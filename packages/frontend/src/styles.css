@@ -1172,10 +1172,65 @@ code {
   text-align: center;
 }
 
-.workflow-canvas,
+.workflow-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+
 .workflow-canvas .react-flow {
   width: 100%;
   height: 100%;
+}
+
+/* ---- Context menu ---- */
+
+.context-menu {
+  position: absolute;
+  z-index: 100;
+  min-width: 160px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.context-menu__header {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 4px 8px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+
+.context-menu__item {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.context-menu__item:hover:not(:disabled) {
+  background: var(--bg);
+}
+
+.context-menu__item:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.context-menu__item--danger {
+  color: var(--danger);
 }
 
 .validation-panel {

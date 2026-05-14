@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-**最近更新**：2026-05-14（P-2-13 完成后，node-detail 4-tab 抽屉上线）
+**最近更新**：2026-05-14（P-2-07 完成后，多选 / 复制粘贴 / 右键菜单上线）
 
 ---
 
@@ -17,7 +17,7 @@
 ```
 M0 准备       [5/5   ✅]
 M1 骨架       [18/18 ✅]  ← M1 完成
-M2 编辑器     [14/16 🚧]  ← 当前位置（+ node-detail 抽屉；剩 P-2-07 多选 / P-2-10 stage 2）
+M2 编辑器     [15/16 🚧]  ← 当前位置（+ 多选/复制粘贴/右键；剩 P-2-10 stage 2 pickers）
 M3 编排核心   [0/14]
 M4 高级编排   [0/11]
 M5 打磨       [0/12]
@@ -25,7 +25,7 @@ M5 打磨       [0/12]
 
 ---
 
-## 已完成 issue（37 个）
+## 已完成 issue（38 个）
 
 ### M0 全部完成（5/5）
 
@@ -37,10 +37,11 @@ M5 打磨       [0/12]
 | P-0-04 | ESLint + Prettier | `eslint.config.js` flat config + 跨包 import 边界规则（backend↮frontend 互斥） |
 | P-0-05 | Drizzle schema | 8 张表完整定义 + WAL/NORMAL/busy_timeout + 启动时自动 migrate + in-memory 测试辅助 |
 
-### M2 进行中（14/16）
+### M2 进行中（15/16）
 
 | ID | 标题 | 关键产出 |
 | --- | --- | --- |
+| P-2-07 | 多选 + 复制粘贴 + 右键菜单 | `components/canvas/canvasClipboard.ts`：进程内 buffer + `buildSlice(def, ids)` 取 selection 切片（含 anchor = top-left）→ `applyPaste(def, slice, at)` 派生 id 重命名 (`${id}_copy[_N]`) + 内部边端点 re-route + 整数位置 + 边 id 重生。`components/canvas/ContextMenu.tsx`：absolute 浮层 + Escape / outside click 关闭。`WorkflowCanvas`：Cmd/Ctrl+C/V/A 键盘绑在 wrapper（tabIndex=0，不抢全局输入）+ `onNodeContextMenu` / `onPaneContextMenu` → 节点菜单 Duplicate/Copy/Delete，空白菜单 Paste/Select all；多选用 xyflow 的 `multiSelectionKeyCode=[Shift,Meta]` + `selectionOnDrag` 橡皮筋；delete 自己写避免裁断除选中外的孤儿边。tests 8 case（slice 选边 / 锚点 / paste 位置 / id 碰撞 / edge remap / repeat paste / passthrough field 保留 / null slice） |
 | P-2-13 | Node detail drawer 4-tab（M2 简化版）| 后端：`NodeRunSchema` 加 `promptText / tokCacheCreate / tokCacheRead`，`getTaskNodeRuns` 改成把这几列也投影出去。新 service `getNodeRunEvents(db, taskId, nodeRunId, {since, limit})`：先 join 验 owner（防跨 task 泄露 node_run）→ `node_run_events` where `gt(id, since)` 取最多 limit (默认 500, 上限 1000) 行，JSON.parse payload。新 endpoint `GET /api/tasks/:id/node-runs/:nodeRunId/events?since=N&limit=M`，验证 since 非负、limit 正。tests +2 case（分页 cursor + 跨 task 404）。前端：`components/NodeDetailDrawer.tsx` 4 tab — Prompt（promptText `<pre>`）/ Events（拉新 endpoint + kind chips 过滤 + max-height 60vh 滚动）/ Output（端口卡片 + Copy）/ Stats（status/start/finish/duration/exit/iteration/retry/tokens × 5 + error）。Task 详情画布 onSelect 把 nodeId 映射到该 node 最新 node_run.id，渲染在画布右侧 480px 抽屉 |
 | P-2-15 | Settings 页面 5 tab | `/settings` 改造：之前是只读 dl 卡片，现在 5 tab — Runtime（opencodePath / defaultModel / defaultVariant / defaultTemperature / maxConcurrentNodes / multiProcessSubprocessConcurrency / logLevel）、Limits（perTaskMaxDurationMs / perTaskMaxTotalTokens / perNodeTimeoutMs / largeOutputThresholdBytes）、GC（worktreeAutoGc 开关 + olderThanDays + onlyMerged + eventsArchiveThresholds.perNodeRunRows/globalRows）、Network（bindHost / bindPort 标 restart-required）、Connection（daemon URL + token + Sign out 按钮，从旧 settings 搬过来）。每个 tab 用 `useTabState` hook 切出 ConfigPatch 子集 → PUT /api/config（已有的 P-1-03 endpoint）→ react-query setQueryData 落回；统一 SectionForm 容器渲染 Save 按钮 + Saved/error 状态条 |
 | P-2-12 | Task 详情状态画布 | `WorkflowCanvas` 新增 `nodeStatuses?: Record<nodeId, status>` prop，`toFlowNodes` 把 status 写到 `CanvasNodeData.status` → 触发 P-2-04 已有的 `canvas-node[data-status=...]` CSS 边框色。Task detail 路由新增 `<TaskStatusCanvas>` section：snapshot 拆 `WorkflowDefinition`、computes latest run-per-nodeId、`canvasStatus()` 把 NodeRunStatus 映射到 CanvasNodeData 子集（done/failed/running/pending/skipped/canceled），canvas 用 readOnly+任务高度 70vh。前端 tests +3 case |
@@ -83,7 +84,7 @@ M5 打磨       [0/12]
 
 ## 测试积累
 
-后端测试 **234 个 case**（`bun test` — 由 `bunfig.toml [test] root` 限定到 `packages/backend/tests`）；前端测试 **96 个 case**（`bun run --filter @agent-workflow/frontend test` → vitest + happy-dom + 自写 localStorage shim，因为 vitest 3 / happy-dom 15 在 node 25 下默认 storage 为空 `{}`）。后端 daemon 启动测试 spawn 子进程，~1-2s 每 case。git util / repos / tasks / 部分 workflow 测试初始化真实 git 仓 fixture。Runner / scheduler 测试用 mock-opencode 子进程脚本代替真 opencode。
+后端测试 **234 个 case**（`bun test` — 由 `bunfig.toml [test] root` 限定到 `packages/backend/tests`）；前端测试 **103 个 case**（`bun run --filter @agent-workflow/frontend test` → vitest + happy-dom + 自写 localStorage shim，因为 vitest 3 / happy-dom 15 在 node 25 下默认 storage 为空 `{}`）。后端 daemon 启动测试 spawn 子进程，~1-2s 每 case。git util / repos / tasks / 部分 workflow 测试初始化真实 git 仓 fixture。Runner / scheduler 测试用 mock-opencode 子进程脚本代替真 opencode。
 
 测试文件：
 ```

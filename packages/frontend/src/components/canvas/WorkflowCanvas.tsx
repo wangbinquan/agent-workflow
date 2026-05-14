@@ -23,6 +23,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Agent, WorkflowDefinition, WorkflowEdge, WorkflowNode } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { AgentNode } from './nodes/AgentNode'
+import { applyPaste, buildSlice, getClipboard, setClipboard } from './canvasClipboard'
+import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { InputNode } from './nodes/InputNode'
 import { deserialize, makeNode, PALETTE_MIME } from './nodePalette'
 import { OutputNode } from './nodes/OutputNode'
@@ -76,6 +78,16 @@ function CanvasInner({
     return m
   }, [agents])
   const rf = useReactFlow()
+  const [selection, setSelection] = useState<{ nodes: string[]; edges: string[] }>({
+    nodes: [],
+    edges: [],
+  })
+  const [menu, setMenu] = useState<{
+    x: number
+    y: number
+    nodeId: string | null
+  } | null>(null)
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
 
   const [nodes, setNodes] = useState<Node[]>(() =>
     toFlowNodes(definition, agentByName, nodeStatuses),
@@ -143,6 +155,87 @@ function CanvasInner({
     [definition, onChange, readOnly],
   )
 
+  // ---- Clipboard / shortcuts (P-2-07) ----
+
+  const copySelection = useCallback(() => {
+    if (selection.nodes.length === 0) return
+    const slice = buildSlice(definition, selection.nodes)
+    if (slice !== null) setClipboard(slice)
+  }, [definition, selection.nodes])
+
+  const pasteFromClipboard = useCallback(
+    (at: { x: number; y: number }) => {
+      const slice = getClipboard()
+      if (slice === null || onChange === undefined || readOnly === true) return
+      const { definition: next, newNodeIds } = applyPaste(definition, slice, at)
+      onChange(next)
+      setSelection({ nodes: newNodeIds, edges: [] })
+    },
+    [definition, onChange, readOnly],
+  )
+
+  const selectAll = useCallback(() => {
+    setSelection({
+      nodes: definition.nodes.map((n) => n.id),
+      edges: definition.edges.map((e) => e.id),
+    })
+  }, [definition])
+
+  // Keyboard shortcuts — bound to the canvas wrapper to avoid hijacking
+  // input fields elsewhere on the page.
+  useEffect(() => {
+    if (readOnly === true) return
+    const el = wrapperRef.current
+    if (el === null) return
+    function onKey(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey
+      if (!mod) return
+      if (e.key === 'c' || e.key === 'C') {
+        copySelection()
+      } else if (e.key === 'v' || e.key === 'V') {
+        // Paste in the visible viewport center so the user sees the result.
+        const box = el!.getBoundingClientRect()
+        const center = rf.screenToFlowPosition({
+          x: box.left + box.width / 2,
+          y: box.top + box.height / 2,
+        })
+        pasteFromClipboard(center)
+      } else if (e.key === 'a' || e.key === 'A') {
+        e.preventDefault()
+        selectAll()
+      }
+    }
+    el.addEventListener('keydown', onKey)
+    return () => el.removeEventListener('keydown', onKey)
+  }, [copySelection, pasteFromClipboard, readOnly, rf, selectAll])
+
+  const deleteSelected = useCallback(() => {
+    if (onChange === undefined || readOnly === true) return
+    if (selection.nodes.length === 0 && selection.edges.length === 0) return
+    const removedNodes = new Set(selection.nodes)
+    const removedEdges = new Set(selection.edges)
+    const keptNodes = definition.nodes.filter((n) => !removedNodes.has(n.id))
+    const stillIds = new Set(keptNodes.map((n) => n.id))
+    const keptEdges = definition.edges.filter(
+      (e) =>
+        !removedEdges.has(e.id) && stillIds.has(e.source.nodeId) && stillIds.has(e.target.nodeId),
+    )
+    onChange({ ...definition, nodes: keptNodes, edges: keptEdges })
+    setSelection({ nodes: [], edges: [] })
+  }, [definition, onChange, readOnly, selection.edges, selection.nodes])
+
+  const duplicateNode = useCallback(
+    (nodeId: string) => {
+      const slice = buildSlice(definition, [nodeId])
+      if (slice === null || onChange === undefined || readOnly === true) return
+      const at = { x: slice.anchor.x + 40, y: slice.anchor.y + 40 }
+      const { definition: next, newNodeIds } = applyPaste(definition, slice, at)
+      onChange(next)
+      setSelection({ nodes: newNodeIds, edges: [] })
+    },
+    [definition, onChange, readOnly],
+  )
+
   function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
     if (readOnly === true) return
     if (
@@ -168,8 +261,75 @@ function CanvasInner({
     onChange({ ...definition, nodes: [...definition.nodes, newNode] })
   }
 
+  function handleNodeContextMenu(e: React.MouseEvent, node: Node) {
+    if (readOnly === true) return
+    e.preventDefault()
+    e.stopPropagation()
+    const box = wrapperRef.current?.getBoundingClientRect()
+    const x = box === undefined ? e.clientX : e.clientX - box.left
+    const y = box === undefined ? e.clientY : e.clientY - box.top
+    setMenu({ x, y, nodeId: node.id })
+    // Make sure the right-clicked node is part of the selection.
+    if (!selection.nodes.includes(node.id)) {
+      setSelection({ nodes: [node.id], edges: [] })
+    }
+  }
+
+  function handlePaneContextMenu(e: MouseEvent | React.MouseEvent) {
+    if (readOnly === true) return
+    e.preventDefault()
+    const box = wrapperRef.current?.getBoundingClientRect()
+    const x = box === undefined ? e.clientX : e.clientX - box.left
+    const y = box === undefined ? e.clientY : e.clientY - box.top
+    setMenu({ x, y, nodeId: null })
+  }
+
+  const menuItems = useMemo<ContextMenuItem[]>(() => {
+    if (menu === null) return []
+    if (menu.nodeId === null) {
+      // Pane menu — paste / select-all.
+      return [
+        {
+          label: 'Paste',
+          disabled: getClipboard() === null,
+          onSelect: () => {
+            if (wrapperRef.current === null) return
+            const box = wrapperRef.current.getBoundingClientRect()
+            pasteFromClipboard(
+              rf.screenToFlowPosition({ x: box.left + menu.x, y: box.top + menu.y }),
+            )
+          },
+        },
+        { label: 'Select all', onSelect: selectAll },
+      ]
+    }
+    return [
+      {
+        label: 'Duplicate',
+        onSelect: () => menu.nodeId !== null && duplicateNode(menu.nodeId),
+      },
+      { label: 'Copy', onSelect: copySelection, disabled: selection.nodes.length === 0 },
+      { label: 'Delete', danger: true, onSelect: deleteSelected },
+    ]
+  }, [
+    copySelection,
+    deleteSelected,
+    duplicateNode,
+    menu,
+    pasteFromClipboard,
+    rf,
+    selectAll,
+    selection.nodes.length,
+  ])
+
   return (
-    <div className="workflow-canvas" onDragOver={handleDragOver} onDrop={handleDrop}>
+    <div
+      ref={wrapperRef}
+      className="workflow-canvas"
+      tabIndex={0}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -177,18 +337,21 @@ function CanvasInner({
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
-        onSelectionChange={
-          onSelect === undefined
-            ? undefined
-            : (s) => {
-                const first = s.nodes[0]?.id ?? null
-                onSelect(first)
-              }
-        }
+        onSelectionChange={(s) => {
+          const ns = s.nodes.map((n) => n.id)
+          const es = s.edges.map((e) => e.id)
+          setSelection({ nodes: ns, edges: es })
+          if (onSelect !== undefined) onSelect(ns[0] ?? null)
+        }}
+        onNodeContextMenu={handleNodeContextMenu}
+        onPaneContextMenu={handlePaneContextMenu}
         nodesDraggable={readOnly !== true}
         edgesFocusable={readOnly !== true}
         nodesConnectable={readOnly !== true}
         deleteKeyCode={readOnly === true ? null : deleteKeyCodes}
+        multiSelectionKeyCode={['Shift', 'Meta']}
+        selectionOnDrag={readOnly !== true}
+        panOnDrag={readOnly === true ? true : [1, 2]}
         fitView
         minZoom={0.2}
         maxZoom={2}
@@ -197,6 +360,20 @@ function CanvasInner({
         <MiniMap pannable zoomable />
         <Controls showInteractive={false} />
       </ReactFlow>
+      <ContextMenu
+        open={menu !== null}
+        x={menu?.x ?? 0}
+        y={menu?.y ?? 0}
+        items={menuItems}
+        onClose={() => setMenu(null)}
+        header={
+          menu?.nodeId !== undefined && menu?.nodeId !== null ? (
+            <code>{menu.nodeId}</code>
+          ) : (
+            <span>{selection.nodes.length} selected</span>
+          )
+        }
+      />
     </div>
   )
 }
