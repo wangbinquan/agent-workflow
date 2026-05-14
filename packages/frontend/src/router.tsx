@@ -19,6 +19,7 @@ import {
   EditRoute as workflowEditRoute,
   NewRoute as workflowNewRoute,
 } from '@/routes/workflows.edit'
+import { LaunchRoute as workflowLaunchRoute } from '@/routes/workflows.launch'
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -31,6 +32,7 @@ const routeTree = rootRoute.addChildren([
   skillDetailRoute,
   skillsRoute,
   workflowNewRoute,
+  workflowLaunchRoute,
   workflowEditRoute,
   workflowsRoute,
   taskDetailRoute,

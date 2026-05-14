@@ -3,7 +3,7 @@
 // arrives in P-2-05; per-kind node renderers in P-2-04.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoute, useNavigate } from '@tanstack/react-router'
+import { Link, createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Agent, Workflow, WorkflowDefinition } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
@@ -198,6 +198,9 @@ function WorkflowEditPage() {
   const headerActions = useMemo(
     () => (
       <div className="page__actions">
+        <Link to="/workflows/$id/launch" params={{ id }} className="btn btn--sm btn--primary">
+          Launch task →
+        </Link>
         <button
           type="button"
           className="btn btn--sm"
@@ -214,7 +217,7 @@ function WorkflowEditPage() {
         />
       </div>
     ),
-    [validate, del],
+    [id, validate, del],
   )
 
   if (query.isLoading || draft === null) return <div className="page muted">Loading workflow…</div>
