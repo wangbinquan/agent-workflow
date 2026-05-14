@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-**最近更新**：2026-05-14（M5 进行中 — P-5-01/02/03-s1/04/05 闭合 + CI macOS flake 终修复 + 单二进制构建上线）
+**最近更新**：2026-05-15（M5 进行中 — P-5-01/02/03-s1/04/05/06 闭合，Release pipeline 就绪）
 
 ---
 
@@ -20,17 +20,18 @@ M1 骨架       [18/18 ✅]  ← M1 完成
 M2 编辑器     [16/16 ✅]  M2 收官 — 编辑器 / launcher / settings / task 详情全套就绪
 M3 编排核心   [14/14 ✅]  fan-out / 重试 / resume / git wrapper / 状态画布 / 抽屉增强
 M4 高级编排   [11/11 ✅]  loop wrapper / 嵌套 / 资源限额 / orphan / GC / shutdown / YAML / token agg
-M5 打磨       [4.5/12]    ← 进行中（P-5-01 + P-5-02 + P-5-03 stage 1 + P-5-04 + P-5-05）
+M5 打磨       [5.5/12]    ← 进行中（P-5-01 + P-5-02 + P-5-03 stage 1 + P-5-04 + P-5-05 + P-5-06）
 ```
 
 ---
 
-## 已完成 issue（68 个）
+## 已完成 issue（69 个）
 
-### M5 进行中（4.5/12）
+### M5 进行中（5.5/12）
 
 | ID | 标题 | 关键产出 |
 | --- | --- | --- |
+| P-5-06 | GitHub Releases 自动发布 | `.github/workflows/release.yml`：`on: push tags v*` → ubuntu + macos matrix → `bun install --frozen-lockfile` → `bun run build:binary` → `softprops/action-gh-release@v2` 上传 `dist/agent-workflow-*` 单文件资产到对应 tag 的 Release。`prerelease: contains(github.ref_name, '-')` —— `v0.1.0-rc.1` 类带连字符 tag 标为 prerelease，纯 semver `v0.1.0` 标为正式版。`generate_release_notes: true` 自动从 commit / PR 拼 release notes。`permissions: contents: write` 让 GITHUB_TOKEN 能写 Release。同一 tag 重跑时 action 是幂等 append（首跑创建 release，后续 push 新 asset）。本地未实跑（需真 tag），逻辑沿用 build-binary CI job 已验证的同一脚本。|
 | P-5-05 | Bun build 单二进制 + 嵌入前端 dist + 嵌入 drizzle migrations | `scripts/build-binary.ts`：1) `bun run --filter @agent-workflow/frontend build` → `packages/frontend/dist/`；2) walk frontend/dist + `packages/backend/db/migrations` 两棵树，把 `packages/backend/src/embed.generated.ts` 改写成每个文件一行 `import xx from '…' with { type: 'file' }`（identifier 用 `prefix_${rel-with-non-alnum-stripped}_${hashCode-base36}` 避免碰撞）+ 导出 `FRONTEND_FILES`/`MIGRATION_FILES` 路径表 + `IS_EMBEDDED = true`；3) `bun build packages/backend/src/main.ts --compile --target=bun --minify --outfile=dist/agent-workflow-<macos\|linux>-<arm64\|x86_64>`；4) finally 还原 stub 文件（dev 时 `IS_EMBEDDED=false` + 两个空 map），防止污染 working tree；5) 跑 `<binary> version` 烟雾测试。`packages/backend/src/embed.ts`：runtime helpers — `getEmbeddedAsset(urlPath)` 异步取 `Bun.file(filePath).arrayBuffer()` + 派生 mime（html/js/css/json/svg/png/woff2 等），`extractMigrationsTo(targetDir)` 同步重建目录树写每个 .sql + meta/_journal.json（drizzle migrator 需要文件系统路径，没法直接走 buffer）。`server.ts`：仅在 `IS_EMBEDDED=true` 时挂 `*` catch-all 路由，`/api/*` 和 `/ws/*` 仍然 404 走原 schema，其它路径先查 FRONTEND_FILES → 命中则回静态资源，未命中回 `index.html`（SPA 路由 hard-refresh 不会 404）。`cli/start.ts`：daemon 启动到 step 5 时，`IS_EMBEDDED=true` 就把 migrations 抽到 `~/.agent-workflow/runtime/migrations/` 再交给 drizzle，否则继续读 `Paths.migrationsDir`。`.github/workflows/ci.yml`：新 `build-binary` job，`needs: check`，ubuntu + macos matrix，跑 `bun run build:binary` → `actions/upload-artifact@v4` 把 `dist/agent-workflow-*` 上传（解锁 P-5-06）。`.gitignore` `dist/` 早就有，无需改。stub `embed.generated.ts` 已 commit，dev 不需要任何额外操作。本地实测：61 MiB 二进制，`/health` 正确、`/` 吐 index.html（467B）、`/assets/*.css` 吐真实 CSS（39 KiB），migrations 抽出 5 文件 + dbVersion=2，SIGTERM 干净退出。tests +4 case（IS_EMBEDDED stub 检查、空 frontend list、`getEmbeddedAsset` null、`extractMigrationsTo` 0 文件幂等）|
 | P-5-04 | 暗色主题 | `styles.css` 把所有调色板变量迁到 `:root[data-theme='dark']` 选择器，旧 `@media (prefers-color-scheme: dark)` 只在 `:root:not([data-theme])` 时生效（覆盖 /auth 路由 + React mount 之前的空窗）。新 hook `hooks/useTheme.ts`：`resolveTheme(theme, system)` 纯函数；`useApplyTheme()` 拉 `/api/config`（仅有 token 时启用，staleTime 60s），订阅 `matchMedia('(prefers-color-scheme: dark)')` change 事件实时跟随；theme === 'system' → `removeAttribute('data-theme')` 把控制权交还给 @media，其它情况 `setAttribute('data-theme', resolved)`。`routes/__root.tsx` 在 RootComponent 顶部调用 `useApplyTheme()`，token 为空时 query disabled，hook 仍设上 system 行为。`routes/settings.tsx` 加 `AppearanceTab`：在 5 个原 tab 之间插入 `appearance`（label 走 i18n `settings.tabAppearance`），单字段 `<select theme>` 三选项（system/light/dark），走通用 `useTabState(['theme'])` PUT /api/config 通路。i18n bundle 同步加 `settings.{tabAppearance, themeLabel, themeHint, themeSystem, themeLight, themeDark}` 中英文本。tests +3 case（explicit dark/light wins + system follows OS）|
 | P-5-03 (stage 1) | i18n 脚手架 + zh-CN/en-US bundle | `packages/frontend/src/i18n/{index.ts, zh-CN.ts, en-US.ts}`：i18next + react-i18next + i18next-browser-languagedetector，detector 顺序 `localStorage('aw-language') → navigator`，fallbackLng=zh-CN。`Resources` interface 把两个 bundle 锁成同一结构（nav / auth / settings / errors × 错误码→i18n key 映射）。`describeApiError(err)` 检测 `errors.{code}` 存在则吐 zh-CN 文案，否则 `'{fallback}: {raw message}'`。`main.tsx` `import './i18n'` side-effect 初始化。Stage 1 已迁文案：`routes/__root.tsx`（侧栏 brand + 5 个 nav）/ `routes/auth.tsx`（标题 + hint + url/token label + verifying/connect 按钮 + 错误用 describeApiError）/ `routes/settings.tsx`（页头三段 hint + 5 个 tab label + loading + BackupCard 全部 4 文案）。**Stage 2 未迁**（追加进列表）：agents/skills/workflows/tasks 列表 + detail + 编辑、launcher、所有 canvas 组件（NodeInspector / WorkflowCanvas / EditorSidebar）、forms (ChipsInput / JsonField / MarkdownEditor)、抽屉 tabs（NodeDetailDrawer 4 tab）、所有 task 详情 (TaskOutputPanel / DiffViewer / TaskStatusChip / TaskStatusCanvas)、settings Limits/GC/Network/Connection tab 内的 field labels + hints。tests +5 case（zh-CN default / en-US bundle reachable / 已知错误码本地化 / 未知错误码 fallback 拼接 / 非 ApiError stringify）|
@@ -213,9 +214,8 @@ packages/backend/src/
 
 ## 下一步：M5 续
 
-P-5-01 + P-5-02 + P-5-04 + P-5-05 闭合，P-5-03 stage 1 完成（脚手架 + nav/auth/settings）。后续工作：
+P-5-01 + P-5-02 + P-5-04 + P-5-05 + P-5-06 闭合，P-5-03 stage 1 完成（脚手架 + nav/auth/settings）。后续工作：
 - **P-5-03 stage 2**：把 stage 1 列表里"未迁"的所有路由/组件 hardcoded 英文外提到 i18n 键，覆盖剩余 ~38 个 .tsx（estimate L）
-- P-5-06 GitHub Releases pipeline（S）— P-5-05 已闭合，可立即上手
 - P-5-06 GitHub Releases pipeline（S）— deps P-5-05
 - P-5-07 Playwright e2e（M）
 - P-5-08 vitest 前端关键组件单元（M）
