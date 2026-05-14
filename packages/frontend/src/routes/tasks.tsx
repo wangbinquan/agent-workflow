@@ -6,6 +6,7 @@ import type { TaskStatus, TaskSummary } from '@agent-workflow/shared'
 import { TASK_STATUS } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
+import { useTasksSync } from '@/hooks/useTasksSync'
 import { Route as RootRoute } from './__root'
 
 interface TasksSearch {
@@ -29,11 +30,12 @@ function TasksPage() {
   const search = Route.useSearch() as TasksSearch
   const status = search.status
 
+  useTasksSync()
   const { data, isLoading, error } = useQuery<TaskSummary[]>({
     queryKey: ['tasks', { status }],
     queryFn: ({ signal }) =>
       api.get('/api/tasks', status === undefined ? undefined : { status }, signal),
-    refetchInterval: 4000,
+    refetchInterval: 15_000, // Fallback for cases where WS is unavailable.
   })
 
   return (

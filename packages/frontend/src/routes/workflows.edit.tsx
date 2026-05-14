@@ -12,6 +12,7 @@ import { NodeInspector } from '@/components/canvas/NodeInspector'
 import { WorkflowCanvas } from '@/components/canvas/WorkflowCanvas'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { Field, TextInput } from '@/components/Form'
+import { useWorkflowSync } from '@/hooks/useWorkflowSync'
 import { Route as RootRoute } from './__root'
 
 const EMPTY_DEF: WorkflowDefinition = {
@@ -176,13 +177,23 @@ function WorkflowEditPage() {
       ),
   })
 
-  // Auto-save when the user pauses for >800ms after a change.
+  // Auto-save when the user pauses for >1s after a change (design.md §4.1).
   useEffect(() => {
     if (!dirty || draft === null) return
-    const t = setTimeout(() => save.mutate(), 800)
+    const t = setTimeout(() => save.mutate(), 1000)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirty, name, description, draft])
+
+  // Toast banner state for remote edits (other tabs / clients).
+  const [remoteToast, setRemoteToast] = useState<string | null>(null)
+  useWorkflowSync({
+    workflowId: id,
+    currentVersion: query.data?.version ?? null,
+    onRemoteUpdate: (v) =>
+      setRemoteToast(`Workflow was updated elsewhere (v${v}); your view will refresh.`),
+    onRemoteDelete: () => setRemoteToast('This workflow was deleted from another tab.'),
+  })
 
   const headerActions = useMemo(
     () => (
@@ -247,6 +258,14 @@ function WorkflowEditPage() {
 
       {save.error !== null && save.error !== undefined && (
         <div className="error-box">{describeError(save.error)}</div>
+      )}
+      {remoteToast !== null && (
+        <div className="info-box">
+          {remoteToast}{' '}
+          <button type="button" className="info-box__action" onClick={() => setRemoteToast(null)}>
+            dismiss
+          </button>
+        </div>
       )}
       {validate.data !== undefined && validate.error === null && (
         <ValidationPanel result={validate.data} />

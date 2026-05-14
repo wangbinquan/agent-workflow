@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-**最近更新**：2026-05-14（P-2-08 完成后，编辑器连线可用）
+**最近更新**：2026-05-14（P-2-09 + P-2-14 完成后，编辑器/任务列表 WS 同步上线）
 
 ---
 
@@ -17,7 +17,7 @@
 ```
 M0 准备       [5/5   ✅]
 M1 骨架       [18/18 ✅]  ← M1 完成
-M2 编辑器     [7/16 🚧]   ← 当前位置（+ 连线；下一步 P-2-07 右键多选 / P-2-09 退出条件编辑器）
+M2 编辑器     [9/16 🚧]   ← 当前位置（+ WS 编辑器同步 + 任务列表实时；下一步 P-2-10 启动表单 / P-2-12 任务画布）
 M3 编排核心   [0/14]
 M4 高级编排   [0/11]
 M5 打磨       [0/12]
@@ -25,7 +25,7 @@ M5 打磨       [0/12]
 
 ---
 
-## 已完成 issue（30 个）
+## 已完成 issue（32 个）
 
 ### M0 全部完成（5/5）
 
@@ -37,10 +37,12 @@ M5 打磨       [0/12]
 | P-0-04 | ESLint + Prettier | `eslint.config.js` flat config + 跨包 import 边界规则（backend↮frontend 互斥） |
 | P-0-05 | Drizzle schema | 8 张表完整定义 + WAL/NORMAL/busy_timeout + 启动时自动 migrate + in-memory 测试辅助 |
 
-### M2 进行中（7/16）
+### M2 进行中（9/16）
 
 | ID | 标题 | 关键产出 |
 | --- | --- | --- |
+| P-2-14 | Task list realtime via /ws/tasks | `hooks/{useTasksSync,useTaskSync}.ts` 订阅 `/ws/tasks` / `/ws/tasks/:id`，收到 task.* / node.* 事件 → invalidate 相应 react-query。tasks 列表轮询从 4s 调到 15s 兜底；详情页 task / node-runs / diff 三个 query 按事件类型分别 invalidate |
+| P-2-09 | 自动保存 + 多 tab WS 同步 | `hooks/{useWebSocket,useWorkflowSync}.ts`：泛型 JSON-WS 订阅 hook 带指数 backoff 重连（base 500ms / cap 30s），最新-listener ref 避免每渲染重连；token / baseUrl 每次 connect 重读 `stores/auth`。`useWorkflowSync(workflowId, currentVersion, onRemoteUpdate, onRemoteDelete)` 过滤同 id 且 `version > current` 的 `workflow.updated` → toast + react-query invalidate。Editor 路由 auto-save 防抖 800ms → 1000ms 对齐 design.md §4.1；workflows.edit 新增 `.info-box` 提示横幅。tests 5 case（FakeWs stub 注入 listener，验证连接 URL + msg routing） |
 | P-2-08 | 边连线 + 端口可视化 | `WorkflowCanvas` 打开 `nodesConnectable={readOnly !== true}` + `onConnect` 回调走新 helper `buildEdgeFromConnection(def, conn)`：检查 source/target/handle 全非空、拒绝 self-loop、拒绝完全重复的 edge（source.nodeId+portName / target.nodeId+portName 全等），通过时生成 `edge_${ulid 末 6 位}`。`PortHandles` 移除 `isConnectable={false}`，圆点变成可拖拽源/汇。tests 6 case |
 | P-2-06 | 节点抽屉 Edit + Preview | `components/canvas/{NodeInspector,PromptPreview}.tsx`：右侧 480px 三栏（左 sidebar / 中画布 / 右 inspector）。Edit 表单按 kind 分支：agent 节点（agent selector、promptTemplate、retries、timeoutMs、model/variant/temperature overrides，agent-multi 多 sourcePort 字段）；input 节点（inputKey）；output 节点（端口列表显示 bind 来源）；wrapper-loop（maxIterations + exitCondition.kind）。Preview tab 调 `@agent-workflow/shared/prompt.ts` 的 `renderUserPrompt`（搬迁自 `backend/services/protocol.ts`，后者改为薄 re-export，保持 backend tests 不动）+ 用户编辑 mock port 值，实时拼接含协议块的 prompt。canvas 新增 `onSelect(nodeId|null)` prop。tests +5 case（template substitution、内置 meta、未引用 port section、协议块、缺失 port）|
 | P-2-05 | 编辑器侧栏（拖拽创建源） | `components/canvas/{EditorSidebar,nodePalette}.tsx`：240px 左 sidebar 顶部 filter + 四组 (Agents / Fan-out / Wrappers / IO)，HTML5 draggable item via `PALETTE_MIME = application/x-agent-workflow-node`。canvas 上 `onDragOver/onDrop` 用 `useReactFlow().screenToFlowPosition` 转坐标，`makeNode(item, pos, {agents, existingIds})` 派生 kind 默认值（id 用短前缀 + ulid 尾部 6 位避免碰撞；wrapper-loop 默认 maxIterations=3 + exitCondition=port-empty 让 validator 一开就过）。tests 13 case（dataTransfer 格式 round-trip + 各 kind 默认值 + id 碰撞 fallback + buildPalette 结构）|
@@ -76,7 +78,7 @@ M5 打磨       [0/12]
 
 ## 测试积累
 
-后端测试 **232 个 case**（`bun test` — 由 `bunfig.toml [test] root` 限定到 `packages/backend/tests`）；前端测试 **83 个 case**（`bun run --filter @agent-workflow/frontend test` → vitest + happy-dom + 自写 localStorage shim，因为 vitest 3 / happy-dom 15 在 node 25 下默认 storage 为空 `{}`）。后端 daemon 启动测试 spawn 子进程，~1-2s 每 case。git util / repos / tasks / 部分 workflow 测试初始化真实 git 仓 fixture。Runner / scheduler 测试用 mock-opencode 子进程脚本代替真 opencode。
+后端测试 **232 个 case**（`bun test` — 由 `bunfig.toml [test] root` 限定到 `packages/backend/tests`）；前端测试 **88 个 case**（`bun run --filter @agent-workflow/frontend test` → vitest + happy-dom + 自写 localStorage shim，因为 vitest 3 / happy-dom 15 在 node 25 下默认 storage 为空 `{}`）。后端 daemon 启动测试 spawn 子进程，~1-2s 每 case。git util / repos / tasks / 部分 workflow 测试初始化真实 git 仓 fixture。Runner / scheduler 测试用 mock-opencode 子进程脚本代替真 opencode。
 
 测试文件：
 ```
@@ -164,8 +166,9 @@ M1 验收已 ready：`agent-workflow start` → 浏览器登 token → 创 agent
 | ID | 标题 | 依赖 | 复杂度 |
 | --- | --- | --- | --- |
 | P-2-07 | 右键菜单 + 多选 + 复制粘贴 | P-2-03 | M |
-| P-2-09 | Loop wrapper 退出条件编辑器 | P-2-06 | S |
-| P-2-10 | 输入节点配置 + 启动表单生成 | P-2-06 | M |
+| P-2-10 | 输入节点配置 + 启动表单生成（任务启动器） | P-2-06、P-1-10 | L |
+| P-2-11 | 输出节点 + Task 详情产出面板 | P-2-06 | M |
+| P-2-12 | Task 详情三区布局 + 状态画布 overlay | P-2-03、P-2-11 | M |
 
 M1 验收：跑通 `创 agent → 创 skill → 通过 API/curl 创线性 workflow → 启 task → 看 opencode 子进程跑完 → 输出 envelope 解析为 ports`。
 

@@ -9,6 +9,7 @@ import { api, ApiError } from '@/api/client'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { DiffViewer } from '@/components/DiffViewer'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
+import { useTaskSync } from '@/hooks/useTaskSync'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -20,6 +21,7 @@ export const Route = createRoute({
 function TaskDetailPage() {
   const { id } = Route.useParams()
   const qc = useQueryClient()
+  useTaskSync(id)
 
   const task = useQuery<Task>({
     queryKey: ['tasks', id],

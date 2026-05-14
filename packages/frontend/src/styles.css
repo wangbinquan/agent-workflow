@@ -181,6 +181,28 @@ code {
   font-size: 14px;
 }
 
+.info-box {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.info-box__action {
+  background: none;
+  border: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+
 /* ---- Settings ---- */
 
 .settings-grid {
