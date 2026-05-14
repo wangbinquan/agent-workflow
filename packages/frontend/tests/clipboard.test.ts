@@ -84,11 +84,9 @@ describe('applyPaste', () => {
           id: 'a',
           kind: 'agent-single',
           position: { x: 0, y: 0 },
-          // @ts-expect-error passthrough field
           agentName: 'coder',
-          // @ts-expect-error passthrough field
           promptTemplate: 'do {{x}}',
-        },
+        } as unknown as WorkflowDefinition['nodes'][number],
       ],
       edges: [],
     }

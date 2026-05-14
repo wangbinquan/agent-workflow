@@ -15,6 +15,9 @@ import type {
   WorkflowInput,
 } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
+import { EnumPicker } from '@/components/launch/EnumPicker'
+import { FilesPicker } from '@/components/launch/FilesPicker'
+import { GitPicker } from '@/components/launch/GitPicker'
 import { Field, TextInput } from '@/components/Form'
 import { Route as RootRoute } from './__root'
 
@@ -155,6 +158,7 @@ function LaunchPage() {
           >
             <DynamicInput
               def={def}
+              repoPath={repoPath}
               value={inputs[def.key] ?? ''}
               onChange={(v) => setInputs((prev) => ({ ...prev, [def.key]: v }))}
             />
@@ -181,16 +185,16 @@ function LaunchPage() {
 
 function DynamicInput({
   def,
+  repoPath,
   value,
   onChange,
 }: {
   def: WorkflowInput
+  repoPath: string
   value: string
   onChange: (next: string) => void
 }) {
-  // Stage 1: text only. P-2-10 stage 2 adds files / enum / git pickers.
   if (def.kind === 'text') {
-    // Treat multiline as a hint surfaced via the `multiline` passthrough key.
     const multiline = (def as Record<string, unknown>).multiline === true
     if (multiline) {
       return (
@@ -205,15 +209,16 @@ function DynamicInput({
     }
     return <TextInput value={value} onChange={onChange} required={def.required === true} />
   }
-  return (
-    <div>
-      <TextInput value={value} onChange={onChange} placeholder={`raw ${def.kind} value`} />
-      <div className="form-field__hint">
-        Stage-2 picker for <code>{def.kind}</code> ships in a follow-up; for now, paste a JSON
-        string.
-      </div>
-    </div>
-  )
+  if (def.kind === 'files') {
+    return <FilesPicker def={def} repoPath={repoPath} value={value} onChange={onChange} />
+  }
+  if (def.kind === 'enum') {
+    return <EnumPicker def={def} value={value} onChange={onChange} />
+  }
+  if (def.kind === 'git') {
+    return <GitPicker def={def} repoPath={repoPath} value={value} onChange={onChange} />
+  }
+  return <TextInput value={value} onChange={onChange} placeholder={`raw ${def.kind} value`} />
 }
 
 function describeError(e: unknown): string {

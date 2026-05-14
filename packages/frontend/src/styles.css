@@ -1028,6 +1028,79 @@ code {
   gap: 12px;
 }
 
+/* ---- Launcher pickers ---- */
+
+.files-picker {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.files-picker__filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.files-picker__filter > .form-input {
+  flex: 1;
+}
+
+.files-picker__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.files-picker__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.files-picker__row:hover {
+  background: var(--panel);
+}
+
+.enum-picker__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.enum-picker__row {
+  display: flex;
+  gap: 6px;
+  font-size: 13px;
+  align-items: center;
+}
+
+.enum-picker__other {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+}
+
+.enum-picker__other > .form-input {
+  flex: 1;
+}
+
 .task-canvas-layout > .canvas-frame--task {
   height: 70vh;
 }
