@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-**最近更新**：2026-05-14（P-2-12 完成后，task 详情状态画布上线）
+**最近更新**：2026-05-14（P-2-15 完成后，settings 5-tab 上线）
 
 ---
 
@@ -17,7 +17,7 @@
 ```
 M0 准备       [5/5   ✅]
 M1 骨架       [18/18 ✅]  ← M1 完成
-M2 编辑器     [12/16 🚧]  ← 当前位置（+ task 详情状态画布；剩 P-2-07 多选 / P-2-13 抽屉 / P-2-15 YAML / P-2-10 stage 2）
+M2 编辑器     [13/16 🚧]  ← 当前位置（+ settings 5-tab；剩 P-2-07 多选 / P-2-10 stage 2 / P-2-13 抽屉）
 M3 编排核心   [0/14]
 M4 高级编排   [0/11]
 M5 打磨       [0/12]
@@ -25,7 +25,7 @@ M5 打磨       [0/12]
 
 ---
 
-## 已完成 issue（35 个）
+## 已完成 issue（36 个）
 
 ### M0 全部完成（5/5）
 
@@ -37,10 +37,11 @@ M5 打磨       [0/12]
 | P-0-04 | ESLint + Prettier | `eslint.config.js` flat config + 跨包 import 边界规则（backend↮frontend 互斥） |
 | P-0-05 | Drizzle schema | 8 张表完整定义 + WAL/NORMAL/busy_timeout + 启动时自动 migrate + in-memory 测试辅助 |
 
-### M2 进行中（12/16）
+### M2 进行中（13/16）
 
 | ID | 标题 | 关键产出 |
 | --- | --- | --- |
+| P-2-15 | Settings 页面 5 tab | `/settings` 改造：之前是只读 dl 卡片，现在 5 tab — Runtime（opencodePath / defaultModel / defaultVariant / defaultTemperature / maxConcurrentNodes / multiProcessSubprocessConcurrency / logLevel）、Limits（perTaskMaxDurationMs / perTaskMaxTotalTokens / perNodeTimeoutMs / largeOutputThresholdBytes）、GC（worktreeAutoGc 开关 + olderThanDays + onlyMerged + eventsArchiveThresholds.perNodeRunRows/globalRows）、Network（bindHost / bindPort 标 restart-required）、Connection（daemon URL + token + Sign out 按钮，从旧 settings 搬过来）。每个 tab 用 `useTabState` hook 切出 ConfigPatch 子集 → PUT /api/config（已有的 P-1-03 endpoint）→ react-query setQueryData 落回；统一 SectionForm 容器渲染 Save 按钮 + Saved/error 状态条 |
 | P-2-12 | Task 详情状态画布 | `WorkflowCanvas` 新增 `nodeStatuses?: Record<nodeId, status>` prop，`toFlowNodes` 把 status 写到 `CanvasNodeData.status` → 触发 P-2-04 已有的 `canvas-node[data-status=...]` CSS 边框色。Task detail 路由新增 `<TaskStatusCanvas>` section：snapshot 拆 `WorkflowDefinition`、computes latest run-per-nodeId、`canvasStatus()` 把 NodeRunStatus 映射到 CanvasNodeData 子集（done/failed/running/pending/skipped/canceled），canvas 用 readOnly+任务高度 70vh。前端 tests +3 case |
 | P-2-10 (stage 1) | Launcher 表单 | `routes/workflows.launch.tsx`：路由 `/workflows/$id/launch`。recent-repo `<select>` + 手填 path 双绑（选了就自动 set baseBranch = recentRepo.defaultBranch），baseBranch 通过 `useQuery /api/repos/refs` 拿到 branches 后 `<select>` 否则 fallback text input。`workflow.definition.inputs` 自动渲染：kind === 'text' 走 TextInput（含 multiline passthrough → textarea），其它 kind 暂留占位 + "stage 2 picker ships later" 提示。`missingRequired` 推断 disabled。提交 POST /api/tasks → 跳 /tasks/$id。editor 路由 header 新增 "Launch task →" 按钮。`stage 2`（file / git-object / enum picker + warning bar）后续单独 issue |
 | P-2-11 | Output 节点配置 + 产出面板 | NodeInspector 的 output 节点改成可编辑列表（每行 name + bind.nodeId + bind.portName + Remove，底部 + Add port）。`components/TaskOutputPanel.tsx` 在 task 详情顶部渲染：`collectPorts(task.workflowSnapshot)` 解析 output 节点 `ports[]` + workflow-level `outputs[]` bindings → 拿 latest run per nodeId → 从 `node_run_outputs` 取对应 port 值 → 一张卡片含 name / bind / value，Copy 按钮（navigator.clipboard）。pending / empty / value 三态显示。tests 5 case for collectPorts |
