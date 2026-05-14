@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-**最近更新**：2026-05-14（P-1-16 完成后，前端骨架就绪）
+**最近更新**：2026-05-14（P-1-17 完成后，Agents/Skills 全套 UI 就绪）
 
 ---
 
@@ -16,7 +16,7 @@
 
 ```
 M0 准备       [5/5   ✅]
-M1 骨架       [16/18 🚧]  ← 当前位置（后端核心闭环 + 前端骨架完成；剩 P-1-17 / P-1-18）
+M1 骨架       [17/18 🚧]  ← 当前位置（剩 P-1-18 Tasks 简化视图）
 M2 编辑器     [0/16]
 M3 编排核心   [0/14]
 M4 高级编排   [0/11]
@@ -25,7 +25,7 @@ M5 打磨       [0/12]
 
 ---
 
-## 已完成 issue（21 个）
+## 已完成 issue（22 个）
 
 ### M0 全部完成（5/5）
 
@@ -37,7 +37,7 @@ M5 打磨       [0/12]
 | P-0-04 | ESLint + Prettier | `eslint.config.js` flat config + 跨包 import 边界规则（backend↮frontend 互斥） |
 | P-0-05 | Drizzle schema | 8 张表完整定义 + WAL/NORMAL/busy_timeout + 启动时自动 migrate + in-memory 测试辅助 |
 
-### M1 已完成（16/18）
+### M1 已完成（17/18）
 
 | ID | 标题 | 关键产出 |
 | --- | --- | --- |
@@ -57,12 +57,13 @@ M5 打磨       [0/12]
 | P-1-14 | Task 启动 + 线性 DAG 调度 | `services/{scheduler,task}.ts` + `routes/tasks.ts`：Kahn 拓扑排序 / input 节点物化为虚拟 node_run / agent-single 调 runNode / output 节点跳过 / multi-process+wrapper+loop 拒绝 / 多入边到同 port 自动拼接（`---` 分隔）/ 失败节点 halt task；POST/GET endpoint，HTTP 创建后 scheduler 后台跑；tests 14 case |
 | P-1-15 | Cancel task | `POST /api/tasks/:id/cancel` + service 层 `activeTasks: Map<taskId, AbortController>` + scheduler/runner 全链路 signal 传递；终态 task → 409 `task-not-cancelable`；无 controller 的孤儿（如 daemon 重启后）也能 flip 到 canceled；tests 5 case |
 | P-1-16 | 前端骨架：路由 / Layout / API client | Vite + React 19 + TanStack Router (code-based) + TanStack Query；侧栏 `Agents/Skills/Workflows/Tasks/Settings`；`/auth` token 录入页 + 401 自动 clearToken；`api/client.ts` fetch wrapper (token + query + body 序列化 + DomainError → ApiError 映射)；`stores/auth.ts` localStorage + subscribe；vitest+happy-dom (root `bunfig.toml [test] root` 把 `bun test` 限定到 backend；CI 跑 frontend vitest 步骤独立)；frontend 16 case |
+| P-1-17 | Agents/Skills 列表 + 详情编辑 | `routes/{agents,agents.new,agents.detail,skills,skills.new,skills.detail}.tsx` + 组件 `AgentForm / SkillFileTree / MarkdownEditor / ChipsInput / JsonField / ConfirmButton / Form 原语`；数据表 + 行内 Open/Delete；agent form 全 frontmatter 字段（含 outputs/skills chips、permission/frontmatterExtra raw JSON、readonly switch、model/variant/temperature/steps/maxSteps、bodyMd markdown 编辑+预览）；skill 详情含 description 保存 + SKILL.md body 保存（external skill 只读展示）+ 文件树（列出 / 选 / 改 / 加 / 删）；自写极简 markdown 渲染器（headings / 段落 / bullet / 围栏代码 / inline code / bold-italic / HTML 转义）。frontend tests 35 case（新增 markdown 8 + chips 6 + json-field 5） |
 
 ---
 
 ## 测试积累
 
-后端测试 **200 个 case**（`bun test` — 由 `bunfig.toml [test] root` 限定到 `packages/backend/tests`）；前端测试 **16 个 case**（`bun run --filter @agent-workflow/frontend test` → vitest + happy-dom + 自写 localStorage shim，因为 vitest 3 / happy-dom 15 在 node 25 下默认 storage 为空 `{}`）。后端 daemon 启动测试 spawn 子进程，~1-2s 每 case。git util / repos / tasks / 部分 workflow 测试初始化真实 git 仓 fixture。Runner / scheduler 测试用 mock-opencode 子进程脚本代替真 opencode。
+后端测试 **200 个 case**（`bun test` — 由 `bunfig.toml [test] root` 限定到 `packages/backend/tests`）；前端测试 **35 个 case**（`bun run --filter @agent-workflow/frontend test` → vitest + happy-dom + 自写 localStorage shim，因为 vitest 3 / happy-dom 15 在 node 25 下默认 storage 为空 `{}`）。后端 daemon 启动测试 spawn 子进程，~1-2s 每 case。git util / repos / tasks / 部分 workflow 测试初始化真实 git 仓 fixture。Runner / scheduler 测试用 mock-opencode 子进程脚本代替真 opencode。
 
 测试文件：
 ```
@@ -141,14 +142,11 @@ packages/backend/src/
 
 ---
 
-## 下一步：M1 剩余 2 个 issue（全部前端）
-
-前端骨架 + 鉴权 + API client 就绪。剩下的 2 个 issue：
+## 下一步：M1 最后 1 个 issue
 
 | ID | 标题 | 依赖 | 复杂度 |
 | --- | --- | --- | --- |
-| P-1-17 | 前端 Agents / Skills 列表 + 编辑界面 | P-1-08, P-1-09, P-1-16 | L |
-| P-1-18 | 前端 Tasks 简化版（无编辑器） | P-1-14, P-1-16 | M |
+| P-1-18 | 前端 Tasks 简化版（列表 + 详情 + git diff，无 xyflow） | P-1-14, P-1-16 | M |
 
 M1 验收：跑通 `创 agent → 创 skill → 通过 API/curl 创线性 workflow → 启 task → 看 opencode 子进程跑完 → 输出 envelope 解析为 ports`。
 

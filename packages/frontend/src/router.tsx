@@ -3,18 +3,27 @@
 
 import { createRouter } from '@tanstack/react-router'
 import { Route as agentsRoute } from '@/routes/agents'
+import { Route as agentDetailRoute } from '@/routes/agents.detail'
+import { Route as agentNewRoute } from '@/routes/agents.new'
 import { Route as authRoute } from '@/routes/auth'
 import { Route as indexRoute } from '@/routes/index'
 import { Route as rootRoute } from '@/routes/__root'
 import { Route as settingsRoute } from '@/routes/settings'
 import { Route as skillsRoute } from '@/routes/skills'
+import { Route as skillDetailRoute } from '@/routes/skills.detail'
+import { Route as skillNewRoute } from '@/routes/skills.new'
 import { Route as tasksRoute } from '@/routes/tasks'
 import { Route as workflowsRoute } from '@/routes/workflows'
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
   authRoute,
+  // '/agents/new' must come before '/agents/$name' so the literal wins.
+  agentNewRoute,
+  agentDetailRoute,
   agentsRoute,
+  skillNewRoute,
+  skillDetailRoute,
   skillsRoute,
   workflowsRoute,
   tasksRoute,
