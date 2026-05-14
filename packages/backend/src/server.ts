@@ -8,6 +8,7 @@ import type { DbClient } from '@/db/client'
 import { mountAgentRoutes } from '@/routes/agents'
 import { mountConfigRoutes } from '@/routes/config'
 import { mountHealthRoutes } from '@/routes/health'
+import { mountRepoRoutes } from '@/routes/repos'
 import { mountSkillRoutes } from '@/routes/skills'
 import { errorHandler } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -50,6 +51,7 @@ export function createApp(deps: AppDeps): Hono {
   mountConfigRoutes(app, deps)
   mountAgentRoutes(app, deps)
   mountSkillRoutes(app, deps)
+  mountRepoRoutes(app, deps)
 
   app.onError(errorHandler)
   app.notFound((c) =>

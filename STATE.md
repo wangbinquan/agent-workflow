@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-**最近更新**：2026-05-14
+**最近更新**：2026-05-14（P-1-10 + P-1-12 完成后）
 
 ---
 
@@ -15,8 +15,8 @@
 - `CLAUDE.md` — 仓约定与索引
 
 ```
-M0 准备       [5/5  ✅]
-M1 骨架       [9/18 🚧]  ← 当前位置
+M0 准备       [5/5   ✅]
+M1 骨架       [11/18 🚧]  ← 当前位置
 M2 编辑器     [0/16]
 M3 编排核心   [0/14]
 M4 高级编排   [0/11]
@@ -25,7 +25,7 @@ M5 打磨       [0/12]
 
 ---
 
-## 已完成 issue（13 个）
+## 已完成 issue（16 个）
 
 ### M0 全部完成（5/5）
 
@@ -37,7 +37,7 @@ M5 打磨       [0/12]
 | P-0-04 | ESLint + Prettier | `eslint.config.js` flat config + 跨包 import 边界规则（backend↮frontend 互斥） |
 | P-0-05 | Drizzle schema | 8 张表完整定义 + WAL/NORMAL/busy_timeout + 启动时自动 migrate + in-memory 测试辅助 |
 
-### M1 已完成（9/18）
+### M1 已完成（11/18）
 
 | ID | 标题 | 关键产出 |
 | --- | --- | --- |
@@ -50,12 +50,14 @@ M5 打磨       [0/12]
 | P-1-07 | API 错误统一 schema | `DomainError / NotFoundError(404) / ValidationError(422) / ConflictError(409) / UnauthorizedError(401)` + Hono `onError` |
 | P-1-08 | Agents CRUD | 6 个 endpoint；DB 是真值源；frontmatter 字段拆 DB 列；JSON 字段在 service 层 marshal；删除/重命名引用拒绝 |
 | P-1-09 | Skills CRUD + 文件树 | fs 真值源；managed + external 两种 source；SKILL.md frontmatter 通过 `yaml` 包解析；safeJoin 路径遍历防御；引用拒绝；12 个 endpoint |
+| P-1-10 | 仓最近列表 + refs/files endpoint | `recent_repos` 表 upsert（含 defaultBranch 探测）；GET/POST `/api/repos/recent` + GET `/api/repos/{refs,files}?path=`；非 git 仓 422、路径不存在 404 |
+| P-1-12 | Worktree helper（util/git.ts） | `runGit` / `requireGitRepo` / `repoSlug = sha1(8)+basename` / `createWorktree`（`agent-workflow/{taskId}` 分支，返 baseCommit）/ `removeWorktree`；并发 task 拿独立 worktree 验证 |
 
 ---
 
 ## 测试积累
 
-后端测试 ~90 个 case，全部用 `bun test` 跑（in-memory SQLite，每 case <100ms）。daemon 启动相关测试 spawn 子进程，~1-2s 每 case。
+后端测试 ~118 个 case，全部用 `bun test` 跑（in-memory SQLite，每 case <100ms）。daemon 启动相关测试 spawn 子进程，~1-2s 每 case。git util / repos 测试初始化真实 git 仓 fixture。
 
 测试文件：
 ```
@@ -67,9 +69,11 @@ packages/backend/tests/
 ├── daemon-start.test.ts    (5 case，含 e2e daemon spawn)
 ├── db.test.ts              (2 case)
 ├── errors.test.ts          (6 case)
+├── git.test.ts             (16 case，含 git init fixture + 并发 worktree)
 ├── log.test.ts             (7 case)
 ├── lock.test.ts            (6 case，跨进程 fork)
 ├── opencode-version.test.ts (4 case)
+├── repos.test.ts           (12 case)
 ├── skills.test.ts          (22 case)
 └── smoke.test.ts           (1 case)
 ```
@@ -98,13 +102,16 @@ packages/backend/src/
 │   ├── health.ts
 │   ├── config.ts
 │   ├── agents.ts
+│   ├── repos.ts            # /api/repos/{recent,refs,files}
 │   └── skills.ts
 ├── services/
 │   ├── agent.ts            # Agents CRUD
+│   ├── repo.ts             # recent_repos upsert + getRepoRefs / getRepoFiles
 │   └── skill.ts            # Skills CRUD + 文件树 + frontmatter
 └── util/
     ├── errors.ts           # DomainError 家族 + Hono onError handler
     ├── frontmatter.ts      # YAML frontmatter 解析（用 yaml 包）
+    ├── git.ts              # runGit / requireGitRepo / repoSlug / createWorktree / removeWorktree + ref/file 解析器
     ├── lock.ts             # 单实例 PID 文件锁
     ├── log.ts              # 结构化 logger
     ├── opencode.ts         # 版本探测 + semver 比较 + 最低版本常量
@@ -114,15 +121,13 @@ packages/backend/src/
 
 ---
 
-## 下一步：M1 剩余 9 个 issue
+## 下一步：M1 剩余 7 个 issue
 
-按 `design/plan.md` 依赖顺序，**下一轮推荐做 P-1-10 + P-1-12**（独立可并行）：
+按 `design/plan.md` 依赖顺序，**下一轮做 P-1-11（Workflow CRUD）**，是 runner+scheduler 主线的前置：
 
 | ID | 标题 | 依赖 | 复杂度 |
 | --- | --- | --- | --- |
-| **P-1-10** | 仓最近列表 + `/api/repos/{recent,refs,files}` | P-1-07, P-0-05 | M |
 | **P-1-11** | Workflow CRUD（基础，不含 5 项校验） | P-0-05, P-1-07 | M |
-| **P-1-12** | Worktree helper（`git worktree add/remove` + slug） | P-0-05 | S |
 | P-1-13 | opencode 子进程 spawn + envelope 解析（runner） | P-0-05, P-1-09, P-1-12 | L |
 | P-1-14 | Task 启动 + DAG 调度（线性版本） | P-1-08, P-1-11, P-1-12, P-1-13 | L |
 | P-1-15 | Cancel task | P-1-14 | S |
