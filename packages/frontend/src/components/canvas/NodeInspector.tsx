@@ -125,25 +125,73 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
       const ports = Array.isArray(rec.ports)
         ? (rec.ports as Array<{ name: string; bind: { nodeId: string; portName: string } }>)
         : []
+      function setPorts(next: typeof ports) {
+        onPatch({
+          ...(node as Record<string, unknown>),
+          ports: next,
+        } as unknown as WorkflowNode)
+      }
       return (
         <div className="form-grid">
-          <Field label="Output ports" hint="Bind each name to a node + port.">
-            {ports.length === 0 ? (
-              <div className="muted">
-                No ports yet. Add inbound edges from upstream nodes — they'll appear here.
-              </div>
-            ) : (
-              <ul className="inspector__output-ports">
-                {ports.map((p, i) => (
-                  <li key={i}>
-                    <code>{p.name}</code> ←{' '}
-                    <code>
-                      {p.bind.nodeId}.{p.bind.portName}
-                    </code>
-                  </li>
-                ))}
-              </ul>
-            )}
+          <Field
+            label="Output ports"
+            hint="Each port = a card on the task detail page; bind to (nodeId, portName)."
+          >
+            <ul className="inspector__output-ports">
+              {ports.map((p, i) => (
+                <li key={i} className="inspector__output-port-row">
+                  <input
+                    className="form-input"
+                    value={p.name}
+                    onChange={(e) => {
+                      const copy = [...ports]
+                      copy[i] = { ...p, name: e.target.value }
+                      setPorts(copy)
+                    }}
+                    placeholder="port name"
+                  />
+                  <input
+                    className="form-input form-input--mono"
+                    value={p.bind.nodeId}
+                    onChange={(e) => {
+                      const copy = [...ports]
+                      copy[i] = { ...p, bind: { ...p.bind, nodeId: e.target.value } }
+                      setPorts(copy)
+                    }}
+                    placeholder="upstream nodeId"
+                  />
+                  <input
+                    className="form-input form-input--mono"
+                    value={p.bind.portName}
+                    onChange={(e) => {
+                      const copy = [...ports]
+                      copy[i] = { ...p, bind: { ...p.bind, portName: e.target.value } }
+                      setPorts(copy)
+                    }}
+                    placeholder="port"
+                  />
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    onClick={() => setPorts(ports.filter((_, j) => j !== i))}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() =>
+                setPorts([
+                  ...ports,
+                  { name: `port_${ports.length + 1}`, bind: { nodeId: '', portName: '' } },
+                ])
+              }
+            >
+              + Add port
+            </button>
           </Field>
         </div>
       )

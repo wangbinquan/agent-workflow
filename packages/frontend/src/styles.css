@@ -1256,6 +1256,74 @@ code {
   border: 2px solid var(--panel) !important;
 }
 
+/* ---- Task output panel ---- */
+
+.task-outputs {
+  margin: 12px 0 24px;
+}
+
+.task-outputs > h2 {
+  font-size: 14px;
+  margin: 0 0 8px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.task-outputs__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.task-output-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-output-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.task-output-card__name {
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.task-output-card__bind {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.task-output-card__body {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: auto;
+  background: var(--bg);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.inspector__output-port-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
 .readonly-pre {
   background: var(--panel);
   border: 1px solid var(--border);

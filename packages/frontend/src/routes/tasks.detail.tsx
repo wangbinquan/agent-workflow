@@ -8,6 +8,7 @@ import type { NodeRun, Task, TaskDiff, TaskNodeRuns } from '@agent-workflow/shar
 import { api, ApiError } from '@/api/client'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { DiffViewer } from '@/components/DiffViewer'
+import { TaskOutputPanel } from '@/components/TaskOutputPanel'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
 import { useTaskSync } from '@/hooks/useTaskSync'
 import { Route as RootRoute } from './__root'
@@ -112,6 +113,10 @@ function TaskDetailPage() {
       </header>
       {cancel.error !== null && cancel.error !== undefined && (
         <div className="error-box">{describeError(cancel.error)}</div>
+      )}
+
+      {nodeRuns.data !== undefined && (
+        <TaskOutputPanel task={t} runs={nodeRuns.data.runs} outputs={nodeRuns.data.outputs} />
       )}
 
       <section className="page__section">
