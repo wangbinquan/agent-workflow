@@ -508,6 +508,12 @@ code {
   gap: 16px;
 }
 
+.form-grid--cols-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+
 .form-grid--cols-3 {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -842,6 +848,58 @@ code {
 .file-tree__actions {
   display: flex;
   gap: 6px;
+}
+
+/* ---- Workflow editor ---- */
+
+.page--editor {
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.canvas-frame {
+  flex: 1;
+  min-height: 520px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.workflow-canvas,
+.workflow-canvas .react-flow {
+  width: 100%;
+  height: 100%;
+}
+
+.validation-panel {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.validation-panel--ok {
+  border-color: #2da44e;
+  color: #2da44e;
+}
+
+.validation-panel--bad {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.validation-panel__title {
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.validation-panel ul {
+  margin: 0;
+  padding-left: 18px;
 }
 
 .readonly-pre {
