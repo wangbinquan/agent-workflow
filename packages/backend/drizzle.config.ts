@@ -1,7 +1,7 @@
 import { defineConfig } from 'drizzle-kit'
 
 export default defineConfig({
-  schema: './db/schema.ts',
+  schema: './src/db/schema.ts',
   out: './db/migrations',
   dialect: 'sqlite',
   // Migrations are applied at daemon startup against ~/.agent-workflow/db.sqlite,

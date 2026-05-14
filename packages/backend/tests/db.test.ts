@@ -4,8 +4,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { openDb } from '../db/client'
-import { agents } from '../db/schema'
+import { openDb } from '../src/db/client'
+import { agents } from '../src/db/schema'
 
 const migrationsFolder = resolve(import.meta.dirname, '..', 'db', 'migrations')
 

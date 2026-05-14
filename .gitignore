@@ -29,6 +29,8 @@ coverage/
 .nyc_output/
 
 # bun
+# Note: bun.lock (text) IS committed for reproducible installs;
+# only the legacy binary lockfile is ignored.
 bun.lockb
 
 # local app data should never be committed; only here as defense-in-depth

@@ -4,17 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository status
 
-This repo is in the **design / pre-implementation stage**. It currently contains:
+This repo is **mid-implementation** (M1 in progress; ~9/18 of M1 done as of last commit).
 
-- `proposal/init.md` — the original product proposal (written in **Chinese**, raw form).
-- `design/proposal.md` — **supplemented proposal** (产品规格定稿). Refines `proposal/init.md` after multi-round Q&A with the author. **This is the authoritative product spec going forward**; `proposal/init.md` is preserved for history.
-- `design/design.md` — **technical design** (技术设计). Architecture, data model, API surface, execution engine, runtime, file layout, roadmap.
-- `design/plan.md` — **implementation plan** (实施计划). Breaks down the M0–M5 roadmap into 81 numbered issues (P-{milestone}-{seq}) with deps, files, sizes, and acceptance criteria. Pick from this when starting work.
-- No source code, no package manifest, no build/lint/test toolchain yet. There are no commands to run.
+**Read in this order at session start:**
 
-When the design docs and `proposal/init.md` disagree, `design/*.md` wins (they were written to clarify and resolve open questions in the original).
+1. `STATE.md` — **session-to-session execution log**. Always read first; tells you what's done, what's next, current caveats.
+2. `design/plan.md` — 81-issue roadmap (M0–M5). Pick next issue from here once you know the state.
+3. `design/proposal.md` — product spec (authoritative).
+4. `design/design.md` — technical design (authoritative).
+5. `proposal/init.md` — original Chinese proposal, preserved for history. When it disagrees with `design/*.md`, `design/*.md` wins.
 
-When asked to implement features: read `design/proposal.md` first for product intent, `design/design.md` for technical detail, then confirm scope with the user before generating code or scaffolding.
+When a batch of issues completes, commit + push and update `STATE.md` so the next session can pick up seamlessly.
+
+`bun install` then `bun test` to verify dev environment works.
 
 ## Product vision (from `proposal/init.md`)
 

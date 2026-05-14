@@ -25,6 +25,10 @@ export const Paths = {
   get lock() {
     return join(appHome(), '.daemon.lock')
   },
+  /** Runtime info written by `start` (host/port/url/startedAt) for `status` to read. */
+  get daemonInfo() {
+    return join(appHome(), '.daemon.info')
+  },
   get logsDir() {
     return join(appHome(), 'logs')
   },

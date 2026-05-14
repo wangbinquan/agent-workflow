@@ -1,72 +1,152 @@
 // `agent-workflow start` — daemon foreground entry.
-// P-1-01 scaffold: acquires single-instance lock, starts a minimal HTTP server,
-// handles graceful shutdown. Token middleware (P-1-02), config (P-1-03), real
-// routes (P-1-08+), DB migration (P-0-05 wired here later), and 30s graceful
-// shutdown of subprocesses (P-4-06) all build on top.
 
-import { type Lock, acquireLock, DaemonLockHeldError } from '@/util/lock'
+import { ensureTokenFile } from '@/auth/token'
+import { loadConfig } from '@/config'
+import { openDb } from '@/db/client'
+import { createApp } from '@/server'
+import { acquireLock, DaemonLockHeldError, type Lock } from '@/util/lock'
+import { configureLogger, createLogger, type LogLevel } from '@/util/log'
+import { MIN_OPENCODE_VERSION, probeOpencode } from '@/util/opencode'
 import { Paths } from '@/util/paths'
+import { existsSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
 
 export interface StartOptions {
-  /** Override bind port. 0 = random. Default: random. */
   port?: number
-  /** Override bind host. Default: 127.0.0.1. */
   host?: string
 }
 
 export async function startCommand(opts: StartOptions = {}): Promise<void> {
+  // 1. Logger — must come before lock so failures land in stdout/file.
+  configureLogger({
+    level: (process.env.LOG_LEVEL as LogLevel | undefined) ?? 'info',
+    logFile: Paths.daemonLog,
+  })
+  const log = createLogger('daemon')
+
+  // 2. Single-instance lock.
   let lock: Lock
   try {
     lock = acquireLock(Paths.lock)
   } catch (err) {
     if (err instanceof DaemonLockHeldError) {
-      console.error(`agent-workflow: another daemon is already running (PID ${err.pid})`)
-      console.error(`  lock file: ${err.lockPath}`)
-      console.error(`  if it is stale, remove the lock file manually and try again`)
+      log.error('another daemon is already running', { pid: err.pid, lock: err.lockPath })
+      console.error(
+        `agent-workflow: another daemon is already running (PID ${err.pid})\n` +
+          `  lock file: ${err.lockPath}\n` +
+          `  if it is stale, remove the lock file manually and try again`,
+      )
       process.exit(1)
     }
     throw err
   }
+  log.info('lock acquired', { pid: lock.pid, lock: lock.path })
 
-  console.log(`[agent-workflow] daemon starting (pid ${lock.pid})`)
-  console.log(`[agent-workflow] lock file: ${lock.path}`)
+  // 3. Load config; honor logLevel if user set non-default in config.
+  const config = loadConfig(Paths.config)
+  if (config.logLevel !== 'info') {
+    configureLogger({ level: config.logLevel })
+  }
+  log.info('config loaded', { path: Paths.config, language: config.language, theme: config.theme })
 
-  // Minimal HTTP server. Real Hono app + token middleware land in P-1-02.
-  const server = Bun.serve({
-    port: opts.port ?? 0,
-    hostname: opts.host ?? '127.0.0.1',
-    fetch(req) {
-      const url = new URL(req.url)
-      if (url.pathname === '/api/health') {
-        return Response.json({ ok: true, scaffold: 'P-1-01', pid: lock.pid })
-      }
-      return new Response('not found', { status: 404 })
-    },
+  // 4. opencode version probe — daemon refuses to start on incompatible version.
+  const probe = await probeOpencode(config.opencodePath)
+  if (probe.version === null) {
+    log.error('opencode binary not found or unreadable', { binary: probe.binary })
+    console.error(
+      `agent-workflow: cannot execute "${probe.binary}".\n` +
+        `  install opencode (>=${MIN_OPENCODE_VERSION}) and ensure it is on PATH,\n` +
+        `  or set 'opencodePath' in ${Paths.config}.`,
+    )
+    lock.release()
+    process.exit(1)
+  }
+  if (!probe.compatible) {
+    log.error('opencode too old', { found: probe.version, required: MIN_OPENCODE_VERSION })
+    console.error(
+      `agent-workflow: opencode ${probe.version} is older than the required ${MIN_OPENCODE_VERSION}.\n` +
+        `  run "opencode upgrade" or set 'opencodePath' to a newer binary.`,
+    )
+    lock.release()
+    process.exit(1)
+  }
+  log.info('opencode probe ok', { version: probe.version, binary: probe.binary })
+
+  // 5. DB — open + apply migrations. dbVersion = number of SQL files in the
+  // bundled migrations folder (== the highest version we've applied, since
+  // openDb() applies all pending migrations on startup).
+  const db = openDb({ path: Paths.db, migrationsFolder: Paths.migrationsDir })
+  const dbVersion = existsSync(Paths.migrationsDir)
+    ? readdirSync(Paths.migrationsDir).filter((f) => f.endsWith('.sql')).length
+    : 0
+  log.info('db ready', { path: Paths.db, dbVersion })
+
+  // 6. Token (generate-on-first-run, chmod 600).
+  const token = ensureTokenFile(Paths.tokenFile)
+  log.info('token ready', { tokenFile: Paths.tokenFile })
+
+  // 7. HTTP server.
+  const app = createApp({
+    token,
+    configPath: Paths.config,
+    opencodeVersion: probe.version,
+    dbVersion,
+    db,
   })
 
-  console.log(`[agent-workflow] listening at http://${server.hostname}:${server.port}/`)
-  console.log(`[agent-workflow] (token / real routes wire up in P-1-02+)`)
+  const bindHost = opts.host ?? config.bindHost
+  const bindPort = opts.port ?? config.bindPort ?? 0
+  const server = Bun.serve({
+    port: bindPort,
+    hostname: bindHost,
+    fetch: app.fetch,
+  })
 
-  // Graceful shutdown on signals.
-  // Full 30s graceful subprocess shutdown is P-4-06; here we just close the
-  // HTTP server and release the lock.
+  const baseUrl = `http://${server.hostname}:${server.port}/`
+  log.info('listening', { url: baseUrl })
+
+  // Write runtime info file for `status` / `stop` subcommands to discover us.
+  writeFileSync(
+    Paths.daemonInfo,
+    JSON.stringify(
+      {
+        pid: lock.pid,
+        host: server.hostname,
+        port: server.port,
+        url: baseUrl,
+        startedAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    ),
+  )
+
+  // Browser-facing URL with token included; printed exactly once on stdout
+  // and never written to the persistent log (per design.md §10.2).
+  const browserUrl = `${baseUrl}?token=${token}`
+  process.stdout.write(
+    `\nagent-workflow ready — open this URL in your browser:\n  ${browserUrl}\n\n`,
+  )
+
+  // 8. Graceful shutdown.
   let shuttingDown = false
   const shutdown = (signal: string): void => {
     if (shuttingDown) return
     shuttingDown = true
-    console.log(`[agent-workflow] received ${signal}, shutting down`)
+    log.info('shutting down', { signal })
     server.stop(true)
+    try {
+      unlinkSync(Paths.daemonInfo)
+    } catch {
+      // best-effort
+    }
     lock.release()
     process.exit(0)
   }
   process.on('SIGTERM', () => shutdown('SIGTERM'))
   process.on('SIGINT', () => shutdown('SIGINT'))
-  // Defensive — release if we crash for any reason.
   process.on('exit', () => lock.release())
 
-  // Block forever; Bun.serve keeps the event loop alive on its own, but the
-  // explicit await makes the start() Promise observable to callers/tests.
   await new Promise<void>(() => {
-    /* never resolves; signal handlers exit the process */
+    /* never resolves */
   })
 }
