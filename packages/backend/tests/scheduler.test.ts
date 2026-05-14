@@ -4,7 +4,7 @@
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -189,12 +189,11 @@ describe('runTask: linear DAG (M1)', () => {
     expect(t?.failedNodeId).toBe('a1')
   })
 
-  test('multi-process / wrapper kinds rejected as M1 unsupported', async () => {
-    await seedAgent(h.db, 'a')
+  test('wrapper kinds rejected as M3 unsupported', async () => {
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
-      nodes: [{ id: 'm1', kind: 'agent-multi', agentName: 'a' }],
+      nodes: [{ id: 'wg', kind: 'wrapper-git', nodeIds: [] }],
       edges: [],
     }
     const { taskId } = await seedWorkflowAndTask(h, def)
@@ -206,7 +205,7 @@ describe('runTask: linear DAG (M1)', () => {
     })
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('failed')
-    expect(t?.errorSummary).toContain('M1 does not yet support agent-multi')
+    expect(t?.errorSummary).toContain('wrapper-git')
   })
 
   test('cycle in workflow -> task fails with cycle error', async () => {
@@ -524,6 +523,134 @@ describe('runTask: linear DAG (M1)', () => {
     // retries=1 → 2 attempts total.
     expect(runs.length).toBe(2)
     expect(runs.every((r) => r.status === 'failed')).toBe(true)
+  })
+
+  test('agent-multi fans out per-file and aggregates outputs sorted by shard_key', async () => {
+    await seedReadonlyAgent(h.db, 'src', ['git_diff'], true)
+    await seedReadonlyAgent(h.db, 'auditor', ['findings'], true)
+    const def: WorkflowDefinition = {
+      $schema_version: 1,
+      inputs: [{ kind: 'text', key: 'requirement', label: 'r' }],
+      nodes: [
+        { id: 'in', kind: 'input', inputKey: 'requirement' },
+        { id: 'src', kind: 'agent-single', agentName: 'src' },
+        {
+          id: 'audit',
+          kind: 'agent-multi',
+          agentName: 'auditor',
+          sourcePort: { nodeId: 'src', portName: 'git_diff' },
+        } as unknown as WorkflowDefinition['nodes'][number],
+      ],
+      edges: [
+        {
+          id: 'e1',
+          source: { nodeId: 'in', portName: 'out' },
+          target: { nodeId: 'src', portName: 'requirement' },
+        },
+      ],
+    }
+    const { taskId } = await seedWorkflowAndTask(h, def, { requirement: 'audit two files' })
+
+    // src outputs a 2-file diff; auditor returns "findings" per shard.
+    const TWO_FILE_DIFF = [
+      'diff --git a/src/a.ts b/src/a.ts',
+      '@@ -1 +1 @@',
+      '-1',
+      '+1',
+      'diff --git a/src/b.ts b/src/b.ts',
+      '@@ -1 +1 @@',
+      '-2',
+      '+2',
+    ].join('\n')
+
+    // For src node we want it to emit the diff; for auditor we want
+    // distinct findings per shard. The mock returns the same body each
+    // invocation, so per-shard divergence is harder — what we can verify
+    // is the aggregation joins by shard_key dictionary order.
+    await withEnv(
+      {
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({
+          git_diff: TWO_FILE_DIFF,
+          findings: 'audited',
+        }),
+      },
+      () =>
+        runTask({
+          taskId,
+          db: h.db,
+          appHome: h.appHome,
+          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        }),
+    )
+
+    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    expect(t?.status).toBe('done')
+
+    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    // parent (audit) + 2 children + src + in = 5 rows.
+    const auditRuns = runs.filter((r) => r.nodeId === 'audit')
+    expect(auditRuns.length).toBe(3) // parent + 2 children
+    const parent = auditRuns.find((r) => r.parentNodeRunId === null)
+    const children = auditRuns.filter((r) => r.parentNodeRunId !== null)
+    expect(parent).toBeDefined()
+    expect(children.length).toBe(2)
+    expect(new Set(children.map((c) => c.shardKey))).toEqual(new Set(['src/a.ts', 'src/b.ts']))
+
+    // Aggregated findings = "audited\naudited" (2 children, sorted).
+    const findings = await h.db
+      .select()
+      .from(nodeRunOutputs)
+      .where(and(eq(nodeRunOutputs.nodeRunId, parent!.id), eq(nodeRunOutputs.portName, 'findings')))
+    expect(findings[0]?.content).toBe('audited\naudited')
+
+    // No failures → errors port is empty.
+    const errors = await h.db
+      .select()
+      .from(nodeRunOutputs)
+      .where(and(eq(nodeRunOutputs.nodeRunId, parent!.id), eq(nodeRunOutputs.portName, 'errors')))
+    expect(errors[0]?.content).toBe('')
+  })
+
+  test('agent-multi with empty sourcePort completes immediately', async () => {
+    await seedReadonlyAgent(h.db, 'src', ['git_diff'], true)
+    await seedReadonlyAgent(h.db, 'auditor', ['findings'], true)
+    const def: WorkflowDefinition = {
+      $schema_version: 1,
+      inputs: [],
+      nodes: [
+        { id: 'src', kind: 'agent-single', agentName: 'src' },
+        {
+          id: 'audit',
+          kind: 'agent-multi',
+          agentName: 'auditor',
+          sourcePort: { nodeId: 'src', portName: 'git_diff' },
+        } as unknown as WorkflowDefinition['nodes'][number],
+      ],
+      edges: [],
+    }
+    const { taskId } = await seedWorkflowAndTask(h, def)
+    await withEnv(
+      {
+        // Empty diff → fan-out short-circuit to done with empty outputs.
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({ git_diff: '', findings: '' }),
+      },
+      () =>
+        runTask({
+          taskId,
+          db: h.db,
+          appHome: h.appHome,
+          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        }),
+    )
+    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    expect(t?.status).toBe('done')
+    const auditRuns = await h.db
+      .select()
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'audit')))
+    // No children for an empty diff.
+    expect(auditRuns.length).toBe(1)
+    expect(auditRuns[0]?.parentNodeRunId).toBeNull()
   })
 
   test('two write agents at the same level serialize through the write semaphore', async () => {

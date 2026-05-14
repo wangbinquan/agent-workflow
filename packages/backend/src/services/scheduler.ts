@@ -20,6 +20,7 @@ import { agents, nodeRunOutputs, nodeRuns, skills, tasks } from '@/db/schema'
 import { runNode, type ResolvedSkill, type RunResult } from '@/services/runner'
 import { emitTaskStatus, getTask } from '@/services/task'
 import { createLogger, type Logger } from '@/util/log'
+import { splitDiffPerDirectory, splitDiffPerFile, splitDiffPerNFiles } from '@/util/diffSplit'
 import { gitStashSnapshot, rollbackToSnapshot } from '@/util/git'
 import { Semaphore } from '@/util/semaphore'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
@@ -40,6 +41,8 @@ export interface RunTaskOptions {
   defaultPerNodeTimeoutMs?: number
   /** Global concurrency limit for agent nodes within this task. Default 4. */
   maxConcurrentNodes?: number
+  /** Concurrency cap for fan-out child subprocesses (P-3-02). Default 4. */
+  multiProcessSubprocessConcurrency?: number
 }
 
 /**
@@ -72,14 +75,20 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
   await emitStatus(db, taskId)
 
-  // 4. Validate node kinds (M1 subset).
+  // 4. Validate node kinds. M3 adds agent-multi (P-3-02). Wrappers + loops
+  //    land in P-3-03 / M4.
   for (const node of definition.nodes) {
-    if (node.kind !== 'input' && node.kind !== 'agent-single' && node.kind !== 'output') {
+    if (
+      node.kind !== 'input' &&
+      node.kind !== 'agent-single' &&
+      node.kind !== 'agent-multi' &&
+      node.kind !== 'output'
+    ) {
       await failTask(
         db,
         taskId,
-        `M1 does not yet support ${node.kind} nodes`,
-        `node kind ${node.kind} unsupported in M1`,
+        `scheduler does not yet support ${node.kind} nodes`,
+        `node kind ${node.kind} unsupported in M3`,
         node.id,
       )
       return
@@ -115,6 +124,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   //    failures or the abort signal, so an in-flight write isn't stranded.
   const globalSem = new Semaphore(opts.maxConcurrentNodes ?? 4)
   const writeSem = new Semaphore(1)
+  const subprocessSem = new Semaphore(opts.multiProcessSubprocessConcurrency ?? 4)
   const upstreamsOf = buildUpstreamMap(definition)
   const remaining = new Map(order.map((n) => [n.id, n]))
   const completed = new Set<string>()
@@ -168,6 +178,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
           inputsMap,
           globalSem,
           writeSem,
+          subprocessSem,
           log,
         }),
       ),
@@ -444,7 +455,8 @@ async function readSnapshotForLatestRun(
   return rows[0]?.preSnapshot ?? ''
 }
 
-/** nodeId → list of upstream nodeIds (deduped). */
+/** nodeId → list of upstream nodeIds (deduped). Includes `sourcePort` of
+ *  agent-multi nodes as an upstream dep (not modeled as an edge). */
 function buildUpstreamMap(definition: WorkflowDefinition): Map<string, string[]> {
   const m = new Map<string, string[]>()
   for (const n of definition.nodes) m.set(n.id, [])
@@ -452,6 +464,14 @@ function buildUpstreamMap(definition: WorkflowDefinition): Map<string, string[]>
     const list = m.get(e.target.nodeId)
     if (list === undefined) continue
     if (!list.includes(e.source.nodeId)) list.push(e.source.nodeId)
+  }
+  for (const n of definition.nodes) {
+    if (n.kind !== 'agent-multi') continue
+    const sp = (n as Record<string, unknown>).sourcePort as { nodeId?: unknown } | undefined
+    if (sp === undefined || typeof sp.nodeId !== 'string') continue
+    const list = m.get(n.id) ?? []
+    if (!list.includes(sp.nodeId)) list.push(sp.nodeId)
+    m.set(n.id, list)
   }
   return m
 }
@@ -472,6 +492,8 @@ interface OneNodeContext {
   inputsMap: Record<string, string>
   globalSem: Semaphore
   writeSem: Semaphore
+  /** Independent pool for multi-process child runs (P-3-02). */
+  subprocessSem: Semaphore
   log: Logger
 }
 
@@ -498,18 +520,24 @@ async function runOneNode(ctx: OneNodeContext): Promise<OneNodeResult> {
     return { kind: 'ok', summary: '', message: '' }
   }
 
-  // agent-single (multi-process lands in P-3-02).
   const agentName = pickString(node, 'agentName')
   if (agentName === null) {
     return {
       kind: 'failed',
       summary: `node ${node.id} missing agentName`,
-      message: 'invalid agent-single node',
+      message: 'invalid agent node',
     }
   }
   const agent = await loadAgent(db, agentName)
   if (agent === null) {
     return { kind: 'failed', summary: `agent '${agentName}' not found`, message: 'agent-not-found' }
+  }
+
+  // agent-multi (P-3-02): the parent waits for sourcePort content from
+  // upstream, shards it, then fans out a child node_run per shard with the
+  // sub-process semaphore providing the independent concurrency pool.
+  if (node.kind === 'agent-multi') {
+    return runFanOutNode(ctx, agent)
   }
 
   const upstreamInputs = await resolveUpstreamInputs(db, taskId, definition.edges, node.id, log)
@@ -647,6 +675,221 @@ async function runOneNode(ctx: OneNodeContext): Promise<OneNodeResult> {
       kind: 'failed',
       summary: lastResult.errorMessage ?? `node ${node.id} ${lastResult.status}`,
       message: lastResult.errorMessage ?? lastResult.status,
+    }
+  }
+  return { kind: 'ok', summary: '', message: '' }
+}
+
+// ---------------------------------------------------------------------------
+// Multi-process fan-out (P-3-02)
+// ---------------------------------------------------------------------------
+
+async function runFanOutNode(ctx: OneNodeContext, agent: Agent): Promise<OneNodeResult> {
+  const { node, definition, task, taskId, db, opts, subprocessSem, log } = ctx
+
+  // 1. Resolve the source port (the diff to shard).
+  const sourcePort = (node as Record<string, unknown>).sourcePort as
+    | { nodeId?: unknown; portName?: unknown }
+    | undefined
+  if (
+    sourcePort === undefined ||
+    typeof sourcePort.nodeId !== 'string' ||
+    typeof sourcePort.portName !== 'string'
+  ) {
+    return {
+      kind: 'failed',
+      summary: `agent-multi node ${node.id} missing sourcePort`,
+      message: 'sourcePort required',
+    }
+  }
+
+  // 2. Locate the latest node_run for the source node and pull its content.
+  const sourceRuns = await db
+    .select()
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, sourcePort.nodeId)))
+    .orderBy(desc(nodeRuns.retryIndex))
+    .limit(1)
+  const sourceRun = sourceRuns[0]
+  if (sourceRun === undefined) {
+    return {
+      kind: 'failed',
+      summary: `agent-multi node ${node.id} sourcePort ${sourcePort.nodeId} has no completed run`,
+      message: 'source-not-ready',
+    }
+  }
+  const sourceOuts = await db
+    .select()
+    .from(nodeRunOutputs)
+    .where(
+      and(
+        eq(nodeRunOutputs.nodeRunId, sourceRun.id),
+        eq(nodeRunOutputs.portName, sourcePort.portName),
+      ),
+    )
+  const sourceContent = sourceOuts[0]?.content ?? ''
+
+  // 3. Open the parent node_run + apply default fanout strategy.
+  const parentRunId = await insertNodeRun(db, taskId, node.id, 'pending', 0)
+  broadcastNodeStatus(taskId, parentRunId, node.id, 'running')
+
+  // 4. Empty source → parent done immediately with empty outputs + no errors.
+  if (sourceContent.trim() === '') {
+    for (const port of agent.outputs) {
+      await db
+        .insert(nodeRunOutputs)
+        .values({ nodeRunId: parentRunId, portName: port, content: '' })
+    }
+    await db
+      .insert(nodeRunOutputs)
+      .values({ nodeRunId: parentRunId, portName: 'errors', content: '' })
+    await db
+      .update(nodeRuns)
+      .set({ status: 'done', finishedAt: Date.now() })
+      .where(eq(nodeRuns.id, parentRunId))
+    broadcastNodeStatus(taskId, parentRunId, node.id, 'done')
+    return { kind: 'ok', summary: '', message: '' }
+  }
+
+  // 5. Shard via configured strategy. Default = per-file.
+  const strategy = (node as Record<string, unknown>).shardingStrategy as
+    | { kind: 'per-file' }
+    | { kind: 'per-n-files'; n: number }
+    | { kind: 'per-directory'; depth?: number }
+    | undefined
+  let shards
+  try {
+    if (strategy === undefined || strategy.kind === 'per-file') {
+      shards = splitDiffPerFile(sourceContent)
+    } else if (strategy.kind === 'per-n-files') {
+      shards = splitDiffPerNFiles(sourceContent, strategy.n)
+    } else {
+      shards = splitDiffPerDirectory(sourceContent, strategy.depth ?? 1)
+    }
+  } catch (err) {
+    return {
+      kind: 'failed',
+      summary: `shard split failed for node ${node.id}`,
+      message: err instanceof Error ? err.message : String(err),
+    }
+  }
+
+  // 6. Per-shard child runs. Inherit upstream non-source inputs verbatim.
+  const upstreamInputs = await resolveUpstreamInputs(db, taskId, definition.edges, node.id, log)
+  const resolvedSkills = await resolveSkills(db, opts.appHome, agent.skills)
+  const promptTemplate = pickString(node, 'promptTemplate') ?? undefined
+  const nodeTimeoutMs = pickNumber(node, 'timeoutMs') ?? opts.defaultPerNodeTimeoutMs
+
+  interface ChildResult {
+    shardKey: string
+    runId: string
+    status: RunResult['status']
+    outputs: Record<string, string>
+    errorMessage?: string
+  }
+
+  const children = await Promise.all(
+    shards.map((shard) =>
+      subprocessSem.run<ChildResult>(async () => {
+        const childRunId = ulid()
+        await db.insert(nodeRuns).values({
+          id: childRunId,
+          taskId,
+          nodeId: node.id,
+          status: 'pending',
+          retryIndex: 0,
+          parentNodeRunId: parentRunId,
+          shardKey: shard.shardKey,
+          startedAt: Date.now(),
+        })
+        broadcastNodeStatus(taskId, childRunId, node.id, 'pending')
+
+        const shardInputs: Record<string, string> = {
+          ...upstreamInputs,
+          [sourcePort.portName as string]: shard.content,
+        }
+        try {
+          const result = await runNode({
+            taskId,
+            nodeRunId: childRunId,
+            agent,
+            inputs: shardInputs,
+            worktreePath: task.worktreePath,
+            templateMeta: {
+              repoPath: task.repoPath,
+              baseBranch: task.baseBranch,
+              taskId,
+              nodeId: node.id,
+              shardKey: shard.shardKey,
+            },
+            ...(promptTemplate !== undefined ? { promptTemplate } : {}),
+            ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
+            skills: resolvedSkills,
+            appHome: opts.appHome,
+            ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
+            db,
+            log: log.child('fanout'),
+            ...(opts.signal ? { signal: opts.signal } : {}),
+          })
+          broadcastNodeStatus(taskId, childRunId, node.id, result.status)
+          return {
+            shardKey: shard.shardKey,
+            runId: childRunId,
+            status: result.status,
+            outputs: result.outputs,
+            ...(result.errorMessage !== undefined ? { errorMessage: result.errorMessage } : {}),
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          broadcastNodeStatus(taskId, childRunId, node.id, 'failed')
+          return {
+            shardKey: shard.shardKey,
+            runId: childRunId,
+            status: 'failed',
+            outputs: {},
+            errorMessage: msg,
+          }
+        }
+      }),
+    ),
+  )
+
+  // 7. Aggregate. Per declared output port, concat successful shards sorted
+  //    by shardKey (dictionary order). errors port = list of failed shards.
+  const sorted = [...children].sort((a, b) => a.shardKey.localeCompare(b.shardKey))
+  for (const port of agent.outputs) {
+    const content = sorted
+      .filter((c) => c.status === 'done')
+      .map((c) => c.outputs[port] ?? '')
+      .join('\n')
+    await db.insert(nodeRunOutputs).values({ nodeRunId: parentRunId, portName: port, content })
+  }
+  const failed = sorted.filter((c) => c.status !== 'done')
+  const errorsBody = failed
+    .map((c) => `## ${c.shardKey} (${c.status})\n${c.errorMessage ?? ''}`)
+    .join('\n\n')
+  await db
+    .insert(nodeRunOutputs)
+    .values({ nodeRunId: parentRunId, portName: 'errors', content: errorsBody })
+
+  // 8. Mark parent done if at least one shard succeeded — even with failed
+  //    shards, the errors port surfaces them. If ALL shards failed, fail.
+  const allFailed = sorted.length > 0 && sorted.every((c) => c.status !== 'done')
+  const finalStatus = allFailed ? 'failed' : 'done'
+  await db
+    .update(nodeRuns)
+    .set({
+      status: finalStatus,
+      finishedAt: Date.now(),
+      ...(allFailed ? { errorMessage: 'all shards failed' } : {}),
+    })
+    .where(eq(nodeRuns.id, parentRunId))
+  broadcastNodeStatus(taskId, parentRunId, node.id, finalStatus)
+  if (allFailed) {
+    return {
+      kind: 'failed',
+      summary: `agent-multi ${node.id} all ${sorted.length} shards failed`,
+      message: errorsBody,
     }
   }
   return { kind: 'ok', summary: '', message: '' }
