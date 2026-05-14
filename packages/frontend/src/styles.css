@@ -902,6 +902,131 @@ code {
   padding-left: 18px;
 }
 
+/* ---- Custom canvas nodes ---- */
+
+.canvas-node {
+  position: relative;
+  min-width: 180px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.canvas-node--selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.canvas-node__header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.canvas-node__kind {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.canvas-node__title {
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.canvas-node__id {
+  margin-top: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.canvas-node--agent {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+
+.canvas-node--multi {
+  border-style: dashed;
+}
+
+.canvas-node--io {
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+}
+
+.canvas-node--wrapper {
+  border-style: dashed;
+  min-width: 200px;
+  background: color-mix(in srgb, var(--muted) 6%, var(--panel));
+}
+
+/* Status overlay (populated by the task-detail canvas later). */
+.canvas-node[data-status='running'] {
+  border-color: var(--accent);
+}
+.canvas-node[data-status='done'] {
+  border-color: #2da44e;
+}
+.canvas-node[data-status='failed'] {
+  border-color: var(--danger);
+}
+
+/* Port handles + labels rendered alongside <Handle>. */
+.canvas-node__ports {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+}
+
+.canvas-node__ports--left {
+  left: -6px;
+}
+
+.canvas-node__ports--right {
+  right: -6px;
+}
+
+.canvas-node__port {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.canvas-node__port--left {
+  left: 0;
+  flex-direction: row;
+}
+
+.canvas-node__port--right {
+  right: 0;
+  flex-direction: row-reverse;
+}
+
+.canvas-node__port-label {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.canvas-node__handle {
+  background: var(--accent) !important;
+  width: 8px !important;
+  height: 8px !important;
+  border: 2px solid var(--panel) !important;
+}
+
 .readonly-pre {
   background: var(--panel);
   border: 1px solid var(--border);

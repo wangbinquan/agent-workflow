@@ -5,7 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Workflow, WorkflowDefinition } from '@agent-workflow/shared'
+import type { Agent, Workflow, WorkflowDefinition } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { WorkflowCanvas } from '@/components/canvas/WorkflowCanvas'
 import { ConfirmButton } from '@/components/ConfirmButton'
@@ -33,6 +33,10 @@ function WorkflowNewPage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [definition, setDefinition] = useState<WorkflowDefinition>(EMPTY_DEF)
+  const agents = useQuery<Agent[]>({
+    queryKey: ['agents'],
+    queryFn: ({ signal }) => api.get('/api/agents', undefined, signal),
+  })
 
   const create = useMutation({
     mutationFn: () => api.post<Workflow>('/api/workflows', { name, description, definition }),
@@ -70,7 +74,11 @@ function WorkflowNewPage() {
         <div className="error-box">{describeError(create.error)}</div>
       )}
       <div className="canvas-frame">
-        <WorkflowCanvas definition={definition} onChange={setDefinition} />
+        <WorkflowCanvas
+          definition={definition}
+          onChange={setDefinition}
+          agents={agents.data ?? []}
+        />
       </div>
     </div>
   )
@@ -101,6 +109,10 @@ function WorkflowEditPage() {
   const query = useQuery<Workflow>({
     queryKey: ['workflows', id],
     queryFn: ({ signal }) => api.get(`/api/workflows/${encodeURIComponent(id)}`, undefined, signal),
+  })
+  const agents = useQuery<Agent[]>({
+    queryKey: ['agents'],
+    queryFn: ({ signal }) => api.get('/api/agents', undefined, signal),
   })
 
   useEffect(() => {
@@ -228,6 +240,7 @@ function WorkflowEditPage() {
       <div className="canvas-frame">
         <WorkflowCanvas
           definition={draft}
+          agents={agents.data ?? []}
           onChange={(next) => {
             setDraft(next)
             setDirty(true)
