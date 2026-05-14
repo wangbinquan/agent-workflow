@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-**最近更新**：2026-05-14（P-2-10 stage 1 完成后，launcher 表单上线）
+**最近更新**：2026-05-14（P-2-12 完成后，task 详情状态画布上线）
 
 ---
 
@@ -17,7 +17,7 @@
 ```
 M0 准备       [5/5   ✅]
 M1 骨架       [18/18 ✅]  ← M1 完成
-M2 编辑器     [11/16 🚧]  ← 当前位置（+ launcher 表单 stage 1；下一步 P-2-12 任务画布 / P-2-13 节点详情抽屉 / P-2-07 多选）
+M2 编辑器     [12/16 🚧]  ← 当前位置（+ task 详情状态画布；剩 P-2-07 多选 / P-2-13 抽屉 / P-2-15 YAML / P-2-10 stage 2）
 M3 编排核心   [0/14]
 M4 高级编排   [0/11]
 M5 打磨       [0/12]
@@ -25,7 +25,7 @@ M5 打磨       [0/12]
 
 ---
 
-## 已完成 issue（34 个）
+## 已完成 issue（35 个）
 
 ### M0 全部完成（5/5）
 
@@ -37,10 +37,11 @@ M5 打磨       [0/12]
 | P-0-04 | ESLint + Prettier | `eslint.config.js` flat config + 跨包 import 边界规则（backend↮frontend 互斥） |
 | P-0-05 | Drizzle schema | 8 张表完整定义 + WAL/NORMAL/busy_timeout + 启动时自动 migrate + in-memory 测试辅助 |
 
-### M2 进行中（11/16）
+### M2 进行中（12/16）
 
 | ID | 标题 | 关键产出 |
 | --- | --- | --- |
+| P-2-12 | Task 详情状态画布 | `WorkflowCanvas` 新增 `nodeStatuses?: Record<nodeId, status>` prop，`toFlowNodes` 把 status 写到 `CanvasNodeData.status` → 触发 P-2-04 已有的 `canvas-node[data-status=...]` CSS 边框色。Task detail 路由新增 `<TaskStatusCanvas>` section：snapshot 拆 `WorkflowDefinition`、computes latest run-per-nodeId、`canvasStatus()` 把 NodeRunStatus 映射到 CanvasNodeData 子集（done/failed/running/pending/skipped/canceled），canvas 用 readOnly+任务高度 70vh。前端 tests +3 case |
 | P-2-10 (stage 1) | Launcher 表单 | `routes/workflows.launch.tsx`：路由 `/workflows/$id/launch`。recent-repo `<select>` + 手填 path 双绑（选了就自动 set baseBranch = recentRepo.defaultBranch），baseBranch 通过 `useQuery /api/repos/refs` 拿到 branches 后 `<select>` 否则 fallback text input。`workflow.definition.inputs` 自动渲染：kind === 'text' 走 TextInput（含 multiline passthrough → textarea），其它 kind 暂留占位 + "stage 2 picker ships later" 提示。`missingRequired` 推断 disabled。提交 POST /api/tasks → 跳 /tasks/$id。editor 路由 header 新增 "Launch task →" 按钮。`stage 2`（file / git-object / enum picker + warning bar）后续单独 issue |
 | P-2-11 | Output 节点配置 + 产出面板 | NodeInspector 的 output 节点改成可编辑列表（每行 name + bind.nodeId + bind.portName + Remove，底部 + Add port）。`components/TaskOutputPanel.tsx` 在 task 详情顶部渲染：`collectPorts(task.workflowSnapshot)` 解析 output 节点 `ports[]` + workflow-level `outputs[]` bindings → 拿 latest run per nodeId → 从 `node_run_outputs` 取对应 port 值 → 一张卡片含 name / bind / value，Copy 按钮（navigator.clipboard）。pending / empty / value 三态显示。tests 5 case for collectPorts |
 | P-2-14 | Task list realtime via /ws/tasks | `hooks/{useTasksSync,useTaskSync}.ts` 订阅 `/ws/tasks` / `/ws/tasks/:id`，收到 task.* / node.* 事件 → invalidate 相应 react-query。tasks 列表轮询从 4s 调到 15s 兜底；详情页 task / node-runs / diff 三个 query 按事件类型分别 invalidate |
@@ -80,7 +81,7 @@ M5 打磨       [0/12]
 
 ## 测试积累
 
-后端测试 **232 个 case**（`bun test` — 由 `bunfig.toml [test] root` 限定到 `packages/backend/tests`）；前端测试 **93 个 case**（`bun run --filter @agent-workflow/frontend test` → vitest + happy-dom + 自写 localStorage shim，因为 vitest 3 / happy-dom 15 在 node 25 下默认 storage 为空 `{}`）。后端 daemon 启动测试 spawn 子进程，~1-2s 每 case。git util / repos / tasks / 部分 workflow 测试初始化真实 git 仓 fixture。Runner / scheduler 测试用 mock-opencode 子进程脚本代替真 opencode。
+后端测试 **232 个 case**（`bun test` — 由 `bunfig.toml [test] root` 限定到 `packages/backend/tests`）；前端测试 **96 个 case**（`bun run --filter @agent-workflow/frontend test` → vitest + happy-dom + 自写 localStorage shim，因为 vitest 3 / happy-dom 15 在 node 25 下默认 storage 为空 `{}`）。后端 daemon 启动测试 spawn 子进程，~1-2s 每 case。git util / repos / tasks / 部分 workflow 测试初始化真实 git 仓 fixture。Runner / scheduler 测试用 mock-opencode 子进程脚本代替真 opencode。
 
 测试文件：
 ```
@@ -168,9 +169,11 @@ M1 验收已 ready：`agent-workflow start` → 浏览器登 token → 创 agent
 | ID | 标题 | 依赖 | 复杂度 |
 | --- | --- | --- | --- |
 | P-2-07 | 右键菜单 + 多选 + 复制粘贴 | P-2-03 | M |
+| P-2-07 | 右键菜单 + 多选 + 复制粘贴 | P-2-03 | M |
 | P-2-10 (stage 2) | Launcher 的 file / enum / git 选择器 + warning bar | P-1-10 | M |
-| P-2-12 | Task 详情三区布局 + 状态画布 overlay | P-2-03、P-2-11 | M |
 | P-2-13 | 节点详情抽屉 4 tab（Prompt/Events/Output/Stats） | P-2-02、P-2-12 | L |
+| P-2-15 | YAML 导入/导出 | P-1-11 | M |
+| P-2-16 | Settings 页面 4 标签 | P-1-03 | M |
 
 M1 验收：跑通 `创 agent → 创 skill → 通过 API/curl 创线性 workflow → 启 task → 看 opencode 子进程跑完 → 输出 envelope 解析为 ports`。
 

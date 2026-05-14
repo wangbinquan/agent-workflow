@@ -4,13 +4,23 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute } from '@tanstack/react-router'
-import type { NodeRun, Task, TaskDiff, TaskNodeRuns } from '@agent-workflow/shared'
+import type {
+  Agent,
+  NodeRun,
+  Task,
+  TaskDiff,
+  TaskNodeRuns,
+  WorkflowDefinition,
+} from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
+import { WorkflowCanvas } from '@/components/canvas/WorkflowCanvas'
+import type { CanvasNodeData } from '@/components/canvas/nodes/types'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { DiffViewer } from '@/components/DiffViewer'
 import { TaskOutputPanel } from '@/components/TaskOutputPanel'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
 import { useTaskSync } from '@/hooks/useTaskSync'
+import { useMemo } from 'react'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -120,6 +130,11 @@ function TaskDetailPage() {
       )}
 
       <section className="page__section">
+        <h2>Workflow status</h2>
+        <TaskStatusCanvas task={t} runs={nodeRuns.data?.runs ?? []} />
+      </section>
+
+      <section className="page__section">
         <h2>Node runs</h2>
         {nodeRuns.isLoading && <div className="muted">Loading…</div>}
         {nodeRuns.error !== null && nodeRuns.error !== undefined && (
@@ -142,6 +157,70 @@ function TaskDetailPage() {
       </section>
     </div>
   )
+}
+
+function TaskStatusCanvas({ task, runs }: { task: Task; runs: NodeRun[] }) {
+  const definition = useMemo<WorkflowDefinition | null>(() => {
+    const snap = task.workflowSnapshot
+    if (typeof snap !== 'object' || snap === null) return null
+    // Trust the snapshot's shape — it came out of the same code path that
+    // validated it at task-start time.
+    return snap as WorkflowDefinition
+  }, [task.workflowSnapshot])
+
+  const agents = useQuery<Agent[]>({
+    queryKey: ['agents'],
+    queryFn: ({ signal }) => api.get('/api/agents', undefined, signal),
+  })
+
+  const statuses = useMemo<Record<string, CanvasNodeData['status']>>(() => {
+    const latest = new Map<string, NodeRun>()
+    for (const r of runs) {
+      const prev = latest.get(r.nodeId)
+      if (prev === undefined || (r.startedAt ?? 0) >= (prev.startedAt ?? 0)) {
+        latest.set(r.nodeId, r)
+      }
+    }
+    const out: Record<string, CanvasNodeData['status']> = {}
+    for (const [nodeId, run] of latest) {
+      out[nodeId] = canvasStatus(run.status)
+    }
+    return out
+  }, [runs])
+
+  if (definition === null) {
+    return <div className="muted">No workflow snapshot available.</div>
+  }
+
+  return (
+    <div className="canvas-frame canvas-frame--task">
+      <WorkflowCanvas
+        definition={definition}
+        agents={agents.data ?? []}
+        nodeStatuses={statuses}
+        readOnly
+      />
+    </div>
+  )
+}
+
+function canvasStatus(s: NodeRun['status']): CanvasNodeData['status'] {
+  switch (s) {
+    case 'running':
+      return 'running'
+    case 'done':
+      return 'done'
+    case 'failed':
+    case 'exhausted':
+      return 'failed'
+    case 'canceled':
+    case 'interrupted':
+      return 'canceled'
+    case 'pending':
+      return 'pending'
+    case 'skipped':
+      return 'skipped'
+  }
 }
 
 function NodeRunsTable({ runs }: { runs: NodeRun[] }) {

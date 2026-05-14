@@ -1017,6 +1017,11 @@ code {
   min-height: 520px;
 }
 
+.canvas-frame--task {
+  height: 70vh;
+  min-height: 420px;
+}
+
 .editor-sidebar {
   background: var(--panel);
   border: 1px solid var(--border);

@@ -46,6 +46,12 @@ export interface WorkflowCanvasProps {
   /** Receives the currently-selected node id or null when nothing is selected. */
   onSelect?: (nodeId: string | null) => void
   readOnly?: boolean
+  /**
+   * Map of nodeId → status. Wired into the per-kind renderers'
+   * `data-status` attribute so the existing CSS overlay picks the color.
+   * Used by the task-detail status view (P-2-12).
+   */
+  nodeStatuses?: Record<string, CanvasNodeData['status'] | undefined>
 }
 
 export function WorkflowCanvas(props: WorkflowCanvasProps) {
@@ -56,7 +62,14 @@ export function WorkflowCanvas(props: WorkflowCanvasProps) {
   )
 }
 
-function CanvasInner({ definition, agents, onChange, onSelect, readOnly }: WorkflowCanvasProps) {
+function CanvasInner({
+  definition,
+  agents,
+  onChange,
+  onSelect,
+  readOnly,
+  nodeStatuses,
+}: WorkflowCanvasProps) {
   const agentByName = useMemo(() => {
     const m = new Map<string, Agent>()
     for (const a of agents ?? []) m.set(a.name, a)
@@ -64,17 +77,23 @@ function CanvasInner({ definition, agents, onChange, onSelect, readOnly }: Workf
   }, [agents])
   const rf = useReactFlow()
 
-  const [nodes, setNodes] = useState<Node[]>(() => toFlowNodes(definition, agentByName))
+  const [nodes, setNodes] = useState<Node[]>(() =>
+    toFlowNodes(definition, agentByName, nodeStatuses),
+  )
   const [edges, setEdges] = useState<Edge[]>(() => toFlowEdges(definition.edges))
   const externalDefRef = useRef(definition)
+  const externalStatusesRef = useRef(nodeStatuses)
 
   useEffect(() => {
-    if (definition !== externalDefRef.current) {
+    const defChanged = definition !== externalDefRef.current
+    const statusChanged = nodeStatuses !== externalStatusesRef.current
+    if (defChanged || statusChanged) {
       externalDefRef.current = definition
-      setNodes(toFlowNodes(definition, agentByName))
-      setEdges(toFlowEdges(definition.edges))
+      externalStatusesRef.current = nodeStatuses
+      setNodes(toFlowNodes(definition, agentByName, nodeStatuses))
+      if (defChanged) setEdges(toFlowEdges(definition.edges))
     }
-  }, [definition, agentByName])
+  }, [definition, agentByName, nodeStatuses])
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -248,7 +267,11 @@ export function computePorts(
   return { inputs, outputs }
 }
 
-function toFlowNodes(definition: WorkflowDefinition, agentByName: Map<string, Agent>): Node[] {
+function toFlowNodes(
+  definition: WorkflowDefinition,
+  agentByName: Map<string, Agent>,
+  statuses?: Record<string, CanvasNodeData['status'] | undefined>,
+): Node[] {
   return definition.nodes.map((n, idx) => {
     const pos = n.position
     const ports = computePorts(n, agentByName, definition)
@@ -258,6 +281,10 @@ function toFlowNodes(definition: WorkflowDefinition, agentByName: Map<string, Ag
       title: nodeTitle(n),
       inputPorts: ports.inputs,
       outputPorts: ports.outputs,
+    }
+    if (statuses !== undefined) {
+      const s = statuses[n.id]
+      if (s !== undefined) data.status = s
     }
     if (n.kind === 'wrapper-git' || n.kind === 'wrapper-loop') {
       const inner = (n as unknown as { nodeIds?: string[] }).nodeIds
@@ -371,6 +398,7 @@ export const __testToFlowNodes = (
   defNodes: WorkflowDefinition['nodes'],
   agents: Agent[] = [],
   edges: WorkflowEdge[] = [],
+  statuses?: Record<string, CanvasNodeData['status'] | undefined>,
 ): Node[] => {
   const def: WorkflowDefinition = {
     $schema_version: 1,
@@ -380,7 +408,7 @@ export const __testToFlowNodes = (
   }
   const map = new Map<string, Agent>()
   for (const a of agents) map.set(a.name, a)
-  return toFlowNodes(def, map)
+  return toFlowNodes(def, map, statuses)
 }
 export const __testToFlowEdges = toFlowEdges
 export const __testToDefinition = toDefinition
