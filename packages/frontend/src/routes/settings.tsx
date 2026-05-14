@@ -341,13 +341,14 @@ function BackupCard() {
 }
 
 function NetworkTab({ config }: TabProps) {
-  const { state, setState, save } = useTabState(config, ['bindHost', 'bindPort'])
+  const { state, setState, save, restartRequired } = useTabState(config, ['bindHost', 'bindPort'])
   return (
     <SectionForm
       onSave={save.mutate}
       busy={save.isPending}
       error={save.error}
       success={save.isSuccess && save.error === null ? 'saved' : null}
+      restartRequired={restartRequired}
     >
       <Field
         label="Bind host"
@@ -427,6 +428,31 @@ function ConnectionTab() {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * P-5-09: config keys whose new value only takes effect on the next daemon
+ * start. After a successful PUT we compare these against the pre-save snapshot
+ * and surface a restart banner in `<SectionForm>` whenever one of them moved.
+ */
+export const RESTART_REQUIRED_KEYS: ReadonlySet<keyof ConfigPatch> = new Set([
+  'bindHost',
+  'bindPort',
+])
+
+/**
+ * Returns true iff at least one of `keys` is a restart-required key AND its
+ * value differs between `before` and `after`. Exported for unit tests.
+ */
+export function hasRestartRequiredChange(
+  keys: readonly (keyof ConfigPatch)[],
+  before: Partial<Record<keyof ConfigPatch, unknown>>,
+  after: Partial<Record<keyof ConfigPatch, unknown>>,
+): boolean {
+  return keys.some((k) => {
+    if (!RESTART_REQUIRED_KEYS.has(k)) return false
+    return after[k] !== before[k]
+  })
+}
+
 function useTabState<K extends keyof ConfigPatch>(config: Config, keys: K[]) {
   const qc = useQueryClient()
   const initial: ConfigPatch = {}
@@ -434,6 +460,7 @@ function useTabState<K extends keyof ConfigPatch>(config: Config, keys: K[]) {
     ;(initial as Record<string, unknown>)[k] = (config as Record<string, unknown>)[k]
   }
   const [state, setState] = useState<ConfigPatch>(initial)
+  const [restartRequired, setRestartRequired] = useState(false)
 
   // Re-seed when the config re-fetches (e.g. after save).
   useEffect(() => {
@@ -448,10 +475,18 @@ function useTabState<K extends keyof ConfigPatch>(config: Config, keys: K[]) {
   const save = useMutation({
     mutationFn: () => api.put<Config>('/api/config', state),
     onSuccess: (next) => {
+      // Restart banner fires whenever any restart-required key handled by this
+      // tab actually changed value. Comparing to `config` (the pre-save query
+      // snapshot) rather than `state` avoids false positives when the user
+      // saved without editing those fields.
+      setRestartRequired(hasRestartRequiredChange(keys, config, next))
       qc.setQueryData(['config'], next)
     },
+    onMutate: () => {
+      setRestartRequired(false)
+    },
   })
-  return { state, setState, save }
+  return { state, setState, save, restartRequired }
 }
 
 interface SectionFormProps {
@@ -459,10 +494,19 @@ interface SectionFormProps {
   busy: boolean
   error: unknown
   success: string | null
+  restartRequired?: boolean
   children: React.ReactNode
 }
 
-function SectionForm({ onSave, busy, error, success, children }: SectionFormProps) {
+function SectionForm({
+  onSave,
+  busy,
+  error,
+  success,
+  restartRequired,
+  children,
+}: SectionFormProps) {
+  const { t } = useTranslation()
   return (
     <div>
       <div className="form-grid">{children}</div>
@@ -475,6 +519,14 @@ function SectionForm({ onSave, busy, error, success, children }: SectionFormProp
           <span className="form-actions__error">{describeError(error)}</span>
         )}
       </div>
+      {restartRequired === true && (
+        <div className="info-box" role="status" aria-live="polite" style={{ marginTop: 12 }}>
+          <strong>{t('settings.restartRequiredTitle')}</strong>
+          <p style={{ marginTop: 4, marginBottom: 0, fontSize: 13 }}>
+            {t('settings.restartRequiredHint')}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

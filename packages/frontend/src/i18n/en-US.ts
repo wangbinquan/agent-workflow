@@ -49,6 +49,9 @@ export const enUS: Resources = {
     themeSystem: 'Follow system',
     themeLight: 'Light',
     themeDark: 'Dark',
+    restartRequiredTitle: 'Daemon restart required',
+    restartRequiredHint:
+      'The new value was written to config.json, but bind host / bind port only apply on the next agent-workflow start. Run `agent-workflow stop` and then `agent-workflow start` in your terminal.',
   },
   errors: {
     'http-401': 'Unauthorized — please sign in again.',

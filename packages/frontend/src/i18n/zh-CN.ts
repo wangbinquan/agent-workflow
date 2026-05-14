@@ -50,6 +50,8 @@ export interface Resources {
     themeSystem: string
     themeLight: string
     themeDark: string
+    restartRequiredTitle: string
+    restartRequiredHint: string
   }
   errors: Record<string, string>
 }
@@ -100,6 +102,9 @@ export const zhCN: Resources = {
     themeSystem: '跟随系统',
     themeLight: '浅色',
     themeDark: '深色',
+    restartRequiredTitle: '需要重启守护进程',
+    restartRequiredHint:
+      '新值已写入 config.json，但 bind host / bind port 仅在下次 agent-workflow start 时生效。请在终端先 agent-workflow stop，再 agent-workflow start。',
   },
   // Error codes thrown by the backend (DomainError family + transport).
   errors: {
