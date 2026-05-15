@@ -23,8 +23,9 @@ function ruleBody(selector: string, css: string): string {
   // boundary so `.page` doesn't accidentally pick up `.page--wide` etc.
   const re = new RegExp(`(?:^|\\n|\\})\\s*${selector.replace(/[.\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`)
   const m = css.match(re)
-  if (!m) throw new Error(`selector not found: ${selector}`)
-  return m[1]
+  const body = m?.[1]
+  if (body === undefined) throw new Error(`selector not found: ${selector}`)
+  return body
 }
 
 describe('pages fill the full content width', () => {
