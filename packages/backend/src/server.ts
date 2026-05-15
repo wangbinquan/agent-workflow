@@ -15,6 +15,7 @@ import { mountRuntimeRoutes } from '@/routes/runtime'
 import { mountSkillRoutes } from '@/routes/skills'
 import { mountTaskRoutes } from '@/routes/tasks'
 import { mountWorkflowRoutes } from '@/routes/workflows'
+import { mountWorktreeFilesRoutes } from '@/routes/worktree-files'
 import { errorHandler } from '@/util/errors'
 import { createLogger } from '@/util/log'
 
@@ -61,6 +62,7 @@ export function createApp(deps: AppDeps): Hono {
   mountWorkflowRoutes(app, deps)
   mountTaskRoutes(app, deps)
   mountBackupRoutes(app, deps)
+  mountWorktreeFilesRoutes(app, deps)
 
   app.onError(errorHandler)
 
