@@ -2,6 +2,7 @@
 // draggable; the drop side lives on the canvas.
 
 import { useMemo, useState, type DragEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Agent } from '@agent-workflow/shared'
 import { PALETTE_MIME, buildPalette, serialize, type PaletteItem } from './nodePalette'
 
@@ -10,8 +11,9 @@ interface Props {
 }
 
 export function EditorSidebar({ agents }: Props) {
+  const { t } = useTranslation()
   const [filter, setFilter] = useState('')
-  const sections = useMemo(() => buildPalette(agents), [agents])
+  const sections = useMemo(() => buildPalette(agents, t), [agents, t])
 
   const visible = useMemo(() => {
     if (filter.trim() === '') return sections
@@ -38,7 +40,7 @@ export function EditorSidebar({ agents }: Props) {
       <div className="editor-sidebar__filter">
         <input
           type="search"
-          placeholder="Filter palette…"
+          placeholder={t('editor.paletteFilter')}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="form-input form-input--sm"
@@ -66,7 +68,9 @@ export function EditorSidebar({ agents }: Props) {
             </ul>
           </section>
         ))}
-        {visible.length === 0 && <div className="muted editor-sidebar__empty">No matches.</div>}
+        {visible.length === 0 && (
+          <div className="muted editor-sidebar__empty">{t('editor.paletteNoMatches')}</div>
+        )}
       </div>
     </aside>
   )

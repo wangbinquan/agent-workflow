@@ -194,6 +194,123 @@ export interface Resources {
     minutesAgo: string
     hoursAgo: string
   }
+  editor: {
+    newTitle: string
+    newHint: string
+    create: string
+    creating: string
+    fieldName: string
+    fieldDescription: string
+    loadingWorkflow: string
+    statusSaving: string
+    statusUnsaved: string
+    statusSaved: string
+    launch: string
+    validate: string
+    validating: string
+    exportYaml: string
+    exportTitle: string
+    remoteUpdated: string
+    remoteDeleted: string
+    remoteDismiss: string
+    validationOk: string
+    validationIssues: string
+    paletteFilter: string
+    paletteNoMatches: string
+    paletteAgents: string
+    paletteFanOut: string
+    paletteFanOutDesc: string
+    paletteAgentFallbackDesc: string
+    paletteWrappers: string
+    paletteWrapperGitLabel: string
+    paletteWrapperGitDesc: string
+    paletteWrapperLoopLabel: string
+    paletteWrapperLoopDesc: string
+    paletteIo: string
+    paletteInputLabel: string
+    paletteInputDesc: string
+    paletteOutputLabel: string
+    paletteOutputDesc: string
+    menuPaste: string
+    menuSelectAll: string
+    menuDuplicate: string
+    menuCopy: string
+    menuWrapGit: string
+    menuWrapLoop: string
+    menuDecompose: string
+  }
+  launch: {
+    title: string
+    hintBefore: string
+    hintCode: string
+    hintAfter: string
+    backToEditor: string
+    fieldRepo: string
+    fieldRepoHint: string
+    pickRepoPlaceholder: string
+    pasteRepoPath: string
+    fieldBaseBranch: string
+    baseBranchHint: string
+    pickBranchPlaceholder: string
+    baseBranchPlaceholder: string
+    noInputs: string
+    start: string
+    starting: string
+  }
+  inspector: {
+    closeAria: string
+    tabEdit: string
+    tabPreview: string
+    previewOnlyAgent: string
+    resolvedInbound: string
+    fieldInputKey: string
+    fieldInputKeyHint: string
+    fieldOutputPorts: string
+    fieldOutputPortsHint: string
+    portNamePlaceholder: string
+    upstreamPlaceholder: string
+    portPlaceholder: string
+    remove: string
+    addPort: string
+    innerNodeIds: string
+    innerNodeIdsHint: string
+    none: string
+    loopBanner: string
+    fieldMaxIterations: string
+    fieldExitConditionKind: string
+    fieldExitConditionKindHint: string
+    fieldExitConditionTarget: string
+    fieldExitConditionTargetHint: string
+    fieldExitConditionValue: string
+    fieldExitConditionN: string
+    fieldExitConditionSeparator: string
+    fieldOutputBindings: string
+    fieldOutputBindingsHint: string
+    outputNamePlaceholder: string
+    innerNodeIdPlaceholder: string
+    addBinding: string
+    fieldAgent: string
+    fieldAgentHint: string
+    pickAgent: string
+    fieldSourcePort: string
+    fieldPromptTemplate: string
+    fieldPromptTemplateHint: string
+    fieldRetries: string
+    fieldRetriesHint: string
+    fieldTimeoutMs: string
+    fieldTimeoutMsHint: string
+    fieldModelOverride: string
+    modelPlaceholder: string
+    fieldVariant: string
+    fieldTemperatureOverride: string
+    sourcePortNodePlaceholder: string
+    sourcePortPlaceholder: string
+  }
+  promptPreview: {
+    mockTitle: string
+    noPorts: string
+    assembledTitle: string
+  }
   errors: Record<string, string>
 }
 
@@ -392,6 +509,124 @@ export const zhCN: Resources = {
     secondsAgo: '{{n}} 秒前',
     minutesAgo: '{{n}} 分钟前',
     hoursAgo: '{{n}} 小时前',
+  },
+  editor: {
+    newTitle: '新建工作流',
+    newHint: '从左侧面板拖拽节点到画布即可创建。',
+    create: '创建',
+    creating: '创建中…',
+    fieldName: '名称',
+    fieldDescription: '描述',
+    loadingWorkflow: '加载工作流中…',
+    statusSaving: '保存中…',
+    statusUnsaved: '未保存',
+    statusSaved: '已保存',
+    launch: '启动任务 →',
+    validate: '校验',
+    validating: '校验中…',
+    exportYaml: '导出 YAML',
+    exportTitle: '下载为 YAML',
+    remoteUpdated: '该工作流在其它端被更新（v{{version}}）；当前视图即将刷新。',
+    remoteDeleted: '该工作流在其它端被删除。',
+    remoteDismiss: '关闭',
+    validationOk: '✓ 校验通过',
+    validationIssues: '{{n}} 个问题',
+    paletteFilter: '过滤面板…',
+    paletteNoMatches: '没有匹配项。',
+    paletteAgents: '代理',
+    paletteFanOut: 'Fan-out',
+    paletteFanOutDesc: '多进程（按 sourcePort 分片）',
+    paletteAgentFallbackDesc: 'agent',
+    paletteWrappers: '包装器',
+    paletteWrapperGitLabel: 'git wrapper',
+    paletteWrapperGitDesc: '在子节点前后快照 diff',
+    paletteWrapperLoopLabel: 'loop wrapper',
+    paletteWrapperLoopDesc: '重复执行子节点直到退出条件满足',
+    paletteIo: 'IO',
+    paletteInputLabel: 'input',
+    paletteInputDesc: 'launcher 表单值',
+    paletteOutputLabel: 'output',
+    paletteOutputDesc: '任务详情页输出面板',
+    menuPaste: '粘贴',
+    menuSelectAll: '全选',
+    menuDuplicate: '复制为新节点',
+    menuCopy: '复制',
+    menuWrapGit: '用 git wrapper 包装',
+    menuWrapLoop: '用 loop wrapper 包装',
+    menuDecompose: '解组 wrapper',
+  },
+  launch: {
+    title: '启动：{{name}}',
+    hintBefore: '选好仓库 + 分支，填好工作流 inputs，然后提交。提交时会在 ',
+    hintCode: '~/.agent-workflow/worktrees/<repo>/<taskId>',
+    hintAfter: ' 处创建一个 worktree。',
+    backToEditor: '← 返回编辑器',
+    fieldRepo: '仓库',
+    fieldRepoHint: '从最近列表选一个，或粘贴绝对路径。',
+    pickRepoPlaceholder: '— 选一个仓库 —',
+    pasteRepoPath: '或粘贴绝对路径',
+    fieldBaseBranch: '基线分支',
+    baseBranchHint: '用作 worktree 的起点',
+    pickBranchPlaceholder: '— 选一个分支 —',
+    baseBranchPlaceholder: 'main',
+    noInputs: '该工作流没有声明 inputs。',
+    start: '启动任务',
+    starting: '启动中…',
+  },
+  inspector: {
+    closeAria: '关闭',
+    tabEdit: '编辑',
+    tabPreview: '预览',
+    previewOnlyAgent: '仅 agent 节点支持预览。',
+    resolvedInbound: '入边端口：',
+    fieldInputKey: 'Input key',
+    fieldInputKeyHint: '工作流内必须唯一。',
+    fieldOutputPorts: '输出端口',
+    fieldOutputPortsHint: '每个端口 = 任务详情页的一张卡片；绑定到 (nodeId, portName)。',
+    portNamePlaceholder: '端口名',
+    upstreamPlaceholder: '上游 nodeId',
+    portPlaceholder: '端口',
+    remove: '移除',
+    addPort: '+ 增加端口',
+    innerNodeIds: '内部节点 id',
+    innerNodeIdsHint: '通过画布右键菜单组装。',
+    none: '无',
+    loopBanner: '跨轮次状态完全靠 worktree 文件流转。v1 没有反馈端口；agent 之间通过读写文件传递。',
+    fieldMaxIterations: '最大迭代次数',
+    fieldExitConditionKind: '退出条件类型',
+    fieldExitConditionKindHint:
+      'port-empty：trim 后为空 · port-equals：完全相等 · port-count-lt：行数 < n',
+    fieldExitConditionTarget: '退出条件目标',
+    fieldExitConditionTargetHint: '(nodeId, portName)，每轮检查',
+    fieldExitConditionValue: '相等值',
+    fieldExitConditionN: 'n',
+    fieldExitConditionSeparator: "分隔符（默认 '\\n'）",
+    fieldOutputBindings: '输出绑定',
+    fieldOutputBindingsHint: '把内部端口暴露为 wrapper 的输出端口。',
+    outputNamePlaceholder: '输出名',
+    innerNodeIdPlaceholder: '内部 nodeId',
+    addBinding: '+ 增加绑定',
+    fieldAgent: '代理',
+    fieldAgentHint: 'Fan-out 会按 sourcePort 把子运行切片。',
+    pickAgent: '— 选一个代理 —',
+    fieldSourcePort: 'sourcePort (nodeId.portName)',
+    fieldPromptTemplate: 'Prompt 模板',
+    fieldPromptTemplateHint: '使用 {{port_name}} 引用入边端口；内置变量如 {{__repo_path__}}。',
+    fieldRetries: '重试次数',
+    fieldRetriesHint: '默认 0',
+    fieldTimeoutMs: '超时 (ms)',
+    fieldTimeoutMsHint: '缺省走 settings.defaultPerNodeTimeoutMs',
+    fieldModelOverride: '模型覆盖',
+    modelPlaceholder: 'anthropic/claude-sonnet-4-6',
+    fieldVariant: 'Variant',
+    fieldTemperatureOverride: 'Temperature 覆盖',
+    sourcePortNodePlaceholder: '上游 node id',
+    sourcePortPlaceholder: '端口名',
+  },
+  promptPreview: {
+    mockTitle: '模拟端口值',
+    noPorts: '没有入边端口。增加一条入边后此处会列出。',
+    assembledTitle: '拼好的 prompt',
   },
   // Error codes thrown by the backend (DomainError family + transport).
   errors: {

@@ -127,16 +127,25 @@ describe('makeNode', () => {
 })
 
 describe('buildPalette', () => {
-  test('groups agents into Agents + Fan-out sections', () => {
-    const sections = buildPalette([AGENT_A])
+  // Identity stub stands in for react-i18next's `t` so the assertion can
+  // pin the exact i18n keys this module emits without booting the bundle.
+  const identityT = (key: string) => key
+
+  test('groups agents into Agents + Fan-out sections (i18n key labels)', () => {
+    const sections = buildPalette([AGENT_A], identityT)
     const labels = sections.map((s) => s.label)
-    expect(labels).toEqual(['Agents', 'Fan-out', 'Wrappers', 'IO'])
+    expect(labels).toEqual([
+      'editor.paletteAgents',
+      'editor.paletteFanOut',
+      'editor.paletteWrappers',
+      'editor.paletteIo',
+    ])
     expect(sections[0]?.items[0]?.item).toEqual({ kind: 'agent-single', agentName: 'coder' })
     expect(sections[1]?.items[0]?.item).toEqual({ kind: 'agent-multi', agentName: 'coder' })
   })
 
   test('always includes wrapper + IO entries regardless of agents', () => {
-    const sections = buildPalette([])
+    const sections = buildPalette([], identityT)
     const all = sections.flatMap((s) => s.items.map((i) => i.item.kind))
     expect(all).toContain('wrapper-git')
     expect(all).toContain('wrapper-loop')

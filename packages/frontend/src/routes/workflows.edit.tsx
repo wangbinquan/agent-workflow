@@ -5,6 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Agent, Workflow, WorkflowDefinition } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { getBaseUrl, getToken } from '@/stores/auth'
@@ -40,6 +41,7 @@ export const NewRoute = createRoute({
 })
 
 function WorkflowNewPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [name, setName] = useState('')
@@ -63,8 +65,8 @@ function WorkflowNewPage() {
     <div className="page page--editor">
       <header className="page__header page__header--row">
         <div>
-          <h1>New workflow</h1>
-          <p className="page__hint">Drag-create from the sidebar arrives in P-2-05.</p>
+          <h1>{t('editor.newTitle')}</h1>
+          <p className="page__hint">{t('editor.newHint')}</p>
         </div>
         <button
           type="button"
@@ -72,14 +74,14 @@ function WorkflowNewPage() {
           onClick={() => create.mutate()}
           disabled={name === '' || create.isPending}
         >
-          {create.isPending ? 'Creating…' : 'Create'}
+          {create.isPending ? t('editor.creating') : t('editor.create')}
         </button>
       </header>
       <div className="form-grid form-grid--cols-2">
-        <Field label="Name" required>
+        <Field label={t('editor.fieldName')} required>
           <TextInput value={name} onChange={setName} required />
         </Field>
-        <Field label="Description">
+        <Field label={t('editor.fieldDescription')}>
           <TextInput value={description} onChange={setDescription} />
         </Field>
       </div>
@@ -117,6 +119,7 @@ export const EditRoute = createRoute({
 })
 
 function WorkflowEditPage() {
+  const { t } = useTranslation()
   const { id } = EditRoute.useParams()
   const qc = useQueryClient()
   const navigate = useNavigate()
@@ -189,8 +192,8 @@ function WorkflowEditPage() {
   // Auto-save when the user pauses for >1s after a change (design.md §4.1).
   useEffect(() => {
     if (!dirty || draft === null) return
-    const t = setTimeout(() => save.mutate(), 1000)
-    return () => clearTimeout(t)
+    const tt = setTimeout(() => save.mutate(), 1000)
+    return () => clearTimeout(tt)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirty, name, description, draft])
 
@@ -199,16 +202,15 @@ function WorkflowEditPage() {
   useWorkflowSync({
     workflowId: id,
     currentVersion: query.data?.version ?? null,
-    onRemoteUpdate: (v) =>
-      setRemoteToast(`Workflow was updated elsewhere (v${v}); your view will refresh.`),
-    onRemoteDelete: () => setRemoteToast('This workflow was deleted from another tab.'),
+    onRemoteUpdate: (v) => setRemoteToast(t('editor.remoteUpdated', { version: v })),
+    onRemoteDelete: () => setRemoteToast(t('editor.remoteDeleted')),
   })
 
   const headerActions = useMemo(
     () => (
       <div className="page__actions">
         <Link to="/workflows/$id/launch" params={{ id }} className="btn btn--sm btn--primary">
-          Launch task →
+          {t('editor.launch')}
         </Link>
         <button
           type="button"
@@ -216,29 +218,30 @@ function WorkflowEditPage() {
           onClick={() => validate.mutate()}
           disabled={validate.isPending}
         >
-          {validate.isPending ? 'Validating…' : 'Validate'}
+          {validate.isPending ? t('editor.validating') : t('editor.validate')}
         </button>
         <a
           href={exportUrl(id)}
           target="_blank"
           rel="noreferrer"
           className="btn btn--sm"
-          title="Download workflow as YAML"
+          title={t('editor.exportTitle')}
         >
-          Export YAML
+          {t('editor.exportYaml')}
         </a>
         <ConfirmButton
-          label="Delete"
+          label={t('common.delete')}
           onConfirm={() => del.mutateAsync()}
           danger
           disabled={del.isPending}
         />
       </div>
     ),
-    [id, validate, del],
+    [id, validate, del, t],
   )
 
-  if (query.isLoading || draft === null) return <div className="page muted">Loading workflow…</div>
+  if (query.isLoading || draft === null)
+    return <div className="page muted">{t('editor.loadingWorkflow')}</div>
   if (query.error !== null && query.error !== undefined)
     return <div className="page error-box">{describeError(query.error)}</div>
 
@@ -249,14 +252,18 @@ function WorkflowEditPage() {
           <h1>{name || id}</h1>
           <p className="page__hint">
             <code>{id}</code> · v{query.data?.version ?? '?'} ·{' '}
-            {dirty ? (save.isPending ? 'saving…' : 'unsaved') : 'saved'}
+            {dirty
+              ? save.isPending
+                ? t('editor.statusSaving')
+                : t('editor.statusUnsaved')
+              : t('editor.statusSaved')}
           </p>
         </div>
         {headerActions}
       </header>
 
       <div className="form-grid form-grid--cols-2">
-        <Field label="Name" required>
+        <Field label={t('editor.fieldName')} required>
           <TextInput
             value={name}
             onChange={(v) => {
@@ -266,7 +273,7 @@ function WorkflowEditPage() {
             required
           />
         </Field>
-        <Field label="Description">
+        <Field label={t('editor.fieldDescription')}>
           <TextInput
             value={description}
             onChange={(v) => {
@@ -284,7 +291,7 @@ function WorkflowEditPage() {
         <div className="info-box">
           {remoteToast}{' '}
           <button type="button" className="info-box__action" onClick={() => setRemoteToast(null)}>
-            dismiss
+            {t('editor.remoteDismiss')}
           </button>
         </div>
       )}
@@ -325,12 +332,15 @@ function ValidationPanel({
 }: {
   result: { ok: boolean; issues: Array<{ code: string; message: string }> }
 }) {
+  const { t } = useTranslation()
   if (result.ok) {
-    return <div className="validation-panel validation-panel--ok">✓ valid</div>
+    return <div className="validation-panel validation-panel--ok">{t('editor.validationOk')}</div>
   }
   return (
     <div className="validation-panel validation-panel--bad">
-      <div className="validation-panel__title">{result.issues.length} issue(s)</div>
+      <div className="validation-panel__title">
+        {t('editor.validationIssues', { n: result.issues.length })}
+      </div>
       <ul>
         {result.issues.map((i, idx) => (
           <li key={idx}>

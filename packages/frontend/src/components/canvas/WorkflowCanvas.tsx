@@ -20,6 +20,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Agent, WorkflowDefinition, WorkflowEdge, WorkflowNode } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { AgentNode } from './nodes/AgentNode'
@@ -72,6 +73,7 @@ function CanvasInner({
   readOnly,
   nodeStatuses,
 }: WorkflowCanvasProps) {
+  const { t } = useTranslation()
   const agentByName = useMemo(() => {
     const m = new Map<string, Agent>()
     for (const a of agents ?? []) m.set(a.name, a)
@@ -348,7 +350,7 @@ function CanvasInner({
       // Pane menu — paste / select-all.
       return [
         {
-          label: 'Paste',
+          label: t('editor.menuPaste'),
           disabled: getClipboard() === null,
           onSelect: () => {
             if (wrapperRef.current === null) return
@@ -358,33 +360,37 @@ function CanvasInner({
             )
           },
         },
-        { label: 'Select all', onSelect: selectAll },
+        { label: t('editor.menuSelectAll'), onSelect: selectAll },
       ]
     }
     return [
       {
-        label: 'Duplicate',
+        label: t('editor.menuDuplicate'),
         onSelect: () => menu.nodeId !== null && duplicateNode(menu.nodeId),
       },
-      { label: 'Copy', onSelect: copySelection, disabled: selection.nodes.length === 0 },
       {
-        label: 'Wrap in git wrapper',
+        label: t('editor.menuCopy'),
+        onSelect: copySelection,
+        disabled: selection.nodes.length === 0,
+      },
+      {
+        label: t('editor.menuWrapGit'),
         disabled: selection.nodes.length === 0,
         onSelect: () => wrapSelection('wrapper-git'),
       },
       // wrapper-loop is M4 territory; we still expose it so users can
       // pre-author workflows but the scheduler will reject runs.
       {
-        label: 'Wrap in loop wrapper',
+        label: t('editor.menuWrapLoop'),
         disabled: selection.nodes.length === 0,
         onSelect: () => wrapSelection('wrapper-loop'),
       },
       {
-        label: 'Decompose wrapper',
+        label: t('editor.menuDecompose'),
         disabled: !isWrapperNode(definition, menu.nodeId),
         onSelect: () => menu.nodeId !== null && decomposeWrapper(menu.nodeId),
       },
-      { label: 'Delete', danger: true, onSelect: deleteSelected },
+      { label: t('common.delete'), danger: true, onSelect: deleteSelected },
     ]
   }, [
     copySelection,
@@ -397,6 +403,7 @@ function CanvasInner({
     rf,
     selectAll,
     selection.nodes.length,
+    t,
     wrapSelection,
   ])
 

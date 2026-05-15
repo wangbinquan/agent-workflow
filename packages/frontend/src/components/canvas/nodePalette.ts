@@ -129,51 +129,59 @@ export interface PaletteSection {
   }>
 }
 
-export function buildPalette(agents: Agent[]): PaletteSection[] {
+/**
+ * Translator surface used here: just (key) → string. Tests pass an identity
+ * stub; the real sidebar passes react-i18next's `t`. Section + non-agent
+ * entry labels go through it; agent labels/descriptions are user-supplied
+ * literals and stay verbatim.
+ */
+export type PaletteTranslator = (key: string) => string
+
+export function buildPalette(agents: Agent[], t: PaletteTranslator): PaletteSection[] {
   return [
     {
-      label: 'Agents',
+      label: t('editor.paletteAgents'),
       items: agents.map((a) => ({
         item: { kind: 'agent-single', agentName: a.name } as PaletteItem,
         label: a.name,
-        description: a.description || 'agent',
+        description: a.description || t('editor.paletteAgentFallbackDesc'),
       })),
     },
     {
-      label: 'Fan-out',
+      label: t('editor.paletteFanOut'),
       items: agents.map((a) => ({
         item: { kind: 'agent-multi', agentName: a.name } as PaletteItem,
         label: `🔀 ${a.name}`,
-        description: 'multi-process (shards sourcePort)',
+        description: t('editor.paletteFanOutDesc'),
       })),
     },
     {
-      label: 'Wrappers',
+      label: t('editor.paletteWrappers'),
       items: [
         {
           item: { kind: 'wrapper-git' } as PaletteItem,
-          label: 'git wrapper',
-          description: 'snapshot diff before+after children',
+          label: t('editor.paletteWrapperGitLabel'),
+          description: t('editor.paletteWrapperGitDesc'),
         },
         {
           item: { kind: 'wrapper-loop' } as PaletteItem,
-          label: 'loop wrapper',
-          description: 'rerun children until exit condition',
+          label: t('editor.paletteWrapperLoopLabel'),
+          description: t('editor.paletteWrapperLoopDesc'),
         },
       ],
     },
     {
-      label: 'IO',
+      label: t('editor.paletteIo'),
       items: [
         {
           item: { kind: 'input' } as PaletteItem,
-          label: 'input',
-          description: 'launcher form value',
+          label: t('editor.paletteInputLabel'),
+          description: t('editor.paletteInputDesc'),
         },
         {
           item: { kind: 'output' } as PaletteItem,
-          label: 'output',
-          description: 'task-detail outputs panel',
+          label: t('editor.paletteOutputLabel'),
+          description: t('editor.paletteOutputDesc'),
         },
       ],
     },

@@ -15,6 +15,7 @@
 
 import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChipsInput } from '@/components/ChipsInput'
 import { Field, NumberInput, TextArea, TextInput } from '@/components/Form'
 import { computePorts } from './WorkflowCanvas'
@@ -31,6 +32,7 @@ interface Props {
 type Tab = 'edit' | 'preview'
 
 export function NodeInspector({ definition, selectedNodeId, agents, onChange, onClose }: Props) {
+  const { t } = useTranslation()
   const [tab, setTab] = useState<Tab>('edit')
 
   // Reset to edit tab whenever the selection changes.
@@ -56,7 +58,12 @@ export function NodeInspector({ definition, selectedNodeId, agents, onChange, on
             <code>{node.id}</code>
           </div>
         </div>
-        <button type="button" onClick={onClose} className="inspector__close" aria-label="Close">
+        <button
+          type="button"
+          onClick={onClose}
+          className="inspector__close"
+          aria-label={t('inspector.closeAria')}
+        >
           ×
         </button>
       </header>
@@ -66,7 +73,7 @@ export function NodeInspector({ definition, selectedNodeId, agents, onChange, on
           className={`tabs__tab ${tab === 'edit' ? 'tabs__tab--active' : ''}`}
           onClick={() => setTab('edit')}
         >
-          Edit
+          {t('inspector.tabEdit')}
         </button>
         <button
           type="button"
@@ -74,7 +81,7 @@ export function NodeInspector({ definition, selectedNodeId, agents, onChange, on
           onClick={() => setTab('preview')}
           disabled={node.kind !== 'agent-single' && node.kind !== 'agent-multi'}
         >
-          Preview
+          {t('inspector.tabPreview')}
         </button>
       </div>
       <div className="inspector__body">
@@ -100,6 +107,7 @@ interface EditProps {
 }
 
 function EditForm({ node, agents, definition, onPatch }: EditProps) {
+  const { t } = useTranslation()
   const rec = node as unknown as Record<string, unknown>
 
   switch (node.kind) {
@@ -107,7 +115,11 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
       const key = typeof rec.inputKey === 'string' ? rec.inputKey : ''
       return (
         <div className="form-grid">
-          <Field label="Input key" required hint="Must be unique across the workflow.">
+          <Field
+            label={t('inspector.fieldInputKey')}
+            required
+            hint={t('inspector.fieldInputKeyHint')}
+          >
             <TextInput
               value={key}
               onChange={(v) =>
@@ -133,10 +145,7 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
       }
       return (
         <div className="form-grid">
-          <Field
-            label="Output ports"
-            hint="Each port = a card on the task detail page; bind to (nodeId, portName)."
-          >
+          <Field label={t('inspector.fieldOutputPorts')} hint={t('inspector.fieldOutputPortsHint')}>
             <ul className="inspector__output-ports">
               {ports.map((p, i) => (
                 <li key={i} className="inspector__output-port-row">
@@ -148,7 +157,7 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
                       copy[i] = { ...p, name: e.target.value }
                       setPorts(copy)
                     }}
-                    placeholder="port name"
+                    placeholder={t('inspector.portNamePlaceholder')}
                   />
                   <input
                     className="form-input form-input--mono"
@@ -158,7 +167,7 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
                       copy[i] = { ...p, bind: { ...p.bind, nodeId: e.target.value } }
                       setPorts(copy)
                     }}
-                    placeholder="upstream nodeId"
+                    placeholder={t('inspector.upstreamPlaceholder')}
                   />
                   <input
                     className="form-input form-input--mono"
@@ -168,14 +177,14 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
                       copy[i] = { ...p, bind: { ...p.bind, portName: e.target.value } }
                       setPorts(copy)
                     }}
-                    placeholder="port"
+                    placeholder={t('inspector.portPlaceholder')}
                   />
                   <button
                     type="button"
                     className="btn btn--sm"
                     onClick={() => setPorts(ports.filter((_, j) => j !== i))}
                   >
-                    Remove
+                    {t('inspector.remove')}
                   </button>
                 </li>
               ))}
@@ -190,7 +199,7 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
                 ])
               }
             >
-              + Add port
+              {t('inspector.addPort')}
             </button>
           </Field>
         </div>
@@ -203,9 +212,11 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
       if (!isLoop) {
         return (
           <div className="form-grid">
-            <Field label="Inner node ids" hint="Edit by composing nodes via the canvas menu.">
+            <Field label={t('inspector.innerNodeIds')} hint={t('inspector.innerNodeIdsHint')}>
               <div className="muted">
-                {inner.length === 0 ? 'none' : inner.map((i) => <code key={i}>{i} </code>)}
+                {inner.length === 0
+                  ? t('inspector.none')
+                  : inner.map((i) => <code key={i}>{i} </code>)}
               </div>
             </Field>
           </div>
@@ -240,11 +251,8 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
       }
       return (
         <div className="form-grid">
-          <div className="info-box info-box--muted">
-            Cross-iteration state lives in worktree files only. v1 has no feedback ports — agents
-            communicate across iterations by reading/writing files.
-          </div>
-          <Field label="Max iterations" required>
+          <div className="info-box info-box--muted">{t('inspector.loopBanner')}</div>
+          <Field label={t('inspector.fieldMaxIterations')} required>
             <NumberInput
               value={typeof rec.maxIterations === 'number' ? rec.maxIterations : undefined}
               onChange={(v) => update({ maxIterations: v ?? 1 })}
@@ -253,8 +261,8 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
             />
           </Field>
           <Field
-            label="Exit condition kind"
-            hint="port-empty: trimmed value empty · port-equals: exact match · port-count-lt: count < n"
+            label={t('inspector.fieldExitConditionKind')}
+            hint={t('inspector.fieldExitConditionKindHint')}
           >
             <select
               className="form-input"
@@ -266,28 +274,31 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
               <option value="port-count-lt">port-count-lt</option>
             </select>
           </Field>
-          <Field label="Exit condition target" hint="(nodeId, portName) probed each iteration">
+          <Field
+            label={t('inspector.fieldExitConditionTarget')}
+            hint={t('inspector.fieldExitConditionTargetHint')}
+          >
             <div className="form-grid form-grid--two">
               <TextInput
                 value={exitNodeId}
                 onChange={(v) => updateExit({ nodeId: v })}
-                placeholder="inner nodeId"
+                placeholder={t('inspector.innerNodeIdPlaceholder')}
               />
               <TextInput
                 value={exitPortName}
                 onChange={(v) => updateExit({ portName: v })}
-                placeholder="port"
+                placeholder={t('inspector.portPlaceholder')}
               />
             </div>
           </Field>
           {exitKind === 'port-equals' && (
-            <Field label="Equals value">
+            <Field label={t('inspector.fieldExitConditionValue')}>
               <TextInput value={exitValue} onChange={(v) => updateExit({ value: v })} />
             </Field>
           )}
           {exitKind === 'port-count-lt' && (
             <>
-              <Field label="n">
+              <Field label={t('inspector.fieldExitConditionN')}>
                 <NumberInput
                   value={exitN}
                   onChange={(v) => updateExit({ n: v ?? 1 })}
@@ -295,7 +306,7 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
                   step={1}
                 />
               </Field>
-              <Field label="Separator (default '\\n')">
+              <Field label={t('inspector.fieldExitConditionSeparator')}>
                 <TextInput
                   value={exitSeparator}
                   onChange={(v) => updateExit({ separator: v })}
@@ -305,8 +316,8 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
             </>
           )}
           <Field
-            label="Output bindings"
-            hint="Each binding exposes an inner port as a wrapper output port."
+            label={t('inspector.fieldOutputBindings')}
+            hint={t('inspector.fieldOutputBindingsHint')}
           >
             <ul className="inspector__output-ports">
               {bindings.map((b, i) => (
@@ -319,7 +330,7 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
                       copy[i] = { ...b, name: e.target.value }
                       setBindings(copy)
                     }}
-                    placeholder="output name"
+                    placeholder={t('inspector.outputNamePlaceholder')}
                   />
                   <input
                     className="form-input form-input--mono"
@@ -329,7 +340,7 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
                       copy[i] = { ...b, bind: { ...b.bind, nodeId: e.target.value } }
                       setBindings(copy)
                     }}
-                    placeholder="inner nodeId"
+                    placeholder={t('inspector.innerNodeIdPlaceholder')}
                   />
                   <input
                     className="form-input form-input--mono"
@@ -339,14 +350,14 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
                       copy[i] = { ...b, bind: { ...b.bind, portName: e.target.value } }
                       setBindings(copy)
                     }}
-                    placeholder="port"
+                    placeholder={t('inspector.portPlaceholder')}
                   />
                   <button
                     type="button"
                     className="btn btn--sm"
                     onClick={() => setBindings(bindings.filter((_, j) => j !== i))}
                   >
-                    Remove
+                    {t('inspector.remove')}
                   </button>
                 </li>
               ))}
@@ -364,12 +375,14 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
                 ])
               }
             >
-              + Add binding
+              {t('inspector.addBinding')}
             </button>
           </Field>
-          <Field label="Inner node ids" hint="Edit by composing nodes via the canvas menu.">
+          <Field label={t('inspector.innerNodeIds')} hint={t('inspector.innerNodeIdsHint')}>
             <div className="muted">
-              {inner.length === 0 ? 'none' : inner.map((i) => <code key={i}>{i} </code>)}
+              {inner.length === 0
+                ? t('inspector.none')
+                : inner.map((i) => <code key={i}>{i} </code>)}
             </div>
           </Field>
         </div>
@@ -394,16 +407,16 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
       return (
         <div className="form-grid">
           <Field
-            label="Agent"
+            label={t('inspector.fieldAgent')}
             required
-            hint={node.kind === 'agent-multi' ? 'Fan-out shards sourcePort across child runs.' : ''}
+            hint={node.kind === 'agent-multi' ? t('inspector.fieldAgentHint') : ''}
           >
             <select
               className="form-input"
               value={agentName}
               onChange={(e) => update({ agentName: e.target.value })}
             >
-              <option value="">— pick an agent —</option>
+              <option value="">{t('inspector.pickAgent')}</option>
               {agents.map((a) => (
                 <option key={a.name} value={a.name}>
                   {a.name}
@@ -413,7 +426,7 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
           </Field>
 
           {node.kind === 'agent-multi' && (
-            <Field label="sourcePort (nodeId.portName)" required>
+            <Field label={t('inspector.fieldSourcePort')} required>
               <SourcePortField
                 value={(rec.sourcePort as { nodeId?: string; portName?: string } | undefined) ?? {}}
                 onChange={(sp) => update({ sourcePort: sp })}
@@ -422,8 +435,8 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
           )}
 
           <Field
-            label="Prompt template"
-            hint="Use {{port_name}} + builtins like {{__repo_path__}}."
+            label={t('inspector.fieldPromptTemplate')}
+            hint={t('inspector.fieldPromptTemplateHint')}
           >
             <TextArea
               value={promptTemplate}
@@ -435,10 +448,10 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
           </Field>
 
           <div className="form-grid form-grid--cols-2">
-            <Field label="Retries" hint="Default 0">
+            <Field label={t('inspector.fieldRetries')} hint={t('inspector.fieldRetriesHint')}>
               <NumberInput value={retries} onChange={(v) => update({ retries: v ?? 0 })} min={0} />
             </Field>
-            <Field label="Timeout (ms)" hint="Defaults to settings.defaultPerNodeTimeoutMs">
+            <Field label={t('inspector.fieldTimeoutMs')} hint={t('inspector.fieldTimeoutMsHint')}>
               <NumberInput
                 value={timeoutMs}
                 onChange={(v) => update({ timeoutMs: v })}
@@ -446,7 +459,7 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
                 step={1000}
               />
             </Field>
-            <Field label="Model override">
+            <Field label={t('inspector.fieldModelOverride')}>
               <TextInput
                 value={typeof overrides.model === 'string' ? overrides.model : ''}
                 onChange={(v) =>
@@ -454,10 +467,10 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
                     overrides: { ...overrides, ...(v ? { model: v } : { model: undefined }) },
                   })
                 }
-                placeholder="anthropic/claude-sonnet-4-6"
+                placeholder={t('inspector.modelPlaceholder')}
               />
             </Field>
-            <Field label="Variant">
+            <Field label={t('inspector.fieldVariant')}>
               <TextInput
                 value={typeof overrides.variant === 'string' ? overrides.variant : ''}
                 onChange={(v) =>
@@ -467,7 +480,7 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
                 }
               />
             </Field>
-            <Field label="Temperature override">
+            <Field label={t('inspector.fieldTemperatureOverride')}>
               <NumberInput
                 value={
                   typeof overrides.temperature === 'number' ? overrides.temperature : undefined
@@ -486,10 +499,11 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
 }
 
 function PortRefList({ ports }: { ports: string[] }) {
+  const { t } = useTranslation()
   if (ports.length === 0) return null
   return (
     <div className="inspector__port-refs">
-      <span className="muted">Resolved inbound ports:</span>{' '}
+      <span className="muted">{t('inspector.resolvedInbound')}</span>{' '}
       <ChipsInput value={ports} onChange={() => {}} placeholder="" />
     </div>
   )
@@ -502,17 +516,18 @@ function SourcePortField({
   value: { nodeId?: string; portName?: string }
   onChange: (next: { nodeId: string; portName: string }) => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="form-grid form-grid--cols-2">
       <TextInput
         value={value.nodeId ?? ''}
         onChange={(v) => onChange({ nodeId: v, portName: value.portName ?? '' })}
-        placeholder="upstream node id"
+        placeholder={t('inspector.sourcePortNodePlaceholder')}
       />
       <TextInput
         value={value.portName ?? ''}
         onChange={(v) => onChange({ nodeId: value.nodeId ?? '', portName: v })}
-        placeholder="port name"
+        placeholder={t('inspector.sourcePortPlaceholder')}
       />
     </div>
   )
@@ -529,8 +544,9 @@ interface PreviewProps {
 }
 
 function PreviewPane({ node, agents, definition }: PreviewProps) {
+  const { t } = useTranslation()
   if (node.kind !== 'agent-single' && node.kind !== 'agent-multi') {
-    return <div className="muted">Preview only available on agent nodes.</div>
+    return <div className="muted">{t('inspector.previewOnlyAgent')}</div>
   }
   const agentName = (node as Record<string, unknown>).agentName as string | undefined
   const agent = agents.find((a) => a.name === agentName)

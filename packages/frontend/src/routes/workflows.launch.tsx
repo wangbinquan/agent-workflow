@@ -7,6 +7,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type {
   RecentRepo,
   RepoRefsResponse,
@@ -28,6 +29,7 @@ export const LaunchRoute = createRoute({
 })
 
 function LaunchPage() {
+  const { t } = useTranslation()
   const { id } = LaunchRoute.useParams()
   const navigate = useNavigate()
   const workflow = useQuery<Workflow>({
@@ -76,7 +78,7 @@ function LaunchPage() {
     onSuccess: (t) => navigate({ to: '/tasks/$id', params: { id: t.id } }),
   })
 
-  if (workflow.isLoading) return <div className="page muted">Loading workflow…</div>
+  if (workflow.isLoading) return <div className="page muted">{t('editor.loadingWorkflow')}</div>
   if (workflow.error !== null && workflow.error !== undefined)
     return <div className="page error-box">{describeError(workflow.error)}</div>
   if (workflow.data === undefined) return null
@@ -91,26 +93,26 @@ function LaunchPage() {
     <div className="page">
       <header className="page__header page__header--row">
         <div>
-          <h1>Launch: {workflow.data.name}</h1>
+          <h1>{t('launch.title', { name: workflow.data.name })}</h1>
           <p className="page__hint">
-            Pick a repo + base branch, fill the workflow inputs, then start. A worktree at{' '}
-            <code>~/.agent-workflow/worktrees/&lt;repo&gt;/&lt;taskId&gt;</code> is created on
-            submit.
+            {t('launch.hintBefore')}
+            <code>{t('launch.hintCode')}</code>
+            {t('launch.hintAfter')}
           </p>
         </div>
         <Link to="/workflows/$id" params={{ id }} className="btn btn--sm">
-          ← Back to editor
+          {t('launch.backToEditor')}
         </Link>
       </header>
 
       <div className="form-grid">
-        <Field label="Repo" required hint="Pick from recent or paste an absolute path.">
+        <Field label={t('launch.fieldRepo')} required hint={t('launch.fieldRepoHint')}>
           <select
             className="form-input"
             value={repoPath}
             onChange={(e) => setRepoPath(e.target.value)}
           >
-            <option value="">— pick a repo —</option>
+            <option value="">{t('launch.pickRepoPlaceholder')}</option>
             {(recent.data ?? []).map((r) => (
               <option key={r.path} value={r.path}>
                 {r.path} {r.defaultBranch ? `(${r.defaultBranch})` : ''}
@@ -120,14 +122,14 @@ function LaunchPage() {
           <TextInput
             value={repoPath}
             onChange={setRepoPath}
-            placeholder="or paste an absolute repo path"
+            placeholder={t('launch.pasteRepoPath')}
           />
         </Field>
 
         <Field
-          label="Base branch"
+          label={t('launch.fieldBaseBranch')}
           required
-          hint={refs.error !== null ? describeError(refs.error) : 'Used as the worktree origin'}
+          hint={refs.error !== null ? describeError(refs.error) : t('launch.baseBranchHint')}
         >
           {refs.data !== undefined ? (
             <select
@@ -135,7 +137,7 @@ function LaunchPage() {
               value={baseBranch}
               onChange={(e) => setBaseBranch(e.target.value)}
             >
-              <option value="">— pick a branch —</option>
+              <option value="">{t('launch.pickBranchPlaceholder')}</option>
               {refs.data.branches.map((b) => (
                 <option key={b} value={b}>
                   {b}
@@ -143,11 +145,15 @@ function LaunchPage() {
               ))}
             </select>
           ) : (
-            <TextInput value={baseBranch} onChange={setBaseBranch} placeholder="main" />
+            <TextInput
+              value={baseBranch}
+              onChange={setBaseBranch}
+              placeholder={t('launch.baseBranchPlaceholder')}
+            />
           )}
         </Field>
 
-        {inputDefs.length === 0 && <div className="muted">This workflow declares no inputs.</div>}
+        {inputDefs.length === 0 && <div className="muted">{t('launch.noInputs')}</div>}
 
         {inputDefs.map((def) => (
           <Field
@@ -173,7 +179,7 @@ function LaunchPage() {
           onClick={() => start.mutate()}
           disabled={!canSubmit}
         >
-          {start.isPending ? 'Starting…' : 'Start task'}
+          {start.isPending ? t('launch.starting') : t('launch.start')}
         </button>
         {start.error !== null && start.error !== undefined && (
           <span className="form-actions__error">{describeError(start.error)}</span>

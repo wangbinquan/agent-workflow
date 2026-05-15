@@ -8,6 +8,7 @@
 
 import { renderUserPrompt } from '@agent-workflow/shared'
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   /** Prompt template currently bound to the node. */
@@ -21,6 +22,7 @@ interface Props {
 const DEFAULT_PLACEHOLDER = '<sample content>'
 
 export function PromptPreview({ template, inputPorts, outputs }: Props) {
+  const { t } = useTranslation()
   const [inputs, setInputs] = useState<Record<string, string>>(() => seedInputs(inputPorts))
 
   // Re-seed whenever the port set changes — but preserve any values the
@@ -52,9 +54,9 @@ export function PromptPreview({ template, inputPorts, outputs }: Props) {
   return (
     <div className="prompt-preview">
       <div className="prompt-preview__inputs">
-        <div className="prompt-preview__title">Mock port values</div>
+        <div className="prompt-preview__title">{t('promptPreview.mockTitle')}</div>
         {inputPorts.length === 0 ? (
-          <div className="muted">No inbound ports. Add edges to populate this form.</div>
+          <div className="muted">{t('promptPreview.noPorts')}</div>
         ) : (
           inputPorts.map((p) => (
             <label key={p} className="prompt-preview__field">
@@ -70,7 +72,7 @@ export function PromptPreview({ template, inputPorts, outputs }: Props) {
         )}
       </div>
       <div className="prompt-preview__output">
-        <div className="prompt-preview__title">Assembled prompt</div>
+        <div className="prompt-preview__title">{t('promptPreview.assembledTitle')}</div>
         <pre className="prompt-preview__pre">{rendered}</pre>
       </div>
     </div>
