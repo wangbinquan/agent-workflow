@@ -12,7 +12,7 @@ import { getBaseUrl, getToken } from '@/stores/auth'
 import { EditorSidebar } from '@/components/canvas/EditorSidebar'
 import { EdgeInspector } from '@/components/canvas/EdgeInspector'
 import { NodeInspector } from '@/components/canvas/NodeInspector'
-import { WorkflowCanvas } from '@/components/canvas/WorkflowCanvas'
+import { WorkflowCanvas, type WorkflowCanvasHandle } from '@/components/canvas/WorkflowCanvas'
 import type { CanvasSelection } from '@/components/canvas/nodes/types'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { Field, TextInput } from '@/components/Form'
@@ -67,6 +67,11 @@ function WorkflowNewPage() {
     selection?.kind === 'edge'
       ? (definition.edges.find((e) => e.id === selection.id) ?? null)
       : null
+  const canvasRef = useRef<WorkflowCanvasHandle | null>(null)
+  const closeInspector = () => {
+    canvasRef.current?.clearSelection()
+    setSelection(null)
+  }
   const agents = useQuery<Agent[]>({
     queryKey: ['agents'],
     queryFn: ({ signal }) => api.get('/api/agents', undefined, signal),
@@ -111,6 +116,7 @@ function WorkflowNewPage() {
         <EditorSidebar agents={agents.data ?? []} />
         <div className="canvas-frame">
           <WorkflowCanvas
+            ref={canvasRef}
             definition={definition}
             onChange={setDefinition}
             onSelect={setSelection}
@@ -122,7 +128,7 @@ function WorkflowNewPage() {
             edge={selectedEdge}
             definition={definition}
             onChange={setDefinition}
-            onClose={() => setSelection(null)}
+            onClose={closeInspector}
           />
         ) : (
           <NodeInspector
@@ -130,7 +136,7 @@ function WorkflowNewPage() {
             selectedNodeId={selectedNodeId}
             agents={agents.data ?? []}
             onChange={setDefinition}
-            onClose={() => setSelection(null)}
+            onClose={closeInspector}
           />
         )}
       </div>
@@ -161,6 +167,11 @@ function WorkflowEditPage() {
     selection?.kind === 'edge' && draft !== null
       ? (draft.edges.find((e) => e.id === selection.id) ?? null)
       : null
+  const canvasRef = useRef<WorkflowCanvasHandle | null>(null)
+  const closeInspector = () => {
+    canvasRef.current?.clearSelection()
+    setSelection(null)
+  }
   const lastSaved = useRef<{
     name: string
     description: string
@@ -336,6 +347,7 @@ function WorkflowEditPage() {
         <EditorSidebar agents={agents.data ?? []} />
         <div className="canvas-frame">
           <WorkflowCanvas
+            ref={canvasRef}
             definition={draft}
             agents={agents.data ?? []}
             onSelect={setSelection}
@@ -353,7 +365,7 @@ function WorkflowEditPage() {
               setDraft(next)
               setDirty(true)
             }}
-            onClose={() => setSelection(null)}
+            onClose={closeInspector}
           />
         ) : (
           <NodeInspector
@@ -364,7 +376,7 @@ function WorkflowEditPage() {
               setDraft(next)
               setDirty(true)
             }}
-            onClose={() => setSelection(null)}
+            onClose={closeInspector}
           />
         )}
       </div>

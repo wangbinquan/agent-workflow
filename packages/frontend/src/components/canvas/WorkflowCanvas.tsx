@@ -21,7 +21,15 @@ import {
   useReactFlow,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Agent, WorkflowDefinition, WorkflowEdge, WorkflowNode } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
@@ -63,13 +71,27 @@ export interface WorkflowCanvasProps {
   nodeStatuses?: Record<string, CanvasNodeData['status'] | undefined>
 }
 
-export function WorkflowCanvas(props: WorkflowCanvasProps) {
-  return (
-    <ReactFlowProvider>
-      <CanvasInner {...props} />
-    </ReactFlowProvider>
-  )
+/**
+ * Imperative handle exposed via ref on {@link WorkflowCanvas}. The parent
+ * route uses `clearSelection` from inspector close buttons so the edge /
+ * node loses its xyflow `selected: true` state and can be re-clicked.
+ * Without this the EdgeInspector close (✕) leaves the edge highlighted
+ * AND pinned in `lastEmittedSelectionSig`, so xyflow emits no fresh
+ * select change on the next click and the inspector never reopens.
+ */
+export interface WorkflowCanvasHandle {
+  clearSelection: () => void
 }
+
+export const WorkflowCanvas = forwardRef<WorkflowCanvasHandle, WorkflowCanvasProps>(
+  function WorkflowCanvas(props, ref) {
+    return (
+      <ReactFlowProvider>
+        <CanvasInner {...props} handleRef={ref} />
+      </ReactFlowProvider>
+    )
+  },
+)
 
 function CanvasInner({
   definition,
@@ -78,7 +100,10 @@ function CanvasInner({
   onSelect,
   readOnly,
   nodeStatuses,
-}: WorkflowCanvasProps) {
+  handleRef,
+}: WorkflowCanvasProps & {
+  handleRef?: React.ForwardedRef<WorkflowCanvasHandle>
+}) {
   const { t } = useTranslation()
   const agentByName = useMemo(() => {
     const m = new Map<string, Agent>()
@@ -431,6 +456,27 @@ function CanvasInner({
     wrapSelection,
   ])
 
+  // Lets the parent route deselect the canvas from outside — required by
+  // the EdgeInspector / NodeInspector ✕ buttons. Just nulling the parent's
+  // selection state leaves xyflow's edge.selected/node.selected true AND
+  // pins `lastEmittedSelectionSig`, so the dedupe in `onEdgeClick` swallows
+  // the next click on the same edge. See `clearFlowSelection` for the pure
+  // shape transformation that this delegates to.
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      clearSelection: () => {
+        setNodes((prev) => clearFlowSelection(prev))
+        setEdges((prev) => clearFlowSelection(prev))
+        setSelection((prev) =>
+          prev.nodes.length === 0 && prev.edges.length === 0 ? prev : { nodes: [], edges: [] },
+        )
+        lastEmittedSelectionSig.current = 'null'
+      },
+    }),
+    [],
+  )
+
   return (
     <div
       ref={wrapperRef}
@@ -685,6 +731,22 @@ export function translateInboundConnection(conn: Connection): Connection {
     return { ...conn, targetHandle: conn.sourceHandle ?? null }
   }
   return conn
+}
+
+/**
+ * Returns a new array with `selected: false` applied to every item that
+ * currently has `selected: true`, and the same reference otherwise. Used
+ * by the imperative `clearSelection` handle to deselect xyflow's edges /
+ * nodes when the EdgeInspector / NodeInspector ✕ closes — otherwise the
+ * edge stays highlighted AND becomes un-reclickable because xyflow emits
+ * no new `select` change and our dedupe in `onEdgeClick` (keyed by
+ * `lastEmittedSelectionSig`) swallows the click.
+ *
+ * Exported for unit tests.
+ */
+export function clearFlowSelection<T extends { selected?: boolean }>(items: T[]): T[] {
+  if (!items.some((it) => it.selected === true)) return items
+  return items.map((it) => (it.selected === true ? { ...it, selected: false } : it))
 }
 
 /**

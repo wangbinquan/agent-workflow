@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from 'vitest'
 import { applyEdgeChanges, type Edge, type EdgeChange } from '@xyflow/react'
-import { affectsEdgeDefinition } from '../src/components/canvas/WorkflowCanvas'
+import { affectsEdgeDefinition, clearFlowSelection } from '../src/components/canvas/WorkflowCanvas'
 
 // --- Bug 1: handleEdgesChange used to filter ONLY for `remove`. xyflow
 // reports edge selection via a `select` change; if we drop that the edge
@@ -122,5 +122,79 @@ describe('WorkflowCanvas does not enable selectionOnDrag', () => {
     // doesn't trip the regex; we only care about an actual prop usage.
     const code = src.replace(/^\s*\/\/.*$/gm, '')
     expect(code).not.toMatch(/selectionOnDrag\s*=/)
+  })
+})
+
+// --- Bug 4: clicking the EdgeInspector ✕ used to call only
+// `setSelection(null)` in the route. That left xyflow's edge.selected
+// = true AND pinned `lastEmittedSelectionSig` to `edge:<id>`, so:
+//   - the edge stayed visually highlighted
+//   - the next click on the same edge produced no new `select` change
+//     (xyflow had nothing to flip), the onSelectionChange/onEdgeClick
+//     dedupe swallowed it, and the inspector never reopened.
+// The fix is the imperative `clearSelection` handle on WorkflowCanvas;
+// `clearFlowSelection` is its pure inner step.
+
+describe('clearFlowSelection (EdgeInspector close → reclick reachability)', () => {
+  test('flips selected:true → false on every item', () => {
+    const before = [
+      { id: 'a', selected: true },
+      { id: 'b', selected: true },
+    ]
+    const after = clearFlowSelection(before)
+    expect(after).not.toBe(before)
+    expect(after.every((it) => it.selected === false)).toBe(true)
+  })
+
+  test('leaves items without selected:true untouched (reference-stable)', () => {
+    const before = [{ id: 'a', selected: false }, { id: 'b' }]
+    const after = clearFlowSelection(before)
+    // Reference equality matters — returning a fresh array on every call
+    // would mint a new xyflow edges/nodes array every render and retrigger
+    // the def-sync useEffect feedback loop the canvas already had to guard.
+    expect(after).toBe(before)
+  })
+
+  test('mixed array: only the selected entries are cloned', () => {
+    const before = [
+      { id: 'a', selected: true },
+      { id: 'b', selected: false },
+    ]
+    const after = clearFlowSelection(before)
+    expect(after).not.toBe(before)
+    expect(after[0]).not.toBe(before[0])
+    expect(after[0]?.selected).toBe(false)
+    expect(after[1]).toBe(before[1])
+  })
+
+  test('empty array is the identity', () => {
+    const before: Array<{ selected?: boolean }> = []
+    expect(clearFlowSelection(before)).toBe(before)
+  })
+})
+
+// Source-text assertion: the editor route MUST route both inspector
+// close paths (Edge + Node, in both /workflows/new and /workflows/$id)
+// through `canvasRef.current?.clearSelection()` — otherwise the bug
+// regresses silently because the inspector still unmounts and looks
+// closed, but the underlying edge stays stuck-selected. Each individual
+// step is hard to simulate in JSDOM (xyflow needs ResizeObserver +
+// layout), so we mirror the existing `selectionOnDrag` style and pin
+// the wiring textually.
+
+describe('workflows.edit.tsx wires clearSelection into inspector close', () => {
+  test('route source calls canvasRef.current?.clearSelection() and uses it on both Edge + Node onClose', async () => {
+    const fs = await import('node:fs/promises')
+    const path = await import('node:path')
+    const here = path.dirname(new URL(import.meta.url).pathname)
+    const src = await fs.readFile(path.join(here, '../src/routes/workflows.edit.tsx'), 'utf8')
+    expect(src).toMatch(/canvasRef\.current\?\.clearSelection\(\)/)
+    // Both inspectors share the `closeInspector` helper; it must be
+    // wired on EdgeInspector AND NodeInspector. Each route block has
+    // its own pair (new + edit), so we expect at least 4 occurrences.
+    const onCloseHits = src.match(/onClose=\{closeInspector\}/g) ?? []
+    expect(onCloseHits.length).toBeGreaterThanOrEqual(4)
+    // Forbid the old pattern that left the edge stuck.
+    expect(src).not.toMatch(/onClose=\{\(\) => setSelection\(null\)\}/)
   })
 })
