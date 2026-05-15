@@ -12,6 +12,8 @@ import { useTranslation } from 'react-i18next'
 import type { Config, ConfigPatch } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { Field, NumberInput, Switch, TextInput } from '@/components/Form'
+import { ModelSelect } from '@/components/ModelSelect'
+import { RUNTIME_OPENCODE_QUERY_KEY, RuntimeStatusCard } from '@/components/RuntimeStatusCard'
 import { describeApiError } from '@/i18n'
 import { clearToken, getBaseUrl, getToken } from '@/stores/auth'
 import { Route as RootRoute } from './__root'
@@ -95,79 +97,94 @@ interface TabProps {
 
 function RuntimeTab({ config }: TabProps) {
   const { t } = useTranslation()
-  const { state, setState, save } = useTabState(config, [
-    'opencodePath',
-    'defaultModel',
-    'defaultVariant',
-    'defaultTemperature',
-    'maxConcurrentNodes',
-    'multiProcessSubprocessConcurrency',
-    'logLevel',
-  ])
+  const qc = useQueryClient()
+  const { state, setState, save } = useTabState(
+    config,
+    [
+      'opencodePath',
+      'defaultModel',
+      'defaultVariant',
+      'defaultTemperature',
+      'maxConcurrentNodes',
+      'multiProcessSubprocessConcurrency',
+      'logLevel',
+    ],
+    {
+      onSaved: () => {
+        // opencodePath may have changed — refresh the runtime status badge.
+        void qc.invalidateQueries({ queryKey: RUNTIME_OPENCODE_QUERY_KEY })
+        void qc.invalidateQueries({ queryKey: ['runtime', 'models'] })
+      },
+    },
+  )
   return (
-    <SectionForm
-      onSave={save.mutate}
-      busy={save.isPending}
-      error={save.error}
-      success={save.isSuccess && save.error === null ? 'saved' : null}
-    >
-      <Field label={t('settingsForm.opencodePath')} hint={t('settingsForm.opencodePathHint')}>
-        <TextInput
-          value={state.opencodePath ?? ''}
-          onChange={(v) => setState({ ...state, opencodePath: v === '' ? undefined : v })}
-        />
-      </Field>
-      <Field label={t('settingsForm.defaultModel')} hint={t('settingsForm.defaultModelHint')}>
-        <TextInput
-          value={state.defaultModel ?? ''}
-          onChange={(v) => setState({ ...state, defaultModel: v === '' ? undefined : v })}
-          placeholder="anthropic/claude-sonnet-4-6"
-        />
-      </Field>
-      <Field label={t('settingsForm.defaultVariant')}>
-        <TextInput
-          value={state.defaultVariant ?? ''}
-          onChange={(v) => setState({ ...state, defaultVariant: v === '' ? undefined : v })}
-        />
-      </Field>
-      <Field label={t('settingsForm.defaultTemperature')}>
-        <NumberInput
-          value={state.defaultTemperature}
-          onChange={(v) => setState({ ...state, defaultTemperature: v })}
-          min={0}
-          max={2}
-          step={0.1}
-        />
-      </Field>
-      <div className="form-grid form-grid--cols-2">
-        <Field label={t('settingsForm.maxConcurrentNodes')} required>
-          <NumberInput
-            value={state.maxConcurrentNodes}
-            onChange={(v) => setState({ ...state, maxConcurrentNodes: v ?? 1 })}
-            min={1}
+    <>
+      <RuntimeStatusCard />
+      <SectionForm
+        onSave={save.mutate}
+        busy={save.isPending}
+        error={save.error}
+        success={save.isSuccess && save.error === null ? 'saved' : null}
+      >
+        <Field label={t('settingsForm.opencodePath')} hint={t('settingsForm.opencodePathHint')}>
+          <TextInput
+            value={state.opencodePath ?? ''}
+            onChange={(v) => setState({ ...state, opencodePath: v === '' ? undefined : v })}
           />
         </Field>
-        <Field label={t('settingsForm.multiProcessConc')} required>
-          <NumberInput
-            value={state.multiProcessSubprocessConcurrency}
-            onChange={(v) => setState({ ...state, multiProcessSubprocessConcurrency: v ?? 1 })}
-            min={1}
+        <Field label={t('settingsForm.defaultModel')} hint={t('settingsForm.defaultModelHint')}>
+          <ModelSelect
+            value={state.defaultModel}
+            onChange={(v) => setState({ ...state, defaultModel: v })}
           />
         </Field>
-      </div>
-      <Field label={t('settingsForm.logLevel')}>
-        <select
-          className="form-input"
-          value={state.logLevel}
-          onChange={(e) => setState({ ...state, logLevel: e.target.value as Config['logLevel'] })}
-        >
-          <option value="debug">debug</option>
-          <option value="info">info</option>
-          <option value="warn">warn</option>
-          <option value="error">error</option>
-        </select>
-      </Field>
-    </SectionForm>
+        <Field label={t('settingsForm.defaultVariant')}>
+          <TextInput
+            value={state.defaultVariant ?? ''}
+            onChange={(v) => setState({ ...state, defaultVariant: v === '' ? undefined : v })}
+          />
+        </Field>
+        <Field label={t('settingsForm.defaultTemperature')}>
+          <NumberInput
+            value={state.defaultTemperature}
+            onChange={(v) => setState({ ...state, defaultTemperature: v })}
+            min={0}
+            max={2}
+            step={0.1}
+          />
+        </Field>
+        <div className="form-grid form-grid--cols-2">
+          <Field label={t('settingsForm.maxConcurrentNodes')} required>
+            <NumberInput
+              value={state.maxConcurrentNodes}
+              onChange={(v) => setState({ ...state, maxConcurrentNodes: v ?? 1 })}
+              min={1}
+            />
+          </Field>
+          <Field label={t('settingsForm.multiProcessConc')} required>
+            <NumberInput
+              value={state.multiProcessSubprocessConcurrency}
+              onChange={(v) => setState({ ...state, multiProcessSubprocessConcurrency: v ?? 1 })}
+              min={1}
+            />
+          </Field>
+        </div>
+        <Field label={t('settingsForm.logLevel')}>
+          <select
+            className="form-input"
+            value={state.logLevel}
+            onChange={(e) =>
+              setState({ ...state, logLevel: e.target.value as Config['logLevel'] })
+            }
+          >
+            <option value="debug">debug</option>
+            <option value="info">info</option>
+            <option value="warn">warn</option>
+            <option value="error">error</option>
+          </select>
+        </Field>
+      </SectionForm>
+    </>
   )
 }
 
@@ -468,7 +485,15 @@ export function hasRestartRequiredChange(
   })
 }
 
-function useTabState<K extends keyof ConfigPatch>(config: Config, keys: K[]) {
+interface UseTabStateOptions {
+  onSaved?: (next: Config) => void
+}
+
+function useTabState<K extends keyof ConfigPatch>(
+  config: Config,
+  keys: K[],
+  options?: UseTabStateOptions,
+) {
   const qc = useQueryClient()
   const initial: ConfigPatch = {}
   for (const k of keys) {
@@ -496,6 +521,7 @@ function useTabState<K extends keyof ConfigPatch>(config: Config, keys: K[]) {
       // saved without editing those fields.
       setRestartRequired(hasRestartRequiredChange(keys, config, next))
       qc.setQueryData(['config'], next)
+      options?.onSaved?.(next)
     },
     onMutate: () => {
       setRestartRequired(false)

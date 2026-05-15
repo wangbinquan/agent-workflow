@@ -19,6 +19,14 @@
 
 合计 **81 个 issue**，单人全职 ~13 周完成 v1（含测试）。多人并行可压缩。
 
+## RFC 索引
+
+v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/` 子目录下，每个 RFC 含 `proposal.md` / `design.md` / `plan.md` 三文件。RFC 编号独立于 P-X-XX issue 编号。
+
+| 编号 | 标题 | 状态 |
+| --- | --- | --- |
+| [RFC-001](./RFC-001-runtime-status-and-model-select/proposal.md) | Settings → Runtime 状态卡片 + Model 下拉选择 | Draft |
+
 ---
 
 ## M0 — 项目准备

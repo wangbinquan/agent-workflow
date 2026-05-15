@@ -2,7 +2,9 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-**最近更新**：2026-05-15（M5 进行中 — P-5-01/02/03-s1+s2-A+B+C/04/05/06/08/09/10/11 闭合，文档齐备）
+**最近更新**：2026-05-15（M5 闭合 — P-5-07 + P-5-12 落地，整个 v1 路线图 81/81 完成）
+
+> 进行中 RFC：[RFC-001 — Runtime 状态卡片 + Model 下拉选择](./design/RFC-001-runtime-status-and-model-select/proposal.md)（Draft，未完成）
 
 ---
 
@@ -20,17 +22,19 @@ M1 骨架       [18/18 ✅]  ← M1 完成
 M2 编辑器     [16/16 ✅]  M2 收官 — 编辑器 / launcher / settings / task 详情全套就绪
 M3 编排核心   [14/14 ✅]  fan-out / 重试 / resume / git wrapper / 状态画布 / 抽屉增强
 M4 高级编排   [11/11 ✅]  loop wrapper / 嵌套 / 资源限额 / orphan / GC / shutdown / YAML / token agg
-M5 打磨       [10/12]     ← 进行中（P-5-01 + P-5-02 + P-5-03 + P-5-04 + P-5-05 + P-5-06 + P-5-08 + P-5-09 + P-5-10 + P-5-11）
+M5 打磨       [12/12 ✅]  M5 完工 — 单二进制 / i18n / 暗色 / 备份 / 文档 / e2e / 性能 sweep
 ```
 
 ---
 
-## 已完成 issue（71 个）
+## 已完成 issue（81 个）
 
-### M5 进行中（9.5/12）
+### M5 完成（12/12）
 
 | ID | 标题 | 关键产出 |
 | --- | --- | --- |
+| P-5-12 | 性能 + 稳定性 sweep | 新脚本 `packages/backend/scripts/perf-sweep.ts` + npm script `perf:sweep`：四场景 in-memory bench——(1) 1000 events: seed → `getNodeRunEvents` 取 first 500 / cursor-paginated next 500 / 单次 1000，~1-3ms 每次；(2) 100 tasks: `listTasks` 三个过滤器全部 <1ms；(3) 10MiB 合成 diff (1066 files, 60 行/file): `splitDiffPerFile / splitDiffPerNFiles(10) / splitDiffPerDirectory(2)` 8-11ms / 13-25MiB RSS delta；(4) 10 并发任务: `Promise.all(startTask × 10)` 走真 `git init` + stub-opencode 调度 268ms 总墙钟、每节点均 17ms / max 22ms / RSS +50MiB；用 `createInMemoryDb(MIGRATIONS_DIR)` + `e2e/fixtures/stub-opencode.sh` 跑通真 scheduler。新文档 `docs/performance-notes.md` 把数据、平台标记 (darwin arm64 / bun 1.3.13 / 10 cpu / 64 GiB)、findings (每场景 1 段) + 5 条 v2 issue tracker (events 表无 nodeRunId 索引 / listTasks 带 workflowSnapshot 重 / diff 每轮 polling 重解析 / worktree add 串行 / events INSERT 无合批) 写成可定期 re-run 的 baseline |
+| P-5-07 | Playwright e2e | 新顶层目录 `e2e/`：`fixtures/stub-opencode.sh`（POSIX sh，`--version` 吐 stub-opencode 1.14.99 满足 MIN_OPENCODE_VERSION + `run …` 单条 `text` JSON event 含写死的 `<workflow-output><port name="answer">stub e2e output</port>` envelope）/ `harness.ts`（node:child_process spawn 单二进制 + AGENT_WORKFLOW_HOME=tmp，pre-seed config.json 含 opencodePath=stub + bindPort=0 + language=en-US，正则 `(https?://[^\s?]+)\?token=([A-Za-z0-9]+)` 抓 daemon stdout ready 行，30s timeout，stop() SIGTERM→5s grace→SIGKILL→rm home）/ `main.spec.ts`（test.beforeAll: 起 daemon + `git init -b main` 临时 repo + API 创 agent (outputs=['answer'] readonly=true) + workflow (input topic → agent_1 → output answer 三节点两边) + `/api/repos/recent` 注册；test.afterAll: stop daemon。Playwright `primeAuthLocalStorage` 用 `page.addInitScript` 写 `agent-workflow.baseUrl / token / aw-language='en-US'` 三 key。验证流程：goto baseUrl → 在 Agents 页看到 agent name → 点 Workflows nav → 行内 Open → workflow header → Launch task 链接 → topic 输入 + main branch select → Start → URL 跳 /tasks/{ULID} → poll `/api/tasks/{id}` 直到 terminal=done → 校验 `/api/tasks/{id}/node-runs` 里 agent_1.done + answer="stub e2e output" → 等 UI 上的 `.status-chip` (done) + `.task-output-card__body` 文本同步) / `package.json`（顶层 + `playwright.config.ts`：chromium-only / workers=1 / 90s timeout / 失败自动 trace）。**附带修复一个生产 bug**：`routes/tasks.ts` 新 `resolveOpencodeCmd(configPath)` helper 把 `config.opencodePath` 反查后传给 startTask/resumeTask/retryNode 的 opencodeCmd —— 之前 `opencodePath` 只参与启动 probe，runner 总是从 PATH 找 'opencode'，配置自定义路径根本不生效；现在 daemon 启动 probe 与每次任务 spawn 拿到的就是同一个 binary。CI 新增 `e2e` job（needs build-binary，ubuntu+macos matrix，`bun run build:binary` + `bunx playwright install --with-deps chromium` + `bun run e2e`，失败时 upload test-results/ + playwright-report/）。`.gitignore` 加 test-results/ playwright-report/ .playwright/。本地实跑 ~1s 一次，318 backend test + 175 frontend test + 1 e2e test 全绿 |
 | P-5-10 | First-run onboarding | `routes/index.tsx` 由 beforeLoad redirect 改成渲染组件：拉取 `/api/agents` + `/api/workflows` 走 react-query（缓存让后续 `/agents` 复用同一份数据，不会再 refetch），两者均为空数组 → 渲染 `<Onboarding>`，否则 `<Navigate to='/agents' replace>`。`components/Onboarding.tsx` 暴露纯函数 `computeIsFirstRun({agents, workflows, isLoading, error})` 把判定从 hook 中抽出便于单测，再加 `useOnboardingProbe` 把 react-query 状态喂进去。卡片含四步（建 agent → 建 skill → 建 workflow → launch task），第三步同时给一键 "Import demo workflow" 按钮 + "or start from a blank workflow" 链接；底部 "Skip onboarding" 跳到 `/agents`。Demo workflow YAML 抽到 `src/fixtures/demo-workflow.ts`（input → coder agent (`outputs: [code]`) → output 三节点 + 一条边，name 用连字符 "Demo - code..." 避免 YAML 解析 `name: Demo: ...` 时把第二个冒号当映射符），i18n 加 `onboarding` section 18 条 key（zh/en 同步）。Import 按钮 mutation 用裸 `fetch` 走 `text/yaml` content-type + Bearer token 直接 POST `/api/workflows/import?onConflict=new`（沿用 `workflows.tsx` 已有的 postYaml 模式，因为 `api.post` 默认 JSON 序列化）。`styles.css` 加 `.onboarding__steps / __step / __actions / __skip` 一组卡片样式。tests +10：前端 `tests/onboarding.test.tsx` 8 case（loading/error 不算 first-run / 双空 true / 任一非空 false / undefined 不 first-run × 5 pure + 三步标题渲染 / Import 按钮发对 URL+headers+body 并显示成功提示 / 422 错误把 `workflow-yaml-invalid` 渲染到 `role=alert`，用 `vi.mock('@tanstack/react-router')` 把 `<Link>` stub 成裸 `<a>` 避免 RouterProvider），后端 `tests/onboarding-demo.test.ts` 2 case（直接读 fixture 文件正则抽出 YAML 字符串 → `previewWorkflowYaml` 校验 3 个 kind 一致 / `importWorkflowYaml(db, …, {onConflict:'new'})` 实际入库），CI 任何 schema 漂移让 demo 不可导入会被这两个 case 拦下来。`tests/setup.ts` 加 `import('../src/i18n')` 副作用，让 `useTranslation()` 在测试里能拿到真实文案（之前缺这个，第一版 onboarding render 测试都 querByText 命中的是裸 key）。前端 test 146 → 154，后端 317 → 319 |
 | P-5-08 | 前端关键组件 vitest | 新增 4 个 spec 共 +29 case，覆盖编辑器/启动器交互密集组件：(1) `tests/enum-picker.test.tsx` 6 case — single 出裸串 / multi 出 JSON array / toggle 移除 / 解析坏 JSON / allowOther Add 按钮 / 空白时 Add 禁用；(2) `tests/git-picker.test.tsx` 5 case — commit-range 双 input 出 `{kind,from,to}` / 现有 JSON round-trip / pr 数字 / branch 用 `setQueryData(['repos','refs','/repo'])` 预热缓存（staleTime Infinity 防止 fetch 重试发起真请求）/ 坏 JSON 不崩；(3) `tests/files-picker.test.tsx` 5 case — newline-joined value 派生 selected / 勾选发 newline join / maxCount 阻挡新增但允许减少 / 客户端 filter 收窄 / `repoPath=''` 显示 Pick a repo first；(4) `tests/node-inspector.test.tsx` 13 case — null/ghost selection 不渲染 / Close → onClose / input inputKey patch / output + Add port 默认 `port_{N+1}` / Remove 删行 / wrapper-git inputs=0（read-only inner ids）/ wrapper-loop 换 exitCondition.kind 保留 nodeId+portName / wrapper-loop + Add binding / agent-single select 派 agentName / promptTemplate / agent-multi sourcePort（用 `Host` 状态化 wrapper 让两次 fireEvent 之间真重渲，否则第二次 onChange 读到陈旧 props）/ Preview tab 只对 agent kind enable。前端 test 总数 117 → 146 |
 | P-5-11 | README + 用户文档 | `README.md` 整体重写，从 M0 脚手架介绍换成 v1 上手文档：requirements 表（opencode 1.14.0+ / git 2.5+ / macOS+Linux）、单二进制 curl 安装一行命令（macos-arm64 + linux-x86_64）、quick start（`./agent-workflow start` → 点链接 → 建 agent / skill / workflow / launch task）、`~/.agent-workflow/` 文件树、完整 CLI 列表、所有可编辑 config 字段表（标 restart-required）、build-from-source。新增 `docs/`：(1) `architecture.md` ASCII 进程图 + 8 张表数据模型 + 任务生命周期 + fan-out 详解 + wrapper 嵌套语义 + 进程隔离 + token 鉴权；(2) `agent.md` frontmatter 字段表 + readonly 与三套 semaphore 的并发模型 + prompt 模板变量（`{{port}}` + 6 个 builtin）+ CRUD endpoint 表；(3) `skill.md` managed vs external 源类型 + 目录布局 + SKILL.md frontmatter + 两种 source 的 per-run staging（copy vs symlink）+ CRUD endpoint 表；(4) `workflow-yaml.md` top-level shape + 4 种 launcher input kind + 6 种 node kind 全例子 + edges 多入边 `---` 拼接规则 + 13 条校验规则；(5) `troubleshooting.md` 8 个常见问题（stale lock / opencode 版本 / worktree 错误 / 远程访问 / 卡死任务 / daemon crash resume / events 归档 / 备份），README 末尾的 docs 链接全部对齐 |
@@ -219,11 +223,27 @@ packages/backend/src/
 
 ---
 
-## 下一步：M5 续
+## 下一步：v1 发布
 
-P-5-01 + P-5-02 + P-5-04 + P-5-05 + P-5-06 + P-5-08 + P-5-09 + P-5-10 + P-5-11 闭合；P-5-03 stage 2 全部完成（stage 1 脚手架 + Phase A list/new/detail + Phase B 编辑器/canvas + Phase C components/settings 字段 label）。P-5-03 整体闭合。后续工作：
-- P-5-07 Playwright e2e（M）
-- P-5-12 性能 + 稳定性 sweep（M）
+81/81 全部 issue 闭合。v1 验收清单（design/plan.md §M5 验收 + design.md §22）：
+
+- [x] 单二进制下载即跑（macOS arm64 + Linux x86_64，build-binary CI job）
+- [x] 暗色主题（P-5-04，跟随系统/强制 light/强制 dark）
+- [x] e2e 通过 CI（P-5-07 chromium happy-path，ubuntu + macos matrix）
+- [x] README + docs/ 上手能让新人在 10 分钟内跑通 demo workflow（P-5-11）
+- [x] 备份还原验证（P-5-02 CLI + Settings 按钮，6 test 覆盖布局/round-trip）
+
+接下来可以发版了：
+1. `git tag v0.1.0 && git push origin v0.1.0` 触发 `.github/workflows/release.yml`（P-5-06）。
+2. release.yml 自动 build ubuntu + macos → 上传 dist/agent-workflow-{linux-x86_64,macos-arm64} 到 GitHub Releases。
+3. release notes 走 `generate_release_notes: true` 自动从 commit/PR 拼接。
+
+v2 候选（已记录到 [docs/performance-notes.md](docs/performance-notes.md) §issue tracker）：
+- `node_run_events` 加 `(node_run_id, id)` 复合索引
+- `listTasks` 轻量投影（去掉 workflowSnapshot+inputs）
+- 任务详情 diff 缓存（keyed by taskId+base_commit）
+- worktree 池化
+- events INSERT 合批（100ms 窗口）
 
 ---
 

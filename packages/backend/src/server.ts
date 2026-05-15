@@ -11,6 +11,7 @@ import { mountBackupRoutes } from '@/routes/backup'
 import { mountConfigRoutes } from '@/routes/config'
 import { mountHealthRoutes } from '@/routes/health'
 import { mountRepoRoutes } from '@/routes/repos'
+import { mountRuntimeRoutes } from '@/routes/runtime'
 import { mountSkillRoutes } from '@/routes/skills'
 import { mountTaskRoutes } from '@/routes/tasks'
 import { mountWorkflowRoutes } from '@/routes/workflows'
@@ -53,6 +54,7 @@ export function createApp(deps: AppDeps): Hono {
   )
 
   mountConfigRoutes(app, deps)
+  mountRuntimeRoutes(app, deps)
   mountAgentRoutes(app, deps)
   mountSkillRoutes(app, deps)
   mountRepoRoutes(app, deps)

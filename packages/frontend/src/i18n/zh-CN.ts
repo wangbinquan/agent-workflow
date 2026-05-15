@@ -411,6 +411,21 @@ export interface Resources {
     tokenNone: string
     tokenMask: string
     signOut: string
+    runtimeStatusTitle: string
+    runtimeStatusProbing: string
+    runtimeStatusOk: string
+    runtimeStatusIncompatible: string
+    runtimeStatusNotFound: string
+    runtimeStatusBinary: string
+    runtimeStatusReprobe: string
+    runtimeStatusMinVersion: string
+    runtimeStatusHint: string
+    modelLoadFailed: string
+    modelLoading: string
+    modelRefresh: string
+    modelCustom: string
+    modelCustomPlaceholder: string
+    modelEmpty: string
   }
   enumPicker: {
     otherPlaceholder: string
@@ -837,6 +852,21 @@ export const zhCN: Resources = {
     tokenNone: '无',
     tokenMask: '{{prefix}}…{{suffix}}（共 {{len}} 字符）',
     signOut: '登出 / 重新输入 token',
+    runtimeStatusTitle: 'opencode 运行状态',
+    runtimeStatusProbing: '正在探测 opencode…',
+    runtimeStatusOk: '兼容 — {{version}}',
+    runtimeStatusIncompatible: '版本 {{version}} 低于最低要求 {{minVersion}}',
+    runtimeStatusNotFound: '未找到 opencode 二进制或无法执行',
+    runtimeStatusBinary: '二进制：{{path}}',
+    runtimeStatusReprobe: '重新探测',
+    runtimeStatusMinVersion: '最低 {{version}}',
+    runtimeStatusHint: '红色状态请检查 opencode 路径字段。',
+    modelLoadFailed: '模型列表加载失败 — 已降级为手动输入。',
+    modelLoading: '加载模型列表…',
+    modelRefresh: '刷新',
+    modelCustom: '自定义…',
+    modelCustomPlaceholder: 'provider/modelID',
+    modelEmpty: '（空）',
   },
   enumPicker: {
     otherPlaceholder: '其它（自定义）…',
