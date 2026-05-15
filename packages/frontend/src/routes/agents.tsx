@@ -90,6 +90,7 @@ function AgentsPage() {
                     onConfirm={() => del.mutateAsync(a.name)}
                     danger
                     disabled={del.isPending}
+                    size="sm"
                   />
                 </td>
               </tr>

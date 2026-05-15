@@ -126,6 +126,7 @@ function WorkflowsPage() {
                     onConfirm={() => del.mutateAsync(w.id)}
                     danger
                     disabled={del.isPending}
+                    size="sm"
                   />
                 </td>
               </tr>

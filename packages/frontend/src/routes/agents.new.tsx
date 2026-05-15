@@ -60,9 +60,9 @@ function AgentCreatePage() {
 
   const create = useMutation({
     mutationFn: () => api.post<Agent>('/api/agents', draft),
-    onSuccess: (a) => {
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['agents'] })
-      navigate({ to: '/agents/$name', params: { name: a.name } })
+      navigate({ to: '/agents' })
     },
   })
 

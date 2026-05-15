@@ -10,6 +10,7 @@ interface ConfirmButtonProps {
   onConfirm: () => unknown | Promise<unknown>
   danger?: boolean
   disabled?: boolean
+  size?: 'sm'
 }
 
 export function ConfirmButton({
@@ -18,6 +19,7 @@ export function ConfirmButton({
   onConfirm,
   danger,
   disabled,
+  size,
 }: ConfirmButtonProps) {
   const { t } = useTranslation()
   const resolvedConfirmLabel = confirmLabel ?? t('common.confirmPrompt')
@@ -45,7 +47,7 @@ export function ConfirmButton({
   return (
     <button
       type="button"
-      className={`btn ${danger === true ? 'btn--danger' : ''} ${armed ? 'btn--armed' : ''}`}
+      className={`btn ${size === 'sm' ? 'btn--sm' : ''} ${danger === true ? 'btn--danger' : ''} ${armed ? 'btn--armed' : ''}`}
       disabled={disabled}
       onClick={handle}
     >

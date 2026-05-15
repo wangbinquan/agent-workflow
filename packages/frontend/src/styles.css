@@ -283,11 +283,16 @@ code {
 }
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 14px;
   color: var(--text);
+  text-decoration: none;
+  line-height: 1.2;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -344,7 +349,7 @@ code {
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   font-size: 14px;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .data-table th {
