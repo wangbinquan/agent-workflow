@@ -92,7 +92,7 @@ jobs:
         run: ls -lh dist/
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: agent-workflow-${{ matrix.os }}
           path: dist/agent-workflow-*
@@ -135,7 +135,7 @@ jobs:
 
       - name: Upload Playwright trace on failure
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: playwright-trace-${{ matrix.os }}
           path: |
