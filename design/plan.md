@@ -25,7 +25,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 
 | 编号 | 标题 | 状态 |
 | --- | --- | --- |
-| [RFC-001](./RFC-001-runtime-status-and-model-select/proposal.md) | Settings → Runtime 状态卡片 + Model 下拉选择 | Draft |
+| [RFC-001](./RFC-001-runtime-status-and-model-select/proposal.md) | Settings → Runtime 状态卡片 + Model 下拉选择 | Done |
 
 ---
 
