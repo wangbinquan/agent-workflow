@@ -122,6 +122,12 @@ export const WorkflowValidationIssueSchema = z.object({
   message: z.string(),
   /** Optional pointer into the definition (e.g. node id, edge id). */
   pointer: z.string().optional(),
+  /**
+   * Severity. Absence is treated as 'error' for backwards compatibility — only
+   * issues that explicitly set 'warning' are non-blocking. `result.ok` is true
+   * iff no issue carries 'error' severity.
+   */
+  severity: z.enum(['error', 'warning']).optional(),
 })
 export type WorkflowValidationIssue = z.infer<typeof WorkflowValidationIssueSchema>
 

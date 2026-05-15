@@ -360,6 +360,37 @@ export function validateWorkflowDef(
     seenKeys.add(inp.key)
   }
 
+  // Input-node ↔ workflow.inputs[] bijection (RFC-004).
+  // Error:   input node references an inputKey that no inputs[] entry declares.
+  // Warning: inputs[] declares a key that no input node references (allows the
+  //          user to keep a launcher field around temporarily without deleting
+  //          its declaration).
+  const declaredKeys = new Set(inputs.map((i) => i.key))
+  const inputNodeKeys = new Set<string>()
+  for (const node of nodes) {
+    if (node.kind !== 'input') continue
+    const key = readString(node, 'inputKey')
+    if (key === undefined) continue
+    inputNodeKeys.add(key)
+    if (!declaredKeys.has(key)) {
+      issues.push({
+        code: 'input-key-not-declared',
+        message: `input node '${node.id}' inputKey '${key}' not declared in workflow.inputs[]`,
+        pointer: node.id,
+      })
+    }
+  }
+  for (const inp of inputs) {
+    if (!inputNodeKeys.has(inp.key)) {
+      issues.push({
+        code: 'input-orphan-declared',
+        message: `workflow.inputs[] declares key '${inp.key}' but no input node references it`,
+        pointer: inp.key,
+        severity: 'warning',
+      })
+    }
+  }
+
   // 5. prompt-template --------------------------------------------------------
   for (const node of nodes) {
     if (node.kind !== 'agent-single' && node.kind !== 'agent-multi') continue
@@ -388,7 +419,8 @@ export function validateWorkflowDef(
     }
   }
 
-  return { ok: issues.length === 0, issues }
+  const hasError = issues.some((i) => (i.severity ?? 'error') === 'error')
+  return { ok: !hasError, issues }
 }
 
 // -----------------------------------------------------------------------------

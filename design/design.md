@@ -507,7 +507,7 @@ nodes:
     promptTemplate: |
       Fix the issues found by the auditors.
 edges:
-  - { source: { nodeId: in_1, portName: out },          target: { nodeId: worker_1, portName: requirement } }
+  - { source: { nodeId: in_1, portName: requirement },  target: { nodeId: worker_1, portName: requirement } }
   - { source: { nodeId: wrap_git_1, portName: git_diff }, target: { nodeId: audit_1, portName: diff } }
   - { source: { nodeId: audit_1, portName: audit_findings }, target: { nodeId: fix_1, portName: audit_findings } }
 ```
@@ -779,6 +779,13 @@ async function startNodeRun(task: Task, nodeRun: NodeRun, agent: Agent) {
 ```
 
 ### 7.3 prompt 拼接细节
+
+> **Input 节点端口契约（RFC-004）**：`input` 节点的**输出端口名 = `inputKey`**，
+> 同时也是 `definition.inputs[]` 中对应 entry 的 `key`、launcher 表单字段的
+> 字段名。三处任一不一致都是 bug。运行时 scheduler 把 `task.inputs[inputKey]`
+> 写到 `node_run_outputs.portName = inputKey`，下游边按 `source.portName ===
+> inputKey` 查同一份 row。
+
 
 ```ts
 function renderUserPrompt(nodeRun: NodeRun, agent: Agent): string {

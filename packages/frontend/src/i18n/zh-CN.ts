@@ -224,6 +224,7 @@ export interface Resources {
     remoteDismiss: string
     validationOk: string
     validationIssues: string
+    validationWarnings: string
     paletteFilter: string
     paletteNoMatches: string
     paletteAgents: string
@@ -275,6 +276,13 @@ export interface Resources {
     resolvedInbound: string
     fieldInputKey: string
     fieldInputKeyHint: string
+    fieldInputKind: string
+    fieldInputKindHint: string
+    fieldInputLabel: string
+    fieldInputLabelHint: string
+    fieldInputRequired: string
+    fieldInputDescription: string
+    fieldInputDescriptionHint: string
     fieldOutputPorts: string
     fieldOutputPortsHint: string
     portNamePlaceholder: string
@@ -689,6 +697,7 @@ export const zhCN: Resources = {
     remoteDismiss: '关闭',
     validationOk: '✓ 校验通过',
     validationIssues: '{{n}} 个问题',
+    validationWarnings: '{{n}} 个警告（不阻塞启动）',
     paletteFilter: '过滤面板…',
     paletteNoMatches: '没有匹配项。',
     paletteAgents: '代理',
@@ -739,7 +748,15 @@ export const zhCN: Resources = {
     previewOnlyAgent: '仅 agent 节点支持预览。',
     resolvedInbound: '入边端口：',
     fieldInputKey: 'Input key',
-    fieldInputKeyHint: '工作流内必须唯一。',
+    fieldInputKeyHint: '工作流内必须唯一；也是该 input 节点产出端口名 + launcher 字段 key。',
+    fieldInputKind: '字段类型',
+    fieldInputKindHint:
+      '决定 launcher 上的输入控件：text=单行/多行文本，files=多选文件，enum=枚举，git=分支/commit/PR。',
+    fieldInputLabel: '显示标签',
+    fieldInputLabelHint: 'launcher 上展示给用户的字段名；留空则使用 key。',
+    fieldInputRequired: '必填',
+    fieldInputDescription: '说明',
+    fieldInputDescriptionHint: 'launcher 字段下方的额外说明，可空。',
     fieldOutputPorts: '输出端口',
     fieldOutputPortsHint: '每个端口 = 任务详情页的一张卡片；绑定到 (nodeId, portName)。',
     portNamePlaceholder: '端口名',

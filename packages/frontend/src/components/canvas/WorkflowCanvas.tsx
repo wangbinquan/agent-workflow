@@ -40,6 +40,7 @@ import { InputNode } from './nodes/InputNode'
 import { deserialize, makeNode, PALETTE_MIME } from './nodePalette'
 import { OutputNode } from './nodes/OutputNode'
 import { INBOUND_HANDLE_ID, type CanvasNodeData, type CanvasSelection } from './nodes/types'
+import { syncInputDefs } from './syncInputDefs'
 import { GitWrapperNode, LoopWrapperNode } from './nodes/WrapperNodes'
 
 const NODE_TYPES = {
@@ -111,6 +112,18 @@ function CanvasInner({
     return m
   }, [agents])
   const rf = useReactFlow()
+  // RFC-004: every definition commit funnels through `commitChange`, which
+  // reconciles `definition.inputs[]` with input-node inputKeys. Adding /
+  // patching / deleting input nodes therefore keeps the launcher form
+  // declaration in lock-step automatically.
+  const commitChange = useCallback(
+    (next: WorkflowDefinition) => {
+      if (onChange === undefined) return
+      const synced = syncInputDefs(next.inputs ?? [], next.nodes)
+      onChange(synced === (next.inputs ?? []) ? next : { ...next, inputs: synced })
+    },
+    [onChange],
+  )
   const [selection, setSelection] = useState<{ nodes: string[]; edges: string[] }>({
     nodes: [],
     edges: [],
@@ -179,13 +192,13 @@ function CanvasInner({
               (e) => stillReferenced.has(e.source) && stillReferenced.has(e.target),
             )
             if (liveEdges.length !== edges.length) setEdges(liveEdges)
-            onChange(toDefinition(definition, next, liveEdges))
+            commitChange(toDefinition(definition, next, liveEdges))
           }
         }
         return next
       })
     },
-    [definition, edges, onChange, readOnly],
+    [commitChange, definition, edges, onChange, readOnly],
   )
 
   const handleEdgesChange = useCallback(
@@ -200,12 +213,12 @@ function CanvasInner({
         // Only the structural mutations need to round-trip into the
         // persisted WorkflowDefinition; selection-only ticks stay local.
         if (onChange !== undefined && affectsEdgeDefinition(changes)) {
-          onChange(toDefinition(definition, nodes, next))
+          commitChange(toDefinition(definition, nodes, next))
         }
         return next
       })
     },
-    [definition, nodes, onChange, readOnly],
+    [commitChange, definition, nodes, onChange, readOnly],
   )
 
   const deleteKeyCodes = useMemo(() => ['Backspace', 'Delete'], [])
@@ -215,9 +228,9 @@ function CanvasInner({
       if (readOnly === true || onChange === undefined) return
       const built = buildEdgeFromConnection(definition, translateInboundConnection(conn))
       if (built === null) return
-      onChange({ ...definition, edges: [...definition.edges, built] })
+      commitChange({ ...definition, edges: [...definition.edges, built] })
     },
-    [definition, onChange, readOnly],
+    [commitChange, definition, onChange, readOnly],
   )
 
   // ---- Clipboard / shortcuts (P-2-07) ----
@@ -233,10 +246,10 @@ function CanvasInner({
       const slice = getClipboard()
       if (slice === null || onChange === undefined || readOnly === true) return
       const { definition: next, newNodeIds } = applyPaste(definition, slice, at)
-      onChange(next)
+      commitChange(next)
       setSelection({ nodes: newNodeIds, edges: [] })
     },
-    [definition, onChange, readOnly],
+    [commitChange, definition, onChange, readOnly],
   )
 
   const selectAll = useCallback(() => {
@@ -285,9 +298,9 @@ function CanvasInner({
       (e) =>
         !removedEdges.has(e.id) && stillIds.has(e.source.nodeId) && stillIds.has(e.target.nodeId),
     )
-    onChange({ ...definition, nodes: keptNodes, edges: keptEdges })
+    commitChange({ ...definition, nodes: keptNodes, edges: keptEdges })
     setSelection({ nodes: [], edges: [] })
-  }, [definition, onChange, readOnly, selection.edges, selection.nodes])
+  }, [commitChange, definition, onChange, readOnly, selection.edges, selection.nodes])
 
   const duplicateNode = useCallback(
     (nodeId: string) => {
@@ -295,10 +308,10 @@ function CanvasInner({
       if (slice === null || onChange === undefined || readOnly === true) return
       const at = { x: slice.anchor.x + 40, y: slice.anchor.y + 40 }
       const { definition: next, newNodeIds } = applyPaste(definition, slice, at)
-      onChange(next)
+      commitChange(next)
       setSelection({ nodes: newNodeIds, edges: [] })
     },
-    [definition, onChange, readOnly],
+    [commitChange, definition, onChange, readOnly],
   )
 
   // P-3-04: wrap the current selection in a new wrapper-git / wrapper-loop
@@ -331,13 +344,13 @@ function CanvasInner({
         kind === 'wrapper-loop'
           ? { ...base, maxIterations: 3, exitCondition: { kind: 'port-empty' } }
           : base
-      onChange({
+      commitChange({
         ...definition,
         nodes: [...definition.nodes, wrapper as WorkflowNode],
       })
       setSelection({ nodes: [wrapperId], edges: [] })
     },
-    [definition, onChange, readOnly, selection.nodes],
+    [commitChange, definition, onChange, readOnly, selection.nodes],
   )
 
   const decomposeWrapper = useCallback(
@@ -350,13 +363,13 @@ function CanvasInner({
       const innerIds = Array.isArray(inner)
         ? inner.filter((s): s is string => typeof s === 'string')
         : []
-      onChange({
+      commitChange({
         ...definition,
         nodes: definition.nodes.filter((n) => n.id !== wrapperId),
       })
       setSelection({ nodes: innerIds, edges: [] })
     },
-    [definition, onChange, readOnly],
+    [commitChange, definition, onChange, readOnly],
   )
 
   function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
@@ -381,7 +394,7 @@ function CanvasInner({
     const pos = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY })
     const existingIds = new Set(definition.nodes.map((n) => n.id))
     const newNode = makeNode(item, pos, { agents, existingIds })
-    onChange({ ...definition, nodes: [...definition.nodes, newNode] })
+    commitChange({ ...definition, nodes: [...definition.nodes, newNode] })
   }
 
   function handleNodeContextMenu(e: React.MouseEvent, node: Node) {

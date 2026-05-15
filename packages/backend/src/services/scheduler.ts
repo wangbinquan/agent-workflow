@@ -316,7 +316,11 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     }
     const value = inputsMap[inputKey] ?? ''
     const nrId = await insertNodeRun(db, taskId, node.id, 'done', 0, iteration)
-    await db.insert(nodeRunOutputs).values({ nodeRunId: nrId, portName: 'out', content: value })
+    // RFC-004: an input node's single output port is named after its inputKey,
+    // so edges authored on the canvas (whose source.portName defaults to the
+    // visible handle label = inputKey) actually resolve. Previously hardcoded
+    // to 'out', which mismatched every workflow created through the editor.
+    await db.insert(nodeRunOutputs).values({ nodeRunId: nrId, portName: inputKey, content: value })
     broadcastNodeStatus(taskId, nrId, node.id, 'done')
     return { kind: 'ok', summary: '', message: '' }
   }

@@ -57,6 +57,7 @@ function makeDef(parts: Partial<WorkflowDefinition>): WorkflowDefinition {
 describe('rule 1: edge port existence', () => {
   test('valid: edge between input.outPort and output.inPort', () => {
     const def = makeDef({
+      inputs: [{ kind: 'text', key: 'requirement', label: 'requirement' }],
       nodes: [
         { id: 'i1', kind: 'input', inputKey: 'requirement' },
         {
@@ -94,6 +95,7 @@ describe('rule 1: edge port existence', () => {
 
   test('invalid: edge source port not in node outputs', () => {
     const def = makeDef({
+      inputs: [{ kind: 'text', key: 'requirement', label: 'requirement' }],
       nodes: [
         { id: 'i1', kind: 'input', inputKey: 'requirement' },
         {
@@ -123,6 +125,7 @@ describe('rule 2: topology', () => {
   test('valid: linear input → agent → output', () => {
     const a = agent('coder', ['result'])
     const def = makeDef({
+      inputs: [{ kind: 'text', key: 'req', label: 'req' }],
       nodes: [
         { id: 'i1', kind: 'input', inputKey: 'req' },
         {
@@ -223,6 +226,7 @@ describe('rule 2: topology', () => {
 describe('rule 3: wrapper required fields', () => {
   test('valid: wrapper-loop with all required fields', () => {
     const def = makeDef({
+      inputs: [{ kind: 'text', key: 'r', label: 'r' }],
       nodes: [
         { id: 'n1', kind: 'input', inputKey: 'r' },
         {
@@ -313,6 +317,7 @@ describe('rule 4: reference resolution', () => {
   test('invalid: agent-multi sourcePort references unknown port', () => {
     const a = agent('auditor', ['findings'])
     const def = makeDef({
+      inputs: [{ kind: 'text', key: 'unused', label: 'unused' }],
       nodes: [
         { id: 'wg', kind: 'wrapper-git', nodeIds: ['x'] },
         { id: 'x', kind: 'input', inputKey: 'unused' },
@@ -337,6 +342,7 @@ describe('rule 5: prompt template', () => {
   test('valid: template references inbound port + builtin only', () => {
     const a = agent('coder', ['result'])
     const def = makeDef({
+      inputs: [{ kind: 'text', key: 'requirement', label: 'requirement' }],
       nodes: [
         { id: 'i1', kind: 'input', inputKey: 'requirement' },
         {
@@ -377,6 +383,7 @@ describe('rule 5: prompt template', () => {
   test('agent-multi can reference its sourcePort name in the template', () => {
     const a = agent('auditor', ['findings'])
     const def = makeDef({
+      inputs: [{ kind: 'text', key: 'x', label: 'x' }],
       nodes: [
         { id: 'wg', kind: 'wrapper-git', nodeIds: ['unused'] },
         { id: 'unused', kind: 'input', inputKey: 'x' },
@@ -391,6 +398,55 @@ describe('rule 5: prompt template', () => {
     })
     const codes = validateWorkflowDef(def, { agents: [a], skills: [] }).issues.map((i) => i.code)
     expect(codes).not.toContain('prompt-template-unresolved')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-004 — input-node ↔ workflow.inputs[] bijection
+//
+// Locks in the new contract: an input node's inputKey MUST appear in
+// definition.inputs[]; an orphan inputs[] entry surfaces as a warning that
+// does NOT block task launch. If these go red, check
+// workflow.validator.ts around the input-key-not-declared / input-orphan-
+// declared block plus the WorkflowValidationIssue.severity field in
+// packages/shared/src/schemas/workflow.ts.
+// ---------------------------------------------------------------------------
+
+describe('RFC-004: input-node ↔ workflow.inputs[] bijection', () => {
+  test('error: input node inputKey not declared in inputs[]', () => {
+    const def = makeDef({
+      inputs: [],
+      nodes: [{ id: 'i1', kind: 'input', inputKey: 'requirement' }],
+    })
+    const res = validateWorkflowDef(def, EMPTY_CTX)
+    expect(res.ok).toBe(false)
+    const issue = res.issues.find((i) => i.code === 'input-key-not-declared')
+    expect(issue).toBeDefined()
+    expect(issue?.pointer).toBe('i1')
+    expect(issue?.severity ?? 'error').toBe('error')
+  })
+
+  test('ok: input node inputKey declared in inputs[]', () => {
+    const def = makeDef({
+      inputs: [{ kind: 'text', key: 'requirement', label: 'requirement' }],
+      nodes: [{ id: 'i1', kind: 'input', inputKey: 'requirement' }],
+    })
+    const res = validateWorkflowDef(def, EMPTY_CTX)
+    expect(res.issues.find((i) => i.code === 'input-key-not-declared')).toBeUndefined()
+    expect(res.ok).toBe(true)
+  })
+
+  test('warning (non-blocking): inputs[] declares a key no input node references', () => {
+    const def = makeDef({
+      inputs: [{ kind: 'text', key: 'orphan', label: 'orphan' }],
+      nodes: [],
+    })
+    const res = validateWorkflowDef(def, EMPTY_CTX)
+    const issue = res.issues.find((i) => i.code === 'input-orphan-declared')
+    expect(issue).toBeDefined()
+    expect(issue?.severity).toBe('warning')
+    // Warning must not flip result.ok to false.
+    expect(res.ok).toBe(true)
   })
 })
 

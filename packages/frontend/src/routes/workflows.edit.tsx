@@ -12,6 +12,7 @@ import { getBaseUrl, getToken } from '@/stores/auth'
 import { EditorSidebar } from '@/components/canvas/EditorSidebar'
 import { EdgeInspector } from '@/components/canvas/EdgeInspector'
 import { NodeInspector } from '@/components/canvas/NodeInspector'
+import { syncInputDefs } from '@/components/canvas/syncInputDefs'
 import { WorkflowCanvas, type WorkflowCanvasHandle } from '@/components/canvas/WorkflowCanvas'
 import type { CanvasSelection } from '@/components/canvas/nodes/types'
 import { ConfirmButton } from '@/components/ConfirmButton'
@@ -44,6 +45,21 @@ const EMPTY_DEF: WorkflowDefinition = {
  */
 export function editorLayoutClass(selectedNodeId: string | null): string {
   return selectedNodeId !== null ? 'editor-layout editor-layout--with-inspector' : 'editor-layout'
+}
+
+/**
+ * RFC-004: heal old workflow definitions on editor load. Pre-RFC the editor
+ * never registered input-node inputKeys in `definition.inputs[]`, leaving
+ * launcher forms empty. Running this once on load surfaces the correct
+ * inputs[] back into the draft; the existing 1s auto-save then writes it
+ * back to the daemon. No backend migration needed.
+ *
+ * Exported pure for testing — see tests/canvas-edit-old-workflow.test.tsx.
+ */
+export function healLoadedDefinition(def: WorkflowDefinition): WorkflowDefinition {
+  const synced = syncInputDefs(def.inputs ?? [], def.nodes)
+  if (synced === (def.inputs ?? [])) return def
+  return { ...def, inputs: synced }
 }
 
 // /workflows/new ------------------------------------------------------------
@@ -190,10 +206,14 @@ function WorkflowEditPage() {
   useEffect(() => {
     if (query.data === undefined) return
     if (lastSaved.current?.definition === query.data.definition) return
-    setDraft(query.data.definition)
+    // RFC-004: pre-flight heal so old workflows whose inputs[] never got
+    // populated by the editor regain working launcher fields on the next
+    // auto-save (no backend migration; opening the workflow once fixes it).
+    const healed = healLoadedDefinition(query.data.definition)
+    setDraft(healed)
     setName(query.data.name)
     setDescription(query.data.description)
-    setDirty(false)
+    setDirty(healed !== query.data.definition)
     lastSaved.current = {
       name: query.data.name,
       description: query.data.description,
@@ -228,7 +248,7 @@ function WorkflowEditPage() {
 
   const validate = useMutation({
     mutationFn: () =>
-      api.post<{ ok: boolean; issues: Array<{ code: string; message: string }> }>(
+      api.post<{ ok: boolean; issues: ValidationIssue[] }>(
         `/api/workflows/${encodeURIComponent(id)}/validate`,
       ),
   })
@@ -384,27 +404,65 @@ function WorkflowEditPage() {
   )
 }
 
-function ValidationPanel({
-  result,
-}: {
-  result: { ok: boolean; issues: Array<{ code: string; message: string }> }
-}) {
-  const { t } = useTranslation()
-  if (result.ok) {
-    return <div className="validation-panel validation-panel--ok">{t('editor.validationOk')}</div>
+interface ValidationIssue {
+  code: string
+  message: string
+  severity?: 'error' | 'warning'
+}
+
+/**
+ * RFC-004 added a `severity` field to ValidationIssue. The default ('error')
+ * stays blocking; only entries explicitly tagged 'warning' fall into the
+ * non-blocking bucket. Exported pure for testing.
+ */
+export function partitionIssues(issues: ValidationIssue[]): {
+  errors: ValidationIssue[]
+  warnings: ValidationIssue[]
+} {
+  const errors: ValidationIssue[] = []
+  const warnings: ValidationIssue[] = []
+  for (const i of issues) {
+    if (i.severity === 'warning') warnings.push(i)
+    else errors.push(i)
   }
+  return { errors, warnings }
+}
+
+function ValidationPanel({ result }: { result: { ok: boolean; issues: ValidationIssue[] } }) {
+  const { t } = useTranslation()
+  const { errors, warnings } = partitionIssues(result.issues)
   return (
-    <div className="validation-panel validation-panel--bad">
-      <div className="validation-panel__title">
-        {t('editor.validationIssues', { n: result.issues.length })}
-      </div>
-      <ul>
-        {result.issues.map((i, idx) => (
-          <li key={idx}>
-            <code>{i.code}</code> — {i.message}
-          </li>
-        ))}
-      </ul>
+    <div>
+      {errors.length === 0 ? (
+        <div className="validation-panel validation-panel--ok">{t('editor.validationOk')}</div>
+      ) : (
+        <div className="validation-panel validation-panel--bad">
+          <div className="validation-panel__title">
+            {t('editor.validationIssues', { n: errors.length })}
+          </div>
+          <ul>
+            {errors.map((i, idx) => (
+              <li key={`e-${idx}`}>
+                <code>{i.code}</code> — {i.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {warnings.length > 0 && (
+        <div className="validation-panel validation-panel--warn">
+          <div className="validation-panel__title">
+            {t('editor.validationWarnings', { n: warnings.length })}
+          </div>
+          <ul>
+            {warnings.map((i, idx) => (
+              <li key={`w-${idx}`}>
+                <code>{i.code}</code> — {i.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

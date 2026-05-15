@@ -122,7 +122,8 @@ describe('runTask: linear DAG (M1)', () => {
       edges: [
         {
           id: 'e1',
-          source: { nodeId: 'in', portName: 'out' },
+          // RFC-004: input node port name is its inputKey, not 'out'.
+          source: { nodeId: 'in', portName: 'requirement' },
           target: { nodeId: 'a1', portName: 'requirement' },
         },
       ],
@@ -164,7 +165,8 @@ describe('runTask: linear DAG (M1)', () => {
       .select()
       .from(nodeRunOutputs)
       .where(eq(nodeRunOutputs.nodeRunId, inRun?.id ?? ''))
-    expect(inOutputs[0]?.portName).toBe('out')
+    // RFC-004: input node's output port name === inputKey, not 'out'.
+    expect(inOutputs[0]?.portName).toBe('requirement')
     expect(inOutputs[0]?.content).toBe('do the thing')
   })
 
@@ -370,12 +372,13 @@ describe('runTask: linear DAG (M1)', () => {
       edges: [
         {
           id: 'e1',
-          source: { nodeId: 'in1', portName: 'out' },
+          // RFC-004: input.portName === inputKey.
+          source: { nodeId: 'in1', portName: 'k1' },
           target: { nodeId: 'a', portName: 'requirement' },
         },
         {
           id: 'e2',
-          source: { nodeId: 'in2', portName: 'out' },
+          source: { nodeId: 'in2', portName: 'k2' },
           target: { nodeId: 'a', portName: 'requirement' },
         },
       ],
@@ -545,7 +548,8 @@ describe('runTask: linear DAG (M1)', () => {
       edges: [
         {
           id: 'e1',
-          source: { nodeId: 'in', portName: 'out' },
+          // RFC-004: input.portName === inputKey.
+          source: { nodeId: 'in', portName: 'requirement' },
           target: { nodeId: 'src', portName: 'requirement' },
         },
       ],

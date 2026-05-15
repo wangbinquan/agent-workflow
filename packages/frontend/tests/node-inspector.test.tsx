@@ -115,8 +115,12 @@ describe('NodeInspector', () => {
 
   test('input node: editing the Input key patches inputKey', () => {
     const { onChange } = setup({ id: 'i1', kind: 'input', inputKey: 'req' })
-    const input = screen.getByDisplayValue('req') as HTMLInputElement
-    fireEvent.change(input, { target: { value: 'spec' } })
+    // RFC-004: the inspector now renders 5 inputs (key / kind / label /
+    // required / description). The key is the first text input and shows
+    // value 'req' before the label field (label defaults to the key, so
+    // both have the same displayed value).
+    const inputKeyEl = screen.getAllByDisplayValue('req')[0] as HTMLInputElement
+    fireEvent.change(inputKeyEl, { target: { value: 'spec' } })
     const next = lastPatchedNode(onChange) as unknown as { inputKey: string }
     expect(next.inputKey).toBe('spec')
   })

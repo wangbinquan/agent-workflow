@@ -13,12 +13,13 @@
 // The drawer mutates the workflow definition in place; the parent route
 // owns the dirty/save bookkeeping.
 
-import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import type { Agent, WorkflowDefinition, WorkflowInput, WorkflowNode } from '@agent-workflow/shared'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChipsInput } from '@/components/ChipsInput'
-import { Field, NumberInput, TextArea, TextInput } from '@/components/Form'
+import { Field, NumberInput, Switch, TextArea, TextInput } from '@/components/Form'
 import { computePorts } from './WorkflowCanvas'
+import { patchInputDef, renameInputKey } from './syncInputDefs'
 import { PromptPreview } from './PromptPreview'
 
 interface Props {
@@ -86,7 +87,13 @@ export function NodeInspector({ definition, selectedNodeId, agents, onChange, on
       </div>
       <div className="inspector__body">
         {tab === 'edit' ? (
-          <EditForm node={node} agents={agents} definition={definition} onPatch={patch} />
+          <EditForm
+            node={node}
+            agents={agents}
+            definition={definition}
+            onPatch={patch}
+            onCommitDef={onChange}
+          />
         ) : (
           <PreviewPane node={node} agents={agents} definition={definition} />
         )}
@@ -104,15 +111,32 @@ interface EditProps {
   agents: Agent[]
   definition: WorkflowDefinition
   onPatch: (next: WorkflowNode) => void
+  /**
+   * Apply a multi-field workflow definition change. Used by branches that
+   * need to mutate the node + other parts of the definition atomically
+   * (e.g. RFC-004 input-node inputKey rename touches inputs[] + edges, and
+   * the inputs[] entry edits live outside the node itself).
+   */
+  onCommitDef: (next: WorkflowDefinition) => void
 }
 
-function EditForm({ node, agents, definition, onPatch }: EditProps) {
+function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps) {
   const { t } = useTranslation()
   const rec = node as unknown as Record<string, unknown>
 
   switch (node.kind) {
     case 'input': {
       const key = typeof rec.inputKey === 'string' ? rec.inputKey : ''
+      // RFC-004: inputKey is the single source of truth for the launcher form
+      // entry. Edits to the launcher field's kind / label / required /
+      // description land on definition.inputs[].
+      const inputDef: WorkflowInput | undefined = (definition.inputs ?? []).find(
+        (i) => i.key === key,
+      )
+      const inputKind = (inputDef?.kind ?? 'text') as WorkflowInput['kind']
+      const inputLabel = inputDef?.label ?? key
+      const inputRequired = inputDef?.required ?? true
+      const inputDescription = inputDef?.description ?? ''
       return (
         <div className="form-grid">
           <Field
@@ -122,12 +146,51 @@ function EditForm({ node, agents, definition, onPatch }: EditProps) {
           >
             <TextInput
               value={key}
-              onChange={(v) =>
-                onPatch({
-                  ...(node as Record<string, unknown>),
-                  inputKey: v,
-                } as unknown as WorkflowNode)
+              onChange={(v) => {
+                if (v.length === 0 || v === key) return
+                onCommitDef(renameInputKey(definition, node.id, v))
+              }}
+            />
+          </Field>
+          <Field label={t('inspector.fieldInputKind')} hint={t('inspector.fieldInputKindHint')}>
+            <select
+              className="form-input"
+              value={inputKind}
+              onChange={(e) =>
+                onCommitDef(
+                  patchInputDef(definition, key, {
+                    kind: e.target.value as WorkflowInput['kind'],
+                  }),
+                )
               }
+            >
+              <option value="text">text</option>
+              <option value="files">files</option>
+              <option value="enum">enum</option>
+              <option value="git">git</option>
+            </select>
+          </Field>
+          <Field label={t('inspector.fieldInputLabel')} hint={t('inspector.fieldInputLabelHint')}>
+            <TextInput
+              value={inputLabel}
+              onChange={(v) => onCommitDef(patchInputDef(definition, key, { label: v }))}
+            />
+          </Field>
+          <Field label={t('inspector.fieldInputRequired')}>
+            <Switch
+              checked={inputRequired}
+              onChange={(c) => onCommitDef(patchInputDef(definition, key, { required: c }))}
+              label={t('inspector.fieldInputRequired')}
+            />
+          </Field>
+          <Field
+            label={t('inspector.fieldInputDescription')}
+            hint={t('inspector.fieldInputDescriptionHint')}
+          >
+            <TextArea
+              value={inputDescription}
+              rows={3}
+              onChange={(v) => onCommitDef(patchInputDef(definition, key, { description: v }))}
             />
           </Field>
         </div>

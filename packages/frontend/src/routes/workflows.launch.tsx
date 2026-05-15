@@ -236,6 +236,23 @@ function DynamicInput({
 }
 
 /**
+ * RFC-004: the launcher form is driven solely by `definition.inputs[]`. The
+ * input nodes on the canvas don't show up as form fields by themselves — they
+ * route the value at task-run time into the graph. Exporting this trivial
+ * accessor pins the contract so a future refactor can't quietly switch the
+ * launcher to "scan input nodes" and bypass the inputs[] declaration.
+ */
+export function launcherFieldDefs(
+  def:
+    | {
+        inputs?: WorkflowInput[]
+      }
+    | undefined,
+): WorkflowInput[] {
+  return def?.inputs ?? []
+}
+
+/**
  * Pre-launch validation of the chosen repo. Returns a stable issue code
  * the UI uses to render an inline banner AND disable Start.
  *
