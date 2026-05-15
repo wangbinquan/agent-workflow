@@ -21,6 +21,7 @@ import { DiffViewer } from '@/components/DiffViewer'
 import { NodeDetailDrawer } from '@/components/NodeDetailDrawer'
 import { TaskOutputPanel } from '@/components/TaskOutputPanel'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
+import { classifyCanceled, displayNoderunStatusKey } from '@/lib/noderun-status'
 import { useTaskSync } from '@/hooks/useTaskSync'
 import { useMemo, useRef, useState } from 'react'
 import { Route as RootRoute } from './__root'
@@ -402,7 +403,7 @@ function NodeRunsTable({ runs }: { runs: NodeRun[] }) {
             </td>
             <td>
               <span className={`status-chip status-chip--${noderunTone(r.status)}`}>
-                {r.status}
+                {t(displayNoderunStatusKey(r))}
               </span>
             </td>
             <td className="data-table__muted">{r.iteration}</td>
@@ -417,7 +418,11 @@ function NodeRunsTable({ runs }: { runs: NodeRun[] }) {
                 ? t('common.emDash')
                 : `${Math.round((r.finishedAt - r.startedAt) / 100) / 10}s`}
             </td>
-            <td className="data-table__muted">{r.errorMessage ?? t('common.emDash')}</td>
+            <td className="data-table__muted">
+              {classifyCanceled(r) === 'manual'
+                ? (r.errorMessage ?? t('common.emDash'))
+                : t('common.emDash')}
+            </td>
           </tr>
         ))}
       </tbody>

@@ -12,6 +12,7 @@
 //   - `formatAttemptLabel` returns the `<option>` text for one attempt.
 
 import type { NodeRun } from '@agent-workflow/shared'
+import { displayNoderunStatusKey } from '@/lib/noderun-status'
 
 export function sortNodeRunsForPromptHistory(runs: readonly NodeRun[]): NodeRun[] {
   return [...runs].sort((a, b) => {
@@ -65,11 +66,15 @@ interface AttemptLabelOpts {
 export function formatAttemptLabel(run: NodeRun, opts: AttemptLabelOpts): string {
   const time =
     opts.timeString ?? (run.startedAt === null ? '' : new Date(run.startedAt).toLocaleTimeString())
+  // Localized status — superseded rows render "Superseded / 已被新尝试取代"
+  // instead of raw "canceled" so the dropdown stays in lock-step with the
+  // Stats tab chip.
+  const status = opts.t(displayNoderunStatusKey(run))
   if (opts.fanoutParent) {
     return opts.t('nodeDrawer.promptAttemptParent', {
       iter: run.iteration,
       retry: run.retryIndex,
-      status: run.status,
+      status,
       time,
     })
   }
@@ -78,14 +83,14 @@ export function formatAttemptLabel(run: NodeRun, opts: AttemptLabelOpts): string
       iter: run.iteration,
       retry: run.retryIndex,
       shard: run.shardKey,
-      status: run.status,
+      status,
       time,
     })
   }
   return opts.t('nodeDrawer.promptAttemptEntry', {
     iter: run.iteration,
     retry: run.retryIndex,
-    status: run.status,
+    status,
     time,
   })
 }

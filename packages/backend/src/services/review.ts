@@ -1054,10 +1054,16 @@ export async function submitReviewDecision(
       .orderBy(desc(nodeRuns.retryIndex))
     const latest = upRuns.find((r) => r.parentNodeRunId === null) ?? upRuns[0]
     if (latest === undefined) continue
-    // Worktree rollback per the review-node config.
+    // Worktree rollback per the review-node config. Track whether rollback
+    // *actually completed* so the supersede marker can distinguish "files
+    // rolled back, this attempt is truly canceled" from "files kept, this
+    // attempt is just superseded by a newer retry" — UI uses this to pick
+    // between the 'Canceled' and 'Superseded' labels.
+    let rolledBack = false
     if (rollbackFlag && latest.preSnapshot !== null && latest.preSnapshot !== '') {
       try {
         await rollbackToSnapshot(taskRow.worktreePath, latest.preSnapshot)
+        rolledBack = true
       } catch (err) {
         log.warn('review rollback failed', {
           nodeRunId: latest.id,
@@ -1068,12 +1074,16 @@ export async function submitReviewDecision(
     const nextRetryIndex = latest.retryIndex + 1
     // node_runs has no error_summary column; encode the supersede marker as
     // a stable prefix on error_message so tests / future GC can grep it.
+    // The optional `-rollback` suffix marks "worktree was actually reset to
+    // preSnapshot". Substring matches like `.toContain('superseded-by-review-iterated')`
+    // still work either way.
+    const supersedeMarker = `superseded-by-review-${args.decision}${rolledBack ? '-rollback' : ''}`
     await args.db
       .update(nodeRuns)
       .set({
         status: 'canceled',
         finishedAt: latest.finishedAt ?? Date.now(),
-        errorMessage: `superseded-by-review-${args.decision}: Replaced by retry_index ${nextRetryIndex} due to review ${args.decision} of ${dv.reviewNodeId}`,
+        errorMessage: `${supersedeMarker}: Replaced by retry_index ${nextRetryIndex} due to review ${args.decision} of ${dv.reviewNodeId}`,
       })
       .where(eq(nodeRuns.id, latest.id))
     await args.db.insert(nodeRuns).values({

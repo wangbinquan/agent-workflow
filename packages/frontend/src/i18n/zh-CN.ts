@@ -498,6 +498,24 @@ export interface Resources {
     promptNotApplicable: string
     promptEmpty: string
   }
+  noderunStatus: {
+    pending: string
+    running: string
+    done: string
+    failed: string
+    canceled: string
+    interrupted: string
+    skipped: string
+    exhausted: string
+    awaiting_review: string
+    superseded: string
+    supersededHint: string
+    rollbackHint: string
+    decision: {
+      iterated: string
+      rejected: string
+    }
+  }
   taskOutputs: {
     section: string
     pending: string
@@ -1071,6 +1089,25 @@ export const zhCN: Resources = {
     promptFanoutParent: '多进程父节点本身没有 prompt — 请选一个 shard。',
     promptNotApplicable: '该节点种类不发起 opencode prompt。',
     promptEmpty: '本次执行尚未记录 prompt。',
+  },
+  noderunStatus: {
+    pending: '待运行',
+    running: '运行中',
+    done: '已完成',
+    failed: '失败',
+    canceled: '已取消',
+    interrupted: '已中断',
+    skipped: '已跳过',
+    exhausted: '已耗尽重试',
+    awaiting_review: '待评审',
+    superseded: '已被新尝试取代',
+    supersededHint:
+      '本次尝试在评审 {{decision}} 后被新一次重试取代，worktree 中的文件未回退；Prompt 与输出仍保留在此条目以备查阅。',
+    rollbackHint: '本次尝试在评审 {{decision}} 后已取消，worktree 中的文件已回退到尝试前的快照。',
+    decision: {
+      iterated: '迭代',
+      rejected: '退回',
+    },
   },
   taskOutputs: {
     section: '产出',

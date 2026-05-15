@@ -21,6 +21,7 @@ import {
   isPromptCapableKind,
   sortNodeRunsForPromptHistory,
 } from '@/lib/node-prompt'
+import { classifyCanceled, displayNoderunStatusKey, supersededDecision } from '@/lib/noderun-status'
 
 interface Props {
   taskId: string
@@ -335,10 +336,15 @@ function StatsTab({
     run.startedAt !== null && run.finishedAt !== null
       ? `${((run.finishedAt - run.startedAt) / 1000).toFixed(2)}s`
       : t('common.emDash')
+  // RFC-011 文案：被新尝试取代的旧 attempt 不再以 raw 'canceled' 字串呈现，
+  // 也不显示机器前缀错误信息——通过 noderun-status helper 决定 chip 文案与
+  // 是否用 supersededHint / rollbackHint 替换 errorMessage。
+  const cancellationKind = classifyCanceled(run)
+  const decision = supersededDecision(run)
   return (
     <dl className="task-meta">
       <dt>{t('nodeDrawer.statStatus')}</dt>
-      <dd>{run.status}</dd>
+      <dd>{t(displayNoderunStatusKey(run))}</dd>
       <dt>{t('nodeDrawer.statStarted')}</dt>
       <dd>
         {run.startedAt === null ? t('common.emDash') : new Date(run.startedAt).toLocaleString()}
@@ -365,7 +371,27 @@ function StatsTab({
       <dd>{run.tokCacheCreate ?? t('common.emDash')}</dd>
       <dt>{t('nodeDrawer.statCacheRead')}</dt>
       <dd>{run.tokCacheRead ?? t('common.emDash')}</dd>
-      {run.errorMessage !== null && (
+      {cancellationKind === 'superseded' && decision !== null && (
+        <>
+          <dt>{t('nodeDrawer.statError')}</dt>
+          <dd className="task-meta__error">
+            {t('noderunStatus.supersededHint', {
+              decision: t(`noderunStatus.decision.${decision}`),
+            })}
+          </dd>
+        </>
+      )}
+      {cancellationKind === 'rollback' && decision !== null && (
+        <>
+          <dt>{t('nodeDrawer.statError')}</dt>
+          <dd className="task-meta__error">
+            {t('noderunStatus.rollbackHint', {
+              decision: t(`noderunStatus.decision.${decision}`),
+            })}
+          </dd>
+        </>
+      )}
+      {cancellationKind === 'manual' && run.errorMessage !== null && (
         <>
           <dt>{t('nodeDrawer.statError')}</dt>
           <dd className="task-meta__error">{run.errorMessage}</dd>
@@ -385,7 +411,7 @@ function StatsTab({
                   >
                     <code>{t('nodeDrawer.attempt', { n: r.retryIndex })}</code>{' '}
                     <span className={`status-chip status-chip--${noderunTone(r.status)}`}>
-                      {r.status}
+                      {t(displayNoderunStatusKey(r))}
                     </span>
                     {r.startedAt !== null && (
                       <span className="muted">{new Date(r.startedAt).toLocaleTimeString()}</span>

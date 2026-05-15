@@ -525,6 +525,26 @@ export const enUS: Resources = {
     promptNotApplicable: 'This node kind does not run an opencode prompt.',
     promptEmpty: 'No prompt recorded for this attempt yet.',
   },
+  noderunStatus: {
+    pending: 'Pending',
+    running: 'Running',
+    done: 'Done',
+    failed: 'Failed',
+    canceled: 'Canceled',
+    interrupted: 'Interrupted',
+    skipped: 'Skipped',
+    exhausted: 'Exhausted',
+    awaiting_review: 'Awaiting review',
+    superseded: 'Superseded',
+    supersededHint:
+      'This attempt was replaced by a newer retry after review {{decision}} — files in the worktree were kept; Prompt and outputs are preserved here for reference.',
+    rollbackHint:
+      'This attempt was canceled after review {{decision}} — worktree files were rolled back to the pre-attempt snapshot.',
+    decision: {
+      iterated: 'iterate',
+      rejected: 'reject',
+    },
+  },
   taskOutputs: {
     section: 'Outputs',
     pending: 'pending…',

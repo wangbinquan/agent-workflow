@@ -118,7 +118,9 @@ describe('RFC-011 formatAttemptLabel', () => {
     expect(label).toContain('promptAttemptEntry')
     expect(label).toContain('"iter":0')
     expect(label).toContain('"retry":2')
-    expect(label).toContain('"status":"done"')
+    // Status is rendered through the noderun-status helper now so the
+    // dropdown picks up the i18n label (e.g. "Done") instead of raw "done".
+    expect(label).toContain('"status":"noderunStatus.done"')
     expect(label).toContain('"time":"12:34"')
   })
 
@@ -127,11 +129,40 @@ describe('RFC-011 formatAttemptLabel', () => {
     const label = formatAttemptLabel(run, { fanoutParent: false, t, timeString: '13:00' })
     expect(label).toContain('promptAttemptShard')
     expect(label).toContain('"shard":"src/foo.ts"')
+    expect(label).toContain('"status":"noderunStatus.failed"')
   })
 
   test('fan-out parent uses promptAttemptParent', () => {
     const run = makeRun({ id: 'p', status: 'done' })
     const label = formatAttemptLabel(run, { fanoutParent: true, t, timeString: '14:00' })
     expect(label).toContain('promptAttemptParent')
+  })
+
+  // The next two cases lock in the friendly status label for canceled
+  // rows that the review iterate / reject path produced. A row marked with
+  // the plain `superseded-by-review-*` prefix means the worktree was kept;
+  // the dropdown should label it "Superseded" rather than "Canceled". A row
+  // with the `-rollback` suffix had its files reset, so the user-facing
+  // label stays "Canceled" — matching the Stats tab chip.
+  test('superseded canceled row renders noderunStatus.superseded label', () => {
+    const run = makeRun({
+      id: 'sup',
+      status: 'canceled',
+      errorMessage:
+        'superseded-by-review-iterated: Replaced by retry_index 1 due to review iterated of rev_1',
+    })
+    const label = formatAttemptLabel(run, { fanoutParent: false, t, timeString: '15:00' })
+    expect(label).toContain('"status":"noderunStatus.superseded"')
+  })
+
+  test('rollback-canceled row keeps noderunStatus.canceled label', () => {
+    const run = makeRun({
+      id: 'rb',
+      status: 'canceled',
+      errorMessage:
+        'superseded-by-review-rejected-rollback: Replaced by retry_index 1 due to review rejected of rev_1',
+    })
+    const label = formatAttemptLabel(run, { fanoutParent: false, t, timeString: '15:00' })
+    expect(label).toContain('"status":"noderunStatus.canceled"')
   })
 })

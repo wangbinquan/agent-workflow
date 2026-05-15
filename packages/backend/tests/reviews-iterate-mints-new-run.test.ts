@@ -28,8 +28,21 @@ interface Harness {
   db: DbClient
   appHome: string
   taskId: string
+  worktreePath: string
   reviewNodeRunId: string
   cleanup: () => Promise<void>
+}
+
+interface HarnessOpts {
+  secondReviewNode?: boolean
+  /**
+   * Overrides for the review node's rollback flags. Defaults to neither
+   * key (so review.ts uses its decision-specific defaults: rollbackOnReject=true,
+   * rollbackOnIterate=false). Tests that need to assert the `-rollback`
+   * marker on iterate / suppress it on reject pass these explicitly.
+   */
+  rollbackFilesOnIterate?: boolean
+  rollbackFilesOnReject?: boolean
 }
 
 const REVIEW_DOC = '# Design v1\n\nThe `order_status` enum should include partially_refunded.\n'
@@ -60,7 +73,7 @@ exit 1
   return path
 }
 
-async function buildHarness(opts?: { secondReviewNode?: boolean }): Promise<Harness> {
+async function buildHarness(opts?: HarnessOpts): Promise<Harness> {
   runIdx++
   const tmp = mkdtempSync(join(tmpdir(), `aw-rfc011-${runIdx}-`))
   const appHome = join(tmp, 'appHome')
@@ -91,6 +104,13 @@ async function buildHarness(opts?: { secondReviewNode?: boolean }): Promise<Harn
 
   // Use loose typing — the workflow schema accepts unknown extras and the
   // reviewer fields aren't part of WorkflowNodeSchema's strict shape.
+  const rollbackOverrides: Record<string, boolean> = {}
+  if (opts?.rollbackFilesOnIterate !== undefined) {
+    rollbackOverrides.rollbackFilesOnIterate = opts.rollbackFilesOnIterate
+  }
+  if (opts?.rollbackFilesOnReject !== undefined) {
+    rollbackOverrides.rollbackFilesOnReject = opts.rollbackFilesOnReject
+  }
   const reviewNodes = [
     {
       id: 'rev_1',
@@ -98,6 +118,7 @@ async function buildHarness(opts?: { secondReviewNode?: boolean }): Promise<Harn
       inputSource: { nodeId: 'designer', portName: 'design' },
       rerunnableOnReject: ['designer'],
       rerunnableOnIterate: ['designer'],
+      ...rollbackOverrides,
     },
   ]
   if (opts?.secondReviewNode === true) {
@@ -107,6 +128,7 @@ async function buildHarness(opts?: { secondReviewNode?: boolean }): Promise<Harn
       inputSource: { nodeId: 'designer', portName: 'design' },
       rerunnableOnReject: ['designer'],
       rerunnableOnIterate: ['designer'],
+      ...rollbackOverrides,
     })
   }
 
@@ -153,12 +175,41 @@ async function buildHarness(opts?: { secondReviewNode?: boolean }): Promise<Harn
     db,
     appHome,
     taskId: task.id,
+    worktreePath: task.worktreePath,
     reviewNodeRunId: reviewRuns[0]!.id,
     cleanup: async () => {
       rmSync(tmp, { recursive: true, force: true })
       delete process.env.AGENT_WORKFLOW_HOME
     },
   }
+}
+
+/**
+ * The stub agent never dirties files, so `git stash create` against the
+ * worktree returns '' and `node_runs.pre_snapshot` stays empty — meaning
+ * the review.ts rollback branch is skipped regardless of the rollback flag.
+ *
+ * To exercise the actual rollback path (and the new `-rollback` supersede
+ * marker it produces), tests call this helper after startTask: it dirties
+ * the worktree, captures a real stash sha, and writes that sha into the
+ * latest designer node_run's pre_snapshot column. From there a subsequent
+ * submitReviewDecision with rollback=true will invoke rollbackToSnapshot,
+ * succeed, and tag the canceled row with `-rollback`.
+ */
+async function seedDesignerPreSnapshot(h: Harness): Promise<string> {
+  writeFileSync(join(h.worktreePath, 'dirty.txt'), 'pretend-uncommitted-work\n')
+  // `git stash create` skips untracked files, so add the file first to put
+  // it in the index — then the stash sha is non-empty and rollbackToSnapshot
+  // can apply it back.
+  execSync('git add dirty.txt', { cwd: h.worktreePath })
+  const sha = execSync('git stash create', { cwd: h.worktreePath }).toString().trim()
+  if (sha === '') throw new Error('git stash create returned empty sha')
+  // Update the latest non-shard designer row.
+  const rows = await fetchDesignerTopRuns(h)
+  const target = rows[rows.length - 1]
+  if (target === undefined) throw new Error('no designer node_run to seed')
+  await h.db.update(nodeRuns).set({ preSnapshot: sha }).where(eq(nodeRuns.id, target.id))
+  return sha
 }
 
 async function fetchDesignerTopRuns(h: Harness) {
@@ -197,6 +248,11 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     expect(old.status).toBe('canceled')
     expect(old.promptText).toBe(originalPrompt) // not overwritten
     expect(old.errorMessage).toContain('superseded-by-review-iterated')
+    // Default iterate has rollbackFilesOnIterate=false AND the stub never
+    // dirtied the worktree, so rollback was not performed — marker must NOT
+    // carry the `-rollback` suffix.
+    expect(old.errorMessage).toMatch(/^superseded-by-review-iterated:/)
+    expect(old.errorMessage).not.toContain('-rollback')
     expect(old.finishedAt).not.toBeNull()
   })
 
@@ -243,6 +299,11 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     expect(after.length).toBe(2)
     expect(after[0]!.status).toBe('canceled')
     expect(after[0]!.errorMessage).toContain('superseded-by-review-rejected')
+    // Default reject has rollbackFilesOnReject=true but the stub left the
+    // worktree clean → preSnapshot is empty → rollback branch was skipped →
+    // marker must still be the plain form.
+    expect(after[0]!.errorMessage).toMatch(/^superseded-by-review-rejected:/)
+    expect(after[0]!.errorMessage).not.toContain('-rollback')
     expect(after[1]!.status).toBe('pending')
     expect(after[1]!.retryIndex).toBe(1)
 
@@ -258,5 +319,85 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     for (const r of rev2) {
       expect(r.status).not.toBe('done')
     }
+  })
+
+  // The next four cases lock in the `-rollback` supersede marker that the
+  // frontend uses to pick between the 'Canceled' label (worktree files
+  // actually rolled back) and the 'Superseded' label (files kept). The
+  // marker is added in services/review.ts iff rollbackToSnapshot completed
+  // without throwing — which requires both a non-empty preSnapshot and
+  // rollbackFlag=true.
+
+  test('iterate with rollbackFilesOnIterate=true tags the canceled row with -rollback', async () => {
+    h = await buildHarness({ rollbackFilesOnIterate: true })
+    await seedDesignerPreSnapshot(h)
+
+    await submitReviewDecision({
+      db: h.db,
+      appHome: h.appHome,
+      nodeRunId: h.reviewNodeRunId,
+      decision: 'iterated',
+      expectedReviewIteration: 0,
+    })
+
+    const after = await fetchDesignerTopRuns(h)
+    const old = after.find((r) => r.retryIndex === 0)!
+    expect(old.status).toBe('canceled')
+    expect(old.errorMessage).toMatch(/^superseded-by-review-iterated-rollback:/)
+  })
+
+  test('iterate without rollback flag leaves no -rollback marker even with seeded preSnapshot', async () => {
+    h = await buildHarness() // default rollbackFilesOnIterate=false
+    await seedDesignerPreSnapshot(h)
+
+    await submitReviewDecision({
+      db: h.db,
+      appHome: h.appHome,
+      nodeRunId: h.reviewNodeRunId,
+      decision: 'iterated',
+      expectedReviewIteration: 0,
+    })
+
+    const after = await fetchDesignerTopRuns(h)
+    const old = after.find((r) => r.retryIndex === 0)!
+    expect(old.errorMessage).toMatch(/^superseded-by-review-iterated:/)
+    expect(old.errorMessage).not.toContain('-rollback')
+  })
+
+  test('reject with default rollbackFilesOnReject=true tags the canceled row with -rollback', async () => {
+    h = await buildHarness()
+    await seedDesignerPreSnapshot(h)
+
+    await submitReviewDecision({
+      db: h.db,
+      appHome: h.appHome,
+      nodeRunId: h.reviewNodeRunId,
+      decision: 'rejected',
+      rejectReason: 'wrong direction',
+      expectedReviewIteration: 0,
+    })
+
+    const after = await fetchDesignerTopRuns(h)
+    const old = after.find((r) => r.retryIndex === 0)!
+    expect(old.errorMessage).toMatch(/^superseded-by-review-rejected-rollback:/)
+  })
+
+  test('reject with rollbackFilesOnReject=false omits the -rollback marker', async () => {
+    h = await buildHarness({ rollbackFilesOnReject: false })
+    await seedDesignerPreSnapshot(h)
+
+    await submitReviewDecision({
+      db: h.db,
+      appHome: h.appHome,
+      nodeRunId: h.reviewNodeRunId,
+      decision: 'rejected',
+      rejectReason: 'wrong direction',
+      expectedReviewIteration: 0,
+    })
+
+    const after = await fetchDesignerTopRuns(h)
+    const old = after.find((r) => r.retryIndex === 0)!
+    expect(old.errorMessage).toMatch(/^superseded-by-review-rejected:/)
+    expect(old.errorMessage).not.toContain('-rollback')
   })
 })
