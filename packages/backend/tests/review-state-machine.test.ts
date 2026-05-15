@@ -258,7 +258,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
     expect(await countPendingReviews(h.db)).toBe(0)
   })
 
-  test('reject archives v1 comments, bumps reviewIteration, resets review to pending', async () => {
+  test('reject archives v1 comments, bumps reviewIteration, mints a new pending upstream run (RFC-011)', async () => {
     // Drop a comment on v1 so we can verify it gets archived.
     await addReviewComment({
       db: h.db,
@@ -312,13 +312,23 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
       .where(eq(reviewComments.docVersionId, dvs[0]!.id))
     expect(remaining.length).toBe(0)
 
-    // Designer upstream node_run reset to pending so scheduler re-runs it.
+    // RFC-011: instead of resetting the latest designer row in place, the
+    // review code now mints a fresh node_run at retry_index+1 and marks the
+    // old row canceled with a stable supersede prefix on errorMessage. This
+    // preserves the v1 promptText for the Prompt-tab attempts switcher.
     const upRuns = await h.db
       .select()
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'designer')))
-    const upLatest = upRuns.find((r) => r.parentNodeRunId === null)
-    expect(upLatest?.status).toBe('pending')
+    const tops = upRuns.filter((r) => r.parentNodeRunId === null)
+    expect(tops.length).toBe(2)
+    const old = tops.find((r) => r.retryIndex === 0)
+    const fresh = tops.find((r) => r.retryIndex === 1)
+    expect(old?.status).toBe('canceled')
+    expect(old?.errorMessage).toContain('superseded-by-review-rejected')
+    expect(old?.promptText).not.toBeNull() // v1 prompt preserved
+    expect(fresh?.status).toBe('pending')
+    expect(fresh?.preSnapshot).toBe(old?.preSnapshot ?? null)
   })
 
   test('reject + scheduler re-run produces a new doc_version v2 with reviewIteration=1', async () => {

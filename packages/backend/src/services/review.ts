@@ -1035,7 +1035,11 @@ export async function submitReviewDecision(
       ? readBool(reviewNode, 'rollbackFilesOnReject', true)
       : readBool(reviewNode, 'rollbackFilesOnIterate', false)
 
-  // Reset each rerunnable upstream node_run at this run's iteration to pending.
+  // RFC-011: mint a fresh node_run row at retry_index+1 for each rerunnable
+  // upstream node instead of resetting the latest row in place — this
+  // preserves the old row's promptText (and outputs) for the Prompt tab
+  // attempts switcher. Old row goes to a terminal canceled state with an
+  // errorSummary that machine-identifies the supersede reason.
   for (const nodeId of rerunSet) {
     const upRuns = await args.db
       .select()
@@ -1061,7 +1065,27 @@ export async function submitReviewDecision(
         })
       }
     }
-    await args.db.update(nodeRuns).set({ status: 'pending' }).where(eq(nodeRuns.id, latest.id))
+    const nextRetryIndex = latest.retryIndex + 1
+    // node_runs has no error_summary column; encode the supersede marker as
+    // a stable prefix on error_message so tests / future GC can grep it.
+    await args.db
+      .update(nodeRuns)
+      .set({
+        status: 'canceled',
+        finishedAt: latest.finishedAt ?? Date.now(),
+        errorMessage: `superseded-by-review-${args.decision}: Replaced by retry_index ${nextRetryIndex} due to review ${args.decision} of ${dv.reviewNodeId}`,
+      })
+      .where(eq(nodeRuns.id, latest.id))
+    await args.db.insert(nodeRuns).values({
+      id: ulid(),
+      taskId: dv.taskId,
+      nodeId,
+      status: 'pending',
+      retryIndex: nextRetryIndex,
+      iteration: latest.iteration,
+      parentNodeRunId: null,
+      preSnapshot: latest.preSnapshot,
+    })
   }
 
   // Sibling cascade (reject only): every other review node bound to the same

@@ -10,17 +10,39 @@
 // Retries history + sub-process listing for fan-out children land in M3.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { NodeRun, NodeRunEventsResponse, NodeRunOutput, Task } from '@agent-workflow/shared'
 import { NODE_EVENT_KIND } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
+import {
+  formatAttemptLabel,
+  isFanoutParentRun,
+  isPromptCapableKind,
+  sortNodeRunsForPromptHistory,
+} from '@/lib/node-prompt'
 
 interface Props {
   taskId: string
   /** Used to gate the Retry button — the API rejects retry on a running task. */
   taskStatus?: Task['status']
   nodeRunId: string | null
+  /**
+   * RFC-011: the workflow node id this drawer is currently anchored at.
+   * Needed so the Prompt tab can list every historical node_run for the
+   * same node (retries, iterations, fan-out shards, review re-runs).
+   * Derived from `runs.find(r.id === nodeRunId).nodeId` upstream but passed
+   * explicitly to keep the helper / drawer separation crisp.
+   */
+  nodeId: string | null
+  /**
+   * RFC-011: the workflow definition kind (agent-single / agent-multi /
+   * input / output / wrapper-* / review). Used to decide whether the Prompt
+   * tab shows the attempts switcher or an "N/A — this node kind has no
+   * opencode prompt" placeholder. Looked up against the task's
+   * workflowSnapshot in tasks.detail.tsx.
+   */
+  workflowNodeKind: string | null
   runs: NodeRun[]
   outputs: NodeRunOutput[]
   onClose: () => void
@@ -34,6 +56,8 @@ export function NodeDetailDrawer({
   taskId,
   taskStatus,
   nodeRunId,
+  nodeId,
+  workflowNodeKind,
   runs,
   outputs,
   onClose,
@@ -135,7 +159,14 @@ export function NodeDetailDrawer({
       )}
       {children.length > 0 && <SubProcessList shards={children} onPick={onSelectRun} />}
       <div className="inspector__body">
-        {tab === 'prompt' && <PromptTab run={run} />}
+        {tab === 'prompt' && (
+          <PromptTab
+            runs={runs}
+            nodeId={nodeId}
+            selectedRunId={nodeRunId}
+            workflowNodeKind={workflowNodeKind}
+          />
+        )}
         {tab === 'events' && <EventsTab taskId={taskId} nodeRunId={nodeRunId} />}
         {tab === 'output' && <OutputTab outputs={nodeOutputs} />}
         {tab === 'stats' && <StatsTab run={run} retries={retries} onPickRetry={onSelectRun} />}
@@ -202,12 +233,70 @@ function noderunTone(s: NodeRun['status']): string {
 
 // ---------------------------------------------------------------------------
 
-function PromptTab({ run }: { run: NodeRun }) {
+function PromptTab({
+  runs,
+  nodeId,
+  selectedRunId,
+  workflowNodeKind,
+}: {
+  runs: NodeRun[]
+  nodeId: string | null
+  selectedRunId: string
+  workflowNodeKind: string | null
+}) {
   const { t } = useTranslation()
-  if (run.promptText === null) {
+
+  const attempts = useMemo(
+    () =>
+      nodeId === null ? [] : sortNodeRunsForPromptHistory(runs.filter((r) => r.nodeId === nodeId)),
+    [runs, nodeId],
+  )
+  const [pickedId, setPickedId] = useState<string>(selectedRunId)
+
+  // When the canvas selection changes (a new selectedRunId arrives), re-anchor
+  // the picker to that run. Otherwise the user's last manual pick is kept.
+  useEffect(() => {
+    setPickedId(selectedRunId)
+  }, [selectedRunId])
+
+  if (!isPromptCapableKind(workflowNodeKind)) {
+    return <div className="muted">{t('nodeDrawer.promptNotApplicable')}</div>
+  }
+  if (attempts.length === 0) {
     return <div className="muted">{t('nodeDrawer.promptPending')}</div>
   }
-  return <pre className="readonly-pre">{run.promptText}</pre>
+
+  const picked = attempts.find((a) => a.id === pickedId) ?? attempts[attempts.length - 1]!
+  const fanoutParent = isFanoutParentRun(picked, attempts)
+
+  return (
+    <div className="prompt-history">
+      <label className="prompt-history__picker">
+        <span className="muted">{t('nodeDrawer.promptAttemptLabel')}</span>
+        <select
+          value={picked.id}
+          onChange={(e) => setPickedId(e.target.value)}
+          className="prompt-history__select"
+        >
+          {attempts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {formatAttemptLabel(a, {
+                fanoutParent: isFanoutParentRun(a, attempts),
+                t,
+              })}
+            </option>
+          ))}
+        </select>
+      </label>
+      {fanoutParent ? (
+        <div className="muted">{t('nodeDrawer.promptFanoutParent')}</div>
+      ) : picked.promptText === null || picked.promptText === '' ? (
+        <div className="muted">{t('nodeDrawer.promptEmpty')}</div>
+      ) : (
+        <pre className="readonly-pre">{picked.promptText}</pre>
+      )}
+    </div>
+  )
 }
 
 function OutputTab({ outputs }: { outputs: NodeRunOutput[] }) {

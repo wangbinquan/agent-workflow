@@ -23,18 +23,19 @@
 
 v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/` 子目录下，每个 RFC 含 `proposal.md` / `design.md` / `plan.md` 三文件。RFC 编号独立于 P-X-XX issue 编号。
 
-| 编号                                                             | 标题                                                                                                         | 状态        |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------- |
-| [RFC-001](./RFC-001-runtime-status-and-model-select/proposal.md) | Settings → Runtime 状态卡片 + Model 下拉选择                                                                 | Done        |
-| [RFC-002](./RFC-002-agent-defaults-from-runtime/proposal.md)     | Add Agent 表单：从 Runtime 默认值快照 + Skills 下拉选已有（含 Settings 新增 defaultSteps / defaultMaxSteps） | Done        |
-| [RFC-003](./RFC-003-canvas-input-port-wiring/proposal.md)        | Canvas 输入端口连边可达性：catch-all 左侧 handle + onConnect 默认 portName=source + EdgeInspector 改名       | Done        |
-| [RFC-004](./RFC-004-input-port-contract/proposal.md)             | Input 节点端口契约统一：scheduler portName=inputKey + 编辑器同步 `definition.inputs[]` + validator 新规则    | Done        |
-| [RFC-005](./RFC-005-human-review/proposal.md)                    | 设计文档人工评审节点 + Markdown 渲染 / 评审意见 / 历史 + Diff（5 PR 拆分）                                   | Done        |
-| [RFC-006](./RFC-006-node-port-ux-cleanup/proposal.md)            | 节点端口呈现重构：消除标签遮挡 + 行内布局 + 长名截断 + tooltip 兜底（编辑器 + task 详情画布共享）            | Done        |
-| [RFC-007](./RFC-007-canvas-review-output-drag/proposal.md)       | Canvas review / output 节点支持拖拽连线：与 agent 节点对齐 + 字段 / 边双向同步 + iterate 锁                  | Draft       |
-| [RFC-008](./RFC-008-markdown-prose-premium/proposal.md)          | Premium Markdown 渲染（react-markdown + shiki + KaTeX + Callout + 锚点 + 字体）替换 review + 编辑器两套渲染器 | In Progress |
-| [RFC-009](./RFC-009-review-sidebar-enhancement/proposal.md)      | Review 评论侧栏功能增强：内联编辑 + 复制 + 数量 badge + 折叠 + 拖宽 + 行号（借鉴 md-review）                  | In Progress |
-| [RFC-010](./RFC-010-markdown-rendered-diff/proposal.md)          | Markdown 渲染态内联 Diff：替换 review word 模式（参考 markdown-diff，PUA marker + remark 插件，绕开 rehype-raw） | In Progress |
+| 编号                                                             | 标题                                                                                                                | 状态        |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------- |
+| [RFC-001](./RFC-001-runtime-status-and-model-select/proposal.md) | Settings → Runtime 状态卡片 + Model 下拉选择                                                                        | Done        |
+| [RFC-002](./RFC-002-agent-defaults-from-runtime/proposal.md)     | Add Agent 表单：从 Runtime 默认值快照 + Skills 下拉选已有（含 Settings 新增 defaultSteps / defaultMaxSteps）        | Done        |
+| [RFC-003](./RFC-003-canvas-input-port-wiring/proposal.md)        | Canvas 输入端口连边可达性：catch-all 左侧 handle + onConnect 默认 portName=source + EdgeInspector 改名              | Done        |
+| [RFC-004](./RFC-004-input-port-contract/proposal.md)             | Input 节点端口契约统一：scheduler portName=inputKey + 编辑器同步 `definition.inputs[]` + validator 新规则           | Done        |
+| [RFC-005](./RFC-005-human-review/proposal.md)                    | 设计文档人工评审节点 + Markdown 渲染 / 评审意见 / 历史 + Diff（5 PR 拆分）                                          | Done        |
+| [RFC-006](./RFC-006-node-port-ux-cleanup/proposal.md)            | 节点端口呈现重构：消除标签遮挡 + 行内布局 + 长名截断 + tooltip 兜底（编辑器 + task 详情画布共享）                   | Done        |
+| [RFC-007](./RFC-007-canvas-review-output-drag/proposal.md)       | Canvas review / output 节点支持拖拽连线：与 agent 节点对齐 + 字段 / 边双向同步 + iterate 锁                         | Draft       |
+| [RFC-008](./RFC-008-markdown-prose-premium/proposal.md)          | Premium Markdown 渲染（react-markdown + shiki + KaTeX + Callout + 锚点 + 字体）替换 review + 编辑器两套渲染器       | In Progress |
+| [RFC-009](./RFC-009-review-sidebar-enhancement/proposal.md)      | Review 评论侧栏功能增强：内联编辑 + 复制 + 数量 badge + 折叠 + 拖宽 + 行号（借鉴 md-review）                        | In Progress |
+| [RFC-010](./RFC-010-markdown-rendered-diff/proposal.md)          | Markdown 渲染态内联 Diff：替换 review word 模式（参考 markdown-diff，PUA marker + remark 插件，绕开 rehype-raw）    | In Progress |
+| [RFC-011](./RFC-011-node-prompt-history/proposal.md)             | 节点 Prompt 历史可见性：drawer Prompt tab attempts 切换器 + review reject/iterate 改 mint 新行（保留旧 promptText） | In Progress |
 
 ---
 

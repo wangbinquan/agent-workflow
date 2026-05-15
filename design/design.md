@@ -1107,6 +1107,7 @@ pending ──► running ──► done
   - `approve` → 节点 `done`，docPort 写 body_md；reviewOutcomePort = `'approve'`
   - `reject` → 节点 `done`（reviewOutcome = `'reject'`），框架把 `rerunOnReject` 列表内的节点（含同上游派生出的兄弟 review 节点）回 `pending`，task 进入 `running` 重跑
   - `iterate` → 节点 `done`（reviewOutcome = `'iterate'`），把 `rerunOnIterate` 内节点回 `pending`，相同上游兄弟 review 不连锁；prompt 模板可读 `{{__review_comments__}}` / `{{__iterate_target_port__}}`
+- **Reject / iterate 上游重跑（RFC-011）**：上面两条提到的"回 `pending`"在实现层不是就地改状态，而是 **mint 一行新的 `node_run`**：原行 `status='canceled'` + `errorMessage='superseded-by-review-{decision}: …'` 保留其 `promptText` / outputs；新行 `retry_index = prev.retry_index + 1`，状态 `pending`，继承 `preSnapshot`。scheduler 的 `pendingExisting` 谓词与 `resolveUpstreamInputs` 的 "latest by retryIndex" 都向后兼容。这样 task 详情 drawer 的 Prompt-tab attempts 切换器可以列出每一轮 review 重跑各自实际发出去的 prompt（review iterate / reject 之前的 prompt 不再被覆写）。同一 (taskId, nodeId, iteration) 下因此可累积多条 `retry_index` 行 —— 既来自技术性 retry，也来自 review reject / iterate 重跑。
 
 ---
 
