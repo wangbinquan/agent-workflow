@@ -181,6 +181,10 @@ export interface Resources {
     metaFinished: string
     metaError: string
     cancelButton: string
+    resumeButton: string
+    resuming: string
+    resumeUnavailableNoWorktree: string
+    resumeLaunchLink: string
     failedBanner: string
     jumpToFailed: string
     worktreePreserved: string
@@ -388,6 +392,9 @@ export interface Resources {
     statRetries: string
     attempt: string
     noEventsMatch: string
+    retryButton: string
+    retrying: string
+    retryCascadeLabel: string
   }
   taskOutputs: {
     section: string
@@ -637,6 +644,11 @@ export const zhCN: Resources = {
     metaFinished: '完成',
     metaError: '错误',
     cancelButton: '取消任务',
+    resumeButton: '继续任务',
+    resuming: '继续中…',
+    resumeUnavailableNoWorktree:
+      'worktree 创建阶段就失败了（根本没建出 worktree），resume 救不了。请新建一个任务。',
+    resumeLaunchLink: '启动新任务 →',
     failedBanner: '任务失败。',
     jumpToFailed: '跳到失败节点 ({{nodeId}})',
     worktreePreserved:
@@ -847,6 +859,9 @@ export const zhCN: Resources = {
     statRetries: '重试列表',
     attempt: '第 {{n}} 次',
     noEventsMatch: '没有事件匹配当前过滤。',
+    retryButton: '重试节点',
+    retrying: '重试中…',
+    retryCascadeLabel: '同时重跑下游节点',
   },
   taskOutputs: {
     section: '产出',

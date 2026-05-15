@@ -3,7 +3,7 @@
 // doesn't stall the node-run progress feed.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoute } from '@tanstack/react-router'
+import { createRoute, Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type {
   Agent,
@@ -70,6 +70,15 @@ function TaskDetailPage() {
     },
   })
 
+  const resume = useMutation({
+    mutationFn: () => api.post<Task>(`/api/tasks/${encodeURIComponent(id)}/resume`),
+    onSuccess: (tk) => {
+      qc.setQueryData(['tasks', id], tk)
+      void qc.invalidateQueries({ queryKey: ['tasks', id, 'node-runs'] })
+      void qc.invalidateQueries({ queryKey: ['tasks'] })
+    },
+  })
+
   if (task.isLoading) return <div className="page muted">{t('tasks.loadingTask')}</div>
   if (task.error !== null && task.error !== undefined)
     return <div className="page error-box">{describeError(task.error)}</div>
@@ -77,6 +86,7 @@ function TaskDetailPage() {
 
   const tk = task.data
   const cancelable = tk.status === 'pending' || tk.status === 'running'
+  const resumability = resumeStatus(tk.status, tk.worktreePath)
 
   return (
     <div className="page page--wide">
@@ -120,6 +130,16 @@ function TaskDetailPage() {
           </dl>
         </div>
         <div className="page__actions">
+          {resumability === 'ready' && (
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => resume.mutate()}
+              disabled={resume.isPending}
+            >
+              {resume.isPending ? t('tasks.resuming') : t('tasks.resumeButton')}
+            </button>
+          )}
           {cancelable && (
             <ConfirmButton
               label={t('tasks.cancelButton')}
@@ -132,6 +152,17 @@ function TaskDetailPage() {
       </header>
       {cancel.error !== null && cancel.error !== undefined && (
         <div className="error-box">{describeError(cancel.error)}</div>
+      )}
+      {resume.error !== null && resume.error !== undefined && (
+        <div className="error-box">{describeError(resume.error)}</div>
+      )}
+      {resumability === 'worktree-missing' && (
+        <div className="info-box info-box--muted">
+          <span>{t('tasks.resumeUnavailableNoWorktree')}</span>{' '}
+          <Link to="/workflows/$id/launch" params={{ id: tk.workflowId }} className="btn btn--sm">
+            {t('tasks.resumeLaunchLink')}
+          </Link>
+        </div>
       )}
 
       {tk.status === 'failed' && tk.errorSummary !== null && (
@@ -183,6 +214,7 @@ function TaskDetailPage() {
           {selectedNodeRunId !== null && nodeRuns.data !== undefined && (
             <NodeDetailDrawer
               taskId={id}
+              taskStatus={tk.status}
               nodeRunId={selectedNodeRunId}
               runs={nodeRuns.data.runs}
               outputs={nodeRuns.data.outputs}
@@ -383,6 +415,30 @@ function isTerminal(status: Task['status'] | undefined): boolean {
   return (
     status === 'done' || status === 'failed' || status === 'canceled' || status === 'interrupted'
   )
+}
+
+/**
+ * Three-state predicate for the Resume button. Two failure shapes deserve
+ * different UI:
+ *   - `ready` — task failed AFTER the worktree was created. Resume can
+ *     roll back the failed node and re-run; show a Resume button.
+ *   - `worktree-missing` — task failed at worktree creation itself, so
+ *     `worktreePath === ''`. The backend's resumeTask explicitly
+ *     "kicks the scheduler without re-creating the worktree" (see
+ *     task.ts:287-288), so resume would just re-fail the same way.
+ *     Surface a hint pointing the user at /workflows/$id/launch instead.
+ *   - `not-resumable` — task is still running / pending / done, no
+ *     resume action applicable.
+ *
+ * Exported for unit tests.
+ */
+export function resumeStatus(
+  status: Task['status'],
+  worktreePath: string,
+): 'ready' | 'worktree-missing' | 'not-resumable' {
+  if (status !== 'failed' && status !== 'interrupted') return 'not-resumable'
+  if (worktreePath === '') return 'worktree-missing'
+  return 'ready'
 }
 
 function describeError(e: unknown): string {

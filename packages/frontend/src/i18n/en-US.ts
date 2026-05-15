@@ -187,6 +187,11 @@ export const enUS: Resources = {
     metaFinished: 'Finished',
     metaError: 'Error',
     cancelButton: 'Cancel task',
+    resumeButton: 'Resume task',
+    resuming: 'Resuming…',
+    resumeUnavailableNoWorktree:
+      'Resume cannot recover from a worktree-creation failure (no worktree was ever created). Launch a fresh task instead.',
+    resumeLaunchLink: 'Launch a new task →',
     failedBanner: 'Task failed.',
     jumpToFailed: 'Jump to failed node ({{nodeId}})',
     worktreePreserved:
@@ -401,6 +406,9 @@ export const enUS: Resources = {
     statRetries: 'Retries',
     attempt: 'attempt {{n}}',
     noEventsMatch: 'No events match the current filters.',
+    retryButton: 'Retry node',
+    retrying: 'Retrying…',
+    retryCascadeLabel: 'Also re-run downstream nodes',
   },
   taskOutputs: {
     section: 'Outputs',

@@ -9,15 +9,17 @@
 //
 // Retries history + sub-process listing for fan-out children land in M3.
 
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { NodeRun, NodeRunEventsResponse, NodeRunOutput } from '@agent-workflow/shared'
+import type { NodeRun, NodeRunEventsResponse, NodeRunOutput, Task } from '@agent-workflow/shared'
 import { NODE_EVENT_KIND } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 
 interface Props {
   taskId: string
+  /** Used to gate the Retry button — the API rejects retry on a running task. */
+  taskStatus?: Task['status']
   nodeRunId: string | null
   runs: NodeRun[]
   outputs: NodeRunOutput[]
@@ -30,6 +32,7 @@ type Tab = 'prompt' | 'events' | 'output' | 'stats'
 
 export function NodeDetailDrawer({
   taskId,
+  taskStatus,
   nodeRunId,
   runs,
   outputs,
@@ -38,11 +41,29 @@ export function NodeDetailDrawer({
 }: Props) {
   const { t } = useTranslation()
   const [tab, setTab] = useState<Tab>('prompt')
+  const [cascade, setCascade] = useState(true)
+  const qc = useQueryClient()
+
+  const retry = useMutation({
+    mutationFn: () => {
+      if (nodeRunId === null) throw new Error('no nodeRunId')
+      const qs = new URLSearchParams({ cascade: cascade ? 'true' : 'false' }).toString()
+      return api.post<Task>(
+        `/api/tasks/${encodeURIComponent(taskId)}/nodes/${encodeURIComponent(nodeRunId)}/retry?${qs}`,
+      )
+    },
+    onSuccess: (tk) => {
+      qc.setQueryData(['tasks', taskId], tk)
+      void qc.invalidateQueries({ queryKey: ['tasks', taskId, 'node-runs'] })
+      void qc.invalidateQueries({ queryKey: ['tasks'] })
+    },
+  })
 
   if (nodeRunId === null) return null
   const run = runs.find((r) => r.id === nodeRunId)
   if (run === undefined) return null
   const nodeOutputs = outputs.filter((o) => o.nodeRunId === nodeRunId)
+  const retryable = canRetryNodeRun(run.status, taskStatus)
 
   // P-3-10: sibling fan-out children, if this run is a multi-process parent.
   const children = runs.filter((r) => r.parentNodeRunId === nodeRunId)
@@ -88,6 +109,30 @@ export function NodeDetailDrawer({
           </button>
         ))}
       </div>
+      {retryable && (
+        <div className="inspector__action-row">
+          <button
+            type="button"
+            className="btn btn--sm btn--primary"
+            onClick={() => retry.mutate()}
+            disabled={retry.isPending}
+          >
+            {retry.isPending ? t('nodeDrawer.retrying') : t('nodeDrawer.retryButton')}
+          </button>
+          <label className="checkbox-inline">
+            <input
+              type="checkbox"
+              checked={cascade}
+              onChange={(e) => setCascade(e.target.checked)}
+              disabled={retry.isPending}
+            />
+            <span>{t('nodeDrawer.retryCascadeLabel')}</span>
+          </label>
+        </div>
+      )}
+      {retry.error !== null && retry.error !== undefined && (
+        <div className="error-box">{describeError(retry.error)}</div>
+      )}
       {children.length > 0 && <SubProcessList shards={children} onPick={onSelectRun} />}
       <div className="inspector__body">
         {tab === 'prompt' && <PromptTab run={run} />}
@@ -350,4 +395,30 @@ function describeError(e: unknown): string {
   if (e instanceof ApiError) return `${e.code}: ${e.message}`
   if (e instanceof Error) return e.message
   return String(e)
+}
+
+/**
+ * The /retry endpoint mints a fresh node_run at retry_index+1 for the
+ * target node (and, with cascade=true, every downstream node). Two
+ * preconditions:
+ *   - The node's latest run must actually be in a recoverable terminal
+ *     state. `done` / `skipped` would re-do already-finished work;
+ *     `pending` / `running` would race the live scheduler.
+ *   - The task itself must not be running — the backend returns 409
+ *     `task-still-running` otherwise (see retryNode in task.ts).
+ *
+ * Exported for unit tests.
+ */
+export function canRetryNodeRun(
+  runStatus: NodeRun['status'],
+  taskStatus: Task['status'] | undefined,
+): boolean {
+  const terminalRunForRetry =
+    runStatus === 'failed' ||
+    runStatus === 'interrupted' ||
+    runStatus === 'exhausted' ||
+    runStatus === 'canceled'
+  if (!terminalRunForRetry) return false
+  if (taskStatus === 'running' || taskStatus === 'pending') return false
+  return true
 }
