@@ -7,6 +7,7 @@
 
 import type { NodeRun, NodeRunOutput, Task } from '@agent-workflow/shared'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   task: Task
@@ -24,6 +25,7 @@ interface DeclaredPort {
 }
 
 export function TaskOutputPanel({ task, runs, outputs }: Props) {
+  const { t } = useTranslation()
   const ports = collectPorts(task.workflowSnapshot)
   if (ports.length === 0) {
     return null
@@ -42,7 +44,7 @@ export function TaskOutputPanel({ task, runs, outputs }: Props) {
 
   return (
     <section className="task-outputs">
-      <h2>Outputs</h2>
+      <h2>{t('taskOutputs.section')}</h2>
       <div className="task-outputs__grid">
         {ports.map((p, i) => {
           const run = latestRunByNodeId.get(p.nodeId)
@@ -61,6 +63,7 @@ interface CardProps {
 }
 
 function OutputCard({ port, value }: CardProps) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   function handleCopy() {
     if (value === null) return
@@ -87,14 +90,14 @@ function OutputCard({ port, value }: CardProps) {
           onClick={handleCopy}
           disabled={value === null}
         >
-          {copied ? 'Copied!' : 'Copy'}
+          {copied ? t('common.copied') : t('common.copy')}
         </button>
       </header>
       <pre className="task-output-card__body">
         {value === null ? (
-          <span className="muted">pending…</span>
+          <span className="muted">{t('taskOutputs.pending')}</span>
         ) : value === '' ? (
-          <span className="muted">(empty)</span>
+          <span className="muted">{t('common.empty')}</span>
         ) : (
           value
         )}

@@ -2,6 +2,7 @@
 // any other click outside resets. Keeps M1 dialog-free.
 
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface ConfirmButtonProps {
   label: string
@@ -13,11 +14,13 @@ interface ConfirmButtonProps {
 
 export function ConfirmButton({
   label,
-  confirmLabel = 'Confirm?',
+  confirmLabel,
   onConfirm,
   danger,
   disabled,
 }: ConfirmButtonProps) {
+  const { t } = useTranslation()
+  const resolvedConfirmLabel = confirmLabel ?? t('common.confirmPrompt')
   const [armed, setArmed] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -46,7 +49,7 @@ export function ConfirmButton({
       disabled={disabled}
       onClick={handle}
     >
-      {armed ? confirmLabel : label}
+      {armed ? resolvedConfirmLabel : label}
     </button>
   )
 }

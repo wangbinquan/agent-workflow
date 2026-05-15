@@ -2,6 +2,7 @@
 // Lifts the entire CreateAgent payload to local state; submission is the
 // parent's concern.
 
+import { useTranslation } from 'react-i18next'
 import type { CreateAgent } from '@agent-workflow/shared'
 import { AGENT_NAME_RE } from '@agent-workflow/shared'
 import { ChipsInput } from './ChipsInput'
@@ -32,6 +33,7 @@ export function emptyAgent(): CreateAgent {
 }
 
 export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
+  const { t } = useTranslation()
   function patch<K extends keyof CreateAgent>(key: K, next: CreateAgent[K]) {
     onChange({ ...value, [key]: next })
   }
@@ -39,124 +41,124 @@ export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
   return (
     <div className="agent-form">
       <div className="form-grid">
-        <Field label="Name" required hint="kebab-case; matches /agents/:name URL.">
+        <Field label={t('agentForm.fieldName')} required hint={t('agentForm.fieldNameHint')}>
           <TextInput
             value={value.name}
             onChange={(v) => patch('name', v)}
             disabled={nameLocked === true}
             required
             pattern={AGENT_NAME_RE.source}
-            placeholder="e.g. code-fixer"
+            placeholder={t('agentForm.fieldNamePlaceholder')}
           />
         </Field>
 
-        <Field label="Description">
+        <Field label={t('agentForm.fieldDescription')}>
           <TextInput
             value={value.description ?? ''}
             onChange={(v) => patch('description', v)}
-            placeholder="One-line summary shown in lists"
+            placeholder={t('agentForm.fieldDescriptionPlaceholder')}
           />
         </Field>
 
-        <Field label="Outputs" hint="Port names declared in <port> envelopes.">
+        <Field label={t('agentForm.fieldOutputs')} hint={t('agentForm.fieldOutputsHint')}>
           <ChipsInput
             value={value.outputs ?? []}
             onChange={(v) => patch('outputs', v)}
-            placeholder="add a port name then Enter"
-            validate={(t) => (/^[a-z][a-z0-9_]*$/.test(t) ? null : 'lowercase + underscore only')}
+            placeholder={t('agentForm.fieldOutputsPlaceholder')}
+            validate={(s) => (/^[a-z][a-z0-9_]*$/.test(s) ? null : t('agentForm.outputsValidate'))}
           />
         </Field>
 
-        <Field label="Skills" hint="Skill names the framework should inject.">
+        <Field label={t('agentForm.fieldSkills')} hint={t('agentForm.fieldSkillsHint')}>
           <ChipsInput
             value={value.skills ?? []}
             onChange={(v) => patch('skills', v)}
-            placeholder="add a skill name then Enter"
+            placeholder={t('agentForm.fieldSkillsPlaceholder')}
           />
         </Field>
 
         <Switch
           checked={value.readonly === true}
           onChange={(v) => patch('readonly', v)}
-          label="Read-only"
-          hint="Read-only agents can run concurrently in the same task; writers serialize."
+          label={t('agentForm.fieldReadonly')}
+          hint={t('agentForm.fieldReadonlyHint')}
         />
 
         <div className="form-grid form-grid--cols-3">
-          <Field label="Model">
+          <Field label={t('agentForm.fieldModel')}>
             <TextInput
               value={value.model ?? ''}
               onChange={(v) => patch('model', v === '' ? undefined : v)}
-              placeholder="anthropic/claude-sonnet-4-6"
+              placeholder={t('agentForm.modelPlaceholder')}
             />
           </Field>
-          <Field label="Variant">
+          <Field label={t('agentForm.fieldVariant')}>
             <TextInput
               value={value.variant ?? ''}
               onChange={(v) => patch('variant', v === '' ? undefined : v)}
-              placeholder="(optional)"
+              placeholder={t('common.optionalPlaceholder')}
             />
           </Field>
-          <Field label="Temperature">
+          <Field label={t('agentForm.fieldTemperature')}>
             <NumberInput
               value={value.temperature}
               onChange={(v) => patch('temperature', v)}
               min={0}
               max={2}
               step={0.1}
-              placeholder="0–2"
+              placeholder={t('agentForm.temperaturePlaceholder')}
             />
           </Field>
-          <Field label="Steps">
+          <Field label={t('agentForm.fieldSteps')}>
             <NumberInput
               value={value.steps}
               onChange={(v) => patch('steps', v)}
               min={1}
-              placeholder="(optional)"
+              placeholder={t('common.optionalPlaceholder')}
             />
           </Field>
-          <Field label="Max steps">
+          <Field label={t('agentForm.fieldMaxSteps')}>
             <NumberInput
               value={value.maxSteps}
               onChange={(v) => patch('maxSteps', v)}
               min={1}
-              placeholder="(optional)"
+              placeholder={t('common.optionalPlaceholder')}
             />
           </Field>
         </div>
 
-        <Field label="Permission JSON" hint="opencode permission object; pass-through.">
+        <Field label={t('agentForm.fieldPermission')} hint={t('agentForm.fieldPermissionHint')}>
           <JsonField
             value={value.permission ?? {}}
             onChange={(v) => patch('permission', v)}
-            placeholder='{"edit":"allow","webfetch":"deny"}'
+            placeholder={t('agentForm.permissionPlaceholder')}
             rows={5}
           />
         </Field>
 
         <Field
-          label="Extra frontmatter (JSON)"
-          hint="Any keys other than name/description/outputs/readonly/model/variant/temperature/steps/permission/skills."
+          label={t('agentForm.fieldFrontmatterExtra')}
+          hint={t('agentForm.fieldFrontmatterExtraHint')}
         >
           <JsonField
             value={value.frontmatterExtra ?? {}}
             onChange={(v) => patch('frontmatterExtra', v)}
-            placeholder="(optional)"
+            placeholder={t('common.optionalPlaceholder')}
             rows={4}
           />
         </Field>
 
-        <Field label="Body (Markdown)">
+        <Field label={t('agentForm.fieldBody')}>
           <MarkdownEditor
             value={value.bodyMd ?? ''}
             onChange={(v) => patch('bodyMd', v)}
-            placeholder="Agent system prompt body. Markdown."
+            placeholder={t('agentForm.bodyPlaceholder')}
           />
         </Field>
 
         {/* Quick raw-body fallback for users who don't want preview. */}
         <details className="form-details">
-          <summary>Raw body (no preview)</summary>
+          <summary>{t('agentForm.rawBodySummary')}</summary>
           <TextArea
             value={value.bodyMd ?? ''}
             onChange={(v) => patch('bodyMd', v)}

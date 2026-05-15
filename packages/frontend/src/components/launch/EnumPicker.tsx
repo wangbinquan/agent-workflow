@@ -6,6 +6,7 @@
 //   - multi   → JSON array of chosen strings
 
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { WorkflowInput } from '@agent-workflow/shared'
 import { TextInput } from '@/components/Form'
 
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function EnumPicker({ def, value, onChange }: Props) {
+  const { t } = useTranslation()
   const choices = useMemo(() => {
     const raw = (def as Record<string, unknown>).choices
     if (!Array.isArray(raw)) return [] as string[]
@@ -74,7 +76,11 @@ export function EnumPicker({ def, value, onChange }: Props) {
       </ul>
       {allowOther && (
         <div className="enum-picker__other">
-          <TextInput value={other} onChange={setOther} placeholder="Other (custom)…" />
+          <TextInput
+            value={other}
+            onChange={setOther}
+            placeholder={t('enumPicker.otherPlaceholder')}
+          />
           <button
             type="button"
             className="btn btn--sm"
@@ -85,7 +91,7 @@ export function EnumPicker({ def, value, onChange }: Props) {
               setOther('')
             }}
           >
-            Add
+            {t('enumPicker.add')}
           </button>
         </div>
       )}

@@ -94,6 +94,7 @@ interface TabProps {
 }
 
 function RuntimeTab({ config }: TabProps) {
+  const { t } = useTranslation()
   const { state, setState, save } = useTabState(config, [
     'opencodePath',
     'defaultModel',
@@ -110,26 +111,26 @@ function RuntimeTab({ config }: TabProps) {
       error={save.error}
       success={save.isSuccess && save.error === null ? 'saved' : null}
     >
-      <Field label="opencode path" hint="Defaults to `which opencode` from PATH.">
+      <Field label={t('settingsForm.opencodePath')} hint={t('settingsForm.opencodePathHint')}>
         <TextInput
           value={state.opencodePath ?? ''}
           onChange={(v) => setState({ ...state, opencodePath: v === '' ? undefined : v })}
         />
       </Field>
-      <Field label="Default model" hint="Used by agents without an explicit `model`.">
+      <Field label={t('settingsForm.defaultModel')} hint={t('settingsForm.defaultModelHint')}>
         <TextInput
           value={state.defaultModel ?? ''}
           onChange={(v) => setState({ ...state, defaultModel: v === '' ? undefined : v })}
           placeholder="anthropic/claude-sonnet-4-6"
         />
       </Field>
-      <Field label="Default variant">
+      <Field label={t('settingsForm.defaultVariant')}>
         <TextInput
           value={state.defaultVariant ?? ''}
           onChange={(v) => setState({ ...state, defaultVariant: v === '' ? undefined : v })}
         />
       </Field>
-      <Field label="Default temperature">
+      <Field label={t('settingsForm.defaultTemperature')}>
         <NumberInput
           value={state.defaultTemperature}
           onChange={(v) => setState({ ...state, defaultTemperature: v })}
@@ -139,14 +140,14 @@ function RuntimeTab({ config }: TabProps) {
         />
       </Field>
       <div className="form-grid form-grid--cols-2">
-        <Field label="Max concurrent nodes" required>
+        <Field label={t('settingsForm.maxConcurrentNodes')} required>
           <NumberInput
             value={state.maxConcurrentNodes}
             onChange={(v) => setState({ ...state, maxConcurrentNodes: v ?? 1 })}
             min={1}
           />
         </Field>
-        <Field label="Multi-process subprocess concurrency" required>
+        <Field label={t('settingsForm.multiProcessConc')} required>
           <NumberInput
             value={state.multiProcessSubprocessConcurrency}
             onChange={(v) => setState({ ...state, multiProcessSubprocessConcurrency: v ?? 1 })}
@@ -154,7 +155,7 @@ function RuntimeTab({ config }: TabProps) {
           />
         </Field>
       </div>
-      <Field label="Log level">
+      <Field label={t('settingsForm.logLevel')}>
         <select
           className="form-input"
           value={state.logLevel}
@@ -171,6 +172,7 @@ function RuntimeTab({ config }: TabProps) {
 }
 
 function LimitsTab({ config }: TabProps) {
+  const { t } = useTranslation()
   const { state, setState, save } = useTabState(config, [
     'defaultPerTaskMaxDurationMs',
     'defaultPerTaskMaxTotalTokens',
@@ -184,7 +186,11 @@ function LimitsTab({ config }: TabProps) {
       error={save.error}
       success={save.isSuccess && save.error === null ? 'saved' : null}
     >
-      <Field label="Per-task max duration (ms)" required hint="0 = unlimited.">
+      <Field
+        label={t('settingsForm.perTaskDuration')}
+        required
+        hint={t('settingsForm.zeroUnlimited')}
+      >
         <NumberInput
           value={state.defaultPerTaskMaxDurationMs}
           onChange={(v) => setState({ ...state, defaultPerTaskMaxDurationMs: v ?? 0 })}
@@ -192,14 +198,18 @@ function LimitsTab({ config }: TabProps) {
           step={60_000}
         />
       </Field>
-      <Field label="Per-task max total tokens" required hint="0 = unlimited.">
+      <Field
+        label={t('settingsForm.perTaskTokens')}
+        required
+        hint={t('settingsForm.zeroUnlimited')}
+      >
         <NumberInput
           value={state.defaultPerTaskMaxTotalTokens}
           onChange={(v) => setState({ ...state, defaultPerTaskMaxTotalTokens: v ?? 0 })}
           min={0}
         />
       </Field>
-      <Field label="Per-node timeout (ms)" required>
+      <Field label={t('settingsForm.perNodeTimeout')} required>
         <NumberInput
           value={state.defaultPerNodeTimeoutMs}
           onChange={(v) => setState({ ...state, defaultPerNodeTimeoutMs: v ?? 60_000 })}
@@ -207,7 +217,7 @@ function LimitsTab({ config }: TabProps) {
           step={60_000}
         />
       </Field>
-      <Field label="Large output threshold (bytes)" required>
+      <Field label={t('settingsForm.largeOutputThreshold')} required>
         <NumberInput
           value={state.largeOutputThresholdBytes}
           onChange={(v) => setState({ ...state, largeOutputThresholdBytes: v ?? 1_048_576 })}
@@ -220,6 +230,7 @@ function LimitsTab({ config }: TabProps) {
 }
 
 function GcTab({ config }: TabProps) {
+  const { t } = useTranslation()
   const { state, setState, save } = useTabState(config, [
     'worktreeAutoGc',
     'eventsArchiveThresholds',
@@ -236,11 +247,11 @@ function GcTab({ config }: TabProps) {
       <Switch
         checked={gc?.enabled === true}
         onChange={(v) => setState({ ...state, worktreeAutoGc: { ...(gc ?? {}), enabled: v } })}
-        label="Auto-GC merged worktrees"
-        hint="Periodic background job; safe to leave off in v1."
+        label={t('settingsForm.autoGcLabel')}
+        hint={t('settingsForm.autoGcHint')}
       />
       <div className="form-grid form-grid--cols-2">
-        <Field label="GC older-than (days)">
+        <Field label={t('settingsForm.olderThanDays')}>
           <NumberInput
             value={gc?.olderThanDays}
             onChange={(v) =>
@@ -260,13 +271,13 @@ function GcTab({ config }: TabProps) {
               worktreeAutoGc: { ...(gc ?? { enabled: false }), onlyMerged: v },
             })
           }
-          label="Only GC merged branches"
+          label={t('settingsForm.onlyMerged')}
         />
       </div>
       <Field
-        label="Events archive — per-node-run rows"
+        label={t('settingsForm.archivePerNodeRun')}
         required
-        hint="When a node_run accumulates this many event rows, archive to JSONL."
+        hint={t('settingsForm.archivePerNodeRunHint')}
       >
         <NumberInput
           value={thresholds?.perNodeRunRows}
@@ -280,9 +291,9 @@ function GcTab({ config }: TabProps) {
         />
       </Field>
       <Field
-        label="Events archive — global rows"
+        label={t('settingsForm.archiveGlobal')}
         required
-        hint="DB-wide event row cap before background archival runs."
+        hint={t('settingsForm.archiveGlobalHint')}
       >
         <NumberInput
           value={thresholds?.globalRows}
@@ -341,6 +352,7 @@ function BackupCard() {
 }
 
 function NetworkTab({ config }: TabProps) {
+  const { t } = useTranslation()
   const { state, setState, save, restartRequired } = useTabState(config, ['bindHost', 'bindPort'])
   return (
     <SectionForm
@@ -350,17 +362,13 @@ function NetworkTab({ config }: TabProps) {
       success={save.isSuccess && save.error === null ? 'saved' : null}
       restartRequired={restartRequired}
     >
-      <Field
-        label="Bind host"
-        required
-        hint="Restart required. Default 127.0.0.1 keeps the daemon local-only."
-      >
+      <Field label={t('settingsForm.bindHost')} required hint={t('settingsForm.bindHostHint')}>
         <TextInput
           value={state.bindHost ?? '127.0.0.1'}
           onChange={(v) => setState({ ...state, bindHost: v })}
         />
       </Field>
-      <Field label="Bind port" hint="Restart required. Leave 0 to pick a free port at start time.">
+      <Field label={t('settingsForm.bindPort')} hint={t('settingsForm.bindPortHint')}>
         <NumberInput
           value={state.bindPort}
           onChange={(v) => setState({ ...state, bindPort: v })}
@@ -398,6 +406,7 @@ function AppearanceTab({ config }: TabProps) {
 }
 
 function ConnectionTab() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const token = getToken()
   const baseUrl = getBaseUrl()
@@ -407,17 +416,23 @@ function ConnectionTab() {
   }
   return (
     <div className="form-grid">
-      <Field label="Daemon URL">
+      <Field label={t('settingsForm.daemonUrl')}>
         <div>
           <code>{baseUrl}</code>
         </div>
       </Field>
-      <Field label="Token">
-        <div>{token === null ? <em>none</em> : <code>{maskToken(token)}</code>}</div>
+      <Field label={t('settingsForm.tokenLabel')}>
+        <div>
+          {token === null ? (
+            <em>{t('settingsForm.tokenNone')}</em>
+          ) : (
+            <code>{maskToken(token, t)}</code>
+          )}
+        </div>
       </Field>
       <div>
         <button type="button" onClick={signOut} className="btn btn--danger">
-          Sign out / re-enter token
+          {t('settingsForm.signOut')}
         </button>
       </div>
     </div>
@@ -512,9 +527,9 @@ function SectionForm({
       <div className="form-grid">{children}</div>
       <div className="form-actions">
         <button type="button" className="btn btn--primary" onClick={() => onSave()} disabled={busy}>
-          {busy ? 'Saving…' : 'Save'}
+          {busy ? t('common.saving') : t('common.save')}
         </button>
-        {success !== null && <span className="form-actions__ok">Saved.</span>}
+        {success !== null && <span className="form-actions__ok">{t('common.saved')}</span>}
         {error !== null && error !== undefined && (
           <span className="form-actions__error">{describeError(error)}</span>
         )}
@@ -531,9 +546,16 @@ function SectionForm({
   )
 }
 
-function maskToken(t: string): string {
-  if (t.length <= 8) return '••••'
-  return `${t.slice(0, 4)}…${t.slice(-4)} (${t.length} chars)`
+function maskToken(
+  token: string,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  if (token.length <= 8) return '••••'
+  return t('settingsForm.tokenMask', {
+    prefix: token.slice(0, 4),
+    suffix: token.slice(-4),
+    len: token.length,
+  })
 }
 
 function describeError(e: unknown): string {

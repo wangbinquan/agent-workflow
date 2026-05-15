@@ -86,6 +86,11 @@ export interface Resources {
     no: string
     details: string
     emDash: string
+    copy: string
+    copied: string
+    empty: string
+    optionalPlaceholder: string
+    confirmPrompt: string
   }
   agents: {
     title: string
@@ -311,6 +316,109 @@ export interface Resources {
     noPorts: string
     assembledTitle: string
   }
+  agentForm: {
+    fieldName: string
+    fieldNameHint: string
+    fieldNamePlaceholder: string
+    fieldDescription: string
+    fieldDescriptionPlaceholder: string
+    fieldOutputs: string
+    fieldOutputsHint: string
+    fieldOutputsPlaceholder: string
+    outputsValidate: string
+    fieldSkills: string
+    fieldSkillsHint: string
+    fieldSkillsPlaceholder: string
+    fieldReadonly: string
+    fieldReadonlyHint: string
+    fieldModel: string
+    modelPlaceholder: string
+    fieldVariant: string
+    fieldTemperature: string
+    temperaturePlaceholder: string
+    fieldSteps: string
+    fieldMaxSteps: string
+    fieldPermission: string
+    fieldPermissionHint: string
+    permissionPlaceholder: string
+    fieldFrontmatterExtra: string
+    fieldFrontmatterExtraHint: string
+    fieldBody: string
+    bodyPlaceholder: string
+    rawBodySummary: string
+  }
+  nodeDrawer: {
+    kindLabel: string
+    tabPrompt: string
+    tabEvents: string
+    tabOutput: string
+    tabStats: string
+    shardCount: string
+    shardNoKey: string
+    tokenPrefix: string
+    promptPending: string
+    outputNone: string
+    statStatus: string
+    statStarted: string
+    statFinished: string
+    statDuration: string
+    statExitCode: string
+    statIteration: string
+    statRetry: string
+    statTokensIn: string
+    statTokensOut: string
+    statTokensTotal: string
+    statCacheCreate: string
+    statCacheRead: string
+    statError: string
+    statRetries: string
+    attempt: string
+    noEventsMatch: string
+  }
+  taskOutputs: {
+    section: string
+    pending: string
+  }
+  settingsForm: {
+    opencodePath: string
+    opencodePathHint: string
+    defaultModel: string
+    defaultModelHint: string
+    defaultVariant: string
+    defaultTemperature: string
+    maxConcurrentNodes: string
+    multiProcessConc: string
+    logLevel: string
+    perTaskDuration: string
+    perTaskTokens: string
+    perNodeTimeout: string
+    largeOutputThreshold: string
+    zeroUnlimited: string
+    autoGcLabel: string
+    autoGcHint: string
+    olderThanDays: string
+    onlyMerged: string
+    archivePerNodeRun: string
+    archivePerNodeRunHint: string
+    archiveGlobal: string
+    archiveGlobalHint: string
+    bindHost: string
+    bindHostHint: string
+    bindPort: string
+    bindPortHint: string
+    daemonUrl: string
+    tokenLabel: string
+    tokenNone: string
+    tokenMask: string
+    signOut: string
+  }
+  enumPicker: {
+    otherPlaceholder: string
+    add: string
+  }
+  wrapperNode: {
+    innerNodes: string
+  }
   errors: Record<string, string>
 }
 
@@ -401,6 +509,11 @@ export const zhCN: Resources = {
     no: '否',
     details: '详情',
     emDash: '—',
+    copy: '复制',
+    copied: '已复制！',
+    empty: '（空）',
+    optionalPlaceholder: '（可选）',
+    confirmPrompt: '确认？',
   },
   agents: {
     title: '代理',
@@ -627,6 +740,110 @@ export const zhCN: Resources = {
     mockTitle: '模拟端口值',
     noPorts: '没有入边端口。增加一条入边后此处会列出。',
     assembledTitle: '拼好的 prompt',
+  },
+  agentForm: {
+    fieldName: '名称',
+    fieldNameHint: 'kebab-case；用于 /agents/:name URL。',
+    fieldNamePlaceholder: '例如 code-fixer',
+    fieldDescription: '描述',
+    fieldDescriptionPlaceholder: '一行简介，会显示在列表中',
+    fieldOutputs: '输出端口',
+    fieldOutputsHint: '在 <port> envelope 中声明的端口名。',
+    fieldOutputsPlaceholder: '输入端口名后按 Enter',
+    outputsValidate: '只允许小写字母 + 下划线',
+    fieldSkills: '技能',
+    fieldSkillsHint: '框架运行时注入的技能名。',
+    fieldSkillsPlaceholder: '输入技能名后按 Enter',
+    fieldReadonly: '只读',
+    fieldReadonlyHint: '只读 agent 可在同一 task 中并发；可写 agent 会串行。',
+    fieldModel: 'Model',
+    modelPlaceholder: 'anthropic/claude-sonnet-4-6',
+    fieldVariant: 'Variant',
+    fieldTemperature: 'Temperature',
+    temperaturePlaceholder: '0–2',
+    fieldSteps: 'Steps',
+    fieldMaxSteps: 'Max steps',
+    fieldPermission: 'Permission JSON',
+    fieldPermissionHint: 'opencode permission 对象，透传。',
+    permissionPlaceholder: '{"edit":"allow","webfetch":"deny"}',
+    fieldFrontmatterExtra: '额外 frontmatter (JSON)',
+    fieldFrontmatterExtraHint:
+      '除 name/description/outputs/readonly/model/variant/temperature/steps/permission/skills 之外的其它键。',
+    fieldBody: '正文 (Markdown)',
+    bodyPlaceholder: 'Agent 系统提示词；Markdown。',
+    rawBodySummary: '裸 markdown（无预览）',
+  },
+  nodeDrawer: {
+    kindLabel: 'node_run',
+    tabPrompt: 'Prompt',
+    tabEvents: '事件',
+    tabOutput: '输出',
+    tabStats: '统计',
+    shardCount: '{{n}} 个 shard',
+    shardNoKey: '(无 key)',
+    tokenPrefix: 'tok',
+    promptPending: '该节点还没拼完 prompt（仍 pending）。',
+    outputNone: '还没有捕获到输出。',
+    statStatus: '状态',
+    statStarted: '开始',
+    statFinished: '完成',
+    statDuration: '耗时',
+    statExitCode: '退出码',
+    statIteration: '轮次',
+    statRetry: '重试',
+    statTokensIn: '输入 tokens',
+    statTokensOut: '输出 tokens',
+    statTokensTotal: '总 tokens',
+    statCacheCreate: '缓存创建',
+    statCacheRead: '缓存读取',
+    statError: '错误',
+    statRetries: '重试列表',
+    attempt: '第 {{n}} 次',
+    noEventsMatch: '没有事件匹配当前过滤。',
+  },
+  taskOutputs: {
+    section: '产出',
+    pending: '等待中…',
+  },
+  settingsForm: {
+    opencodePath: 'opencode 路径',
+    opencodePathHint: '缺省走 PATH 上的 `which opencode`。',
+    defaultModel: '默认 model',
+    defaultModelHint: '没声明 model 的 agent 使用。',
+    defaultVariant: '默认 variant',
+    defaultTemperature: '默认 temperature',
+    maxConcurrentNodes: '最大并发节点数',
+    multiProcessConc: 'Multi-process 子进程并发',
+    logLevel: '日志级别',
+    perTaskDuration: '单 task 最大时长 (ms)',
+    perTaskTokens: '单 task 最大 token 数',
+    perNodeTimeout: '单节点超时 (ms)',
+    largeOutputThreshold: '大输出阈值 (bytes)',
+    zeroUnlimited: '0 = 无限制。',
+    autoGcLabel: '自动 GC 已合并的 worktree',
+    autoGcHint: '后台周期性任务；v1 默认关闭也无碍。',
+    olderThanDays: 'GC 时间窗（天）',
+    onlyMerged: '仅 GC 已合并分支',
+    archivePerNodeRun: '事件归档 — 单 node_run 行数',
+    archivePerNodeRunHint: '当某个 node_run 累计到此行数，归档为 JSONL。',
+    archiveGlobal: '事件归档 — 全局行数',
+    archiveGlobalHint: 'DB 全表事件行数上限；超过会触发归档。',
+    bindHost: '监听 host',
+    bindHostHint: '需要重启。默认 127.0.0.1 使 daemon 仅本机可达。',
+    bindPort: '监听 port',
+    bindPortHint: '需要重启。0 让启动时自动挑空闲端口。',
+    daemonUrl: 'Daemon URL',
+    tokenLabel: 'Token',
+    tokenNone: '无',
+    tokenMask: '{{prefix}}…{{suffix}}（共 {{len}} 字符）',
+    signOut: '登出 / 重新输入 token',
+  },
+  enumPicker: {
+    otherPlaceholder: '其它（自定义）…',
+    add: '添加',
+  },
+  wrapperNode: {
+    innerNodes: '{{n}} 个内部节点',
   },
   // Error codes thrown by the backend (DomainError family + transport).
   errors: {

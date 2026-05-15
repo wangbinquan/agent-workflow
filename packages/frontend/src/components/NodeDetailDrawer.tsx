@@ -11,6 +11,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { NodeRun, NodeRunEventsResponse, NodeRunOutput } from '@agent-workflow/shared'
 import { NODE_EVENT_KIND } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
@@ -35,6 +36,7 @@ export function NodeDetailDrawer({
   onClose,
   onSelectRun,
 }: Props) {
+  const { t } = useTranslation()
   const [tab, setTab] = useState<Tab>('prompt')
 
   if (nodeRunId === null) return null
@@ -49,28 +51,33 @@ export function NodeDetailDrawer({
     .filter((r) => r.nodeId === run.nodeId && r.id !== run.id && r.parentNodeRunId === null)
     .sort((a, b) => a.retryIndex - b.retryIndex)
 
+  const tabs: Array<[Tab, string]> = [
+    ['prompt', t('nodeDrawer.tabPrompt')],
+    ['events', t('nodeDrawer.tabEvents')],
+    ['output', t('nodeDrawer.tabOutput')],
+    ['stats', t('nodeDrawer.tabStats')],
+  ]
+
   return (
     <aside className="inspector">
       <header className="inspector__header">
         <div>
-          <div className="inspector__kind">node_run</div>
+          <div className="inspector__kind">{t('nodeDrawer.kindLabel')}</div>
           <div className="inspector__id">
             <code>{run.nodeId}</code> <span className="muted">/ {run.id.slice(-6)}</span>
           </div>
         </div>
-        <button type="button" onClick={onClose} className="inspector__close" aria-label="Close">
+        <button
+          type="button"
+          onClick={onClose}
+          className="inspector__close"
+          aria-label={t('inspector.closeAria')}
+        >
           ×
         </button>
       </header>
       <div className="tabs inspector__tabs">
-        {(
-          [
-            ['prompt', 'Prompt'],
-            ['events', 'Events'],
-            ['output', 'Output'],
-            ['stats', 'Stats'],
-          ] as Array<[Tab, string]>
-        ).map(([k, label]) => (
+        {tabs.map(([k, label]) => (
           <button
             key={k}
             type="button"
@@ -81,7 +88,7 @@ export function NodeDetailDrawer({
           </button>
         ))}
       </div>
-      {children.length > 0 && <SubProcessList children={children} onPick={onSelectRun} />}
+      {children.length > 0 && <SubProcessList shards={children} onPick={onSelectRun} />}
       <div className="inspector__body">
         {tab === 'prompt' && <PromptTab run={run} />}
         {tab === 'events' && <EventsTab taskId={taskId} nodeRunId={nodeRunId} />}
@@ -94,18 +101,15 @@ export function NodeDetailDrawer({
 
 // ---------------------------------------------------------------------------
 
-function SubProcessList({
-  children,
-  onPick,
-}: {
-  children: NodeRun[]
-  onPick?: (id: string) => void
-}) {
+function SubProcessList({ shards, onPick }: { shards: NodeRun[]; onPick?: (id: string) => void }) {
+  const { t } = useTranslation()
   return (
     <div className="subprocess-list">
-      <div className="subprocess-list__title">{children.length} shard(s)</div>
+      <div className="subprocess-list__title">
+        {t('nodeDrawer.shardCount', { n: shards.length })}
+      </div>
       <ul>
-        {children
+        {shards
           .sort((a, b) => (a.shardKey ?? '').localeCompare(b.shardKey ?? ''))
           .map((c) => (
             <li key={c.id}>
@@ -117,8 +121,12 @@ function SubProcessList({
                 <span className={`status-chip status-chip--${noderunTone(c.status)}`}>
                   {c.status}
                 </span>
-                <code className="subprocess-list__shard">{c.shardKey ?? '(no key)'}</code>
-                <span className="muted">tok {c.tokTotal ?? 0}</span>
+                <code className="subprocess-list__shard">
+                  {c.shardKey ?? t('nodeDrawer.shardNoKey')}
+                </code>
+                <span className="muted">
+                  {t('nodeDrawer.tokenPrefix')} {c.tokTotal ?? 0}
+                </span>
               </button>
             </li>
           ))}
@@ -148,15 +156,17 @@ function noderunTone(s: NodeRun['status']): string {
 // ---------------------------------------------------------------------------
 
 function PromptTab({ run }: { run: NodeRun }) {
+  const { t } = useTranslation()
   if (run.promptText === null) {
-    return <div className="muted">Prompt hasn't been assembled yet (node is still pending).</div>
+    return <div className="muted">{t('nodeDrawer.promptPending')}</div>
   }
   return <pre className="readonly-pre">{run.promptText}</pre>
 }
 
 function OutputTab({ outputs }: { outputs: NodeRunOutput[] }) {
+  const { t } = useTranslation()
   if (outputs.length === 0) {
-    return <div className="muted">No outputs captured yet.</div>
+    return <div className="muted">{t('nodeDrawer.outputNone')}</div>
   }
   return (
     <div className="form-grid">
@@ -167,7 +177,7 @@ function OutputTab({ outputs }: { outputs: NodeRunOutput[] }) {
             <CopyButton text={o.value} />
           </header>
           <pre className="task-output-card__body">
-            {o.value === '' ? <span className="muted">(empty)</span> : o.value}
+            {o.value === '' ? <span className="muted">{t('common.empty')}</span> : o.value}
           </pre>
         </article>
       ))}
@@ -184,45 +194,50 @@ function StatsTab({
   retries: NodeRun[]
   onPickRetry?: (id: string) => void
 }) {
+  const { t } = useTranslation()
   const duration =
     run.startedAt !== null && run.finishedAt !== null
       ? `${((run.finishedAt - run.startedAt) / 1000).toFixed(2)}s`
-      : '—'
+      : t('common.emDash')
   return (
     <dl className="task-meta">
-      <dt>Status</dt>
+      <dt>{t('nodeDrawer.statStatus')}</dt>
       <dd>{run.status}</dd>
-      <dt>Started</dt>
-      <dd>{run.startedAt === null ? '—' : new Date(run.startedAt).toLocaleString()}</dd>
-      <dt>Finished</dt>
-      <dd>{run.finishedAt === null ? '—' : new Date(run.finishedAt).toLocaleString()}</dd>
-      <dt>Duration</dt>
+      <dt>{t('nodeDrawer.statStarted')}</dt>
+      <dd>
+        {run.startedAt === null ? t('common.emDash') : new Date(run.startedAt).toLocaleString()}
+      </dd>
+      <dt>{t('nodeDrawer.statFinished')}</dt>
+      <dd>
+        {run.finishedAt === null ? t('common.emDash') : new Date(run.finishedAt).toLocaleString()}
+      </dd>
+      <dt>{t('nodeDrawer.statDuration')}</dt>
       <dd>{duration}</dd>
-      <dt>Exit code</dt>
-      <dd>{run.exitCode === null ? '—' : run.exitCode}</dd>
-      <dt>Iteration</dt>
+      <dt>{t('nodeDrawer.statExitCode')}</dt>
+      <dd>{run.exitCode === null ? t('common.emDash') : run.exitCode}</dd>
+      <dt>{t('nodeDrawer.statIteration')}</dt>
       <dd>{run.iteration}</dd>
-      <dt>Retry</dt>
+      <dt>{t('nodeDrawer.statRetry')}</dt>
       <dd>{run.retryIndex}</dd>
-      <dt>Tokens in</dt>
-      <dd>{run.tokInput ?? '—'}</dd>
-      <dt>Tokens out</dt>
-      <dd>{run.tokOutput ?? '—'}</dd>
-      <dt>Tokens total</dt>
-      <dd>{run.tokTotal ?? '—'}</dd>
-      <dt>Cache create</dt>
-      <dd>{run.tokCacheCreate ?? '—'}</dd>
-      <dt>Cache read</dt>
-      <dd>{run.tokCacheRead ?? '—'}</dd>
+      <dt>{t('nodeDrawer.statTokensIn')}</dt>
+      <dd>{run.tokInput ?? t('common.emDash')}</dd>
+      <dt>{t('nodeDrawer.statTokensOut')}</dt>
+      <dd>{run.tokOutput ?? t('common.emDash')}</dd>
+      <dt>{t('nodeDrawer.statTokensTotal')}</dt>
+      <dd>{run.tokTotal ?? t('common.emDash')}</dd>
+      <dt>{t('nodeDrawer.statCacheCreate')}</dt>
+      <dd>{run.tokCacheCreate ?? t('common.emDash')}</dd>
+      <dt>{t('nodeDrawer.statCacheRead')}</dt>
+      <dd>{run.tokCacheRead ?? t('common.emDash')}</dd>
       {run.errorMessage !== null && (
         <>
-          <dt>Error</dt>
+          <dt>{t('nodeDrawer.statError')}</dt>
           <dd className="task-meta__error">{run.errorMessage}</dd>
         </>
       )}
       {retries.length > 0 && (
         <>
-          <dt>Retries</dt>
+          <dt>{t('nodeDrawer.statRetries')}</dt>
           <dd>
             <ul className="retries-history">
               {retries.map((r) => (
@@ -232,7 +247,7 @@ function StatsTab({
                     className="retries-history__item"
                     onClick={() => onPickRetry?.(r.id)}
                   >
-                    <code>attempt {r.retryIndex}</code>{' '}
+                    <code>{t('nodeDrawer.attempt', { n: r.retryIndex })}</code>{' '}
                     <span className={`status-chip status-chip--${noderunTone(r.status)}`}>
                       {r.status}
                     </span>
@@ -251,6 +266,7 @@ function StatsTab({
 }
 
 function EventsTab({ taskId, nodeRunId }: { taskId: string; nodeRunId: string }) {
+  const { t } = useTranslation()
   const [enabledKinds, setEnabledKinds] = useState<Set<string>>(() => new Set(NODE_EVENT_KIND))
   const query = useQuery<NodeRunEventsResponse>({
     queryKey: ['tasks', taskId, 'node-runs', nodeRunId, 'events'],
@@ -290,12 +306,12 @@ function EventsTab({ taskId, nodeRunId }: { taskId: string; nodeRunId: string })
           </button>
         ))}
       </div>
-      {query.isLoading && <div className="muted">Loading…</div>}
+      {query.isLoading && <div className="muted">{t('common.loading')}</div>}
       {query.error !== null && query.error !== undefined && (
         <div className="error-box">{describeError(query.error)}</div>
       )}
       {visible.length === 0 && !query.isLoading && (
-        <div className="muted">No events match the current filters.</div>
+        <div className="muted">{t('nodeDrawer.noEventsMatch')}</div>
       )}
       <ol className="events-list">
         {visible.map((e) => (
@@ -315,6 +331,7 @@ function EventsTab({ taskId, nodeRunId }: { taskId: string; nodeRunId: string })
 }
 
 function CopyButton({ text }: { text: string }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   function copy() {
     void navigator.clipboard.writeText(text).then(() => {
@@ -324,7 +341,7 @@ function CopyButton({ text }: { text: string }) {
   }
   return (
     <button type="button" className="btn btn--sm" onClick={copy}>
-      {copied ? 'Copied!' : 'Copy'}
+      {copied ? t('common.copied') : t('common.copy')}
     </button>
   )
 }
