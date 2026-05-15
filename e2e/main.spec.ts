@@ -253,4 +253,36 @@ test('happy path: agents → workflow → launch → task done → outputs visib
   await expect(page.locator('.task-output-card__body', { hasText: 'stub e2e output' })).toBeVisible(
     { timeout: 15_000 },
   )
+
+  // 8. RFC-006 visual contract: every port label is rendered INSIDE the
+  // bounding rectangle of its containing .canvas-node. The old strip-of-
+  // chips layout pushed labels onto a -6px sidebar that overlapped the
+  // node body and bled past its left/right edges; we lock that out here
+  // in the task-detail canvas (same WorkflowCanvas as the editor, read-
+  // only mode).
+  await expect(page.locator('.canvas-node__port-label').first()).toBeVisible({ timeout: 10_000 })
+  const labelFit = await page.evaluate(() => {
+    const labels = Array.from(document.querySelectorAll('.canvas-node__port-label'))
+    const offenders: { port: string; reason: string }[] = []
+    for (const label of labels) {
+      const node = label.closest('.canvas-node')
+      if (node === null) {
+        offenders.push({ port: label.textContent ?? '?', reason: 'no .canvas-node ancestor' })
+        continue
+      }
+      const lr = label.getBoundingClientRect()
+      const nr = node.getBoundingClientRect()
+      // Allow 1px sub-pixel slack on each side; xyflow's zoom rounding
+      // occasionally yields fractional bleed of less than a pixel.
+      if (lr.left < nr.left - 1 || lr.right > nr.right + 1) {
+        offenders.push({
+          port: label.textContent ?? '?',
+          reason: `label[${lr.left}..${lr.right}] outside node[${nr.left}..${nr.right}]`,
+        })
+      }
+    }
+    return { count: labels.length, offenders }
+  })
+  expect(labelFit.count).toBeGreaterThan(0)
+  expect(labelFit.offenders).toEqual([])
 })

@@ -4,6 +4,9 @@
 
 **最近更新**：2026-05-15（RFC-004 落地 — Input 节点端口契约统一：scheduler 不再把 input 节点产出硬编码到 `'out'`，改为 `inputKey`；编辑器在 add/patch/delete 节点时通过新纯函数 `syncInputDefs` 维护 `definition.inputs[]`；NodeInspector input 抽屉新增 4 字段编辑 launcher 字段元数据；validator 加 `input-key-not-declared` + `input-orphan-declared` 两规则 + `severity` 字段；老 workflow 编辑器一打开自动 heal；v1 路线图保持 81/81）
 
+**进行中 RFC**：
+- [RFC-006](./design/RFC-006-node-port-ux-cleanup/proposal.md) — 节点端口呈现重构（消除标签溢出节点 + 行内布局 + 长名 ellipsis + tooltip 兜底；编辑器 + task 详情画布共享同一 PortHandles 一次性修两面；纯前端渲染层零后端 / DB / API / YAML 改动；规划单 PR ~150 行 frontend diff + 80 行测试），Draft 等用户审。
+
 ---
 
 ## 路线图全局视图

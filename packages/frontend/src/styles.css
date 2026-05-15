@@ -1,6 +1,10 @@
 :root {
   color-scheme: light dark;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
   --bg: #f8f9fb;
   --panel: #ffffff;
   --border: #e3e5ea;
@@ -1639,49 +1643,62 @@ code {
   border-color: #1d4ed8;
 }
 
-/* Port handles + labels rendered alongside <Handle>. */
-.canvas-node__ports {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 12px;
+/* Port rows rendered inside the node body (RFC-006). The old layout
+ * absolutely-positioned chip-style labels on a -6px strip hanging off
+ * the node edge; chip text extended back into the node body covering
+ * the title / node-id. The current layout stacks ports as inline rows
+ * inside the body — labels never overlap header text and node height
+ * grows naturally with port count. Handle dots are pinned to the row
+ * edge via negative offset that cancels the node's 14px horizontal
+ * padding, keeping the visible dot at the node's outer edge (same
+ * position as before). */
+.canvas-node__port-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
 }
 
-.canvas-node__ports--left {
-  left: -6px;
-}
-
-.canvas-node__ports--right {
-  right: -6px;
-}
-
-.canvas-node__port {
-  position: absolute;
+.canvas-node__port-row {
+  position: relative;
+  height: 22px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  transform: translateY(-50%);
   font-size: 11px;
   color: var(--muted);
 }
 
-.canvas-node__port--left {
-  left: 0;
-  flex-direction: row;
+.canvas-node__port-rows--left .canvas-node__port-row {
+  justify-content: flex-start;
 }
 
-.canvas-node__port--right {
-  right: 0;
-  flex-direction: row-reverse;
+.canvas-node__port-rows--right .canvas-node__port-row {
+  justify-content: flex-end;
+}
+
+/* xyflow's default `.react-flow__handle-left/right { left|right: 0 }`
+ * would anchor the dot to the row's edge — i.e. inside the node body's
+ * padding. Negative offsets cancel `.canvas-node { padding: 8px 14px }`
+ * + 6px to align the visible dot exactly at the node's outer edge,
+ * matching the pre-RFC-006 dot position so existing edges land
+ * pixel-identically. */
+.canvas-node__port-row .react-flow__handle-left {
+  left: -14px !important;
+  right: auto !important;
+}
+
+.canvas-node__port-row .react-flow__handle-right {
+  right: -14px !important;
+  left: auto !important;
 }
 
 .canvas-node__port-label {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 0 4px;
-  white-space: nowrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px;
 }
 
 .canvas-node__handle {
@@ -1705,18 +1722,26 @@ code {
 /* Invisible 12px wide target strip covering the node's left edge. Lets
  * the first edge into a fresh agent / wrapper-loop node land somewhere
  * (RFC-003). Named handles sit on top via z-index so fan-in drops still
- * hit the precise port. */
+ * hit the precise port. RFC-006 wraps it in a dedicated absolute div so
+ * port rows below it can flow naturally in the node body. */
+.canvas-node__inbound-catchall {
+  position: absolute;
+  top: 0;
+  left: -6px;
+  width: 12px;
+  height: 100%;
+  z-index: 0;
+}
+
 .canvas-node__handle--catchall {
   position: absolute !important;
-  top: 0 !important;
-  left: -6px !important;
-  width: 12px !important;
+  inset: 0 !important;
+  width: 100% !important;
   height: 100% !important;
   background: transparent !important;
   border: none !important;
   border-radius: 0 !important;
   transform: none !important;
-  z-index: 0;
 }
 
 /* ---- Task output panel ---- */
