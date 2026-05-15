@@ -1121,10 +1121,22 @@ code {
   min-height: 420px;
 }
 
+/* Default: canvas takes the full content width. The 480px inspector
+ * column only materializes once the user picks a node — without this
+ * gate, an empty `1fr 480px` grid permanently donates 480px to a
+ * non-existent drawer and crushes the canvas on narrow viewports
+ * (~82px when the surrounding main column is 574px wide). */
 .task-canvas-layout {
   display: grid;
-  grid-template-columns: 1fr 480px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
+}
+
+.task-canvas-layout--with-drawer {
+  /* minmax on both sides keeps the canvas usable on narrow viewports —
+   * the drawer can shrink from 480→320 before the canvas drops below
+   * 280, so neither side disappears. */
+  grid-template-columns: minmax(280px, 1fr) minmax(320px, 480px);
 }
 
 /* ---- Launcher pickers ---- */

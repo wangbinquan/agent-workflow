@@ -205,7 +205,7 @@ function TaskDetailPage() {
 
       <section className="page__section">
         <h2>{t('tasks.sectionWorkflowStatus')}</h2>
-        <div className="task-canvas-layout">
+        <div className={taskCanvasLayoutClass(selectedNodeRunId)}>
           <TaskStatusCanvas
             task={tk}
             runs={nodeRuns.data?.runs ?? []}
@@ -415,6 +415,22 @@ function isTerminal(status: Task['status'] | undefined): boolean {
   return (
     status === 'done' || status === 'failed' || status === 'canceled' || status === 'interrupted'
   )
+}
+
+/**
+ * Class list for the task-detail canvas grid. The `--with-drawer`
+ * modifier reserves a 480px (shrinkable to 320) inspector track — we
+ * only apply it when a node run is actually selected. Without the
+ * gate, the empty drawer column permanently donates ~480px to a
+ * non-existent inspector and crushes the canvas to ~82px on narrow
+ * viewports.
+ *
+ * Exported for unit testing — mirrors `editorLayoutClass`.
+ */
+export function taskCanvasLayoutClass(selectedNodeRunId: string | null): string {
+  return selectedNodeRunId !== null
+    ? 'task-canvas-layout task-canvas-layout--with-drawer'
+    : 'task-canvas-layout'
 }
 
 /**
