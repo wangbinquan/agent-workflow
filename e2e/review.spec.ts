@@ -160,7 +160,13 @@ function expectOk(res: Response, what: string): void {
 
 interface TaskRow {
   status: string
-  reviewIteration?: number
+}
+
+interface ReviewSummaryRow {
+  nodeRunId: string
+  taskId: string
+  reviewIteration: number
+  awaitingReview: boolean
 }
 
 async function pollTaskStatus(
@@ -184,17 +190,38 @@ async function pollTaskStatus(
   throw new Error(`pollTaskStatus: timeout — last=${JSON.stringify(last)}`)
 }
 
-async function findReviewNodeRunId(d: DaemonHandle, taskId: string): Promise<string> {
-  const res = await fetch(`${d.baseUrl}/api/reviews?status=pending`, {
-    headers: { Authorization: `Bearer ${d.token}` },
-  })
-  expectOk(res, 'list reviews')
-  const summaries = (await res.json()) as { nodeRunId: string; taskId: string }[]
-  const row = summaries.find((r) => r.taskId === taskId)
-  if (row === undefined) {
-    throw new Error(`no pending review found for task ${taskId}; got ${JSON.stringify(summaries)}`)
+/**
+ * Polls `/api/reviews?status=pending` until a row for `taskId` shows up with
+ * `reviewIteration === targetIteration` and `awaitingReview === true`.
+ * Used to walk through the reject → iterate → approve cycle — the task row
+ * itself doesn't expose `reviewIteration` (lives on node_runs), so we use
+ * the summary list as the cycle signal.
+ */
+async function waitForPendingReviewAt(
+  d: DaemonHandle,
+  taskId: string,
+  targetIteration: number,
+  timeoutMs: number,
+): Promise<ReviewSummaryRow> {
+  const deadline = Date.now() + timeoutMs
+  let last: ReviewSummaryRow | null = null
+  while (Date.now() < deadline) {
+    const res = await fetch(`${d.baseUrl}/api/reviews?status=pending`, {
+      headers: { Authorization: `Bearer ${d.token}` },
+    })
+    if (res.ok) {
+      const summaries = (await res.json()) as ReviewSummaryRow[]
+      const row = summaries.find((r) => r.taskId === taskId)
+      if (row !== undefined) {
+        last = row
+        if (row.awaitingReview && row.reviewIteration === targetIteration) return row
+      }
+    }
+    await new Promise((r) => setTimeout(r, 300))
   }
-  return row.nodeRunId
+  throw new Error(
+    `waitForPendingReviewAt: timeout target=${targetIteration} lastSeen=${JSON.stringify(last)}`,
+  )
 }
 
 async function submitDecision(
@@ -239,39 +266,34 @@ test('review cycle: awaiting → reject → awaiting → iterate → awaiting �
   const launched = (await launchRes.json()) as { id: string }
   const taskId = launched.id
 
-  // 2. Wait for first awaiting_review.
-  const first = await pollTaskStatus(daemon, taskId, (t) => t.status === 'awaiting_review', 30_000)
-  expect(first.reviewIteration ?? 0).toBe(0)
+  // 2. Wait for first pending review at iteration 0.
+  const first = await waitForPendingReviewAt(daemon, taskId, 0, 30_000)
+  expect(first.reviewIteration).toBe(0)
 
   // 3. Reject.
-  let nodeRunId = await findReviewNodeRunId(daemon, taskId)
-  await submitDecision(daemon, nodeRunId, 'rejected', 0, 'please redo the failure-modes section')
-
-  // 4. Wait for second awaiting_review (iteration bumped to 1).
-  const second = await pollTaskStatus(
+  await submitDecision(
     daemon,
-    taskId,
-    (t) => t.status === 'awaiting_review' && (t.reviewIteration ?? 0) >= 1,
-    30_000,
+    first.nodeRunId,
+    'rejected',
+    0,
+    'please redo the failure-modes section',
   )
+
+  // 4. Wait for second pending review at iteration 1.
+  const second = await waitForPendingReviewAt(daemon, taskId, 1, 30_000)
   expect(second.reviewIteration).toBe(1)
+  // Same node_run is reused across decisions — reviewIteration just bumps.
+  expect(second.nodeRunId).toBe(first.nodeRunId)
 
   // 5. Iterate.
-  nodeRunId = await findReviewNodeRunId(daemon, taskId)
-  await submitDecision(daemon, nodeRunId, 'iterated', 1)
+  await submitDecision(daemon, second.nodeRunId, 'iterated', 1)
 
-  // 6. Wait for third awaiting_review.
-  const third = await pollTaskStatus(
-    daemon,
-    taskId,
-    (t) => t.status === 'awaiting_review' && (t.reviewIteration ?? 0) >= 2,
-    30_000,
-  )
+  // 6. Wait for third pending review at iteration 2.
+  const third = await waitForPendingReviewAt(daemon, taskId, 2, 30_000)
   expect(third.reviewIteration).toBe(2)
 
   // 7. Approve.
-  nodeRunId = await findReviewNodeRunId(daemon, taskId)
-  await submitDecision(daemon, nodeRunId, 'approved', 2)
+  await submitDecision(daemon, third.nodeRunId, 'approved', 2)
 
   // 8. Wait for terminal done.
   const final = await pollTaskStatus(daemon, taskId, (t) => t.status === 'done', 30_000)
