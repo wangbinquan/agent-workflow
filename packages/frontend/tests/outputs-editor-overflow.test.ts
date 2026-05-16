@@ -16,7 +16,7 @@ const STYLES = readFileSync(join(__dirname, '..', 'src', 'styles.css'), 'utf8').
 )
 
 function ruleBody(selector: string): string {
-  const escaped = selector.replace(/[.\-]/g, (c) => `\\${c}`)
+  const escaped = selector.replace(/[.-]/g, (c) => `\\${c}`)
   const re = new RegExp(`${escaped}\\s*\\{([^}]*)\\}`)
   const m = STYLES.match(re)
   if (m === null) throw new Error(`rule ${selector} not found in styles.css`)
