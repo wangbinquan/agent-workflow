@@ -3,9 +3,14 @@ name: Release
 # P-5-06: cut a GitHub Release whenever a tag matching `v*` is pushed.
 #
 # Per OS in the matrix we run the same `bun run build:binary` pipeline the CI
-# job uses, then upload the resulting executable as a release asset.
-# - macos-latest  -> dist/agent-workflow-macos-arm64
-# - ubuntu-latest -> dist/agent-workflow-linux-x86_64
+# job uses, then upload the resulting executable as a release asset. The
+# build script names the file from process.platform + process.arch
+# (scripts/build-binary.ts), so simply running on each runner produces the
+# correct asset name automatically:
+# - macos-latest      (Apple Silicon) -> dist/agent-workflow-macos-arm64
+# - macos-13          (Intel)         -> dist/agent-workflow-macos-x86_64
+# - ubuntu-latest     (x86_64)        -> dist/agent-workflow-linux-x86_64
+# - ubuntu-24.04-arm  (arm64)         -> dist/agent-workflow-linux-arm64
 #
 # Cutting a release:
 #   git tag v0.1.0 && git push origin v0.1.0
@@ -27,7 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-13]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5

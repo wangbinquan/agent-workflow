@@ -1,0 +1,46 @@
+# Auto-generated release notes config — consumed by GitHub when the Release API
+# is called with `generate_release_notes: true` (see .github/workflows/release.yml).
+#
+# Grouping is done by PR label, not commit prefix. To get a PR into a section,
+# add the matching label before merging. The fallback `*` bucket catches
+# everything that isn't labeled.
+#
+# Docs: https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes#configuration-options
+
+changelog:
+  exclude:
+    labels:
+      - duplicate
+      - invalid
+      - wontfix
+      - question
+      - ignore-for-release
+  categories:
+    - title: 🚀 Features
+      labels:
+        - feat
+        - feature
+        - enhancement
+    - title: 🐛 Bug Fixes
+      labels:
+        - fix
+        - bug
+    - title: 📝 Documentation
+      labels:
+        - docs
+        - documentation
+    - title: 🔧 Maintenance
+      labels:
+        - chore
+        - refactor
+        - ci
+        - build
+        - deps
+        - dependencies
+    - title: 🧪 Tests
+      labels:
+        - test
+        - tests
+    - title: Other Changes
+      labels:
+        - '*'
