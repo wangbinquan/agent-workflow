@@ -9,6 +9,7 @@ import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { agents, workflows } from '@/db/schema'
 import { ConflictError, NotFoundError } from '@/util/errors'
+import { findAgentsDependingOn, validateDependsOn } from './agentDeps'
 
 type AgentRow = typeof agents.$inferSelect
 
@@ -28,6 +29,11 @@ export async function createAgent(db: DbClient, input: CreateAgent): Promise<Age
   if (existing !== null) {
     throw new ConflictError('agent-name-in-use', `agent '${input.name}' already exists`)
   }
+
+  // RFC-022 save-time guard: not-found / self-ref / cycle all throw a 400
+  // DomainError with the corresponding code. Runs *before* the insert so
+  // partially-validated rows never land in the DB.
+  await validateDependsOn(db, input.name, input.dependsOn)
 
   const id = ulid()
   const now = Date.now()
@@ -50,6 +56,7 @@ export async function createAgent(db: DbClient, input: CreateAgent): Promise<Age
     steps: input.steps ?? null,
     maxSteps: input.maxSteps ?? null,
     skills: JSON.stringify(input.skills),
+    dependsOn: JSON.stringify(dedupePreservingOrder(input.dependsOn)),
     frontmatterExtra: JSON.stringify(fmExtra),
     bodyMd: input.bodyMd,
     createdAt: now,
@@ -67,6 +74,12 @@ export async function updateAgent(db: DbClient, name: string, patch: UpdateAgent
     throw new NotFoundError('agent-not-found', `agent '${name}' not found`)
   }
 
+  // RFC-022 save-time guard — only when the caller actually patched dependsOn.
+  // PATCH that doesn't touch the field keeps the existing closure validity.
+  if (patch.dependsOn !== undefined) {
+    await validateDependsOn(db, name, patch.dependsOn)
+  }
+
   const set: Partial<typeof agents.$inferInsert> = { updatedAt: Date.now() }
   if (patch.description !== undefined) set.description = patch.description
   if (patch.outputs !== undefined) set.outputs = JSON.stringify(patch.outputs)
@@ -80,6 +93,8 @@ export async function updateAgent(db: DbClient, name: string, patch: UpdateAgent
   if (patch.steps !== undefined) set.steps = patch.steps
   if (patch.maxSteps !== undefined) set.maxSteps = patch.maxSteps
   if (patch.skills !== undefined) set.skills = JSON.stringify(patch.skills)
+  if (patch.dependsOn !== undefined)
+    set.dependsOn = JSON.stringify(dedupePreservingOrder(patch.dependsOn))
   // RFC-005: merge outputKinds into frontmatter_extra alongside the explicit
   // patch (if any). Tests that PATCH only outputKinds preserve the rest of
   // frontmatter_extra; tests that PATCH only frontmatterExtra drop outputKinds
@@ -122,6 +137,18 @@ export async function deleteAgent(db: DbClient, name: string): Promise<void> {
       workflows: refs,
     })
   }
+  // RFC-022 reverse-dep guard: refuse to delete an agent any other agent's
+  // dependsOn closure mentions. Forces the caller to deref upstream first so
+  // runtime never spawns with a dangling reference (which would surface as
+  // a node failure with `agent-dependency-not-found`).
+  const dependents = await findAgentsDependingOn(db, name)
+  if (dependents.length > 0) {
+    throw new ConflictError(
+      'agent-dependency-still-referenced',
+      `agent '${name}' is referenced by other agents' dependsOn`,
+      { referencedBy: dependents },
+    )
+  }
   await db.delete(agents).where(eq(agents.name, name))
 }
 
@@ -142,6 +169,17 @@ export async function renameAgent(
       'agent-in-use',
       `agent '${oldName}' is referenced by workflows; cannot rename`,
       { workflows: refs },
+    )
+  }
+
+  // RFC-022 reverse-dep guard (mirror of deleteAgent). Don't silently rename
+  // out from under other agents' dependsOn — the caller must deref first.
+  const dependents = await findAgentsDependingOn(db, oldName)
+  if (dependents.length > 0) {
+    throw new ConflictError(
+      'agent-dependency-still-referenced',
+      `agent '${oldName}' is referenced by other agents' dependsOn; cannot rename`,
+      { referencedBy: dependents },
     )
   }
 
@@ -187,6 +225,39 @@ async function findWorkflowsUsingAgent(
   return out
 }
 
+/**
+ * RFC-022: de-dup the dependsOn list while preserving the author's listed
+ * order. Callers should still rely on zod's max(64) for hard caps; this just
+ * stops accidental duplicates from bloating the JSON column.
+ */
+function dedupePreservingOrder(names: readonly string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const n of names) {
+    if (seen.has(n)) continue
+    seen.add(n)
+    out.push(n)
+  }
+  return out
+}
+
+/**
+ * RFC-022: tolerate legacy rows whose depends_on column is missing or holds a
+ * non-array JSON value (e.g. from manual SQL edits). Parse failure or
+ * non-array → []. Filter to strings so downstream code never panics on `null`
+ * entries.
+ */
+function parseDependsOnColumn(value: string | null | undefined): string[] {
+  if (value === null || value === undefined || value === '') return []
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((x): x is string => typeof x === 'string')
+  } catch {
+    return []
+  }
+}
+
 function rowToAgent(row: AgentRow): Agent {
   const fmExtra = JSON.parse(row.frontmatterExtra) as Record<string, unknown>
   // RFC-005: lift outputKinds back out of frontmatter_extra into a top-level
@@ -217,6 +288,7 @@ function rowToAgent(row: AgentRow): Agent {
     syncOutputsOnIterate: row.syncOutputsOnIterate,
     permission: JSON.parse(row.permission) as Record<string, unknown>,
     skills: JSON.parse(row.skills) as string[],
+    dependsOn: parseDependsOnColumn(row.dependsOn),
     frontmatterExtra: exposedFm,
     bodyMd: row.bodyMd,
     schemaVersion: row.schemaVersion,

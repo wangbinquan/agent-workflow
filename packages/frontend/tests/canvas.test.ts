@@ -21,6 +21,7 @@ const CODER: Agent = {
   syncOutputsOnIterate: true,
   permission: {},
   skills: [],
+  dependsOn: [],
   frontmatterExtra: {},
   bodyMd: '',
   schemaVersion: 1,

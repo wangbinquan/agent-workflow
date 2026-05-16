@@ -120,6 +120,7 @@ async function buildHarness(): Promise<Harness> {
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],
+    dependsOn: [],
     frontmatterExtra: {},
     bodyMd: '',
   })

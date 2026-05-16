@@ -59,6 +59,7 @@ async function setup() {
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],
+    dependsOn: [],
     frontmatterExtra: {},
     bodyMd: '',
   })

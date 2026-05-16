@@ -23,6 +23,7 @@ const AGENT_A: Agent = {
   syncOutputsOnIterate: true,
   permission: {},
   skills: [],
+  dependsOn: [],
   frontmatterExtra: {},
   bodyMd: '',
   schemaVersion: 1,

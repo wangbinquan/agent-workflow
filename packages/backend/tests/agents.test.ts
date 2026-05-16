@@ -52,6 +52,7 @@ function samplePayload(name: string): Record<string, unknown> {
     model: 'anthropic/claude-opus-4-7',
     permission: { edit: 'deny' },
     skills: ['s1'],
+    dependsOn: [],
     bodyMd: '# hello',
   }
 }
@@ -77,6 +78,7 @@ describe('agent service', () => {
       model: 'anthropic/claude-opus-4-7',
       permission: { edit: 'deny', bash: 'deny' },
       skills: ['go-conventions'],
+      dependsOn: [],
       frontmatterExtra: { custom: 'value' },
       bodyMd: '# System prompt\nDo the thing.',
     })
@@ -101,6 +103,7 @@ describe('agent service', () => {
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
+      dependsOn: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -113,6 +116,7 @@ describe('agent service', () => {
         syncOutputsOnIterate: true,
         permission: {},
         skills: [],
+        dependsOn: [],
         frontmatterExtra: {},
         bodyMd: '',
       }),
@@ -128,6 +132,7 @@ describe('agent service', () => {
       syncOutputsOnIterate: true,
       permission: { edit: 'allow' },
       skills: ['s1'],
+      dependsOn: [],
       frontmatterExtra: {},
       bodyMd: 'body',
     })
@@ -155,6 +160,7 @@ describe('agent service', () => {
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
+      dependsOn: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -172,6 +178,7 @@ describe('agent service', () => {
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
+      dependsOn: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -198,6 +205,7 @@ describe('agent service', () => {
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
+      dependsOn: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -209,6 +217,7 @@ describe('agent service', () => {
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
+      dependsOn: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -228,6 +237,7 @@ describe('agent service', () => {
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
+      dependsOn: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -239,6 +249,86 @@ describe('agent service', () => {
       updatedAt: Date.now(),
     })
     await expect(renameAgent(db, 'a', { newName: 'b' })).rejects.toBeInstanceOf(ConflictError)
+  })
+
+  // RFC-022 T1: `dependsOn` is a JSON string[] column with default `[]`; CRUD
+  // must round-trip the value and tolerate legacy rows that pre-date the
+  // migration (depends_on absent or malformed → []). Red here means the
+  // column wiring drifted — agent.skills round-trip already covers the JSON
+  // path; this case watches the new column specifically.
+  test('RFC-022 dependsOn round-trips and defaults to []', async () => {
+    // Seed the two referenced agents first so the save-time guard accepts
+    // the orchestrator's dependsOn closure (RFC-022 §2.1 #5).
+    const leafSeed = {
+      description: '',
+      outputs: [] as string[],
+      readonly: false,
+      syncOutputsOnIterate: true,
+      permission: {},
+      skills: [] as string[],
+      dependsOn: [] as string[],
+      frontmatterExtra: {},
+      bodyMd: '',
+    }
+    await createAgent(db, { name: 'code-auditor', ...leafSeed })
+    await createAgent(db, { name: 'unit-test-runner', ...leafSeed })
+
+    const a = await createAgent(db, {
+      name: 'orchestrator',
+      description: '',
+      outputs: [],
+      readonly: false,
+      syncOutputsOnIterate: true,
+      permission: {},
+      skills: [],
+      dependsOn: ['code-auditor', 'unit-test-runner'],
+      frontmatterExtra: {},
+      bodyMd: '',
+    })
+    expect(a.dependsOn).toEqual(['code-auditor', 'unit-test-runner'])
+
+    const b = await createAgent(db, {
+      name: 'lonely',
+      description: '',
+      outputs: [],
+      readonly: false,
+      syncOutputsOnIterate: true,
+      permission: {},
+      skills: [],
+      dependsOn: [],
+      frontmatterExtra: {},
+      bodyMd: '',
+    })
+    expect(b.dependsOn).toEqual([])
+
+    // Dupes deduped while preserving order. Seed referenced leaves first.
+    await createAgent(db, { name: 'a', ...leafSeed })
+    await createAgent(db, { name: 'b', ...leafSeed })
+    await createAgent(db, { name: 'c', ...leafSeed })
+    const c = await createAgent(db, {
+      name: 'dupes',
+      description: '',
+      outputs: [],
+      readonly: false,
+      syncOutputsOnIterate: true,
+      permission: {},
+      skills: [],
+      dependsOn: ['a', 'b', 'a', 'c', 'b'],
+      frontmatterExtra: {},
+      bodyMd: '',
+    })
+    expect(c.dependsOn).toEqual(['a', 'b', 'c'])
+
+    // Patch via updateAgent.
+    const updated = await updateAgent(db, 'orchestrator', { dependsOn: ['code-auditor'] })
+    expect(updated.dependsOn).toEqual(['code-auditor'])
+
+    // Legacy row whose depends_on JSON is malformed → exposed as [] (defensive
+    // parser). Simulate by raw UPDATE.
+    const { sql } = await import('drizzle-orm')
+    await db.run(sql`UPDATE agents SET depends_on = '{not-an-array}' WHERE name = 'orchestrator'`)
+    const reread = await getAgent(db, 'orchestrator')
+    expect(reread?.dependsOn).toEqual([])
   })
 })
 

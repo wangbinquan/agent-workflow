@@ -19,6 +19,7 @@ import { and, asc, desc, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { agents, nodeRunOutputs, nodeRuns, skills, tasks } from '@/db/schema'
+import { resolveDependsClosure } from '@/services/agentDeps'
 import { evaluateExitCondition, parseExitCondition } from '@/services/exitCondition'
 import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
 import { runNode, type ResolvedSkill, type RunResult } from '@/services/runner'
@@ -392,7 +393,15 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     iteration,
     log,
   )
-  const resolvedSkills = await resolveSkills(db, opts.appHome, agent.skills)
+  // RFC-022: expand the agent.dependsOn closure before resolving skills so
+  // closure-member skills get unioned into the same OPENCODE_CONFIG_DIR
+  // staging dir. A cycle / missing-dep here is fatal — the agent.ts save
+  // guard normally prevents it; hitting one at runtime implies an external
+  // SQL edit or a race against another writer. Fail loudly instead of
+  // silently spawning with a broken closure.
+  const injection = await prepareNodeRunInjection(db, opts.appHome, agent, log)
+  if (injection.kind === 'failed') return injection
+  const { dependents, resolvedSkills } = injection
   const promptTemplate = pickString(node, 'promptTemplate') ?? undefined
   const nodeTimeoutMs = pickNumber(node, 'timeoutMs') ?? opts.defaultPerNodeTimeoutMs
   const maxRetries = pickNumber(node, 'retries') ?? 0
@@ -486,6 +495,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
           ...(reviewContext !== undefined ? { reviewContext } : {}),
           skills: resolvedSkills,
+          dependents,
           appHome: opts.appHome,
           ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
           db,
@@ -820,7 +830,11 @@ async function runFanOutNode(
     iteration,
     log,
   )
-  const resolvedSkills = await resolveSkills(db, opts.appHome, agent.skills)
+  // RFC-022: same closure expansion as the single-agent path — every shard
+  // subprocess gets the full closure + skills union (design.md §4.2 #2).
+  const injection = await prepareNodeRunInjection(db, opts.appHome, agent, log)
+  if (injection.kind === 'failed') return injection
+  const { dependents, resolvedSkills } = injection
   const promptTemplate = pickString(node, 'promptTemplate') ?? undefined
   const nodeTimeoutMs = pickNumber(node, 'timeoutMs') ?? opts.defaultPerNodeTimeoutMs
   // RFC-005 review-driven re-run context — same plumbing as the single-agent
@@ -877,6 +891,7 @@ async function runFanOutNode(
             ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
             ...(reviewContext !== undefined ? { reviewContext } : {}),
             skills: resolvedSkills,
+            dependents,
             appHome: opts.appHome,
             ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
             db,
@@ -1028,6 +1043,17 @@ async function cancelTaskRow(db: DbClient, taskId: string, failedNodeId?: string
   await emitStatus(db, taskId)
 }
 
+function parseStringArray(value: string | null | undefined): string[] {
+  if (value === null || value === undefined || value === '') return []
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((x): x is string => typeof x === 'string')
+  } catch {
+    return []
+  }
+}
+
 async function loadAgent(db: DbClient, name: string): Promise<Agent | null> {
   const rows = await db.select().from(agents).where(eq(agents.name, name)).limit(1)
   const row = rows[0]
@@ -1041,6 +1067,9 @@ async function loadAgent(db: DbClient, name: string): Promise<Agent | null> {
     syncOutputsOnIterate: row.syncOutputsOnIterate,
     permission: JSON.parse(row.permission) as Record<string, unknown>,
     skills: JSON.parse(row.skills) as string[],
+    // RFC-022: tolerate legacy rows whose depends_on column is missing /
+    // malformed (manual SQL edits); parse failure or non-array → [].
+    dependsOn: parseStringArray(row.dependsOn),
     frontmatterExtra: JSON.parse(row.frontmatterExtra) as Record<string, unknown>,
     bodyMd: row.bodyMd,
     schemaVersion: row.schemaVersion,
@@ -1053,6 +1082,71 @@ async function loadAgent(db: DbClient, name: string): Promise<Agent | null> {
   if (row.steps !== null) out.steps = row.steps
   if (row.maxSteps !== null) out.maxSteps = row.maxSteps
   return out
+}
+
+/**
+ * RFC-022: expand the agent.dependsOn closure and resolve the skills union
+ * for one node-run spawn. Used by both the single-agent path and the
+ * fan-out child path so they stay in lockstep.
+ *
+ * Returns either `{ kind: 'ok', dependents, resolvedSkills }` for the
+ * scheduler to feed straight into `runNode({ ..., dependents, skills })`, or
+ * the same `NodeStepResult` 'failed' shape every other scheduler step uses
+ * so the caller's normal failure path handles cycles / missing-dep names.
+ *
+ * Skills union de-dup is by name — same skill referenced from multiple
+ * closure agents only stages once under OPENCODE_CONFIG_DIR/skills/.
+ */
+export async function prepareNodeRunInjection(
+  db: DbClient,
+  appHome: string,
+  agent: Agent,
+  log: Logger,
+): Promise<
+  | { kind: 'ok'; dependents: Agent[]; resolvedSkills: ResolvedSkill[] }
+  | { kind: 'failed'; summary: string; message: string }
+> {
+  const closure = await resolveDependsClosure(db, agent, { allowMissing: false }).catch(
+    (err: Error & { code?: string; details?: unknown }) => {
+      // resolveDependsClosure throws DomainError for missing deps. Surface
+      // the code via NodeStepResult so the caller's normal failure path
+      // handles it — no separate exception path needed.
+      log.warn('dependsOn resolve failed', {
+        agent: agent.name,
+        code: err.code,
+        message: err.message,
+      })
+      return { ok: false as const, cyclePath: [] as string[], error: err }
+    },
+  )
+  if ('error' in closure) {
+    return {
+      kind: 'failed',
+      summary: `agent '${agent.name}' depends on missing agent`,
+      message: closure.error.code ?? 'agent-dependency-not-found',
+    }
+  }
+  if (closure.ok === false) {
+    log.warn('dependsOn cycle detected', {
+      agent: agent.name,
+      cyclePath: closure.cyclePath,
+    })
+    return {
+      kind: 'failed',
+      summary: `agent '${agent.name}' dependsOn forms a cycle`,
+      message: `agent-dependency-cycle: ${closure.cyclePath.join(' → ')}`,
+    }
+  }
+  const dependents = closure.agents.slice(1) // [0] is the root
+  const skillsUnion: string[] = []
+  const seenSkills = new Set<string>()
+  for (const skillName of [...agent.skills, ...dependents.flatMap((a) => a.skills)]) {
+    if (seenSkills.has(skillName)) continue
+    seenSkills.add(skillName)
+    skillsUnion.push(skillName)
+  }
+  const resolvedSkills = await resolveSkills(db, appHome, skillsUnion)
+  return { kind: 'ok', dependents, resolvedSkills }
 }
 
 async function resolveSkills(

@@ -38,6 +38,7 @@ describe('agent.syncOutputsOnIterate (RFC-014 T0)', () => {
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
+      dependsOn: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -55,6 +56,7 @@ describe('agent.syncOutputsOnIterate (RFC-014 T0)', () => {
       syncOutputsOnIterate: false,
       permission: {},
       skills: [],
+      dependsOn: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -72,6 +74,7 @@ describe('agent.syncOutputsOnIterate (RFC-014 T0)', () => {
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
+      dependsOn: [],
       frontmatterExtra: {},
       bodyMd: 'body',
     })

@@ -38,7 +38,15 @@ const KNOWN_KEYS = new Set<string>([
   'maxSteps',
   'permission',
   'tools',
+  // RFC-022: list of agent names the imported agent depends on at runtime.
+  // Must be a string[] of valid agent names; bad shapes demote to
+  // frontmatterExtra with a warning (same pattern as `permission` / `tools`).
+  'dependsOn',
 ])
+
+/** RFC-022: matches AGENT_NAME_RE in schemas/agent.ts so import-time and
+ *  save-time validation agree on legal names. */
+const AGENT_NAME_RE_LOCAL = /^[a-z0-9][a-z0-9_-]*$/
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -216,6 +224,42 @@ export function parseAgentMarkdown(
 
   if (toolsConsumed || explicitPermissionApplied) {
     partial.permission = derivedPermission
+  }
+
+  // RFC-022: dependsOn — string[] of agent names. Demote bad shapes to
+  // frontmatterExtra so the UI can still surface the raw value to the
+  // author for manual fixing. We only enforce shape here (array of valid
+  // name strings); existence + cycle checks belong to the save-time guard
+  // in services/agentDeps.ts, which sees the full DB.
+  if (data.dependsOn !== undefined) {
+    if (Array.isArray(data.dependsOn)) {
+      const cleaned: string[] = []
+      const rejected: unknown[] = []
+      for (const entry of data.dependsOn) {
+        if (typeof entry === 'string' && AGENT_NAME_RE_LOCAL.test(entry)) {
+          cleaned.push(entry)
+        } else {
+          rejected.push(entry)
+        }
+      }
+      if (rejected.length > 0) {
+        extras.dependsOn = data.dependsOn
+        warnings.push('dependsOn entries must match [a-z0-9][a-z0-9_-]*; kept in frontmatterExtra')
+      } else {
+        // De-dupe while preserving author's listed order.
+        const seen = new Set<string>()
+        const ordered: string[] = []
+        for (const n of cleaned) {
+          if (seen.has(n)) continue
+          seen.add(n)
+          ordered.push(n)
+        }
+        partial.dependsOn = ordered
+      }
+    } else {
+      extras.dependsOn = data.dependsOn
+      warnings.push('dependsOn must be an array of agent names; kept in frontmatterExtra')
+    }
   }
 
   // name: frontmatter.name > filename stem > unset

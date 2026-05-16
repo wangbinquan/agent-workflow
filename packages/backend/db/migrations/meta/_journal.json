@@ -47,6 +47,13 @@
     {
       "idx": 6,
       "version": "6",
+      "when": 1778900000000,
+      "tag": "0006_rfc022_agent_depends_on",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
       "when": 1778948098434,
       "tag": "0007_rfc023_clarify_sessions",
       "breakpoints": true

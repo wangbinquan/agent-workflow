@@ -74,6 +74,18 @@ export interface RunNodeOptions {
   reviewContext?: ReviewPromptContext
   /** Skills used by this agent. */
   skills: ResolvedSkill[]
+  /**
+   * RFC-022: agents resolved from the primary agent's dependsOn closure (BFS
+   * order, root excluded). Each one becomes an additional entry under
+   * `agent` in OPENCODE_CONFIG_CONTENT so the primary agent can invoke them
+   * via opencode's task / subagent tool. Default `[]` keeps legacy callers
+   * (the runner tests pre-RFC-022) at single-agent injection behavior.
+   *
+   * Dependents do NOT receive the per-node `overrides` block — overrides
+   * (model / variant / temperature) only ever apply to the node-selected
+   * primary agent.
+   */
+  dependents?: Agent[]
   /** Default true. */
   dangerouslySkipPermissions?: boolean
   /** Wall-clock timeout in ms. Undefined = no limit. */
@@ -120,8 +132,20 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // 1. Prepare per-run config dir and inject skills.
   prepareSkills(runDir, opts.skills, log)
 
-  // 2. Build OPENCODE_CONFIG_CONTENT inline agent JSON.
-  const inlineConfig = buildInlineConfig(opts.agent, opts.overrides)
+  // 2. Build OPENCODE_CONFIG_CONTENT inline agent JSON. RFC-022: primary
+  // agent plus every closure dependent gets a `agent.<name>` entry; opencode
+  // merges this after all directory scans so platform definitions win.
+  const inlineConfig = buildInlineConfig(opts.agent, opts.overrides, opts.dependents ?? [])
+  // RFC-022 §design B6: warn (don't fail) when the serialized config crosses
+  // the soft cap. Real OS env-var ceilings are well above this; the warning
+  // helps catch authors stuffing massive bodies into every dependent agent.
+  const serializedInline = JSON.stringify(inlineConfig)
+  if (serializedInline.length > 32 * 1024) {
+    log.warn('inline-config-large', {
+      bytes: serializedInline.length,
+      agents: Object.keys(inlineConfig.agent),
+    })
+  }
 
   // 3. Render the user prompt.
   const prompt = renderUserPrompt({
@@ -357,11 +381,16 @@ function prepareSkills(runDir: string, skills: ResolvedSkill[], log: Logger): vo
   }
 }
 
-function buildInlineConfig(
+/**
+ * RFC-022: build the inline-agent JSON for one agent. Pulled out so the
+ * primary agent and every closure dependent share one definition formula;
+ * the only difference is that dependents pass `overrides = {}` so per-node
+ * model/variant/temperature tweaks only apply to the selected primary.
+ */
+export function buildInlineAgentEntry(
   agent: Agent,
-  overrides?: AgentOverrides,
-): { agent: Record<string, Record<string, unknown>> } {
-  const ov = overrides ?? {}
+  overrides: AgentOverrides = {},
+): Record<string, unknown> {
   const inlineAgent: Record<string, unknown> = {
     prompt: agent.bodyMd,
     description: agent.description,
@@ -371,15 +400,30 @@ function buildInlineConfig(
     // for observability when an operator dumps `opencode debug agent`.
     options: { outputs: agent.outputs, readonly: agent.readonly },
   }
-  const model = ov.model ?? agent.model
+  const model = overrides.model ?? agent.model
   if (model !== undefined) inlineAgent.model = model
-  const variant = ov.variant ?? agent.variant
+  const variant = overrides.variant ?? agent.variant
   if (variant !== undefined) inlineAgent.variant = variant
-  const temperature = ov.temperature ?? agent.temperature
+  const temperature = overrides.temperature ?? agent.temperature
   if (temperature !== undefined) inlineAgent.temperature = temperature
   if (agent.steps !== undefined) inlineAgent.steps = agent.steps
+  return inlineAgent
+}
 
-  return { agent: { [agent.name]: inlineAgent } }
+export function buildInlineConfig(
+  agent: Agent,
+  overrides: AgentOverrides | undefined,
+  dependents: readonly Agent[],
+): { agent: Record<string, Record<string, unknown>> } {
+  const map: Record<string, Record<string, unknown>> = {
+    [agent.name]: buildInlineAgentEntry(agent, overrides),
+  }
+  for (const dep of dependents) {
+    if (dep.name === agent.name) continue // root would shadow itself; defensive
+    if (map[dep.name] !== undefined) continue // closure already deduped, but guard anyway
+    map[dep.name] = buildInlineAgentEntry(dep)
+  }
+  return { agent: map }
 }
 
 function buildCommand(opts: RunNodeOptions, prompt: string): string[] {

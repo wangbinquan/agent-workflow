@@ -311,6 +311,39 @@ export function validateWorkflowDef(
           })
         }
       }
+      // RFC-022: also scan the agent.dependsOn closure for missing agents /
+      // missing skills. BFS over agentByName since the validator already
+      // owns the full agent set (no DB call). `seen` set guards against
+      // cycle-driven infinite loops — even though agent.ts save-time guard
+      // refuses cycles, the validator is also called from `workflow-yaml`
+      // import and from CI fixtures that may have stale DBs.
+      const seenInClosure = new Set<string>([agent.name])
+      const closureQueue = [...agent.dependsOn]
+      while (closureQueue.length > 0) {
+        const depName = closureQueue.shift()
+        if (depName === undefined) break
+        if (seenInClosure.has(depName)) continue
+        seenInClosure.add(depName)
+        const dep = agentByName.get(depName)
+        if (dep === undefined) {
+          issues.push({
+            code: 'agent-dependency-not-found',
+            message: `agent '${agent.name}' (used by node '${node.id}') depends on unknown agent '${depName}'`,
+            pointer: node.id,
+          })
+          continue
+        }
+        for (const s of dep.skills) {
+          if (!skillNames.has(s)) {
+            issues.push({
+              code: 'skill-not-found',
+              message: `dependent agent '${dep.name}' (closure of '${agent.name}', used by node '${node.id}') references unknown skill '${s}'`,
+              pointer: node.id,
+            })
+          }
+        }
+        for (const next of dep.dependsOn) closureQueue.push(next)
+      }
       if (node.kind === 'agent-multi') {
         const sp = (node as Record<string, unknown>).sourcePort
         if (sp === undefined || sp === null || typeof sp !== 'object') {

@@ -186,4 +186,33 @@ describe('parseAgentMarkdown', () => {
     expect(r.partial.description).toBe('x')
     expect(r.partial.bodyMd).toBe('body')
   })
+
+  // RFC-022: dependsOn parser cases.
+  test('dependsOn (array of valid names) round-trips and dedupes order', () => {
+    const src =
+      '---\ndependsOn:\n  - code-auditor\n  - unit_test_runner\n  - code-auditor\n---\nbody'
+    const r = parseAgentMarkdown(src)
+    expect(r.partial.dependsOn).toEqual(['code-auditor', 'unit_test_runner'])
+    expect(r.warnings).toEqual([])
+    expect(r.unrecognizedKeys).toEqual([])
+  })
+
+  test('dependsOn with an invalid name entry demotes the whole field to frontmatterExtra with a warning', () => {
+    // Mixed valid + invalid: per design.md §4.5 we don't silently swallow the
+    // invalid entry; the whole field goes to extras so the import dialog can
+    // surface the raw value to the author for manual fixing.
+    const src = '---\ndependsOn:\n  - code-auditor\n  - "Bad Name!"\n---\n'
+    const r = parseAgentMarkdown(src)
+    expect(r.partial.dependsOn).toBeUndefined()
+    expect(r.partial.frontmatterExtra?.dependsOn).toEqual(['code-auditor', 'Bad Name!'])
+    expect(r.warnings.some((w) => w.includes('dependsOn entries must match'))).toBe(true)
+  })
+
+  test('dependsOn with non-array value demotes to frontmatterExtra with a warning', () => {
+    const src = '---\ndependsOn: code-auditor\n---\n'
+    const r = parseAgentMarkdown(src)
+    expect(r.partial.dependsOn).toBeUndefined()
+    expect(r.partial.frontmatterExtra?.dependsOn).toBe('code-auditor')
+    expect(r.warnings.some((w) => w.startsWith('dependsOn must be an array'))).toBe(true)
+  })
 })

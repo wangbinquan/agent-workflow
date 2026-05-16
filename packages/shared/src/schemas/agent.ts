@@ -55,6 +55,18 @@ export const AgentSchema = z.object({
   steps: z.number().int().positive().optional(),
   maxSteps: z.number().int().positive().optional(),
   skills: z.array(z.string()),
+  /**
+   * RFC-022: agent names this agent transitively requires at runtime. The
+   * framework runs BFS over depends_on to compute a closure, then injects
+   * every member as an entry under `agent` in OPENCODE_CONFIG_CONTENT and
+   * unions every member's skills into OPENCODE_CONFIG_DIR/skills/. Default
+   * `[]` keeps legacy single-agent injection behavior.
+   *
+   * Save-time validation (services/agentDeps.ts): names must exist, no
+   * self-reference, no cycle. Workflow validator extends the existing
+   * `agent-not-found` / `skill-not-found` checks to the closure.
+   */
+  dependsOn: z.array(AgentNameSchema),
   frontmatterExtra: z.record(z.string(), z.unknown()),
   bodyMd: z.string(),
   schemaVersion: z.number().int(),
@@ -79,6 +91,8 @@ export const CreateAgentSchema = z.object({
   steps: z.number().int().positive().optional(),
   maxSteps: z.number().int().positive().optional(),
   skills: z.array(z.string()).default([]),
+  /** RFC-022 — see AgentSchema.dependsOn. */
+  dependsOn: z.array(AgentNameSchema).max(64).default([]),
   frontmatterExtra: z.record(z.string(), z.unknown()).default({}),
   bodyMd: z.string().default(''),
 })

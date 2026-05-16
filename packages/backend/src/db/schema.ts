@@ -31,6 +31,12 @@ export const agents = sqliteTable('agents', {
   steps: integer('steps'),
   maxSteps: integer('max_steps'),
   skills: text('skills').notNull().default('[]'), // JSON string[]
+  // RFC-022: agent name list (JSON string[]) of agents this one transitively
+  // requires. Closure (BFS) gets injected into the same opencode subprocess
+  // via OPENCODE_CONFIG_CONTENT; every closure member's skills are unioned
+  // and staged under OPENCODE_CONFIG_DIR/skills/. Default [] keeps legacy
+  // agents at single-agent injection behavior.
+  dependsOn: text('depends_on').notNull().default('[]'),
   frontmatterExtra: text('frontmatter_extra').notNull().default('{}'), // JSON for advanced fields
   bodyMd: text('body_md').notNull().default(''), // system prompt; may be empty
   schemaVersion: integer('schema_version').notNull().default(1),

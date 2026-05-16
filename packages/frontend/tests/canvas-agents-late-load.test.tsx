@@ -49,6 +49,7 @@ const CODER: Agent = {
   outputs: ['software_design', 'test_design'],
   readonly: false,
   skills: [],
+  dependsOn: [],
   permission: {},
   bodyMd: '',
   frontmatterExtra: {},

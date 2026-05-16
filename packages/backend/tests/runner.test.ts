@@ -38,6 +38,7 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],
+    dependsOn: [],
     frontmatterExtra: {},
     bodyMd: 'You are a test agent.',
     schemaVersion: 1,

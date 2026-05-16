@@ -8,7 +8,12 @@ import type { Agent, Skill, WorkflowDefinition } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 import { extractTemplateVars, validateWorkflowDef } from '../src/services/workflow.validator'
 
-function agent(name: string, outputs: string[] = [], skills: string[] = []): Agent {
+function agent(
+  name: string,
+  outputs: string[] = [],
+  skills: string[] = [],
+  dependsOn: string[] = [],
+): Agent {
   return {
     id: `agent-${name}`,
     name,
@@ -18,6 +23,7 @@ function agent(name: string, outputs: string[] = [], skills: string[] = []): Age
     syncOutputsOnIterate: true,
     permission: {},
     skills,
+    dependsOn,
     frontmatterExtra: {},
     bodyMd: '',
     schemaVersion: 1,

@@ -118,6 +118,7 @@ async function buildHarness(opts: HarnessOpts): Promise<Harness> {
     syncOutputsOnIterate: opts.agentSyncOutputsOnIterate,
     permission: {},
     skills: [],
+    dependsOn: [],
     frontmatterExtra: {},
     bodyMd: '',
   })

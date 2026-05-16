@@ -406,3 +406,61 @@ test('RFC-016: wrapper-git renders as a group container with inner node inside i
   expect(containment.found).toBe(true)
   expect(containment.inside).toBe(true)
 })
+
+// RFC-022 e2e: dependsOn closure renders as a Dependency tree on the agent
+// detail page. We seed three agents A → B → C via REST, open the form for A,
+// and assert that the tree renders all three rows (A as root, B + C nested).
+// The closure-preview endpoint is also pinged directly to lock its wire
+// shape from the browser's vantage point.
+test('RFC-022: agent form Dependency tree (preview) renders the full closure', async ({
+  page,
+}) => {
+  const headers = {
+    Authorization: `Bearer ${daemon.token}`,
+    'Content-Type': 'application/json',
+  }
+  // Seed leaves first so the save-time guard accepts each row.
+  const seed = async (name: string, dependsOn: string[]) => {
+    const res = await fetch(`${daemon.baseUrl}/api/agents`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name,
+        description: `rfc-022 e2e ${name}`,
+        dependsOn,
+        outputs: [],
+        readonly: false,
+      }),
+    })
+    expectOk(res, `seed agent ${name}`)
+  }
+  await seed('rfc022-c', [])
+  await seed('rfc022-b', ['rfc022-c'])
+  await seed('rfc022-a', ['rfc022-b'])
+
+  await page.addInitScript(
+    ({ baseUrl, token }) => {
+      window.localStorage.setItem('agent-workflow.baseUrl', baseUrl)
+      window.localStorage.setItem('agent-workflow.token', token)
+      window.localStorage.setItem('aw-language', 'en-US')
+    },
+    { baseUrl: daemon.baseUrl, token: daemon.token },
+  )
+  await page.goto(`${daemon.baseUrl}/agents/rfc022-a`)
+
+  // 200ms debounce → wait for the closure preview to populate. The tree
+  // renders a treeitem per closure member (root + dependents recursively).
+  await expect(page.getByRole('treeitem', { name: 'rfc022-b' })).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByRole('treeitem', { name: 'rfc022-c' })).toBeVisible()
+  // Sanity: root row exists too.
+  await expect(page.getByRole('treeitem', { name: 'rfc022-a' })).toBeVisible()
+
+  // Direct API check — the closure GET endpoint returns BFS-ordered agents.
+  const closureRes = await fetch(`${daemon.baseUrl}/api/agents/rfc022-a/closure`, {
+    headers: { Authorization: `Bearer ${daemon.token}` },
+  })
+  expectOk(closureRes, 'closure GET')
+  const body = (await closureRes.json()) as { ok: boolean; agents: Array<{ name: string }> }
+  expect(body.ok).toBe(true)
+  expect(body.agents.map((a) => a.name)).toEqual(['rfc022-a', 'rfc022-b', 'rfc022-c'])
+})

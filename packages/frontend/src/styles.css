@@ -3651,3 +3651,89 @@ mark.comment-anchor[data-active='true'] {
   max-height: none;
   overflow: auto;
 }
+
+/* RFC-022: dependency-closure tree (AgentForm preview + node Stats tab). */
+.dep-tree {
+  font-family: var(--mono-font, ui-monospace, monospace);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  border-radius: 6px;
+  padding: 8px 12px;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.dep-tree__row {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+}
+
+.dep-tree__guide {
+  color: color-mix(in srgb, var(--text) 35%, transparent);
+  user-select: none;
+  white-space: pre;
+}
+
+.dep-tree__label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.dep-tree__name {
+  font-weight: 500;
+}
+
+.dep-tree__link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+}
+
+.dep-tree__link:hover {
+  text-decoration: underline;
+}
+
+.dep-tree__chips {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.dep-tree__chip {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: color-mix(in srgb, var(--text) 70%, transparent);
+}
+
+.dep-tree__seeAbove {
+  font-size: 11px;
+  color: color-mix(in srgb, var(--text) 45%, transparent);
+  font-style: italic;
+}
+
+.dep-tree__cycle {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--danger, #c44) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger, #c44) 25%, transparent);
+  color: var(--text);
+}
+
+.dep-tree__cycle code {
+  font-family: var(--mono-font, ui-monospace, monospace);
+  background: color-mix(in srgb, var(--danger, #c44) 12%, transparent);
+  padding: 1px 4px;
+  border-radius: 3px;
+}

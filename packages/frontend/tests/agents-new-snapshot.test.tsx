@@ -16,6 +16,7 @@ function emptyDraft(): CreateAgent {
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],
+    dependsOn: [],
     frontmatterExtra: {},
     bodyMd: '',
   }

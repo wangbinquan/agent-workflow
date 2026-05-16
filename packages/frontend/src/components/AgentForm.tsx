@@ -3,8 +3,11 @@
 // parent's concern.
 
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from '@tanstack/react-router'
 import type { CreateAgent } from '@agent-workflow/shared'
 import { AGENT_NAME_RE } from '@agent-workflow/shared'
+import { AgentDependsPicker } from './AgentDependsPicker'
+import { DependencyTreePreview } from './agents/DependencyTreePreview'
 import { Field, NumberInput, Switch, TextArea, TextInput } from './Form'
 import { JsonField } from './JsonField'
 import { MarkdownEditor } from './MarkdownEditor'
@@ -27,6 +30,7 @@ const DEFAULT: CreateAgent = {
   syncOutputsOnIterate: true,
   permission: {},
   skills: [],
+  dependsOn: [],
   frontmatterExtra: {},
   bodyMd: '',
 }
@@ -37,6 +41,7 @@ export function emptyAgent(): CreateAgent {
 
 export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   function patch<K extends keyof CreateAgent>(key: K, next: CreateAgent[K]) {
     onChange({ ...value, [key]: next })
   }
@@ -77,6 +82,23 @@ export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
             value={value.skills ?? []}
             onChange={(v) => patch('skills', v)}
             placeholder={t('agentForm.fieldSkillsPlaceholder')}
+          />
+        </Field>
+
+        <Field label={t('agentForm.fieldDependsOn')} hint={t('agentForm.fieldDependsOnHint')}>
+          <AgentDependsPicker
+            value={value.dependsOn ?? []}
+            onChange={(v) => patch('dependsOn', v)}
+            selfName={value.name}
+            placeholder={t('agentForm.fieldDependsOnPlaceholder')}
+          />
+        </Field>
+
+        <Field label={t('agentForm.fieldDependencyTree')}>
+          <DependencyTreePreview
+            name={value.name}
+            dependsOn={value.dependsOn ?? []}
+            onNodeClick={(n) => navigate({ to: '/agents/$name', params: { name: n } })}
           />
         </Field>
 
