@@ -37,7 +37,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-010](./RFC-010-markdown-rendered-diff/proposal.md)          | Markdown 渲染态内联 Diff：替换 review word 模式（参考 markdown-diff，PUA marker + remark 插件，绕开 rehype-raw）    | In Progress |
 | [RFC-011](./RFC-011-node-prompt-history/proposal.md)             | 节点 Prompt 历史可见性：drawer Prompt tab attempts 切换器 + review reject/iterate 改 mint 新行（保留旧 promptText） | In Progress |
 | [RFC-012](./RFC-012-word-diff-table-preservation/proposal.md)    | Word 模式 markdown 表格保留：表格块占位符法原子化，避免 jsdiff 在分隔符 `-` 粒度上对齐打碎渲染（RFC-010 follow-up） | In Progress |
-| [RFC-013](./RFC-013-review-historical-versions/proposal.md)      | 评审列表页历史版本浏览：行可展开列 v1..vN + 历史版只读详情（`?version=<vid>` 隐决策/评论编辑/diff toggle）           | Draft       |
+| [RFC-013](./RFC-013-review-historical-versions/proposal.md)      | 评审列表页历史版本浏览：行可展开列 v1..vN + 历史版只读详情（`?version=<vid>` 隐决策/评论编辑/diff toggle）           | In Progress |
 
 ---
 

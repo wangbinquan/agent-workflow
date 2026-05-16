@@ -63,6 +63,20 @@ export const enUS: Resources = {
     diffGranularityBlock: 'Block',
     diffLeftLabel: 'Prior v{{version}} ({{decision}})',
     diffRightLabel: 'Current v{{version}}',
+    // RFC-013
+    expand: 'Show history',
+    collapse: 'Hide history',
+    historyHeader: 'Version history · {{count}}',
+    sidebarEmptyReadonly: 'This version had no review comments.',
+    historicalBanner:
+      'Read-only · viewing version v{{version}} ({{decision}}) · decisions and comment edits are disabled',
+    backToCurrent: 'Back to current',
+    loadVersionsFailed: 'Failed to load version history.',
+    retry: 'Retry',
+    currentTag: 'current',
+    unknownVersion: 'Unknown version: {{id}}. Returned to current.',
+    downloadMarkdown: 'Download Markdown',
+    downloadMarkdownTitle: 'Download {{filename}}',
   },
   auth: {
     title: 'Connect to daemon',

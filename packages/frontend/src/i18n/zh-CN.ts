@@ -63,6 +63,19 @@ export interface Resources {
     diffGranularityBlock: string
     diffLeftLabel: string
     diffRightLabel: string
+    // RFC-013: historical-version expand + read-only view.
+    expand: string
+    collapse: string
+    historyHeader: string
+    sidebarEmptyReadonly: string
+    historicalBanner: string
+    backToCurrent: string
+    loadVersionsFailed: string
+    retry: string
+    currentTag: string
+    unknownVersion: string
+    downloadMarkdown: string
+    downloadMarkdownTitle: string
   }
   auth: {
     title: string
@@ -642,6 +655,19 @@ export const zhCN: Resources = {
     diffGranularityBlock: '段',
     diffLeftLabel: '上一版 v{{version}}（{{decision}}）',
     diffRightLabel: '当前 v{{version}}',
+    // RFC-013
+    expand: '展开历史版本',
+    collapse: '折叠历史版本',
+    historyHeader: '历史版本 · {{count}}',
+    sidebarEmptyReadonly: '这一版没有评审意见。',
+    historicalBanner: '只读 · 正在查看版本 v{{version}}（{{decision}}）· 决策与评论编辑已禁用',
+    backToCurrent: '回到当前版',
+    loadVersionsFailed: '加载历史版本失败。',
+    retry: '重试',
+    currentTag: '当前',
+    unknownVersion: '未知版本：{{id}}。已跳回当前版。',
+    downloadMarkdown: '下载 Markdown',
+    downloadMarkdownTitle: '下载 {{filename}}',
   },
   auth: {
     title: '连接到守护进程',

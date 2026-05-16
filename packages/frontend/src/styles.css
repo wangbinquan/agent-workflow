@@ -2101,6 +2101,206 @@ code {
   white-space: pre-wrap;
 }
 
+/* RFC-013: list row expand toggle + lazy-loaded version history sub-row.
+   The history row spans the full table width and indents its content so
+   visually it reads as belonging to the parent review row. The visual
+   model: row toggle is a minimal chevron (not a button), the sub-row is
+   a tinted panel with a small header + a list of version lines that
+   carry the same status-chip + creation-time + an inline "open ›" link
+   instead of a heavy button (the parent row already has the primary
+   "open" affordance — the per-version links are secondary). */
+.reviews-row__expand-cell {
+  width: 40px;
+  padding-right: 0 !important;
+}
+
+.reviews-row__expand {
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.reviews-row__expand:hover,
+.reviews-row__expand:focus-visible {
+  color: var(--accent);
+  background: var(--bg);
+  border-color: var(--accent);
+  outline: none;
+}
+
+.reviews-row__expand-icon {
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+/* The sub-row td hosts the whole tinted panel. We zero out the cell's
+   normal padding (the panel adds its own) and use --bg so the panel
+   contrasts subtly against the table body (--panel = #fff). */
+.reviews-row__history > td {
+  background: var(--bg);
+  padding: 0;
+}
+
+.reviews-version-panel {
+  padding: 10px 16px 14px 56px; /* left-pad aligns with the title column */
+}
+
+.reviews-version-panel__header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.reviews-version-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reviews-version-list__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-bottom: 1px dashed var(--border);
+  border-radius: 4px;
+  transition: background 120ms ease;
+}
+
+.reviews-version-list__item:last-child {
+  border-bottom: none;
+}
+
+.reviews-version-list__item:hover {
+  background: var(--panel);
+}
+
+.reviews-version-list__label {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text);
+  min-width: 28px;
+}
+
+.reviews-version-list__current-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  color: var(--accent);
+}
+
+.reviews-version-list__date {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.reviews-version-list__open {
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 120ms ease;
+}
+
+.reviews-version-list__open:hover,
+.reviews-version-list__open:focus-visible {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  outline: none;
+}
+
+.reviews-version-loading,
+.reviews-version-error {
+  padding: 10px 16px 14px 56px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* RFC-013: read-only banner shown on /reviews/$nodeRunId?version=<vid>.
+   Sits between the page header and the layout grid; amber tint signals
+   "this is not the live editable view" without yelling. */
+.readonly-banner {
+  background: var(--amber-bg, #fff4d6);
+  color: var(--amber-fg, #5b3a00);
+  border: 1px solid var(--amber-border, #f0c674);
+  padding: 8px 12px;
+  margin: 8px 0 12px;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.readonly-banner__back {
+  white-space: nowrap;
+}
+
+/* Review detail page header: title block + right-aligned actions
+   (download button today; could host more affordances later). The
+   actions sit at flex-start so a long title doesn't squash them. */
+.review-detail__page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.review-detail__page-header-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.review-detail__page-header-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+}
+
+.review-detail__download {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.review-detail__download-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
 /* ---- Review detail (RFC-005) ---- */
 
 .review-detail__layout {

@@ -265,3 +265,16 @@ export const ReviewPendingCountSchema = z.object({
   count: z.number().int().nonnegative(),
 })
 export type ReviewPendingCount = z.infer<typeof ReviewPendingCountSchema>
+
+// -----------------------------------------------------------------------------
+// RFC-013: historical-version detail endpoint payload.
+//
+// `GET /api/reviews/:nodeRunId/versions/:versionId` returns the doc_version
+// fields + the markdown body + the review_comments captured against that
+// specific version. Used by the read-only historical view in the reviews UI.
+// -----------------------------------------------------------------------------
+export const DocVersionWithBodyAndCommentsSchema = DocVersionSchema.extend({
+  body: z.string(),
+  comments: z.array(ReviewCommentSchema),
+})
+export type DocVersionWithBodyAndComments = z.infer<typeof DocVersionWithBodyAndCommentsSchema>

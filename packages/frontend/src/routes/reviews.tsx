@@ -1,16 +1,22 @@
-// /reviews — RFC-005 PR-D T26.
+// /reviews — RFC-005 PR-D T26 + RFC-013 historical-version expand.
 //
 // Global Reviews inbox. Lists pending review items + has filter chips to
 // switch between pending / all / approved / rejected / iterated views.
 // Grouping is by task (per RFC Q&A D3); within a task, items keep their
 // natural order coming back from the backend (which orders by node id
 // stability + version recency).
+//
+// RFC-013: each row carries an expand toggle that opens a child region
+// listing every doc_version this review has produced (v1..vN, each with
+// its decision chip + "Open" link). Current version's Open goes to the
+// regular detail page; historical versions' Open goes to
+// `/reviews/$nodeRunId?version=<vid>`, the read-only view.
 
 import { useQuery } from '@tanstack/react-query'
 import { Link, createRoute } from '@tanstack/react-router'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { ReviewSummary } from '@agent-workflow/shared'
+import type { DocVersion, ReviewSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Route as RootRoute } from './__root'
 
@@ -23,9 +29,28 @@ export const Route = createRoute({
 const FILTERS = ['pending', 'all', 'approved', 'rejected', 'iterated'] as const
 type Filter = (typeof FILTERS)[number]
 
-function ReviewsListPage() {
+function decisionChipColor(decision: DocVersion['decision']): string {
+  if (decision === 'approved') return 'green'
+  if (decision === 'rejected') return 'red'
+  if (decision === 'iterated') return 'blue'
+  return 'gray' // pending
+}
+
+export function ReviewsListPage() {
   const { t } = useTranslation()
   const [filter, setFilter] = useState<Filter>('pending')
+  // RFC-013: per-row expand toggles. Keyed by nodeRunId. Not persisted to
+  // localStorage — page-session only; users who navigate away expect a
+  // clean slate when they come back.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  const toggleRow = (id: string): void => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
   const list = useQuery<ReviewSummary[]>({
     queryKey: ['reviews', 'list', filter],
     queryFn: ({ signal }) => api.get(`/api/reviews?status=${filter}`, undefined, signal),
@@ -79,6 +104,7 @@ function ReviewsListPage() {
           <table className="data-table">
             <thead>
               <tr>
+                <th aria-label={t('reviews.expand')}></th>
                 <th>{t('reviews.colNode')}</th>
                 <th>{t('reviews.colStatus')}</th>
                 <th>{t('reviews.colVersion')}</th>
@@ -89,52 +115,79 @@ function ReviewsListPage() {
             <tbody>
               {g.items.map((r) => {
                 const hasTitle = r.title !== '' && r.title !== r.reviewNodeId
+                const isOpen = expanded.has(r.nodeRunId)
                 return (
-                  <tr key={r.nodeRunId}>
-                    <td>
-                      {hasTitle ? (
-                        <>
-                          <div className="reviews-row__title">{r.title}</div>
-                          <code className="chip chip--tight reviews-row__nodeid">
-                            {r.reviewNodeId}
-                          </code>
-                        </>
-                      ) : (
-                        <code className="chip chip--tight">{r.reviewNodeId}</code>
-                      )}
-                      {r.description !== '' && r.description !== r.title && (
-                        <div className="muted reviews-row__desc">{r.description}</div>
-                      )}
-                    </td>
-                    <td>
-                      <span
-                        className={`status-chip status-chip--${
-                          r.awaitingReview
-                            ? 'amber'
-                            : r.decision === 'approved'
-                              ? 'green'
-                              : r.decision === 'rejected'
-                                ? 'red'
-                                : r.decision === 'iterated'
-                                  ? 'blue'
-                                  : 'gray'
-                        }`}
-                      >
-                        {r.awaitingReview ? t('reviews.statusAwaiting') : r.decision}
-                      </span>
-                    </td>
-                    <td>v{r.currentVersionIndex}</td>
-                    <td className="muted">{formatTimestamp(r.createdAt)}</td>
-                    <td>
-                      <Link
-                        to="/reviews/$nodeRunId"
-                        params={{ nodeRunId: r.nodeRunId }}
-                        className="btn btn--sm"
-                      >
-                        {t('reviews.openButton')}
-                      </Link>
-                    </td>
-                  </tr>
+                  <Fragment key={r.nodeRunId}>
+                    <tr>
+                      <td className="reviews-row__expand-cell">
+                        <button
+                          type="button"
+                          className="reviews-row__expand"
+                          aria-expanded={isOpen}
+                          aria-label={isOpen ? t('reviews.collapse') : t('reviews.expand')}
+                          onClick={() => toggleRow(r.nodeRunId)}
+                        >
+                          <span aria-hidden="true" className="reviews-row__expand-icon">
+                            {isOpen ? '▾' : '▸'}
+                          </span>
+                        </button>
+                      </td>
+                      <td>
+                        {hasTitle ? (
+                          <>
+                            <div className="reviews-row__title">{r.title}</div>
+                            <code className="chip chip--tight reviews-row__nodeid">
+                              {r.reviewNodeId}
+                            </code>
+                          </>
+                        ) : (
+                          <code className="chip chip--tight">{r.reviewNodeId}</code>
+                        )}
+                        {r.description !== '' && r.description !== r.title && (
+                          <div className="muted reviews-row__desc">{r.description}</div>
+                        )}
+                      </td>
+                      <td>
+                        <span
+                          className={`status-chip status-chip--${
+                            r.awaitingReview
+                              ? 'amber'
+                              : r.decision === 'approved'
+                                ? 'green'
+                                : r.decision === 'rejected'
+                                  ? 'red'
+                                  : r.decision === 'iterated'
+                                    ? 'blue'
+                                    : 'gray'
+                          }`}
+                        >
+                          {r.awaitingReview ? t('reviews.statusAwaiting') : r.decision}
+                        </span>
+                      </td>
+                      <td>v{r.currentVersionIndex}</td>
+                      <td className="muted">{formatTimestamp(r.createdAt)}</td>
+                      <td>
+                        <Link
+                          to="/reviews/$nodeRunId"
+                          params={{ nodeRunId: r.nodeRunId }}
+                          search={{}}
+                          className="btn btn--sm"
+                        >
+                          {t('reviews.openButton')}
+                        </Link>
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr className="reviews-row__history">
+                        <td colSpan={6}>
+                          <HistoryRows
+                            nodeRunId={r.nodeRunId}
+                            currentVersionIndex={r.currentVersionIndex}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 )
               })}
             </tbody>
@@ -147,4 +200,82 @@ function ReviewsListPage() {
 
 function formatTimestamp(ts: number): string {
   return new Date(ts).toLocaleString()
+}
+
+// RFC-013: expanded sub-row inside each review's table row. Lazily loads
+// the doc_versions list for this nodeRunId (the parent list endpoint
+// only carries `currentVersionIndex` — fetching all versions for every
+// row up front would be N requests on a list that's usually short). The
+// child renders one row per version with its decision chip and an
+// "Open" link; the current version routes to the regular detail page,
+// historical versions route to `?version=<vid>` for the read-only view.
+export function HistoryRows({
+  nodeRunId,
+  currentVersionIndex,
+}: {
+  nodeRunId: string
+  currentVersionIndex: number
+}) {
+  const { t } = useTranslation()
+  const q = useQuery<DocVersion[]>({
+    queryKey: ['reviews', 'versions', nodeRunId],
+    queryFn: ({ signal }) => api.get(`/api/reviews/${nodeRunId}/versions`, undefined, signal),
+  })
+  if (q.isLoading) {
+    return <div className="muted reviews-version-loading">{t('common.loading')}</div>
+  }
+  if (q.error !== null && q.error !== undefined) {
+    return (
+      <div className="reviews-version-error" role="alert">
+        <span>{t('reviews.loadVersionsFailed')}</span>
+        <button
+          type="button"
+          className="btn btn--sm"
+          onClick={() => {
+            void q.refetch()
+          }}
+        >
+          {t('reviews.retry')}
+        </button>
+      </div>
+    )
+  }
+  // Render in ascending version order (v1 first → vN last) so the
+  // history reads chronologically. The endpoint returns desc-by-versionIndex.
+  const sorted = [...(q.data ?? [])].sort((a, b) => a.versionIndex - b.versionIndex)
+  return (
+    <div className="reviews-version-panel">
+      <div className="reviews-version-panel__header">
+        {t('reviews.historyHeader', { count: sorted.length })}
+      </div>
+      <ul className="reviews-version-list">
+        {sorted.map((v) => {
+          const isCurrent = v.versionIndex === currentVersionIndex
+          return (
+            <li key={v.id} className="reviews-version-list__item">
+              <span className="reviews-version-list__label">v{v.versionIndex}</span>
+              <span className={`status-chip status-chip--${decisionChipColor(v.decision)}`}>
+                {v.decision}
+              </span>
+              {isCurrent && (
+                <span className="reviews-version-list__current-pill">
+                  {t('reviews.currentTag')}
+                </span>
+              )}
+              <span className="reviews-version-list__date">{formatTimestamp(v.createdAt)}</span>
+              <Link
+                to="/reviews/$nodeRunId"
+                params={{ nodeRunId }}
+                search={isCurrent ? {} : { version: v.id }}
+                className="reviews-version-list__open"
+              >
+                {t('reviews.openButton')}
+                <span aria-hidden="true"> ›</span>
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
 }

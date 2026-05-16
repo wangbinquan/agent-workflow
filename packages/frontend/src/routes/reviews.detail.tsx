@@ -7,11 +7,12 @@
 // review_iteration the backend will check.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoute } from '@tanstack/react-router'
+import { createRoute, useNavigate, useSearch, Link } from '@tanstack/react-router'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   Config,
+  DocVersionWithBodyAndComments,
   ReviewComment,
   ReviewCommentAnchor,
   ReviewDetail,
@@ -25,8 +26,16 @@ import { useTaskSync } from '@/hooks/useTaskSync'
 import { anchorKey, computeAnchorFromSelection } from '@/lib/review/anchor'
 import { deleteDraft, getDraft, listDrafts, setDraft } from '@/lib/review/draftStore'
 import { computeLineRange } from '@/lib/review/lineRange'
+import { resolveReviewView } from '@/lib/review/readonly'
 import { wrapAnchorsInDom } from '@/lib/review/wrapAnchorsInDom'
 import { Route as RootRoute } from './__root'
+
+// RFC-013: optional ?version=<vid> for the read-only historical view.
+// The search object must always be defined (TanStack invariant), so we
+// hand back `{}` for the no-query path.
+interface ReviewDetailSearch {
+  version?: string
+}
 
 const BUBBLE_GAP_PX = 8
 
@@ -52,11 +61,18 @@ function readCollapsedInit(): boolean {
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/reviews/$nodeRunId',
+  validateSearch: (raw: Record<string, unknown>): ReviewDetailSearch => {
+    const out: ReviewDetailSearch = {}
+    if (typeof raw.version === 'string' && raw.version.length > 0) out.version = raw.version
+    return out
+  },
   component: ReviewDetailPage,
 })
 
 function ReviewDetailPage() {
   const { nodeRunId } = Route.useParams()
+  const search = useSearch({ from: Route.id }) as ReviewDetailSearch
+  const navigate = useNavigate()
   const { t } = useTranslation()
   const qc = useQueryClient()
 
@@ -77,10 +93,15 @@ function ReviewDetailPage() {
   const [diffMode, setDiffMode] = useState(false)
   const [diffGranularity, setDiffGranularity] = useState<DiffGranularity>('word')
 
+  // RFC-013: versions list is consulted for two distinct purposes — the
+  // diff toggle's prior-version pick AND the read-only historical view's
+  // legitimacy check (resolveReviewView falls into `invalid` only after
+  // this resolves and the requested vid isn't in the list). Fire it
+  // whenever either consumer needs it.
   const versions = useQuery<DocVersion[]>({
     queryKey: ['reviews', 'versions', nodeRunId],
     queryFn: ({ signal }) => api.get(`/api/reviews/${nodeRunId}/versions`, undefined, signal),
-    enabled: diffMode,
+    enabled: diffMode || search.version !== undefined,
   })
 
   // Pick the most recent doc_version that ISN'T the current pending one as
@@ -93,12 +114,62 @@ function ReviewDetailPage() {
     return candidate ?? null
   }, [versions.data, detail.data])
 
-  const priorBody = useQuery<{ body: string } & DocVersion>({
+  const priorBody = useQuery<DocVersionWithBodyAndComments>({
     queryKey: ['reviews', 'version-body', nodeRunId, priorVersion?.id ?? ''],
     queryFn: ({ signal }) =>
       api.get(`/api/reviews/${nodeRunId}/versions/${priorVersion?.id ?? ''}`, undefined, signal),
     enabled: diffMode && priorVersion !== null,
   })
+
+  // RFC-013: when ?version=<vid> is present and it's not the current vid,
+  // fetch that historical version's body + comments. The endpoint validates
+  // nodeRunId scoping server-side; a bogus vid returns 404 which we surface
+  // through the navigate-replace + toast path below.
+  const view = resolveReviewView(
+    search.version,
+    detail.data?.currentVersion.id ?? '',
+    versions.data,
+  )
+  const historicalVid = view.mode === 'historical' ? view.vid : null
+  const historicalDetail = useQuery<DocVersionWithBodyAndComments>({
+    queryKey: ['reviews', 'version-body', nodeRunId, historicalVid ?? ''],
+    queryFn: ({ signal }) =>
+      api.get(`/api/reviews/${nodeRunId}/versions/${historicalVid ?? ''}`, undefined, signal),
+    enabled: historicalVid !== null,
+  })
+  const readonly = view.mode === 'historical'
+
+  // RFC-013: doc body + comments the page should *render* — in current
+  // mode these come from the detail endpoint, in historical mode from the
+  // version-detail endpoint. Memoized so the downstream `wrapAnchorsInDom`
+  // effect doesn't churn its dependency on every render.
+  const activeBody = useMemo<string | undefined>(() => {
+    if (view.mode === 'historical') return historicalDetail.data?.body
+    return detail.data?.currentBody
+  }, [view.mode, historicalDetail.data, detail.data])
+
+  const activeComments = useMemo<ReviewComment[]>(() => {
+    if (view.mode === 'historical') return historicalDetail.data?.comments ?? []
+    return detail.data?.comments ?? []
+  }, [view.mode, historicalDetail.data, detail.data])
+
+  // RFC-013: when the user types in a vid that the versions endpoint
+  // doesn't recognize (after that endpoint has resolved), bounce them back
+  // to the current-version path with a one-shot warning. Using window.alert
+  // keeps the surface tiny — there is no in-app toast system yet, and the
+  // page is interactive enough that a blocking dialog is acceptable here.
+  // The `replace: true` keeps the back button from looping into the bad URL.
+  const requestedInvalid = view.mode === 'invalid' ? view.requested : null
+  useEffect(() => {
+    if (requestedInvalid === null) return
+    window.alert(t('reviews.unknownVersion', { id: requestedInvalid }))
+    void navigate({
+      to: '/reviews/$nodeRunId',
+      params: { nodeRunId },
+      search: {},
+      replace: true,
+    })
+  }, [requestedInvalid, navigate, nodeRunId, t])
 
   // Config needed for plantuml endpoint passthrough.
   const config = useQuery<Config>({
@@ -163,11 +234,10 @@ function ReviewDetailPage() {
   const [bubblesMinHeight, setBubblesMinHeight] = useState<number>(0)
 
   const commentsByOccurrence = useMemo(() => {
-    if (detail.data === undefined) return new Map<string, ReviewComment>()
     const m = new Map<string, ReviewComment>()
-    for (const c of detail.data.comments) m.set(anchorKey(c.anchor), c)
+    for (const c of activeComments) m.set(anchorKey(c.anchor), c)
     return m
-  }, [detail.data])
+  }, [activeComments])
 
   // Comments rendered in the order they appear in the reviewed text, not
   // in the API's creation order. The bubble layout positions each card at
@@ -178,17 +248,19 @@ function ReviewDetailPage() {
   // order too. Sort key: source-markdown char offset, then occurrenceIndex
   // as a stable tiebreaker for two comments anchored to the same span.
   const sortedComments = useMemo<ReviewComment[]>(() => {
-    if (detail.data === undefined) return []
-    return [...detail.data.comments].sort((a, b) => {
+    return [...activeComments].sort((a, b) => {
       if (a.anchor.offsetStart !== b.anchor.offsetStart) {
         return a.anchor.offsetStart - b.anchor.offsetStart
       }
       return a.anchor.occurrenceIndex - b.anchor.occurrenceIndex
     })
-  }, [detail.data])
+  }, [activeComments])
 
   // Mouse-up handler on the markdown area: capture selection → build anchor → open popover.
+  // RFC-013: in read-only historical mode the popover never opens — bail
+  // out early so we don't waste the selection compute or open the IDB.
   const onMouseUpInDoc = useCallback(async () => {
+    if (readonly) return
     if (markdownRef.current === null) return
     const sel = window.getSelection()
     if (sel === null || sel.isCollapsed) return
@@ -209,7 +281,7 @@ function ReviewDetailPage() {
       draft,
       rect: { left: rect.left + window.scrollX, top: rect.bottom + window.scrollY },
     })
-  }, [detail.data, nodeRunId])
+  }, [detail.data, nodeRunId, readonly])
 
   // Persist draft on every keystroke + cleanup on submit/cancel.
   useEffect(() => {
@@ -263,13 +335,12 @@ function ReviewDetailPage() {
   // when comments are added/removed or the doc body changes.
   const lineRanges = useMemo<Map<string, { start: number; end: number }>>(() => {
     const m = new Map<string, { start: number; end: number }>()
-    if (detail.data === undefined) return m
-    const body = detail.data.currentBody
-    for (const c of detail.data.comments) {
-      m.set(c.id, computeLineRange(body, c.anchor.offsetStart, c.anchor.offsetEnd))
+    if (activeBody === undefined) return m
+    for (const c of activeComments) {
+      m.set(c.id, computeLineRange(activeBody, c.anchor.offsetStart, c.anchor.offsetEnd))
     }
     return m
-  }, [detail.data])
+  }, [activeBody, activeComments])
 
   // RFC-009-T4: clipboard helper. We don't need to expose this as a
   // mutation because there's no server round-trip — just an optimistic
@@ -540,7 +611,7 @@ function ReviewDetailPage() {
   // markdown rerender. Currently a simple "top visible anchor in viewport"
   // heuristic — keeps the sidebar tracking the user's reading position.
   useEffect(() => {
-    if (markdownRef.current === null || detail.data === undefined) return
+    if (markdownRef.current === null || activeBody === undefined) return
     const observer = new IntersectionObserver(
       (entries) => {
         const top = entries
@@ -556,11 +627,18 @@ function ReviewDetailPage() {
     const anchors = markdownRef.current.querySelectorAll('[data-comment-id]')
     anchors.forEach((a) => observer.observe(a))
     return () => observer.disconnect()
-  }, [detail.data])
+  }, [activeBody])
 
   // Keyboard shortcuts: A/R/I + J/K (cross-comment jump) + Esc.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // RFC-013: read-only historical mode disables every shortcut. The
+      // decision buttons are not in the DOM, the popover is never opened,
+      // and the diff toggle is hidden — so A/R/I, Ctrl+1/2/3 and even
+      // J/K (which depend on comment-anchor state that's intentionally
+      // present in the read-only view but should not steal global focus
+      // away from typing in dev tools etc) all short-circuit.
+      if (readonly) return
       if (popover !== null) {
         if (e.key === 'Escape') {
           setPopover(null)
@@ -639,6 +717,7 @@ function ReviewDetailPage() {
     activeCommentId,
     diffMode,
     editingId,
+    readonly,
   ])
 
   if (detail.isLoading) return <div className="muted">{t('common.loading')}</div>
@@ -649,34 +728,117 @@ function ReviewDetailPage() {
   if (detail.data === undefined) return null
 
   const data = detail.data
-  const isAwaiting = data.summary.awaitingReview
+  // RFC-013: in readonly historical view, decision buttons are not in the
+  // DOM, comment write affordances are hidden, and the diff toggle is
+  // hidden. `isAwaiting` continues to drive the current-mode button enable
+  // state. The "viewing version vN" label in the header switches between
+  // current and historical too.
+  const isAwaiting = !readonly && data.summary.awaitingReview
   const hasTitle = data.summary.title !== '' && data.summary.title !== data.summary.reviewNodeId
+  const headerVersionIndex =
+    view.mode === 'historical'
+      ? (view.versionIndex ?? historicalDetail.data?.versionIndex)
+      : data.currentVersion.versionIndex
+  const headerDecision =
+    view.mode === 'historical'
+      ? (view.decision ?? historicalDetail.data?.decision)
+      : data.currentVersion.decision
+
+  // Download the markdown body the user is currently viewing (current or
+  // historical version) as a `.md` file. Filename combines a sanitized title
+  // (or the review node id when the user didn't set a title) with the
+  // version index — gives a useful name when the user accumulates several
+  // versions of the same review in their downloads folder. Sanitization
+  // strips characters that POSIX / Windows refuse in filenames so the click
+  // never silently fails on edge cases like "user/auth: design".
+  const downloadDisabled = activeBody === undefined || activeBody.length === 0
+  const downloadFileName = (() => {
+    const base = (hasTitle ? data.summary.title : data.summary.reviewNodeId)
+      .replace(/[\\/:*?"<>|\n\r\t]+/g, '_')
+      .replace(/\s+/g, '_')
+      .trim()
+    const safeBase = base.length > 0 ? base : 'document'
+    return `${safeBase}-v${headerVersionIndex ?? data.currentVersion.versionIndex}.md`
+  })()
+  const handleDownloadMarkdown = (): void => {
+    if (activeBody === undefined || activeBody.length === 0) return
+    const blob = new Blob([activeBody], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = downloadFileName
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="page review-detail">
-      <header className="page__header">
-        <h1>
-          {data.summary.workflowName} /{' '}
-          {hasTitle ? data.summary.title : <code>{data.summary.reviewNodeId}</code>}
-          <span className="muted"> · v{data.currentVersion.versionIndex}</span>
-        </h1>
-        {hasTitle && (
-          <div className="muted">
-            <code>{data.summary.reviewNodeId}</code>
-          </div>
-        )}
-        {data.summary.description !== '' && data.summary.description !== data.summary.title && (
-          <p className="page__hint review-detail__description">{data.summary.description}</p>
-        )}
-        <p className="page__hint">
-          {t('reviews.detailHint', {
-            iteration: data.summary.reviewIteration,
-            decision: data.currentVersion.decision,
-          })}
-        </p>
+      <header className="page__header review-detail__page-header">
+        <div className="review-detail__page-header-text">
+          <h1>
+            {data.summary.workflowName} /{' '}
+            {hasTitle ? data.summary.title : <code>{data.summary.reviewNodeId}</code>}
+            <span className="muted">
+              {' '}
+              · v{headerVersionIndex ?? data.currentVersion.versionIndex}
+            </span>
+          </h1>
+          {hasTitle && (
+            <div className="muted">
+              <code>{data.summary.reviewNodeId}</code>
+            </div>
+          )}
+          {data.summary.description !== '' && data.summary.description !== data.summary.title && (
+            <p className="page__hint review-detail__description">{data.summary.description}</p>
+          )}
+          {!readonly && (
+            <p className="page__hint">
+              {t('reviews.detailHint', {
+                iteration: data.summary.reviewIteration,
+                decision: data.currentVersion.decision,
+              })}
+            </p>
+          )}
+        </div>
+        <div className="review-detail__page-header-actions">
+          <button
+            type="button"
+            className="btn btn--sm review-detail__download"
+            disabled={downloadDisabled}
+            onClick={handleDownloadMarkdown}
+            title={t('reviews.downloadMarkdownTitle', { filename: downloadFileName })}
+          >
+            <span aria-hidden="true" className="review-detail__download-icon">
+              ↓
+            </span>
+            {t('reviews.downloadMarkdown')}
+          </button>
+        </div>
       </header>
 
-      {data.currentVersion.versionIndex > 1 && (
+      {readonly && (
+        <div className="readonly-banner" role="status">
+          <span>
+            {t('reviews.historicalBanner', {
+              version: headerVersionIndex ?? '?',
+              decision: headerDecision ?? 'pending',
+            })}
+          </span>
+          <Link
+            to="/reviews/$nodeRunId"
+            params={{ nodeRunId }}
+            search={{}}
+            className="link readonly-banner__back"
+          >
+            {t('reviews.backToCurrent')}
+          </Link>
+        </div>
+      )}
+
+      {!readonly && data.currentVersion.versionIndex > 1 && (
         <div className="review-detail__diff-toolbar">
           {/* RFC-010 follow-up：把"勾选框 + 三按钮"合并成一个 4 段 pill
               segmented control。选 "原文" 等价于关闭 diff 模式；其它三段
@@ -721,7 +883,7 @@ function ReviewDetailPage() {
           gridTemplateColumns: `minmax(0, 1fr) ${collapsed ? SIDEBAR_COLLAPSED_PX : sidebarWidth}px`,
         }}
       >
-        {diffMode && priorBody.data !== undefined ? (
+        {!readonly && diffMode && priorBody.data !== undefined ? (
           <div className="review-detail__body">
             <DiffView
               left={priorBody.data.body}
@@ -736,14 +898,16 @@ function ReviewDetailPage() {
               })}
             />
           </div>
+        ) : readonly && historicalDetail.isLoading ? (
+          <div className="review-detail__body muted">{t('common.loading')}</div>
         ) : (
           <div
             className="review-detail__body"
             ref={markdownRef}
-            onMouseUp={() => void onMouseUpInDoc()}
+            onMouseUp={readonly ? undefined : () => void onMouseUpInDoc()}
           >
             <Prose
-              body={data.currentBody}
+              body={activeBody ?? ''}
               taskId={data.summary.taskId}
               plantumlEndpoint={config.data?.plantumlEndpoint}
               plantumlAuthHeader={config.data?.plantumlAuthHeader}
@@ -796,7 +960,9 @@ function ReviewDetailPage() {
               </button>
             </header>
             {sortedComments.length === 0 ? (
-              <div className="review-detail__bubbles-empty muted">{t('reviews.sidebarEmpty')}</div>
+              <div className="review-detail__bubbles-empty muted">
+                {readonly ? t('reviews.sidebarEmptyReadonly') : t('reviews.sidebarEmpty')}
+              </div>
             ) : (
               sortedComments.map((c) => {
                 const top = bubbleTops.get(c.id)
@@ -827,7 +993,11 @@ function ReviewDetailPage() {
                     style={top !== undefined ? { top: `${top}px` } : undefined}
                     onClick={() => onBubbleClick(c.id)}
                   >
-                    {!isEditing && (
+                    {/* RFC-013: in read-only historical view, ALL comment
+                        write affordances (edit / copy / delete) are
+                        omitted from the DOM so they don't visually imply
+                        an action that the page will refuse to take. */}
+                    {!readonly && !isEditing && (
                       <div className="comment-bubble__actions">
                         <button
                           type="button"
@@ -935,37 +1105,39 @@ function ReviewDetailPage() {
         )}
       </div>
 
-      <footer className="review-detail__footer">
-        <button
-          type="button"
-          className="btn btn--primary"
-          disabled={!isAwaiting || submitDecision.isPending}
-          onClick={() => void onApprove()}
-        >
-          {t('reviews.approveButton')}
-        </button>
-        <button
-          type="button"
-          className="btn"
-          disabled={!isAwaiting || submitDecision.isPending}
-          onClick={() => void onIterate()}
-        >
-          {t('reviews.iterateButton')}
-        </button>
-        <button
-          type="button"
-          className="btn btn--danger"
-          disabled={!isAwaiting || submitDecision.isPending}
-          onClick={() => void onReject()}
-        >
-          {t('reviews.rejectButton')}
-        </button>
-        {submitDecision.error !== null && submitDecision.error !== undefined && (
-          <div className="error-box">{(submitDecision.error as Error).message}</div>
-        )}
-      </footer>
+      {!readonly && (
+        <footer className="review-detail__footer">
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={!isAwaiting || submitDecision.isPending}
+            onClick={() => void onApprove()}
+          >
+            {t('reviews.approveButton')}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={!isAwaiting || submitDecision.isPending}
+            onClick={() => void onIterate()}
+          >
+            {t('reviews.iterateButton')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--danger"
+            disabled={!isAwaiting || submitDecision.isPending}
+            onClick={() => void onReject()}
+          >
+            {t('reviews.rejectButton')}
+          </button>
+          {submitDecision.error !== null && submitDecision.error !== undefined && (
+            <div className="error-box">{(submitDecision.error as Error).message}</div>
+          )}
+        </footer>
+      )}
 
-      {popover !== null && (
+      {!readonly && popover !== null && (
         <div
           className="comment-popover"
           style={{ position: 'absolute', left: popover.rect.left, top: popover.rect.top }}

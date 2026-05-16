@@ -750,6 +750,90 @@ export async function getDocVersion(db: DbClient, versionId: string): Promise<Do
   return rows.length > 0 ? rowToDocVersion(rows[0]!) : null
 }
 
+/**
+ * RFC-013: fetch a single doc_version's body + the comments captured
+ * against that specific version. The route layer uses this to power the
+ * historical-version read-only view in the /reviews UI.
+ *
+ * Returns null when the version does not exist OR exists but does not belong
+ * to `nodeRunId`. The nodeRunId scoping is deliberate — without it, the
+ * endpoint would let a caller probe doc_versions across unrelated reviews by
+ * brute-forcing ULIDs.
+ *
+ * Comment source per decision state:
+ *   - `pending`   → live `review_comments` rows for this docVersionId
+ *                   (the user is still actively annotating it).
+ *   - decided     → parse `doc_versions.commentsJson` (the archived
+ *                   snapshot captured at decision time). The live rows
+ *                   are deleted by `submitReviewDecision`, so the JSON
+ *                   blob is the only remaining source of truth.
+ *
+ * Comments are sorted by anchor position (paragraph index, then offset)
+ * so the UI's bubble layout matches the in-doc reading order without an
+ * extra client-side sort. Empty array when there are no comments.
+ */
+export async function getDocVersionDetail(
+  db: DbClient,
+  appHome: string,
+  nodeRunId: string,
+  versionId: string,
+): Promise<(DocVersion & { body: string; comments: ReviewComment[] }) | null> {
+  const dv = await getDocVersion(db, versionId)
+  if (dv === null) return null
+  if (dv.reviewNodeRunId !== nodeRunId) return null
+  const body = readDocVersionBody(appHome, dv)
+  let comments: ReviewComment[]
+  if (dv.decision === 'pending') {
+    const commentsRows = await db
+      .select()
+      .from(reviewComments)
+      .where(eq(reviewComments.docVersionId, dv.id))
+      .orderBy(asc(reviewComments.anchorParagraphIdx), asc(reviewComments.anchorOffsetStart))
+    comments = commentsRows.map(rowToReviewComment)
+  } else {
+    comments = parseArchivedComments(dv.commentsJson)
+    comments.sort((a, b) => {
+      if (a.anchor.paragraphIdx !== b.anchor.paragraphIdx) {
+        return a.anchor.paragraphIdx - b.anchor.paragraphIdx
+      }
+      return a.anchor.offsetStart - b.anchor.offsetStart
+    })
+  }
+  return { ...dv, body, comments }
+}
+
+/**
+ * Robust-parse the archived comments blob stored on `doc_versions.commentsJson`.
+ *
+ * `submitReviewDecision` writes `JSON.stringify(commentsArr)` here at the
+ * moment of approve / reject / iterate, so a well-formed row should round-trip
+ * via JSON.parse. We still guard against three realistic failure modes that
+ * would otherwise crash the read-only view:
+ *
+ *   1. Empty / null / non-string column (legacy rows written before commentsJson
+ *      was always populated) → treat as empty.
+ *   2. JSON that doesn't parse (manual DB tampering, partial write) → log
+ *      and treat as empty rather than 500ing the whole detail endpoint.
+ *   3. JSON that parses to a non-array → treat as empty.
+ *
+ * Anchor shape mismatches inside individual entries fall through to runtime
+ * type errors at the route serializer; we don't filter per-entry because
+ * the writer side controls the shape and any drift there is a real bug.
+ */
+function parseArchivedComments(json: string | null | undefined): ReviewComment[] {
+  if (json === null || json === undefined || json.length === 0 || json === '[]') return []
+  try {
+    const parsed: unknown = JSON.parse(json)
+    if (!Array.isArray(parsed)) return []
+    return parsed as ReviewComment[]
+  } catch (err) {
+    log.warn('doc_versions.commentsJson is not valid JSON; returning empty', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return []
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Comments — add / delete.
 // ---------------------------------------------------------------------------

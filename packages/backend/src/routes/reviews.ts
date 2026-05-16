@@ -25,11 +25,10 @@ import {
   addReviewComment,
   countPendingReviews,
   deleteReviewComment,
-  getDocVersion,
+  getDocVersionDetail,
   getReviewDetail,
   listDocVersionsForReview,
   listReviewSummaries,
-  readDocVersionBody,
   submitReviewDecision,
   updateReviewCommentText,
 } from '@/services/review'
@@ -98,13 +97,16 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
   })
 
   app.get('/api/reviews/:nodeRunId/versions/:versionId', async (c) => {
+    const nodeRunId = c.req.param('nodeRunId')
     const versionId = c.req.param('versionId')
-    const dv = await getDocVersion(deps.db, versionId)
+    // RFC-013: returns body + comments for read-only historical view. The
+    // helper validates the version belongs to `nodeRunId` so a caller can't
+    // brute-force doc_versions across unrelated reviews.
+    const dv = await getDocVersionDetail(deps.db, appHomeFor(deps), nodeRunId, versionId)
     if (dv === null) {
       throw new NotFoundError('review-version-not-found', `doc_version ${versionId} not found`)
     }
-    const body = readDocVersionBody(appHomeFor(deps), dv)
-    return c.json({ ...dv, body })
+    return c.json(dv)
   })
 
   app.post('/api/reviews/:nodeRunId/decision', async (c) => {
