@@ -314,6 +314,14 @@ export interface Resources {
     sectionWorkflowStatus: string
     sectionNodeRuns: string
     sectionWorktreeDiff: string
+    /** RFC-021 tab labels (replace the `section*` headings inside the new
+     *  tab bar). Old keys stay in the type because i18n consumers may
+     *  still reference them as fallback strings. */
+    tabWorkflowStatus: string
+    tabNodeRuns: string
+    tabDetails: string
+    tabOutputs: string
+    tabWorktreeDiff: string
     noWorkflowSnapshot: string
     noBaseCommit: string
     loadingDiff: string
@@ -1028,6 +1036,11 @@ export const zhCN: Resources = {
     sectionWorkflowStatus: '工作流状态',
     sectionNodeRuns: '节点运行',
     sectionWorktreeDiff: 'Worktree diff',
+    tabWorkflowStatus: '工作流状态',
+    tabNodeRuns: '节点运行',
+    tabDetails: '详细信息',
+    tabOutputs: '输出',
+    tabWorktreeDiff: 'Worktree diff',
     noWorkflowSnapshot: '没有工作流快照。',
     noBaseCommit: '未记录 base commit；diff 不可用。',
     loadingDiff: '加载 diff 中…',

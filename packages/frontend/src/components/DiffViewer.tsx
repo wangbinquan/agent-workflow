@@ -2,7 +2,9 @@
 // per-file hunks based on `diff --git a/... b/...` markers so very long
 // diffs are still navigable.
 //
-// Real syntax highlighting + collapsible files lands in a M5 polish issue.
+// RFC-021 promoted `splitByFile` / `lineClass` from internal helpers to
+// real exports and added `DiffFileBody` so the new `WorktreeDiffPanel`
+// can reuse the same parsing + per-line styling without duplicating it.
 
 import { useMemo } from 'react'
 
@@ -11,7 +13,7 @@ interface DiffViewerProps {
   truncated?: boolean
 }
 
-interface FileBlock {
+export interface FileBlock {
   header: string
   lines: string[]
 }
@@ -31,23 +33,32 @@ export function DiffViewer({ diff, truncated }: DiffViewerProps) {
         </div>
       )}
       {blocks.map((b, i) => (
-        <section key={`${b.header}-${i}`} className="diff__file">
-          <div className="diff__file-header">{b.header}</div>
-          <pre className="diff__body">
-            {b.lines.map((line, j) => (
-              <span key={j} className={lineClass(line)}>
-                {line === '' ? ' ' : line}
-                {'\n'}
-              </span>
-            ))}
-          </pre>
-        </section>
+        <DiffFileBody key={`${b.header}-${i}`} block={b} />
       ))}
     </div>
   )
 }
 
-function splitByFile(diff: string): FileBlock[] {
+/** Single-file diff block renderer. Extracted so `WorktreeDiffPanel`
+ *  (RFC-021) can render exactly one block on the right pane while the
+ *  left pane drives selection. */
+export function DiffFileBody({ block }: { block: FileBlock }) {
+  return (
+    <section className="diff__file">
+      <div className="diff__file-header">{block.header}</div>
+      <pre className="diff__body">
+        {block.lines.map((line, j) => (
+          <span key={j} className={lineClass(line)}>
+            {line === '' ? ' ' : line}
+            {'\n'}
+          </span>
+        ))}
+      </pre>
+    </section>
+  )
+}
+
+export function splitByFile(diff: string): FileBlock[] {
   const lines = diff.split('\n')
   const out: FileBlock[] = []
   let current: FileBlock | null = null
@@ -75,7 +86,7 @@ function deriveFileHeader(diffLine: string): string {
   return from === to ? (from ?? diffLine) : `${from ?? ''} → ${to ?? ''}`
 }
 
-function lineClass(line: string): string {
+export function lineClass(line: string): string {
   if (line.startsWith('+++') || line.startsWith('---')) return 'diff__meta'
   if (line.startsWith('@@')) return 'diff__hunk'
   if (line.startsWith('+')) return 'diff__add'
@@ -93,5 +104,8 @@ function lineClass(line: string): string {
   return 'diff__ctx'
 }
 
+// Legacy test aliases. RFC-021 changed `splitByFile` / `lineClass` to
+// proper exports; existing test files still import via `__testXxx`,
+// so we keep the aliases for backward compatibility.
 export const __testSplitByFile = splitByFile
 export const __testLineClass = lineClass

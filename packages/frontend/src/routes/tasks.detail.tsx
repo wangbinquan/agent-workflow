@@ -17,13 +17,14 @@ import { api, ApiError } from '@/api/client'
 import { WorkflowCanvas, type WorkflowCanvasHandle } from '@/components/canvas/WorkflowCanvas'
 import type { CanvasNodeData } from '@/components/canvas/nodes/types'
 import { ConfirmButton } from '@/components/ConfirmButton'
-import { DiffViewer } from '@/components/DiffViewer'
 import { NodeDetailDrawer } from '@/components/NodeDetailDrawer'
-import { TaskOutputPanel } from '@/components/TaskOutputPanel'
+import { collectPorts, TaskOutputPanel } from '@/components/TaskOutputPanel'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
+import { WorktreeDiffPanel } from '@/components/WorktreeDiffPanel'
 import { classifyCanceled, displayNoderunStatusKey } from '@/lib/noderun-status'
+import { availableTabs, nextTabForFailedJump, type TaskDetailTab } from '@/lib/task-detail-tabs'
 import { useTaskSync } from '@/hooks/useTaskSync'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -38,6 +39,9 @@ function TaskDetailPage() {
   const qc = useQueryClient()
   useTaskSync(id)
   const [selectedNodeRunId, setSelectedNodeRunId] = useState<string | null>(null)
+  // RFC-021: page-level tab state. Default is the workflow-status canvas
+  // since that's the most actionable view for a running task.
+  const [tab, setTab] = useState<TaskDetailTab>('workflow-status')
   // Same shape as the editor route: the drawer ✕ must drive xyflow's
   // selection clear, otherwise the underlying node stays highlighted and
   // a re-click on it is swallowed by xyflow's `handleNodeClick`. See
@@ -90,6 +94,21 @@ function TaskDetailPage() {
     },
   })
 
+  // Compute `hasOutputs` from the optional snapshot so the useEffect can
+  // run on every render — including the initial loading render. React's
+  // rules-of-hooks forbids calling hooks after a conditional return, so
+  // this must sit above the `if (task.isLoading) return ...` guards.
+  const hasOutputs =
+    task.data === undefined ? false : collectPorts(task.data.workflowSnapshot).length > 0
+  const tabs = availableTabs({ hasOutputs })
+  // If the user was on the outputs tab and hasOutputs flips false (mostly
+  // defensive — the snapshot is frozen at task start), fall back to the
+  // canvas. Always-mount strategy keeps panes in the DOM, but the tab
+  // bar must reflect what's actually selectable.
+  useEffect(() => {
+    if (!tabs.includes(tab)) setTab('workflow-status')
+  }, [tabs, tab])
+
   if (task.isLoading) return <div className="page muted">{t('tasks.loadingTask')}</div>
   if (task.error !== null && task.error !== undefined)
     return <div className="page error-box">{describeError(task.error)}</div>
@@ -100,55 +119,12 @@ function TaskDetailPage() {
   const resumability = resumeStatus(tk.status, tk.worktreePath)
 
   return (
-    <div className="page page--wide">
+    <div className="page page--task-detail">
       <header className="page__header page__header--row">
         <div>
           <h1>
             <code>{tk.id}</code> <TaskStatusChip status={tk.status} />
           </h1>
-          <dl className="task-meta">
-            <dt>{t('tasks.metaWorkflow')}</dt>
-            <dd>
-              <Link to="/workflows/$id" params={{ id: tk.workflowId }} className="data-table__link">
-                {tk.workflowName ?? tk.workflowId}
-              </Link>
-              {tk.workflowName !== null && (
-                <>
-                  {' '}
-                  <span className="data-table__muted">
-                    (<code>{tk.workflowId}</code>)
-                  </span>
-                </>
-              )}
-            </dd>
-            <dt>{t('tasks.metaRepo')}</dt>
-            <dd>
-              <code>{tk.repoPath}</code>
-            </dd>
-            <dt>{t('tasks.metaWorktree')}</dt>
-            <dd>
-              <code>{tk.worktreePath || t('common.emDash')}</code>
-            </dd>
-            <dt>{t('tasks.metaBranch')}</dt>
-            <dd>
-              <code>{tk.branch}</code> @{' '}
-              <code>{(tk.baseCommit ?? '').slice(0, 12) || t('common.emDash')}</code>
-            </dd>
-            <dt>{t('tasks.metaStarted')}</dt>
-            <dd>{new Date(tk.startedAt).toLocaleString()}</dd>
-            <dt>{t('tasks.metaFinished')}</dt>
-            <dd>
-              {tk.finishedAt === null
-                ? t('common.emDash')
-                : new Date(tk.finishedAt).toLocaleString()}
-            </dd>
-            {tk.errorSummary !== null && (
-              <>
-                <dt>{t('tasks.metaError')}</dt>
-                <dd className="task-meta__error">{tk.errorSummary}</dd>
-              </>
-            )}
-          </dl>
         </div>
         <div className="page__actions">
           {resumability === 'ready' && (
@@ -202,10 +178,12 @@ function TaskDetailPage() {
               type="button"
               className="btn btn--sm btn--danger"
               onClick={() => {
-                // Walk node-runs for the failedNodeId and pick the latest.
-                const candidates = nodeRuns.data!.runs.filter((r) => r.nodeId === tk.failedNodeId)
-                const target = candidates.sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))[0]
-                if (target !== undefined) setSelectedNodeRunId(target.id)
+                const { runId, tab: next } = nextTabForFailedJump(
+                  nodeRuns.data!.runs,
+                  tk.failedNodeId,
+                )
+                if (runId !== null) setSelectedNodeRunId(runId)
+                setTab(next)
               }}
             >
               {t('tasks.jumpToFailed', { nodeId: tk.failedNodeId })}
@@ -220,61 +198,145 @@ function TaskDetailPage() {
         </div>
       )}
 
-      {nodeRuns.data !== undefined && (
-        <TaskOutputPanel task={tk} runs={nodeRuns.data.runs} outputs={nodeRuns.data.outputs} />
-      )}
+      <nav role="tablist" className="task-detail__tab-bar tabs">
+        {tabs.map((k) => (
+          <button
+            type="button"
+            key={k}
+            role="tab"
+            aria-selected={tab === k}
+            className={`tabs__tab ${tab === k ? 'tabs__tab--active' : ''}`}
+            onClick={() => setTab(k)}
+          >
+            {tabLabel(t, k)}
+          </button>
+        ))}
+      </nav>
 
-      <section className="page__section">
-        <h2>{t('tasks.sectionWorkflowStatus')}</h2>
-        <div className={taskCanvasLayoutClass(selectedNodeRunId)}>
-          <TaskStatusCanvas
-            canvasRef={canvasRef}
-            task={tk}
-            runs={nodeRuns.data?.runs ?? []}
-            onSelectNodeRun={setSelectedNodeRunId}
-          />
-          {selectedNodeRunId !== null && nodeRuns.data !== undefined && (
-            <NodeDetailDrawer
-              taskId={id}
-              taskStatus={tk.status}
-              nodeRunId={selectedNodeRunId}
-              nodeId={resolveNodeIdFromRuns(nodeRuns.data.runs, selectedNodeRunId)}
-              workflowNodeKind={resolveNodeKindFromSnapshot(
-                tk.workflowSnapshot,
-                resolveNodeIdFromRuns(nodeRuns.data.runs, selectedNodeRunId),
-              )}
-              runs={nodeRuns.data.runs}
-              outputs={nodeRuns.data.outputs}
-              onClose={closeNodeDrawer}
-              onSelectRun={setSelectedNodeRunId}
+      <div className="task-detail__panes">
+        {/* workflow-status: always mounted so xyflow viewport survives tab switches. */}
+        <div className="task-detail__pane" hidden={tab !== 'workflow-status'}>
+          <div className={taskCanvasLayoutClass(selectedNodeRunId)}>
+            <TaskStatusCanvas
+              canvasRef={canvasRef}
+              task={tk}
+              runs={nodeRuns.data?.runs ?? []}
+              onSelectNodeRun={setSelectedNodeRunId}
             />
-          )}
+            {selectedNodeRunId !== null && nodeRuns.data !== undefined && (
+              <NodeDetailDrawer
+                taskId={id}
+                taskStatus={tk.status}
+                nodeRunId={selectedNodeRunId}
+                nodeId={resolveNodeIdFromRuns(nodeRuns.data.runs, selectedNodeRunId)}
+                workflowNodeKind={resolveNodeKindFromSnapshot(
+                  tk.workflowSnapshot,
+                  resolveNodeIdFromRuns(nodeRuns.data.runs, selectedNodeRunId),
+                )}
+                runs={nodeRuns.data.runs}
+                outputs={nodeRuns.data.outputs}
+                onClose={closeNodeDrawer}
+                onSelectRun={setSelectedNodeRunId}
+              />
+            )}
+          </div>
         </div>
-      </section>
 
-      <section className="page__section">
-        <h2>{t('tasks.sectionNodeRuns')}</h2>
-        {nodeRuns.isLoading && <div className="muted">{t('common.loading')}</div>}
-        {nodeRuns.error !== null && nodeRuns.error !== undefined && (
-          <div className="error-box">{describeError(nodeRuns.error)}</div>
+        <div className="task-detail__pane" hidden={tab !== 'node-runs'}>
+          {nodeRuns.isLoading && <div className="muted">{t('common.loading')}</div>}
+          {nodeRuns.error !== null && nodeRuns.error !== undefined && (
+            <div className="error-box">{describeError(nodeRuns.error)}</div>
+          )}
+          {nodeRuns.data !== undefined && <NodeRunsTable runs={nodeRuns.data.runs} />}
+        </div>
+
+        <div className="task-detail__pane" hidden={tab !== 'details'}>
+          <dl className="task-meta">
+            <dt>{t('tasks.metaWorkflow')}</dt>
+            <dd>
+              <Link to="/workflows/$id" params={{ id: tk.workflowId }} className="data-table__link">
+                {tk.workflowName ?? tk.workflowId}
+              </Link>
+              {tk.workflowName !== null && (
+                <>
+                  {' '}
+                  <span className="data-table__muted">
+                    (<code>{tk.workflowId}</code>)
+                  </span>
+                </>
+              )}
+            </dd>
+            <dt>{t('tasks.metaRepo')}</dt>
+            <dd>
+              <code>{tk.repoPath}</code>
+            </dd>
+            <dt>{t('tasks.metaWorktree')}</dt>
+            <dd>
+              <code>{tk.worktreePath || t('common.emDash')}</code>
+            </dd>
+            <dt>{t('tasks.metaBranch')}</dt>
+            <dd>
+              <code>{tk.branch}</code> @{' '}
+              <code>{(tk.baseCommit ?? '').slice(0, 12) || t('common.emDash')}</code>
+            </dd>
+            <dt>{t('tasks.metaStarted')}</dt>
+            <dd>{new Date(tk.startedAt).toLocaleString()}</dd>
+            <dt>{t('tasks.metaFinished')}</dt>
+            <dd>
+              {tk.finishedAt === null
+                ? t('common.emDash')
+                : new Date(tk.finishedAt).toLocaleString()}
+            </dd>
+            {tk.errorSummary !== null && (
+              <>
+                <dt>{t('tasks.metaError')}</dt>
+                <dd className="task-meta__error">{tk.errorSummary}</dd>
+              </>
+            )}
+          </dl>
+        </div>
+
+        {hasOutputs && (
+          <div className="task-detail__pane" hidden={tab !== 'outputs'}>
+            {nodeRuns.data !== undefined && (
+              <TaskOutputPanel
+                task={tk}
+                runs={nodeRuns.data.runs}
+                outputs={nodeRuns.data.outputs}
+              />
+            )}
+          </div>
         )}
-        {nodeRuns.data !== undefined && <NodeRunsTable runs={nodeRuns.data.runs} />}
-      </section>
 
-      <section className="page__section">
-        <h2>{t('tasks.sectionWorktreeDiff')}</h2>
-        {tk.baseCommit === null ? (
-          <div className="muted">{t('tasks.noBaseCommit')}</div>
-        ) : diff.isLoading ? (
-          <div className="muted">{t('tasks.loadingDiff')}</div>
-        ) : diff.error !== null && diff.error !== undefined ? (
-          <div className="error-box">{describeError(diff.error)}</div>
-        ) : diff.data !== undefined ? (
-          <DiffViewer diff={diff.data.diff} truncated={diff.data.truncated} />
-        ) : null}
-      </section>
+        <div className="task-detail__pane" hidden={tab !== 'worktree-diff'}>
+          {tk.baseCommit === null ? (
+            <div className="muted">{t('tasks.noBaseCommit')}</div>
+          ) : diff.isLoading ? (
+            <div className="muted">{t('tasks.loadingDiff')}</div>
+          ) : diff.error !== null && diff.error !== undefined ? (
+            <div className="error-box">{describeError(diff.error)}</div>
+          ) : diff.data !== undefined ? (
+            <WorktreeDiffPanel diff={diff.data.diff} truncated={diff.data.truncated} />
+          ) : null}
+        </div>
+      </div>
     </div>
   )
+}
+
+function tabLabel(t: (key: string) => string, k: TaskDetailTab): string {
+  switch (k) {
+    case 'workflow-status':
+      return t('tasks.tabWorkflowStatus')
+    case 'node-runs':
+      return t('tasks.tabNodeRuns')
+    case 'details':
+      return t('tasks.tabDetails')
+    case 'outputs':
+      return t('tasks.tabOutputs')
+    case 'worktree-diff':
+      return t('tasks.tabWorktreeDiff')
+  }
 }
 
 function TaskStatusCanvas({

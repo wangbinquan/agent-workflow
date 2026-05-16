@@ -1253,8 +1253,20 @@ code {
 }
 
 .canvas-frame--task {
-  height: 70vh;
-  min-height: 420px;
+  /* RFC-021: when the canvas lives inside a tab pane, the pane (height
+   * 100% of the .task-detail__panes flex row) already provides bounded
+   * height, so let the canvas fill it. The legacy 70vh keeps working
+   * outside the task-detail page (no other caller today, but defensive). */
+  height: 100%;
+  min-height: 0;
+}
+
+/* Editor pane wrapping the canvas in the task-detail tab also fills the
+ * pane vertically — without this, the inner `taskCanvasLayoutClass`
+ * grid only takes its intrinsic 420px and leaves whitespace below. */
+.task-detail__pane > .task-canvas-layout {
+  height: 100%;
+  min-height: 0;
 }
 
 /* Default: canvas takes the full content width. The 480px inspector
@@ -1411,7 +1423,10 @@ code {
 }
 
 .task-canvas-layout > .canvas-frame--task {
-  height: 70vh;
+  /* RFC-021: when the canvas lives inside the workflow-status tab pane,
+   * the pane already provides bounded height; let the canvas fill it
+   * instead of pinning to 70vh (which left ~128px dead space below). */
+  height: 100%;
 }
 
 /* ---- Events list ---- */
@@ -3299,4 +3314,128 @@ mark.comment-anchor[data-active='true'] {
   padding-left: 20px;
   font-size: 12px;
   color: var(--err, #c33);
+}
+
+/* ---- RFC-021: task detail page tab layout ---- */
+
+/* The page itself is locked to the content area's height so the only
+ * scrollable surfaces are individual tab panes (node-runs table, details
+ * dl, diff body, etc.). Mirrors `.page--editor`. */
+.page--task-detail {
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Same chrome trim as the workflow editor — h1 / hint default margins
+ * eat 60+ vertical pixels we'd rather hand to the canvas. */
+.content:has(.page--task-detail) {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.page--task-detail .page__header {
+  margin-bottom: 0;
+}
+
+.page--task-detail h1 {
+  font-size: 18px;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.task-detail__tab-bar {
+  flex: 0 0 auto;
+}
+
+.task-detail__panes {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* Each pane is always mounted (so xyflow's pan/zoom state survives tab
+ * switches) and toggled via the native `hidden` attribute. Explicit
+ * `display: none` here is defensive — without it a CSS reset that sets
+ * `display: block !important` on `div` would unhide all panes. */
+.task-detail__pane {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-detail__pane[hidden] {
+  display: none;
+}
+
+/* ---- RFC-021: worktree diff vertical file tabs ---- */
+
+.worktree-diff {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  min-height: 0;
+  gap: 8px;
+}
+
+.worktree-diff__files {
+  flex: 0 0 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  padding-right: 6px;
+}
+
+.worktree-diff__tablist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+}
+
+.worktree-diff__file-tab {
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text);
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.worktree-diff__file-tab:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.worktree-diff__file-tab--active,
+.worktree-diff__file-tab[aria-selected='true'] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.worktree-diff__truncated {
+  margin-bottom: 4px;
+}
+
+.worktree-diff__body {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
 }
