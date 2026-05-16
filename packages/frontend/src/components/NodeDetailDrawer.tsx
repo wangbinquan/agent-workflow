@@ -14,8 +14,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { NodeRun, NodeRunEventsResponse, NodeRunOutput, Task } from '@agent-workflow/shared'
 import { NODE_EVENT_KIND } from '@agent-workflow/shared'
-import { useNavigate } from '@tanstack/react-router'
-import { NodeDependencyTreeSection } from './agents/NodeDependencyTreeSection'
 import { api, ApiError } from '@/api/client'
 import {
   formatAttemptLabel,
@@ -46,12 +44,6 @@ interface Props {
    * workflowSnapshot in tasks.detail.tsx.
    */
   workflowNodeKind: string | null
-  /**
-   * RFC-022: the primary agent name for agent-single / agent-multi nodes,
-   * resolved from the workflow snapshot. Stats tab uses it to fetch the
-   * dependsOn closure tree. Null for non-agent kinds — tree section hides.
-   */
-  agentName: string | null
   runs: NodeRun[]
   outputs: NodeRunOutput[]
   onClose: () => void
@@ -67,7 +59,6 @@ export function NodeDetailDrawer({
   nodeRunId,
   nodeId,
   workflowNodeKind,
-  agentName,
   runs,
   outputs,
   onClose,
@@ -179,9 +170,7 @@ export function NodeDetailDrawer({
         )}
         {tab === 'events' && <EventsTab taskId={taskId} nodeRunId={nodeRunId} />}
         {tab === 'output' && <OutputTab outputs={nodeOutputs} />}
-        {tab === 'stats' && (
-          <StatsTab run={run} retries={retries} onPickRetry={onSelectRun} agentName={agentName} />
-        )}
+        {tab === 'stats' && <StatsTab run={run} retries={retries} onPickRetry={onSelectRun} />}
       </div>
     </aside>
   )
@@ -334,33 +323,14 @@ function OutputTab({ outputs }: { outputs: NodeRunOutput[] }) {
   )
 }
 
-function StatsDependencyTreeRow({ agentName }: { agentName: string }) {
-  const { t } = useTranslation()
-  const navigate = useNavigate()
-  return (
-    <>
-      <dt>{t('nodeDrawer.statDependencyTree')}</dt>
-      <dd>
-        <NodeDependencyTreeSection
-          agentName={agentName}
-          onNodeClick={(n) => navigate({ to: '/agents/$name', params: { name: n } })}
-        />
-      </dd>
-    </>
-  )
-}
-
 function StatsTab({
   run,
   retries,
   onPickRetry,
-  agentName,
 }: {
   run: NodeRun
   retries: NodeRun[]
   onPickRetry?: (id: string) => void
-  /** RFC-022: primary agent name; null hides the dependency-tree section. */
-  agentName: string | null
 }) {
   const { t } = useTranslation()
   const duration =
@@ -428,7 +398,6 @@ function StatsTab({
           <dd className="task-meta__error">{run.errorMessage}</dd>
         </>
       )}
-      {agentName !== null && <StatsDependencyTreeRow agentName={agentName} />}
       {retries.length > 0 && (
         <>
           <dt>{t('nodeDrawer.statRetries')}</dt>

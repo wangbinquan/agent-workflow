@@ -16,7 +16,6 @@ function agent(name: string, outputs: string[] = []): Agent {
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],
-    dependsOn: [],
     frontmatterExtra: {},
     bodyMd: '',
     schemaVersion: 1,

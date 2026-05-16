@@ -233,10 +233,6 @@ function TaskDetailPage() {
                   tk.workflowSnapshot,
                   resolveNodeIdFromRuns(nodeRuns.data.runs, selectedNodeRunId),
                 )}
-                agentName={resolveAgentNameFromSnapshot(
-                  tk.workflowSnapshot,
-                  resolveNodeIdFromRuns(nodeRuns.data.runs, selectedNodeRunId),
-                )}
                 runs={nodeRuns.data.runs}
                 outputs={nodeRuns.data.outputs}
                 onClose={closeNodeDrawer}
@@ -623,33 +619,6 @@ export function resolveNodeKindFromSnapshot(
     if (typeof n !== 'object' || n === null) continue
     const node = n as { id?: unknown; kind?: unknown }
     if (node.id === nodeId && typeof node.kind === 'string') return node.kind
-  }
-  return null
-}
-
-/**
- * RFC-022: resolve the primary agent name a workflow node references, so the
- * node-detail drawer can fetch its closure for the Stats tab tree. Only
- * agent-single / agent-multi nodes have an agentName — other kinds (input /
- * output / wrappers / review / clarify) return null and the drawer hides the
- * tree section.
- *
- * Exported for unit tests.
- */
-export function resolveAgentNameFromSnapshot(
-  snapshot: unknown,
-  nodeId: string | null,
-): string | null {
-  if (nodeId === null) return null
-  if (typeof snapshot !== 'object' || snapshot === null) return null
-  const nodes = (snapshot as { nodes?: unknown }).nodes
-  if (!Array.isArray(nodes)) return null
-  for (const n of nodes) {
-    if (typeof n !== 'object' || n === null) continue
-    const node = n as { id?: unknown; kind?: unknown; agentName?: unknown }
-    if (node.id !== nodeId) continue
-    if (node.kind !== 'agent-single' && node.kind !== 'agent-multi') return null
-    return typeof node.agentName === 'string' ? node.agentName : null
   }
   return null
 }
