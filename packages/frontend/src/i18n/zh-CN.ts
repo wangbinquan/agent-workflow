@@ -415,6 +415,7 @@ export interface Resources {
     fieldTimeoutMs: string
     fieldTimeoutMsHint: string
     fieldModelOverride: string
+    fieldModelOverrideHint: string
     modelPlaceholder: string
     fieldVariant: string
     fieldTemperatureOverride: string
@@ -1019,6 +1020,7 @@ export const zhCN: Resources = {
     fieldTimeoutMs: '超时 (ms)',
     fieldTimeoutMsHint: '缺省走 settings.defaultPerNodeTimeoutMs',
     fieldModelOverride: '模型覆盖',
+    fieldModelOverrideHint: '默认沿用 Agent 的模型（{{model}}）；改成其他值即覆盖。',
     modelPlaceholder: 'anthropic/claude-sonnet-4-6',
     fieldVariant: 'Variant',
     fieldTemperatureOverride: 'Temperature 覆盖',

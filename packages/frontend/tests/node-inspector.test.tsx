@@ -2,11 +2,34 @@
 // these confirm that user edits flow through `onChange` as a fully-formed
 // WorkflowDefinition with the right node updated.
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { NodeInspector } from '../src/components/canvas/NodeInspector'
+import { setBaseUrl, setToken } from '../src/stores/auth'
+
+function wrap(node: React.ReactElement) {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  })
+  return render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>)
+}
+
+beforeEach(() => {
+  // ModelSelect (rendered for agent-single / agent-multi) hits
+  // /api/runtime/models — stub out fetch so the inspector renders the
+  // dropdown without going to the network in unit tests.
+  setBaseUrl('http://daemon.test')
+  setToken('tok')
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    new Response(JSON.stringify({ binary: 'opencode', cached: false, models: [] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }),
+  )
+})
 
 const CODER: Agent = {
   id: 'agent-coder',
@@ -21,6 +44,7 @@ const CODER: Agent = {
   schemaVersion: 1,
   createdAt: 0,
   updatedAt: 0,
+  model: 'anthropic/sonnet',
 }
 
 function makeDef(nodes: WorkflowNode[]): WorkflowDefinition {
@@ -58,7 +82,7 @@ function Host({
 function setup(node: WorkflowNode, agents: Agent[] = [CODER]) {
   const onChange = vi.fn()
   const onClose = vi.fn()
-  render(<Host initial={node} agents={agents} onChangeSpy={onChange} onCloseSpy={onClose} />)
+  wrap(<Host initial={node} agents={agents} onChangeSpy={onChange} onCloseSpy={onClose} />)
   return { onChange, onClose }
 }
 
@@ -69,6 +93,7 @@ function lastPatchedNode(onChange: ReturnType<typeof vi.fn>): WorkflowNode {
 
 afterEach(() => {
   document.body.innerHTML = ''
+  vi.restoreAllMocks()
 })
 
 describe('NodeInspector', () => {
@@ -206,10 +231,66 @@ describe('NodeInspector', () => {
       agentName: '',
       promptTemplate: '',
     })
-    const select = screen.getByRole('combobox') as HTMLSelectElement
+    // First combobox is the agent picker; the model-override dropdown
+    // also renders, so we explicitly grab index 0.
+    const select = (screen.getAllByRole('combobox') as HTMLSelectElement[])[0]!
     fireEvent.change(select, { target: { value: 'coder' } })
     const after = lastPatchedNode(onChange) as unknown as { agentName: string }
     expect(after.agentName).toBe('coder')
+  })
+
+  // When no override is set, the model dropdown shows the agent's own
+  // default model — so the displayed value matches what'll actually run.
+  test('agent-single: model dropdown defaults to the agent model when no override is set', async () => {
+    vi.restoreAllMocks()
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          binary: 'opencode',
+          cached: false,
+          models: [{ id: 'anthropic/sonnet', provider: 'anthropic', modelID: 'sonnet' }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+    setup({
+      id: 'a1',
+      kind: 'agent-single',
+      agentName: 'coder',
+      promptTemplate: '',
+    })
+    const modelOption = await screen.findByRole('option', { name: /sonnet/i })
+    const modelSelect = modelOption.closest('select') as HTMLSelectElement
+    expect(modelSelect.value).toBe('anthropic/sonnet')
+  })
+
+  // Locks in the swap from a free-text model field to a ModelSelect dropdown
+  // for the workflow node's model override (mirrors the AgentForm dropdown).
+  test('agent-single: model override renders as a dropdown listing fetched models', async () => {
+    vi.restoreAllMocks()
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          binary: 'opencode',
+          cached: false,
+          models: [{ id: 'anthropic/sonnet', provider: 'anthropic', modelID: 'sonnet' }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+    const { onChange } = setup({
+      id: 'a1',
+      kind: 'agent-single',
+      agentName: 'coder',
+      promptTemplate: '',
+    })
+    const modelOption = await screen.findByRole('option', { name: /sonnet/i })
+    const modelSelect = modelOption.closest('select') as HTMLSelectElement
+    fireEvent.change(modelSelect, { target: { value: 'anthropic/sonnet' } })
+    const after = lastPatchedNode(onChange) as unknown as {
+      overrides: { model?: string }
+    }
+    expect(after.overrides.model).toBe('anthropic/sonnet')
   })
 
   test('agent-single: editing the prompt template patches promptTemplate', () => {
@@ -258,7 +339,7 @@ describe('NodeInspector', () => {
         />
       )
     }
-    render(<MultiHost />)
+    wrap(<MultiHost />)
     const selects = screen.getAllByRole('combobox') as HTMLSelectElement[]
     // selects[0] = agent picker, selects[1] = node id, selects[2] = port name
     expect(selects.length).toBeGreaterThanOrEqual(3)
@@ -311,7 +392,7 @@ describe('NodeInspector', () => {
         />
       )
     }
-    render(<MultiHost />)
+    wrap(<MultiHost />)
     const selects = screen.getAllByRole('combobox') as HTMLSelectElement[]
     fireEvent.change(selects[1]!, { target: { value: 'a1' } })
     const after = (onChange.mock.calls[0]![0] as WorkflowDefinition).nodes.find(
@@ -348,7 +429,7 @@ describe('NodeInspector', () => {
         />
       )
     }
-    render(<MultiHost />)
+    wrap(<MultiHost />)
     const selects = screen.getAllByRole('combobox') as HTMLSelectElement[]
     const nodeSel = selects[1]!
     expect(nodeSel.value).toBe('diff')
@@ -359,7 +440,7 @@ describe('NodeInspector', () => {
   })
 
   test('Preview tab is disabled for non-agent kinds and enabled for agents', () => {
-    const { unmount } = render(
+    const { unmount } = wrap(
       <NodeInspector
         definition={makeDef([{ id: 'i1', kind: 'input', inputKey: 'req' }])}
         selectedNodeId="i1"
@@ -370,7 +451,7 @@ describe('NodeInspector', () => {
     )
     expect((screen.getByText('Preview') as HTMLButtonElement).disabled).toBe(true)
     unmount()
-    render(
+    wrap(
       <NodeInspector
         definition={makeDef([{ id: 'a1', kind: 'agent-single', agentName: 'coder' }])}
         selectedNodeId="a1"

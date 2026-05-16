@@ -439,6 +439,7 @@ export const enUS: Resources = {
     fieldTimeoutMs: 'Timeout (ms)',
     fieldTimeoutMsHint: 'Defaults to settings.defaultPerNodeTimeoutMs',
     fieldModelOverride: 'Model override',
+    fieldModelOverrideHint: 'Defaults to the agent model ({{model}}); pick another to override.',
     modelPlaceholder: 'anthropic/claude-sonnet-4-6',
     fieldVariant: 'Variant',
     fieldTemperatureOverride: 'Temperature override',

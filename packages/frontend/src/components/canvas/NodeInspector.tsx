@@ -18,6 +18,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChipsInput } from '@/components/ChipsInput'
 import { Field, NumberInput, Switch, TextArea, TextInput } from '@/components/Form'
+import { ModelSelect } from '@/components/ModelSelect'
 import { computePorts } from './WorkflowCanvas'
 import { REVIEW_INPUT_HANDLE_ID, syncEdgeFromFormField } from './connectionSync'
 import { patchInputDef, renameInputKey } from './syncInputDefs'
@@ -666,6 +667,7 @@ function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps)
         typeof rec.overrides === 'object' && rec.overrides !== null
           ? (rec.overrides as Record<string, unknown>)
           : {}
+      const selectedAgent = agents.find((a) => a.name === agentName)
       const ports = computePorts(node, new Map(agents.map((a) => [a.name, a])), definition)
 
       function update(p: Record<string, unknown>) {
@@ -731,15 +733,21 @@ function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps)
                 step={1000}
               />
             </Field>
-            <Field label={t('inspector.fieldModelOverride')}>
-              <TextInput
-                value={typeof overrides.model === 'string' ? overrides.model : ''}
-                onChange={(v) =>
-                  update({
-                    overrides: { ...overrides, ...(v ? { model: v } : { model: undefined }) },
-                  })
+            <Field
+              label={t('inspector.fieldModelOverride')}
+              hint={
+                selectedAgent?.model
+                  ? t('inspector.fieldModelOverrideHint', { model: selectedAgent.model })
+                  : undefined
+              }
+            >
+              <ModelSelect
+                value={
+                  typeof overrides.model === 'string'
+                    ? overrides.model
+                    : (selectedAgent?.model ?? undefined)
                 }
-                placeholder={t('inspector.modelPlaceholder')}
+                onChange={(v) => update({ overrides: { ...overrides, model: v } })}
               />
             </Field>
             <Field label={t('inspector.fieldVariant')}>
