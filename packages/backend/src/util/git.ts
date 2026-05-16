@@ -204,7 +204,18 @@ export async function gitDiffSnapshot(worktreePath: string, fromCommit: string):
   if (tracked.exitCode !== 0) {
     throw new DomainError('worktree-diff-failed', `git diff failed: ${tracked.stderr.trim()}`, 500)
   }
-  const untrackedList = await runGit(worktreePath, ['ls-files', '--others', '--exclude-standard'])
+  // `core.quotepath=false` is critical: without it, ls-files C-style escapes
+  // any non-ASCII path (e.g. `docs/中文.md` -> `"docs/\344\270\255\346\226\207.md"`)
+  // and the loop below feeds that quoted/escaped string back to `git diff
+  // --no-index`, which fails with `Could not access ...` and silently drops
+  // the file from the diff.
+  const untrackedList = await runGit(worktreePath, [
+    '-c',
+    'core.quotepath=false',
+    'ls-files',
+    '--others',
+    '--exclude-standard',
+  ])
   const untrackedNames = untrackedList.stdout
     .split('\n')
     .map((s) => s.trim())
@@ -222,11 +233,29 @@ export async function gitDiffSnapshot(worktreePath: string, fromCommit: string):
       '/dev/null',
       name,
     ])
-    // git diff --no-index exits 1 when diffs exist; that's expected.
+    // `git diff --no-index` exits 0 when files are identical, 1 when they
+    // differ (the expected case here, since we diff against /dev/null), and
+    // >1 on a real error like "Could not access". Treat anything beyond 0/1
+    // as fatal so a future regression can't silently swallow untracked files.
+    if (one.exitCode > 1) {
+      throw new DomainError(
+        'worktree-diff-failed',
+        `git diff --no-index failed for untracked path ${name}: ${one.stderr.trim()}`,
+        500,
+      )
+    }
     untrackedDiff += one.stdout
   }
 
-  return untrackedDiff === '' ? tracked.stdout : tracked.stdout + `\n${untrackedDiff}`
+  // Avoid emitting a leading blank line when only untracked files changed.
+  // The frontend DiffViewer buckets any line before the first `diff --git`
+  // marker into a virtual `(preamble)` block; a stray `\n` would surface as
+  // an empty preamble at the top of every untracked-only review.
+  if (tracked.stdout === '') return untrackedDiff
+  if (untrackedDiff === '') return tracked.stdout
+  return tracked.stdout.endsWith('\n')
+    ? tracked.stdout + untrackedDiff
+    : tracked.stdout + '\n' + untrackedDiff
 }
 
 /**
