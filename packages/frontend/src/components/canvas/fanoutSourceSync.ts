@@ -27,7 +27,7 @@
 // reference when nothing changes so upstream React effects can short-circuit
 // on `===`. Same trick as RFC-007 connectionSync + RFC-004 healLoadedDefinition.
 
-import type { Connection } from '@xyflow/react'
+import type { Connection, Edge } from '@xyflow/react'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 /**
@@ -37,6 +37,16 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
  * `handleConnect`'s fast-path discrimination.
  */
 export const MULTI_SOURCE_PORT_HANDLE_ID = '__multi_source_port__'
+
+/**
+ * Prefix for synthetic xyflow Edge ids that represent a fanout node's
+ * sourcePort visually on the canvas. These edges are NOT persisted in
+ * `definition.edges[]`; they're added to the render layer only so the
+ * user can see which upstream port currently feeds the multi-process
+ * sharding. `toDefinition` filters edges by id against `prev.edges`,
+ * so synthetic ids naturally drop out of round-tripping.
+ */
+export const SOURCE_PORT_EDGE_ID_PREFIX = '__sp__:'
 
 type SourcePortRef = { nodeId: string; portName: string }
 const EMPTY_SOURCE_PORT: SourcePortRef = { nodeId: '', portName: '' }
@@ -140,4 +150,49 @@ export function isValidSourcePortConnection(
   const source = def.nodes.find((n) => n.id === conn.source)
   if (source === undefined) return false
   return true
+}
+
+/**
+ * Build a list of synthetic xyflow Edges that visually connect each
+ * agent-multi node's sourcePort upstream port to its top-side handle.
+ * The user asked for a visible line so they can spot the sharding source
+ * on the canvas without opening the inspector.
+ *
+ * Contract: synthetic edges are render-only.
+ *  - id prefix `__sp__:<targetNodeId>` keeps them out of `toDefinition`'s
+ *    `liveById` filter (no matching entry in `prev.edges` ever).
+ *  - `selectable: false` + `deletable: false` prevents the user from
+ *    accidentally trying to delete a line that has no persisted backing;
+ *    to "remove" the connection they drag a fresh source onto the top
+ *    handle (replace) or clear the inspector field.
+ *  - `data.synthetic = 'sourcePort'` lets future logic discriminate.
+ *  - dashed accent style differentiates from real persisted edges.
+ *
+ * Only emits an edge when both endpoints exist in `def.nodes` so xyflow
+ * doesn't log a "handle not found" warning when the user clears one half
+ * (validator 'agent-multi-source-port-missing' already surfaces the
+ * misconfiguration in the inspector).
+ */
+export function buildSourcePortDisplayEdges(def: WorkflowDefinition): Edge[] {
+  const nodesById = new Map(def.nodes.map((n) => [n.id, n]))
+  const out: Edge[] = []
+  for (const n of def.nodes) {
+    if (n.kind !== 'agent-multi') continue
+    const sp = readSourcePort(n)
+    if (sp === undefined || sp.nodeId === '' || sp.portName === '') continue
+    if (!nodesById.has(sp.nodeId)) continue
+    out.push({
+      id: `${SOURCE_PORT_EDGE_ID_PREFIX}${n.id}`,
+      source: sp.nodeId,
+      sourceHandle: sp.portName,
+      target: n.id,
+      targetHandle: MULTI_SOURCE_PORT_HANDLE_ID,
+      style: { stroke: 'var(--accent)', strokeDasharray: '4 4', strokeWidth: 1.5 },
+      selectable: false,
+      deletable: false,
+      focusable: false,
+      data: { synthetic: 'sourcePort' },
+    })
+  }
+  return out
 }

@@ -147,7 +147,10 @@ describe('WorkflowCanvas does not enable selectionOnDrag', () => {
     expect(src).toMatch(
       /setNodes\(\s*applySelection\(\s*projectDefinitionForXyflow\(\s*definition,\s*toFlowNodes\(/,
     )
-    expect(src).toMatch(/setEdges\(\s*applySelection\(toFlowEdges\(/)
+    // setEdges still wraps toFlowEdges in applySelection. After RFC-015 the
+    // path additionally spreads buildSourcePortDisplayEdges alongside, so we
+    // allow an optional `[` + spread between `setEdges(` and `applySelection`.
+    expect(src).toMatch(/setEdges\(\s*\[?\s*\.{0,3}\s*applySelection\(toFlowEdges\(/)
   })
 })
 

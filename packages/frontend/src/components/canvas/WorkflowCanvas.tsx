@@ -46,6 +46,7 @@ import { INBOUND_HANDLE_ID, type CanvasNodeData, type CanvasSelection } from './
 import {
   MULTI_SOURCE_PORT_HANDLE_ID,
   applySourcePortConnection,
+  buildSourcePortDisplayEdges,
   clearSourcePortOnNodeRemoved,
   isValidSourcePortConnection,
 } from './fanoutSourceSync'
@@ -192,7 +193,10 @@ function CanvasInner({
   const [nodes, setNodes] = useState<Node[]>(() =>
     projectDefinitionForXyflow(definition, toFlowNodes(definition, agentByName, nodeStatuses)),
   )
-  const [edges, setEdges] = useState<Edge[]>(() => toFlowEdges(definition.edges))
+  const [edges, setEdges] = useState<Edge[]>(() => [
+    ...toFlowEdges(definition.edges),
+    ...buildSourcePortDisplayEdges(definition),
+  ])
   const externalDefRef = useRef(definition)
   const externalStatusesRef = useRef(nodeStatuses)
   // Track the last agentByName ref we rebuilt against. The canvas is often
@@ -237,7 +241,11 @@ function CanvasInner({
           sel.nodes,
         ),
       )
-      if (defChanged) setEdges(applySelection(toFlowEdges(definition.edges), sel.edges))
+      if (defChanged)
+        setEdges([
+          ...applySelection(toFlowEdges(definition.edges), sel.edges),
+          ...buildSourcePortDisplayEdges(definition),
+        ])
     }
   }, [definition, agentByName, nodeStatuses])
 

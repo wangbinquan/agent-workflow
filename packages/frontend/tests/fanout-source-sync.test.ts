@@ -14,7 +14,9 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { describe, expect, test } from 'vitest'
 import {
   MULTI_SOURCE_PORT_HANDLE_ID,
+  SOURCE_PORT_EDGE_ID_PREFIX,
   applySourcePortConnection,
+  buildSourcePortDisplayEdges,
   clearSourcePortOnNodeRemoved,
   isValidSourcePortConnection,
 } from '../src/components/canvas/fanoutSourceSync'
@@ -253,5 +255,70 @@ describe('isValidSourcePortConnection', () => {
         targetHandle: MULTI_SOURCE_PORT_HANDLE_ID,
       }),
     ).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// buildSourcePortDisplayEdges — render-only synthetic edges so the user
+// sees a visible line from the upstream port to the agent-multi node's
+// top handle. NOT persisted in definition.edges[].
+// ---------------------------------------------------------------------------
+
+describe('buildSourcePortDisplayEdges', () => {
+  test('empty when no agent-multi nodes', () => {
+    const def = makeDef({ nodes: [agent('designer')] })
+    expect(buildSourcePortDisplayEdges(def)).toEqual([])
+  })
+
+  test('empty when agent-multi has unset sourcePort', () => {
+    const def = makeDef({ nodes: [agent('designer'), multi('audit')] })
+    expect(buildSourcePortDisplayEdges(def)).toEqual([])
+  })
+
+  test('emits one synthetic edge per fanout with set + resolvable sourcePort', () => {
+    const def = makeDef({
+      nodes: [
+        agent('designer'),
+        multi('audit', { nodeId: 'designer', portName: 'markdown_design' }),
+      ],
+    })
+    const result = buildSourcePortDisplayEdges(def)
+    expect(result).toHaveLength(1)
+    const edge = result[0]!
+    expect(edge.id).toBe(`${SOURCE_PORT_EDGE_ID_PREFIX}audit`)
+    expect(edge.source).toBe('designer')
+    expect(edge.sourceHandle).toBe('markdown_design')
+    expect(edge.target).toBe('audit')
+    expect(edge.targetHandle).toBe(MULTI_SOURCE_PORT_HANDLE_ID)
+    expect(edge.selectable).toBe(false)
+    expect(edge.deletable).toBe(false)
+    expect(edge.data).toEqual({ synthetic: 'sourcePort' })
+  })
+
+  test('skips fanouts whose sourcePort references a deleted node', () => {
+    const def = makeDef({
+      nodes: [multi('audit', { nodeId: 'ghost', portName: 'p' })],
+    })
+    expect(buildSourcePortDisplayEdges(def)).toEqual([])
+  })
+
+  test('skips fanouts whose sourcePort has empty portName', () => {
+    const def = makeDef({
+      nodes: [agent('designer'), multi('audit', { nodeId: 'designer', portName: '' })],
+    })
+    expect(buildSourcePortDisplayEdges(def)).toEqual([])
+  })
+
+  test('synthetic edge id prefix sits outside `definition.edges[]` id space', () => {
+    const def = makeDef({
+      nodes: [
+        agent('designer'),
+        multi('audit', { nodeId: 'designer', portName: 'markdown_design' }),
+      ],
+    })
+    const result = buildSourcePortDisplayEdges(def)
+    // toDefinition's liveById filter would never match a synthetic id against
+    // a real edge id; lock the prefix so this contract stays.
+    expect(result[0]?.id.startsWith(SOURCE_PORT_EDGE_ID_PREFIX)).toBe(true)
   })
 })
