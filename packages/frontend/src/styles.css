@@ -3392,8 +3392,16 @@ mark.comment-anchor[data-active='true'] {
   gap: 6px;
   min-height: 0;
   overflow-y: auto;
-  border-right: 1px solid var(--border);
-  padding-right: 6px;
+  /* Give the file list a proper sidebar-like panel so it visually
+   * fills the column even when only a handful of files changed.
+   * Without this the column was technically 100% height but with just
+   * a 1px right border + transparent background, leaving a 600px+
+   * void below the last file tab that read as "the box isn't full
+   * height". */
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px;
 }
 
 .worktree-diff__tablist {

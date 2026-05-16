@@ -77,6 +77,18 @@ describe('worktree diff vertical file tabs', () => {
     expect(body).toMatch(/min-height:\s*0/)
   })
 
+  test('left file list reads as a full-height panel (border on all sides + bg)', () => {
+    // Without these the column was technically 100% tall but only the
+    // 1px right border was visible, so the empty space below the last
+    // file tab looked like "the box isn't filled". Lock the panel look
+    // so a future style cleanup doesn't quietly revert.
+    const body = ruleBody('.worktree-diff__files')
+    expect(body).toMatch(/border:\s*1px solid var\(--border\)/)
+    expect(body).toMatch(/border-radius:\s*6px/)
+    expect(body).toMatch(/background:\s*var\(--bg\)/)
+    expect(body).not.toMatch(/border-right:\s*1px solid var\(--border\)/)
+  })
+
   test('right body grows + independently scrolls + can shrink horizontally', () => {
     const body = ruleBody('.worktree-diff__body')
     expect(body).toMatch(/flex:\s*1/)
