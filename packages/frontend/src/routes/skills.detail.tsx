@@ -53,13 +53,16 @@ function SkillDetailPage() {
     onSuccess: (s) => {
       void qc.invalidateQueries({ queryKey: ['skills'] })
       qc.setQueryData(['skills', name], s)
+      navigate({ to: '/skills' })
     },
   })
   const saveContent = useMutation({
     mutationFn: () =>
       api.put<SkillContent>(`/api/skills/${encodeURIComponent(name)}/content`, { bodyMd }),
     onSuccess: (next) => {
+      void qc.invalidateQueries({ queryKey: ['skills'] })
       qc.setQueryData(['skills', name, 'content'], next)
+      navigate({ to: '/skills' })
     },
   })
   const del = useMutation({

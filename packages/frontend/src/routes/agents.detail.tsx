@@ -47,6 +47,7 @@ function AgentDetailPage() {
     onSuccess: (a) => {
       void qc.invalidateQueries({ queryKey: ['agents'] })
       qc.setQueryData(['agents', name], a)
+      navigate({ to: '/agents' })
     },
   })
 
@@ -88,9 +89,6 @@ function AgentDetailPage() {
         >
           {save.isPending ? t('common.saving') : t('agents.saveButton')}
         </button>
-        {save.isSuccess && save.error === null && (
-          <span className="form-actions__ok">{t('common.saved')}</span>
-        )}
         {save.error !== null && save.error !== undefined && (
           <span className="form-actions__error">{describeError(save.error)}</span>
         )}
