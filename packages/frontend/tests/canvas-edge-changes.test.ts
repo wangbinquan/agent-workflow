@@ -152,6 +152,35 @@ describe('WorkflowCanvas does not enable selectionOnDrag', () => {
     // allow an optional `[` + spread between `setEdges(` and `applySelection`.
     expect(src).toMatch(/setEdges\(\s*\[?\s*\.{0,3}\s*applySelection\(toFlowEdges\(/)
   })
+
+  test('deleteSelected clears parent selection so empty inspector frame folds away', async () => {
+    // Regression: pressing Delete on a selected node removed the node
+    // from definition but the parent route's `selection` state still
+    // held `{kind:'node', id:'foo'}` → `editorLayoutClass` kept the
+    // 3rd grid column open and the (now-rendering-null) NodeInspector
+    // showed an empty white frame until the user clicked elsewhere.
+    // The fix calls onSelect(null) inside deleteSelected so the parent
+    // collapses the inspector column synchronously. Source-level lock
+    // because triggering xyflow's Delete-key path in JSDOM is brittle;
+    // we anchor the contract with a regex that survives prettier
+    // reformatting.
+    const fs = await import('node:fs/promises')
+    const path = await import('node:path')
+    const here = path.dirname(new URL(import.meta.url).pathname)
+    const src = await fs.readFile(
+      path.join(here, '../src/components/canvas/WorkflowCanvas.tsx'),
+      'utf8',
+    )
+    const start = src.indexOf('const deleteSelected = useCallback(')
+    expect(start).toBeGreaterThan(-1)
+    const end = src.indexOf('[commitChange', start)
+    const body = src.slice(start, end)
+    // Must reset both the local sig (so the next click on a fresh node
+    // emits) AND call onSelect(null) (so the parent route's selection
+    // state clears and editorLayoutClass collapses the 3rd column).
+    expect(body).toMatch(/lastEmittedSelectionSig\.current\s*=\s*['"]null['"]/)
+    expect(body).toMatch(/onSelect\s*\(\s*null\s*\)/)
+  })
 })
 
 // --- Bug 4: clicking the EdgeInspector ✕ used to call only

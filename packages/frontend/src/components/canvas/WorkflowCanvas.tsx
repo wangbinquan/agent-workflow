@@ -469,7 +469,17 @@ function CanvasInner({
     nextDef = clearSourcePortsForSyntheticIds(nextDef, selection.edges)
     commitChange(nextDef)
     setSelection({ nodes: [], edges: [] })
-  }, [commitChange, definition, onChange, readOnly, selection.edges, selection.nodes])
+    // Tell the parent route to drop its selection too — otherwise
+    // `editorLayoutClass` keeps the third column slot reserved and the
+    // (now-empty) NodeInspector renders an empty white frame until the
+    // user clicks elsewhere. mirrors onPaneClick's "clear parent
+    // selection" path so the inspector folds away the moment its node
+    // disappears.
+    if (lastEmittedSelectionSig.current !== 'null') {
+      lastEmittedSelectionSig.current = 'null'
+      if (onSelect !== undefined) onSelect(null)
+    }
+  }, [commitChange, definition, onChange, onSelect, readOnly, selection.edges, selection.nodes])
 
   const duplicateNode = useCallback(
     (nodeId: string) => {
