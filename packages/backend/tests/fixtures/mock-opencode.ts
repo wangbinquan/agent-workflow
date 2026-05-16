@@ -12,6 +12,11 @@
 //   MOCK_OPENCODE_REQUIRE_TOKEN  '1' to assert OPENCODE_CONFIG_CONTENT contains a marker
 //   MOCK_OPENCODE_FAIL_COUNTER   path to a file holding an integer attempt counter
 //   MOCK_OPENCODE_FAIL_UNTIL     fail (exit 1, skip envelope) while counter < this number
+//   MOCK_OPENCODE_CLARIFY_BODY   JSON for the <workflow-clarify> envelope body
+//                                (e.g. {"questions":[{"id":"q1",...}]}); when set,
+//                                the mock emits a <workflow-clarify> envelope INSTEAD
+//                                of <workflow-output>. To exercise the both-envelope
+//                                rejection path, set this alongside MOCK_OPENCODE_OUTPUTS.
 
 import process from 'node:process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -87,24 +92,40 @@ if (stderr) {
 // Real opencode with `--format json` puts the agent's text reply (which
 // carries the <workflow-output> envelope) inside a `text` event's
 // `part.text` field. Mirror that shape so the runner can find it.
+//
+// RFC-023: when MOCK_OPENCODE_CLARIFY_BODY is set, emit a <workflow-clarify>
+// envelope (alone, or combined with <workflow-output> when both env vars
+// are present — used to exercise the exclusive-or hard reject).
 if (env.MOCK_OPENCODE_SKIP_ENVELOPE !== '1' && !forceFail) {
-  let outputs: Record<string, string> = {}
-  try {
-    outputs = JSON.parse(env.MOCK_OPENCODE_OUTPUTS ?? '{}') as Record<string, string>
-  } catch (e) {
-    fail(`MOCK_OPENCODE_OUTPUTS is not valid JSON: ${(e as Error).message}`)
+  const blocks: string[] = []
+  const wantOutput =
+    env.MOCK_OPENCODE_OUTPUTS !== undefined || env.MOCK_OPENCODE_CLARIFY_BODY === undefined
+  if (wantOutput) {
+    let outputs: Record<string, string> = {}
+    try {
+      outputs = JSON.parse(env.MOCK_OPENCODE_OUTPUTS ?? '{}') as Record<string, string>
+    } catch (e) {
+      fail(`MOCK_OPENCODE_OUTPUTS is not valid JSON: ${(e as Error).message}`)
+    }
+    let envelope = '<workflow-output>\n'
+    for (const [name, content] of Object.entries(outputs)) {
+      envelope += `  <port name="${name}">${content}</port>\n`
+    }
+    envelope += '</workflow-output>'
+    blocks.push(envelope)
   }
-  let envelope = '<workflow-output>\n'
-  for (const [name, content] of Object.entries(outputs)) {
-    envelope += `  <port name="${name}">${content}</port>\n`
+  if (env.MOCK_OPENCODE_CLARIFY_BODY !== undefined) {
+    // Just embed the body string verbatim; tests are responsible for shape.
+    blocks.push(`<workflow-clarify>${env.MOCK_OPENCODE_CLARIFY_BODY}</workflow-clarify>`)
   }
-  envelope += '</workflow-output>'
-  const textEvent = {
-    type: 'text',
-    timestamp: Date.now(),
-    part: { type: 'text', text: envelope },
+  if (blocks.length > 0) {
+    const textEvent = {
+      type: 'text',
+      timestamp: Date.now(),
+      part: { type: 'text', text: blocks.join('\n') },
+    }
+    process.stdout.write(JSON.stringify(textEvent) + '\n')
   }
-  process.stdout.write(JSON.stringify(textEvent) + '\n')
 }
 
 // Optional delay (for timeout tests).

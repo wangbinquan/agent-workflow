@@ -26,6 +26,7 @@ import type { AgentOutputKind } from '@agent-workflow/shared'
 import { ValidationError } from '@/util/errors'
 
 const ENVELOPE_RE = /<workflow-output>([\s\S]*?)<\/workflow-output>/g
+const CLARIFY_ENVELOPE_RE = /<workflow-clarify>([\s\S]*?)<\/workflow-clarify>/g
 // Accept both "name" and 'name' attribute quotes. Tolerant of arbitrary
 // whitespace inside the opening tag.
 const PORT_RE = /<port\s+name=(?:"([^"]+)"|'([^']+)')\s*>([\s\S]*?)<\/port>/g
@@ -51,6 +52,69 @@ export function extractLastEnvelope(text: string): string | null {
   if (matches.length === 0) return null
   const last = matches[matches.length - 1]
   return last ? last[0] : null
+}
+
+// ---------------------------------------------------------------------------
+// RFC-023: clarify envelope detection.
+// ---------------------------------------------------------------------------
+
+/**
+ * The four possible envelope shapes an agent reply can take after RFC-023.
+ *
+ *  - 'output'  → exactly one (or more) <workflow-output> block, no clarify.
+ *                Normal happy path — runner parses output and writes ports.
+ *  - 'clarify' → exactly one (or more) <workflow-clarify> block, no output.
+ *                Runner hands off to ClarifyService.createClarifySession and
+ *                marks the clarify node_run awaiting_human.
+ *  - 'both'    → both kinds present. **Hard reject** — the protocol block in
+ *                the user prompt explicitly forbids this (a reply MUST be
+ *                exactly one OR the other, never both / neither). Runner
+ *                fails the node with `clarify-and-output-both-present` so the
+ *                normal retry path applies.
+ *  - 'none'    → neither kind present. Same failure mode as today.
+ */
+export type DetectedEnvelopeKind = 'output' | 'clarify' | 'both' | 'none'
+
+/**
+ * Cheap pre-scan over agent stdout to decide which envelope path the runner
+ * should take. We do not parse the body here — just count global regex hits
+ * for either form.
+ *
+ * Both/Neither detection does not depend on ordering — any stdout that
+ * contains BOTH tag pairs (even nested or separated by megabytes) is `both`.
+ * This is intentional: agents that try to "hedge" by emitting one form first
+ * and another later are still rejected so we never have to decide which one
+ * was the intent.
+ */
+export function detectEnvelopeKind(stdout: string): DetectedEnvelopeKind {
+  const hasOutput = ENVELOPE_RE.test(stdout)
+  // RegExp objects with the global flag carry mutable lastIndex state across
+  // .test()/.exec() calls. Reset so the next caller doesn't get a false
+  // negative on a string that begins before our last cursor position.
+  ENVELOPE_RE.lastIndex = 0
+  const hasClarify = CLARIFY_ENVELOPE_RE.test(stdout)
+  CLARIFY_ENVELOPE_RE.lastIndex = 0
+  if (hasOutput && hasClarify) return 'both'
+  if (hasOutput) return 'output'
+  if (hasClarify) return 'clarify'
+  return 'none'
+}
+
+/**
+ * Extract the JSON body inside the LAST `<workflow-clarify>...</workflow-clarify>`
+ * block, mirroring extractLastEnvelope semantics. Returns null when no
+ * clarify block is present. The returned string is trimmed but otherwise
+ * verbatim — callers (shared/clarify.parseClarifyEnvelopeBody) handle JSON
+ * parsing + zod validation + permissive truncation.
+ */
+export function extractClarifyEnvelopeBody(stdout: string): string | null {
+  const matches = [...stdout.matchAll(CLARIFY_ENVELOPE_RE)]
+  if (matches.length === 0) return null
+  const last = matches[matches.length - 1]
+  if (!last) return null
+  // last[1] is the captured body between the open / close tags.
+  const body = (last[1] ?? '').trim()
+  return body
 }
 
 /**

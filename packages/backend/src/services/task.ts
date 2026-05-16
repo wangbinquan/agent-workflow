@@ -321,11 +321,12 @@ export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps):
   if (
     task.status !== 'failed' &&
     task.status !== 'interrupted' &&
-    task.status !== 'awaiting_review' // RFC-005: decision handler resumes after pause
+    task.status !== 'awaiting_review' && // RFC-005: decision handler resumes after pause
+    task.status !== 'awaiting_human' // RFC-023: clarify answer submit resumes after pause
   ) {
     throw new ConflictError(
       'task-not-resumable',
-      `task '${id}' is ${task.status}; only failed/interrupted/awaiting_review tasks can resume`,
+      `task '${id}' is ${task.status}; only failed/interrupted/awaiting_review/awaiting_human tasks can resume`,
     )
   }
 

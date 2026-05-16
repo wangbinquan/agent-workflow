@@ -17,14 +17,26 @@
 // Caller (scheduler / tests) is responsible for INSERT-ing the node_runs row
 // in 'pending' state before calling runNode().
 
-import type { Agent, ReviewPromptContext } from '@agent-workflow/shared'
+import type {
+  Agent,
+  ClarifyPromptContext,
+  ClarifyQuestion,
+  ClarifyTruncationWarning,
+  ReviewPromptContext,
+} from '@agent-workflow/shared'
+import { buildClarifyProtocolBlock, parseClarifyEnvelopeBody } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { cpSync, mkdirSync, rmSync, symlinkSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
 import { createLogger, type Logger } from '@/util/log'
-import { extractLastEnvelope, parseEnvelope } from './envelope'
+import {
+  detectEnvelopeKind,
+  extractClarifyEnvelopeBody,
+  extractLastEnvelope,
+  parseEnvelope,
+} from './envelope'
 import { renderUserPrompt } from './protocol'
 
 export type SkillSource = 'managed' | 'external' | 'project'
@@ -72,6 +84,23 @@ export interface RunNodeOptions {
    * decided review. Built by services/review.ts:buildReviewPromptContext.
    */
   reviewContext?: ReviewPromptContext
+  /**
+   * RFC-023 clarify-driven re-run context. Set by the scheduler when the
+   * agent is being re-spawned after the user submitted clarify answers
+   * (clarifyIteration > 0). Substitutes {{__clarify_questions__}} /
+   * {{__clarify_answers__}} / {{__clarify_iteration__}} / {{__clarify_remaining__}}
+   * and auto-appends the Q&A sections at the user prompt tail. Absent on
+   * first runs and on runs whose agent never asked back.
+   */
+  clarifyContext?: ClarifyPromptContext
+  /**
+   * RFC-023: when true (scheduler computed `agentHasClarifyChannel(definition,
+   * agentNodeId)` from the workflow definition), the runner appends
+   * `buildClarifyProtocolBlock()` to the user prompt so the agent is
+   * instructed it MAY reply with a <workflow-clarify> envelope. Off by
+   * default keeps the non-clarify wire format identical to pre-RFC-023.
+   */
+  hasClarifyChannel?: boolean
   /** Skills used by this agent. */
   skills: ResolvedSkill[]
   /**
@@ -122,6 +151,18 @@ export interface RunResult {
   prompt: string
   /** opencode sessionID first seen in stdout events, if any. */
   sessionId?: string
+  /**
+   * RFC-023: present when the agent reply parsed as a `<workflow-clarify>`
+   * envelope (status will still be 'done' — the agent successfully expressed
+   * an ask). The scheduler reads this and forwards questions/warnings into
+   * `clarify.createClarifySession`, then parks the task at `awaiting_human`.
+   * `outputs` is empty in this case — clarify defers all port outputs to
+   * the next round per the protocol block in the user prompt.
+   */
+  clarify?: {
+    questions: ClarifyQuestion[]
+    truncationWarnings: ClarifyTruncationWarning[]
+  }
 }
 
 export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
@@ -148,13 +189,22 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   }
 
   // 3. Render the user prompt.
-  const prompt = renderUserPrompt({
+  const renderedPrompt = renderUserPrompt({
     promptTemplate: opts.promptTemplate,
     inputs: opts.inputs,
     meta: opts.templateMeta,
     agentOutputs: opts.agent.outputs,
     ...(opts.reviewContext !== undefined ? { reviewContext: opts.reviewContext } : {}),
+    ...(opts.clarifyContext !== undefined ? { clarifyContext: opts.clarifyContext } : {}),
   })
+  // RFC-023: append the clarify protocol block AFTER the standard
+  // <workflow-output> protocol block. The order matters — the standard
+  // block already established the default behavior; the clarify block
+  // adds the conditional "instead emit <workflow-clarify>" branch. Only
+  // append when the scheduler told us the agent node has a clarify channel
+  // wired in the workflow definition.
+  const prompt =
+    opts.hasClarifyChannel === true ? renderedPrompt + buildClarifyProtocolBlock() : renderedPrompt
 
   await opts.db
     .update(nodeRuns)
@@ -292,37 +342,82 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     status = 'done'
   }
 
-  // 9. Parse envelope on clean exit.
+  // 9. Parse envelope on clean exit. RFC-023 splits this into a kind probe
+  //    first so we can branch between the legacy <workflow-output> path,
+  //    the new <workflow-clarify> path, and the exclusive-or hard rejects
+  //    (both / neither). detectEnvelopeKind is the single source of truth
+  //    for which form the reply took.
   let outputs: Record<string, string> = {}
+  let clarifyResult:
+    | { questions: ClarifyQuestion[]; truncationWarnings: ClarifyTruncationWarning[] }
+    | undefined
   if (status === 'done') {
     const accumulatedText = agentText.join('\n')
-    const envelope = extractLastEnvelope(accumulatedText)
-    if (envelope === null) {
+    const kind = detectEnvelopeKind(accumulatedText)
+    if (kind === 'both') {
+      status = 'failed'
+      errorMessage =
+        'clarify-and-output-both-present: agent reply contained BOTH <workflow-output> and <workflow-clarify>; the framework requires exactly one'
+    } else if (kind === 'clarify') {
+      const body = extractClarifyEnvelopeBody(accumulatedText)
+      const parsed = body !== null ? parseClarifyEnvelopeBody(body) : null
+      if (parsed === null || parsed.body === null) {
+        const firstErr = parsed?.errors[0]
+        status = 'failed'
+        errorMessage =
+          firstErr !== undefined
+            ? `${firstErr.code}: ${firstErr.detail}`
+            : 'clarify-questions-malformed: empty body'
+      } else {
+        // Agent successfully expressed a clarify ask. Keep status=done — the
+        // agent's subprocess exited cleanly with a valid envelope; the next
+        // round will be a fresh node_run minted post-answer.
+        clarifyResult = {
+          questions: parsed.body.questions,
+          truncationWarnings: parsed.warnings,
+        }
+        if (parsed.warnings.length > 0) {
+          log.warn('clarify envelope truncated to limits', {
+            nodeRunId: opts.nodeRunId,
+            warnings: parsed.warnings.map((w) => w.code),
+          })
+        }
+      }
+    } else if (kind === 'none') {
       status = 'failed'
       errorMessage = 'no <workflow-output> envelope found in stdout'
     } else {
-      const parsed = parseEnvelope(envelope, opts.agent.outputs)
-      outputs = Object.fromEntries(parsed.ports)
-      for (const [name, content] of parsed.ports) {
-        await opts.db
-          .insert(nodeRunOutputs)
-          .values({ nodeRunId: opts.nodeRunId, portName: name, content })
-          .onConflictDoUpdate({
-            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-            set: { content },
+      // kind === 'output' — legacy happy path.
+      const envelope = extractLastEnvelope(accumulatedText)
+      // envelope is non-null here because detectEnvelopeKind matched, but
+      // guard defensively for type narrowing.
+      if (envelope === null) {
+        status = 'failed'
+        errorMessage = 'no <workflow-output> envelope found in stdout'
+      } else {
+        const parsed = parseEnvelope(envelope, opts.agent.outputs)
+        outputs = Object.fromEntries(parsed.ports)
+        for (const [name, content] of parsed.ports) {
+          await opts.db
+            .insert(nodeRunOutputs)
+            .values({ nodeRunId: opts.nodeRunId, portName: name, content })
+            .onConflictDoUpdate({
+              target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+              set: { content },
+            })
+        }
+        if (parsed.missingDeclared.length > 0) {
+          log.warn('agent omitted declared ports', {
+            missing: parsed.missingDeclared,
+            nodeRunId: opts.nodeRunId,
           })
-      }
-      if (parsed.missingDeclared.length > 0) {
-        log.warn('agent omitted declared ports', {
-          missing: parsed.missingDeclared,
-          nodeRunId: opts.nodeRunId,
-        })
-      }
-      if (parsed.undeclared.length > 0) {
-        log.warn('agent emitted undeclared ports', {
-          undeclared: parsed.undeclared.map((u) => u.name),
-          nodeRunId: opts.nodeRunId,
-        })
+        }
+        if (parsed.undeclared.length > 0) {
+          log.warn('agent emitted undeclared ports', {
+            undeclared: parsed.undeclared.map((u) => u.name),
+            nodeRunId: opts.nodeRunId,
+          })
+        }
       }
     }
   }
@@ -353,6 +448,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   const result: RunResult = { status, exitCode, outputs, tokenUsage, prompt }
   if (errorMessage !== undefined) result.errorMessage = errorMessage
   if (sessionId !== undefined) result.sessionId = sessionId
+  if (clarifyResult !== undefined) result.clarify = clarifyResult
   return result
 }
 

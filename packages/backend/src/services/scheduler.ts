@@ -14,12 +14,17 @@
 // times for wrapper-loop).
 
 import type { Agent, WorkflowDefinition, WorkflowEdge, WorkflowNode } from '@agent-workflow/shared'
-import { WorkflowDefinitionSchema } from '@agent-workflow/shared'
+import {
+  WorkflowDefinitionSchema,
+  agentHasClarifyChannel,
+  findClarifyNodeForAgent,
+} from '@agent-workflow/shared'
 import { and, asc, desc, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { agents, nodeRunOutputs, nodeRuns, skills, tasks } from '@/db/schema'
 import { resolveDependsClosure } from '@/services/agentDeps'
+import { buildClarifyPromptContext, createClarifySession } from '@/services/clarify'
 import { evaluateExitCondition, parseExitCondition } from '@/services/exitCondition'
 import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
 import { runNode, type ResolvedSkill, type RunResult } from '@/services/runner'
@@ -60,6 +65,7 @@ type NodeStatus =
   | 'skipped'
   | 'exhausted'
   | 'awaiting_review'
+  | 'awaiting_human'
 
 interface SchedulerState {
   db: DbClient
@@ -117,7 +123,8 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       node.kind !== 'output' &&
       node.kind !== 'wrapper-git' &&
       node.kind !== 'wrapper-loop' &&
-      node.kind !== 'review' // RFC-005
+      node.kind !== 'review' && // RFC-005
+      node.kind !== 'clarify' // RFC-023
     ) {
       await failTask(
         db,
@@ -196,6 +203,17 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     log.info('task awaiting human review', { taskId })
     return
   }
+  if (result.kind === 'awaiting_human') {
+    // RFC-023: an agent (or one or more agent-multi shard children) emitted a
+    // <workflow-clarify> envelope. The clarify node_run is parked
+    // awaiting_human; the source agent has no rerun row yet — that's
+    // created when the user POSTs answers. Per design §7.3 awaiting_human
+    // outranks awaiting_review on the task chip when both can fire at once.
+    await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
+    await emitStatus(db, taskId)
+    log.info('task awaiting human clarification', { taskId })
+    return
+  }
 
   // 9. Done.
   await db.update(tasks).set({ status: 'done', finishedAt: Date.now() }).where(eq(tasks.id, taskId))
@@ -208,7 +226,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
 // -----------------------------------------------------------------------------
 
 interface ScopeResult {
-  kind: 'ok' | 'failed' | 'canceled' | 'awaiting_review'
+  kind: 'ok' | 'failed' | 'canceled' | 'awaiting_review' | 'awaiting_human'
   detail?: { summary: string; message: string; nodeId?: string }
 }
 
@@ -232,6 +250,12 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
   // P-3-08 resume: nodes whose latest run at THIS iteration is `done` are
   // pre-completed. Inner scopes additionally narrow by iteration so re-runs
   // start fresh per iteration.
+  //
+  // RFC-023: the "latest" comparator widens from retryIndex alone to a
+  // (retryIndex, clarifyIteration) tuple. A clarify-driven rerun mints a
+  // node_run with retryIndex=0 (process-retry budget intact) but a
+  // bumped clarifyIteration — without this, the older done row of the same
+  // node beats it and the rerun row stays pending forever.
   const priorRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   const latestPerNode = new Map<string, (typeof priorRuns)[number]>()
   for (const r of priorRuns) {
@@ -239,7 +263,13 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
     if (!scopeIds.has(r.nodeId)) continue
     if (r.parentNodeRunId !== null) continue // skip fan-out child rows
     const prev = latestPerNode.get(r.nodeId)
-    if (prev === undefined || r.retryIndex > prev.retryIndex) latestPerNode.set(r.nodeId, r)
+    if (
+      prev === undefined ||
+      r.retryIndex > prev.retryIndex ||
+      (r.retryIndex === prev.retryIndex && r.clarifyIteration > prev.clarifyIteration)
+    ) {
+      latestPerNode.set(r.nodeId, r)
+    }
   }
   for (const [nodeId, r] of latestPerNode) {
     if (r.status === 'done') {
@@ -269,7 +299,9 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
       ready.map((node) => runOneNode(state, { node, iteration, log })),
     )
     let anyAwaitingReview = false
+    let anyAwaitingHuman = false
     let awaitingDetail: { summary: string; message: string; nodeId?: string } | undefined
+    let awaitingHumanDetail: { summary: string; message: string; nodeId?: string } | undefined
     for (let i = 0; i < ready.length; i++) {
       const node = ready[i]!
       const r = results[i]!
@@ -287,10 +319,23 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
         awaitingDetail = { summary: r.summary, message: r.message, nodeId: node.id }
         continue
       }
+      if (r.kind === 'awaiting_human') {
+        // RFC-023: agent emitted a <workflow-clarify> envelope; the clarify
+        // node_run is parked awaiting_human. Same shape as awaiting_review:
+        // downstream stays blocked, other batch members continue, the task
+        // bubbles up after the loop. awaiting_human outranks awaiting_review
+        // when both happen at once.
+        anyAwaitingHuman = true
+        awaitingHumanDetail = { summary: r.summary, message: r.message, nodeId: node.id }
+        continue
+      }
       return {
         kind: r.kind,
         detail: { summary: r.summary, message: r.message, nodeId: node.id },
       }
+    }
+    if (anyAwaitingHuman) {
+      return { kind: 'awaiting_human', detail: awaitingHumanDetail }
     }
     if (anyAwaitingReview) {
       return { kind: 'awaiting_review', detail: awaitingDetail }
@@ -305,7 +350,7 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
 // -----------------------------------------------------------------------------
 
 interface OneNodeResult {
-  kind: 'ok' | 'failed' | 'canceled' | 'awaiting_review'
+  kind: 'ok' | 'failed' | 'canceled' | 'awaiting_review' | 'awaiting_human'
   summary: string
   message: string
 }
@@ -346,6 +391,18 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       node,
       iteration,
     })
+  }
+
+  if (node.kind === 'clarify') {
+    // RFC-023: clarify nodes are not actively scheduled — they're activated
+    // by the runner when the asking agent emits <workflow-clarify>. If the
+    // scheduler reaches a clarify node directly (as part of its dataflow
+    // graph), it is a no-op pass: ready signals from upstream agents are
+    // routed through createClarifySession instead. Mark this graph-level
+    // visit done so downstream nodes (typically the answers→agent edge
+    // marking the clarify node "complete" in the canvas) can proceed once a
+    // session is closed.
+    return { kind: 'ok', summary: '', message: '' }
   }
 
   if (node.kind === 'input') {
@@ -412,6 +469,12 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   // Returns undefined for first runs and for runs whose latest downstream
   // decision is approve/pending — see buildReviewPromptContext.
   const reviewContext = await buildReviewPromptContext(db, opts.appHome, node.id, taskId, iteration)
+  // RFC-023: when this node has a clarify channel wired AND a clarify_iteration
+  // > 0, surface the last-round Q&A through {{__clarify_*}} tokens / auto-
+  // appended sections. The protocol block is appended by the runner when
+  // hasClarifyChannel is true, regardless of whether there's prior context
+  // (the agent needs to know it MAY ask back even on the first round).
+  const hasClarifyChannel = agentHasClarifyChannel(definition, node.id)
 
   // Pick up an existing pending node_run at this iteration; otherwise create
   // a fresh run with retry_index = max-existing-in-iter + 1 (or 0).
@@ -478,6 +541,26 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       }
 
       try {
+        // RFC-023: read this row's clarifyIteration so the prompt context
+        // surfaces the prior round's Q&A. The row may have been minted at
+        // any of three sites (pendingExisting, retry-mint, clarify-rerun
+        // mint from clarify service); reading off the DB guarantees we see
+        // whatever each path set.
+        const currentRunRow = (
+          await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
+        )[0]
+        const currentClarifyIteration = currentRunRow?.clarifyIteration ?? 0
+        const currentShardKey = currentRunRow?.shardKey ?? null
+        const clarifyContext = hasClarifyChannel
+          ? await buildClarifyPromptContext({
+              db,
+              definition,
+              taskId,
+              agentNodeId: node.id,
+              targetIteration: currentClarifyIteration,
+              shardKey: currentShardKey,
+            })
+          : undefined
         lastResult = await runNode({
           taskId,
           nodeRunId,
@@ -494,6 +577,8 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           ...(promptTemplate !== undefined ? { promptTemplate } : {}),
           ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
           ...(reviewContext !== undefined ? { reviewContext } : {}),
+          ...(clarifyContext !== undefined ? { clarifyContext } : {}),
+          hasClarifyChannel,
           skills: resolvedSkills,
           dependents,
           appHome: opts.appHome,
@@ -542,6 +627,45 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       kind: 'failed',
       summary: lastResult.errorMessage ?? `node ${node.id} ${lastResult.status}`,
       message: lastResult.errorMessage ?? lastResult.status,
+    }
+  }
+  // RFC-023: when the agent reply was a <workflow-clarify> envelope, runner
+  // returns status='done' AND populates result.clarify. The scheduler is the
+  // only piece with access to the workflow definition, so it owns mapping
+  // the asking agent → clarify node id and parking the clarify node_run
+  // awaiting_human. After this returns 'awaiting_human', the scope loop
+  // bubbles up and the task transitions to status='awaiting_human' until the
+  // user POSTs answers via /api/clarify.
+  if (lastResult.clarify !== undefined) {
+    const clarifyNodeId = findClarifyNodeForAgent(definition, node.id)
+    if (clarifyNodeId === undefined) {
+      // Agent emitted clarify but has no clarify channel — protocol abuse.
+      return {
+        kind: 'failed',
+        summary: `agent ${agent.name} emitted <workflow-clarify> but node ${node.id} has no clarify channel`,
+        message: 'clarify-no-channel',
+      }
+    }
+    const currentRunRow = (
+      await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
+    )[0]
+    await createClarifySession({
+      db,
+      taskId,
+      sourceAgentNodeId: node.id,
+      sourceAgentNodeRunId: nodeRunId,
+      sourceShardKey: currentRunRow?.shardKey ?? null,
+      clarifyNodeId,
+      iterationIndex: currentRunRow?.clarifyIteration ?? 0,
+      questions: lastResult.clarify.questions,
+      ...(lastResult.clarify.truncationWarnings.length > 0
+        ? { truncationWarnings: lastResult.clarify.truncationWarnings }
+        : {}),
+    })
+    return {
+      kind: 'awaiting_human',
+      summary: `agent ${node.id} asked back via clarify node ${clarifyNodeId}`,
+      message: 'clarify-awaiting-human',
     }
   }
   return { kind: 'ok', summary: '', message: '' }
@@ -849,7 +973,16 @@ async function runFanOutNode(
     status: RunResult['status']
     outputs: Record<string, string>
     errorMessage?: string
+    /** RFC-023: when set, this shard's child agent asked back. The aggregate
+     *  pass below skips its outputs and surfaces 'awaiting_human' on the
+     *  parent. */
+    clarifyAwaiting?: boolean
   }
+
+  const hasClarifyChannel = agentHasClarifyChannel(definition, node.id)
+  const clarifyNodeIdForFanout = hasClarifyChannel
+    ? findClarifyNodeForAgent(definition, node.id)
+    : undefined
 
   const children = await Promise.all(
     shards.map((shard) =>
@@ -873,6 +1006,18 @@ async function runFanOutNode(
           [sourcePort.portName as string]: shard.content,
         }
         try {
+          // RFC-023: per-shard clarify context — surfaces this shard's prior
+          // round Q&A (if any) without bleeding shards into each other.
+          const clarifyContext = hasClarifyChannel
+            ? await buildClarifyPromptContext({
+                db,
+                definition,
+                taskId,
+                agentNodeId: node.id,
+                targetIteration: 0, // first run; rerun rows are minted by clarify service
+                shardKey: shard.shardKey,
+              })
+            : undefined
           const result = await runNode({
             taskId,
             nodeRunId: childRunId,
@@ -890,6 +1035,8 @@ async function runFanOutNode(
             ...(promptTemplate !== undefined ? { promptTemplate } : {}),
             ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
             ...(reviewContext !== undefined ? { reviewContext } : {}),
+            ...(clarifyContext !== undefined ? { clarifyContext } : {}),
+            hasClarifyChannel,
             skills: resolvedSkills,
             dependents,
             appHome: opts.appHome,
@@ -898,6 +1045,34 @@ async function runFanOutNode(
             log: log.child('fanout'),
             ...(opts.signal ? { signal: opts.signal } : {}),
           })
+          // RFC-023: shard child emitted clarify — mint the per-shard
+          // session, mark this child clarifyAwaiting (it does NOT count as
+          // done; the parent waits for all shards including answered-then-
+          // rerun shards before aggregating).
+          if (result.clarify !== undefined && clarifyNodeIdForFanout !== undefined) {
+            await createClarifySession({
+              db,
+              taskId,
+              sourceAgentNodeId: node.id,
+              sourceAgentNodeRunId: childRunId,
+              sourceShardKey: shard.shardKey,
+              clarifyNodeId: clarifyNodeIdForFanout,
+              iterationIndex: 0,
+              questions: result.clarify.questions,
+              ...(result.clarify.truncationWarnings.length > 0
+                ? { truncationWarnings: result.clarify.truncationWarnings }
+                : {}),
+              parentNodeRunId: parentRunId,
+            })
+            broadcastNodeStatus(taskId, childRunId, node.id, 'awaiting_human')
+            return {
+              shardKey: shard.shardKey,
+              runId: childRunId,
+              status: result.status,
+              outputs: {},
+              clarifyAwaiting: true,
+            }
+          }
           broadcastNodeStatus(taskId, childRunId, node.id, result.status)
           return {
             shardKey: shard.shardKey,
@@ -920,6 +1095,23 @@ async function runFanOutNode(
       }),
     ),
   )
+
+  // RFC-023: if ANY shard is awaiting clarification, the agent-multi parent
+  // does not aggregate — the task pauses awaiting_human until each pending
+  // shard's user answers land + their rerun children re-complete. The
+  // parent's eventual aggregation will be triggered by resumeTask, which
+  // re-enters runFanOutNode and finds prior shard rows in 'done' status,
+  // skipping the re-spawn.
+  const awaitingShards = children.filter((c) => c.clarifyAwaiting === true)
+  if (awaitingShards.length > 0) {
+    await db.update(nodeRuns).set({ status: 'awaiting_human' }).where(eq(nodeRuns.id, parentRunId))
+    broadcastNodeStatus(taskId, parentRunId, node.id, 'awaiting_human')
+    return {
+      kind: 'awaiting_human',
+      summary: `agent-multi ${node.id}: ${awaitingShards.length}/${children.length} shards asked back`,
+      message: 'clarify-awaiting-human',
+    }
+  }
 
   const sorted = [...children].sort((a, b) => a.shardKey.localeCompare(b.shardKey))
   for (const port of agent.outputs) {
@@ -994,7 +1186,7 @@ async function insertNodeRun(
   db: DbClient,
   taskId: string,
   nodeId: string,
-  status: 'pending' | 'done' | 'awaiting_review',
+  status: 'pending' | 'done' | 'awaiting_review' | 'awaiting_human',
   retryIndex: number = 0,
   iteration: number = 0,
 ): Promise<string> {
@@ -1309,8 +1501,14 @@ function topologicalOrder(
   const nodeById = new Map(nodes.map((n) => [n.id, n]))
   const inDegree = new Map<string, number>()
   for (const n of nodes) inDegree.set(n.id, 0)
+  // RFC-023: ignore clarify channel edges when computing topology. They form
+  // an explicit cycle (agent → clarify → agent) by design, and the cycle is
+  // resolved out-of-band via clarify_session prompt injection.
+  const isClarifyEdge = (e: WorkflowEdge): boolean =>
+    e.source.portName === '__clarify__' || e.target.portName === '__clarify_response__'
   for (const e of edges) {
     if (!nodeById.has(e.source.nodeId) || !nodeById.has(e.target.nodeId)) continue
+    if (isClarifyEdge(e)) continue
     inDegree.set(e.target.nodeId, (inDegree.get(e.target.nodeId) ?? 0) + 1)
   }
   const queue: string[] = []
@@ -1324,6 +1522,7 @@ function topologicalOrder(
     for (const e of edges) {
       if (e.source.nodeId !== id) continue
       if (!nodeById.has(e.target.nodeId)) continue
+      if (isClarifyEdge(e)) continue
       const next = (inDegree.get(e.target.nodeId) ?? 0) - 1
       inDegree.set(e.target.nodeId, next)
       if (next === 0) queue.push(e.target.nodeId)
@@ -1407,6 +1606,14 @@ function buildScopeUpstreams(
   for (const e of edges) {
     if (!ids.has(e.target.nodeId)) continue
     if (!ids.has(e.source.nodeId)) continue
+    // RFC-023: clarify channel edges are not dataflow deps; they're
+    // out-of-band, handled by services/clarify.ts. Skipping them prevents
+    // a cycle (agent -> clarify -> agent) and keeps the clarify node off
+    // the agent's upstream list (the answer arrives via prompt injection,
+    // not the answers→agent edge).
+    if (e.source.portName === '__clarify__' || e.target.portName === '__clarify_response__') {
+      continue
+    }
     const list = m.get(e.target.nodeId) ?? []
     if (!list.includes(e.source.nodeId)) list.push(e.source.nodeId)
     m.set(e.target.nodeId, list)
