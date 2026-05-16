@@ -48,6 +48,16 @@ export function NodeInspector({ definition, selectedNodeId, agents, onChange, on
   const node = definition.nodes.find((n) => n.id === selectedNodeId)
   if (node === undefined) return null
 
+  // PreviewPane only renders prompt-template assembly for agent kinds; other
+  // kinds previously got a disabled tab + "preview only available for agents"
+  // muted message. Hiding the tab entirely (per user feedback) drops the
+  // dead surface and avoids the implicit "this is greyed out for a reason"
+  // confusion. Force the active tab back to edit when previewing isn't
+  // available so a stale `tab === 'preview'` from a prior agent selection
+  // doesn't render an empty pane.
+  const hasPreview = node.kind === 'agent-single' || node.kind === 'agent-multi'
+  const activeTab: Tab = !hasPreview ? 'edit' : tab
+
   function patch(next: WorkflowNode) {
     const nodes = definition.nodes.map((n) => (n.id === next.id ? next : n))
     onChange({ ...definition, nodes })
@@ -74,22 +84,23 @@ export function NodeInspector({ definition, selectedNodeId, agents, onChange, on
       <div className="tabs inspector__tabs">
         <button
           type="button"
-          className={`tabs__tab ${tab === 'edit' ? 'tabs__tab--active' : ''}`}
+          className={`tabs__tab ${activeTab === 'edit' ? 'tabs__tab--active' : ''}`}
           onClick={() => setTab('edit')}
         >
           {t('inspector.tabEdit')}
         </button>
-        <button
-          type="button"
-          className={`tabs__tab ${tab === 'preview' ? 'tabs__tab--active' : ''}`}
-          onClick={() => setTab('preview')}
-          disabled={node.kind !== 'agent-single' && node.kind !== 'agent-multi'}
-        >
-          {t('inspector.tabPreview')}
-        </button>
+        {hasPreview && (
+          <button
+            type="button"
+            className={`tabs__tab ${activeTab === 'preview' ? 'tabs__tab--active' : ''}`}
+            onClick={() => setTab('preview')}
+          >
+            {t('inspector.tabPreview')}
+          </button>
+        )}
       </div>
       <div className="inspector__body">
-        {tab === 'edit' ? (
+        {activeTab === 'edit' ? (
           <EditForm
             node={node}
             agents={agents}

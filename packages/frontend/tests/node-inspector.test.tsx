@@ -124,6 +124,39 @@ describe('NodeInspector', () => {
     expect(container.querySelector('.inspector')).toBeNull()
   })
 
+  // RFC-015 follow-up: PreviewPane only renders prompt-template assembly
+  // for agent-single / agent-multi. Other kinds (input / output / wrappers /
+  // review) used to get a disabled "Preview" tab + a muted "preview only for
+  // agents" message. Hide the tab entirely for those kinds so the surface
+  // doesn't advertise functionality that isn't available.
+  test('Preview tab hidden for non-agent kinds (input)', () => {
+    render(
+      <NodeInspector
+        definition={makeDef([{ id: 'i1', kind: 'input', inputKey: 'req' }])}
+        selectedNodeId="i1"
+        agents={[]}
+        onChange={() => {}}
+        onClose={() => {}}
+      />,
+    )
+    // Only Edit tab is in the DOM — Preview button gone.
+    const tabs = document.querySelectorAll('.inspector__tabs .tabs__tab')
+    expect(tabs.length).toBe(1)
+    expect(tabs[0]?.textContent).toMatch(/Edit/i)
+  })
+
+  test('Preview tab visible for agent-single', () => {
+    const node: WorkflowNode = {
+      id: 'a1',
+      kind: 'agent-single',
+      agentName: 'coder',
+    } as unknown as WorkflowNode
+    setup(node)
+    const tabs = document.querySelectorAll('.inspector__tabs .tabs__tab')
+    expect(tabs.length).toBe(2)
+    expect(tabs[1]?.textContent).toMatch(/Preview/i)
+  })
+
   test('Close button calls onClose', () => {
     const onClose = vi.fn()
     render(
@@ -440,7 +473,7 @@ describe('NodeInspector', () => {
     expect(optionLabels.some((l) => l.includes('diff'))).toBe(true)
   })
 
-  test('Preview tab is disabled for non-agent kinds and enabled for agents', () => {
+  test('Preview tab is omitted for non-agent kinds and present for agents', () => {
     const { unmount } = wrap(
       <NodeInspector
         definition={makeDef([{ id: 'i1', kind: 'input', inputKey: 'req' }])}
@@ -450,7 +483,11 @@ describe('NodeInspector', () => {
         onClose={() => {}}
       />,
     )
-    expect((screen.getByText('Preview') as HTMLButtonElement).disabled).toBe(true)
+    // Pre-RFC-015 follow-up the tab was rendered with `disabled`. Now it's
+    // removed entirely so the surface doesn't advertise unavailable
+    // functionality. Look up by class because the button label is i18n'd.
+    let tabs = document.querySelectorAll('.inspector__tabs .tabs__tab')
+    expect(tabs.length).toBe(1)
     unmount()
     wrap(
       <NodeInspector
@@ -461,6 +498,7 @@ describe('NodeInspector', () => {
         onClose={() => {}}
       />,
     )
-    expect((screen.getByText('Preview') as HTMLButtonElement).disabled).toBe(false)
+    tabs = document.querySelectorAll('.inspector__tabs .tabs__tab')
+    expect(tabs.length).toBe(2)
   })
 })

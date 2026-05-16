@@ -50,6 +50,7 @@ import {
   clearSourcePortOnNodeRemoved,
   clearSourcePortsForSyntheticIds,
   isValidSourcePortConnection,
+  parseSyntheticSourcePortEdgeId,
 } from './fanoutSourceSync'
 import { syncInputDefs } from './syncInputDefs'
 import { GroupWrapperNode } from './nodes/WrapperNodes'
@@ -222,6 +223,16 @@ function CanvasInner({
   useEffect(() => {
     selectionRef.current = selection
   }, [selection])
+  // RFC-016: keep an out-of-band handle on the current xyflow `nodes` so the
+  // def-sync useEffect below can pluck the measured sizes (populated by
+  // xyflow's ResizeObserver after first render) without subscribing to every
+  // dimensions change. Without this, wrappers would always re-fit using the
+  // pre-measurement DEFAULT_NODE_SIZE_BY_KIND estimates and could
+  // under-grow once agents render with many port rows.
+  const nodesRef = useRef<Node[]>(nodes)
+  useEffect(() => {
+    nodesRef.current = nodes
+  }, [nodes])
 
   useEffect(() => {
     const defChanged = definition !== externalDefRef.current
@@ -237,11 +248,13 @@ function CanvasInner({
       // onSelectionChange with `[]` — our handler then calls
       // `onSelect(null)` and the inspector unmounts mid-keystroke.
       const sel = selectionRef.current
+      const measured = buildMeasuredSizesFromXyflowNodes(nodesRef.current)
       setNodes(
         applySelection(
           projectDefinitionForXyflow(
             definition,
             toFlowNodes(definition, agentByName, nodeStatuses),
+            measured,
           ),
           sel.nodes,
         ),
@@ -767,6 +780,17 @@ function CanvasInner({
           // + panOnDrag interplay), so we wire onEdgeClick directly to
           // open the EdgeInspector. Dedupe via lastEmittedSelectionSig so
           // we don't loop when both this and onSelectionChange fire.
+          // RFC-015: synthetic sourcePort lines have no inspector form to
+          // show (the field lives on the fanout node, not on a real
+          // edge). Update internal selection so the keyboard Delete
+          // shortcut still works on the line, but don't emit onSelect —
+          // the right-side drawer would just render an empty shell and
+          // confuse the user. The visual `selected: true` ring on the
+          // edge still appears via xyflow's internal state.
+          if (parseSyntheticSourcePortEdgeId(edge.id) !== null) {
+            setSelection({ nodes: [], edges: [edge.id] })
+            return
+          }
           const sig = `edge:${edge.id}`
           if (sig === lastEmittedSelectionSig.current) return
           lastEmittedSelectionSig.current = sig
@@ -794,19 +818,16 @@ function CanvasInner({
           // rect or left its current one). The membership patches go through
           // applyMembershipPatch on the post-positions definition so the
           // wrapper.nodeIds list stays in lock-step with the visible layout.
-          let nextDef = toDefinition(definition, nodes, edges)
+          const measured = buildMeasuredSizesFromXyflowNodes(nodes)
+          let nextDef = toDefinition(definition, nodes, edges, measured)
+          const absoluteNodes = projectXyflowPositionsToAbsolute(definition, nodes, measured)
           const wrappers: WrapperHitInput[] = []
           for (const fn of nodes) {
             if (fn.type !== 'wrapper-git' && fn.type !== 'wrapper-loop') continue
             const style = fn.style as { width?: unknown; height?: unknown } | undefined
             const w = typeof style?.width === 'number' ? style.width : 200
             const h = typeof style?.height === 'number' ? style.height : 120
-            // Wrappers in the flow node array carry absolute coords (no
-            // parentId for the top-level wrappers, and projection has
-            // already resolved nested wrappers' absolute position).
-            const absForRect = projectXyflowPositionsToAbsolute(definition, nodes).find(
-              (n) => n.id === fn.id,
-            )
+            const absForRect = absoluteNodes.find((n) => n.id === fn.id)
             const px = absForRect?.position.x ?? fn.position.x
             const py = absForRect?.position.y ?? fn.position.y
             const rec = nextDef.nodes.find((n) => n.id === fn.id) as
@@ -825,12 +846,11 @@ function CanvasInner({
             // Wrapper-on-wrapper or non-wrapper-into-wrapper both go through
             // the same path. Wrapper-on-itself is excluded inside resolve().
             if (dn.type === 'wrapper-git' || dn.type === 'wrapper-loop') continue
-            const absNode = projectXyflowPositionsToAbsolute(definition, nodes).find(
-              (n) => n.id === dn.id,
-            )
+            const absNode = absoluteNodes.find((n) => n.id === dn.id)
             if (absNode === undefined) continue
-            const kind = (dn.type ?? 'agent-single') as keyof typeof DEFAULT_NODE_SIZE_BY_KIND
-            const size = DEFAULT_NODE_SIZE_BY_KIND[kind] ?? { width: 240, height: 120 }
+            const m = measured.get(dn.id)
+            const fallback = (dn.type ?? 'agent-single') as keyof typeof DEFAULT_NODE_SIZE_BY_KIND
+            const size = m ?? DEFAULT_NODE_SIZE_BY_KIND[fallback] ?? { width: 240, height: 120 }
             const center = {
               x: absNode.position.x + size.width / 2,
               y: absNode.position.y + size.height / 2,
@@ -1201,10 +1221,11 @@ function toDefinition(
   prev: WorkflowDefinition,
   flowNodes: Node[],
   flowEdges: Edge[],
+  measuredSizes?: Map<string, { width: number; height: number }>,
 ): WorkflowDefinition {
   // RFC-016: xyflow hands us children with parent-relative positions; invert
   // to absolute coords before reading position into the persisted def.
-  const absolute = projectXyflowPositionsToAbsolute(prev, flowNodes)
+  const absolute = projectXyflowPositionsToAbsolute(prev, flowNodes, measuredSizes)
   const prevById = new Map(prev.nodes.map((n) => [n.id, n]))
   const nextNodes = absolute
     .map((fn) => {
