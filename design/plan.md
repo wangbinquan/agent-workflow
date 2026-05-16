@@ -46,7 +46,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-019](./RFC-019-skill-zip-import/proposal.md)                | Skill ZIP 批量导入：上传 zip → 自动识别多 skill（顶层目录 / wrapper 两形态）→ 冲突逐项决策 → 全部 managed 形式落盘                  | Done        |
 | [RFC-020](./RFC-020-input-file-upload/proposal.md)               | Input 节点本地文件上传（新 `kind: 'upload'`）：launcher 同步 multipart → 写入 worktree 指定 repo-relative 目录 → packed paths 喂下游     | Done        |
 | [RFC-021](./RFC-021-task-detail-tabs/proposal.md)                | 任务详情页 Tab 化：标题区 + 5 个 tab（工作流状态 / 节点运行 / 详细信息 / 输出 / worktree diff）+ worktree diff 二级竖向文件 tab + 视口锁定与编辑器一致 | Done        |
-| [RFC-022](./RFC-022-agent-dependencies/proposal.md)              | Agent 依赖其他 Agent（`dependsOn`）：保存阶段校验（不存在 / 自引 / 环 / 反向引用守卫）+ 运行期闭包注入 inline JSON + skills 并集 | Draft       |
+| [RFC-022](./RFC-022-agent-dependencies/proposal.md)              | Agent 依赖其他 Agent（`dependsOn`）：保存阶段校验（不存在 / 自引 / 环 / 反向引用守卫）+ 运行期闭包注入 inline JSON + skills 并集 + 编辑表单与节点 Stats tab 闭包依赖树 | Done        |
 | [RFC-023](./RFC-023-agent-clarify/proposal.md)                   | 反问澄清节点（Clarify）：agent 主动反问 + 单/多选 + 人工补充 + 反向拖动建反问环 + agent-multi 每 shard 独立反问 + 答案动态注入触发重跑 | Draft       |
 
 ---
