@@ -250,6 +250,14 @@ test('happy path: agents → workflow → launch → task done → outputs visib
   await expect(page.locator('.status-chip', { hasText: /^done$/ }).first()).toBeVisible({
     timeout: 15_000,
   })
+  // RFC-021: outputs now live inside the Outputs tab on the task detail
+  // page (default tab is Workflow status). Click the tab before asserting
+  // the output card is visible. The tab itself only renders when
+  // `collectPorts(workflowSnapshot).length > 0`, so its appearance also
+  // doubles as a smoke check for hasOutputs detection.
+  await page
+    .locator('.task-detail__tab-bar [role="tab"]', { hasText: /Outputs|输出/ })
+    .click()
   await expect(page.locator('.task-output-card__body', { hasText: 'stub e2e output' })).toBeVisible(
     { timeout: 15_000 },
   )
@@ -260,6 +268,13 @@ test('happy path: agents → workflow → launch → task done → outputs visib
   // node body and bled past its left/right edges; we lock that out here
   // in the task-detail canvas (same WorkflowCanvas as the editor, read-
   // only mode).
+  //
+  // RFC-021: step 7 left us on the Outputs tab (canvas pane is hidden via
+  // [hidden] → display:none). Switch back to Workflow status so the canvas
+  // is in the live layout tree before geometry assertions run.
+  await page
+    .locator('.task-detail__tab-bar [role="tab"]', { hasText: /Workflow status|工作流状态/ })
+    .click()
   await expect(page.locator('.canvas-node__port-label').first()).toBeVisible({ timeout: 10_000 })
   const labelFit = await page.evaluate(() => {
     const labels = Array.from(document.querySelectorAll('.canvas-node__port-label'))
