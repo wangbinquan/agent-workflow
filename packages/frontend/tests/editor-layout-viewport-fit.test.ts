@@ -28,7 +28,7 @@ const STYLES = readFileSync(join(__dirname, '..', 'src', 'styles.css'), 'utf8').
 function ruleBody(selector: string): string {
   // Escape every regex metachar in the selector so we can match selectors
   // that include `:`, `(`, `)`, `.`, `-`, etc. — e.g. `.content:has(.page--editor)`.
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\\-]/g, '\\$&')
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')
   const re = new RegExp(`${escaped}\\s*\\{([^}]*)\\}`)
   const m = STYLES.match(re)
   if (m === null) throw new Error(`rule ${selector} not found in styles.css`)
