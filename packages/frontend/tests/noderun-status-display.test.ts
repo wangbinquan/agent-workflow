@@ -9,12 +9,14 @@
 // IS truly canceled, label stays "Canceled".
 
 import { describe, expect, test } from 'vitest'
-import type { NodeRun, NodeRunStatus } from '@agent-workflow/shared'
+import { NodeRunStatusSchema, type NodeRun, type NodeRunStatus } from '@agent-workflow/shared'
 import {
   classifyCanceled,
   displayNoderunStatusKey,
   supersededDecision,
 } from '../src/lib/noderun-status'
+import { zhCN } from '../src/i18n/zh-CN'
+import { enUS } from '../src/i18n/en-US'
 
 function makeRun(partial: Partial<NodeRun> & { id: string }): NodeRun {
   return {
@@ -196,9 +198,27 @@ describe('displayNoderunStatusKey', () => {
       'skipped',
       'exhausted',
       'awaiting_review',
+      'awaiting_human',
     ]
     for (const s of all) {
       expect(displayNoderunStatusKey(makeRun({ id: s, status: s }))).toBe(`noderunStatus.${s}`)
     }
+  })
+})
+
+// Every status the backend can emit must have a label in both locales —
+// noderun-status.ts:77 builds the i18n key as `noderunStatus.${rawStatus}`,
+// so a missing entry surfaces as the raw key (e.g. "noderunStatus.awaiting_human")
+// to end users. RFC-023 added `awaiting_human` and the labels were forgotten;
+// this lock catches the next time it happens.
+describe('noderunStatus i18n coverage', () => {
+  const allStatuses = NodeRunStatusSchema.options as NodeRunStatus[]
+  test.each(allStatuses)('zh-CN has noderunStatus.%s', (s) => {
+    const label = (zhCN.noderunStatus as unknown as Record<string, string>)[s]
+    expect(label, `missing zh-CN noderunStatus.${s}`).toBeTruthy()
+  })
+  test.each(allStatuses)('en-US has noderunStatus.%s', (s) => {
+    const label = (enUS.noderunStatus as unknown as Record<string, string>)[s]
+    expect(label, `missing en-US noderunStatus.${s}`).toBeTruthy()
   })
 })

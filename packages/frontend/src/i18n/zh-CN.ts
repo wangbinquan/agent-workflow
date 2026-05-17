@@ -726,6 +726,7 @@ export interface Resources {
     skipped: string
     exhausted: string
     awaiting_review: string
+    awaiting_human: string
     superseded: string
     supersededHint: string
     rollbackHint: string
@@ -1602,6 +1603,7 @@ export const zhCN: Resources = {
     skipped: '已跳过',
     exhausted: '已耗尽重试',
     awaiting_review: '待评审',
+    awaiting_human: '待回答反问',
     superseded: '已被新尝试取代',
     supersededHint:
       '本次尝试在评审 {{decision}} 后被新一次重试取代，worktree 中的文件未回退；Prompt 与输出仍保留在此条目以备查阅。',

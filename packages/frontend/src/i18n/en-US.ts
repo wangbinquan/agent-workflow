@@ -766,6 +766,7 @@ export const enUS: Resources = {
     skipped: 'Skipped',
     exhausted: 'Exhausted',
     awaiting_review: 'Awaiting review',
+    awaiting_human: 'Awaiting answer',
     superseded: 'Superseded',
     supersededHint:
       'This attempt was replaced by a newer retry after review {{decision}} — files in the worktree were kept; Prompt and outputs are preserved here for reference.',
