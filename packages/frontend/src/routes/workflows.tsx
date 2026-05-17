@@ -8,7 +8,9 @@ import type { Workflow } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { getBaseUrl, getToken } from '@/stores/auth'
 import { ConfirmButton } from '@/components/ConfirmButton'
+import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { LoadingState } from '@/components/LoadingState'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -88,12 +90,12 @@ function WorkflowsPage() {
       </header>
       {importMsg !== null && <div className="info-box info-box--muted">{importMsg}</div>}
 
-      {isLoading && <div className="muted">{t('common.loading')}</div>}
+      {isLoading && <LoadingState data-testid="workflows-loading" />}
       {error !== null && error !== undefined && <ErrorBanner error={error} />}
       {del.error !== null && <ErrorBanner error={del.error} />}
 
       {!isLoading && data !== undefined && data.length === 0 && (
-        <div className="muted">{t('workflows.emptyList')}</div>
+        <EmptyState title={t('workflows.emptyList')} data-testid="workflows-empty" />
       )}
 
       {data !== undefined && data.length > 0 && (

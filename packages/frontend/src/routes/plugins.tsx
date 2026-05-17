@@ -16,7 +16,9 @@ import { useTranslation } from 'react-i18next'
 import type { Plugin } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { ConfirmButton } from '@/components/ConfirmButton'
+import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { LoadingState } from '@/components/LoadingState'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -73,7 +75,7 @@ function PluginsPage() {
         </Link>
       </header>
 
-      {isLoading && <div className="muted">{t('common.loading')}</div>}
+      {isLoading && <LoadingState data-testid="plugins-loading" />}
       {error !== null && error !== undefined && <ErrorBanner error={error} />}
       {del.error !== null && del.error !== undefined && <ErrorBanner error={del.error} />}
       {checkUpdate.error !== null && checkUpdate.error !== undefined && (
@@ -84,7 +86,7 @@ function PluginsPage() {
       )}
 
       {!isLoading && data !== undefined && data.length === 0 && (
-        <div className="muted">{t('plugins.emptyList')}</div>
+        <EmptyState title={t('plugins.emptyList')} data-testid="plugins-empty" />
       )}
 
       {data !== undefined && data.length > 0 && (

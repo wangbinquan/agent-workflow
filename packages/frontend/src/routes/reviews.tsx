@@ -18,6 +18,8 @@ import { Fragment, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { DocVersion, ReviewSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { EmptyState } from '@/components/EmptyState'
+import { LoadingState } from '@/components/LoadingState'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -89,12 +91,12 @@ export function ReviewsListPage() {
           </button>
         ))}
       </div>
-      {list.isLoading && <div className="muted">{t('common.loading')}</div>}
+      {list.isLoading && <LoadingState data-testid="reviews-loading" />}
       {list.error !== null && list.error !== undefined && (
         <div className="error-box">{(list.error as Error).message}</div>
       )}
       {list.data !== undefined && list.data.length === 0 && (
-        <div className="muted">{t('reviews.emptyList')}</div>
+        <EmptyState title={t('reviews.emptyList')} data-testid="reviews-empty" />
       )}
       {Array.from(groups.entries()).map(([taskId, g]) => (
         <section key={taskId} className="reviews-group">

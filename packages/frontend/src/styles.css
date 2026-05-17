@@ -5892,3 +5892,215 @@ mark.comment-anchor[data-active='true'] {
 :root[data-theme='light'] .status-badge--danger {
   color: #b81f24;
 }
+
+/* ---- RFC-035 PR3 shared primitives (Dialog / EmptyState / LoadingState / DetailLayout) ---- */
+
+.dialog__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 96px 24px 24px;
+  z-index: 1000;
+}
+
+.dialog__panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  width: min(100%, 520px);
+  max-height: calc(100vh - 144px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--shadow-lg);
+  overflow: auto;
+}
+
+.dialog--sm .dialog__panel {
+  width: min(100%, 400px);
+}
+
+.dialog--md .dialog__panel {
+  /* default */
+}
+
+.dialog--lg .dialog__panel {
+  width: min(100%, 760px);
+}
+
+.dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.dialog__header h2 {
+  margin: 0;
+  font-size: var(--font-lg);
+  font-weight: 600;
+}
+
+.dialog__close {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.dialog__close:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--font-md);
+  color: var(--text);
+}
+
+.dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-top: var(--space-1);
+}
+
+/* ---- EmptyState / LoadingState ---- */
+
+.empty-state,
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty-state--compact,
+.loading-state--compact {
+  padding: var(--space-3) var(--space-3);
+}
+
+.empty-state__title,
+.loading-state__label {
+  font-size: var(--font-md);
+  color: var(--text);
+}
+
+.empty-state__description {
+  font-size: var(--font-sm);
+  color: var(--muted);
+}
+
+.empty-state__icon {
+  font-size: 32px;
+  opacity: 0.6;
+}
+
+.empty-state__action {
+  margin-top: var(--space-2);
+}
+
+.loading-state__spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: rfc035-spin 0.9s linear infinite;
+}
+
+@keyframes rfc035-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- DetailLayout ---- */
+
+.detail-layout {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: 1fr;
+  min-height: 0;
+  height: 100%;
+}
+
+.detail-layout--has-aside {
+  grid-template-columns: 1fr var(--detail-layout-aside-w, 320px);
+}
+
+.detail-layout--has-aside.detail-layout--aside-left {
+  grid-template-columns: var(--detail-layout-aside-w, 320px) 1fr;
+}
+
+.detail-layout--aside-sm {
+  --detail-layout-aside-w: 240px;
+}
+
+.detail-layout--aside-md {
+  --detail-layout-aside-w: 320px;
+}
+
+.detail-layout--aside-lg {
+  --detail-layout-aside-w: 420px;
+}
+
+.detail-layout__main,
+.detail-layout__aside {
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (max-width: 720px) {
+  .detail-layout--has-aside {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- .stack utilities (token-driven spacing) ---- */
+
+.stack--sm > * + * {
+  margin-top: var(--space-2);
+}
+.stack--md > * + * {
+  margin-top: var(--space-4);
+}
+.stack--lg > * + * {
+  margin-top: var(--space-5);
+}
+
+.stack-top--sm {
+  margin-top: var(--space-2);
+}
+.stack-top--md {
+  margin-top: var(--space-4);
+}
+.stack-top--lg {
+  margin-top: var(--space-5);
+}
+
+/* RFC-035 PR3 — small settings page utility for hint paragraphs that used
+   to live as inline marginTop/marginBottom/fontSize style attrs. */
+.settings-hint {
+  margin-top: var(--space-1);
+  margin-bottom: var(--space-2);
+  font-size: var(--font-sm);
+}
+.settings-hint--tight {
+  margin-bottom: 0;
+}

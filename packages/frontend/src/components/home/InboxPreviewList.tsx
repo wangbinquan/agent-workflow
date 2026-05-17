@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ClarifySessionSummary, ReviewSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { EmptyState } from '@/components/EmptyState'
 import {
   INBOX_PREVIEW_LIMIT,
   formatRelativeTime,
@@ -75,7 +76,13 @@ export function InboxPreviewList({ onCount }: InboxPreviewListProps) {
     )
   }
   if (items.length === 0) {
-    return <div className="muted">{t('home.section.empty.inbox')}</div>
+    return (
+      <EmptyState
+        size="compact"
+        title={t('home.section.empty.inbox')}
+        data-testid="inbox-preview-empty"
+      />
+    )
   }
   return (
     <div className="inbox-list">

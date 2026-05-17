@@ -4,12 +4,17 @@
 //
 // Rows whose `cachedRepoId` becomes set drive a react-query invalidation on
 // the parent so the main /repos table picks up the new cache entries.
+//
+// RFC-035 PR3: overlay + panel + ESC + outside click + body overflow lock
+// are now owned by the shared <Dialog>; this component owns just the body
+// (textarea + table) and renders an action footer.
 
 import type { BatchImportRow, BatchImportSnapshot } from '@agent-workflow/shared'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError } from '@/api/client'
+import { Dialog } from '@/components/Dialog'
 import { useWebSocket } from '@/hooks/useWebSocket'
 
 interface BatchImportDialogProps {
@@ -183,16 +188,46 @@ export function BatchImportDialog({
     }
   }
 
-  return (
-    <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      data-testid="batch-import-dialog"
-    >
-      <div className="modal batch-import-dialog">
-        <h2>{t('repos.batchImport.title')}</h2>
+  const footer =
+    view === 'input' ? (
+      <>
+        <button type="button" className="btn btn--sm" onClick={handleClose}>
+          {t('repos.batchImport.cancel')}
+        </button>
+        <button
+          type="button"
+          className="btn btn--sm btn--primary"
+          disabled={submitting || parsedUrls.length === 0 || parsedUrls.length > 100}
+          onClick={() => void handleStart()}
+          data-testid="batch-import-start"
+        >
+          {t('repos.batchImport.start')}
+        </button>
+      </>
+    ) : (
+      <>
+        {snapshot?.state === 'completed' && (
+          <button type="button" className="btn btn--sm" onClick={handleAgain}>
+            {t('repos.batchImport.again')}
+          </button>
+        )}
+        <button type="button" className="btn btn--sm btn--primary" onClick={handleClose}>
+          {t('repos.batchImport.close')}
+        </button>
+      </>
+    )
 
+  return (
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      title={t('repos.batchImport.title')}
+      size="lg"
+      panelClassName="batch-import-dialog"
+      data-testid="batch-import-dialog"
+      footer={footer}
+    >
+      <div>
         {errorMsg !== null && <div className="error-box">{errorMsg}</div>}
 
         {view === 'input' && (
@@ -212,20 +247,6 @@ export function BatchImportDialog({
             {parsedUrls.length > 100 && (
               <div className="error-box">{t('repos.batchImport.batchTooLarge')}</div>
             )}
-            <div className="modal__actions">
-              <button type="button" className="btn btn--sm" onClick={handleClose}>
-                {t('repos.batchImport.cancel')}
-              </button>
-              <button
-                type="button"
-                className="btn btn--sm btn--primary"
-                disabled={submitting || parsedUrls.length === 0 || parsedUrls.length > 100}
-                onClick={() => void handleStart()}
-                data-testid="batch-import-start"
-              >
-                {t('repos.batchImport.start')}
-              </button>
-            </div>
           </>
         )}
 
@@ -278,20 +299,10 @@ export function BatchImportDialog({
                 ))}
               </tbody>
             </table>
-            <div className="modal__actions">
-              {snapshot.state === 'completed' && (
-                <button type="button" className="btn btn--sm" onClick={handleAgain}>
-                  {t('repos.batchImport.again')}
-                </button>
-              )}
-              <button type="button" className="btn btn--sm btn--primary" onClick={handleClose}>
-                {t('repos.batchImport.close')}
-              </button>
-            </div>
           </>
         )}
       </div>
-    </div>
+    </Dialog>
   )
 }
 

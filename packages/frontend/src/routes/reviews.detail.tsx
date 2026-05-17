@@ -20,6 +20,7 @@ import type {
 import type { DocVersion } from '@agent-workflow/shared'
 import { api, type ApiError } from '@/api/client'
 import { DiffView, type DiffGranularity } from '@/components/review/DiffView'
+import { Dialog } from '@/components/Dialog'
 import { Prose } from '@/components/prose/Prose'
 import { useResizable } from '@/hooks/useResizable'
 import { useTaskSync } from '@/hooks/useTaskSync'
@@ -1370,16 +1371,6 @@ function DecisionDialog({
   submitting: boolean
 }) {
   const { t } = useTranslation()
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onCancel()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onCancel])
 
   const title =
     state.kind === 'approve'
@@ -1389,75 +1380,15 @@ function DecisionDialog({
         : t('reviews.rejectDialogTitle')
 
   return (
-    <div
-      className="review-decision-dialog__overlay"
-      role="presentation"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onCancel()
-      }}
-    >
-      <div
-        className="review-decision-dialog__panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="review-decision-dialog-title"
-      >
-        <header className="review-decision-dialog__header">
-          <h2 id="review-decision-dialog-title">{title}</h2>
-          <button
-            type="button"
-            className="review-decision-dialog__close"
-            onClick={onCancel}
-            aria-label={t('reviews.dialogCancel')}
-          >
-            ×
-          </button>
-        </header>
-        <div className="review-decision-dialog__body">
-          {state.kind === 'approve' && (
-            <>
-              <p>{t('reviews.approveDraftWarning', { count: state.draftCount })}</p>
-              <p>{t('reviews.approveDraftConfirm')}</p>
-            </>
-          )}
-          {state.kind === 'iterate' && (
-            <>
-              {state.noComments && (
-                <p className="review-decision-dialog__warn">
-                  {t('reviews.iterateNoCommentsWarning')}
-                </p>
-              )}
-              <p>{t('reviews.iterateConfirm', { willRerun: state.willRerun })}</p>
-            </>
-          )}
-          {state.kind === 'reject' && (
-            <>
-              <p>{t('reviews.rejectPrompt', { willRerun: state.willRerun })}</p>
-              <label className="review-decision-dialog__label">
-                {t('reviews.rejectReasonLabel')}
-                <textarea
-                  className="form-input review-decision-dialog__textarea"
-                  autoFocus
-                  rows={4}
-                  value={state.reason}
-                  onChange={(e) =>
-                    onChange({ ...state, reason: e.target.value, reasonError: false })
-                  }
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                      e.preventDefault()
-                      onConfirm()
-                    }
-                  }}
-                />
-              </label>
-              {state.reasonError && (
-                <p className="review-decision-dialog__error">{t('reviews.rejectReasonRequired')}</p>
-              )}
-            </>
-          )}
-        </div>
-        <footer className="review-decision-dialog__actions">
+    <Dialog
+      open
+      onClose={onCancel}
+      title={title}
+      size="sm"
+      panelClassName="review-decision-dialog__panel"
+      data-testid="review-decision-dialog"
+      footer={
+        <>
           <button type="button" className="btn btn--sm" onClick={onCancel}>
             {t('reviews.dialogCancel')}
           </button>
@@ -1469,8 +1400,47 @@ function DecisionDialog({
           >
             {t('reviews.dialogConfirm')}
           </button>
-        </footer>
-      </div>
-    </div>
+        </>
+      }
+    >
+      {state.kind === 'approve' && (
+        <>
+          <p>{t('reviews.approveDraftWarning', { count: state.draftCount })}</p>
+          <p>{t('reviews.approveDraftConfirm')}</p>
+        </>
+      )}
+      {state.kind === 'iterate' && (
+        <>
+          {state.noComments && (
+            <p className="review-decision-dialog__warn">{t('reviews.iterateNoCommentsWarning')}</p>
+          )}
+          <p>{t('reviews.iterateConfirm', { willRerun: state.willRerun })}</p>
+        </>
+      )}
+      {state.kind === 'reject' && (
+        <>
+          <p>{t('reviews.rejectPrompt', { willRerun: state.willRerun })}</p>
+          <label className="review-decision-dialog__label">
+            {t('reviews.rejectReasonLabel')}
+            <textarea
+              className="form-input review-decision-dialog__textarea"
+              autoFocus
+              rows={4}
+              value={state.reason}
+              onChange={(e) => onChange({ ...state, reason: e.target.value, reasonError: false })}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault()
+                  onConfirm()
+                }
+              }}
+            />
+          </label>
+          {state.reasonError && (
+            <p className="review-decision-dialog__error">{t('reviews.rejectReasonRequired')}</p>
+          )}
+        </>
+      )}
+    </Dialog>
   )
 }

@@ -16,7 +16,9 @@ import { useTranslation } from 'react-i18next'
 import type { Mcp, McpProbe } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { ConfirmButton } from '@/components/ConfirmButton'
+import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { LoadingState } from '@/components/LoadingState'
 import { McpProbeStatusChip, type McpProbeUiStatus } from '@/components/McpProbeStatusChip'
 import { useMcpProbes, useProbeMcpMutation } from '@/lib/mcp-probe-query'
 import { Route as RootRoute } from './__root'
@@ -68,12 +70,12 @@ function McpsPage() {
         </Link>
       </header>
 
-      {isLoading && <div className="muted">{t('common.loading')}</div>}
+      {isLoading && <LoadingState data-testid="mcps-loading" />}
       {error !== null && error !== undefined && <ErrorBanner error={error} />}
       {del.error !== null && <ErrorBanner error={del.error} />}
 
       {!isLoading && data !== undefined && data.length === 0 && (
-        <div className="muted">{t('mcps.emptyList')}</div>
+        <EmptyState title={t('mcps.emptyList')} data-testid="mcps-empty" />
       )}
 
       {data !== undefined && data.length > 0 && (

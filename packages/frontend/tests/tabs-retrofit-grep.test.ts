@@ -30,20 +30,24 @@ describe('RFC-035 .tabs retrofit grep guard', () => {
   test('the legacy class names are no longer in JSX className strings (CSS may still keep them)', () => {
     const bodies: Record<string, string> = {}
     for (const c of CASES) bodies[c.file] = readFileSync(path.resolve(SRC, c.file), 'utf8')
-    expect(bodies['components/NodeDetailDrawer.tsx'].includes('inspector__tabs"')).toBe(false)
-    expect(bodies['components/canvas/NodeInspector.tsx'].includes('inspector__tabs"')).toBe(false)
+    // `Record<string,string>` index access reads as possibly-undefined
+    // under strict TS even though we just populated the map above; `!` is
+    // the minimal nudge to satisfy the compiler without changing runtime
+    // behaviour.
+    expect(bodies['components/NodeDetailDrawer.tsx']!.includes('inspector__tabs"')).toBe(false)
+    expect(bodies['components/canvas/NodeInspector.tsx']!.includes('inspector__tabs"')).toBe(false)
     // AgentImportDialog: only the tabs block was retrofitted; other
     // namespaced .agent-import__* class names survive (cleanup PR will
     // remove them once the <Dialog> retrofit lands in PR3).
-    expect(bodies['components/AgentImportDialog.tsx'].includes('agent-import__tabs')).toBe(false)
-    expect(bodies['components/AgentImportDialog.tsx'].includes('agent-import__tab"')).toBe(false)
+    expect(bodies['components/AgentImportDialog.tsx']!.includes('agent-import__tabs')).toBe(false)
+    expect(bodies['components/AgentImportDialog.tsx']!.includes('agent-import__tab"')).toBe(false)
     // RepoSourceTabs: outer wrapper class .repo-source-tabs still exists
     // so legacy CSS rules keep working; the bar + tab class names are
     // gone.
-    expect(bodies['components/launch/RepoSourceTabs.tsx'].includes('repo-source-tabs__bar')).toBe(
+    expect(bodies['components/launch/RepoSourceTabs.tsx']!.includes('repo-source-tabs__bar')).toBe(
       false,
     )
-    expect(bodies['components/launch/RepoSourceTabs.tsx'].includes('repo-source-tabs__tab')).toBe(
+    expect(bodies['components/launch/RepoSourceTabs.tsx']!.includes('repo-source-tabs__tab')).toBe(
       false,
     )
   })

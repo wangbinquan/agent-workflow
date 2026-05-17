@@ -6,7 +6,9 @@ import { useTranslation } from 'react-i18next'
 import type { Agent } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { ConfirmButton } from '@/components/ConfirmButton'
+import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { LoadingState } from '@/components/LoadingState'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -40,12 +42,12 @@ function AgentsPage() {
         </Link>
       </header>
 
-      {isLoading && <div className="muted">{t('common.loading')}</div>}
+      {isLoading && <LoadingState data-testid="agents-loading" />}
       {error !== null && error !== undefined && <ErrorBanner error={error} />}
       {del.error !== null && <ErrorBanner error={del.error} />}
 
       {!isLoading && data !== undefined && data.length === 0 && (
-        <div className="muted">{t('agents.emptyList')}</div>
+        <EmptyState title={t('agents.emptyList')} data-testid="agents-empty" />
       )}
 
       {data !== undefined && data.length > 0 && (

@@ -403,22 +403,20 @@ function BackupCard() {
     }
   }
   return (
-    <div className="info-box-muted" style={{ marginTop: 16 }}>
+    <div className="info-box-muted stack-top--md">
       <strong>{t('settings.backupTitle')}</strong>
-      <p style={{ marginTop: 4, marginBottom: 8, fontSize: 13 }}>{t('settings.backupHint')}</p>
+      <p className="settings-hint">{t('settings.backupHint')}</p>
       <button type="button" className="btn" onClick={runBackup} disabled={busy}>
         {busy ? t('settings.backupRunning') : t('settings.backupCreate')}
       </button>
       {result !== null && (
-        <p style={{ marginTop: 8, fontSize: 13 }} className="muted">
+        <p className="muted settings-hint settings-hint--tight stack-top--sm">
           {t('settings.backupSavedAs')}
           <code>{result.path}</code> ({(result.sizeBytes / 1024 / 1024).toFixed(2)} MB)
         </p>
       )}
       {error !== null && (
-        <p style={{ marginTop: 8, fontSize: 13 }} className="error-box">
-          {error}
-        </p>
+        <p className="error-box settings-hint settings-hint--tight stack-top--sm">{error}</p>
       )}
     </div>
   )
@@ -723,11 +721,9 @@ function SectionForm({
         )}
       </div>
       {restartRequired === true && (
-        <div className="info-box" role="status" aria-live="polite" style={{ marginTop: 12 }}>
+        <div className="info-box stack-top--sm" role="status" aria-live="polite">
           <strong>{t('settings.restartRequiredTitle')}</strong>
-          <p style={{ marginTop: 4, marginBottom: 0, fontSize: 13 }}>
-            {t('settings.restartRequiredHint')}
-          </p>
+          <p className="settings-hint settings-hint--tight">{t('settings.restartRequiredHint')}</p>
         </div>
       )}
     </div>

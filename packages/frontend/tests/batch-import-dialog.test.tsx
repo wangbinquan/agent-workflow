@@ -116,7 +116,11 @@ beforeEach(() => {
 afterEach(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ;(globalThis as any).WebSocket = RealWebSocket
-  document.body.innerHTML = ''
+  // RFC-035 PR3: BatchImportDialog now renders via <Dialog> + createPortal,
+  // so the panel attaches to document.body. We let React's own unmount
+  // clean up its portal subtree — manually wiping body.innerHTML here
+  // races with React 19's commit-time removal and throws "removeChild:
+  // The node to be removed is not a child of this node."
   vi.restoreAllMocks()
 })
 

@@ -40,7 +40,9 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  document.body.innerHTML = ''
+  // RFC-035 PR3: BatchImportDialog renders via <Dialog> + createPortal.
+  // React's own unmount cleans up the portal subtree; manually wiping
+  // document.body races with that and throws DOMException in React 19.
   vi.restoreAllMocks()
 })
 

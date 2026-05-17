@@ -7,7 +7,9 @@ import { useTranslation } from 'react-i18next'
 import type { TaskStatus, TaskSummary } from '@agent-workflow/shared'
 import { TASK_STATUS } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { LoadingState } from '@/components/LoadingState'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
 import { useTasksSync } from '@/hooks/useTasksSync'
 import { Route as RootRoute } from './__root'
@@ -71,10 +73,10 @@ function TasksPage() {
         ))}
       </div>
 
-      {isLoading && <div className="muted">{t('common.loading')}</div>}
+      {isLoading && <LoadingState data-testid="tasks-loading" />}
       {error !== null && error !== undefined && <ErrorBanner error={error} />}
       {!isLoading && data !== undefined && data.length === 0 && (
-        <div className="muted">{t('tasks.emptyList')}</div>
+        <EmptyState title={t('tasks.emptyList')} data-testid="tasks-empty" />
       )}
 
       {data !== undefined && data.length > 0 && (

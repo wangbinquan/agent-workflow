@@ -1,13 +1,18 @@
 // RFC-018 — Import dialog for /agents/new.
 // Two input paths: upload .md / .markdown file, or paste raw text.
 // Hands the parsed result back via onApply for merge into AgentForm draft.
+//
+// RFC-035 PR3: chrome (overlay + panel + header + close + footer + focus
+// trap + ESC + body overflow) is now owned by the shared <Dialog>; this
+// component owns just the body (tabs / upload / paste / preview).
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentMarkdownParseResult, CreateAgent } from '@agent-workflow/shared'
 import { parseAgentMarkdown } from '@agent-workflow/shared'
 import { emptyAgent } from './AgentForm'
 import { fieldsOverwrittenByImport } from '@/lib/agent-import-merge'
+import { Dialog } from './Dialog'
 
 export interface AgentImportDialogProps {
   open: boolean
@@ -42,8 +47,6 @@ export function AgentImportDialog({
   const [rawText, setRawText] = useState('')
   const [filenameStem, setFilenameStem] = useState<string | undefined>(undefined)
   const [parseResult, setParseResult] = useState<AgentMarkdownParseResult | null>(null)
-  const dialogRef = useRef<HTMLDivElement | null>(null)
-  const titleId = useId()
 
   useEffect(() => {
     if (!open) {
@@ -54,18 +57,6 @@ export function AgentImportDialog({
       setParseResult(null)
     }
   }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
 
   const willOverwrite = useMemo(() => {
     if (parseResult === null) return [] as string[]
@@ -148,32 +139,31 @@ export function AgentImportDialog({
   const previewRows = describePreview()
 
   return (
-    <div
-      className="agent-import__overlay"
-      role="presentation"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
-    >
-      <div
-        ref={dialogRef}
-        className="agent-import__panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-      >
-        <header className="agent-import__header">
-          <h2 id={titleId}>{t('agentForm.importDialog.title')}</h2>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={t('agentForm.importDialog.title')}
+      size="lg"
+      panelClassName="agent-import__panel"
+      data-testid="agent-import-dialog"
+      footer={
+        <>
+          <button type="button" className="btn" onClick={onClose}>
+            {t('agentForm.importDialog.cancelButton')}
+          </button>
           <button
             type="button"
-            className="btn btn--sm agent-import__close"
-            onClick={onClose}
-            aria-label={t('agentForm.importDialog.cancelButton')}
+            className="btn btn--primary"
+            disabled={parseResult === null || hasYamlError}
+            data-testid="agent-import-apply"
+            onClick={doApply}
           >
-            ×
+            {t('agentForm.importDialog.applyButton')}
           </button>
-        </header>
-
+        </>
+      }
+    >
+      <div>
         <div className="tabs tabs--inline" role="tablist">
           <button
             type="button"
@@ -281,23 +271,8 @@ export function AgentImportDialog({
             )}
           </section>
         )}
-
-        <footer className="agent-import__footer">
-          <button type="button" className="btn" onClick={onClose}>
-            {t('agentForm.importDialog.cancelButton')}
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={parseResult === null || hasYamlError}
-            data-testid="agent-import-apply"
-            onClick={doApply}
-          >
-            {t('agentForm.importDialog.applyButton')}
-          </button>
-        </footer>
       </div>
-    </div>
+    </Dialog>
   )
 }
 

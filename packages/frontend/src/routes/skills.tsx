@@ -6,7 +6,9 @@ import { useTranslation } from 'react-i18next'
 import type { Skill, SkillSourceWithStats } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { ConfirmButton } from '@/components/ConfirmButton'
+import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { LoadingState } from '@/components/LoadingState'
 import { SkillSourcesCard } from '@/components/SkillSourcesCard'
 import { Route as RootRoute } from './__root'
 
@@ -56,12 +58,12 @@ function SkillsPage() {
         </Link>
       </header>
 
-      {isLoading && <div className="muted">{t('common.loading')}</div>}
+      {isLoading && <LoadingState data-testid="skills-loading" />}
       {error !== null && error !== undefined && <ErrorBanner error={error} />}
       {del.error !== null && <ErrorBanner error={del.error} />}
 
       {!isLoading && data !== undefined && data.length === 0 && (
-        <div className="muted">{t('skills.emptyList')}</div>
+        <EmptyState title={t('skills.emptyList')} data-testid="skills-empty" />
       )}
 
       {data !== undefined && data.length > 0 && (
