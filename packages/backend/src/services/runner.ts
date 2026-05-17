@@ -24,7 +24,7 @@ import type {
   ClarifyTruncationWarning,
   ReviewPromptContext,
 } from '@agent-workflow/shared'
-import { buildClarifyProtocolBlock, parseClarifyEnvelopeBody } from '@agent-workflow/shared'
+import { parseClarifyEnvelopeBody } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { cpSync, mkdirSync, rmSync, symlinkSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -95,10 +95,11 @@ export interface RunNodeOptions {
   clarifyContext?: ClarifyPromptContext
   /**
    * RFC-023: when true (scheduler computed `agentHasClarifyChannel(definition,
-   * agentNodeId)` from the workflow definition), the runner appends
-   * `buildClarifyProtocolBlock()` to the user prompt so the agent is
-   * instructed it MAY reply with a <workflow-clarify> envelope. Off by
-   * default keeps the non-clarify wire format identical to pre-RFC-023.
+   * agentNodeId)` from the workflow definition), the renderer emits a bi-modal
+   * trailing block (`<workflow-output>` and `<workflow-clarify>` presented as
+   * equally first-class reply envelopes) so the agent treats ask-back as
+   * first-class instead of a contingency. Off by default keeps the non-clarify
+   * wire format identical to pre-RFC-023.
    */
   hasClarifyChannel?: boolean
   /** Skills used by this agent. */
@@ -188,23 +189,20 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     })
   }
 
-  // 3. Render the user prompt.
-  const renderedPrompt = renderUserPrompt({
+  // 3. Render the user prompt. When the scheduler tells us this node has a
+  // clarify channel wired in the workflow definition, the renderer rewrites
+  // the trailing protocol block as a bi-modal preamble (output vs clarify
+  // presented as equally first-class envelopes) and appends the clarify
+  // format block immediately after — see `buildProtocolBlock` in shared.
+  const prompt = renderUserPrompt({
     promptTemplate: opts.promptTemplate,
     inputs: opts.inputs,
     meta: opts.templateMeta,
     agentOutputs: opts.agent.outputs,
     ...(opts.reviewContext !== undefined ? { reviewContext: opts.reviewContext } : {}),
     ...(opts.clarifyContext !== undefined ? { clarifyContext: opts.clarifyContext } : {}),
+    ...(opts.hasClarifyChannel === true ? { hasClarifyChannel: true } : {}),
   })
-  // RFC-023: append the clarify protocol block AFTER the standard
-  // <workflow-output> protocol block. The order matters — the standard
-  // block already established the default behavior; the clarify block
-  // adds the conditional "instead emit <workflow-clarify>" branch. Only
-  // append when the scheduler told us the agent node has a clarify channel
-  // wired in the workflow definition.
-  const prompt =
-    opts.hasClarifyChannel === true ? renderedPrompt + buildClarifyProtocolBlock() : renderedPrompt
 
   await opts.db
     .update(nodeRuns)

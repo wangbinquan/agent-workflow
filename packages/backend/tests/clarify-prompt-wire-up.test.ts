@@ -1,21 +1,29 @@
 // RFC-023 PR-B T12 — locks the scheduler ↔ runner wiring for clarify prompt
 // context.
 //
-// Two source-level guards (no runtime needed) keep the wire-up from rotting:
+// Source-level guards (no runtime needed) keep the wire-up from rotting:
 //   1. scheduler.ts MUST call buildClarifyPromptContext at the agent-single
 //      AND agent-multi shard sites.
-//   2. runner.ts MUST call buildClarifyProtocolBlock and detectEnvelopeKind /
-//      extractClarifyEnvelopeBody — without these calls, the agent never
-//      sees the protocol rules and replies never get routed into the
-//      clarify path. (extractClarifyEnvelopeBody is also asserted by
-//      clarify-envelope-exclusive.test.ts via runner.ts grep — duplicating
-//      here so a future split of that file doesn't silently drop this one.)
+//   2. runner.ts MUST thread `hasClarifyChannel` into renderUserPrompt and
+//      call detectEnvelopeKind / extractClarifyEnvelopeBody on stdout —
+//      without these the agent never sees the protocol rules and replies
+//      never get routed into the clarify path. (extractClarifyEnvelopeBody is
+//      also asserted by clarify-envelope-exclusive.test.ts via runner.ts grep
+//      — duplicating here so a future split of that file doesn't silently
+//      drop this one.)
+//   3. shared/src/prompt.ts MUST still call buildClarifyProtocolBlock — the
+//      bi-modal rewrite (output + clarify presented as equally first-class)
+//      moved this call out of runner.ts and into renderUserPrompt so the
+//      preamble in `buildProtocolBlock(outputs, hasClarifyChannel=true)` and
+//      the clarify-format block always travel together. Asserting on the
+//      shared file keeps the lock without re-tightening runner.ts.
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const BACKEND_SRC = join(__dirname, '..', 'src', 'services')
+const SHARED_SRC = join(__dirname, '..', '..', 'shared', 'src')
 
 describe('scheduler ↔ runner clarify prompt wire-up (RFC-023 T12)', () => {
   test('scheduler.ts wires buildClarifyPromptContext on both agent paths', () => {
@@ -37,11 +45,20 @@ describe('scheduler ↔ runner clarify prompt wire-up (RFC-023 T12)', () => {
     expect(src).toContain('createClarifySession')
   })
 
-  test('runner.ts wires buildClarifyProtocolBlock onto the user prompt', () => {
+  test('runner.ts threads hasClarifyChannel into renderUserPrompt', () => {
     const src = readFileSync(join(BACKEND_SRC, 'runner.ts'), 'utf8')
-    expect(src).toContain('buildClarifyProtocolBlock')
-    // Also receives the hasClarifyChannel switch.
     expect(src).toContain('hasClarifyChannel')
+    // The actual `buildClarifyProtocolBlock` call now lives inside
+    // renderUserPrompt (shared/src/prompt.ts) so the bi-modal protocol
+    // preamble and the clarify-format block always travel together. Asserting
+    // that wire-up is in `shared/src/prompt.ts mounts buildClarifyProtocolBlock`
+    // below.
+  })
+
+  test('shared/src/prompt.ts mounts buildClarifyProtocolBlock inside renderUserPrompt', () => {
+    const src = readFileSync(join(SHARED_SRC, 'prompt.ts'), 'utf8')
+    expect(src).toContain('buildClarifyProtocolBlock()')
+    expect(src).toContain('buildProtocolBlock(input.agentOutputs, true)')
   })
 
   test('runner.ts wires detectEnvelopeKind + extractClarifyEnvelopeBody for the envelope kind branch', () => {

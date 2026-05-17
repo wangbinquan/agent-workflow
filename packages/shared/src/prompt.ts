@@ -82,6 +82,32 @@ export interface ClarifyPromptContext {
    *  before calling the runner. `undefined` (default) preserves legacy
    *  behaviour: the channel is gated purely on the workflow definition. */
   directive?: 'continue' | 'stop'
+  /**
+   * RFC-026: which clarify session mode emitted this context. Defaults to
+   * `'isolated'` (treats missing / undefined the same as RFC-023 behavior).
+   *
+   * When `'inline'`, the runner has spawned opencode with `--session <id>`
+   * and the prior rounds' Q&A + protocol blocks already live in opencode's
+   * session memory. `renderUserPrompt` then:
+   *   1. Skips the prior-rounds questions / answers auto-append sections
+   *      (replaced by a single "User Answers (Current Round)" section,
+   *      because `answersBlock` carries only the freshly submitted answers).
+   *   2. Replaces the trailing protocol block(s) with a short inline
+   *      reminder via `buildClarifyInlineReminder()` — re-emitting the
+   *      full bi-modal preamble + format block would just burn tokens
+   *      duplicating context the session already has.
+   */
+  mode?: 'isolated' | 'inline'
+  /**
+   * RFC-026: when `true` (always true under `mode === 'inline'`), the
+   * `answersBlock` represents ONLY the most-recent round, NOT the
+   * cumulative multi-round dump. The renderer uses this flag to pick the
+   * correct section title ("User Answers (Current Round)" vs the legacy
+   * "Prior Rounds (Answers)"). Kept as a separate boolean — rather than
+   * implied from `mode === 'inline'` — so future modes can mix-and-match
+   * without conflating semantics.
+   */
+  currentRoundOnly?: boolean
 }
 
 export interface RenderPromptInput {
@@ -108,6 +134,16 @@ export interface RenderPromptInput {
   /** RFC-023 clarify-driven re-run context. Absent for first runs and runs
    *  where the agent's clarify channel is wired but it hasn't yet asked. */
   clarifyContext?: ClarifyPromptContext
+  /**
+   * RFC-023: when true, the trailing protocol block is rewritten as a bi-modal
+   * preamble that presents `<workflow-output>` and `<workflow-clarify>` as
+   * equally-first-class reply envelopes (instead of the legacy "MUST end with
+   * <workflow-output>" wording, which anchored the agent toward output even
+   * when it had blocking questions). The clarify-format block is appended
+   * after. When undefined / false, the legacy single-envelope wording is
+   * emitted unchanged.
+   */
+  hasClarifyChannel?: boolean
 }
 
 const TEMPLATE_RE = /\{\{(\w+)\}\}/g
@@ -230,12 +266,21 @@ export function renderUserPrompt(input: RenderPromptInput): string {
     }
   }
 
-  // RFC-023: auto-append the clarify Q&A sections at the prompt tail when the
-  // author's template did not explicitly reference the tokens. Same shape as
-  // the review section above so authors can rely on a predictable trailing
-  // structure.
+  // RFC-023 / RFC-026: auto-append the clarify Q&A sections at the prompt
+  // tail when the author's template did not explicitly reference the tokens.
+  //
+  // Inline mode (RFC-026): opencode session memory already holds prior
+  // rounds. Skip the "Prior Rounds (Questions)" section; emit a single
+  // "User Answers (Current Round)" carrying just the freshly submitted
+  // answers. The questions block is suppressed entirely in inline mode —
+  // re-rendering questions the agent already saw burns tokens and re-anchors
+  // it to the prior wording. (Authors who explicitly reference
+  // `{{__clarify_questions__}}` still get substitution above — that path is
+  // a deliberate template choice.)
+  const inlineMode = cc?.mode === 'inline'
   if (cc !== undefined) {
     if (
+      !inlineMode &&
       cc.questionsBlock !== undefined &&
       cc.questionsBlock.trim().length > 0 &&
       !referenced.has('__clarify_questions__')
@@ -247,23 +292,76 @@ export function renderUserPrompt(input: RenderPromptInput): string {
       cc.answersBlock.trim().length > 0 &&
       !referenced.has('__clarify_answers__')
     ) {
-      sections += `\n\n## Clarify Q&A — Prior Rounds (Answers)\n${cc.answersBlock}`
+      const heading =
+        inlineMode || cc.currentRoundOnly === true
+          ? 'Clarify Q&A — User Answers (Current Round)'
+          : 'Clarify Q&A — Prior Rounds (Answers)'
+      sections += `\n\n## ${heading}\n${cc.answersBlock}`
     }
   }
 
-  return body + sections + buildProtocolBlock(input.agentOutputs)
+  // Trailing protocol selection:
+  //   - inline mode: opencode session already has the bi-modal preamble +
+  //     full clarify format block from earlier rounds. Emit only a short
+  //     reminder so the agent knows fresh user answers landed.
+  //   - has-clarify-channel (RFC-023): bi-modal preamble + clarify format.
+  //   - default: legacy single-envelope output protocol.
+  let trailing: string
+  if (inlineMode) {
+    trailing = buildClarifyInlineReminder()
+  } else if (input.hasClarifyChannel === true) {
+    trailing = buildProtocolBlock(input.agentOutputs, true) + buildClarifyProtocolBlock()
+  } else {
+    trailing = buildProtocolBlock(input.agentOutputs)
+  }
+  return body + sections + trailing
 }
 
 /**
  * The English protocol block. Always appended to user prompt, never to the
  * agent's system prompt (agent.md body is passed through verbatim).
+ *
+ * When `hasClarifyChannel` is true (RFC-023), the block is rewritten as a
+ * bi-modal preamble: it announces that the reply must be EXACTLY ONE of two
+ * envelopes (`<workflow-output>` or `<workflow-clarify>`) before the agent
+ * starts drafting, then describes the output format with softened wording.
+ * The clarify-format block is appended by `renderUserPrompt` immediately
+ * after. The bi-modal framing exists because the legacy single-envelope
+ * "You MUST end your reply with <workflow-output>" wording anchored the
+ * agent toward output even when blocking questions remained — a real
+ * production regression that this rewording targets.
  */
-export function buildProtocolBlock(agentOutputs: string[]): string {
-  let s = '\n\n---\nYou MUST end your reply with a `<workflow-output>` block listing these ports:\n'
+export function buildProtocolBlock(agentOutputs: string[], hasClarifyChannel?: boolean): string {
+  if (hasClarifyChannel !== true) {
+    let s =
+      '\n\n---\nYou MUST end your reply with a `<workflow-output>` block listing these ports:\n'
+    for (const port of agentOutputs) {
+      s += `  - ${port}\n`
+    }
+    s += '\nFormat:\n<workflow-output>\n'
+    for (const port of agentOutputs) {
+      s += `  <port name="${port}">...</port>\n`
+    }
+    s += '</workflow-output>'
+    return s
+  }
+
+  let s = '\n\n---\n'
+  s +=
+    '**This node has a clarify channel. Your reply must be EXACTLY ONE of two envelopes — decide which one applies BEFORE you start drafting:**\n\n'
+  s +=
+    '  (A) `<workflow-output>` — you have everything you need and are committing the final answer for the ports listed below.\n'
+  s +=
+    '  (B) `<workflow-clarify>` — you have unresolved questions, missing context, or decisions you would otherwise have to guess at, and you need the user to resolve them before you can produce a useful answer. Format described under "Clarify mode is enabled for this node" below.\n\n'
+  s +=
+    'Both envelopes are equally first-class. Do NOT default to (A) just because its format is shown first or feels like the "normal" path. If, while drafting (A), you find yourself hedging, marking decisions as "TBD", inventing constraints not given by the inputs, or guessing at the user\'s intent — stop and emit (B) instead. Asking back is the correct behavior when intent is genuinely under-specified; silently picking a direction and committing it as final is the failure mode this channel exists to prevent.\n\n'
+  s += '— (A) `<workflow-output>` format —\n'
+  s +=
+    'When you are ready to commit the final answer, end your reply with a `<workflow-output>` block listing these ports:\n'
   for (const port of agentOutputs) {
     s += `  - ${port}\n`
   }
-  s += '\nFormat:\n<workflow-output>\n'
+  s += '\n<workflow-output>\n'
   for (const port of agentOutputs) {
     s += `  <port name="${port}">...</port>\n`
   }
@@ -283,7 +381,7 @@ export function buildClarifyProtocolBlock(): string {
   return `
 
 ---
-**Clarify mode is enabled for this node.** If — and ONLY if — you have unresolved questions that block you from producing your normal output, you MUST instead emit a <workflow-clarify> block (no <workflow-output> in the same reply).
+**Clarify mode is enabled for this node.** When you have unresolved questions, missing context, or decisions you would otherwise have to guess at, ask back by emitting a <workflow-clarify> block instead of <workflow-output> (no <workflow-output> in the same reply). Ask-back is a first-class outcome — prefer it over guessing.
 
 Format:
 <workflow-clarify>
@@ -314,4 +412,27 @@ Hard rules — violation is treated as a malformed reply and the node will fail 
 - Mark at most a couple of options across the whole envelope as "recommended": true. Recommended options sort to the top of the picker for the user.
 - Legacy form is also accepted: \`"options": ["a", "b", "c"]\` — strings are lifted into \`{label, description:"", recommended:false, recommendationReason:""}\`. Prefer the structured form for new emissions.
 - Once the user submits answers, you will receive every prior round's Q&A in the next prompt under "## Clarify Q&A — Prior Rounds (Answers)" — each round is wrapped in a "### Round N" header with a deterministic synthesis line per question. Treat earlier rounds as already-resolved decisions; only the latest round carries the user's standing continue/stop directive.`
+}
+
+/**
+ * RFC-026 — the short reminder appended to the user prompt when a clarify
+ * rerun is running in `inline` session mode.
+ *
+ * In inline mode the runner spawns opencode with `--session <previous-id>`,
+ * so the prior bi-modal preamble + full clarify protocol block are already
+ * in opencode's session memory. Re-emitting them would burn tokens and risk
+ * re-anchoring the agent on stale wording. This reminder is the minimum
+ * needed to (a) acknowledge the fresh user answers landed, (b) keep the
+ * two-envelope choice salient for the next reply.
+ *
+ * Returns a leading `\n\n---\n` separator so callers can concatenate after
+ * the body / sections without re-injecting their own divider.
+ */
+export function buildClarifyInlineReminder(): string {
+  return (
+    '\n\n---\n' +
+    'The user has answered your previous `<workflow-clarify>` round (see "Clarify Q&A — User Answers (Current Round)" above). ' +
+    'Reply with EXACTLY ONE envelope — either `<workflow-output>` if the answers unblocked you, or another `<workflow-clarify>` if real blockers remain. ' +
+    'Earlier rounds, the full envelope formats, and the asking-back rules are still in this session — they have not been re-emitted.'
+  )
 }
