@@ -190,32 +190,33 @@ code {
   min-width: 0;
 }
 
-/* RFC-032 — 3-group sidebar nav. Group headers are 11-px small caps; sub-items
-   are 32-px tall rows with a soft accent hover and full-accent active fill. */
+/* RFC-032 — 3-group sidebar nav. Group headers are 11-px small caps that
+   sit at the sidebar's gutter edge; sub-items are 32-px tall rows indented
+   to read as children of their group header. */
 .nav-group {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 8px 0 6px;
+  padding: 10px 0 4px;
 }
 
 .nav-group__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px;
-  font-size: 11px;
+  padding: 4px 12px 6px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
   user-select: none;
 }
 
 .nav-group__chevron {
-  font-size: 10px;
+  font-size: 9px;
   line-height: 1;
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
 .nav-group__items {
@@ -240,6 +241,13 @@ code {
   text-align: left;
   min-height: 32px;
   font-family: inherit;
+}
+
+/* Indent rows that sit under a group header so the user reads them as
+   children. The Home link stays at the column edge because it is not
+   inside `.nav-group__items`. */
+.nav-group__items .nav-item {
+  padding-left: 22px;
 }
 
 .nav-item__label {
