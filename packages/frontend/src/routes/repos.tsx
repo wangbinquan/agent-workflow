@@ -65,19 +65,19 @@ function ReposPage() {
 
   return (
     <div className="page repos-page">
-      <header className="page__header">
-        <h1>{t('repos.title')}</h1>
-        <p className="page__hint">{t('repos.hint')}</p>
-        <div className="page__actions">
-          <button
-            type="button"
-            className="btn btn--sm btn--primary"
-            data-testid="repos-batch-import-button"
-            onClick={() => setBatchImportOpen(true)}
-          >
-            {t('repos.batchImport.button')}
-          </button>
+      <header className="page__header page__header--row">
+        <div>
+          <h1>{t('repos.title')}</h1>
+          <p className="page__hint">{t('repos.hint')}</p>
         </div>
+        <button
+          type="button"
+          className="btn btn--primary"
+          data-testid="repos-batch-import-button"
+          onClick={() => setBatchImportOpen(true)}
+        >
+          {t('repos.batchImport.button')}
+        </button>
       </header>
 
       <BatchImportDialog

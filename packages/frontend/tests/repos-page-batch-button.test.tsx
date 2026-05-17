@@ -73,4 +73,19 @@ describe('/repos page batch import button (RFC-033)', () => {
     fireEvent.click(screen.getByTestId('repos-batch-import-button'))
     expect(screen.getByTestId('batch-import-dialog')).toBeTruthy()
   })
+
+  // Locks in the top-right placement aligned with /agents "新建代理" button
+  // (see commit aligning batch-import button placement). Header should be a
+  // page__header--row flex so the button sits to the right of the title;
+  // button itself should use the unsized primary style, not btn--sm.
+  test('button uses primary style inside page__header--row layout', async () => {
+    renderPage()
+    await new Promise((r) => setTimeout(r, 10))
+    const btn = screen.getByTestId('repos-batch-import-button')
+    expect(btn.className).toContain('btn--primary')
+    expect(btn.className).not.toContain('btn--sm')
+    const header = btn.closest('header')
+    expect(header).not.toBeNull()
+    expect(header?.className ?? '').toContain('page__header--row')
+  })
 })
