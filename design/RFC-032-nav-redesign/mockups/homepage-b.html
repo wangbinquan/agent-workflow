@@ -1,0 +1,411 @@
+<!doctype html>
+<!-- RFC-032 首页方案 B — 资源驱动仪表盘（**备选，未采纳**）
+     聚焦"我有什么资产可以用"：代理 / 工作流 / 远端仓 / 能力 四象限 + 新建快捷 + runtime 顶部条。
+     适合项目早期 / 环境搭建阶段；RFC-032 最终采纳 homepage-a 任务驱动，保留本文件仅作讨论历史的对照参考。
+     **主题切换不在 chrome**：归 /settings → Appearance tab；demo 用 console 调 toggleTheme() 切换。 -->
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <title>Homepage B — 资源驱动仪表盘（RFC-032）</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+        --bg: #f8f9fb;
+        --panel: #ffffff;
+        --border: #e3e5ea;
+        --text: #1f2328;
+        --muted: #6b7180;
+        --accent: #2f6feb;
+        --danger: #d12c2c;
+        --success: #1f9d55;
+        --warn: #d97706;
+      }
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --bg: #15181d;
+        --panel: #1c2028;
+        --border: #2a2f38;
+        --text: #e6e7ea;
+        --muted: #95a0b3;
+        --accent: #6aa3ff;
+        --danger: #ff6b6b;
+        --success: #4ade80;
+        --warn: #fbbf24;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; }
+      a { color: inherit; text-decoration: none; }
+      button { font: inherit; cursor: pointer; }
+
+      .app-shell {
+        display: grid;
+        grid-template-columns: 240px 1fr;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      /* --- Sidebar (与 layout-a 一致) --- */
+      .sidebar {
+        background: var(--panel); border-right: 1px solid var(--border);
+        padding: 16px 10px;
+        display: flex; flex-direction: column; gap: 4px;
+        overflow-y: auto;
+      }
+      .sidebar__brand {
+        display: flex; align-items: center; gap: 10px;
+        font-size: 16px; font-weight: 600;
+        padding: 6px 12px 10px;
+      }
+      .sidebar__brand-dot {
+        width: 22px; height: 22px; border-radius: 6px;
+        background: linear-gradient(135deg, #22d3ee, #818cf8 50%, #e879f9);
+      }
+      .nav-home {
+        display: flex; align-items: center; gap: 8px;
+        padding: 7px 12px; border-radius: 6px;
+        font-size: 13px; color: #fff; background: var(--accent);
+        margin-bottom: 8px;
+      }
+      .nav-group { display: flex; flex-direction: column; gap: 1px; margin-bottom: 4px; }
+      .nav-group__header {
+        padding: 6px 12px 4px;
+        font-size: 11px; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+      .nav-item {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 8px; padding: 7px 12px 7px 28px;
+        border-radius: 6px; font-size: 13px; color: var(--text);
+      }
+      .nav-item:hover {
+        background: color-mix(in srgb, var(--accent) 12%, transparent);
+        color: var(--accent);
+      }
+      .nav-item__label { display: flex; align-items: center; gap: 8px; }
+      .nav-item__dot {
+        width: 6px; height: 6px; border-radius: 50%;
+        background: var(--success); flex-shrink: 0;
+      }
+      .inbox-footer {
+        margin-top: auto;
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 8px; padding: 8px 12px; margin-bottom: 6px;
+        border: 1px solid var(--border);
+        background: color-mix(in srgb, var(--accent) 8%, transparent);
+        color: var(--text);
+        border-radius: 8px; font-size: 13px;
+      }
+      .inbox-footer:hover {
+        background: color-mix(in srgb, var(--accent) 16%, transparent);
+        color: var(--accent);
+      }
+      .inbox-footer__label { display: inline-flex; align-items: center; gap: 8px; }
+      .nav-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 20px; height: 18px; padding: 0 6px;
+        border-radius: 999px; background: var(--danger); color: #fff;
+        font-size: 11px; font-weight: 600;
+      }
+      .sidebar__footer {
+        padding-top: 10px; border-top: 1px solid var(--border);
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 8px; padding-left: 4px; padding-right: 4px;
+      }
+      .lang-pill { font-size: 11px; color: var(--muted); }
+      .settings-icon, .theme-toggle {
+        background: transparent; border: 1px solid var(--border);
+        color: var(--muted); border-radius: 6px;
+        padding: 4px 6px;
+        display: inline-flex; align-items: center; justify-content: center;
+        line-height: 0;
+      }
+      .theme-toggle { font-size: 11px; padding: 4px 8px; line-height: 1.2; }
+      .settings-icon:hover, .theme-toggle:hover {
+        color: var(--text);
+        background: color-mix(in srgb, var(--text) 6%, transparent);
+      }
+
+      /* --- Content --- */
+      .content { padding: 28px 36px; overflow: auto; }
+
+      .runtime-bar {
+        display: flex; align-items: center; justify-content: space-between;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px 22px;
+        margin-bottom: 24px;
+      }
+      .runtime-bar__main { display: flex; align-items: center; gap: 14px; }
+      .runtime-bar__dot {
+        width: 14px; height: 14px; border-radius: 50%;
+        background: var(--success);
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 18%, transparent);
+      }
+      .runtime-bar__title { font-size: 16px; font-weight: 600; margin: 0 0 2px; }
+      .runtime-bar__meta { color: var(--muted); font-size: 12px; }
+      .btn-ghost {
+        background: transparent; border: 1px solid var(--border);
+        color: var(--text); font-size: 12px;
+        padding: 6px 12px; border-radius: 6px;
+      }
+
+      .greet { margin-bottom: 20px; }
+      .greet__title { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+      .greet__hint { color: var(--muted); font-size: 13px; margin: 0; }
+
+      .resource-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .res-card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px 22px;
+        display: flex; flex-direction: column; gap: 14px;
+        transition: border-color 0.15s, transform 0.15s;
+        cursor: pointer;
+      }
+      .res-card:hover {
+        border-color: var(--accent);
+        transform: translateY(-2px);
+      }
+      .res-card__icon {
+        width: 36px; height: 36px;
+        border-radius: 10px;
+        display: grid; place-items: center;
+        font-size: 20px;
+      }
+      .res-card--agents .res-card__icon { background: color-mix(in srgb, #2f6feb 18%, transparent); color: #2f6feb; }
+      .res-card--workflows .res-card__icon { background: color-mix(in srgb, #818cf8 18%, transparent); color: #818cf8; }
+      .res-card--repos .res-card__icon { background: color-mix(in srgb, #22d3ee 18%, transparent); color: #22d3ee; }
+      .res-card--capabilities .res-card__icon { background: color-mix(in srgb, #e879f9 18%, transparent); color: #e879f9; }
+      .res-card__title { font-size: 13px; color: var(--muted); margin: 0 0 4px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+      .res-card__count { font-size: 30px; font-weight: 600; line-height: 1; }
+      .res-card__count-unit { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+      .res-card__breakdown {
+        color: var(--muted); font-size: 12px;
+        display: flex; gap: 6px; flex-wrap: wrap;
+      }
+      .res-card__chip {
+        font-size: 11px; padding: 2px 8px; border-radius: 999px;
+        background: color-mix(in srgb, var(--text) 6%, transparent);
+      }
+      .res-card__action {
+        margin-top: auto;
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 12px; font-weight: 600; color: var(--accent);
+      }
+
+      .recent-section {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px 22px;
+      }
+      .recent-section__title {
+        font-size: 13px; font-weight: 600; color: var(--muted);
+        text-transform: uppercase; letter-spacing: 0.04em;
+        margin: 0 0 12px;
+      }
+      .recent-list { display: flex; flex-direction: column; gap: 1px; }
+      .recent-item {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 8px 0;
+        border-top: 1px dashed var(--border);
+        font-size: 13px;
+      }
+      .recent-item:first-child { border-top: 0; }
+      .recent-item__main { display: flex; align-items: center; gap: 10px; }
+      .recent-item__type {
+        font-size: 10px; font-weight: 700; padding: 2px 7px;
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
+        color: var(--accent);
+      }
+      .recent-item__time { color: var(--muted); font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar__brand">
+          <span class="sidebar__brand-dot"></span>
+          <span>Agent Workflow</span>
+        </div>
+
+        <a class="nav-home" href="#">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          首页
+        </a>
+
+        <div class="nav-group">
+          <div class="nav-group__header">代理 · Agents</div>
+          <a class="nav-item" href="#"><span class="nav-item__label">代理</span></a>
+          <a class="nav-item" href="#"><span class="nav-item__label">技能</span></a>
+          <a class="nav-item" href="#"><span class="nav-item__label">MCP</span></a>
+          <a class="nav-item" href="#"><span class="nav-item__label">插件</span></a>
+          <a class="nav-item" href="#">
+            <span class="nav-item__label"><span class="nav-item__dot"></span>运行时</span>
+            <span style="font-size:11px;color:var(--muted)">v0.13.2</span>
+          </a>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-group__header">工作流 · Workflows</div>
+          <a class="nav-item" href="#"><span class="nav-item__label">工作流</span></a>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-group__header">任务 · Tasks</div>
+          <a class="nav-item" href="#"><span class="nav-item__label">任务</span></a>
+          <a class="nav-item" href="#"><span class="nav-item__label">远端仓</span></a>
+        </div>
+
+        <button class="inbox-footer" type="button">
+          <span class="inbox-footer__label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline>
+              <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+            </svg>
+            收件箱
+          </span>
+          <span class="nav-badge">12</span>
+        </button>
+
+        <div class="sidebar__footer">
+          <span class="lang-pill">中文 / EN</span>
+          <button class="settings-icon" type="button" title="设置（含主题切换）" aria-label="设置">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
+        </div>
+      </aside>
+
+      <main class="content">
+        <div class="runtime-bar">
+          <div class="runtime-bar__main">
+            <span class="runtime-bar__dot"></span>
+            <div>
+              <div class="runtime-bar__title">opencode v0.13.2 · ready</div>
+              <div class="runtime-bar__meta">/usr/local/bin/opencode · 满足最低版本 v0.12.0 · 5 个 fixture 通过</div>
+            </div>
+          </div>
+          <button class="btn-ghost">查看运行时设置 →</button>
+        </div>
+
+        <div class="greet">
+          <h1 class="greet__title">欢迎回来，binquan</h1>
+          <p class="greet__hint">从这些资产开始：4 类对象、零配置即可拼出第一个工作流</p>
+        </div>
+
+        <div class="resource-grid">
+          <div class="res-card res-card--agents">
+            <div class="res-card__icon">🤖</div>
+            <div>
+              <div class="res-card__title">代理</div>
+              <div class="res-card__count">8<span class="res-card__count-unit">个</span></div>
+            </div>
+            <div class="res-card__breakdown">
+              <span class="res-card__chip">3 可写</span>
+              <span class="res-card__chip">5 只读</span>
+            </div>
+            <a class="res-card__action" href="#">+ 新建代理 →</a>
+          </div>
+
+          <div class="res-card res-card--workflows">
+            <div class="res-card__icon">🔀</div>
+            <div>
+              <div class="res-card__title">工作流</div>
+              <div class="res-card__count">12<span class="res-card__count-unit">个</span></div>
+            </div>
+            <div class="res-card__breakdown">
+              <span class="res-card__chip">4 含评审</span>
+              <span class="res-card__chip">2 含 loop</span>
+            </div>
+            <a class="res-card__action" href="#">+ 画工作流 →</a>
+          </div>
+
+          <div class="res-card res-card--repos">
+            <div class="res-card__icon">📦</div>
+            <div>
+              <div class="res-card__title">远端仓</div>
+              <div class="res-card__count">5<span class="res-card__count-unit">个</span></div>
+            </div>
+            <div class="res-card__breakdown">
+              <span class="res-card__chip">3 SSH</span>
+              <span class="res-card__chip">2 HTTPS</span>
+            </div>
+            <a class="res-card__action" href="#">+ 接入仓库 →</a>
+          </div>
+
+          <div class="res-card res-card--capabilities">
+            <div class="res-card__icon">🧩</div>
+            <div>
+              <div class="res-card__title">代理能力</div>
+              <div class="res-card__count">9<span class="res-card__count-unit">项</span></div>
+            </div>
+            <div class="res-card__breakdown">
+              <span class="res-card__chip">4 技能</span>
+              <span class="res-card__chip">3 MCP</span>
+              <span class="res-card__chip">2 插件</span>
+            </div>
+            <a class="res-card__action" href="#">+ 添加能力 →</a>
+          </div>
+        </div>
+
+        <div class="recent-section">
+          <h2 class="recent-section__title">最近活动</h2>
+          <div class="recent-list">
+            <div class="recent-item">
+              <div class="recent-item__main">
+                <span class="recent-item__type">新建</span>
+                <span>代理 <strong>reviewer-v2</strong></span>
+              </div>
+              <span class="recent-item__time">12 分钟前</span>
+            </div>
+            <div class="recent-item">
+              <div class="recent-item__main">
+                <span class="recent-item__type">更新</span>
+                <span>工作流 <strong>audit-then-fix</strong>（v8）</span>
+              </div>
+              <span class="recent-item__time">1 小时前</span>
+            </div>
+            <div class="recent-item">
+              <div class="recent-item__main">
+                <span class="recent-item__type">完成</span>
+                <span>任务 <strong>t-9af2</strong> audit-then-fix</span>
+              </div>
+              <span class="recent-item__time">1 小时前</span>
+            </div>
+            <div class="recent-item">
+              <div class="recent-item__main">
+                <span class="recent-item__type">接入</span>
+                <span>远端仓 <strong>git@…/web-app.git</strong></span>
+              </div>
+              <span class="recent-item__time">昨天</span>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      function toggleTheme() {
+        const r = document.documentElement
+        r.setAttribute('data-theme', r.getAttribute('data-theme') === 'dark' ? 'light' : 'dark')
+      }
+    </script>
+  </body>
+</html>
