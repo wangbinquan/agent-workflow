@@ -3,6 +3,7 @@
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -642,5 +643,70 @@ describe('task HTTP routes', () => {
     const body = (await res.json()) as { status: string; errorSummary: string | null }
     expect(body.status).toBe('pending')
     expect(body.errorSummary).toBeNull()
+  })
+
+  // Regression: clicking "retry" on a failed clarify-driven rerun used to
+  // mint a fresh row at retryIndex+1 with clarifyIteration defaulted to 0,
+  // which made buildClarifyPromptContext early-return undefined and the
+  // agent's multi-round clarify Q&A vanished from the next prompt. The
+  // freshly minted retry row must inherit (iteration, clarifyIteration,
+  // reviewIteration, shardKey, parentNodeRunId, preSnapshot) from the row
+  // the user picked.
+  test('POST /:id/nodes/:nrId/retry preserves clarifyIteration / iteration / etc. on the retried row', async () => {
+    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
+    const id = ulid()
+    await h.db.insert(tasks).values({
+      id,
+      workflowId: wfId,
+      workflowSnapshot: JSON.stringify({
+        $schema_version: 1,
+        inputs: [],
+        nodes: [{ id: 'agent1', kind: 'agent-single' }],
+        edges: [],
+      }),
+      repoPath: h.repoPath,
+      worktreePath: '', // skip rollback path
+      baseBranch: 'main',
+      branch: `agent-workflow/${id}`,
+      status: 'failed',
+      inputs: '{}',
+      startedAt: Date.now(),
+      finishedAt: Date.now(),
+      errorSummary: 'boom',
+    })
+    // Original clarify-driven rerun row: a failed attempt mid-multi-round.
+    const failedRunId = ulid()
+    await h.db.insert(nodeRuns).values({
+      id: failedRunId,
+      taskId: id,
+      nodeId: 'agent1',
+      status: 'failed',
+      retryIndex: 0,
+      iteration: 2,
+      clarifyIteration: 3,
+      reviewIteration: 1,
+      shardKey: 'shard-a',
+      parentNodeRunId: null,
+      preSnapshot: 'snap-abcdef',
+      startedAt: Date.now(),
+      finishedAt: Date.now(),
+    })
+    const res = await req(
+      h.app,
+      `/api/tasks/${id}/nodes/${failedRunId}/retry?cascade=false`,
+      { method: 'POST' },
+    )
+    expect(res.status).toBe(200)
+    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
+    const fresh = rows.find((r) => r.id !== failedRunId)
+    expect(fresh).toBeDefined()
+    expect(fresh!.nodeId).toBe('agent1')
+    expect(fresh!.retryIndex).toBe(1)
+    // The fields that locked the bug:
+    expect(fresh!.clarifyIteration).toBe(3)
+    expect(fresh!.iteration).toBe(2)
+    expect(fresh!.reviewIteration).toBe(1)
+    expect(fresh!.shardKey).toBe('shard-a')
+    expect(fresh!.preSnapshot).toBe('snap-abcdef')
   })
 })

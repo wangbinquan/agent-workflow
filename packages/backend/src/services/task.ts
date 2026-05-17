@@ -548,6 +548,16 @@ export async function retryNode(
   // Flip target + downstream node_runs from done → failed so the resumer
   // re-runs them. We do this by inserting a fresh failed row at retry_index
   // max+1, so the scheduler treats it as the "latest" and starts attempt+1.
+  //
+  // Carry forward (iteration, clarifyIteration, reviewIteration, shardKey,
+  // parentNodeRunId, preSnapshot) from the prior run so the retried attempt
+  // resumes in the same loop / clarify / review / shard frame. Skipping this
+  // step previously reset clarifyIteration to 0 on retry, which made
+  // buildClarifyPromptContext drop every answered round and the agent's
+  // multi-round clarify history vanished from the next prompt. For the
+  // explicitly retried target the source-of-truth is `runRow` (the row the
+  // user picked); for cascaded downstream nodes we inherit from each node's
+  // own latest row.
   const targets = new Set<string>([runRow.nodeId])
   for (const id of downstream) targets.add(id)
   for (const nodeId of targets) {
@@ -559,6 +569,7 @@ export async function retryNode(
       .limit(1)
     const prev = existing[0]
     const nextRetry = prev === undefined ? 0 : prev.retryIndex + 1
+    const inherit = nodeId === runRow.nodeId ? runRow : prev
     const newId = ulid()
     await db.insert(nodeRuns).values({
       id: newId,
@@ -566,6 +577,12 @@ export async function retryNode(
       nodeId,
       status: 'failed',
       retryIndex: nextRetry,
+      iteration: inherit?.iteration ?? 0,
+      clarifyIteration: inherit?.clarifyIteration ?? 0,
+      reviewIteration: inherit?.reviewIteration ?? 0,
+      shardKey: inherit?.shardKey ?? null,
+      parentNodeRunId: inherit?.parentNodeRunId ?? null,
+      preSnapshot: inherit?.preSnapshot ?? null,
       startedAt: Date.now(),
       finishedAt: Date.now(),
       errorMessage: 'queued for retry',
