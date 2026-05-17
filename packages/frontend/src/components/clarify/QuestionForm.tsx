@@ -11,15 +11,32 @@
 //     text" checkbox + textarea. NOT mutually exclusive — the user can tick
 //     any subset of options AND add custom notes.
 //
-// Keyboard hotkeys: digit keys 1..N select / toggle the matching option.
-// (Single-choice picks; multi-choice toggles.) The (N+1) "Other" row is on
-// digit (N+1). The hotkeys only fire when the user is NOT focused inside a
-// textarea / input field, so typing in the custom field never collides.
+// Keyboard hotkeys (reviewer ergonomics):
+//   - digit keys 1..N select / toggle the matching option (single picks,
+//     multi toggles); (N+1) is the "Other (custom)" row.
+//   - Enter → call `onAdvance()` to jump to the next question / submit.
+//   - For single-choice, a digit key that picks a normal option (1..N) also
+//     triggers `onAdvance()` so the reviewer can fly through the form with
+//     just digits. Picking the custom row (N+1) does NOT advance; instead it
+//     auto-focuses the textarea so the reviewer can immediately type.
+//   - For multi-choice, digit keys never auto-advance (the reviewer needs
+//     to tick multiple boxes before moving on); Enter is the explicit advance.
+//   - Hotkeys only fire when the user is NOT focused inside a textarea /
+//     input field, so typing in the custom field never collides.
 //
 // The component is fully controlled (no internal state) so the parent
 // route (`/clarify/:nodeRunId`) can drive draft persistence in one place.
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ClarifyAnswer, ClarifyQuestion } from '@agent-workflow/shared'
 import { CLARIFY_MAX_CUSTOM_TEXT_LEN } from '@agent-workflow/shared'
@@ -32,13 +49,40 @@ export interface QuestionFormProps {
   onChange: (next: ClarifyAnswer) => void
   /** When true, all inputs are disabled (post-submit / WS race lock). */
   disabled?: boolean
+  /**
+   * Called when the reviewer signals "advance to next question": pressing
+   * Enter (outside the custom textarea), or — for single-choice — picking
+   * a normal option (1..N) via digit hotkey. The parent decides what
+   * "next" means (focus next QuestionForm, or focus the submit button when
+   * this is the last question).
+   */
+  onAdvance?: () => void
 }
 
-export function QuestionForm({ question, value, index, onChange, disabled }: QuestionFormProps) {
+export interface QuestionFormHandle {
+  /** Move keyboard focus onto this question's root for digit / Enter hotkeys. */
+  focus: () => void
+}
+
+export const QuestionForm = forwardRef<QuestionFormHandle, QuestionFormProps>(function QuestionForm(
+  { question, value, index, onChange, disabled, onAdvance },
+  forwardedRef,
+) {
   const { t } = useTranslation()
   const groupId = useId()
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const customTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const customRowIndex = question.options.length // 0-based; +1 = digit hotkey
+
+  useImperativeHandle(
+    forwardedRef,
+    () => ({
+      focus: () => {
+        rootRef.current?.focus()
+      },
+    }),
+    [],
+  )
 
   // single-choice questions can't infer "Other is picked" from ClarifyAnswer
   // alone when customText is empty (empty indices + empty text is also the
@@ -154,23 +198,44 @@ export function QuestionForm({ question, value, index, onChange, disabled }: Que
     if (root === null || disabled === true) return
     function onKeyDown(e: KeyboardEvent) {
       // Ignore typing inside text inputs / textareas so the user doesn't
-      // accidentally trigger an option while filling custom text.
+      // accidentally trigger an option while filling custom text. Enter
+      // inside the textarea still inserts a newline (browser default).
       const target = e.target as HTMLElement | null
       if (target !== null) {
         const tag = target.tagName
         if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return
+      // Enter → advance to next question / submit. Works on both single and
+      // multi; the reviewer uses this after they've finished toggling boxes
+      // (multi) or as a no-op confirm (single, since digit already advanced).
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        onAdvance?.()
+        return
+      }
       const digit = Number.parseInt(e.key, 10)
       const idx = digitToOptionIdx(digit)
       if (idx === null) return
       e.preventDefault()
       if (idx === customRowIndex) {
-        if (question.kind === 'single') pickSingleCustom()
-        else toggleMultiCustomEnabled(!multiCustomEnabled)
+        if (question.kind === 'single') {
+          pickSingleCustom()
+          // Focus the textarea so the reviewer can type immediately. Defer
+          // via rAF so React has rendered the now-active textarea state.
+          requestAnimationFrame(() => customTextareaRef.current?.focus())
+        } else {
+          toggleMultiCustomEnabled(!multiCustomEnabled)
+        }
       } else {
-        if (question.kind === 'single') pickSingleOption(idx)
-        else toggleMultiOption(idx)
+        if (question.kind === 'single') {
+          pickSingleOption(idx)
+          // Single-choice + normal option pick is a complete answer → advance.
+          // (Multi never auto-advances; reviewer presses Enter when done.)
+          onAdvance?.()
+        } else {
+          toggleMultiOption(idx)
+        }
       }
     }
     root.addEventListener('keydown', onKeyDown)
@@ -180,6 +245,7 @@ export function QuestionForm({ question, value, index, onChange, disabled }: Que
     digitToOptionIdx,
     disabled,
     multiCustomEnabled,
+    onAdvance,
     pickSingleCustom,
     pickSingleOption,
     question.kind,
@@ -336,6 +402,7 @@ export function QuestionForm({ question, value, index, onChange, disabled }: Que
         }
       >
         <textarea
+          ref={customTextareaRef}
           className="clarify-custom-input"
           value={value.customText}
           disabled={disabled === true || (isSingle ? !singleCustomRowActive : !multiCustomEnabled)}
@@ -354,4 +421,4 @@ export function QuestionForm({ question, value, index, onChange, disabled }: Que
       </div>
     </div>
   )
-}
+})

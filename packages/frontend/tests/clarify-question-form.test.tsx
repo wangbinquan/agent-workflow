@@ -62,10 +62,12 @@ function Host({
   question,
   initial,
   onChangeSpy,
+  onAdvance,
 }: {
   question: ClarifyQuestion
   initial: ClarifyAnswer
   onChangeSpy: (a: ClarifyAnswer) => void
+  onAdvance?: () => void
 }) {
   const [a, setA] = useState<ClarifyAnswer>(initial)
   return (
@@ -77,6 +79,7 @@ function Host({
         setA(next)
         onChangeSpy(next)
       }}
+      onAdvance={onAdvance}
     />
   )
 }
@@ -297,5 +300,121 @@ describe('QuestionForm — keyboard hotkeys', () => {
     // handler must early-out because the event's target is a textarea.
     fireEvent.keyDown(textarea, { key: '1' })
     expect(spy.mock.calls.length).toBe(0)
+  })
+})
+
+// Reviewer ergonomics: digit picks for single-choice auto-advance, Enter is
+// the universal "next" key. Without these the reviewer has to mouse / tab
+// after every question, defeating the digit-hotkey win.
+describe('QuestionForm — keyboard advance', () => {
+  test('Enter calls onAdvance (single)', () => {
+    const adv = vi.fn()
+    const change = vi.fn()
+    render(
+      <Host
+        question={SINGLE_Q}
+        initial={emptyAnswer('q-db')}
+        onChangeSpy={change}
+        onAdvance={adv}
+      />,
+    )
+    const root = document.querySelector('.clarify-question') as HTMLElement
+    root.focus()
+    fireEvent.keyDown(root, { key: 'Enter' })
+    expect(adv).toHaveBeenCalledTimes(1)
+    expect(change).not.toHaveBeenCalled() // Enter must not mutate the answer
+  })
+
+  test('Enter calls onAdvance (multi)', () => {
+    const adv = vi.fn()
+    render(
+      <Host
+        question={MULTI_Q}
+        initial={emptyAnswer('q-langs')}
+        onChangeSpy={vi.fn()}
+        onAdvance={adv}
+      />,
+    )
+    const root = document.querySelector('.clarify-question') as HTMLElement
+    root.focus()
+    fireEvent.keyDown(root, { key: 'Enter' })
+    expect(adv).toHaveBeenCalledTimes(1)
+  })
+
+  test('Enter inside the custom textarea does NOT advance (newline still works)', () => {
+    const adv = vi.fn()
+    render(
+      <Host
+        question={SINGLE_Q}
+        // Pre-activate custom row so the textarea is enabled.
+        initial={{ ...emptyAnswer('q-db'), customText: 'draft' }}
+        onChangeSpy={vi.fn()}
+        onAdvance={adv}
+      />,
+    )
+    const textarea = screen.getByTestId('clarify-custom-textarea') as HTMLTextAreaElement
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    expect(adv).not.toHaveBeenCalled()
+  })
+
+  test('single-choice digit 1..N picks AND advances', () => {
+    const adv = vi.fn()
+    const change = vi.fn()
+    render(
+      <Host
+        question={SINGLE_Q}
+        initial={emptyAnswer('q-db')}
+        onChangeSpy={change}
+        onAdvance={adv}
+      />,
+    )
+    const root = document.querySelector('.clarify-question') as HTMLElement
+    root.focus()
+    fireEvent.keyDown(root, { key: '2' })
+    const last = change.mock.calls[change.mock.calls.length - 1]?.[0] as ClarifyAnswer
+    expect(last.selectedOptionIndices).toEqual([1])
+    expect(adv).toHaveBeenCalledTimes(1)
+  })
+
+  test('single-choice digit N+1 (custom row) does NOT advance — it focuses the textarea instead', async () => {
+    const adv = vi.fn()
+    render(
+      <Host
+        question={SINGLE_Q}
+        initial={emptyAnswer('q-db')}
+        onChangeSpy={vi.fn()}
+        onAdvance={adv}
+      />,
+    )
+    const root = document.querySelector('.clarify-question') as HTMLElement
+    root.focus()
+    // SINGLE_Q has 2 options; digit 3 = custom row.
+    fireEvent.keyDown(root, { key: '3' })
+    expect(adv).not.toHaveBeenCalled()
+    // Textarea focus is scheduled via rAF after the active-state render.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    )
+    const textarea = screen.getByTestId('clarify-custom-textarea') as HTMLTextAreaElement
+    expect(document.activeElement).toBe(textarea)
+  })
+
+  test('multi-choice digit toggles but does NOT advance', () => {
+    const adv = vi.fn()
+    const change = vi.fn()
+    render(
+      <Host
+        question={MULTI_Q}
+        initial={emptyAnswer('q-langs')}
+        onChangeSpy={change}
+        onAdvance={adv}
+      />,
+    )
+    const root = document.querySelector('.clarify-question') as HTMLElement
+    root.focus()
+    fireEvent.keyDown(root, { key: '2' })
+    const last = change.mock.calls[change.mock.calls.length - 1]?.[0] as ClarifyAnswer
+    expect(last.selectedOptionIndices).toEqual([1])
+    expect(adv).not.toHaveBeenCalled()
   })
 })

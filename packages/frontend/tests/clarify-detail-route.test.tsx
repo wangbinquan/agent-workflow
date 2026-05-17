@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
   RouterProvider,
   createMemoryHistory,
@@ -192,5 +192,81 @@ describe('/clarify/$nodeRunId detail (RFC-023 T23)', () => {
   test('source-level grep: shard_key field name survives in clarify.detail.tsx', () => {
     const src = readFileSync(join(__dirname, '..', 'src', 'routes', 'clarify.detail.tsx'), 'utf8')
     expect(src).toContain('sourceShardKey')
+  })
+})
+
+// Reviewer keyboard ergonomics: once the form is loaded, digit / Enter
+// keystrokes should hop between questions without a mouse click; the last
+// question's "advance" should land focus on the submit button so a final
+// Enter actually submits. These tests pin the page-level wiring (parent
+// route → QuestionForm refs + advanceFromQuestion + initial focus).
+describe('/clarify/$nodeRunId reviewer keyboard nav', () => {
+  function twoQuestionSession(): ClarifySession {
+    return mkSession({
+      questions: [
+        {
+          id: 'q1',
+          title: 'Pick DB',
+          kind: 'single',
+          recommended: false,
+          options: [
+            { label: 'Postgres', description: '', recommended: false, recommendationReason: '' },
+            { label: 'MySQL', description: '', recommended: false, recommendationReason: '' },
+          ],
+        },
+        {
+          id: 'q2',
+          title: 'Pick lang',
+          kind: 'single',
+          recommended: false,
+          options: [
+            { label: 'TS', description: '', recommended: false, recommendationReason: '' },
+            { label: 'Go', description: '', recommended: false, recommendationReason: '' },
+          ],
+        },
+      ],
+    })
+  }
+
+  test('initial focus lands on the first question once the draft loads', async () => {
+    mockApi(twoQuestionSession())
+    renderRoute()
+    await waitFor(() => screen.getByTestId('clarify-question-q1'))
+    // Initial focus is scheduled via rAF after draft load.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    )
+    expect(document.activeElement).toBe(screen.getByTestId('clarify-question-q1'))
+  })
+
+  test('Enter on the first question moves focus to the second', async () => {
+    mockApi(twoQuestionSession())
+    renderRoute()
+    await waitFor(() => screen.getByTestId('clarify-question-q1'))
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    )
+    const q1 = screen.getByTestId('clarify-question-q1')
+    fireEvent.keyDown(q1, { key: 'Enter' })
+    expect(document.activeElement).toBe(screen.getByTestId('clarify-question-q2'))
+  })
+
+  test('Enter on the last question moves focus to the submit button', async () => {
+    mockApi(twoQuestionSession())
+    renderRoute()
+    await waitFor(() => screen.getByTestId('clarify-question-q2'))
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    )
+    const q2 = screen.getByTestId('clarify-question-q2')
+    q2.focus()
+    fireEvent.keyDown(q2, { key: 'Enter' })
+    expect(document.activeElement).toBe(screen.getByTestId('clarify-submit'))
+  })
+
+  test('keyboard hint is rendered for awaiting_human sessions', async () => {
+    mockApi(twoQuestionSession())
+    renderRoute()
+    await waitFor(() => screen.getByTestId('clarify-keyboard-hint'))
   })
 })

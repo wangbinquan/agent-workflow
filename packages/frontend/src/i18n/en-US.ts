@@ -361,6 +361,7 @@ export const enUS: Resources = {
     failedBanner: 'Task failed.',
     jumpToFailed: 'Jump to failed node ({{nodeId}})',
     reviewButton: 'Review',
+    clarifyButton: 'Answer',
     worktreePreserved:
       'Worktree preserved at {{path}}. You can inspect it manually, or run git worktree remove when done.',
     sectionWorkflowStatus: 'Workflow status',
@@ -906,6 +907,7 @@ export const enUS: Resources = {
       back: '← Back to list',
       answeredAt: 'Answered · {{time}}',
       askedAt: 'Asked at {{time}}',
+      keyboardHint: 'Shortcuts: digits 1–N pick an option · Enter jumps to next / submits',
     },
     question: {
       single: { customLabel: 'Other (custom)' },

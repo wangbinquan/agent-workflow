@@ -344,6 +344,7 @@ export interface Resources {
     failedBanner: string
     jumpToFailed: string
     reviewButton: string
+    clarifyButton: string
     worktreePreserved: string
     sectionWorkflowStatus: string
     sectionNodeRuns: string
@@ -840,6 +841,7 @@ export interface Resources {
       back: string
       answeredAt: string
       askedAt: string
+      keyboardHint: string
     }
     question: {
       single: { customLabel: string }
@@ -1220,6 +1222,7 @@ export const zhCN: Resources = {
     failedBanner: '任务失败。',
     jumpToFailed: '跳到失败节点 ({{nodeId}})',
     reviewButton: '去审核',
+    clarifyButton: '去回答',
     worktreePreserved:
       'Worktree 仍保留在 {{path}}。可手动检查；结束后执行 git worktree remove 清理。',
     sectionWorkflowStatus: '工作流状态',
@@ -1738,6 +1741,7 @@ export const zhCN: Resources = {
       back: '← 返回列表',
       answeredAt: '已回答 · {{time}}',
       askedAt: '提问于 {{time}}',
+      keyboardHint: '快捷键：数字键 1–N 选择选项 · Enter 跳下一题 / 提交',
     },
     question: {
       single: { customLabel: '其他（自定义）' },

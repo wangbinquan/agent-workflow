@@ -43,4 +43,23 @@ describe('RFC-023 bugfix #4 — clarify question form CSS contract', () => {
     expect(css).toContain("title='__clarify__'")
     expect(css).toContain("title='__clarify_response__'")
   })
+
+  // The submit button used to ship as `class="button button--primary"` but
+  // there are no `.button*` rules in styles.css (only `.btn` / `.btn--primary`),
+  // so it rendered as an ugly default-grey button. Lock it to the shared
+  // `.btn .btn--primary` styling so a future refactor can't quietly regress it.
+  test('clarify-detail submit button uses the shared .btn .btn--primary class', () => {
+    const src = readFileSync(
+      resolve(__dirname, '..', 'src', 'routes', 'clarify.detail.tsx'),
+      'utf8',
+    )
+    expect(src).toContain('className="btn btn--primary"')
+    expect(src).not.toContain('"button button--primary"')
+    const css = readFileSync(STYLES_CSS, 'utf8')
+    // The footer rule must follow the className, otherwise margin-left:auto
+    // (which pushes the submit to the right) silently breaks.
+    expect(css).toContain('.clarify-detail__footer .btn {')
+    // Sanity: .btn--primary exists and uses the accent color (blue).
+    expect(css).toMatch(/\.btn--primary\s*\{[^}]*var\(--accent\)/)
+  })
 })

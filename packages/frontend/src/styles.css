@@ -4096,7 +4096,7 @@ mark.comment-anchor[data-active='true'] {
   background: color-mix(in srgb, var(--bg) 70%, transparent);
 }
 
-.clarify-detail__footer .button {
+.clarify-detail__footer .btn {
   margin-left: auto;
 }
 

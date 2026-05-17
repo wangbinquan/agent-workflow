@@ -26,7 +26,7 @@ import type {
   SubmitClarifyAnswersResponse,
 } from '@agent-workflow/shared'
 import { api } from '@/api/client'
-import { QuestionForm } from '@/components/clarify/QuestionForm'
+import { QuestionForm, type QuestionFormHandle } from '@/components/clarify/QuestionForm'
 import { useClarifyWs } from '@/hooks/useClarifyWs'
 import { deleteClarifyDraft, getClarifyDraft, setClarifyDraft } from '@/lib/clarify/draftStore'
 import { Route as RootRoute } from './__root'
@@ -225,6 +225,51 @@ export function ClarifyDetailPage() {
   const requiredMissing = false
 
   // ----------------------------------------------------------------------
+  // Keyboard navigation between questions. The reviewer ergonomics flow:
+  //   1. On mount (after draft / sealed answers loaded), focus the first
+  //      *unanswered* question so digit / Enter hotkeys work without a click.
+  //   2. Each QuestionForm calls `onAdvance` after Enter or a single-choice
+  //      digit pick → we focus the next QuestionForm; on the last question
+  //      we focus the submit button so a follow-up Enter actually submits.
+  // ----------------------------------------------------------------------
+  const questionRefs = useRef<Map<string, QuestionFormHandle | null>>(new Map())
+  const submitRef = useRef<HTMLButtonElement | null>(null)
+  const initialFocusedRef = useRef(false)
+
+  function isAnswerEmpty(a: ClarifyAnswer | undefined): boolean {
+    if (a === undefined) return true
+    return a.selectedOptionIndices.length === 0 && a.customText.length === 0
+  }
+
+  const advanceFromQuestion = (currentId: string) => {
+    const qs = session.data?.questions ?? []
+    const idx = qs.findIndex((q) => q.id === currentId)
+    if (idx === -1) return
+    const next = qs[idx + 1]
+    if (next !== undefined) {
+      questionRefs.current.get(next.id)?.focus()
+    } else {
+      submitRef.current?.focus()
+    }
+  }
+
+  useEffect(() => {
+    if (!draftLoaded || initialFocusedRef.current) return
+    const s = session.data
+    if (s === undefined) return
+    if (s.status !== 'awaiting_human') return
+    const firstUnanswered = s.questions.find((q) => isAnswerEmpty(answers[q.id]))
+    const target = firstUnanswered ?? s.questions[0]
+    if (target === undefined) return
+    // rAF defers focus until after the QuestionForms have mounted + their
+    // refs settled (the ref callbacks fire during the same commit).
+    requestAnimationFrame(() => {
+      questionRefs.current.get(target.id)?.focus()
+      initialFocusedRef.current = true
+    })
+  }, [answers, draftLoaded, session.data])
+
+  // ----------------------------------------------------------------------
   // render
   // ----------------------------------------------------------------------
 
@@ -290,6 +335,11 @@ export function ClarifyDetailPage() {
         </section>
       )}
 
+      {!readonly && (
+        <p className="muted clarify-detail__keyboard-hint" data-testid="clarify-keyboard-hint">
+          {t('clarify.detail.keyboardHint')}
+        </p>
+      )}
       <section className="clarify-questions">
         {s.questions.map((q, idx) => {
           const a = answers[q.id]
@@ -297,11 +347,16 @@ export function ClarifyDetailPage() {
           return (
             <QuestionForm
               key={q.id}
+              ref={(h) => {
+                if (h === null) questionRefs.current.delete(q.id)
+                else questionRefs.current.set(q.id, h)
+              }}
               question={q}
               value={a}
               index={idx + 1}
               disabled={readonly || submitMut.isPending}
               onChange={(next) => setAnswers((prev) => ({ ...prev, [q.id]: next }))}
+              onAdvance={() => advanceFromQuestion(q.id)}
             />
           )
         })}
@@ -312,8 +367,9 @@ export function ClarifyDetailPage() {
           {draftSaving ? t('clarify.detail.draftSaving') : t('clarify.detail.draftSaved')}
         </span>
         <button
+          ref={submitRef}
           type="button"
-          className="button button--primary"
+          className="btn btn--primary"
           disabled={readonly || submitMut.isPending || requiredMissing}
           onClick={() => submitMut.mutate()}
           data-testid="clarify-submit"
