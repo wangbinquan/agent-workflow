@@ -38,6 +38,10 @@ export const Paths = {
   get skillsDir() {
     return join(appHome(), 'skills')
   },
+  /** RFC-031: framework-managed plugin install root; one subdir per plugin row id. */
+  get pluginsDir() {
+    return join(appHome(), 'plugins')
+  },
   get worktreesDir() {
     return join(appHome(), 'worktrees')
   },

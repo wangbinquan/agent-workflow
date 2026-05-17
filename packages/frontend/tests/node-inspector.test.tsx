@@ -42,6 +42,7 @@ const CODER: Agent = {
   skills: [],
   dependsOn: [],
   mcp: [],
+  plugins: [],
   frontmatterExtra: {},
   bodyMd: '',
   schemaVersion: 1,

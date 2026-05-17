@@ -17,6 +17,7 @@ import type {
   Agent,
   ClarifyNode,
   Mcp,
+  Plugin,
   WorkflowDefinition,
   WorkflowEdge,
   WorkflowNode,
@@ -33,6 +34,7 @@ import type { DbClient } from '@/db/client'
 import { agents, nodeRunEvents, nodeRunOutputs, nodeRuns, skills, tasks } from '@/db/schema'
 import { resolveDependsClosure } from '@/services/agentDeps'
 import { collectMcpNamesFromClosure, loadMcpsByNames } from '@/services/mcpClosure'
+import { collectPluginNamesFromClosure, loadPluginsByNames } from '@/services/pluginClosure'
 import {
   buildClarifyPromptContext,
   createClarifySession,
@@ -619,7 +621,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   // silently spawning with a broken closure.
   const injection = await prepareNodeRunInjection(db, opts.appHome, agent, log)
   if (injection.kind === 'failed') return injection
-  const { dependents, resolvedSkills, mcps } = injection
+  const { dependents, resolvedSkills, mcps, plugins } = injection
   const promptTemplate = pickString(node, 'promptTemplate') ?? undefined
   const nodeTimeoutMs = pickNumber(node, 'timeoutMs') ?? opts.defaultPerNodeTimeoutMs
   const maxRetries = pickNumber(node, 'retries') ?? 0
@@ -838,6 +840,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           skills: resolvedSkills,
           dependents,
           mcps,
+          plugins,
           appHome: opts.appHome,
           ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
           db,
@@ -1241,7 +1244,7 @@ async function runFanOutNode(
   // subprocess gets the full closure + skills union (design.md §4.2 #2).
   const injection = await prepareNodeRunInjection(db, opts.appHome, agent, log)
   if (injection.kind === 'failed') return injection
-  const { dependents, resolvedSkills, mcps } = injection
+  const { dependents, resolvedSkills, mcps, plugins } = injection
   const promptTemplate = pickString(node, 'promptTemplate') ?? undefined
   const nodeTimeoutMs = pickNumber(node, 'timeoutMs') ?? opts.defaultPerNodeTimeoutMs
   const nodeOverrides = pickOverrides(node)
@@ -1576,6 +1579,8 @@ async function loadAgent(db: DbClient, name: string): Promise<Agent | null> {
     dependsOn: parseStringArray(row.dependsOn),
     // RFC-028: same lenient parsing for the mcp column.
     mcp: parseStringArray(row.mcp),
+    // RFC-031: same lenient parsing for the plugins column.
+    plugins: parseStringArray(row.plugins),
     frontmatterExtra: JSON.parse(row.frontmatterExtra) as Record<string, unknown>,
     bodyMd: row.bodyMd,
     schemaVersion: row.schemaVersion,
@@ -1621,6 +1626,13 @@ export async function prepareNodeRunInjection(
        * dropped — see loadMcpsByNames + OPENCODE_CONFIG.md §6.
        */
       mcps: Mcp[]
+      /**
+       * RFC-031: opencode plugin rows hydrated from the dependsOn closure's
+       * union of agent.plugins[] names. Empty when no closure member declares
+       * a plugin. Same "silently skip names that no longer resolve" stance as
+       * mcps — see loadPluginsByNames docstring.
+       */
+      plugins: Plugin[]
     }
   | { kind: 'failed'; summary: string; message: string }
 > {
@@ -1671,7 +1683,13 @@ export async function prepareNodeRunInjection(
   // "fail the whole node because a previously-saved name no longer exists").
   const mcpNames = collectMcpNamesFromClosure(closure.agents)
   const mcps = await loadMcpsByNames(db, mcpNames)
-  return { kind: 'ok', dependents, resolvedSkills, mcps }
+  // RFC-031: same closure + hydrate dance for opencode plugins. Names that no
+  // longer resolve (deleted out from under the running task) are silently
+  // dropped at the loader; we'd rather start the node without a plugin than
+  // crash on a previously-saved-but-deleted reference.
+  const pluginNames = collectPluginNamesFromClosure(closure.agents)
+  const plugins = await loadPluginsByNames(db, pluginNames)
+  return { kind: 'ok', dependents, resolvedSkills, mcps, plugins }
 }
 
 async function resolveSkills(

@@ -7,7 +7,7 @@ import type { Agent, CreateAgent, RenameAgent, UpdateAgent } from '@agent-workfl
 import { eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
-import { agents, mcps, workflows } from '@/db/schema'
+import { agents, mcps, plugins, workflows } from '@/db/schema'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { findAgentsDependingOn, validateDependsOn } from './agentDeps'
 
@@ -41,6 +41,10 @@ export async function createAgent(db: DbClient, input: CreateAgent): Promise<Age
   // closure that silently drops the missing reference).
   await validateMcpReferences(db, input.mcp)
 
+  // RFC-031: every entry in input.plugins must point at an existing + enabled
+  // plugins row. Failure here surfaces as 422 plugin-not-found / -disabled.
+  await validatePluginReferences(db, input.plugins ?? [])
+
   const id = ulid()
   const now = Date.now()
   // RFC-005: outputKinds is a sidecar map ported through `frontmatter_extra`
@@ -64,6 +68,9 @@ export async function createAgent(db: DbClient, input: CreateAgent): Promise<Age
     skills: JSON.stringify(input.skills),
     dependsOn: JSON.stringify(dedupePreservingOrder(input.dependsOn)),
     mcp: JSON.stringify(dedupePreservingOrder(input.mcp)),
+    // RFC-031: plugin name array; T6 enforces existence + enabled at save
+    // time, T7 unions across the dependsOn closure at runner injection time.
+    plugins: JSON.stringify(dedupePreservingOrder(input.plugins ?? [])),
     frontmatterExtra: JSON.stringify(fmExtra),
     bodyMd: input.bodyMd,
     createdAt: now,
@@ -92,6 +99,11 @@ export async function updateAgent(db: DbClient, name: string, patch: UpdateAgent
     await validateMcpReferences(db, patch.mcp)
   }
 
+  // RFC-031 save-time guard — only when caller patched plugins.
+  if (patch.plugins !== undefined) {
+    await validatePluginReferences(db, patch.plugins)
+  }
+
   const set: Partial<typeof agents.$inferInsert> = { updatedAt: Date.now() }
   if (patch.description !== undefined) set.description = patch.description
   if (patch.outputs !== undefined) set.outputs = JSON.stringify(patch.outputs)
@@ -108,6 +120,8 @@ export async function updateAgent(db: DbClient, name: string, patch: UpdateAgent
   if (patch.dependsOn !== undefined)
     set.dependsOn = JSON.stringify(dedupePreservingOrder(patch.dependsOn))
   if (patch.mcp !== undefined) set.mcp = JSON.stringify(dedupePreservingOrder(patch.mcp))
+  if (patch.plugins !== undefined)
+    set.plugins = JSON.stringify(dedupePreservingOrder(patch.plugins))
   // RFC-005: merge outputKinds into frontmatter_extra alongside the explicit
   // patch (if any). Tests that PATCH only outputKinds preserve the rest of
   // frontmatter_extra; tests that PATCH only frontmatterExtra drop outputKinds
@@ -285,6 +299,43 @@ async function validateMcpReferences(db: DbClient, names: readonly string[]): Pr
 }
 
 /**
+ * RFC-031: assert every plugin name in the agent's `plugins[]` array maps
+ * to an existing + enabled plugins row. Empty input is a no-op. Throws
+ * `plugin-not-found` (422) with the missing names, or `plugin-disabled` (422)
+ * when a referenced plugin exists but has `enabled=false`.
+ */
+async function validatePluginReferences(db: DbClient, names: readonly string[]): Promise<void> {
+  if (names.length === 0) return
+  const unique = Array.from(new Set(names))
+  const rows = await db
+    .select({ name: plugins.name, enabled: plugins.enabled })
+    .from(plugins)
+    .where(inArray(plugins.name, unique))
+  const enabledSet = new Set<string>()
+  const disabledSet = new Set<string>()
+  for (const r of rows) {
+    if (r.enabled) enabledSet.add(r.name)
+    else disabledSet.add(r.name)
+  }
+  const missing = unique.filter((n) => !enabledSet.has(n) && !disabledSet.has(n))
+  if (missing.length > 0) {
+    throw new ValidationError(
+      'plugin-not-found',
+      `agent references unknown plugin(s): ${missing.join(', ')}`,
+      { notFound: missing },
+    )
+  }
+  const disabled = unique.filter((n) => disabledSet.has(n))
+  if (disabled.length > 0) {
+    throw new ValidationError(
+      'plugin-disabled',
+      `agent references disabled plugin(s): ${disabled.join(', ')}`,
+      { disabled },
+    )
+  }
+}
+
+/**
  * RFC-028: same lenient parser pattern as dependsOn — used for the `mcp`
  * column. Any non-string entries or parse errors collapse to `[]` so a row
  * with a hand-edited corrupt column never crashes downstream code.
@@ -332,6 +383,7 @@ function rowToAgent(row: AgentRow): Agent {
     skills: JSON.parse(row.skills) as string[],
     dependsOn: parseDependsOnColumn(row.dependsOn),
     mcp: parseStringArrayColumn(row.mcp),
+    plugins: parseStringArrayColumn(row.plugins),
     frontmatterExtra: exposedFm,
     bodyMd: row.bodyMd,
     schemaVersion: row.schemaVersion,

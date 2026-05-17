@@ -12,6 +12,7 @@ import { mountCachedRepoRoutes } from '@/routes/cached-repos'
 import { mountConfigRoutes } from '@/routes/config'
 import { mountHealthRoutes } from '@/routes/health'
 import { mountMcpRoutes } from '@/routes/mcps'
+import { mountPluginRoutes } from '@/routes/plugins'
 import { mountRepoRoutes } from '@/routes/repos'
 import { mountRuntimeRoutes } from '@/routes/runtime'
 import { mountSkillRoutes } from '@/routes/skills'
@@ -63,6 +64,7 @@ export function createApp(deps: AppDeps): Hono {
   mountRuntimeRoutes(app, deps)
   mountAgentRoutes(app, deps)
   mountMcpRoutes(app, deps)
+  mountPluginRoutes(app, deps)
   mountSkillRoutes(app, deps)
   mountSkillSourceRoutes(app, deps)
   mountRepoRoutes(app, deps)

@@ -35,6 +35,7 @@ function makeAgent(): Agent {
     skills: [],
     dependsOn: [],
     mcp: [],
+    plugins: [],
     frontmatterExtra: {},
     bodyMd: 'agent body',
     schemaVersion: 1,

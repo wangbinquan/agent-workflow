@@ -757,6 +757,13 @@ export interface Resources {
     mcpsPickerLoading: string
     mcpsPickerEmpty: string
     mcpsPickerLoadFailed: string
+    fieldPlugins: string
+    fieldPluginsHint: string
+    fieldPluginsPlaceholder: string
+    pluginsPickerLabel: string
+    pluginsPickerLoading: string
+    pluginsPickerEmpty: string
+    pluginsPickerLoadFailed: string
     fieldDependencyTree: string
     fieldReadonly: string
     fieldReadonlyHint: string
@@ -1868,6 +1875,14 @@ export const zhCN: Resources = {
     mcpsPickerLoading: '加载中…',
     mcpsPickerEmpty: '暂无可选 MCP（已全部添加 / 仓库为空）',
     mcpsPickerLoadFailed: '加载 MCP 列表失败；仍可在下方手动输入。',
+    fieldPlugins: 'Plugin 依赖',
+    fieldPluginsHint:
+      '名称需对应 /plugins 中已登记的插件。runner 在闭包合并后以 file://<cachedPath> 注入到 OPENCODE_CONFIG_CONTENT.plugin，spawn 阶段零联网。',
+    fieldPluginsPlaceholder: '输入插件名后按 Enter',
+    pluginsPickerLabel: '从已登记的插件中选择…',
+    pluginsPickerLoading: '加载中…',
+    pluginsPickerEmpty: '暂无可选插件（已全部添加 / 仓库为空）',
+    pluginsPickerLoadFailed: '加载插件列表失败；仍可在下方手动输入。',
     fieldDependencyTree: '闭包依赖（预览）',
     fieldReadonly: '只读',
     fieldReadonlyHint: '只读 agent 可在同一 task 中并发；可写 agent 会串行。',

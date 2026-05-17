@@ -12,6 +12,7 @@ import { Field, NumberInput, Switch, TextArea, TextInput } from './Form'
 import { JsonField } from './JsonField'
 import { MarkdownEditor } from './MarkdownEditor'
 import { McpsPicker } from './McpsPicker'
+import { PluginsPicker } from './PluginsPicker'
 import { ModelSelect } from './ModelSelect'
 import { OutputsEditor } from './OutputsEditor'
 import { SkillsPicker } from './SkillsPicker'
@@ -33,6 +34,7 @@ const DEFAULT: CreateAgent = {
   skills: [],
   dependsOn: [],
   mcp: [],
+  plugins: [],
   frontmatterExtra: {},
   bodyMd: '',
 }
@@ -92,6 +94,14 @@ export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
             value={value.mcp ?? []}
             onChange={(v) => patch('mcp', v)}
             placeholder={t('agentForm.fieldMcpsPlaceholder')}
+          />
+        </Field>
+
+        <Field label={t('agentForm.fieldPlugins')} hint={t('agentForm.fieldPluginsHint')}>
+          <PluginsPicker
+            value={value.plugins ?? []}
+            onChange={(v) => patch('plugins', v)}
+            placeholder={t('agentForm.fieldPluginsPlaceholder')}
           />
         </Field>
 

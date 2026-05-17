@@ -54,6 +54,7 @@ function samplePayload(name: string): Record<string, unknown> {
     skills: ['s1'],
     dependsOn: [],
     mcp: [],
+    plugins: [],
     bodyMd: '# hello',
   }
 }
@@ -81,6 +82,7 @@ describe('agent service', () => {
       skills: ['go-conventions'],
       dependsOn: [],
       mcp: [],
+      plugins: [],
       frontmatterExtra: { custom: 'value' },
       bodyMd: '# System prompt\nDo the thing.',
     })
@@ -107,6 +109,7 @@ describe('agent service', () => {
       skills: [],
       dependsOn: [],
       mcp: [],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -121,6 +124,7 @@ describe('agent service', () => {
         skills: [],
         dependsOn: [],
         mcp: [],
+        plugins: [],
         frontmatterExtra: {},
         bodyMd: '',
       }),
@@ -138,6 +142,7 @@ describe('agent service', () => {
       skills: ['s1'],
       dependsOn: [],
       mcp: [],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: 'body',
     })
@@ -167,6 +172,7 @@ describe('agent service', () => {
       skills: [],
       dependsOn: [],
       mcp: [],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -186,6 +192,7 @@ describe('agent service', () => {
       skills: [],
       dependsOn: [],
       mcp: [],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -214,6 +221,7 @@ describe('agent service', () => {
       skills: [],
       dependsOn: [],
       mcp: [],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -227,6 +235,7 @@ describe('agent service', () => {
       skills: [],
       dependsOn: [],
       mcp: [],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -248,6 +257,7 @@ describe('agent service', () => {
       skills: [],
       dependsOn: [],
       mcp: [],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -278,6 +288,7 @@ describe('agent service', () => {
       skills: [] as string[],
       dependsOn: [] as string[],
       mcp: [] as string[],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     }
@@ -294,6 +305,7 @@ describe('agent service', () => {
       skills: [],
       dependsOn: ['code-auditor', 'unit-test-runner'],
       mcp: [],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -309,6 +321,7 @@ describe('agent service', () => {
       skills: [],
       dependsOn: [],
       mcp: [],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -328,6 +341,7 @@ describe('agent service', () => {
       skills: [],
       dependsOn: ['a', 'b', 'a', 'c', 'b'],
       mcp: [],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })

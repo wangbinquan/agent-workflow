@@ -28,6 +28,7 @@ import type {
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { listAgents } from '@/services/agent'
+import { listPlugins } from '@/services/plugin'
 import { listSkills } from '@/services/skill'
 import { getWorkflow } from '@/services/workflow'
 import { NotFoundError } from '@/util/errors'
@@ -67,12 +68,21 @@ export async function validateWorkflowById(
   return validateWorkflowDef(wf.definition, {
     agents: await listAgents(db),
     skills: await listSkills(db),
+    plugins: await listPlugins(db),
   })
 }
 
 export interface ValidatorContext {
   agents: Agent[]
   skills: Skill[]
+  /**
+   * RFC-031: list of registered plugins, used to validate that every name in
+   * `agent.plugins` (and across the dependsOn closure) maps to a known +
+   * enabled record. Optional for callers that predate RFC-031; the validator
+   * silently skips the plugin check when this field is absent so existing
+   * tests + workflow-yaml import sites don't break.
+   */
+  plugins?: Array<{ name: string; enabled: boolean }>
 }
 
 export function validateWorkflowDef(
@@ -89,6 +99,15 @@ export function validateWorkflowDef(
 
   const agentByName = new Map(ctx.agents.map((a) => [a.name, a]))
   const skillNames = new Set(ctx.skills.map((s) => s.name))
+  // RFC-031: lookup tables for plugin reference checks. `pluginsKnown`
+  // tells us name exists; `pluginsEnabled` tells us its enabled flag. When
+  // ctx.plugins is undefined we leave both as undefined → checks no-op.
+  const pluginsKnown =
+    ctx.plugins === undefined ? undefined : new Set(ctx.plugins.map((p) => p.name))
+  const pluginsEnabled =
+    ctx.plugins === undefined
+      ? undefined
+      : new Set(ctx.plugins.filter((p) => p.enabled).map((p) => p.name))
 
   // 1. wrapper-required-fields ------------------------------------------------
   // (run early so later rules don't dereference invalid wrappers)
@@ -311,6 +330,24 @@ export function validateWorkflowDef(
           })
         }
       }
+      // RFC-031: plugin references on the directly-used agent.
+      if (pluginsKnown !== undefined && pluginsEnabled !== undefined) {
+        for (const p of agent.plugins ?? []) {
+          if (!pluginsKnown.has(p)) {
+            issues.push({
+              code: 'plugin-not-found',
+              message: `agent '${agent.name}' (used by node '${node.id}') references unknown plugin '${p}'`,
+              pointer: node.id,
+            })
+          } else if (!pluginsEnabled.has(p)) {
+            issues.push({
+              code: 'plugin-disabled',
+              message: `agent '${agent.name}' (used by node '${node.id}') references disabled plugin '${p}'`,
+              pointer: node.id,
+            })
+          }
+        }
+      }
       // RFC-022: also scan the agent.dependsOn closure for missing agents /
       // missing skills. BFS over agentByName since the validator already
       // owns the full agent set (no DB call). `seen` set guards against
@@ -340,6 +377,24 @@ export function validateWorkflowDef(
               message: `dependent agent '${dep.name}' (closure of '${agent.name}', used by node '${node.id}') references unknown skill '${s}'`,
               pointer: node.id,
             })
+          }
+        }
+        // RFC-031: same plugin-name reference check across the closure.
+        if (pluginsKnown !== undefined && pluginsEnabled !== undefined) {
+          for (const p of dep.plugins ?? []) {
+            if (!pluginsKnown.has(p)) {
+              issues.push({
+                code: 'plugin-not-found',
+                message: `dependent agent '${dep.name}' (closure of '${agent.name}', used by node '${node.id}') references unknown plugin '${p}'`,
+                pointer: node.id,
+              })
+            } else if (!pluginsEnabled.has(p)) {
+              issues.push({
+                code: 'plugin-disabled',
+                message: `dependent agent '${dep.name}' (closure of '${agent.name}', used by node '${node.id}') references disabled plugin '${p}'`,
+                pointer: node.id,
+              })
+            }
           }
         }
         for (const next of dep.dependsOn) closureQueue.push(next)

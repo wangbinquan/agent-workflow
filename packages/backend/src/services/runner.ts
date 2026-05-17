@@ -581,6 +581,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       await captureChildSessions({
         rootSessionId: sessionId,
         nodeRunId: opts.nodeRunId,
+        taskId: opts.taskId,
         db: opts.db,
         log,
       })

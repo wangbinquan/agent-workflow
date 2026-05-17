@@ -28,6 +28,7 @@ import {
 import { formatIterationLabel, nodeRunHistory } from '@/lib/node-history'
 import { classifyCanceled, displayNoderunStatusKey, supersededDecision } from '@/lib/noderun-status'
 import { parseRfc026Event } from '@/lib/rfc026-events'
+import { parseRfc031Event } from '@/lib/rfc031-events'
 
 interface Props {
   taskId: string
@@ -576,6 +577,30 @@ function EventsTab({ taskId, nodeRunId }: { taskId: string; nodeRunId: string })
                   <span className="muted">{new Date(e.ts).toLocaleTimeString()}</span>
                 </header>
                 <div className="events-list__rfc026">{summary}</div>
+              </li>
+            )
+          }
+          // RFC-031: opencode plugin failed to load — runner tagged it onto
+          // the stderr stream. Render as a warning card with the plugin name
+          // up-front so operators can correlate against /plugins UI.
+          const rfc031 =
+            e.kind === 'text' && typeof e.payload === 'string' ? parseRfc031Event(e.payload) : null
+          if (rfc031 !== null) {
+            const label = rfc031.pluginName.length > 0 ? rfc031.pluginName : '(unknown plugin)'
+            return (
+              <li
+                key={e.id}
+                className="events-list__item events-list__item--rfc026-warning"
+                data-testid="rfc031-event-warning"
+              >
+                <header className="events-list__header">
+                  <code className="events-list__kind">warning</code>
+                  <span className="muted">{new Date(e.ts).toLocaleTimeString()}</span>
+                </header>
+                <div className="events-list__rfc026">
+                  <strong>{label}</strong>
+                  {rfc031.message.length > 0 ? `: ${rfc031.message}` : ''}
+                </div>
               </li>
             )
           }

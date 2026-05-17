@@ -5,6 +5,7 @@
 
 import { z } from 'zod'
 import { McpNameSchema } from './mcp'
+import { PluginNameSchema } from './plugin'
 import { AgentOutputKindSchema } from './review'
 
 /**
@@ -78,6 +79,15 @@ export const AgentSchema = z.object({
    * naturally — see OPENCODE_CONFIG.md §4).
    */
   mcp: z.array(McpNameSchema),
+  /**
+   * RFC-031: opencode plugin names this agent needs at runtime. Runner unions
+   * the plugins[] of every agent in the dependsOn closure (RFC-022) and
+   * injects each member's `file://<cachedPath>` (with options when present)
+   * under `plugin` in OPENCODE_CONFIG_CONTENT. Spawn paths never hit the
+   * network because cachedPath is populated at save time, not run time.
+   * Default `[]` leaves the agent free of framework-managed plugins.
+   */
+  plugins: z.array(PluginNameSchema),
   frontmatterExtra: z.record(z.string(), z.unknown()),
   bodyMd: z.string(),
   schemaVersion: z.number().int(),
@@ -106,6 +116,8 @@ export const CreateAgentSchema = z.object({
   dependsOn: z.array(AgentNameSchema).max(64).default([]),
   /** RFC-028 — see AgentSchema.mcp. */
   mcp: z.array(McpNameSchema).max(64).default([]),
+  /** RFC-031 — see AgentSchema.plugins. */
+  plugins: z.array(PluginNameSchema).max(64).default([]),
   frontmatterExtra: z.record(z.string(), z.unknown()).default({}),
   bodyMd: z.string().default(''),
 })

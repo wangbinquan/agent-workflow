@@ -44,6 +44,7 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     skills: [],
     dependsOn: [],
     mcp: [],
+    plugins: [],
     frontmatterExtra: {},
     bodyMd: 'You may ask back.',
     schemaVersion: 1,

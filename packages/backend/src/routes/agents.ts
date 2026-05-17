@@ -155,6 +155,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
           skills: [],
           dependsOn: parsed.data.dependsOn,
           mcp: [],
+          plugins: [],
           frontmatterExtra: {},
           bodyMd: '',
           schemaVersion: 1,
@@ -199,6 +200,12 @@ function toAgentClosureSummaries(
    * without an extra round-trip. Empty array for pre-RFC-028 agents.
    */
   mcp: string[]
+  /**
+   * RFC-031: include this agent's plugins[] in the closure summary so the
+   * Stats tab can render the inline-injected plugin union without an extra
+   * round-trip. Empty array for pre-RFC-031 agents.
+   */
+  plugins: string[]
   missing: boolean
 }> {
   const out: Array<{
@@ -208,6 +215,7 @@ function toAgentClosureSummaries(
     readonly: boolean
     dependsOn: string[]
     mcp: string[]
+    plugins: string[]
     missing: boolean
   }> = closure.map((a) => ({
     name: a.name,
@@ -216,6 +224,7 @@ function toAgentClosureSummaries(
     readonly: a.readonly,
     dependsOn: a.dependsOn,
     mcp: a.mcp ?? [],
+    plugins: a.plugins ?? [],
     missing: false,
   }))
   // Append placeholder rows for names referenced by any closure member but
@@ -238,6 +247,7 @@ function toAgentClosureSummaries(
       readonly: false,
       dependsOn: [],
       mcp: [],
+      plugins: [],
       missing: true,
     })
   }

@@ -22,6 +22,7 @@ describe('agentToDraft', () => {
       skills: [],
       dependsOn: [],
       mcp: [],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
       schemaVersion: 1,

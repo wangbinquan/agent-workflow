@@ -44,6 +44,7 @@ async function seed(db: DbClient, ...rows: AgentSeed[]): Promise<void> {
       skills: [],
       dependsOn: r.dependsOn ?? [],
       mcp: r.mcp ?? [],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })

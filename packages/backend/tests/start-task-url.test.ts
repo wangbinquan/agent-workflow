@@ -71,6 +71,7 @@ async function setup() {
     skills: [],
     dependsOn: [],
     mcp: [],
+    plugins: [],
     frontmatterExtra: {},
     bodyMd: '',
   })

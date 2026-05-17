@@ -24,6 +24,7 @@ function fakeAgent(name: string, mcp: string[] = []): Agent {
     skills: [],
     dependsOn: [],
     mcp,
+    plugins: [],
     frontmatterExtra: {},
     bodyMd: '',
     schemaVersion: 1,

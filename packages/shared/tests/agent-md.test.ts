@@ -241,4 +241,30 @@ describe('parseAgentMarkdown', () => {
     expect(r.partial.frontmatterExtra?.mcp).toBe('postgres-prod')
     expect(r.warnings.some((w) => w.startsWith('mcp must be an array'))).toBe(true)
   })
+
+  // RFC-031: plugins parser cases — mirror dependsOn / mcp shape policy so the
+  // import dialog can surface missing-plugin candidates the same way.
+  test('plugins (array of valid names) round-trips and dedupes order', () => {
+    const src = '---\nplugins:\n  - dd-trace\n  - opencode-changelog\n  - dd-trace\n---\nbody'
+    const r = parseAgentMarkdown(src)
+    expect(r.partial.plugins).toEqual(['dd-trace', 'opencode-changelog'])
+    expect(r.warnings).toEqual([])
+    expect(r.unrecognizedKeys).toEqual([])
+  })
+
+  test('plugins with an invalid name demotes the whole field to frontmatterExtra', () => {
+    const src = '---\nplugins:\n  - dd-trace\n  - "Bad Name"\n---\n'
+    const r = parseAgentMarkdown(src)
+    expect(r.partial.plugins).toBeUndefined()
+    expect(r.partial.frontmatterExtra?.plugins).toEqual(['dd-trace', 'Bad Name'])
+    expect(r.warnings.some((w) => w.includes('plugins entries must match'))).toBe(true)
+  })
+
+  test('plugins with non-array value demotes to frontmatterExtra', () => {
+    const src = '---\nplugins: dd-trace\n---\n'
+    const r = parseAgentMarkdown(src)
+    expect(r.partial.plugins).toBeUndefined()
+    expect(r.partial.frontmatterExtra?.plugins).toBe('dd-trace')
+    expect(r.warnings.some((w) => w.startsWith('plugins must be an array'))).toBe(true)
+  })
 })

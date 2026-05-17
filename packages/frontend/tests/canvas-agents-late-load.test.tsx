@@ -51,6 +51,7 @@ const CODER: Agent = {
   skills: [],
   dependsOn: [],
   mcp: [],
+  plugins: [],
   permission: {},
   bodyMd: '',
   frontmatterExtra: {},

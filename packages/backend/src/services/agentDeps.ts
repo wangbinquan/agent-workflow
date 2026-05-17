@@ -159,6 +159,7 @@ export async function validateDependsOn(
         skills: [],
         dependsOn: unique,
         mcp: [],
+        plugins: [],
         frontmatterExtra: {},
         bodyMd: '',
         schemaVersion: 1,

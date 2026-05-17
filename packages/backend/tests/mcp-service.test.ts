@@ -209,6 +209,7 @@ describe('services/mcp.ts reference cascade', () => {
       skills: [],
       dependsOn: [],
       mcp: ['sentry'],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -222,6 +223,7 @@ describe('services/mcp.ts reference cascade', () => {
       skills: [],
       dependsOn: [],
       mcp: ['sentry-staging'],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -248,6 +250,7 @@ describe('services/mcp.ts reference cascade', () => {
       skills: [],
       dependsOn: [],
       mcp: ['m'],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -299,6 +302,7 @@ describe('services/mcp.ts reference cascade', () => {
       skills: [],
       dependsOn: [],
       mcp: ['old-name', 'other'],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -312,6 +316,7 @@ describe('services/mcp.ts reference cascade', () => {
       skills: [],
       dependsOn: [],
       mcp: ['old-name'],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -325,6 +330,7 @@ describe('services/mcp.ts reference cascade', () => {
       skills: [],
       dependsOn: [],
       mcp: ['other-mcp'],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })

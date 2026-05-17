@@ -24,6 +24,7 @@ function agentInput(name: string, mcp: string[] = []): Parameters<typeof createA
     skills: [],
     dependsOn: [],
     mcp,
+    plugins: [],
     frontmatterExtra: {},
     bodyMd: '',
   }

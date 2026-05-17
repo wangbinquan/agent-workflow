@@ -25,6 +25,7 @@ function agent(
     skills,
     dependsOn,
     mcp: [],
+    plugins: [],
     frontmatterExtra: {},
     bodyMd: '',
     schemaVersion: 1,

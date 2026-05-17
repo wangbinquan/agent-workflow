@@ -47,6 +47,10 @@ const KNOWN_KEYS = new Set<string>([
   // shapes demote to frontmatterExtra. Existence check happens server-side
   // at save time (services/agent.ts `validateMcpReferences`).
   'mcp',
+  // RFC-031: list of opencode plugin names this agent needs at runtime.
+  // Same shape policy as dependsOn / mcp. Existence + enabled check happens
+  // server-side at save time (services/agent.ts `validatePluginReferences`).
+  'plugins',
 ])
 
 /** RFC-022: matches AGENT_NAME_RE in schemas/agent.ts so import-time and
@@ -297,6 +301,41 @@ export function parseAgentMarkdown(
     } else {
       extras.mcp = data.mcp
       warnings.push('mcp must be an array of MCP server names; kept in frontmatterExtra')
+    }
+  }
+
+  // RFC-031: plugins — string[] of opencode plugin names. Same shape rules
+  // as dependsOn / mcp. Existence + enabled validation belongs to the save-
+  // time guard in services/agent.ts (`validatePluginReferences`).
+  if (data.plugins !== undefined) {
+    if (Array.isArray(data.plugins)) {
+      const cleaned: string[] = []
+      const rejected: unknown[] = []
+      for (const entry of data.plugins) {
+        if (typeof entry === 'string' && AGENT_NAME_RE_LOCAL.test(entry)) {
+          cleaned.push(entry)
+        } else {
+          rejected.push(entry)
+        }
+      }
+      if (rejected.length > 0) {
+        extras.plugins = data.plugins
+        warnings.push(
+          'plugins entries must match [a-z0-9][a-z0-9_-]*; kept in frontmatterExtra',
+        )
+      } else {
+        const seen = new Set<string>()
+        const ordered: string[] = []
+        for (const n of cleaned) {
+          if (seen.has(n)) continue
+          seen.add(n)
+          ordered.push(n)
+        }
+        partial.plugins = ordered
+      }
+    } else {
+      extras.plugins = data.plugins
+      warnings.push('plugins must be an array of plugin names; kept in frontmatterExtra')
     }
   }
 

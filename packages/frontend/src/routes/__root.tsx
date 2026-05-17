@@ -23,12 +23,14 @@ type NavKey =
   | 'reviews'
   | 'clarify'
   | 'mcps'
+  | 'plugins'
   | 'repos'
   | 'settings'
 const NAV: { to: string; key: NavKey }[] = [
   { to: '/agents', key: 'agents' },
   { to: '/skills', key: 'skills' },
   { to: '/mcps', key: 'mcps' },
+  { to: '/plugins', key: 'plugins' },
   { to: '/workflows', key: 'workflows' },
   { to: '/tasks', key: 'tasks' },
   { to: '/reviews', key: 'reviews' },

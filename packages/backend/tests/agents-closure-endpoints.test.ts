@@ -60,6 +60,7 @@ async function seedAgent(
     skills: opts.skills ?? [],
     dependsOn: opts.dependsOn ?? [],
     mcp: opts.mcp ?? [],
+    plugins: [],
     frontmatterExtra: {},
     bodyMd: '',
   })

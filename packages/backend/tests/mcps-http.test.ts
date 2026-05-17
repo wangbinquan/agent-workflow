@@ -186,6 +186,7 @@ describe('DELETE /api/mcps/:name', () => {
       skills: [],
       dependsOn: [],
       mcp: ['m'],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })

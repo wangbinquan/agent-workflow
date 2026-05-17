@@ -27,6 +27,7 @@ async function seed(db: DbClient, name: string, dependsOn: string[] = []): Promi
     skills: [],
     dependsOn,
     mcp: [],
+    plugins: [],
     frontmatterExtra: {},
     bodyMd: '',
   })

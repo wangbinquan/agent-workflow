@@ -49,6 +49,7 @@ describe('RFC-028 end-to-end inline injection', () => {
       skills: [],
       dependsOn: [],
       mcp: ['postgres-prod'],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -113,6 +114,7 @@ describe('RFC-028 end-to-end inline injection', () => {
       skills: [],
       dependsOn: [],
       mcp: ['m-leaf'],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -126,6 +128,7 @@ describe('RFC-028 end-to-end inline injection', () => {
       skills: [],
       dependsOn: ['leaf'],
       mcp: ['m-mid'],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -139,6 +142,7 @@ describe('RFC-028 end-to-end inline injection', () => {
       skills: [],
       dependsOn: ['mid'],
       mcp: ['m-root'],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -183,6 +187,7 @@ describe('RFC-028 end-to-end inline injection', () => {
       skills: [],
       dependsOn: [],
       mcp: ['on', 'off'],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })
@@ -206,6 +211,7 @@ describe('RFC-028 end-to-end inline injection', () => {
       skills: [],
       dependsOn: [],
       mcp: [],
+      plugins: [],
       frontmatterExtra: {},
       bodyMd: '',
     })

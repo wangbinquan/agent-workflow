@@ -18,6 +18,7 @@ function agent(name: string, outputs: string[] = []): Agent {
     skills: [],
     dependsOn: [],
     mcp: [],
+    plugins: [],
     frontmatterExtra: {},
     bodyMd: '',
     schemaVersion: 1,

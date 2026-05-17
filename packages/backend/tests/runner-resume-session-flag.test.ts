@@ -31,6 +31,7 @@ const AGENT: Agent = {
   skills: [],
   dependsOn: [],
   mcp: [],
+  plugins: [],
   frontmatterExtra: {},
   bodyMd: 'body',
   schemaVersion: 1,

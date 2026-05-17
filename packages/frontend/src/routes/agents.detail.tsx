@@ -114,6 +114,7 @@ export function agentToDraft(a: Agent): CreateAgent {
     skills: a.skills,
     dependsOn: a.dependsOn,
     mcp: [],
+    plugins: [],
     frontmatterExtra: a.frontmatterExtra,
     bodyMd: a.bodyMd,
   }
