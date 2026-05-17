@@ -35,6 +35,17 @@ export const enUS: Resources = {
       label: 'Settings',
       tooltip: 'Settings (incl. theme)',
     },
+    inbox: {
+      label: 'Inbox',
+      tabAll: 'All',
+      tabReviews: 'Reviews',
+      tabClarify: 'Clarify',
+      empty: 'Nothing waiting for you',
+      errorReviews: 'Failed to load reviews',
+      errorClarify: 'Failed to load clarify sessions',
+      retry: 'Retry',
+      sourceTask: 'task {{taskId}}',
+    },
   },
   reviews: {
     title: 'Reviews',

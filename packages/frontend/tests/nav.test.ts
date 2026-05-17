@@ -60,22 +60,36 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
     expect(resolveActiveNav('/workflows/launch/x').activeGroup).toBe('workflows')
   })
 
-  test('/reviews + /clarify detail routes fall through to the workflows group', () => {
-    // PR1 of RFC-032 also lists these in NAV_GROUPS as visible sub-items, so
-    // the exact entry depends on the pathname matching one of those entries.
-    // For top-level paths the sub-item match wins.
-    expect(resolveActiveNav('/reviews').activeGroup).toBe('workflows')
-    expect(resolveActiveNav('/reviews').activeItemTo).toBe('/reviews')
-    expect(resolveActiveNav('/clarify').activeGroup).toBe('workflows')
-    expect(resolveActiveNav('/clarify').activeItemTo).toBe('/clarify')
-
-    // Deep links (detail pages) still resolve through the per-group walk —
-    // here they hit the prefix match on '/reviews'+'/' so activeItemTo
-    // remains '/reviews'. PR2 removes both entries from NAV_GROUPS, after
-    // which the explicit fallback at the bottom of resolveActiveNav kicks
-    // in and `activeItemTo` becomes null. That test gets added in PR2.
-    expect(resolveActiveNav('/reviews/abc').activeGroup).toBe('workflows')
-    expect(resolveActiveNav('/clarify/xyz').activeGroup).toBe('workflows')
+  test('/reviews + /clarify routes map to the workflows group with NO sub-item active (PR2 inbox)', () => {
+    // PR2 of RFC-032 lifted /reviews and /clarify out of NAV_GROUPS — both
+    // now live behind the unified inbox drawer. The explicit fallback at
+    // the bottom of `resolveActiveNav` keeps `activeGroup:'workflows'` so
+    // sidebar headers stay highlighted on detail-page deep links, but
+    // `activeItemTo` is null because there is no visible sub-item to mark.
+    expect(resolveActiveNav('/reviews')).toEqual({
+      onHome: false,
+      onSettings: false,
+      activeGroup: 'workflows',
+      activeItemTo: null,
+    })
+    expect(resolveActiveNav('/reviews/abc')).toEqual({
+      onHome: false,
+      onSettings: false,
+      activeGroup: 'workflows',
+      activeItemTo: null,
+    })
+    expect(resolveActiveNav('/clarify')).toEqual({
+      onHome: false,
+      onSettings: false,
+      activeGroup: 'workflows',
+      activeItemTo: null,
+    })
+    expect(resolveActiveNav('/clarify/xyz')).toEqual({
+      onHome: false,
+      onSettings: false,
+      activeGroup: 'workflows',
+      activeItemTo: null,
+    })
   })
 
   test('/tasks + /repos both belong to the tasks group', () => {

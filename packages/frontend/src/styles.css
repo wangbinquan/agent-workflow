@@ -366,6 +366,188 @@ code {
   }
 }
 
+/* RFC-032 PR2 — unified inbox footer button + drawer.
+   Footer button sits between the nav-group list and the language/gear
+   footer row, separated from both by a thin border. */
+.inbox-footer-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 6px 0 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+}
+
+.inbox-footer-button:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
+.inbox-footer-button--open {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.inbox-footer-button__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-footer-button__badge {
+  margin-left: auto;
+}
+
+/* The drawer floats next to the sidebar, capped at 360 px, with a soft
+   shadow so it reads as overlaid rather than docked. */
+.inbox-drawer {
+  position: fixed;
+  left: 240px;
+  top: 16px;
+  bottom: 16px;
+  width: 360px;
+  max-width: 360px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--text) 18%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  z-index: 50;
+}
+
+.inbox-drawer__tabs {
+  display: inline-flex;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.inbox-drawer__tab {
+  flex: 1 1 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.inbox-drawer__tab:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.inbox-drawer__tab--active,
+.inbox-drawer__tab--active:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.inbox-drawer__list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inbox-drawer__item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto auto;
+  column-gap: 8px;
+  row-gap: 2px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+}
+
+.inbox-drawer__item:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-color: var(--border);
+}
+
+.inbox-drawer__kind {
+  grid-row: 1;
+  grid-column: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  height: 18px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  color: #fff;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  width: fit-content;
+}
+
+.inbox-drawer__kind--review {
+  background: #2563eb;
+}
+
+.inbox-drawer__kind--clarify {
+  background: #c2410c;
+}
+
+.inbox-drawer__title {
+  grid-row: 1;
+  grid-column: 2;
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-drawer__subtitle {
+  grid-row: 2;
+  grid-column: 2;
+  font-size: 12px;
+}
+
+.inbox-drawer__task {
+  grid-row: 3;
+  grid-column: 2;
+  font-size: 11px;
+}
+
+.inbox-drawer__empty {
+  padding: 12px;
+  font-size: 13px;
+}
+
+.inbox-drawer__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
 .language-switch {
   display: flex;
   flex-direction: column;

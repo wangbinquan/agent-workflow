@@ -4,26 +4,22 @@
 // to /auth so the user can paste the daemon token. The daemon prints it at
 // startup.
 //
-// RFC-032 PR1: the previously-flat 10-item sidebar is now a 3-group layout
-// (agents / workflows / tasks) with a Home top entry, a placeholder for the
-// PR2 inbox button, and a footer row containing the language switch + a
-// settings gear button. The legacy reviews/clarify sub-items still render
-// inside the workflows group as a PR1 stop-gap until the inbox drawer ships
-// in PR2.
+// RFC-032 PR2: the workflows group no longer surfaces /reviews + /clarify
+// as visible sub-items. Both are now reachable via the unified inbox drawer
+// triggered by the footer button; detail-page deep links still get the
+// workflows-group highlight via `resolveActiveNav`'s fallback.
 
-import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet, createRootRoute, redirect, useRouterState } from '@tanstack/react-router'
-import { useSyncExternalStore } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { ClarifyPendingCount, ReviewPendingCount } from '@agent-workflow/shared'
-import { api } from '@/api/client'
 import { LanguageSwitch } from '@/components/LanguageSwitch'
+import { InboxDrawer } from '@/components/shell/InboxDrawer'
+import { InboxFooterButton } from '@/components/shell/InboxFooterButton'
 import { NavGroup } from '@/components/shell/NavGroup'
 import { SettingsGearButton } from '@/components/shell/SettingsGearButton'
 import { useApplyLanguage } from '@/hooks/useLanguage'
 import { useApplyTheme } from '@/hooks/useTheme'
 import { NAV_GROUPS, resolveActiveNav } from '@/lib/nav'
-import type { SubNavItem } from '@/lib/nav'
 import { getToken, subscribeAuth } from '@/stores/auth'
 
 export const Route = createRootRoute({
@@ -46,23 +42,11 @@ function RootComponent() {
   const { t } = useTranslation()
   useApplyTheme()
   useApplyLanguage()
-  // RFC-005: Reviews nav badge — periodically poll the pending-count endpoint.
-  // Disabled when not signed in to avoid 401 spam.
-  const pending = useQuery<ReviewPendingCount>({
-    queryKey: ['reviews', 'pending-count'],
-    queryFn: ({ signal }) => api.get('/api/reviews/pending-count', undefined, signal),
-    enabled: token !== null,
-    refetchInterval: 15000,
-  })
-  const pendingCount = pending.data?.count ?? 0
-  // RFC-023: same pattern for clarify pending sessions.
-  const clarifyPending = useQuery<ClarifyPendingCount>({
-    queryKey: ['clarify', 'pending-count'],
-    queryFn: ({ signal }) => api.get('/api/clarify/pending-count', undefined, signal),
-    enabled: token !== null,
-    refetchInterval: 15000,
-  })
-  const clarifyPendingCount = clarifyPending.data?.count ?? 0
+  // RFC-032 PR2: inbox-drawer open state lifted here so the footer button
+  // and the drawer can share it. Reviews + clarify pending-count queries
+  // moved inside <InboxFooterButton> (still keyed `['reviews','pending-count']`
+  // and `['clarify','pending-count']` so older tests + cached data align).
+  const [inboxOpen, setInboxOpen] = useState(false)
 
   if (pathname === '/auth' || token === null) {
     return (
@@ -73,27 +57,6 @@ function RootComponent() {
   }
 
   const active = resolveActiveNav(pathname)
-  const renderBadge = (item: SubNavItem) => {
-    if (item.to === '/reviews' && pendingCount > 0) {
-      return (
-        <span className="sidebar__badge" aria-label={`${pendingCount} pending reviews`}>
-          {pendingCount > 99 ? '99+' : pendingCount}
-        </span>
-      )
-    }
-    if (item.to === '/clarify' && clarifyPendingCount > 0) {
-      return (
-        <span
-          className="sidebar__badge"
-          data-testid="clarify-nav-badge"
-          aria-label={t('clarify.nav.badgeTitle', { count: clarifyPendingCount })}
-        >
-          {clarifyPendingCount > 99 ? '99+' : clarifyPendingCount}
-        </span>
-      )
-    }
-    return null
-  }
 
   return (
     <div className="app-shell">
@@ -178,9 +141,10 @@ function RootComponent() {
             <span className="nav-item__label">{t('nav.home')}</span>
           </Link>
           {NAV_GROUPS.map((group) => (
-            <NavGroup key={group.key} group={group} active={active} renderBadge={renderBadge} />
+            <NavGroup key={group.key} group={group} active={active} />
           ))}
         </nav>
+        <InboxFooterButton open={inboxOpen} onToggle={() => setInboxOpen((v) => !v)} />
         <div className="sidebar__footer">
           <LanguageSwitch />
           <SettingsGearButton active={active.onSettings} />
@@ -189,6 +153,7 @@ function RootComponent() {
       <main className="content">
         <Outlet />
       </main>
+      <InboxDrawer open={inboxOpen} onClose={() => setInboxOpen(false)} />
     </div>
   )
 }

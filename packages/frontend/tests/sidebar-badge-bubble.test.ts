@@ -1,22 +1,30 @@
-// Locks in the visual fix that turned the Reviews-nav pending-count
-// indicator from bare inline text into a pill/bubble badge. The
-// component already renders `<span class="sidebar__badge">N</span>`,
-// but the matching CSS rule didn't exist, so the count rendered as
-// plain text glued to the link label. If a future refactor drops the
-// `.sidebar__badge` rule or strips its pill-shaping declarations,
-// this test fails.
+// Locks in the visual fix that turned the pending-count indicator from
+// bare inline text into a pill/bubble badge.
+//
+// RFC-005 first introduced the badge inside __root.tsx's reviews nav row.
+// RFC-032 PR2 lifted reviews + clarify into the unified inbox footer
+// button, so the badge markup now lives in InboxFooterButton.tsx. The
+// CSS contract is unchanged — same class, same pill shape, same `99+`
+// cap on the count — and is still used by both NavGroup sub-items (for
+// any future per-row count badge) and the inbox footer button.
 //
 // Source-code-level fallback per CLAUDE.md "Test-with-every-change":
 // JSDOM can't evaluate computed layout, so we assert the contract on
-// the stylesheet text directly. Paired with the existing __root.tsx
-// markup that emits `<span class="sidebar__badge">`.
+// the stylesheet text directly.
 
 import { describe, expect, test } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const STYLES_CSS = resolve(__dirname, '..', 'src', 'styles.css')
-const ROOT_TSX = resolve(__dirname, '..', 'src', 'routes', '__root.tsx')
+const INBOX_BUTTON_TSX = resolve(
+  __dirname,
+  '..',
+  'src',
+  'components',
+  'shell',
+  'InboxFooterButton.tsx',
+)
 
 describe('sidebar pending-review badge renders as a bubble', () => {
   test('styles.css declares a .sidebar__badge rule', () => {
@@ -40,9 +48,13 @@ describe('sidebar pending-review badge renders as a bubble', () => {
     expect(body).toMatch(/min-width:\s*\d+px/)
   })
 
-  test('.sidebar__link is a flex row so the badge sits at the right edge', () => {
+  test('.nav-item is a flex row so the badge sits at the right edge (RFC-032)', () => {
+    // PR1 of RFC-032 replaced .sidebar__link with .nav-item — the legacy
+    // CSS rule is kept for backward compat (other components reference it
+    // via class) but the active-nav primitive is .nav-item now. Both must
+    // remain flex rows so any future per-row badge still sits flush right.
     const css = readFileSync(STYLES_CSS, 'utf8')
-    const match = css.match(/\.sidebar__link\s*\{([^}]*)\}/)
+    const match = css.match(/\.nav-item\s*\{([^}]*)\}/)
     expect(match).not.toBeNull()
     const body = match![1]
     expect(body).toMatch(/display:\s*flex/)
@@ -50,15 +62,14 @@ describe('sidebar pending-review badge renders as a bubble', () => {
     expect(body).toMatch(/align-items:\s*center/)
   })
 
-  test('active-link variant inverts the badge so it stays readable on the accent fill', () => {
+  test('active variant inverts the badge so it stays readable on the accent fill', () => {
     const css = readFileSync(STYLES_CSS, 'utf8')
-    expect(css).toMatch(/\.sidebar__link--active\s+\.sidebar__badge\s*\{/)
+    expect(css).toMatch(/\.nav-item--active\s+\.sidebar__badge\s*\{/)
   })
 
-  test('__root.tsx still emits <span class="sidebar__badge"> for the pending count', () => {
-    const tsx = readFileSync(ROOT_TSX, 'utf8')
+  test('InboxFooterButton emits <span class="sidebar__badge"> with the 99+ cap (RFC-032 PR2)', () => {
+    const tsx = readFileSync(INBOX_BUTTON_TSX, 'utf8')
     expect(tsx).toContain('sidebar__badge')
-    // Counts above 99 must collapse to "99+" so the pill keeps a sane width.
-    expect(tsx).toMatch(/pendingCount\s*>\s*99\s*\?\s*'99\+'/)
+    expect(tsx).toMatch(/total > 99 \? '99\+' : String\(total\)/)
   })
 })

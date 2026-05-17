@@ -24,10 +24,12 @@ export interface NavGroupEntry {
 }
 
 /**
- * PR1 of RFC-032 keeps `/reviews` and `/clarify` parked under the workflows
- * group as visible sub-items so users can still reach them while the inbox
- * footer button + drawer (PR2) are not yet in place. PR2 removes these two
- * entries and lifts them into the inbox drawer.
+ * PR2 of RFC-032 lifts `/reviews` and `/clarify` out of the workflows group
+ * — both now live behind the unified inbox drawer triggered by the footer
+ * button. Their detail pages (`/reviews/:id`, `/clarify/:id`) still exist,
+ * and `resolveActiveNav` still maps those paths to the workflows group via
+ * the fallback at the bottom so detail-page deep links keep their group
+ * highlight.
  */
 export const NAV_GROUPS: NavGroupEntry[] = [
   {
@@ -44,12 +46,7 @@ export const NAV_GROUPS: NavGroupEntry[] = [
   {
     key: 'workflows',
     i18nKey: 'nav.group.workflows',
-    subnav: [
-      { to: '/workflows', i18nKey: 'nav.workflows' },
-      // PR1 placeholders — removed in PR2 once the inbox drawer ships.
-      { to: '/reviews', i18nKey: 'nav.reviews' },
-      { to: '/clarify', i18nKey: 'nav.clarify' },
-    ],
+    subnav: [{ to: '/workflows', i18nKey: 'nav.workflows' }],
   },
   {
     key: 'tasks',
@@ -79,10 +76,10 @@ export interface ActiveNav {
  * - `/` → `onHome:true`; everything else false/null.
  * - `/settings` / `/settings/*` → `onSettings:true`; nav stays inactive (the
  *   footer gear is what gets highlighted).
- * - `/reviews*` / `/clarify*` → during PR1 these *are* visible sub-items under
- *   the workflows group, so they take the workflows group active. PR2 removes
- *   them from `NAV_GROUPS`; this resolver keeps the explicit fallback so
- *   `activeGroup` still maps to `'workflows'` for detail-page deep links.
+ * - `/reviews*` / `/clarify*` → no longer enumerated in `NAV_GROUPS` (PR2
+ *   lifted them into the unified inbox drawer); the fallback at the bottom
+ *   keeps `activeGroup = 'workflows'` so detail-page deep links retain the
+ *   correct group highlight even though the items themselves are gone.
  * - `/runtime` is a pseudo-URL that exists in `NAV_GROUPS` only as a click
  *   target. The `<NavItem>` for it navigates to `/settings#runtime`, after
  *   which `onSettings` flips true (and `activeGroup` becomes `null`).

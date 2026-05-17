@@ -88,3 +88,33 @@ test('RFC-032 nav-redesign auth gate: no token → /auth, no sidebar', async ({ 
   await page.waitForURL(/\/auth/)
   await expect(page.locator('aside.sidebar')).toHaveCount(0)
 })
+
+test('RFC-032 nav-redesign inbox: footer button opens drawer; empty pending → empty hint, no badge', async ({
+  page,
+}) => {
+  // The daemon comes up clean — no pending reviews / clarify sessions —
+  // so the button stays visible without a badge, and clicking it brings
+  // up the drawer with the empty hint. We don't seed pending items here;
+  // dedicated e2e for the populated path lives next to the review /
+  // clarify e2e (e2e/review.spec.ts / e2e/clarify.spec.ts), which already
+  // mount full task fixtures and would otherwise duplicate setup.
+  await primeAuth(page, daemon)
+  await page.goto(`${daemon.baseUrl}/agents`)
+
+  const inboxButton = page.locator('[data-testid="inbox-footer-button"]')
+  await expect(inboxButton).toBeVisible()
+  // No badge until reviews/clarify endpoints report nonzero counts.
+  await expect(page.locator('[data-testid="inbox-footer-badge"]')).toHaveCount(0)
+
+  await inboxButton.click()
+  await expect(page.locator('[data-testid="inbox-drawer"]')).toBeVisible()
+  await expect(page.locator('[data-testid="inbox-tab-all"]')).toBeVisible()
+  await expect(page.locator('[data-testid="inbox-tab-reviews"]')).toBeVisible()
+  await expect(page.locator('[data-testid="inbox-tab-clarify"]')).toBeVisible()
+  // Empty hint (en-US bundle).
+  await expect(page.locator('[data-testid="inbox-drawer"]')).toContainText('Nothing waiting')
+
+  // ESC closes.
+  await page.keyboard.press('Escape')
+  await expect(page.locator('[data-testid="inbox-drawer"]')).toHaveCount(0)
+})

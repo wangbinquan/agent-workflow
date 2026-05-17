@@ -38,6 +38,17 @@ export interface Resources {
       label: string
       tooltip: string
     }
+    inbox: {
+      label: string
+      tabAll: string
+      tabReviews: string
+      tabClarify: string
+      empty: string
+      errorReviews: string
+      errorClarify: string
+      retry: string
+      sourceTask: string
+    }
   }
   mcps: {
     title: string
@@ -1199,6 +1210,17 @@ export const zhCN: Resources = {
     settingsIcon: {
       label: '设置',
       tooltip: '设置（含主题切换）',
+    },
+    inbox: {
+      label: '收件箱',
+      tabAll: '全部',
+      tabReviews: '评审',
+      tabClarify: '反问',
+      empty: '当前没有待处理事项',
+      errorReviews: '评审列表加载失败',
+      errorClarify: '反问列表加载失败',
+      retry: '重试',
+      sourceTask: '任务 {{taskId}}',
     },
   },
   reviews: {
