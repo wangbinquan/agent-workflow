@@ -101,6 +101,11 @@ function NodeLabel({
           <span className="dep-tree__chip">
             {t('dependencyTree.skillCount', { count: node.skillCount })}
           </span>
+          {node.mcpCount > 0 && (
+            <span className="dep-tree__chip">
+              {t('dependencyTree.mcpCount', { count: node.mcpCount })}
+            </span>
+          )}
           <span className="dep-tree__chip">
             {node.readonly ? t('dependencyTree.readonly') : t('dependencyTree.writes')}
           </span>

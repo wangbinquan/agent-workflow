@@ -20,6 +20,11 @@ export interface DependencyTreeAgent {
   name: string
   description: string
   skillCount: number
+  /** RFC-030 follow-up: number of MCP servers this agent itself references
+   *  (NOT the closure union — that's recomputed downstream). Drives the
+   *  per-row MCP chip in <DependencyTree> so users can see at a glance
+   *  which closure members bring in MCPs. */
+  mcpCount: number
   readonly: boolean
   dependsOn: readonly string[]
 }
@@ -28,6 +33,7 @@ export interface DependencyTreeNode {
   name: string
   description: string
   skillCount: number
+  mcpCount: number
   readonly: boolean
   /** True when an earlier sighting of this name already expanded its
    *  children; the rendering layer shows `↑ see above` and stops. */
@@ -56,6 +62,7 @@ export function buildDependencyTree(
         name,
         description: '',
         skillCount: 0,
+        mcpCount: 0,
         readonly: false,
         duplicateRef: false,
         children: [],
@@ -67,6 +74,7 @@ export function buildDependencyTree(
         name: agent.name,
         description: agent.description,
         skillCount: agent.skillCount,
+        mcpCount: agent.mcpCount,
         readonly: agent.readonly,
         duplicateRef: true,
         children: [],
@@ -78,6 +86,7 @@ export function buildDependencyTree(
       name: agent.name,
       description: agent.description,
       skillCount: agent.skillCount,
+      mcpCount: agent.mcpCount,
       readonly: agent.readonly,
       duplicateRef: false,
       children: agent.dependsOn.map((child) => walk(child, nextPath)),

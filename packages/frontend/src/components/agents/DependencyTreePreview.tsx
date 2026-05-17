@@ -13,8 +13,28 @@ import { api } from '@/api/client'
 import { buildDependencyTree, type DependencyTreeAgent } from '@/lib/dependency-tree'
 import { DependencyCycleHint, DependencyTree } from './DependencyTree'
 
-interface ClosureSummary extends DependencyTreeAgent {
+/** Wire shape coming back from /api/agents/closure-preview. */
+interface ClosureSummary {
+  name: string
+  description: string
+  skillCount: number
+  /** RFC-028 — raw mcp[] from the closure response; we derive mcpCount
+   *  in `toTreeAgents` below so the tree renderer never sees the array. */
+  mcp?: string[]
+  readonly: boolean
+  dependsOn: readonly string[]
   missing?: boolean
+}
+
+function toTreeAgents(rows: readonly ClosureSummary[]): DependencyTreeAgent[] {
+  return rows.map((r) => ({
+    name: r.name,
+    description: r.description,
+    skillCount: r.skillCount,
+    mcpCount: r.mcp?.length ?? 0,
+    readonly: r.readonly,
+    dependsOn: r.dependsOn,
+  }))
 }
 
 interface PreviewOk {
@@ -121,7 +141,7 @@ export function DependencyTreePreview({ name, dependsOn, onNodeClick }: Props) {
   if (rootName === '') {
     return <p className="muted dep-tree__empty">{t('dependencyTreePreview.emptyHint')}</p>
   }
-  const tree = buildDependencyTree(state.agents, rootName)
+  const tree = buildDependencyTree(toTreeAgents(state.agents), rootName)
   // tree.children empty + tree exists = no dependents declared. Show hint.
   if (tree.children.length === 0) {
     return <p className="muted dep-tree__empty">{t('dependencyTreePreview.emptyHint')}</p>

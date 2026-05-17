@@ -16,8 +16,11 @@ function mk(
   description = `desc:${name}`,
   skillCount = 0,
   readonly = false,
+  // RFC-030 follow-up — default 0 keeps every existing test case meaningful;
+  // new tests below pass a non-zero value to exercise the MCP chip path.
+  mcpCount = 0,
 ): DependencyTreeAgent {
-  return { name, description, skillCount, readonly, dependsOn }
+  return { name, description, skillCount, mcpCount, readonly, dependsOn }
 }
 
 describe('buildDependencyTree', () => {

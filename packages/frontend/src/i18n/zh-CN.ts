@@ -811,6 +811,8 @@ export interface Resources {
   // sites import them via `t('dependencyTree.X')`.
   dependencyTree: {
     skillCount: string
+    /** RFC-030 follow-up: per-row MCP chip when the agent declares mcp[]. */
+    mcpCount: string
     readonly: string
     writes: string
     seeAbove: string
@@ -1919,6 +1921,7 @@ export const zhCN: Resources = {
   },
   dependencyTree: {
     skillCount: '{{count}} 个技能',
+    mcpCount: '{{count}} 个 MCP',
     readonly: '只读',
     writes: '可写',
     seeAbove: '↑ 见上',

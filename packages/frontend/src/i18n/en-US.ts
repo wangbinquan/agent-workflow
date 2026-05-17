@@ -865,6 +865,7 @@ export const enUS: Resources = {
   },
   dependencyTree: {
     skillCount: '{{count}} skill(s)',
+    mcpCount: '{{count}} MCP(s)',
     readonly: 'readonly',
     writes: 'writes',
     seeAbove: '↑ see above',

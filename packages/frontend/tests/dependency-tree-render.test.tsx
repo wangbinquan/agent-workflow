@@ -15,8 +15,11 @@ function mk(
   description = `desc:${name}`,
   skillCount = 0,
   readonly = false,
+  // RFC-030 follow-up — default 0 (no MCP chip), explicit non-zero in the
+  // dedicated MCP-chip test case below.
+  mcpCount = 0,
 ): DependencyTreeAgent {
-  return { name, description, skillCount, readonly, dependsOn }
+  return { name, description, skillCount, mcpCount, readonly, dependsOn }
 }
 
 afterEach(() => {
@@ -50,6 +53,23 @@ describe('<DependencyTree>', () => {
     // The `↑ see above` hint only appears for the duplicate sighting.
     const hints = screen.getAllByText(/see above/i)
     expect(hints).toHaveLength(1)
+  })
+
+  // RFC-030 follow-up — closure rows that bring in MCP servers (declared on
+  // the agent itself, not unioned across the closure) get a "{n} MCP(s)" chip
+  // alongside the skill-count + readonly chips. Counts of 0 produce no chip.
+  test('renders MCP chip when mcpCount > 0, omits it when mcpCount === 0', () => {
+    const flat = [
+      mk('top', ['mid']),
+      mk('mid', ['leaf'], 'desc:mid', /* skillCount */ 0, /* readonly */ false, /* mcpCount */ 2),
+      mk('leaf'),
+    ]
+    const tree = buildDependencyTree(flat, 'top')
+    render(<DependencyTree tree={tree} />)
+    // `mid` should render an "MCP" chip (count: 2). `top` and `leaf` should not.
+    const mcpChips = screen.getAllByText(/\bMCP\b/i)
+    expect(mcpChips).toHaveLength(1)
+    expect(mcpChips[0]?.textContent ?? '').toMatch(/2/)
   })
 
   test('onNodeClick fires with the clicked agent name (only for expanded sightings)', () => {

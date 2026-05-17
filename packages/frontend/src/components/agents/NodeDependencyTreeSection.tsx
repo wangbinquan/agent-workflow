@@ -10,8 +10,27 @@ import { api } from '@/api/client'
 import { buildDependencyTree, type DependencyTreeAgent } from '@/lib/dependency-tree'
 import { DependencyTree } from './DependencyTree'
 
-interface ClosureSummary extends DependencyTreeAgent {
+/** Wire shape coming back from /api/agents/:name/closure. */
+interface ClosureSummary {
+  name: string
+  description: string
+  skillCount: number
+  /** RFC-028 — raw mcp[]; we map to mcpCount in `toTreeAgents` below. */
+  mcp?: string[]
+  readonly: boolean
+  dependsOn: readonly string[]
   missing?: boolean
+}
+
+function toTreeAgents(rows: readonly ClosureSummary[]): DependencyTreeAgent[] {
+  return rows.map((r) => ({
+    name: r.name,
+    description: r.description,
+    skillCount: r.skillCount,
+    mcpCount: r.mcp?.length ?? 0,
+    readonly: r.readonly,
+    dependsOn: r.dependsOn,
+  }))
 }
 
 interface ClosureResponse {
@@ -46,7 +65,7 @@ export function NodeDependencyTreeSection({ agentName, onNodeClick }: Props) {
   }
   const data = q.data
   if (data === undefined || data.agents === undefined) return null
-  const tree = buildDependencyTree(data.agents, agentName)
+  const tree = buildDependencyTree(toTreeAgents(data.agents), agentName)
   if (tree.children.length === 0) {
     return <span className="muted">{t('dependencyTreePreview.emptyHint')}</span>
   }
