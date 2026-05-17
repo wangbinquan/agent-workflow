@@ -74,13 +74,16 @@ export function ReviewsListPage() {
         <h1>{t('reviews.title')}</h1>
         <p className="page__hint">{t('reviews.hint')}</p>
       </header>
-      <div className="tabs">
+      <div className="tabs" role="tablist">
         {FILTERS.map((k) => (
           <button
             key={k}
             type="button"
+            role="tab"
+            aria-selected={filter === k}
             className={`tabs__tab ${filter === k ? 'tabs__tab--active' : ''}`}
             onClick={() => setFilter(k)}
+            data-testid={`reviews-filter-${k}`}
           >
             {t(`reviews.filter${k.charAt(0).toUpperCase()}${k.slice(1)}` as const)}
           </button>

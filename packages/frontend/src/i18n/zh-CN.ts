@@ -814,6 +814,7 @@ export interface Resources {
     nav: { label: string; badgeTitle: string }
     list: {
       title: string
+      hint: string
       filter: { awaiting: string; answered: string; all: string }
       empty: string
       colTask: string
@@ -822,8 +823,9 @@ export interface Resources {
       colIteration: string
       colQuestions: string
       colTime: string
-      taskFilterLabel: string
-      taskFilterAll: string
+      openButton: string
+      statusAwaiting: string
+      statusAnswered: string
     }
     detail: {
       contextCard: string
@@ -1714,17 +1716,19 @@ export const zhCN: Resources = {
       badgeTitle: '{{count}} 条待回答的反问',
     },
     list: {
-      title: '反问列表',
+      title: '反问',
+      hint: 'Agent 发起的反问澄清；回答后流程会继续往下走。',
       filter: { awaiting: '待回答', answered: '已回答', all: '全部' },
-      empty: '没有待回答的反问。',
+      empty: '没有反问项。',
       colTask: '任务',
       colAgent: '反问发起方',
-      colNode: '反问节点',
+      colNode: '节点',
       colIteration: '轮次',
       colQuestions: '问题数',
       colTime: '创建时间',
-      taskFilterLabel: '按任务筛选',
-      taskFilterAll: '全部任务',
+      openButton: '打开',
+      statusAwaiting: '待回答',
+      statusAnswered: '已回答',
     },
     detail: {
       contextCard: '由 agent {{name}} 发起 · 第 {{n}} 轮反问',

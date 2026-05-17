@@ -4,6 +4,11 @@
 // grouped by task. Each row links to /clarify/$nodeRunId for the detail
 // page. Polling every 10s mirrors the Reviews inbox so the badge count and
 // the list stay rough-time-in-sync without a WS dep here.
+//
+// Layout mirrors /reviews: same `.page__hint`, accessible `.tabs` tab bar,
+// per-task `.reviews-group` section with a `.data-table` body and a
+// per-row "Open" button + status chip. The two inbox pages stay visually
+// uniform so users don't context-switch between them.
 
 import { useQuery } from '@tanstack/react-query'
 import { Link, createRoute } from '@tanstack/react-router'
@@ -31,30 +36,16 @@ function filterToStatus(f: FilterKey): ClarifySessionStatus | 'all' {
 export function ClarifyListPage() {
   const { t } = useTranslation()
   const [filter, setFilter] = useState<FilterKey>('awaiting')
-  const [taskFilter, setTaskFilter] = useState<string>('')
 
   const list = useQuery<ClarifySessionSummary[]>({
-    queryKey: ['clarify', 'list', filter, taskFilter],
+    queryKey: ['clarify', 'list', filter],
     queryFn: ({ signal }) => {
       const q = new URLSearchParams()
       q.set('status', filterToStatus(filter))
-      if (taskFilter.length > 0) q.set('taskId', taskFilter)
       return api.get<ClarifySessionSummary[]>(`/api/clarify?${q.toString()}`, undefined, signal)
     },
     refetchInterval: 10000,
   })
-
-  // Build a stable set of taskIds for the filter dropdown — derived from the
-  // currently-loaded rows so options only show tasks that actually have at
-  // least one clarify session of the currently-selected status.
-  const taskIds: string[] = []
-  const seenTask = new Set<string>()
-  for (const r of list.data ?? []) {
-    if (!seenTask.has(r.taskId)) {
-      seenTask.add(r.taskId)
-      taskIds.push(r.taskId)
-    }
-  }
 
   // Group rows by task for a section-by-task layout.
   const groups = new Map<string, ClarifySessionSummary[]>()
@@ -68,6 +59,7 @@ export function ClarifyListPage() {
     <div className="page" data-testid="clarify-list-page">
       <header className="page__header">
         <h1>{t('clarify.list.title')}</h1>
+        <p className="page__hint">{t('clarify.list.hint')}</p>
       </header>
       <div className="tabs" role="tablist">
         {FILTERS.map((k) => (
@@ -83,25 +75,6 @@ export function ClarifyListPage() {
             {t(`clarify.list.filter.${k}`)}
           </button>
         ))}
-        <div style={{ marginLeft: 'auto' }}>
-          <label className="muted" htmlFor="clarify-task-filter">
-            {t('clarify.list.taskFilterLabel')}{' '}
-          </label>
-          <select
-            id="clarify-task-filter"
-            className="form-input"
-            value={taskFilter}
-            onChange={(e) => setTaskFilter(e.target.value)}
-            style={{ minWidth: 240 }}
-          >
-            <option value="">{t('clarify.list.taskFilterAll')}</option>
-            {taskIds.map((id) => (
-              <option key={id} value={id}>
-                {id}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
       {list.isLoading && <div className="muted">{t('common.loading')}</div>}
       {list.error !== null && list.error !== undefined && (
@@ -119,33 +92,56 @@ export function ClarifyListPage() {
               {taskId}
             </Link>
           </h2>
-          <ul className="reviews-group__items">
-            {items.map((s) => (
-              <li
-                key={s.id}
-                className="reviews-group__item"
-                data-status={s.status}
-                data-testid={`clarify-row-${s.id}`}
-              >
-                <Link to="/clarify/$nodeRunId" params={{ nodeRunId: s.clarifyNodeRunId }}>
-                  <div>
-                    <strong>{s.clarifyNodeId}</strong>
-                    <span className="muted" style={{ marginLeft: 8 }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>{t('clarify.list.colNode')}</th>
+                <th>{t('reviews.colStatus')}</th>
+                <th>{t('clarify.list.colIteration')}</th>
+                <th>{t('clarify.list.colQuestions')}</th>
+                <th>{t('clarify.list.colTime')}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((s) => (
+                <tr key={s.id} data-status={s.status} data-testid={`clarify-row-${s.id}`}>
+                  <td>
+                    <div className="reviews-row__title">{s.clarifyNodeId}</div>
+                    <code className="chip chip--tight reviews-row__nodeid">
                       ← {s.sourceAgentNodeId}
                       {s.sourceShardKey !== null && (
                         <span data-testid="clarify-row-shard"> · {s.sourceShardKey}</span>
                       )}
+                    </code>
+                  </td>
+                  <td>
+                    <span
+                      className={`status-chip status-chip--${
+                        s.status === 'awaiting_human' ? 'amber' : 'green'
+                      }`}
+                    >
+                      {s.status === 'awaiting_human'
+                        ? t('clarify.list.statusAwaiting')
+                        : t('clarify.list.statusAnswered')}
                     </span>
-                  </div>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    {t('clarify.list.colIteration')} {s.iterationIndex} ·{' '}
-                    {t('clarify.list.colQuestions')} {s.questionCount} · {t('clarify.list.colTime')}{' '}
-                    {new Date(s.createdAt).toLocaleString()}
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
+                  </td>
+                  <td>{s.iterationIndex}</td>
+                  <td>{s.questionCount}</td>
+                  <td className="muted">{new Date(s.createdAt).toLocaleString()}</td>
+                  <td>
+                    <Link
+                      to="/clarify/$nodeRunId"
+                      params={{ nodeRunId: s.clarifyNodeRunId }}
+                      className="btn btn--sm"
+                    >
+                      {t('clarify.list.openButton')}
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
       ))}
     </div>
