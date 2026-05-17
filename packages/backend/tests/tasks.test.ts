@@ -691,11 +691,9 @@ describe('task HTTP routes', () => {
       startedAt: Date.now(),
       finishedAt: Date.now(),
     })
-    const res = await req(
-      h.app,
-      `/api/tasks/${id}/nodes/${failedRunId}/retry?cascade=false`,
-      { method: 'POST' },
-    )
+    const res = await req(h.app, `/api/tasks/${id}/nodes/${failedRunId}/retry?cascade=false`, {
+      method: 'POST',
+    })
     expect(res.status).toBe(200)
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
     const fresh = rows.find((r) => r.id !== failedRunId)
