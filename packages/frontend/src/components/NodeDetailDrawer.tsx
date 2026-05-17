@@ -16,7 +16,6 @@ import type { NodeRun, NodeRunEventsResponse, NodeRunOutput, Task } from '@agent
 import { NODE_EVENT_KIND } from '@agent-workflow/shared'
 import { useNavigate } from '@tanstack/react-router'
 import { NodeDependencyTreeSection } from './agents/NodeDependencyTreeSection'
-import { NodeMcpClosureSection } from './agents/NodeMcpClosureSection'
 import { SessionTab } from './node-session/SessionTab'
 import { api, ApiError } from '@/api/client'
 import {
@@ -359,10 +358,6 @@ function StatsDependencyTreeRow({ agentName }: { agentName: string }) {
           agentName={agentName}
           onNodeClick={(n) => navigate({ to: '/agents/$name', params: { name: n } })}
         />
-      </dd>
-      <dt>{t('nodeDrawer.statMcpClosure')}</dt>
-      <dd>
-        <NodeMcpClosureSection agentName={agentName} />
       </dd>
     </>
   )

@@ -880,9 +880,6 @@ export interface Resources {
     iterRetry: string
     iterInitial: string
     statDependencyTree: string
-    statMcpClosure: string
-    mcpClosureEmpty: string
-    mcpClosureLoadFailed: string
     attempt: string
     noEventsMatch: string
     retryButton: string
@@ -2012,9 +2009,6 @@ export const zhCN: Resources = {
     iterRetry: '重试#{{n}}',
     iterInitial: '初次',
     statDependencyTree: '依赖闭包',
-    statMcpClosure: 'MCP 闭包',
-    mcpClosureEmpty: '本次注入未带 MCP',
-    mcpClosureLoadFailed: '加载 MCP 闭包失败',
     attempt: '第 {{n}} 次',
     noEventsMatch: '没有事件匹配当前过滤。',
     retryButton: '重试节点',

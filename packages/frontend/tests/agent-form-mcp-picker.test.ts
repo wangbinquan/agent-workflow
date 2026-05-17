@@ -1,10 +1,15 @@
 // RFC-028 T10 — locks the AgentForm + Stats tab wiring at source level:
 //   - AgentForm imports McpsPicker
 //   - AgentForm renders an `agentForm.fieldMcps` Field next to the Skills one
-//   - NodeDetailDrawer Stats tab includes NodeMcpClosureSection
-//   - Both i18n bundles cover all new keys (fieldMcps / mcpClosureXxx)
+//   - Both i18n bundles cover the AgentForm-side MCP picker keys
+//
+// Regression note: the original RFC-028 also placed a "MCP closure" row in the
+// task-detail Stats tab via NodeMcpClosureSection. That row was removed at
+// product request — it duplicated information already covered by the
+// dependency tree's MCP badges. Tests below lock in the removal so a future
+// refactor doesn't bring the chip back.
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import path, { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 
@@ -29,24 +34,36 @@ describe('RFC-028 T10 — AgentForm MCP picker', () => {
   })
 })
 
-describe('RFC-028 T10 — Stats tab MCP closure', () => {
-  test('NodeDetailDrawer imports + renders NodeMcpClosureSection', () => {
+describe('Stats tab MCP closure — removed', () => {
+  // Locks in the product decision to drop the MCP closure chip from the
+  // task-detail workflow tab's agent-node stats. Any reintroduction of the
+  // NodeMcpClosureSection import, the statMcpClosure label, or the source
+  // file itself should fail here and force a fresh product review.
+
+  test('NodeDetailDrawer no longer imports or renders NodeMcpClosureSection', () => {
     const src = read('components/NodeDetailDrawer.tsx')
-    expect(src).toContain("import { NodeMcpClosureSection } from './agents/NodeMcpClosureSection'")
-    expect(src).toContain('statMcpClosure')
-    expect(src).toContain('<NodeMcpClosureSection agentName={agentName} />')
+    expect(src).not.toContain('NodeMcpClosureSection')
+    expect(src).not.toContain('statMcpClosure')
   })
 
-  test('NodeMcpClosureSection unions mcp[] across closure agents (first-seen order)', () => {
-    const src = read('components/agents/NodeMcpClosureSection.tsx')
-    // First-seen order matches services/mcpClosure.ts behavior.
-    expect(src).toContain('first-seen order')
-    expect(src).toContain('collectMcpNamesFromClosure')
+  test('NodeMcpClosureSection source file is deleted', () => {
+    expect(existsSync(resolve(FRONTEND_SRC, 'components/agents/NodeMcpClosureSection.tsx'))).toBe(
+      false,
+    )
+  })
+
+  test('i18n bundles no longer carry the MCP-closure stat keys', () => {
+    const zh = read('i18n/zh-CN.ts')
+    const en = read('i18n/en-US.ts')
+    for (const key of ['statMcpClosure', 'mcpClosureEmpty', 'mcpClosureLoadFailed']) {
+      expect(zh).not.toContain(key)
+      expect(en).not.toContain(key)
+    }
   })
 })
 
-describe('RFC-028 T10 — i18n parity', () => {
-  test('zh-CN + en-US both define the new keys', () => {
+describe('RFC-028 T10 — AgentForm i18n parity', () => {
+  test('zh-CN + en-US both define the AgentForm MCP picker keys', () => {
     const zh = read('i18n/zh-CN.ts')
     const en = read('i18n/en-US.ts')
     for (const key of [
@@ -57,9 +74,6 @@ describe('RFC-028 T10 — i18n parity', () => {
       'mcpsPickerLoading:',
       'mcpsPickerEmpty:',
       'mcpsPickerLoadFailed:',
-      'statMcpClosure:',
-      'mcpClosureEmpty:',
-      'mcpClosureLoadFailed:',
     ]) {
       expect(zh).toContain(key)
       expect(en).toContain(key)
