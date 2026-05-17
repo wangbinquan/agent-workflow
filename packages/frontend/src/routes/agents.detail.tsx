@@ -116,6 +116,7 @@ export function agentToDraft(a: Agent): CreateAgent {
     frontmatterExtra: a.frontmatterExtra,
     bodyMd: a.bodyMd,
   }
+  if (a.outputKinds !== undefined) out.outputKinds = a.outputKinds
   if (a.model !== undefined) out.model = a.model
   if (a.variant !== undefined) out.variant = a.variant
   if (a.temperature !== undefined) out.temperature = a.temperature
