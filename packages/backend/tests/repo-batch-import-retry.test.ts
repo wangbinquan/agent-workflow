@@ -11,7 +11,7 @@ import {
   type RepoBatchImportDeps,
 } from '../src/services/repoBatchImport'
 import { DomainError, NotFoundError } from '../src/util/errors'
-import { resolveCachedRepo } from '../src/services/gitRepoCache'
+import type { resolveCachedRepo } from '../src/services/gitRepoCache'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

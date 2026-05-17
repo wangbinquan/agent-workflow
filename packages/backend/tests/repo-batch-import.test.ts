@@ -13,7 +13,7 @@ import {
   type RepoBatchImportDeps,
 } from '../src/services/repoBatchImport'
 import { DomainError } from '../src/util/errors'
-import { resolveCachedRepo } from '../src/services/gitRepoCache'
+import type { resolveCachedRepo } from '../src/services/gitRepoCache'
 import type { RepoImportWsMessage } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

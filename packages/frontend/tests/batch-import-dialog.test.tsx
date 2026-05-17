@@ -10,9 +10,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import type { BatchImportSnapshot } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import type * as ApiClientModule from '../src/api/client'
 
 vi.mock('../src/api/client', async () => {
-  const actual = await vi.importActual<typeof import('../src/api/client')>('../src/api/client')
+  const actual = await vi.importActual<typeof ApiClientModule>('../src/api/client')
   return {
     ...actual,
     api: {
