@@ -651,6 +651,21 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     .orderBy(asc(nodeRuns.startedAt))
   let retryIndex = 0
   let nodeRunId: string
+  // RFC-023: latest existing row drives clarify/review/shard inheritance for
+  // every fresh row we mint below (single-node retry-from-interrupted, resume
+  // of an interrupted clarify rerun, and the process-retry inner loop). Using
+  // isFresherNodeRun matches the comparator that latestPerNode uses upstream,
+  // so the inherited round is always the one the scheduler is about to treat
+  // as authoritative.
+  let latestExisting: (typeof sameNodeIterRuns)[number] | undefined
+  for (const r of sameNodeIterRuns) {
+    if (r.parentNodeRunId !== null) continue // skip fan-out children
+    if (isFresherNodeRun(r, latestExisting)) latestExisting = r
+  }
+  const inheritedClarifyIteration = latestExisting?.clarifyIteration ?? 0
+  const inheritedReviewIteration = latestExisting?.reviewIteration ?? 0
+  const inheritedShardKey = latestExisting?.shardKey ?? null
+  const inheritedParentNodeRunId = latestExisting?.parentNodeRunId ?? null
   const pendingExisting = sameNodeIterRuns.find(
     (r) => r.status === 'pending' && r.parentNodeRunId === null,
   )
@@ -660,7 +675,12 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   } else {
     retryIndex =
       sameNodeIterRuns.length === 0 ? 0 : Math.max(...sameNodeIterRuns.map((r) => r.retryIndex)) + 1
-    nodeRunId = await insertNodeRun(db, taskId, node.id, 'pending', retryIndex, iteration)
+    nodeRunId = await insertNodeRun(db, taskId, node.id, 'pending', retryIndex, iteration, {
+      clarifyIteration: inheritedClarifyIteration,
+      reviewIteration: inheritedReviewIteration,
+      shardKey: inheritedShardKey,
+      parentNodeRunId: inheritedParentNodeRunId,
+    })
   }
   broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
 
@@ -684,7 +704,16 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
             })
           }
         }
-        nodeRunId = await insertNodeRun(db, taskId, node.id, 'pending', attempt, iteration)
+        // RFC-023: process-retry within the same clarify round must keep the
+        // same clarifyIteration so the next attempt's prompt still surfaces
+        // the answered Q&A. shardKey / parentNodeRunId likewise belong to
+        // this run-of-the-node and must persist across attempts.
+        nodeRunId = await insertNodeRun(db, taskId, node.id, 'pending', attempt, iteration, {
+          clarifyIteration: inheritedClarifyIteration,
+          reviewIteration: inheritedReviewIteration,
+          shardKey: inheritedShardKey,
+          parentNodeRunId: inheritedParentNodeRunId,
+        })
         broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
       }
 
@@ -1458,6 +1487,12 @@ async function insertNodeRun(
   status: 'pending' | 'done' | 'awaiting_review' | 'awaiting_human',
   retryIndex: number = 0,
   iteration: number = 0,
+  inherit?: {
+    clarifyIteration?: number
+    reviewIteration?: number
+    shardKey?: string | null
+    parentNodeRunId?: string | null
+  },
 ): Promise<string> {
   const id = ulid()
   const now = Date.now()
@@ -1468,6 +1503,10 @@ async function insertNodeRun(
     status,
     retryIndex,
     iteration,
+    clarifyIteration: inherit?.clarifyIteration ?? 0,
+    reviewIteration: inherit?.reviewIteration ?? 0,
+    shardKey: inherit?.shardKey ?? null,
+    parentNodeRunId: inherit?.parentNodeRunId ?? null,
     startedAt: now,
     finishedAt: status === 'done' ? now : null,
   })

@@ -503,6 +503,123 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     const finalTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(finalTask.status).toBe('done')
   })
+
+  // Regression: when a daemon restart sweeps a clarify-driven rerun row to
+  // 'interrupted' (RFC-024 P-4-07 path), resume / scheduler re-entry used to
+  // mint a fresh pending row via insertNodeRun() that defaulted
+  // clarifyIteration to 0 — buildClarifyPromptContext then returned undefined
+  // and the next prompt carried zero Q&A history. scheduleAgentNode must now
+  // inherit clarifyIteration (and shard / parent / review iteration) from the
+  // latest existing row when minting the fresh attempt.
+  test('interrupted clarify rerun: re-entering scheduler keeps clarifyIteration on the fresh attempt + Q&A in prompt', async () => {
+    await seedAgent(h.db, 'designer', ['design'])
+    const def: WorkflowDefinition = {
+      $schema_version: 3,
+      inputs: [{ kind: 'text', key: 'req', label: 'r' }],
+      nodes: [
+        { id: 'in1', kind: 'input', inputKey: 'req' } as WorkflowNode,
+        { id: 'd', kind: 'agent-single', agentName: 'designer' } as WorkflowNode,
+        { id: 'c', kind: 'clarify', title: 'Clarify me' } as WorkflowNode,
+      ],
+      edges: [
+        {
+          id: 'e_in',
+          source: { nodeId: 'in1', portName: 'req' },
+          target: { nodeId: 'd', portName: 'req' },
+        },
+        {
+          id: 'e_ask',
+          source: { nodeId: 'd', portName: '__clarify__' },
+          target: { nodeId: 'c', portName: 'questions' },
+        },
+        {
+          id: 'e_ans',
+          source: { nodeId: 'c', portName: 'answers' },
+          target: { nodeId: 'd', portName: '__clarify_response__' },
+        },
+      ],
+    }
+    const { taskId } = await seedWorkflowAndTask(h, def, { req: 'go' })
+
+    // Step 1: first run — agent asks, parks at awaiting_human.
+    await withEnv({ MOCK_OPENCODE_CLARIFY_BODY: CLARIFY_BODY }, () =>
+      runTask({
+        taskId,
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      }),
+    )
+
+    // Step 2: synthesize the answered session + the clarify-rerun row that
+    // submitClarifyAnswers normally mints (retry=0, clarifyIter=1).
+    const sessRow = (
+      await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
+    )[0]!
+    await h.db
+      .update(clarifySessions)
+      .set({
+        status: 'answered',
+        answeredAt: Date.now(),
+        answeredBy: 'local',
+        directive: 'continue',
+        answersJson: JSON.stringify([
+          {
+            questionId: 'qdb',
+            selectedOptionIndices: [0],
+            selectedOptionLabels: ['Postgres'],
+            customText: '',
+          },
+        ]),
+      })
+      .where(eq(clarifySessions.id, sessRow.id))
+    await h.db
+      .update(nodeRuns)
+      .set({ status: 'done', finishedAt: Date.now() })
+      .where(eq(nodeRuns.id, sessRow.clarifyNodeRunId))
+    const rerunId = ulid()
+    await h.db.insert(nodeRuns).values({
+      id: rerunId,
+      taskId,
+      nodeId: 'd',
+      status: 'pending',
+      retryIndex: 0,
+      iteration: 0,
+      clarifyIteration: 1,
+    })
+
+    // Step 3: simulate the daemon restart sweep — the rerun row never got a
+    // chance to run; orphans.ts flips pending/running rows to 'interrupted'.
+    await h.db
+      .update(nodeRuns)
+      .set({ status: 'interrupted', finishedAt: Date.now() })
+      .where(eq(nodeRuns.id, rerunId))
+    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+
+    // Step 4: re-enter the scheduler (what /resume or runTask after restart
+    // does). The scheduler must mint a fresh attempt that INHERITS
+    // clarifyIteration=1 — not reset it to 0.
+    await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'with pg' }) }, () =>
+      runTask({
+        taskId,
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      }),
+    )
+
+    const allRuns = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    // The fresh attempt is the most recent agent-d row (retry=1, ci=1).
+    const dRuns = allRuns
+      .filter((r) => r.nodeId === 'd' && r.parentNodeRunId === null)
+      .sort((a, b) => b.retryIndex - a.retryIndex)
+    const fresh = dRuns[0]!
+    expect(fresh.id).not.toBe(rerunId)
+    expect(fresh.status).toBe('done')
+    expect(fresh.clarifyIteration).toBe(1) // the bug: this was 0
+    expect(fresh.promptText ?? '').toContain('Clarify Q&A')
+    expect(fresh.promptText ?? '').toContain('Postgres')
+  })
 })
 
 describe('agent-multi clarify per shard', () => {
