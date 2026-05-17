@@ -131,6 +131,21 @@ export interface RunNodeOptions {
   log?: Logger
   /** When aborted, runner SIGTERMs the child and returns status='canceled'. */
   signal?: AbortSignal
+  /**
+   * RFC-026: when set (only ever populated by the scheduler on the
+   * clarify-driven rerun path where the upstream clarify node has
+   * `sessionMode: 'inline'` AND the prior agent run captured an opencode
+   * session id), the runner appends `--session <id>` to the opencode CLI.
+   * opencode then loads the prior session's full transcript (messages,
+   * thinking, tool calls), and the rendered user prompt is reduced to a
+   * small incremental message (just this round's clarify answers + a short
+   * reminder — see `buildClarifyInlineReminder` in shared/prompt.ts).
+   *
+   * Review reject / iterate / technical retry / loop cross-iteration paths
+   * MUST NOT set this — they intentionally start fresh sessions. See
+   * proposal §2.1 / A12 / A13 / A7.
+   */
+  resumeSessionId?: string
 }
 
 export type RunFinalStatus = 'done' | 'failed' | 'canceled'
@@ -529,10 +544,17 @@ export function buildInlineConfig(
   return { agent: map }
 }
 
-function buildCommand(opts: RunNodeOptions, prompt: string): string[] {
+export function buildCommand(opts: RunNodeOptions, prompt: string): string[] {
   const head = opts.opencodeCmd ?? ['opencode']
   const cmd = [...head, 'run', prompt, '--agent', opts.agent.name, '--format', 'json']
   if (opts.dangerouslySkipPermissions ?? true) cmd.push('--dangerously-skip-permissions')
+  // RFC-026: clarify-inline rerun — resume the prior opencode session so the
+  // agent has its full prior transcript + state. Only ever populated by the
+  // scheduler on the clarify-driven path (review / retry / loop paths leave
+  // it undefined). Empty string is treated the same as undefined.
+  if (opts.resumeSessionId !== undefined && opts.resumeSessionId.length > 0) {
+    cmd.push('--session', opts.resumeSessionId)
+  }
   return cmd
 }
 

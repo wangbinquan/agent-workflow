@@ -3,7 +3,12 @@
 // drag helper / prompt preview pane. No Bun / Node / DB imports — keep this
 // module easy to test in either runtime.
 
-import type { WorkflowDefinition, WorkflowEdge } from './schemas/workflow'
+import type {
+  ClarifyNode,
+  ClarifySessionMode,
+  WorkflowDefinition,
+  WorkflowEdge,
+} from './schemas/workflow'
 import {
   CLARIFY_INPUT_PORT_NAME,
   CLARIFY_OUTPUT_PORT_NAME,
@@ -275,6 +280,17 @@ export function summariseClarifyAnswer(question: ClarifyQuestion, answer: Clarif
 // -----------------------------------------------------------------------------
 // definition-level helpers
 // -----------------------------------------------------------------------------
+
+/**
+ * RFC-026: resolve the session mode for a clarify node. Missing field (legacy
+ * v3 workflows authored before RFC-026) is normalized to `'isolated'`, which
+ * preserves RFC-023 behavior byte-for-byte. Centralizing the fallback here
+ * keeps callers from sprinkling `?? 'isolated'` everywhere and gives the
+ * regression-guard test one place to lock the default.
+ */
+export function resolveClarifySessionMode(node: ClarifyNode): ClarifySessionMode {
+  return node.sessionMode ?? 'isolated'
+}
 
 export function agentHasClarifyChannel(
   definition: WorkflowDefinition,

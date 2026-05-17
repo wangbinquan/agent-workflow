@@ -50,11 +50,13 @@ import {
   type ClarifySessionSummary,
   type ClarifyPromptContext,
   type ClarifyTruncationWarning,
+  type ClarifyNode,
   type WorkflowDefinition,
   type WorkflowNode,
   buildClarifyPromptBlock,
   findClarifyNodeForAgent,
   renderClarifyQuestionsBlock,
+  resolveClarifySessionMode,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { clarifySessions, nodeRuns, tasks } from '@/db/schema'
@@ -341,7 +343,24 @@ export async function submitClarifyAnswers(
     )
   }
 
+  // RFC-026: in inline session mode, skip the worktree rollback. The agent
+  // is about to resume its prior opencode session, which holds tool-call
+  // history mentioning the worktree state it left behind. Rolling files
+  // back to pre_snapshot now would desynchronise the agent's "I just
+  // touched / read file X" memory from the actual filesystem and produce
+  // confusing failures. RFC-023 protocol forbids agents from writing
+  // during a clarify round anyway, so this is usually a no-op — but we
+  // err on the safe side and let the session's view of the worktree stay
+  // authoritative. See proposal §8 + design §8.
+  const clarifyNodeForRerun = resolveClarifyNodeFromTaskSnapshot(
+    taskRow.workflowSnapshot,
+    sessionRow.clarifyNodeId,
+  )
+  const sessionModeForRerun = clarifyNodeForRerun
+    ? resolveClarifySessionMode(clarifyNodeForRerun)
+    : 'isolated'
   if (
+    sessionModeForRerun !== 'inline' &&
     sourceRunRow.preSnapshot !== null &&
     sourceRunRow.preSnapshot !== '' &&
     taskRow.worktreePath !== ''
@@ -428,6 +447,20 @@ export interface BuildClarifyPromptContextArgs {
    * in the right rerun's prompt.
    */
   shardKey: string | null
+  /**
+   * RFC-026: which clarify session mode the upstream clarify node selected
+   * for this rerun. `'isolated'` (default / undefined) keeps RFC-023 multi-
+   * round dump behavior verbatim. `'inline'` collapses the result to the
+   * SINGLE most-recent answered round (no prior questions, no historical
+   * answers) and tags the returned context with `mode: 'inline'` so
+   * `renderUserPrompt` switches to the short inline trailing reminder.
+   *
+   * Inline mode relies on the runner spawning opencode with
+   * `--session <prior-id>` so older rounds + the bi-modal preamble are
+   * already in opencode's session memory. Rerendering them here would
+   * duplicate context the agent already has.
+   */
+  sessionMode?: 'isolated' | 'inline'
 }
 
 /**
@@ -454,8 +487,14 @@ export async function buildClarifyPromptContext(
   // status = 'answered' + iterationIndex < targetIteration so an in-flight
   // unanswered session never bleeds into the next prompt; only sealed
   // answers feed the agent.
-  const rows = await db_selectAnsweredSessionsForRerun(args)
-  if (rows.length === 0) return undefined
+  const allRows = await db_selectAnsweredSessionsForRerun(args)
+  if (allRows.length === 0) return undefined
+
+  // RFC-026: inline mode collapses the dump to the single most-recent round.
+  // The runner is about to spawn opencode with `--session <prior-id>` so
+  // earlier rounds live in opencode's session memory already.
+  const inlineMode = args.sessionMode === 'inline'
+  const rows = inlineMode ? allRows.slice(-1) : allRows
 
   const questionParts: string[] = []
   const answerParts: string[] = []
@@ -496,6 +535,10 @@ export async function buildClarifyPromptContext(
     iteration: String(args.targetIteration),
     remaining: computeRemaining(args.definition, args.agentNodeId, args.targetIteration),
     directive: latestDirective,
+    // RFC-026: tag the context so renderUserPrompt picks the right trailing
+    // block (inline reminder vs full bi-modal preamble) and the right answers
+    // section heading.
+    ...(inlineMode ? { mode: 'inline' as const, currentRoundOnly: true } : {}),
   }
   return ctx
 }
@@ -821,6 +864,37 @@ export function findClarifyNode(
   clarifyNodeId: string,
 ): WorkflowNode | undefined {
   return definition.nodes.find((n) => n.id === clarifyNodeId && n.kind === 'clarify')
+}
+
+/**
+ * RFC-026: parse a task's stored workflowSnapshot JSON and pull out the clarify
+ * node by id. Returns undefined when the snapshot is malformed or the id isn't
+ * present (e.g. workflow was edited after task launch and the snapshot is
+ * stale in a way that drops the clarify node — falls back to isolated then).
+ *
+ * Kept narrow on purpose: callers want `resolveClarifySessionMode` access at
+ * REST-handler time WITHOUT pulling the whole definition into scope.
+ */
+export function resolveClarifyNodeFromTaskSnapshot(
+  workflowSnapshotJson: string,
+  clarifyNodeId: string,
+): ClarifyNode | undefined {
+  let snap: unknown
+  try {
+    snap = JSON.parse(workflowSnapshotJson)
+  } catch {
+    return undefined
+  }
+  const nodes = (snap as { nodes?: unknown }).nodes
+  if (!Array.isArray(nodes)) return undefined
+  for (const n of nodes) {
+    if (typeof n !== 'object' || n === null) continue
+    const rec = n as { id?: unknown; kind?: unknown }
+    if (rec.kind !== 'clarify') continue
+    if (rec.id !== clarifyNodeId) continue
+    return n as ClarifyNode
+  }
+  return undefined
 }
 
 // Constants re-export for tests / runner wire-ups so callers don't pull

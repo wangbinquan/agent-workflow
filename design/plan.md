@@ -50,6 +50,8 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-023](./RFC-023-agent-clarify/proposal.md)                   | 反问澄清节点（Clarify）：agent 主动反问 + 单/多选 + 人工补充 + 反向拖动建反问环 + agent-multi 每 shard 独立反问 + 答案动态注入触发重跑 | Done        |
 | [RFC-024](./RFC-024-launch-from-git-url/proposal.md)             | 启动任务支持 SSH / HTTPS Git URL：launcher 切 tab → 后端持久缓存 clone → 走现有 createWorktree；公开仓 / SSH 复用本机 key / HTTPS URL 内嵌 token；新增 `/repos` 管理页 + cached_repos 表 + 全链路 URL redact | Done        |
 | [RFC-025](./RFC-025-settings-language-switch/proposal.md)        | 框架语言切换：Settings → Appearance 加 language 下拉 + 侧边栏底部 LanguageSwitch segmented；新 `useApplyLanguage` hook 让后端 `config.language` 为权威覆盖 localStorage；optimistic setLanguage + 失败回滚；零 backend / shared / DB 改动 | Done        |
+| [RFC-026](./RFC-026-clarify-inline-session/proposal.md)          | Clarify 节点支持「同 session 内反问」模式（opencode `--session` resume）：clarify 节点新 `sessionMode` 字段（默认 isolated）+ node_runs 持久化 opencode session_id + scheduler inline 路径透传 `--session` + prompt 仅含本轮答案 + 失败自动回退到 isolated | Draft       |
+| [RFC-027](./RFC-027-node-session-view/proposal.md)               | 节点详情 drawer 把 Prompt 页签升级为 Session 页签：按时间线还原对话流（user / assistant text / tool_use / tool_result）+ subagent 多层嵌套折叠；runner 在 child.exited 后只读读 opencode SQLite (`Global.Path.data/opencode.db`) BFS `session.parent_id` 把子 session 行 transcode 成 normalized event 落到 `node_run_events`（新增 `session_id` / `parent_session_id` 两列），任何失败走 `subagent-capture-failed` marker + 父 task tool final output 兜底；新 `parseSessionTree` 纯函数 + `GET /api/tasks/:taskId/node-runs/:nodeRunId/session` 端点 | Draft       |
 
 ---
 

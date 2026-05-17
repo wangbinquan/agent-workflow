@@ -257,6 +257,17 @@ export const nodeRuns = sqliteTable(
     tokTotal: integer('tok_total'),
     // worktree snapshot (write nodes only) for retry rollback
     preSnapshot: text('pre_snapshot'),
+    /**
+     * RFC-026: opencode session id captured from the JSON event stream of
+     * this run. NULL when the run was canceled / failed before opencode
+     * emitted any session event, or for non-agent runs (clarify / review /
+     * input / output / wrapper) that never spawn opencode. Read by the
+     * scheduler ONLY on the clarify-driven rerun path when the upstream
+     * clarify node has `sessionMode: 'inline'` — that path passes the id
+     * to runner.ts which appends `--session <id>` to the opencode CLI so
+     * the prior session's full transcript is resumed.
+     */
+    opencodeSessionId: text('opencode_session_id'),
   },
   (t) => ({
     taskIdx: index('idx_node_runs_task').on(t.taskId, t.nodeId, t.iteration, t.retryIndex),

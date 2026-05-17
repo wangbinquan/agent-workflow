@@ -207,6 +207,26 @@ export const CLARIFY_OUTPUT_PORT_NAME = 'answers' as const
 export const CLARIFY_SOURCE_PORT_NAME = '__clarify__' as const
 export const CLARIFY_RESPONSE_TARGET_PORT_NAME = '__clarify_response__' as const
 
+/**
+ * RFC-026: clarify session mode.
+ *
+ * - `isolated` (default, current RFC-023 behavior): every clarify-driven rerun
+ *   spawns a fresh opencode process; the prompt carries the full Q&A history
+ *   accumulated across prior rounds.
+ * - `inline`: rerun spawns opencode with `--session <previous-session-id>` so
+ *   opencode loads the full prior session (messages, thinking, tool calls).
+ *   The prompt becomes a small incremental message (just this round's user
+ *   answers + a short reminder). Tokens / latency drop on multi-round asks.
+ *   Falls back to isolated automatically when the session id is unavailable
+ *   or opencode rejects it.
+ *
+ * Stored as an optional string in workflow JSON; undefined is treated as
+ * `'isolated'` everywhere via `resolveClarifySessionMode` in shared/clarify.ts.
+ * Pure additive field — no schema_version bump.
+ */
+export const ClarifySessionModeSchema = z.enum(['isolated', 'inline'])
+export type ClarifySessionMode = z.infer<typeof ClarifySessionModeSchema>
+
 export const ClarifyNodeSchema = z
   .object({
     id: z.string().min(1),
@@ -218,6 +238,12 @@ export const ClarifyNodeSchema = z
     description: z.string().default(''),
     /** Reserved for future per-user assignment; UI does not expose it in v1. */
     assignee: z.string().optional(),
+    /**
+     * RFC-026: opencode session reuse mode for clarify-driven reruns. See
+     * `ClarifySessionModeSchema` for semantics. Optional; missing field is
+     * resolved to `'isolated'` (preserves RFC-023 behavior byte-for-byte).
+     */
+    sessionMode: ClarifySessionModeSchema.optional(),
   })
   .passthrough()
 export type ClarifyNode = z.infer<typeof ClarifyNodeSchema>

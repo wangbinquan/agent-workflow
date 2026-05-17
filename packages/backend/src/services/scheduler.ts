@@ -13,18 +13,34 @@
 // into the wrapper's inner scope (once for wrapper-git, up to maxIterations
 // times for wrapper-loop).
 
-import type { Agent, WorkflowDefinition, WorkflowEdge, WorkflowNode } from '@agent-workflow/shared'
+import type {
+  Agent,
+  ClarifyNode,
+  WorkflowDefinition,
+  WorkflowEdge,
+  WorkflowNode,
+} from '@agent-workflow/shared'
 import {
   WorkflowDefinitionSchema,
   agentHasClarifyChannel,
   findClarifyNodeForAgent,
+  resolveClarifySessionMode,
 } from '@agent-workflow/shared'
 import { and, asc, desc, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
-import { agents, nodeRunOutputs, nodeRuns, skills, tasks } from '@/db/schema'
+import { agents, nodeRunEvents, nodeRunOutputs, nodeRuns, skills, tasks } from '@/db/schema'
 import { resolveDependsClosure } from '@/services/agentDeps'
-import { buildClarifyPromptContext, createClarifySession } from '@/services/clarify'
+import {
+  buildClarifyPromptContext,
+  createClarifySession,
+  findClarifyNode,
+} from '@/services/clarify'
+import {
+  decideResumeSessionId,
+  detectSessionNotFoundFromStderr,
+  type ClarifyInlineFallbackReason,
+} from '@/services/clarifyFallback'
 import { evaluateExitCondition, parseExitCondition } from '@/services/exitCondition'
 import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
 import { runNode, type AgentOverrides, type ResolvedSkill, type RunResult } from '@/services/runner'
@@ -695,6 +711,51 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         )[0]
         const currentClarifyIteration = currentRunRow?.clarifyIteration ?? 0
         const currentShardKey = currentRunRow?.shardKey ?? null
+
+        // RFC-026: resolve sessionMode from the clarify node attached to this
+        // agent (if any). `inline` only takes effect when the current run is
+        // a clarify-driven rerun (clarifyIteration > 0 AND retryIndex === 0):
+        //   - clarifyIteration === 0  → first run, no prior session to resume
+        //   - retryIndex > 0          → technical retry within same clarify
+        //     round; design.md §7 forbids inline on retries to keep retry
+        //     behavior deterministic when something went wrong mid-session
+        const clarifyNodeForGate = hasClarifyChannel
+          ? findClarifyNodeForAgent(definition, node.id)
+          : undefined
+        const clarifyNodeObjForGate = clarifyNodeForGate
+          ? (findClarifyNode(definition, clarifyNodeForGate) as ClarifyNode | undefined)
+          : undefined
+        const sessionMode = clarifyNodeObjForGate
+          ? resolveClarifySessionMode(clarifyNodeObjForGate)
+          : 'isolated'
+        const isClarifyRerun = currentClarifyIteration > 0 && (currentRunRow?.retryIndex ?? 0) === 0
+        const priorSessionId = isClarifyRerun
+          ? await readPriorAgentSessionId(db, {
+              taskId,
+              agentNodeId: node.id,
+              shardKey: currentShardKey,
+              priorIterationIndex: currentClarifyIteration - 1,
+            })
+          : null
+        // RFC-026 fallback reasons recorded via `recordClarifyInlineEvent`
+        // below:
+        //   - 'missing-session-id'           — decideResumeSessionId, pre-spawn
+        //   - 'session-not-found'            — stderr inspection, post-spawn
+        //   - 'unsupported-opencode-version' — reserved for the daemon version
+        //                                      probe (not yet wired here; see
+        //                                      design.md §15)
+        const resumeDecision = decideResumeSessionId({
+          sessionMode: isClarifyRerun ? sessionMode : 'isolated',
+          sourceSessionId: priorSessionId,
+        })
+        if (resumeDecision.fallbackReason !== undefined) {
+          await recordClarifyInlineEvent(db, nodeRunId, {
+            level: 'warning',
+            reason: resumeDecision.fallbackReason,
+            extra: { clarifyIteration: currentClarifyIteration },
+          })
+        }
+
         const clarifyContext = hasClarifyChannel
           ? await buildClarifyPromptContext({
               db,
@@ -703,6 +764,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
               agentNodeId: node.id,
               targetIteration: currentClarifyIteration,
               shardKey: currentShardKey,
+              ...(resumeDecision.inlineMode ? { sessionMode: 'inline' as const } : {}),
             })
           : undefined
         // RFC-023 directive iteration: when the last answered session was
@@ -713,6 +775,13 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // round (clarifyIteration + 1) walks back through scheduleAgentNode
         // and re-derives the flag, so 'stop' naturally scopes to one rerun.
         const effectiveHasClarifyChannel = hasClarifyChannel && clarifyContext?.directive !== 'stop'
+        if (resumeDecision.inlineMode && resumeDecision.resumeSessionId !== undefined) {
+          await recordClarifyInlineEvent(db, nodeRunId, {
+            level: 'info',
+            sessionIdPrefix: resumeDecision.resumeSessionId.slice(0, 8),
+            extra: { clarifyIteration: currentClarifyIteration },
+          })
+        }
         lastResult = await runNode({
           taskId,
           nodeRunId,
@@ -731,6 +800,9 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           ...(reviewContext !== undefined ? { reviewContext } : {}),
           ...(clarifyContext !== undefined ? { clarifyContext } : {}),
           ...(nodeOverrides !== undefined ? { overrides: nodeOverrides } : {}),
+          ...(resumeDecision.resumeSessionId !== undefined
+            ? { resumeSessionId: resumeDecision.resumeSessionId }
+            : {}),
           hasClarifyChannel: effectiveHasClarifyChannel,
           skills: resolvedSkills,
           dependents,
@@ -740,6 +812,32 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           log: log.child('run'),
           ...(opts.signal ? { signal: opts.signal } : {}),
         })
+
+        // RFC-026: persist opencode session id captured from the JSON event
+        // stream so the NEXT clarify-driven rerun on this lineage can pass
+        // it back via `--session`. NULL on failed / canceled runs is fine.
+        if (lastResult.sessionId !== undefined && lastResult.sessionId !== '') {
+          await db
+            .update(nodeRuns)
+            .set({ opencodeSessionId: lastResult.sessionId })
+            .where(eq(nodeRuns.id, nodeRunId))
+        }
+        // RFC-026: post-spawn fallback — opencode rejected the resume id we
+        // passed. Treat the run as a fail-soft signal: leave the failure to
+        // surface naturally (status will be 'failed' or have empty outputs),
+        // but log a warning so operators can see WHY. The next retry within
+        // this attempt loop will not carry resumeSessionId (we only set it
+        // on the first attempt of a clarify rerun).
+        if (resumeDecision.inlineMode && lastResult.status !== 'done') {
+          const stderrText = await readStderrText(db, nodeRunId)
+          if (detectSessionNotFoundFromStderr(stderrText)) {
+            await recordClarifyInlineEvent(db, nodeRunId, {
+              level: 'warning',
+              reason: 'session-not-found',
+              extra: { clarifyIteration: currentClarifyIteration },
+            })
+          }
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         lastResult = {
@@ -1206,6 +1304,16 @@ async function runFanOutNode(
             log: log.child('fanout'),
             ...(opts.signal ? { signal: opts.signal } : {}),
           })
+          // RFC-026: persist opencode session id for this shard so a future
+          // clarify-inline rerun on the same shard chain can resume. Captured
+          // even when the run failed — opencode often still emits a session
+          // id before bailing — so the next attempt can resume regardless.
+          if (result.sessionId !== undefined && result.sessionId !== '') {
+            await db
+              .update(nodeRuns)
+              .set({ opencodeSessionId: result.sessionId })
+              .where(eq(nodeRuns.id, childRunId))
+          }
           // RFC-023: shard child emitted clarify — mint the per-shard
           // session, mark this child clarifyAwaiting (it does NOT count as
           // done; the parent waits for all shards including answered-then-
@@ -1770,6 +1878,108 @@ async function readSnapshotForLatestRun(
     .orderBy(desc(nodeRuns.retryIndex))
     .limit(1)
   return rows[0]?.preSnapshot ?? ''
+}
+
+/**
+ * RFC-026: look up the opencode session id captured on the agent's PRIOR
+ * clarify round (one less than the current run's clarifyIteration). Walks
+ * node_runs filtered by (taskId, nodeId, shardKey, clarifyIteration), picks
+ * the latest retry attempt that actually finished — that's the run that
+ * emitted the `<workflow-clarify>` envelope the user just answered. Returns
+ * null when nothing matches (will then degrade to isolated via
+ * `decideResumeSessionId`).
+ */
+async function readPriorAgentSessionId(
+  db: DbClient,
+  args: {
+    taskId: string
+    agentNodeId: string
+    shardKey: string | null
+    priorIterationIndex: number
+  },
+): Promise<string | null> {
+  const rows = await db
+    .select()
+    .from(nodeRuns)
+    .where(
+      and(
+        eq(nodeRuns.taskId, args.taskId),
+        eq(nodeRuns.nodeId, args.agentNodeId),
+        eq(nodeRuns.clarifyIteration, args.priorIterationIndex),
+        eq(nodeRuns.status, 'done'),
+      ),
+    )
+    .orderBy(desc(nodeRuns.retryIndex))
+  // shardKey is filtered in memory because drizzle's IS NULL handling
+  // varies; the result set is tiny (one row per retry attempt).
+  const filtered = rows.filter((r) => (r.shardKey ?? null) === args.shardKey)
+  for (const r of filtered) {
+    if (r.opencodeSessionId !== null && r.opencodeSessionId !== '') {
+      return r.opencodeSessionId
+    }
+  }
+  return null
+}
+
+/**
+ * RFC-026: read concatenated stderr text recorded for a node_run via the
+ * runner's stderr pump. Used post-spawn to sniff for `session not found`
+ * style messages so the inline-mode fallback can degrade gracefully.
+ */
+async function readStderrText(db: DbClient, nodeRunId: string): Promise<string> {
+  const rows = await db
+    .select()
+    .from(nodeRunEvents)
+    .where(and(eq(nodeRunEvents.nodeRunId, nodeRunId), eq(nodeRunEvents.kind, 'stderr')))
+    .orderBy(asc(nodeRunEvents.id))
+  return rows.map((r) => r.payload).join('\n')
+}
+
+/**
+ * RFC-026: record an info/warning row about inline-mode session resume.
+ *
+ * Both flavors are written as `kind: 'text'` (the closest enum value that
+ * doesn't collide with stderr / step-finish / etc.) with a structured JSON
+ * payload + a stable `[rfc026/...]` prefix. PR-B's frontend reads the
+ * prefix to render the row with an info or warning style; until then the
+ * payload is plain-readable in the events tab.
+ */
+async function recordClarifyInlineEvent(
+  db: DbClient,
+  nodeRunId: string,
+  args:
+    | {
+        level: 'info'
+        sessionIdPrefix: string
+        extra?: Record<string, unknown>
+      }
+    | {
+        level: 'warning'
+        reason: ClarifyInlineFallbackReason
+        extra?: Record<string, unknown>
+      },
+): Promise<void> {
+  const tag = args.level === 'info' ? '[rfc026/inline-session-resumed]' : '[rfc026/inline-fallback]'
+  const payload =
+    args.level === 'info'
+      ? JSON.stringify({
+          rfc: 'rfc026',
+          code: 'clarify-session-resumed',
+          sessionIdPrefix: args.sessionIdPrefix,
+          ...args.extra,
+        })
+      : JSON.stringify({
+          rfc: 'rfc026',
+          code: 'inline-clarify-fallback-to-isolated',
+          reason: args.reason,
+          ...args.extra,
+        })
+  await db.insert(nodeRunEvents).values({
+    nodeRunId,
+    ts: Date.now(),
+    kind: 'text',
+    payload: `${tag} ${payload}`,
+  })
 }
 
 /**

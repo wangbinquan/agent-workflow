@@ -22,6 +22,15 @@
 //                                    temperature } pulled from OPENCODE_CONFIG_CONTENT.
 //                                    Lets tests assert per-node overrides survived the
 //                                    scheduler → runner → env-var → subprocess hop.
+//   MOCK_OPENCODE_CAPTURE_ARGV_TO    path; if set, the mock appends one JSON line per
+//                                    invocation containing the full argv array. RFC-026
+//                                    tests use this to assert that `--session <id>` (or
+//                                    its absence) reaches the spawned subprocess.
+//   MOCK_OPENCODE_EMIT_SESSION_ID    when set, the mock prefixes its JSON event stream
+//                                    with `{"type":"session.created","sessionID":"<id>"}`
+//                                    so the runner captures it into RunResult.sessionId.
+//                                    Default ULID-style synthetic id when set to '1';
+//                                    any other value is treated as the literal id.
 
 import process from 'node:process'
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -76,6 +85,20 @@ const mockedAgentName = argv[agentFlagIdx + 1] ?? ''
 // Append one JSON line per invocation so tests can inspect what model /
 // variant / temperature actually reached the subprocess. Guards the
 // scheduler → runner → env hop end-to-end.
+// RFC-026: capture full argv array for inline-session tests. Appended as one
+// JSON line per invocation: { agent, argv: [...] }.
+if (env.MOCK_OPENCODE_CAPTURE_ARGV_TO) {
+  try {
+    const agentName = argv[agentFlagIdx + 1] ?? ''
+    appendFileSync(
+      env.MOCK_OPENCODE_CAPTURE_ARGV_TO,
+      JSON.stringify({ agent: agentName, argv }) + '\n',
+    )
+  } catch (e) {
+    fail(`MOCK_OPENCODE_CAPTURE_ARGV_TO write failed: ${(e as Error).message}`)
+  }
+}
+
 if (env.MOCK_OPENCODE_CAPTURE_CONFIG_TO) {
   try {
     const cfg = JSON.parse(env.OPENCODE_CONFIG_CONTENT) as {
@@ -108,6 +131,21 @@ if (counterFile !== undefined && Number.isFinite(failUntil) && failUntil > 0) {
   n += 1
   writeFileSync(counterFile, String(n))
   if (n <= failUntil) forceFail = true
+}
+
+// RFC-026: optionally pre-emit a session.created event so the runner captures
+// a sessionId into RunResult.sessionId. Real opencode emits an event with
+// `sessionID` somewhere in the stream; the runner grabs the first one it
+// sees. We synthesize that here for inline-mode tests. `1` produces a stable
+// fake id; any other string is used verbatim.
+if (env.MOCK_OPENCODE_EMIT_SESSION_ID) {
+  const sessionID =
+    env.MOCK_OPENCODE_EMIT_SESSION_ID === '1'
+      ? 'opc_mock_session_01'
+      : env.MOCK_OPENCODE_EMIT_SESSION_ID
+  process.stdout.write(
+    JSON.stringify({ type: 'session.created', sessionID, timestamp: Date.now() }) + '\n',
+  )
 }
 
 // Emit stdout events.

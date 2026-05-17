@@ -1,0 +1,1 @@
+ALTER TABLE `node_runs` ADD `opencode_session_id` text;
