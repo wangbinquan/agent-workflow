@@ -20,7 +20,7 @@ export interface WrapperNodeData extends CanvasNodeData {
   innerCount?: number
   /** Loop only — surfaced to render the "× N · kind" pill. */
   maxIterations?: number
-  exitConditionKind?: 'port-empty' | 'port-equals' | 'port-count-lt' | string
+  exitConditionKind?: 'port-empty' | 'port-not-empty' | 'port-equals' | 'port-count-lt' | string
 }
 
 interface Props extends NodeProps {

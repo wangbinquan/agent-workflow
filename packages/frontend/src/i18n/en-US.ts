@@ -554,7 +554,7 @@ export const enUS: Resources = {
     fieldMaxIterations: 'Max iterations',
     fieldExitConditionKind: 'Exit condition kind',
     fieldExitConditionKindHint:
-      'port-empty: trimmed value empty · port-equals: exact match · port-count-lt: count < n',
+      'port-empty: trimmed value empty · port-not-empty: trimmed value non-empty (clarify use case — exit when the agent finally produces an output instead of asking again) · port-equals: exact match · port-count-lt: count < n',
     fieldExitConditionTarget: 'Exit condition target',
     fieldExitConditionTargetHint: '(nodeId, portName) probed each iteration',
     fieldExitConditionValue: 'Equals value',

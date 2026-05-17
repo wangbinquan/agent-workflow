@@ -1,12 +1,18 @@
 // Loop wrapper exit condition evaluation (design.md §6.4).
 //
-// Three built-in shapes:
-//   - port-empty:    target node's `port` content (trimmed) is empty
-//   - port-equals:   target node's `port` content equals the configured value
-//   - port-count-lt: count of separator-delimited tokens is < n (default sep '\n')
+// Built-in shapes:
+//   - port-empty:     target node's `port` content (trimmed) is empty
+//   - port-not-empty: target node's `port` content (trimmed) is non-empty
+//                     — added for the RFC-023 clarify use case: loop on
+//                     "agent asked → user answered → agent retried" until
+//                     the agent actually produces an output port (so the
+//                     port stops being empty), at which point exit.
+//   - port-equals:    target node's `port` content equals the configured value
+//   - port-count-lt:  count of separator-delimited tokens is < n (default sep '\n')
 
 export type ExitCondition =
   | { kind: 'port-empty'; nodeId: string; portName: string }
+  | { kind: 'port-not-empty'; nodeId: string; portName: string }
   | { kind: 'port-equals'; nodeId: string; portName: string; value: string }
   | {
       kind: 'port-count-lt'
@@ -35,6 +41,9 @@ export function parseExitCondition(raw: unknown): ExitCondition | null {
   if (r.kind === 'port-empty') {
     return { kind: 'port-empty', nodeId: r.nodeId, portName: r.portName }
   }
+  if (r.kind === 'port-not-empty') {
+    return { kind: 'port-not-empty', nodeId: r.nodeId, portName: r.portName }
+  }
   if (r.kind === 'port-equals') {
     return {
       kind: 'port-equals',
@@ -54,6 +63,7 @@ export function parseExitCondition(raw: unknown): ExitCondition | null {
 /** Evaluate an exit condition against the current iteration's port content. */
 export function evaluateExitCondition(cond: ExitCondition, portContent: string): boolean {
   if (cond.kind === 'port-empty') return portContent.trim() === ''
+  if (cond.kind === 'port-not-empty') return portContent.trim() !== ''
   if (cond.kind === 'port-equals') return portContent === cond.value
   // port-count-lt
   const sep = cond.separator ?? '\n'

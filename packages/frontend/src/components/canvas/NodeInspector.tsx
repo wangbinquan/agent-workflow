@@ -381,6 +381,7 @@ function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps)
               onChange={(e) => updateExit({ kind: e.target.value })}
             >
               <option value="port-empty">port-empty</option>
+              <option value="port-not-empty">port-not-empty</option>
               <option value="port-equals">port-equals</option>
               <option value="port-count-lt">port-count-lt</option>
             </select>

@@ -133,6 +133,51 @@ describe('loop NodeInspector candidate-driven selects', () => {
     expect(selects.length).toBeGreaterThanOrEqual(2)
   })
 
+  test('exitCondition.kind dropdown lists all 4 built-in kinds including port-not-empty (RFC-023)', () => {
+    const def = makeDef([loop('w1', ['a1']), agentNode('a1', 'fixer')])
+    const { container } = render(
+      <Host initial={def} agents={fakeAgents({ name: 'fixer', outputs: ['design'] })} />,
+    )
+    // The kind <select> is the only select that has these 4 option values.
+    const selects = Array.from(container.querySelectorAll('select')) as HTMLSelectElement[]
+    const kindSelect = selects.find((s) => {
+      const vals = Array.from(s.options).map((o) => o.value)
+      return vals.includes('port-empty') && vals.includes('port-equals')
+    })!
+    const optionValues = Array.from(kindSelect.options).map((o) => o.value)
+    expect(optionValues).toEqual(['port-empty', 'port-not-empty', 'port-equals', 'port-count-lt'])
+  })
+
+  test('switching to port-not-empty persists kind in the definition', () => {
+    const def = makeDef([loop('w1', ['a1']), agentNode('a1', 'fixer')])
+    function ChangeHost() {
+      const [d, setD] = useState(def)
+      return (
+        <>
+          <NodeInspector
+            definition={d}
+            selectedNodeId="w1"
+            agents={fakeAgents({ name: 'fixer', outputs: ['design'] })}
+            onChange={setD}
+            onClose={() => {}}
+          />
+          <pre data-testid="snapshot">{JSON.stringify(d)}</pre>
+        </>
+      )
+    }
+    const { container } = render(<ChangeHost />)
+    const selects = Array.from(container.querySelectorAll('select')) as HTMLSelectElement[]
+    const kindSelect = selects.find((s) =>
+      Array.from(s.options)
+        .map((o) => o.value)
+        .includes('port-not-empty'),
+    )!
+    fireEvent.change(kindSelect, { target: { value: 'port-not-empty' } })
+    const snap = JSON.parse(screen.getByTestId('snapshot').textContent ?? '{}')
+    const loopNode = snap.nodes.find((n: { id: string }) => n.id === 'w1')
+    expect(loopNode.exitCondition.kind).toBe('port-not-empty')
+  })
+
   test('changing exitCondition.nodeId triggers a definition update', () => {
     const def = makeDef([
       loop('w1', ['a1', 'a2']),

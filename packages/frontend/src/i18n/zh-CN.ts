@@ -1399,7 +1399,7 @@ export const zhCN: Resources = {
     fieldMaxIterations: '最大迭代次数',
     fieldExitConditionKind: '退出条件类型',
     fieldExitConditionKindHint:
-      'port-empty：trim 后为空 · port-equals：完全相等 · port-count-lt：行数 < n',
+      'port-empty：trim 后为空 · port-not-empty：trim 后非空（反问场景：agent 真正给出 output 才退出）· port-equals：完全相等 · port-count-lt：行数 < n',
     fieldExitConditionTarget: '退出条件目标',
     fieldExitConditionTargetHint: '(nodeId, portName)，每轮检查',
     fieldExitConditionValue: '相等值',
