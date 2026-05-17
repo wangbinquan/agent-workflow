@@ -609,3 +609,65 @@ test('RFC-022: agent form Dependency tree (preview) renders the full closure', a
   expect(body.ok).toBe(true)
   expect(body.agents.map((a) => a.name)).toEqual(['rfc022-a', 'rfc022-b', 'rfc022-c'])
 })
+
+// RFC-027 e2e: NodeDetailDrawer "Session" tab renders the conversation
+// flow for the previously-completed agent_1 node from the happy path.
+// Verifies AC-1 (tab renamed to Session), AC-2 (attempts picker), AC-3
+// (User role label visible), and AC-4 (prompt text becomes the first
+// user message). Doesn't exercise subagent nesting (would need the stub
+// to emit `task` tool parts + a fake opencode SQLite); the unit suite
+// covers that part of the contract.
+test('RFC-027: NodeDetailDrawer Session tab renders the agent conversation', async ({ page }) => {
+  await primeAuthLocalStorage(page, daemon)
+
+  // Find the most-recently completed happy-path task. The happy-path
+  // beforeAll seeded the fixture; the earlier test may not have run in
+  // this file order, so launch a fresh task here to guarantee state.
+  const headers = {
+    Authorization: `Bearer ${daemon.token}`,
+    'Content-Type': 'application/json',
+  }
+  const startRes = await fetch(`${daemon.baseUrl}/api/tasks`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      workflowId: fixtures.workflowId,
+      inputs: { topic: 'rfc-027' },
+      repoPath: fixtures.repoPath,
+      baseBranch: 'main',
+    }),
+  })
+  expectOk(startRes, 'start task for rfc-027')
+  const startedTask = (await startRes.json()) as { id: string }
+  const finalTask = await pollUntilTerminal(daemon, startedTask.id, 30_000)
+  expect(finalTask.status).toBe('done')
+
+  await page.goto(`${daemon.baseUrl}/tasks/${startedTask.id}`)
+  await expect(page.locator('.status-chip', { hasText: /^done$/ }).first()).toBeVisible({
+    timeout: 15_000,
+  })
+
+  // Click the agent_1 canvas node — the only agent in the happy-path
+  // workflow — to open the NodeDetailDrawer.
+  await expect(page.locator('.canvas-node--agent').first()).toBeVisible({ timeout: 10_000 })
+  await page.locator('.canvas-node--agent').first().click()
+
+  // Session tab MUST be present and default-selected. Prompt tab is gone.
+  const tabBar = page.locator('.inspector__tabs')
+  await expect(tabBar.getByRole('button', { name: 'Session', exact: true })).toBeVisible()
+  await expect(tabBar.getByRole('button', { name: 'Prompt', exact: true })).toHaveCount(0)
+
+  // The attempts picker (reused from RFC-011) renders inside the body.
+  await expect(page.locator('.prompt-history__select')).toBeVisible({ timeout: 5_000 })
+
+  // The user prompt becomes the first message in the conversation flow —
+  // its body should contain the rendered template ("Explain rfc-027 …").
+  await expect(page.locator('.session-block--user .session-block__body')).toContainText(
+    /Explain rfc-027/i,
+    { timeout: 10_000 },
+  )
+
+  // Source-code-level assertion in the live build: the drawer's Session
+  // tab actually contains a session-flow container (vs an empty fallback).
+  await expect(page.locator('.session-flow').first()).toBeVisible()
+})

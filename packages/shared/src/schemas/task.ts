@@ -230,6 +230,10 @@ export const NODE_EVENT_KIND = [
   'step_start',
   'step_finish',
   'stderr',
+  // RFC-027: marker written by services/sessionCapture when the
+  // post-run opencode SQLite read fails. SessionTab treats it as a
+  // captureComplete=false signal for the affected child session.
+  'subagent_capture_failed',
 ] as const
 
 export const NodeRunEventSchema = z.object({

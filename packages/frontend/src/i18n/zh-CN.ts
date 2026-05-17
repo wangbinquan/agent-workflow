@@ -734,9 +734,13 @@ export interface Resources {
   nodeDrawer: {
     kindLabel: string
     tabPrompt: string
+    tabSession: string
     tabEvents: string
     tabOutput: string
     tabStats: string
+    sessionPending: string
+    sessionNotApplicable: string
+    sessionFanoutParent: string
     shardCount: string
     shardNoKey: string
     tokenPrefix: string
@@ -945,6 +949,23 @@ export interface Resources {
       zh: string
       en: string
     }
+  }
+  session: {
+    user: string
+    assistant: string
+    toolCall: string
+    toolResult: string
+    subagent: string
+    captureMissing: string
+    fallbackOutput: string
+    expand: string
+    collapse: string
+    statusPending: string
+    statusRunning: string
+    statusCompleted: string
+    statusError: string
+    loadError: string
+    empty: string
   }
 }
 
@@ -1692,6 +1713,10 @@ export const zhCN: Resources = {
   nodeDrawer: {
     kindLabel: 'node_run',
     tabPrompt: 'Prompt',
+    tabSession: '会话',
+    sessionPending: '会话尚未生成。',
+    sessionNotApplicable: '该节点类型不产生 opencode 会话。',
+    sessionFanoutParent: '父 fan-out 节点本身没有会话，请选择一个 shard。',
     tabEvents: '事件',
     tabOutput: '输出',
     tabStats: '统计',
@@ -1927,5 +1952,23 @@ export const zhCN: Resources = {
       zh: '中',
       en: 'EN',
     },
+  },
+  // RFC-027: NodeDetailDrawer Session tab content.
+  session: {
+    user: '用户',
+    assistant: '助手',
+    toolCall: '工具调用',
+    toolResult: '工具返回',
+    subagent: '子代理',
+    captureMissing: '未能捕获子代理事件。',
+    fallbackOutput: '父代理收到的最终回复：',
+    expand: '展开',
+    collapse: '折叠',
+    statusPending: '排队中',
+    statusRunning: '运行中',
+    statusCompleted: '已完成',
+    statusError: '出错',
+    loadError: '加载会话失败。',
+    empty: '本轮 session 暂无事件。',
   },
 }

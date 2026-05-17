@@ -85,6 +85,20 @@
       "when": 1779004864373,
       "tag": "0011_rfc028_mcps",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1779011470852,
+      "tag": "0012_rfc027_node_run_events_session",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1779014230815,
+      "tag": "0013_rfc030_mcp_probes",
+      "breakpoints": true
     }
   ]
 }

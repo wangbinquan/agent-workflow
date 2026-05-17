@@ -39,6 +39,7 @@ import {
   parseEnvelope,
 } from './envelope'
 import { renderUserPrompt } from './protocol'
+import { captureChildSessions } from './sessionCapture'
 
 export type SkillSource = 'managed' | 'external' | 'project'
 
@@ -346,9 +347,19 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       if (text !== null) agentText.push(text)
       const kind = inferEventKind(evt)
       const ts = typeof evt.timestamp === 'number' ? evt.timestamp : Date.now()
-      await opts.db
-        .insert(nodeRunEvents)
-        .values({ nodeRunId: opts.nodeRunId, ts, kind, payload: line })
+      // RFC-027: tag every stdout-derived row with the (root) sessionID +
+      // parent_session_id=null so the SessionTab parser can bucket parent
+      // events against post-run captured child events without ambiguity.
+      const evtSessionId =
+        typeof evt.sessionID === 'string' ? (evt.sessionID as string) : (sessionId ?? null)
+      await opts.db.insert(nodeRunEvents).values({
+        nodeRunId: opts.nodeRunId,
+        ts,
+        kind,
+        payload: line,
+        sessionId: evtSessionId,
+        parentSessionId: null,
+      })
     } else {
       // Non-JSON stdout lines shouldn't happen with --format json, but record
       // them as kind=text for debugging.
@@ -473,7 +484,27 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     }
   }
 
-  // 10. Update node_runs final state.
+  // 10. RFC-027: post-run capture of child (subagent) session events
+  //     from opencode's persisted SQLite. Non-fatal; any failure writes
+  //     a `subagent_capture_failed` marker and lets the SessionTab tab
+  //     fall back to AC-10 rendering.
+  if (sessionId !== undefined) {
+    try {
+      await captureChildSessions({
+        rootSessionId: sessionId,
+        nodeRunId: opts.nodeRunId,
+        db: opts.db,
+        log,
+      })
+    } catch (err) {
+      log.warn('subagent-capture-unhandled', {
+        nodeRunId: opts.nodeRunId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  // 11. Update node_runs final state.
   await opts.db
     .update(nodeRuns)
     .set({
@@ -489,7 +520,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     })
     .where(eq(nodeRuns.id, opts.nodeRunId))
 
-  // 11. Clean up run dir (best-effort).
+  // 12. Clean up run dir (best-effort).
   try {
     rmSync(runRoot, { recursive: true, force: true })
   } catch {

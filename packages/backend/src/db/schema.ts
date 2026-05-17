@@ -109,6 +109,55 @@ export const mcps = sqliteTable('mcps', {
 })
 
 // -----------------------------------------------------------------------------
+// mcp_probes — RFC-030. One row per MCP, holding the most-recent probe result.
+// UNIQUE(mcp_id) + ON DELETE CASCADE means deleting the parent mcp drops the
+// probe automatically; UPSERT-on-probe keeps a single row per MCP. We do *not*
+// keep history here (out of scope, see RFC-030 §3). All large fields are JSON
+// strings (tools / resources / etc.); parsed via the zod schemas in
+// `@agent-workflow/shared` mcpProbe.ts when materialised for the API.
+// -----------------------------------------------------------------------------
+export const mcpProbes = sqliteTable('mcp_probes', {
+  id: text('id').primaryKey(), // ULID
+  mcpId: text('mcp_id')
+    .notNull()
+    .unique()
+    .references(() => mcps.id, { onDelete: 'cascade' }),
+  /** 'ok' | 'error'. 'partial' lists go under errorCode while keeping status='ok'. */
+  status: text('status', { enum: ['ok', 'error'] }).notNull(),
+  /** Wall-clock probe latency (connect → all-lists-done or fail). */
+  latencyMs: integer('latency_ms').notNull(),
+  /** Connect + `initialize` latency only. Null when transport never came up. */
+  handshakeMs: integer('handshake_ms'),
+  /** Raw {name, version?} from initialize response. */
+  serverInfoJson: text('server_info_json'),
+  protocolVersion: text('protocol_version'),
+  /** Raw capabilities map (opencode-style). */
+  capabilitiesJson: text('capabilities_json'),
+  /** Array<{name,title?,description?,inputSchema?}> JSON. Null on list failure. */
+  toolsJson: text('tools_json'),
+  /** Array<{uri,name?,description?,mimeType?}>. */
+  resourcesJson: text('resources_json'),
+  /** Array<{uriTemplate,name?,description?,mimeType?}>. */
+  resourceTemplatesJson: text('resource_templates_json'),
+  /** Array<{name,description?,arguments?[]}>. */
+  promptsJson: text('prompts_json'),
+  /** One of the codes from McpProbeErrorCode (see shared/mcpProbe.ts). */
+  errorCode: text('error_code'),
+  errorMessage: text('error_message'),
+  /** {stderr?, httpStatus?, partialFailures?: [{method,message}]} — redacted. */
+  errorDetailJson: text('error_detail_json'),
+  schemaVersion: integer('schema_version').notNull().default(1),
+  startedAt: integer('started_at').notNull(),
+  finishedAt: integer('finished_at').notNull(),
+  createdAt: integer('created_at')
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+  updatedAt: integer('updated_at')
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+})
+
+// -----------------------------------------------------------------------------
 // skills — fs is source of truth (~/.agent-workflow/skills/{name}/files/).
 // DB stores only the index.
 // -----------------------------------------------------------------------------
@@ -439,12 +488,22 @@ export const nodeRunEvents = sqliteTable(
         'step_start',
         'step_finish',
         'stderr',
+        // RFC-027: synthetic marker written by sessionCapture when the
+        // post-run opencode SQLite read fails. Frontend treats it as a
+        // captureComplete=false signal for the affected child session.
+        'subagent_capture_failed',
       ],
     }).notNull(),
     payload: text('payload').notNull(), // raw JSON line / stderr line
+    // RFC-027: nullable so pre-migration rows + stdout lines that never
+    // saw an opencode sessionID stay valid. sessionCapture / runner fill
+    // these to enable the SessionTree parser to bucket events by session.
+    sessionId: text('session_id'),
+    parentSessionId: text('parent_session_id'),
   },
   (t) => ({
     nodeIdx: index('idx_events_node').on(t.nodeRunId, t.id),
+    sessionIdx: index('idx_events_session').on(t.nodeRunId, t.sessionId, t.id),
   }),
 )
 

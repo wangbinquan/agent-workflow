@@ -4348,3 +4348,91 @@ mark.comment-anchor[data-active='true'] {
   color: var(--muted);
   font-style: italic;
 }
+
+/* ---------------------------------------------------------------------------
+ * RFC-027 — NodeDetailDrawer Session tab. Conversation flow + recursive
+ * subagent cards. Indentation per nesting level is expressed via
+ * .session-flow--nested wrapping (left border + 16px margin); the
+ * component tree mirrors the data tree so unbounded depth is fine.
+ * ---------------------------------------------------------------------------
+ */
+.session-history {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.session-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.session-flow--nested {
+  margin-left: 16px;
+  border-left: 2px solid var(--surface-border);
+  padding-left: 12px;
+}
+.session-flow__empty {
+  font-style: italic;
+}
+.session-block {
+  background: var(--surface-2);
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.session-block--user {
+  background: var(--surface-3, var(--surface-2));
+}
+.session-block--assistant {
+  border-left: 3px solid var(--accent, #6db);
+}
+.session-block--tool {
+  border-left: 3px solid var(--info, #88c);
+}
+.session-block--subagent {
+  border-left: 3px solid var(--warn, #c80);
+}
+.session-block__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.session-block__role {
+  opacity: 0.85;
+}
+.session-block__ts {
+  font-size: 11px;
+  opacity: 0.5;
+  margin-left: auto;
+}
+.session-block__body {
+  margin: 6px 0 0 0;
+  white-space: pre-wrap;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.session-block__details {
+  margin-top: 6px;
+}
+.session-block__details summary {
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.75;
+}
+.session-subagent__toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+  width: 14px;
+  text-align: center;
+}
+.session-subagent__body {
+  margin-top: 8px;
+}
+.session-capture-warning {
+  color: var(--warn, #c80);
+  font-size: 11px;
+}

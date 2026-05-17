@@ -21,6 +21,9 @@ export const NodeEventKindSchema = z.enum([
   'step_start',
   'step_finish',
   'stderr',
+  // RFC-027: synthetic marker for post-run subagent capture failures.
+  // Mirrors NODE_EVENT_KIND in schemas/task.ts.
+  'subagent_capture_failed',
 ])
 export type NodeEventKind = z.infer<typeof NodeEventKindSchema>
 

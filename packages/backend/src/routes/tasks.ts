@@ -37,6 +37,7 @@ import {
   type UploadInputDef,
   type UploadLimits,
 } from '@/services/upload'
+import { getSessionTree } from '@/services/sessionView'
 import { getWorkflow } from '@/services/workflow'
 import { Paths } from '@/util/paths'
 import { NotFoundError, ValidationError } from '@/util/errors'
@@ -180,6 +181,16 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     return c.json(
       await getNodeRunEvents(deps.db, c.req.param('id'), c.req.param('nodeRunId'), opts),
     )
+  })
+
+  // RFC-027: Session-tree view consumed by the NodeDetailDrawer's
+  // Session tab. Reads the persisted events for one node_run and
+  // reassembles a normalized conversation tree (user / assistant text
+  // / tool_use / subagent-call, with recursive children for any task
+  // tool whose child sessionID was captured into node_run_events by
+  // sessionCapture).
+  app.get('/api/tasks/:id/node-runs/:nodeRunId/session', async (c) => {
+    return c.json(await getSessionTree(deps.db, c.req.param('id'), c.req.param('nodeRunId')))
   })
 }
 

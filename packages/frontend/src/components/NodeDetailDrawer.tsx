@@ -17,6 +17,7 @@ import { NODE_EVENT_KIND } from '@agent-workflow/shared'
 import { useNavigate } from '@tanstack/react-router'
 import { NodeDependencyTreeSection } from './agents/NodeDependencyTreeSection'
 import { NodeMcpClosureSection } from './agents/NodeMcpClosureSection'
+import { SessionTab } from './node-session/SessionTab'
 import { api, ApiError } from '@/api/client'
 import {
   formatAttemptLabel,
@@ -62,7 +63,7 @@ interface Props {
   onSelectRun?: (nodeRunId: string) => void
 }
 
-type Tab = 'prompt' | 'events' | 'output' | 'stats'
+type Tab = 'session' | 'prompt' | 'events' | 'output' | 'stats'
 
 export function NodeDetailDrawer({
   taskId,
@@ -77,7 +78,7 @@ export function NodeDetailDrawer({
   onSelectRun,
 }: Props) {
   const { t } = useTranslation()
-  const [tab, setTab] = useState<Tab>('prompt')
+  const [tab, setTab] = useState<Tab>('session')
   const [cascade, setCascade] = useState(true)
   const qc = useQueryClient()
 
@@ -110,7 +111,7 @@ export function NodeDetailDrawer({
   const history = nodeRunHistory(run, runs)
 
   const tabs: Array<[Tab, string]> = [
-    ['prompt', t('nodeDrawer.tabPrompt')],
+    ['session', t('nodeDrawer.tabSession')],
     ['events', t('nodeDrawer.tabEvents')],
     ['output', t('nodeDrawer.tabOutput')],
     ['stats', t('nodeDrawer.tabStats')],
@@ -172,6 +173,15 @@ export function NodeDetailDrawer({
       )}
       {children.length > 0 && <SubProcessList shards={children} onPick={onSelectRun} />}
       <div className="inspector__body">
+        {tab === 'session' && (
+          <SessionTab
+            taskId={taskId}
+            runs={runs}
+            nodeId={nodeId}
+            selectedRunId={nodeRunId}
+            workflowNodeKind={workflowNodeKind}
+          />
+        )}
         {tab === 'prompt' && (
           <PromptTab
             runs={runs}
