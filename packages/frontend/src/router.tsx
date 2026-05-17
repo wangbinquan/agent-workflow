@@ -13,6 +13,8 @@ import { Route as mcpsRoute } from '@/routes/mcps'
 import { Route as mcpDetailRoute } from '@/routes/mcps.detail'
 import { Route as mcpNewRoute } from '@/routes/mcps.new'
 import { Route as pluginsRoute } from '@/routes/plugins'
+import { Route as pluginDetailRoute } from '@/routes/plugins.detail'
+import { Route as pluginNewRoute } from '@/routes/plugins.new'
 import { Route as skillsRoute } from '@/routes/skills'
 import { Route as skillDetailRoute } from '@/routes/skills.detail'
 import { Route as skillNewRoute } from '@/routes/skills.new'
@@ -44,7 +46,9 @@ const routeTree = rootRoute.addChildren([
   mcpNewRoute,
   mcpDetailRoute,
   mcpsRoute,
-  // RFC-031: /plugins is a single page (no /new or /:id sub-route).
+  // RFC-031: '/plugins/new' literal must precede '/plugins/$id' so the literal wins.
+  pluginNewRoute,
+  pluginDetailRoute,
   pluginsRoute,
   workflowNewRoute,
   workflowLaunchRoute,
