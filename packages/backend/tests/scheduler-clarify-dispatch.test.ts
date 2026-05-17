@@ -620,6 +620,175 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     expect(fresh.promptText ?? '').toContain('Clarify Q&A')
     expect(fresh.promptText ?? '').toContain('Postgres')
   })
+
+  // Multi-round boundary: with TWO already-answered rounds (ci=0 and ci=1)
+  // plus a clarify-rerun row at ci=2 that got swept to 'interrupted' by a
+  // daemon restart, the freshly minted attempt must keep clarifyIteration=2
+  // AND buildClarifyPromptContext must render BOTH Round 1 + Round 2 Q&A in
+  // the next prompt (chronological order). This locks the multi-round-history
+  // slice of clarify.ts and the inheritance path in scheduler.ts together —
+  // neither in isolation suffices.
+  test('multi-round (ci=2) interrupted rerun: every prior round renders in next prompt', async () => {
+    await seedAgent(h.db, 'designer', ['design'])
+    const def: WorkflowDefinition = {
+      $schema_version: 3,
+      inputs: [{ kind: 'text', key: 'req', label: 'r' }],
+      nodes: [
+        { id: 'in1', kind: 'input', inputKey: 'req' } as WorkflowNode,
+        { id: 'd', kind: 'agent-single', agentName: 'designer' } as WorkflowNode,
+        { id: 'c', kind: 'clarify', title: 'Clarify me' } as WorkflowNode,
+      ],
+      edges: [
+        {
+          id: 'e_in',
+          source: { nodeId: 'in1', portName: 'req' },
+          target: { nodeId: 'd', portName: 'req' },
+        },
+        {
+          id: 'e_ask',
+          source: { nodeId: 'd', portName: '__clarify__' },
+          target: { nodeId: 'c', portName: 'questions' },
+        },
+        {
+          id: 'e_ans',
+          source: { nodeId: 'c', portName: 'answers' },
+          target: { nodeId: 'd', portName: '__clarify_response__' },
+        },
+      ],
+    }
+    const { taskId } = await seedWorkflowAndTask(h, def, { req: 'go' })
+
+    // Round 1 (ci=0): first run asks "Which database?".
+    await withEnv({ MOCK_OPENCODE_CLARIFY_BODY: CLARIFY_BODY }, () =>
+      runTask({
+        taskId,
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      }),
+    )
+    const round1Sess = (
+      await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
+    )[0]!
+    await h.db
+      .update(clarifySessions)
+      .set({
+        status: 'answered',
+        answeredAt: Date.now(),
+        answeredBy: 'local',
+        directive: 'continue',
+        answersJson: JSON.stringify([
+          {
+            questionId: 'qdb',
+            selectedOptionIndices: [0],
+            selectedOptionLabels: ['Postgres'],
+            customText: '',
+          },
+        ]),
+      })
+      .where(eq(clarifySessions.id, round1Sess.id))
+    await h.db
+      .update(nodeRuns)
+      .set({ status: 'done', finishedAt: Date.now() })
+      .where(eq(nodeRuns.id, round1Sess.clarifyNodeRunId))
+
+    // Round 2 (ci=1): mint rerun row, drive it through to ask "Which env?".
+    const ci1Id = ulid()
+    await h.db.insert(nodeRuns).values({
+      id: ci1Id,
+      taskId,
+      nodeId: 'd',
+      status: 'pending',
+      retryIndex: 0,
+      iteration: 0,
+      clarifyIteration: 1,
+    })
+    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+    const ROUND2_BODY = JSON.stringify({
+      questions: [
+        {
+          id: 'qenv',
+          title: 'Which environment first?',
+          kind: 'single',
+          recommended: true,
+          options: ['Staging', 'Prod'],
+        },
+      ],
+    })
+    await withEnv({ MOCK_OPENCODE_CLARIFY_BODY: ROUND2_BODY }, () =>
+      runTask({
+        taskId,
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      }),
+    )
+    const allSess = await h.db
+      .select()
+      .from(clarifySessions)
+      .where(eq(clarifySessions.taskId, taskId))
+    const round2Sess = allSess.find((s) => s.iterationIndex === 1)!
+    await h.db
+      .update(clarifySessions)
+      .set({
+        status: 'answered',
+        answeredAt: Date.now(),
+        answeredBy: 'local',
+        directive: 'continue',
+        answersJson: JSON.stringify([
+          {
+            questionId: 'qenv',
+            selectedOptionIndices: [0],
+            selectedOptionLabels: ['Staging'],
+            customText: '',
+          },
+        ]),
+      })
+      .where(eq(clarifySessions.id, round2Sess.id))
+    await h.db
+      .update(nodeRuns)
+      .set({ status: 'done', finishedAt: Date.now() })
+      .where(eq(nodeRuns.id, round2Sess.clarifyNodeRunId))
+
+    // Mint the ci=2 rerun row, immediately mark interrupted (daemon restart).
+    const ci2Id = ulid()
+    await h.db.insert(nodeRuns).values({
+      id: ci2Id,
+      taskId,
+      nodeId: 'd',
+      status: 'interrupted',
+      retryIndex: 0,
+      iteration: 0,
+      clarifyIteration: 2,
+      finishedAt: Date.now(),
+    })
+    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+
+    // Re-enter scheduler. Fresh row must inherit ci=2 and prompt must carry
+    // BOTH 'Postgres' (Round 1) and 'Staging' (Round 2).
+    await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'pg + staging' }) }, () =>
+      runTask({
+        taskId,
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+      }),
+    )
+
+    const allRuns = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const dRuns = allRuns
+      .filter((r) => r.nodeId === 'd' && r.parentNodeRunId === null)
+      .sort((a, b) => b.retryIndex - a.retryIndex)
+    const fresh = dRuns[0]!
+    expect(fresh.id).not.toBe(ci2Id)
+    expect(fresh.clarifyIteration).toBe(2)
+    expect(fresh.status).toBe('done')
+    const prompt = fresh.promptText ?? ''
+    expect(prompt).toContain('Round 1')
+    expect(prompt).toContain('Round 2')
+    expect(prompt).toContain('Postgres')
+    expect(prompt).toContain('Staging')
+  })
 })
 
 describe('agent-multi clarify per shard', () => {
