@@ -492,23 +492,30 @@ function StatsTab({
           <dt>{t('nodeDrawer.statIterations')}</dt>
           <dd>
             <ul className="retries-history" data-testid="stats-iterations-list">
-              {iterationsHistory.map((r) => (
-                <li key={r.id}>
-                  <button
-                    type="button"
-                    className="retries-history__item"
-                    onClick={() => onPickRetry?.(r.id)}
-                  >
-                    <code>{formatIterationLabel(r, { t })}</code>{' '}
-                    <span className={`status-chip status-chip--${noderunTone(r.status)}`}>
-                      {t(displayNoderunStatusKey(r))}
-                    </span>
-                    {r.startedAt !== null && (
-                      <span className="muted">{new Date(r.startedAt).toLocaleTimeString()}</span>
-                    )}
-                  </button>
-                </li>
-              ))}
+              {iterationsHistory.map((r) => {
+                const isActive = r.id === run.id
+                return (
+                  <li key={r.id}>
+                    <button
+                      type="button"
+                      className={`retries-history__item${
+                        isActive ? ' retries-history__item--active' : ''
+                      }`}
+                      aria-current={isActive ? 'true' : undefined}
+                      disabled={isActive}
+                      onClick={() => onPickRetry?.(r.id)}
+                    >
+                      <code>{formatIterationLabel(r, { t })}</code>{' '}
+                      <span className={`status-chip status-chip--${noderunTone(r.status)}`}>
+                        {t(displayNoderunStatusKey(r))}
+                      </span>
+                      {r.startedAt !== null && (
+                        <span className="muted">{new Date(r.startedAt).toLocaleTimeString()}</span>
+                      )}
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
           </dd>
         </>

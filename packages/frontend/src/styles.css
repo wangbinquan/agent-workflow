@@ -1696,6 +1696,16 @@ code {
   border-color: var(--accent);
 }
 
+.retries-history__item--active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  cursor: default;
+}
+
+.retries-history__item--active:hover {
+  border-color: var(--accent);
+}
+
 .events-list__body {
   margin: 4px 0 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -4287,6 +4297,18 @@ mark.comment-anchor[data-active='true'] {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
+}
+.mcp-editor__close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.mcp-editor__close:hover {
+  color: var(--text);
 }
 .mcp-editor__cwd-hint {
   font-style: italic;

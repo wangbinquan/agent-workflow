@@ -7,6 +7,8 @@
 // produced node-history.ts for the original bug repro on agent_p69bj1
 // where clarifyIteration went 0→1→2→3 but retryIndex stayed 0.
 
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import type { NodeRun } from '@agent-workflow/shared'
 import { formatIterationLabel, splitNodeRunHistory } from '../src/lib/node-history'
@@ -60,11 +62,19 @@ describe('splitNodeRunHistory', () => {
     expect(iterations).toEqual([])
   })
 
-  test('current run itself is never returned in either list', () => {
+  test('current run is excluded from retries (only OTHER same-tuple runs are retries)', () => {
     const current = makeRun({ id: 'cur', retryIndex: 1 })
-    const { retries, iterations } = splitNodeRunHistory(current, [current])
+    const { retries } = splitNodeRunHistory(current, [current])
     expect(retries.map((r) => r.id)).toEqual([])
-    expect(iterations.map((r) => r.id)).toEqual([])
+  })
+
+  test('single-tuple history: iterations list stays empty (only retries are relevant)', () => {
+    // All siblings share the current tuple, so 迭代历史 doesn't need to show.
+    const current = makeRun({ id: 'cur', retryIndex: 1 })
+    const peer = makeRun({ id: 'peer', retryIndex: 0 })
+    const { retries, iterations } = splitNodeRunHistory(current, [current, peer])
+    expect(retries.map((r) => r.id)).toEqual(['peer'])
+    expect(iterations).toEqual([])
   })
 
   test('same iteration/review/clarify tuple, different retryIndex → retries (sorted)', () => {
@@ -76,36 +86,38 @@ describe('splitNodeRunHistory', () => {
     expect(iterations).toEqual([])
   })
 
-  test('different clarifyIteration goes to iterations, NOT retries', () => {
-    // The exact agent_p69bj1 case from the original bug report.
+  test('different clarifyIteration → iterations list includes current run for anchoring', () => {
+    // The exact agent_p69bj1 case from the original bug report. The user
+    // explicitly asked for "初次+三轮迭代都放上" (always show all 4 rows)
+    // so the active iteration row can be highlighted in place.
     const c0 = makeRun({ id: 'c0', clarifyIteration: 0, startedAt: 100 })
     const c1 = makeRun({ id: 'c1', clarifyIteration: 1, startedAt: 200 })
     const c2 = makeRun({ id: 'c2', clarifyIteration: 2, startedAt: 300 })
     const cur = makeRun({ id: 'cur', clarifyIteration: 3, startedAt: 400, status: 'running' })
     const { retries, iterations } = splitNodeRunHistory(cur, [c0, c1, c2, cur])
     expect(retries).toEqual([])
-    expect(iterations.map((r) => r.id)).toEqual(['c0', 'c1', 'c2'])
+    expect(iterations.map((r) => r.id)).toEqual(['c0', 'c1', 'c2', 'cur'])
   })
 
-  test('different reviewIteration goes to iterations', () => {
+  test('different reviewIteration → iterations list includes current', () => {
     const v0 = makeRun({ id: 'v0', reviewIteration: 0 })
     const v1 = makeRun({ id: 'v1', reviewIteration: 1 })
     const cur = makeRun({ id: 'cur', reviewIteration: 2 })
     const { retries, iterations } = splitNodeRunHistory(cur, [v0, v1, cur])
     expect(retries).toEqual([])
-    expect(iterations.map((r) => r.id)).toEqual(['v0', 'v1'])
+    expect(iterations.map((r) => r.id)).toEqual(['v0', 'v1', 'cur'])
   })
 
-  test('different loop iteration goes to iterations', () => {
+  test('different loop iteration → iterations list includes current', () => {
     const i0 = makeRun({ id: 'i0', iteration: 0 })
     const i1 = makeRun({ id: 'i1', iteration: 1 })
     const cur = makeRun({ id: 'cur', iteration: 2 })
     const { retries, iterations } = splitNodeRunHistory(cur, [i0, i1, cur])
     expect(retries).toEqual([])
-    expect(iterations.map((r) => r.id)).toEqual(['i0', 'i1'])
+    expect(iterations.map((r) => r.id)).toEqual(['i0', 'i1', 'cur'])
   })
 
-  test('mix: same-tuple retries + other-iteration siblings split correctly', () => {
+  test('mix: same-tuple retries + cross-iteration siblings split correctly', () => {
     const cur = makeRun({ id: 'cur', clarifyIteration: 2, retryIndex: 1 })
     const sameTupleRetry = makeRun({ id: 'rt', clarifyIteration: 2, retryIndex: 0 })
     const earlierIter = makeRun({ id: 'pi', clarifyIteration: 1, retryIndex: 0 })
@@ -117,18 +129,19 @@ describe('splitNodeRunHistory', () => {
       earlierIterRetry,
     ])
     expect(retries.map((r) => r.id)).toEqual(['rt'])
-    // Iteration list shows every retry of past iterations — the user can
-    // drill into a specific retry without leaving the drawer.
-    expect(iterations.map((r) => r.id)).toEqual(['pi', 'pi-rt'])
+    // Iteration list shows every run in every iteration including cur+rt,
+    // so the user always sees the complete timeline; the drawer highlights
+    // whichever row matches the currently-anchored run.
+    expect(iterations.map((r) => r.id)).toEqual(['pi', 'pi-rt', 'rt', 'cur'])
   })
 
-  test('iteration list sorts by (iteration, review, clarify, retryIndex)', () => {
+  test('iteration list sorts by (iteration, review, clarify, retryIndex), current included', () => {
     const a = makeRun({ id: 'a', iteration: 0, reviewIteration: 0, clarifyIteration: 2 })
     const b = makeRun({ id: 'b', iteration: 0, reviewIteration: 1, clarifyIteration: 0 })
     const c = makeRun({ id: 'c', iteration: 1, reviewIteration: 0, clarifyIteration: 0 })
     const cur = makeRun({ id: 'cur', iteration: 2 })
     const { iterations } = splitNodeRunHistory(cur, [c, b, a, cur])
-    expect(iterations.map((r) => r.id)).toEqual(['a', 'b', 'c'])
+    expect(iterations.map((r) => r.id)).toEqual(['a', 'b', 'c', 'cur'])
   })
 })
 
@@ -162,5 +175,27 @@ describe('formatIterationLabel', () => {
     // "initial" anchor or we'd render a bare "retry#1" with no context.
     const run = makeRun({ id: 'x', retryIndex: 1 })
     expect(formatIterationLabel(run, { t })).toBe('nodeDrawer.iterInitial · nodeDrawer.iterRetry=1')
+  })
+})
+
+describe('NodeDetailDrawer iteration list marks the active row', () => {
+  // Source-level lock: per the user request, the iteration list now keeps
+  // the current run in view (it's no longer filtered out) and highlights
+  // the active row + disables its button so it can't double-click into
+  // itself. If anyone reverts those two affordances this test goes red.
+  const src = readFileSync(
+    resolve(import.meta.dirname, '..', 'src/components/NodeDetailDrawer.tsx'),
+    'utf8',
+  )
+
+  test('iterations list applies the --active class when row.id === run.id', () => {
+    expect(src).toContain('stats-iterations-list')
+    expect(src).toContain('retries-history__item--active')
+    expect(src).toMatch(/const isActive\s*=\s*r\.id\s*===\s*run\.id/)
+  })
+
+  test('active row sets aria-current and disables click', () => {
+    expect(src).toMatch(/aria-current=\{isActive \? 'true' : undefined\}/)
+    expect(src).toMatch(/disabled=\{isActive\}/)
   })
 })

@@ -26,10 +26,11 @@ export interface NodeRunHistorySplit {
    */
   retries: NodeRun[]
   /**
-   * Other iterations of the same nodeId — every sibling that differs from
-   * `current` in any of (iteration, reviewIteration, clarifyIteration).
-   * One entry per row; not deduped by tuple so the user can drill into a
-   * specific retry of a past iteration.
+   * Full iteration history of the same nodeId — *includes* the current run
+   * so the user always sees the complete `初次 + 反问#1 + 反问#2 + …`
+   * timeline and the active row is highlighted. Empty when every sibling
+   * shares the current run's (iteration, reviewIteration, clarifyIteration)
+   * tuple — in that case only the retries list is relevant.
    */
   iterations: NodeRun[]
 }
@@ -38,20 +39,20 @@ export function splitNodeRunHistory(
   current: NodeRun,
   runs: readonly NodeRun[],
 ): NodeRunHistorySplit {
-  const siblings = runs.filter(
-    (r) => r.nodeId === current.nodeId && r.id !== current.id && r.parentNodeRunId === null,
-  )
+  const siblings = runs.filter((r) => r.nodeId === current.nodeId && r.parentNodeRunId === null)
   const retries = siblings
-    .filter((r) => sameTuple(r, current))
+    .filter((r) => r.id !== current.id && sameTuple(r, current))
     .sort((a, b) => a.retryIndex - b.retryIndex)
-  const iterations = siblings
-    .filter((r) => !sameTuple(r, current))
-    .sort((a, b) => {
-      if (a.iteration !== b.iteration) return a.iteration - b.iteration
-      if (a.reviewIteration !== b.reviewIteration) return a.reviewIteration - b.reviewIteration
-      if (a.clarifyIteration !== b.clarifyIteration) return a.clarifyIteration - b.clarifyIteration
-      return a.retryIndex - b.retryIndex
-    })
+  const hasMultipleTuples = siblings.some((r) => !sameTuple(r, current))
+  const iterations = hasMultipleTuples
+    ? [...siblings].sort((a, b) => {
+        if (a.iteration !== b.iteration) return a.iteration - b.iteration
+        if (a.reviewIteration !== b.reviewIteration) return a.reviewIteration - b.reviewIteration
+        if (a.clarifyIteration !== b.clarifyIteration)
+          return a.clarifyIteration - b.clarifyIteration
+        return a.retryIndex - b.retryIndex
+      })
+    : []
   return { retries, iterations }
 }
 
