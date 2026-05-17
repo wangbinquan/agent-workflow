@@ -188,8 +188,10 @@ test('happy path: agents → workflow → launch → task done → outputs visib
   await openLink.click()
   await expect(page.getByRole('heading', { name: fixtures.workflowName })).toBeVisible()
 
-  // 3. Launcher.
-  await page.getByRole('link', { name: /launch task/i }).click()
+  // 3. Launcher. Editor's launch trigger is now a <button> (it runs the
+  // workflow validator on click and only navigates when ok — see
+  // src/routes/workflows.edit.tsx). The role-based lookup must follow.
+  await page.getByRole('button', { name: /launch task/i }).click()
   await expect(
     page.getByRole('heading', { name: `Launch: ${fixtures.workflowName}` }),
   ).toBeVisible()
