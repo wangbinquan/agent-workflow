@@ -819,18 +819,18 @@ test.describe('RFC-026 clarify e2e — inline session resume', () => {
 
     // 6. Assertion B: the persisted node_runs row for round 0 (clarifyIteration=0)
     //    carries the same opencodeSessionId the stub emitted.
-    const taskRes = await fetch(`${daemon.baseUrl}/api/tasks/${taskId}`, {
+    const runsRes = await fetch(`${daemon.baseUrl}/api/tasks/${taskId}/node-runs`, {
       headers: { Authorization: `Bearer ${daemon.token}` },
     })
-    expectOk(taskRes, 'GET task')
-    const taskBody = (await taskRes.json()) as {
+    expectOk(runsRes, 'GET task node-runs')
+    const runsBody = (await runsRes.json()) as {
       runs: Array<{
         nodeId: string
         clarifyIteration: number
         opencodeSessionId: string | null
       }>
     }
-    const round0Run = taskBody.runs.find(
+    const round0Run = runsBody.runs.find(
       (r) => r.nodeId === 'designer' && r.clarifyIteration === 0,
     )
     expect(round0Run?.opencodeSessionId).toBe('opc_e2e_e2e-rfc026-designer')
