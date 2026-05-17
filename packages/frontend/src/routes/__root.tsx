@@ -8,18 +8,19 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet, createRootRoute, redirect, useRouterState } from '@tanstack/react-router'
 import { useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { ReviewPendingCount } from '@agent-workflow/shared'
+import type { ClarifyPendingCount, ReviewPendingCount } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { useApplyTheme } from '@/hooks/useTheme'
 import { getToken, subscribeAuth } from '@/stores/auth'
 
-type NavKey = 'agents' | 'skills' | 'workflows' | 'tasks' | 'reviews' | 'settings'
+type NavKey = 'agents' | 'skills' | 'workflows' | 'tasks' | 'reviews' | 'clarify' | 'settings'
 const NAV: { to: string; key: NavKey }[] = [
   { to: '/agents', key: 'agents' },
   { to: '/skills', key: 'skills' },
   { to: '/workflows', key: 'workflows' },
   { to: '/tasks', key: 'tasks' },
   { to: '/reviews', key: 'reviews' },
+  { to: '/clarify', key: 'clarify' },
   { to: '/settings', key: 'settings' },
 ]
 
@@ -51,6 +52,14 @@ function RootComponent() {
     refetchInterval: 15000,
   })
   const pendingCount = pending.data?.count ?? 0
+  // RFC-023: same pattern for clarify pending sessions.
+  const clarifyPending = useQuery<ClarifyPendingCount>({
+    queryKey: ['clarify', 'pending-count'],
+    queryFn: ({ signal }) => api.get('/api/clarify/pending-count', undefined, signal),
+    enabled: token !== null,
+    refetchInterval: 15000,
+  })
+  const clarifyPendingCount = clarifyPending.data?.count ?? 0
 
   if (pathname === '/auth' || token === null) {
     return (
@@ -76,6 +85,15 @@ function RootComponent() {
               {item.key === 'reviews' && pendingCount > 0 && (
                 <span className="sidebar__badge" aria-label={`${pendingCount} pending reviews`}>
                   {pendingCount > 99 ? '99+' : pendingCount}
+                </span>
+              )}
+              {item.key === 'clarify' && clarifyPendingCount > 0 && (
+                <span
+                  className="sidebar__badge"
+                  data-testid="clarify-nav-badge"
+                  aria-label={t('clarify.nav.badgeTitle', { count: clarifyPendingCount })}
+                >
+                  {clarifyPendingCount > 99 ? '99+' : clarifyPendingCount}
                 </span>
               )}
             </Link>

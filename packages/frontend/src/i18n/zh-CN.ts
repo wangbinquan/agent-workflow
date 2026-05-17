@@ -12,6 +12,7 @@ export interface Resources {
     workflows: string
     tasks: string
     reviews: string
+    clarify: string
     settings: string
     brand: string
   }
@@ -385,6 +386,8 @@ export interface Resources {
     paletteHuman: string
     paletteReviewLabel: string
     paletteReviewDesc: string
+    paletteClarifyLabel: string
+    paletteClarifyDesc: string
     menuPaste: string
     menuSelectAll: string
     menuDuplicate: string
@@ -521,6 +524,17 @@ export interface Resources {
     edgeDeleteBtn: string
     missingRefsLabel: string
     missingRefsHint: string
+    // RFC-023 clarify node inspector
+    fieldClarifyTitle: string
+    fieldClarifyTitleHint: string
+    fieldClarifyDescription: string
+    fieldClarifyDescriptionHint: string
+    fieldClarifyLinkedAgent: string
+    clarifyLinkedAgentMissing: string
+    clarifyLinkedAgentHint: string
+    fieldClarifyInLoop: string
+    clarifyInLoopYes: string
+    clarifyInLoopNo: string
   }
   promptPreview: {
     mockTitle: string
@@ -751,6 +765,57 @@ export interface Resources {
     confirmDeleteWithInner: string
   }
   errors: Record<string, string>
+  // RFC-023 clarify feature (PR-C).
+  clarify: {
+    nav: { label: string; badgeTitle: string }
+    list: {
+      title: string
+      filter: { awaiting: string; answered: string; all: string }
+      empty: string
+      colTask: string
+      colAgent: string
+      colNode: string
+      colIteration: string
+      colQuestions: string
+      colTime: string
+      taskFilterLabel: string
+      taskFilterAll: string
+    }
+    detail: {
+      contextCard: string
+      contextCardShard: string
+      truncationWarning: string
+      shardSwitcherLabel: string
+      shardSwitcherEmpty: string
+      historyTitle: string
+      historyEmpty: string
+      submit: string
+      submitDisabledRequired: string
+      draftSaving: string
+      draftSaved: string
+      recommendedChip: string
+      back: string
+      answeredAt: string
+      askedAt: string
+    }
+    question: {
+      single: { customLabel: string }
+      multi: { customLabel: string; customPlaceholder: string }
+      custom: { lengthHint: string }
+    }
+    canvas: {
+      error: { multiNotSupported: string; duplicate: string }
+    }
+    ws: { toast: { othersSubmitted: string } }
+    inspector: {
+      title: string
+      linkedAgentMissing: string
+      inLoop: string
+      notInLoop: string
+    }
+    task: { statusLabel: string }
+    error: { unknown: string }
+  }
 }
 
 export const zhCN: Resources = {
@@ -760,6 +825,7 @@ export const zhCN: Resources = {
     workflows: '工作流',
     tasks: '任务',
     reviews: '评审',
+    clarify: '反问',
     settings: '设置',
     brand: 'Agent Workflow',
   },
@@ -1139,6 +1205,8 @@ export const zhCN: Resources = {
     paletteHuman: '人工',
     paletteReviewLabel: '⚖ 评审节点',
     paletteReviewDesc: '挂在 markdown port 下游，让人评审后再继续。',
+    paletteClarifyLabel: '⚡ 反问澄清',
+    paletteClarifyDesc: '让 agent 在无法决断时主动反问；从节点左侧 input 端往 agent 上拖即可挂接。',
     menuPaste: '粘贴',
     menuSelectAll: '全选',
     menuDuplicate: '复制为新节点',
@@ -1278,6 +1346,16 @@ export const zhCN: Resources = {
     edgeDeleteBtn: '删除该边',
     missingRefsLabel: '模板引用但未连入：',
     missingRefsHint: '这些端口名出现在 prompt 模板里但还没有上游边；启动 task 时会被静态校验拦下。',
+    fieldClarifyTitle: '反问节点标题',
+    fieldClarifyTitleHint: '展示在画布和列表头部；可为空，会回退到节点 id。',
+    fieldClarifyDescription: '说明',
+    fieldClarifyDescriptionHint: '可选；只对作者展示，不影响运行期。',
+    fieldClarifyLinkedAgent: '已挂接到 agent',
+    clarifyLinkedAgentMissing: '尚未挂接任何 agent — 从本节点左侧 input 端往 agent 节点拖一条线。',
+    clarifyLinkedAgentHint: '反问的发起方；同一个 agent 只允许挂一个反问节点。',
+    fieldClarifyInLoop: 'wrapper-loop 包裹',
+    clarifyInLoopYes: '✔ 在 loop 内，可累计多轮反问。',
+    clarifyInLoopNo: '⚠ 未在 wrapper-loop 内 — 反问轮数不会被限制，建议套一层 loop。',
   },
   promptPreview: {
     mockTitle: '模拟端口值',
@@ -1527,5 +1605,66 @@ export const zhCN: Resources = {
     'skill-source-children-referenced': '该父目录下的部分子技能仍被代理引用，请先解绑。',
     'skill-source-readonly': '此技能由父目录纳管，请在外部目录里编辑文件。',
     fallback: '请求失败',
+  },
+  clarify: {
+    nav: {
+      label: '反问澄清',
+      badgeTitle: '{{count}} 条待回答的反问',
+    },
+    list: {
+      title: '反问列表',
+      filter: { awaiting: '待回答', answered: '已回答', all: '全部' },
+      empty: '没有待回答的反问。',
+      colTask: '任务',
+      colAgent: '反问发起方',
+      colNode: '反问节点',
+      colIteration: '轮次',
+      colQuestions: '问题数',
+      colTime: '创建时间',
+      taskFilterLabel: '按任务筛选',
+      taskFilterAll: '全部任务',
+    },
+    detail: {
+      contextCard: '由 agent {{name}} 发起 · 第 {{n}} 轮反问',
+      contextCardShard: 'Shard: {{shard}}',
+      truncationWarning: 'Agent 提了 {{got}} 题，已截到前 {{kept}} 题',
+      shardSwitcherLabel: 'Shard 切换',
+      shardSwitcherEmpty: '当前 shard 没有待回答的反问。',
+      historyTitle: '历史轮次',
+      historyEmpty: '没有历史反问。',
+      submit: '全部提交',
+      submitDisabledRequired: '请先回答所有"推荐"题',
+      draftSaving: '正在保存草稿…',
+      draftSaved: '草稿已保存（关 tab 不丢）',
+      recommendedChip: '推荐',
+      back: '← 返回列表',
+      answeredAt: '已回答 · {{time}}',
+      askedAt: '提问于 {{time}}',
+    },
+    question: {
+      single: { customLabel: '其他（自定义）' },
+      multi: {
+        customLabel: '也包含以下补充',
+        customPlaceholder: '在此填写补充内容…',
+      },
+      custom: { lengthHint: '{{count}} / {{max}}' },
+    },
+    canvas: {
+      error: {
+        multiNotSupported: 'v1 暂不支持 agent-multi 节点连入反问节点',
+        duplicate: '该 agent 已挂接另一个反问节点',
+      },
+    },
+    ws: {
+      toast: { othersSubmitted: '另一处已提交答案，本页已切换为只读' },
+    },
+    inspector: {
+      title: '反问节点配置',
+      linkedAgentMissing: '未挂接到任何 agent',
+      inLoop: '在 wrapper-loop 内',
+      notInLoop: '未在 wrapper-loop 内',
+    },
+    task: { statusLabel: '等待用户回答' },
+    error: { unknown: '加载反问详情失败' },
   },
 }

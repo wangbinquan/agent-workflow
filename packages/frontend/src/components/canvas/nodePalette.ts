@@ -14,6 +14,7 @@ export type PaletteItem =
   | { kind: 'wrapper-git' }
   | { kind: 'wrapper-loop' }
   | { kind: 'review' }
+  | { kind: 'clarify' }
 
 /** mime carried in HTML5 dataTransfer. Custom to avoid colliding with files. */
 export const PALETTE_MIME = 'application/x-agent-workflow-node'
@@ -39,6 +40,7 @@ export function deserialize(raw: string): PaletteItem | null {
       case 'wrapper-git':
       case 'wrapper-loop':
       case 'review':
+      case 'clarify':
         return { kind: rec.kind } as PaletteItem
       default:
         return null
@@ -105,6 +107,18 @@ export function makeNode(
         rollbackFilesOnReject: true,
         rollbackFilesOnIterate: false,
       } as unknown as WorkflowNode
+    case 'clarify':
+      // RFC-023 — a fresh clarify node has no wiring; the asking agent gets
+      // linked via reverse-drag (clarifyDragHelper.applyClarifyReverseDrag).
+      // The validator's `clarify-input-source-missing` / `clarify-questions-port-missing`
+      // rules catch the user dropping one and never wiring it.
+      return {
+        id,
+        kind: 'clarify',
+        position: pos,
+        title: '',
+        description: '',
+      } as unknown as WorkflowNode
   }
 }
 
@@ -128,6 +142,7 @@ const SHORT: Record<PaletteItem['kind'], string> = {
   'wrapper-git': 'wrap_git',
   'wrapper-loop': 'wrap_loop',
   review: 'rev',
+  clarify: 'clarify',
 }
 
 function uniqueInputKey(existing: Set<string>): string {
@@ -211,6 +226,11 @@ export function buildPalette(agents: Agent[], t: PaletteTranslator): PaletteSect
           item: { kind: 'review' } as PaletteItem,
           label: t('editor.paletteReviewLabel'),
           description: t('editor.paletteReviewDesc'),
+        },
+        {
+          item: { kind: 'clarify' } as PaletteItem,
+          label: t('editor.paletteClarifyLabel'),
+          description: t('editor.paletteClarifyDesc'),
         },
       ],
     },

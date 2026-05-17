@@ -10,6 +10,7 @@ export const enUS: Resources = {
     workflows: 'Workflows',
     tasks: 'Tasks',
     reviews: 'Reviews',
+    clarify: 'Clarify',
     settings: 'Settings',
     brand: 'Agent Workflow',
   },
@@ -398,6 +399,9 @@ export const enUS: Resources = {
     paletteReviewLabel: '⚖ Review node',
     paletteReviewDesc:
       'Sits downstream of a markdown port and pauses the workflow until a human decides.',
+    paletteClarifyLabel: '⚡ Clarify',
+    paletteClarifyDesc:
+      'Lets an agent ask back when stuck; drag from this node’s input handle onto the agent to wire it.',
     menuPaste: 'Paste',
     menuSelectAll: 'Select all',
     menuDuplicate: 'Duplicate',
@@ -552,6 +556,19 @@ export const enUS: Resources = {
     missingRefsLabel: 'Template refs without inbound edge:',
     missingRefsHint:
       'These names appear in the prompt template but have no inbound edge; task launch will fail static validation.',
+    fieldClarifyTitle: 'Clarify node title',
+    fieldClarifyTitleHint: 'Shown on the canvas and list headers; empty falls back to the node id.',
+    fieldClarifyDescription: 'Description',
+    fieldClarifyDescriptionHint: 'Optional author-facing note; no runtime impact.',
+    fieldClarifyLinkedAgent: 'Linked agent',
+    clarifyLinkedAgentMissing:
+      'No agent linked yet — drag a line from this node’s left input handle onto the asking agent.',
+    clarifyLinkedAgentHint:
+      'The asking agent. Each agent can have at most one clarify node attached.',
+    fieldClarifyInLoop: 'Wrapped in a loop',
+    clarifyInLoopYes: '✔ Inside a wrapper-loop — multiple clarify rounds are accumulated.',
+    clarifyInLoopNo:
+      '⚠ Not inside a wrapper-loop — clarify rounds are unbounded; wrap it in a loop to cap rounds.',
   },
   promptPreview: {
     mockTitle: 'Mock port values',
@@ -806,5 +823,66 @@ export const enUS: Resources = {
     'skill-source-readonly':
       'This skill is managed by a folder; edit files in the source directory.',
     fallback: 'Request failed',
+  },
+  clarify: {
+    nav: {
+      label: 'Clarify',
+      badgeTitle: '{{count}} clarify session(s) awaiting answers',
+    },
+    list: {
+      title: 'Clarify sessions',
+      filter: { awaiting: 'Awaiting', answered: 'Answered', all: 'All' },
+      empty: 'No clarify sessions awaiting answers.',
+      colTask: 'Task',
+      colAgent: 'Asking agent',
+      colNode: 'Clarify node',
+      colIteration: 'Round',
+      colQuestions: 'Questions',
+      colTime: 'Created',
+      taskFilterLabel: 'Filter by task',
+      taskFilterAll: 'All tasks',
+    },
+    detail: {
+      contextCard: 'Asked by agent {{name}} · round {{n}}',
+      contextCardShard: 'Shard: {{shard}}',
+      truncationWarning: 'Agent emitted {{got}} questions; truncated to the first {{kept}}',
+      shardSwitcherLabel: 'Switch shard',
+      shardSwitcherEmpty: 'No awaiting sessions for the current shard.',
+      historyTitle: 'Previous rounds',
+      historyEmpty: 'No previous rounds.',
+      submit: 'Submit all answers',
+      submitDisabledRequired: 'Answer every "Recommended" question first',
+      draftSaving: 'Saving draft…',
+      draftSaved: 'Draft saved (safe to close the tab)',
+      recommendedChip: 'Recommended',
+      back: '← Back to list',
+      answeredAt: 'Answered · {{time}}',
+      askedAt: 'Asked at {{time}}',
+    },
+    question: {
+      single: { customLabel: 'Other (custom)' },
+      multi: {
+        customLabel: 'Also include the following note',
+        customPlaceholder: 'Write your supplementary note here…',
+      },
+      custom: { lengthHint: '{{count}} / {{max}}' },
+    },
+    canvas: {
+      error: {
+        multiNotSupported: 'v1 does not yet allow attaching a clarify node to agent-multi',
+        duplicate: 'This agent already has a clarify node attached',
+      },
+    },
+    ws: {
+      toast: { othersSubmitted: 'Another tab already submitted; this page is now read-only' },
+    },
+    inspector: {
+      title: 'Clarify node',
+      linkedAgentMissing: 'Not linked to any agent yet',
+      inLoop: 'Wrapped by a wrapper-loop',
+      notInLoop: 'Not wrapped — clarify rounds are uncapped',
+    },
+    task: { statusLabel: 'Awaiting your answer' },
+    error: { unknown: 'Failed to load clarify detail' },
   },
 }

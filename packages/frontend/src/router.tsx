@@ -16,6 +16,8 @@ import { Route as tasksRoute } from '@/routes/tasks'
 import { Route as taskDetailRoute } from '@/routes/tasks.detail'
 import { Route as reviewsRoute } from '@/routes/reviews'
 import { Route as reviewDetailRoute } from '@/routes/reviews.detail'
+import { Route as clarifyRoute } from '@/routes/clarify'
+import { Route as clarifyDetailRoute } from '@/routes/clarify.detail'
 import { Route as workflowsRoute } from '@/routes/workflows'
 import {
   EditRoute as workflowEditRoute,
@@ -42,6 +44,9 @@ const routeTree = rootRoute.addChildren([
   // '/reviews/$nodeRunId' must come before '/reviews' so the literal wins.
   reviewDetailRoute,
   reviewsRoute,
+  // RFC-023: same rule — `$nodeRunId` literal needs to win over the index.
+  clarifyDetailRoute,
+  clarifyRoute,
   settingsRoute,
 ])
 

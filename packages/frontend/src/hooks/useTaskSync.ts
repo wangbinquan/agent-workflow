@@ -53,6 +53,19 @@ export function useTaskSync(taskId: string | null): void {
           void qc.invalidateQueries({ queryKey: ['tasks', taskId, 'node-runs'] })
         }
       }
+      // RFC-023: clarify.* events. Same shape as the review block — the
+      // task-detail page may have the per-session detail open; the
+      // /clarify list + the sidebar badge both want a refetch when a new
+      // session is created or sealed.
+      if (msg.type === 'clarify.created' || msg.type === 'clarify.answered') {
+        void qc.invalidateQueries({ queryKey: ['clarify', 'detail', msg.nodeRunId] })
+        void qc.invalidateQueries({ queryKey: ['clarify', 'list'] })
+        void qc.invalidateQueries({ queryKey: ['clarify', 'pending-count'] })
+        if (msg.type === 'clarify.answered') {
+          void qc.invalidateQueries({ queryKey: ['tasks', taskId] })
+          void qc.invalidateQueries({ queryKey: ['tasks', taskId, 'node-runs'] })
+        }
+      }
     },
   })
 }

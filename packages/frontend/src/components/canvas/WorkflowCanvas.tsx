@@ -36,6 +36,14 @@ import type { Agent, WorkflowDefinition, WorkflowEdge, WorkflowNode } from '@age
 import { ulid } from 'ulid'
 import { AgentNode } from './nodes/AgentNode'
 import { applyPaste, buildSlice, getClipboard, setClipboard } from './canvasClipboard'
+import {
+  applyClarifyReverseDrag,
+  CLARIFY_INPUT_PORT_NAME,
+  clearClarifyEdgesForRemovedNodes,
+  hasExistingClarifyChannel,
+  isValidClarifyTarget,
+} from './clarifyDragHelper'
+import { ClarifyNode } from './nodes/ClarifyNode'
 import { applyConnectionForReviewOutput, applyDisconnectForReviewOutput } from './connectionSync'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { InputNode } from './nodes/InputNode'
@@ -75,6 +83,7 @@ const NODE_TYPES = {
   'wrapper-git': GroupWrapperNode,
   'wrapper-loop': GroupWrapperNode,
   review: ReviewNode,
+  clarify: ClarifyNode,
 }
 
 export interface WorkflowCanvasProps {
@@ -380,6 +389,29 @@ function CanvasInner({
         if (next !== definition) commitChange(next)
         return
       }
+      // RFC-023 reverse-drag: user dragged FROM the clarify node's input
+      // handle (`questions`) TO an agent node. xyflow normalises the
+      // Connection so source = agent (its right-side output handle was the
+      // drop target) and target = clarify with targetHandle === 'questions'.
+      // We splice the TWO clarify channel edges atomically and short-circuit
+      // — the user's drag should never produce a normal "source.outputPort
+      // → clarify.questions" edge (the only valid clarify wiring goes
+      // through the `__clarify__` system port).
+      if (
+        conn.targetHandle === CLARIFY_INPUT_PORT_NAME &&
+        conn.source !== null &&
+        conn.target !== null
+      ) {
+        const targetNode = definition.nodes.find((n) => n.id === conn.target)
+        if (targetNode !== undefined && targetNode.kind === 'clarify') {
+          const next = applyClarifyReverseDrag(definition, {
+            sourceAgentNodeId: conn.source,
+            clarifyNodeId: conn.target,
+          })
+          if (next !== definition) commitChange(next)
+          return
+        }
+      }
       // RFC-007: distinguish "dropped on catch-all left strip" from "dropped
       // on a specific named handle" BEFORE translateInboundConnection rewrites
       // targetHandle. Output's catch-all path always appends a new port (with
@@ -417,6 +449,21 @@ function CanvasInner({
         targetHandle: conn.targetHandle ?? null,
       }
       if (!isValidSourcePortConnection(definition, guardConn)) return false
+      // RFC-023: reverse-drag pre-flight — when the user is dragging from a
+      // clarify input handle toward an agent, fail fast on (a) non-agent
+      // source, (b) self-loop on a clarify node, (c) the agent already has
+      // another clarify wired. xyflow respects the false return by
+      // showing a red dashed line + refusing to fire onConnect.
+      if (conn.targetHandle === CLARIFY_INPUT_PORT_NAME) {
+        if (conn.source === null || conn.target === null) return false
+        if (conn.source === conn.target) return false
+        const target = definition.nodes.find((n) => n.id === conn.target)
+        if (target === undefined || target.kind !== 'clarify') return false
+        const source = definition.nodes.find((n) => n.id === conn.source)
+        if (!isValidClarifyTarget(source)) return false
+        if (hasExistingClarifyChannel(definition, conn.source)) return false
+        return true
+      }
       // RFC-007 task-detail iterate lock.
       if (taskContext === undefined) return true
       if (conn.target === null || conn.target === undefined) return true
@@ -498,6 +545,11 @@ function CanvasInner({
     // so the filter above is a no-op for them — bridge delete to the field
     // clear here too so the keyboard Delete path works.
     nextDef = clearSourcePortsForSyntheticIds(nextDef, selection.edges)
+    // RFC-023: deleting an agent or clarify node cascade-removes both edges
+    // of its clarify channel so the canvas doesn't render dangling arrows.
+    // (Above filter already drops edges whose endpoint nodes were removed,
+    // but routing through the helper documents the dependency.)
+    nextDef = clearClarifyEdgesForRemovedNodes(nextDef, [...removedNodes])
     commitChange(nextDef)
     setSelection({ nodes: [], edges: [] })
     // Tell the parent route to drop its selection too — otherwise
