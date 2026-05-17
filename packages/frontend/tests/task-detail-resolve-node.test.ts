@@ -34,6 +34,7 @@ function makeRun(id: string, nodeId: string): NodeRun {
     tokTotal: null,
     tokCacheCreate: null,
     tokCacheRead: null,
+    opencodeSessionId: null,
   }
 }
 

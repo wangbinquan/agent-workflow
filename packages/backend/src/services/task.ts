@@ -733,6 +733,9 @@ export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<Tas
     tokTotal: r.tokTotal,
     tokCacheCreate: r.tokCacheCreate,
     tokCacheRead: r.tokCacheRead,
+    // RFC-026: surface opencode session id to the UI so a clarify-inline
+    // chip can render + operators can copy it for local debugging.
+    opencodeSessionId: r.opencodeSessionId,
   }))
 
   let outputs: NodeRunOutput[] = []

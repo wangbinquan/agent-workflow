@@ -47,6 +47,7 @@ function run(partial: Partial<NodeRun> & { id: string }): NodeRun {
     tokTotal: partial.tokTotal ?? null,
     tokCacheCreate: partial.tokCacheCreate ?? null,
     tokCacheRead: partial.tokCacheRead ?? null,
+    opencodeSessionId: partial.opencodeSessionId ?? null,
   }
 }
 

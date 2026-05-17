@@ -24,6 +24,7 @@ import {
   sortNodeRunsForPromptHistory,
 } from '@/lib/node-prompt'
 import { classifyCanceled, displayNoderunStatusKey, supersededDecision } from '@/lib/noderun-status'
+import { parseRfc026Event } from '@/lib/rfc026-events'
 
 interface Props {
   taskId: string
@@ -392,6 +393,23 @@ function StatsTab({
       <dd>{run.iteration}</dd>
       <dt>{t('nodeDrawer.statRetry')}</dt>
       <dd>{run.retryIndex}</dd>
+      {run.opencodeSessionId !== null && run.opencodeSessionId.length > 0 && (
+        <>
+          <dt>opencode session</dt>
+          <dd data-testid="rfc026-session-id">
+            <code>{run.opencodeSessionId.slice(0, 16)}</code>
+            {run.clarifyIteration > 0 && (
+              <span
+                className="chip chip--tight"
+                data-testid="rfc026-session-chip"
+                style={{ marginLeft: 8 }}
+              >
+                {t('clarify.node.chip.inline')}
+              </span>
+            )}
+          </dd>
+        </>
+      )}
       <dt>{t('nodeDrawer.statTokensIn')}</dt>
       <dd>{run.tokInput ?? t('common.emDash')}</dd>
       <dt>{t('nodeDrawer.statTokensOut')}</dt>
@@ -508,17 +526,48 @@ function EventsTab({ taskId, nodeRunId }: { taskId: string; nodeRunId: string })
         <div className="muted">{t('nodeDrawer.noEventsMatch')}</div>
       )}
       <ol className="events-list">
-        {visible.map((e) => (
-          <li key={e.id} className={`events-list__item events-list__item--${e.kind}`}>
-            <header className="events-list__header">
-              <code className="events-list__kind">{e.kind}</code>
-              <span className="muted">{new Date(e.ts).toLocaleTimeString()}</span>
-            </header>
-            <pre className="events-list__body">
-              {typeof e.payload === 'string' ? e.payload : JSON.stringify(e.payload, null, 2)}
-            </pre>
-          </li>
-        ))}
+        {visible.map((e) => {
+          // RFC-026: events the scheduler writes for inline-session-resume
+          // get a friendlier rendering — info chip + plain summary line —
+          // instead of the raw `[rfc026/...]` JSON blob.
+          const rfc026 =
+            e.kind === 'text' && typeof e.payload === 'string' ? parseRfc026Event(e.payload) : null
+          if (rfc026 !== null) {
+            const classes =
+              rfc026.level === 'info'
+                ? 'events-list__item events-list__item--rfc026-info'
+                : 'events-list__item events-list__item--rfc026-warning'
+            const summary =
+              rfc026.level === 'info'
+                ? t('clarify.eventStream.sessionResumed', {
+                    prefix: rfc026.sessionIdPrefix,
+                    n: rfc026.clarifyIteration ?? '?',
+                  })
+                : t('clarify.eventStream.fallbackToIsolated', { reason: rfc026.reason })
+            return (
+              <li key={e.id} className={classes} data-testid={`rfc026-event-${rfc026.level}`}>
+                <header className="events-list__header">
+                  <code className="events-list__kind">
+                    {rfc026.level === 'info' ? 'info' : 'warning'}
+                  </code>
+                  <span className="muted">{new Date(e.ts).toLocaleTimeString()}</span>
+                </header>
+                <div className="events-list__rfc026">{summary}</div>
+              </li>
+            )
+          }
+          return (
+            <li key={e.id} className={`events-list__item events-list__item--${e.kind}`}>
+              <header className="events-list__header">
+                <code className="events-list__kind">{e.kind}</code>
+                <span className="muted">{new Date(e.ts).toLocaleTimeString()}</span>
+              </header>
+              <pre className="events-list__body">
+                {typeof e.payload === 'string' ? e.payload : JSON.stringify(e.payload, null, 2)}
+              </pre>
+            </li>
+          )
+        })}
       </ol>
     </div>
   )

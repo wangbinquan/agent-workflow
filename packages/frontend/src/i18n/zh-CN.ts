@@ -578,6 +578,11 @@ export interface Resources {
     fieldClarifyInLoop: string
     clarifyInLoopYes: string
     clarifyInLoopNo: string
+    // RFC-026 clarify session mode (inline vs isolated)
+    fieldClarifySessionMode: string
+    clarifySessionModeIsolated: string
+    clarifySessionModeInline: string
+    clarifySessionModeHint: string
   }
   promptPreview: {
     mockTitle: string
@@ -867,6 +872,16 @@ export interface Resources {
     }
     task: { statusLabel: string }
     error: { unknown: string }
+    // RFC-026 inline session mode UI surface
+    eventStream: {
+      sessionResumed: string
+      fallbackToIsolated: string
+    }
+    node: {
+      chip: {
+        inline: string
+      }
+    }
   }
   sidebar: {
     languageGroupLabel: string
@@ -1459,6 +1474,11 @@ export const zhCN: Resources = {
     fieldClarifyInLoop: 'wrapper-loop 包裹',
     clarifyInLoopYes: '✔ 在 loop 内，可累计多轮反问。',
     clarifyInLoopNo: '⚠ 未在 wrapper-loop 内 — 反问轮数不会被限制，建议套一层 loop。',
+    fieldClarifySessionMode: '反问 session 模式',
+    clarifySessionModeIsolated: '独立 session（默认）',
+    clarifySessionModeInline: '同 session 内反问',
+    clarifySessionModeHint:
+      '选「同 session」时 agent 在每轮反问之间保留完整对话历史（省 token + 响应更快）；session 失效时自动回退到独立模式。',
   },
   promptPreview: {
     mockTitle: '模拟端口值',
@@ -1778,6 +1798,11 @@ export const zhCN: Resources = {
     },
     task: { statusLabel: '等待用户回答' },
     error: { unknown: '加载反问详情失败' },
+    eventStream: {
+      sessionResumed: '已复用 opencode session {{prefix}}（第 {{n}} 轮反问）',
+      fallbackToIsolated: '本轮 inline session 不可用（原因：{{reason}}），自动回退为独立 session',
+    },
+    node: { chip: { inline: 'session=inline' } },
   },
   sidebar: {
     languageGroupLabel: '切换界面语言',

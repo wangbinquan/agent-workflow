@@ -218,6 +218,41 @@ code {
   padding: 0 4px;
 }
 
+/* RFC-026 — generic segmented control (clarify session mode + future
+   binary/n-ary toggles). Same visual language as .language-switch but
+   intended as a re-usable namespace. */
+.segmented {
+  display: inline-flex;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  padding: 2px;
+  gap: 2px;
+}
+.segmented__option {
+  flex: 1 1 auto;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1.2;
+}
+.segmented__option:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.segmented__option--active,
+.segmented__option--active:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.segmented__option:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 .content {
   padding: 24px 32px;
   overflow: auto;
@@ -1551,6 +1586,21 @@ code {
 
 .events-list__item--tool_use {
   border-left-color: #8a3ffc;
+}
+
+/* RFC-026 — scheduler-emitted info / warning rows about inline-session resume. */
+.events-list__item--rfc026-info {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.events-list__item--rfc026-warning {
+  border-left-color: #d29922;
+  background: color-mix(in srgb, #d29922 10%, transparent);
+}
+.events-list__rfc026 {
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 4px;
 }
 
 .events-list__header {

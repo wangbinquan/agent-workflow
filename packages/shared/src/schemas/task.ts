@@ -192,6 +192,15 @@ export const NodeRunSchema = z.object({
   tokTotal: z.number().int().nullable(),
   tokCacheCreate: z.number().int().nullable(),
   tokCacheRead: z.number().int().nullable(),
+  /**
+   * RFC-026: opencode session id captured from the JSON event stream of this
+   * run, when present. Used by the task-detail UI to show a "session=inline"
+   * chip on clarify-resume runs (and as a copy-paste handle for local
+   * `opencode --session <id>` debugging). NULL when the run never spawned
+   * opencode (clarify / review / input / output / wrapper) or when opencode
+   * exited before emitting any session event.
+   */
+  opencodeSessionId: z.string().nullable().default(null),
 })
 export type NodeRun = z.infer<typeof NodeRunSchema>
 

@@ -617,6 +617,11 @@ export const enUS: Resources = {
     clarifyInLoopYes: '✔ Inside a wrapper-loop — multiple clarify rounds are accumulated.',
     clarifyInLoopNo:
       '⚠ Not inside a wrapper-loop — clarify rounds are unbounded; wrap it in a loop to cap rounds.',
+    fieldClarifySessionMode: 'Clarify session mode',
+    clarifySessionModeIsolated: 'Isolated session (default)',
+    clarifySessionModeInline: 'Same session (inline)',
+    clarifySessionModeHint:
+      'In "Same session" mode the agent keeps its full conversation across clarify rounds (cheaper tokens, faster turnaround). Falls back to isolated automatically when the prior session is unavailable.',
   },
   promptPreview: {
     mockTitle: 'Mock port values',
@@ -941,6 +946,12 @@ export const enUS: Resources = {
     },
     task: { statusLabel: 'Awaiting your answer' },
     error: { unknown: 'Failed to load clarify detail' },
+    eventStream: {
+      sessionResumed: 'Resumed opencode session {{prefix}} (clarify round {{n}})',
+      fallbackToIsolated:
+        'Inline session unavailable this round (reason: {{reason}}); fell back to isolated mode',
+    },
+    node: { chip: { inline: 'session=inline' } },
   },
   sidebar: {
     languageGroupLabel: 'Switch UI language',

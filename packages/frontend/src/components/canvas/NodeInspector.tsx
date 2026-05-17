@@ -837,6 +837,43 @@ function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps)
               </div>
             )}
           </Field>
+          {/* RFC-026: clarify session mode (isolated vs inline). Missing
+              field is normalised to 'isolated' (RFC-023 byte-for-byte). */}
+          <Field
+            label={t('inspector.fieldClarifySessionMode')}
+            hint={t('inspector.clarifySessionModeHint')}
+          >
+            <div
+              className="segmented"
+              role="radiogroup"
+              aria-label={t('inspector.fieldClarifySessionMode')}
+              data-testid="clarify-session-mode"
+            >
+              {(['isolated', 'inline'] as const).map((mode) => {
+                const active = (rec.sessionMode ?? 'isolated') === mode
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    className={'segmented__option' + (active ? ' segmented__option--active' : '')}
+                    data-testid={`clarify-session-mode-${mode}`}
+                    onClick={() => {
+                      // Explicit field write keeps roundtripping deterministic:
+                      // even 'isolated' is stored when the user clicks it, so
+                      // the workflow.definition surfaces the user's choice.
+                      patchClarify({ sessionMode: mode })
+                    }}
+                  >
+                    {mode === 'isolated'
+                      ? t('inspector.clarifySessionModeIsolated')
+                      : t('inspector.clarifySessionModeInline')}
+                  </button>
+                )
+              })}
+            </div>
+          </Field>
         </div>
       )
     }

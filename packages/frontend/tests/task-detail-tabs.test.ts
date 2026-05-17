@@ -32,6 +32,7 @@ function makeRun(over: Partial<NodeRun>): NodeRun {
     tokTotal: null,
     tokCacheCreate: null,
     tokCacheRead: null,
+    opencodeSessionId: null,
     ...over,
   } satisfies NodeRun
 }

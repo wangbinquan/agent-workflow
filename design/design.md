@@ -229,6 +229,14 @@ CREATE TABLE node_runs (
   tok_total         INTEGER,                  -- 等于上四项之和（冗余便于求和）
   -- worktree 快照（仅写入节点写）
   pre_snapshot      TEXT,                     -- git stash hash，retry 前回滚到此
+  -- RFC-026: opencode session id captured from this run's --format json
+  -- event stream. NULL when the run never spawned opencode (clarify /
+  -- review / input / output / wrapper) or when the process exited before
+  -- emitting any session event. Read by the scheduler ONLY on the
+  -- clarify-driven rerun path when the upstream clarify node has
+  -- sessionMode='inline' (see §7.4 below) — that path forwards the id via
+  -- `--session <id>` so opencode resumes the prior session.
+  opencode_session_id TEXT,
   FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 CREATE INDEX idx_node_runs_task ON node_runs(task_id, node_id, iteration, retry_index);
@@ -1116,6 +1124,24 @@ clarify 信封 body 是 JSON：
 - `recommended: true` 的题目在用户提交时强制必答（UI 校验）。
 
 runner 解析成功后调 `clarify.createClarifySession(...)`：写一行 `clarify_sessions`、对应 mint 一行 `clarify_node_run` 入 `awaiting_human`，回 task 顶层 `awaiting_human`，并广播 `clarify.created` WS 事件。用户提交答案后 service 把答案盖回 `clarify_sessions.answers_json`（重算 selectedOptionLabels 防客户端伪造）、把 clarify node_run 标 done、mint 一行 `source_agent_node_run` 的 rerun（`clarify_iteration = source.clarify_iteration + 1`，`retry_index = 0`，shardKey / parent / preSnapshot 透传）。详见 §9。
+
+#### 7.4.1.1 同 session 内反问（RFC-026 起）
+
+clarify 节点新增可选字段 `sessionMode: 'isolated' | 'inline'`（默认 `'isolated'`，与 RFC-023 落地版本 byte-for-byte 一致）。
+
+- `isolated`：每轮反问 → 用户回答 → agent 重跑都新开 opencode 进程；prompt 在 `## Clarify Q&A — Prior Rounds (Questions)` + `## Clarify Q&A — Prior Rounds (Answers)` 两段里把所有历史轮 Q&A 重新拼进去。
+- `inline`：runner 在 spawn 时多带一个 `--session <prior-session-id>` 参数，opencode CLI 加载上一次 session 的完整 transcript（messages / thinking / tool calls）。本轮 user prompt 退化为 "User Answers (Current Round)" 一段 + 一行精简 reminder（`buildClarifyInlineReminder()`），不再重发 bi-modal preamble + 完整 clarify 协议块（agent 在 session 历史里已经看过）。
+
+实现要点：
+- `node_runs.opencode_session_id`（§3 同章节加列）持久化 runner 从 opencode `--format json` event stream 抓到的 sessionId。
+- scheduler 在 clarify 触发的 agent 重跑（`clarify_iteration > 0 && retry_index === 0`）路径上调 `decideResumeSessionId({ sessionMode, sourceSessionId })`：
+  - `sessionMode === 'isolated'` 或 sourceSessionId 缺失 → 走 isolated（无 `--session`），missing 时写 warning 事件 `inline-clarify-fallback-to-isolated: missing-session-id`。
+  - 否则 inline 路径生效；runner spawn 后扫 stderr 检测 `session not found` 类提示 → 写 warning `inline-clarify-fallback-to-isolated: session-not-found` 并让现有 retry 路径以 isolated 复位。
+- inline 路径**跳过**反问回滚的 `worktree.restoreSnapshot(preSnapshot)`：opencode session 的 tool-call 记忆里包含它对 worktree 状态的认知，rollback 会让 agent 视角与文件系统脱钩。RFC-023 协议禁止 agent 在反问回合里写文件，所以 rollback 通常本就是 no-op。
+- review reject / iterate / 技术 retry / wrapper-loop 跨 iter 路径**一律**不走 inline（这些是"重新开始"语义），保留 RFC-023 默认行为。
+- agent-multi shard 各自独立 sessionId，inline 沿 shard 链路续接（fan-out 父节点本身不调 opencode）。
+
+UI：clarify 节点 Inspector 暴露 segmented `sessionMode` 选择器；任务详情节点 Stats tab 在 `opencode_session_id` 非空时显示该 id 前缀 + `session=inline` chip（仅当本 node_run 的 `clarify_iteration > 0`）；事件流把 `[rfc026/inline-session-resumed]` / `[rfc026/inline-fallback]` 前缀的 `kind='text'` 行渲染成 info / warning 行（i18n key `clarify.eventStream.{sessionResumed,fallbackToIsolated}`）。
 
 #### 7.4.2 端口元数据（RFC-005 起）
 
