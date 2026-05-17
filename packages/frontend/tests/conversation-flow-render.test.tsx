@@ -71,6 +71,36 @@ describe('ConversationFlow', () => {
     expect(screen.getByText(/No session events recorded/i)).toBeTruthy()
   })
 
+  test('renders assistant-reasoning collapsed by default with thinking summary', () => {
+    wrap({
+      sessionId: 's',
+      parentSessionId: null,
+      agentName: 'coder',
+      captureComplete: true,
+      messages: [
+        {
+          kind: 'assistant-reasoning',
+          text: 'THINK_BODY',
+          ts: 1000,
+          messageId: 'm1',
+        },
+      ],
+    })
+    // Role badge label visible
+    expect(screen.getByText('Thinking')).toBeTruthy()
+    // Summary mentions the char count
+    expect(screen.getByText(/thinking · 10 chars/i)).toBeTruthy()
+    // Body lives inside a <details> — closed by default. The text exists in
+    // the DOM but the surrounding <details> has open=false.
+    const detailsList = document.querySelectorAll('details')
+    expect(detailsList.length).toBeGreaterThan(0)
+    const reasoningDetails = Array.from(detailsList).find((d) =>
+      (d.textContent ?? '').includes('THINK_BODY'),
+    )
+    expect(reasoningDetails).toBeTruthy()
+    expect(reasoningDetails!.hasAttribute('open')).toBe(false)
+  })
+
   test('multiple message kinds preserve order in the DOM', () => {
     wrap({
       sessionId: 's',

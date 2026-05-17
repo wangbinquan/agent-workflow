@@ -548,6 +548,308 @@ code {
   font-size: 12px;
 }
 
+/* RFC-032 PR3 — task-driven homepage. The page-level layout follows
+   .page conventions (set elsewhere), so .homepage only owns its own
+   sectioning. */
+.homepage {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.homepage__greet {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0 8px;
+}
+
+.homepage__greet-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.homepage__greet-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.homepage__greet-runtime {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.homepage__runtime-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.homepage__runtime-link:hover {
+  color: var(--accent);
+}
+
+.homepage__runtime-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.homepage__runtime-dot--ready {
+  background: #1e8e3e;
+}
+
+.homepage__runtime-dot--checking {
+  background: #f5a623;
+}
+
+.homepage__runtime-dot--incompatible {
+  background: #9aa0a6;
+}
+
+.homepage__runtime-dot--missing {
+  background: #c5221f;
+}
+
+.homepage__start-task {
+  flex: 0 0 auto;
+}
+
+.homepage-section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.homepage-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.homepage-section__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.homepage-section__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.homepage-section__count--warn {
+  background: color-mix(in srgb, #f5a623 22%, transparent);
+  color: #b1660d;
+}
+
+.homepage-section__link {
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.homepage-section__link:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.homepage-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.homepage-section__loading {
+  padding: 8px 4px;
+  font-size: 12px;
+}
+
+/* Task / inbox rows in the homepage sections. Both render as buttons with
+   a grid layout so columns stay aligned. */
+.task-list,
+.inbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.task-row {
+  display: grid;
+  grid-template-columns: 130px 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+}
+
+.task-row:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-color: var(--border);
+}
+
+.task-row__id {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-row__name {
+  font-weight: 500;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.task-row__status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
+.task-row__status--running {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.task-row__status--awaiting_human,
+.task-row__status--awaiting_review {
+  background: color-mix(in srgb, #f5a623 22%, transparent);
+  color: #b1660d;
+}
+
+.task-row__status--done {
+  background: color-mix(in srgb, #1e8e3e 18%, transparent);
+  color: #1e8e3e;
+}
+
+.task-row__status--failed,
+.task-row__status--canceled,
+.task-row__status--interrupted {
+  background: color-mix(in srgb, #c5221f 18%, transparent);
+  color: #c5221f;
+}
+
+.task-row__time {
+  font-size: 11px;
+}
+
+.inbox-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+}
+
+.inbox-row:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-color: var(--border);
+}
+
+.inbox-row__kind {
+  grid-row: 1;
+  grid-column: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  height: 18px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  color: #fff;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.inbox-row__kind--review {
+  background: #2563eb;
+}
+
+.inbox-row__kind--clarify {
+  background: #c2410c;
+}
+
+.inbox-row__title {
+  grid-row: 1;
+  grid-column: 2;
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-row__subtitle {
+  grid-row: 2;
+  grid-column: 2;
+  font-size: 12px;
+}
+
+.inbox-row__time {
+  grid-row: 1 / span 2;
+  grid-column: 3;
+  font-size: 11px;
+}
+
 .language-switch {
   display: flex;
   flex-direction: column;
@@ -4967,6 +5269,11 @@ mark.comment-anchor[data-active='true'] {
   --rfc027-accent: #9333ea;
   background-color: color-mix(in srgb, #9333ea 8%, var(--surface-2));
 }
+.session-block--reasoning {
+  --rfc027-accent: #64748b;
+  background-color: color-mix(in srgb, #64748b 6%, var(--surface-2));
+  font-style: italic;
+}
 
 .session-block__head {
   display: flex;
@@ -5047,6 +5354,9 @@ mark.comment-anchor[data-active='true'] {
 }
 .session-role-badge--subagent {
   --rfc027-accent: #9333ea;
+}
+.session-role-badge--reasoning {
+  --rfc027-accent: #64748b;
 }
 .session-role-badge__icon {
   font-size: 12px;

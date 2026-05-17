@@ -51,6 +51,27 @@ function MessageBlock({ message }: { message: SessionMessage }) {
           <pre className="session-block__body">{message.text}</pre>
         </article>
       )
+    case 'assistant-reasoning':
+      // Collapsed-by-default so long chains of thought don't drown the
+      // assistant reply / tool calls. The summary surfaces a char count
+      // so users can tell at a glance whether the model "thought a lot"
+      // before answering.
+      return (
+        <article className="session-block session-block--reasoning">
+          <header className="session-block__head">
+            <RoleBadge variant="reasoning" icon="🧠" label={t('session.thinking')} />
+            <Ts ts={message.ts} />
+          </header>
+          <details className="session-block__details">
+            <summary>
+              <span className="session-block__details-tag">
+                {t('session.thinkingCount', { n: message.text.length })}
+              </span>
+            </summary>
+            <pre className="session-block__body">{message.text}</pre>
+          </details>
+        </article>
+      )
     case 'tool-call':
       return (
         <article className="session-block session-block--tool">
@@ -85,7 +106,7 @@ function MessageBlock({ message }: { message: SessionMessage }) {
   }
 }
 
-export type RoleVariant = 'user' | 'assistant' | 'tool' | 'subagent'
+export type RoleVariant = 'user' | 'assistant' | 'reasoning' | 'tool' | 'subagent'
 
 /**
  * Visually distinct role chip rendered in the top-left of every session

@@ -850,7 +850,10 @@ export function detectPluginLoadFailure(
 
 export function buildCommand(opts: RunNodeOptions, prompt: string): string[] {
   const head = opts.opencodeCmd ?? ['opencode']
-  const cmd = [...head, 'run', prompt, '--agent', opts.agent.name, '--format', 'json']
+  // `--thinking` makes opencode emit `reasoning` events to stdout in
+  // `--format json` mode; without it `cli/cmd/run.ts:671` filters them
+  // out and the SessionTab can never show the model's thinking blocks.
+  const cmd = [...head, 'run', prompt, '--agent', opts.agent.name, '--format', 'json', '--thinking']
   if (opts.dangerouslySkipPermissions ?? true) cmd.push('--dangerously-skip-permissions')
   // RFC-026: clarify-inline rerun — resume the prior opencode session so the
   // agent has its full prior transcript + state. Only ever populated by the

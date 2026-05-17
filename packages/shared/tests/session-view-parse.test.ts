@@ -563,3 +563,118 @@ describe('parseSessionTree — extraUserPrompts (inline-session merge)', () => {
     expect(tree.messages[0]!.kind).toBe('user')
   })
 })
+
+// Locks in the parser branch that surfaces opencode `reasoning` parts
+// (model thinking blocks) as their own SessionMessage kind. opencode
+// emits these whenever the runner passes `--thinking` (see
+// runner.ts buildCommand). Pre-fix the parser silently dropped them,
+// so the Session tab only ever showed the final reply — see the
+// "thinking 内容也打印出来" feature request.
+describe('parseSessionTree — reasoning blocks', () => {
+  test('single reasoning event surfaces as assistant-reasoning', () => {
+    const tree = parseSessionTree({
+      rootSessionId: 'root',
+      promptText: null,
+      startedAt: null,
+      primaryAgentName: 'coder',
+      events: [
+        evt({
+          kind: 'reasoning',
+          payload: {
+            type: 'reasoning',
+            sessionID: 'root',
+            messageID: 'm1',
+            part: { type: 'reasoning', text: 'Let me think step by step…' },
+          },
+        }),
+      ],
+    })
+    expect(tree.messages).toHaveLength(1)
+    expect(tree.messages[0]).toMatchObject({
+      kind: 'assistant-reasoning',
+      text: 'Let me think step by step…',
+      messageId: 'm1',
+    })
+  })
+
+  test('repeated reasoning events with same messageID fold last-write-wins', () => {
+    const tree = parseSessionTree({
+      rootSessionId: 'root',
+      promptText: null,
+      startedAt: null,
+      primaryAgentName: 'coder',
+      events: [
+        evt({
+          kind: 'reasoning',
+          payload: {
+            type: 'reasoning',
+            messageID: 'm1',
+            part: { type: 'reasoning', text: 'partial' },
+          },
+        }),
+        evt({
+          kind: 'reasoning',
+          payload: {
+            type: 'reasoning',
+            messageID: 'm1',
+            part: { type: 'reasoning', text: 'partial then full final.' },
+          },
+        }),
+      ],
+    })
+    const reasonings = tree.messages.filter((m) => m.kind === 'assistant-reasoning')
+    expect(reasonings).toHaveLength(1)
+    expect(reasonings[0]).toMatchObject({
+      kind: 'assistant-reasoning',
+      text: 'partial then full final.',
+    })
+  })
+
+  test('reasoning interleaves with assistant-text and tool calls in event order', () => {
+    const tree = parseSessionTree({
+      rootSessionId: 'root',
+      promptText: null,
+      startedAt: null,
+      primaryAgentName: 'coder',
+      events: [
+        evt({
+          kind: 'reasoning',
+          payload: {
+            type: 'reasoning',
+            messageID: 'm1',
+            part: { type: 'reasoning', text: 'thinking...' },
+          },
+        }),
+        evt({
+          kind: 'text',
+          payload: {
+            type: 'text',
+            messageID: 'm1',
+            part: { type: 'text', text: 'Here is the answer.' },
+          },
+        }),
+      ],
+    })
+    expect(tree.messages.map((m) => m.kind)).toEqual(['assistant-reasoning', 'assistant-text'])
+  })
+
+  test('empty reasoning text deltas are skipped (no hollow blocks)', () => {
+    const tree = parseSessionTree({
+      rootSessionId: 'root',
+      promptText: null,
+      startedAt: null,
+      primaryAgentName: 'coder',
+      events: [
+        evt({
+          kind: 'reasoning',
+          payload: {
+            type: 'reasoning',
+            messageID: 'm1',
+            part: { type: 'reasoning', text: '' },
+          },
+        }),
+      ],
+    })
+    expect(tree.messages).toEqual([])
+  })
+})

@@ -9,7 +9,12 @@
 // SessionTree per root session. The frontend SessionTab consumes the
 // tree directly; the backend `/session` endpoint serializes it.
 
-export type SessionMessageKind = 'user' | 'assistant-text' | 'tool-call' | 'subagent-call'
+export type SessionMessageKind =
+  | 'user'
+  | 'assistant-text'
+  | 'assistant-reasoning'
+  | 'tool-call'
+  | 'subagent-call'
 
 export interface SessionUserMessage {
   kind: 'user'
@@ -22,6 +27,20 @@ export interface SessionAssistantText {
   text: string
   ts: number
   /** opencode messageID when known; null for tests / events that didn't expose one. */
+  messageId: string | null
+}
+
+/**
+ * Model thinking / chain-of-thought block. opencode emits these as
+ * `part.type === 'reasoning'` (cli/cmd/run.ts:671) whenever the parent
+ * runner is launched with `--thinking`. Stream deltas land as repeated
+ * events with the same messageID, so the parser folds them with the
+ * same last-write-wins merge used for assistant-text.
+ */
+export interface SessionAssistantReasoning {
+  kind: 'assistant-reasoning'
+  text: string
+  ts: number
   messageId: string | null
 }
 
@@ -63,6 +82,7 @@ export interface SessionSubagentCall {
 export type SessionMessage =
   | SessionUserMessage
   | SessionAssistantText
+  | SessionAssistantReasoning
   | SessionToolCall
   | SessionSubagentCall
 
@@ -167,6 +187,7 @@ export function parseSessionTree(input: ParseSessionInput): SessionTree {
     const messages: SessionMessage[] = []
     const tools = new Map<string, SessionToolCall | SessionSubagentCall>()
     const textsByMessageId = new Map<string, SessionAssistantText>()
+    const reasoningByMessageId = new Map<string, SessionAssistantReasoning>()
 
     for (const evt of bucket) {
       const parsed = safeJsonParse(evt.payload)
@@ -192,6 +213,32 @@ export function parseSessionTree(input: ParseSessionInput): SessionTree {
             messageId,
           }
           textsByMessageId.set(key, block)
+          messages.push(block)
+        }
+        continue
+      }
+
+      // RFC: reasoning parts (model thinking blocks) folded with the
+      // same last-write-wins strategy as assistant-text. Empty deltas
+      // (final part.text === '') are skipped so we never push hollow
+      // "Thinking · 0 chars" blocks into the UI.
+      if (partType === 'reasoning' && evt.kind === 'reasoning') {
+        const text = typeof part.text === 'string' ? part.text : ''
+        if (text === '') continue
+        const messageId = pickMessageId(parsed, part)
+        const key = messageId ?? `__anon__:${evt.id}`
+        const existing = reasoningByMessageId.get(key)
+        if (existing !== undefined) {
+          existing.text = text
+          existing.ts = evt.ts
+        } else {
+          const block: SessionAssistantReasoning = {
+            kind: 'assistant-reasoning',
+            text,
+            ts: evt.ts,
+            messageId,
+          }
+          reasoningByMessageId.set(key, block)
           messages.push(block)
         }
         continue

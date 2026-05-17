@@ -50,6 +50,50 @@ export interface Resources {
       sourceTask: string
     }
   }
+  home: {
+    greet: {
+      morning: string
+      afternoon: string
+      evening: string
+    }
+    startTask: string
+    runtime: {
+      ready: string
+      checking: string
+      missing: string
+      incompatible: string
+    }
+    section: {
+      running: string
+      inbox: string
+      recent: string
+      viewAll: string
+      openInbox: string
+      viewTasks: string
+      empty: {
+        running: string
+        inbox: string
+        recent: string
+      }
+      error: {
+        generic: string
+        retry: string
+      }
+    }
+    taskRow: {
+      statusRunning: string
+      statusAwaitingHuman: string
+      statusAwaitingReview: string
+      statusDone: string
+      statusFailed: string
+      statusCanceled: string
+      statusInterrupted: string
+      relativeJustNow: string
+      relativeMinAgo: string
+      relativeHourAgo: string
+      relativeDayAgo: string
+    }
+  }
   mcps: {
     title: string
     hint: string
@@ -1163,6 +1207,8 @@ export interface Resources {
   session: {
     user: string
     assistant: string
+    thinking: string
+    thinkingCount: string
     toolCall: string
     toolResult: string
     subagent: string
@@ -1221,6 +1267,50 @@ export const zhCN: Resources = {
       errorClarify: '反问列表加载失败',
       retry: '重试',
       sourceTask: '任务 {{taskId}}',
+    },
+  },
+  home: {
+    greet: {
+      morning: '早上好',
+      afternoon: '下午好',
+      evening: '晚上好',
+    },
+    startTask: '启动任务',
+    runtime: {
+      ready: 'opencode v{{version}} · 已就绪',
+      checking: '检查中…',
+      missing: '未找到 opencode',
+      incompatible: 'opencode v{{version}} 低于最低门槛 v{{minVersion}}',
+    },
+    section: {
+      running: '运行中',
+      inbox: '等你处理',
+      recent: '最近完成',
+      viewAll: '查看全部 →',
+      openInbox: '打开收件箱 →',
+      viewTasks: '查看任务列表 →',
+      empty: {
+        running: '暂无运行中任务',
+        inbox: '当前没有等你处理的事项 ✓',
+        recent: '还没有完成过任务',
+      },
+      error: {
+        generic: '加载失败',
+        retry: '重试',
+      },
+    },
+    taskRow: {
+      statusRunning: '运行中',
+      statusAwaitingHuman: '等待回答',
+      statusAwaitingReview: '等待评审',
+      statusDone: '已完成',
+      statusFailed: '失败',
+      statusCanceled: '已取消',
+      statusInterrupted: '已中断',
+      relativeJustNow: '刚刚',
+      relativeMinAgo: '{{n}} 分钟前',
+      relativeHourAgo: '{{n}} 小时前',
+      relativeDayAgo: '{{n}} 天前',
     },
   },
   reviews: {
@@ -2378,6 +2468,8 @@ export const zhCN: Resources = {
   session: {
     user: '用户',
     assistant: '助手',
+    thinking: '思考',
+    thinkingCount: '思考 · {{n}} 字',
     toolCall: '工具调用',
     toolResult: '工具返回',
     subagent: '子代理',

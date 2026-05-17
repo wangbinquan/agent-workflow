@@ -71,4 +71,24 @@ describe('SessionTreeSchema', () => {
     const parsed = SessionViewResponseSchema.parse({ tree: rootTree })
     expect(parsed.tree.messages).toHaveLength(2)
   })
+
+  test('accepts assistant-reasoning messages alongside assistant-text', () => {
+    const tree = {
+      sessionId: 'root',
+      parentSessionId: null,
+      agentName: null,
+      messages: [
+        {
+          kind: 'assistant-reasoning' as const,
+          text: 'thinking out loud',
+          ts: 1,
+          messageId: 'm1',
+        },
+        { kind: 'assistant-text' as const, text: 'done', ts: 2, messageId: 'm1' },
+      ],
+      captureComplete: true,
+    }
+    const parsed = SessionTreeSchema.parse(tree)
+    expect(parsed.messages.map((m) => m.kind)).toEqual(['assistant-reasoning', 'assistant-text'])
+  })
 })

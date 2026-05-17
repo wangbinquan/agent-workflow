@@ -20,6 +20,13 @@ const AssistantTextSchema = z.object({
   messageId: z.string().nullable(),
 })
 
+const AssistantReasoningSchema = z.object({
+  kind: z.literal('assistant-reasoning'),
+  text: z.string(),
+  ts: z.number().int(),
+  messageId: z.string().nullable(),
+})
+
 const ToolCallSchema = z.object({
   kind: z.literal('tool-call'),
   toolName: z.string(),
@@ -55,6 +62,7 @@ interface SessionTreeShape {
   messages: Array<
     | z.infer<typeof UserMessageSchema>
     | z.infer<typeof AssistantTextSchema>
+    | z.infer<typeof AssistantReasoningSchema>
     | z.infer<typeof ToolCallSchema>
     | SubagentCallShape
   >
@@ -70,7 +78,13 @@ export const SessionTreeSchema: z.ZodType<SessionTreeShape> = z.lazy(() =>
     // recursive via z.lazy and discriminatedUnion can't introspect .shape
     // through a lazy wrapper.
     messages: z.array(
-      z.union([UserMessageSchema, AssistantTextSchema, ToolCallSchema, SubagentCallSchema]),
+      z.union([
+        UserMessageSchema,
+        AssistantTextSchema,
+        AssistantReasoningSchema,
+        ToolCallSchema,
+        SubagentCallSchema,
+      ]),
     ),
     captureComplete: z.boolean(),
   }),
