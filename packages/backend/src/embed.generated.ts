@@ -15,3 +15,12 @@ export const FRONTEND_FILES: Record<string, string> = {}
 
 /** migrations-rel-path -> embedded file path. */
 export const MIGRATION_FILES: Record<string, string> = {}
+
+/**
+ * RFC-029: opencode plugin asset table. Each entry maps a filename (no
+ * path) to the embedded `/$bunfs/...` path at runtime. The runner copies
+ * these into per-run dirs so opencode child processes can load them via
+ * inline OPENCODE_CONFIG_CONTENT.plugin file:// URLs. In dev this stays
+ * empty (the runner reads the source tree directly).
+ */
+export const PLUGIN_FILES: Record<string, string> = {}

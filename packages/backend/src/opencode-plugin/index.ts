@@ -2,24 +2,64 @@
 //
 // `transcoder.ts` exposes the TS twin of `aw-inventory-dump.mjs`'s pure
 // conversion functions so that unit tests can exercise the field mapping
-// without spawning an opencode process. `awInventoryDumpSourcePath()` returns
-// the on-disk path to the actual ESM file that the framework copies into a
-// per-run-dir's `.opencode/plugins/` directory before spawning opencode.
+// without spawning an opencode process.
+//
+// `materializeInventoryPlugin(runRoot)` copies the dump plugin's .mjs into
+// the per-run dir so opencode can load it via inline
+// `OPENCODE_CONFIG_CONTENT.plugin` `file://` URL. Two routes:
+//   - dev mode: read from the source tree adjacent to this file,
+//   - binary mode (built by scripts/build-binary.ts): fall back to the
+//     embedded `/$bunfs/...` path looked up in `embed.generated.PLUGIN_FILES`.
+// The CI failure that motivated this fallback: the e2e Playwright suite
+// runs against the compiled binary which previously had no .mjs on disk →
+// copyFileSync ENOENT → no OPENCODE_AW_INVENTORY_OUT set → stub couldn't
+// write inventory → captured:false → no chips → e2e red.
 
-import { dirname, resolve } from 'node:path'
+import { copyFileSync, existsSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { PLUGIN_FILES } from '../embed.generated'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
+const PLUGIN_BASENAME = 'aw-inventory-dump.mjs'
 
 /**
- * Absolute path to the dump plugin's ESM source. Stable across dev (`bun
- * run`) and the single-binary distribution (`bun build --compile` ships the
- * file via the embed table; see `embed.ts`'s migration path for the same
- * pattern). Use this from runner.ts when materializing the file into the
- * spawn dir.
+ * Absolute path to the dump plugin's ESM source as seen by the *current*
+ * runtime. In dev this is the source tree; in single-binary mode it's a
+ * `/$bunfs/...` path. Falls back to the dev path even when neither exists
+ * so callers that only care about logging get a stable string.
  */
 export function awInventoryDumpSourcePath(): string {
-  return resolve(HERE, 'aw-inventory-dump.mjs')
+  const devPath = resolve(HERE, PLUGIN_BASENAME)
+  if (existsSync(devPath)) return devPath
+  const embedded = PLUGIN_FILES[PLUGIN_BASENAME]
+  if (embedded !== undefined && existsSync(embedded)) return embedded
+  return devPath
+}
+
+/**
+ * Copy `aw-inventory-dump.mjs` into `runRoot` so opencode's plugin loader
+ * can `import()` it via the inline `file://` URL the runner adds to
+ * OPENCODE_CONFIG_CONTENT.plugin. Returns the absolute path the runner
+ * should reference. Throws if neither dev nor embedded source is reachable
+ * so the runner's outer try/catch can degrade cleanly to
+ * `plugin-load-failed`.
+ */
+export function materializeInventoryPlugin(runRoot: string): string {
+  const target = join(runRoot, PLUGIN_BASENAME)
+  const devPath = resolve(HERE, PLUGIN_BASENAME)
+  if (existsSync(devPath)) {
+    copyFileSync(devPath, target)
+    return target
+  }
+  const embedded = PLUGIN_FILES[PLUGIN_BASENAME]
+  if (embedded !== undefined && existsSync(embedded)) {
+    copyFileSync(embedded, target)
+    return target
+  }
+  throw new Error(
+    `aw-inventory-dump.mjs not found in dev tree (${devPath}) or embed table (PLUGIN_FILES['${PLUGIN_BASENAME}'])`,
+  )
 }
 
 export * from './transcoder'

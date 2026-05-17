@@ -42,8 +42,7 @@ import {
 import { renderUserPrompt } from './protocol'
 import { captureChildSessions } from './sessionCapture'
 import { isAgentRunKind, readSnapshotFromRunDir } from './inventory'
-import { awInventoryDumpSourcePath } from '@/opencode-plugin'
-import { copyFileSync } from 'node:fs'
+import { materializeInventoryPlugin } from '@/opencode-plugin'
 
 export type SkillSource = 'managed' | 'external' | 'project'
 
@@ -254,15 +253,16 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   if (isAgentRunKind(inventoryNodeKind)) {
     try {
       mkdirSync(runRoot, { recursive: true })
-      const pluginPath = join(runRoot, 'aw-inventory-dump.mjs')
-      copyFileSync(awInventoryDumpSourcePath(), pluginPath)
+      // materializeInventoryPlugin handles both dev (source tree) and
+      // single-binary (embed table) layouts — see opencode-plugin/index.ts.
+      const pluginPath = materializeInventoryPlugin(runRoot)
       const fileSpec: string | [string, Record<string, unknown>] = `file://${pluginPath}`
       inlineConfig.plugin = [...(inlineConfig.plugin ?? []), fileSpec]
       inventoryOutPath = join(runRoot, 'inventory.json')
     } catch (err) {
       // Non-fatal: if we can't materialize the plugin (disk full / permission
-      // denied), the run continues without inventory capture and the post-exit
-      // read just lands on a `plugin-load-failed` reason.
+      // denied / asset missing in binary mode), the run continues without
+      // inventory capture and the post-exit read lands on `plugin-load-failed`.
       log.warn('inventory-plugin-materialize-failed', {
         nodeRunId: opts.nodeRunId,
         err: err instanceof Error ? err.message : String(err),

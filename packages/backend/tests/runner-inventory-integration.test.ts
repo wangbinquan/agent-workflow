@@ -272,18 +272,46 @@ describe('runNode RFC-029 inventory snapshot', () => {
 })
 
 describe('runner.ts source: dump plugin wiring lock', () => {
-  test('runner imports awInventoryDumpSourcePath and isAgentRunKind', () => {
+  test('runner imports materializeInventoryPlugin and isAgentRunKind', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
       'utf-8',
     )
-    expect(src).toContain('awInventoryDumpSourcePath')
+    // materializeInventoryPlugin replaced the older awInventoryDumpSourcePath
+    // + copyFileSync pair so binary-mode runs (which have no plugin .mjs on
+    // disk) still get the file written via the embed.generated PLUGIN_FILES
+    // fallback. The grep lock follows the post-refactor wiring.
+    expect(src).toContain('materializeInventoryPlugin')
     expect(src).toContain('isAgentRunKind')
     expect(src).toContain('OPENCODE_AW_INVENTORY_OUT')
-    expect(src).toContain('aw-inventory-dump.mjs')
   })
 
-  test('plugin file exists in tree (will be needed when binary embeds it)', () => {
+  test('opencode-plugin/index exports both helpers and references PLUGIN_FILES embed table', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'opencode-plugin', 'index.ts'),
+      'utf-8',
+    )
+    // Source-tree path resolver (used by docs / logs).
+    expect(src).toContain('export function awInventoryDumpSourcePath')
+    // Runtime materializer that handles dev + binary modes.
+    expect(src).toContain('export function materializeInventoryPlugin')
+    // Binary-mode fallback is via the embed table.
+    expect(src).toContain('PLUGIN_FILES')
+  })
+
+  test('build-binary.ts walks opencode-plugin dir + writes PLUGIN_FILES into embed.generated', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', '..', '..', 'scripts', 'build-binary.ts'),
+      'utf-8',
+    )
+    // Plugins dir is registered + .mjs filter is applied.
+    expect(src).toContain('pluginsDir')
+    expect(src).toContain(".mjs'")
+    // The generated PLUGIN_FILES export block is emitted.
+    expect(src).toContain('PLUGIN_FILES: Record<string, string>')
+  })
+
+  test('plugin file exists in tree (dev mode source)', () => {
     const p = resolve(import.meta.dir, '..', 'src', 'opencode-plugin', 'aw-inventory-dump.mjs')
     expect(existsSync(p)).toBe(true)
   })
