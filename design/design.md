@@ -176,7 +176,7 @@ CREATE TABLE tasks (
   worktree_path     TEXT NOT NULL,
   base_branch       TEXT NOT NULL,            -- 用户在启动表单选的 base
   branch            TEXT NOT NULL,            -- 'agent-workflow/{task-id}'
-  status            TEXT NOT NULL,            -- pending|running|done|failed|canceled|interrupted|awaiting_review
+  status            TEXT NOT NULL,            -- pending|running|done|failed|canceled|interrupted|awaiting_review|awaiting_human
   inputs            TEXT NOT NULL,            -- JSON: 启动表单值
   -- 人审：每次 review 决策 (approve/reject/iterate) 单调 +1。WS 与 REST 用作乐观锁（防多 tab 抢决）
   review_iteration  INTEGER NOT NULL DEFAULT 0,
@@ -210,7 +210,11 @@ CREATE TABLE node_runs (
   iteration         INTEGER NOT NULL DEFAULT 0, -- loop 迭代号
   shard_key         TEXT,                     -- multi-process shard 标识（如文件名）
   retry_index       INTEGER NOT NULL DEFAULT 0, -- 第几次重试（0 = 首次）
-  status            TEXT NOT NULL,            -- pending|running|done|failed|canceled|interrupted|skipped|exhausted
+  -- RFC-023: clarify-driven rerun counter; orthogonal to retry_index (process
+  -- retries) and review_iteration (review-driven). For an agent-multi shard
+  -- child this counts that shard alone.
+  clarify_iteration INTEGER NOT NULL DEFAULT 0,
+  status            TEXT NOT NULL,            -- pending|running|done|failed|canceled|interrupted|skipped|exhausted|awaiting_review|awaiting_human
   started_at        INTEGER,
   finished_at       INTEGER,
   pid               INTEGER,
@@ -276,6 +280,32 @@ CREATE TABLE review_comments (
   FOREIGN KEY (doc_version_id) REFERENCES doc_versions(id) ON DELETE CASCADE
 );
 CREATE INDEX idx_review_comments_doc ON review_comments(doc_version_id);
+
+-- 反问澄清（RFC-023）：agent 主动反问的每一次会话。
+-- agent-multi 下每个反问 shard 各自 mint 一条独立 clarify_sessions 行 +
+-- 一条独立 clarify-node node_run，按 (clarify_node_id, source_shard_key) 分组。
+CREATE TABLE clarify_sessions (
+  id                          TEXT PRIMARY KEY,             -- ULID
+  task_id                     TEXT NOT NULL,
+  source_agent_node_id        TEXT NOT NULL,                -- 提问 agent 的 workflow 节点 id
+  source_agent_node_run_id    TEXT NOT NULL,                -- agent-single 时是单一 node_run；agent-multi 时是 shard 子 node_run
+  source_shard_key            TEXT,                         -- shard_key when agent-multi child; NULL 表示 agent-single
+  clarify_node_id             TEXT NOT NULL,                -- clarify 节点 workflow id
+  clarify_node_run_id         TEXT NOT NULL,                -- clarify 节点的 node_run id（agent-multi 时每个反问 shard 一条）
+  iteration_index             INTEGER NOT NULL,             -- 与 node_runs.clarify_iteration AT TIME OF ASKING 同
+  questions_json              TEXT NOT NULL,                -- JSON: ClarifyQuestion[]
+  answers_json                TEXT,                         -- JSON: ClarifyAnswer[]；提交前 NULL
+  status                      TEXT NOT NULL DEFAULT 'awaiting_human', -- awaiting_human | answered | canceled
+  truncation_warnings_json    TEXT,                         -- JSON: {code,detail}[]；agent 超额时记录
+  created_at                  INTEGER NOT NULL,
+  answered_at                 INTEGER,
+  answered_by                 TEXT,                         -- v1 恒为 'local'，多用户预留
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_clarify_sessions_task        ON clarify_sessions(task_id);
+CREATE INDEX idx_clarify_sessions_clarify_run ON clarify_sessions(clarify_node_run_id, iteration_index);
+CREATE INDEX idx_clarify_sessions_source_run  ON clarify_sessions(source_agent_node_run_id);
+CREATE INDEX idx_clarify_sessions_node_shard  ON clarify_sessions(clarify_node_id, source_shard_key);
 
 -- drizzle 自维护
 -- CREATE TABLE __drizzle_migrations (...)
@@ -421,9 +451,31 @@ type TaskWsMessage =
       decision: 'approve' | 'reject' | 'iterate'
       reviewIteration: number
     }
+  // —— 反问澄清（RFC-023） ——
+  | {
+      id: number
+      type: 'clarify.created'
+      nodeRunId: string         // clarify 节点 node_run id
+      clarifyNodeId: string     // clarify 节点 workflow id
+      sourceShardKey: string | null
+      iterationIndex: number
+      session: ClarifySessionSummary // 紧凑摘要 — 列表 / 徽标增量更新用
+    }
+  | {
+      id: number
+      type: 'clarify.answered'
+      nodeRunId: string
+      clarifyNodeId: string
+      sourceShardKey: string | null
+      iterationIndex: number
+      rerunNodeRunId: string    // 新 mint 的 source agent node_run id；订阅方可切换焦点
+      session: ClarifySession   // 完整 session（含 sealed answers + selectedOptionLabels）
+    }
 ```
 
 `id` = `node_run_events.id`（自增）。客户端断线重连用 `?since={lastSeenId}`，服务端从 events 表回放 id > since 的所有事件，再衔接实时推送。
+
+clarify.* 与 review.* 复用同一 `/ws/tasks/{taskId}` 通道；前端 `/clarify` 列表与左栏 badge 走 polling + invalidate（10s + 15s），详情页订阅本通道直接拿增量。`sourceShardKey` 在 payload 上让前端把同 clarifyNodeId 的多 shard 会话路由到正确 tab。
 
 #### `/ws/tasks` —— 任务列表页
 
@@ -461,7 +513,7 @@ type WorkflowsWsMessage =
 
 ```ts
 type Workflow = {
-  $schema_version: 1 | 2 // v2 (RFC-005) 引入 review 节点；旧库自动迁移
+  $schema_version: 1 | 2 | 3 // v2 (RFC-005) 引入 review；v3 (RFC-023) 引入 clarify。旧库自动迁移
   id: string // ULID
   name: string
   description?: string
@@ -509,7 +561,14 @@ type WorkflowInput =
       objectType: 'branch' | 'commit-range' | 'pr'
     }
 
-type Node = AgentNode | InputNode | OutputNode | WrapperGitNode | WrapperLoopNode | ReviewNode
+type Node =
+  | AgentNode
+  | InputNode
+  | OutputNode
+  | WrapperGitNode
+  | WrapperLoopNode
+  | ReviewNode
+  | ClarifyNode // RFC-023
 
 type AgentNode = {
   id: string
@@ -553,6 +612,24 @@ type ReviewNode = {
   rerunOnReject?: string[] // 决策 = reject 时，需要重置 (pending) 的下游节点 id 列表
   rerunOnIterate?: string[] // 决策 = iterate 时，同上；iterate_target_port 写到 prompt 模板
   iterateTargetPort?: string // 用于 {{__iterate_target_port__}} 模板替换
+  position: XY
+}
+
+// —— 反问澄清节点（RFC-023） ——
+// 不主动调度；由上游 agent 通过 <workflow-clarify> 协议触发。系统通过两条
+// 由反向拖动注入的边把它与提问 agent 关联：
+//   agent.__clarify__         → clarify.questions       （问题通道）
+//   clarify.answers           → agent.__clarify_response__（视觉环；运行期靠
+//                                                          clarify_sessions 行 + prompt
+//                                                          context 注入，不走该边）
+// 端口是硬编码（'questions' / 'answers'），不可改；user 仅可编辑 title /
+// description。validator 拒绝接到非 agent-{single,multi} 的对端。
+type ClarifyNode = {
+  id: string
+  kind: 'clarify'
+  title?: string
+  description?: string
+  assignee?: string // 预留；v1 UI 不暴露
   position: XY
 }
 
@@ -995,7 +1072,52 @@ function parseEnvelope(xml: string, declaredOutputs: string[]): Map<string, stri
 
 > 容错策略：如果 agent 用 `name='x'` 单引号，或者 attribute 顺序不同，都补一个备用正则。但故意不写完备 XML parser —— 信封约定就一种合法形态。
 
-#### 7.4.1 端口元数据（RFC-005 起）
+#### 7.4.1 反问澄清信封（RFC-023 起）
+
+agent 也允许吐出**第二种信封** `<workflow-clarify>`：当本节点的 workflow 中存在 `agent.__clarify__` 出边（指向某 clarify 节点）时，runner 会在用户 prompt 末尾追加一段英文 `buildClarifyProtocolBlock()`，指示 agent 在卡住的情况下可改吐 clarify。
+
+```ts
+type DetectedEnvelopeKind = 'output' | 'clarify' | 'both' | 'none'
+
+function detectEnvelopeKind(stdout: string): DetectedEnvelopeKind {
+  const hasOutput = /<workflow-output>[\s\S]*?<\/workflow-output>/.test(stdout)
+  const hasClarify = /<workflow-clarify>[\s\S]*?<\/workflow-clarify>/.test(stdout)
+  if (hasOutput && hasClarify) return 'both'
+  if (hasOutput) return 'output'
+  if (hasClarify) return 'clarify'
+  return 'none'
+}
+```
+
+**互斥规则（硬约束）**：一次回复只能是 `output` 或 `clarify` 之一；同时含两者 → runner 立刻把 node_run 标 `failed` 错误码 `clarify-and-output-both-present`；都不含 → 与既有行为一致，标 `failed` 错误码 `no <workflow-output> envelope found in stdout`。
+
+clarify 信封 body 是 JSON：
+
+```json
+<workflow-clarify>
+{
+  "questions": [
+    {
+      "id": "q-db",
+      "title": "Which database should we use?",
+      "kind": "single",
+      "recommended": true,
+      "options": ["Postgres", "SQLite"]
+    }
+  ]
+}
+</workflow-clarify>
+```
+
+约束（agent 必须遵守，否则被框架友善截断 / 拒绝）：
+- 最多 5 个 question；超出则取前 5 + 在下次 prompt 里回灌一条警告 `clarify-questions-too-many`（不阻塞）。
+- 每 question 2–4 个 option；> 4 截到 4 + 回灌警告；< 2 是硬错误码 `clarify-options-too-few`，节点 fail。
+- agent 禁止自己加 "其他/自定义" option —— UI 会自动给每题追加一行 textarea。
+- `recommended: true` 的题目在用户提交时强制必答（UI 校验）。
+
+runner 解析成功后调 `clarify.createClarifySession(...)`：写一行 `clarify_sessions`、对应 mint 一行 `clarify_node_run` 入 `awaiting_human`，回 task 顶层 `awaiting_human`，并广播 `clarify.created` WS 事件。用户提交答案后 service 把答案盖回 `clarify_sessions.answers_json`（重算 selectedOptionLabels 防客户端伪造）、把 clarify node_run 标 done、mint 一行 `source_agent_node_run` 的 rerun（`clarify_iteration = source.clarify_iteration + 1`，`retry_index = 0`，shardKey / parent / preSnapshot 透传）。详见 §9。
+
+#### 7.4.2 端口元数据（RFC-005 起）
 
 agent.md frontmatter 可声明 `outputKinds: { portName: 'markdown' | 'markdown_file' }`（sidecar，不破坏老 agent 的 `outputs: string[]`）。**`markdown_file`** kind 表示 port content 是 worktree 内的相对路径（不是文件正文）；review 节点遇到这种 port 时框架会读出文件正文写入 `doc_versions.body_md` 并把 `source_ref` 设为 `file:<相对路径>`。普通 `markdown` 走 inline。
 
@@ -1108,6 +1230,8 @@ pending ──► running ──► done
   - `reject` → 节点 `done`（reviewOutcome = `'reject'`），框架把 `rerunOnReject` 列表内的节点（含同上游派生出的兄弟 review 节点）回 `pending`，task 进入 `running` 重跑
   - `iterate` → 节点 `done`（reviewOutcome = `'iterate'`），把 `rerunOnIterate` 内节点回 `pending`，相同上游兄弟 review 不连锁；prompt 模板可读 `{{__review_comments__}}` / `{{__iterate_target_port__}}`
 - **Reject / iterate 上游重跑（RFC-011）**：上面两条提到的"回 `pending`"在实现层不是就地改状态，而是 **mint 一行新的 `node_run`**：原行 `status='canceled'` + `errorMessage='superseded-by-review-{decision}: …'` 保留其 `promptText` / outputs；新行 `retry_index = prev.retry_index + 1`，状态 `pending`，继承 `preSnapshot`。scheduler 的 `pendingExisting` 谓词与 `resolveUpstreamInputs` 的 "latest by retryIndex" 都向后兼容。这样 task 详情 drawer 的 Prompt-tab attempts 切换器可以列出每一轮 review 重跑各自实际发出去的 prompt（review iterate / reject 之前的 prompt 不再被覆写）。同一 (taskId, nodeId, iteration) 下因此可累积多条 `retry_index` 行 —— 既来自技术性 retry，也来自 review reject / iterate 重跑。
+- **Clarify 节点（RFC-023）**：不主动调度。当上游 agent 吐出 `<workflow-clarify>` 信封，runner 在原 agent node_run 仍维持 `done`（agent 完成了一次有效"反问表达"）的同时调 `clarify.createClarifySession(...)`，mint 一行 clarify-node node_run 立即落 `awaiting_human`，**task.status 同步切 `awaiting_human`**（与 `awaiting_review` 互斥但 awaiting_human **优先级更高**：clarify 等用户答题比 review 等用户决议语义更主动、面板更紧迫）。submit answers 后 clarify service 把 clarify node_run 标 done、mint 一行 source agent 的 rerun：`clarify_iteration = source.clarify_iteration + 1`、`retry_index = 0`、`shard_key` / `parent_node_run_id` / `pre_snapshot` 透传。scheduler 的 resume "latest per node_id" 比较从 `retry_index` 单维改成 `(retry_index, clarify_iteration)` tuple，让 clarify rerun 行不被旧 done 行盖过。**agent-multi shard fanout**：每个反问 shard mint 独立 clarify_session + 独立 clarify node_run（按 source_shard_key 分组）；只要还有 shard `awaiting_human`，父 multi-process 节点维持 `awaiting_human` 不聚合。
+- **clarify channel 边在调度图里被剔除**：`agent.__clarify__ → clarify.questions` + `clarify.answers → agent.__clarify_response__` 这两条由反向拖动注入的边形成一个**显式环**；`buildScopeUpstreams` 与 `topologicalOrder` 都跳过 portName 为 `__clarify__` / `__clarify_response__` 的边，所以拓扑序里 clarify 节点不挂 agent 的上游、agent 也不依赖 clarify。answer 通过 `clarify_sessions.answers_json` + `buildClarifyPromptContext(...)` 注入到 agent 下一轮 prompt，并非沿这条 visual 边走 dataflow。
 
 ---
 
@@ -1181,6 +1305,12 @@ type Config = {
   // 留空 → 不渲染 PlantUML 块，仅显示原码块。建议自托管或填官方公共实例。
   plantumlEndpoint?: string // 形如 'https://kroki.io/plantuml'
   plantumlAuthHeader?: string // 可选：直传 Authorization header（私有 Kroki 部署）
+  // —— 反问澄清（RFC-023）：本 RFC 不引入新 config 字段。 ——
+  // 草稿（前端 IndexedDB store `clarify-drafts`）的字段长度由前端 maxLength +
+  // shared schema `z.string().max(CLARIFY_MAX_CUSTOM_TEXT_LEN = 2000)` 双闸门兜底；
+  // 每问题选项数 / 每信封问题数硬上限分别是 `CLARIFY_MAX_OPTIONS_PER_QUESTION = 4`
+  // / `CLARIFY_MAX_QUESTIONS = 5`，在 `packages/shared/src/schemas/clarify.ts`
+  // 集中定义；agent 超额时框架截到上限并在下一轮 prompt 回灌 truncationWarnings。
 }
 ```
 

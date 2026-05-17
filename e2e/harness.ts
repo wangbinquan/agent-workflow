@@ -39,6 +39,19 @@ export interface SpawnOptions {
    * If the file does not exist, harness throws — tell the engineer to build first.
    */
   binary?: string
+  /**
+   * Override the stub-opencode shim path. Defaults to e2e/fixtures/stub-opencode.sh
+   * (the fixed-output stub used by main.spec.ts + review.spec.ts). Tests that
+   * need round-driven behaviour (clarify.spec.ts) pass stub-opencode-clarify.sh
+   * here.
+   */
+  stubOpencode?: string
+  /**
+   * Extra env vars merged into the daemon (and inherited by every opencode
+   * subprocess). The clarify e2e uses CLARIFY_STUB_STATE +
+   * CLARIFY_STUB_ASK_SHARDS to drive the round-driven stub.
+   */
+  extraEnv?: Record<string, string>
 }
 
 function platformSuffix(): string {
@@ -73,7 +86,7 @@ export async function startDaemon(opts: SpawnOptions = {}): Promise<DaemonHandle
   const home = mkdtempSync(join(tmpdir(), 'aw-e2e-'))
   mkdirSync(home, { recursive: true })
 
-  const stubOpencode = resolve(here, 'fixtures', 'stub-opencode.sh')
+  const stubOpencode = opts.stubOpencode ?? resolve(here, 'fixtures', 'stub-opencode.sh')
   if (!isExecutableFile(stubOpencode)) {
     throw new Error(`e2e/harness: stub-opencode not executable: ${stubOpencode}`)
   }
@@ -116,6 +129,7 @@ export async function startDaemon(opts: SpawnOptions = {}): Promise<DaemonHandle
         ...process.env,
         AGENT_WORKFLOW_HOME: home,
         LANG: 'en_US.UTF-8',
+        ...(opts.extraEnv ?? {}),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
