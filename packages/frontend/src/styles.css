@@ -3970,6 +3970,18 @@ code {
   font-weight: 600;
 }
 
+/* Clarify (反问) node — mirrors the review palette so the two human-in-the-loop
+ * kinds read as the same family on the canvas. Status-specific borders are
+ * still allowed via `.canvas-node[data-status=…]`. */
+.canvas-node--clarify {
+  background: color-mix(in srgb, #d97706 10%, var(--panel));
+  border-color: color-mix(in srgb, #d97706 45%, var(--border));
+}
+.canvas-node--clarify .canvas-node__kind {
+  color: #b45309;
+  font-weight: 600;
+}
+
 /* RFC-016: wrapper group container — replaces the old 240px placeholder
  * card. Renders as a sized rectangle so inner nodes physically sit inside,
  * making membership visible at a glance. Sized via xyflow Node.style; the
