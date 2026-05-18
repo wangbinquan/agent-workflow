@@ -22,6 +22,14 @@ export const Paths = {
   get tokenFile() {
     return join(appHome(), 'token')
   },
+  /**
+   * RFC-036: AES-256-GCM key used to seal OIDC client_secret values at rest.
+   * Generated lazily on first daemon start via auth/secretBox.ts; chmod 600.
+   * Losing this file makes every previously-stored client_secret unreadable.
+   */
+  get secretKeyFile() {
+    return join(appHome(), 'secret.key')
+  },
   get lock() {
     return join(appHome(), '.daemon.lock')
   },

@@ -1,5 +1,6 @@
 // `agent-workflow start` — daemon foreground entry.
 
+import { createSecretBox } from '@/auth/secretBox'
 import { ensureTokenFile } from '@/auth/token'
 import { loadConfig } from '@/config'
 import { openDb } from '@/db/client'
@@ -145,6 +146,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const token = ensureTokenFile(Paths.tokenFile)
   log.info('token ready', { tokenFile: Paths.tokenFile })
 
+  // 6b. RFC-036 secret box (generate-on-first-run, chmod 600). Used to seal
+  // OIDC client_secret values at rest. Losing the file makes every
+  // previously-stored secret unreadable — flag it in backup docs.
+  const secretBox = createSecretBox(Paths.secretKeyFile)
+  log.info('secret box ready', { keyFile: Paths.secretKeyFile })
+
   // 7. HTTP server.
   const app = createApp({
     token,
@@ -152,6 +159,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     opencodeVersion: probe.version,
     dbVersion,
     db,
+    secretBox,
   })
 
   const bindHost = opts.host ?? config.bindHost
