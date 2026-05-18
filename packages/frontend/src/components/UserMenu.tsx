@@ -6,11 +6,11 @@
 // just be visual noise.
 
 import { Link, useNavigate } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api/client'
 import { useActor, usePermission } from '@/hooks/useActor'
-import { clearToken } from '@/stores/auth'
+import { clearToken, getToken, subscribeAuth } from '@/stores/auth'
 
 export function UserMenu() {
   const { data, isLoading } = useActor()
@@ -40,7 +40,42 @@ export function UserMenu() {
     navigate({ to: '/auth' })
   }
 
-  if (isLoading || !data) return null
+  // If a token IS present but /api/auth/me fails (e.g. a PAT that lacks
+  // account:self, or an expired session), useActor returns null. We still
+  // need the user to be able to sign out — otherwise they're trapped with
+  // no clickable affordance. Render a minimal "sign-out only" fallback.
+  const hasToken = useSyncExternalStore(subscribeAuth, getToken, () => null) !== null
+  if (isLoading) return null
+  if (!data) {
+    if (!hasToken) return null
+    return (
+      <div className="user-menu user-menu--orphan">
+        <button
+          type="button"
+          className="user-menu__trigger user-menu__trigger--orphan"
+          onClick={() => {
+            clearToken()
+            navigate({ to: '/auth' })
+          }}
+          title={t('userMenu.signedOutHint', {
+            defaultValue: 'Token is missing account:self permission. Click to sign out.',
+          })}
+        >
+          <span className="user-menu__avatar user-menu__avatar--warn" aria-hidden>
+            !
+          </span>
+          <span className="user-menu__name-wrap">
+            <span className="user-menu__name">
+              {t('userMenu.tokenIssue', { defaultValue: 'Token has no access' })}
+            </span>
+            <span className="user-menu__sub">
+              {t('userMenu.logout', { defaultValue: 'Sign out' })} →
+            </span>
+          </span>
+        </button>
+      </div>
+    )
+  }
 
   const isDaemon = data.source === 'daemon'
   // For daemon-token actors we surface the friendly displayName ("System")

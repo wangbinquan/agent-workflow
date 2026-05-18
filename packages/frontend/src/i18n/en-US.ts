@@ -190,6 +190,8 @@ export const enUS: Resources = {
     logout: 'Sign out',
     daemonAccess: 'daemon access',
     daemonRole: 'daemon admin',
+    tokenIssue: 'Token has no access',
+    signedOutHint: 'Token is missing account:self permission. Click to sign out.',
   },
   account: {
     title: 'My account',

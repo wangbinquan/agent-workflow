@@ -286,6 +286,19 @@ code {
   flex-shrink: 0;
 }
 
+.user-menu__avatar--warn {
+  background: var(--warn, #d28e0a);
+}
+
+.user-menu--orphan .user-menu__trigger--orphan {
+  border-color: color-mix(in srgb, var(--warn, #d28e0a) 50%, var(--border));
+  background: color-mix(in srgb, var(--warn, #d28e0a) 8%, transparent);
+}
+
+.user-menu--orphan .user-menu__trigger--orphan:hover {
+  background: color-mix(in srgb, var(--warn, #d28e0a) 14%, transparent);
+}
+
 .user-menu__name-wrap {
   flex: 1 1 auto;
   min-width: 0;

@@ -326,6 +326,8 @@ export interface Resources {
     logout: string
     daemonAccess: string
     daemonRole: string
+    tokenIssue: string
+    signedOutHint: string
   }
   // RFC-036 — /account self-service page.
   account: {
@@ -1544,6 +1546,8 @@ export const zhCN: Resources = {
     logout: '退出登录',
     daemonAccess: '守护进程访问',
     daemonRole: '守护进程管理员',
+    tokenIssue: '当前 Token 无访问权限',
+    signedOutHint: '当前 Token 缺少 account:self 权限。点击退出登录。',
   },
   account: {
     title: '我的账户',
