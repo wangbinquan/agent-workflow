@@ -61,30 +61,15 @@ function SectionShell(props: { title: string; description?: string; children: Re
 
 function ProfileSection({ me }: { me: MeResponse }) {
   const { t } = useTranslation()
-  const rows: Array<[string, React.ReactNode]> = [
-    [t('account.username', { defaultValue: 'Username' }), <code key="u">{me.user.username}</code>],
+  // Plain label / value rows. No chips, no borders, no code-style wrappers —
+  // this is read-only profile data, not interactive state, so the visual
+  // weight of pills was overkill and made the section feel boxed-in.
+  const rows: Array<[string, string]> = [
+    [t('account.username', { defaultValue: 'Username' }), me.user.username],
     [t('account.displayName', { defaultValue: 'Display name' }), me.user.displayName],
-    [
-      t('account.role', { defaultValue: 'Role' }),
-      <span key="r" className={`role-chip role-chip--${me.user.role}`}>
-        {me.user.role}
-      </span>,
-    ],
-    [
-      t('account.status', { defaultValue: 'Status' }),
-      <span
-        key="s"
-        className={`status-chip status-chip--${me.user.status === 'active' ? 'success' : 'warn'}`}
-      >
-        {me.user.status}
-      </span>,
-    ],
-    [
-      t('account.source', { defaultValue: 'Authenticated via' }),
-      <span key="src" className="source-chip">
-        {me.source}
-      </span>,
-    ],
+    [t('account.role', { defaultValue: 'Role' }), me.user.role],
+    [t('account.status', { defaultValue: 'Status' }), me.user.status],
+    [t('account.source', { defaultValue: 'Authenticated via' }), me.source],
   ]
   return (
     <SectionShell title={t('account.profile', { defaultValue: 'Profile' })}>
