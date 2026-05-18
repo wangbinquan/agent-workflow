@@ -257,6 +257,7 @@ test('review cycle: awaiting → reject → awaiting → iterate → awaiting �
     headers,
     body: JSON.stringify({
       workflowId: fixtures.workflowId,
+      name: 'e2e-fixture-task',
       repoPath: fixtures.repoPath,
       baseBranch: 'main',
       inputs: { topic: 'order_status enum' },

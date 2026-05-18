@@ -293,6 +293,7 @@ test.describe('RFC-023 clarify e2e — agent-single happy path', () => {
       headers,
       body: JSON.stringify({
         workflowId: fixtures.workflowId,
+        name: 'e2e-fixture-task',
         repoPath: fixtures.repoPath,
         baseBranch: 'main',
         inputs: { topic: 'order_status enum' },
@@ -571,6 +572,7 @@ test.describe('RFC-023 clarify e2e — agent-multi shard fanout', () => {
       headers,
       body: JSON.stringify({
         workflowId: fixtures.workflowId,
+        name: 'e2e-fixture-task',
         repoPath: fixtures.repoPath,
         baseBranch: 'main',
         inputs: { diff: syntheticDiff },
@@ -771,6 +773,7 @@ test.describe('RFC-026 clarify e2e — inline session resume', () => {
       headers,
       body: JSON.stringify({
         workflowId: fixtures.workflowId,
+        name: 'e2e-fixture-task',
         repoPath: fixtures.repoPath,
         baseBranch: 'main',
         inputs: { topic: 'order_status enum' },

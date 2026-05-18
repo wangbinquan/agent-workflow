@@ -207,6 +207,9 @@ test('happy path: agents → workflow → launch → task done → outputs visib
   await expect(topicInput).toBeVisible({ timeout: 10_000 })
   await topicInput.fill('e2e-test')
 
+  // RFC-037: task name is now a required field — fill it before submit.
+  await page.fill('[data-testid="launch-task-name"]', 'e2e-launch-task')
+
   // baseBranch select may take a moment to swap in once /api/repos/refs
   // resolves. If it's a <select>, ensure 'main' is selected.
   const branchSelect = page.locator('select').nth(1) // [0]=repo, [1]=branch when present
@@ -506,6 +509,9 @@ test('RFC-024: launch task from git URL clones into cache and renders redacted U
     .locator('input.form-input')
   await topicInput.fill('rfc-024-test')
 
+  // RFC-037: task name is now required.
+  await page.fill('[data-testid="launch-task-name"]', 'e2e-url-task')
+
   await page.getByRole('button', { name: /Start task/ }).click()
   await page.waitForURL(/\/tasks\/[A-Z0-9]+/i, { timeout: 30_000 })
 
@@ -717,6 +723,7 @@ test('RFC-027: NodeDetailDrawer Session tab renders the agent conversation', asy
     headers,
     body: JSON.stringify({
       workflowId: fixtures.workflowId,
+      name: 'e2e-fixture-task',
       inputs: { topic: 'rfc-027' },
       repoPath: fixtures.repoPath,
       baseBranch: 'main',
@@ -782,6 +789,7 @@ test('RFC-029: Runtime Inventory section renders on the Session tab', async ({ p
     headers,
     body: JSON.stringify({
       workflowId: fixtures.workflowId,
+      name: 'e2e-fixture-task',
       inputs: { topic: 'rfc-029' },
       repoPath: fixtures.repoPath,
       baseBranch: 'main',
