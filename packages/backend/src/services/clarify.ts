@@ -231,6 +231,15 @@ export async function createClarifySession(
     .limit(1)
   const taskName = taskNameRow[0]?.name ?? ''
 
+  // RFC-037 follow-up: resolve clarify node title from the snapshot once so
+  // the WS create-event summary carries it; otherwise subscribers re-fetch
+  // the list to learn the title. Failure / missing title leaves null.
+  const titlesByTaskAndNode = await loadNodeTitlesByTask(db, [taskId])
+  const resolvedClarifyTitle = titlesByTaskAndNode.get(taskId)?.get(clarifyNodeId)
+  if (typeof resolvedClarifyTitle === 'string' && resolvedClarifyTitle.length > 0) {
+    session.clarifyNodeTitle = resolvedClarifyTitle
+  }
+
   broadcastClarifyCreated(taskId, taskName, session)
   return { session, clarifyNodeRunId }
 }
@@ -634,13 +643,18 @@ export async function listClarifySummaries(
   // missing nodes degrade to `null` so the frontend keeps the existing
   // fallback to `sourceAgentNodeId`.
   const taskIds = Array.from(new Set(sliced.map((r) => r.taskId)))
-  const agentTitleByTaskAndNode = await loadAgentNodeTitlesByTask(db, taskIds)
+  const titleByTaskAndNode = await loadNodeTitlesByTask(db, taskIds)
   const taskNameByTaskId = await loadTaskNamesByTaskId(db, taskIds)
 
   return sliced.map((row) => {
     const summary = rowToSummary(row, taskNameByTaskId.get(row.taskId) ?? '')
-    const title = agentTitleByTaskAndNode.get(row.taskId)?.get(row.sourceAgentNodeId)
-    summary.sourceAgentNodeTitle = typeof title === 'string' && title.length > 0 ? title : null
+    const titles = titleByTaskAndNode.get(row.taskId)
+    const srcTitle = titles?.get(row.sourceAgentNodeId)
+    summary.sourceAgentNodeTitle =
+      typeof srcTitle === 'string' && srcTitle.length > 0 ? srcTitle : null
+    const clarTitle = titles?.get(row.clarifyNodeId)
+    summary.clarifyNodeTitle =
+      typeof clarTitle === 'string' && clarTitle.length > 0 ? clarTitle : null
     return summary
   })
 }
@@ -669,12 +683,13 @@ async function loadTaskNamesByTaskId(
 
 /**
  * Bulk-fetch the `tasks.workflowSnapshot` rows for `taskIds` and extract
- * each non-empty agent-{single,multi} node title into a nested map
- * `taskId → nodeId → title`. Used by listClarifySummaries to enrich
- * inbox rows with the user-set "display name" (RFC node-title field).
- * Pure read; corrupt snapshots or missing tasks degrade to empty maps.
+ * each non-empty node title into a nested map `taskId → nodeId → title`.
+ * Both source-agent and clarify nodes are indexed so the inbox can render
+ * `sourceAgentNodeTitle` AND `clarifyNodeTitle` (RFC-037 follow-up: clarify
+ * surface aligned with the review side, which uses node titles with nodeId
+ * fallback). Pure read; corrupt snapshots or missing tasks degrade to empty.
  */
-async function loadAgentNodeTitlesByTask(
+async function loadNodeTitlesByTask(
   db: DbClient,
   taskIds: string[],
 ): Promise<Map<string, Map<string, string>>> {
@@ -689,7 +704,8 @@ async function loadAgentNodeTitlesByTask(
       const def = JSON.parse(t.workflowSnapshot) as WorkflowDefinition
       for (const node of def.nodes ?? []) {
         const rec = node as Record<string, unknown>
-        if (rec.kind !== 'agent-single' && rec.kind !== 'agent-multi') continue
+        if (rec.kind !== 'agent-single' && rec.kind !== 'agent-multi' && rec.kind !== 'clarify')
+          continue
         const title = typeof rec.title === 'string' ? rec.title.trim() : ''
         if (title.length === 0) continue
         inner.set(node.id, title)
@@ -727,7 +743,19 @@ export async function getClarifyDetail(
       `no clarify_session for clarify node_run ${clarifyNodeRunId}`,
     )
   }
-  return rowToSession(row)
+  const session = rowToSession(row)
+  // RFC-037 follow-up: resolve the clarify node's `WorkflowNode.title` from
+  // the task snapshot so the detail page can render "任务名 / 节点标题"
+  // mirroring the review side. Failure to resolve degrades to null and the
+  // frontend keeps the existing fallback to `clarifyNodeId`.
+  const titlesByTaskAndNode = await loadNodeTitlesByTask(db, [row.taskId])
+  const clarTitle = titlesByTaskAndNode.get(row.taskId)?.get(row.clarifyNodeId)
+  if (typeof clarTitle === 'string' && clarTitle.length > 0) {
+    session.clarifyNodeTitle = clarTitle
+  } else {
+    session.clarifyNodeTitle = null
+  }
+  return session
 }
 
 // ---------------------------------------------------------------------------
@@ -908,6 +936,10 @@ function rowToSummary(
     sourceAgentNodeTitle: null,
     sourceShardKey: row.sourceShardKey,
     clarifyNodeId: row.clarifyNodeId,
+    // Same convention as sourceAgentNodeTitle — list path enriches from
+    // snapshot, single-session paths leave null and the frontend falls
+    // back to `clarifyNodeId`.
+    clarifyNodeTitle: null,
     clarifyNodeRunId: row.clarifyNodeRunId,
     iterationIndex: row.iterationIndex,
     questionCount,
@@ -927,6 +959,7 @@ function sessionToSummary(session: ClarifySession, taskName: string): ClarifySes
     sourceAgentNodeTitle: null,
     sourceShardKey: session.sourceShardKey ?? null,
     clarifyNodeId: session.clarifyNodeId,
+    clarifyNodeTitle: session.clarifyNodeTitle ?? null,
     clarifyNodeRunId: session.clarifyNodeRunId,
     iterationIndex: session.iterationIndex,
     questionCount: session.questions.length,

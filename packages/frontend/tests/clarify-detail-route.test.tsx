@@ -196,6 +196,28 @@ describe('/clarify/$nodeRunId detail (RFC-023 T23)', () => {
     const src = readFileSync(join(__dirname, '..', 'src', 'routes', 'clarify.detail.tsx'), 'utf8')
     expect(src).toContain('sourceShardKey')
   })
+
+  // RFC-037 follow-up: H1 reads "{taskName} / {clarifyNodeTitle || clarifyNodeId}"
+  // — the same pattern reviews.detail.tsx uses, so the two pages are visually
+  // interchangeable. Test the title path; the taskName mock is intentionally
+  // left undefined so we isolate the node-label branch.
+  test('H1 prefers clarifyNodeTitle when present, falls back to clarifyNodeId otherwise', async () => {
+    // With title.
+    mockApi(mkSession({ clarifyNodeTitle: 'Ask user about the DB' }))
+    const { unmount } = renderRoute()
+    await waitFor(() => screen.getByTestId('clarify-context-card'))
+    expect(document.querySelector('h1')?.textContent ?? '').toContain('Ask user about the DB')
+    unmount()
+    vi.restoreAllMocks()
+
+    // Without title — H1 keeps the id so it's never empty.
+    mockApi(mkSession({ clarifyNodeTitle: null }))
+    renderRoute()
+    await waitFor(() => screen.getByTestId('clarify-context-card'))
+    const heading = document.querySelector('h1')?.textContent ?? ''
+    expect(heading).toContain('c1')
+    expect(heading).not.toContain('Ask user about the DB')
+  })
 })
 
 // Reviewer keyboard ergonomics: once the form is loaded, digit / Enter

@@ -97,13 +97,25 @@ export function InboxDrawer({ open, onClose }: InboxDrawerProps) {
     }
     if (tab === 'all' || tab === 'clarify') {
       for (const c of clarify.data ?? []) {
-        // Prefer the source-agent node's user-set display name (RFC
-        // node-title field) so the row reads "Coder" not "agent_xy_01".
-        // Null/empty falls back to the opaque node id.
-        const agentTitle =
+        // The clarify-list + clarify-detail pages identify a clarify entry
+        // by its *clarify node* title (parallel to how the review list
+        // uses the review node title). The inbox preview needs the same
+        // identity or "open this row" jumps to a header reading something
+        // different than what the row promised. Fall back order:
+        // clarifyNodeTitle → clarifyNodeId (the opaque workflow node id).
+        const clarifyTitle =
+          typeof c.clarifyNodeTitle === 'string' && c.clarifyNodeTitle.length > 0
+            ? c.clarifyNodeTitle
+            : c.clarifyNodeId
+        // Source agent shown as supporting context underneath; prefer its
+        // user-set display name when available.
+        const agentLabel =
           typeof c.sourceAgentNodeTitle === 'string' && c.sourceAgentNodeTitle.length > 0
             ? c.sourceAgentNodeTitle
             : c.sourceAgentNodeId
+        const shardOrIter = c.sourceShardKey
+          ? `shard ${c.sourceShardKey}`
+          : `iter ${c.iterationIndex}`
         rows.push({
           kind: 'clarify',
           // React key uses the session id (always unique). The nav target
@@ -116,8 +128,8 @@ export function InboxDrawer({ open, onClose }: InboxDrawerProps) {
           id: c.clarifyNodeRunId,
           taskId: c.taskId,
           taskName: c.taskName,
-          title: agentTitle,
-          subtitle: c.sourceShardKey ? `shard ${c.sourceShardKey}` : `iter ${c.iterationIndex}`,
+          title: clarifyTitle,
+          subtitle: `← ${agentLabel} · ${shardOrIter}`,
           createdAt: c.createdAt,
         })
       }

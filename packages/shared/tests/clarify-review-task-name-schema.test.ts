@@ -31,6 +31,25 @@ describe('ClarifySessionSummarySchema.taskName', () => {
   test('rejects when taskName is missing', () => {
     expect(ClarifySessionSummarySchema.safeParse(base).success).toBe(false)
   })
+
+  // RFC-037 follow-up: optional `clarifyNodeTitle` field surfaces the
+  // workflow-node display name on the inbox row. Parallel to the existing
+  // `sourceAgentNodeTitle` field — must accept string / null / absent for
+  // forward + backward compat.
+  test('accepts clarifyNodeTitle as string, null, or absent', () => {
+    expect(
+      ClarifySessionSummarySchema.safeParse({
+        ...base,
+        taskName: 't',
+        clarifyNodeTitle: 'Ask user about the DB',
+      }).success,
+    ).toBe(true)
+    expect(
+      ClarifySessionSummarySchema.safeParse({ ...base, taskName: 't', clarifyNodeTitle: null })
+        .success,
+    ).toBe(true)
+    expect(ClarifySessionSummarySchema.safeParse({ ...base, taskName: 't' }).success).toBe(true)
+  })
 })
 
 describe('ReviewSummarySchema.taskName', () => {

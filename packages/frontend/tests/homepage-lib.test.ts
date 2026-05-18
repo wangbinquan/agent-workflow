@@ -75,17 +75,25 @@ describe('RFC-032 mergeInboxItems — locks newest-first ordering and limit', ()
     expect(result[1]?.kind).toBe('clarify')
   })
 
-  test('clarify shard key → "shard X" subtitle; null shard → "iter N"', () => {
+  test('clarify subtitle carries source-agent label + shard/iter; "shard X" when shardKey set, "iter N" when null', () => {
     const result = mergeInboxItems(
       [],
       [
-        clarify({ clarifyNodeRunId: 'a', sourceShardKey: 'shard-1' }),
-        clarify({ clarifyNodeRunId: 'b', sourceShardKey: null, iterationIndex: 3, createdAt: 1 }),
+        clarify({ clarifyNodeRunId: 'a', sourceAgentNodeId: 'coder', sourceShardKey: 'shard-1' }),
+        clarify({
+          clarifyNodeRunId: 'b',
+          sourceAgentNodeId: 'designer',
+          sourceShardKey: null,
+          iterationIndex: 3,
+          createdAt: 1,
+        }),
       ],
     )
     const subtitles = result.map((r) => r.subtitle)
-    expect(subtitles).toContain('shard shard-1')
-    expect(subtitles).toContain('iter 3')
+    // Subtitle format: "← {agentLabel} · {shard|iter}". Locks both halves
+    // present so a future refactor can't drop the agent attribution.
+    expect(subtitles.some((s) => s.includes('coder') && s.includes('shard shard-1'))).toBe(true)
+    expect(subtitles.some((s) => s.includes('designer') && s.includes('iter 3'))).toBe(true)
   })
 
   test('output capped at INBOX_PREVIEW_LIMIT', () => {
@@ -104,65 +112,76 @@ describe('RFC-032 mergeInboxItems — locks newest-first ordering and limit', ()
     expect(mergeInboxItems(reviews, [], 1).map((r) => r.id)).toEqual(['r2'])
   })
 
-  // Source-agent title surfacing — locks in: when the backend has
-  // enriched a clarify summary with sourceAgentNodeTitle from the workflow
-  // snapshot, the inbox row uses that display name instead of the opaque
-  // node id. Null / empty title falls back to sourceAgentNodeId.
-  test('clarify row prefers sourceAgentNodeTitle when set', () => {
+  // Clarify row identity (RFC-037 follow-up):
+  // - title = the clarify node's own display name (clarifyNodeTitle), falling
+  //   back to clarifyNodeId. Previously the title was the source-agent's
+  //   name, which made the inbox read "Coder" while clicking the row took
+  //   the user to a "Ask user about the DB" clarify page — different identity
+  //   to the row promised.
+  // - subtitle keeps the source-agent label so users still know which agent
+  //   is asking ("← {agentLabel} · {shard|iter}").
+  test('clarify row title prefers clarifyNodeTitle; subtitle carries the source-agent label', () => {
     const result = mergeInboxItems(
       [],
       [
         clarify({
           clarifyNodeRunId: 'cn1',
+          clarifyNodeId: 'clarify_db',
+          clarifyNodeTitle: 'Ask user about the DB',
           sourceAgentNodeId: 'agent_xy_01',
           sourceAgentNodeTitle: 'Implementation Coder',
         }),
       ],
     )
-    expect(result[0]?.title).toBe('Implementation Coder')
+    expect(result[0]?.title).toBe('Ask user about the DB')
+    expect(result[0]?.subtitle).toContain('Implementation Coder')
   })
 
-  test('clarify row falls back to sourceAgentNodeId when title is null', () => {
+  test('clarify row title falls back to clarifyNodeId when clarifyNodeTitle is null', () => {
     const result = mergeInboxItems(
       [],
       [
         clarify({
           clarifyNodeRunId: 'cn1',
+          clarifyNodeId: 'clarify_db',
+          clarifyNodeTitle: null,
           sourceAgentNodeId: 'agent_xy_01',
-          sourceAgentNodeTitle: null,
         }),
       ],
     )
-    expect(result[0]?.title).toBe('agent_xy_01')
+    expect(result[0]?.title).toBe('clarify_db')
   })
 
-  test('clarify row falls back to sourceAgentNodeId when title is empty', () => {
+  test('clarify row title falls back to clarifyNodeId when clarifyNodeTitle is empty', () => {
     const result = mergeInboxItems(
       [],
       [
         clarify({
           clarifyNodeRunId: 'cn1',
-          sourceAgentNodeId: 'agent_xy_01',
-          sourceAgentNodeTitle: '',
+          clarifyNodeId: 'clarify_db',
+          clarifyNodeTitle: '',
         }),
       ],
     )
-    expect(result[0]?.title).toBe('agent_xy_01')
+    expect(result[0]?.title).toBe('clarify_db')
   })
 
-  test('clarify row falls back to sourceAgentNodeId when title field is omitted (legacy backend)', () => {
+  test('clarify row title falls back to clarifyNodeId when clarifyNodeTitle field is omitted (legacy backend)', () => {
     const result = mergeInboxItems(
       [],
       [
         clarify({
           clarifyNodeRunId: 'cn1',
+          clarifyNodeId: 'clarify_legacy',
           sourceAgentNodeId: 'agent_legacy',
-          // Note: sourceAgentNodeTitle deliberately not passed — simulates a
-          // backend that hasn't been upgraded to the title-surfacing path.
+          // clarifyNodeTitle / sourceAgentNodeTitle intentionally omitted —
+          // simulates a pre-upgrade backend.
         }),
       ],
     )
-    expect(result[0]?.title).toBe('agent_legacy')
+    expect(result[0]?.title).toBe('clarify_legacy')
+    // Subtitle still carries the raw source agent id as fallback context.
+    expect(result[0]?.subtitle).toContain('agent_legacy')
   })
 
   // Locks in the fix for the "inbox tab switch leaves stale rows" bug.

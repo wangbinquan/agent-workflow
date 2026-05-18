@@ -109,42 +109,66 @@ export function ClarifyListPage() {
               </tr>
             </thead>
             <tbody>
-              {items.map((s) => (
-                <tr key={s.id} data-status={s.status} data-testid={`clarify-row-${s.id}`}>
-                  <td>
-                    <div className="reviews-row__title">{s.clarifyNodeId}</div>
-                    <code className="chip chip--tight reviews-row__nodeid">
-                      ← {s.sourceAgentNodeId}
-                      {s.sourceShardKey !== null && (
-                        <span data-testid="clarify-row-shard"> · {s.sourceShardKey}</span>
+              {items.map((s) => {
+                // RFC-037 follow-up: prefer the user-set node title (matches
+                // the review list's `title || reviewNodeId` pattern). When
+                // the title equals the id (legacy snapshots) we collapse to
+                // the id-only render to avoid a redundant chip underneath.
+                const clarifyTitle =
+                  typeof s.clarifyNodeTitle === 'string' && s.clarifyNodeTitle.length > 0
+                    ? s.clarifyNodeTitle
+                    : null
+                const sourceTitle =
+                  typeof s.sourceAgentNodeTitle === 'string' && s.sourceAgentNodeTitle.length > 0
+                    ? s.sourceAgentNodeTitle
+                    : null
+                const hasClarifyTitle = clarifyTitle !== null && clarifyTitle !== s.clarifyNodeId
+                return (
+                  <tr key={s.id} data-status={s.status} data-testid={`clarify-row-${s.id}`}>
+                    <td>
+                      {hasClarifyTitle ? (
+                        <>
+                          <div className="reviews-row__title">{clarifyTitle}</div>
+                          <code className="chip chip--tight reviews-row__nodeid">
+                            {s.clarifyNodeId}
+                          </code>
+                        </>
+                      ) : (
+                        <code className="chip chip--tight">{s.clarifyNodeId}</code>
                       )}
-                    </code>
-                  </td>
-                  <td>
-                    <span
-                      className={`status-chip status-chip--${
-                        s.status === 'awaiting_human' ? 'amber' : 'green'
-                      }`}
-                    >
-                      {s.status === 'awaiting_human'
-                        ? t('clarify.list.statusAwaiting')
-                        : t('clarify.list.statusAnswered')}
-                    </span>
-                  </td>
-                  <td>{s.iterationIndex}</td>
-                  <td>{s.questionCount}</td>
-                  <td className="muted">{new Date(s.createdAt).toLocaleString()}</td>
-                  <td>
-                    <Link
-                      to="/clarify/$nodeRunId"
-                      params={{ nodeRunId: s.clarifyNodeRunId }}
-                      className="btn btn--sm"
-                    >
-                      {t('clarify.list.openButton')}
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+                      <code className="chip chip--tight reviews-row__nodeid">
+                        ← {sourceTitle ?? s.sourceAgentNodeId}
+                        {s.sourceShardKey !== null && (
+                          <span data-testid="clarify-row-shard"> · {s.sourceShardKey}</span>
+                        )}
+                      </code>
+                    </td>
+                    <td>
+                      <span
+                        className={`status-chip status-chip--${
+                          s.status === 'awaiting_human' ? 'amber' : 'green'
+                        }`}
+                      >
+                        {s.status === 'awaiting_human'
+                          ? t('clarify.list.statusAwaiting')
+                          : t('clarify.list.statusAnswered')}
+                      </span>
+                    </td>
+                    <td>{s.iterationIndex}</td>
+                    <td>{s.questionCount}</td>
+                    <td className="muted">{new Date(s.createdAt).toLocaleString()}</td>
+                    <td>
+                      <Link
+                        to="/clarify/$nodeRunId"
+                        params={{ nodeRunId: s.clarifyNodeRunId }}
+                        className="btn btn--sm"
+                      >
+                        {t('clarify.list.openButton')}
+                      </Link>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </section>

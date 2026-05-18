@@ -34,6 +34,8 @@ function mockLists(opts: {
     Partial<{
       id: string
       clarifyNodeRunId: string
+      clarifyNodeId: string
+      clarifyNodeTitle: string | null
       taskId: string
       sourceAgentNodeId: string
       sourceAgentNodeTitle: string | null
@@ -74,7 +76,8 @@ function mockLists(opts: {
         sourceAgentNodeId: c.sourceAgentNodeId ?? `agent_${i}`,
         sourceAgentNodeTitle: c.sourceAgentNodeTitle === undefined ? null : c.sourceAgentNodeTitle,
         sourceShardKey: null,
-        clarifyNodeId: 'clarify_node',
+        clarifyNodeId: c.clarifyNodeId ?? 'clarify_node',
+        clarifyNodeTitle: c.clarifyNodeTitle === undefined ? null : c.clarifyNodeTitle,
         clarifyNodeRunId: c.clarifyNodeRunId ?? `cn${i}`,
         iterationIndex: 0,
         questionCount: 2,
@@ -203,15 +206,19 @@ describe('RFC-032 InboxDrawer', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
-  // Clarify rows prefer the source-agent node's user-set title (the new
-  // WorkflowNode.title field surfaced through `sourceAgentNodeTitle`) so
-  // the inbox reads "节点名" instead of an opaque internal id.
-  test('clarify row title uses sourceAgentNodeTitle when set', async () => {
+  // RFC-037 follow-up: a clarify row's *identity* is the clarify node
+  // itself — that's what the row's open target navigates to and what the
+  // clarify list + detail pages display. Title fallback order:
+  // clarifyNodeTitle → clarifyNodeId. The source-agent attribution moves
+  // into the subtitle so users still know which agent is asking.
+  test('clarify row title uses clarifyNodeTitle when set; subtitle carries source-agent label', async () => {
     mockLists({
       clarify: [
         {
           id: 'cn-titled',
           clarifyNodeRunId: 'cn-titled',
+          clarifyNodeId: 'clarify_db',
+          clarifyNodeTitle: 'Ask user about the DB',
           sourceAgentNodeId: 'agent_xy_01',
           sourceAgentNodeTitle: 'Implementation Coder',
         },
@@ -219,16 +226,21 @@ describe('RFC-032 InboxDrawer', () => {
     })
     wrap(<InboxDrawer open={true} onClose={() => {}} />)
     const row = await screen.findByTestId('inbox-row-clarify-cn-titled')
+    expect(row.textContent ?? '').toContain('Ask user about the DB')
+    // Source agent still surfaces as supporting context in the subtitle.
     expect(row.textContent ?? '').toContain('Implementation Coder')
-    expect(row.textContent ?? '').not.toContain('agent_xy_01')
+    // The clarify node id is not in the row text (avoid double-rendering it).
+    expect(row.textContent ?? '').not.toContain('clarify_db')
   })
 
-  test('clarify row title falls back to sourceAgentNodeId when title is null', async () => {
+  test('clarify row title falls back to clarifyNodeId when clarifyNodeTitle is null', async () => {
     mockLists({
       clarify: [
         {
           id: 'cn-untitled',
           clarifyNodeRunId: 'cn-untitled',
+          clarifyNodeId: 'clarify_legacy',
+          clarifyNodeTitle: null,
           sourceAgentNodeId: 'agent_legacy_99',
           sourceAgentNodeTitle: null,
         },
@@ -236,6 +248,9 @@ describe('RFC-032 InboxDrawer', () => {
     })
     wrap(<InboxDrawer open={true} onClose={() => {}} />)
     const row = await screen.findByTestId('inbox-row-clarify-cn-untitled')
+    expect(row.textContent ?? '').toContain('clarify_legacy')
+    // The raw source-agent id still appears in the subtitle when its title
+    // is unavailable — keeps the row debuggable for older snapshots.
     expect(row.textContent ?? '').toContain('agent_legacy_99')
   })
 

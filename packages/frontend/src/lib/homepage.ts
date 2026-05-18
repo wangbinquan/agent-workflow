@@ -64,24 +64,34 @@ export function mergeInboxItems(
     })
   }
   for (const c of clarify) {
-    // Prefer the source-agent node's user-set display name (RFC node-title
-    // field) so the inbox shows "节点名" — matches what the review tab
-    // already does. Null/empty falls back to the raw node id.
-    const agentTitle =
+    // Identify the row by the *clarify node* — that's what the clarify
+    // list + detail pages now display, and what the row's "open" target
+    // takes the user to. Previously the row title carried the source
+    // agent's name, which made the inbox read like "Coder" even though
+    // clicking it took the user to a `Ask user about the DB` clarify
+    // page. Fall back order: clarifyNodeTitle → clarifyNodeId.
+    const clarifyTitle =
+      typeof c.clarifyNodeTitle === 'string' && c.clarifyNodeTitle.length > 0
+        ? c.clarifyNodeTitle
+        : c.clarifyNodeId
+    // Keep the source-agent label as supporting context in the subtitle
+    // so users still know which agent is asking.
+    const agentLabel =
       typeof c.sourceAgentNodeTitle === 'string' && c.sourceAgentNodeTitle.length > 0
         ? c.sourceAgentNodeTitle
         : c.sourceAgentNodeId
+    const shardOrIter =
+      c.sourceShardKey !== null && c.sourceShardKey !== ''
+        ? `shard ${c.sourceShardKey}`
+        : `iter ${c.iterationIndex}`
     out.push({
       kind: 'clarify',
       rowKey: c.id,
       id: c.clarifyNodeRunId,
       taskId: c.taskId,
       taskName: c.taskName,
-      title: agentTitle,
-      subtitle:
-        c.sourceShardKey !== null && c.sourceShardKey !== ''
-          ? `shard ${c.sourceShardKey}`
-          : `iter ${c.iterationIndex}`,
+      title: clarifyTitle,
+      subtitle: `← ${agentLabel} · ${shardOrIter}`,
       timestamp: c.createdAt,
     })
   }

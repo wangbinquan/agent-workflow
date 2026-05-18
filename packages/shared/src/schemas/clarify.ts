@@ -158,6 +158,13 @@ export const ClarifySessionSchema = z.object({
   /** Shard key when the asking agent is an agent-multi child; null otherwise. */
   sourceShardKey: z.string().nullable().default(null),
   clarifyNodeId: z.string(),
+  /**
+   * Display name from the workflow snapshot's clarify node (`WorkflowNode.title`).
+   * Mirrors `sourceAgentNodeTitle`; surfaced so the detail H1 can render
+   * "任务名 / 节点名" parity with the review side (RFC-037 follow-up). Null
+   * when the clarify node has no title set or the snapshot is unavailable.
+   */
+  clarifyNodeTitle: z.string().nullable().optional(),
   clarifyNodeRunId: z.string(),
   /** Matches the source agent node_run's clarifyIteration at ask-time. */
   iterationIndex: z.number().int().nonnegative(),
@@ -198,6 +205,13 @@ export const ClarifySessionSummarySchema = z.object({
   sourceAgentNodeTitle: z.string().nullable().optional(),
   sourceShardKey: z.string().nullable(),
   clarifyNodeId: z.string(),
+  /**
+   * Display name from the workflow snapshot's clarify node. Parallel to
+   * `sourceAgentNodeTitle`; lets the inbox row render "节点标题" instead of
+   * the opaque `clarifyNodeId`. Null when no title is set or the snapshot
+   * is unavailable. Optional for back-compat with older daemons.
+   */
+  clarifyNodeTitle: z.string().nullable().optional(),
   clarifyNodeRunId: z.string(),
   iterationIndex: z.number().int().nonnegative(),
   questionCount: z.number().int().nonnegative(),

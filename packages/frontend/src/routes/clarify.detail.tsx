@@ -306,12 +306,23 @@ export function ClarifyDetailPage() {
         <Link to="/clarify" className="link">
           {t('clarify.detail.back')}
         </Link>
-        {/* RFC-037: lead with the user-supplied task name (when loaded);
-            fall back to the clarify node id so the heading is never empty. */}
+        {/* RFC-037 + follow-up: lead with the user-supplied task name (when
+            loaded), then the clarify node title (workflowSnapshot's
+            `WorkflowNode.title`) with a fall-back to the clarify node id —
+            same pattern as the review detail page so the two surfaces read
+            identically. */}
         <h1>
-          {taskQuery.data?.name && taskQuery.data.name.length > 0
-            ? `${taskQuery.data.name} / ${s.clarifyNodeId}`
-            : s.clarifyNodeId}
+          {(() => {
+            const nodeLabel =
+              typeof s.clarifyNodeTitle === 'string' &&
+              s.clarifyNodeTitle.length > 0 &&
+              s.clarifyNodeTitle !== s.clarifyNodeId
+                ? s.clarifyNodeTitle
+                : s.clarifyNodeId
+            const hasTaskName =
+              typeof taskQuery.data?.name === 'string' && taskQuery.data.name.length > 0
+            return hasTaskName ? `${taskQuery.data!.name} / ${nodeLabel}` : nodeLabel
+          })()}
         </h1>
         {taskQuery.data?.name && taskQuery.data.name.length > 0 && (
           <div className="muted" data-testid="clarify-detail-task-name">
