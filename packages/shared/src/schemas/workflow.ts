@@ -56,6 +56,15 @@ export const WorkflowNodeSchema = z
     id: z.string().min(1),
     kind: NodeKindSchema,
     position: XYSchema.optional(),
+    /**
+     * Optional user-visible display name shown on the canvas card and used
+     * by `nodeTitle()` ahead of any kind-specific derivation (agentName /
+     * inputKey / etc). Free-form, no uniqueness constraint — the node's
+     * `id` remains the stable identifier referenced by edges / port refs.
+     * `review` and `clarify` nodes' existing `title` field reuses the same
+     * key, so old definitions roundtrip unchanged.
+     */
+    title: z.string().optional(),
   })
   .passthrough()
 export type WorkflowNode = z.infer<typeof WorkflowNodeSchema>

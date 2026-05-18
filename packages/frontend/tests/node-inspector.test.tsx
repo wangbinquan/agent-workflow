@@ -504,4 +504,68 @@ describe('NodeInspector', () => {
     tabs = document.querySelectorAll('.tabs--inspector .tabs__tab')
     expect(tabs.length).toBe(2)
   })
+
+  // Display-name field — locks in the unified `title` editor surfaced for
+  // every node kind. Earlier behaviour: agent / input / output / wrapper
+  // nodes had no editable display name; only review / clarify carried a
+  // kind-specific title field. The new field writes to `node.title` and
+  // blanking it strips the key so the canvas falls back to the previous
+  // derivation (agentName / inputKey / id).
+  test('display name field: agent-single writes node.title', () => {
+    const { onChange } = setup({ id: 'a1', kind: 'agent-single', agentName: 'coder' })
+    const titleEl = screen.getByLabelText(/Display name/i) as HTMLInputElement
+    fireEvent.change(titleEl, { target: { value: 'My coder' } })
+    const next = lastPatchedNode(onChange) as unknown as { title?: string }
+    expect(next.title).toBe('My coder')
+  })
+
+  test('display name field: blanking strips node.title entirely', () => {
+    const { onChange } = setup({
+      id: 'a1',
+      kind: 'agent-single',
+      agentName: 'coder',
+      title: 'My coder',
+    } as unknown as WorkflowNode)
+    const titleEl = screen.getByLabelText(/Display name/i) as HTMLInputElement
+    fireEvent.change(titleEl, { target: { value: '' } })
+    const next = lastPatchedNode(onChange) as unknown as Record<string, unknown>
+    expect('title' in next).toBe(false)
+  })
+
+  test('display name field: rendered for input / wrapper / output kinds too', () => {
+    // Input
+    const { unmount: u1 } = wrap(
+      <Host
+        initial={{ id: 'i1', kind: 'input', inputKey: 'req' } as unknown as WorkflowNode}
+        agents={[]}
+        onChangeSpy={() => {}}
+        onCloseSpy={() => {}}
+      />,
+    )
+    expect(screen.queryByLabelText(/Display name/i)).not.toBeNull()
+    u1()
+
+    // Wrapper-git
+    const { unmount: u2 } = wrap(
+      <Host
+        initial={{ id: 'w1', kind: 'wrapper-git', nodeIds: [] } as unknown as WorkflowNode}
+        agents={[]}
+        onChangeSpy={() => {}}
+        onCloseSpy={() => {}}
+      />,
+    )
+    expect(screen.queryByLabelText(/Display name/i)).not.toBeNull()
+    u2()
+
+    // Output
+    wrap(
+      <Host
+        initial={{ id: 'o1', kind: 'output', ports: [] } as unknown as WorkflowNode}
+        agents={[]}
+        onChangeSpy={() => {}}
+        onCloseSpy={() => {}}
+      />,
+    )
+    expect(screen.queryByLabelText(/Display name/i)).not.toBeNull()
+  })
 })

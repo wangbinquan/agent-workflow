@@ -914,6 +914,8 @@ export interface Resources {
       minCount: string
       maxCount: string
     }
+    fieldNodeTitle: string
+    fieldNodeTitleHint: string
     fieldReviewTitle: string
     fieldReviewTitleHint: string
     fieldReviewDescription: string
@@ -2328,6 +2330,8 @@ export const zhCN: Resources = {
       minCount: '最少文件数',
       maxCount: '最多文件数',
     },
+    fieldNodeTitle: '显示名',
+    fieldNodeTitleHint: '画布卡片上的标题；为空时回退到 agent 名 / input key / 节点 id。',
     fieldReviewTitle: '评审标题',
     fieldReviewTitleHint: '展示在评审列表与详情头部；可为空，会回退到节点 id。',
     fieldReviewDescription: '评审说明',

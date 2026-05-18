@@ -138,6 +138,26 @@ interface EditProps {
 function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps) {
   const { t } = useTranslation()
   const rec = node as unknown as Record<string, unknown>
+  const nodeTitle = typeof rec.title === 'string' ? rec.title : ''
+  // Shared display-name input rendered above every kind-specific form.
+  // Writes go through onPatch so review/clarify (which already used the same
+  // `title` field) continue to roundtrip identically; agent-* / input /
+  // output / wrappers opt in via the same key.
+  const titleField = (
+    <Field label={t('inspector.fieldNodeTitle')} hint={t('inspector.fieldNodeTitleHint')}>
+      <TextInput
+        value={nodeTitle}
+        onChange={(v) => {
+          // Strip the field entirely when the user blanks it so the canvas
+          // falls back to the kind-specific derivation (agentName etc.).
+          const next = { ...(node as Record<string, unknown>) }
+          if (v.length === 0) delete next.title
+          else next.title = v
+          onPatch(next as unknown as WorkflowNode)
+        }}
+      />
+    </Field>
+  )
 
   switch (node.kind) {
     case 'input': {
@@ -154,6 +174,7 @@ function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps)
       const inputDescription = inputDef?.description ?? ''
       return (
         <div className="form-grid">
+          {titleField}
           <Field
             label={t('inspector.fieldInputKey')}
             required
@@ -256,6 +277,7 @@ function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps)
       }
       return (
         <div className="form-grid">
+          {titleField}
           <Field label={t('inspector.fieldOutputPorts')} hint={t('inspector.fieldOutputPortsHint')}>
             <ul className="inspector__output-ports">
               {ports.map((p, i) => (
@@ -323,6 +345,7 @@ function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps)
       if (!isLoop) {
         return (
           <div className="form-grid">
+            {titleField}
             <Field label={t('inspector.innerNodeIds')} hint={t('inspector.innerNodeIdsHint')}>
               <div className="muted">
                 {inner.length === 0
@@ -362,6 +385,7 @@ function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps)
       }
       return (
         <div className="form-grid">
+          {titleField}
           <div className="info-box info-box--muted">{t('inspector.loopBanner')}</div>
           <Field label={t('inspector.fieldMaxIterations')} required>
             <NumberInput
@@ -590,7 +614,6 @@ function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps)
         nodeId?: string
         portName?: string
       }
-      const title = typeof rec.title === 'string' ? rec.title : ''
       const description = typeof rec.description === 'string' ? rec.description : ''
       const rerunnableOnReject = Array.isArray(rec.rerunnableOnReject)
         ? (rec.rerunnableOnReject as string[])
@@ -647,9 +670,7 @@ function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps)
 
       return (
         <div className="form-grid">
-          <Field label={t('inspector.fieldReviewTitle')} hint={t('inspector.fieldReviewTitleHint')}>
-            <TextInput value={title} onChange={(v) => patchReview({ title: v })} />
-          </Field>
+          {titleField}
           <Field
             label={t('inspector.fieldReviewDescription')}
             hint={t('inspector.fieldReviewDescriptionHint')}
@@ -764,7 +785,6 @@ function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps)
       // ports `__clarify__` / `__clarify_response__` carry that link).
       // Ports are hard-coded ('questions' / 'answers') so we do NOT expose
       // a port editor.
-      const title = typeof rec.title === 'string' ? rec.title : ''
       const description = typeof rec.description === 'string' ? rec.description : ''
 
       // Find the linked agent (if any) by walking edges for a `__clarify__`
@@ -790,12 +810,7 @@ function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps)
 
       return (
         <div className="form-grid">
-          <Field
-            label={t('inspector.fieldClarifyTitle')}
-            hint={t('inspector.fieldClarifyTitleHint')}
-          >
-            <TextInput value={title} onChange={(v) => patchClarify({ title: v })} />
-          </Field>
+          {titleField}
           <Field
             label={t('inspector.fieldClarifyDescription')}
             hint={t('inspector.fieldClarifyDescriptionHint')}
@@ -897,6 +912,7 @@ function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps)
 
       return (
         <div className="form-grid">
+          {titleField}
           <Field
             label={t('inspector.fieldAgent')}
             required

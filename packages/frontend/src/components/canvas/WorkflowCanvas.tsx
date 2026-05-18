@@ -1187,8 +1187,16 @@ function toFlowNodes(
   })
 }
 
-function nodeTitle(n: WorkflowNode): string {
+export function nodeTitle(n: WorkflowNode): string {
   const rec = n as unknown as Record<string, unknown>
+  // User-set display name always wins. `review` / `clarify` historically
+  // wrote `title` directly; agent-* and other kinds opt in via the
+  // Inspector's "display name" field. Empty string falls back to the
+  // kind-specific derivation so blanking the input doesn't strand the
+  // card with no label.
+  if (typeof rec.title === 'string' && rec.title.length > 0) {
+    return rec.title
+  }
   if (n.kind === 'agent-single' || n.kind === 'agent-multi') {
     return typeof rec.agentName === 'string' ? rec.agentName : '(unset agent)'
   }

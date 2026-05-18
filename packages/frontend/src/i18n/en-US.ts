@@ -977,6 +977,9 @@ export const enUS: Resources = {
       minCount: 'Min file count',
       maxCount: 'Max file count',
     },
+    fieldNodeTitle: 'Display name',
+    fieldNodeTitleHint:
+      'Shown on the canvas card. When empty, falls back to the agent name / input key / node id.',
     fieldReviewTitle: 'Review title',
     fieldReviewTitleHint:
       'Shown in the Reviews list + detail header. Falls back to the node id when empty.',
