@@ -7,6 +7,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
+import { Select } from '@/components/Select'
 import { usePermission } from '@/hooks/useActor'
 import { Route as RootRoute } from './__root'
 
@@ -191,10 +192,33 @@ function CreateUserDialog(props: {
         </label>
         <label className="form-field">
           <span className="form-field__label">{t('users.role', { defaultValue: 'Role' })}</span>
-          <select value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'user')}>
-            <option value="user">user</option>
-            <option value="admin">admin</option>
-          </select>
+          <Select<'admin' | 'user'>
+            value={role}
+            onChange={setRole}
+            ariaLabel={t('users.role', { defaultValue: 'Role' })}
+            options={[
+              {
+                value: 'user',
+                label: t('users.role.user', { defaultValue: 'user' }),
+                description: t('users.role.userDesc', {
+                  defaultValue: 'Resource read + launch tasks + manage own account.',
+                }),
+              },
+              {
+                value: 'admin',
+                label: t('users.role.admin', { defaultValue: 'admin' }),
+                description: t('users.role.adminDesc', {
+                  defaultValue: 'Full access: users, settings, OIDC, all tasks.',
+                }),
+              },
+            ]}
+            renderOption={(opt) => (
+              <span className="select__option-stack">
+                <span className="select__option-title">{opt.label}</span>
+                {opt.description && <span className="select__option-sub">{opt.description}</span>}
+              </span>
+            )}
+          />
         </label>
         <label className="form-field">
           <span className="form-field__label">

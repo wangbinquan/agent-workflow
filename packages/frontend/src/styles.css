@@ -420,6 +420,135 @@ code {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
+/* RFC-036 — custom <Select> component. The native <select> popup is
+   browser-chrome we cannot restyle, so callers that need the dropdown
+   to match the dialog's input rhythm should use components/Select.tsx
+   which renders a trigger + a styled listbox panel. */
+.select {
+  position: relative;
+  width: 100%;
+}
+
+.select__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.select__trigger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.select__trigger:focus-visible,
+.select[data-open='true'] > .select__trigger {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.select__trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.select__value {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.select__chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 10px;
+  transition: transform 0.12s ease;
+}
+
+.select[data-open='true'] .select__chevron {
+  transform: rotate(180deg);
+}
+
+.select__listbox {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.18));
+  z-index: 50;
+  max-height: 280px;
+  overflow-y: auto;
+  outline: none;
+}
+
+.select__option {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  user-select: none;
+}
+
+.select__option--active,
+.select__option:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.select__option--selected {
+  font-weight: 600;
+}
+
+.select__option[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.select__option-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.select__option-title {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.select__option-sub {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.select__option-check {
+  color: var(--accent);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
 /* RFC-032 — 3-group sidebar nav. Group headers are 11-px small caps that
    sit at the sidebar's gutter edge; sub-items are 32-px tall rows indented
    to read as children of their group header. */
