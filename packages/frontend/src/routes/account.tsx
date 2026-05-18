@@ -518,7 +518,9 @@ function PatSection() {
                   <span
                     className={`status-chip status-chip--${p.revokedAt ? 'danger' : 'success'}`}
                   >
-                    {p.revokedAt ? 'revoked' : 'active'}
+                    {p.revokedAt
+                      ? t('account.patStatusRevoked', { defaultValue: 'revoked' })
+                      : t('account.patStatusActive', { defaultValue: 'active' })}
                   </span>
                 </td>
                 <td>

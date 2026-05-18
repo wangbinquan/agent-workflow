@@ -240,6 +240,8 @@ export const enUS: Resources = {
     patSelectDefault: 'Defaults',
     patSelectNone: 'Clear',
     patNoScopes: 'Pick at least one scope.',
+    patStatusActive: 'active',
+    patStatusRevoked: 'revoked',
     patGroup: {
       spa: 'Web access — required to sign into the SPA with this token',
       tasks: 'Tasks',

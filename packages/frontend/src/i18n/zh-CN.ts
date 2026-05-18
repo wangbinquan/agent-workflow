@@ -373,6 +373,8 @@ export interface Resources {
     patSelectDefault: string
     patSelectNone: string
     patNoScopes: string
+    patStatusActive: string
+    patStatusRevoked: string
     patGroup: {
       spa: string
       tasks: string
@@ -1623,6 +1625,8 @@ export const zhCN: Resources = {
     patSelectDefault: '默认',
     patSelectNone: '清空',
     patNoScopes: '请至少勾选一个权限。',
+    patStatusActive: '有效',
+    patStatusRevoked: '已吊销',
     patGroup: {
       spa: 'Web 访问 — 使用此 Token 登录网页时需要',
       tasks: '任务',
