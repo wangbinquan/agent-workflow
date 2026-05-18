@@ -449,6 +449,7 @@ export interface Resources {
     tabConnection: string
     tabAppearance: string
     tabRendering: string
+    tabAuthentication: string
     loading: string
     saving: string
     saved: string
@@ -1610,6 +1611,7 @@ export const zhCN: Resources = {
     tabConnection: '连接',
     tabAppearance: '外观',
     tabRendering: '渲染',
+    tabAuthentication: '认证',
     loading: '加载中…',
     saving: '保存中…',
     saved: '已保存',

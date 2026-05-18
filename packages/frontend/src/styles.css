@@ -801,6 +801,47 @@ code {
   color: var(--text);
 }
 
+/* RFC-036 — /settings → Authentication tab. */
+.auth-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-tab__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.auth-tab__title {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.auth-tab__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  max-width: 560px;
+}
+
+.auth-tab__hint-inline {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.account-form__field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  max-width: none;
+}
+
 /* Role / status / source chips */
 .role-chip {
   display: inline-flex;

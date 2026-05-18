@@ -11,8 +11,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Config, ConfigPatch } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
+import { Dialog } from '@/components/Dialog'
 import { Field, NumberInput, Switch, TextInput } from '@/components/Form'
 import { ModelSelect } from '@/components/ModelSelect'
+import { Select } from '@/components/Select'
 import { RUNTIME_OPENCODE_QUERY_KEY, RuntimeStatusCard } from '@/components/RuntimeStatusCard'
 import { describeApiError, setLanguage, type SupportedLanguage } from '@/i18n'
 import { isSupportedLanguage } from '@/hooks/useLanguage'
@@ -25,7 +27,15 @@ export const Route = createRoute({
   component: SettingsPage,
 })
 
-type Tab = 'runtime' | 'limits' | 'gc' | 'network' | 'appearance' | 'connection' | 'rendering'
+type Tab =
+  | 'runtime'
+  | 'limits'
+  | 'gc'
+  | 'network'
+  | 'appearance'
+  | 'connection'
+  | 'rendering'
+  | 'authentication'
 
 function SettingsPage() {
   const [tab, setTab] = useState<Tab>('runtime')
@@ -70,6 +80,7 @@ function SettingsPage() {
             ['network', t('settings.tabNetwork')],
             ['appearance', t('settings.tabAppearance')],
             ['rendering', t('settings.tabRendering')],
+            ['authentication', t('settings.tabAuthentication')],
             ['connection', t('settings.tabConnection')],
           ] as Array<[Tab, string]>
         ).map(([k, label]) => (
@@ -96,6 +107,7 @@ function SettingsPage() {
           {tab === 'network' && <NetworkTab config={config.data} />}
           {tab === 'appearance' && <AppearanceTab config={config.data} />}
           {tab === 'rendering' && <RenderingTab config={config.data} />}
+          {tab === 'authentication' && <AuthenticationTab />}
           {tab === 'connection' && <ConnectionTab />}
         </>
       )}
@@ -579,6 +591,426 @@ function RenderingTab({ config }: TabProps) {
         )}
       </div>
     </SectionForm>
+  )
+}
+
+// RFC-036 — OIDC providers admin tab. CRUD + connection test for the
+// /api/oidc/providers endpoint. clientSecret is never readable from the
+// API (only re-writable); empty clientSecret on PATCH leaves the stored
+// value unchanged.
+function AuthenticationTab() {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+  const [editing, setEditing] = useState<OidcProviderRow | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
+
+  const list = useQuery<OidcProviderRow[]>({
+    queryKey: ['oidc-providers'],
+    queryFn: () => api.get('/api/oidc/providers'),
+  })
+
+  const remove = useMutation({
+    mutationFn: ({ id, force }: { id: string; force: boolean }) =>
+      api.delete(`/api/oidc/providers/${id}${force ? '?force=true' : ''}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['oidc-providers'] }),
+  })
+
+  return (
+    <div className="auth-tab">
+      <header className="auth-tab__header">
+        <div>
+          <h2 className="auth-tab__title">
+            {t('settings.auth.providersTitle', { defaultValue: 'OIDC providers' })}
+          </h2>
+          <p className="auth-tab__hint">
+            {t('settings.auth.providersHint', {
+              defaultValue:
+                'Configure identity providers users can sign in with. Each provider stores its OAuth 2.0 / OIDC client_id + client_secret + scopes. The client_secret is AES-256-GCM-sealed at rest.',
+            })}
+          </p>
+        </div>
+        <button className="btn btn--primary" onClick={() => setShowCreate(true)}>
+          {t('settings.auth.add', { defaultValue: 'Add provider' })}
+        </button>
+      </header>
+
+      {list.isLoading && <div className="muted">{t('settings.loading')}</div>}
+      {list.error && <div className="auth-form__error">{(list.error as Error).message}</div>}
+
+      {list.data && list.data.length === 0 && (
+        <p className="account-empty">
+          {t('settings.auth.empty', {
+            defaultValue: 'No providers yet. Add one to enable single sign-on.',
+          })}
+        </p>
+      )}
+
+      {list.data && list.data.length > 0 && (
+        <table className="account-table">
+          <thead>
+            <tr>
+              <th>{t('settings.auth.colSlug', { defaultValue: 'Slug' })}</th>
+              <th>{t('settings.auth.colName', { defaultValue: 'Name' })}</th>
+              <th>{t('settings.auth.colIssuer', { defaultValue: 'Issuer' })}</th>
+              <th>{t('settings.auth.colProvisioning', { defaultValue: 'Provisioning' })}</th>
+              <th>{t('settings.auth.colEnabled', { defaultValue: 'Enabled' })}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.data.map((p) => (
+              <tr key={p.id}>
+                <td>
+                  <code>{p.slug}</code>
+                </td>
+                <td>{p.displayName}</td>
+                <td className="account-table__ua">{p.issuerUrl}</td>
+                <td>{p.provisioning}</td>
+                <td>
+                  <span
+                    className={`account-dot account-dot--status-${p.enabled ? 'active' : 'disabled'}`}
+                    aria-hidden
+                  />{' '}
+                  {p.enabled
+                    ? t('settings.auth.enabled', { defaultValue: 'enabled' })
+                    : t('settings.auth.disabled', { defaultValue: 'disabled' })}
+                </td>
+                <td>
+                  <button className="btn btn--ghost btn--xs" onClick={() => setEditing(p)}>
+                    {t('settings.auth.edit', { defaultValue: 'Edit' })}
+                  </button>
+                  <button
+                    className="btn btn--ghost btn--xs btn--danger"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          t('settings.auth.deleteConfirm', {
+                            defaultValue: `Delete provider "${p.displayName}"?`,
+                            name: p.displayName,
+                          }),
+                        )
+                      ) {
+                        remove.mutate({ id: p.id, force: false })
+                      }
+                    }}
+                  >
+                    {t('settings.auth.delete', { defaultValue: 'Delete' })}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {showCreate && (
+        <OidcProviderDialog
+          mode="create"
+          onClose={() => setShowCreate(false)}
+          onSaved={() => {
+            setShowCreate(false)
+            qc.invalidateQueries({ queryKey: ['oidc-providers'] })
+          }}
+        />
+      )}
+      {editing && (
+        <OidcProviderDialog
+          mode="edit"
+          initial={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null)
+            qc.invalidateQueries({ queryKey: ['oidc-providers'] })
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+interface OidcProviderRow {
+  id: string
+  slug: string
+  displayName: string
+  issuerUrl: string
+  clientId: string
+  scopes: string
+  provisioning: 'auto' | 'allowlist' | 'invite'
+  allowedEmailDomains: string[]
+  iconUrl: string | null
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+function OidcProviderDialog(props: {
+  mode: 'create' | 'edit'
+  initial?: OidcProviderRow
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const { t } = useTranslation()
+  const initial = props.initial
+  const [slug, setSlug] = useState(initial?.slug ?? '')
+  const [displayName, setDisplayName] = useState(initial?.displayName ?? '')
+  const [issuerUrl, setIssuerUrl] = useState(initial?.issuerUrl ?? '')
+  const [clientId, setClientId] = useState(initial?.clientId ?? '')
+  const [clientSecret, setClientSecret] = useState('')
+  const [scopes, setScopes] = useState(initial?.scopes ?? 'openid profile email')
+  const [provisioning, setProvisioning] = useState<'auto' | 'allowlist' | 'invite'>(
+    initial?.provisioning ?? 'invite',
+  )
+  const [allowedDomains, setAllowedDomains] = useState(
+    (initial?.allowedEmailDomains ?? []).join(', '),
+  )
+  const [enabled, setEnabled] = useState(initial?.enabled ?? true)
+  const [testResult, setTestResult] = useState<
+    | null
+    | { ok: true; issuer: string; tokenEndpoint: string; jwksUri: string }
+    | { ok: false; error: string }
+  >(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const save = useMutation({
+    mutationFn: () => {
+      const body = {
+        slug,
+        displayName,
+        issuerUrl,
+        clientId,
+        ...(clientSecret ? { clientSecret } : props.mode === 'create' ? { clientSecret: '' } : {}),
+        scopes,
+        provisioning,
+        allowedEmailDomains: allowedDomains
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0),
+        iconUrl: null,
+        enabled,
+      }
+      if (props.mode === 'create') {
+        return api.post('/api/oidc/providers', body)
+      }
+      return api.patch(`/api/oidc/providers/${initial!.id}`, body)
+    },
+    onSuccess: () => props.onSaved(),
+    onError: (e: unknown) => setError(e instanceof ApiError ? e.message : (e as Error).message),
+  })
+
+  const testConnection = useMutation({
+    mutationFn: async () => {
+      // For new providers we don't have an id yet — use the issuer URL directly.
+      // For edit we hit the per-id /test endpoint so the daemon resolves the row.
+      if (props.mode === 'edit' && initial) {
+        return api.post<
+          | { ok: true; issuer: string; tokenEndpoint: string; jwksUri: string }
+          | { ok: false; error: string }
+        >(`/api/oidc/providers/${initial.id}/test`)
+      }
+      // Mode='create' — ask the daemon to probe the URL by saving a temp,
+      // but the simpler path is just letting the user save first. Until
+      // then test is unavailable for new providers.
+      throw new Error('save first, then run test')
+    },
+    onSuccess: (r) => setTestResult(r),
+    onError: (e: unknown) =>
+      setTestResult({ ok: false, error: e instanceof Error ? e.message : String(e) }),
+  })
+
+  return (
+    <Dialog
+      open
+      onClose={props.onClose}
+      title={
+        props.mode === 'create'
+          ? t('settings.auth.addTitle', { defaultValue: 'Add OIDC provider' })
+          : t('settings.auth.editTitle', { defaultValue: 'Edit OIDC provider' })
+      }
+      size="md"
+      footer={
+        <>
+          {props.mode === 'edit' && (
+            <button
+              type="button"
+              className="btn btn--ghost"
+              disabled={testConnection.isPending}
+              onClick={() => testConnection.mutate()}
+            >
+              {testConnection.isPending
+                ? '…'
+                : t('settings.auth.testConnection', { defaultValue: 'Test connection' })}
+            </button>
+          )}
+          <button type="button" className="btn btn--ghost" onClick={props.onClose}>
+            {t('settings.auth.cancel', { defaultValue: 'Cancel' })}
+          </button>
+          <button
+            type="submit"
+            form="oidc-provider-form"
+            className="btn btn--primary"
+            disabled={save.isPending}
+          >
+            {save.isPending ? '…' : t('settings.auth.save', { defaultValue: 'Save' })}
+          </button>
+        </>
+      }
+    >
+      <form
+        id="oidc-provider-form"
+        className="account-form"
+        onSubmit={(e) => {
+          e.preventDefault()
+          setError(null)
+          save.mutate()
+        }}
+      >
+        <label className="account-form__field">
+          <span className="account-form__label">
+            {t('settings.auth.slug', { defaultValue: 'Slug (URL-safe identifier)' })}
+          </span>
+          <input
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            pattern="[a-z0-9][a-z0-9-]{0,63}"
+            required
+            placeholder="e.g. github-enterprise"
+          />
+        </label>
+        <label className="account-form__field">
+          <span className="account-form__label">
+            {t('settings.auth.displayName', { defaultValue: 'Display name' })}
+          </span>
+          <input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            required
+            placeholder="e.g. GitHub Enterprise"
+          />
+        </label>
+        <label className="account-form__field">
+          <span className="account-form__label">
+            {t('settings.auth.issuerUrl', { defaultValue: 'Issuer URL' })}
+          </span>
+          <input
+            type="url"
+            value={issuerUrl}
+            onChange={(e) => setIssuerUrl(e.target.value)}
+            required
+            placeholder="https://github.corp.com"
+          />
+        </label>
+        <label className="account-form__field">
+          <span className="account-form__label">
+            {t('settings.auth.clientId', { defaultValue: 'Client ID' })}
+          </span>
+          <input value={clientId} onChange={(e) => setClientId(e.target.value)} required />
+        </label>
+        <label className="account-form__field">
+          <span className="account-form__label">
+            {t('settings.auth.clientSecret', { defaultValue: 'Client secret' })}
+            {props.mode === 'edit' && (
+              <span className="auth-tab__hint-inline">
+                {' '}
+                {t('settings.auth.clientSecretEditHint', {
+                  defaultValue: '(leave blank to keep current)',
+                })}
+              </span>
+            )}
+          </span>
+          <input
+            type="password"
+            value={clientSecret}
+            onChange={(e) => setClientSecret(e.target.value)}
+            required={props.mode === 'create'}
+          />
+        </label>
+        <label className="account-form__field">
+          <span className="account-form__label">
+            {t('settings.auth.scopes', { defaultValue: 'Scopes' })}
+          </span>
+          <input value={scopes} onChange={(e) => setScopes(e.target.value)} required />
+        </label>
+        <label className="account-form__field">
+          <span className="account-form__label">
+            {t('settings.auth.provisioning', { defaultValue: 'Provisioning' })}
+          </span>
+          <Select<'auto' | 'allowlist' | 'invite'>
+            value={provisioning}
+            onChange={setProvisioning}
+            ariaLabel={t('settings.auth.provisioning', { defaultValue: 'Provisioning' })}
+            options={[
+              {
+                value: 'invite',
+                label: 'invite',
+                description: t('settings.auth.inviteDesc', {
+                  defaultValue: 'Only pre-created users with matching verified email may sign in.',
+                }),
+              },
+              {
+                value: 'allowlist',
+                label: 'allowlist',
+                description: t('settings.auth.allowlistDesc', {
+                  defaultValue:
+                    'Auto-provision users whose verified email matches an allowed domain.',
+                }),
+              },
+              {
+                value: 'auto',
+                label: 'auto',
+                description: t('settings.auth.autoDesc', {
+                  defaultValue:
+                    'Auto-provision any successful IdP login. Use only with a trusted IdP.',
+                }),
+              },
+            ]}
+            renderOption={(opt) => (
+              <span className="select__option-stack">
+                <span className="select__option-title">{opt.label}</span>
+                {opt.description && <span className="select__option-sub">{opt.description}</span>}
+              </span>
+            )}
+          />
+        </label>
+        {provisioning === 'allowlist' && (
+          <label className="account-form__field">
+            <span className="account-form__label">
+              {t('settings.auth.allowedDomains', {
+                defaultValue: 'Allowed email domains (comma-separated, e.g. @corp.com)',
+              })}
+            </span>
+            <input
+              value={allowedDomains}
+              onChange={(e) => setAllowedDomains(e.target.value)}
+              placeholder="@corp.com, @subsidiary.com"
+            />
+          </label>
+        )}
+        <label className="account-form__field account-form__field--inline">
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+          <span>
+            {t('settings.auth.enabledLabel', {
+              defaultValue: 'Enabled (show on login page)',
+            })}
+          </span>
+        </label>
+        {testResult && (
+          <div
+            className={
+              testResult.ok ? 'account-callout account-callout--success' : 'auth-form__error'
+            }
+          >
+            {testResult.ok ? (
+              <span>
+                ✓ {testResult.issuer} · token={new URL(testResult.tokenEndpoint).host}
+              </span>
+            ) : (
+              <span>✗ {testResult.error}</span>
+            )}
+          </div>
+        )}
+        {error && <div className="auth-form__error">{error}</div>}
+      </form>
+    </Dialog>
   )
 }
 

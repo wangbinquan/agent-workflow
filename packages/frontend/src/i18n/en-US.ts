@@ -316,6 +316,7 @@ export const enUS: Resources = {
     tabConnection: 'Connection',
     tabAppearance: 'Appearance',
     tabRendering: 'Rendering',
+    tabAuthentication: 'Authentication',
     loading: 'Loading…',
     saving: 'Saving…',
     saved: 'Saved',
