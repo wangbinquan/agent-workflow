@@ -218,11 +218,19 @@ describe('NodeInspector', () => {
     expect(next.ports.map((p) => p.name)).toEqual(['b'])
   })
 
-  test('wrapper-git: inner ids list is read-only (no form inputs)', () => {
+  test('wrapper-git: inner ids list is read-only (chips, not inputs)', () => {
     setup({ id: 'wg', kind: 'wrapper-git', nodeIds: ['a', 'b'] })
-    // No editable form inputs in the body — just inner-id chips.
-    const inputs = document.querySelectorAll('.inspector__body input, .inspector__body select')
-    expect(inputs.length).toBe(0)
+    // Inner ids should render as plain chip text — not bound to any input
+    // that would let the user retype them here. After the unified
+    // display-name field landed the body does have one input (the new
+    // node title), so we assert specifically that the inner ids surface
+    // as text, not values inside an input/select.
+    const editable = Array.from(
+      document.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+        '.inspector__body input, .inspector__body select',
+      ),
+    )
+    expect(editable.some((el) => el.value === 'a' || el.value === 'b')).toBe(false)
     expect(screen.getByText('a')).toBeTruthy()
     expect(screen.getByText('b')).toBeTruthy()
   })
