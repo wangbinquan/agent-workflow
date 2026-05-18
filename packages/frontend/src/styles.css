@@ -4189,10 +4189,68 @@ code {
 }
 
 .auth-page__provider-hint {
-  margin: 0 0 8px;
+  margin: 0 0 12px;
   font-size: 12px;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.auth-page__providers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-page__provider-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.12s ease,
+    background-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.auth-page__provider-btn::before {
+  content: '';
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%232f6feb' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='8' r='4'/><path d='M4 21a8 8 0 0 1 16 0'/></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 16px 16px;
+}
+
+.auth-page__provider-btn:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+}
+
+.auth-page__provider-btn:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.auth-page__provider-btn::after {
+  content: '→';
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 16px;
 }
 
 .auth-form {

@@ -157,7 +157,7 @@ export const enUS: Resources = {
     dialogCancel: 'Cancel',
   },
   auth: {
-    title: 'Connect to daemon',
+    title: 'Sign in',
     hint: 'Run ',
     hintCmd: 'agent-workflow start',
     hintAfter: '; copy the token it prints on stdout and paste below.',
@@ -178,7 +178,7 @@ export const enUS: Resources = {
     useDaemonToken: 'Use daemon token',
     tabPassword: 'Username & password',
     tabOidc: 'Identity provider',
-    tabToken: 'Daemon token',
+    tabToken: 'Token sign-in',
     oidcHint: 'Sign in with an external identity provider.',
     tokenHint:
       'Use the 64-char hex token printed when the daemon started. Admin / break-glass only.',

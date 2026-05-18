@@ -1512,7 +1512,7 @@ export const zhCN: Resources = {
     dialogCancel: '取消',
   },
   auth: {
-    title: '连接到守护进程',
+    title: '登录',
     hint: '运行 ',
     hintCmd: 'agent-workflow start',
     hintAfter: '，复制启动时打印的 token 粘贴到下方。',
@@ -1533,7 +1533,7 @@ export const zhCN: Resources = {
     useDaemonToken: '使用守护进程 Token',
     tabPassword: '账号密码',
     tabOidc: '身份提供商',
-    tabToken: '守护进程 Token',
+    tabToken: 'Token 登录',
     oidcHint: '通过已配置的身份提供商登录。',
     tokenHint: '使用 daemon 启动时打印的 64 位十六进制 token。仅供管理员 / 应急使用。',
   },
