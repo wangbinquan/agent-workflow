@@ -4,6 +4,7 @@
 //   GET  /api/auth/oidc/:slug/callback         IdP callback; issues a session
 
 import type { Context, Hono } from 'hono'
+import { loadConfig } from '@/config'
 import { getProviderMetadata } from '@/auth/oidc/discovery'
 import { consumeFlow, startFlow } from '@/auth/oidc/flow'
 import { exchangeCodeForTokens, verifyIdToken } from '@/auth/oidc/tokens'
@@ -34,7 +35,7 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
     const body = (await safeJson(c.req.raw)) as Record<string, unknown>
     const postLoginRedirect =
       typeof body.postLoginRedirect === 'string' ? body.postLoginRedirect : undefined
-    const redirectUri = resolveRedirectUri(c, provider.slug)
+    const redirectUri = resolveRedirectUri(c, provider.slug, deps)
     const flow = startFlow(provider.id, {
       redirectUri,
       ...(postLoginRedirect ? { postLoginRedirect } : {}),
@@ -143,6 +144,11 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
           displayName: claims.name ?? claims.email ?? 'OIDC User',
           email: claims.email ?? undefined,
           role: 'user',
+          // OIDC auto-provisioning: the IdP verified the identity, so the
+          // user lands as `active` immediately. Without this override
+          // createUser would default to `invited` (password is null) and
+          // every subsequent /api/auth/me call would 401.
+          status: 'active',
         })
         await createIdentity(deps.db, {
           userId: created.id,
@@ -187,7 +193,19 @@ async function safeJson(req: Request): Promise<unknown> {
   }
 }
 
-function resolveRedirectUri(c: Context, slug: string): string {
+function resolveRedirectUri(c: Context, slug: string, deps: AppDeps): string {
+  // RFC-036 — explicit publicBaseUrl in config.json takes precedence so dev
+  // setups behind a proxy that doesn't forward X-Forwarded-* (e.g. vite)
+  // still issue redirects that land back on the user-facing origin.
+  try {
+    const cfg = loadConfig(deps.configPath)
+    if (typeof cfg.publicBaseUrl === 'string' && cfg.publicBaseUrl.length > 0) {
+      const base = cfg.publicBaseUrl.replace(/\/$/, '')
+      return `${base}/api/auth/oidc/${slug}/callback`
+    }
+  } catch {
+    // ignore — fall through to header-based derivation
+  }
   const proto = c.req.header('X-Forwarded-Proto') ?? new URL(c.req.url).protocol.replace(/:$/, '')
   const host = c.req.header('X-Forwarded-Host') ?? c.req.header('Host')
   return `${proto}://${host}/api/auth/oidc/${slug}/callback`

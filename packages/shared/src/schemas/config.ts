@@ -141,6 +141,15 @@ export const ConfigSchema = z.object({
    * self-hosted kroki behind auth fill this in.
    */
   plantumlAuthHeader: z.string().optional(),
+  /**
+   * RFC-036 — explicit public base URL the OIDC callback should redirect
+   * back to. When set, overrides the X-Forwarded-Host / Host header
+   * derivation in routes/oidc-auth.ts. Required when the SPA sits behind a
+   * proxy that doesn't forward X-Forwarded-* headers (e.g. vite dev:
+   *   "publicBaseUrl": "http://localhost:5174"
+   * makes the IdP redirect back to the proxy that serves the SPA).
+   */
+  publicBaseUrl: z.string().url().optional(),
 })
 
 export type Config = z.infer<typeof ConfigSchema>

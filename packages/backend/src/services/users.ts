@@ -37,6 +37,13 @@ export async function findByUsername(db: DbClient, username: string): Promise<Us
 export interface CreateUserInput extends CreateUserBody {
   createdBy?: string | null
   now?: number
+  /**
+   * RFC-036 override. Without it: password present → active, password
+   * absent → invited (admin-creates-an-invited-user flow). OIDC auto-
+   * provisioning passes `status='active'` because the IdP already
+   * verified the identity; password stays null forever.
+   */
+  status?: 'active' | 'disabled' | 'invited'
 }
 
 export async function createUser(db: DbClient, input: CreateUserInput): Promise<UserRow> {
@@ -49,7 +56,7 @@ export async function createUser(db: DbClient, input: CreateUserInput): Promise<
   }
   const now = input.now ?? Date.now()
   const passwordHash = input.password ? await hashPassword(input.password) : null
-  const status = passwordHash ? 'active' : 'invited'
+  const status = input.status ?? (passwordHash ? 'active' : 'invited')
   const id = ulid()
   await db.insert(users).values({
     id,
