@@ -61,14 +61,19 @@ function SectionShell(props: { title: string; description?: string; children: Re
 
 function ProfileSection({ me }: { me: MeResponse }) {
   const { t } = useTranslation()
-  // Plain label / value rows. No chips, no borders, no code-style wrappers —
-  // this is read-only profile data, not interactive state, so the visual
-  // weight of pills was overkill and made the section feel boxed-in.
-  const rows: Array<[string, string]> = [
+  // Plain label / value rows. Role + Status get a small colored dot so they
+  // can be skimmed at a glance, but stay borderless / unboxed.
+  const rows: Array<[string, React.ReactNode]> = [
     [t('account.username', { defaultValue: 'Username' }), me.user.username],
     [t('account.displayName', { defaultValue: 'Display name' }), me.user.displayName],
-    [t('account.role', { defaultValue: 'Role' }), me.user.role],
-    [t('account.status', { defaultValue: 'Status' }), me.user.status],
+    [
+      t('account.role', { defaultValue: 'Role' }),
+      <DotValue key="r" kind={`role-${me.user.role}`} text={me.user.role} />,
+    ],
+    [
+      t('account.status', { defaultValue: 'Status' }),
+      <DotValue key="s" kind={`status-${me.user.status}`} text={me.user.status} />,
+    ],
     [t('account.source', { defaultValue: 'Authenticated via' }), me.source],
   ]
   return (
@@ -82,6 +87,15 @@ function ProfileSection({ me }: { me: MeResponse }) {
         ))}
       </dl>
     </SectionShell>
+  )
+}
+
+function DotValue({ kind, text }: { kind: string; text: string }) {
+  return (
+    <span className="account-dot-value">
+      <span className={`account-dot account-dot--${kind}`} aria-hidden />
+      <span className="account-dot-value__text">{text}</span>
+    </span>
   )
 }
 

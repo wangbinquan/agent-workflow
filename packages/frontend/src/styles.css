@@ -760,6 +760,47 @@ code {
   overflow-wrap: anywhere;
 }
 
+/* Light-touch label for /account Profile section — colored dot + text, no
+   border, no background. Just enough signal to skim role + status at a
+   glance without making the read-only summary feel boxed in. */
+.account-dot-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.account-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+
+.account-dot--role-admin {
+  background: var(--accent);
+}
+
+.account-dot--role-user {
+  background: var(--muted);
+}
+
+.account-dot--status-active {
+  background: var(--success, #2c8a2c);
+}
+
+.account-dot--status-disabled {
+  background: var(--danger);
+}
+
+.account-dot--status-invited {
+  background: var(--warn, #d28e0a);
+}
+
+.account-dot-value__text {
+  color: var(--text);
+}
+
 /* Role / status / source chips */
 .role-chip {
   display: inline-flex;
