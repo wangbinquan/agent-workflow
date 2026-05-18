@@ -2555,11 +2555,20 @@ code {
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
+  /* Cap the name column so a pathological 100+ char title can't dominate the
+     row — without this the column auto-sizes to fit and squeezes Repo / Error
+     into unreadable widths. Pair with single-line ellipsis on the name and a
+     `title` attr for hover, so the full string is still recoverable. */
+  max-width: 320px;
 }
 
 .task-name-cell__name {
   font-weight: 500;
-  word-break: break-word;
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .task-name-cell__id {
@@ -2567,6 +2576,10 @@ code {
   font-size: var(--font-xs);
   color: var(--text-muted);
   white-space: nowrap;
+  /* Parent is `display: flex; flex-direction: column` — without this the code
+     box stretches to the full cell width, which looks like a wide empty chip.
+     Shrink to content so the box hugs the ULID. */
+  align-self: flex-start;
 }
 
 /* ---- Diff viewer ---- */

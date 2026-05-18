@@ -102,12 +102,11 @@ function TasksPage() {
                     to="/tasks/$id"
                     params={{ id: row.id }}
                     className="data-table__link task-name-cell__name"
+                    title={row.name}
                   >
                     {row.name}
                   </Link>
-                  <code className="task-name-cell__id" title={row.id}>
-                    {row.id.slice(-10)}
-                  </code>
+                  <code className="task-name-cell__id">{row.id}</code>
                 </td>
                 <td>
                   <Link

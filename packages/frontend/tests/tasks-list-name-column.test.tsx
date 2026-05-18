@@ -23,8 +23,13 @@ describe('routes/tasks.tsx — RFC-037 Linear-style first column', () => {
     expect(SRC).toMatch(/task-name-cell__name[\s\S]*?\{row\.name\}/)
   })
 
-  test('name cell still surfaces the short ULID (last 10 chars) as subtitle', () => {
-    expect(SRC).toMatch(/task-name-cell__id[\s\S]*?row\.id\.slice\(-10\)/)
+  test('name cell surfaces the full ULID as subtitle', () => {
+    // The previous design showed only the last 10 chars and put the full ID
+    // in a `title` tooltip; that left a wide empty chip below short names
+    // and forced users to hover. Now we render `{row.id}` directly and let
+    // the `.task-name-cell__id` `align-self: flex-start` shrink the chip.
+    expect(SRC).toMatch(/task-name-cell__id[\s\S]*?\{row\.id\}/)
+    expect(SRC).not.toMatch(/row\.id\.slice\(-10\)/)
   })
 
   test('Workflow / Status / Started / Repo / Error columns survive the reshuffle', () => {
