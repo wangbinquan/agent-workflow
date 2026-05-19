@@ -6723,6 +6723,8 @@ mark.comment-anchor[data-active='true'] {
 .session-block__body {
   margin: 8px 0 0 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   font-family: var(--mono);
   font-size: 12px;
   line-height: 1.5;
@@ -8307,6 +8309,8 @@ mark.comment-anchor[data-active='true'] {
 
 .injected-memory-row__preview {
   flex: 1 1 100%;
+  min-width: 0;
+  max-width: 100%;
   font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
