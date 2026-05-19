@@ -181,3 +181,57 @@ scheduler 的 attempt 循环里，第 N+1 次 attempt（N ≥ 0）走"同 sessio
 - **RFC-026 inline clarify session resume**：本 RFC 复用 RFC-026 的 `--session <id>` 透传机制（`runner.ts:871-872`）和 `node_runs.opencodeSessionId` 持久化（`scheduler.ts:859-863`），但走的是不同 attempt 维度（见 R4）。
 - **RFC-040 wrapper awaiting-bubble**：完全正交，作用面互不重叠（见 R3）。
 - **RFC-041 platform memory**：完全正交。
+
+## Follow-up（计划中） — markdown_file 路径协议在 envelope followup 中同步提示
+
+> 状态：Planned（RFC-042 主体已 Done + merged，本节是后续增量）。
+> 触发：实际运行中观察到 followup 这一轮，模型仍然只给 `<port>` 内塞了一段路径但**没有落盘**真实文件（envelope 形态合法，但下游 `resolvePortContent` / `markdown-file-read-failed` 失败），或者 followup 这一轮再次漏 envelope、且补的 envelope 里 markdown_file port 又是空路径 / placeholder。
+> 关系：与本 RFC 已落地的 G1/G2/G3/G4 正交补强；不改 followup 触发条件、不改默认 retries=3、不改全新 session 路径。只在 followup prompt 文案里加一段 markdown_file 提醒。
+
+### F1（背景）
+
+`buildProtocolBlock`（`packages/shared/src/prompt.ts:383`）首轮已经针对 markdown_file 端口渲染两步协议（先落盘、再只给 worktree-relative 路径），并通过 `buildMarkdownFilePortGuidance`（`prompt.ts:460`）把"emit only a path without the file behind it will fail the run"写得很重。**但 `renderEnvelopeFollowupPrompt`（`prompt.ts:589`）不感知 outputKinds，followup 短指令完全没提 markdown_file 的两步协议**。后果：
+
+- followup 这一轮 agent 在同 session 续跑时，session 上下文里第一轮的 protocol block 还在，按理论模型应该记得；但实测里 envelope 漏发本身就是"模型把协议忘了一半"的信号——followup 提醒得越具体、补救成功率越高。
+- 如果 agent 的 followup 回复里 markdown_file port 写的是路径但路径不存在（因为它根本没调 Write/Edit 工具），envelope 解析会通过 ⇒ runner 走 `resolvePortContent` ⇒ 命中 `markdown-file-read-failed` ⇒ 节点仍 failed；但 errorMessage 不在 RFC-042 识别集合里（不是 `no <workflow-output>` / `both-present` / `clarify-questions-*`），下一次 attempt 就降级走全新 session、白烧 token。
+
+### F2（目标 / 非目标）
+
+- (G-F1) 当本节点的 `agentOutputKinds` 里**任一** port 声明为 `markdown_file` 时，`renderEnvelopeFollowupPrompt` 在主 bullets 之后追加一条**专门的 markdown_file 两步协议提醒**——内容与首轮 `buildMarkdownFilePortGuidance` 等价（让模型"先落盘、再只发 worktree-relative 路径"），但**短一档**，因为 followup 是补丁不是教学。
+- (G-F2) 当本节点的 `agentOutputKinds` 里**没有任一**端口是 markdown_file 时，followup prompt 文案完全不变（零行噪声）。
+- 非目标：
+  - 不把 `markdown-file-read-failed` 加入 RFC-042 识别集合（那是 envelope-解析后才发生的下游错误，需要的不是同 session 追问而是 RFC-005 全新 session 重试 + 主 prompt 已有的 `buildMarkdownFilePortGuidance`；不在本 follow-up 范围）。
+  - 不改 `buildProtocolBlock` / `buildMarkdownFilePortGuidance`（首轮已经写得够重；本 follow-up 只补 followup 这一面）。
+  - 不改 outputKinds schema / 不改 envelope 解析。
+
+### F3（验收）
+
+- **F-A1**：`renderEnvelopeFollowupPrompt` 入参追加 `agentOutputKinds?: AgentOutputKindsMap`（可选，向后兼容）+ `agentOutputs?: readonly string[]`（用来列出哪些 port 名是 markdown_file）。两个字段都缺省时 followup 文案与目前完全一致——已落地的 6 个 shared 单测全 0 退化。
+- **F-A2**：当 `agentOutputs` 与 `agentOutputKinds` 都提供、且 `agentOutputs.filter(p => agentOutputKinds[p] === 'markdown_file')` 非空时，followup 文案在主 bullets 之后插入一段固定模板，包含三个锚点（测试用）：
+  - 列出命中的 port 名（反引号包裹、逗号分隔），方便模型定位；
+  - 短语 `markdown_file ports require a two-step protocol`；
+  - 短语 `write the file to disk first, then place ONLY its worktree-relative path inside the <port> tag` —— 与首轮 `buildMarkdownFilePortGuidance` 同向但更短。
+- **F-A3**：调用方（runner）在 `envelopeFollowup === true` 分支里把 `agent.outputs.map(o => o.name)` 与 `agent.outputs` 转出的 outputKinds 字典传给 `renderEnvelopeFollowupPrompt`，不新增 DB 字段、不新增 RFC-042 决策状态。
+- **F-A4**：新增 shared 单测 3 case（按 §F5 落地）；既有 6 个 followup 单测全过；新增 backend runner 集成 1 case（agent 声明 markdown_file 输出 + envelopeFollowup=true → promptText 含三个锚点）。
+- **F-A5**：clarify channel 路径（has=true）与 markdown_file 路径正交叠加——两者都命中时，followup 文案先 has=true 的双 envelope bullets，再追加 markdown_file 段，最后才追加 directive=continue 的 RFC-039 短句（顺序固定，避免 RFC-039 短句被夹在 markdown_file 段中间）。
+
+### F4（不变契约）
+
+- 默认 retries=3 不变；
+- followup 触发条件 / 识别集合不变；
+- runner 是否走 followup 的决策仍由 scheduler `decideEnvelopeFollowup` 决定，本 follow-up 只在"已经决定要 followup"之后影响 prompt 文案；
+- `[rfc042/envelope-followup]` 审计行不变（payload 只多一个 `hasMarkdownFilePorts: boolean` 也可以，但非必须，PR 时再决定）。
+
+### F5（测试增量草案）
+
+- shared 新增 `envelope-followup-prompt.test.ts` 3 case：
+  1. agentOutputs=['summary'] + agentOutputKinds={summary:'markdown'} → followup 文案**不**含 `markdown_file ports require` 短语（kind 非 markdown_file）。
+  2. agentOutputs=['report','log'] + agentOutputKinds={report:'markdown_file', log:'string'} → followup 文案含 `report` + `markdown_file ports require a two-step protocol` + `worktree-relative path inside the <port> tag`，**不**含 `log`（log 不是 markdown_file）。
+  3. hasClarifyChannel=true + clarifyDirective=continue + agentOutputKinds 含 markdown_file → 顺序断言：先 `(B) <workflow-clarify>` bullets、再 `markdown_file ports require` 段、再 `Keep clarifying` RFC-039 短句（验顺序，防 refactor 把 RFC-039 句挤错位置）。
+- backend 新增 1 case 跑通"agent 声明 markdown_file + 第一次 reply 无 envelope + followup 这一轮 promptText 含三个锚点"。
+- 既有 6 个 shared followup 测试 + 8 case `decideEnvelopeFollowup` 单测 + 4 case runner-envelope-followup + 4 case default-retries + 2 case rfc039-bias + 1 case events 审计 + 2 case grep 守卫 → 全部零退化。
+
+### F6（实施前置 / 不在本节做）
+
+- 本节仅落入 RFC-042 三件套作为 Planned 增量；代码 + 测试落地时再开单 PR，commit message `feat(prompt): RFC-042 follow-up — markdown_file 提示同步进 envelope followup`。
+- 落地时校验 `agentOutputKinds` 类型与 `AGENT_OUTPUT_KIND`（`packages/shared/src/schemas/review.ts:27`）保持一致，不引入新枚举值。

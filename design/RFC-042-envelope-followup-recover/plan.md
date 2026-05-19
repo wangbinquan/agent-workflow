@@ -100,3 +100,27 @@
 - 单 commit revert 立即生效；followup 分支整体回退，retries 默认回 0。
 - 不存在 schema / migration / WS 协议残留。
 - 已有 `[rfc042/envelope-followup]` events 行作为字符串保留，不影响 RFC-040 / RFC-027 / RFC-029 等其它 events 消费者。
+
+## Follow-up 任务（Planned，待开 PR）
+
+> 配套 proposal.md §Follow-up + design.md §9。RFC-042 主体已 Done + merged；本任务是后续增量，不影响主体回滚。
+
+### RFC-042-T10 — markdown_file 提示同步进 envelope followup prompt
+
+- 范围：`renderEnvelopeFollowupPrompt`（`packages/shared/src/prompt.ts:589`）追加 `agentOutputs?` + `agentOutputKinds?` 两个可选入参；当 outputKinds 含 `markdown_file` 时，在主 bullets 与 RFC-039 `Keep clarifying` trailer 之间插入一段两步协议提醒（先落盘、再只发 worktree-relative 路径）。runner（`packages/backend/src/services/runner.ts`）在 envelopeFollowup 分支多传这两个字段。
+- 不在本任务做：不改 `buildProtocolBlock`（首轮已覆盖）；不改 scheduler 决策器；不动 `markdown-file-read-failed` 等下游错误的识别集合（不属 RFC-042 同 session 追问范畴）。
+- 测试增量（按 design.md §9.5）：
+  - shared `envelope-followup-prompt.test.ts`：+3 case（kinds 全 markdown / 部分 markdown_file / has=true+continue+markdown_file 顺序断言）。
+  - backend `runner-envelope-followup.test.ts`：+1 case（runner 写入 promptText 含三个锚点）。
+- 既有 6 case shared followup + 8/4/4/2/1/2 case backend 全部零退化。
+- 验证：`bun run typecheck && bun run test && bun run format:check` 三件套全绿；GitHub Actions 六 jobs 全绿；按 [feedback_post_commit_ci_check] push 后立刻查 CI。
+- commit message：`feat(prompt): RFC-042 follow-up — markdown_file 提示同步进 envelope followup`，body 链回 proposal.md §Follow-up + design.md §9。
+
+### 前置：已确认 agent 首轮 prompt 已覆盖 markdown_file 要求
+
+不需要改首轮 prompt：
+
+- `buildProtocolBlock`（`packages/shared/src/prompt.ts:383`）当 port 声明为 `markdown_file` 时已渲染 `(markdown_file — write the file first, then emit only its worktree-relative path)` 端口 bullet。
+- `buildMarkdownFilePortGuidance`（`prompt.ts:460`）追加两步协议长段："USE A FILE-WRITING TOOL ... persist the FULL markdown body to a file" + "place ONLY that worktree-relative path inside the matching `<port>` tag"。
+
+故 T10 仅补 followup 这一面。

@@ -461,3 +461,128 @@ commit message 模板：`feat(runner): RFC-042 envelope 缺失同 session 追问
 本 RFC 不改 opencode 端协议——`--session <id>` 是 opencode 已有的 CLI flag（`opencode/packages/opencode/src/cli/cmd/run.ts:12,158,338,372,383`），RFC-026 已经验证过透传到 `Session.prompt({ sessionID: args.session, ... })` 的路径稳定。followup attempt 复用同 `--session <id>` 行为与 RFC-026 inline clarify rerun 完全一致——不需要再次 grep opencode 源码。
 
 如未来 opencode 重写 session resume 语义，本 RFC 和 RFC-026 会同时坏；届时统一改一次 runner 的 `--session` 透传即可，followup 分支自身不依赖 opencode 协议细节。
+
+## 9. Follow-up 设计 — markdown_file 路径协议同步进 envelope followup
+
+> 状态：Planned（与 proposal.md §Follow-up 对齐；RFC-042 主体已 Done + merged，本节是后续增量的技术蓝图）。
+
+### 9.1 现状盘点（首轮 vs followup 的 markdown_file 覆盖差）
+
+| 路径                                          | 文件:行                                                | 是否提示 markdown_file 两步协议                                                                          |
+| --------------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| 首轮 user prompt（renderUserPrompt → buildProtocolBlock） | `packages/shared/src/prompt.ts:383`、`prompt.ts:460`   | ✅ 端口 bullet 渲染成 `(markdown_file — write the file first, then emit only its worktree-relative path)`，`buildMarkdownFilePortGuidance` 追加两步协议长段                  |
+| envelope followup prompt（renderEnvelopeFollowupPrompt）  | `packages/shared/src/prompt.ts:589`                    | ❌ 完全不感知 outputKinds；followup 短指令里没有 markdown_file 任何字眼                                  |
+
+**结论**：首轮已覆盖；followup 缺一段同向但更短的提醒。本 follow-up 只补 followup 这一面。
+
+### 9.2 接口契约改动
+
+`EnvelopeFollowupInput`（`prompt.ts:558`）**追加**两个可选字段（向后兼容）：
+
+```ts
+export interface EnvelopeFollowupInput {
+  // ... 现有 hasClarifyChannel / clarifyDirective / reason 字段不变
+  /**
+   * 本节点 agent 声明的所有输出 port 名（与首轮 renderUserPrompt 入参的 agentOutputs 同语义）。
+   * 仅当 agentOutputKinds 中有 markdown_file 端口时才被读，否则 followup 文案不变。
+   * 缺省 → 不渲染 markdown_file 提醒段（向后兼容）。
+   */
+  agentOutputs?: readonly string[]
+  /**
+   * 本节点 agent 声明的输出 kinds 字典（与 buildProtocolBlock 同语义、同 AgentOutputKindsMap 类型）。
+   * 缺省 → 同上，不渲染 markdown_file 提醒段。
+   */
+  agentOutputKinds?: AgentOutputKindsMap
+}
+```
+
+`renderEnvelopeFollowupPrompt` 内部逻辑增量（伪代码）：
+
+```ts
+const mdFilePorts =
+  input.agentOutputs && input.agentOutputKinds
+    ? input.agentOutputs.filter((p) => input.agentOutputKinds![p] === 'markdown_file')
+    : []
+const mdSegment = mdFilePorts.length > 0 ? buildEnvelopeFollowupMarkdownFileSegment(mdFilePorts) : ''
+
+// 顺序：标题 + opening → 主 bullets → markdown_file 提醒段（如有） → RFC-039 continue 短句（如有）
+return `\n\n---\n**Envelope missing — follow-up.** ${opening}\n\n${bullets}${mdSegment}${trailer}`
+```
+
+新增内部 helper（不导出）：
+
+```ts
+function buildEnvelopeFollowupMarkdownFileSegment(mdFilePorts: string[]): string {
+  const list = mdFilePorts.map((p) => `\`${p}\``).join(', ')
+  return (
+    `\n\n` +
+    `**markdown_file ports require a two-step protocol** — for the port(s) ${list} declared \`markdown_file\` on this node:\n` +
+    `  1. Write the file to disk first (use a file-writing tool — Write / Edit / shell \`cat > path\` / equivalent) at a stable worktree-relative path inside the current working directory.\n` +
+    `  2. Then place ONLY its worktree-relative path inside the matching \`<port>\` tag — no markdown body, no code fences, no placeholder, no leading or trailing whitespace.\n` +
+    `Emitting a path without the file behind it will fail the run (the framework reads the file at that path).`
+  )
+}
+```
+
+### 9.3 runner 调用方改动
+
+`packages/backend/src/services/runner.ts` 在 `opts.envelopeFollowup === true` 的 prompt 渲染分支（参考 §3.2 现有改动点）多传两个字段：
+
+```ts
+const prompt = renderEnvelopeFollowupPrompt({
+  hasClarifyChannel: opts.hasClarifyChannel === true,
+  ...(opts.envelopeFollowupClarifyDirective !== undefined
+    ? { clarifyDirective: opts.envelopeFollowupClarifyDirective }
+    : {}),
+  reason: opts.envelopeFollowupReason ?? 'envelope-missing',
+  // ↓↓↓ follow-up 增量
+  agentOutputs: agent.outputs?.map((o) => o.name),
+  agentOutputKinds: buildAgentOutputKindsMap(agent.outputs),
+  // ↑↑↑
+})
+```
+
+`buildAgentOutputKindsMap` 已在 runner 内部用于 `renderUserPrompt`（同源代码，无需新增 helper）。
+
+### 9.4 顺序与互斥
+
+文案最终顺序硬约束（测试断言）：
+
+```
+\n\n---
+**Envelope missing — follow-up.** {opening}
+
+{bullets}                       ← envelope-missing / both-present / clarify-malformed 三选一文案
+{mdSegment}                     ← 仅 agentOutputKinds 含 markdown_file 时插入；空字符串可省略整段
+{trailer}                       ← 仅 hasClarifyChannel=true ∧ clarifyDirective=continue 时追加 RFC-039 强偏向短句
+```
+
+RFC-039 `Keep clarifying` 短句**始终在最末尾**——避免 markdown_file 段把"REQUIRED to be another `<workflow-clarify>`"挤到中段，让模型读漏。
+
+### 9.5 测试矩阵增量
+
+| 测试文件                                                  | 新增 case 描述                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/tests/envelope-followup-prompt.test.ts`  | (a) outputs=['s'] + kinds={s:'markdown'} → 文案**不**含 `markdown_file ports require`。(b) outputs=['report','log'] + kinds={report:'markdown_file', log:'string'} → 文案含 `\`report\`` + `markdown_file ports require a two-step protocol` + `worktree-relative path inside the <port> tag`，且**不**含 `\`log\``。(c) has=true + directive=continue + kinds 含 markdown_file → 三段顺序：双 envelope bullets → markdown_file 段 → RFC-039 `Keep clarifying` 短句（用 indexOf 锁顺序）。 |
+| `packages/backend/tests/runner-envelope-followup.test.ts` | (d) agent 声明 markdown_file output + envelopeFollowup=true → runner 写入 `node_runs.promptText` 的内容含三个锚点。                                                                                                                                                  |
+
+既有 6 个 shared followup case + 8 case `decideEnvelopeFollowup` + 4 case runner-envelope-followup + 4 case default-retries + 2 case rfc039-bias + 1 case events + 2 case grep → **全部零退化**。
+
+### 9.6 失败模式补充
+
+| 边界                                                          | 行为                                                                                                       |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| agent 完全没声明 outputs（agentOutputs 为空数组）             | mdFilePorts=[] → 不渲染 markdown_file 段。followup 文案与目前 100% 一致。                                  |
+| agent 声明 outputs 但 outputKinds 全是 string/markdown        | mdFilePorts=[] → 不渲染。                                                                                  |
+| agent 声明 markdown_file output 但 followup 调用方忘传 agentOutputs / agentOutputKinds | 行为退化为"文案与目前一致"——不报错、不抛异常，最坏情况是 followup 没追加 markdown_file 提醒；属于安全降级。 |
+| 同一端口在 outputKinds 里被声明成未知值                       | 不命中 markdown_file 过滤；属于上游 schema 守卫问题，本 follow-up 不做防御。                                |
+
+### 9.7 回滚
+
+本 follow-up 与 RFC-042 主体可独立回滚——回退 `renderEnvelopeFollowupPrompt` 入参的两个可选字段 + helper 删除即可。`buildEnvelopeFollowupMarkdownFileSegment` 是内部函数、不导出、零外部消费者。
+
+### 9.8 不在本节做的事
+
+- 不改 `buildProtocolBlock` / `buildMarkdownFilePortGuidance`（首轮已经覆盖）。
+- 不把 `markdown-file-empty-path` / `markdown-file-escapes-worktree` / `markdown-file-read-failed` 加入 RFC-042 识别集合（那是 envelope 后下游错误，不属"模型协议错"，应走 RFC-005 全新 session 重试 + 首轮主 prompt 提醒；与本 follow-up 正交）。
+- 不动 scheduler 决策器、不动默认 retries、不动 events 审计行 schema。
