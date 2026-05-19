@@ -174,8 +174,10 @@ function TaskDetailPage() {
 
       {tk.status === 'failed' && tk.errorSummary !== null && (
         <div className="task-error-banner">
-          <div>
-            <strong>{t('tasks.failedBanner')}</strong> <span>{tk.errorSummary}</span>
+          <div className="task-error-banner__body">
+            <div className="task-error-banner__summary" title={tk.errorSummary}>
+              <strong>{t('tasks.failedBanner')}</strong> <span>{tk.errorSummary}</span>
+            </div>
             {tk.errorMessage !== null && tk.errorMessage !== tk.errorSummary && (
               <details className="task-error-banner__details">
                 <summary>{t('common.details')}</summary>

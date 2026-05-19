@@ -2154,6 +2154,22 @@ code {
   margin-bottom: 16px;
 }
 
+/* The banner is `display:flex` between body and the "jump to failed" button.
+   Without `min-width:0` the body flex item grows to fit its longest line and
+   a multi-line stack trace in `errorSummary` would push the banner past the
+   viewport. Clipping `__summary` to one line + `title` for hover keeps the
+   banner short; the `<details>` block below still expands to the full text. */
+.task-error-banner__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.task-error-banner__summary {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .task-error-banner__details {
   margin-top: 4px;
   font-size: 12px;
