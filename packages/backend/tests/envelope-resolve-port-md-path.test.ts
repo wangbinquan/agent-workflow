@@ -1,16 +1,16 @@
-// Locks in the "forgiveness path" in resolvePortContent: when a port's
-// outputKinds was never declared as markdown_file but the agent emitted a
-// single-line .md path that resolves safely inside the task worktree, we
-// auto-read the file body. Reported live by the user on the review detail
-// page at /reviews/01KRPE30VQT3R4G24PV3ZAG82D where the upstream agent had
-// emitted an absolute path and the doc_version body rendered as a one-line
-// path string. The strict markdown_file branch is unchanged — covered by
-// envelope-parse-md-edge-cases.test.ts.
+// RFC-049 PR-B: locks the post-forgiveness contract. The old auto-promote
+// "if the port content is a single-line .md path inside the worktree, read
+// the file" behavior was removed; agents that want the file body delivered
+// to downstream nodes MUST declare `outputKinds: { port: markdown_file }`.
+// Anything else now returns the raw content verbatim, even when a real .md
+// file exists at the path. Original incident report (forgiveness path)
+// preserved for context: /reviews/01KRPE30VQT3R4G24PV3ZAG82D where the
+// upstream designer agent emitted an absolute path and the doc_version body
+// rendered as a one-line path string. PR-B's "fix" is to declare the kind.
 //
-// If any of these go red, see packages/backend/src/services/envelope.ts:
-// tryReadInWorktreeMarkdownPath — silent rewrites here can leak file reads
-// outside the worktree or break legitimate string ports that happen to end
-// in '.md'.
+// If any of these go red, check packages/backend/src/services/envelope.ts:
+// resolvePortContentDetailed should be a single early-return passthrough
+// when kind === undefined; no fs probe.
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -19,7 +19,7 @@ import { join } from 'node:path'
 import { resolvePortContent } from '../src/services/envelope'
 import { ValidationError } from '../src/util/errors'
 
-describe('resolvePortContent forgiveness path (kind=undefined + in-worktree .md)', () => {
+describe('RFC-049 PR-B raw-passthrough (kind=undefined never reads file)', () => {
   let worktree: string
   let outside: string
 
@@ -33,29 +33,25 @@ describe('resolvePortContent forgiveness path (kind=undefined + in-worktree .md)
     rmSync(outside, { recursive: true, force: true })
   })
 
-  test('kind=undefined + absolute path inside worktree → reads file body', () => {
+  test('kind=undefined + absolute path inside worktree → raw passthrough (the path string)', () => {
     mkdirSync(join(worktree, 'docs'), { recursive: true })
     writeFileSync(join(worktree, 'docs', 'design.md'), '# Spec\nbody')
-    const out = resolvePortContent({
-      rawContent: join(worktree, 'docs', 'design.md'),
-      worktreePath: worktree,
-    })
-    expect(out).toBe('# Spec\nbody')
+    const absPath = join(worktree, 'docs', 'design.md')
+    expect(resolvePortContent({ rawContent: absPath, worktreePath: worktree })).toBe(absPath)
   })
 
-  test('kind=undefined + relative path inside worktree → reads file body', () => {
+  test('kind=undefined + relative path inside worktree → raw passthrough (the path string)', () => {
     mkdirSync(join(worktree, 'docs'), { recursive: true })
     writeFileSync(join(worktree, 'docs', 'design.md'), '# rel')
-    const out = resolvePortContent({
-      rawContent: 'docs/design.md',
-      worktreePath: worktree,
-    })
-    expect(out).toBe('# rel')
+    expect(resolvePortContent({ rawContent: 'docs/design.md', worktreePath: worktree })).toBe(
+      'docs/design.md',
+    )
   })
 
-  test('kind=string + relative .md path inside worktree → also auto-promotes', () => {
-    // 'string' / 'markdown' / undefined all share the forgiveness path; only
-    // strict 'markdown_file' bypasses it.
+  test('kind=string + relative .md path inside worktree → still passthrough (no auto-promote)', () => {
+    // 'string' / 'markdown' kinds pass through the handler whose validate
+    // returns { ok: true, body: raw } — no file read, regardless of whether
+    // the path-shaped string happens to point to a real file.
     mkdirSync(join(worktree, 'docs'), { recursive: true })
     writeFileSync(join(worktree, 'docs', 'a.md'), 'auto')
     expect(
@@ -64,7 +60,7 @@ describe('resolvePortContent forgiveness path (kind=undefined + in-worktree .md)
         kind: 'string',
         worktreePath: worktree,
       }),
-    ).toBe('auto')
+    ).toBe('docs/a.md')
   })
 
   test('kind=undefined + path-shaped string but file does not exist → passthrough', () => {

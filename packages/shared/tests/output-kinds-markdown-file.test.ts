@@ -96,10 +96,60 @@ describe('RFC-049 markdown_file kind handler — validate', () => {
     }
   })
 
-  test('subReasons set covers exactly the codes validate produces in PR-A', () => {
+  test('subReasons set covers exactly the 5 codes validate produces in PR-B', () => {
     expect([...markdownFileHandler.subReasons].sort()).toEqual(
-      ['empty-path', 'escapes-worktree', 'missing-file'].sort(),
+      ['empty-path', 'escapes-worktree', 'missing-file', 'wrong-extension', 'empty-file'].sort(),
     )
+  })
+
+  test('wrong-extension: path does not end with .md or .markdown', () => {
+    const io = ioWith({ inside: true, body: 'never read' })
+    const r = markdownFileHandler.validate('docs/report.txt', CTX, io)
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.subReason).toBe('wrong-extension')
+      expect(r.detail).toContain('.md or .markdown')
+      expect(r.detail).toContain("'docs/report.txt'")
+    }
+  })
+
+  test('wrong-extension: bare path with no extension', () => {
+    const io = ioWith({ inside: true })
+    const r = markdownFileHandler.validate('README', CTX, io)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.subReason).toBe('wrong-extension')
+  })
+
+  test('extension check is case-insensitive (.MD / .Markdown both accepted)', () => {
+    const io = ioWith({ inside: true, body: '# upper' })
+    const upper = markdownFileHandler.validate('docs/REPORT.MD', CTX, io)
+    expect(upper.ok).toBe(true)
+    const mixedMarkdown = markdownFileHandler.validate('docs/notes.Markdown', CTX, io)
+    expect(mixedMarkdown.ok).toBe(true)
+  })
+
+  test('empty-file: file exists, extension is .md, but content trims to empty', () => {
+    const io = ioWith({ inside: true, body: '   \n\n   ' })
+    const r = markdownFileHandler.validate('docs/empty.md', CTX, io)
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.subReason).toBe('empty-file')
+      expect(r.detail).toContain('empty after trim')
+      expect(r.detail).toContain("'docs/empty.md'")
+    }
+  })
+
+  test('wrong-extension precedes missing-file: .txt path that does not exist still reports wrong-extension', () => {
+    // Order matters — the extension check runs BEFORE the read attempt so the
+    // agent gets a precise diagnosis instead of a misleading "missing file"
+    // when the real bug is a typo'd extension.
+    const io = ioWith({
+      inside: true,
+      throwOnRead: new Error('ENOENT: would have thrown but the read never happens'),
+    })
+    const r = markdownFileHandler.validate('docs/report.txt', CTX, io)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.subReason).toBe('wrong-extension')
   })
 })
 

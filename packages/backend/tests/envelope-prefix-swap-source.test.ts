@@ -68,9 +68,19 @@ describe('RFC-049 envelope.ts source-level prefix swap guard', () => {
     }
   })
 
-  test('forgiveness path `tryReadInWorktreeMarkdownPath` is still present in PR-A', () => {
-    // PR-A explicitly KEEPS the forgiveness path (zero-behavior refactor).
-    // PR-B removes it; the grep guard there flips to .not.toContain.
-    expect(ENVELOPE_SRC).toContain('function tryReadInWorktreeMarkdownPath')
+  test('forgiveness path `tryReadInWorktreeMarkdownPath` is gone (RFC-049 PR-B)', () => {
+    // PR-B removed the auto-promote helper + its caller; undeclared kinds
+    // now return rawContent verbatim. If this grep ever flips back to
+    // `.toContain`, the breaking change has silently regressed.
+    expect(ENVELOPE_SRC).not.toContain('tryReadInWorktreeMarkdownPath')
+    expect(ENVELOPE_SRC).not.toContain('realpathSync')
+    expect(ENVELOPE_SRC).not.toContain('statSync')
+  })
+
+  test('PortValidationError is exported with a structured failure payload field', () => {
+    // PR-B introduces a ValidationError subclass that carries the structured
+    // failure object the runner persists to port_validation_failures_json.
+    expect(ENVELOPE_SRC).toContain('export class PortValidationError')
+    expect(ENVELOPE_SRC).toContain('public readonly failure')
   })
 })

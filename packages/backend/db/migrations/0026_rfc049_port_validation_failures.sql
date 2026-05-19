@@ -1,0 +1,24 @@
+-- RFC-049: structured failures payload for port-content validation. When
+-- envelope.ts throws a PortValidationError (e.g. markdown_file path missing,
+-- escapes worktree, wrong extension, empty file...), runner writes the
+-- structured failure list here as JSON so scheduler can decide same-session
+-- follow-up and route to the owning OutputKindHandler's repair block
+-- without re-parsing the human-readable errorMessage prefix.
+--
+-- Shape (an array of failures; one row may carry multiple if a future
+-- multi-port reduce-style validate fans them out):
+--   [
+--     {
+--       "port": "docpath",
+--       "kind": "markdown_file",
+--       "subReason": "missing-file",
+--       "detail": "markdown_file 'report.md': ENOENT: no such file ..."
+--     },
+--     ...
+--   ]
+--
+-- Old rows (pre-RFC-049, or any successful run, or any failure that wasn't
+-- port-validation) carry NULL. Scheduler degrades gracefully when the column
+-- is NULL but the errorMessage still matches the prefix (followup fires but
+-- the per-port repair text is omitted) — see design/RFC-049-... §4.2.
+ALTER TABLE `node_runs` ADD COLUMN `port_validation_failures_json` text;

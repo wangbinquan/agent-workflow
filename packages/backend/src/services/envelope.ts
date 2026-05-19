@@ -20,10 +20,92 @@
 // resolution + traversal hardening before the content lands in
 // node_run_outputs.
 
-import { readFileSync, realpathSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { getOutputKindHandler, type AgentOutputKind, type ValidateIO } from '@agent-workflow/shared'
 import { ValidationError } from '@/util/errors'
+
+/**
+ * RFC-049 — structured failure payload attached to PortValidationError when
+ * port content fails an OutputKindHandler.validate call. The runner catches
+ * PortValidationError specifically, serializes `failure` into the
+ * `port_validation_failures_json` column, and the scheduler reads it back to
+ * drive same-session followup.
+ */
+export interface PortValidationFailure {
+  port: string
+  kind: AgentOutputKind
+  subReason: string
+  detail?: string
+}
+
+/**
+ * ValidationError subclass carrying a structured `failure` payload so the
+ * runner can persist it to `node_runs.port_validation_failures_json` without
+ * re-parsing the human-readable errorMessage. Test code catching this class
+ * gets a precise narrowed type instead of a stringly-typed `code` match.
+ */
+export class PortValidationError extends ValidationError {
+  constructor(
+    code: string,
+    message: string,
+    public readonly failure: PortValidationFailure,
+  ) {
+    super(code, message, { ...failure })
+    this.name = 'PortValidationError'
+  }
+}
+
+/**
+ * Convenience for callers that want to write a batch of port failures to the
+ * new column. Today we throw on the first failure (fail-fast — see RFC-049
+ * design.md §7), so the array is always length 1; the helper is shaped this
+ * way to anchor the JSON-payload schema for a future reduce-style validator.
+ */
+export function serializePortValidationFailures(
+  failures: ReadonlyArray<PortValidationFailure>,
+): string {
+  return JSON.stringify(failures)
+}
+
+/**
+ * Parse the raw JSON the runner persisted into
+ * `node_runs.port_validation_failures_json`. Defensive parsing — malformed
+ * payloads degrade to null rather than throw, so a corrupted column never
+ * 5xx's the task detail API. Same shape as RFC-046's parseInjectedSnapshotJson.
+ */
+export function parsePortValidationFailuresJson(
+  raw: string | null,
+): PortValidationFailure[] | null {
+  if (raw == null) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return null
+  }
+  if (!Array.isArray(parsed)) return null
+  const out: PortValidationFailure[] = []
+  for (const item of parsed) {
+    if (item == null || typeof item !== 'object') continue
+    const m = item as Record<string, unknown>
+    if (
+      typeof m.port !== 'string' ||
+      typeof m.kind !== 'string' ||
+      typeof m.subReason !== 'string'
+    ) {
+      continue
+    }
+    const entry: PortValidationFailure = {
+      port: m.port,
+      kind: m.kind as AgentOutputKind,
+      subReason: m.subReason,
+    }
+    if (typeof m.detail === 'string') entry.detail = m.detail
+    out.push(entry)
+  }
+  return out
+}
 
 /**
  * Node-backed ValidateIO supplied to RFC-049 OutputKindHandler.validate.
@@ -204,41 +286,36 @@ export interface ResolvePortContentOptions {
  * that need to remember the source file path (e.g. dispatchReviewNode
  * snapshotting onto doc_versions for the iterate prompt) use this.
  *
- * `sourcePath` is set when:
- *   - kind === 'markdown_file' (always — the strict branch reads a file).
- *   - kind is anything else and the forgiveness branch silently read a `.md`
- *     file inside the worktree.
- * `sourcePath` is undefined when the body was passed through verbatim
- * (inline markdown, path-shaped strings that did not resolve, etc.).
+ * `sourcePath` is set when the OutputKindHandler.validate that ran reports
+ * one (today: `markdown_file` always; pure-text kinds never).
  *
  * The path is always normalized to be worktree-relative, even when the agent
  * emitted an absolute path inside the worktree.
+ *
+ * RFC-049 PR-B: kind === undefined → raw passthrough (no file read attempt,
+ * no probing). The old "forgiveness path" that auto-promoted single-line
+ * .md paths is gone — agents that want the file body delivered to downstream
+ * nodes MUST declare `outputKinds: { port: markdown_file }`. This is a
+ * breaking change, locked in {@link envelope-undeclared-kind-raw-passthrough}
+ * test + the prefix-swap source grep guard.
  */
 export function resolvePortContentDetailed(opts: ResolvePortContentOptions): {
   body: string
   sourcePath?: string
 } {
   const { rawContent, kind, worktreePath } = opts
-  if (kind !== 'markdown_file') {
-    // Forgiveness path: when an agent emits a single-line `.md` path on a
-    // port whose `outputKinds` was never declared as `markdown_file`, the
-    // review/audit/fix downstream still wants the file body, not the path
-    // string itself. We auto-promote ONLY when the candidate resolves to a
-    // real file safely contained inside the task worktree (lexical +
-    // realpath checks). Any failure mode → return rawContent unchanged so
-    // legitimate string ports that happen to look path-shaped don't crash.
-    //
-    // RFC-049 PR-A keeps this path intact (strict zero-behavior). PR-B
-    // removes it entirely and forces agents to declare outputKinds; the
-    // string / markdown handlers will be wired in at the same time.
-    return tryReadInWorktreeMarkdownPath(rawContent, worktreePath)
+  if (kind === undefined) {
+    // Undeclared kind → raw passthrough. Forgiveness path was removed in
+    // RFC-049 PR-B; emit the content verbatim so legitimate string ports
+    // that happen to look path-shaped don't get accidentally read as files.
+    return { body: rawContent }
   }
 
-  // RFC-049 PR-A: route the markdown_file path through the registered
-  // handler. The handler's `validate` returns either `{ ok: true, body,
-  // sourcePath? }` or `{ ok: false, subReason, detail }`; failures translate
-  // into a `port-validation-<kind>-<sub>` errCode at the wire (kind
-  // namespace so future kinds can't collide with markdown_file's codes).
+  // RFC-049 PR-B: route through the registered handler. Handler's `validate`
+  // returns either `{ ok: true, body, sourcePath? }` or `{ ok: false,
+  // subReason, detail }`; failures translate into a
+  // `port-validation-<kind>-<sub>` errCode at the wire (kind namespace so a
+  // future kind's subReasons can't collide with markdown_file's codes).
   const handler = getOutputKindHandler(kind)
   const result = handler.validate(
     rawContent,
@@ -250,10 +327,15 @@ export function resolvePortContentDetailed(opts: ResolvePortContentOptions): {
     if (result.sourcePath !== undefined) out.sourcePath = result.sourcePath
     return out
   }
-  throw new ValidationError(
+  throw new PortValidationError(
     `port-validation-${kind}-${result.subReason}`,
     `port-validation-${kind}-${result.subReason}: ${result.detail}`,
-    { port: opts.port, kind, subReason: result.subReason, detail: result.detail },
+    {
+      port: opts.port ?? '',
+      kind,
+      subReason: result.subReason,
+      ...(result.detail !== undefined ? { detail: result.detail } : {}),
+    },
   )
 }
 
@@ -261,10 +343,12 @@ export function resolvePortContentDetailed(opts: ResolvePortContentOptions): {
  * Resolve the on-the-wire content of a port to the value downstream nodes
  * actually consume.
  *
- * - `string` / undefined / `markdown` → pass `rawContent` through unchanged.
- * - `markdown_file` → treat `rawContent` as a worktree-relative path,
- *   verify it stays under `worktreePath` (defeats `../etc/passwd`,
- *   `/etc/passwd`, symlinks pointing outside), then read the file as UTF-8.
+ * - `string` / `markdown` → handler passthrough (rawContent unchanged).
+ * - `markdown_file` → handler treats rawContent as a worktree-relative path,
+ *   verifies containment + .md/.markdown extension + non-empty file, then
+ *   reads the file as UTF-8.
+ * - `undefined` → raw passthrough (no file read attempt). RFC-049 PR-B
+ *   removed the auto-promote forgiveness path.
  *
  * Used by the runner post-`parseEnvelope` and by the review service when
  * snapshotting a port into doc_versions. Thin wrapper over
@@ -272,55 +356,4 @@ export function resolvePortContentDetailed(opts: ResolvePortContentOptions): {
  */
 export function resolvePortContent(opts: ResolvePortContentOptions): string {
   return resolvePortContentDetailed(opts).body
-}
-
-/**
- * Heuristic auto-promote: when a port's `outputKinds` was NOT declared as
- * `markdown_file` but its content is a single-line `.md` path safely
- * resolving to a real file inside the task worktree, return the file body.
- * Otherwise pass the raw content through verbatim — multi-line markdown,
- * non-`.md` text, non-existent paths, and anything outside the worktree all
- * keep the legacy passthrough contract.
- *
- * This is a forgiveness path for agents that emit a markdown_file path
- * without declaring the kind in their frontmatter; the review detail page
- * was rendering the literal path string before this existed (see commit
- * referenced in tests/envelope-resolve-port-md-path.test.ts).
- */
-function tryReadInWorktreeMarkdownPath(
-  rawContent: string,
-  worktreePath: string,
-): { body: string; sourcePath?: string } {
-  const trimmed = rawContent.trim()
-  if (trimmed.length === 0 || trimmed.length >= 4096) return { body: rawContent }
-  if (trimmed.includes('\n') || trimmed.includes('\r')) return { body: rawContent }
-  if (!trimmed.toLowerCase().endsWith('.md')) return { body: rawContent }
-
-  const rootAbs = resolve(worktreePath)
-  const targetAbs = isAbsolute(trimmed) ? resolve(trimmed) : resolve(rootAbs, trimmed)
-  if (!(targetAbs === rootAbs || targetAbs.startsWith(rootAbs + sep))) return { body: rawContent }
-
-  let rootReal: string
-  let targetReal: string
-  try {
-    rootReal = realpathSync(rootAbs)
-    targetReal = realpathSync(targetAbs)
-  } catch {
-    return { body: rawContent }
-  }
-  if (!(targetReal === rootReal || targetReal.startsWith(rootReal + sep))) {
-    return { body: rawContent }
-  }
-
-  try {
-    if (!statSync(targetReal).isFile()) return { body: rawContent }
-    const body = readFileSync(targetReal, 'utf8')
-    // Report the path the caller pointed us at (lexical, pre-realpath) so
-    // the iterate prompt cites the exact filename the agent emitted, not the
-    // symlink target. relative() handles both forms (relative-in / abs-in).
-    const sourcePath = isAbsolute(trimmed) ? relative(rootAbs, targetAbs) : trimmed
-    return { body, sourcePath }
-  } catch {
-    return { body: rawContent }
-  }
 }

@@ -182,8 +182,10 @@ scheduler 的 attempt 循环里，第 N+1 次 attempt（N ≥ 0）走"同 sessio
 - **RFC-040 wrapper awaiting-bubble**：完全正交，作用面互不重叠（见 R3）。
 - **RFC-041 platform memory**：完全正交。
 
-## Follow-up（计划中） — markdown_file 路径协议在 envelope followup 中同步提示
+## Follow-up（已超被 RFC-049 取代） — markdown_file 路径协议在 envelope followup 中同步提示
 
+> **Superseded by [RFC-049](../RFC-049-port-content-repair-followup/proposal.md)**（2026-05-20）：RFC-049 把"端口内容校验失败 → 同 session 追问"做成了一个统一框架，markdown_file 的两步协议提示由 `markdownFile` 这个 `OutputKindHandler` 的 `buildPromptGuidance`（首轮）+ `buildRepairBlock`（followup）共同负责。`renderEnvelopeFollowupPrompt` 不再硬编码 markdown_file 字眼——shared 端只拼接 backend `composePerKindRepairBlocks` 预渲染出的 `perKindRepairBlocks` 字符串数组。本节保留作历史记录；RFC-042 已实现的"envelope 形态错 → 同 session 追问"机制零退化。
+>
 > 状态：Planned（RFC-042 主体已 Done + merged，本节是后续增量）。
 > 触发：实际运行中观察到 followup 这一轮，模型仍然只给 `<port>` 内塞了一段路径但**没有落盘**真实文件（envelope 形态合法，但下游 `resolvePortContent` / `markdown-file-read-failed` 失败），或者 followup 这一轮再次漏 envelope、且补的 envelope 里 markdown_file port 又是空路径 / placeholder。
 > 关系：与本 RFC 已落地的 G1/G2/G3/G4 正交补强；不改 followup 触发条件、不改默认 retries=3、不改全新 session 路径。只在 followup prompt 文案里加一段 markdown_file 提醒。

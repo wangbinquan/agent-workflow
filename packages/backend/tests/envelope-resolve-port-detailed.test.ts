@@ -55,26 +55,31 @@ describe('resolvePortContentDetailed sourcePath', () => {
     expect(result.sourcePath).toBe('design/spec.md')
   })
 
-  test('forgiveness branch (kind=undefined) + .md file in worktree → sourcePath set', () => {
+  test('kind=undefined + .md file in worktree → raw passthrough (sourcePath undefined, body=path)', () => {
+    // RFC-049 PR-B removed the forgiveness path. Undeclared kind always
+    // returns the raw content verbatim with no sourcePath.
     mkdirSync(join(worktree, 'notes'), { recursive: true })
-    writeFileSync(join(worktree, 'notes', 'todo.md'), 'forgiven')
+    writeFileSync(join(worktree, 'notes', 'todo.md'), 'never read after PR-B')
     const result = resolvePortContentDetailed({
       rawContent: 'notes/todo.md',
       worktreePath: worktree,
     })
-    expect(result.body).toBe('forgiven')
-    expect(result.sourcePath).toBe('notes/todo.md')
+    expect(result.body).toBe('notes/todo.md')
+    expect(result.sourcePath).toBeUndefined()
   })
 
-  test('forgiveness branch + absolute .md in worktree → sourcePath normalized to relative', () => {
+  test('kind=undefined + absolute .md path in worktree → raw passthrough (no sourcePath)', () => {
+    // Symmetric with the relative-path case: absolute paths emitted by an
+    // agent on an undeclared port also passthrough verbatim now.
     mkdirSync(join(worktree, 'docs'), { recursive: true })
-    writeFileSync(join(worktree, 'docs', 'design.md'), 'abs forgiven')
+    writeFileSync(join(worktree, 'docs', 'design.md'), 'abs (never read)')
+    const absPath = join(worktree, 'docs', 'design.md')
     const result = resolvePortContentDetailed({
-      rawContent: join(worktree, 'docs', 'design.md'),
+      rawContent: absPath,
       worktreePath: worktree,
     })
-    expect(result.body).toBe('abs forgiven')
-    expect(result.sourcePath).toBe('docs/design.md')
+    expect(result.body).toBe(absPath)
+    expect(result.sourcePath).toBeUndefined()
   })
 
   test('kind=markdown + multi-line body → sourcePath undefined, body verbatim', () => {

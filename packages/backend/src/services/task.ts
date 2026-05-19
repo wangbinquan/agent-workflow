@@ -44,6 +44,7 @@ import { runTask } from './scheduler'
 import { Paths } from '@/util/paths'
 import { createLogger } from '@/util/log'
 import { parseInjectedSnapshotJson } from './memoryInject'
+import { parsePortValidationFailuresJson } from './envelope'
 
 const log = createLogger('task')
 
@@ -870,6 +871,12 @@ export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<Tas
     // so corruption should be impossible, but defensive at the API edge
     // beats a 5xx on the whole task detail page).
     injectedMemories: parseInjectedSnapshotJson(r.injectedMemoriesJson),
+    // RFC-049: structured port-validation failures captured by the runner
+    // (NULL for successful runs or runs that failed for any reason other
+    // than port-content validation). Same defensive-parse contract as
+    // injectedMemories — corrupted payloads degrade to null rather than
+    // throw the whole task detail response.
+    portValidationFailures: parsePortValidationFailuresJson(r.portValidationFailuresJson),
   }))
 
   let outputs: NodeRunOutput[] = []

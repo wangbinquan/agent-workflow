@@ -562,23 +562,59 @@ export interface EnvelopeFollowupInput {
    * Which failure category scheduler observed on the prior attempt — used to
    * customize the opening line so the agent knows exactly what to fix.
    * Mapping from runner.ts errorMessage prefixes:
-   *   'envelope-missing' ← 'no <workflow-output> envelope found in stdout'
-   *   'both-present'     ← 'clarify-and-output-both-present: ...'
-   *   'clarify-malformed' ← 'clarify-questions-...: ...'
+   *   'envelope-missing'   ← 'no <workflow-output> envelope found in stdout'
+   *   'both-present'       ← 'clarify-and-output-both-present: ...'
+   *   'clarify-malformed'  ← 'clarify-questions-...: ...'
+   *   'port-validation'    ← 'port-validation-<kind>-<sub>: ...' (RFC-049)
    *
    * When hasClarifyChannel is false, 'both-present' / 'clarify-malformed' are
    * not reachable (those errors require a clarify channel to exist); the
    * function falls back to the 'envelope-missing' opening line in that case.
+   *
+   * 'port-validation' is reachable in BOTH clarify-on and clarify-off modes
+   * because port content validation runs against `<workflow-output>` ports
+   * regardless of channel wiring.
    */
-  reason: 'envelope-missing' | 'both-present' | 'clarify-malformed'
+  reason: 'envelope-missing' | 'both-present' | 'clarify-malformed' | 'port-validation'
+  /**
+   * RFC-049: backend-prerendered per-kind repair segments. shared/prompt.ts
+   * does NOT import the OutputKindHandler registry (handlers live in
+   * @agent-workflow/shared but are exercised via backend's NODE_VALIDATE_IO;
+   * the *text* each handler emits is computed at the call site and threaded
+   * through here so the renderer remains a pure string-splicer with no
+   * cross-kind knowledge baked in). Each entry is a complete repair segment
+   * including its own section header marker — the renderer joins them with
+   * blank lines and inserts the joined block between the bi-modal preamble
+   * and the RFC-039 strong-bias trailer.
+   *
+   * Only consumed when `reason === 'port-validation'`. Other reasons ignore
+   * this field even if a backend bug threads it through.
+   */
+  perKindRepairBlocks?: ReadonlyArray<string>
 }
 
 export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): string {
   const hasClarify = input.hasClarifyChannel
-  const reason = hasClarify ? input.reason : 'envelope-missing'
+  // hasClarifyChannel=false narrows the reason — 'both-present' and
+  // 'clarify-malformed' both require a clarify channel; 'port-validation'
+  // is preserved across both modes (port content validation runs against
+  // <workflow-output> regardless of channel wiring).
+  const reason = hasClarify
+    ? input.reason
+    : input.reason === 'port-validation'
+      ? 'port-validation'
+      : 'envelope-missing'
 
+  const isPortValidation = reason === 'port-validation'
+
+  // ---------------------------------------------------------------------------
+  // Section 1 — opening line.
+  // ---------------------------------------------------------------------------
   let opening: string
-  if (!hasClarify) {
+  if (isPortValidation) {
+    opening =
+      'Your previous reply in this session emitted a `<workflow-output>` envelope, but one or more of its ports failed content validation. Re-emit the envelope with the failing ports fixed per the per-kind notes below.'
+  } else if (!hasClarify) {
     opening =
       'Your previous reply in this session did not contain a `<workflow-output>` envelope. The framework cannot parse your result without it.'
   } else if (reason === 'both-present') {
@@ -592,6 +628,10 @@ export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): stri
       'Your previous reply in this session did not contain either a `<workflow-output>` or a `<workflow-clarify>` envelope. The framework cannot parse your result without exactly one of them.'
   }
 
+  // ---------------------------------------------------------------------------
+  // Section 2 — bullets (bi-modal preamble for clarify channel agents,
+  // single-envelope for everyone else).
+  // ---------------------------------------------------------------------------
   let bullets: string
   if (!hasClarify) {
     bullets =
@@ -606,11 +646,34 @@ export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): stri
       '- Do not emit anything after the closing envelope tag.'
   }
 
+  // ---------------------------------------------------------------------------
+  // Section 3 — RFC-049 per-kind repair blocks. Only rendered when reason is
+  // port-validation. Each handler self-renders its section header marker; we
+  // join with blank lines so the markdown reads naturally between bullets and
+  // the trailer.
+  // ---------------------------------------------------------------------------
+  const repairBlocks =
+    isPortValidation && input.perKindRepairBlocks && input.perKindRepairBlocks.length > 0
+      ? input.perKindRepairBlocks.join('\n')
+      : ''
+
+  // ---------------------------------------------------------------------------
+  // Section 4 — RFC-039 strong-bias trailer (clarify-driven continue only).
+  // ---------------------------------------------------------------------------
   let trailer = ''
   if (hasClarify && input.clarifyDirective === 'continue') {
     trailer =
       '\n\nThe user has explicitly clicked "Keep clarifying" — unless every still-unresolved detail has been pinned down by the answers earlier in this session, your reply is REQUIRED to be another `<workflow-clarify>` envelope. Skipping to `<workflow-output>` for the sake of brevity is not allowed.'
   }
 
-  return `\n\n---\n**Envelope missing — follow-up.** ${opening}\n\n${bullets}${trailer}`
+  // ---------------------------------------------------------------------------
+  // Header label keeps the same legacy "Envelope missing — follow-up." anchor
+  // for RFC-042-shape failures so existing logs / tests don't shift; the
+  // port-validation reason swaps to its own label for parity.
+  // ---------------------------------------------------------------------------
+  const label = isPortValidation
+    ? 'Port content validation — follow-up.'
+    : 'Envelope missing — follow-up.'
+
+  return `\n\n---\n**${label}** ${opening}\n\n${bullets}${repairBlocks}${trailer}`
 }

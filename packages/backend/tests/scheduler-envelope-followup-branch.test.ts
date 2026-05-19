@@ -23,6 +23,7 @@ describe('RFC-042 decideEnvelopeFollowup', () => {
     expect(decideEnvelopeFollowup(BASE)).toEqual({
       followup: true,
       reason: 'envelope-missing',
+      failures: [],
     })
   })
 
@@ -50,7 +51,7 @@ describe('RFC-042 decideEnvelopeFollowup', () => {
         errorMessage:
           'clarify-and-output-both-present: agent reply contained BOTH <workflow-output> and <workflow-clarify>',
       }),
-    ).toEqual({ followup: true, reason: 'both-present' })
+    ).toEqual({ followup: true, reason: 'both-present', failures: [] })
   })
 
   // §5.2 case 6
@@ -60,13 +61,13 @@ describe('RFC-042 decideEnvelopeFollowup', () => {
         ...BASE,
         errorMessage: 'clarify-questions-too-many: 6/5',
       }),
-    ).toEqual({ followup: true, reason: 'clarify-malformed' })
+    ).toEqual({ followup: true, reason: 'clarify-malformed', failures: [] })
     expect(
       decideEnvelopeFollowup({
         ...BASE,
         errorMessage: 'clarify-questions-malformed: empty body',
       }),
-    ).toEqual({ followup: true, reason: 'clarify-malformed' })
+    ).toEqual({ followup: true, reason: 'clarify-malformed', failures: [] })
   })
 
   // §5.2 case 7

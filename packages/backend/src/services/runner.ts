@@ -26,7 +26,11 @@ import type {
   Plugin,
   ReviewPromptContext,
 } from '@agent-workflow/shared'
-import { parseClarifyEnvelopeBody, renderEnvelopeFollowupPrompt } from '@agent-workflow/shared'
+import {
+  composePerKindRepairBlocks,
+  parseClarifyEnvelopeBody,
+  renderEnvelopeFollowupPrompt,
+} from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { cpSync, mkdirSync, rmSync, symlinkSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -38,6 +42,10 @@ import {
   extractClarifyEnvelopeBody,
   extractLastEnvelope,
   parseEnvelope,
+  PortValidationError,
+  resolvePortContent,
+  serializePortValidationFailures,
+  type PortValidationFailure,
 } from './envelope'
 import { renderUserPrompt } from './protocol'
 import { captureChildSessions } from './sessionCapture'
@@ -220,8 +228,26 @@ export interface RunNodeOptions {
    * `false` / `undefined` preserve legacy callers.
    */
   envelopeFollowup?: boolean
-  envelopeFollowupReason?: 'envelope-missing' | 'both-present' | 'clarify-malformed'
+  envelopeFollowupReason?:
+    | 'envelope-missing'
+    | 'both-present'
+    | 'clarify-malformed'
+    | 'port-validation'
   envelopeFollowupClarifyDirective?: 'continue' | 'stop'
+  /**
+   * RFC-049: structured failures persisted into the previous attempt's
+   * `port_validation_failures_json` column. Scheduler reads + zod-parses the
+   * column, threads the array through here when scheduling a
+   * `reason='port-validation'` followup; runner forwards it to the shared
+   * renderer (via composePerKindRepairBlocks) so the agent gets per-port
+   * repair instructions in this session.
+   */
+  envelopeFollowupPortValidations?: ReadonlyArray<{
+    port: string
+    kind: string
+    subReason: string
+    detail?: string
+  }>
   /**
    * RFC-041 PR3: per-scope token budget for memory inject. Optional —
    * scheduler/daemon reads `config.memoryInjectionBudget` and passes it
@@ -474,6 +500,27 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // <workflow-clarify> first; <workflow-output> only when every decision is
   // already pinned down) and appends the clarify format block immediately
   // after — see `buildProtocolBlock` in shared.
+  // RFC-049: when reason is 'port-validation', the scheduler attached the
+  // failures payload via envelopeFollowupPortValidations. Pre-render the
+  // per-kind repair segments through the registered OutputKindHandler set
+  // (shared, pure JS) so the prompt assembler stays a string-splicer with
+  // no per-kind branching of its own.
+  const followupRepairBlocks =
+    opts.envelopeFollowup === true &&
+    opts.envelopeFollowupReason === 'port-validation' &&
+    opts.envelopeFollowupPortValidations &&
+    opts.envelopeFollowupPortValidations.length > 0
+      ? composePerKindRepairBlocks(
+          opts.envelopeFollowupPortValidations.map((f) => ({
+            port: f.port,
+            kind: f.kind as 'string' | 'markdown' | 'markdown_file',
+            subReason: f.subReason,
+            ...(f.detail !== undefined ? { detail: f.detail } : {}),
+          })),
+          opts.agent.outputKinds,
+        )
+      : undefined
+
   const prompt =
     opts.envelopeFollowup === true
       ? renderEnvelopeFollowupPrompt({
@@ -481,6 +528,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           reason: opts.envelopeFollowupReason ?? 'envelope-missing',
           ...(opts.envelopeFollowupClarifyDirective !== undefined
             ? { clarifyDirective: opts.envelopeFollowupClarifyDirective }
+            : {}),
+          ...(followupRepairBlocks !== undefined
+            ? { perKindRepairBlocks: followupRepairBlocks }
             : {}),
         })
       : renderUserPrompt({
@@ -754,6 +804,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // 8. Resolve final status.
   let status: RunFinalStatus
   let errorMessage: string | undefined
+  // RFC-049: structured port-validation failures captured eagerly after
+  // parseEnvelope (see section below). Persisted to
+  // node_runs.port_validation_failures_json so the scheduler can route the
+  // followup attempt to the right OutputKindHandler's repair block without
+  // re-parsing errorMessage.
+  const portValidationFailures: PortValidationFailure[] = []
   if (aborted) {
     status = 'canceled'
     errorMessage = 'aborted by signal'
@@ -843,6 +899,37 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             nodeRunId: opts.nodeRunId,
           })
         }
+
+        // RFC-049: eagerly validate port content against the declared
+        // OutputKindHandler. Failures here surface the producer's session
+        // immediately so the scheduler can drive a same-session followup
+        // (consumer-side validation would only see the failure after the
+        // producer's session is already gone). Fail-fast — first failure
+        // wins, see RFC-049 design.md §7 for the rationale.
+        const outputKinds = opts.agent.outputKinds
+        if (outputKinds !== undefined) {
+          for (const [name, content] of parsed.ports) {
+            const kind = outputKinds[name]
+            if (kind === undefined) continue
+            try {
+              resolvePortContent({
+                rawContent: content,
+                kind,
+                worktreePath: opts.worktreePath,
+                port: name,
+              })
+            } catch (err) {
+              if (err instanceof PortValidationError) {
+                portValidationFailures.push(err.failure)
+                status = 'failed'
+                errorMessage = err.message
+                break
+              }
+              // Unknown errors fall through to the standard catch path.
+              throw err
+            }
+          }
+        }
       }
     }
   }
@@ -916,6 +1003,14 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // NULL when inject was skipped or resolved to zero memories — see
       // RFC-046 design.md §3.2.3.
       injectedMemoriesJson: injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),
+      // RFC-049: structured port-validation failure payload, or NULL when
+      // the run succeeded / failed for some other reason. Scheduler reads
+      // this column to decide whether to schedule a same-session follow-up
+      // and to populate per-kind repair blocks in the followup prompt.
+      portValidationFailuresJson:
+        portValidationFailures.length > 0
+          ? serializePortValidationFailures(portValidationFailures)
+          : null,
       tokInput: tokenUsage.input,
       tokOutput: tokenUsage.output,
       tokCacheCreate: tokenUsage.cacheCreate,

@@ -49,6 +49,7 @@ import {
 import { evaluateExitCondition, parseExitCondition } from '@/services/exitCondition'
 import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
 import { runNode, type AgentOverrides, type ResolvedSkill, type RunResult } from '@/services/runner'
+import { parsePortValidationFailuresJson } from '@/services/envelope'
 import {
   decodeWrapperProgress,
   encodeWrapperProgress,
@@ -329,11 +330,45 @@ export interface PreviousAttemptShape {
   sessionId: string | null
   /** Count of `kind='text'` rows the runner persisted for the previous run. */
   agentTextCount: number
+  /**
+   * RFC-049: structured port-validation failures the previous attempt's
+   * runner persisted to `node_runs.port_validation_failures_json`. Defaults
+   * to undefined; callers that have the JSON-parsed array can thread it
+   * through here so the scheduler can route per-kind repair text via
+   * `composePerKindRepairBlocks`. When the errorMessage carries the
+   * `port-validation-` prefix but this field is missing (e.g. legacy rows
+   * pre-RFC-049 / malformed JSON degraded by parsePortValidationFailuresJson),
+   * the followup still fires but `failures` in the decision is an empty
+   * array — degraded mode: prompt still nudges the agent, just without
+   * per-port specifics.
+   */
+  portValidationFailures?: ReadonlyArray<{
+    port: string
+    kind: string
+    subReason: string
+    detail?: string
+  }>
 }
 
 export type EnvelopeFollowupDecision =
-  | { followup: true; reason: 'envelope-missing' | 'both-present' | 'clarify-malformed' }
+  | {
+      followup: true
+      reason: 'envelope-missing' | 'both-present' | 'clarify-malformed' | 'port-validation'
+      /**
+       * Failures payload to thread into the runner / shared renderer when
+       * reason is 'port-validation'. Empty array for the other reasons (and
+       * for the degraded-mode port-validation case described above).
+       */
+      failures: ReadonlyArray<{
+        port: string
+        kind: string
+        subReason: string
+        detail?: string
+      }>
+    }
   | { followup: false }
+
+export const PORT_VALIDATION_PREFIX = 'port-validation-'
 
 export function decideEnvelopeFollowup(prev: PreviousAttemptShape): EnvelopeFollowupDecision {
   if (prev.status !== 'failed') return { followup: false }
@@ -342,13 +377,24 @@ export function decideEnvelopeFollowup(prev: PreviousAttemptShape): EnvelopeFoll
   if (prev.agentTextCount <= 0) return { followup: false }
   const m = prev.errorMessage ?? ''
   if (m.startsWith('no <workflow-output> envelope found in stdout')) {
-    return { followup: true, reason: 'envelope-missing' }
+    return { followup: true, reason: 'envelope-missing', failures: [] }
   }
   if (m.startsWith('clarify-and-output-both-present')) {
-    return { followup: true, reason: 'both-present' }
+    return { followup: true, reason: 'both-present', failures: [] }
   }
   if (m.startsWith('clarify-questions-')) {
-    return { followup: true, reason: 'clarify-malformed' }
+    return { followup: true, reason: 'clarify-malformed', failures: [] }
+  }
+  // RFC-049: any `port-validation-<kind>-<sub>` prefix → same-session
+  // followup. The `<kind>` segment routing happens later in
+  // composePerKindRepairBlocks; here we only need the outermost prefix to
+  // make the on/off decision.
+  if (m.startsWith(PORT_VALIDATION_PREFIX)) {
+    return {
+      followup: true,
+      reason: 'port-validation',
+      failures: prev.portValidationFailures ?? [],
+    }
   }
   return { followup: false }
 }
@@ -776,12 +822,28 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           .select({ c: sql<number>`count(*)` })
           .from(nodeRunEvents)
           .where(and(eq(nodeRunEvents.nodeRunId, nodeRunId), eq(nodeRunEvents.kind, 'text')))
+        // RFC-049: read the structured port-validation failures the prior
+        // attempt's runner persisted (NULL → undefined; malformed JSON →
+        // null via parsePortValidationFailuresJson, then coerced to
+        // undefined for the decision input). decideEnvelopeFollowup uses
+        // the failures array to populate the per-port repair prompt; absent
+        // / empty arrays degrade gracefully (followup still fires on the
+        // outer prefix, but the prompt skips per-kind specifics).
+        const priorRunRow = (
+          await db
+            .select({ pvf: nodeRuns.portValidationFailuresJson })
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, nodeRunId))
+            .limit(1)
+        )[0]
+        const priorFailures = parsePortValidationFailuresJson(priorRunRow?.pvf ?? null)
         followupDecision = decideEnvelopeFollowup({
           status: lastResult.status,
           exitCode: lastResult.exitCode,
           errorMessage: lastResult.errorMessage ?? null,
           sessionId: lastResult.sessionId ?? null,
           agentTextCount: Number(textCountRow[0]?.c ?? 0),
+          ...(priorFailures !== null ? { portValidationFailures: priorFailures } : {}),
         })
         if (followupDecision.followup) {
           followupResumeSessionId = lastResult.sessionId ?? undefined
@@ -819,21 +881,49 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         })
         broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
 
-        // RFC-042: surface the follow-up decision as an event so operators
-        // can replay how a green run recovered from a missing envelope.
-        // Written on the FRESH row (so it sits in the events list for the
-        // attempt that's about to run, not the failed prior attempt).
+        // RFC-042 / RFC-049: surface the follow-up decision as an audit
+        // event so operators can replay how a green run recovered from a
+        // failed prior attempt. Written on the FRESH row (so it sits in the
+        // events list for the attempt that's about to run, not the failed
+        // prior attempt). reason='port-validation' uses its own tag /
+        // payload shape (RFC-049 §A6) so log aggregators can filter the
+        // two failure classes apart.
         if (followupDecision.followup) {
-          await db.insert(nodeRunEvents).values({
-            nodeRunId,
-            ts: Date.now(),
-            kind: 'text',
-            payload: `[rfc042/envelope-followup] ${JSON.stringify({
-              rfc: 'RFC-042',
-              reason: followupDecision.reason,
-              retryAttempt: attempt,
-            })}`,
-          })
+          if (followupDecision.reason === 'port-validation') {
+            // One audit row per failing port — keeps the payload symmetric
+            // with how runner.ts persists multiple failures in the JSON
+            // column (today fail-fast → always length 1, but the schema is
+            // ready for the future batch-validate path).
+            const failures =
+              followupDecision.failures.length > 0
+                ? followupDecision.failures
+                : [{ port: '', kind: '', subReason: '' }]
+            for (const f of failures) {
+              await db.insert(nodeRunEvents).values({
+                nodeRunId,
+                ts: Date.now(),
+                kind: 'text',
+                payload: `[rfc049/port-validation-followup] ${JSON.stringify({
+                  rfc: 'RFC-049',
+                  port: f.port,
+                  kind: f.kind,
+                  subReason: f.subReason,
+                  retryAttempt: attempt,
+                })}`,
+              })
+            }
+          } else {
+            await db.insert(nodeRunEvents).values({
+              nodeRunId,
+              ts: Date.now(),
+              kind: 'text',
+              payload: `[rfc042/envelope-followup] ${JSON.stringify({
+                rfc: 'RFC-042',
+                reason: followupDecision.reason,
+                retryAttempt: attempt,
+              })}`,
+            })
+          }
         }
       }
 
@@ -977,6 +1067,14 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
                 envelopeFollowupReason: followupDecision.reason,
                 ...(followupClarifyDirective !== undefined
                   ? { envelopeFollowupClarifyDirective: followupClarifyDirective }
+                  : {}),
+                // RFC-049: thread the structured failures through to the
+                // runner so it can render the per-kind repair block via
+                // composePerKindRepairBlocks. Empty array (degraded mode)
+                // is fine — the followup still fires; the runner just
+                // omits the per-port section.
+                ...(followupDecision.reason === 'port-validation'
+                  ? { envelopeFollowupPortValidations: followupDecision.failures }
                   : {}),
               }
             : {}),

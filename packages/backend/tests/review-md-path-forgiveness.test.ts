@@ -1,15 +1,18 @@
-// Integration test for the resolvePortContent forgiveness path inside
-// the review flow. Reported by the user on the live /reviews/:id page:
-// upstream agent emitted an absolute .md path on its output port without
-// declaring outputKinds, so doc_versions.body ended up rendering the path
-// string instead of the file body. This test pins the end-to-end fix —
-// dispatchReviewNode must now snapshot the file *contents* into
-// doc_versions even when the agent skipped the outputKinds: { port:
-// markdown_file } declaration.
+// RFC-049 PR-B: integration test locking the post-forgiveness review-flow
+// contract. The original incident (linked in commit history) was: upstream
+// agent emitted an absolute .md path on an undeclared port → doc_versions
+// body rendered the path string instead of the file contents. The PR-B
+// answer is "declare outputKinds explicitly; the framework refuses to guess
+// anymore." So:
 //
-// If this goes red, check packages/backend/src/services/envelope.ts
-// (tryReadInWorktreeMarkdownPath) and packages/backend/src/services/
-// review.ts (dispatchReviewNode upstream port resolve).
+//   * Agent declares outputKinds.<port> = markdown_file → doc_versions body
+//     holds the file contents (happy path, unchanged).
+//   * Agent does NOT declare outputKinds → doc_versions body holds the path
+//     string verbatim. The breaking change is intentional.
+//
+// If this goes red, see packages/backend/src/services/envelope.ts
+// (resolvePortContentDetailed) and packages/backend/src/services/review.ts
+// (dispatchReviewNode upstream port resolve).
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -32,7 +35,7 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-describe('dispatchReviewNode forgiveness path (path-shaped port content)', () => {
+describe('dispatchReviewNode + RFC-049 PR-B explicit outputKinds contract', () => {
   let db: DbClient
   let appHome: string
   let worktree: string
@@ -51,9 +54,11 @@ describe('dispatchReviewNode forgiveness path (path-shaped port content)', () =>
     rmSync(worktree, { recursive: true, force: true })
   })
 
-  test('doc_versions body contains file contents, not the raw path string', async () => {
-    // 1) Agent row WITHOUT outputKinds — frontmatterExtra is the empty object.
+  async function seedFixture(opts: { declareMarkdownFileKind: boolean }) {
     const agentId = ulid()
+    const frontmatter = opts.declareMarkdownFileKind
+      ? JSON.stringify({ outputKinds: { design: 'markdown_file' } })
+      : '{}'
     await db.insert(agentsTable).values({
       id: agentId,
       name: 'designer',
@@ -62,12 +67,10 @@ describe('dispatchReviewNode forgiveness path (path-shaped port content)', () =>
       readonly: false,
       permission: '{}',
       skills: '[]',
-      frontmatterExtra: '{}',
+      frontmatterExtra: frontmatter,
       bodyMd: '',
     })
 
-    // 2) Workflow + task rows. workflowSnapshot/inputs unused by
-    //    dispatchReviewNode but the columns are non-null.
     const definition: WorkflowDefinition = {
       $schema_version: 2,
       inputs: [],
@@ -98,7 +101,6 @@ describe('dispatchReviewNode forgiveness path (path-shaped port content)', () =>
     const taskId = ulid()
     await db.insert(tasks).values({
       name: 'fixture-task',
-
       id: taskId,
       workflowId,
       workflowSnapshot: JSON.stringify(definition),
@@ -112,7 +114,6 @@ describe('dispatchReviewNode forgiveness path (path-shaped port content)', () =>
     })
     const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
 
-    // 3) Designer run that ALREADY emitted an absolute path on its output port.
     mkdirSync(join(worktree, 'docs'), { recursive: true })
     const fileBody = '# Generated design\n\nbody of the file the user expects to see.'
     writeFileSync(join(worktree, 'docs', 'test_design.md'), fileBody)
@@ -136,11 +137,17 @@ describe('dispatchReviewNode forgiveness path (path-shaped port content)', () =>
       content: absPath,
     })
 
-    // 4) Dispatch the review node.
+    return { task, definition, fileBody, absPath }
+  }
+
+  test('agent declares outputKinds.<port> = markdown_file → doc_versions body holds file contents', async () => {
+    const { task, definition, fileBody, absPath } = await seedFixture({
+      declareMarkdownFileKind: true,
+    })
     const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
     const result = await dispatchReviewNode({
       db,
-      taskId,
+      taskId: task.id,
       task,
       appHome,
       definition,
@@ -149,12 +156,35 @@ describe('dispatchReviewNode forgiveness path (path-shaped port content)', () =>
     })
     expect(result.kind).toBe('awaiting_review')
 
-    // 5) doc_versions body file on disk must hold the file body, not the path.
     const dvs = await db.select().from(docVersions)
     expect(dvs.length).toBe(1)
-    const dv = dvs[0]!
-    const onDisk = readFileSync(join(appHome, dv.bodyPath), 'utf8')
+    const onDisk = readFileSync(join(appHome, dvs[0]!.bodyPath), 'utf8')
     expect(onDisk).toBe(fileBody)
     expect(onDisk).not.toContain(absPath)
+  })
+
+  test('agent omits outputKinds → doc_versions body holds the raw path string (PR-B breaking change)', async () => {
+    const { task, definition, fileBody, absPath } = await seedFixture({
+      declareMarkdownFileKind: false,
+    })
+    const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
+    const result = await dispatchReviewNode({
+      db,
+      taskId: task.id,
+      task,
+      appHome,
+      definition,
+      node: reviewNode,
+      iteration: 0,
+    })
+    expect(result.kind).toBe('awaiting_review')
+
+    const dvs = await db.select().from(docVersions)
+    expect(dvs.length).toBe(1)
+    const onDisk = readFileSync(join(appHome, dvs[0]!.bodyPath), 'utf8')
+    // After PR-B the body is whatever the upstream port emitted — the path
+    // string here, NOT the file contents at that path.
+    expect(onDisk).toBe(absPath)
+    expect(onDisk).not.toContain(fileBody)
   })
 })

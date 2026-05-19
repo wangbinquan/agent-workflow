@@ -2,34 +2,46 @@
 // `<port>` content is a worktree-relative path; the framework reads that file
 // off disk before downstream nodes see the body.
 //
-// PR-A scope:
-//   - subReasons covers 3 codes that PR-A's validate produces (empty-path /
-//     escapes-worktree / missing-file). PR-B adds `wrong-extension` +
-//     `empty-file` once the stricter validation is wired in.
-//   - buildPromptGuidance: moved verbatim from shared/prompt.ts's
-//     `buildMarkdownFilePortGuidance` (search-replace search anchor here so
-//     future readers find the migration commit).
-//   - buildRepairBlock: ships now even though scheduler followup wiring is
-//     PR-B work; an unused function in PR-A is harmless and avoids touching
-//     this file again in PR-B for shared text.
+// PR-A scope: 3 of 5 subReasons (empty-path / escapes-worktree / missing-file)
+// + buildPromptGuidance moved out of shared/prompt.ts.
+//
+// PR-B scope (this file): subReasons set expanded to 5 (adds wrong-extension
+// + empty-file). validate now runs the stricter post-read checks so the
+// markdown_file contract is "the file MUST exist AND be .md/.markdown AND have
+// non-empty trimmed content"; the buildRepairBlock SUB_REASON_DESCRIPTIONS map
+// was already PR-A-ready for these.
 
 import type { OutputKindHandler } from './types'
+
+const ALLOWED_EXTENSIONS: ReadonlySet<string> = new Set(['.md', '.markdown'])
 
 const SUB_REASON_DESCRIPTIONS: Record<string, string> = {
   'empty-path': 'empty path',
   'escapes-worktree': 'path escapes the task worktree',
   'missing-file': 'file at the given path does not exist',
-  // Pre-declared for PR-B convenience — handler doesn't emit these subReasons
-  // yet, but buildRepairBlock already knows how to describe them so PR-B can
-  // wire validators without re-touching this map.
   'wrong-extension': 'path extension is not .md / .markdown',
   'empty-file': 'file exists but its content is empty after trim',
 }
 
+function endsWithAllowedExtension(path: string): boolean {
+  const lower = path.toLowerCase()
+  for (const ext of ALLOWED_EXTENSIONS) {
+    if (lower.endsWith(ext)) return true
+  }
+  return false
+}
+
 const handler: OutputKindHandler<'markdown_file'> = {
   kind: 'markdown_file',
-  // PR-A: only the 3 codes the PR-A validate produces. PR-B expands to 5.
-  subReasons: new Set<string>(['empty-path', 'escapes-worktree', 'missing-file']),
+  // PR-B: full 5-code set. Order doesn't matter; the assert in
+  // outputKinds/index.ts only checks uniqueness across kinds.
+  subReasons: new Set<string>([
+    'empty-path',
+    'escapes-worktree',
+    'wrong-extension',
+    'missing-file',
+    'empty-file',
+  ]),
 
   buildPromptGuidance({ ports }) {
     if (ports.length === 0) return null
@@ -42,7 +54,7 @@ const handler: OutputKindHandler<'markdown_file'> = {
     )
   },
 
-  validate(rawContent, _ctx, io) {
+  validate(rawContent, ctx, io) {
     const trimmed = rawContent.trim()
     if (trimmed.length === 0) {
       return {
@@ -52,7 +64,7 @@ const handler: OutputKindHandler<'markdown_file'> = {
       }
     }
 
-    const resolved = io.resolveWorktreePath(_ctx.worktreePath, trimmed)
+    const resolved = io.resolveWorktreePath(ctx.worktreePath, trimmed)
     if (!resolved.insideWorktree) {
       return {
         ok: false,
@@ -61,9 +73,21 @@ const handler: OutputKindHandler<'markdown_file'> = {
       }
     }
 
+    // Extension check is purely lexical on the worktree-relative path we will
+    // attempt to read. We check BEFORE the read so an agent that emits e.g.
+    // `report.txt` gets a precise diagnosis instead of "missing file" if the
+    // path also happened to not exist.
+    if (!endsWithAllowedExtension(resolved.relativePath)) {
+      return {
+        ok: false,
+        subReason: 'wrong-extension',
+        detail: `markdown_file port content '${trimmed}': extension must be .md or .markdown`,
+      }
+    }
+
+    let body: string
     try {
-      const body = io.readFileUtf8(resolved.targetAbs)
-      return { ok: true, body, sourcePath: resolved.relativePath }
+      body = io.readFileUtf8(resolved.targetAbs)
     } catch (err) {
       return {
         ok: false,
@@ -71,6 +95,16 @@ const handler: OutputKindHandler<'markdown_file'> = {
         detail: `markdown_file '${trimmed}': ${(err as Error).message}`,
       }
     }
+
+    if (body.trim().length === 0) {
+      return {
+        ok: false,
+        subReason: 'empty-file',
+        detail: `markdown_file '${trimmed}': file exists but its content is empty after trim`,
+      }
+    }
+
+    return { ok: true, body, sourcePath: resolved.relativePath }
   },
 
   buildRepairBlock({ failures, ports }) {

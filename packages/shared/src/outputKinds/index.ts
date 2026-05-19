@@ -16,7 +16,7 @@ import type { AgentOutputKind } from '../schemas/review'
 import stringHandler from './string'
 import markdownHandler from './markdown'
 import markdownFileHandler from './markdownFile'
-import type { OutputKindHandler } from './types'
+import type { KindFailure, OutputKindHandler } from './types'
 
 export const HANDLERS: Readonly<Record<AgentOutputKind, OutputKindHandler>> = Object.freeze({
   string: stringHandler,
@@ -68,6 +68,53 @@ export function groupPortsByKind(
     byKind.get(k)!.push(port)
   }
   return orderedKinds.map((k) => ({ handler: getOutputKindHandler(k), ports: byKind.get(k)! }))
+}
+
+/**
+ * RFC-049: compose the per-kind repair text segments the scheduler's followup
+ * attempt feeds into `renderEnvelopeFollowupPrompt.perKindRepairBlocks`. The
+ * algorithm:
+ *
+ *   1. Bucket `failures` by `kind`, in first-occurrence order.
+ *   2. For each bucket, look up the registered handler and call
+ *      `handler.buildRepairBlock({ failures: <bucket>, ports: <kind ports
+ *      on this agent> })`.
+ *   3. Drop null segments (handlers that opt out, e.g. string / markdown).
+ *   4. Drop failures whose `kind` has no registered handler (defensive — the
+ *      scheduler reads from the JSON column written by an older runner; if
+ *      somehow the kind isn't in HANDLERS, surfacing the failure as a
+ *      generic "no handler" wouldn't help the agent). Callers can detect
+ *      the degraded case via the returned array being empty / shorter than
+ *      `failures.length`.
+ *
+ * The renderer joins the resulting strings with blank lines.
+ */
+export function composePerKindRepairBlocks(
+  failures: readonly KindFailure[],
+  agentOutputKinds?: Record<string, AgentOutputKind>,
+): string[] {
+  if (failures.length === 0) return []
+  const orderedKinds: AgentOutputKind[] = []
+  const byKind = new Map<AgentOutputKind, KindFailure[]>()
+  for (const f of failures) {
+    const k = f.kind as AgentOutputKind
+    if (!HANDLERS[k]) continue
+    if (!byKind.has(k)) {
+      byKind.set(k, [])
+      orderedKinds.push(k)
+    }
+    byKind.get(k)!.push(f)
+  }
+  const out: string[] = []
+  for (const k of orderedKinds) {
+    const handler = HANDLERS[k]!
+    const ports = Object.entries(agentOutputKinds ?? {})
+      .filter(([, kk]) => kk === k)
+      .map(([port]) => port)
+    const segment = handler.buildRepairBlock({ failures: byKind.get(k)!, ports })
+    if (segment !== null) out.push(segment)
+  }
+  return out
 }
 
 // -----------------------------------------------------------------------------

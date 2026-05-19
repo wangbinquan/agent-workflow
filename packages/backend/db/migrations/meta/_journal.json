@@ -176,6 +176,13 @@
       "when": 1780000000000,
       "tag": "0025_rfc046_node_runs_injected_memories",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1780100000000,
+      "tag": "0026_rfc049_port_validation_failures",
+      "breakpoints": true
     }
   ]
 }

@@ -444,6 +444,16 @@ export const nodeRuns = sqliteTable(
      * sibling row at write time.
      */
     injectedMemoriesJson: text('injected_memories_json'),
+    /**
+     * RFC-049: JSON array of structured port-validation failures for this
+     * attempt. Each entry is `{ port, kind, subReason, detail? }` — runner
+     * writes the payload when envelope.ts throws PortValidationError so the
+     * scheduler can route same-session follow-up to the owning kind's
+     * handler (and the per-port repair text knows which port to name)
+     * without re-parsing errorMessage. NULL for successful runs, runs that
+     * failed for any non-port-validation reason, and pre-RFC-049 rows.
+     */
+    portValidationFailuresJson: text('port_validation_failures_json'),
   },
   (t) => ({
     taskIdx: index('idx_node_runs_task').on(t.taskId, t.nodeId, t.iteration, t.retryIndex),

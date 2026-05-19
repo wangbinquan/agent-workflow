@@ -256,6 +256,26 @@ export const NodeRunSchema = z.object({
    * resumed session. Optional+nullable to keep older API responses parseable.
    */
   injectedMemories: z.array(InjectedMemorySnapshotSchema).nullable().optional(),
+  /**
+   * RFC-049: structured failures captured when envelope.ts threw
+   * PortValidationError for one of this attempt's `markdown_file` (or any
+   * future kind's) ports. The scheduler reads this column to route
+   * same-session follow-up to the right OutputKindHandler and to compose
+   * per-port repair prompt text without re-parsing errorMessage. NULL on
+   * successful runs, runs that failed for any non-port-validation reason,
+   * and pre-RFC-049 rows.
+   */
+  portValidationFailures: z
+    .array(
+      z.object({
+        port: z.string(),
+        kind: z.string(),
+        subReason: z.string(),
+        detail: z.string().optional(),
+      }),
+    )
+    .nullable()
+    .optional(),
 })
 export type NodeRun = z.infer<typeof NodeRunSchema>
 
