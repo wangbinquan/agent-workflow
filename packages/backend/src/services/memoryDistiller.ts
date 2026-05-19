@@ -26,13 +26,7 @@ import { ulid } from 'ulid'
 import type { Memory, MemoryDistillJob, ResolvedDistillScope } from '@agent-workflow/shared'
 import { MemorySchema } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import {
-  clarifySessions,
-  docVersions,
-  memories,
-  reviewComments,
-  taskFeedback,
-} from '@/db/schema'
+import { clarifySessions, docVersions, memories, reviewComments, taskFeedback } from '@/db/schema'
 import type { memoryDistillJobs } from '@/db/schema'
 import { extractLastEnvelope } from '@/services/envelope'
 import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
