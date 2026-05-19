@@ -126,6 +126,61 @@ export const MemoryCreateRequestSchema = z
   })
 export type MemoryCreateRequest = z.infer<typeof MemoryCreateRequestSchema>
 
+// RFC-045: Admin-issued in-place edit. Distinct from MemoryCreateRequestSchema
+// because every field is optional (partial PATCH) — but at least one must be
+// present, and when scopeType + scopeId are *both* in the patch they must
+// satisfy the global ↔ scopeId-null invariant on their own. The
+// "scopeType-only" case (caller changes scope_type but keeps the row's
+// existing scope_id) is allowed by the schema and re-validated against the
+// row at the service layer (§design.md §4.2 step 3).
+export const MemoryPatchRequestSchema = z
+  .object({
+    scopeType: MemoryScopeSchema.optional(),
+    scopeId: z.string().nullable().optional(),
+    title: z.string().trim().min(1).max(120).optional(),
+    bodyMd: z.string().trim().min(1).max(4000).optional(),
+    tags: tagsArraySchema.optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (
+      v.scopeType === undefined &&
+      v.scopeId === undefined &&
+      v.title === undefined &&
+      v.bodyMd === undefined &&
+      v.tags === undefined
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'patch must include at least one of scopeType/scopeId/title/bodyMd/tags',
+        path: [],
+      })
+    }
+    if (v.scopeType !== undefined && v.scopeId !== undefined) {
+      if (v.scopeType === 'global' && v.scopeId !== null) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'global scope must have scopeId=null',
+          path: ['scopeId'],
+        })
+      }
+      if (v.scopeType !== 'global' && (v.scopeId === null || v.scopeId === '')) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'non-global scope requires scopeId',
+          path: ['scopeId'],
+        })
+      }
+    }
+  })
+export type MemoryPatchRequest = z.infer<typeof MemoryPatchRequestSchema>
+
+/** Field names that PATCH /api/memories/:id may change (and that the WS
+ *  `memory.updated` event reports in changedFields). Kept as a const tuple so
+ *  the WS schema can derive the same enum without redeclaring it.
+ *  Order is fixed so test fixtures are stable. */
+export const MEMORY_PATCH_FIELDS = ['scopeType', 'scopeId', 'title', 'bodyMd', 'tags'] as const
+export type MemoryPatchField = (typeof MEMORY_PATCH_FIELDS)[number]
+
 // Resolved scope set computed at enqueue time and frozen on the job row.
 export const ResolvedDistillScopeSchema = z.object({
   agentIds: z.array(z.string()),

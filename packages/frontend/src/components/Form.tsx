@@ -110,9 +110,19 @@ interface TextAreaProps {
   rows?: number
   placeholder?: string
   monospace?: boolean
+  disabled?: boolean
+  'data-testid'?: string
 }
 
-export function TextArea({ value, onChange, rows = 8, placeholder, monospace }: TextAreaProps) {
+export function TextArea({
+  value,
+  onChange,
+  rows = 8,
+  placeholder,
+  monospace,
+  disabled,
+  'data-testid': testid,
+}: TextAreaProps) {
   return (
     <textarea
       className={monospace === true ? 'form-input form-input--mono' : 'form-input'}
@@ -120,6 +130,8 @@ export function TextArea({ value, onChange, rows = 8, placeholder, monospace }: 
       onChange={(e) => onChange(e.target.value)}
       rows={rows}
       placeholder={placeholder}
+      disabled={disabled}
+      data-testid={testid}
     />
   )
 }

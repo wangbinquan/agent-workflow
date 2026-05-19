@@ -13,11 +13,26 @@ export interface MemoryRowProps {
   memory: MemorySummary
   /** Optional trailing actions (Approve / Archive / Delete buttons). */
   actions?: ReactNode
+  /** RFC-045: when provided AND the row's status is candidate / approved /
+   *  archived, an Edit button is rendered BEFORE the `actions` slot. */
+  onEdit?: () => void
+  /** RFC-045: optional override for editability (parents that already gate
+   *  on isAdmin pass false to hide the button). Defaults to true. */
+  editable?: boolean
   'data-testid'?: string
 }
 
-export function MemoryRow({ memory, actions, 'data-testid': testId }: MemoryRowProps) {
+const EDITABLE_STATUSES = new Set(['candidate', 'approved', 'archived'])
+
+export function MemoryRow({
+  memory,
+  actions,
+  onEdit,
+  editable = true,
+  'data-testid': testId,
+}: MemoryRowProps) {
   const { t } = useTranslation()
+  const showEdit = onEdit !== undefined && editable && EDITABLE_STATUSES.has(memory.status)
   return (
     <li
       className={`memory-row memory-row--${memory.status}`}
@@ -50,7 +65,21 @@ export function MemoryRow({ memory, actions, 'data-testid': testId }: MemoryRowP
         )}
         {memory.version > 1 && <span className="memory-row__version">v{memory.version}</span>}
       </div>
-      {actions !== undefined && <div className="memory-row__actions">{actions}</div>}
+      {(showEdit || actions !== undefined) && (
+        <div className="memory-row__actions">
+          {showEdit && (
+            <button
+              type="button"
+              className="btn btn--xs"
+              onClick={onEdit}
+              data-testid={`memory-row-${memory.id}-edit`}
+            >
+              {t('memory.action.edit')}
+            </button>
+          )}
+          {actions}
+        </div>
+      )}
     </li>
   )
 }

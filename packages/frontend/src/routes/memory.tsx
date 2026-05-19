@@ -21,6 +21,7 @@ import { MemoryApprovalQueue } from '@/components/memory/MemoryApprovalQueue'
 import { MemoryAllList } from '@/components/memory/MemoryAllList'
 import { MemoryByScopeBrowser } from '@/components/memory/MemoryByScopeBrowser'
 import { MemoryDistillJobsTable } from '@/components/memory/MemoryDistillJobsTable'
+import { MemoryNewDialog } from '@/components/memory/MemoryNewDialog'
 import { useMemoryWs } from '@/hooks/useMemoryWs'
 import { useMemoryDistillJobWs } from '@/hooks/useMemoryDistillJobWs'
 import { usePermission } from '@/hooks/useActor'
@@ -39,6 +40,7 @@ function MemoryPage() {
   const { t } = useTranslation()
   const isAdmin = usePermission('memory:approve')
   const [tab, setTab] = useState<MemoryTab>('approval-queue')
+  const [newDialogOpen, setNewDialogOpen] = useState(false)
 
   // Live updates for the entire surface.
   useMemoryWs()
@@ -46,10 +48,32 @@ function MemoryPage() {
 
   return (
     <div className="page page--memory">
-      <header className="page__header">
-        <h1>{t('memory.title')}</h1>
-        <p className="muted">{t('memory.hint')}</p>
+      <header className="page__header page__header--row">
+        <div>
+          <h1>{t('memory.title')}</h1>
+          <p className="muted">{t('memory.hint')}</p>
+        </div>
+        {isAdmin && (
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => setNewDialogOpen(true)}
+            data-testid="memory-new-button"
+          >
+            {t('memory.action.new')}
+          </button>
+        )}
       </header>
+      {newDialogOpen && (
+        <MemoryNewDialog
+          open={newDialogOpen}
+          onClose={() => setNewDialogOpen(false)}
+          onCreated={() => {
+            setNewDialogOpen(false)
+            setTab('approval-queue')
+          }}
+        />
+      )}
 
       <nav role="tablist" className="tabs memory-tab-bar" data-testid="memory-tab-bar">
         {TABS.map((k) => (

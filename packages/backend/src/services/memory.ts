@@ -21,6 +21,8 @@ import type {
   MemoryCandidatePromote,
   MemoryCreateRequest,
   MemoryListFilter,
+  MemoryPatchField,
+  MemoryPatchRequest,
   MemoryScope,
   MemoryStatus,
   MemorySummary,
@@ -320,6 +322,156 @@ export async function promoteCandidate(
       .limit(1)) as MemoryRow[]
     return rowToMemory(final[0]!)
   })
+}
+
+/**
+ * RFC-045: in-place edit of `scope_type / scope_id / title / body_md / tags`
+ * on candidate, approved, or archived rows. Terminal-status rows
+ * (superseded / rejected) reject with `memory-terminal-status` 409.
+ *
+ * Semantics (design.md §4.2):
+ *   1. version bumps only when ≥ 1 field actually changes (idempotent re-save
+ *      returns the row unchanged + an empty changedFields array, no WS event).
+ *   2. The supersede chain is untouched — this path NEVER writes supersedes_id
+ *      / superseded_by_id. "approved row in-place edit" is intentional and is
+ *      what supersedes RFC-041 §G7 (see proposal §5).
+ *   3. The row's audit columns (source_*, distill_*, approved_by_user_id,
+ *      approved_at) are likewise frozen — admin edit is not a new approval.
+ *
+ * `editorUserId` is optional in the type for callers that don't have an actor
+ * context (e.g. unit tests); it's only used to attribute the log line.
+ */
+export interface PatchMemoryResult {
+  memory: Memory
+  changedFields: ReadonlyArray<MemoryPatchField>
+}
+
+export async function patchMemory(
+  db: DbClient,
+  id: string,
+  input: MemoryPatchRequest,
+  editorUserId?: string,
+): Promise<PatchMemoryResult> {
+  return db.transaction(async (tx) => {
+    const rows = (await tx
+      .select()
+      .from(memories)
+      .where(eq(memories.id, id))
+      .limit(1)) as MemoryRow[]
+    if (rows.length === 0) {
+      throw new NotFoundError('memory-not-found', `memory ${id} not found`)
+    }
+    const row = rows[0]!
+    if (row.status === 'superseded' || row.status === 'rejected') {
+      throw new ConflictError(
+        'memory-terminal-status',
+        `memory ${id} is in terminal status '${row.status}'; cannot edit`,
+      )
+    }
+
+    // Synthesize the post-PATCH shape by overlaying provided fields.
+    // scope_id is special: when scopeType changes but scopeId is *not* in
+    // input, the existing scopeId is reused — the synth then runs through
+    // MemorySchema below, which enforces the global ↔ null invariant.
+    const synthScopeType = input.scopeType ?? row.scopeType
+    const synthScopeId = input.scopeId !== undefined ? input.scopeId : row.scopeId
+    const synthTitle = input.title !== undefined ? input.title : row.title
+    const synthBody = input.bodyMd !== undefined ? input.bodyMd : row.bodyMd
+    const synthTags = input.tags !== undefined ? input.tags : parseTags(row.tags)
+
+    // Re-validate the synthesized row through the full MemorySchema so that
+    // e.g. "change scopeType to global but the row already has scopeId='x'"
+    // is caught with the same error code as a malformed POST body.
+    const synthParsed = MemorySchema.safeParse({
+      id: row.id,
+      scopeType: synthScopeType,
+      scopeId: synthScopeId,
+      title: synthTitle,
+      bodyMd: synthBody,
+      tags: synthTags,
+      status: row.status,
+      sourceKind: row.sourceKind,
+      sourceEventId: row.sourceEventId,
+      sourceTaskId: row.sourceTaskId,
+      distillJobId: row.distillJobId,
+      distillAction: row.distillAction,
+      supersedesId: row.supersedesId,
+      supersededById: row.supersededById,
+      approvedByUserId: row.approvedByUserId,
+      approvedAt: row.approvedAt,
+      createdAt: row.createdAt,
+      version: row.version,
+    })
+    if (!synthParsed.success) {
+      throw new ValidationError(
+        'invalid-body',
+        'patch would put the row in an invalid state',
+        synthParsed.error.format(),
+      )
+    }
+    const synth = synthParsed.data
+
+    const changed: MemoryPatchField[] = []
+    if (synth.scopeType !== row.scopeType) changed.push('scopeType')
+    if (synth.scopeId !== row.scopeId) changed.push('scopeId')
+    if (synth.title !== row.title) changed.push('title')
+    if (synth.bodyMd !== row.bodyMd) changed.push('bodyMd')
+    if (!sameTagsJSON(synth.tags, parseTags(row.tags))) changed.push('tags')
+
+    if (changed.length === 0) {
+      // Idempotent no-op — return the parsed current row, do not bump version
+      // and do not publish WS. Route layer still returns 200 with the row.
+      return { memory: rowToMemory(row), changedFields: [] as ReadonlyArray<MemoryPatchField> }
+    }
+
+    const nextVersion = row.version + 1
+    await tx
+      .update(memories)
+      .set({
+        scopeType: synth.scopeType,
+        scopeId: synth.scopeId,
+        title: synth.title,
+        bodyMd: synth.bodyMd,
+        tags: JSON.stringify(synth.tags),
+        version: nextVersion,
+      })
+      .where(eq(memories.id, id))
+
+    publish({
+      type: 'memory.updated',
+      memoryId: id,
+      changedFields: changed,
+      version: nextVersion,
+    })
+
+    // Append an audit line in the structured log so we can ask "who edited
+    // what" without a dedicated history table (non-goal §2.2). The line is
+    // intentionally terse so log greps stay cheap.
+    console.log(
+      `[memory-edited] id=${id} editedBy=${editorUserId ?? 'unknown'} fieldsChanged=${changed.join(',')} version=${nextVersion}`,
+    )
+
+    const after = (await tx
+      .select()
+      .from(memories)
+      .where(eq(memories.id, id))
+      .limit(1)) as MemoryRow[]
+    return { memory: rowToMemory(after[0]!), changedFields: changed }
+  })
+}
+
+/** Tag arrays are compared order-independently: tags are a *set* of labels,
+ *  not an ordered list, so PATCH `{tags:["b","a"]}` against `["a","b"]` is a
+ *  no-op (no version bump). Anything mutating the underlying set (added /
+ *  removed / case-changed) flips the diff. */
+function sameTagsJSON(a: ReadonlyArray<string>, b: ReadonlyArray<string>): boolean {
+  if (a.length !== b.length) return false
+  const sa = [...a].sort()
+  const sb = [...b].sort()
+  for (let i = 0; i < sa.length; i += 1) {
+    if (sa[i] !== sb[i]) return false
+  }
+  return true
 }
 
 async function transitionStatus(

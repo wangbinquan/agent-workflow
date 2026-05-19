@@ -57,6 +57,61 @@ When a batch of issues completes, commit + push and update `STATE.md` so the nex
 - **flaky 不能掩盖红 case**：发现某测试间歇性失败，先确认是不是真 bug；如果确属环境 / 时序，要么修测试（首选 `findByRole` / class 选择器去掉 i18n race），要么显式用注释标记并开 issue，**绝不允许"重跑就过了"作为通过依据**。
 - **不写测试的极少数例外**：纯文档 / 注释改动、依赖版本号 bump（且 lock 文件锁住了 minor）、CI 配置微调、prettier 自动 format。**任何触及生产代码或测试代码的改动都没有这个豁免**。
 
+## Frontend UI consistency（前台界面统一风格强制原则）
+
+任何新增/改动的前台界面——新按钮、新弹窗、新表单、新列表行、新页签、新空状态、新页面 header
+——必须**优先复用既有公共组件 / 样式 class**，**禁止**为了"快一点"而落原生 HTML 元素 / 自写一套
+chrome / 自写一套 CSS。整个系统的视觉与交互风格要保持一致，新功能不能成为视觉孤岛。
+
+**已存在的公共组件**（持续增加；写代码前先在 `packages/frontend/src/components/` 下扫一遍，
+不在这里写名字以免清单过时——以源码实际为准）：
+
+- **Dialog** (`components/Dialog.tsx`) — 所有 modal / overlay 必走这一个：自带 overlay + portal +
+  focus trap + ESC + outside-click + a11y。提供 `footer` 槽位放 Save / Cancel。**禁止**新写
+  `.xxx__overlay` / `.xxx__panel` 之类的 modal chrome。
+- **Form primitives** (`components/Form.tsx`) — `<Field>` (label + hint + 必填 *) /
+  `<TextInput>` / `<NumberInput>` / `<TextArea>`（含 `monospace`）/ `<Switch>`。表单字段一律
+  走这套，**禁止**直接落 `<input className="form-input">` 或自写 border / focus ring。
+- **Select** (`components/Select.tsx`) — RFC-036 自带 popover 的下拉，键盘 / a11y 完整。**禁止**
+  在弹窗内直接落原生 `<select>`，原生弹层无法和周围 UI 风格对齐。
+- **ChipsInput** (`components/ChipsInput.tsx`) — 标签 / 字符串数组输入：Enter / 逗号 commit +
+  Backspace 删除 + dedup + validator。**禁止**自写"chip 输入 + × 删除"逻辑。
+- **`.segmented`** (`styles.css`) — 2-N 个短选项的分段控件（同 LanguageSwitch / NodeInspector
+  clarify sessionMode）。短列表互斥选择走这条，**禁止**自写 radio 按钮组。
+- **页面骨架**：`.page` / `.page__header` / `.page__header--row` / `.page__actions` /
+  `.page__section`；行级行动按钮 `.btn .btn--sm` / `.btn--primary` / `.btn--danger` /
+  `.btn--xs`；状态 chip 走 `<StatusChip>` / `<TaskStatusChip>` 等既有组件。
+- **错误 / 空 / 加载状态**：`<ErrorBanner>` / `<EmptyState>` / `<LoadingState>`，**禁止**写
+  `<div className="error-box">…</div>` 自己拼。
+- **WS 订阅**：先看 `hooks/useMemoryWs.ts` / `useWebSocket.ts` 等既有 hook，复用它们的
+  invalidation 模式，不要新建一套。
+
+**操作规程**：
+
+1. 开工前用 `find packages/frontend/src/components -name "*.tsx" | head -50` +
+   `grep -rn "className=\"<候选 class 前缀>" packages/frontend/src/styles.css`
+   先看清现有库存，**有就用现有的**。
+2. 若现有公共组件**确实不够用**（缺一两个 prop 比如 `disabled` / `data-testid`），优先**最小
+   扩展**它（加可选 prop、向后兼容），让所有调用方一起受益；**不要**在你的功能里 fork 一份
+   或绕开。如 RFC-045 给 `TextArea` 加 `disabled` + `data-testid`、给 `ChipsInput` 加
+   `testidPrefix` 即范例。
+3. 真的需要全新一类组件（共享库里完全没有），按"新增公共组件"对待：放在
+   `components/<Name>.tsx`、起 i18n key 体系、给 `.<name>` 命名空间样式、加单测，并把它当公共
+   原语供后续复用。新组件的初版**就**要考虑被别人复用的形态，不是私有助手函数式塞在路由里。
+4. 写完后做一次"视觉对齐自查"：把新页面截图（或本地起 dev server 看），与 `/agents`、
+   `/workflows`、`/repos`、`/memory`、`/settings` 等核心页 side-by-side 比一下——按钮高度 /
+   圆角 / spacing / 颜色 / 字号是否一致；如有偏差，先想"是不是应该贴公共 class"，再考虑加自有
+   CSS。
+5. 不复用、直接落原生元素 / 自写 chrome / 自写 CSS 的工作**等于回归**，code review 一律打回。
+   PR 提交时如果 reviewer 发现可以替换成公共组件 / class，作者必须改完才能合并。
+6. **测试可视化锚点**：测试里能用 `findByRole` / `getByRole` 就优先用 role（角色断言是公共
+   组件契约的一部分），少依赖具体 DOM 结构。需要 testid 时尽量挂在公共组件本身（如
+   `testidPrefix` 模式），不要在 wrapper `<span data-testid>` 上凑数。
+
+**判定原则**：当你犹豫"要不要自己写一个"时，默认答案是"不要"。让出"这次特殊"的判断给 RFC
+设计文档处理，常规改动**总是**先找公共原语。
+违反此条不算个人风格选择，是产品级 bug。
+
 ## Product vision (from `proposal/init.md`)
 
 The goal is an **orchestration platform that drives multiple `opencode` CLI processes as collaborating agents**, instead of using opencode's built-in subagents. The motivation: when many subagents (especially audit-style ones) run inside a single opencode session, the parent session's context grows uncontrollably and model accuracy degrades. By moving inter-agent message passing into a deterministic, framework-level pipeline, each agent process keeps a small, focused context.

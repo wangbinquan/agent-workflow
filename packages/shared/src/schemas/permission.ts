@@ -48,6 +48,8 @@ export const PERMISSIONS = [
   'memory:archive',
   'memory:delete',
   'memory:write_feedback',
+  // RFC-045 manual edit of candidate/approved/archived rows (admin only)
+  'memory:edit',
 ] as const
 
 export type Permission = (typeof PERMISSIONS)[number]

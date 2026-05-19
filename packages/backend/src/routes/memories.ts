@@ -3,6 +3,7 @@
 //   GET    /api/memories               list + filter        memory:read
 //   GET    /api/memories/:id           detail + supersede chain   memory:read
 //   POST   /api/memories               admin manual create (status=candidate)  memory:approve
+//   PATCH  /api/memories/:id           RFC-045 in-place edit                    memory:edit
 //   POST   /api/memories/:id/promote   admin approve / supersede / reject       memory:approve
 //   POST   /api/memories/:id/archive   approved → archived                       memory:archive
 //   POST   /api/memories/:id/unarchive archived → approved                       memory:archive
@@ -12,6 +13,7 @@ import {
   MemoryCandidatePromoteSchema,
   MemoryCreateRequestSchema,
   MemoryListFilterSchema,
+  MemoryPatchRequestSchema,
   MemoryScopeSchema,
   MemoryStatusSchema,
 } from '@agent-workflow/shared'
@@ -25,6 +27,7 @@ import {
   deleteMemory,
   getMemoryById,
   listMemories,
+  patchMemory,
   promoteCandidate,
   toSummary,
   unarchiveMemory,
@@ -83,6 +86,21 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
     }
     const memory = await createManualCandidate(deps.db, parsed.data)
     return c.json({ memory }, 201)
+  })
+
+  // RFC-045 — admin in-place edit (scope_type / scope_id / title / body_md /
+  // tags) on candidate / approved / archived rows. version is bumped only
+  // when ≥1 field actually changes (service-side idempotent semantics).
+  app.patch('/api/memories/:id', requirePermission('memory:edit'), async (c) => {
+    const id = c.req.param('id')
+    const body = await c.req.json().catch(() => ({}))
+    const parsed = MemoryPatchRequestSchema.safeParse(body)
+    if (!parsed.success) {
+      throw new ValidationError('invalid-body', 'invalid patch request', parsed.error.format())
+    }
+    const actor = actorOf(c)
+    const result = await patchMemory(deps.db, id, parsed.data, actor.user.id)
+    return c.json({ memory: result.memory, changedFields: result.changedFields })
   })
 
   app.post('/api/memories/:id/promote', requirePermission('memory:approve'), async (c) => {

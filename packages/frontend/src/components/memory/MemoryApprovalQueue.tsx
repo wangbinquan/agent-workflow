@@ -13,6 +13,7 @@ import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import { LoadingState } from '@/components/LoadingState'
 import { MemoryConflictCompareDialog } from './MemoryConflictCompareDialog'
+import { MemoryEditDialog } from './MemoryEditDialog'
 import { promoteActionToLabel, sourceKindLabel } from '@/lib/memory'
 import { describeApiError } from '@/i18n'
 
@@ -52,6 +53,9 @@ export function MemoryApprovalQueue({ isAdmin }: MemoryApprovalQueueProps) {
     candidate: Memory
     existingId: string
   } | null>(null)
+  // RFC-045: row-level edit dialog. Candidate cards already have the full
+  // Memory object so no extra fetch is needed.
+  const [editing, setEditing] = useState<Memory | null>(null)
 
   if (candidates.isLoading) {
     return <LoadingState label={t('common.loading')} />
@@ -81,6 +85,7 @@ export function MemoryApprovalQueue({ isAdmin }: MemoryApprovalQueueProps) {
             onApprove={() => promote.mutate({ id: mem.id, body: { action: 'approve' } })}
             onReject={() => promote.mutate({ id: mem.id, body: { action: 'reject' } })}
             onCompare={(refId) => setCompareWith({ candidate: mem, existingId: refId })}
+            onEdit={isAdmin ? () => setEditing(mem) : undefined}
           />
         ))}
       </ul>
@@ -125,6 +130,9 @@ export function MemoryApprovalQueue({ isAdmin }: MemoryApprovalQueueProps) {
           {describeApiError(promote.error)}
         </div>
       )}
+      {editing !== null && (
+        <MemoryEditDialog open onClose={() => setEditing(null)} memory={editing} />
+      )}
     </div>
   )
 }
@@ -136,6 +144,8 @@ interface CandidateCardProps {
   onApprove: () => void
   onReject: () => void
   onCompare: (refId: string) => void
+  /** RFC-045: when defined and the user is admin, render an [Edit] button. */
+  onEdit?: () => void
 }
 
 function CandidateCard({
@@ -145,6 +155,7 @@ function CandidateCard({
   onApprove,
   onReject,
   onCompare,
+  onEdit,
 }: CandidateCardProps) {
   const { t } = useTranslation()
   const label =
@@ -192,6 +203,17 @@ function CandidateCard({
         )}
       </div>
       <footer className="memory-candidate-card__actions">
+        {onEdit !== undefined && (
+          <button
+            type="button"
+            className="btn btn--sm"
+            onClick={onEdit}
+            disabled={!isAdmin || disabled}
+            data-testid={`memory-candidate-${candidate.id}-edit`}
+          >
+            {t('memory.action.edit')}
+          </button>
+        )}
         {candidate.distillAction === 'conflict_with' && refId !== null && (
           <button
             type="button"

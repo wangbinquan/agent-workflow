@@ -1473,6 +1473,37 @@ export interface Resources {
       unarchive: string
       delete: string
       compare: string
+      // RFC-045
+      new: string
+      edit: string
+    }
+    // RFC-045 — manual create + edit dialog
+    newDialogTitle: string
+    editDialogTitle: string
+    formCancel: string
+    formSave: string
+    error: {
+      terminalStatus: string
+    }
+    form: {
+      scopeType: string
+      scopeId: string
+      scopeIdGlobal: string
+      scopeIdPlaceholder: string
+      title: string
+      bodyMd: string
+      tags: string
+      tagsHint: string
+      tagsFull: string
+      tagInputPlaceholder: string
+      tagRemoveAria: string
+      errTitleEmpty: string
+      errTitleTooLong: string
+      errBodyEmpty: string
+      errBodyTooLong: string
+      errScopeIdRequired: string
+      errTagsTooMany: string
+      errTagTooLong: string
     }
     candidate: {
       from: string
@@ -2813,7 +2844,7 @@ export const zhCN: Resources = {
     promptAttemptParent: '轮次={{iter}} 重试={{retry}} · 多进程父节点 · {{status}} · {{time}}',
     injectedMemoriesTitle: '已注入记忆 ({{n}})',
     injectedMemoriesEmpty: '本次执行未注入任何记忆。',
-    injectedMemoriesNotCaptured: '未记录本次注入清单（RFC-046 之前的历史运行）。',
+    injectedMemoriesNotCaptured: '未记录本次注入清单。',
     injectedMemoriesInheritedFromAttempt0: '沿用 attempt 0 的注入快照',
     injectedMemoriesGroup_agent: 'Agent 范围',
     injectedMemoriesGroup_workflow: 'Workflow 范围',
@@ -3099,6 +3130,37 @@ export const zhCN: Resources = {
       unarchive: '取消归档',
       delete: '删除',
       compare: '对比',
+      // RFC-045
+      new: '+ 新建记忆',
+      edit: '编辑',
+    },
+    // RFC-045 — manual create + edit dialog
+    newDialogTitle: '新建记忆',
+    editDialogTitle: '编辑记忆',
+    formCancel: '取消',
+    formSave: '保存',
+    error: {
+      terminalStatus: '该记忆已是终态，不可编辑',
+    },
+    form: {
+      scopeType: '作用域',
+      scopeId: '作用域目标',
+      scopeIdGlobal: '（global — 无目标）',
+      scopeIdPlaceholder: '选择目标…',
+      title: '标题',
+      bodyMd: '正文（markdown）',
+      tags: '标签',
+      tagsHint: '回车或逗号添加，最多 16 个',
+      tagsFull: '已达上限',
+      tagInputPlaceholder: '添加标签…',
+      tagRemoveAria: '移除标签 {{tag}}',
+      errTitleEmpty: '标题不能为空',
+      errTitleTooLong: '标题不能超过 {{max}} 字符',
+      errBodyEmpty: '正文不能为空',
+      errBodyTooLong: '正文不能超过 {{max}} 字符',
+      errScopeIdRequired: '请选择作用域目标',
+      errTagsTooMany: '标签数量超出上限 ({{max}})',
+      errTagTooLong: '单个标签不能超过 {{max}} 字符',
     },
     candidate: {
       from: '来自 {{kind}} {{id}}',

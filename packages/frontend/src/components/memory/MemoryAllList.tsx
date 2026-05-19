@@ -14,7 +14,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import type { MemorySummary } from '@agent-workflow/shared'
+import type { Memory, MemorySummary } from '@agent-workflow/shared'
 import type { ApiError } from '@/api/client'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
@@ -22,6 +22,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { LoadingState } from '@/components/LoadingState'
 import { describeApiError } from '@/i18n'
 import { sortByRecency } from '@/lib/memory'
+import { MemoryEditDialog } from './MemoryEditDialog'
 import { MemoryRow } from './MemoryRow'
 
 interface ListResponse {
@@ -41,6 +42,20 @@ export function MemoryAllList({ isAdmin }: MemoryAllListProps) {
   const qc = useQueryClient()
   const [view, setView] = useState<View>('approved')
   const [pending, setPending] = useState<PendingConfirm>(null)
+  // RFC-045: id of the row whose Edit button was clicked. We then fetch the
+  // full Memory (the list endpoint returns MemorySummary only) and feed it
+  // to <MemoryEditDialog>.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const editingMemory = useQuery<{ memory: Memory }>({
+    queryKey: ['memories', 'detail', editingId],
+    queryFn: ({ signal }) =>
+      api.get<{ memory: Memory }>(
+        `/api/memories/${encodeURIComponent(editingId ?? '')}`,
+        undefined,
+        signal,
+      ),
+    enabled: editingId !== null,
+  })
 
   const list = useQuery<ListResponse>({
     queryKey: ['memories', 'all', view],
@@ -102,8 +117,17 @@ export function MemoryAllList({ isAdmin }: MemoryAllListProps) {
         onArchive: (id) => setPending({ kind: 'archive', id }),
         onUnarchive: (id) => unarchive.mutate(id),
         onDelete: (id) => setPending({ kind: 'delete', id }),
+        onEdit: isAdmin ? (id) => setEditingId(id) : undefined,
         t,
       })}
+
+      {editingId !== null && editingMemory.data?.memory !== undefined && (
+        <MemoryEditDialog
+          open
+          onClose={() => setEditingId(null)}
+          memory={editingMemory.data.memory}
+        />
+      )}
 
       {pending !== null && (
         <Dialog
@@ -156,6 +180,7 @@ interface BodyArgs {
   onArchive: (id: string) => void
   onUnarchive: (id: string) => void
   onDelete: (id: string) => void
+  onEdit?: (id: string) => void
   t: (key: string) => string
 }
 
@@ -170,6 +195,7 @@ function renderBody(args: BodyArgs) {
     onArchive,
     onUnarchive,
     onDelete,
+    onEdit,
     t,
   } = args
   if (list.isLoading) return <LoadingState />
@@ -187,6 +213,8 @@ function renderBody(args: BodyArgs) {
         <MemoryRow
           key={m.id}
           memory={m}
+          onEdit={onEdit !== undefined ? () => onEdit(m.id) : undefined}
+          editable={isAdmin}
           actions={
             <>
               {view === 'approved' ? (

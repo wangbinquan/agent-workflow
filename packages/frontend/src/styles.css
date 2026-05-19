@@ -7054,10 +7054,12 @@ mark.comment-anchor[data-active='true'] {
 .inventory-section__missing {
   color: var(--muted);
   font-style: italic;
+  font-size: 13px;
   margin-top: 8px;
 }
 .inventory-section__pending {
   color: var(--muted);
+  font-size: 13px;
   margin-top: 8px;
 }
 .inventory-section__body {

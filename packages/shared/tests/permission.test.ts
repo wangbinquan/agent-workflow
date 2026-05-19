@@ -13,8 +13,8 @@ import {
 } from '../src/schemas/permission'
 
 describe('PERMISSIONS catalog', () => {
-  test('contains the documented 27 entries', () => {
-    expect(PERMISSIONS.length).toBe(27)
+  test('contains the documented 33 entries', () => {
+    expect(PERMISSIONS.length).toBe(33)
   })
 
   test('admin role is the full PERMISSIONS set', () => {
@@ -25,7 +25,7 @@ describe('PERMISSIONS catalog', () => {
     expect(ROLE_PERMISSIONS.admin.length).toBe(PERMISSIONS.length)
   })
 
-  test('user role contains exactly the documented baseline (12 entries)', () => {
+  test('user role contains exactly the documented baseline (14 entries)', () => {
     const expected: Permission[] = [
       'agents:read',
       'skills:read',
@@ -39,6 +39,9 @@ describe('PERMISSIONS catalog', () => {
       'tasks:read:own',
       'tasks:cancel:own',
       'account:self',
+      // RFC-041 — read approved memories + write task feedback
+      'memory:read',
+      'memory:write_feedback',
     ]
     expect([...ROLE_PERMISSIONS.user].sort()).toEqual(expected.sort())
   })
@@ -60,6 +63,12 @@ describe('PERMISSIONS catalog', () => {
       'backup:run',
       'tasks:read:all',
       'tasks:cancel:all',
+      // RFC-041 write surface on platform memory
+      'memory:approve',
+      'memory:archive',
+      'memory:delete',
+      // RFC-045 manual edit on candidate / approved / archived rows
+      'memory:edit',
     ]
     for (const p of adminOnly) {
       expect(ROLE_PERMISSIONS.user.includes(p)).toBe(false)

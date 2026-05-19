@@ -227,6 +227,22 @@ export const MemoryWsMessageSchema = z.discriminatedUnion('type', [
     oldId: z.string(),
     newId: z.string(),
   }),
+  // RFC-045: in-place admin edit of candidate / approved / archived rows.
+  // changedFields is the (non-empty) subset of {scopeType, scopeId, title,
+  // bodyMd, tags} that actually changed in this PATCH; version is the
+  // resulting row.version (>= 2 since version 1 belongs to creation/promote,
+  // never to PATCH). Subscribed clients use changedFields for granular
+  // toasts; useMemoryWs already routes any 'memory.*' event to full
+  // invalidation, so this case is additive.
+  z.object({
+    type: z.literal('memory.updated'),
+    memoryId: z.string(),
+    changedFields: z
+      .array(z.enum(['scopeType', 'scopeId', 'title', 'bodyMd', 'tags']))
+      .min(1)
+      .max(5),
+    version: z.number().int().min(2),
+  }),
 ])
 export type MemoryWsMessage = z.infer<typeof MemoryWsMessageSchema>
 

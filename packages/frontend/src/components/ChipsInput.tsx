@@ -9,9 +9,23 @@ interface ChipsInputProps {
   onChange: (next: string[]) => void
   placeholder?: string
   validate?: (token: string) => string | null
+  disabled?: boolean
+  /**
+   * Optional namespace for test-only data-testid attributes. When set the
+   * input gets `${prefix}-input` and each chip's remove button gets
+   * `${prefix}-remove-${token}`. No effect on production behavior.
+   */
+  testidPrefix?: string
 }
 
-export function ChipsInput({ value, onChange, placeholder, validate }: ChipsInputProps) {
+export function ChipsInput({
+  value,
+  onChange,
+  placeholder,
+  validate,
+  disabled,
+  testidPrefix,
+}: ChipsInputProps) {
   const [pending, setPending] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -58,6 +72,10 @@ export function ChipsInput({ value, onChange, placeholder, validate }: ChipsInpu
               className="chip__remove"
               onClick={() => remove(i)}
               aria-label={`Remove ${token}`}
+              disabled={disabled}
+              data-testid={
+                testidPrefix !== undefined ? `${testidPrefix}-remove-${token}` : undefined
+              }
             >
               ×
             </button>
@@ -73,6 +91,8 @@ export function ChipsInput({ value, onChange, placeholder, validate }: ChipsInpu
           onKeyDown={handleKey}
           onBlur={() => commit(pending)}
           placeholder={value.length === 0 ? placeholder : ''}
+          disabled={disabled}
+          data-testid={testidPrefix !== undefined ? `${testidPrefix}-input` : undefined}
         />
       </div>
       {error !== null && <div className="chips-input__error">{error}</div>}
