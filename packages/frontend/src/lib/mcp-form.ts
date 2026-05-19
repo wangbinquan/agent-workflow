@@ -3,7 +3,7 @@
 // nasty bits (KEY=VALUE list editor, type-discriminated payload assembly,
 // validation messages) without rendering the page.
 
-import type { CreateMcp, Mcp } from '@agent-workflow/shared'
+import type { CreateMcp, Mcp, McpOAuthConfig } from '@agent-workflow/shared'
 import { CreateMcpSchema } from '@agent-workflow/shared'
 
 /**
@@ -27,6 +27,16 @@ export interface McpFormState {
   url: string
   headersText: string
   oauthMode: 'auto' | 'disabled'
+  /**
+   * Carry-through for the saved oauth config object (clientId/secret/scope/
+   * redirectUri). The current UI only toggles `auto` vs `disabled`, so without
+   * preserving this on the form state we'd silently overwrite the stored
+   * object with `undefined` on every PUT — re-running `opencode mcp auth`
+   * would be the only recovery. Round-tripped on the edit page; for
+   * `oauthMode === 'disabled'` (or when the user truly wants to clear it)
+   * the value is ignored.
+   */
+  oauthConfig?: McpOAuthConfig
   // shared
   timeoutMsText: string
 }
@@ -136,7 +146,11 @@ export function buildCreatePayload(
             ...(parseKvLines(form.headersText) !== undefined
               ? { headers: parseKvLines(form.headersText)! }
               : {}),
-            ...(form.oauthMode === 'disabled' ? { oauth: false as const } : {}),
+            ...(form.oauthMode === 'disabled'
+              ? { oauth: false as const }
+              : form.oauthConfig !== undefined
+                ? { oauth: form.oauthConfig }
+                : {}),
             ...(timeoutMs !== undefined && timeoutMs !== 'invalid' ? { timeoutMs } : {}),
           },
         } as const)
@@ -194,6 +208,12 @@ export function mcpToForm(m: Mcp): McpFormState {
     url: m.config.url,
     headersText: kvToLines(m.config.headers),
     oauthMode: m.config.oauth === false ? 'disabled' : 'auto',
+    // Preserve the saved oauth config object so a no-op edit + Save doesn't
+    // wipe it. The current UI has no widget for the inner fields; this is
+    // a pure passthrough.
+    ...(m.config.oauth !== undefined && m.config.oauth !== false
+      ? { oauthConfig: m.config.oauth }
+      : {}),
     timeoutMsText: m.config.timeoutMs?.toString() ?? '',
   }
 }

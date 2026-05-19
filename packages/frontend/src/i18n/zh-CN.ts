@@ -1147,9 +1147,12 @@ export interface Resources {
   // and node-run Stats tab; keys live in a top-level section so both call
   // sites import them via `t('dependencyTree.X')`.
   dependencyTree: {
-    skillCount: string
-    /** RFC-030 follow-up: per-row MCP chip when the agent declares mcp[]. */
-    mcpCount: string
+    /** Skill names chip — shown only when the agent declares skills[]. */
+    skills: string
+    /** RFC-030 follow-up: MCP names chip — shown only when the agent declares mcp[]. */
+    mcps: string
+    /** RFC-031: plugin names chip — shown only when the agent declares plugins[]. */
+    plugins: string
     readonly: string
     writes: string
     seeAbove: string
@@ -1209,6 +1212,15 @@ export interface Resources {
     promptFanoutParent: string
     promptNotApplicable: string
     promptEmpty: string
+    injectedMemoriesTitle: string
+    injectedMemoriesEmpty: string
+    injectedMemoriesNotCaptured: string
+    injectedMemoriesInheritedFromAttempt0: string
+    injectedMemoriesGroup_agent: string
+    injectedMemoriesGroup_workflow: string
+    injectedMemoriesGroup_repo: string
+    injectedMemoriesGroup_global: string
+    injectedMemoriesVersionLabel: string
     inventory: {
       title: string
       pending: string
@@ -2740,8 +2752,9 @@ export const zhCN: Resources = {
     },
   },
   dependencyTree: {
-    skillCount: '{{count}} 个技能',
-    mcpCount: '{{count}} 个 MCP',
+    skills: '技能：{{names}}',
+    mcps: 'MCP：{{names}}',
+    plugins: '插件：{{names}}',
     readonly: '只读',
     writes: '可写',
     seeAbove: '↑ 见上',
@@ -2798,6 +2811,15 @@ export const zhCN: Resources = {
     promptAttemptEntry: '轮次={{iter}} 重试={{retry}} · {{status}} · {{time}}',
     promptAttemptShard: '轮次={{iter}} 重试={{retry}} · shard={{shard}} · {{status}} · {{time}}',
     promptAttemptParent: '轮次={{iter}} 重试={{retry}} · 多进程父节点 · {{status}} · {{time}}',
+    injectedMemoriesTitle: '已注入记忆 ({{n}})',
+    injectedMemoriesEmpty: '本次执行未注入任何记忆。',
+    injectedMemoriesNotCaptured: '未记录本次注入清单（RFC-046 之前的历史运行）。',
+    injectedMemoriesInheritedFromAttempt0: '沿用 attempt 0 的注入快照',
+    injectedMemoriesGroup_agent: 'Agent 范围',
+    injectedMemoriesGroup_workflow: 'Workflow 范围',
+    injectedMemoriesGroup_repo: 'Repo 范围',
+    injectedMemoriesGroup_global: '全局',
+    injectedMemoriesVersionLabel: 'v{{n}}',
     promptFanoutParent: '多进程父节点本身没有 prompt — 请选一个 shard。',
     promptNotApplicable: '该节点种类不发起 opencode prompt。',
     promptEmpty: '本次执行尚未记录 prompt。',

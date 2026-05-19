@@ -48,13 +48,23 @@ describe('<DependencyTreePreview>', () => {
         {
           name: 'orchestrator',
           description: '',
+          skills: [],
           skillCount: 0,
           readonly: false,
           dependsOn: ['auditor'],
           mcp: [],
           plugins: [],
         },
-        { name: 'auditor', description: '', skillCount: 1, readonly: true, dependsOn: [] },
+        {
+          name: 'auditor',
+          description: '',
+          skills: ['s1'],
+          skillCount: 1,
+          readonly: true,
+          dependsOn: [],
+          mcp: [],
+          plugins: [],
+        },
       ],
     })
     wrap(<DependencyTreePreview name="orchestrator" dependsOn={['auditor']} />)

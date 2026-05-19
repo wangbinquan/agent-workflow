@@ -193,5 +193,56 @@ describe('mcpToForm (edit-page round-trip)', () => {
     expect(form.headersText).toBe('Authorization=Bearer x')
     expect(form.oauthMode).toBe('disabled')
     expect(form.enabled).toBe(false)
+    expect(form.oauthConfig).toBeUndefined()
+  })
+
+  // Regression: remote MCPs that were authenticated via `opencode mcp auth`
+  // store an oauth object (clientId / clientSecret / scope / redirectUri).
+  // The form UI only toggles auto/disabled — without preserving the object,
+  // a no-op edit + Save silently wiped the stored OAuth credentials. Locks
+  // both halves of the round-trip: mcpToForm carries the object onto the
+  // form state, and buildCreatePayload re-emits it on save under oauth=auto.
+  test('oauth object round-trips through mcpToForm + buildCreatePayload', () => {
+    const oauth = {
+      clientId: 'cid-123',
+      clientSecret: 's3cret',
+      scope: 'read write',
+      redirectUri: 'http://localhost:9999/cb',
+    }
+    const row: Mcp = {
+      id: 'mcp-3',
+      name: 'github',
+      description: '',
+      type: 'remote',
+      config: { url: 'https://api.github.com/mcp', oauth },
+      enabled: true,
+      schemaVersion: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    }
+    const form = mcpToForm(row)
+    expect(form.oauthMode).toBe('auto')
+    expect(form.oauthConfig).toEqual(oauth)
+
+    const built = buildCreatePayload(form)
+    expect(built.ok).toBe(true)
+    if (built.ok && built.payload.type === 'remote') {
+      expect(built.payload.config.oauth).toEqual(oauth)
+    }
+  })
+
+  test('oauthMode=disabled wins over a preserved oauthConfig (user explicitly disables)', () => {
+    const built = buildCreatePayload({
+      ...EMPTY_LOCAL_FORM,
+      name: 'gh',
+      type: 'remote',
+      url: 'https://api.github.com/mcp',
+      oauthMode: 'disabled',
+      oauthConfig: { clientId: 'leftover' },
+    })
+    expect(built.ok).toBe(true)
+    if (built.ok && built.payload.type === 'remote') {
+      expect(built.payload.config.oauth).toBe(false)
+    }
   })
 })

@@ -14,9 +14,13 @@ import { DependencyTree } from './DependencyTree'
 interface ClosureSummary {
   name: string
   description: string
-  skillCount: number
-  /** RFC-028 — raw mcp[]; we map to mcpCount in `toTreeAgents` below. */
+  /** RFC-046 follow-up — names of skills this agent itself references;
+   *  rendered as a chip when non-empty. */
+  skills?: string[]
+  /** RFC-028 — MCP server names this agent itself references. */
   mcp?: string[]
+  /** RFC-031 — plugin names this agent itself references. */
+  plugins?: string[]
   readonly: boolean
   dependsOn: readonly string[]
   missing?: boolean
@@ -26,8 +30,9 @@ function toTreeAgents(rows: readonly ClosureSummary[]): DependencyTreeAgent[] {
   return rows.map((r) => ({
     name: r.name,
     description: r.description,
-    skillCount: r.skillCount,
-    mcpCount: r.mcp?.length ?? 0,
+    skills: r.skills ?? [],
+    mcps: r.mcp ?? [],
+    plugins: r.plugins ?? [],
     readonly: r.readonly,
     dependsOn: r.dependsOn,
   }))

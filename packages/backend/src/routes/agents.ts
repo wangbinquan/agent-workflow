@@ -191,6 +191,13 @@ function toAgentClosureSummaries(
 ): Array<{
   name: string
   description: string
+  /**
+   * Skill names this agent itself references. The DependencyTree UI shows
+   * them as a chip (only when non-empty) so users can audit which closure
+   * members contribute which skills. `skillCount` is preserved for
+   * backwards compatibility but `skills` is the source of truth.
+   */
+  skills: string[]
   skillCount: number
   readonly: boolean
   dependsOn: string[]
@@ -211,6 +218,7 @@ function toAgentClosureSummaries(
   const out: Array<{
     name: string
     description: string
+    skills: string[]
     skillCount: number
     readonly: boolean
     dependsOn: string[]
@@ -220,6 +228,7 @@ function toAgentClosureSummaries(
   }> = closure.map((a) => ({
     name: a.name,
     description: a.description,
+    skills: a.skills,
     skillCount: a.skills.length,
     readonly: a.readonly,
     dependsOn: a.dependsOn,
@@ -243,6 +252,7 @@ function toAgentClosureSummaries(
     out.push({
       name,
       description: '',
+      skills: [],
       skillCount: 0,
       readonly: false,
       dependsOn: [],

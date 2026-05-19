@@ -37,7 +37,12 @@ interface RowProps {
 
 function Row({ node, prefix, isRoot, isLast, onNodeClick }: RowProps) {
   const connector = isRoot ? '' : isLast ? '└─ ' : '├─ '
-  const missing = node.description === '' && node.skillCount === 0 && !node.duplicateRef
+  const missing =
+    node.description === '' &&
+    node.skills.length === 0 &&
+    node.mcps.length === 0 &&
+    node.plugins.length === 0 &&
+    !node.duplicateRef
   // A truly missing agent has no row in the flat list — buildDependencyTree
   // returns a placeholder with empty fields. We rely on the convention that
   // the dependsOn entries are always non-empty so this heuristic is safe.
@@ -98,12 +103,19 @@ function NodeLabel({
       )}
       {!missing && (
         <span className="dep-tree__chips">
-          <span className="dep-tree__chip">
-            {t('dependencyTree.skillCount', { count: node.skillCount })}
-          </span>
-          {node.mcpCount > 0 && (
+          {node.skills.length > 0 && (
             <span className="dep-tree__chip">
-              {t('dependencyTree.mcpCount', { count: node.mcpCount })}
+              {t('dependencyTree.skills', { names: node.skills.join(', ') })}
+            </span>
+          )}
+          {node.mcps.length > 0 && (
+            <span className="dep-tree__chip">
+              {t('dependencyTree.mcps', { names: node.mcps.join(', ') })}
+            </span>
+          )}
+          {node.plugins.length > 0 && (
+            <span className="dep-tree__chip">
+              {t('dependencyTree.plugins', { names: node.plugins.join(', ') })}
             </span>
           )}
           <span className="dep-tree__chip">

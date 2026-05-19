@@ -113,8 +113,11 @@ export function agentToDraft(a: Agent): CreateAgent {
     permission: a.permission,
     skills: a.skills,
     dependsOn: a.dependsOn,
-    mcp: [],
-    plugins: [],
+    // RFC-028 / RFC-031 round-trip: preserve the saved mcp[] and plugins[]
+    // so reopening the edit page doesn't silently reset them. Locked by
+    // agents-detail-mcp-plugins-roundtrip.test.ts.
+    mcp: a.mcp,
+    plugins: a.plugins,
     frontmatterExtra: a.frontmatterExtra,
     bodyMd: a.bodyMd,
   }

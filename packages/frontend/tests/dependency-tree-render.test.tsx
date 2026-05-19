@@ -13,13 +13,14 @@ function mk(
   name: string,
   dependsOn: string[] = [],
   description = `desc:${name}`,
-  skillCount = 0,
+  skills: readonly string[] = [],
   readonly = false,
-  // RFC-030 follow-up — default 0 (no MCP chip), explicit non-zero in the
+  // RFC-030 follow-up — default [] (no MCP chip), explicit names in the
   // dedicated MCP-chip test case below.
-  mcpCount = 0,
+  mcps: readonly string[] = [],
+  plugins: readonly string[] = [],
 ): DependencyTreeAgent {
-  return { name, description, skillCount, mcpCount, readonly, dependsOn }
+  return { name, description, skills, mcps, plugins, readonly, dependsOn }
 }
 
 afterEach(() => {
@@ -56,20 +57,66 @@ describe('<DependencyTree>', () => {
   })
 
   // RFC-030 follow-up — closure rows that bring in MCP servers (declared on
-  // the agent itself, not unioned across the closure) get a "{n} MCP(s)" chip
-  // alongside the skill-count + readonly chips. Counts of 0 produce no chip.
-  test('renders MCP chip when mcpCount > 0, omits it when mcpCount === 0', () => {
+  // the agent itself, not unioned across the closure) get an "MCPs:" chip
+  // alongside the skill + readonly chips. Empty arrays produce no chip.
+  test('renders MCP chip with names when mcps non-empty, omits it when empty', () => {
     const flat = [
       mk('top', ['mid']),
-      mk('mid', ['leaf'], 'desc:mid', /* skillCount */ 0, /* readonly */ false, /* mcpCount */ 2),
+      mk(
+        'mid',
+        ['leaf'],
+        'desc:mid',
+        /* skills */ [],
+        /* readonly */ false,
+        /* mcps */ ['m-a', 'm-b'],
+      ),
       mk('leaf'),
     ]
     const tree = buildDependencyTree(flat, 'top')
     render(<DependencyTree tree={tree} />)
-    // `mid` should render an "MCP" chip (count: 2). `top` and `leaf` should not.
-    const mcpChips = screen.getAllByText(/\bMCP\b/i)
+    // `mid` should render an "MCPs:" chip listing the names. `top` / `leaf` should not.
+    const mcpChips = screen.getAllByText(/\bMCPs?\b/i)
     expect(mcpChips).toHaveLength(1)
-    expect(mcpChips[0]?.textContent ?? '').toMatch(/2/)
+    const text = mcpChips[0]?.textContent ?? ''
+    expect(text).toContain('m-a')
+    expect(text).toContain('m-b')
+  })
+
+  // RFC-046 follow-up — closure preview now renders skill / plugin names
+  // (not counts), and omits the chip entirely when the list is empty so the
+  // row stays uncluttered for agents with no skills/plugins.
+  test('renders Skills chip with names when skills non-empty, omits it when empty', () => {
+    const flat = [
+      mk('top', ['mid']),
+      mk('mid', [], 'desc:mid', /* skills */ ['skill-a', 'skill-b']),
+    ]
+    const tree = buildDependencyTree(flat, 'top')
+    render(<DependencyTree tree={tree} />)
+    const skillChips = screen.getAllByText(/Skills?/)
+    expect(skillChips).toHaveLength(1)
+    const text = skillChips[0]?.textContent ?? ''
+    expect(text).toContain('skill-a')
+    expect(text).toContain('skill-b')
+  })
+
+  test('renders Plugins chip with names when plugins non-empty, omits it when empty', () => {
+    const flat = [
+      mk('top', ['mid']),
+      mk(
+        'mid',
+        [],
+        'desc:mid',
+        /* skills */ [],
+        /* readonly */ false,
+        /* mcps */ [],
+        /* plugins */ ['plug-x'],
+      ),
+    ]
+    const tree = buildDependencyTree(flat, 'top')
+    render(<DependencyTree tree={tree} />)
+    const pluginChips = screen.getAllByText(/Plugins?/)
+    expect(pluginChips).toHaveLength(1)
+    expect(pluginChips[0]?.textContent ?? '').toContain('plug-x')
   })
 
   test('onNodeClick fires with the clicked agent name (only for expanded sightings)', () => {

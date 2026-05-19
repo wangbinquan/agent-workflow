@@ -1227,8 +1227,9 @@ export const enUS: Resources = {
     },
   },
   dependencyTree: {
-    skillCount: '{{count}} skill(s)',
-    mcpCount: '{{count}} MCP(s)',
+    skills: 'Skills: {{names}}',
+    mcps: 'MCPs: {{names}}',
+    plugins: 'Plugins: {{names}}',
     readonly: 'readonly',
     writes: 'writes',
     seeAbove: '↑ see above',
@@ -1288,6 +1289,16 @@ export const enUS: Resources = {
     promptFanoutParent: 'Fan-out parent — no prompt of its own; pick a shard.',
     promptNotApplicable: 'This node kind does not run an opencode prompt.',
     promptEmpty: 'No prompt recorded for this attempt yet.',
+    // RFC-046 — Injected memories card on the Session tab.
+    injectedMemoriesTitle: 'Injected memories ({{n}})',
+    injectedMemoriesEmpty: 'No memories injected for this attempt.',
+    injectedMemoriesNotCaptured: 'Inject record not captured (pre-RFC-046 run).',
+    injectedMemoriesInheritedFromAttempt0: 'Inherited from attempt 0',
+    injectedMemoriesGroup_agent: 'Agent scope',
+    injectedMemoriesGroup_workflow: 'Workflow scope',
+    injectedMemoriesGroup_repo: 'Repo scope',
+    injectedMemoriesGroup_global: 'Global',
+    injectedMemoriesVersionLabel: 'v{{n}}',
     inventory: {
       title: 'Runtime Inventory',
       pending: 'Capturing inventory…',

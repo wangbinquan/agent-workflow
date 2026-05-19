@@ -85,7 +85,10 @@ describe('GET /api/agents/:name/closure', () => {
       agents: Array<{
         name: string
         description: string
+        skills: string[]
         skillCount: number
+        mcp: string[]
+        plugins: string[]
         readonly: boolean
         dependsOn: string[]
         missing: boolean
@@ -94,7 +97,14 @@ describe('GET /api/agents/:name/closure', () => {
     expect(body.ok).toBe(true)
     expect(body.agents.map((a) => a.name)).toEqual(['top', 'mid', 'leaf'])
     const leaf = body.agents.find((a) => a.name === 'leaf')!
+    // RFC-046 follow-up: `skills` (names) must accompany `skillCount` so the
+    // DependencyTree UI can render the names instead of only a count. Same
+    // for mcp[] / plugins[] which already shipped as names. If you ever drop
+    // skillCount, update the front-end consumers first.
+    expect(leaf.skills).toEqual(['s1'])
     expect(leaf.skillCount).toBe(1)
+    expect(leaf.mcp).toEqual([])
+    expect(leaf.plugins).toEqual([])
     expect(leaf.readonly).toBe(true)
     expect(leaf.description).toBe('leaf-desc')
     expect(leaf.missing).toBe(false)

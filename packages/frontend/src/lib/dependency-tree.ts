@@ -19,12 +19,15 @@
 export interface DependencyTreeAgent {
   name: string
   description: string
-  skillCount: number
-  /** RFC-030 follow-up: number of MCP servers this agent itself references
-   *  (NOT the closure union — that's recomputed downstream). Drives the
-   *  per-row MCP chip in <DependencyTree> so users can see at a glance
-   *  which closure members bring in MCPs. */
-  mcpCount: number
+  /** Skill names this agent itself references. Empty → no skill chip. */
+  skills: readonly string[]
+  /** RFC-030 follow-up: MCP server names this agent itself references
+   *  (NOT the closure union — that's recomputed downstream). Empty →
+   *  no MCP chip. */
+  mcps: readonly string[]
+  /** RFC-031: plugin names this agent itself references. Empty → no
+   *  plugin chip. */
+  plugins: readonly string[]
   readonly: boolean
   dependsOn: readonly string[]
 }
@@ -32,8 +35,9 @@ export interface DependencyTreeAgent {
 export interface DependencyTreeNode {
   name: string
   description: string
-  skillCount: number
-  mcpCount: number
+  skills: readonly string[]
+  mcps: readonly string[]
+  plugins: readonly string[]
   readonly: boolean
   /** True when an earlier sighting of this name already expanded its
    *  children; the rendering layer shows `↑ see above` and stops. */
@@ -61,8 +65,9 @@ export function buildDependencyTree(
       return {
         name,
         description: '',
-        skillCount: 0,
-        mcpCount: 0,
+        skills: [],
+        mcps: [],
+        plugins: [],
         readonly: false,
         duplicateRef: false,
         children: [],
@@ -73,8 +78,9 @@ export function buildDependencyTree(
       return {
         name: agent.name,
         description: agent.description,
-        skillCount: agent.skillCount,
-        mcpCount: agent.mcpCount,
+        skills: agent.skills,
+        mcps: agent.mcps,
+        plugins: agent.plugins,
         readonly: agent.readonly,
         duplicateRef: true,
         children: [],
@@ -85,8 +91,9 @@ export function buildDependencyTree(
     return {
       name: agent.name,
       description: agent.description,
-      skillCount: agent.skillCount,
-      mcpCount: agent.mcpCount,
+      skills: agent.skills,
+      mcps: agent.mcps,
+      plugins: agent.plugins,
       readonly: agent.readonly,
       duplicateRef: false,
       children: agent.dependsOn.map((child) => walk(child, nextPath)),

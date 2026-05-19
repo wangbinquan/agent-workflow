@@ -34,8 +34,26 @@ describe('<NodeDependencyTreeSection>', () => {
         JSON.stringify({
           ok: true,
           agents: [
-            { name: 'orch', description: '', skillCount: 0, readonly: false, dependsOn: ['leaf'] },
-            { name: 'leaf', description: '', skillCount: 1, readonly: true, dependsOn: [] },
+            {
+              name: 'orch',
+              description: '',
+              skills: [],
+              skillCount: 0,
+              readonly: false,
+              dependsOn: ['leaf'],
+              mcp: [],
+              plugins: [],
+            },
+            {
+              name: 'leaf',
+              description: '',
+              skills: ['s1'],
+              skillCount: 1,
+              readonly: true,
+              dependsOn: [],
+              mcp: [],
+              plugins: [],
+            },
           ],
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },
@@ -51,7 +69,16 @@ describe('<NodeDependencyTreeSection>', () => {
         JSON.stringify({
           ok: true,
           agents: [
-            { name: 'lonely', description: '', skillCount: 0, readonly: false, dependsOn: [] },
+            {
+              name: 'lonely',
+              description: '',
+              skills: [],
+              skillCount: 0,
+              readonly: false,
+              dependsOn: [],
+              mcp: [],
+              plugins: [],
+            },
           ],
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },

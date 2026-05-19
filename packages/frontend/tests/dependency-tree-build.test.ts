@@ -14,13 +14,14 @@ function mk(
   name: string,
   dependsOn: string[] = [],
   description = `desc:${name}`,
-  skillCount = 0,
+  skills: readonly string[] = [],
   readonly = false,
-  // RFC-030 follow-up — default 0 keeps every existing test case meaningful;
-  // new tests below pass a non-zero value to exercise the MCP chip path.
-  mcpCount = 0,
+  // RFC-030 follow-up — default [] keeps every existing test case meaningful;
+  // new tests below pass non-empty names to exercise the MCP chip path.
+  mcps: readonly string[] = [],
+  plugins: readonly string[] = [],
 ): DependencyTreeAgent {
-  return { name, description, skillCount, mcpCount, readonly, dependsOn }
+  return { name, description, skills, mcps, plugins, readonly, dependsOn }
 }
 
 describe('buildDependencyTree', () => {
@@ -46,7 +47,7 @@ describe('buildDependencyTree', () => {
       mk('top', ['mid1', 'mid2']),
       mk('mid1', ['leaf']),
       mk('mid2', ['leaf']),
-      mk('leaf', [], 'desc:leaf', 3, true),
+      mk('leaf', [], 'desc:leaf', ['s1', 's2', 's3'], true),
     ]
     const tree = buildDependencyTree(flat, 'top')
     expect(tree.children.map((c) => c.name)).toEqual(['mid1', 'mid2'])
@@ -55,9 +56,9 @@ describe('buildDependencyTree', () => {
     const leafViaMid2 = tree.children[1]!.children[0]
     expect(leafViaMid1!.name).toBe('leaf')
     expect(leafViaMid1!.duplicateRef).toBe(false)
-    // Even leaf nodes carry their skillCount + readonly so the chip
+    // Even leaf nodes carry their skill names + readonly so the chip
     // renders identically on the first sighting.
-    expect(leafViaMid1!.skillCount).toBe(3)
+    expect(leafViaMid1!.skills).toEqual(['s1', 's2', 's3'])
     expect(leafViaMid1!.readonly).toBe(true)
 
     expect(leafViaMid2!.name).toBe('leaf')
@@ -65,7 +66,7 @@ describe('buildDependencyTree', () => {
     expect(leafViaMid2!.children).toHaveLength(0)
     // Duplicate leaves still carry the same chips so the rendered row is
     // visually consistent (just with `↑ see above` instead of recursion).
-    expect(leafViaMid2!.skillCount).toBe(3)
+    expect(leafViaMid2!.skills).toEqual(['s1', 's2', 's3'])
     expect(leafViaMid2!.readonly).toBe(true)
   })
 
@@ -74,11 +75,13 @@ describe('buildDependencyTree', () => {
     const tree = buildDependencyTree(flat, 'top')
     expect(tree.children).toHaveLength(1)
     expect(tree.children[0]!.name).toBe('ghost')
-    // Placeholder: empty description + zero skill count + not flagged
-    // duplicate. The UI's renderer treats "no description AND zero skills
-    // AND not duplicate" as the missing signal.
+    // Placeholder: empty description + zero skill/mcp/plugin chips +
+    // not flagged duplicate. The UI's renderer treats "no description
+    // AND empty skills/mcps/plugins AND not duplicate" as the missing signal.
     expect(tree.children[0]!.description).toBe('')
-    expect(tree.children[0]!.skillCount).toBe(0)
+    expect(tree.children[0]!.skills).toEqual([])
+    expect(tree.children[0]!.mcps).toEqual([])
+    expect(tree.children[0]!.plugins).toEqual([])
     expect(tree.children[0]!.duplicateRef).toBe(false)
     expect(tree.children[0]!.children).toHaveLength(0)
   })
