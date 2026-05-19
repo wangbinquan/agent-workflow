@@ -91,6 +91,19 @@ export const ConfigSchema = z.object({
    */
   repoBatchImportRetentionMs: z.number().int().positive().optional(),
 
+  // --- RFC-041 platform long-term memory ---
+  /**
+   * Master switch for the distiller daemon. When `false`, enqueueDistillJob
+   * still writes audit rows but the worker tick never picks them up; flip
+   * back to `true` and the queue drains. Default `true`.
+   */
+  memoryDistillerEnabled: z.boolean().optional(),
+  /**
+   * Model the distiller agent uses. Falls back to opencode's installed
+   * default when unset. Settings → Memory section will surface this.
+   */
+  memoryDistillModel: z.string().min(1).optional(),
+
   // --- RFC-034 git submodule recursion ---
   /**
    * Behavior when cold-cloning, warm-fetching, or worktree-launching a repo

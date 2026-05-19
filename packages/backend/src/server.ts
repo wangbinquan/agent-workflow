@@ -19,6 +19,8 @@ import { mountConfigRoutes } from '@/routes/config'
 import { mountHealthRoutes } from '@/routes/health'
 import { mountMcpRoutes } from '@/routes/mcps'
 import { mountMemoryRoutes } from '@/routes/memories'
+import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
+import { mountTaskFeedbackRoutes } from '@/routes/taskFeedback'
 import { mountOidcRoutes } from '@/routes/oidc'
 import { mountOidcAuthRoutes } from '@/routes/oidc-auth'
 import { mountPluginRoutes } from '@/routes/plugins'
@@ -153,6 +155,8 @@ export function createApp(deps: AppDeps): Hono {
   mountReviewRoutes(app, deps)
   mountClarifyRoutes(app, deps)
   mountMemoryRoutes(app, deps)
+  mountMemoryDistillJobRoutes(app, deps)
+  mountTaskFeedbackRoutes(app, deps)
   // RFC-036 — auth + OIDC + user-CRUD routes. The first three are always
   // mounted; OIDC routes self-skip when deps.secretBox is omitted.
   mountAuthRoutes(app, deps)

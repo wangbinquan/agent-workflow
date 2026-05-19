@@ -11,6 +11,7 @@ import { reapOrphanRuns } from '@/services/orphans'
 import { startEventsArchiver } from '@/services/eventsArchive'
 import { startWorktreeGc } from '@/services/gc'
 import { startBatchImportGc } from '@/services/repoBatchImport'
+import { startMemoryDistillLoop } from '@/services/memoryDistillScheduler'
 import { acquireLock, DaemonLockHeldError, type Lock } from '@/util/lock'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
 import { MIN_OPENCODE_VERSION, probeOpencode } from '@/util/opencode'
@@ -200,6 +201,13 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     undefined,
     batchImportCfg.repoBatchImportRetentionMs,
   )
+  // RFC-041 — distill queue worker. Honors `memoryDistillerEnabled`
+  // (default true); when false the handle is a no-op shell.
+  const memoryDistillTicker = startMemoryDistillLoop({
+    db,
+    enabled: batchImportCfg.memoryDistillerEnabled !== false,
+    model: batchImportCfg.memoryDistillModel ?? null,
+  })
 
   // 9. Graceful shutdown (P-4-06).
   //
@@ -233,6 +241,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     gcTicker.stop()
     archiveTicker.stop()
     batchImportGcTicker.stop()
+    memoryDistillTicker.stop()
     removeDaemonInfo()
     server.stop(true)
     try {

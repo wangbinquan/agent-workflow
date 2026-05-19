@@ -51,6 +51,7 @@ import {
   workflows,
 } from '@/db/schema'
 import { resolvePortContentDetailed } from '@/services/envelope'
+import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 import { rollbackToSnapshot } from '@/util/git'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -1135,6 +1136,15 @@ export async function submitReviewDecision(
       .update(nodeRuns)
       .set({ status: 'done', finishedAt: decidedAt })
       .where(eq(nodeRuns.id, args.nodeRunId))
+    // RFC-041: feed the approved decision into the memory distill queue.
+    // Best-effort — never blocks the decision return path.
+    await enqueueDistillJob(args.db, {
+      sourceKind: 'review',
+      sourceEventId: dv.id,
+      taskId: dv.taskId,
+    }).catch(() => {
+      /* swallow — distill is async, downstream broken queue must not affect decision */
+    })
     return { taskId: dv.taskId, reviewIteration: run.reviewIteration, resumeRequired: true }
   }
 
@@ -1271,6 +1281,16 @@ export async function submitReviewDecision(
     .update(nodeRuns)
     .set({ status: 'pending', reviewIteration: nextIter })
     .where(eq(nodeRuns.id, args.nodeRunId))
+
+  // RFC-041: same as the approve path — feed the (reject / iterate)
+  // decision into the distill queue. Best-effort.
+  await enqueueDistillJob(args.db, {
+    sourceKind: 'review',
+    sourceEventId: dv.id,
+    taskId: dv.taskId,
+  }).catch(() => {
+    /* swallow — see comment above */
+  })
 
   return { taskId: dv.taskId, reviewIteration: nextIter, resumeRequired: true }
 }

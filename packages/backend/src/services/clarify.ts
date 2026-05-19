@@ -60,6 +60,7 @@ import {
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { clarifySessions, nodeRuns, tasks } from '@/db/schema'
+import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { rollbackToSnapshot } from '@/util/git'
 import { createLogger } from '@/util/log'
@@ -440,6 +441,17 @@ export async function submitClarifyAnswers(
   }
 
   broadcastClarifyAnswered(sessionRow.taskId, sealedSession, rerunNodeRunId)
+  // RFC-041: enqueue a memory-distill job for this just-answered session so
+  // the distiller can lift any reusable preference / decision out of the
+  // Q&A. Best-effort — distill is async, a broken queue must not affect
+  // the clarify decision return.
+  await enqueueDistillJob(db, {
+    sourceKind: 'clarify',
+    sourceEventId: sessionRow.id,
+    taskId: sessionRow.taskId,
+  }).catch(() => {
+    /* swallow */
+  })
   return { session: sealedSession, rerunNodeRunId }
 }
 
