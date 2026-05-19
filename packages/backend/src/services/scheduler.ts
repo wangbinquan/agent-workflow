@@ -28,7 +28,7 @@ import {
   findClarifyNodeForAgent,
   resolveClarifySessionMode,
 } from '@agent-workflow/shared'
-import { and, asc, desc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { agents, nodeRunEvents, nodeRunOutputs, nodeRuns, skills, tasks } from '@/db/schema'
@@ -296,6 +296,54 @@ function isFresherNodeRun(
     return candidate.retryIndex > incumbent.retryIndex
   }
   return candidate.id > incumbent.id
+}
+
+// -----------------------------------------------------------------------------
+// RFC-042 — same-session envelope follow-up decision.
+//
+// When an attempt fails with a recognized envelope-format error (none / both /
+// clarify-malformed) AND opencode itself exited cleanly AND we captured a
+// session id AND the model emitted at least one text line, the next retry
+// attempt should resume the SAME opencode session and send a short follow-up
+// prompt (see shared `renderEnvelopeFollowupPrompt`) rather than rolling back
+// to the pre-snapshot and starting from scratch. Any other failure shape —
+// non-zero exit / crash / timeout / no session id captured / no text produced
+// / non-envelope errorMessage — falls back to the legacy fresh-session retry
+// path (rollback + new spawn).
+//
+// Pure function intentionally — easy to unit-test the 8-case truth table
+// without standing up the whole scheduler.
+// -----------------------------------------------------------------------------
+
+export interface PreviousAttemptShape {
+  status: 'done' | 'failed' | 'canceled' | null
+  exitCode: number | null
+  errorMessage: string | null
+  sessionId: string | null
+  /** Count of `kind='text'` rows the runner persisted for the previous run. */
+  agentTextCount: number
+}
+
+export type EnvelopeFollowupDecision =
+  | { followup: true; reason: 'envelope-missing' | 'both-present' | 'clarify-malformed' }
+  | { followup: false }
+
+export function decideEnvelopeFollowup(prev: PreviousAttemptShape): EnvelopeFollowupDecision {
+  if (prev.status !== 'failed') return { followup: false }
+  if (prev.exitCode !== 0) return { followup: false }
+  if (prev.sessionId === null || prev.sessionId === '') return { followup: false }
+  if (prev.agentTextCount <= 0) return { followup: false }
+  const m = prev.errorMessage ?? ''
+  if (m.startsWith('no <workflow-output> envelope found in stdout')) {
+    return { followup: true, reason: 'envelope-missing' }
+  }
+  if (m.startsWith('clarify-and-output-both-present')) {
+    return { followup: true, reason: 'both-present' }
+  }
+  if (m.startsWith('clarify-questions-')) {
+    return { followup: true, reason: 'clarify-malformed' }
+  }
+  return { followup: false }
 }
 
 async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeResult> {
@@ -629,7 +677,13 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   const { dependents, resolvedSkills, mcps, plugins } = injection
   const promptTemplate = pickString(node, 'promptTemplate') ?? undefined
   const nodeTimeoutMs = pickNumber(node, 'timeoutMs') ?? opts.defaultPerNodeTimeoutMs
-  const maxRetries = pickNumber(node, 'retries') ?? 0
+  // RFC-042: default retries bumped from 0 → 3 so that recoverable failure
+  // modes (in particular the model forgetting to emit a `<workflow-output>` /
+  // `<workflow-clarify>` envelope after a long tool-using session) get a
+  // chance to recover via same-session follow-up before the task is failed.
+  // Workflow authors who explicitly set `retries: 0` keep that — the change
+  // is only the fallback when the field is absent.
+  const maxRetries = pickNumber(node, 'retries') ?? 3
   const nodeOverrides = pickOverrides(node)
 
   // RFC-005: when this node is being re-run because a downstream review node
@@ -701,16 +755,49 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
 
   try {
     for (let attempt = retryIndex; attempt <= retryIndex + maxRetries; attempt++) {
+      // RFC-042: when the previous attempt failed for a recognized envelope
+      // reason AND opencode exited cleanly AND we captured a session id AND
+      // the model emitted at least one text line, the next attempt resumes
+      // the SAME opencode session with a short follow-up prompt. Any other
+      // failure shape (process crash / timeout / no session / no text /
+      // unrecognized error) falls back to the legacy fresh-session retry
+      // path: rollback pre-snapshot and re-spawn with the full prompt.
+      let followupDecision: EnvelopeFollowupDecision = { followup: false }
+      let followupResumeSessionId: string | undefined
+      if (attempt > retryIndex && lastResult !== null) {
+        const textCountRow = await db
+          .select({ c: sql<number>`count(*)` })
+          .from(nodeRunEvents)
+          .where(and(eq(nodeRunEvents.nodeRunId, nodeRunId), eq(nodeRunEvents.kind, 'text')))
+        followupDecision = decideEnvelopeFollowup({
+          status: lastResult.status,
+          exitCode: lastResult.exitCode,
+          errorMessage: lastResult.errorMessage ?? null,
+          sessionId: lastResult.sessionId ?? null,
+          agentTextCount: Number(textCountRow[0]?.c ?? 0),
+        })
+        if (followupDecision.followup) {
+          followupResumeSessionId = lastResult.sessionId ?? undefined
+        }
+      }
+
       if (attempt > retryIndex) {
-        const snap = await readSnapshotForLatestRun(db, taskId, node.id, iteration)
-        if (!agent.readonly && snap !== '') {
-          try {
-            await rollbackToSnapshot(task.worktreePath, snap)
-          } catch (err) {
-            log.warn('retry rollback failed', {
-              nodeId: node.id,
-              error: err instanceof Error ? err.message : String(err),
-            })
+        // RFC-042: rollback / pre-snapshot is for fresh-session retries only.
+        // Same-session follow-up KEEPS the worktree at whatever state the
+        // first attempt left it in — the model is continuing the same
+        // conversation; rolling back files behind its back would create a
+        // mismatch between session memory and disk.
+        if (!followupDecision.followup) {
+          const snap = await readSnapshotForLatestRun(db, taskId, node.id, iteration)
+          if (!agent.readonly && snap !== '') {
+            try {
+              await rollbackToSnapshot(task.worktreePath, snap)
+            } catch (err) {
+              log.warn('retry rollback failed', {
+                nodeId: node.id,
+                error: err instanceof Error ? err.message : String(err),
+              })
+            }
           }
         }
         // RFC-023: process-retry within the same clarify round must keep the
@@ -724,9 +811,29 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           parentNodeRunId: inheritedParentNodeRunId,
         })
         broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
+
+        // RFC-042: surface the follow-up decision as an event so operators
+        // can replay how a green run recovered from a missing envelope.
+        // Written on the FRESH row (so it sits in the events list for the
+        // attempt that's about to run, not the failed prior attempt).
+        if (followupDecision.followup) {
+          await db.insert(nodeRunEvents).values({
+            nodeRunId,
+            ts: Date.now(),
+            kind: 'text',
+            payload: `[rfc042/envelope-followup] ${JSON.stringify({
+              rfc: 'RFC-042',
+              reason: followupDecision.reason,
+              retryAttempt: attempt,
+            })}`,
+          })
+        }
       }
 
-      if (!agent.readonly) {
+      // RFC-042: pre-snapshot is also skipped on follow-up attempts (same
+      // reason as rollback — the worktree must keep its current state so
+      // opencode's session view matches disk).
+      if (!agent.readonly && !followupDecision.followup) {
         try {
           const sha = await gitStashSnapshot(task.worktreePath)
           await db.update(nodeRuns).set({ preSnapshot: sha }).where(eq(nodeRuns.id, nodeRunId))
@@ -820,6 +927,21 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
             extra: { clarifyIteration: currentClarifyIteration },
           })
         }
+        // RFC-042: follow-up attempts re-use the prior attempt's opencode
+        // session id (captured above into `followupResumeSessionId`) AND swap
+        // the prompt for a short re-anchor directive. The RFC-026 inline
+        // clarify-rerun resume path only fires on the FIRST attempt of a
+        // clarify-driven rerun (`retryIndex === 0`); follow-up attempts are
+        // strictly attempt > retryIndex so the two paths cannot fight over
+        // the same `resumeSessionId` slot. When both contexts are present,
+        // follow-up wins because it expresses what THIS attempt is for.
+        const effectiveResumeSessionId = followupDecision.followup
+          ? followupResumeSessionId
+          : resumeDecision.resumeSessionId
+        const followupClarifyDirective =
+          followupDecision.followup && effectiveHasClarifyChannel
+            ? clarifyContext?.directive
+            : undefined
         lastResult = await runNode({
           taskId,
           nodeRunId,
@@ -838,8 +960,17 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           ...(reviewContext !== undefined ? { reviewContext } : {}),
           ...(clarifyContext !== undefined ? { clarifyContext } : {}),
           ...(nodeOverrides !== undefined ? { overrides: nodeOverrides } : {}),
-          ...(resumeDecision.resumeSessionId !== undefined
-            ? { resumeSessionId: resumeDecision.resumeSessionId }
+          ...(effectiveResumeSessionId !== undefined
+            ? { resumeSessionId: effectiveResumeSessionId }
+            : {}),
+          ...(followupDecision.followup
+            ? {
+                envelopeFollowup: true as const,
+                envelopeFollowupReason: followupDecision.reason,
+                ...(followupClarifyDirective !== undefined
+                  ? { envelopeFollowupClarifyDirective: followupClarifyDirective }
+                  : {}),
+              }
             : {}),
           hasClarifyChannel: effectiveHasClarifyChannel,
           skills: resolvedSkills,

@@ -534,3 +534,96 @@ export function buildClarifyInlineReminder(): string {
     'Earlier rounds, the full envelope formats, and the asking-back rules are still in this session — they have not been re-emitted.'
   )
 }
+
+/**
+ * RFC-042 — short follow-up prompt sent in the SAME opencode session when the
+ * agent's previous reply did not produce a parseable envelope. Used by the
+ * runner's `envelopeFollowup` branch (see services/runner.ts) which kicks in
+ * only when scheduler's `decideEnvelopeFollowup` determines the prior attempt
+ * exited cleanly (exitCode === 0), captured a session id, emitted at least one
+ * text line, and failed for a recognized envelope reason
+ * (none / both / clarify-malformed).
+ *
+ * Critically this function does NOT take inputs / promptTemplate / agentOutputs
+ * / reviewContext / clarifyContext — the prior round in the same session
+ * already includes all of that, and re-emitting it would burn tokens and risk
+ * re-anchoring the agent on stale framing. Mirrors RFC-026
+ * `buildClarifyInlineReminder` design: deliberately short, deliberately bare.
+ *
+ * The clarifyDirective='continue' branch carries the RFC-039 strong-bias
+ * "REQUIRED to be another <workflow-clarify>" wording verbatim — the user
+ * explicitly clicked "Keep clarifying" on the previous round and the followup
+ * must not let the agent skip back to <workflow-output> for brevity.
+ */
+export interface EnvelopeFollowupInput {
+  /**
+   * Whether the agent node has a clarify channel wired (RFC-023). Drives the
+   * choice between the single-envelope follow-up wording and the bi-modal
+   * follow-up wording.
+   */
+  hasClarifyChannel: boolean
+  /**
+   * Latest clarify session directive when hasClarifyChannel is true.
+   * - 'continue' → append the RFC-039 strong-bias sentence at the tail.
+   * - 'stop' / undefined → do not append it. ('stop' rounds have their own
+   *   single-shot rerun path and would not normally reach a followup attempt;
+   *   the explicit no-op here is defensive.)
+   * Ignored when hasClarifyChannel is false.
+   */
+  clarifyDirective?: 'continue' | 'stop'
+  /**
+   * Which failure category scheduler observed on the prior attempt — used to
+   * customize the opening line so the agent knows exactly what to fix.
+   * Mapping from runner.ts errorMessage prefixes:
+   *   'envelope-missing' ← 'no <workflow-output> envelope found in stdout'
+   *   'both-present'     ← 'clarify-and-output-both-present: ...'
+   *   'clarify-malformed' ← 'clarify-questions-...: ...'
+   *
+   * When hasClarifyChannel is false, 'both-present' / 'clarify-malformed' are
+   * not reachable (those errors require a clarify channel to exist); the
+   * function falls back to the 'envelope-missing' opening line in that case.
+   */
+  reason: 'envelope-missing' | 'both-present' | 'clarify-malformed'
+}
+
+export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): string {
+  const hasClarify = input.hasClarifyChannel
+  const reason = hasClarify ? input.reason : 'envelope-missing'
+
+  let opening: string
+  if (!hasClarify) {
+    opening =
+      'Your previous reply in this session did not contain a `<workflow-output>` envelope. The framework cannot parse your result without it.'
+  } else if (reason === 'both-present') {
+    opening =
+      'Your previous reply in this session contained BOTH `<workflow-output>` AND `<workflow-clarify>` — the framework requires exactly one. Pick one and re-emit.'
+  } else if (reason === 'clarify-malformed') {
+    opening =
+      'Your previous reply in this session contained a `<workflow-clarify>` envelope but its JSON body could not be parsed. Re-emit a valid `<workflow-clarify>` body following the format previously specified in this session.'
+  } else {
+    opening =
+      'Your previous reply in this session did not contain either a `<workflow-output>` or a `<workflow-clarify>` envelope. The framework cannot parse your result without exactly one of them.'
+  }
+
+  let bullets: string
+  if (!hasClarify) {
+    bullets =
+      '- If you have finished the requested work, end your NEXT reply with a `<workflow-output>` block using the EXACT format previously specified in this session (the same port list, the same `<port name="...">...</port>` shape). Do not summarize, do not omit the block.\n' +
+      '- If you were not finished, complete the remaining work first, THEN emit the `<workflow-output>` block. The envelope is mandatory either way.\n' +
+      '- Do not emit anything after the closing `</workflow-output>` tag.'
+  } else {
+    bullets =
+      '- By default, per the clarify protocol previously stated in this session, your next reply should be (B) `<workflow-clarify>` — ask back to disambiguate. Emit (A) `<workflow-output>` directly ONLY when every decision is already pinned down. (RFC-039 bias still applies.)\n' +
+      '- If the previous reply was an in-progress draft, finish the work first, then commit to EXACTLY ONE envelope.\n' +
+      '- A reply must contain EITHER one `<workflow-output>` block OR one `<workflow-clarify>` block — NEVER both, NEVER neither.\n' +
+      '- Do not emit anything after the closing envelope tag.'
+  }
+
+  let trailer = ''
+  if (hasClarify && input.clarifyDirective === 'continue') {
+    trailer =
+      '\n\nThe user has explicitly clicked "Keep clarifying" — unless every still-unresolved detail has been pinned down by the answers earlier in this session, your reply is REQUIRED to be another `<workflow-clarify>` envelope. Skipping to `<workflow-output>` for the sake of brevity is not allowed.'
+  }
+
+  return `\n\n---\n**Envelope missing — follow-up.** ${opening}\n\n${bullets}${trailer}`
+}

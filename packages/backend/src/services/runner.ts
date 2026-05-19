@@ -26,7 +26,7 @@ import type {
   Plugin,
   ReviewPromptContext,
 } from '@agent-workflow/shared'
-import { parseClarifyEnvelopeBody } from '@agent-workflow/shared'
+import { parseClarifyEnvelopeBody, renderEnvelopeFollowupPrompt } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { cpSync, mkdirSync, rmSync, symlinkSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -184,6 +184,28 @@ export interface RunNodeOptions {
    * exercise the inventory path).
    */
   nodeKind?: string
+  /**
+   * RFC-042: same-session envelope follow-up. When the scheduler's
+   * `decideEnvelopeFollowup` determined the previous attempt failed for a
+   * recognized envelope-format reason AND opencode itself exited cleanly
+   * with a captured session id, the next retry attempt is run with this set
+   * to `true`. The runner then:
+   *   - Renders the user prompt via `renderEnvelopeFollowupPrompt` (a short
+   *     directive — no inputs, no template body, no auto-appended port
+   *     sections, no full RFC-039 / RFC-023 protocol blocks). The original
+   *     prompt is still in opencode's session memory thanks to
+   *     `resumeSessionId` being set alongside this flag.
+   *   - Skips materializing the RFC-029 inventory plugin (the first attempt
+   *     already wrote a snapshot; followup is only nudging for an envelope).
+   *
+   * Always passed together with `resumeSessionId`. `envelopeFollowupReason`
+   * drives the opening line and `envelopeFollowupClarifyDirective` controls
+   * whether the RFC-039 "Keep clarifying" trailer is appended. Defaults
+   * `false` / `undefined` preserve legacy callers.
+   */
+  envelopeFollowup?: boolean
+  envelopeFollowupReason?: 'envelope-missing' | 'both-present' | 'clarify-malformed'
+  envelopeFollowupClarifyDirective?: 'continue' | 'stop'
 }
 
 export type RunFinalStatus = 'done' | 'failed' | 'canceled'
@@ -250,9 +272,15 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // wrapper / clarify / review etc. runNode is not invoked anyway, but the
   // explicit guard keeps the behavior stable even if a future caller routes
   // non-agent kinds through here.
+  //
+  // RFC-042: on a same-session envelope follow-up, the first attempt already
+  // wrote the inventory snapshot. Re-materializing the plugin just to nudge
+  // the model into emitting an envelope is pure overhead (extra plugin-load
+  // failure surface for no gain), so the followup path skips this entire
+  // block.
   const inventoryNodeKind = opts.nodeKind ?? 'agent-single'
   let inventoryOutPath: string | undefined
-  if (isAgentRunKind(inventoryNodeKind)) {
+  if (isAgentRunKind(inventoryNodeKind) && opts.envelopeFollowup !== true) {
     try {
       mkdirSync(runRoot, { recursive: true })
       // materializeInventoryPlugin handles both dev (source tree) and
@@ -288,27 +316,47 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     })
   }
 
-  // 3. Render the user prompt. When the scheduler tells us this node has a
-  // clarify channel wired in the workflow definition, the renderer rewrites
-  // the trailing protocol block as a bi-modal preamble (RFC-039: defaults to
+  // 3. Render the user prompt.
+  //
+  // RFC-042: on a same-session envelope follow-up, swap the full
+  // `renderUserPrompt` (template body + input ports + protocol blocks) for a
+  // short directive that re-anchors the agent on the envelope contract. The
+  // prior round's full prompt is still in opencode's session memory thanks to
+  // `resumeSessionId` being set on the same call — re-emitting it would just
+  // burn tokens and risk re-anchoring the agent on stale framing.
+  //
+  // RFC-023 + RFC-039: when the scheduler tells us this node has a clarify
+  // channel wired in the workflow definition, the renderer rewrites the
+  // trailing protocol block as a bi-modal preamble (RFC-039: defaults to
   // <workflow-clarify> first; <workflow-output> only when every decision is
   // already pinned down) and appends the clarify format block immediately
   // after — see `buildProtocolBlock` in shared.
-  const prompt = renderUserPrompt({
-    promptTemplate: opts.promptTemplate,
-    inputs: opts.inputs,
-    meta: opts.templateMeta,
-    agentOutputs: opts.agent.outputs,
-    // RFC-005 outputKinds: when any port is `markdown_file`, the trailing
-    // protocol block surfaces the "write the file first, then emit only its
-    // worktree-relative path" rule by name. Pass-through is unconditional so
-    // the editor preview (which threads the same map via PromptPreview) and
-    // the live runner stay in lock-step.
-    ...(opts.agent.outputKinds !== undefined ? { agentOutputKinds: opts.agent.outputKinds } : {}),
-    ...(opts.reviewContext !== undefined ? { reviewContext: opts.reviewContext } : {}),
-    ...(opts.clarifyContext !== undefined ? { clarifyContext: opts.clarifyContext } : {}),
-    ...(opts.hasClarifyChannel === true ? { hasClarifyChannel: true } : {}),
-  })
+  const prompt =
+    opts.envelopeFollowup === true
+      ? renderEnvelopeFollowupPrompt({
+          hasClarifyChannel: opts.hasClarifyChannel === true,
+          reason: opts.envelopeFollowupReason ?? 'envelope-missing',
+          ...(opts.envelopeFollowupClarifyDirective !== undefined
+            ? { clarifyDirective: opts.envelopeFollowupClarifyDirective }
+            : {}),
+        })
+      : renderUserPrompt({
+          promptTemplate: opts.promptTemplate,
+          inputs: opts.inputs,
+          meta: opts.templateMeta,
+          agentOutputs: opts.agent.outputs,
+          // RFC-005 outputKinds: when any port is `markdown_file`, the trailing
+          // protocol block surfaces the "write the file first, then emit only its
+          // worktree-relative path" rule by name. Pass-through is unconditional so
+          // the editor preview (which threads the same map via PromptPreview) and
+          // the live runner stay in lock-step.
+          ...(opts.agent.outputKinds !== undefined
+            ? { agentOutputKinds: opts.agent.outputKinds }
+            : {}),
+          ...(opts.reviewContext !== undefined ? { reviewContext: opts.reviewContext } : {}),
+          ...(opts.clarifyContext !== undefined ? { clarifyContext: opts.clarifyContext } : {}),
+          ...(opts.hasClarifyChannel === true ? { hasClarifyChannel: true } : {}),
+        })
 
   await opts.db
     .update(nodeRuns)
@@ -610,8 +658,14 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   //      stub with a precise reason code rather than leaving the column
   //      NULL, so the UI's reason-pinpointed messaging works on the first
   //      load. Skipped (column stays NULL) for non-agent kinds.
+  //
+  // RFC-042: same-session envelope follow-up runs skipped plugin
+  // materialization above; reading the (intentionally absent) snapshot file
+  // would just record a `file-missing` stub on top of the previous attempt's
+  // legitimate snapshot. Leave the column at its prior value by skipping the
+  // read entirely.
   let inventoryJson: string | null = null
-  if (isAgentRunKind(inventoryNodeKind)) {
+  if (isAgentRunKind(inventoryNodeKind) && opts.envelopeFollowup !== true) {
     try {
       const snapshot = await readSnapshotFromRunDir({
         runDir: runRoot,

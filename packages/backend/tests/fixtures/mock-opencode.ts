@@ -43,6 +43,25 @@
 //                                    `__MISSING__` to skip writing (default case;
 //                                    runner should then store captured:false /
 //                                    file-missing).
+//   MOCK_OPENCODE_SKIP_ENVELOPE_UNTIL  RFC-042: integer; while the disk-backed
+//                                    MOCK_OPENCODE_FAIL_COUNTER value is <= this
+//                                    number, the mock suppresses the
+//                                    `<workflow-output>` / `<workflow-clarify>`
+//                                    envelope BUT still exits 0 and emits one
+//                                    placeholder text event so the runner sees
+//                                    `agentText.length > 0`. Pairs with the same
+//                                    counter file used by MOCK_OPENCODE_FAIL_UNTIL.
+//                                    Once the counter exceeds the threshold the
+//                                    mock falls back to normal envelope emission.
+//                                    Used by scheduler integration tests to drive
+//                                    "first attempt drops envelope cleanly, retry
+//                                    must same-session follow up" flows.
+//   MOCK_OPENCODE_EXPECT_FOLLOWUP_ARGV
+//                                    RFC-042: alias of MOCK_OPENCODE_CAPTURE_ARGV_TO
+//                                    intended for follow-up tests; identical semantics
+//                                    (path; appends one JSON line per invocation). Kept
+//                                    as a separate env name to make test setup self-
+//                                    documenting.
 
 import process from 'node:process'
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -111,6 +130,20 @@ if (env.MOCK_OPENCODE_CAPTURE_ARGV_TO) {
   }
 }
 
+// RFC-042: same shape as MOCK_OPENCODE_CAPTURE_ARGV_TO; separate env name lets
+// follow-up tests be self-documenting about what they expect to assert.
+if (env.MOCK_OPENCODE_EXPECT_FOLLOWUP_ARGV) {
+  try {
+    const agentName = argv[agentFlagIdx + 1] ?? ''
+    appendFileSync(
+      env.MOCK_OPENCODE_EXPECT_FOLLOWUP_ARGV,
+      JSON.stringify({ agent: agentName, argv }) + '\n',
+    )
+  } catch (e) {
+    fail(`MOCK_OPENCODE_EXPECT_FOLLOWUP_ARGV write failed: ${(e as Error).message}`)
+  }
+}
+
 if (env.MOCK_OPENCODE_CAPTURE_CONFIG_TO) {
   try {
     const cfg = JSON.parse(env.OPENCODE_CONFIG_CONTENT) as {
@@ -151,17 +184,31 @@ if (
 
 // Fail-N-times-then-succeed: increment a counter on disk; exit non-zero
 // without emitting the envelope while counter <= MOCK_OPENCODE_FAIL_UNTIL.
+//
+// RFC-042: a sibling threshold `MOCK_OPENCODE_SKIP_ENVELOPE_UNTIL` shares the
+// same counter file. While `counter <= skipEnvelopeUntil`, the mock exits 0
+// (clean) BUT suppresses the trailing envelope AND emits one placeholder
+// text event so the runner's `agentText.length > 0` check passes. That
+// matches the production failure mode the same-session followup path is
+// designed to recover from.
 let forceFail = false
+let forceSkipEnvelope = false
 const counterFile = env.MOCK_OPENCODE_FAIL_COUNTER
 const failUntil = Number(env.MOCK_OPENCODE_FAIL_UNTIL ?? '0')
-if (counterFile !== undefined && Number.isFinite(failUntil) && failUntil > 0) {
+const skipEnvelopeUntil = Number(env.MOCK_OPENCODE_SKIP_ENVELOPE_UNTIL ?? '0')
+if (
+  counterFile !== undefined &&
+  ((Number.isFinite(failUntil) && failUntil > 0) ||
+    (Number.isFinite(skipEnvelopeUntil) && skipEnvelopeUntil > 0))
+) {
   let n = 0
   if (existsSync(counterFile)) {
     n = Number(readFileSync(counterFile, 'utf-8').trim()) || 0
   }
   n += 1
   writeFileSync(counterFile, String(n))
-  if (n <= failUntil) forceFail = true
+  if (failUntil > 0 && n <= failUntil) forceFail = true
+  if (skipEnvelopeUntil > 0 && n <= skipEnvelopeUntil) forceSkipEnvelope = true
 }
 
 // RFC-026: optionally pre-emit a session.created event so the runner captures
@@ -206,7 +253,25 @@ if (stderr) {
 // RFC-023: when MOCK_OPENCODE_CLARIFY_BODY is set, emit a <workflow-clarify>
 // envelope (alone, or combined with <workflow-output> when both env vars
 // are present — used to exercise the exclusive-or hard reject).
-if (env.MOCK_OPENCODE_SKIP_ENVELOPE !== '1' && !forceFail) {
+// RFC-042: emit a placeholder text event so the runner records at least one
+// `kind='text'` row when the envelope is intentionally suppressed via
+// `MOCK_OPENCODE_SKIP_ENVELOPE_UNTIL`. The real failure mode this simulates is
+// "the agent produced text but forgot the envelope"; without an agentText
+// emission, scheduler's `decideEnvelopeFollowup` would (correctly) refuse to
+// follow up because `agentTextCount === 0`. Scoped to the counter-driven
+// path on purpose — the always-on `MOCK_OPENCODE_SKIP_ENVELOPE='1'` flag
+// keeps its legacy "agent produced nothing useful" semantics for existing
+// tests that depend on event counts.
+if (forceSkipEnvelope) {
+  const placeholder = {
+    type: 'text',
+    timestamp: Date.now(),
+    part: { type: 'text', text: '(mock: agent produced text without an envelope)' },
+  }
+  process.stdout.write(JSON.stringify(placeholder) + '\n')
+}
+
+if (env.MOCK_OPENCODE_SKIP_ENVELOPE !== '1' && !forceFail && !forceSkipEnvelope) {
   const blocks: string[] = []
   const wantOutput =
     env.MOCK_OPENCODE_OUTPUTS !== undefined || env.MOCK_OPENCODE_CLARIFY_BODY === undefined
