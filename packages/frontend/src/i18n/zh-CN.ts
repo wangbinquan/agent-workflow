@@ -890,8 +890,6 @@ export interface Resources {
       refField: string
       refHint: string
       refPlaceholder: string
-      recentUrls: string
-      recentUrlsHint: string
       recentUrlsPlaceholder: string
       cloningHint: string
     }
@@ -2337,8 +2335,6 @@ export const zhCN: Resources = {
       refField: '分支 / tag / commit（可选）',
       refHint: '留空则使用克隆后的默认分支。',
       refPlaceholder: 'main / v1.2.0 / a3f9c…',
-      recentUrls: '最近使用的 URL',
-      recentUrlsHint: '从已缓存的远端仓里挑一个，复用本地副本，不会重新克隆。',
       recentUrlsPlaceholder: '— 从已缓存仓里挑一个 —',
       cloningHint: '首次克隆可能耗时数分钟；下次启动会复用本地缓存。',
     },

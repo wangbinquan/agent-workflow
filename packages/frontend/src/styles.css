@@ -3032,6 +3032,7 @@ code {
 
 .tabs--segment {
   display: inline-flex;
+  align-self: flex-start;
   gap: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);

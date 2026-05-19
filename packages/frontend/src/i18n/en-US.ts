@@ -950,8 +950,6 @@ export const enUS: Resources = {
       refField: 'Branch / tag / commit (optional)',
       refHint: 'Leave blank to use the cloned default branch.',
       refPlaceholder: 'main / v1.2.0 / a3f9c…',
-      recentUrls: 'Recently used URLs',
-      recentUrlsHint: 'Pick a previously cached remote — its local mirror is reused.',
       recentUrlsPlaceholder: '— pick a cached repo —',
       cloningHint: 'First-time clone may take a few minutes; subsequent launches reuse the cache.',
     },

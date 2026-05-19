@@ -127,6 +127,27 @@ export function RepoSourceTabs({ source, onChange }: RepoSourceTabsProps) {
             required
             hint={t('launch.repoSource.urlHint')}
           >
+            {cached.data !== undefined && cached.data.items.length > 0 && (
+              <select
+                className="form-input"
+                data-testid="repo-source-recent-urls"
+                value={
+                  cached.data.items.some((it) => it.url === source.repoUrl) ? source.repoUrl : ''
+                }
+                onChange={(e) => {
+                  if (e.target.value !== '') {
+                    onChange({ kind: 'url', repoUrl: e.target.value, ref: source.ref })
+                  }
+                }}
+              >
+                <option value="">{t('launch.repoSource.recentUrlsPlaceholder')}</option>
+                {cached.data.items.map((it) => (
+                  <option key={it.id} value={it.url}>
+                    {it.urlRedacted}
+                  </option>
+                ))}
+              </select>
+            )}
             <TextInput
               value={source.repoUrl}
               onChange={(v) => onChange({ ...source, repoUrl: v })}
@@ -145,30 +166,6 @@ export function RepoSourceTabs({ source, onChange }: RepoSourceTabsProps) {
               placeholder={t('launch.repoSource.refPlaceholder')}
             />
           </Field>
-          {cached.data !== undefined && cached.data.items.length > 0 && (
-            <Field
-              label={t('launch.repoSource.recentUrls')}
-              hint={t('launch.repoSource.recentUrlsHint')}
-            >
-              <select
-                className="form-input"
-                data-testid="repo-source-recent-urls"
-                value=""
-                onChange={(e) => {
-                  if (e.target.value !== '') {
-                    onChange({ kind: 'url', repoUrl: e.target.value, ref: source.ref })
-                  }
-                }}
-              >
-                <option value="">{t('launch.repoSource.recentUrlsPlaceholder')}</option>
-                {cached.data.items.map((it) => (
-                  <option key={it.id} value={it.url}>
-                    {it.urlRedacted}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          )}
         </>
       )}
     </div>
