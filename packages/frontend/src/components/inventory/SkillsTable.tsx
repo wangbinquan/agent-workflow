@@ -13,14 +13,12 @@ export function SkillsTable({ skills }: { skills: readonly InventorySkill[] }) {
         <col className="col-name" />
         <col className="col-source" />
         <col className="col-path" />
-        <col className="col-desc" />
       </colgroup>
       <thead>
         <tr>
           <th>{t('nodeDrawer.inventory.col.name')}</th>
           <th>{t('nodeDrawer.inventory.col.source')}</th>
           <th>{t('nodeDrawer.inventory.col.path')}</th>
-          <th>{t('nodeDrawer.inventory.col.desc')}</th>
         </tr>
       </thead>
       <tbody>
@@ -28,11 +26,10 @@ export function SkillsTable({ skills }: { skills: readonly InventorySkill[] }) {
           <tr key={s.name}>
             <td>{s.name}</td>
             <td>{sourceLabel(s.source, t)}</td>
-            {/* Long paths / descriptions wrap inside the cell via CSS
+            {/* Long paths wrap inside the cell via CSS
                 `overflow-wrap: anywhere` instead of being JS-truncated —
                 the full text stays visible without a hover tooltip. */}
             <td>{s.path !== null ? s.path : '—'}</td>
-            <td>{s.description !== null ? s.description : '—'}</td>
           </tr>
         ))}
       </tbody>

@@ -6568,7 +6568,7 @@ mark.comment-anchor[data-active='true'] {
 .session-history {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
 }
 
 /* Attempts dropdown — Select-based picker for retries / fan-out shards /
@@ -7025,9 +7025,9 @@ mark.comment-anchor[data-active='true'] {
    are not defined repo-wide and silently fell back to light hex values in
    dark mode. */
 .inventory-section {
-  margin: 8px 0 12px;
+  margin: 0;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 8px;
+  padding-bottom: 6px;
 }
 .inventory-section__summary {
   cursor: pointer;
@@ -7129,16 +7129,13 @@ mark.comment-anchor[data-active='true'] {
   width: 20%;
 }
 .inventory-table--skills col.col-name {
-  width: 22%;
+  width: 28%;
 }
 .inventory-table--skills col.col-source {
-  width: 14%;
+  width: 18%;
 }
 .inventory-table--skills col.col-path {
-  width: 32%;
-}
-.inventory-table--skills col.col-desc {
-  width: 32%;
+  width: 54%;
 }
 .inventory-table--mcps col.col-name {
   width: 26%;
@@ -8127,45 +8124,49 @@ mark.comment-anchor[data-active='true'] {
 /* RFC-046 — Injected memories card on the SessionTab. Sits above the
    conversation flow (and above the runtime inventory section) so admins
    see at a glance which memories the model received this attempt. */
+/* Visual parity with .inventory-section: border-bottom only, no rounded
+   card / accent tint, matching summary/subtitle/chip styling. The
+   per-row affordances below (scope chip, version, tags, expandable
+   body) remain so each memory's bodyMd is still inspectable. */
 .injected-memories-card {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  margin-bottom: var(--space-2);
-  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
-}
-
-.injected-memories-card[open] {
-  background: var(--surface);
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
 }
 
 .injected-memories-card__summary {
+  cursor: pointer;
+  font-weight: 600;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  cursor: pointer;
+  gap: 8px;
+  padding: 4px 0;
+  color: var(--text);
   list-style: none;
-  font-size: 13px;
 }
 
 .injected-memories-card__summary::-webkit-details-marker {
   display: none;
 }
 
-.injected-memories-card__summary::before {
-  content: '▸';
-  font-size: 10px;
-  color: var(--text-muted);
-  transition: transform 100ms;
-}
-
-.injected-memories-card[open] > .injected-memories-card__summary::before {
-  transform: rotate(90deg);
-}
-
 .injected-memories-card__title {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text);
+}
+
+.injected-memories-card__chips {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.injected-memories-card__chip {
+  padding: 0 6px;
+  border-radius: 3px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .injected-memories-card__inherit {
@@ -8177,22 +8178,24 @@ mark.comment-anchor[data-active='true'] {
 }
 
 .injected-memories-card__body {
-  padding: 0 var(--space-3) var(--space-3) var(--space-3);
+  margin-top: 8px;
+  overflow-x: auto;
   font-size: 13px;
 }
 
 .injected-memories-card__groups {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .injected-memories-card__group-title {
-  margin: 0 0 var(--space-1) 0;
   font-size: 12px;
+  font-weight: 600;
+  margin: 12px 0 4px;
+  color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
+  letter-spacing: 0.05em;
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -8202,8 +8205,11 @@ mark.comment-anchor[data-active='true'] {
   font-size: 11px;
   padding: 0 5px;
   border-radius: 3px;
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: var(--text-muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .injected-memories-card__list {
@@ -8291,4 +8297,45 @@ mark.comment-anchor[data-active='true'] {
   word-break: break-word;
   color: var(--text);
   border-top: 1px dashed color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* RFC-045 — manual create + edit dialog form styling.
+   Form chrome itself is delivered by shared primitives (`form-field` /
+   `form-input` / `chips-input` / `segmented` / `select`); these rules only
+   cover the bits unique to the memory dialog. */
+
+.memory-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.memory-form__error {
+  font-size: 11px;
+  color: var(--danger, #c33);
+}
+
+/* Scope-type segmented control: pin width to 100% so it spans the dialog
+   instead of hugging its labels. */
+.memory-form__scope-segmented {
+  display: flex;
+  width: 100%;
+}
+.memory-form__scope-segmented .segmented__option {
+  flex: 1 1 0;
+}
+
+.memory-form__scope-id-wrap {
+  display: block;
+}
+
+.memory-form__scope-id-global {
+  font-size: 12px;
+}
+
+.memory-form__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
 }

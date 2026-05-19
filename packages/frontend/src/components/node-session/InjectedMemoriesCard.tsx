@@ -56,6 +56,26 @@ export function InjectedMemoriesCard({ run, attempts, workflowNodeKind }: Props)
             {t('nodeDrawer.injectedMemoriesInheritedFromAttempt0')}
           </span>
         )}
+        {status === 'captured' && (
+          <span className="injected-memories-card__chips">
+            {SCOPE_ORDER.map((scope) => {
+              const n = groups[scope].length
+              if (n === 0) return null
+              return (
+                <span key={scope} className="injected-memories-card__chip">
+                  {t(
+                    `nodeDrawer.injectedMemoriesGroup_${scope}` as
+                      | 'nodeDrawer.injectedMemoriesGroup_agent'
+                      | 'nodeDrawer.injectedMemoriesGroup_workflow'
+                      | 'nodeDrawer.injectedMemoriesGroup_repo'
+                      | 'nodeDrawer.injectedMemoriesGroup_global',
+                  )}
+                  ·{n}
+                </span>
+              )
+            })}
+          </span>
+        )}
       </summary>
       <div className="injected-memories-card__body">
         {status === 'pre-rfc046' && (
