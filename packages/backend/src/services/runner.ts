@@ -42,6 +42,7 @@ import {
 import { renderUserPrompt } from './protocol'
 import { captureChildSessions } from './sessionCapture'
 import { isAgentRunKind, readSnapshotFromRunDir } from './inventory'
+import { injectMemoryForRun, type ScopeBudget } from './memoryInject'
 import { materializeInventoryPlugin } from '@/opencode-plugin'
 
 export type SkillSource = 'managed' | 'external' | 'project'
@@ -206,6 +207,12 @@ export interface RunNodeOptions {
   envelopeFollowup?: boolean
   envelopeFollowupReason?: 'envelope-missing' | 'both-present' | 'clarify-malformed'
   envelopeFollowupClarifyDirective?: 'continue' | 'stop'
+  /**
+   * RFC-041 PR3: per-scope token budget for memory inject. Optional —
+   * scheduler/daemon reads `config.memoryInjectionBudget` and passes it
+   * through; tests omit to use the design.md §3.3 defaults.
+   */
+  memoryInjectionBudget?: ScopeBudget
 }
 
 export type RunFinalStatus = 'done' | 'failed' | 'canceled'
@@ -299,6 +306,36 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       log.warn('inventory-plugin-materialize-failed', {
         nodeRunId: opts.nodeRunId,
         err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  // RFC-041 PR3: silent inject of approved memories into the primary agent's
+  // inline prompt. Best-effort — a broken memory table degrades to "no
+  // inject", never to a failed run. Skipped for the envelope-followup path
+  // (the same-session retry is just nudging for a missing envelope; the
+  // first attempt already saw the original block, and re-stringifying a
+  // large prompt fragment on each retry would pointlessly invalidate the
+  // session prompt cache).
+  if (opts.envelopeFollowup !== true) {
+    try {
+      const memoryBlock = await injectMemoryForRun({
+        db: opts.db,
+        taskId: opts.taskId,
+        primaryAgent: opts.agent,
+        dependents: opts.dependents ?? [],
+        budget: opts.memoryInjectionBudget,
+      })
+      if (memoryBlock !== null) {
+        const primary = inlineConfig.agent[opts.agent.name]
+        if (primary !== undefined && typeof primary.prompt === 'string') {
+          primary.prompt = `${primary.prompt}\n\n${memoryBlock}`
+        }
+      }
+    } catch (err) {
+      log.warn('memory-inject-failed', {
+        nodeRunId: opts.nodeRunId,
+        error: err instanceof Error ? err.message : String(err),
       })
     }
   }

@@ -103,6 +103,21 @@ export const ConfigSchema = z.object({
    * default when unset. Settings → Memory section will surface this.
    */
   memoryDistillModel: z.string().min(1).optional(),
+  /**
+   * Per-scope token budget for runtime memory inject (PR3). When the
+   * sum of "- [scope] title — body" lines for a scope exceeds its
+   * budget, the runner drops the oldest (lowest createdAt) entries
+   * until it fits. Setting any field to 0 disables that scope's
+   * contribution. Defaults below are the design.md §3.3 values.
+   */
+  memoryInjectionBudget: z
+    .object({
+      agent: z.number().int().min(0).max(8000),
+      workflow: z.number().int().min(0).max(8000),
+      repo: z.number().int().min(0).max(8000),
+      global: z.number().int().min(0).max(8000),
+    })
+    .optional(),
 
   // --- RFC-034 git submodule recursion ---
   /**
