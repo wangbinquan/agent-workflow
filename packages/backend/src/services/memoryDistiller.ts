@@ -30,10 +30,10 @@ import {
   clarifySessions,
   docVersions,
   memories,
-  memoryDistillJobs,
   reviewComments,
   taskFeedback,
 } from '@/db/schema'
+import type { memoryDistillJobs } from '@/db/schema'
 import { extractLastEnvelope } from '@/services/envelope'
 import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'

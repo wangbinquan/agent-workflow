@@ -18,7 +18,7 @@ import {
   listDistillJobs,
   retryFailedJob,
 } from '@/services/memoryDistillScheduler'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, ValidationError } from '@/util/errors'
 
 export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
   app.get('/api/memory-distill-jobs', requirePermission('memory:approve'), async (c) => {
