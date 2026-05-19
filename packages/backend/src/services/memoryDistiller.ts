@@ -491,9 +491,21 @@ export function parseDistillerOutput(stdout: string): RawCandidate[] {
 }
 
 function extractEventText(evt: Record<string, unknown>): string | null {
-  // Common opencode event shapes that carry model text. Mirrors the
-  // tolerance in runner.ts so we accept the same range of shapes the
-  // production pipeline already accepts.
+  // opencode --format json (1.15.x) emits per-part events shaped like:
+  //   { type: 'text', sessionID, messageID, part: { type: 'text', text: '...' }, timestamp }
+  // We check this FIRST because it's what every real distiller run produces;
+  // missing it caused the envelope to never reach extractLastEnvelope and
+  // every candidate batch silently became `[]` (no memory rows linked back
+  // to the job). Mirrors runner.ts::extractTextFromEvent so distiller and
+  // worker-node tolerance stay in lockstep.
+  const part = evt.part as Record<string, unknown> | undefined
+  if (part && typeof part === 'object') {
+    const ptype = part.type
+    const ptext = part.text
+    if (ptype === 'text' && typeof ptext === 'string') return ptext
+  }
+  // Legacy / synthetic / unit-test shapes we also accept.
+  if (evt.type === 'text' && typeof evt.text === 'string') return evt.text
   const direct = evt.text
   if (typeof direct === 'string') return direct
   const message = evt.message
@@ -502,10 +514,10 @@ function extractEventText(evt: Record<string, unknown>): string | null {
     if (typeof content === 'string') return content
     if (Array.isArray(content)) {
       const parts: string[] = []
-      for (const part of content) {
-        if (typeof part === 'string') parts.push(part)
-        else if (typeof part === 'object' && part !== null) {
-          const text = (part as Record<string, unknown>).text
+      for (const item of content) {
+        if (typeof item === 'string') parts.push(item)
+        else if (typeof item === 'object' && item !== null) {
+          const text = (item as Record<string, unknown>).text
           if (typeof text === 'string') parts.push(text)
         }
       }

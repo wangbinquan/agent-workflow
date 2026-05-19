@@ -106,6 +106,42 @@ describe('parseDistillerOutput', () => {
     expect(parseDistillerOutput(lines)).toEqual([])
   })
 
+  // Regression: real opencode 1.15.x --format json wraps each model part in
+  // { type:'text', sessionID, messageID, part:{type:'text', text:'...'}, timestamp }.
+  // The original extractEventText only looked at evt.text / evt.message.content /
+  // evt.delta.text, so production stdout always parsed as "no envelope" and
+  // every candidate batch was silently dropped (no memories.distill_job_id
+  // backlink, detail page showed "No candidates emitted" while the conversation
+  // tab clearly displayed the envelope). Locks in the part.text path.
+  test('extracts candidates from the real opencode --format json part.text shape', () => {
+    const candidatesPort =
+      '{"candidates":[{"scopeType":"global","scopeId":null,"title":"perf matters","bodyMd":"treat performance as critical","knownTags":[],"newTags":["performance"],"action":"new","referenceMemoryId":null,"sourceRefs":[{"kind":"feedback","id":"f1"}]}]}'
+    const lines = [
+      JSON.stringify({
+        type: 'text',
+        sessionID: 'ses_X',
+        messageID: 'msg_1',
+        part: { id: 'prt_1', type: 'text', text: '# Source events to distill\n' },
+        timestamp: 1,
+      }),
+      JSON.stringify({
+        type: 'text',
+        sessionID: 'ses_X',
+        messageID: 'msg_2',
+        part: {
+          id: 'prt_2',
+          type: 'text',
+          text: `<workflow-output>\n<port name="candidates">${candidatesPort}</port>\n</workflow-output>`,
+        },
+        timestamp: 2,
+      }),
+    ].join('\n')
+    const cands = parseDistillerOutput(lines)
+    expect(cands.length).toBe(1)
+    expect(cands[0]!.title).toBe('perf matters')
+    expect(cands[0]!.scopeType).toBe('global')
+  })
+
   test('returns [] on missing envelope rather than throwing', () => {
     expect(parseDistillerOutput('no envelope here')).toEqual([])
   })
