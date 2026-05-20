@@ -64,7 +64,17 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
     if (!parsed.success) {
       throw new ValidationError('invalid-filter', 'invalid query parameters', parsed.error.format())
     }
-    const items = await listMemories(deps.db, parsed.data)
+    // `?include=body` widens the row to full Memory (with bodyMd /
+    // sourceKind / sourceEventId / supersedesId) for the approval queue, which
+    // needs to render the candidate body for admins to actually approve.
+    const includeRaw = c.req.query('include')
+    if (includeRaw !== undefined && includeRaw !== 'body') {
+      throw new ValidationError('invalid-filter', `invalid include: ${includeRaw}`)
+    }
+    const items =
+      includeRaw === 'body'
+        ? await listMemories(deps.db, parsed.data, { includeBody: true })
+        : await listMemories(deps.db, parsed.data)
     return c.json({ items })
   })
 

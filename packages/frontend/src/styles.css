@@ -7551,6 +7551,25 @@ mark.comment-anchor[data-active='true'] {
   color: var(--text);
 }
 
+.memory-candidate-card__body-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* Default-fold > 8 lines: clamp to ~8 lines of font-sm leading and fade out
+   the bottom edge so users know there's more behind the toggle. */
+.memory-candidate-card__body--clamped {
+  max-height: 14rem;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
+}
+
+.memory-candidate-card__body-toggle {
+  align-self: flex-start;
+}
+
 .memory-candidate-card__tags,
 .memory-row__tags {
   display: flex;

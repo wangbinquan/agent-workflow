@@ -168,10 +168,25 @@ export async function createManualCandidate(
   return draft
 }
 
+// `includeBody: true` returns full `Memory[]` (with bodyMd + source / supersede
+// fields) so the approval queue can render the candidate body inline for review
+// — the default `MemorySummary[]` shape stays the cheap path for grouped /
+// scope-browsing UIs that only need titles + chips.
+export async function listMemories(
+  db: DbClient,
+  filter: MemoryListFilter,
+  options: { includeBody: true },
+): Promise<Memory[]>
+export async function listMemories(
+  db: DbClient,
+  filter?: MemoryListFilter,
+  options?: { includeBody?: false },
+): Promise<MemorySummary[]>
 export async function listMemories(
   db: DbClient,
   filter: MemoryListFilter = {},
-): Promise<MemorySummary[]> {
+  options: { includeBody?: boolean } = {},
+): Promise<Memory[] | MemorySummary[]> {
   const conds = []
   if (filter.status !== undefined) conds.push(eq(memories.status, filter.status))
   if (filter.scopeType !== undefined) conds.push(eq(memories.scopeType, filter.scopeType))
@@ -191,7 +206,7 @@ export async function listMemories(
     const needle = filter.tag
     items = items.filter((m) => m.tags.includes(needle))
   }
-  return items.map(toSummary)
+  return options.includeBody === true ? items : items.map(toSummary)
 }
 
 export async function getMemoryById(db: DbClient, id: string): Promise<MemoryWithChain | null> {

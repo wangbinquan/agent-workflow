@@ -28,10 +28,13 @@ export interface MemoryApprovalQueueProps {
 export function MemoryApprovalQueue({ isAdmin }: MemoryApprovalQueueProps) {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  // `include=body` widens the list rows to full Memory shape so the card can
+  // render bodyMd / sourceKind / sourceEventId / supersedesId inline — without
+  // it admins would approve candidates blind. See routes-memories.ts.
   const candidates = useQuery<ListResponse>({
     queryKey: ['memories', 'candidates'],
     queryFn: ({ signal }) =>
-      api.get<ListResponse>('/api/memories', { status: 'candidate' }, signal),
+      api.get<ListResponse>('/api/memories', { status: 'candidate', include: 'body' }, signal),
   })
 
   const promote = useMutation<Memory, ApiError, { id: string; body: MemoryCandidatePromote }>({
@@ -53,11 +56,10 @@ export function MemoryApprovalQueue({ isAdmin }: MemoryApprovalQueueProps) {
     candidate: Memory
     existingId: string
   } | null>(null)
-  // RFC-045: row-level edit dialog. The candidates list endpoint returns
-  // MemorySummary[] (no bodyMd / sourceKind / etc — see backend
-  // listMemories → toSummary). MemoryEditDialog needs the full Memory,
-  // so we fetch detail by id on click and only mount the dialog once
-  // data is in the cache.
+  // RFC-045: row-level edit dialog. Even though the approval queue now
+  // loads full Memory rows (via `include=body`), MemoryEditDialog wants the
+  // canonical detail shape (timestamps + chain), so we still fetch by id on
+  // click and only mount the dialog once that response is in the cache.
   const [editingId, setEditingId] = useState<string | null>(null)
   const editingMemory = useQuery<{ memory: Memory }>({
     queryKey: ['memories', 'detail', editingId],
@@ -198,7 +200,7 @@ function CandidateCard({
           </span>
         )}
       </header>
-      <pre className="memory-candidate-card__body">{candidate.bodyMd}</pre>
+      <CollapsibleBody bodyMd={candidate.bodyMd} candidateId={candidate.id} />
       {candidate.tags.length > 0 && (
         <div className="memory-candidate-card__tags">
           {candidate.tags.map((tag) => (
@@ -261,5 +263,63 @@ function CandidateCard({
         </button>
       </footer>
     </li>
+  )
+}
+
+/**
+ * Approval card body: shows up to {@link COLLAPSE_LINE_THRESHOLD} lines by
+ * default, with a [Show full body] / [Collapse] toggle when the body is longer.
+ * Short bodies render fully and the toggle is omitted.
+ *
+ * The threshold is line-count based (newline-separated) rather than character
+ * count: a single long paragraph wraps onto multiple visual lines via the CSS
+ * `white-space: pre-wrap` rule on `.memory-candidate-card__body`, so once the
+ * source has ≤ 8 newlines we trust the CSS to clamp visual height with
+ * `max-height` (no toggle). Above the threshold we hide the rest behind the
+ * toggle so the queue stays scannable when many candidates are queued.
+ */
+const COLLAPSE_LINE_THRESHOLD = 8
+
+function countLines(s: string): number {
+  let n = 1
+  for (let i = 0; i < s.length; i++) {
+    if (s.charCodeAt(i) === 10) n++
+  }
+  return n
+}
+
+function CollapsibleBody({ bodyMd, candidateId }: { bodyMd: string; candidateId: string }) {
+  const { t } = useTranslation()
+  const lineCount = countLines(bodyMd)
+  const needsToggle = lineCount > COLLAPSE_LINE_THRESHOLD
+  const [expanded, setExpanded] = useState(false)
+  if (!needsToggle) {
+    return (
+      <pre
+        className="memory-candidate-card__body"
+        data-testid={`memory-candidate-${candidateId}-body`}
+      >
+        {bodyMd}
+      </pre>
+    )
+  }
+  return (
+    <div className="memory-candidate-card__body-wrap">
+      <pre
+        className={`memory-candidate-card__body${expanded ? '' : ' memory-candidate-card__body--clamped'}`}
+        data-testid={`memory-candidate-${candidateId}-body`}
+        data-expanded={expanded ? 'true' : 'false'}
+      >
+        {bodyMd}
+      </pre>
+      <button
+        type="button"
+        className="btn btn--xs memory-candidate-card__body-toggle"
+        onClick={() => setExpanded((v) => !v)}
+        data-testid={`memory-candidate-${candidateId}-body-toggle`}
+      >
+        {expanded ? t('memory.action.collapseBody') : t('memory.action.expandBody')}
+      </button>
+    </div>
   )
 }

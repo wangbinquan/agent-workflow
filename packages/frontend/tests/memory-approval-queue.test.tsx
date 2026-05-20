@@ -159,6 +159,60 @@ describe('MemoryApprovalQueue', () => {
     })
   })
 
+  // Regression: the approval card MUST render bodyMd, otherwise admins
+  // can't actually approve anything. Locks in:
+  //  - GET /api/memories?status=candidate is called with include=body
+  //    (so the backend returns full Memory rows, not stripped MemorySummary).
+  //  - Short bodies (≤ COLLAPSE_LINE_THRESHOLD lines) render fully with no toggle.
+  test('list fetch includes include=body and short body renders without a toggle', async () => {
+    const calls = installFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            items: [mkCandidate({ bodyMd: 'short body across\ntwo lines only' })],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+    )
+    wrap(true)
+    const body = await screen.findByTestId('memory-candidate-mem_cand_1-body')
+    expect(body.textContent).toBe('short body across\ntwo lines only')
+    expect(screen.queryByTestId('memory-candidate-mem_cand_1-body-toggle')).toBeNull()
+    // GET must request include=body — the listMemories default returns
+    // MemorySummary which lacks bodyMd / sourceKind / etc.
+    const getCall = calls.find((c) => c.method === 'GET')
+    expect(getCall).toBeTruthy()
+    expect(getCall!.url).toContain('include=body')
+    expect(getCall!.url).toContain('status=candidate')
+  })
+
+  // Regression: long bodies must be foldable so a queue of 20+ candidates
+  // stays scannable. Threshold = 8 newline-separated lines.
+  test('long body (> 8 lines) defaults to clamped and toggles open / closed', async () => {
+    const longBody = Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join('\n')
+    installFetch(
+      () =>
+        new Response(JSON.stringify({ items: [mkCandidate({ bodyMd: longBody })] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    )
+    wrap(true)
+    const body = await screen.findByTestId('memory-candidate-mem_cand_1-body')
+    expect(body.getAttribute('data-expanded')).toBe('false')
+    expect(body.className).toContain('memory-candidate-card__body--clamped')
+    // Full text is still in the DOM (CSS-clamped, not text-truncated) so a
+    // screen reader / Ctrl-F can still find the rest.
+    expect(body.textContent).toContain('line 12')
+    const toggle = screen.getByTestId('memory-candidate-mem_cand_1-body-toggle')
+    fireEvent.click(toggle)
+    expect(body.getAttribute('data-expanded')).toBe('true')
+    expect(body.className).not.toContain('memory-candidate-card__body--clamped')
+    fireEvent.click(toggle)
+    expect(body.getAttribute('data-expanded')).toBe('false')
+    expect(body.className).toContain('memory-candidate-card__body--clamped')
+  })
+
   test('reject click posts { action: "reject" } to /promote', async () => {
     const calls = installFetch(({ method }) => {
       if (method === 'GET') {

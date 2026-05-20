@@ -1592,6 +1592,8 @@ export const enUS: Resources = {
       // RFC-045
       new: '+ New memory',
       edit: 'Edit',
+      expandBody: 'Show full body',
+      collapseBody: 'Collapse body',
     },
     // RFC-045 — manual create + edit dialog
     newDialogTitle: 'New memory',

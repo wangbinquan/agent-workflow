@@ -159,6 +159,39 @@ describe('routes-memories — happy paths via daemon token (admin)', () => {
     const j = (await res.json()) as { items: MemorySummary[] }
     expect(j.items.length).toBe(1)
     expect(j.items[0]!.status).toBe('candidate')
+    // Default summary shape strips bodyMd so the approval card cannot render
+    // it without ?include=body — locks in the bug this test was added for.
+    expect((j.items[0] as unknown as { bodyMd?: string }).bodyMd).toBeUndefined()
+  })
+
+  // Regression: the approval queue needs full Memory rows (bodyMd + source*
+  // / supersedesId) to render the candidate body for admins to actually
+  // approve. The default summary list strips those; ?include=body widens
+  // every row to the full Memory shape.
+  test('GET /api/memories?status=candidate&include=body → returns full Memory rows', async () => {
+    await createCandidateViaAdmin(h)
+    const res = await h.app.fetch(
+      authed(h, h.daemonToken, {
+        url: '/api/memories?status=candidate&include=body',
+        method: 'GET',
+      }),
+    )
+    expect(res.status).toBe(200)
+    const j = (await res.json()) as { items: Memory[] }
+    expect(j.items.length).toBe(1)
+    const row = j.items[0]!
+    expect(row.status).toBe('candidate')
+    expect(row.bodyMd).toBe('body')
+    expect(row.sourceKind).toBe('manual')
+    expect(row.sourceEventId).toBeNull()
+    expect(row.supersedesId).toBeNull()
+  })
+
+  test('GET /api/memories?include=bogus → 422', async () => {
+    const res = await h.app.fetch(
+      authed(h, h.daemonToken, { url: '/api/memories?include=full', method: 'GET' }),
+    )
+    expect(res.status).toBe(422)
   })
 
   test('promote(approve) flips status; subsequent promote → 409', async () => {

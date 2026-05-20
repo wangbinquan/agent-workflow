@@ -1477,6 +1477,8 @@ export interface Resources {
       // RFC-045
       new: string
       edit: string
+      expandBody: string
+      collapseBody: string
     }
     // RFC-045 — manual create + edit dialog
     newDialogTitle: string
@@ -3135,6 +3137,8 @@ export const zhCN: Resources = {
       // RFC-045
       new: '+ 新建记忆',
       edit: '编辑',
+      expandBody: '展开全文',
+      collapseBody: '收起',
     },
     // RFC-045 — manual create + edit dialog
     newDialogTitle: '新建记忆',
