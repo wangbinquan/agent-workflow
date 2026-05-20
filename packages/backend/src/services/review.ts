@@ -51,6 +51,7 @@ import {
   workflows,
 } from '@/db/schema'
 import { resolvePortContentDetailed } from '@/services/envelope'
+import { isFresherNodeRun } from '@/services/scheduler'
 import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 import { rollbackToSnapshot } from '@/util/git'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
@@ -315,6 +316,13 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
   const sourceNodeId = inputSource.nodeId
 
   // Locate the upstream node_run at this iteration whose port we should read.
+  // Picks the freshest top-level run via the same comparator the scheduler uses
+  // (clarifyIteration first, then retryIndex, ulid tie-break). Sorting by
+  // retryIndex alone here used to silently shadow a clarify-driven rerun
+  // (clarifyIteration=N, retryIndex=0) behind a stale process-retry row
+  // (clarifyIteration=0, retryIndex=M>0) that finished BEFORE the clarify
+  // session opened, causing review to read a node_run that never emitted the
+  // expected port.
   const sourceRuns = await db
     .select()
     .from(nodeRuns)
@@ -325,11 +333,13 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
         eq(nodeRuns.iteration, iteration),
       ),
     )
-    .orderBy(desc(nodeRuns.retryIndex))
-  // Pick the latest top-level run (no parent — fan-out children produce
-  // shards but we want the aggregator-side row here for now; multi-process
-  // review fanout per-shard is RFC-005 T14).
-  const sourceRun = sourceRuns.find((r) => r.parentNodeRunId === null) ?? sourceRuns[0]
+  let sourceRun: (typeof sourceRuns)[number] | undefined
+  for (const r of sourceRuns) {
+    // Skip fan-out child rows — multi-process review fanout per-shard is
+    // RFC-005 T14; for now we read the aggregator-side row.
+    if (r.parentNodeRunId !== null) continue
+    if (isFresherNodeRun(r, sourceRun)) sourceRun = r
+  }
   if (sourceRun === undefined || sourceRun.status !== 'done') {
     return {
       kind: 'failed',

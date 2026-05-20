@@ -292,7 +292,7 @@ interface ScopeArgs {
  * earlier single-node-retry storm, causing the task to be marked done while
  * the freshly-minted pending rerun row never ran.
  */
-function isFresherNodeRun(
+export function isFresherNodeRun(
   candidate: typeof nodeRuns.$inferSelect,
   incumbent: typeof nodeRuns.$inferSelect | undefined,
 ): boolean {
