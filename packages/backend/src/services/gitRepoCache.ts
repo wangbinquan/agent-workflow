@@ -31,7 +31,7 @@ import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { cachedRepos, tasks } from '@/db/schema'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { runGit } from '@/util/git'
+import { nonInteractiveGitEnv, runGit } from '@/util/git'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { getCachedGitCapabilities } from '@/services/gitVersion'
@@ -96,7 +96,9 @@ async function spawnGit(
   const proc = Bun.spawn({
     cmd: ['git', ...args],
     // Explicit env passthrough — see runGit() in util/git.ts for rationale.
-    env: process.env,
+    // nonInteractiveGitEnv() also stops ssh from hanging the daemon on first
+    // connect to an unknown host (ssh reads /dev/tty, not stdin, for prompts).
+    env: nonInteractiveGitEnv(),
     stdout: 'pipe',
     stderr: 'pipe',
     stdin: 'ignore',

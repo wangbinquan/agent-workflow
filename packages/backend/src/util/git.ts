@@ -16,6 +16,29 @@ export interface GitRunResult {
   exitCode: number
 }
 
+/**
+ * Non-interactive env for any `git` spawn. Without these, ssh reads `/dev/tty`
+ * directly (not stdin) on first connect to an unknown host and hangs the daemon
+ * forever — closing stdin doesn't help. Two ssh options + one git option fix it:
+ *   - BatchMode=yes — ssh fails fast instead of prompting on tty for any input.
+ *   - StrictHostKeyChecking=accept-new — TOFU new hosts into known_hosts but
+ *     still reject when a known host's fingerprint changes (MITM defense).
+ *   - GIT_TERMINAL_PROMPT=0 — same treatment for HTTPS credential prompts.
+ */
+export function nonInteractiveGitEnv(): Record<string, string | undefined> {
+  return {
+    ...process.env,
+    GIT_SSH_COMMAND: [
+      process.env.GIT_SSH_COMMAND ?? 'ssh',
+      '-o',
+      'BatchMode=yes',
+      '-o',
+      'StrictHostKeyChecking=accept-new',
+    ].join(' '),
+    GIT_TERMINAL_PROMPT: '0',
+  }
+}
+
 /** Run `git -C <cwd> <...args>` and capture stdout/stderr. Never throws. */
 export async function runGit(cwd: string, args: string[]): Promise<GitRunResult> {
   const proc = Bun.spawn({
@@ -24,7 +47,7 @@ export async function runGit(cwd: string, args: string[]): Promise<GitRunResult>
     // post-startup process.env mutations otherwise, which makes per-test env
     // injection (e.g. GIT_CONFIG_GLOBAL) unreliable. In production this is a
     // no-op since process.env is fixed at daemon start.
-    env: process.env,
+    env: nonInteractiveGitEnv(),
     stdout: 'pipe',
     stderr: 'pipe',
     stdin: 'ignore',
