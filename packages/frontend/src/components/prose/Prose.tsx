@@ -30,6 +30,9 @@ import { remarkAlert } from 'remark-github-blockquote-alert'
 import remarkMath from 'remark-math'
 import { makeCode, PassThroughPre } from './CodeBlock'
 import { makeProseImage } from './ProseImage'
+import { rehypeWrapAnchors, type AnchorWrapInput } from './rehypeWrapAnchors'
+
+export type { AnchorWrapInput } from './rehypeWrapAnchors'
 
 export interface ProseProps {
   /** Raw markdown body. Pass the deferred value when called from an editor. */
@@ -42,6 +45,16 @@ export interface ProseProps {
   plantumlAuthHeader?: string
   /** Additional class on the outer wrapper (joins `.prose`). */
   className?: string
+  /**
+   * RFC-051 — Optional review-comment anchors. When provided and non-empty,
+   * each occurrence of an anchor's `selectedText` is wrapped with
+   * `<mark class="comment-anchor" data-comment-id>` *inside the React
+   * tree* (via a local rehype plugin) instead of via post-mount DOM
+   * mutation. Omitting the prop or passing `[]` leaves output
+   * byte-identical to the legacy non-review callers (editor preview,
+   * memory body, distill job detail, etc.).
+   */
+  anchors?: ReadonlyArray<AnchorWrapInput>
 }
 
 export function Prose({
@@ -50,6 +63,7 @@ export function Prose({
   plantumlEndpoint,
   plantumlAuthHeader,
   className,
+  anchors,
 }: ProseProps) {
   const components = useMemo<Components>(
     () =>
@@ -61,39 +75,45 @@ export function Prose({
     [plantumlEndpoint, plantumlAuthHeader, taskId],
   )
 
-  const rehypePlugins = useMemo(
-    () =>
+  const rehypePlugins = useMemo(() => {
+    const base: unknown[] = [
+      [rehypeKatex, { strict: false, output: 'html' }],
+      rehypeSlug,
       [
-        [rehypeKatex, { strict: false, output: 'html' }],
-        rehypeSlug,
-        [
-          rehypeAutolinkHeadings,
-          {
-            behavior: 'append',
-            properties: {
-              className: ['prose__anchor'],
-              ariaHidden: 'true',
-              tabIndex: -1,
-            },
-            content: { type: 'text', value: '#' },
+        rehypeAutolinkHeadings,
+        {
+          behavior: 'append',
+          properties: {
+            className: ['prose__anchor'],
+            ariaHidden: 'true',
+            tabIndex: -1,
           },
-        ],
-        [
-          rehypeExternalLinks,
-          {
-            target: '_blank',
-            rel: ['noopener', 'noreferrer'],
-            content: {
-              type: 'element',
-              tagName: 'span',
-              properties: { className: ['prose__external-icon'], ariaHidden: 'true' },
-              children: [],
-            },
+          content: { type: 'text', value: '#' },
+        },
+      ],
+      [
+        rehypeExternalLinks,
+        {
+          target: '_blank',
+          rel: ['noopener', 'noreferrer'],
+          content: {
+            type: 'element',
+            tagName: 'span',
+            properties: { className: ['prose__external-icon'], ariaHidden: 'true' },
+            children: [],
           },
-        ],
-      ] as unknown as React.ComponentProps<typeof ReactMarkdown>['rehypePlugins'],
-    [],
-  )
+        },
+      ],
+    ]
+    // RFC-051: only insert when anchors is non-empty so the byte-identical
+    // contract for non-review callers (anchors omitted OR passed as []) is
+    // preserved. The legacy DOM-mutation utility ran behind a `length === 0`
+    // short-circuit too — empty anchors means "no high-light work to do".
+    if (anchors !== undefined && anchors.length > 0) {
+      base.push([rehypeWrapAnchors, { anchors }])
+    }
+    return base as unknown as React.ComponentProps<typeof ReactMarkdown>['rehypePlugins']
+  }, [anchors])
 
   const wrapperClass = 'prose' + (className !== undefined ? ' ' + className : '')
 

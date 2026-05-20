@@ -28,7 +28,6 @@ import { anchorKey, computeAnchorFromSelection, selectionCrossesHeading } from '
 import { deleteDraft, getDraft, listDrafts, setDraft } from '@/lib/review/draftStore'
 import { computeLineRange } from '@/lib/review/lineRange'
 import { resolveReviewView } from '@/lib/review/readonly'
-import { wrapAnchorsInDom } from '@/lib/review/wrapAnchorsInDom'
 import { Route as RootRoute } from './__root'
 
 // RFC-013: optional ?version=<vid> for the read-only historical view.
@@ -505,22 +504,25 @@ function ReviewDetailPage() {
     })
   }, [decisionDialog, detail.data, submitDecision])
 
-  // Wrap each comment's selectedText in <mark data-comment-id> inside the
-  // rendered markdown DOM. Diff mode renders a different component so we
-  // only wrap when in regular review mode. Re-runs on every change to
-  // comments / body / diff toggle.
-  useLayoutEffect(() => {
-    if (markdownRef.current === null) return
-    if (diffMode) return
-    wrapAnchorsInDom(
-      markdownRef.current,
+  // RFC-051: anchor wrapping now happens inside the React tree via the
+  // `rehypeWrapAnchors` plugin (see `<Prose anchors={proseAnchors}>`
+  // below). The legacy `useLayoutEffect(wrapAnchorsInDom)` is gone — it
+  // used to mutate the rendered DOM after mount, which collided with
+  // react reconciliation every time `currentBody` changed (cross-review
+  // navigation, refetch polling, iterate landing a new version) and
+  // tripped `NotFoundError: removeChild` on the next render. The
+  // downstream measure / scroll-spy / `data-active` logic all keeps
+  // working unchanged because the resulting `<mark.comment-anchor
+  // [data-comment-id="..."]>` selector match is identical.
+  const proseAnchors = useMemo(
+    () =>
       sortedComments.map((c) => ({
         commentId: c.id,
         selectedText: c.anchor.selectedText,
         occurrenceIndex: c.anchor.occurrenceIndex,
       })),
-    )
-  }, [sortedComments, diffMode])
+    [sortedComments],
+  )
 
   // Measure each bubble's vertical position from its anchor's rect. Walks
   // comments in DOM order and bumps any bubble down if it would overlap
@@ -1029,6 +1031,12 @@ function ReviewDetailPage() {
               taskId={data.summary.taskId}
               plantumlEndpoint={config.data?.plantumlEndpoint}
               plantumlAuthHeader={config.data?.plantumlAuthHeader}
+              // RFC-051: mirror the legacy `if (diffMode) return` guard
+              // inside the old wrap effect — when diff mode is on but
+              // `priorBody.data` is still loading we render Prose as a
+              // transient placeholder and we don't want marks to flash
+              // before DiffView swaps in.
+              anchors={diffMode ? undefined : proseAnchors}
             />
           </div>
         )}

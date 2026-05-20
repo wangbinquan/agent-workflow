@@ -81,6 +81,38 @@ export function ClarifyDetailPage() {
   const [draftLoaded, setDraftLoaded] = useState(false)
   const [draftSaving, setDraftSaving] = useState(false)
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // RFC-051: `initialFocusedRef` is declared up here (alongside the other
+  // session-scoped refs) instead of further down with the keyboard-nav
+  // refs, because the reset-on-nodeRunId effect right below needs to
+  // clear it. Same-route nav between two clarify sessions reuses this
+  // component, so per-session refs must be reachable by the reset.
+  const initialFocusedRef = useRef(false)
+
+  // RFC-051: same-route navigation between two clarify sessions (e.g.
+  // clicking through the inbox queue from session A's nodeRunId to
+  // session B's) keeps this ClarifyDetailPage mounted — TanStack Router
+  // reuses the component when only the path param changes. Without
+  // resetting on `nodeRunId` flip, the one-shot `draftLoaded` flag blocks
+  // the seeding effect below from re-running, and the `answers` map
+  // keeps stale `question.id` keys from the previous session. The
+  // questions-list render then maps the *new* session's questions through
+  // the *old* dictionary, every lookup returns `undefined`, the
+  // `if (a === undefined) return null` branch fires for every question,
+  // and the user sees an empty form (the user-reported bug).
+  //
+  // We reset state here rather than putting `key={nodeRunId}` on the
+  // route component because the surrounding `useClarifyWs` hook prefers
+  // a stable mount — remounting tears down + reconnects the WS for the
+  // same taskId on every clarify swap, which is wasteful and racy.
+  useEffect(() => {
+    setAnswers({})
+    setDraftLoaded(false)
+    initialFocusedRef.current = false
+    if (draftTimerRef.current !== null) {
+      clearTimeout(draftTimerRef.current)
+      draftTimerRef.current = null
+    }
+  }, [nodeRunId])
 
   useEffect(() => {
     const s = session.data
@@ -250,7 +282,8 @@ export function ClarifyDetailPage() {
   // Enter, matching the "continue is default" semantics. Users who actually
   // want to stop can tab once or click the secondary button.
   const submitContinueRef = useRef<HTMLButtonElement | null>(null)
-  const initialFocusedRef = useRef(false)
+  // `initialFocusedRef` is declared near the top of the component
+  // (RFC-051) so the reset-on-nodeRunId effect can reach it.
 
   function isAnswerEmpty(a: ClarifyAnswer | undefined): boolean {
     if (a === undefined) return true
