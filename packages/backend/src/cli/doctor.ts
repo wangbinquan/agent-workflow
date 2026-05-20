@@ -3,7 +3,13 @@
 
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { loadConfig } from '@/config'
-import { compareSemver, extractVersion, MIN_OPENCODE_VERSION, probeOpencode } from '@/util/opencode'
+import {
+  compareSemver,
+  extractVersion,
+  MAX_OPENCODE_VERSION_EXCLUSIVE,
+  MIN_OPENCODE_VERSION,
+  probeOpencode,
+} from '@/util/opencode'
 import { Paths } from '@/util/paths'
 
 export interface CheckResult {
@@ -38,13 +44,15 @@ export async function doctorCommand(): Promise<DoctorResult> {
     checks.push({
       name: 'opencode version',
       ok: false,
-      message: `${probe.version} is older than required ${MIN_OPENCODE_VERSION}`,
+      message:
+        probe.incompatibleReason ??
+        `${probe.version} is outside the supported range ${MIN_OPENCODE_VERSION}..<${MAX_OPENCODE_VERSION_EXCLUSIVE}`,
     })
   } else {
     checks.push({
       name: 'opencode version',
       ok: true,
-      message: `${probe.version} (>=${MIN_OPENCODE_VERSION})`,
+      message: `${probe.version} (in ${MIN_OPENCODE_VERSION}..<${MAX_OPENCODE_VERSION_EXCLUSIVE})`,
     })
   }
 

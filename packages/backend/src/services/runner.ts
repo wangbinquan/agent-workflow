@@ -593,6 +593,20 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
 
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
+    // opencode 1.14.51+ (upstream commit 7f2b5ee8c, the Effect-TS run.ts rewrite)
+    // resolves its root via `process.env.PWD ?? process.cwd()`, NOT just
+    // `process.cwd()`. Bun.spawn's `cwd:` updates the child's
+    // `process.cwd()` but leaves `PWD` inherited from the daemon's parent
+    // shell. When daemon's PWD (e.g. the repo source root) differs from the
+    // spawn cwd (the worktree), opencode loads TWO Instances (one for cwd via
+    // effectCmd's directory preload, one for PWD as the SDK default), the
+    // session lands in the wrong one, and `--format json` events stop reaching
+    // our stdout pump entirely — the run exits 0 with zero parseable lines and
+    // every node fails "no <workflow-output> envelope found in stdout".
+    // Reproduced 2026-05-20 against opencode-ai 1.14.51 on this machine.
+    // Forcing PWD = cwd is no-op for pre-1.14.30 versions (they used
+    // `process.cwd()` only) and restores the legacy behavior for 1.14.30+.
+    PWD: opts.worktreePath,
     OPENCODE_CONFIG_DIR: runDir,
     OPENCODE_CONFIG_CONTENT: JSON.stringify(inlineConfig),
   }

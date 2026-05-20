@@ -17,7 +17,11 @@ import {
 } from '@/services/memoryDistillScheduler'
 import { acquireLock, DaemonLockHeldError, type Lock } from '@/util/lock'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
-import { MIN_OPENCODE_VERSION, probeOpencode } from '@/util/opencode'
+import {
+  MAX_OPENCODE_VERSION_EXCLUSIVE,
+  MIN_OPENCODE_VERSION,
+  probeOpencode,
+} from '@/util/opencode'
 import { Paths } from '@/util/paths'
 import { buildWebSocketAdapter } from '@/ws/server'
 import { existsSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
@@ -74,10 +78,16 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     process.exit(1)
   }
   if (!probe.compatible) {
-    log.error('opencode too old', { found: probe.version, required: MIN_OPENCODE_VERSION })
+    log.error('opencode incompatible', {
+      found: probe.version,
+      requiredRange: `${MIN_OPENCODE_VERSION}..<${MAX_OPENCODE_VERSION_EXCLUSIVE}`,
+      reason: probe.incompatibleReason,
+    })
     console.error(
-      `agent-workflow: opencode ${probe.version} is older than the required ${MIN_OPENCODE_VERSION}.\n` +
-        `  run "opencode upgrade" or set 'opencodePath' to a newer binary.`,
+      `agent-workflow: opencode ${probe.version} is incompatible.\n` +
+        `  required range: ${MIN_OPENCODE_VERSION} <= version < ${MAX_OPENCODE_VERSION_EXCLUSIVE}\n` +
+        `  reason: ${probe.incompatibleReason ?? 'unknown'}\n` +
+        `  to recover: \`npm install -g opencode-ai@1.15.5\` (or any 1.14.x / 1.15.x) or set 'opencodePath' in ${Paths.config}.`,
     )
     lock.release()
     process.exit(1)

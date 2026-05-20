@@ -4,7 +4,11 @@
 import type { Hono } from 'hono'
 import { loadConfig } from '@/config'
 import type { AppDeps } from '@/server'
-import { MIN_OPENCODE_VERSION, probeOpencode } from '@/util/opencode'
+import {
+  MAX_OPENCODE_VERSION_EXCLUSIVE,
+  MIN_OPENCODE_VERSION,
+  probeOpencode,
+} from '@/util/opencode'
 import { listOpencodeModels } from '@/util/opencode-models'
 
 export function mountRuntimeRoutes(app: Hono, deps: AppDeps): void {
@@ -15,7 +19,9 @@ export function mountRuntimeRoutes(app: Hono, deps: AppDeps): void {
       binary: probe.binary,
       version: probe.version,
       compatible: probe.compatible,
+      incompatibleReason: probe.incompatibleReason,
       minVersion: MIN_OPENCODE_VERSION,
+      maxVersionExclusive: MAX_OPENCODE_VERSION_EXCLUSIVE,
     })
   })
 

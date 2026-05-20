@@ -950,6 +950,10 @@ export async function defaultDistillerSpawn(
   ]
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
+    // See runner.ts for the full rationale — opencode 1.14.51+ resolves root
+    // from `process.env.PWD` before `process.cwd()`, so PWD must match the
+    // spawn cwd or `--format json` events go missing.
+    PWD: input.cwd,
     OPENCODE_CONFIG_CONTENT: input.inlineConfigJson,
     OPENCODE_CONFIG_DIR: input.cwd,
   }

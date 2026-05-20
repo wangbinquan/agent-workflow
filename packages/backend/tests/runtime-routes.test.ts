@@ -9,7 +9,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
 import { applyConfigPatch, loadConfig } from '../src/config'
 import { clearOpencodeModelsCache } from '../src/util/opencode-models'
-import { MIN_OPENCODE_VERSION } from '../src/util/opencode'
+import { MAX_OPENCODE_VERSION_EXCLUSIVE, MIN_OPENCODE_VERSION } from '../src/util/opencode'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -54,7 +54,10 @@ function writeBinary(
   },
 ): void {
   const {
-    versionStdout = 'stub-opencode 1.14.99',
+    // 1.14.25 is the verified-working last version inside the supported
+    // [MIN_OPENCODE_VERSION, MAX_OPENCODE_VERSION_EXCLUSIVE) range — see
+    // `packages/backend/src/util/opencode.ts` for why the upper bound exists.
+    versionStdout = 'stub-opencode 1.14.25',
     versionExit = 0,
     modelsStdout = '',
     modelsExit = 0,
@@ -106,9 +109,11 @@ describe('GET /api/runtime/opencode', () => {
     expect(res.status).toBe(200)
     const json = (await res.json()) as Record<string, unknown>
     expect(json.binary).toBe(h.binaryPath)
-    expect(json.version).toBe('1.14.99')
+    expect(json.version).toBe('1.14.25')
     expect(json.compatible).toBe(true)
     expect(json.minVersion).toBe(MIN_OPENCODE_VERSION)
+    expect(json.maxVersionExclusive).toBe(MAX_OPENCODE_VERSION_EXCLUSIVE)
+    expect(json.incompatibleReason).toBeUndefined()
   })
 
   test('returns null version + compatible=false when binary missing', async () => {
@@ -126,6 +131,24 @@ describe('GET /api/runtime/opencode', () => {
     const json = (await res.json()) as Record<string, unknown>
     expect(json.version).toBe('1.0.0')
     expect(json.compatible).toBe(false)
+    expect(typeof json.incompatibleReason).toBe('string')
+    expect(json.incompatibleReason as string).toContain(MIN_OPENCODE_VERSION)
+  })
+
+  test('flags version >= MAX_OPENCODE_VERSION_EXCLUSIVE as incompatible (next-minor tripwire)', async () => {
+    // Why this exists: MAX_OPENCODE_VERSION_EXCLUSIVE is the "you bumped past
+    // a minor — re-verify" gate. The probe must surface this as
+    // compatible=false + a reason that points the user at the manual smoke
+    // test before flipping the cap forward.
+    writeBinary(h.binaryPath, { versionStdout: 'stub-opencode 1.16.0' })
+    const res = await req(h.app, '/api/runtime/opencode')
+    const json = (await res.json()) as Record<string, unknown>
+    expect(json.version).toBe('1.16.0')
+    expect(json.compatible).toBe(false)
+    expect(typeof json.incompatibleReason).toBe('string')
+    const reason = json.incompatibleReason as string
+    expect(reason).toContain('1.16.0')
+    expect(reason).toContain(MAX_OPENCODE_VERSION_EXCLUSIVE)
   })
 
   test('401 without token', async () => {
