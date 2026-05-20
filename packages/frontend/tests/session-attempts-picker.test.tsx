@@ -274,6 +274,55 @@ describe('Session attempts dropdown picker', () => {
     expect(screen.getAllByRole('option')).toHaveLength(2)
   })
 
+  // Locks the post-grouping chronological sort in SessionTab. Default
+  // attempt order (sortNodeRunsForPromptHistory) breaks ties between
+  // fan-out shards by shardKey alphabetical, which surprised users when
+  // a later-started shard sat above an earlier-started one. Groups now
+  // sort by earliest startedAt ascending.
+  test('dropdown groups are ordered by earliest startedAt, not shardKey alphabetical', () => {
+    const parent = run({ id: 'p', promptText: null, startedAt: 50 })
+    // Alphabetically 'a' < 'z', but time-wise z (100) started before a (300).
+    const shardZ = run({ id: 'sz', parentNodeRunId: 'p', shardKey: 'src/z.ts', startedAt: 100 })
+    const shardA = run({ id: 'sa', parentNodeRunId: 'p', shardKey: 'src/a.ts', startedAt: 300 })
+    renderDrawer({
+      nodeRunId: shardZ.id,
+      nodeId: parent.nodeId,
+      workflowNodeKind: 'agent-multi',
+      runs: [parent, shardA, shardZ],
+    })
+    openCombobox()
+    const options = screen.getAllByRole('option')
+    // 3 options (parent + two shards). Parent at 50 first, then z at 100, then a at 300.
+    expect(options).toHaveLength(3)
+    expect(options[0]!.textContent ?? '').not.toContain('src/')
+    expect(options[1]!.textContent ?? '').toContain('src/z.ts')
+    expect(options[2]!.textContent ?? '').toContain('src/a.ts')
+  })
+
+  test('groups with no startedAt sink to the bottom', () => {
+    const r0 = run({ id: 'r0', retryIndex: 0, startedAt: 100 })
+    const r1 = run({ id: 'r1', retryIndex: 1, startedAt: 200 })
+    // Not-yet-started attempt — should land last regardless of retryIndex.
+    const pending = run({
+      id: 'rp',
+      retryIndex: 2,
+      startedAt: null as unknown as number,
+      status: 'pending',
+    })
+    renderDrawer({
+      nodeRunId: r0.id,
+      nodeId: r0.nodeId,
+      workflowNodeKind: 'agent-single',
+      runs: [r0, r1, pending],
+    })
+    openCombobox()
+    const options = screen.getAllByRole('option')
+    expect(options).toHaveLength(3)
+    expect(options[0]!.textContent ?? '').toMatch(/initial/i)
+    expect(options[1]!.textContent ?? '').toMatch(/retry#1/i)
+    expect(options[2]!.textContent ?? '').toMatch(/retry#2/i)
+  })
+
   test('mixed: an inline group + a follow-on isolated retry render as 2 options', () => {
     const r0 = run({
       id: 'r0',

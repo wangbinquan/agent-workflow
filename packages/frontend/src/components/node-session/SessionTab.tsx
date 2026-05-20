@@ -112,7 +112,18 @@ function AttemptPicker({
   isFanoutParent: (a: NodeRun) => boolean
 }) {
   const { t } = useTranslation()
-  const groups = useMemo(() => groupAttemptsByInlineSession(attempts), [attempts])
+  // After inline-session grouping, sort the groups themselves by each
+  // group's earliest startedAt ascending so the dropdown is strictly
+  // chronological. The default order out of groupAttemptsByInlineSession
+  // inherits sortNodeRunsForPromptHistory's (iteration, retryIndex,
+  // shardKey) ordering, which for fan-out shards is alphabetical by
+  // shardKey rather than by time — surprising when a shard that started
+  // later sits above one that started first. Groups whose attempts have
+  // no startedAt (not yet running) sink to the bottom.
+  const groups = useMemo(() => {
+    const raw = groupAttemptsByInlineSession(attempts)
+    return [...raw].sort((a, b) => groupStartTime(a) - groupStartTime(b))
+  }, [attempts])
 
   // Each Select option's `value` is the LATEST run id in the group. Clicking
   // hands that id to the parent so the backend /session route can unify all
@@ -192,7 +203,7 @@ function AttemptPicker({
   )
 }
 
-interface AttemptGroup {
+export interface AttemptGroup {
   /** opencode session id when grouped; for legacy/isolated attempts uses the run id as a unique placeholder. */
   sessionId: string
   attempts: NodeRun[]
@@ -225,6 +236,21 @@ export function groupAttemptsByInlineSession(attempts: NodeRun[]): AttemptGroup[
     }
   }
   return out
+}
+
+/**
+ * Earliest `startedAt` within a group, used purely for chronological
+ * ordering of the AttemptPicker dropdown. Groups with no started run
+ * (everything still pending) return `+Infinity` so they sink to the
+ * bottom rather than getting "earlier than every real run" via NaN/0.
+ * Exported for direct unit testing.
+ */
+export function groupStartTime(group: AttemptGroup): number {
+  let min = Number.POSITIVE_INFINITY
+  for (const a of group.attempts) {
+    if (a.startedAt !== null && a.startedAt < min) min = a.startedAt
+  }
+  return min
 }
 
 function iterLabel(a: NodeRun, t: TFunction): string {
