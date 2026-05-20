@@ -30,7 +30,7 @@ import type {
 } from '@agent-workflow/shared'
 import { MemorySchema } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { memories } from '@/db/schema'
+import { memories, memoryDistillJobs } from '@/db/schema'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
 
@@ -95,7 +95,10 @@ function rowToMemory(row: MemoryRow): Memory {
   })
 }
 
-export function toSummary(m: Memory): MemorySummary {
+export function toSummary(
+  m: Memory,
+  extras: { outputLang?: 'zh-CN' | 'en-US' | null } = {},
+): MemorySummary {
   return {
     id: m.id,
     scopeType: m.scopeType,
@@ -106,6 +109,10 @@ export function toSummary(m: Memory): MemorySummary {
     approvedAt: m.approvedAt,
     version: m.version,
     distillAction: m.distillAction,
+    // RFC-050: only candidate rows carry the lang chip — approved /
+    // archived / superseded / rejected are "facts" whose generation
+    // language we no longer surface.
+    outputLang: m.status === 'candidate' ? (extras.outputLang ?? null) : null,
   }
 }
 
@@ -206,7 +213,45 @@ export async function listMemories(
     const needle = filter.tag
     items = items.filter((m) => m.tags.includes(needle))
   }
-  return options.includeBody === true ? items : items.map(toSummary)
+  if (options.includeBody === true) return items
+  // RFC-050: for the cheap summary path, batch-lookup output_lang on the
+  // distill jobs that produced this row's CANDIDATES. We deliberately
+  // skip the lookup for non-candidate rows because toSummary itself
+  // discards the value (approved / archived / superseded / rejected are
+  // language-less "facts" by design).
+  const candidateJobIds = new Set<string>()
+  for (const m of items) {
+    if (m.status === 'candidate' && m.distillJobId !== null) candidateJobIds.add(m.distillJobId)
+  }
+  const langByJob = await loadJobOutputLangs(db, [...candidateJobIds])
+  return items.map((m) =>
+    toSummary(m, {
+      outputLang: m.distillJobId === null ? null : (langByJob.get(m.distillJobId) ?? null),
+    }),
+  )
+}
+
+async function loadJobOutputLangs(
+  db: DbClient,
+  jobIds: string[],
+): Promise<Map<string, 'zh-CN' | 'en-US' | null>> {
+  if (jobIds.length === 0) return new Map()
+  const rows = (await db
+    .select({ id: memoryDistillJobs.id, outputLang: memoryDistillJobs.outputLang })
+    .from(memoryDistillJobs)
+    .where(inArray(memoryDistillJobs.id, jobIds))) as Array<{
+    id: string
+    outputLang: string | null
+  }>
+  const out = new Map<string, 'zh-CN' | 'en-US' | null>()
+  for (const r of rows) {
+    if (r.outputLang === 'zh-CN' || r.outputLang === 'en-US') {
+      out.set(r.id, r.outputLang)
+    } else {
+      out.set(r.id, null)
+    }
+  }
+  return out
 }
 
 export async function getMemoryById(db: DbClient, id: string): Promise<MemoryWithChain | null> {

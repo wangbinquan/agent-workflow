@@ -386,6 +386,7 @@ export const enUS: Resources = {
     tabNetwork: 'Network',
     tabConnection: 'Connection',
     tabAppearance: 'Appearance',
+    tabMemory: 'Memory',
     tabRendering: 'Rendering',
     tabAuthentication: 'Authentication',
     loading: 'Loading…',
@@ -408,6 +409,12 @@ export const enUS: Resources = {
       'Switch between Chinese and English. The saved value applies instantly — no page refresh required.',
     languageZhCN: '简体中文',
     languageEnUS: 'English',
+    memoryDistillLangLabel: 'Memory distill output language',
+    memoryDistillLangHint:
+      "Language the distiller emits each candidate's title / bodyMd in; the [category:xxx] prefix stays lowercase ASCII. Independent from the UI language; defaults to English (RFC-041 baseline). Applies to new batches only — existing memories are not back-translated.",
+    memoryDistillLangDefault: 'Default (English)',
+    memoryDistillLangZhCN: '简体中文',
+    memoryDistillLangEnUS: 'English',
     restartRequiredTitle: 'Daemon restart required',
     restartRequiredHint:
       'The new value was written to config.json, but bind host / bind port only apply on the next agent-workflow start. Run `agent-workflow stop` and then `agent-workflow start` in your terminal.',
@@ -1633,6 +1640,16 @@ export const enUS: Resources = {
         manual: 'manual',
       },
     },
+    candidateRow: {
+      lang: {
+        'zh-CN': '中',
+        'en-US': 'EN',
+      },
+      langTooltip: {
+        'zh-CN': 'Distilled by distiller in 简体中文 (RFC-050)',
+        'en-US': 'Distilled by distiller in English (RFC-050)',
+      },
+    },
     distillAction: {
       new: 'New',
       updateOf: 'Updates {{id}}',
@@ -1701,6 +1718,12 @@ export const enUS: Resources = {
       noDedupSnapshot: 'No prior memories were visible to the distiller',
       noSourceEvents: 'No source events resolved',
       openInQueue: 'Open in Approval Queue',
+      outputLangLabel: 'Output language',
+      outputLang: {
+        default: 'Default (English)',
+        'zh-CN': '简体中文',
+        'en-US': 'English',
+      },
       section: {
         candidates: 'Candidates produced',
         conversation: 'Distiller conversation',

@@ -14,6 +14,7 @@
 import { and, asc, eq, inArray, lte } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
+  Language,
   MemoryDistillJob,
   MemoryDistillJobWsMessage,
   ResolvedDistillScope,
@@ -29,6 +30,27 @@ const log = createLogger('memory-distill-scheduler')
 
 /** 5s debounce window: collapse N events on the same (task, source) into 1 distill. */
 export const DISTILL_DEBOUNCE_MS = 5_000
+
+/**
+ * RFC-050: ambient provider for the per-job output language. `cli/start.ts`
+ * registers a function that reads `config.memoryDistillLang` from disk on
+ * every call (so edits without a daemon restart still flow through). When
+ * unset (tests, early boot) the provider returns null and the runtime
+ * falls back to 'en-US' (RFC-041 byte-level baseline).
+ *
+ * Per-call `outputLang` passed to `enqueueDistillJob` always wins.
+ */
+let memoryDistillLangProvider: () => Language | null = () => null
+
+export function setMemoryDistillLangProvider(fn: () => Language | null): void {
+  memoryDistillLangProvider = fn
+}
+
+/** Test-only — restore the noop provider so a leaked setter from a prior
+ *  case doesn't leak into the next one. Production never calls this. */
+export function resetMemoryDistillLangProviderForTest(): void {
+  memoryDistillLangProvider = () => null
+}
 /** Cap how many distill jobs we kick off per tick to bound LLM concurrency. */
 export const DISTILL_BATCH_LIMIT = 5
 /** Failed jobs flip to permanent `failed` after this many attempts. */
@@ -46,6 +68,14 @@ export interface EnqueueDistillJobInput {
   taskId: string | null
   /** Override the 5s default — useful for tests. */
   debounceMs?: number
+  /**
+   * RFC-050: language for this job's distiller output. Snapshotted at
+   * enqueue so retries / merged siblings within this debounce key all
+   * produce candidates in the same language, even if the admin flips
+   * `config.memoryDistillLang` between enqueue and run. `undefined` ≡
+   * null in DB ≡ runtime fallback 'en-US' (RFC-041 byte-level baseline).
+   */
+  outputLang?: Language | null
 }
 
 export interface EnqueueResult {
@@ -63,6 +93,11 @@ export async function enqueueDistillJob(
   const jobId = ulid()
   const now = Date.now()
   const debounceMs = input.debounceMs ?? DISTILL_DEBOUNCE_MS
+  // RFC-050: explicit per-call wins; otherwise consult the ambient provider
+  // registered by cli/start.ts at daemon boot. Null is persisted as-is and
+  // means "use the runtime default" (currently 'en-US' / RFC-041 baseline).
+  const outputLang: Language | null =
+    input.outputLang !== undefined ? input.outputLang : memoryDistillLangProvider()
   await db.insert(memoryDistillJobs).values({
     id: jobId,
     debounceKey,
@@ -74,6 +109,7 @@ export async function enqueueDistillJob(
     attempts: 0,
     nextRunAt: now + debounceMs,
     createdAt: now,
+    outputLang,
   })
   publish({ type: 'distill.queued', jobId, debounceKey })
   return { jobId, debounceKey, nextRunAt: now + debounceMs }
@@ -190,6 +226,7 @@ interface DistillJobRow {
   createdAt: number
   startedAt: number | null
   finishedAt: number | null
+  outputLang?: string | null
 }
 
 /**

@@ -7669,6 +7669,19 @@ mark.comment-anchor[data-active='true'] {
   color: var(--muted);
 }
 
+/* RFC-050 — per-candidate distill output language chip. Lives next to the
+   status chip in the row head; only rendered when the row is still a
+   candidate AND the distill job's outputLang is non-null. */
+.memory-row__lang {
+  font-size: var(--font-xs);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--info) 14%, transparent);
+  color: var(--info);
+  border: 1px solid color-mix(in srgb, var(--info) 35%, transparent);
+  cursor: help;
+}
+
 .memory-row__meta {
   display: flex;
   flex-wrap: wrap;

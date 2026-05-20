@@ -46,6 +46,16 @@ export function MemoryRow({
         <span className={`memory-row__status memory-row__status--${memory.status}`}>
           {t(`memory.status.${memory.status}`)}
         </span>
+        {memory.status === 'candidate' &&
+          (memory.outputLang === 'zh-CN' || memory.outputLang === 'en-US') && (
+            <span
+              className={`memory-row__lang memory-row__lang--${memory.outputLang}`}
+              data-testid={`memory-row-${memory.id}-lang`}
+              title={t(`memory.candidateRow.langTooltip.${memory.outputLang}`)}
+            >
+              {t(`memory.candidateRow.lang.${memory.outputLang}`)}
+            </span>
+          )}
       </div>
       {memory.tags.length > 0 && (
         <div className="memory-row__tags">

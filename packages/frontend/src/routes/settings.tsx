@@ -33,6 +33,7 @@ type Tab =
   | 'gc'
   | 'network'
   | 'appearance'
+  | 'memory'
   | 'connection'
   | 'rendering'
   | 'authentication'
@@ -79,6 +80,7 @@ function SettingsPage() {
             ['gc', t('settings.tabGc')],
             ['network', t('settings.tabNetwork')],
             ['appearance', t('settings.tabAppearance')],
+            ['memory', t('settings.tabMemory')],
             ['rendering', t('settings.tabRendering')],
             ['authentication', t('settings.tabAuthentication')],
             ['connection', t('settings.tabConnection')],
@@ -106,6 +108,7 @@ function SettingsPage() {
           {tab === 'gc' && <GcTab config={config.data} />}
           {tab === 'network' && <NetworkTab config={config.data} />}
           {tab === 'appearance' && <AppearanceTab config={config.data} />}
+          {tab === 'memory' && <MemoryTab config={config.data} />}
           {tab === 'rendering' && <RenderingTab config={config.data} />}
           {tab === 'authentication' && <AuthenticationTab />}
           {tab === 'connection' && <ConnectionTab />}
@@ -497,6 +500,46 @@ export function AppearanceTab({ config }: TabProps) {
         >
           <option value="zh-CN">{t('settings.languageZhCN')}</option>
           <option value="en-US">{t('settings.languageEnUS')}</option>
+        </select>
+      </Field>
+    </SectionForm>
+  )
+}
+
+// RFC-050 — Memory tab. For now hosts only the distill output language;
+// future distiller knobs (e.g. memoryDistillerEnabled / memoryDistillModel /
+// per-scope inject budgets) can move here in follow-ups so the JSON-only
+// config surface gets a visible home.
+export function MemoryTab({ config }: TabProps) {
+  const { t } = useTranslation()
+  const { state, setState, save } = useTabState(config, ['memoryDistillLang'])
+  return (
+    <SectionForm
+      onSave={save.mutate}
+      busy={save.isPending}
+      error={save.error}
+      success={save.isSuccess && save.error === null ? 'saved' : null}
+    >
+      <Field
+        label={t('settings.memoryDistillLangLabel')}
+        hint={t('settings.memoryDistillLangHint')}
+      >
+        <select
+          className="form-input"
+          data-testid="settings-memory-distill-lang-select"
+          value={state.memoryDistillLang ?? ''}
+          onChange={(e) => {
+            const v = e.target.value
+            setState({
+              ...state,
+              memoryDistillLang:
+                v === '' ? undefined : (v as NonNullable<Config['memoryDistillLang']>),
+            })
+          }}
+        >
+          <option value="">{t('settings.memoryDistillLangDefault')}</option>
+          <option value="en-US">{t('settings.memoryDistillLangEnUS')}</option>
+          <option value="zh-CN">{t('settings.memoryDistillLangZhCN')}</option>
         </select>
       </Field>
     </SectionForm>

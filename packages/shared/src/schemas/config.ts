@@ -8,6 +8,7 @@ export const CONFIG_SCHEMA_VERSION = 1
 
 export const LogLevelSchema = z.enum(['debug', 'info', 'warn', 'error'])
 export const LanguageSchema = z.enum(['zh-CN', 'en-US'])
+export type Language = z.infer<typeof LanguageSchema>
 export const ThemeSchema = z.enum(['system', 'light', 'dark'])
 
 export const WorktreeGcSchema = z.object({
@@ -103,6 +104,15 @@ export const ConfigSchema = z.object({
    * default when unset. Settings → Memory section will surface this.
    */
   memoryDistillModel: z.string().min(1).optional(),
+  /**
+   * RFC-050: language the distiller emits candidate `title` (after the
+   * `[category:xxx]` prefix) + `bodyMd` in. Independent from the frontend
+   * UI `language` field — admin may keep the UI in English yet sink the
+   * memory library in Chinese (or vice versa). `undefined` ≡ `'en-US'`
+   * at runtime to preserve RFC-041 byte-level baseline; the prompt itself
+   * stays English and only a short trailing directive switches.
+   */
+  memoryDistillLang: LanguageSchema.optional(),
   /**
    * Per-scope token budget for runtime memory inject (PR3). When the
    * sum of "- [scope] title — body" lines for a scope exceeds its

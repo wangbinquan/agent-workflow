@@ -11,7 +11,10 @@ import { reapOrphanRuns } from '@/services/orphans'
 import { startEventsArchiver } from '@/services/eventsArchive'
 import { startWorktreeGc } from '@/services/gc'
 import { startBatchImportGc } from '@/services/repoBatchImport'
-import { startMemoryDistillLoop } from '@/services/memoryDistillScheduler'
+import {
+  setMemoryDistillLangProvider,
+  startMemoryDistillLoop,
+} from '@/services/memoryDistillScheduler'
 import { acquireLock, DaemonLockHeldError, type Lock } from '@/util/lock'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
 import { MIN_OPENCODE_VERSION, probeOpencode } from '@/util/opencode'
@@ -206,6 +209,19 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     undefined,
     batchImportCfg.repoBatchImportRetentionMs,
   )
+  // RFC-050: register an ambient provider so enqueueDistillJob callers
+  // pick up the current `config.memoryDistillLang` without us having to
+  // thread configPath through review.ts / clarify.ts / taskFeedback.ts.
+  // Re-reads config on every call so admin edits to the config file
+  // (e.g. via `PUT /api/config`) flow through without a daemon restart.
+  setMemoryDistillLangProvider(() => {
+    try {
+      return loadConfig(Paths.config).memoryDistillLang ?? null
+    } catch {
+      return null
+    }
+  })
+
   // RFC-041 — distill queue worker. Honors `memoryDistillerEnabled`
   // (default true); when false the handle is a no-op shell.
   const memoryDistillTicker = startMemoryDistillLoop({

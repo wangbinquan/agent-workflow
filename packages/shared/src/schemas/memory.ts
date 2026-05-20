@@ -76,6 +76,12 @@ export const MemorySummarySchema = z.object({
   approvedAt: z.number().int().nullable(),
   version: z.number().int(),
   distillAction: DistillActionSchema.nullable(),
+  // RFC-050: distiller output language for this row's distill job.
+  // Only present on rows produced by the distiller (NULL for manual /
+  // legacy rows). The frontend shows a small LangChip when this is
+  // non-null AND the row is still a candidate — approved rows are
+  // "facts" and the generation language is no longer tracked.
+  outputLang: z.enum(['zh-CN', 'en-US']).nullable().optional(),
 })
 export type MemorySummary = z.infer<typeof MemorySummarySchema>
 
@@ -211,6 +217,11 @@ export const MemoryDistillJobSchema = z.object({
   userPromptMd: z.string().nullable().optional(),
   exitCode: z.number().int().nullable().optional(),
   stderrExcerpt: z.string().nullable().optional(),
+  // RFC-050: per-job output language captured at enqueue. NULL on rows
+  // inserted before migration 0027 or before the admin set
+  // `config.memoryDistillLang`; distiller layer treats NULL as 'en-US'
+  // (byte-level RFC-041 baseline).
+  outputLang: z.enum(['zh-CN', 'en-US']).nullable().optional(),
 })
 export type MemoryDistillJob = z.infer<typeof MemoryDistillJobSchema>
 

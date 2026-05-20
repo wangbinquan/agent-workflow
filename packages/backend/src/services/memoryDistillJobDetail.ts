@@ -86,15 +86,22 @@ interface MemoryDistillJobRowShape {
   userPromptMd: string | null
   exitCode: number | null
   stderrExcerpt: string | null
+  outputLang?: string | null
 }
 
 function decorateJob(base: MemoryDistillJob, row: MemoryDistillJobRowShape): MemoryDistillJob {
+  // RFC-050: surface the per-job output language so the detail page can
+  // show a one-line `Output language: <lang>` header. Defensive narrow:
+  // unknown / corrupt values come back as null (UI then shows "default").
+  const outputLang =
+    row.outputLang === 'zh-CN' || row.outputLang === 'en-US' ? row.outputLang : null
   return {
     ...base,
     opencodeSessionId: row.opencodeSessionId,
     userPromptMd: row.userPromptMd,
     exitCode: row.exitCode,
     stderrExcerpt: row.stderrExcerpt,
+    outputLang,
   }
 }
 

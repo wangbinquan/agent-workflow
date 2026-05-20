@@ -929,6 +929,11 @@ export const memoryDistillJobs = sqliteTable(
     exitCode: integer('exit_code'),
     stderrExcerpt: text('stderr_excerpt'),
     dedupSnapshotIdsJson: text('dedup_snapshot_ids_json'),
+    // RFC-050: per-job output language for the distiller. NULL = pre-RFC-050
+    // row OR explicit "use default"; distiller layer treats NULL as 'en-US'.
+    // Captured at enqueue so retries / merged siblings stay consistent even
+    // if admin flips config.memoryDistillLang mid-batch.
+    outputLang: text('output_lang'),
   },
   (t) => ({
     statusNextIdx: index('idx_distill_jobs_status_next').on(t.status, t.nextRunAt),

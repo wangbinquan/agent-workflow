@@ -44,6 +44,15 @@ export function DetailHeader({ job }: Props) {
         <span className="distill-job-detail__meta-chip">
           {t('memory.distillJobDetail.attemptsCount', { n: job.attempts })}
         </span>
+        <span
+          className="distill-job-detail__meta-chip"
+          data-testid="distill-job-detail-output-lang"
+        >
+          {t('memory.distillJobDetail.outputLangLabel')}:{' '}
+          {job.outputLang === 'zh-CN' || job.outputLang === 'en-US'
+            ? t(`memory.distillJobDetail.outputLang.${job.outputLang}`)
+            : t('memory.distillJobDetail.outputLang.default')}
+        </span>
         <span className="muted">
           {t('memory.distillJobs.colCreated')}: {new Date(job.createdAt).toLocaleString()}
         </span>

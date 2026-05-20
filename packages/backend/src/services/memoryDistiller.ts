@@ -165,6 +165,24 @@ If no good candidate exists, emit:
 
 Do NOT include any other narration outside the envelope. Do NOT call any tools.`
 
+/**
+ * RFC-050: a short trailer appended at the END of the user prompt — never
+ * the system prompt. By living in the user prompt we leave
+ * `DISTILLER_SYSTEM_PROMPT` byte-for-byte identical to RFC-041 (locked by
+ * the grep-guard test + a SHA-256 hash baseline). The two strings are
+ * intentionally short and surgical: instructions, categories, envelope
+ * shape, and rejection rules stay in English; only the visible candidate
+ * text language flips. The `[category:xxx]` title prefix MUST remain
+ * lowercase ASCII (locked by the existing memory-distiller test).
+ */
+export type DistillerOutputLang = 'zh-CN' | 'en-US'
+export const DISTILLER_OUTPUT_LANG_DIRECTIVE: Readonly<Record<DistillerOutputLang, string>> = {
+  'en-US':
+    "Emit each candidate's `title` (after the [category:xxx] prefix) and `bodyMd` in English. The category prefix itself remains lowercase ASCII (e.g. [category:invariant]).",
+  'zh-CN':
+    '候选记忆的 `title`（[category:xxx] 前缀之后部分）与 `bodyMd` 用简体中文输出。`[category:xxx]` 前缀本身保持小写 ASCII（如 [category:invariant]），不要翻译。',
+} as const
+
 const DEFAULT_TIMEOUT_MS = 120_000
 
 // -----------------------------------------------------------------------------
@@ -584,6 +602,14 @@ export interface BuildDistillerPromptInput {
    * shared DEFAULT_SOURCE_CONTEXT_BUDGET.
    */
   sourceContextBudget?: SourceContextBudget
+  /**
+   * RFC-050: language for the visible candidate text (`title` after the
+   * lowercase ASCII `[category:xxx]` prefix, plus `bodyMd`). Appended as a
+   * short trailing directive at the END of the user prompt; the system
+   * prompt itself stays English (locked by grep guard + hash baseline).
+   * Defaults to `'en-US'`, which restores byte-level RFC-041 baseline.
+   */
+  outputLang?: DistillerOutputLang
 }
 
 export function buildDistillerUserPrompt(input: BuildDistillerPromptInput): string {
@@ -671,6 +697,13 @@ export function buildDistillerUserPrompt(input: BuildDistillerPromptInput): stri
     '# Instructions',
     'Emit exactly one <workflow-output> envelope. The "candidates" port carries the JSON shape documented in your system prompt. If nothing is worth distilling, emit `{"candidates": []}`.',
   )
+  // RFC-050: append the output-language directive last so the model sees it
+  // closest to its own generation point. The 'en-US' branch is byte-stable
+  // — its inclusion is the only diff vs. the RFC-041 baseline prompt and
+  // is harmless reinforcement of the system prompt's existing
+  // English-by-default stance.
+  const outputLang: DistillerOutputLang = input.outputLang ?? 'en-US'
+  lines.push('', DISTILLER_OUTPUT_LANG_DIRECTIVE[outputLang])
   return lines.join('\n')
 }
 
@@ -964,11 +997,17 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
     loadSourceEvents(options.db, options.siblings, sourceContextBudget),
     loadScopeContexts(options.db, scope),
   ])
+  // RFC-050: read the language from the job row (snapshotted at enqueue
+  // by the scheduler). We deliberately do NOT read `config.memoryDistillLang`
+  // here — retries and merged-sibling reruns must all use the language the
+  // batch started with, even if the admin flipped the setting mid-batch.
+  const outputLang: DistillerOutputLang = options.job.outputLang ?? 'en-US'
   const userPrompt = buildDistillerUserPrompt({
     events,
     scopeContexts,
     taskId: options.job.taskId,
     sourceContextBudget,
+    outputLang,
   })
 
   // RFC-043: persist the user prompt + dedup snapshot on the first
@@ -1167,6 +1206,7 @@ interface DistillJobRow {
   createdAt: number
   startedAt: number | null
   finishedAt: number | null
+  outputLang?: string | null
 }
 
 export function rowToDistillJob(row: DistillJobRow): MemoryDistillJob {
@@ -1191,6 +1231,8 @@ export function rowToDistillJob(row: DistillJobRow): MemoryDistillJob {
   } catch {
     // keep defaults
   }
+  const outputLang =
+    row.outputLang === 'zh-CN' || row.outputLang === 'en-US' ? row.outputLang : null
   return {
     id: row.id,
     debounceKey: row.debounceKey,
@@ -1205,6 +1247,7 @@ export function rowToDistillJob(row: DistillJobRow): MemoryDistillJob {
     createdAt: row.createdAt,
     startedAt: row.startedAt,
     finishedAt: row.finishedAt,
+    outputLang,
   }
 }
 
