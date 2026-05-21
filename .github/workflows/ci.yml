@@ -173,12 +173,16 @@ jobs:
       - name: Show artifact size
         run: ls -lh dist/
 
-      - name: Smoke-run binary (--version + doctor)
+      - name: Smoke-run binary (version + doctor)
         # `ls -lh` only checks the artifact exists; a build can succeed yet
         # produce a binary that crashes at startup (broken bundle, missing
         # native bindings, stripped permissions). Exec the binary to catch
         # those before the artifact ships. `doctor` exercises opencode PATH
         # resolution end-to-end and is fast.
+        #
+        # NOTE: CLI uses subcommand-style (`agent-workflow version`), not
+        # POSIX flag-style (`--version`) — see packages/backend/src/main.ts
+        # `case 'version'`.
         #
         # `find` instead of `ls | head` to satisfy actionlint's embedded
         # shellcheck (SC2012) — robust under names with whitespace even
@@ -187,7 +191,7 @@ jobs:
           set -euxo pipefail
           bin=$(find dist -maxdepth 1 -type f -name 'agent-workflow-*' | head -n 1)
           chmod +x "$bin"
-          "$bin" --version
+          "$bin" version
           "$bin" doctor
 
       - name: Upload artifact
