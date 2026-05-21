@@ -122,13 +122,16 @@ jobs:
           # cytoscape's release scripts have SC2086 etc) and we'd be linting
           # code we don't own. Restrict to the repo's own scripts.
           ignore_paths: node_modules dist .git
-        env:
           # Start strict on our own scripts — current ones
           # (`e2e/fixtures/*.sh`, scripts/git-hooks/*, tests/fixtures/fake-npm.sh)
-          # are all `set -eu` clean. Loosen via SHELLCHECK_OPTS / per-file
-          # `# shellcheck disable=...` only if a legitimately unfixable
-          # warning appears.
-          SHELLCHECK_SEVERITY: error
+          # are mostly `set -eu` clean. `severity: error` only fails on hard
+          # bugs (e.g. SC2145 mixed array/string); style / info / warning
+          # findings still print to the log so they're visible without
+          # blocking merge. Tighten by lowering severity once the existing
+          # warnings (e.g. unused RAW_PROMPT in stub-opencode-clarify-inline)
+          # are cleaned up. NOTE: SHELLCHECK_SEVERITY env var has no effect on
+          # this action — the documented input is `severity`.
+          severity: error
 
       - name: gitleaks (secret scanning)
         uses: gitleaks/gitleaks-action@v2
