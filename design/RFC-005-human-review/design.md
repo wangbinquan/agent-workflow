@@ -38,7 +38,7 @@
 | `packages/frontend/src/routes/__root.tsx` | edit | 左栏 Reviews nav + badge |
 | `packages/frontend/src/i18n/zh-CN.ts` + `en-US.ts` | edit | 新增 `review.*` section 约 60 条 key |
 | `design/design.md` | edit | §5 加 review 节点 schema 段；§9 节点状态机加 awaiting_review；§3 数据模型表加 doc_versions + review_comments；§11 配置表加 plantumlEndpoint |
-| `STATE.md` | edit | 顶部追加"进行中 RFC：[RFC-005](...)"一行；完工时挪到"已完成 RFC"表 |
+| `STATE.md` | edit | 顶部追加 `"进行中 RFC：[RFC-005](...)"` 一行；完工时挪到"已完成 RFC"表 |
 | `design/plan.md` | edit | RFC 索引追加 `RFC-005` 行（Draft → 进度更新 → Done） |
 
 明示不动文件：

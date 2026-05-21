@@ -7,7 +7,7 @@
 ## 0. 前置
 
 - 用户在对话中通过 ExitPlanMode（或等价的显式批准）接受 proposal / design / plan。
-- 在 `STATE.md` 顶部追加"进行中 RFC：[RFC-026](./design/RFC-026-clarify-inline-session/proposal.md)"一行。
+- 在 `STATE.md` 顶部追加 `"进行中 RFC：[RFC-026](./design/RFC-026-clarify-inline-session/proposal.md)"` 一行。
 - `design/plan.md` RFC 索引追加 `RFC-026` 行，状态 `In Progress`。
 - 由 PR1 开 branch；PR2 基于 PR1 合并提交起新 branch。
 

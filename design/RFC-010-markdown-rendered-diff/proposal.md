@@ -4,7 +4,7 @@
 
 `packages/frontend/src/components/review/DiffView.tsx`（RFC-005 PR-E T34）当前对 `word` / `line` / `block` 三种粒度都用同一种方式渲染：左右两栏、源码原文 + 红绿底色。这对于代码 / 配置文件类纯文本是合适的，但 review 评审的对象是 **markdown 文档**——标题、列表、强调、表格、引用块、代码块，一旦红绿底色压在源码上，作者眼中"成稿后的样子"就完全丢失了。
 
-社区项目 [`netj/markdown-diff`](/Users/wangbinquan/Documents/code/markdown-diff) 给出了一个简洁有效的范式：把 word-diff 的添加 / 删除标记内联到 markdown 文本里，再用 markdown 渲染器渲染成"成稿样式 + 内联高亮"。本 RFC 把这个范式引进来，但绕开 `<del>` / `<ins>` 内联 HTML（RFC-008 的 `Prose.tsx` 出于 XSS 安全刻意禁用了 `rehype-raw`）。
+社区项目 [`netj/markdown-diff`](https://github.com/netj/markdown-diff) 给出了一个简洁有效的范式：把 word-diff 的添加 / 删除标记内联到 markdown 文本里，再用 markdown 渲染器渲染成"成稿样式 + 内联高亮"。本 RFC 把这个范式引进来，但绕开 `<del>` / `<ins>` 内联 HTML（RFC-008 的 `Prose.tsx` 出于 XSS 安全刻意禁用了 `rehype-raw`）。
 
 ## 目标 / 非目标
 

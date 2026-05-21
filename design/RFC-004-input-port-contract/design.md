@@ -16,7 +16,7 @@
 | `packages/frontend/src/components/canvas/nodePalette.ts` | edit | 新建 input 节点时不再只给 `inputKey`，新增工厂返回与 syncInputDefs 一致的 default entry shape（避免双写） |
 | `packages/frontend/src/i18n/zh-CN.ts` + `en-US.ts` | edit | 新增 5 条 `inspector.fieldInput*` key（kind / label / required / description / labelHint） |
 | `design/design.md` | edit | §5 YAML 样例 `source.portName: out` 改 `source.portName: requirement`；§7.3 输入端口章节顶部加一段"端口名 = inputKey" |
-| `STATE.md` | edit | 顶部追加"进行中 RFC：[RFC-004](...)"一行；完工时挪到"已完成 RFC"表 |
+| `STATE.md` | edit | 顶部追加 `"进行中 RFC：[RFC-004](...)"` 一行；完工时挪到"已完成 RFC"表 |
 | `design/plan.md` | edit | RFC 索引表追加 `RFC-004` 行 |
 
 不动文件清单（明示）：

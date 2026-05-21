@@ -7,7 +7,7 @@
 ## 0. 前置
 
 - 用户已经在对话中批准本 RFC（ExitPlanMode 通过）。
-- 在 `STATE.md` 顶部追加"进行中 RFC：[RFC-005](./design/RFC-005-human-review/proposal.md)"一行。
+- 在 `STATE.md` 顶部追加 `"进行中 RFC：[RFC-005](./design/RFC-005-human-review/proposal.md)"` 一行。
 - `design/plan.md` RFC 索引追加 `RFC-005` 行，状态 `In Progress`。
 - 由 PR1 开 branch；后续 4 个 PR 各自基于前一个的合并提交起新 branch。**不要拉长 branch 链**——每个 PR 合 main 后立即基于 main 开下一个。
 

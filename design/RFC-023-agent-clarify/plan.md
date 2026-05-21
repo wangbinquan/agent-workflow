@@ -7,7 +7,7 @@
 ## 0. 前置
 
 - 用户在对话中通过 ExitPlanMode（或等价的显式批准）接受 proposal / design / plan。
-- 在 `STATE.md` 顶部追加"进行中 RFC：[RFC-023](./design/RFC-023-agent-clarify/proposal.md)"一行。
+- 在 `STATE.md` 顶部追加 `"进行中 RFC：[RFC-023](./design/RFC-023-agent-clarify/proposal.md)"` 一行。
 - `design/plan.md` RFC 索引追加 `RFC-023` 行，状态 `In Progress`。
 - 由 PR1 开 branch；后续 3 个 PR 各自基于前一个的合并提交起新 branch。**不要拉长 branch 链**——每个 PR 合 main 后立即基于 main 开下一个，以避开同 session 中 RFC-021 / RFC-022 / RFC-020 in-flight 改动造成的脏 working tree。
 

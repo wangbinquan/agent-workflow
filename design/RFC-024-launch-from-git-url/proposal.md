@@ -63,7 +63,7 @@
 - `/repos` 管理页：列表（URL + redact / 缓存路径 / 上次 fetch 时间 / 引用任务数）+ Refresh / Delete 按钮 + Delete 二次确认（确认文案显示引用任务数）
 - Delete 不级联删除 task 行或 worktree 目录（保护历史）；该 cached_repos 行被删后，再次用同 URL 起任务等同于 cold clone
 - 现有 path-mode 启动表单 + 启动流程零回归（保留所有原 e2e / unit）
-- 不向 stdout / response body / DB / events 表泄漏未脱敏的 URL；新增 `redact-url` 测试覆盖 6+ 形态（带 user:pass、带 token、不带 cred、ssh://、git@host:、纯 http）
+- 不向 stdout / response body / DB / events 表泄漏未脱敏的 URL；新增 `redact-url` 测试覆盖 6+ 形态（带 user:pass、带 token、不带 cred、`ssh://`、`git@host:`、纯 http）
 
 ## 与现有模块的关系
 
