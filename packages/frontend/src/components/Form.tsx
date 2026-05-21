@@ -79,9 +79,20 @@ interface NumberInputProps {
   min?: number
   max?: number
   step?: number
+  disabled?: boolean
+  'data-testid'?: string
 }
 
-export function NumberInput({ value, onChange, placeholder, min, max, step }: NumberInputProps) {
+export function NumberInput({
+  value,
+  onChange,
+  placeholder,
+  min,
+  max,
+  step,
+  disabled,
+  'data-testid': testid,
+}: NumberInputProps) {
   return (
     <input
       className="form-input"
@@ -100,6 +111,8 @@ export function NumberInput({ value, onChange, placeholder, min, max, step }: Nu
       min={min}
       max={max}
       step={step}
+      disabled={disabled}
+      data-testid={testid}
     />
   )
 }

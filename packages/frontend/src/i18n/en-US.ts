@@ -1117,6 +1117,19 @@ export const enUS: Resources = {
     sourcePortMissingSuffix: '(missing)',
     sourcePortDragHint:
       'You can also drag an upstream output onto the handle at the top of this node to set the source.',
+    fieldShardingStrategy: 'Sharding strategy',
+    fieldShardingStrategyHint:
+      'Controls how the sourcePort content is split into shards that fan out across child processes.',
+    fieldShardingN: 'Files per shard (n)',
+    fieldShardingNHint: 'Integer ≥ 1; the last shard may contain fewer than n files.',
+    fieldShardingDepth: 'Directory depth (depth)',
+    fieldShardingDepthHint:
+      'Leave empty for the default of 1 (group by top-level directory); 2 groups by the first two path components.',
+    shardingKind: {
+      perFile: 'One file per shard (per-file)',
+      perNFiles: 'N files per shard (per-n-files)',
+      perDirectory: 'By directory (per-directory)',
+    },
     edgeTitle: 'Edge',
     edgeSourceLabel: 'Source',
     edgeTargetLabel: 'Target node',

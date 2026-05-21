@@ -26,6 +26,7 @@ import type {
   WorkflowValidationIssue,
   WorkflowValidationResult,
 } from '@agent-workflow/shared'
+import { validateShardingStrategy } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { listAgents } from '@/services/agent'
 import { listPlugins } from '@/services/plugin'
@@ -433,6 +434,30 @@ export function validateWorkflowDef(
             }
           }
         }
+        // RFC-055 — shardingStrategy field.
+        // Missing field is a warning, not an error: the scheduler falls back
+        // to per-file when undefined (services/scheduler.ts:1680), so old
+        // workflows / yaml-edited fixtures still run. UI writes are always
+        // explicit, so any user-edited workflow that lacks this field has
+        // skipped the inspector for a reason worth flagging.
+        const ss = (node as Record<string, unknown>).shardingStrategy
+        if (ss === undefined) {
+          issues.push({
+            code: 'agent-multi-sharding-missing',
+            message: `agent-multi node '${node.id}' missing shardingStrategy (will fall back to per-file)`,
+            pointer: node.id,
+            severity: 'warning',
+          })
+        } else {
+          const r = validateShardingStrategy(ss)
+          if (!r.ok) {
+            issues.push({
+              code: 'agent-multi-sharding-invalid',
+              message: shardingInvalidMessage(node.id, r.code),
+              pointer: node.id,
+            })
+          }
+        }
       }
     }
     if (node.kind === 'output') {
@@ -831,6 +856,22 @@ export function validateWorkflowDef(
 // -----------------------------------------------------------------------------
 // helpers
 // -----------------------------------------------------------------------------
+
+function shardingInvalidMessage(
+  nodeId: string,
+  code: 'kind-invalid' | 'n-missing' | 'n-out-of-range' | 'depth-out-of-range',
+): string {
+  switch (code) {
+    case 'kind-invalid':
+      return `agent-multi node '${nodeId}' shardingStrategy.kind must be one of per-file / per-n-files / per-directory`
+    case 'n-missing':
+      return `agent-multi node '${nodeId}' shardingStrategy per-n-files requires 'n' (integer ≥ 1)`
+    case 'n-out-of-range':
+      return `agent-multi node '${nodeId}' shardingStrategy per-n-files 'n' must be an integer ≥ 1`
+    case 'depth-out-of-range':
+      return `agent-multi node '${nodeId}' shardingStrategy per-directory 'depth' must be an integer ≥ 1`
+  }
+}
 
 function readString(node: unknown, key: string): string | undefined {
   if (typeof node !== 'object' || node === null) return undefined

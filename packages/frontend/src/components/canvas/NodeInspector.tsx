@@ -13,7 +13,13 @@
 // The drawer mutates the workflow definition in place; the parent route
 // owns the dirty/save bookkeeping.
 
-import type { Agent, WorkflowDefinition, WorkflowInput, WorkflowNode } from '@agent-workflow/shared'
+import type {
+  Agent,
+  ShardingStrategy,
+  WorkflowDefinition,
+  WorkflowInput,
+  WorkflowNode,
+} from '@agent-workflow/shared'
 import { CLARIFY_SOURCE_PORT_NAME } from '@agent-workflow/shared'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -22,6 +28,7 @@ import { Field, NumberInput, Switch, TextArea, TextInput } from '@/components/Fo
 import { ModelSelect } from '@/components/ModelSelect'
 import { computePorts } from './WorkflowCanvas'
 import { REVIEW_INPUT_HANDLE_ID, syncEdgeFromFormField } from './connectionSync'
+import { ShardingStrategyField } from './ShardingStrategyField'
 import { patchInputDef, renameInputKey } from './syncInputDefs'
 import { PromptPreview } from './PromptPreview'
 import { loopMemberCandidates } from './wrapperCandidates'
@@ -945,6 +952,13 @@ function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps)
                 {t('inspector.sourcePortDragHint')}
               </p>
             </Field>
+          )}
+
+          {node.kind === 'agent-multi' && (
+            <ShardingStrategyField
+              value={rec.shardingStrategy as ShardingStrategy | undefined}
+              onChange={(sp) => update({ shardingStrategy: sp })}
+            />
           )}
 
           <Field

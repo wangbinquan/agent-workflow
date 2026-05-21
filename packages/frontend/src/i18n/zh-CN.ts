@@ -1043,6 +1043,18 @@ export interface Resources {
     sourcePortPlaceholder: string
     sourcePortMissingSuffix: string
     sourcePortDragHint: string
+    // RFC-055 fanout sharding strategy
+    fieldShardingStrategy: string
+    fieldShardingStrategyHint: string
+    fieldShardingN: string
+    fieldShardingNHint: string
+    fieldShardingDepth: string
+    fieldShardingDepthHint: string
+    shardingKind: {
+      perFile: string
+      perNFiles: string
+      perDirectory: string
+    }
     edgeTitle: string
     edgeSourceLabel: string
     edgeTargetLabel: string
@@ -2741,6 +2753,17 @@ export const zhCN: Resources = {
     sourcePortPlaceholder: '— 选输出端口 —',
     sourcePortMissingSuffix: '（已失效）',
     sourcePortDragHint: '也可以从节点顶部的端口直接拖入上游输出来设置。',
+    fieldShardingStrategy: '分片策略',
+    fieldShardingStrategyHint: '决定 sourcePort 内容如何被切成 shard，分给多个子进程并行处理。',
+    fieldShardingN: '每分片文件数 (n)',
+    fieldShardingNHint: 'n ≥ 1，整数；最后一片可能不足 n 个文件。',
+    fieldShardingDepth: '目录深度 (depth)',
+    fieldShardingDepthHint: '留空 = 默认 1，即按 top-level 目录分组；2 表示按前两级路径分组。',
+    shardingKind: {
+      perFile: '每个文件一片 (per-file)',
+      perNFiles: '每 N 个文件一片 (per-n-files)',
+      perDirectory: '按目录分片 (per-directory)',
+    },
     edgeTitle: '边设置',
     edgeSourceLabel: '源',
     edgeTargetLabel: '目标节点',
