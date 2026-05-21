@@ -41,7 +41,7 @@ import { resolve } from 'node:path'
 
 import * as schema from '@/db/schema'
 import { docVersions, nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
-import { isProcessNodeKind, type NodeKind } from '@agent-workflow/shared'
+import { NODE_KIND_BEHAVIORS, type NodeKind } from '@agent-workflow/shared'
 
 interface CliArgs {
   taskId: string
@@ -188,7 +188,11 @@ async function main(): Promise<void> {
     if (r.errorMessage !== 'queued for retry') continue
     const k = kindOf.get(r.nodeId)
     if (k === undefined) continue
-    if (isProcessNodeKind(k)) continue
+    // Skip kinds that would cascade on retry — those are "real" placeholders.
+    // We only want to delete placeholders for non-process kinds (review /
+    // clarify / output / input) where the retry-cascade row was minted
+    // accidentally pre-RFC-052.
+    if (NODE_KIND_BEHAVIORS[k].retryCascade === 'mint-placeholder') continue
     placeholderIds.push(r.id)
   }
 

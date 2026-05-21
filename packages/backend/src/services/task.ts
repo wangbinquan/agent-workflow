@@ -13,7 +13,7 @@ import type {
   TaskNodeRuns,
   TaskSummary,
 } from '@agent-workflow/shared'
-import { isProcessNodeKind } from '@agent-workflow/shared'
+import { NODE_KIND_BEHAVIORS } from '@agent-workflow/shared'
 import { and, asc, desc, eq, gt, inArray, ne, or } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 import { ulid } from 'ulid'
@@ -653,16 +653,20 @@ export async function retryNode(
   // explicitly retried target the source-of-truth is `runRow` (the row the
   // user picked); for cascaded downstream nodes we inherit from each node's
   // own latest row.
-  // RFC-052: skip downstream non-process kinds (input/output/review/clarify).
-  // The user-picked node (`runRow.nodeId`) is included unconditionally — if
-  // someone retries a review/clarify node directly, that's a different
-  // operation handled elsewhere (or a no-op the user explicitly chose).
-  // Unknown kinds (snapshot missing / older schema) default to "process" to
-  // preserve the legacy behavior.
+  // RFC-052 / RFC-053 PR-C: per-kind cascade behavior comes from
+  // `NODE_KIND_BEHAVIORS[k].retryCascade` (shared/node-kind-behavior.ts).
+  // The user-picked node (`runRow.nodeId`) is included unconditionally —
+  // direct retry on a non-process node is a different operation the user
+  // explicitly chose. Downstream nodes are filtered by the table: kinds
+  // with retryCascade='mint-placeholder' get a placeholder row; kinds with
+  // 'skip' don't (RFC-052 fix). Unknown kinds (snapshot missing / older
+  // schema) default to 'mint-placeholder' to preserve the legacy
+  // pre-RFC-052 behavior on stale data.
   const targets = new Set<string>([runRow.nodeId])
   for (const id of downstream) {
     const k = kindOf.get(id)
-    if (k === undefined || isProcessNodeKind(k)) {
+    const cascade = k === undefined ? 'mint-placeholder' : NODE_KIND_BEHAVIORS[k].retryCascade
+    if (cascade === 'mint-placeholder') {
       targets.add(id)
     }
   }
