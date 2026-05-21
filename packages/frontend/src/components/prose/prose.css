@@ -404,6 +404,18 @@
   height: auto;
 }
 
+/* PlantUML SVG mounts under .review-diagram__svg, not directly under
+ * .prose__diagram, so the rule above misses it. Plus inline SVGs without
+ * explicit width/height don't derive intrinsic aspect-ratio from viewBox
+ * unless `display: block` (or inline-block) — without it the SVG keeps
+ * the viewBox's full height (e.g. 1580px) while we constrain its width,
+ * leaving huge vertical whitespace top+bottom from `xMidYMid meet`. */
+.prose .review-diagram__svg svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
 /* Source / hint fallbacks (plantuml unconfigured, plantuml/mermaid error)
  * override the centered diagram alignment — we're displaying raw text the
  * reader needs to scan line-by-line, not a centered figure. */
