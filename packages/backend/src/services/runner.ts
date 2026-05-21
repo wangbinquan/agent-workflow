@@ -1320,7 +1320,7 @@ async function pumpLines(
  * Different opencode versions / part kinds put it in different shapes; we
  * tolerate the common ones.
  */
-function extractTextFromEvent(evt: Record<string, unknown>): string | null {
+export function extractTextFromEvent(evt: Record<string, unknown>): string | null {
   const part = evt.part as Record<string, unknown> | undefined
   // shape: { type: 'text', part: { type: 'text', text: '...' } }
   if (part && typeof part === 'object') {
@@ -1334,7 +1334,7 @@ function extractTextFromEvent(evt: Record<string, unknown>): string | null {
 }
 
 /** Map an opencode JSON event to one of our enum kinds. */
-function inferEventKind(
+export function inferEventKind(
   evt: Record<string, unknown>,
 ): 'tool_use' | 'text' | 'reasoning' | 'permission_asked' | 'error' | 'step_start' | 'step_finish' {
   const t = evt.type

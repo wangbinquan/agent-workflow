@@ -18,7 +18,8 @@
     "test": "bun test",
     "build:binary": "bun run scripts/build-binary.ts",
     "e2e": "playwright test",
-    "e2e:install": "playwright install --with-deps chromium"
+    "e2e:install": "playwright install --with-deps chromium",
+    "record:opencode": "bun run scripts/record-opencode.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
