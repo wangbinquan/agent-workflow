@@ -52,10 +52,72 @@ jobs:
         run: bun run typecheck
 
       - name: Test (backend + shared, bun:test)
-        run: bun test
+        # --coverage-reporter accepts multiple values: keep the human-readable
+        # text summary in the log and also emit lcov for codecov upload.
+        run: bun test --coverage --coverage-reporter=text --coverage-reporter=lcov
 
       - name: Test (frontend, vitest)
         run: bun run --filter @agent-workflow/frontend test
+
+      - name: Upload coverage to Codecov
+        # Tokenless upload works for public repos. Only upload from one OS to
+        # avoid double-counting the same lines; ubuntu is the canonical leg.
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
+          disable_search: true
+
+  scans:
+    # Lightweight static gates that run in parallel with `check`. Ubuntu-only
+    # because none of these are OS-specific. Kept in a single job so the four
+    # actions share one checkout / bun install.
+    name: Static scans (audit + actionlint + shellcheck + gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # gitleaks needs full history to scan commits; the other tools are
+          # happy with shallow but the extra depth is cheap.
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.x'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: bun audit (production dependency vulnerabilities)
+        # `--prod` skips devDependencies — they don't ship in the single
+        # binary, so their advisories aren't user-facing. If this gate becomes
+        # noisy with unfixable transitive advisories, address per-advisory
+        # (override / patch / upstream issue); do NOT silently downgrade to
+        # continue-on-error.
+        run: bun audit --prod
+
+      - name: actionlint (GitHub Actions workflow lint)
+        # Pinned via the official downloader script so the version moves only
+        # when we explicitly bump it.
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
+
+      - name: shellcheck (shell script lint)
+        uses: ludeeus/action-shellcheck@2.0.0
+        env:
+          # Start strict — current scripts (`e2e/fixtures/*.sh`, hooks, fake-npm)
+          # are all `set -eu` clean. Loosen with SHELLCHECK_OPTS only if a
+          # legitimately unfixable warning appears.
+          SHELLCHECK_SEVERITY: error
+
+      - name: gitleaks (secret scanning)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          # Free for public repos; no GITLEAKS_LICENSE needed.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-binary:
     name: Build single-binary (smoke)
@@ -90,6 +152,19 @@ jobs:
 
       - name: Show artifact size
         run: ls -lh dist/
+
+      - name: Smoke-run binary (--version + doctor)
+        # `ls -lh` only checks the artifact exists; a build can succeed yet
+        # produce a binary that crashes at startup (broken bundle, missing
+        # native bindings, stripped permissions). Exec the binary to catch
+        # those before the artifact ships. `doctor` exercises opencode PATH
+        # resolution end-to-end and is fast.
+        run: |
+          set -euxo pipefail
+          bin=$(ls dist/agent-workflow-* | head -n 1)
+          chmod +x "$bin"
+          "$bin" --version
+          "$bin" doctor
 
       - name: Upload artifact
         uses: actions/upload-artifact@v6
