@@ -1,0 +1,75 @@
+# RFC-054 W3-4 — gitea test fixture for git-protocols e2e.
+#
+# Brings up a single Gitea instance on a host-private port matrix:
+#   * 3001/tcp → gitea HTTP UI + clone-over-HTTPS endpoint
+#   * 2222/tcp → gitea SSH (clone-over-ssh endpoint)
+#
+# Why a separate compose file (not the daemon's own docker-compose):
+# this fixture only exists for the W3-4 e2e suite. The platform itself
+# runs natively (no containers) — keeping the test fixture distinct
+# means `docker compose up` for the suite never collides with anything
+# a developer might be running for an unrelated task.
+#
+# Why port 3001 not 3000: Vite dev server defaults to 3000 / 3001 / 5173,
+# so 3001 is a frequent collision target. We've explicitly mapped to
+# 3001 with the comment so future dev-server tweaks don't accidentally
+# stomp it. If a hard conflict ever lands, change the LEFT side of the
+# mapping (host port) only — the right side (container port) is fixed
+# by gitea's own ENTRYPOINT.
+#
+# Bootstrap: the GITEA__security__INSTALL_LOCK=true env var skips the
+# install wizard so the admin token bootstrap can run immediately via
+# the gitea API. The actual admin user / repo / SSH key seeding happens
+# in `scripts/git-protocols/seed-gitea.sh` (called from the workflow).
+
+services:
+  gitea:
+    # Pin to a specific stable tag so the suite doesn't drift on
+    # `latest`. Bump on quarterly cadence when Gitea cuts a new minor.
+    image: gitea/gitea:1.22.6
+    container_name: aw-gitea-test
+    restart: unless-stopped
+    environment:
+      # Skip the install wizard — admin user is created via API by the
+      # seed script that follows compose up.
+      USER_UID: '1000'
+      USER_GID: '1000'
+      GITEA__security__INSTALL_LOCK: 'true'
+      GITEA__server__ROOT_URL: 'http://localhost:3001/'
+      GITEA__server__HTTP_PORT: '3000'
+      # SSH_PORT is what appears in clone URLs gitea emits — host-side.
+      # SSH_LISTEN_PORT is the internal port the built-in Go SSH server
+      # binds to inside the container. We MUST use a non-22 internal port
+      # because the gitea container ships its own openssh listening on
+      # 22 already (for the `git` user's authorized_keys forwarder), and
+      # double-binding fails with "address already in use".
+      GITEA__server__SSH_PORT: '2222'
+      GITEA__server__SSH_LISTEN_PORT: '2222'
+      GITEA__server__START_SSH_SERVER: 'true'
+      # Disable signup; only the seeded admin can create users.
+      GITEA__service__DISABLE_REGISTRATION: 'true'
+      # Required by gitea — sets sane defaults for the fixture.
+      GITEA__database__DB_TYPE: 'sqlite3'
+      GITEA__log__MODE: 'console'
+      GITEA__log__LEVEL: 'info'
+    ports:
+      - '3001:3000'
+      # Internal SSH port 2222 (set above to dodge the container's openssh
+      # which owns 22 by default).
+      - '2222:2222'
+    volumes:
+      # Persist gitea state to a named volume so consecutive `up` calls
+      # within a CI workflow keep the seeded user/repo. Volume is torn
+      # down by `docker compose down -v` at the end of the workflow.
+      - gitea-data:/data
+    healthcheck:
+      # Block dependents until gitea is actually ready to serve API
+      # calls (otherwise the seed script races against startup).
+      test: ['CMD-SHELL', 'curl -sf http://127.0.0.1:3000/api/v1/version > /dev/null']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+volumes:
+  gitea-data:
