@@ -173,11 +173,15 @@ jobs:
       - name: Show artifact size
         run: ls -lh dist/
 
-      - name: Smoke-run binary (version)
+      - name: Smoke-run binary (version + doctor)
         # `ls -lh` only checks the artifact exists; a build can succeed yet
         # produce a binary that crashes at startup (broken bundle, missing
         # native bindings, stripped permissions). Exec the binary to catch
         # those before the artifact ships.
+        #
+        # `version` validates command dispatch + bundle integrity.
+        # `doctor` exercises opencode PATH resolution + git probe + the
+        # IS_EMBEDDED-aware migrations check end-to-end.
         #
         # NOTE: CLI uses subcommand-style (`agent-workflow version`), not
         # POSIX flag-style (`--version`) — see packages/backend/src/main.ts
@@ -186,22 +190,12 @@ jobs:
         # `find` instead of `ls | head` to satisfy actionlint's embedded
         # shellcheck (SC2012) — robust under names with whitespace even
         # though the canonical asset names here never contain any.
-        #
-        # `doctor` was originally included here but the compiled single
-        # binary always fails its `migrations folder` check: util/paths.ts
-        # resolves `migrationsDir` from `import.meta.dirname` which is baked
-        # into the binary as `/` (so the path becomes `/db/migrations`,
-        # missing). `start` has an `IS_EMBEDDED` branch that extracts
-        # embedded SQL to `~/.agent-workflow/runtime/migrations`; `doctor`
-        # does not. This is a real bug in `doctor` (an installed binary
-        # cannot self-diagnose), tracked as a follow-up — out of scope for
-        # this CI PR. `version` alone still catches broken bundles / bad
-        # bindings / command-dispatch regressions.
         run: |
           set -euxo pipefail
           bin=$(find dist -maxdepth 1 -type f -name 'agent-workflow-*' | head -n 1)
           chmod +x "$bin"
           "$bin" version
+          "$bin" doctor
 
       - name: Upload artifact
         uses: actions/upload-artifact@v6
