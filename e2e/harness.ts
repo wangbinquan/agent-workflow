@@ -25,12 +25,23 @@ export interface DaemonHandle {
   baseUrl: string
   /** Token the daemon generated on first run, parsed from its ready line. */
   token: string
-  /** Temp $AGENT_WORKFLOW_HOME for this session — wipes on teardown. */
+  /** Temp $AGENT_WORKFLOW_HOME for this session — wipes on teardown unless `keepHome=true`. */
   home: string
   /** Resolved path to the stub-opencode shim. */
   stubOpencode: string
-  /** Stop the daemon and remove the temp home. */
+  /** Stop the daemon and (unless `keepHome=true`) remove the temp home. */
   stop: () => Promise<void>
+  /**
+   * RFC-054 W1-3 — directly send a signal to the daemon child process.
+   * Used by crash-recovery.spec.ts to SIGKILL mid-task (vs. the graceful
+   * SIGTERM path that `stop()` walks). The promise resolves after the
+   * child has actually exited (or after `fallbackTimeoutMs` SIGKILL
+   * fallback; default 5s — bump to ≥ 35s when sending SIGTERM so the
+   * 30s graceful-shutdown budget can complete).
+   */
+  killChild: (signal?: NodeJS.Signals, fallbackTimeoutMs?: number) => Promise<void>
+  /** True if the home dir was provided externally (don't wipe on stop). */
+  keepHome: boolean
 }
 
 export interface SpawnOptions {
@@ -52,6 +63,13 @@ export interface SpawnOptions {
    * CLARIFY_STUB_ASK_SHARDS to drive the round-driven stub.
    */
   extraEnv?: Record<string, string>
+  /**
+   * RFC-054 W1-3 — reuse an existing AGENT_WORKFLOW_HOME directory instead
+   * of mkdtemp-ing a fresh one. Required for crash-recovery: kill daemon A,
+   * spawn daemon B against the same home so the SQLite db + worktrees are
+   * preserved. When set, `stop()` does NOT remove the directory.
+   */
+  home?: string
 }
 
 function platformSuffix(): string {
@@ -83,7 +101,10 @@ export async function startDaemon(opts: SpawnOptions = {}): Promise<DaemonHandle
     )
   }
 
-  const home = mkdtempSync(join(tmpdir(), 'aw-e2e-'))
+  // RFC-054 W1-3 — accept an existing home so the crash-recovery spec can
+  // SIGKILL daemon A and spawn daemon B against the same SQLite + worktrees.
+  const home = opts.home ?? mkdtempSync(join(tmpdir(), 'aw-e2e-'))
+  const keepHome = opts.home !== undefined
   mkdirSync(home, { recursive: true })
 
   const stubOpencode = opts.stubOpencode ?? resolve(here, 'fixtures', 'stub-opencode.sh')
@@ -222,12 +243,59 @@ export async function startDaemon(opts: SpawnOptions = {}): Promise<DaemonHandle
         res()
       })
     })
-    try {
-      rmSync(home, { recursive: true, force: true })
-    } catch {
-      // best-effort
+    if (!keepHome) {
+      try {
+        rmSync(home, { recursive: true, force: true })
+      } catch {
+        // best-effort
+      }
     }
   }
 
-  return { baseUrl: ready.baseUrl, token: ready.token, home, stubOpencode, stop }
+  // RFC-054 W1-3 — direct signal helper for crash-recovery spec. Sends
+  // `signal` (default SIGKILL) and waits for `child.exited` to land. After
+  // `fallbackTimeoutMs` of no exit, force-SIGKILLs the child so the test
+  // doesn't hang. Default 5s suits the SIGKILL case; pass ≥ 35s when
+  // sending SIGTERM so the daemon's 30s graceful-shutdown budget can run
+  // to completion without being short-circuited.
+  const killChild = async (
+    signal: NodeJS.Signals = 'SIGKILL',
+    fallbackTimeoutMs: number = 5_000,
+  ): Promise<void> => {
+    if (child.exitCode !== null || child.signalCode !== null) return
+    try {
+      child.kill(signal)
+    } catch {
+      // already dead
+    }
+    await new Promise<void>((res) => {
+      const t = setTimeout(() => {
+        try {
+          child.kill('SIGKILL')
+        } catch {
+          /* ignore */
+        }
+        res()
+      }, fallbackTimeoutMs)
+      if (child.exitCode !== null || child.signalCode !== null) {
+        clearTimeout(t)
+        res()
+        return
+      }
+      child.once('exit', () => {
+        clearTimeout(t)
+        res()
+      })
+    })
+  }
+
+  return {
+    baseUrl: ready.baseUrl,
+    token: ready.token,
+    home,
+    stubOpencode,
+    stop,
+    killChild,
+    keepHome,
+  }
 }
