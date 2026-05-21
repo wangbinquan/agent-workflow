@@ -13,6 +13,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runGit } from '../src/util/git'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTask } from '../src/services/scheduler'
+import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -271,7 +272,14 @@ describe('runTask: linear DAG (M1)', () => {
     expect(t?.errorMessage).toContain('exited with code 5')
   })
 
-  test('output nodes are skipped at run time (used by detail page)', async () => {
+  test('output nodes mint a virtual done node_run + snapshot bound port content', async () => {
+    // RFC-053 T3 alignment (see lifecycleInvariants.ts §T3). Previously the
+    // scheduler filtered output nodes out of every scope and short-circuited
+    // runOneNode for kind='output', so done tasks containing an output node
+    // permanently violated the T3 invariant (`task.status=done but not every
+    // output node has a done node_run`). The fix gives output nodes a virtual
+    // `done` row + node_run_outputs derived from their `ports[].bind`
+    // bindings; the detail page now reads outputs uniformly via node_runs.
     await seedAgent(h.db, 'a', ['summary'])
     const def: WorkflowDefinition = {
       $schema_version: 1,
@@ -298,10 +306,24 @@ describe('runTask: linear DAG (M1)', () => {
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
 
-    // The output node did NOT create a node_run.
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
-    expect(runs.find((r) => r.nodeId === 'o')).toBeUndefined()
     expect(runs.find((r) => r.nodeId === 'a')?.status).toBe('done')
+    const outRun = runs.find((r) => r.nodeId === 'o')
+    expect(outRun).toBeDefined()
+    expect(outRun?.status).toBe('done')
+
+    const outPorts = await h.db
+      .select()
+      .from(nodeRunOutputs)
+      .where(eq(nodeRunOutputs.nodeRunId, outRun!.id))
+    expect(outPorts).toHaveLength(1)
+    expect(outPorts[0]?.portName).toBe('final')
+    expect(outPorts[0]?.content).toBe('ok')
+
+    // End-to-end T3 invariant guard: a done task with this workflow must
+    // produce zero T3 findings. Locks in the fix at the integration level.
+    const inv = await runLifecycleInvariants({ db: h.db, scope: { taskId } })
+    expect(inv.openAlerts.filter((a) => a.rule === 'T3')).toHaveLength(0)
   })
 
   test('signal aborted before scheduling -> task status=canceled', async () => {

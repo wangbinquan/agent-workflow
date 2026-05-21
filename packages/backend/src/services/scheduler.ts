@@ -404,8 +404,11 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
   const { db, taskId, definition, opts } = state
   const { scopeIds, iteration, log } = args
 
-  // Filter scope nodes (exclude output sinks — they don't run).
-  const scopeNodes = definition.nodes.filter((n) => scopeIds.has(n.id) && n.kind !== 'output')
+  // Scope nodes include output sinks: they each get a virtual node_run that
+  // mirrors their upstream port content, so lifecycle invariant T3 (task.done
+  // ⟹ every output node has a done node_run) is satisfied and the detail page
+  // can read output values from node_run_outputs uniformly.
+  const scopeNodes = definition.nodes.filter((n) => scopeIds.has(n.id))
   // Upstream map restricted to in-scope sources.
   const upstreamsOf = buildScopeUpstreams(scopeNodes, definition.edges)
   const remaining = new Map(scopeNodes.map((n) => [n.id, n]))
@@ -638,7 +641,30 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   if (opts.signal?.aborted === true) {
     return { kind: 'canceled', summary: 'task canceled', message: 'signal aborted' }
   }
-  if (node.kind === 'output') return { kind: 'ok', summary: '', message: '' }
+  if (node.kind === 'output') {
+    // Output nodes are display-only sinks: no subprocess, no envelope. The
+    // node's declared `ports[]` bindings resolve to upstream (nodeId, portName)
+    // pairs (the canonical form, mirroring wrapper-loop's outputBindings; see
+    // workflow.validator.ts §output binding validation). We mint a virtual
+    // `done` node_run and snapshot each bound port's content into
+    // node_run_outputs so the detail page reads outputs uniformly and
+    // lifecycle invariant T3 (task done ⟹ every output node has a done run)
+    // is satisfied.
+    const bindings = readBindings(node, 'ports')
+    const nrId = await insertNodeRun(db, taskId, node.id, 'done', 0, iteration)
+    for (const b of bindings) {
+      const content = await readPortAtIteration(
+        db,
+        taskId,
+        b.bind.nodeId,
+        b.bind.portName,
+        iteration,
+      )
+      await db.insert(nodeRunOutputs).values({ nodeRunId: nrId, portName: b.name, content })
+    }
+    broadcastNodeStatus(taskId, nrId, node.id, 'done')
+    return { kind: 'ok', summary: '', message: '' }
+  }
 
   if (node.kind === 'wrapper-git') {
     return runGitWrapperNode(state, args)
@@ -2555,6 +2581,21 @@ function buildScopeUpstreams(
       if (!ids.has(inp.nodeId)) continue
       const list = m.get(n.id) ?? []
       if (!list.includes(inp.nodeId)) list.push(inp.nodeId)
+      m.set(n.id, list)
+    }
+    // Output nodes carry their dependencies in `ports[].bind` (not always as
+    // edges; the canvas editor emits both in practice but bindings are the
+    // canonical form per workflow.validator.ts §output bindings). Treating
+    // them as implicit upstream deps keeps the scheduler from snapshotting
+    // empty port content when an output node would otherwise be considered
+    // a graph root with no incoming edges.
+    if (n.kind === 'output') {
+      const bindings = readBindings(n, 'ports')
+      const list = m.get(n.id) ?? []
+      for (const b of bindings) {
+        if (!ids.has(b.bind.nodeId)) continue
+        if (!list.includes(b.bind.nodeId)) list.push(b.bind.nodeId)
+      }
       m.set(n.id, list)
     }
   }
