@@ -1,13 +1,22 @@
 #!/bin/sh
-# RFC-054 W1-3 — slow variant of stub-opencode.sh that sleeps before emitting
-# its envelope. Used by e2e/crash-recovery.spec.ts to keep a task in `running`
-# while the spec SIGKILLs the daemon mid-flight.
+# RFC-054 W1-3 / W1-4 — slow + controllable variant of stub-opencode.sh.
+# Used by e2e/crash-recovery.spec.ts (W1-3) to keep a task in `running` long
+# enough to SIGKILL the daemon, and by e2e/task-lifecycle-states.spec.ts
+# (W1-4) to drive failure / no-envelope / non-zero-exit paths.
 #
 # Controls (env var):
-#   STUB_OPENCODE_SLEEP_MS   integer; defaults to 0 (no sleep — behaves like
-#                            the fast stub). Floor-divided to whole seconds
-#                            for portable `sleep` because /bin/sh on macOS
-#                            doesn't support fractional sleeps.
+#   STUB_OPENCODE_SLEEP_MS       integer; defaults to 0 (no sleep — behaves
+#                                like the fast stub). Floor-divided to whole
+#                                seconds for portable `sleep` because /bin/sh
+#                                on macOS doesn't support fractional sleeps.
+#   STUB_OPENCODE_EXIT_CODE      integer; defaults to 0. Set to 1 (or any
+#                                non-zero) to simulate an exploded agent;
+#                                runner marks node_run failed.
+#   STUB_OPENCODE_SKIP_ENVELOPE  any non-empty value → omit the
+#                                <workflow-output> envelope line. Combined
+#                                with EXIT_CODE=0 this models "agent ran
+#                                cleanly but produced no envelope" (runner
+#                                detects missing envelope → fails the run).
 #
 # Behavior is otherwise identical to stub-opencode.sh: a single text event
 # carries the <workflow-output> envelope, exit 0.
@@ -54,5 +63,8 @@ if [ -n "${OPENCODE_AW_INVENTORY_OUT:-}" ]; then
 INVENTORY_JSON
 fi
 
-printf '%s\n' '{"type":"text","timestamp":0,"part":{"type":"text","text":"<workflow-output>\n  <port name=\"answer\">stub e2e output</port>\n</workflow-output>"}}'
-exit 0
+if [ -z "${STUB_OPENCODE_SKIP_ENVELOPE:-}" ]; then
+  printf '%s\n' '{"type":"text","timestamp":0,"part":{"type":"text","text":"<workflow-output>\n  <port name=\"answer\">stub e2e output</port>\n</workflow-output>"}}'
+fi
+
+exit "${STUB_OPENCODE_EXIT_CODE:-0}"
