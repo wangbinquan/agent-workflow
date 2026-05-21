@@ -303,7 +303,7 @@ Delete 弹窗：
 
 ### 7.1 Shared (`packages/shared/tests/`)
 
-- `git-url-parse.test.ts`：覆盖 ssh-scp / ssh-uri / https / http / 带 user:pass / 带 :port / 带 .git 后缀 / 无效（file://、裸字符串、空、含空格）共 12 case
+- `git-url-parse.test.ts`：覆盖 ssh-scp / ssh-uri / https / http / 带 user:pass / 带 :port / 带 .git 后缀 / 无效（`file://`、裸字符串、空、含空格）共 12 case
 - `git-url-redact.test.ts`：6 形态（带 user:pass、带 token、不带 cred、`ssh://`、`git@host:`、纯 http）
 - `git-url-cache-key.test.ts`：canonical 规范化使 `git@github.com:foo/bar.git` 与 `ssh://git@github.com/foo/bar` 与 `git@github.com:foo/bar/` 同 hash；带不同 user:pass 的 https 同 hash
 
