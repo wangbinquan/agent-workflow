@@ -76,17 +76,20 @@ describe('/repos page batch import button (RFC-033)', () => {
     expect(screen.getByTestId('batch-import-dialog')).toBeTruthy()
   })
 
-  // Locks in the webkit-nightly fix (run 26282474062): Safari does NOT
-  // focus <button> on click, so without an explicit pointerdown self-
-  // focus, the Dialog's `restoreRef = document.activeElement` captures
-  // <body> and Escape→focus-restore fails. The pointerdown handler is
-  // a one-line trigger-side workaround that keeps the Dialog primitive
-  // unchanged. Sourceless DOM event simulation skipped — happy-dom's
-  // synthetic pointer events don't always reflect the real focus
-  // behavior we're locking, so we assert at the JSX source level.
-  test('trigger button carries onPointerDown self-focus for Safari/WebKit focus restoration', () => {
+  // Locks in the webkit-nightly fix (runs 26282474062 + 26293636014):
+  // Safari/WebKit doesn't focus <button> on mouse click. We avoid the
+  // unreliable `document.activeElement`-at-open-time capture inside the
+  // Dialog by passing the trigger's ref explicitly via `triggerRef`,
+  // which the Dialog prefers on close. Locked at source level because
+  // the contract is "this trigger's ref reaches the Dialog" — a JSDOM
+  // simulation can't validate cross-browser focus behavior, only
+  // production / e2e webkit can.
+  test('trigger button forwards its ref to BatchImportDialog.triggerRef for focus restoration', () => {
     const src = readFileSync(resolve(__dirname, '..', 'src', 'routes', 'repos.tsx'), 'utf8')
-    expect(src).toMatch(/onPointerDown=\{\(e\)\s*=>\s*e\.currentTarget\.focus\(\)\}/)
+    // The trigger button must carry a ref (any name — assert structure).
+    expect(src).toMatch(/<button\s+ref=\{[a-zA-Z]+TriggerRef\}/)
+    // BatchImportDialog must receive that ref through triggerRef.
+    expect(src).toMatch(/triggerRef=\{[a-zA-Z]+TriggerRef\}/)
   })
 
   // Locks in the top-right placement aligned with /agents "新建代理" button

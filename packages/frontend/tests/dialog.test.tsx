@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/react'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import { Dialog } from '../src/components/Dialog'
 
@@ -177,6 +177,43 @@ describe('<Dialog />', () => {
     expect(ae).not.toBe(outside)
     expect(ae).not.toBe(document.body)
     expect(panel?.contains(ae)).toBe(true)
+  })
+
+  // Locks the explicit `triggerRef` contract added after webkit-nightly
+  // run 26293636014. Linux WebKit (Playwright WPE) doesn't focus <button>
+  // on click, so `document.activeElement` at open time is unreliable.
+  // Callers can pass `triggerRef` and the Dialog must prefer it on close.
+  test('triggerRef wins over activeElement-at-open for focus restoration', async () => {
+    function Probe(): ReactElement {
+      const triggerRef = useRef<HTMLButtonElement | null>(null)
+      const [open, setOpen] = useState(false)
+      return (
+        <>
+          <button ref={triggerRef} data-testid="real-trigger" onClick={() => setOpen(true)}>
+            Open
+          </button>
+          <Dialog open={open} onClose={() => setOpen(false)} title="t" triggerRef={triggerRef}>
+            <button data-testid="inside">Inside</button>
+          </Dialog>
+        </>
+      )
+    }
+    const { rerender: _rerender } = render(<Probe />)
+    // Programmatically open the dialog WITHOUT focusing the trigger first
+    // (simulating Safari's "click doesn't focus" behaviour where
+    // document.activeElement at open is <body>, not the trigger).
+    const opener = document.querySelector<HTMLButtonElement>('[data-testid="real-trigger"]')
+    expect(opener).not.toBeNull()
+    // Sanity: ensure body is the active element (not the trigger).
+    ;(document.body as HTMLElement).focus?.()
+    opener?.click()
+    // Wait for the dialog's initial-focus setTimeout(0).
+    await new Promise((r) => setTimeout(r, 5))
+    // Close via Escape → effect cleanup runs → Dialog restores focus
+    // to triggerRef.current (the button), NOT to <body>.
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await new Promise((r) => setTimeout(r, 5))
+    expect(document.activeElement?.getAttribute('data-testid')).toBe('real-trigger')
   })
 
   test('focusin redirect: focusing inside the panel is a no-op (does not bounce focus around)', () => {

@@ -5,7 +5,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { CachedRepo, ListCachedReposResponse } from '@agent-workflow/shared'
 import { redactGitUrl } from '@agent-workflow/shared'
@@ -45,6 +45,10 @@ function ReposPage() {
 
   const [pendingDelete, setPendingDelete] = useState<CachedRepo | null>(null)
   const [batchImportOpen, setBatchImportOpen] = useState(false)
+  // Captured so the Dialog can restore focus here on close, even on
+  // Safari/WebKit where mouse-clicking a <button> doesn't capture it
+  // via `document.activeElement`. See e2e/keyboard-flows.spec.ts.
+  const batchImportTriggerRef = useRef<HTMLButtonElement | null>(null)
   const [activeBatchId, setActiveBatchId] = useState<string | null>(() => {
     try {
       return localStorage.getItem(BATCH_ID_LS_KEY)
@@ -71,15 +75,10 @@ function ReposPage() {
           <p className="page__hint">{t('repos.hint')}</p>
         </div>
         <button
+          ref={batchImportTriggerRef}
           type="button"
           className="btn btn--primary"
           data-testid="repos-batch-import-button"
-          // Safari/WebKit doesn't focus <button> on click (only form
-          // controls); without an explicit focus here, the Dialog's
-          // `restoreRef = document.activeElement` captures <body> and
-          // closes can't restore focus to this trigger on webkit.
-          // Locked by e2e/keyboard-flows.spec.ts (Escape→restore-focus).
-          onPointerDown={(e) => e.currentTarget.focus()}
           onClick={() => setBatchImportOpen(true)}
         >
           {t('repos.batchImport.button')}
@@ -91,6 +90,7 @@ function ReposPage() {
         onClose={() => setBatchImportOpen(false)}
         activeBatchId={activeBatchId}
         onActiveBatchIdChange={setActiveBatchId}
+        triggerRef={batchImportTriggerRef}
       />
 
       {list.isLoading && <LoadingState label={t('repos.loading')} data-testid="repos-loading" />}

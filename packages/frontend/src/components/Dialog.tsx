@@ -24,6 +24,16 @@ export interface DialogProps {
   children: ReactNode
   footer?: ReactNode
   initialFocusRef?: RefObject<HTMLElement | null>
+  /**
+   * Element to focus on close. Pass the ref of the trigger element so a
+   * keyboard user lands back where they started. The Dialog falls back
+   * to whatever `document.activeElement` was at open time, but that's
+   * fragile across browsers — Safari/WebKit doesn't focus `<button>` on
+   * mouse click, so capturing at open time may leave us with `<body>`
+   * and close-time focus restoration becomes a no-op. Pass `triggerRef`
+   * explicitly when the contract matters (see e2e/keyboard-flows.spec.ts).
+   */
+  triggerRef?: RefObject<HTMLElement | null>
   closeOnOverlayClick?: boolean
   closeOnEsc?: boolean
   'aria-label'?: string
@@ -69,7 +79,12 @@ export function Dialog(props: DialogProps): ReactElement | null {
   }, [props.open, closeOnEsc, props])
 
   // Focus management: remember the element that had focus before we
-  // opened so we can hand it back on close; set initial focus.
+  // opened so we can hand it back on close; set initial focus. The
+  // explicit `triggerRef` prop wins over the auto-captured
+  // `document.activeElement` — that auto-capture lies on Safari/WebKit
+  // where mouse-clicking a `<button>` does NOT focus it (it captures
+  // `<body>` instead, and `body.focus()` on close is a no-op). Locked
+  // by e2e/keyboard-flows.spec.ts (Escape→focus-restore).
   const restoreRef = useRef<HTMLElement | null>(null)
   useEffect(() => {
     if (!props.open) return
@@ -83,9 +98,10 @@ export function Dialog(props: DialogProps): ReactElement | null {
     }, 0)
     return () => {
       window.clearTimeout(t)
-      restoreRef.current?.focus?.()
+      const restoreTarget = props.triggerRef?.current ?? restoreRef.current
+      restoreTarget?.focus?.()
     }
-  }, [props.open, props.initialFocusRef])
+  }, [props.open, props.initialFocusRef, props.triggerRef])
 
   // Focus trap — yank focus back whenever it lands outside the panel.
   // The previous implementation intercepted Tab/Shift+Tab keydowns and
@@ -100,16 +116,33 @@ export function Dialog(props: DialogProps): ReactElement | null {
   // Locked by tests/dialog.test.tsx and e2e/keyboard-flows.spec.ts.
   useEffect(() => {
     if (!props.open) return
+    const yankBack = () => {
+      const panel = panelRef.current
+      if (panel === null) return
+      const ae = document.activeElement
+      if (ae !== null && ae !== document.body && panel.contains(ae)) return
+      const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE))
+      ;(focusables[0] ?? panel).focus?.()
+    }
     const onFocusIn = (e: FocusEvent) => {
       const panel = panelRef.current
       if (panel === null) return
       const target = e.target as Node | null
       if (target !== null && panel.contains(target)) return
-      const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE))
-      ;(focusables[0] ?? panel).focus?.()
+      yankBack()
     }
+    // `focusout` safety net: Linux WebKit (Playwright WPE build) doesn't
+    // reliably fire `focusin` on `body` when Tab walks past the panel's
+    // last focusable. The corresponding `focusout` on the panel-side
+    // element DOES fire — defer via microtask so `document.activeElement`
+    // has settled, then redirect if it ended up outside.
+    const onFocusOut = () => queueMicrotask(yankBack)
     document.addEventListener('focusin', onFocusIn)
-    return () => document.removeEventListener('focusin', onFocusIn)
+    document.addEventListener('focusout', onFocusOut)
+    return () => {
+      document.removeEventListener('focusin', onFocusIn)
+      document.removeEventListener('focusout', onFocusOut)
+    }
   }, [props.open])
 
   if (!props.open) return null

@@ -11,7 +11,7 @@
 
 import type { BatchImportRow, BatchImportSnapshot } from '@agent-workflow/shared'
 import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
@@ -22,6 +22,8 @@ interface BatchImportDialogProps {
   onClose: () => void
   activeBatchId: string | null
   onActiveBatchIdChange: (id: string | null) => void
+  /** Forwarded to <Dialog triggerRef> so close restores focus to the trigger. */
+  triggerRef?: RefObject<HTMLElement | null>
 }
 
 type View = 'input' | 'progress'
@@ -31,6 +33,7 @@ export function BatchImportDialog({
   onClose,
   activeBatchId,
   onActiveBatchIdChange,
+  triggerRef,
 }: BatchImportDialogProps) {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -226,6 +229,7 @@ export function BatchImportDialog({
       panelClassName="batch-import-dialog"
       data-testid="batch-import-dialog"
       footer={footer}
+      triggerRef={triggerRef}
     >
       <div>
         {errorMsg !== null && <div className="error-box">{errorMsg}</div>}
