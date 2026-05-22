@@ -43,3 +43,7 @@ bun.lockb
 
 # local app data should never be committed; only here as defense-in-depth
 .agent-workflow/
+
+# atomic-write scratch from saveConfigRaw (config/index.ts) — `.tmp-<pid>-<ts>`
+# files get orphaned when a backend test aborts between writeFileSync + rename.
+.config.json.tmp-*
