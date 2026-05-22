@@ -3,6 +3,7 @@
 // imports. Mirrors design.md §7.2.
 
 import type { AgentOutputKindsMap } from './schemas/agent'
+import { CROSS_CLARIFY_UPDATE_DIRECTIVE_TEXT } from './clarify-cross'
 import { groupPortsByKind } from './outputKinds'
 
 /**
@@ -147,6 +148,19 @@ export interface CrossClarifyPromptContext {
    *  drew Q&A from. Lets agent templates reference "you are being reviewed
    *  by {{__external_feedback_sources__}} this round". */
   sourcesCsv?: string
+  /**
+   * RFC-056 §6 update mode (2026-05-22 amendment): pre-rendered markdown body
+   * of the designer's last done output (one `### <port_name>` section per
+   * declared output port). When present, `shared/prompt.ts` emits a
+   * `## Prior Output (to be updated)` section AND a `## Update Directive`
+   * section so the agent knows to update the prior draft rather than
+   * regenerate. The scheduler populates this only when the rerun was
+   * triggered by a cross-clarify submit (NOT for fresh first-time runs).
+   *
+   * Empty string OR undefined means "no prior output to update" — emit
+   * neither section (legacy regenerate-from-inputs behaviour).
+   */
+  priorOutputBlock?: string
 }
 
 export interface RenderPromptInput {
@@ -424,16 +438,30 @@ export function renderUserPrompt(input: RenderPromptInput): string {
   // after RFC-023 self-clarify auto-append so a designer that has BOTH
   // sources of feedback in the same rerun shows them in stable order:
   //   ## Self Clarify Q&A (RFC-023, if any)
+  //   ## Prior Output (to be updated) (RFC-056 update mode, if any)
   //   ## External Feedback (RFC-056, if any)
+  //   ## Update Directive (RFC-056 update mode, if any)
   // Two iteration counters (clarifyIteration / crossClarifyIteration) run
-  // orthogonally — see RFC-056 design.md §6.3.
+  // orthogonally — see RFC-056 design.md §6.3 + 2026-05-22 amendment.
   if (xcc !== undefined) {
+    // §6 update-mode prior-output section (renders BEFORE External Feedback
+    // so the agent reads "here's the draft you're updating" → "here's what
+    // the user wants changed" in that order).
+    if (xcc.priorOutputBlock !== undefined && xcc.priorOutputBlock.trim().length > 0) {
+      sections += `\n\n## Prior Output (to be updated)\n${xcc.priorOutputBlock}`
+    }
     if (
       xcc.block !== undefined &&
       xcc.block.trim().length > 0 &&
       !referenced.has('__external_feedback__')
     ) {
       sections += `\n\n## External Feedback\n${xcc.block}`
+    }
+    // §6 update-mode directive (renders AFTER External Feedback so it's the
+    // last instruction before the protocol block — primes the agent's
+    // "what do I do this round" mental model on update-mode terms).
+    if (xcc.priorOutputBlock !== undefined && xcc.priorOutputBlock.trim().length > 0) {
+      sections += `\n\n## Update Directive\n${CROSS_CLARIFY_UPDATE_DIRECTIVE_TEXT}`
     }
   }
 

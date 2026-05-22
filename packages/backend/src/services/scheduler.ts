@@ -26,6 +26,7 @@ import {
   WorkflowDefinitionSchema,
   agentHasClarifyChannel,
   agentHasExternalFeedbackChannel,
+  buildPriorOutputBlock,
   findClarifyNodeForAgent,
   findCrossClarifyNodeForQuestioner,
   findDesignerNodeForCrossClarify,
@@ -1126,6 +1127,50 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           })
         }
 
+        // RFC-056 §6 update mode (2026-05-22 amendment): when this rerun was
+        // triggered by a cross-clarify submit, fetch the designer's latest
+        // done node_run for this (taskId, nodeId, iteration) so we can:
+        //   1. Inject its output verbatim as `## Prior Output (to be updated)`
+        //      so the agent reads the working draft.
+        //   2. Use its `clarifyIteration` as the cutoff that drops the prior
+        //      self-clarify Q&A rounds from the prompt (those rounds' answers
+        //      are already baked into that draft — repeating them is pure
+        //      token waste + mis-anchors the agent to regenerate).
+        //
+        // Trigger condition: hasExternalFeedbackChannel + this row's
+        // crossClarifyIteration > 0 (i.e. NOT the first ever designer run).
+        // The currentRunRow.retryIndex === 0 sub-condition keeps the update
+        // path scoped to fresh cross-clarify reruns, not in-attempt retries
+        // that might temporarily shadow the same row.
+        const currentCrossClarifyIteration = currentRunRow?.crossClarifyIteration ?? 0
+        const isCrossClarifyTriggeredRerun =
+          hasExternalFeedbackChannel &&
+          currentCrossClarifyIteration > 0 &&
+          (currentRunRow?.retryIndex ?? 0) === 0
+        let priorDoneDesigner: typeof nodeRuns.$inferSelect | undefined
+        if (isCrossClarifyTriggeredRerun) {
+          const priorRows = await db
+            .select()
+            .from(nodeRuns)
+            .where(
+              and(
+                eq(nodeRuns.taskId, taskId),
+                eq(nodeRuns.nodeId, node.id),
+                eq(nodeRuns.status, 'done'),
+              ),
+            )
+          // Latest done row with crossClarifyIteration < current is the one
+          // whose output became the working draft for this cross-clarify
+          // rerun. Pick by isFresherNodeRun for the same reason
+          // readPortAtIteration does (RFC-040 clarify shadowing bug).
+          for (const r of priorRows) {
+            if (r.crossClarifyIteration >= currentCrossClarifyIteration) continue
+            if (r.parentNodeRunId !== null) continue
+            if (isFresherNodeRun(r, priorDoneDesigner)) priorDoneDesigner = r
+          }
+        }
+        const historyCutoffClarifyIteration = priorDoneDesigner?.clarifyIteration
+
         const clarifyContext = hasClarifyChannel
           ? await buildClarifyPromptContext({
               db,
@@ -1145,13 +1190,15 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
               // comments. Gate the directive propagation on isClarifyRerun
               // so 'stop' truly only suppresses the immediate next rerun.
               applyLatestDirective: isClarifyRerun,
+              ...(historyCutoffClarifyIteration !== undefined
+                ? { historyCutoffClarifyIteration }
+                : {}),
             })
           : undefined
-        // RFC-056: when this designer has External Feedback channel + has
-        // already been rerun by cross-clarify (crossClarifyIteration > 0),
-        // build the External Feedback prompt block sourced from every
-        // directive='continue' session targeting it.
-        const currentCrossClarifyIteration = currentRunRow?.crossClarifyIteration ?? 0
+        // RFC-056: build the External Feedback context + (if update-mode)
+        // the prior output block. Both are part of the same
+        // CrossClarifyPromptContext so renderUserPrompt emits Prior Output
+        // → External Feedback → Update Directive in stable order.
         const crossClarifyContext = hasExternalFeedbackChannel
           ? await buildExternalFeedbackContext({
               db,
@@ -1162,6 +1209,28 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
               definition,
             })
           : undefined
+        // Compose the prior-output block from the latest done designer's
+        // captured port outputs. The agent's declared outputs[] determines
+        // the order so the block is deterministic across reruns. Empty
+        // outputs are dropped by buildPriorOutputBlock itself.
+        if (
+          isCrossClarifyTriggeredRerun &&
+          priorDoneDesigner !== undefined &&
+          crossClarifyContext !== undefined
+        ) {
+          const captured = await db
+            .select()
+            .from(nodeRunOutputs)
+            .where(eq(nodeRunOutputs.nodeRunId, priorDoneDesigner.id))
+          const byPort = new Map(captured.map((r) => [r.portName, r.content]))
+          const ordered = (agent.outputs ?? [])
+            .map((p) => ({ portName: p, content: byPort.get(p) ?? '' }))
+            .filter((o) => o.content.length > 0)
+          const priorOutputBlock = buildPriorOutputBlock(ordered)
+          if (priorOutputBlock.length > 0) {
+            crossClarifyContext.priorOutputBlock = priorOutputBlock
+          }
+        }
         // RFC-023 directive iteration: when the last answered session was
         // submitted with directive='stop', this single rerun MUST NOT see
         // the <workflow-clarify> protocol block — the answersBlock already

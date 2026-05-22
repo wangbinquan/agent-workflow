@@ -824,6 +824,16 @@ export interface ExternalFeedbackPromptContext {
   block: string
   iteration: string
   sourcesCsv: string
+  /**
+   * RFC-056 §6 update mode (2026-05-22 amendment): pre-rendered designer's
+   * last done output (via shared `buildPriorOutputBlock`), populated only
+   * when the rerun was triggered by a cross-clarify submit AND the prior
+   * done node_run captured at least one non-empty port output. The shared
+   * `renderUserPrompt` emits `## Prior Output (to be updated)` +
+   * `## Update Directive` sections when this is set. Undefined / empty
+   * preserves legacy regenerate-from-inputs behaviour.
+   */
+  priorOutputBlock?: string
 }
 
 /**

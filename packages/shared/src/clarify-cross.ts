@@ -36,6 +36,27 @@ import type { ClarifyAnswer, ClarifyQuestion } from './schemas/clarify'
  *  catch silent renames in `shared/prompt.ts`. */
 export const CROSS_CLARIFY_EXTERNAL_FEEDBACK_BLOCK_TITLE = '## External Feedback' as const
 
+/** RFC-056 §6 update mode (2026-05-22 amendment): when cross-clarify triggers
+ *  a designer rerun, the prompt switches from "regenerate from inputs" to
+ *  "update prior output". The framework injects two extra sections — the
+ *  designer's last done output verbatim + an explicit update directive — so
+ *  the agent's mental model matches the product semantic (cross-clarify Q&A
+ *  is a change driver, not a from-scratch signal). Constants exported so
+ *  regression-guard grep tests can pin the literal headings.
+ */
+export const CROSS_CLARIFY_PRIOR_OUTPUT_BLOCK_TITLE = '## Prior Output (to be updated)' as const
+export const CROSS_CLARIFY_UPDATE_DIRECTIVE_BLOCK_TITLE = '## Update Directive' as const
+
+/** Stable English directive text that primes the designer for update mode.
+ *  Kept short — opencode is good at the rest once the contract is clear. */
+export const CROSS_CLARIFY_UPDATE_DIRECTIVE_TEXT = [
+  'Your goal this round is to **update** the prior output above to incorporate the',
+  'External Feedback Q&A. Do NOT regenerate the output from scratch. Preserve every',
+  'detail of the prior output that the External Feedback does not contradict; only',
+  'change the parts the cross-clarify answers require. Treat the External Feedback',
+  'as the source of changes, the prior output as the working draft.',
+].join(' ')
+
 // -----------------------------------------------------------------------------
 // envelope parsing — lifts the RFC-023 5-question cap for the cross path.
 // -----------------------------------------------------------------------------
@@ -143,6 +164,47 @@ export function buildExternalFeedbackBlock(sources: CrossClarifySourceContext[])
  */
 export function renderCrossClarifySource(src: CrossClarifySourceContext): string {
   return buildExternalFeedbackBlock([src])
+}
+
+/**
+ * RFC-056 §6 update mode: render the designer's last done output verbatim so
+ * the agent can read the working draft instead of regenerating from scratch.
+ *
+ * Format:
+ *   ### <port_name>
+ *
+ *   <content body>
+ *
+ * Each output port gets a sub-heading + the captured content body. Ports are
+ * emitted in the declared order on the agent's outputs[]. Returns ONLY the
+ * body — the leading `## Prior Output (to be updated)` heading is applied
+ * by `shared/prompt.ts` via the auto-append mechanism.
+ *
+ * Empty / NULL content rows are dropped (no `### port_name` heading with
+ * empty body); the goal is a clean draft for the agent to update.
+ *
+ * For markdown_file outputs the content row may be the raw markdown body
+ * (when the framework captured it post-port-validation). Path-shaped
+ * content is left as-is — the designer's prompt template can resolve via
+ * filesystem read if needed; mixing raw + path is a port-kind decision
+ * outside this renderer's scope.
+ */
+export function buildPriorOutputBlock(
+  outputs: ReadonlyArray<{
+    portName: string
+    content: string
+  }>,
+): string {
+  if (outputs.length === 0) return ''
+  const lines: string[] = []
+  for (const o of outputs) {
+    if (o.content.trim().length === 0) continue
+    lines.push(`### ${o.portName}`)
+    lines.push('')
+    lines.push(o.content)
+    lines.push('')
+  }
+  return lines.join('\n').trimEnd()
 }
 
 /**

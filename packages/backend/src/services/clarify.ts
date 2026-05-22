@@ -516,6 +516,21 @@ export interface BuildClarifyPromptContextArgs {
    * Locked by clarify-stop-directive-scoped-to-clarify-rerun.test.ts.
    */
   applyLatestDirective?: boolean
+  /**
+   * RFC-056 §6 update mode (2026-05-22 amendment): when set to a non-negative
+   * integer, only self-clarify sessions with `iterationIndex >= cutoff` are
+   * surfaced — older sessions are considered "already baked into a prior
+   * done output" and dropped from the prompt. The scheduler computes this
+   * cutoff as `latestDoneDesigner.clarifyIteration` when a cross-clarify
+   * submit triggered the current rerun, so the designer reading the prompt
+   * gets the prior output as the working draft + ONLY the new self-clarify
+   * Q&A since that output (if any) — never the redundant full Q&A history
+   * already embodied in that draft.
+   *
+   * Default `undefined` preserves the full-history behaviour for normal
+   * self-clarify reruns / review-iterate / process-retry paths.
+   */
+  historyCutoffClarifyIteration?: number
 }
 
 /**
@@ -545,11 +560,25 @@ export async function buildClarifyPromptContext(
   const allRows = await db_selectAnsweredSessionsForRerun(args)
   if (allRows.length === 0) return undefined
 
+  // RFC-056 §6 update mode: when a cross-clarify rerun is in progress, drop
+  // self-clarify rounds with iterationIndex < cutoff. Those rounds' answers
+  // are already baked into the prior done output (surfaced separately via
+  // `priorOutputBlock`); repeating them here would waste tokens AND mis-anchor
+  // the designer to regenerate. If the cutoff prunes all rows, return
+  // undefined so no clarify section emits — the agent reads only Prior
+  // Output + External Feedback + Update Directive that round.
+  const cutoff = args.historyCutoffClarifyIteration
+  const postCutoffRows =
+    cutoff !== undefined && cutoff >= 0
+      ? allRows.filter((r) => r.iterationIndex >= cutoff)
+      : allRows
+  if (postCutoffRows.length === 0) return undefined
+
   // RFC-026: inline mode collapses the dump to the single most-recent round.
   // The runner is about to spawn opencode with `--session <prior-id>` so
   // earlier rounds live in opencode's session memory already.
   const inlineMode = args.sessionMode === 'inline'
-  const rows = inlineMode ? allRows.slice(-1) : allRows
+  const rows = inlineMode ? postCutoffRows.slice(-1) : postCutoffRows
 
   const questionParts: string[] = []
   const answerParts: string[] = []

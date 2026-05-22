@@ -659,6 +659,140 @@ describe('buildClarifyPromptContext', () => {
     expect(ctx?.answersBlock ?? '').toContain('User directive: STOP CLARIFYING')
   })
 
+  // RFC-056 §6 update mode (2026-05-22 amendment) — when a cross-clarify
+  // submit triggers the designer rerun, the prompt should NOT replay the
+  // self-clarify Q&A rounds that are already baked into the prior done
+  // output. The scheduler passes `historyCutoffClarifyIteration` =
+  // priorDoneDesigner.clarifyIteration so any session with
+  // iterationIndex < cutoff is filtered out. If a new self-clarify round
+  // fired SINCE that prior done output, that round (iterationIndex >=
+  // cutoff) still surfaces, matching the user-stated rule "if this node
+  // triggers clarify again, accumulate from new clarify on".
+  test('historyCutoffClarifyIteration: filters sessions with iterationIndex < cutoff (sessions baked into prior output)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { taskId } = await seedTask(db)
+
+    const seedRound = async (
+      runId: string,
+      iterationIndex: number,
+      questionTitle: string,
+      pickIndex: number,
+    ): Promise<void> => {
+      await db.insert(nodeRuns).values({
+        id: runId,
+        taskId,
+        nodeId: 'designer',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        clarifyIteration: iterationIndex,
+      })
+      const { clarifyNodeRunId } = await createClarifySession({
+        db,
+        taskId,
+        sourceAgentNodeId: 'designer',
+        sourceAgentNodeRunId: runId,
+        sourceShardKey: null,
+        clarifyNodeId: 'clarify1',
+        iterationIndex,
+        questions: [makeQuestion({ title: questionTitle })],
+      })
+      await submitClarifyAnswers({
+        db,
+        clarifyNodeRunId,
+        answers: [makeAnswer({ selectedOptionIndices: [pickIndex] })],
+      })
+    }
+
+    // Three rounds of self-clarify: rounds 0..2 are baked into the designer's
+    // done output at clarifyIteration=2 (this is the cross-clarify rerun's
+    // "prior draft"). Round 3 is a NEW self-clarify the designer asked AFTER
+    // that done output (e.g., cross-clarify triggered designer to rerun, the
+    // updated designer emitted another clarify). The cross-clarify rerun
+    // prompt should surface ONLY round 3 — rounds 0..2 are redundant with
+    // the prior output the agent reads as the working draft.
+    await seedRound('nr_r0', 0, 'Which database?', 0) // baked into prior output
+    await seedRound('nr_r1', 1, 'Which ORM?', 1) // baked into prior output
+    await seedRound('nr_r2', 2, 'Which migration tool?', 2) // baked into prior output
+    await seedRound('nr_r3', 3, 'New question after cross-clarify?', 0) // NEW since prior output
+
+    // Without cutoff: legacy full-history behaviour — all 4 rounds appear.
+    const fullCtx = await buildClarifyPromptContext({
+      db,
+      definition: emptyDefinition(),
+      taskId,
+      agentNodeId: 'designer',
+      targetIteration: 4,
+      shardKey: null,
+    })
+    expect(fullCtx?.questionsBlock ?? '').toContain('Which database?')
+    expect(fullCtx?.questionsBlock ?? '').toContain('Which ORM?')
+    expect(fullCtx?.questionsBlock ?? '').toContain('Which migration tool?')
+    expect(fullCtx?.questionsBlock ?? '').toContain('New question after cross-clarify?')
+
+    // With cutoff=3 (prior output's clarifyIteration is 2 → cutoff for next
+    // rerun is 3 since "iterationIndex >= cutoff" surfaces only sessions
+    // PAST the baked-in mark; rounds 0..2 drop, round 3 (the new one)
+    // survives).
+    const cutoffCtx = await buildClarifyPromptContext({
+      db,
+      definition: emptyDefinition(),
+      taskId,
+      agentNodeId: 'designer',
+      targetIteration: 4,
+      shardKey: null,
+      historyCutoffClarifyIteration: 3,
+    })
+    expect(cutoffCtx).toBeDefined()
+    expect(cutoffCtx?.questionsBlock ?? '').not.toContain('Which database?')
+    expect(cutoffCtx?.questionsBlock ?? '').not.toContain('Which ORM?')
+    expect(cutoffCtx?.questionsBlock ?? '').not.toContain('Which migration tool?')
+    expect(cutoffCtx?.questionsBlock ?? '').toContain('New question after cross-clarify?')
+  })
+
+  test('historyCutoffClarifyIteration: cutoff prunes ALL rows → returns undefined (no clarify section emits)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { taskId } = await seedTask(db)
+
+    await db.insert(nodeRuns).values({
+      id: 'nr_pre',
+      taskId,
+      nodeId: 'designer',
+      status: 'done',
+      retryIndex: 0,
+      iteration: 0,
+      clarifyIteration: 0,
+    })
+    const { clarifyNodeRunId } = await createClarifySession({
+      db,
+      taskId,
+      sourceAgentNodeId: 'designer',
+      sourceAgentNodeRunId: 'nr_pre',
+      sourceShardKey: null,
+      clarifyNodeId: 'clarify1',
+      iterationIndex: 0,
+      questions: [makeQuestion()],
+    })
+    await submitClarifyAnswers({
+      db,
+      clarifyNodeRunId,
+      answers: [makeAnswer()],
+    })
+
+    // Cutoff=1 prunes the only round (iterationIndex=0). No clarify section
+    // — the agent reads Prior Output + External Feedback only.
+    const ctx = await buildClarifyPromptContext({
+      db,
+      definition: emptyDefinition(),
+      taskId,
+      agentNodeId: 'designer',
+      targetIteration: 2,
+      shardKey: null,
+      historyCutoffClarifyIteration: 1,
+    })
+    expect(ctx).toBeUndefined()
+  })
+
   test('directive=continue (default) surfaces continue sentence and context.directive', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId } = await seedTask(db)
