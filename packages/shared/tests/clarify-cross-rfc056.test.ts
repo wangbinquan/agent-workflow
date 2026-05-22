@@ -181,6 +181,83 @@ describe('RFC-056 buildExternalFeedbackBlock — dictionary-sorted multi-source 
     }
     expect(renderCrossClarifySource(src)).toBe(buildExternalFeedbackBlock([src]))
   })
+
+  test('renders FULL per-question detail: title + Type + Candidate options + descriptions + [recommended] flags + reasons (2026-05-22 enrichment)', () => {
+    // The original 2025 implementation only emitted `#### Q{N}: title` +
+    // `User chose: …` synthesis — losing the candidate option set that the
+    // questioner surfaced. Designer reading the prompt then had no clue
+    // whether the user picked Jest over Vitest / Mocha / Cypress, or
+    // whether the questioner even raised those alternatives. This lock
+    // pins the richer rendering that matches RFC-023 self-clarify info
+    // density via `renderClarifyQuestionsBlock`.
+    const q: ClarifyQuestion = {
+      id: 'q1',
+      title: 'Pick test framework',
+      kind: 'single',
+      recommended: false,
+      options: [
+        {
+          label: 'Jest',
+          description: 'Mature, widely adopted',
+          recommended: true,
+          recommendationReason: 'Best ecosystem fit for our stack',
+        },
+        {
+          label: 'Vitest',
+          description: 'Vite-native, faster',
+          recommended: false,
+          recommendationReason: '',
+        },
+        { label: 'Mocha', description: '', recommended: false, recommendationReason: '' },
+      ],
+    }
+    const a = mkA('q1', ['Jest'], '')
+    const out = buildExternalFeedbackBlock([
+      {
+        sourceQuestionerNodeId: 'tester',
+        crossClarifyNodeId: 'cc1',
+        iteration: 0,
+        questions: [q],
+        answers: [a],
+      },
+    ])
+    // Title + section heading.
+    expect(out).toContain("### From 'tester' (round 0)")
+    expect(out).toContain('#### Q1: Pick test framework')
+    // Full question detail surfaces — locks each piece independently so a
+    // refactor that drops one part fails fast.
+    expect(out).toContain('Type: single-choice')
+    expect(out).toContain('Candidate options:')
+    expect(out).toContain('Jest [recommended]')
+    expect(out).toContain('description: Mature, widely adopted')
+    expect(out).toContain('reason: Best ecosystem fit for our stack')
+    expect(out).toContain('Vitest')
+    expect(out).toContain('description: Vite-native, faster')
+    expect(out).toContain('Mocha')
+    // Answer synthesis still rendered (NOT mutually exclusive with full Q).
+    expect(out).toContain('User chose: "Jest"')
+  })
+
+  test('Q heading is `#### Q{N}` (one deeper than RFC-023 `### Q{N}` since cross-clarify nests under `### From <id>`)', () => {
+    // Verify the heading-shift step in buildExternalFeedbackBlock didn't
+    // leave a stray `### Q1` from renderClarifyQuestionsBlock that would
+    // collide with the `### From '<id>'` sibling heading and break the
+    // markdown outline.
+    const q = mkQ('q1', 't')
+    const a = mkA('q1', ['A'], '')
+    const out = buildExternalFeedbackBlock([
+      {
+        sourceQuestionerNodeId: 'a',
+        crossClarifyNodeId: 'cc1',
+        iteration: 0,
+        questions: [q],
+        answers: [a],
+      },
+    ])
+    expect(out).toContain('#### Q1:')
+    // No bare `### Q1` (would only appear if the shift regex missed).
+    expect(out).not.toMatch(/^### Q1:/m)
+  })
 })
 
 describe('RFC-056 summariseCrossAnswer — reuses RFC-023 single-question synthesis', () => {

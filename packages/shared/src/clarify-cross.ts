@@ -22,6 +22,7 @@ import {
 import {
   parseClarifyEnvelopeBody,
   type ParseClarifyEnvelopeResult,
+  renderClarifyQuestionsBlock,
   summariseClarifyAnswer,
 } from './clarify'
 import type { ClarifyAnswer, ClarifyQuestion } from './schemas/clarify'
@@ -79,13 +80,24 @@ export interface CrossClarifySourceContext {
 /**
  * Render the designer-facing `## External Feedback` body. Each source becomes
  * a `### From '{nodeId}' (round {iteration})` sub-section, sorted by source
- * questioner nodeId (dictionary order). Within a source, each question gets a
- * `#### Q{N}: {title}` line plus the single-sentence
- * {@link summariseClarifyAnswer} synthesis the user's answer maps to.
+ * questioner nodeId (dictionary order). Within a source, each question gets
+ * the FULL question detail (title + Type + Candidate options with description
+ * + [recommended] flag + reason — same shape as the RFC-023 self-clarify
+ * "Prior Rounds (Questions)" rendering via `renderClarifyQuestionsBlock`)
+ * PLUS the user's answer synthesised by {@link summariseClarifyAnswer}.
  *
  * Returns ONLY the body — the leading `## External Feedback` heading is
  * applied by `shared/prompt.ts` via the auto-append mechanism (when the
  * template doesn't reference `{{__external_feedback__}}`).
+ *
+ * Question detail surfaces the candidate options + recommendations + reasons
+ * that the questioner agent emitted — so the designer reading this prompt
+ * sees the SAME context the user saw when they made the call. Without this
+ * the designer reads only "User chose: Jest" and can't tell whether the
+ * user picked Jest over Vitest / Mocha / Cypress, or whether the questioner
+ * even surfaced those alternatives. The RFC-023 self-clarify path already
+ * carries full Q detail; the cross-clarify designer prompt would otherwise
+ * be a strictly worse information path.
  */
 export function buildExternalFeedbackBlock(sources: CrossClarifySourceContext[]): string {
   if (sources.length === 0) return ''
@@ -96,17 +108,29 @@ export function buildExternalFeedbackBlock(sources: CrossClarifySourceContext[])
   for (const src of sorted) {
     lines.push(`### From '${src.sourceQuestionerNodeId}' (round ${src.iteration})`)
     lines.push('')
+    // Full per-question detail (Type + Candidate options + descriptions +
+    // [recommended] flags + reasons) — reuses the RFC-023 renderer so any
+    // future format change keeps the two paths byte-for-byte symmetric.
+    const questionsBlock = renderClarifyQuestionsBlock(src.questions)
+    // `renderClarifyQuestionsBlock` uses `### Q{N}` (one less than our
+    // `#### Q{N}` convention since cross-clarify is one heading level deeper).
+    // Shift the prefix so the cross-clarify section keeps a coherent
+    // markdown outline: `## External Feedback` → `### From '<id>'` →
+    // `#### Q{N}`.
+    lines.push(questionsBlock.replace(/^### Q/gm, '#### Q'))
+    lines.push('')
+    // Then per-question answer synthesis under each question (matches the
+    // RFC-023 "Prior Rounds (Answers)" section but inline so cross-clarify
+    // stays a single contiguous sub-section per source).
     const byId = new Map(src.answers.map((a) => [a.questionId, a]))
+    lines.push('Answers:')
     src.questions.forEach((q, idx) => {
       const a = byId.get(q.id)
-      lines.push(`#### Q${idx + 1}: ${q.title}`)
-      if (a === undefined) {
-        lines.push('- User did not answer this question.')
-      } else {
-        lines.push(`- ${summariseClarifyAnswer(q, a)}`)
-      }
-      lines.push('')
+      lines.push(
+        `- Q${idx + 1} (${q.title}): ${a === undefined ? 'User did not answer this question.' : summariseClarifyAnswer(q, a)}`,
+      )
     })
+    lines.push('')
   }
   return lines.join('\n').trimEnd()
 }
