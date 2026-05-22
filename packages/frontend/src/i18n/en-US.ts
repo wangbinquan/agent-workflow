@@ -1628,7 +1628,7 @@ export const enUS: Resources = {
         'Inline lets the rerun reuse the prior opencode session; falls back to isolated on auth/session errors.',
     },
     canvas: {
-      paletteLabel: 'Cross Clarify',
+      paletteLabel: '⚡ Cross Clarify',
       paletteHint:
         'Drag onto a downstream questioner agent; then connect to_designer → an upstream designer.',
       error: {

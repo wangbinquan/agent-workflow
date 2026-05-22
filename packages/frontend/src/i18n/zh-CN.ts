@@ -3268,7 +3268,7 @@ export const zhCN: Resources = {
         '续接模式让重跑复用上一轮 opencode session；auth/session 失败时自动回退为独立模式。',
     },
     canvas: {
-      paletteLabel: '跨 agent 反问',
+      paletteLabel: '⚡ 跨 agent 反问',
       paletteHint: '拖到下游反问 agent 上自动建反问通道；再手动连 to_designer → 上游 designer。',
       error: {
         targetNotAgentSingle: '跨 agent 反问节点的输入端只能连 agent-single（v1 限制）。',

@@ -513,20 +513,14 @@ function CanvasInner({
         if (hasExistingClarifyChannel(definition, clarifyDrop.sourceAgentNodeId)) return false
         return true
       }
-      // The targetHandle / sourceHandle of a clarify drop was already
-      // observed by the classifier above; if a connection arrived with
-      // those exact handle names but the classifier rejected (e.g. the
-      // counterpart node was missing), refuse to fall through to the
-      // generic catch-all — that path would create a stray edge.
-      if (
-        conn.targetHandle === CLARIFY_INPUT_PORT_NAME ||
-        conn.sourceHandle === CLARIFY_OUTPUT_PORT_NAME
-      ) {
-        return false
-      }
-      // RFC-056 cross-clarify pre-flight. Mirrors the RFC-023 path —
-      // fail-fast on self-loops, non-agent-single counterparts, and
-      // already-wired channels. xyflow draws the red dashed reject UI.
+      // RFC-056 cross-clarify pre-flight. Must run BEFORE the merged
+      // defensive guard below — cross-clarify reuses the literal port name
+      // `'questions'` (===CLARIFY_INPUT_PORT_NAME), so a defensive
+      // RFC-023 guard placed ahead of this classifier would silently
+      // reject every cross-clarify questioner-reverse drop (see issue #2
+      // 2026-05-22 UI bug report). Mirrors the RFC-023 path: fail-fast on
+      // self-loops, non-agent-single counterparts, and already-wired
+      // channels. xyflow draws the red dashed reject UI on `return false`.
       const crossDrop = classifyCrossClarifyConnection(definition, guardConn)
       if (crossDrop !== null) {
         if (crossDrop.kind === 'questioner-reverse') {
@@ -544,10 +538,19 @@ function CanvasInner({
         if (crossClarifyHasDesignerEdge(definition, crossDrop.crossClarifyNodeId)) return false
         return true
       }
-      // Same defensive guard as RFC-023 — drops carrying cross-clarify
-      // port handles that the classifier rejected MUST NOT fall through
-      // to the generic catch-all path.
+      // Merged defensive guard for BOTH RFC-023 + RFC-056 clarify-channel
+      // system port handles. Runs only AFTER both classifiers had a chance
+      // to match; if a drop is still carrying these handle names without
+      // a matching channel target, it's a stray drop the generic catch-all
+      // path would turn into a junk edge — reject up-front so xyflow shows
+      // the red dashed feedback. Note `CLARIFY_INPUT_PORT_NAME` and
+      // `CROSS_CLARIFY_INPUT_PORT_NAME` share the literal value `'questions'`;
+      // by the time we reach this guard, neither classifier matched, which
+      // means the target node is neither `'clarify'` nor
+      // `'clarify-cross-agent'`.
       if (
+        conn.targetHandle === CLARIFY_INPUT_PORT_NAME ||
+        conn.sourceHandle === CLARIFY_OUTPUT_PORT_NAME ||
         conn.targetHandle === CROSS_CLARIFY_INPUT_PORT_NAME ||
         conn.sourceHandle === CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT ||
         conn.sourceHandle === CROSS_CLARIFY_OUT_TO_DESIGNER_PORT ||

@@ -4195,6 +4195,33 @@ code {
   font-weight: 600;
 }
 
+/* RFC-056 cross-clarify node — reuses the clarify/review amber/gold tint
+ * so all three human-in-the-loop kinds read as one visual family on the
+ * canvas. The 2 output handles (to_questioner @ 40% / to_designer @ 70%)
+ * inherit the base `.canvas-node__handle` style and pin to the right
+ * edge via inline `top` style on the Handle component. */
+.canvas-node--clarify-cross-agent {
+  background: color-mix(in srgb, #d97706 10%, var(--panel));
+  border-color: color-mix(in srgb, #d97706 45%, var(--border));
+}
+.canvas-node--clarify-cross-agent .canvas-node__kind {
+  color: #b45309;
+  font-weight: 600;
+}
+/* Status-specific border overlays (mirror RFC-023 clarify pattern).
+ * awaiting_human → amber (matches default tint, slightly stronger);
+ * answered → green; abandoned → red; failed → red; pending → neutral. */
+.canvas-node--clarify-cross-agent-awaiting_human {
+  border-color: color-mix(in srgb, #d97706 75%, var(--border));
+}
+.canvas-node--clarify-cross-agent-answered {
+  border-color: color-mix(in srgb, #16a34a 55%, var(--border));
+}
+.canvas-node--clarify-cross-agent-abandoned,
+.canvas-node--clarify-cross-agent-failed {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+}
+
 /* RFC-016: wrapper group container — replaces the old 240px placeholder
  * card. Renders as a sized rectangle so inner nodes physically sit inside,
  * making membership visible at a glance. Sized via xyflow Node.style; the
