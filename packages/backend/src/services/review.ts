@@ -448,6 +448,12 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
     reviewNodeRunId = ulid()
     reviewIteration = 0
     const now = Date.now()
+    // RFC-056 patch 2026-05-25 §2.3 — carry the upstream source-agent's
+    // crossClarifyIteration onto the review's awaiting_review row so the
+    // cross-clarify scope walker (Layer B freshness invariant) sees a
+    // continuous iteration across the data graph. Default 0 is preserved
+    // when sourceRun lookup turns up empty (initial dispatch without an
+    // upstream run, which shouldn't happen but stay defensive).
     await db.insert(nodeRuns).values({
       id: reviewNodeRunId,
       taskId,
@@ -456,6 +462,7 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
       retryIndex: 0,
       iteration,
       reviewIteration: 0,
+      crossClarifyIteration: sourceRun.crossClarifyIteration ?? 0,
       startedAt: now,
     })
   }
@@ -1349,6 +1356,12 @@ export async function submitReviewDecision(
       // bug from task 01KS1N8WVZWE8FTR4K9WSETRNW (贪吃蛇). Locked by
       // review-iterate-inherits-clarify-iteration.test.ts.
       clarifyIteration: latest.clarifyIteration,
+      // RFC-056 patch 2026-05-25 §2.3 — preserve crossClarifyIteration on
+      // the review-iterate placeholder so the cross-clarify counter
+      // doesn't silently regress when a user requests changes on a
+      // post-cross-clarify designer/questioner output. See
+      // patch-2026-05-25-questioner-cascade-no-skip.md §2.3.
+      crossClarifyIteration: latest.crossClarifyIteration ?? 0,
     })
   }
 

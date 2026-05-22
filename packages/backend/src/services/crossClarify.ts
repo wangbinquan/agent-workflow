@@ -74,7 +74,7 @@ import { and, asc, desc, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
-import { crossClarifySessions, nodeRuns, tasks } from '@/db/schema'
+import { crossClarifySessions, nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
 import { sealAnswersServerSide } from '@/services/clarify'
 import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
@@ -657,6 +657,37 @@ export async function triggerDesignerRerun(
     topLevelDesignerRows.length === 0
       ? 0
       : Math.max(...topLevelDesignerRows.map((r) => r.retryIndex)) + 1
+  // RFC-056 patch 2026-05-25 §2.2 — newCci must land STRICTLY above every
+  // participant in the cross-clarify chain (designer rows, questioner rows
+  // emitted at this iteration, and any prior cross-clarify session
+  // iteration). The pre-patch formula `(lastDesigner.cci ?? 0) + 1` only
+  // accounted for the designer, missing the case where the questioner had
+  // already advanced past the designer via a prior cascade — e.g. live
+  // task 01KS86DPCSERV7S41GQA5Y81RN, designer at cci=0 + questioner at
+  // cci=1 after first session, newCci computed = 1 = questioner.cci →
+  // cascade idempotency at :799 then skipped the questioner. Querying
+  // all node_runs at this iteration is cheap (single indexed scan on
+  // task_id) and the +1 guarantees the cascade always sees newCci >
+  // existing on every downstream node.
+  const allTaskRunsAtIter = await args.db
+    .select({ c: nodeRuns.crossClarifyIteration })
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, args.taskId), eq(nodeRuns.iteration, lastDesigner.iteration)))
+  const sessionRows = await args.db
+    .select({ iter: crossClarifySessions.iteration })
+    .from(crossClarifySessions)
+    .where(
+      and(
+        eq(crossClarifySessions.taskId, args.taskId),
+        eq(crossClarifySessions.loopIter, args.loopIter),
+      ),
+    )
+  const maxParticipantCci = Math.max(
+    0,
+    ...allTaskRunsAtIter.map((r) => r.c ?? 0),
+    ...sessionRows.map((r) => r.iter ?? 0),
+  )
+  const newCrossClarifyIteration = maxParticipantCci + 1
   const designerNodeRunId = ulid()
   await args.db.insert(nodeRuns).values({
     id: designerNodeRunId,
@@ -669,7 +700,7 @@ export async function triggerDesignerRerun(
     shardKey: lastDesigner.shardKey ?? null,
     reviewIteration: lastDesigner.reviewIteration,
     clarifyIteration: lastDesigner.clarifyIteration,
-    crossClarifyIteration: (lastDesigner.crossClarifyIteration ?? 0) + 1,
+    crossClarifyIteration: newCrossClarifyIteration,
     preSnapshot: lastDesigner.preSnapshot,
   })
 
@@ -708,7 +739,7 @@ export async function triggerDesignerRerun(
     taskId: args.taskId,
     designerNodeId: args.designerNodeId,
     designerIteration: lastDesigner.iteration,
-    newCrossClarifyIteration: (lastDesigner.crossClarifyIteration ?? 0) + 1,
+    newCrossClarifyIteration,
     definition,
   })
 
@@ -793,11 +824,37 @@ async function cascadeDownstreamFromDesigner(args: CascadeDownstreamArgs): Promi
       continue
     }
     // Idempotency: if some row already carries the new cross_clarify_iteration
-    // (regardless of status), the cascade has already fired for this node.
-    // Cross-clarify resolves can be triggered multiple times in flight on
-    // multi-tab UIs; this guard keeps the cascade safe to invoke twice.
-    if (topLevel.some((r) => r.crossClarifyIteration >= newCrossClarifyIteration)) {
-      continue
+    // AND that row already produced at least one data output port
+    // (`node_run_outputs` row with a non-underscore port name), the cascade
+    // has already done its job for this node — skip to keep the cascade
+    // safe to invoke twice (multi-tab UI race etc.).
+    //
+    // RFC-056 patch 2026-05-25 §2.1 — the bare cci comparison the
+    // pre-patch code used was wrong for cross-clarify questioners. A
+    // questioner's row at cci=N can be the CLARIFY-ONLY row that emitted
+    // `<workflow-clarify>` (no `<workflow-output>`, therefore no entries
+    // in `node_run_outputs`); that row is the one that CAUSED the
+    // cross-clarify session, not a row that consumed the answers. Without
+    // the output check the cascade silently skips re-minting the
+    // questioner, downstream review reads a port-missing upstream, and the
+    // task fails with `review-source-port-missing`. See live task
+    // 01KS86DPCSERV7S41GQA5Y81RN + the patch doc.
+    const cciMatch = topLevel.filter(
+      (r) => (r.crossClarifyIteration ?? 0) >= newCrossClarifyIteration,
+    )
+    if (cciMatch.length > 0) {
+      let anyHasDataOutput = false
+      for (const r of cciMatch) {
+        const outs = await db
+          .select({ portName: nodeRunOutputs.portName })
+          .from(nodeRunOutputs)
+          .where(eq(nodeRunOutputs.nodeRunId, r.id))
+        if (outs.some((o) => !o.portName.startsWith('__'))) {
+          anyHasDataOutput = true
+          break
+        }
+      }
+      if (anyHasDataOutput) continue
     }
     // Template row: the latest top-level row. We inherit its iteration /
     // shardKey / parentNodeRunId / reviewIteration / clarifyIteration /

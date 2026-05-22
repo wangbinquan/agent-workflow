@@ -696,6 +696,12 @@ export async function retryNode(
       iteration: inherit?.iteration ?? 0,
       clarifyIteration: inherit?.clarifyIteration ?? 0,
       reviewIteration: inherit?.reviewIteration ?? 0,
+      // RFC-056 patch 2026-05-25 §2.3 — inherit crossClarifyIteration so the
+      // single-node retry placeholder doesn't silently regress the
+      // cross-clarify round counter. Without this the next dispatch reads
+      // currentCrossClarifyIteration=0 and the freshness invariant can't
+      // detect the inversion (its guard only fires on upstream > my cci).
+      crossClarifyIteration: inherit?.crossClarifyIteration ?? 0,
       shardKey: inherit?.shardKey ?? null,
       parentNodeRunId: inherit?.parentNodeRunId ?? null,
       preSnapshot: inherit?.preSnapshot ?? null,
