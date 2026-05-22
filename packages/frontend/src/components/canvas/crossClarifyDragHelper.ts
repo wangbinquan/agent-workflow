@@ -56,18 +56,27 @@ export function isValidCrossClarifyQuestioner(node: WorkflowNode | undefined): b
 }
 
 /**
- * True when the agent already has an outbound `__clarify__` edge — either
- * to an RFC-023 clarify node or another cross-clarify node. The validator
- * rejects double-wiring via `clarify-multiple-clarify-on-same-agent`; this
- * helper lets the canvas pre-flight short-circuit before the drop.
+ * True when the agent already has an outbound `__clarify__` edge that
+ * specifically targets ANOTHER cross-clarify node — i.e. a duplicate
+ * cross-clarify on the same questioner agent. Per RFC-056 design.md
+ * §4.2, an agent CAN have both an RFC-023 `clarify` target AND an
+ * RFC-056 `clarify-cross-agent` target on the same `__clarify__`
+ * source port ("罕见但合法"); the runtime picks cross-clarify when both
+ * are present. So this pre-flight intentionally does NOT block when
+ * the existing edge points at a plain `clarify` node — only when it
+ * points at another cross-clarify node, which would be a real
+ * duplicate the validator rejects.
  */
 export function questionerHasExistingClarifyChannel(
   def: WorkflowDefinition,
   agentNodeId: string,
 ): boolean {
-  return def.edges.some(
-    (e) => e.source.nodeId === agentNodeId && e.source.portName === CLARIFY_SOURCE_PORT_NAME,
-  )
+  return def.edges.some((e) => {
+    if (e.source.nodeId !== agentNodeId) return false
+    if (e.source.portName !== CLARIFY_SOURCE_PORT_NAME) return false
+    const tgt = def.nodes.find((n) => n.id === e.target.nodeId)
+    return tgt?.kind === 'clarify-cross-agent'
+  })
 }
 
 /**

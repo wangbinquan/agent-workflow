@@ -91,18 +91,50 @@ describe('RFC-056 applyCrossClarifyQuestionerReverseDrag', () => {
     expect(next).toBe(def)
   })
 
-  test('rejects when the questioner already has another __clarify__ outbound edge', () => {
+  test('rejects when the questioner already has another cross-clarify wired (would be duplicate cross-clarify)', () => {
     const def = baseDef()
+    def.nodes.push({ id: 'cross2', kind: 'clarify-cross-agent' })
     def.edges.push({
       id: 'pre',
       source: { nodeId: 'questioner', portName: '__clarify__' },
-      target: { nodeId: 'other', portName: 'questions' },
+      target: { nodeId: 'cross2', portName: 'questions' },
     })
     const next = applyCrossClarifyQuestionerReverseDrag(def, {
       questionerNodeId: 'questioner',
       crossClarifyNodeId: 'cross1',
     })
     expect(next).toBe(def)
+  })
+
+  test('ALLOWS coexistence with an existing RFC-023 clarify (per RFC-056 design.md §4.2: cross-clarify wins at runtime)', () => {
+    // An agent CAN have both a plain `clarify` target AND a
+    // `clarify-cross-agent` target on the same `__clarify__` source port.
+    // The pre-flight must NOT reject the cross-clarify drop in that case
+    // — the canvas would otherwise prevent a legal configuration the
+    // runtime explicitly supports.
+    const def = baseDef()
+    def.nodes.push({ id: 'self_clarify', kind: 'clarify' })
+    def.edges.push({
+      id: 'pre_self',
+      source: { nodeId: 'questioner', portName: '__clarify__' },
+      target: { nodeId: 'self_clarify', portName: 'questions' },
+    })
+    const next = applyCrossClarifyQuestionerReverseDrag(def, {
+      questionerNodeId: 'questioner',
+      crossClarifyNodeId: 'cross1',
+    })
+    // Two new edges appended (ask + ans) on top of the pre-existing
+    // self-clarify edge; the self-clarify edge is preserved.
+    expect(next).not.toBe(def)
+    expect(next.edges.length).toBe(3)
+    expect(
+      next.edges.some(
+        (e) => e.source.portName === '__clarify__' && e.target.nodeId === 'self_clarify',
+      ),
+    ).toBe(true)
+    expect(
+      next.edges.some((e) => e.source.portName === '__clarify__' && e.target.nodeId === 'cross1'),
+    ).toBe(true)
   })
 })
 
