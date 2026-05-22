@@ -26,24 +26,28 @@ describe('clarify reverse-drag two-edge invariant (RFC-023 C6)', () => {
 
   it('scheduler.ts skips clarify channel edges when building dep graph (answer-edge deletion safe)', () => {
     const src = readFileSync(SCHEDULER_PATH, 'utf8')
-    // Both helpers must call out the system port names; if a refactor drops
-    // the guard, the answers→agent edge becomes a hard upstream dep and
-    // the cycle resolution breaks. Hard-code the literal port name match
-    // so a rename can't slip through.
-    expect(src).toContain('__clarify__')
-    expect(src).toContain('__clarify_response__')
-    // The two places to guard are buildScopeUpstreams + topologicalOrder.
-    // Both must explicitly continue/skip on those port names.
+    // If a refactor drops the guard, the answers→agent edge becomes a hard
+    // upstream dep and the cycle resolution breaks. We pin the mechanism
+    // by name: the two places to guard are `buildScopeUpstreams` and
+    // `topologicalOrder`. Both must explicitly skip clarify-channel
+    // edges — historically that meant a literal `__clarify__` string in
+    // the function body; post RFC-056 patch 2026-05-22 the shared helper
+    // `isClarifyChannelEdge` (in shared/clarify-cross.ts) owns the rule
+    // and both helpers call into it. Either shape counts as "guarded".
     const buildScopePos = src.indexOf('function buildScopeUpstreams')
     expect(buildScopePos).toBeGreaterThan(-1)
     const toposortPos = src.indexOf('function topologicalOrder')
     expect(toposortPos).toBeGreaterThan(-1)
-    // Both helpers should reference the clarify port names within their
-    // first ~50 lines (skip / continue lines). Slice 4000 chars to give
-    // generous room for either function's body.
     const buildScopeBody = src.slice(buildScopePos, buildScopePos + 4000)
-    expect(buildScopeBody).toContain('__clarify__')
     const toposortBody = src.slice(toposortPos, toposortPos + 4000)
-    expect(toposortBody).toContain('__clarify__')
+    // Each body must contain SOME clarify-channel-edge skip signal:
+    // either the literal `__clarify__` port name (legacy inline form) or
+    // the shared `isClarifyChannelEdge` helper call (post-patch form).
+    expect(
+      buildScopeBody.includes('__clarify__') || buildScopeBody.includes('isClarifyChannelEdge'),
+    ).toBe(true)
+    expect(
+      toposortBody.includes('__clarify__') || toposortBody.includes('isClarifyChannelEdge'),
+    ).toBe(true)
   })
 })
