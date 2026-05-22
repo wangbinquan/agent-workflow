@@ -1051,6 +1051,15 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   }
   const inheritedClarifyIteration = latestExisting?.clarifyIteration ?? 0
   const inheritedReviewIteration = latestExisting?.reviewIteration ?? 0
+  // RFC-056 patch-2026-05-24: inherit the latest top-level row's
+  // crossClarifyIteration so an RFC-042 in-attempt process retry (and the
+  // initial-mint branch below) keeps the cross-clarify rerun signal alive.
+  // Without it the retry row dropped to schema default 0 and the entire
+  // External Feedback / Prior Output / Update Directive / questioner Q&A
+  // stack disappeared from the next attempt's prompt. See
+  // design/RFC-056-clarify-cross-agent/patch-2026-05-24-retry-preserves-
+  // cross-clarify-iteration.md.
+  const inheritedCrossClarifyIteration = latestExisting?.crossClarifyIteration ?? 0
   const inheritedShardKey = latestExisting?.shardKey ?? null
   const inheritedParentNodeRunId = latestExisting?.parentNodeRunId ?? null
   const pendingExisting = sameNodeIterRuns.find(
@@ -1065,6 +1074,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     nodeRunId = await insertNodeRun(db, taskId, node.id, 'pending', retryIndex, iteration, {
       clarifyIteration: inheritedClarifyIteration,
       reviewIteration: inheritedReviewIteration,
+      crossClarifyIteration: inheritedCrossClarifyIteration,
       shardKey: inheritedShardKey,
       parentNodeRunId: inheritedParentNodeRunId,
     })
@@ -1147,6 +1157,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         nodeRunId = await insertNodeRun(db, taskId, node.id, 'pending', attempt, iteration, {
           clarifyIteration: inheritedClarifyIteration,
           reviewIteration: inheritedReviewIteration,
+          crossClarifyIteration: inheritedCrossClarifyIteration,
           shardKey: inheritedShardKey,
           parentNodeRunId: inheritedParentNodeRunId,
         })
@@ -1298,11 +1309,15 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // priorDoneDesigner lookup below uses `crossClarifyIteration <
         // current` as its filter — that's the real "this is a cross-clarify
         // rerun" signal, NOT retry_index. An in-attempt RFC-042 retry
-        // inherits crossClarifyIteration from the row it retries, so it
-        // simply won't find a strictly-lesser priorDoneDesigner (or will
-        // find one but the update-mode block is still semantically correct
-        // for it — the agent should still see the draft + directive). Drop
-        // the retryIndex gate; let priorDoneDesigner existence drive it.
+        // inherits crossClarifyIteration from the row it retries (made
+        // explicit by patch-2026-05-24 via `inheritedCrossClarifyIteration`
+        // → `insertNodeRun` inherit param; before that patch the retry row
+        // silently dropped to default 0 and the gate below collapsed),
+        // so it simply won't find a strictly-lesser priorDoneDesigner (or
+        // will find one but the update-mode block is still semantically
+        // correct for it — the agent should still see the draft +
+        // directive). Drop the retryIndex gate; let priorDoneDesigner
+        // existence drive it.
         const currentCrossClarifyIteration = currentRunRow?.crossClarifyIteration ?? 0
         const isCrossClarifyTriggeredRerun =
           hasExternalFeedbackChannel && currentCrossClarifyIteration > 0
@@ -2473,6 +2488,7 @@ async function insertNodeRun(
   inherit?: {
     clarifyIteration?: number
     reviewIteration?: number
+    crossClarifyIteration?: number
     shardKey?: string | null
     parentNodeRunId?: string | null
   },
@@ -2488,6 +2504,16 @@ async function insertNodeRun(
     iteration,
     clarifyIteration: inherit?.clarifyIteration ?? 0,
     reviewIteration: inherit?.reviewIteration ?? 0,
+    // RFC-056 patch-2026-05-24: crossClarifyIteration MUST be inherited
+    // on every fresh row scheduleAgentNode mints — most importantly the
+    // RFC-042 in-attempt process retry. Without this, the retry row
+    // silently drops to schema default 0, the next scheduler pass sees
+    // currentCrossClarifyIteration=0, every cross-clarify prompt block
+    // (External Feedback / Prior Output / Update Directive / questioner
+    // Q&A) vanishes, and the designer regenerates from scratch. See
+    // design/RFC-056-clarify-cross-agent/patch-2026-05-24-retry-
+    // preserves-cross-clarify-iteration.md.
+    crossClarifyIteration: inherit?.crossClarifyIteration ?? 0,
     shardKey: inherit?.shardKey ?? null,
     parentNodeRunId: inherit?.parentNodeRunId ?? null,
     startedAt: now,
