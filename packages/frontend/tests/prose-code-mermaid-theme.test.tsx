@@ -77,16 +77,27 @@ describe('Prose mermaid → MermaidBlock theme wiring', () => {
     const md = '```mermaid\nflowchart TD\nA-->B\n```'
     render(<Prose body={md} />)
 
-    await waitFor(() => expect(renderSpy.mock.calls.at(-1)?.[1]).toBe('dark'))
+    // Explicit 5s waitFor timeouts (default is 1s). useResolvedTheme
+    // observes `<html data-theme>` via MutationObserver; on slow CI
+    // runners (macos GHA in particular) the effect chain
+    // mutation → observer fire → setState → useEffect → renderSpy can
+    // miss the 1s budget. Confirmed environmental flake on 2026-05-22
+    // CI run 26297919707; bumping the explicit timeout keeps the test
+    // catching real regressions while not relying on default-budget
+    // luck. Local fast path: still finishes in <50ms.
+    await waitFor(() => expect(renderSpy.mock.calls.at(-1)?.[1]).toBe('dark'), { timeout: 5000 })
     const darkCalls = renderSpy.mock.calls.length
 
     act(() => {
       document.documentElement.setAttribute('data-theme', 'light')
     })
 
-    await waitFor(() => {
-      expect(renderSpy.mock.calls.length).toBeGreaterThan(darkCalls)
-      expect(renderSpy.mock.calls.at(-1)?.[1]).toBe('light')
-    })
+    await waitFor(
+      () => {
+        expect(renderSpy.mock.calls.length).toBeGreaterThan(darkCalls)
+        expect(renderSpy.mock.calls.at(-1)?.[1]).toBe('light')
+      },
+      { timeout: 5000 },
+    )
   })
 })

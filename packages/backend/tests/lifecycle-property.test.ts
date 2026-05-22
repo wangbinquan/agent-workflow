@@ -122,12 +122,29 @@ async function buildHarness(): Promise<Harness> {
   const repoPath = join(tmp, 'repo')
   mkdirSync(appHome, { recursive: true })
   mkdirSync(repoPath, { recursive: true })
-  await runGit(repoPath, ['init', '-q', '-b', 'main'])
-  await runGit(repoPath, ['config', 'user.email', 't@t.test'])
-  await runGit(repoPath, ['config', 'user.name', 't'])
+  // We used to call `runGit` 5 times here (init / config email / config
+  // name / add / commit). On macos GHA each spawn is ~30-80ms, so 5 ×
+  // 20 fc iterations stacked to multiple seconds of pure subprocess
+  // overhead. Two cheap wins:
+  //   1. `git -c init.defaultBranch=main init -q` collapses init + the
+  //      branch-rename `git config` to one call.
+  //   2. Pass commit identity inline via `-c user.email=… -c user.name=…`
+  //      on the commit invocation itself — transient config applies to
+  //      that one command, no separate `git config` needed.
+  // Net: 5 spawns → 3 spawns/harness.
+  await runGit(repoPath, ['-c', 'init.defaultBranch=main', 'init', '-q'])
   writeFileSync(join(repoPath, 'README.md'), '# r\n')
   await runGit(repoPath, ['add', '.'])
-  await runGit(repoPath, ['commit', '-q', '-m', 'i'])
+  await runGit(repoPath, [
+    '-c',
+    'user.email=t@t.test',
+    '-c',
+    'user.name=t',
+    'commit',
+    '-q',
+    '-m',
+    'i',
+  ])
   const db = createInMemoryDb(MIGRATIONS)
   await db.insert(agentsTable).values({
     id: ulid(),
@@ -364,6 +381,17 @@ describe('RFC-053 PR-A T1h — property-based: random sequences preserve invaria
     // Targeted property: any interleaving of approve/iterate operations
     // followed by a final approve should end with R1 satisfied (every
     // approved dv has a done node_run).
+    //
+    // Per-test timeout 15s (bumped from bun:test's default 5s). Each
+    // fc.asyncProperty iteration calls `buildHarness()` which spawns ~5
+    // `runGit` subprocesses (init / 2× config / add / commit) + runs
+    // the full DB migration set + ~5 inserts. That's ~200-500ms per
+    // iteration on macos GHA runners (which lack ramfs for /tmp), so
+    // numRuns=20 stacks to 4-10s, right at the default timeout edge.
+    // Property-based testing wants a real budget to shrink on a real
+    // failure, so we give it 15s — confirmed unrelated flake on
+    // 2026-05-22 CI run 26297919707; same shape would re-occur every
+    // few macos runs until the budget was widened.
     await fc.assert(
       fc.asyncProperty(
         fc.array(fc.oneof(fc.constant('A'), fc.constant('I')), {
@@ -392,5 +420,5 @@ describe('RFC-053 PR-A T1h — property-based: random sequences preserve invaria
       ),
       { numRuns: 20 },
     )
-  })
+  }, 15000)
 })
