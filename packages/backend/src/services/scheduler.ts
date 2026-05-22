@@ -1281,14 +1281,31 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         //
         // Trigger condition: hasExternalFeedbackChannel + this row's
         // crossClarifyIteration > 0 (i.e. NOT the first ever designer run).
-        // The currentRunRow.retryIndex === 0 sub-condition keeps the update
-        // path scoped to fresh cross-clarify reruns, not in-attempt retries
-        // that might temporarily shadow the same row.
+        //
+        // Patch 2026-05-23 (paired with patch-2026-05-23-designer-retry-index):
+        // we used to gate this ALSO on `retryIndex === 0` to distinguish
+        // "fresh cross-clarify rerun" from "in-attempt RFC-042 retry". That
+        // distinction broke the moment `triggerDesignerRerun` started
+        // minting the new designer row at `retry_index = max(existing) + 1`
+        // (required so `isFresherNodeRun` picks it over a prior done row
+        // whose retry_index was already inflated by self-clarify rounds /
+        // RFC-042 retries). Post-patch, every cross-clarify designer rerun
+        // has retry_index ≥ 1, so the old gate silently dropped update-mode
+        // injection — `## Prior Output (to be updated)` + `## Update
+        // Directive` vanished from the prompt, leaving only `## External
+        // Feedback` and pushing the designer back into regenerate-from-
+        // scratch mode (defeats RFC-056 §6 update mode entirely). The
+        // priorDoneDesigner lookup below uses `crossClarifyIteration <
+        // current` as its filter — that's the real "this is a cross-clarify
+        // rerun" signal, NOT retry_index. An in-attempt RFC-042 retry
+        // inherits crossClarifyIteration from the row it retries, so it
+        // simply won't find a strictly-lesser priorDoneDesigner (or will
+        // find one but the update-mode block is still semantically correct
+        // for it — the agent should still see the draft + directive). Drop
+        // the retryIndex gate; let priorDoneDesigner existence drive it.
         const currentCrossClarifyIteration = currentRunRow?.crossClarifyIteration ?? 0
         const isCrossClarifyTriggeredRerun =
-          hasExternalFeedbackChannel &&
-          currentCrossClarifyIteration > 0 &&
-          (currentRunRow?.retryIndex ?? 0) === 0
+          hasExternalFeedbackChannel && currentCrossClarifyIteration > 0
         let priorDoneDesigner: typeof nodeRuns.$inferSelect | undefined
         if (isCrossClarifyTriggeredRerun) {
           const priorRows = await db
@@ -1374,20 +1391,25 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
 
         // RFC-056 §5.4 §6.4: when the about-to-run node is a cross-clarify
         // questioner AND this rerun was triggered by a cross-clarify resolve
-        // (crossClarifyIteration > 0 + retryIndex === 0), pull the questioner's
-        // own Q&A from `cross_clarify_sessions` instead of the self-clarify
-        // table. The result is the same `ClarifyPromptContext` shape so the
-        // renderer emits `## Clarify Q&A` + standing directive verbatim.
+        // (crossClarifyIteration > 0), pull the questioner's own Q&A from
+        // `cross_clarify_sessions` instead of the self-clarify table. The
+        // result is the same `ClarifyPromptContext` shape so the renderer
+        // emits `## Clarify Q&A` + standing directive verbatim.
         //
         // Without this branch the questioner reruns blind — having no record
         // of having asked anything — and the agent re-emits the SAME
         // `<workflow-clarify>` envelope, looping back into cross-clarify
         // forever. The 2026-05-22 cross-clarify-downstream-cascade patch
         // pairs with this so the cascade actually makes the workflow advance.
+        //
+        // Patch 2026-05-23: dropped the legacy `retryIndex === 0` sub-gate
+        // for the same reason the designer-side update-mode gate dropped
+        // it (see comment above on `isCrossClarifyTriggeredRerun`). The
+        // designer-retry-index patch can in principle propagate retry_index
+        // bumps to questioner reruns minted by the downstream cascade; we
+        // must not let the gate silently miss those.
         const isQuestionerCrossClarifyRerun =
-          clarifyMode === 'cross' &&
-          currentCrossClarifyIteration > 0 &&
-          (currentRunRow?.retryIndex ?? 0) === 0
+          clarifyMode === 'cross' && currentCrossClarifyIteration > 0
         const clarifyContext = hasClarifyChannel
           ? isQuestionerCrossClarifyRerun
             ? await buildQuestionerCrossClarifyContext({

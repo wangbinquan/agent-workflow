@@ -17,15 +17,15 @@ incorporate the answers.
 
 Timeline reconstructed from `node_runs`:
 
-| time | node | event |
-| --- | --- | --- |
-| 17:36 → 22:14 | `agent_m7p3n1` (designer) | many self-clarify rounds + RFC-042 same-session retries pushed the latest done to `clarify_iter=6, retry_index=9` |
-| 22:14:46 | `agent_b48d63` (questioner) | done at `retry_index=2`, emitted `<workflow-clarify>` |
-| 22:14:47 | `cross_clarify_6c910f` | user clicked Submit (directive=continue) |
-| 22:14:47 | designer pending row minted | **`retry_index=0`**, `cross_clarify_iter=1`, `clarify_iter=6`, `started_at=NULL` (never dispatched) |
-| 22:14:47 | questioner pending row minted | `retry_index=3` (max(2)+1) — cascade-minted via `cascadeDownstreamFromDesigner` |
-| 22:14:47 → 22:14:57 | questioner | actually ran (scheduler picked it up because retry_index=3 beats prior done at retry_index=2), emitted ANOTHER `<workflow-clarify>` |
-| 22:14:57 → now | cross-clarify awaiting_human | task parked; designer still has unscheduled pending row sitting at `retry_index=0` |
+| time                | node                          | event                                                                                                                               |
+| ------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 17:36 → 22:14       | `agent_m7p3n1` (designer)     | many self-clarify rounds + RFC-042 same-session retries pushed the latest done to `clarify_iter=6, retry_index=9`                   |
+| 22:14:46            | `agent_b48d63` (questioner)   | done at `retry_index=2`, emitted `<workflow-clarify>`                                                                               |
+| 22:14:47            | `cross_clarify_6c910f`        | user clicked Submit (directive=continue)                                                                                            |
+| 22:14:47            | designer pending row minted   | **`retry_index=0`**, `cross_clarify_iter=1`, `clarify_iter=6`, `started_at=NULL` (never dispatched)                                 |
+| 22:14:47            | questioner pending row minted | `retry_index=3` (max(2)+1) — cascade-minted via `cascadeDownstreamFromDesigner`                                                     |
+| 22:14:47 → 22:14:57 | questioner                    | actually ran (scheduler picked it up because retry_index=3 beats prior done at retry_index=2), emitted ANOTHER `<workflow-clarify>` |
+| 22:14:57 → now      | cross-clarify awaiting_human  | task parked; designer still has unscheduled pending row sitting at `retry_index=0`                                                  |
 
 Root cause: the scheduler's freshness comparator `isFresherNodeRun`
 (`packages/backend/src/services/scheduler.ts:309`) keys on
@@ -89,14 +89,91 @@ task parked on a second awaiting cross-clarify.
 
 ## 4. Tests
 
-| test file | what it locks |
-| --- | --- |
-| `packages/backend/tests/cross-clarify-designer-retry-index.test.ts` | 3 cases: (a) prior retry_index=9 → new pending strictly greater; (b) first-ever rerun (prior retry=0) → new pending retry=1; (c) wrapper-loop iteration isolation — bump considers same-iteration rows only |
-| `packages/backend/tests/cross-clarify-service.test.ts` | existing test renamed to "retry_index=max(existing)+1" + assertion flipped from `toBe(0)` to `toBe(1)` (locking the new contract) |
+| test file                                                            | what it locks                                                                                                                                                                                               |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/backend/tests/cross-clarify-designer-retry-index.test.ts`  | 3 cases: (a) prior retry_index=9 → new pending strictly greater; (b) first-ever rerun (prior retry=0) → new pending retry=1; (c) wrapper-loop iteration isolation — bump considers same-iteration rows only |
+| `packages/backend/tests/cross-clarify-service.test.ts`               | existing test renamed to "retry_index=max(existing)+1" + assertion flipped from `toBe(0)` to `toBe(1)` (locking the new contract)                                                                           |
+| `packages/backend/tests/cross-clarify-update-mode-injection.test.ts` | §6 update-mode injection survives the retry_index bump (see §4.1 below)                                                                                                                                     |
 
 The new test file header explicitly cites task
 `01KS86DPCSERV7S41GQA5Y81RN` so any future refactor that turns the test
 red has a clear trail back to the live failure.
+
+### 4.1. Side-effect fix — update-mode injection gate must not key on retry_index
+
+The original `scheduler.ts` gated §6 update-mode prompt injection
+(`## Prior Output (to be updated)` + `## Update Directive` sections) on
+**`currentRunRow.retryIndex === 0`** in addition to
+`hasExternalFeedbackChannel && currentCrossClarifyIteration > 0`. The
+intent was "scope update mode to fresh cross-clarify reruns, not in-
+attempt RFC-042 retries that might temporarily shadow the same row." A
+mirrored gate (`isQuestionerCrossClarifyRerun`) protected the cross-
+clarify questioner Q&A injection on the same signal.
+
+That gate worked pre-patch only because `triggerDesignerRerun` minted
+the new pending row at `retry_index = 0`. Post-patch retry_index is
+≥ 1 whenever the designer has ANY prior row (i.e. every cross-clarify
+resolve after the first run). The gate therefore silently dropped
+update-mode injection on every cross-clarify resolve: the rendered
+designer prompt carried `## requirement` + `## External Feedback` but
+NO `## Prior Output (to be updated)` and NO `## Update Directive` —
+defeating RFC-056 §6 entirely.
+
+User-observable symptom (real session, same workflow shape one round
+after the original incident):
+
+```
+生成软件设计文档
+
+## requirement
+生成坦克大战游戏设计
+
+## External Feedback
+### From 'agent_b48d63' (round 1)
+...
+```
+
+No `## Prior Output (to be updated)`, no `## Update Directive`. The
+designer regenerated the document from scratch and discarded the prior
+draft.
+
+**The fix**: drop `retryIndex === 0` from BOTH gate conditions in
+`scheduler.ts`:
+
+- `isCrossClarifyTriggeredRerun` (designer update-mode injection,
+  scheduler.ts:1287-1291) → keyed only on
+  `hasExternalFeedbackChannel && currentCrossClarifyIteration > 0`. The
+  `priorDoneDesigner` lookup below the gate filters by
+  `crossClarifyIteration < current` — that's the actual "this is a
+  cross-clarify rerun" signal, NOT retry_index. RFC-042 same-session
+  retries inherit crossClarifyIteration from the row they retry, so
+  they simply won't find a strictly-lesser priorDoneDesigner (or will
+  find one but the §6 sections are still semantically correct for
+  them — the agent should still see the working draft + directive).
+- `isQuestionerCrossClarifyRerun` (questioner cross-clarify Q&A
+  injection, scheduler.ts:1387-1390) → keyed only on
+  `clarifyMode === 'cross' && currentCrossClarifyIteration > 0`.
+  `triggerQuestionerStopRerun` still mints at retry_index=0, so this
+  is currently a no-op change — but the gates are parallel and we
+  must not leave a future cascade-propagated retry_index bump
+  unprotected.
+
+**Test surface** (locks the regression so it cannot return silently):
+
+- Live-shaped DB state (designer prior done at retry_index=9 with a
+  captured `<workflow-output>`) → assembled context populates
+  `priorOutputBlock` and `renderUserPrompt` emits all three §6
+  sections in canonical order: Prior Output → External Feedback →
+  Update Directive.
+- First-ever rerun (retry_index=1 minimum post-patch value) — gate
+  must still fire.
+- Negative case: no prior `<workflow-output>` rows → Prior Output +
+  Update Directive both suppressed; External Feedback still emits.
+- Source-code-text guard: grep against `scheduler.ts` asserts neither
+  `isCrossClarifyTriggeredRerun` nor `isQuestionerCrossClarifyRerun`
+  contains a `retryIndex === 0` substring. If a future refactor
+  re-introduces it the runtime symptom is silent — the grep guard
+  catches it before runtime.
 
 ## 5. Data rescue for the live task
 
