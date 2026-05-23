@@ -43,7 +43,6 @@ import {
   computeTickActions,
   type TickContext,
   type ReadyScope,
-  type SpawnRequest,
 } from './taskActorTick'
 import { scanReadyScopes, scanWrapperInnerCompletions, type ReadyScanContext } from './readyScanner'
 import type { RunnerAdapter } from './runnerAdapter'
