@@ -269,6 +269,11 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
   // RFC-053 P-3: on-demand invariant scan for the diagnose panel. Reads
   // live (not the cached lifecycle_alerts table) so a stuck-task report
   // reflects the current DB state without waiting for the next hourly tick.
+  // RFC-057: after the live invariant scan, also merge in any open
+  // stuck-rule rows (S1..S4) from the table. The stuck-task detector has
+  // a 30-min freshness gate and runs on its own 5-min cadence, so the
+  // live scan alone misses those — leaving the banner saying "open
+  // alerts" while the panel says "no findings".
   app.post('/api/tasks/:id/diagnose', async (c) => {
     const taskId = c.req.param('id')
     const result = await runLifecycleInvariants({
@@ -284,7 +289,20 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         })
       },
     })
-    return c.json(result)
+    const invariantIds = new Set(result.openAlerts.map((a) => a.id))
+    const allOpen = await listOpenLifecycleAlertsForTask(deps.db, taskId)
+    const extra = allOpen
+      .filter((a) => !invariantIds.has(a.id))
+      .map((a) => ({
+        id: a.id,
+        taskId: a.taskId,
+        rule: a.rule,
+        severity: a.severity,
+        detail: a.detail,
+        detectedAt: a.detectedAt,
+        resolvedAt: null,
+      }))
+    return c.json({ ...result, openAlerts: [...result.openAlerts, ...extra] })
   })
 
   app.post('/api/tasks/:id/resume', async (c) => {

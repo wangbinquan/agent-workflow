@@ -215,3 +215,80 @@ describe('POST /api/tasks/:id/diagnose — unknown task id', () => {
     expect([200, 403, 404]).toContain(res.status)
   })
 })
+
+// RFC-057 — `/diagnose` merges in stored stuck-rule rows so the panel
+// shows the full set of open alerts (invariant + stuck). Without this,
+// the banner can say "1 open alert" (from /alerts which reads the table)
+// while the panel says "no findings" (from /diagnose which only ran the
+// invariant scan). Locked here so a refactor of the route can't silently
+// drop the merge.
+describe('POST /api/tasks/:id/diagnose — RFC-057 stuck-rule merge', () => {
+  test('openAlerts includes pre-existing stuck-rule (S3) row even though the live scan does not produce one', async () => {
+    const { db, app } = buildApp()
+    const taskId = await seedTask(db, 'running', [])
+    // Plant a fresh S3 row directly — mimicking what the periodic
+    // stuck-task scan would have written once the 30-min threshold
+    // elapsed. The /diagnose handler runs only the invariant scan so
+    // it never inserts S3/S4 itself; merging from the table is the
+    // only path that surfaces them.
+    const { lifecycleAlerts } = await import('../src/db/schema')
+    await db.insert(lifecycleAlerts).values({
+      id: 'al_s3_test',
+      taskId,
+      rule: 'S3',
+      severity: 'warning',
+      detail: JSON.stringify({ rule: 'S3', repairHint: { kind: 'review', nodeRunId: 'nr_x' } }),
+      detectedAt: Date.now(),
+      resolvedAt: null,
+    })
+
+    const res = await diagnose(app, taskId)
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      openAlerts: Array<{ id: string; rule: string; severity: string }>
+    }
+    const s3 = body.openAlerts.filter((a) => a.rule === 'S3')
+    expect(s3).toHaveLength(1)
+    expect(s3[0]!.id).toBe('al_s3_test')
+  })
+
+  test('does not duplicate an alert that the invariant scan also returns', async () => {
+    const { db, app } = buildApp()
+    const taskId = await seedTask(db, 'awaiting_review', [
+      { id: 'rev_1', kind: 'review' } as WorkflowNode,
+    ])
+    const runId = ulid()
+    await db.insert(nodeRuns).values({
+      id: runId,
+      taskId,
+      nodeId: 'rev_1',
+      iteration: 0,
+      retryIndex: 0,
+      reviewIteration: 0,
+      clarifyIteration: 0,
+      status: 'awaiting_review',
+      startedAt: Date.now(),
+    })
+    await db.insert(docVersions).values({
+      id: ulid(),
+      taskId,
+      reviewNodeId: 'rev_1',
+      reviewNodeRunId: runId,
+      sourceNodeId: 'doc',
+      sourcePortName: 'docpath',
+      versionIndex: 1,
+      reviewIteration: 0,
+      bodyPath: 'dv/v1.md',
+      decision: 'approved',
+      decidedAt: Date.now(),
+    })
+    // First call: invariant scan inserts the R1 row.
+    await diagnose(app, taskId)
+    // Second call: the merge path also reads the table; ensure the row
+    // appears exactly once (not duplicated by the merge).
+    const res = await diagnose(app, taskId)
+    const body = (await res.json()) as { openAlerts: Array<{ id: string; rule: string }> }
+    const r1 = body.openAlerts.filter((a) => a.rule === 'R1')
+    expect(r1).toHaveLength(1)
+  })
+})
