@@ -17,13 +17,14 @@ import type { TaskWsMessage } from '@agent-workflow/shared'
 import { useWebSocket } from './useWebSocket'
 
 export interface UseClarifyWsOpts {
-  /** Task id of the currently-loaded clarify session, or null while pending. */
+  /** Task id of the currently-loaded clarify round, or null while pending. */
   taskId: string | null
-  /** Clarify node_run id currently focused — used to scope the detail invalidation. */
-  clarifyNodeRunId: string | null
+  /** Intermediary node_run id currently focused — used to scope the detail
+   *  invalidation. RFC-058 renamed from `clarifyNodeRunId`. */
+  intermediaryNodeRunId: string | null
 }
 
-export function useClarifyWs({ taskId, clarifyNodeRunId }: UseClarifyWsOpts): void {
+export function useClarifyWs({ taskId, intermediaryNodeRunId }: UseClarifyWsOpts): void {
   const qc = useQueryClient()
   useWebSocket({
     path: taskId === null ? '' : `/ws/tasks/${encodeURIComponent(taskId)}`,
@@ -31,24 +32,15 @@ export function useClarifyWs({ taskId, clarifyNodeRunId }: UseClarifyWsOpts): vo
     onMessage: (raw) => {
       const msg = raw as TaskWsMessage
       const isSelfClarify = msg.type === 'clarify.created' || msg.type === 'clarify.answered'
-      // RFC-056: cross-clarify events route through the same hook so the
-      // /clarify list + detail (now mixed) stay in sync on the same WS
-      // channel. designer-rerun-batched also invalidates the focused
-      // detail because the cross-clarify form needs to flip to read-only
-      // once the designer is mid-rerun (the source-of-truth is the
-      // session's `status` which moves answered → designerRunTriggered
-      // implicitly).
       const isCrossClarify =
         msg.type === 'cross-clarify.created' ||
         msg.type === 'cross-clarify.answered' ||
         msg.type === 'cross-clarify.rejected' ||
         msg.type === 'cross-clarify.designer-rerun-batched'
       if (!isSelfClarify && !isCrossClarify) return
-      // Refetch the focused session detail if it's the one being currently
-      // viewed (or if the WS event targets any other session — we still
-      // invalidate the list so the badge / list view updates).
-      if (clarifyNodeRunId !== null) {
-        void qc.invalidateQueries({ queryKey: ['clarify', 'detail', clarifyNodeRunId] })
+      // Refetch the focused round detail if it's the one currently viewed.
+      if (intermediaryNodeRunId !== null) {
+        void qc.invalidateQueries({ queryKey: ['clarify', 'detail', intermediaryNodeRunId] })
       }
       void qc.invalidateQueries({ queryKey: ['clarify', 'list'] })
       void qc.invalidateQueries({ queryKey: ['clarify', 'pending-count'] })

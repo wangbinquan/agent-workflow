@@ -154,15 +154,17 @@ describe('GET /api/clarify', () => {
     expect(filteredBody[0]?.taskId).toBe(a.taskId)
   })
 
-  test('summary payload carries sourceShardKey for agent-multi grouping', async () => {
+  test('summary payload carries askingShardKey for agent-multi grouping', async () => {
+    // RFC-058 T14: response shape switched to ClarifyRoundSummary —
+    // legacy field `sourceShardKey` is now exposed as `askingShardKey`.
     const { db, app } = buildApp()
     const taskId = `task_${ulid()}`
     await seedSession(db, { taskId, sourceShardKey: 'shard-A' })
     await seedSession(db, { taskId, sourceShardKey: 'shard-B' })
     const res = await req(app, `/api/clarify?taskId=${taskId}`)
-    const body = (await res.json()) as ClarifySessionSummary[]
+    const body = (await res.json()) as Array<{ askingShardKey: string | null }>
     expect(body.length).toBe(2)
-    const shardKeys = body.map((s) => s.sourceShardKey).sort()
+    const shardKeys = body.map((s) => s.askingShardKey).sort()
     expect(shardKeys).toEqual(['shard-A', 'shard-B'])
   })
 })

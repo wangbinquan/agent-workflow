@@ -19,17 +19,9 @@ import { actorOf, type Actor } from '@/auth/actor'
 import { loadConfig } from '@/config'
 import { clarifySessions, crossClarifySessions, nodeRuns, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
-import {
-  countPendingClarifications,
-  getClarifyDetail,
-  listClarifySummaries,
-  submitClarifyAnswers,
-} from '@/services/clarify'
-import {
-  getCrossClarifyDetail,
-  listCrossClarifySummaries,
-  submitCrossClarifyAnswers,
-} from '@/services/crossClarify'
+import { countPendingClarifications, submitClarifyAnswers } from '@/services/clarify'
+import { submitCrossClarifyAnswers } from '@/services/crossClarify'
+import { getClarifyRoundDetail, listClarifyRoundSummaries } from '@/services/clarifyRounds'
 import { isAssignedClarifyTarget } from '@/services/taskCollab'
 import { resumeTask } from '@/services/task'
 import { Paths } from '@/util/paths'
@@ -147,36 +139,19 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
         issues: q.error.issues,
       })
     }
+    // RFC-058 T14: single ClarifyRoundSummary[] from unified clarify_rounds.
+    // Replaces the kind-tagged ClarifySession|CrossClarifySession union the
+    // route used to emit; `entry.kind` discriminator lives on the row itself.
     const filter: {
-      status?: typeof q.data.status
+      status?: 'awaiting_human' | 'answered' | 'canceled' | 'abandoned' | 'all'
       taskId?: string
       limit?: number
     } = {}
     if (q.data.status !== undefined) filter.status = q.data.status
     if (q.data.taskId !== undefined) filter.taskId = q.data.taskId
     if (q.data.limit !== undefined) filter.limit = q.data.limit
-    // RFC-023 self-clarify summaries (canonical shape).
-    const selfRows = await listClarifySummaries(deps.db, filter)
-    const selfTagged = selfRows.map((r) => ({ ...r, kind: 'self' as const }))
-
-    // RFC-056 cross-clarify summaries — status enum here is
-    // 'awaiting_human' | 'answered' | 'abandoned' (no 'canceled') so we
-    // only forward status when it matches the cross-clarify enum.
-    const crossStatus =
-      filter.status === undefined || filter.status === 'canceled'
-        ? undefined
-        : (filter.status as 'awaiting_human' | 'answered' | 'all')
-    const crossFilter: { taskId?: string; status?: typeof crossStatus; limit?: number } = {}
-    if (filter.taskId !== undefined) crossFilter.taskId = filter.taskId
-    if (crossStatus !== undefined) crossFilter.status = crossStatus
-    if (filter.limit !== undefined) crossFilter.limit = filter.limit
-    const crossRows = await listCrossClarifySummaries(deps.db, crossFilter)
-    const crossTagged = crossRows.map((r) => ({ ...r, kind: 'cross' as const }))
-
-    // Mixed list sorted by createdAt descending, capped by the original limit.
-    const merged = [...selfTagged, ...crossTagged].sort((a, b) => b.createdAt - a.createdAt)
-    const cap = filter.limit ?? 100
-    return c.json(merged.slice(0, cap))
+    const summaries = await listClarifyRoundSummaries(deps.db, filter)
+    return c.json(summaries)
   })
 
   app.get('/api/clarify/pending-count', async (c) => {
@@ -186,27 +161,11 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
 
   app.get('/api/clarify/:nodeRunId', async (c) => {
     const nodeRunId = c.req.param('nodeRunId')
-    // RFC-056: detail branch is decided by node_run kind. Self-clarify
-    // payload is preserved byte-for-byte (returns ClarifySession directly);
-    // cross-clarify payload returns CrossClarifySession. The two are
-    // disambiguated by the presence of `clarifyNodeId` vs
-    // `crossClarifyNodeId` on the response object.
-    const nrRow = (
-      await deps.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
-    )[0]
-    if (nrRow !== undefined) {
-      const taskRow = (
-        await deps.db.select().from(tasksTable).where(eq(tasksTable.id, nrRow.taskId)).limit(1)
-      )[0]
-      if (
-        taskRow !== undefined &&
-        nodeKindFromSnapshot(taskRow.workflowSnapshot, nrRow.nodeId) === 'clarify-cross-agent'
-      ) {
-        const detail = await getCrossClarifyDetail(deps.db, nodeRunId)
-        return c.json(detail)
-      }
-    }
-    const detail = await getClarifyDetail(deps.db, nodeRunId)
+    // RFC-058 T14: single ClarifyRound shape; `kind` discriminator
+    // distinguishes self vs cross. The keying by intermediary node_run id
+    // works for both because dual-write already mints the matching
+    // clarify_rounds row at session creation time.
+    const detail = await getClarifyRoundDetail(deps.db, nodeRunId)
     return c.json(detail)
   })
 

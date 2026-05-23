@@ -25,7 +25,7 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router'
-import type { ClarifySession, ClarifySessionSummary } from '@agent-workflow/shared'
+import type { ClarifyRound, ClarifyRoundSummary } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { ClarifyDetailPage } from '../src/routes/clarify.detail'
 import '../src/i18n'
@@ -40,16 +40,42 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function mkSession(overrides: Partial<ClarifySession> = {}): ClarifySession {
+// RFC-058: fixtures accept legacy aliases so older test cases stay readable.
+type LegacySessionOverrides = Partial<{
+  sourceAgentNodeId: string
+  sourceAgentNodeRunId: string
+  sourceShardKey: string | null
+  clarifyNodeId: string
+  clarifyNodeTitle: string | null
+  clarifyNodeRunId: string
+  iterationIndex: number
+}> &
+  Partial<ClarifyRound>
+
+function mkSession(overrides: LegacySessionOverrides = {}): ClarifyRound {
+  const {
+    sourceAgentNodeId,
+    sourceAgentNodeRunId,
+    sourceShardKey,
+    clarifyNodeId,
+    clarifyNodeTitle,
+    clarifyNodeRunId,
+    iterationIndex,
+    ...rest
+  } = overrides
   return {
     id: 'sess_1',
     taskId: 'task_a',
-    sourceAgentNodeId: 'designer',
-    sourceAgentNodeRunId: 'nr_src',
-    sourceShardKey: null,
-    clarifyNodeId: 'c1',
-    clarifyNodeRunId: 'nr_clarify',
-    iterationIndex: 0,
+    kind: 'self',
+    askingNodeId: sourceAgentNodeId ?? 'designer',
+    askingNodeRunId: sourceAgentNodeRunId ?? 'nr_src',
+    askingShardKey: sourceShardKey ?? null,
+    intermediaryNodeId: clarifyNodeId ?? 'c1',
+    intermediaryNodeRunId: clarifyNodeRunId ?? 'nr_clarify',
+    intermediaryNodeTitle: clarifyNodeTitle ?? null,
+    targetConsumerNodeId: null,
+    loopIter: 0,
+    iteration: iterationIndex ?? 0,
     questions: [
       {
         id: 'q1',
@@ -67,14 +93,17 @@ function mkSession(overrides: Partial<ClarifySession> = {}): ClarifySession {
     answeredAt: null,
     answeredBy: null,
     directive: null,
-    ...overrides,
+    sessionMode: null,
+    designerRunTriggeredAt: null,
+    abandonedAt: null,
+    ...rest,
   }
 }
 
-function mockApi(session: ClarifySession, peers: ClarifySessionSummary[] = []) {
+function mockApi(session: ClarifyRound, peers: ClarifyRoundSummary[] = []) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
     const s = typeof url === 'string' ? url : url.toString()
-    if (s.includes(`/api/clarify/${session.clarifyNodeRunId}`) && !s.endsWith('/answers')) {
+    if (s.includes(`/api/clarify/${session.intermediaryNodeRunId}`) && !s.endsWith('/answers')) {
       return new Response(JSON.stringify(session), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -152,20 +181,24 @@ describe('/clarify/$nodeRunId detail (RFC-023 T23)', () => {
     await waitFor(() => screen.getByTestId('clarify-truncation-warning'))
   })
 
-  test('shard switcher renders only when ≥ 2 awaiting_human peers share the same (taskId, clarifyNodeId)', async () => {
+  test('shard switcher renders only when ≥ 2 awaiting_human peers share the same (taskId, intermediaryNodeId)', async () => {
     const session = mkSession({ sourceShardKey: 'shard-A' })
-    const peers: ClarifySessionSummary[] = [
+    const peers: ClarifyRoundSummary[] = [
       {
         id: 'sess_a',
         taskId: 'task_a',
         taskName: 'fixture-task',
-        sourceAgentNodeId: 'designer',
-        sourceShardKey: 'shard-A',
-        clarifyNodeId: 'c1',
-        clarifyNodeRunId: 'nr_clarify',
-        iterationIndex: 0,
+        kind: 'self',
+        askingNodeId: 'designer',
+        askingShardKey: 'shard-A',
+        intermediaryNodeId: 'c1',
+        intermediaryNodeRunId: 'nr_clarify',
+        targetConsumerNodeId: null,
+        loopIter: 0,
+        iteration: 0,
         questionCount: 1,
         status: 'awaiting_human',
+        directive: null,
         createdAt: 0,
         answeredAt: null,
       },
@@ -173,13 +206,17 @@ describe('/clarify/$nodeRunId detail (RFC-023 T23)', () => {
         id: 'sess_b',
         taskId: 'task_a',
         taskName: 'fixture-task',
-        sourceAgentNodeId: 'designer',
-        sourceShardKey: 'shard-B',
-        clarifyNodeId: 'c1',
-        clarifyNodeRunId: 'nr_clarify_b',
-        iterationIndex: 0,
+        kind: 'self',
+        askingNodeId: 'designer',
+        askingShardKey: 'shard-B',
+        intermediaryNodeId: 'c1',
+        intermediaryNodeRunId: 'nr_clarify_b',
+        targetConsumerNodeId: null,
+        loopIter: 0,
+        iteration: 0,
         questionCount: 1,
         status: 'awaiting_human',
+        directive: null,
         createdAt: 0,
         answeredAt: null,
       },
@@ -193,8 +230,10 @@ describe('/clarify/$nodeRunId detail (RFC-023 T23)', () => {
   })
 
   test('source-level grep: shard_key field name survives in clarify.detail.tsx', () => {
+    // RFC-058: `sourceShardKey` → `askingShardKey` (renamed on the unified
+    // ClarifyRound shape). The user-facing DOM shard testids are unchanged.
     const src = readFileSync(join(__dirname, '..', 'src', 'routes', 'clarify.detail.tsx'), 'utf8')
-    expect(src).toContain('sourceShardKey')
+    expect(src).toContain('askingShardKey')
   })
 
   // RFC-037 follow-up: H1 reads "{taskName} / {clarifyNodeTitle || clarifyNodeId}"
@@ -226,7 +265,7 @@ describe('/clarify/$nodeRunId detail (RFC-023 T23)', () => {
 // Enter actually submits. These tests pin the page-level wiring (parent
 // route → QuestionForm refs + advanceFromQuestion + initial focus).
 describe('/clarify/$nodeRunId reviewer keyboard nav', () => {
-  function twoQuestionSession(): ClarifySession {
+  function twoQuestionSession(): ClarifyRound {
     return mkSession({
       questions: [
         {
@@ -311,7 +350,7 @@ describe('/clarify/$nodeRunId directive submit buttons (RFC-023 iter)', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       async (url: RequestInfo | URL, init?: RequestInit) => {
         const s = typeof url === 'string' ? url : url.toString()
-        if (s.includes(`/api/clarify/${session.clarifyNodeRunId}`) && s.endsWith('/answers')) {
+        if (s.includes(`/api/clarify/${session.intermediaryNodeRunId}`) && s.endsWith('/answers')) {
           const body =
             typeof init?.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : {}
           capturedPosts.push(body)
@@ -324,7 +363,7 @@ describe('/clarify/$nodeRunId directive submit buttons (RFC-023 iter)', () => {
             { status: 200, headers: { 'content-type': 'application/json' } },
           )
         }
-        if (s.includes(`/api/clarify/${session.clarifyNodeRunId}`)) {
+        if (s.includes(`/api/clarify/${session.intermediaryNodeRunId}`)) {
           return new Response(JSON.stringify(session), {
             status: 200,
             headers: { 'content-type': 'application/json' },

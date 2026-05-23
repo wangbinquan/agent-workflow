@@ -33,6 +33,8 @@ function mockLists(opts: {
   clarify?: Array<
     Partial<{
       id: string
+      // RFC-058: legacy alias names kept on the test mock surface for
+      // readability of older test cases; mapped to the new unified shape below.
       clarifyNodeRunId: string
       clarifyNodeId: string
       clarifyNodeTitle: string | null
@@ -73,15 +75,19 @@ function mockLists(opts: {
         id: c.id ?? `sess_${i}`,
         taskId: c.taskId ?? 'task_b',
         taskName: 'fixture-task',
-        sourceAgentNodeId: c.sourceAgentNodeId ?? `agent_${i}`,
-        sourceAgentNodeTitle: c.sourceAgentNodeTitle === undefined ? null : c.sourceAgentNodeTitle,
-        sourceShardKey: null,
-        clarifyNodeId: c.clarifyNodeId ?? 'clarify_node',
-        clarifyNodeTitle: c.clarifyNodeTitle === undefined ? null : c.clarifyNodeTitle,
-        clarifyNodeRunId: c.clarifyNodeRunId ?? `cn${i}`,
-        iterationIndex: 0,
+        kind: 'self' as const,
+        askingNodeId: c.sourceAgentNodeId ?? `agent_${i}`,
+        askingNodeTitle: c.sourceAgentNodeTitle === undefined ? null : c.sourceAgentNodeTitle,
+        askingShardKey: null,
+        intermediaryNodeId: c.clarifyNodeId ?? 'clarify_node',
+        intermediaryNodeTitle: c.clarifyNodeTitle === undefined ? null : c.clarifyNodeTitle,
+        intermediaryNodeRunId: c.clarifyNodeRunId ?? `cn${i}`,
+        targetConsumerNodeId: null,
+        loopIter: 0,
+        iteration: 0,
         questionCount: 2,
-        status: 'awaiting_human',
+        status: 'awaiting_human' as const,
+        directive: null,
         createdAt: c.createdAt ?? 1_700_000_500_000 + i * 1000,
         answeredAt: null,
       }))

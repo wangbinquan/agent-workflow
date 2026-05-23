@@ -22,7 +22,7 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router'
-import type { ClarifySessionSummary } from '@agent-workflow/shared'
+import type { ClarifyRoundSummary } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { ClarifyListPage } from '../src/routes/clarify'
 import '../src/i18n'
@@ -37,7 +37,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function mockListResponse(rows: ClarifySessionSummary[]) {
+function mockListResponse(rows: ClarifyRoundSummary[]) {
   const calls: string[] = []
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
     const s = typeof url === 'string' ? url : url.toString()
@@ -50,21 +50,50 @@ function mockListResponse(rows: ClarifySessionSummary[]) {
   return calls
 }
 
-function mkSummary(overrides: Partial<ClarifySessionSummary> = {}): ClarifySessionSummary {
+// RFC-058: fixtures use the unified shape; the `mkSummary` overrides bag
+// also accepts legacy field names for readability of older test cases.
+type LegacyOverrides = Partial<{
+  sourceAgentNodeId: string
+  sourceAgentNodeTitle: string | null
+  sourceShardKey: string | null
+  clarifyNodeId: string
+  clarifyNodeTitle: string | null
+  clarifyNodeRunId: string
+  iterationIndex: number
+}> &
+  Partial<ClarifyRoundSummary>
+
+function mkSummary(overrides: LegacyOverrides = {}): ClarifyRoundSummary {
+  const {
+    sourceAgentNodeId,
+    sourceAgentNodeTitle,
+    sourceShardKey,
+    clarifyNodeId,
+    clarifyNodeTitle,
+    clarifyNodeRunId,
+    iterationIndex,
+    ...rest
+  } = overrides
   return {
     id: 'sess_1',
     taskId: 'task_a',
     taskName: 'fixture-task',
-    sourceAgentNodeId: 'designer',
-    sourceShardKey: null,
-    clarifyNodeId: 'c1',
-    clarifyNodeRunId: 'nr_1',
-    iterationIndex: 0,
+    kind: 'self',
+    askingNodeId: sourceAgentNodeId ?? 'designer',
+    askingNodeTitle: sourceAgentNodeTitle ?? null,
+    askingShardKey: sourceShardKey ?? null,
+    intermediaryNodeId: clarifyNodeId ?? 'c1',
+    intermediaryNodeTitle: clarifyNodeTitle ?? null,
+    intermediaryNodeRunId: clarifyNodeRunId ?? 'nr_1',
+    targetConsumerNodeId: null,
+    loopIter: 0,
+    iteration: iterationIndex ?? 0,
     questionCount: 2,
     status: 'awaiting_human',
+    directive: null,
     createdAt: 1_700_000_000_000,
     answeredAt: null,
-    ...overrides,
+    ...rest,
   }
 }
 

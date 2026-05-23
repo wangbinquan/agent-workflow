@@ -47,7 +47,7 @@ class MockSocket {
 const RealWebSocket = globalThis.WebSocket
 
 function Probe({ taskId, nodeRunId }: { taskId: string | null; nodeRunId: string | null }) {
-  useClarifyWs({ taskId, clarifyNodeRunId: nodeRunId })
+  useClarifyWs({ taskId, intermediaryNodeRunId: nodeRunId })
   return null
 }
 

@@ -2,8 +2,11 @@
 //
 // Drafts: a user has opened a clarify session detail page, started filling in
 // answers (radio / checkbox / custom text) but not yet submitted. We persist
-// the in-flight ClarifyAnswer[] by (taskId, clarifyNodeRunId, sessionId) so
-// closing the tab or refreshing doesn't lose work.
+// the in-flight ClarifyAnswer[] by (taskId, intermediaryNodeRunId, roundId)
+// so closing the tab or refreshing doesn't lose work. RFC-058 renamed the
+// key fields from (clarifyNodeRunId, sessionId) to
+// (intermediaryNodeRunId, roundId) — the IDB key prefix bumped to
+// `clarify-round:` so prior drafts don't shadow new ones with stale ids.
 //
 // Deliberately a separate object store from `review-drafts` so the two
 // features can evolve independently. Same IDB facade for parity.
@@ -16,14 +19,16 @@ const VERSION = 2 // bumped from 1 to add the clarify-drafts store
 
 export interface ClarifyDraftKey {
   taskId: string
-  clarifyNodeRunId: string
-  sessionId: string
+  intermediaryNodeRunId: string
+  roundId: string
 }
 
 export function clarifyDraftKey(k: ClarifyDraftKey): string {
-  // 'clarify:' prefix keeps the cursor scan in listDrafts cheap to filter and
-  // gives the operator a way to grep the IDB store name in devtools.
-  return `clarify:${k.taskId}:${k.clarifyNodeRunId}:${k.sessionId}`
+  // 'clarify-round:' prefix matches the RFC-058 rename; legacy `clarify:`
+  // entries from pre-PR-B builds are intentionally left in place (no
+  // migration) because the draft store is best-effort and reset on the
+  // next answer submit anyway.
+  return `clarify-round:${k.taskId}:${k.intermediaryNodeRunId}:${k.roundId}`
 }
 
 let dbPromise: Promise<IDBDatabase | null> | null = null
@@ -99,16 +104,15 @@ export async function deleteClarifyDraft(k: ClarifyDraftKey): Promise<void> {
 }
 
 export async function listClarifyDrafts(
-  filter: Partial<Pick<ClarifyDraftKey, 'taskId' | 'clarifyNodeRunId'>> = {},
+  filter: Partial<Pick<ClarifyDraftKey, 'taskId' | 'intermediaryNodeRunId'>> = {},
 ): Promise<{ key: string; answers: ClarifyAnswer[] }[]> {
   const db = await openDb()
   if (db === null) return []
-  // The keys are stored as `clarify:<taskId>:<clarifyNodeRunId>:<sessionId>`,
-  // so the filter prefix needs the literal 'clarify:' lead-in plus whichever
-  // higher-order id segments the caller asked to narrow by.
-  const segments: string[] = ['clarify']
+  // Keys are `clarify-round:<taskId>:<intermediaryNodeRunId>:<roundId>`.
+  // Filter narrowed via prefix segments.
+  const segments: string[] = ['clarify-round']
   if (filter.taskId !== undefined) segments.push(filter.taskId)
-  if (filter.clarifyNodeRunId !== undefined) segments.push(filter.clarifyNodeRunId)
+  if (filter.intermediaryNodeRunId !== undefined) segments.push(filter.intermediaryNodeRunId)
   const prefix = segments.join(':')
   return new Promise((resolve) => {
     const out: { key: string; answers: ClarifyAnswer[] }[] = []

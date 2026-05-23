@@ -59,9 +59,14 @@ describe('RFC-058 baseline T7 — detail page reject modal + submit hook', () =>
   })
 
   test('cross-clarify multi-source banner: role + per-peer link testid pattern', () => {
+    // RFC-058 T14/T16: field path renamed `p.crossClarifyNodeId` →
+    // `p.intermediaryNodeId` as part of the ClarifyRound unification.
+    // User-facing DOM testid prefix `cross-clarify-multi-source-link-` is
+    // preserved byte-equivalent; only the source-text aliasing changed
+    // (internal behavior layer per RFC-058 Q3).
     expect(DETAIL_SRC).toContain('data-testid="cross-clarify-multi-source-banner"')
     expect(DETAIL_SRC).toContain(
-      'data-testid={`cross-clarify-multi-source-link-${p.crossClarifyNodeId}`}',
+      'data-testid={`cross-clarify-multi-source-link-${p.intermediaryNodeId}`}',
     )
   })
 

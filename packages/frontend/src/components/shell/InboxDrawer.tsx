@@ -15,7 +15,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import type { ClarifySessionSummary, MemorySummary, ReviewSummary } from '@agent-workflow/shared'
+import type { ClarifyRoundSummary, MemorySummary, ReviewSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { usePermission } from '@/hooks/useActor'
 
@@ -50,7 +50,7 @@ export function InboxDrawer({ open, onClose }: InboxDrawerProps) {
     refetchInterval: open ? 15_000 : false,
   })
 
-  const clarify = useQuery<ClarifySessionSummary[]>({
+  const clarify = useQuery<ClarifyRoundSummary[]>({
     queryKey: ['clarify', 'inbox', 'pending'],
     queryFn: ({ signal }) => api.get('/api/clarify?status=awaiting_human', undefined, signal),
     enabled: open,
@@ -108,35 +108,25 @@ export function InboxDrawer({ open, onClose }: InboxDrawerProps) {
     }
     if (tab === 'all' || tab === 'clarify') {
       for (const c of clarify.data ?? []) {
-        // The clarify-list + clarify-detail pages identify a clarify entry
-        // by its *clarify node* title (parallel to how the review list
-        // uses the review node title). The inbox preview needs the same
-        // identity or "open this row" jumps to a header reading something
-        // different than what the row promised. Fall back order:
-        // clarifyNodeTitle → clarifyNodeId (the opaque workflow node id).
+        // RFC-058: unified ClarifyRoundSummary — intermediary == clarify
+        // node, asking == source agent, iteration == legacy iterationIndex.
         const clarifyTitle =
-          typeof c.clarifyNodeTitle === 'string' && c.clarifyNodeTitle.length > 0
-            ? c.clarifyNodeTitle
-            : c.clarifyNodeId
-        // Source agent shown as supporting context underneath; prefer its
-        // user-set display name when available.
+          typeof c.intermediaryNodeTitle === 'string' && c.intermediaryNodeTitle.length > 0
+            ? c.intermediaryNodeTitle
+            : c.intermediaryNodeId
         const agentLabel =
-          typeof c.sourceAgentNodeTitle === 'string' && c.sourceAgentNodeTitle.length > 0
-            ? c.sourceAgentNodeTitle
-            : c.sourceAgentNodeId
-        const shardOrIter = c.sourceShardKey
-          ? `shard ${c.sourceShardKey}`
-          : `iter ${c.iterationIndex}`
+          typeof c.askingNodeTitle === 'string' && c.askingNodeTitle.length > 0
+            ? c.askingNodeTitle
+            : c.askingNodeId
+        const shardOrIter = c.askingShardKey ? `shard ${c.askingShardKey}` : `iter ${c.iteration}`
         rows.push({
           kind: 'clarify',
-          // React key uses the session id (always unique). The nav target
-          // stays on `clarifyNodeRunId` because the detail route is
-          // /clarify/$nodeRunId. Multiple awaiting sessions can share a
-          // node-run (loop iterations / retries) — without separating the
-          // key from the nav id we get duplicate React keys, and tab
-          // switches leave stale rows in the DOM instead of re-filtering.
+          // React key uses the round id (always unique). The nav target
+          // stays on `intermediaryNodeRunId` because the detail route is
+          // /clarify/$nodeRunId — keyed by the intermediary (clarify /
+          // clarify-cross-agent) node's run id.
           rowKey: c.id,
-          id: c.clarifyNodeRunId,
+          id: c.intermediaryNodeRunId,
           taskId: c.taskId,
           taskName: c.taskName,
           title: clarifyTitle,

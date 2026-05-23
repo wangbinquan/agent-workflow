@@ -22,9 +22,8 @@ import { useTranslation } from 'react-i18next'
 import type {
   ClarifyAnswer,
   ClarifyDirective,
-  ClarifyInboxEntry,
-  ClarifySession,
-  CrossClarifySession,
+  ClarifyRound,
+  ClarifyRoundSummary,
   SubmitClarifyAnswersResponse,
 } from '@agent-workflow/shared'
 import { api } from '@/api/client'
@@ -34,12 +33,8 @@ import { useClarifyWs } from '@/hooks/useClarifyWs'
 import { deleteClarifyDraft, getClarifyDraft, setClarifyDraft } from '@/lib/clarify/draftStore'
 import { Route as RootRoute } from './__root'
 
-/** Cross-clarify detail wraps the legacy ClarifySession in a discriminated
- *  union so the same component renders both. We narrow at the top of the
- *  page via the field `crossClarifyNodeId` (cross) vs `clarifyNodeId` (self). */
-type ClarifyDetailEntry =
-  | ({ kind: 'self' } & ClarifySession)
-  | ({ kind: 'cross' } & CrossClarifySession)
+/** RFC-058: REST returns a single ClarifyRound shape with `kind` discriminator. */
+type ClarifyDetailEntry = ClarifyRound
 
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
@@ -58,20 +53,7 @@ export function ClarifyDetailPage() {
 
   const session = useQuery<ClarifyDetailEntry>({
     queryKey: ['clarify', 'detail', nodeRunId],
-    queryFn: async ({ signal }) => {
-      // RFC-056: the endpoint returns either a ClarifySession (RFC-023
-      // self-clarify) or a CrossClarifySession (RFC-056). Distinguish by
-      // the presence of `crossClarifyNodeId` (cross) vs `clarifyNodeId`
-      // (self) and tag with kind so downstream code can branch cleanly.
-      const raw = (await api.get(`/api/clarify/${nodeRunId}`, undefined, signal)) as Record<
-        string,
-        unknown
-      >
-      if (typeof raw.crossClarifyNodeId === 'string') {
-        return { kind: 'cross' as const, ...(raw as unknown as CrossClarifySession) }
-      }
-      return { kind: 'self' as const, ...(raw as unknown as ClarifySession) }
-    },
+    queryFn: ({ signal }) => api.get<ClarifyRound>(`/api/clarify/${nodeRunId}`, undefined, signal),
     refetchOnWindowFocus: false,
   })
 
@@ -91,7 +73,7 @@ export function ClarifyDetailPage() {
   // when the other tab submits.
   useClarifyWs({
     taskId: session.data?.taskId ?? null,
-    clarifyNodeRunId: nodeRunId,
+    intermediaryNodeRunId: nodeRunId,
   })
 
   // ----------------------------------------------------------------------
@@ -166,8 +148,11 @@ export function ClarifyDetailPage() {
       return
     }
     // Try to restore the IDB draft (if any) for this session.
-    const ownerNodeRunId = s.kind === 'cross' ? s.crossClarifyNodeRunId : s.clarifyNodeRunId
-    const key = { taskId: s.taskId, clarifyNodeRunId: ownerNodeRunId, sessionId: s.id }
+    const key = {
+      taskId: s.taskId,
+      intermediaryNodeRunId: s.intermediaryNodeRunId,
+      roundId: s.id,
+    }
     getClarifyDraft(key)
       .then((stored) => {
         if (stored !== null) {
@@ -199,9 +184,8 @@ export function ClarifyDetailPage() {
             customText: '',
           },
       )
-      const ownerNodeRunId = s.kind === 'cross' ? s.crossClarifyNodeRunId : s.clarifyNodeRunId
       void setClarifyDraft(
-        { taskId: s.taskId, clarifyNodeRunId: ownerNodeRunId, sessionId: s.id },
+        { taskId: s.taskId, intermediaryNodeRunId: s.intermediaryNodeRunId, roundId: s.id },
         arr,
       ).finally(() => setDraftSaving(false))
     }, DRAFT_DEBOUNCE_MS)
@@ -219,11 +203,11 @@ export function ClarifyDetailPage() {
   // ----------------------------------------------------------------------
 
   const peerScopeTaskId = session.data?.taskId
-  const peers = useQuery<ClarifyInboxEntry[]>({
+  const peers = useQuery<ClarifyRoundSummary[]>({
     queryKey: ['clarify', 'peers', peerScopeTaskId],
     queryFn: ({ signal }) => {
       const taskId = peerScopeTaskId ?? ''
-      return api.get<ClarifyInboxEntry[]>(
+      return api.get<ClarifyRoundSummary[]>(
         `/api/clarify?status=awaiting_human&taskId=${encodeURIComponent(taskId)}`,
         undefined,
         signal,
@@ -233,38 +217,30 @@ export function ClarifyDetailPage() {
     refetchInterval: 10000,
   })
 
+  // RFC-058: same task + same intermediary (clarify) node has ≥ 2 awaiting
+  // shards → render the shard switcher.
   const shardPeers = useMemo(() => {
     if (session.data === undefined || session.data.kind !== 'self') return []
     const me = session.data
-    // Older payloads (and the unit-test fixtures predating the mixed-list
-    // PR-B) don't carry the discriminator `kind` field. Treat any peer
-    // with `clarifyNodeId` set (RFC-023 shape) as a self-clarify entry
-    // for compat.
     const list = (peers.data ?? []).filter(
-      (p): p is Extract<ClarifyInboxEntry, { kind: 'self' }> => {
-        const kindOrLegacy = p.kind ?? ('clarifyNodeId' in p ? 'self' : null)
-        return (
-          kindOrLegacy === 'self' &&
-          (p as Extract<ClarifyInboxEntry, { kind: 'self' }>).clarifyNodeId === me.clarifyNodeId
-        )
-      },
+      (p) => p.kind === 'self' && p.intermediaryNodeId === me.intermediaryNodeId,
     )
     if (list.length < 2) return []
-    return [...list].sort((a, b) => (a.sourceShardKey ?? '').localeCompare(b.sourceShardKey ?? ''))
+    return [...list].sort((a, b) => (a.askingShardKey ?? '').localeCompare(b.askingShardKey ?? ''))
   }, [peers.data, session.data])
 
-  /** RFC-056: cross-clarify peers — awaiting cross sessions targeting the
+  /** RFC-058: cross-clarify peers — awaiting cross rounds targeting the
    *  same designer. Used to render the multi-source waiting banner after
    *  the user submits THIS cross-clarify but ≥ 1 sibling is still awaiting. */
   const crossPeers = useMemo(() => {
     if (session.data === undefined || session.data.kind !== 'cross') return []
     const me = session.data
-    if (me.targetDesignerNodeId === null) return []
+    if (me.targetConsumerNodeId === null) return []
     return (peers.data ?? []).filter(
-      (p): p is Extract<ClarifyInboxEntry, { kind: 'cross' }> =>
+      (p) =>
         p.kind === 'cross' &&
-        p.crossClarifyNodeRunId !== me.crossClarifyNodeRunId &&
-        p.targetDesignerNodeId === me.targetDesignerNodeId &&
+        p.intermediaryNodeRunId !== me.intermediaryNodeRunId &&
+        p.targetConsumerNodeId === me.targetConsumerNodeId &&
         p.status === 'awaiting_human',
     )
   }, [peers.data, session.data])
@@ -294,17 +270,15 @@ export function ClarifyDetailPage() {
             customText: '',
           },
       )
-      const ownerNodeRunId = s.kind === 'cross' ? s.crossClarifyNodeRunId : s.clarifyNodeRunId
-      const ifMatchIteration = s.kind === 'cross' ? s.iteration : s.iterationIndex
       const resp = await api.post<SubmitClarifyAnswersResponse>(
-        `/api/clarify/${ownerNodeRunId}/answers`,
-        { answers: arr, ifMatchIteration, directive },
+        `/api/clarify/${s.intermediaryNodeRunId}/answers`,
+        { answers: arr, ifMatchIteration: s.iteration, directive },
       )
       // Clear the IDB draft; the answer is committed server-side.
       await deleteClarifyDraft({
         taskId: s.taskId,
-        clarifyNodeRunId: ownerNodeRunId,
-        sessionId: s.id,
+        intermediaryNodeRunId: s.intermediaryNodeRunId,
+        roundId: s.id,
       })
       return resp
     },
@@ -419,20 +393,18 @@ export function ClarifyDetailPage() {
   if (s === undefined) return null
 
   const readonly = s.status !== 'awaiting_human'
-  // Normalized fields — RFC-023 (self) and RFC-056 (cross) carry the same
-  // logical data under different field names. Keep the JSX below readable
-  // by deriving the shared shape here.
-  const nodeId = s.kind === 'cross' ? s.crossClarifyNodeId : s.clarifyNodeId
+  // RFC-058: ClarifyRound unified — intermediary == clarify / clarify-cross
+  // node, asking == source agent / questioner, iteration == round counter.
+  const nodeId = s.intermediaryNodeId
   const nodeTitle =
-    s.kind === 'self' &&
-    typeof s.clarifyNodeTitle === 'string' &&
-    s.clarifyNodeTitle.length > 0 &&
-    s.clarifyNodeTitle !== s.clarifyNodeId
-      ? s.clarifyNodeTitle
+    typeof s.intermediaryNodeTitle === 'string' &&
+    s.intermediaryNodeTitle.length > 0 &&
+    s.intermediaryNodeTitle !== s.intermediaryNodeId
+      ? s.intermediaryNodeTitle
       : null
-  const sourceName = s.kind === 'cross' ? s.sourceQuestionerNodeId : s.sourceAgentNodeId
-  const iteration = s.kind === 'cross' ? s.iteration : s.iterationIndex
-  const shardKey = s.kind === 'cross' ? null : s.sourceShardKey
+  const sourceName = s.askingNodeId
+  const iteration = s.iteration
+  const shardKey = s.kind === 'cross' ? null : s.askingShardKey
   const truncationWarnings = s.kind === 'self' ? s.truncationWarnings : undefined
   const isCross = s.kind === 'cross'
 
@@ -472,11 +444,11 @@ export function ClarifyDetailPage() {
           {isCross
             ? t('crossClarify.contextCard', { name: sourceName, n: iteration })
             : t('clarify.detail.contextCard', { name: sourceName, n: iteration })}
-          {isCross && s.targetDesignerNodeId !== null && (
+          {isCross && s.targetConsumerNodeId !== null && (
             <>
               {' · '}
               <span data-testid="cross-clarify-target-designer">
-                {t('crossClarify.targetDesigner', { name: s.targetDesignerNodeId })}
+                {t('crossClarify.targetDesigner', { name: s.targetConsumerNodeId })}
               </span>
             </>
           )}
@@ -508,17 +480,15 @@ export function ClarifyDetailPage() {
             <Link
               key={p.id}
               to="/clarify/$nodeRunId"
-              params={{ nodeRunId: p.clarifyNodeRunId }}
+              params={{ nodeRunId: p.intermediaryNodeRunId }}
               className={
                 'tabs__tab' +
-                (p.clarifyNodeRunId === (s as ClarifySession).clarifyNodeRunId
-                  ? ' tabs__tab--active'
-                  : '')
+                (p.intermediaryNodeRunId === s.intermediaryNodeRunId ? ' tabs__tab--active' : '')
               }
-              data-shard-key={p.sourceShardKey ?? ''}
-              data-testid={`clarify-shard-${p.sourceShardKey ?? 'main'}`}
+              data-shard-key={p.askingShardKey ?? ''}
+              data-testid={`clarify-shard-${p.askingShardKey ?? 'main'}`}
             >
-              {p.sourceShardKey ?? '—'}
+              {p.askingShardKey ?? '—'}
             </Link>
           ))}
         </section>
@@ -532,8 +502,8 @@ export function ClarifyDetailPage() {
       {isCross &&
         (crossWaiting !== null || crossPeers.length > 0) &&
         (() => {
-          const pending = crossWaiting?.pending ?? crossPeers.map((p) => p.crossClarifyNodeId)
-          const pendingPeers = crossPeers.filter((p) => pending.includes(p.crossClarifyNodeId))
+          const pending = crossWaiting?.pending ?? crossPeers.map((p) => p.intermediaryNodeId)
+          const pendingPeers = crossPeers.filter((p) => pending.includes(p.intermediaryNodeId))
           if (pending.length === 0) return null
           return (
             <section
@@ -548,11 +518,11 @@ export function ClarifyDetailPage() {
                     <li key={p.id}>
                       <Link
                         to="/clarify/$nodeRunId"
-                        params={{ nodeRunId: p.crossClarifyNodeRunId }}
+                        params={{ nodeRunId: p.intermediaryNodeRunId }}
                         className="link"
-                        data-testid={`cross-clarify-multi-source-link-${p.crossClarifyNodeId}`}
+                        data-testid={`cross-clarify-multi-source-link-${p.intermediaryNodeId}`}
                       >
-                        {t('crossClarify.multiSourcePendingLinkLabel')}: {p.crossClarifyNodeId}
+                        {t('crossClarify.multiSourcePendingLinkLabel')}: {p.intermediaryNodeId}
                       </Link>
                     </li>
                   ))}

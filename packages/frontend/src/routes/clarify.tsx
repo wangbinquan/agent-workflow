@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, createRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { ClarifyInboxEntry, ClarifySessionStatus } from '@agent-workflow/shared'
+import type { ClarifyRoundSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Route as RootRoute } from './__root'
 
@@ -27,41 +27,36 @@ export const Route = createRoute({
 const FILTERS: ReadonlyArray<'awaiting' | 'answered' | 'all'> = ['awaiting', 'answered', 'all']
 type FilterKey = (typeof FILTERS)[number]
 
-function filterToStatus(f: FilterKey): ClarifySessionStatus | 'all' {
+function filterToStatus(
+  f: FilterKey,
+): 'awaiting_human' | 'answered' | 'canceled' | 'abandoned' | 'all' {
   if (f === 'awaiting') return 'awaiting_human'
   if (f === 'answered') return 'answered'
   return 'all'
 }
 
-/** RFC-056: render one inbox row branching on kind. Self-clarify keeps the
- *  RFC-023 row shape verbatim (chips, source agent arrow, shard key);
- *  cross-clarify renders the questioner → designer relationship with the
- *  same visual chrome. The `kind` chip differentiates them on the left.
- *
- *  Older payloads (before the backend started tagging) lack the `kind`
- *  discriminator entirely; we treat those as self for back-compat. */
-function renderRow(entry: ClarifyInboxEntry, t: (key: string) => string): React.ReactElement {
-  const kind: 'self' | 'cross' = entry.kind ?? 'self'
+/** RFC-058: render one inbox row branching on ClarifyRoundSummary.kind.
+ *  Self-clarify keeps the RFC-023 row shape (chips, asking-node arrow,
+ *  shard key); cross-clarify renders the questioner → designer
+ *  relationship with the same visual chrome. The `kind` chip on the left
+ *  differentiates them. */
+function renderRow(entry: ClarifyRoundSummary, t: (key: string) => string): React.ReactElement {
+  const kind: 'self' | 'cross' = entry.kind
   const kindChipLabel =
     kind === 'cross' ? t('clarify.list.chip.cross') : t('clarify.list.chip.self')
-  // Both chips use the same neutral chip class; text label + per-row
-  // data-kind attr give the visual + DOM differentiation.
   const kindChipClass = 'chip chip--tight'
 
   if (kind === 'self') {
-    // Alias the narrowed entry back to `s` so the existing source-text
-    // regression tests (which assert literal `s.status === 'awaiting_human'`)
-    // still match.
-    const s = entry as Extract<ClarifyInboxEntry, { kind: 'self' }>
+    const s = entry
     const clarifyTitle =
-      typeof s.clarifyNodeTitle === 'string' && s.clarifyNodeTitle.length > 0
-        ? s.clarifyNodeTitle
+      typeof s.intermediaryNodeTitle === 'string' && s.intermediaryNodeTitle.length > 0
+        ? s.intermediaryNodeTitle
         : null
-    const sourceTitle =
-      typeof s.sourceAgentNodeTitle === 'string' && s.sourceAgentNodeTitle.length > 0
-        ? s.sourceAgentNodeTitle
+    const askingTitle =
+      typeof s.askingNodeTitle === 'string' && s.askingNodeTitle.length > 0
+        ? s.askingNodeTitle
         : null
-    const hasClarifyTitle = clarifyTitle !== null && clarifyTitle !== s.clarifyNodeId
+    const hasClarifyTitle = clarifyTitle !== null && clarifyTitle !== s.intermediaryNodeId
     return (
       <tr key={s.id} data-status={s.status} data-kind="self" data-testid={`clarify-row-${s.id}`}>
         <td>
@@ -71,15 +66,15 @@ function renderRow(entry: ClarifyInboxEntry, t: (key: string) => string): React.
           {hasClarifyTitle ? (
             <>
               <div className="reviews-row__title">{clarifyTitle}</div>
-              <code className="chip chip--tight reviews-row__nodeid">{s.clarifyNodeId}</code>
+              <code className="chip chip--tight reviews-row__nodeid">{s.intermediaryNodeId}</code>
             </>
           ) : (
-            <code className="chip chip--tight">{s.clarifyNodeId}</code>
+            <code className="chip chip--tight">{s.intermediaryNodeId}</code>
           )}
           <code className="chip chip--tight reviews-row__nodeid">
-            ← {sourceTitle ?? s.sourceAgentNodeId}
-            {s.sourceShardKey !== null && (
-              <span data-testid="clarify-row-shard"> · {s.sourceShardKey}</span>
+            ← {askingTitle ?? s.askingNodeId}
+            {s.askingShardKey !== null && (
+              <span data-testid="clarify-row-shard"> · {s.askingShardKey}</span>
             )}
           </code>
         </td>
@@ -94,13 +89,13 @@ function renderRow(entry: ClarifyInboxEntry, t: (key: string) => string): React.
               : t('clarify.list.statusAnswered')}
           </span>
         </td>
-        <td>{s.iterationIndex}</td>
+        <td>{s.iteration}</td>
         <td>{s.questionCount}</td>
         <td className="muted">{new Date(s.createdAt).toLocaleString()}</td>
         <td>
           <Link
             to="/clarify/$nodeRunId"
-            params={{ nodeRunId: s.clarifyNodeRunId }}
+            params={{ nodeRunId: s.intermediaryNodeRunId }}
             className="btn btn--sm"
           >
             {t('clarify.list.openButton')}
@@ -109,8 +104,8 @@ function renderRow(entry: ClarifyInboxEntry, t: (key: string) => string): React.
       </tr>
     )
   }
-  // RFC-056 cross-clarify row.
-  const cross = entry as Extract<ClarifyInboxEntry, { kind: 'cross' }>
+  // RFC-058 cross-clarify row.
+  const cross = entry
   return (
     <tr
       key={cross.id}
@@ -122,11 +117,11 @@ function renderRow(entry: ClarifyInboxEntry, t: (key: string) => string): React.
         <span className={kindChipClass} data-testid={`clarify-row-kind-${cross.id}`}>
           {kindChipLabel}
         </span>{' '}
-        <code className="chip chip--tight">{cross.crossClarifyNodeId}</code>
+        <code className="chip chip--tight">{cross.intermediaryNodeId}</code>
         <code className="chip chip--tight reviews-row__nodeid">
-          ← {cross.sourceQuestionerNodeId}
-          {cross.targetDesignerNodeId !== null && (
-            <span data-testid="clarify-row-designer"> → {cross.targetDesignerNodeId}</span>
+          ← {cross.askingNodeId}
+          {cross.targetConsumerNodeId !== null && (
+            <span data-testid="clarify-row-designer"> → {cross.targetConsumerNodeId}</span>
           )}
         </code>
       </td>
@@ -153,7 +148,7 @@ function renderRow(entry: ClarifyInboxEntry, t: (key: string) => string): React.
       <td>
         <Link
           to="/clarify/$nodeRunId"
-          params={{ nodeRunId: cross.crossClarifyNodeRunId }}
+          params={{ nodeRunId: cross.intermediaryNodeRunId }}
           className="btn btn--sm"
         >
           {t('clarify.list.openButton')}
@@ -167,18 +162,18 @@ export function ClarifyListPage() {
   const { t } = useTranslation()
   const [filter, setFilter] = useState<FilterKey>('awaiting')
 
-  const list = useQuery<ClarifyInboxEntry[]>({
+  const list = useQuery<ClarifyRoundSummary[]>({
     queryKey: ['clarify', 'list', filter],
     queryFn: ({ signal }) => {
       const q = new URLSearchParams()
       q.set('status', filterToStatus(filter))
-      return api.get<ClarifyInboxEntry[]>(`/api/clarify?${q.toString()}`, undefined, signal)
+      return api.get<ClarifyRoundSummary[]>(`/api/clarify?${q.toString()}`, undefined, signal)
     },
     refetchInterval: 10000,
   })
 
   // Group rows by task for a section-by-task layout.
-  const groups = new Map<string, ClarifyInboxEntry[]>()
+  const groups = new Map<string, ClarifyRoundSummary[]>()
   for (const r of list.data ?? []) {
     const g = groups.get(r.taskId)
     if (g === undefined) groups.set(r.taskId, [r])

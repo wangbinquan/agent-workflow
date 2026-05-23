@@ -11,7 +11,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { ClarifySessionSummary, ReviewSummary } from '@agent-workflow/shared'
+import type { ClarifyRoundSummary, ReviewSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import {
@@ -36,7 +36,7 @@ export function InboxPreviewList({ onCount }: InboxPreviewListProps) {
     queryFn: ({ signal }) => api.get('/api/reviews?status=pending', undefined, signal),
     refetchInterval: 15_000,
   })
-  const clarify = useQuery<ClarifySessionSummary[]>({
+  const clarify = useQuery<ClarifyRoundSummary[]>({
     queryKey: CLARIFY_HOMEPAGE_QUERY_KEY,
     queryFn: ({ signal }) => api.get('/api/clarify?status=awaiting_human', undefined, signal),
     refetchInterval: 15_000,

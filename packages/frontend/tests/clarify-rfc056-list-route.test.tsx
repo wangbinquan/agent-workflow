@@ -29,7 +29,7 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router'
-import type { ClarifyInboxEntry } from '@agent-workflow/shared'
+import type { ClarifyRoundSummary } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { ClarifyListPage } from '../src/routes/clarify'
 import '../src/i18n'
@@ -46,7 +46,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function mockListResponse(rows: ClarifyInboxEntry[]) {
+function mockListResponse(rows: ClarifyRoundSummary[]) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async () =>
       new Response(JSON.stringify(rows), {
@@ -56,39 +56,39 @@ function mockListResponse(rows: ClarifyInboxEntry[]) {
   )
 }
 
-function selfRow(
-  overrides: Partial<Extract<ClarifyInboxEntry, { kind: 'self' }>> = {},
-): Extract<ClarifyInboxEntry, { kind: 'self' }> {
+function selfRow(overrides: Partial<ClarifyRoundSummary> = {}): ClarifyRoundSummary {
   return {
     kind: 'self',
     id: 'sess_self',
     taskId: 'task_a',
     taskName: 'fixture-task',
-    sourceAgentNodeId: 'designer',
-    sourceShardKey: null,
-    clarifyNodeId: 'c1',
-    clarifyNodeRunId: 'nr_self_1',
-    iterationIndex: 0,
+    askingNodeId: 'designer',
+    askingShardKey: null,
+    intermediaryNodeId: 'c1',
+    intermediaryNodeRunId: 'nr_self_1',
+    targetConsumerNodeId: null,
+    loopIter: 0,
+    iteration: 0,
     questionCount: 2,
     status: 'awaiting_human',
+    directive: null,
     createdAt: 1_700_000_000_000,
     answeredAt: null,
     ...overrides,
   }
 }
 
-function crossRow(
-  overrides: Partial<Extract<ClarifyInboxEntry, { kind: 'cross' }>> = {},
-): Extract<ClarifyInboxEntry, { kind: 'cross' }> {
+function crossRow(overrides: Partial<ClarifyRoundSummary> = {}): ClarifyRoundSummary {
   return {
     kind: 'cross',
     id: 'sess_cross',
     taskId: 'task_a',
     taskName: 'fixture-task',
-    crossClarifyNodeId: 'cross1',
-    crossClarifyNodeRunId: 'nr_cross_1',
-    sourceQuestionerNodeId: 'questioner',
-    targetDesignerNodeId: 'designer',
+    askingNodeId: 'questioner',
+    askingShardKey: null,
+    intermediaryNodeId: 'cross1',
+    intermediaryNodeRunId: 'nr_cross_1',
+    targetConsumerNodeId: 'designer',
     loopIter: 0,
     iteration: 0,
     questionCount: 3,
@@ -155,7 +155,7 @@ describe('RFC-056 /clarify list — mixed self + cross with kind chip', () => {
   })
 
   test('cross-clarify Open link points to the cross-clarify node_run id', async () => {
-    mockListResponse([crossRow({ crossClarifyNodeRunId: 'nr_xc_abc' })])
+    mockListResponse([crossRow({ intermediaryNodeRunId: 'nr_xc_abc' })])
     renderWithRouter()
     await waitFor(() => screen.getByTestId('clarify-row-sess_cross'))
     const row = screen.getByTestId('clarify-row-sess_cross')
@@ -165,7 +165,7 @@ describe('RFC-056 /clarify list — mixed self + cross with kind chip', () => {
   })
 
   test('cross-clarify row surfaces the designer target in the source chip', async () => {
-    mockListResponse([crossRow({ targetDesignerNodeId: 'designerNodeABC' })])
+    mockListResponse([crossRow({ targetConsumerNodeId: 'designerNodeABC' })])
     renderWithRouter()
     await waitFor(() => screen.getByTestId('clarify-row-sess_cross'))
     expect(screen.getByTestId('clarify-row-designer').textContent ?? '').toContain(

@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from 'vitest'
 import { mergeInboxItems } from '@/lib/homepage'
-import type { ClarifySessionSummary, ReviewSummary } from '@agent-workflow/shared'
+import type { ClarifyRoundSummary, ReviewSummary } from '@agent-workflow/shared'
 
 const REVIEW: ReviewSummary = {
   nodeRunId: 'nr-1',
@@ -24,17 +24,21 @@ const REVIEW: ReviewSummary = {
   decidedAt: null,
 }
 
-const CLARIFY: ClarifySessionSummary = {
+const CLARIFY: ClarifyRoundSummary = {
   id: 'c1',
   taskId: 't2',
   taskName: 'PR-9999 doc',
-  sourceAgentNodeId: 'agent-1',
-  sourceShardKey: null,
-  clarifyNodeId: 'clarify-1',
-  clarifyNodeRunId: 'nr-2',
-  iterationIndex: 0,
+  kind: 'self',
+  askingNodeId: 'agent-1',
+  askingShardKey: null,
+  intermediaryNodeId: 'clarify-1',
+  intermediaryNodeRunId: 'nr-2',
+  targetConsumerNodeId: null,
+  loopIter: 0,
+  iteration: 0,
   questionCount: 2,
   status: 'awaiting_human',
+  directive: null,
   createdAt: 2000,
   answeredAt: null,
 }

@@ -10,7 +10,7 @@
 // exhaustively (no React, no fake clock).
 
 import { describe, expect, test } from 'vitest'
-import type { ClarifySessionSummary, ReviewSummary } from '@agent-workflow/shared'
+import type { ClarifyRoundSummary, ReviewSummary } from '@agent-workflow/shared'
 import {
   INBOX_PREVIEW_LIMIT,
   formatRelativeTime,
@@ -39,21 +39,46 @@ function review(overrides: Partial<ReviewSummary> = {}): ReviewSummary {
   }
 }
 
-function clarify(overrides: Partial<ClarifySessionSummary> = {}): ClarifySessionSummary {
+// RFC-058: ClarifyRoundSummary uses unified field names. The factory accepts
+// either the new names directly (preferred) OR a legacy alias bag that the
+// helper translates so older test cases below remain readable.
+type LegacyClarifyOverrides = Partial<{
+  id: string
+  taskId: string
+  taskName: string
+  sourceAgentNodeId: string
+  sourceAgentNodeTitle: string | null
+  sourceShardKey: string | null
+  clarifyNodeId: string
+  clarifyNodeTitle: string | null
+  clarifyNodeRunId: string
+  iterationIndex: number
+  questionCount: number
+  status: 'awaiting_human' | 'answered' | 'canceled' | 'abandoned'
+  createdAt: number
+  answeredAt: number | null
+}>
+
+function clarify(overrides: LegacyClarifyOverrides = {}): ClarifyRoundSummary {
   return {
-    id: 'sess_1',
-    taskId: 'task_b',
-    taskName: 'fixture-task',
-    sourceAgentNodeId: 'agent_x',
-    sourceShardKey: null,
-    clarifyNodeId: 'c1',
-    clarifyNodeRunId: 'cn1',
-    iterationIndex: 0,
-    questionCount: 2,
-    status: 'awaiting_human',
-    createdAt: 1_700_000_500_000,
-    answeredAt: null,
-    ...overrides,
+    id: overrides.id ?? 'sess_1',
+    taskId: overrides.taskId ?? 'task_b',
+    taskName: overrides.taskName ?? 'fixture-task',
+    kind: 'self',
+    askingNodeId: overrides.sourceAgentNodeId ?? 'agent_x',
+    askingNodeTitle: overrides.sourceAgentNodeTitle ?? null,
+    askingShardKey: overrides.sourceShardKey ?? null,
+    intermediaryNodeId: overrides.clarifyNodeId ?? 'c1',
+    intermediaryNodeTitle: overrides.clarifyNodeTitle ?? null,
+    intermediaryNodeRunId: overrides.clarifyNodeRunId ?? 'cn1',
+    targetConsumerNodeId: null,
+    loopIter: 0,
+    iteration: overrides.iterationIndex ?? 0,
+    questionCount: overrides.questionCount ?? 2,
+    status: overrides.status ?? 'awaiting_human',
+    directive: null,
+    createdAt: overrides.createdAt ?? 1_700_000_500_000,
+    answeredAt: overrides.answeredAt ?? null,
   }
 }
 

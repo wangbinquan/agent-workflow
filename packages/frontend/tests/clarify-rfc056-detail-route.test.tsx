@@ -28,7 +28,7 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router'
-import type { CrossClarifySession } from '@agent-workflow/shared'
+import type { ClarifyRound } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { ClarifyDetailPage } from '../src/routes/clarify.detail'
 import '../src/i18n'
@@ -45,15 +45,36 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function crossSession(overrides: Partial<CrossClarifySession> = {}): CrossClarifySession {
+// RFC-058: legacy alias overrides for readability of older test cases.
+type CrossLegacyOverrides = Partial<{
+  crossClarifyNodeId: string
+  crossClarifyNodeRunId: string
+  sourceQuestionerNodeId: string
+  sourceQuestionerNodeRunId: string
+  targetDesignerNodeId: string | null
+}> &
+  Partial<ClarifyRound>
+
+function crossSession(overrides: CrossLegacyOverrides = {}): ClarifyRound {
+  const {
+    crossClarifyNodeId,
+    crossClarifyNodeRunId,
+    sourceQuestionerNodeId,
+    sourceQuestionerNodeRunId,
+    targetDesignerNodeId,
+    ...rest
+  } = overrides
   return {
     id: 'sess_cross_1',
     taskId: 'task_a',
-    crossClarifyNodeId: 'cross1',
-    crossClarifyNodeRunId: 'nr_cross_1',
-    sourceQuestionerNodeId: 'questioner',
-    sourceQuestionerNodeRunId: 'nr_q_1',
-    targetDesignerNodeId: 'designer',
+    kind: 'cross',
+    askingNodeId: sourceQuestionerNodeId ?? 'questioner',
+    askingNodeRunId: sourceQuestionerNodeRunId ?? 'nr_q_1',
+    askingShardKey: null,
+    intermediaryNodeId: crossClarifyNodeId ?? 'cross1',
+    intermediaryNodeRunId: crossClarifyNodeRunId ?? 'nr_cross_1',
+    intermediaryNodeTitle: null,
+    targetConsumerNodeId: targetDesignerNodeId !== undefined ? targetDesignerNodeId : 'designer',
     loopIter: 0,
     iteration: 0,
     questions: [
@@ -70,16 +91,18 @@ function crossSession(overrides: Partial<CrossClarifySession> = {}): CrossClarif
     ],
     directive: null,
     status: 'awaiting_human',
+    sessionMode: null,
     designerRunTriggeredAt: null,
     createdAt: 1_700_000_000_000,
     answeredAt: null,
+    answeredBy: null,
     abandonedAt: null,
-    ...overrides,
+    ...rest,
   }
 }
 
 function mockApi(opts: {
-  session: CrossClarifySession
+  session: ClarifyRound
   peers?: Array<Record<string, unknown>>
   /** Capture submit POST args; the spy fills these in. */
   capturePost?: { url?: string; body?: unknown }
@@ -89,7 +112,7 @@ function mockApi(opts: {
       const s = typeof url === 'string' ? url : url.toString()
       // GET detail
       if (
-        s.includes(`/api/clarify/${opts.session.crossClarifyNodeRunId}`) &&
+        s.includes(`/api/clarify/${opts.session.intermediaryNodeRunId}`) &&
         !s.endsWith('/answers')
       ) {
         return new Response(JSON.stringify(opts.session), {

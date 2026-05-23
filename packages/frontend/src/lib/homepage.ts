@@ -8,7 +8,7 @@
 // sidebar inbox drawer share the merge logic in the future without
 // introducing cross-component coupling.
 
-import type { ClarifySessionSummary, ReviewSummary } from '@agent-workflow/shared'
+import type { ClarifyRoundSummary, ReviewSummary } from '@agent-workflow/shared'
 
 export type GreetingKey = 'morning' | 'afternoon' | 'evening'
 
@@ -47,7 +47,7 @@ export const INBOX_PREVIEW_LIMIT = 8
  */
 export function mergeInboxItems(
   reviews: ReviewSummary[],
-  clarify: ClarifySessionSummary[],
+  clarify: ClarifyRoundSummary[],
   limit: number = INBOX_PREVIEW_LIMIT,
 ): InboxPreviewItem[] {
   const out: InboxPreviewItem[] = []
@@ -64,30 +64,27 @@ export function mergeInboxItems(
     })
   }
   for (const c of clarify) {
-    // Identify the row by the *clarify node* — that's what the clarify
-    // list + detail pages now display, and what the row's "open" target
-    // takes the user to. Previously the row title carried the source
-    // agent's name, which made the inbox read like "Coder" even though
-    // clicking it took the user to a `Ask user about the DB` clarify
-    // page. Fall back order: clarifyNodeTitle → clarifyNodeId.
+    // RFC-058: unified ClarifyRoundSummary — `intermediaryNodeId/Title`
+    // replaces legacy `clarifyNodeId/clarifyNodeTitle` (the gated form
+    // node); `askingNodeId/Title` replaces legacy `sourceAgentNodeId/Title`
+    // (the agent that asked); `askingShardKey` replaces `sourceShardKey`;
+    // `iteration` replaces `iterationIndex`.
     const clarifyTitle =
-      typeof c.clarifyNodeTitle === 'string' && c.clarifyNodeTitle.length > 0
-        ? c.clarifyNodeTitle
-        : c.clarifyNodeId
-    // Keep the source-agent label as supporting context in the subtitle
-    // so users still know which agent is asking.
+      typeof c.intermediaryNodeTitle === 'string' && c.intermediaryNodeTitle.length > 0
+        ? c.intermediaryNodeTitle
+        : c.intermediaryNodeId
     const agentLabel =
-      typeof c.sourceAgentNodeTitle === 'string' && c.sourceAgentNodeTitle.length > 0
-        ? c.sourceAgentNodeTitle
-        : c.sourceAgentNodeId
+      typeof c.askingNodeTitle === 'string' && c.askingNodeTitle.length > 0
+        ? c.askingNodeTitle
+        : c.askingNodeId
     const shardOrIter =
-      c.sourceShardKey !== null && c.sourceShardKey !== ''
-        ? `shard ${c.sourceShardKey}`
-        : `iter ${c.iterationIndex}`
+      c.askingShardKey !== null && c.askingShardKey !== ''
+        ? `shard ${c.askingShardKey}`
+        : `iter ${c.iteration}`
     out.push({
       kind: 'clarify',
       rowKey: c.id,
-      id: c.clarifyNodeRunId,
+      id: c.intermediaryNodeRunId,
       taskId: c.taskId,
       taskName: c.taskName,
       title: clarifyTitle,

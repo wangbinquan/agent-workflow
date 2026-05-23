@@ -1,13 +1,17 @@
 // RFC-023 PR-C T20 — clarify draftStore IDB facade.
 //
+// RFC-058 update: key shape renamed from (taskId, clarifyNodeRunId, sessionId)
+// → (taskId, intermediaryNodeRunId, roundId) and prefix bumped to
+// `clarify-round:` to match the unified ClarifyRound model.
+//
 // Three locks:
-//   1. clarifyDraftKey composes the four-segment 'clarify:' prefix so
+//   1. clarifyDraftKey composes the four-segment 'clarify-round:' prefix so
 //      listClarifyDrafts can scope by partial key cheaply.
 //   2. set/get round-trips a ClarifyAnswer[] through JSON (the IDB store
 //      holds strings, not the raw shape, since shape changes survive
 //      schema bumps that way).
 //   3. delete is idempotent and listClarifyDrafts narrows by both taskId
-//      and clarifyNodeRunId filters.
+//      and intermediaryNodeRunId filters.
 //
 // The tests do not require a real IndexedDB — when `indexedDB` is missing
 // the helpers all gracefully degrade to no-ops. We assert both shapes
@@ -27,8 +31,8 @@ import {
 
 const KEY = {
   taskId: 'task_abc',
-  clarifyNodeRunId: 'nr_123',
-  sessionId: 'sess_x',
+  intermediaryNodeRunId: 'nr_123',
+  roundId: 'sess_x',
 }
 
 const SAMPLE: ClarifyAnswer[] = [
@@ -45,8 +49,8 @@ afterEach(async () => {
 })
 
 describe('clarifyDraftKey', () => {
-  it('serialises (taskId, clarifyNodeRunId, sessionId) under a stable clarify: prefix', () => {
-    expect(clarifyDraftKey(KEY)).toBe('clarify:task_abc:nr_123:sess_x')
+  it('serialises (taskId, intermediaryNodeRunId, roundId) under a stable clarify-round: prefix', () => {
+    expect(clarifyDraftKey(KEY)).toBe('clarify-round:task_abc:nr_123:sess_x')
   })
 })
 
@@ -82,7 +86,10 @@ describe('listClarifyDrafts', () => {
       return
     }
     await setClarifyDraft(KEY, SAMPLE)
-    await setClarifyDraft({ taskId: 'task_other', clarifyNodeRunId: 'x', sessionId: 'y' }, SAMPLE)
+    await setClarifyDraft(
+      { taskId: 'task_other', intermediaryNodeRunId: 'x', roundId: 'y' },
+      SAMPLE,
+    )
     const onlyA = await listClarifyDrafts({ taskId: 'task_abc' })
     expect(onlyA.length).toBe(1)
     expect(onlyA[0]?.answers).toEqual(SAMPLE)

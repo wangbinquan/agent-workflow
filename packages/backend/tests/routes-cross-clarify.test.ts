@@ -30,7 +30,6 @@ import { createClarifySession } from '../src/services/clarify'
 import { createCrossClarifySession } from '../src/services/crossClarify'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
-import type { CrossClarifySession } from '../src/services/crossClarify'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -237,17 +236,25 @@ describe('GET /api/clarify — mixed self + cross with kind chip', () => {
 })
 
 describe('GET /api/clarify/:nodeRunId — branches by node kind', () => {
-  test('returns CrossClarifySession (with crossClarifyNodeId field) for cross-clarify node_run', async () => {
+  test('returns ClarifyRound (with kind="cross" + intermediaryNodeId) for cross-clarify node_run', async () => {
+    // RFC-058 T14: detail endpoint now emits a single ClarifyRound shape;
+    // cross-clarify rows surface as `kind: 'cross'` + `intermediaryNodeId`
+    // (formerly `crossClarifyNodeId`).
     const { db, app } = buildApp()
     const { crossClarifyNodeRunId } = await seedCrossClarifySession(db)
 
     const res = await req(app, `/api/clarify/${crossClarifyNodeRunId}`)
     expect(res.status).toBe(200)
-    const body = (await res.json()) as CrossClarifySession
+    const body = (await res.json()) as {
+      kind: 'self' | 'cross'
+      status: string
+      questions: unknown[]
+      intermediaryNodeId: string
+    }
+    expect(body.kind).toBe('cross')
     expect(body.status).toBe('awaiting_human')
     expect(body.questions.length).toBe(1)
-    // Cross-clarify shape carries crossClarifyNodeId (vs RFC-023's clarifyNodeId).
-    expect(body.crossClarifyNodeId).toBe('cross1')
+    expect(body.intermediaryNodeId).toBe('cross1')
   })
 })
 

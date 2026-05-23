@@ -34,7 +34,7 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router'
-import type { ClarifySession } from '@agent-workflow/shared'
+import type { ClarifyRound } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { ClarifyDetailPage } from '../src/routes/clarify.detail'
 import '../src/i18n'
@@ -51,16 +51,20 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function mkSession(over: Partial<ClarifySession>): ClarifySession {
+function mkSession(over: Partial<ClarifyRound>): ClarifyRound {
   return {
     id: 'sess_x',
     taskId: 'task_x',
-    sourceAgentNodeId: 'designer',
-    sourceAgentNodeRunId: 'nr_src',
-    sourceShardKey: null,
-    clarifyNodeId: 'c1',
-    clarifyNodeRunId: 'nr_A',
-    iterationIndex: 0,
+    kind: 'self',
+    askingNodeId: 'designer',
+    askingNodeRunId: 'nr_src',
+    askingShardKey: null,
+    intermediaryNodeId: 'c1',
+    intermediaryNodeRunId: 'nr_A',
+    intermediaryNodeTitle: null,
+    targetConsumerNodeId: null,
+    loopIter: 0,
+    iteration: 0,
     questions: [
       {
         id: 'qA1',
@@ -78,11 +82,14 @@ function mkSession(over: Partial<ClarifySession>): ClarifySession {
     answeredAt: null,
     answeredBy: null,
     directive: null,
+    sessionMode: null,
+    designerRunTriggeredAt: null,
+    abandonedAt: null,
     ...over,
   }
 }
 
-function mockApi(byNodeRunId: Record<string, ClarifySession>) {
+function mockApi(byNodeRunId: Record<string, ClarifyRound>) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
     const s = typeof url === 'string' ? url : url.toString()
     for (const [nodeRunId, sess] of Object.entries(byNodeRunId)) {
