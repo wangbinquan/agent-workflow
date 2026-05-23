@@ -629,38 +629,37 @@ export const nodeRunEvents = sqliteTable(
 // For agent-multi: each reaching shard mints its OWN clarify node_run row
 // + its own clarify_session, keyed by (clarify_node_id, source_shard_key).
 // -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// RFC-023 clarify_sessions — RETAINED through RFC-058 staged refactor.
+// Migration 0031 builds `clarify_rounds` and copies rows over; this table
+// stays live until services migrate (then migration 0032 drops it).
+// -----------------------------------------------------------------------------
 export const clarifySessions = sqliteTable(
   'clarify_sessions',
   {
-    id: text('id').primaryKey(), // ULID
+    id: text('id').primaryKey(),
     taskId: text('task_id')
       .notNull()
       .references(() => tasks.id, { onDelete: 'cascade' }),
     sourceAgentNodeId: text('source_agent_node_id').notNull(),
-    // For agent-multi this is the shard child node_run id (one per shard);
-    // for agent-single it is the single asking node_run id.
     sourceAgentNodeRunId: text('source_agent_node_run_id').notNull(),
-    sourceShardKey: text('source_shard_key'), // NULL for agent-single
+    sourceShardKey: text('source_shard_key'),
     clarifyNodeId: text('clarify_node_id').notNull(),
     clarifyNodeRunId: text('clarify_node_run_id').notNull(),
-    // matches the source agent node_run's clarify_iteration AT TIME OF ASKING
     iterationIndex: integer('iteration_index').notNull(),
-    questionsJson: text('questions_json').notNull(), // ClarifyQuestion[]
-    answersJson: text('answers_json'), // ClarifyAnswer[]; NULL until submitted
+    questionsJson: text('questions_json').notNull(),
+    answersJson: text('answers_json'),
     status: text('status', {
       enum: ['awaiting_human', 'answered', 'canceled'],
     })
       .notNull()
       .default('awaiting_human'),
-    truncationWarningsJson: text('truncation_warnings_json'), // JSON: { code, detail }[]
+    truncationWarningsJson: text('truncation_warnings_json'),
     createdAt: integer('created_at')
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
     answeredAt: integer('answered_at'),
     answeredBy: text('answered_by'),
-    // RFC-023 directive: 'continue' (default, legacy) | 'stop'. Nullable so
-    // already-persisted pre-directive rows survive; readers coalesce NULL to
-    // 'continue' to match the behaviour those sessions had at submit time.
     directive: text('directive', { enum: ['continue', 'stop'] }),
   },
   (t) => ({
@@ -675,57 +674,35 @@ export const clarifySessions = sqliteTable(
 )
 
 // -----------------------------------------------------------------------------
-// RFC-056 cross_clarify_sessions — one row per cross-clarify human-gated
-// envelope batch. Mirrors clarify_sessions but the source / target sit on
-// DIFFERENT agents:
-//   * source = questioner agent (the one that emits <workflow-clarify>)
-//   * target = designer agent   (the one rerun on submit via __external_feedback__)
-// The clarify-cross-agent node itself is the human-gated form node parked
-// in awaiting_human between the two. See design/RFC-056-clarify-cross-agent/
-// design.md §3.2 + §5 for the full lifecycle.
+// RFC-056 cross_clarify_sessions — RETAINED through RFC-058 staged refactor
+// (see clarifySessions comment above).
 // -----------------------------------------------------------------------------
 export const crossClarifySessions = sqliteTable(
   'cross_clarify_sessions',
   {
-    id: text('id').primaryKey(), // ULID
+    id: text('id').primaryKey(),
     taskId: text('task_id')
       .notNull()
       .references(() => tasks.id, { onDelete: 'cascade' }),
-    // clarify-cross-agent NodeId in workflow.definition (stable anchor across
-    // reruns; the node_run id below points at the row currently parked).
     crossClarifyNodeId: text('cross_clarify_node_id').notNull(),
     crossClarifyNodeRunId: text('cross_clarify_node_run_id')
       .notNull()
       .references(() => nodeRuns.id, { onDelete: 'cascade' }),
-    // questioner agent (the source of <workflow-clarify>).
     sourceQuestionerNodeId: text('source_questioner_node_id').notNull(),
     sourceQuestionerNodeRunId: text('source_questioner_node_run_id')
       .notNull()
       .references(() => nodeRuns.id, { onDelete: 'cascade' }),
-    // designer agent (the manual-edge target). Nullable — manual edge may
-    // be missing at runtime (validator emits cross-clarify-manual-edge-missing
-    // warning earlier in the editor; the runtime row records the gap).
     targetDesignerNodeId: text('target_designer_node_id'),
-    // wrapper-loop iteration index when nested; 0 for non-loop placement.
-    // Reject persistence carries across loop_iter (queried by node_id
-    // alone); Q&A history resets per loop_iter.
     loopIter: integer('loop_iter').notNull().default(0),
-    // Per-(node, loop_iter) cumulative cross-clarify iteration counter.
     iteration: integer('iteration').notNull().default(0),
-    questionsJson: text('questions_json').notNull(), // ClarifyQuestion[]
-    answersJson: text('answers_json'), // ClarifyAnswer[]; NULL while awaiting_human.
-    // Submit → 'continue' (questions feed designer rerun External Feedback).
-    // Reject → 'stop' (questioner gets STOP CLARIFYING; cross-clarify node
-    //                  never re-enters awaiting_human in this task).
+    questionsJson: text('questions_json').notNull(),
+    answersJson: text('answers_json'),
     directive: text('directive', { enum: ['continue', 'stop'] }),
     status: text('status', {
       enum: ['awaiting_human', 'answered', 'abandoned'],
     })
       .notNull()
       .default('awaiting_human'),
-    // Stamped at designer rerun spawn time (the moment scheduler triggered
-    // the batch). Stays NULL on reject-only sessions and abandoned sessions
-    // that never made it to the designer.
     designerRunTriggeredAt: integer('designer_run_triggered_at'),
     createdAt: integer('created_at')
       .notNull()
@@ -742,6 +719,92 @@ export const crossClarifySessions = sqliteTable(
     ),
     designerIdx: index('idx_cross_clarify_sessions_designer').on(t.targetDesignerNodeId, t.status),
     statusIdx: index('idx_cross_clarify_sessions_status').on(t.status),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// RFC-058 clarify_rounds — unified replacement for clarify_sessions (RFC-023)
+// and cross_clarify_sessions (RFC-056). The `kind` discriminator decides
+// which lifecycle the row participates in:
+//   - kind='self'  → RFC-023 self-clarify. asking agent IS the consumer.
+//                     target_consumer_node_id is NULL; loop_iter is 0.
+//                     status enum reaches {'awaiting_human','answered',
+//                     'canceled'}; CR-1 abandoned is unreachable.
+//   - kind='cross' → RFC-056 cross-clarify. asking = questioner;
+//                     target_consumer_node_id = designer node. loop_iter
+//                     captures wrapper-loop placement. status reaches
+//                     {'awaiting_human','answered','abandoned'}; canceled
+//                     is unreachable.
+// DB CHECK constraint enforces the cross-domain (kind × status) rule so
+// application code does not need to re-validate that pairing on every write.
+// -----------------------------------------------------------------------------
+export const clarifyRounds = sqliteTable(
+  'clarify_rounds',
+  {
+    id: text('id').primaryKey(), // ULID
+    taskId: text('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: ['self', 'cross'] }).notNull(),
+    // For kind='self' agent-multi this is the shard child node_run id;
+    // for kind='cross' this is the questioner's node_run id.
+    askingNodeId: text('asking_node_id').notNull(),
+    askingNodeRunId: text('asking_node_run_id')
+      .notNull()
+      .references(() => nodeRuns.id, { onDelete: 'cascade' }),
+    // NULL for agent-single + always NULL for kind='cross' (RFC-056 v1).
+    askingShardKey: text('asking_shard_key'),
+    // The clarify / clarify-cross-agent node id (human-gated form node).
+    intermediaryNodeId: text('intermediary_node_id').notNull(),
+    intermediaryNodeRunId: text('intermediary_node_run_id')
+      .notNull()
+      .references(() => nodeRuns.id, { onDelete: 'cascade' }),
+    // Designer node id receiving External Feedback. NULL when kind='self'
+    // (the asking agent itself is the consumer) or when manual edge missing
+    // at cross-clarify spawn time.
+    targetConsumerNodeId: text('target_consumer_node_id'),
+    // wrapper-loop iter (RFC-056 partial persistence). 0 for kind='self' or
+    // cross outside a loop.
+    loopIter: integer('loop_iter').notNull().default(0),
+    // Monotonic round counter scoped to (intermediary_node_id, loop_iter).
+    // RFC-023's iteration_index and RFC-056's iteration map to this column
+    // in migration 0031.
+    iteration: integer('iteration').notNull().default(0),
+    questionsJson: text('questions_json').notNull(), // ClarifyQuestion[]
+    answersJson: text('answers_json'), // ClarifyAnswer[]; NULL until submitted
+    directive: text('directive', { enum: ['continue', 'stop'] }),
+    status: text('status', {
+      enum: ['awaiting_human', 'answered', 'canceled', 'abandoned'],
+    })
+      .notNull()
+      .default('awaiting_human'),
+    truncationWarningsJson: text('truncation_warnings_json'), // JSON: { code, detail }[]
+    // Stamped at designer rerun spawn time (kind='cross' only). NULL while
+    // awaiting_human, on reject-only rows, on abandoned rows, and on every
+    // kind='self' row.
+    designerRunTriggeredAt: integer('designer_run_triggered_at'),
+    // Stamped by RFC-053 CR-1 invariant when escalating cross-clarify rows on
+    // parent task fail. NULL for kind='self'.
+    abandonedAt: integer('abandoned_at'),
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    answeredAt: integer('answered_at'),
+    answeredBy: text('answered_by'),
+  },
+  (t) => ({
+    taskIdx: index('idx_clarify_rounds_task').on(t.taskId),
+    kindStatusIdx: index('idx_clarify_rounds_kind_status').on(t.kind, t.status),
+    askingIdx: index('idx_clarify_rounds_asking').on(t.askingNodeId, t.loopIter, t.iteration),
+    intermediaryIdx: index('idx_clarify_rounds_intermediary').on(
+      t.intermediaryNodeId,
+      t.loopIter,
+      t.iteration,
+    ),
+    targetConsumerIdx: index('idx_clarify_rounds_target_consumer').on(
+      t.targetConsumerNodeId,
+      t.status,
+    ),
   }),
 )
 
