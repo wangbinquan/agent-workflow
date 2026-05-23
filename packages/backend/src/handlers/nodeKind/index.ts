@@ -53,3 +53,42 @@ export {
   wrapperGitNodeKindHandler,
   wrapperLoopNodeKindHandler,
 }
+
+// Re-export per-kind dispatch context types so callers (taskActor, REST
+// routes) can assemble them without digging into handler subdirectories.
+export type {
+  AgentSingleDispatchContext,
+  AgentSingleDispatchExtras,
+  UpstreamInput,
+} from './agentSingle'
+export type {
+  ClarifyCrossAgentDispatchContext,
+  ClarifyCrossAgentDispatchExtras,
+} from './clarifyCrossAgent'
+export type { InputDispatchContext, InputDispatchExtras } from './input'
+export type { OutputDispatchContext, OutputDispatchExtras, OutputBinding } from './output'
+export type { ReviewDispatchContext, ReviewDispatchExtras } from './review'
+export type {
+  WrapperGitDispatchContext,
+  WrapperGitDispatchExtras,
+  WrapperGitInnerCompletedContext,
+  WrapperGitInnerCompletedExtras,
+} from './wrapperGit'
+export type {
+  WrapperLoopDispatchContext,
+  WrapperLoopDispatchExtras,
+  WrapperLoopInnerCompletedContext,
+  WrapperLoopInnerCompletedExtras,
+  ExitConditionShape,
+} from './wrapperLoop'
+export type {
+  WrapperFanoutDispatchContext,
+  WrapperFanoutDispatchExtras,
+  WrapperFanoutInnerCompletedContext,
+  WrapperFanoutInnerCompletedExtras,
+  WrapperFanoutReadyContext,
+  WrapperFanoutReadyExtras,
+} from './wrapperFanout'
+export { parseExitCondition, parseMaxIterations } from './wrapperLoop'
+export { composePrompt } from './agentSingle'
+export { readBindings } from './output'
