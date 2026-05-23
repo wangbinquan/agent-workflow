@@ -27,6 +27,8 @@ export const DEFAULT_NODE_SIZE_BY_KIND: Record<NodeKind, { width: number; height
   'clarify-cross-agent': { width: 240, height: 160 },
   'wrapper-git': { width: 240, height: 160 },
   'wrapper-loop': { width: 240, height: 160 },
+  // RFC-060 — wrapper-fanout matches sibling wrapper container footprint.
+  'wrapper-fanout': { width: 240, height: 160 },
 }
 
 /** Header strip height (matches `.canvas-node__header`). */

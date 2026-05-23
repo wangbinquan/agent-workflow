@@ -967,6 +967,9 @@ export const enUS: Resources = {
     paletteWrapperGitDesc: 'snapshot diff before+after children',
     paletteWrapperLoopLabel: 'loop wrapper',
     paletteWrapperLoopDesc: 'rerun children until exit condition',
+    paletteWrapperFanoutLabel: 'fanout wrapper',
+    paletteWrapperFanoutDesc:
+      'shard a list<T> port across the inner subgraph; converge via aggregator agent',
     paletteIo: 'IO',
     paletteInputLabel: 'input',
     paletteInputDesc: 'launcher form value',
@@ -1101,6 +1104,17 @@ export const enUS: Resources = {
     addPort: '+ Add port',
     innerNodeIds: 'Inner node ids',
     innerNodeIdsHint: 'Edit by composing nodes via the canvas menu.',
+    fanoutInputs: 'Inputs',
+    fanoutInputsHint:
+      'Declared input ports. EXACTLY ONE must be marked as shard source and its kind must be list<T>; others are broadcast to every shard.',
+    fanoutInputNamePlaceholder: 'port name',
+    fanoutInputShardSource: 'shard source',
+    fanoutInputShardSourceMustBeList: 'shard source kind must be list<T>',
+    fanoutInputAdd: '+ add input',
+    fanoutInputRemove: 'remove input',
+    fanoutDerivedOutputs: 'Derived outputs',
+    fanoutDerivedOutputsHint:
+      'Auto-derived from the wrapper-fanout body: aggregator agent outputs (when present), or a single __done__ signal port (no aggregator).',
     none: 'none',
     loopBanner:
       'Cross-iteration state lives in worktree files only. v1 has no feedback ports — agents communicate across iterations by reading/writing files.',

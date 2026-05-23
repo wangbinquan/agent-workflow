@@ -13,6 +13,7 @@ export type PaletteItem =
   | { kind: 'output' }
   | { kind: 'wrapper-git' }
   | { kind: 'wrapper-loop' }
+  | { kind: 'wrapper-fanout' }
   | { kind: 'review' }
   | { kind: 'clarify' }
   | { kind: 'clarify-cross-agent' }
@@ -40,6 +41,7 @@ export function deserialize(raw: string): PaletteItem | null {
       case 'output':
       case 'wrapper-git':
       case 'wrapper-loop':
+      case 'wrapper-fanout':
       case 'review':
       case 'clarify':
       case 'clarify-cross-agent':
@@ -93,6 +95,20 @@ export function makeNode(
         maxIterations: 3,
         exitCondition: { kind: 'port-empty' },
       } as WorkflowNode
+    case 'wrapper-fanout':
+      // RFC-060 — fresh wrapper-fanout. Author must wire the shardSource
+      // upstream + populate inner subgraph before launch (validator rules
+      // `wrapper-empty` + `wrapper-fanout-shard-source-missing` catch the
+      // unfinished case). Default shape ships a single shardSource input
+      // pre-named `docs` with `list<path<md>>` kind — that's the most
+      // common case (markdown documents per shard). Users free to change.
+      return {
+        id,
+        kind: 'wrapper-fanout',
+        position: pos,
+        nodeIds: [],
+        inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
+      } as unknown as WorkflowNode
     case 'review':
       return {
         id,
@@ -155,6 +171,7 @@ const SHORT: Record<PaletteItem['kind'], string> = {
   output: 'out',
   'wrapper-git': 'wrap_git',
   'wrapper-loop': 'wrap_loop',
+  'wrapper-fanout': 'wrap_fan',
   review: 'rev',
   clarify: 'clarify',
   'clarify-cross-agent': 'cross_clarify',
@@ -216,6 +233,11 @@ export function buildPalette(agents: Agent[], t: PaletteTranslator): PaletteSect
           item: { kind: 'wrapper-loop' } as PaletteItem,
           label: t('editor.paletteWrapperLoopLabel'),
           description: t('editor.paletteWrapperLoopDesc'),
+        },
+        {
+          item: { kind: 'wrapper-fanout' } as PaletteItem,
+          label: t('editor.paletteWrapperFanoutLabel'),
+          description: t('editor.paletteWrapperFanoutDesc'),
         },
       ],
     },

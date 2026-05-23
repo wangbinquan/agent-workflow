@@ -158,6 +158,17 @@ export const NODE_KIND_BEHAVIORS = {
     gc: 'gc-with-task',
     shutdown: 'graceful-abort',
   },
+  // RFC-060 — wrapper-fanout shares the wrapper-* row: holds a container
+  // node_run whose status is driven by inner subgraph shards + aggregator;
+  // when daemon restarts mid-shard, the container row is marked interrupted
+  // so the next runTask pass can resume from the per-shard state.
+  'wrapper-fanout': {
+    retryCascade: 'mint-placeholder',
+    limits: 'enforce-time-budget',
+    orphanReap: 'mark-interrupted',
+    gc: 'gc-with-task',
+    shutdown: 'graceful-abort',
+  },
   review: {
     retryCascade: 'skip',
     limits: 'opt-out',

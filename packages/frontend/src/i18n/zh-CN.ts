@@ -915,6 +915,9 @@ export interface Resources {
     paletteWrapperGitDesc: string
     paletteWrapperLoopLabel: string
     paletteWrapperLoopDesc: string
+    /** RFC-060 — wrapper-fanout palette entry. */
+    paletteWrapperFanoutLabel: string
+    paletteWrapperFanoutDesc: string
     paletteIo: string
     paletteInputLabel: string
     paletteInputDesc: string
@@ -1034,6 +1037,16 @@ export interface Resources {
     addPort: string
     innerNodeIds: string
     innerNodeIdsHint: string
+    /** RFC-060 — wrapper-fanout inspector. */
+    fanoutInputs: string
+    fanoutInputsHint: string
+    fanoutInputNamePlaceholder: string
+    fanoutInputShardSource: string
+    fanoutInputShardSourceMustBeList: string
+    fanoutInputAdd: string
+    fanoutInputRemove: string
+    fanoutDerivedOutputs: string
+    fanoutDerivedOutputsHint: string
     none: string
     loopBanner: string
     fieldMaxIterations: string
@@ -2812,6 +2825,8 @@ export const zhCN: Resources = {
     paletteWrapperGitDesc: '在子节点前后快照 diff',
     paletteWrapperLoopLabel: 'loop wrapper',
     paletteWrapperLoopDesc: '重复执行子节点直到退出条件满足',
+    paletteWrapperFanoutLabel: '分片包装器',
+    paletteWrapperFanoutDesc: '把 list<T> 端口的每个元素分配给内部子图独立执行；用聚合 agent 收口',
     paletteIo: 'IO',
     paletteInputLabel: 'input',
     paletteInputDesc: 'launcher 表单值',
@@ -2933,6 +2948,17 @@ export const zhCN: Resources = {
     addPort: '+ 增加端口',
     innerNodeIds: '内部节点 id',
     innerNodeIdsHint: '通过画布右键菜单组装。',
+    fanoutInputs: '输入端口',
+    fanoutInputsHint:
+      '声明的输入端口列表。**恰好一个**必须标记为 shard source 且 kind 必须是 list<T>；其余作为 broadcast 端口、传给每个 shard。',
+    fanoutInputNamePlaceholder: '端口名',
+    fanoutInputShardSource: '分片源',
+    fanoutInputShardSourceMustBeList: '分片源的 kind 必须是 list<T>',
+    fanoutInputAdd: '+ 添加输入',
+    fanoutInputRemove: '删除输入',
+    fanoutDerivedOutputs: '推导出的输出',
+    fanoutDerivedOutputsHint:
+      '由 wrapper-fanout 内部自动推导：若有 aggregator agent 则用其 outputs；否则单一 __done__ signal 端口。',
     none: '无',
     loopBanner: '跨轮次状态完全靠 worktree 文件流转。v1 没有反馈端口；agent 之间通过读写文件传递。',
     fieldMaxIterations: '最大迭代次数',

@@ -111,6 +111,17 @@ async function seedTaskWithEdge(
         // 1-in / 2-out node here just exercises the dispatch path; the
         // upstream agent's retry never spawns a placeholder on it.
         return { id: downstreamNodeId, kind: 'clarify-cross-agent' }
+      case 'wrapper-fanout':
+        // RFC-060 — fanout wrapper shares the wrapper-* retry-cascade row
+        // (mint placeholder on upstream retry). The minimal viable shape
+        // here is enough to drive the matrix; PR-D's scheduler tests cover
+        // the actual fan-out dispatch.
+        return {
+          id: downstreamNodeId,
+          kind: 'wrapper-fanout',
+          nodeIds: [],
+          inputs: [{ name: 'docs', kind: 'list<string>', isShardSource: true }],
+        }
       case 'output':
         return { id: downstreamNodeId, kind: 'output' }
       case 'input':

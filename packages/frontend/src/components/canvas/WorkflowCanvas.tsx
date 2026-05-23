@@ -100,6 +100,8 @@ const NODE_TYPES = {
   output: OutputNode,
   'wrapper-git': GroupWrapperNode,
   'wrapper-loop': GroupWrapperNode,
+  // RFC-060 — wrapper-fanout reuses GroupWrapperNode container chrome.
+  'wrapper-fanout': GroupWrapperNode,
   review: ReviewNode,
   clarify: ClarifyNode,
   'clarify-cross-agent': CrossClarifyNode,

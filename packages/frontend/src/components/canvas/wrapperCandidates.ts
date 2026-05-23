@@ -70,7 +70,8 @@ export function loopMemberCandidates(
   const result: LoopMemberCandidate[] = []
   for (const n of allNodes) {
     if (!idSet.has(n.id)) continue
-    if (n.kind === 'wrapper-git' || n.kind === 'wrapper-loop') continue
+    if (n.kind === 'wrapper-git' || n.kind === 'wrapper-loop' || n.kind === 'wrapper-fanout')
+      continue
     const outputPorts = deriveOutputPorts(n, agents)
     result.push({
       nodeId: n.id,

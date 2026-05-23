@@ -34,6 +34,7 @@ export const NODE_KIND = [
   'output',
   'wrapper-git',
   'wrapper-loop',
+  'wrapper-fanout', // RFC-060: fan-out wrapper with arbitrary inner subgraph + list<T> shardSource
   'review', // RFC-005: human-in-the-loop review gate
   'clarify', // RFC-023: agent-initiated clarification questions
   'clarify-cross-agent', // RFC-056: downstream questioner reverse-feeds upstream designer via human gate
@@ -49,12 +50,17 @@ export type NodeKind = z.infer<typeof NodeKindSchema>
 // events (review → user decision, clarify → agent envelope). Cascading
 // retries onto them only produces stale `queued for retry` placeholder rows
 // that confuse downstream `isFresherNodeRun` selection.
+//
+// RFC-060: wrapper-fanout joins the process-kind set — it holds a parent
+// node_run row whose status reflects the shard fan-out + aggregator
+// completion (mirroring wrapper-git's container-row semantics).
 export function isProcessNodeKind(kind: NodeKind): boolean {
   return (
     kind === 'agent-single' ||
     kind === 'agent-multi' ||
     kind === 'wrapper-git' ||
-    kind === 'wrapper-loop'
+    kind === 'wrapper-loop' ||
+    kind === 'wrapper-fanout'
   )
 }
 
@@ -98,10 +104,34 @@ export const PortRefSchema = z.object({
   portName: z.string().min(1),
 })
 
+/**
+ * RFC-060: when an edge crosses the boundary between a wrapper-fanout
+ * and its inner subgraph, the `boundary` field marks which side of the
+ * crossing it represents:
+ *
+ *   - `'wrapper-input'`: edge.source = (wrapperId, wrapperInputPortName),
+ *     edge.target = (innerNodeId, innerInputPortName). The wrapper input
+ *     value flows into the inner node. For the shardSource port the
+ *     scheduler injects ONE list item per shard; for broadcast inputs
+ *     it injects the raw value into every shard's instance of the inner
+ *     node.
+ *   - `'wrapper-output'`: edge.source = (innerNodeId, innerOutputPortName),
+ *     edge.target = (wrapperId, wrapperOutputPortName). The inner node's
+ *     output is promoted to a wrapper outlet — only the aggregator agent
+ *     may be the source (validator enforces).
+ *
+ * Edges without `boundary` are ordinary inner-to-inner or outer-to-outer
+ * connections.
+ */
+export const EdgeBoundarySchema = z.enum(['wrapper-input', 'wrapper-output'])
+export type EdgeBoundary = z.infer<typeof EdgeBoundarySchema>
+
 export const WorkflowEdgeSchema = z.object({
   id: z.string().min(1),
   source: PortRefSchema,
   target: PortRefSchema,
+  /** RFC-060 — wrapper boundary marker; absent for ordinary edges. */
+  boundary: EdgeBoundarySchema.optional(),
 })
 export type WorkflowEdge = z.infer<typeof WorkflowEdgeSchema>
 
@@ -346,3 +376,68 @@ export const ClarifyCrossAgentNodeSchema = z
   })
   .passthrough()
 export type ClarifyCrossAgentNode = z.infer<typeof ClarifyCrossAgentNodeSchema>
+
+// --- RFC-060 Wrapper-Fanout node --------------------------------------------
+//
+// Container wrapper that fan-outs an inner subgraph across the items of a
+// `list<T>` shardSource port. The wrapper holds:
+//
+//   - `inputs[]`: declared input ports. EXACTLY ONE input must have
+//     `isShardSource: true`; its kind MUST be `list<T>` for some T. Other
+//     inputs are broadcast (same value passed to every shard's inner
+//     subgraph).
+//   - `nodeIds[]`: inner subgraph node ids (same convention as
+//     wrapper-git / wrapper-loop). Per RFC-060 design §1.1, inner is
+//     stored flat in the top-level `nodes[]` / `edges[]` arrays; the
+//     wrapper just references them.
+//
+// `outputs` is NOT a schema field — runtime derives wrapper outputs from
+// the inner subgraph's aggregator agent (RFC-060 design §5.4 via
+// `deriveWrapperFanoutOutputs`). When there's no aggregator the wrapper
+// gets a single implicit `__done__` (kind: signal) outlet.
+//
+// Boundary edges connecting wrapper ports to inner nodes carry the
+// `boundary: 'wrapper-input' | 'wrapper-output'` flag on the edge
+// (see WorkflowEdgeSchema).
+//
+// PR-C ships this schema + validator rules; the scheduler dispatch path
+// lands in PR-D.
+export const WrapperFanoutPortSchema = z.object({
+  name: z.string().min(1),
+  /**
+   * AgentOutputKind grammar string (base / path<ext> / list<...>). The
+   * validator additionally requires that exactly one port is marked
+   * `isShardSource: true` and that its kind parses as `list<T>`.
+   */
+  kind: z.string().min(1),
+  /**
+   * Mark the shard source port. Exactly one input MUST set this to true;
+   * the validator emits `wrapper-fanout-shard-source-missing` /
+   * `-duplicate` otherwise.
+   */
+  isShardSource: z.boolean().optional(),
+})
+export type WrapperFanoutPort = z.infer<typeof WrapperFanoutPortSchema>
+
+export const WrapperFanoutNodeSchema = z
+  .object({
+    id: z.string().min(1),
+    kind: z.literal('wrapper-fanout'),
+    position: XYSchema.optional(),
+    title: z.string().optional(),
+    /** Inner subgraph node ids — must all exist in workflow.definition.nodes. */
+    nodeIds: z.array(z.string().min(1)).default([]),
+    /** Declared input ports. validator enforces ≥1 with isShardSource: true. */
+    inputs: z.array(WrapperFanoutPortSchema).default([]),
+    /**
+     * Optional author-supplied hint for the runtime cartesian guard. When
+     * a wrapper-fanout is nested inside another one, the outer scheduler
+     * can't yet know the inner's shard count (depends on a port value
+     * produced at run time); the author can pre-declare a conservative
+     * upper bound here for static estimation. Falls back to a default
+     * estimate in `services/fanout.ts` (PR-D).
+     */
+    expectedShardCount: z.number().int().positive().max(10_000).optional(),
+  })
+  .passthrough()
+export type WrapperFanoutNode = z.infer<typeof WrapperFanoutNodeSchema>

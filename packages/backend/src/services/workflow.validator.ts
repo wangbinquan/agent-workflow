@@ -21,12 +21,17 @@
 
 import type {
   Agent,
+  ParsedKind,
   Skill,
   WorkflowDefinition,
   WorkflowValidationIssue,
   WorkflowValidationResult,
 } from '@agent-workflow/shared'
-import { validateShardingStrategy } from '@agent-workflow/shared'
+import {
+  countFanoutAggregators,
+  tryParseKind,
+  validateShardingStrategy,
+} from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { listAgents } from '@/services/agent'
 import { listPlugins } from '@/services/plugin'
@@ -149,10 +154,95 @@ export function validateWorkflowDef(
         })
       }
     }
+    // RFC-060 PR-C — schema-time cartesian guard. wrapper-fanout nested
+    // inside another wrapper-fanout fires a warning (not an error) since
+    // the shard total at runtime is the product of the outer + inner
+    // cardinalities. Authors can override with `expectedShardCount` or
+    // simply acknowledge the cost.
+    if (node.kind === 'wrapper-fanout') {
+      // Walk up via innerToWrapper-equivalent here — innerToWrapper isn't
+      // built yet (rule 1 runs before nodeById is established), so do
+      // the direct lookup against all candidate wrappers.
+      for (const candidate of nodes) {
+        if (candidate.kind !== 'wrapper-fanout') continue
+        if (candidate.id === node.id) continue
+        const inner = readStringArray(candidate, 'nodeIds')
+        if (inner.includes(node.id)) {
+          issues.push({
+            code: 'wrapper-fanout-nested',
+            message: `wrapper-fanout '${node.id}' is nested inside wrapper-fanout '${candidate.id}' — total shard count grows multiplicatively at runtime; consider declaring 'expectedShardCount' or restructuring`,
+            pointer: node.id,
+            severity: 'warning',
+          })
+          break
+        }
+      }
+    }
+
+    // RFC-060 PR-C — wrapper-fanout required fields.
+    //
+    // Inner subgraph reuses wrapper-git/loop's flat `nodeIds[]` reference
+    // (design §1.1); empty inner is allowed only when the shardSource list
+    // is also empty (runtime fanout-empty path). The validator can't see
+    // shardSource's runtime cardinality, so it just warns when both are
+    // empty rather than hard-failing — authors often start with the
+    // wrapper card alone and fill nodeIds[] next.
+    //
+    // Shard source: EXACTLY ONE input port must have `isShardSource: true`
+    // and the port's `kind` must parse as `list<T>`. Other inputs are
+    // broadcast.
+    if (node.kind === 'wrapper-fanout') {
+      const inputs = readWrapperFanoutInputs(node)
+      const shardSources = inputs.filter((p) => p.isShardSource === true)
+      if (shardSources.length === 0) {
+        issues.push({
+          code: 'wrapper-fanout-shard-source-missing',
+          message: `wrapper-fanout '${node.id}' has no input port marked isShardSource: true (exactly one required)`,
+          pointer: node.id,
+        })
+      } else if (shardSources.length > 1) {
+        issues.push({
+          code: 'wrapper-fanout-shard-source-duplicate',
+          message: `wrapper-fanout '${node.id}' has ${shardSources.length} input ports marked isShardSource: true (exactly one allowed)`,
+          pointer: node.id,
+        })
+      } else {
+        const shardPort = shardSources[0]!
+        const parsed = tryParseKind(shardPort.kind)
+        if (parsed === null || parsed.kind !== 'list') {
+          issues.push({
+            code: 'wrapper-fanout-shard-source-must-be-list',
+            message: `wrapper-fanout '${node.id}' shardSource input '${shardPort.name}' must declare kind: list<T> (got '${shardPort.kind}')`,
+            pointer: node.id,
+          })
+        }
+      }
+    }
   }
 
   // Build node lookup + port-sets per node (output port set, input port set).
   const nodeById = new Map(nodes.map((n) => [n.id, n]))
+  // RFC-060 PR-C — innerToWrapper: every inner subgraph node points at its
+  // immediate wrapper container (wrapper-git / wrapper-loop / wrapper-fanout).
+  // Used by the aggregator-placement rule + wrapper-fanout boundary edge
+  // validator. Computed eagerly (one pass) so subsequent rules read it
+  // in O(1).
+  const innerToWrapper = new Map<string, string>()
+  for (const node of nodes) {
+    if (
+      node.kind === 'wrapper-git' ||
+      node.kind === 'wrapper-loop' ||
+      node.kind === 'wrapper-fanout'
+    ) {
+      for (const innerId of readStringArray(node, 'nodeIds')) {
+        // Multi-wrapper containment is an authoring error; the last write
+        // wins here, RFC-016 wrapper-children-outside-bounds catches the
+        // pathological "node listed in two wrappers" pattern. Validator
+        // surfaces it via the existing wrapper rules.
+        innerToWrapper.set(innerId, node.id)
+      }
+    }
+  }
   const outputPorts = new Map<string, Set<string>>()
   const inputPorts = new Map<string, Set<string>>()
 
@@ -345,19 +435,29 @@ export function validateWorkflowDef(
         })
         continue
       }
-      // RFC-060 PR-B — aggregator placement guard. Until PR-C lands the
-      // `wrapper-fanout` NodeKind, an aggregator agent has no legal home;
-      // any node referencing one is rejected. PR-C refines this rule to
-      // "must be an inner node of a wrapper-fanout"; PR-B's role is to
-      // lock the invariant in CI so authoring an aggregator agent + a
-      // plain workflow that uses it surfaces the error rather than
-      // silently dispatching the LLM with all shards collapsed.
+      // RFC-060 PR-C — aggregator placement guard. An aggregator agent
+      // (agent.role === 'aggregator') MUST be an inner node of a
+      // wrapper-fanout. PR-B rejected it everywhere as a placeholder;
+      // PR-C tightens the rule by consulting the innerToWrapper map:
+      //   - Inner of wrapper-fanout → allowed (runtime dispatches it once
+      //     as the convergence point).
+      //   - Inner of wrapper-git / wrapper-loop or top-level → rejected
+      //     with `aggregator-agent-outside-fanout`.
       if (agent.role === 'aggregator') {
-        issues.push({
-          code: 'aggregator-agent-outside-fanout',
-          message: `node '${node.id}' uses aggregator agent '${agent.name}' — aggregator agents must sit inside a wrapper-fanout (RFC-060). The wrapper-fanout NodeKind lands in PR-C; until then aggregator agents cannot be placed on the canvas.`,
-          pointer: node.id,
-        })
+        const containerId = innerToWrapper.get(node.id)
+        const container = containerId !== undefined ? nodeById.get(containerId) : undefined
+        const inFanout = container?.kind === 'wrapper-fanout'
+        if (!inFanout) {
+          issues.push({
+            code: 'aggregator-agent-outside-fanout',
+            message: `node '${node.id}' uses aggregator agent '${agent.name}' — aggregator agents must sit inside a wrapper-fanout (RFC-060${
+              containerId !== undefined
+                ? `; currently nested in '${containerId}' which is kind '${container?.kind}'`
+                : '; currently at top level'
+            }).`,
+            pointer: node.id,
+          })
+        }
       }
       for (const s of agent.skills) {
         if (!skillNames.has(s)) {
@@ -705,14 +805,31 @@ export function validateWorkflowDef(
         continue
       }
       // markdown kind enforcement — only agent nodes carry outputKinds.
+      //
+      // RFC-060 PR-C: kind comparison switches from hardcoded literals to
+      // parseKind-based shape checks. Accepts {markdown, markdown_file,
+      // path<md>, path<markdown>} (markdown_file folds to path<md> at
+      // parse time, so the alias survives). Rejects list<T> with the
+      // separate `review-input-list-kind-not-supported` code — per-item
+      // review must live INSIDE a wrapper-fanout.
       if (src.kind === 'agent-single' || src.kind === 'agent-multi') {
         const agentName = readString(src, 'agentName') ?? ''
         const agent = agentByName.get(agentName)
         const kind = agent?.outputKinds?.[srcPort]
-        if (kind !== 'markdown' && kind !== 'markdown_file') {
+        const parsed: ParsedKind | null = kind !== undefined ? tryParseKind(kind) : null
+        const isMarkdownish =
+          (parsed?.kind === 'base' && parsed.name === 'markdown') ||
+          (parsed?.kind === 'path' && (parsed.ext === 'md' || parsed.ext === 'markdown'))
+        if (parsed?.kind === 'list') {
+          issues.push({
+            code: 'review-input-list-kind-not-supported',
+            message: `review node '${node.id}' inputSource '${srcNodeId}.${srcPort}' has list kind '${kind}'; review only accepts single-value ports. Move review inside a wrapper-fanout for per-item review (RFC-060 §10.2).`,
+            pointer: node.id,
+          })
+        } else if (!isMarkdownish) {
           issues.push({
             code: 'review-input-source-not-markdown',
-            message: `review node '${node.id}' inputSource '${srcNodeId}.${srcPort}' must be declared kind: markdown | markdown_file on agent '${agentName}'`,
+            message: `review node '${node.id}' inputSource '${srcNodeId}.${srcPort}' must be declared kind: markdown | path<md> | markdown_file on agent '${agentName}'`,
             pointer: node.id,
           })
         }
@@ -1011,6 +1128,91 @@ export function validateWorkflowDef(
     }
   }
 
+  // 4d. RFC-060 — wrapper-fanout cross-cutting validation -----------------
+  // Runs AFTER reference-resolution so agentByName is populated; also
+  // depends on innerToWrapper and outputPorts from rule 1 + the loop above.
+  for (const node of nodes) {
+    if (node.kind !== 'wrapper-fanout') continue
+
+    // multiple-aggregators-in-fanout: v1 allows exactly 0 or 1.
+    const aggCount = countFanoutAggregators(
+      { $schema_version: 4, inputs: [], nodes, edges },
+      node.id,
+      agentByName,
+    )
+    if (aggCount > 1) {
+      issues.push({
+        code: 'multiple-aggregators-in-fanout',
+        message: `wrapper-fanout '${node.id}' contains ${aggCount} aggregator agents; v1 supports at most 1 (RFC-060 design §4.3)`,
+        pointer: node.id,
+      })
+    }
+  }
+
+  // 4e. RFC-060 — boundary edge validation --------------------------------
+  for (const edge of edges) {
+    if (edge.boundary === undefined) continue
+    if (edge.boundary === 'wrapper-input') {
+      const wrapper = nodeById.get(edge.source.nodeId)
+      if (wrapper === undefined || wrapper.kind !== 'wrapper-fanout') {
+        issues.push({
+          code: 'boundary-input-source-not-wrapper',
+          message: `edge '${edge.id}' boundary='wrapper-input' source.nodeId '${edge.source.nodeId}' is not a wrapper-fanout node`,
+          pointer: edge.id,
+        })
+        continue
+      }
+      const declared = readWrapperFanoutInputs(wrapper).some((p) => p.name === edge.source.portName)
+      if (!declared) {
+        issues.push({
+          code: 'boundary-input-port-not-declared',
+          message: `edge '${edge.id}' boundary='wrapper-input' source.portName '${edge.source.portName}' is not declared in wrapper-fanout '${wrapper.id}' inputs[]`,
+          pointer: edge.id,
+        })
+      }
+      const wrapperInner = new Set(readStringArray(wrapper, 'nodeIds'))
+      if (!wrapperInner.has(edge.target.nodeId)) {
+        issues.push({
+          code: 'boundary-input-target-not-inner',
+          message: `edge '${edge.id}' boundary='wrapper-input' target.nodeId '${edge.target.nodeId}' is not in wrapper-fanout '${wrapper.id}' nodeIds[]`,
+          pointer: edge.id,
+        })
+      }
+    } else if (edge.boundary === 'wrapper-output') {
+      const wrapper = nodeById.get(edge.target.nodeId)
+      if (wrapper === undefined || wrapper.kind !== 'wrapper-fanout') {
+        issues.push({
+          code: 'boundary-output-target-not-wrapper',
+          message: `edge '${edge.id}' boundary='wrapper-output' target.nodeId '${edge.target.nodeId}' is not a wrapper-fanout node`,
+          pointer: edge.id,
+        })
+        continue
+      }
+      const wrapperInner = new Set(readStringArray(wrapper, 'nodeIds'))
+      if (!wrapperInner.has(edge.source.nodeId)) {
+        issues.push({
+          code: 'boundary-output-source-not-inner',
+          message: `edge '${edge.id}' boundary='wrapper-output' source.nodeId '${edge.source.nodeId}' is not in wrapper-fanout '${wrapper.id}' nodeIds[]`,
+          pointer: edge.id,
+        })
+        continue
+      }
+      // The source must be the aggregator agent. We look up by agentName
+      // (agent-single) and check role === 'aggregator'.
+      const srcNode = nodeById.get(edge.source.nodeId)
+      if (srcNode === undefined) continue
+      const srcAgentName = readString(srcNode, 'agentName') ?? ''
+      const srcAgent = agentByName.get(srcAgentName)
+      if (srcNode.kind !== 'agent-single' || srcAgent?.role !== 'aggregator') {
+        issues.push({
+          code: 'boundary-output-source-must-be-aggregator',
+          message: `edge '${edge.id}' boundary='wrapper-output' source '${edge.source.nodeId}' must be an aggregator agent-single node (RFC-060 §5.3.1)`,
+          pointer: edge.id,
+        })
+      }
+    }
+  }
+
   // 5. prompt-template --------------------------------------------------------
   for (const node of nodes) {
     if (node.kind !== 'agent-single' && node.kind !== 'agent-multi') continue
@@ -1061,6 +1263,29 @@ function shardingInvalidMessage(
     case 'depth-out-of-range':
       return `agent-multi node '${nodeId}' shardingStrategy per-directory 'depth' must be an integer ≥ 1`
   }
+}
+
+interface WrapperFanoutInputView {
+  name: string
+  kind: string
+  isShardSource?: boolean
+}
+
+function readWrapperFanoutInputs(node: unknown): WrapperFanoutInputView[] {
+  if (typeof node !== 'object' || node === null) return []
+  const raw = (node as Record<string, unknown>).inputs
+  if (!Array.isArray(raw)) return []
+  const out: WrapperFanoutInputView[] = []
+  for (const item of raw) {
+    if (typeof item !== 'object' || item === null) continue
+    const rec = item as Record<string, unknown>
+    if (typeof rec.name !== 'string' || rec.name.length === 0) continue
+    if (typeof rec.kind !== 'string' || rec.kind.length === 0) continue
+    const view: WrapperFanoutInputView = { name: rec.name, kind: rec.kind }
+    if (rec.isShardSource === true) view.isShardSource = true
+    out.push(view)
+  }
+  return out
 }
 
 function readString(node: unknown, key: string): string | undefined {

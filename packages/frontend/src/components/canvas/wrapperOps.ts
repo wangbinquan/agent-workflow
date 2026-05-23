@@ -14,7 +14,12 @@ export function clearWrapperSize(
 ): WorkflowDefinition {
   const target = prevDef.nodes.find((n) => n.id === wrapperId)
   if (target === undefined) return prevDef
-  if (target.kind !== 'wrapper-git' && target.kind !== 'wrapper-loop') return prevDef
+  if (
+    target.kind !== 'wrapper-git' &&
+    target.kind !== 'wrapper-loop' &&
+    target.kind !== 'wrapper-fanout'
+  )
+    return prevDef
   let changed = false
   const nodes = prevDef.nodes.map((n) => {
     if (n.id !== wrapperId) return n
@@ -37,7 +42,12 @@ export function deleteWrapperWithChildren(
 ): WorkflowDefinition {
   const target = prevDef.nodes.find((n) => n.id === wrapperId)
   if (target === undefined) return prevDef
-  if (target.kind !== 'wrapper-git' && target.kind !== 'wrapper-loop') return prevDef
+  if (
+    target.kind !== 'wrapper-git' &&
+    target.kind !== 'wrapper-loop' &&
+    target.kind !== 'wrapper-fanout'
+  )
+    return prevDef
   const inner = (target as Record<string, unknown>).nodeIds
   const innerIds = Array.isArray(inner)
     ? (inner as unknown[]).filter((s): s is string => typeof s === 'string')
