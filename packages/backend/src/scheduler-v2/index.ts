@@ -11,6 +11,7 @@
 
 export * from './actorRegistry'
 export * from './daemonResume'
+export * from './eventApplierWakeBridge'
 export * from './readyScanner'
 export * from './runnerAdapter'
 export * from './taskActor'
