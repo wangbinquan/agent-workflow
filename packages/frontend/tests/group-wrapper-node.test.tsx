@@ -174,22 +174,55 @@ describe('GroupWrapperNode', () => {
     // same way wrapper-git renders `git_diff`. Otherwise the wrapper's
     // outputs would visually diverge from git's, which is the bug the
     // user just reported about pre-aggregator state.
+    // 2026-05-24 — fanout now renders outputs on the RIGHT edge (via the
+    // shared `.canvas-node__port-row--right` path) instead of the bottom-
+    // centered strip the other wrapper kinds use. The signal-port chrome
+    // for `__done__` still applies; query the right-side port row.
     test('fanout output: __done__ gets signal chrome (no-aggregator case)', () => {
       const { container } = renderNode(fanoutData({ outputPorts: ['__done__'] }))
-      const port = container.querySelector('.canvas-node__bottom-port')
-      expect(port?.classList.contains('canvas-node__bottom-port--signal')).toBe(true)
-      const handle = container.querySelector('.canvas-node__handle')
+      const port = container.querySelector(
+        '.canvas-node__port-rows--wrapper-fanout .canvas-node__port-row',
+      )
+      expect(port?.classList.contains('canvas-node__port-row--signal')).toBe(true)
+      const handle = port?.querySelector('.canvas-node__handle')
       expect(handle?.classList.contains('canvas-node__handle--signal')).toBe(true)
     })
     test('fanout output: aggregator-derived port renders as plain data handle (matches git_diff)', () => {
       const { container } = renderNode(fanoutData({ outputPorts: ['summary'] }))
-      const port = container.querySelector('.canvas-node__bottom-port')
+      const port = container.querySelector(
+        '.canvas-node__port-rows--wrapper-fanout .canvas-node__port-row',
+      )
       expect(port).not.toBeNull()
       // No --signal modifier when the port is a real data output — that's
-      // what unifies the visual with wrapper-git's `git_diff`.
-      expect(port?.classList.contains('canvas-node__bottom-port--signal')).toBe(false)
-      const handle = container.querySelector('.canvas-node__handle')
+      // what unifies the visual with wrapper-git's `git_diff` (both render
+      // as plain data handles, just on different edges).
+      expect(port?.classList.contains('canvas-node__port-row--signal')).toBe(false)
+      const handle = port?.querySelector('.canvas-node__handle')
       expect(handle?.classList.contains('canvas-node__handle--signal')).toBe(false)
+    })
+    test('fanout wrapper places outputs on the RIGHT, not the bottom strip', () => {
+      const { container } = renderNode(fanoutData({ outputPorts: ['summary'] }))
+      expect(container.querySelector('.canvas-node__bottom-ports')).toBeNull()
+      expect(container.querySelector('.canvas-node__port-rows--right')).not.toBeNull()
+    })
+
+    // 2026-05-24 — fanout wrappers need left-side input Handles so users
+    // can drag-connect upstream nodes into the shardSource (+ optional
+    // broadcast inputs). Without these the wrapper has outputs only and
+    // is unreachable from upstream on the canvas.
+    test('fanout wrapper renders a target handle for each declared input port', () => {
+      const { container } = renderNode(fanoutData({ inputPorts: ['docs'] }))
+      const leftHandles = container.querySelectorAll(
+        '.canvas-node__port-rows--left .canvas-node__handle',
+      )
+      expect(leftHandles.length).toBe(1)
+      expect(leftHandles[0]?.getAttribute('data-handleid')).toBe('docs')
+    })
+    test('fanout wrapper also exposes the catch-all left strip for tolerant drops', () => {
+      const { container } = renderNode(fanoutData({ inputPorts: ['docs'] }))
+      const catchAll = container.querySelector('.canvas-node__handle--catchall')
+      expect(catchAll).not.toBeNull()
+      expect(catchAll?.getAttribute('data-handleid')).toBe(INBOUND_HANDLE_ID)
     })
   })
 })

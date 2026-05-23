@@ -93,15 +93,52 @@ export function GroupWrapperNode({ data, selected }: Props) {
       {kind === 'loop' ? (
         <PortHandles side="left" ports={[]} catchAll={{ id: INBOUND_HANDLE_ID }} />
       ) : null}
-      {data.outputPorts.length > 0 ? (
+      {/* RFC-060 — wrapper-fanout declares `inputs[]` (shardSource +
+       *  optional broadcast inputs). Without these target Handles, the
+       *  fanout wrapper has no canvas affordance for drag-connect of
+       *  upstream edges. The catch-all lets the first drop land on the
+       *  shardSource (typical case); precise per-port drops still hit
+       *  named handles via z-index priority. */}
+      {kind === 'fanout' ? (
+        <PortHandles side="left" ports={data.inputPorts} catchAll={{ id: INBOUND_HANDLE_ID }} />
+      ) : null}
+      {/* Fanout outputs render on the RIGHT (mirrors the agent-node layout
+       *  so the wrapper reads as an agent-shaped block at a glance): inputs
+       *  on the left, outputs on the right. Each output handle still keeps
+       *  the signal-port chrome for `__done__` via the same className
+       *  branch as the bottom-port renderer. */}
+      {kind === 'fanout' && data.outputPorts.length > 0 ? (
+        <div className="canvas-node__port-rows canvas-node__port-rows--right canvas-node__port-rows--wrapper-fanout">
+          {data.outputPorts.map((p) => {
+            const isSignal = p === '__done__'
+            return (
+              <div
+                key={p}
+                className={`canvas-node__port-row canvas-node__port-row--right${isSignal ? ' canvas-node__port-row--signal' : ''}`}
+                data-signal={isSignal ? 'true' : undefined}
+              >
+                <span className="canvas-node__port-label" title={p}>
+                  {p}
+                </span>
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={p}
+                  className={`canvas-node__handle${isSignal ? ' canvas-node__handle--signal' : ''}`}
+                />
+              </div>
+            )
+          })}
+        </div>
+      ) : null}
+      {/* git / loop keep bottom-centered outputs (RFC-016 §3.2). The right-
+       *  side layout that fanout uses doesn't fit them: wrapper-git's single
+       *  `git_diff` output reads better at the bottom because the wrapper is
+       *  typically wider than tall, and wrapper-loop's outputBindings are
+       *  authored downstream of the loop body, not on a side. */}
+      {kind !== 'fanout' && data.outputPorts.length > 0 ? (
         <div className="canvas-node__bottom-ports">
           {data.outputPorts.map((p) => {
-            // RFC-060 F.T2: the implicit `__done__` outlet is a
-            // signal-kind port — control-flow only, no data payload.
-            // Render it with the dashed-handle / dimmed-label variant
-            // so authors visually distinguish data edges from signal
-            // edges at a glance. Future signal-kind ports (PR-D2 will
-            // promote agent.signal outputs) reuse the same class.
             const isSignal = p === '__done__'
             return (
               <div

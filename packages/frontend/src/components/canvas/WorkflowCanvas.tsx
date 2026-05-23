@@ -1199,6 +1199,17 @@ export function computePorts(
       for (const p of derived) {
         if (!outputs.includes(p.name)) outputs.push(p.name)
       }
+      // Surface declared input ports (shardSource + auxiliary broadcast
+      // ports) so the canvas renders them as left-side target Handles.
+      // Without this, users can author a fanout wrapper but have no
+      // canvas affordance to drag an upstream edge into it — the only
+      // wiring route would be hand-editing YAML.
+      const declaredInputs = Array.isArray(rec.inputs)
+        ? (rec.inputs as Array<{ name?: unknown }>)
+        : []
+      for (const p of declaredInputs) {
+        if (typeof p.name === 'string' && !inputs.includes(p.name)) inputs.push(p.name)
+      }
       break
     }
     case 'review': {

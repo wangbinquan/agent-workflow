@@ -4381,6 +4381,51 @@ code {
   background-color: color-mix(in srgb, #b87333 6%, var(--panel));
   border-color: color-mix(in srgb, #b87333 55%, transparent);
 }
+/* 2026-05-24 — wrapper-fanout exposes inputs on the LEFT edge and outputs on
+ * the RIGHT edge (matches the agent-node mental model the user expects).
+ * Both columns are absolutely positioned along the wrapper edges so the port
+ * labels stay INSIDE the wrapper rect — without this the default
+ * `.canvas-node__port-rows` (normal-flow, top-of-body) stacks under the
+ * header and overflows below the wrapper's small empty footprint, looking
+ * like floating ports outside the lower-left corner. */
+.canvas-node--wrapper-group--fanout .canvas-node__port-rows--left,
+.canvas-node--wrapper-group--fanout .canvas-node__port-rows--right {
+  position: absolute;
+  top: 30px; /* sit below the header strip */
+  bottom: 6px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.canvas-node--wrapper-group--fanout .canvas-node__port-rows--left {
+  left: 6px;
+  align-items: flex-start;
+}
+.canvas-node--wrapper-group--fanout .canvas-node__port-rows--right {
+  right: 6px;
+  align-items: flex-end;
+}
+.canvas-node--wrapper-group--fanout .canvas-node__port-row {
+  pointer-events: auto;
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+/* Pin handles to the wrapper's OUTER edge (matches the agent -14px offset
+ * pattern; the wrapper has padding:0 so the offset is from the column edge
+ * directly, plus the 6px left/right inset above lands the handle at the
+ * wrapper edge). */
+.canvas-node--wrapper-group--fanout .canvas-node__port-rows--left .react-flow__handle-left {
+  left: -10px !important;
+  right: auto !important;
+}
+.canvas-node--wrapper-group--fanout .canvas-node__port-rows--right .react-flow__handle-right {
+  right: -10px !important;
+  left: auto !important;
+}
 .canvas-node--wrapper-group--drop-hover {
   background-color: color-mix(in srgb, var(--accent) 14%, var(--panel)) !important;
   border-color: var(--accent) !important;
