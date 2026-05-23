@@ -39,11 +39,7 @@ import { ulid } from 'ulid'
 
 import { NODE_KIND_HANDLERS, SIGNAL_KIND_HANDLERS } from '../handlers'
 import type { UpstreamInput } from '../handlers'
-import {
-  computeTickActions,
-  type TickContext,
-  type ReadyScope,
-} from './taskActorTick'
+import { computeTickActions, type TickContext, type ReadyScope } from './taskActorTick'
 import { scanReadyScopes, scanWrapperInnerCompletions, type ReadyScanContext } from './readyScanner'
 import type { RunnerAdapter } from './runnerAdapter'
 import type { ActorState } from './actorRegistry'
