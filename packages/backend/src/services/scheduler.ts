@@ -34,7 +34,7 @@ import {
   isClarifyChannelEdge,
   resolveClarifySessionMode,
 } from '@agent-workflow/shared'
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRunOutputs, nodeRuns, skills, tasks } from '@/db/schema'
@@ -42,17 +42,13 @@ import { getAgent } from '@/services/agent'
 import { resolveDependsClosure } from '@/services/agentDeps'
 import { collectMcpNamesFromClosure, loadMcpsByNames } from '@/services/mcpClosure'
 import { collectPluginNamesFromClosure, loadPluginsByNames } from '@/services/pluginClosure'
-import {
-  buildClarifyPromptContext,
-  createClarifySession,
-  findClarifyNode,
-} from '@/services/clarify'
+import { createClarifySession, findClarifyNode } from '@/services/clarify'
 import {
   buildExternalFeedbackContext,
-  buildQuestionerCrossClarifyContext,
   createCrossClarifySession,
   hasPersistentStop,
 } from '@/services/crossClarify'
+import { buildPromptContext, computeHistoryCutoff } from '@/services/clarifyRounds'
 import {
   decideResumeSessionId,
   detectSessionNotFoundFromStderr,
@@ -1369,40 +1365,20 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // The cross-clarify rerun path (priorDoneDesigner above) was the
         // first instance of this rule; this block generalises it to every
         // rerun trigger.
-        let priorCompletedTopLevelRun: typeof nodeRuns.$inferSelect | undefined
-        {
-          const candidates = await db
-            .select()
-            .from(nodeRuns)
-            .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, node.id)))
-          const currentShardKeyForFilter = currentRunRow?.shardKey ?? null
-          const eligible: Array<typeof nodeRuns.$inferSelect> = []
-          for (const r of candidates) {
-            if (r.id === nodeRunId) continue
-            if (r.parentNodeRunId !== null) continue
-            if ((r.shardKey ?? null) !== currentShardKeyForFilter) continue
-            if (currentRunRow !== undefined && !isFresherNodeRun(currentRunRow, r)) continue
-            eligible.push(r)
-          }
-          if (eligible.length > 0) {
-            const outputsRows = await db
-              .select({ nodeRunId: nodeRunOutputs.nodeRunId })
-              .from(nodeRunOutputs)
-              .where(
-                inArray(
-                  nodeRunOutputs.nodeRunId,
-                  eligible.map((r) => r.id),
-                ),
-              )
-            const haveOutputs = new Set<string>(outputsRows.map((o) => o.nodeRunId))
-            for (const r of eligible) {
-              if (!haveOutputs.has(r.id)) continue
-              if (isFresherNodeRun(r, priorCompletedTopLevelRun)) priorCompletedTopLevelRun = r
-            }
-          }
-        }
+        // RFC-058 T13: extracted to services/clarifyRounds.computeHistoryCutoff.
+        // Single source of truth for the GENERAL aging rule — same semantics
+        // (outputs-presence + isFresherNodeRun shadow ordering), now shared
+        // between self-clarify and cross-clarify consumer paths.
+        const priorCompletedCutoff = await computeHistoryCutoff({
+          db,
+          taskId,
+          nodeId: node.id,
+          shardKey: currentRunRow?.shardKey ?? null,
+          ...(currentRunRow !== undefined ? { currentRunRow } : {}),
+          iterationField: 'clarifyIteration',
+        })
         const historyCutoffClarifyIteration =
-          priorCompletedTopLevelRun?.clarifyIteration ?? priorDoneDesigner?.clarifyIteration
+          priorCompletedCutoff ?? priorDoneDesigner?.clarifyIteration
 
         // RFC-056 §5.4 §6.4: when the about-to-run node is a cross-clarify
         // questioner AND this rerun was triggered by a cross-clarify resolve
@@ -1425,19 +1401,30 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // must not let the gate silently miss those.
         const isQuestionerCrossClarifyRerun =
           clarifyMode === 'cross' && currentCrossClarifyIteration > 0
+        // RFC-058 T13: unified buildPromptContext via consumerKind dispatch.
+        // 'cross-questioner' path additionally fixes RFC-058 缺口 1 (questioner
+        // aging gap) and 缺口 2 (wrapper-loop loop_iter isolation) by routing
+        // through the same cutoff + loopIter filter pipeline the self path uses.
         const clarifyContext = hasClarifyChannel
           ? isQuestionerCrossClarifyRerun
-            ? await buildQuestionerCrossClarifyContext({
-                db,
-                taskId,
-                questionerNodeId: node.id,
-                targetCrossClarifyIteration: currentCrossClarifyIteration,
-              })
-            : await buildClarifyPromptContext({
+            ? await buildPromptContext({
                 db,
                 definition,
                 taskId,
-                agentNodeId: node.id,
+                consumerKind: 'cross-questioner',
+                consumerNodeId: node.id,
+                targetIteration: currentCrossClarifyIteration,
+                loopIter: iteration,
+                ...(historyCutoffClarifyIteration !== undefined
+                  ? { historyCutoff: historyCutoffClarifyIteration }
+                  : {}),
+              })
+            : await buildPromptContext({
+                db,
+                definition,
+                taskId,
+                consumerKind: 'self',
+                consumerNodeId: node.id,
                 targetIteration: currentClarifyIteration,
                 shardKey: currentShardKey,
                 ...(resumeDecision.inlineMode ? { sessionMode: 'inline' as const } : {}),
@@ -1452,7 +1439,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
                 // so 'stop' truly only suppresses the immediate next rerun.
                 applyLatestDirective: isClarifyRerun,
                 ...(historyCutoffClarifyIteration !== undefined
-                  ? { historyCutoffClarifyIteration }
+                  ? { historyCutoff: historyCutoffClarifyIteration }
                   : {}),
               })
           : undefined
@@ -2268,12 +2255,14 @@ async function runFanOutNode(
         try {
           // RFC-023: per-shard clarify context — surfaces this shard's prior
           // round Q&A (if any) without bleeding shards into each other.
+          // RFC-058 T13: unified via buildPromptContext (consumerKind='self').
           const clarifyContext = hasClarifyChannel
-            ? await buildClarifyPromptContext({
+            ? await buildPromptContext({
                 db,
                 definition,
                 taskId,
-                agentNodeId: node.id,
+                consumerKind: 'self',
+                consumerNodeId: node.id,
                 targetIteration: 0, // first run; rerun rows are minted by clarify service
                 shardKey: shard.shardKey,
               })

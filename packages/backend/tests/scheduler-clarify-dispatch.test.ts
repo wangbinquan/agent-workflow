@@ -29,9 +29,38 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, clarifySessions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import {
+  agents,
+  clarifyRounds,
+  clarifySessions,
+  nodeRuns,
+  tasks,
+  workflows,
+} from '../src/db/schema'
 import { runTask } from '../src/services/scheduler'
 import { runGit } from '../src/util/git'
+
+// RFC-058 T13: scheduler now reads clarify state via `clarify_rounds`
+// (unified self+cross table). These tests directly UPDATE the legacy
+// `clarify_sessions` table to synthesize answered state without going through
+// submitClarifyAnswers. We mirror the update onto `clarify_rounds` so the new
+// read path observes the same state.
+async function mirrorClarifyAnswered(
+  db: DbClient,
+  sessionId: string,
+  fields: { answersJson: string; directive?: 'continue' | 'stop' },
+): Promise<void> {
+  await db
+    .update(clarifyRounds)
+    .set({
+      status: 'answered',
+      answeredAt: Date.now(),
+      answeredBy: 'local',
+      directive: fields.directive ?? null,
+      answersJson: fields.answersJson,
+    })
+    .where(eq(clarifyRounds.id, sessionId))
+}
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -334,22 +363,24 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     const sessRow = (
       await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
     )[0]!
+    const ANSWERS_JSON_S2 = JSON.stringify([
+      {
+        questionId: 'qdb',
+        selectedOptionIndices: [0],
+        selectedOptionLabels: ['Postgres'],
+        customText: '',
+      },
+    ])
     await h.db
       .update(clarifySessions)
       .set({
         status: 'answered',
         answeredAt: Date.now(),
         answeredBy: 'local',
-        answersJson: JSON.stringify([
-          {
-            questionId: 'qdb',
-            selectedOptionIndices: [0],
-            selectedOptionLabels: ['Postgres'],
-            customText: '',
-          },
-        ]),
+        answersJson: ANSWERS_JSON_S2,
       })
       .where(eq(clarifySessions.id, sessRow.id))
+    await mirrorClarifyAnswered(h.db, sessRow.id, { answersJson: ANSWERS_JSON_S2 })
     await h.db
       .update(nodeRuns)
       .set({ status: 'done', finishedAt: Date.now() })
@@ -453,6 +484,14 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     const sessRow = (
       await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
     )[0]!
+    const ANSWERS_JSON_S3A = JSON.stringify([
+      {
+        questionId: 'qdb',
+        selectedOptionIndices: [0],
+        selectedOptionLabels: ['Postgres'],
+        customText: '',
+      },
+    ])
     await h.db
       .update(clarifySessions)
       .set({
@@ -460,16 +499,13 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         answeredAt: Date.now(),
         answeredBy: 'local',
         directive: 'continue',
-        answersJson: JSON.stringify([
-          {
-            questionId: 'qdb',
-            selectedOptionIndices: [0],
-            selectedOptionLabels: ['Postgres'],
-            customText: '',
-          },
-        ]),
+        answersJson: ANSWERS_JSON_S3A,
       })
       .where(eq(clarifySessions.id, sessRow.id))
+    await mirrorClarifyAnswered(h.db, sessRow.id, {
+      answersJson: ANSWERS_JSON_S3A,
+      directive: 'continue',
+    })
     await h.db
       .update(nodeRuns)
       .set({ status: 'done', finishedAt: Date.now() })
@@ -558,6 +594,14 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     const sessRow = (
       await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
     )[0]!
+    const ANSWERS_JSON_S2B = JSON.stringify([
+      {
+        questionId: 'qdb',
+        selectedOptionIndices: [0],
+        selectedOptionLabels: ['Postgres'],
+        customText: '',
+      },
+    ])
     await h.db
       .update(clarifySessions)
       .set({
@@ -565,16 +609,13 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         answeredAt: Date.now(),
         answeredBy: 'local',
         directive: 'continue',
-        answersJson: JSON.stringify([
-          {
-            questionId: 'qdb',
-            selectedOptionIndices: [0],
-            selectedOptionLabels: ['Postgres'],
-            customText: '',
-          },
-        ]),
+        answersJson: ANSWERS_JSON_S2B,
       })
       .where(eq(clarifySessions.id, sessRow.id))
+    await mirrorClarifyAnswered(h.db, sessRow.id, {
+      answersJson: ANSWERS_JSON_S2B,
+      directive: 'continue',
+    })
     await h.db
       .update(nodeRuns)
       .set({ status: 'done', finishedAt: Date.now() })
@@ -672,6 +713,14 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     const round1Sess = (
       await h.db.select().from(clarifySessions).where(eq(clarifySessions.taskId, taskId))
     )[0]!
+    const ANSWERS_JSON_R1 = JSON.stringify([
+      {
+        questionId: 'qdb',
+        selectedOptionIndices: [0],
+        selectedOptionLabels: ['Postgres'],
+        customText: '',
+      },
+    ])
     await h.db
       .update(clarifySessions)
       .set({
@@ -679,16 +728,13 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         answeredAt: Date.now(),
         answeredBy: 'local',
         directive: 'continue',
-        answersJson: JSON.stringify([
-          {
-            questionId: 'qdb',
-            selectedOptionIndices: [0],
-            selectedOptionLabels: ['Postgres'],
-            customText: '',
-          },
-        ]),
+        answersJson: ANSWERS_JSON_R1,
       })
       .where(eq(clarifySessions.id, round1Sess.id))
+    await mirrorClarifyAnswered(h.db, round1Sess.id, {
+      answersJson: ANSWERS_JSON_R1,
+      directive: 'continue',
+    })
     await h.db
       .update(nodeRuns)
       .set({ status: 'done', finishedAt: Date.now() })
@@ -730,6 +776,14 @@ describe('scheduler RFC-023 clarify dispatch', () => {
       .from(clarifySessions)
       .where(eq(clarifySessions.taskId, taskId))
     const round2Sess = allSess.find((s) => s.iterationIndex === 1)!
+    const ANSWERS_JSON_R2 = JSON.stringify([
+      {
+        questionId: 'qenv',
+        selectedOptionIndices: [0],
+        selectedOptionLabels: ['Staging'],
+        customText: '',
+      },
+    ])
     await h.db
       .update(clarifySessions)
       .set({
@@ -737,16 +791,13 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         answeredAt: Date.now(),
         answeredBy: 'local',
         directive: 'continue',
-        answersJson: JSON.stringify([
-          {
-            questionId: 'qenv',
-            selectedOptionIndices: [0],
-            selectedOptionLabels: ['Staging'],
-            customText: '',
-          },
-        ]),
+        answersJson: ANSWERS_JSON_R2,
       })
       .where(eq(clarifySessions.id, round2Sess.id))
+    await mirrorClarifyAnswered(h.db, round2Sess.id, {
+      answersJson: ANSWERS_JSON_R2,
+      directive: 'continue',
+    })
     await h.db
       .update(nodeRuns)
       .set({ status: 'done', finishedAt: Date.now() })

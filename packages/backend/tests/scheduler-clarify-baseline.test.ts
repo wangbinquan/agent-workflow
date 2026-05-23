@@ -375,13 +375,16 @@ describe('RFC-058 baseline T5 — GENERAL aging cutoff signal (prior done + outp
 })
 
 describe('RFC-058 baseline T5 — scheduler dispatch gate grep guards', () => {
-  test('source grep: scheduler routes to buildQuestionerCrossClarifyContext when cci>0', async () => {
+  test('source grep: scheduler routes through buildPromptContext consumerKind dispatch when cci>0', async () => {
     const fs = await import('node:fs/promises')
     const txt = await fs.readFile(
       resolve(import.meta.dir, '..', '..', '..', 'packages/backend/src/services/scheduler.ts'),
       'utf8',
     )
-    expect(txt).toContain('buildQuestionerCrossClarifyContext')
+    // RFC-058 T13: legacy buildQuestionerCrossClarifyContext call site replaced
+    // by unified `buildPromptContext({ consumerKind: 'cross-questioner', ... })`.
+    expect(txt).toContain('buildPromptContext')
+    expect(txt).toContain("consumerKind: 'cross-questioner'")
     expect(txt).toContain('isQuestionerCrossClarifyRerun')
     expect(txt).toContain('hasExternalFeedbackChannel')
     expect(txt).toContain('historyCutoffClarifyIteration')

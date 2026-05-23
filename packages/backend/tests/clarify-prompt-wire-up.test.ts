@@ -1,8 +1,12 @@
 // RFC-023 PR-B T12 — locks the scheduler ↔ runner wiring for clarify prompt
 // context.
 //
+// RFC-058 T13 update: scheduler now calls the unified
+// `buildPromptContext` from `services/clarifyRounds.ts` (consumerKind dispatch)
+// instead of `buildClarifyPromptContext` / `buildQuestionerCrossClarifyContext`.
+//
 // Source-level guards (no runtime needed) keep the wire-up from rotting:
-//   1. scheduler.ts MUST call buildClarifyPromptContext at the agent-single
+//   1. scheduler.ts MUST call buildPromptContext at the agent-single
 //      AND agent-multi shard sites.
 //   2. runner.ts MUST thread `hasClarifyChannel` into renderUserPrompt and
 //      call detectEnvelopeKind / extractClarifyEnvelopeBody on stdout —
@@ -26,12 +30,16 @@ const BACKEND_SRC = join(__dirname, '..', 'src', 'services')
 const SHARED_SRC = join(__dirname, '..', '..', 'shared', 'src')
 
 describe('scheduler ↔ runner clarify prompt wire-up (RFC-023 T12)', () => {
-  test('scheduler.ts wires buildClarifyPromptContext on both agent paths', () => {
+  test('scheduler.ts wires buildPromptContext on both agent paths', () => {
     const src = readFileSync(join(BACKEND_SRC, 'scheduler.ts'), 'utf8')
-    expect(src).toContain('buildClarifyPromptContext')
-    // Two call sites in runOneNode (agent-single) and runFanOutNode (agent-multi).
-    const occurrences = src.match(/buildClarifyPromptContext\(/g) ?? []
+    expect(src).toContain('buildPromptContext')
+    // RFC-058 T13: three call sites — agent-single self, agent-single
+    // cross-questioner, agent-multi shard fanout (each replaces the legacy
+    // buildClarifyPromptContext / buildQuestionerCrossClarifyContext call).
+    const occurrences = src.match(/buildPromptContext\(/g) ?? []
     expect(occurrences.length).toBeGreaterThanOrEqual(2)
+    expect(src).toContain("consumerKind: 'self'")
+    expect(src).toContain("consumerKind: 'cross-questioner'")
   })
 
   test('scheduler.ts wires findClarifyNodeForAgent + agentHasClarifyChannel', () => {
