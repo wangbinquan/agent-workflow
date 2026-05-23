@@ -7,7 +7,7 @@
 
 > **重要前置条件**：本 RFC 建立在 [RFC-058](../RFC-058-clarify-sessions-unification/proposal.md) 合并后的 `clarify_rounds` 单表 + 单 service 基础上。RFC-058 落地前**本 RFC 不进入实现**。RFC-058 落地后，进入 RFC-059 实施前需要把本文里出现的 `cross_clarify_sessions` / `crossClarifySessions` / `CrossClarifySession` / `buildQuestionerCrossClarifyContext` / `triggerQuestionerStopRerun` / `triggerQuestionerContinueRerun` / `extractDesignerScopedSubset` 等引用按 RFC-058 final shape 刷过一遍（典型：rename 为 `clarify_rounds` / `clarifyRounds` / `ClarifyRound` / 合并后的 `buildPromptContext` + `kind` 分支 / `submitClarifyAnswers` 统一入口等）。产品语义、scope 单向 destination flag 定义、UI Segmented 控件、三态 footer hint、8 个 i18n key 列表、5 条 C 守门测试目标保持不变。
 >
-> 关于 RFC-058 落地后**反问者侧老化漏写**问题（[scheduler.ts:1426-1435](../../packages/backend/src/services/scheduler.ts:1426) 在 cross-clarify questioner 分支没传 `historyCutoffClarifyIteration`）已在 RFC-058 PR-B 内统一修复，本 RFC 直接享受单一 `computeHistoryCutoff` + `applyAgingCutoff` helper 的成果，不再单独描述 aging 补齐。
+> 关于 RFC-058 落地后**反问者侧老化漏写**问题（`packages/backend/src/services/scheduler.ts` 第 1426-1435 行，cross-clarify questioner 分支没传 `historyCutoffClarifyIteration`）已在 RFC-058 PR-B 内统一修复，本 RFC 直接享受单一 `computeHistoryCutoff` + `applyAgingCutoff` helper 的成果，不再单独描述 aging 补齐。
 
 ## 1. 背景
 
