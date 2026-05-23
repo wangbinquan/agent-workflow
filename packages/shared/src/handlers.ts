@@ -34,12 +34,26 @@ export type ActorRef = 'system' | `user:${string}` | `agent:${string}` | `openco
 /**
  * What a NodeKindHandler.dispatch returns. The taskActor inspects the
  * `kind` discriminator and writes the appropriate events.
+ *
+ * `suspend-direct` covers review / cross-clarify gate NodeKinds that have
+ * no opencode subprocess — they read upstream output, then immediately
+ * park the logical_run in `suspended` status awaiting a user decision.
+ * The taskActor delegates to SIGNAL_KIND_HANDLERS[signalKind].onSuspend
+ * to mint the suspension and any side-effect events (cross-clarify
+ * cascades the questioner, etc.).
  */
 export type DispatchResult =
   | { kind: 'spawn-attempt'; prompt: string; preSnapshot?: string }
   | { kind: 'virtual-done'; outputs: Record<string, string> }
   | { kind: 'enter-inner-scope'; innerScope: Scope }
   | { kind: 'enter-inner-scope-multi'; innerScopes: ReadonlyArray<Scope> }
+  | {
+      kind: 'suspend-direct'
+      signalKind: SignalKind
+      payload: unknown
+      awaitsActor: ActorRef
+    }
+  | { kind: 'fail-direct'; errorMessage: string }
   | { kind: 'noop'; reason: string }
 
 /**
