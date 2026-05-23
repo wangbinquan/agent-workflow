@@ -10,6 +10,7 @@
 // build on top of it without changing the core.
 
 export * from './actorRegistry'
+export * from './daemonResume'
 export * from './readyScanner'
 export * from './runnerAdapter'
 export * from './taskActor'
