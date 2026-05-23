@@ -9,4 +9,6 @@
 // For now we export the pure decision core; the orchestrator layers
 // build on top of it without changing the core.
 
+export * from './actorRegistry'
 export * from './taskActorTick'
+export * from './wakeQueue'
