@@ -25,10 +25,14 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     )
   })
 
-  test('scheduler forwards opts.subagentLiveCapture into runNode (both call sites)', () => {
+  test('scheduler forwards opts.subagentLiveCapture into runNode (every call site)', () => {
     const src = read('packages/backend/src/services/scheduler.ts')
     const matches = src.match(/subagentLiveCapture: opts\.subagentLiveCapture/g) ?? []
-    expect(matches.length).toBe(2)
+    // RFC-060 PR-D bumped this from 2 → 4: the existing agent-single +
+    // agent-multi (fan-out) shard call sites remain, and the new
+    // dispatchFanoutShard + dispatchFanoutAggregator call sites join the
+    // forwarding chain. Future call sites should keep this lock in step.
+    expect(matches.length).toBe(4)
   })
 
   test('StartTaskDeps declares the field and runTask receives it from every kick-off path', () => {

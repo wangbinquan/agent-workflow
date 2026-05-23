@@ -21,19 +21,31 @@ import type {
   WorkflowDefinition,
   WorkflowEdge,
   WorkflowNode,
+  WrapperFanoutPort,
 } from '@agent-workflow/shared'
 import {
+  FANOUT_DONE_PORT_NAME,
   WorkflowDefinitionSchema,
   agentHasClarifyChannel,
   agentHasExternalFeedbackChannel,
   buildPriorOutputBlock,
+  deriveWrapperFanoutOutputs,
   findClarifyNodeForAgent,
   findCrossClarifyNodeForQuestioner,
   findDesignerNodeForCrossClarify,
+  findFanoutAggregator,
   findQuestionerNodeForCrossClarify,
   isClarifyChannelEdge,
   resolveClarifySessionMode,
+  resolveKeyOf,
+  tryParseKind,
 } from '@agent-workflow/shared'
+import {
+  applyAutoPromote,
+  computeShardScope,
+  estimateShardTotal,
+  findBoundaryEdgesToInner,
+} from '@/services/fanout'
 import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
@@ -89,6 +101,14 @@ export interface RunTaskOptions {
   maxConcurrentNodes?: number
   /** Concurrency cap for fan-out child subprocesses (P-3-02). Default 4. */
   multiProcessSubprocessConcurrency?: number
+  /**
+   * RFC-060 D.T6: runtime cartesian guard for wrapper-fanout. When a single
+   * wrapper-fanout (possibly with nested wrapper-fanouts) would mint more
+   * than this many total shards, the wrapper finalizes 'failed' with
+   * `wrapper-fanout-cartesian-exceeds-max` rather than minting the shards.
+   * Default 256.
+   */
+  fanoutMaxShardTotal?: number
   /**
    * RFC-048: forwarded verbatim to every `runNode` call so the runner spins
    * up its subagent live-capture poller with the operator-configured cadence.
@@ -165,6 +185,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       node.kind !== 'output' &&
       node.kind !== 'wrapper-git' &&
       node.kind !== 'wrapper-loop' &&
+      node.kind !== 'wrapper-fanout' && // RFC-060
       node.kind !== 'review' && // RFC-005
       node.kind !== 'clarify' && // RFC-023
       node.kind !== 'clarify-cross-agent' // RFC-056
@@ -820,6 +841,9 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   }
   if (node.kind === 'wrapper-loop') {
     return runLoopWrapperNode(state, args)
+  }
+  if (node.kind === 'wrapper-fanout') {
+    return runFanoutWrapperNode(state, args)
   }
 
   if (node.kind === 'review') {
@@ -1962,6 +1986,704 @@ async function runLoopWrapperNode(
     kind: 'failed',
     summary: `wrapper-loop ${node.id} exhausted after ${maxIter} iterations`,
     message: 'wrapper-loop-exhausted',
+  }
+}
+
+// -----------------------------------------------------------------------------
+// wrapper-fanout (RFC-060) — fan a list<T> shardSource into N parallel inner
+// dispatches, optionally aggregated by an inner role='aggregator' agent.
+//
+// PR-D v1 inner-kind support: agent-single only. agent-multi / wrapper-*
+// / review / clarify / clarify-cross-agent / output / input inside a
+// wrapper-fanout's inner subgraph are PR-D2 scope and fail at runtime with
+// `wrapper-fanout-v1-unsupported-inner-kind` (the user gets a clear error
+// rather than silent wrong behavior). The validator emits a static warning
+// for the nested wrapper-fanout case; runtime rejection here is the
+// secondary safety net.
+//
+// Lifecycle (RFC-053 compatible — D.T8):
+//   pending → running → done | failed
+// Shard child rows are minted with parentNodeRunId=wrapperRunId so they
+// don't bubble into latestPerNode of the wrapper's parent scope.
+// -----------------------------------------------------------------------------
+
+async function runFanoutWrapperNode(
+  state: SchedulerState,
+  args: OneNodeArgs,
+): Promise<OneNodeResult> {
+  const { db, taskId, definition, opts, log: stateLog } = state
+  const { node, iteration, log } = args
+
+  // 1. Schema-shape validation (defensive — validator catches most pre-run).
+  const rec = node as Record<string, unknown>
+  const inputs = Array.isArray(rec.inputs) ? (rec.inputs as WrapperFanoutPort[]) : []
+  const shardPort = inputs.find((p) => p?.isShardSource === true)
+  if (shardPort === undefined) {
+    return {
+      kind: 'failed',
+      summary: `wrapper-fanout ${node.id} missing shardSource input`,
+      message: 'wrapper-fanout-shard-source-missing',
+    }
+  }
+  const parsedKind = tryParseKind(shardPort.kind)
+  if (parsedKind === null || parsedKind.kind !== 'list') {
+    return {
+      kind: 'failed',
+      summary: `wrapper-fanout ${node.id} shardSource port '${shardPort.name}' kind '${shardPort.kind}' must be list<T>`,
+      message: 'wrapper-fanout-shard-source-not-list',
+    }
+  }
+  const itemKind = parsedKind.item
+  const innerIds = pickStringArray(node, 'nodeIds')
+  if (innerIds.length === 0) {
+    return {
+      kind: 'failed',
+      summary: `wrapper-fanout ${node.id} has no inner nodes`,
+      message: 'wrapper-empty',
+    }
+  }
+
+  // 2. Hydrate the inner-node agent map. findFanoutAggregator + scope
+  // computation both consult this. Missing-agent here is fatal.
+  const agentNames = new Set<string>()
+  for (const id of innerIds) {
+    const inner = definition.nodes.find((n) => n.id === id)
+    if (inner === undefined) continue
+    const an = (inner as Record<string, unknown>).agentName
+    if (typeof an === 'string') agentNames.add(an)
+  }
+  const agentsMap = new Map<string, Agent>()
+  for (const name of agentNames) {
+    const a = await getAgent(db, name)
+    if (a !== null) agentsMap.set(name, a)
+  }
+
+  // 3. Wrapper row resume / mint (mirrors wrapper-git pattern).
+  const existing = await findResumableWrapperRun(db, taskId, node.id, iteration)
+  let wrapperRunId: string
+  if (existing !== null) {
+    wrapperRunId = existing.id
+    if (existing.status !== 'running') {
+      await setNodeRunStatus({
+        db,
+        nodeRunId: wrapperRunId,
+        to: 'running',
+        allowedFrom: ['pending', 'awaiting_review', 'awaiting_human'],
+        reason: 'wrapper-fanout-resume',
+      })
+      broadcastNodeStatus(taskId, wrapperRunId, node.id, 'running')
+    }
+  } else {
+    wrapperRunId = await insertNodeRun(db, taskId, node.id, 'pending', 0, iteration)
+    broadcastNodeStatus(taskId, wrapperRunId, node.id, 'running')
+  }
+
+  // 4. Read shardSource content via upstream resolution. Boundary-input edges
+  // (source.nodeId = wrapper) are NOT involved here — those edges connect the
+  // wrapper's own input ports to inner nodes; the upstream shardSource value
+  // arrives at the wrapper via a regular edge (target.nodeId = wrapper.id,
+  // target.portName = shardPort.name).
+  const upstreamInputs = await resolveUpstreamInputs(
+    db,
+    taskId,
+    definition.edges,
+    node.id,
+    iteration,
+    log,
+  )
+  const rawContent = upstreamInputs[shardPort.name] ?? ''
+
+  // 5. Derive wrapper outlets (aggregator outputs OR __done__ signal).
+  const derivedOutputs = deriveWrapperFanoutOutputs(definition, node.id, agentsMap)
+
+  // 6. Empty source: short-circuit done with empty outlets.
+  const items = rawContent
+    .split('\n')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+  if (items.length === 0) {
+    for (const port of derivedOutputs) {
+      await db
+        .insert(nodeRunOutputs)
+        .values({ nodeRunId: wrapperRunId, portName: port.name, content: '' })
+    }
+    await markWrapperTerminal(db, wrapperRunId, 'done')
+    broadcastNodeStatus(taskId, wrapperRunId, node.id, 'done')
+    return { kind: 'ok', summary: '', message: 'wrapper-fanout-empty' }
+  }
+
+  // 7. Cartesian guard (D.T6). Multiplies through nested wrapper-fanout's
+  // expectedShardCount (estimateShardTotal) so the user gets a bounded
+  // failure rather than a flood of node_runs.
+  const maxAllowed = opts.fanoutMaxShardTotal ?? 256
+  const projectedTotal = estimateShardTotal(definition, node.id, items.length)
+  if (projectedTotal > maxAllowed) {
+    await markWrapperTerminal(
+      db,
+      wrapperRunId,
+      'failed',
+      `cartesian-exceeds-max:${projectedTotal}>${maxAllowed}`,
+    )
+    broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')
+    return {
+      kind: 'failed',
+      summary: `wrapper-fanout ${node.id} would mint ${projectedTotal} shards > limit ${maxAllowed}`,
+      message: `wrapper-fanout-cartesian-exceeds-max:${projectedTotal}`,
+    }
+  }
+
+  // 8. Compute shard scope (D.T1) + apply auto-promote.
+  let scope = computeShardScope({ wrapperId: node.id, defn: definition, agents: agentsMap })
+  scope = applyAutoPromote(scope, definition)
+
+  // 9. Build shards with per-item shardKey (resolveKeyOf — path-family uses
+  // the path itself, others default to 0-based index).
+  const keyOf = resolveKeyOf(itemKind)
+  const shards = items.map((value, idx) => ({
+    shardKey: keyOf(value, idx, itemKind),
+    value,
+  }))
+
+  // 10. Dispatch each inner node (skip aggregator — handled last).
+  for (const innerId of innerIds) {
+    const inner = definition.nodes.find((n) => n.id === innerId)
+    if (inner === undefined) {
+      await markWrapperTerminal(db, wrapperRunId, 'failed', `inner-missing:${innerId}`)
+      broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')
+      return {
+        kind: 'failed',
+        summary: `wrapper-fanout ${node.id} inner node '${innerId}' not found in definition`,
+        message: `wrapper-fanout-inner-missing:${innerId}`,
+      }
+    }
+    if (innerId === scope.aggregatorId) continue
+
+    if (inner.kind !== 'agent-single') {
+      await markWrapperTerminal(
+        db,
+        wrapperRunId,
+        'failed',
+        `v1-unsupported-inner-kind:${inner.kind}`,
+      )
+      broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')
+      return {
+        kind: 'failed',
+        summary: `wrapper-fanout ${node.id} inner '${innerId}' kind '${inner.kind}' — v1 supports agent-single only inside wrapper-fanout (PR-D2 will extend support)`,
+        message: `wrapper-fanout-v1-unsupported-inner-kind:${inner.kind}`,
+      }
+    }
+
+    const innerAgentName = (inner as Record<string, unknown>).agentName
+    if (typeof innerAgentName !== 'string') {
+      await markWrapperTerminal(db, wrapperRunId, 'failed', `inner-missing-agentName:${innerId}`)
+      broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')
+      return {
+        kind: 'failed',
+        summary: `wrapper-fanout ${node.id} inner '${innerId}' missing agentName`,
+        message: 'wrapper-fanout-inner-missing-agent-name',
+      }
+    }
+    const innerAgent = agentsMap.get(innerAgentName)
+    if (innerAgent === undefined) {
+      await markWrapperTerminal(db, wrapperRunId, 'failed', `inner-agent-missing:${innerAgentName}`)
+      broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')
+      return {
+        kind: 'failed',
+        summary: `wrapper-fanout ${node.id} inner agent '${innerAgentName}' not found`,
+        message: `agent-not-found:${innerAgentName}`,
+      }
+    }
+
+    // Per-shard boundary-input edges from THIS wrapper to THIS inner node.
+    // Used to inject shard value into the inner's resolved inputs when an
+    // edge binds wrapper.shardPort.name → inner.somePort.
+    const boundaryEdges = findBoundaryEdgesToInner(definition, node.id, innerId)
+    const innerUpstream = await resolveUpstreamInputs(
+      db,
+      taskId,
+      definition.edges,
+      innerId,
+      iteration,
+      log,
+    )
+
+    if (scope.perShard.has(innerId)) {
+      const shardResults = await Promise.all(
+        shards.map((sh) =>
+          dispatchFanoutShard({
+            state,
+            wrapperId: node.id,
+            wrapperRunId,
+            innerNode: inner,
+            innerAgent,
+            iteration,
+            shard: sh,
+            shardSourcePortName: shardPort.name,
+            boundaryEdges,
+            broadcastInputs: innerUpstream,
+            log: log.child(`fanout:${node.id}:${innerId}`),
+          }),
+        ),
+      )
+      const failedShards = shardResults.filter((r) => r.kind === 'failed')
+      if (failedShards.length > 0) {
+        const msg = failedShards.map((f) => `${f.shardKey}:${f.message}`).join(' | ')
+        await markWrapperTerminal(db, wrapperRunId, 'failed', `inner-shard-failed:${msg}`)
+        broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')
+        return {
+          kind: 'failed',
+          summary: `wrapper-fanout ${node.id} inner '${innerId}' ${failedShards.length}/${shards.length} shards failed`,
+          message: msg,
+        }
+      }
+    } else {
+      // Shared inner: dispatch once (no shardKey). Boundary-input edges from
+      // the shardSource port don't make sense for shared inner nodes (a
+      // shared node by definition isn't shard-aware); the validator should
+      // already prevent that wiring — if it slipped through, the boundary
+      // edge injection below still copies the first shard's value, which is
+      // an acceptable degenerate behavior.
+      const r = await dispatchFanoutShard({
+        state,
+        wrapperId: node.id,
+        wrapperRunId,
+        innerNode: inner,
+        innerAgent,
+        iteration,
+        shard: null,
+        shardSourcePortName: shardPort.name,
+        boundaryEdges,
+        broadcastInputs: innerUpstream,
+        log: log.child(`fanout:${node.id}:${innerId}:shared`),
+      })
+      if (r.kind === 'failed') {
+        await markWrapperTerminal(db, wrapperRunId, 'failed', `inner-shared-failed:${r.message}`)
+        broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')
+        return {
+          kind: 'failed',
+          summary: `wrapper-fanout ${node.id} inner shared '${innerId}' failed`,
+          message: r.message,
+        }
+      }
+    }
+  }
+
+  // 11. Aggregator dispatch (D.T3) — collect every perShard inner agent's
+  // outputs into raw lists keyed by shardKey, dispatched once.
+  if (scope.aggregatorId !== null) {
+    const aggInfo = findFanoutAggregator(definition, node.id, agentsMap)
+    if (aggInfo === null) {
+      await markWrapperTerminal(db, wrapperRunId, 'failed', 'aggregator-resolve-failed')
+      broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')
+      return {
+        kind: 'failed',
+        summary: 'aggregator agent resolution failed',
+        message: 'aggregator-resolve-failed',
+      }
+    }
+    const aggRes = await dispatchFanoutAggregator({
+      state,
+      wrapperId: node.id,
+      wrapperRunId,
+      aggNode: aggInfo.node,
+      aggAgent: aggInfo.agent,
+      iteration,
+      shards,
+      definition,
+      scope,
+      log: log.child(`fanout:${node.id}:aggregator`),
+    })
+    if (aggRes.kind === 'failed') {
+      await markWrapperTerminal(db, wrapperRunId, 'failed', `aggregator-failed:${aggRes.message}`)
+      broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')
+      return aggRes
+    }
+    // Propagate aggregator outputs → wrapper outlets, renamed by
+    // outputWrapperPortNames where set (RFC-060 design §5.4).
+    const renames = aggInfo.agent.outputWrapperPortNames ?? {}
+    for (const port of aggInfo.agent.outputs) {
+      const outletName = renames[port] ?? port
+      const content = aggRes.outputs[port] ?? ''
+      await db
+        .insert(nodeRunOutputs)
+        .values({ nodeRunId: wrapperRunId, portName: outletName, content })
+    }
+  } else {
+    // No aggregator: emit the implicit __done__ signal outlet. Empty content;
+    // downstream can chain on it but must NOT reference it inside {{...}} —
+    // assertNoPromptSignalRefs (D.T7) catches that at prompt-render time.
+    await db.insert(nodeRunOutputs).values({
+      nodeRunId: wrapperRunId,
+      portName: FANOUT_DONE_PORT_NAME,
+      content: '',
+    })
+  }
+
+  await markWrapperTerminal(db, wrapperRunId, 'done')
+  broadcastNodeStatus(taskId, wrapperRunId, node.id, 'done')
+  stateLog.info('wrapper-fanout done', {
+    taskId,
+    nodeId: node.id,
+    shards: shards.length,
+    hasAggregator: scope.aggregatorId !== null,
+  })
+  return { kind: 'ok', summary: '', message: '' }
+}
+
+interface ShardSpec {
+  shardKey: string
+  value: string
+}
+
+interface DispatchShardArgs {
+  state: SchedulerState
+  wrapperId: string
+  wrapperRunId: string
+  innerNode: WorkflowNode
+  innerAgent: Agent
+  iteration: number
+  /** null = shared (broadcast) dispatch — no shardKey, runs once. */
+  shard: ShardSpec | null
+  shardSourcePortName: string
+  boundaryEdges: WorkflowEdge[]
+  broadcastInputs: Record<string, string>
+  log: Logger
+}
+
+interface DispatchShardResult {
+  kind: 'ok' | 'failed'
+  shardKey: string
+  outputs: Record<string, string>
+  message: string
+}
+
+/**
+ * Dispatch one agent-single inner node for one shard (or shared/broadcast
+ * mode when `shard === null`). Mints a node_run row with shardKey +
+ * parentNodeRunId=wrapperRunId, runs `runNode`, persists outputs.
+ *
+ * v1 limitations (PR-D2 will extend):
+ *   - No clarify / review channel — the channel hooks are wired in by the
+ *     scheduler's runOneNode single-agent branch; bringing that whole branch
+ *     in here would duplicate ~500 lines. PR-D2's per-shard review (D.T4)
+ *     and per-shard clarify (D.T5) will add the corresponding hand-offs.
+ *   - No retry / envelope follow-up. The fanout wrapper currently fails-fast
+ *     on the first shard failure; a future PR can layer retries on top.
+ */
+async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchShardResult> {
+  const {
+    state,
+    wrapperRunId,
+    innerNode,
+    innerAgent,
+    iteration,
+    shard,
+    shardSourcePortName,
+    boundaryEdges,
+    broadcastInputs,
+    log,
+  } = args
+  const { db, task, taskId, opts } = state
+
+  const shardKey = shard?.shardKey ?? '__shared__'
+  const shardRunId = ulid()
+  await db.insert(nodeRuns).values({
+    id: shardRunId,
+    taskId,
+    nodeId: innerNode.id,
+    status: 'pending',
+    retryIndex: 0,
+    iteration,
+    parentNodeRunId: wrapperRunId,
+    shardKey: shard === null ? null : shardKey,
+    startedAt: Date.now(),
+  })
+  broadcastNodeStatus(taskId, shardRunId, innerNode.id, 'pending')
+
+  // Build inner inputs: broadcast first, then inject shard value for any
+  // boundary-input edge that wires the wrapper's shardSource port into one
+  // of the inner's input ports.
+  const inputs: Record<string, string> = { ...broadcastInputs }
+  if (shard !== null) {
+    for (const e of boundaryEdges) {
+      if (e.source.portName !== shardSourcePortName) continue
+      inputs[e.target.portName] = shard.value
+    }
+  }
+
+  // RFC-060 D.T7: build inputPortKinds from boundary edges so the runner can
+  // refuse `{{port}}` references against signal-kind inputs. We look up each
+  // boundary edge's source port on the wrapper itself to find its declared
+  // kind (signal / list<T> / etc.) and stash that against the target
+  // (inner's local) port name.
+  const inputPortKinds: Record<string, string> = {}
+  const wrapper = args.state.definition.nodes.find((n) => n.id === args.wrapperId)
+  if (wrapper !== undefined && wrapper.kind === 'wrapper-fanout') {
+    const wrapperInputs = ((wrapper as Record<string, unknown>).inputs ?? []) as WrapperFanoutPort[]
+    for (const e of boundaryEdges) {
+      const wp = wrapperInputs.find((p) => p.name === e.source.portName)
+      if (wp !== undefined) {
+        // For shardSource ports, the inner receives ONE item (the shard
+        // value); the item's effective kind is the list's item kind, not
+        // `list<T>`. For non-shard broadcast boundary ports, the kind is
+        // the wrapper's declared input kind verbatim.
+        if (wp.isShardSource === true) {
+          const lk = tryParseKind(wp.kind)
+          if (lk !== null && lk.kind === 'list') {
+            // stringify the item kind so the runner side can re-parse.
+            const itemRepr = (() => {
+              const item = lk.item
+              if (item.kind === 'base') return item.name
+              if (item.kind === 'path') return `path<${item.ext}>`
+              // nested list<list<...>> — uncommon, but stringify recursively
+              if (item.kind === 'list') {
+                // delegated to stringifyKind via JSON-friendly fallback
+                return 'list'
+              }
+              return 'string'
+            })()
+            inputPortKinds[e.target.portName] = itemRepr
+          } else {
+            inputPortKinds[e.target.portName] = wp.kind
+          }
+        } else {
+          inputPortKinds[e.target.portName] = wp.kind
+        }
+      }
+    }
+  }
+
+  const injection = await prepareNodeRunInjection(db, opts.appHome, innerAgent, log)
+  if (injection.kind === 'failed') {
+    await setNodeRunStatus({
+      db,
+      nodeRunId: shardRunId,
+      to: 'failed',
+      allowedFrom: ['pending'],
+      reason: 'fanout-shard-injection-failed',
+      extra: { finishedAt: Date.now(), errorMessage: injection.message },
+    })
+    broadcastNodeStatus(taskId, shardRunId, innerNode.id, 'failed')
+    return { kind: 'failed', shardKey, outputs: {}, message: injection.message }
+  }
+  const promptTemplate = pickString(innerNode, 'promptTemplate') ?? undefined
+  const nodeTimeoutMs = pickNumber(innerNode, 'timeoutMs') ?? opts.defaultPerNodeTimeoutMs
+  const nodeOverrides = pickOverrides(innerNode)
+
+  try {
+    const result = await runNode({
+      taskId,
+      nodeRunId: shardRunId,
+      nodeId: innerNode.id,
+      agent: innerAgent,
+      inputs,
+      worktreePath: task.worktreePath,
+      templateMeta: {
+        repoPath: task.repoPath,
+        baseBranch: task.baseBranch,
+        taskId,
+        nodeId: innerNode.id,
+        iteration,
+        ...(shard !== null ? { shardKey } : {}),
+      },
+      ...(promptTemplate !== undefined ? { promptTemplate } : {}),
+      ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
+      ...(nodeOverrides !== undefined ? { overrides: nodeOverrides } : {}),
+      hasClarifyChannel: false, // PR-D2: per-shard clarify
+      skills: injection.resolvedSkills,
+      dependents: injection.dependents,
+      mcps: injection.mcps,
+      plugins: injection.plugins,
+      appHome: opts.appHome,
+      ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
+      ...(Object.keys(inputPortKinds).length > 0 ? { inputPortKinds } : {}),
+      db,
+      log,
+      ...(opts.signal ? { signal: opts.signal } : {}),
+      ...(opts.subagentLiveCapture !== undefined
+        ? { subagentLiveCapture: opts.subagentLiveCapture }
+        : {}),
+    })
+    broadcastNodeStatus(taskId, shardRunId, innerNode.id, result.status)
+    if (result.status !== 'done') {
+      return {
+        kind: 'failed',
+        shardKey,
+        outputs: {},
+        message: result.errorMessage ?? `shard-${result.status}`,
+      }
+    }
+    return { kind: 'ok', shardKey, outputs: result.outputs, message: '' }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    broadcastNodeStatus(taskId, shardRunId, innerNode.id, 'failed')
+    return { kind: 'failed', shardKey, outputs: {}, message: msg }
+  }
+}
+
+interface DispatchAggregatorArgs {
+  state: SchedulerState
+  wrapperId: string
+  wrapperRunId: string
+  aggNode: WorkflowNode
+  aggAgent: Agent
+  iteration: number
+  shards: ShardSpec[]
+  definition: WorkflowDefinition
+  scope: ReturnType<typeof computeShardScope>
+  log: Logger
+}
+
+/**
+ * Dispatch the wrapper-fanout's aggregator agent — runs once, with per-shard
+ * inner outputs collected into raw lists. The aggregator's prompt template
+ * accesses these via {{#each port.shards}}{{shardKey}}: {{content}}{{/each}}
+ * (PR-D2 will add that template syntax to renderUserPrompt; PR-D ships the
+ * minimum: each per-shard output is delimited by a blank line and prefixed
+ * with `### <shardKey>` so even a plain `{{port}}` substitution gives the
+ * aggregator readable input).
+ */
+async function dispatchFanoutAggregator(
+  args: DispatchAggregatorArgs,
+): Promise<OneNodeResult & { outputs: Record<string, string> }> {
+  const { state, wrapperRunId, aggNode, aggAgent, iteration, shards, definition, scope, log } = args
+  const { db, task, taskId, opts } = state
+
+  // Collect each perShard inner's outputs across all shards. The aggregator
+  // declares (via its edges' target.portName) which inner port to read; we
+  // group by aggregator-input port name → newline-joined `### shardKey` blocks.
+  // boundary-input edges from the wrapper itself are NOT relevant here (the
+  // aggregator sits inside the wrapper and consumes inner-to-inner edges).
+  const aggInputs: Record<string, string> = {}
+  const incoming = definition.edges.filter(
+    (e) => e.target.nodeId === aggNode.id && e.boundary === undefined,
+  )
+  for (const edge of incoming) {
+    const blocks: string[] = []
+    // For each shard, pick the corresponding inner node_run + read port.
+    const innerRows = await db
+      .select()
+      .from(nodeRuns)
+      .where(
+        and(
+          eq(nodeRuns.taskId, taskId),
+          eq(nodeRuns.nodeId, edge.source.nodeId),
+          eq(nodeRuns.parentNodeRunId, wrapperRunId),
+        ),
+      )
+    if (scope.perShard.has(edge.source.nodeId)) {
+      // sorted by shardKey dictionary order (matches agent-multi convention).
+      const sortedShards = [...shards].sort((a, b) => a.shardKey.localeCompare(b.shardKey))
+      for (const s of sortedShards) {
+        const row = innerRows.find((r) => r.shardKey === s.shardKey)
+        if (row === undefined) continue
+        const outRows = await db
+          .select()
+          .from(nodeRunOutputs)
+          .where(eq(nodeRunOutputs.nodeRunId, row.id))
+        const port = outRows.find((o) => o.portName === edge.source.portName)
+        if (port !== undefined) {
+          blocks.push(`### ${s.shardKey}\n${port.content}`)
+        }
+      }
+    } else {
+      // shared upstream — single row, plain content.
+      const row = innerRows.find((r) => r.shardKey === null)
+      if (row !== undefined) {
+        const outRows = await db
+          .select()
+          .from(nodeRunOutputs)
+          .where(eq(nodeRunOutputs.nodeRunId, row.id))
+        const port = outRows.find((o) => o.portName === edge.source.portName)
+        if (port !== undefined) blocks.push(port.content)
+      }
+    }
+    aggInputs[edge.target.portName] = blocks.join('\n\n')
+  }
+
+  // Mint aggregator node_run row. The aggregator does NOT carry shardKey
+  // (it's the convergence point); parentNodeRunId=wrapperRunId so its row
+  // also doesn't leak into the parent scope's latestPerNode.
+  const aggRunId = ulid()
+  await db.insert(nodeRuns).values({
+    id: aggRunId,
+    taskId,
+    nodeId: aggNode.id,
+    status: 'pending',
+    retryIndex: 0,
+    iteration,
+    parentNodeRunId: wrapperRunId,
+    shardKey: null,
+    startedAt: Date.now(),
+  })
+  broadcastNodeStatus(taskId, aggRunId, aggNode.id, 'pending')
+
+  const injection = await prepareNodeRunInjection(db, opts.appHome, aggAgent, log)
+  if (injection.kind === 'failed') {
+    await setNodeRunStatus({
+      db,
+      nodeRunId: aggRunId,
+      to: 'failed',
+      allowedFrom: ['pending'],
+      reason: 'fanout-aggregator-injection-failed',
+      extra: { finishedAt: Date.now(), errorMessage: injection.message },
+    })
+    broadcastNodeStatus(taskId, aggRunId, aggNode.id, 'failed')
+    return { kind: 'failed', summary: injection.summary, message: injection.message, outputs: {} }
+  }
+  const promptTemplate = pickString(aggNode, 'promptTemplate') ?? undefined
+  const nodeTimeoutMs = pickNumber(aggNode, 'timeoutMs') ?? opts.defaultPerNodeTimeoutMs
+  const nodeOverrides = pickOverrides(aggNode)
+
+  try {
+    const result = await runNode({
+      taskId,
+      nodeRunId: aggRunId,
+      nodeId: aggNode.id,
+      agent: aggAgent,
+      inputs: aggInputs,
+      worktreePath: task.worktreePath,
+      templateMeta: {
+        repoPath: task.repoPath,
+        baseBranch: task.baseBranch,
+        taskId,
+        nodeId: aggNode.id,
+        iteration,
+      },
+      ...(promptTemplate !== undefined ? { promptTemplate } : {}),
+      ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
+      ...(nodeOverrides !== undefined ? { overrides: nodeOverrides } : {}),
+      hasClarifyChannel: false, // PR-D2
+      skills: injection.resolvedSkills,
+      dependents: injection.dependents,
+      mcps: injection.mcps,
+      plugins: injection.plugins,
+      appHome: opts.appHome,
+      ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
+      db,
+      log,
+      ...(opts.signal ? { signal: opts.signal } : {}),
+      ...(opts.subagentLiveCapture !== undefined
+        ? { subagentLiveCapture: opts.subagentLiveCapture }
+        : {}),
+    })
+    broadcastNodeStatus(taskId, aggRunId, aggNode.id, result.status)
+    if (result.status !== 'done') {
+      return {
+        kind: 'failed',
+        summary: `aggregator ${aggNode.id} ${result.status}`,
+        message: result.errorMessage ?? `aggregator-${result.status}`,
+        outputs: {},
+      }
+    }
+    // Aggregator's outputs are already persisted by runner.ts (nodeRunOutputs
+    // upsert at runner.ts §port-persist). The wrapper-row outlet copy is
+    // handled by the caller (runFanoutWrapperNode after this returns).
+    return { kind: 'ok', summary: '', message: '', outputs: result.outputs }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    broadcastNodeStatus(taskId, aggRunId, aggNode.id, 'failed')
+    return { kind: 'failed', summary: 'aggregator threw', message: msg, outputs: {} }
   }
 }
 
@@ -3133,7 +3855,9 @@ function buildContainerMap(def: WorkflowDefinition): Map<string, string> {
   // we sort by nesting depth: wrappers whose inner ids include other
   // wrappers are processed AFTER those other wrappers. This is implemented
   // by repeated passes — small N, cheap.
-  const wrappers = def.nodes.filter((n) => n.kind === 'wrapper-git' || n.kind === 'wrapper-loop')
+  const wrappers = def.nodes.filter(
+    (n) => n.kind === 'wrapper-git' || n.kind === 'wrapper-loop' || n.kind === 'wrapper-fanout',
+  )
   const processed = new Set<string>()
   let safety = wrappers.length + 1
   while (processed.size < wrappers.length && safety-- > 0) {
@@ -3144,7 +3868,9 @@ function buildContainerMap(def: WorkflowDefinition): Map<string, string> {
       const blocked = inner.some(
         (id) =>
           nodeById.get(id) !== undefined &&
-          (nodeById.get(id)!.kind === 'wrapper-git' || nodeById.get(id)!.kind === 'wrapper-loop') &&
+          (nodeById.get(id)!.kind === 'wrapper-git' ||
+            nodeById.get(id)!.kind === 'wrapper-loop' ||
+            nodeById.get(id)!.kind === 'wrapper-fanout') &&
           !processed.has(id),
       )
       if (blocked) continue

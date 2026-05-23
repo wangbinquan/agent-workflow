@@ -53,6 +53,8 @@ describe('RFC-053 PR-C — NODE_KIND_BEHAVIORS matrix', () => {
       'output',
       'wrapper-git',
       'wrapper-loop',
+      // RFC-060 — wrapper-fanout joins the wrapper-* row.
+      'wrapper-fanout',
       'review',
       'clarify',
       // RFC-056 — cross-agent clarify joins the non-process row.

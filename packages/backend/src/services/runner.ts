@@ -31,6 +31,8 @@ import {
   composePerKindRepairBlocks,
   parseClarifyEnvelopeBody,
   renderEnvelopeFollowupPrompt,
+  SignalPortInPromptError,
+  assertNoPromptSignalRefs,
 } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { cpSync, mkdirSync, rmSync, symlinkSync } from 'node:fs'
@@ -192,6 +194,16 @@ export interface RunNodeOptions {
    * entirely.
    */
   plugins?: readonly Plugin[]
+  /**
+   * RFC-060 D.T7: per-input port kinds, used to enforce the
+   * `signal`-port-not-in-prompt rule. Optional — when set, the runner runs
+   * `assertNoPromptSignalRefs` against `promptTemplate` before render and
+   * fails the run with errCode `signal-port-in-prompt` when any `{{port}}`
+   * reference resolves to a `signal` kind. When unset, the check is skipped
+   * (legacy callers retain current behavior). Scheduler's wrapper-fanout
+   * dispatch in services/scheduler.ts populates this for inner shard dispatches.
+   */
+  inputPortKinds?: Record<string, string>
   /** Default true. */
   dangerouslySkipPermissions?: boolean
   /** Wall-clock timeout in ms. Undefined = no limit. */
@@ -544,6 +556,39 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           opts.agent.outputKinds,
         )
       : undefined
+
+  // RFC-060 D.T7: enforce signal-port-not-in-prompt at the runner edge before
+  // any render / spawn. When inputPortKinds is omitted (legacy callers /
+  // non-fanout dispatch paths), the check no-ops.
+  if (opts.inputPortKinds !== undefined && opts.envelopeFollowup !== true) {
+    try {
+      assertNoPromptSignalRefs(opts.promptTemplate, opts.inputPortKinds)
+    } catch (err) {
+      if (err instanceof SignalPortInPromptError) {
+        const ports = err.violations.map((v) => v.port).join(',')
+        await setNodeRunStatus({
+          db: opts.db,
+          nodeRunId: opts.nodeRunId,
+          to: 'failed',
+          allowedFrom: ['pending'],
+          reason: 'signal-port-in-prompt',
+          extra: {
+            finishedAt: Date.now(),
+            errorMessage: err.message,
+          },
+        })
+        return {
+          status: 'failed',
+          exitCode: null,
+          outputs: {},
+          tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
+          errorMessage: `signal-port-in-prompt:${ports}`,
+          prompt: '',
+        }
+      }
+      throw err
+    }
+  }
 
   const prompt =
     opts.envelopeFollowup === true

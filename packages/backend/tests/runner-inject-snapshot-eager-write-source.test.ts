@@ -46,14 +46,16 @@ describe('RFC-047 source-level grep guard', () => {
     // The final run-end UPDATE writes status + finishedAt + injectedMemoriesJson
     // together. We pin both pieces to be sure we're matching the run-end UPDATE
     // (the eager block only sets injectedMemoriesJson, so it does NOT contain
-    // `finishedAt:`).
-    const finalIdx = src.indexOf('finishedAt: Date.now()')
+    // `finishedAt:`). lastIndexOf is used so unrelated `finishedAt:` lines
+    // earlier in the file (e.g. RFC-060 PR-D signal-port-in-prompt failure
+    // path) don't shadow the actual final run-end UPDATE block we want to lock.
+    const finalIdx = src.lastIndexOf('finishedAt: Date.now()')
     expect(finalIdx).toBeGreaterThan(-1)
     expect(eagerIdx).toBeLessThan(finalIdx)
   })
 
   test('final UPDATE still carries injectedMemoriesJson (fail-safe vs RFC-046)', () => {
-    const finalBlockStart = src.indexOf('finishedAt: Date.now()')
+    const finalBlockStart = src.lastIndexOf('finishedAt: Date.now()')
     expect(finalBlockStart).toBeGreaterThan(-1)
     // Walk a generous window after the finishedAt line and assert
     // `injectedMemoriesJson:` is present — the final UPDATE's `.set({...})`
