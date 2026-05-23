@@ -255,14 +255,12 @@ async function handleAttemptExit(
   let tsCursor = Date.now()
   switch (decision.kind) {
     case 'done': {
-      for (const [portName, content] of Object.entries(decision.outputs)) {
-        followups.push(
-          makeAttemptOutputCapturedEvent(ctx.taskId, attemptScope, reason.attemptId, tsCursor++, {
-            portName,
-            content,
-          }),
-        )
-      }
+      // NodeKindHandler.onAttemptFinished('success') reads outputs from
+      // pre-existing `attempt-output-captured` events the runner wrote
+      // mid-attempt. Those events are already persisted, so we MUST NOT
+      // re-emit them here — that would violate node_outputs' composite
+      // PRIMARY KEY. Write only the logical-run-completed event.
+      void decision.outputs
       followups.push(makeLogicalRunCompletedEvent(ctx.taskId, attemptScope, tsCursor++))
       break
     }
