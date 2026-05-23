@@ -34,10 +34,12 @@ import {
   ClarifyQuestionSchema,
   CLARIFY_MAX_QUESTIONS,
   CLARIFY_MAX_OPTIONS_PER_QUESTION,
+  CLARIFY_QUESTION_SCOPE_DEFAULT,
   type ClarifyAnswer,
   type ClarifyDirective,
   type ClarifyEnvelopeBody,
   type ClarifyQuestion,
+  type ClarifyQuestionScope,
   type ClarifyTruncationWarning,
 } from './schemas/clarify'
 
@@ -468,6 +470,95 @@ export function buildExternalFeedbackBlock(sources: CrossClarifySourceContext[])
 /** Render a single source's contribution. */
 export function renderCrossClarifySource(src: CrossClarifySourceContext): string {
   return buildExternalFeedbackBlock([src])
+}
+
+// -----------------------------------------------------------------------------
+// RFC-059 per-question scope helpers
+//
+// scope is a one-way "also send to designer" flag, decided per-question at
+// submit time on cross-clarify nodes:
+//   - 'designer'   → answer enters BOTH the designer's External Feedback
+//                    (filtered subset, via extractDesignerScopedSubset) AND
+//                    the questioner's cascade rerun Q&A (full, no filter).
+//   - 'questioner' → answer enters ONLY the questioner's cascade rerun Q&A
+//                    (full, no filter); the designer is not notified.
+//
+// IMPORTANT: the questioner side is NEVER filtered. The questioner always
+// receives the entire session's Q&A in its cascade rerun, regardless of
+// scope distribution. See design.md §4.4 + acceptance criterion A3b for the
+// reasoning (the questioner needs full context to decide its next move).
+// -----------------------------------------------------------------------------
+
+/** Resolve the scope of a single question id against a stored map.
+ *
+ *   - `scopes === null` (row predates RFC-059 / kind='self' / client did not
+ *     send questionScopes) → returns the default 'designer'.
+ *   - `scopes` missing the key → also returns the default 'designer'.
+ *   - `scopes[questionId]` set → returns that value verbatim.
+ *
+ *   Pure: no allocation, no validation (callers validate at submit time via
+ *   validateQuestionScopes() in the backend service). */
+export function resolveQuestionScope(
+  scopes: Record<string, ClarifyQuestionScope> | null,
+  questionId: string,
+): ClarifyQuestionScope {
+  if (scopes === null) return CLARIFY_QUESTION_SCOPE_DEFAULT
+  return scopes[questionId] ?? CLARIFY_QUESTION_SCOPE_DEFAULT
+}
+
+/** Extract the (questions, answers) subset that should be forwarded to the
+ *  designer's External Feedback block. Questions whose scope resolves to
+ *  'designer' (the default) are kept; 'questioner'-scoped questions are
+ *  filtered out. Questions without a matching answer (e.g. the user closed
+ *  the form without answering a particular row) are skipped — the backend
+ *  treats "no answer" as "do not forward".
+ *
+ *  IMPORTANT: This is the DESIGNER side only. Do NOT use it to filter the
+ *  questioner's cascade-rerun Q&A injection — the questioner always sees
+ *  the full Q&A regardless of scope.
+ *
+ *  Returns a fresh tuple (no aliasing into the input arrays). */
+export function extractDesignerScopedSubset(
+  questions: ClarifyQuestion[],
+  answers: ClarifyAnswer[],
+  scopes: Record<string, ClarifyQuestionScope> | null,
+): { questions: ClarifyQuestion[]; answers: ClarifyAnswer[] } {
+  const designerQuestions: ClarifyQuestion[] = []
+  const designerAnswers: ClarifyAnswer[] = []
+  const byId = new Map(answers.map((a) => [a.questionId, a]))
+  for (const q of questions) {
+    const a = byId.get(q.id)
+    if (a === undefined) continue
+    if (resolveQuestionScope(scopes, q.id) === 'designer') {
+      designerQuestions.push(q)
+      designerAnswers.push(a)
+    }
+  }
+  return { questions: designerQuestions, answers: designerAnswers }
+}
+
+/** Sum the designer-scoped question count across multiple already-resolved
+ *  cross-clarify sources. Used by `submitCrossClarifyAnswers` to decide
+ *  whether the aggregated External Feedback batch is empty — when it is,
+ *  the designer is not rerun (outcome
+ *  `designer-skipped-all-questioner-scope`).
+ *
+ *  Sources whose own answers do not include a particular question are not
+ *  double-counted — `extractDesignerScopedSubset` skips them, so this helper
+ *  agrees with what eventually lands in the External Feedback block. */
+export function countDesignerScopedAcrossSources(
+  sources: ReadonlyArray<{
+    questions: ClarifyQuestion[]
+    answers: ClarifyAnswer[]
+    scopes: Record<string, ClarifyQuestionScope> | null
+  }>,
+): number {
+  let n = 0
+  for (const s of sources) {
+    const subset = extractDesignerScopedSubset(s.questions, s.answers, s.scopes)
+    n += subset.questions.length
+  }
+  return n
 }
 
 /**

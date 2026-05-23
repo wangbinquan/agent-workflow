@@ -709,6 +709,12 @@ export const crossClarifySessions = sqliteTable(
       .default(sql`(unixepoch() * 1000)`),
     answeredAt: integer('answered_at'),
     abandonedAt: integer('abandoned_at'),
+    // RFC-059: JSON object `Record<questionId, 'designer'|'questioner'>`.
+    // NULL when (a) row predates RFC-059 / (b) client did not send
+    // questionScopes on submit. Runtime treats NULL as "every question is
+    // 'designer'" via `resolveQuestionScope` (preserves RFC-056/058 behavior).
+    // Dual-write target: mirrors `clarifyRounds.questionScopesJson`.
+    questionScopesJson: text('question_scopes_json'),
   },
   (t) => ({
     taskIdx: index('idx_cross_clarify_sessions_task').on(t.taskId),
@@ -791,6 +797,10 @@ export const clarifyRounds = sqliteTable(
       .default(sql`(unixepoch() * 1000)`),
     answeredAt: integer('answered_at'),
     answeredBy: text('answered_by'),
+    // RFC-059: same payload as crossClarifySessions.questionScopesJson; written
+    // by the submit handler dual-write. Always NULL for kind='self' rows;
+    // may be NULL for kind='cross' rows when client did not send the map.
+    questionScopesJson: text('question_scopes_json'),
   },
   (t) => ({
     taskIdx: index('idx_clarify_rounds_task').on(t.taskId),

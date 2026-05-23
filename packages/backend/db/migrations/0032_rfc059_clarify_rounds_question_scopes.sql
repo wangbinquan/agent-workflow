@@ -1,0 +1,21 @@
+-- RFC-059 — Cross-clarify per-question scope. Add a nullable TEXT column to
+-- BOTH the legacy `cross_clarify_sessions` table (still read by
+-- `buildExternalFeedbackContext` per RFC-058 dual-write era) and the unified
+-- `clarify_rounds` table (read by `buildPromptContext` for the cross-
+-- questioner branch). The submit handler dual-writes the same JSON payload
+-- to both columns in a single transaction so legacy + unified readers stay
+-- byte-for-byte consistent.
+--
+-- Payload shape: JSON object `Record<questionId, 'designer' | 'questioner'>`.
+-- NULL on rows persisted before RFC-059 OR when the client did not send a
+-- `questionScopes` map; runtime treats NULL as "every question is 'designer'"
+-- via `resolveQuestionScope` (preserves RFC-056/058 behaviour). The
+-- questioner cascade rerun path NEVER reads this column — scope is a
+-- one-way "also send to designer" flag and the questioner always sees the
+-- full Q&A regardless of scope.
+--
+-- See design/RFC-059-cross-clarify-question-scope/design.md §3 for the full
+-- migration rationale + double-table reasoning.
+ALTER TABLE `cross_clarify_sessions` ADD COLUMN `question_scopes_json` text;
+--> statement-breakpoint
+ALTER TABLE `clarify_rounds` ADD COLUMN `question_scopes_json` text;

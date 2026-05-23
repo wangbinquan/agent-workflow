@@ -85,6 +85,7 @@ function mkSession(over: Partial<ClarifyRound>): ClarifyRound {
     sessionMode: null,
     designerRunTriggeredAt: null,
     abandonedAt: null,
+    questionScopes: null,
     ...over,
   }
 }

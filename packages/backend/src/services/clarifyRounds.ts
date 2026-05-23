@@ -37,6 +37,7 @@ import {
   type ClarifyDirective,
   type ClarifyPromptContext,
   type ClarifyQuestion,
+  type ClarifyQuestionScope,
   type ClarifyRound,
   type ClarifyRoundSummary,
   type WorkflowDefinition,
@@ -574,9 +575,36 @@ function rowToDetail(
     sessionMode: null,
     designerRunTriggeredAt: row.designerRunTriggeredAt,
     abandonedAt: row.abandonedAt,
+    // RFC-059 T5: parse questionScopesJson back into the DTO map. NULL or
+    // parse failure → null (runtime treats null as all-designer via
+    // `resolveQuestionScope`). kind='self' rows always carry null because
+    // the self-clarify submit path never writes this column.
+    questionScopes: parseRoundQuestionScopes(row.questionScopesJson),
     createdAt: row.createdAt,
     answeredAt: row.answeredAt,
     answeredBy: row.answeredBy,
+  }
+}
+
+/**
+ * RFC-059 — defensive parse of `clarify_rounds.question_scopes_json` back
+ * into the DTO map. NULL / parse failure / array / non-object → null.
+ * Mirror of `crossClarify.ts/parseQuestionScopesJson` so the read path on
+ * the unified table doesn't depend on importing it from the cross-clarify
+ * service.
+ */
+function parseRoundQuestionScopes(raw: string | null): Record<string, ClarifyQuestionScope> | null {
+  if (raw === null) return null
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
+    const out: Record<string, ClarifyQuestionScope> = {}
+    for (const [k, v] of Object.entries(parsed)) {
+      if (v === 'designer' || v === 'questioner') out[k] = v
+    }
+    return out
+  } catch {
+    return null
   }
 }
 

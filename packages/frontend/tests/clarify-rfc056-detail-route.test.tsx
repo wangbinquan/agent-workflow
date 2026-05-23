@@ -97,6 +97,7 @@ function crossSession(overrides: CrossLegacyOverrides = {}): ClarifyRound {
     answeredAt: null,
     answeredBy: null,
     abandonedAt: null,
+    questionScopes: null,
     ...rest,
   }
 }

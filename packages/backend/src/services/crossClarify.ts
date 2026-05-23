@@ -53,8 +53,11 @@ import {
   CROSS_CLARIFY_OUT_TO_DESIGNER_PORT,
   CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT,
   CROSS_CLARIFY_EXTERNAL_FEEDBACK_PORT,
+  ClarifyQuestionScopeSchema,
   buildClarifyPromptBlock,
   buildExternalFeedbackBlock,
+  countDesignerScopedAcrossSources,
+  extractDesignerScopedSubset,
   findCrossClarifyNodesPointingToDesigner,
   findDesignerNodeForCrossClarify,
   findQuestionerNodeForCrossClarify,
@@ -66,6 +69,7 @@ import {
   type ClarifyDirective,
   type ClarifyPromptContext,
   type ClarifyQuestion,
+  type ClarifyQuestionScope,
   type ClarifyTruncationWarning,
   type CrossClarifySourceContext,
   type WorkflowDefinition,
@@ -108,6 +112,11 @@ export interface CrossClarifySession {
   createdAt: number
   answeredAt: number | null
   abandonedAt: number | null
+  /** RFC-059: per-question scope persisted at submit time. NULL when row
+   *  predates RFC-059 OR when client did not send `questionScopes` — runtime
+   *  treats NULL as "every question is 'designer'" via `resolveQuestionScope`
+   *  (preserves RFC-056/058 behaviour). */
+  questionScopes: Record<string, ClarifyQuestionScope> | null
 }
 
 export interface CrossClarifySessionSummary {
@@ -276,6 +285,7 @@ export async function createCrossClarifySession(
     directive: null,
     status: 'awaiting_human',
     designerRunTriggeredAt: null,
+    questionScopes: null,
     createdAt,
     answeredAt: null,
     abandonedAt: null,
@@ -303,27 +313,41 @@ export interface SubmitCrossClarifyAnswersArgs {
   answeredBy?: string
   /** Defaults to Date.now(). */
   now?: () => number
+  /** RFC-059: per-question scope decisions. Optional (old clients / all-
+   *  designer default). Keys MUST be questionIds present in the session's
+   *  questions array; unknown keys / non-enum scope values throw
+   *  ValidationError 400 'cross-clarify-question-scopes-malformed'. */
+  questionScopes?: Record<string, ClarifyQuestionScope>
 }
 
 export interface SubmitCrossClarifyAnswersResult {
   session: CrossClarifySession
   /**
    * Outcome of the submit:
-   *   - directive='continue' AND all sibling cross-clarify nodes pointing to
-   *     the same designer are also resolved → 'designer-rerun-triggered'
-   *     with the new designer node_run id.
+   *   - directive='continue' AND aggregated designer-scoped Q&A count > 0 AND
+   *     all sibling cross-clarify nodes pointing to the same designer are also
+   *     resolved → 'designer-rerun-triggered' with the new designer node_run id.
    *   - directive='continue' AND siblings still awaiting → 'designer-waiting'
    *     (UI shows the multi-source banner).
    *   - directive='continue' AND target designer can't be resolved →
    *     'designer-target-missing' (warning event recorded; no rerun).
    *   - directive='stop' → 'questioner-stop-triggered' with the new
    *     questioner node_run id.
+   *   - RFC-059 directive='continue' AND this session's questionScopes are
+   *     all 'questioner' → 'questioner-continue-triggered'. Designer is not
+   *     rerun; questioner cascades with the full Q&A (no STOP CLARIFYING).
+   *   - RFC-059 directive='continue' AND aggregated designer-scoped Q&A
+   *     count across all resolved sources = 0 → 'designer-skipped-all-
+   *     questioner-scope'. Designer is not rerun; each source's questioner
+   *     was already cascaded at its own submit.
    */
   outcome:
     | { kind: 'designer-rerun-triggered'; designerNodeRunId: string; sourceCount: number }
     | { kind: 'designer-waiting'; pendingCrossClarifyNodeIds: string[] }
     | { kind: 'designer-target-missing' }
     | { kind: 'questioner-stop-triggered'; questionerNodeRunId: string }
+    | { kind: 'questioner-continue-triggered'; questionerNodeRunId: string }
+    | { kind: 'designer-skipped-all-questioner-scope' }
 }
 
 /**
@@ -374,6 +398,12 @@ export async function submitCrossClarifyAnswers(
   const questions = JSON.parse(row.questionsJson) as ClarifyQuestion[]
   const sealedAnswers = sealAnswersServerSide(questions, args.answers)
 
+  // RFC-059: validate questionScopes against the session's questions BEFORE
+  // any write so a malformed map can't reach the DB. Throws ValidationError
+  // 400 'cross-clarify-question-scopes-malformed' on any rejected key / value.
+  const validatedScopes = validateQuestionScopes(args.questionScopes, questions)
+  const questionScopesJson = validatedScopes === undefined ? null : JSON.stringify(validatedScopes)
+
   const answersJson = JSON.stringify(sealedAnswers)
   await args.db
     .update(crossClarifySessions)
@@ -382,10 +412,12 @@ export async function submitCrossClarifyAnswers(
       status: 'answered',
       directive: args.directive,
       answeredAt,
+      questionScopesJson,
     })
     .where(eq(crossClarifySessions.id, row.id))
 
-  // RFC-058 T12 dual-write — mirror the answered state to clarify_rounds.
+  // RFC-058 T12 dual-write — mirror the answered state to clarify_rounds,
+  // including the RFC-059 questionScopesJson payload.
   await args.db
     .update(clarifyRounds)
     .set({
@@ -393,6 +425,7 @@ export async function submitCrossClarifyAnswers(
       status: 'answered',
       directive: args.directive,
       answeredAt,
+      questionScopesJson,
     })
     .where(eq(clarifyRounds.id, row.id))
 
@@ -405,7 +438,13 @@ export async function submitCrossClarifyAnswers(
     extra: { finishedAt: answeredAt },
   })
 
-  const sessionAfter = mergeAnswered(row, sealedAnswers, args.directive, answeredAt)
+  const sessionAfter = mergeAnswered(
+    row,
+    sealedAnswers,
+    args.directive,
+    answeredAt,
+    validatedScopes ?? null,
+  )
   void answeredBy
 
   // Branch on directive.
@@ -427,6 +466,33 @@ export async function submitCrossClarifyAnswers(
   }
 
   // directive === 'continue'.
+  // RFC-059 fast path — if THIS session resolves with zero designer-scoped
+  // questions, skip designer rerun entirely + cascade only the questioner.
+  // Even in the multi-source scenario: peer sessions whose designer count
+  // > 0 will trigger the designer when they submit (their readiness check
+  // aggregates all already-resolved peers including this one). Letting the
+  // questioner cascade now means the user doesn't wait for peers.
+  const designerSplit = extractDesignerScopedSubset(
+    questions,
+    sealedAnswers,
+    validatedScopes ?? null,
+  )
+  if (designerSplit.questions.length === 0) {
+    const outcome = await triggerQuestionerContinueRerun({
+      db: args.db,
+      taskId: row.taskId,
+      questionerNodeRunId: row.sourceQuestionerNodeRunId,
+    })
+    broadcastCrossClarifyAnswered(row.taskId, sessionAfter)
+    return {
+      session: sessionAfter,
+      outcome: {
+        kind: 'questioner-continue-triggered',
+        questionerNodeRunId: outcome.questionerNodeRunId,
+      },
+    }
+  }
+
   const designerNodeId = row.targetDesignerNodeId
   if (designerNodeId === null) {
     broadcastCrossClarifyAnswered(row.taskId, sessionAfter)
@@ -461,6 +527,25 @@ export async function submitCrossClarifyAnswers(
         kind: 'designer-waiting',
         pendingCrossClarifyNodeIds: readiness.pendingCrossClarifyNodeIds,
       },
+    }
+  }
+
+  // RFC-059: even when all siblings resolved, skip the designer rerun if
+  // the aggregated designer-scoped Q&A count is zero — every source is
+  // all-questioner-scoped. Each source's questioner was cascaded at its
+  // own submit (fast path above), so there is nothing left to do here.
+  const aggregatedDesignerCount = countDesignerScopedAcrossSources(
+    readiness.sources.map((s) => ({
+      questions: s.questions,
+      answers: s.answers,
+      scopes: s.questionScopes,
+    })),
+  )
+  if (aggregatedDesignerCount === 0) {
+    broadcastCrossClarifyAnswered(row.taskId, sessionAfter)
+    return {
+      session: sessionAfter,
+      outcome: { kind: 'designer-skipped-all-questioner-scope' },
     }
   }
 
@@ -523,6 +608,12 @@ export interface DesignerRerunReadinessSource {
   iteration: number
   questions: ClarifyQuestion[]
   answers: ClarifyAnswer[]
+  /** RFC-059: per-question scope captured at submit time. NULL on RFC-056
+   *  legacy rows; runtime falls back to all-designer via
+   *  `resolveQuestionScope`. Downstream callers
+   *  (`buildExternalFeedbackContext`, submit `countDesignerScopedAcrossSources`)
+   *  use this to keep designer-scoped Q&A only. */
+  questionScopes: Record<string, ClarifyQuestionScope> | null
 }
 
 export interface DesignerRerunReadiness {
@@ -603,6 +694,7 @@ export async function evaluateDesignerRerunReadiness(
         iteration: latest.iteration,
         questions,
         answers,
+        questionScopes: parseQuestionScopesJson(latest.questionScopesJson),
       })
     }
     // 'answered'+'stop' / 'abandoned' → resolved, no source contribution.
@@ -983,6 +1075,50 @@ export interface TriggerQuestionerStopRerunResult {
 export async function triggerQuestionerStopRerun(
   args: TriggerQuestionerStopRerunArgs,
 ): Promise<TriggerQuestionerStopRerunResult> {
+  return mintQuestionerRerun(args)
+}
+
+// ---------------------------------------------------------------------------
+// RFC-059 triggerQuestionerContinueRerun — fast path when this session is
+// all-questioner-scope. Twin of triggerQuestionerStopRerun: same shape,
+// same node_run inheritance rules, but caller does NOT persist directive=
+// 'stop' (the session keeps directive='continue') and does NOT append the
+// STOP CLARIFYING anchor. The questioner cascade rerun picks up the full
+// Q&A through the existing buildPromptContext / buildQuestionerCross-
+// ClarifyContext path — those readers don't consult questionScopesJson,
+// so the questioner always sees every answer regardless of scope.
+// ---------------------------------------------------------------------------
+
+export interface TriggerQuestionerContinueRerunArgs {
+  db: DbClient
+  taskId: string
+  questionerNodeRunId: string
+  now?: () => number
+}
+
+export interface TriggerQuestionerContinueRerunResult {
+  questionerNodeRunId: string
+}
+
+export async function triggerQuestionerContinueRerun(
+  args: TriggerQuestionerContinueRerunArgs,
+): Promise<TriggerQuestionerContinueRerunResult> {
+  return mintQuestionerRerun(args)
+}
+
+/**
+ * Mint a fresh questioner node_run keyed on (nodeId, iteration). Shared
+ * helper for both `triggerQuestionerStopRerun` (reject) and
+ * `triggerQuestionerContinueRerun` (RFC-059 fast path). The behavioural
+ * difference (STOP CLARIFYING anchor injection) lives at prompt-render
+ * time, controlled by the session's persisted directive — the rerun's
+ * dispatch path is identical.
+ */
+async function mintQuestionerRerun(args: {
+  db: DbClient
+  taskId: string
+  questionerNodeRunId: string
+}): Promise<{ questionerNodeRunId: string }> {
   const lastRun = (
     await args.db.select().from(nodeRuns).where(eq(nodeRuns.id, args.questionerNodeRunId)).limit(1)
   )[0]
@@ -1165,12 +1301,31 @@ export async function buildExternalFeedbackContext(
     const questions = JSON.parse(latest.questionsJson) as ClarifyQuestion[]
     const answers =
       latest.answersJson !== null ? (JSON.parse(latest.answersJson) as ClarifyAnswer[]) : []
+    // RFC-059: filter to designer-scoped subset BEFORE the source enters the
+    // External Feedback block. NULL scopes (RFC-056/058 legacy rows or
+    // clients that omit questionScopes) fall back to all-designer via
+    // `extractDesignerScopedSubset` / `resolveQuestionScope`, so this block
+    // is byte-equivalent to the pre-RFC-059 behaviour on legacy rows.
+    //
+    // Critical invariant: this filter applies ONLY to the designer side.
+    // The questioner cascade rerun reads via
+    // `clarifyRounds.ts/buildPromptContext` (consumerKind='cross-questioner')
+    // which does NOT consult questionScopesJson — the questioner always
+    // sees every answer regardless of scope. C3 grep guards lock that.
+    const scopes = parseQuestionScopesJson(latest.questionScopesJson)
+    const subset = extractDesignerScopedSubset(questions, answers, scopes)
+    if (subset.questions.length === 0) {
+      // RFC-059: every question on this source went to the questioner.
+      // Skip the source entirely so the designer's prompt doesn't render
+      // an empty `### From '...' (round N)` heading with no Q&A under it.
+      continue
+    }
     sources.push({
       sourceQuestionerNodeId: latest.sourceQuestionerNodeId,
       crossClarifyNodeId: nodeId,
       iteration: latest.iteration,
-      questions,
-      answers,
+      questions: subset.questions,
+      answers: subset.answers,
     })
   }
   if (sources.length === 0) return undefined
@@ -1365,6 +1520,7 @@ function mergeAnswered(
   sealedAnswers: ClarifyAnswer[],
   directive: ClarifyDirective,
   answeredAt: number,
+  questionScopes: Record<string, ClarifyQuestionScope> | null,
 ): CrossClarifySession {
   const questions = JSON.parse(row.questionsJson) as ClarifyQuestion[]
   return {
@@ -1385,7 +1541,48 @@ function mergeAnswered(
     createdAt: row.createdAt,
     answeredAt,
     abandonedAt: row.abandonedAt,
+    questionScopes,
   }
+}
+
+/**
+ * RFC-059 — defensive validation of submit body's `questionScopes` map
+ * against the session's persisted questions. Three failure modes are turned
+ * into a single `ValidationError` 400 'cross-clarify-question-scopes-
+ * malformed' so the REST route maps cleanly:
+ *
+ *   - undefined / null input → returns undefined (caller writes NULL,
+ *     runtime falls back to all-designer).
+ *   - any key that is NOT a questionId in the session → reject.
+ *   - any value that is not 'designer' | 'questioner' (zod parse fails) → reject.
+ *
+ * Empty object `{}` is accepted (every question defaults to 'designer').
+ * Sparse maps are accepted (questions not mentioned default to 'designer').
+ */
+function validateQuestionScopes(
+  scopes: Record<string, ClarifyQuestionScope> | undefined,
+  questions: ClarifyQuestion[],
+): Record<string, ClarifyQuestionScope> | undefined {
+  if (scopes === undefined) return undefined
+  const validQuestionIds = new Set(questions.map((q) => q.id))
+  const out: Record<string, ClarifyQuestionScope> = {}
+  for (const [questionId, scope] of Object.entries(scopes)) {
+    if (!validQuestionIds.has(questionId)) {
+      throw new ValidationError(
+        'cross-clarify-question-scopes-malformed',
+        `questionScopes references unknown questionId '${questionId}'`,
+      )
+    }
+    const parsed = ClarifyQuestionScopeSchema.safeParse(scope)
+    if (!parsed.success) {
+      throw new ValidationError(
+        'cross-clarify-question-scopes-malformed',
+        `questionScopes['${questionId}'] is not 'designer' or 'questioner' (got ${JSON.stringify(scope)})`,
+      )
+    }
+    out[questionId] = parsed.data
+  }
+  return out
 }
 
 function rowToSession(row: typeof crossClarifySessions.$inferSelect): CrossClarifySession {
@@ -1407,6 +1604,7 @@ function rowToSession(row: typeof crossClarifySessions.$inferSelect): CrossClari
     createdAt: row.createdAt,
     answeredAt: row.answeredAt,
     abandonedAt: row.abandonedAt,
+    questionScopes: parseQuestionScopesJson(row.questionScopesJson),
   }
   if (row.answersJson !== null) {
     try {
@@ -1416,6 +1614,27 @@ function rowToSession(row: typeof crossClarifySessions.$inferSelect): CrossClari
     }
   }
   return out
+}
+
+/**
+ * RFC-059 — parse the `question_scopes_json` column back into the runtime
+ * map. NULL / parse failure → null (runtime treats null as all-designer via
+ * `resolveQuestionScope`).
+ */
+function parseQuestionScopesJson(raw: string | null): Record<string, ClarifyQuestionScope> | null {
+  if (raw === null) return null
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
+    const out: Record<string, ClarifyQuestionScope> = {}
+    for (const [k, v] of Object.entries(parsed)) {
+      const z = ClarifyQuestionScopeSchema.safeParse(v)
+      if (z.success) out[k] = z.data
+    }
+    return out
+  } catch {
+    return null
+  }
 }
 
 function rowToSummary(

@@ -334,3 +334,115 @@ describe('POST /api/clarify/:nodeRunId/answers — cross-clarify directive branc
     expect(body.code).toBe('cross-clarify-iteration-mismatch')
   })
 })
+
+describe('POST /api/clarify/:nodeRunId/answers — RFC-059 questionScopes', () => {
+  test('omitting questionScopes → 200 (RFC-056 byte-compat) + questionScopes:null in detail', async () => {
+    const { db, app } = buildApp()
+    const { crossClarifyNodeRunId } = await seedCrossClarifySession(db)
+    const submit = await req(app, `/api/clarify/${crossClarifyNodeRunId}/answers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        answers: [
+          {
+            questionId: 'q1',
+            selectedOptionIndices: [0],
+            selectedOptionLabels: [],
+            customText: '',
+          },
+        ],
+        directive: 'continue',
+      }),
+    })
+    expect(submit.status).toBe(200)
+    const detail = await req(app, `/api/clarify/${crossClarifyNodeRunId}`)
+    expect(detail.status).toBe(200)
+    const body = (await detail.json()) as { questionScopes: unknown }
+    expect(body.questionScopes).toBeNull()
+  })
+
+  test('valid questionScopes → 200 + persisted on detail', async () => {
+    const { db, app } = buildApp()
+    const { crossClarifyNodeRunId } = await seedCrossClarifySession(db)
+    const submit = await req(app, `/api/clarify/${crossClarifyNodeRunId}/answers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        answers: [
+          {
+            questionId: 'q1',
+            selectedOptionIndices: [0],
+            selectedOptionLabels: [],
+            customText: '',
+          },
+        ],
+        directive: 'continue',
+        questionScopes: { q1: 'questioner' },
+      }),
+    })
+    expect(submit.status).toBe(200)
+    const submitBody = (await submit.json()) as { outcome: { kind: string } }
+    // Single question, all-questioner → fast path.
+    expect(submitBody.outcome.kind).toBe('questioner-continue-triggered')
+    const detail = await req(app, `/api/clarify/${crossClarifyNodeRunId}`)
+    const body = (await detail.json()) as { questionScopes: Record<string, string> | null }
+    expect(body.questionScopes).toEqual({ q1: 'questioner' })
+  })
+
+  test('malformed questionScopes (unknown questionId) → 422 cross-clarify-question-scopes-malformed', async () => {
+    const { db, app } = buildApp()
+    const { crossClarifyNodeRunId } = await seedCrossClarifySession(db)
+    const res = await req(app, `/api/clarify/${crossClarifyNodeRunId}/answers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        answers: [
+          {
+            questionId: 'q1',
+            selectedOptionIndices: [0],
+            selectedOptionLabels: [],
+            customText: '',
+          },
+        ],
+        directive: 'continue',
+        questionScopes: { unknown_id: 'designer' },
+      }),
+    })
+    expect(res.status).toBe(422)
+    const body = (await res.json()) as { code: string }
+    expect(body.code).toBe('cross-clarify-question-scopes-malformed')
+  })
+
+  test('malformed questionScopes (bad enum value) → 4xx with cross-clarify-question-scopes-malformed', async () => {
+    // The shared SubmitClarifyAnswersSchema parser rejects non-enum values at
+    // the input-validation layer (`clarify-answers-invalid` ValidationError),
+    // BEFORE the service layer's `validateQuestionScopes` runs. Either
+    // failure mode is acceptable here — both are 4xx and both surface a
+    // schema-level "invalid" code; this case primarily guards that the
+    // route does NOT silently accept the bad value.
+    const { db, app } = buildApp()
+    const { crossClarifyNodeRunId } = await seedCrossClarifySession(db)
+    const res = await req(app, `/api/clarify/${crossClarifyNodeRunId}/answers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        answers: [
+          {
+            questionId: 'q1',
+            selectedOptionIndices: [0],
+            selectedOptionLabels: [],
+            customText: '',
+          },
+        ],
+        directive: 'continue',
+        questionScopes: { q1: 'both' },
+      }),
+    })
+    expect(res.status).toBeGreaterThanOrEqual(400)
+    expect(res.status).toBeLessThan(500)
+    const body = (await res.json()) as { code: string }
+    expect(['cross-clarify-question-scopes-malformed', 'clarify-answers-invalid']).toContain(
+      body.code,
+    )
+  })
+})

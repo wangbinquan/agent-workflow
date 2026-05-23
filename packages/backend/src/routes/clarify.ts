@@ -211,6 +211,12 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
         directive: parsed.data.directive,
         answeredBy: actor.user.id,
         ...(ifMatch !== undefined ? { ifMatchIteration: ifMatch } : {}),
+        // RFC-059: per-question scope mapping. Self-clarify branch below
+        // intentionally does NOT receive this field (the asking agent is
+        // itself the consumer, so there's no designer/questioner split).
+        ...(parsed.data.questionScopes !== undefined
+          ? { questionScopes: parsed.data.questionScopes }
+          : {}),
       })
       const opencodeCmdCC = resolveOpencodeCmd(deps.configPath)
       const resumeDepsCC: Parameters<typeof resumeTask>[2] = {

@@ -1,10 +1,16 @@
 # RFC-059 Design — 跨节点反问问题作用域：技术设计
 
-> 状态：**Draft（Blocked-by-RFC-058，2026-05-23）**
+> 状态：**Ready（2026-05-23，RFC-058 已落 main，本文按 RFC-058 final API 刷新）**
 > 关联文档：[proposal.md](./proposal.md)、[plan.md](./plan.md)
 > 复用基线：[RFC-056](../RFC-056-clarify-cross-agent/design.md)、[RFC-023](../RFC-023-agent-clarify/design.md)、[RFC-039](../RFC-039-clarify-ask-bias/design.md)、[RFC-058 clarify-sessions-unification](../RFC-058-clarify-sessions-unification/design.md)
 
-> 待 RFC-058 落地后本文里所有 `cross_clarify_sessions` / `CrossClarifySession` / `buildQuestionerCrossClarifyContext` / `extractDesignerScopedSubset` / `triggerQuestionerContinueRerun` 等引用按合并后的 `clarify_rounds` / `ClarifyRound` / 合并 service shape 刷过；产品语义不变。本文 §10 测试策略中描述的 "buildExternalFeedbackContext" / "buildQuestionerCrossClarifyContext" 在合并后对应同一个 `buildPromptContext(... kind ...)` 函数的两条分支。
+> **2026-05-23 RFC-058 落地后差异（本次刷新已应用）**：
+> - **migration 编号 0031 → 0032**（RFC-058 占用 0031）。
+> - **目标表双写**：`cross_clarify_sessions`（legacy reader for `buildExternalFeedbackContext`）+ `clarify_rounds`（unified reader for `buildPromptContext`）双表都需要 `question_scopes_json TEXT NULLABLE` 列；submit dual-write 同步落两张表。
+> - **shared helper 文件路径**：本文出现的 `packages/shared/src/clarify-cross.ts` 在本仓不存在；helper 落到 `packages/shared/src/clarify.ts`（`buildExternalFeedbackBlock` 已在该文件 line 443）。
+> - **反问者侧两条入口**：生产实际走 `packages/backend/src/services/clarifyRounds.ts:294` 的 `buildPromptContext({ consumerKind: 'cross-questioner', ... })`；遗留 `packages/backend/src/services/crossClarify.ts:1223` 的 `buildQuestionerCrossClarifyContext` 仍作为 PR-A baseline 锚保留、本 RFC 都不改。C3 守门覆盖**两条**入口的 grep。
+> - **DTO 重命名**：`CrossClarifySession` → `ClarifyRound`（带 `kind: 'self'|'cross'` 判别符）；GET `/api/clarify/:nodeRunId` 详情走 RFC-058 的 `getClarifyRoundDetail` 返回 `ClarifyRound`，前端把 scope UI 挂在 `s.kind === 'cross'` 分支。dual-write 期 `CrossClarifySessionSchema` 仍同步保留 `questionScopes` 字段，避免 RFC-058 dual-write helper 类型不一致。
+> - 产品语义、scope 单向 destination flag 定义、UI Segmented 控件、三态 footer hint、i18n key 列表、5 条 C 守门测试目标保持不变。
 
 ## 1. 概览
 
@@ -66,28 +72,38 @@ export const SubmitClarifyAnswersSchema = z.object({
   /** RFC-058: per-question scope mapping. Optional — when omitted (旧客户端 /
    *  self-clarify 路径) the backend treats every question as 'designer' for
    *  RFC-056 行为保留. Keys MUST be questionIds present in the session's
-   *  questions array; unknown keys → 400 'cross-clarify-question-scopes-malformed'.
+   *  questions array; unknown keys → HTTP 422 'cross-clarify-question-scopes-malformed'.
    *  Self-clarify 路径接受但忽略此字段（不写入 clarify_sessions、不影响 rerun）. */
   questionScopes: z.record(z.string(), ClarifyQuestionScopeSchema).optional(),
 })
 ```
 
-`CrossClarifySessionSchema` 追加只读字段（GET 详情用）：
+**RFC-058 final API**：GET 详情走 `ClarifyRoundSchema`（packages/shared/src/schemas/clarify.ts:322）；本 RFC 在该 schema 追加只读字段（自 `kind: 'cross'` 行有效，`kind: 'self'` 行恒为 null）：
 
 ```ts
-export const CrossClarifySessionSchema = z.object({
+export const ClarifyRoundSchema = z.object({
   // ...既有字段...
-  /** RFC-058: scope mapping 持久化结果。NULL（旧行）或缺 key → 视为 'designer'。
-   *  仅在 answered / abandoned 状态有意义；awaiting_human 期间永远是 null。 */
+  /** RFC-059: scope mapping 持久化结果。NULL（旧行 / self-clarify 行）或缺 key
+   *  → 视为 'designer'。仅在 kind='cross' + answered/abandoned 状态有意义；
+   *  awaiting_human 与 kind='self' 期间永远是 null。 */
   questionScopes: z.record(z.string(), ClarifyQuestionScopeSchema).nullable().default(null),
 })
 ```
 
-`CrossClarifySessionSummarySchema`（列表项）**不**加 questionScopes 字段——列表不渲染 scope 详情，仅在详情页用到。
+dual-write 期 `CrossClarifySessionSchema` 也同步追加同字段，避免 RFC-058 dual-write helper 类型不一致：
 
-### 2.2 clarify-cross.ts 纯函数
+```ts
+export const CrossClarifySessionSchema = z.object({
+  // ...既有字段...
+  questionScopes: z.record(z.string(), ClarifyQuestionScopeSchema).nullable().default(null),
+})
+```
 
-`packages/shared/src/clarify-cross.ts` 追加（**3 个新纯函数 — 全部仅用于设计者侧过滤**；反问者侧不需要任何新 helper，继续走 RFC-056 既有 buildQuestionerCrossClarifyContext 全量注入路径）：
+`ClarifyRoundSummarySchema` / `CrossClarifySessionSummarySchema`（列表项）**不**加 questionScopes 字段——列表不渲染 scope 详情，仅在详情页用到。
+
+### 2.2 shared/clarify.ts 纯函数
+
+`packages/shared/src/clarify.ts` 追加（**3 个新纯函数 — 全部仅用于设计者侧过滤**；反问者侧不需要任何新 helper，继续走生产入口 `buildPromptContext({ consumerKind: 'cross-questioner', ... })` 全量注入路径，遗留 `buildQuestionerCrossClarifyContext` 也维持原样）。注意本仓没有 `clarify-cross.ts` 文件；`buildExternalFeedbackBlock` 与 `CrossClarifySourceContext` 都已经住在 `clarify.ts:443`，本 RFC 的 helper 与之并列：
 
 ```ts
 /** Default to 'designer' for any question id not present in the map (incl.
@@ -149,38 +165,49 @@ export function countDesignerScopedAcrossSources(
 
 ### 2.3 schema 守门
 
-`packages/shared/tests/cross-clarify-rfc058-shared.test.ts`（新文件）：
+`packages/shared/tests/clarify-question-scope-shared.test.ts`（新文件）：
 - `ClarifyQuestionScopeSchema` enum 仅接受 'designer' / 'questioner'。
 - `SubmitClarifyAnswersSchema` 接受 questionScopes 字段、缺省 / null / 空对象都 parse 成功。
-- `CrossClarifySessionSchema` 接受 questionScopes 字段 + nullable default null。
+- `ClarifyRoundSchema` 接受 questionScopes 字段 + nullable default null（kind='self' / 'cross' 两种行都要绿）。
+- `CrossClarifySessionSchema` 接受 questionScopes 字段 + nullable default null（dual-write 期向后兼容）。
 - `resolveQuestionScope(null, ...)` → 'designer'；scopes 缺 key → 'designer'；scopes 有 key → 该值。
 - `extractDesignerScopedSubset` 单测：全 designer / 全 questioner / 混合 / 空 / 缺 answer 跳过对应题。
 - `countDesignerScopedAcrossSources` 单测：多 source 聚合 / 空 sources / 全 questioner sources。
 
-## 3. DB migration 0031
+## 3. DB migration 0032
 
-`packages/backend/src/db/migrations/0031-cross-clarify-question-scopes.ts`：
+`packages/backend/db/migrations/0032_rfc059_clarify_rounds_question_scopes.sql`：
 
 ```sql
 ALTER TABLE cross_clarify_sessions ADD COLUMN question_scopes_json TEXT;
+ALTER TABLE clarify_rounds ADD COLUMN question_scopes_json TEXT;
 ```
 
-无 index、无 FK——纯 nullable TEXT 列，NULL 默认。drizzle schema 同步更新（`packages/backend/src/db/schema.ts`）：
+无 index、无 FK——纯 nullable TEXT 列，NULL 默认。**双表都改**：RFC-058 dual-write 期两张表同时承载 cross-clarify 数据，任一缺列会让 submit dual-write 失败。drizzle schema 同步更新（`packages/backend/src/db/schema.ts`）：
 
 ```ts
 export const crossClarifySessions = sqliteTable('cross_clarify_sessions', {
   // ...既有列...
-  /** RFC-058: JSON object `Record<questionId, 'designer'|'questioner'>`. NULL
-   *  when (a) session predates RFC-058 / (b) client didn't send questionScopes
+  /** RFC-059: JSON object `Record<questionId, 'designer'|'questioner'>`. NULL
+   *  when (a) session predates RFC-059 / (b) client didn't send questionScopes
    *  on submit. In both cases the runtime treats every question as 'designer'
-   *  for byte-level RFC-056 compatibility. */
+   *  for byte-level RFC-056/058 compatibility. */
+  questionScopesJson: text('question_scopes_json'),
+})
+
+export const clarifyRounds = sqliteTable('clarify_rounds', {
+  // ...既有列（含 RFC-058 kind 判别符 + 重命名后字段）...
+  /** RFC-059: same payload as crossClarifySessions.questionScopesJson; written
+   *  by submit dual-write. Always NULL for kind='self' rows; may be NULL for
+   *  kind='cross' rows when client didn't send questionScopes. */
   questionScopesJson: text('question_scopes_json'),
 })
 ```
 
-**测试**（`packages/backend/tests/migration-0031-rfc058-question-scopes.test.ts`，2 case）：
-1. migration 上行：新 schema 含 `question_scopes_json` 列，类型 TEXT、NULL 默认。
+**测试**（`packages/backend/tests/migration-0032-rfc059-question-scopes.test.ts`，3 case）：
+1. migration 上行：两张表都含 `question_scopes_json` 列，类型 TEXT、NULL 默认。
 2. 已存 cross_clarify_sessions 行（譬如 RFC-056 happy path 装的）经过 migration 后该列 = NULL，其它列字节级不变。
+3. 已存 clarify_rounds 行（RFC-058 dual-write 写入的）经过 migration 后该列 = NULL，其它列字节级不变。
 
 ## 4. backend service：submit 分支扩展
 
@@ -216,20 +243,29 @@ outcome:
 
 ### 4.2 submit 主路径分支
 
-`submitCrossClarifyAnswers` 内部修改（关键分支，伪码）：
+`submitCrossClarifyAnswers`（`packages/backend/src/services/crossClarify.ts:334`）内部修改（关键分支，伪码）：
 
 ```ts
 // 1. 解析 + 校验 questionScopes（malformed → 400）
 const scopes = validateQuestionScopes(args.questionScopes, questions)  // throws ValidationError
 
-// 2. 写入 cross_clarify_sessions（追加 question_scopes_json 列）
+// 2. 写入 cross_clarify_sessions + clarify_rounds（追加 question_scopes_json 列；
+//    RFC-058 dual-write 同事务、两条 UPDATE 顺序与 line 380+/391+ 一致）
+const scopesJson = scopes === undefined ? null : JSON.stringify(scopes)
 await db.update(crossClarifySessions).set({
   answersJson: JSON.stringify(sealedAnswers),
   status: 'answered',
   directive: args.directive,
   answeredAt,
-  questionScopesJson: scopes === undefined ? null : JSON.stringify(scopes),
+  questionScopesJson: scopesJson,
 }).where(eq(crossClarifySessions.id, row.id))
+await db.update(clarifyRounds).set({
+  answersJson: JSON.stringify(sealedAnswers),
+  status: 'answered',
+  directive: args.directive,
+  answeredAt,
+  questionScopesJson: scopesJson,
+}).where(eq(clarifyRounds.id, row.id))
 
 // 3. directive='stop' → 走 RFC-056 reject 路径，scope 持久但忽略
 if (args.directive === 'stop') {
@@ -302,11 +338,16 @@ export async function triggerQuestionerContinueRerun(args: {
 
 ### 4.4 prompt 注入侧改动
 
-**仅设计者侧需要新过滤逻辑**。`packages/backend/src/services/crossClarify.ts` 的 `buildExternalFeedbackContext`（design.md §6 已有）：在构造 `CrossClarifySourceContext` 时把 scopes 列读出来，按 'designer' 过滤 questions/answers 后再传给 `buildExternalFeedbackBlock`。
+**仅设计者侧需要新过滤逻辑**。`packages/backend/src/services/crossClarify.ts:1136` 的 `buildExternalFeedbackContext`：在构造 `CrossClarifySourceContext` 时把 `cross_clarify_sessions.questionScopesJson` 列读出来，按 'designer' 过滤 questions/answers 后再传给 `buildExternalFeedbackBlock`。
 
-**反问者侧 `buildQuestionerCrossClarifyContext` 字节级不动**——RFC-056 既有路径已经是"该 session 全量 Q&A 注入"，本 RFC 不改变这个行为。scope=NULL（旧行）/ scope 全 designer / scope 全 questioner / scope 混合，四种情况下反问者收到的 `__clarify_questions__` / `__clarify_answers__` 文本完全一致——单只 session 的全部 questions × answers。
+**反问者侧两条入口都字节级不动**——RFC-056/058 既有路径已经是"该 session 全量 Q&A 注入"，本 RFC 不改变这个行为：
 
-伪码（实际位置在 `crossClarify.ts` 现有 `buildExternalFeedbackContext` 或类似函数里）：
+- 生产入口 `packages/backend/src/services/clarifyRounds.ts:294` `buildPromptContext({ consumerKind: 'cross-questioner', ... })`（RFC-058 T13 合并后 scheduler 唯一调用方）—— 不读 `questionScopesJson`、不调 `extractDesignerScopedSubset`。
+- 遗留入口 `packages/backend/src/services/crossClarify.ts:1223` `buildQuestionerCrossClarifyContext`（PR-A baseline 锚）—— 同样不读。
+
+scope=NULL（旧行）/ scope 全 designer / scope 全 questioner / scope 混合，四种情况下反问者收到的 `__clarify_questions__` / `__clarify_answers__` 文本完全一致——单只 session 的全部 questions × answers。
+
+伪码（实际位置在 `crossClarify.ts` 现有 `buildExternalFeedbackContext`）：
 
 ```ts
 // 设计者侧（新增过滤）
@@ -333,17 +374,18 @@ async function buildExternalFeedbackContext(...) {
   return buildExternalFeedbackBlock(sources)
 }
 
-// 反问者侧（零改动，RFC-056 既有路径）
-function buildQuestionerCrossClarifyContext(session: CrossClarifySessionRow): { ... } {
-  // RFC-056 byte-level 既有实现：注入该 session 的 questions + answers 全量。
-  // 不读 questionScopesJson、不调 extractDesignerScopedSubset。
-  // directive='stop' 时上层 dispatcher 还会追加 STOP CLARIFYING trailer（RFC-039）。
-}
+// 反问者侧（零改动，RFC-056/058 既有路径，两条入口都不动）
+// (a) 生产入口：clarifyRounds.ts:294 buildPromptContext + consumerKind='cross-questioner'
+//     直接从 clarify_rounds 取 row.questionsJson / row.answersJson 全量注入；
+//     不读 row.questionScopesJson。
+// (b) 遗留入口：crossClarify.ts:1223 buildQuestionerCrossClarifyContext
+//     直接从 cross_clarify_sessions 取全量注入；不读 questionScopesJson。
+// directive='stop' 时上层 dispatcher 还会追加 STOP CLARIFYING trailer（RFC-039）。
 ```
 
 ### 4.5 evaluateDesignerRerunReadiness 扩展
 
-函数返回 `sources` 数组每项追加 `questionScopes: Record<string, ClarifyQuestionScope> | null` 字段（直接读 cross_clarify_sessions.questionScopesJson 解析）。其它字段不变。
+函数返回 `sources` 数组每项追加 `questionScopes: Record<string, ClarifyQuestionScope> | null` 字段（直接读 `cross_clarify_sessions.questionScopesJson` 解析——本函数本来就读 legacy 表，与 `buildExternalFeedbackContext` 同侧）。其它字段不变。
 
 `ReadinessSource` 类型：
 
@@ -364,30 +406,35 @@ interface ReadinessSource {
 
 ### 4.6 service 单测
 
-`packages/backend/tests/cross-clarify-question-scope.test.ts`（新文件 + ≥ 8 case）：
+`packages/backend/tests/cross-clarify-question-scope.test.ts`（新文件 + ≥ 9 case）：
 
-1. `submitCrossClarifyAnswers` 不传 questionScopes → outcome 与 RFC-056 同（happy path）+ question_scopes_json 写 NULL。
-2. 传 questionScopes 全 'designer' → 同上 + question_scopes_json 写 `{"q1":"designer","q2":"designer",...}`。
-3. 传 questionScopes 全 'questioner' → outcome='questioner-continue-triggered' + designer 不重跑 + question_scopes_json 写。
+1. `submitCrossClarifyAnswers` 不传 questionScopes → outcome 与 RFC-058 main baseline 同（happy path）+ 双表 question_scopes_json 都写 NULL。
+2. 传 questionScopes 全 'designer' → 同上 + 双表 question_scopes_json 写 `{"q1":"designer","q2":"designer",...}`，两表字节级一致。
+3. 传 questionScopes 全 'questioner' → outcome='questioner-continue-triggered' + designer 不重跑 + 双表 question_scopes_json 写。
 4. 传 questionScopes 混合 → outcome='designer-rerun-triggered' + designer External Feedback **仅含 designer-scoped 题**；questioner cascade rerun Q&A **含全量题与答案**（不过滤）。
 5. multi-source：peer A 全 questioner 快路径 + peer B 还在 awaiting → A outcome='questioner-continue-triggered'，B 状态不变；B submit 后聚合判断。
 6. multi-source 聚合 designerCount=0 → outcome='designer-skipped-all-questioner-scope'。
 7. 反 reject + 混合 scope：directive='stop' + questionScopes 混合 → outcome='questioner-stop-triggered'，questioner prompt 含全量 Q&A（含 STOP CLARIFYING anchor），question_scopes_json 持久但运行时忽略。
-8. malformed questionScopes（引用未知 questionId）→ throw ValidationError 400 + 错误码 `cross-clarify-question-scopes-malformed`。
+8. malformed questionScopes（引用未知 questionId）→ throw ValidationError → HTTP 422 + 错误码 `cross-clarify-question-scopes-malformed`。
+9. dual-write 双表 questionScopesJson 字节级一致（防御 future 单写漂移）。
 
-`packages/backend/tests/cross-clarify-rfc058-compat.test.ts`（C1 守门，2 case）：
-- 不传 questionScopes 跑完整 RFC-056 happy path → designer prompt 文本与"RFC-058 上线前"快照字节级一致（snapshot file 锁字符串）。
-- 不传 questionScopes 跑 RFC-056 reject 路径 → questioner cascade rerun prompt 字节级一致。
+`packages/backend/tests/cross-clarify-rfc059-compat.test.ts`（C1 守门，2 case）：
+- 不传 questionScopes 跑完整 happy path → designer prompt 文本与"RFC-059 上线前"main baseline 字节级一致（snapshot file 锁字符串）。
+- 不传 questionScopes 跑 reject 路径 → questioner cascade rerun prompt 字节级一致（通过生产入口 `buildPromptContext` 调用断言）。
 
 ## 5. REST 路由
 
-`packages/backend/src/routes/clarify.ts` 的 POST `/api/clarify/:nodeRunId/answers` 路由仅有一处改动：解析 `request.body.questionScopes`（已经在 `SubmitClarifyAnswersSchema` 里 optional），把它原样传给 `submitCrossClarifyAnswers`。self-clarify 路径**不读**该字段。
+`packages/backend/src/routes/clarify.ts` 改动两处：
 
-REST 单测（追加到 `packages/backend/tests/routes-cross-clarify.test.ts`，3 case）：
+1. POST `/api/clarify/:nodeRunId/answers`：解析 `request.body.questionScopes`（已经在 `SubmitClarifyAnswersSchema` 里 optional），把它原样传给 `submitCrossClarifyAnswers`。self-clarify 路径**不读**该字段。
+2. GET `/api/clarify/:nodeRunId`：RFC-058 已切到 `getClarifyRoundDetail` 返回 `ClarifyRound`；本 RFC 让该 helper 在拼装 DTO 时把 `clarify_rounds.questionScopesJson` 解析后填入 `ClarifyRound.questionScopes`（NULL → null；非空 → `Record<questionId, scope>`）。self-clarify 行恒为 null（migration 0032 后默认 NULL、submit 也不写）。
+
+REST 单测（追加到 `packages/backend/tests/routes-cross-clarify.test.ts` + `packages/backend/tests/routes-clarify.test.ts`，4 case）：
 
 1. POST 不带 questionScopes → 200 + 既有行为。
-2. POST 带合法 questionScopes → 200 + question_scopes_json 写入。
-3. POST 带 malformed questionScopes（譬如 scope='unknown'）→ 400 + 错误码 `cross-clarify-question-scopes-malformed`。
+2. POST 带合法 questionScopes → 200 + 双表 question_scopes_json 写入。
+3. POST 带 malformed questionScopes（譬如 scope='unknown'）→ 422 + 错误码 `cross-clarify-question-scopes-malformed`。
+4. GET 详情 cross-clarify session → 返回 `ClarifyRound.questionScopes`（NULL → null；非空 → 解析后的对象）。
 
 ## 6. WS 事件
 
@@ -397,23 +444,23 @@ REST 单测（追加到 `packages/backend/tests/routes-cross-clarify.test.ts`，
 
 ### 7.1 状态管理
 
-`packages/frontend/src/routes/clarify.detail.tsx` 加 `scopes` 本地 state：
+`packages/frontend/src/routes/clarify.detail.tsx` 加 `scopes` 本地 state。**注意**：RFC-058 把前端切到 `ClarifyRound`（带 `kind: 'self'|'cross'` 判别符）；本 RFC 在 `s.kind === 'cross'` 分支内挂 UI。
 
 ```tsx
 const [scopes, setScopes] = useState<Record<string, ClarifyQuestionScope>>({})
 
-// 1. 初始化：cross-clarify + awaiting_human → 全部默认 'designer'；
-//    cross-clarify + sealed → 从 session.questionScopes 还原（NULL → 全 designer）；
-//    self-clarify → 不渲染 scope 控件、state 保持空。
+// 1. 初始化：kind='cross' + awaiting_human → 全部默认 'designer'；
+//    kind='cross' + sealed → 从 round.questionScopes 还原（NULL → 全 designer）；
+//    kind='self' → 不渲染 scope 控件、state 保持空。
 useEffect(() => {
-  const s = session.data
+  const s = round.data
   if (s === undefined || s.kind !== 'cross') return
   const initial: Record<string, ClarifyQuestionScope> = {}
   for (const q of s.questions) {
     initial[q.id] = s.questionScopes?.[q.id] ?? CLARIFY_QUESTION_SCOPE_DEFAULT
   }
   setScopes(initial)
-}, [session.data])
+}, [round.data])
 ```
 
 ### 7.2 Per-question Segmented 控件
@@ -518,13 +565,13 @@ const resp = await api.post<SubmitClarifyAnswersResponse>(
 
 ## 8. backward compatibility
 
-### 8.1 旧 cross_clarify_sessions 行
+### 8.1 旧 cross_clarify_sessions / clarify_rounds 行
 
-migration 0031 后所有 RFC-056 时代的 answered 行 question_scopes_json=NULL。两处需要正确 fallback：
+migration 0032 后所有 RFC-056/058 时代的 answered 行（双表）question_scopes_json=NULL。三处需要正确 fallback：
 
-- `buildExternalFeedbackContext`：`extractDesignerScopedSubset(questions, answers, null)` → resolveQuestionScope 返回 'designer' → 全量进 designer 子集，与 RFC-056 行为一致。
-- 反问者侧 `buildQuestionerCrossClarifyContext`：**零改动**，注入该 session 的全量 Q&A，与 RFC-056 一致；不读 questionScopesJson 列。
-- `/clarify/{id}` 详情页 GET：question_scopes_json=NULL → API DTO `questionScopes: null` → 前端初始化 fallback 为全 designer chip（A8 验收）。
+- `buildExternalFeedbackContext`（读 cross_clarify_sessions）：`extractDesignerScopedSubset(questions, answers, null)` → resolveQuestionScope 返回 'designer' → 全量进 designer 子集，与 RFC-056/058 行为一致。
+- 反问者侧两条入口（生产 `buildPromptContext` 读 clarify_rounds + 遗留 `buildQuestionerCrossClarifyContext` 读 cross_clarify_sessions）：**零改动**，注入该 session 的全量 Q&A，与 RFC-056/058 一致；不读 questionScopesJson 列。
+- `/clarify/{id}` 详情页 GET：clarify_rounds.question_scopes_json=NULL → `ClarifyRound.questionScopes: null` → 前端初始化 fallback 为全 designer chip（A8 验收）。
 
 ### 8.2 旧客户端
 
@@ -536,6 +583,8 @@ A7 验收覆盖。
 
 `packages/backend/src/services/clarify.ts` 的 `submitClarifyAnswers`（RFC-023 路径）**不读** `args.questionScopes`。`SubmitClarifyAnswersSchema` 的 optional 字段被 self-clarify route 忽略。
 
+dual-write 期 self-clarify 也写 clarify_rounds（kind='self'），但本 RFC submit 路径不在 self 分支写 `questionScopesJson`，列保持 NULL；`getClarifyRoundDetail` 拼 DTO 时 `questionScopes: null` 给前端。
+
 A10 验收 + RFC-023 既有套件零退化。
 
 ## 9. 错误码 + i18n
@@ -544,25 +593,26 @@ A10 验收 + RFC-023 既有套件零退化。
 
 | code                                          | severity | HTTP | 触发                                                                              |
 | --------------------------------------------- | -------- | ---- | --------------------------------------------------------------------------------- |
-| `cross-clarify-question-scopes-malformed`     | fail     | 400  | submit body 的 questionScopes 字段引用未知 questionId / scope 值非 enum / 非 Record |
+| `cross-clarify-question-scopes-malformed`     | fail     | 422  | submit body 的 questionScopes 字段引用未知 questionId / scope 值非 enum / 非 Record。**注意**：proposal §A9 草稿写 HTTP 400，落地用 `ValidationError`（codebase 约定 → HTTP 422 Unprocessable Entity，语义更准）。 |
 
 i18n key 6 条详见 proposal §2.1 第 12 项。
 
 ## 10. 测试策略总结
 
-- **shared 单测** ≥ 5（schemas 2 + 纯函数 2 + 守门 1）
-- **backend 单测** ≥ 14
-  - service `cross-clarify-question-scope.test.ts` 8 case
-  - service `cross-clarify-rfc058-compat.test.ts` 2 case（C1 守门）
-  - service `cross-clarify-questioner-full-injection.test.ts` 1 case（C3 守门，反问者侧不过滤）
+- **shared 单测** ≥ 7（schemas 3：Submit/ClarifyRound/CrossClarifySession + 纯函数 3 + enum 1）
+  - 文件名 `clarify-question-scope-shared.test.ts`
+- **backend 单测** ≥ 15
+  - service `cross-clarify-question-scope.test.ts` 9 case
+  - service `cross-clarify-rfc059-compat.test.ts` 2 case（C1 守门，main baseline）
+  - service `cross-clarify-questioner-full-injection.test.ts` 1 case（C3 守门，反问者侧不过滤，覆盖**双入口** grep）
   - service `cross-clarify-fast-path-isolation.test.ts` 1 case（C4 守门）
-  - migration `migration-0031-rfc058-question-scopes.test.ts` 2 case
+  - migration `migration-0032-rfc059-question-scopes.test.ts` 3 case（双表 + 已有行）
 - **frontend 单测** ≥ 6
   - `cross-clarify-scope-control.test.tsx` 6 case
   - `cross-clarify-scope-i18n.test.ts` 1 case（C5 守门）
 - **e2e** 不增量（A1/A2/A3 在 vitest 已覆盖；e2e fixture stub-opencode 维护成本不抵收益）。
 
-**回归防护汇总**：C1 RFC-056 happy path byte-level / C2 extractDesignerScopedSubset 纯函数 / C3 反问者侧不过滤 + reject 注入全量 / C4 multi-source 快路径不污染 / C5 i18n cn/en 对齐——共 5 条守门。
+**回归防护汇总**：C1 RFC-058 main baseline happy path byte-level / C2 extractDesignerScopedSubset 纯函数 / C3 反问者侧两条入口不过滤 + reject 注入全量 / C4 multi-source 快路径不污染 / C5 i18n cn/en 对齐——共 5 条守门。
 
 ## 11. 关键决策理由与替代方案
 
@@ -578,6 +628,7 @@ i18n key 6 条详见 proposal §2.1 第 12 项。
 |------|------|
 | `extractDesignerScopedSubset` 在 questions / answers 数组不同步时（譬如旧行 answers 部分缺失）产生空对结果 | 函数内 `byId.get(q.id) === undefined` 时跳过该题；测试 case 覆盖 |
 | `triggerQuestionerContinueRerun` 与 `triggerQuestionerStopRerun` 代码重复 → 维护漂移 | 抽出共享 helper `_cascadeResetAndDispatchQuestioner({ injectStop: boolean })`；两个 public helper 都委托给它 |
-| 反问者侧路径意外被改 → 注入按 scope 过滤 → RFC-056 行为退化 | C1 / C3 双守门：C1 锁 happy path 字节级、C3 grep 锁 `buildQuestionerCrossClarifyContext` 不读 questionScopesJson；改动需要先跑两条 |
+| 反问者侧路径意外被改 → 注入按 scope 过滤 → RFC-056/058 行为退化 | C1 / C3 双守门：C1 锁 main baseline 字节级、C3 grep 锁**两条入口**（生产 `buildPromptContext` cross-questioner 分支 + 遗留 `buildQuestionerCrossClarifyContext`）不读 questionScopesJson；改动需要先跑两条 |
+| RFC-058 dual-write 期单表漏写 questionScopesJson | T3 测试增加"双表 questionScopesJson 字节级一致"case；service 层抽 helper `serializeQuestionScopes()` 避免两条写路径分裂 |
 | `evaluateDesignerRerunReadiness` 加 questionScopes 字段到 sources 后调用方需要更新 | 改动是 sources 数组每项**追加**字段（不删除既有字段）；TypeScript 编译期能捕获遗漏 |
 | 前端 `<Segmented>` 控件在 RFC-035 中已使用、但本 RFC 把它放进 QuestionForm 外层 wrapper → 视觉与现有 self-clarify 题目不一致 | 视觉对齐自查：CSS 加 `.clarify-question-wrapper` + `.clarify-question-scope` 样式调；与 NodeInspector 的 sessionMode 控件 side-by-side 比对 |
