@@ -40,7 +40,7 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 async function seedTask(
   db: DbClient,
-  opts: { id?: string; definition?: WorkflowDefinition; status?: string } = {},
+  opts: { id?: string; definition?: WorkflowDefinition } = {},
 ): Promise<{ taskId: string }> {
   const taskId = opts.id ?? `task_${Math.random().toString(36).slice(2, 8)}`
   const def: WorkflowDefinition = opts.definition ?? {
@@ -82,7 +82,7 @@ async function seedTask(
     worktreePath: '',
     baseBranch: 'main',
     branch: `agent-workflow/${taskId}`,
-    status: opts.status ?? 'running',
+    status: 'running' as const,
     inputs: JSON.stringify({}),
     startedAt: Date.now(),
   })
@@ -453,9 +453,8 @@ describe('RFC-058 baseline T2 — buildClarifyPromptContext multi-round + inline
     expect(ctx?.questionsBlock).toContain('Round 0 question?')
     expect(ctx?.questionsBlock).toContain('Round 1 question?')
     // Round 1 must appear before Round 2 in the rendered string
-    expect(ctx!.questionsBlock.indexOf('### Round 1')).toBeLessThan(
-      ctx!.questionsBlock.indexOf('### Round 2'),
-    )
+    const block = ctx?.questionsBlock ?? ''
+    expect(block.indexOf('### Round 1')).toBeLessThan(block.indexOf('### Round 2'))
     expect(ctx?.directive).toBe('continue')
   })
 
@@ -807,10 +806,8 @@ describe('RFC-058 baseline T2 — nodeRunOutputs interaction (aging context)', (
     })
     await db.insert(nodeRunOutputs).values({
       nodeRunId: 'nr_with_outputs',
-      taskId,
       portName: 'plan',
       content: 'done output',
-      contentKind: 'string',
     })
     const rows = await db
       .select({ id: nodeRunOutputs.nodeRunId })

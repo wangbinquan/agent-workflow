@@ -96,7 +96,7 @@ async function seedCrossClarifyTask(
     })
   }
   const def: WorkflowDefinition = {
-    $schema_version: 5,
+    $schema_version: 4,
     inputs: [],
     nodes,
     edges,
@@ -109,7 +109,7 @@ async function seedCrossClarifyTask(
     description: '',
     definition: JSON.stringify(def),
     version: 1,
-    schemaVersion: 5,
+    schemaVersion: 4,
   })
   await db.insert(tasks).values({
     name: 'fixture-task',
@@ -565,10 +565,8 @@ describe('RFC-058 baseline T3 — buildExternalFeedbackContext (designer side pr
     })
     await db.insert(nodeRunOutputs).values({
       nodeRunId: 'nr_designer_prior',
-      taskId,
       portName: 'plan',
       content: 'step 1; step 2',
-      contentKind: 'string',
     })
     await db.insert(nodeRuns).values({
       id: 'nr_q_done',

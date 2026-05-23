@@ -167,7 +167,7 @@ describe('RFC-058 baseline T5 — cross-clarify designer dispatch path', () => {
     // Augment fixture with cross-clarify wiring
     const ccDef: WorkflowDefinition = {
       ...definition,
-      $schema_version: 5,
+      $schema_version: 4,
       nodes: [
         ...definition.nodes,
         { id: 'questioner', kind: 'agent-single', agentName: 'questioner' } as WorkflowNode,
@@ -249,7 +249,7 @@ describe('RFC-058 baseline T5 — cross-clarify questioner dispatch path', () =>
     const { taskId, definition } = await seedSelfClarifyTask(db)
     const ccDef: WorkflowDefinition = {
       ...definition,
-      $schema_version: 5,
+      $schema_version: 4,
       nodes: [
         ...definition.nodes,
         { id: 'questioner', kind: 'agent-single', agentName: 'questioner' } as WorkflowNode,
@@ -338,10 +338,8 @@ describe('RFC-058 baseline T5 — GENERAL aging cutoff signal (prior done + outp
     })
     await db.insert(nodeRunOutputs).values({
       nodeRunId: 'nr_round0',
-      taskId,
       portName: 'plan',
       content: 'output',
-      contentKind: 'string',
     })
     const { clarifyNodeRunId } = await createClarifySession({
       db,

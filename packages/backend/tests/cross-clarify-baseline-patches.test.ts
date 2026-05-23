@@ -47,7 +47,7 @@ async function seedTriad(
     { id: 'cc1', kind: 'clarify-cross-agent', title: 'cc1' } as WorkflowNode,
   ]
   const definition: WorkflowDefinition = {
-    $schema_version: 5,
+    $schema_version: 4,
     inputs: [],
     nodes,
     edges: [
@@ -76,7 +76,7 @@ async function seedTriad(
     description: '',
     definition: JSON.stringify(definition),
     version: 1,
-    schemaVersion: 5,
+    schemaVersion: 4,
   })
   await db.insert(tasks).values({
     name: 'patch-baseline',

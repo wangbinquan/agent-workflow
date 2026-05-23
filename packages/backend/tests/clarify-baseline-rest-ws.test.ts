@@ -27,15 +27,11 @@ import {
   listCrossClarifySummaries,
   submitCrossClarifyAnswers,
 } from '../src/services/crossClarify'
-import {
-  resetBroadcastersForTests,
-  TASK_CHANNEL,
-  taskBroadcaster,
-  type TaskWsMessage,
-} from '../src/ws/broadcaster'
+import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import type {
   ClarifyAnswer,
   ClarifyQuestion,
+  TaskWsMessage,
   WorkflowDefinition,
   WorkflowNode,
 } from '@agent-workflow/shared'
@@ -65,7 +61,7 @@ async function seedTask(
   ]
   const definition: WorkflowDefinition = withCross
     ? {
-        $schema_version: 5,
+        $schema_version: 4,
         inputs: [],
         nodes: [
           ...baseNodes,
@@ -101,7 +97,7 @@ async function seedTask(
     description: '',
     definition: JSON.stringify(definition),
     version: 1,
-    schemaVersion: withCross ? 5 : 3,
+    schemaVersion: withCross ? 4 : 3,
   })
   await db.insert(tasks).values({
     name: 'rest-baseline-task',
