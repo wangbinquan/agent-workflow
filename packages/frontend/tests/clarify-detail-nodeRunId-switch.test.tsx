@@ -152,7 +152,7 @@ describe('/clarify/$nodeRunId — RFC-051 reset on nodeRunId switch', () => {
   test("navigating A → B on the same mount renders B's questions (not empty form)", async () => {
     const sessA = mkSession({
       id: 'sess_a',
-      clarifyNodeRunId: 'nr_A',
+      intermediaryNodeRunId: 'nr_A',
       questions: [
         {
           id: 'qA1',
@@ -168,7 +168,7 @@ describe('/clarify/$nodeRunId — RFC-051 reset on nodeRunId switch', () => {
     })
     const sessB = mkSession({
       id: 'sess_b',
-      clarifyNodeRunId: 'nr_B',
+      intermediaryNodeRunId: 'nr_B',
       questions: [
         {
           id: 'qB1',
