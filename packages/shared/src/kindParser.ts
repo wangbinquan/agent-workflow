@@ -146,15 +146,15 @@ export function isValidKindString(text: string): boolean {
 
 /**
  * Base kind names recognized by the shared schemas as valid
- * AgentOutputKind ingredients. PR-A locks in 'string' and 'markdown';
- * PR-B (RFC-060) will add 'signal'; future RFCs may extend this set.
+ * AgentOutputKind ingredients. PR-A locked in 'string' / 'markdown';
+ * PR-B (RFC-060) adds 'signal' as the control-flow-only base kind.
+ * Future RFCs may extend this set.
  *
  * Kept as a const Set so additions are visible to any consumer that does
- * `REGISTERED_BASE_KINDS.has(name)`. Don't import this in PR-A consumers
- * other than the kindParser itself — the only public hook is
+ * `REGISTERED_BASE_KINDS.has(name)`. The only public hook is
  * `isRegisteredKindString`.
  */
-const REGISTERED_BASE_KINDS: ReadonlySet<string> = new Set<string>(['string', 'markdown'])
+const REGISTERED_BASE_KINDS: ReadonlySet<string> = new Set<string>(['string', 'markdown', 'signal'])
 
 /**
  * Stricter sibling of `isValidKindString`: parses successfully AND every

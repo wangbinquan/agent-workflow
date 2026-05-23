@@ -1162,6 +1162,13 @@ export interface Resources {
     fieldReadonlyHint: string
     fieldSyncOutputsOnIterate: string
     fieldSyncOutputsOnIterateHint: string
+    /** RFC-060 PR-B — agent role flavor selector (normal / aggregator). */
+    fieldRole: string
+    fieldRoleHint: string
+    roleNormal: string
+    roleAggregator: string
+    fieldOutputWrapperPortNames: string
+    fieldOutputWrapperPortNamesHint: string
     fieldModel: string
     modelPlaceholder: string
     fieldVariant: string
@@ -3057,6 +3064,14 @@ export const zhCN: Resources = {
     fieldSyncOutputsOnIterate: '文档迭代期间是否同步刷新本代理生成的其他文档',
     fieldSyncOutputsOnIterateHint:
       '仅当本代理 outputs 含 ≥ 2 个 markdown / markdown_file 时实际生效；关闭则在用户点"返回修改"时只重生被评审的那一份，其他文档沿用上一版本。',
+    fieldRole: '角色',
+    fieldRoleHint:
+      'RFC-060：普通 agent 是 workflow 中的常规节点；聚合 agent 用于 wrapper-fanout 收口、跑 1 次、看到所有 shard 的 raw list。当前阶段 (PR-B) 聚合 agent 还不能被放到 canvas 上，需等 PR-C 落地 wrapper-fanout 后启用。',
+    roleNormal: '普通',
+    roleAggregator: '聚合',
+    fieldOutputWrapperPortNames: '输出 → wrapper 端口名映射',
+    fieldOutputWrapperPortNamesHint:
+      '仅聚合 agent 生效。JSON 对象，键为本 agent 声明的 output 端口名，值为 promote 到 wrapper-fanout 出口时的端口名；缺省即同名 mirror。',
     fieldModel: 'Model',
     modelPlaceholder: 'anthropic/claude-sonnet-4-6',
     fieldVariant: 'Variant',

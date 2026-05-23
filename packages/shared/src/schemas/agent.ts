@@ -22,6 +22,36 @@ import { AgentOutputKindSchema } from './review'
 export const AgentOutputKindsMapSchema = z.record(z.string(), AgentOutputKindSchema)
 export type AgentOutputKindsMap = z.infer<typeof AgentOutputKindsMapSchema>
 
+/**
+ * RFC-060 PR-B — agent role flag. Default `'normal'` for all agents that
+ * existed before RFC-060; `'aggregator'` marks an agent designed to sit at
+ * the convergence point of a wrapper-fanout (runs once per wrapper, sees
+ * `raw list` of every shard's output, decides how to merge). Validator
+ * rejects role=aggregator agents outside a wrapper-fanout
+ * (`aggregator-agent-outside-fanout`, see workflow.validator.ts PR-B).
+ *
+ * Carried via agent.md frontmatter `role:` field; persisted in DB via
+ * `frontmatter_extra` JSON column (same path as RFC-005 outputKinds).
+ */
+export const AGENT_ROLE = ['normal', 'aggregator'] as const
+export const AgentRoleSchema = z.enum(AGENT_ROLE)
+export type AgentRole = z.infer<typeof AgentRoleSchema>
+
+/**
+ * RFC-060 PR-B — per-output port rename map, used when promoting an
+ * aggregator agent's outputs to wrapper-fanout output ports. Only
+ * meaningful when `role === 'aggregator'`; ignored otherwise (PR-C
+ * validator may emit a warning if the field is set on a normal agent).
+ *
+ * Keys are port names declared in `outputs`; values are the desired
+ * wrapper-side port names. Missing keys → same-name mirror at wrapper
+ * promotion time.
+ *
+ * Sidecar map kept symmetrical with `outputKinds`.
+ */
+export const AgentOutputWrapperPortNamesSchema = z.record(z.string(), z.string().min(1))
+export type AgentOutputWrapperPortNames = z.infer<typeof AgentOutputWrapperPortNamesSchema>
+
 /** Permitted characters in agent name (URL-safe; matches /agents/:name). */
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
@@ -42,6 +72,21 @@ export const AgentSchema = z.object({
   description: z.string(),
   outputs: z.array(z.string()),
   outputKinds: AgentOutputKindsMapSchema.optional(),
+  /**
+   * RFC-060 PR-B — wrapper-fanout output rename sidecar. Only meaningful
+   * when `role === 'aggregator'`; absent otherwise.
+   */
+  outputWrapperPortNames: AgentOutputWrapperPortNamesSchema.optional(),
+  /**
+   * RFC-060 PR-B — agent role; absent / undefined → treat as 'normal'.
+   * See AgentRoleSchema docs. Persisted into agent.md frontmatter `role:`;
+   * round-trips via frontmatter_extra in DB. Optional on the schema so
+   * pre-RFC-060 fixtures / hand-constructed test agents continue to compile
+   * without each call site spelling out `role: 'normal'`. Consumers MUST
+   * treat undefined as 'normal' (see workflow.validator.ts placement check
+   * + scheduler aggregator dispatch in PR-D).
+   */
+  role: AgentRoleSchema.optional(),
   readonly: z.boolean(),
   /**
    * RFC-014: when true (default), an iterate decision on a multi-markdown
@@ -102,6 +147,10 @@ export const CreateAgentSchema = z.object({
   description: z.string().default(''),
   outputs: z.array(z.string()).default([]),
   outputKinds: AgentOutputKindsMapSchema.optional(),
+  /** RFC-060 PR-B — wrapper-fanout output rename sidecar (aggregator only). */
+  outputWrapperPortNames: AgentOutputWrapperPortNamesSchema.optional(),
+  /** RFC-060 PR-B — agent role flag; optional, treat absent as 'normal'. */
+  role: AgentRoleSchema.optional(),
   readonly: z.boolean().default(false),
   /** RFC-014: default true — author must explicitly opt-out. */
   syncOutputsOnIterate: z.boolean().default(true),

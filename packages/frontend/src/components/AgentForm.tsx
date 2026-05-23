@@ -17,6 +17,7 @@ import { McpsPicker } from './McpsPicker'
 import { PluginsPicker } from './PluginsPicker'
 import { ModelSelect } from './ModelSelect'
 import { OutputsEditor } from './OutputsEditor'
+import { Select } from './Select'
 import { SkillsPicker } from './SkillsPicker'
 
 export interface AgentFormProps {
@@ -144,6 +145,38 @@ export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
           label={t('agentForm.fieldSyncOutputsOnIterate')}
           hint={t('agentForm.fieldSyncOutputsOnIterateHint')}
         />
+
+        {/* RFC-060 PR-B — agent role + outputWrapperPortNames. The map editor
+            is JSON-shaped for now; PR-F upgrades OutputsEditor with per-port
+            rename inputs. */}
+        <Field label={t('agentForm.fieldRole')} hint={t('agentForm.fieldRoleHint')}>
+          <Select<'normal' | 'aggregator'>
+            value={value.role ?? 'normal'}
+            onChange={(v) => patch('role', v === 'normal' ? undefined : v)}
+            options={[
+              { value: 'normal', label: t('agentForm.roleNormal') },
+              { value: 'aggregator', label: t('agentForm.roleAggregator') },
+            ]}
+            ariaLabel={t('agentForm.fieldRole')}
+          />
+        </Field>
+
+        {value.role === 'aggregator' ? (
+          <Field
+            label={t('agentForm.fieldOutputWrapperPortNames')}
+            hint={t('agentForm.fieldOutputWrapperPortNamesHint')}
+          >
+            <JsonField
+              value={value.outputWrapperPortNames ?? {}}
+              onChange={(v) => {
+                if (typeof v !== 'object' || v === null || Array.isArray(v)) return
+                patch('outputWrapperPortNames', v as Record<string, string>)
+              }}
+              placeholder={'{"report":"final"}'}
+              rows={3}
+            />
+          </Field>
+        ) : null}
 
         <div className="form-grid form-grid--cols-3">
           <Field label={t('agentForm.fieldModel')}>

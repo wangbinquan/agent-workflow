@@ -50,8 +50,19 @@ export async function createAgent(db: DbClient, input: CreateAgent): Promise<Age
   // RFC-005: outputKinds is a sidecar map ported through `frontmatter_extra`
   // (under reserved key `outputKinds`) until a dedicated column is needed.
   // services/review.ts:loadUpstreamPortKind reads from the same place.
+  //
+  // RFC-060 PR-B: same pattern for `role` and `outputWrapperPortNames` — both
+  // are stored as reserved keys under frontmatter_extra and lifted back out
+  // to top-level Agent fields by rowToAgent. role: 'normal' is the default
+  // and is never persisted (keeps existing agents' fmExtra byte-identical).
   const fmExtra = { ...input.frontmatterExtra } as Record<string, unknown>
   if (input.outputKinds !== undefined) fmExtra.outputKinds = input.outputKinds
+  if (input.role !== undefined && input.role !== 'normal') {
+    fmExtra.role = input.role
+  }
+  if (input.outputWrapperPortNames !== undefined) {
+    fmExtra.outputWrapperPortNames = input.outputWrapperPortNames
+  }
   await db.insert(agents).values({
     id,
     name: input.name,
@@ -127,7 +138,17 @@ export async function updateAgent(db: DbClient, name: string, patch: UpdateAgent
   // frontmatter_extra; tests that PATCH only frontmatterExtra drop outputKinds
   // only if the caller passes a fresh object without that key (existing
   // overwrite semantics).
-  if (patch.frontmatterExtra !== undefined || patch.outputKinds !== undefined) {
+  //
+  // RFC-060 PR-B: extend the same merge to `role` and `outputWrapperPortNames`.
+  // A patch that touches either of these three sidecar fields (or
+  // frontmatterExtra itself) triggers the merge; the others stay at their
+  // current row values.
+  if (
+    patch.frontmatterExtra !== undefined ||
+    patch.outputKinds !== undefined ||
+    patch.role !== undefined ||
+    patch.outputWrapperPortNames !== undefined
+  ) {
     const baseFm =
       patch.frontmatterExtra !== undefined
         ? { ...patch.frontmatterExtra }
@@ -136,12 +157,36 @@ export async function updateAgent(db: DbClient, name: string, patch: UpdateAgent
             unknown
           >) ?? {})
     if (patch.frontmatterExtra === undefined) {
-      // Caller patched only outputKinds — start from current row state.
+      // Caller patched only a sidecar — start from current row state.
       const fresh = await getAgent(db, name)
-      if (fresh !== null) Object.assign(baseFm, fresh.frontmatterExtra)
+      if (fresh !== null) {
+        Object.assign(baseFm, fresh.frontmatterExtra)
+        if (fresh.outputKinds !== undefined && patch.outputKinds === undefined) {
+          ;(baseFm as Record<string, unknown>).outputKinds = fresh.outputKinds
+        }
+        if (fresh.role !== undefined && fresh.role !== 'normal' && patch.role === undefined) {
+          ;(baseFm as Record<string, unknown>).role = fresh.role
+        }
+        if (
+          fresh.outputWrapperPortNames !== undefined &&
+          patch.outputWrapperPortNames === undefined
+        ) {
+          ;(baseFm as Record<string, unknown>).outputWrapperPortNames = fresh.outputWrapperPortNames
+        }
+      }
     }
     if (patch.outputKinds !== undefined) {
       ;(baseFm as Record<string, unknown>).outputKinds = patch.outputKinds
+    }
+    if (patch.role !== undefined) {
+      if (patch.role === 'normal') {
+        delete (baseFm as Record<string, unknown>).role
+      } else {
+        ;(baseFm as Record<string, unknown>).role = patch.role
+      }
+    }
+    if (patch.outputWrapperPortNames !== undefined) {
+      ;(baseFm as Record<string, unknown>).outputWrapperPortNames = patch.outputWrapperPortNames
     }
     set.frontmatterExtra = JSON.stringify(baseFm)
   }
@@ -356,6 +401,15 @@ function rowToAgent(row: AgentRow): Agent {
   // RFC-005: lift outputKinds back out of frontmatter_extra into a top-level
   // property on the Agent DTO so consumers (review validator, scheduler,
   // frontend AgentForm) see it without poking into nested JSON.
+  //
+  // RFC-060 PR-B: outputKinds value can now be any string that passes the
+  // shared kind grammar (path<md>, list<string>, signal, …). The PR-A
+  // grammar accepts the legacy 'string' / 'markdown' / 'markdown_file'
+  // literals so round-trip is byte-identical for pre-RFC-060 agents.
+  // PR-D will swap downstream consumers over to parseKind; this filter
+  // is intentionally permissive — anything passing the grammar lands
+  // back on the Agent DTO and the downstream validator surfaces any
+  // unregistered base names.
   let outputKinds: Agent['outputKinds'] | undefined
   if (
     fmExtra.outputKinds !== undefined &&
@@ -364,13 +418,40 @@ function rowToAgent(row: AgentRow): Agent {
   ) {
     outputKinds = {} as Agent['outputKinds']
     for (const [port, kind] of Object.entries(fmExtra.outputKinds as Record<string, unknown>)) {
-      if (kind === 'string' || kind === 'markdown' || kind === 'markdown_file') {
-        ;(outputKinds as Record<string, typeof kind>)[port] = kind
+      if (typeof kind === 'string' && kind.length > 0) {
+        ;(outputKinds as Record<string, string>)[port] = kind
       }
     }
   }
+
+  // RFC-060 PR-B: lift role + outputWrapperPortNames out of frontmatter_extra
+  // following the same pattern. `role` is optional on the Agent DTO; we only
+  // set it when it's not the default 'normal' so callers that don't care
+  // about RFC-060 see byte-identical Agent objects pre-vs-post-RFC-060.
+  let role: Agent['role'] | undefined
+  if (fmExtra.role === 'aggregator') {
+    role = 'aggregator'
+  }
+  let outputWrapperPortNames: Agent['outputWrapperPortNames'] | undefined
+  if (
+    fmExtra.outputWrapperPortNames !== undefined &&
+    fmExtra.outputWrapperPortNames !== null &&
+    typeof fmExtra.outputWrapperPortNames === 'object'
+  ) {
+    outputWrapperPortNames = {} as Agent['outputWrapperPortNames']
+    for (const [port, wrapperName] of Object.entries(
+      fmExtra.outputWrapperPortNames as Record<string, unknown>,
+    )) {
+      if (typeof wrapperName === 'string' && wrapperName.length > 0) {
+        ;(outputWrapperPortNames as Record<string, string>)[port] = wrapperName
+      }
+    }
+  }
+
   const exposedFm = { ...fmExtra }
   delete (exposedFm as Record<string, unknown>).outputKinds
+  delete (exposedFm as Record<string, unknown>).role
+  delete (exposedFm as Record<string, unknown>).outputWrapperPortNames
 
   const agent: Agent = {
     id: row.id,
@@ -391,6 +472,10 @@ function rowToAgent(row: AgentRow): Agent {
     updatedAt: row.updatedAt,
   }
   if (outputKinds !== undefined) agent.outputKinds = outputKinds
+  if (role !== undefined) agent.role = role
+  if (outputWrapperPortNames !== undefined) {
+    agent.outputWrapperPortNames = outputWrapperPortNames
+  }
   if (row.model !== null) agent.model = row.model
   if (row.variant !== null) agent.variant = row.variant
   if (row.temperature !== null) agent.temperature = row.temperature

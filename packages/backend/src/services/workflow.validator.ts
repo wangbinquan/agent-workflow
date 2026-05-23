@@ -345,6 +345,20 @@ export function validateWorkflowDef(
         })
         continue
       }
+      // RFC-060 PR-B — aggregator placement guard. Until PR-C lands the
+      // `wrapper-fanout` NodeKind, an aggregator agent has no legal home;
+      // any node referencing one is rejected. PR-C refines this rule to
+      // "must be an inner node of a wrapper-fanout"; PR-B's role is to
+      // lock the invariant in CI so authoring an aggregator agent + a
+      // plain workflow that uses it surfaces the error rather than
+      // silently dispatching the LLM with all shards collapsed.
+      if (agent.role === 'aggregator') {
+        issues.push({
+          code: 'aggregator-agent-outside-fanout',
+          message: `node '${node.id}' uses aggregator agent '${agent.name}' — aggregator agents must sit inside a wrapper-fanout (RFC-060). The wrapper-fanout NodeKind lands in PR-C; until then aggregator agents cannot be placed on the canvas.`,
+          pointer: node.id,
+        })
+      }
       for (const s of agent.skills) {
         if (!skillNames.has(s)) {
           issues.push({

@@ -53,9 +53,9 @@ describe('AgentOutputKindSchema — new parametric kinds', () => {
   })
 })
 
-describe('AgentOutputKindSchema — PR-A base allowlist', () => {
-  test("'signal' rejected in PR-A (PR-B will register it)", () => {
-    expect(() => AgentOutputKindSchema.parse('signal')).toThrow()
+describe('AgentOutputKindSchema — base allowlist', () => {
+  test("'signal' accepted (PR-B registered)", () => {
+    expect(AgentOutputKindSchema.parse('signal')).toBe('signal')
   })
 
   test("'html' rejected (not in allowlist)", () => {
@@ -72,6 +72,10 @@ describe('AgentOutputKindSchema — PR-A base allowlist', () => {
 
   test("'list<list<foo>>' rejected (deeply nested unknown base)", () => {
     expect(() => AgentOutputKindSchema.parse('list<list<foo>>')).toThrow()
+  })
+
+  test("'list<signal>' valid (signal nested in list)", () => {
+    expect(AgentOutputKindSchema.parse('list<signal>')).toBe('list<signal>')
   })
 })
 

@@ -1245,6 +1245,14 @@ export const enUS: Resources = {
     fieldSyncOutputsOnIterate: 'Sync-refresh sibling documents when one is returned for revision',
     fieldSyncOutputsOnIterateHint:
       'Only applies when this agent emits ≥ 2 markdown / markdown_file outputs. When off, an iterate decision regenerates only the reviewed document; siblings keep their previous version.',
+    fieldRole: 'Role',
+    fieldRoleHint:
+      "RFC-060: normal agents are ordinary workflow nodes; aggregator agents sit at the convergence of a wrapper-fanout — they run once per wrapper and see the raw list of every shard's output. Aggregator agents can't be placed on the canvas until PR-C ships the wrapper-fanout NodeKind.",
+    roleNormal: 'Normal',
+    roleAggregator: 'Aggregator',
+    fieldOutputWrapperPortNames: 'Output → wrapper port name map',
+    fieldOutputWrapperPortNamesHint:
+      "Aggregator-only. JSON object keyed by this agent's declared output port names; the value renames that port when it is promoted to the wrapper-fanout outlet. Missing keys mirror the original name.",
     fieldModel: 'Model',
     modelPlaceholder: 'anthropic/claude-sonnet-4-6',
     fieldVariant: 'Variant',
