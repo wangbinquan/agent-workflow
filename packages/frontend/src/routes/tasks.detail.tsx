@@ -514,31 +514,8 @@ function NodeRunsTable({ runs, workflowSnapshot }: { runs: NodeRun[]; workflowSn
                 <span className={`status-chip status-chip--${noderunTone(r.status)}`}>
                   {t(displayNoderunStatusKey(r))}
                 </span>
-                {shouldShowReviewJump(r.status) && (
-                  <>
-                    {' '}
-                    <Link
-                      to="/reviews/$nodeRunId"
-                      params={{ nodeRunId: r.id }}
-                      search={{}}
-                      className="btn btn--sm node-runs__review-link"
-                    >
-                      {t('tasks.reviewButton')}
-                    </Link>
-                  </>
-                )}
-                {shouldShowClarifyJump(r.status) && (
-                  <>
-                    {' '}
-                    <Link
-                      to="/clarify/$nodeRunId"
-                      params={{ nodeRunId: r.id }}
-                      className="btn btn--sm node-runs__clarify-link"
-                    >
-                      {t('tasks.clarifyButton')}
-                    </Link>
-                  </>
-                )}
+                {/* RFC-061 PR-C: review/clarify jump links removed until
+                    the suspensions-projection UI is rebuilt. */}
               </td>
               <td className="data-table__muted">{r.iteration}</td>
               <td className="data-table__muted">{r.retryIndex}</td>

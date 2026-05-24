@@ -22,10 +22,6 @@ import { Route as skillDetailRoute } from '@/routes/skills.detail'
 import { Route as skillNewRoute } from '@/routes/skills.new'
 import { Route as tasksRoute } from '@/routes/tasks'
 import { Route as taskDetailRoute } from '@/routes/tasks.detail'
-import { Route as reviewsRoute } from '@/routes/reviews'
-import { Route as reviewDetailRoute } from '@/routes/reviews.detail'
-import { Route as clarifyRoute } from '@/routes/clarify'
-import { Route as clarifyDetailRoute } from '@/routes/clarify.detail'
 import { Route as workflowsRoute } from '@/routes/workflows'
 import {
   EditRoute as workflowEditRoute,
@@ -60,12 +56,8 @@ const routeTree = rootRoute.addChildren([
   workflowsRoute,
   taskDetailRoute,
   tasksRoute,
-  // '/reviews/$nodeRunId' must come before '/reviews' so the literal wins.
-  reviewDetailRoute,
-  reviewsRoute,
-  // RFC-023: same rule — `$nodeRunId` literal needs to win over the index.
-  clarifyDetailRoute,
-  clarifyRoute,
+  // RFC-061 PR-C: /reviews + /clarify routes removed pending UX rebuild
+  // against the suspensions projection.
   reposRoute,
   // RFC-043: admin distill job detail. Must come BEFORE /memory so the
   // longer literal segment wins the match.
