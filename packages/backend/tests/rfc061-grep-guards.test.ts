@@ -216,6 +216,10 @@ describe('RFC-061 architectural fence — new tree must stay clean', () => {
       '../services/writeEvents',
       '../services/eventApplier',
       '../services/projectionRebuilder',
+      // runner-v2 deliberately reuses runner.ts utility helpers
+      // (buildInlineConfig, prepareSkills, etc.) until T10 deletes
+      // runner.ts. Allowed by design per the cutover playbook §Step 1.
+      '../services/runner',
       'node:',
     ]
     // Match `from '...'` across the whole file content (handles multi-line imports).
