@@ -31,17 +31,19 @@ import {
 import { ForbiddenError } from '@/util/errors'
 import {
   cancelTask,
-  getNodeRunEvents,
-  getNodeRunStdout,
   getTask,
   getTaskDiff,
-  getTaskNodeRuns,
   listTasks,
   materializeWorktree,
   resumeTask,
   retryNode,
   startTask,
 } from '@/services/task'
+import {
+  getNodeRunEventsFromProjection as getNodeRunEvents,
+  getNodeRunStdoutFromProjection as getNodeRunStdout,
+  getTaskNodeRunsFromProjection as getTaskNodeRuns,
+} from '@/services/taskRunsProjection'
 import {
   applyUploadsToWorktree,
   DEFAULT_UPLOAD_LIMITS,

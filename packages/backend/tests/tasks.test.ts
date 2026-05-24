@@ -10,8 +10,9 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
+import { writeEvent } from '../src/services/writeEvents'
 import { runGit } from '../src/util/git'
 
 const TOKEN = 'a'.repeat(64)
@@ -494,12 +495,15 @@ describe('task HTTP routes', () => {
     expect(((await res.json()) as { code: string }).code).toBe('task-worktree-missing')
   })
 
+  // RFC-061 cleanup: the events endpoint now reads from the events
+  // projection table; the legacy node_runs / node_run_events tables
+  // are no longer populated by the actor. We seed via writeEvent and
+  // expect the synthesised numeric ids to honour ?since semantics.
   test('GET /:id/node-runs/:nodeRunId/events paginates with ?since', async () => {
     const wfId = await seedWorkflow(h.db, EMPTY_DEF)
     const taskId = ulid()
     await h.db.insert(tasks).values({
       name: 'fixture-task',
-
       id: taskId,
       workflowId: wfId,
       workflowSnapshot: '{}',
@@ -511,36 +515,47 @@ describe('task HTTP routes', () => {
       inputs: '{}',
       startedAt: Date.now(),
     })
-    const nrId = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: nrId,
+    const baseScope = { nodeId: 'n1', loopIter: 0, shardKey: '', iter: 0 } as const
+    const lrCreated = await writeEvent(h.db, {
       taskId,
-      nodeId: 'n1',
-      status: 'running',
-      startedAt: Date.now(),
+      kind: 'logical-run-created',
+      payload: {},
+      actor: 'system',
+      ...baseScope,
+    })
+    const lrId = lrCreated.id
+    const attemptId = `att_${ulid()}`
+    await writeEvent(h.db, {
+      taskId,
+      kind: 'attempt-started',
+      payload: {},
+      actor: 'system',
+      ...baseScope,
+      attemptId,
     })
     for (let i = 0; i < 5; i++) {
-      await h.db.insert(nodeRunEvents).values({
-        nodeRunId: nrId,
-        ts: Date.now() + i,
-        kind: 'text',
-        payload: JSON.stringify({ chunk: i }),
+      await writeEvent(h.db, {
+        taskId,
+        kind: 'attempt-subagent-output',
+        payload: { sessionId: 'sub', content: `chunk-${i}` },
+        actor: 'system',
+        ...baseScope,
+        attemptId,
       })
     }
 
-    // First batch — no since cursor, expect all 5.
-    const r1 = await req(h.app, `/api/tasks/${taskId}/node-runs/${nrId}/events`)
+    const r1 = await req(h.app, `/api/tasks/${taskId}/node-runs/${lrId}/events`)
     expect(r1.status).toBe(200)
     const body1 = (await r1.json()) as { events: Array<{ id: number }>; cursor: number | null }
-    expect(body1.events.length).toBe(5)
-    expect(body1.cursor).toBe(body1.events[4]?.id ?? null)
+    // attempt-started → 'step_start' + 5 × attempt-subagent-output → 'text' = 6
+    expect(body1.events.length).toBe(6)
+    expect(body1.cursor).toBe(body1.events[5]?.id ?? null)
 
-    // Second batch — since=mid, expect tail.
-    const mid = body1.events[2]?.id ?? 0
-    const r2 = await req(h.app, `/api/tasks/${taskId}/node-runs/${nrId}/events?since=${mid}`)
+    const mid = body1.events[3]?.id ?? 0
+    const r2 = await req(h.app, `/api/tasks/${taskId}/node-runs/${lrId}/events?since=${mid}`)
     const body2 = (await r2.json()) as { events: Array<{ id: number }> }
     expect(body2.events.length).toBe(2)
-    expect(body2.events[0]?.id).toBe(body1.events[3]?.id)
+    expect(body2.events[0]?.id).toBe(body1.events[4]?.id)
   })
 
   test('GET node-runs events refuses a node_run that belongs to a different task -> 404', async () => {
@@ -575,15 +590,18 @@ describe('task HTTP routes', () => {
         startedAt: Date.now(),
       },
     ])
-    const nrA = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: nrA,
+    const lrCreated = await writeEvent(h.db, {
       taskId: idA,
+      kind: 'logical-run-created',
+      payload: {},
+      actor: 'system',
       nodeId: 'n1',
-      status: 'running',
-      startedAt: Date.now(),
+      loopIter: 0,
+      shardKey: '',
+      iter: 0,
     })
-    const res = await req(h.app, `/api/tasks/${idB}/node-runs/${nrA}/events`)
+    const lrA = lrCreated.id
+    const res = await req(h.app, `/api/tasks/${idB}/node-runs/${lrA}/events`)
     expect(res.status).toBe(404)
     expect(((await res.json()) as { code: string }).code).toBe('node-run-not-found')
   })
