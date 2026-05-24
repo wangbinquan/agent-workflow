@@ -51,6 +51,11 @@ export async function runTaskActorViaProduction(
 ): Promise<void> {
   const log = opts.log ?? createLogger('actor-launcher')
 
+  // 0. Transition tasks.status pending → running so the UI + tests
+  //    see the task actually moving. The actor's checkAndEmitTaskTerminal
+  //    later flips it to done/failed/canceled.
+  opts.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, opts.taskId)).run()
+
   // 1. Mint initial events (only if not already present).
   await seedInitialEventsIfMissing(opts.db, opts.taskId, opts.workflow, log)
 
