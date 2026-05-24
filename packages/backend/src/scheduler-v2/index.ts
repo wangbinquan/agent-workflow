@@ -12,6 +12,7 @@
 export * from './actorRegistry'
 export * from './daemonResume'
 export * from './eventApplierWakeBridge'
+export * from './launcher'
 export * from './readyScanner'
 export * from './runnerAdapter'
 export * from './runnerAdapterProduction'
