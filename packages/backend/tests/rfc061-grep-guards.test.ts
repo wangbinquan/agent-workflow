@@ -220,6 +220,10 @@ describe('RFC-061 architectural fence — new tree must stay clean', () => {
       // (buildInlineConfig, prepareSkills, etc.) until T10 deletes
       // runner.ts. Allowed by design per the cutover playbook §Step 1.
       '../services/runner',
+      // services/envelope is pre-existing utility (parseEnvelope /
+      // extractLastEnvelope / detectEnvelopeKind etc.); not deleted at
+      // T10 — stays a shared service for runner-v2 + REST routes.
+      '../services/envelope',
       'node:',
     ]
     // Match `from '...'` across the whole file content (handles multi-line imports).
