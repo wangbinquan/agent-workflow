@@ -1154,7 +1154,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
 // helpers
 // -----------------------------------------------------------------------------
 
-function prepareSkills(runDir: string, skills: ResolvedSkill[], log: Logger): void {
+export function prepareSkills(runDir: string, skills: ResolvedSkill[], log: Logger): void {
   const skillsDir = join(runDir, 'skills')
   mkdirSync(skillsDir, { recursive: true })
   for (const skill of skills) {
@@ -1378,7 +1378,7 @@ function safeKill(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
  * Drain a ReadableStream of UTF-8 bytes, calling `onLine` for each complete
  * line. Awaits each callback so the caller's DB writes serialize naturally.
  */
-async function pumpLines(
+export async function pumpLines(
   stream: ReadableStream<Uint8Array>,
   onLine: (line: string) => Promise<void> | void,
 ): Promise<void> {

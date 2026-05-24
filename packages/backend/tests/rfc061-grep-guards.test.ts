@@ -224,6 +224,15 @@ describe('RFC-061 architectural fence — new tree must stay clean', () => {
       // extractLastEnvelope / detectEnvelopeKind etc.); not deleted at
       // T10 — stays a shared service for runner-v2 + REST routes.
       '../services/envelope',
+      // ProductionRunnerAdapter needs these foundational services to
+      // resolve agent / MCPs / plugins on each spawn — all of which
+      // survive T10 (they're owned by their own service files, not by
+      // the legacy scheduler).
+      '../services/agent',
+      '../services/mcp',
+      '../services/plugin',
+      // util/log is the standard logger; survives all cutovers.
+      '@/util/log',
       'node:',
     ]
     // Match `from '...'` across the whole file content (handles multi-line imports).
