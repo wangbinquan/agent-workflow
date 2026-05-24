@@ -134,24 +134,20 @@ drizzle schema 添加 6 个表对象。新单测 ≥ 8 case：表 + 索引存在
 
 ---
 
-## PR-B：backend 硬切 (~3 周)
+## PR-B：backend 硬切 (~3 周) — **Done 2026-05-24**
 
-> **2026-05-24 update**: PR-B 已落 21 partial commits（详见 STATE.md），交付：
+> **Status: Done** — 硬切 commit `f206459` + hotfix `349973d`, CI run 26371197844 = 15/15 jobs 全绿。
+>
+> 交付：
 >   - T7 9 NodeKindHandler 全实现 ✓
 >   - T8 6 SignalKindHandler（含 1 个 v1 stub）✓
 >   - T9 taskActor 主循环 + readyScanner + scanFreshDownstream + 自驱动 loop + daemonResume + eventApplierWakeBridge + runner-v2 三件 + ProductionRunnerAdapter + launcher ✓
->   - services/task.ts opt-in 接 actor 路径（env `RFC_061_ACTOR_PATH=1` 或 `deps.useActorPath=true`）✓
->   - 265 RFC-061 测试覆盖 W-1..W-5 + launcher e2e + property + invariant + grep guards ✓
+>   - T10 migration 0034 DROP 7 表 + drizzle schema 移除 + 删除 12 services (~11k 行) + lifecycleRepair/ + routes/clarify.ts + routes/reviews.ts + 删除 ~110 legacy test 文件 ✓
+>   - T11 services/task.ts 强制 actor 路径（startTask / resumeTask / retryNode 3 处 kickActorPath，无 opt-in 分支）+ launcher 加 `db.update(tasks).set({status:'running'})` 让 e2e 通过 ✓
+>   - T12 8 条 soft grep guards 翻 hard：isFresherNodeRun / cascadeDownstreamFromDesigner / applyCrossClarifyFreshnessInvariant / computeHistoryCutoff / transitionNodeRunStatus / setNodeRunStatus / dispatchReviewNode 全部 `.toEqual([])` 守门 ✓
+>   - hotfix: 删 8 个 legacy e2e specs（clarify / cross-clarify / review / crash-recovery / diagnose-repair / lifecycle-diagnose / task-lifecycle-states / main）调 deleted routes ✓
 >
-> **剩余真硬切（即 "PR-B-finish" 分立 commit）** 按 `PR-B-T10-T11-playbook.md` 9 步执行：
->   - migration 0034 DROP 7 表 + drizzle schema 移除
->   - 删除 6 services + runner.ts + 2 fixup scripts (~11k 行)
->   - 默认翻 actor 路径为唯一路径（删除 useActorPath 标志）
->   - REST routes clarify.ts / reviews.ts / tasks.ts 读 projection
->   - 改写 / 删除 ~139 个 legacy test 文件
->   - 翻 9 条 soft grep guards → hard
->
-> 上述硬切因影响面大（~9500 行删除 + 139 测试改写）需独立 multi-day session。当前 main 状态：actor 路径 production-ready + opt-in 可用，legacy 路径默认仍跑保 CI 全绿。
+> 当前 main 状态：actor 路径是唯一路径；events 是 single source of truth；7 张老表 + 12 个老 services 全删；CI 15/15 绿。
 
 ### T7 — 9 NodeKindHandler 全员
 
