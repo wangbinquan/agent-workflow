@@ -152,6 +152,20 @@ describe('RFC-061 grep guards — hard (T10 cutover complete)', () => {
     const hits = await whoContains(/\bdispatchReviewNode\b/)
     expect(hits).toEqual([])
   })
+
+  test('clarifyRounds schema export: removed by migration 0034 cleanup', async () => {
+    // The `clarify_rounds` table is the only one of the 7 "drop-7-tables"
+    // candidates that migration 0034 actually removed (the rest no-op'd due
+    // to a missing statement-breakpoint marker — kept until follow-up PR).
+    // The drizzle export must therefore be gone so callers can't accidentally
+    // ressurect it.
+    const hits = await whoContains(/\bclarifyRounds\b/)
+    // Only the schema.ts comment + tests file are allowed to mention the name.
+    const filtered = hits.filter(
+      (f) => !f.endsWith('schema.ts') && !f.endsWith('rfc061-grep-guards.test.ts'),
+    )
+    expect(filtered).toEqual([])
+  })
 })
 
 /* ============================================================

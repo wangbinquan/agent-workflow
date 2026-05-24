@@ -744,79 +744,11 @@ export const crossClarifySessions = sqliteTable(
 // DB CHECK constraint enforces the cross-domain (kind × status) rule so
 // application code does not need to re-validate that pairing on every write.
 // -----------------------------------------------------------------------------
-export const clarifyRounds = sqliteTable(
-  'clarify_rounds',
-  {
-    id: text('id').primaryKey(), // ULID
-    taskId: text('task_id')
-      .notNull()
-      .references(() => tasks.id, { onDelete: 'cascade' }),
-    kind: text('kind', { enum: ['self', 'cross'] }).notNull(),
-    // For kind='self' agent-multi this is the shard child node_run id;
-    // for kind='cross' this is the questioner's node_run id.
-    askingNodeId: text('asking_node_id').notNull(),
-    askingNodeRunId: text('asking_node_run_id')
-      .notNull()
-      .references(() => nodeRuns.id, { onDelete: 'cascade' }),
-    // NULL for agent-single + always NULL for kind='cross' (RFC-056 v1).
-    askingShardKey: text('asking_shard_key'),
-    // The clarify / clarify-cross-agent node id (human-gated form node).
-    intermediaryNodeId: text('intermediary_node_id').notNull(),
-    intermediaryNodeRunId: text('intermediary_node_run_id')
-      .notNull()
-      .references(() => nodeRuns.id, { onDelete: 'cascade' }),
-    // Designer node id receiving External Feedback. NULL when kind='self'
-    // (the asking agent itself is the consumer) or when manual edge missing
-    // at cross-clarify spawn time.
-    targetConsumerNodeId: text('target_consumer_node_id'),
-    // wrapper-loop iter (RFC-056 partial persistence). 0 for kind='self' or
-    // cross outside a loop.
-    loopIter: integer('loop_iter').notNull().default(0),
-    // Monotonic round counter scoped to (intermediary_node_id, loop_iter).
-    // RFC-023's iteration_index and RFC-056's iteration map to this column
-    // in migration 0031.
-    iteration: integer('iteration').notNull().default(0),
-    questionsJson: text('questions_json').notNull(), // ClarifyQuestion[]
-    answersJson: text('answers_json'), // ClarifyAnswer[]; NULL until submitted
-    directive: text('directive', { enum: ['continue', 'stop'] }),
-    status: text('status', {
-      enum: ['awaiting_human', 'answered', 'canceled', 'abandoned'],
-    })
-      .notNull()
-      .default('awaiting_human'),
-    truncationWarningsJson: text('truncation_warnings_json'), // JSON: { code, detail }[]
-    // Stamped at designer rerun spawn time (kind='cross' only). NULL while
-    // awaiting_human, on reject-only rows, on abandoned rows, and on every
-    // kind='self' row.
-    designerRunTriggeredAt: integer('designer_run_triggered_at'),
-    // Stamped by RFC-053 CR-1 invariant when escalating cross-clarify rows on
-    // parent task fail. NULL for kind='self'.
-    abandonedAt: integer('abandoned_at'),
-    createdAt: integer('created_at')
-      .notNull()
-      .default(sql`(unixepoch() * 1000)`),
-    answeredAt: integer('answered_at'),
-    answeredBy: text('answered_by'),
-    // RFC-059: same payload as crossClarifySessions.questionScopesJson; written
-    // by the submit handler dual-write. Always NULL for kind='self' rows;
-    // may be NULL for kind='cross' rows when client did not send the map.
-    questionScopesJson: text('question_scopes_json'),
-  },
-  (t) => ({
-    taskIdx: index('idx_clarify_rounds_task').on(t.taskId),
-    kindStatusIdx: index('idx_clarify_rounds_kind_status').on(t.kind, t.status),
-    askingIdx: index('idx_clarify_rounds_asking').on(t.askingNodeId, t.loopIter, t.iteration),
-    intermediaryIdx: index('idx_clarify_rounds_intermediary').on(
-      t.intermediaryNodeId,
-      t.loopIter,
-      t.iteration,
-    ),
-    targetConsumerIdx: index('idx_clarify_rounds_target_consumer').on(
-      t.targetConsumerNodeId,
-      t.status,
-    ),
-  }),
-)
+// RFC-061 PR-B T10: clarify_rounds was actually DROPped by migration 0034
+// (the only one of the 7 listed tables that the broken migration successfully
+// removed). The drizzle schema export is therefore retired here. Reads/writes
+// against clarifyRounds are removed from lifecycleInvariants.ts; no remaining
+// callsite is allowed (enforced by grep guard).
 
 // -----------------------------------------------------------------------------
 // RFC-036 users — first-class user identity. `__system__` row is seeded by

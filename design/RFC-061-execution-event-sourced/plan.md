@@ -320,7 +320,13 @@ frontend 不再使用旧 DTOs，全面重写：
 
 ## PR-D：收尾 (~0.5 周) — **Done 2026-05-24**
 
-> **Status: Done** — commit `6229e83`，CI run 26373140499 = 15/15 全绿。
+> **Status: Done (含 deferred 标注)** — commit `6229e83`，CI run 26373140499 = 15/15 全绿。
+>
+> **2026-05-25 honest 校核结论**：migration 0034 原始 SQL 漏写 drizzle `--> statement-breakpoint` 分隔符，bun-sqlite migrator 只执行了首条 `DROP TABLE IF EXISTS clarify_rounds;`，其余 6 条 DROP 都 silent no-op。已运行 0034 的 DB 现状：`clarify_rounds` 已 drop；`node_runs` / `node_run_events` / `node_run_outputs` / `clarify_sessions` / `cross_clarify_sessions` / `doc_versions` 仍存在。
+>
+> **修复策略**：因 13 个 legacy consumer service（`inventory.ts` / `memoryDistillJobDetail.ts` / `sessionView.ts` / `subagentLiveCapture.ts` / `sessionCapture.ts` / `eventsArchive.ts` / `lifecycleInvariants.ts` / `memoryDistiller.ts` / `memoryInject.ts` / `stuckTaskDetector.ts` / `limits.ts` / `task.ts` / `ws/server.ts`）仍 SELECT 这 6 张表，立即 DROP 会 runtime 失败它们；故将 0034 内容更新为只声明 `DROP TABLE IF EXISTS clarify_rounds;`（与实际生效一致），同步删除 drizzle schema 中 `clarifyRounds` export + `lifecycleInvariants.ts` 的 CR-1 invariant（cross-clarify 状态已迁到 suspensions projection）。
+>
+> **Deferred 真硬切 PR**（命名 `RFC-061-legacy-tables-cleanup`）：把这 13 个 service 切到 `node_outputs` / `attempts` / `suspensions` projection 或退役它们 → 之后才能安全 DROP 那 6 张表。新建独立 PR 跟踪。
 >   - **删除 2 fixup scripts**：`packages/backend/scripts/fixup-rfc052-stuck-review.ts` + `packages/backend/scripts/fixup-rfc056-2026-05-26-cci-stuck-review.ts`——RFC-061 events-sourced 架构下"stuck review" 结构性 not-possible（grep guard `dispatchReviewNode → empty` 锁住），脚本永不再需要。
 >   - **plan.md / STATE.md 标 RFC-061 Done**：本文档 + `STATE.md` 第 5 行 + `design/plan.md` RFC 索引同步。
 >   - **Grep guards 已集中在 `rfc061-grep-guards.test.ts`**：6 hard active（writeEvents 单写者 + eventApplier 单 mutator + events 无 UPDATE/DELETE）+ 6 hard cutover guards（isFresherNodeRun / cascadeDownstreamFromDesigner / applyCrossClarifyFreshnessInvariant / computeHistoryCutoff / transitionNodeRunStatus / setNodeRunStatus / dispatchReviewNode 全 `.toEqual([])`）+ 2 architectural-fence guards（handlers/+scheduler-v2/ 不 import legacy services / import allowlist），共 14 case。

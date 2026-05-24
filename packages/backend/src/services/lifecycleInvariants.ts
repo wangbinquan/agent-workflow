@@ -31,7 +31,7 @@
 // All seven invariants are read-only against the source tables; only
 // `lifecycle_alerts` is written.
 
-import { and, eq, gt, gte, inArray, isNull, isNotNull, or } from 'drizzle-orm'
+import { and, eq, gte, inArray, isNull, or } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type {
@@ -41,15 +41,7 @@ import type {
 } from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
-import {
-  clarifyRounds,
-  clarifySessions,
-  crossClarifySessions,
-  docVersions,
-  lifecycleAlerts,
-  nodeRuns,
-  tasks,
-} from '@/db/schema'
+import { clarifySessions, docVersions, lifecycleAlerts, nodeRuns, tasks } from '@/db/schema'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('lifecycle.invariants')
@@ -476,95 +468,17 @@ async function checkU1(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInv
 }
 
 async function checkCR1(
-  db: DbClient,
-  ctx: TaskScanContext,
-  now: number,
+  _db: DbClient,
+  _ctx: TaskScanContext,
+  _now: number,
 ): Promise<LifecycleInvariantFinding[]> {
-  // CR-1 (RFC-056 §10): cross_clarify_session answered+continue + parent task
-  // failed + no consuming designer node_run (i.e. no done designer run with
-  // cross_clarify_iteration >= session.iteration) ⟹ upgrade to 'abandoned'.
-  //
-  // Unlike R1/R2/C1/T*/U1, this rule is "auto-upgrade": the violation IS the
-  // signal — we flip the row to abandoned in this pass so the next scan
-  // sees nothing. The lifecycle_alerts breadcrumb is still emitted (with
-  // detail.message = "...upgraded to abandoned") so operators see the
-  // upgrade for audit / debug.
-  //
-  // RFC-058 T15: read path switched to `clarify_rounds WHERE kind='cross'`
-  // (unified table). Column projection keeps the legacy field names so the
-  // detail payload + downstream code path stays byte-identical for the
-  // diagnose panel. UPDATE side still dual-writes to legacy
-  // cross_clarify_sessions + clarify_rounds (kept until T14/T16 finish
-  // reader migration); migration 0032 will drop the legacy table.
-  if (ctx.taskStatus !== 'failed') return []
-  const stuck = await db
-    .select({
-      id: clarifyRounds.id,
-      crossClarifyNodeId: clarifyRounds.intermediaryNodeId,
-      targetDesignerNodeId: clarifyRounds.targetConsumerNodeId,
-      iteration: clarifyRounds.iteration,
-      directive: clarifyRounds.directive,
-      status: clarifyRounds.status,
-    })
-    .from(clarifyRounds)
-    .where(
-      and(
-        eq(clarifyRounds.taskId, ctx.taskId),
-        eq(clarifyRounds.kind, 'cross'),
-        eq(clarifyRounds.status, 'answered'),
-        eq(clarifyRounds.directive, 'continue'),
-        isNotNull(clarifyRounds.targetConsumerNodeId),
-      ),
-    )
-  if (stuck.length === 0) return []
-
-  const out: LifecycleInvariantFinding[] = []
-  for (const s of stuck) {
-    if (s.targetDesignerNodeId === null) continue
-    // Is there a designer node_run with cross_clarify_iteration >= session.iteration
-    // that reached 'done'? If yes, the feedback was consumed → not abandoned.
-    const consumed = (
-      await db
-        .select({ id: nodeRuns.id })
-        .from(nodeRuns)
-        .where(
-          and(
-            eq(nodeRuns.taskId, ctx.taskId),
-            eq(nodeRuns.nodeId, s.targetDesignerNodeId),
-            gt(nodeRuns.crossClarifyIteration, s.iteration),
-            eq(nodeRuns.status, 'done'),
-          ),
-        )
-        .limit(1)
-    )[0]
-    if (consumed !== undefined) continue
-
-    // Upgrade in place.
-    await db
-      .update(crossClarifySessions)
-      .set({ status: 'abandoned', abandonedAt: now })
-      .where(eq(crossClarifySessions.id, s.id))
-
-    // RFC-058 T12 dual-write — mirror CR-1 abandoned upgrade to clarify_rounds.
-    await db
-      .update(clarifyRounds)
-      .set({ status: 'abandoned', abandonedAt: now })
-      .where(eq(clarifyRounds.id, s.id))
-
-    out.push({
-      taskId: ctx.taskId,
-      rule: 'CR-1',
-      detail: {
-        rule: 'CR-1',
-        message: 'cross_clarify_session answered+continue with task failed; upgraded to abandoned',
-        crossClarifySessionId: s.id,
-        crossClarifyNodeId: s.crossClarifyNodeId,
-        targetDesignerNodeId: s.targetDesignerNodeId,
-        iteration: s.iteration,
-      },
-    })
-  }
-  return out
+  // RFC-061 PR-D: CR-1 retired. Cross-clarify state now lives in the
+  // `suspensions` projection (signal_kind='cross-clarify'). When a task
+  // terminates, the actor closes every open suspension via terminal
+  // event-emit, so the "answered+continue but no consuming designer run"
+  // backstop is structurally unreachable. clarify_rounds is dropped and
+  // legacy cross_clarify_sessions is no longer the source of truth.
+  return []
 }
 
 // =============================================================================
