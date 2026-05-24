@@ -40,7 +40,12 @@ import { ulid } from 'ulid'
 import { NODE_KIND_HANDLERS, SIGNAL_KIND_HANDLERS } from '../handlers'
 import type { UpstreamInput } from '../handlers'
 import { computeTickActions, type TickContext, type ReadyScope } from './taskActorTick'
-import { scanReadyScopes, scanWrapperInnerCompletions, type ReadyScanContext } from './readyScanner'
+import {
+  scanFreshDownstream,
+  scanReadyScopes,
+  scanWrapperInnerCompletions,
+  type ReadyScanContext,
+} from './readyScanner'
 import type { RunnerAdapter } from './runnerAdapter'
 import type { ActorState } from './actorRegistry'
 import type { AttemptExitWake } from './wakeQueue'
@@ -104,10 +109,20 @@ export async function runTaskActor(actor: ActorState, ctx: ActorRuntimeContext):
       }
 
       // Run the scan/dispatch pass unless the actor was canceled mid-handler.
-      if (actor.abortController.signal.aborted) break
-      await scanAndDispatch(ctx)
-      await processWrapperInnerCompletions(ctx)
-      await autoResolveSuspensions(ctx)
+      // We drain repeatedly as long as state changes — each step may write
+      // events that unblock the next step (mint downstream → dispatch →
+      // attempt scheduled → ...) without waiting for an external wake.
+      let drainPasses = 0
+      while (!actor.abortController.signal.aborted && drainPasses < 50) {
+        drainPasses++
+        const eventCountBefore = countTaskEvents(ctx.db, ctx.taskId)
+        await mintFreshDownstreamRuns(ctx)
+        await scanAndDispatch(ctx)
+        await processWrapperInnerCompletions(ctx)
+        await autoResolveSuspensions(ctx)
+        const eventCountAfter = countTaskEvents(ctx.db, ctx.taskId)
+        if (eventCountAfter === eventCountBefore) break // no progress; idle
+      }
       if (await isTaskTerminal(ctx)) break
     }
   } finally {
@@ -118,6 +133,30 @@ export async function runTaskActor(actor: ActorState, ctx: ActorRuntimeContext):
 /* ============================================================
  *  Loop steps
  * ============================================================ */
+
+function countTaskEvents(db: DbClient, taskId: string): number {
+  return db
+    .select({ id: eventsTable.id })
+    .from(eventsTable)
+    .where(eq(eventsTable.taskId, taskId))
+    .all().length
+}
+
+async function mintFreshDownstreamRuns(ctx: ActorRuntimeContext): Promise<void> {
+  const fresh = scanFreshDownstream(toScanCtx(ctx))
+  if (fresh.length === 0) return
+  const newEvents = fresh.map((f) => ({
+    taskId: ctx.taskId,
+    kind: 'logical-run-created' as const,
+    nodeId: f.scope.nodeId,
+    loopIter: f.scope.loopIter,
+    shardKey: f.scope.shardKey,
+    iter: f.scope.iter,
+    actor: 'system',
+    payload: {},
+  }))
+  await writeEvents(ctx.db, newEvents)
+}
 
 async function scanAndDispatch(ctx: ActorRuntimeContext): Promise<void> {
   const readyScopes = scanReadyScopes(toScanCtx(ctx))

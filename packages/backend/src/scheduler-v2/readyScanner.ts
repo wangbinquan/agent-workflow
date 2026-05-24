@@ -145,3 +145,81 @@ export function scanWrapperInnerCompletions(ctx: ReadyScanContext): WrapperInner
 function isWrapper(kind: string): boolean {
   return kind === 'wrapper-git' || kind === 'wrapper-loop' || kind === 'wrapper-fanout'
 }
+
+/**
+ * Detect downstream nodes that are ready to mint a fresh logical_run
+ * row: every inbound edge's source node has a completed logical_run at
+ * the current scope, but this node has no row yet.
+ *
+ * Returns the list of (scope, node) pairs the actor should write
+ * `logical-run-created` events for. After the events are written + the
+ * applier creates the rows, scanReadyScopes will return them on the
+ * next tick.
+ */
+export function scanFreshDownstream(ctx: ReadyScanContext): ReadyScope[] {
+  const allRuns = ctx.db
+    .select()
+    .from(logicalRuns)
+    .where(eq(logicalRuns.taskId, ctx.taskId))
+    .all() as Array<typeof logicalRuns.$inferSelect>
+
+  const nodes = (ctx.workflow as { nodes?: ReadonlyArray<WorkflowNode> }).nodes ?? []
+  const edges =
+    (
+      ctx.workflow as {
+        edges?: ReadonlyArray<{
+          source?: { nodeId?: string }
+          target?: { nodeId?: string }
+        }>
+      }
+    ).edges ?? []
+
+  // Build adjacency: node → list of upstream node ids.
+  const upstreamMap = new Map<string, Set<string>>()
+  for (const e of edges) {
+    const t = e.target?.nodeId
+    const s = e.source?.nodeId
+    if (typeof t !== 'string' || typeof s !== 'string') continue
+    const set = upstreamMap.get(t) ?? new Set<string>()
+    set.add(s)
+    upstreamMap.set(t, set)
+  }
+
+  // Group existing runs by nodeId for quick lookup.
+  const runsByNode = new Map<string, Array<typeof logicalRuns.$inferSelect>>()
+  for (const r of allRuns) {
+    const arr = runsByNode.get(r.nodeId) ?? []
+    arr.push(r)
+    runsByNode.set(r.nodeId, arr)
+  }
+
+  const out: ReadyScope[] = []
+  for (const node of nodes) {
+    const upstreams = upstreamMap.get(node.id)
+    if (!upstreams || upstreams.size === 0) continue // entry node; seeded by launcher
+    // Skip if this node already has any logical_run row at iter=0/loopIter=0/shardKey=''.
+    const myRuns = runsByNode.get(node.id) ?? []
+    const alreadyHasInitial = myRuns.some(
+      (r) => r.loopIter === 0 && r.shardKey === '' && r.iter === 0,
+    )
+    if (alreadyHasInitial) continue
+    // All upstream nodes must have a 'done' run at scope (0, '', any iter — take latest).
+    let allUpstreamDone = true
+    for (const upId of upstreams) {
+      const upRuns = runsByNode.get(upId) ?? []
+      const hasDone = upRuns.some(
+        (r) => r.status === 'done' && r.loopIter === 0 && r.shardKey === '',
+      )
+      if (!hasDone) {
+        allUpstreamDone = false
+        break
+      }
+    }
+    if (!allUpstreamDone) continue
+    out.push({
+      scope: { nodeId: node.id, loopIter: 0, shardKey: '', iter: 0 },
+      node,
+    })
+  }
+  return out
+}
