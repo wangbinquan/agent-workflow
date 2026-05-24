@@ -250,7 +250,11 @@ describe('WebSocket channels', () => {
     expect(types).toContain('task.done')
   })
 
-  test('/ws/tasks/{id}?since=N replays node_run_events with id > N', async () => {
+  // RFC-061 follow-up: replayTaskEvents is temporarily a no-op (see
+  // ws/server.ts). Re-enable + rewrite this test against the
+  // projection events table when the events-stream WS contract lands
+  // alongside the /tasks/:id/timeline route (Phase 6 follow-up PR).
+  test.skip('/ws/tasks/{id}?since=N replays node_run_events with id > N (disabled — legacy replay retired)', async () => {
     // Seed a task + node_run + 3 events.
     const taskId = ulid()
     await h.db.insert(workflows).values({

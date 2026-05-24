@@ -3,31 +3,17 @@
 
 import type {
   NodeKind,
-  NodeRun,
-  NodeRunEvent,
-  NodeRunEventsResponse,
-  NodeRunOutput,
   StartTask,
   Task,
   TaskDiff,
-  TaskNodeRuns,
   TaskSummary,
 } from '@agent-workflow/shared'
 import { NODE_KIND_BEHAVIORS } from '@agent-workflow/shared'
-import { and, asc, desc, eq, gt, inArray, ne, or } from 'drizzle-orm'
+import { and, desc, eq, inArray, ne, or } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
-import {
-  attempts,
-  logicalRuns,
-  nodeRunEvents,
-  nodeRunOutputs,
-  nodeRuns,
-  taskCollaborators,
-  tasks,
-  workflows,
-} from '@/db/schema'
+import { attempts, logicalRuns, taskCollaborators, tasks, workflows } from '@/db/schema'
 import { writeEvents, type NewEvent } from '@/services/writeEvents'
 import { getWorkflow } from '@/services/workflow'
 import { listAgents } from '@/services/agent'
@@ -38,7 +24,6 @@ import { listAvailableRefs, resolveCachedRepo } from '@/services/gitRepoCache'
 import { createWorktree, rollbackToSnapshot, worktreeDiff } from '@/util/git'
 import { redactGitUrl } from '@agent-workflow/shared'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { readArchivedEvents } from '@/services/eventsArchive'
 import {
   TASK_CHANNEL,
   TASKS_LIST_CHANNEL,
@@ -51,8 +36,6 @@ import {
 } from '@/scheduler-v2/launcher'
 import { Paths } from '@/util/paths'
 import { createLogger } from '@/util/log'
-import { parseInjectedSnapshotJson } from './memoryInject'
-import { parsePortValidationFailuresJson } from './envelope'
 
 const log = createLogger('task')
 
@@ -897,197 +880,6 @@ export async function listTasks(
     .orderBy(desc(tasks.startedAt))
     .limit(filters.limit ?? 100)
   return rows.map((r) => rowToSummary(r.task, r.workflowName))
-}
-
-/**
- * Returns all node_runs rows for a task plus their captured port outputs.
- * Ordering: started_at ascending so the frontend can render them as a
- * timeline. node_runs that haven't started yet (`pending`) tail the list
- * sorted by id.
- */
-export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<TaskNodeRuns> {
-  const task = await getTask(db, taskId)
-  if (task === null) {
-    throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-  }
-  const runRows = await db
-    .select()
-    .from(nodeRuns)
-    .where(eq(nodeRuns.taskId, taskId))
-    .orderBy(asc(nodeRuns.startedAt), asc(nodeRuns.id))
-
-  const runs: NodeRun[] = runRows.map((r) => ({
-    id: r.id,
-    taskId: r.taskId,
-    nodeId: r.nodeId,
-    parentNodeRunId: r.parentNodeRunId,
-    iteration: r.iteration,
-    shardKey: r.shardKey,
-    retryIndex: r.retryIndex,
-    reviewIteration: r.reviewIteration,
-    clarifyIteration: r.clarifyIteration,
-    // RFC-056: surface cross-clarify rerun iteration counter (orthogonal to
-    // clarifyIteration; see §C8 cascade isolation).
-    crossClarifyIteration: r.crossClarifyIteration,
-    status: r.status,
-    startedAt: r.startedAt,
-    finishedAt: r.finishedAt,
-    pid: r.pid,
-    exitCode: r.exitCode,
-    errorMessage: r.errorMessage,
-    promptText: r.promptText,
-    tokInput: r.tokInput,
-    tokOutput: r.tokOutput,
-    tokTotal: r.tokTotal,
-    tokCacheCreate: r.tokCacheCreate,
-    tokCacheRead: r.tokCacheRead,
-    // RFC-026: surface opencode session id to the UI so a clarify-inline
-    // chip can render + operators can copy it for local debugging.
-    opencodeSessionId: r.opencodeSessionId,
-    // RFC-046: parse the post-budget-clip memory snapshot the runner
-    // persisted at inject time. Malformed payloads degrade to null + log
-    // (the column is JSON written by the runner; nothing user-supplied,
-    // so corruption should be impossible, but defensive at the API edge
-    // beats a 5xx on the whole task detail page).
-    injectedMemories: parseInjectedSnapshotJson(r.injectedMemoriesJson),
-    // RFC-049: structured port-validation failures captured by the runner
-    // (NULL for successful runs or runs that failed for any reason other
-    // than port-content validation). Same defensive-parse contract as
-    // injectedMemories — corrupted payloads degrade to null rather than
-    // throw the whole task detail response.
-    portValidationFailures: parsePortValidationFailuresJson(r.portValidationFailuresJson),
-  }))
-
-  let outputs: NodeRunOutput[] = []
-  if (runs.length > 0) {
-    const runIds = runs.map((r) => r.id)
-    const outRows = await db
-      .select()
-      .from(nodeRunOutputs)
-      .where(inArray(nodeRunOutputs.nodeRunId, runIds))
-    outputs = outRows.map((o) => ({
-      nodeRunId: o.nodeRunId,
-      port: o.portName,
-      value: o.content,
-    }))
-  }
-  return { runs, outputs }
-}
-
-/**
- * Page events for one node_run. `since` is the event id cursor (exclusive);
- * returns up to `limit` events ordered by id ascending plus the new cursor.
- *
- * Caller is responsible for asserting that the task owns the node_run; we
- * just verify the node_run belongs to the task to avoid cross-task leakage.
- */
-export async function getNodeRunEvents(
-  db: DbClient,
-  taskId: string,
-  nodeRunId: string,
-  opts: { since?: number; limit?: number; logsDir?: string } = {},
-): Promise<NodeRunEventsResponse> {
-  const ownerRows = await db
-    .select({ taskId: nodeRuns.taskId })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, nodeRunId))
-    .limit(1)
-  const owner = ownerRows[0]
-  if (owner === undefined || owner.taskId !== taskId) {
-    throw new NotFoundError(
-      'node-run-not-found',
-      `node_run '${nodeRunId}' not found under task '${taskId}'`,
-    )
-  }
-  const limit = Math.min(opts.limit ?? 500, 1000)
-  const since = opts.since ?? 0
-  const logsDir = opts.logsDir ?? Paths.logsDir
-
-  // P-5-01: archived events (oldest) come first; live DB rows fill the
-  // remainder up to `limit`. Skipping the archive read when since is past
-  // the highest archived id is handled implicitly by `readArchivedEvents`
-  // returning [] when nothing matches.
-  const archived = await readArchivedEvents(logsDir, taskId, nodeRunId, since, limit)
-  const events: NodeRunEvent[] = archived.map((a) => {
-    let payload: unknown
-    try {
-      payload = JSON.parse(a.payload)
-    } catch {
-      payload = a.payload
-    }
-    return {
-      id: a.id,
-      nodeRunId,
-      ts: a.ts,
-      kind: a.kind as NodeRunEvent['kind'],
-      payload,
-    }
-  })
-
-  const remaining = limit - events.length
-  if (remaining > 0) {
-    const dbLowerBound = events.length > 0 ? events[events.length - 1]!.id : since
-    const rows = await db
-      .select()
-      .from(nodeRunEvents)
-      .where(and(eq(nodeRunEvents.nodeRunId, nodeRunId), gt(nodeRunEvents.id, dbLowerBound)))
-      .orderBy(asc(nodeRunEvents.id))
-      .limit(remaining)
-    for (const r of rows) {
-      let payload: unknown
-      try {
-        payload = JSON.parse(r.payload)
-      } catch {
-        payload = r.payload
-      }
-      events.push({
-        id: r.id,
-        nodeRunId: r.nodeRunId,
-        ts: r.ts,
-        kind: r.kind,
-        payload,
-      })
-    }
-  }
-  const cursor = events.length > 0 ? (events[events.length - 1]?.id ?? null) : null
-  return { events, cursor }
-}
-
-/**
- * Concatenated stdout for one node_run (P-3-13). Returns every event's
- * raw `payload` ordered by id ascending, joined with `\n`. Stderr events
- * are excluded — those live on the Events tab.
- */
-export async function getNodeRunStdout(
-  db: DbClient,
-  taskId: string,
-  nodeRunId: string,
-  opts: { logsDir?: string } = {},
-): Promise<string> {
-  const ownerRows = await db
-    .select({ taskId: nodeRuns.taskId })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, nodeRunId))
-    .limit(1)
-  const owner = ownerRows[0]
-  if (owner === undefined || owner.taskId !== taskId) {
-    throw new NotFoundError(
-      'node-run-not-found',
-      `node_run '${nodeRunId}' not found under task '${taskId}'`,
-    )
-  }
-  // Archived (oldest) lines come first, live DB rows last. Stderr is dropped
-  // from both sides — that channel lives on the Events tab.
-  const logsDir = opts.logsDir ?? Paths.logsDir
-  const archived = await readArchivedEvents(logsDir, taskId, nodeRunId, 0, Number.MAX_SAFE_INTEGER)
-  const archivedTexts = archived.filter((a) => a.kind !== 'stderr').map((a) => a.payload)
-  const rows = await db
-    .select({ payload: nodeRunEvents.payload, kind: nodeRunEvents.kind })
-    .from(nodeRunEvents)
-    .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-    .orderBy(asc(nodeRunEvents.id))
-  const dbTexts = rows.filter((r) => r.kind !== 'stderr').map((r) => r.payload)
-  return [...archivedTexts, ...dbTexts].join('\n')
 }
 
 /**

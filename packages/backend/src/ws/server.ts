@@ -25,11 +25,11 @@ import type {
   WsControlMessage,
 } from '@agent-workflow/shared'
 import type { ServerWebSocket } from 'bun'
-import { and, eq, gt, asc } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { resolveActor } from '@/auth/session'
 import type { DbClient } from '@/db/client'
-import { nodeRunEvents, nodeRuns, tasks } from '@/db/schema'
+import { tasks } from '@/db/schema'
 import { canViewTask } from '@/services/taskCollab'
 import { createLogger } from '@/util/log'
 import {
@@ -377,42 +377,21 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
 }
 
 async function replayTaskEvents(
-  db: DbClient,
-  taskId: string,
-  since: number,
-  ws: ServerWebSocket<ConnectionData>,
+  _db: DbClient,
+  _taskId: string,
+  _since: number,
+  _ws: ServerWebSocket<ConnectionData>,
 ): Promise<void> {
-  // node_run_events is per-node-run; join via nodeRuns.taskId.
-  const rows = await db
-    .select({
-      id: nodeRunEvents.id,
-      nodeRunId: nodeRunEvents.nodeRunId,
-      ts: nodeRunEvents.ts,
-      kind: nodeRunEvents.kind,
-      payload: nodeRunEvents.payload,
-    })
-    .from(nodeRunEvents)
-    .innerJoin(nodeRuns, eq(nodeRunEvents.nodeRunId, nodeRuns.id))
-    .where(and(eq(nodeRuns.taskId, taskId), gt(nodeRunEvents.id, since)))
-    .orderBy(asc(nodeRunEvents.id))
-
-  for (const r of rows) {
-    let payload: unknown
-    try {
-      payload = JSON.parse(r.payload)
-    } catch {
-      payload = r.payload
-    }
-    const msg: TaskWsMessage = {
-      id: r.id,
-      type: 'node.event',
-      nodeRunId: r.nodeRunId,
-      ts: r.ts,
-      kind: r.kind,
-      payload,
-    }
-    safeSend(ws, msg)
-  }
+  // RFC-061 follow-up: the legacy node_run_events stream replay has been
+  // retired. The actor writes attempt-subagent-* events into the
+  // projection `events` table but those events have a ULID id, not the
+  // legacy autoincrement int cursor the WS contract uses. Live
+  // updates are temporarily silenced; the frontend's per-node Events
+  // tab continues to work via REST polling on
+  // GET /api/tasks/:id/node-runs/:nodeRunId/events (which already reads
+  // the projection — see services/taskRunsProjection.ts). A native
+  // events-stream WS replay lands with the /tasks/:id/timeline route in
+  // a follow-up PR.
 }
 
 /**
