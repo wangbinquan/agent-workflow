@@ -43,6 +43,10 @@ import {
   tasksListBroadcaster,
 } from '@/ws/broadcaster'
 import { runTask } from './scheduler'
+import {
+  runTaskActorViaProduction,
+  type RunTaskActorViaProductionOptions,
+} from '@/scheduler-v2/launcher'
 import { Paths } from '@/util/paths'
 import { createLogger } from '@/util/log'
 import { parseInjectedSnapshotJson } from './memoryInject'
@@ -103,6 +107,15 @@ export interface StartTaskDeps {
    * token callers can leave it unset or pass '__system__' explicitly.
    */
   actorUserId?: string
+  /**
+   * RFC-061 transition: route the task through the new event-driven
+   * actor + runner-v2 instead of legacy services/scheduler:runTask.
+   * When true (or when env RFC_061_ACTOR_PATH=1), the actor path is
+   * used; otherwise legacy. Each task picks exactly one path — no
+   * dual-write. After T10 cutover removes legacy services this flag
+   * becomes a no-op (the only path).
+   */
+  useActorPath?: boolean
 }
 
 /**
@@ -376,37 +389,97 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
   }
 
   // Kick the scheduler. HTTP route returns immediately; tests can await.
+  // RFC-061 transition: when RFC_061_ACTOR_PATH=1 (or deps.useActorPath=true),
+  // route through the new event-driven actor + runner-v2 instead of the
+  // legacy runTask. The actor path emits events + writes projections;
+  // legacy still writes node_runs / clarify_sessions / etc. Each task
+  // uses EXACTLY ONE path — never both. Once T10 deletes legacy services
+  // this branch unconditionally takes the actor path.
   const controller = new AbortController()
   activeTasks.set(taskId, controller)
-  const schedulerPromise = runTask({
-    taskId,
-    db: deps.db,
-    appHome,
-    ...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {}),
-    ...(deps.defaultPerNodeTimeoutMs !== undefined
-      ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
-      : {}),
-    ...(deps.subagentLiveCapture !== undefined
-      ? { subagentLiveCapture: deps.subagentLiveCapture }
-      : {}),
-    log,
-    signal: controller.signal,
-  })
-    .catch((err) => {
-      log.error('runTask threw', {
+  const useActor = deps.useActorPath === true || process.env.RFC_061_ACTOR_PATH === '1'
+  const schedulerPromise = useActor
+    ? kickActorPath(
+        deps.db,
         taskId,
-        error: err instanceof Error ? err.message : String(err),
+        workflow.definition,
+        input.inputs,
+        source.repoPath,
+        worktreePath,
+        appHome,
+        controller,
+      ).finally(() => {
+        activeTasks.delete(taskId)
       })
-    })
-    .finally(() => {
-      activeTasks.delete(taskId)
-    })
+    : runTask({
+        taskId,
+        db: deps.db,
+        appHome,
+        ...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {}),
+        ...(deps.defaultPerNodeTimeoutMs !== undefined
+          ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
+          : {}),
+        ...(deps.subagentLiveCapture !== undefined
+          ? { subagentLiveCapture: deps.subagentLiveCapture }
+          : {}),
+        log,
+        signal: controller.signal,
+      })
+        .catch((err) => {
+          log.error('runTask threw', {
+            taskId,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        })
+        .finally(() => {
+          activeTasks.delete(taskId)
+        })
 
   if (deps.awaitScheduler === true) {
     await schedulerPromise
     return (await getTask(deps.db, taskId)) as Task
   }
   return task
+}
+
+/**
+ * RFC-061: kick the actor + production runner path. Wraps
+ * runTaskActorViaProduction in a try/catch matching the legacy runTask
+ * shape so startTask's then/finally cleanup stays uniform.
+ */
+async function kickActorPath(
+  db: DbClient,
+  taskId: string,
+  workflow: unknown,
+  inputs: Record<string, unknown>,
+  repoPath: string,
+  worktreePath: string,
+  appHome: string,
+  controller: AbortController,
+): Promise<void> {
+  void controller // cancel propagation TBD; the registry handles deregister
+  try {
+    const inputsMap: Record<string, string> = {}
+    for (const [k, v] of Object.entries(inputs)) {
+      if (typeof v === 'string') inputsMap[k] = v
+      else inputsMap[k] = JSON.stringify(v)
+    }
+    const opts: RunTaskActorViaProductionOptions = {
+      db,
+      taskId,
+      workflow: workflow as never,
+      inputsMap,
+      worktreePath,
+      repoPath,
+      appHome,
+    }
+    await runTaskActorViaProduction(opts)
+  } catch (err) {
+    log.error('actor-path threw', {
+      taskId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
 }
 
 /**
