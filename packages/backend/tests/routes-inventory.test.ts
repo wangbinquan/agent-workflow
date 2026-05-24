@@ -1,22 +1,39 @@
-// RFC-029 T6 — integration tests for
-// GET /api/tasks/:taskId/node-runs/:nodeRunId/inventory.
-// Locks: 200 captured / 200 uncaptured (NULL column) / 200 parse-failed
-// (corrupt JSON) / 404 task / 404 node-run / 410 non-agent kind.
+// RFC-061 follow-up: rewritten on top of the projection.
+// GET /api/tasks/:taskId/node-runs/:nodeRunId/inventory now resolves
+// (logical_run.id → latest attempt → <appHome>/runs/<taskId>/<attemptId>/
+// inventory.json) instead of reading from the removed
+// node_runs.inventory_snapshot_json column. The seed helper writes the
+// file to disk so the readSnapshotFromRunDir path is exercised end-to-
+// end. Behaviour locks preserved: 200 captured / 200 file-missing /
+// 200 parse-failed / 404 task / 404 node-run / 410 non-agent kind.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import { logicalRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
+import { writeEvent } from '../src/services/writeEvents'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { InventorySnapshot, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-function buildApp(): { db: DbClient; app: Hono } {
+interface Harness {
+  db: DbClient
+  app: Hono
+  appHome: string
+  cleanup: () => void
+}
+
+function buildApp(): Harness {
+  const appHome = mkdtempSync(join(tmpdir(), 'aw-inv-'))
+  const prevHome = process.env.AGENT_WORKFLOW_HOME
+  process.env.AGENT_WORKFLOW_HOME = appHome
   const db = createInMemoryDb(MIGRATIONS)
   const app = createApp({
     token: TOKEN,
@@ -25,7 +42,16 @@ function buildApp(): { db: DbClient; app: Hono } {
     dbVersion: 1,
     db,
   })
-  return { db, app }
+  return {
+    db,
+    app,
+    appHome,
+    cleanup: () => {
+      rmSync(appHome, { recursive: true, force: true })
+      if (prevHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+      else process.env.AGENT_WORKFLOW_HOME = prevHome
+    },
+  }
 }
 
 async function req(app: Hono, path: string): Promise<Response> {
@@ -35,19 +61,21 @@ async function req(app: Hono, path: string): Promise<Response> {
 interface SeedOpts {
   nodeKind?:
     | 'agent-single'
-    | 'agent-multi'
     | 'input'
     | 'output'
     | 'wrapper-git'
     | 'review'
     | 'clarify'
-  inventoryJson?: string | null
+  /** Body to write into `<appHome>/runs/<taskId>/<attemptId>/inventory.json`. */
+  inventoryBody?: string | null
+  /** Skip seeding any attempt for this logical_run. */
+  noAttempt?: boolean
 }
 
 async function seed(
-  db: DbClient,
+  h: Harness,
   opts: SeedOpts = {},
-): Promise<{ taskId: string; nodeRunId: string }> {
+): Promise<{ taskId: string; nodeRunId: string; attemptId: string | null }> {
   const taskId = `task_${ulid()}`
   const workflowId = `wf_${taskId}`
   const nodeId = 'n1'
@@ -64,7 +92,7 @@ async function seed(
     edges: [],
     outputs: [],
   }
-  await db.insert(workflows).values({
+  await h.db.insert(workflows).values({
     id: workflowId,
     name: 'wf',
     description: '',
@@ -72,9 +100,8 @@ async function seed(
     version: 1,
     schemaVersion: 3,
   })
-  await db.insert(tasks).values({
+  await h.db.insert(tasks).values({
     name: 'fixture-task',
-
     id: taskId,
     workflowId,
     workflowSnapshot: JSON.stringify(def),
@@ -86,33 +113,47 @@ async function seed(
     inputs: '{}',
     startedAt: 1000,
   })
-  const nodeRunId = ulid()
-  await db.insert(nodeRuns).values({
-    id: nodeRunId,
+  const scope = { nodeId, loopIter: 0, shardKey: '', iter: 0 } as const
+  const lrEvt = await writeEvent(h.db, {
     taskId,
-    nodeId,
-    iteration: 0,
-    retryIndex: 0,
-    reviewIteration: 0,
-    clarifyIteration: 0,
-    status: 'done',
-    promptText: 'go',
-    startedAt: 1000,
-    inventorySnapshotJson: opts.inventoryJson ?? null,
+    kind: 'logical-run-created',
+    payload: {},
+    actor: 'system',
+    ...scope,
   })
-  return { taskId, nodeRunId }
+  const nodeRunId = lrEvt.id
+  let attemptId: string | null = null
+  if (!opts.noAttempt) {
+    attemptId = `att_${ulid()}`
+    await writeEvent(h.db, {
+      taskId,
+      kind: 'attempt-started',
+      payload: {},
+      actor: 'system',
+      ...scope,
+      attemptId,
+    })
+    if (opts.inventoryBody !== undefined && opts.inventoryBody !== null) {
+      const runDir = join(h.appHome, 'runs', taskId, attemptId)
+      mkdirSync(runDir, { recursive: true })
+      writeFileSync(join(runDir, 'inventory.json'), opts.inventoryBody)
+    }
+  }
+  return { taskId, nodeRunId, attemptId }
 }
 
 describe('GET /api/tasks/:id/node-runs/:nodeRunId/inventory', () => {
+  let h: Harness
   beforeEach(() => {
     resetBroadcastersForTests()
+    h = buildApp()
   })
   afterEach(() => {
     resetBroadcastersForTests()
+    h.cleanup()
   })
 
   test('200 captured: persisted snapshot is returned verbatim through zod validation', async () => {
-    const { db, app } = buildApp()
     const snapshot = {
       captured: true,
       schemaVersion: 1,
@@ -131,8 +172,8 @@ describe('GET /api/tasks/:id/node-runs/:nodeRunId/inventory', () => {
       mcps: [{ name: 'memcache', type: 'local', status: 'connected', hint: null }],
       plugins: [{ specifier: 'file:///a.mjs', source: 'inline' }],
     }
-    const { taskId, nodeRunId } = await seed(db, { inventoryJson: JSON.stringify(snapshot) })
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+    const { taskId, nodeRunId } = await seed(h, { inventoryBody: JSON.stringify(snapshot) })
+    const res = await req(h.app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
     expect(res.status).toBe(200)
     const body = (await res.json()) as InventorySnapshot
     expect(body.captured).toBe(true)
@@ -142,20 +183,18 @@ describe('GET /api/tasks/:id/node-runs/:nodeRunId/inventory', () => {
     }
   })
 
-  test('200 captured:false reason=file-missing when column is NULL (legacy row or pre-run-not-yet)', async () => {
-    const { db, app } = buildApp()
-    const { taskId, nodeRunId } = await seed(db, { inventoryJson: null })
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+  test('200 captured:false reason=file-missing when no attempt has been spawned yet', async () => {
+    const { taskId, nodeRunId } = await seed(h, { noAttempt: true })
+    const res = await req(h.app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
     expect(res.status).toBe(200)
     const body = (await res.json()) as InventorySnapshot
     expect(body.captured).toBe(false)
     if (!body.captured) expect(body.reason).toBe('file-missing')
   })
 
-  test('200 captured:false reason=parse-failed when stored JSON is corrupt', async () => {
-    const { db, app } = buildApp()
-    const { taskId, nodeRunId } = await seed(db, { inventoryJson: '{ broken json' })
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+  test('200 captured:false reason=parse-failed when the on-disk JSON is corrupt', async () => {
+    const { taskId, nodeRunId } = await seed(h, { inventoryBody: '{ broken json' })
+    const res = await req(h.app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
     expect(res.status).toBe(200)
     const body = (await res.json()) as InventorySnapshot
     expect(body.captured).toBe(false)
@@ -163,25 +202,22 @@ describe('GET /api/tasks/:id/node-runs/:nodeRunId/inventory', () => {
   })
 
   test('404 when the task does not exist', async () => {
-    const { db, app } = buildApp()
-    const { nodeRunId } = await seed(db)
-    const res = await req(app, `/api/tasks/no_such_task/node-runs/${nodeRunId}/inventory`)
+    const { nodeRunId } = await seed(h)
+    const res = await req(h.app, `/api/tasks/no_such_task/node-runs/${nodeRunId}/inventory`)
     expect(res.status).toBe(404)
   })
 
   test('404 when node_run does not belong to the task', async () => {
-    const { db, app } = buildApp()
-    const { taskId } = await seed(db)
+    const { taskId } = await seed(h)
     const otherId = ulid()
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${otherId}/inventory`)
+    const res = await req(h.app, `/api/tasks/${taskId}/node-runs/${otherId}/inventory`)
     expect(res.status).toBe(404)
   })
 
   test('410 for non-agent node kinds', async () => {
-    const { db, app } = buildApp()
     for (const kind of ['wrapper-git', 'review', 'clarify', 'input', 'output'] as const) {
-      const { taskId, nodeRunId } = await seed(db, { nodeKind: kind })
-      const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+      const { taskId, nodeRunId } = await seed(h, { nodeKind: kind })
+      const res = await req(h.app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
       expect(res.status).toBe(410)
     }
   })

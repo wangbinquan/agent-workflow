@@ -9,18 +9,18 @@
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import {
   inventoryReasonCode,
   InventorySnapshotCapturedSchema,
   InventorySnapshotMissingSchema,
-  InventorySnapshotSchema,
   type InventoryReasonCode,
   type InventorySnapshot,
   normalizeInventoryRaw,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { nodeRuns, tasks } from '@/db/schema'
+import { attempts, logicalRuns, tasks } from '@/db/schema'
+import { Paths } from '@/util/paths'
 import { DomainError, NotFoundError } from '@/util/errors'
 
 /**
@@ -126,16 +126,24 @@ function errorMessage(err: unknown): string | null {
 const PROMPT_CAPABLE_KINDS = new Set(['agent-single'])
 
 /**
- * Look up a stored inventory snapshot by node_run id. Mirrors the route
- * layer's error contract (404 task / node-run not found, 410 non-agent
- * kind). Falls back to `{captured:false, reason:'file-missing'}` when the
- * column is NULL for an agent kind row (covers legacy rows from before
- * RFC-029) so the UI doesn't need a separate "no data yet" code path.
+ * Look up an inventory snapshot for a logical_run by reading the latest
+ * attempt's run dir on disk. The legacy node_runs.inventory_snapshot_json
+ * column is gone — the snapshot lives in
+ * `<appHome>/runs/<taskId>/<attemptId>/inventory.json`, written by the
+ * framework-injected aw-inventory-dump opencode plugin. We read it via
+ * readSnapshotFromRunDir so the same fallback / reason-code matrix
+ * applies whether the read happens at runner exit or at REST time.
+ *
+ * Mirrors the route layer's error contract (404 task / node-run not
+ * found, 410 non-agent kind). Returns `{captured:false, reason:
+ * 'file-missing'}` for a logical_run with no attempts yet, or for any
+ * attempt whose inventory.json never landed (e.g. opencode --pure).
  */
 export async function getInventorySnapshot(
   db: DbClient,
   taskId: string,
   nodeRunId: string,
+  opts: { appHome?: string } = {},
 ): Promise<InventorySnapshot> {
   const taskRows = await db
     .select({ snapshot: tasks.workflowSnapshot })
@@ -145,57 +153,48 @@ export async function getInventorySnapshot(
   if (taskRows.length === 0) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }
-  const runRows = await db
-    .select({
-      id: nodeRuns.id,
-      taskId: nodeRuns.taskId,
-      nodeId: nodeRuns.nodeId,
-      inventorySnapshotJson: nodeRuns.inventorySnapshotJson,
-    })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, nodeRunId))
+  const lrRows = await db
+    .select()
+    .from(logicalRuns)
+    .where(eq(logicalRuns.id, nodeRunId))
     .limit(1)
-  const run = runRows[0]
-  if (run === undefined || run.taskId !== taskId) {
+  const lr = lrRows[0]
+  if (lr === undefined || lr.taskId !== taskId) {
     throw new NotFoundError(
       'node-run-not-found',
       `node_run '${nodeRunId}' not found under task '${taskId}'`,
     )
   }
 
-  const { nodeKind } = resolveNodeKindFromSnapshot(taskRows[0]!.snapshot, run.nodeId)
+  const { nodeKind } = resolveNodeKindFromSnapshot(taskRows[0]!.snapshot, lr.nodeId)
   if (nodeKind !== null && !PROMPT_CAPABLE_KINDS.has(nodeKind)) {
     throw new DomainError(
       'node-kind-not-supported',
-      `node '${run.nodeId}' (kind=${nodeKind}) does not produce an opencode inventory`,
+      `node '${lr.nodeId}' (kind=${nodeKind}) does not produce an opencode inventory`,
       410,
     )
   }
 
-  // NULL → legacy / not-yet-captured agent run. Return a precise stub so the
-  // UI shows the standard "file missing" hint instead of a blank state.
-  if (run.inventorySnapshotJson === null || run.inventorySnapshotJson === '') {
+  // Pick the latest attempt for this logical_run; that's the most recent
+  // dump on disk.
+  const attRows = await db
+    .select({ id: attempts.id })
+    .from(attempts)
+    .where(eq(attempts.logicalRunId, lr.id))
+    .orderBy(desc(attempts.attemptSeq))
+    .limit(1)
+  const att = attRows[0]
+  if (att === undefined) {
     return { captured: false, reason: 'file-missing', message: null }
   }
 
-  // The runner serialized a validated snapshot via `readSnapshotFromRunDir`,
-  // but corruption is still possible if the DB was hand-edited; degrade
-  // gracefully into `parse-failed`.
-  let parsedRaw: unknown
-  try {
-    parsedRaw = JSON.parse(run.inventorySnapshotJson)
-  } catch (err) {
-    return { captured: false, reason: 'parse-failed', message: errorMessage(err) }
-  }
-  const validated = InventorySnapshotSchema.safeParse(parsedRaw)
-  if (!validated.success) {
-    return {
-      captured: false,
-      reason: 'parse-failed',
-      message: validated.error.message.slice(0, 200),
-    }
-  }
-  return validated.data
+  const appHome = opts.appHome ?? Paths.root
+  const runDir = join(appHome, 'runs', taskId, att.id)
+  return readSnapshotFromRunDir({
+    runDir,
+    nodeKind: nodeKind ?? 'agent-single',
+    pureMode: false,
+  })
 }
 
 interface SnapshotNode {

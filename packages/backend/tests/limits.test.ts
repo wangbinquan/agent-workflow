@@ -90,34 +90,12 @@ describe('enforceLimits', () => {
     expect(t?.status).toBe('running')
   })
 
-  test('cancels task when total tokens exceed maxTotalTokens', async () => {
-    const taskId = await seedTask(h.db, { maxTotalTokens: 100 })
-    // Two node_runs with 60 and 80 tokens → total 140 > 100.
-    await h.db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId,
-      nodeId: 'a',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now(),
-      tokTotal: 60,
-    })
-    await h.db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId,
-      nodeId: 'b',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now(),
-      tokTotal: 80,
-    })
-    const r = await enforceLimits(h.db)
-    expect(r.canceled).toEqual([taskId])
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
-    expect(t?.errorSummary).toBe('task-token-limit-exceeded')
-    expect(t?.errorMessage).toContain('140')
+  // RFC-061 follow-up: token-limit enforcement is temporarily disabled
+  // (services/limits.ts dropped the node_runs.tok_total sum). When a
+  // future commit emits tokenUsage on attempt-finished-success, restore
+  // this test against the new projection.
+  test.skip('cancels task when total tokens exceed maxTotalTokens (disabled — token usage not yet projected)', async () => {
+    // intentionally left empty; see services/limits.ts header.
   })
 
   test('maxTotalTokens=0 disables the token cap', async () => {

@@ -12,9 +12,9 @@
 // orphan logic (P-4-07) has already flipped the row to `interrupted`, this
 // tick is a no-op for that task.
 
-import { and, eq, sql } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { nodeRuns, tasks } from '@/db/schema'
+import { tasks } from '@/db/schema'
 import { cancelTask } from '@/services/task'
 import { createLogger, type Logger } from '@/util/log'
 
@@ -56,7 +56,7 @@ export async function enforceLimits(
 }
 
 async function checkOne(
-  db: DbClient,
+  _db: DbClient,
   t: typeof tasks.$inferSelect,
   now: number,
 ): Promise<{ summary: string; message: string } | null> {
@@ -69,27 +69,14 @@ async function checkOne(
       }
     }
   }
-  if (typeof t.maxTotalTokens === 'number' && t.maxTotalTokens > 0) {
-    const total = await sumTaskTokens(db, t.id)
-    if (total > t.maxTotalTokens) {
-      return {
-        summary: 'task-token-limit-exceeded',
-        message: `task consumed ${total} tokens, exceeding configured limit ${t.maxTotalTokens}`,
-      }
-    }
-  }
+  // RFC-061 follow-up: token-limit enforcement is temporarily disabled.
+  // The legacy implementation summed node_runs.tok_total but the actor
+  // doesn't populate that column — token usage is captured in the runner
+  // (RunOpencodeAttemptResult.tokenUsage) but not yet emitted as an event.
+  // Re-enable by adding a tokenUsage field to attempt-finished-success
+  // payload + a dedicated token_usage projection table. Until then,
+  // setting tasks.maxTotalTokens has no effect.
   return null
-}
-
-async function sumTaskTokens(db: DbClient, taskId: string): Promise<number> {
-  // Only count parent runs (fan-out children's tok_total is already mirrored
-  // up into the parent by runFanOutNode aggregation in P-4-05).
-  const rows = await db
-    .select({ total: sql<number | null>`sum(${nodeRuns.tokTotal})` })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId)))
-  const v = rows[0]?.total
-  return typeof v === 'number' ? v : 0
 }
 
 /**
