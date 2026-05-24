@@ -52,7 +52,13 @@ import {
 import { getSessionTree } from '@/services/sessionView'
 import { getInventorySnapshot } from '@/services/inventory'
 import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
-import { applyRepairOption, listRepairOptionsForAlert } from '@/services/lifecycleRepair'
+// RFC-061 T10: lifecycleRepair removed. Routes that referenced repairs
+// degrade to 410 Gone; PR-C will reintroduce equivalent UX via the
+// suspensions projection.
+const applyRepairOption = async (..._args: unknown[]): Promise<never> => {
+  throw new Error('lifecycleRepair removed by RFC-061 T10')
+}
+const listRepairOptionsForAlert = (..._args: unknown[]): Array<{ id: string }> => []
 import { listOpenLifecycleAlertsForTask } from '@/services/taskAlerts'
 import { getWorkflow } from '@/services/workflow'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
@@ -279,7 +285,10 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     const result = await runLifecycleInvariants({
       db: deps.db,
       scope: { taskId },
-      onAlert: (row, transition) => {
+      onAlert: (
+        row: { taskId: string; rule: string; severity: 'error' | 'warning' },
+        transition: 'new' | 'promoted',
+      ) => {
         tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
           type: 'lifecycle.alert',
           taskId: row.taskId,
@@ -361,7 +370,10 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         ...(opencodeCmd ? { opencodeCmd } : {}),
         ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
       },
-      onAlert: (row, transition) => {
+      onAlert: (
+        row: { taskId: string; rule: string; severity: 'error' | 'warning' },
+        transition: 'new' | 'promoted',
+      ) => {
         tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
           type: 'lifecycle.alert',
           taskId: row.taskId,

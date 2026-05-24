@@ -7,7 +7,8 @@ import { openDb } from '@/db/client'
 import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
 import { createApp } from '@/server'
 import { startLimitsTicker } from '@/services/limits'
-import { reapOrphanRuns } from '@/services/orphans'
+// RFC-061 T10: services/orphans removed; daemonResume.markCrashedAttempts
+// (scheduler-v2) handles orphan-attempt recovery on startup.
 import { startEventsArchiver } from '@/services/eventsArchive'
 import { startWorktreeGc } from '@/services/gc'
 import { startLifecycleInvariantsLoop } from '@/services/lifecycleInvariants'
@@ -130,20 +131,23 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     /* users service may not be available in degraded mode; ignore */
   }
 
-  // 5b. P-4-07: reap orphan runs from the previous (crashed/SIGKILLed) daemon
-  // process. Any task/node_run left in 'running' is flipped to 'interrupted'
-  // with task.error_message = 'daemon-restart' so the UI surfaces what
-  // happened.
+  // 5b. RFC-061 T10: daemonResume.resumeFromDisk replaces reapOrphanRuns.
+  // It catches up projections, marks orphan attempts as crashed, emits
+  // task-resumed events, and registers actors for non-terminal tasks.
   try {
-    const reap = await reapOrphanRuns(db)
-    if (reap.tasks > 0 || reap.runs > 0) {
-      log.warn('reaped orphan runs from previous daemon', {
-        tasks: reap.tasks,
-        runs: reap.runs,
+    const { resumeFromDisk } = await import('@/scheduler-v2/daemonResume')
+    const report = await resumeFromDisk({ db })
+    if (report.crashedAttempts > 0 || report.resumedTasks > 0) {
+      log.warn('rfc-061 daemon resume', {
+        applied: report.appliedEvents,
+        crashed: report.crashedAttempts,
+        resumed: report.resumedTasks,
       })
     }
   } catch (err) {
-    log.warn('orphan reap failed', { error: err instanceof Error ? err.message : String(err) })
+    log.warn('daemon resume failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
   }
 
   // 5c. RFC-017: reconcile registered skill_sources up-front so the first

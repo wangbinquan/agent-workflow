@@ -11,8 +11,8 @@
 import { join } from 'node:path'
 
 import type { Agent, Mcp, Plugin, Scope } from '@agent-workflow/shared'
-import type { ResolvedSkill, AgentOverrides } from '../services/runner'
-import { buildInlineConfig } from '../services/runner'
+import type { ResolvedSkill, AgentOverrides } from './runnerUtils'
+import { buildInlineConfig } from './runnerUtils'
 
 export interface RunnerV2InvocationInputs {
   /** App home (~/.agent-workflow) for OPENCODE_CONFIG_DIR base. */

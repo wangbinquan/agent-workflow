@@ -283,7 +283,7 @@ export interface ResolvePortContentOptions {
  * Detailed variant of {@link resolvePortContent} that ALSO reports the
  * worktree-relative path the body was read from, when one was used. Callers
  * that just want the body should keep using `resolvePortContent`; callers
- * that need to remember the source file path (e.g. dispatchReviewNode
+ * that need to remember the source file path (e.g. legacy review
  * snapshotting onto doc_versions for the iterate prompt) use this.
  *
  * `sourcePath` is set when the OutputKindHandler.validate that ran reports

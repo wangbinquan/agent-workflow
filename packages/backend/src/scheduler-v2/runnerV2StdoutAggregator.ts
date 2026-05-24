@@ -14,14 +14,14 @@
 // The subprocess spawn loop (to be added next) will call this function
 // AFTER pumpLines has finished accumulating lines (on process exit).
 
-import { extractTextFromEvent, inferEventKind, accumulateTokens } from '../services/runner'
+import { extractTextFromEvent, inferEventKind, accumulateTokens } from './runnerUtils'
 import {
   detectEnvelopeKind,
   extractClarifyEnvelopeBody,
   extractLastEnvelope,
   parseEnvelope,
 } from '../services/envelope'
-import type { RunResult } from '../services/runner'
+import type { RunResult } from './runnerUtils'
 
 export interface AggregatedStdout {
   /** Full concatenated assistant text from all `text.*` events. */

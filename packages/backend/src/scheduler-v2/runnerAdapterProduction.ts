@@ -18,7 +18,7 @@ import type { Agent, Mcp, Plugin } from '@agent-workflow/shared'
 import { getAgent } from '../services/agent'
 import { listMcps } from '../services/mcp'
 import { listPlugins } from '../services/plugin'
-import type { ResolvedSkill } from '../services/runner'
+import type { ResolvedSkill } from './runnerUtils'
 import { writeEvents, type NewEvent } from '../services/writeEvents'
 
 import type { RunnerAdapter, WakeProducer } from './runnerAdapter'

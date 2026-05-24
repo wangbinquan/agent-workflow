@@ -232,6 +232,13 @@
       "when": 1780800000000,
       "tag": "0033_rfc061_events_projections",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1780900000000,
+      "tag": "0034_rfc061_drop_legacy",
+      "breakpoints": true
     }
   ]
 }

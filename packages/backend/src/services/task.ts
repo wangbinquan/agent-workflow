@@ -42,7 +42,6 @@ import {
   taskBroadcaster,
   tasksListBroadcaster,
 } from '@/ws/broadcaster'
-import { runTask } from './scheduler'
 import {
   runTaskActorViaProduction,
   type RunTaskActorViaProductionOptions,
@@ -388,49 +387,23 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
     return task
   }
 
-  // RFC-061 transition: opt-in actor path via env RFC_061_ACTOR_PATH=1
-  // or deps.useActorPath=true. Default = legacy `runTask` until the
-  // T10/T11 cutover commit deletes all legacy services + test files.
+  // RFC-061 T10 hard cut: all tasks now run through the event-driven
+  // actor + runner-v2. Legacy services/scheduler:runTask deleted.
   const controller = new AbortController()
   activeTasks.set(taskId, controller)
-  const useActor = deps.useActorPath === true || process.env.RFC_061_ACTOR_PATH === '1'
-  const schedulerPromise = useActor
-    ? kickActorPath(
-        deps.db,
-        taskId,
-        workflow.definition,
-        input.inputs,
-        source.repoPath,
-        worktreePath,
-        appHome,
-        controller,
-        deps.opencodeCmd,
-      ).finally(() => {
-        activeTasks.delete(taskId)
-      })
-    : runTask({
-        taskId,
-        db: deps.db,
-        appHome,
-        ...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {}),
-        ...(deps.defaultPerNodeTimeoutMs !== undefined
-          ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
-          : {}),
-        ...(deps.subagentLiveCapture !== undefined
-          ? { subagentLiveCapture: deps.subagentLiveCapture }
-          : {}),
-        log,
-        signal: controller.signal,
-      })
-        .catch((err) => {
-          log.error('runTask threw', {
-            taskId,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        })
-        .finally(() => {
-          activeTasks.delete(taskId)
-        })
+  const schedulerPromise = kickActorPath(
+    deps.db,
+    taskId,
+    workflow.definition,
+    input.inputs,
+    source.repoPath,
+    worktreePath,
+    appHome,
+    controller,
+    deps.opencodeCmd,
+  ).finally(() => {
+    activeTasks.delete(taskId)
+  })
 
   if (deps.awaitScheduler === true) {
     await schedulerPromise
@@ -598,53 +571,24 @@ export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps):
   const next = (await getTask(db, id)) as Task
   emitTaskStatus(next)
 
-  // RFC-061 transition: resume uses the same useActorPath selection
-  // as startTask. Each task picks ONE path consistently for its
-  // lifetime (the seed-initial-events idempotence handles resume).
+  // RFC-061 T10: resume rejoins the actor (seedInitialEventsIfMissing idempotent).
   const controller = new AbortController()
   activeTasks.set(id, controller)
-  const useActor = deps.useActorPath === true || process.env.RFC_061_ACTOR_PATH === '1'
-  if (useActor) {
-    const workflowDef = parseSnapshot(task.workflowSnapshot) as Record<string, unknown>
-    const inputsMap: Record<string, unknown> = task.inputs as Record<string, unknown>
-    void kickActorPath(
-      db,
-      id,
-      workflowDef,
-      inputsMap,
-      task.repoPath,
-      task.worktreePath,
-      deps.appHome ?? Paths.root,
-      controller,
-      deps.opencodeCmd,
-    ).finally(() => {
-      activeTasks.delete(id)
-    })
-  } else {
-    void runTask({
-      taskId: id,
-      db,
-      appHome: deps.appHome ?? Paths.root,
-      ...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {}),
-      ...(deps.defaultPerNodeTimeoutMs !== undefined
-        ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
-        : {}),
-      ...(deps.subagentLiveCapture !== undefined
-        ? { subagentLiveCapture: deps.subagentLiveCapture }
-        : {}),
-      log,
-      signal: controller.signal,
-    })
-      .catch((err) => {
-        log.error('runTask threw on resume', {
-          taskId: id,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      })
-      .finally(() => {
-        activeTasks.delete(id)
-      })
-  }
+  const workflowDef = parseSnapshot(task.workflowSnapshot) as Record<string, unknown>
+  const inputsMap: Record<string, unknown> = task.inputs as Record<string, unknown>
+  void kickActorPath(
+    db,
+    id,
+    workflowDef,
+    inputsMap,
+    task.repoPath,
+    task.worktreePath,
+    deps.appHome ?? Paths.root,
+    controller,
+    deps.opencodeCmd,
+  ).finally(() => {
+    activeTasks.delete(id)
+  })
   return next
 }
 
@@ -688,7 +632,7 @@ export async function retryNode(
   // kinds (input/output/review/clarify) when minting `retryIndex+1` placeholders.
   // Those kinds have no per-attempt process state — their runOneNode paths
   // are either no-ops or driven by external events — and the stale placeholder
-  // rows were the source of dispatchReviewNode picking the wrong latest row
+  // rows were the source of the legacy review dispatch picking the wrong latest row
   // and resetting approved reviews back to awaiting_review.
   const downstream = new Set<string>()
   const kindOf = new Map<string, NodeKind>()
@@ -816,52 +760,25 @@ export async function retryNode(
   const next = (await getTask(db, taskId)) as Task
   emitTaskStatus(next)
 
-  // RFC-061 transition: same path selection as startTask/resumeTask.
+  // RFC-061 T10: retry rejoins the actor.
   const controller = new AbortController()
   activeTasks.set(taskId, controller)
-  const useActor = opts.deps.useActorPath === true || process.env.RFC_061_ACTOR_PATH === '1'
-  if (useActor) {
-    const task2 = (await getTask(db, taskId))!
-    const workflowDef = parseSnapshot(task2.workflowSnapshot) as Record<string, unknown>
-    const inputsMap: Record<string, unknown> = task2.inputs as Record<string, unknown>
-    void kickActorPath(
-      db,
-      taskId,
-      workflowDef,
-      inputsMap,
-      task2.repoPath,
-      task2.worktreePath,
-      opts.deps.appHome ?? Paths.root,
-      controller,
-      opts.deps.opencodeCmd,
-    ).finally(() => {
-      activeTasks.delete(taskId)
-    })
-  } else {
-    void runTask({
-      taskId,
-      db,
-      appHome: opts.deps.appHome ?? Paths.root,
-      ...(opts.deps.opencodeCmd ? { opencodeCmd: opts.deps.opencodeCmd } : {}),
-      ...(opts.deps.defaultPerNodeTimeoutMs !== undefined
-        ? { defaultPerNodeTimeoutMs: opts.deps.defaultPerNodeTimeoutMs }
-        : {}),
-      ...(opts.deps.subagentLiveCapture !== undefined
-        ? { subagentLiveCapture: opts.deps.subagentLiveCapture }
-        : {}),
-      log,
-      signal: controller.signal,
-    })
-      .catch((err) => {
-        log.error('runTask threw on node retry', {
-          taskId,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      })
-      .finally(() => {
-        activeTasks.delete(taskId)
-      })
-  }
+  const task2 = (await getTask(db, taskId))!
+  const workflowDef = parseSnapshot(task2.workflowSnapshot) as Record<string, unknown>
+  const inputsMap: Record<string, unknown> = task2.inputs as Record<string, unknown>
+  void kickActorPath(
+    db,
+    taskId,
+    workflowDef,
+    inputsMap,
+    task2.repoPath,
+    task2.worktreePath,
+    opts.deps.appHome ?? Paths.root,
+    controller,
+    opts.deps.opencodeCmd,
+  ).finally(() => {
+    activeTasks.delete(taskId)
+  })
   return next
 }
 

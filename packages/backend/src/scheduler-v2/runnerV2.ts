@@ -22,7 +22,7 @@ import {
   type AgentOverrides,
   type ResolvedSkill,
   type RunResult,
-} from '../services/runner'
+} from './runnerUtils'
 import { prepareRunnerV2Invocation } from './runnerV2Invocation'
 import { aggregateStdout, type AggregatedStdout } from './runnerV2StdoutAggregator'
 

@@ -117,63 +117,40 @@ describe('RFC-061 grep guards — active', () => {
 })
 
 /* ============================================================
- *  Soft guards — record current state; will flip to hard fail
- *  when T10 drops the listed legacy files.
+ *  Hard guards (flipped from soft → hard by T10/T11 cutover).
+ *  Reference functions / files all deleted; any new reference
+ *  is a regression.
  * ============================================================ */
 
-describe('RFC-061 grep guards — soft (will tighten at T10)', () => {
-  test('isFresherNodeRun: tracks current callers (deleted with scheduler.ts at T10)', async () => {
+describe('RFC-061 grep guards — hard (T10 cutover complete)', () => {
+  test('isFresherNodeRun: deleted helper must have no callers', async () => {
     const hits = await whoContains(/\bisFresherNodeRun\b/)
-    // Today: scheduler.ts + a few callers. Recording the count so a NEW
-    // reference triggers visible diff. T10 hard-deletes the helper.
-    expect(hits.length).toBeGreaterThanOrEqual(0)
+    expect(hits).toEqual([])
   })
 
-  test('cascadeDownstreamFromDesigner: tracks current callers (deleted with crossClarify.ts at T10)', async () => {
+  test('cascadeDownstreamFromDesigner: deleted helper must have no callers', async () => {
     const hits = await whoContains(/\bcascadeDownstreamFromDesigner\b/)
-    expect(hits.length).toBeGreaterThanOrEqual(0)
+    expect(hits).toEqual([])
   })
 
-  test('applyCrossClarifyFreshnessInvariant: tracks current callers', async () => {
+  test('applyCrossClarifyFreshnessInvariant: deleted helper must have no callers', async () => {
     const hits = await whoContains(/\bapplyCrossClarifyFreshnessInvariant\b/)
-    expect(hits.length).toBeGreaterThanOrEqual(0)
+    expect(hits).toEqual([])
   })
 
-  test('computeHistoryCutoff: tracks current callers (collapses to baselineIter at T10)', async () => {
+  test('computeHistoryCutoff: deleted; aging logic lives in promptFromEvents now', async () => {
     const hits = await whoContains(/\bcomputeHistoryCutoff\b/)
-    expect(hits.length).toBeGreaterThanOrEqual(0)
+    expect(hits).toEqual([])
   })
 
-  test('transitionNodeRunStatus / setNodeRunStatus: tracks RFC-053 retirement', async () => {
+  test('transitionNodeRunStatus / setNodeRunStatus: deleted with lifecycle.ts', async () => {
     const hits = await whoContains(/\b(transitionNodeRunStatus|setNodeRunStatus)\b/)
-    expect(hits.length).toBeGreaterThanOrEqual(0)
+    expect(hits).toEqual([])
   })
 
-  test('dispatchReviewNode: tracks current callers (deleted with review.ts at T10)', async () => {
+  test('dispatchReviewNode: deleted with review.ts', async () => {
     const hits = await whoContains(/\bdispatchReviewNode\b/)
-    expect(hits.length).toBeGreaterThanOrEqual(0)
-  })
-
-  test('legacy 7 table names: tracks references (DROP at T10 migration 0034)', async () => {
-    const legacyTables = [
-      'node_runs',
-      'node_run_events',
-      'node_run_outputs',
-      'clarify_sessions',
-      'clarify_rounds',
-      'cross_clarify_sessions',
-      'doc_versions',
-    ]
-    // Each legacy table is still referenced today; the count is
-    // expected to drop to 0 (outside migrations/) post-T10. We just
-    // surface the inventory here for visibility.
-    for (const table of legacyTables) {
-      const re = new RegExp(`\\b${table}\\b`)
-      const hits = await whoContains(re)
-      // Allow current references; this assertion is for documentation,
-      // not gating. (The real T10 cutover flips this to .toEqual([]).)
-      expect(hits.length).toBeGreaterThanOrEqual(0)
-    }
+    expect(hits).toEqual([])
   })
 })
 

@@ -29,8 +29,8 @@ import { mountRepoRoutes } from '@/routes/repos'
 import { mountRuntimeRoutes } from '@/routes/runtime'
 import { mountSkillRoutes } from '@/routes/skills'
 import { mountSkillSourceRoutes } from '@/routes/skill-sources'
-import { mountClarifyRoutes } from '@/routes/clarify'
-import { mountReviewRoutes } from '@/routes/reviews'
+// RFC-061 T10/T11: routes/clarify + routes/reviews deleted; PR-C will
+// reintroduce them reading from suspensions + node_outputs directly.
 import { mountTaskRoutes } from '@/routes/tasks'
 import { mountWorkflowRoutes } from '@/routes/workflows'
 import { mountWorktreeFilesRoutes } from '@/routes/worktree-files'
@@ -152,8 +152,7 @@ export function createApp(deps: AppDeps): Hono {
   mountTaskRoutes(app, deps)
   mountBackupRoutes(app, deps)
   mountWorktreeFilesRoutes(app, deps)
-  mountReviewRoutes(app, deps)
-  mountClarifyRoutes(app, deps)
+  // RFC-061 T10/T11: mountReviewRoutes + mountClarifyRoutes removed.
   mountMemoryRoutes(app, deps)
   mountMemoryDistillJobRoutes(app, deps)
   mountTaskFeedbackRoutes(app, deps)
