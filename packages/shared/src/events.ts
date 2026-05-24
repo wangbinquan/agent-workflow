@@ -143,6 +143,7 @@ const LogicalRunIterBumpedPayload = z.object({
     'attempt-finished-crash',
     'attempt-finished-timeout',
     'logical-run-completed', // inner-scope wrap-up triggers outer iter bump
+    'user-retry', // user clicked "Retry" on a failed/done logical_run
   ]),
 })
 

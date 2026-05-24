@@ -3,14 +3,14 @@
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import { logicalRuns, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { writeEvent } from '../src/services/writeEvents'
 import { runGit } from '../src/util/git'
@@ -658,12 +658,11 @@ describe('task HTTP routes', () => {
     expect(((await res.json()) as { code: string }).code).toBe('task-still-running')
   })
 
-  test('POST /:id/nodes/:nrId/retry on a failed task flips status → pending', async () => {
+  test('POST /:id/nodes/:nrId/retry on a failed task flips status → pending + bumps iter', async () => {
     const wfId = await seedWorkflow(h.db, EMPTY_DEF)
     const id = ulid()
     await h.db.insert(tasks).values({
       name: 'fixture-task',
-
       id,
       workflowId: wfId,
       workflowSnapshot: JSON.stringify({
@@ -682,190 +681,84 @@ describe('task HTTP routes', () => {
       finishedAt: Date.now(),
       errorSummary: 'boom',
     })
-    const nrId = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: nrId,
+    // RFC-061 follow-up: seed via writeEvent so retryNode finds a real
+    // logical_run row. Mint logical-run-created at iter=0, then mark it
+    // failed via attempt-finished-crash.
+    const scope = { nodeId: 'n1', loopIter: 0, shardKey: '', iter: 0 } as const
+    const lrEvt = await writeEvent(h.db, {
       taskId: id,
-      nodeId: 'n1',
-      status: 'failed',
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
+      kind: 'logical-run-created',
+      payload: {},
+      actor: 'system',
+      ...scope,
     })
-    const res = await req(h.app, `/api/tasks/${id}/nodes/${nrId}/retry?cascade=false`, {
+    const lrId = lrEvt.id
+    const attemptId = `att_${ulid()}`
+    await writeEvent(h.db, {
+      taskId: id,
+      kind: 'attempt-started',
+      payload: { preSnapshot: 'snap-pre' },
+      actor: 'system',
+      ...scope,
+      attemptId,
+    })
+    await writeEvent(h.db, {
+      taskId: id,
+      kind: 'attempt-finished-crash',
+      payload: { exitCode: 1, errorMessage: 'boom' },
+      actor: 'system',
+      ...scope,
+      attemptId,
+    })
+    // Force the logical_run into 'failed' status (the actor would do this
+    // via retry-pending-* SignalKind; for the test we mark it directly to
+    // exercise the retryNode path on a terminal failed lr).
+    await h.db
+      .update(logicalRuns)
+      .set({ status: 'failed' })
+      .where(eq(logicalRuns.id, lrId))
+
+    const res = await req(h.app, `/api/tasks/${id}/nodes/${lrId}/retry?cascade=false`, {
       method: 'POST',
     })
     expect(res.status).toBe(200)
     const body = (await res.json()) as { status: string; errorSummary: string | null }
     expect(body.status).toBe('pending')
     expect(body.errorSummary).toBeNull()
+    // A new logical_run at iter=1 should now exist for n1.
+    const after = await h.db
+      .select()
+      .from(logicalRuns)
+      .where(and(eq(logicalRuns.taskId, id), eq(logicalRuns.nodeId, 'n1')))
+    expect(after.length).toBe(2)
+    expect(after.some((r) => r.iter === 1)).toBe(true)
   })
 
-  // Regression: clicking "retry" on a failed clarify-driven rerun used to
-  // mint a fresh row at retryIndex+1 with clarifyIteration defaulted to 0,
-  // which made buildClarifyPromptContext early-return undefined and the
-  // agent's multi-round clarify Q&A vanished from the next prompt. The
-  // freshly minted retry row must inherit (iteration, clarifyIteration,
-  // reviewIteration, shardKey, parentNodeRunId, preSnapshot) from the row
-  // the user picked.
-  test('POST /:id/nodes/:nrId/retry preserves clarifyIteration / iteration / etc. on the retried row', async () => {
+  // RFC-061 follow-up: cascade matrix replacement for the deleted
+  // retry-cascade-kind-matrix + retry-node-no-review-cascade tests.
+  // Verifies retryNode honours NODE_KIND_BEHAVIORS[kind].retryCascade —
+  // downstream agent gets iter-bumped, downstream review/clarify do not.
+  test('POST retry?cascade=true bumps downstream agents but skips downstream review/clarify', async () => {
     const wfId = await seedWorkflow(h.db, EMPTY_DEF)
     const id = ulid()
     await h.db.insert(tasks).values({
       name: 'fixture-task',
-
       id,
       workflowId: wfId,
       workflowSnapshot: JSON.stringify({
-        $schema_version: 1,
-        inputs: [],
-        nodes: [{ id: 'agent1', kind: 'agent-single' }],
-        edges: [],
-      }),
-      repoPath: h.repoPath,
-      worktreePath: '', // skip rollback path
-      baseBranch: 'main',
-      branch: `agent-workflow/${id}`,
-      status: 'failed',
-      inputs: '{}',
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-      errorSummary: 'boom',
-    })
-    // Original clarify-driven rerun row: a failed attempt mid-multi-round.
-    const failedRunId = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: failedRunId,
-      taskId: id,
-      nodeId: 'agent1',
-      status: 'failed',
-      retryIndex: 0,
-      iteration: 2,
-      clarifyIteration: 3,
-      reviewIteration: 1,
-      shardKey: 'shard-a',
-      parentNodeRunId: null,
-      preSnapshot: 'snap-abcdef',
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-    })
-    const res = await req(h.app, `/api/tasks/${id}/nodes/${failedRunId}/retry?cascade=false`, {
-      method: 'POST',
-    })
-    expect(res.status).toBe(200)
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
-    const fresh = rows.find((r) => r.id !== failedRunId)
-    expect(fresh).toBeDefined()
-    expect(fresh!.nodeId).toBe('agent1')
-    expect(fresh!.retryIndex).toBe(1)
-    // The fields that locked the bug:
-    expect(fresh!.clarifyIteration).toBe(3)
-    expect(fresh!.iteration).toBe(2)
-    expect(fresh!.reviewIteration).toBe(1)
-    expect(fresh!.shardKey).toBe('shard-a')
-    expect(fresh!.preSnapshot).toBe('snap-abcdef')
-  })
-
-  // Boundary: cascade retry of an UPSTREAM node must not pollute the
-  // downstream node's clarifyIteration with the upstream's value. Each node
-  // has its own clarify counter; the fresh downstream row must inherit from
-  // its own latest historical row, not from the explicitly-retried target.
-  test('POST /:id/nodes/:nrId/retry?cascade=true: downstream inherits from its own latest, not from runRow', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const id = ulid()
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
-
-      id,
-      workflowId: wfId,
-      workflowSnapshot: JSON.stringify({
-        $schema_version: 1,
+        $schema_version: 2,
         inputs: [],
         nodes: [
           { id: 'A', kind: 'agent-single' },
           { id: 'B', kind: 'agent-single' },
+          { id: 'R', kind: 'review' },
+          { id: 'C', kind: 'clarify' },
         ],
         edges: [
-          {
-            id: 'e1',
-            source: { nodeId: 'A', portName: 'out' },
-            target: { nodeId: 'B', portName: 'in' },
-          },
+          { id: 'e1', source: { nodeId: 'A', portName: 'out' }, target: { nodeId: 'B', portName: 'in' } },
+          { id: 'e2', source: { nodeId: 'A', portName: 'out' }, target: { nodeId: 'R', portName: 'doc' } },
+          { id: 'e3', source: { nodeId: 'A', portName: 'out' }, target: { nodeId: 'C', portName: 'in' } },
         ],
-      }),
-      repoPath: h.repoPath,
-      worktreePath: '', // skip rollback
-      baseBranch: 'main',
-      branch: `agent-workflow/${id}`,
-      status: 'failed',
-      inputs: '{}',
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-      errorSummary: 'boom',
-    })
-    // Target (A): failed row at ci=4 — the user explicitly retried this.
-    const aFailedId = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: aFailedId,
-      taskId: id,
-      nodeId: 'A',
-      status: 'failed',
-      retryIndex: 0,
-      iteration: 0,
-      clarifyIteration: 4,
-      reviewIteration: 0,
-      startedAt: Date.now() - 100,
-      finishedAt: Date.now() - 50,
-    })
-    // Downstream (B): its own done row at a DIFFERENT ci (=1) — cascade must
-    // inherit B's own state, not bleed A's ci=4 into B's fresh row.
-    const bDoneId = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: bDoneId,
-      taskId: id,
-      nodeId: 'B',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      clarifyIteration: 1,
-      reviewIteration: 2,
-      shardKey: 'b-shard',
-      startedAt: Date.now() - 80,
-      finishedAt: Date.now() - 40,
-    })
-    const res = await req(h.app, `/api/tasks/${id}/nodes/${aFailedId}/retry`, { method: 'POST' })
-    expect(res.status).toBe(200)
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
-    const freshA = rows.find((r) => r.nodeId === 'A' && r.id !== aFailedId)
-    const freshB = rows.find((r) => r.nodeId === 'B' && r.id !== bDoneId)
-    expect(freshA).toBeDefined()
-    expect(freshB).toBeDefined()
-    // Target inherits from runRow (A's failed row): ci=4.
-    expect(freshA!.clarifyIteration).toBe(4)
-    expect(freshA!.reviewIteration).toBe(0)
-    // Downstream inherits from B's own latest, NOT A's ci=4.
-    expect(freshB!.clarifyIteration).toBe(1)
-    expect(freshB!.reviewIteration).toBe(2)
-    expect(freshB!.shardKey).toBe('b-shard')
-  })
-
-  // Boundary: the user can click retry on a HISTORICAL row (not the freshest
-  // attempt). The fix uses `runRow` for the target node specifically, so the
-  // fresh row must reflect the row the user picked — even if another row at
-  // a higher retryIndex exists with different clarifyIteration. Locks the
-  // `nodeId === runRow.nodeId ? runRow : prev` distinction.
-  test('POST /:id/nodes/:nrId/retry on a historical row: fresh row reflects runRow, not the highest-retryIndex prev', async () => {
-    const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-    const id = ulid()
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
-
-      id,
-      workflowId: wfId,
-      workflowSnapshot: JSON.stringify({
-        $schema_version: 1,
-        inputs: [],
-        nodes: [{ id: 'agent1', kind: 'agent-single' }],
-        edges: [],
       }),
       repoPath: h.repoPath,
       worktreePath: '',
@@ -877,42 +770,41 @@ describe('task HTTP routes', () => {
       finishedAt: Date.now(),
       errorSummary: 'boom',
     })
-    // Older done row the user wants to retry from: retryIndex=0, ci=2.
-    const pickedId = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: pickedId,
-      taskId: id,
-      nodeId: 'agent1',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      clarifyIteration: 2,
-      startedAt: Date.now() - 200,
-      finishedAt: Date.now() - 150,
-    })
-    // Newer done row at higher retryIndex with DIFFERENT ci — desc(retryIndex)
-    // would point retryNode at this row if it confused `prev` with `runRow`.
-    await h.db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId: id,
-      nodeId: 'agent1',
-      status: 'done',
-      retryIndex: 1,
-      iteration: 0,
-      clarifyIteration: 5,
-      startedAt: Date.now() - 100,
-      finishedAt: Date.now() - 50,
-    })
-    const res = await req(h.app, `/api/tasks/${id}/nodes/${pickedId}/retry?cascade=false`, {
-      method: 'POST',
-    })
+    // Seed logical_runs at iter=0 for all four nodes.
+    const seedLr = async (nodeId: string): Promise<string> => {
+      const ev = await writeEvent(h.db, {
+        taskId: id,
+        kind: 'logical-run-created',
+        payload: {},
+        actor: 'system',
+        nodeId,
+        loopIter: 0,
+        shardKey: '',
+        iter: 0,
+      })
+      return ev.id
+    }
+    const aLrId = await seedLr('A')
+    await seedLr('B')
+    await seedLr('R')
+    await seedLr('C')
+    // Force A into 'failed' so retry validates.
+    await h.db.update(logicalRuns).set({ status: 'failed' }).where(eq(logicalRuns.id, aLrId))
+
+    const res = await req(h.app, `/api/tasks/${id}/nodes/${aLrId}/retry`, { method: 'POST' })
     expect(res.status).toBe(200)
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
-    // Fresh row is the one with retryIndex=2 (max+1) — neither of the seeded
-    // rows above. Find it by retryIndex.
-    const fresh = rows.find((r) => r.nodeId === 'agent1' && r.retryIndex === 2)
-    expect(fresh).toBeDefined()
-    // Critical: inherits from runRow (pickedId, ci=2), not from prev (ci=5).
-    expect(fresh!.clarifyIteration).toBe(2)
+
+    // A and B (agent kinds) should have a fresh iter=1 row; R and C should not.
+    const after = await h.db.select().from(logicalRuns).where(eq(logicalRuns.taskId, id))
+    const byNode = new Map<string, number[]>()
+    for (const r of after) {
+      const list = byNode.get(r.nodeId) ?? []
+      list.push(r.iter)
+      byNode.set(r.nodeId, list)
+    }
+    expect(byNode.get('A')?.sort()).toEqual([0, 1])
+    expect(byNode.get('B')?.sort()).toEqual([0, 1])
+    expect(byNode.get('R')).toEqual([0])
+    expect(byNode.get('C')).toEqual([0])
   })
 })

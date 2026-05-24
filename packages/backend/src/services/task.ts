@@ -19,6 +19,8 @@ import { existsSync } from 'node:fs'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import {
+  attempts,
+  logicalRuns,
   nodeRunEvents,
   nodeRunOutputs,
   nodeRuns,
@@ -26,6 +28,7 @@ import {
   tasks,
   workflows,
 } from '@/db/schema'
+import { writeEvents, type NewEvent } from '@/services/writeEvents'
 import { getWorkflow } from '@/services/workflow'
 import { listAgents } from '@/services/agent'
 import { listSkills } from '@/services/skill'
@@ -529,32 +532,34 @@ export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps):
     )
   }
 
-  // Collect the latest non-done run per nodeId — those are the ones that
-  // need rollback + a fresh attempt.
-  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
-  const latestPerNode = new Map<string, (typeof runs)[number]>()
-  for (const r of runs) {
-    const prev = latestPerNode.get(r.nodeId)
-    if (prev === undefined || r.retryIndex > prev.retryIndex) latestPerNode.set(r.nodeId, r)
-  }
-  const toRollback = [...latestPerNode.values()].filter(
-    (r) => r.status === 'failed' || r.status === 'interrupted',
-  )
-
-  for (const r of toRollback) {
-    if (r.preSnapshot !== null && r.preSnapshot !== '' && task.worktreePath !== '') {
+  // RFC-061 follow-up: walk failed logical_runs and roll the worktree back
+  // to each one's last attempt's pre_snapshot. The legacy "skip the actual
+  // rerun" comment below stays true under the actor model — the actor wakes
+  // on the task.status flip, scans projections, and re-dispatches whatever
+  // is pending. The actor's rescan is what produces the fresh attempt; this
+  // function only owns the worktree rollback + status flip.
+  const failedLrs = await db
+    .select()
+    .from(logicalRuns)
+    .where(and(eq(logicalRuns.taskId, id), eq(logicalRuns.status, 'failed')))
+  for (const lr of failedLrs) {
+    const attRows = await db
+      .select({ preSnapshot: attempts.preSnapshot })
+      .from(attempts)
+      .where(eq(attempts.logicalRunId, lr.id))
+      .orderBy(desc(attempts.attemptSeq))
+      .limit(1)
+    const preSnapshot = attRows[0]?.preSnapshot ?? null
+    if (preSnapshot !== null && preSnapshot !== '' && task.worktreePath !== '') {
       try {
-        await rollbackToSnapshot(task.worktreePath, r.preSnapshot)
+        await rollbackToSnapshot(task.worktreePath, preSnapshot)
       } catch (err) {
         log.warn('resume rollback failed', {
-          nodeRunId: r.id,
+          logicalRunId: lr.id,
           error: err instanceof Error ? err.message : String(err),
         })
       }
     }
-    // The scheduler creates a new node_run with retry_index = max+1 on its
-    // own when it sees no pending run for the node, so we just leave the
-    // failed row as historical and clear errors on the task.
   }
 
   await db
@@ -593,14 +598,24 @@ export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps):
 }
 
 /**
- * Retry one node_run, optionally cascading to all downstream nodes that
- * depended on it (P-3-09). The retry happens by:
+ * Retry one logical_run, optionally cascading to all downstream nodes
+ * that depended on it. Under RFC-061 this is implemented entirely via
+ * events: we emit `logical-run-iter-bumped` for the picked node + each
+ * cascaded downstream node, which the eventApplier turns into a fresh
+ * pending logical_run row at iter+1. The actor's next wake picks them
+ * up and dispatches.
  *
- *   - rolling the worktree back to the node_run's `pre_snapshot`
- *   - marking the target run + (cascaded) downstream runs as failed so the
- *     scheduler picks them up on the next runTask() invocation
- *   - flipping task.status back to pending
- *   - kicking the scheduler
+ * Cascade rule: NODE_KIND_BEHAVIORS[kind].retryCascade decides whether
+ * a downstream node gets bumped ('mint-placeholder') or left alone
+ * ('skip'). Kinds with no execution side-effects (input / output /
+ * clarify / review) get 'skip' under the legacy table; we keep the
+ * same matrix so user-facing retry semantics are preserved across the
+ * cutover.
+ *
+ * The 5 collapsed counters (retry/iteration/clarify/review/cross-
+ * clarify) are GONE — there's only `iter`. Every retry simply bumps
+ * iter by 1; the agent's prompt reconstruction (promptFromEvents)
+ * picks up the relevant resolution events from history.
  */
 export async function retryNode(
   db: DbClient,
@@ -619,21 +634,23 @@ export async function retryNode(
       `task '${taskId}' is ${task.status}; cancel it first before retrying a node`,
     )
   }
-  const runRow = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1))[0]
-  if (runRow === undefined || runRow.taskId !== taskId) {
+
+  // nodeRunId is now a logical_run.id (the projection shim returns
+  // logical_run.id as NodeRun.id). Validate it belongs to this task.
+  const lrRows = await db
+    .select()
+    .from(logicalRuns)
+    .where(eq(logicalRuns.id, nodeRunId))
+    .limit(1)
+  const lr = lrRows[0]
+  if (lr === undefined || lr.taskId !== taskId) {
     throw new NotFoundError(
       'node-run-not-found',
       `node_run '${nodeRunId}' not found under task '${taskId}'`,
     )
   }
 
-  // Identify downstream nodeIds from the workflow snapshot's edges.
-  // RFC-052: also build a nodeId → kind map so the cascade can skip non-process
-  // kinds (input/output/review/clarify) when minting `retryIndex+1` placeholders.
-  // Those kinds have no per-attempt process state — their runOneNode paths
-  // are either no-ops or driven by external events — and the stale placeholder
-  // rows were the source of the legacy review dispatch picking the wrong latest row
-  // and resetting approved reviews back to awaiting_review.
+  // Walk the workflow snapshot for the cascade set + nodeId → kind map.
   const downstream = new Set<string>()
   const kindOf = new Map<string, NodeKind>()
   if (cascade) {
@@ -657,7 +674,7 @@ export async function retryNode(
       if (!list.includes(t)) list.push(t)
       adj.set(s, list)
     }
-    const stack: string[] = [runRow.nodeId]
+    const stack: string[] = [lr.nodeId]
     while (stack.length > 0) {
       const cur = stack.pop()!
       for (const next of adj.get(cur) ?? []) {
@@ -668,83 +685,70 @@ export async function retryNode(
     }
   }
 
-  // Rollback to the snapshot before the node_run started. The single-node
-  // retry uses THIS run's snapshot (not the latest, since the user picked
-  // this specific historical attempt).
-  if (runRow.preSnapshot !== null && runRow.preSnapshot !== '' && task.worktreePath !== '') {
+  // Rollback to the snapshot taken before the picked logical_run's last
+  // attempt started. Look up the latest attempt for the picked lr.
+  const pickedAttempts = await db
+    .select({ preSnapshot: attempts.preSnapshot })
+    .from(attempts)
+    .where(eq(attempts.logicalRunId, lr.id))
+    .orderBy(desc(attempts.attemptSeq))
+    .limit(1)
+  const pickedSnapshot = pickedAttempts[0]?.preSnapshot ?? null
+  if (pickedSnapshot !== null && pickedSnapshot !== '' && task.worktreePath !== '') {
     try {
-      await rollbackToSnapshot(task.worktreePath, runRow.preSnapshot)
+      await rollbackToSnapshot(task.worktreePath, pickedSnapshot)
     } catch (err) {
       log.warn('node retry rollback failed', {
-        nodeRunId,
+        logicalRunId: lr.id,
         error: err instanceof Error ? err.message : String(err),
       })
     }
   }
 
-  // Flip target + downstream node_runs from done → failed so the resumer
-  // re-runs them. We do this by inserting a fresh failed row at retry_index
-  // max+1, so the scheduler treats it as the "latest" and starts attempt+1.
-  //
-  // Carry forward (iteration, clarifyIteration, reviewIteration, shardKey,
-  // parentNodeRunId, preSnapshot) from the prior run so the retried attempt
-  // resumes in the same loop / clarify / review / shard frame. Skipping this
-  // step previously reset clarifyIteration to 0 on retry, which made
-  // buildClarifyPromptContext drop every answered round and the agent's
-  // multi-round clarify history vanished from the next prompt. For the
-  // explicitly retried target the source-of-truth is `runRow` (the row the
-  // user picked); for cascaded downstream nodes we inherit from each node's
-  // own latest row.
-  // RFC-052 / RFC-053 PR-C: per-kind cascade behavior comes from
-  // `NODE_KIND_BEHAVIORS[k].retryCascade` (shared/node-kind-behavior.ts).
-  // The user-picked node (`runRow.nodeId`) is included unconditionally —
-  // direct retry on a non-process node is a different operation the user
-  // explicitly chose. Downstream nodes are filtered by the table: kinds
-  // with retryCascade='mint-placeholder' get a placeholder row; kinds with
-  // 'skip' don't (RFC-052 fix). Unknown kinds (snapshot missing / older
-  // schema) default to 'mint-placeholder' to preserve the legacy
-  // pre-RFC-052 behavior on stale data.
-  const targets = new Set<string>([runRow.nodeId])
+  // Build the bump set: the picked node + cascaded downstream with
+  // retryCascade='mint-placeholder'. Skip kinds the matrix marks 'skip'.
+  const bumpTargets = new Set<string>([lr.nodeId])
   for (const id of downstream) {
     const k = kindOf.get(id)
-    const cascade = k === undefined ? 'mint-placeholder' : NODE_KIND_BEHAVIORS[k].retryCascade
-    if (cascade === 'mint-placeholder') {
-      targets.add(id)
-    }
+    const c = k === undefined ? 'mint-placeholder' : NODE_KIND_BEHAVIORS[k].retryCascade
+    if (c === 'mint-placeholder') bumpTargets.add(id)
   }
-  for (const nodeId of targets) {
-    const existing = await db
+
+  // For each target node, emit a logical-run-iter-bumped event at the
+  // top-level scope (loopIter=0, shardKey=''). Only target nodes that
+  // already have at least one logical_run get bumped; nodes with no
+  // existing row will be minted by the actor's scanFreshDownstream once
+  // the upstream done events propagate through ready check.
+  const bumpEvents: NewEvent<'logical-run-iter-bumped'>[] = []
+  for (const nodeId of bumpTargets) {
+    const myLatest = await db
       .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
-      .orderBy(desc(nodeRuns.retryIndex))
+      .from(logicalRuns)
+      .where(
+        and(
+          eq(logicalRuns.taskId, taskId),
+          eq(logicalRuns.nodeId, nodeId),
+          eq(logicalRuns.loopIter, 0),
+          eq(logicalRuns.shardKey, ''),
+        ),
+      )
+      .orderBy(desc(logicalRuns.iter))
       .limit(1)
-    const prev = existing[0]
-    const nextRetry = prev === undefined ? 0 : prev.retryIndex + 1
-    const inherit = nodeId === runRow.nodeId ? runRow : prev
-    const newId = ulid()
-    await db.insert(nodeRuns).values({
-      id: newId,
+    const prev = myLatest[0]
+    if (prev === undefined) continue
+    bumpEvents.push({
       taskId,
+      kind: 'logical-run-iter-bumped',
+      payload: { triggerEventId: prev.lastEventId, triggerKind: 'user-retry' },
+      actor: 'user:retry',
       nodeId,
-      status: 'failed',
-      retryIndex: nextRetry,
-      iteration: inherit?.iteration ?? 0,
-      clarifyIteration: inherit?.clarifyIteration ?? 0,
-      reviewIteration: inherit?.reviewIteration ?? 0,
-      // RFC-056 patch 2026-05-25 §2.3 — inherit crossClarifyIteration so the
-      // single-node retry placeholder doesn't silently regress the
-      // cross-clarify round counter. Without this the next dispatch reads
-      // currentCrossClarifyIteration=0 and the freshness invariant can't
-      // detect the inversion (its guard only fires on upstream > my cci).
-      crossClarifyIteration: inherit?.crossClarifyIteration ?? 0,
-      shardKey: inherit?.shardKey ?? null,
-      parentNodeRunId: inherit?.parentNodeRunId ?? null,
-      preSnapshot: inherit?.preSnapshot ?? null,
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-      errorMessage: 'queued for retry',
+      loopIter: 0,
+      shardKey: '',
+      iter: prev.iter + 1,
     })
+  }
+  if (bumpEvents.length > 0) {
+    await writeEvents(db, bumpEvents)
   }
 
   await db
