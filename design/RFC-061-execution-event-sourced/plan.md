@@ -257,7 +257,7 @@ commit `feat(backend): RFC-061 PR-B — backend 硬切 + 删 7 表 + 删 6 servi
 
 ## PR-C：frontend 硬切 + events timeline 视图 (~1.5 周) — **Done 2026-05-24（scope 缩减）**
 
-> **Status: Done (scope 缩减)** — frontend cutover 收 commit `<this commit>`. 实际交付：
+> **Status: Done (scope 缩减)** — frontend cutover 收 commit `6229e83` + e2e hotfix `f02023e`，CI run 26373140499 = 15/15 全绿。实际交付：
 >   - **删除 4 frontend routes**：`routes/clarify.tsx` / `routes/clarify.detail.tsx` / `routes/reviews.tsx` / `routes/reviews.detail.tsx` — 它们调用已删除的 `/api/clarify` + `/api/reviews` 后端路由，clarify+review UX 现暂无入口；router.tsx 同步移除对应 child routes。
 >   - **InboxDrawer / InboxFooterButton / InboxPreviewList stub**：保留 shell layout（footer 按钮 + drawer 容器仍渲染），但不再 fetch 已删除的 endpoints；drawer 仅展示 memory candidate 入口；badge 计数永远 0。
 >   - **tasks.detail.tsx**：删除 `<Link to="/reviews/$nodeRunId">` + `<Link to="/clarify/$nodeRunId">` jump 按钮（路由已不存在）；`shouldShowReviewJump` / `shouldShowClarifyJump` helper 保留供未来重用。
@@ -320,7 +320,7 @@ frontend 不再使用旧 DTOs，全面重写：
 
 ## PR-D：收尾 (~0.5 周) — **Done 2026-05-24**
 
-> **Status: Done** — commit `<this commit>`：
+> **Status: Done** — commit `6229e83`，CI run 26373140499 = 15/15 全绿。
 >   - **删除 2 fixup scripts**：`packages/backend/scripts/fixup-rfc052-stuck-review.ts` + `packages/backend/scripts/fixup-rfc056-2026-05-26-cci-stuck-review.ts`——RFC-061 events-sourced 架构下"stuck review" 结构性 not-possible（grep guard `dispatchReviewNode → empty` 锁住），脚本永不再需要。
 >   - **plan.md / STATE.md 标 RFC-061 Done**：本文档 + `STATE.md` 第 5 行 + `design/plan.md` RFC 索引同步。
 >   - **Grep guards 已集中在 `rfc061-grep-guards.test.ts`**：6 hard active（writeEvents 单写者 + eventApplier 单 mutator + events 无 UPDATE/DELETE）+ 6 hard cutover guards（isFresherNodeRun / cascadeDownstreamFromDesigner / applyCrossClarifyFreshnessInvariant / computeHistoryCutoff / transitionNodeRunStatus / setNodeRunStatus / dispatchReviewNode 全 `.toEqual([])`）+ 2 architectural-fence guards（handlers/+scheduler-v2/ 不 import legacy services / import allowlist），共 14 case。
