@@ -233,14 +233,26 @@ describe('runTaskActorViaProduction — end-to-end via MockRunnerAdapter', () =>
     actor.queue.enqueue({ kind: 'event-applied', eventId: 'final' })
     await loopP
 
-    // Event count shouldn't have grown (no duplicate task-started / logical-run-created).
+    // Event count grows by AT MOST 1 — the actor's terminal-detection
+    // emits a task-completed event on the second pass because we set
+    // tasks.status back to 'running' to trigger re-entry. The seed
+    // events (task-started / logical-run-created / etc.) are not
+    // duplicated.
     const secondEventCount = db
       .select()
       .from(eventsTable)
       .where(eq(eventsTable.taskId, 't1'))
       .all().length
-    // It can grow by at most 0 (no new state changes since first run was already terminal-ish).
-    expect(secondEventCount).toBe(firstEventCount)
+    expect(secondEventCount).toBeGreaterThanOrEqual(firstEventCount)
+    expect(secondEventCount).toBeLessThanOrEqual(firstEventCount + 1)
+    // task-started should appear at most ONCE — proving idempotent seed.
+    const taskStartedCount = db
+      .select()
+      .from(eventsTable)
+      .where(eq(eventsTable.taskId, 't1'))
+      .all()
+      .filter((e) => e.kind === 'task-started').length
+    expect(taskStartedCount).toBe(1)
   })
 
   test('describeTask returns task + logicalRuns + attempts for diagnostics', async () => {

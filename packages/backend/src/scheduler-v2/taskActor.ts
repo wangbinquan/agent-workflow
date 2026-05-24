@@ -123,6 +123,10 @@ export async function runTaskActor(actor: ActorState, ctx: ActorRuntimeContext):
         const eventCountAfter = countTaskEvents(ctx.db, ctx.taskId)
         if (eventCountAfter === eventCountBefore) break // no progress; idle
       }
+      // Detect terminal: every workflow node has a 'done' / 'failed' /
+      // 'canceled' logical_run, no pending/running/suspended remaining,
+      // no open suspensions.
+      await checkAndEmitTaskTerminal(ctx)
       if (await isTaskTerminal(ctx)) break
     }
   } finally {
@@ -318,14 +322,45 @@ async function handleAttemptExit(
       break
     }
     case 'request-retry-auto': {
+      // Count prior retry-pending-auto suspensions for this scope to
+      // compute remaining budget. Without this the actor would loop
+      // forever on every crash since autoResolve always fires.
+      const priorAutoRetries = tickEvents.filter(
+        (e) =>
+          e.kind === 'suspension-created' &&
+          e.nodeId === attemptScope.nodeId &&
+          e.loopIter === attemptScope.loopIter &&
+          e.shardKey === attemptScope.shardKey &&
+          (e.payload as { signalKind?: string }).signalKind === 'retry-pending-auto',
+      ).length
+      const RETRY_BUDGET_TOTAL = 3
+      const remainingBudget = Math.max(0, RETRY_BUDGET_TOTAL - priorAutoRetries)
       const sigHandler = SIGNAL_KIND_HANDLERS['retry-pending-auto']
       const evs = await sigHandler.onSuspend({ scope: attemptScope, events: tickEvents } as never, {
         outcome: outcomeFromReason(reason),
         lastAttemptId: reason.attemptId,
         reason: reason.reason ?? decision.reason,
-        remainingBudget: 3,
+        remainingBudget,
       })
       followups.push(...evs)
+      // If budget exhausted, ALSO escalate to retry-pending-human so the
+      // actor doesn't deadlock waiting for an auto-resolve that never comes.
+      if (remainingBudget === 0) {
+        const humanHandler = SIGNAL_KIND_HANDLERS['retry-pending-human']
+        // Note: INV-3 prevents 2 open suspensions on same logical_run.
+        // We need to terminate the retry-pending-auto first... actually
+        // the simpler path is to mark the logical_run failed directly
+        // here so the task can terminate.
+        void humanHandler
+        followups.push(
+          makeLogicalRunCanceledEvent(
+            ctx.taskId,
+            attemptScope,
+            tsCursor++,
+            'retry-budget-exhausted',
+          ),
+        )
+      }
       break
     }
     case 'request-retry-human': {
@@ -407,6 +442,74 @@ async function isTaskTerminal(ctx: ActorRuntimeContext): Promise<boolean> {
     .all()
   const status = rows[0]?.status
   return status === 'done' || status === 'failed' || status === 'canceled'
+}
+
+/**
+ * RFC-061 T10/T11: after all workflow nodes have terminal logical_runs
+ * and no open suspensions remain, emit task-completed (or task-failed
+ * if any logical_run is canceled). The legacy scheduler used to handle
+ * this; under the actor model the actor is responsible.
+ */
+async function checkAndEmitTaskTerminal(ctx: ActorRuntimeContext): Promise<void> {
+  // Skip if already terminal.
+  if (await isTaskTerminal(ctx)) return
+
+  const nodes = (ctx.workflow as { nodes?: ReadonlyArray<WorkflowNode> }).nodes ?? []
+  if (nodes.length === 0) return // empty workflow; let the launcher decide
+
+  const allRuns = ctx.db
+    .select()
+    .from(logicalRuns)
+    .where(eq(logicalRuns.taskId, ctx.taskId))
+    .all() as Array<typeof logicalRuns.$inferSelect>
+
+  // For terminal detection we look at the LATEST row per
+  // (nodeId, loopIter, shardKey) since iter-bumps leave older iters
+  // suspended (those are historical, not "still pending"). Group +
+  // pick max iter per scope.
+  const latestByScope = new Map<string, typeof logicalRuns.$inferSelect>()
+  for (const r of allRuns) {
+    const key = `${r.nodeId}|${r.loopIter}|${r.shardKey}`
+    const prior = latestByScope.get(key)
+    if (prior === undefined || r.iter > prior.iter) {
+      latestByScope.set(key, r)
+    }
+  }
+
+  const nodeIds = new Set(nodes.map((n) => n.id))
+  const seenNodeIds = new Set<string>()
+  let hasNonTerminal = false
+  let hasFailureOrCancel = false
+  for (const r of latestByScope.values()) {
+    if (!nodeIds.has(r.nodeId)) continue
+    seenNodeIds.add(r.nodeId)
+    if (r.status !== 'done' && r.status !== 'failed' && r.status !== 'canceled') {
+      hasNonTerminal = true
+      break
+    }
+    if (r.status === 'failed' || r.status === 'canceled') hasFailureOrCancel = true
+  }
+  if (hasNonTerminal) return
+  // Every node should have a row (or be skipped by upstream-not-done).
+  if (seenNodeIds.size < nodeIds.size) return
+
+  // Emit task-completed / task-failed + update tasks.status.
+  const targetKind = hasFailureOrCancel ? 'task-failed' : 'task-completed'
+  await writeEvents(ctx.db, [
+    {
+      taskId: ctx.taskId,
+      kind: targetKind,
+      actor: 'system',
+      payload: targetKind === 'task-failed' ? { reason: 'logical-run-failed-or-canceled' } : {},
+    },
+  ])
+  // Update tasks.status to match (the applier doesn't currently touch
+  // task-level events; this is the actor's responsibility for now).
+  ctx.db
+    .update(tasks)
+    .set({ status: hasFailureOrCancel ? 'failed' : 'done', finishedAt: Date.now() })
+    .where(eq(tasks.id, ctx.taskId))
+    .run()
 }
 
 /* ============================================================

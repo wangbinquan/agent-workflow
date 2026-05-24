@@ -41,6 +41,8 @@ export interface ProductionRunnerAdapterOptions {
    * Defaults to () => [] when omitted (used in tests).
    */
   resolveSkills?: (agent: Agent) => Promise<ResolvedSkill[]>
+  /** Override the opencode CLI head (tests inject stubOpencode). */
+  opencodeCmd?: readonly string[]
 }
 
 export class ProductionRunnerAdapter implements RunnerAdapter {
@@ -94,6 +96,7 @@ export class ProductionRunnerAdapter implements RunnerAdapter {
       plugins,
       skills,
       prompt: req.prompt,
+      ...(this.opts.opencodeCmd !== undefined ? { opencodeCmd: this.opts.opencodeCmd } : {}),
     })
 
     const events = this.resultToEvents(req, result)

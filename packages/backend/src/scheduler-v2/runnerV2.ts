@@ -43,6 +43,8 @@ export interface RunOpencodeAttemptOptions {
   /** Soft timeout in ms; killed via SIGTERM. Default 10 minutes. */
   timeoutMs?: number
   log?: Logger
+  /** Override the opencode CLI head (tests inject stubOpencode). */
+  opencodeCmd?: readonly string[]
 }
 
 export interface RunOpencodeAttemptResult {
@@ -88,6 +90,7 @@ export async function runOpencodeAttempt(
     ...(opts.plugins !== undefined ? { plugins: opts.plugins } : {}),
     prompt: opts.prompt,
     ...(opts.resumeSessionId !== undefined ? { resumeSessionId: opts.resumeSessionId } : {}),
+    ...(opts.opencodeCmd !== undefined ? { opencodeCmd: opts.opencodeCmd } : {}),
   })
 
   // 2. Prepare disk: mkdir runRoot, copy skills into configDir.
@@ -148,21 +151,33 @@ export async function runOpencodeAttempt(
   // 5. Wait for exit (or timeout).
   const timeoutMs = opts.timeoutMs ?? 10 * 60 * 1000
   let didTimeout = false
-  const timeoutHandle = setTimeout(() => {
-    didTimeout = true
-    try {
-      child.kill('SIGTERM')
-    } catch {
-      // process already dead
-    }
-  }, timeoutMs)
 
   const exitCode = await new Promise<number | null>((resolve) => {
-    child.once('exit', (code) => resolve(code))
-    child.once('error', () => resolve(null))
+    const timeoutHandle = setTimeout(() => {
+      didTimeout = true
+      try {
+        child.kill('SIGTERM')
+      } catch {
+        // process already dead
+      }
+      // Force-resolve so we don't hang forever if exit/error never fire.
+      resolve(null)
+    }, timeoutMs)
+    child.once('exit', (code) => {
+      clearTimeout(timeoutHandle)
+      resolve(code)
+    })
+    child.once('error', () => {
+      clearTimeout(timeoutHandle)
+      resolve(null)
+    })
   })
-  clearTimeout(timeoutHandle)
-  await Promise.all([stdoutCollector, stderrCollector])
+  // pumpLines collectors may still be running; race against a short
+  // budget so a slow-closing stream doesn't pin the test.
+  await Promise.race([
+    Promise.all([stdoutCollector, stderrCollector]),
+    new Promise<void>((r) => setTimeout(r, 200)),
+  ])
 
   // 6. Aggregate post-exit.
   const declared = pickDeclaredOutputs(opts.agent)

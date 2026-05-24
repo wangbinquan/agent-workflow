@@ -388,13 +388,9 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
     return task
   }
 
-  // Kick the scheduler. HTTP route returns immediately; tests can await.
-  // RFC-061 transition: when RFC_061_ACTOR_PATH=1 (or deps.useActorPath=true),
-  // route through the new event-driven actor + runner-v2 instead of the
-  // legacy runTask. The actor path emits events + writes projections;
-  // legacy still writes node_runs / clarify_sessions / etc. Each task
-  // uses EXACTLY ONE path — never both. Once T10 deletes legacy services
-  // this branch unconditionally takes the actor path.
+  // RFC-061 transition: opt-in actor path via env RFC_061_ACTOR_PATH=1
+  // or deps.useActorPath=true. Default = legacy `runTask` until the
+  // T10/T11 cutover commit deletes all legacy services + test files.
   const controller = new AbortController()
   activeTasks.set(taskId, controller)
   const useActor = deps.useActorPath === true || process.env.RFC_061_ACTOR_PATH === '1'
@@ -408,6 +404,7 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
         worktreePath,
         appHome,
         controller,
+        deps.opencodeCmd,
       ).finally(() => {
         activeTasks.delete(taskId)
       })
@@ -456,6 +453,7 @@ async function kickActorPath(
   worktreePath: string,
   appHome: string,
   controller: AbortController,
+  opencodeCmd?: readonly string[],
 ): Promise<void> {
   void controller // cancel propagation TBD; the registry handles deregister
   try {
@@ -472,6 +470,7 @@ async function kickActorPath(
       worktreePath,
       repoPath,
       appHome,
+      ...(opencodeCmd !== undefined ? { opencodeCmd } : {}),
     }
     await runTaskActorViaProduction(opts)
   } catch (err) {
@@ -599,33 +598,53 @@ export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps):
   const next = (await getTask(db, id)) as Task
   emitTaskStatus(next)
 
-  // Kick the scheduler — same plumbing as startTask but without re-creating
-  // the worktree.
+  // RFC-061 transition: resume uses the same useActorPath selection
+  // as startTask. Each task picks ONE path consistently for its
+  // lifetime (the seed-initial-events idempotence handles resume).
   const controller = new AbortController()
   activeTasks.set(id, controller)
-  void runTask({
-    taskId: id,
-    db,
-    appHome: deps.appHome ?? Paths.root,
-    ...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {}),
-    ...(deps.defaultPerNodeTimeoutMs !== undefined
-      ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
-      : {}),
-    ...(deps.subagentLiveCapture !== undefined
-      ? { subagentLiveCapture: deps.subagentLiveCapture }
-      : {}),
-    log,
-    signal: controller.signal,
-  })
-    .catch((err) => {
-      log.error('runTask threw on resume', {
-        taskId: id,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    })
-    .finally(() => {
+  const useActor = deps.useActorPath === true || process.env.RFC_061_ACTOR_PATH === '1'
+  if (useActor) {
+    const workflowDef = parseSnapshot(task.workflowSnapshot) as Record<string, unknown>
+    const inputsMap: Record<string, unknown> = task.inputs as Record<string, unknown>
+    void kickActorPath(
+      db,
+      id,
+      workflowDef,
+      inputsMap,
+      task.repoPath,
+      task.worktreePath,
+      deps.appHome ?? Paths.root,
+      controller,
+      deps.opencodeCmd,
+    ).finally(() => {
       activeTasks.delete(id)
     })
+  } else {
+    void runTask({
+      taskId: id,
+      db,
+      appHome: deps.appHome ?? Paths.root,
+      ...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {}),
+      ...(deps.defaultPerNodeTimeoutMs !== undefined
+        ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
+        : {}),
+      ...(deps.subagentLiveCapture !== undefined
+        ? { subagentLiveCapture: deps.subagentLiveCapture }
+        : {}),
+      log,
+      signal: controller.signal,
+    })
+      .catch((err) => {
+        log.error('runTask threw on resume', {
+          taskId: id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
+      .finally(() => {
+        activeTasks.delete(id)
+      })
+  }
   return next
 }
 
@@ -797,31 +816,52 @@ export async function retryNode(
   const next = (await getTask(db, taskId)) as Task
   emitTaskStatus(next)
 
+  // RFC-061 transition: same path selection as startTask/resumeTask.
   const controller = new AbortController()
   activeTasks.set(taskId, controller)
-  void runTask({
-    taskId,
-    db,
-    appHome: opts.deps.appHome ?? Paths.root,
-    ...(opts.deps.opencodeCmd ? { opencodeCmd: opts.deps.opencodeCmd } : {}),
-    ...(opts.deps.defaultPerNodeTimeoutMs !== undefined
-      ? { defaultPerNodeTimeoutMs: opts.deps.defaultPerNodeTimeoutMs }
-      : {}),
-    ...(opts.deps.subagentLiveCapture !== undefined
-      ? { subagentLiveCapture: opts.deps.subagentLiveCapture }
-      : {}),
-    log,
-    signal: controller.signal,
-  })
-    .catch((err) => {
-      log.error('runTask threw on node retry', {
-        taskId,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    })
-    .finally(() => {
+  const useActor = opts.deps.useActorPath === true || process.env.RFC_061_ACTOR_PATH === '1'
+  if (useActor) {
+    const task2 = (await getTask(db, taskId))!
+    const workflowDef = parseSnapshot(task2.workflowSnapshot) as Record<string, unknown>
+    const inputsMap: Record<string, unknown> = task2.inputs as Record<string, unknown>
+    void kickActorPath(
+      db,
+      taskId,
+      workflowDef,
+      inputsMap,
+      task2.repoPath,
+      task2.worktreePath,
+      opts.deps.appHome ?? Paths.root,
+      controller,
+      opts.deps.opencodeCmd,
+    ).finally(() => {
       activeTasks.delete(taskId)
     })
+  } else {
+    void runTask({
+      taskId,
+      db,
+      appHome: opts.deps.appHome ?? Paths.root,
+      ...(opts.deps.opencodeCmd ? { opencodeCmd: opts.deps.opencodeCmd } : {}),
+      ...(opts.deps.defaultPerNodeTimeoutMs !== undefined
+        ? { defaultPerNodeTimeoutMs: opts.deps.defaultPerNodeTimeoutMs }
+        : {}),
+      ...(opts.deps.subagentLiveCapture !== undefined
+        ? { subagentLiveCapture: opts.deps.subagentLiveCapture }
+        : {}),
+      log,
+      signal: controller.signal,
+    })
+      .catch((err) => {
+        log.error('runTask threw on node retry', {
+          taskId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
+      .finally(() => {
+        activeTasks.delete(taskId)
+      })
+  }
   return next
 }
 

@@ -37,6 +37,8 @@ export interface RunTaskActorViaProductionOptions {
   log?: Logger
   /** Test hook: override the runner adapter (e.g. MockRunnerAdapter). */
   runnerAdapterOverride?: RunnerAdapter
+  /** Override the opencode CLI head (tests inject stubOpencode). */
+  opencodeCmd?: readonly string[]
 }
 
 /**
@@ -62,6 +64,7 @@ export async function runTaskActorViaProduction(
       worktreePath: opts.worktreePath,
       appHome: opts.appHome,
       wakeProducer: actor.queue,
+      ...(opts.opencodeCmd !== undefined ? { opencodeCmd: opts.opencodeCmd } : {}),
     })
 
   // 3. Kick the loop with an initial wake.
