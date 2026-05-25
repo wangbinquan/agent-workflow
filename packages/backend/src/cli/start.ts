@@ -229,7 +229,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   //    + RFC-033 batch-import retention GC).
   const limitsTicker = startLimitsTicker(db)
   const gcTicker = startWorktreeGc(db, () => loadConfig(Paths.config))
-  const archiveTicker = startEventsArchiver(db, () => loadConfig(Paths.config), Paths.logsDir)
+  const archiveTicker = startEventsArchiver(db)
   const batchImportCfg = loadConfig(Paths.config)
   const batchImportGcTicker = startBatchImportGc(
     undefined,

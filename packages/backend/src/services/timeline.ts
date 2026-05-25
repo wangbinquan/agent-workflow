@@ -15,7 +15,7 @@
 import { and, asc, eq, gt } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
-import { events as eventsTable, tasks } from '@/db/schema'
+import { events as eventsTable, eventsArchive, tasks } from '@/db/schema'
 import { NotFoundError } from '@/util/errors'
 import { decodeEvent, type Event, RawEventSchema } from '@agent-workflow/shared'
 
@@ -55,6 +55,38 @@ export async function listTaskTimeline(
     .where(and(...conds))
     .orderBy(asc(eventsTable.id))
     .limit(opts.limit)
+
+  // RFC-061 follow-up — if the live events table has nothing (or fewer
+  // rows than the limit), backfill from events_archive so timelines for
+  // old terminal tasks stay continuous after archival.
+  if (rows.length < opts.limit) {
+    const archConds = [eq(eventsArchive.taskId, taskId)]
+    if (opts.afterId !== null) archConds.push(gt(eventsArchive.id, opts.afterId))
+    if (opts.kindFilter !== null) archConds.push(eq(eventsArchive.kind, opts.kindFilter))
+    const archRows = await db
+      .select()
+      .from(eventsArchive)
+      .where(and(...archConds))
+      .orderBy(asc(eventsArchive.id))
+      .limit(opts.limit - rows.length)
+    rows.push(
+      ...archRows.map((a) => ({
+        id: a.id,
+        taskId: a.taskId,
+        ts: a.ts,
+        kind: a.kind as (typeof eventsTable.$inferSelect)['kind'],
+        nodeId: a.nodeId,
+        loopIter: a.loopIter,
+        shardKey: a.shardKey,
+        iter: a.iter,
+        attemptId: a.attemptId,
+        parentEventId: a.parentEventId,
+        actor: a.actor,
+        resolutionId: a.resolutionId,
+        payload: a.payload,
+      })),
+    )
+  }
 
   const decoded: Event[] = rows.map((r) => decodeEvent(RawEventSchema.parse(r)))
   const cursor =

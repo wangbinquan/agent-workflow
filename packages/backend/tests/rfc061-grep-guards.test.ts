@@ -110,9 +110,16 @@ describe('RFC-061 grep guards — active', () => {
     expect(hits).toEqual([])
   })
 
-  test('events table has no DELETE call sites outside projectionRebuilder rebuild path', async () => {
-    const hits = await whoContains(/\.delete\(events\)/)
-    expect(hits).toEqual([])
+  test('events table has no DELETE call sites outside the archiver + rebuilder paths', async () => {
+    // Allowed: services/eventsArchive.ts moves terminal-task rows into
+    // events_archive then DELETEs them from the live table; the
+    // projectionRebuilder uses the same drizzle helper against a temp DB
+    // during full rebuild verification. Both are bounded + auditable.
+    const hits = await whoContains(/\.delete\(events\)|\.delete\(eventsTable\)/)
+    const filtered = hits.filter(
+      (f) => !f.endsWith('eventsArchive.ts') && !f.endsWith('projectionRebuilder.ts'),
+    )
+    expect(filtered).toEqual([])
   })
 })
 

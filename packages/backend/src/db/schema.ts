@@ -854,6 +854,40 @@ export const events = sqliteTable(
 )
 
 /**
+ * events_archive — cold-store mirror of `events` for terminal tasks
+ * older than the archive cutoff (default 30 days post-finish). Same
+ * column shape as `events` plus `archived_at`; no CHECK on `kind`
+ * (the archive accepts whatever production wrote) and no
+ * append-only trigger (archive is rewritable to support corrections).
+ *
+ * Read path: services/timeline.ts falls back here when the live
+ * `events` table has nothing for an old task.
+ */
+export const eventsArchive = sqliteTable(
+  'events_archive',
+  {
+    id: text('id').primaryKey(),
+    taskId: text('task_id').notNull(),
+    ts: integer('ts').notNull(),
+    kind: text('kind').notNull(),
+    nodeId: text('node_id'),
+    loopIter: integer('loop_iter'),
+    shardKey: text('shard_key'),
+    iter: integer('iter'),
+    attemptId: text('attempt_id'),
+    parentEventId: text('parent_event_id'),
+    actor: text('actor').notNull(),
+    resolutionId: text('resolution_id'),
+    payload: text('payload').notNull().default('{}'),
+    archivedAt: integer('archived_at').notNull(),
+  },
+  (t) => ({
+    taskTsIdx: index('idx_events_archive_task_ts').on(t.taskId, t.ts),
+    kindIdx: index('idx_events_archive_kind').on(t.taskId, t.kind),
+  }),
+)
+
+/**
  * logical_runs — projection: one row per (taskId, nodeId, loopIter,
  * shardKey, iter). INV-4: UNIQUE across that natural key.
  */

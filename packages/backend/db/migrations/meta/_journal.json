@@ -253,6 +253,13 @@
       "when": 1781100000000,
       "tag": "0036_rfc061_events_kind_token_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1781200000000,
+      "tag": "0037_rfc061_events_archive",
+      "breakpoints": true
     }
   ]
 }
