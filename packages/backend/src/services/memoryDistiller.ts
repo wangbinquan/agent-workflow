@@ -37,16 +37,7 @@ import {
   redactGitUrl,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import {
-  clarifySessions,
-  docVersions,
-  memories,
-  memoryDistillJobs,
-  nodeRunEvents,
-  nodeRuns,
-  reviewComments,
-  taskFeedback,
-} from '@/db/schema'
+import { memories, memoryDistillJobs, reviewComments, taskFeedback } from '@/db/schema'
 import { extractLastEnvelope } from '@/services/envelope'
 import { captureDistillJobSession } from '@/services/distillSessionCapture'
 import { clipHeadTail, renderSessionTreeToDistillerMd } from '@/services/distillerSourceContext'
@@ -305,14 +296,31 @@ export async function loadSourceEvents(
   const reviewIds = jobs.filter((j) => j.sourceKind === 'review').map((j) => j.sourceEventId)
   const feedbackIds = jobs.filter((j) => j.sourceKind === 'feedback').map((j) => j.sourceEventId)
 
-  const clarifyRows =
-    clarifyIds.length > 0
-      ? await db.select().from(clarifySessions).where(inArray(clarifySessions.id, clarifyIds))
-      : []
-  const reviewRows =
-    reviewIds.length > 0
-      ? await db.select().from(docVersions).where(inArray(docVersions.id, reviewIds))
-      : []
+  // RFC-061 follow-up: clarify_sessions + doc_versions are on the drop
+  // list. The memory-distill pipeline temporarily loses access to
+  // historical clarify Q&A and review history; only taskFeedback rows
+  // (separate table, kept) still feed the distiller. Full rebuild will
+  // pull from suspensions + node_outputs once the distiller is rewired.
+  void clarifyIds
+  void reviewIds
+  type ClarifyShape = {
+    id: string
+    taskId: string
+    clarifyNodeId: string
+    sourceAgentNodeRunId: string
+    questionsJson: string
+    answersJson: string | null
+  }
+  type ReviewShape = {
+    id: string
+    taskId: string
+    reviewNodeId: string
+    decision: string
+    bodyPath: string
+    versionIndex: number
+  }
+  const clarifyRows: ClarifyShape[] = []
+  const reviewRows: ReviewShape[] = []
   const feedbackRows =
     feedbackIds.length > 0
       ? await db.select().from(taskFeedback).where(inArray(taskFeedback.id, feedbackIds))
@@ -403,85 +411,16 @@ interface SourceContextResult {
  *    budget.
  */
 async function loadClarifyTranscripts(
-  db: DbClient,
-  clarifyRows: Array<{ id: string; sourceAgentNodeRunId: string }>,
-  budget: SourceContextBudget,
+  _db: DbClient,
+  _clarifyRows: Array<{ id: string; sourceAgentNodeRunId: string }>,
+  _budget: SourceContextBudget,
 ): Promise<Map<string, SourceContextResult>> {
-  const out = new Map<string, SourceContextResult>()
-  if (budget.clarifyTranscriptMaxBytes === 0 || clarifyRows.length === 0) return out
-
-  const sourceRunIds = [...new Set(clarifyRows.map((r) => r.sourceAgentNodeRunId))]
-  const runRows = await db
-    .select({
-      id: nodeRuns.id,
-      promptText: nodeRuns.promptText,
-      startedAt: nodeRuns.startedAt,
-      opencodeSessionId: nodeRuns.opencodeSessionId,
-    })
-    .from(nodeRuns)
-    .where(inArray(nodeRuns.id, sourceRunIds))
-  const runById = new Map(runRows.map((r) => [r.id, r] as const))
-
-  const eventRows =
-    sourceRunIds.length > 0
-      ? await db
-          .select({
-            id: nodeRunEvents.id,
-            ts: nodeRunEvents.ts,
-            kind: nodeRunEvents.kind,
-            payload: nodeRunEvents.payload,
-            sessionId: nodeRunEvents.sessionId,
-            parentSessionId: nodeRunEvents.parentSessionId,
-            nodeRunId: nodeRunEvents.nodeRunId,
-          })
-          .from(nodeRunEvents)
-          .where(inArray(nodeRunEvents.nodeRunId, sourceRunIds))
-          .orderBy(asc(nodeRunEvents.ts), asc(nodeRunEvents.id))
-      : []
-  const eventsByRun = new Map<string, ParseSessionInputEvent[]>()
-  for (const e of eventRows) {
-    const list = eventsByRun.get(e.nodeRunId) ?? []
-    list.push({
-      id: e.id,
-      ts: e.ts,
-      kind: e.kind,
-      payload: e.payload,
-      sessionId: e.sessionId,
-      parentSessionId: e.parentSessionId,
-    })
-    eventsByRun.set(e.nodeRunId, list)
-  }
-
-  for (const c of clarifyRows) {
-    const run = runById.get(c.sourceAgentNodeRunId)
-    if (run === undefined) {
-      out.set(c.id, { md: null, reason: 'source node_run not found' })
-      continue
-    }
-    const events = eventsByRun.get(run.id) ?? []
-    if (events.length === 0) {
-      out.set(c.id, { md: null, reason: 'no events captured for source node_run' })
-      continue
-    }
-    try {
-      // node_runs has no agent_id column; agent identity is by workflow
-      // node lookup (out of scope here). Render with a neutral name — the
-      // transcript content itself carries the context the distiller needs.
-      const tree = parseSessionTree({
-        rootSessionId: run.opencodeSessionId,
-        promptText: run.promptText,
-        startedAt: run.startedAt,
-        primaryAgentName: 'agent',
-        events,
-      })
-      const md = renderSessionTreeToDistillerMd(tree)
-      out.set(c.id, { md: clipHeadTail(md, budget.clarifyTranscriptMaxBytes), reason: null })
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      out.set(c.id, { md: null, reason: `parse-failed: ${msg}` })
-    }
-  }
-  return out
+  // RFC-061 follow-up: source node_runs + node_run_events tables are on
+  // the drop list. Clarify transcript rendering for distill is degraded
+  // until the loader is rewired to read from attempts + projection
+  // events. Returning an empty map preserves the call shape; callers
+  // already fall back to `{ md: null, reason: '...' }` per id.
+  return new Map<string, SourceContextResult>()
 }
 
 /**

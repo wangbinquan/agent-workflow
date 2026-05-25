@@ -27,13 +27,7 @@ import type {
   MemoryStatus,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import {
-  clarifySessions,
-  docVersions,
-  memories,
-  memoryDistillJobs,
-  taskFeedback,
-} from '@/db/schema'
+import { memories, memoryDistillJobs, taskFeedback } from '@/db/schema'
 import { rowToDistillJob } from '@/services/memoryDistiller'
 import { NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -148,20 +142,21 @@ async function safeLoadSourceEvents(
     .filter((s) => s.sourceKind === 'feedback')
     .map((s) => s.sourceEventId)
 
-  const [clarifyRows, reviewRows, feedbackRows] = await Promise.all([
-    clarifyIds.length > 0
-      ? db.select().from(clarifySessions).where(inArray(clarifySessions.id, clarifyIds))
-      : Promise.resolve([] as Array<typeof clarifySessions.$inferSelect>),
-    reviewIds.length > 0
-      ? db.select().from(docVersions).where(inArray(docVersions.id, reviewIds))
-      : Promise.resolve([] as Array<typeof docVersions.$inferSelect>),
+  // RFC-061 follow-up: clarify_sessions + doc_versions on drop list.
+  // Distill job detail temporarily surfaces only taskFeedback sources;
+  // clarify / review siblings render as `deletedOrMissing` until the
+  // suspensions-projection rewire lands.
+  void clarifyIds
+  void reviewIds
+  const feedbackRows =
     feedbackIds.length > 0
-      ? db.select().from(taskFeedback).where(inArray(taskFeedback.id, feedbackIds))
-      : Promise.resolve([] as Array<typeof taskFeedback.$inferSelect>),
-  ])
+      ? await db.select().from(taskFeedback).where(inArray(taskFeedback.id, feedbackIds))
+      : []
 
-  const clarifyById = new Map(clarifyRows.map((r) => [r.id, r]))
-  const reviewById = new Map(reviewRows.map((r) => [r.id, r]))
+  type ClarifyShape = { id: string; taskId: string; questionsJson: string }
+  type ReviewShape = { id: string; taskId: string; decision: string; versionIndex: number }
+  const clarifyById = new Map<string, ClarifyShape>()
+  const reviewById = new Map<string, ReviewShape>()
   const feedbackById = new Map(feedbackRows.map((r) => [r.id, r]))
 
   const out: MemoryDistillSourceEventEntry[] = []
