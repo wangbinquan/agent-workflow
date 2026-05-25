@@ -51,6 +51,14 @@ export interface AgentSingleDispatchExtras {
   resolveUpstreamInputs: (scope: Scope) => Promise<UpstreamInput[]>
   /** Repo worktree path; substituted as `{{__repo_path__}}` in prompt template. */
   repoPath: string
+  /**
+   * RFC-041 PR3 (rewired post-RFC-061) — optional closure returning the
+   * "## Learned context" markdown block to append to the prompt. Returns
+   * null when no approved memory matches the agent's scope closure;
+   * throws never escape — the caller wraps in try/catch so memory-inject
+   * failures degrade to "no inject" rather than crashing dispatch.
+   */
+  loadMemoryBlock?: () => Promise<string | null>
 }
 
 export interface AgentSingleDispatchContext
@@ -71,7 +79,18 @@ export const agentSingleNodeKindHandler: NodeKindHandler<'agent-single'> = {
 
     const template = pickString(extras.node, 'promptTemplate') ?? ''
     const upstreams = await extras.resolveUpstreamInputs(ctx.scope)
-    const prompt = composePrompt(template, upstreams, extras.repoPath, ctx.prompt)
+    let prompt = composePrompt(template, upstreams, extras.repoPath, ctx.prompt)
+    if (extras.loadMemoryBlock !== undefined) {
+      try {
+        const block = await extras.loadMemoryBlock()
+        if (block !== null && block.length > 0) {
+          prompt = `${prompt}\n\n${block}`
+        }
+      } catch {
+        // Memory-inject MUST NEVER fail dispatch — a broken table or
+        // slow query degrades to "no inject" instead of a 5xx.
+      }
+    }
 
     return { kind: 'spawn-attempt', prompt }
   },

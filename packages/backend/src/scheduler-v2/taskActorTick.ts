@@ -90,6 +90,13 @@ export interface TickContext {
    * in topological order matching scheduler's resolveUpstreamInputs.
    */
   resolveUpstreamInputs: (nodeId: string, scope: Scope) => Promise<UpstreamInput[]>
+  /**
+   * RFC-061 follow-up — load the memory-inject block for an agent name.
+   * Returns null when no approved memory matches. Optional so tests that
+   * don't seed memories don't need to provide it (current actor tests
+   * pre-date the rewire).
+   */
+  loadMemoryBlockForAgent?: (agentName: string) => Promise<string | null>
 }
 
 export interface TickOutcome {
@@ -214,11 +221,16 @@ async function dispatchOne(
     }
     case 'agent-single': {
       const handler = NODE_KIND_HANDLERS['agent-single']
+      const agentName = pickString(node, 'agentName') ?? ''
+      const memoryLoader = ctx.loadMemoryBlockForAgent
       const dctx: AgentSingleDispatchContext = {
         ...baseCtx,
         node,
         repoPath: ctx.repoPath,
         resolveUpstreamInputs: (sc) => ctx.resolveUpstreamInputs(node.id, sc),
+        ...(memoryLoader !== undefined && agentName.length > 0
+          ? { loadMemoryBlock: () => memoryLoader(agentName) }
+          : {}),
       }
       return await handler.dispatch(dctx)
     }

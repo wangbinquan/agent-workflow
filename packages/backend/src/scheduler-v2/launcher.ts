@@ -16,13 +16,21 @@ import type { Logger } from '@/util/log'
 import type { DbClient } from '../db/client'
 import { attempts, events as eventsTable, logicalRuns, nodeOutputs, tasks } from '../db/schema'
 import { writeEvents, type NewEvent } from '../services/writeEvents'
-import type { Scope, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import {
+  filterDataEdges,
+  type Scope,
+  type WorkflowDefinition,
+  type WorkflowEdgeLike,
+  type WorkflowNode,
+} from '@agent-workflow/shared'
 
 import { taskActorRegistry } from './actorRegistry'
 import { ProductionRunnerAdapter } from './runnerAdapterProduction'
 import type { RunnerAdapter } from './runnerAdapter'
 import { runTaskActor } from './taskActor'
 import type { UpstreamInput } from '../handlers'
+import { getAgent } from '../services/agent'
+import { injectMemoryForRun } from '../services/memoryInject'
 
 export interface RunTaskActorViaProductionOptions {
   db: DbClient
@@ -86,6 +94,7 @@ export async function runTaskActorViaProduction(
       runner,
       readUpstreamPort: makeProjectionReader(opts.db, opts.taskId),
       resolveUpstreamInputs: makeUpstreamInputsResolver(opts.db, opts.taskId, opts.workflow),
+      loadMemoryBlockForAgent: makeMemoryBlockLoader(opts.db, opts.taskId),
     })
   } finally {
     // 5. Always deregister on exit.
@@ -133,8 +142,13 @@ async function seedInitialEventsIfMissing(
 
 function findEntryNodes(workflow: WorkflowDefinition): WorkflowNode[] {
   const nodes = (workflow as { nodes?: ReadonlyArray<WorkflowNode> }).nodes ?? []
-  const edges =
-    (workflow as { edges?: ReadonlyArray<{ target?: { nodeId?: string } }> }).edges ?? []
+  const rawEdges = (workflow as { edges?: ReadonlyArray<WorkflowEdgeLike> }).edges ?? []
+  // RFC-062 §2 — feedback edges (target.portName ∈ SYSTEM_PORT_NAMES) are
+  // back-edges, not real inbound dependencies. A node whose only inbound
+  // edges are feedback ones is still an entry node and must be seeded
+  // with logical-run-created here; otherwise it would deadlock waiting
+  // for its own response port to fire.
+  const edges = filterDataEdges(rawEdges)
   const hasInbound = new Set<string>()
   for (const e of edges) {
     const t = e.target?.nodeId
@@ -172,6 +186,53 @@ function makeProjectionReader(
 }
 
 /**
+ * RFC-041 PR3 (RFC-061 rewire) — build the memory-block loader the actor
+ * passes through to agent-single dispatch. The loader takes an agent
+ * name, resolves the agent + its dependsOn closure, calls
+ * injectMemoryForRun, and returns the rendered block (or null).
+ *
+ * Failures inside this closure NEVER escape — agent dispatch must not
+ * crash because the memories table is unreachable.
+ */
+function makeMemoryBlockLoader(
+  db: DbClient,
+  taskId: string,
+): (agentName: string) => Promise<string | null> {
+  return async (agentName) => {
+    try {
+      const primary = await getAgent(db, agentName)
+      if (primary === null) return null
+      // RFC-041: dependsOn closure means an agent inherits memories
+      // scoped to any of its dependent agents. Resolve depths first so
+      // we get a full closure list.
+      const dependents: Awaited<ReturnType<typeof getAgent>>[] = []
+      const seen = new Set<string>([primary.id])
+      const queue: string[] = primary.dependsOn ?? []
+      while (queue.length > 0) {
+        const next = queue.shift()!
+        if (seen.has(next)) continue
+        seen.add(next)
+        const dep = await getAgent(db, next)
+        if (dep === null) continue
+        dependents.push(dep)
+        for (const d of dep.dependsOn ?? []) queue.push(d)
+      }
+      const result = await injectMemoryForRun({
+        db,
+        taskId,
+        primaryAgent: primary,
+        dependents: dependents.filter((d) => d !== null) as ReadonlyArray<
+          NonNullable<(typeof dependents)[number]>
+        >,
+      })
+      return result.block
+    } catch {
+      return null
+    }
+  }
+}
+
+/**
  * Build an upstream-inputs resolver: collects all upstream port values
  * for a given node by walking workflow edges + reading node_outputs.
  */
@@ -181,15 +242,17 @@ function makeUpstreamInputsResolver(
   workflow: WorkflowDefinition,
 ): (nodeId: string, scope: Scope) => Promise<UpstreamInput[]> {
   return async (nodeId, scope) => {
-    const edges =
-      (
-        workflow as {
-          edges?: ReadonlyArray<{
-            source?: { nodeId?: string; portName?: string }
-            target?: { nodeId?: string; portName?: string }
-          }>
-        }
-      ).edges ?? []
+    const rawEdges = (workflow as { edges?: ReadonlyArray<WorkflowEdgeLike> }).edges ?? []
+    // RFC-062 §2 — feedback ports (__clarify_response__ /
+    // __external_feedback__) DO appear in workflow.edges so the canvas
+    // can render handles, but their content is injected into the agent
+    // prompt via dedicated Clarify Q&A / External Feedback blocks
+    // (SignalKindHandler.renderPromptSection), NOT via node_outputs.
+    // Including them here would (a) waste a DB round-trip for a port
+    // that never has a node_outputs row, and (b) risk duplicating the
+    // feedback content as a generic `## __clarify_response__` section
+    // alongside the dedicated block.
+    const edges = filterDataEdges(rawEdges)
     const inbound = edges.filter((e) => e.target?.nodeId === nodeId)
     const out: UpstreamInput[] = []
     for (const e of inbound) {

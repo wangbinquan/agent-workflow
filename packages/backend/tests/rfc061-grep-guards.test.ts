@@ -262,6 +262,10 @@ describe('RFC-061 architectural fence — new tree must stay clean', () => {
       '../services/agent',
       '../services/mcp',
       '../services/plugin',
+      // RFC-041 PR3 (RFC-061 follow-up) — launcher uses memoryInject to
+      // wire the memory-block loader into the TickContext closure that
+      // agent-single dispatch picks up.
+      '../services/memoryInject',
       // util/log is the standard logger; survives all cutovers.
       '@/util/log',
       'node:',

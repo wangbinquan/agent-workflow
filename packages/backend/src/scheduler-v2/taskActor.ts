@@ -72,6 +72,13 @@ export interface ActorRuntimeContext {
    * readUpstreamPort — overrideable for tests.
    */
   resolveUpstreamInputs?: (nodeId: string, scope: Scope) => Promise<UpstreamInput[]>
+  /**
+   * RFC-061 follow-up — load the "## Learned context" markdown block to
+   * append to an agent-single prompt. Threaded through TickContext to
+   * the agent-single NodeKindHandler. Optional: tests without memory
+   * fixtures omit it and the handler skips the append.
+   */
+  loadMemoryBlockForAgent?: (agentName: string) => Promise<string | null>
 }
 
 /**
@@ -534,6 +541,9 @@ function makeTickContext(
     repoPath: ctx.repoPath,
     readUpstreamPort: ctx.readUpstreamPort ?? (async () => null),
     resolveUpstreamInputs: ctx.resolveUpstreamInputs ?? (async () => []),
+    ...(ctx.loadMemoryBlockForAgent !== undefined
+      ? { loadMemoryBlockForAgent: ctx.loadMemoryBlockForAgent }
+      : {}),
   }
 }
 
