@@ -12,7 +12,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import { tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 import { createManualCandidate, promoteCandidate, archiveMemory } from '../src/services/memory'
@@ -222,86 +222,11 @@ describe('PATCH /api/memories/:id — RFC-045', () => {
     expect(j.memory.version).toBe(seed.version)
   })
 
-  test('RFC-046 invariant: PATCH does NOT touch node_runs.injected_memories_json', async () => {
-    const seed = await createManualCandidate(h.db, {
-      scopeType: 'global',
-      scopeId: null,
-      title: 'orig',
-      bodyMd: 'b',
-    })
-    await promoteCandidate(h.db, seed.id, { action: 'approve' }, 'admin')
-
-    // Seed a fake node_runs row carrying an injected_memories_json snapshot
-    // that includes a record of the memory at its v1 state. PATCHing the
-    // memory must NOT rewrite this historical column.
-    const workflowId = ulid()
-    await h.db.insert(workflows).values({
-      id: workflowId,
-      name: 'wf-test',
-      description: '',
-      definition: '{}',
-      version: 1,
-      schemaVersion: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    const taskId = ulid()
-    await h.db.insert(tasks).values({
-      id: taskId,
-      name: 'task-rfc045-test',
-      workflowId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/aw-test',
-      worktreePath: '/tmp/aw-test-wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/test',
-      status: 'done',
-      inputs: '{}',
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-    })
-    const nodeRunId = ulid()
-    const snapshotJsonBefore = JSON.stringify([
-      {
-        id: seed.id,
-        version: 1,
-        scopeType: 'global',
-        scopeId: null,
-        title: 'orig',
-        bodyMd: 'b',
-        tags: [],
-        sourceKind: 'manual',
-        approvedAt: Date.now(),
-      },
-    ])
-    await h.db.insert(nodeRuns).values({
-      id: nodeRunId,
-      taskId,
-      nodeId: 'n1',
-      iteration: 0,
-      retryIndex: 0,
-      reviewIteration: 0,
-      clarifyIteration: 0,
-      status: 'done',
-      injectedMemoriesJson: snapshotJsonBefore,
-    })
-
-    // PATCH the memory's title + body — every field a runtime injector
-    // would care about.
-    const res = await h.app.fetch(
-      authed(h.adminUserToken, {
-        url: `/api/memories/${encodeURIComponent(seed.id)}`,
-        method: 'PATCH',
-        body: JSON.stringify({ title: 'edited', bodyMd: 'edited body' }),
-      }),
-    )
-    expect(res.status).toBe(200)
-
-    const rows = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))) as Array<{
-      injectedMemoriesJson: string | null
-    }>
-    expect(rows.length).toBe(1)
-    // Byte-equal: the historical snapshot is frozen by RFC-046 design.
-    expect(rows[0]!.injectedMemoriesJson).toBe(snapshotJsonBefore)
+  // RFC-061 follow-up: node_runs.injected_memories_json column is gone
+  // with migration 0035. The RFC-046 historical-snapshot invariant
+  // moves to (attempts + projection events); rewritten test lands with
+  // the memory-inject rewire in a follow-up PR.
+  test.skip('RFC-046 invariant: PATCH does NOT touch node_runs.injected_memories_json (disabled — column dropped)', async () => {
+    // intentionally empty
   })
 })

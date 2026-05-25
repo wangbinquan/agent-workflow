@@ -37,7 +37,7 @@ import {
   redactGitUrl,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { memories, memoryDistillJobs, reviewComments, taskFeedback } from '@/db/schema'
+import { memories, memoryDistillJobs, taskFeedback } from '@/db/schema'
 import { extractLastEnvelope } from '@/services/envelope'
 import { captureDistillJobSession } from '@/services/distillSessionCapture'
 import { clipHeadTail, renderSessionTreeToDistillerMd } from '@/services/distillerSourceContext'
@@ -326,31 +326,14 @@ export async function loadSourceEvents(
       ? await db.select().from(taskFeedback).where(inArray(taskFeedback.id, feedbackIds))
       : []
 
-  // Comments are 1:N on doc_versions; one pass to fetch them all.
-  const commentRows =
-    reviewIds.length > 0
-      ? await db
-          .select()
-          .from(reviewComments)
-          .where(inArray(reviewComments.docVersionId, reviewIds))
-          .orderBy(asc(reviewComments.anchorParagraphIdx), asc(reviewComments.anchorOffsetStart))
-      : []
+  // RFC-061 follow-up: review_comments table is dropped with doc_versions.
+  // The distill pipeline no longer attaches per-anchor reviewer notes; the
+  // suspensions-projection successor will store them as part of the review
+  // resolution payload.
   const commentsByDv = new Map<
     string,
     Array<{ body: string; anchorParagraphIdx: number; selectedText: string }>
   >()
-  for (const c of commentRows) {
-    let bucket = commentsByDv.get(c.docVersionId)
-    if (bucket === undefined) {
-      bucket = []
-      commentsByDv.set(c.docVersionId, bucket)
-    }
-    bucket.push({
-      body: c.commentText,
-      anchorParagraphIdx: c.anchorParagraphIdx,
-      selectedText: c.selectedText,
-    })
-  }
 
   const transcriptsByClarifyId = await loadClarifyTranscripts(db, clarifyRows, budget)
   const reviewBodiesByDvId = await loadReviewBodies(reviewRows, budget)

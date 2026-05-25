@@ -12,7 +12,7 @@ import { ulid } from 'ulid'
 
 type AnyServer = Server<unknown>
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createWorkflow, deleteWorkflow, updateWorkflow } from '../src/services/workflow'
 import { emitTaskStatus } from '../src/services/task'
@@ -255,58 +255,11 @@ describe('WebSocket channels', () => {
   // projection events table when the events-stream WS contract lands
   // alongside the /tasks/:id/timeline route (Phase 6 follow-up PR).
   test.skip('/ws/tasks/{id}?since=N replays node_run_events with id > N (disabled — legacy replay retired)', async () => {
-    // Seed a task + node_run + 3 events.
-    const taskId = ulid()
-    await h.db.insert(workflows).values({
-      id: 'wf-y',
-      name: 'wf',
-      definition: '{}',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    await h.db.insert(tasks).values({
-      name: 'fixture-task',
+    // Body intentionally empty — the legacy node_run_events seed paths
+    // are gone with migration 0035. The successor lives with the
+    // events-stream WS contract in Phase 6.
+    const _placeholder = TOKEN
+    void _placeholder
 
-      id: taskId,
-      workflowId: 'wf-y',
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/y',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: 'running',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    const nrId = ulid()
-    await h.db
-      .insert(nodeRuns)
-      .values({ id: nrId, taskId, nodeId: 'n1', status: 'done', startedAt: Date.now() })
-    for (let i = 0; i < 3; i++) {
-      await h.db.insert(nodeRunEvents).values({
-        nodeRunId: nrId,
-        ts: Date.now(),
-        kind: 'text',
-        payload: JSON.stringify({ chunk: i }),
-      })
-    }
-
-    // Read back the event ids so we know what to ?since=.
-    const allEvents = await h.db.select().from(nodeRunEvents)
-    const sortedIds = allEvents.map((e) => e.id).sort((a, b) => a - b)
-    const firstId = sortedIds[0] ?? 0
-
-    const received: Array<{ type: string; id?: number; payload?: unknown }> = []
-    const ws = new WebSocket(`${h.url}/ws/tasks/${taskId}?token=${TOKEN}&since=${firstId}`)
-    await new Promise<void>((res) => {
-      ws.addEventListener('open', () => res())
-    })
-    ws.addEventListener('message', (e) => received.push(JSON.parse(String(e.data))))
-    await new Promise((r) => setTimeout(r, 100))
-    ws.close()
-
-    const events = received.filter((m) => m.type === 'node.event')
-    expect(events.length).toBe(2) // events with id > firstId
-    expect(events[0]?.id).toBe(sortedIds[1])
   })
 })

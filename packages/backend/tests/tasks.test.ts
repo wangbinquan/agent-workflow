@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { logicalRuns, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { logicalRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { writeEvent } from '../src/services/writeEvents'
 import { runGit } from '../src/util/git'
@@ -633,7 +633,6 @@ describe('task HTTP routes', () => {
     const id = ulid()
     await h.db.insert(tasks).values({
       name: 'fixture-task',
-
       id,
       workflowId: wfId,
       workflowSnapshot: '{}',
@@ -645,15 +644,9 @@ describe('task HTTP routes', () => {
       inputs: '{}',
       startedAt: Date.now(),
     })
-    const nrId = ulid()
-    await h.db.insert(nodeRuns).values({
-      id: nrId,
-      taskId: id,
-      nodeId: 'n1',
-      status: 'failed',
-      startedAt: Date.now(),
-    })
-    const res = await req(h.app, `/api/tasks/${id}/nodes/${nrId}/retry`, { method: 'POST' })
+    // task-still-running check fires before the nodeRunId lookup, so a
+    // synthetic id is enough — no projection seed required.
+    const res = await req(h.app, `/api/tasks/${id}/nodes/${ulid()}/retry`, { method: 'POST' })
     expect(res.status).toBe(409)
     expect(((await res.json()) as { code: string }).code).toBe('task-still-running')
   })

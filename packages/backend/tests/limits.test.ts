@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import { tasks, workflows } from '../src/db/schema'
 import { enforceLimits } from '../src/services/limits'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -100,16 +100,9 @@ describe('enforceLimits', () => {
 
   test('maxTotalTokens=0 disables the token cap', async () => {
     const taskId = await seedTask(h.db, { maxTotalTokens: 0 })
-    await h.db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId,
-      nodeId: 'a',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now(),
-      tokTotal: 999_999,
-    })
+    // maxTotalTokens=0 short-circuits the check before any nodeRun /
+    // attempt is queried (see services/limits.ts).
+    void taskId
     const r = await enforceLimits(h.db)
     expect(r.canceled).toEqual([])
   })

@@ -23,9 +23,9 @@ import { createApp } from '../../src/server'
 import { createUser } from '../../src/services/users'
 import {
   agents,
+  logicalRuns,
   mcps,
   memories,
-  nodeRuns,
   plugins,
   skills,
   tasks,
@@ -177,12 +177,20 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     finishedAt: now,
     ownerUserId: alice.id,
   })
-  await db.insert(nodeRuns).values({
+  // RFC-061 follow-up: contract fixtures seed a logical_run row (the
+  // projection's NodeRun equivalent) so the /node-runs REST shim
+  // returns a non-empty response. node_runs / promptText etc. are gone.
+  await db.insert(logicalRuns).values({
     id: nodeRunId,
     taskId,
     nodeId: 'agent_1',
+    loopIter: 0,
+    shardKey: '',
+    iter: 0,
     status: 'done',
-    promptText: 'hello',
+    createdAt: now,
+    updatedAt: now,
+    lastEventId: 'evt_seed',
   })
   await db.insert(memories).values({
     id: memoryId,
