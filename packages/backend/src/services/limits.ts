@@ -12,9 +12,9 @@
 // orphan logic (P-4-07) has already flipped the row to `interrupted`, this
 // tick is a no-op for that task.
 
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { tasks } from '@/db/schema'
+import { events as eventsTable, tasks } from '@/db/schema'
 import { cancelTask } from '@/services/task'
 import { createLogger, type Logger } from '@/util/log'
 
@@ -56,7 +56,7 @@ export async function enforceLimits(
 }
 
 async function checkOne(
-  _db: DbClient,
+  db: DbClient,
   t: typeof tasks.$inferSelect,
   now: number,
 ): Promise<{ summary: string; message: string } | null> {
@@ -69,14 +69,44 @@ async function checkOne(
       }
     }
   }
-  // RFC-061 follow-up: token-limit enforcement is temporarily disabled.
-  // The legacy implementation summed node_runs.tok_total but the actor
-  // doesn't populate that column — token usage is captured in the runner
-  // (RunOpencodeAttemptResult.tokenUsage) but not yet emitted as an event.
-  // Re-enable by adding a tokenUsage field to attempt-finished-success
-  // payload + a dedicated token_usage projection table. Until then,
-  // setting tasks.maxTotalTokens has no effect.
+  if (typeof t.maxTotalTokens === 'number' && t.maxTotalTokens > 0) {
+    const total = await sumTaskTokens(db, t.id)
+    if (total > t.maxTotalTokens) {
+      return {
+        summary: 'task-token-limit-exceeded',
+        message: `task consumed ${total} tokens, exceeding configured limit ${t.maxTotalTokens}`,
+      }
+    }
+  }
   return null
+}
+
+/**
+ * Sum every attempt-token-usage event's `total` field for one task.
+ * RFC-061 follow-up restored token-limit enforcement: the projection
+ * events table is authoritative now that node_runs.tok_total is gone.
+ *
+ * Events whose payload doesn't parse or whose .total is missing
+ * contribute 0 (a malformed event must NEVER credit a task with
+ * negative or NaN tokens).
+ */
+async function sumTaskTokens(db: DbClient, taskId: string): Promise<number> {
+  const rows = await db
+    .select({ payload: eventsTable.payload })
+    .from(eventsTable)
+    .where(and(eq(eventsTable.taskId, taskId), eq(eventsTable.kind, 'attempt-token-usage')))
+  let total = 0
+  for (const r of rows) {
+    try {
+      const p = JSON.parse(r.payload) as { total?: unknown }
+      if (typeof p.total === 'number' && Number.isFinite(p.total) && p.total >= 0) {
+        total += p.total
+      }
+    } catch {
+      // skip malformed
+    }
+  }
+  return total
 }
 
 /**

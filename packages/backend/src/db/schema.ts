@@ -824,6 +824,7 @@ export const events = sqliteTable(
         'attempt-output-captured',
         'attempt-subagent-tool-use',
         'attempt-subagent-output',
+        'attempt-token-usage',
         // suspension-level
         'suspension-created',
         'suspension-resolved',

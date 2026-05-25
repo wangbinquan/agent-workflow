@@ -167,6 +167,31 @@ export class ProductionRunnerAdapter implements RunnerAdapter {
           payload: { portName, content },
         })
       }
+      // RFC-061 follow-up: surface token usage so limits.ts can sum it.
+      // Skipped when the runner didn't report usage (some opencode
+      // configurations / providers don't return token counts).
+      if (result.tokenUsage !== undefined) {
+        const u = result.tokenUsage
+        const input = u.input ?? 0
+        const output = u.output ?? 0
+        const cacheCreate = u.cacheCreate
+        const cacheRead = u.cacheRead
+        const total = u.total ?? input + output + (cacheCreate ?? 0) + (cacheRead ?? 0)
+        events.push({
+          taskId: this.opts.taskId,
+          kind: 'attempt-token-usage',
+          ...scopeFields,
+          attemptId: req.attemptId,
+          actor: 'system',
+          payload: {
+            input,
+            output,
+            total,
+            ...(cacheCreate !== undefined ? { cacheCreate } : {}),
+            ...(cacheRead !== undefined ? { cacheRead } : {}),
+          },
+        })
+      }
       events.push({
         taskId: this.opts.taskId,
         kind: 'attempt-finished-success',

@@ -9,6 +9,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { enforceLimits } from '../src/services/limits'
+import { writeEvent } from '../src/services/writeEvents'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -90,12 +91,50 @@ describe('enforceLimits', () => {
     expect(t?.status).toBe('running')
   })
 
-  // RFC-061 follow-up: token-limit enforcement is temporarily disabled
-  // (services/limits.ts dropped the node_runs.tok_total sum). When a
-  // future commit emits tokenUsage on attempt-finished-success, restore
-  // this test against the new projection.
-  test.skip('cancels task when total tokens exceed maxTotalTokens (disabled — token usage not yet projected)', async () => {
-    // intentionally left empty; see services/limits.ts header.
+  // RFC-061 follow-up: token-limit enforcement restored. The runner
+  // emits attempt-token-usage events; limits.ts sums their `total`
+  // payload field via the projection.
+  test('cancels task when total tokens exceed maxTotalTokens (projection-summed)', async () => {
+    const taskId = await seedTask(h.db, { maxTotalTokens: 100 })
+    // Two attempt-token-usage events summing 140 > 100 cap.
+    const scope = { nodeId: 'n', loopIter: 0, shardKey: '', iter: 0 } as const
+    await writeEvent(h.db, {
+      taskId,
+      kind: 'logical-run-created',
+      payload: {},
+      actor: 'system',
+      ...scope,
+    })
+    const att1 = `att_${ulid()}`
+    await writeEvent(h.db, {
+      taskId,
+      kind: 'attempt-started',
+      payload: {},
+      actor: 'system',
+      ...scope,
+      attemptId: att1,
+    })
+    await writeEvent(h.db, {
+      taskId,
+      kind: 'attempt-token-usage',
+      payload: { input: 30, output: 30, total: 60 },
+      actor: 'system',
+      ...scope,
+      attemptId: att1,
+    })
+    await writeEvent(h.db, {
+      taskId,
+      kind: 'attempt-token-usage',
+      payload: { input: 40, output: 40, total: 80 },
+      actor: 'system',
+      ...scope,
+      attemptId: att1,
+    })
+    const r = await enforceLimits(h.db)
+    expect(r.canceled).toEqual([taskId])
+    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    expect(t?.errorSummary).toBe('task-token-limit-exceeded')
+    expect(t?.errorMessage).toContain('140')
   })
 
   test('maxTotalTokens=0 disables the token cap', async () => {

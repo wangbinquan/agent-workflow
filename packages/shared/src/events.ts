@@ -63,7 +63,7 @@ export const EVENT_KINDS = [
   'logical-run-iter-bumped',
   'logical-run-completed',
   'logical-run-canceled',
-  // attempt-level (9)
+  // attempt-level (10)
   'attempt-started',
   'attempt-finished-success',
   'attempt-finished-envelope-fail',
@@ -73,6 +73,10 @@ export const EVENT_KINDS = [
   'attempt-output-captured',
   'attempt-subagent-tool-use',
   'attempt-subagent-output',
+  // RFC-061 follow-up — token usage at attempt finish so limits.ts can
+  // re-enforce maxTotalTokens. Optional emit (some runners don't report
+  // usage); summed projection-side as needed.
+  'attempt-token-usage',
   // suspension-level (3)
   'suspension-created',
   'suspension-resolved',
@@ -194,6 +198,18 @@ const AttemptSubagentOutputPayload = z.object({
   content: z.string(),
 })
 
+const AttemptTokenUsagePayload = z.object({
+  /** Input (prompt) tokens consumed by this attempt. */
+  input: z.number().int().nonnegative(),
+  /** Output (completion) tokens emitted by this attempt. */
+  output: z.number().int().nonnegative(),
+  /** Optional cache-write / cache-read split (Anthropic). */
+  cacheCreate: z.number().int().nonnegative().optional(),
+  cacheRead: z.number().int().nonnegative().optional(),
+  /** Convenience total — input + output + cache rounds. */
+  total: z.number().int().nonnegative(),
+})
+
 const SuspensionCreatedPayload = z.object({
   suspensionId: z.string().min(1),
   signalKind: SignalKindSchema,
@@ -247,6 +263,7 @@ export const EVENT_PAYLOAD_SCHEMAS = {
   'attempt-output-captured': AttemptOutputCapturedPayload,
   'attempt-subagent-tool-use': AttemptSubagentToolUsePayload,
   'attempt-subagent-output': AttemptSubagentOutputPayload,
+  'attempt-token-usage': AttemptTokenUsagePayload,
 
   'suspension-created': SuspensionCreatedPayload,
   'suspension-resolved': SuspensionResolvedPayload,

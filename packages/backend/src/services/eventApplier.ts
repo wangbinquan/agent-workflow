@@ -237,6 +237,7 @@ export function applyEvent(db: DbOrTx, rawEvent: RawEvent): void {
 
     case 'attempt-subagent-tool-use':
     case 'attempt-subagent-output':
+    case 'attempt-token-usage':
       return
 
     /* ============================================================
