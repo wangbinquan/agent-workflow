@@ -542,26 +542,6 @@ function NodeRunsTable({ runs, workflowSnapshot }: { runs: NodeRun[]; workflowSn
   )
 }
 
-/**
- * True when a node_run row should render a "Review" jump button next to
- * its status chip. Only the awaiting-review state hides a pending human
- * action behind the table row; every other status either runs on its own
- * or is terminal. Exported for unit tests.
- */
-export function shouldShowReviewJump(status: NodeRun['status']): boolean {
-  return status === 'awaiting_review'
-}
-
-/**
- * True when a node_run row should render a "Clarify" jump button. The
- * `awaiting_human` status only lives on clarify-node node_runs (see
- * services/clarify.ts createClarifySession), so `r.id` is directly the
- * clarifyNodeRunId expected by /clarify/$nodeRunId.
- */
-export function shouldShowClarifyJump(status: NodeRun['status']): boolean {
-  return status === 'awaiting_human'
-}
-
 function noderunTone(status: NodeRun['status']): string {
   switch (status) {
     case 'pending':
