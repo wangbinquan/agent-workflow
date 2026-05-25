@@ -435,6 +435,55 @@ async function kickActorPath(
 }
 
 /**
+ * RFC-062 PR-A T8 — public helper for spawning the actor of an
+ * already-persisted task. Reads the task row, reconstructs the
+ * launcher args (workflow snapshot, inputsMap, paths), wires the
+ * AbortController into activeTasks, and kicks the actor through the
+ * production runner.
+ *
+ * Used by `daemonResume.spawnResumedActors` so the daemon-restart
+ * recovery pipeline actually brings each non-terminal task's actor
+ * loop online (pre-RFC-062: Step 4 was self-described as "unused in
+ * production" and tasks just sat in `running` with no actor).
+ *
+ * Returns a promise that resolves when the actor loop exits (task
+ * reaches terminal state or is canceled). Callers that want
+ * fire-and-forget should `void launchTaskActor(...)`.
+ */
+export async function launchTaskActor(
+  db: DbClient,
+  taskId: string,
+  options?: {
+    appHome?: string
+    opencodeCmd?: readonly string[]
+    controller?: AbortController
+  },
+): Promise<void> {
+  const task = await getTask(db, taskId)
+  if (task === null) {
+    log.warn('launchTaskActor: task not found', { taskId })
+    return
+  }
+  const controller = options?.controller ?? new AbortController()
+  activeTasks.set(taskId, controller)
+  const workflowDef = parseSnapshot(task.workflowSnapshot) as Record<string, unknown>
+  const inputsMap = task.inputs as Record<string, unknown>
+  await kickActorPath(
+    db,
+    taskId,
+    workflowDef,
+    inputsMap,
+    task.repoPath,
+    task.worktreePath,
+    options?.appHome ?? Paths.root,
+    controller,
+    options?.opencodeCmd,
+  ).finally(() => {
+    activeTasks.delete(taskId)
+  })
+}
+
+/**
  * Cancel an in-flight task. Aborts the in-process controller (runner SIGTERMs
  * the opencode child), then waits briefly for the scheduler to settle.
  *
@@ -635,6 +684,13 @@ export async function retryNode(
       }
     }
     const edges = Array.isArray(snap?.edges) ? snap.edges : []
+    // edges:include-system — RFC-062 §2 audit: retry-cascade follows
+    // source→target along every edge, including feedback edges. When
+    // a clarify / cross-clarify node is retried (e.g. new answer
+    // submitted), the agent on the receiving end of the feedback
+    // edge has consumed stale output and must also be retried — so
+    // the feedback edge is a legitimate cascade path here, opposite
+    // of the lazy-cascade-gating use case in readyScanner.
     const adj = new Map<string, string[]>()
     for (const e of edges as Array<{
       source?: { nodeId?: string }

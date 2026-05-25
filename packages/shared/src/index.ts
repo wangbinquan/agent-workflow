@@ -45,6 +45,10 @@ export * from './kindParser'
 export * from './shardingRegistry'
 export * from './signalPromptGuard'
 export * from './wrapperFanout'
+// RFC-062 §2 — workflow edge contracts (SYSTEM_PORT_NAMES + filterDataEdges
+// + isFeedbackEdge). Public so every consumer of workflow.edges can
+// explicitly choose between data-only or feedback-only views.
+export * from './workflow-edges'
 // RFC-061 PR-A: event-sourced execution model — types only in PR-A; PR-B
 // fills in the concrete handler implementations.
 export * from './events'

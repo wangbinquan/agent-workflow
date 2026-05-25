@@ -1,3 +1,11 @@
+// edges:include-system file-scope — RFC-062 §2 audit. This module
+// is the clarify / cross-clarify topology library; every workflow.edges
+// iteration here is explicitly looking for SYSTEM ports (e.g.
+// `__clarify__` source, `__clarify_response__` target, cross-clarify
+// channel patterns). Using filterDataEdges here would defeat the
+// purpose — these helpers are how the scheduler resolves the back-
+// edges in the first place.
+//
 // Pure functions and constants for the RFC-023 clarify node + RFC-056
 // cross-clarify node. Shared between the backend runner / scheduler / clarify
 // service and the frontend canvas drag helper / prompt preview pane. No Bun

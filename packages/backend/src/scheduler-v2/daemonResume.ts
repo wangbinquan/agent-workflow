@@ -1,4 +1,5 @@
 // RFC-061 PR-B T9-extra — daemon restart sequence (design.md §8).
+// RFC-062 PR-A T8 — Step 4 actually wired (see CHANGELOG below).
 //
 // On daemon startup, runs the 4-step recovery so non-terminal tasks
 // pick up where they left off — no fixup scripts, no manual cleanup:
@@ -13,12 +14,17 @@
 //   3. enqueueResumeWakes — every task with non-terminal status gets a
 //      `task-resumed-after-daemon-restart` event + wake on the actor
 //      queue. The actor's wake-loop body then drives ready-scan.
-//   4. spawnActors — register actors for every non-terminal task and
-//      hand them to runTaskActor.
+//   4. spawnResumedActors — fires the injected launcher (cli/start.ts
+//      wires services/task.launchTaskActor) for every non-terminal
+//      task so its actor loop comes online and drains the wake from
+//      Step 3.
 //
-// This file is purely additive — it doesn't replace the existing
-// daemon-start path, just sits next to it as the eventual entry point
-// the daemon hard-cut commit will wire up.
+// RFC-062 CHANGELOG: Step 4 was originally a stub; cli/start.ts called
+// resumeFromDisk but nothing fired launchTaskActor, so resumed wakes
+// piled up with no draining actor. The 2026-05-25 incident task spent
+// ~8 hours "running" with zero progress after a daemon restart. PR-A
+// T8 inverts the responsibility — resumeFromDisk now takes a launcher
+// callback and runs it itself.
 
 import { eq, gt, inArray, isNull, asc, type SQL } from 'drizzle-orm'
 
@@ -50,10 +56,21 @@ export interface DaemonResumeOptions {
    */
   incrementalLimit?: number
   /**
-   * Skip the spawnActors step. Useful for tests / dry runs that just
-   * want to verify recovery state without bringing actors online.
+   * Skip the spawnResumedActors step. Useful for tests / dry runs that
+   * just want to verify recovery state without bringing actors online.
    */
   skipSpawn?: boolean
+  /**
+   * RFC-062 PR-A T8 — injected actor launcher (avoids importing
+   * services/task.ts directly here and keeps daemonResume.ts unit-
+   * testable with a mock). Called once per non-terminal task; should
+   * return quickly (fire actor loop in background) and never throw to
+   * the caller. cli/start.ts wires this to services/task.launchTaskActor.
+   *
+   * If undefined (back-compat for tests that don't care about Step 4),
+   * spawnResumedActors becomes a no-op and only Steps 1-3 run.
+   */
+  launcher?: (taskId: string) => Promise<void>
 }
 
 /**
@@ -72,6 +89,15 @@ export async function resumeFromDisk(opts: DaemonResumeOptions): Promise<DaemonR
   const crashedAttempts = await markCrashedAttempts(opts.db)
   // 3. Enqueue resume wakes for non-terminal tasks
   const resumedTasks = await enqueueResumeWakes(opts.db)
+  // 4. RFC-062 PR-A T8 — actually spawn the actor loops the wakes were
+  //    enqueued for. Without this step a daemon restart leaves every
+  //    "running" task with a resume wake in queue and no actor draining
+  //    it (the 2026-05-25 incident's secondary cause). Each launcher
+  //    call returns a Promise resolved when the actor exits terminal;
+  //    we fire-and-forget here so resumeFromDisk returns quickly.
+  if (!opts.skipSpawn && opts.launcher !== undefined) {
+    spawnResumedActors(opts.db, opts.launcher)
+  }
 
   return {
     appliedEvents: projectionInfo.appliedEvents,
@@ -79,6 +105,42 @@ export async function resumeFromDisk(opts: DaemonResumeOptions): Promise<DaemonR
     crashedAttempts,
     resumedTasks,
   }
+}
+
+/* ============================================================
+ *  Step 4 — spawnResumedActors (RFC-062 PR-A T8 — actually wired)
+ * ============================================================ */
+
+/**
+ * Fire `launcher(taskId)` for every task with non-terminal status. The
+ * launcher promise is intentionally not awaited; each actor loop runs
+ * until terminal state and self-deregisters from the registry. Errors
+ * from individual launches are caught + logged so one bad task can't
+ * abort the others.
+ */
+export function spawnResumedActors(
+  db: DbClient,
+  launcher: (taskId: string) => Promise<void>,
+): number {
+  const nonTerminal = db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(inArray(tasks.status, ['pending', 'running', 'awaiting_review', 'awaiting_human']))
+    .all()
+  for (const t of nonTerminal) {
+    void launcher(t.id).catch((err) => {
+      // We can't import the project logger here without a cycle risk;
+      // fall back to console.error so the failure is at least visible
+      // in daemon.log via the global console redirect.
+      // eslint-disable-next-line no-console
+      console.error(
+        `[daemon-resume] launcher threw for task ${t.id}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      )
+    })
+  }
+  return nonTerminal.length
 }
 
 /* ============================================================
@@ -261,13 +323,13 @@ export async function enqueueResumeWakes(db: DbClient): Promise<number> {
 }
 
 /* ============================================================
- *  Step 4 — spawnActors (caller's responsibility for now)
+ *  Diagnostics — listResumedActors (kept for completeness)
  * ============================================================ */
 
 /**
- * Helper exposed for the daemon entrypoint: returns the actor states
- * the daemon should hand to `runTaskActor`. The daemon hard-cut commit
- * wires this up; for now it's exported but unused in production.
+ * Snapshot of the actor registry post-resume. Useful for diagnostic
+ * routes / tests that want to enumerate which tasks the daemon
+ * brought back online.
  */
 export function listResumedActors(): ActorState[] {
   return taskActorRegistry

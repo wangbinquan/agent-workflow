@@ -252,21 +252,12 @@ const BUILTIN_VARS = new Set([
   '__external_feedback_sources__',
 ])
 
-/**
- * System ports the framework injects via DEDICATED prompt sections instead of
- * the generic `## ${port_name}` auto-append loop. They appear in
- * `definition.edges` as system-channel targets (RFC-023 clarify channel /
- * RFC-056 cross-clarify channel) so the canvas can render handles + the
- * scheduler can track wiring, but the actual prompt content arrives via the
- * `## Clarify Q&A — Prior Rounds` / `## External Feedback` blocks rendered
- * below. Skipping these here keeps the auto-append from emitting empty,
- * misleading `## __port_name__` headers that make the human reader (and
- * the agent) think the cross-channel content is missing.
- */
-const SYSTEM_PORT_NAMES = new Set<string>([
-  '__clarify_response__', // RFC-023 self-clarify answers target
-  '__external_feedback__', // RFC-056 cross-clarify designer feedback target
-])
+// RFC-062 §2.2 — SYSTEM_PORT_NAMES single source of truth moved to
+// workflow-edges.ts so scheduler-v2 / fanout / validator / prompt all
+// share the same set. Same rationale as before applies here:
+// auto-append loop skips these ports because their content comes via
+// dedicated Clarify Q&A / External Feedback blocks rendered below.
+import { SYSTEM_PORT_NAMES } from './workflow-edges'
 
 /**
  * Compose the user-prompt string sent to opencode for one node invocation:

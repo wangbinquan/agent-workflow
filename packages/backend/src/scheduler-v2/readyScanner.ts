@@ -23,7 +23,13 @@ import { and, eq, inArray } from 'drizzle-orm'
 
 import type { DbClient } from '../db/client'
 import { logicalRuns } from '../db/schema'
-import type { Scope, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import {
+  filterDataEdges,
+  type Scope,
+  type WorkflowDefinition,
+  type WorkflowEdgeLike,
+  type WorkflowNode,
+} from '@agent-workflow/shared'
 
 import type { ReadyScope } from './taskActorTick'
 
@@ -164,15 +170,17 @@ export function scanFreshDownstream(ctx: ReadyScanContext): ReadyScope[] {
     .all() as Array<typeof logicalRuns.$inferSelect>
 
   const nodes = (ctx.workflow as { nodes?: ReadonlyArray<WorkflowNode> }).nodes ?? []
-  const edges =
-    (
-      ctx.workflow as {
-        edges?: ReadonlyArray<{
-          source?: { nodeId?: string }
-          target?: { nodeId?: string }
-        }>
-      }
-    ).edges ?? []
+  const rawEdges = (ctx.workflow as { edges?: ReadonlyArray<WorkflowEdgeLike> }).edges ?? []
+  // RFC-062 §2 — only DATA edges gate downstream dispatch. Feedback
+  // edges (target.portName ∈ SYSTEM_PORT_NAMES like __clarify_response__
+  // / __external_feedback__) are back-edges produced by clarify /
+  // cross-clarify nodes IN RESPONSE TO the downstream agent suspending
+  // with the corresponding signal. Gating on them deadlocks every
+  // workflow containing self-clarify or cross-clarify (the 2026-05-25
+  // incident root cause). filterDataEdges drops them from the gating
+  // computation; their wiring is consumed via SignalKindHandler resume
+  // paths, not via the lazy-cascade scanner.
+  const edges = filterDataEdges(rawEdges)
 
   // Build adjacency: node → list of upstream node ids.
   const upstreamMap = new Map<string, Set<string>>()

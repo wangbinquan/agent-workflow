@@ -131,12 +131,21 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     /* users service may not be available in degraded mode; ignore */
   }
 
-  // 5b. RFC-061 T10: daemonResume.resumeFromDisk replaces reapOrphanRuns.
-  // It catches up projections, marks orphan attempts as crashed, emits
-  // task-resumed events, and registers actors for non-terminal tasks.
+  // 5b. RFC-061 T10 + RFC-062 PR-A T8: daemonResume.resumeFromDisk
+  // catches up projections, marks orphan attempts as crashed, emits
+  // task-resumed events, AND now actually spawns the actor loops for
+  // every non-terminal task via the injected launcher (services/task.
+  // launchTaskActor). Pre-RFC-062 the spawn step was a "caller's
+  // responsibility for now" stub; nothing in production called it, so
+  // resumed tasks just sat with an enqueued wake and no draining
+  // actor — the 2026-05-25 incident's secondary cause.
   try {
     const { resumeFromDisk } = await import('@/scheduler-v2/daemonResume')
-    const report = await resumeFromDisk({ db })
+    const { launchTaskActor } = await import('@/services/task')
+    const report = await resumeFromDisk({
+      db,
+      launcher: (taskId) => launchTaskActor(db, taskId, { appHome: Paths.root }),
+    })
     if (report.crashedAttempts > 0 || report.resumedTasks > 0) {
       log.warn('rfc-061 daemon resume', {
         applied: report.appliedEvents,

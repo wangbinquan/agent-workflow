@@ -67,6 +67,10 @@ export function computeShardScope(input: ShardScopeInput): ShardScope {
 
   const seeds: string[] = []
   if (shardSourceName !== null) {
+    // edges:include-system — RFC-062 §2 audit: this loop only matches
+    // edges with boundary === 'wrapper-input' (wrapper → inner). System
+    // feedback ports never appear on wrapper-input boundary edges, so
+    // there is nothing to filter; iterating all edges is correct.
     for (const e of defn.edges) {
       if (e.boundary !== 'wrapper-input') continue
       if (e.source.nodeId !== wrapperId) continue
@@ -83,6 +87,11 @@ export function computeShardScope(input: ShardScopeInput): ShardScope {
     const cur = queue.shift()!
     if (perShard.has(cur)) continue
     perShard.add(cur)
+    // edges:include-system — RFC-062 §2 audit: per-shard topology
+    // propagation must follow EVERY inner edge, including feedback
+    // edges. A clarify / cross-clarify node inside a wrapper-fanout
+    // must inherit the same shard label as the agent it feeds back
+    // into; filterDataEdges would break that.
     for (const e of defn.edges) {
       if (e.source.nodeId !== cur) continue
       // Boundary-output edges leave the wrapper — stop propagation.
@@ -122,6 +131,10 @@ export function applyAutoPromote(scope: ShardScope, defn: WorkflowDefinition): S
   let changed = true
   while (changed) {
     changed = false
+    // edges:include-system — RFC-062 §2 audit: cross-set promote needs
+    // every inner edge (data + feedback). A clarify-cross-agent inside
+    // a wrapper-fanout fed by per-shard agents must inherit per-shard
+    // membership; filterDataEdges would leave it incorrectly in `shared`.
     for (const e of defn.edges) {
       if (e.boundary !== undefined) continue // skip wrapper boundary edges
       if (!innerIds.has(e.source.nodeId) || !innerIds.has(e.target.nodeId)) continue
@@ -184,6 +197,8 @@ export function findBoundaryEdgesToInner(
   wrapperId: string,
   innerNodeId: string,
 ): WorkflowEdge[] {
+  // edges:include-system — RFC-062 §2 audit: wrapper-input boundary
+  // edges only; feedback ports do not appear on this boundary shape.
   return defn.edges.filter(
     (e) =>
       e.boundary === 'wrapper-input' &&

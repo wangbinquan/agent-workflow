@@ -1,5 +1,14 @@
 // Workflow static validator (P-2-01).
 //
+// edges:include-system file-scope — RFC-062 §2 audit. This file is the
+// structural validator; it iterates `def.edges` ~30 times across rules
+// (port existence, DAG / cycle, wrapper boundary, clarify back-edge
+// stripping, etc.) and explicitly needs to see EVERY edge (data +
+// feedback) so it can validate their source/target node + port. Using
+// filterDataEdges anywhere here would silently skip validating
+// feedback edges, the exact opposite of validator's job. The grep
+// guard whitelists this file via the marker above.
+//
 // Replaces the M1 stub with the five static checks the design promises:
 //
 //   1. edge-port-existence    — every edge endpoint references a real node
