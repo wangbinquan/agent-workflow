@@ -66,7 +66,64 @@ export async function listTaskSuspensions(
         : eq(logicalRuns.taskId, taskId),
     )
     .orderBy(asc(suspensions.createdAt), asc(suspensions.id))
-  return rows.map((r) => ({
+  return rows.map(rowToSuspension)
+}
+
+/**
+ * List suspensions across every task. Powers the global inbox view.
+ * Always filters to `openOnly` (no use case for the all-tasks list of
+ * historic rows yet). Optional signalKind filter narrows to clarify-
+ * only or review-only inboxes.
+ */
+export async function listAllOpenSuspensions(
+  db: DbClient,
+  opts: { signalKind?: SignalKind; limit?: number } = {},
+): Promise<SuspensionRow[]> {
+  const conds = [isNull(suspensions.resolvedAt)]
+  if (opts.signalKind !== undefined) {
+    conds.push(eq(suspensions.signalKind, opts.signalKind))
+  }
+  const limit = Math.min(opts.limit ?? 200, 500)
+  const rows = await db
+    .select({
+      id: suspensions.id,
+      logicalRunId: suspensions.logicalRunId,
+      signalKind: suspensions.signalKind,
+      awaitsActor: suspensions.awaitsActor,
+      payload: suspensions.payload,
+      createdAt: suspensions.createdAt,
+      resolvedAt: suspensions.resolvedAt,
+      resolvedByEventId: suspensions.resolvedByEventId,
+      lrTaskId: logicalRuns.taskId,
+      lrNodeId: logicalRuns.nodeId,
+      lrLoopIter: logicalRuns.loopIter,
+      lrShardKey: logicalRuns.shardKey,
+      lrIter: logicalRuns.iter,
+    })
+    .from(suspensions)
+    .innerJoin(logicalRuns, eq(suspensions.logicalRunId, logicalRuns.id))
+    .where(and(...conds))
+    .orderBy(asc(suspensions.createdAt), asc(suspensions.id))
+    .limit(limit)
+  return rows.map(rowToSuspension)
+}
+
+function rowToSuspension(r: {
+  id: string
+  logicalRunId: string
+  signalKind: string
+  awaitsActor: string
+  payload: string
+  createdAt: number
+  resolvedAt: number | null
+  resolvedByEventId: string | null
+  lrTaskId: string
+  lrNodeId: string
+  lrLoopIter: number
+  lrShardKey: string
+  lrIter: number
+}): SuspensionRow {
+  return {
     id: r.id,
     taskId: r.lrTaskId,
     nodeRunId: r.logicalRunId,
@@ -82,7 +139,7 @@ export async function listTaskSuspensions(
     createdAt: r.createdAt,
     resolvedAt: r.resolvedAt,
     resolvedByEventId: r.resolvedByEventId,
-  }))
+  }
 }
 
 export async function getSuspensionById(
@@ -113,23 +170,7 @@ export async function getSuspensionById(
   if (r === undefined) {
     throw new NotFoundError('suspension-not-found', `suspension '${suspensionId}' not found`)
   }
-  return {
-    id: r.id,
-    taskId: r.lrTaskId,
-    nodeRunId: r.logicalRunId,
-    scope: {
-      nodeId: r.lrNodeId,
-      loopIter: r.lrLoopIter,
-      shardKey: r.lrShardKey,
-      iter: r.lrIter,
-    },
-    signalKind: r.signalKind as SignalKind,
-    awaitsActor: r.awaitsActor,
-    body: safeJsonParse(r.payload),
-    createdAt: r.createdAt,
-    resolvedAt: r.resolvedAt,
-    resolvedByEventId: r.resolvedByEventId,
-  }
+  return rowToSuspension(r)
 }
 
 /**

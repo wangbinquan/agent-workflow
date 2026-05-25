@@ -158,6 +158,58 @@ describe('GET /api/tasks/:id/suspensions + /api/suspensions/:id', () => {
     expect(res.status).toBe(404)
   })
 
+  test('GET /api/suspensions lists open rows across every task', async () => {
+    const a = await seedTaskAndScope(h.db)
+    const b = await seedTaskAndScope(h.db)
+    for (const t of [a, b]) {
+      await writeEvent(h.db, {
+        taskId: t.taskId,
+        kind: 'suspension-created',
+        payload: {
+          suspensionId: `sus_${ulid()}`,
+          signalKind: 'self-clarify',
+          awaitsActor: 'user:',
+          body: { questions: [{ id: 'q1', text: 'q?', type: 'text' }] },
+        },
+        actor: 'system',
+        nodeId: 'agent_a',
+        loopIter: 0,
+        shardKey: '',
+        iter: 0,
+      })
+    }
+    const res = await req(h.app, `/api/suspensions`)
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { rows: Array<{ taskId: string }> }
+    expect(body.rows.length).toBe(2)
+    const taskIds = new Set(body.rows.map((r) => r.taskId))
+    expect(taskIds.has(a.taskId)).toBe(true)
+    expect(taskIds.has(b.taskId)).toBe(true)
+  })
+
+  test('GET /api/suspensions?signalKind=review filters', async () => {
+    const t = await seedTaskAndScope(h.db)
+    await writeEvent(h.db, {
+      taskId: t.taskId,
+      kind: 'suspension-created',
+      payload: {
+        suspensionId: `sus_${ulid()}`,
+        signalKind: 'self-clarify',
+        awaitsActor: 'user:',
+        body: { questions: [{ id: 'q1', text: 'q?', type: 'text' }] },
+      },
+      actor: 'system',
+      nodeId: 'agent_a',
+      loopIter: 0,
+      shardKey: '',
+      iter: 0,
+    })
+    const res = await req(h.app, `/api/suspensions?signalKind=review`)
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { rows: Array<unknown> }
+    expect(body.rows.length).toBe(0)
+  })
+
   test('?openOnly=false returns resolved rows too', async () => {
     const { taskId } = await seedTaskAndScope(h.db)
     const suspensionId = `sus_${ulid()}`

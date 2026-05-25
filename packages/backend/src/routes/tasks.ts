@@ -46,10 +46,12 @@ import {
 } from '@/services/taskRunsProjection'
 import {
   getSuspensionById,
+  listAllOpenSuspensions,
   listTaskSuspensions,
   resolveSuspension,
 } from '@/services/suspensions'
 import { listTaskTimeline } from '@/services/timeline'
+import { SignalKindSchema, type SignalKind } from '@agent-workflow/shared'
 import {
   applyUploadsToWorktree,
   DEFAULT_UPLOAD_LIMITS,
@@ -467,6 +469,33 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     const openOnlyRaw = c.req.query('openOnly')
     const openOnly = openOnlyRaw === undefined || openOnlyRaw !== 'false'
     return c.json({ rows: await listTaskSuspensions(deps.db, c.req.param('id'), { openOnly }) })
+  })
+
+  // Cross-task open suspensions list — powers the global inbox drawer
+  // (one place to see every clarify / review request across tasks).
+  // GET /api/suspensions[?signalKind=K&limit=N]
+  app.get('/api/suspensions', async (c) => {
+    const signalKindRaw = c.req.query('signalKind')
+    const limitRaw = c.req.query('limit')
+    const opts: { signalKind?: SignalKind; limit?: number } = {}
+    if (signalKindRaw !== undefined) {
+      const parsed = SignalKindSchema.safeParse(signalKindRaw)
+      if (!parsed.success) {
+        throw new ValidationError(
+          'suspensions-signalKind-invalid',
+          `signalKind must be one of the closed SignalKind enum`,
+        )
+      }
+      opts.signalKind = parsed.data
+    }
+    if (limitRaw !== undefined) {
+      const n = Number(limitRaw)
+      if (!Number.isFinite(n) || n <= 0) {
+        throw new ValidationError('suspensions-limit-invalid', 'limit must be a positive number')
+      }
+      opts.limit = n
+    }
+    return c.json({ rows: await listAllOpenSuspensions(deps.db, opts) })
   })
 
   app.get('/api/suspensions/:id', async (c) => {
