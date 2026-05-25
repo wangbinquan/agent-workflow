@@ -193,6 +193,11 @@ export function startStuckTaskDetectorLoop(opts: {
       ...(opts.onAlert !== undefined ? { onAlert: opts.onAlert } : {}),
     })
       .catch((err: unknown) => {
+        // log-only: this detector IS the alert source for S5/S6; a
+        // failure of the detector itself can only be logged. A future
+        // "self-watch" rule (S?-detector-down) could escalate this to
+        // a UI banner, but it's circular — the same loop that's failing
+        // would need to fire the new alert.
         log.error('scan failed', { error: err instanceof Error ? err.message : String(err) })
       })
       .finally(() => {

@@ -90,6 +90,10 @@ export const errorHandler: ErrorHandler = (err, c) => {
   if (isIllegalNodeRunTransition(err)) {
     return c.json<ErrorPayload>({ ok: false, code: err.code, message: err.message }, 422)
   }
+  // log-only: HTTP boundary surfaces the failure as a 500 response to
+  // the caller (the alert channel). Server-side log captures stack +
+  // class for operator diagnosis; it doesn't and shouldn't synthesize
+  // a lifecycle_alerts row for every random request error.
   log.error('unhandled error', {
     name: err.name,
     message: err.message,

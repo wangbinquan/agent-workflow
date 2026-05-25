@@ -823,6 +823,8 @@ export interface Resources {
         S2: string
         S3: string
         S4: string
+        S5: string
+        S6: string
       }
       // RFC-057: UI strings for the repair dialog + confirm modal. The
       // option-specific labels (R1.approveRun.label / etc.) live at root
@@ -2819,6 +2821,8 @@ export const zhCN: Resources = {
         S2: 'task 在 awaiting_human 长时间无开放 clarify_session',
         S3: 'task 状态 running，但所有 node_run 都已落终态',
         S4: 'task 长时间处于 pending，调度器未拣选',
+        S5: '调度器停滞——超过阈值时间没有新事件',
+        S6: '用户答复挂起超过阈值时间',
       },
       repair: {
         openButton: '修复…',

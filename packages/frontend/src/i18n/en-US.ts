@@ -878,6 +878,8 @@ export const enUS: Resources = {
         S2: 'Task awaiting_human with no open clarify_session',
         S3: 'Task running but every node_run is terminal',
         S4: 'Task pending without scheduler pickup',
+        S5: 'Scheduler stalled — no new events emitted past the threshold',
+        S6: 'User-awaited suspension older than threshold',
       },
       repair: {
         openButton: 'Repair…',

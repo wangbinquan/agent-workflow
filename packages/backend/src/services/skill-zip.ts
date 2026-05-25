@@ -272,6 +272,12 @@ export async function commitSkillZipBuffer(
       claimedNames.add(targetName)
       void result
     } catch (err) {
+      // log-only: per-skill failure is reported back to the caller in
+      // `outcome.failed` (the user-visible alert channel — the HTTP
+      // response or the UI's import dialog renders this list). The
+      // server-side log captures the underlying error message so
+      // operators can debug pathological skill_zip uploads after the
+      // fact without re-running the import.
       log.error('zip-commit: skill write failed', {
         candidate: candidate.name,
         target: targetName,

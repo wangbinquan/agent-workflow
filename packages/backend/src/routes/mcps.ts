@@ -129,8 +129,10 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       result = await probeMcp(mcp, probeOptionsOverride)
     } catch (err) {
       if (err instanceof DomainError) throw err
-      // Probe orchestrator should not throw non-DomainError; if it does, this
-      // is an internal bug — surface as 500 via the default error handler.
+      // log-only: probe orchestrator should not throw non-DomainError. If it
+      // does, this is an internal bug — surface as 500 via the default error
+      // handler (HTTP alert path); the log captures the unexpected
+      // exception for operator debugging.
       log.error('probeMcp unexpectedly threw', {
         mcp: name,
         message: err instanceof Error ? err.message : String(err),
