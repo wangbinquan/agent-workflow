@@ -105,6 +105,12 @@ export const REPAIR_OPTION_IDS = {
     'S3.mark-task-failed',
   ],
   S4: ['S4.kick-task', 'S4.cancel-task'],
+  // RFC-061 follow-up rules — the rebuilt stuckTaskDetector emits these.
+  // For now the only documented repair action is "cancel the task" so
+  // operators can manually re-launch. Future PRs can add finer-grained
+  // recovery (poke the actor, rewrite a suspension, etc.).
+  S5: ['S5.cancel-task'],
+  S6: ['S6.cancel-task'],
 } as const satisfies Record<LifecycleAlertRule, readonly string[]>
 
 export type RepairOptionId = (typeof REPAIR_OPTION_IDS)[keyof typeof REPAIR_OPTION_IDS][number]

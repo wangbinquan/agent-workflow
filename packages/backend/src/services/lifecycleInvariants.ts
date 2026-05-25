@@ -27,7 +27,7 @@ const HOUR_MS = 3_600_000
 const GRACE_MS = 24 * HOUR_MS
 
 export type InvariantRule = 'R1' | 'R2' | 'C1' | 'T1' | 'T2' | 'T3' | 'U1' | 'CR-1'
-export type StuckRule = 'S1' | 'S2' | 'S3' | 'S4'
+export type StuckRule = 'S1' | 'S2' | 'S3' | 'S4' | 'S5' | 'S6'
 
 export type LifecycleAlertRule = SharedLifecycleAlertRule
 
@@ -55,7 +55,7 @@ export const INVARIANT_RULES: readonly InvariantRule[] = [
   'CR-1',
 ]
 
-export const STUCK_RULES: readonly StuckRule[] = ['S1', 'S2', 'S3', 'S4']
+export const STUCK_RULES: readonly StuckRule[] = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6']
 
 export interface LifecycleInvariantFinding {
   taskId: string
