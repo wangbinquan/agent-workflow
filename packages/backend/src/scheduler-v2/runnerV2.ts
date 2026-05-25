@@ -112,9 +112,12 @@ export async function runOpencodeAttempt(
     ...(opts.opencodeCmd !== undefined ? { opencodeCmd: opts.opencodeCmd } : {}),
   })
 
-  // 2. Prepare disk: mkdir runRoot, copy skills into configDir.
+  // 2. Prepare disk: mkdir runRoot + configDir, copy skills into configDir.
+  // Real opencode bootstrap writes <configDir>/.gitignore on startup,
+  // so configDir must exist before spawn even when no skills declared.
   try {
     mkdirSync(invocation.runRoot, { recursive: true })
+    mkdirSync(invocation.configDir, { recursive: true })
     prepareSkills(invocation.configDir, [...(opts.skills ?? [])], log)
   } catch (err) {
     return {
