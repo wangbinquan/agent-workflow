@@ -1644,6 +1644,14 @@ export interface Resources {
     loadError: string
     empty: string
   }
+  // RFC-061 G9 — events timeline route copy.
+  timeline: {
+    title: string
+    backToTask: string
+    empty: string
+    eventCount: string
+    payload: string
+  }
   // RFC-061 follow-up: suspensions list + unified detail/answer page.
   suspensions: {
     title: string
@@ -3656,6 +3664,13 @@ export const zhCN: Resources = {
     statusError: '出错',
     loadError: '加载会话失败。',
     empty: '本轮 session 暂无事件。',
+  },
+  timeline: {
+    title: '事件时间线',
+    backToTask: '← 返回任务详情',
+    empty: '暂无事件',
+    eventCount: '共 {{n}} 条事件',
+    payload: '查看 payload',
   },
   suspensions: {
     title: '待处理事项',

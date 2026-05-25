@@ -1777,6 +1777,13 @@ export const enUS: Resources = {
     loadError: 'Failed to load session.',
     empty: 'No session events recorded.',
   },
+  timeline: {
+    title: 'Event timeline',
+    backToTask: '← Back to task',
+    empty: 'No events yet',
+    eventCount: '{{n}} events',
+    payload: 'View payload',
+  },
   suspensions: {
     title: 'Pending items',
     hint: 'Every open clarify, review, and retry request across all tasks. Click to answer or decide.',

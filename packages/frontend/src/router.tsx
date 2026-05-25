@@ -36,6 +36,8 @@ import { Route as memoryDistillJobDetailRoute } from '@/routes/memory.distill-jo
 // answer / decision form (kind-specific branches).
 import { Route as suspensionsRoute } from '@/routes/suspensions'
 import { Route as suspensionDetailRoute } from '@/routes/suspensions.$id'
+// RFC-061 G9 — events timeline view.
+import { Route as taskTimelineRoute } from '@/routes/tasks.$id.timeline'
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -59,6 +61,9 @@ const routeTree = rootRoute.addChildren([
   workflowLaunchRoute,
   workflowEditRoute,
   workflowsRoute,
+  // '/tasks/$id/timeline' literal segment must precede '/tasks/$id' so
+  // the deeper route wins on URL match.
+  taskTimelineRoute,
   taskDetailRoute,
   tasksRoute,
   // RFC-061 follow-up: '/suspensions/$id' literal must precede the bare
