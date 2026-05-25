@@ -15,8 +15,12 @@ import { logicalRuns, suspensions } from '@/db/schema'
 import { writeEvents } from '@/services/writeEvents'
 import { loadTaskEvents } from '@/scheduler-v2/taskActor'
 import { SIGNAL_KIND_HANDLERS } from '@/handlers/signalKind'
+import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 import { NotFoundError, ValidationError } from '@/util/errors'
+import { createLogger } from '@/util/log'
 import type { Scope, SignalKind, Event } from '@agent-workflow/shared'
+
+const log = createLogger('suspensions')
 
 export interface SuspensionRow {
   id: string
@@ -232,6 +236,36 @@ export async function resolveSuspension(
       resolutionId: e.resolutionId ?? null,
     })),
   )
+
+  // RFC-061 follow-up P2-1 — for human-answerable SignalKinds, enqueue
+  // a distill job so memoryDistiller can extract long-term memories
+  // from the Q&A / review decision. Pure side effect; failure must not
+  // block the resolution itself (the suspension is already closed).
+  if (
+    susp.signalKind === 'self-clarify' ||
+    susp.signalKind === 'cross-clarify' ||
+    susp.signalKind === 'review'
+  ) {
+    try {
+      const distillKind: 'clarify' | 'review' = susp.signalKind === 'review' ? 'review' : 'clarify'
+      await enqueueDistillJob(db, {
+        sourceKind: distillKind,
+        sourceEventId: susp.id,
+        taskId: susp.taskId,
+      })
+    } catch (err) {
+      // log-only: distill enqueue failures shouldn't fail the user's
+      // answer / decision submission. A future memory-distill-stuck
+      // alert can surface stragglers; until then operators can re-
+      // enqueue manually from /memory.
+      log.warn('enqueueDistillJob after suspension-resolved failed', {
+        suspensionId,
+        signalKind: susp.signalKind,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
   return {
     writtenEventIds: written.map((e) => e.id),
     signalKind: susp.signalKind,

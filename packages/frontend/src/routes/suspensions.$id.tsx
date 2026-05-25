@@ -110,7 +110,7 @@ function SuspensionDetailPage() {
         {s.signalKind === 'retry-pending-human' && (
           <RetryHumanForm
             disabled={resolved || submitting}
-            onSubmit={() => resolveMutation.mutate({ approved: true })}
+            onSubmit={() => resolveMutation.mutate({ decision: 'retry' })}
           />
         )}
         {s.signalKind === 'retry-pending-auto' && (

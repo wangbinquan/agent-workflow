@@ -31,7 +31,15 @@ import type {
 } from '@agent-workflow/shared'
 import { DEFAULT_SOURCE_CONTEXT_BUDGET, MemorySchema, redactGitUrl } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { memories, memoryDistillJobs, taskFeedback } from '@/db/schema'
+import { logicalRuns, memories, memoryDistillJobs, suspensions, taskFeedback } from '@/db/schema'
+
+function safeParse(s: string): unknown {
+  try {
+    return JSON.parse(s)
+  } catch {
+    return null
+  }
+}
 import { extractLastEnvelope } from '@/services/envelope'
 import { captureDistillJobSession } from '@/services/distillSessionCapture'
 import { clipHeadTail } from '@/services/distillerSourceContext'
@@ -290,13 +298,12 @@ export async function loadSourceEvents(
   const reviewIds = jobs.filter((j) => j.sourceKind === 'review').map((j) => j.sourceEventId)
   const feedbackIds = jobs.filter((j) => j.sourceKind === 'feedback').map((j) => j.sourceEventId)
 
-  // RFC-061 follow-up: clarify_sessions + doc_versions are on the drop
-  // list. The memory-distill pipeline temporarily loses access to
-  // historical clarify Q&A and review history; only taskFeedback rows
-  // (separate table, kept) still feed the distiller. Full rebuild will
-  // pull from suspensions + node_outputs once the distiller is rewired.
-  void clarifyIds
-  void reviewIds
+  // RFC-061 follow-up P2-1 — load clarify + review history from the
+  // suspensions projection. distill jobs created post-RFC-061 carry
+  // suspension.id as sourceEventId (see suspensions.ts:resolveSuspension
+  // enqueue hook). The shape projects to clarify-like / review-like for
+  // downstream renderers; eventually the renderers can switch to a
+  // unified suspension shape (separate cleanup PR).
   type ClarifyShape = {
     id: string
     taskId: string
@@ -313,8 +320,69 @@ export async function loadSourceEvents(
     bodyPath: string
     versionIndex: number
   }
+
   const clarifyRows: ClarifyShape[] = []
+  if (clarifyIds.length > 0) {
+    const rows = await db
+      .select({
+        id: suspensions.id,
+        signalKind: suspensions.signalKind,
+        payload: suspensions.payload,
+        logicalRunId: suspensions.logicalRunId,
+        lrTaskId: logicalRuns.taskId,
+        lrNodeId: logicalRuns.nodeId,
+      })
+      .from(suspensions)
+      .innerJoin(logicalRuns, eq(suspensions.logicalRunId, logicalRuns.id))
+      .where(inArray(suspensions.id, clarifyIds))
+    for (const r of rows) {
+      if (r.signalKind !== 'self-clarify' && r.signalKind !== 'cross-clarify') continue
+      const body = safeParse(r.payload) as {
+        questions?: ReadonlyArray<{ id: string; text: string }>
+      } | null
+      clarifyRows.push({
+        id: r.id,
+        taskId: r.lrTaskId,
+        clarifyNodeId: r.lrNodeId,
+        sourceAgentNodeRunId: r.logicalRunId,
+        questionsJson: JSON.stringify(body?.questions ?? []),
+        answersJson: null,
+      })
+    }
+  }
+
   const reviewRows: ReviewShape[] = []
+  if (reviewIds.length > 0) {
+    const rows = await db
+      .select({
+        id: suspensions.id,
+        signalKind: suspensions.signalKind,
+        payload: suspensions.payload,
+        logicalRunId: suspensions.logicalRunId,
+        lrTaskId: logicalRuns.taskId,
+        lrNodeId: logicalRuns.nodeId,
+        lrIter: logicalRuns.iter,
+      })
+      .from(suspensions)
+      .innerJoin(logicalRuns, eq(suspensions.logicalRunId, logicalRuns.id))
+      .where(inArray(suspensions.id, reviewIds))
+    for (const r of rows) {
+      if (r.signalKind !== 'review') continue
+      const body = safeParse(r.payload) as {
+        docNodeId?: string
+        docPortName?: string
+      } | null
+      reviewRows.push({
+        id: r.id,
+        taskId: r.lrTaskId,
+        reviewNodeId: r.lrNodeId,
+        decision: 'pending',
+        bodyPath: `${body?.docNodeId ?? '?'}.${body?.docPortName ?? '?'}`,
+        versionIndex: r.lrIter + 1,
+      })
+    }
+  }
+
   const feedbackRows =
     feedbackIds.length > 0
       ? await db.select().from(taskFeedback).where(inArray(taskFeedback.id, feedbackIds))

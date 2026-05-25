@@ -27,8 +27,16 @@ import type {
   MemoryStatus,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { memories, memoryDistillJobs, taskFeedback } from '@/db/schema'
+import { logicalRuns, memories, memoryDistillJobs, suspensions, taskFeedback } from '@/db/schema'
 import { rowToDistillJob } from '@/services/memoryDistiller'
+
+function safeJson(s: string): unknown {
+  try {
+    return JSON.parse(s)
+  } catch {
+    return null
+  }
+}
 import { NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 
@@ -142,21 +150,67 @@ async function safeLoadSourceEvents(
     .filter((s) => s.sourceKind === 'feedback')
     .map((s) => s.sourceEventId)
 
-  // RFC-061 follow-up: clarify_sessions + doc_versions on drop list.
-  // Distill job detail temporarily surfaces only taskFeedback sources;
-  // clarify / review siblings render as `deletedOrMissing` until the
-  // suspensions-projection rewire lands.
-  void clarifyIds
-  void reviewIds
-  const feedbackRows =
-    feedbackIds.length > 0
-      ? await db.select().from(taskFeedback).where(inArray(taskFeedback.id, feedbackIds))
-      : []
-
+  // RFC-061 follow-up P2-2 — clarify + review sources resolve through
+  // the suspensions projection (distill jobs created post-rewire
+  // carry suspension.id as sourceEventId). Pre-RFC-061 jobs whose
+  // sourceEventId points at a clarify_sessions / doc_versions row
+  // resolve to deletedOrMissing — that's correct: those tables are
+  // gone and there's no way to recover their content.
   type ClarifyShape = { id: string; taskId: string; questionsJson: string }
   type ReviewShape = { id: string; taskId: string; decision: string; versionIndex: number }
   const clarifyById = new Map<string, ClarifyShape>()
   const reviewById = new Map<string, ReviewShape>()
+
+  if (clarifyIds.length > 0) {
+    const rows = await db
+      .select({
+        id: suspensions.id,
+        signalKind: suspensions.signalKind,
+        payload: suspensions.payload,
+        lrTaskId: logicalRuns.taskId,
+      })
+      .from(suspensions)
+      .innerJoin(logicalRuns, eq(suspensions.logicalRunId, logicalRuns.id))
+      .where(inArray(suspensions.id, clarifyIds))
+    for (const r of rows) {
+      if (r.signalKind !== 'self-clarify' && r.signalKind !== 'cross-clarify') continue
+      const body = safeJson(r.payload) as {
+        questions?: ReadonlyArray<{ id: string; text: string }>
+      } | null
+      clarifyById.set(r.id, {
+        id: r.id,
+        taskId: r.lrTaskId,
+        questionsJson: JSON.stringify(body?.questions ?? []),
+      })
+    }
+  }
+  if (reviewIds.length > 0) {
+    const rows = await db
+      .select({
+        id: suspensions.id,
+        signalKind: suspensions.signalKind,
+        payload: suspensions.payload,
+        lrTaskId: logicalRuns.taskId,
+        lrIter: logicalRuns.iter,
+      })
+      .from(suspensions)
+      .innerJoin(logicalRuns, eq(suspensions.logicalRunId, logicalRuns.id))
+      .where(inArray(suspensions.id, reviewIds))
+    for (const r of rows) {
+      if (r.signalKind !== 'review') continue
+      reviewById.set(r.id, {
+        id: r.id,
+        taskId: r.lrTaskId,
+        decision: 'pending',
+        versionIndex: r.lrIter + 1,
+      })
+    }
+  }
+
+  const feedbackRows =
+    feedbackIds.length > 0
+      ? await db.select().from(taskFeedback).where(inArray(taskFeedback.id, feedbackIds))
+      : []
   const feedbackById = new Map(feedbackRows.map((r) => [r.id, r]))
 
   const out: MemoryDistillSourceEventEntry[] = []
