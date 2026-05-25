@@ -214,7 +214,7 @@ describe('buildPromptFromEvents', () => {
     const ctx = buildPromptFromEvents([], FULL_SCOPE, makeRegistry())
     expect(ctx.selfClarifyQA).toBe('')
     expect(ctx.externalFeedback).toBe('')
-    expect(ctx.reviewComments).toBe('')
+    expect(ctx.reviewerFeedback).toBe('')
   })
 
   test('aggregates resolutions by signalKind into per-section strings', () => {
@@ -227,7 +227,7 @@ describe('buildPromptFromEvents', () => {
     const ctx = buildPromptFromEvents(events, FULL_SCOPE, makeRegistry())
     expect(ctx.selfClarifyQA).toBe('[self-2]')
     expect(ctx.externalFeedback).toBe('[cross-1]')
-    expect(ctx.reviewComments).toBe('[review-1]')
+    expect(ctx.reviewerFeedback).toBe('[review-1]')
   })
 
   test('aging cutoff: resolutions before captured output are excluded', () => {
