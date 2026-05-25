@@ -86,8 +86,8 @@ export interface PromptContext {
   selfClarifyQA: string
   /** RFC-056/059 cross-clarify designer feedback (post-baseline only) */
   externalFeedback: string
-  /** RFC-005 reviewer comments (post-baseline only, iterate/reject only) */
-  reviewComments: string
+  /** RFC-005 reviewer feedback (post-baseline only, iterate/reject only) */
+  reviewerFeedback: string
 }
 
 /* ============================================================

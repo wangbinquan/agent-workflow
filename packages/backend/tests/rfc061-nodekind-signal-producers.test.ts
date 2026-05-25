@@ -15,7 +15,7 @@ import {
 import type { WorkflowNode, Scope, Event } from '@agent-workflow/shared'
 
 const baseScope: Scope = { nodeId: 'rv', loopIter: 0, shardKey: '', iter: 0 }
-const basePromptCtx = { selfClarifyQA: '', externalFeedback: '', reviewComments: '' }
+const basePromptCtx = { selfClarifyQA: '', externalFeedback: '', reviewerFeedback: '' }
 
 describe('review NodeKindHandler', () => {
   test('dispatch: doc available → suspend-direct(review)', async () => {

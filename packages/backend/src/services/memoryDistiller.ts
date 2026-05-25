@@ -281,7 +281,7 @@ export interface LoadedSourceEvents {
  * RFC-044: when the optional `budget` argument is passed, the loader also
  * fetches the source-agent transcript for clarify rows (via
  * `clarify_sessions.source_agent_node_run_id` → `node_run_events`) and the
- * reviewed document body for review rows (`docVersions.bodyPath` file).
+ * reviewed document body for review rows (the doc-version body_path file).
  * Each extra read is best-effort: on failure the corresponding `*Md` field
  * is null and the `*Reason` field carries a short string the builder prints
  * as a placeholder line — the distiller still runs, degraded to RFC-041
@@ -407,7 +407,7 @@ async function loadClarifyTranscripts(
 }
 
 /**
- * RFC-044: read each `docVersions.bodyPath` markdown file (relative to
+ * RFC-044: read each the doc-version body_path markdown file (relative to
  * appHome) and clip to the budget. Skipped when the budget is 0; per-row
  * read failures degrade to a null + reason pair so the builder can render a
  * placeholder line.

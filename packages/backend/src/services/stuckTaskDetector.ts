@@ -12,7 +12,7 @@
 //   * S2 same story for clarify suspensions.
 //   * S3 "running > 30 min without active node_run": replace with a
 //     query over (logical_runs.status='running' + max(events.ts)).
-//   * S4 "pending > 5 min": no nodeRuns dependency; could survive a
+//   * S4 "pending > 5 min": no projection dependency; could survive a
 //     simple rewrite but we stub it for consistency until the full
 //     suite ports.
 //

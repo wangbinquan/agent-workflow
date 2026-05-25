@@ -19,7 +19,7 @@ const baseScope: Scope = { nodeId: 'designer', loopIter: 0, shardKey: '', iter: 
 const baseDispatchCtx = {
   scope: baseScope,
   events: [] as ReadonlyArray<Event>,
-  prompt: { selfClarifyQA: '', externalFeedback: '', reviewComments: '' },
+  prompt: { selfClarifyQA: '', externalFeedback: '', reviewerFeedback: '' },
 }
 
 describe('agent-single NodeKindHandler — dispatch', () => {
@@ -70,7 +70,7 @@ describe('agent-single NodeKindHandler — dispatch', () => {
       prompt: {
         selfClarifyQA: '<workflow-self-clarify>x</workflow-self-clarify>',
         externalFeedback: '',
-        reviewComments: '',
+        reviewerFeedback: '',
       },
       node,
       repoPath: '/repo',
@@ -184,7 +184,7 @@ describe('composePrompt', () => {
         { portName: 'y', content: 'B' },
       ],
       '/repo',
-      { selfClarifyQA: '', externalFeedback: '', reviewComments: '' },
+      { selfClarifyQA: '', externalFeedback: '', reviewerFeedback: '' },
     )
     expect(r).toBe('a=A b=B')
   })
@@ -193,7 +193,7 @@ describe('composePrompt', () => {
     const r = composePrompt('cd {{__repo_path__}}', [], '/var/repos/x', {
       selfClarifyQA: '',
       externalFeedback: '',
-      reviewComments: '',
+      reviewerFeedback: '',
     })
     expect(r).toBe('cd /var/repos/x')
   })
@@ -202,7 +202,7 @@ describe('composePrompt', () => {
     const r = composePrompt('body', [], '/r', {
       selfClarifyQA: 'SC',
       externalFeedback: 'EF',
-      reviewComments: 'RC',
+      reviewerFeedback: 'RC',
     })
     expect(r).toBe('body\n\nSC\n\nEF\n\nRC')
   })
@@ -211,7 +211,7 @@ describe('composePrompt', () => {
     const r = composePrompt('body', [], '/r', {
       selfClarifyQA: '',
       externalFeedback: 'EF',
-      reviewComments: '',
+      reviewerFeedback: '',
     })
     expect(r).toBe('body\n\nEF')
   })
@@ -220,7 +220,7 @@ describe('composePrompt', () => {
     const r = composePrompt('static', [], '/r', {
       selfClarifyQA: '',
       externalFeedback: '',
-      reviewComments: '',
+      reviewerFeedback: '',
     })
     expect(r).toBe('static')
   })

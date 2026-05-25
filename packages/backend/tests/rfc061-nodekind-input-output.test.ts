@@ -20,7 +20,7 @@ const baseScope: Scope = { nodeId: 'n1', loopIter: 0, shardKey: '', iter: 0 }
 const baseDispatchCtx = {
   scope: baseScope,
   events: [],
-  prompt: { selfClarifyQA: '', externalFeedback: '', reviewComments: '' },
+  prompt: { selfClarifyQA: '', externalFeedback: '', reviewerFeedback: '' },
 }
 
 describe('input NodeKindHandler', () => {

@@ -189,7 +189,7 @@ async function dispatchOne(
   node: WorkflowNode,
   scope: Scope,
   ctx: TickContext,
-  promptCtx: { selfClarifyQA: string; externalFeedback: string; reviewComments: string },
+  promptCtx: { selfClarifyQA: string; externalFeedback: string; reviewerFeedback: string },
 ): Promise<Awaited<ReturnType<(typeof NODE_KIND_HANDLERS)[NodeKind]['dispatch']>>> {
   const baseCtx = { scope, events: ctx.events, prompt: promptCtx }
 

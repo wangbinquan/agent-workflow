@@ -166,6 +166,46 @@ describe('RFC-061 grep guards — hard (T10 cutover complete)', () => {
     )
     expect(filtered).toEqual([])
   })
+
+  /**
+   * RFC-061 follow-up: migration 0035 DROPped the remaining six legacy
+   * execution-model tables. Any new src/ code referencing the drizzle
+   * exports for them is a regression — the schema doesn't export them
+   * anymore + the tables don't exist on disk. Comment-only mentions in
+   * schema.ts, services/taskRunsProjection.ts (REST shim explainer),
+   * and the grep-guard test file are allowed.
+   */
+  test('legacy drizzle exports (nodeRuns / nodeRunOutputs / nodeRunEvents / docVersions / clarifySessions / crossClarifySessions / reviewComments): no src/ references', async () => {
+    const allowedSuffixes = [
+      '/db/schema.ts',
+      '/services/taskRunsProjection.ts',
+      '/tests/rfc061-grep-guards.test.ts',
+    ]
+    const isAllowed = (f: string): boolean => allowedSuffixes.some((s) => f.endsWith(s))
+    const guard = async (re: RegExp, name: string): Promise<void> => {
+      const hits = await whoContains(re)
+      const filtered = hits.filter((f) => !isAllowed(f))
+      if (filtered.length > 0) {
+        throw new Error(`${name} references survive in: ${filtered.join(', ')}`)
+      }
+    }
+    await guard(/\bnodeRuns\b/, 'nodeRuns')
+    await guard(/\bnodeRunOutputs\b/, 'nodeRunOutputs')
+    await guard(/\bnodeRunEvents\b/, 'nodeRunEvents')
+    await guard(/\bdocVersions\b/, 'docVersions')
+    await guard(/\bclarifySessions\b/, 'clarifySessions')
+    await guard(/\bcrossClarifySessions\b/, 'crossClarifySessions')
+    await guard(/\breviewComments\b/, 'reviewComments')
+  })
+
+  // NOTE: a parallel snake_case guard was considered (matching the raw
+  // SQL table names) but rejected — the stubbed services explain in
+  // comments which legacy table they replace, which is useful historical
+  // context. The camelCase guard above is sufficient because no SQL
+  // string can hit those tables without first going through the
+  // drizzle export anyway (sql template literals against unknown
+  // table names would runtime-fail with `no such table`, surfaced by
+  // the property tests).
 })
 
 /* ============================================================

@@ -26,7 +26,7 @@ import {
 import type { WorkflowNode, Scope, Event } from '@agent-workflow/shared'
 
 const baseScope: Scope = { nodeId: 'w', loopIter: 0, shardKey: '', iter: 0 }
-const basePromptCtx = { selfClarifyQA: '', externalFeedback: '', reviewComments: '' }
+const basePromptCtx = { selfClarifyQA: '', externalFeedback: '', reviewerFeedback: '' }
 
 describe('wrapper-git NodeKindHandler', () => {
   test('dispatch → enter-inner-scope with same coords as wrapper', async () => {

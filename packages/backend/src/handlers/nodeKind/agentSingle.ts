@@ -132,7 +132,7 @@ export function composePrompt(
   template: string,
   upstreams: ReadonlyArray<UpstreamInput>,
   repoPath: string,
-  promptCtx: { selfClarifyQA: string; externalFeedback: string; reviewComments: string },
+  promptCtx: { selfClarifyQA: string; externalFeedback: string; reviewerFeedback: string },
 ): string {
   let body = template
   for (const u of upstreams) {
@@ -146,7 +146,7 @@ export function composePrompt(
   const sections: string[] = []
   if (promptCtx.selfClarifyQA) sections.push(promptCtx.selfClarifyQA)
   if (promptCtx.externalFeedback) sections.push(promptCtx.externalFeedback)
-  if (promptCtx.reviewComments) sections.push(promptCtx.reviewComments)
+  if (promptCtx.reviewerFeedback) sections.push(promptCtx.reviewerFeedback)
   if (sections.length === 0) return body
   return `${body}\n\n${sections.join('\n\n')}`
 }

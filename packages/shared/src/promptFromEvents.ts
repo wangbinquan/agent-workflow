@@ -114,7 +114,7 @@ export function buildPromptFromEvents(
       selfClarifyHandler?.renderPromptSection(bySignal.get('self-clarify') ?? []) ?? '',
     externalFeedback:
       crossClarifyHandler?.renderPromptSection(bySignal.get('cross-clarify') ?? []) ?? '',
-    reviewComments: reviewHandler?.renderPromptSection(bySignal.get('review') ?? []) ?? '',
+    reviewerFeedback: reviewHandler?.renderPromptSection(bySignal.get('review') ?? []) ?? '',
   }
 }
 
