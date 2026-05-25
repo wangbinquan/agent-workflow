@@ -1,0 +1,77 @@
+{
+  "$comment": "Minimal self-clarify shape: input → agent ← clarify (only the back-edge from clarify; no cross-clarify involved). Pre-RFC-062 readyScanner gated on agent's __clarify_response__ edge and deadlocked.",
+  "$schema_version": 4,
+  "workflow": {
+    "$schema_version": 4,
+    "inputs": [{ "kind": "text", "key": "requirement", "label": "requirement", "required": true }],
+    "nodes": [
+      {
+        "id": "in_req",
+        "kind": "input",
+        "position": { "x": 0, "y": 0 },
+        "inputKey": "requirement"
+      },
+      {
+        "id": "agent_writer",
+        "kind": "agent-single",
+        "position": { "x": 200, "y": 0 },
+        "agentName": "doc",
+        "promptTemplate": "Write a doc for {{requirement}}"
+      },
+      {
+        "id": "clarify_writer",
+        "kind": "clarify",
+        "position": { "x": 200, "y": 200 }
+      },
+      {
+        "id": "out",
+        "kind": "output",
+        "position": { "x": 400, "y": 0 },
+        "ports": [{ "name": "doc", "bind": { "nodeId": "agent_writer", "portName": "doc" } }]
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": { "nodeId": "in_req", "portName": "requirement" },
+        "target": { "nodeId": "agent_writer", "portName": "requirement" }
+      },
+      {
+        "id": "e2_ask",
+        "source": { "nodeId": "agent_writer", "portName": "__clarify__" },
+        "target": { "nodeId": "clarify_writer", "portName": "questions" }
+      },
+      {
+        "id": "e2_ans",
+        "source": { "nodeId": "clarify_writer", "portName": "answers" },
+        "target": { "nodeId": "agent_writer", "portName": "__clarify_response__" }
+      },
+      {
+        "id": "e3",
+        "source": { "nodeId": "agent_writer", "portName": "doc" },
+        "target": { "nodeId": "out", "portName": "doc" }
+      }
+    ]
+  },
+  "inputs": { "requirement": "write a haiku" },
+  "scriptedAgentOutputs": [
+    {
+      "matchNode": "agent_writer",
+      "matchIter": 0,
+      "ports": [{ "name": "doc", "content": "winter wind / a single crow / circles back" }]
+    }
+  ],
+  "expectedTerminalKind": "task-completed",
+  "expectedEvents": {
+    "mustContainInOrder": [
+      "task-started",
+      "logical-run-created:in_req",
+      "logical-run-completed:in_req",
+      "logical-run-created:agent_writer",
+      "attempt-started:agent_writer",
+      "attempt-finished-success:agent_writer",
+      "logical-run-completed:agent_writer",
+      "task-completed"
+    ]
+  }
+}

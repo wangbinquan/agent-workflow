@@ -1,0 +1,83 @@
+{
+  "$comment": "Baseline: pure linear data chain with no feedback edges. Acts as the control for the cross-clarify / self-clarify fixtures — if THIS fixture ever fails, the regression is in the actor loop / launcher itself, not in RFC-062's feedback-edge contract.",
+  "$schema_version": 4,
+  "workflow": {
+    "$schema_version": 4,
+    "inputs": [{ "kind": "text", "key": "topic", "label": "topic", "required": true }],
+    "nodes": [
+      {
+        "id": "in_topic",
+        "kind": "input",
+        "position": { "x": 0, "y": 0 },
+        "inputKey": "topic"
+      },
+      {
+        "id": "agent_outline",
+        "kind": "agent-single",
+        "position": { "x": 200, "y": 0 },
+        "agentName": "doc",
+        "promptTemplate": "Outline {{topic}}"
+      },
+      {
+        "id": "agent_fillin",
+        "kind": "agent-single",
+        "position": { "x": 400, "y": 0 },
+        "agentName": "doc",
+        "promptTemplate": "Fill in {{outline}}"
+      },
+      {
+        "id": "out",
+        "kind": "output",
+        "position": { "x": 600, "y": 0 },
+        "ports": [{ "name": "final", "bind": { "nodeId": "agent_fillin", "portName": "final" } }]
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "source": { "nodeId": "in_topic", "portName": "topic" },
+        "target": { "nodeId": "agent_outline", "portName": "topic" }
+      },
+      {
+        "id": "e2",
+        "source": { "nodeId": "agent_outline", "portName": "outline" },
+        "target": { "nodeId": "agent_fillin", "portName": "outline" }
+      },
+      {
+        "id": "e3",
+        "source": { "nodeId": "agent_fillin", "portName": "final" },
+        "target": { "nodeId": "out", "portName": "final" }
+      }
+    ]
+  },
+  "inputs": { "topic": "rocket propulsion basics" },
+  "scriptedAgentOutputs": [
+    {
+      "matchNode": "agent_outline",
+      "matchIter": 0,
+      "ports": [{ "name": "outline", "content": "1. Thrust\n2. Propellant\n3. Specific impulse" }]
+    },
+    {
+      "matchNode": "agent_fillin",
+      "matchIter": 0,
+      "ports": [{ "name": "final", "content": "Thrust is force...\nPropellant is...\nIsp is..." }]
+    }
+  ],
+  "expectedTerminalKind": "task-completed",
+  "expectedEvents": {
+    "mustContainInOrder": [
+      "task-started",
+      "logical-run-created:in_topic",
+      "logical-run-completed:in_topic",
+      "logical-run-created:agent_outline",
+      "attempt-started:agent_outline",
+      "attempt-finished-success:agent_outline",
+      "logical-run-completed:agent_outline",
+      "logical-run-created:agent_fillin",
+      "attempt-started:agent_fillin",
+      "attempt-finished-success:agent_fillin",
+      "logical-run-completed:agent_fillin",
+      "task-completed"
+    ]
+  }
+}

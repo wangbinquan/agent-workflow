@@ -1,0 +1,92 @@
+{
+  "$comment": "Frozen 2026-05-25 from the workflow shape that caused the deadlock incident (task 01KSE07E4D6TDHMAS1VZWVMKE7). agent_m7p3n1 has 3 inbound edges: requirement (data) + __clarify_response__ + __external_feedback__ (both feedback). Pre-RFC-062 scanFreshDownstream gated on all three; the data edge alone is satisfied by in_0ck111 so the agent should mint immediately. This fixture's agents return their final envelope on the first attempt with no clarify question, so no SignalKindHandler suspension fires.",
+  "$schema_version": 4,
+  "workflow": {
+    "$schema_version": 4,
+    "inputs": [{ "kind": "text", "key": "requirement", "label": "requirement", "required": true }],
+    "nodes": [
+      {
+        "id": "in_0ck111",
+        "kind": "input",
+        "position": { "x": 0, "y": 0 },
+        "inputKey": "requirement"
+      },
+      {
+        "id": "agent_m7p3n1",
+        "kind": "agent-single",
+        "position": { "x": 200, "y": 0 },
+        "agentName": "doc",
+        "promptTemplate": "Produce a design doc for {{requirement}}"
+      },
+      {
+        "id": "clarify_400qzp",
+        "kind": "clarify",
+        "position": { "x": 200, "y": 200 }
+      },
+      {
+        "id": "cross_clarify_6c910f",
+        "kind": "clarify-cross-agent",
+        "position": { "x": 400, "y": -200 }
+      },
+      {
+        "id": "out_hdp1q4",
+        "kind": "output",
+        "position": { "x": 400, "y": 0 },
+        "ports": [
+          {
+            "name": "approved_doc",
+            "bind": { "nodeId": "agent_m7p3n1", "portName": "docpath" }
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "e_in_req",
+        "source": { "nodeId": "in_0ck111", "portName": "requirement" },
+        "target": { "nodeId": "agent_m7p3n1", "portName": "requirement" }
+      },
+      {
+        "id": "e_clarify_ask",
+        "source": { "nodeId": "agent_m7p3n1", "portName": "__clarify__" },
+        "target": { "nodeId": "clarify_400qzp", "portName": "questions" }
+      },
+      {
+        "id": "e_clarify_ans",
+        "source": { "nodeId": "clarify_400qzp", "portName": "answers" },
+        "target": { "nodeId": "agent_m7p3n1", "portName": "__clarify_response__" }
+      },
+      {
+        "id": "e_cross_to_designer",
+        "source": { "nodeId": "cross_clarify_6c910f", "portName": "to_designer" },
+        "target": { "nodeId": "agent_m7p3n1", "portName": "__external_feedback__" }
+      },
+      {
+        "id": "e_out",
+        "source": { "nodeId": "agent_m7p3n1", "portName": "docpath" },
+        "target": { "nodeId": "out_hdp1q4", "portName": "approved_doc" }
+      }
+    ]
+  },
+  "inputs": { "requirement": "generate a snake game design" },
+  "scriptedAgentOutputs": [
+    {
+      "matchNode": "agent_m7p3n1",
+      "matchIter": 0,
+      "ports": [{ "name": "docpath", "content": "doc/design.md" }]
+    }
+  ],
+  "expectedTerminalKind": "task-completed",
+  "expectedEvents": {
+    "mustContainInOrder": [
+      "task-started",
+      "logical-run-created:in_0ck111",
+      "logical-run-completed:in_0ck111",
+      "logical-run-created:agent_m7p3n1",
+      "attempt-started:agent_m7p3n1",
+      "attempt-finished-success:agent_m7p3n1",
+      "logical-run-completed:agent_m7p3n1",
+      "task-completed"
+    ]
+  }
+}
