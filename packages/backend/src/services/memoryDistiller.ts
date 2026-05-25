@@ -21,26 +21,20 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { and, asc, desc, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
   Memory,
   MemoryDistillJob,
-  ParseSessionInputEvent,
   ResolvedDistillScope,
   SourceContextBudget,
 } from '@agent-workflow/shared'
-import {
-  DEFAULT_SOURCE_CONTEXT_BUDGET,
-  MemorySchema,
-  parseSessionTree,
-  redactGitUrl,
-} from '@agent-workflow/shared'
+import { DEFAULT_SOURCE_CONTEXT_BUDGET, MemorySchema, redactGitUrl } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { memories, memoryDistillJobs, taskFeedback } from '@/db/schema'
 import { extractLastEnvelope } from '@/services/envelope'
 import { captureDistillJobSession } from '@/services/distillSessionCapture'
-import { clipHeadTail, renderSessionTreeToDistillerMd } from '@/services/distillerSourceContext'
+import { clipHeadTail } from '@/services/distillerSourceContext'
 import { appHome } from '@/util/paths'
 import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'
