@@ -95,12 +95,39 @@ describe('nodeRunHistory', () => {
     ])
   })
 
-  test('sort order is (iteration, review, clarify, retryIndex, startedAt)', () => {
+  test('sort order is (iteration, review, clarify, crossClarify, retryIndex, startedAt)', () => {
     const a = makeRun({ id: 'a', iteration: 0, reviewIteration: 0, clarifyIteration: 2 })
     const b = makeRun({ id: 'b', iteration: 0, reviewIteration: 1, clarifyIteration: 0 })
     const c = makeRun({ id: 'c', iteration: 1, reviewIteration: 0, clarifyIteration: 0 })
     const cur = makeRun({ id: 'cur', iteration: 2 })
     expect(nodeRunHistory(cur, [c, b, a, cur]).map((r) => r.id)).toEqual(['a', 'b', 'c', 'cur'])
+  })
+
+  // RFC-056 cross-clarify questioner re-runs bump `crossClarifyIteration`
+  // only (loop/review/clarify/retry stay at 0). If the sort key forgets
+  // cci, an existing done row at cci=0 sits next to the fresh cci=1 row
+  // with arbitrary order from `startedAt`, and the user can't tell which
+  // chip in the timeline is "this round" vs "last round".
+  test('cross-clarify rerun: cci tie-breaks after clarifyIteration, before retryIndex', () => {
+    const oldDone = makeRun({
+      id: 'old',
+      clarifyIteration: 0,
+      crossClarifyIteration: 0,
+      retryIndex: 0,
+      startedAt: 100,
+    })
+    const newPending = makeRun({
+      id: 'new',
+      clarifyIteration: 0,
+      crossClarifyIteration: 1,
+      retryIndex: 0,
+      status: 'pending',
+      startedAt: 200,
+    })
+    expect(nodeRunHistory(newPending, [newPending, oldDone]).map((r) => r.id)).toEqual([
+      'old',
+      'new',
+    ])
   })
 
   test('mixed: cross-iteration siblings + same-tuple retries interleave correctly', () => {
@@ -146,6 +173,30 @@ describe('formatIterationLabel', () => {
     // "initial" anchor or we'd render a bare "retry#1" with no context.
     const run = makeRun({ id: 'x', retryIndex: 1 })
     expect(formatIterationLabel(run, { t })).toBe('nodeDrawer.iterInitial · nodeDrawer.iterRetry=1')
+  })
+
+  // RFC-056 questioner-rerun bug repro: mintQuestionerRerun bumps cci
+  // only. Without the cci branch in this helper, the new node_run lands
+  // on the all-zero fallthrough and renders identically to the original
+  // "初次" row, making the rerun invisible in the Stats history list.
+  test('only crossClarifyIteration non-zero → "cross-clarify#N", NOT "initial"', () => {
+    expect(formatIterationLabel(makeRun({ id: 'x', crossClarifyIteration: 1 }), { t })).toBe(
+      'nodeDrawer.iterCrossClarify=1',
+    )
+  })
+
+  test('clarify + cross-clarify both non-zero → both chunks in canonical order', () => {
+    const run = makeRun({ id: 'x', clarifyIteration: 2, crossClarifyIteration: 1 })
+    expect(formatIterationLabel(run, { t })).toBe(
+      'nodeDrawer.iterClarify=2 · nodeDrawer.iterCrossClarify=1',
+    )
+  })
+
+  test('crossClarifyIteration > 0 with retryIndex > 0 → "cross-clarify#N · retry#M"', () => {
+    const run = makeRun({ id: 'x', crossClarifyIteration: 1, retryIndex: 2 })
+    expect(formatIterationLabel(run, { t })).toBe(
+      'nodeDrawer.iterCrossClarify=1 · nodeDrawer.iterRetry=2',
+    )
   })
 })
 

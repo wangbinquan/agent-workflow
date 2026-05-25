@@ -259,7 +259,15 @@ export function groupStartTime(group: AttemptGroup): number {
 }
 
 function iterLabel(a: NodeRun, t: TFunction): string {
+  // `crossClarifyIteration` is checked before `iteration` / `reviewIteration`
+  // because cross-clarify reruns are minted via mintQuestionerRerun /
+  // triggerDesignerRerun WITHOUT bumping any of those — a fresh questioner
+  // attempt has only `cci > 0`. Forgetting this branch makes the picker
+  // collapse every cross-clarify rerun back into the original "初次"
+  // option, so the user can't tell the new attempt apart from the old one.
   if (a.clarifyIteration > 0) return t('nodeDrawer.iterClarify', { n: a.clarifyIteration })
+  if (a.crossClarifyIteration > 0)
+    return t('nodeDrawer.iterCrossClarify', { n: a.crossClarifyIteration })
   if (a.reviewIteration > 0) return t('nodeDrawer.iterReview', { n: a.reviewIteration })
   if (a.iteration > 0) return t('nodeDrawer.iterLoop', { n: a.iteration })
   if (a.retryIndex > 0) return t('nodeDrawer.iterRetry', { n: a.retryIndex })

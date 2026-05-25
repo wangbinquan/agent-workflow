@@ -1384,6 +1384,7 @@ export const enUS: Resources = {
     iterLoop: 'loop#{{n}}',
     iterReview: 'review#{{n}}',
     iterClarify: 'clarify#{{n}}',
+    iterCrossClarify: 'cross-clarify#{{n}}',
     iterRetry: 'retry#{{n}}',
     iterInitial: 'initial',
     statDependencyTree: 'Dependency tree',

@@ -168,7 +168,7 @@ describe('Session attempts dropdown picker', () => {
     expect(after[1]!.getAttribute('aria-selected')).toBe('false')
   })
 
-  test('iter label distinguishes initial / retry / loop / clarify rows', () => {
+  test('iter label distinguishes initial / retry / loop / clarify / cross-clarify rows', () => {
     const initial = run({ id: 'a', retryIndex: 0, iteration: 0, clarifyIteration: 0 })
     const retry = run({ id: 'b', retryIndex: 1, iteration: 0, clarifyIteration: 0, startedAt: 200 })
     const loop = run({ id: 'c', retryIndex: 0, iteration: 2, clarifyIteration: 0, startedAt: 300 })
@@ -179,11 +179,22 @@ describe('Session attempts dropdown picker', () => {
       clarifyIteration: 3,
       startedAt: 400,
     })
+    // RFC-056 questioner-rerun row: only crossClarifyIteration bumped.
+    // Without the cci branch in iterLabel, this option collapses back to
+    // "initial" and the picker hides the new attempt from the user.
+    const cross = run({
+      id: 'e',
+      retryIndex: 0,
+      iteration: 0,
+      clarifyIteration: 0,
+      crossClarifyIteration: 1,
+      startedAt: 500,
+    })
     renderDrawer({
       nodeRunId: clarify.id,
       nodeId: initial.nodeId,
       workflowNodeKind: 'agent-single',
-      runs: [initial, retry, loop, clarify],
+      runs: [initial, retry, loop, clarify, cross],
     })
     openCombobox()
     const html = document.body.innerHTML
@@ -191,6 +202,7 @@ describe('Session attempts dropdown picker', () => {
     expect(html).toMatch(/retry#1/i)
     expect(html).toMatch(/loop#2/i)
     expect(html).toMatch(/clarify#3/i)
+    expect(html).toMatch(/cross-clarify#1/i)
   })
 
   test('shard rows show the shardKey alongside the iter label', () => {

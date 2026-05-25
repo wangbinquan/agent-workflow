@@ -1305,6 +1305,7 @@ export interface Resources {
     iterLoop: string
     iterReview: string
     iterClarify: string
+    iterCrossClarify: string
     iterRetry: string
     iterInitial: string
     statDependencyTree: string
@@ -3251,6 +3252,7 @@ export const zhCN: Resources = {
     iterLoop: '循环#{{n}}',
     iterReview: '评审#{{n}}',
     iterClarify: '反问#{{n}}',
+    iterCrossClarify: '跨反问#{{n}}',
     iterRetry: '重试#{{n}}',
     iterInitial: '初次',
     statDependencyTree: '依赖闭包',
