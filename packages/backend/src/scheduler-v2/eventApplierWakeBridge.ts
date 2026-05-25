@@ -76,6 +76,7 @@ export function eventToWakeReason(event: Event): WakeReason | null {
 
     case 'attempt-subagent-tool-use':
     case 'attempt-subagent-output':
+    case 'attempt-token-usage':
     case 'invariant-alert-detected':
     case 'invariant-alert-resolved':
     case 'task-created':

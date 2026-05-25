@@ -93,7 +93,10 @@ describe('SIGNAL_KIND_HANDLERS exhaustiveness', () => {
 })
 
 describe('EventKind closed union (cross-check vs PR-A schema)', () => {
-  test('25 kinds present (7 task + 4 logical-run + 9 attempt + 3 suspension + 2 invariant)', () => {
-    expect(EVENT_KINDS.length).toBe(25)
+  test('26 kinds present (7 task + 4 logical-run + 10 attempt + 3 suspension + 2 invariant)', () => {
+    // 10 attempt-* kinds: started, finished-success/envelope-fail/crash/
+    // timeout, canceled, output-captured, subagent-tool-use, subagent-
+    // output, token-usage (RFC-061 follow-up).
+    expect(EVENT_KINDS.length).toBe(26)
   })
 })
