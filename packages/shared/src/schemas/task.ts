@@ -295,12 +295,96 @@ export const NodeRunOutputSchema = z.object({
 })
 export type NodeRunOutput = z.infer<typeof NodeRunOutputSchema>
 
-/** Response shape of GET /api/tasks/:id/node-runs. */
+/** Response shape of GET /api/tasks/:id/node-runs.
+ *
+ * **Legacy shape** — synthesised by the REST shim at
+ * services/taskRunsProjection.ts from logical_runs + attempts +
+ * node_outputs. Kept for back-compat with the v1 canvas; new code
+ * should consume TaskProjectionViewSchema (below) which exposes the
+ * projection tables directly. */
 export const TaskNodeRunsSchema = z.object({
   runs: z.array(NodeRunSchema),
   outputs: z.array(NodeRunOutputSchema),
 })
 export type TaskNodeRuns = z.infer<typeof TaskNodeRunsSchema>
+
+/**
+ * RFC-061 follow-up — projection-native wire shapes. The new task
+ * detail / canvas / timeline components consume these directly
+ * instead of the legacy NodeRun synthesis. Field names match the
+ * `logical_runs / attempts / node_outputs / suspensions` schema 1:1.
+ */
+export const LogicalRunWireSchema = z.object({
+  id: z.string(),
+  taskId: z.string(),
+  nodeId: z.string(),
+  loopIter: z.number().int(),
+  shardKey: z.string(),
+  iter: z.number().int(),
+  status: z.enum(['pending', 'running', 'suspended', 'done', 'failed', 'canceled']),
+  createdAt: z.number().int(),
+  updatedAt: z.number().int(),
+  lastEventId: z.string(),
+})
+export type LogicalRunWire = z.infer<typeof LogicalRunWireSchema>
+
+export const AttemptWireSchema = z.object({
+  id: z.string(),
+  logicalRunId: z.string(),
+  attemptSeq: z.number().int(),
+  pid: z.number().int().nullable(),
+  opencodeSessionId: z.string().nullable(),
+  startedAt: z.number().int(),
+  finishedAt: z.number().int().nullable(),
+  outcome: z.enum(['success', 'envelope-fail', 'crash', 'timeout', 'canceled']).nullable(),
+  exitCode: z.number().int().nullable(),
+  errorMessage: z.string().nullable(),
+  preSnapshot: z.string().nullable(),
+})
+export type AttemptWire = z.infer<typeof AttemptWireSchema>
+
+export const NodeOutputWireSchema = z.object({
+  taskId: z.string(),
+  nodeId: z.string(),
+  loopIter: z.number().int(),
+  shardKey: z.string(),
+  iter: z.number().int(),
+  portName: z.string(),
+  content: z.string(),
+  capturedAt: z.number().int(),
+  sourceEventId: z.string(),
+})
+export type NodeOutputWire = z.infer<typeof NodeOutputWireSchema>
+
+export const SuspensionWireSchema = z.object({
+  id: z.string(),
+  logicalRunId: z.string(),
+  signalKind: z.enum([
+    'self-clarify',
+    'cross-clarify',
+    'review',
+    'retry-pending-auto',
+    'retry-pending-human',
+    'await-external-data',
+  ]),
+  awaitsActor: z.string(),
+  payload: z.string(),
+  createdAt: z.number().int(),
+  resolvedAt: z.number().int().nullable(),
+  resolvedByEventId: z.string().nullable(),
+})
+export type SuspensionWire = z.infer<typeof SuspensionWireSchema>
+
+/** Response shape of GET /api/tasks/:id/projection — projection-native
+ *  bundle. Replaces both /node-runs (legacy NodeRun shape) and
+ *  /suspensions (single-list) for components that need the full picture. */
+export const TaskProjectionViewSchema = z.object({
+  logicalRuns: z.array(LogicalRunWireSchema),
+  attempts: z.array(AttemptWireSchema),
+  outputs: z.array(NodeOutputWireSchema),
+  suspensions: z.array(SuspensionWireSchema),
+})
+export type TaskProjectionView = z.infer<typeof TaskProjectionViewSchema>
 
 /** Response shape of GET /api/tasks/:id/node-runs/:nodeRunId/events. */
 

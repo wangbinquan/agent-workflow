@@ -52,6 +52,7 @@ import {
 } from '@/services/suspensions'
 import { listTaskTimeline } from '@/services/timeline'
 import { diagnoseTask } from '@/services/diagnose'
+import { getTaskProjectionView } from '@/services/taskProjectionView'
 import { SignalKindSchema, type SignalKind } from '@agent-workflow/shared'
 import {
   applyUploadsToWorktree,
@@ -507,6 +508,15 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     const body = await safeJson(c.req.raw)
     const r = await resolveSuspension(deps.db, c.req.param('id'), body)
     return c.json(r)
+  })
+
+  // RFC-061 follow-up — projection-native bundle for new task detail /
+  // canvas / timeline components. Returns logical_runs + attempts +
+  // node_outputs + suspensions as 1:1 wire types instead of synthesising
+  // the legacy NodeRun shape. The /node-runs shim stays for back-compat
+  // with the v1 canvas.
+  app.get('/api/tasks/:id/projection', async (c) => {
+    return c.json(await getTaskProjectionView(deps.db, c.req.param('id')))
   })
 
   // RFC-061 follow-up — projection-native diagnose panel. Aggregates
