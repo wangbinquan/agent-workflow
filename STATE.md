@@ -24,13 +24,13 @@
 - 新前端路由：`/suspensions` `/suspensions/$id` `/tasks/$id/timeline`
 - 全局 InboxDrawer 显示跨 task 的待办 SignalKind 行（点击跳新 `/suspensions/$id` 答题页）
 
-**测试**：1845 backend pass + 1816 frontend pass / 8 pre-existing daemon/MCP/WS fails；第二轮新增 ~32 case；每个 phase commit 独立可合 + 各自绿 CI。
+**测试**：1860 backend pass + 1816 frontend pass / 8 pre-existing daemon/MCP/WS fails；第二轮新增 ~48 case；每个 phase commit 独立可合 + 各自绿 CI。
 
-**仍 deferred 到独立 PR**（少 ROI 或需新设计 session）：
-- P1-5 events 表归档（半年内不紧迫；需 migration + grep guard 调整 `.delete(events)` 允许 archive code path）
-- P2-1 / P2-2 memoryDistiller / memoryDistillJobDetail 改读 suspensions（需配套 producer-side `enqueueDistillJob` hook in SignalKindHandler.applyResolution）
-- P2-3 subagent live capture 真实时（actor 内启 poller；现 post-attempt 已足）
-- 前端 wire DTO `NodeRun → LogicalRun + Attempt` 大重构（REST shim 顶着，不影响功能）
+**第二轮的「stop hook 追加」一并清零**（commits `be6982d` → `b492948`，~5 commit）：
+- P1-5 events 表归档：migration 0037 新建 `events_archive` 表 + `services/eventsArchive.ts` 真实现 + `services/timeline.ts` fallback + grep guard 允许 archiver 的 DELETE call
+- P2-1 / P2-2 memoryDistiller / memoryDistillJobDetail 改读 suspensions：producer 侧 `services/suspensions.ts:resolveSuspension` 自动 enqueueDistillJob；consumer 侧 loadSourceEvents / safeLoadSourceEvents 走 suspensions join logical_runs
+- P2-3 subagent live capture：runner-v2 新增 `onLiveSubagentEvent` 回调；ProductionRunnerAdapter 在 opencode stdout 每行立即 writeEvents，post-exit aggregator 跳过 subagent re-emit
+- 前端 wire DTO refactor 基础：新 `LogicalRunWire / AttemptWire / NodeOutputWire / SuspensionWire / TaskProjectionView` 类型 + `GET /api/tasks/:id/projection` 端点。原 `TaskNodeRunsSchema` 标 legacy back-compat；新组件直接消费 projection types，每个组件可独立 incremental adopt
 
 ---
 
