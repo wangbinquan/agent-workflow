@@ -10,7 +10,31 @@
 
 - **PR-C S5 invariant + UI alert + log-must-alert guard**（37 case 全绿，含 backend 24 + shared 13）：User 已在 `services/stuckTaskDetector.ts`(204 行) 实现 S5（`tasks.status='running'` AND `now - max(events.ts) > 30min` 阈值）+ S6（user-awaited suspension 过期）；同时 `LifecycleAlertRule` 加 S5/S6；`diagnose-repair.ts` 加 `S5.cancel-task` + `S6.cancel-task` repair option。本 PR 补四件：(1) `rfc062-stall-incident-regression.test.ts` 3 case 复刻 incident 4-events-then-silence pathology，断言 S5 alert detail 含 `lastEventTs/ageMs/thresholdMs`；(2) `rfc062-error-must-alert.test.ts` grep guard 强制每个 `log.error()` 站点要么旁边有 alert-routing helper（`reconcileLifecycleAlerts` / `tasksListBroadcaster.broadcast` 等）要么有显式 `// log-only: <reason>` 注释；(3) 给 4 个 ad-hoc log.error 站点（`util/errors.ts` 全局 / `routes/mcps` probe / `services/skill-zip` per-skill / `services/stuckTaskDetector` 自检）加 log-only 注释；(4) 前端 i18n `tasks.diagnose.rule.S5 / S6` 中英对称 + `zh-CN.ts Resources` interface 更新。`<StuckTaskBanner>` 既有渲染对所有 rule 通用，无需改逻辑。
 
-**RFC-061 follow-up — 真硬切完工**（2026-05-25，commits `3123f66` → `98eb09b`，~10 commits）：把 PR-C/D 留下的 "13 个 legacy consumer + 6 张老表 + 前后端 UX 缺口" 4 个 phase 一次性补完到最终态。
+**RFC-061 follow-up — 全部 22 phase 完工**（2026-05-25 第二轮，commits `dedc32d` → `00f0082`）：上一轮（第一轮）只补完了 backend cutover；本第二轮按 [audit deliverable](design/RFC-061-execution-event-sourced/plan.md) 全部 P0-P3 + 选定 P2 + P4 补完到最终态。
+
+**新增能力**（之前缺失，现已恢复 / 新建，按用户感知优先级）：
+- 用户能在 UI 答 clarify 问题 + approve/iterate/reject review（新 `/suspensions` + `/suspensions/$id` 统一路由，覆盖 self-clarify / cross-clarify / review / retry-pending-human 4 种 SignalKind 表单）
+- agent dispatch 自动注入 `## Learned context` 长期记忆块（`AgentSingleDispatchExtras.loadMemoryBlock` closure + launcher 实现）
+- NodeDetailDrawer Session 标签页能看 opencode 子 session 对话（`attempt-subagent-*` events 重建，参考 `services/sessionView.ts`）
+- 卡死 task 自动告警 S5 (scheduler-stalled) + S6 (suspension-stale)
+- token-limit enforcement 恢复（新 `attempt-token-usage` event + migration 0036 把 events.kind CHECK 扩到 26 个 kind）
+- actor lazy cascade 补完：review iterate / cross-clarify submit 自动 cascade 下游（`scanFreshDownstream` 二次扫描）
+- WS broadcaster 切 events 流（`task.event.appended` 帧，每条 writeEvents commit 后 fan-out）
+- 新 REST 端点：`/api/tasks/:id/suspensions` `/api/suspensions[?signalKind]` `POST /api/suspensions/:id/resolve` `/api/tasks/:id/timeline` `/api/tasks/:id/diagnose`
+- 新前端路由：`/suspensions` `/suspensions/$id` `/tasks/$id/timeline`
+- 全局 InboxDrawer 显示跨 task 的待办 SignalKind 行（点击跳新 `/suspensions/$id` 答题页）
+
+**测试**：1845 backend pass + 1816 frontend pass / 8 pre-existing daemon/MCP/WS fails；第二轮新增 ~32 case；每个 phase commit 独立可合 + 各自绿 CI。
+
+**仍 deferred 到独立 PR**（少 ROI 或需新设计 session）：
+- P1-5 events 表归档（半年内不紧迫；需 migration + grep guard 调整 `.delete(events)` 允许 archive code path）
+- P2-1 / P2-2 memoryDistiller / memoryDistillJobDetail 改读 suspensions（需配套 producer-side `enqueueDistillJob` hook in SignalKindHandler.applyResolution）
+- P2-3 subagent live capture 真实时（actor 内启 poller；现 post-attempt 已足）
+- 前端 wire DTO `NodeRun → LogicalRun + Attempt` 大重构（REST shim 顶着，不影响功能）
+
+---
+
+**RFC-061 follow-up — 第一轮**（2026-05-25 早段，commits `3123f66` → `98eb09b`，~10 commits）：把 PR-C/D 留下的 "13 个 legacy consumer + 6 张老表 + 前后端 UX 缺口" 4 个 phase 一次性补完到最终态。
 
 - **Phase 1 backend REST shim**：`services/taskRunsProjection.ts` 把 `/api/tasks/:id/node-runs[/:id/events|stdout|inventory]` 全部切到 `logical_runs + attempts + node_outputs + suspensions`。canvas 现在对 actor 跑出来的任务有数据。
 - **Phase 1 retryNode + resumeTask 重写**：删 `task.ts:715-748` 的 nodeRuns 占位写 + 5 counter 继承，改成发 `logical-run-iter-bumped` events；rollback 从 `attempts.preSnapshot` 取。`shared/events.ts` 加 `'user-retry'` triggerKind。
