@@ -229,5 +229,48 @@ export function scanFreshDownstream(ctx: ReadyScanContext): ReadyScope[] {
       node,
     })
   }
+
+  // RFC-061 G6 "lazy cascade" — after initial-mint, walk every node
+  // whose latest local iter < max(upstream done iter) and emit a
+  // logical-run-created at scope=(0,'',upstreamMaxIter+1) so the
+  // downstream picks up its rerun. This is what makes review iterate /
+  // cross-clarify submit cascade past the upstream that bumped — the
+  // SignalKindHandler.applyResolution bumps the upstream, the actor
+  // re-dispatches it; on completion downstream's stale iter triggers
+  // this loop and mints a fresh row for re-dispatch.
+  for (const node of nodes) {
+    const upstreams = upstreamMap.get(node.id)
+    if (!upstreams || upstreams.size === 0) continue
+    const myRuns = (runsByNode.get(node.id) ?? []).filter(
+      (r) => r.loopIter === 0 && r.shardKey === '',
+    )
+    if (myRuns.length === 0) continue // initial mint handled above
+    const myMaxIter = myRuns.reduce((max, r) => Math.max(max, r.iter), -1)
+
+    let upstreamMaxIter = -1
+    let allUpstreamDoneAtMax = true
+    for (const upId of upstreams) {
+      const upDone = (runsByNode.get(upId) ?? []).filter(
+        (r) => r.status === 'done' && r.loopIter === 0 && r.shardKey === '',
+      )
+      if (upDone.length === 0) {
+        allUpstreamDoneAtMax = false
+        break
+      }
+      const localMax = upDone.reduce((max, r) => Math.max(max, r.iter), -1)
+      upstreamMaxIter = Math.max(upstreamMaxIter, localMax)
+    }
+    if (!allUpstreamDoneAtMax) continue
+    if (upstreamMaxIter <= myMaxIter) continue
+    // Avoid re-emitting if a row at the target iter already exists
+    // (handles applier-already-minted via logical-run-iter-bumped path).
+    const targetIter = upstreamMaxIter
+    if (myRuns.some((r) => r.iter === targetIter)) continue
+    out.push({
+      scope: { nodeId: node.id, loopIter: 0, shardKey: '', iter: targetIter },
+      node,
+    })
+  }
+
   return out
 }
