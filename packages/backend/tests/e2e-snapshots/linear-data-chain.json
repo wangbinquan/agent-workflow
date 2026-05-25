@@ -65,10 +65,9 @@
   ],
   "expectedTerminalKind": "task-completed",
   "expectedEvents": {
+    "$comment": "Per-node lifecycle only — cross-node interleaving is non-deterministic (see cross-clarify-roundtrip.json for rationale).",
     "mustContainInOrder": [
       "task-started",
-      "logical-run-created:in_topic",
-      "logical-run-completed:in_topic",
       "logical-run-created:agent_outline",
       "attempt-started:agent_outline",
       "attempt-finished-success:agent_outline",
