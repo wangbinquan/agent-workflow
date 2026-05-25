@@ -56,12 +56,10 @@ const FILE_LINE_ALLOWLIST = new Set<string>([
   // tasks.ts:496 — multipart FormData entries; web spec types are wrong-shape.
   // Re-typing FormData iterators upstream is out of scope here.
   'tasks.ts:const entries = form.entries() as unknown as Iterable<[string, string | File]>',
-  // tasks.ts:541 — multipart launch path narrows `startInput.repoPath` to string
-  // after the explicit `if (startInput.repoUrl) throw` guard upstream. Cleaner
-  // long-term would be StartTaskRequestSchema being a discriminated union
-  // (path-mode vs url-mode) so the static narrow falls out of Zod, but the
-  // current single-schema design forces a runtime check + as-cast pair.
-  'tasks.ts:repoPath: startInput.repoPath as string,',
+  // (RFC-066 PR-A: the legacy `tasks.ts:repoPath: startInput.repoPath as
+  // string,` entry was retired when the multipart handler was refactored
+  // to narrow via an explicit `if (!multipartRepoPath) throw …` guard;
+  // the cast disappeared and no zombie remains on this allowlist.)
 ])
 
 interface Violation {

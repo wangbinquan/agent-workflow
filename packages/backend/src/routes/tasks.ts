@@ -668,12 +668,19 @@ async function handleMultipartTaskStart(
   // to the legacy top-level `repoPath`/`baseBranch` fields. The multi-repo
   // case (length > 1) was already rejected above; here we just normalize so
   // materializeWorktree always sees a concrete repoPath even when the caller
-  // used the new shape.
-  const multipartRepoPath =
-    startInput.repoPath ?? (startInput.repos?.[0]?.repoPath as string | undefined)
+  // used the new shape. We narrow to a non-empty string via an explicit
+  // runtime check rather than an `as string` cast (RFC-054 W1-7 route-cast
+  // guard prefers this pattern).
+  const multipartRepoPath = startInput.repoPath ?? startInput.repos?.[0]?.repoPath
   const multipartBaseBranch = startInput.baseBranch ?? startInput.repos?.[0]?.baseBranch
+  if (!multipartRepoPath) {
+    throw new ValidationError(
+      'multipart-upload-requires-path-mode',
+      'multipart uploads require a local repoPath (top-level repoPath or repos[0].repoPath)',
+    )
+  }
   const wt = await materializeWorktree({
-    repoPath: multipartRepoPath as string,
+    repoPath: multipartRepoPath,
     baseBranch: multipartBaseBranch,
     taskId,
     appHome,
