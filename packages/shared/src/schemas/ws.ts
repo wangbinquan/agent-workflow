@@ -62,6 +62,29 @@ export const TaskWsMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('task.done'),
     status: z.enum(['done', 'failed', 'canceled', 'interrupted']),
   }),
+  // RFC-061 follow-up — events-stream broadcast. Every writeEvents()
+  // batch fans out one frame per appended event so subscribers can
+  // build live timelines + invalidate downstream queries without a
+  // polling round-trip. The wire shape mirrors the projection events
+  // table's RawEvent (kind / scope / payload-as-JSON-string + actor).
+  // Frontend can decode via shared/events.ts decodeEvent for typed
+  // access.
+  z.object({
+    type: z.literal('task.event.appended'),
+    eventId: z.string(),
+    ts: z.number().int(),
+    kind: z.string(),
+    nodeId: z.string().nullable(),
+    loopIter: z.number().int().nullable(),
+    shardKey: z.string().nullable(),
+    iter: z.number().int().nullable(),
+    attemptId: z.string().nullable(),
+    parentEventId: z.string().nullable(),
+    actor: z.string(),
+    resolutionId: z.string().nullable(),
+    /** JSON-encoded payload — same shape as events.payload column. */
+    payload: z.string(),
+  }),
   // -------------------------------------------------------------------------
   // RFC-005 review events. Delivered on the per-task /ws/tasks/{taskId}
   // channel — global Reviews tab uses polling + invalidation on its own.

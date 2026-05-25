@@ -28,6 +28,7 @@ import {
 } from '@agent-workflow/shared'
 
 import { applyEvent } from './eventApplier'
+import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
 // Monotonic ULID factory — ULIDs from the same millisecond increment a
 // counter rather than re-randomize. This guarantees that ordering events
@@ -142,6 +143,35 @@ export async function writeEvents<K extends EventKind>(
       })
       .run()
   })
+
+  // RFC-061 follow-up — after commit, fan out one task.event.appended
+  // frame per event so WS subscribers see the live timeline. The
+  // broadcaster is fire-and-forget; a slow consumer can never delay
+  // event writes (the writeEvents call already returned to its caller
+  // synchronously after commit).
+  for (const r of rawEvents) {
+    try {
+      taskBroadcaster.broadcast(TASK_CHANNEL(r.taskId), {
+        type: 'task.event.appended',
+        eventId: r.id,
+        ts: r.ts,
+        kind: r.kind,
+        nodeId: r.nodeId,
+        loopIter: r.loopIter,
+        shardKey: r.shardKey,
+        iter: r.iter,
+        attemptId: r.attemptId,
+        parentEventId: r.parentEventId,
+        actor: r.actor,
+        resolutionId: r.resolutionId,
+        payload: r.payload,
+      })
+    } catch {
+      // Broadcaster failures must not corrupt the events table; they
+      // already committed. Drop the frame silently; clients can recover
+      // via REST polling on /api/tasks/:id/timeline.
+    }
+  }
 
   return rawEvents.map(decodeEvent)
 }
