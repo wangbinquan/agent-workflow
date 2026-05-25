@@ -18,7 +18,9 @@ interface H {
   taskId: string
 }
 
-async function seed(opts: { status?: string } = {}): Promise<H> {
+async function seed(
+  opts: { status?: 'pending' | 'running' | 'done' | 'failed' | 'canceled' } = {},
+): Promise<H> {
   const db = createInMemoryDb(MIGRATIONS)
   const wfId = ulid()
   await db.insert(workflows).values({ id: wfId, name: 'wf', definition: '{}' })

@@ -51,6 +51,7 @@ import {
   resolveSuspension,
 } from '@/services/suspensions'
 import { listTaskTimeline } from '@/services/timeline'
+import { diagnoseTask } from '@/services/diagnose'
 import { SignalKindSchema, type SignalKind } from '@agent-workflow/shared'
 import {
   applyUploadsToWorktree,
@@ -506,6 +507,15 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     const body = await safeJson(c.req.raw)
     const r = await resolveSuspension(deps.db, c.req.param('id'), body)
     return c.json(r)
+  })
+
+  // RFC-061 follow-up — projection-native diagnose panel. Aggregates
+  // task summary + open suspensions + pending logical_runs + open
+  // lifecycle alerts (S5/S6) for the operator-side wedge recovery
+  // surface. Read-only for now; manual recovery is "cancel + relaunch"
+  // until a projection-native repair catalog lands.
+  app.get('/api/tasks/:id/diagnose', async (c) => {
+    return c.json(await diagnoseTask(deps.db, c.req.param('id')))
   })
 
   // RFC-061 G9 — events timeline. Cheap pagination across the raw
