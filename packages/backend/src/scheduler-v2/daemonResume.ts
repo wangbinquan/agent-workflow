@@ -132,7 +132,6 @@ export function spawnResumedActors(
       // We can't import the project logger here without a cycle risk;
       // fall back to console.error so the failure is at least visible
       // in daemon.log via the global console redirect.
-      // eslint-disable-next-line no-console
       console.error(
         `[daemon-resume] launcher threw for task ${t.id}: ${
           err instanceof Error ? err.message : String(err)

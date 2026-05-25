@@ -17,7 +17,7 @@
 // Frontend canvas/ is excluded from the scan — editor code lives in a
 // different topology (drag/drop/select), not gating.
 
-import { describe, expect, test } from 'bun:test'
+import { describe, test } from 'bun:test'
 import { readdir, readFile } from 'node:fs/promises'
 import { resolve, join, relative } from 'node:path'
 

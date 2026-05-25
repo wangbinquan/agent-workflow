@@ -16,7 +16,7 @@
 //   - this test file (we need to MENTION the strings to match them)
 //   - any file that uses `// log-only: reason` (different category)
 
-import { describe, expect, test } from 'bun:test'
+import { describe, test } from 'bun:test'
 import { readdir, readFile } from 'node:fs/promises'
 import { resolve, join, relative } from 'node:path'
 
