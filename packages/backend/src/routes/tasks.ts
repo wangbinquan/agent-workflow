@@ -45,6 +45,12 @@ import {
   getTaskNodeRunsFromProjection as getTaskNodeRuns,
 } from '@/services/taskRunsProjection'
 import {
+  getSuspensionById,
+  listTaskSuspensions,
+  resolveSuspension,
+} from '@/services/suspensions'
+import { listTaskTimeline } from '@/services/timeline'
+import {
   applyUploadsToWorktree,
   DEFAULT_UPLOAD_LIMITS,
   type UploadFile,
@@ -449,6 +455,49 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
   // opencode plugin produced inside the per-run dir.
   app.get('/api/tasks/:id/node-runs/:nodeRunId/inventory', async (c) => {
     return c.json(await getInventorySnapshot(deps.db, c.req.param('id'), c.req.param('nodeRunId')))
+  })
+
+  // RFC-061 follow-up — suspensions projection (open clarify / review /
+  // retry-* signals). Replaces the deleted /api/clarify + /api/reviews
+  // routes with a uniform shape keyed by SignalKind.
+  //   GET  /api/tasks/:id/suspensions[?openOnly=true|false]
+  //   GET  /api/suspensions/:id
+  //   POST /api/suspensions/:id/resolve   body = SignalKind-specific
+  app.get('/api/tasks/:id/suspensions', async (c) => {
+    const openOnlyRaw = c.req.query('openOnly')
+    const openOnly = openOnlyRaw === undefined || openOnlyRaw !== 'false'
+    return c.json({ rows: await listTaskSuspensions(deps.db, c.req.param('id'), { openOnly }) })
+  })
+
+  app.get('/api/suspensions/:id', async (c) => {
+    return c.json(await getSuspensionById(deps.db, c.req.param('id')))
+  })
+
+  app.post('/api/suspensions/:id/resolve', async (c) => {
+    const body = await safeJson(c.req.raw)
+    const r = await resolveSuspension(deps.db, c.req.param('id'), body)
+    return c.json(r)
+  })
+
+  // RFC-061 G9 — events timeline. Cheap pagination across the raw
+  // events table for the deferred /tasks/:id/timeline view + any
+  // observability surfacing.
+  //   GET /api/tasks/:id/timeline[?afterId=:ulid&limit=:n&kind=:k]
+  app.get('/api/tasks/:id/timeline', async (c) => {
+    const afterId = c.req.query('afterId') ?? null
+    const limitRaw = c.req.query('limit')
+    const kindFilter = c.req.query('kind') ?? null
+    let limit = 500
+    if (limitRaw !== undefined) {
+      const n = Number(limitRaw)
+      if (!Number.isFinite(n) || n <= 0) {
+        throw new ValidationError('timeline-limit-invalid', 'limit must be a positive number')
+      }
+      limit = Math.min(n, 2000)
+    }
+    return c.json(
+      await listTaskTimeline(deps.db, c.req.param('id'), { afterId, limit, kindFilter }),
+    )
   })
 }
 

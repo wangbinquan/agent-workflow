@@ -537,7 +537,7 @@ function makeTickContext(
   }
 }
 
-async function loadTaskEvents(db: DbClient, taskId: string): Promise<Event[]> {
+export async function loadTaskEvents(db: DbClient, taskId: string): Promise<Event[]> {
   const rows = db
     .select()
     .from(eventsTable)
