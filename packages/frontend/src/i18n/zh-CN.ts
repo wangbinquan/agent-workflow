@@ -47,6 +47,14 @@ export interface Resources {
       pendingMemoryGroup: string
       pendingMemoryEmpty: string
       memoryItemSubtitle: string
+      // RFC-061 follow-up: open SignalKind suspensions surfaced in the inbox.
+      suspensionItemSubtitle: string
+      suspensionKindSelfClarify: string
+      suspensionKindCrossClarify: string
+      suspensionKindReview: string
+      suspensionKindRetryAuto: string
+      suspensionKindRetryHuman: string
+      suspensionKindAwaitExternal: string
     }
     // RFC-041 PR4: top-level Memory route.
     memory: string
@@ -1969,6 +1977,13 @@ export const zhCN: Resources = {
       pendingMemoryGroup: '待审批记忆 ({{count}})',
       pendingMemoryEmpty: '暂无候选记忆',
       memoryItemSubtitle: '{{scope}} · {{kind}}',
+      suspensionItemSubtitle: '任务 {{taskId}} · 节点 {{nodeId}}',
+      suspensionKindSelfClarify: '自反问',
+      suspensionKindCrossClarify: '跨节点反问',
+      suspensionKindReview: '评审',
+      suspensionKindRetryAuto: '自动重试',
+      suspensionKindRetryHuman: '人工重试',
+      suspensionKindAwaitExternal: '外部数据',
     },
     memory: '记忆',
     memoryHint: '从过往反问、评审与反馈中沉淀的长期上下文',
