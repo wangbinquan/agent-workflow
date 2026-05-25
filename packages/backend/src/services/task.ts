@@ -1,13 +1,7 @@
 // Task service — start / list / get.
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
-import type {
-  NodeKind,
-  StartTask,
-  Task,
-  TaskDiff,
-  TaskSummary,
-} from '@agent-workflow/shared'
+import type { NodeKind, StartTask, Task, TaskDiff, TaskSummary } from '@agent-workflow/shared'
 import { NODE_KIND_BEHAVIORS } from '@agent-workflow/shared'
 import { and, desc, eq, inArray, ne, or } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
@@ -620,11 +614,7 @@ export async function retryNode(
 
   // nodeRunId is now a logical_run.id (the projection shim returns
   // logical_run.id as NodeRun.id). Validate it belongs to this task.
-  const lrRows = await db
-    .select()
-    .from(logicalRuns)
-    .where(eq(logicalRuns.id, nodeRunId))
-    .limit(1)
+  const lrRows = await db.select().from(logicalRuns).where(eq(logicalRuns.id, nodeRunId)).limit(1)
   const lr = lrRows[0]
   if (lr === undefined || lr.taskId !== taskId) {
     throw new NotFoundError(

@@ -51,9 +51,7 @@ async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Res
   return app.request(path, { ...init, headers })
 }
 
-async function seedTaskAndScope(
-  db: DbClient,
-): Promise<{ taskId: string; logicalRunId: string }> {
+async function seedTaskAndScope(db: DbClient): Promise<{ taskId: string; logicalRunId: string }> {
   const wfId = ulid()
   await db.insert(workflows).values({
     id: wfId,
@@ -312,7 +310,10 @@ describe('GET /api/tasks/:id/timeline', () => {
       h.app,
       `/api/tasks/${taskId}/timeline?limit=10&afterId=${firstBody.cursor}`,
     )
-    const secondBody = (await second.json()) as { events: Array<{ id: string }>; cursor: string | null }
+    const secondBody = (await second.json()) as {
+      events: Array<{ id: string }>
+      cursor: string | null
+    }
     expect(secondBody.events.length).toBe(2)
     expect(secondBody.cursor).toBeNull()
   })

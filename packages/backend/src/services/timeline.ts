@@ -36,7 +36,11 @@ export async function listTaskTimeline(
   taskId: string,
   opts: ListTaskTimelineOpts,
 ): Promise<TimelineResponse> {
-  const taskRows = await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+  const taskRows = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1)
   if (taskRows.length === 0) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }

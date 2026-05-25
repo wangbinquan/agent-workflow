@@ -106,7 +106,11 @@ export async function getTaskNodeRunsFromProjection(
   db: DbClient,
   taskId: string,
 ): Promise<TaskNodeRuns> {
-  const taskRows = await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+  const taskRows = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1)
   if (taskRows.length === 0) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }
@@ -204,11 +208,7 @@ async function assertLogicalRunBelongsToTask(
   taskId: string,
   logicalRunId: string,
 ): Promise<typeof logicalRuns.$inferSelect> {
-  const rows = await db
-    .select()
-    .from(logicalRuns)
-    .where(eq(logicalRuns.id, logicalRunId))
-    .limit(1)
+  const rows = await db.select().from(logicalRuns).where(eq(logicalRuns.id, logicalRunId)).limit(1)
   const lr = rows[0]
   if (lr === undefined || lr.taskId !== taskId) {
     throw new NotFoundError(

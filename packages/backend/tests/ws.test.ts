@@ -260,6 +260,5 @@ describe('WebSocket channels', () => {
     // events-stream WS contract in Phase 6.
     const _placeholder = TOKEN
     void _placeholder
-
   })
 })

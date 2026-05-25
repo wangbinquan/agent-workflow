@@ -153,11 +153,7 @@ export async function getInventorySnapshot(
   if (taskRows.length === 0) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }
-  const lrRows = await db
-    .select()
-    .from(logicalRuns)
-    .where(eq(logicalRuns.id, nodeRunId))
-    .limit(1)
+  const lrRows = await db.select().from(logicalRuns).where(eq(logicalRuns.id, nodeRunId)).limit(1)
   const lr = lrRows[0]
   if (lr === undefined || lr.taskId !== taskId) {
     throw new NotFoundError(

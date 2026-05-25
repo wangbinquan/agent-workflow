@@ -706,10 +706,7 @@ describe('task HTTP routes', () => {
     // Force the logical_run into 'failed' status (the actor would do this
     // via retry-pending-* SignalKind; for the test we mark it directly to
     // exercise the retryNode path on a terminal failed lr).
-    await h.db
-      .update(logicalRuns)
-      .set({ status: 'failed' })
-      .where(eq(logicalRuns.id, lrId))
+    await h.db.update(logicalRuns).set({ status: 'failed' }).where(eq(logicalRuns.id, lrId))
 
     const res = await req(h.app, `/api/tasks/${id}/nodes/${lrId}/retry?cascade=false`, {
       method: 'POST',
@@ -748,9 +745,21 @@ describe('task HTTP routes', () => {
           { id: 'C', kind: 'clarify' },
         ],
         edges: [
-          { id: 'e1', source: { nodeId: 'A', portName: 'out' }, target: { nodeId: 'B', portName: 'in' } },
-          { id: 'e2', source: { nodeId: 'A', portName: 'out' }, target: { nodeId: 'R', portName: 'doc' } },
-          { id: 'e3', source: { nodeId: 'A', portName: 'out' }, target: { nodeId: 'C', portName: 'in' } },
+          {
+            id: 'e1',
+            source: { nodeId: 'A', portName: 'out' },
+            target: { nodeId: 'B', portName: 'in' },
+          },
+          {
+            id: 'e2',
+            source: { nodeId: 'A', portName: 'out' },
+            target: { nodeId: 'R', portName: 'doc' },
+          },
+          {
+            id: 'e3',
+            source: { nodeId: 'A', portName: 'out' },
+            target: { nodeId: 'C', portName: 'in' },
+          },
         ],
       }),
       repoPath: h.repoPath,

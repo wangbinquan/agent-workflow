@@ -59,13 +59,7 @@ async function req(app: Hono, path: string): Promise<Response> {
 }
 
 interface SeedOpts {
-  nodeKind?:
-    | 'agent-single'
-    | 'input'
-    | 'output'
-    | 'wrapper-git'
-    | 'review'
-    | 'clarify'
+  nodeKind?: 'agent-single' | 'input' | 'output' | 'wrapper-git' | 'review' | 'clarify'
   /** Body to write into `<appHome>/runs/<taskId>/<attemptId>/inventory.json`. */
   inventoryBody?: string | null
   /** Skip seeding any attempt for this logical_run. */
