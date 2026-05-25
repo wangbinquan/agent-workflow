@@ -1644,6 +1644,37 @@ export interface Resources {
     loadError: string
     empty: string
   }
+  // RFC-061 follow-up: suspensions list + unified detail/answer page.
+  suspensions: {
+    title: string
+    hint: string
+    empty: string
+    taskHint: string
+    nodeHint: string
+    alreadyResolved: string
+    submitAnswers: string
+    submitDecision: string
+    noQuestions: string
+    crossClarifyDesignerHint: string
+    crossClarifyDesignerValue: string
+    crossClarifyDirective: string
+    crossClarifyDirective_submit: string
+    crossClarifyDirective_reject: string
+    crossClarifyDirective_stop: string
+    rejectionFeedback: string
+    reviewHint: string
+    reviewDocument: string
+    reviewDecision: string
+    reviewDecision_approve: string
+    reviewDecision_iterate: string
+    reviewDecision_reject: string
+    reviewComments: string
+    reviewSummary: string
+    retryHumanHint: string
+    retryNow: string
+    retryAutoNote: string
+    awaitExternalNote: string
+  }
   // RFC-041 PR4: platform memory UI surface.
   memory: {
     title: string
@@ -3625,6 +3656,36 @@ export const zhCN: Resources = {
     statusError: '出错',
     loadError: '加载会话失败。',
     empty: '本轮 session 暂无事件。',
+  },
+  suspensions: {
+    title: '待处理事项',
+    hint: '所有打开的反问、评审与重试请求；点击进入答题或决策页面。',
+    empty: '当前没有待处理事项 ✓',
+    taskHint: '任务 {{id}}…',
+    nodeHint: '节点 {{id}}',
+    alreadyResolved: '此事项已被处理；下方表单为只读。',
+    submitAnswers: '提交答案',
+    submitDecision: '提交决策',
+    noQuestions: '没有问题，可能已被其他途径回答。',
+    crossClarifyDesignerHint: '反问目标',
+    crossClarifyDesignerValue: '反问者 {{questioner}} → 设计者 {{designer}}',
+    crossClarifyDirective: '决策',
+    crossClarifyDirective_submit: '提交答案（回到设计者）',
+    crossClarifyDirective_reject: '驳回反问（让反问者重写问题）',
+    crossClarifyDirective_stop: '终止反问环',
+    rejectionFeedback: '驳回理由（必填）',
+    reviewHint: '评审提示',
+    reviewDocument: '待评审文档（节点 {{node}} · 端口 {{port}}）',
+    reviewDecision: '决策',
+    reviewDecision_approve: '通过',
+    reviewDecision_iterate: '让设计者改一稿',
+    reviewDecision_reject: '驳回',
+    reviewComments: '评论（必填）',
+    reviewSummary: '摘要（可选）',
+    retryHumanHint: '系统已耗尽自动重试预算，需手动确认再跑一次。',
+    retryNow: '立即重试',
+    retryAutoNote: '由调度器自动处理，无需手动操作。',
+    awaitExternalNote: '等待外部数据进入；v1 暂未提供注入入口。',
   },
   memory: {
     title: '平台长期记忆',

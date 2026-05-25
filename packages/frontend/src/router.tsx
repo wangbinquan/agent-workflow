@@ -31,6 +31,11 @@ import { LaunchRoute as workflowLaunchRoute } from '@/routes/workflows.launch'
 import { ReposRoute as reposRoute } from '@/routes/repos'
 import { Route as memoryRoute } from '@/routes/memory'
 import { Route as memoryDistillJobDetailRoute } from '@/routes/memory.distill-jobs.$jobId'
+// RFC-061 follow-up: unified replacement for the deleted /clarify + /reviews
+// routes. /suspensions lists open SignalKind rows; /suspensions/$id is the
+// answer / decision form (kind-specific branches).
+import { Route as suspensionsRoute } from '@/routes/suspensions'
+import { Route as suspensionDetailRoute } from '@/routes/suspensions.$id'
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -56,8 +61,10 @@ const routeTree = rootRoute.addChildren([
   workflowsRoute,
   taskDetailRoute,
   tasksRoute,
-  // RFC-061 PR-C: /reviews + /clarify routes removed pending UX rebuild
-  // against the suspensions projection.
+  // RFC-061 follow-up: '/suspensions/$id' literal must precede the bare
+  // '/suspensions' so the dynamic param route wins on detail URLs.
+  suspensionDetailRoute,
+  suspensionsRoute,
   reposRoute,
   // RFC-043: admin distill job detail. Must come BEFORE /memory so the
   // longer literal segment wins the match.

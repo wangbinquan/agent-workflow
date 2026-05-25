@@ -147,12 +147,13 @@ export function InboxDrawer({ open, onClose }: InboxDrawerProps) {
                   void navigate({ to: '/memory' } as any)
                   return
                 }
-                // Suspension row — land on the owning task's detail page.
-                // Dedicated /clarify / /reviews routes will rebuild in a
-                // follow-up PR; for now the user can at least see the task
-                // context from the canvas.
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                void navigate({ to: `/tasks/${encodeURIComponent(it.taskId)}` } as any)
+                // Suspension row — land on the unified detail / answer
+                // form (renders the SignalKind-specific branch).
+                void navigate({
+                  to: '/suspensions/$id',
+                  params: { id: it.rowKey },
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                } as any)
               }}
             >
               <span
