@@ -22,6 +22,7 @@ import {
 import type { DbClient } from '@/db/client'
 import { nodeRuns, tasks } from '@/db/schema'
 import { DomainError, NotFoundError } from '@/util/errors'
+import { Paths } from '@/util/paths'
 
 /**
  * Map a workflow `NodeKind` (`'agent-single'` / `'agent-multi'` / ...) onto
@@ -126,6 +127,18 @@ function errorMessage(err: unknown): string | null {
 const PROMPT_CAPABLE_KINDS = new Set(['agent-single'])
 
 /**
+ * RFC-062: per-run dir layout for the read end.
+ *
+ * Mirrors the runner's `join(opts.appHome, 'runs', taskId, nodeRunId)` —
+ * the runner uses DI for `appHome` so tests can override; the read end uses
+ * `Paths.runsDir` which honours the same `$AGENT_WORKFLOW_HOME` env. Kept a
+ * named export so the in-flight fallback's grep guard can lock its callsite.
+ */
+export function runRootFor(taskId: string, nodeRunId: string): string {
+  return join(Paths.runsDir, taskId, nodeRunId)
+}
+
+/**
  * Look up a stored inventory snapshot by node_run id. Mirrors the route
  * layer's error contract (404 task / node-run not found, 410 non-agent
  * kind). Falls back to `{captured:false, reason:'file-missing'}` when the
@@ -150,6 +163,7 @@ export async function getInventorySnapshot(
       id: nodeRuns.id,
       taskId: nodeRuns.taskId,
       nodeId: nodeRuns.nodeId,
+      status: nodeRuns.status,
       inventorySnapshotJson: nodeRuns.inventorySnapshotJson,
     })
     .from(nodeRuns)
@@ -172,9 +186,31 @@ export async function getInventorySnapshot(
     )
   }
 
-  // NULL → legacy / not-yet-captured agent run. Return a precise stub so the
-  // UI shows the standard "file missing" hint instead of a blank state.
+  // NULL → legacy / not-yet-captured agent run.
   if (run.inventorySnapshotJson === null || run.inventorySnapshotJson === '') {
+    // RFC-062: dump plugin writes inventory.json at opencode-boot, but the
+    // runner only reads it (and fills this DB column) AFTER the child exits.
+    // For a still-running run, fall back to a fresh read from runRoot so the
+    // UI sees real data instead of the misleading "plugin may have failed"
+    // file-missing fallback. Terminal-state rows skip this branch — even if
+    // runRoot wasn't cleaned up, the DB NULL is authoritative.
+    if (run.status === 'running') {
+      const snap = await readSnapshotFromRunDir({
+        runDir: runRootFor(taskId, nodeRunId),
+        nodeKind: 'agent-single',
+        pureMode: process.env.OPENCODE_PURE === '1' || process.env.OPENCODE_PURE === 'true',
+      })
+      if (snap.captured) return snap
+      // Plugin hasn't written the file yet (queueMicrotask race at session
+      // start). Upgrade file-missing → in-flight so the UI message names the
+      // actual situation instead of blaming the plugin. Other reasons
+      // (parse-failed, dump-plugin-internal-error, plugin-load-failed) are
+      // real diagnostics — surface them as-is.
+      if (snap.reason === 'file-missing') {
+        return { captured: false, reason: 'in-flight', message: null }
+      }
+      return snap
+    }
     return { captured: false, reason: 'file-missing', message: null }
   }
 

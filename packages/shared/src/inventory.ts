@@ -22,6 +22,10 @@ export const InventoryReasonCodeSchema = z.enum([
   'plugin-load-failed',
   'dump-plugin-internal-error',
   'non-agent-kind',
+  // RFC-062: read end stays NULL until the runner's post-exit step 10b lands;
+  // for status='running' rows the API short-circuits this code so the UI shows
+  // "inventory generating" instead of mis-blaming the plugin via 'file-missing'.
+  'in-flight',
 ])
 export type InventoryReasonCode = z.infer<typeof InventoryReasonCodeSchema>
 

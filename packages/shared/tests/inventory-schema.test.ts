@@ -46,6 +46,9 @@ describe('InventorySnapshotSchema', () => {
       'plugin-load-failed',
       'dump-plugin-internal-error',
       'non-agent-kind',
+      // RFC-062: in-flight reason for running runs whose inventory.json hasn't
+      // been persisted to the DB column yet.
+      'in-flight',
     ] as const) {
       const parsed = InventorySnapshotMissingSchema.parse({
         captured: false,

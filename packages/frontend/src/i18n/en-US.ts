@@ -1450,6 +1450,9 @@ export const enUS: Resources = {
         'plugin-load-failed': 'Failed to write or load the inventory plugin.',
         'dump-plugin-internal-error': 'Inventory plugin reported an internal error.',
         'non-agent-kind': 'This node kind does not produce a runtime inventory.',
+        // RFC-062: still-running agent run, runner hasn't read inventory.json
+        // into the DB yet. Phrasing avoids blaming the plugin (which is fine).
+        'in-flight': 'Run in progress, inventory generating…',
       },
     },
   },

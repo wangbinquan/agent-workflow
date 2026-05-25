@@ -1364,6 +1364,7 @@ export interface Resources {
         'plugin-load-failed': string
         'dump-plugin-internal-error': string
         'non-agent-kind': string
+        'in-flight': string
       }
     }
   }
@@ -3309,6 +3310,9 @@ export const zhCN: Resources = {
         'plugin-load-failed': '插件写入或加载失败。',
         'dump-plugin-internal-error': '清单插件内部报错。',
         'non-agent-kind': '该节点类型不产生运行时清单。',
+        // RFC-062: still-running agent run, runner hasn't read inventory.json
+        // into the DB yet. Phrasing avoids blaming the plugin (which is fine).
+        'in-flight': '正在运行，清单生成中…',
       },
     },
   },

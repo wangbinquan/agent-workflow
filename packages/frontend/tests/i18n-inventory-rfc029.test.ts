@@ -16,6 +16,10 @@ const REASON_CODES = [
   'plugin-load-failed',
   'dump-plugin-internal-error',
   'non-agent-kind',
+  // RFC-062: shown for running runs whose inventory.json hasn't been
+  // persisted to the DB column yet (between dump-plugin write and runner
+  // post-exit read).
+  'in-flight',
 ] as const
 
 const SOURCE_KINDS = ['inline', 'project', 'global', 'native', 'unknown'] as const
