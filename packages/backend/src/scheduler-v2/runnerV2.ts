@@ -26,6 +26,17 @@ import {
 import { prepareRunnerV2Invocation } from './runnerV2Invocation'
 import { aggregateStdout, type AggregatedStdout } from './runnerV2StdoutAggregator'
 
+export interface LiveSubagentEvent {
+  kind: 'subagent-output' | 'subagent-tool-use'
+  sessionId: string
+  /** For 'subagent-output': textual content of the assistant message. */
+  content?: string
+  /** For 'subagent-tool-use': name of the invoked tool. */
+  toolName?: string
+  /** Raw event detail forwarded to the typed payload. */
+  detail?: unknown
+}
+
 export interface RunOpencodeAttemptOptions {
   appHome: string
   taskId: string
@@ -45,6 +56,14 @@ export interface RunOpencodeAttemptOptions {
   log?: Logger
   /** Override the opencode CLI head (tests inject stubOpencode). */
   opencodeCmd?: readonly string[]
+  /**
+   * RFC-061 follow-up P2-3 — fired per stdout line that parses as a
+   * subagent text / tool-use event. When provided, the post-exit
+   * aggregator path SKIPS re-emitting those events (the caller already
+   * persisted them live). Pure stream — no dedup; the runner emits a
+   * subagent event exactly once.
+   */
+  onLiveSubagentEvent?: (event: LiveSubagentEvent) => void
 }
 
 export interface RunOpencodeAttemptResult {
@@ -142,6 +161,11 @@ export async function runOpencodeAttempt(
       const evt = JSON.parse(line)
       if (evt !== null && typeof evt === 'object') {
         events.push(evt as Record<string, unknown>)
+        // RFC-061 follow-up P2-3 — fire live subagent callback. The
+        // post-exit aggregator skips re-emit when this is set.
+        if (opts.onLiveSubagentEvent !== undefined) {
+          tryEmitLiveSubagent(evt as Record<string, unknown>, opts.onLiveSubagentEvent)
+        }
       }
     } catch {
       // ignore non-JSON lines
@@ -337,3 +361,38 @@ function streamFromReadable(readable: NodeJS.ReadableStream | null): ReadableStr
 
 // Re-export for callers building events from result.
 export type { AggregatedStdout }
+
+/**
+ * Mirror of aggregateStdout's subagent extraction, applied to a single
+ * stdout event for live streaming. Fires the caller's callback when
+ * the event matches the subagent text / tool-use pattern; silent
+ * otherwise. Failures are swallowed — live streaming is best-effort.
+ */
+function tryEmitLiveSubagent(
+  evt: Record<string, unknown>,
+  emit: (event: LiveSubagentEvent) => void,
+): void {
+  try {
+    const type = typeof evt.type === 'string' ? evt.type : null
+    const sessionId = typeof evt.sessionID === 'string' ? evt.sessionID : null
+    if (sessionId === null) return
+    const part = evt.part as Record<string, unknown> | null
+    if (part === null || typeof part !== 'object') return
+    const partType = typeof part.type === 'string' ? part.type : null
+
+    if (type === 'text' && partType === 'text') {
+      const text = typeof part.text === 'string' ? part.text : ''
+      if (text === '') return
+      emit({ kind: 'subagent-output', sessionId, content: text, detail: part })
+      return
+    }
+    if (type === 'tool' && partType === 'tool') {
+      const toolName = typeof part.tool === 'string' ? part.tool : null
+      if (toolName === null) return
+      emit({ kind: 'subagent-tool-use', sessionId, toolName, detail: part })
+      return
+    }
+  } catch {
+    // best-effort live streaming; never break the attempt loop.
+  }
+}

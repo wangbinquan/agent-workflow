@@ -85,6 +85,19 @@ export class ProductionRunnerAdapter implements RunnerAdapter {
     const mcps: Mcp[] = await listMcps(this.opts.db)
     const plugins: Plugin[] = await listPlugins(this.opts.db)
 
+    // RFC-061 follow-up P2-3 — live subagent capture. Emit each
+    // subagent-output / subagent-tool-use event as opencode prints
+    // it to stdout, instead of buffering until exit. Frontend Session
+    // tab + timeline view reflect long-running attempts in near-real-
+    // time. The post-exit aggregator's subagentOutputs / subagent-
+    // ToolUses arrays are dropped from resultToEvents to avoid
+    // duplication.
+    const scopeFields = {
+      nodeId: req.scope.nodeId,
+      loopIter: req.scope.loopIter,
+      shardKey: req.scope.shardKey,
+      iter: req.scope.iter,
+    }
     const result = await runOpencodeAttempt({
       appHome: this.opts.appHome,
       taskId: this.opts.taskId,
@@ -97,9 +110,43 @@ export class ProductionRunnerAdapter implements RunnerAdapter {
       skills,
       prompt: req.prompt,
       ...(this.opts.opencodeCmd !== undefined ? { opencodeCmd: this.opts.opencodeCmd } : {}),
+      onLiveSubagentEvent: (live) => {
+        const ev: NewEvent =
+          live.kind === 'subagent-output'
+            ? {
+                taskId: this.opts.taskId,
+                kind: 'attempt-subagent-output',
+                ...scopeFields,
+                attemptId: req.attemptId,
+                actor: `opencode:${live.sessionId}`,
+                payload: { sessionId: live.sessionId, content: live.content ?? '' },
+              }
+            : {
+                taskId: this.opts.taskId,
+                kind: 'attempt-subagent-tool-use',
+                ...scopeFields,
+                attemptId: req.attemptId,
+                actor: `opencode:${live.sessionId}`,
+                payload: {
+                  toolName: live.toolName ?? '',
+                  sessionId: live.sessionId,
+                  detail: live.detail,
+                },
+              }
+        // Fire-and-forget — sync write inside the stdout pump would
+        // block opencode's line callback. The drizzle transaction is
+        // synchronous so by the time the next stdout line arrives the
+        // event is committed; the WS broadcaster fan-out happens after.
+        void writeEvents(this.opts.db, [ev])
+          .then(wakeForEvents)
+          .catch(() => {
+            // log-only: live emit failures degrade silently to the post-
+            // exit aggregator path (which already de-duped).
+          })
+      },
     })
 
-    const events = this.resultToEvents(req, result)
+    const events = this.resultToEvents(req, result, /* skipSubagent */ true)
     if (events.length === 0) return
     const written = await writeEvents(this.opts.db, events)
     wakeForEvents(written)
@@ -124,7 +171,11 @@ export class ProductionRunnerAdapter implements RunnerAdapter {
     wakeForEvents(written)
   }
 
-  private resultToEvents(req: SpawnRequest, result: RunOpencodeAttemptResult): NewEvent[] {
+  private resultToEvents(
+    req: SpawnRequest,
+    result: RunOpencodeAttemptResult,
+    skipSubagent: boolean = false,
+  ): NewEvent[] {
     const scopeFields = {
       nodeId: req.scope.nodeId,
       loopIter: req.scope.loopIter,
@@ -134,25 +185,29 @@ export class ProductionRunnerAdapter implements RunnerAdapter {
     const events: NewEvent[] = []
 
     // attempt-subagent-* events (telemetry) — flushed first.
-    for (const t of result.subagentToolUses) {
-      events.push({
-        taskId: this.opts.taskId,
-        kind: 'attempt-subagent-tool-use',
-        ...scopeFields,
-        attemptId: req.attemptId,
-        actor: `opencode:${t.sessionId}`,
-        payload: { toolName: t.toolName, sessionId: t.sessionId, detail: t.detail },
-      })
-    }
-    for (const s of result.subagentOutputs) {
-      events.push({
-        taskId: this.opts.taskId,
-        kind: 'attempt-subagent-output',
-        ...scopeFields,
-        attemptId: req.attemptId,
-        actor: `opencode:${s.sessionId}`,
-        payload: { sessionId: s.sessionId, content: s.content },
-      })
+    // Skipped when the live capture path already wrote them
+    // incrementally (RFC-061 follow-up P2-3).
+    if (!skipSubagent) {
+      for (const t of result.subagentToolUses) {
+        events.push({
+          taskId: this.opts.taskId,
+          kind: 'attempt-subagent-tool-use',
+          ...scopeFields,
+          attemptId: req.attemptId,
+          actor: `opencode:${t.sessionId}`,
+          payload: { toolName: t.toolName, sessionId: t.sessionId, detail: t.detail },
+        })
+      }
+      for (const s of result.subagentOutputs) {
+        events.push({
+          taskId: this.opts.taskId,
+          kind: 'attempt-subagent-output',
+          ...scopeFields,
+          attemptId: req.attemptId,
+          actor: `opencode:${s.sessionId}`,
+          payload: { sessionId: s.sessionId, content: s.content },
+        })
+      }
     }
 
     if (result.outcome === 'success') {
