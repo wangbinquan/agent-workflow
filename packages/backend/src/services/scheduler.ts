@@ -1512,6 +1512,25 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // works for both the self and cross-questioner consumer branches —
         // the `iterationField` parameter that 05-27 added is no longer
         // necessary (see services/clarifyRounds.ts).
+        //
+        // Patch 2026-05-26 (no-cross-fallback): the previous version OR-ed
+        // in `priorDoneDesigner?.clarifyIteration` as a fallback. That
+        // fallback was a leftover from the original RFC-056 design where
+        // the cutoff lived inside the cross-clarify branch — when RFC-058
+        // generalised the rule via `computeHistoryCutoff`, the fallback
+        // became both redundant (when `priorDoneDesigner` has outputs the
+        // GENERAL rule already finds it) AND actively harmful (when it
+        // doesn't have outputs, using its clarifyIteration ages out rounds
+        // against a draft that never existed). The harmful case fires on
+        // any designer node that is topologically wired to a
+        // `__external_feedback__` edge AND has run self-clarify ≥ 2 times
+        // — `hasExternalFeedbackChannel` is purely topological, so the
+        // `isCrossClarifyTriggeredRerun=true` branch above runs even when
+        // no cross_clarify_sessions row exists. The bug dropped the very
+        // first answered self-clarify round from the rerun's prompt,
+        // making the agent re-ask resolved questions. Live failure:
+        // task 01KSHB1YHMZWFX85SHQ4KM2HKX. Locked by
+        // tests/clarify-history-cutoff-no-cross-fallback.test.ts.
         const isQuestionerCrossClarifyRerun = clarifyMode === 'cross' && currentClarifyIteration > 0
         const priorCompletedCutoff = await computeHistoryCutoff({
           db,
@@ -1520,8 +1539,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           shardKey: currentRunRow?.shardKey ?? null,
           ...(currentRunRow !== undefined ? { currentRunRow } : {}),
         })
-        const historyCutoffClarifyIteration =
-          priorCompletedCutoff ?? priorDoneDesigner?.clarifyIteration
+        const historyCutoffClarifyIteration = priorCompletedCutoff
 
         // RFC-056 §5.4 §6.4: when the about-to-run node is a cross-clarify
         // questioner AND this rerun was triggered by a cross-clarify resolve
