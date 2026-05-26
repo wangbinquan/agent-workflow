@@ -200,6 +200,38 @@ async function seedWrapperGitWorkflow(daemon: DaemonHandle): Promise<string> {
   return ((await wfRes.json()) as { id: string }).id
 }
 
+/**
+ * Pick the baseBranch for repo source row `rowIndex`. The field is
+ * `<TextInput>` until `/api/repos/refs` resolves, then swaps to a
+ * `<select>`. The previous "probe tagName, then act" pattern (e6271f3)
+ * had a race window: between the probe and the action the element
+ * could swap, blowing up with "Element is not an <input>". This helper
+ * uses Playwright's auto-retrying expect on TWO distinct locators (one
+ * scoped to `select[data-testid=...]`, one to `input[data-testid=...]`)
+ * so the locator query itself absorbs the swap — whichever element
+ * exists at action time is what we act on. The fixture repos always
+ * have the requested branch (`main`) so the select path is the
+ * dominant happy path; the input fallback only triggers if refs fails
+ * to resolve within the budget.
+ */
+async function pickBaseBranch(page: Page, rowIndex: number, branch: string): Promise<void> {
+  const tid = `repo-source-base-branch-${rowIndex}`
+  const branchSelect = page.locator(`select[data-testid="${tid}"]`)
+  const branchInput = page.locator(`input[data-testid="${tid}"]`)
+  try {
+    await branchSelect.waitFor({ state: 'visible', timeout: 5_000 })
+    await branchSelect.selectOption(branch)
+    return
+  } catch {
+    // refs hasn't materialised the select within the budget — fall
+    // back to typing into the TextInput. waitFor here is short
+    // because the input is the initial-render shape; it's already
+    // present unless something is genuinely broken.
+    await branchInput.waitFor({ state: 'visible', timeout: 2_000 })
+    await branchInput.fill(branch)
+  }
+}
+
 test.describe('RFC-066 PR-C — multi-repo launch', () => {
   let daemon: DaemonHandle | undefined
   const repos: RepoFixture[] = []
@@ -246,25 +278,13 @@ test.describe('RFC-066 PR-C — multi-repo launch', () => {
 
     // Fill row 1 path manually (recent-repo auto-fill only seeds row 0).
     // The path TextInput sits as the second child of the row's Repo Field;
-    // we target it by index. The baseBranch field has its own stable
-    // `repo-source-base-branch-1` testid so we don't race the
-    // <input>→<select> swap that happens when /api/repos/refs resolves.
+    // we target it by index.
     const row1 = page.getByTestId('repo-source-row-1')
     await row1
       .locator('input.form-input[placeholder*="paste"], input.form-input')
       .first()
       .fill(repoB.repoDir)
-    const branch1 = page.getByTestId('repo-source-base-branch-1')
-    await branch1.waitFor({ state: 'visible', timeout: 10_000 })
-    // Whether refs has resolved or not, both <select> and <input> respond to
-    // either `selectOption` (if <select>) or `fill` (if <input>). Try select
-    // first; fall back to fill when the element is still a TextInput.
-    const branchTag = await branch1.evaluate((el) => el.tagName.toLowerCase())
-    if (branchTag === 'select') {
-      await branch1.selectOption('main')
-    } else {
-      await branch1.fill('main')
-    }
+    await pickBaseBranch(page, 1, 'main')
 
     // Topic input.
     await page
@@ -315,16 +335,7 @@ test.describe('RFC-066 PR-C — multi-repo launch', () => {
     await expect(page.getByTestId('repo-source-row-1')).toBeVisible()
     const row1 = page.getByTestId('repo-source-row-1')
     await row1.locator('input.form-input').first().fill(repoB.repoDir)
-    // Use the stable baseBranch testid (RFC-066 PR-C follow-up) to avoid
-    // racing the <input>→<select> swap when /api/repos/refs resolves.
-    const branch1 = page.getByTestId('repo-source-base-branch-1')
-    await branch1.waitFor({ state: 'visible', timeout: 10_000 })
-    const branchTag = await branch1.evaluate((el) => el.tagName.toLowerCase())
-    if (branchTag === 'select') {
-      await branch1.selectOption('main')
-    } else {
-      await branch1.fill('main')
-    }
+    await pickBaseBranch(page, 1, 'main')
 
     // Banner is visible.
     const banner = page.getByTestId('repo-source-multi-banner')
