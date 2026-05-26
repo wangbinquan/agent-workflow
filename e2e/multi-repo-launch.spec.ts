@@ -14,16 +14,36 @@
 //   packages/backend/tests/start-task-multi-repo-gates.test.ts
 // This spec only exercises the click path → API contract.
 
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { startDaemon, type DaemonHandle } from './harness'
 
 const here = dirname(fileURLToPath(import.meta.url))
+void here // (silence unused-when-fixture-paths-not-used lint)
+
+// Stamp localStorage before the SPA mounts so the auth gate redirects
+// straight through to the launcher. Same shape as /auth's submit handler
+// writes (mirrors main.spec.ts:primeAuthLocalStorage).
+async function primeAuthLocalStorage(page: Page, d: DaemonHandle): Promise<void> {
+  await page.addInitScript(
+    ({ baseUrl, token }) => {
+      try {
+        window.localStorage.setItem('agent-workflow.baseUrl', baseUrl)
+        window.localStorage.setItem('agent-workflow.token', token)
+        // Force English so the test selectors / regex line up with en-US strings.
+        window.localStorage.setItem('aw-language', 'en-US')
+      } catch {
+        /* noop */
+      }
+    },
+    { baseUrl: d.baseUrl, token: d.token },
+  )
+}
 
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(90_000)
@@ -208,7 +228,7 @@ test.describe('RFC-066 PR-C — multi-repo launch', () => {
     })
     const wfId = await seedLinearWorkflow(d)
 
-    page.setExtraHTTPHeaders({ Authorization: `Bearer ${d.token}` })
+    await primeAuthLocalStorage(page, d)
     await page.goto(`${d.baseUrl}/workflows/${wfId}/launch`)
 
     // Default: 1 row, no `−` button.
@@ -269,7 +289,7 @@ test.describe('RFC-066 PR-C — multi-repo launch', () => {
     })
     const wfId = await seedWrapperGitWorkflow(d)
 
-    page.setExtraHTTPHeaders({ Authorization: `Bearer ${d.token}` })
+    await primeAuthLocalStorage(page, d)
     await page.goto(`${d.baseUrl}/workflows/${wfId}/launch`)
 
     await expect(page.getByTestId('repo-source-row-0')).toBeVisible({ timeout: 10_000 })

@@ -498,7 +498,10 @@ test('RFC-024: launch task from git URL clones into cache and renders redacted U
   await page.goto(`${daemon.baseUrl}/workflows/${wf.id}/launch`)
 
   // Switch to Remote URL tab + fill URL.
-  await page.getByTestId('repo-source-tab-url').click()
+  // RFC-066 PR-C: launch route now renders RepoSourceList; the path/url
+  // tab buttons are stamped with a per-row index suffix (`-0` for the
+  // first row, which is the only row in single-repo launches).
+  await page.getByTestId('repo-source-tab-url-0').click()
   const urlInput = page
     .locator('label.form-field', { hasText: /Git URL/i })
     .locator('input.form-input')
