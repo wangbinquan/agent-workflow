@@ -1080,12 +1080,16 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         // (status still 'done').
         if (status === 'done') {
           for (const [name, content] of parsed.ports) {
+            // RFC-072: persist the resolved output kind so the Outputs tab can
+            // tell file-path ports from text. NULL when the agent declared no
+            // kind for this port.
+            const kind = outputKinds?.[name] ?? null
             await opts.db
               .insert(nodeRunOutputs)
-              .values({ nodeRunId: opts.nodeRunId, portName: name, content })
+              .values({ nodeRunId: opts.nodeRunId, portName: name, content, kind })
               .onConflictDoUpdate({
                 target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-                set: { content },
+                set: { content, kind },
               })
             outputsPersistedCount += 1
           }

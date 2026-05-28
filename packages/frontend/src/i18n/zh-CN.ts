@@ -1439,6 +1439,9 @@ export interface Resources {
   taskOutputs: {
     section: string
     pending: string
+    download: string
+    downloading: string
+    downloadFailed: string
   }
   settingsForm: {
     opencodePath: string
@@ -3430,6 +3433,9 @@ export const zhCN: Resources = {
   taskOutputs: {
     section: '产出',
     pending: '等待中…',
+    download: '下载',
+    downloading: '下载中…',
+    downloadFailed: '下载失败',
   },
   settingsForm: {
     opencodePath: 'opencode 路径',

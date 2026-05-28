@@ -471,6 +471,13 @@ export const NodeRunOutputSchema = z.object({
   nodeRunId: z.string(),
   port: z.string(),
   value: z.string(),
+  /**
+   * RFC-072: resolved AgentOutputKind string at run time (agent.outputKinds[port]),
+   * e.g. 'markdown_file' / 'path<md>' / 'markdown'. null/absent for legacy rows
+   * or ports whose agent declared no kind. The task-detail Outputs tab uses it to
+   * tell file-path ports (whose `value` is a worktree-relative path) from text.
+   */
+  kind: z.string().nullable().optional(),
 })
 export type NodeRunOutput = z.infer<typeof NodeRunOutputSchema>
 

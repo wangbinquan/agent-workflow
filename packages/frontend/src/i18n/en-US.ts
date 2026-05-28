@@ -1522,6 +1522,9 @@ export const enUS: Resources = {
   taskOutputs: {
     section: 'Outputs',
     pending: 'pending…',
+    download: 'Download',
+    downloading: 'Downloading…',
+    downloadFailed: 'Download failed',
   },
   settingsForm: {
     opencodePath: 'opencode path',

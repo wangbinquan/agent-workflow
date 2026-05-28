@@ -253,6 +253,13 @@
       "when": 1781100000000,
       "tag": "0036_rfc070_clarify_consumed_by_run",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1781200000000,
+      "tag": "0037_rfc072_node_run_output_kind",
+      "breakpoints": true
     }
   ]
 }

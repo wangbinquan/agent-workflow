@@ -1,13 +1,21 @@
-// Top-of-task-detail "outputs" panel (P-2-11).
+// Top-of-task-detail "outputs" panel (P-2-11; redesigned in RFC-072).
 //
 // Resolves each output-node port via the workflow snapshot + node-run-outputs
 // table: for each declared port `{name, bind: {nodeId, portName}}`, walk the
-// most-recent run of `bind.nodeId` and pull its `bind.portName` value from
-// the task's outputs array.
+// most-recent run of `bind.nodeId` and pull its `bind.portName` value (and
+// resolved kind) from the task's outputs array.
+//
+// RFC-072 layout: a two-pane browser mirroring the RFC-065 worktree-files tab —
+// left is the list of declared output ports (selectable), right is the selected
+// port's full-height detail (value + Copy + Download-for-file-kinds).
 
 import type { NodeRun, NodeRunOutput, Task } from '@agent-workflow/shared'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { copyText } from '@/lib/clipboard'
+import { isFileOutputKind, isSingleLinePath } from '@/lib/output-port'
+import { downloadWorktreeFile } from '@/lib/worktree-download'
 
 interface Props {
   task: Task
@@ -16,7 +24,7 @@ interface Props {
 }
 
 interface DeclaredPort {
-  /** Output-node's port name (shown as the card title). */
+  /** Output-node's port name (shown as the list/title). */
   name: string
   /** Source node id. */
   nodeId: string
@@ -24,14 +32,27 @@ interface DeclaredPort {
   portName: string
 }
 
+interface ResolvedPort {
+  port: DeclaredPort
+  value: string | null
+  kind: string | null
+}
+
 export function TaskOutputPanel({ task, runs, outputs }: Props) {
   const { t } = useTranslation()
+  const [selectedIndex, setSelectedIndex] = useState(0)
+
   const ports = collectPorts(task.workflowSnapshot)
   if (ports.length === 0) {
     return null
   }
+
   const valueByRunPort = new Map<string, string>()
-  for (const o of outputs) valueByRunPort.set(`${o.nodeRunId}:${o.port}`, o.value)
+  const kindByRunPort = new Map<string, string | null>()
+  for (const o of outputs) {
+    valueByRunPort.set(`${o.nodeRunId}:${o.port}`, o.value)
+    kindByRunPort.set(`${o.nodeRunId}:${o.port}`, o.kind ?? null)
+  }
 
   // Pick the latest run per nodeId (highest startedAt or last in list).
   const latestRunByNodeId = new Map<string, NodeRun>()
@@ -42,58 +63,142 @@ export function TaskOutputPanel({ task, runs, outputs }: Props) {
     }
   }
 
+  const resolved: ResolvedPort[] = ports.map((port) => {
+    const run = latestRunByNodeId.get(port.nodeId)
+    const key = run === undefined ? null : `${run.id}:${port.portName}`
+    return {
+      port,
+      value: key === null ? null : (valueByRunPort.get(key) ?? null),
+      kind: key === null ? null : (kindByRunPort.get(key) ?? null),
+    }
+  })
+
+  // Clamp: ports can change between renders (live updates) — never index past
+  // the end.
+  const idx = Math.min(selectedIndex, resolved.length - 1)
+  const selected = resolved[idx]
+
   return (
     <section className="task-outputs">
       <h2>{t('taskOutputs.section')}</h2>
-      <div className="task-outputs__grid">
-        {ports.map((p, i) => {
-          const run = latestRunByNodeId.get(p.nodeId)
-          const value =
-            run === undefined ? null : (valueByRunPort.get(`${run.id}:${p.portName}`) ?? null)
-          return <OutputCard key={`${p.name}-${i}`} port={p} value={value} />
-        })}
+      <div className="task-outputs-panel" data-testid="task-outputs-panel">
+        <div
+          className="task-outputs-panel__list"
+          role="listbox"
+          aria-label={t('taskOutputs.section')}
+        >
+          {resolved.map((r, i) => (
+            <button
+              key={`${r.port.name}-${i}`}
+              type="button"
+              role="option"
+              aria-selected={i === idx}
+              className={'task-outputs-panel__option' + (i === idx ? ' is-selected' : '')}
+              onClick={() => setSelectedIndex(i)}
+              data-testid={`task-output-option-${i}`}
+            >
+              <span className="task-outputs-panel__option-name">{r.port.name}</span>
+              <span className="task-outputs-panel__option-bind">
+                {r.port.nodeId}.{r.port.portName}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="task-outputs-panel__detail">
+          {selected !== undefined && (
+            <OutputDetail
+              key={`${selected.port.name}-${idx}`}
+              taskId={task.id}
+              port={selected.port}
+              value={selected.value}
+              kind={selected.kind}
+            />
+          )}
+        </div>
       </div>
     </section>
   )
 }
 
-interface CardProps {
+interface DetailProps {
+  taskId: string
   port: DeclaredPort
   value: string | null
+  kind: string | null
 }
 
-function OutputCard({ port, value }: CardProps) {
+function OutputDetail({ taskId, port, value, kind }: DetailProps) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const [downloadFailed, setDownloadFailed] = useState(false)
+
+  const showDownload = isFileOutputKind(kind) && isSingleLinePath(value)
+
   function handleCopy() {
     if (value === null) return
-    void navigator.clipboard.writeText(value).then(() => {
+    void copyText(value).then((ok) => {
+      if (!ok) return
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     })
   }
+
+  function handleDownload() {
+    if (value === null || downloading) return
+    setDownloading(true)
+    setDownloadFailed(false)
+    void downloadWorktreeFile(taskId, value.trim())
+      .catch(() => setDownloadFailed(true))
+      .finally(() => setDownloading(false))
+  }
+
   return (
-    <article className="task-output-card">
-      <header className="task-output-card__header">
+    <article className="task-outputs-panel__detail-body">
+      <header className="task-outputs-panel__detail-header">
         <div>
-          <div className="task-output-card__name">{port.name}</div>
-          <div className="task-output-card__bind">
+          <div className="task-outputs-panel__detail-name">{port.name}</div>
+          <div className="task-outputs-panel__detail-bind">
             ←{' '}
             <code>
               {port.nodeId}.{port.portName}
             </code>
           </div>
         </div>
-        <button
-          type="button"
-          className="btn btn--sm"
-          onClick={handleCopy}
-          disabled={value === null}
-        >
-          {copied ? t('common.copied') : t('common.copy')}
-        </button>
+        <div className="task-outputs-panel__actions">
+          {showDownload && (
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={handleDownload}
+              disabled={downloading}
+              data-testid="task-output-download"
+            >
+              <span aria-hidden="true">↓</span>{' '}
+              {downloading ? t('taskOutputs.downloading') : t('taskOutputs.download')}
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn btn--sm"
+            onClick={handleCopy}
+            disabled={value === null}
+            data-testid="task-output-copy"
+          >
+            {copied ? t('common.copied') : t('common.copy')}
+          </button>
+        </div>
       </header>
-      <pre className="task-output-card__body">
+      {downloadFailed && (
+        <div
+          className="task-outputs-panel__download-error"
+          role="alert"
+          data-testid="task-output-download-error"
+        >
+          {t('taskOutputs.downloadFailed')}
+        </div>
+      )}
+      <pre className="task-outputs-panel__pre">
         {value === null ? (
           <span className="muted">{t('taskOutputs.pending')}</span>
         ) : value === '' ? (

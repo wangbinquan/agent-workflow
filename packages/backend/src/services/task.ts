@@ -1362,6 +1362,7 @@ export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<Tas
       nodeRunId: o.nodeRunId,
       port: o.portName,
       value: o.content,
+      kind: o.kind, // RFC-072: surface resolved output kind for the Outputs tab
     }))
   }
   return { runs, outputs }

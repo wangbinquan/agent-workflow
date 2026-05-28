@@ -553,6 +553,11 @@ export const nodeRunOutputs = sqliteTable(
       .references(() => nodeRuns.id, { onDelete: 'cascade' }),
     portName: text('port_name').notNull(),
     content: text('content').notNull(),
+    // RFC-072: resolved AgentOutputKind string (agent.outputKinds[port]) at run
+    // time. NULL when the agent declared no kind for this port or for rows
+    // written before RFC-072. Lets the Outputs tab distinguish file-path ports
+    // (path<ext> / markdown_file) from text ports.
+    kind: text('kind'),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.nodeRunId, t.portName] }),

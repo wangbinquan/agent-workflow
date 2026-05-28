@@ -1,0 +1,12 @@
+-- RFC-072 — Task detail "Outputs" tab redesign. Persist the resolved output
+-- kind alongside each parsed <workflow-output> port value so the UI can tell
+-- file-path ports (path<ext> / markdown_file, whose stored content is a
+-- worktree-relative path, not the file body) from text ports (string /
+-- markdown) without re-resolving the (possibly drifted / deleted) agent
+-- definition. The runner already resolves agent.outputKinds[port] at persist
+-- time; this column just stops dropping it.
+--
+-- Nullable, no backfill: legacy rows and ports whose agent declared no kind
+-- stay NULL → the Outputs tab renders them as plain text with no download
+-- button (byte-for-byte the pre-RFC-072 behavior).
+ALTER TABLE node_run_outputs ADD COLUMN kind TEXT;

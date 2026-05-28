@@ -4837,63 +4837,145 @@ code {
 
 /* ---- Task output panel ---- */
 
+/* RFC-072: Outputs tab two-pane browser (left port list + right detail),
+ * mirroring the RFC-065 worktree-files tab. Replaces the old fixed-height
+ * card grid (`.task-outputs__grid` / `.task-output-card*`, body capped at
+ * 240px) which made long outputs hard to read. */
 .task-outputs {
-  margin: 12px 0 24px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
 }
 
 .task-outputs > h2 {
   font-size: 14px;
-  margin: 0 0 8px;
+  margin: 0;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  flex: 0 0 auto;
 }
 
-.task-outputs__grid {
+.task-outputs-panel {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  grid-template-columns: minmax(220px, 320px) 1fr;
+  gap: var(--space-3);
+  flex: 1;
+  min-height: 0;
 }
 
-.task-output-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
+.task-outputs-panel__list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
+  border-right: 1px solid var(--border);
+  padding-right: var(--space-2);
+  overflow: auto;
+  min-height: 0;
 }
 
-.task-output-card__header {
+.task-outputs-panel__option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 8px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.task-outputs-panel__option:hover {
+  background: var(--bg);
+}
+
+.task-outputs-panel__option.is-selected {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.task-outputs-panel__option-name {
+  font-size: var(--font-sm);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-outputs-panel__option-bind {
+  font-size: var(--font-xs);
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-outputs-panel__detail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+
+.task-outputs-panel__detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  min-height: 0;
+}
+
+.task-outputs-panel__detail-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
+  gap: var(--space-3);
+  flex: 0 0 auto;
 }
 
-.task-output-card__name {
+.task-outputs-panel__detail-name {
   font-weight: 500;
-  font-size: 13px;
+  font-size: var(--font-sm);
 }
 
-.task-output-card__bind {
-  font-size: 11px;
+.task-outputs-panel__detail-bind {
+  font-size: var(--font-xs);
   color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-.task-output-card__body {
+.task-outputs-panel__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+}
+
+.task-outputs-panel__download-error {
+  color: var(--danger);
+  font-size: var(--font-xs);
+  flex: 0 0 auto;
+}
+
+.task-outputs-panel__pre {
+  flex: 1;
   margin: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  padding: var(--space-3);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--font-sm);
+  line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 240px;
   overflow: auto;
   background: var(--bg);
-  border-radius: 4px;
-  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
 }
 
 .inspector__output-port-row {
