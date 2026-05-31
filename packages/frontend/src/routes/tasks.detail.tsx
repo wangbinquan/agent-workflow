@@ -329,6 +329,27 @@ function TaskDetailPage() {
               <code>{tk.branch}</code> @{' '}
               <code>{(tk.baseCommit ?? '').slice(0, 12) || t('common.emDash')}</code>
             </dd>
+            {/* RFC-075: surface the base branch + (user-specified) working
+                branch. Working branch null → the framework isolation branch. */}
+            <dt>{t('tasks.metaBaseBranch')}</dt>
+            <dd>
+              <code data-testid="task-detail-base-branch">
+                {tk.baseBranch || t('common.emDash')}
+              </code>
+            </dd>
+            <dt>{t('tasks.metaWorkingBranch')}</dt>
+            <dd>
+              {tk.workingBranch !== null ? (
+                <code data-testid="task-detail-working-branch">{tk.workingBranch}</code>
+              ) : (
+                <span className="data-table__muted" data-testid="task-detail-working-branch">
+                  {t('tasks.metaWorkingBranchNone')}
+                </span>
+              )}
+              {tk.autoCommitPush && (
+                <span className="data-table__muted"> · {t('tasks.metaAutoCommitPushOn')}</span>
+              )}
+            </dd>
             <dt>{t('tasks.metaStarted')}</dt>
             <dd>{new Date(tk.startedAt).toLocaleString()}</dd>
             <dt>{t('tasks.metaFinished')}</dt>

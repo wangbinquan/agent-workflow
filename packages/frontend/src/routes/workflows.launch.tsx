@@ -15,6 +15,7 @@ import type {
   Workflow,
   WorkflowInput,
 } from '@agent-workflow/shared'
+import { isLooseValidBranchName } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { EnumPicker } from '@/components/launch/EnumPicker'
 import { FilesPicker } from '@/components/launch/FilesPicker'
@@ -22,7 +23,7 @@ import { GitPicker } from '@/components/launch/GitPicker'
 import { UploadPicker } from '@/components/launch/UploadPicker'
 import { buildLaunchFormData } from '@/components/launch/buildLaunchFormData'
 import { RepoSourceList, type MultiRepoBlockedReason } from '@/components/launch/RepoSourceList'
-import { Field, TextInput } from '@/components/Form'
+import { Field, Switch, TextInput } from '@/components/Form'
 import {
   buildLaunchBody,
   buildLaunchBodyMultiRepo,
@@ -60,6 +61,11 @@ function LaunchPage() {
   // XOR superRefine).
   const [gitUserName, setGitUserName] = useState('')
   const [gitUserEmail, setGitUserEmail] = useState('')
+  // RFC-075: optional working branch (applies to every repo) + the auto
+  // commit&push toggle. Both independent. The toggle's last value is
+  // remembered in localStorage; the branch name is task-specific so it isn't.
+  const [workingBranch, setWorkingBranch] = useState('')
+  const [autoCommitPush, setAutoCommitPush] = useState(loadAutoCommitPushPref())
   // RFC-024 + RFC-066: 1..N repo sources. Single-row state is byte-baseline
   // against pre-RFC-066 (default = one empty path-mode row, recents
   // auto-fills the first row); the `+ Add` button in `<RepoSourceList>`
@@ -127,6 +133,9 @@ function LaunchPage() {
       // into buildLaunchBody, which omits the keys when blank.
       const trimGitName = gitUserName.trim()
       const trimGitEmail = gitUserEmail.trim()
+      // RFC-075: working branch (omit when blank) + auto commit&push (omit
+      // when false so legacy bodies stay byte-identical).
+      const trimWorkingBranch = workingBranch.trim()
       const launchCommon = {
         workflowId: id,
         name,
@@ -134,6 +143,8 @@ function LaunchPage() {
         ...(trimGitName !== '' && trimGitEmail !== ''
           ? { gitUserName: trimGitName, gitUserEmail: trimGitEmail }
           : {}),
+        ...(trimWorkingBranch !== '' ? { workingBranch: trimWorkingBranch } : {}),
+        ...(autoCommitPush ? { autoCommitPush: true } : {}),
       }
       // RFC-066: multi-repo (length > 1) → always JSON post via the v2 body
       // helper. Multi-repo + uploads is gated by T6's `canSubmit` predicate
@@ -213,12 +224,18 @@ function LaunchPage() {
   const gitPairingError = !gitBoth && !gitNeither
   const gitEmailFormatError = gitEmailTrim !== '' && !/^[^\s@]+@[^\s@]+$/.test(gitEmailTrim)
   const gitIdentityOk = gitNeither || (gitBoth && !gitEmailFormatError)
+  // RFC-075: loose working-branch validation mirrors StartTaskSchema so the
+  // user gets immediate feedback instead of a 422. Blank is always fine.
+  const workingBranchTrim = workingBranch.trim()
+  const workingBranchError = workingBranchTrim !== '' && !isLooseValidBranchName(workingBranchTrim)
+  const workingBranchOk = !workingBranchError
   const canSubmit =
     nameReady &&
     sourceReady &&
     !missingRequired &&
     repoIssue === null &&
     gitIdentityOk &&
+    workingBranchOk &&
     // RFC-066: multi-repo + wrapper-git / upload → Start disabled.
     multiRepoBlockedReason === null &&
     !start.isPending
@@ -297,6 +314,38 @@ function LaunchPage() {
             {t('launch.repoSource.cloningHint')}
           </div>
         )}
+
+        {/* RFC-075: working branch + auto commit&push — two independent Git
+            options. Blank working branch → framework isolation branch; the
+            toggle defaults off (legacy) and remembers the last choice. */}
+        <Field
+          label={t('launch.workingBranch.label')}
+          hint={
+            workingBranchError ? t('launch.workingBranch.invalid') : t('launch.workingBranch.hint')
+          }
+        >
+          <TextInput
+            value={workingBranch}
+            onChange={setWorkingBranch}
+            maxLength={255}
+            placeholder={t('launch.workingBranch.placeholder')}
+            data-testid="launch-working-branch"
+          />
+        </Field>
+        {workingBranchError && (
+          <div className="error-text" role="alert" data-testid="launch-working-branch-error">
+            {t('launch.workingBranch.invalid')}
+          </div>
+        )}
+        <Switch
+          checked={autoCommitPush}
+          onChange={(v) => {
+            setAutoCommitPush(v)
+            saveAutoCommitPushPref(v)
+          }}
+          label={t('launch.autoCommitPush.label')}
+          hint={t('launch.autoCommitPush.hint')}
+        />
 
         {inputDefs.length === 0 && <div className="muted">{t('launch.noInputs')}</div>}
 
@@ -422,4 +471,25 @@ function describeError(e: unknown): string {
   if (e instanceof ApiError) return `${e.code}: ${e.message}`
   if (e instanceof Error) return e.message
   return String(e)
+}
+
+// RFC-075: remember the auto commit&push toggle across reloads. Kept in
+// localStorage (not user settings) — it's a per-machine launch convenience,
+// mirroring RFC-068's fetch-before-launch preference.
+export const AUTO_COMMIT_PUSH_LS_KEY = 'agent-workflow.launcher.autoCommitPush'
+export function loadAutoCommitPushPref(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem(AUTO_COMMIT_PUSH_LS_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+export function saveAutoCommitPushPref(v: boolean): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(AUTO_COMMIT_PUSH_LS_KEY, v ? '1' : '0')
+  } catch {
+    /* noop */
+  }
 }

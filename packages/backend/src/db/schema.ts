@@ -342,6 +342,13 @@ export const tasks = sqliteTable(
     // and never persisted.
     gitUserName: text('git_user_name'),
     gitUserEmail: text('git_user_email'),
+    // RFC-075: user-specified working branch. NULL → framework default
+    // isolation branch `agent-workflow/{taskId}` (byte-identical to
+    // pre-RFC-075). When set, `branch` equals this value.
+    workingBranch: text('working_branch'),
+    // RFC-075: auto commit&push toggle. false → no commit/push ever (legacy).
+    // true → framework commits + pushes each writer agent's final output.
+    autoCommitPush: integer('auto_commit_push', { mode: 'boolean' }).notNull().default(false),
     /**
      * RFC-066: count of `task_repos` rows for this task. Always ≥ 1.
      * Single-repo tasks have value 1 (and the legacy `repo_path` /
@@ -385,6 +392,9 @@ export const taskRepos = sqliteTable(
      * same branch name (the branches live in different source repos, so
      * names cannot collide). */
     branch: text('branch').notNull(),
+    // RFC-075: per-repo mirror of `tasks.working_branch` (the single working
+    // branch name is applied to every repo). NULL → isolation branch.
+    workingBranch: text('working_branch'),
     baseCommit: text('base_commit'),
     worktreePath: text('worktree_path').notNull(),
     /**
@@ -524,6 +534,15 @@ export const nodeRuns = sqliteTable(
      * failed for any non-port-validation reason, and pre-RFC-049 rows.
      */
     portValidationFailuresJson: text('port_validation_failures_json'),
+    /**
+     * RFC-075: JSON `CommitPushMeta` recorded on a framework-synthesized
+     * commit&push node_run (commit SHA / push target / outcome / repair
+     * count). Non-NULL presence marks the row as a commit node — the synthetic
+     * `node_id` is `__commit_push__:{agentNodeId}` (+ `:{repoSlug}` in
+     * multi-repo) and `parent_node_run_id` points at the triggering agent run.
+     * NULL on every regular node_run and all pre-RFC-075 rows.
+     */
+    commitPushJson: text('commit_push_json'),
     /**
      * RFC-066: per-repo stash sha map for multi-repo tasks, serialized as
      * `{ "<worktree_dir_name>": "<git-stash-sha>", ... }`. Replaces the

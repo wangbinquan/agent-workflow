@@ -768,6 +768,10 @@ export interface Resources {
     metaRepoCachePath: string
     metaWorktree: string
     metaBranch: string
+    metaBaseBranch: string
+    metaWorkingBranch: string
+    metaWorkingBranchNone: string
+    metaAutoCommitPushOn: string
     metaStarted: string
     metaFinished: string
     metaError: string
@@ -1028,6 +1032,16 @@ export interface Resources {
       hint: string
       pairingError: string
       emailInvalid: string
+    }
+    workingBranch: {
+      label: string
+      hint: string
+      placeholder: string
+      invalid: string
+    }
+    autoCommitPush: {
+      label: string
+      hint: string
     }
   }
   inspector: {
@@ -2771,6 +2785,10 @@ export const zhCN: Resources = {
     metaRepoCachePath: '本地缓存路径',
     metaWorktree: 'Worktree',
     metaBranch: '分支',
+    metaBaseBranch: '基线分支',
+    metaWorkingBranch: '工作分支',
+    metaWorkingBranchNone: '—（隔离分支）',
+    metaAutoCommitPushOn: '自动提交并推送：开',
     metaStarted: '开始',
     metaFinished: '完成',
     metaError: '错误',
@@ -3012,6 +3030,16 @@ export const zhCN: Resources = {
       hint: '留空则使用系统默认身份',
       pairingError: '用户名和邮箱必须同时填或同时留空',
       emailInvalid: '请输入合法的邮箱（含 @）',
+    },
+    workingBranch: {
+      label: '工作分支（可选）',
+      hint: '留空则在隔离分支 agent-workflow/{任务ID} 上工作；填写则基于基线分支最新内容创建/复用该分支',
+      placeholder: '例如 feature/refactor-auth',
+      invalid: '分支名不合法（不能含空格 / .. / 以 / 开头或结尾等）',
+    },
+    autoCommitPush: {
+      label: '完成后自动提交并推送',
+      hint: '每个写文件的 agent 产出最终内容后，框架自动提交全部变更并推送到远端（反问轮不触发）',
     },
     pathFetch: {
       label: '启动前刷新远端引用',

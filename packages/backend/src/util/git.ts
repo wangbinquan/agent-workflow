@@ -243,6 +243,27 @@ export interface CreateWorktreeOptions {
    * byte-for-byte identical.
    */
   overrideWorktreePath?: string
+  /**
+   * RFC-075: optional user-specified working branch. When provided it
+   * REPLACES the default `agent-workflow/{taskId}` as the worktree's
+   * checked-out branch:
+   *   - absent on both local + remote → created off `baseCommit`;
+   *   - existing (local or remote) → reused (checked out) and `baseCommit`
+   *     (the RFC-068 remote-synced base) is merged in.
+   * Throws a typed ValidationError with a stable code on invalid name /
+   * `working-branch-in-use` / `working-branch-base-fetch-failed` /
+   * `working-branch-base-merge-conflict`. Omitted → legacy behavior,
+   * byte-for-byte unchanged.
+   */
+  workingBranch?: string
+  /**
+   * RFC-075 + RFC-067: task Git identity used for the framework's own merge
+   * commit when reusing a working branch needs a non-fast-forward merge (a
+   * true merge commit needs an author/committer). Both omitted → the merge
+   * inherits the daemon's git config like any other launch-time git call.
+   */
+  gitUserName?: string | null
+  gitUserEmail?: string | null
 }
 
 export interface CreatedWorktree {
@@ -273,35 +294,59 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Creat
   const slug = repoSlug(opts.repoPath)
   const worktreePath =
     opts.overrideWorktreePath ?? join(opts.appHome, 'worktrees', slug, opts.taskId)
-  const branch = `agent-workflow/${opts.taskId}`
-
   // Pick base ref. Falls back to HEAD when caller didn't specify.
   const base = opts.baseBranch ?? (await currentBranch(opts.repoPath)) ?? 'HEAD'
 
   // Resolve to a concrete commit so the worktree is reproducible even if base
-  // is a symbolic ref that moves underneath us.
+  // is a symbolic ref that moves underneath us. RFC-068 has already synced the
+  // base to remote-latest by the time we get here.
   const baseRev = await runGit(opts.repoPath, ['rev-parse', base])
   if (baseRev.exitCode !== 0) {
+    // RFC-075: with a working branch, an unresolvable base is a hard launch
+    // failure (we cannot honor "branch off remote latest"); without one we
+    // keep the legacy error code byte-for-byte.
+    if (opts.workingBranch) {
+      throw new ValidationError(
+        'working-branch-base-fetch-failed',
+        `cannot resolve base ref '${base}' for working branch '${opts.workingBranch}'`,
+        { stderr: baseRev.stderr.trim() },
+      )
+    }
     throw new ValidationError('worktree-base-invalid', `cannot resolve base ref '${base}'`, {
       stderr: baseRev.stderr.trim(),
     })
   }
   const baseCommit = baseRev.stdout.trim()
 
-  const add = await runGit(opts.repoPath, [
-    'worktree',
-    'add',
-    '-b',
-    branch,
-    worktreePath,
-    baseCommit,
-  ])
-  if (add.exitCode !== 0) {
-    throw new DomainError(
-      'worktree-add-failed',
-      `git worktree add failed: ${add.stderr.trim()}`,
-      500,
-    )
+  // RFC-075: a user-specified working branch replaces the default isolation
+  // branch as the worktree's checked-out branch. Omitted → byte-for-byte
+  // legacy behavior (grep guard locks the `agent-workflow/{taskId}` literal).
+  const branch = opts.workingBranch ?? `agent-workflow/${opts.taskId}`
+  if (opts.workingBranch) {
+    await checkoutWorkingBranch({
+      repoPath: opts.repoPath,
+      worktreePath,
+      branch: opts.workingBranch,
+      baseCommit,
+      gitUserName: opts.gitUserName ?? null,
+      gitUserEmail: opts.gitUserEmail ?? null,
+    })
+  } else {
+    const add = await runGit(opts.repoPath, [
+      'worktree',
+      'add',
+      '-b',
+      branch,
+      worktreePath,
+      baseCommit,
+    ])
+    if (add.exitCode !== 0) {
+      throw new DomainError(
+        'worktree-add-failed',
+        `git worktree add failed: ${add.stderr.trim()}`,
+        500,
+      )
+    }
   }
 
   // RFC-034: dynamic import to avoid a circular dep between util/git.ts and
@@ -321,6 +366,123 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Creat
     submoduleInitOk: sub.ok,
     submoduleInitError: sub.error,
     hasSubmodules: sub.hasGitmodules,
+  }
+}
+
+/** `-c user.name=… -c user.email=…` args when both are present, else []. */
+function gitIdentityArgs(name: string | null, email: string | null): string[] {
+  const n = name?.trim()
+  const e = email?.trim()
+  if (n && e) return ['-c', `user.name=${n}`, '-c', `user.email=${e}`]
+  return []
+}
+
+function mapWorktreeAddError(stderr: string, branch: string): Error {
+  // `git worktree add` refuses a branch already checked out elsewhere with
+  // "fatal: '<branch>' is already used by worktree at '<path>'".
+  if (/already (used|checked out|being used) by worktree/i.test(stderr)) {
+    return new ValidationError(
+      'working-branch-in-use',
+      `working branch '${branch}' is already checked out by another worktree`,
+      { stderr: stderr.trim() },
+    )
+  }
+  return new DomainError('worktree-add-failed', `git worktree add failed: ${stderr.trim()}`, 500)
+}
+
+/**
+ * RFC-075: materialize a user-specified working branch into a fresh worktree.
+ *
+ *  - Validates the branch name via `git check-ref-format --branch`.
+ *  - New branch (absent local + remote) → `worktree add -b` off `baseCommit`.
+ *  - Existing branch (local or remote) → reuse: check it out into the worktree
+ *    and `git merge` `baseCommit` (the RFC-068 remote-synced base) into it.
+ *
+ * On any failure the partially-created worktree is torn down so a failed
+ * launch leaves nothing behind, and a typed ValidationError with a stable
+ * code is thrown. Remote existence is probed via `ls-remote origin`; a
+ * network failure there degrades to "remote absent" (we create a fresh branch
+ * and let the eventual push reconcile), which is the pragmatic v1 stance.
+ */
+async function checkoutWorkingBranch(opts: {
+  repoPath: string
+  worktreePath: string
+  branch: string
+  baseCommit: string
+  gitUserName: string | null
+  gitUserEmail: string | null
+}): Promise<void> {
+  const { repoPath, worktreePath, branch, baseCommit } = opts
+
+  // 1. Authoritative name validation (mirrors shared isLooseValidBranchName).
+  const fmt = await runGit(repoPath, ['check-ref-format', '--branch', branch])
+  if (fmt.exitCode !== 0) {
+    throw new ValidationError('working-branch-invalid', `invalid working branch name '${branch}'`, {
+      stderr: fmt.stderr.trim(),
+    })
+  }
+
+  // 2. Existence probes: local head + remote head.
+  const localExists =
+    (await runGit(repoPath, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`]))
+      .exitCode === 0
+  const remoteLs = await runGit(repoPath, ['ls-remote', '--heads', 'origin', branch])
+  const remoteExists = remoteLs.exitCode === 0 && remoteLs.stdout.trim().length > 0
+
+  // 3a. New branch off the remote-synced base — no merge needed.
+  if (!localExists && !remoteExists) {
+    const add = await runGit(repoPath, ['worktree', 'add', '-b', branch, worktreePath, baseCommit])
+    if (add.exitCode !== 0) throw mapWorktreeAddError(add.stderr, branch)
+    return
+  }
+
+  // 3b. Reuse. When the branch lives only on the remote, fetch it and create a
+  // local branch off the remote tip; otherwise check out the existing local.
+  if (!localExists && remoteExists) {
+    const fetch = await runGit(repoPath, [
+      'fetch',
+      'origin',
+      `${branch}:refs/remotes/origin/${branch}`,
+    ])
+    if (fetch.exitCode !== 0) {
+      throw new ValidationError(
+        'working-branch-base-fetch-failed',
+        `failed to fetch existing remote working branch '${branch}'`,
+        { stderr: fetch.stderr.trim() },
+      )
+    }
+    const add = await runGit(repoPath, [
+      'worktree',
+      'add',
+      '-b',
+      branch,
+      worktreePath,
+      `refs/remotes/origin/${branch}`,
+    ])
+    if (add.exitCode !== 0) throw mapWorktreeAddError(add.stderr, branch)
+  } else {
+    const add = await runGit(repoPath, ['worktree', 'add', worktreePath, branch])
+    if (add.exitCode !== 0) throw mapWorktreeAddError(add.stderr, branch)
+  }
+
+  // 4. Merge the remote-synced base into the checked-out working branch. A
+  // fast-forward needs no identity; a true merge commit uses the task identity
+  // (RFC-067) when present, else the daemon's git config.
+  const merge = await runGit(worktreePath, [
+    ...gitIdentityArgs(opts.gitUserName, opts.gitUserEmail),
+    'merge',
+    '--no-edit',
+    baseCommit,
+  ])
+  if (merge.exitCode !== 0) {
+    // Abort the conflicted merge and tear the worktree back down.
+    await runGit(worktreePath, ['merge', '--abort'])
+    await runGit(repoPath, ['worktree', 'remove', '--force', worktreePath])
+    throw new ValidationError(
+      'working-branch-base-merge-conflict',
+      `merging base into working branch '${branch}' produced a conflict`,
+      { stderr: merge.stderr.trim() },
+    )
   }
 }
 

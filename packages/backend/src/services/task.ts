@@ -143,6 +143,16 @@ export async function materializeWorktree(opts: {
    * branch leaves this undefined to inherit the legacy layout byte-for-byte.
    */
   overrideWorktreePath?: string
+  /**
+   * RFC-075: optional working branch (task-level, applied to this repo). When
+   * set, createWorktree checks out this branch instead of the default
+   * isolation branch; validation failures (`working-branch-*`) propagate as
+   * thrown ValidationErrors (422 launch failure) rather than `earlyError`.
+   */
+  workingBranch?: string
+  /** RFC-075/067: identity for the framework's merge commit on branch reuse. */
+  gitUserName?: string | null
+  gitUserEmail?: string | null
 }): Promise<{
   worktreePath: string
   branch: string
@@ -162,6 +172,9 @@ export async function materializeWorktree(opts: {
       ...(opts.overrideWorktreePath !== undefined
         ? { overrideWorktreePath: opts.overrideWorktreePath }
         : {}),
+      ...(opts.workingBranch !== undefined ? { workingBranch: opts.workingBranch } : {}),
+      ...(opts.gitUserName != null ? { gitUserName: opts.gitUserName } : {}),
+      ...(opts.gitUserEmail != null ? { gitUserEmail: opts.gitUserEmail } : {}),
     })
     return {
       worktreePath: wt.worktreePath,
@@ -173,6 +186,13 @@ export async function materializeWorktree(opts: {
       hasSubmodules: wt.hasSubmodules,
     }
   } catch (err) {
+    // RFC-075: a user-requested working branch that can't be honored (invalid
+    // name, in use, base fetch failed, merge conflict) is a hard launch
+    // failure surfaced as 422 — let the typed error propagate instead of
+    // degrading into a `failed` task row.
+    if (err instanceof ValidationError && err.code.startsWith('working-branch-')) {
+      throw err
+    }
     return {
       worktreePath: '',
       branch: '',
@@ -462,6 +482,10 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
       baseBranch: source.baseBranch,
       taskId,
       appHome,
+      // RFC-075: working branch (task-level) + identity for the merge commit.
+      ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
+      gitUserName: input.gitUserName ?? null,
+      gitUserEmail: input.gitUserEmail ?? null,
     })
     worktreePath = wt.worktreePath
     branch = wt.branch
@@ -528,6 +552,10 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
         taskId,
         appHome,
         overrideWorktreePath: join(parentWorktree, dirName),
+        // RFC-075: same working branch name applied to every repo in the task.
+        ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
+        gitUserName: input.gitUserName ?? null,
+        gitUserEmail: input.gitUserEmail ?? null,
       })
       if (wt.earlyError !== null) {
         earlyError = `repo[${i}] (${dirName}) failed: ${wt.earlyError}`
@@ -638,6 +666,10 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
     // half-set; runner.ts skips env injection when these are NULL).
     gitUserName: persistedGitUserName,
     gitUserEmail: persistedGitUserEmail,
+    // RFC-075: user-specified working branch (NULL → isolation branch) +
+    // the auto commit&push toggle (false → legacy, no commit/push).
+    workingBranch: input.workingBranch ?? null,
+    autoCommitPush: input.autoCommitPush ?? false,
     // RFC-066: count of `task_repos` rows. Single-repo path always = 1;
     // multi-repo populates with the materialized count (zero only when the
     // first repo failed before any task_repos row was minted).
@@ -664,6 +696,9 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
         repoUrl: r.repoUrl !== null ? redactGitUrl(r.repoUrl) : null,
         baseBranch: r.baseBranch,
         branch: r.branch,
+        // RFC-075: the single working-branch name is applied to every repo
+        // (NULL → this repo uses the isolation branch in `branch`).
+        workingBranch: input.workingBranch ?? null,
         baseCommit: r.baseCommit,
         worktreePath: r.worktreePath,
         worktreeDirName: r.worktreeDirName,
@@ -1639,6 +1674,9 @@ function rowToTask(
     // RFC-067: per-task Git commit identity (NULL = no override → daemon default).
     gitUserName: row.gitUserName ?? null,
     gitUserEmail: row.gitUserEmail ?? null,
+    // RFC-075: working branch (NULL → isolation branch) + auto commit&push.
+    workingBranch: row.workingBranch ?? null,
+    autoCommitPush: row.autoCommitPush,
     // RFC-066: per-task repo metadata. `repoCount` is sourced from the
     // denormalized column on `tasks` (cheap for list queries); `repos[]` is
     // hydrated by the caller from `task_repos` ordered by `repo_index`.
@@ -1677,6 +1715,8 @@ function mapTaskRepoRow(row: typeof taskRepos.$inferSelect): TaskRepo {
     repoUrl: row.repoUrl ?? null,
     baseBranch: row.baseBranch,
     branch: row.branch,
+    // RFC-075: per-repo working-branch mirror (NULL → isolation branch).
+    workingBranch: row.workingBranch ?? null,
     baseCommit: row.baseCommit ?? null,
     worktreePath: row.worktreePath,
     worktreeDirName: row.worktreeDirName,
@@ -1700,6 +1740,8 @@ function synthesizeRepoFromTaskRow(row: typeof tasks.$inferSelect): TaskRepo {
     repoUrl: row.repoUrl ?? null,
     baseBranch: row.baseBranch,
     branch: row.branch,
+    // RFC-075: mirror the task-level working branch onto the synthesized repo.
+    workingBranch: row.workingBranch ?? null,
     baseCommit: row.baseCommit ?? null,
     worktreePath: row.worktreePath,
     worktreeDirName: '',

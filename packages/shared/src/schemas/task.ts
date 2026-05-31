@@ -44,6 +44,25 @@ export const TaskNameSchema = z
 export const MULTI_REPO_MAX = 8
 
 /**
+ * RFC-075: optional working branch name captured at launch. Applies to every
+ * repo in a multi-repo task. Loose validation here only catches the obvious
+ * illegal shapes early so the launcher can show a field error; the
+ * authoritative check is `git check-ref-format --branch <name>` run inside
+ * util/git at materialize time (rejects with `working-branch-invalid`).
+ */
+export const WORKING_BRANCH_MAX = 255
+// Conservative subset of git's ref-format rules: no whitespace / control
+// chars / `~^:?*[\`, no `..`, no `@{`, no leading or trailing `/`, no `//`,
+// not `@` alone, no leading/trailing `.`, not ending in `.lock`.
+const WORKING_BRANCH_ILLEGAL =
+  // eslint-disable-next-line no-control-regex
+  /[\s~^:?*[\\\x00-\x1f\x7f]|\.\.|@\{|^\/|\/$|\/\/|\.lock$|^@$|^\.|\.$/
+export function isLooseValidBranchName(name: string): boolean {
+  if (name.length === 0 || name.length > WORKING_BRANCH_MAX) return false
+  return !WORKING_BRANCH_ILLEGAL.test(name)
+}
+
+/**
  * RFC-066: single repo entry inside `StartTask.repos[]`. Same path/url mutex
  * + baseBranch-required-in-path-mode rules as the legacy `StartTask` top
  * level — kept identical so legacy single-repo bodies stay byte-for-byte
@@ -98,6 +117,13 @@ export const TaskRepoSchema = z.object({
   repoUrl: z.string().nullable(),
   baseBranch: z.string(),
   branch: z.string(),
+  /**
+   * RFC-075: user-specified working branch for this repo (mirrors
+   * `task_repos.working_branch`). Null when the task did not specify one — in
+   * that case `branch` is the framework default `agent-workflow/{taskId}`.
+   * When set, `branch === workingBranch`.
+   */
+  workingBranch: z.string().nullable().default(null),
   baseCommit: z.string().nullable(),
   worktreePath: z.string(),
   /**
@@ -138,6 +164,19 @@ export const TaskSchema = z.object({
   worktreePath: z.string(),
   baseBranch: z.string(),
   branch: z.string(),
+  /**
+   * RFC-075: user-specified working branch (applies to every repo; per-repo
+   * values live in `repos[i].workingBranch`). Null when none was specified —
+   * `branch` is then the framework default `agent-workflow/{taskId}`. Detail
+   * page renders this alongside `baseBranch`.
+   */
+  workingBranch: z.string().nullable().default(null),
+  /**
+   * RFC-075: when true, the framework auto-commits & pushes each writer
+   * agent's final output (see RFC-075). Default false → byte-identical to
+   * pre-RFC-075 behavior.
+   */
+  autoCommitPush: z.boolean().default(false),
   baseCommit: z.string().nullable(),
   status: TaskStatusSchema,
   inputs: z.record(z.string(), z.string()),
@@ -278,6 +317,21 @@ export const StartTaskSchema = z
      * `~/.agent-workflow/worktrees/multi/{taskId}/`).
      */
     repos: z.array(StartTaskRepoSchema).min(1).max(MULTI_REPO_MAX).optional(),
+    /**
+     * RFC-075 — optional working branch name. Applies to every repo in a
+     * multi-repo task. When set, the worktree is checked out on this branch
+     * (replacing the default `agent-workflow/{taskId}`), branched off the
+     * remote-latest base; an existing branch is reused + base merged in.
+     * Omitted → legacy isolation branch, byte-for-byte unchanged.
+     */
+    workingBranch: z.string().min(1).max(WORKING_BRANCH_MAX).optional(),
+    /**
+     * RFC-075 — when true, after each writer agent emits its final output the
+     * framework commits all changes (LLM-summarized message) and pushes to
+     * the working branch (or the isolation branch when no working branch was
+     * set). Default false → no commit/push, legacy behavior.
+     */
+    autoCommitPush: z.boolean().optional(),
   })
   .superRefine((value, ctx) => {
     const hasLegacyPath = typeof value.repoPath === 'string' && value.repoPath.length > 0
@@ -345,6 +399,20 @@ export const StartTaskSchema = z
         path: ['gitUserEmail'],
       })
     }
+    // RFC-075: loose working-branch format check. Authoritative validation is
+    // `git check-ref-format --branch` at materialize time; this catches the
+    // obvious illegal shapes (whitespace, `..`, leading/trailing `/`, etc.)
+    // before we even spawn git.
+    if (typeof value.workingBranch === 'string') {
+      const wb = value.workingBranch.trim()
+      if (wb.length === 0 || !isLooseValidBranchName(wb)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'working-branch-invalid',
+          path: ['workingBranch'],
+        })
+      }
+    }
   })
 export type StartTask = z.infer<typeof StartTaskSchema>
 
@@ -381,6 +449,50 @@ export const NODE_RUN_STATUS = [
 ] as const
 export const NodeRunStatusSchema = z.enum(NODE_RUN_STATUS)
 export type NodeRunStatus = z.infer<typeof NodeRunStatusSchema>
+
+/**
+ * RFC-075: metadata recorded on a framework-synthesized commit&push node_run.
+ * Non-null presence marks the row as a commit node (the synthetic `nodeId` is
+ * `__commit_push__:{agentNodeId}` (+ `:{repoSlug}` in multi-repo); the row's
+ * `parentNodeRunId` points at the triggering agent run). The UI renders these
+ * rows distinctly and offers a "view session" button.
+ */
+export const COMMIT_PUSH_OUTCOME = [
+  /** commit + push both succeeded */
+  'pushed',
+  /** push rejected for auth/permission reasons → committed locally, not retried */
+  'commit-local-auth',
+  /** repair retries exhausted → committed locally, node failed */
+  'commit-local-failed',
+  /** no net change since the last commit → nothing committed */
+  'skipped-empty',
+] as const
+export const CommitPushOutcomeSchema = z.enum(COMMIT_PUSH_OUTCOME)
+export type CommitPushOutcome = z.infer<typeof CommitPushOutcomeSchema>
+
+export const CommitPushMetaSchema = z.object({
+  /** Absolute path to the repo worktree this commit row targets. */
+  repoPath: z.string(),
+  /** Local branch committed on (working branch or `agent-workflow/{taskId}`). */
+  repoBranch: z.string(),
+  /** Push target, e.g. `origin/<branch>`. */
+  pushTarget: z.string(),
+  /** Base ref the worktree was branched from. */
+  baseRef: z.string(),
+  /** Resolved commit SHA, or null when nothing was committed. */
+  commitSha: z.string().nullable(),
+  filesChanged: z.number().int().nonnegative(),
+  insertions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+  /** How the commit message was produced. */
+  messageSource: z.enum(['llm', 'llm-repair', 'fallback']),
+  /** Number of repair-and-repush cycles performed (0 when first push succeeded). */
+  repairAttempts: z.number().int().nonnegative(),
+  pushOutcome: CommitPushOutcomeSchema,
+  /** Redacted push stderr summary, or null. */
+  pushError: z.string().nullable(),
+})
+export type CommitPushMeta = z.infer<typeof CommitPushMetaSchema>
 
 export const NodeRunSchema = z.object({
   id: z.string(),
@@ -463,6 +575,13 @@ export const NodeRunSchema = z.object({
     )
     .nullable()
     .optional(),
+  /**
+   * RFC-075: present (non-null) only on framework-synthesized commit&push
+   * node_runs. Carries the commit SHA / push outcome / repair count for the
+   * detail-page commit row. NULL/absent for every regular node_run and all
+   * pre-RFC-075 rows.
+   */
+  commitPush: CommitPushMetaSchema.nullable().optional(),
 })
 export type NodeRun = z.infer<typeof NodeRunSchema>
 

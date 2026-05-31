@@ -823,6 +823,10 @@ export const enUS: Resources = {
     metaRepoCachePath: 'Local cache path',
     metaWorktree: 'Worktree',
     metaBranch: 'Branch',
+    metaBaseBranch: 'Base branch',
+    metaWorkingBranch: 'Working branch',
+    metaWorkingBranchNone: '— (isolation branch)',
+    metaAutoCommitPushOn: 'Auto commit & push: on',
     metaStarted: 'Started',
     metaFinished: 'Finished',
     metaError: 'Error',
@@ -1072,6 +1076,16 @@ export const enUS: Resources = {
       hint: 'Leave blank to use the system default identity',
       pairingError: 'Name and email must both be set or both be blank',
       emailInvalid: 'Enter a valid email address (must include @)',
+    },
+    workingBranch: {
+      label: 'Working branch (optional)',
+      hint: 'Blank → work on the isolation branch agent-workflow/{taskId}; set → create/reuse this branch off the latest base branch',
+      placeholder: 'e.g. feature/refactor-auth',
+      invalid: 'Invalid branch name (no spaces / .. / leading or trailing /, etc.)',
+    },
+    autoCommitPush: {
+      label: 'Auto commit & push on completion',
+      hint: "After each writer agent emits its final output, the framework commits all changes and pushes to the remote (clarify rounds don't trigger it)",
     },
     pathFetch: {
       label: 'Refresh remote refs before launch',
