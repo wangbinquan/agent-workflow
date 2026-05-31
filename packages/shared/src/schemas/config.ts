@@ -181,6 +181,27 @@ export const ConfigSchema = z.object({
    */
   gitSubmoduleJobs: z.number().int().min(1).max(32).optional(),
 
+  // --- RFC-075 auto commit & push ---
+  /**
+   * Model the built-in "commit" agent uses to summarize a diff into a commit
+   * message and to repair a rejected push. Falls back to opencode's installed
+   * default when unset (mirrors `memoryDistillModel`). Settings → Git section
+   * surfaces this; a cheap/fast model is recommended.
+   */
+  commitPushModel: z.string().min(1).optional(),
+  /**
+   * Max repair-and-repush cycles a commit&push node attempts on a non-auth
+   * push rejection before giving up (commit stays local, node failed, task
+   * continues). Auth/permission failures never retry. Default 3.
+   */
+  commitPushMaxRepairRetries: z.number().int().min(0).max(10).optional(),
+  /**
+   * Byte cap on the diff body fed to the commit-message session (first 50% +
+   * last 50% + `[truncated N bytes]` when over; `git diff --stat` is always
+   * included separately). 0 disables the body block. Default 16384 (~4K tok).
+   */
+  commitPushDiffMaxBytes: z.number().int().min(0).max(262144).optional(),
+
   // --- Large outputs ---
   largeOutputThresholdBytes: z.number().int().positive(),
 
@@ -281,3 +302,11 @@ export const DEFAULT_SUBAGENT_LIVE_CAPTURE: SubagentLiveCapture = {
   pollMs: 1500,
   consecutiveFailureLimit: 5,
 }
+
+/**
+ * RFC-075: defaults the backend loader applies when `commitPushMaxRepairRetries`
+ * / `commitPushDiffMaxBytes` are omitted. `commitPushModel` has no constant —
+ * unset means "fall back to opencode's installed default" at spawn time.
+ */
+export const DEFAULT_COMMIT_PUSH_MAX_REPAIR_RETRIES = 3
+export const DEFAULT_COMMIT_PUSH_DIFF_MAX_BYTES = 16384
