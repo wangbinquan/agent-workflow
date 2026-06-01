@@ -298,10 +298,9 @@ export async function runCommitPush(
           pushError: redactPushError(merge.stderr),
         })
       }
-      // Merge commit advanced HEAD; record the new sha and re-push.
-      const merged = (await g(['rev-parse', 'HEAD'])).stdout.trim()
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      void merged
+      // Merge advanced HEAD (the re-push below picks up the new tip). The
+      // commit SHA we report stays the original agent commit; the merge is a
+      // reconciliation, not a new attributed change.
       continue
     }
 

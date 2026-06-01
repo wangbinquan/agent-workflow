@@ -4,7 +4,7 @@
 // exhaustion, and non-fast-forward auto-merge → re-push. The framework owns
 // git; the message/repair generators are injected (production wraps opencode).
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
