@@ -23,7 +23,7 @@
 
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
-import { and, eq, gt } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { crossClarifySessions, nodeRuns, tasks, workflows } from '../src/db/schema'

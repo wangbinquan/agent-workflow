@@ -202,6 +202,8 @@ describe('RFC-074 — designer rerun no longer eagerly cascades downstream', () 
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'designer')))
     expect(designerRows.length).toBe(2)
     const designerFresh = designerRows.find((r) => r.status === 'pending')
+    // RFC-074 PR-C: the designer rerun is a fresh pending insert (latest id wins).
+    expect(designerFresh).toBeDefined()
 
     // RFC-074 NO-CASCADE LOCK: rev1 + questioner are NOT pre-minted a pending
     // row. Each keeps exactly its single done row from iteration 0; the

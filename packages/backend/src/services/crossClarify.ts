@@ -63,7 +63,6 @@ import {
   findCrossClarifyNodesPointingToDesigner,
   findDesignerNodeForCrossClarify,
   findQuestionerNodeForCrossClarify,
-  isClarifyChannelEdge,
   renderClarifyQuestionsBlock,
   resolveCrossClarifySessionMode,
   type ClarifyAnswer,
@@ -80,7 +79,7 @@ import { and, asc, desc, eq, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
-import { clarifyRounds, crossClarifySessions, nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
+import { clarifyRounds, crossClarifySessions, nodeRuns, tasks } from '@/db/schema'
 import { sealAnswersServerSide } from '@/services/clarify'
 import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'

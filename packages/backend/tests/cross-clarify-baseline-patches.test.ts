@@ -174,7 +174,9 @@ describe('RFC-058 baseline T4 — patch-2026-05-23 designer retry index', () => 
     const newRun = (
       await db.select().from(nodeRuns).where(eq(nodeRuns.id, result.designerNodeRunId))
     )[0]
-    // RFC-058 baseline locks: patch-2026-05-23 formula — newCci > prior max
+    // RFC-074 PR-C: the designer rerun is a fresh pending insert (latest id wins
+    // freshness); no cci to assert.
+    expect(newRun?.status).toBe('pending')
     void crossClarifyNodeRunId
   })
 })
@@ -208,10 +210,12 @@ describe('RFC-058 baseline T4 — patch-2026-05-24 cci inheritance', () => {
       questions: [makeQuestion()],
     })
     expect(session.iteration).toBe(0)
-    // The cc node_run row mints clarifyIteration = session iteration
+    // RFC-074 PR-C: the cross-clarify node_run no longer carries a cci counter;
+    // assert the row exists and is parked for human input.
     const nr = (
       await db.select().from(nodeRuns).where(eq(nodeRuns.id, session.crossClarifyNodeRunId))
     )[0]
+    expect(nr?.status).toBe('awaiting_human')
   })
 })
 

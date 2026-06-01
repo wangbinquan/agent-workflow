@@ -50,7 +50,6 @@
 // design/RFC-056-clarify-cross-agent/patch-2026-05-25-questioner-cascade-no-skip.md.
 
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
@@ -68,10 +67,6 @@ import { createClarifySession, submitClarifyAnswers } from '../src/services/clar
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const CROSS_CLARIFY_SOURCE = resolve(import.meta.dir, '..', 'src', 'services', 'crossClarify.ts')
-const TASK_SOURCE = resolve(import.meta.dir, '..', 'src', 'services', 'task.ts')
-const CLARIFY_SOURCE = resolve(import.meta.dir, '..', 'src', 'services', 'clarify.ts')
-const REVIEW_SOURCE = resolve(import.meta.dir, '..', 'src', 'services', 'review.ts')
 
 function makeQ(id: string): ClarifyQuestion {
   return {

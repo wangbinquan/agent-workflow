@@ -147,7 +147,7 @@ function AttemptPicker({
           : iterLabel(latest, t, clarifyRoundForRun(latest, attempts))
         return { value: latest.id, label }
       }),
-    [groups, t],
+    [groups, attempts, t],
   )
 
   // Map the latest-id back to its group for renderOption / renderValue.

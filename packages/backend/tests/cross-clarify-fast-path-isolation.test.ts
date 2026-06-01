@@ -393,9 +393,11 @@ describe('RFC-059 C4 — fast-path isolation', () => {
     })
     expect(aResult.outcome.kind).toBe('questioner-stop-triggered')
     if (aResult.outcome.kind !== 'questioner-stop-triggered') return
+    // RFC-074 PR-C: the questioner stop-rerun is a fresh pending insert (no cci).
     const newRunRow = (
       await db.select().from(nodeRuns).where(eq(nodeRuns.id, aResult.outcome.questionerNodeRunId))
     )[0]
+    expect(newRunRow?.status).toBe('pending')
   })
 
   test('peer A fast path: clarify_rounds row carries questionScopesJson same as cross_clarify_sessions', async () => {
