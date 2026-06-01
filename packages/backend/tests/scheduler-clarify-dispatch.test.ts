@@ -27,7 +27,14 @@ import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { ulid } from 'ulid'
+import { monotonicFactory } from 'ulid'
+// RFC-074 PR-C: freshness is pure ULID id-order (isFresherNodeRun). Several
+// cases below synchronously seed a stale higher-retryIndex `done` row AND the
+// clarify-rerun row back-to-back; two plain ulid() calls in the same ms can
+// invert (the random component decides order), letting the stale row shadow
+// the rerun and flake the assertion. A shared monotonicFactory guarantees the
+// later-seeded rerun always sorts freshest — mirrors scheduler-clarify-mid-batch.test.ts.
+const ulid = monotonicFactory()
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   agents,
