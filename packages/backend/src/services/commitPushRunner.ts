@@ -77,6 +77,20 @@ export interface CommitPushParams {
   diffMaxBytes: number
   generateMessage: (ctx: GenerateMessageCtx) => Promise<GeneratedMessage>
   generateRepair: (ctx: GenerateRepairCtx) => Promise<GeneratedMessage>
+  /**
+   * RFC-076 C4 — optional write-lock acquirer (the scheduler passes its
+   * per-task `writeSem.acquire`). Held ONLY around `git add -A` + the
+   * `git diff --cached` capture so the staged index snapshot is consistent: a
+   * sibling writer node still in flight under the completion-driven race loop
+   * could otherwise mutate the worktree mid-`add`, splitting its changes across
+   * two commits. Writer nodes hold the same Semaphore(1) for their whole run, so
+   * acquiring it here means "capture only when no writer is mid-write" — the
+   * quiescence the old batch barrier gave for free. Released BEFORE the LLM
+   * message-gen / commit / push (those operate on the frozen index, so a writer
+   * resuming after the snapshot lands in its OWN later commit). Omit → no lock
+   * (single-writer / test callers take a byte-identical unlocked path).
+   */
+  acquireWrite?: () => Promise<() => void>
 }
 
 export interface CommitPushDeps {
@@ -166,17 +180,30 @@ export async function runCommitPush(
     return { nodeRunId, meta }
   }
 
-  // 1. Stage everything (respects .gitignore).
-  await g(['add', '-A'])
-
-  // 2. Compute the change set. Nothing staged → skip (no commit).
-  const numstat = (await g(['diff', '--cached', '--numstat'])).stdout
+  // 1+2. Stage everything (respects .gitignore) and capture the change set —
+  // under the write lock (RFC-076 C4) so a sibling writer can't mutate the
+  // worktree mid-`add` and split its changes across commits. The lock is held
+  // ONLY for this capture; `git diff --cached` reads the now-frozen index, and
+  // the commit below operates on that same index, so we release before the slow
+  // LLM message-gen / push (a writer resuming then lands in its own later
+  // commit). No acquirer (single-writer / tests) → unlocked, byte-identical.
+  const releaseWrite = params.acquireWrite ? await params.acquireWrite() : null
+  let numstat: string
+  let stat: string
+  let diffRaw: string
+  try {
+    await g(['add', '-A'])
+    numstat = (await g(['diff', '--cached', '--numstat'])).stdout
+    stat = (await g(['diff', '--cached', '--stat'])).stdout
+    diffRaw = (await g(['diff', '--cached'])).stdout
+  } finally {
+    releaseWrite?.()
+  }
+  // Nothing staged → skip (no commit).
   const { filesChanged, insertions, deletions } = parseNumstat(numstat)
   if (filesChanged === 0) {
     return finalize('skipped-empty', { filesChanged: 0 })
   }
-  const stat = (await g(['diff', '--cached', '--stat'])).stdout
-  const diffRaw = (await g(['diff', '--cached'])).stdout
   const diffTruncated = truncateDiff(diffRaw, params.diffMaxBytes)
 
   // 3. Generate the commit message (LLM), falling back to a template.

@@ -230,4 +230,52 @@ describe('runCommitPush', () => {
     // Remote now has both files reachable from feature/x.
     expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(true)
   })
+
+  // RFC-076 C4 — the write lock (scheduler's writeSem) is held ONLY around the
+  // `git add -A` + `git diff --cached` capture and released BEFORE the slow LLM
+  // message-gen / commit / push, so a concurrent writer node (race loop) can't
+  // mutate the worktree mid-stage (which would split its changes across commits)
+  // yet isn't blocked for the whole commit duration.
+  test('C4: write lock spans stage+diff and is released before message-gen', async () => {
+    f = await build()
+    writeFileSync(join(f.repo, 'b.txt'), 'new file\n')
+    const events: string[] = []
+    let held = false
+    await runCommitPush(
+      baseParams(f, {
+        acquireWrite: async () => {
+          held = true
+          events.push('acquire')
+          return () => {
+            held = false
+            events.push('release')
+          }
+        },
+        generateMessage: async () => {
+          events.push(`msg(held=${held})`)
+          return { message: 'feat: locked capture' }
+        },
+      }),
+      { db: f.db },
+    )
+    // Lock acquired, the staged snapshot captured, lock released — THEN the
+    // (slow) message generator runs, with the lock no longer held.
+    expect(events).toEqual(['acquire', 'release', 'msg(held=false)'])
+  })
+
+  test('C4: write lock is released even when nothing is staged (skipped-empty)', async () => {
+    f = await build()
+    let released = false
+    const { meta } = await runCommitPush(
+      baseParams(f, {
+        acquireWrite: async () => () => {
+          released = true
+        },
+      }),
+      { db: f.db },
+    )
+    // The finally around stage+diff must release even on the early skip return.
+    expect(meta.pushOutcome).toBe('skipped-empty')
+    expect(released).toBe(true)
+  })
 })

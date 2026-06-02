@@ -884,6 +884,11 @@ async function maybeRunCommitPush(
         maxRepairRetries:
           state.opts.commitPushMaxRepairRetries ?? DEFAULT_COMMIT_PUSH_MAX_REPAIR_RETRIES,
         diffMaxBytes: state.opts.commitPushDiffMaxBytes ?? DEFAULT_COMMIT_PUSH_DIFF_MAX_BYTES,
+        // RFC-076 C4: capture the staged snapshot only when no writer node is
+        // mid-write. Writers hold this same Semaphore(1) for their whole run, so
+        // under the race loop this serializes the commit's `git add` against
+        // them — restoring the worktree quiescence the old batch barrier gave.
+        acquireWrite: () => state.writeSem.acquire(),
         generateMessage: (mctx) =>
           genViaOpencode(
             buildCommitMessagePrompt({

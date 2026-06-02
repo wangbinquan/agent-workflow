@@ -205,4 +205,17 @@ describe('source guard — runScope wires the transitive gate', () => {
     expect(SCHEDULER_SRC).not.toContain('ready.map((node) => runOneNode')
     expect(SCHEDULER_SRC).not.toContain('computeReadyNodes(remaining.values()')
   })
+
+  test('RFC-076 T5 — the batch-model reconcile passes are deleted', () => {
+    // The completion-driven loop re-derives from node_runs every tick, so the
+    // two batch-boundary reconcile functions are no longer needed and must not
+    // creep back: rescanScopeForNewPendingRows (out-of-band clarify mints) and
+    // recomputeFreshnessAndDemote (RFC-074 multi-hop staleness) are both
+    // subsumed by deriveFrontier. Their reappearance would mean the mutable
+    // completed/remaining snapshot drift the rewrite eliminated has returned.
+    // (We match the `function` DEFINITION form — the runScope comment quotes the
+    // historical names in prose to explain what they replaced, which is fine.)
+    expect(SCHEDULER_SRC).not.toContain('function rescanScopeForNewPendingRows')
+    expect(SCHEDULER_SRC).not.toContain('function recomputeFreshnessAndDemote')
+  })
 })
