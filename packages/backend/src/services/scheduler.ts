@@ -17,6 +17,7 @@ import type {
   Agent,
   ClarifyNode,
   Mcp,
+  NodeKind,
   Plugin,
   WorkflowDefinition,
   WorkflowEdge,
@@ -69,7 +70,12 @@ import {
 import { evaluateExitCondition, parseExitCondition } from '@/services/exitCondition'
 import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
 import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
-import { computeReadyNodes, isNodeRunFresh } from '@/services/freshness'
+import {
+  areTransitiveUpstreamsCompleted,
+  computeReadyNodes,
+  isNodeRunFresh,
+} from '@/services/freshness'
+import { isDispatchable } from '@/services/dispatchFrontier'
 import { runNode, type AgentOverrides, type ResolvedSkill, type RunResult } from '@/services/runner'
 import { parsePortValidationFailuresJson } from '@/services/envelope'
 import { runCommitPush } from '@/services/commitPushRunner'
@@ -919,6 +925,129 @@ function buildFreshestDonePerNode(
     if (isFresherNodeRun(r, m.get(r.nodeId))) m.set(r.nodeId, r)
   }
   return m
+}
+
+// -----------------------------------------------------------------------------
+// RFC-076 PR-B — deriveFrontier (the dispatch brain; PURE, currently UNWIRED).
+// -----------------------------------------------------------------------------
+//
+// Re-derives the dispatchable frontier from node_runs each tick, replacing the
+// batch model's mutable completed/remaining snapshot + rescan/recompute
+// reconcile. Composes fix A's areTransitiveUpstreamsCompleted + PR-A's
+// isDispatchable / wrapperHasFreshInnerWork. Lives here (not freshness.ts /
+// dispatchFrontier.ts) to reuse the scheduler's row-ordering primitives
+// (isFresherNodeRun / buildFreshestDonePerNode) without an import cycle.
+//
+// NOT yet called by runScope — wiring + the Promise.race loop + deleting
+// rescan/recompute/barrier are the remaining PR-B steps. Exported + unit-tested
+// now as the validated foundation.
+
+export interface Frontier {
+  /** done∧fresh ∪ exhausted(loop-max terminal, HIGH-2) ∪ settles-without-row leaves. */
+  completed: Set<string>
+  /** transitive upstreams completed ∧ isDispatchable ∧ ∉ inFlight ∧ ∉ dispatchedThisInvocation. */
+  ready: string[]
+  /** latest awaiting_review / awaiting_human, NOT going to ready (terminal bubbling). */
+  awaitingReview: string[]
+  awaitingHuman: string[]
+  /** latest failed, NOT going to ready (a dispatchable failed row = pending resume, not terminal). */
+  failed: string[]
+  /** every in-scope node is completed ⇒ scope may return done. */
+  allSettled: boolean
+}
+
+// clarify / cross-clarify graph-visit no-ops write NO node_run row (C1); they
+// settle without one once upstreams are done and no session is open (N6).
+const SETTLES_WITHOUT_ROW_KINDS = new Set<NodeKind>(['clarify', 'clarify-cross-agent'])
+
+function isLiveStatus(status: string): boolean {
+  return (
+    status === 'pending' ||
+    status === 'running' ||
+    status === 'awaiting_human' ||
+    status === 'awaiting_review'
+  )
+}
+
+/**
+ * @param rows                     all node_runs for the task (filtered inside)
+ * @param openClarifyNodeIds       clarify / clarify-cross-agent node ids with an
+ *   UNANSWERED session (N6 positive evidence — caller queries clarify_sessions /
+ *   cross_clarify_sessions). A no-row clarify leaf only settles when NOT here,
+ *   closing the "agent done, createClarifySession not yet written" window.
+ * @param dispatchedThisInvocation nodes already dispatched this runScope call
+ *   (N3 — recovers the old remaining.delete per-invocation dedup; pure status
+ *   read can't tell "already-dispatched parked wrapper" from "fresh resume").
+ */
+export function deriveFrontier(
+  rows: ReadonlyArray<typeof nodeRuns.$inferSelect>,
+  definition: WorkflowDefinition,
+  scopeNodes: WorkflowNode[],
+  scopeIds: Set<string>,
+  iteration: number,
+  upstreamsOf: Map<string, string[]>,
+  inFlight: ReadonlySet<string>,
+  dispatchedThisInvocation: ReadonlySet<string>,
+  openClarifyNodeIds: ReadonlySet<string>,
+): Frontier {
+  const latestPerNode = new Map<string, typeof nodeRuns.$inferSelect>()
+  for (const r of rows) {
+    if (r.iteration !== iteration) continue
+    if (!scopeIds.has(r.nodeId)) continue
+    if (r.parentNodeRunId !== null) continue // skip fan-out child rows
+    if (isFresherNodeRun(r, latestPerNode.get(r.nodeId))) latestPerNode.set(r.nodeId, r)
+  }
+  const freshestDone = buildFreshestDonePerNode(rows, scopeIds, iteration)
+
+  // Pass 1 — done∧fresh (old seed口径) + exhausted (loop-max true terminal, HIGH-2).
+  const completed = new Set<string>()
+  for (const [nodeId, r] of latestPerNode) {
+    if (r.status === 'done' && isNodeRunFresh(r, freshestDone)) completed.add(nodeId)
+    else if (r.status === 'exhausted') completed.add(nodeId)
+  }
+  // Pass 2 — settles-without-row (C1/N6). clarify nodes have no structural
+  // upstream (channel edges dropped) so are leaves; cross-clarify depends on its
+  // questioner (settled in pass 1), so one pass over pass-1 `completed` suffices.
+  for (const n of scopeNodes) {
+    if (completed.has(n.id)) continue
+    if (!SETTLES_WITHOUT_ROW_KINDS.has(n.kind)) continue
+    const latest = latestPerNode.get(n.id)
+    if (latest !== undefined && isLiveStatus(latest.status)) continue
+    if (openClarifyNodeIds.has(n.id)) continue
+    if (areTransitiveUpstreamsCompleted(n.id, upstreamsOf, completed)) completed.add(n.id)
+  }
+
+  const awaitingReview: string[] = []
+  const awaitingHuman: string[] = []
+  const failed: string[] = []
+  const ready: string[] = []
+  let remainingCount = 0
+  for (const n of scopeNodes) {
+    if (completed.has(n.id)) continue
+    remainingCount += 1
+    const latest = latestPerNode.get(n.id)
+    const dispatchable =
+      areTransitiveUpstreamsCompleted(n.id, upstreamsOf, completed) &&
+      !inFlight.has(n.id) &&
+      !dispatchedThisInvocation.has(n.id) &&
+      isDispatchable(latest, n.kind, freshestDone, rows, definition)
+    if (dispatchable) {
+      ready.push(n.id)
+      continue
+    }
+    // Terminal bucketing — only nodes that are NOT (re-)dispatchable.
+    if (latest?.status === 'awaiting_review') awaitingReview.push(n.id)
+    else if (latest?.status === 'awaiting_human') awaitingHuman.push(n.id)
+    else if (latest?.status === 'failed') failed.push(n.id)
+  }
+  return {
+    completed,
+    ready,
+    awaitingReview,
+    awaitingHuman,
+    failed,
+    allSettled: remainingCount === 0,
+  }
 }
 
 /**
