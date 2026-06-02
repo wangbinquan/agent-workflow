@@ -30,6 +30,11 @@ import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { DbClient } from '../db/client'
 import { nodeRunEvents, nodeRuns } from '../db/schema'
 import { createLogger, type Logger } from '@/util/log'
+import {
+  walkOpencodeSessions,
+  type OpencodeMessageRow,
+  type OpencodePartRow,
+} from './opencodeSessionWalk'
 
 export interface CaptureChildSessionsOptions {
   rootSessionId: string
@@ -95,25 +100,6 @@ function defaultXdgDataDir(home: string): string {
   // rows with reason `opencode-db-not-found`.
   // Windows is out of scope for v1 per RFC-027 design.md §8.
   return join(home, '.local', 'share')
-}
-
-interface OpencodeSessionRow {
-  id: string
-  parent_id: string | null
-  agent: string | null
-}
-
-interface OpencodeMessageRow {
-  id: string
-  time_created: number
-  data: string
-}
-
-interface OpencodePartRow {
-  id: string
-  message_id: string
-  time_created: number
-  data: string
 }
 
 export interface TranscodedEvent {
@@ -207,27 +193,6 @@ export async function captureChildSessions(
   let opencodeDb: Database | null = null
   try {
     opencodeDb = new Database(dbPath, { readonly: true })
-    // BFS children — bounded by visited set so malformed self-loops can't
-    // hang the runner.
-    const visited = new Set<string>()
-    const queue: string[] = [opts.rootSessionId]
-    const order: OpencodeSessionRow[] = []
-    while (queue.length > 0) {
-      const sid = queue.shift()!
-      if (visited.has(sid)) continue
-      visited.add(sid)
-      const children = opencodeDb
-        .query<
-          OpencodeSessionRow,
-          [string]
-        >('SELECT id, parent_id, agent FROM session WHERE parent_id = ?')
-        .all(sid)
-      for (const c of children) {
-        if (visited.has(c.id)) continue
-        order.push(c)
-        queue.push(c.id)
-      }
-    }
 
     // RFC-027 §UX merge / RFC-026 inline-mode dedup: when a sibling
     // node_run in this same task already captured rows for this
@@ -240,23 +205,21 @@ export async function captureChildSessions(
 
     let insertedRows = 0
     const skipped: string[] = []
-    for (const sess of order) {
+    const captured: string[] = []
+    // RFC-077: BFS + per-session message/part reads via the shared walk core.
+    // includeRoot:false — root events are written live by the stdout pump, so
+    // we capture only descendants. The walk yields in the same BFS order as
+    // the previous inline implementation.
+    for (const { session: sess, messages, parts } of walkOpencodeSessions(
+      opencodeDb,
+      opts.rootSessionId,
+      { includeRoot: false },
+    )) {
       if (alreadyCaptured.has(sess.id)) {
         skipped.push(sess.id)
         continue
       }
-      const messages = opencodeDb
-        .query<
-          OpencodeMessageRow,
-          [string]
-        >('SELECT id, time_created, data FROM message WHERE session_id = ? ORDER BY time_created, id')
-        .all(sess.id)
-      const parts = opencodeDb
-        .query<
-          OpencodePartRow,
-          [string]
-        >('SELECT id, message_id, time_created, data FROM part WHERE session_id = ? ORDER BY time_created, id')
-        .all(sess.id)
+      captured.push(sess.id)
       // RFC-048: when the live poller already wrote part rows for this
       // sessionId in the current nodeRun, drop them before transcoding so
       // post-run capture only inserts the tail flushed after the last tick.
@@ -290,7 +253,7 @@ export async function captureChildSessions(
     }
 
     return {
-      capturedSessionIds: order.filter((s) => !alreadyCaptured.has(s.id)).map((s) => s.id),
+      capturedSessionIds: captured,
       insertedEventRows: insertedRows,
       failed: false,
     }

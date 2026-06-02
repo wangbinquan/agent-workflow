@@ -18,6 +18,7 @@ import type { DbClient } from '../db/client'
 import { memoryDistillEvents } from '../db/schema'
 import { createLogger, type Logger } from '@/util/log'
 import { resolveOpencodeDbPath, transcodeOpencodeRowsToEvents } from './sessionCapture'
+import { walkOpencodeSessions } from './opencodeSessionWalk'
 
 export const DISTILL_CAPTURE_FAILED_KIND = 'rfc043/distill-capture-failed'
 
@@ -36,25 +37,6 @@ export interface CaptureDistillJobSessionResult {
   insertedEventRows: number
   failed: boolean
   failureReason?: string
-}
-
-interface OpencodeSessionRow {
-  id: string
-  parent_id: string | null
-  agent: string | null
-}
-
-interface OpencodeMessageRow {
-  id: string
-  time_created: number
-  data: string
-}
-
-interface OpencodePartRow {
-  id: string
-  message_id: string
-  time_created: number
-  data: string
 }
 
 /**
@@ -89,48 +71,19 @@ export async function captureDistillJobSession(
   try {
     opencodeDb = new Database(dbPath, { readonly: true })
 
-    // BFS — start FROM the root (include it) since distiller never
-    // streamed root events through our pump.
-    const visited = new Set<string>()
-    const queue: string[] = [opts.rootSessionId]
-    const order: OpencodeSessionRow[] = []
-    // Seed root row by pulling its own session record.
-    const rootRow = opencodeDb
-      .query<OpencodeSessionRow, [string]>('SELECT id, parent_id, agent FROM session WHERE id = ?')
-      .get(opts.rootSessionId)
-    if (rootRow !== null) order.push(rootRow)
-
-    while (queue.length > 0) {
-      const sid = queue.shift()!
-      if (visited.has(sid)) continue
-      visited.add(sid)
-      const children = opencodeDb
-        .query<
-          OpencodeSessionRow,
-          [string]
-        >('SELECT id, parent_id, agent FROM session WHERE parent_id = ?')
-        .all(sid)
-      for (const c of children) {
-        if (visited.has(c.id)) continue
-        order.push(c)
-        queue.push(c.id)
-      }
-    }
-
     let insertedRows = 0
-    for (const sess of order) {
-      const messages = opencodeDb
-        .query<
-          OpencodeMessageRow,
-          [string]
-        >('SELECT id, time_created, data FROM message WHERE session_id = ? ORDER BY time_created, id')
-        .all(sess.id)
-      const parts = opencodeDb
-        .query<
-          OpencodePartRow,
-          [string]
-        >('SELECT id, message_id, time_created, data FROM part WHERE session_id = ? ORDER BY time_created, id')
-        .all(sess.id)
+    const captured: string[] = []
+    // RFC-077: BFS + per-session message/part reads via the shared walk core.
+    // includeRoot:true — the distiller never streamed root events through our
+    // stdout pump, so SQLite is the only source for the root session's own
+    // events; the root row is seeded first (skipped if its session row is
+    // absent, matching the previous `rootRow !== null` guard).
+    for (const { session: sess, messages, parts } of walkOpencodeSessions(
+      opencodeDb,
+      opts.rootSessionId,
+      { includeRoot: true },
+    )) {
+      captured.push(sess.id)
       const events = transcodeOpencodeRowsToEvents({ sessionId: sess.id, messages, parts })
       if (events.length === 0) continue
       const rows = events.map((e) => ({
@@ -147,7 +100,7 @@ export async function captureDistillJobSession(
     }
 
     return {
-      capturedSessionIds: order.map((s) => s.id),
+      capturedSessionIds: captured,
       insertedEventRows: insertedRows,
       failed: false,
     }

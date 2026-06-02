@@ -31,6 +31,7 @@ import {
   resolveOpencodeDbPath,
   transcodeOpencodeRowsToEvents,
 } from './sessionCapture'
+import { walkOpencodeSessions } from './opencodeSessionWalk'
 
 export interface LivePollOptions {
   nodeRunId: string
@@ -80,25 +81,6 @@ export interface LivePollerHandle {
    */
   tickOnce(): Promise<number>
   stats(): LivePollerStats
-}
-
-interface OpencodeSessionRow {
-  id: string
-  parent_id: string | null
-  agent: string | null
-}
-
-interface OpencodeMessageRow {
-  id: string
-  time_created: number
-  data: string
-}
-
-interface OpencodePartRow {
-  id: string
-  message_id: string
-  time_created: number
-  data: string
 }
 
 const NOOP_HANDLE: LivePollerHandle = {
@@ -170,43 +152,15 @@ export function startLiveSubagentCapture(opts: LivePollOptions): LivePollerHandl
         siblingsCached = await loadSiblingsCapturedSessionIds(opts.db, opts.taskId, opts.nodeRunId)
       }
 
-      // BFS the session tree starting from the root sessionID.
-      const visited = new Set<string>()
-      const queue: string[] = [root]
-      const order: OpencodeSessionRow[] = []
-      while (queue.length > 0) {
-        const sid = queue.shift() as string
-        if (visited.has(sid)) continue
-        visited.add(sid)
-        const children = opencodeDb
-          .query<
-            OpencodeSessionRow,
-            [string]
-          >('SELECT id, parent_id, agent FROM session WHERE parent_id = ?')
-          .all(sid)
-        for (const c of children) {
-          if (visited.has(c.id)) continue
-          order.push(c)
-          queue.push(c.id)
-        }
-      }
-
       let tickInserted = 0
       const changedSessions: string[] = []
-      for (const sess of order) {
+      // RFC-077: BFS + per-session message/part reads via the shared walk
+      // core. includeRoot:false — root events are written live by the stdout
+      // pump, so the poller captures only descendants (subagent sessions).
+      for (const { session: sess, messages, parts } of walkOpencodeSessions(opencodeDb, root, {
+        includeRoot: false,
+      })) {
         if (siblingsCached.has(sess.id)) continue
-        const messages = opencodeDb
-          .query<
-            OpencodeMessageRow,
-            [string]
-          >('SELECT id, time_created, data FROM message WHERE session_id = ? ORDER BY time_created, id')
-          .all(sess.id)
-        const parts = opencodeDb
-          .query<
-            OpencodePartRow,
-            [string]
-          >('SELECT id, message_id, time_created, data FROM part WHERE session_id = ? ORDER BY time_created, id')
-          .all(sess.id)
 
         let writtenForSession = insertedPartIdsBySession.get(sess.id)
         const fresh = parts.filter(
