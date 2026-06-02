@@ -23,6 +23,7 @@ import { basename, join } from 'node:path'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import {
+  docVersions,
   nodeRunEvents,
   nodeRunOutputs,
   nodeRuns,
@@ -52,6 +53,12 @@ import { Paths } from '@/util/paths'
 import { createLogger } from '@/util/log'
 import { parseInjectedSnapshotJson } from './memoryInject'
 import { parsePortValidationFailuresJson } from './envelope'
+import {
+  compareNodeRunsForTimeline,
+  deriveReviewRoundTiming,
+  type ReviewVersionFacts,
+} from './reviewRoundStart'
+import type { DocVersionDecision } from '@agent-workflow/shared'
 
 const log = createLogger('task')
 
@@ -1379,47 +1386,86 @@ export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<Tas
     .where(eq(nodeRuns.taskId, taskId))
     .orderBy(asc(nodeRuns.startedAt), asc(nodeRuns.id))
 
-  const runs: NodeRun[] = runRows.map((r) => ({
-    id: r.id,
-    taskId: r.taskId,
-    nodeId: r.nodeId,
-    parentNodeRunId: r.parentNodeRunId,
-    iteration: r.iteration,
-    shardKey: r.shardKey,
-    retryIndex: r.retryIndex,
-    reviewIteration: r.reviewIteration,
-    status: r.status,
-    startedAt: r.startedAt,
-    finishedAt: r.finishedAt,
-    pid: r.pid,
-    exitCode: r.exitCode,
-    errorMessage: r.errorMessage,
-    promptText: r.promptText,
-    tokInput: r.tokInput,
-    tokOutput: r.tokOutput,
-    tokTotal: r.tokTotal,
-    tokCacheCreate: r.tokCacheCreate,
-    tokCacheRead: r.tokCacheRead,
-    // RFC-026: surface opencode session id to the UI so a clarify-inline
-    // chip can render + operators can copy it for local debugging.
-    opencodeSessionId: r.opencodeSessionId,
-    // RFC-046: parse the post-budget-clip memory snapshot the runner
-    // persisted at inject time. Malformed payloads degrade to null + log
-    // (the column is JSON written by the runner; nothing user-supplied,
-    // so corruption should be impossible, but defensive at the API edge
-    // beats a 5xx on the whole task detail page).
-    injectedMemories: parseInjectedSnapshotJson(r.injectedMemoriesJson),
-    // RFC-049: structured port-validation failures captured by the runner
-    // (NULL for successful runs or runs that failed for any reason other
-    // than port-content validation). Same defensive-parse contract as
-    // injectedMemories — corrupted payloads degrade to null rather than
-    // throw the whole task detail response.
-    portValidationFailures: parsePortValidationFailuresJson(r.portValidationFailuresJson),
-    // RFC-075: commit&push metadata on framework-synthesized commit rows
-    // (NULL on every regular node_run). Defensive parse: corrupt payloads
-    // degrade to null rather than 5xx the whole task-detail response.
-    commitPush: parseCommitPushJson(r.commitPushJson),
-  }))
+  // RFC-078: group the task's doc_versions by review node_run so we can derive
+  // each review row's content-anchored "this round started" timestamp instead
+  // of surfacing its pinned (slot-first-open) started_at. One extra query; no
+  // N+1. Non-review runs simply have no doc_versions → timing derives to null.
+  const dvRows = await db
+    .select({
+      reviewNodeRunId: docVersions.reviewNodeRunId,
+      createdAt: docVersions.createdAt,
+      versionIndex: docVersions.versionIndex,
+      decision: docVersions.decision,
+      decidedAt: docVersions.decidedAt,
+    })
+    .from(docVersions)
+    .where(eq(docVersions.taskId, taskId))
+  const versionsByRun = new Map<string, ReviewVersionFacts[]>()
+  for (const dv of dvRows) {
+    const list = versionsByRun.get(dv.reviewNodeRunId)
+    const fact: ReviewVersionFacts = {
+      createdAt: dv.createdAt,
+      versionIndex: dv.versionIndex,
+      decision: dv.decision as DocVersionDecision,
+      decidedAt: dv.decidedAt,
+    }
+    if (list === undefined) versionsByRun.set(dv.reviewNodeRunId, [fact])
+    else list.push(fact)
+  }
+
+  const runs: NodeRun[] = runRows.map((r) => {
+    const reviewTiming = deriveReviewRoundTiming(r, versionsByRun.get(r.id) ?? [])
+    return {
+      id: r.id,
+      taskId: r.taskId,
+      nodeId: r.nodeId,
+      parentNodeRunId: r.parentNodeRunId,
+      iteration: r.iteration,
+      shardKey: r.shardKey,
+      retryIndex: r.retryIndex,
+      reviewIteration: r.reviewIteration,
+      status: r.status,
+      startedAt: r.startedAt,
+      finishedAt: r.finishedAt,
+      pid: r.pid,
+      exitCode: r.exitCode,
+      errorMessage: r.errorMessage,
+      promptText: r.promptText,
+      tokInput: r.tokInput,
+      tokOutput: r.tokOutput,
+      tokTotal: r.tokTotal,
+      tokCacheCreate: r.tokCacheCreate,
+      tokCacheRead: r.tokCacheRead,
+      // RFC-026: surface opencode session id to the UI so a clarify-inline
+      // chip can render + operators can copy it for local debugging.
+      opencodeSessionId: r.opencodeSessionId,
+      // RFC-046: parse the post-budget-clip memory snapshot the runner
+      // persisted at inject time. Malformed payloads degrade to null + log
+      // (the column is JSON written by the runner; nothing user-supplied,
+      // so corruption should be impossible, but defensive at the API edge
+      // beats a 5xx on the whole task detail page).
+      injectedMemories: parseInjectedSnapshotJson(r.injectedMemoriesJson),
+      // RFC-049: structured port-validation failures captured by the runner
+      // (NULL for successful runs or runs that failed for any reason other
+      // than port-content validation). Same defensive-parse contract as
+      // injectedMemories — corrupted payloads degrade to null rather than
+      // throw the whole task detail response.
+      portValidationFailures: parsePortValidationFailuresJson(r.portValidationFailuresJson),
+      // RFC-075: commit&push metadata on framework-synthesized commit rows
+      // (NULL on every regular node_run). Defensive parse: corrupt payloads
+      // degrade to null rather than 5xx the whole task-detail response.
+      commitPush: parseCommitPushJson(r.commitPushJson),
+      // RFC-078: review-round display anchor (see reviewRoundStart.ts). Null for
+      // non-review rows; the UI falls back to startedAt when null.
+      reviewRoundStartedAt: reviewTiming?.roundStartedAt ?? null,
+      reviewDecidedAt: reviewTiming?.decidedAt ?? null,
+    }
+  })
+
+  // RFC-078: re-sort with review rows keyed on their round anchor (not their
+  // pinned started_at), so a review lands after the content it reviews instead
+  // of at the slot-first-open tick. Non-review rows keep asc(startedAt, id).
+  runs.sort(compareNodeRunsForTimeline)
 
   let outputs: NodeRunOutput[] = []
   if (runs.length > 0) {

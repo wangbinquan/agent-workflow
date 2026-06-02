@@ -26,6 +26,7 @@ import {
 } from '@/lib/node-prompt'
 import { clarifyRoundForRun, formatIterationLabel, nodeRunHistory } from '@/lib/node-history'
 import { classifyCanceled, displayNoderunStatusKey, supersededDecision } from '@/lib/noderun-status'
+import { reviewRunDisplay } from '@/lib/reviewRunDisplay'
 import { parseRfc026Event } from '@/lib/rfc026-events'
 import { parseRfc031Event } from '@/lib/rfc031-events'
 
@@ -379,8 +380,15 @@ function StatsTab({
   agentName: string | null
 }) {
   const { t } = useTranslation()
-  const duration =
-    run.startedAt !== null && run.finishedAt !== null
+  // RFC-078: review rows surface the current round's content-anchored start +
+  // a human-review wait, not the pinned slot-open started_at / (finished−
+  // started) compute span. See lib/reviewRunDisplay.
+  const { isReview, displayStartedAt: displayStarted, reviewWaitMs } = reviewRunDisplay(run)
+  const duration = isReview
+    ? reviewWaitMs != null
+      ? t('tasks.reviewWaitDuration', { d: Math.round(reviewWaitMs / 10) / 100 })
+      : t('tasks.reviewAwaiting')
+    : run.startedAt !== null && run.finishedAt !== null
       ? `${((run.finishedAt - run.startedAt) / 1000).toFixed(2)}s`
       : t('common.emDash')
   // RFC-011 文案：被新尝试取代的旧 attempt 不再以 raw 'canceled' 字串呈现，
@@ -394,7 +402,7 @@ function StatsTab({
       <dd>{t(displayNoderunStatusKey(run))}</dd>
       <dt>{t('nodeDrawer.statStarted')}</dt>
       <dd>
-        {run.startedAt === null ? t('common.emDash') : new Date(run.startedAt).toLocaleString()}
+        {displayStarted === null ? t('common.emDash') : new Date(displayStarted).toLocaleString()}
       </dd>
       <dt>{t('nodeDrawer.statFinished')}</dt>
       <dd>

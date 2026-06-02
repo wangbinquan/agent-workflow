@@ -569,6 +569,23 @@ export const NodeRunSchema = z.object({
    * pre-RFC-075 rows.
    */
   commitPush: CommitPushMetaSchema.nullable().optional(),
+  /**
+   * RFC-078: for REVIEW node_runs, the time the CURRENT review round's content
+   * was produced — derived from the latest pending doc_version's created_at
+   * (terminal reviews: the deciding version's created_at). This is the
+   * meaningful "review started" anchor; the row's raw startedAt is the slot
+   * first-open tick and is never re-stamped across refresh/iterate reuse, so it
+   * can predate the reviewed run by hours. NULL/absent for non-review rows and
+   * review rows with no doc_version yet (UI falls back to startedAt).
+   */
+  reviewRoundStartedAt: z.number().int().nullable().optional(),
+  /**
+   * RFC-078: for REVIEW node_runs, when the current round was decided (the
+   * deciding doc_version's decided_at); NULL while awaiting a human decision.
+   * Paired with reviewRoundStartedAt to render a meaningful human-review wait
+   * time instead of (finishedAt − pinned startedAt).
+   */
+  reviewDecidedAt: z.number().int().nullable().optional(),
 })
 export type NodeRun = z.infer<typeof NodeRunSchema>
 

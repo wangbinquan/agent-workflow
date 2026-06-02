@@ -945,6 +945,8 @@ export const enUS: Resources = {
     colIteration: 'Iteration',
     colRetry: 'Retry',
     colDuration: 'Duration',
+    reviewWaitDuration: '{{d}}s (review)',
+    reviewAwaiting: 'awaiting',
     secondsAgo: '{{n}}s ago',
     minutesAgo: '{{n}}m ago',
     hoursAgo: '{{n}}h ago',

@@ -28,6 +28,7 @@ import { TaskStatusChip } from '@/components/TaskStatusChip'
 import { WorktreeDiffPanel } from '@/components/WorktreeDiffPanel'
 import { WorktreeFilesPanel } from '@/components/WorktreeFilesPanel'
 import { classifyCanceled, displayNoderunStatusKey } from '@/lib/noderun-status'
+import { reviewRunDisplay } from '@/lib/reviewRunDisplay'
 import { availableTabs, nextTabForFailedJump, type TaskDetailTab } from '@/lib/task-detail-tabs'
 import { useTaskSync } from '@/hooks/useTaskSync'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -568,6 +569,10 @@ function NodeRunsTable({ runs, workflowSnapshot }: { runs: NodeRun[]; workflowSn
             return <CommitRunRow key={r.id} run={r} allRuns={runs} />
           }
           const name = resolveNodeNameFromSnapshot(workflowSnapshot, r.nodeId) ?? r.nodeId
+          // RFC-078: review rows show the CURRENT round's content-anchored time
+          // and a human-review wait, not the pinned slot-first-open started_at /
+          // (finished−started) compute span. See lib/reviewRunDisplay.
+          const { isReview, displayStartedAt, reviewWaitMs } = reviewRunDisplay(r)
           return (
             <tr key={r.id}>
               <td>
@@ -613,14 +618,18 @@ function NodeRunsTable({ runs, workflowSnapshot }: { runs: NodeRun[]; workflowSn
               <td className="data-table__muted">{r.iteration}</td>
               <td className="data-table__muted">{r.retryIndex}</td>
               <td className="data-table__muted">
-                {r.startedAt === null
+                {displayStartedAt === null
                   ? t('common.emDash')
-                  : new Date(r.startedAt).toLocaleTimeString()}
+                  : new Date(displayStartedAt).toLocaleTimeString()}
               </td>
               <td className="data-table__muted">
-                {r.startedAt === null || r.finishedAt === null
-                  ? t('common.emDash')
-                  : `${Math.round((r.finishedAt - r.startedAt) / 100) / 10}s`}
+                {isReview
+                  ? reviewWaitMs != null
+                    ? t('tasks.reviewWaitDuration', { d: Math.round(reviewWaitMs / 100) / 10 })
+                    : t('tasks.reviewAwaiting')
+                  : r.startedAt === null || r.finishedAt === null
+                    ? t('common.emDash')
+                    : `${Math.round((r.finishedAt - r.startedAt) / 100) / 10}s`}
               </td>
               <td className="data-table__muted">
                 {classifyCanceled(r) === 'manual'
