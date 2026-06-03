@@ -108,6 +108,16 @@ export const TaskWsMessageSchema = z.discriminatedUnion('type', [
     docVersionId: z.string(),
     comment: ReviewCommentSchema,
   }),
+  // RFC-079: a multi-document review item's accepted/not_accepted choice
+  // changed. Other tabs update the left-rail StatusChip + the approve gate
+  // (all-decided) without re-fetching the full review.
+  z.object({
+    id: z.number().int(),
+    type: z.literal('review.selection_changed'),
+    nodeRunId: z.string(),
+    docVersionId: z.string(),
+    selection: z.enum(['unselected', 'accepted', 'not_accepted']),
+  }),
   // -------------------------------------------------------------------------
   // RFC-023 clarify events. Broadcast on the same /ws/tasks/{taskId} channel
   // as review.* events. Payloads carry sourceShardKey so subscribers can

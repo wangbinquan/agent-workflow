@@ -31,7 +31,12 @@ const SUB_REASON_DESCRIPTIONS: Record<string, string> = {
   'list-item-validate-failed': 'one or more list items failed item-kind validation',
 }
 
-function splitListItems(rawContent: string): string[] {
+// RFC-079: exported so the backend review dispatch (services/review.ts) can
+// split a list<path<md>> port's wire content into per-item paths using the
+// exact same normalization the validator/runtime use — keeping the
+// multi-document review's item set byte-identical to the downstream
+// wrapper-fanout's shard set.
+export function splitListItems(rawContent: string): string[] {
   // Items are non-empty trimmed lines; preserve declaration order. Blank
   // lines between items are tolerated (dropped) — agents wrapping their
   // output in extra newlines won't trip the empty-item check.

@@ -24,7 +24,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { and, asc, desc, eq, ne } from 'drizzle-orm'
+import { and, asc, desc, eq, isNull, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
   AgentOutputKind,
@@ -40,6 +40,12 @@ import type {
   WorkflowNode,
 } from '@agent-workflow/shared'
 import { isMultiMarkdownUpstream, SIBLING_OUTPUTS_INSTRUCTION } from '@agent-workflow/shared'
+import {
+  acceptedSubsetPaths,
+  allDocumentsDecided,
+  isMultiDocReviewInput,
+  splitListItems,
+} from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import {
   agents as agentsTable,
@@ -264,8 +270,13 @@ export function docVersionRelativePath(
   reviewNodeId: string,
   portName: string,
   versionIndex: number,
+  // RFC-079: in multi-document mode each list item gets its own version
+  // sequence under an `item_{i}` segment, so item bodies never collide.
+  // Undefined (single-document) keeps the legacy path byte-for-byte.
+  itemIndex?: number,
 ): string {
-  return `runs/${taskId}/review/${reviewNodeId}/${portName}/v${versionIndex}.md`
+  const itemSeg = itemIndex !== undefined ? `/item_${itemIndex}` : ''
+  return `runs/${taskId}/review/${reviewNodeId}/${portName}${itemSeg}/v${versionIndex}.md`
 }
 
 // ---------------------------------------------------------------------------
@@ -404,21 +415,33 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
   }
 
   const upstreamKind = await loadUpstreamPortKind(db, definition, sourceNodeId, sourcePortName)
-  let resolvedBody: string
+  // RFC-079: a list<markdownish> upstream puts this review in MULTI-DOCUMENT
+  // mode — each list item is archived as its own doc_version below.
+  const isMultiDoc = isMultiDocReviewInput(upstreamKind ?? '')
+  let resolvedBody = ''
   let resolvedSourcePath: string | undefined
-  try {
-    const resolved = resolvePortContentDetailed({
-      rawContent: portRow.content,
-      kind: upstreamKind,
-      worktreePath: task.worktreePath,
-    })
-    resolvedBody = resolved.body
-    resolvedSourcePath = resolved.sourcePath
-  } catch (err) {
-    return {
-      kind: 'failed',
-      summary: `review node ${node.id}: ${(err as Error).message}`,
-      message: 'review-source-resolve-failed',
+  let itemPaths: string[] = []
+  if (isMultiDoc) {
+    // The port content is newline-separated worktree-relative .md paths. Split
+    // with the SAME shared splitter the validator / downstream wrapper-fanout
+    // use so the reviewed item set matches the shard set byte-for-byte. Each
+    // item's body is read from the worktree at archive time (below).
+    itemPaths = splitListItems(portRow.content)
+  } else {
+    try {
+      const resolved = resolvePortContentDetailed({
+        rawContent: portRow.content,
+        kind: upstreamKind,
+        worktreePath: task.worktreePath,
+      })
+      resolvedBody = resolved.body
+      resolvedSourcePath = resolved.sourcePath
+    } catch (err) {
+      return {
+        kind: 'failed',
+        summary: `review node ${node.id}: ${(err as Error).message}`,
+        message: 'review-source-resolve-failed',
+      }
     }
   }
 
@@ -557,6 +580,61 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
         eq(docVersions.decision, 'pending'),
       ),
     )
+  if (isMultiDoc) {
+    // Multi-document round: one doc_version per list item, in item order.
+    let docs: DocVersion[]
+    if (pendingDocVersions.length > 0) {
+      // Resume after restart / awaiting-refresh re-entry — re-use the already
+      // archived item set rather than re-creating it.
+      docs = pendingDocVersions
+        .map(rowToDocVersion)
+        .sort((a, b) => (a.itemIndex ?? 0) - (b.itemIndex ?? 0))
+    } else {
+      docs = []
+      for (let i = 0; i < itemPaths.length; i++) {
+        const itemPath = itemPaths[i]!
+        let body: string
+        try {
+          body = readFileSync(join(task.worktreePath, itemPath), 'utf8')
+        } catch {
+          // A missing / unreadable file must not wedge the whole round — the
+          // reviewer can still reject it. Surface a visible placeholder body.
+          body = `> ⚠️ RFC-079: file not found in worktree: \`${itemPath}\``
+        }
+        const dv = await createDocVersion({
+          db,
+          appHome,
+          taskId,
+          reviewNodeId: node.id,
+          reviewNodeRunId,
+          sourceNodeId,
+          sourcePortName,
+          reviewIteration,
+          body,
+          sourceFilePath: itemPath,
+          itemIndex: i,
+          itemPath,
+          selection: 'unselected',
+        })
+        docs.push(dv)
+      }
+    }
+    // One broadcast is enough — the WS event just triggers an inbox/detail
+    // refetch that pulls the whole document set. Empty list → park an empty
+    // round (approve emits an empty `accepted`); skip the broadcast (no dv).
+    if (docs.length > 0) {
+      broadcastReviewCreated(taskId, reviewNodeRunId, node.id, docs[0]!)
+    }
+    return {
+      kind: 'awaiting_review',
+      summary: `review node ${node.id} awaiting decision (${docs.length} document${
+        docs.length === 1 ? '' : 's'
+      })`,
+      message: 'awaiting_review',
+    }
+  }
+
+  // Single-document (unchanged).
   let docVersion: DocVersion
   if (pendingDocVersions.length > 0) {
     docVersion = rowToDocVersion(pendingDocVersions[0]!)
@@ -608,9 +686,25 @@ export interface CreateDocVersionArgs {
    * which file the comments target. Undefined when the source was inline.
    */
   sourceFilePath?: string
+  /**
+   * RFC-079 multi-document mode: 0-based item index within the round. When
+   * set, the version sequence is keyed per-item and the row carries
+   * item_index / item_path / selection. Undefined ⇒ single-document row
+   * (all three columns NULL — legacy behavior unchanged).
+   */
+  itemIndex?: number
+  /** RFC-079: worktree-relative path of this list member. */
+  itemPath?: string
+  /** RFC-079: initial per-document selection (defaults to 'unselected'). */
+  selection?: 'unselected' | 'accepted' | 'not_accepted'
 }
 
 async function createDocVersion(args: CreateDocVersionArgs): Promise<DocVersion> {
+  // RFC-079 (risk #1): version sequence is per (reviewNodeRun, sourcePort) for
+  // single-doc, but per (reviewNodeRun, sourcePort, item_index) in multi-doc —
+  // otherwise N items sharing a sourcePort would pollute each other's
+  // versionIndex. Single-doc rows match on item_index IS NULL, preserving the
+  // exact legacy sequence.
   const existing = await args.db
     .select({ versionIndex: docVersions.versionIndex })
     .from(docVersions)
@@ -618,6 +712,9 @@ async function createDocVersion(args: CreateDocVersionArgs): Promise<DocVersion>
       and(
         eq(docVersions.reviewNodeRunId, args.reviewNodeRunId),
         eq(docVersions.sourcePortName, args.sourcePortName),
+        args.itemIndex !== undefined
+          ? eq(docVersions.itemIndex, args.itemIndex)
+          : isNull(docVersions.itemIndex),
       ),
     )
     .orderBy(desc(docVersions.versionIndex))
@@ -629,6 +726,7 @@ async function createDocVersion(args: CreateDocVersionArgs): Promise<DocVersion>
     args.reviewNodeId,
     args.sourcePortName,
     nextVersion,
+    args.itemIndex,
   )
   const absPath = join(args.appHome, bodyPath)
   mkdirSync(dirname(absPath), { recursive: true })
@@ -637,6 +735,12 @@ async function createDocVersion(args: CreateDocVersionArgs): Promise<DocVersion>
   const id = ulid()
   const now = Date.now()
   const sourceFilePath = args.sourceFilePath ?? null
+  // RFC-079: multi-document fields. Single-document rows (itemIndex undefined)
+  // store NULL for all three — the system-wide single-doc discriminator.
+  const itemIndex = args.itemIndex ?? null
+  const itemPath = args.itemPath ?? null
+  const selection: 'unselected' | 'accepted' | 'not_accepted' | null =
+    args.itemIndex !== undefined ? (args.selection ?? 'unselected') : null
   await args.db.insert(docVersions).values({
     id,
     taskId: args.taskId,
@@ -653,6 +757,9 @@ async function createDocVersion(args: CreateDocVersionArgs): Promise<DocVersion>
     promptSnapshot: args.promptSnapshot ?? null,
     agentSnapshot: args.agentSnapshot ?? null,
     sourceFilePath,
+    itemIndex,
+    selection,
+    itemPath,
     decidedAt: null,
     decidedBy: null,
     createdAt: now,
@@ -674,6 +781,9 @@ async function createDocVersion(args: CreateDocVersionArgs): Promise<DocVersion>
     promptSnapshot: args.promptSnapshot ?? null,
     agentSnapshot: args.agentSnapshot ?? null,
     sourceFilePath,
+    itemIndex,
+    selection,
+    itemPath,
     decidedAt: null,
     decidedBy: null,
     createdAt: now,
@@ -1149,6 +1259,77 @@ export interface SubmitReviewDecisionResult {
   resumeRequired: boolean
 }
 
+/**
+ * RFC-079: multi-document approve. Writes the curated subset (accepted items,
+ * in item_index order) to the `accepted` output port as a newline-joined
+ * list<path<md>>, plus an `approval_meta` blob, then transitions the review
+ * node_run to done. The per-document doc_versions are already archived as
+ * decision='approved' by the caller. The single-document approve path is
+ * untouched — this is only reached when the round has item_index rows.
+ */
+async function approveMultiDocReview(args: {
+  db: DbClient
+  nodeRunId: string
+  run: typeof nodeRuns.$inferSelect
+  dvs: DocVersion[]
+  author?: string
+}): Promise<SubmitReviewDecisionResult> {
+  const { db, nodeRunId, run, dvs } = args
+  const decidedAt = Date.now()
+  const decidedBy = args.author ?? 'local'
+  const acceptedPaths = acceptedSubsetPaths(dvs)
+  const acceptedContent = acceptedPaths.join('\n')
+  const acceptedItemIndices = dvs
+    .filter((d) => d.selection === 'accepted')
+    .map((d) => d.itemIndex)
+    .filter((i): i is number => i !== null && i !== undefined)
+    .sort((a, b) => a - b)
+  const rep = dvs[0]!
+  const meta = JSON.stringify({
+    decision: 'approved',
+    decidedAt,
+    decidedBy,
+    reviewIteration: run.reviewIteration,
+    sourceNodeId: rep.sourceNodeId,
+    sourcePortName: rep.sourcePortName,
+    itemCount: dvs.length,
+    acceptedCount: acceptedPaths.length,
+    acceptedItemIndices,
+  })
+  // The curated subset is a list<path<md>> (paths into the live worktree); a
+  // downstream wrapper-fanout shards it by path. Empty subset → empty content,
+  // and the fanout sees an empty list and completes immediately.
+  const ACCEPTED_KIND = 'list<path<md>>'
+  await db
+    .insert(nodeRunOutputs)
+    .values({ nodeRunId, portName: 'accepted', content: acceptedContent, kind: ACCEPTED_KIND })
+    .onConflictDoUpdate({
+      target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+      set: { content: acceptedContent, kind: ACCEPTED_KIND },
+    })
+  await db
+    .insert(nodeRunOutputs)
+    .values({ nodeRunId, portName: 'approval_meta', content: meta })
+    .onConflictDoUpdate({
+      target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+      set: { content: meta },
+    })
+  await transitionNodeRunStatus({
+    db,
+    nodeRunId,
+    event: { kind: 'approve-review' },
+    extra: { finishedAt: decidedAt },
+  })
+  await enqueueDistillJob(db, {
+    sourceKind: 'review',
+    sourceEventId: rep.id,
+    taskId: rep.taskId,
+  }).catch(() => {
+    /* swallow — distill is async, must not affect the decision return path */
+  })
+  return { taskId: rep.taskId, reviewIteration: run.reviewIteration, resumeRequired: true }
+}
+
 export async function submitReviewDecision(
   args: SubmitReviewDecisionArgs,
 ): Promise<SubmitReviewDecisionResult> {
@@ -1175,46 +1356,70 @@ export async function submitReviewDecision(
     )
   }
 
+  // RFC-079: a multi-document round has N pending doc_versions (one per list
+  // item, item_index set); single-document has exactly one (item_index NULL).
+  // Single-document behavior is preserved exactly: with one pending row the
+  // loop + branches below collapse to the legacy path. (`.limit(1)` is dropped
+  // in favor of ordering by item_index so every member of a round is decided.)
   const dvRows = await args.db
     .select()
     .from(docVersions)
     .where(
       and(eq(docVersions.reviewNodeRunId, args.nodeRunId), eq(docVersions.decision, 'pending')),
     )
-    .limit(1)
+    .orderBy(asc(docVersions.itemIndex))
   if (dvRows.length === 0) {
     throw new ConflictError(
       'review-doc-version-missing',
       `no pending doc_version for review ${args.nodeRunId}`,
     )
   }
-  const dv = rowToDocVersion(dvRows[0]!)
+  const dvs = dvRows.map(rowToDocVersion)
+  // Representative row — taskId / sourceNodeId / reviewNodeId / sourcePortName
+  // are identical across every item of a round (one shared upstream port).
+  const dv = dvs[0]!
+  const isMultiDoc = dvs.some((d) => d.itemIndex !== null && d.itemIndex !== undefined)
 
-  // 1. Archive comments into the doc_version snapshot + drop the row-side.
-  const commentRows = await args.db
-    .select()
-    .from(reviewComments)
-    .where(eq(reviewComments.docVersionId, dv.id))
-    .orderBy(asc(reviewComments.anchorParagraphIdx), asc(reviewComments.anchorOffsetStart))
-  const commentsArr = commentRows.map(rowToReviewComment)
-  await args.db
-    .update(docVersions)
-    .set({
-      decision: args.decision,
-      decisionReason:
-        args.decision === 'rejected'
-          ? (args.rejectReason ?? null)
-          : args.decision === 'iterated'
-            ? renderCommentsForPrompt(commentsArr, {
-                ...(dv.sourceFilePath ? { sourceFilePath: dv.sourceFilePath } : {}),
-              })
-            : null,
-      decidedAt: Date.now(),
-      decidedBy: args.author ?? 'local',
-      commentsJson: JSON.stringify(commentsArr),
-    })
-    .where(eq(docVersions.id, dv.id))
-  await args.db.delete(reviewComments).where(eq(reviewComments.docVersionId, dv.id))
+  // RFC-079: a multi-document approve requires every document decided
+  // (accepted / not_accepted) — reject an undecided round before any mutation.
+  if (isMultiDoc && args.decision === 'approved' && !allDocumentsDecided(dvs)) {
+    throw new ConflictError(
+      'review-selection-incomplete',
+      `review ${args.nodeRunId} has undecided documents; decide every document before approving`,
+    )
+  }
+
+  // 1. Archive each pending doc_version's comments into its snapshot + drop the
+  //    row-side comments. Single-document = exactly one iteration. For iterate,
+  //    each document's own comments render into its decisionReason (carried,
+  //    with a File header, into the aggregated re-run prompt by
+  //    buildReviewPromptContext).
+  for (const d of dvs) {
+    const commentRows = await args.db
+      .select()
+      .from(reviewComments)
+      .where(eq(reviewComments.docVersionId, d.id))
+      .orderBy(asc(reviewComments.anchorParagraphIdx), asc(reviewComments.anchorOffsetStart))
+    const commentsArr = commentRows.map(rowToReviewComment)
+    await args.db
+      .update(docVersions)
+      .set({
+        decision: args.decision,
+        decisionReason:
+          args.decision === 'rejected'
+            ? (args.rejectReason ?? null)
+            : args.decision === 'iterated'
+              ? renderCommentsForPrompt(commentsArr, {
+                  ...(d.sourceFilePath ? { sourceFilePath: d.sourceFilePath } : {}),
+                })
+              : null,
+        decidedAt: Date.now(),
+        decidedBy: args.author ?? 'local',
+        commentsJson: JSON.stringify(commentsArr),
+      })
+      .where(eq(docVersions.id, d.id))
+    await args.db.delete(reviewComments).where(eq(reviewComments.docVersionId, d.id))
+  }
 
   // 2. Broadcast decision.
   emitReviewDecisionEvent(
@@ -1227,6 +1432,17 @@ export async function submitReviewDecision(
 
   // 3. Per-decision state mutation.
   if (args.decision === 'approved') {
+    if (isMultiDoc) {
+      // RFC-079: multi-document approve emits the curated subset (accepted
+      // items, in item order) on the `accepted` port instead of approved_doc.
+      return approveMultiDocReview({
+        db: args.db,
+        nodeRunId: args.nodeRunId,
+        run,
+        dvs,
+        author: args.author,
+      })
+    }
     // Publish the two declared output ports (`approved_doc`, `approval_meta`)
     // into node_run_outputs so downstream output bindings + the task-detail
     // TaskOutputPanel can resolve them. Without these rows downstream
@@ -1492,6 +1708,80 @@ export async function submitReviewDecision(
   return { taskId: dv.taskId, reviewIteration: nextIter, resumeRequired: true }
 }
 
+/**
+ * RFC-079: set one multi-document review item's curation choice
+ * (accepted / not_accepted). Does NOT advance the workflow or bump
+ * reviewIteration — only the round-level decision (approve/reject/iterate)
+ * does, so this PATCH never trips the optimistic-lock. Validates the review is
+ * still awaiting and the doc_version is a pending multi-document member.
+ */
+export async function setDocumentSelection(args: {
+  db: DbClient
+  nodeRunId: string
+  docVersionId: string
+  selection: 'accepted' | 'not_accepted'
+}): Promise<{ taskId: string; docVersionId: string; selection: 'accepted' | 'not_accepted' }> {
+  const runRows = await args.db
+    .select()
+    .from(nodeRuns)
+    .where(eq(nodeRuns.id, args.nodeRunId))
+    .limit(1)
+  if (runRows.length === 0) {
+    throw new NotFoundError('review-not-found', `review run ${args.nodeRunId} not found`)
+  }
+  if (runRows[0]!.status !== 'awaiting_review') {
+    throw new ConflictError(
+      'review-not-awaiting',
+      `review ${args.nodeRunId} is not awaiting_review (status=${runRows[0]!.status})`,
+    )
+  }
+  const dvRows = await args.db
+    .select()
+    .from(docVersions)
+    .where(eq(docVersions.id, args.docVersionId))
+    .limit(1)
+  const dvRow = dvRows[0]
+  if (dvRow === undefined || dvRow.reviewNodeRunId !== args.nodeRunId) {
+    throw new NotFoundError(
+      'doc-version-not-found',
+      `doc_version ${args.docVersionId} not found on review ${args.nodeRunId}`,
+    )
+  }
+  if (dvRow.itemIndex === null) {
+    throw new ConflictError(
+      'review-not-multi-doc',
+      `doc_version ${args.docVersionId} is not a multi-document item`,
+    )
+  }
+  if (dvRow.decision !== 'pending') {
+    throw new ConflictError(
+      'review-doc-decided',
+      `doc_version ${args.docVersionId} already decided (${dvRow.decision})`,
+    )
+  }
+  await args.db
+    .update(docVersions)
+    .set({ selection: args.selection })
+    .where(eq(docVersions.id, args.docVersionId))
+  emitReviewSelectionChanged(dvRow.taskId, args.nodeRunId, args.docVersionId, args.selection)
+  return { taskId: dvRow.taskId, docVersionId: args.docVersionId, selection: args.selection }
+}
+
+function emitReviewSelectionChanged(
+  taskId: string,
+  nodeRunId: string,
+  docVersionId: string,
+  selection: 'unselected' | 'accepted' | 'not_accepted',
+): void {
+  taskBroadcaster.broadcast(TASK_CHANNEL(taskId), {
+    id: -1,
+    type: 'review.selection_changed',
+    nodeRunId,
+    docVersionId,
+    selection,
+  })
+}
+
 interface CascadeSiblingArgs {
   db: DbClient
   definition: WorkflowDefinition
@@ -1705,6 +1995,37 @@ export async function buildReviewPromptContext(
     .limit(1)
   const dv = dvRows[0]
   if (dv === undefined) return undefined
+  // RFC-079: multi-document iterate. The latest decided row is just ONE item
+  // of the round; aggregate EVERY iterated item's feedback for this upstream
+  // at the same reviewIteration so the re-run prompt sees all per-document
+  // comments — not only the most-recently-touched item. Each item's
+  // decisionReason already carries a `**File**: <path>` header (rendered with
+  // its itemPath), which is the per-document distinction. Single-document rows
+  // (item_index NULL) skip this and keep the legacy single-row path below.
+  if (dv.itemIndex !== null && dv.decision === 'iterated') {
+    const roundRows = await db
+      .select()
+      .from(docVersions)
+      .where(
+        and(
+          eq(docVersions.taskId, taskId),
+          eq(docVersions.sourceNodeId, upstreamNodeId),
+          eq(docVersions.decision, 'iterated'),
+          eq(docVersions.reviewIteration, dv.reviewIteration),
+          ne(docVersions.decidedBy, 'system'),
+        ),
+      )
+      .orderBy(asc(docVersions.itemIndex))
+    const sections = roundRows
+      .map((r) => (r.decisionReason ?? '').trim())
+      .filter((s) => s.length > 0)
+    // sibling-outputs (RFC-014 multi-PORT) is orthogonal to multi-DOC (one
+    // list port, many items) and does not apply to a multi-document round.
+    return {
+      comments: sections.join('\n\n'),
+      iterateTargetPort: dv.sourcePortName,
+    }
+  }
   if (dv.decision === 'rejected') {
     return { rejection: dv.decisionReason ?? '' }
   }
@@ -1955,6 +2276,10 @@ function rowToDocVersion(row: typeof docVersions.$inferSelect): DocVersion {
     promptSnapshot: row.promptSnapshot,
     agentSnapshot: row.agentSnapshot,
     sourceFilePath: row.sourceFilePath,
+    // RFC-079: multi-document fields (NULL on single-document rows).
+    itemIndex: row.itemIndex,
+    selection: row.selection,
+    itemPath: row.itemPath,
     createdAt: row.createdAt,
     decidedAt: row.decidedAt,
     decidedBy: row.decidedBy,
@@ -2018,6 +2343,12 @@ async function loadUpstreamPortKind(
     if (kinds !== undefined && kinds !== null && typeof kinds === 'object') {
       const v = (kinds as Record<string, unknown>)[portName]
       if (v === 'markdown' || v === 'markdown_file' || v === 'string') return v
+      // RFC-079: a list<markdownish> kind (list<path<md>> / list<markdown>)
+      // drives multi-document review — return it so dispatchReviewNode enters
+      // multi-doc mode. Every OTHER kind keeps returning undefined (the
+      // single-document forgiveness path, e.g. bare path<md>), so single-doc
+      // behavior is unchanged.
+      if (typeof v === 'string' && isMultiDocReviewInput(v)) return v
     }
   } catch {
     /* fall through */

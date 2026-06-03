@@ -8,7 +8,8 @@
 //   - aggregator-agent-outside-fanout (PR-C refinement of PR-B blanket rule)
 //   - multiple-aggregators-in-fanout
 //   - boundary-input-* / boundary-output-* edge checks
-//   - review-input-list-kind-not-supported
+//   - RFC-079 review-input list kind: list<markdownish> allowed (multi-doc),
+//     list<non-markdown> → review-input-list-item-not-markdown
 //   - review accepts path<md> kind (RFC-060 path<T> grammar)
 
 import type { Agent, Skill, WorkflowDefinition } from '@agent-workflow/shared'
@@ -338,8 +339,13 @@ describe('boundary edges', () => {
   })
 })
 
-describe('review-input-list-kind-not-supported', () => {
-  test('review input pointing at list<T> port → flagged', () => {
+// RFC-079: a review pointing at a list<markdownish> port (list<path<md>> /
+// list<markdown>) is now ALLOWED — it enters MULTI-DOCUMENT mode (one
+// reviewable doc_version per item). Only a list whose item is NOT a markdown
+// document is rejected, with the new `review-input-list-item-not-markdown`
+// code. The old hard `review-input-list-kind-not-supported` reject is gone.
+describe('RFC-079 review-input list kind (multi-document)', () => {
+  test('review input on list<path<md>> → allowed (multi-document mode)', () => {
     const def = makeDef({
       nodes: [
         {
@@ -355,14 +361,56 @@ describe('review-input-list-kind-not-supported', () => {
         },
       ],
     })
+    const codes = codesOf(def, [
+      agent('reporter', {
+        outputs: ['docs'],
+        outputKinds: { docs: 'list<path<md>>' },
+      }),
+    ])
+    expect(codes).not.toContain('review-input-list-item-not-markdown')
+    expect(codes).not.toContain('review-input-source-not-markdown')
+  })
+
+  test('review input on list<markdown> → allowed (multi-document mode)', () => {
+    const def = makeDef({
+      nodes: [
+        { id: 'reporter', kind: 'agent-single', agentName: 'reporter', outputs: ['docs'] },
+        { id: 'rev', kind: 'review', inputSource: { nodeId: 'reporter', portName: 'docs' } },
+      ],
+    })
+    const codes = codesOf(def, [
+      agent('reporter', { outputs: ['docs'], outputKinds: { docs: 'list<markdown>' } }),
+    ])
+    expect(codes).not.toContain('review-input-list-item-not-markdown')
+    expect(codes).not.toContain('review-input-source-not-markdown')
+  })
+
+  test('review input on list<string> → flagged list-item-not-markdown', () => {
+    const def = makeDef({
+      nodes: [
+        { id: 'reporter', kind: 'agent-single', agentName: 'reporter', outputs: ['items'] },
+        { id: 'rev', kind: 'review', inputSource: { nodeId: 'reporter', portName: 'items' } },
+      ],
+    })
     expect(
       codesOf(def, [
-        agent('reporter', {
-          outputs: ['docs'],
-          outputKinds: { docs: 'list<path<md>>' },
-        }),
+        agent('reporter', { outputs: ['items'], outputKinds: { items: 'list<string>' } }),
       ]),
-    ).toContain('review-input-list-kind-not-supported')
+    ).toContain('review-input-list-item-not-markdown')
+  })
+
+  test('review input on list<path<txt>> → flagged list-item-not-markdown', () => {
+    const def = makeDef({
+      nodes: [
+        { id: 'reporter', kind: 'agent-single', agentName: 'reporter', outputs: ['files'] },
+        { id: 'rev', kind: 'review', inputSource: { nodeId: 'reporter', portName: 'files' } },
+      ],
+    })
+    expect(
+      codesOf(def, [
+        agent('reporter', { outputs: ['files'], outputKinds: { files: 'list<path<txt>>' } }),
+      ]),
+    ).toContain('review-input-list-item-not-markdown')
   })
 
   test('review input on path<md> → accepted', () => {
@@ -385,7 +433,7 @@ describe('review-input-list-kind-not-supported', () => {
       agent('reporter', { outputs: ['report'], outputKinds: { report: 'path<md>' } }),
     ])
     expect(codes).not.toContain('review-input-source-not-markdown')
-    expect(codes).not.toContain('review-input-list-kind-not-supported')
+    expect(codes).not.toContain('review-input-list-item-not-markdown')
   })
 
   test("review input on legacy 'markdown_file' literal still accepted", () => {
@@ -408,7 +456,7 @@ describe('review-input-list-kind-not-supported', () => {
       agent('reporter', { outputs: ['report'], outputKinds: { report: 'markdown_file' } }),
     ])
     expect(codes).not.toContain('review-input-source-not-markdown')
-    expect(codes).not.toContain('review-input-list-kind-not-supported')
+    expect(codes).not.toContain('review-input-list-item-not-markdown')
   })
 
   test('review input on string kind → still flagged as not-markdown', () => {

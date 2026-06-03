@@ -13,6 +13,7 @@
 
 import {
   ListReviewsQuerySchema,
+  SetDocumentSelectionSchema,
   SubmitReviewCommentSchema,
   SubmitReviewDecisionSchema,
   UpdateReviewCommentBodySchema,
@@ -33,6 +34,7 @@ import {
   getReviewDetail,
   listDocVersionsForReview,
   listReviewSummaries,
+  setDocumentSelection,
   submitReviewDecision,
   updateReviewCommentText,
 } from '@/services/review'
@@ -179,6 +181,30 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
         /* errors land in task.errorMessage via failTask */
       })
     }
+    return c.json({ ok: true, ...result })
+  })
+
+  // RFC-079: set one multi-document review item's accepted/not_accepted choice.
+  // Does not advance the workflow (no resumeTask) — only the round-level
+  // decision does.
+  app.patch('/api/reviews/:nodeRunId/documents/:docVersionId/selection', async (c) => {
+    const nodeRunId = c.req.param('nodeRunId')
+    const docVersionId = c.req.param('docVersionId')
+    const raw: unknown = await c.req.json().catch(() => null)
+    const parsed = SetDocumentSelectionSchema.safeParse(raw)
+    if (!parsed.success) {
+      throw new ValidationError('review-selection-invalid', 'invalid selection body', {
+        issues: parsed.error.issues,
+      })
+    }
+    const actor = (await import('@/auth/actor')).actorOf(c)
+    await ensureReviewerAuth(deps, nodeRunId, actor)
+    const result = await setDocumentSelection({
+      db: deps.db,
+      nodeRunId,
+      docVersionId,
+      selection: parsed.data.selection,
+    })
     return c.json({ ok: true, ...result })
   })
 

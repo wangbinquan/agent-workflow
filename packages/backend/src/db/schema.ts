@@ -629,6 +629,23 @@ export const docVersions = sqliteTable(
     // re-run prompt cites which file the comments target. NULL when the
     // source was inline markdown / a non-file string.
     sourceFilePath: text('source_file_path'),
+    // RFC-079: 0-based item index within a MULTI-document review round (one
+    // doc_version per list<path<md>> member). NULL on every single-document
+    // row — that NULL is the system-wide "single-doc mode" discriminator, so
+    // all existing queries / dispatch / decision paths stay byte-for-byte
+    // unchanged. The accepted-subset output (approve) sorts members by this.
+    itemIndex: integer('item_index'),
+    // RFC-079: per-document curation choice in multi-doc mode. Orthogonal to
+    // `decision` (which stays the round-level approve/reject/iterate state):
+    // at round approve, 'accepted' members flow downstream as the subset and
+    // 'not_accepted' members are dropped, while `decision` flips to 'approved'
+    // on every member row. NULL on single-document rows.
+    selection: text('selection', { enum: ['unselected', 'accepted', 'not_accepted'] }),
+    // RFC-079: worktree-relative path of a list<path<md>> member (stable id =
+    // the line read from the upstream list port). Carried verbatim into the
+    // accepted-subset output so downstream nodes read the live file. NULL on
+    // single-document / inline rows.
+    itemPath: text('item_path'),
     createdAt: integer('created_at')
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
@@ -638,6 +655,8 @@ export const docVersions = sqliteTable(
   (t) => ({
     reviewIdx: index('idx_doc_versions_review_run').on(t.reviewNodeRunId, t.versionIndex),
     taskIdx: index('idx_doc_versions_task').on(t.taskId),
+    // RFC-079: lookup all members of a multi-doc round in item order.
+    reviewItemIdx: index('idx_doc_versions_review_item').on(t.reviewNodeRunId, t.itemIndex),
   }),
 )
 

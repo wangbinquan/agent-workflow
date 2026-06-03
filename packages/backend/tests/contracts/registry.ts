@@ -274,6 +274,8 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/reviews/:nodeRunId/comments' },
   { method: 'PATCH', path: '/api/reviews/:nodeRunId/comments/:commentId' },
   { method: 'DELETE', path: '/api/reviews/:nodeRunId/comments/:commentId' },
+  // RFC-079: multi-document review per-item selection.
+  { method: 'PATCH', path: '/api/reviews/:nodeRunId/documents/:docVersionId/selection' },
 
   // ---- clarify (RFC-023) ----
   { method: 'GET', path: '/api/clarify' },

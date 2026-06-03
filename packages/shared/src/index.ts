@@ -45,3 +45,8 @@ export * from './shardingRegistry'
 export * from './signalPromptGuard'
 export * from './wrapperFanout'
 export * from './worktree-files'
+// RFC-079 — review multi-document mode pure helpers.
+export * from './reviewMultiDoc'
+// RFC-079 — surface the list wire-form splitter so backend review dispatch
+// shares the exact item normalization the validator/runtime use.
+export { splitListItems } from './outputKinds/list'

@@ -30,6 +30,7 @@ import type {
 import {
   CLARIFY_SOURCE_PORT_NAME,
   countFanoutAggregators,
+  isMultiDocReviewInput,
   tryParseKind,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
@@ -288,13 +289,27 @@ export function validateWorkflowDef(
         break
       }
       case 'review': {
-        // RFC-005: review nodes publish two ports downstream after approve —
-        // the source doc passes through, plus a metadata blob.
-        outs.add('approved_doc')
+        // RFC-005 / RFC-079: review nodes publish two ports downstream after
+        // approve. Single-document review → `approved_doc` (the source doc
+        // passes through). Multi-document review (inputSource is a
+        // list<markdownish> port) → `accepted` (the curated subset, kind
+        // list<path<md>>). Both carry `approval_meta`. inputSource validity is
+        // checked separately below; here we only choose the port name so
+        // downstream edge validation accepts the right outlet.
+        let reviewMultiDoc = false
+        const inputSource = (node as Record<string, unknown>).inputSource
+        if (inputSource !== null && typeof inputSource === 'object') {
+          const rec = inputSource as Record<string, unknown>
+          const src = typeof rec.nodeId === 'string' ? nodeById.get(rec.nodeId) : undefined
+          if (src?.kind === 'agent-single' && typeof rec.portName === 'string') {
+            const k = agentByName.get(readString(src, 'agentName') ?? '')?.outputKinds?.[
+              rec.portName
+            ]
+            reviewMultiDoc = k !== undefined && isMultiDocReviewInput(k)
+          }
+        }
+        outs.add(reviewMultiDoc ? 'accepted' : 'approved_doc')
         outs.add('approval_meta')
-        // The input is the (sourceNode, sourcePort) declared on the review
-        // node itself; review nodes don't accept inbound edges via the regular
-        // edge graph in v1 (validated below).
         break
       }
       case 'clarify': {
@@ -763,11 +778,18 @@ export function validateWorkflowDef(
           (parsed?.kind === 'base' && parsed.name === 'markdown') ||
           (parsed?.kind === 'path' && (parsed.ext === 'md' || parsed.ext === 'markdown'))
         if (parsed?.kind === 'list') {
-          issues.push({
-            code: 'review-input-list-kind-not-supported',
-            message: `review node '${node.id}' inputSource '${srcNodeId}.${srcPort}' has list kind '${kind}'; review only accepts single-value ports. Move review inside a wrapper-fanout for per-item review (RFC-060 §10.2).`,
-            pointer: node.id,
-          })
+          // RFC-079: a list<markdownish> input (list<path<md>> / list<markdown>)
+          // puts the review in MULTI-DOCUMENT mode — each item is archived as
+          // its own reviewable doc_version. That is now allowed (it used to be
+          // a hard `review-input-list-kind-not-supported` reject). A list whose
+          // item is NOT a markdown document still can't be reviewed.
+          if (!isMultiDocReviewInput(kind ?? '')) {
+            issues.push({
+              code: 'review-input-list-item-not-markdown',
+              message: `review node '${node.id}' inputSource '${srcNodeId}.${srcPort}' has list kind '${kind}' whose item is not a markdown document; multi-document review requires list<path<md>> | list<markdown>.`,
+              pointer: node.id,
+            })
+          }
         } else if (!isMarkdownish) {
           issues.push({
             code: 'review-input-source-not-markdown',

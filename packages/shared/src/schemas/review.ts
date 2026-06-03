@@ -169,6 +169,21 @@ export const DocVersionSchema = z.object({
    * comments target.
    */
   sourceFilePath: z.string().nullable().optional(),
+  /**
+   * RFC-079: 0-based item index within a multi-document review round. NULL /
+   * absent on single-document rows (the discriminator for single-doc mode).
+   */
+  itemIndex: z.number().int().nonnegative().nullable().optional(),
+  /**
+   * RFC-079: per-document curation choice in multi-doc mode. NULL / absent on
+   * single-document rows. Orthogonal to `decision` (round-level state).
+   */
+  selection: z.enum(['unselected', 'accepted', 'not_accepted']).nullable().optional(),
+  /**
+   * RFC-079: worktree-relative path of a list<path<md>> member. NULL / absent
+   * on single-document / inline rows.
+   */
+  itemPath: z.string().nullable().optional(),
   createdAt: z.number().int(),
   decidedAt: z.number().int().nullable(),
   decidedBy: z.string().nullable(),
@@ -282,10 +297,45 @@ export const ReviewSummarySchema = z.object({
   decision: DocVersionDecisionSchema,
   awaitingReview: z.boolean(),
   shardKey: z.string().nullable(),
+  /**
+   * RFC-079: true when this review node_run is a multi-document round (its
+   * doc_versions carry non-NULL item_index). Lets the reviews inbox tag the
+   * row "multi-document" and route into the document-list view. Absent /
+   * false for single-document reviews.
+   */
+  isMultiDoc: z.boolean().optional(),
   createdAt: z.number().int(),
   decidedAt: z.number().int().nullable(),
 })
 export type ReviewSummary = z.infer<typeof ReviewSummarySchema>
+
+// -----------------------------------------------------------------------------
+// RFC-079: multi-document review.
+//
+// PATCH /api/reviews/:nodeRunId/documents/:docVersionId/selection — set one
+// document's curation choice. Does NOT advance the workflow or bump
+// reviewIteration; only the round-level decision (approve/reject/iterate) does.
+// -----------------------------------------------------------------------------
+export const SetDocumentSelectionSchema = z.object({
+  selection: z.enum(['accepted', 'not_accepted']),
+})
+export type SetDocumentSelection = z.infer<typeof SetDocumentSelectionSchema>
+
+/**
+ * RFC-079: one entry per document in a multi-document review round. Drives the
+ * left-hand document list in the reviews detail page. Absent on single-doc
+ * reviews (ReviewDetail.documents is undefined → single-document layout).
+ */
+export const ReviewDocumentSummarySchema = z.object({
+  docVersionId: z.string(),
+  itemIndex: z.number().int().nonnegative(),
+  itemPath: z.string(),
+  /** First markdown heading / first non-empty line / filename fallback. */
+  title: z.string(),
+  selection: z.enum(['unselected', 'accepted', 'not_accepted']),
+  commentCount: z.number().int().nonnegative(),
+})
+export type ReviewDocumentSummary = z.infer<typeof ReviewDocumentSummarySchema>
 
 /** GET /api/reviews/:nodeRunId — full detail used by the review page. */
 export const ReviewDetailSchema = z.object({
@@ -296,6 +346,13 @@ export const ReviewDetailSchema = z.object({
   /** Lightweight rerun candidate list for the readonly "will rerun" modal. */
   rerunnableOnReject: z.array(z.string()),
   rerunnableOnIterate: z.array(z.string()),
+  /**
+   * RFC-079: present (non-empty) only for a multi-document review round. Lists
+   * every document in `item_index` order; `currentVersion`/`currentBody`/
+   * `comments` refer to the currently-selected document. Undefined for
+   * single-document reviews → the page renders the existing two-column layout.
+   */
+  documents: z.array(ReviewDocumentSummarySchema).optional(),
 })
 export type ReviewDetail = z.infer<typeof ReviewDetailSchema>
 
