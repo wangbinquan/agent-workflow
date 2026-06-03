@@ -43,9 +43,11 @@ import { isMultiMarkdownUpstream, SIBLING_OUTPUTS_INSTRUCTION } from '@agent-wor
 import {
   acceptedSubsetPaths,
   allDocumentsDecided,
+  extractDocTitle,
   isMultiDocReviewInput,
   splitListItems,
 } from '@agent-workflow/shared'
+import type { ReviewDocumentSummary } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import {
   agents as agentsTable,
@@ -904,6 +906,9 @@ export async function listReviewSummaries(
       decision: dv.decision as DocVersionDecision,
       awaitingReview,
       shardKey: run.shardKey,
+      // RFC-079: a non-NULL item_index marks this review as a multi-document
+      // round (the inbox tags it + routes into the document-list view).
+      isMultiDoc: dv.itemIndex !== null && dv.itemIndex !== undefined,
       createdAt: dv.createdAt,
       decidedAt: dv.decidedAt,
     })
@@ -927,17 +932,63 @@ export async function getReviewDetail(
   if (summary === undefined) {
     throw new NotFoundError('review-not-found', `review for nodeRun ${nodeRunId} not found`)
   }
-  const dvRows = await db
+  const allRows = await db
     .select()
     .from(docVersions)
     .where(eq(docVersions.reviewNodeRunId, nodeRunId))
-    .orderBy(desc(docVersions.versionIndex))
-    .limit(1)
-  if (dvRows.length === 0) {
+  if (allRows.length === 0) {
     throw new NotFoundError('review-not-found', `no doc_versions for ${nodeRunId}`)
   }
-  const dv = rowToDocVersion(dvRows[0]!)
-  const body = readDocVersionBody(appHome, dv)
+  // RFC-079: multi-document mode (any member carries item_index). Build the
+  // document list and default the rendered "current" document to the first
+  // item; the frontend lazy-loads other items via the versions endpoint.
+  const isMulti = allRows.some((r) => r.itemIndex !== null)
+  let dv: DocVersion
+  let body: string
+  let documents: ReviewDocumentSummary[] | undefined
+  if (isMulti) {
+    // Current round = pending members (awaiting); if decided, the members at
+    // the highest reviewIteration (historical view).
+    let members = allRows.filter((r) => r.decision === 'pending' && r.itemIndex !== null)
+    if (members.length === 0) {
+      const maxIter = Math.max(...allRows.map((r) => r.reviewIteration))
+      members = allRows.filter((r) => r.reviewIteration === maxIter && r.itemIndex !== null)
+    }
+    members.sort((a, b) => (a.itemIndex ?? 0) - (b.itemIndex ?? 0))
+    documents = []
+    for (const m of members) {
+      const mdv = rowToDocVersion(m)
+      let mbody = ''
+      try {
+        mbody = readDocVersionBody(appHome, mdv)
+      } catch {
+        mbody = ''
+      }
+      const cc = await db
+        .select({ id: reviewComments.id })
+        .from(reviewComments)
+        .where(eq(reviewComments.docVersionId, m.id))
+      documents.push({
+        docVersionId: m.id,
+        itemIndex: m.itemIndex ?? 0,
+        itemPath: m.itemPath ?? '',
+        title: extractDocTitle(mbody, m.itemPath ?? m.id),
+        selection: (m.selection ?? 'unselected') as 'unselected' | 'accepted' | 'not_accepted',
+        commentCount: cc.length,
+      })
+    }
+    dv = rowToDocVersion(members[0]!)
+    try {
+      body = readDocVersionBody(appHome, dv)
+    } catch {
+      body = ''
+    }
+  } else {
+    // Single-document: latest version (behavior unchanged).
+    const latest = allRows.slice().sort((a, b) => b.versionIndex - a.versionIndex)[0]!
+    dv = rowToDocVersion(latest)
+    body = readDocVersionBody(appHome, dv)
+  }
   const commentsRows = await db
     .select()
     .from(reviewComments)
@@ -974,6 +1025,7 @@ export async function getReviewDetail(
     comments,
     rerunnableOnReject,
     rerunnableOnIterate,
+    ...(documents !== undefined ? { documents } : {}),
   }
 }
 
@@ -1089,15 +1141,28 @@ export interface AddReviewCommentArgs {
   anchor: ReviewCommentAnchor
   commentText: string
   author?: string
+  /**
+   * RFC-079: in a multi-document round several doc_versions are pending at once;
+   * the caller passes the specific document the comment anchors to. Single-doc
+   * callers omit it and the (one) pending doc_version is used.
+   */
+  docVersionId?: string
 }
 
 export async function addReviewComment(args: AddReviewCommentArgs): Promise<ReviewComment> {
-  // Pending doc_version for this review run.
+  // Pending doc_version for this review run. RFC-079: when docVersionId is given
+  // (multi-document), scope to that exact pending member.
   const dvRows = await args.db
     .select()
     .from(docVersions)
     .where(
-      and(eq(docVersions.reviewNodeRunId, args.nodeRunId), eq(docVersions.decision, 'pending')),
+      args.docVersionId !== undefined
+        ? and(
+            eq(docVersions.id, args.docVersionId),
+            eq(docVersions.reviewNodeRunId, args.nodeRunId),
+            eq(docVersions.decision, 'pending'),
+          )
+        : and(eq(docVersions.reviewNodeRunId, args.nodeRunId), eq(docVersions.decision, 'pending')),
     )
     .limit(1)
   if (dvRows.length === 0) {

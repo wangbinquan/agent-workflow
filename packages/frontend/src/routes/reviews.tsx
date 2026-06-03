@@ -162,6 +162,15 @@ export function ReviewsListPage() {
                         {r.description !== '' && r.description !== r.title && (
                           <div className="muted reviews-row__desc">{r.description}</div>
                         )}
+                        {r.isMultiDoc === true && (
+                          <span
+                            className="chip chip--tight reviews-row__multidoc"
+                            title={t('reviews.multiDoc.badge')}
+                            data-testid="review-multidoc-badge"
+                          >
+                            {t('reviews.multiDoc.badge')}
+                          </span>
+                        )}
                       </td>
                       <td>
                         <span

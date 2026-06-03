@@ -304,6 +304,19 @@ export interface Resources {
     rejectReasonLabel: string
     dialogConfirm: string
     dialogCancel: string
+    // RFC-079: multi-document review mode.
+    multiDoc: {
+      documents: string
+      accept: string
+      notAccept: string
+      pending: string
+      accepted: string
+      notAccepted: string
+      approveProgress: string
+      approveBlocked: string
+      noComments: string
+      badge: string
+    }
   }
   auth: {
     title: string
@@ -2173,6 +2186,18 @@ export const zhCN: Resources = {
     rejectReasonLabel: '退回原因',
     dialogConfirm: '确认',
     dialogCancel: '取消',
+    multiDoc: {
+      documents: '文档（{{count}}）',
+      accept: '采纳',
+      notAccept: '不采纳',
+      pending: '待定',
+      accepted: '已采纳',
+      notAccepted: '已排除',
+      approveProgress: '通过（{{decided}}/{{total}}）',
+      approveBlocked: '还有 {{count}} 篇未裁决',
+      noComments: '（暂无评审意见）',
+      badge: '多文档',
+    },
   },
   auth: {
     title: '登录',

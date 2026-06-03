@@ -5894,6 +5894,116 @@ mark.comment-anchor[data-active='true'] {
   justify-content: flex-end;
 }
 
+/* RFC-079 — multi-document review (left doc list | rendered doc | comments). */
+.review-multidoc__body {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) 280px;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .review-multidoc__body {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+  .review-multidoc__comments {
+    grid-column: 1 / -1;
+  }
+}
+.review-multidoc__list,
+.review-multidoc__comments {
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+.review-multidoc__list-head {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+}
+.review-multidoc__list ul,
+.review-multidoc__comments ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.review-multidoc__doc {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  color: var(--text);
+}
+.review-multidoc__doc:hover {
+  background: var(--bg);
+}
+.review-multidoc__doc--active {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.review-multidoc__doc-title {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-multidoc__doc-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.review-multidoc__doc-comments {
+  font-size: 11px;
+  color: var(--muted);
+}
+.review-multidoc__doc-pane {
+  min-width: 0;
+}
+.review-multidoc__doc-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.review-multidoc__comments {
+  padding: 8px;
+}
+.review-multidoc__comment {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.review-multidoc__comment-loc {
+  font-size: 11px;
+}
+.review-multidoc__comment-quote {
+  margin: 4px 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.review-multidoc__comment-text {
+  margin: 4px 0;
+}
+.reviews-row__multidoc {
+  margin-top: 4px;
+}
+
 .review-cross-heading-hint {
   z-index: 60;
   margin-top: 6px;

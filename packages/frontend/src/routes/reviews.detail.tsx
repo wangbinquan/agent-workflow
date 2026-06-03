@@ -21,6 +21,7 @@ import type { DocVersion } from '@agent-workflow/shared'
 import { api, type ApiError } from '@/api/client'
 import { DiffView, type DiffGranularity } from '@/components/review/DiffView'
 import { Dialog } from '@/components/Dialog'
+import { MultiDocReviewView } from '@/components/review/MultiDocReviewView'
 import { Prose } from '@/components/prose/Prose'
 import { useResizable } from '@/hooks/useResizable'
 import { useTaskSync } from '@/hooks/useTaskSync'
@@ -66,8 +67,25 @@ export const Route = createRoute({
     if (typeof raw.version === 'string' && raw.version.length > 0) out.version = raw.version
     return out
   },
-  component: ReviewDetailPage,
+  component: ReviewDetailRoute,
 })
+
+// RFC-079: route-level branch. A multi-document review round
+// (ReviewDetail.documents present) renders the dedicated MultiDocReviewView;
+// everything else keeps the single-document ReviewDetailPage below untouched.
+// Branching at the component boundary (not via conditional hooks) keeps both
+// views' hook lists stable.
+function ReviewDetailRoute() {
+  const { nodeRunId } = Route.useParams()
+  const detail = useQuery<ReviewDetail>({
+    queryKey: ['reviews', 'detail', nodeRunId],
+    queryFn: ({ signal }) => api.get(`/api/reviews/${nodeRunId}`, undefined, signal),
+  })
+  if (detail.data?.documents !== undefined && detail.data.documents.length > 0) {
+    return <MultiDocReviewView nodeRunId={nodeRunId} />
+  }
+  return <ReviewDetailPage />
+}
 
 function ReviewDetailPage() {
   const { nodeRunId } = Route.useParams()

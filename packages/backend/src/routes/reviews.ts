@@ -223,6 +223,7 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       nodeRunId,
       anchor: parsed.data.anchor,
       commentText: parsed.data.commentText,
+      ...(parsed.data.docVersionId !== undefined ? { docVersionId: parsed.data.docVersionId } : {}),
     })
     return c.json(comment, 201)
   })

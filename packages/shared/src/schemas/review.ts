@@ -258,6 +258,12 @@ export const SubmitReviewCommentSchema = z.object({
   /** Client-computed anchor; backend recomputes occurrenceIndex from canonical doc. */
   anchor: ReviewCommentAnchorSchema,
   commentText: z.string().min(1),
+  /**
+   * RFC-079: the document this comment anchors to, in a multi-document review
+   * round (several doc_versions pending at once). Omitted for single-document
+   * reviews (the one pending doc_version is used).
+   */
+  docVersionId: z.string().optional(),
 })
 export type SubmitReviewComment = z.infer<typeof SubmitReviewCommentSchema>
 

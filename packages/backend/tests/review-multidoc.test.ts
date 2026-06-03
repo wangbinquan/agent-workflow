@@ -34,6 +34,8 @@ import {
 import {
   buildReviewPromptContext,
   dispatchReviewNode,
+  getReviewDetail,
+  listReviewSummaries,
   setDocumentSelection,
   submitReviewDecision,
 } from '../src/services/review'
@@ -382,5 +384,31 @@ describe('RFC-079 — review multi-document mode', () => {
     expect(pending?.retryIndex).toBe(1)
     expect(srcRuns.some((r) => r.status === 'canceled')).toBe(true)
     void docs
+  })
+
+  test('getReviewDetail exposes documents[] + listReviewSummaries.isMultiDoc', async () => {
+    const { taskId, reviewNodeRunId, docs } = await dispatchRound()
+    await setDocumentSelection({
+      db,
+      nodeRunId: reviewNodeRunId,
+      docVersionId: docs[1]!.id,
+      selection: 'accepted',
+    })
+
+    const detail = await getReviewDetail(db, appHome, reviewNodeRunId)
+    expect(detail.documents).toBeDefined()
+    expect(detail.documents!.length).toBe(3)
+    // ordered by item_index, titles extracted from each file's first heading
+    expect(detail.documents!.map((d) => d.itemIndex)).toEqual([0, 1, 2])
+    expect(detail.documents!.map((d) => d.itemPath)).toEqual(PATHS)
+    expect(detail.documents![0]!.title).toBe('Case cases/a.md')
+    expect(detail.documents![1]!.selection).toBe('accepted')
+    expect(detail.documents![0]!.selection).toBe('unselected')
+    // currentVersion defaults to the first item
+    expect(detail.currentVersion.itemIndex).toBe(0)
+
+    const summaries = await listReviewSummaries(db, { taskId })
+    const summary = summaries.find((s) => s.nodeRunId === reviewNodeRunId)
+    expect(summary?.isMultiDoc).toBe(true)
   })
 })

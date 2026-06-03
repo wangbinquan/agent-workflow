@@ -41,7 +41,11 @@ export function useTaskSync(taskId: string | null): void {
         msg.type === 'review.created' ||
         msg.type === 'review.decision_made' ||
         msg.type === 'review.comment_added' ||
-        msg.type === 'review.comment_deleted'
+        msg.type === 'review.comment_deleted' ||
+        // RFC-079: a multi-document item's accepted/not_accepted choice changed
+        // in another tab — refresh the detail so the left-rail chips + the
+        // approve gate stay in sync.
+        msg.type === 'review.selection_changed'
       ) {
         void qc.invalidateQueries({ queryKey: ['reviews', 'detail', msg.nodeRunId] })
         void qc.invalidateQueries({ queryKey: ['reviews', 'list'] })

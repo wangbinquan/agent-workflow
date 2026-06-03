@@ -167,6 +167,18 @@ export const enUS: Resources = {
     rejectReasonLabel: 'Rejection reason',
     dialogConfirm: 'Confirm',
     dialogCancel: 'Cancel',
+    multiDoc: {
+      documents: 'Documents ({{count}})',
+      accept: 'Accept',
+      notAccept: 'Exclude',
+      pending: 'Undecided',
+      accepted: 'Accepted',
+      notAccepted: 'Excluded',
+      approveProgress: 'Approve ({{decided}}/{{total}})',
+      approveBlocked: '{{count}} document(s) still undecided',
+      noComments: '(no review comments yet)',
+      badge: 'Multi-doc',
+    },
   },
   auth: {
     title: 'Sign in',
