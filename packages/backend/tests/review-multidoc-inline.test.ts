@@ -169,7 +169,7 @@ describe('RFC-081 — multi-document review over inline list<markdown>', () => {
     expect(detail.documents!.map((d) => d.title)).toEqual(['Alpha', 'Beta', 'Gamma'])
     expect(detail.documents!.every((d) => d.itemPath === '')).toBe(true)
     // currentBody is the first inline document's body verbatim.
-    expect(detail.currentBody).toBe(DOCS[0])
+    expect(detail.currentBody).toBe(DOCS[0]!)
   })
 
   test('approve emits the accepted subset as list<markdown> (bodies, boundary-joined)', async () => {
