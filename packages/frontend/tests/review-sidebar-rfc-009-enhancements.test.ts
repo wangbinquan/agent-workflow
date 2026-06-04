@@ -16,13 +16,16 @@ import { describe, expect, test } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const ROUTE_TSX = resolve(__dirname, '..', 'src', 'routes', 'reviews.detail.tsx')
+// RFC-082: the whole RFC-009 sidebar surface (resize/collapse/inline-edit/copy/
+// line-ref/measure) moved into the shared <ReviewDocPane>. Assert it there; the
+// CSS + useResizable hook are unchanged.
+const PANE_TSX = resolve(__dirname, '..', 'src', 'components', 'review', 'ReviewDocPane.tsx')
 const STYLES_CSS = resolve(__dirname, '..', 'src', 'styles.css')
 const USE_RESIZABLE = resolve(__dirname, '..', 'src', 'hooks', 'useResizable.ts')
 
-describe('RFC-009 sidebar enhancements — route surface', () => {
+describe('RFC-009 sidebar enhancements — ReviewDocPane surface', () => {
   test('reviews.detail.tsx wires the useResizable hook + bounds constants', () => {
-    const src = readFileSync(ROUTE_TSX, 'utf8')
+    const src = readFileSync(PANE_TSX, 'utf8')
     expect(src).toContain("from '@/hooks/useResizable'")
     expect(src).toMatch(/useResizable\(\s*\{/)
     expect(src).toContain('storageKey: SIDEBAR_WIDTH_KEY')
@@ -35,14 +38,14 @@ describe('RFC-009 sidebar enhancements — route surface', () => {
   })
 
   test('reviews.detail.tsx persists collapsed state to localStorage', () => {
-    const src = readFileSync(ROUTE_TSX, 'utf8')
+    const src = readFileSync(PANE_TSX, 'utf8')
     expect(src).toContain("SIDEBAR_COLLAPSED_KEY = 'agw-review-sidebar-collapsed'")
     expect(src).toContain("SIDEBAR_WIDTH_KEY = 'agw-review-sidebar-width'")
     expect(src).toMatch(/setItem\(SIDEBAR_COLLAPSED_KEY/)
   })
 
   test('reviews.detail.tsx renders the collapsed rail when collapsed === true', () => {
-    const src = readFileSync(ROUTE_TSX, 'utf8')
+    const src = readFileSync(PANE_TSX, 'utf8')
     expect(src).toContain('comments-collapsed-rail')
     expect(src).toContain('comments-collapsed-rail__toggle')
     expect(src).toContain('comments-collapsed-rail__count')
@@ -54,7 +57,7 @@ describe('RFC-009 sidebar enhancements — route surface', () => {
   })
 
   test('reviews.detail.tsx renders the action toolbar (edit / copy / delete)', () => {
-    const src = readFileSync(ROUTE_TSX, 'utf8')
+    const src = readFileSync(PANE_TSX, 'utf8')
     expect(src).toContain('comment-bubble__actions')
     expect(src).toContain('comment-bubble__action')
     // Delete button still present (we kept the original class).
@@ -66,7 +69,7 @@ describe('RFC-009 sidebar enhancements — route surface', () => {
   })
 
   test('reviews.detail.tsx wires the inline-edit form with Cmd/Ctrl+Enter + Esc', () => {
-    const src = readFileSync(ROUTE_TSX, 'utf8')
+    const src = readFileSync(PANE_TSX, 'utf8')
     expect(src).toContain('comment-bubble__edit-form')
     expect(src).toContain('comment-bubble--editing')
     expect(src).toContain('updateComment')
@@ -74,12 +77,13 @@ describe('RFC-009 sidebar enhancements — route surface', () => {
     // Cmd/Ctrl+Enter saves, Escape cancels — same shape as the popover.
     expect(src).toMatch(/e\.key\s*===\s*'Enter'\s*&&\s*\(e\.ctrlKey\s*\|\|\s*e\.metaKey\)/)
     expect(src).toMatch(/e\.key\s*===\s*'Escape'/)
-    // Single-key shortcuts must not fire while editing.
-    expect(src).toMatch(/if\s*\(\s*editingId\s*!==\s*null\s*\)\s*\{/)
+    // Single-key shortcuts (J/K) must not fire while editing — the pane's
+    // keyboard handler bails on editingId.
+    expect(src).toMatch(/if\s*\(\s*editingId\s*!==\s*null\s*\)\s*return/)
   })
 
   test('reviews.detail.tsx wires the copy button to navigator.clipboard', () => {
-    const src = readFileSync(ROUTE_TSX, 'utf8')
+    const src = readFileSync(PANE_TSX, 'utf8')
     expect(src).toMatch(/navigator\.clipboard\.writeText/)
     expect(src).toContain('copiedId')
     expect(src).toContain('copyFailedId')
@@ -89,7 +93,7 @@ describe('RFC-009 sidebar enhancements — route surface', () => {
   })
 
   test('reviews.detail.tsx renders the line-ref chip + count badge', () => {
-    const src = readFileSync(ROUTE_TSX, 'utf8')
+    const src = readFileSync(PANE_TSX, 'utf8')
     expect(src).toContain('comment-bubble__line-ref')
     expect(src).toContain("from '@/lib/review/lineRange'")
     expect(src).toContain('computeLineRange')
@@ -100,15 +104,19 @@ describe('RFC-009 sidebar enhancements — route surface', () => {
     expect(src).toContain("t('reviews.sidebarCountLabel'")
   })
 
-  test('reviews.detail.tsx bails out of measure() when collapsed', () => {
-    const src = readFileSync(ROUTE_TSX, 'utf8')
-    // The measure useLayoutEffect early-returns when collapsed === true so
-    // we don't thrash on a 0-height bubble container.
-    expect(src).toMatch(/if\s*\(collapsed\)\s*return/)
-    // And measure re-runs when collapsed flips back to false / editingId
-    // toggles (so the expanding textarea pushes lower bubbles down before
-    // the per-bubble ResizeObserver kicks in).
-    expect(src).toMatch(/\[sortedComments,\s*diffMode,\s*collapsed,\s*sidebarWidth,\s*editingId\]/)
+  test('ReviewDocPane bails out of measure() when collapsed', () => {
+    const src = readFileSync(PANE_TSX, 'utf8')
+    // RFC-082: the measure useLayoutEffect lives in the useCommentBubbles hook
+    // and early-returns when `!enabled`; `enabled` folds in the collapsed +
+    // diff guards so a 0-height (collapsed) column never gets measured.
+    expect(src).toMatch(/if\s*\(!enabled\)\s*return/)
+    expect(src).toMatch(/enabled:\s*!diffActive\s*&&\s*!collapsed/)
+    // And measure re-runs when those inputs / editingId toggle (so the
+    // expanding textarea pushes lower bubbles down before the per-bubble
+    // ResizeObserver kicks in).
+    expect(src).toMatch(
+      /\[markdownRef,\s*bubblesRef,\s*sortedComments,\s*enabled,\s*sidebarWidth,\s*editingId\]/,
+    )
     // Per-bubble ResizeObserver — bubble grows when its inline editor opens,
     // and the column's own minHeight masks the change from a column-level
     // observer.
@@ -123,12 +131,14 @@ describe('RFC-009 sidebar enhancements — route surface', () => {
     // header element's offsetHeight once per measure pass and uses that
     // value as the cursor floor. If a future refactor reverts this, the
     // first comment overlaps the count badge again.
-    const src = readFileSync(ROUTE_TSX, 'utf8')
+    const src = readFileSync(PANE_TSX, 'utf8')
     // Grabs the header element and reads offsetHeight.
     expect(src).toMatch(/querySelector[^)]*review-detail__sidebar-header/)
     expect(src).toMatch(/headerEl[^.]*\.offsetHeight/)
-    // Cursor starts at the header's floor (header height + gap), not 0.
-    expect(src).toMatch(/let\s+cursor\s*=\s*headerFloor/)
+    // RFC-082: the floor is handed to computeBubbleLayout (whose
+    // review-bubble-layout.test.ts locks `cursor = headerFloor` as the start),
+    // so the first bubble can never sit under the sticky header.
+    expect(src).toMatch(/computeBubbleLayout\(\{[\s\S]*?headerFloor/)
     // And the floor itself includes the BUBBLE_GAP_PX clearance.
     expect(src).toMatch(/headerFloor[\s\S]{0,80}BUBBLE_GAP_PX/)
   })

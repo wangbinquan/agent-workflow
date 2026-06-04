@@ -2,20 +2,22 @@
 //
 // Rendered by the /reviews/$nodeRunId route when the review is a multi-document
 // round (ReviewDetail.documents present). Keeps the single-document review page
-// (reviews.detail.tsx) completely untouched. Reuses the shared primitives —
-// Prose renderer, the selection→anchor helpers, the comment / selection /
-// decision APIs, StatusChip / Dialog / TextArea — so the experience matches the
-// rest of the app. Each list item is its own doc_version, so per-document inline
-// comments + per-document accept/reject Just Work against the PR-A backend.
+// (reviews.detail.tsx) completely untouched.
+//
+// RFC-082: the per-document "markdown + anchored comment sidebar" is now the
+// shared <ReviewDocPane> (same component the single-doc page uses), so each
+// document gets the full comment experience — anchored bubbles, collapse/resize,
+// scroll-spy, J/K jump, inline edit/copy. This view keeps ONLY the multi-doc
+// shell: the left document navigator, per-document accept/reject, and the
+// round-level approve/iterate/reject decision.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   Config,
   DocVersionWithBodyAndComments,
   ReviewComment,
-  ReviewCommentAnchor,
   ReviewDetail,
 } from '@agent-workflow/shared'
 import { api } from '@/api/client'
@@ -23,9 +25,8 @@ import { Dialog } from '@/components/Dialog'
 import { TextArea } from '@/components/Form'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
-import { Prose } from '@/components/prose/Prose'
+import { ReviewDocPane } from '@/components/review/ReviewDocPane'
 import { StatusChip, type StatusChipKind } from '@/components/StatusChip'
-import { computeAnchorFromSelection } from '@/lib/review/anchor'
 import { useTaskSync } from '@/hooks/useTaskSync'
 
 type Selection = 'unselected' | 'accepted' | 'not_accepted'
@@ -96,24 +97,6 @@ export function MultiDocReviewView({ nodeRunId }: { nodeRunId: string }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reviews', 'detail', nodeRunId] }),
   })
 
-  const submitComment = useMutation({
-    mutationFn: async (input: {
-      anchor: ReviewCommentAnchor
-      commentText: string
-      docVersionId: string
-    }) => {
-      await api.post(`/api/reviews/${nodeRunId}/comments`, input)
-    },
-    onSuccess: invalidate,
-  })
-
-  const deleteComment = useMutation({
-    mutationFn: async (commentId: string) => {
-      await api.delete(`/api/reviews/${nodeRunId}/comments/${commentId}`)
-    },
-    onSuccess: invalidate,
-  })
-
   const submitDecision = useMutation({
     mutationFn: async (input: {
       decision: 'approved' | 'rejected' | 'iterated'
@@ -128,37 +111,6 @@ export function MultiDocReviewView({ nodeRunId }: { nodeRunId: string }) {
       await qc.invalidateQueries({ queryKey: ['reviews', 'pending-count'] })
     },
   })
-
-  // Selection → anchor → comment popover (reuses the single-doc helper).
-  const markdownRef = useRef<HTMLDivElement>(null)
-  const [popover, setPopover] = useState<{
-    anchor: ReviewCommentAnchor
-    draft: string
-    rect: { left: number; top: number }
-  } | null>(null)
-  const onMouseUp = useCallback(() => {
-    if (!awaiting || markdownRef.current === null || activeBody === undefined) return
-    const sel = window.getSelection()
-    if (sel === null || sel.isCollapsed) return
-    const anchor = computeAnchorFromSelection(markdownRef.current, sel, activeBody)
-    if (anchor === null) return
-    const rect = sel.getRangeAt(0).getBoundingClientRect()
-    setPopover({
-      anchor,
-      draft: '',
-      rect: { left: rect.left + window.scrollX, top: rect.bottom + window.scrollY },
-    })
-  }, [awaiting, activeBody])
-
-  const proseAnchors = useMemo(
-    () =>
-      activeComments.map((c) => ({
-        commentId: c.id,
-        selectedText: c.anchor.selectedText,
-        occurrenceIndex: c.anchor.occurrenceIndex,
-      })),
-    [activeComments],
-  )
 
   const [dialog, setDialog] = useState<DecisionDialog>(null)
   const reviewIteration = detail.data?.summary.reviewIteration ?? 0
@@ -278,7 +230,10 @@ export function MultiDocReviewView({ nodeRunId }: { nodeRunId: string }) {
           </ul>
         </aside>
 
-        <main className="review-multidoc__doc-pane">
+        {/* Per-document accept/reject bar (multi-doc only) pinned above the
+            shared <ReviewDocPane>, which renders the active doc's markdown +
+            anchored comment sidebar exactly like the single-document page. */}
+        <div className="review-multidoc__pane">
           {awaiting && current !== undefined && (
             <div className="review-multidoc__doc-actions">
               <button
@@ -309,83 +264,24 @@ export function MultiDocReviewView({ nodeRunId }: { nodeRunId: string }) {
               </button>
             </div>
           )}
-          <div ref={markdownRef} onMouseUp={awaiting ? onMouseUp : undefined}>
-            {activeBody === undefined ? (
-              <LoadingState label={t('common.loading')} />
-            ) : (
-              <Prose
-                body={activeBody}
-                plantumlEndpoint={config.data?.plantumlEndpoint}
-                plantumlAuthHeader={config.data?.plantumlAuthHeader}
-                anchors={proseAnchors}
-              />
-            )}
-          </div>
-        </main>
-
-        <aside className="review-multidoc__comments" aria-label="comments">
-          {activeComments.length === 0 ? (
-            <p className="muted">{t('reviews.multiDoc.noComments')}</p>
+          {activeBody === undefined ? (
+            <LoadingState label={t('common.loading')} />
           ) : (
-            <ul role="list">
-              {activeComments.map((c) => (
-                <li key={c.id} className="review-multidoc__comment">
-                  <div className="muted review-multidoc__comment-loc">{c.anchor.sectionPath}</div>
-                  <blockquote className="review-multidoc__comment-quote">
-                    {c.anchor.selectedText}
-                  </blockquote>
-                  <p className="review-multidoc__comment-text">{c.commentText}</p>
-                  {awaiting && (
-                    <button
-                      type="button"
-                      className="btn btn--xs btn--danger"
-                      disabled={deleteComment.isPending}
-                      onClick={() => deleteComment.mutate(c.id)}
-                    >
-                      {t('common.delete')}
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <ReviewDocPane
+              nodeRunId={nodeRunId}
+              taskId={detail.data.summary.taskId}
+              docVersionId={activeDocId}
+              body={activeBody}
+              comments={activeComments}
+              readonly={!awaiting}
+              awaiting={awaiting}
+              plantumlEndpoint={config.data?.plantumlEndpoint}
+              plantumlAuthHeader={config.data?.plantumlAuthHeader}
+              onInvalidate={invalidate}
+            />
           )}
-        </aside>
-      </div>
-
-      {awaiting && popover !== null && (
-        <div
-          className="comment-popover"
-          style={{ position: 'absolute', left: popover.rect.left, top: popover.rect.top }}
-        >
-          <div className="muted">{popover.anchor.sectionPath}</div>
-          <TextArea
-            value={popover.draft}
-            onChange={(v) => setPopover({ ...popover, draft: v })}
-            rows={3}
-            placeholder={t('reviews.popoverPlaceholder')}
-          />
-          <div className="comment-popover__actions">
-            <button type="button" className="btn btn--xs" onClick={() => setPopover(null)}>
-              {t('reviews.popoverCancel')}
-            </button>
-            <button
-              type="button"
-              className="btn btn--xs btn--primary"
-              disabled={popover.draft.trim().length === 0 || submitComment.isPending}
-              onClick={async () => {
-                await submitComment.mutateAsync({
-                  anchor: popover.anchor,
-                  commentText: popover.draft.trim(),
-                  docVersionId: activeDocId,
-                })
-                setPopover(null)
-              }}
-            >
-              {t('reviews.popoverSubmit')}
-            </button>
-          </div>
         </div>
-      )}
+      </div>
 
       <Dialog
         open={dialog !== null}

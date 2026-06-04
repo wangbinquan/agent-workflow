@@ -16,12 +16,20 @@ import { Prose } from '@/components/prose/Prose'
 import { wrapAnchorsInDom } from '@/lib/review/wrapAnchorsInDom'
 
 describe('reviews.detail uses <Prose>', () => {
-  test('source-level: route imports Prose, not MarkdownView', () => {
+  test('source-level: review doc surface renders <Prose>, not MarkdownView', () => {
     const src = readFileSync(resolve(__dirname, '../src/routes/reviews.detail.tsx'), 'utf-8')
-    expect(src).toContain("from '@/components/prose/Prose'")
-    expect(src).toContain('<Prose')
+    // RFC-082: the route now delegates the markdown body to <ReviewDocPane>,
+    // which is where the <Prose> render lives.
+    expect(src).toContain("from '@/components/review/ReviewDocPane'")
     expect(src).not.toContain("from '@/components/review/MarkdownView'")
     expect(src).not.toContain('<MarkdownView')
+    const pane = readFileSync(
+      resolve(__dirname, '../src/components/review/ReviewDocPane.tsx'),
+      'utf-8',
+    )
+    expect(pane).toContain("from '@/components/prose/Prose'")
+    expect(pane).toContain('<Prose')
+    expect(pane).not.toContain('<MarkdownView')
   })
 
   test('wrapAnchorsInDom can locate plain text in Prose output', () => {

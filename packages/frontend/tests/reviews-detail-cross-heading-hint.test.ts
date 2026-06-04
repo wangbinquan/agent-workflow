@@ -17,7 +17,9 @@ import { describe, expect, test } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const ROUTE_TSX = resolve(__dirname, '..', 'src', 'routes', 'reviews.detail.tsx')
+// RFC-082: the selection → comment popover (incl. the cross-heading hint)
+// moved into the shared <ReviewDocPane>, so the wiring is asserted there now.
+const PANE_TSX = resolve(__dirname, '..', 'src', 'components', 'review', 'ReviewDocPane.tsx')
 const EN_TS = resolve(__dirname, '..', 'src', 'i18n', 'en-US.ts')
 const ZH_TS = resolve(__dirname, '..', 'src', 'i18n', 'zh-CN.ts')
 
@@ -25,13 +27,13 @@ function src(p: string): string {
   return readFileSync(p, 'utf8')
 }
 
-describe('reviews.detail.tsx — cross-heading selection hint', () => {
+describe('ReviewDocPane — cross-heading selection hint', () => {
   test('imports selectionCrossesHeading from anchor lib', () => {
-    expect(src(ROUTE_TSX)).toMatch(/selectionCrossesHeading[\s\S]*?from\s*'@\/lib\/review\/anchor'/)
+    expect(src(PANE_TSX)).toMatch(/selectionCrossesHeading[\s\S]*?from\s*'@\/lib\/review\/anchor'/)
   })
 
   test('mouse-up handler invokes selectionCrossesHeading when anchor is null', () => {
-    const s = src(ROUTE_TSX)
+    const s = src(PANE_TSX)
     // The handler must call the helper inside the `anchor === null` branch
     // — otherwise we either nag on every empty selection (bad) or never
     // nag at all (the original bug).
@@ -39,14 +41,14 @@ describe('reviews.detail.tsx — cross-heading selection hint', () => {
   })
 
   test('crossHeadingHint state + auto-clear timer are wired', () => {
-    const s = src(ROUTE_TSX)
+    const s = src(PANE_TSX)
     expect(s).toMatch(/setCrossHeadingHint/)
     // The auto-dismiss effect must clear the hint so it doesn't stick.
     expect(s).toMatch(/setCrossHeadingHint\(null\)/)
   })
 
   test('hint element renders with the i18n key and is gated behind !readonly', () => {
-    const s = src(ROUTE_TSX)
+    const s = src(PANE_TSX)
     expect(s).toMatch(
       /\{\s*!readonly\s*&&\s*crossHeadingHint\s*!==\s*null\s*&&[\s\S]*?reviews\.crossHeadingHint/,
     )

@@ -28,6 +28,9 @@ import { resolve } from 'node:path'
 
 const STYLES_CSS = resolve(__dirname, '..', 'src', 'styles.css')
 const REVIEWS_DETAIL_TSX = resolve(__dirname, '..', 'src', 'routes', 'reviews.detail.tsx')
+// RFC-082: the comment sidebar (jump buttons, jumpComment, scroll-spy) moved
+// into the shared <ReviewDocPane>; those assertions read the pane now.
+const PANE_TSX = resolve(__dirname, '..', 'src', 'components', 'review', 'ReviewDocPane.tsx')
 
 describe('review detail layout — sidebar position + top-right action cluster + no kbd', () => {
   test('styles.css declares the .review-detail__layout grid with a fixed right column', () => {
@@ -140,8 +143,8 @@ describe('review detail decision dialog — approve confirms when submitted comm
 })
 
 describe('review detail sidebar — ▲/▼ jump buttons mirror the J/K shortcut', () => {
-  test('reviews.detail.tsx renders the up/down jump buttons in the sidebar header', () => {
-    const tsx = readFileSync(REVIEWS_DETAIL_TSX, 'utf8')
+  test('ReviewDocPane renders the up/down jump buttons in the sidebar header', () => {
+    const tsx = readFileSync(PANE_TSX, 'utf8')
     // Both buttons must exist, share the `review-detail__sidebar-jump-btn`
     // class, and use the new sidebarJumpPrev / sidebarJumpNext i18n keys.
     expect(tsx).toMatch(/review-detail__sidebar-jump-btn/)
@@ -150,7 +153,7 @@ describe('review detail sidebar — ▲/▼ jump buttons mirror the J/K shortcut
   })
 
   test('jumpComment helper exists and is reused by both buttons + J/K handler', () => {
-    const tsx = readFileSync(REVIEWS_DETAIL_TSX, 'utf8')
+    const tsx = readFileSync(PANE_TSX, 'utf8')
     // Single source of truth — the helper is defined once and consumed by
     // the keyboard branch and both arrow onClicks. Locking this prevents a
     // future refactor from drifting the two paths.
@@ -177,7 +180,7 @@ describe('review detail sidebar — ▲/▼ jump buttons mirror the J/K shortcut
     // programmatic jump, checked at the top of the observer callback. We
     // lock both the ref and the check at source-text level so a refactor
     // that drops the suppression immediately re-introduces the bug.
-    const tsx = readFileSync(REVIEWS_DETAIL_TSX, 'utf8')
+    const tsx = readFileSync(PANE_TSX, 'utf8')
     expect(tsx).toMatch(/const suppressScrollSpyUntilRef\s*=\s*useRef/)
     expect(tsx).toMatch(/suppressScrollSpyUntilRef\.current\s*=\s*Date\.now\(\)\s*\+/)
     expect(tsx).toMatch(/if\s*\(Date\.now\(\)\s*<\s*suppressScrollSpyUntilRef\.current\)\s*return/)

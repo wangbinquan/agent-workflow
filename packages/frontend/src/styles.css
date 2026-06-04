@@ -5572,6 +5572,13 @@ code {
      the page container should never need to scroll sideways. */
   overflow-y: auto;
   overflow-x: hidden;
+  /* The comment bubbles (`left: 0; right: 0`) sit flush against this column's
+     right edge — exactly where the vertical scrollbar lives. With macOS overlay
+     scrollbars (scrollbar-width 0) the bubble's right border / rounded corner /
+     box-shadow ended up under the scrollbar AND clipped by `overflow-x: hidden`
+     (the "评审意见 框右边框出界" report). A right inset keeps the bubble border
+     clear of the scrollbar and inside the clip. */
+  padding-right: 14px;
 }
 
 .review-detail__body {
@@ -5935,30 +5942,65 @@ mark.comment-anchor[data-active='true'] {
   justify-content: flex-end;
 }
 
-/* RFC-079 — multi-document review (left doc list | rendered doc | comments). */
+/* RFC-079 / RFC-082 — multi-document review: left doc navigator | per-doc
+   accept/reject bar + shared <ReviewDocPane>.
+   The page is a full-height flex column (like .page--review-detail); the LEFT
+   doc list scrolls independently as the navigator, and the right column
+   (.review-multidoc__pane) stacks the per-document accept/reject bar above the
+   ReviewDocPane, whose own .review-detail__layout scrolls markdown + anchored
+   comments together. RFC-082 retired the bespoke flat comment list (the old
+   .review-multidoc__scroll / __comments / __doc-pane); the document body now
+   uses the same component as the single-doc page. */
+.content:has(.review-multidoc) {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+.page.review-multidoc {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.review-multidoc > .page__header {
+  margin-bottom: 0;
+  flex: 0 0 auto;
+}
 .review-multidoc__body {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr) 280px;
+  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  flex: 1 1 auto;
+  min-height: 0;
 }
-@media (max-width: 1100px) {
-  .review-multidoc__body {
-    grid-template-columns: 200px minmax(0, 1fr);
-  }
-  .review-multidoc__comments {
-    grid-column: 1 / -1;
-  }
-}
-.review-multidoc__list,
-.review-multidoc__comments {
-  position: sticky;
-  top: 12px;
-  max-height: calc(100vh - 120px);
+/* The doc navigator: hugs its content but caps at the row height and scrolls
+   INTERNALLY, so a 24-item list never grows the page. */
+.review-multidoc__list {
+  align-self: start;
+  min-height: 0;
+  max-height: 100%;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--panel);
+}
+/* Right column: per-doc accept/reject bar pinned on top, then the shared
+   <ReviewDocPane> (its .review-detail__layout is `flex: 1; min-height: 0;
+   overflow-y: auto`, so it fills the remaining height and scrolls markdown +
+   comments together). */
+.review-multidoc__pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+@media (max-width: 1100px) {
+  .review-multidoc__body {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
 }
 .review-multidoc__list-head {
   padding: 8px 12px;
@@ -5970,8 +6012,7 @@ mark.comment-anchor[data-active='true'] {
   top: 0;
   background: var(--panel);
 }
-.review-multidoc__list ul,
-.review-multidoc__comments ul {
+.review-multidoc__list ul {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -6012,34 +6053,13 @@ mark.comment-anchor[data-active='true'] {
   font-size: 11px;
   color: var(--muted);
 }
-.review-multidoc__doc-pane {
-  min-width: 0;
-}
+/* Per-document accept/reject bar pinned above the pane (RFC-082 moved the
+   markdown + comments into <ReviewDocPane>, so this is the only multi-doc-only
+   control left in the right column). */
 .review-multidoc__doc-actions {
   display: flex;
   gap: 8px;
-  margin-bottom: 12px;
-}
-.review-multidoc__comments {
-  padding: 8px;
-}
-.review-multidoc__comment {
-  padding: 8px;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-.review-multidoc__comment-loc {
-  font-size: 11px;
-}
-.review-multidoc__comment-quote {
-  margin: 4px 0;
-  padding-left: 8px;
-  border-left: 2px solid var(--border);
-  color: var(--muted);
-  font-size: 12px;
-}
-.review-multidoc__comment-text {
-  margin: 4px 0;
+  flex: 0 0 auto;
 }
 .reviews-row__multidoc {
   margin-top: 4px;

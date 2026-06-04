@@ -23,6 +23,10 @@ import { resolve } from 'node:path'
 
 const ROUTE_TSX = resolve(__dirname, '..', 'src', 'routes', 'reviews.detail.tsx')
 const STYLES_CSS = resolve(__dirname, '..', 'src', 'styles.css')
+// RFC-082: the bubble column + sortedComments + scroll remeasure + data-active
+// wiring moved into the shared <ReviewDocPane>. The new bubble JSX is asserted
+// there; the route negatives (old comment-list gone) still hold on the route.
+const PANE_TSX = resolve(__dirname, '..', 'src', 'components', 'review', 'ReviewDocPane.tsx')
 
 describe('review-detail bubble redesign', () => {
   test('reviews.detail.tsx no longer renders the old <ul class="comment-list">', () => {
@@ -38,16 +42,17 @@ describe('review-detail bubble redesign', () => {
     expect(src).not.toMatch(/\breview-detail__sidebar(?![-\w])/)
   })
 
-  test('reviews.detail.tsx renders the bubble column with bubble articles', () => {
-    const src = readFileSync(ROUTE_TSX, 'utf8')
+  test('ReviewDocPane renders the bubble column with bubble articles', () => {
+    const src = readFileSync(PANE_TSX, 'utf8')
     expect(src).toContain('review-detail__bubbles')
     expect(src).toContain('comment-bubble')
     expect(src).toContain('comment-bubble__section')
     expect(src).toContain('comment-bubble__quote')
     expect(src).toContain('comment-bubble__body')
-    // The bubble layout effect needs the anchors actually wrapped in the
-    // rendered DOM — the route must call wrapAnchorsInDom.
-    expect(src).toContain('wrapAnchorsInDom')
+    // RFC-051: anchors are wrapped inside the React tree via `<Prose anchors>`
+    // (rehypeWrapAnchors), not a post-mount wrapAnchorsInDom call — see the
+    // dedicated reviews-detail-anchor-rehype lock.
+    expect(src).toContain('proseAnchors')
   })
 
   test('styles.css drops the sticky sidebar and adds bubble styling', () => {
@@ -74,6 +79,15 @@ describe('review-detail bubble redesign', () => {
     )
   })
 
+  test('styles.css insets the layout right edge so bubble borders clear the scrollbar', () => {
+    // RFC-082 fix: `.comment-bubble { right: 0 }` sat flush against the layout's
+    // right edge, where the (macOS overlay) vertical scrollbar lives + where
+    // `overflow-x: hidden` clips — so the bubble's right border / rounded corner
+    // / shadow got cut ("评审意见框右边框出界"). A padding-right keeps them clear.
+    const css = readFileSync(STYLES_CSS, 'utf8')
+    expect(css).toMatch(/\.review-detail__layout\s*\{[^}]*padding-right:\s*\d+px/)
+  })
+
   test('styles.css stacks bubbles vertically on narrow viewports', () => {
     // Below 720px the absolute positioning collapses so the bubbles flow
     // normally under the document — matches the existing mobile fallback
@@ -89,8 +103,8 @@ describe('review-detail bubble redesign', () => {
   // must (a) be ordered by where their anchor sits in the reviewed text,
   // (b) follow the document as the user scrolls, (c) highlight the
   // anchored text when their bubble is clicked.
-  test('reviews.detail.tsx renders comments sorted by anchor.offsetStart', () => {
-    const src = readFileSync(ROUTE_TSX, 'utf8')
+  test('ReviewDocPane renders comments sorted by anchor.offsetStart', () => {
+    const src = readFileSync(PANE_TSX, 'utf8')
     // A `sortedComments` memo exists and sorts by offsetStart with
     // occurrenceIndex as tiebreaker.
     expect(src).toMatch(/sortedComments/)
@@ -100,20 +114,20 @@ describe('review-detail bubble redesign', () => {
     expect(src).toMatch(/sortedComments\.map\(/)
   })
 
-  test('reviews.detail.tsx remeasures bubble positions on scroll', () => {
+  test('ReviewDocPane remeasures bubble positions on scroll', () => {
     // Both the bubble column and the markdown body live in the same
     // .content scroll container, so the (anchor.top - col.top) math is
     // invariant under scroll *today* — but if any container later
     // introduces its own overflow:auto the bubbles would drift. The
     // scroll listener is cheap insurance.
-    const src = readFileSync(ROUTE_TSX, 'utf8')
+    const src = readFileSync(PANE_TSX, 'utf8')
     expect(src).toMatch(/addEventListener\(\s*'scroll'/)
     // Must use the capture phase — scroll events don't bubble.
     expect(src).toMatch(/'scroll'[^)]*,\s*true\s*\)/)
   })
 
-  test('reviews.detail.tsx wires click-bubble → highlight-anchor-text', () => {
-    const src = readFileSync(ROUTE_TSX, 'utf8')
+  test('ReviewDocPane wires click-bubble → highlight-anchor-text', () => {
+    const src = readFileSync(PANE_TSX, 'utf8')
     // An effect toggles data-active on the matching mark when
     // activeCommentId changes.
     expect(src).toMatch(/data-active/)

@@ -8,13 +8,12 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate, useSearch, Link } from '@tanstack/react-router'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   Config,
   DocVersionWithBodyAndComments,
   ReviewComment,
-  ReviewCommentAnchor,
   ReviewDetail,
 } from '@agent-workflow/shared'
 import type { DocVersion } from '@agent-workflow/shared'
@@ -22,12 +21,9 @@ import { api, type ApiError } from '@/api/client'
 import { DiffView, type DiffGranularity } from '@/components/review/DiffView'
 import { Dialog } from '@/components/Dialog'
 import { MultiDocReviewView } from '@/components/review/MultiDocReviewView'
-import { Prose } from '@/components/prose/Prose'
-import { useResizable } from '@/hooks/useResizable'
+import { ReviewDocPane } from '@/components/review/ReviewDocPane'
 import { useTaskSync } from '@/hooks/useTaskSync'
-import { anchorKey, computeAnchorFromSelection, selectionCrossesHeading } from '@/lib/review/anchor'
-import { deleteDraft, getDraft, listDrafts, setDraft } from '@/lib/review/draftStore'
-import { computeLineRange } from '@/lib/review/lineRange'
+import { listDrafts } from '@/lib/review/draftStore'
 import { resolveReviewView } from '@/lib/review/readonly'
 import { Route as RootRoute } from './__root'
 
@@ -36,27 +32,6 @@ import { Route as RootRoute } from './__root'
 // hand back `{}` for the no-query path.
 interface ReviewDetailSearch {
   version?: string
-}
-
-const BUBBLE_GAP_PX = 8
-
-// RFC-009-T2: sidebar width persistence + bounds. The min keeps the bubble
-// quote+body readable; the max prevents the user from squeezing the doc
-// area to nothing on a wide monitor.
-const SIDEBAR_WIDTH_KEY = 'agw-review-sidebar-width'
-const SIDEBAR_COLLAPSED_KEY = 'agw-review-sidebar-collapsed'
-const SIDEBAR_WIDTH_DEFAULT = 280
-const SIDEBAR_WIDTH_MIN = 240
-const SIDEBAR_WIDTH_MAX = 520
-const SIDEBAR_COLLAPSED_PX = 32
-
-function readCollapsedInit(): boolean {
-  if (typeof window === 'undefined') return false
-  try {
-    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'
-  } catch {
-    return false
-  }
 }
 
 export const Route = createRoute({
@@ -195,238 +170,17 @@ function ReviewDetailPage() {
     queryFn: ({ signal }) => api.get('/api/config', undefined, signal),
   })
 
-  const markdownRef = useRef<HTMLDivElement>(null)
-  const bubblesRef = useRef<HTMLDivElement>(null)
-  const [popover, setPopover] = useState<{
-    anchor: ReviewCommentAnchor
-    draft: string
-    rect: { left: number; top: number }
-  } | null>(null)
-
-  // Light hint shown when the user's selection spans a heading boundary.
-  // computeAnchorFromSelection silently rejects those, which was confusing —
-  // the popover just never opened. We surface a small auto-dismissing tip
-  // anchored to the selection's bounding rect so the user knows *why*
-  // nothing happened. The `key` field lets repeated cross-heading attempts
-  // restart the dismiss timer without flicker.
-  const [crossHeadingHint, setCrossHeadingHint] = useState<{
-    left: number
-    top: number
-    key: number
-  } | null>(null)
-  useEffect(() => {
-    if (crossHeadingHint === null) return
-    const id = window.setTimeout(() => setCrossHeadingHint(null), 2500)
-    return () => window.clearTimeout(id)
-  }, [crossHeadingHint])
-
-  // Sidebar scroll-spy: highlight the comment whose anchor element is
-  // currently the topmost in view.
-  const [activeCommentId, setActiveCommentId] = useState<string | null>(null)
-
-  // RFC-009-T2: collapsible / resizable sidebar (width persisted to
-  // localStorage; collapsed state persisted under a separate key so the
-  // user's last preference survives between sessions and across tasks).
-  const {
-    width: sidebarWidth,
-    onResizerPointerDown,
-    dragging: resizing,
-  } = useResizable({
-    storageKey: SIDEBAR_WIDTH_KEY,
-    initial: SIDEBAR_WIDTH_DEFAULT,
-    min: SIDEBAR_WIDTH_MIN,
-    max: SIDEBAR_WIDTH_MAX,
-  })
-  const [collapsed, setCollapsed] = useState<boolean>(readCollapsedInit)
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0')
-    } catch {
-      /* ignore */
-    }
-  }, [collapsed])
-
-  // RFC-009-T3: inline edit. editingId selects which comment the user is
-  // currently editing; editDraft holds the in-flight textarea value so the
-  // user can Esc out without losing the saved row.
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editDraft, setEditDraft] = useState<string>('')
-
-  // RFC-009-T4: copy-to-clipboard transient state. copiedId is the comment
-  // whose copy button was last clicked; copyFailedId mirrors it for the
-  // failure path (no clipboard permission, etc.). Both auto-clear after
-  // ~1.5s so the button label flicks back.
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [copyFailedId, setCopyFailedId] = useState<string | null>(null)
-
-  // Bubble vertical positions, keyed by comment id. Computed off the
-  // anchor element rects in the rendered markdown; recomputed whenever
-  // comments or rendered body change, on window resize, and on any
-  // ResizeObserver tick from the markdown body (diagrams hydrating, images
-  // loading, font swap, etc.).
-  const [bubbleTops, setBubbleTops] = useState<Map<string, number>>(new Map())
-  const [bubblesMinHeight, setBubblesMinHeight] = useState<number>(0)
-
-  const commentsByOccurrence = useMemo(() => {
-    const m = new Map<string, ReviewComment>()
-    for (const c of activeComments) m.set(anchorKey(c.anchor), c)
-    return m
-  }, [activeComments])
-
-  // Comments rendered in the order they appear in the reviewed text, not
-  // in the API's creation order. The bubble layout positions each card at
-  // its anchor's vertical offset, so visual order is *usually* doc order
-  // anyway — but if measurement fails for any reason (orphan anchor, slow
-  // diagram hydration during the first measure pass, etc.), bubbles fall
-  // back to their DOM source-order stacking and we want THAT to be doc
-  // order too. Sort key: source-markdown char offset, then occurrenceIndex
-  // as a stable tiebreaker for two comments anchored to the same span.
-  const sortedComments = useMemo<ReviewComment[]>(() => {
-    return [...activeComments].sort((a, b) => {
-      if (a.anchor.offsetStart !== b.anchor.offsetStart) {
-        return a.anchor.offsetStart - b.anchor.offsetStart
-      }
-      return a.anchor.occurrenceIndex - b.anchor.occurrenceIndex
-    })
-  }, [activeComments])
-
-  // Mouse-up handler on the markdown area: capture selection → build anchor → open popover.
-  // RFC-013: in read-only historical mode the popover never opens — bail
-  // out early so we don't waste the selection compute or open the IDB.
-  const onMouseUpInDoc = useCallback(async () => {
-    if (readonly) return
-    if (markdownRef.current === null) return
-    const sel = window.getSelection()
-    if (sel === null || sel.isCollapsed) return
-    if (detail.data === undefined) return
-    const anchor = computeAnchorFromSelection(markdownRef.current, sel, detail.data.currentBody)
-    if (anchor === null) {
-      // Distinguish "crossed a heading" (recoverable, user picked the wrong
-      // range) from other null reasons (collapsed / outside body) so we
-      // only nag in the case where there's something useful to say.
-      if (selectionCrossesHeading(markdownRef.current, sel)) {
-        const r = sel.getRangeAt(0).getBoundingClientRect()
-        setCrossHeadingHint({
-          left: r.left + window.scrollX,
-          top: r.bottom + window.scrollY,
-          key: Date.now(),
-        })
-      }
-      return
-    }
-    const range = sel.getRangeAt(0)
-    const rect = range.getBoundingClientRect()
-    const draft =
-      (await getDraft({
-        taskId: detail.data.summary.taskId,
-        nodeRunId,
-        docVersionId: detail.data.currentVersion.id,
-        anchorHash: anchorKey(anchor),
-      })) ?? ''
-    setPopover({
-      anchor,
-      draft,
-      rect: { left: rect.left + window.scrollX, top: rect.bottom + window.scrollY },
-    })
-  }, [detail.data, nodeRunId, readonly])
-
-  // Persist draft on every keystroke + cleanup on submit/cancel.
-  useEffect(() => {
-    if (popover === null || detail.data === undefined) return
-    const k = {
-      taskId: detail.data.summary.taskId,
-      nodeRunId,
-      docVersionId: detail.data.currentVersion.id,
-      anchorHash: anchorKey(popover.anchor),
-    }
-    void setDraft(k, popover.draft)
-  }, [popover, detail.data, nodeRunId])
-
-  const submitComment = useMutation({
-    mutationFn: async (input: { anchor: ReviewCommentAnchor; commentText: string }) => {
-      await api.post(`/api/reviews/${nodeRunId}/comments`, input)
-    },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['reviews', 'detail', nodeRunId] })
-    },
-  })
-
-  const deleteComment = useMutation({
-    mutationFn: async (commentId: string) => {
-      await api.delete(`/api/reviews/${nodeRunId}/comments/${commentId}`)
-    },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['reviews', 'detail', nodeRunId] })
-    },
-  })
-
-  // RFC-009-T3: PATCH the comment body. Backend rejects 409 when the
-  // review is no longer awaiting; the UI keeps the editor open so the user
-  // can either retry or copy out their text.
-  const updateComment = useMutation({
-    mutationFn: async (input: { commentId: string; commentText: string }) => {
-      await api.patch(`/api/reviews/${nodeRunId}/comments/${input.commentId}`, {
-        commentText: input.commentText,
-      })
-    },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['reviews', 'detail', nodeRunId] })
-      setEditingId(null)
-      setEditDraft('')
-    },
-  })
-
-  // RFC-009-T5: derive line ranges (1-based) for each comment so the
-  // bubble can render a "Line N" chip without changing the anchor schema.
-  // Memoized over [body, comments] so the O(N·docLen) scan only re-runs
-  // when comments are added/removed or the doc body changes.
-  const lineRanges = useMemo<Map<string, { start: number; end: number }>>(() => {
-    const m = new Map<string, { start: number; end: number }>()
-    if (activeBody === undefined) return m
-    for (const c of activeComments) {
-      m.set(c.id, computeLineRange(activeBody, c.anchor.offsetStart, c.anchor.offsetEnd))
-    }
-    return m
-  }, [activeBody, activeComments])
-
-  // RFC-009-T4: clipboard helper. We don't need to expose this as a
-  // mutation because there's no server round-trip — just an optimistic
-  // transient state.
-  const onCopy = useCallback((commentId: string, text: string) => {
-    if (typeof navigator === 'undefined' || navigator.clipboard === undefined) {
-      setCopyFailedId(commentId)
-      setTimeout(() => setCopyFailedId(null), 1500)
-      return
-    }
-    navigator.clipboard.writeText(text).then(
-      () => {
-        setCopiedId(commentId)
-        setTimeout(() => setCopiedId(null), 1500)
-      },
-      () => {
-        setCopyFailedId(commentId)
-        setTimeout(() => setCopyFailedId(null), 1500)
-      },
-    )
-  }, [])
-
-  const onStartEdit = useCallback((c: ReviewComment) => {
-    setEditingId(c.id)
-    setEditDraft(c.commentText)
-  }, [])
-  const onCancelEdit = useCallback(() => {
-    setEditingId(null)
-    setEditDraft('')
-  }, [])
-  const onSaveEdit = useCallback(
-    async (commentId: string) => {
-      const text = editDraft.trim()
-      if (text.length === 0) return
-      await updateComment.mutateAsync({ commentId, commentText: text })
-    },
-    [editDraft, updateComment],
-  )
+  // RFC-082: the markdown body + anchored comment sidebar + popover + comment
+  // CRUD all live in <ReviewDocPane> now (shared with the multi-doc page). The
+  // page keeps only what it needs to DRIVE the pane: invalidate on comment
+  // writes, and a `paneCapturing` flag the pane reports so the page can suppress
+  // its own single-key shortcuts (A/R/I + Ctrl+1/2/3) while the pane owns the
+  // keyboard (popover open / inline-editing) — faithfully reproducing the old
+  // single combined handler's `if (popover) / if (editingId) return` guards.
+  const invalidateDetail = useCallback(async () => {
+    await qc.invalidateQueries({ queryKey: ['reviews', 'detail', nodeRunId] })
+  }, [qc, nodeRunId])
+  const [paneCapturing, setPaneCapturing] = useState(false)
 
   const submitDecision = useMutation({
     mutationFn: async (input: {
@@ -533,269 +287,16 @@ function ReviewDetailPage() {
     })
   }, [decisionDialog, detail.data, submitDecision])
 
-  // RFC-051: anchor wrapping now happens inside the React tree via the
-  // `rehypeWrapAnchors` plugin (see `<Prose anchors={proseAnchors}>`
-  // below). The legacy `useLayoutEffect(wrapAnchorsInDom)` is gone — it
-  // used to mutate the rendered DOM after mount, which collided with
-  // react reconciliation every time `currentBody` changed (cross-review
-  // navigation, refetch polling, iterate landing a new version) and
-  // tripped `NotFoundError: removeChild` on the next render. The
-  // downstream measure / scroll-spy / `data-active` logic all keeps
-  // working unchanged because the resulting `<mark.comment-anchor
-  // [data-comment-id="..."]>` selector match is identical.
-  const proseAnchors = useMemo(
-    () =>
-      sortedComments.map((c) => ({
-        commentId: c.id,
-        selectedText: c.anchor.selectedText,
-        occurrenceIndex: c.anchor.occurrenceIndex,
-      })),
-    [sortedComments],
-  )
-
-  // Measure each bubble's vertical position from its anchor's rect. Walks
-  // comments in DOM order and bumps any bubble down if it would overlap
-  // the previous one (gap = BUBBLE_GAP_PX). Recomputes on resize, on body
-  // mutations (ResizeObserver), and on every comments/body change.
-  useLayoutEffect(() => {
-    if (markdownRef.current === null || bubblesRef.current === null) return
-    if (diffMode) return
-    // RFC-009-T2: bubble column is hidden (display: none via collapsed
-    // branch) when the sidebar is collapsed; measuring against a 0-height
-    // container would just pin every bubble at top=0 and then thrash on
-    // expand. Bail out cleanly.
-    if (collapsed) return
-
-    const measure = (): void => {
-      const root = markdownRef.current
-      const col = bubblesRef.current
-      if (root === null || col === null) return
-      const colTop = col.getBoundingClientRect().top
-      // RFC-009 hot-fix: the sticky sidebar header is the first child of the
-      // bubble column. Bubbles are position: absolute (so they ignore the
-      // header in normal flow) and the first bubble's measured top can be
-      // 0 / very small when its anchor sits near the top of the doc —
-      // which would slide it under the header. Compute the header's offset
-      // height once per pass and use that as the floor for the bubble
-      // cursor below. offsetHeight is layout-final and includes
-      // margin-bottom: 0 / padding / borders so it's the right number.
-      const headerEl = col.querySelector<HTMLElement>('.review-detail__sidebar-header')
-      const headerFloor = headerEl !== null ? headerEl.offsetHeight + BUBBLE_GAP_PX : 0
-      // Split comments into "located" (anchor found in DOM) and
-      // "orphaned" (anchor text missing — e.g. body changed since the
-      // comment was created, or the wrap helper failed to find the
-      // n-th occurrence). Located bubbles are positioned at their
-      // anchor; orphans get stacked at the bottom of the column so they
-      // remain visible. Without this, an orphan bubble would have no
-      // inline top and collapse to the static-position 0, overlapping
-      // every located bubble and producing the "only one comment
-      // renders" symptom users hit when several anchors stack up.
-      const located: { id: string; top: number; height: number }[] = []
-      const orphans: { id: string; height: number }[] = []
-      for (const c of sortedComments) {
-        const bubble = col.querySelector<HTMLElement>(`.comment-bubble[data-comment-id="${c.id}"]`)
-        const h = bubble?.getBoundingClientRect().height ?? 0
-        const el = root.querySelector<HTMLElement>(`mark.comment-anchor[data-comment-id="${c.id}"]`)
-        if (el === null) {
-          orphans.push({ id: c.id, height: h })
-          continue
-        }
-        const rect = el.getBoundingClientRect()
-        located.push({ id: c.id, top: rect.top - colTop, height: h })
-      }
-      // sortedComments is already in anchor.offsetStart order, but the
-      // *visual* position of those anchors can differ slightly if the
-      // markdown renderer reorders content (rare, but possible with
-      // custom block plugins). Re-sort defensively by measured top.
-      located.sort((a, b) => a.top - b.top)
-      const next = new Map<string, number>()
-      // RFC-009 hot-fix: start the cursor below the sticky header so the
-      // first bubble can never sit under it. Subsequent bubbles either
-      // sit at their anchor's measured top or get bumped down by the
-      // cumulative max (existing collision-avoidance logic).
-      let cursor = headerFloor
-      for (const item of located) {
-        const top = Math.max(item.top, cursor)
-        next.set(item.id, top)
-        cursor = top + item.height + BUBBLE_GAP_PX
-      }
-      for (const item of orphans) {
-        next.set(item.id, cursor)
-        cursor = cursor + item.height + BUBBLE_GAP_PX
-      }
-      setBubbleTops(next)
-      setBubblesMinHeight(Math.max(cursor, root.getBoundingClientRect().height))
-    }
-
-    measure()
-
-    const ro = new ResizeObserver(() => measure())
-    ro.observe(markdownRef.current)
-    // Also observe the bubbles column itself — bubble heights change as
-    // text wraps with column width.
-    ro.observe(bubblesRef.current)
-    // RFC-009 hot-fix: when the user opens / closes inline edit on a
-    // middle bubble, that bubble grows (textarea + Save/Cancel actions)
-    // or shrinks back — but the column's own size doesn't change since
-    // we pin a minHeight on it. Observe each bubble individually so any
-    // height change (inline edit toggle, manual textarea resize, body
-    // text wrap on width change) triggers a remeasure and pushes the
-    // bubbles below back down.
-    bubblesRef.current
-      .querySelectorAll<HTMLElement>('.comment-bubble')
-      .forEach((b) => ro.observe(b))
-    const onResize = (): void => measure()
-    window.addEventListener('resize', onResize)
-    // Scroll listener (capture phase, since scroll events don't bubble).
-    // The anchor/bubble math (anchor.top - col.top) is invariant under
-    // scroll *only* when both elements live in the same scroll container.
-    // Adding a scroll-triggered remeasure makes the layout robust even if
-    // a future container introduces its own overflow — bubbles stay
-    // pinned to their anchors as the user drags the scrollbar.
-    const onScroll = (): void => measure()
-    window.addEventListener('scroll', onScroll, true)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', onResize)
-      window.removeEventListener('scroll', onScroll, true)
-    }
-    // editingId is in deps so opening / closing the inline editor
-    // immediately re-measures even before the per-bubble ResizeObserver
-    // fires its first callback (avoids a one-frame overlap flash).
-  }, [sortedComments, diffMode, collapsed, sidebarWidth, editingId])
-
-  // When the active comment changes (click bubble, J/K jump, scroll-spy),
-  // toggle a data-active attribute on the matching <mark.comment-anchor>
-  // in the rendered markdown so CSS can paint it with a stronger
-  // highlight. Re-applied whenever the wrap effect re-runs (since wrap
-  // strips and recreates every mark, otherwise the active state would be
-  // lost after a comments refetch).
-  useEffect(() => {
-    if (markdownRef.current === null) return
-    const root = markdownRef.current
-    root.querySelectorAll<HTMLElement>('mark.comment-anchor[data-active]').forEach((m) => {
-      m.removeAttribute('data-active')
-    })
-    if (activeCommentId === null) return
-    const el = root.querySelector<HTMLElement>(
-      `mark.comment-anchor[data-comment-id="${activeCommentId}"]`,
-    )
-    if (el !== null) el.setAttribute('data-active', 'true')
-  }, [activeCommentId, sortedComments, diffMode])
-
-  // When the user clicks a bubble OR hits the ▲/▼ arrows OR J/K, we call
-  // `setActiveCommentId(target)` and start a programmatic smooth scroll
-  // toward the target anchor. The IntersectionObserver scroll-spy below
-  // fires *during* that scroll for every anchor that briefly becomes
-  // "topmost intersecting", which races with — and clobbers — our
-  // intentional active id (the user clicks ▼ but lands on whichever
-  // anchor happens to be scrolling past at observer-callback time).
-  // We suppress the scroll-spy for a short window after each programmatic
-  // jump using this timestamp ref. Smooth scrollIntoView typically settles
-  // within ~400ms on local docs; 800ms gives long-distance jumps headroom
-  // without blocking real reading-position updates for long.
-  const suppressScrollSpyUntilRef = useRef<number>(0)
-
-  const scrollToCommentAnchor = useCallback((commentId: string) => {
-    const el = markdownRef.current?.querySelector<HTMLElement>(
-      `mark.comment-anchor[data-comment-id="${commentId}"]`,
-    )
-    if (el === null || el === undefined) return
-    suppressScrollSpyUntilRef.current = Date.now() + 800
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }, [])
-
-  const onBubbleClick = useCallback(
-    (commentId: string) => {
-      setActiveCommentId(commentId)
-      scrollToCommentAnchor(commentId)
-    },
-    [scrollToCommentAnchor],
-  )
-
-  // Shared "jump to next / prev comment" helper. Used by both the J/K
-  // keyboard shortcut and the up/down triangle buttons in the sidebar
-  // header. Doc order = sortedComments (anchor.offsetStart asc), which
-  // also matches the bubble column's visual order.
-  const jumpComment = useCallback(
-    (direction: 'next' | 'prev') => {
-      const comments = sortedComments
-      if (comments.length === 0) return
-      const currentIdx =
-        activeCommentId === null ? -1 : comments.findIndex((c) => c.id === activeCommentId)
-      const nextIdx =
-        direction === 'next'
-          ? Math.min(currentIdx + 1, comments.length - 1)
-          : Math.max(currentIdx - 1, 0)
-      const target = comments[nextIdx]
-      if (target === undefined) return
-      setActiveCommentId(target.id)
-      scrollToCommentAnchor(target.id)
-    },
-    [sortedComments, activeCommentId, scrollToCommentAnchor],
-  )
-
-  // Derived enable/disable state for the up/down triangle buttons. We
-  // disable the up arrow when the active comment is the first (or none
-  // is active and the list is empty) and the down arrow at the tail.
-  // Empty list → both disabled. No active comment → both enabled so the
-  // user can jump into the list in either direction.
-  const currentCommentIdx =
-    activeCommentId === null ? -1 : sortedComments.findIndex((c) => c.id === activeCommentId)
-  const canJumpPrev = sortedComments.length > 0 && currentCommentIdx !== 0
-  const canJumpNext = sortedComments.length > 0 && currentCommentIdx !== sortedComments.length - 1
-
-  // Scroll-spy: hook IntersectionObserver to the rendered DOM after each
-  // markdown rerender. Currently a simple "top visible anchor in viewport"
-  // heuristic — keeps the sidebar tracking the user's reading position.
-  // While a programmatic jump (bubble click / ▲▼ / J/K) is in flight, the
-  // smooth scroll fires intersection events for every anchor it sweeps
-  // past — without suppression those would clobber our intentional active
-  // id, leaving the user landed on the wrong comment.
-  useEffect(() => {
-    if (markdownRef.current === null || activeBody === undefined) return
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (Date.now() < suppressScrollSpyUntilRef.current) return
-        const top = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
-        if (top !== undefined) {
-          const id = (top.target as HTMLElement).dataset.commentId ?? null
-          if (id !== null) setActiveCommentId(id)
-        }
-      },
-      { rootMargin: '-20% 0px -60% 0px' },
-    )
-    const anchors = markdownRef.current.querySelectorAll('[data-comment-id]')
-    anchors.forEach((a) => observer.observe(a))
-    return () => observer.disconnect()
-  }, [activeBody])
-
-  // Keyboard shortcuts: A/R/I + J/K (cross-comment jump) + Esc.
+  // Keyboard shortcuts: A/R/I decisions + Ctrl/Cmd+1/2/3 diff granularity.
+  // J/K (cross-comment jump) and Esc-closes-popover moved into
+  // <ReviewDocPane> with the comment machinery; `paneCapturing` (reported by
+  // the pane while its popover is open or a comment is being inline-edited)
+  // stands in for the old `if (popover) / if (editingId) return` guards so
+  // A/R/I never fire mid-comment.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // RFC-013: read-only historical mode disables every shortcut. The
-      // decision buttons are not in the DOM, the popover is never opened,
-      // and the diff toggle is hidden — so A/R/I, Ctrl+1/2/3 and even
-      // J/K (which depend on comment-anchor state that's intentionally
-      // present in the read-only view but should not steal global focus
-      // away from typing in dev tools etc) all short-circuit.
       if (readonly) return
-      if (popover !== null) {
-        if (e.key === 'Escape') {
-          setPopover(null)
-        }
-        return
-      }
-      // RFC-009-T3: while the user is editing a comment, all single-key
-      // shortcuts are off — `j` / `k` need to type into the textarea, and
-      // `a` / `r` / `i` would steal the keystroke too. We still process
-      // Cmd/Ctrl+Enter / Escape in the textarea's own onKeyDown, so this
-      // early return is safe.
-      if (editingId !== null) {
-        return
-      }
+      if (paneCapturing) return
       // Don't hijack typing inside form fields.
       if (
         document.activeElement !== null &&
@@ -827,12 +328,10 @@ function ReviewDetailPage() {
       if (k === 'a') void onApprove()
       else if (k === 'r') void onReject()
       else if (k === 'i') void onIterate()
-      else if (k === 'j') jumpComment('next')
-      else if (k === 'k') jumpComment('prev')
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [popover, onApprove, onReject, onIterate, jumpComment, diffMode, editingId, readonly])
+  }, [paneCapturing, onApprove, onReject, onIterate, diffMode, readonly])
 
   if (detail.isLoading) return <div className="muted">{t('common.loading')}</div>
   if (detail.error !== null && detail.error !== undefined) {
@@ -1026,14 +525,25 @@ function ReviewDetailPage() {
         </div>
       )}
 
-      <div
-        className="review-detail__layout"
-        style={{
-          gridTemplateColumns: `minmax(0, 1fr) ${collapsed ? SIDEBAR_COLLAPSED_PX : sidebarWidth}px`,
-        }}
-      >
-        {!readonly && diffMode && priorBody.data !== undefined ? (
-          <div className="review-detail__body">
+      <ReviewDocPane
+        nodeRunId={nodeRunId}
+        taskId={data.summary.taskId}
+        docVersionId={
+          view.mode === 'historical'
+            ? (historicalVid ?? data.currentVersion.id)
+            : data.currentVersion.id
+        }
+        body={activeBody ?? ''}
+        comments={activeComments}
+        readonly={readonly}
+        awaiting={isAwaiting}
+        plantumlEndpoint={config.data?.plantumlEndpoint}
+        plantumlAuthHeader={config.data?.plantumlAuthHeader}
+        onInvalidate={invalidateDetail}
+        onShortcutCaptureChange={setPaneCapturing}
+        diffMode={diffMode}
+        bodySlot={
+          !readonly && diffMode && priorBody.data !== undefined ? (
             <DiffView
               left={priorBody.data.body}
               right={data.currentBody}
@@ -1046,246 +556,11 @@ function ReviewDetailPage() {
                 version: data.currentVersion.versionIndex,
               })}
             />
-          </div>
-        ) : readonly && historicalDetail.isLoading ? (
-          <div className="review-detail__body muted">{t('common.loading')}</div>
-        ) : (
-          <div
-            className="review-detail__body"
-            ref={markdownRef}
-            onMouseUp={readonly ? undefined : () => void onMouseUpInDoc()}
-          >
-            <Prose
-              body={activeBody ?? ''}
-              taskId={data.summary.taskId}
-              plantumlEndpoint={config.data?.plantumlEndpoint}
-              plantumlAuthHeader={config.data?.plantumlAuthHeader}
-              // RFC-051: mirror the legacy `if (diffMode) return` guard
-              // inside the old wrap effect — when diff mode is on but
-              // `priorBody.data` is still loading we render Prose as a
-              // transient placeholder and we don't want marks to flash
-              // before DiffView swaps in.
-              anchors={diffMode ? undefined : proseAnchors}
-            />
-          </div>
-        )}
-        {collapsed ? (
-          <div className="comments-collapsed-rail" aria-label={t('reviews.sidebarTitle')}>
-            <button
-              type="button"
-              className="comments-collapsed-rail__toggle"
-              aria-label={t('reviews.sidebarExpand')}
-              title={t('reviews.sidebarExpand')}
-              onClick={() => setCollapsed(false)}
-            >
-              ‹
-            </button>
-            <span className="comments-collapsed-rail__count" aria-hidden="true">
-              {sortedComments.length}
-            </span>
-          </div>
-        ) : (
-          <div
-            className="review-detail__bubbles"
-            ref={bubblesRef}
-            style={bubblesMinHeight > 0 ? { minHeight: `${bubblesMinHeight}px` } : undefined}
-            aria-label={t('reviews.sidebarTitle')}
-          >
-            {/* RFC-009-T2: drag handle on the left edge of the column. */}
-            <div
-              className="review-detail__sidebar-resizer"
-              data-dragging={resizing ? 'true' : 'false'}
-              onPointerDown={onResizerPointerDown}
-              role="separator"
-              aria-orientation="vertical"
-            />
-            {/* RFC-009-T5: sticky header — count + jump arrows + collapse
-                toggle. The two triangle buttons mirror the J/K keyboard
-                shortcut: ▲ jumps to the previous comment in doc order, ▼
-                jumps to the next. Disabled at the boundaries so the user
-                gets visual feedback when they're at the first / last
-                comment instead of the click silently no-op'ing. */}
-            <header className="review-detail__sidebar-header">
-              <span className="review-detail__sidebar-count">
-                {t('reviews.sidebarCountLabel', { count: sortedComments.length })}
-              </span>
-              <div className="review-detail__sidebar-jump" role="group">
-                <button
-                  type="button"
-                  className="review-detail__sidebar-jump-btn"
-                  aria-label={t('reviews.sidebarJumpPrev')}
-                  title={t('reviews.sidebarJumpPrev')}
-                  disabled={!canJumpPrev}
-                  onClick={() => jumpComment('prev')}
-                >
-                  ▲
-                </button>
-                <button
-                  type="button"
-                  className="review-detail__sidebar-jump-btn"
-                  aria-label={t('reviews.sidebarJumpNext')}
-                  title={t('reviews.sidebarJumpNext')}
-                  disabled={!canJumpNext}
-                  onClick={() => jumpComment('next')}
-                >
-                  ▼
-                </button>
-              </div>
-              <button
-                type="button"
-                className="review-detail__sidebar-toggle"
-                aria-label={t('reviews.sidebarCollapse')}
-                title={t('reviews.sidebarCollapse')}
-                onClick={() => setCollapsed(true)}
-              >
-                ›
-              </button>
-            </header>
-            {sortedComments.length === 0 ? (
-              <div className="review-detail__bubbles-empty muted">
-                {readonly ? t('reviews.sidebarEmptyReadonly') : t('reviews.sidebarEmpty')}
-              </div>
-            ) : (
-              sortedComments.map((c) => {
-                const top = bubbleTops.get(c.id)
-                const isActive = activeCommentId === c.id
-                const isEditing = editingId === c.id
-                const range = lineRanges.get(c.id)
-                const lineLabel =
-                  range === undefined
-                    ? ''
-                    : range.start === range.end
-                      ? t('reviews.lineRef', { n: range.start })
-                      : t('reviews.lineRefRange', { start: range.start, end: range.end })
-                const copyLabel =
-                  copiedId === c.id
-                    ? t('reviews.commentCopied')
-                    : copyFailedId === c.id
-                      ? t('reviews.commentCopyFailed')
-                      : t('reviews.commentCopy')
-                return (
-                  <article
-                    key={c.id}
-                    className={
-                      'comment-bubble' +
-                      (isActive ? ' comment-bubble--active' : '') +
-                      (isEditing ? ' comment-bubble--editing' : '')
-                    }
-                    data-comment-id={c.id}
-                    style={top !== undefined ? { top: `${top}px` } : undefined}
-                    onClick={() => onBubbleClick(c.id)}
-                  >
-                    {/* RFC-013: in read-only historical view, ALL comment
-                        write affordances (edit / copy / delete) are
-                        omitted from the DOM so they don't visually imply
-                        an action that the page will refuse to take. */}
-                    {!readonly && !isEditing && (
-                      <div className="comment-bubble__actions">
-                        <button
-                          type="button"
-                          className="comment-bubble__action"
-                          aria-label={t('reviews.commentEdit')}
-                          title={t('reviews.commentEdit')}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onStartEdit(c)
-                          }}
-                          disabled={!isAwaiting}
-                        >
-                          ✎
-                        </button>
-                        <button
-                          type="button"
-                          className="comment-bubble__action"
-                          aria-label={copyLabel}
-                          title={copyLabel}
-                          data-copied={copiedId === c.id ? 'true' : 'false'}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onCopy(c.id, c.commentText)
-                          }}
-                        >
-                          ⧉
-                        </button>
-                        <button
-                          type="button"
-                          className="comment-bubble__action comment-bubble__delete"
-                          aria-label={t('common.delete')}
-                          title={t('common.delete')}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            deleteComment.mutate(c.id)
-                          }}
-                          disabled={!isAwaiting}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    )}
-                    <header className="comment-bubble__section" title={c.anchor.sectionPath}>
-                      {c.anchor.sectionPath || t('reviews.sidebarTitle')}
-                      {lineLabel !== '' && (
-                        <span className="comment-bubble__line-ref">{lineLabel}</span>
-                      )}
-                    </header>
-                    <blockquote className="comment-bubble__quote" title={c.anchor.selectedText}>
-                      {c.anchor.selectedText}
-                    </blockquote>
-                    {isEditing ? (
-                      <div
-                        className="comment-bubble__edit-form"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <textarea
-                          autoFocus
-                          rows={3}
-                          value={editDraft}
-                          onChange={(e) => setEditDraft(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                              e.preventDefault()
-                              void onSaveEdit(c.id)
-                            }
-                            if (e.key === 'Escape') {
-                              e.preventDefault()
-                              onCancelEdit()
-                            }
-                          }}
-                        />
-                        <div className="comment-bubble__edit-form-actions">
-                          <button
-                            type="button"
-                            className="btn btn--sm"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onCancelEdit()
-                            }}
-                          >
-                            {t('reviews.commentEditCancel')}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn--sm btn--primary"
-                            disabled={editDraft.trim().length === 0 || updateComment.isPending}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              void onSaveEdit(c.id)
-                            }}
-                          >
-                            {t('reviews.commentSave')}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="comment-bubble__body">{c.commentText}</p>
-                    )}
-                  </article>
-                )
-              })
-            )}
-          </div>
-        )}
-      </div>
+          ) : readonly && historicalDetail.isLoading ? (
+            <span className="muted">{t('common.loading')}</span>
+          ) : undefined
+        }
+      />
 
       {!readonly && submitDecision.error !== null && submitDecision.error !== undefined && (
         <div className="review-detail__error error-box">
@@ -1302,93 +577,8 @@ function ReviewDetailPage() {
           submitting={submitDecision.isPending}
         />
       )}
-
-      {!readonly && crossHeadingHint !== null && (
-        <div
-          key={crossHeadingHint.key}
-          className="review-cross-heading-hint"
-          style={{
-            position: 'absolute',
-            left: crossHeadingHint.left,
-            top: crossHeadingHint.top,
-          }}
-          role="status"
-          aria-live="polite"
-        >
-          {t('reviews.crossHeadingHint')}
-        </div>
-      )}
-
-      {!readonly && popover !== null && (
-        <div
-          className="comment-popover"
-          style={{ position: 'absolute', left: popover.rect.left, top: popover.rect.top }}
-          role="dialog"
-        >
-          <div className="muted">{popover.anchor.sectionPath}</div>
-          <textarea
-            className="form-input"
-            autoFocus
-            rows={3}
-            value={popover.draft}
-            placeholder={t('reviews.popoverPlaceholder')}
-            onChange={(e) => setPopover({ ...popover, draft: e.target.value })}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault()
-                void submitPopover()
-              }
-              if (e.key === 'Escape') {
-                e.preventDefault()
-                setPopover(null)
-              }
-            }}
-          />
-          <div className="comment-popover__actions">
-            <button
-              type="button"
-              className="btn btn--sm btn--primary"
-              disabled={popover.draft.trim().length === 0 || submitComment.isPending}
-              onClick={() => void submitPopover()}
-            >
-              {t('reviews.popoverSubmit')}
-            </button>
-            <button
-              type="button"
-              className="btn btn--sm"
-              onClick={() => {
-                if (detail.data === undefined) return
-                void deleteDraft({
-                  taskId: detail.data.summary.taskId,
-                  nodeRunId,
-                  docVersionId: detail.data.currentVersion.id,
-                  anchorHash: anchorKey(popover.anchor),
-                })
-                setPopover(null)
-              }}
-            >
-              {t('reviews.popoverCancel')}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
-
-  async function submitPopover() {
-    if (popover === null || detail.data === undefined) return
-    const text = popover.draft.trim()
-    if (text.length === 0) return
-    await submitComment.mutateAsync({ anchor: popover.anchor, commentText: text })
-    await deleteDraft({
-      taskId: detail.data.summary.taskId,
-      nodeRunId,
-      docVersionId: detail.data.currentVersion.id,
-      anchorHash: anchorKey(popover.anchor),
-    })
-    void commentsByOccurrence // silence unused-var lint if commentsByOccurrence never gets a reader
-    setPopover(null)
-  }
 }
 
 // In-app dialog for the three decision buttons. Replaces window.confirm /

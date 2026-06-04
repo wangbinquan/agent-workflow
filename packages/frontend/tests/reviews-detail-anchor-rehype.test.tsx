@@ -87,7 +87,14 @@ describe('reviews.detail anchor wrap goes through React tree (RFC-051)', () => {
     const src = readFileSync(ROUTE_TSX, 'utf8')
     expect(src).not.toMatch(/\bwrapAnchorsInDom\s*\(/)
     expect(src).not.toContain("from '@/lib/review/wrapAnchorsInDom'")
-    // And the new path is wired up.
-    expect(src).toContain('anchors={diffMode ? undefined : proseAnchors}')
+    // RFC-082: the <Prose anchors> render moved into <ReviewDocPane>; the new
+    // rehype-anchor path (no wrapAnchorsInDom) is wired up there. `diffActive`
+    // is the pane's diff flag (host passes diffMode through).
+    const pane = readFileSync(
+      resolve(__dirname, '..', 'src', 'components', 'review', 'ReviewDocPane.tsx'),
+      'utf8',
+    )
+    expect(pane).not.toMatch(/\bwrapAnchorsInDom\s*\(/)
+    expect(pane).toContain('anchors={diffActive ? undefined : proseAnchors}')
   })
 })

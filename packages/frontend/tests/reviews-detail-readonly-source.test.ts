@@ -15,9 +15,16 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const ROUTE_TSX = resolve(__dirname, '..', 'src', 'routes', 'reviews.detail.tsx')
+// RFC-082: the markdown body + comment bubbles + popover + onMouseUpInDoc moved
+// into the shared <ReviewDocPane>. Readonly guards on those affordances now live
+// there, so assertions about them read the pane source instead of the route.
+const PANE_TSX = resolve(__dirname, '..', 'src', 'components', 'review', 'ReviewDocPane.tsx')
 
 function src(): string {
   return readFileSync(ROUTE_TSX, 'utf8')
+}
+function pane(): string {
+  return readFileSync(PANE_TSX, 'utf8')
 }
 
 describe('RFC-013 reviews.detail.tsx — readonly historical view', () => {
@@ -40,15 +47,19 @@ describe('RFC-013 reviews.detail.tsx — readonly historical view', () => {
     // Effect body opens with the readonly short-circuit before touching
     // popover / editingId / activeElement / diffMode.
     expect(s).toMatch(/onKey\s*=\s*\(e:[^)]*\)\s*=>\s*\{[\s\S]*?if\s*\(\s*readonly\s*\)\s*return/)
-    // readonly is in the effect's deps array.
-    expect(s).toMatch(/\],\s*\)\s*$/m) // trailing closer exists (sanity)
-    // `readonly` is in the keyboard effect's deps array. We don't lock the
-    // exact formatting (prettier may collapse it to a single line) — just
-    // that the keyword appears alongside `editingId` inside a deps array.
-    expect(s).toMatch(/editingId[\s\S]{0,200}readonly\s*\]/m)
+    // RFC-082: right after the readonly bail, the route keyboard also bails
+    // when the pane is capturing keystrokes (popover open / inline-editing),
+    // so A/R/I never fire mid-comment.
+    expect(s).toMatch(
+      /if\s*\(\s*readonly\s*\)\s*return[\s\S]{0,80}if\s*\(\s*paneCapturing\s*\)\s*return/,
+    )
+    // RFC-082: `editingId` moved into <ReviewDocPane> with the comment
+    // machinery; the route's A/R/I keyboard now gates on `paneCapturing`
+    // (reported by the pane) instead — still alongside `readonly` in the deps.
+    expect(s).toMatch(/paneCapturing[\s\S]{0,200}readonly\s*\]/m)
   })
 
-  test('decision buttons + dialog + popover are gated behind !readonly', () => {
+  test('decision buttons + dialog are gated behind !readonly (route); popover gated in pane', () => {
     const s = src()
     // The three decision buttons live in a header-actions cluster wrapped
     // by `{!readonly && (<div className="review-detail__decision-actions" ...>)}`.
@@ -59,14 +70,14 @@ describe('RFC-013 reviews.detail.tsx — readonly historical view', () => {
     )
     // The styled in-app decision dialog is also gated.
     expect(s).toMatch(/\{\s*!readonly\s*&&\s*decisionDialog\s*!==\s*null\s*&&/)
-    // Popover wrapped: {!readonly && popover !== null && ...}.
-    expect(s).toMatch(/\{\s*!readonly\s*&&\s*popover\s*!==\s*null\s*&&/)
+    // RFC-082: the selection→comment popover moved to <ReviewDocPane>; its
+    // !readonly gate lives there now.
+    expect(pane()).toMatch(/\{\s*!readonly\s*&&\s*popover\s*!==\s*null\s*&&/)
   })
 
-  test('comment-bubble write actions (edit/copy/delete) are gated behind !readonly', () => {
-    const s = src()
-    // The actions block opens with {!readonly && !isEditing && (...)}.
-    expect(s).toMatch(/\{\s*!readonly\s*&&\s*!isEditing\s*&&\s*\(/)
+  test('comment-bubble write actions (edit/copy/delete) are gated behind !readonly (pane)', () => {
+    // RFC-082: the bubble write actions moved to <ReviewDocPane>.
+    expect(pane()).toMatch(/\{\s*!readonly\s*&&\s*!isEditing\s*&&\s*\(/)
   })
 
   test('diff toolbar is gated behind !readonly', () => {
@@ -75,9 +86,9 @@ describe('RFC-013 reviews.detail.tsx — readonly historical view', () => {
     expect(s).toMatch(/\{\s*!readonly\s*&&\s*data\.currentVersion\.versionIndex\s*>\s*1\s*&&\s*\(/)
   })
 
-  test('onMouseUpInDoc bails out early when readonly', () => {
-    const s = src()
-    expect(s).toMatch(
+  test('onMouseUpInDoc bails out early when readonly (pane)', () => {
+    // RFC-082: onMouseUpInDoc moved into <ReviewDocPane>.
+    expect(pane()).toMatch(
       /onMouseUpInDoc\s*=\s*useCallback\(\s*async\s*\(\)\s*=>\s*\{\s*if\s*\(\s*readonly\s*\)\s*return/,
     )
   })
