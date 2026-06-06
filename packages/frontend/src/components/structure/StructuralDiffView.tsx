@@ -136,7 +136,7 @@ export function StructuralDiffView({
               onOpenCallChain={openCallChain}
             />
           ) : activeView === 'graph' ? (
-            <StructuralGraph data={data} />
+            <StructuralGraph data={data} onOpenCallChain={openCallChain} />
           ) : activeView === 'impact' ? (
             <div className="structure__impact-view">
               <ImpactPanel impact={data.impact} />

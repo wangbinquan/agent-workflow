@@ -36,4 +36,19 @@ describe('inferLocalTypes', () => {
     expect(t.get('items')).toBe('List')
     expect(t.get('table')).toBe('HashMap')
   })
+
+  test('does NOT map a method declaration return-type as a var (#8 no fabrication)', () => {
+    // `Foo getFoo()` is a method, not `Foo` typed var `getFoo` — mapping it would
+    // fabricate a resolved edge (getFoo.x → Foo.x), violating 绝不臆造.
+    const t = inferLocalTypes('public Foo getFoo() { return null; }\n Bar svc;')
+    expect(t.has('getFoo')).toBe(false)
+    expect(t.get('svc')).toBe('Bar') // a real field is still mapped
+  })
+})
+
+describe('scanClassDecls — Go name-first form (#3)', () => {
+  test('indexes `type Game struct` / `type Reader interface`', () => {
+    const names = scanClassDecls('g.go', 'type Game struct{}\ntype Reader interface{}\n')
+    expect(names.sort()).toEqual(['Game', 'Reader'])
+  })
 })

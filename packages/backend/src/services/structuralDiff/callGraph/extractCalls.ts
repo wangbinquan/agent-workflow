@@ -41,16 +41,19 @@ const GO = `
 `
 const RUST = `
 (call_expression function: (field_expression value: (_) @recv field: (field_identifier) @name)) @call.method
-(call_expression function: (scoped_identifier) @name) @call.scoped
+(call_expression function: (scoped_identifier path: (_) @recv name: (identifier) @name)) @call.scoped
 (call_expression function: (identifier) @name) @call.bare
 `
+// C++ method calls: the receiver field is named \`argument\` (covers \`a.foo()\`
+// and \`a->foo()\`); \`value:\` is not a valid field here.
 const CPP = `
-(call_expression function: (field_expression field: (field_identifier) @name)) @call.method
+(call_expression function: (field_expression argument: (_) @recv field: (field_identifier) @name)) @call.method
 (call_expression function: (identifier) @name) @call.bare
 (new_expression (type_identifier) @name) @call.new
 `
 const SCALA = `
 (call_expression function: (field_expression value: (_) @recv field: (identifier) @name)) @call.method
+(instance_expression (call_expression function: (identifier) @name)) @call.new
 (call_expression function: (identifier) @name) @call.bare
 `
 

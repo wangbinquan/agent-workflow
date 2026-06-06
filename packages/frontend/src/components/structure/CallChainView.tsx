@@ -105,13 +105,15 @@ async function fetchChainTree(
       }
       count += 1
       let children: SeqCallNode[] = []
-      if (
-        tg.resolution === 'resolved' &&
-        tg.ref !== undefined &&
-        !ancestors.has(tg.ref) &&
-        depth < SEQ_MAX_DEPTH
-      ) {
-        children = await visit(tg.ref, new Set([...ancestors, tg.ref]), depth + 1)
+      if (tg.resolution === 'resolved' && tg.ref !== undefined) {
+        if (ancestors.has(tg.ref) || depth >= SEQ_MAX_DEPTH) {
+          // a resolved subtree we DID NOT expand (cycle / depth cap) → the diagram
+          // is incomplete; surface the marker (the tree view tags these per-node,
+          // the sequence view can't, so it flags the whole diagram).
+          truncated = true
+        } else {
+          children = await visit(tg.ref, new Set([...ancestors, tg.ref]), depth + 1)
+        }
       }
       out.push({
         ownerClass: tg.ownerClass ?? null,
@@ -138,7 +140,7 @@ function SequencePane({ taskId, root }: { taskId: string; root: CallChainRoot })
   return (
     <div className="callchain__sequence">
       {q.data?.truncated === true && (
-        <div className="callchain__empty muted">{t('tasks.structCallTruncated')}</div>
+        <div className="callchain__empty muted">{t('tasks.structCallSeqTruncated')}</div>
       )}
       <SequenceDiagram model={model} />
     </div>

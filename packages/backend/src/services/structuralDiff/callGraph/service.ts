@@ -58,10 +58,16 @@ interface DefInfo {
   node: TsNode
   kind: SymbolKind
   name: string
+  /** Owning class name: nearest class-like ancestor, OR (Go/Rust, where a method
+   *  lives outside its type's body) the receiver-prefix type. '' for top-level. */
+  owner: string
 }
 
 /** Run the extraction query and index every def node by tree-node id, with its
- *  kind + name — so we can compute a node's enclosing class + find a method. */
+ *  kind + name + owning class — so we can find a method + list a class's methods.
+ *  Owner attribution honours `receiverPrefix` so Go (`func (g Game) m`) and Rust
+ *  (`impl S { fn m }`) methods are attributed to their type even though the def
+ *  node has no class-like ANCESTOR. */
 function indexDefs(root: TsNode, language: Parser.Language, lang: LangId): Map<number, DefInfo> {
   const cfg = getLangExtraction(lang)
   const byId = new Map<number, DefInfo>()
@@ -79,8 +85,25 @@ function indexDefs(root: TsNode, language: Parser.Language, lang: LangId): Map<n
         } else if (c.name === 'name') name = c.node.text
       }
       if (node !== undefined && kind !== undefined && !byId.has(node.id)) {
-        byId.set(node.id, { node, kind, name })
+        byId.set(node.id, { node, kind, name, owner: '' })
       }
+    }
+    // 2nd pass (needs all defs indexed): compute each def's owning class.
+    for (const d of byId.values()) {
+      let owner = ''
+      let p = d.node.parent
+      while (p !== null) {
+        const pd = byId.get(p.id)
+        if (pd !== undefined && CLASS_LIKE.has(pd.kind)) {
+          owner = pd.name
+          break
+        }
+        p = p.parent
+      }
+      if (owner === '' && cfg.receiverPrefix !== undefined && CALLABLE.has(d.kind)) {
+        owner = cfg.receiverPrefix(d.node) ?? ''
+      }
+      d.owner = owner
     }
   } finally {
     query.delete()
@@ -88,15 +111,19 @@ function indexDefs(root: TsNode, language: Parser.Language, lang: LangId): Map<n
   return byId
 }
 
-/** Nearest class-like ancestor's name for a def node (its container leaf), or ''. */
+/** Owning class name for a def node (precomputed in indexDefs), or ''. */
 function ownerName(node: TsNode, defs: Map<number, DefInfo>): string {
-  let p = node.parent
-  while (p !== null) {
-    const d = defs.get(p.id)
-    if (d !== undefined && CLASS_LIKE.has(d.kind)) return d.name
-    p = p.parent
+  return defs.get(node.id)?.owner ?? ''
+}
+
+/** The receiver variable name of a Go/Rust method (`func (g Game) m` → `g`;
+ *  Rust `&self` → `self`), so a `g.x()` call is recognised as a same-type call. */
+function receiverVar(node: TsNode, lang: LangId): string | undefined {
+  if (lang === 'go') {
+    const recv = node.childForFieldName('receiver')
+    return recv?.descendantsOfType('identifier')[0]?.text
   }
-  return ''
+  return undefined
 }
 
 /** Find a callable def node whose leaf name + enclosing class match `qn`. */
@@ -161,6 +188,7 @@ export async function expandMethod(methodRef: string, ctx: ExpandCtx): Promise<C
     const body = method.node.childForFieldName('body') ?? method.node
     const callerClass = container(qn) // qn of the caller's class (may be nested)
     const callerClassLeaf = leaf(callerClass)
+    const selfVar = receiverVar(method.node, pf.lang) // Go/Rust receiver → same-type call
 
     const calls = extractCalls(body, pf.language, pf.lang)
     if (calls.length === 0) return []
@@ -205,7 +233,12 @@ export async function expandMethod(methodRef: string, ctx: ExpandCtx): Promise<C
           ownerFile = loc.ref
           ownerMethods = loc.methods
         }
-      } else if (call.recv === null || call.recv === 'this' || call.recv === 'self') {
+      } else if (
+        call.recv === null ||
+        call.recv === 'this' ||
+        call.recv === 'self' ||
+        (selfVar !== undefined && call.recv === selfVar)
+      ) {
         // same-class (or bare) call → the caller's class
         ownerType = callerClassLeaf
         ownerFile = file
@@ -228,7 +261,15 @@ export async function expandMethod(methodRef: string, ctx: ExpandCtx): Promise<C
           ? ownerType
           : `${ownerFile}::${ownerClassLeafQn(ownerFile, ownerType, file, callerClass)}`
         if (call.kind === 'constructor' || ownerMethods.has(call.name)) {
-          const memberQn = `${ownerType}.${call.name}`
+          // a constructor target must point at the language's REAL ctor member
+          // (TS/JS `constructor`, Python `__init__`, Java/Scala the class name) so
+          // expanding it finds the ctor body — not a dangling `Type.Type` ref.
+          const ctorName = ownerMethods.has('constructor')
+            ? 'constructor'
+            : ownerMethods.has('__init__')
+              ? '__init__'
+              : call.name
+          const memberQn = `${ownerType}.${call.kind === 'constructor' ? ctorName : call.name}`
           out.push({
             ref: `${ownerFile}#${memberQn}`,
             label: `${call.kind === 'constructor' ? 'new ' : ''}${call.name}()`,

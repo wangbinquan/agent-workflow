@@ -43,6 +43,12 @@ import {
 
 // Member rows highlighted because an active edge links them (caller ↔ callee).
 const HighlightedMembers = createContext<ReadonlySet<string>>(new Set())
+// RFC-085 — opens the call-chain (5th tab) rooted at a changed method row (⎇);
+// undefined when the host doesn't offer call chains (keeps the graph standalone).
+const CallChainEntry = createContext<((root: { ref: string; label: string }) => void) | undefined>(
+  undefined,
+)
+const GRAPH_CALLABLE = new Set<string>(['method', 'function', 'constructor'])
 import { badgeSymbol } from '@/lib/structureView'
 
 const EDGE_KEYS: EdgeKind[] = ['inherits', 'references', 'calls']
@@ -56,6 +62,7 @@ function CardNode({ data }: NodeProps) {
   const { t } = useTranslation()
   const card = data.card as GraphCard
   const hlMembers = useContext(HighlightedMembers)
+  const openCallChain = useContext(CallChainEntry)
   const ctClass = card.changeType !== undefined ? ` sg-card--ct-${card.changeType}` : ''
   const changedClass = card.isChanged ? ' sg-card--changed' : ' sg-card--caller'
   // RFC-086 — anonymous types (title already reads `«anonymous» <base>`) get a
@@ -100,6 +107,23 @@ function CardNode({ data }: NodeProps) {
                       <span className="sg-card__member-name">
                         {m.role === 'changed' ? memberSignature(m.signature, m.label) : m.label}
                       </span>
+                      {openCallChain !== undefined &&
+                        m.role === 'changed' &&
+                        GRAPH_CALLABLE.has(m.kind) && (
+                          <button
+                            type="button"
+                            className="sg-card__callchain"
+                            title={t('tasks.structCallChainEntry')}
+                            aria-label={t('tasks.structCallChainEntry')}
+                            onClick={(e) => {
+                              e.stopPropagation() // don't trigger node-click edge highlight
+                              const qn = (m.id.split('#')[1] ?? '').split(':')[0]
+                              openCallChain({ ref: `${card.file}#${qn}`, label: `${m.label}()` })
+                            }}
+                          >
+                            ⎇
+                          </button>
+                        )}
                     </li>
                   )
                 })}
@@ -229,7 +253,13 @@ function PackageFlow({ graph }: { graph: PackageGraph }) {
 }
 
 /** CLASS detail — cards have variable size, so measure then re-layout. */
-function ClassFlow({ graph }: { graph: StructureGraph }) {
+function ClassFlow({
+  graph,
+  onOpenCallChain,
+}: {
+  graph: StructureGraph
+  onOpenCallChain?: (root: { ref: string; label: string }) => void
+}) {
   const initialNodes = useMemo<Node[]>(
     () => [
       ...graph.packages.map((p) => ({
@@ -298,31 +328,40 @@ function ClassFlow({ graph }: { graph: StructureGraph }) {
 
   return (
     <HighlightedMembers.Provider value={highlightedMembers}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onEdgeClick={onEdgeClick}
-        onNodeClick={onNodeClick}
-        onPaneClick={onPaneClick}
-        nodeTypes={CLASS_NODE_TYPES}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable={false}
-        fitView
-        fitViewOptions={{ maxZoom: 1, minZoom: 0.4 }}
-        minZoom={0.15}
-        proOptions={{ hideAttribution: true }}
-      >
-        <Background />
-        <Controls showInteractive={false} />
-      </ReactFlow>
+      <CallChainEntry.Provider value={onOpenCallChain}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onEdgeClick={onEdgeClick}
+          onNodeClick={onNodeClick}
+          onPaneClick={onPaneClick}
+          nodeTypes={CLASS_NODE_TYPES}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
+          fitView
+          fitViewOptions={{ maxZoom: 1, minZoom: 0.4 }}
+          minZoom={0.15}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background />
+          <Controls showInteractive={false} />
+        </ReactFlow>
+      </CallChainEntry.Provider>
     </HighlightedMembers.Provider>
   )
 }
 
-export function StructuralGraph({ data }: { data: StructuralDiff }) {
+export function StructuralGraph({
+  data,
+  onOpenCallChain,
+}: {
+  data: StructuralDiff
+  /** RFC-085 — open the call chain rooted at a changed method row (⎇). */
+  onOpenCallChain?: (root: { ref: string; label: string }) => void
+}) {
   const { t } = useTranslation()
   const [level, setLevel] = useState<'package' | 'class'>('package')
   const [edgeKinds, setEdgeKinds] = useState<Set<EdgeKind>>(
@@ -395,7 +434,7 @@ export function StructuralGraph({ data }: { data: StructuralDiff }) {
           {level === 'package' ? (
             <PackageFlow graph={pkgGraph} />
           ) : (
-            <ClassFlow graph={classGraph} />
+            <ClassFlow graph={classGraph} onOpenCallChain={onOpenCallChain} />
           )}
         </ReactFlowProvider>
       </div>

@@ -547,6 +547,16 @@ code {
   cursor: not-allowed;
 }
 
+/* Non-interactive group header inside the listbox — the unified replacement
+   for the native <optgroup> label (e.g. ModelSelect provider grouping). */
+.select__group {
+  padding: 8px 10px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  user-select: none;
+}
+
 .select__option-stack {
   display: flex;
   flex-direction: column;
@@ -9537,6 +9547,21 @@ mark.comment-anchor[data-active='true'] {
   line-height: 1;
 }
 .structure__callchain-entry:hover {
+  color: var(--accent);
+}
+/* RFC-085 — call-chain entry on a relationship-graph member row */
+.sg-card__callchain {
+  margin-left: auto;
+  flex: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 0 2px;
+  font-size: 11px;
+  line-height: 1;
+}
+.sg-card__callchain:hover {
   color: var(--accent);
 }
 /* RFC-085 — call-chain view */

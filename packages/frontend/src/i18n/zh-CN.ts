@@ -927,6 +927,7 @@ export interface Resources {
     structCallModeTree: string
     structCallModeSequence: string
     structSeqTitle: string
+    structCallSeqTruncated: string
     structBodyDeltaTitle: string
     structGraphEmpty: string
     structGraphLegendAdded: string
@@ -3046,6 +3047,7 @@ export const zhCN: Resources = {
     structCallModeTree: '调用树',
     structCallModeSequence: '时序图',
     structSeqTitle: '调用链时序图',
+    structCallSeqTruncated: '调用链较深,已按上限截断——部分分支未在时序图展开',
     structBodyDeltaTitle: '方法体行变更（+新增 / −删除）',
     structGraphEmpty: '无可视化的结构改动（仅依赖/字段等变更）—— 见上方摘要卡片与"树"视图。',
     structGraphLegendAdded: '+ 新增',

@@ -8,12 +8,19 @@
 // Both are heuristic (the RFC's accepted "尽力而为"): statically-typed languages
 // resolve well; dynamic ones (no type text) mostly yield nothing → unresolved.
 
-/** class/interface/struct/enum/trait/object declaration name → file path(s). */
+/** class/interface/struct/enum/trait/object declaration name → file path(s).
+ *  Two shapes: keyword-first (`class Foo`, Rust `struct Foo`) and Go's name-first
+ *  `type Foo struct|interface`. */
 export function scanClassDecls(file: string, source: string): string[] {
   const out = new Set<string>()
   const re = /\b(?:class|interface|struct|enum|trait|object)\s+([A-Za-z_]\w*)/g
   let m: RegExpExecArray | null
   while ((m = re.exec(source)) !== null) {
+    if (m[1] !== undefined) out.add(m[1])
+  }
+  // Go: `type Game struct {…}` / `type Reader interface {…}`
+  const go = /\btype\s+([A-Za-z_]\w*)\s+(?:struct|interface)\b/g
+  while ((m = go.exec(source)) !== null) {
     if (m[1] !== undefined) out.add(m[1])
   }
   void file
@@ -54,8 +61,11 @@ export function inferLocalTypes(...texts: Array<string | undefined>): Map<string
     put(m[1], leafType(m[2]))
   // name: Type   (annotation; not `::` scope, not `=`)
   for (const m of text.matchAll(/\b(\w+)\s*:\s*([A-Z][\w.]*)/g)) put(m[1], leafType(m[2]))
-  // Type name   (type-first; Type is Capitalised, name lower-ish)
-  for (const m of text.matchAll(/\b([A-Z][\w.]*(?:<[^>]*>)?)\s+([a-z_]\w*)\b/g))
+  // Type name   (type-first; Type is Capitalised, name lower-ish). The negative
+  // lookahead `(?!\s*\()` drops a METHOD DECLARATION (`Foo getFoo()`) so a return
+  // type is never mistaken for a local var's type — that would fabricate a
+  // `resolved` edge (`getFoo.x()` → Foo.x), violating the RFC's 绝不臆造 invariant.
+  for (const m of text.matchAll(/\b([A-Z][\w.]*(?:<[^>]*>)?)\s+([a-z_]\w*)\b(?!\s*\()/g))
     put(m[2], leafType(m[1]))
   return out
 }
