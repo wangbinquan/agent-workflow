@@ -3,7 +3,7 @@
 // tests — we just confirm the dropdown renders + emits without data.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { WorkflowInput } from '@agent-workflow/shared'
 import { GitPicker } from '../src/components/launch/GitPicker'
@@ -26,7 +26,10 @@ function wrap(node: React.ReactElement, refs?: { branches: string[] }) {
 }
 
 afterEach(() => {
-  document.body.innerHTML = ''
+  // Unmount via testing-library first — the Select listbox is portaled to
+  // document.body, so wiping innerHTML before cleanup() races React's
+  // removeChild and crashes happy-dom.
+  cleanup()
 })
 
 describe('GitPicker', () => {
@@ -73,9 +76,12 @@ describe('GitPicker', () => {
     wrap(<GitPicker def={def()} repoPath="/repo" value="" onChange={onChange} />, {
       branches: ['main', 'dev'],
     })
-    const select = screen.getByRole('combobox') as HTMLSelectElement
-    expect(select.value).toBe('')
-    fireEvent.change(select, { target: { value: 'main' } })
+    const trigger = screen.getByRole('combobox')
+    // value '' → trigger shows the placeholder.
+    expect(trigger.textContent).toMatch(/pick a branch/i)
+    fireEvent.click(trigger)
+    const list = document.getElementById(trigger.getAttribute('aria-controls')!)!
+    fireEvent.mouseDown(within(list).getByText('main'))
     expect(onChange).toHaveBeenLastCalledWith(JSON.stringify({ kind: 'branch', ref: 'main' }))
   })
 

@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 import type { CachedRepo, RecentRepo, RepoRefsResponse } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Field, Switch, TextInput } from '@/components/Form'
+import { Select } from '@/components/Select'
 import { validateRepoUrl, type RepoSource } from '@/lib/launch-repo-source'
 
 // RFC-068: persist the user's "fetch before launch" preference so it survives
@@ -147,30 +148,31 @@ export function RepoSourceRow({
       {source.kind === 'path' ? (
         <>
           <Field label={t('launch.fieldRepo')} required hint={t('launch.fieldRepoHint')}>
-            <select
-              className="form-input"
+            <Select<string>
               data-testid={`repo-source-path-select${idxSuffix}`}
+              ariaLabel={t('launch.fieldRepo')}
+              placeholder={t('launch.pickRepoPlaceholder')}
               value={source.repoPath}
-              onChange={(e) =>
+              onChange={(repoPath) =>
                 onChange({
                   kind: 'path',
-                  repoPath: e.target.value,
+                  repoPath,
                   baseBranch:
-                    (recent.data ?? []).find((r) => r.path === e.target.value)?.defaultBranch ??
+                    (recent.data ?? []).find((r) => r.path === repoPath)?.defaultBranch ??
                     source.baseBranch,
                   ...(source.fetchBeforeLaunch !== undefined
                     ? { fetchBeforeLaunch: source.fetchBeforeLaunch }
                     : {}),
                 })
               }
-            >
-              <option value="">{t('launch.pickRepoPlaceholder')}</option>
-              {(recent.data ?? []).map((r) => (
-                <option key={r.path} value={r.path}>
-                  {r.path} {r.defaultBranch ? `(${r.defaultBranch})` : ''}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: '', label: t('launch.pickRepoPlaceholder') },
+                ...(recent.data ?? []).map((r) => ({
+                  value: r.path,
+                  label: r.defaultBranch ? `${r.path} (${r.defaultBranch})` : r.path,
+                })),
+              ]}
+            />
             <TextInput
               value={source.repoPath}
               onChange={(v) => onChange({ ...source, repoPath: v })}
@@ -179,19 +181,17 @@ export function RepoSourceRow({
           </Field>
           <Field label={t('launch.fieldBaseBranch')} required hint={t('launch.baseBranchHint')}>
             {refs.data !== undefined ? (
-              <select
-                className="form-input"
+              <Select<string>
                 data-testid={`repo-source-base-branch${idxSuffix}`}
+                ariaLabel={t('launch.fieldBaseBranch')}
+                placeholder={t('launch.pickBranchPlaceholder')}
                 value={source.baseBranch}
-                onChange={(e) => onChange({ ...source, baseBranch: e.target.value })}
-              >
-                <option value="">{t('launch.pickBranchPlaceholder')}</option>
-                {refs.data.branches.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
+                onChange={(baseBranch) => onChange({ ...source, baseBranch })}
+                options={[
+                  { value: '', label: t('launch.pickBranchPlaceholder') },
+                  ...refs.data.branches.map((b) => ({ value: b, label: b })),
+                ]}
+              />
             ) : (
               <TextInput
                 value={source.baseBranch}
@@ -222,25 +222,23 @@ export function RepoSourceRow({
             hint={t('launch.repoSource.urlHint')}
           >
             {cached.data !== undefined && cached.data.items.length > 0 && (
-              <select
-                className="form-input"
+              <Select<string>
                 data-testid={`repo-source-recent-urls${idxSuffix}`}
+                ariaLabel={t('launch.repoSource.recentUrlsPlaceholder')}
+                placeholder={t('launch.repoSource.recentUrlsPlaceholder')}
                 value={
                   cached.data.items.some((it) => it.url === source.repoUrl) ? source.repoUrl : ''
                 }
-                onChange={(e) => {
-                  if (e.target.value !== '') {
-                    onChange({ kind: 'url', repoUrl: e.target.value, ref: source.ref })
+                onChange={(url) => {
+                  if (url !== '') {
+                    onChange({ kind: 'url', repoUrl: url, ref: source.ref })
                   }
                 }}
-              >
-                <option value="">{t('launch.repoSource.recentUrlsPlaceholder')}</option>
-                {cached.data.items.map((it) => (
-                  <option key={it.id} value={it.url}>
-                    {it.urlRedacted}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: t('launch.repoSource.recentUrlsPlaceholder') },
+                  ...cached.data.items.map((it) => ({ value: it.url, label: it.urlRedacted })),
+                ]}
+              />
             )}
             <TextInput
               value={source.repoUrl}

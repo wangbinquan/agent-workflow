@@ -18,6 +18,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { NodeDependencyTreeSection } from './agents/NodeDependencyTreeSection'
 import { SessionTab } from './node-session/SessionTab'
 import { api, ApiError } from '@/api/client'
+import { Select } from '@/components/Select'
 import {
   formatAttemptLabel,
   isFanoutParentRun,
@@ -301,23 +302,22 @@ function PromptTab({
 
   return (
     <div className="prompt-history">
-      <label className="prompt-history__picker">
+      <div className="prompt-history__picker">
         <span className="muted">{t('nodeDrawer.promptAttemptLabel')}</span>
-        <select
-          value={picked.id}
-          onChange={(e) => setPickedId(e.target.value)}
+        <Select<string>
           className="prompt-history__select"
-        >
-          {attempts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {formatAttemptLabel(a, {
-                fanoutParent: isFanoutParentRun(a, attempts),
-                t,
-              })}
-            </option>
-          ))}
-        </select>
-      </label>
+          ariaLabel={t('nodeDrawer.promptAttemptLabel')}
+          value={picked.id}
+          onChange={(id) => setPickedId(id)}
+          options={attempts.map((a) => ({
+            value: a.id,
+            label: formatAttemptLabel(a, {
+              fanoutParent: isFanoutParentRun(a, attempts),
+              t,
+            }),
+          }))}
+        />
+      </div>
       {fanoutParent ? (
         <div className="muted">{t('nodeDrawer.promptFanoutParent')}</div>
       ) : picked.promptText === null || picked.promptText === '' ? (

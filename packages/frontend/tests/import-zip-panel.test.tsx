@@ -2,12 +2,32 @@
 // the parse endpoint, and the commit endpoint, then drives the full flow.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type * as TanStackRouter from '@tanstack/react-router'
 import type { CommitSkillZipResponse, ParseSkillZipResponse, Skill } from '@agent-workflow/shared'
 import { ImportZipPanel } from '../src/components/skills/ImportZipPanel'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import i18n from '../src/i18n'
+
+// The per-row action dropdown is the shared <Select> (RFC-036): the trigger
+// carries the data-testid; options live in a portaled listbox (resolved via
+// aria-controls). Action option labels are the i18n strings, so we compare
+// against i18n.t(...) rather than the raw DecisionAction values.
+const actionLabel = {
+  import: () => i18n.t('skills.zipActionImport'),
+  skip: () => i18n.t('skills.zipActionSkip'),
+  overwrite: () => i18n.t('skills.zipActionOverwrite'),
+  rename: () => i18n.t('skills.zipActionRename'),
+}
+function actionOptionLabels(testid: string): string[] {
+  const trigger = screen.getByTestId(testid)
+  fireEvent.click(trigger)
+  const list = document.getElementById(trigger.getAttribute('aria-controls')!)!
+  return Array.from(list.querySelectorAll('[role="option"]')).map(
+    (o) => o.querySelector('.select__option-label')?.textContent ?? '',
+  )
+}
 
 const realFetch = globalThis.fetch
 
@@ -174,27 +194,26 @@ describe('ImportZipPanel', () => {
     })
 
     // fresh row: no conflict, action select shows import + skip.
-    const freshSelect = screen.getByTestId('zip-action-fresh') as HTMLSelectElement
-    expect(freshSelect.disabled).toBe(false)
-    expect(
-      Array.from(freshSelect.options)
-        .map((o) => o.value)
-        .sort(),
-    ).toEqual(['import', 'skip'])
+    expect((screen.getByTestId('zip-action-fresh') as HTMLButtonElement).disabled).toBe(false)
+    expect(actionOptionLabels('zip-action-fresh').sort()).toEqual(
+      [actionLabel.import(), actionLabel.skip()].sort(),
+    )
 
     // managed row: skip, overwrite, rename — defaults to skip.
-    const managedSelect = screen.getByTestId('zip-action-existing-managed') as HTMLSelectElement
-    expect(managedSelect.value).toBe('skip')
-    expect(
-      Array.from(managedSelect.options)
-        .map((o) => o.value)
-        .sort(),
-    ).toEqual(['overwrite', 'rename', 'skip'])
+    expect(screen.getByTestId('zip-action-existing-managed').textContent).toContain(
+      actionLabel.skip(),
+    )
+    expect(actionOptionLabels('zip-action-existing-managed').sort()).toEqual(
+      [actionLabel.overwrite(), actionLabel.rename(), actionLabel.skip()].sort(),
+    )
 
-    // external row: only skip + disabled.
-    const externalSelect = screen.getByTestId('zip-action-existing-external') as HTMLSelectElement
-    expect(externalSelect.disabled).toBe(true)
-    expect(Array.from(externalSelect.options).map((o) => o.value)).toEqual(['skip'])
+    // external row: only skip + disabled (a disabled trigger never opens).
+    expect((screen.getByTestId('zip-action-existing-external') as HTMLButtonElement).disabled).toBe(
+      true,
+    )
+    expect(screen.getByTestId('zip-action-existing-external').textContent).toContain(
+      actionLabel.skip(),
+    )
   })
 
   test('rename inline error appears when target name collides with another candidate', async () => {
@@ -229,8 +248,13 @@ describe('ImportZipPanel', () => {
     await waitFor(() => screen.getByTestId('zip-candidate-table'))
 
     // Switch a → rename, type 'taken' (which is candidate b's import name)
-    const aSelect = screen.getByTestId('zip-action-a') as HTMLSelectElement
-    fireEvent.change(aSelect, { target: { value: 'rename' } })
+    const aTrigger = screen.getByTestId('zip-action-a')
+    fireEvent.click(aTrigger)
+    fireEvent.mouseDown(
+      within(document.getElementById(aTrigger.getAttribute('aria-controls')!)!).getByText(
+        actionLabel.rename(),
+      ),
+    )
     const renameInput = screen.getByTestId('zip-rename-a') as HTMLInputElement
     fireEvent.change(renameInput, { target: { value: 'taken' } })
 

@@ -12,6 +12,7 @@ import { useMemo } from 'react'
 import type { RepoRefsResponse, WorkflowInput } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Field, TextInput } from '@/components/Form'
+import { Select } from '@/components/Select'
 
 interface Props {
   def: WorkflowInput
@@ -65,18 +66,16 @@ export function GitPicker({ def, repoPath, value, onChange }: Props) {
     const current = parsed?.kind === 'branch' ? parsed.ref : ''
     return (
       <Field label="Branch" required>
-        <select
-          className="form-input"
+        <Select<string>
           value={current}
-          onChange={(e) => emit({ kind: 'branch', ref: e.target.value })}
-        >
-          <option value="">— pick a branch —</option>
-          {(refs.data?.branches ?? []).map((b) => (
-            <option key={b} value={b}>
-              {b}
-            </option>
-          ))}
-        </select>
+          ariaLabel="Branch"
+          placeholder="— pick a branch —"
+          onChange={(ref) => emit({ kind: 'branch', ref })}
+          options={[
+            { value: '', label: '— pick a branch —' },
+            ...(refs.data?.branches ?? []).map((b) => ({ value: b, label: b })),
+          ]}
+        />
       </Field>
     )
   }

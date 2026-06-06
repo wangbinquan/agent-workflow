@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { CommitSkillZipResponse, ParseSkillZipResponse, Skill } from '@agent-workflow/shared'
+import { Select } from '@/components/Select'
 import { getBaseUrl, getToken } from '@/stores/auth'
 import {
   buildDecisionMap,
@@ -326,18 +327,13 @@ function CandidateRow({ row, idx, allRows, existingNames, onUpdate }: CandidateR
         )}
       </td>
       <td>
-        <select
+        <Select<DecisionAction>
           value={row.decision.action}
-          onChange={(e) => onUpdate(idx, { action: e.target.value as DecisionAction })}
+          onChange={(action) => onUpdate(idx, { action })}
           disabled={isExternalConflict}
           data-testid={`zip-action-${row.candidate.name}`}
-        >
-          {availableActions.map((a) => (
-            <option key={a} value={a}>
-              {labelForAction(t, a)}
-            </option>
-          ))}
-        </select>
+          options={availableActions.map((a) => ({ value: a, label: labelForAction(t, a) }))}
+        />
         {row.decision.action === 'rename' && (
           <span className="zip-import__rename">
             <input
