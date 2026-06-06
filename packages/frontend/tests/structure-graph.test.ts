@@ -141,36 +141,17 @@ describe('buildStructureGraph — cards', () => {
     expect(g.edges[0]).toMatchObject({ source: 'ctrl.ts::Checkout', target: 'svc.ts::Svc' })
   })
 
-  test('caller-only cards sit left of changed cards (blast-radius flow)', () => {
-    const g = buildStructureGraph(
-      diffWith(
-        [
-          file('svc.ts', [
-            {
-              changeType: 'modified',
-              kind: 'method',
-              after: sym('svc.ts', 'Svc.charge', 'method'),
-            },
-          ]),
-        ],
-        [
-          {
-            changedSymbolId: 'svc.ts#Svc.charge:method:1',
-            confidence: 'extracted',
-            callers: [
-              {
-                symbolId: 'ctrl.ts#Checkout.pay:method:3',
-                filePath: 'ctrl.ts',
-                range: { startLine: 3, endLine: 4 },
-              },
-            ],
-          },
-        ],
-      ),
-    )
-    const caller = g.cards.find((c) => !c.isChanged)!
-    const changed = g.cards.find((c) => c.isChanged)!
-    expect(caller.x).toBeLessThan(changed.x)
+  test('many cards spread across multiple columns (use the canvas width)', () => {
+    // 8 changed classes → the masonry must use ≥3 distinct columns, not 1–2.
+    const changes = Array.from({ length: 8 }, (_, i) => ({
+      changeType: 'modified' as const,
+      kind: 'method' as const,
+      after: sym('big.ts', `Class${i}.run`, 'method'),
+    }))
+    const g = buildStructureGraph(diffWith([file('big.ts', changes)], []))
+    expect(g.cards).toHaveLength(8)
+    const distinctX = new Set(g.cards.map((c) => c.x))
+    expect(distinctX.size).toBeGreaterThanOrEqual(3)
   })
 
   test('only field/import changes → no cards (nothing graphable)', () => {

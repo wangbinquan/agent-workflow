@@ -109,24 +109,17 @@ function layoutCards(cards: GraphCard[]): void {
     c.w = CARD_W
     c.h = HEADER_H + c.members.length * ROW_H + PAD_V
   }
-  // Two zones: caller-only cards (left), changed cards (right, up to 2 columns).
-  const callers = cards.filter((c) => !c.isChanged)
-  const changed = cards.filter((c) => c.isChanged)
-  // left column
-  let leftY = 0
-  for (const c of callers) {
-    c.x = 0
-    c.y = leftY
-    leftY += c.h + GAP_Y
-  }
-  // right zone: masonry into N columns (1 col if no callers → keep it compact)
-  const rightX0 = callers.length > 0 ? CARD_W + GAP_X : 0
-  const cols = Math.min(2, Math.max(1, changed.length))
+  // Balanced MASONRY across an adaptive number of columns, biased WIDE so a big
+  // canvas is actually used (not 1–2 tall columns). Cards come in changed-first
+  // (see the sort in buildStructureGraph), so changed cards fill the top rows.
+  const n = cards.length
+  const cols = Math.min(5, Math.max(1, Math.ceil(Math.sqrt(n * 1.8))))
   const colY = new Array<number>(cols).fill(0)
-  for (const c of changed) {
+  for (const c of cards) {
+    // place in the currently shortest column
     let col = 0
     for (let i = 1; i < cols; i += 1) if ((colY[i] ?? 0) < (colY[col] ?? 0)) col = i
-    c.x = rightX0 + col * (CARD_W + GAP_X)
+    c.x = col * (CARD_W + GAP_X)
     c.y = colY[col] ?? 0
     colY[col] = (colY[col] ?? 0) + c.h + GAP_Y
   }
