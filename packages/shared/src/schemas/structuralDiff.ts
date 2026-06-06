@@ -274,10 +274,10 @@ export const classEdgeSchema = z.object({
    *  this is a list. Empty/undefined when no reference sits in a changed member
    *  (or for 'inherits', a class-level relation). */
   fromMembers: z.array(z.string()).optional(),
-  /** For 'references': the symbol id of `to`'s CONSTRUCTOR (the referenced
-   *  class's entry point) when it has a changed one — the downstream end to
-   *  highlight alongside `fromMembers`. Undefined if `to` has no changed ctor. */
-  toMember: z.string().optional(),
+  /** For 'references': symbol ids of `to`'s members that `from` actually USES —
+   *  its constructor (entry) plus any of `to`'s members invoked by name (`.foo`)
+   *  in `from`'s body. The downstream end(s) to highlight. */
+  toMembers: z.array(z.string()).optional(),
 })
 export type ClassEdge = z.infer<typeof classEdgeSchema>
 

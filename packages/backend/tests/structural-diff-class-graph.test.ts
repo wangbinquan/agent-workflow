@@ -41,8 +41,20 @@ describe('computeClassEdges', () => {
       [
         'a.ts::A',
         [
-          { id: 'a.ts#A.foo:method:1', kind: 'method' as const, startLine: 2, endLine: 4 },
-          { id: 'a.ts#A.bar:method:1', kind: 'method' as const, startLine: 5, endLine: 5 },
+          {
+            id: 'a.ts#A.foo:method:1',
+            name: 'foo',
+            kind: 'method' as const,
+            startLine: 2,
+            endLine: 4,
+          },
+          {
+            id: 'a.ts#A.bar:method:1',
+            name: 'bar',
+            kind: 'method' as const,
+            startLine: 5,
+            endLine: 5,
+          },
         ],
       ],
     ])
@@ -63,8 +75,20 @@ describe('computeClassEdges', () => {
       [
         'a.ts::A',
         [
-          { id: 'a.ts#A.foo:method:1', kind: 'method' as const, startLine: 2, endLine: 4 },
-          { id: 'a.ts#A.bar:method:1', kind: 'method' as const, startLine: 5, endLine: 7 },
+          {
+            id: 'a.ts#A.foo:method:1',
+            name: 'foo',
+            kind: 'method' as const,
+            startLine: 2,
+            endLine: 4,
+          },
+          {
+            id: 'a.ts#A.bar:method:1',
+            name: 'bar',
+            kind: 'method' as const,
+            startLine: 5,
+            endLine: 7,
+          },
         ],
       ],
     ])
@@ -72,7 +96,7 @@ describe('computeClassEdges', () => {
     expect(edges[0]?.fromMembers).toEqual(['a.ts#A.foo:method:1', 'a.ts#A.bar:method:1'])
   })
 
-  test('a references edge also points downstream to the referenced class constructor (toMember)', () => {
+  test('a references edge points downstream to the referenced class constructor (toMembers)', () => {
     const nodes = [node('a.ts::A', 'A', 'a.ts', 1, 4), node('b.ts::B', 'B', 'b.ts', 1, 4)]
     const fileText = new Map([
       ['a.ts', 'class A {\n  make() {\n    return new B()\n  }\n}'],
@@ -81,13 +105,22 @@ describe('computeClassEdges', () => {
     const members = new Map([
       [
         'a.ts::A',
-        [{ id: 'a.ts#A.make:method:1', kind: 'method' as const, startLine: 2, endLine: 4 }],
+        [
+          {
+            id: 'a.ts#A.make:method:1',
+            name: 'make',
+            kind: 'method' as const,
+            startLine: 2,
+            endLine: 4,
+          },
+        ],
       ],
       [
         'b.ts::B',
         [
           {
             id: 'b.ts#B.ctor:constructor:1',
+            name: 'B',
             kind: 'constructor' as const,
             startLine: 2,
             endLine: 2,
@@ -102,9 +135,63 @@ describe('computeClassEdges', () => {
         to: 'b.ts::B',
         kind: 'references',
         fromMembers: ['a.ts#A.make:method:1'],
-        toMember: 'b.ts#B.ctor:constructor:1',
+        toMembers: ['b.ts#B.ctor:constructor:1'],
       },
     ])
+  })
+
+  test('a references edge lists the referenced class methods USED by name (toMembers)', () => {
+    const nodes = [node('a.ts::A', 'A', 'a.ts', 1, 5), node('b.ts::B', 'B', 'b.ts', 1, 5)]
+    const fileText = new Map([
+      // A holds a B and calls b.foo() + b.bar(); baz() is never called
+      ['a.ts', 'class A {\n  b = new B()\n  run() {\n    this.b.foo(); this.b.bar()\n  }\n}'],
+      ['b.ts', 'class B {\n  foo() {}\n  bar() {}\n  baz() {}\n}'],
+    ])
+    const members = new Map([
+      [
+        'a.ts::A',
+        [
+          { id: 'a.ts#A.b:field:1', name: 'b', kind: 'field' as const, startLine: 2, endLine: 2 },
+          {
+            id: 'a.ts#A.run:method:1',
+            name: 'run',
+            kind: 'method' as const,
+            startLine: 3,
+            endLine: 5,
+          },
+        ],
+      ],
+      [
+        'b.ts::B',
+        [
+          {
+            id: 'b.ts#B.foo:method:1',
+            name: 'foo',
+            kind: 'method' as const,
+            startLine: 2,
+            endLine: 2,
+          },
+          {
+            id: 'b.ts#B.bar:method:1',
+            name: 'bar',
+            kind: 'method' as const,
+            startLine: 3,
+            endLine: 3,
+          },
+          {
+            id: 'b.ts#B.baz:method:1',
+            name: 'baz',
+            kind: 'method' as const,
+            startLine: 4,
+            endLine: 4,
+          },
+        ],
+      ],
+    ])
+    const ref = computeClassEdges(nodes, fileText, members).find(
+      (e) => e.from === 'a.ts::A' && e.to === 'b.ts::B',
+    )
+    expect(ref?.toMembers?.sort()).toEqual(['b.ts#B.bar:method:1', 'b.ts#B.foo:method:1']) // baz NOT used
   })
 
   test('collectClassMembers groups changed members under their enclosing class key', () => {

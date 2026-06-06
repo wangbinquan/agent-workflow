@@ -26,10 +26,12 @@ const MEMBER_KINDS: ReadonlySet<SymbolKind> = new Set<SymbolKind>([
   'constant',
 ])
 
-/** Changed member (method/field/…) with its id + line range, for attributing a
- *  reference to the exact member it appears in. */
+/** Changed member (method/field/…) with its id, name + line range, for
+ *  attributing a reference to the member it appears in (by range) and a usage to
+ *  the member invoked (by name). */
 export interface MemberRange {
   id: string
+  name: string
   kind: SymbolKind
   startLine: number
   endLine: number
@@ -55,6 +57,7 @@ export function collectClassMembers(
       const arr = out.get(key) ?? []
       arr.push({
         id: sym.id,
+        name: leafName(sym.name),
         kind: sym.kind,
         startLine: sym.range.startLine,
         endLine: sym.range.endLine,
@@ -128,7 +131,7 @@ export function computeClassEdges(
     to: string,
     kind: ClassEdge['kind'],
     fromMembers?: string[],
-    toMember?: string,
+    toMembers?: string[],
   ): void => {
     if (from === to) return
     const refKey = `${from}|${to}|references`
@@ -148,7 +151,7 @@ export function computeClassEdges(
     seen.add(k)
     const edge: ClassEdge = { from, to, kind }
     if (fromMembers !== undefined && fromMembers.length > 0) edge.fromMembers = fromMembers
-    if (toMember !== undefined) edge.toMember = toMember
+    if (toMembers !== undefined && toMembers.length > 0) edge.toMembers = toMembers
     edges.push(edge)
   }
 
@@ -164,10 +167,10 @@ export function computeClassEdges(
       const re = new RegExp(`\\b${escapeRegExp(d.name)}\\b`)
       if (!re.test(bodyText)) continue
       const kind = isInheritance(declText, d.name) ? 'inherits' : 'references'
-      // attribute a reference to EVERY changed member it appears in (upstream),
-      // and to the referenced class's constructor (downstream).
+      // upstream: EVERY changed member of C where D appears.
+      // downstream: D's constructor + D's members C invokes by name (`.foo`).
       let fromMembers: string[] | undefined
-      let toMember: string | undefined
+      let toMembers: string[] | undefined
       if (kind === 'references') {
         if (members !== undefined) {
           const ids = new Set<string>()
@@ -177,9 +180,9 @@ export function computeClassEdges(
           }
           if (ids.size > 0) fromMembers = [...ids]
         }
-        toMember = membersByClass.get(d.key)?.find((m) => m.kind === 'constructor')?.id
+        toMembers = usedMembers(membersByClass.get(d.key), bodyText)
       }
-      add(c.key, d.key, kind, fromMembers, toMember)
+      add(c.key, d.key, kind, fromMembers, toMembers)
     }
   }
   return edges
@@ -192,4 +195,31 @@ function matchLines(body: string[], re: RegExp, startLine: number): number[] {
     if (re.test(body[i] ?? '')) out.push(startLine + i)
   }
   return out
+}
+
+/** The referenced class's members that the referencing body USES: its
+ *  constructor (entry) + any member invoked by name as `.foo(`/`.foo` in the
+ *  body. Heuristic (a name can coincide), mirroring the class-name reference
+ *  scan. Returns undefined when nothing is found. */
+function usedMembers(
+  dMembers: ReadonlyArray<MemberRange> | undefined,
+  bodyText: string,
+): string[] | undefined {
+  if (dMembers === undefined || dMembers.length === 0) return undefined
+  const used = new Set<string>()
+  const byName = new Map<string, string[]>()
+  for (const m of dMembers) {
+    if (m.kind === 'constructor') used.add(m.id) // entry point, always relevant
+    const arr = byName.get(m.name) ?? []
+    arr.push(m.id)
+    byName.set(m.name, arr)
+  }
+  const names = [...byName.keys()].filter((n) => n.length > 0)
+  if (names.length > 0) {
+    const re = new RegExp(`\\.(${names.map(escapeRegExp).join('|')})\\b`, 'g')
+    for (const match of bodyText.matchAll(re)) {
+      for (const id of byName.get(match[1] ?? '') ?? []) used.add(id)
+    }
+  }
+  return used.size > 0 ? [...used] : undefined
 }
