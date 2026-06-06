@@ -927,6 +927,7 @@ export interface Resources {
     structGraphLevelPackage: string
     structGraphLevelClass: string
     structGraphPkgClasses: string
+    structGraphCallers: string
     structViaImportManifest: string
     structRenamedFrom: string
     structSigChanged: string
@@ -3031,6 +3032,7 @@ export const zhCN: Resources = {
     structGraphLevelPackage: '包级',
     structGraphLevelClass: '类级',
     structGraphPkgClasses: '{{n}} 个类',
+    structGraphCallers: '调用方',
     structViaImportManifest: '源码已引用',
     structRenamedFrom: '原 {{from}}',
     structSigChanged: '签名变化',

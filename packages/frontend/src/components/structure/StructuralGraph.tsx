@@ -30,6 +30,8 @@ import {
   aggregatePackageGraph,
   layoutGraph,
   relatedMembers,
+  groupMembersByVisibility,
+  memberSignature,
   type EdgeKind,
   type GraphCard,
   type GraphCardEdge,
@@ -50,6 +52,7 @@ const EDGE_LABEL: Record<EdgeKind, string> = {
 }
 
 function CardNode({ data }: NodeProps) {
+  const { t } = useTranslation()
   const card = data.card as GraphCard
   const hlMembers = useContext(HighlightedMembers)
   const ctClass = card.changeType !== undefined ? ` sg-card--ct-${card.changeType}` : ''
@@ -68,22 +71,37 @@ function CardNode({ data }: NodeProps) {
       </div>
       {card.members.length > 0 && (
         <ul className="sg-card__members">
-          {card.members.map((m) => {
-            const base =
-              m.role === 'changed'
-                ? `sg-card__member sg-card__member--ct-${m.changeType}`
-                : 'sg-card__member sg-card__member--caller'
-            return (
-              <li key={m.id} className={hlMembers.has(m.id) ? `${base} sg-card__member--hl` : base}>
-                <span className="sg-card__member-badge">
-                  {m.role === 'changed' && m.changeType !== undefined
-                    ? badgeSymbol(m.changeType)
-                    : '·'}
-                </span>
-                <span className="sg-card__member-name">{m.label}</span>
-              </li>
-            )
-          })}
+          {groupMembersByVisibility(card.members).map((g) => (
+            <li key={g.visibility} className="sg-card__group">
+              <span className={`sg-card__vis sg-card__vis--${g.visibility}`}>
+                {g.visibility === 'callers' ? t('tasks.structGraphCallers') : g.visibility}
+              </span>
+              <ul className="sg-card__members">
+                {g.members.map((m) => {
+                  const base =
+                    m.role === 'changed'
+                      ? `sg-card__member sg-card__member--ct-${m.changeType}`
+                      : 'sg-card__member sg-card__member--caller'
+                  return (
+                    <li
+                      key={m.id}
+                      className={hlMembers.has(m.id) ? `${base} sg-card__member--hl` : base}
+                      title={m.signature ?? m.label}
+                    >
+                      <span className="sg-card__member-badge">
+                        {m.role === 'changed' && m.changeType !== undefined
+                          ? badgeSymbol(m.changeType)
+                          : '·'}
+                      </span>
+                      <span className="sg-card__member-name">
+                        {m.role === 'changed' ? memberSignature(m.signature, m.label) : m.label}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </li>
+          ))}
         </ul>
       )}
       <Handle type="source" position={Position.Bottom} isConnectable={false} />

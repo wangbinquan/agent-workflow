@@ -32,6 +32,9 @@ const MEMBER_KINDS: ReadonlySet<SymbolKind> = new Set<SymbolKind>([
 
 export type MemberRole = 'changed' | 'caller'
 export type EdgeKind = 'inherits' | 'references' | 'calls'
+/** access level for grouping members (UML-ish); 'package' = no modifier. */
+export type Visibility = 'public' | 'protected' | 'package' | 'private'
+export const VISIBILITY_ORDER: readonly Visibility[] = ['public', 'protected', 'package', 'private']
 
 export interface GraphMember {
   id: string
@@ -39,6 +42,65 @@ export interface GraphMember {
   kind: SymbolKind
   changeType?: ChangeType
   role: MemberRole
+  /** declaration header (params/return), shown on the row; from sym.signature. */
+  signature?: string
+  /** access level (from the signature keyword or language convention). */
+  visibility?: Visibility
+}
+
+/** Access level of a member from its declaration signature, falling back to
+ *  language conventions (Python `_`/`__`, Go capitalisation) and finally the
+ *  language default ('package' for Java, else 'public'). */
+export function memberVisibility(
+  signature: string | undefined,
+  name: string,
+  lang: string,
+): Visibility {
+  const sig = signature ?? ''
+  if (/\bprivate\b/.test(sig)) return 'private'
+  if (/\bprotected\b/.test(sig)) return 'protected'
+  if (/\b(?:public|internal)\b/.test(sig)) return 'public'
+  if (lang === 'python') {
+    if (name.startsWith('__') && !name.endsWith('__')) return 'private'
+    if (name.startsWith('_')) return 'protected'
+    return 'public'
+  }
+  if (lang === 'go') return /^[A-Z]/.test(name) ? 'public' : 'private'
+  return lang === 'java' || lang === 'kotlin' ? 'package' : 'public'
+}
+
+/** Row text: the signature minus the visibility keyword (it becomes the group),
+ *  e.g. `public int getScore(GameContext ctx)` → `int getScore(GameContext ctx)`.
+ *  Falls back to the bare name when there is no signature. */
+export function memberSignature(signature: string | undefined, name: string): string {
+  if (signature === undefined || signature === '') return name
+  const s = signature
+    .replace(/\b(?:public|protected|private|internal)\b\s*/g, '')
+    .replace(/[;{]\s*$/, '')
+    .trim()
+  return s.length > 0 ? s : name
+}
+
+/** Group a card's members by visibility (public→protected→package→private) for
+ *  display; caller rows (no visibility) come last under their own bucket. */
+export function groupMembersByVisibility(
+  members: readonly GraphMember[],
+): Array<{ visibility: Visibility | 'callers'; members: GraphMember[] }> {
+  const buckets = new Map<Visibility | 'callers', GraphMember[]>()
+  for (const m of members) {
+    const key: Visibility | 'callers' = m.role === 'caller' ? 'callers' : (m.visibility ?? 'public')
+    const arr = buckets.get(key) ?? []
+    arr.push(m)
+    buckets.set(key, arr)
+  }
+  const out: Array<{ visibility: Visibility | 'callers'; members: GraphMember[] }> = []
+  for (const v of VISIBILITY_ORDER) {
+    const ms = buckets.get(v)
+    if (ms !== undefined) out.push({ visibility: v, members: ms })
+  }
+  const callers = buckets.get('callers')
+  if (callers !== undefined) out.push({ visibility: 'callers', members: callers })
+  return out
 }
 export type CardKind = SymbolKind | 'file'
 export interface GraphCard {
@@ -310,6 +372,8 @@ export function buildStructureGraph(
           kind: sym.kind,
           changeType: ch.changeType,
           role: 'changed',
+          signature: sym.signature,
+          visibility: memberVisibility(sym.signature, sym.name, f.lang),
         })
         changedSymbolCard.set(sym.id, card.id)
       }

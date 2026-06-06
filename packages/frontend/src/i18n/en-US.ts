@@ -981,6 +981,7 @@ export const enUS: Resources = {
     structGraphLevelPackage: 'Packages',
     structGraphLevelClass: 'Classes',
     structGraphPkgClasses: '{{n}} classes',
+    structGraphCallers: 'callers',
     structViaImportManifest: 'imported in code',
     structRenamedFrom: 'was {{from}}',
     structSigChanged: 'signature changed',

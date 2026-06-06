@@ -16,7 +16,11 @@ import {
   packageOf,
   packageLabel,
   relatedMembers,
+  memberVisibility,
+  memberSignature,
+  groupMembersByVisibility,
   type GraphCardEdge,
+  type GraphMember,
 } from '../src/lib/structureGraph'
 
 function sym(filePath: string, qn: string, kind: SymbolNode['kind']): SymbolNode {
@@ -266,6 +270,56 @@ describe('buildStructureGraph — hierarchy layout (dagre)', () => {
 
 test('fileBase strips the directory', () => {
   expect(fileBase('src/a/b.ts')).toBe('b.ts')
+})
+
+describe('member visibility + signature', () => {
+  test('memberVisibility from the signature keyword (Java) + defaults', () => {
+    expect(memberVisibility('public int getScore(GameContext ctx)', 'getScore', 'java')).toBe(
+      'public',
+    )
+    expect(memberVisibility('private Color bg', 'bg', 'java')).toBe('private')
+    expect(memberVisibility('protected void run()', 'run', 'java')).toBe('protected')
+    expect(memberVisibility('int compute(int x)', 'compute', 'java')).toBe('package') // java default
+    expect(memberVisibility('compute(x)', 'compute', 'typescript')).toBe('public') // ts default
+  })
+
+  test('memberVisibility language conventions (python `_`, go capitalisation)', () => {
+    expect(memberVisibility(undefined, '__secret', 'python')).toBe('private')
+    expect(memberVisibility(undefined, '_helper', 'python')).toBe('protected')
+    expect(memberVisibility(undefined, 'Exported', 'go')).toBe('public')
+    expect(memberVisibility(undefined, 'unexported', 'go')).toBe('private')
+  })
+
+  test('memberSignature strips the visibility keyword, keeps params/return', () => {
+    expect(memberSignature('public int getScore(GameContext ctx)', 'getScore')).toBe(
+      'int getScore(GameContext ctx)',
+    )
+    expect(memberSignature('private Color backgroundColor;', 'backgroundColor')).toBe(
+      'Color backgroundColor',
+    )
+    expect(memberSignature(undefined, 'foo')).toBe('foo')
+  })
+
+  test('groupMembersByVisibility orders public→protected→package→private, callers last', () => {
+    const m = (
+      id: string,
+      visibility: GraphMember['visibility'],
+      role: GraphMember['role'] = 'changed',
+    ): GraphMember => ({
+      id,
+      label: id,
+      kind: 'method',
+      role,
+      visibility,
+    })
+    const groups = groupMembersByVisibility([
+      m('a', 'private'),
+      m('b', 'public'),
+      m('c', undefined, 'caller'),
+      m('d', 'protected'),
+    ])
+    expect(groups.map((g) => g.visibility)).toEqual(['public', 'protected', 'private', 'callers'])
+  })
 })
 
 describe('package grouping', () => {

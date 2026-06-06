@@ -9684,6 +9684,42 @@ mark.comment-anchor[data-active='true'] {
   margin: 0;
   padding: 4px 0;
 }
+/* members grouped by visibility */
+.sg-card__group {
+  list-style: none;
+}
+.sg-card__group > .sg-card__members {
+  padding: 0;
+}
+.sg-card__vis {
+  display: block;
+  padding: 2px 10px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 6%, transparent);
+}
+.sg-card__vis--public {
+  color: color-mix(in srgb, #2e7d32 70%, var(--text));
+}
+.sg-card__vis--protected {
+  color: color-mix(in srgb, #b8860b 70%, var(--text));
+}
+.sg-card__vis--private {
+  color: color-mix(in srgb, #c0392b 70%, var(--text));
+}
+.sg-card__vis--package,
+.sg-card__vis--callers {
+  color: var(--muted);
+}
+/* the signature row: monospace, single line, clip overflow */
+.sg-card__member-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
 .sg-card__member {
   display: flex;
   align-items: center;
