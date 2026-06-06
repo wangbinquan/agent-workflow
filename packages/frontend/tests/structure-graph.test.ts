@@ -118,7 +118,7 @@ describe('buildStructureGraph — edges', () => {
     expect(g.edges[0]).toMatchObject({ source: 'a.ts::A', target: 'b.ts::B', kind: 'inherits' })
   })
 
-  test('references edge with fromMember/toMember → a both-ended member link', () => {
+  test('references edge: a link per upstream member + the downstream constructor', () => {
     const g = buildStructureGraph(
       diffWith([cls('a.ts', 'A'), cls('b.ts', 'B')], {
         classEdges: [
@@ -126,7 +126,7 @@ describe('buildStructureGraph — edges', () => {
             from: 'a.ts::A',
             to: 'b.ts::B',
             kind: 'references',
-            fromMember: 'a.ts#A.m:method:1',
+            fromMembers: ['a.ts#A.m1:method:1', 'a.ts#A.m2:method:1'],
             toMember: 'b.ts#B.ctor:constructor:1',
           },
         ],
@@ -134,7 +134,9 @@ describe('buildStructureGraph — edges', () => {
     )
     const e = g.edges.find((x) => x.source === 'a.ts::A' && x.target === 'b.ts::B')
     expect(e?.memberLinks).toEqual([
-      { source: 'a.ts#A.m:method:1', target: 'b.ts#B.ctor:constructor:1' },
+      { source: 'a.ts#A.m1:method:1' },
+      { source: 'a.ts#A.m2:method:1' },
+      { target: 'b.ts#B.ctor:constructor:1' },
     ])
   })
 

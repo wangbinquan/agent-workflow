@@ -331,12 +331,13 @@ export function buildStructureGraph(
   for (const e of diff.classEdges ?? []) {
     if (!edgeKinds.has(e.kind)) continue
     addEdge(e.from, e.to, e.kind)
-    // a 'references' edge knows the upstream member (where the reference sits)
-    // and the downstream member (the referenced class's constructor) → link both
-    if (e.fromMember !== undefined || e.toMember !== undefined) {
+    // a 'references' edge may touch several upstream members (every method/field
+    // where the reference sits) + the downstream constructor → one link each
+    if ((e.fromMembers !== undefined && e.fromMembers.length > 0) || e.toMember !== undefined) {
       const edgeId = `${e.from}=>${e.to}`
       const arr = callLinks.get(edgeId) ?? []
-      arr.push({ source: e.fromMember, target: e.toMember })
+      for (const fm of e.fromMembers ?? []) arr.push({ source: fm })
+      if (e.toMember !== undefined) arr.push({ target: e.toMember })
       callLinks.set(edgeId, arr)
     }
   }

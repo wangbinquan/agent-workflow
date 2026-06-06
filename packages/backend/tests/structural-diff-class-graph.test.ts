@@ -48,8 +48,28 @@ describe('computeClassEdges', () => {
     ])
     const edges = computeClassEdges(nodes, fileText, members)
     expect(edges).toEqual([
-      { from: 'a.ts::A', to: 'b.ts::B', kind: 'references', fromMember: 'a.ts#A.foo:method:1' },
+      { from: 'a.ts::A', to: 'b.ts::B', kind: 'references', fromMembers: ['a.ts#A.foo:method:1'] },
     ])
+  })
+
+  test('a reference appearing in several members lists them ALL (fromMembers, not just the first)', () => {
+    const nodes = [node('a.ts::A', 'A', 'a.ts', 1, 8), node('b.ts::B', 'B', 'b.ts', 1, 2)]
+    const fileText = new Map([
+      // B is used in BOTH foo (line 3) and bar (line 6)
+      ['a.ts', 'class A {\n  foo() {\n    new B()\n  }\n  bar() {\n    new B()\n  }\n}'],
+      ['b.ts', 'class B {\n}'],
+    ])
+    const members = new Map([
+      [
+        'a.ts::A',
+        [
+          { id: 'a.ts#A.foo:method:1', kind: 'method' as const, startLine: 2, endLine: 4 },
+          { id: 'a.ts#A.bar:method:1', kind: 'method' as const, startLine: 5, endLine: 7 },
+        ],
+      ],
+    ])
+    const edges = computeClassEdges(nodes, fileText, members)
+    expect(edges[0]?.fromMembers).toEqual(['a.ts#A.foo:method:1', 'a.ts#A.bar:method:1'])
   })
 
   test('a references edge also points downstream to the referenced class constructor (toMember)', () => {
@@ -81,7 +101,7 @@ describe('computeClassEdges', () => {
         from: 'a.ts::A',
         to: 'b.ts::B',
         kind: 'references',
-        fromMember: 'a.ts#A.make:method:1',
+        fromMembers: ['a.ts#A.make:method:1'],
         toMember: 'b.ts#B.ctor:constructor:1',
       },
     ])

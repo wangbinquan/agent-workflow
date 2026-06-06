@@ -127,7 +127,7 @@ export function computeClassEdges(
     from: string,
     to: string,
     kind: ClassEdge['kind'],
-    fromMember?: string,
+    fromMembers?: string[],
     toMember?: string,
   ): void => {
     if (from === to) return
@@ -147,7 +147,7 @@ export function computeClassEdges(
     if (seen.has(k)) return
     seen.add(k)
     const edge: ClassEdge = { from, to, kind }
-    if (fromMember !== undefined) edge.fromMember = fromMember
+    if (fromMembers !== undefined && fromMembers.length > 0) edge.fromMembers = fromMembers
     if (toMember !== undefined) edge.toMember = toMember
     edges.push(edge)
   }
@@ -164,27 +164,32 @@ export function computeClassEdges(
       const re = new RegExp(`\\b${escapeRegExp(d.name)}\\b`)
       if (!re.test(bodyText)) continue
       const kind = isInheritance(declText, d.name) ? 'inherits' : 'references'
-      // attribute a reference to the CHANGED member whose range contains it
-      // (upstream), and to the referenced class's constructor (downstream).
-      let fromMember: string | undefined
+      // attribute a reference to EVERY changed member it appears in (upstream),
+      // and to the referenced class's constructor (downstream).
+      let fromMembers: string[] | undefined
       let toMember: string | undefined
       if (kind === 'references') {
         if (members !== undefined) {
-          const ln = firstMatchLine(body, re, c.range.startLine)
-          if (ln >= 0) fromMember = members.find((m) => ln >= m.startLine && ln <= m.endLine)?.id
+          const ids = new Set<string>()
+          for (const ln of matchLines(body, re, c.range.startLine)) {
+            const m = members.find((mm) => ln >= mm.startLine && ln <= mm.endLine)
+            if (m !== undefined) ids.add(m.id)
+          }
+          if (ids.size > 0) fromMembers = [...ids]
         }
         toMember = membersByClass.get(d.key)?.find((m) => m.kind === 'constructor')?.id
       }
-      add(c.key, d.key, kind, fromMember, toMember)
+      add(c.key, d.key, kind, fromMembers, toMember)
     }
   }
   return edges
 }
 
-/** Absolute (1-based) line of the first body line matching `re`, or -1. */
-function firstMatchLine(body: string[], re: RegExp, startLine: number): number {
+/** Absolute (1-based) lines of EVERY body line matching `re`. */
+function matchLines(body: string[], re: RegExp, startLine: number): number[] {
+  const out: number[] = []
   for (let i = 0; i < body.length; i += 1) {
-    if (re.test(body[i] ?? '')) return startLine + i
+    if (re.test(body[i] ?? '')) out.push(startLine + i)
   }
-  return -1
+  return out
 }

@@ -213,8 +213,8 @@ describe('computeFromWorktree — real git repo', () => {
     // so the graph can highlight that exact method/field (not the whole class)
     const ref = diff.classEdges.find((e) => e.from === 'a.ts::A' && e.to === 'dep.ts::Dep')
     expect(ref?.kind).toBe('references')
-    expect(ref?.fromMember).toBeDefined()
-    expect(ref?.fromMember).toContain('a.ts#A')
+    expect(ref?.fromMembers?.length).toBeGreaterThan(0)
+    expect(ref?.fromMembers?.some((m) => m.includes('a.ts#A'))).toBe(true)
   })
 
   test('clean worktree → empty diff', async () => {

@@ -269,14 +269,14 @@ export const classEdgeSchema = z.object({
   /** `${filePath}::${qualifiedName}` of the referenced class. */
   to: z.string(),
   kind: classEdgeKindSchema,
-  /** For 'references': the symbol id of the CHANGED member (method/field) of
-   *  `from` where the reference appears — so the graph can highlight the exact
-   *  method this edge involves, not the whole class. Undefined when the reference
-   *  isn't inside a changed member (or for 'inherits', a class-level relation). */
-  fromMember: z.string().optional(),
+  /** For 'references': symbol ids of EVERY changed member (method/field) of
+   *  `from` where the reference appears — one edge can touch several methods, so
+   *  this is a list. Empty/undefined when no reference sits in a changed member
+   *  (or for 'inherits', a class-level relation). */
+  fromMembers: z.array(z.string()).optional(),
   /** For 'references': the symbol id of `to`'s CONSTRUCTOR (the referenced
    *  class's entry point) when it has a changed one — the downstream end to
-   *  highlight alongside `fromMember`. Undefined if `to` has no changed ctor. */
+   *  highlight alongside `fromMembers`. Undefined if `to` has no changed ctor. */
   toMember: z.string().optional(),
 })
 export type ClassEdge = z.infer<typeof classEdgeSchema>
