@@ -122,9 +122,9 @@ describe('RFC-050 MemoryTab — distill output language select', () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(<MemoryTab config={mkConfig()} />, { wrapper: wrap(qc) })
     pickLang('settings.memoryDistillLangZhCN')
-    expect(
-      screen.getByTestId('settings-memory-distill-lang-select').textContent,
-    ).toContain(i18n.t('settings.memoryDistillLangZhCN'))
+    expect(screen.getByTestId('settings-memory-distill-lang-select').textContent).toContain(
+      i18n.t('settings.memoryDistillLangZhCN'),
+    )
     const saveBtn = screen
       .getAllByRole('button')
       .find((b) => b.textContent && /保存|Save/.test(b.textContent))
