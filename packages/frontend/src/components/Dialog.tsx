@@ -46,6 +46,27 @@ export interface DialogProps {
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
+// Focus is "inside the dialog" if it's in the panel itself OR inside a
+// popover that a control *within* the panel owns via `aria-controls`. The
+// latter covers floating layers that are intentionally portaled to
+// `document.body` to escape the panel's overflow clipping — most notably
+// <Select>'s listbox (combobox[aria-controls=id] → <ul id=id>). Without
+// this, the focus trap below would yank focus out of an open <Select>
+// back to the panel's first focusable (the × close button), which both
+// breaks the dropdown and scroll-jumps the panel to the top.
+// Locked by tests/dialog-portal-focus.test.tsx.
+function isFocusInsideDialog(panel: HTMLElement, node: Node | null): boolean {
+  if (node === null) return false
+  if (panel.contains(node)) return true
+  for (const owner of panel.querySelectorAll('[aria-controls]')) {
+    const id = owner.getAttribute('aria-controls')
+    if (id === null || id === '') continue
+    const owned = document.getElementById(id)
+    if (owned !== null && owned.contains(node)) return true
+  }
+  return false
+}
+
 export function Dialog(props: DialogProps): ReactElement | null {
   const { t } = useTranslation()
   const size: DialogSize = props.size ?? 'md'
@@ -122,7 +143,7 @@ export function Dialog(props: DialogProps): ReactElement | null {
       const panel = panelRef.current
       if (panel === null) return
       const ae = document.activeElement
-      if (ae !== null && ae !== document.body && panel.contains(ae)) return
+      if (ae !== null && ae !== document.body && isFocusInsideDialog(panel, ae)) return
       const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE))
       ;(focusables[0] ?? panel).focus?.()
     }
@@ -130,7 +151,7 @@ export function Dialog(props: DialogProps): ReactElement | null {
       const panel = panelRef.current
       if (panel === null) return
       const target = e.target as Node | null
-      if (target !== null && panel.contains(target)) return
+      if (target !== null && isFocusInsideDialog(panel, target)) return
       yankBack()
     }
     // `focusout` safety net: Linux WebKit (Playwright WPE build) doesn't
