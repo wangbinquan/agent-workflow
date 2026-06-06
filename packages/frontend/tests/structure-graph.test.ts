@@ -122,19 +122,45 @@ describe('buildStructureGraph — edges', () => {
     expect(g.edges[0]).toMatchObject({ source: 'a.ts::A', target: 'b.ts::B', kind: 'inherits' })
   })
 
-  test('references edge: a link per upstream member + per downstream member used', () => {
+  test('references edge: a link per upstream member + per (public) downstream member used', () => {
+    const member = (
+      qn: string,
+      kind: 'constructor' | 'method',
+      signature: string,
+    ): StructuralDiff['files'][number]['changes'][number] => ({
+      changeType: 'added',
+      kind,
+      after: { ...sym('b.ts', qn, kind), signature },
+    })
     const g = buildStructureGraph(
-      diffWith([cls('a.ts', 'A'), cls('b.ts', 'B')], {
-        classEdges: [
+      diffWith(
+        [
+          cls('a.ts', 'A'),
           {
-            from: 'a.ts::A',
-            to: 'b.ts::B',
-            kind: 'references',
-            fromMembers: ['a.ts#A.m1:method:1', 'a.ts#A.m2:method:1'],
-            toMembers: ['b.ts#B.ctor:constructor:1', 'b.ts#B.foo:method:1'],
+            filePath: 'b.ts',
+            lang: 'java',
+            status: 'ok',
+            edges: [],
+            impact: [],
+            changes: [
+              { changeType: 'added', kind: 'class', after: sym('b.ts', 'B', 'class') },
+              member('B.ctor', 'constructor', 'public B()'),
+              member('B.foo', 'method', 'public void foo()'),
+            ],
           },
         ],
-      }),
+        {
+          classEdges: [
+            {
+              from: 'a.ts::A',
+              to: 'b.ts::B',
+              kind: 'references',
+              fromMembers: ['a.ts#A.m1:method:1', 'a.ts#A.m2:method:1'],
+              toMembers: ['b.ts#B.ctor:constructor:1', 'b.ts#B.foo:method:1'],
+            },
+          ],
+        },
+      ),
     )
     const e = g.edges.find((x) => x.source === 'a.ts::A' && x.target === 'b.ts::B')
     expect(e?.memberLinks).toEqual([
@@ -143,6 +169,53 @@ describe('buildStructureGraph — edges', () => {
       { target: 'b.ts#B.ctor:constructor:1' },
       { target: 'b.ts#B.foo:method:1' },
     ])
+  })
+
+  test('references downstream drops PRIVATE members but keeps public/protected (reachable)', () => {
+    const meth = (qn: string, signature: string) => ({
+      changeType: 'added' as const,
+      kind: 'method' as const,
+      after: { ...sym('b.ts', qn, 'method'), signature },
+    })
+    const g = buildStructureGraph(
+      diffWith(
+        [
+          cls('a.ts', 'A'),
+          {
+            filePath: 'b.ts',
+            lang: 'java',
+            status: 'ok',
+            edges: [],
+            impact: [],
+            changes: [
+              { changeType: 'added', kind: 'class', after: sym('b.ts', 'B', 'class') },
+              meth('B.foo', 'public void foo()'),
+              meth('B.helper', 'protected void helper()'),
+              meth('B.secret', 'private void secret()'),
+            ],
+          },
+        ],
+        {
+          classEdges: [
+            {
+              from: 'a.ts::A',
+              to: 'b.ts::B',
+              kind: 'references',
+              toMembers: [
+                'b.ts#B.foo:method:1',
+                'b.ts#B.helper:method:1',
+                'b.ts#B.secret:method:1',
+              ],
+            },
+          ],
+        },
+      ),
+    )
+    const e = g.edges.find((x) => x.source === 'a.ts::A' && x.target === 'b.ts::B')
+    const targets = (e?.memberLinks ?? []).map((l) => l.target).filter(Boolean)
+    expect(targets).toContain('b.ts#B.foo:method:1') // public kept
+    expect(targets).toContain('b.ts#B.helper:method:1') // protected kept (subclass-reachable)
+    expect(targets).not.toContain('b.ts#B.secret:method:1') // private dropped
   })
 
   test('a references edge also surfaces the callee methods X calls into D (downstream)', () => {

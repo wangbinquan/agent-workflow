@@ -383,6 +383,13 @@ export function buildStructureGraph(
   // 2) edges. Prefer inherits > references > calls for a given pair.
   const edgeMap = new Map<string, GraphCardEdge>()
   const callLinks = new Map<string, Array<{ source?: string; target?: string }>>()
+  // member id → row, to gate a 'references' edge's DOWNSTREAM (used) members by
+  // visibility. PRIVATE members are never reachable from another class, so they
+  // must never show as "used from outside". protected (subclasses) + package
+  // (same package) CAN be, so keep them — only private is dropped.
+  const memberById = new Map<string, GraphMember>()
+  for (const card of cards.values()) for (const m of card.members) memberById.set(m.id, m)
+  const externallyUsable = (id: string): boolean => memberById.get(id)?.visibility !== 'private'
   const addEdge = (source: string, target: string, kind: EdgeKind): void => {
     if (source === target || !cards.has(source) || !cards.has(target)) return
     const id = `${source}=>${target}`
@@ -405,7 +412,8 @@ export function buildStructureGraph(
       const edgeId = `${e.from}=>${e.to}`
       const arr = callLinks.get(edgeId) ?? []
       for (const fm of e.fromMembers ?? []) arr.push({ source: fm })
-      for (const tm of e.toMembers ?? []) arr.push({ target: tm })
+      // downstream: only members an outside class could actually reach (public)
+      for (const tm of e.toMembers ?? []) if (externallyUsable(tm)) arr.push({ target: tm })
       callLinks.set(edgeId, arr)
     }
   }
