@@ -341,35 +341,39 @@ export function buildStructureGraph(
       callLinks.set(edgeId, arr)
     }
   }
-  // method-level call edges + caller cards (from impact) — only when 'calls' is on,
-  // so filtering it out also drops the otherwise-orphaned caller cards.
-  if (edgeKinds.has('calls'))
-    for (const item of diff.impact) {
-      const targetCardId = changedSymbolCard.get(item.changedSymbolId)
-      if (targetCardId === undefined) continue
-      for (const caller of item.callers) {
-        let callerKey: string
-        let callerTitle: string
-        let callerFile: string
-        let callerKind: CardKind
-        let callerLabel: string | null
-        if (caller.symbolId !== undefined) {
-          const file = fileFromId(caller.symbolId)
-          const qn = qnFromId(caller.symbolId)
-          const c = memberContainer(file, qn)
-          callerKey = c.key
-          callerTitle = c.title
-          callerFile = file
-          callerKind = c.kind
-          callerLabel = leafOf(qn)
-        } else {
-          callerKey = `${caller.filePath}::<file>`
-          callerTitle = fileBase(caller.filePath)
-          callerFile = caller.filePath
-          callerKind = 'file'
-          callerLabel = null
-        }
-        if (callerKey === targetCardId) continue
+  // method-level calls (from impact). When 'calls' is on we materialise caller
+  // cards + 'calls' edges. EITHER WAY, every call records its callee as a member
+  // link on the pair's edge — so an existing 'references' edge X→D also surfaces
+  // the D methods X actually calls (multiple downstream), not just the ctor.
+  const callsOn = edgeKinds.has('calls')
+  for (const item of diff.impact) {
+    const targetCardId = changedSymbolCard.get(item.changedSymbolId)
+    if (targetCardId === undefined) continue
+    for (const caller of item.callers) {
+      let callerKey: string
+      let callerTitle: string
+      let callerFile: string
+      let callerKind: CardKind
+      let callerLabel: string | null
+      if (caller.symbolId !== undefined) {
+        const file = fileFromId(caller.symbolId)
+        const qn = qnFromId(caller.symbolId)
+        const c = memberContainer(file, qn)
+        callerKey = c.key
+        callerTitle = c.title
+        callerFile = file
+        callerKind = c.kind
+        callerLabel = leafOf(qn)
+      } else {
+        callerKey = `${caller.filePath}::<file>`
+        callerTitle = fileBase(caller.filePath)
+        callerFile = caller.filePath
+        callerKind = 'file'
+        callerLabel = null
+      }
+      if (callerKey === targetCardId) continue
+      const edgeId = `${callerKey}=>${targetCardId}`
+      if (callsOn) {
         const callerCard = ensureCard(callerKey, callerTitle, callerFile, callerKind)
         if (callerLabel !== null && !callerCard.members.some((m) => m.label === callerLabel)) {
           callerCard.members.push({
@@ -380,16 +384,19 @@ export function buildStructureGraph(
           })
         }
         addEdge(callerKey, targetCardId, 'calls')
-        // record which member rows this call links (caller method → changed method)
-        const edgeId = `${callerKey}=>${targetCardId}`
+      }
+      // attach the callee (downstream) — to the calls edge we just made, OR to an
+      // already-existing edge (e.g. a 'references' edge) between the same pair.
+      if (callsOn || edgeMap.has(edgeId)) {
         const arr = callLinks.get(edgeId) ?? []
         arr.push({
-          source: callerLabel !== null ? `${callerKey}::${callerLabel}` : undefined,
+          source: callsOn && callerLabel !== null ? `${callerKey}::${callerLabel}` : undefined,
           target: item.changedSymbolId,
         })
         callLinks.set(edgeId, arr)
       }
     }
+  }
 
   const list = [...cards.values()]
   const edges = [...edgeMap.values()]

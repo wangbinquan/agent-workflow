@@ -140,6 +140,54 @@ describe('buildStructureGraph — edges', () => {
     ])
   })
 
+  test('a references edge also surfaces the callee methods X calls into D (downstream)', () => {
+    const g = buildStructureGraph(
+      diffWith(
+        [
+          cls('a.ts', 'A'),
+          {
+            filePath: 'b.ts',
+            lang: 'typescript',
+            status: 'ok',
+            edges: [],
+            impact: [],
+            changes: [
+              { changeType: 'added', kind: 'class', after: sym('b.ts', 'B', 'class') },
+              { changeType: 'modified', kind: 'method', after: sym('b.ts', 'B.foo', 'method') },
+            ],
+          },
+        ],
+        {
+          classEdges: [
+            {
+              from: 'a.ts::A',
+              to: 'b.ts::B',
+              kind: 'references',
+              fromMembers: ['a.ts#A.m:method:1'],
+            },
+          ],
+          impact: [
+            {
+              changedSymbolId: 'b.ts#B.foo:method:1',
+              confidence: 'extracted',
+              callers: [
+                {
+                  symbolId: 'a.ts#A.m:method:3',
+                  filePath: 'a.ts',
+                  range: { startLine: 3, endLine: 4 },
+                },
+              ],
+            },
+          ],
+        },
+      ),
+      new Set(['references']), // calls OFF — yet the callee still shows downstream
+    )
+    const e = g.edges.find((x) => x.source === 'a.ts::A' && x.target === 'b.ts::B')
+    expect(e?.kind).toBe('references')
+    expect(e?.memberLinks?.some((l) => l.target === 'b.ts#B.foo:method:1')).toBe(true)
+  })
+
   test('inherits wins over a calls edge for the same pair', () => {
     const g = buildStructureGraph(
       diffWith([cls('a.ts', 'A'), cls('b.ts', 'B')], {
