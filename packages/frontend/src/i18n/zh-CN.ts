@@ -901,6 +901,8 @@ export interface Resources {
     structCardImports: string
     structCardDependencies: string
     structDepsHeader: string
+    structImpactHeader: string
+    structImpactInferred: string
     structViaImportManifest: string
     structRenamedFrom: string
     structSigChanged: string
@@ -2978,6 +2980,8 @@ export const zhCN: Resources = {
     structCardImports: '导入',
     structCardDependencies: '依赖',
     structDepsHeader: '依赖变更',
+    structImpactHeader: '影响面（谁调用了被改方法）',
+    structImpactInferred: '文件内 · 启发式',
     structViaImportManifest: '源码已引用',
     structRenamedFrom: '原 {{from}}',
     structSigChanged: '签名变化',

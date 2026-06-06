@@ -192,6 +192,7 @@ describe('computeSummary', () => {
         lang: 'typescript',
         status: 'ok',
         edges: [],
+        impact: [],
         changes: [
           { changeType: 'added', kind: 'class' },
           { changeType: 'modified', kind: 'interface' },
@@ -208,6 +209,7 @@ describe('computeSummary', () => {
         lang: 'cpp',
         status: 'degraded',
         edges: [],
+        impact: [],
         changes: [{ changeType: 'added', kind: 'struct' }],
       },
     ]

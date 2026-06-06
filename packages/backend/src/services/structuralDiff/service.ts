@@ -19,6 +19,7 @@ import { getTask } from '@/services/task'
 import { computeFromWorktree, computeBetweenRefs } from './gitBackend'
 import { mergeStructuralDiffs } from './assemble'
 import { resolveNodeScope } from './refSelect'
+import { readStoredDiff, writeStoredDiff, isTerminalTaskStatus } from './store'
 
 export async function getTaskStructuralDiff(
   db: DbClient,
@@ -51,22 +52,30 @@ export async function getTaskStructuralDiff(
       )
     }
     if (!existsSync(task.worktreePath)) {
+      // Worktree GC'd — serve the eager-persisted artifact if we have one.
+      const stored = await readStoredDiff(taskId, 'task')
+      if (stored !== null) return stored
       throw new DomainError(
         'task-worktree-missing',
         `worktree '${task.worktreePath}' does not exist; cannot compute structural diff`,
         410,
       )
     }
-    return computeFromWorktree({
+    const diff = await computeFromWorktree({
       taskId,
       scope,
       worktreePath: task.worktreePath,
       fromRef: task.baseCommit,
     })
+    // Persist for terminal tasks so the view survives a later worktree GC.
+    if (isTerminalTaskStatus(task.status)) void writeStoredDiff(diff)
+    return diff
   }
 
   // Multi-repo: merge per-repo diffs, labeling files by repo dir.
   if (!existsSync(task.worktreePath)) {
+    const stored = await readStoredDiff(taskId, 'task')
+    if (stored !== null) return stored
     throw new DomainError(
       'task-worktree-missing',
       `worktree '${task.worktreePath}' does not exist; cannot compute structural diff`,
@@ -93,7 +102,7 @@ export async function getTaskStructuralDiff(
     })
     parts.push({ label: repo.worktreeDirName || basename(repo.repoPath), diff })
   }
-  return mergeStructuralDiffs(
+  const merged = mergeStructuralDiffs(
     {
       scope,
       taskId,
@@ -104,6 +113,8 @@ export async function getTaskStructuralDiff(
     },
     parts,
   )
+  if (isTerminalTaskStatus(task.status)) void writeStoredDiff(merged)
+  return merged
 }
 
 type ResolvedTask = NonNullable<Awaited<ReturnType<typeof getTask>>>

@@ -39,6 +39,7 @@ function sampleDiff(): StructuralDiff {
       lang: 'python',
       status: 'ok',
       edges: [],
+      impact: [],
       changes: [
         {
           changeType: 'modified',
@@ -55,6 +56,7 @@ function sampleDiff(): StructuralDiff {
       lang: 'cpp',
       status: 'degraded',
       edges: [],
+      impact: [],
       changes: [{ changeType: 'added', kind: 'class', after: sym('Widget', 'class', true) }],
     },
   ]
@@ -145,6 +147,26 @@ describe('<StructuralDiffView />', () => {
     )
     fireEvent.click(screen.getByText('speak'))
     expect(jumped).toEqual({ filePath: 'mod.py', startLine: 3, endLine: 4 })
+  })
+
+  test('renders the impact panel (within-file callers) when impact is present', () => {
+    const data = sampleDiff()
+    data.impact = [
+      {
+        changedSymbolId: 'mod.py#Animal.speak:method:3',
+        callers: [
+          {
+            symbolId: 'mod.py#Animal.greet:method:8',
+            filePath: 'mod.py',
+            range: { startLine: 8, endLine: 9 },
+          },
+        ],
+        confidence: 'inferred',
+      },
+    ]
+    render(<StructuralDiffView data={data} />)
+    expect(screen.getByText('Animal.speak')).toBeTruthy() // impact target (full qn)
+    expect(screen.getByText(/Animal\.greet/)).toBeTruthy() // caller
   })
 
   test('empty diff renders an empty state', () => {

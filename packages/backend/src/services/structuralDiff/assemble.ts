@@ -69,7 +69,7 @@ export async function assembleStructuralDiff(opts: {
     degradedReason: opts.degradedReason,
     files,
     dependencyChanges,
-    impact: [],
+    impact: files.flatMap((f) => f.impact),
     summary,
   }
 }
@@ -126,7 +126,7 @@ export function mergeStructuralDiffs(
     ...base,
     files,
     dependencyChanges,
-    impact: [],
+    impact: files.flatMap((f) => f.impact),
     summary: computeSummary(files, dependencyChanges),
   }
 }

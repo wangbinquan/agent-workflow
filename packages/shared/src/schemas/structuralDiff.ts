@@ -217,6 +217,10 @@ export const fileStructuralDiffSchema = z.object({
   status: fileAnalysisStatusSchema,
   changes: z.array(symbolChangeSchema).default([]),
   edges: z.array(symbolEdgeSchema).default([]),
+  /** Within-file blast-radius: callers of this file's changed methods. The
+   *  top-level StructuralDiff.impact is the flattened union of these. Empty
+   *  unless impact analysis ran (baseline = within-file, heuristic). */
+  impact: z.array(impactItemSchema).default([]),
 })
 export type FileStructuralDiff = z.infer<typeof fileStructuralDiffSchema>
 

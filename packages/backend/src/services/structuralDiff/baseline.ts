@@ -10,6 +10,7 @@ import { graphDiff, type FileStructuralDiff, type SymbolChange } from '@agent-wo
 import { resolveLang } from './lang/grammars'
 import { extractSymbols } from './lang/extract'
 import { hasExtraction, DEGRADED_LANGS } from './lang/queries'
+import { computeWithinFileImpact } from './impact'
 
 /** Files larger than this are skipped (consistent with diff sharding caps). */
 export const MAX_ANALYZE_BYTES = 1_500_000
@@ -43,20 +44,20 @@ export async function analyzeFile(opts: {
   const { filePath, oldText, newText } = opts
   const resolution = resolveLang(filePath)
   if (resolution === null) {
-    return { filePath, lang: 'unknown', status: 'unsupported', changes: [], edges: [] }
+    return { filePath, lang: 'unknown', status: 'unsupported', changes: [], edges: [], impact: [] }
   }
   const { lang, grammarFile } = resolution
   if (!hasExtraction(lang)) {
     // Grammar exists but extraction queries not authored yet (PR-B langs).
-    return { filePath, lang, status: 'unsupported', changes: [], edges: [] }
+    return { filePath, lang, status: 'unsupported', changes: [], edges: [], impact: [] }
   }
 
   const present = [oldText, newText].filter((t): t is string => t !== null)
   if (present.some(looksBinary)) {
-    return { filePath, lang, status: 'skipped-binary', changes: [], edges: [] }
+    return { filePath, lang, status: 'skipped-binary', changes: [], edges: [], impact: [] }
   }
   if (present.some((t) => t.length > MAX_ANALYZE_BYTES)) {
-    return { filePath, lang, status: 'skipped-oversized', changes: [], edges: [] }
+    return { filePath, lang, status: 'skipped-oversized', changes: [], edges: [], impact: [] }
   }
 
   try {
@@ -76,8 +77,9 @@ export async function analyzeFile(opts: {
     // downgrades to degraded so the UI flags "analysis may be incomplete".
     const status: FileStructuralDiff['status'] =
       DEGRADED_LANGS.has(lang) || oldRes.hadError || newRes.hadError ? 'degraded' : 'ok'
-    return { filePath, lang, status, changes, edges: [] }
+    const impact = computeWithinFileImpact(changes, newRes.symbols, newText, filePath)
+    return { filePath, lang, status, changes, edges: [], impact }
   } catch {
-    return { filePath, lang, status: 'parse-error', changes: [], edges: [] }
+    return { filePath, lang, status: 'parse-error', changes: [], edges: [], impact: [] }
   }
 }

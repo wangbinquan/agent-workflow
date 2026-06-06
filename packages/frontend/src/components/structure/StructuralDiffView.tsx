@@ -12,6 +12,7 @@ import type {
   StructuralDiffSummary,
   SymbolChange,
   HunkAnchor,
+  ImpactItem,
 } from '@agent-workflow/shared'
 import { EmptyState } from '@/components/EmptyState'
 import {
@@ -63,7 +64,39 @@ export function StructuralDiffView({
       {data.dependencyChanges.length > 0 && (
         <DependencyChangesPanel changes={data.dependencyChanges} />
       )}
+      {data.impact.length > 0 && <ImpactPanel impact={data.impact} />}
       {files.length > 0 && <StructuralTree files={files} onJumpToHunk={onJumpToHunk} />}
+    </div>
+  )
+}
+
+/** Parse the readable symbol name out of a SymbolNode id
+ *  (`filePath#qualifiedName:kind:line`). */
+function symbolName(id: string | undefined): string {
+  if (id === undefined) return '?'
+  const afterHash = id.includes('#') ? (id.split('#')[1] ?? id) : id
+  return afterHash.split(':')[0] ?? afterHash
+}
+
+function ImpactPanel({ impact }: { impact: ImpactItem[] }) {
+  const { t } = useTranslation()
+  return (
+    <div className="structure__impact">
+      <div className="structure__impact-header">
+        {t('tasks.structImpactHeader')}
+        <span className="structure__tag">{t('tasks.structImpactInferred')}</span>
+      </div>
+      <ul className="structure__impact-list">
+        {impact.map((it, i) => (
+          <li key={`${it.changedSymbolId}-${i}`} className="structure__impact-item">
+            <span className="structure__impact-target">{symbolName(it.changedSymbolId)}</span>
+            <span className="structure__impact-arrow">←</span>
+            <span className="structure__impact-callers">
+              {it.callers.map((c) => symbolName(c.symbolId) || c.filePath).join(', ')}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

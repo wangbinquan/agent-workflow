@@ -953,6 +953,8 @@ export const enUS: Resources = {
     structCardImports: 'Imports',
     structCardDependencies: 'Deps',
     structDepsHeader: 'Dependency changes',
+    structImpactHeader: 'Impact (callers of changed methods)',
+    structImpactInferred: 'within-file · heuristic',
     structViaImportManifest: 'imported in code',
     structRenamedFrom: 'was {{from}}',
     structSigChanged: 'signature changed',

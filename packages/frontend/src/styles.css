@@ -9463,6 +9463,45 @@ mark.comment-anchor[data-active='true'] {
   font-size: var(--font-xs);
   margin-bottom: 6px;
 }
+.structure__impact {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--bg);
+}
+.structure__impact-header {
+  font-weight: 600;
+  font-size: var(--font-xs);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.structure__impact-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.structure__impact-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.structure__impact-target {
+  color: #d99100;
+  font-weight: 600;
+}
+.structure__impact-arrow {
+  color: var(--muted, #6b7280);
+}
+.structure__impact-callers {
+  color: var(--text);
+}
 .structure__deps-list,
 .structure__symbols {
   list-style: none;
