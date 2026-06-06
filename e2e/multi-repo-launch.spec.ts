@@ -216,19 +216,20 @@ async function seedWrapperGitWorkflow(daemon: DaemonHandle): Promise<string> {
  */
 async function pickBaseBranch(page: Page, rowIndex: number, branch: string): Promise<void> {
   const tid = `repo-source-base-branch-${rowIndex}`
-  const branchSelect = page.locator(`select[data-testid="${tid}"]`)
-  const branchInput = page.locator(`input[data-testid="${tid}"]`)
-  try {
-    await branchSelect.waitFor({ state: 'visible', timeout: 5_000 })
-    await branchSelect.selectOption(branch)
-    return
-  } catch {
-    // refs hasn't materialised the select within the budget — fall
-    // back to typing into the TextInput. waitFor here is short
-    // because the input is the initial-render shape; it's already
-    // present unless something is genuinely broken.
-    await branchInput.waitFor({ state: 'visible', timeout: 2_000 })
-    await branchInput.fill(branch)
+  // RFC-036: once /api/repos/refs resolves the branch picker renders as the
+  // shared <Select> (a `button[role=combobox]` + portaled listbox); before
+  // that it's a plain `<input>` TextInput. Both carry the same data-testid,
+  // so locate by testid and branch on `role` to absorb the swap — whichever
+  // shape exists at action time is what we drive.
+  const el = page.locator(`[data-testid="${tid}"]`)
+  await el.waitFor({ state: 'visible', timeout: 5_000 })
+  if ((await el.getAttribute('role')) === 'combobox') {
+    await el.click()
+    // Select rows commit on mousedown (then the listbox unmounts), so dispatch
+    // mousedown directly rather than a full click whose mouseup could miss.
+    await page.getByRole('option', { name: branch, exact: true }).dispatchEvent('mousedown')
+  } else {
+    await el.fill(branch)
   }
 }
 

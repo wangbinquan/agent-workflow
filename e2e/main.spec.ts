@@ -210,11 +210,16 @@ test('happy path: agents → workflow → launch → task done → outputs visib
   // RFC-037: task name is now a required field — fill it before submit.
   await page.fill('[data-testid="launch-task-name"]', 'e2e-launch-task')
 
-  // baseBranch select may take a moment to swap in once /api/repos/refs
-  // resolves. If it's a <select>, ensure 'main' is selected.
-  const branchSelect = page.locator('select').nth(1) // [0]=repo, [1]=branch when present
+  // baseBranch picker swaps in once /api/repos/refs resolves. RFC-036: it now
+  // renders as the shared <Select> — a role=combobox trigger + portaled
+  // listbox — so open it and pick 'main' rather than selectOption() on a
+  // native <select> (which no longer exists).
+  const branchSelect = page.locator('[data-testid^="repo-source-base-branch"]')
   await expect(branchSelect).toBeVisible({ timeout: 10_000 })
-  await branchSelect.selectOption('main')
+  await branchSelect.click()
+  // Select rows commit on mousedown (then the listbox unmounts), so dispatch
+  // mousedown directly rather than a full click whose mouseup could miss.
+  await page.getByRole('option', { name: 'main', exact: true }).dispatchEvent('mousedown')
 
   await page.getByRole('button', { name: 'Start task', exact: true }).click()
 
