@@ -6661,6 +6661,9 @@ mark.comment-anchor[data-active='true'] {
   flex-direction: column;
   gap: 2px;
   min-height: 0;
+  /* scroll the file list — without this, many files get flex-shrunk to a
+     sliver and the names render vertically clipped */
+  overflow-y: auto;
 }
 
 .worktree-diff__file-tab {
@@ -6676,6 +6679,8 @@ mark.comment-anchor[data-active='true'] {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* never let the column flex crush a row below its text height */
+  flex-shrink: 0;
 }
 
 .worktree-diff__file-tab:hover {
