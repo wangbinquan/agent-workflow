@@ -28,9 +28,9 @@ describe('SequenceDiagram', () => {
     expect(screen.getByText('A')).toBeTruthy()
     expect(screen.getByText('B')).toBeTruthy()
     expect(screen.getByText('C')).toBeTruthy()
-    // messages (depth indent is leading spaces; match on the method text)
-    expect(screen.getByText(/charge\(\)/)).toBeTruthy()
-    expect(screen.getByText(/save\(\)/)).toBeTruthy()
+    // messages: labels are drawn verbatim (no depth-indent leading spaces)
+    expect(screen.getByText('charge()')).toBeTruthy()
+    expect(screen.getByText('save()')).toBeTruthy()
   })
 
   test('empty model → no-calls message, not an empty SVG', () => {
@@ -51,5 +51,29 @@ describe('SequenceDiagram', () => {
     expect(label.getAttribute('text-anchor')).toBe('start')
     // x sits just right of the LEFT lifeline (99 + SEQ_LABEL_GAP), not the midpoint 174
     expect(Number(label.getAttribute('x'))).toBe(99 + 8)
+  })
+
+  // Regression: nested-call labels used to carry `'  '.repeat(depth)` leading
+  // spaces; with white-space:pre + left-alignment that pushed the visible method
+  // name far to the right of its arrow. Labels must render verbatim, no indent.
+  test('a deep nested-call label has no leading-space indentation', () => {
+    const model = buildSequence('f::A', [
+      {
+        ownerClass: 'f::B',
+        method: 'go()',
+        resolution: 'resolved',
+        children: [
+          {
+            ownerClass: 'f::C',
+            method: 'deep()',
+            resolution: 'resolved',
+            children: [],
+          },
+        ],
+      },
+    ])
+    render(<SequenceDiagram model={model} />)
+    const deep = screen.getByText('deep()') // exact match → no leading spaces
+    expect(deep.textContent).toBe('deep()')
   })
 })

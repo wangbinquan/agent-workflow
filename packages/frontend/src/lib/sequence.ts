@@ -82,9 +82,12 @@ export const SEQ_CHAR_W = 6.7
 /** approx glyph advance of the 12px head label. */
 export const SEQ_HEAD_CHAR_W = 7.3
 
-/** Indented label string exactly as drawn (depth → leading spaces). */
-export function seqMessageLabel(m: Pick<SeqMessage, 'depth' | 'label'>): string {
-  return `${' '.repeat(m.depth * 2)}${m.label}`
+/** Label string exactly as drawn. No depth indentation: labels are left-aligned
+ *  flush to their arrow's left end, and leading spaces (white-space:pre) would
+ *  push the visible method name away from the arrow. Call depth is already shown
+ *  by the lifelines involved + top-to-bottom order. */
+export function seqMessageLabel(m: Pick<SeqMessage, 'label'>): string {
+  return m.label
 }
 
 export interface SeqLayout {
