@@ -18,6 +18,19 @@ const graphCss = css.slice(
   css.indexOf('.structure-graph .react-flow__node'),
 )
 
+describe('structure-graph handle hit area', () => {
+  // regression: tiny xyflow handles intercepted clicks → dead zones over the
+  // connection points. Handles must be pointer-events:none so the whole
+  // top/bottom half of a node is the highlight click target.
+  test('graph handles do not intercept clicks (pointer-events: none)', () => {
+    const rule = css.slice(
+      css.indexOf('.structure-graph .react-flow__handle {'),
+      css.indexOf('.structure-graph-wrap {'),
+    )
+    expect(rule).toMatch(/pointer-events:\s*none/)
+  })
+})
+
 describe('structure-graph container height', () => {
   // regression: the graph is inside a flex column that could collapse to 0 — a
   // shrinkable child got crushed to ~2px and vanished. It now FILLS (flex:1) but

@@ -9776,6 +9776,19 @@ mark.comment-anchor[data-active='true'] {
 .structure-graph .react-flow__edge.sg-edge--dim {
   opacity: 0.08;
 }
+/* Handles are visual in/out markers only: clicks fall THROUGH them to the node,
+   so the whole top half (input) / bottom half (output) is the click target — no
+   tiny dead zones over the connection points. */
+.structure-graph .react-flow__handle {
+  pointer-events: none;
+  width: 34px;
+  height: 5px;
+  min-width: 0;
+  min-height: 0;
+  border: none;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+}
 .structure-graph-wrap {
   display: flex;
   flex-direction: column;
