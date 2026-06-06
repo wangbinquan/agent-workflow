@@ -263,6 +263,13 @@ interface StructuralDiff {       // 顶层 artifact
 
 **门槛**：`bun run typecheck && bun run test && bun run format:check` 全绿 + `bun run build:binary` smoke（grammar 内嵌）+ CI（双 OS + Playwright）。按 [feedback_post_commit_ci_check] 推后即查。
 
+**本地验证清单（CI 无法覆盖——CI 不装 scip-* 索引器）**：以下唯一不能在 CI 验证的是"真索引器产出 `.scip`"；解析/精确 impact/发现/回退全部用 fixture（`encodeScipFixture` 在测试里造）+ 注入 stub spawn 测过。装好对应索引器后本地核对：
+1. 装一个自洽索引器（`scip-typescript`/`scip-python`/`scip-go`/`rust-analyzer scip`），对一个真小项目 worktree 调 `?mode=deep`，确认 `engine='deep'` + ImpactPanel 精确调用方。
+2. 未装/编译不过/超时三种情况确认 UI 出"深度回退基线"横幅、`engine='baseline'`、不报 500。
+3. C++/Scala 需 `compile_commands.json` / build-tool；agent 中间态常编译不过→预期回退基线（属正常）。
+4. 索引器版本升级后 SCIP moniker 方案可能漂移——以同一 `parseScip` 重跑步骤 1 核对。
+5. 关系图(PR-F)/方法体行变更(#6)在 dev server 上目测：树↔图切换、+N/−M 显示。
+
 ## 13. Open Questions（实现期决断，非阻塞批准）
 
 - **OQ-1 grammar 来源包**：`tree-sitter-wasms` vs `@vscode/tree-sitter-wasm` vs 各 grammar 官方 wasm —— 取覆盖 8 语言且维护活跃者；体积评估（预计内嵌 ~8–12MB）。
