@@ -9758,6 +9758,24 @@ mark.comment-anchor[data-active='true'] {
   stroke-width: 1;
   stroke-dasharray: 5 4;
 }
+/* click highlighting (these come AFTER the kind rules so they win) */
+.structure-graph .react-flow__edge {
+  cursor: pointer;
+}
+.structure-graph .sg-card,
+.structure-graph .sg-pkgnode {
+  cursor: pointer;
+}
+.structure-graph .react-flow__edge.sg-edge--hl .react-flow__edge-path {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+.structure-graph .react-flow__edge.sg-edge--hl {
+  opacity: 1;
+}
+.structure-graph .react-flow__edge.sg-edge--dim {
+  opacity: 0.08;
+}
 .structure-graph-wrap {
   display: flex;
   flex-direction: column;

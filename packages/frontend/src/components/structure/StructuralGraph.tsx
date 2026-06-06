@@ -22,7 +22,7 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { StructuralDiff } from '@agent-workflow/shared'
 import {
@@ -124,6 +124,47 @@ function edgeFor(e: { id: string; source: string; target: string; kind: EdgeKind
   }
 }
 
+/** Click highlighting shared by both flows: click an edge → highlight it; click
+ *  a node's TOP half (input) → its incoming edges, BOTTOM half (output) → its
+ *  outgoing edges; click the empty pane → clear. Highlighted edges pop, the rest
+ *  dim. `rawEdges` is the source/target lookup; `baseEdges` the xyflow edges. */
+function useEdgeHighlight(
+  baseEdges: Edge[],
+  rawEdges: ReadonlyArray<{ id: string; source: string; target: string }>,
+) {
+  const [hl, setHl] = useState<ReadonlySet<string>>(() => new Set())
+  const onPaneClick = useCallback(() => setHl(new Set()), [])
+  const onEdgeClick = useCallback((_: unknown, edge: { id: string }) => {
+    setHl(new Set([edge.id]))
+  }, [])
+  const onNodeClick = useCallback(
+    (event: { target: EventTarget | null; clientY: number }, node: { id: string }) => {
+      const el = (event.target as HTMLElement | null)?.closest?.('.react-flow__node')
+      const rect = el?.getBoundingClientRect()
+      const input = rect === undefined ? true : event.clientY - rect.top < rect.height / 2
+      const ids = new Set<string>()
+      for (const e of rawEdges) {
+        if (input ? e.target === node.id : e.source === node.id) ids.add(e.id)
+      }
+      setHl(ids)
+    },
+    [rawEdges],
+  )
+  const edges = useMemo<Edge[]>(
+    () =>
+      baseEdges.map((e) => {
+        const state = hl.size === 0 ? '' : hl.has(e.id) ? ' sg-edge--hl' : ' sg-edge--dim'
+        return {
+          ...e,
+          className: `${e.className ?? ''}${state}`.trim(),
+          zIndex: hl.has(e.id) ? 10 : 0,
+        }
+      }),
+    [baseEdges, hl],
+  )
+  return { edges, onEdgeClick, onNodeClick, onPaneClick }
+}
+
 /** PACKAGE overview — fixed-size nodes, so no measure/re-layout dance needed. */
 function PackageFlow({ graph }: { graph: PackageGraph }) {
   const nodes: Node[] = graph.nodes.map((n) => ({
@@ -136,7 +177,8 @@ function PackageFlow({ graph }: { graph: PackageGraph }) {
     width: n.w,
     height: n.h,
   }))
-  const edges = graph.edges.map(edgeFor)
+  const baseEdges = useMemo(() => graph.edges.map(edgeFor), [graph])
+  const { edges, onEdgeClick, onNodeClick, onPaneClick } = useEdgeHighlight(baseEdges, graph.edges)
   return (
     <ReactFlow
       nodes={nodes}
@@ -145,6 +187,9 @@ function PackageFlow({ graph }: { graph: PackageGraph }) {
       nodesDraggable={false}
       nodesConnectable={false}
       elementsSelectable={false}
+      onEdgeClick={onEdgeClick}
+      onNodeClick={onNodeClick}
+      onPaneClick={onPaneClick}
       fitView
       fitViewOptions={{ maxZoom: 1.2, minZoom: 0.3 }}
       minZoom={0.15}
@@ -185,7 +230,8 @@ function ClassFlow({ graph }: { graph: StructureGraph }) {
   )
   const initialEdges = useMemo<Edge[]>(() => graph.edges.map(edgeFor), [graph])
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
-  const [edges, , onEdgesChange] = useEdgesState(initialEdges)
+  const [baseEdges, , onEdgesChange] = useEdgesState(initialEdges)
+  const { edges, onEdgeClick, onNodeClick, onPaneClick } = useEdgeHighlight(baseEdges, graph.edges)
   const initialized = useNodesInitialized()
   const { fitView } = useReactFlow()
   const laidOut = useRef(false)
@@ -226,6 +272,9 @@ function ClassFlow({ graph }: { graph: StructureGraph }) {
       edges={edges}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
+      onEdgeClick={onEdgeClick}
+      onNodeClick={onNodeClick}
+      onPaneClick={onPaneClick}
       nodeTypes={CLASS_NODE_TYPES}
       nodesDraggable={false}
       nodesConnectable={false}
