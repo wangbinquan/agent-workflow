@@ -299,6 +299,27 @@ export function aggregatePackageGraph(graph: StructureGraph): PackageGraph {
   return { nodes, edges }
 }
 
+/** Edge ids to highlight when a node is clicked, by the vertical click position
+ *  `rel` (0 = top, 1 = bottom): top third → INCOMING, bottom third → OUTGOING,
+ *  middle → BOTH. The thirds keep the directional intent while making a TALL card
+ *  (whose body is mostly the lower half) still surface incoming edges from a
+ *  click on a member row, instead of always reading as "output". */
+export function edgesForNodeClick(
+  edges: ReadonlyArray<{ id: string; source: string; target: string }>,
+  nodeId: string,
+  rel: number,
+): Set<string> {
+  const wantIn = rel < 0.34
+  const wantOut = rel > 0.66
+  const ids = new Set<string>()
+  for (const e of edges) {
+    const inc = e.target === nodeId
+    const out = e.source === nodeId
+    if (wantIn ? inc : wantOut ? out : inc || out) ids.add(e.id)
+  }
+  return ids
+}
+
 /** Member rows to highlight for the active (highlighted) edges — ONLY the exact
  *  methods that edge involves (memberLinks): caller↔callee for 'calls', the
  *  referencing member for 'references'. Class-level edges with no specific member

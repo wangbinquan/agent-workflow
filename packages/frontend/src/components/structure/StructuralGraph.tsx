@@ -30,6 +30,7 @@ import {
   aggregatePackageGraph,
   layoutGraph,
   relatedMembers,
+  edgesForNodeClick,
   groupMembersByVisibility,
   memberSignature,
   type EdgeKind,
@@ -161,12 +162,9 @@ function useEdgeHighlight(baseEdges: Edge[], rawEdges: ReadonlyArray<GraphCardEd
     (event: { target: EventTarget | null; clientY: number }, node: { id: string }) => {
       const el = (event.target as HTMLElement | null)?.closest?.('.react-flow__node')
       const rect = el?.getBoundingClientRect()
-      const input = rect === undefined ? true : event.clientY - rect.top < rect.height / 2
-      const ids = new Set<string>()
-      for (const e of rawEdges) {
-        if (input ? e.target === node.id : e.source === node.id) ids.add(e.id)
-      }
-      setHl(ids)
+      // vertical position of the click within the card (0=top, 1=bottom)
+      const rel = rect === undefined ? 0.5 : (event.clientY - rect.top) / rect.height
+      setHl(edgesForNodeClick(rawEdges, node.id, rel))
     },
     [rawEdges],
   )

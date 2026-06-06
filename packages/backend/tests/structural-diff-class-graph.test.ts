@@ -30,6 +30,16 @@ describe('computeClassEdges', () => {
     expect(edges).toEqual([{ from: 'a.ts::A', to: 'b.ts::B', kind: 'references' }])
   })
 
+  test('a class name only in a COMMENT or STRING is NOT a reference', () => {
+    const nodes = [node('a.ts::A', 'A', 'a.ts', 1, 5), node('b.ts::B', 'B', 'b.ts', 1, 2)]
+    const fileText = new Map([
+      // 'B' appears ONLY in a line comment + a string literal — not real usage
+      ['a.ts', 'class A {\n  // B colors here\n  m() {\n    log("new B()")\n  }\n}'],
+      ['b.ts', 'class B {}'],
+    ])
+    expect(computeClassEdges(nodes, fileText)).toEqual([]) // comment/string stripped → no edge
+  })
+
   test('a references edge is attributed to the member where the reference sits (fromMember)', () => {
     const nodes = [node('a.ts::A', 'A', 'a.ts', 1, 6), node('b.ts::B', 'B', 'b.ts', 1, 3)]
     const fileText = new Map([

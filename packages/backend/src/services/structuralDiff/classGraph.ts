@@ -79,6 +79,57 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/** Blank out line comments, block comments and string/char/template literals
+ *  (replacing their content with spaces, KEEPING newlines so line numbers/ranges
+ *  stay valid), so a class/method name mentioned only in a comment or string isn't
+ *  mistaken for a real reference (e.g. a `Food colors` comment must not link
+ *  ThemeConfig to Food). Handles C-family / Java / TS / Go; `#` is left alone
+ *  (it is a JS private field, not a comment in these grammars). */
+function stripCommentsAndStrings(src: string): string {
+  const out: string[] = []
+  let state: 'code' | 'line' | 'block' | 'str' = 'code'
+  let quote = ''
+  for (let i = 0; i < src.length; i += 1) {
+    const c = src[i] ?? ''
+    const c2 = src[i + 1] ?? ''
+    const blank = c === '\n' || c === '\t' ? c : ' '
+    if (state === 'code') {
+      if (c === '/' && c2 === '/') {
+        out.push('  ')
+        i += 1
+        state = 'line'
+      } else if (c === '/' && c2 === '*') {
+        out.push('  ')
+        i += 1
+        state = 'block'
+      } else if (c === '"' || c === "'" || c === '`') {
+        out.push(' ')
+        quote = c
+        state = 'str'
+      } else out.push(c)
+    } else if (state === 'line') {
+      if (c === '\n') state = 'code'
+      out.push(c === '\n' ? '\n' : blank)
+    } else if (state === 'block') {
+      if (c === '*' && c2 === '/') {
+        out.push('  ')
+        i += 1
+        state = 'code'
+      } else out.push(blank)
+    } else {
+      // string literal
+      if (c === '\\') {
+        out.push('  ')
+        i += 1
+      } else if (c === quote || c === '\n') {
+        out.push(c === '\n' ? '\n' : ' ')
+        state = 'code'
+      } else out.push(blank)
+    }
+  }
+  return out.join('')
+}
+
 function leafName(qualifiedName: string): string {
   const i = qualifiedName.lastIndexOf('.')
   return i >= 0 ? qualifiedName.slice(i + 1) : qualifiedName
@@ -155,8 +206,19 @@ export function computeClassEdges(
     edges.push(edge)
   }
 
+  // strip comments/strings once per file so a name in a comment/string is ignored
+  const strippedCache = new Map<string, string>()
+  const strippedText = (file: string): string | undefined => {
+    const cached = strippedCache.get(file)
+    if (cached !== undefined) return cached
+    const t = fileText.get(file)
+    if (t === undefined) return undefined
+    const s = stripCommentsAndStrings(t)
+    strippedCache.set(file, s)
+    return s
+  }
   for (const c of nodes) {
-    const text = fileText.get(c.file)
+    const text = strippedText(c.file)
     if (text === undefined) continue
     const body = text.split('\n').slice(c.range.startLine - 1, c.range.endLine)
     const bodyText = body.join('\n')

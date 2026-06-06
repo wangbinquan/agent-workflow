@@ -16,6 +16,7 @@ import {
   packageOf,
   packageLabel,
   relatedMembers,
+  edgesForNodeClick,
   memberVisibility,
   memberSignature,
   groupMembersByVisibility,
@@ -350,6 +351,23 @@ describe('buildStructureGraph — hierarchy layout (dagre)', () => {
 
 test('fileBase strips the directory', () => {
   expect(fileBase('src/a/b.ts')).toBe('b.ts')
+})
+
+describe('edgesForNodeClick (directional by click position, both in the middle)', () => {
+  // X is the clicked node; in=Y->X (incoming), out=X->Z (outgoing)
+  const edges = [
+    { id: 'in', source: 'Y', target: 'X' },
+    { id: 'out', source: 'X', target: 'Z' },
+  ]
+  test('top third → incoming only', () => {
+    expect([...edgesForNodeClick(edges, 'X', 0.1)]).toEqual(['in'])
+  })
+  test('bottom third → outgoing only', () => {
+    expect([...edgesForNodeClick(edges, 'X', 0.9)]).toEqual(['out'])
+  })
+  test('middle → BOTH (so a tall card click still shows incoming)', () => {
+    expect([...edgesForNodeClick(edges, 'X', 0.5)].sort()).toEqual(['in', 'out'])
+  })
 })
 
 describe('member visibility + signature', () => {
