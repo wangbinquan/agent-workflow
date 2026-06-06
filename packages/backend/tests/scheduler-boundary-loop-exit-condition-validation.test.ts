@@ -21,10 +21,35 @@
 // The SECOND test (valid exitCondition.nodeId pointing at the real inner node)
 // guards against a future over-broad rule and PASSES today.
 
-import type { WorkflowDefinition } from '@agent-workflow/shared'
+import type { Agent, WorkflowDefinition } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 
 import { validateWorkflowDef } from '../src/services/workflow.validator'
+
+// Minimal Agent for the validation context so the validator knows node 'audit'
+// exposes the 'findings' output port. The exitCondition PORT check only runs
+// when the node's ports are known (agent present in ctx) — see
+// workflow.validator.ts exitCondition handling.
+function mkAgent(name: string, outputs: string[]): Agent {
+  return {
+    id: `agent-${name}`,
+    name,
+    description: '',
+    outputs,
+    readonly: false,
+    syncOutputsOnIterate: true,
+    permission: {},
+    skills: [],
+    dependsOn: [],
+    mcp: [],
+    plugins: [],
+    frontmatterExtra: {},
+    bodyMd: '',
+    schemaVersion: 1,
+    createdAt: 0,
+    updatedAt: 0,
+  }
+}
 
 describe('wrapper-loop exitCondition node-reference existence (locks dangling-ref validator gap)', () => {
   test('RED: exitCondition.nodeId pointing at a non-existent node is flagged as an exit-related issue', () => {
@@ -79,5 +104,34 @@ describe('wrapper-loop exitCondition node-reference existence (locks dangling-re
 
     // A correct exitCondition must not trip any future exit-reference rule.
     expect(issues.some((i) => /exit/i.test(i.code) || /exit/i.test(i.message))).toBe(false)
+  })
+
+  test('valid node but unknown PORT (agent in ctx) → wrapper-loop-exit-port-missing', () => {
+    const def = {
+      $schema_version: 2,
+      inputs: [],
+      nodes: [
+        { id: 'audit', kind: 'agent-single', agentName: 'auditor' },
+        {
+          id: 'loop',
+          kind: 'wrapper-loop',
+          nodeIds: ['audit'],
+          maxIterations: 3,
+          // node exists, but 'ghost-port' is not one of auditor's outputs.
+          exitCondition: { kind: 'port-empty', nodeId: 'audit', portName: 'ghost-port' },
+          outputBindings: [{ name: 'final', bind: { nodeId: 'audit', portName: 'findings' } }],
+        },
+      ] as unknown as WorkflowDefinition['nodes'],
+      edges: [],
+    } as unknown as WorkflowDefinition
+
+    // Agent in ctx → the validator knows 'audit' exposes only ['findings'], so
+    // the dangling PORT reference is caught. (Without the agent, the port check
+    // is skipped to avoid false positives — that is the GREEN case above.)
+    const issues = validateWorkflowDef(def, {
+      agents: [mkAgent('auditor', ['findings'])],
+      skills: [],
+    }).issues
+    expect(issues.some((i) => i.code === 'wrapper-loop-exit-port-missing')).toBe(true)
   })
 })

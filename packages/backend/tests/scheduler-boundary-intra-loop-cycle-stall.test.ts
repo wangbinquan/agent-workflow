@@ -194,9 +194,9 @@ describe('scheduler: intra-loop same-iteration data cycle must not stall opaquel
   }, 120_000)
 })
 
-describe('premise check: validateWorkflowDef accepts the intra-loop data cycle', () => {
-  test('no topology/cycle issue is returned for the cyclic-in-loop def', () => {
-    const def: WorkflowDefinition = {
+describe('validateWorkflowDef surfaces an intra-loop data cycle as a warning (clarify exemption preserved)', () => {
+  const loopWith = (edges: WorkflowDefinition['edges']): WorkflowDefinition =>
+    ({
       $schema_version: 1,
       nodes: [
         { id: 'n1', kind: 'agent-single', agentName: 'a1' },
@@ -210,26 +210,46 @@ describe('premise check: validateWorkflowDef accepts the intra-loop data cycle',
           outputBindings: [{ name: 'final', bind: { nodeId: 'n1', portName: 'findings' } }],
         },
       ] as unknown as WorkflowDefinition['nodes'],
-      edges: [
-        {
-          id: 'c1',
-          source: { nodeId: 'n1', portName: 'findings' },
-          target: { nodeId: 'n2', portName: 'input' },
-        },
-        {
-          id: 'c2',
-          source: { nodeId: 'n2', portName: 'findings' },
-          target: { nodeId: 'n1', portName: 'input' },
-        },
-      ] as unknown as WorkflowDefinition['edges'],
-    } as unknown as WorkflowDefinition
+      edges,
+    }) as unknown as WorkflowDefinition
+
+  test('cyclic loop → wrapper-loop-inner-data-cycle WARNING, but NOT a hard topology-cycle', () => {
+    const def = loopWith([
+      {
+        id: 'c1',
+        source: { nodeId: 'n1', portName: 'findings' },
+        target: { nodeId: 'n2', portName: 'input' },
+      },
+      {
+        id: 'c2',
+        source: { nodeId: 'n2', portName: 'findings' },
+        target: { nodeId: 'n1', portName: 'input' },
+      },
+    ] as unknown as WorkflowDefinition['edges'])
 
     const { issues } = validateWorkflowDef(def, { agents: [], skills: [] })
-    const cycleIssues = issues.filter(
-      (i) => i.code === 'topology-cycle' || /cycle/i.test(i.message),
-    )
-    // Documents the validator-accepts premise: it sees NO cycle for an
-    // intra-loop data cycle (validator.ts:417 exempts same-loop edges).
-    expect(cycleIssues).toHaveLength(0)
+    // Item 2: a pure agent→agent data cycle inside a loop deadlocks at runtime
+    // (no cross-iteration ports in v1), so it is surfaced at edit time as a
+    // non-blocking WARNING.
+    const dataCycle = issues.find((i) => i.code === 'wrapper-loop-inner-data-cycle')
+    expect(dataCycle).toBeDefined()
+    expect(dataCycle?.severity).toBe('warning')
+    // The long-standing topology exemption for in-loop feedback cycles is
+    // preserved (no hard 'topology-cycle' error); the runtime findScopeCycle is
+    // the hard backstop. See the runtime test above.
+    expect(issues.some((i) => i.code === 'topology-cycle')).toBe(false)
+  })
+
+  test('healthy loop (no back-edge) is NOT flagged', () => {
+    const def = loopWith([
+      {
+        id: 'c1',
+        source: { nodeId: 'n1', portName: 'findings' },
+        target: { nodeId: 'n2', portName: 'input' },
+      },
+    ] as unknown as WorkflowDefinition['edges'])
+
+    const { issues } = validateWorkflowDef(def, { agents: [], skills: [] })
+    expect(issues.some((i) => i.code === 'wrapper-loop-inner-data-cycle')).toBe(false)
   })
 })

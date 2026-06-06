@@ -436,6 +436,45 @@ export function validateWorkflowDef(
     })
   }
 
+  // The topology check above exempts ALL intra-loop edges — that exemption
+  // exists for clarify / cross-clarify FEEDBACK cycles (see comments above). But
+  // a plain agent→agent DATA cycle between two of a loop's inner nodes is NOT
+  // cross-iteration feedback (v1 has no cross-iteration ports), so it deadlocks
+  // at runtime: the scheduler's findScopeCycle fails the inner scope with a
+  // 'scope-cycle' error. Surface that at edit time as a WARNING (non-blocking,
+  // so the clarify/cross-clarify feedback patterns the exemption protects are
+  // untouched — their channel edges are excluded below). See
+  // scheduler-boundary-intra-loop-cycle-stall.test.ts.
+  for (const node of nodes) {
+    if (node.kind !== 'wrapper-loop') continue
+    const innerIds = new Set(readStringArray(node, 'nodeIds'))
+    if (innerIds.size < 2) continue
+    const dataEdges: Array<{ from: string; to: string }> = []
+    for (const edge of edges) {
+      if (!innerIds.has(edge.source.nodeId) || !innerIds.has(edge.target.nodeId)) continue
+      const s = nodeById.get(edge.source.nodeId)
+      const t = nodeById.get(edge.target.nodeId)
+      if (s === undefined || t === undefined) continue
+      // Exclude clarify / cross-clarify channel edges (mirrors buildScopeUpstreams
+      // — these carry feedback out-of-band, not as same-iteration dataflow).
+      if (s.kind === 'clarify' || t.kind === 'clarify') continue
+      if (s.kind === 'clarify-cross-agent' || t.kind === 'clarify-cross-agent') continue
+      const sp = edge.source.portName
+      const tp = edge.target.portName
+      if (sp === '__clarify__' || sp === 'to_designer' || sp === 'to_questioner') continue
+      if (tp === '__clarify_response__' || tp === '__external_feedback__') continue
+      dataEdges.push({ from: edge.source.nodeId, to: edge.target.nodeId })
+    }
+    if (hasCycle(dataEdges, [...innerIds])) {
+      issues.push({
+        code: 'wrapper-loop-inner-data-cycle',
+        message: `wrapper-loop '${node.id}' has a data cycle between its inner nodes; with no cross-iteration ports in v1 this deadlocks at runtime (the scheduler fails the loop scope with a cycle error). Break the cycle or route the feedback through a clarify channel / worktree file.`,
+        pointer: node.id,
+        severity: 'warning',
+      })
+    }
+  }
+
   // 4. reference-resolution ---------------------------------------------------
   for (const node of nodes) {
     if (node.kind === 'agent-single') {
@@ -596,22 +635,39 @@ export function validateWorkflowDef(
           }
         }
       }
-      // exitCondition must reference a real node. At runtime readPortAtIteration
-      // returns '' for a dangling reference, which silently satisfies a
-      // port-empty/-count condition and exits the loop early (no error surfaced).
-      // (Port-level existence isn't checked here: output ports are only known
-      // when the agent is in the validation context, so a port check would
-      // false-positive when validating a def standalone — node existence is the
-      // reliable signal.) See scheduler-boundary-loop-exit-condition-validation.test.ts.
+      // exitCondition must reference a real node + port. At runtime
+      // readPortAtIteration returns '' for a dangling reference, which silently
+      // satisfies a port-empty/-count condition and exits the loop early (no
+      // error surfaced). Node existence is always checked. The port check only
+      // runs when the node's output ports are genuinely known — for an
+      // agent-single that means its agent is in the validation context (always
+      // true for validateWorkflowById; absent for standalone def validation,
+      // where we must not false-positive). See
+      // scheduler-boundary-loop-exit-condition-validation.test.ts.
       const exitCond = (node as Record<string, unknown>).exitCondition
       if (exitCond !== null && typeof exitCond === 'object') {
-        const exitNodeId = (exitCond as Record<string, unknown>).nodeId
-        if (typeof exitNodeId === 'string' && !nodeById.has(exitNodeId)) {
+        const ec = exitCond as Record<string, unknown>
+        const exitNodeId = typeof ec.nodeId === 'string' ? ec.nodeId : undefined
+        const exitPortName = typeof ec.portName === 'string' ? ec.portName : undefined
+        if (exitNodeId !== undefined && !nodeById.has(exitNodeId)) {
           issues.push({
             code: 'wrapper-loop-exit-node-missing',
             message: `wrapper-loop '${node.id}' exitCondition references unknown node '${exitNodeId}'`,
             pointer: node.id,
           })
+        } else if (exitNodeId !== undefined && exitPortName !== undefined) {
+          const exitNode = nodeById.get(exitNodeId)
+          const portsKnown =
+            exitNode?.kind === 'agent-single'
+              ? agentByName.has(readString(exitNode, 'agentName') ?? '')
+              : true
+          if (portsKnown && !(outputPorts.get(exitNodeId) ?? new Set<string>()).has(exitPortName)) {
+            issues.push({
+              code: 'wrapper-loop-exit-port-missing',
+              message: `wrapper-loop '${node.id}' exitCondition references unknown port '${exitPortName}' on node '${exitNodeId}'`,
+              pointer: node.id,
+            })
+          }
         }
       }
     }
