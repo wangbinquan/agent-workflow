@@ -12,6 +12,20 @@ const css = readFileSync(path.resolve(here, '../src/styles.css'), 'utf8')
 
 // the card rules region
 const cardCss = css.slice(css.indexOf('.sg-card {'), css.indexOf('.structure-graph-wrap {'))
+// the graph container rule
+const graphCss = css.slice(
+  css.indexOf('.structure-graph {'),
+  css.indexOf('.structure-graph .react-flow__node'),
+)
+
+describe('structure-graph container height', () => {
+  // regression: the graph is inside a flex column the (tall) impact panel can
+  // collapse to 0 — a shrinkable flex child got crushed to ~2px and vanished.
+  test('has a fixed height and is non-shrinkable (flex: none)', () => {
+    expect(graphCss).toMatch(/height:\s*\d{3}px/)
+    expect(graphCss).toMatch(/flex:\s*none/)
+  })
+})
 
 describe('structure-graph card styling', () => {
   test('card title + members clip long names (no overflow outside the box)', () => {

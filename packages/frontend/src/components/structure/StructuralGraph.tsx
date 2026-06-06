@@ -8,6 +8,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   Background,
+  Controls,
   Handle,
   Position,
   MarkerType,
@@ -118,10 +119,12 @@ export function StructuralGraph({ data }: { data: StructuralDiff }) {
             nodesConnectable={false}
             elementsSelectable={false}
             fitView
+            fitViewOptions={{ maxZoom: 1, minZoom: 0.4 }}
             minZoom={0.15}
             proOptions={{ hideAttribution: true }}
           >
             <Background />
+            <Controls showInteractive={false} />
           </ReactFlow>
         </ReactFlowProvider>
       </div>

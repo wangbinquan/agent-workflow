@@ -113,7 +113,9 @@ function layoutCards(cards: GraphCard[]): void {
   // canvas is actually used (not 1–2 tall columns). Cards come in changed-first
   // (see the sort in buildStructureGraph), so changed cards fill the top rows.
   const n = cards.length
-  const cols = Math.min(5, Math.max(1, Math.ceil(Math.sqrt(n * 1.8))))
+  // bias WIDE (canvas is wide-short) so fitView fills the width instead of
+  // centering a narrow column with big empty margins; cap at 6 / the card count.
+  const cols = Math.max(1, Math.min(6, n, Math.ceil(Math.sqrt(n * 2.6))))
   const colY = new Array<number>(cols).fill(0)
   for (const c of cards) {
     // place in the currently shortest column

@@ -9568,7 +9568,10 @@ mark.comment-anchor[data-active='true'] {
 }
 /* RFC-083 PR-F — read-only class-collaboration diagram */
 .structure-graph {
-  height: 460px;
+  height: 480px;
+  /* fixed-height: never let a collapsed flex parent (the impact panel can eat
+     all the column height) shrink it to ~0 and hide the whole graph */
+  flex: none;
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
@@ -9685,8 +9688,9 @@ mark.comment-anchor[data-active='true'] {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex: 1;
-  min-height: 0;
+  /* size to content (legend + fixed-height graph), don't collapse in a 0-height
+     flex parent — pairs with `.structure-graph { flex: none }` */
+  flex: none;
 }
 .structure-graph__legend {
   display: flex;
