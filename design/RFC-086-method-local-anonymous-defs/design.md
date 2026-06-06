@@ -23,14 +23,15 @@
 `packages/shared/src/schemas/structuralDiff.ts` 的 `symbolNodeSchema` 加一个**可选**字段（向后兼容，旧响应 = `undefined`）：
 
 ```ts
-  /** True for an anonymous type (Java anonymous class, JS/TS class expression,
-   *  深度模式可识别的 lambda 目标接口). name = its base/super type (e.g.
-   *  `TimerTask`); 取不到基类型时 name='' 且前端显示 `«anonymous»`. */
+  /** True for an anonymous type (Java anonymous class, JS/TS anon class
+   *  expression). name = its base/super type (e.g. `TimerTask`); 取不到基类型时
+   *  name='' 且前端显示 `«anonymous»`. (D4: 深度模式 lambda 目标接口为后续增强，
+   *  本轮不产出。) */
   anonymous: z.boolean().optional(),
 ```
 
 - `kind` 仍用 `'class'`（下游容器逻辑天然把 class 当容器，无需新 kind）。
-- `name` = 基类型名（`TimerTask`）；`qualifiedName` = `<enclosing>.$<BaseType>`（如 `GameFrame.setupGameTimer.$TimerTask`），`id` 已含 startLine 行号做消歧（同方法内多个匿名类不撞）。
+- `name` = 基类型名（`TimerTask`）；`qualifiedName` = `<enclosing>.$anon<line>_<col>`（如 `GameFrame.setupGameTimer.$anon165_47`，**合成名**，基类型只在 `name` 里），起止行+列做消歧（同一行多个匿名类也不撞，见 §6）。前端识别 `$anon…` 合成段，不会把它当真实类名展示。
 - **创建边**不需要新 schema：复用 `classEdge{kind:'references', from:外层真实类, to:匿名类, fromMembers:[外层方法 id]}`。
 
 ## 3. 后端：匿名类捕获（新）
@@ -46,7 +47,7 @@
 ### 3.2 extract（`lang/extract.ts`）
 
 - `leafName`：匿名类节点取 `type` 文本的**叶子**（`java.util.TimerTask` → `TimerTask`），设 `anonymous=true`；取不到 → `name=''`、`anonymous=true`。
-- `qualifiedName`：匿名类 → `${qn(parent)}.$${baseLeaf || 'anon'}`；它**现在被捕获**，于是其内部 `run()` 的 `nearestDefAncestor` 命中匿名类（`CLASS_LIKE`），`run` 的 `qn=…$TimerTask.run`、`finalKind='method'`、`parentId=匿名类 id`——假类不再产生。
+- `qualifiedName`：匿名类 → `${qn(parent)}.$anon<line>_<col>`（合成名，**与基类型无关**——基类型在 `name` 里）；它**现在被捕获**，于是其内部 `run()` 的 `nearestDefAncestor` 命中匿名类（`CLASS_LIKE`），`run` 的 `qn=…$anon<line>_<col>.run`、`finalKind='method'`、`parentId=匿名类 id`——假类不再产生。
 - 现有 `if (name === '') continue`（pass 3）需放行匿名类（name 允许空 + `anonymous` 标记），否则匿名类被丢弃、又退回老 bug。
 
 ### 3.3 深度模式（lambda 目标接口，决策 D4）
@@ -84,14 +85,17 @@ Java/Kotlin lambda 的目标函数式接口在语法树里**不出现**（上下
 
 ## 6. 失败模式 & 边界
 
-| 情形                          | 行为                                                         |
-| ----------------------------- | ------------------------------------------------------------ |
-| 取不到基类型名                | `name=''` + `anonymous=true` → 显示 `«anonymous»`            |
-| 同一方法内多个匿名类          | `id` 含 startLine 行号消歧，各成一卡                         |
-| 匿名类嵌匿名类                | `parentId` 链向上找最近真实类做创建边的 `from`；逐层各自成卡 |
-| lambda（基线模式）            | 不升格，保持折叠（D4）                                       |
-| 旧响应无 `anonymous`          | 止血生效（§4），但不画匿名卡（无数据）——视图正常             |
-| 局部**具名**类（Java/Python） | 用它自己的名字成卡（非匿名），父为最近真实类                 |
+| 情形                                | 行为                                                                                                                                                                      |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 取不到基类型名                      | `name=''` + `anonymous=true` → 显示 `«anonymous»`                                                                                                                         |
+| 同一方法内多个匿名类（含同一行）    | 合成 qn 含**起始行+列**（`$anon<line>_<col>`）消歧，各成一卡                                                                                                              |
+| 匿名类嵌匿名类                      | `parentId` 链向上找最近真实类做创建边的 `from`；逐层各自成卡                                                                                                              |
+| 匿名容器自身未变（仅内层成员体改）  | 它不在 diff（容器 bodyHash 只含 header）→ 不在 `qnKind`；前端 `memberContainer` 识别 `$anon…` 合成段跳过，内层成员折叠进最近真实类，**不产生 `$anon` 假类**（审计回归点） |
+| 嵌套**具名**函数做 impact 调用方    | 调用方 qn 永不在 diff；用其 symbolId 里的 `kind`：`function` 的容器必非类 → 折叠到 file 卡，不产生 `outer` 假类                                                           |
+| lambda（基线模式）                  | 不升格，保持折叠（D4）                                                                                                                                                    |
+| Java enum 常量带类体（`E{ A{…} }`） | **暂不捕获**（`enum_constant` 非 object_creation/class 节点）：override 方法 re-parent 到 enum，行可能并到 enum 卡上；**已知后续项**（同 D4，不产生假类卡）               |
+| 旧响应无 `anonymous`                | 止血生效（§4），但不画匿名卡（无数据）——视图正常                                                                                                                          |
+| 局部**具名**类（Java/Python）       | 用它自己的名字成卡（非匿名），父为最近真实类                                                                                                                              |
 
 ## 7. 测试策略（test-with-every-change）
 

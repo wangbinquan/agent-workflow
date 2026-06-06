@@ -195,6 +195,13 @@ function qnFromId(id: string): string {
 function fileFromId(id: string): string {
   return id.split('#')[0] ?? id
 }
+/** Kind encoded in a symbol id (`${file}#${qn}:${kind}:${line}`). Lets the
+ *  impact-caller path tell a nested-function caller from a class method so its
+ *  owner folds to the file card instead of minting a phantom class (RFC-086). */
+function kindFromId(id: string): SymbolKind | undefined {
+  const afterHash = id.split('#')[1]
+  return afterHash === undefined ? undefined : (afterHash.split(':')[1] as SymbolKind | undefined)
+}
 function leafOf(qualifiedName: string): string {
   const idx = qualifiedName.lastIndexOf('.')
   return idx >= 0 ? qualifiedName.slice(idx + 1) : qualifiedName
@@ -205,31 +212,67 @@ function stripLeaf(qualifiedName: string): string {
   return idx > 0 ? qualifiedName.slice(0, idx) : ''
 }
 
+/** Leaf of a qualifiedName (segment after the last dot). */
+function leafOfQn(qualifiedName: string): string {
+  return qualifiedName.slice(qualifiedName.lastIndexOf('.') + 1)
+}
+
+/** A backend synthetic anonymous-scope leaf (`$anon<line>` / `$anon<line>_<col>`,
+ *  see lang/extract.ts). It is NEVER a real class, so when it is not itself a
+ *  changed symbol we must walk past it rather than mint a card titled with it. */
+const SYNTHETIC_ANON = /^\$anon[\d_]+$/
+
 /** RFC-086 — resolve a member's owning CARD from its qualifiedName using the
  *  diff's actual symbol KINDS (`qnKind`), not a blind "everything before the
- *  last dot is a class" string split. A prefix that is itself a known member
- *  (method/function/constructor/field …) can't be a class container — so we walk
- *  UP past it. This stops a method-local definition (an anonymous class's
- *  `run()`, a nested function/closure) from minting a phantom "class" card named
- *  after the enclosing callable (e.g. `GameFrame.setupGameTimer`). A real inner
- *  class (`Outer.Inner`) is a CONTAINER kind, so it is NOT skipped. Falls back to
- *  the file card when no class container remains. Language-agnostic. */
+ *  last dot is a class" string split. We walk UP past any prefix that can't be a
+ *  class container, so a method-local definition (an anonymous class's `run()`, a
+ *  nested function/closure) never mints a phantom "class" card named after the
+ *  enclosing callable. Skipped prefixes:
+ *   - a KNOWN member (method/function/constructor/field …); and
+ *   - an UNKNOWN synthetic `$anon…` segment — its anon container is absent from
+ *     `qnKind` whenever only an inner member body changed (a container's bodyHash
+ *     is header-only), which is the COMMON edit-inner-body case; treating it as a
+ *     class brought the phantom card back. (When the anon IS a changed symbol,
+ *     k==='class' and we keep it — that is the real «anonymous» card.)
+ *  A real inner class (`Outer.Inner`, a CONTAINER kind) is NOT skipped. When the
+ *  remaining container's kind is unknown, a *function* member's container is by
+ *  construction a non-class scope (a class-nested function is extracted as
+ *  'method'), so it folds to the FILE card instead of a phantom class — this also
+ *  hardens the impact-caller path, whose caller qns are never in the diff. */
 function memberContainer(
   filePath: string,
   qualifiedName: string,
   qnKind: ReadonlyMap<string, SymbolKind>,
+  ownKind?: SymbolKind,
 ): { key: string; title: string; kind: CardKind } {
+  const fileCard = {
+    key: `${filePath}::<file>`,
+    title: fileBase(filePath),
+    kind: 'file' as CardKind,
+  }
   let container = stripLeaf(qualifiedName)
   while (container !== '') {
     const k = qnKind.get(`${filePath}::${container}`)
-    if (k !== undefined && MEMBER_KINDS.has(k)) container = stripLeaf(container)
-    else break
+    if (k !== undefined && MEMBER_KINDS.has(k)) {
+      container = stripLeaf(container)
+      continue
+    }
+    if (k === undefined && SYNTHETIC_ANON.test(leafOfQn(container))) {
+      container = stripLeaf(container)
+      continue
+    }
+    break
   }
-  if (container === '')
-    return { key: `${filePath}::<file>`, title: fileBase(filePath), kind: 'file' }
+  if (container === '') return fileCard
   const k = qnKind.get(`${filePath}::${container}`)
-  const kind: CardKind = k !== undefined && CONTAINER_KINDS.has(k) ? k : 'class'
-  return { key: `${filePath}::${container}`, title: container, kind }
+  if (k !== undefined && CONTAINER_KINDS.has(k)) {
+    return { key: `${filePath}::${container}`, title: container, kind: k }
+  }
+  // container kind unknown (its own declaration didn't change): a method/field's
+  // owner is a class (keep the RFC-083 "unchanged class still gets a card"
+  // behavior); a function's owner is a non-class scope → fold to the file card.
+  if (ownKind === 'function') return fileCard
+  return { key: `${filePath}::${container}`, title: container, kind: 'class' }
 }
 
 function cardHeight(memberCount: number): number {
@@ -432,7 +475,7 @@ export function buildStructureGraph(
         card.isChanged = true
         changedSymbolCard.set(sym.id, card.id)
       } else if (MEMBER_KINDS.has(sym.kind)) {
-        const c = memberContainer(sym.filePath, sym.qualifiedName, qnKind)
+        const c = memberContainer(sym.filePath, sym.qualifiedName, qnKind, sym.kind)
         const card = ensureCard(c.key, c.title, sym.filePath, c.kind)
         card.isChanged = true
         card.members.push({
@@ -506,7 +549,7 @@ export function buildStructureGraph(
       if (caller.symbolId !== undefined) {
         const file = fileFromId(caller.symbolId)
         const qn = qnFromId(caller.symbolId)
-        const c = memberContainer(file, qn, qnKind)
+        const c = memberContainer(file, qn, qnKind, kindFromId(caller.symbolId))
         callerKey = c.key
         callerTitle = c.title
         callerFile = file

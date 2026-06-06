@@ -12,6 +12,7 @@ import {
 } from '@agent-workflow/shared'
 import {
   buildStructureGraph,
+  anonymousCardTitle,
   fileBase,
   packageOf,
   packageLabel,
@@ -597,5 +598,86 @@ describe('buildStructureGraph — RFC-086 method-local definitions', () => {
           e.target === 'GameFrame.java::GameFrame.setupGameTimer.$anon3',
       ),
     ).toBe(true)
+  })
+
+  // AUDIT REGRESSION: the phantom card returned in the COMMON edit-inner-body case,
+  // because the $anon container (header-only bodyHash) is absent from the diff when
+  // only its inner member body changed → it was missing from qnKind → the walk-up
+  // stopped at the unknown $anon prefix and minted a phantom 'class' titled with it.
+  test('no phantom $anon class when only the inner body changed (anon container absent from diff)', () => {
+    const g = buildStructureGraph(
+      diffWith([
+        file('GameFrame.java', 'java', [
+          // NOTE: neither GameFrame (class) nor the $anon container is in the diff
+          change('GameFrame.java', 'GameFrame.setupGameTimer', 'method'),
+          change('GameFrame.java', 'GameFrame.setupGameTimer.$anon165_47.run', 'method'),
+        ]),
+      ]),
+    )
+    expect(g.cards.some((c) => c.title.includes('$anon'))).toBe(false)
+    expect(g.cards.some((c) => c.kind === 'class' && c.title === 'GameFrame.setupGameTimer')).toBe(
+      false,
+    )
+    const gf = g.cards.find((c) => c.title === 'GameFrame')
+    expect(gf?.members.map((m) => m.label).sort()).toEqual(['run', 'setupGameTimer'])
+  })
+
+  // AUDIT REGRESSION: the impact-CALLER branch reused memberContainer for caller qns
+  // that are never in the diff; a nested-function caller `outer.inner` minted a
+  // phantom 'class' titled 'outer'. The caller's own kind ('function') now folds it.
+  test('a nested-function impact caller folds to the file card, not a phantom "outer" class', () => {
+    const target = sym('svc.ts', 'Svc.charge', 'method')
+    const g = buildStructureGraph(
+      diffWith(
+        [file('svc.ts', 'typescript', [{ changeType: 'modified', kind: 'method', after: target }])],
+        {
+          impact: [
+            {
+              changedSymbolId: target.id,
+              confidence: 'extracted',
+              callers: [
+                {
+                  symbolId: 'app.ts#outer.inner:function:3',
+                  filePath: 'app.ts',
+                  range: { startLine: 3, endLine: 5 },
+                },
+              ],
+            },
+          ],
+        },
+      ),
+    )
+    expect(g.cards.some((c) => c.title === 'outer')).toBe(false)
+    expect(g.cards.find((c) => c.id === 'app.ts::<file>')).toBeDefined()
+  })
+
+  test('anonymousCardTitle: base type vs unknown base', () => {
+    expect(anonymousCardTitle('TimerTask')).toBe('«anonymous» TimerTask')
+    expect(anonymousCardTitle('')).toBe('«anonymous»')
+  })
+
+  test('a no-base anonymous class renders as bare «anonymous» with its method', () => {
+    const anon: SymbolNode = {
+      id: 'a.js#make.$anon1_10:class:1',
+      kind: 'class',
+      name: '',
+      qualifiedName: 'make.$anon1_10',
+      lang: 'javascript',
+      filePath: 'a.js',
+      confidence: 'extracted',
+      anonymous: true,
+    }
+    const g = buildStructureGraph(
+      diffWith([
+        file('a.js', 'javascript', [
+          { changeType: 'added', kind: 'class', after: anon },
+          change('a.js', 'make.$anon1_10.go', 'method'),
+        ]),
+      ]),
+    )
+    const card = g.cards.find((c) => c.anonymous === true)
+    expect(card?.title).toBe('«anonymous»')
+    expect(card?.members.map((m) => m.label)).toEqual(['go'])
+    expect(g.cards.some((c) => c.title.includes('$anon'))).toBe(false)
   })
 })

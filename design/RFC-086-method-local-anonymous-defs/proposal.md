@@ -76,10 +76,23 @@ if (idx > 0) {
 ## 交付（2026-06-06）
 
 - **PR-0**：`structureGraph.ts` `memberContainer` 用符号 kind 定容器（跳过 callable 段）——全语言消假「类」卡。
-- **PR-A**：`SymbolNode.anonymous?` schema；`lang/queries.ts` Java `object_creation_expression(+class_body)` 捕获；`extract.ts` 基类型名 + `$anon<line>` 合成 qn + 放行空名；`classGraph.computeAnonCreationEdges` 走 parentId 链产「外层方法→匿名类」`references` 边，`gitBackend` 合并。
+- **PR-A**：`SymbolNode.anonymous?` schema；`lang/queries.ts` Java `object_creation_expression(+class_body)` 捕获；`extract.ts` 基类型名 + `$anon<line>_<col>` 合成 qn + 放行空名；`classGraph.computeAnonCreationEdges` 走 parentId 链产「外层方法→匿名类」`references` 边，`gitBackend` 合并。
 - **PR-B**：匿名卡 title `«anonymous» {base}`（容器分支权威覆盖）+ `GraphCard.anonymous` + `.sg-card--anonymous` 样式。
 - **PR-C**：TS/JS `(class !name)` 匿名类表达式捕获（extends 取基类型）。
 - **测试**：前端 structure-graph +4、后端 `structural-diff-anon-class` 5（Java + TS/JS + 创建边 + 负例）。
-- **后续（已记录、非本轮）**：D4 深度模式 lambda 目标接口升格。
+
+### 审计修复（2026-06-06，post-merge 对抗式审计）
+
+合并后做了一次 5 维对抗式审计，发现首版仍漏 3 个真 bug，已修 + 补回归锁：
+
+- **B1（headline，已修）**：`memberContainer` 的 `qnKind` 只由「变更符号」构建；匿名容器 bodyHash 只含 header，**只改内层成员体**时容器不在 diff → 向上遇到未知 `$anon` 前缀又造出 `$anon` 假类。修：`memberContainer` 识别未知的 `$anon…` 合成段并跳过（容器在 diff 时仍正常出 `«anonymous»` 卡）。
+- **B2（已修）**：impact 调用方分支对「永不在 diff」的调用方 qn 复用 `memberContainer`，嵌套**具名**函数调用方 `outer.inner` 造出 `outer` 假类。修：用调用方 symbolId 里的 `kind`——`function` 的容器必非类 → 折叠到 file 卡。
+- **B3（已修）**：`$anon<line>` 对**同一行两个匿名类**会撞 id/qn（第二个丢失）。修：合成段加列 → `$anon<line>_<col>`。
+- **回归锁**：前端 +4（内层体改无 `$anon` 假类 / 具名函数调用方折叠 / `anonymousCardTitle` / 无基类型 `«anonymous»` 渲染）、后端 +6（同行双匿名 / Python·Rust·TS 嵌套函数 / 字段初始化匿名 / 匿名套匿名）。
+
+### 后续（已记录、非本轮）
+
+- **D4** 深度模式 SCIP 解析 lambda 目标接口升格（CI 不可验，同 RFC-083 SCIP 边界）。
+- **Java enum 常量类体**（`enum E { A { … } }`）暂不捕获——override 方法会并到 enum 卡（**不产生假类卡**），属已知后续项；匿名**类**（有语法基类型）已全覆盖。
 
 详见 [design.md](./design.md) 与 [plan.md](./plan.md)。

@@ -276,11 +276,14 @@ function buildSymbols(
       const recv = cfg.receiverPrefix(r.node)
       if (recv !== null && recv !== '') prefix = `${recv}.`
     }
-    // Anonymous types have no name of their own → a stable per-line synthetic
-    // leaf (`$anon<line>`), so the qualifiedName (and thus the card key) stays
-    // unique even with several anonymous classes in one method. The DISPLAY name
-    // (base type) is computed separately in pass 3.
-    const leaf = isAnonymousTypeNode(r.node) ? `$anon${r.node.startPosition.row + 1}` : leafName(r)
+    // Anonymous types have no name of their own → a stable synthetic leaf keyed by
+    // start line+column (`$anon<line>_<col>`), so the qualifiedName (and thus the
+    // card key + symbol id) stays unique even with SEVERAL anonymous classes on the
+    // same line (e.g. `f(new A(){…}, new B(){…})`). The DISPLAY name (base type) is
+    // computed separately in pass 3.
+    const leaf = isAnonymousTypeNode(r.node)
+      ? `$anon${r.node.startPosition.row + 1}_${r.node.startPosition.column}`
+      : leafName(r)
     const qn = prefix + leaf
     qnameCache.set(r, qn)
     return qn
