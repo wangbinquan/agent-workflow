@@ -48,8 +48,20 @@ export const PlantUmlBlock = {
       mount.appendChild(buildUnconfigured(source))
       return
     }
+    // RFC-005 (Q10) — a configured endpoint receives the raw document source.
+    // Surface that explicitly AT send time (and again under the rendered SVG)
+    // so the exfiltration is never silent. Acceptance criterion: design.md
+    // "PlantUML 外部端点泄漏文档源码 | UI 显式提示『将向 {host} 发送源码』".
+    mount.appendChild(buildPrivacyNote(hostOf(endpoint)))
     mount.appendChild(buildLoading())
     void fetchAndSwap(mount, source, endpoint, authHeader)
+  },
+
+  /** Hostname of a configured renderer endpoint, for the privacy notice.
+   *  Falls back to the raw endpoint (minus scheme/path) on parse failure.
+   *  Exported for tests. */
+  hostOf(endpoint: string): string {
+    return hostOf(endpoint)
   },
 
   /**
@@ -186,6 +198,7 @@ async function fetchAndSwap(
         svgEl.style.height = '100%'
       }
     }
+    mount.appendChild(buildPrivacyNote(hostOf(endpoint)))
     mount.appendChild(wrap)
     return
   }
@@ -296,6 +309,26 @@ function buildLoading(): HTMLElement {
   wrap.className = 'review-diagram__loading'
   wrap.textContent = i18n.t('reviews.plantumlRendering')
   return wrap
+}
+
+/** Hostname of a configured renderer endpoint (e.g. `kroki.io`). Falls back to
+ *  the raw endpoint minus scheme/path when it isn't a parseable URL. */
+export function hostOf(endpoint: string): string {
+  const raw = endpoint.trim()
+  try {
+    return new URL(raw).host || raw
+  } catch {
+    return raw.replace(/^[a-z]+:\/\//i, '').replace(/\/.*$/, '') || raw
+  }
+}
+
+/** RFC-005 (Q10) — privacy notice naming the third-party host the document
+ *  source is sent to. Persisted alongside loading + the rendered SVG. */
+function buildPrivacyNote(host: string): HTMLElement {
+  const note = document.createElement('div')
+  note.className = 'review-diagram__privacy'
+  note.textContent = i18n.t('reviews.plantumlPrivacyNotice', { host })
+  return note
 }
 
 function buildErrorWithSource(source: string, msg: string): HTMLElement {

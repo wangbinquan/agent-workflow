@@ -391,3 +391,52 @@ describe('render — PlantUML syntax error on first GET surfaces line number + r
     expect(mount.querySelector('.review-diagram__svg')).toBeNull()
   })
 })
+
+describe('hostOf', () => {
+  test('extracts the hostname from a URL endpoint (incl. port)', () => {
+    expect(PlantUmlBlock.hostOf('https://kroki.io')).toBe('kroki.io')
+    expect(PlantUmlBlock.hostOf('https://plantuml.example.com:8080/render')).toBe(
+      'plantuml.example.com:8080',
+    )
+  })
+  test('falls back to the bare host when the endpoint is not a full URL', () => {
+    expect(PlantUmlBlock.hostOf('kroki.io')).toBe('kroki.io')
+  })
+})
+
+// RFC-005 (Q10) — a configured endpoint receives the raw document source.
+// Regression guard: the send must NEVER be silent — a host-named privacy notice
+// shows at send time (loading) and persists under the rendered diagram. The
+// acceptance criterion (design.md) is "UI 显式提示『将向 {host} 发送源码』".
+describe('render — privacy notice (Q10)', () => {
+  test('configured endpoint shows a host-named privacy notice during loading', () => {
+    const mount = makeMount()
+    // a fetch that never settles, so we can inspect the loading state
+    vi.stubGlobal('fetch', () => new Promise<Response>(() => {}))
+    PlantUmlBlock.render(mount, '@startuml\nA -> B\n@enduml', 'https://kroki.io', undefined)
+    const note = mount.querySelector('.review-diagram__privacy')
+    expect(note).not.toBeNull()
+    expect(note?.textContent).toContain('kroki.io')
+    expect(note?.textContent?.toLowerCase()).toContain('sent to')
+    // loading is still shown alongside the notice
+    expect(mount.querySelector('.review-diagram__loading')).not.toBeNull()
+  })
+
+  test('privacy notice persists under the rendered SVG (not just transiently)', async () => {
+    const mount = makeMount()
+    vi.stubGlobal(
+      'fetch',
+      async () => new Response('<svg xmlns="http://www.w3.org/2000/svg"></svg>', { status: 200 }),
+    )
+    PlantUmlBlock.render(mount, 'src', 'https://kroki.io', undefined)
+    await settle(50)
+    expect(mount.querySelector('.review-diagram__svg svg')).not.toBeNull()
+    expect(mount.querySelector('.review-diagram__privacy')?.textContent).toContain('kroki.io')
+  })
+
+  test('unconfigured endpoint shows NO privacy notice (nothing is sent)', () => {
+    const mount = makeMount()
+    PlantUmlBlock.render(mount, 'src', undefined, undefined)
+    expect(mount.querySelector('.review-diagram__privacy')).toBeNull()
+  })
+})

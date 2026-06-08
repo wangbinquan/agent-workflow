@@ -22,7 +22,9 @@ import {
   fileTreeRows,
   badgeClass,
   badgeSymbol,
+  diffSignatureTokens,
   type SummaryRow,
+  type SigToken,
 } from '@/lib/structureView'
 import { StructuralGraph } from './StructuralGraph'
 import { CallChainView, type CallChainRoot } from './CallChainView'
@@ -327,6 +329,44 @@ function StructuralTree({
   )
 }
 
+/** RFC-083 (Q1) — the before→after signature comparison: two monospace rows,
+ *  old on top (removed tokens flagged red), new below (added tokens flagged
+ *  green). Reuses the diff add/remove palette via `.structure__sigtok--*`. */
+function SignatureDiff({ diff }: { diff: { before: SigToken[]; after: SigToken[] } }) {
+  return (
+    <div className="structure__sigdiff" data-testid="sigdiff">
+      <code className="structure__sigdiff-row structure__sigdiff-row--before">
+        {diff.before.map((tok, i) => (
+          <span
+            key={i}
+            className={
+              tok.kind === 'removed'
+                ? 'structure__sigtok structure__sigtok--removed'
+                : 'structure__sigtok'
+            }
+          >
+            {tok.text}
+          </span>
+        ))}
+      </code>
+      <code className="structure__sigdiff-row structure__sigdiff-row--after">
+        {diff.after.map((tok, i) => (
+          <span
+            key={i}
+            className={
+              tok.kind === 'added'
+                ? 'structure__sigtok structure__sigtok--added'
+                : 'structure__sigtok'
+            }
+          >
+            {tok.text}
+          </span>
+        ))}
+      </code>
+    </div>
+  )
+}
+
 const CALLABLE_KINDS = new Set(['method', 'function', 'constructor'])
 
 function FileChanges({
@@ -365,6 +405,13 @@ function FileChanges({
                       label: `${ch.after.name}()`,
                     }
                   : null
+              // RFC-083 (Q1) — when the declaration signature changed, show the
+              // before→after token diff instead of just a "signature changed"
+              // tag, so the reviewer sees exactly which params/return moved.
+              const sigDiff =
+                ch.signatureChanged === true && ch.changeType === 'modified'
+                  ? diffSignatureTokens(ch.before?.signature, ch.after?.signature)
+                  : null
               const body = (
                 <>
                   <span className={badgeClass(ch.changeType)} aria-label={ch.changeType}>
@@ -380,7 +427,7 @@ function FileChanges({
                         {t('tasks.structRenamedFrom', { from: ch.renamedFrom })}
                       </span>
                     )}
-                  {ch.signatureChanged === true && (
+                  {ch.signatureChanged === true && sigDiff === null && (
                     <span className="structure__tag">{t('tasks.structSigChanged')}</span>
                   )}
                   {ch.bodyDelta !== undefined && (
@@ -420,6 +467,7 @@ function FileChanges({
                       ⎇
                     </button>
                   )}
+                  {sigDiff !== null && <SignatureDiff diff={sigDiff} />}
                 </li>
               )
             })}

@@ -145,3 +145,90 @@ index 9999..AAAA 100644
     expect(screen.getAllByRole('tab')).toHaveLength(100)
   })
 })
+
+// RFC-021 (Q5) — per-file "viewed" review progress. Number assertions (not the
+// localized label) keep these locale-agnostic.
+describe('WorktreeDiffPanel — viewed progress (Q5)', () => {
+  test('a checkbox marks a file viewed, updates the N/M counter, and persists by storageKey', () => {
+    localStorage.clear()
+    const { unmount } = render(<WorktreeDiffPanel diff={THREE_FILE_DIFF} storageKey="taskV" />)
+    expect(screen.getByTestId('diff-viewed-progress').textContent).toMatch(/0\/3/)
+    const checks = screen.getAllByRole('checkbox')
+    expect(checks).toHaveLength(3)
+    expect((checks[0] as HTMLInputElement).checked).toBe(false)
+    fireEvent.click(checks[0]!)
+    expect((checks[0] as HTMLInputElement).checked).toBe(true)
+    expect(screen.getByTestId('diff-viewed-progress').textContent).toMatch(/1\/3/)
+    unmount()
+    // remount with the SAME storageKey → the viewed file is restored from storage
+    render(<WorktreeDiffPanel diff={THREE_FILE_DIFF} storageKey="taskV" />)
+    expect(screen.getByTestId('diff-viewed-progress').textContent).toMatch(/1\/3/)
+    expect((screen.getAllByRole('checkbox')[0] as HTMLInputElement).checked).toBe(true)
+  })
+
+  test('without a storageKey, viewed state stays in-memory (nothing persisted)', () => {
+    localStorage.clear()
+    render(<WorktreeDiffPanel diff={THREE_FILE_DIFF} />)
+    fireEvent.click(screen.getAllByRole('checkbox')[0]!)
+    expect(screen.getByTestId('diff-viewed-progress').textContent).toMatch(/1\/3/)
+    expect(localStorage.length).toBe(0)
+  })
+})
+
+// RFC-066 multi-repo: getTaskDiff concatenates per-repo diffs behind
+// `# === Repo: <name> ===` markers. The panel must group the file column per
+// repo and keep same-path files across repos distinct (selection + viewed).
+describe('WorktreeDiffPanel — multi-repo grouping (RFC-066)', () => {
+  // Both repos changed the SAME path (src/index.ts) — the case that rendered as
+  // two indistinguishable tabs + a swallowed marker before the fix.
+  const MULTI_REPO_DIFF = `# === Repo: repo-a ===
+diff --git a/src/index.ts b/src/index.ts
+index 1111..2222 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -1 +1 @@
+-alpha old
++alpha new
+# === Repo: repo-b ===
+diff --git a/src/index.ts b/src/index.ts
+index 3333..4444 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -1 +1 @@
+-beta old
++beta new
+`
+
+  test('renders a heading per repo and one tab per file', () => {
+    render(<WorktreeDiffPanel diff={MULTI_REPO_DIFF} />)
+    const headings = document.querySelectorAll('.worktree-diff__repo')
+    expect([...headings].map((h) => h.textContent)).toEqual(['repo-a', 'repo-b'])
+    // Two distinct file tabs even though both files are `src/index.ts`.
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs).toHaveLength(2)
+    expect(tabs.every((t) => t.textContent === 'src/index.ts')).toBe(true)
+    // First repo's file selected by default → its body, not repo-b's.
+    expect(screen.getByText('+alpha new')).toBeTruthy()
+    expect(screen.queryByText('+beta new')).toBeNull()
+  })
+
+  test('selecting repo-b file swaps to its body (same path, different repo)', () => {
+    render(<WorktreeDiffPanel diff={MULTI_REPO_DIFF} />)
+    fireEvent.click(screen.getAllByRole('tab')[1]!)
+    expect(screen.getByText('+beta new')).toBeTruthy()
+    expect(screen.queryByText('+alpha new')).toBeNull()
+  })
+
+  test('viewed state is per-repo: checking repo-a does not check repo-b', () => {
+    localStorage.clear()
+    render(<WorktreeDiffPanel diff={MULTI_REPO_DIFF} storageKey="multi" />)
+    // Two same-path files must count as two (a bare-header key would dedupe to 1).
+    expect(screen.getByTestId('diff-viewed-progress').textContent).toMatch(/0\/2/)
+    const checks = screen.getAllByRole('checkbox')
+    expect(checks).toHaveLength(2)
+    fireEvent.click(checks[0]!)
+    expect((checks[0] as HTMLInputElement).checked).toBe(true)
+    expect((checks[1] as HTMLInputElement).checked).toBe(false)
+    expect(screen.getByTestId('diff-viewed-progress').textContent).toMatch(/1\/2/)
+  })
+})

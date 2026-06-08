@@ -78,6 +78,59 @@ export function splitByFile(diff: string): FileBlock[] {
   return out
 }
 
+/** RFC-066 multi-repo: one repo's file blocks within a concatenated worktree
+ *  diff. `repo` is the name from the `# === Repo: <name> ===` marker, or null
+ *  for an un-marked (single-repo) diff so callers render it without a heading. */
+export interface RepoGroup {
+  repo: string | null
+  blocks: FileBlock[]
+}
+
+const REPO_MARKER = /^# === Repo: (.+) ===$/
+
+/**
+ * Segment a worktree diff into per-repo groups on the `# === Repo: X ===`
+ * markers the backend emits for multi-repo tasks (see backend `getTaskDiff`),
+ * then `splitByFile` each segment.
+ *
+ * A diff with NO markers — the single-repo common case — returns one
+ * `{ repo: null }` group whose blocks are byte-identical to `splitByFile(diff)`,
+ * so single-repo rendering is completely unchanged.
+ *
+ * Markers only ever appear at column 0; every real unified-diff line is either a
+ * `diff --git`/`index`/`@@` header or carries a ` `/`+`/`-` hunk prefix, so a
+ * file's CONTENT can never be mistaken for a marker.
+ */
+export function splitByRepo(diff: string): RepoGroup[] {
+  const lines = diff.split('\n')
+  if (!lines.some((l) => REPO_MARKER.test(l))) {
+    return [{ repo: null, blocks: splitByFile(diff) }]
+  }
+  const groups: RepoGroup[] = []
+  let repo: string | null = null
+  let buf: string[] = []
+  const flush = (): void => {
+    // Drop an empty leading segment (the bytes before the first marker, which
+    // is normally nothing); keep any non-empty leading content under a null
+    // repo so it's never silently lost.
+    const text = buf.join('\n')
+    if (repo === null && text.trim() === '') return
+    groups.push({ repo, blocks: splitByFile(text) })
+  }
+  for (const line of lines) {
+    const m = REPO_MARKER.exec(line)
+    if (m !== null) {
+      flush()
+      repo = m[1] ?? null
+      buf = []
+      continue
+    }
+    buf.push(line)
+  }
+  flush()
+  return groups
+}
+
 function deriveFileHeader(diffLine: string): string {
   // `diff --git a/path b/path`
   const m = /^diff --git a\/(.+?) b\/(.+)$/.exec(diffLine)

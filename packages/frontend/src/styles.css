@@ -6692,6 +6692,22 @@ mark.comment-anchor[data-active='true'] {
   overflow-y: auto;
 }
 
+/* RFC-021 (Q5) — each file is a row: a "viewed" checkbox + the selectable tab.
+ * The ROW is the flex-column child now, so it carries the no-crush guard. */
+.worktree-diff__file-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  /* never let the column flex crush a row below its text height */
+  flex-shrink: 0;
+}
+.worktree-diff__viewed {
+  flex: none;
+  cursor: pointer;
+  margin: 0;
+}
+
 .worktree-diff__file-tab {
   text-align: left;
   background: none;
@@ -6705,8 +6721,40 @@ mark.comment-anchor[data-active='true'] {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* never let the column flex crush a row below its text height */
+  /* fill the row width beside the checkbox; min-width:0 lets the path ellipsis */
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.worktree-diff__progress {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0 0 4px 2px;
+}
+
+/* RFC-066 multi-repo — per-repo section heading in the file column. Only
+ * rendered for multi-repo tasks (single-repo diffs carry no marker, so no
+ * heading). Sticky so the repo name stays visible while scrolling a long file
+ * list; flex-shrink:0 keeps it from being crushed like the file rows. */
+.worktree-diff__repo {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   flex-shrink: 0;
+  margin: 8px 0 2px;
+  padding: 2px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.worktree-diff__repo:first-child {
+  margin-top: 0;
 }
 
 .worktree-diff__file-tab:hover {
@@ -6718,6 +6766,13 @@ mark.comment-anchor[data-active='true'] {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* RFC-021 (Q5) — a checked-off file reads as "done" (declared AFTER the base
+ * `.worktree-diff__file-tab` rule so single-selector CSS lookups resolve the
+ * base rule first). */
+.worktree-diff__file-row--viewed .worktree-diff__file-tab {
+  opacity: 0.55;
 }
 
 .worktree-diff__truncated {
@@ -10250,4 +10305,34 @@ mark.comment-anchor[data-active='true'] {
 .structure__muted {
   font-size: var(--font-xs);
   padding: 8px;
+}
+
+/* RFC-083 (Q1) — before→after signature comparison: two monospace rows under
+ * the changed symbol. Old row muted; changed param/return tokens get the diff
+ * add/remove tint so the actual delta pops. */
+.structure__sigdiff {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 4px 26px;
+}
+.structure__sigdiff-row {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.structure__sigdiff-row--before {
+  color: var(--muted, #6b7280);
+}
+.structure__sigtok--removed {
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+  color: var(--danger);
+  border-radius: 3px;
+}
+.structure__sigtok--added {
+  background: color-mix(in srgb, var(--success) 22%, transparent);
+  color: var(--success);
+  border-radius: 3px;
 }

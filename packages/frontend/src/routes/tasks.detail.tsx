@@ -442,6 +442,7 @@ function TaskDetailPage() {
               diff={diff.data.diff}
               truncated={diff.data.truncated}
               focusFilePath={diffFocusFile}
+              storageKey={tk.id}
             />
           ) : null}
         </div>

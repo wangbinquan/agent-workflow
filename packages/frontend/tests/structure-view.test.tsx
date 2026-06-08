@@ -15,7 +15,13 @@ import type {
 } from '@agent-workflow/shared'
 import '../src/i18n'
 import { StructuralDiffView } from '../src/components/structure/StructuralDiffView'
-import { summaryRows, groupFileChanges, badgeSymbol, fileTreeRows } from '../src/lib/structureView'
+import {
+  summaryRows,
+  groupFileChanges,
+  badgeSymbol,
+  fileTreeRows,
+  diffSignatureTokens,
+} from '../src/lib/structureView'
 
 afterEach(() => cleanup())
 
@@ -107,6 +113,24 @@ describe('structureView helpers', () => {
     expect(badgeSymbol('removed')).toBe('−')
     expect(badgeSymbol('modified')).toBe('~')
     expect(badgeSymbol('renamed')).toBe('→')
+  })
+
+  test('diffSignatureTokens splits into before/after rows; tokens reassemble', () => {
+    const d = diffSignatureTokens('(a: number): void', '(a: string, b: number): void')
+    expect(d).not.toBeNull()
+    // removed-flagged tokens live ONLY on the before row, added ONLY on after
+    expect(d!.before.some((t) => t.kind === 'added')).toBe(false)
+    expect(d!.after.some((t) => t.kind === 'removed')).toBe(false)
+    expect(d!.after.some((t) => t.kind === 'added')).toBe(true)
+    // lossless: each row's tokens reassemble the original signature
+    expect(d!.before.map((t) => t.text).join('')).toBe('(a: number): void')
+    expect(d!.after.map((t) => t.text).join('')).toBe('(a: string, b: number): void')
+  })
+
+  test('diffSignatureTokens returns null when there is nothing to compare', () => {
+    expect(diffSignatureTokens('(x)', '(x)')).toBeNull() // identical
+    expect(diffSignatureTokens(undefined, '(x)')).toBeNull() // missing side
+    expect(diffSignatureTokens('(x)', '')).toBeNull()
   })
 
   test('fileTreeRows groups by directory + compacts single-child chains', () => {
@@ -248,6 +272,26 @@ describe('<StructuralDiffView />', () => {
     fireEvent.click(graphBtn as Element)
     expect(container.querySelector('[data-testid="structure-graph"]')).toBeTruthy()
     expect(container.querySelector('.structure__tree')).toBeNull() // tree swapped out
+  })
+
+  test('a signature change renders the before→after token diff and suppresses the bare tag (Q1)', () => {
+    const data = sampleDiff()
+    const ch = data.files[0]!.changes[0]! // modified method Animal.speak
+    ch.signatureChanged = true
+    ch.before = sym('Animal.speak', 'method')
+    ch.before.signature = '(loud: bool): None'
+    ch.after = sym('Animal.speak', 'method')
+    ch.after.signature = '(loud: bool, times: int): None'
+    const { container } = render(<StructuralDiffView data={data} />)
+    const sig = container.querySelector('[data-testid="sigdiff"]')
+    expect(sig).toBeTruthy()
+    // the inserted param is flagged on the after row...
+    expect(sig?.querySelector('.structure__sigtok--added')).toBeTruthy()
+    // ...and a pure insertion leaves no removed token on the before row
+    expect(sig?.querySelector('.structure__sigtok--removed')).toBeNull()
+    // the redundant "signature changed" tag is suppressed when the detail shows
+    // (language-agnostic: the tag is the only `.structure__tag` in the tree view)
+    expect(container.querySelector('.structure__tag')).toBeNull()
   })
 
   test('empty diff renders an empty state', () => {

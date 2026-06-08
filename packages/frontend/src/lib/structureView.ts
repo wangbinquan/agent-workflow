@@ -1,6 +1,7 @@
 // RFC-083 PR-D — pure helpers for the structural-diff view. Kept out of the
 // components so the aggregation / grouping / badge mapping get unit coverage.
 
+import { diffWordsWithSpace } from 'diff'
 import type {
   FileStructuralDiff,
   SymbolChange,
@@ -135,6 +136,40 @@ export function badgeClass(changeType: SymbolChange['changeType']): string {
     default:
       return 'structure__badge structure__badge--renamed' // renamed | moved
   }
+}
+
+export interface SigToken {
+  text: string
+  kind: 'same' | 'added' | 'removed'
+}
+
+/** RFC-083 (Q1) — token-level diff of a modified callable's declaration
+ *  signature, split into a "before" row (old, with removed tokens flagged) and
+ *  an "after" row (new, with added tokens flagged). Returns null when there is
+ *  nothing meaningful to compare (a side missing, or the two are identical).
+ *  Lets the UI show `(a: number): void` → `(a: string, b?: T): void` instead of
+ *  a bare "signature changed" tag — the actual param/return delta is what tells
+ *  a reviewer whether existing callers will break. */
+export function diffSignatureTokens(
+  before: string | undefined,
+  after: string | undefined,
+): { before: SigToken[]; after: SigToken[] } | null {
+  const b = before ?? ''
+  const a = after ?? ''
+  if (b === '' || a === '' || b === a) return null
+  const beforeRow: SigToken[] = []
+  const afterRow: SigToken[] = []
+  for (const part of diffWordsWithSpace(b, a)) {
+    if (part.added === true) {
+      afterRow.push({ text: part.value, kind: 'added' })
+    } else if (part.removed === true) {
+      beforeRow.push({ text: part.value, kind: 'removed' })
+    } else {
+      beforeRow.push({ text: part.value, kind: 'same' })
+      afterRow.push({ text: part.value, kind: 'same' })
+    }
+  }
+  return { before: beforeRow, after: afterRow }
 }
 
 export function badgeSymbol(changeType: SymbolChange['changeType']): string {

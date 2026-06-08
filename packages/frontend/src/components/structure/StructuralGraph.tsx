@@ -10,6 +10,7 @@ import {
   ReactFlowProvider,
   Background,
   Controls,
+  MiniMap,
   Handle,
   Position,
   MarkerType,
@@ -33,6 +34,7 @@ import {
   edgesForNodeClick,
   groupMembersByVisibility,
   memberSignature,
+  changeTypeColor,
   type EdgeKind,
   type GraphCard,
   type GraphCardEdge,
@@ -249,6 +251,16 @@ function PackageFlow({ graph }: { graph: PackageGraph }) {
       proOptions={{ hideAttribution: true }}
     >
       <Background />
+      <MiniMap
+        pannable
+        zoomable
+        ariaLabel={null}
+        nodeColor={(n) =>
+          ((n.data?.node as PkgGraphNode | undefined)?.classCount ?? 0) > 0
+            ? 'var(--accent)'
+            : 'var(--border)'
+        }
+      />
       <Controls showInteractive={false} />
     </ReactFlow>
   )
@@ -349,6 +361,16 @@ function ClassFlow({
           proOptions={{ hideAttribution: true }}
         >
           <Background />
+          <MiniMap
+            pannable
+            zoomable
+            ariaLabel={null}
+            nodeColor={(n) =>
+              n.type === 'card'
+                ? changeTypeColor((n.data?.card as GraphCard | undefined)?.changeType)
+                : 'transparent'
+            }
+          />
           <Controls showInteractive={false} />
         </ReactFlow>
       </CallChainEntry.Provider>

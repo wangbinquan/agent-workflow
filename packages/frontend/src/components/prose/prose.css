@@ -456,6 +456,21 @@
   color: #d4910a;
 }
 
+/* RFC-005 (Q10) — privacy notice: a configured PlantUML endpoint receives the
+ * raw document source. Shown at send time (loading) and persisted under the
+ * rendered diagram so the exfiltration is never silent. Muted so it informs
+ * without shouting over the diagram. */
+.prose .review-diagram__privacy {
+  margin: 0 0 8px 0;
+  font-size: 0.82em;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: left;
+}
+.prose .review-diagram__privacy::before {
+  content: '🔒 ';
+}
+
 .prose .review-diagram__error::before {
   content: '⚠';
 }

@@ -354,6 +354,7 @@ export interface Resources {
     plantumlUnconfigured: string
     plantumlRendering: string
     plantumlRenderFailed: string
+    plantumlPrivacyNotice: string
   }
   auth: {
     title: string
@@ -1037,6 +1038,8 @@ export interface Resources {
     loadingDiff: string
     diffNoChanges: string
     diffTruncatedBanner: string
+    diffViewedProgress: string
+    diffMarkViewed: string
     noNodeRuns: string
     colNode: string
     colIteration: string
@@ -2416,6 +2419,7 @@ export const zhCN: Resources = {
       'PlantUML 渲染器未配置 —— 请在 设置 → 渲染 中设置 endpoint。下方显示图源。',
     plantumlRendering: '渲染中…',
     plantumlRenderFailed: 'PlantUML 渲染失败：{{msg}}',
+    plantumlPrivacyNotice: '将向 {{host}} 发送文档源码以渲染该图。',
   },
   auth: {
     title: '登录',
@@ -3272,6 +3276,8 @@ export const zhCN: Resources = {
     loadingDiff: '加载 diff 中…',
     diffNoChanges: '自任务启动以来没有改动。',
     diffTruncatedBanner: '⚠ Diff 已截断至 1 MiB。请直接查看 worktree 获取完整输出。',
+    diffViewedProgress: '已看 {{n}}/{{total}}',
+    diffMarkViewed: '标记 {{file}} 为已看',
     noNodeRuns: '还没有节点运行；调度器还未触达任何节点。',
     colNode: '节点',
     colIteration: '轮次',

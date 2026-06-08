@@ -448,6 +448,26 @@ export function anonymousCardTitle(baseName: string): string {
   return baseName.length > 0 ? `«anonymous» ${baseName}` : '«anonymous»'
 }
 
+/** RFC-083 — MiniMap fill for a node by its change type, so the overview reads
+ *  as a "where are the changes" heatmap. Returns CSS vars (resolved against
+ *  :root, so the SVG minimap stays theme-aware) matching the `.structure__delta`
+ *  palette; unchanged / caller nodes fall back to a muted border tone. */
+export function changeTypeColor(ct: ChangeType | undefined): string {
+  switch (ct) {
+    case 'added':
+      return 'var(--success)'
+    case 'removed':
+      return 'var(--danger)'
+    case 'modified':
+      return '#d99100'
+    case 'renamed':
+    case 'moved':
+      return 'var(--accent)'
+    default:
+      return 'var(--border)'
+  }
+}
+
 export function buildStructureGraph(
   diff: StructuralDiff,
   edgeKinds: ReadonlySet<EdgeKind> = ALL_EDGE_KINDS,

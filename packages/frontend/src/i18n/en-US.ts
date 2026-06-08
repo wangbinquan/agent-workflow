@@ -203,6 +203,7 @@ export const enUS: Resources = {
       'PlantUML renderer not configured — set an endpoint in Settings → Rendering. Showing diagram source below.',
     plantumlRendering: 'rendering…',
     plantumlRenderFailed: 'plantuml render failed: {{msg}}',
+    plantumlPrivacyNotice: 'Diagram source is sent to {{host}} to render this diagram.',
   },
   auth: {
     title: 'Sign in',
@@ -1094,6 +1095,8 @@ export const enUS: Resources = {
     diffNoChanges: 'No changes since the task started.',
     diffTruncatedBanner:
       '⚠ Diff truncated at 1 MiB. View the worktree directly for the full output.',
+    diffViewedProgress: '{{n}}/{{total}} viewed',
+    diffMarkViewed: 'Mark {{file}} as viewed',
     noNodeRuns: "No node runs yet; scheduler hasn't reached any nodes.",
     colNode: 'Node',
     colIteration: 'Iteration',

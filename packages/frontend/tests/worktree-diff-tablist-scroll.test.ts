@@ -19,9 +19,11 @@ const block = (selector: string): string => {
 
 // Both feature-specific file lists share the SAME flex-column tablist pattern,
 // so both need the SAME guard (worktree-diff is where it first surfaced; the
-// structure tree has the identical nesting).
+// structure tree has the identical nesting). RFC-021 (Q5) wrapped each
+// worktree-diff file tab in a `.worktree-diff__file-row` (viewed-checkbox +
+// tab), so the ROW is now the flex-column child that must refuse to shrink.
 describe.each([
-  ['.worktree-diff__tablist', '.worktree-diff__file-tab'],
+  ['.worktree-diff__tablist', '.worktree-diff__file-row'],
   ['.structure__tablist', '.structure__file-tab'],
 ])('%s does not crush its rows', (listSel, itemSel) => {
   test(`${listSel} scrolls (overflow-y) instead of shrinking rows`, () => {
