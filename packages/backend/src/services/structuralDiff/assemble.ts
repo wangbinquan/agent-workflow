@@ -14,6 +14,10 @@ import {
   type StructuralScope,
   type Engine,
   type AnalysisStatus,
+  type ClassEdge,
+  type ImpactItem,
+  type SymbolNode,
+  type SymbolChange,
 } from '@agent-workflow/shared'
 import { analyzeFile } from './baseline'
 import { resolveLang } from './lang/grammars'
@@ -114,30 +118,119 @@ function applyViaImport(files: FileStructuralDiff[], deps: DependencyChange[]): 
   })
 }
 
-/** Merge several per-repo StructuralDiffs (multi-repo task) into one, prefixing
- *  file paths with the repo label so the UI can tell them apart. Recomputes the
- *  summary over the merged set. */
+// ---------------------------------------------------------------------------
+// RFC-089 P2 — multi-repo id namespacing.
+//
+// The class graph builds each card's id from a SYMBOL's own filePath
+// (`${sym.filePath}::${qn}`, see frontend structureGraph.ts), and `classEdges`
+// reference those same `${filePath}::${qn}` card ids; symbol ids are
+// `${filePath}#${qn}:${kind}`. So to merge per-repo diffs into one consistent
+// namespace, EVERY embedded filePath — file paths, symbol ids/parentIds, edge
+// endpoints, impact refs, classEdge endpoints/members — must get the SAME
+// `${label}/` prefix, or the graph's cards and edges won't line up (and
+// same-path files across repos collide). The pre-RFC-089 merge prefixed only
+// `file.filePath`, which is exactly why `classEdges` had to be dropped.
+// ---------------------------------------------------------------------------
+
+const prefixPath = (label: string, fp: string): string => `${label}/${fp}`
+
+/** Prefix the leading filePath segment of an id delimited by `delim` — symbol
+ *  id `${filePath}#…` (delim `#`) or card id `${filePath}::…` (delim `::`). A
+ *  bare path with no delimiter is prefixed whole. Exported for unit tests. */
+export function prefixIdPath(label: string, id: string, delim: string): string {
+  const i = id.indexOf(delim)
+  return i < 0 ? prefixPath(label, id) : prefixPath(label, id.slice(0, i)) + id.slice(i)
+}
+const prefixSymbolId = (label: string, id: string): string => prefixIdPath(label, id, '#')
+const prefixCardId = (label: string, id: string): string => prefixIdPath(label, id, '::')
+
+function prefixSymbolNode(label: string, s: SymbolNode): SymbolNode {
+  return {
+    ...s,
+    id: prefixSymbolId(label, s.id),
+    filePath: prefixPath(label, s.filePath),
+    parentId: s.parentId !== undefined ? prefixSymbolId(label, s.parentId) : undefined,
+  }
+}
+
+function prefixChange(label: string, c: SymbolChange): SymbolChange {
+  return {
+    ...c,
+    before: c.before !== undefined ? prefixSymbolNode(label, c.before) : undefined,
+    after: c.after !== undefined ? prefixSymbolNode(label, c.after) : undefined,
+    hunkAnchor:
+      c.hunkAnchor !== undefined
+        ? { ...c.hunkAnchor, filePath: prefixPath(label, c.hunkAnchor.filePath) }
+        : undefined,
+  }
+}
+
+function prefixImpactItem(label: string, it: ImpactItem): ImpactItem {
+  return {
+    ...it,
+    changedSymbolId: prefixSymbolId(label, it.changedSymbolId),
+    callers: it.callers.map((c) => ({
+      ...c,
+      symbolId: c.symbolId !== undefined ? prefixSymbolId(label, c.symbolId) : undefined,
+      filePath: prefixPath(label, c.filePath),
+    })),
+  }
+}
+
+function prefixFile(label: string, f: FileStructuralDiff): FileStructuralDiff {
+  return {
+    ...f,
+    filePath: prefixPath(label, f.filePath),
+    changes: f.changes.map((c) => prefixChange(label, c)),
+    edges: f.edges.map((e) => ({
+      ...e,
+      from: prefixSymbolId(label, e.from),
+      to: prefixSymbolId(label, e.to),
+    })),
+    impact: f.impact.map((it) => prefixImpactItem(label, it)),
+  }
+}
+
+function prefixClassEdge(label: string, e: ClassEdge): ClassEdge {
+  return {
+    ...e,
+    from: prefixCardId(label, e.from),
+    to: prefixCardId(label, e.to),
+    fromMembers:
+      e.fromMembers !== undefined ? e.fromMembers.map((m) => prefixSymbolId(label, m)) : undefined,
+    toMembers:
+      e.toMembers !== undefined ? e.toMembers.map((m) => prefixSymbolId(label, m)) : undefined,
+  }
+}
+
+/** Merge several per-repo StructuralDiffs (multi-repo task) into one. Every
+ *  embedded filePath/id is `${label}/`-prefixed so the merged set is ONE
+ *  consistent namespace — file tree, class graph (RFC-089 P2) and impact
+ *  cross-nav all line up, and same-path files across repos never collide.
+ *  Recomputes the summary over the merged set. */
 export function mergeStructuralDiffs(
   base: Omit<StructuralDiff, 'files' | 'dependencyChanges' | 'summary' | 'impact' | 'classEdges'>,
   parts: Array<{ label: string; diff: StructuralDiff }>,
 ): StructuralDiff {
   const files: FileStructuralDiff[] = []
-  const dependencyChanges = []
+  const dependencyChanges: DependencyChange[] = []
+  const classEdges: ClassEdge[] = []
   for (const { label, diff } of parts) {
-    for (const f of diff.files) files.push({ ...f, filePath: `${label}/${f.filePath}` })
+    for (const f of diff.files) files.push(prefixFile(label, f))
     for (const d of diff.dependencyChanges) {
       dependencyChanges.push({
         ...d,
-        manifestPath: d.manifestPath !== undefined ? `${label}/${d.manifestPath}` : undefined,
+        manifestPath: d.manifestPath !== undefined ? prefixPath(label, d.manifestPath) : undefined,
       })
     }
+    for (const e of diff.classEdges) classEdges.push(prefixClassEdge(label, e))
   }
   return {
     ...base,
     files,
     dependencyChanges,
     impact: files.flatMap((f) => f.impact),
-    classEdges: [], // multi-repo class edges would need label-prefixed keys — deferred
+    classEdges,
     summary: computeSummary(files, dependencyChanges),
   }
 }
