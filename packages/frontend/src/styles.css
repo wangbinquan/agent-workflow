@@ -6763,6 +6763,21 @@ mark.comment-anchor[data-active='true'] {
   margin-top: 0;
 }
 
+/* RFC-091 — directory header rows in the file tree (mirrors .structure__tree-dir
+ * so the worktree diff and structural views look identical). Non-interactive;
+ * files render below them as indented .worktree-diff__file-row tabs. */
+.worktree-diff__tree-dir {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .worktree-diff__file-tab:hover {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }

@@ -54,6 +54,13 @@ describe('WorktreeDiffPanel', () => {
     expect(tabs[0]?.getAttribute('aria-selected')).toBe('true')
     expect(tabs[1]?.getAttribute('aria-selected')).toBe('false')
     expect(tabs[2]?.getAttribute('aria-selected')).toBe('false')
+    // RFC-091: the file column is a folder tree — tabs show basenames under a
+    // single compacted `src` directory header row; the full path stays in title.
+    expect(tabs.map((t) => t.textContent)).toEqual(['a.ts', 'b.ts', 'c.ts'])
+    expect(tabs[0]?.getAttribute('title')).toBe('src/a.ts')
+    expect(
+      [...document.querySelectorAll('.worktree-diff__tree-dir')].map((d) => d.textContent),
+    ).toEqual(['src'])
     // Right pane shows the first file's hunks only.
     expect(screen.getByText('+new line from a')).toBeTruthy()
     expect(screen.queryByText('+new line from b')).toBeNull()
@@ -209,7 +216,13 @@ index 3333..4444 100644
     // Two distinct file tabs even though both files are `src/index.ts`.
     const tabs = screen.getAllByRole('tab')
     expect(tabs).toHaveLength(2)
-    expect(tabs.every((t) => t.textContent === 'src/index.ts')).toBe(true)
+    // RFC-091: tab labels are basenames now (full path in the title); each repo
+    // renders its own `src` directory header row in its own folder tree.
+    expect(tabs.every((t) => t.textContent === 'index.ts')).toBe(true)
+    expect(tabs.every((t) => t.getAttribute('title') === 'src/index.ts')).toBe(true)
+    expect(
+      [...document.querySelectorAll('.worktree-diff__tree-dir')].map((d) => d.textContent),
+    ).toEqual(['src', 'src'])
     // First repo's file selected by default → its body, not repo-b's.
     expect(screen.getByText('+alpha new')).toBeTruthy()
     expect(screen.queryByText('+beta new')).toBeNull()
@@ -242,7 +255,11 @@ index 3333..4444 100644
 // (only the active tab is Tab-reachable) and a list-SCOPED handler (onKeyDown on
 // the tablist, never a global window listener) so Arrow keys can never hijack
 // scrolling the diff body on the right. Selection assertions read `aria-selected`
-// so they stay locale-agnostic (tab labels are file paths, not translated).
+// so they stay locale-agnostic (tab labels are file basenames, not translated).
+// RFC-091: the file column is a folder tree, so Up/Down step through files in
+// VISUAL (tree) order, skipping directory header rows. For THREE_FILE_DIFF
+// (src/a,b,c.ts) the tree order a→b→c equals the diff order, so these hold; the
+// `folder tree ordering` test below locks the case where the two differ.
 describe('WorktreeDiffPanel — keyboard file switching', () => {
   const selectedTabLabel = (): string | null =>
     screen.getAllByRole('tab').find((t) => t.getAttribute('aria-selected') === 'true')
@@ -251,19 +268,19 @@ describe('WorktreeDiffPanel — keyboard file switching', () => {
   test('ArrowDown / ArrowUp move to the next / previous file', () => {
     render(<WorktreeDiffPanel diff={THREE_FILE_DIFF} />)
     const tablist = screen.getByRole('tablist')
-    expect(selectedTabLabel()).toBe('src/a.ts')
+    expect(selectedTabLabel()).toBe('a.ts')
 
     fireEvent.keyDown(tablist, { key: 'ArrowDown' })
-    expect(selectedTabLabel()).toBe('src/b.ts')
+    expect(selectedTabLabel()).toBe('b.ts')
     // The right pane swaps to the newly selected file.
     expect(screen.getByText('+new line from b')).toBeTruthy()
     expect(screen.queryByText('+new line from a')).toBeNull()
 
     fireEvent.keyDown(tablist, { key: 'ArrowDown' })
-    expect(selectedTabLabel()).toBe('src/c.ts')
+    expect(selectedTabLabel()).toBe('c.ts')
 
     fireEvent.keyDown(tablist, { key: 'ArrowUp' })
-    expect(selectedTabLabel()).toBe('src/b.ts')
+    expect(selectedTabLabel()).toBe('b.ts')
     expect(screen.getByText('+new line from b')).toBeTruthy()
   })
 
@@ -271,10 +288,10 @@ describe('WorktreeDiffPanel — keyboard file switching', () => {
     render(<WorktreeDiffPanel diff={THREE_FILE_DIFF} />)
     const tablist = screen.getByRole('tablist')
     fireEvent.keyDown(tablist, { key: 'End' })
-    expect(selectedTabLabel()).toBe('src/c.ts')
+    expect(selectedTabLabel()).toBe('c.ts')
     expect(screen.getByText('+new line from c')).toBeTruthy()
     fireEvent.keyDown(tablist, { key: 'Home' })
-    expect(selectedTabLabel()).toBe('src/a.ts')
+    expect(selectedTabLabel()).toBe('a.ts')
   })
 
   test('selection clamps at both ends — no wraparound', () => {
@@ -282,11 +299,11 @@ describe('WorktreeDiffPanel — keyboard file switching', () => {
     const tablist = screen.getByRole('tablist')
     // already on the first file → ArrowUp keeps it there
     fireEvent.keyDown(tablist, { key: 'ArrowUp' })
-    expect(selectedTabLabel()).toBe('src/a.ts')
+    expect(selectedTabLabel()).toBe('a.ts')
     // jump to the last file → ArrowDown past the end keeps it there
     fireEvent.keyDown(tablist, { key: 'End' })
     fireEvent.keyDown(tablist, { key: 'ArrowDown' })
-    expect(selectedTabLabel()).toBe('src/c.ts')
+    expect(selectedTabLabel()).toBe('c.ts')
   })
 
   test('roving tab stop: only the active file tab is Tab-reachable', () => {
@@ -311,7 +328,7 @@ describe('WorktreeDiffPanel — keyboard file switching', () => {
     render(<WorktreeDiffPanel diff={THREE_FILE_DIFF} />)
     const tablist = screen.getByRole('tablist')
     fireEvent.keyDown(tablist, { key: 'ArrowDown', metaKey: true })
-    expect(selectedTabLabel()).toBe('src/a.ts') // unchanged
+    expect(selectedTabLabel()).toBe('a.ts') // unchanged
   })
 
   // Space toggles the current file's "viewed" mark — the keyboard shortcut for
@@ -328,7 +345,7 @@ describe('WorktreeDiffPanel — keyboard file switching', () => {
     fireEvent.keyDown(tablist, { key: ' ' })
     expect(checkboxes()[0]!.checked).toBe(true)
     expect(progress()).toMatch(/1\/3/)
-    expect(selectedTabLabel()).toBe('src/a.ts') // Space marks, it does not navigate
+    expect(selectedTabLabel()).toBe('a.ts') // Space marks, it does not navigate
 
     fireEvent.keyDown(tablist, { key: ' ' })
     expect(checkboxes()[0]!.checked).toBe(false)
@@ -369,5 +386,84 @@ describe('WorktreeDiffPanel — keyboard file switching', () => {
     const src = readFileSync(path.resolve(here, '../src/components/WorktreeDiffPanel.tsx'), 'utf8')
     expect(src).toMatch(/onKeyDown=\{onTablistKeyDown\}/)
     expect(src).not.toMatch(/addEventListener\(\s*['"]keydown['"]/)
+  })
+})
+
+// RFC-091 — folder-tree presentation. The left column groups files under
+// directory header rows (reusing the structural view's `fileTreeRows`), files
+// render as indented basenames, and keyboard nav follows the VISUAL (tree) order
+// — which `fileTreeRows` reorders by directory, so it can differ from the raw
+// diff order. NESTED_DIFF is built so the two orders DIFFER, which is what makes
+// "nav uses the tree, not the diff array" an observable, lockable fact.
+describe('WorktreeDiffPanel — folder tree (RFC-091)', () => {
+  // Diff order:  src/lib/util.ts, README.md, src/components/Foo.tsx
+  // Tree order:  src/ › components/ › Foo.tsx,  src/ › lib/ › util.ts,  README.md
+  //              i.e. Foo.tsx, util.ts, README.md — deliberately != diff order.
+  const NESTED_DIFF = `diff --git a/src/lib/util.ts b/src/lib/util.ts
+index 1111..2222 100644
+--- a/src/lib/util.ts
++++ b/src/lib/util.ts
+@@ -1 +1 @@
+-old util
++new util
+diff --git a/README.md b/README.md
+index 3333..4444 100644
+--- a/README.md
++++ b/README.md
+@@ -1 +1 @@
+-old readme
++new readme
+diff --git a/src/components/Foo.tsx b/src/components/Foo.tsx
+index 5555..6666 100644
+--- a/src/components/Foo.tsx
++++ b/src/components/Foo.tsx
+@@ -1 +1 @@
+-old foo
++new foo
+`
+
+  const tabLabels = (): (string | null)[] => screen.getAllByRole('tab').map((t) => t.textContent)
+  const selectedTabLabel = (): string | null =>
+    screen.getAllByRole('tab').find((t) => t.getAttribute('aria-selected') === 'true')
+      ?.textContent ?? null
+
+  test('groups files under directory header rows; files are indented basenames', () => {
+    render(<WorktreeDiffPanel diff={NESTED_DIFF} />)
+    // Directory header rows (NOT tabs) in visual order, indented by depth.
+    const dirs = [...document.querySelectorAll('.worktree-diff__tree-dir')] as HTMLElement[]
+    expect(dirs.map((d) => d.textContent)).toEqual(['src', 'components', 'lib'])
+    expect(dirs.map((d) => d.style.paddingLeft)).toEqual(['8px', '22px', '22px'])
+    // One tab per file, shown by basename, with the full path in the title.
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs).toHaveLength(3)
+    expect(tabLabels()).toEqual(['Foo.tsx', 'util.ts', 'README.md'])
+    expect(tabs[0]?.getAttribute('title')).toBe('src/components/Foo.tsx')
+  })
+
+  test('defaults to the tree-first file, not the first diff file', () => {
+    render(<WorktreeDiffPanel diff={NESTED_DIFF} />)
+    // The diff starts at util.ts, but the tree puts Foo.tsx first → it is selected.
+    expect(selectedTabLabel()).toBe('Foo.tsx')
+    expect(screen.getByText('+new foo')).toBeTruthy()
+    expect(screen.queryByText('+new util')).toBeNull()
+  })
+
+  test('ArrowDown steps in tree (visual) order, not diff order', () => {
+    render(<WorktreeDiffPanel diff={NESTED_DIFF} />)
+    const tablist = screen.getByRole('tablist')
+    expect(selectedTabLabel()).toBe('Foo.tsx')
+    fireEvent.keyDown(tablist, { key: 'ArrowDown' })
+    expect(selectedTabLabel()).toBe('util.ts')
+    expect(screen.getByText('+new util')).toBeTruthy()
+    fireEvent.keyDown(tablist, { key: 'ArrowDown' })
+    expect(selectedTabLabel()).toBe('README.md')
+  })
+
+  // Source-level backstop: the panel must drive its file list through the shared
+  // `fileTreeRows` helper — a regression to a flat per-file list would drop this.
+  test('reuses the structural view fileTreeRows helper (no regression to a flat list)', () => {
+    const here = path.dirname(fileURLToPath(import.meta.url))
+    const src = readFileSync(path.resolve(here, '../src/components/WorktreeDiffPanel.tsx'), 'utf8')
+    expect(src).toMatch(/fileTreeRows/)
   })
 })
