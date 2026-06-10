@@ -30,6 +30,7 @@ import type {
 import {
   CLARIFY_SOURCE_PORT_NAME,
   countFanoutAggregators,
+  isClarifyChannelEdge,
   isMultiDocReviewInput,
   isReviewableBodyKind,
   reviewApprovedPortName,
@@ -246,6 +247,36 @@ export function validateWorkflowDef(
       }
     }
   }
+
+  // RFC-094 (audit S-6) — wrapper-loop nested (transitively) inside another
+  // wrapper-loop is a BROKEN topology, not a cost concern: node_runs rows are
+  // keyed (taskId, nodeId, iteration) with no parent-scope axis, so from the
+  // outer loop's 2nd round the inner loop's frontier hits round-1 done rows
+  // and the whole inner scope silently no-ops (current behavior locked by
+  // scheduler-audit-s06-nested-loop-inner-noop.test.ts). Error — blocks task
+  // launch (not canvas save) until nested-loop support lands (audit WP-6c).
+  // The walk is transitive: loop→git→loop / loop→fanout→loop collide on the
+  // same iteration axis. Contrast wrapper-fanout-nested above, which stays a
+  // warning (multiplicative cost, not broken semantics).
+  {
+    const nodeKindById = new Map(nodes.map((n) => [n.id, n.kind]))
+    for (const node of nodes) {
+      if (node.kind !== 'wrapper-loop') continue
+      let cur = innerToWrapper.get(node.id)
+      for (let hop = 0; cur !== undefined && hop < nodes.length; hop++) {
+        if (nodeKindById.get(cur) === 'wrapper-loop') {
+          issues.push({
+            code: 'wrapper-loop-nested',
+            message: `wrapper-loop '${node.id}' is nested inside wrapper-loop '${cur}' — inner iterations silently no-op from the outer loop's 2nd round (audit S-6); restructure to a single loop until nested-loop support lands`,
+            pointer: node.id,
+          })
+          break
+        }
+        cur = innerToWrapper.get(cur)
+      }
+    }
+  }
+
   const outputPorts = new Map<string, Set<string>>()
   const inputPorts = new Map<string, Set<string>>()
 
@@ -362,13 +393,21 @@ export function validateWorkflowDef(
       })
       continue
     }
-    const outs = outputPorts.get(src.id) ?? new Set()
-    if (!outs.has(edge.source.portName)) {
-      issues.push({
-        code: 'edge-source-port-missing',
-        message: `edge '${edge.id}': node '${src.id}' has no output port '${edge.source.portName}'`,
-        pointer: edge.id,
-      })
+    // RFC-094 (audit gap ⑥-9): a boundary='wrapper-input' edge's SOURCE is the
+    // wrapper-fanout node itself (the wrapper forwards its declared input port
+    // inward), which has no entry in the kind-switch above — the generic check
+    // false-errored every legal fanout workflow at the createTask gate. Rule 4
+    // (`boundary-input-port-not-declared`) validates that edge's source port
+    // precisely, so the generic source check skips it.
+    if (edge.boundary !== 'wrapper-input') {
+      const outs = outputPorts.get(src.id) ?? new Set()
+      if (!outs.has(edge.source.portName)) {
+        issues.push({
+          code: 'edge-source-port-missing',
+          message: `edge '${edge.id}': node '${src.id}' has no output port '${edge.source.portName}'`,
+          pointer: edge.id,
+        })
+      }
     }
     // Output and agent-input ports are accepted: output node declares its
     // inputs explicitly; agent nodes accept any port name (the runner exposes
@@ -388,6 +427,40 @@ export function validateWorkflowDef(
         message: `edge '${edge.id}': wrapper '${tgt.id}' does not accept inbound edges in v1`,
         pointer: edge.id,
       })
+    }
+
+    // RFC-094 (audit S-5) — per-shard inner chain inside a wrapper-fanout.
+    // The shard-scope computation auto-promotes chains, but the dispatch side
+    // never feeds B with A's shard-child outputs (`resolveUpstreamInputs`
+    // filters parentNodeRunId !== null rows), so B's port renders as an EMPTY
+    // string and the task goes green on garbage (current behavior locked by
+    // scheduler-audit-s05-fanout-inner-chain.test.ts). Error — blocks task
+    // launch until per-shard chains are dispatched (audit WP-6b). Edges INTO
+    // the aggregator stay legal (that is how aggregation input is wired), as
+    // do clarify-channel edges (not part of data dispatch) and boundary edges
+    // (validated by rule 4).
+    if (edge.boundary === undefined && !isClarifyChannelEdge(edge)) {
+      const srcWrapper = innerToWrapper.get(edge.source.nodeId)
+      const tgtWrapper = innerToWrapper.get(edge.target.nodeId)
+      if (
+        srcWrapper !== undefined &&
+        srcWrapper === tgtWrapper &&
+        nodeById.get(srcWrapper)?.kind === 'wrapper-fanout' &&
+        src.kind !== 'clarify' &&
+        src.kind !== 'clarify-cross-agent' &&
+        tgt.kind !== 'clarify' &&
+        tgt.kind !== 'clarify-cross-agent'
+      ) {
+        const tgtAgent = agentByName.get(readString(tgt, 'agentName') ?? '')
+        const targetIsAggregator = tgt.kind === 'agent-single' && tgtAgent?.role === 'aggregator'
+        if (!targetIsAggregator) {
+          issues.push({
+            code: 'fanout-inner-chain-unsupported',
+            message: `edge '${edge.id}' chains inner node '${src.id}' into non-aggregator inner node '${tgt.id}' inside wrapper-fanout '${srcWrapper}' — per-shard chains are not dispatched yet (the target reads an EMPTY port at runtime, audit S-5); route the result through the aggregator or split into sequential fanouts`,
+            pointer: edge.id,
+          })
+        }
+      }
     }
   }
 

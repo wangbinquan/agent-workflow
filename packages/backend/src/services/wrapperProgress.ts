@@ -6,11 +6,17 @@
 // state needed to resume a wrapper after it bubbled awaiting_human /
 // awaiting_review up from its inner scope:
 //
-//   - wrapper-loop: which iteration we parked on. On resume the wrapper
-//     re-calls runScope at the same iteration; `rescanScopeForNewPendingRows`
-//     (RFC-023 bug 13) picks up the agent rerun row that
+//   - wrapper-loop: which iteration we parked on. This iteration is ALSO the
+//     scan window `wrapperHasFreshInnerWork` (dispatchFrontier.ts) uses to
+//     decide whether a parked wrapper row may re-dispatch: the rerun row that
 //     `submitClarifyAnswers` / `submitReviewDecision` minted while we were
-//     suspended.
+//     suspended lives at this inner iteration, not at the wrapper row's own
+//     (outer) iteration. On resume the wrapper re-calls runScope at the same
+//     iteration and deriveFrontier picks the rerun row up. (The old
+//     `rescanScopeForNewPendingRows` this comment used to cite was deleted in
+//     RFC-076; fixed by RFC-094, audit S-26. Note audit S-3: approve leaves
+//     NO pending inner row, so an approved review inside a wrapper does not
+//     re-dispatch it — locked by scheduler-audit-s03, fix queued in WP-6c.)
 //
 //   - wrapper-git: the baseline commit we captured before the inner scope
 //     started. We MUST NOT re-capture HEAD on resume — the worktree has

@@ -1,6 +1,9 @@
-// RFC-076 PR-A — trim-B dispatch predicates (PURE, currently UNWIRED).
+// RFC-076 PR-A — trim-B dispatch predicates (PURE; LIVE since PR-B wired
+// deriveFrontier into runScope — scheduler.ts consumes isDispatchable every
+// dispatch tick; RFC-094 removed the stale "currently UNWIRED" claim that
+// post-dated the wiring, audit S-26).
 //
-// These are the two NOVEL predicates the trim-B dispatch frontier needs, on top
+// These are the two NOVEL predicates the dispatch frontier needs, on top
 // of fix A's computeReadyNodes / areTransitiveUpstreamsCompleted (freshness.ts).
 // They are the much-reviewed (3 adversarial rounds) corrections to the original
 // full-B sketch:
@@ -29,8 +32,9 @@
 // PURE module: only types + isNodeRunFresh (freshness.ts) + decodeWrapperProgress
 // (wrapperProgress.ts, itself pure). No DB / scheduler import. The frontier
 // ORCHESTRATION (read rows → latestPerNode → freshestDone → completed → ready)
-// and the runScope wiring are PR-B (deferred) — they belong with the scheduler's
-// row-ordering primitives (isFresherNodeRun / buildFreshestDonePerNode).
+// lives in scheduler.ts deriveFrontier (PR-B, live) next to the row-ordering
+// primitives (isFresherNodeRun / buildFreshestDonePerNode). Pure-function locks:
+// dispatch-frontier.test.ts + derive-frontier.test.ts.
 
 import type { NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { nodeRuns } from '../db/schema'

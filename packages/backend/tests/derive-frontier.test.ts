@@ -1,10 +1,12 @@
 // RFC-076 PR-B — deriveFrontier orchestrator (the dispatch brain).
 //
-// End-to-end pure-function locks for the frontier derivation that PR-B's
-// runScope race loop will consume. Composes fix A's transitive-closure readiness
-// + PR-A's isDispatchable / wrapperHasFreshInnerWork + settles-without-row (C1) +
-// N6 open-session evidence + N3 per-invocation dedup. Currently UNWIRED — these
-// validate the brain before the runScope rewrite wires it in.
+// End-to-end pure-function locks for the frontier derivation that runScope's
+// race loop consumes every dispatch tick (LIVE since PR-B; the stale
+// "currently UNWIRED" note removed by RFC-094, audit S-26). Composes fix A's
+// transitive-closure readiness + PR-A's isDispatchable /
+// wrapperHasFreshInnerWork + settles-without-row (C1) + N6 open-session
+// evidence + N3 per-invocation dedup (+ RFC-092 pending-anchor row-id release,
+// locked separately in scheduler-audit-s01 / rfc092-answer-race-window).
 
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'

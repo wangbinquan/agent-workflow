@@ -105,11 +105,17 @@ export function areTransitiveUpstreamsCompleted(
 }
 
 /**
- * Pure extraction of runScope's per-batch ready computation, so the transitive
+ * Pure extraction of the per-batch ready computation, so the transitive
  * gate above is unit-testable at the actual dispatch-decision altitude (rather
  * than only as graph-walk trivia). A remaining node becomes ready only once its
  * whole structural ancestor chain is `completed`. Generic over the node shape —
- * the scheduler passes `WorkflowNode`s; tests pass `{ id }` stubs.
+ * tests pass `{ id }` stubs.
+ *
+ * Status (RFC-094, audit S-26): production dispatch moved to deriveFrontier
+ * (scheduler.ts), which inlines this readiness step via
+ * areTransitiveUpstreamsCompleted. This wrapper is kept as the TEST ORACLE for
+ * the transitive gate (scheduler-transitive-dispatch-gate.test.ts) — do not
+ * delete without migrating that lock.
  */
 export function computeReadyNodes<N extends { id: string }>(
   remaining: Iterable<N>,

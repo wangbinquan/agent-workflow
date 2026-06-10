@@ -999,19 +999,19 @@ function buildFreshestDonePerNode(
 }
 
 // -----------------------------------------------------------------------------
-// RFC-076 PR-B — deriveFrontier (the dispatch brain; PURE, currently UNWIRED).
+// RFC-076 PR-B — deriveFrontier (the dispatch brain; PURE, and LIVE: runScope
+// calls it every dispatch tick — the stale "currently UNWIRED / NOT yet called"
+// claims removed by RFC-094, audit S-26).
 // -----------------------------------------------------------------------------
 //
 // Re-derives the dispatchable frontier from node_runs each tick, replacing the
 // batch model's mutable completed/remaining snapshot + rescan/recompute
 // reconcile. Composes fix A's areTransitiveUpstreamsCompleted + PR-A's
-// isDispatchable / wrapperHasFreshInnerWork. Lives here (not freshness.ts /
-// dispatchFrontier.ts) to reuse the scheduler's row-ordering primitives
-// (isFresherNodeRun / buildFreshestDonePerNode) without an import cycle.
-//
-// NOT yet called by runScope — wiring + the Promise.race loop + deleting
-// rescan/recompute/barrier are the remaining PR-B steps. Exported + unit-tested
-// now as the validated foundation.
+// isDispatchable / wrapperHasFreshInnerWork, plus RFC-092's pending-anchor
+// row-id release (mid-run clarify answer / review decision pickup, audit S-1).
+// Lives here (not freshness.ts / dispatchFrontier.ts) to reuse the scheduler's
+// row-ordering primitives (isFresherNodeRun / buildFreshestDonePerNode)
+// without an import cycle. Pure-function locks: derive-frontier.test.ts.
 
 export interface Frontier {
   /** done∧fresh ∪ exhausted(loop-max terminal, HIGH-2) ∪ settles-without-row leaves. */
@@ -2294,8 +2294,11 @@ async function runLoopWrapperNode(
   // RFC-040 resume detection: if the dispatcher re-entered us after we
   // previously bubbled awaiting_*, reuse our prior wrapper row and pick up
   // at the persisted iteration. The user answered clarify / decided review
-  // while we were parked; runScope's rescanScopeForNewPendingRows (RFC-023
-  // bug 13) will see the freshly-minted agent rerun row inside iter N.
+  // while we were parked; the inner runScope's deriveFrontier sees the
+  // freshly-minted agent rerun row inside iter N (the wrapper itself was
+  // re-dispatched because wrapperHasFreshInnerWork saw that pending row —
+  // dispatchFrontier.ts; the old rescanScopeForNewPendingRows this comment
+  // used to cite was deleted in RFC-076, comment fixed by RFC-094 S-26).
   const existing = await findResumableWrapperRun(db, taskId, node.id, parentIteration)
   let wrapperRunId: string
   let startIter = 0
@@ -2844,8 +2847,12 @@ interface DispatchShardResult {
  *     scheduler's runOneNode single-agent branch; bringing that whole branch
  *     in here would duplicate ~500 lines. PR-D2's per-shard review (D.T4)
  *     and per-shard clarify (D.T5) will add the corresponding hand-offs.
- *   - No retry / envelope follow-up. The fanout wrapper currently fails-fast
- *     on the first shard failure; a future PR can layer retries on top.
+ *   - No retry / envelope follow-up. The fanout wrapper's failure semantics
+ *     are FAIL-ALL-AFTER-JOIN (RFC-094 / audit S-18): every shard runs to
+ *     completion, then ANY failed shard fails the whole wrapper and skips
+ *     aggregation — it is not fail-fast (siblings are not cancelled), and it
+ *     is not partial-tolerant either (design.md §6.3; the errors-port partial
+ *     semantics are deferred to WP-6b). Locked by scheduler-audit-s18.
  */
 async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchShardResult> {
   const {

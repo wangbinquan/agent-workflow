@@ -305,8 +305,10 @@ export interface ReviewRunsPicked {
  * Pick the freshest top-level review row (`reuse`) and the freshest
  * top-level `done` review row (`latestDone`) from a list of review_runs
  * for one (taskId, nodeId, iteration). Skips fan-out child rows.
- * Comparator is `isFresherNodeRun` (clarifyIteration → retryIndex → ulid)
- * — same one the scheduler picks `latestPerNode` with.
+ * Comparator is `isFresherNodeRun` (pure ULID id-order — later-minted row
+ * wins; the clarifyIteration/retryIndex tiers this comment used to describe
+ * were retired in RFC-074) — same one the scheduler picks `latestPerNode`
+ * with (comment fixed by RFC-094, audit S-26).
  */
 export function pickFreshestReviewRun(
   reviewRuns: ReadonlyArray<typeof nodeRuns.$inferSelect>,

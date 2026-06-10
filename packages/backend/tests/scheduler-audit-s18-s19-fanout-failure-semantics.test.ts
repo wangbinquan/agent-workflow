@@ -12,10 +12,12 @@
 //   正确语义（RFC-060 design §7.5，design/RFC-060-fanout-as-wrapper/design.md:529-531）：
 //   单 shard 失败只标记该 shard，不阻塞其他 shard；聚合阶段只看 done shard
 //   的输出；全部 shard 失败才把 wrapper 标 failed；失败清单走自动 errors port。
-//   修复落在 WP-6a（失败语义二选一决策）：若按 §7.5 落地部分容忍，本文件
-//   test 1 的断言应翻转 —— task/wrapper 转 done、aggNode 跑 1 次、wrapper
-//   outlet 出现 'final'（和 errors port）、下游 down 节点正常 dispatch；若决策
-//   保留 v1 fail-all 并写进 design.md，本文件继续保持绿色并改名为正式回归锁。
+//   【RFC-094 决策落定（2026-06-11，方案 A）】：v1 保留 fail-all-after-join 并
+//   已写进 design.md §6.3（部分容忍 + errors port 标记为 deferred，归 WP-6b
+//   产品决策）。本文件 test 1 自此是**正式回归锁**（锁定与文档一致的语义），
+//   不再是缺陷现状锁定；若未来 WP-6b 落地部分容忍，断言随该 RFC 翻转 ——
+//   task/wrapper 转 done、aggNode 跑 1 次、wrapper outlet 出现 'final'（和
+//   errors port）、下游 down 节点正常 dispatch。
 //
 // S-19（failed→重试全量重跑，scheduler.ts:2126-2133, 2429-2431, 2790-2800）：
 //   当前缺陷行为：wrapper 失败后用户恢复任务时，findResumableWrapperRun 把

@@ -462,8 +462,8 @@ type TaskWsMessage =
   | {
       id: number
       type: 'clarify.created'
-      nodeRunId: string         // clarify 节点 node_run id
-      clarifyNodeId: string     // clarify 节点 workflow id
+      nodeRunId: string // clarify 节点 node_run id
+      clarifyNodeId: string // clarify 节点 workflow id
       sourceShardKey: string | null
       iterationIndex: number
       session: ClarifySessionSummary // 紧凑摘要 — 列表 / 徽标增量更新用
@@ -475,14 +475,14 @@ type TaskWsMessage =
       clarifyNodeId: string
       sourceShardKey: string | null
       iterationIndex: number
-      rerunNodeRunId: string    // 新 mint 的 source agent node_run id；订阅方可切换焦点
-      session: ClarifySession   // 完整 session（含 sealed answers + selectedOptionLabels）
+      rerunNodeRunId: string // 新 mint 的 source agent node_run id；订阅方可切换焦点
+      session: ClarifySession // 完整 session（含 sealed answers + selectedOptionLabels）
     }
 ```
 
 `id` = `node_run_events.id`（自增）。客户端断线重连用 `?since={lastSeenId}`，服务端从 events 表回放 id > since 的所有事件，再衔接实时推送。
 
-clarify.* 与 review.* 复用同一 `/ws/tasks/{taskId}` 通道；前端 `/clarify` 列表与左栏 badge 走 polling + invalidate（10s + 15s），详情页订阅本通道直接拿增量。`sourceShardKey` 在 payload 上让前端把同 clarifyNodeId 的多 shard 会话路由到正确 tab。
+clarify._ 与 review._ 复用同一 `/ws/tasks/{taskId}` 通道；前端 `/clarify` 列表与左栏 badge 走 polling + invalidate（10s + 15s），详情页订阅本通道直接拿增量。`sourceShardKey` 在 payload 上让前端把同 clarifyNodeId 的多 shard 会话路由到正确 tab。
 
 #### `/ws/tasks` —— 任务列表页
 
@@ -774,12 +774,17 @@ edges:
 3. 为每个 shard 创建子 node_run（shard_key 填充，parent_node_run_id = 父）
 4. 父节点用内部独立 semaphore 调度子 shard，与全局 semaphore 解耦
 5. 等所有子 shard node_run 完成（含 done / failed）
-6. 聚合：
-   - 每个声明的 outputs port → 成功 shard 的同名 port 内容按 shard_key 字典序拼接
-   - 自动 errors port → 失败 shard 列表 + 各自 error_message + binary files 提示
-7. 写入父 node_run 的 outputs
-8. 父节点 status = done
+6. 【v1 实际语义 = fail-all-after-join】join 后只要存在失败 shard：父节点 status = failed，
+   跳过聚合、不写任何 outlet，errors port 不产出（见 scheduler-audit-s18 测试锁定；
+   RFC-094 / 调研 S-18 把本节从旧的部分容忍描述改写为与实现一致）
+7. 全部 shard 成功时聚合：每个声明的 outputs port → 各 shard 同名 port 内容按 shard_key
+   字典序拼接；写入父 node_run 的 outputs；父节点 status = done
 ```
+
+> **deferred（WP-6b 产品决策）**：旧设计承诺的部分容忍语义——只聚合成功 shard、全失败才
+> failed、自动 `errors` port 输出失败清单——在 v1 未实现。若未来落地，连带需要 done-only
+> 聚合挑行（调研 S-21）与 fanout 失败断点续跑（S-19）一起设计，另立 RFC。本文其他位置对
+> 自动 errors port 的描述（§6.2、编辑器侧栏小注等）在落地前均属 deferred。
 
 > **非分片输入端口**：父节点的其他输入端口（除 sourcePort 之外）对每个 shard 完整复制，子进程都看到一样的内容（如 `requirement` / `audit_checklist`）。
 
@@ -1111,6 +1116,7 @@ clarify 信封 body 是 JSON：
 ```
 
 约束（agent 必须遵守，否则被框架友善截断 / 拒绝）：
+
 - 最多 5 个 question；超出则取前 5 + 在下次 prompt 里回灌一条警告 `clarify-questions-too-many`（不阻塞）。
 - 每 question 2–4 个 option；> 4 截到 4 + 回灌警告；< 2 是硬错误码 `clarify-options-too-few`，节点 fail。
 - agent 禁止自己加 "其他/自定义" option —— UI 会自动给每题追加一行 textarea。
@@ -1126,6 +1132,7 @@ clarify 节点新增可选字段 `sessionMode: 'isolated' | 'inline'`（默认 `
 - `inline`：runner 在 spawn 时多带一个 `--session <prior-session-id>` 参数，opencode CLI 加载上一次 session 的完整 transcript（messages / thinking / tool calls）。本轮 user prompt 退化为 "User Answers (Current Round)" 一段 + 一行精简 reminder（`buildClarifyInlineReminder()`），不再重发 bi-modal preamble + 完整 clarify 协议块（agent 在 session 历史里已经看过）。
 
 实现要点：
+
 - `node_runs.opencode_session_id`（§3 同章节加列）持久化 runner 从 opencode `--format json` event stream 抓到的 sessionId。
 - scheduler 在 clarify 触发的 agent 重跑（`clarify_iteration > 0 && retry_index === 0`）路径上调 `decideResumeSessionId({ sessionMode, sourceSessionId })`：
   - `sessionMode === 'isolated'` 或 sourceSessionId 缺失 → 走 isolated（无 `--session`），missing 时写 warning 事件 `inline-clarify-fallback-to-isolated: missing-session-id`。

@@ -1,34 +1,24 @@
-// CURRENT-BEHAVIOR LOCK — design/scheduler-audit-2026-06-10.md S-5 (WP-6a)
+// design/scheduler-audit-2026-06-10.md S-5 — 分层状态（RFC-094 / WP-6a 已部分修复）：
 //
-// 当前缺陷行为（三层全部锁定为"现状"，全部绿色）：
-//   1. resolveUpstreamInputs (services/scheduler.ts:3558) 用
-//      `parentNodeRunId === null` 过滤候选行 —— fanout 内 per-shard 节点 A 的
-//      全部产出都挂在 shard child 行上（parentNodeRunId = wrapperRunId），
-//      因此 fanout 内 A→B inner-to-inner 边的 B 在解析上游时一行都拿不到：
-//      目标端口键整体缺失（不是空字符串，是 key 不存在），consumed 也为空。
-//   2. workflow.validator 对"指向非 aggregator inner 节点的 inner-to-inner 边"
-//      零规则 —— 链路边不产生任何 issue（error/warning 都没有）。用户画
-//      fanout 内 audit→fix 链（产品主打场景），validator 不拦。
-//   3. 运行时静默成功 —— B 的 prompt 模板里 A 的端口占位符被
-//      renderUserPrompt（shared/src/prompt.ts，`v ?? ''`）静默替换为空字符串，
-//      B 的 shard 行照样 done，任务整体 done，无任何报错/告警。
-//      且 inner 派发按 nodeIds[] 数组序（scheduler.ts:2517 for-loop），
-//      非拓扑序：nodeIds 逆序时 B 整体先于 A 派发。
+// 【层 2 = 已修复（RFC-094），断言锁定正确语义】
+//   - validator 现在以 error 'fanout-inner-chain-unsupported' 拒绝指向非
+//     aggregator inner 节点的 inner-to-inner 数据边（短期止血：错误只阻启动
+//     不阻保存）。
+//   - boundary='wrapper-input' 边不再被规则 2 误报 edge-source-port-missing
+//     （审计缺口 ⑥-9：这种边的 source 是 wrapper 本体，由规则 4 精确校验）。
 //
-// 正确语义应是：要么 validator 在 v1 直接报错拒绝指向非 aggregator inner 的
-// inner-to-inner 边（短期止血，WP-6a），要么 dispatchFanoutShard 解析同
-// shardKey 的上游 child 行并按拓扑序派发（长期）。
-//
-// 修复时本文件应翻红，按各断言旁的 [FLIP] 注释翻转期望值：
-//   - validator 修复：'eChain' 边应产生 error（pointer === 'eChain'）。
-//   - 运行时修复（长期方案）：fixer prompt 应包含 AUDIT-FINDING-SENTINEL，
-//     resolveUpstreamInputs（或其替代）应能按 shardKey 解析 child 行。
-//
-// 注：与主笔预判"validator 全绿"不符的一点（以源码为准）——同一定义里
-// wrapper-input boundary 边会触发一个无关的 `edge-source-port-missing`
-// error（validator 的端口收集 switch 没有 wrapper-fanout case，wrapper 输出
-// 端口集为空集）。这是另一个独立缺口，不属于 S-5；本文件单独用一条
-// characterization 记录它，S-5 的锁定断言只看 chain 边自身产生的 issue。
+// 【层 1 / 层 3 = CURRENT-BEHAVIOR LOCK，仍锁缺陷现状（WP-6b 根治时翻转）】
+//   1. resolveUpstreamInputs (services/scheduler.ts) 用 `parentNodeRunId ===
+//      null` 过滤候选行 —— fanout 内 per-shard 节点 A 的全部产出都挂在 shard
+//      child 行上，A→B 链的 B 在解析上游时一行都拿不到：目标端口键整体缺失，
+//      consumed 也为空。
+//   3. 运行时静默成功 —— B 的 prompt 里 A 的端口占位符被 renderUserPrompt
+//      （`v ?? ''`）静默替换为空字符串，任务整体 done 无报错；且 inner 派发按
+//      nodeIds[] 数组序而非拓扑序。（这两层的工作流经直接 runTask 构造，不过
+//      validator 门，故新 error 规则不影响它们的锁定。）
+//   WP-6b 运行时修复（dispatchFanoutShard 按 shardKey 解析上游 child 行 +
+//   拓扑序派发）落地时：fixer prompt 应包含 AUDIT-FINDING-SENTINEL，层 1/3
+//   断言按旁注翻转，层 2 的 error 规则届时放开。
 
 import type { Agent, WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
 import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -275,32 +265,28 @@ function chainWorkflowDef(nodeIds: string[] = ['audit', 'fix']): WorkflowDefinit
   } as unknown as WorkflowDefinition
 }
 
-describe('S-5 layer 2 — validator has NO rule for inner-to-inner chain edges to a non-aggregator inner', () => {
-  test('chain edge eChain produces zero issues (no error, no warning)', () => {
+describe('S-5 layer 2 — RFC-094 validator guardrails (flipped from the pre-fix locks)', () => {
+  test('chain edge eChain is rejected with fanout-inner-chain-unsupported (error)', () => {
     const res = validateWorkflowDef(chainWorkflowDef(), {
       agents: [valAgent('auditor'), valAgent('fixer')],
       skills: [],
     })
-    // [FLIP] WP-6a 修复后：应存在一条 error-severity issue，pointer === 'eChain'
-    // （v1 明确拒绝指向非 aggregator inner 节点的 inner-to-inner 边）。
-    // 当前缺陷行为：validator 对这条边完全沉默 —— 运行时 fix 注定收到空输入，
-    // 静态检查却全程不拦。
-    expect(res.issues.filter((i) => i.pointer === 'eChain')).toEqual([])
-    // 链路相关的 message 同样不存在（防止规则换了 pointer 形态导致假绿）。
-    expect(res.issues.some((i) => i.message.includes('eChain'))).toBe(false)
+    // RFC-094 (WP-6a)：v1 明确拒绝指向非 aggregator inner 节点的 inner-to-inner
+    // 数据边——派发侧不喂 per-shard 链，fix 端口在运行时恒为空（层 3 仍锁该现状，
+    // 直到 WP-6b 落地真正的链派发后一并翻转）。
+    const chainIssues = res.issues.filter((i) => i.pointer === 'eChain')
+    expect(chainIssues).toHaveLength(1)
+    expect(chainIssues[0]!.code).toBe('fanout-inner-chain-unsupported')
+    expect(chainIssues[0]!.severity ?? 'error').toBe('error')
+    expect(res.ok).toBe(false)
   })
 
-  test('incidental (NOT S-5): boundary edge eB misfires edge-source-port-missing despite the port being declared', () => {
-    // 单独记录：validator 端口收集 switch（workflow.validator.ts:255 起，case
-    // 覆盖 input/output/agent-single/wrapper-git/wrapper-loop/review/clarify*）
-    // 没有 wrapper-fanout case，wrapper 输出端口集是空集 —— 即便 `docs` 已在
-    // wrapper inputs 里声明（与 workflow-validator-wrapper-fanout.test.ts:245
-    // 锁的 boundary-input-port-not-declared【未声明】场景相反），wrapper-input
-    // boundary 边的 source 端口仍被判不存在。这是独立于 S-5 的另一个缺口
-    // （error severity 还会卡 task.ts createTask 的静态校验门）。
-    // 为了让两个缺口各自独立翻红，这里先把 eChain 相关 issue（上一条 [FLIP]
-    // 后 WP-6a 会新增的那条 error）排除，再对剩余 issue 全集做 exact-equal：
-    // WP-6a 落地只翻上一条，本条只在"端口收集补 wrapper-fanout case"修复时翻红。
+  test('boundary edge eB no longer misfires edge-source-port-missing (audit gap ⑥-9 fixed)', () => {
+    // RFC-094：规则 2 对 boundary='wrapper-input' 边豁免 source-port 检查——
+    // 这种边的 source 就是 wrapper 本体，由规则 4 的
+    // boundary-input-port-not-declared 精确校验（未声明场景仍报错，见
+    // rfc094-validator-guardrails.test.ts 的反例用例与
+    // workflow-validator-wrapper-fanout.test.ts:245）。
     const res = validateWorkflowDef(chainWorkflowDef(), {
       agents: [valAgent('auditor'), valAgent('fixer')],
       skills: [],
@@ -308,11 +294,7 @@ describe('S-5 layer 2 — validator has NO rule for inner-to-inner chain edges t
     const nonChainIssues = res.issues.filter(
       (i) => i.pointer !== 'eChain' && !i.message.includes('eChain'),
     )
-    // [FLIP] 端口收集修复（switch 补 wrapper-fanout case）后：eB 不再误报，
-    // 此列表应变为 []。
-    expect(nonChainIssues.map((i) => ({ code: i.code, pointer: i.pointer }))).toEqual([
-      { code: 'edge-source-port-missing', pointer: 'eB' },
-    ])
+    expect(nonChainIssues.map((i) => ({ code: i.code, pointer: i.pointer }))).toEqual([])
   })
 })
 
