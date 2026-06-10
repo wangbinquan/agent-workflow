@@ -150,7 +150,16 @@ jobs:
         # advisories, address per-advisory (override / patch / upstream
         # issue / --ignore <GHSA>); do NOT silently downgrade to
         # continue-on-error.
-        run: bun audit --audit-level=high
+        #
+        # GHSA-w7jw-789q-3m8p (shell-quote quote() does not escape newlines):
+        # transitive, dev/tooling-only — pulled via drizzle-orm/drizzle-kit ›
+        # gel (the EdgeDB/Gel driver), which the platform does NOT use (runtime
+        # is bun:sqlite) and which is NOT in the shipped single binary. The
+        # installed shell-quote@1.8.3 is the latest version satisfying the
+        # range and is still in the affected set (<=1.8.3), so there is no fix
+        # to update to yet. Scoped --ignore per the policy above; REMOVE when
+        # drizzle bumps its transitive shell-quote past the advisory.
+        run: bun audit --audit-level=high --ignore GHSA-w7jw-789q-3m8p
 
       - name: actionlint (GitHub Actions workflow lint)
         # Pinned via the official downloader script so the version moves only
