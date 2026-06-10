@@ -1,32 +1,30 @@
-// CURRENT-BEHAVIOR LOCK — design/scheduler-audit-2026-06-10.md S-13 (P2, WP-3)
-// （兼锁 S-2 的「快照写入双轨 / 读取单轨」源码面证据，行为面见
+// SOURCE-TEXT GUARDS — design/scheduler-audit-2026-06-10.md S-13 (P2, WP-3)
+// （兼锁 S-2 读取侧的修复形态，行为面见
 //   scheduler-audit-s02-multirepo-retry-rollback-noop.test.ts。）
 //
-// 当前缺陷行为（本文件全绿地锁定它）：
+// 状态（RFC-092 落地后，design/RFC-092-scheduler-p0-stopgap/design.md §2）：
 //   权威 freshest-run 比较器是纯 ULID id 序（scheduler.ts isFresherNodeRun，
-//   :450-456，其 docstring 明确「(retryIndex, id) 被考虑并否决」——retry 风暴
-//   可把 stale 行的 retryIndex 抬到比后铸的 clarify rerun 更高）。resumeTask
-//   已为同一 bug 修过一次（scheduler-boundary-resume-retryindex-vs-id.test.ts
-//   锁住）。但该被判死的 `desc(retryIndex)` 排序仍残留在三处 picker fork：
-//     fork #4  scheduler.ts:3791  readSnapshotForLatestRun —— 被进程内重试回滚
-//              调用（scheduler.ts:1519）；选错行 = 回滚目标错、工作区被错误覆盖。
-//              且它只读 `preSnapshot` 单列（:3793）——多仓行恒得 ''（S-2 的
-//              读取单轨半边）。
-//     fork #5  task.ts:1178       retryNode 下游 cascade 的 prev 继承 picker ——
-//              占位行的 iteration/shardKey/parentNodeRunId/preSnapshot 可能
-//              继承自 stale 高-retryIndex 行而非 freshest 行。
-//     fork #6  lifecycleRepair/helpers.ts:42  loadNodeRunsForNode ——
-//              核实者补充发现（审计报告 S-13 机制段）。
+//   其 docstring 明确「(retryIndex, id) 被考虑并否决」——retry 风暴可把 stale
+//   行的 retryIndex 抬到比后铸的 clarify rerun 更高）。resumeTask 已为同一
+//   bug 修过一次（scheduler-boundary-resume-retryindex-vs-id.test.ts 锁住）。
+//   被判死的 `desc(retryIndex)` picker fork 原有三处，现状分两档锁定：
+//     fork #4  scheduler.ts readSnapshotForLatestRun —— ✅ RFC-092 已整个删除
+//              （进程内重试回滚改用 runOneNode 的 `lastFreshSnapshot` 局部 +
+//              共享 rollbackNodeRunWorktrees，逐仓读 per-repo map——S-2 的
+//              读取单轨半边一并消灭）。G1/G2 翻转为「不得回来」守卫。
+//     fork #5  task.ts retryNode 下游 cascade 的 prev 继承 picker ——
+//              仍在（WP-3 待办）：占位行的 iteration/shardKey/parentNodeRunId/
+//              preSnapshot 可能继承自 stale 高-retryIndex 行而非 freshest 行。
+//     fork #6  lifecycleRepair/helpers.ts loadNodeRunsForNode ——
+//              仍在（WP-3 待办；核实者补充发现，审计报告 S-13 机制段）。
 //
-// 正确语义应是：freshest 选行收敛为 shared 单函数（pure id 序），
-//   `desc(nodeRuns.retryIndex)` 不得再出现在快照/继承/修复路径；
-//   readSnapshotForLatestRun 整个删掉（调用方直接传当前行，与 S-2 修复合并）。
+// 终态语义：freshest 选行收敛为 shared 单函数（pure id 序），
+//   `desc(nodeRuns.retryIndex)` 不得再出现在快照/继承/修复路径。
 //
-// 修复落点：WP-3（freshest-run picker 收敛；fork #4 也可能随 WP-1 的 S-2 修复
-//   提前消失）。函数未导出 → 无法直测，按源码文本守卫兜底。
-// 修复时本文件应翻红：哪个 fork 被消掉，对应计数断言就从 1 掉到 0 ——
-//   按各断言旁 [FLIP-ON-FIX] 注释把期望改为 0（或直接删除该守卫），
-//   并把 G6 全 src 清单里对应文件的条目移除。
+// 剩余修复落点：WP-3（fork #5/#6 收敛）。函数未导出 → 无法直测，按源码文本
+//   守卫兜底。后续每消掉一个 fork：按 G3/G5 旁 [FLIP-ON-FIX] 注释把期望改为 0
+//   （或直接删除该守卫），并把 G6 全 src 清单里对应文件的条目移除
+//   （scheduler.ts 的条目已随 RFC-092 移除）。
 //
 // 权威比较器本身（isFresherNodeRun 纯 id 序）的回归防护不在本文件——
 //   isfresher-noderun-baseline.test.ts 已用导入函数 + 逐 case 行为断言锁死
@@ -70,42 +68,37 @@ function extractSection(src: string, startMarker: string, endMarker: string): st
   return src.slice(start, end)
 }
 
-describe('S-13 freshest-run comparator forks — source-text guards (CURRENT-BEHAVIOR LOCK)', () => {
-  test('G1 fork #4: scheduler.ts readSnapshotForLatestRun still orders by desc(retryIndex) — and it is the ONLY such fork left in scheduler.ts', () => {
-    const fn = extractSection(
-      SCHEDULER_SRC,
-      'async function readSnapshotForLatestRun(',
-      // End anchor: the doc comment of the next declaration (unique, verified).
-      'RFC-074 PR-C: derive a node_run',
-    )
-    // The dead-ruled ordering is still here.
-    // [FLIP-ON-FIX] WP-3/WP-1: readSnapshotForLatestRun should be deleted
-    // outright (callers pass the current row); when that happens extractSection
-    // throws → replace G1 with a "marker absent" assertion:
-    //   expect(SCHEDULER_SRC.includes('readSnapshotForLatestRun')).toBe(false)
-    expect(fn.includes('.orderBy(desc(nodeRuns.retryIndex))')).toBe(true)
-    // Exactly ONE retryIndex-ordering fork in scheduler.ts, and it is THIS one
-    // (cross-file ratchet lives in G6).
-    expect(countOccurrences(SCHEDULER_SRC, FORK_MARKER)).toBe(1)
+describe('S-13 freshest-run comparator forks — source-text guards (fork #4 deleted by RFC-092; #5/#6 still locked)', () => {
+  test('G1 fork #4 DELETED (RFC-092): scheduler.ts neither declares nor calls readSnapshotForLatestRun, and contains ZERO desc(retryIndex) ordering forks', () => {
+    // The function was deleted outright — the retry rollback now passes the
+    // in-process `lastFreshSnapshot` straight to the shared rollback (see G2).
+    // The NAME may legitimately survive inside explanatory comments (the
+    // tombstone note at the old declaration site); what must never come back
+    // is the declaration or a call site.
+    expect(SCHEDULER_SRC.includes('async function readSnapshotForLatestRun(')).toBe(false)
+    expect(SCHEDULER_SRC.includes('await readSnapshotForLatestRun(')).toBe(false)
+    // ZERO retryIndex-ordering forks left in scheduler.ts (cross-file ratchet
+    // lives in G6).
+    expect(countOccurrences(SCHEDULER_SRC, FORK_MARKER)).toBe(0)
   })
 
-  test('G2 S-2 read-single-track evidence: readSnapshotForLatestRun reads ONLY the preSnapshot column; preSnapshotReposJson appears in scheduler.ts solely on the WRITE side', () => {
-    const fn = extractSection(
-      SCHEDULER_SRC,
-      'async function readSnapshotForLatestRun(',
-      'RFC-074 PR-C: derive a node_run',
+  test('G2 S-2 read side FIXED (RFC-092): the retry rollback goes through shared rollbackNodeRunWorktrees with the in-process lastFreshSnapshot; the per-repo map read lives in nodeRollback.ts', () => {
+    // The scheduler retry path calls the shared multi-repo-aware rollback…
+    expect(SCHEDULER_SRC.includes('await rollbackNodeRunWorktrees(')).toBe(true)
+    // …passing the snapshot of the most recent FRESH-SESSION attempt held in
+    // memory (a followup attempt's snapshot-less row can no longer shadow the
+    // real baseline — S-2b).
+    expect(SCHEDULER_SRC.includes('lastFreshSnapshot')).toBe(true)
+    // The shared authority consumes the per-repo map — the read side S-2
+    // lacked — and carries the empty-sha reset switch.
+    const rollbackSrc = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'nodeRollback.ts'),
+      'utf-8',
     )
-    // Single-column read → multi-repo rows (preSnapshot = NULL) yield ''.
-    expect(fn.includes('?.preSnapshot ??')).toBe(true)
-    // [FLIP-ON-FIX] WP-1: the fixed read path must consult the per-repo map —
-    // flip to true (or delete alongside the function).
-    expect(fn.includes('preSnapshotReposJson')).toBe(false)
-    // Whole-file: exactly ONE preSnapshotReposJson occurrence = the dual-write
-    // branch at scheduler.ts:1627. Write side exists, read side doesn't —
-    // the structural root of S-2.
-    // [FLIP-ON-FIX] WP-1: a read-side occurrence (or shared-helper call) is
-    // added → bump/replace this count deliberately.
-    expect(countOccurrences(SCHEDULER_SRC, 'preSnapshotReposJson')).toBe(1)
+    expect(rollbackSrc.includes('preSnapshotReposJson')).toBe(true)
+    expect(rollbackSrc.includes('resetOnEmptySnapshot')).toBe(true)
+    // And the shared module itself never picks rows by retryIndex.
+    expect(countOccurrences(rollbackSrc, FORK_MARKER)).toBe(0)
   })
 
   test('G3 fork #5: task.ts retryNode cascade prev-inheritance picker still orders by desc(retryIndex) — the ONLY such fork left in task.ts', () => {
@@ -146,12 +139,13 @@ describe('S-13 freshest-run comparator forks — source-text guards (CURRENT-BEH
     expect(countOccurrences(REPAIR_HELPERS_SRC, FORK_MARKER)).toBe(1)
   })
 
-  test('G6 whole-src fork inventory: desc(nodeRuns.retryIndex) appears in EXACTLY these three files, once each — no new fork anywhere in src/', () => {
+  test('G6 whole-src fork inventory: desc(nodeRuns.retryIndex) appears in EXACTLY these two files, once each — no new fork anywhere in src/', () => {
     // The R2 ratchet the audit asks for ("desc(nodeRuns.retryIndex) 不得再出现
-    // 在快照/继承路径"), made global: G1/G3/G5 pin each known fork in place;
+    // 在快照/继承路径"), made global: G3/G5 pin each remaining fork in place;
     // this test makes ANY new fork — in any src file, including ones this
     // family never heard of — flip red immediately.
-    // [FLIP-ON-FIX] WP-3/WP-1: as each fork converges onto the shared
+    // RFC-092 removed the scheduler.ts entry (fork #4 / readSnapshotForLatestRun).
+    // [FLIP-ON-FIX] WP-3: as each remaining fork converges onto the shared
     // freshest picker, remove its entry here; end state is an empty inventory.
     const srcRoot = resolve(import.meta.dir, '..', 'src')
     const inventory: Record<string, number> = {}
@@ -163,7 +157,6 @@ describe('S-13 freshest-run comparator forks — source-text guards (CURRENT-BEH
     }
     expect(inventory).toEqual({
       'services/lifecycleRepair/helpers.ts': 1,
-      'services/scheduler.ts': 1,
       'services/task.ts': 1,
     })
   })

@@ -37,14 +37,9 @@ import { listAgents } from '@/services/agent'
 import { listSkills } from '@/services/skill'
 import { validateWorkflowDef } from '@/services/workflow.validator'
 import { upsertRecentRepo } from '@/services/repo'
+import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { listAvailableRefs, resolveCachedRepo } from '@/services/gitRepoCache'
-import {
-  createWorktree,
-  gitDiffSnapshot,
-  isGitWorkTree,
-  rollbackToSnapshot,
-  worktreeDiff,
-} from '@/util/git'
+import { createWorktree, gitDiffSnapshot, isGitWorkTree, worktreeDiff } from '@/util/git'
 import { redactGitUrl } from '@agent-workflow/shared'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { readArchivedEvents } from '@/services/eventsArchive'
@@ -852,66 +847,27 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
  */
 /**
  * RFC-066 PR-B T13: roll back the worktree state before a node_run for the
- * resume / single-node-retry paths. Two strategies depending on `task.repoCount`:
- *
- *  - Single-repo (repoCount === 1): read the legacy `preSnapshot` column
- *    (a single git-stash sha) and roll back `task.worktreePath`.
- *    Byte-baseline equivalent to pre-RFC-066 behavior.
- *  - Multi-repo (repoCount > 1): read the new `preSnapshotReposJson` column
- *    (`{<worktreeDirName>: <stashSha>}` map) and roll each per-repo sub-
- *    worktree independently. Defensive fallback to the single-string
- *    `preSnapshot` for any task_repos row that happens to predate PR-B
- *    (e.g. multi-repo task created before T13 landed); same `task.worktreePath`
- *    rollback path is used as a last-ditch attempt in that case.
- *
- * Errors per repo are warn-and-continue; we never abort the resume because
- * one of N repos' stash applies failed. Caller decides next step.
+ * resume / single-node-retry paths. RFC-092 T1: thin shell over the shared
+ * `rollbackNodeRunWorktrees` (services/nodeRollback.ts) — the single authority
+ * for snapshot rollback, also used by the scheduler's in-process retry path
+ * (audit S-2). Resume semantics (`resetOnEmptySnapshot: false`) are preserved
+ * exactly: empty/missing shas are skipped, a multi-repo row whose
+ * `preSnapshotReposJson` is NULL (predates PR-B) falls through to the legacy
+ * single-string rollback, and an unparseable map degrades to a per-repo no-op
+ * (NOT a single-repo fallback — see nodeRollback.ts for the real control flow
+ * the old comment here misdescribed).
  */
 async function rollbackNodeRunForResume(
   task: Task,
   run: { id: string; preSnapshot: string | null; preSnapshotReposJson: string | null },
   log: ReturnType<typeof createLogger>,
 ): Promise<void> {
-  // Multi-repo path: prefer the per-repo map when present.
-  if (task.repoCount > 1 && run.preSnapshotReposJson !== null && task.repos.length > 0) {
-    let map: Record<string, string> = {}
-    try {
-      map = JSON.parse(run.preSnapshotReposJson) as Record<string, string>
-    } catch (err) {
-      log.warn('preSnapshotReposJson parse failed; falling back to legacy single-stash rollback', {
-        nodeRunId: run.id,
-        error: err instanceof Error ? err.message : String(err),
-      })
-      // Fall through to single-repo path below.
-    }
-    for (const repo of task.repos) {
-      const sha = map[repo.worktreeDirName] ?? ''
-      if (sha === '') continue
-      try {
-        await rollbackToSnapshot(repo.worktreePath, sha)
-      } catch (err) {
-        log.warn('resume rollback per-repo failed', {
-          nodeRunId: run.id,
-          worktreeDirName: repo.worktreeDirName,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-    }
-    return
-  }
-
-  // Single-repo path (or multi-repo defensive fallback when the per-repo
-  // map is unparseable / absent). Byte-baseline equivalent to pre-RFC-066.
-  if (run.preSnapshot !== null && run.preSnapshot !== '' && task.worktreePath !== '') {
-    try {
-      await rollbackToSnapshot(task.worktreePath, run.preSnapshot)
-    } catch (err) {
-      log.warn('resume rollback failed', {
-        nodeRunId: run.id,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }
+  await rollbackNodeRunWorktrees(
+    { repoCount: task.repoCount, worktreePath: task.worktreePath, repos: task.repos },
+    run,
+    { resetOnEmptySnapshot: false },
+    log,
+  )
 }
 
 export async function cancelTask(db: DbClient, id: string): Promise<Task> {

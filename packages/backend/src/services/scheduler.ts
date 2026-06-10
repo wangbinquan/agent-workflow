@@ -105,7 +105,8 @@ import { createLogger, type Logger } from '@/util/log'
 // RFC-060 PR-E: splitDiff* imports removed — they were used only by the
 // agent-multi fan-out path (now deleted). wrapper-fanout consumes a `list<T>`
 // shardSource instead of slicing a string diff.
-import { gitChangedFiles, gitStashSnapshot, rollbackToSnapshot, runGit } from '@/util/git'
+import { gitChangedFiles, gitStashSnapshot, runGit } from '@/util/git'
+import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { Semaphore } from '@/util/semaphore'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
@@ -604,6 +605,11 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
   // the old `?? ''` wrapper bubbling).
   const inFlight = new Map<string, Promise<{ nodeId: string; result: OneNodeResult }>>()
   const dispatchedThisInvocation = new Set<string>()
+  // RFC-092 (audit S-1): pending anchor rows already released this invocation.
+  // A node in `dispatchedThisInvocation` re-dispatches when an out-of-band
+  // rerun mints a FRESH pending row (mid-run clarify answer / review
+  // decision); this set bounds that bypass to one release per row id.
+  const dispatchedPendingRowIds = new Set<string>()
   const parkedDetail = new Map<string, { summary: string; message: string }>()
   let firstFailureDetail: { summary: string; message: string; nodeId?: string } | undefined
 
@@ -628,12 +634,15 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
       dispatchedThisInvocation,
       openClarify.clarifyNodeIds,
       openClarify.askingRunIds,
+      dispatchedPendingRowIds,
     )
 
     for (const nodeId of f.ready) {
       const node = scopeNodeById.get(nodeId)
       if (node === undefined) continue
       dispatchedThisInvocation.add(nodeId)
+      const anchor = f.pendingAnchors.get(nodeId)
+      if (anchor !== undefined) dispatchedPendingRowIds.add(anchor)
       inFlight.set(
         nodeId,
         runOneNode(state, { node, iteration, log }).then((result) => ({ nodeId, result })),
@@ -1009,6 +1018,16 @@ export interface Frontier {
   completed: Set<string>
   /** transitive upstreams completed ∧ isDispatchable ∧ ∉ inFlight ∧ ∉ dispatchedThisInvocation. */
   ready: string[]
+  /**
+   * RFC-092 (audit S-1): for every `ready` node whose latest row is `pending`,
+   * that row's id. The caller records these into its per-invocation
+   * `dispatchedPendingRowIds` set so each pending anchor row is released AT
+   * MOST ONCE — an out-of-band rerun mint (clarify answer / review decision)
+   * carries a fresh ULID and re-releases the node; a leaked pending row that a
+   * dispatch failed to consume degrades back to the stall semantics instead of
+   * hot-looping.
+   */
+  pendingAnchors: Map<string, string>
   /** latest awaiting_review / awaiting_human, NOT going to ready (terminal bubbling). */
   awaitingReview: string[]
   awaitingHuman: string[]
@@ -1048,6 +1067,10 @@ function isLiveStatus(status: string): boolean {
  *   with an open clarify session. Their `done` row is a clarify park, NOT a
  *   completion: excluded from `completed` and bucketed awaitingHuman until the
  *   answer mints a rerun (S12). See loadOpenClarify.
+ * @param dispatchedPendingRowIds  pending row ids already released through the
+ *   RFC-092 pending-anchor bypass this invocation (caller records
+ *   `Frontier.pendingAnchors` of every dispatch). Bounds the bypass to one
+ *   release per row — see Frontier.pendingAnchors.
  */
 export function deriveFrontier(
   rows: ReadonlyArray<typeof nodeRuns.$inferSelect>,
@@ -1060,6 +1083,7 @@ export function deriveFrontier(
   dispatchedThisInvocation: ReadonlySet<string>,
   openClarifyNodeIds: ReadonlySet<string>,
   askingRunIds: ReadonlySet<string> = new Set(),
+  dispatchedPendingRowIds: ReadonlySet<string> = new Set(),
 ): Frontier {
   const latestPerNode = new Map<string, typeof nodeRuns.$inferSelect>()
   for (const r of rows) {
@@ -1100,10 +1124,24 @@ export function deriveFrontier(
     if (areTransitiveUpstreamsCompleted(n.id, upstreamsOf, completed)) completed.add(n.id)
   }
 
+  // RFC-092 (audit S-1, design §1.2b): node ids whose ASKING run still has an
+  // open (un-answered) clarify session. submitClarifyAnswers mints the rerun
+  // row BEFORE writing the answers / flipping the session (clarify.ts, no real
+  // transaction under bun:sqlite) — releasing that pending row inside the
+  // window would start the rerun without its answers. Derived from the rows we
+  // already hold; the set empties the tick after the session flips answered.
+  const openAskingNodeIds = new Set<string>()
+  if (askingRunIds.size > 0) {
+    for (const r of rows) {
+      if (askingRunIds.has(r.id)) openAskingNodeIds.add(r.nodeId)
+    }
+  }
+
   const awaitingReview: string[] = []
   const awaitingHuman: string[] = []
   const failed: string[] = []
   const ready: string[] = []
+  const pendingAnchors = new Map<string, string>()
   let remainingCount = 0
   for (const n of scopeNodes) {
     if (completed.has(n.id)) continue
@@ -1117,13 +1155,28 @@ export function deriveFrontier(
       awaitingHuman.push(n.id)
       continue
     }
+    // RFC-092 (audit S-1): a `pending` latest row is an explicit new-work
+    // signal (out-of-band rerun mint by submitClarifyAnswers / review
+    // iterate-reject, or a resume placeholder). The per-invocation node-level
+    // dedup must NOT permanently mask it — that turned a mid-run clarify
+    // answer into a false `scheduler stalled` failure. Release it once per
+    // ROW (dispatchedPendingRowIds), and never while its asking session is
+    // still open (answer-write race window — see openAskingNodeIds above).
+    const pendingAnchorReleasable =
+      latest !== undefined &&
+      latest.status === 'pending' &&
+      !dispatchedPendingRowIds.has(latest.id) &&
+      !openAskingNodeIds.has(n.id)
     const dispatchable =
       areTransitiveUpstreamsCompleted(n.id, upstreamsOf, completed) &&
       !inFlight.has(n.id) &&
-      !dispatchedThisInvocation.has(n.id) &&
+      (pendingAnchorReleasable || !dispatchedThisInvocation.has(n.id)) &&
       isDispatchable(latest, n.kind, freshestDone, rows, definition)
     if (dispatchable) {
       ready.push(n.id)
+      if (latest !== undefined && latest.status === 'pending') {
+        pendingAnchors.set(n.id, latest.id)
+      }
       continue
     }
     // Terminal bucketing — only nodes that are NOT (re-)dispatchable.
@@ -1134,6 +1187,7 @@ export function deriveFrontier(
   return {
     completed,
     ready,
+    pendingAnchors,
     awaitingReview,
     awaitingHuman,
     failed,
@@ -1464,6 +1518,19 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
 
   let lastResult: RunResult | null = null
   let lastError: string | null = null
+  // RFC-092 T2 (audit S-2/S-2b): the pre-snapshot written by the most recent
+  // FRESH-SESSION attempt of THIS invocation, kept in memory so the retry
+  // rollback below targets the right baseline without re-querying node_runs
+  // (the old `readSnapshotForLatestRun` ordered by retry_index and read only
+  // the single-repo column — multi-repo rollbacks were silent no-ops and a
+  // followup attempt's snapshot-less row shadowed the real baseline).
+  // Follow-up attempts never overwrite it: they keep the worktree as-is, so
+  // the last fresh-session snapshot stays the rollback target.
+  let lastFreshSnapshot: {
+    id: string
+    preSnapshot: string | null
+    preSnapshotReposJson: string | null
+  } | null = null
 
   try {
     for (let attempt = retryIndex; attempt <= retryIndex + maxRetries; attempt++) {
@@ -1516,16 +1583,22 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // conversation; rolling back files behind its back would create a
         // mismatch between session memory and disk.
         if (!followupDecision.followup) {
-          const snap = await readSnapshotForLatestRun(db, taskId, node.id, iteration)
-          // Always roll a writer back before a fresh-session retry — even when
-          // the pre-snapshot is '' (the worktree was CLEAN when snapshotted, the
-          // common case, or the snapshot failed). rollbackToSnapshot still does
-          // `reset --hard` + `clean -fd` for snap === '', which clears the failed
-          // attempt's partial writes; gating on snap !== '' left them behind. See
-          // scheduler-boundary-presnapshot-rollback-skip.test.ts.
+          // RFC-092 T2 (audit S-2/S-2b): roll back to the last fresh-session
+          // snapshot of THIS invocation via the shared multi-repo-aware
+          // rollback. Always roll a writer back — even when no snapshot is in
+          // hand ('' still does `reset --hard` + `clean -fd`, clearing the
+          // failed attempt's partial writes; gating on a non-empty sha left
+          // them behind, see scheduler-boundary-presnapshot-rollback-skip
+          // .test.ts). Multi-repo: each sub-worktree rolls independently and
+          // the container dir is never touched (nodeRollback.ts hard gate).
           if (!agent.readonly) {
             try {
-              await rollbackToSnapshot(task.worktreePath, snap)
+              await rollbackNodeRunWorktrees(
+                { repoCount: task.repoCount, worktreePath: task.worktreePath, repos: state.repos },
+                lastFreshSnapshot ?? { id: nodeRunId, preSnapshot: '', preSnapshotReposJson: null },
+                { resetOnEmptySnapshot: true },
+                log,
+              )
             } catch (err) {
               log.warn('retry rollback failed', {
                 nodeId: node.id,
@@ -1602,6 +1675,10 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
             // remains the single-string column the resume path has always
             // read.
             const sha = await gitStashSnapshot(task.worktreePath)
+            // RFC-092: remember the baseline in-process for the retry rollback
+            // (set before the DB write so a failed write still leaves the
+            // correct rollback target in hand).
+            lastFreshSnapshot = { id: nodeRunId, preSnapshot: sha, preSnapshotReposJson: null }
             await db.update(nodeRuns).set({ preSnapshot: sha }).where(eq(nodeRuns.id, nodeRunId))
           } else {
             // RFC-066: multi-repo per-repo stash map. Each sub-worktree
@@ -1622,9 +1699,16 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
                 stashMap[repo.worktreeDirName] = ''
               }
             }
+            const stashMapJson = JSON.stringify(stashMap)
+            // RFC-092: in-process baseline for the retry rollback (see above).
+            lastFreshSnapshot = {
+              id: nodeRunId,
+              preSnapshot: null,
+              preSnapshotReposJson: stashMapJson,
+            }
             await db
               .update(nodeRuns)
-              .set({ preSnapshotReposJson: JSON.stringify(stashMap) })
+              .set({ preSnapshotReposJson: stashMapJson })
               .where(eq(nodeRuns.id, nodeRunId))
           }
         } catch (err) {
@@ -3772,26 +3856,11 @@ function readBindings(node: WorkflowNode, key: string): Binding[] {
   return out
 }
 
-async function readSnapshotForLatestRun(
-  db: DbClient,
-  taskId: string,
-  nodeId: string,
-  iteration: number,
-): Promise<string> {
-  const rows = await db
-    .select()
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, taskId),
-        eq(nodeRuns.nodeId, nodeId),
-        eq(nodeRuns.iteration, iteration),
-      ),
-    )
-    .orderBy(desc(nodeRuns.retryIndex))
-    .limit(1)
-  return rows[0]?.preSnapshot ?? ''
-}
+// RFC-092 T2: `readSnapshotForLatestRun` was deleted — the retry rollback now
+// uses the in-process `lastFreshSnapshot` (see runOneNode). Its
+// `orderBy(desc(retryIndex))` was one of the audit S-13 freshest-row forks
+// (retry_index ordering was ruled out in favor of id-order, and a followup
+// attempt's snapshot-less row shadowed the real baseline — S-2b).
 
 /**
  * RFC-074 PR-C: derive a node_run's clarify "generation" from id-order instead

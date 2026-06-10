@@ -247,18 +247,19 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
     })
     // Re-enter the scheduler so the freshly minted rerun node_run starts.
     //
-    // RFC-023 bug 13: when the task is still `running` / `pending` at submit
-    // time (typical when there are multiple parallel branches and the user
-    // answers one clarify while another branch keeps the scheduler busy),
-    // `resumeTask` throws `task-not-resumable`. That used to be swallowed
-    // silently and the freshly minted rerun row sat orphaned. Now:
-    //   - The scheduler's per-batch rescan (services/scheduler.ts
-    //     `rescanScopeForNewPendingRows`) will pick up the new pending row
-    //     on its next iteration. So this resume is best-effort.
+    // RFC-023 bug 13 / RFC-092 (audit S-1, S-26): when the task is still
+    // `running` at submit time (parallel branches keep the scheduler busy
+    // while the user answers), `resumeTask` throws `task-not-resumable` and
+    // that is EXPECTED — the live dispatch loop picks the fresh pending rerun
+    // row up on its next tick via deriveFrontier's pending-anchor release
+    // (scheduler.ts, RFC-092; the rescanScopeForNewPendingRows mechanism this
+    // comment used to cite was deleted in RFC-076, which made the swallow
+    // unsafe until RFC-092 restored a pickup path). So this resume is
+    // best-effort:
     //   - We still TRY to resume in case the task is already paused
     //     (awaiting_human / awaiting_review / failed / interrupted), which
-    //     covers the single-branch happy path.
-    //   - `task-not-resumable` is now logged at info — not silent — so the
+    //     covers the single-branch / parked path.
+    //   - `task-not-resumable` is logged at info — not silent — so the
     //     deferral is visible in the daemon log if anyone needs to debug.
     const opencodeCmd = resolveOpencodeCmd(deps.configPath)
     const resumeDeps: Parameters<typeof resumeTask>[2] = {
@@ -268,7 +269,7 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
     }
     void resumeTask(deps.db, result.session.taskId, resumeDeps).catch((err) => {
       if (err instanceof ConflictError && err.code === 'task-not-resumable') {
-        log.info('clarify resume deferred — scheduler will rescan mid-batch', {
+        log.info('clarify resume deferred — live dispatch loop picks up the pending rerun', {
           taskId: result.session.taskId,
           rerunNodeRunId: result.rerunNodeRunId,
         })

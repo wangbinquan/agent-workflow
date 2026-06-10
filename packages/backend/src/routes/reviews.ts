@@ -177,9 +177,14 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
         appHome: appHomeFor(deps),
         ...(opencodeCmd ? { opencodeCmd } : {}),
       }
-      void resumeTask(deps.db, result.taskId, resumeDeps).catch(() => {
-        /* errors land in task.errorMessage via failTask */
-      })
+      // RFC-092 (audit S-26/S-27): a `task-not-resumable` ConflictError here is
+      // EXPECTED when the task is still running (parallel branch in flight) —
+      // the live dispatch loop picks the freshly minted pending rerun row up
+      // via deriveFrontier's pending-anchor release. Other errors are NOT
+      // persisted anywhere by this catch (the old comment claiming "errors
+      // land in task.errorMessage via failTask" was wrong); classification /
+      // retry-with-backoff is queued behind audit WP-4 (S-27).
+      void resumeTask(deps.db, result.taskId, resumeDeps).catch(() => {})
     }
     return c.json({ ok: true, ...result })
   })
