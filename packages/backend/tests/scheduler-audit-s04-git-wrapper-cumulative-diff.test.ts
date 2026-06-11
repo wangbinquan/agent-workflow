@@ -1,22 +1,16 @@
-// CURRENT-BEHAVIOR LOCK — design/scheduler-audit-2026-06-10.md S-4 (WP-6c)
+// REGRESSION GUARD — audit S-4 修复锁（RFC-098 B3 / WP-6c；原 CURRENT-BEHAVIOR
+// LOCK 已按头注指引翻转）。
 //
-// 当前缺陷行为（本文件锁定的就是它）：
-//   wrapper-git 进入时只记 baseline = `git rev-parse HEAD`（scheduler.ts
-//   captureHead, :3176-3184），完全不抓 pre-existing 脏文件集；输出 git_diff =
-//   `git diff --name-only <baseline>` + 全部 untracked 无条件并入
-//   （util/git.ts gitChangedFiles, :627-667）。design.md §6.5 要求的 pre_diff
-//   扣除未实现。后果两面：
-//   (a) 顺序双 wrapper-git：第一阶段 agent 写了 fileA 不 commit，第二个
-//       wrapper 的 git_diff 把 fileA 一并混入（应只含本 wrapper 内产生的
-//       fileB）——下游 fan-out 分片集合失真；
-//   (b) git-in-loop：迭代 N 的 git_diff 是 0..N 的累计并集而非"那一轮"的
-//       增量，loop 第 2 轮起输出语义直接错。
+// 锁定的修复语义（scheduler.ts runGitWrapperNode + captureGitPreDirty）：
+//   wrapper-git fresh-mint 在写锁窗口内抓 baseline + pre 脏集
+//   `{path: blobSha|'deleted'}` 存入 wrapperProgress.preDirty；finalize 做差集
+//   「post ∈ pre ∧ hash 相等才扣」。两个历史病面由同一机制修复：
+//   (a) 顺序双 wrapper-git：第一阶段未 commit 的 fileA 不再混入第二个 wrapper
+//       的 git_diff（wg2 输出只含本 wrapper 内产生的 fileB）；
+//   (b) git-in-loop：迭代 N 的 git_diff 是"那一轮"的增量而非 0..N 累计并集
+//       （每轮 fresh-mint 的 pre 集天然含前轮残留）。
 //
-// 正确语义：每个 wrapper-git 的 git_diff 只应包含**该 wrapper 执行期间**新产生
-// /修改的路径（进入时抓 pre 文件集，输出时做差集；见报告建议修法）。
-//
-// 修复落点：WP-6c（pre_diff 扣除 + git-in-loop 每轮独立 diff）。修复落地时本
-// 文件应翻红——按各断言旁 [FLIP-ON-FIX] 注释翻转期望值即可改造成回归防护。
+// 任何 refactor 把这两个断言翻回累计并集 = S-4 回归，立刻打回。
 //
 // 为什么现有测试盖不住：scheduler.test.ts:561 用干净 worktree + 单 wrapper；
 // :847 的 git-in-loop 只跑 1 个迭代且不断言 diff 内容。本 harness 刻意让前序
@@ -285,12 +279,12 @@ describe('AUDIT S-4 current-behavior lock: wrapper-git baseline = HEAD only, no 
     expect(wg1Run?.status).toBe('done')
     expect(wg2Run?.status).toBe('done')
 
-    // Mechanism lock: both wrappers persisted the SAME baseline — the
-    // initial commit hash. The baseline carries no file-set information,
-    // which is exactly why pre-existing dirt cannot be subtracted.
-    // [FLIP-ON-FIX] when WP-6c lands a pre file-set (or stash snapshot) in
-    // wrapperProgress, extend this to assert the pre-set differs between
-    // the two wrappers (wg2's pre-set must contain fileA.txt).
+    // Mechanism lock: both wrappers persisted the SAME baseline (the initial
+    // commit hash — neither stage commits), but their PRE-SETS differ: wg1
+    // entered a clean worktree (empty pre-set) while wg2 entered with wg1's
+    // uncommitted fileA.txt already dirty. The pre-set, not the baseline, is
+    // what carries the file-set information the subtraction needs (RFC-098 B3
+    // / audit S-4).
     const p1 = decodeWrapperProgress(wg1Run!.wrapperProgressJson, () => {})
     const p2 = decodeWrapperProgress(wg2Run!.wrapperProgressJson, () => {})
     const head = (await runGit(h.worktreePath, ['rev-parse', 'HEAD'])).stdout.trim()
@@ -298,6 +292,10 @@ describe('AUDIT S-4 current-behavior lock: wrapper-git baseline = HEAD only, no 
     expect(p2?.kind).toBe('git')
     expect((p1 as { baseline?: string }).baseline).toBe(head)
     expect((p2 as { baseline?: string }).baseline).toBe(head)
+    const pre1 = (p1 as { preDirty?: Record<string, string> }).preDirty ?? {}
+    const pre2 = (p2 as { preDirty?: Record<string, string> }).preDirty ?? {}
+    expect(Object.keys(pre1)).toEqual([])
+    expect(Object.keys(pre2)).toEqual(['fileA.txt'])
 
     // wg1 ran first: only fileA.txt existed at its finalize — its diff is
     // exactly that one path today and must STAY so after the fix. Exact-set
@@ -306,15 +304,12 @@ describe('AUDIT S-4 current-behavior lock: wrapper-git baseline = HEAD only, no 
     expect([...wg1Paths].sort()).toEqual(['fileA.txt'])
 
     const wg2Paths = await readGitDiffPaths(h, wg2Run!.id)
-    // ⟵ THE DEFECT: fileB.txt was written inside wg2 (correct in both
-    // worlds), but fileA.txt was written by the FIRST stage (inside wg1,
-    // before wg2 even captured its baseline) — yet it appears in wg2's
-    // git_diff because the untracked scan is unconditional and the
-    // baseline is just a commit hash.
-    // Correct semantics (design.md §6.5 pre_diff subtraction): wg2's
-    // git_diff must contain ONLY fileB.txt.
-    // [FLIP-ON-FIX] WP-6c: change to expect([...wg2Paths].sort()).toEqual(['fileB.txt'])
-    expect([...wg2Paths].sort()).toEqual(['fileA.txt', 'fileB.txt'])
+    // FIXED (RFC-098 B3 / audit S-4): fileA.txt was written by the FIRST
+    // stage (inside wg1, before wg2 captured its baseline) — it is in wg2's
+    // pre-set with an unchanged hash, so the finalize subtraction drops it.
+    // wg2's git_diff carries ONLY the file its own inner scope produced
+    // (design.md §6.5 pre-set subtraction).
+    expect([...wg2Paths].sort()).toEqual(['fileB.txt'])
   }, 20000)
 
   test('S-4b git-in-loop: iteration-1 git_diff is the CUMULATIVE union of iterations 0..1, not that round alone', async () => {
@@ -390,13 +385,22 @@ describe('AUDIT S-4 current-behavior lock: wrapper-git baseline = HEAD only, no 
     expect([...paths0].sort()).toEqual(['iter-0.txt'])
 
     const paths1 = await readGitDiffPaths(h, wgIter1.id)
-    // ⟵ THE DEFECT: iter-1.txt belongs to iteration 1 (correct in both
-    // worlds), but iteration 1's git_diff degenerates into the cumulative
-    // 0..1 union because the baseline is still the same HEAD commit and
-    // iter-0.txt is still untracked. design.md §6.4/6.5 says `git in loop`
-    // = per-iteration diff ("那一轮"), so iteration 1's output must contain
-    // ONLY iter-1.txt.
-    // [FLIP-ON-FIX] WP-6c: change to expect([...paths1].sort()).toEqual(['iter-1.txt'])
-    expect([...paths1].sort()).toEqual(['iter-0.txt', 'iter-1.txt'])
+    // FIXED (RFC-098 B3 / audit S-4): iteration 1's fresh-mint pre-set
+    // naturally contains iteration 0's still-untracked iter-0.txt, so the
+    // finalize subtraction yields the per-iteration increment. design.md
+    // §6.4/6.5: `git in loop` = per-iteration diff ("那一轮") — iteration 1's
+    // output contains ONLY iter-1.txt, not the 0..1 cumulative union.
+    expect([...paths1].sort()).toEqual(['iter-1.txt'])
+
+    // Mechanism lock: iteration 0 entered clean; iteration 1's pre-set is
+    // exactly the residue of iteration 0.
+    const prog0 = decodeWrapperProgress(wgIter0.wrapperProgressJson, () => {})
+    const prog1 = decodeWrapperProgress(wgIter1.wrapperProgressJson, () => {})
+    expect(Object.keys((prog0 as { preDirty?: Record<string, string> })?.preDirty ?? {})).toEqual(
+      [],
+    )
+    expect(Object.keys((prog1 as { preDirty?: Record<string, string> })?.preDirty ?? {})).toEqual([
+      'iter-0.txt',
+    ])
   }, 20000)
 })

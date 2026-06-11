@@ -668,6 +668,62 @@ export async function gitChangedFiles(worktreePath: string, fromCommit: string):
 }
 
 /**
+ * RFC-098 B3 (audit S-4) — sentinel recorded in a git wrapper's preDirty map
+ * for a path that does not exist in the worktree (a deleted tracked file).
+ * Compared BY STATE at finalize: pre 'deleted' ∧ post 'deleted' ⇒ subtract;
+ * pre 'deleted' ∧ post has content (inner scope recreated it) ⇒ keep. A real
+ * blob sha can never collide with it (shas are hex).
+ */
+export const DELETED_BLOB_SENTINEL = 'deleted'
+
+/**
+ * RFC-098 B3 (audit S-4) — blob hash per path: `{ path: sha | 'deleted' }`.
+ * Missing files map to DELETED_BLOB_SENTINEL; existing files are hashed in
+ * chunked `git hash-object -- <paths…>` batches (one spawn per 256 paths, not
+ * per file). Throws DomainError('hash-object-failed') on a real git failure —
+ * callers decide the degrade policy (entry capture degrades to the empty
+ * pre-set; finalize fails closed with the S-24 git-diff-failed path).
+ */
+export async function gitBlobHashes(
+  worktreePath: string,
+  paths: string[],
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {}
+  const existing: string[] = []
+  for (const p of paths) {
+    if (existsSync(join(worktreePath, p))) existing.push(p)
+    else out[p] = DELETED_BLOB_SENTINEL
+  }
+  const CHUNK = 256
+  for (let i = 0; i < existing.length; i += CHUNK) {
+    const chunk = existing.slice(i, i + CHUNK)
+    const r = await runGit(worktreePath, ['hash-object', '--', ...chunk])
+    if (r.exitCode !== 0) {
+      throw new DomainError(
+        'hash-object-failed',
+        `git hash-object failed in ${worktreePath}: ${r.stderr.trim()}`,
+        500,
+      )
+    }
+    const lines = r.stdout
+      .split('\n')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+    if (lines.length !== chunk.length) {
+      throw new DomainError(
+        'hash-object-failed',
+        `git hash-object returned ${lines.length} hashes for ${chunk.length} paths in ${worktreePath}`,
+        500,
+      )
+    }
+    chunk.forEach((p, idx) => {
+      out[p] = lines[idx]!
+    })
+  }
+  return out
+}
+
+/**
  * RFC-083 — worktree files containing any of the given fixed-string patterns
  * (`git grep -l --untracked -F -e p1 -e p2 ...`). Used by cross-file impact to
  * find candidate caller files for a changed method. Empty on no match / error

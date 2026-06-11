@@ -20,30 +20,34 @@
 //     the fresh upstream). A WRAPPER's `awaiting_*` IS dispatchable (round-2 N2
 //     resume anchor), but only when its inner scope has fresh post-answer work.
 //
-//   - wrapperHasFreshInnerWork(wrapperRow, rows, definition) — round-3 HIGH-1.
-//     A wrapper-loop parks its OWN top-level row at `parentIteration`, but its
-//     inner descendants (and the clarify/review rerun minted on answer) live at
-//     the loop counter `i`. Scanning the wrapper's own iteration would miss the
-//     i≥1 rerun → the answered task would re-park forever ("scheduler stalled").
-//     So the scan window comes from the wrapper PROGRESS payload's iteration for
-//     loops, and from the wrapper row's own iteration for git wrappers (git
-//     inner shares the wrapper iteration).
+//   - wrapperRevivalEvidence(wrapperRow, rows, definition) — round-3 HIGH-1,
+//     extended by RFC-098 B3 (audit S-3). A wrapper-loop parks its OWN
+//     top-level row at `parentIteration`, but its inner descendants (and the
+//     clarify/review rerun minted on answer) live at the loop counter `i`.
+//     Scanning the wrapper's own iteration would miss the i≥1 rerun → the
+//     answered task would re-park forever ("scheduler stalled"). So the scan
+//     window comes from the wrapper PROGRESS payload's iteration for loops,
+//     and from the wrapper row's own iteration for git wrappers (git inner
+//     shares the wrapper iteration). `wrapperHasFreshInnerWork` is the
+//     boolean shell kept for the existing predicate consumers.
 //
-// PURE module: only types + isNodeRunFresh (freshness.ts) + decodeWrapperProgress
-// (wrapperProgress.ts, itself pure). No DB / scheduler import. The frontier
-// ORCHESTRATION (read rows → latestPerNode → freshestDone → completed → ready)
-// lives in scheduler.ts deriveFrontier (PR-B, live) next to the row-ordering
-// primitives (isFresherNodeRun / buildFreshestDonePerNode). Pure-function locks:
-// dispatch-frontier.test.ts + derive-frontier.test.ts.
+// PURE module: only types + freshness primitives (isNodeRunFresh /
+// isFresherNodeRun / buildFreshestDonePerNode, freshness.ts) +
+// decodeWrapperProgress (wrapperProgress.ts, itself pure). No DB / scheduler
+// import. The frontier ORCHESTRATION (read rows → latestPerNode → freshestDone
+// → completed → ready) lives in scheduler.ts deriveFrontier (PR-B, live).
+// Pure-function locks: dispatch-frontier.test.ts + derive-frontier.test.ts.
 
 import type { NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { nodeRuns } from '../db/schema'
-import { isNodeRunFresh } from './freshness'
+import { buildFreshestDonePerNode, isFresherNodeRun, isNodeRunFresh } from './freshness'
 import { decodeWrapperProgress } from './wrapperProgress'
 
 type NodeRunRow = typeof nodeRuns.$inferSelect
 
-const WRAPPER_KINDS: ReadonlySet<NodeKind> = new Set<NodeKind>([
+/** The three container kinds whose parked rows are resume anchors (exported
+ *  for deriveFrontier's wrapper-anchor release and retryNode's ⑥-11 carve-out). */
+export const WRAPPER_KINDS: ReadonlySet<NodeKind> = new Set<NodeKind>([
   'wrapper-loop',
   'wrapper-git',
   'wrapper-fanout',
@@ -93,21 +97,129 @@ export function wrapperInnerDescendants(
 }
 
 /**
- * RFC-076 round-3 HIGH-1. Does a parked wrapper's inner scope hold fresh
- * post-answer work (a `pending` row minted by submitClarifyAnswers /
- * submitReviewDecision while the wrapper was suspended)? Scans inner-descendant
- * rows AT THE CORRECT ITERATION WINDOW:
+ * RFC-098 B3 (audit S-7) — the EXTERNAL upstream source set of a loop/git
+ * wrapper: every node OUTSIDE the wrapper that feeds data into the wrapper's
+ * inner scope (or into the wrapper row itself). This is the key set
+ * `computeWrapperConsumed` (scheduler.ts) stamps onto the wrapper's
+ * `consumed_upstream_runs_json` at fresh-mint, so an upstream rerun (clarify
+ * answer, review iterate, …) demotes the wrapper's done row to stale and the
+ * frontier re-dispatches it — the same provenance contract wrapper-fanout has
+ * carried since RFC-074 §8 D3.
+ *
+ * Membership = edges `external → (inner descendant ∪ wrapper itself)`:
+ *   - inner descendants because v1 loop/git wrappers accept NO inbound edges
+ *     (workflow.validator.ts 'does not accept inbound edges in v1') — external
+ *     data enters via direct external→inner edges that resolveUpstreamInputs
+ *     reads with the full definition.edges;
+ *   - the wrapper itself to cover wrapper→wrapper ordering edges (the
+ *     validator rejects them but the scheduler honors them — see
+ *     scheduler-audit-s04's wg1→wg2 sequencing edge).
+ *
+ * Edge filtering MIRRORS buildScopeUpstreams (scheduler.ts) — the same five
+ * channel-edge rules isClarifyChannelEdge (shared/clarify.ts) classifies,
+ * including the carve-out that `questioner.__clarify__ → clarify-cross-agent`
+ * is a REAL dataflow dep (kept), plus the review `inputSource` implicit
+ * dependency. Keep the two in lockstep: a source buildScopeUpstreams would
+ * gate dispatch on must also be provenance-tracked here, and vice versa.
+ *
+ * Pure function — definition-only, no DB / rows.
+ */
+export function wrapperExternalUpstreamSources(
+  wrapperNodeId: string,
+  definition: WorkflowDefinition,
+): Set<string> {
+  const scope = wrapperInnerDescendants(wrapperNodeId, definition)
+  scope.add(wrapperNodeId)
+  const kindById = new Map(definition.nodes.map((n) => [n.id, n.kind]))
+  const sources = new Set<string>()
+  for (const e of definition.edges) {
+    if (!scope.has(e.target.nodeId)) continue
+    if (scope.has(e.source.nodeId)) continue
+    // Channel-edge skip rules — verbatim from buildScopeUpstreams:
+    // agent.__clarify__ → clarify is dispatched out-of-band (skip), but
+    // questioner.__clarify__ → clarify-cross-agent is a kept dataflow dep.
+    if (e.source.portName === '__clarify__') {
+      if (kindById.get(e.target.nodeId) === 'clarify') continue
+      // clarify-cross-agent target → fall through (kept).
+    }
+    // Answer / cross-clarify back-channels are prompt-injected, not consumed
+    // as dataflow inputs — never provenance sources.
+    if (
+      e.target.portName === '__clarify_response__' ||
+      e.target.portName === '__external_feedback__' ||
+      e.source.portName === 'to_designer' ||
+      e.source.portName === 'to_questioner'
+    ) {
+      continue
+    }
+    sources.add(e.source.nodeId)
+  }
+  // review.inputSource is an implicit upstream dep (no user-authored edge) —
+  // same rule buildScopeUpstreams applies, but here only EXTERNAL sources
+  // qualify (an in-scope inputSource is intra-wrapper dataflow, not
+  // provenance).
+  for (const n of definition.nodes) {
+    if (!scope.has(n.id)) continue
+    if (n.kind !== 'review') continue
+    const inp = (n as Record<string, unknown>).inputSource as { nodeId?: unknown } | undefined
+    if (inp === undefined || typeof inp.nodeId !== 'string') continue
+    if (scope.has(inp.nodeId)) continue
+    sources.add(inp.nodeId)
+  }
+  return sources
+}
+
+/** The revival-evidence row a parked wrapper may be released on. */
+export interface WrapperRevivalEvidence {
+  /** node_run id of the evidence row — the one-shot release key. */
+  rowId: string
+  /** inner node the evidence row belongs to — the open-asking race guard key. */
+  nodeId: string
+}
+
+/**
+ * RFC-076 round-3 HIGH-1, refactored + extended by RFC-098 B3 (audit S-3 +
+ * the RFC-092 documented limitation). Does a parked wrapper's inner scope
+ * hold fresh post-human work? Returns the EVIDENCE row (max-id qualifying
+ * row) so deriveFrontier can key its one-shot release + open-asking guard on
+ * it, or null when the wrapper must stay parked.
+ *
+ * A row qualifies as evidence iff it belongs to an inner descendant, sits in
+ * the wrapper's inner ITERATION WINDOW, and is either:
+ *   - `pending` — the rerun row submitClarifyAnswers / submitReviewDecision
+ *     (iterate/reject) mints while the wrapper is suspended; or
+ *   - a `kind === 'review'` node's `done` ∧ fresh row — the approve branch
+ *     flips the review row done WITHOUT minting anything (audit S-3), so the
+ *     approved review itself is the only resume signal. Restricting to review
+ *     kind is load-bearing: any inner agent's done row would otherwise unlock
+ *     the wrapper and break clarify parking (dispatch-frontier.test.ts N2).
+ *
+ * CONTRACT (RFC-098 adversarial-review revision #8): the review done∧fresh
+ * judgment MUST use a freshest-done map built INSIDE this function at the
+ * inner window — `buildFreshestDonePerNode(rows, innerDescendants, innerIter)`.
+ * The caller's outer-scope freshestDone map is keyed to the WRAPPER's own
+ * iteration/scope and would mis-judge i≥1 inner rows (silently never/always
+ * fresh). Do not "optimize" by threading the outer map in.
+ *
+ * Iteration window:
  *   - wrapper-loop: the loop counter from the wrapper's progress payload (the
  *     iteration the inner scope parked on). Malformed/absent → 0 (mirrors the
  *     runtime resume fallback `startIter=0`). NOT the wrapper row's own
  *     iteration (which is the parent scope's iteration — would miss i≥1 work).
  *   - wrapper-git: the wrapper row's own iteration (git inner shares it).
+ *
+ * Known DEPTH-1 limitation (revision #8): the scan covers all transitive
+ * inner descendants but applies the OUTER wrapper's single window. Evidence
+ * born inside a nested loop-in-git lives at the INNER loop's counter `j`, so
+ * a deep approve/answer does not release the outermost wrapper — the same
+ * blind spot the pending-row evidence has always had. Recorded in
+ * design/RFC-098 §B3 as accepted; not fixed here.
  */
-export function wrapperHasFreshInnerWork(
+export function wrapperRevivalEvidence(
   wrapperRow: NodeRunRow,
   rows: readonly NodeRunRow[],
   definition: WorkflowDefinition,
-): boolean {
+): WrapperRevivalEvidence | null {
   const node = definition.nodes.find((n) => n.id === wrapperRow.nodeId)
   const kind = node?.kind
   let innerIter: number
@@ -119,9 +231,39 @@ export function wrapperHasFreshInnerWork(
     innerIter = wrapperRow.iteration
   }
   const inner = wrapperInnerDescendants(wrapperRow.nodeId, definition)
-  return rows.some(
-    (r) => inner.has(r.nodeId) && r.iteration === innerIter && r.status === 'pending',
-  )
+  const kindById = new Map(definition.nodes.map((n) => [n.id, n.kind]))
+  // Built lazily — most calls see no inner done review row at the window.
+  let innerFreshest: Map<string, NodeRunRow> | null = null
+  let best: NodeRunRow | undefined
+  for (const r of rows) {
+    if (!inner.has(r.nodeId)) continue
+    if (r.iteration !== innerIter) continue
+    let qualifies = false
+    if (r.status === 'pending') {
+      qualifies = true
+    } else if (r.status === 'done' && kindById.get(r.nodeId) === 'review') {
+      if (innerFreshest === null) {
+        innerFreshest = buildFreshestDonePerNode(rows, inner, innerIter)
+      }
+      qualifies = isNodeRunFresh(r, innerFreshest)
+    }
+    if (!qualifies) continue
+    if (isFresherNodeRun(r, best)) best = r
+  }
+  return best === undefined ? null : { rowId: best.id, nodeId: best.nodeId }
+}
+
+/**
+ * Boolean shell over `wrapperRevivalEvidence` — kept under the original name
+ * for the predicate consumers (isDispatchable below,
+ * dispatch-frontier-fanout-fresh.test.ts imports it directly).
+ */
+export function wrapperHasFreshInnerWork(
+  wrapperRow: NodeRunRow,
+  rows: readonly NodeRunRow[],
+  definition: WorkflowDefinition,
+): boolean {
+  return wrapperRevivalEvidence(wrapperRow, rows, definition) !== null
 }
 
 /**
@@ -139,7 +281,10 @@ export function wrapperHasFreshInnerWork(
  *   canceled             → !superseded (RFC-095 / audit S-22 — revival signal,
  *                                  same class as interrupted; review-supersede
  *                                  marker rows stay parked)
- *   wrapper awaiting_*   → wrapperHasFreshInnerWork (N2 resume anchor + HIGH-1)
+ *   wrapper awaiting_*   → wrapperHasFreshInnerWork (N2 resume anchor + HIGH-1;
+ *                                  RFC-098 S-3 extends the evidence to inner
+ *                                  review done∧fresh rows — see
+ *                                  wrapperRevivalEvidence)
  *   leaf awaiting_*      → !fresh (stale parked re-runs; fresh parked stays — C2)
  *   exhausted | running | skipped → false (loop-max true terminal / in flight /
  *                                  no mint path — see the exhaustive switch)

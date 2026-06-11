@@ -126,9 +126,12 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
   })
 
   test('G3 fork #5 FIXED (RFC-096): task.ts retryNode cascade prev-inheritance picks via shared pickFreshestRun (top-level only, pure id order) — desc(retryIndex) is gone from task.ts', () => {
+    // Anchor updated by RFC-098 B3 (audit ⑥-11): the targets set is no longer
+    // seeded inline with runRow.nodeId — the wrapper-revival carve-out guards
+    // the seed (`if (!wrapperRevivalTarget) targets.add(runRow.nodeId)`).
     const cascade = extractSection(
       TASK_SRC,
-      'const targets = new Set<string>([runRow.nodeId])',
+      'const targets = new Set<string>()',
       "errorMessage: 'queued for retry'",
     )
     // The fork is dead: no retryIndex ordering anywhere in the cascade — nor

@@ -1,33 +1,27 @@
-// CURRENT-BEHAVIOR LOCK — design/scheduler-audit-2026-06-10.md S-21 (WP-6b)
+// REGRESSION LOCK — design/scheduler-audit-2026-06-10.md S-21 (WP-6b，
+// RFC-098 B3 已修复；本文件自此锁定修复后语义，不再是缺陷现状锁定)
 //
 // S-21 有两半，本文件各锁一半：
 //
-// ① aggregator 行无幂等复用（scheduler.ts:3064-3075）：
-//   当前缺陷行为：dispatchFanoutShard 为"重启残留子行导致聚合挑错行"这一
-//   危害专门写了 prior-child 复用分支（scheduler.ts:2784-2824，注释直言动机，
-//   测试 scheduler-boundary-fanout-resume-duplicate-shards.test.ts 锁定），但
-//   dispatchFanoutAggregator 自身没有同款分支 —— 每次进入都 `ulid()` 新铸一行
-//   aggregator node_run；daemon 重启后旧的 interrupted aggregator 行永久残留
-//   （永远不会被复用、不会被转移状态），aggNode 行数随每次恢复 +1。
-//   正确语义：aggregator 应像 shard 一样按 (parentNodeRunId, shardKey=null)
-//   复用既有子行（done 直接复用输出 / 非终态原行重跑）。修复落在 WP-6b
-//   （"aggregator 复用分支 + done 过滤"）：届时 test 1 应翻红 —— aggNode 总行数
-//   断言从 2 翻成 1（残留行被原地复用重跑），按各断言旁注释翻转期望值。
+// ① aggregator 行幂等复用（dispatchFanoutAggregator 复用分支）：
+//   旧缺陷：dispatchFanoutShard 有 prior-child 复用分支（测试
+//   scheduler-boundary-fanout-resume-duplicate-shards.test.ts 锁定），但
+//   dispatchFanoutAggregator 每次进入都 `ulid()` 新铸一行 —— daemon 重启后
+//   旧的 interrupted aggregator 行永久残留，aggNode 行数随每次恢复 +1。
+//   修复语义（test 1 锁定）：aggregator 镜像 shard 的三分支 —— freshest done
+//   且比全部本轮参与 shard 行新 → 回放 outputs；同代非终态残留 → 原地 reset
+//   pending 重跑（本测试场景：id === staleAggId 被复用、终态 done、总行数 1）；
+//   前代残留 → 铸新行。
 //
-// ② 聚合输入挑 inner 行不过滤 status='done'（scheduler.ts:3021-3035）：
-//   当前缺陷行为：`innerRows` 查询只按 (taskId, nodeId, parentNodeRunId)
-//   检索、无 status 过滤、无 orderBy；`innerRows.find((r) => r.shardKey ===
-//   s.shardKey)` 取 SELECT 顺序里第一条命中行。RFC-060 design §7.5 伪码明确
-//   要求"聚合阶段只看 done 状态 shard 的输出"。当前仅因 S-18 的 fail-all
-//   语义（任一 shard 失败 → wrapper failed → 聚合根本不执行）"碰巧"保证
-//   进聚合时全 done 才不出错 —— 一旦 WP-6a 落地部分容忍，这里会静默读到
-//   失败 shard 的空输出。由于 fail-all + dispatch 阶段对非 done 首行的
-//   原地重跑（scheduler.ts:2812-2824）联手挡住了所有能让"非 done 行进入
-//   聚合"的确定性构造（任何同 shardKey 的非 done 首行都会先被重跑成 done，
-//   重跑失败则 wrapper 在聚合前就 failed），无法用集成测试稳定触发挑错行，
-//   按调研分工的指引退化为源码文本断言兜底（test 2）。修复（WP-6b：
-//   filter(done) + isFresherNodeRun 取最新）后 test 2 翻红，直接删除或改写
-//   为"必须包含 done 过滤"的正向断言。
+// ② 聚合输入挑行 done-filter + freshest-per-shardKey（test 2 源码文本正向
+//   断言）：旧缺陷是 innerRows 查询无 status 过滤、`innerRows.find(...)` 取
+//   SELECT 首行 —— 重启残留的空 interrupted 子行会静默顶掉带输出的 done 行。
+//   修复后挑行必须走 pickReusableShardRun（freshness.ts：done-only +
+//   isFresherNodeRun + hash null=match），与 dispatchFanoutShard 的复用判定
+//   共用同一个 picker（「freshest-run 抽一次别 fork」）；锚也与 shard 同步
+//   放宽为 (taskId, nodeId, iteration, parentNodeRunId IS NOT NULL)。由于
+//   fail-all + 同代原地重跑挡住了"非 done 行进聚合"的确定性集成构造，这一半
+//   仍按调研分工指引保留为源码文本断言（改写成正向形态）。
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -183,7 +177,7 @@ function fanoutWithAggregatorDef(): WorkflowDefinition {
   }
 }
 
-describe('scheduler-audit S-21 — fanout aggregator idempotency + done-filter (current-behavior lock)', () => {
+describe('scheduler-audit S-21 — fanout aggregator idempotency + done-filter (regression lock)', () => {
   let h: Harness
   beforeEach(() => {
     h = buildHarness()
@@ -191,10 +185,10 @@ describe('scheduler-audit S-21 — fanout aggregator idempotency + done-filter (
   afterEach(() => h.cleanup())
 
   // ---------------------------------------------------------------------------
-  // ① 重启恢复：shard 子行被复用（不重跑），aggregator 却新铸一行，
-  //    旧 interrupted aggregator 行永久残留。
+  // ① 重启恢复：shard 子行被复用（不重跑），aggregator 残留的 interrupted
+  //    行同样被原地复用重跑 —— 不再新铸、不再残留。
   // ---------------------------------------------------------------------------
-  test('resume reuses done shard children but MINTS A NEW aggregator row; stale interrupted aggregator row is permanent residue', async () => {
+  test('resume reuses done shard children AND re-runs the stale interrupted aggregator row in place (no residue)', async () => {
     await seedAgent(h.db, 'worker', ['result'])
     await seedAgent(h.db, 'agg', ['result'], {
       role: 'aggregator',
@@ -301,19 +295,16 @@ describe('scheduler-audit S-21 — fanout aggregator idempotency + done-filter (
     expect(innerRows.length).toBe(2)
     expect(innerRows.map((r) => r.id).sort()).toEqual([doneShardA, doneShardB].sort())
 
-    // 缺陷面（aggregator 侧无复用）：aggNode 现在挂着 2 行 ——
-    // 残留的 interrupted 行原封不动 + 新铸的 done 行。
-    // 修复（WP-6b aggregator 复用分支）后翻转：总行数 1，且残留行被原地
-    // 复用重跑（id === staleAggId、status 'done'）。
+    // 修复面（RFC-098 B3 aggregator 复用分支）：aggNode 总行数 1 —— 残留的
+    // interrupted 行被原地复用重跑（同代非终态分支：id === staleAggId、
+    // reset pending 后由 runNode 跑成 done），不再新铸、不再残留。
     const aggRows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'aggNode'))
-    expect(aggRows.length).toBe(2)
-    const staleRow = aggRows.find((r) => r.id === staleAggId)!
-    expect(staleRow.status).toBe('interrupted') // 永久残留，无人认领
-    const freshRow = aggRows.find((r) => r.id !== staleAggId)!
-    expect(freshRow.id > staleAggId).toBe(true) // 新铸 ulid，非复用
-    expect(freshRow.status).toBe('done')
-    expect(freshRow.parentNodeRunId).toBe(wrapperRunId)
-    expect(freshRow.shardKey).toBeNull()
+    expect(aggRows.length).toBe(1)
+    const reusedRow = aggRows[0]!
+    expect(reusedRow.id).toBe(staleAggId) // 原地复用，非新铸
+    expect(reusedRow.status).toBe('done')
+    expect(reusedRow.parentNodeRunId).toBe(wrapperRunId)
+    expect(reusedRow.shardKey).toBeNull()
 
     // 聚合结果本身正确（本场景全 done，无 status 过滤"碰巧"无害）：
     // outlet 'final' 拿到 aggregator 输出。
@@ -325,11 +316,12 @@ describe('scheduler-audit S-21 — fanout aggregator idempotency + done-filter (
   }, 60_000)
 
   // ---------------------------------------------------------------------------
-  // ② 源码文本兜底：聚合输入挑行无 status='done' 过滤、无排序、无复用分支。
-  //    集成层无法确定性构造"非 done 行进入聚合"（见文件头说明），故按
-  //    调研分工指引锁定源码文本。
+  // ② 源码文本兜底（正向形态）：聚合输入挑行必须走共享的 done-filter +
+  //    freshest picker（pickReusableShardRun），且 aggregator 自身必须带复用
+  //    分支。集成层依旧无法确定性构造"非 done 行进入聚合"（fail-all + 同代
+  //    原地重跑挡路，见文件头说明），故按调研分工指引保留源码文本断言。
   // ---------------------------------------------------------------------------
-  test('source-text lock: dispatchFanoutAggregator picks inner rows with NO status filter, NO ordering, NO prior-row reuse', () => {
+  test('source-text lock: dispatchFanoutAggregator picks inner rows via pickReusableShardRun (done-only + freshest) and reuses its own prior row', () => {
     const src = readFileSync(SCHEDULER_SRC, 'utf-8')
     const start = src.indexOf('async function dispatchFanoutAggregator')
     expect(start).toBeGreaterThan(-1)
@@ -338,34 +330,38 @@ describe('scheduler-audit S-21 — fanout aggregator idempotency + done-filter (
     expect(nextFn).toBeGreaterThan(start)
     const body = src.slice(start, nextFn)
 
-    // (a) 挑行谓词只比 shardKey，不看 status —— RFC-060 §7.5 要求 done-only。
-    //     修复后此行会变成带 done 过滤 / freshest 选择的形态 → 断言翻红，
-    //     届时改写为"必须包含 done 过滤"的正向断言或直接删除本 test。
-    expect(body).toContain('innerRows.find((r) => r.shardKey === s.shardKey)')
-    // shared 上游分支同病：同样只比 shardKey === null。
-    expect(body).toContain('innerRows.find((r) => r.shardKey === null)')
+    // (a) 挑行必须走 pickReusableShardRun（freshness.ts 的 done-only +
+    //     isFresherNodeRun + hash null=match picker）——perShard 与 shared
+    //     两个分支都不允许退回裸 find 首行匹配。
+    expect(body).toContain('pickReusableShardRun(innerRows, {')
+    expect(body).toContain('pickReusableShardRun(innerRows, { shardKey: null, valueHash: null })')
+    expect(body).not.toContain('innerRows.find((r) => r.shardKey === s.shardKey)')
+    expect(body).not.toContain('innerRows.find((r) => r.shardKey === null)')
 
-    // (b) innerRows 检索段（select → find 之间）完全不含 status 条件 / orderBy。
+    // (b) innerRows 检索锚与 shard 路径同步放宽：iteration 维度 + 非空
+    //     parentNodeRunId（跨代 done 子行可见，顶层占位行被排除）。
     const segStart = body.indexOf('const innerRows')
     expect(segStart).toBeGreaterThan(-1)
-    const segEnd = body.indexOf('innerRows.find((r) => r.shardKey === s.shardKey)')
+    const segEnd = body.indexOf('if (scope.perShard.has(edge.source.nodeId))')
+    expect(segEnd).toBeGreaterThan(segStart)
     const segment = body.slice(segStart, segEnd)
-    expect(segment).not.toContain('status')
-    expect(segment).not.toContain('orderBy')
+    expect(segment).toContain('eq(nodeRuns.iteration, iteration)')
+    expect(segment).toContain('isNotNull(nodeRuns.parentNodeRunId)')
 
-    // (c) 无 prior-row 复用分支：shard 路径的幂等复用（dispatchFanoutShard
-    //     的 priorChild / priorChildren，scheduler.ts:2784-2824）在 aggregator
-    //     这里不存在 —— 行子铸造是无条件的 `ulid()`。
-    expect(body).not.toContain('priorChild')
-    expect(body).toContain('const aggRunId = ulid()')
+    // (c) aggregator 自身的复用分支存在：同代非终态残留原地 reset 重跑
+    //     （reason 'fanout-aggregator-resume'），铸新行不再是无条件路径。
+    expect(body).toContain("reason: 'fanout-aggregator-resume'")
+    expect(body).not.toContain('const aggRunId = ulid()')
+    expect(body).toContain('let aggRunId: string')
 
-    // 对照锚点：shard 路径确实有那套复用（保证 (c) 不是空泛断言）。
+    // 对照锚点：shard 路径用的是同一个 picker（「freshest-run 抽一次别
+    // fork」缝——两处共用 freshness.ts 的 pickReusableShardRun）。
     // 顺序守卫：切片 [shardStart, start) 仅在 dispatchFanoutShard 定义在
     // dispatchFanoutAggregator 之前时才有意义；函数重排时给出可诊断的失败。
     const shardStart = src.indexOf('async function dispatchFanoutShard')
     expect(shardStart).toBeGreaterThan(-1)
     expect(shardStart).toBeLessThan(start)
     const shardBody = src.slice(shardStart, start)
-    expect(shardBody).toContain('priorChild')
+    expect(shardBody).toContain('pickReusableShardRun(candidates, {')
   })
 })

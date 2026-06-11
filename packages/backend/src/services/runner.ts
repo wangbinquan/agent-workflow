@@ -518,7 +518,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // behavior (column populated at end-of-run), not to a corrupted column.
   // A follow-up `node.status: running` broadcast lets `useTaskSync` invalidate
   // `['tasks', taskId, 'node-runs']` so the card materializes without a manual
-  // refresh.
+  // refresh — RFC-098 B3 (audit S-28) moved that broadcast BELOW the
+  // mark-running CAS (DB-first rule, lifecycle.ts): broadcasting 'running'
+  // here, while the row is still 'pending', made a refresh-on-receipt read a
+  // status the DB didn't hold yet.
   try {
     await opts.db
       .update(nodeRuns)
@@ -529,13 +532,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     log.info('inject-snapshot-eager-write', {
       nodeRunId: opts.nodeRunId,
       count: injectedSnapshot?.length ?? 0,
-    })
-    taskBroadcaster.broadcast(TASK_CHANNEL(opts.taskId), {
-      id: -1,
-      type: 'node.status',
-      nodeRunId: opts.nodeRunId,
-      nodeId: opts.nodeId,
-      status: 'running',
     })
   } catch (err) {
     log.warn('inject-snapshot-eager-write-failed', {
@@ -675,6 +671,17 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     nodeRunId: opts.nodeRunId,
     event: { kind: 'mark-running' },
     extra: { startedAt: Date.now() },
+  })
+  // RFC-098 B3 (audit S-28): the eager `node.status: running` ping (see the
+  // inject-snapshot block above) fires only AFTER the row really is running —
+  // a WS listener that re-reads the DB on receipt must observe the same
+  // status it was told about.
+  taskBroadcaster.broadcast(TASK_CHANNEL(opts.taskId), {
+    id: -1,
+    type: 'node.status',
+    nodeRunId: opts.nodeRunId,
+    nodeId: opts.nodeId,
+    status: 'running',
   })
 
   // 4. Spawn opencode.

@@ -17,8 +17,10 @@ import type { nodeRuns } from '../src/db/schema'
 import {
   isDispatchable,
   REVIEW_SUPERSEDE_MARKER_PREFIX,
+  wrapperExternalUpstreamSources,
   wrapperHasFreshInnerWork,
   wrapperInnerDescendants,
+  wrapperRevivalEvidence,
 } from '../src/services/dispatchFrontier'
 import { encodeWrapperProgress } from '../src/services/wrapperProgress'
 
@@ -283,6 +285,88 @@ describe('RFC-076 PR-A — wrapperHasFreshInnerWork (HIGH-1 iteration window)', 
   })
 })
 
+// RFC-098 B3 (audit S-3) — wrapperRevivalEvidence: the review-done evidence
+// extension. An approve flips the inner review row done WITHOUT minting any
+// pending row, so a done∧fresh REVIEW row inside the window is now revival
+// evidence. The review-kind restriction is load-bearing: an ordinary inner
+// agent's done row must NOT unlock (the N2 cases above lock that with an
+// agent-done fixture — both stay green by construction). The deep S-3 lock
+// (post-approve loop/git shapes, max-id selection, revision-#8 fresh
+// contract) lives in scheduler-audit-s03-wrapper-approve-stuck.test.ts.
+describe('RFC-098 B3 — wrapperRevivalEvidence (review done∧fresh extension)', () => {
+  const loopDef = def([
+    { id: 'lw', kind: 'wrapper-loop', nodeIds: ['worker', 'rev'] },
+    { id: 'worker', kind: 'agent-single' },
+    { id: 'rev', kind: 'review' },
+  ])
+  const parked = run({
+    id: '01W',
+    nodeId: 'lw',
+    iteration: 0,
+    status: 'awaiting_review',
+    wrapperProgressJson: encodeWrapperProgress({ kind: 'loop', iteration: 1, phase: 'awaiting' }),
+  })
+  // Helper rows must be TOP-LEVEL (parentNodeRunId null) so the in-window
+  // freshest-done map sees them.
+  function top(over: Partial<Row>): Row {
+    return run({ parentNodeRunId: null, ...over } as Partial<Row>)
+  }
+
+  test('正例：窗口内 review done∧fresh 行即证据 → 谓词放行（approve 形态）', () => {
+    const rows = [
+      parked,
+      top({ id: '01A', nodeId: 'worker', status: 'done', iteration: 1 }),
+      top({ id: '01B', nodeId: 'rev', status: 'done', iteration: 1 }),
+    ]
+    expect(wrapperRevivalEvidence(parked, rows, loopDef)).toEqual({ rowId: '01B', nodeId: 'rev' })
+    expect(wrapperHasFreshInnerWork(parked, rows, loopDef)).toBe(true)
+    expect(isDispatchable(parked, 'wrapper-loop', NO_FRESH, rows, loopDef)).toBe(true)
+  })
+
+  test('负例：非 review 的 inner done（agent）不是证据 → 不解锁（clarify park 不受影响）', () => {
+    const rows = [parked, top({ id: '01A', nodeId: 'worker', status: 'done', iteration: 1 })]
+    expect(wrapperRevivalEvidence(parked, rows, loopDef)).toBeNull()
+    expect(wrapperHasFreshInnerWork(parked, rows, loopDef)).toBe(false)
+    expect(isDispatchable(parked, 'wrapper-loop', NO_FRESH, rows, loopDef)).toBe(false)
+  })
+
+  test('负例：review done 但 stale（消费的 inner 上游已推进）→ 不是证据', () => {
+    const rows = [
+      parked,
+      top({ id: '01A', nodeId: 'worker', status: 'done', iteration: 1 }),
+      top({
+        id: '019',
+        nodeId: 'rev',
+        status: 'done',
+        iteration: 1,
+        consumedUpstreamRunsJson: JSON.stringify({ worker: '01OLD' }),
+      }),
+    ]
+    expect(wrapperRevivalEvidence(parked, rows, loopDef)).toBeNull()
+  })
+
+  test('窗口规则对 review done 同样生效：落在窗口外的 review done 不解锁', () => {
+    const rows = [
+      parked,
+      // review done at iteration 0 — outside the progress window (1).
+      top({ id: '01B', nodeId: 'rev', status: 'done', iteration: 0 }),
+    ]
+    expect(wrapperRevivalEvidence(parked, rows, loopDef)).toBeNull()
+  })
+
+  test('证据选取 max-id：pending 与 review-done 并存时取 id 最大的行', () => {
+    const rows = [
+      parked,
+      top({ id: '01B', nodeId: 'rev', status: 'done', iteration: 1 }),
+      top({ id: '01C', nodeId: 'worker', status: 'pending', iteration: 1 }),
+    ]
+    expect(wrapperRevivalEvidence(parked, rows, loopDef)).toEqual({
+      rowId: '01C',
+      nodeId: 'worker',
+    })
+  })
+})
+
 describe('RFC-076 PR-A — wrapperInnerDescendants (G6 recursive expansion)', () => {
   test('nested git ∋ loop ∋ {agent,clarify} → all descendants collected', () => {
     const nested = def([
@@ -305,5 +389,130 @@ describe('RFC-076 PR-A — wrapperInnerDescendants (G6 recursive expansion)', ()
       { id: 'x', kind: 'agent-single' },
     ])
     expect([...wrapperInnerDescendants('gw', cyclic)].sort()).toEqual(['gw', 'x'])
+  })
+})
+
+// RFC-098 B3 (audit S-7) — wrapperExternalUpstreamSources: the provenance key
+// set computeWrapperConsumed stamps onto loop/git wrapper rows at fresh-mint.
+// Locks the membership rule (external → inner-descendant ∪ wrapper-self) and
+// the channel-edge filtering, which MUST stay in lockstep with
+// buildScopeUpstreams (scheduler.ts) — see the function doc.
+describe('RFC-098 B3 — wrapperExternalUpstreamSources', () => {
+  type EdgeSpec = { id: string; s: [string, string]; t: [string, string] }
+  function defWithEdges(
+    nodes: Array<Record<string, unknown> & { id: string; kind: NodeKind }>,
+    edges: EdgeSpec[],
+  ): WorkflowDefinition {
+    return {
+      nodes,
+      edges: edges.map((e) => ({
+        id: e.id,
+        source: { nodeId: e.s[0], portName: e.s[1] },
+        target: { nodeId: e.t[0], portName: e.t[1] },
+      })),
+    } as unknown as WorkflowDefinition
+  }
+
+  test('external → inner edge AND external → wrapper-self (ordering) edge both count; intra-wrapper edges do not', () => {
+    const d = defWithEdges(
+      [
+        { id: 'up', kind: 'agent-single' },
+        { id: 'order-src', kind: 'wrapper-git', nodeIds: ['x'] },
+        { id: 'x', kind: 'agent-single' },
+        { id: 'lw', kind: 'wrapper-loop', nodeIds: ['a', 'b'] },
+        { id: 'a', kind: 'agent-single' },
+        { id: 'b', kind: 'agent-single' },
+      ],
+      [
+        { id: 'e1', s: ['up', 'doc'], t: ['a', 'doc'] }, // external → inner
+        { id: 'e2', s: ['order-src', 'git_diff'], t: ['lw', 'dep'] }, // external → wrapper self (s04-style sequencing edge)
+        { id: 'e3', s: ['a', 'out'], t: ['b', 'in'] }, // intra-wrapper — NOT a source
+      ],
+    )
+    expect([...wrapperExternalUpstreamSources('lw', d)].sort()).toEqual(['order-src', 'up'])
+  })
+
+  test('nested wrappers: sources of deep inner descendants are collected once', () => {
+    const d = defWithEdges(
+      [
+        { id: 'up', kind: 'agent-single' },
+        { id: 'gw', kind: 'wrapper-git', nodeIds: ['lw'] },
+        { id: 'lw', kind: 'wrapper-loop', nodeIds: ['a'] },
+        { id: 'a', kind: 'agent-single' },
+      ],
+      [
+        { id: 'e1', s: ['up', 'doc'], t: ['a', 'doc'] },
+        { id: 'e2', s: ['up', 'doc'], t: ['lw', 'dep'] },
+      ],
+    )
+    expect([...wrapperExternalUpstreamSources('gw', d)]).toEqual(['up'])
+    // From the INNER loop's perspective `up` is also external.
+    expect([...wrapperExternalUpstreamSources('lw', d)]).toEqual(['up'])
+  })
+
+  test('channel edges are filtered exactly like buildScopeUpstreams', () => {
+    const d = defWithEdges(
+      [
+        { id: 'helper', kind: 'agent-single' },
+        { id: 'cc', kind: 'clarify-cross-agent' },
+        { id: 'questioner', kind: 'agent-single' },
+        { id: 'lw', kind: 'wrapper-loop', nodeIds: ['ag', 'cl', 'inner-cc'] },
+        { id: 'ag', kind: 'agent-single' },
+        { id: 'cl', kind: 'clarify' },
+        { id: 'inner-cc', kind: 'clarify-cross-agent' },
+      ],
+      [
+        // answer / feedback back-channels into the inner agent → filtered.
+        { id: 'e1', s: ['cl', 'answers'], t: ['ag', '__clarify_response__'] },
+        { id: 'e2', s: ['cc', 'to_designer'], t: ['ag', '__external_feedback__'] },
+        { id: 'e3', s: ['cc', 'to_questioner'], t: ['ag', '__clarify_response__'] },
+        // external agent.__clarify__ → inner clarify node → filtered (clarify
+        // nodes are dispatched out-of-band).
+        { id: 'e4', s: ['helper', '__clarify__'], t: ['cl', 'questions'] },
+        // external questioner.__clarify__ → inner clarify-cross-agent → KEPT
+        // (real dataflow dep — the buildScopeUpstreams carve-out).
+        { id: 'e5', s: ['questioner', '__clarify__'], t: ['inner-cc', 'questions'] },
+      ],
+    )
+    expect([...wrapperExternalUpstreamSources('lw', d)]).toEqual(['questioner'])
+  })
+
+  test('review inputSource: external implicit dep counts; in-scope one does not', () => {
+    const d = defWithEdges(
+      [
+        { id: 'designer', kind: 'agent-single' },
+        { id: 'lw', kind: 'wrapper-loop', nodeIds: ['rev', 'author'] },
+        { id: 'author', kind: 'agent-single' },
+        {
+          id: 'rev',
+          kind: 'review',
+          inputSource: { nodeId: 'designer', portName: 'doc' },
+        },
+      ],
+      [],
+    )
+    expect([...wrapperExternalUpstreamSources('lw', d)]).toEqual(['designer'])
+    // Same review pointing at an in-scope sibling → intra-wrapper dataflow,
+    // not provenance.
+    const d2 = defWithEdges(
+      [
+        { id: 'lw', kind: 'wrapper-loop', nodeIds: ['rev', 'author'] },
+        { id: 'author', kind: 'agent-single' },
+        { id: 'rev', kind: 'review', inputSource: { nodeId: 'author', portName: 'doc' } },
+      ],
+      [],
+    )
+    expect(wrapperExternalUpstreamSources('lw', d2).size).toBe(0)
+  })
+
+  test('no external edges → empty set (consumed degrades to {})', () => {
+    const d = defWithEdges(
+      [
+        { id: 'lw', kind: 'wrapper-loop', nodeIds: ['a'] },
+        { id: 'a', kind: 'agent-single' },
+      ],
+      [],
+    )
+    expect(wrapperExternalUpstreamSources('lw', d).size).toBe(0)
   })
 })

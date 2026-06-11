@@ -24,6 +24,10 @@
 //     final diff is meant to be against the pre-inner state, not the
 //     pre-resume state.
 //
+//   - wrapper-fanout (RFC-098 B3, audit S-20): the persisted `reuseDisabled`
+//     gate — see the field doc below. `runFanoutWrapperNode` writes it when
+//     the consumed generation gate trips and reads it back on resume.
+//
 // `phase` is informational: it lets future debuggers tell apart "wrapper
 // parked while inner scope was running" from "wrapper finished iteration N's
 // scope and was about to evaluate exit_condition". The scheduler does NOT
@@ -38,7 +42,7 @@ import { z } from 'zod'
 
 export const WrapperProgressSchema = z
   .object({
-    kind: z.enum(['loop', 'git']),
+    kind: z.enum(['loop', 'git', 'fanout']),
     /**
      * wrapper-loop only: the 0-based iteration the wrapper is currently
      * working on. Must be present when `kind === 'loop'`; the scheduler's
@@ -57,6 +61,40 @@ export const WrapperProgressSchema = z
      * fallback path).
      */
     baseline: z.string().optional(),
+    /**
+     * RFC-098 B3 (audit S-4) — wrapper-git only: the worktree's PRE-EXISTING
+     * dirty set, sampled right after the baseline capture (same task-write-
+     * lock window) at FRESH MINT only: `{ path: blobSha | 'deleted' }` for
+     * every path `gitChangedFiles(worktree, baseline)` reported before the
+     * inner scope started. At finalize a post path is subtracted iff it is in
+     * this map AND its current state matches (hash-equal, or both 'deleted')
+     * — a pre-dirty file the inner scope REWROTE stays in git_diff; one it
+     * touched-then-reverted does not (consistent with git status semantics).
+     * Resume reads this map from progress; absent/malformed degrades to the
+     * EMPTY set (= the pre-fix cumulative behavior: over-report, never
+     * drop real changes) and NEVER re-captures (the inner scope's own writes
+     * are already in the worktree by then). Capped at capture time (4096
+     * entries / 256KB JSON → degrade to empty set, see scheduler.ts
+     * captureGitPreDirty).
+     */
+    preDirty: z.record(z.string(), z.string()).optional(),
+    /**
+     * RFC-098 B3 (audit S-20, adversarial-review revision #7) — wrapper-fanout
+     * only: set to true when the wrapper-entry consumed generation gate
+     * tripped (the previously recorded consumed provenance differs from the
+     * freshly resolved one — an external upstream re-ran while this wrapper
+     * was parked/failed). While true, dispatchFanoutShard /
+     * dispatchFanoutAggregator must NOT replay any done child row (full
+     * re-run), closing the path-family hash blind spot (same path string,
+     * different upstream content). PERSISTED — an in-memory flag would be
+     * lost on a daemon crash AFTER the consumed column was already
+     * overwritten, and the resumed run would replay stale shard results
+     * because its consumed comparison now passes. Cleared by
+     * markWrapperTerminal once the wrapper reaches a terminal state (by then
+     * every shard owns a row from the disabled generation, so reuse is safe
+     * again).
+     */
+    reuseDisabled: z.boolean().optional(),
     /**
      * 'inner-running' = before the inner scope returned; 'awaiting' = parked
      * on awaiting_*; 'iter-done' (loop only) = iteration N's scope returned

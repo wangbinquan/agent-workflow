@@ -820,27 +820,43 @@ UI 颜色：
 
 ### 6.5 Git wrapper
 
-```
-on enter:
-  pre_commit   = git rev-parse HEAD
-  pre_diff     = git diff (HEAD)         + untracked-as-+
-on exit (内部所有节点 done 后):
-  post_commit  = git rev-parse HEAD
-  post_diff    = git diff (HEAD)         + untracked-as-+
-  output git_diff = compose_diff(pre_commit, pre_diff, post_commit, post_diff)
+> 现实实现（RFC-060 PR-E + RFC-098 B3 / audit S-4）：`git_diff` 输出端口是
+> **`list<path>`（换行分隔的变更路径列表）**，不是早期设计承诺的 unified-diff
+> compose——下游 wrapper-fanout 直接把它当 shardSource 消费；需要原始 diff 的
+> 作者在下游 agent 里自行 `git diff`（`git_diff_full` 伴生端口为规划项）。
 
-# compose_diff 实现：
-#   1. commit 范围差: git diff pre_commit..post_commit
-#   2. 当前工作区相对 post_commit 的差: git diff (HEAD)
-#   3. 减去进入 wrapper 之前 已有的 工作区差（pre_diff）
-#   4. untracked 文件以"新文件全 +"形式补充
-#   5. 拼接 1+2 后写到输出 port
+```
+on enter (fresh-mint，整段在任务写锁窗口内，audit S-24/S-4):
+  baseline = git rev-parse HEAD
+  preDirty = { path: blobSha | 'deleted' }   # gitChangedFiles(baseline) 的每个
+                                             # 路径跑 git hash-object（批量）；
+                                             # 删除态记 'deleted' 哨兵
+  两者持久化进 wrapperProgress（resume 只读不重抓；malformed → preDirty 回退
+  空集 = 多报；上限 4096 条 / 256KB JSON，超限同样降级空集——绝不按纯路径扣，
+  那会把 wrapper 内真实改写的文件丢掉）
+on exit (内部所有节点 done 后，同样在写锁内):
+  post = gitChangedFiles(worktree, baseline)   # tracked 变更 + 全部 untracked
+  output git_diff = post 中扣除「∈ preDirty ∧ 当前状态与进入时一致」的路径
+                    （blob hash 相等，或两侧都是 'deleted'）
+
+# 扣除语义（对抗检视修订 #9 裁决，与 git 状态语义一致）：
+#   - pre-dirty 文件被 wrapper 内"改又改回"（终态 hash 等于进入态）→ 不出现
+#   - pre-dirty 文件被 wrapper 内真实改写（hash 不等）→ 保留
+#   - 进入前已删除且 wrapper 内未重建 → 不出现；被重建 → 保留
+# diff 失败 fail-closed：wrapper failed（git-diff-failed，audit S-24），不再
+# 静默降级空 git_diff。
 ```
 
 嵌套：
 
-- **git wrapper 嵌套 loop wrapper 内**：每轮独立拍快照，wrapper 输出 `git_diff` 是退出条件满足那一轮的 diff
-- **loop wrapper 嵌套 git wrapper 内**：git wrapper 的 pre 在 loop 第一轮启动前抓，post 在 loop 全部退出（满足条件 / exhausted）后抓 → 输出整个 loop 期间的总 diff
+- **git wrapper 嵌套 loop wrapper 内**：每轮迭代 fresh-mint 独立 wrapper 行，
+  entry preDirty 天然含前轮残留 → 扣除后即"那一轮"的增量 diff（不再是 0..N
+  累计并集）；外层"last-iter wins"由 resolveUpstreamInputs 最高 iteration 优先保证
+- **loop wrapper 嵌套 git wrapper 内**：git wrapper 的 baseline/preDirty 在 loop 第一轮启动前抓，post 在 loop 全部退出（满足条件 / exhausted）后抓 → 输出整个 loop 期间的总 diff
+- **跨代 interplay（已知开放点，RFC-098 修订 #9 记录）**：wrapper 因上游 rerun
+  判 stale 重跑时**不回滚 worktree**（wrapper 行不抓 preSnapshot），第二代的
+  preDirty 会把第一代残留当作 pre-existing 脏改动扣掉——与"wrapper 整体重跑无
+  回滚"同源，另立工作包处理
 
 ### 6.6 输出节点
 

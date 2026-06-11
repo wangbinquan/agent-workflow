@@ -579,19 +579,34 @@ describe('runTask: linear DAG (M1)', () => {
       edges: [],
     }
     const { taskId } = await seedWorkflowAndTask(h, def)
-    // The writer doesn't really change the worktree (mock-opencode just
-    // returns an envelope). Simulate a write by pre-editing the worktree
-    // so gitChangedFiles picks something up on wrapper-git finalize.
-    writeFileSync(join(repoDir, 'src.txt'), 'after writer\n')
-
-    await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'done' }) }, () =>
-      runTask({
-        taskId,
-        db: h.db,
-        appHome: h.appHome,
-        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
-      }),
+    // The writer must change the worktree DURING its own invocation: RFC-098
+    // B3 (audit S-4) subtracts pre-existing dirt from git_diff, so the old
+    // "pre-edit the worktree before runTask" simulation would now (correctly)
+    // be excluded as pre-dirty. A runtime-generated shim opencode (the
+    // scheduler-audit-s04 pattern) writes src.txt from inside the spawned
+    // agent process — cwd is the task worktree.
+    const shimPath = join(h.appHome, 'shim-opencode.ts')
+    writeFileSync(
+      shimPath,
+      `
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+writeFileSync(join(process.cwd(), 'src.txt'), 'after writer\\n')
+const envl = '<workflow-output>\\n  <port name="summary">done</port>\\n</workflow-output>'
+process.stdout.write(
+  JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: envl } }) +
+    '\\n',
+)
+process.exit(0)
+`,
     )
+
+    await runTask({
+      taskId,
+      db: h.db,
+      appHome: h.appHome,
+      opencodeCmd: ['bun', 'run', shimPath],
+    })
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
     const wrapRun = (

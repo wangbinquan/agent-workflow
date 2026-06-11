@@ -38,6 +38,7 @@ import { listSkills } from '@/services/skill'
 import { validateWorkflowDef } from '@/services/workflow.validator'
 import { upsertRecentRepo } from '@/services/repo'
 import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
+import { WRAPPER_KINDS } from '@/services/dispatchFrontier'
 import type { RollbackOutcome } from '@/services/nodeRollback'
 import { killStaleRunProcessTree } from '@/util/process'
 import { setTaskStatus, trySetTaskStatus } from '@/services/lifecycle'
@@ -1212,15 +1213,20 @@ export async function retryNode(
   // rows were the source of dispatchReviewNode picking the wrong latest row
   // and resetting approved reviews back to awaiting_review.
   const downstream = new Set<string>()
+  // RFC-098 B3 (audit ⑥-11): kindOf is built UNCONDITIONALLY (it used to live
+  // inside the cascade branch) — the wrapper-revival carve-out below consults
+  // the TARGET's kind even when cascade=false.
+  const snap = parseSnapshot(task.workflowSnapshot)
   const kindOf = new Map<string, NodeKind>()
-  if (cascade) {
-    const snap = parseSnapshot(task.workflowSnapshot)
+  {
     const nodes = Array.isArray(snap?.nodes) ? snap.nodes : []
     for (const n of nodes as Array<{ id?: string; kind?: string }>) {
       if (typeof n?.id === 'string' && typeof n?.kind === 'string') {
         kindOf.set(n.id, n.kind as NodeKind)
       }
     }
+  }
+  if (cascade) {
     const edges = Array.isArray(snap?.edges) ? snap.edges : []
     const adj = new Map<string, string[]>()
     for (const e of edges as Array<{
@@ -1288,8 +1294,29 @@ export async function retryNode(
   // 'skip' don't (RFC-052 fix). Unknown kinds (snapshot missing / older
   // schema) default to 'mint-placeholder' to preserve the legacy
   // pre-RFC-052 behavior on stale data.
-  const targets = new Set<string>([runRow.nodeId])
+  // RFC-098 B3 (audit ⑥-11): when the user-picked TARGET row is a WRAPPER's
+  // own canceled/interrupted row, do NOT mint the failed placeholder — that
+  // row already IS the revival signal (isDispatchable treats canceled /
+  // interrupted as dispatchable, RFC-095) and findResumableWrapperRun resumes
+  // the SAME row (continue-from-persisted-progress). A failed placeholder
+  // would become the node's latest row, make findResumableWrapperRun return
+  // null, and restart the wrapper from iteration 0 / re-capture the git
+  // baseline — exactly the continue-not-restart semantics RFC-095 promised.
+  // Downstream cascade placeholders are kept (a downstream wrapper restarting
+  // from 0 after its upstream changed is the correct semantics); other target
+  // statuses (done / failed / awaiting_*) keep the placeholder mint —
+  // findResumableWrapperRun treats done/failed as terminal, so the placeholder
+  // is what re-arms dispatch there. See rfc095-wrapper-canceled-revival /
+  // retry-cascade-kind-matrix.
+  const targetKind = kindOf.get(runRow.nodeId)
+  const wrapperRevivalTarget =
+    targetKind !== undefined &&
+    WRAPPER_KINDS.has(targetKind) &&
+    (runRow.status === 'canceled' || runRow.status === 'interrupted')
+  const targets = new Set<string>()
+  if (!wrapperRevivalTarget) targets.add(runRow.nodeId)
   for (const id of downstream) {
+    if (wrapperRevivalTarget && id === runRow.nodeId) continue // defensive: never placeholder the revival row's node
     const k = kindOf.get(id)
     const cascade = k === undefined ? 'mint-placeholder' : NODE_KIND_BEHAVIORS[k].retryCascade
     if (cascade === 'mint-placeholder') {

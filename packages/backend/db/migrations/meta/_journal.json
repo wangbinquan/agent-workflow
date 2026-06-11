@@ -295,6 +295,13 @@
       "when": 1781700000000,
       "tag": "0042_rfc079_review_multidoc",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "6",
+      "when": 1781800000000,
+      "tag": "0043_rfc098_shard_value_hash",
+      "breakpoints": true
     }
   ]
 }

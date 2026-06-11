@@ -6,9 +6,13 @@
 //     (RFC-060 PR-E: agent-multi removed)
 //   - review / clarify / output / input                       → SKIP
 //
-// The user-clicked target (`runRow.nodeId`) is always minted regardless of
-// kind (current behavior). RFC-053 PR-C may change that via the kind handler
-// table; until then this test pins the matrix.
+// The user-clicked target (`runRow.nodeId`) is minted regardless of kind,
+// with ONE carve-out (RFC-098 B3, audit ⑥-11): a WRAPPER's own
+// canceled/interrupted row is a revival signal — minting a failed placeholder
+// over it would shadow the resumable row and restart the wrapper from
+// iteration 0 instead of continuing (rfc095-wrapper-canceled-revival locks
+// the end-to-end continue semantics; the TARGET tests below pin the mint
+// matrix including the carve-out).
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -267,5 +271,54 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
     const placeholder = reviewRows.find((r) => r.retryIndex === 1)
     expect(placeholder).toBeDefined()
     expect(placeholder!.errorMessage).toBe('queued for retry')
+  })
+
+  // RFC-098 B3 (audit ⑥-11) — the wrapper-revival carve-out on the TARGET row.
+  for (const status of ['canceled', 'interrupted'] as const) {
+    test(`TARGET — wrapper '${status}' row gets NO placeholder (revival signal, ⑥-11)`, async () => {
+      const downId = 'down_wrapper_loop'
+      const { taskId } = await seedTaskWithEdge(h, downId, 'wrapper-loop')
+      // Re-stamp the seeded wrapper row into the revival status and target it.
+      const wrapRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, downId)))[0]!
+      // rfc053-allow-direct-status-write -- test seeding, not a production transition
+      await h.db.update(nodeRuns).set({ status }).where(eq(nodeRuns.id, wrapRow.id))
+
+      await retryNode(h.db, taskId, wrapRow.id, {
+        cascade: true,
+        deps: { db: h.db, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+      })
+
+      const all = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      const wrapRows = all.filter((r) => r.nodeId === downId)
+      // No placeholder: the canceled/interrupted row stays the node's latest
+      // (isDispatchable revival + findResumableWrapperRun same-row resume).
+      expect(wrapRows.length).toBe(1)
+      expect(wrapRows[0]!.id).toBe(wrapRow.id)
+      expect(all.filter((r) => r.errorMessage === 'queued for retry')).toHaveLength(0)
+    })
+  }
+
+  test('TARGET — wrapper done/failed rows still get the placeholder (terminal for findResumableWrapperRun)', async () => {
+    for (const status of ['done', 'failed'] as const) {
+      const downId = 'down_wrapper_loop'
+      const { taskId } = await seedTaskWithEdge(h, downId, 'wrapper-loop')
+      const wrapRow = (
+        await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      ).filter((r) => r.nodeId === downId)[0]!
+      // rfc053-allow-direct-status-write -- test seeding, not a production transition
+      await h.db.update(nodeRuns).set({ status }).where(eq(nodeRuns.id, wrapRow.id))
+
+      await retryNode(h.db, taskId, wrapRow.id, {
+        cascade: false,
+        deps: { db: h.db, appHome: h.appHome, opencodeCmd: ['/usr/bin/env', 'true'] },
+      })
+
+      const wrapRows = (
+        await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      ).filter((r) => r.nodeId === downId)
+      expect(wrapRows.length).toBe(2) // original + placeholder
+      const placeholder = wrapRows.find((r) => r.retryIndex === 1)
+      expect(placeholder?.errorMessage).toBe('queued for retry')
+    }
   })
 })

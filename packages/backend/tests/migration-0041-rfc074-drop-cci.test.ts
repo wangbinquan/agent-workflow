@@ -122,13 +122,17 @@ describe('RFC-074 migration 0041 — DROP clarify_iteration preserves row data',
       up.exec('PRAGMA foreign_keys = OFF;')
       migrate(drizzle(up, {}), { migrationsFolder: MIGRATIONS })
 
-      // 4a. clarify_iteration gone; exactly one column dropped.
+      // 4a. clarify_iteration gone; net column delta vs the 0040 freeze is
+      //     ±0: 0041 drops exactly one (cci), and the LATER 0043 (RFC-098,
+      //     applied by the same HEAD migrate) adds exactly one
+      //     (shard_value_hash) back onto node_runs.
       const cols = (up.query('PRAGMA table_info(node_runs)').all() as Array<{ name: string }>).map(
         (c) => c.name,
       )
       expect(cols).not.toContain('clarify_iteration')
       expect(cols).toContain('consumed_upstream_runs_json')
-      expect(cols.length).toBe(cols0040.length - 1)
+      expect(cols).toContain('shard_value_hash')
+      expect(cols.length).toBe(cols0040.length - 1 + 1)
 
       // 4b. row count unchanged.
       const n = (up.query('SELECT count(*) AS n FROM node_runs').get() as { n: number }).n

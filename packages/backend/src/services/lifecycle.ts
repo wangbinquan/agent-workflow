@@ -17,6 +17,14 @@
 //
 // ESLint rule `no-direct-node-run-status-write` enforces that direct
 // `db.update(nodeRuns).set({ status: ... })` only appears inside this file.
+//
+// Broadcast ordering rule (RFC-098 B3, audit S-28): write the DB FIRST, then
+// broadcast. A `node.status` WS ping must always FOLLOW the CAS that produced
+// the status it reports — listeners re-read the row synchronously on receipt
+// (useTaskSync invalidation, the s07-s28 test harness), so an eager broadcast
+// ahead of the write surfaces a status the DB doesn't hold yet and the chip
+// snaps back on refresh. Callers of these helpers place their
+// broadcastNodeStatus AFTER the helper returns; never the other way around.
 
 import { and, eq } from 'drizzle-orm'
 import {

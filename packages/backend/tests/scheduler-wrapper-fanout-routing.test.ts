@@ -69,8 +69,16 @@ describe('D.T3 — aggregator dispatch helper exists + collects per-shard raw li
     expect(schedulerSrc).toContain('async function dispatchFanoutAggregator(')
   })
 
-  test('aggregator collects inner runs filtered by parentNodeRunId=wrapperRunId', () => {
-    expect(schedulerSrc).toMatch(/eq\(nodeRuns\.parentNodeRunId, wrapperRunId\)/)
+  test('aggregator collects inner runs anchored on non-null parent + iteration (RFC-098 B3 relaxed anchor)', () => {
+    // RFC-098 B3 (audit S-19/S-21) widened the read anchor from
+    // `eq(nodeRuns.parentNodeRunId, wrapperRunId)` to `parentNodeRunId IS NOT
+    // NULL` + `iteration` so a retried wrapper generation can see the previous
+    // generation's replayed done children; per-row picking moved to the shared
+    // done-only picker (pickReusableShardRun). The child rows stay
+    // frontier-invisible because parent is still non-null.
+    expect(schedulerSrc).toMatch(/isNotNull\(nodeRuns\.parentNodeRunId\)/)
+    expect(schedulerSrc).toMatch(/eq\(nodeRuns\.iteration, iteration\)/)
+    expect(schedulerSrc).toMatch(/pickReusableShardRun\(innerRows, \{/)
   })
 
   test('aggregator iterates shards in shardKey dictionary order', () => {

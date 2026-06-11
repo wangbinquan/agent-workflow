@@ -1,0 +1,26 @@
+-- RFC-098 B3 — fanout resume idempotency (audit S-19/S-20/S-21).
+--
+--   * `node_runs.shard_value_hash` (nullable TEXT): sha256 hex of the shard's
+--     VALUE (the list item the shard was minted for), written by
+--     dispatchFanoutShard at shard-row mint time. Shared (broadcast, NULL
+--     shardKey) rows and the aggregator row never write it.
+--
+-- Why: the fanout shard reuse anchor was widened from "same wrapperRunId" to
+-- `(taskId, innerNodeId, iteration, shardKey, parentNodeRunId IS NOT NULL)` so
+-- a failed→retry wrapper generation can replay the PREVIOUS generation's done
+-- shard children instead of re-running every shard. shardKey alone is not a
+-- safe identity across generations — for non-path lists the key is a bare
+-- 0-based index, and even path-family keys say nothing about the item's
+-- CONTENT — so reuse additionally requires the stored value hash to match the
+-- current shard value (pickReusableShardRun, freshness.ts).
+--
+-- Hash NULL policy is NULL=MATCH (legacy compatibility, hard requirement):
+-- rows minted before this migration carry NULL and must stay reusable —
+-- scheduler-boundary-fanout-resume-duplicate-shards.test.ts and
+-- scheduler-audit-s21 test 1 both pre-seed hashless done children and assert
+-- they are reused without a re-spawn. The complementary content gate for the
+-- path-family blind spot (same path string, different upstream content) is the
+-- wrapper-level consumed generation gate (reuseDisabled), not this column.
+--
+-- See design/RFC-098-scheduler-closeout/design.md §B3 + survey §wp6b-fanout.
+ALTER TABLE `node_runs` ADD COLUMN `shard_value_hash` text;

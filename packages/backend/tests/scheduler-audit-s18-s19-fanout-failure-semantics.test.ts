@@ -1,4 +1,6 @@
-// CURRENT-BEHAVIOR LOCK — design/scheduler-audit-2026-06-10.md S-18 + S-19 (WP-6a / WP-6b)
+// REGRESSION LOCK — design/scheduler-audit-2026-06-10.md S-18 + S-19 (WP-6a / WP-6b)
+// （S-18 = RFC-094 方案 A 定版的 fail-all 语义锁；S-19 = RFC-098 B3 修复后的
+//  done-shard 跨代复用语义锁——两段都不再是缺陷现状锁定。）
 //
 // S-18（fail-all 现状，scheduler.ts:2612-2622）：
 //   当前缺陷行为：wrapper-fanout 的 perShard 分发 join 之后只要
@@ -19,19 +21,18 @@
 //   task/wrapper 转 done、aggNode 跑 1 次、wrapper outlet 出现 'final'（和
 //   errors port）、下游 down 节点正常 dispatch。
 //
-// S-19（failed→重试全量重跑，scheduler.ts:2126-2133, 2429-2431, 2790-2800）：
-//   当前缺陷行为：wrapper 失败后用户恢复任务时，findResumableWrapperRun 把
-//   `failed` 列为 terminal 返回 null → runFanoutWrapperNode 重铸一个全新
-//   wrapperRunId → dispatchFanoutShard 的 prior-child 复用查询锚定
-//   `parentNodeRunId = 新 wrapperRunId`，永远查不到旧 wrapper 下已 done 的
-//   shard 子行 → 所有 shard（含已成功的）全量重跑。对照：daemon 重启
-//   （interrupted）路径的 done-shard 复用有专门防护与测试
-//   （scheduler-boundary-fanout-resume-duplicate-shards.test.ts +
-//   scheduler.ts:2784-2811 注释），failed-then-resume 路径完全没有。
-//   正确语义：shard 复用锚点应改为 (taskId, nodeId, iteration, shardKey) 维度
-//   或 retry 时继承前代 wrapper 的 done 子行 —— failed→resume 只重跑失败的
-//   那 1 个 shard。修复落在 WP-6b：届时 test 2 的 mock 调用计数应从 6 翻成 4
-//   （run2 只重跑 1 个 shard），每 shardKey 的行数断言按行内注释翻转。
+// S-19（failed→重试只重跑失败 shard —— RFC-098 B3 已按方案 A 修复，本段
+//   自此为**正式回归锁**）：
+//   旧缺陷：wrapper 失败后恢复任务时 findResumableWrapperRun 把 `failed` 列为
+//   terminal 返回 null → 重铸全新 wrapperRunId → dispatchFanoutShard 的复用
+//   查询锚定 `parentNodeRunId = 新 wrapperRunId`，永远查不到旧 wrapper 下已
+//   done 的 shard 子行 → 所有 shard（含已成功的）全量重跑。
+//   修复语义（方案 A，复用锚放宽）：复用查询改
+//   (taskId, innerNodeId, iteration, shardKey, parentNodeRunId IS NOT NULL)
+//   —— 跨代 done 子行带 value-hash 匹配直接回放 outputs（不改 parent、不铸
+//   行），failed→resume 只重跑失败的那 1 个 shard。test 2 的 mock 调用计数
+//   锁 4（run1 3 + run2 1）；新 wrapper 下只铸 1 个新子行（失败 key），
+//   其余 key 的旧 done 行被跨代复用、每 key 行数 1。
 //
 // 确定性手段：maxConcurrentNodes:1 + multiProcessSubprocessConcurrency:1 把
 // shard 子进程串行化，配合 MOCK_OPENCODE_FAIL_COUNTER（磁盘计数器）+
@@ -142,7 +143,7 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-describe('scheduler-audit S-18/S-19 — wrapper-fanout failure semantics (current-behavior lock)', () => {
+describe('scheduler-audit S-18/S-19 — wrapper-fanout failure semantics (regression lock)', () => {
   let h: Harness
   beforeEach(() => {
     h = buildHarness()
@@ -305,10 +306,10 @@ describe('scheduler-audit S-18/S-19 — wrapper-fanout failure semantics (curren
   }, 60_000)
 
   // ---------------------------------------------------------------------------
-  // S-19 — failed → resume：重铸新 wrapperRunId，旧 wrapper 下已 done 的
-  // shard 子行不被复用，全部 shard 重跑。
+  // S-19（RFC-098 B3 修复后回归锁）— failed → resume：重铸新 wrapperRunId，
+  // 但旧 wrapper 下已 done 的 shard 子行被跨代复用，只重跑失败的 1 个 shard。
   // ---------------------------------------------------------------------------
-  test('S-19: failed fanout + resume re-mints wrapperRunId and re-runs ALL shards (done shards not reused)', async () => {
+  test('S-19: failed fanout + resume re-mints wrapperRunId but REUSES done shards (only the failed shard re-runs)', async () => {
     await seedAgent(h.db, 'worker', ['result'])
 
     // 无 aggregator 的最小 fanout（outlet 为 __done__ 信号），让 run2 的
@@ -396,20 +397,20 @@ describe('scheduler-audit S-18/S-19 — wrapper-fanout failure semantics (curren
       })
       .where(eq(tasks.id, taskId))
 
-    // ---- run 2：当前行为 = 全量重跑。----
+    // ---- run 2：RFC-098 B3 修复后 = 只重跑失败的 1 个 shard。----
     await withEnv(env, () => runTask(runOpts))
 
     const t2 = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t2?.status).toBe('done')
 
-    // 核心 oracle：mock 总调用数 3(run1) + 3(run2 全量重跑) = 6。
-    // 已 done 的 2 个 shard 被白白重跑（真实场景 = 重复 LLM 成本）。
-    // 修复（WP-6b：复用锚点改 (taskId, nodeId, iteration, shardKey) 或继承
-    // 前代 done 子行）后翻转：run2 只重跑失败的 1 个 shard → 总数 '4'。
-    expect(readFileSync(counterFile, 'utf-8').trim()).toBe('6')
+    // 核心 oracle：mock 总调用数 3(run1) + 1(run2 仅失败 shard) = 4。
+    // 已 done 的 2 个 shard 跨代回放 outputs，零 spawn（真实场景 = 省下
+    // 重复 LLM 成本）。回退到全量重跑会把这里翻成 '6'。
+    expect(readFileSync(counterFile, 'utf-8').trim()).toBe('4')
 
-    // 重铸了新 wrapperRunId：findResumableWrapperRun 把 failed 列为 terminal
-    // （scheduler.ts:2126-2133）→ 旧行保留为历史，新行另起炉灶。
+    // 仍重铸新 wrapperRunId：findResumableWrapperRun 把 failed 列为 terminal
+    // （RFC-098 B3 刻意不动它——复用走子行锚，不走 wrapper 行复活）→ 旧行
+    // 保留为历史，新行另起炉灶。
     const wrapperAfterRun2 = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan'))
     expect(wrapperAfterRun2.length).toBe(2)
     const newWrapper = wrapperAfterRun2.find((r) => r.id !== oldWrapper.id)!
@@ -418,24 +419,28 @@ describe('scheduler-audit S-18/S-19 — wrapper-fanout failure semantics (curren
     // 旧 wrapper 行保持 failed 不被触碰。
     expect(wrapperAfterRun2.find((r) => r.id === oldWrapper.id)?.status).toBe('failed')
 
-    // 新 wrapper 下铸了全套 3 个新 shard 子行 —— 旧 wrapper 下已 done 的
-    // 子行一个都没被复用（prior-child 查询锚定 parentNodeRunId=新 id，
-    // scheduler.ts:2790-2800 永远查不到旧子行）。
-    // 修复后翻转：done shard 复用 → 新子行只有 1 个（失败的那 key），或
-    // done 子行被继承挂到新 wrapper 下（届时按实际修法重写本段）。
+    // 方案 A：新 wrapper 下只铸 1 个新子行 —— 失败的那个 shardKey；其余
+    // 2 个 done 子行留在旧 wrapper 名下被原样回放（不改 parent、不铸行，
+    // 历史归属真实）。
     const allInner = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
     const newChildren = allInner.filter((r) => r.parentNodeRunId === newWrapper.id)
-    expect(newChildren.length).toBe(3)
-    expect(newChildren.map((r) => r.shardKey).sort()).toEqual(['a.md', 'b.md', 'c.md'])
-    for (const c of newChildren) {
-      expect(c.status).toBe('done')
-      expect(oldDoneIds.includes(c.id)).toBe(false) // 不是旧 done 行的复用
+    const failedKey = oldChildren.find((r) => r.status === 'failed')!.shardKey!
+    expect(newChildren.length).toBe(1)
+    const reRun = newChildren[0]!
+    expect(reRun.shardKey).toBe(failedKey)
+    expect(reRun.status).toBe('done')
+    expect(oldDoneIds.includes(reRun.id)).toBe(false) // 新铸行，不是旧 done 行
+    // 旧 done 子行原封不动（id 不变、parent 仍是旧 wrapper、status done）。
+    for (const id of oldDoneIds) {
+      const row = allInner.find((r) => r.id === id)!
+      expect(row.status).toBe('done')
+      expect(row.parentNodeRunId).toBe(oldWrapper.id)
     }
-    // 每个 shardKey 现在挂着 2 行（旧 + 新）——全量重跑的行级残留。
+    // 行数分布：失败 key 2 行（旧 failed + 新 done），其余 key 各 1 行。
     const byKey = new Map<string, number>()
     for (const r of allInner) byKey.set(r.shardKey ?? '?', (byKey.get(r.shardKey ?? '?') ?? 0) + 1)
-    expect(byKey.get('a.md')).toBe(2)
-    expect(byKey.get('b.md')).toBe(2)
-    expect(byKey.get('c.md')).toBe(2)
+    for (const key of ['a.md', 'b.md', 'c.md']) {
+      expect(byKey.get(key)).toBe(key === failedKey ? 2 : 1)
+    }
   }, 120_000)
 })

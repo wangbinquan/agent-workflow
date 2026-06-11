@@ -47,7 +47,8 @@ import {
   estimateShardTotal,
   findBoundaryEdgesToInner,
 } from '@/services/fanout'
-import { and, asc, desc, eq, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, isNotNull, sql } from 'drizzle-orm'
+import { createHash } from 'node:crypto'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import {
@@ -83,14 +84,21 @@ import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
 import {
   areTransitiveUpstreamsCompleted,
   buildFreshestDonePerNode,
+  consumedMapsEqual,
   isFresherNodeRun,
   isNodeRunFresh,
+  parseConsumedJson,
   pickFreshestRun,
+  pickReusableShardRun,
+  pickUpstreamSourceRun,
 } from '@/services/freshness'
 import {
   decideScopeOutcome,
   isDispatchable,
   isReviewSupersededRow,
+  WRAPPER_KINDS,
+  wrapperExternalUpstreamSources,
+  wrapperRevivalEvidence,
 } from '@/services/dispatchFrontier'
 import { runNode, type AgentOverrides, type ResolvedSkill, type RunResult } from '@/services/runner'
 import { parsePortValidationFailuresJson } from '@/services/envelope'
@@ -116,7 +124,13 @@ import { createLogger, type Logger } from '@/util/log'
 // RFC-060 PR-E: splitDiff* imports removed — they were used only by the
 // agent-multi fan-out path (now deleted). wrapper-fanout consumes a `list<T>`
 // shardSource instead of slicing a string diff.
-import { gitChangedFiles, gitStashSnapshot, runGit, snapshotRefName } from '@/util/git'
+import {
+  gitBlobHashes,
+  gitChangedFiles,
+  gitStashSnapshot,
+  runGit,
+  snapshotRefName,
+} from '@/util/git'
 import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { Semaphore } from '@/util/semaphore'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
@@ -1086,6 +1100,12 @@ export interface Frontier {
    * carries a fresh ULID and re-releases the node; a leaked pending row that a
    * dispatch failed to consume degrades back to the stall semantics instead of
    * hot-looping.
+   *
+   * RFC-098 B3 (audit S-3): a ready WRAPPER whose latest row is awaiting_*
+   * contributes its inner revival-EVIDENCE row id here instead (the inner
+   * pending rerun / approved review row, wrapperRevivalEvidence) — same
+   * one-shot release contract, keyed on the evidence rather than the wrapper
+   * row itself.
    */
   pendingAnchors: Map<string, string>
   /** latest awaiting_review / awaiting_human, NOT going to ready (terminal bubbling). */
@@ -1236,15 +1256,56 @@ export function deriveFrontier(
       latest.status === 'pending' &&
       !dispatchedPendingRowIds.has(latest.id) &&
       !openAskingNodeIds.has(n.id)
+    // RFC-098 B3 (audit S-3 + the RFC-092 documented limitation): a parked
+    // WRAPPER row (awaiting_*) gets the same one-shot in-invocation release,
+    // keyed on its inner REVIVAL EVIDENCE row (the pending rerun a mid-run
+    // clarify answer minted, or the done∧fresh review row an approve flipped
+    // — wrapperRevivalEvidence, dispatchFrontier.ts). Without this, a wrapper
+    // already in `dispatchedThisInvocation` could never pick up the human
+    // action and the task fell back to awaiting_* needing a manual resume.
+    //
+    // No-busy-loop argument (five layers, mirrors RFC-092 §1.3):
+    //   ① the evidence ROW id is recorded into dispatchedPendingRowIds on
+    //      dispatch (pendingAnchors below) — the same evidence releases the
+    //      wrapper at most once per invocation;
+    //   ② a dispatched wrapper enters `inFlight` — no re-dispatch same tick;
+    //   ③ the wrapper resume immediately flips its row running — `latest`
+    //      leaves awaiting_*, this predicate stops matching while it runs;
+    //   ④ the inner runScope consumes a pending evidence row via its
+    //      pendingExisting reuse (row flips running → terminal) — the
+    //      evidence disappears; NEW evidence can only be minted by a new
+    //      human action (fresh ULID re-arms exactly one more release);
+    //   ④' while the evidence node's clarify session is still OPEN (answers
+    //      mid-write), openAskingNodeIds blocks the release — the next tick
+    //      after the session flips answered releases it;
+    //   ⑤ pathological leak (inner exits without consuming the pending row —
+    //      the known RFC-092 shape): the anchor is already recorded, so no
+    //      further release — degrades to the bounded park/stalled semantics.
+    const wrapperEvidence =
+      latest !== undefined &&
+      (latest.status === 'awaiting_human' || latest.status === 'awaiting_review') &&
+      WRAPPER_KINDS.has(n.kind)
+        ? wrapperRevivalEvidence(latest, rows, definition)
+        : null
+    const wrapperAnchorReleasable =
+      wrapperEvidence !== null &&
+      !dispatchedPendingRowIds.has(wrapperEvidence.rowId) &&
+      !openAskingNodeIds.has(wrapperEvidence.nodeId)
     const dispatchable =
       areTransitiveUpstreamsCompleted(n.id, upstreamsOf, completed) &&
       !inFlight.has(n.id) &&
-      (pendingAnchorReleasable || !dispatchedThisInvocation.has(n.id)) &&
+      (pendingAnchorReleasable || wrapperAnchorReleasable || !dispatchedThisInvocation.has(n.id)) &&
       isDispatchable(latest, n.kind, freshestDone, rows, definition)
     if (dispatchable) {
       ready.push(n.id)
       if (latest !== undefined && latest.status === 'pending') {
         pendingAnchors.set(n.id, latest.id)
+      } else if (wrapperEvidence !== null) {
+        // Record the wrapper's evidence row EVERY time it goes ready (also on
+        // the plain !dispatchedThisInvocation release) so layer ① holds: a
+        // re-park at the same window with the same done-review evidence stays
+        // parked instead of hot-looping.
+        pendingAnchors.set(n.id, wrapperEvidence.rowId)
       }
       continue
     }
@@ -2428,6 +2489,63 @@ async function findResumableWrapperRun(
   return r
 }
 
+/**
+ * RFC-098 B3 (audit S-7) — provenance for loop/git wrapper rows. For every
+ * EXTERNAL upstream source of the wrapper (wrapperExternalUpstreamSources,
+ * dispatchFrontier.ts) pick the run an inner node would consume via
+ * resolveUpstreamInputs at this iteration window (pickUpstreamSourceRun —
+ * shared picker, freshness.ts) and record `{sourceNodeId: runId}`. Stamped
+ * onto the wrapper row so an upstream rerun demotes the wrapper's done row to
+ * stale → frontier re-dispatch → findResumableWrapperRun sees done as
+ * terminal → a FRESH wrapper row is minted: the loop restarts from iteration
+ * 0 / the git wrapper re-captures its baseline (the correct semantics; the
+ * fanout wrapper has carried the same contract since RFC-074 §8 D3).
+ *
+ * A source with no visible done run yet is simply ABSENT from the map (the
+ * same warn-and-skip resolveUpstreamInputs applies) — that source can then
+ * never demote this wrapper generation, which matches the agent-row contract
+ * (isNodeRunFresh treats absent upstreams as still-fresh).
+ *
+ * Known bounded degradations (adversarial-review revision #6 + survey
+ * §wp6c-loopgit, recorded here as the failure-mode ledger):
+ *   - WRITE AT FRESH-MINT ONLY — resume must NOT overwrite. A resume-time
+ *     overwrite would permanently mask an external-source rerun that landed
+ *     while the wrapper was parked (the stale signal vanishes and the
+ *     semantics drift with dispatch timing). Under fresh-mint-only the parked
+ *     generation keeps its original provenance, finishes, is then naturally
+ *     judged stale and fully re-run next invocation — one extra full pass,
+ *     but convergent.
+ *   - Same-invocation done→stale: if the upstream rerun lands in the SAME
+ *     runScope invocation that already dispatched the wrapper, the
+ *     per-invocation dedup parks the stale done row as
+ *     blocked('stale-done-in-invocation-dedup') and the scope can end
+ *     stalled — bounded, a resume re-derives and re-runs it.
+ *   - Wrapper re-run does NOT roll the worktree back (wrapper rows carry no
+ *     preSnapshot): the new generation sees the previous generation's
+ *     worktree residue. Known open point, same family as the cross-generation
+ *     preDirty interplay noted in design/RFC-098 §B3.
+ */
+async function computeWrapperConsumed(
+  db: DbClient,
+  taskId: string,
+  definition: WorkflowDefinition,
+  wrapperId: string,
+  iteration: number,
+): Promise<Record<string, string>> {
+  const consumed: Record<string, string> = {}
+  // Sorted for a deterministic JSON key order (stable across re-mints).
+  const sources = [...wrapperExternalUpstreamSources(wrapperId, definition)].sort()
+  for (const sourceNodeId of sources) {
+    const rows = await db
+      .select()
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, sourceNodeId)))
+    const run = pickUpstreamSourceRun(rows, iteration)
+    if (run !== undefined) consumed[sourceNodeId] = run.id
+  }
+  return consumed
+}
+
 async function persistWrapperProgress(
   db: DbClient,
   wrapperRunId: string,
@@ -2446,14 +2564,19 @@ async function markWrapperTerminal(
   errorMessage?: string,
 ): Promise<void> {
   // RFC-053: wrapper finalize is a runtime-determined transition into one of
-  // four terminal states. setNodeRunStatus with allowedFrom=['running'] is
-  // the typical legal source; awaiting_* is also legal when a wrapper bubbled
-  // up an awaiting child and is now being short-circuited by cancel.
+  // four terminal states. 'running' is the typical legal source — RFC-098 B3
+  // (audit S-28) marks every wrapper row running right after its fresh mint
+  // (and the resume path always flips running first), so 'pending' is no
+  // longer a reachable source here and was removed from allowedFrom; the only
+  // surviving pending rows are daemon-crash orphans, which the boot reaper
+  // flips to interrupted without passing through this function. awaiting_* is
+  // still legal when a wrapper bubbled up an awaiting child and is now being
+  // short-circuited by cancel.
   await setNodeRunStatus({
     db,
     nodeRunId: wrapperRunId,
     to: status,
-    allowedFrom: ['pending', 'running', 'awaiting_review', 'awaiting_human'],
+    allowedFrom: ['running', 'awaiting_review', 'awaiting_human'],
     reason: 'wrapper-finalize',
     extra: {
       finishedAt: Date.now(),
@@ -2462,7 +2585,25 @@ async function markWrapperTerminal(
   })
   // Note: wrapperProgressJson is left in place after terminal transitions —
   // it's debug breadcrumb for "where did this wrapper park last" and is
-  // never read again by the scheduler once status is terminal.
+  // never read again by the scheduler once status is terminal…
+  //
+  // …with ONE exception (RFC-098 B3, audit S-20 / adversarial-review revision
+  // #7): the fanout `reuseDisabled` gate must be CLEARED here. By the time a
+  // wrapper goes terminal, every shard owns a row from the disabled
+  // generation (fail-all-after-join runs all shards to completion; cancel
+  // joins too), so those rows are the freshest per shardKey and reuse is safe
+  // again — leaving the flag set would permanently disable done-shard reuse
+  // for this row's resume lineage. Only the flag is stripped; the rest of the
+  // payload stays as breadcrumb.
+  const [terminalRow] = await db
+    .select({ wrapperProgressJson: nodeRuns.wrapperProgressJson })
+    .from(nodeRuns)
+    .where(eq(nodeRuns.id, wrapperRunId))
+  const progress = decodeWrapperProgress(terminalRow?.wrapperProgressJson, () => {})
+  if (progress !== null && progress.reuseDisabled === true) {
+    const { reuseDisabled: _cleared, ...rest } = progress
+    await persistWrapperProgress(db, wrapperRunId, rest as WrapperProgress)
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -2473,7 +2614,7 @@ async function runLoopWrapperNode(
   state: SchedulerState,
   args: OneNodeArgs,
 ): Promise<OneNodeResult> {
-  const { db, taskId } = state
+  const { db, taskId, definition } = state
   const { node, iteration: parentIteration, log } = args
   const inner = pickStringArray(node, 'nodeIds')
   if (inner.length === 0) {
@@ -2543,8 +2684,23 @@ async function runLoopWrapperNode(
       })
       broadcastNodeStatus(taskId, wrapperRunId, node.id, 'running')
     }
+    // RFC-098 B3 (audit S-7, revision #6): resume deliberately does NOT
+    // (re-)write consumedUpstreamRunsJson — see computeWrapperConsumed's
+    // failure-mode ledger. The fresh-mint stamp below is the only write.
   } else {
-    wrapperRunId = await insertNodeRun(db, taskId, node.id, 'pending', 0, parentIteration)
+    // RFC-098 B3 (audit S-7): stamp external-upstream provenance at fresh
+    // mint, mirroring the fanout wrapper (RFC-074 §8 D3) — an upstream rerun
+    // now demotes this wrapper's done row to stale and the loop re-runs from
+    // iteration 0 on the next dispatch.
+    const consumed = await computeWrapperConsumed(db, taskId, definition, node.id, parentIteration)
+    wrapperRunId = await insertNodeRun(db, taskId, node.id, 'pending', 0, parentIteration, {
+      consumedUpstreamRunsJson: JSON.stringify(consumed),
+    })
+    // RFC-098 B3 (audit S-28): flip the freshly-minted row pending→running
+    // BEFORE the broadcast (DB-first rule, lifecycle.ts) and before any
+    // reachable markWrapperTerminal — the DB row and the WS 'running' ping
+    // must never disagree (scheduler-audit-s07-s28 locks the pairing).
+    await transitionNodeRunStatus({ db, nodeRunId: wrapperRunId, event: { kind: 'mark-running' } })
     broadcastNodeStatus(taskId, wrapperRunId, node.id, 'running')
   }
 
@@ -2729,6 +2885,12 @@ async function runFanoutWrapperNode(
     }
   } else {
     wrapperRunId = await insertNodeRun(db, taskId, node.id, 'pending', 0, iteration)
+    // RFC-098 B3 (audit S-28): mark-running immediately after the mint — it
+    // must precede EVERY reachable markWrapperTerminal below (empty-source
+    // short-circuit done, cartesian guard, inner/agent-missing failures) so
+    // their from='running' is legal, and precede the broadcast (DB-first
+    // rule, lifecycle.ts).
+    await transitionNodeRunStatus({ db, nodeRunId: wrapperRunId, event: { kind: 'mark-running' } })
     broadcastNodeStatus(taskId, wrapperRunId, node.id, 'running')
   }
 
@@ -2746,10 +2908,72 @@ async function runFanoutWrapperNode(
     log,
   )
   const rawContent = upstreamInputs[shardPort.name] ?? ''
+
+  // RFC-098 B3 (audit S-20 + adversarial-review revision #7) — consumed
+  // GENERATION GATE, evaluated BEFORE the provenance overwrite below (the
+  // overwrite is exactly what used to erase the mismatch evidence). When the
+  // previously recorded consumed map differs from the freshly resolved one,
+  // an external upstream re-ran while this wrapper was parked/failed — the
+  // prior generation's done shard rows may be stale in ways the per-shard
+  // value hash cannot see (path-family shard values are bare path strings),
+  // so done-row reuse is disabled for this entire pass (full re-run).
+  let reuseDisabled = false
+  let priorConsumedRaw: string | null = null
+  if (existing !== null) {
+    // Resume: compare against the row's own previously recorded consumed, and
+    // honor the PERSISTED gate (revision #7 crash-resume backdoor: a crashed
+    // disabled run has already overwritten the consumed column, so the
+    // comparison alone would wrongly pass on resume).
+    priorConsumedRaw = existing.consumedUpstreamRunsJson
+    const persisted = decodeWrapperProgress(existing.wrapperProgressJson, (msg) =>
+      log.warn(msg, { taskId, nodeId: node.id }),
+    )
+    if (persisted !== null && persisted.reuseDisabled === true) reuseDisabled = true
+  } else {
+    // Fresh mint: cross-generation shard reuse replays the PREVIOUS
+    // generation's children, so ITS recorded consumed is the comparison base.
+    // Rows with NULL consumed are skipped (retryNode's inert placeholder rows
+    // never ran and record nothing; legacy rows predate provenance) — absent
+    // evidence is treated as MATCH, mirroring the hash NULL=match policy.
+    const priorGenRows = await db
+      .select()
+      .from(nodeRuns)
+      .where(
+        and(
+          eq(nodeRuns.taskId, taskId),
+          eq(nodeRuns.nodeId, node.id),
+          eq(nodeRuns.iteration, iteration),
+        ),
+      )
+    const priorGen = pickFreshestRun(
+      priorGenRows.filter((r) => r.id !== wrapperRunId && r.consumedUpstreamRunsJson !== null),
+      { topLevelOnly: true },
+    )
+    priorConsumedRaw = priorGen?.consumedUpstreamRunsJson ?? null
+  }
+  if (
+    priorConsumedRaw !== null &&
+    !consumedMapsEqual(parseConsumedJson(priorConsumedRaw), wrapperConsumed)
+  ) {
+    reuseDisabled = true
+  }
+  if (reuseDisabled) {
+    // Persist BEFORE overwriting consumed: a crash between the two writes
+    // re-derives the same verdict on resume (the comparison still trips); a
+    // crash AFTER the overwrite is covered by this persisted flag. Cleared by
+    // markWrapperTerminal once the wrapper reaches a terminal state.
+    await persistWrapperProgress(db, wrapperRunId, {
+      kind: 'fanout',
+      phase: 'inner-running',
+      reuseDisabled: true,
+    })
+  }
+
   // RFC-074 §8 (D3): the fan-out wrapper is provenance-atomic — record which
   // upstream runs the wrapper consumed on the wrapper row so freshness can
   // re-run the whole wrapper when an upstream advances. Inner shard rows do NOT
-  // record provenance (treated as fresh within this wrapper run).
+  // record provenance (treated as fresh within this wrapper run). RFC-098 B3:
+  // this overwrite intentionally happens AFTER the generation gate above.
   await db
     .update(nodeRuns)
     .set({ consumedUpstreamRunsJson: JSON.stringify(wrapperConsumed) })
@@ -2893,6 +3117,7 @@ async function runFanoutWrapperNode(
             shardSourcePortName: shardPort.name,
             boundaryEdges,
             broadcastInputs: innerUpstream,
+            reuseDisabled,
             log: log.child(`fanout:${node.id}:${innerId}`),
           }),
         ),
@@ -2939,6 +3164,7 @@ async function runFanoutWrapperNode(
         shardSourcePortName: shardPort.name,
         boundaryEdges,
         broadcastInputs: innerUpstream,
+        reuseDisabled,
         log: log.child(`fanout:${node.id}:${innerId}:shared`),
       })
       if (r.kind === 'canceled' || opts.signal?.aborted === true) {
@@ -2985,6 +3211,7 @@ async function runFanoutWrapperNode(
       shards,
       definition,
       scope,
+      reuseDisabled,
       log: log.child(`fanout:${node.id}:aggregator`),
     })
     if (aggRes.kind === 'failed') {
@@ -3029,6 +3256,16 @@ interface ShardSpec {
   value: string
 }
 
+/**
+ * RFC-098 B3 (audit S-20): sha256 hex of a fanout shard's value — the
+ * cross-generation reuse identity stamped into `node_runs.shard_value_hash`
+ * (migration 0043) and re-derived at dispatch time for the
+ * pickReusableShardRun match. createHash precedent: util/git.ts.
+ */
+function sha256Hex(s: string): string {
+  return createHash('sha256').update(s).digest('hex')
+}
+
 interface DispatchShardArgs {
   state: SchedulerState
   wrapperId: string
@@ -3041,6 +3278,12 @@ interface DispatchShardArgs {
   shardSourcePortName: string
   boundaryEdges: WorkflowEdge[]
   broadcastInputs: Record<string, string>
+  /**
+   * RFC-098 B3 (audit S-20): the wrapper-entry consumed generation gate —
+   * true forbids replaying ANY done prior row (this shard re-runs even when
+   * its value hash matches). See runFanoutWrapperNode's gate block.
+   */
+  reuseDisabled: boolean
   log: Logger
 }
 
@@ -3085,40 +3328,71 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
 
   const shardKey = shard?.shardKey ?? '__shared__'
   const rowShardKey = shard === null ? null : shardKey
+  // Cross-generation reuse identity (S-20): sha256 of the shard VALUE. The
+  // shared/broadcast dispatch has no per-shard value → NULL (matches any —
+  // the consumed generation gate is the shared row's only content guard).
+  const valueHash = shard === null ? null : sha256Hex(shard.value)
 
-  // Idempotent (re)dispatch: a reaped prior run can leave a child row for this
-  // (wrapper run, shardKey). Reuse it instead of minting a duplicate — the
-  // aggregator's find-by-shardKey would otherwise pick the older empty one. A
-  // 'done' child is reused as-is (its outputs are still valid); a
-  // non-terminal/failed child is re-run in place. Only a missing child mints a
-  // fresh row. See scheduler-boundary-fanout-resume-duplicate-shards.test.ts.
-  const priorChildren = await db
-    .select()
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, taskId),
-        eq(nodeRuns.nodeId, innerNode.id),
-        eq(nodeRuns.parentNodeRunId, wrapperRunId),
-      ),
-    )
-  const priorChild = priorChildren.find((r) => (r.shardKey ?? null) === rowShardKey)
+  // Idempotent (re)dispatch — RFC-098 B3 (audit S-19): candidates are anchored
+  // on (taskId, innerNodeId, iteration, shardKey, parentNodeRunId IS NOT NULL),
+  // RELAXED from the old "parentNodeRunId = this wrapperRunId" so a retried
+  // wrapper generation (failed → resume mints a FRESH wrapperRunId) can replay
+  // the previous generation's done children instead of re-running every shard.
+  // The non-null parent filter keeps frontier invisibility intact (deriveFrontier
+  // / buildFreshestDonePerNode / pickFreshestRun all skip child rows) AND
+  // excludes the top-level inert placeholder rows retryNode mints for inner
+  // nodes. Three branches on the FRESHEST candidate (pure id-order):
+  //   1. freshest is done + value-hash match (NULL=match, legacy rows) + reuse
+  //      not disabled → replay its outputs without a spawn (same- OR cross-
+  //      generation; the row keeps its original parent — history stays true).
+  //   2. freshest is non-done and belongs to THIS wrapper generation → re-run
+  //      it in place (the same-generation idempotency branch:
+  //      scheduler-boundary-fanout-resume-duplicate-shards locks each shardKey
+  //      to exactly ONE row under the resumed wrapper).
+  //   3. anything else (no candidate / prior-generation non-done residue /
+  //      done but hash-mismatched or reuse-disabled) → mint a fresh row under
+  //      this wrapper, stamped with sha256(shard.value) (shared rows stay NULL).
+  const candidates = (
+    await db
+      .select()
+      .from(nodeRuns)
+      .where(
+        and(
+          eq(nodeRuns.taskId, taskId),
+          eq(nodeRuns.nodeId, innerNode.id),
+          eq(nodeRuns.iteration, iteration),
+          isNotNull(nodeRuns.parentNodeRunId),
+        ),
+      )
+  ).filter((r) => (r.shardKey ?? null) === rowShardKey)
+  const freshest = pickFreshestRun(candidates, { topLevelOnly: false })
+  const reusable = args.reuseDisabled
+    ? undefined
+    : pickReusableShardRun(candidates, { shardKey: rowShardKey, valueHash })
   let shardRunId: string
-  if (priorChild !== undefined && priorChild.status === 'done') {
+  if (freshest !== undefined && reusable !== undefined && reusable.id === freshest.id) {
+    // Branch 1 — replay. The `reusable.id === freshest.id` guard refuses a
+    // done row that has been SUPERSEDED by a fresher attempt of any status
+    // (e.g. a user-targeted shard retry placeholder): replaying it would undo
+    // that newer attempt's intent.
     const outRows = await db
       .select()
       .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, priorChild.id))
+      .where(eq(nodeRunOutputs.nodeRunId, reusable.id))
     const outputs: Record<string, string> = {}
     for (const o of outRows) outputs[o.portName] = o.content
-    broadcastNodeStatus(taskId, priorChild.id, innerNode.id, 'done')
+    broadcastNodeStatus(taskId, reusable.id, innerNode.id, 'done')
     return { kind: 'ok', shardKey, outputs, message: '' }
   }
-  if (priorChild !== undefined) {
-    // Re-run the existing non-terminal/failed child in place. allowTerminal: a
-    // reaped child is 'interrupted' (terminal); reset to pending so runNode's
-    // mark-running (pending → running) applies cleanly.
-    shardRunId = priorChild.id
+  if (
+    freshest !== undefined &&
+    freshest.status !== 'done' &&
+    freshest.parentNodeRunId === wrapperRunId
+  ) {
+    // Branch 2 — re-run the existing same-generation child in place.
+    // allowTerminal: a reaped child is 'interrupted' (terminal); reset to
+    // pending so runNode's mark-running (pending → running) applies cleanly.
+    shardRunId = freshest.id
     await setNodeRunStatus({
       db,
       nodeRunId: shardRunId,
@@ -3127,7 +3401,11 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
       allowTerminal: true,
       reason: 'fanout-shard-resume',
     })
+    // The re-run consumes the CURRENT shard value — refresh the stored hash
+    // so future reuse decisions compare against what actually ran.
+    await db.update(nodeRuns).set({ shardValueHash: valueHash }).where(eq(nodeRuns.id, shardRunId))
   } else {
+    // Branch 3 — mint a fresh row under this wrapper.
     shardRunId = ulid()
     await db.insert(nodeRuns).values({
       id: shardRunId,
@@ -3138,6 +3416,7 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
       iteration,
       parentNodeRunId: wrapperRunId,
       shardKey: rowShardKey,
+      shardValueHash: valueHash,
       startedAt: Date.now(),
     })
   }
@@ -3294,6 +3573,8 @@ interface DispatchAggregatorArgs {
   shards: ShardSpec[]
   definition: WorkflowDefinition
   scope: ReturnType<typeof computeShardScope>
+  /** RFC-098 B3 (audit S-20): see DispatchShardArgs.reuseDisabled. */
+  reuseDisabled: boolean
   log: Logger
 }
 
@@ -3317,7 +3598,20 @@ async function dispatchFanoutAggregator(
   // group by aggregator-input port name → newline-joined `### shardKey` blocks.
   // boundary-input edges from the wrapper itself are NOT relevant here (the
   // aggregator sits inside the wrapper and consumes inner-to-inner edges).
+  //
+  // RFC-098 B3 (audit S-21): row picking is done-only + freshest-per-shardKey
+  // via pickReusableShardRun — the EXACT picker the shard dispatch uses — and
+  // the anchor is relaxed in lockstep with dispatchFanoutShard's (taskId,
+  // nodeId, iteration, parentNodeRunId IS NOT NULL): a cross-generation done
+  // child the dispatch phase replayed would otherwise be invisible here
+  // (silent empty aggregation). The old form read with NO status filter and
+  // took SELECT-order first-match — a stale outputless child shadowed the
+  // fresh one.
   const aggInputs: Record<string, string> = {}
+  // Every inner row that fed this aggregation: an existing aggregator row may
+  // only be REPLAYED when it is fresher (pure id-order) than ALL of them — a
+  // shard that re-ran after the old aggregation makes that aggregation stale.
+  const participatingRowIds: string[] = []
   const incoming = definition.edges.filter(
     (e) => e.target.nodeId === aggNode.id && e.boundary === undefined,
   )
@@ -3331,15 +3625,20 @@ async function dispatchFanoutAggregator(
         and(
           eq(nodeRuns.taskId, taskId),
           eq(nodeRuns.nodeId, edge.source.nodeId),
-          eq(nodeRuns.parentNodeRunId, wrapperRunId),
+          eq(nodeRuns.iteration, iteration),
+          isNotNull(nodeRuns.parentNodeRunId),
         ),
       )
     if (scope.perShard.has(edge.source.nodeId)) {
       // sorted by shardKey dictionary order (matches agent-multi convention).
       const sortedShards = [...shards].sort((a, b) => a.shardKey.localeCompare(b.shardKey))
       for (const s of sortedShards) {
-        const row = innerRows.find((r) => r.shardKey === s.shardKey)
+        const row = pickReusableShardRun(innerRows, {
+          shardKey: s.shardKey,
+          valueHash: sha256Hex(s.value),
+        })
         if (row === undefined) continue
+        participatingRowIds.push(row.id)
         const outRows = await db
           .select()
           .from(nodeRunOutputs)
@@ -3350,9 +3649,10 @@ async function dispatchFanoutAggregator(
         }
       }
     } else {
-      // shared upstream — single row, plain content.
-      const row = innerRows.find((r) => r.shardKey === null)
+      // shared upstream — single (NULL-shardKey) row, plain content.
+      const row = pickReusableShardRun(innerRows, { shardKey: null, valueHash: null })
       if (row !== undefined) {
+        participatingRowIds.push(row.id)
         const outRows = await db
           .select()
           .from(nodeRunOutputs)
@@ -3364,21 +3664,78 @@ async function dispatchFanoutAggregator(
     aggInputs[edge.target.portName] = blocks.join('\n\n')
   }
 
-  // Mint aggregator node_run row. The aggregator does NOT carry shardKey
-  // (it's the convergence point); parentNodeRunId=wrapperRunId so its row
-  // also doesn't leak into the parent scope's latestPerNode.
-  const aggRunId = ulid()
-  await db.insert(nodeRuns).values({
-    id: aggRunId,
-    taskId,
-    nodeId: aggNode.id,
-    status: 'pending',
-    retryIndex: 0,
-    iteration,
-    parentNodeRunId: wrapperRunId,
-    shardKey: null,
-    startedAt: Date.now(),
-  })
+  // RFC-098 B3 (audit S-21) — aggregator idempotency, mirroring the shard
+  // branches. Candidates: (taskId, aggNodeId, iteration, shardKey IS NULL,
+  // parentNodeRunId IS NOT NULL) — the aggregator is the convergence point so
+  // its row carries no shardKey, and the relaxed anchor lets a retried
+  // wrapper generation see the previous generation's aggregator row.
+  //   1. freshest is done + fresher than EVERY participating inner row + reuse
+  //      not disabled → replay its outputs without a spawn.
+  //   2. freshest is non-done and belongs to THIS wrapper generation → re-run
+  //      it in place (the daemon-restart residue that used to leak a
+  //      permanently-interrupted row, scheduler-audit-s21 test 1).
+  //   3. anything else → mint a fresh row (no shard_value_hash — the
+  //      aggregator has no per-shard value).
+  const aggCandidates = (
+    await db
+      .select()
+      .from(nodeRuns)
+      .where(
+        and(
+          eq(nodeRuns.taskId, taskId),
+          eq(nodeRuns.nodeId, aggNode.id),
+          eq(nodeRuns.iteration, iteration),
+          isNotNull(nodeRuns.parentNodeRunId),
+        ),
+      )
+  ).filter((r) => r.shardKey === null)
+  const freshestAgg = pickFreshestRun(aggCandidates, { topLevelOnly: false })
+  if (
+    !args.reuseDisabled &&
+    freshestAgg !== undefined &&
+    freshestAgg.status === 'done' &&
+    participatingRowIds.every((id) => isFresherNodeRun<{ id: string }>(freshestAgg, { id }))
+  ) {
+    const outRows = await db
+      .select()
+      .from(nodeRunOutputs)
+      .where(eq(nodeRunOutputs.nodeRunId, freshestAgg.id))
+    const outputs: Record<string, string> = {}
+    for (const o of outRows) outputs[o.portName] = o.content
+    broadcastNodeStatus(taskId, freshestAgg.id, aggNode.id, 'done')
+    return { kind: 'ok', summary: '', message: '', outputs }
+  }
+  let aggRunId: string
+  if (
+    freshestAgg !== undefined &&
+    freshestAgg.status !== 'done' &&
+    freshestAgg.parentNodeRunId === wrapperRunId
+  ) {
+    // Re-run the same-generation residue in place (allowTerminal: a reaped
+    // aggregator is 'interrupted'; reset to pending for runNode's mark-running).
+    aggRunId = freshestAgg.id
+    await setNodeRunStatus({
+      db,
+      nodeRunId: aggRunId,
+      to: 'pending',
+      allowedFrom: ['pending', 'running', 'interrupted', 'failed', 'canceled'],
+      allowTerminal: true,
+      reason: 'fanout-aggregator-resume',
+    })
+  } else {
+    aggRunId = ulid()
+    await db.insert(nodeRuns).values({
+      id: aggRunId,
+      taskId,
+      nodeId: aggNode.id,
+      status: 'pending',
+      retryIndex: 0,
+      iteration,
+      parentNodeRunId: wrapperRunId,
+      shardKey: null,
+      startedAt: Date.now(),
+    })
+  }
   broadcastNodeStatus(taskId, aggRunId, aggNode.id, 'pending')
 
   const injection = await prepareNodeRunInjection(db, opts.appHome, aggAgent, log)
@@ -3490,8 +3847,65 @@ async function captureHead(worktreePath: string): Promise<string> {
   return ''
 }
 
+// RFC-098 B3 (audit S-4, adversarial-review revision #9) — preDirty caps.
+// Beyond either limit the capture DEGRADES TO THE EMPTY SET: the finalize
+// subtraction then removes nothing, which is exactly the pre-fix cumulative
+// behavior — over-report, never drop a real change. (A "paths-only" degrade
+// was explicitly rejected: subtracting by bare path would drop files the
+// inner scope genuinely rewrote.)
+const GIT_PRE_DIRTY_MAX_ENTRIES = 4096
+const GIT_PRE_DIRTY_MAX_JSON_BYTES = 256 * 1024
+
+/**
+ * RFC-098 B3 (audit S-4) — sample the worktree's pre-existing dirty set
+ * `{path: blobSha | 'deleted'}` at git-wrapper FRESH MINT, right after the
+ * baseline capture and inside the same task-write-lock window (no sibling
+ * writer can be mid-write while we sample). Best-effort by design: any git
+ * failure (no commits yet, fixture without a repo, hash race) degrades to the
+ * empty set with a warn — entry must never fail the wrapper, and the empty
+ * set only over-reports. Resume NEVER calls this (it reads the persisted map
+ * from wrapperProgress; re-capturing after the inner scope started would
+ * swallow the inner scope's own writes into the pre-set — silent UNDER-report,
+ * worse than today).
+ */
+async function captureGitPreDirty(
+  worktreePath: string,
+  baseline: string,
+  log: Logger,
+): Promise<Record<string, string>> {
+  try {
+    const paths = await gitChangedFiles(worktreePath, baseline || 'HEAD')
+    if (paths.length === 0) return {}
+    if (paths.length > GIT_PRE_DIRTY_MAX_ENTRIES) {
+      log.warn('git wrapper preDirty over entry cap — degrading to empty set (over-report)', {
+        worktreePath,
+        entries: paths.length,
+        cap: GIT_PRE_DIRTY_MAX_ENTRIES,
+      })
+      return {}
+    }
+    const hashes = await gitBlobHashes(worktreePath, paths)
+    const bytes = new TextEncoder().encode(JSON.stringify(hashes)).byteLength
+    if (bytes > GIT_PRE_DIRTY_MAX_JSON_BYTES) {
+      log.warn('git wrapper preDirty over JSON-size cap — degrading to empty set (over-report)', {
+        worktreePath,
+        bytes,
+        cap: GIT_PRE_DIRTY_MAX_JSON_BYTES,
+      })
+      return {}
+    }
+    return hashes
+  } catch (err) {
+    log.warn('git wrapper preDirty capture failed — degrading to empty set (over-report)', {
+      worktreePath,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return {}
+  }
+}
+
 async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
-  const { db, task, taskId } = state
+  const { db, task, taskId, definition } = state
   const { node, iteration, log } = args
   const inner = pickStringArray(node, 'nodeIds')
   if (inner.length === 0) {
@@ -3505,16 +3919,26 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
   const existing = await findResumableWrapperRun(db, taskId, node.id, iteration)
   let wrapperRunId: string
   let baseline: string
+  // RFC-098 B3 (audit S-4): the worktree's pre-existing dirty set, sampled at
+  // fresh mint only — finalize subtracts hash-equal members so git_diff
+  // carries ONLY paths this wrapper's inner scope produced/modified (fixes
+  // both sequential-wrapper pollution and git-in-loop cumulative diffs).
+  let preDirty: Record<string, string> = {}
   if (existing !== null) {
     const progress = decodeWrapperProgress(existing.wrapperProgressJson, (msg) => log.warn(msg))
     wrapperRunId = existing.id
     if (progress?.kind === 'git' && typeof progress.baseline === 'string') {
       baseline = progress.baseline
+      // S-4: resume reads the persisted pre-set; an old payload without the
+      // field degrades to the empty set (over-report). NEVER re-capture here —
+      // the inner scope's own writes are already in the worktree.
+      preDirty = progress.preDirty ?? {}
     } else {
       // Malformed / missing — best-effort re-capture. Worse than persisted
       // baseline but no worse than today's pre-RFC-040 init-only path.
       // RFC-098 B1 (audit S-24): captured under the task write lock so the
-      // baseline never samples a sibling writer mid-write.
+      // baseline never samples a sibling writer mid-write. The pre-set stays
+      // EMPTY on this path (S-4 malformed fallback — see captureGitPreDirty).
       baseline = await state.writeSem.run(() => captureHead(task.worktreePath))
     }
     if (existing.status !== 'running') {
@@ -3537,14 +3961,36 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
       })
       broadcastNodeStatus(taskId, wrapperRunId, node.id, 'running')
     }
+    // RFC-098 B3 (audit S-7, revision #6): resume does NOT overwrite the
+    // wrapper's consumedUpstreamRunsJson — fresh-mint-only, see
+    // computeWrapperConsumed's failure-mode ledger.
   } else {
-    wrapperRunId = await insertNodeRun(db, taskId, node.id, 'pending', 0, iteration)
+    // RFC-098 B3 (audit S-7): external-upstream provenance at fresh mint
+    // (mirrors the fanout wrapper, RFC-074 §8 D3) — an upstream rerun demotes
+    // the done wrapper row to stale; the next dispatch mints a new generation
+    // that re-captures baseline + pre-set below.
+    const consumed = await computeWrapperConsumed(db, taskId, definition, node.id, iteration)
+    wrapperRunId = await insertNodeRun(db, taskId, node.id, 'pending', 0, iteration, {
+      consumedUpstreamRunsJson: JSON.stringify(consumed),
+    })
+    // RFC-098 B3 (audit S-28): mark-running before the broadcast and before
+    // any reachable markWrapperTerminal (DB-first rule, lifecycle.ts).
+    await transitionNodeRunStatus({ db, nodeRunId: wrapperRunId, event: { kind: 'mark-running' } })
     broadcastNodeStatus(taskId, wrapperRunId, node.id, 'running')
-    // RFC-098 B1 (audit S-24): baseline under the task write lock.
-    baseline = await state.writeSem.run(() => captureHead(task.worktreePath))
+    // RFC-098 B1 (audit S-24): baseline under the task write lock; B3 (S-4):
+    // the pre-existing dirty set is sampled in the SAME lock window so both
+    // describe one consistent worktree state.
+    const entry = await state.writeSem.run(async () => {
+      const base = await captureHead(task.worktreePath)
+      const pre = await captureGitPreDirty(task.worktreePath, base, log)
+      return { base, pre }
+    })
+    baseline = entry.base
+    preDirty = entry.pre
     await persistWrapperProgress(db, wrapperRunId, {
       kind: 'git',
       baseline,
+      preDirty,
       phase: 'inner-running',
     })
   }
@@ -3572,9 +4018,13 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
   // doing so against a half-finished worktree was the silent correctness
   // bug RFC-040 is fixing.
   if (subRes.kind === 'awaiting_human' || subRes.kind === 'awaiting_review') {
+    // S-4: re-persist preDirty alongside the baseline — dropping it here
+    // would make the post-park resume read an empty pre-set and regress to
+    // the cumulative diff.
     await persistWrapperProgress(db, wrapperRunId, {
       kind: 'git',
       baseline,
+      preDirty,
       phase: 'awaiting',
     })
     const newStatus = subRes.kind === 'awaiting_human' ? 'awaiting_human' : 'awaiting_review'
@@ -3607,7 +4057,23 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
     // silently degrading to an empty git_diff — the old empty-catch sent the
     // whole downstream fan-out into the empty-source short-circuit and the
     // task went green with zero audit shards.
-    paths = await state.writeSem.run(() => gitChangedFiles(task.worktreePath, baseline || 'HEAD'))
+    //
+    // RFC-098 B3 (audit S-4): subtract the PRE-EXISTING dirty set sampled at
+    // fresh mint — a post path is dropped iff it was already dirty at entry
+    // AND its current state matches the entry state (blob-hash equal, or both
+    // 'deleted'). A pre-dirty file the inner scope rewrote keeps its place; a
+    // touched-then-reverted one is subtracted (git-status-consistent). The
+    // post hashes are sampled inside the SAME lock window as the path list.
+    // Known open point (revision #9): a stale-redispatch generation inherits
+    // the previous generation's residue as preDirty (wrapper re-run performs
+    // no worktree rollback) — recorded in design/RFC-098 §B3.
+    paths = await state.writeSem.run(async () => {
+      const all = await gitChangedFiles(task.worktreePath, baseline || 'HEAD')
+      const candidates = all.filter((p) => preDirty[p] !== undefined)
+      if (candidates.length === 0) return all
+      const post = await gitBlobHashes(task.worktreePath, candidates)
+      return all.filter((p) => preDirty[p] === undefined || post[p] !== preDirty[p])
+    })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     await markWrapperTerminal(db, wrapperRunId, 'failed', `git-diff-failed:${msg}`)
@@ -3904,21 +4370,10 @@ export async function resolveUpstreamInputs(
     // top-level DONE rows within the iteration window, pick the highest
     // iteration (cross-boundary "latest visible", e.g. git-wrapper / loop
     // carry) and, within that iteration, the freshest by isFresherNodeRun.
-    const candidates = rows.filter(
-      (r) => r.iteration <= iteration && r.parentNodeRunId === null && r.status === 'done',
-    )
-    let run: (typeof candidates)[number] | undefined
-    for (const r of candidates) {
-      if (run === undefined) {
-        run = r
-        continue
-      }
-      if (r.iteration > run.iteration) {
-        run = r
-        continue
-      }
-      if (r.iteration === run.iteration && isFresherNodeRun(r, run)) run = r
-    }
+    // RFC-098 B3 (audit S-7): the two-phase picker body now lives in
+    // freshness.ts (pickUpstreamSourceRun) so computeWrapperConsumed shares
+    // the exact same口径 — behavior here is unchanged.
+    const run = pickUpstreamSourceRun(rows, iteration)
     if (!run) {
       log.warn('upstream node_run not found', { taskId, sourceNodeId: edge.source.nodeId })
       continue

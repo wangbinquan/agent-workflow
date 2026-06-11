@@ -552,6 +552,18 @@ export const nodeRuns = sqliteTable(
      * read-time `isNodeRunFresh`, replacing the cci-watermark cascade.
      */
     consumedUpstreamRunsJson: text('consumed_upstream_runs_json'),
+    /**
+     * RFC-098 B3 (audit S-19/S-20): sha256 hex of the fanout shard's VALUE
+     * (the list item this shard row was minted for), written by
+     * dispatchFanoutShard at mint time. The cross-generation reuse anchor is
+     * `(taskId, nodeId, iteration, shardKey, parentNodeRunId IS NOT NULL)`;
+     * a done row is only replayed when this hash matches the current shard
+     * value (pickReusableShardRun, freshness.ts). NULL on pre-0043 rows
+     * (NULL = MATCH, legacy compatibility — hard requirement, see migration
+     * 0043), on shared/broadcast (NULL-shardKey) rows, on the aggregator row,
+     * and on every non-fanout run.
+     */
+    shardValueHash: text('shard_value_hash'),
   },
   (t) => ({
     taskIdx: index('idx_node_runs_task').on(t.taskId, t.nodeId, t.iteration, t.retryIndex),

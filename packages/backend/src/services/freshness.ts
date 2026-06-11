@@ -162,6 +162,98 @@ export function isFresherNodeRun<R extends { id: string }>(
 }
 
 /**
+ * RFC-098 B3 (audit S-7,「freshest-run 抽一次别 fork」第二缝) — the ONE
+ * sanctioned iteration-window source picker, extracted verbatim from
+ * resolveUpstreamInputs (scheduler.ts) so wrapper-consumed computation uses
+ * the EXACT same口径 as the agent input read-point. Among top-level DONE rows
+ * whose iteration ≤ `iterationWindow`, pick the highest iteration
+ * (cross-boundary "latest visible", e.g. git-wrapper / loop carry) and,
+ * within that iteration, the freshest by isFresherNodeRun (pure ULID order).
+ *
+ * NOT the same as pickFreshestRun: that picker is pure-id-ordered with no
+ * iteration term and no window — using it for source resolution would let a
+ * later-minted row at a HIGHER iteration win even outside the caller's
+ * visibility window. Two distinct contracts, both living here so neither
+ * gets forked.
+ */
+export function pickUpstreamSourceRun<
+  R extends { id: string; iteration: number; parentNodeRunId: string | null; status: string },
+>(rows: readonly R[], iterationWindow: number): R | undefined {
+  let run: R | undefined
+  for (const r of rows) {
+    if (r.iteration > iterationWindow) continue
+    if (r.parentNodeRunId !== null) continue
+    if (r.status !== 'done') continue
+    if (run === undefined) {
+      run = r
+      continue
+    }
+    if (r.iteration > run.iteration) {
+      run = r
+      continue
+    }
+    if (r.iteration === run.iteration && isFresherNodeRun(r, run)) run = r
+  }
+  return run
+}
+
+/**
+ * RFC-098 B3 (audit S-20) — strict equality of two consumed-provenance maps
+ * (`{ upstreamNodeId: nodeRunId }`). Used by the fanout wrapper's consumed
+ * GENERATION GATE: the previously recorded map and the freshly resolved one
+ * must be identical for done-shard reuse to stay enabled — any difference
+ * (an upstream re-ran, an upstream appeared/disappeared) means the prior
+ * generation's shard results may be stale in ways the per-shard value hash
+ * cannot see (path-family shard values are bare path strings). Key ORDER is
+ * irrelevant; key SET and every value must match.
+ */
+export function consumedMapsEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+  const ak = Object.keys(a)
+  if (ak.length !== Object.keys(b).length) return false
+  for (const k of ak) if (a[k] !== b[k]) return false
+  return true
+}
+
+/**
+ * RFC-098 B3 (audit S-19/S-20/S-21,「freshest-run 抽一次别 fork」缝) — the ONE
+ * sanctioned picker for a REUSABLE fanout shard row. Shared by
+ * dispatchFanoutShard (cross-generation done-shard replay) and
+ * dispatchFanoutAggregator (per-shardKey aggregation input pick), so the two
+ * sites can never drift apart. Contract:
+ *
+ *   - rows: candidate rows already anchored by the caller's SQL WHERE
+ *     `(taskId, nodeId, iteration, parentNodeRunId IS NOT NULL)` — the
+ *     non-null parent keeps frontier invisibility intact AND excludes the
+ *     top-level inert placeholder rows retryNode mints for inner nodes.
+ *   - shardKey match: `(row.shardKey ?? null) === shardKey` (null = the
+ *     shared/broadcast row or the aggregator row).
+ *   - done-only: a non-done row is never reusable (its outputs are absent
+ *     or superseded); non-done handling (in-place re-run vs fresh mint) is
+ *     the caller's branch, not this picker's.
+ *   - hash policy NULL = MATCH (legacy compatibility — hard requirement):
+ *     a row minted before migration 0043 carries shardValueHash NULL and must
+ *     stay reusable (scheduler-boundary-fanout-resume-duplicate-shards +
+ *     scheduler-audit-s21 test 1 pre-seed hashless done children and assert
+ *     zero re-spawn). Symmetrically a NULL `valueHash` (shared row / caller
+ *     without a value) matches any stored hash.
+ *   - freshest wins: among the surviving rows, pure ULID order
+ *     (isFresherNodeRun).
+ */
+export function pickReusableShardRun<
+  R extends { id: string; status: string; shardKey: string | null; shardValueHash: string | null },
+>(rows: readonly R[], opts: { shardKey: string | null; valueHash: string | null }): R | undefined {
+  let best: R | undefined
+  for (const r of rows) {
+    if ((r.shardKey ?? null) !== opts.shardKey) continue
+    if (r.status !== 'done') continue
+    if (r.shardValueHash !== null && opts.valueHash !== null && r.shardValueHash !== opts.valueHash)
+      continue
+    if (isFresherNodeRun(r, best)) best = r
+  }
+  return best
+}
+
+/**
  * RFC-074 §3.2 / §4.2: each in-scope node's freshest DONE top-level row at the
  * given scope iteration, keyed by nodeId. This is the map `isNodeRunFresh`
  * consults — a consumed upstream run is "still fresh" iff it equals the id of

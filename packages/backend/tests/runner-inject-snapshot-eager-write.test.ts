@@ -378,16 +378,20 @@ describe('RFC-047 runner eager-writes injected_memories_json before opencode spa
     )
 
     expect(eagerWriteIntercepted).toBe(true)
-    // No eager broadcast (it lives in the same try block as the eager UPDATE).
-    // RFC-036's throttled re-ping inside stdoutPump may still emit one
-    // `node.status: running` from the envelope text event — so the bound
-    // here is "no MORE than the throttled one", not "zero". Paired with
-    // the `eagerWriteIntercepted === true` assertion above (which proves
-    // the eager block actually threw) this keeps the suppression contract.
+    // RFC-098 B3 (audit S-28): the `node.status: running` ping is no longer
+    // coupled to the eager UPDATE's try block — it moved BELOW the
+    // mark-running CAS (DB-first rule, lifecycle.ts), so it fires exactly
+    // because the row really is running, regardless of the eager-write
+    // failure. Expected events: the post-CAS ping (always), plus at most
+    // RFC-036's throttled re-ping from the stdoutPump text event. Paired
+    // with `eagerWriteIntercepted === true` above (the eager block really
+    // threw), this locks the new decoupling: an eager-write failure must
+    // NOT suppress the post-CAS status broadcast.
     const runningEvents = received.filter(
       (m) => m.type === 'node.status' && m.nodeRunId === nodeRunId && m.status === 'running',
     )
-    expect(runningEvents.length).toBeLessThanOrEqual(1)
+    expect(runningEvents.length).toBeGreaterThanOrEqual(1)
+    expect(runningEvents.length).toBeLessThanOrEqual(2)
     // Final UPDATE still landed — column visible to the UI at end-of-run
     // (i.e. legacy RFC-046 behavior).
     const rows = await h.db.select({ json: nodeRuns.injectedMemoriesJson }).from(nodeRuns)
