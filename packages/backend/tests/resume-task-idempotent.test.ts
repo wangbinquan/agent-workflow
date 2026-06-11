@@ -14,7 +14,7 @@
 // (PR-D / PR-E may add outbox semantics later).
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -23,7 +23,7 @@ import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resumeTask } from '../src/services/task'
-import { runGit } from '../src/util/git'
+import { gitStashSnapshot, runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -203,7 +203,18 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     expect(code).toBe('task-not-found')
   })
 
-  test('R8 resume leaves done node_runs untouched + does NOT rollback their snapshots', async () => {
+  // RFC-098 B2 (design 修订#5): the old R8 used a FAKE sha ('sha-fake-failed')
+  // on the failed row, which only stayed green because the pre-fix rollback was
+  // warn-and-continue even when `git stash apply` blew up. The WP-9 fail-closed
+  // rollback turns a missing snapshot into a task-level 'snapshot-lost'
+  // escalation, so the case is split:
+  //   R8a — the happy half with a REAL stash sha (done rows untouched, failed
+  //         row stays historical, resume proceeds);
+  //   R8b — the snapshot-lost half (resumeTask throws 409 'snapshot-lost',
+  //         task flips failed with errorSummary='snapshot-lost', and the
+  //         worktree is byte-for-byte untouched — fail-closed means the
+  //         destructive reset/clean never ran).
+  test('R8a resume with a REAL stash sha: done node_runs untouched, failed row stays historical, resume proceeds', async () => {
     h = await buildHarness('failed')
     const doneId = ulid()
     const finishedAt = Date.now() - 500
@@ -214,11 +225,16 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
       status: 'done',
       retryIndex: 0,
       iteration: 0,
+      // Done rows are never rolled back — a fake sha here proves it: were the
+      // rollback to touch this row, fail-closed would 409 the whole resume.
       preSnapshot: 'sha-fake-done',
       startedAt: Date.now() - 1000,
       finishedAt,
     })
-    // A subsequent failed retry attempt:
+    // A subsequent failed retry attempt with a REAL stash snapshot.
+    writeFileSync(join(h.repoPath, 'README.md'), '# snapshot-time\n')
+    const realSha = await gitStashSnapshot(h.repoPath)
+    expect(realSha).not.toBe('')
     const failedId = ulid()
     await h.db.insert(nodeRuns).values({
       id: failedId,
@@ -227,17 +243,18 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
       status: 'failed',
       retryIndex: 1,
       iteration: 0,
-      preSnapshot: 'sha-fake-failed',
+      preSnapshot: realSha,
       startedAt: Date.now() - 200,
       finishedAt: Date.now() - 100,
       errorMessage: 'boom',
     })
 
-    await resumeTask(h.db, h.taskId, {
+    const after = await resumeTask(h.db, h.taskId, {
       db: h.db,
       appHome: h.appHome,
       opencodeCmd: ['/usr/bin/env', 'true'],
     })
+    expect(after.status).toBe('pending')
 
     // Done row preserved (status + finishedAt unchanged).
     const doneAfter = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, doneId)))[0]!
@@ -247,5 +264,54 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     // — the scheduler will mint a fresh retry on dispatch).
     const failedAfter = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, failedId)))[0]!
     expect(failedAfter.status).toBe('failed')
+    // The rollback actually restored the snapshot-time worktree state.
+    expect(readFileSync(join(h.repoPath, 'README.md'), 'utf-8')).toBe('# snapshot-time\n')
+  })
+
+  test("R8b snapshot lost: resumeTask throws 409 'snapshot-lost', task flips failed (errorSummary='snapshot-lost'), worktree untouched", async () => {
+    h = await buildHarness('failed')
+    const failedId = ulid()
+    await h.db.insert(nodeRuns).values({
+      id: failedId,
+      taskId: h.taskId,
+      nodeId: 'doc',
+      status: 'failed',
+      retryIndex: 0,
+      iteration: 0,
+      // Well-formed sha that exists in NO odb — deterministic stand-in for a
+      // gc-pruned snapshot (same shape git-snapshot.test.ts uses).
+      preSnapshot: 'deadbeef'.repeat(5),
+      startedAt: Date.now() - 200,
+      finishedAt: Date.now() - 100,
+      errorMessage: 'boom',
+    })
+    // Dirty worktree state that the pre-fix destroy-then-fail rollback would
+    // have eaten (tracked mutation + untracked stray).
+    writeFileSync(join(h.repoPath, 'README.md'), '# DIRTY\n')
+    writeFileSync(join(h.repoPath, 'stray.txt'), 'keep-me\n')
+
+    let code: string | undefined
+    try {
+      await resumeTask(h.db, h.taskId, {
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: ['/usr/bin/env', 'true'],
+      })
+    } catch (err) {
+      code = (err as { code?: string }).code
+    }
+    expect(code).toBe('snapshot-lost')
+
+    // Task escalated pending → failed with the snapshot-lost summary + detail.
+    const t = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+    expect(t.status).toBe('failed')
+    expect(t.errorSummary).toBe('snapshot-lost')
+    expect(t.errorMessage).toContain(failedId)
+    expect(t.errorMessage).toContain('pre-snapshot lost')
+    expect(t.failedNodeId).toBe('doc')
+
+    // Fail-closed: the worktree was never reset/cleaned.
+    expect(readFileSync(join(h.repoPath, 'README.md'), 'utf-8')).toBe('# DIRTY\n')
+    expect(existsSync(join(h.repoPath, 'stray.txt'))).toBe(true)
   })
 })

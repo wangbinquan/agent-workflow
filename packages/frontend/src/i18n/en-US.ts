@@ -970,10 +970,12 @@ export const enUS: Resources = {
         T2: 'Task awaiting_human but no node_run is awaiting_human',
         T3: 'Task done but an output node has no done node_run',
         U1: 'Multiple active node_runs share (nodeId, iteration, shard)',
+        'CR-1': 'Answered cross-clarify continue-directive left unconsumed on a failed task',
         S1: 'Task awaiting_review with no pending doc_version',
         S2: 'Task awaiting_human with no open clarify_session',
         S3: 'Task running but every node_run is terminal',
         S4: 'Task pending without scheduler pickup',
+        S5: 'Task running with active node_run(s) but events stopped landing',
       },
       repair: {
         openButton: 'Repair…',
@@ -2467,6 +2469,12 @@ export const enUS: Resources = {
         },
         unavailable: {
           taskNotPending: 'Task is no longer pending.',
+        },
+      },
+      S5: {
+        acknowledge: {
+          label: 'Acknowledge (no DB change)',
+          desc: 'Active run(s) exist but events stopped landing — inspect the pids in the alert detail; cancel/resume the task to recover (live children are group-killed before rollback). Acknowledging only resolves the alert.',
         },
       },
     },

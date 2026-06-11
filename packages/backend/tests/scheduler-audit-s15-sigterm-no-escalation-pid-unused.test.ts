@@ -1,41 +1,44 @@
-// CURRENT-BEHAVIOR LOCK — design/scheduler-audit-2026-06-10.md S-15 (WP-8)
+// POSITIVE GUARD (flipped) — design/scheduler-audit-2026-06-10.md S-15, fixed
+// by RFC-098 WP-8 (design/RFC-098-scheduler-closeout, survey §wp8-wp9).
 //
-// 指控已逐条对源码核实（基线 HEAD f9db99f 附近），全部属实，本文件以源码文本
-// 守卫锁定现状（目标函数 safeKill 未导出，无法纯函数直测；不合作子进程的真实
-// 进程级测试留给 WP-8 的 oracle——报告明言"现有 mock 是配合型，从未测过此形态"）：
+// This file used to be a CURRENT-BEHAVIOR LOCK pinning the three S-15
+// indictments (single fire-and-forget SIGTERM, unbounded `await child.exited`,
+// write-only nodeRuns.pid). The fix landed; per the FLIP instructions in the
+// original header the assertions are now POSITIVE source-text guards for the
+// mechanisms that replaced them:
 //
-//   1. 取消/超时只发一次 SIGTERM，无 SIGKILL 升级链——safeKill 的签名
-//      （runner.ts:1506）支持 'SIGTERM' | 'SIGKILL'，但全部调用点
-//      （runner.ts:766 abort 路径、:777 timeout 路径）只传过 'SIGTERM'；
-//      'SIGKILL' 字面量在 runner.ts 非注释行恰好出现 1 次（即签名类型本身）。
-//      对照：pluginInstaller.ts:385 有现成的 kill('SIGKILL') 超时模式，runner 未用。
-//   2. `await child.exited`（runner.ts:933）是无界等待：无 Promise.race、无
-//      最终超时——无视 SIGTERM 的 opencode 子进程（docker MCP 等）可让节点
-//      永久挂起，且该形态落在 stuckTaskDetector S1-S4 的盲区。
-//   3. nodeRuns.pid 落库后从未被任何进程治理逻辑消费：唯一写点
-//      runner.ts:757 `set({ pid: child.pid })`；唯一读点 task.ts:1441 把它映射
-//      进 API DTO（纯展示）。orphans.ts / stuckTaskDetector.ts 零 pid 引用，
-//      services 下 isProcessAlive 零命中（活性探测只存在于 util/lock.ts 的
-//      daemon 单实例锁，从未用于 node_run 孤儿收割 / resume 前置检查）。
+//   1. Kill escalation — runner spawns `detached: true` (child = its own
+//      process-group leader), `killTree` group-kills via `process.kill(-pid)`
+//      with a `safeKill` single-pid fallback, and `armKillEscalation` fires
+//      SIGTERM now → unref'd grace timer → SIGKILL. Both the abort and the
+//      timeout paths route through it (`startKill`).
+//   2. Bounded reaping — `child.exited` and the stdout/stderr pumps race a
+//      final reap deadline (grace + margin, armed at first kill / at exit);
+//      overrun ⟹ status='failed' + errorMessage='child-unkillable' (with
+//      pid), stream readers canceled (`LinePump.cancel`), `child.unref()`.
+//   3. pid governance — `util/process.ts` owns isProcessAlive (re-exported
+//      from util/lock.ts) + killProcessTree + killStaleRunProcessTree (the
+//      kill-then-proceed helper with the 48h startedAt window and the
+//      `ps -o command=` PID-reuse gates). orphans.ts kills live orphans
+//      before flipping rows; task.ts resumeTask/retryNode kill before the
+//      worktree rollback; stuckTaskDetector grew the S5 rule whose detail
+//      carries per-run {nodeRunId,nodeId,pid,lastEventTs}.
 //
-// 正确语义：SIGTERM 后固定宽限升级 SIGKILL；child.exited 加最终超时；spawn 自成
-// 进程组按组杀覆盖孙进程；reapOrphanRuns/resumeTask 前用 pid 做存活检查
-// （结合 startedAt 时间窗降噪 pid 复用）；stuckTaskDetector 增 S5 规则。
-//
-// 修复落点：WP-8。修复时本文件应翻红，按断言旁 FLIP 注释翻转：
-// 届时改为"必须存在 SIGKILL 升级路径 / 必须存在 exited 超时 / pid 必须有
-// 治理消费点"的正向守卫。
+// Behavioral oracles (stubborn child, group kill reaches the grandchild,
+// bounded wall clock) live in tests/rfc098-process-governance.test.ts; this
+// file only keeps the wiring honest at the source level.
 
 import { describe, expect, test } from 'bun:test'
-import { readdirSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 const RUNNER = resolve(BACKEND_SRC, 'services', 'runner.ts')
 const ORPHANS = resolve(BACKEND_SRC, 'services', 'orphans.ts')
 const STUCK = resolve(BACKEND_SRC, 'services', 'stuckTaskDetector.ts')
 const TASK = resolve(BACKEND_SRC, 'services', 'task.ts')
-const SERVICES_DIR = resolve(BACKEND_SRC, 'services')
+const PROCESS_UTIL = resolve(BACKEND_SRC, 'util', 'process.ts')
+const LOCK_UTIL = resolve(BACKEND_SRC, 'util', 'lock.ts')
 
 function isCommentLine(line: string): boolean {
   const trimmed = line.trim()
@@ -55,66 +58,83 @@ function countNonCommentMatches(content: string, re: RegExp): number {
   return n
 }
 
-describe('S-15 lock: single SIGTERM, no SIGKILL escalation (runner.ts)', () => {
+describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (runner.ts)', () => {
   const runnerSrc = readFileSync(RUNNER, 'utf8')
 
-  test('all kill paths route through safeKill, and every call site passes SIGTERM only', () => {
-    // child.kill(...) 只出现在 safeKill 体内一次——升级链若要落地必须经过这里。
-    expect(countNonCommentMatches(runnerSrc, /child\.kill\(/g)).toBe(1)
+  test('spawn is detached and killTree group-kills with safeKill fallback', () => {
+    // detached: true ⟹ the child is its own process-group leader, the
+    // precondition for `-pid` group signals reaching grandchildren.
+    expect(countNonCommentMatches(runnerSrc, /detached: true/g)).toBe(1)
 
-    // abort 路径 + timeout 路径 = 恰好 2 个调用点，都是 SIGTERM。
-    expect(countNonCommentMatches(runnerSrc, /safeKill\(child, 'SIGTERM'\)/g)).toBe(2)
-
-    // FLIP (WP-8): 升级链落地后这里应 ≥1（SIGTERM 宽限期后补 SIGKILL）。
-    expect(countNonCommentMatches(runnerSrc, /safeKill\(child, 'SIGKILL'\)/g)).toBe(0)
-
-    // 'SIGKILL' 字面量唯一的非注释出现就是 safeKill 的签名类型——能力存在、
-    // 从未被使用（签名变了说明有人动了 kill 协议，须重审本守卫）。
-    expect(countNonCommentMatches(runnerSrc, /'SIGKILL'/g)).toBe(1)
-    expect(runnerSrc).toContain(
-      "function safeKill(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void",
-    )
+    // killTree = process.kill(-pid, sig) with single-process fallback.
+    expect(countNonCommentMatches(runnerSrc, /process\.kill\(-pid, signal\)/g)).toBe(1)
+    expect(countNonCommentMatches(runnerSrc, /safeKill\(child, signal\)/g)).toBe(1)
   })
 
-  test('`await child.exited` is a single unbounded wait — no race, no final timeout', () => {
-    expect(countNonCommentMatches(runnerSrc, /await child\.exited/g)).toBe(1)
-    // FLIP (WP-8): exited 加最终超时（Promise.race 或等价机制）后翻转为 ≥1。
-    expect(countNonCommentMatches(runnerSrc, /Promise\.race/g)).toBe(0)
+  test('escalation chain exists: SIGTERM now, SIGKILL after the grace timer', () => {
+    // armKillEscalation fires the TERM and arms the KILL — exactly one each.
+    expect(countNonCommentMatches(runnerSrc, /killTree\(child, 'SIGTERM'\)/g)).toBe(1)
+    expect(countNonCommentMatches(runnerSrc, /killTree\(child, 'SIGKILL'\)/g)).toBe(1)
+
+    // Both kill initiators (abort + timeout) route through startKill().
+    expect(countNonCommentMatches(runnerSrc, /\bstartKill\(\)/g)).toBe(2)
+    expect(countNonCommentMatches(runnerSrc, /armKillEscalation\(/g)).toBeGreaterThanOrEqual(1)
+
+    // The grace timer must be unref'd (a wedged child can't pin bun test).
+    expect(runnerSrc).toContain('timer.unref()')
+  })
+
+  test('`child.exited` and the pumps are bounded by the reap deadline race', () => {
+    // Implementation mechanism is Promise.race against `reapDeadline`
+    // (修订条款: this regex is intentionally written for the REAL mechanism —
+    // if the bounded wait is reimplemented differently, rewrite this guard
+    // alongside it).
+    expect(countNonCommentMatches(runnerSrc, /Promise\.race/g)).toBeGreaterThanOrEqual(2)
+    expect(countNonCommentMatches(runnerSrc, /reapDeadline\b/g)).toBeGreaterThanOrEqual(3)
+
+    // Overrun ⟹ child-unkillable failure (with pid) + reader cancel + unref.
+    expect(countNonCommentMatches(runnerSrc, /child-unkillable/g)).toBeGreaterThanOrEqual(1)
+    expect(countNonCommentMatches(runnerSrc, /child\.unref\(\)/g)).toBe(1)
+    expect(countNonCommentMatches(runnerSrc, /reader\.cancel\(\)/g)).toBeGreaterThanOrEqual(1)
+    expect(countNonCommentMatches(runnerSrc, /stdoutPump\.cancel\(\)/g)).toBeGreaterThanOrEqual(1)
+    expect(countNonCommentMatches(runnerSrc, /stderrPump\.cancel\(\)/g)).toBeGreaterThanOrEqual(1)
   })
 })
 
-describe('S-15 lock: nodeRuns.pid is write-only for process governance', () => {
-  test('single write point in runner.ts; the only read maps it into the API DTO (display-only)', () => {
-    const runnerSrc = readFileSync(RUNNER, 'utf8')
-    expect(countNonCommentMatches(runnerSrc, /\.set\(\{ pid: child\.pid \}\)/g)).toBe(1)
+describe('S-15 guard: nodeRuns.pid is consumed by process governance', () => {
+  test('util/process.ts owns the liveness + kill-tree vocabulary; lock.ts re-exports', () => {
+    const processSrc = readFileSync(PROCESS_UTIL, 'utf8')
+    expect(countNonCommentMatches(processSrc, /export function isProcessAlive/g)).toBe(1)
+    expect(countNonCommentMatches(processSrc, /export function killProcessTree/g)).toBe(1)
+    expect(
+      countNonCommentMatches(processSrc, /export async function killStaleRunProcessTree/g),
+    ).toBe(1)
+    // Both PID-reuse noise gates live in the shared helper.
+    expect(processSrc).toContain('STALE_RUN_PID_MAX_AGE_MS')
+    expect(processSrc).toContain("'-o', 'command='")
 
-    // task.ts 全文件仅 1 个非注释 pid 引用，且是 DTO 映射行（纯展示读）。
-    const taskPidLines = nonCommentLines(readFileSync(TASK, 'utf8')).filter((l) =>
-      /\bpid\b/.test(l),
-    )
-    expect(taskPidLines.length).toBe(1)
-    expect(taskPidLines[0]).toMatch(/pid: r\.pid/)
+    const lockSrc = readFileSync(LOCK_UTIL, 'utf8')
+    expect(countNonCommentMatches(lockSrc, /export \{ isProcessAlive \}/g)).toBe(1)
   })
 
-  test('orphan reaper and stuck detector are pid-blind; no liveness probe anywhere in services', () => {
-    // FLIP (WP-8): reapOrphanRuns/resumeTask 接入 pid 存活检查、stuck S5 规则
-    // 带 pid 告警后，下面三个 0 断言应翻转（并把本用例改为正向守卫）。
-    expect(countNonCommentMatches(readFileSync(ORPHANS, 'utf8'), /\bpid\b/gi)).toBe(0)
-    expect(countNonCommentMatches(readFileSync(STUCK, 'utf8'), /\bpid\b/gi)).toBe(0)
+  test('orphan reaper kills live children before flipping rows', () => {
+    const orphansSrc = readFileSync(ORPHANS, 'utf8')
+    expect(countNonCommentMatches(orphansSrc, /killStaleRunProcessTree\(/g)).toBeGreaterThanOrEqual(
+      1,
+    )
+    expect(countNonCommentMatches(orphansSrc, /\bpid\b/g)).toBeGreaterThan(0)
+  })
 
-    const walk = (dir: string): string[] => {
-      const out: string[] = []
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const p = join(dir, entry.name)
-        if (entry.isDirectory()) out.push(...walk(p))
-        else if (entry.name.endsWith('.ts')) out.push(p)
-      }
-      return out
-    }
-    let liveness = 0
-    for (const f of walk(SERVICES_DIR)) {
-      liveness += countNonCommentMatches(readFileSync(f, 'utf8'), /isProcessAlive/g)
-    }
-    expect(liveness).toBe(0)
+  test('resumeTask + retryNode kill-then-proceed before the worktree rollback', () => {
+    const taskSrc = readFileSync(TASK, 'utf8')
+    // ≥ 2 call sites (resume loop + retry target) + the import line.
+    expect(countNonCommentMatches(taskSrc, /killStaleRunProcessTree/g)).toBeGreaterThanOrEqual(3)
+  })
+
+  test('stuck detector grew the S5 rule and surfaces pid in its detail', () => {
+    const stuckSrc = readFileSync(STUCK, 'utf8')
+    expect(countNonCommentMatches(stuckSrc, /'S5'/g)).toBeGreaterThanOrEqual(2)
+    expect(countNonCommentMatches(stuckSrc, /\bpid\b/g)).toBeGreaterThan(0)
+    expect(stuckSrc).toContain('latestEventTsForRun')
   })
 })

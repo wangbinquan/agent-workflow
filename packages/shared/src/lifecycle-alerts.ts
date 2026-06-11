@@ -19,6 +19,8 @@ export const LIFECYCLE_ALERT_RULES = [
   'S2',
   'S3',
   'S4',
+  // RFC-098 WP-8: running task, active node_run(s), events stalled.
+  'S5',
 ] as const
 
 export type LifecycleAlertRule = (typeof LIFECYCLE_ALERT_RULES)[number]

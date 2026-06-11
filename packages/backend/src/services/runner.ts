@@ -223,6 +223,15 @@ export interface RunNodeOptions {
   dangerouslySkipPermissions?: boolean
   /** Wall-clock timeout in ms. Undefined = no limit. */
   timeoutMs?: number
+  /**
+   * RFC-098 WP-8 (audit S-15): grace between the first SIGTERM (abort /
+   * timeout path) and the SIGKILL escalation. Also the base of the final
+   * reap deadline (grace + 5s margin) after which a child that survived
+   * SIGKILL is abandoned as `child-unkillable`. Default 10s. Only tests
+   * pass a small value (the stubborn-child suite must stay fast);
+   * production callers leave it unset.
+   */
+  killEscalationGraceMs?: number
   /** App home dir (parent of runs/, snapshots/, worktrees/, ...). */
   appHome: string
   /**
@@ -751,6 +760,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     stdout: 'pipe',
     stderr: 'pipe',
     stdin: 'ignore',
+    // RFC-098 WP-8 (audit S-15): POSIX setsid() — the child becomes its own
+    // process-group leader, so killTree's `process.kill(-pid, sig)` reaches
+    // grandchildren (docker MCP / shell-tool descendants) that a single-pid
+    // SIGTERM would orphan with the write end of our pipes still open.
+    detached: true,
   })
 
   if (typeof child.pid === 'number') {
@@ -758,12 +772,38 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   }
 
   // 5. Wire up cancellation + timeout.
+  //
+  // RFC-098 WP-8 (audit S-15): both paths now go through the SIGTERM →
+  // grace → SIGKILL escalation (group-kill first, see killTree) instead of
+  // a single fire-and-forget SIGTERM, and arm a final reap deadline
+  // (grace + margin) so a child that ignores even SIGKILL cannot wedge the
+  // runner forever (see §7 below).
   let aborted = false
   let timedOut = false
+  const graceMs = opts.killEscalationGraceMs ?? KILL_ESCALATION_GRACE_MS
+
+  let reapDeadlineTimer: ReturnType<typeof setTimeout> | null = null
+  let reapDeadlineFire: (() => void) | undefined
+  const reapDeadline = new Promise<'deadline'>((res) => {
+    reapDeadlineFire = () => res('deadline')
+  })
+  const armReapDeadline = (): void => {
+    if (reapDeadlineTimer !== null) return
+    reapDeadlineTimer = setTimeout(() => reapDeadlineFire?.(), graceMs + FINAL_REAP_MARGIN_MS)
+    reapDeadlineTimer.unref()
+  }
+
+  // Initializer cast keeps TS from flow-narrowing to `null` at the §7 read —
+  // the assignment only ever happens inside the abort/timeout closures.
+  let escalation = null as { cancel: () => void } | null
+  const startKill = (): void => {
+    if (escalation === null) escalation = armKillEscalation(child, log, graceMs)
+    armReapDeadline()
+  }
 
   const onAbort = (): void => {
     aborted = true
-    safeKill(child, 'SIGTERM')
+    startKill()
   }
   if (opts.signal) {
     if (opts.signal.aborted) onAbort()
@@ -774,7 +814,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     opts.timeoutMs !== undefined
       ? setTimeout(() => {
           timedOut = true
-          safeKill(child, 'SIGTERM')
+          startKill()
         }, opts.timeoutMs)
       : null
 
@@ -929,17 +969,56 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     }
   })
 
-  // 7. Wait for exit + drain streams.
-  const exitCode = await child.exited
+  // 7. Wait for exit + drain streams — bounded (RFC-098 WP-8, audit S-15).
+  //    The reap deadline (grace + margin) is armed at the first kill signal:
+  //    a child that survives the SIGTERM→SIGKILL escalation past it is
+  //    abandoned — status='failed' / errorMessage='child-unkillable', stream
+  //    readers canceled, child unref'd — so neither the daemon nor bun test
+  //    can hang on an unkillable subprocess. The deadline is re-armed at
+  //    normal exit too, bounding the pump drain below: a detached descendant
+  //    that inherited our pipe FDs would otherwise keep the pumps from ever
+  //    seeing EOF (the second wedge point S-15 called out).
+  const exitedOutcome = await Promise.race([
+    child.exited.then((code) => ({ kind: 'exited' as const, code })),
+    reapDeadline.then(() => ({ kind: 'unkillable' as const })),
+  ])
+  const childUnkillable = exitedOutcome.kind === 'unkillable'
+  const exitCode = exitedOutcome.kind === 'exited' ? exitedOutcome.code : null
+  escalation?.cancel()
   // RFC-048: stop the live poller before the post-run BFS so no concurrent
   // SELECT races against the final captureChildSessions read. `abort()` is
   // idempotent + signal-based; `livePoller.stop()` clears the interval and
   // closes the readonly handle.
   liveCtrl.abort()
   livePoller.stop()
-  await Promise.all([stdoutPump, stderrPump])
+  if (childUnkillable) {
+    log.error('child survived SIGKILL escalation past reap deadline; abandoning', {
+      nodeRunId: opts.nodeRunId,
+      pid: child.pid,
+      deadlineMs: graceMs + FINAL_REAP_MARGIN_MS,
+    })
+    stdoutPump.cancel()
+    stderrPump.cancel()
+    child.unref()
+  } else {
+    armReapDeadline()
+    const drained = await Promise.race([
+      Promise.all([stdoutPump.done, stderrPump.done]).then(() => true),
+      reapDeadline.then(() => false),
+    ])
+    if (!drained) {
+      log.warn('stdout/stderr never hit EOF after exit (descendant holding pipe?); canceling', {
+        nodeRunId: opts.nodeRunId,
+        pid: child.pid,
+      })
+      stdoutPump.cancel()
+      stderrPump.cancel()
+    }
+  }
+  await Promise.all([stdoutPump.done, stderrPump.done])
   if (opts.signal) opts.signal.removeEventListener('abort', onAbort)
   if (timeoutHandle !== null) clearTimeout(timeoutHandle)
+  if (reapDeadlineTimer !== null) clearTimeout(reapDeadlineTimer)
 
   // 8. Resolve final status.
   let status: RunFinalStatus
@@ -950,7 +1029,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // followup attempt to the right OutputKindHandler's repair block without
   // re-parsing errorMessage.
   const portValidationFailures: PortValidationFailure[] = []
-  if (aborted) {
+  if (childUnkillable) {
+    // RFC-098 WP-8: overrides aborted/timedOut — the operator needs the pid
+    // to clean up by hand, and a 'canceled' status would read as a clean stop.
+    status = 'failed'
+    errorMessage = `child-unkillable: pid ${child.pid} survived SIGTERM→SIGKILL escalation past ${graceMs + FINAL_REAP_MARGIN_MS}ms; abandoned (detached process group left running)`
+  } else if (aborted) {
     status = 'canceled'
     errorMessage = 'aborted by signal'
   } else if (timedOut) {
@@ -1511,33 +1595,106 @@ function safeKill(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
   }
 }
 
+/** RFC-098 WP-8: SIGTERM → SIGKILL escalation grace. */
+const KILL_ESCALATION_GRACE_MS = 10_000
+/** RFC-098 WP-8: margin on top of the grace for the final reap deadline. */
+const FINAL_REAP_MARGIN_MS = 5_000
+
+/**
+ * RFC-098 WP-8 (audit S-15): kill the child's WHOLE process group — spawn
+ * uses `detached: true`, making the child its own group leader, so `-pid`
+ * reaches grandchildren too (verified on bun 1.3.13 / darwin: group SIGTERM
+ * kills a bash child's forked sleep). Falls back to the single-process
+ * safeKill when the group signal fails (ESRCH after exit / EPERM).
+ */
+function killTree(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
+  const pid = child.pid
+  if (typeof pid === 'number' && pid > 0) {
+    try {
+      process.kill(-pid, signal)
+      return
+    } catch {
+      // fall back to the single-process kill below
+    }
+  }
+  safeKill(child, signal)
+}
+
+/**
+ * RFC-098 WP-8: fire SIGTERM at the child's process group now, then escalate
+ * to SIGKILL after `graceMs` unless the child exits first. The timer is
+ * unref'd so a wedged child can't keep the daemon (or bun test) alive, and
+ * auto-cancels on `child.exited`.
+ */
+function armKillEscalation(
+  child: Bun.Subprocess,
+  log: Logger,
+  graceMs: number,
+): { cancel: () => void } {
+  killTree(child, 'SIGTERM')
+  const timer = setTimeout(() => {
+    log.warn('child ignored SIGTERM past grace; escalating to SIGKILL', {
+      pid: child.pid,
+      graceMs,
+    })
+    killTree(child, 'SIGKILL')
+  }, graceMs)
+  timer.unref()
+  const cancel = (): void => clearTimeout(timer)
+  void child.exited.then(cancel, cancel)
+  return { cancel }
+}
+
+interface LinePump {
+  /** Resolves once the stream EOFs (or is canceled) and every onLine settled. */
+  done: Promise<void>
+  /**
+   * RFC-098 WP-8: abandon the stream — cancels the underlying reader so a
+   * pipe FD held open by a surviving (grand)child can't wedge `done`.
+   * The partial tail line is dropped on cancel.
+   */
+  cancel: () => void
+}
+
 /**
  * Drain a ReadableStream of UTF-8 bytes, calling `onLine` for each complete
  * line. Awaits each callback so the caller's DB writes serialize naturally.
  */
-async function pumpLines(
+function pumpLines(
   stream: ReadableStream<Uint8Array>,
   onLine: (line: string) => Promise<void> | void,
-): Promise<void> {
+): LinePump {
   const reader = stream.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  try {
-    for (;;) {
-      const { value, done } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      let idx: number
-      while ((idx = buffer.indexOf('\n')) >= 0) {
-        const line = buffer.slice(0, idx)
-        buffer = buffer.slice(idx + 1)
-        if (line.length > 0) await onLine(line)
+  let canceled = false
+  const done = (async (): Promise<void> => {
+    const decoder = new TextDecoder()
+    let buffer = ''
+    try {
+      for (;;) {
+        const { value, done: eof } = await reader.read()
+        if (eof) break
+        buffer += decoder.decode(value, { stream: true })
+        let idx: number
+        while ((idx = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, idx)
+          buffer = buffer.slice(idx + 1)
+          if (line.length > 0) await onLine(line)
+        }
       }
+      // Flush remaining tail (process emitted a line without trailing newline).
+      if (buffer.length > 0 && !canceled) await onLine(buffer)
+    } finally {
+      reader.releaseLock()
     }
-    // Flush remaining tail (process emitted a line without trailing newline).
-    if (buffer.length > 0) await onLine(buffer)
-  } finally {
-    reader.releaseLock()
+  })()
+  return {
+    done,
+    cancel: () => {
+      canceled = true
+      // Resolves any in-flight read() with done:true; the loop above then
+      // exits and releases the lock.
+      void reader.cancel().catch(() => {})
+    },
   }
 }
 

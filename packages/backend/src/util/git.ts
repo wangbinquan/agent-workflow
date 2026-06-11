@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import type { Logger } from '@/util/log'
 
 export interface GitRunResult {
   stdout: string
@@ -752,6 +753,60 @@ export async function worktreeDiff(
 }
 
 /**
+ * RFC-098 WP-9 (audit S-11): canonical ref name pinning a node_run's
+ * pre-snapshot stash commit in the (shared) source-repo object database.
+ * The `{taskId}` path segment exists so the worktree GC can batch-delete
+ * every ref of a task with one `for-each-ref` prefix scan
+ * (`deleteSnapshotRefs` below).
+ */
+export function snapshotRefName(taskId: string, nodeRunId: string): string {
+  return `refs/agent-workflow/snapshots/${taskId}/${nodeRunId}`
+}
+
+/** Prefix under which all of a task's snapshot refs live (see snapshotRefName). */
+export function snapshotRefPrefix(taskId: string): string {
+  return `refs/agent-workflow/snapshots/${taskId}`
+}
+
+/**
+ * RFC-098 WP-9: `git cat-file -e <sha>^{commit}` — true iff the sha resolves
+ * to a commit object still present in the odb. Used as the fail-closed
+ * pre-check before any destructive rollback (a gc-pruned snapshot must be
+ * detected BEFORE reset+clean destroy the worktree state).
+ */
+export async function gitCommitExists(repoPath: string, sha: string): Promise<boolean> {
+  const r = await runGit(repoPath, ['cat-file', '-e', `${sha}^{commit}`])
+  return r.exitCode === 0
+}
+
+/**
+ * RFC-098 WP-9: batch-delete every snapshot ref a task pinned in `repoPath`
+ * (`refs/agent-workflow/snapshots/{taskId}/*`). Best-effort — `runGit` never
+ * throws and a failed delete is simply not counted. Returns the number of
+ * refs actually deleted. Single-repo only: multi-repo container tasks are
+ * the gc.ts multi-repo blindspot (audit ⑥ gap-3 family) and are handled
+ * with that fix, not here.
+ */
+export async function deleteSnapshotRefs(repoPath: string, taskId: string): Promise<number> {
+  const list = await runGit(repoPath, [
+    'for-each-ref',
+    '--format=%(refname)',
+    snapshotRefPrefix(taskId),
+  ])
+  if (list.exitCode !== 0) return 0
+  const refs = list.stdout
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+  let deleted = 0
+  for (const ref of refs) {
+    const del = await runGit(repoPath, ['update-ref', '-d', ref])
+    if (del.exitCode === 0) deleted += 1
+  }
+  return deleted
+}
+
+/**
  * Capture the worktree state as a git stash entry without committing it
  * (P-3-07). Returns the stash sha — caller persists it in
  * `node_runs.pre_snapshot` for later rollback on retry/resume.
@@ -759,13 +814,36 @@ export async function worktreeDiff(
  * `git stash create` produces a commit object referenced only by the
  * returned sha; it does NOT push to the stash list, so concurrent stashes
  * across tasks don't fight over reflog ordering. Empty trees return ''.
+ *
+ * RFC-098 WP-9 (audit S-11): without a ref the stash commit is a dangling
+ * object — any `git gc` past gc.pruneExpire in the SHARED source-repo odb
+ * (which the platform cannot stop the user from running) destroys it and a
+ * later resume loses the pre-snapshot state forever. Pass `opts.pinRef`
+ * (typically `snapshotRefName(taskId, nodeRunId)`) to pin the commit with a
+ * lightweight ref. Pin failure is deliberately non-blocking — the snapshot
+ * is still usable short-term and failing the node over a ref write would be
+ * worse than the (pre-existing) gc exposure; it is logged via `opts.log`.
  */
-export async function gitStashSnapshot(worktreePath: string): Promise<string> {
+export async function gitStashSnapshot(
+  worktreePath: string,
+  opts?: { pinRef?: string; log?: Logger },
+): Promise<string> {
   const r = await runGit(worktreePath, ['stash', 'create'])
   if (r.exitCode !== 0) {
     throw new DomainError('worktree-snapshot-failed', `git stash create: ${r.stderr.trim()}`, 500)
   }
-  return r.stdout.trim()
+  const sha = r.stdout.trim()
+  if (sha !== '' && opts?.pinRef !== undefined) {
+    const pin = await runGit(worktreePath, ['update-ref', opts.pinRef, sha])
+    if (pin.exitCode !== 0) {
+      opts.log?.warn('snapshot ref pin failed (snapshot stays gc-exposed)', {
+        pinRef: opts.pinRef,
+        sha,
+        error: pin.stderr.trim(),
+      })
+    }
+  }
+  return sha
 }
 
 /**
@@ -782,8 +860,24 @@ export async function gitStashSnapshot(worktreePath: string): Promise<string> {
  * node, or the worktree was clean at snapshot time), the function still
  * does reset+clean so any partial bad write outside the snapshot window
  * is cleared.
+ *
+ * RFC-098 WP-9 (audit S-11): fail-closed. A non-empty sha is verified with
+ * `cat-file -e <sha>^{commit}` BEFORE the destructive reset+clean — the old
+ * order destroyed the worktree first and only then discovered the gc-pruned
+ * snapshot at the `stash apply` step ('worktree-apply-failed'), losing the
+ * pre-snapshot uncommitted state forever. A missing snapshot now throws
+ * `'snapshot-missing'` with the worktree untouched. The `''` path keeps its
+ * reset+clean semantics unchanged (scheduler-boundary-presnapshot-rollback-
+ * skip.test.ts).
  */
 export async function rollbackToSnapshot(worktreePath: string, snapshotSha: string): Promise<void> {
+  if (snapshotSha !== '' && !(await gitCommitExists(worktreePath, snapshotSha))) {
+    throw new DomainError(
+      'snapshot-missing',
+      `snapshot ${snapshotSha} not found in the object database (pruned by gc?); worktree left untouched`,
+      500,
+    )
+  }
   const reset = await runGit(worktreePath, ['reset', '--hard', 'HEAD'])
   if (reset.exitCode !== 0) {
     throw new DomainError('worktree-reset-failed', `git reset: ${reset.stderr.trim()}`, 500)

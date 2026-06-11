@@ -1,6 +1,6 @@
 // RFC-057 — Diagnose Panel repair option taxonomy (shared contract).
 //
-// The 12 lifecycle alert rules (R1/R2/C1/T1/T2/T3/U1/CR-1 + S1/S2/S3/S4)
+// The 13 lifecycle alert rules (R1/R2/C1/T1/T2/T3/U1/CR-1 + S1/S2/S3/S4/S5)
 // each map to a fixed set of `optionId`s. Backend implements the
 // `preflight` + `apply` functions per optionId; this file is the static
 // contract both ends agree on so frontend can render UI without coupling
@@ -105,6 +105,10 @@ export const REPAIR_OPTION_IDS = {
     'S3.mark-task-failed',
   ],
   S4: ['S4.kick-task', 'S4.cancel-task'],
+  // RFC-098 WP-8: the runtime fix for S5 is process-level (kill escalation /
+  // orphan reaping / kill-then-proceed on cancel+resume); the repair option
+  // is an acknowledge mirroring CR-1.acknowledge.
+  S5: ['S5.acknowledge'],
 } as const satisfies Record<LifecycleAlertRule, readonly string[]>
 
 export type RepairOptionId = (typeof REPAIR_OPTION_IDS)[keyof typeof REPAIR_OPTION_IDS][number]

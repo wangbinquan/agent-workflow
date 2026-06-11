@@ -914,10 +914,12 @@ export interface Resources {
         T2: string
         T3: string
         U1: string
+        'CR-1': string
         S1: string
         S2: string
         S3: string
         S4: string
+        S5: string
       }
       // RFC-057: UI strings for the repair dialog + confirm modal. The
       // option-specific labels (R1.approveRun.label / etc.) live at root
@@ -2239,6 +2241,10 @@ export interface Resources {
         cancelTask: { label: string; desc: string }
         unavailable: { taskNotPending: string }
       }
+      // RFC-098 WP-8: S5 (running, active runs, events stalled) — acknowledge only.
+      S5: {
+        acknowledge: { label: string; desc: string }
+      }
     }
   }
 }
@@ -3177,10 +3183,12 @@ export const zhCN: Resources = {
         T2: 'task 处于 awaiting_human，但没有任何 node_run 处于 awaiting_human',
         T3: 'task 已 done，但仍有 output 节点没有 done 的 node_run',
         U1: '同一 (nodeId, iteration, shard) 上存在多个活跃 node_run',
+        'CR-1': 'cross-clarify 已回答 continue 指令，但失败任务上无 designer 消费',
         S1: 'task 在 awaiting_review 长时间无 pending doc_version',
         S2: 'task 在 awaiting_human 长时间无开放 clarify_session',
         S3: 'task 状态 running，但所有 node_run 都已落终态',
         S4: 'task 长时间处于 pending，调度器未拣选',
+        S5: 'task 在 running 且存在活跃 node_run，但事件流长时间停滞',
       },
       repair: {
         openButton: '修复…',
@@ -4613,6 +4621,12 @@ export const zhCN: Resources = {
         },
         unavailable: {
           taskNotPending: '任务已经不是 pending 状态。',
+        },
+      },
+      S5: {
+        acknowledge: {
+          label: '确认知悉（不改数据）',
+          desc: '存在活跃 node_run 但事件流已停滞——告警详情携带各活跃行的 pid，可通过取消/恢复任务走 RFC-098 的进程治理回收（回滚前组杀存活子进程）。确认仅关闭该告警。',
         },
       },
     },

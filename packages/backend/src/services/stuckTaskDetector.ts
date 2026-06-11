@@ -1,6 +1,6 @@
 // RFC-053 P-6 — stuck-task detector.
 //
-// Four rules (S1/S2/S3/S4); each looks at whether a task has been parked
+// Five rules (S1/S2/S3/S4/S5); each looks at whether a task has been parked
 // in a status for longer than its threshold AND the *evidence* matching
 // that status is missing. Together: "stuck without explanation."
 //
@@ -8,14 +8,18 @@
 //   S2  task.status='awaiting_human'  > 30 min, no open clarify_session
 //   S3  task.status='running'         > 30 min, no node_run still active
 //   S4  task.status='pending'         > 5 min
+//   S5  task.status='running'         > 30 min quiet, active node_run(s)
+//       exist but events stopped landing (RFC-098 WP-8 / audit S-15: the
+//       opencode child is wedged — e.g. trapped SIGTERM, hung MCP — or died
+//       without the runner settling the row)
 //
-// "30 min" for S1/S2/S3 is from the latest node_run_events for the task —
+// "30 min" for S1/S2/S3/S5 is from the latest node_run_events for the task —
 // if events are still landing we don't flag (the task is actively talking
 // to opencode, not stuck). Falls back to tasks.startedAt when no events.
 // S4 uses tasks.startedAt directly because pending tasks never emit events.
 //
 // Findings land in the same lifecycle_alerts table as PR-D's invariants
-// (rule='S1'|'S2'|'S3'|'S4'); the shared reconcileLifecycleAlerts pass
+// (rule='S1'|'S2'|'S3'|'S4'|'S5'); the shared reconcileLifecycleAlerts pass
 // scoped to STUCK_RULES keeps the two writers from stepping on each
 // other.
 //
@@ -119,6 +123,22 @@ async function latestEventTsForTask(db: DbClient, taskId: string): Promise<numbe
   return row.ts
 }
 
+/**
+ * RFC-098 WP-8: per-run flavor of `latestEventTsForTask` — the S5 detail
+ * reports each wedged run's own last event so the operator can tell which
+ * pid went quiet when.
+ */
+async function latestEventTsForRun(db: DbClient, nodeRunId: string): Promise<number | null> {
+  const row = (
+    await db
+      .select({ ts: max(nodeRunEvents.ts) })
+      .from(nodeRunEvents)
+      .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+  )[0]
+  if (row === undefined || row.ts === null) return null
+  return row.ts
+}
+
 async function hasPendingDocVersion(db: DbClient, taskId: string): Promise<boolean> {
   const row = (
     await db
@@ -154,18 +174,28 @@ interface NodeRunCounts {
   total: number
   terminal: number
   active: number
+  /** RFC-098 WP-8 (S5): the non-terminal rows with the fields the alert
+   *  detail surfaces ({nodeRunId,nodeId,pid} + per-run lastEventTs later). */
+  activeRows: Array<{ id: string; nodeId: string; status: string; pid: number | null }>
 }
 
 async function nodeRunCounts(db: DbClient, taskId: string): Promise<NodeRunCounts> {
   const rows = await db
-    .select({ status: nodeRuns.status })
+    .select({
+      id: nodeRuns.id,
+      nodeId: nodeRuns.nodeId,
+      status: nodeRuns.status,
+      pid: nodeRuns.pid,
+    })
     .from(nodeRuns)
     .where(eq(nodeRuns.taskId, taskId))
   let terminal = 0
+  const activeRows: NodeRunCounts['activeRows'] = []
   for (const r of rows) {
     if (TERMINAL_NODE_RUN_STATUSES.includes(r.status)) terminal++
+    else activeRows.push(r)
   }
-  return { total: rows.length, terminal, active: rows.length - terminal }
+  return { total: rows.length, terminal, active: rows.length - terminal, activeRows }
 }
 
 interface StuckTaskFinding extends LifecycleAlertFinding {
@@ -258,6 +288,39 @@ async function checkOne(
           totalRuns: counts.total,
           terminalRuns: counts.terminal,
           ...(hint ? { repairHint: hint } : {}),
+        },
+      })
+    } else if (counts.active > 0) {
+      // S5 (RFC-098 WP-8, audit S-15): the else half of S3 that used to be a
+      // blind spot — active run(s) exist but events stopped landing past the
+      // threshold (the freshness gate above already established that). The
+      // opencode child is wedged (e.g. ignoring SIGTERM, hung MCP) or died
+      // without the runner settling the row. detail carries per-run
+      // {nodeRunId,nodeId,pid,lastEventTs} so the operator can inspect /
+      // kill the pid; cancel/resume run the RFC-098 kill-then-proceed path.
+      const activeRuns: Array<{
+        nodeRunId: string
+        nodeId: string
+        pid: number | null
+        lastEventTs: number | null
+      }> = []
+      for (const r of counts.activeRows) {
+        activeRuns.push({
+          nodeRunId: r.id,
+          nodeId: r.nodeId,
+          pid: r.pid,
+          lastEventTs: await latestEventTsForRun(db, r.id),
+        })
+      }
+      out.push({
+        taskId: c.taskId,
+        rule: 'S5',
+        detail: {
+          rule: 'S5',
+          message: 'task running with active node_run(s) but events stopped landing',
+          inactiveForMs,
+          thresholdMs: stuckThresholdMs,
+          activeRuns,
         },
       })
     }

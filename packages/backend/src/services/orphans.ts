@@ -6,14 +6,20 @@
 // optimistically flip them to `interrupted` and mark the task error so the
 // UI shows what happened.
 //
-// We don't try to attach to old opencode children; if any are still alive,
-// they'll keep running detached until they exit naturally (their parent is
-// init now). v1 doesn't promise to clean these up.
+// RFC-098 WP-8 (audit S-15): we DO now reap still-alive opencode children.
+// Each orphaned node_runs row carries the child's pid (runner writes it at
+// spawn); when that pid is still alive — gated by the startedAt window and a
+// `ps` command-shape check against PID reuse — we group-kill it (TERM→KILL,
+// best-effort) BEFORE flipping the row to interrupted. Otherwise the
+// survivor keeps writing into the worktree while the user resumes on top of
+// it. Rows with pid NULL (pre-RFC-098 / never-spawned) take the old
+// flip-only path.
 
 import { inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { nodeRuns, tasks } from '@/db/schema'
 import { transitionNodeRunStatus, trySetTaskStatus } from '@/services/lifecycle'
+import { killStaleRunProcessTree } from '@/util/process'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('orphans')
@@ -64,6 +70,18 @@ export async function reapOrphanRuns(db: DbClient): Promise<ReapResult> {
   }
   let runsReaped = 0
   for (const r of runningRuns) {
+    // RFC-098 WP-8: kill-then-flip. killStaleRunProcessTree applies both
+    // PID-reuse noise gates (startedAt < 48h window + `ps -p pid -o command=`
+    // must look like opencode/bun) before signaling; any non-kill outcome
+    // falls through to the status flip exactly as before.
+    const killOutcome = await killStaleRunProcessTree(r, { now })
+    if (killOutcome === 'killed' || killOutcome === 'kill-failed') {
+      log.warn('orphan run had a live child process — group-killed (best-effort)', {
+        nodeRunId: r.id,
+        pid: r.pid,
+        outcome: killOutcome,
+      })
+    }
     try {
       await transitionNodeRunStatus({
         db,

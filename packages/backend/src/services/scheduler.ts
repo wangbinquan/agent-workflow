@@ -116,7 +116,7 @@ import { createLogger, type Logger } from '@/util/log'
 // RFC-060 PR-E: splitDiff* imports removed — they were used only by the
 // agent-multi fan-out path (now deleted). wrapper-fanout consumes a `list<T>`
 // shardSource instead of slicing a string diff.
-import { gitChangedFiles, gitStashSnapshot, runGit } from '@/util/git'
+import { gitChangedFiles, gitStashSnapshot, runGit, snapshotRefName } from '@/util/git'
 import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { Semaphore } from '@/util/semaphore'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
@@ -1759,12 +1759,42 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           // the container dir is never touched (nodeRollback.ts hard gate).
           if (!agent.readonly) {
             try {
-              await rollbackNodeRunWorktrees(
+              const rollbackOutcome = await rollbackNodeRunWorktrees(
                 { repoCount: task.repoCount, worktreePath: task.worktreePath, repos: state.repos },
                 lastFreshSnapshot ?? { id: nodeRunId, preSnapshot: '', preSnapshotReposJson: null },
                 { resetOnEmptySnapshot: true },
                 log,
               )
+              // RFC-098 WP-9: snapshot-lost escalation. A 'snapshot-missing'
+              // failure means the pre-snapshot commit was gc-pruned — the
+              // fail-closed rollback touched nothing, and retrying cannot
+              // restore the baseline. Spawning the next attempt on top of the
+              // failed attempt's leftover writes would compound them, so the
+              // node fails here without starting another process.
+              const missingSnapshots = rollbackOutcome.failures.filter(
+                (f) => f.code === 'snapshot-missing',
+              )
+              if (missingSnapshots.length > 0) {
+                const detail = missingSnapshots
+                  .map((f) =>
+                    f.worktreeDirName ? `${f.worktreeDirName}: ${f.message}` : f.message,
+                  )
+                  .join('; ')
+                log.warn('retry rollback aborted: pre-snapshot lost', {
+                  nodeId: node.id,
+                  detail,
+                })
+                lastError = 'snapshot-lost'
+                lastResult = {
+                  status: 'failed',
+                  exitCode: null,
+                  outputs: {},
+                  tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
+                  prompt: '',
+                  errorMessage: `snapshot-lost: ${detail}`,
+                }
+                break
+              }
             } catch (err) {
               log.warn('retry rollback failed', {
                 nodeId: node.id,
@@ -1839,8 +1869,14 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           if (task.repoCount === 1) {
             // RFC-066: single-path byte-baseline branch — `pre_snapshot`
             // remains the single-string column the resume path has always
-            // read.
-            const sha = await gitStashSnapshot(task.worktreePath)
+            // read. RFC-098 WP-9: the stash commit is pinned with a
+            // lightweight ref so a user-side `git gc` in the shared
+            // source-repo odb cannot prune it (pin failure is logged, never
+            // blocks the node).
+            const sha = await gitStashSnapshot(task.worktreePath, {
+              pinRef: snapshotRefName(taskId, nodeRunId),
+              log,
+            })
             // RFC-092: remember the baseline in-process for the retry rollback
             // (set before the DB write so a failed write still leaves the
             // correct rollback target in hand).
@@ -1855,7 +1891,13 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
             const stashMap: Record<string, string> = {}
             for (const repo of state.repos) {
               try {
-                stashMap[repo.worktreeDirName] = await gitStashSnapshot(repo.worktreePath)
+                // RFC-098 WP-9: same pin as the single-repo branch — each
+                // sub-worktree pins the ref in its OWN source-repo odb, so
+                // the identical ref name never collides across repos.
+                stashMap[repo.worktreeDirName] = await gitStashSnapshot(repo.worktreePath, {
+                  pinRef: snapshotRefName(taskId, nodeRunId),
+                  log,
+                })
               } catch (err) {
                 log.warn('pre-snapshot per-repo failed', {
                   nodeRunId,

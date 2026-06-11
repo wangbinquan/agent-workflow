@@ -1,6 +1,6 @@
 // RFC-057 — Diagnose Panel repair option engine.
 //
-// Each lifecycle_alerts row (R1/R2/C1/T1/T2/T3/U1/CR-1/S1/S2/S3/S4) maps
+// Each lifecycle_alerts row (R1/R2/C1/T1/T2/T3/U1/CR-1/S1/S2/S3/S4/S5) maps
 // to a typed set of repair options declared in `REPAIR_OPTIONS`. The two
 // public entry points are:
 //
@@ -51,6 +51,7 @@ import { S1_OPTIONS } from './lifecycleRepair/options-S1'
 import { S2_OPTIONS } from './lifecycleRepair/options-S2'
 import { S3_OPTIONS } from './lifecycleRepair/options-S3'
 import { S4_OPTIONS } from './lifecycleRepair/options-S4'
+import { S5_OPTIONS } from './lifecycleRepair/options-S5'
 import { T1_OPTIONS } from './lifecycleRepair/options-T1'
 import { T2_OPTIONS } from './lifecycleRepair/options-T2'
 import { T3_OPTIONS } from './lifecycleRepair/options-T3'
@@ -85,6 +86,7 @@ export const REPAIR_OPTIONS = {
   S2: S2_OPTIONS,
   S3: S3_OPTIONS,
   S4: S4_OPTIONS,
+  S5: S5_OPTIONS,
 } as const satisfies Record<LifecycleAlertRule, readonly [RepairOptionDef, ...RepairOptionDef[]]>
 
 // Runtime guard: every implemented option id must appear in the shared

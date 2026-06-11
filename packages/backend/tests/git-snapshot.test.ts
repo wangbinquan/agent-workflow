@@ -84,11 +84,20 @@ describe('gitStashSnapshot + rollbackToSnapshot', () => {
     expect(existsSync(join(r.path, 'extra.txt'))).toBe(false)
   })
 
-  test('rollback with unknown sha → DomainError', async () => {
+  test('rollback with unknown sha → snapshot-missing, worktree untouched (RFC-098 WP-9 fail-closed)', async () => {
+    // FLIPPED by RFC-098 B2: pre-fix this threw 'worktree-apply-failed' AFTER
+    // reset --hard + clean -fd had already destroyed the dirty state. The
+    // fail-closed head check ('cat-file -e <sha>^{commit}') now rejects with
+    // 'snapshot-missing' BEFORE any destructive git command runs.
     writeFileSync(join(r.path, 'a.txt'), 'changed\n')
+    writeFileSync(join(r.path, 'extra.txt'), 'extra\n')
     await expect(rollbackToSnapshot(r.path, 'deadbeef'.repeat(5))).rejects.toMatchObject({
-      code: 'worktree-apply-failed',
+      code: 'snapshot-missing',
     })
+    // Worktree untouched: no reset --hard (tracked change kept), no clean -fd
+    // (untracked file kept).
+    expect(readFileSync(join(r.path, 'a.txt'), 'utf-8')).toBe('changed\n')
+    expect(existsSync(join(r.path, 'extra.txt'))).toBe(true)
   })
 })
 

@@ -14,6 +14,13 @@ import {
 } from 'node:fs'
 import { dirname } from 'node:path'
 
+import { isProcessAlive } from './process'
+
+// RFC-098 WP-8: `isProcessAlive` moved to util/process.ts (shared with the
+// services-level pid governance); re-exported here so existing lock callers
+// keep their import path.
+export { isProcessAlive }
+
 export class DaemonLockHeldError extends Error {
   constructor(
     public readonly pid: number,
@@ -96,18 +103,6 @@ export function readPidFromLock(lockPath: string): number | null {
     return Number.isFinite(n) && n > 0 ? n : null
   } catch {
     return null
-  }
-}
-
-/** True iff `pid` is a live process this user can signal (or at least exists). */
-export function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (err) {
-    const e = err as NodeJS.ErrnoException
-    // EPERM means the process exists but we don't have permission to signal it.
-    return e.code === 'EPERM'
   }
 }
 

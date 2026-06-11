@@ -22,7 +22,7 @@
 //
 // Per-repo errors are warn-and-continue; callers decide what to do next.
 
-import { rollbackToSnapshot } from '@/util/git'
+import { gitCommitExists, rollbackToSnapshot } from '@/util/git'
 import type { Logger } from '@/util/log'
 import { asc, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
@@ -105,6 +105,34 @@ export async function rollbackNodeRunWorktrees(
         map = {}
       }
     }
+    // RFC-098 WP-9 (design 修订#3): two-phase all-or-nothing. Phase 1 verifies
+    // every non-empty per-repo snapshot still resolves to a commit BEFORE any
+    // repo is touched — the old single pass could destroy repo 1 (reset+clean)
+    // and only then hit a gc-pruned snapshot on repo 2, violating the
+    // fail-closed promise. '' repos skip the check (no snapshot object is
+    // needed: they are skipped in resume mode / reset-only in retry mode).
+    // Any missing snapshot → failures filled with 'snapshot-missing' and ZERO
+    // repos touched (`attempted` stays false). rollbackToSnapshot keeps its
+    // own head check as the direct-caller backstop.
+    for (const repo of target.repos) {
+      const sha = map[repo.worktreeDirName] ?? ''
+      if (sha === '') continue
+      if (!(await gitCommitExists(repo.worktreePath, sha))) {
+        outcome.failures.push({
+          worktreeDirName: repo.worktreeDirName,
+          code: 'snapshot-missing',
+          message: `snapshot ${sha} not found in the object database (pruned by gc?); no repo touched`,
+        })
+        log.warn('node-run rollback pre-check: per-repo snapshot missing', {
+          nodeRunId: run.id,
+          worktreeDirName: repo.worktreeDirName,
+          sha,
+        })
+      }
+    }
+    if (outcome.failures.length > 0) return outcome
+
+    // Phase 2: every snapshot verified — execute the per-repo rollback.
     for (const repo of target.repos) {
       const sha = map[repo.worktreeDirName] ?? ''
       if (sha === '' && !opts.resetOnEmptySnapshot) continue

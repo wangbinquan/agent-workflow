@@ -12,7 +12,7 @@ import { existsSync } from 'node:fs'
 import type { Config } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { tasks } from '@/db/schema'
-import { removeWorktree, runGit } from '@/util/git'
+import { deleteSnapshotRefs, removeWorktree, runGit } from '@/util/git'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { createLogger } from '@/util/log'
 
@@ -72,6 +72,16 @@ export async function runWorktreeGc(
     try {
       await removeWorktree({ repoPath: t.repoPath, worktreePath: t.worktreePath, force: true })
       invalidateCallGraphIndex(t.worktreePath) // RFC-085 — free the cached class→file index
+      // RFC-098 WP-9: the snapshot refs this task pinned in the source-repo
+      // odb (refs/agent-workflow/snapshots/{taskId}/*) share the worktree's
+      // lifecycle — retryNode/resumeTask can revive any terminal task while
+      // its worktree exists, so this is the ONLY safe deletion point.
+      // Single-repo only: multi-repo container tasks are the gc.ts multi-repo
+      // blindspot (audit ⑥ gap-3 family) and get their ref cleanup with that
+      // fix. Best-effort (`runGit` never throws); a leftover ref merely keeps
+      // a stash commit alive. Note the recorded trade-off: with worktreeAutoGc
+      // disabled, refs are retained indefinitely.
+      await deleteSnapshotRefs(t.repoPath, t.id)
       result.removed.push(t.id)
     } catch (err) {
       log.warn('removeWorktree failed', {

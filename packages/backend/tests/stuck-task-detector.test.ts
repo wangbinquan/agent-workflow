@@ -1,4 +1,6 @@
-// RFC-053 PR-E — stuck-task detector (S1/S2/S3/S4).
+// RFC-053 PR-E — stuck-task detector (S1/S2/S3/S4), extended by RFC-098 WP-8
+// with S5 (running task, active node_run(s), events stalled — the wedged
+// opencode child the scheduler audit S-15 called a blind spot).
 //
 // Each rule has at least one "stuck" case + one "not stuck" case (the
 // negative is the freshness gate or the rule's evidence-present clause).
@@ -238,12 +240,16 @@ describe('RFC-053 PR-E — S3 (running but all node_runs terminal)', () => {
     expect(s3[0]!.detail).toMatchObject({ totalRuns: 2, terminalRuns: 2 })
   })
 
-  test('not stuck: at least one running node_run → no S3 alert', async () => {
+  test('not stuck for S3: at least one running node_run → no S3, but S5 fires instead', async () => {
     h = await buildHarness('running', T0 - 60 * MIN_MS)
     await insertRun(h.db, h.taskId, { nodeId: 'a', status: 'done', finishedAt: T0 - 35 * MIN_MS })
     await insertRun(h.db, h.taskId, { nodeId: 'b', status: 'running' })
     const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
     expect(r.openAlerts.filter((a) => a.rule === 'S3')).toHaveLength(0)
+    // RFC-098 WP-8: this exact scenario (active run, 60 min of silence) used
+    // to be the S-15 blind spot — it is now S5 by definition. Asserted
+    // explicitly so the semantics shift is visible, per survey §wp8-wp9.
+    expect(r.openAlerts.filter((a) => a.rule === 'S5')).toHaveLength(1)
   })
 
   test('vacuous: running with empty node_runs → no S3 (different layer)', async () => {
@@ -251,6 +257,67 @@ describe('RFC-053 PR-E — S3 (running but all node_runs terminal)', () => {
     // Deliberately no node_runs → bootstrap state; S3 conservatively skips.
     const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
     expect(r.openAlerts.filter((a) => a.rule === 'S3')).toHaveLength(0)
+    // ... and no S5 either: there is no active run to be wedged.
+    expect(r.openAlerts.filter((a) => a.rule === 'S5')).toHaveLength(0)
+  })
+})
+
+describe('RFC-098 WP-8 — S5 (running, active runs, events stalled)', () => {
+  let h: Harness
+  afterEach(() => h?.cleanup())
+
+  test('stuck: active run + zero events ever → S5 with per-run {nodeRunId,nodeId,pid,lastEventTs}', async () => {
+    h = await buildHarness('running', T0 - 60 * MIN_MS)
+    const runId = await insertRun(h.db, h.taskId, { nodeId: 'b', status: 'running' })
+    await h.db.update(nodeRuns).set({ pid: 4242 }).where(eq(nodeRuns.id, runId))
+    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const s5 = r.openAlerts.filter((a) => a.rule === 'S5')
+    expect(s5).toHaveLength(1)
+    expect(s5[0]!.detail).toMatchObject({
+      rule: 'S5',
+      inactiveForMs: 60 * MIN_MS,
+      thresholdMs: 30 * MIN_MS,
+      activeRuns: [{ nodeRunId: runId, nodeId: 'b', pid: 4242, lastEventTs: null }],
+    })
+  })
+
+  test('stuck: events exist but stalled 40 min ago → S5; lastEventTs reports the run own ts', async () => {
+    h = await buildHarness('running', T0 - 120 * MIN_MS)
+    const runId = await insertRun(h.db, h.taskId, { nodeId: 'b', status: 'running' })
+    await insertEvent(h.db, runId, T0 - 40 * MIN_MS)
+    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const s5 = r.openAlerts.filter((a) => a.rule === 'S5')
+    expect(s5).toHaveLength(1)
+    expect(s5[0]!.detail).toMatchObject({
+      rule: 'S5',
+      inactiveForMs: 40 * MIN_MS,
+      activeRuns: [{ nodeRunId: runId, nodeId: 'b', pid: null, lastEventTs: T0 - 40 * MIN_MS }],
+    })
+  })
+
+  test('freshness gate: events 10 min ago → no S5', async () => {
+    h = await buildHarness('running', T0 - 120 * MIN_MS)
+    const runId = await insertRun(h.db, h.taskId, { nodeId: 'b', status: 'running' })
+    await insertEvent(h.db, runId, T0 - 10 * MIN_MS)
+    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    expect(r.openAlerts.filter((a) => a.rule === 'S5')).toHaveLength(0)
+  })
+
+  test('S3 and S5 are mutually exclusive halves of the running branch', async () => {
+    // All-terminal → S3 only (locked by the S3 suite); here: a mixed task
+    // with one active row lands in S5 only.
+    h = await buildHarness('running', T0 - 60 * MIN_MS)
+    await insertRun(h.db, h.taskId, { nodeId: 'a', status: 'failed', finishedAt: T0 - 50 * MIN_MS })
+    await insertRun(h.db, h.taskId, { nodeId: 'b', status: 'awaiting_review' })
+    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    expect(r.openAlerts.filter((a) => a.rule === 'S3')).toHaveLength(0)
+    const s5 = r.openAlerts.filter((a) => a.rule === 'S5')
+    expect(s5).toHaveLength(1)
+    // Only the non-terminal row is listed.
+    expect((s5[0]!.detail as { activeRuns: Array<{ nodeId: string }> }).activeRuns).toHaveLength(1)
+    expect((s5[0]!.detail as { activeRuns: Array<{ nodeId: string }> }).activeRuns[0]!.nodeId).toBe(
+      'b',
+    )
   })
 })
 

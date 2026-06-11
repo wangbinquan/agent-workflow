@@ -38,6 +38,8 @@ import { listSkills } from '@/services/skill'
 import { validateWorkflowDef } from '@/services/workflow.validator'
 import { upsertRecentRepo } from '@/services/repo'
 import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
+import type { RollbackOutcome } from '@/services/nodeRollback'
+import { killStaleRunProcessTree } from '@/util/process'
 import { setTaskStatus, trySetTaskStatus } from '@/services/lifecycle'
 import { pickFreshestRun } from '@/services/freshness'
 import { listAvailableRefs, resolveCachedRepo } from '@/services/gitRepoCache'
@@ -871,12 +873,56 @@ async function rollbackNodeRunForResume(
   task: Task,
   run: { id: string; preSnapshot: string | null; preSnapshotReposJson: string | null },
   log: ReturnType<typeof createLogger>,
-): Promise<void> {
-  await rollbackNodeRunWorktrees(
+): Promise<RollbackOutcome> {
+  return await rollbackNodeRunWorktrees(
     { repoCount: task.repoCount, worktreePath: task.worktreePath, repos: task.repos },
     run,
     { resetOnEmptySnapshot: false },
     log,
+  )
+}
+
+/**
+ * RFC-098 WP-9: snapshot-lost escalation shared by resumeTask / retryNode.
+ * A `'snapshot-missing'` rollback failure means a recorded pre-snapshot was
+ * gc-pruned from the (shared) source-repo odb — the fail-closed rollback
+ * touched nothing, but the baseline the resume contract promises to restore
+ * is gone forever. Silently proceeding would re-run nodes on top of the
+ * failed attempt's leftover writes, so the task flips pending → failed
+ * (`errorSummary='snapshot-lost'`) and the HTTP caller sees a 409.
+ * Returns `never`; throws ConflictError after the CAS.
+ */
+async function escalateSnapshotLost(
+  db: DbClient,
+  taskId: string,
+  run: { id: string; nodeId: string },
+  outcome: RollbackOutcome,
+  reason: 'resumeTask' | 'retryNode',
+): Promise<never> {
+  const detail = outcome.failures
+    .filter((f) => f.code === 'snapshot-missing')
+    .map((f) =>
+      f.worktreeDirName !== undefined ? `${f.worktreeDirName}: ${f.message}` : f.message,
+    )
+    .join('; ')
+  await setTaskStatus({
+    db,
+    taskId,
+    to: 'failed',
+    allowedFrom: ['pending'],
+    extra: {
+      finishedAt: Date.now(),
+      errorSummary: 'snapshot-lost',
+      errorMessage: `node_run ${run.id} (node ${run.nodeId}) pre-snapshot lost: ${detail}`,
+      failedNodeId: run.nodeId,
+    },
+    reason: `${reason}:snapshot-lost`,
+  })
+  const failed = await getTask(db, taskId)
+  if (failed !== null) emitTaskStatus(failed)
+  throw new ConflictError(
+    'snapshot-lost',
+    `cannot ${reason === 'resumeTask' ? 'resume' : 'retry'}: node_run ${run.id} pre-snapshot is missing from the object database (pruned by gc?): ${detail}`,
   )
 }
 
@@ -1007,7 +1053,27 @@ export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps):
   )
 
   for (const r of toRollback) {
-    await rollbackNodeRunForResume(task, r, log)
+    // RFC-098 WP-8 (audit S-15): kill-then-proceed, not 409 — if the row's
+    // opencode child from a previous daemon is still alive (pid + startedAt
+    // window + `ps` command gates inside the helper), group-kill it BEFORE
+    // rolling the worktree back; a survivor would keep writing into the
+    // worktree we are about to reset.
+    const killOutcome = await killStaleRunProcessTree(r)
+    if (killOutcome === 'killed' || killOutcome === 'kill-failed') {
+      log.warn('resume: live child process group-killed before rollback (best-effort)', {
+        nodeRunId: r.id,
+        pid: r.pid,
+        outcome: killOutcome,
+      })
+    }
+    const outcome = await rollbackNodeRunForResume(task, r, log)
+    // RFC-098 WP-9: a gc-pruned pre-snapshot is NOT warn-and-continue — the
+    // fail-closed rollback touched nothing, but the baseline is gone forever;
+    // flip the task failed (errorSummary='snapshot-lost') and surface a 409.
+    // Other failure codes keep the historical warn-and-continue net below.
+    if (outcome.failures.some((f) => f.code === 'snapshot-missing')) {
+      await escalateSnapshotLost(db, id, r, outcome, 'resumeTask')
+    }
     // The scheduler creates a new node_run with retry_index = max+1 on its
     // own when it sees no pending run for the node, so we just leave the
     // failed row as historical. The task row already flipped pending above
@@ -1182,7 +1248,23 @@ export async function retryNode(
   // Rollback to the snapshot before the node_run started. The single-node
   // retry uses THIS run's snapshot (not the latest, since the user picked
   // this specific historical attempt).
-  await rollbackNodeRunForResume(task, runRow, log)
+  // RFC-098 WP-8: same kill-then-proceed as resumeTask — group-kill the
+  // target row's still-alive child (if any) before touching the worktree.
+  const retryKillOutcome = await killStaleRunProcessTree(runRow)
+  if (retryKillOutcome === 'killed' || retryKillOutcome === 'kill-failed') {
+    log.warn('retryNode: live child process group-killed before rollback (best-effort)', {
+      nodeRunId: runRow.id,
+      pid: runRow.pid,
+      outcome: retryKillOutcome,
+    })
+  }
+  // RFC-098 WP-9: snapshot-missing escalates to task failed + 409 (same
+  // contract as resumeTask) — no placeholder rows are minted and no
+  // scheduler is kicked when the promised baseline no longer exists.
+  const rollbackOutcome = await rollbackNodeRunForResume(task, runRow, log)
+  if (rollbackOutcome.failures.some((f) => f.code === 'snapshot-missing')) {
+    await escalateSnapshotLost(db, taskId, runRow, rollbackOutcome, 'retryNode')
+  }
 
   // Flip target + downstream node_runs from done → failed so the resumer
   // re-runs them. We do this by inserting a fresh failed row at retry_index

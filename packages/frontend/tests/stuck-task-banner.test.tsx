@@ -11,7 +11,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
+import { LIFECYCLE_ALERT_RULES } from '@agent-workflow/shared'
+
 import { StuckTaskBanner } from '../src/components/tasks/StuckTaskBanner'
+import { enUS } from '../src/i18n/en-US'
+import { zhCN } from '../src/i18n/zh-CN'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
 const realFetch = globalThis.fetch
@@ -175,5 +179,40 @@ describe('StuckTaskBanner', () => {
     await waitFor(() => {
       expect(document.body.querySelector('[data-testid="task-diagnose-panel"]')).not.toBeNull()
     })
+  })
+
+  // RFC-098 WP-8 (对抗检视修订 #5): the S5 rule landed with bilingual bundle
+  // entries, and describeRule grew an unknown-rule fallback so a backend
+  // that is AHEAD of this bundle (emitting a rule we have no entry for)
+  // shows the bare rule code instead of leaking the raw i18n key.
+  test('S5 renders its bundle label; unknown rule falls back to the bare code', async () => {
+    globalThis.fetch = mockFetch({
+      alerts: [
+        { id: 'a', rule: 'S5', severity: 'warning', detail: { rule: 'S5' }, detectedAt: 1 },
+        { id: 'b', rule: 'S9', severity: 'warning', detail: {}, detectedAt: 2 },
+      ],
+    }) as unknown as typeof fetch
+    const Wrapper = makeWrapper()
+    render(
+      <Wrapper>
+        <StuckTaskBanner taskId="t1" />
+      </Wrapper>,
+    )
+    const banner = await screen.findByTestId('stuck-task-banner')
+    // S5 has a real entry in both bundles — never the raw key.
+    expect(banner.textContent).toMatch(/S5/)
+    expect(banner.textContent).not.toContain('tasks.diagnose.rule.S5')
+    // 'S9' is unknown — describeRule falls back to the bare code.
+    expect(banner.textContent).toContain('S9')
+    expect(banner.textContent).not.toContain('tasks.diagnose.rule.S9')
+  })
+
+  test('rule label tables cover every shared LifecycleAlertRule (en + zh)', () => {
+    const enRules = enUS.tasks.diagnose.rule as Record<string, string>
+    const zhRules = zhCN.tasks.diagnose.rule as Record<string, string>
+    for (const rule of LIFECYCLE_ALERT_RULES) {
+      expect(enRules[rule], `en-US missing tasks.diagnose.rule.${rule}`).toBeTruthy()
+      expect(zhRules[rule], `zh-CN missing tasks.diagnose.rule.${rule}`).toBeTruthy()
+    }
   })
 })

@@ -33,7 +33,11 @@ describe('RFC-048 source-layout guards', () => {
     const stmtPattern = /liveCtrl\.abort\(\)\n\s+livePoller\.stop\(\)/
     const stmtMatch = stmtPattern.exec(src)
     expect(stmtMatch).not.toBeNull()
-    const exitedIdx = src.indexOf('await child.exited')
+    // RFC-098 WP-8: the exit wait is the bounded race
+    // `const exitedOutcome = await Promise.race([child.exited..., reapDeadline...])`
+    // — anchor on that statement instead of the old unbounded
+    // `await child.exited`.
+    const exitedIdx = src.indexOf('const exitedOutcome = await Promise.race([')
     const captureIdx = src.indexOf('await captureChildSessions({')
     expect(exitedIdx).toBeGreaterThan(-1)
     expect(captureIdx).toBeGreaterThan(-1)
