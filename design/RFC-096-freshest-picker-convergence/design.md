@@ -6,7 +6,9 @@
 ## 1. 比较器下沉（freshness.ts）
 
 - `isFresherNodeRun`（scheduler.ts:455-461）与 `buildFreshestDonePerNode`（:964-978，未导出）
-  原样移入 freshness.ts 并导出；scheduler.ts 改 import 并保留
+  移入 freshness.ts 并导出；isFresherNodeRun 形参放宽为泛型 `<R extends { id: string }>`
+  （它只比较 id——对抗检视缺口 2：options-T1 的 RepairNodeRunRow 无 parentNodeRunId 列，
+  全行类型过不了 typecheck）；scheduler.ts 改 import 并保留
   `export { isFresherNodeRun } from '@/services/freshness'` 兼容层（6 个测试文件 from
   '../src/services/scheduler' 零改动）。
 - review.ts:67 改 `import { isFresherNodeRun } from '@/services/freshness'` ——
@@ -40,6 +42,10 @@ export function pickFreshestRun<
   不滤 status）。
 - scheduler.ts:1891-1900 `priorDoneDesigner` → `{topLevelOnly:true, statusIn:['done']}`
   （rows 已 done-only，等价）。
+- scheduler.ts:815-827 commit&push 归属挑行（对抗检视缺口 1——proposal 列了、初版 design 漏了）：
+  SQL 改取全行，内存 `pickFreshestRun(rows, {topLevelOnly:true, statusIn:['done']})`——原查询
+  已 done-only，差异仅 startedAt→id 序（归属语义等价）；消掉后 src 中 `desc(nodeRuns.startedAt)`
+  清零，§4 新守卫白名单为空。
 
 ## 3. 四处病理修复（各为行为变更，红→绿）
 
@@ -55,24 +61,38 @@ export function pickFreshestRun<
 - status 不滤：与 review.ts applyReviewDecision 同型——supersede/rollback 目标就是「该节点
   最新一行（无论状态）」；rollback 用 lastDesigner.preSnapshot、继承 iteration 等字段的语义
   保持，只是行选对了。
+- **前置（对抗检视 1a）**：`cross-clarify-designer-retry-index.test.ts` test 3 的 fixture 用
+  随机非单调 id 且注释明言依赖 startedAt 序——迁移前先把其 seedRun 改为显式单调 id
+  （monotonicFactory 先例），断言语义不变；否则 id 序落地后该测试 ~2/3 概率 flaky 红。
+  其余 cross-clarify 测试 seeded `nr_*` id 恒大于产线 ULID，新增用例一律显式单调 id。
 
 ### 3.2 retryNode 级联继承（task.ts:1131-1155）
 
 `existing` 查询删 `orderBy(desc(retryIndex)).limit(1)`，改全量行 +
 `pickFreshestRun(rows, {topLevelOnly: true})`：
 
-- `nextRetry` 改为 prev 同口径（top-level freshest 的 retryIndex + 1；与现行「全表 max」差异
-  仅在子行 retryIndex 超过 top-level 时——子行 retryIndex 永远跟随父派发，实证无此形态；如
-  实现时发现反例则 nextRetry 单独用全行 max 保守保留）。
-- 继承源不再可能是 shard 子行 → 占位行 `parentNodeRunId` 恒继承自 top-level 行（实际恒
-  null）/ iteration 取该节点最新 top-level 行的 iteration——级联占位行恢复 frontier 可见。
+- `nextRetry` 保守用**全行 max+1**（对抗检视 2b：现行 bug 自身可在存量 DB 铸出
+  「子行/继承行 retryIndex 超 top-level」的病理形态——triggerDesignerRerun 选中子行时继承
+  非 null parent 且 retryIndex bump；保守口径零成本规避 UNIQUE 撞车）。
+- 继承源（仅影响非目标下游；目标节点 inherit=runRow 不变，但其 nextRetry 同样换保守口径）
+  不再可能是 shard 子行 → 占位行 `parentNodeRunId` 恒 null / iteration 取该节点最新
+  top-level 行的 iteration——级联占位行恢复 frontier 可见。
+- **prev=undefined 形态（对抗检视 2b-2）**：fanout 内层节点可能只有子行、无 top-level 行——
+  picker 返回 undefined 时维持现行 `?? 0` 兜底（占位行落 iteration 0 / 全新顶层 failed 行）：
+  该行对顶层 scope 惰性（inner 不在顶层 scope，wrapper 重派走 priorChildren），与现行行为
+  等价、不引入新害；显式注释并配用例锁定惰性。
+- 遗留混合帧（对抗检视 2c，不修只记）：对旧迭代历史行 retryNode 时「目标占位=runRow 旧
+  iteration、下游占位=最新 iteration」——现行已存在，本 RFC 不引入也不解决，入 §5。
 
 ### 3.3 readPortAtIteration（scheduler.ts:3776-3814）
 
 挑行循环加 `if (r.status !== 'done') continue`（与 buildFreshestDonePerNode :975 对齐）；
 :3793-3802 过期三元组注释删除并改述 done-only 语义。修复面：同 iteration 的更新非 done 行
 （pending rerun / running）不再把端口读成 `''` → loop `port-empty` 不误退出、wrapper 输出
-不被 `''` 覆盖、output 快照不落空。
+不被 `''` 覆盖、output 快照不落空。已核实非 done 行恒无 outputs（runner 仅 done 时持久化
+ports），现行 '' 即「查 outputs 落空」。非目标声明（对抗检视 3a）：竞态窗内被跳过的 pending
+rerun 行在 loop 推进后无人消费（orphan）——本 RFC 仅改读值口径与 RFC-074 对齐，orphan 行
+的消费归 wrapper 语义后续（boundary 读不写 consumed 的缺口同记）。
 
 ### 3.4 options-T1.ts:63
 
@@ -89,10 +109,12 @@ freshness）。:62-63 注释同步（options-S3.ts:62-63 的"highest retryIndex"
 - s13 按各 [FLIP-ON-FIX]：G1 → 比较器移籍 freshness.ts（scheduler 仅 re-export）；G3 →
   task.ts `desc(nodeRuns.retryIndex)` 清零；G5 → loadNodeRunsForNode 不存在；G6 → 全 src
   `desc(nodeRuns.retryIndex)` 清零（lifecycleRepair/helpers.ts 删除后达成）。
-- 新增守卫：① `desc(nodeRuns.startedAt)` 在 src 中仅允许出现在白名单（实现后应为空或仅
-  非挑行用途，先 grep 定基线）；② 内存 retryIndex 比较模式
-  （`retryIndex > ` 与 `.retryIndex)` reduce 形态）的启发式 grep——宁可白名单宽松也要让新
-  fork 至少被 review 看见。
+- 新增守卫：① `desc(nodeRuns.startedAt)` 在 src 中清零（§2 commit&push 收敛后白名单为空）；
+  ② 内存 retryIndex 比较模式（`retryIndex > ` reduce 形态）的启发式 grep——宁可白名单宽松
+  也要让新 fork 至少被 review 看见。
+- **G5 实现坑（对抗检视 5）**：s13 的 extractSection 在 loadNodeRunsForNode 删除后会直接
+  throw（找不到 start marker），不是断言翻 false——G5 守卫改写为「该函数名在文件中零出现」
+  或整体删除，不能机械「翻转期望」。
 
 ## 5. 失败模式
 
