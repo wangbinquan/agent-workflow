@@ -63,7 +63,8 @@ import { clarifyRounds, clarifySessions, nodeRuns, tasks } from '@/db/schema'
 import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 import { transitionNodeRunStatus } from '@/services/lifecycle'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
-import { rollbackToSnapshot } from '@/util/git'
+import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
+import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { createLogger } from '@/util/log'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
@@ -422,19 +423,31 @@ export async function submitClarifyAnswers(
   const sessionModeForRerun = clarifyNodeForRerun
     ? resolveClarifySessionMode(clarifyNodeForRerun)
     : 'isolated'
+  // RFC-098 B1 (audit S-9 / ⑥-10): the rollback takes the task's WRITE LOCK
+  // (same instance the scheduler's writer nodes hold — getTaskWriteSem) so a
+  // mid-run answer can never reset/clean the worktree under an in-flight
+  // writer; and it goes through the shared multi-repo-aware rollback so
+  // multi-repo tasks roll each sub-worktree (the old single-track
+  // rollbackToSnapshot call was a silent no-op for them). The entry gates
+  // (inline mode / no snapshot / sealed '' worktree) keep their semantics —
+  // the shared helper skips empty snapshots and empty targets in resume mode.
   if (
     sessionModeForRerun !== 'inline' &&
-    sourceRunRow.preSnapshot !== null &&
-    sourceRunRow.preSnapshot !== '' &&
+    (sourceRunRow.preSnapshot !== null || sourceRunRow.preSnapshotReposJson !== null) &&
     taskRow.worktreePath !== ''
   ) {
-    try {
-      await rollbackToSnapshot(taskRow.worktreePath, sourceRunRow.preSnapshot)
-    } catch (err) {
-      log.warn('clarify rollback failed', {
-        nodeRunId: sourceRunRow.id,
-        error: err instanceof Error ? err.message : String(err),
-      })
+    const target = await loadRollbackTarget(db, taskRow.id)
+    if (target !== null) {
+      try {
+        await getTaskWriteSem(taskRow.id).run(() =>
+          rollbackNodeRunWorktrees(target, sourceRunRow, { resetOnEmptySnapshot: false }, log),
+        )
+      } catch (err) {
+        log.warn('clarify rollback failed', {
+          nodeRunId: sourceRunRow.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
     }
   }
 

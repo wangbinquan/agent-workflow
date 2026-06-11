@@ -68,7 +68,8 @@ import { pickFreshestRun } from '@/services/freshness'
 import { parseConsumedJson } from '@/services/freshness'
 import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
 import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
-import { rollbackToSnapshot } from '@/util/git'
+import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
+import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
@@ -1705,15 +1706,23 @@ export async function submitReviewDecision(
     // attempt is just superseded by a newer retry" — UI uses this to pick
     // between the 'Canceled' and 'Superseded' labels.
     let rolledBack = false
-    if (rollbackFlag && latest.preSnapshot !== null && latest.preSnapshot !== '') {
-      try {
-        await rollbackToSnapshot(taskRow.worktreePath, latest.preSnapshot)
-        rolledBack = true
-      } catch (err) {
-        log.warn('review rollback failed', {
-          nodeRunId: latest.id,
-          error: err instanceof Error ? err.message : String(err),
-        })
+    // RFC-098 B1 (audit S-9 / ⑥-10): write-lock + shared multi-repo rollback;
+    // `rolledBack` (the '-rollback' supersede-marker suffix) now means "at
+    // least one worktree actually rolled back with zero failures".
+    if (rollbackFlag && (latest.preSnapshot !== null || latest.preSnapshotReposJson !== null)) {
+      const target = await loadRollbackTarget(args.db, taskRow.id)
+      if (target !== null) {
+        try {
+          const outcome = await getTaskWriteSem(taskRow.id).run(() =>
+            rollbackNodeRunWorktrees(target, latest, { resetOnEmptySnapshot: false }, log),
+          )
+          rolledBack = outcome.attempted && outcome.failures.length === 0
+        } catch (err) {
+          log.warn('review rollback failed', {
+            nodeRunId: latest.id,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
       }
     }
     const nextRetryIndex = latest.retryIndex + 1

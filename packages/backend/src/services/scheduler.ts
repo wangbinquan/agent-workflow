@@ -78,6 +78,7 @@ import {
 } from '@/services/clarifyFallback'
 import { evaluateExitCondition, parseExitCondition } from '@/services/exitCondition'
 import { trySetTaskStatus, setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
+import { getTaskWriteSem, gcTaskWriteSem } from '@/services/taskWriteLocks'
 import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
 import {
   areTransitiveUpstreamsCompleted,
@@ -215,6 +216,17 @@ interface SchedulerState {
  * to await this (tests) or fire-and-forget (HTTP route).
  */
 export async function runTask(opts: RunTaskOptions): Promise<void> {
+  // RFC-098 B1: the per-task write-lock registry entry is gc'd here and ONLY
+  // here (taskWriteLocks.ts lifecycle — an HTTP-side gc would split-brain the
+  // mutex against our cached SchedulerState.writeSem reference).
+  try {
+    await runTaskInner(opts)
+  } finally {
+    gcTaskWriteSem(opts.taskId)
+  }
+}
+
+async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   const log = opts.log ?? createLogger('scheduler')
   const { db, taskId } = opts
 
@@ -366,7 +378,11 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     log,
     inputsMap,
     globalSem: new Semaphore(opts.maxConcurrentNodes ?? 4),
-    writeSem: new Semaphore(1),
+    // RFC-098 B1 (audit S-9): the writer lock comes from the per-task
+    // registry so HTTP rollback paths (clarify/review/cross-clarify) hold THE
+    // SAME instance. gc happens in this function's finally only (see
+    // taskWriteLocks.ts lifecycle doc).
+    writeSem: getTaskWriteSem(taskId),
     subprocessSem: new Semaphore(opts.multiProcessSubprocessConcurrency ?? 4),
     containerOf,
     topLevelIds,
@@ -661,11 +677,34 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
   const parkedDetail = new Map<string, { summary: string; message: string }>()
   let firstFailureDetail: { summary: string; message: string; nodeId?: string } | undefined
 
+  // RFC-098 B1: in-flight auto commit&push promises are keyed
+  // 'commitpush:<nodeId>:<iter>' — a NON-node key, so deriveFrontier's
+  // in-flight node set never matches a scope node and downstream dispatch is
+  // not frozen while a commit session runs (the synchronous await here used
+  // to freeze the whole dispatch loop, audit S-17 second half). Canceled
+  // exits MUST drain them (their inner runNode holds the shared signal and
+  // returns quickly) — abandoning a commit session past runTask's finally
+  // would orphan a worktree-writing process AND let the write-lock registry
+  // gc race it (adversarial-review revision #2).
+  const drainCommitPush = async (): Promise<void> => {
+    const pending = [...inFlight.entries()].filter(([k]) => k.startsWith('commitpush:'))
+    for (const [k, p] of pending) {
+      try {
+        await p
+      } catch {
+        /* commit failures never break task execution */
+      }
+      inFlight.delete(k)
+    }
+  }
+
   while (true) {
     if (opts.signal?.aborted === true) {
       // Cancel is a hard short-circuit: the abort already fired, so every live
       // child receives SIGTERM through the shared signal. Return immediately
-      // without draining in-flight promises.
+      // without draining in-flight NODE promises — but commit&push synthetics
+      // must be drained (see drainCommitPush above).
+      await drainCommitPush()
       return { kind: 'canceled', detail: { summary: 'task canceled', message: 'signal aborted' } }
     }
 
@@ -714,7 +753,9 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
     inFlight.delete(nodeId)
 
     if (result.kind === 'canceled') {
-      // Hard short-circuit (user-tripped signal): no point draining the rest.
+      // Hard short-circuit (user-tripped signal): no point draining the rest
+      // of the NODE promises; commit&push synthetics are drained (revision #2).
+      await drainCommitPush()
       return {
         kind: 'canceled',
         detail: { summary: result.summary, message: result.message, nodeId },
@@ -741,18 +782,33 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
       continue
     }
     // ok — RFC-075 auto commit&push after a top-level node completes (opt-in;
-    // a commit failure must NEVER break task execution).
-    if (state.task.autoCommitPush && state.topLevelIds.has(nodeId)) {
+    // a commit failure must NEVER break task execution). RFC-098 B1: runs as
+    // a SYNTHETIC in-flight entry instead of a synchronous await — the
+    // dispatch loop keeps racing node completions and dispatching ready
+    // nodes while the commit session runs. The synthetic resolves kind 'ok'
+    // unconditionally (failures are logged inside).
+    if (
+      state.task.autoCommitPush &&
+      state.topLevelIds.has(nodeId) &&
+      !nodeId.startsWith('commitpush:')
+    ) {
       const node = scopeNodeById.get(nodeId)
       if (node !== undefined) {
-        try {
-          await maybeRunCommitPush(state, node, iteration, log)
-        } catch (err) {
-          log.warn('auto commit&push trigger failed (ignored)', {
-            nodeId,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
+        const syntheticKey = `commitpush:${nodeId}:${iteration}`
+        inFlight.set(
+          syntheticKey,
+          maybeRunCommitPush(state, node, iteration, log)
+            .catch((err) => {
+              log.warn('auto commit&push trigger failed (ignored)', {
+                nodeId,
+                error: err instanceof Error ? err.message : String(err),
+              })
+            })
+            .then(() => ({
+              nodeId: syntheticKey,
+              result: { kind: 'ok', summary: 'commit&push settled', message: '' } as OneNodeResult,
+            })),
+        )
       }
     }
   }
@@ -876,6 +932,9 @@ async function maybeRunCommitPush(
   const model = state.opts.commitPushModel
 
   for (const repo of state.repos) {
+    // RFC-098 B1: a cancel that lands mid-commit&push stops at the next repo
+    // boundary (the in-repo opencode session already holds the shared signal).
+    if (state.opts.signal?.aborted === true) return
     const status = await runGit(repo.worktreePath, ['status', '--porcelain'])
     if (status.stdout.trim() === '') continue // nothing changed in this repo
     const repoSlug = repo.worktreeDirName
@@ -1614,8 +1673,14 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   }
   broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
 
-  const releaseGlobal = await globalSem.acquire()
+  // RFC-098 B1 (audit S-17): writers take the WRITE lock FIRST, then the
+  // global slot — a writer queuing for the write lock no longer occupies a
+  // globalSem slot, so ready readonly nodes keep running truly in parallel
+  // (the old global-first order let 3 queued writers starve every reader).
+  // Global lock order: writeSem ≺ globalSem ≺ subprocessSem (no cycles — see
+  // RFC-098 survey §wp5-4).
   const releaseWrite = agent.readonly ? null : await writeSem.acquire()
+  const releaseGlobal = await globalSem.acquire()
 
   let lastResult: RunResult | null = null
   let lastError: string | null = null
@@ -2142,8 +2207,8 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       if (lastResult.status === 'done' || lastResult.status === 'canceled') break
     }
   } finally {
-    releaseWrite?.()
     releaseGlobal()
+    releaseWrite?.()
   }
 
   if (lastResult === null) {
@@ -3110,9 +3175,10 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
   // global node slot + the fan-out subprocess slot (the previously-dead
   // subprocessSem), plus the write slot for non-readonly shards so writers
   // serialize on the shared worktree. See scheduler-boundary-fanout-concurrency.test.ts.
+  // RFC-098 B1 (audit S-17): write ≺ global ≺ subprocess (see single-node site).
+  const releaseWrite = innerAgent.readonly ? null : await state.writeSem.acquire()
   const releaseGlobal = await state.globalSem.acquire()
   const releaseSub = await state.subprocessSem.acquire()
-  const releaseWrite = innerAgent.readonly ? null : await state.writeSem.acquire()
   try {
     const result = await runNode({
       taskId,
@@ -3170,9 +3236,9 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
     broadcastNodeStatus(taskId, shardRunId, innerNode.id, 'failed')
     return { kind: 'failed', shardKey, outputs: {}, message: msg }
   } finally {
-    releaseWrite?.()
     releaseSub()
     releaseGlobal()
+    releaseWrite?.()
   }
 }
 
@@ -3293,9 +3359,10 @@ async function dispatchFanoutAggregator(
   // Concurrency: the aggregator is a real opencode subprocess too — count it
   // against the global node + fan-out subprocess caps (and the write slot when
   // it is non-readonly), like the shards above.
+  // RFC-098 B1 (audit S-17): write ≺ global ≺ subprocess.
+  const releaseWrite = aggAgent.readonly ? null : await state.writeSem.acquire()
   const releaseGlobal = await state.globalSem.acquire()
   const releaseSub = await state.subprocessSem.acquire()
-  const releaseWrite = aggAgent.readonly ? null : await state.writeSem.acquire()
   try {
     const result = await runNode({
       taskId,
@@ -3351,9 +3418,9 @@ async function dispatchFanoutAggregator(
     broadcastNodeStatus(taskId, aggRunId, aggNode.id, 'failed')
     return { kind: 'failed', summary: 'aggregator threw', message: msg, outputs: {} }
   } finally {
-    releaseWrite?.()
     releaseSub()
     releaseGlobal()
+    releaseWrite?.()
   }
 }
 
@@ -3404,7 +3471,9 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
     } else {
       // Malformed / missing — best-effort re-capture. Worse than persisted
       // baseline but no worse than today's pre-RFC-040 init-only path.
-      baseline = await captureHead(task.worktreePath)
+      // RFC-098 B1 (audit S-24): captured under the task write lock so the
+      // baseline never samples a sibling writer mid-write.
+      baseline = await state.writeSem.run(() => captureHead(task.worktreePath))
     }
     if (existing.status !== 'running') {
       // RFC-053: wrapper enter-running — resumes from awaiting_* / pending.
@@ -3429,7 +3498,8 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
   } else {
     wrapperRunId = await insertNodeRun(db, taskId, node.id, 'pending', 0, iteration)
     broadcastNodeStatus(taskId, wrapperRunId, node.id, 'running')
-    baseline = await captureHead(task.worktreePath)
+    // RFC-098 B1 (audit S-24): baseline under the task write lock.
+    baseline = await state.writeSem.run(() => captureHead(task.worktreePath))
     await persistWrapperProgress(db, wrapperRunId, {
       kind: 'git',
       baseline,
@@ -3489,9 +3559,18 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
   // the planned `git_diff_full` companion outlet.
   let paths: string[] = []
   try {
-    paths = await gitChangedFiles(task.worktreePath, baseline || 'HEAD')
-  } catch {
-    paths = []
+    // RFC-098 B1 (audit S-24): the diff is captured under the task write lock
+    // (no sibling writer mid-write can leak half-written files into the
+    // changed-file list), and a diff FAILURE now fails the wrapper instead of
+    // silently degrading to an empty git_diff — the old empty-catch sent the
+    // whole downstream fan-out into the empty-source short-circuit and the
+    // task went green with zero audit shards.
+    paths = await state.writeSem.run(() => gitChangedFiles(task.worktreePath, baseline || 'HEAD'))
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    await markWrapperTerminal(db, wrapperRunId, 'failed', `git-diff-failed:${msg}`)
+    broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')
+    return { kind: 'failed', summary: `git diff failed: ${msg}`, message: 'git-diff-failed' }
   }
   await db
     .insert(nodeRunOutputs)

@@ -24,6 +24,9 @@
 
 import { rollbackToSnapshot } from '@/util/git'
 import type { Logger } from '@/util/log'
+import { asc, eq } from 'drizzle-orm'
+import type { DbClient } from '@/db/client'
+import { taskRepos, tasks } from '@/db/schema'
 
 export interface RollbackTarget {
   repoCount: number
@@ -38,12 +41,45 @@ export interface RollbackRunRow {
   preSnapshotReposJson: string | null
 }
 
+/** RFC-098 B1: per-repo rollback outcome. `attempted` = at least one worktree
+ *  was actually rolled back; `failures` = per-repo errors (warn-and-continue
+ *  semantics preserved — callers decide whether a failure escalates). */
+export interface RollbackOutcome {
+  attempted: boolean
+  failures: Array<{ worktreeDirName?: string; code: string; message: string }>
+}
+
+/**
+ * RFC-098 B1 (audit ⑥-10): load the RollbackTarget for a task — tasks row +
+ * taskRepos (repoIndex order), with the same single-repo synthesized fallback
+ * the scheduler uses for rows predating the multi-repo migration.
+ */
+export async function loadRollbackTarget(
+  db: DbClient,
+  taskId: string,
+): Promise<RollbackTarget | null> {
+  const taskRowArr = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+  const t = taskRowArr[0]
+  if (t === undefined) return null
+  const repoRows = await db
+    .select()
+    .from(taskRepos)
+    .where(eq(taskRepos.taskId, taskId))
+    .orderBy(asc(taskRepos.repoIndex))
+  const repos =
+    repoRows.length > 0
+      ? repoRows.map((r) => ({ worktreePath: r.worktreePath, worktreeDirName: r.worktreeDirName }))
+      : [{ worktreePath: t.worktreePath, worktreeDirName: '' }]
+  return { repoCount: t.repoCount, worktreePath: t.worktreePath, repos }
+}
+
 export async function rollbackNodeRunWorktrees(
   target: RollbackTarget,
   run: RollbackRunRow,
   opts: { resetOnEmptySnapshot: boolean },
   log: Logger,
-): Promise<void> {
+): Promise<RollbackOutcome> {
+  const outcome: RollbackOutcome = { attempted: false, failures: [] }
   const multiRepo = target.repoCount > 1 && target.repos.length > 0
   // Multi-repo branch. In resume mode (`resetOnEmptySnapshot: false`) it is
   // entered only when a per-repo map exists — a null map is a legacy pre-PR-B
@@ -74,7 +110,13 @@ export async function rollbackNodeRunWorktrees(
       if (sha === '' && !opts.resetOnEmptySnapshot) continue
       try {
         await rollbackToSnapshot(repo.worktreePath, sha)
+        outcome.attempted = true
       } catch (err) {
+        outcome.failures.push({
+          worktreeDirName: repo.worktreeDirName,
+          code: (err as { code?: string }).code ?? 'rollback-failed',
+          message: err instanceof Error ? err.message : String(err),
+        })
         log.warn('node-run rollback per-repo failed', {
           nodeRunId: run.id,
           worktreeDirName: repo.worktreeDirName,
@@ -82,20 +124,26 @@ export async function rollbackNodeRunWorktrees(
         })
       }
     }
-    return
+    return outcome
   }
 
   // Single-repo path (also the legacy multi-repo resume fallback when the
   // per-repo map is absent). Byte-baseline equivalent to pre-RFC-092 task.ts.
-  if (target.worktreePath === '') return
+  if (target.worktreePath === '') return outcome
   const snap = run.preSnapshot ?? ''
-  if (snap === '' && !opts.resetOnEmptySnapshot) return
+  if (snap === '' && !opts.resetOnEmptySnapshot) return outcome
   try {
     await rollbackToSnapshot(target.worktreePath, snap)
+    outcome.attempted = true
   } catch (err) {
+    outcome.failures.push({
+      code: (err as { code?: string }).code ?? 'rollback-failed',
+      message: err instanceof Error ? err.message : String(err),
+    })
     log.warn('node-run rollback failed', {
       nodeRunId: run.id,
       error: err instanceof Error ? err.message : String(err),
     })
   }
+  return outcome
 }

@@ -84,7 +84,8 @@ import { sealAnswersServerSide } from '@/services/clarify'
 import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
 import { pickFreshestRun } from '@/services/freshness'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
-import { rollbackToSnapshot } from '@/util/git'
+import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
+import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { createLogger } from '@/util/log'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
@@ -784,18 +785,26 @@ export async function triggerDesignerRerun(
   // RFC-014: roll worktree back to designer's pre_snapshot before reruns so
   // file-level effects are erased. Failure is logged + suppressed; rerun
   // proceeds (worktree may diverge but the designer rewrites the file).
+  // RFC-098 B1 (audit S-9 / ⑥-10): write-lock + shared multi-repo rollback.
+  // `args.worktreePath !== ''` stays as the seal gate (tests construct args
+  // with '' to disable rollback entirely); the target itself is loaded from
+  // the DB so multi-repo tasks roll per sub-worktree.
   if (
-    lastDesigner.preSnapshot !== null &&
-    lastDesigner.preSnapshot !== '' &&
+    (lastDesigner.preSnapshot !== null || lastDesigner.preSnapshotReposJson !== null) &&
     args.worktreePath !== ''
   ) {
-    try {
-      await rollbackToSnapshot(args.worktreePath, lastDesigner.preSnapshot)
-    } catch (err) {
-      log.warn('designer rollback failed', {
-        nodeRunId: lastDesigner.id,
-        error: err instanceof Error ? err.message : String(err),
-      })
+    const target = await loadRollbackTarget(args.db, args.taskId)
+    if (target !== null) {
+      try {
+        await getTaskWriteSem(args.taskId).run(() =>
+          rollbackNodeRunWorktrees(target, lastDesigner, { resetOnEmptySnapshot: false }, log),
+        )
+      } catch (err) {
+        log.warn('designer rollback failed', {
+          nodeRunId: lastDesigner.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
     }
   }
 

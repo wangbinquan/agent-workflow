@@ -1,36 +1,32 @@
-// CURRENT-BEHAVIOR LOCK — design/scheduler-audit-2026-06-10.md S-17 (WP-5)
+// RFC-098 B1 REGRESSION LOCK — design/scheduler-audit-2026-06-10.md S-17 (WP-5)
+// （此文件由修复前的 CURRENT-BEHAVIOR LOCK 按原头注 FLIP 指引翻转而来。）
 //
-// 当前缺陷行为（已对照 src/services/scheduler.ts:1462-1463 核实）：
-//   runOneNode 固定【先 globalSem 后 writeSem】：
-//     const releaseGlobal = await globalSem.acquire()      // :1462
-//     const releaseWrite  = agent.readonly ? null : await writeSem.acquire()  // :1463
-//   当就绪写节点数 ≥ maxConcurrentNodes 时，排队中的写者每人占住一个 global 槽
-//   （它们在 writeSem 上睡觉但不释放 global），readonly 节点拿不到任何 global 槽，
-//   被整体饿死到首个写者完成释放槽位为止——直接违反 :567-568 注释承诺的
-//   "readonly nodes run truly in parallel"。Code→Audit→Fix 主场景里 readonly
-//   审计节点因此被迫串行，墙钟成倍膨胀。
+// 修复前的缺陷行为：runOneNode 固定【先 globalSem 后 writeSem】，当就绪写节点数
+// ≥ maxConcurrentNodes 时，排队中的写者每人占住一个 global 槽（它们在 writeSem
+// 上睡觉但不释放 global），readonly 节点拿不到任何 global 槽，被整体饿死到首个
+// 写者完成释放槽位为止——直接违反注释承诺的 "readonly nodes run truly in
+// parallel"。Code→Audit→Fix 主场景里 readonly 审计节点因此被迫串行。
 //
-// 正确语义应是：写节点先取 writeSem 再取 globalSem（fanout shard / aggregator
-// 同步改，scheduler.ts:2915-2917 / 3098-3100 同型），排队写者不占 global 槽，
-// readonly 与首个写者真并行。
-//
-// 修复归属：WP-5（任务级写锁注册表 + 信号量取用顺序）。
-// 修复时本文件应翻红：最后的 starvation 断言（r.start >= 最早写者 end）不再成立
-// ——届时翻转为断言 readonly 的 start 早于所有写者的 end（真并行）。
+// 修复后的正确语义（本文件全绿地锁定它）：写节点【先 writeSem 后 globalSem】
+// （全局锁序 writeSem ≺ globalSem ≺ subprocessSem，src/services/scheduler.ts
+// runOneNode / fanout shard / aggregator 三点同型，释放反序），排队写者睡在
+// writeSem 上、不占 global 槽，readonly 节点与首个写者真并行。
 //
 // 确定性说明（为什么这不是 sleep 竞速）：
 //   - 四个节点无边、同帧就绪，dispatch 顺序 = definition.nodes 顺序
-//     （deriveFrontier 按 scopeNodes 顺序压 ready，scheduler.ts:1106-1127；
-//     runScope 按 f.ready 顺序同步起 promise，:633-640）。
+//     （deriveFrontier 按 scopeNodes 顺序压 ready；runScope 按 f.ready 顺序
+//     同步起 promise）。
 //   - Semaphore 是 FIFO（util/semaphore.ts），四个 runOneNode 在 acquire 前的
 //     await 链完全同构（全是 agent-single、零边、同形 DB 查询），按起跑顺序到达
-//     acquire ⇒ w1/w2 占满 2 个槽，w3、readonly 排队。
-//   - 断言本身是结构性的：readonly 的 spawn 只能发生在某个写者 runOneNode 完整
-//     结束（进程退出 + 终态落库）释放 global 槽之后，因此
-//     readonly.start >= min(写者 end) 与计时器精度无关；写者 300ms 延迟只是为了
-//     修复后（readonly 与 w1 并行）该断言能稳定翻红。
-//   - 用 3 个写者 + capacity 2：即使排队顺序出现 ±1 扰动（readonly 插到 w3 前），
-//     readonly 仍要等首个写者完成才有槽，断言依旧成立——不依赖毫秒级竞速。
+//     acquire ⇒ w1 取 writeSem + global 槽 1，w2/w3 睡在 writeSem 上（不占
+//     global 槽），readonly auditor 直接拿 global 槽 2 起跑。
+//   - 翻转后的断言依旧是结构性的：auditor 不取 writeSem，w1 持锁期间它即拿到
+//     第 2 个 global 槽 spawn；每个写者至少跑 WRITER_DELAY_MS=300ms，auditor
+//     起跑只需常数管线开销 ⇒ auditor.start < min(写者 end) 有 ~300ms 结构余量，
+//     不依赖毫秒级竞速。修复前语义下该断言稳定为红（auditor 只能在首个写者完整
+//     结束后才有槽）。
+//   - 用 3 个写者 + capacity 2：即使排队顺序出现 ±1 扰动，readonly 真并行的
+//     结论不变；写者两两不重叠的支撑断言保持原样。
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -150,14 +146,14 @@ function readTrace(path: string): TraceEvent[] {
     .map((l) => JSON.parse(l) as TraceEvent)
 }
 
-describe('S-17 — queued writers hold global slots and starve readonly nodes (current-behavior lock)', () => {
+describe('S-17 — queued writers no longer hold global slots; readonly runs parallel to the first writer (RFC-098 B1 regression lock)', () => {
   let h: Harness
   beforeEach(() => {
     h = buildHarness()
   })
   afterEach(() => h.cleanup())
 
-  test('with maxConcurrentNodes=2, a ready readonly node does not start until the first writer COMPLETES', async () => {
+  test('with maxConcurrentNodes=2, a ready readonly node starts BEFORE the first writer completes', async () => {
     // Definition order drives dispatch order: w1, w2 take the 2 global
     // slots, w3 queues on writeSem holding a would-be slot request, and the
     // readonly auditor sits behind all of them on globalSem.
@@ -239,16 +235,14 @@ describe('S-17 — queued writers hold global slots and starve readonly nodes (c
       }
     }
 
-    // DEFECT LOCK (the S-17 claim): the readonly auditor — ready since tick
-    // one, zero-delay, no write lock needed — is spawned only AFTER the
-    // earliest writer has fully completed and released its global slot.
-    // Under the promised semantics (writers acquire writeSem BEFORE a global
-    // slot / queued writers don't hold slots) the auditor would run in
-    // parallel with the first writer, i.e. auditor.start < min(writer ends)
-    // by ~WRITER_DELAY_MS. Flip this assertion when WP-5 lands:
-    //   expect(auditorStart).toBeLessThan(earliestWriterEnd)
+    // HEADLINE LOCK (flipped on RFC-098 B1): writers acquire writeSem BEFORE
+    // a global slot, so queued writers don't hold slots — the readonly
+    // auditor (ready since tick one, zero-delay, no write lock needed) is
+    // spawned WHILE the first writer is still running, i.e. it truly runs in
+    // parallel: auditor.start < min(writer ends) with ~WRITER_DELAY_MS of
+    // structural margin. (Pre-fix this was >= — the starvation defect.)
     const earliestWriterEnd = Math.min(...writers.map((w) => endOf(w)!.t))
     const auditorStart = startOf('auditor')!.t
-    expect(auditorStart).toBeGreaterThanOrEqual(earliestWriterEnd)
+    expect(auditorStart).toBeLessThan(earliestWriterEnd)
   }, 20_000)
 })
