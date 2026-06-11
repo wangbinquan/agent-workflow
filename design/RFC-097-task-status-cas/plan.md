@@ -14,7 +14,8 @@
 ### RFC-097-T2 — 27 写点迁移
 
 - 按 design §2 表逐点替换（scheduler 6 / task 3 / limits·orphans·shutdown 3 / lifecycleRepair 15）；
-  scheduler done/awaiting 写前 aborted 终检（cancel 应赢）。
+  scheduler done/awaiting 写前 aborted 终检（cancel 应赢）；reapOrphanRuns 增 pending→
+  interrupted 任务收割（崩溃窗口补偿，design §3）。
 - 依赖：T1。
 
 ### RFC-097-T3 — 互斥 + S-23 + S-27
@@ -25,7 +26,10 @@
 
 ### RFC-097-T4 — 测试落地与守卫
 
-- 翻转 s08 / s14；新增 rfc097-resume-mutex / rfc097-cancel-wins / S-23 用例（design §7）。
+- 翻转 s08 / s14；新增 rfc097-resume-mutex / rfc097-cancel-wins / S-23 / 重启恢复用例
+  （design §7）。
+- **测试暗雷迁移**：新增共享 `reenterScheduler` helper，替换对抗检视清单的 10 文件 ≈30 处
+  直接重入点；loop-exhausted-resume 重置 pending 保 oracle。
 - 依赖：T1-T3。
 
 ### RFC-097-T5 — 收尾
