@@ -49,6 +49,7 @@ export function UserPicker({
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLUListElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
   const listId = useId()
   const [popPos, setPopPos] = useState<{ left: number; top: number; width: number } | null>(null)
 
@@ -118,7 +119,27 @@ export function UserPicker({
 
   return (
     <div className="user-picker" ref={rootRef}>
-      <div className="chips-input__row">
+      {/* The whole bordered box IS the field: a mousedown anywhere on the
+          row (its padding, the empty area next to chips) would otherwise
+          land on a non-focusable div — the browser parks focus on <body>
+          and, inside a Dialog, the focus trap immediately yanks it to the
+          × close button, so typing goes nowhere and the field reads as
+          dead/disabled (user report: "搜索用户那个textbox无法使用，是灰的").
+          preventDefault keeps the implicit blur from ever happening and we
+          focus the input ourselves. */}
+      <div
+        className="chips-input__row"
+        onMouseDown={(e) => {
+          if (disabled) return
+          // Chip × buttons keep their own click semantics.
+          if ((e.target as HTMLElement).closest('.chip__remove') !== null) return
+          if (e.target !== inputRef.current) {
+            e.preventDefault()
+            inputRef.current?.focus()
+            setOpen(true)
+          }
+        }}
+      >
         {value.map((u) => (
           <span key={u.id} className="chip">
             {u.displayName}
@@ -135,6 +156,7 @@ export function UserPicker({
           </span>
         ))}
         <input
+          ref={inputRef}
           className="chips-input__field"
           value={input}
           placeholder={placeholder ?? t('userPicker.placeholder')}

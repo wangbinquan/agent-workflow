@@ -10528,6 +10528,19 @@ mark.comment-anchor[data-active='true'] {
   min-width: 220px;
 }
 
+/* The row is one click target for the input inside it (see UserPicker's
+   onMouseDown) — show text affordance + the standard input focus ring so the
+   field never reads as disabled. */
+.user-picker .chips-input__row {
+  cursor: text;
+}
+
+.user-picker .chips-input__row:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  border-color: transparent;
+}
+
 .user-picker__results {
   /* Portaled to document.body — coords are set inline from the field's
      bounding rect (mirror of .select__listbox). z-index matches the Select

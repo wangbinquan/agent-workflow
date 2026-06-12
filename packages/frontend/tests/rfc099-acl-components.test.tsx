@@ -93,6 +93,19 @@ describe('UserPicker', () => {
     expect(onChange).toHaveBeenLastCalledWith([])
   })
 
+  test('mousedown on the row (padding / empty area) focuses the input — the whole box is the field', async () => {
+    // Regression: inside a Dialog, a click that landed on the row div (not
+    // the input) parked focus on <body>, the dialog trap yanked it to the ×
+    // button, and the field read as dead ("搜索用户那个textbox无法使用，是灰的").
+    mockedGet.mockResolvedValue([])
+    wrap(<UserPicker value={[]} onChange={() => {}} testidPrefix="tp" />)
+    const input = screen.getByTestId('tp-input')
+    const row = input.closest('.chips-input__row') as HTMLElement
+    fireEvent.mouseDown(row)
+    expect(document.activeElement).toBe(input)
+    expect(input.getAttribute('aria-expanded')).toBe('true')
+  })
+
   test('already-selected and excluded ids are filtered out of results', async () => {
     mockedGet.mockResolvedValue([user('u1', 'alice'), user('u2', 'bob'), user('u3', 'carol')])
     wrap(
