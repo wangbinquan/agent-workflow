@@ -62,11 +62,15 @@ describe('RFC-023 prompt token substitution', () => {
     expect(out).not.toContain('## Clarify Q&A')
   })
 
-  test('buildClarifyProtocolBlock contains the "EITHER ... OR ... NEVER both" rule', () => {
+  // RFC-100: the clarify format block is now clarify-ONLY (no more "EITHER
+  // output OR clarify, NEVER both" bi-modal rule) — while a clarify channel is
+  // active the agent may not emit <workflow-output> at all.
+  test('buildClarifyProtocolBlock states the clarify-only rule (RFC-100)', () => {
     const block = buildClarifyProtocolBlock()
     expect(block).toContain('<workflow-clarify>')
-    expect(block).toContain('NEVER both')
-    expect(block).toContain('Clarify mode is enabled for this node')
+    expect(block).toContain('exactly one <workflow-clarify> block')
+    expect(block).toContain('NO <workflow-output>')
+    expect(block).toContain('rejected until the user stops clarifying')
   })
 
   // Locks the explicit warning that a 5th+ option is silently dropped by
@@ -92,7 +96,7 @@ describe('RFC-023 prompt token substitution', () => {
   // re-confirming the regression (agent biased toward output instead of
   // asking back, even when the user wired a clarify channel).
   describe('bi-modal trailing block when hasClarifyChannel=true', () => {
-    test('renderer emits ask-back-default preamble and softens the output "MUST" wording', () => {
+    test('renderer emits the mandatory ask-back preamble and NO output format', () => {
       const out = renderUserPrompt({
         promptTemplate: 'do the thing',
         inputs: {},
@@ -100,18 +104,15 @@ describe('RFC-023 prompt token substitution', () => {
         agentOutputs: ['design'],
         hasClarifyChannel: true,
       })
-      expect(out).toContain('This node has a clarify channel')
-      // RFC-039 strong-bias anchors
-      expect(out).toContain('The user has wired it because they expect you to ask back')
-      expect(out).toContain('By default, your next reply should be (B)')
-      expect(out).toContain('ONLY when every decision')
-      expect(out).toContain('you do NOT have the green light for (A)')
-      // Output format wording is softened — no top-level "MUST end your reply"
+      expect(out).toContain('MANDATORY ASK-BACK')
+      expect(out).toContain('The user wired a clarify channel')
+      expect(out).toContain('Operate with ZERO guessing')
+      // RFC-100: NO <workflow-output> format is emitted while clarify is active.
       expect(out).not.toContain('You MUST end your reply with a `<workflow-output>` block')
-      expect(out).toContain('When you are ready to commit the final answer')
-      // Clarify format block still follows after the output format block
-      expect(out).toContain('Clarify mode is enabled for this node')
-      expect(out.indexOf('<workflow-output>')).toBeLessThan(out.indexOf('Clarify mode is enabled'))
+      expect(out).not.toContain('When you are ready to commit the final answer')
+      // Clarify format block follows the preamble.
+      expect(out).toContain('Clarify format.')
+      expect(out.indexOf('MANDATORY ASK-BACK')).toBeLessThan(out.indexOf('Clarify format.'))
     })
 
     test('legacy single-envelope wording is preserved when hasClarifyChannel is omitted', () => {
@@ -126,13 +127,10 @@ describe('RFC-023 prompt token substitution', () => {
       expect(out).not.toContain('Clarify mode is enabled')
     })
 
-    test('softened clarify lead encourages ask-back instead of framing it as last resort', () => {
+    test('clarify lead frames ask-back as the expected outcome (RFC-100)', () => {
       const block = buildClarifyProtocolBlock()
-      // Previous wording was "If — and ONLY if — you have unresolved questions
-      // that block you ... you MUST instead emit". That phrasing read as
-      // "only in extreme blocking cases", which reinforced the output bias.
       expect(block).not.toContain('ONLY if')
-      expect(block).toContain('Ask-back is a first-class outcome')
+      expect(block).toContain('Asking back is the expected outcome')
     })
   })
 })
@@ -163,7 +161,7 @@ describe('RFC-023 prompt.ts source-code-text grep guard', () => {
 // tests lock the new default-to-(B) anchors. Do not weaken without fresh
 // production evidence — see design/RFC-039-clarify-ask-bias/proposal.md §G1.
 describe('RFC-039 bi-modal preamble default-asks (B) and lists ask-back triggers', () => {
-  test('preamble contains all four strong-bias anchors', () => {
+  test('preamble contains the RFC-100 mandatory ask-back anchors', () => {
     const out = renderUserPrompt({
       promptTemplate: 'do the thing',
       inputs: {},
@@ -171,19 +169,19 @@ describe('RFC-039 bi-modal preamble default-asks (B) and lists ask-back triggers
       agentOutputs: ['design'],
       hasClarifyChannel: true,
     })
-    // Anchor 1 — explains WHY ask-back is the default (the user wired it).
-    expect(out).toContain('The user has wired it because they expect you to ask back')
-    // Anchor 2 — sets (B) as the default reply.
-    expect(out).toContain('By default, your next reply should be (B)')
-    // Anchor 3 — names the gate for choosing (A).
-    expect(out).toContain('ONLY when every decision')
-    // Anchor 4 — escape-hatch denial when the agent is hedging.
-    expect(out).toContain('you do NOT have the green light for (A)')
-    // Anchor 5 — list of behaviours that should trigger (B), kept loose so the
-    // exact wording can drift slightly but the trigger set survives.
-    expect(out).toMatch(/marking decisions as "TBD"/)
-    expect(out).toMatch(/inventing constraints/)
-    expect(out).toMatch(/rationalizing your own pick/)
+    // Anchor 1 — declares mandatory ask-back mode.
+    expect(out).toContain('MANDATORY ASK-BACK')
+    // Anchor 2 — the only valid reply is clarify; output is forbidden.
+    expect(out).toContain('Your ONLY valid reply this round is a `<workflow-clarify>` envelope')
+    expect(out).toContain('You may NOT emit `<workflow-output>`')
+    // Anchor 3 — zero-guessing directive.
+    expect(out).toContain('Operate with ZERO guessing')
+    // Anchor 4 — the ask-back discipline bullets (kept loose so wording can
+    // drift slightly but the discipline set survives).
+    expect(out).toMatch(/Investigate first, then ask/)
+    expect(out).toMatch(/Never guess unfamiliar terms/)
+    expect(out).toMatch(/No assumptions, no fabrication/)
+    expect(out).toMatch(/writing "TBD"/)
   })
 
   test('legacy "equally first-class" wording is gone', () => {
@@ -226,15 +224,16 @@ describe('RFC-039 source-code grep guards', () => {
     expect(PROMPT_SRC).not.toContain('Both envelopes are equally first-class')
   })
 
-  test('prompt.ts contains the RFC-039 strong-bias preamble anchor', () => {
-    expect(PROMPT_SRC).toContain('By default, your next reply should be (B)')
+  test('prompt.ts contains the RFC-100 mandatory ask-back preamble anchor', () => {
+    expect(PROMPT_SRC).toContain('MANDATORY ASK-BACK')
+    expect(PROMPT_SRC).toContain('buildMandatoryClarifyPreamble')
   })
 
   test('clarify.ts must not retain the legacy "willing to answer" continue wording', () => {
     expect(CLARIFY_SRC).not.toContain('willing to answer more clarification questions')
   })
 
-  test('clarify.ts contains the RFC-039 strong-bias continue anchor', () => {
-    expect(CLARIFY_SRC).toContain('REQUIRED to be another')
+  test('clarify.ts contains the RFC-100 mandatory ask-back continue anchor', () => {
+    expect(CLARIFY_SRC).toContain('mandatory ask-back mode')
   })
 })

@@ -187,6 +187,18 @@ export function extractLastEnvelope(text: string): string | null {
 export type DetectedEnvelopeKind = 'output' | 'clarify' | 'both' | 'none'
 
 /**
+ * RFC-100 — error-message prefix the runner stamps when a node is in mandatory
+ * ask-back mode (a clarify channel is ACTIVE: wired AND the user has not
+ * clicked "Stop clarifying") yet the agent's reply was not a pure
+ * `<workflow-clarify>` envelope (it emitted `<workflow-output>`, both, or
+ * neither). `decideEnvelopeFollowup` matches this prefix to drive a same-session
+ * follow-up that re-demands the clarify envelope. Defined here (a leaf module
+ * imported by both runner.ts and scheduler.ts) so producer and matcher share
+ * one literal — no runner↔scheduler import cycle.
+ */
+export const CLARIFY_REQUIRED_PREFIX = 'clarify-required'
+
+/**
  * Cheap pre-scan over agent stdout to decide which envelope path the runner
  * should take. We do not parse the body here — just count global regex hits
  * for either form.

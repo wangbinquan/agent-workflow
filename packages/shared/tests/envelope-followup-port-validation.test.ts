@@ -55,28 +55,35 @@ describe('RFC-049 renderEnvelopeFollowupPrompt reason=port-validation matrix', (
     expect(out).not.toContain('Keep clarifying')
   })
 
+  // RFC-100: port-validation only fires after a `<workflow-output>` was accepted
+  // (a stop round / no clarify channel — the runtime guard rejects output before
+  // validation while clarify is active), so it now uses OUTPUT-oriented bullets
+  // regardless of channel — no bi-modal "(B) `<workflow-clarify>`" wording even
+  // with hasClarifyChannel=true. M3/M4/M5 updated accordingly.
   // M3: hasClarifyChannel=on + no failing kinds — unreachable, mirror of M1.
-  test('M3: hasClarifyChannel=true + perKindRepairBlocks=[] → bi-modal bullets, no repair section', () => {
+  test('M3: hasClarifyChannel=true + perKindRepairBlocks=[] → output bullets, no repair section', () => {
     const out = renderEnvelopeFollowupPrompt({
       hasClarifyChannel: true,
       reason: 'port-validation',
       perKindRepairBlocks: [],
     })
     expect(out).toContain('Port content validation — follow-up.')
-    expect(out).toContain('(B) `<workflow-clarify>`')
+    expect(out).toContain('`<workflow-output>` block')
+    expect(out).not.toContain('(B) `<workflow-clarify>`')
     expect(out).not.toContain('Port content validation — markdown_file.')
     expect(out).not.toContain('two-step protocol')
   })
 
   // M4: hasClarifyChannel=on + markdown_file failure + directive ∉ {continue}
-  // → bi-modal preamble + repair block; no RFC-039 trailer.
-  test('M4: hasClarifyChannel=true + markdown_file + directive undefined → bi-modal + repair, no trailer', () => {
+  // → output bullets + repair block; no RFC-039 trailer.
+  test('M4: hasClarifyChannel=true + markdown_file + directive undefined → output bullets + repair, no trailer', () => {
     const out = renderEnvelopeFollowupPrompt({
       hasClarifyChannel: true,
       reason: 'port-validation',
       perKindRepairBlocks: [MD_FILE_BLOCK],
     })
-    expect(out).toContain('(B) `<workflow-clarify>`')
+    expect(out).toContain('`<workflow-output>` block')
+    expect(out).not.toContain('(B) `<workflow-clarify>`')
     expect(out).toContain('Port content validation — markdown_file.')
     // M4 specifically excludes the RFC-039 strong-bias trailer.
     expect(out).not.toContain('Keep clarifying')
@@ -92,7 +99,6 @@ describe('RFC-049 renderEnvelopeFollowupPrompt reason=port-validation matrix', (
       clarifyDirective: 'continue',
       perKindRepairBlocks: [MD_FILE_BLOCK],
     })
-    expect(out).toContain('(B) `<workflow-clarify>`')
     expect(out).toContain('Port content validation — markdown_file.')
     const idxRepair = out.indexOf('Port content validation — markdown_file.')
     const idxTrailer = out.indexOf('Keep clarifying')
@@ -175,7 +181,11 @@ describe('RFC-049 renderEnvelopeFollowupPrompt perKindRepairBlocks splicing', ()
     })
     expect(off).toContain('Port content validation — follow-up.')
     expect(on).toContain('Port content validation — follow-up.')
+    // RFC-100: port-validation uses output bullets regardless of channel, so
+    // neither side carries the bi-modal "(B)" wording; both carry the repair block.
     expect(off).not.toContain('(B) `<workflow-clarify>`')
-    expect(on).toContain('(B) `<workflow-clarify>`')
+    expect(on).not.toContain('(B) `<workflow-clarify>`')
+    expect(off).toContain('Port content validation — markdown_file.')
+    expect(on).toContain('Port content validation — markdown_file.')
   })
 })

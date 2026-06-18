@@ -34,7 +34,7 @@ describe('buildProtocolBlock', () => {
   // — re-confirm the regression before weakening them.
   describe('markdown_file output kind guidance', () => {
     test('flags the markdown_file port in the bullet list', () => {
-      const block = buildProtocolBlock(['summary', 'report'], false, { report: 'markdown_file' })
+      const block = buildProtocolBlock(['summary', 'report'], { report: 'markdown_file' })
       expect(block).toContain('  - summary\n')
       expect(block).toContain(
         '  - report (path — write the file first, then emit only its worktree-relative path)',
@@ -42,7 +42,7 @@ describe('buildProtocolBlock', () => {
     })
 
     test('emits the two-step write-then-emit-path block naming the markdown_file ports', () => {
-      const block = buildProtocolBlock(['summary', 'report', 'plan'], false, {
+      const block = buildProtocolBlock(['summary', 'report', 'plan'], {
         report: 'markdown_file',
         plan: 'markdown_file',
       })
@@ -63,7 +63,7 @@ describe('buildProtocolBlock', () => {
     })
 
     test('swaps the `...` placeholder for a path hint inside the format example', () => {
-      const block = buildProtocolBlock(['summary', 'report'], false, { report: 'markdown_file' })
+      const block = buildProtocolBlock(['summary', 'report'], { report: 'markdown_file' })
       // summary is a plain string port — placeholder unchanged.
       expect(block).toContain('<port name="summary">...</port>')
       // report is markdown_file — placeholder becomes a worktree-relative path hint.
@@ -74,7 +74,7 @@ describe('buildProtocolBlock', () => {
 
     test('omits the guidance block entirely when no port is markdown_file', () => {
       const noKindsBlock = buildProtocolBlock(['summary', 'findings'])
-      const allStringBlock = buildProtocolBlock(['summary', 'findings'], false, {
+      const allStringBlock = buildProtocolBlock(['summary', 'findings'], {
         summary: 'string',
         findings: 'markdown',
       })
@@ -86,7 +86,7 @@ describe('buildProtocolBlock', () => {
     })
 
     test('preserves trailing </workflow-output> contract so the prompt still ends with the envelope example', () => {
-      const block = buildProtocolBlock(['report'], false, { report: 'markdown_file' })
+      const block = buildProtocolBlock(['report'], { report: 'markdown_file' })
       // protocol block always ends with the literal close tag — this is the
       // contract the 'protocol block always appended at the end' test below
       // depends on; the markdown_file guidance is inserted BEFORE the
@@ -94,14 +94,28 @@ describe('buildProtocolBlock', () => {
       expect(block.endsWith('</workflow-output>')).toBe(true)
     })
 
-    test('bi-modal trailing block (hasClarifyChannel=true) still surfaces the markdown_file guidance', () => {
-      const block = buildProtocolBlock(['design'], true, { design: 'markdown_file' })
-      expect(block).toContain('This node has a clarify channel')
-      expect(block).toContain('For path-kind ports above (`design` (extension .md/.markdown))')
-      expect(block).toContain('USE A FILE-WRITING TOOL')
-      expect(block).toContain(
-        '<port name="design"><worktree-relative path to the file you just wrote></port>',
-      )
+    // RFC-100 (was: "bi-modal trailing block still surfaces markdown_file
+    // guidance"). buildProtocolBlock no longer has a clarify mode — while a
+    // clarify channel is ACTIVE the agent is given ONLY the mandatory ask-back
+    // preamble + clarify format (no `<workflow-output>` format, hence no
+    // markdown_file guidance). This locks that clarify-active prompts withhold
+    // the output-port guidance the old bi-modal block used to carry.
+    test('RFC-100: clarify-active prompt withholds the output format + markdown_file guidance', () => {
+      const out = renderUserPrompt({
+        promptTemplate: 'go',
+        inputs: {},
+        meta: META,
+        agentOutputs: ['design'],
+        agentOutputKinds: { design: 'markdown_file' },
+        hasClarifyChannel: true,
+      })
+      // mandatory ask-back preamble + clarify format are present...
+      expect(out).toContain('MANDATORY ASK-BACK')
+      expect(out).toContain('<workflow-clarify>')
+      // ...the output format / port list / markdown_file guidance are NOT.
+      expect(out).not.toContain('MUST end your reply with a `<workflow-output>` block')
+      expect(out).not.toContain('For path-kind ports above')
+      expect(out).not.toContain('USE A FILE-WRITING TOOL')
     })
   })
 })

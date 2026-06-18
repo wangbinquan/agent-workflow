@@ -222,14 +222,13 @@ export interface RenderPromptInput {
    *  runs and runs that were not triggered by a cross-clarify submit batch. */
   crossClarifyContext?: CrossClarifyPromptContext
   /**
-   * RFC-023 + RFC-039: when true, the trailing protocol block is rewritten
-   * as a bi-modal preamble. RFC-039 made the basetone "default to (B)
-   * `<workflow-clarify>`; emit (A) `<workflow-output>` only when every
-   * decision is already pinned down" — the legacy "MUST end with
-   * <workflow-output>" wording anchored the agent toward output, and the
-   * intermediate "equally first-class" framing was still too soft. The
-   * clarify-format block is appended after. When undefined / false, the
-   * legacy single-envelope wording is emitted unchanged.
+   * RFC-023 / RFC-039 / RFC-100: the scheduler's effectiveHasClarifyChannel —
+   * true ⟺ a clarify channel is wired AND the user has not clicked "Stop
+   * clarifying". When true, renderUserPrompt emits the RFC-100 mandatory
+   * ask-back preamble + clarify-only format and NO `<workflow-output>` format,
+   * so the agent must ask back and cannot finalize. When undefined / false
+   * (stop round, or no clarify channel), the single-envelope output protocol
+   * block is emitted unchanged.
    */
   hasClarifyChannel?: boolean
 }
@@ -498,39 +497,48 @@ export function renderUserPrompt(input: RenderPromptInput): string {
     }
   }
 
-  // Trailing protocol selection:
-  //   - inline mode: opencode session already has the bi-modal preamble +
-  //     full clarify format block from earlier rounds. Emit only a short
-  //     reminder so the agent knows fresh user answers landed.
-  //   - has-clarify-channel (RFC-023): bi-modal preamble + clarify format.
-  //   - default: legacy single-envelope output protocol.
+  // Trailing protocol selection (RFC-100 — mandatory ask-back).
+  //
+  // `input.hasClarifyChannel` here is the scheduler's effectiveHasClarifyChannel:
+  // true ⟺ a clarify channel is wired AND the user has not clicked "Stop
+  // clarifying" (directive !== 'stop'). Call that state clarifyActive.
+  //
+  //   - clarifyActive + isolated → mandatory ask-back preamble + clarify-only
+  //     format. NO <workflow-output> format is emitted, so the agent is never
+  //     told how to finalize and must ask back.
+  //   - clarifyActive + inline → a short reminder; the mandatory preamble +
+  //     clarify format already live in the resumed opencode session.
+  //   - NOT clarifyActive (stop round, or no clarify channel) → the output
+  //     protocol block. The `hasClarifyChannel` check MUST come before the
+  //     `inlineMode` check: on an inline STOP round every prior round was
+  //     clarify-only, so the session has never seen the output format — this
+  //     is the first time it must be emitted. Routing inline-stop to the
+  //     reminder (as pre-RFC-100 did) would leave the agent with no port list.
   let trailing: string
-  if (inlineMode) {
-    trailing = buildClarifyInlineReminder()
-  } else if (input.hasClarifyChannel === true) {
-    trailing =
-      buildProtocolBlock(input.agentOutputs, true, input.agentOutputKinds) +
-      buildClarifyProtocolBlock()
+  if (input.hasClarifyChannel === true) {
+    trailing = inlineMode
+      ? buildClarifyInlineReminder()
+      : buildMandatoryClarifyPreamble() + buildClarifyProtocolBlock()
   } else {
-    trailing = buildProtocolBlock(input.agentOutputs, false, input.agentOutputKinds)
+    trailing = buildProtocolBlock(input.agentOutputs, input.agentOutputKinds)
   }
   return body + sections + trailing
 }
 
 /**
- * The English protocol block. Always appended to user prompt, never to the
- * agent's system prompt (agent.md body is passed through verbatim).
+ * The English output protocol block. Appended to the user prompt (never the
+ * agent's system prompt — agent.md body is passed through verbatim) whenever
+ * the node is NOT in mandatory ask-back mode: a node with no clarify channel,
+ * or a clarify node on the user's "Stop clarifying" round. Instructs the agent
+ * to end its reply with a `<workflow-output>` envelope listing the declared
+ * ports.
  *
- * When `hasClarifyChannel` is true (RFC-023 + RFC-039), the block is rewritten
- * as a bi-modal preamble. RFC-039 sharpened the basetone: the default is now
- * "you should ask back (B)"; emitting `<workflow-output>` directly is allowed
- * ONLY when every decision needed to satisfy the inputs has already been
- * pinned down. The user wired a clarify channel because they expect ask-back;
- * the legacy "equally first-class" wording was too soft and let agents glide
- * into output mode whenever the inputs looked plausible. The clarify-format
- * block is appended by `renderUserPrompt` immediately after. No runner-side
- * hard rejection — the agent retains an escape hatch when inputs are truly
- * unambiguous.
+ * RFC-100 removed the old bi-modal (`hasClarifyChannel === true`) branch:
+ * while a clarify channel is active the agent is given ONLY the clarify format
+ * (see {@link buildMandatoryClarifyPreamble} + {@link buildClarifyProtocolBlock}),
+ * never this block, so there is no longer an "output OR clarify" preamble to
+ * emit here and no output-side escape hatch. The output-path wording below is
+ * byte-identical to the pre-RFC-100 `hasClarifyChannel !== true` branch.
  *
  * When `agentOutputKinds` declares any port as `markdown_file`, the block
  * additionally emits explicit "write the file first, then emit only the
@@ -540,7 +548,6 @@ export function renderUserPrompt(input: RenderPromptInput): string {
  */
 export function buildProtocolBlock(
   agentOutputs: string[],
-  hasClarifyChannel?: boolean,
   agentOutputKinds?: AgentOutputKindsMap,
 ): string {
   // RFC-080: per-port bullet / example annotation is owned by each kind's
@@ -578,40 +585,12 @@ export function buildProtocolBlock(
     return out
   }
 
-  if (hasClarifyChannel !== true) {
-    let s =
-      '\n\n---\nYou MUST end your reply with a `<workflow-output>` block listing these ports:\n'
-    for (const port of agentOutputs) {
-      s += renderBullet(port)
-    }
-    s += renderPerKindGuidance()
-    s += '\nFormat:\n<workflow-output>\n'
-    for (const port of agentOutputs) {
-      s += renderExample(port)
-    }
-    s += '</workflow-output>'
-    return s
-  }
-
-  let s = '\n\n---\n'
-  s +=
-    '**This node has a clarify channel. The user has wired it because they expect you to ask back when intent is under-specified.**\n\n'
-  s +=
-    'By default, your next reply should be (B) `<workflow-clarify>` — ask the user to disambiguate before you commit a final answer. You may emit (A) `<workflow-output>` directly ONLY when every decision needed to satisfy the inputs has already been pinned down by the prompt / inputs / earlier rounds — i.e. there is genuinely nothing left to ask. Picking (A) means you are taking full responsibility that no naming choice, technical option, UX decision, or unstated constraint is being guessed at.\n\n'
-  s +=
-    'If, while drafting, you find yourself: hedging, marking decisions as "TBD", inventing constraints not given by the inputs, choosing between plausible alternatives without a stated preference, or rationalizing your own pick of the user\'s intent — you do NOT have the green light for (A); emit (B) instead.\n\n'
-  s +=
-    '  (A) `<workflow-output>` — final answer, format described under "(A) `<workflow-output>` format" below.\n'
-  s +=
-    '  (B) `<workflow-clarify>` — ask the user; format described under "Clarify mode is enabled for this node" further below.\n\n'
-  s += '— (A) `<workflow-output>` format —\n'
-  s +=
-    'When you are ready to commit the final answer, end your reply with a `<workflow-output>` block listing these ports:\n'
+  let s = '\n\n---\nYou MUST end your reply with a `<workflow-output>` block listing these ports:\n'
   for (const port of agentOutputs) {
     s += renderBullet(port)
   }
   s += renderPerKindGuidance()
-  s += '\n<workflow-output>\n'
+  s += '\nFormat:\n<workflow-output>\n'
   for (const port of agentOutputs) {
     s += renderExample(port)
   }
@@ -620,18 +599,46 @@ export function buildProtocolBlock(
 }
 
 /**
- * RFC-023 — the clarify protocol block. Appended to the user prompt by the
- * runner only when the current agent node has a clarify channel wired
- * (i.e. an outbound edge on its system port `__clarify__`). When present, it
- * lives AFTER the standard `<workflow-output>` block so the agent reads both
- * envelopes and chooses exactly one. Returns a leading `\n\n` so callers can
- * concatenate without injecting their own separator.
+ * RFC-100 — the mandatory ask-back preamble. Emitted (followed immediately by
+ * {@link buildClarifyProtocolBlock}) whenever a clarify channel is active
+ * (wired AND the user has not clicked "Stop clarifying"). It REPLACES the old
+ * RFC-039 bi-modal preamble: the agent is told it must ask back and is given
+ * NO `<workflow-output>` format at all this round, so it cannot finalize early.
+ * The output format returns only on the stop round, via {@link buildProtocolBlock}.
+ *
+ * Returns a leading `\n\n---\n` so callers can concatenate without their own
+ * separator. The wording is locked by clarify-prompt regression tests — it is
+ * the product contract for "no assumptions until the human has given every
+ * detail", so changing it is a behavioural change, not a cosmetic one.
+ */
+export function buildMandatoryClarifyPreamble(): string {
+  return (
+    '\n\n---\n' +
+    '**This node is in MANDATORY ASK-BACK (clarify) mode.** The user wired a clarify channel because they require you to interrogate intent BEFORE doing any work. Your ONLY valid reply this round is a `<workflow-clarify>` envelope (format below). You may NOT emit `<workflow-output>` — the framework will reject it and re-prompt you. You are released to produce final output only after the user clicks "Stop clarifying".\n\n' +
+    'Operate with ZERO guessing. Treat every unstated detail as a blocker you resolve by asking, never by assuming.\n' +
+    '- **Investigate first, then ask.** Read the inputs, the repository, referenced files, and every prior-round answer; use any skills and tools available to resolve what you can on your own — never spend a question on something you could determine yourself.\n' +
+    '- **Ask the consequential things, in priority order.** Lead with the decisions that most change the outcome (naming, data shapes, API / contracts, UX behavior, scope boundaries, acceptance criteria, risky edge cases). Batch closely-related points into one question. Do NOT pad with low-stakes "just confirming…" questions — depth over breadth.\n' +
+    '- **Pin down every detail that actually matters before acting.** Do not begin the deliverable until each decision needed to do it correctly is settled by the human. "Mostly clear" is not clear enough.\n' +
+    '- **Never guess unfamiliar terms.** Any proprietary term, acronym, internal system / file / convention you do not fully understand — you MUST ask what it means; never infer or invent a meaning.\n' +
+    '- **No assumptions, no fabrication, no silent defaults.** The moment you catch yourself hedging, writing "TBD", inventing a constraint the inputs didn\'t state, or choosing between plausible alternatives without a stated preference — stop and turn it into a question instead.\n' +
+    '- **Ask in the same language as the inputs / the user.**\n' +
+    '- **Asking back is the correct outcome here, not a failure.** Returning early because you "have enough to start" defeats the purpose of this node.'
+  )
+}
+
+/**
+ * RFC-023 / RFC-100 — the clarify format block. Appended right after
+ * {@link buildMandatoryClarifyPreamble} while a clarify channel is active. It
+ * is now the ONLY envelope format the agent sees this round — RFC-100 removed
+ * the parallel `<workflow-output>` format from clarify rounds, so the agent
+ * has no way to finalize until the user stops clarifying. Returns a leading
+ * `\n\n` so callers can concatenate without injecting their own separator.
  */
 export function buildClarifyProtocolBlock(): string {
   return `
 
 ---
-**Clarify mode is enabled for this node.** When you have unresolved questions, missing context, or decisions you would otherwise have to guess at, ask back by emitting a <workflow-clarify> block instead of <workflow-output> (no <workflow-output> in the same reply). Ask-back is a first-class outcome — prefer it over guessing.
+**Clarify format.** Emit exactly one <workflow-clarify> block and nothing else — no <workflow-output> anywhere in the reply. Asking back is the expected outcome of this round.
 
 Format:
 <workflow-clarify>
@@ -655,8 +662,7 @@ Format:
 </workflow-clarify>
 
 Hard rules — violation is treated as a malformed reply and the node will fail / retry:
-- A reply must contain EITHER one <workflow-output> block OR one <workflow-clarify> block — NEVER both, NEVER neither.
-- Asking back means deferring all output ports to the next round; do not also output partial data.
+- Your reply MUST contain exactly one <workflow-clarify> block and NO <workflow-output> — emitting <workflow-output> is rejected until the user stops clarifying. Defer all output ports to a later round; do not output partial data.
 - Limits: at most 5 questions, each question 2–4 options — any option beyond the 4th is silently dropped, so cap each question at 4. Do NOT add a "free text / other" option — the framework appends a user-input row automatically.
 - Each option needs a non-empty "label". The other three fields are optional but strongly recommended: "description" (always render an explanation of what picking this option means), and — when "recommended" is true — "recommendationReason" (why this is your pick).
 - Mark at most a couple of options across the whole envelope as "recommended": true. Recommended options sort to the top of the picker for the user.
@@ -665,25 +671,29 @@ Hard rules — violation is treated as a malformed reply and the node will fail 
 }
 
 /**
- * RFC-026 — the short reminder appended to the user prompt when a clarify
- * rerun is running in `inline` session mode.
+ * RFC-026 / RFC-100 — the short reminder appended when a clarify rerun runs in
+ * `inline` session mode AND the channel is still active (the user clicked
+ * "Keep clarifying", not "Stop"). In inline mode opencode is resumed with
+ * `--session <previous-id>`, so the mandatory ask-back preamble + clarify
+ * format from earlier rounds already live in session memory; re-emitting them
+ * would burn tokens and re-anchor the agent. This reminder just (a) acks the
+ * fresh answers and (b) reasserts that the node is still in mandatory ask-back
+ * mode.
  *
- * In inline mode the runner spawns opencode with `--session <previous-id>`,
- * so the prior bi-modal preamble + full clarify protocol block are already
- * in opencode's session memory. Re-emitting them would burn tokens and risk
- * re-anchoring the agent on stale wording. This reminder is the minimum
- * needed to (a) acknowledge the fresh user answers landed, (b) keep the
- * two-envelope choice salient for the next reply.
+ * Note: the inline STOP round does NOT use this reminder — it routes to
+ * {@link buildProtocolBlock} in renderUserPrompt (the session has never seen
+ * the output format, so the stop round emits it in full).
  *
- * Returns a leading `\n\n---\n` separator so callers can concatenate after
- * the body / sections without re-injecting their own divider.
+ * Returns a leading `\n\n---\n` separator so callers can concatenate after the
+ * body / sections without re-injecting their own divider.
  */
 export function buildClarifyInlineReminder(): string {
   return (
     '\n\n---\n' +
     'The user has answered your previous `<workflow-clarify>` round (see "Clarify Q&A — User Answers (Current Round)" above). ' +
-    'Reply with EXACTLY ONE envelope — either `<workflow-output>` if the answers unblocked you, or another `<workflow-clarify>` if real blockers remain. ' +
-    'Earlier rounds, the full envelope formats, and the asking-back rules are still in this session — they have not been re-emitted.'
+    'This node stays in MANDATORY ask-back mode until the user clicks "Stop clarifying" — your next reply MUST be another `<workflow-clarify>` envelope. ' +
+    'Do not emit `<workflow-output>`; it will be rejected. ' +
+    'The full clarify format and asking-back rules from earlier in this session still apply and have not been re-emitted.'
   )
 }
 
@@ -731,16 +741,26 @@ export interface EnvelopeFollowupInput {
    *   'both-present'       ← 'clarify-and-output-both-present: ...'
    *   'clarify-malformed'  ← 'clarify-questions-...: ...'
    *   'port-validation'    ← 'port-validation-<kind>-<sub>: ...' (RFC-049)
+   *   'clarify-required'   ← 'clarify-required-...' (RFC-100; emitted while a
+   *                          clarify channel is ACTIVE and the agent produced
+   *                          <workflow-output> / both / neither instead of a
+   *                          <workflow-clarify> envelope)
    *
-   * When hasClarifyChannel is false, 'both-present' / 'clarify-malformed' are
-   * not reachable (those errors require a clarify channel to exist); the
-   * function falls back to the 'envelope-missing' opening line in that case.
+   * When hasClarifyChannel is false, 'both-present' / 'clarify-malformed' /
+   * 'clarify-required' are not reachable (those errors require an active
+   * clarify channel); the function falls back to the 'envelope-missing'
+   * opening line in that case.
    *
    * 'port-validation' is reachable in BOTH clarify-on and clarify-off modes
    * because port content validation runs against `<workflow-output>` ports
    * regardless of channel wiring.
    */
-  reason: 'envelope-missing' | 'both-present' | 'clarify-malformed' | 'port-validation'
+  reason:
+    | 'envelope-missing'
+    | 'both-present'
+    | 'clarify-malformed'
+    | 'port-validation'
+    | 'clarify-required'
   /**
    * RFC-049: backend-prerendered per-kind repair segments. shared/prompt.ts
    * does NOT import the OutputKindHandler registry (handlers live in
@@ -788,27 +808,36 @@ export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): stri
   } else if (reason === 'clarify-malformed') {
     opening =
       'Your previous reply in this session contained a `<workflow-clarify>` envelope but its JSON body could not be parsed. Re-emit a valid `<workflow-clarify>` body following the format previously specified in this session.'
+  } else if (reason === 'clarify-required') {
+    opening =
+      'Your previous reply in this session did not ask back — it emitted a `<workflow-output>` envelope (or no `<workflow-clarify>` envelope) while this node is in MANDATORY ask-back mode. The framework rejected it. Your next reply MUST be a `<workflow-clarify>` envelope.'
   } else {
     opening =
       'Your previous reply in this session did not contain either a `<workflow-output>` or a `<workflow-clarify>` envelope. The framework cannot parse your result without exactly one of them.'
   }
 
   // ---------------------------------------------------------------------------
-  // Section 2 — bullets (bi-modal preamble for clarify channel agents,
-  // single-envelope for everyone else).
+  // Section 2 — bullets. RFC-100: the clarify-channel branch is now
+  // single-envelope too — while a clarify channel is active the agent MUST
+  // emit `<workflow-clarify>` and may NOT emit `<workflow-output>`.
+  //
+  // `port-validation` is the exception: it only fires after a `<workflow-output>`
+  // envelope was ACCEPTED (a stop round / no clarify channel — RFC-100's runtime
+  // guard rejects output before validation while clarify is active), so its fix
+  // is always to re-emit `<workflow-output>` with the failing ports corrected.
+  // It therefore uses the output-oriented bullets regardless of channel.
   // ---------------------------------------------------------------------------
   let bullets: string
-  if (!hasClarify) {
+  if (isPortValidation || !hasClarify) {
     bullets =
       '- If you have finished the requested work, end your NEXT reply with a `<workflow-output>` block using the EXACT format previously specified in this session (the same port list, the same `<port name="...">...</port>` shape). Do not summarize, do not omit the block.\n' +
       '- If you were not finished, complete the remaining work first, THEN emit the `<workflow-output>` block. The envelope is mandatory either way.\n' +
       '- Do not emit anything after the closing `</workflow-output>` tag.'
   } else {
     bullets =
-      '- By default, per the clarify protocol previously stated in this session, your next reply should be (B) `<workflow-clarify>` — ask back to disambiguate. Emit (A) `<workflow-output>` directly ONLY when every decision is already pinned down. (RFC-039 bias still applies.)\n' +
-      '- If the previous reply was an in-progress draft, finish the work first, then commit to EXACTLY ONE envelope.\n' +
-      '- A reply must contain EITHER one `<workflow-output>` block OR one `<workflow-clarify>` block — NEVER both, NEVER neither.\n' +
-      '- Do not emit anything after the closing envelope tag.'
+      '- This node is in MANDATORY ask-back mode: your reply MUST be exactly one `<workflow-clarify>` block, using the format previously specified in this session. Do NOT emit `<workflow-output>` — it will be rejected until the user clicks "Stop clarifying".\n' +
+      '- If the previous reply was an in-progress draft, finish your investigation first, then ask every still-open question in a single `<workflow-clarify>`.\n' +
+      '- Do not emit anything after the closing `</workflow-clarify>` tag.'
   }
 
   // ---------------------------------------------------------------------------
@@ -828,7 +857,7 @@ export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): stri
   let trailer = ''
   if (hasClarify && input.clarifyDirective === 'continue') {
     trailer =
-      '\n\nThe user has explicitly clicked "Keep clarifying" — unless every still-unresolved detail has been pinned down by the answers earlier in this session, your reply is REQUIRED to be another `<workflow-clarify>` envelope. Skipping to `<workflow-output>` for the sake of brevity is not allowed.'
+      '\n\nThe user clicked "Keep clarifying" — this node remains in mandatory ask-back mode, so your reply MUST be another `<workflow-clarify>` envelope. `<workflow-output>` is not an option until the user clicks "Stop clarifying".'
   }
 
   // ---------------------------------------------------------------------------

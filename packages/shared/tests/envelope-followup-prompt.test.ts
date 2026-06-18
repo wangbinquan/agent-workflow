@@ -37,11 +37,12 @@ describe('RFC-042 renderEnvelopeFollowupPrompt', () => {
     expect(out).toContain(
       'did not contain either a `<workflow-output>` or a `<workflow-clarify>` envelope',
     )
-    expect(out).toContain('(B) `<workflow-clarify>`')
-    expect(out).toContain('RFC-039 bias still applies')
-    expect(out).toContain(
-      'EITHER one `<workflow-output>` block OR one `<workflow-clarify>` block — NEVER both, NEVER neither',
-    )
+    // RFC-100: clarify-channel followups are now single-envelope (clarify-only)
+    // — no more "(B) / RFC-039 bias / EITHER output OR clarify" bi-modal wording.
+    expect(out).toContain('MANDATORY ask-back mode')
+    expect(out).toContain('exactly one `<workflow-clarify>` block')
+    expect(out).toContain('Do NOT emit `<workflow-output>`')
+    expect(out).not.toContain('(B) `<workflow-clarify>`')
     expect(out).not.toContain('Keep clarifying')
   })
 
@@ -53,7 +54,8 @@ describe('RFC-042 renderEnvelopeFollowupPrompt', () => {
     })
     expect(out).toContain('contained BOTH `<workflow-output>` AND `<workflow-clarify>`')
     expect(out).toContain('Pick one and re-emit')
-    expect(out).toContain('(B) `<workflow-clarify>`')
+    // RFC-100: bullets steer to clarify-only (no bi-modal "(B)" wording).
+    expect(out).toContain('exactly one `<workflow-clarify>` block')
   })
 
   // §5.1 case 4
@@ -75,9 +77,11 @@ describe('RFC-042 renderEnvelopeFollowupPrompt', () => {
       clarifyDirective: 'continue',
       reason: 'envelope-missing',
     })
-    expect(out).toContain('The user has explicitly clicked "Keep clarifying"')
-    expect(out).toContain('REQUIRED to be another `<workflow-clarify>`')
-    expect(out).toContain('Skipping to `<workflow-output>` for the sake of brevity is not allowed')
+    expect(out).toContain('The user clicked "Keep clarifying"')
+    expect(out).toContain('MUST be another `<workflow-clarify>` envelope')
+    expect(out).toContain(
+      '`<workflow-output>` is not an option until the user clicks "Stop clarifying"',
+    )
   })
 
   // §5.1 case 6
@@ -88,9 +92,9 @@ describe('RFC-042 renderEnvelopeFollowupPrompt', () => {
       reason: 'envelope-missing',
     })
     expect(out).not.toContain('Keep clarifying')
-    expect(out).not.toContain('REQUIRED to be another')
-    // sanity: the base hasClarifyChannel=true body is still emitted
-    expect(out).toContain('(B) `<workflow-clarify>`')
+    expect(out).not.toContain('MUST be another `<workflow-clarify>` envelope')
+    // sanity: the base hasClarifyChannel=true (mandatory ask-back) body is still emitted
+    expect(out).toContain('MANDATORY ask-back mode')
   })
 
   // Defensive: hasClarifyChannel=false + reason='both-present' is not a

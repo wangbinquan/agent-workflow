@@ -290,39 +290,40 @@ describe('renderClarifyDirectiveTrailer / buildClarifyPromptBlock directive (RFC
     expect(md).not.toContain('User directive')
   })
 
-  test('continue directive → RFC-039 strongly requires another clarify round', () => {
+  test('continue directive → RFC-100 mandates another clarify round (no output escape)', () => {
     const trailer = renderClarifyDirectiveTrailer('continue')
-    expect(trailer).toContain('User directive: KEEP CLARIFYING IF NEEDED')
-    // RFC-039 strong-bias anchors
-    expect(trailer).toContain('explicitly clicked "Keep clarifying"')
-    expect(trailer).toContain('REQUIRED to be another')
-    expect(trailer).toContain('If — and only if — re-reading the answers above leaves zero')
+    expect(trailer).toContain('User directive: KEEP CLARIFYING')
+    expect(trailer).toContain('clicked "Keep clarifying"')
+    expect(trailer).toContain('MUST be another `<workflow-clarify>` envelope')
+    expect(trailer).toContain('the framework will reject it')
+    // RFC-100: the old "you may emit <workflow-output> if zero unresolved" escape is gone.
+    expect(trailer).not.toContain('you may emit <workflow-output>')
     const md = buildClarifyPromptBlock([q], ans, 'continue')
-    expect(md).toContain('User directive: KEEP CLARIFYING IF NEEDED')
-    expect(md).toContain('REQUIRED to be another')
+    expect(md).toContain('User directive: KEEP CLARIFYING')
+    expect(md).toContain('MUST be another `<workflow-clarify>` envelope')
     // Answers section still rendered first; trailer is at the end.
     expect(md.indexOf('User chose: "Postgres"')).toBeLessThan(md.indexOf('User directive'))
   })
 
-  test('stop directive → forbids further clarify and demands <workflow-output> now', () => {
+  test('stop directive → releases from ask-back and demands <workflow-output> now', () => {
     const trailer = renderClarifyDirectiveTrailer('stop')
     expect(trailer).toContain('User directive: STOP CLARIFYING')
-    expect(trailer).toContain('NOT to emit another <workflow-clarify>')
+    expect(trailer).toContain('RELEASED from ask-back mode')
+    expect(trailer).toContain('do NOT emit another <workflow-clarify>')
     expect(trailer).toContain('final <workflow-output> reply now')
     const md = buildClarifyPromptBlock([q], ans, 'stop')
     expect(md).toContain('User directive: STOP CLARIFYING')
   })
 
-  // RFC-039 regression locks. The stop branch was NOT touched by RFC-039;
-  // locking its exact wording protects against accidental edits in
-  // neighbouring lines from bleeding into the hard-stop directive (which is
-  // already strong and does not need re-balancing).
-  test('RFC-039: stop trailer wording locked verbatim (no collateral damage from continue rewrite)', () => {
+  // RFC-100 lock: the stop trailer releases the agent from ask-back mode, then
+  // demands output. Locking its exact wording protects against accidental edits
+  // bleeding into the hard-stop directive.
+  test('RFC-100: stop trailer wording locked verbatim', () => {
     const trailer = renderClarifyDirectiveTrailer('stop')
     expect(trailer).toBe(
       [
         '### User directive: STOP CLARIFYING',
-        '- The user has explicitly asked you NOT to emit another <workflow-clarify> envelope this round.',
+        '- The user has ended clarification. You are now RELEASED from ask-back mode — do NOT emit another <workflow-clarify> envelope.',
         '- Produce your final <workflow-output> reply now using the answers above. If any detail is still ambiguous, make your best informed call based on the answers and proceed.',
       ].join('\n'),
     )

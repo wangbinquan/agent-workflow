@@ -247,6 +247,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
     await submitClarifyAnswers({
       db: h.db,
       clarifyNodeRunId: sessionRow!.clarifyNodeRunId,
+      directive: 'stop', // RFC-100: finalize round → <workflow-output> accepted
       answers: [
         {
           questionId: 'q1',
@@ -288,16 +289,21 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
     // R0's argv MUST NOT contain --session (no prior round to resume).
     expect(argvLines[0]!.argv).not.toContain('--session')
 
-    // The rerun's user prompt is inline-mode shape: skips Prior Rounds
-    // Questions, retains User Answers (Current Round), ends with inline
-    // reminder. Pull it off the rerun row.
+    // The rerun's user prompt is inline-mode shape: skips Prior Rounds Questions,
+    // retains User Answers (Current Round). RFC-100: this is a STOP round
+    // (directive='stop'), so the inline rerun is RELEASED to output — the prompt
+    // carries the STOP trailer and (since the inline session never saw the output
+    // format under mandatory ask-back) emits the full output protocol block for
+    // the first time, NOT the ask-again reminder. --session resume still fired
+    // (asserted above), which is the point of this test.
     const allRuns = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const rerun = allRuns.filter((r) => r.nodeId === 'd').sort((a, b) => (a.id > b.id ? -1 : 1))[0]
     expect(rerun).toBeDefined()
     expect(rerun?.promptText ?? '').toContain('User Answers (Current Round)')
     expect(rerun?.promptText ?? '').not.toContain('Prior Rounds (Questions)')
+    expect(rerun?.promptText ?? '').toContain('User directive: STOP CLARIFYING')
     expect(rerun?.promptText ?? '').toContain(
-      'Earlier rounds, the full envelope formats, and the asking-back rules are still in this session',
+      'You MUST end your reply with a `<workflow-output>` block',
     )
 
     // Info event recorded.
@@ -337,6 +343,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
     await submitClarifyAnswers({
       db: h.db,
       clarifyNodeRunId: sessionRow!.clarifyNodeRunId,
+      directive: 'stop', // RFC-100: finalize round → <workflow-output> accepted
       answers: [
         {
           questionId: 'q1',
@@ -402,6 +409,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
     await submitClarifyAnswers({
       db: h.db,
       clarifyNodeRunId: sessionRow!.clarifyNodeRunId,
+      directive: 'stop', // RFC-100: finalize round → <workflow-output> accepted
       answers: [
         {
           questionId: 'q1',

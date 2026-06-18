@@ -365,9 +365,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
   // shared tree green; flips to live `test` + green under RFC-074 provenance.
   test('S3 [KNOWN-INCIDENT]: approve after iterate+clarify reruns must not re-open review on the same content', async () => {
     await makeDesigner(c)
-    // designer plan: call0 output v1; call1 clarify; call2 clarify; call3 output v2
+    // RFC-100: the designer has a clarify channel, so it is in mandatory ask-back
+    // mode and MUST ask before it can produce any <workflow-output>. The plan
+    // therefore opens with a clarify (round 0, answered with stop → v1), then the
+    // iterate path drives two more clarify rounds before v2.
+    // plan: call0 clarify; call1 output v1; call2 clarify; call3 clarify; call4 output v2
     writePlan(c, {
       designer: [
+        { clarify: CLARIFY_BODY },
         { output: { design: 'DESIGN_V1' } },
         { clarify: CLARIFY_BODY },
         { clarify: CLARIFY_BODY },
@@ -423,6 +428,16 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       },
       { db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd(), awaitScheduler: true },
     )
+    // RFC-100: the designer asks first (round 0); answer with stop → it outputs v1.
+    expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
+    await submitClarifyAnswers({
+      db: c.db,
+      clarifyNodeRunId: await openClarifyRunId(c.db, task.id),
+      answers: [CLARIFY_ANSWER],
+      directive: 'stop',
+    })
+    await reenterScheduler(c.db, task.id)
+    await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
     const rev1 = await awaitingReviewRun(c.db, task.id, 'rev')
     expect(rev1).toBeDefined()
 
@@ -459,6 +474,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       db: c.db,
       clarifyNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
+      // RFC-100: continue — this answer leads to ANOTHER clarify round (#2), not output.
+      directive: 'continue',
     })
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
@@ -469,6 +486,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       db: c.db,
       clarifyNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
+      // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
+      directive: 'stop',
     })
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
@@ -558,6 +577,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       db: c.db,
       clarifyNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
+      // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
+      directive: 'stop',
     })
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
@@ -682,8 +703,12 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
   // RED on current code [NEW FINDING: bug class extends to the reject path].
   test('S6 probe: reject + clarify reruns then approve must not re-open review on the same content', async () => {
     await makeDesigner(c)
+    // RFC-100: clarify channel ⇒ mandatory ask-back; the designer asks (round 0,
+    // answered with stop → v1) before it can output. plan: clarify; output v1;
+    // clarify (after reject); output v2.
     writePlan(c, {
       designer: [
+        { clarify: CLARIFY_BODY },
         { output: { design: 'DESIGN_V1' } },
         { clarify: CLARIFY_BODY },
         { output: { design: 'DESIGN_V2' } },
@@ -738,6 +763,16 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       },
       { db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd(), awaitScheduler: true },
     )
+    // RFC-100: the designer asks first (round 0); answer with stop → it outputs v1.
+    expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
+    await submitClarifyAnswers({
+      db: c.db,
+      clarifyNodeRunId: await openClarifyRunId(c.db, task.id),
+      answers: [CLARIFY_ANSWER],
+      directive: 'stop',
+    })
+    await reenterScheduler(c.db, task.id)
+    await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
     const rev1 = await awaitingReviewRun(c.db, task.id, 'rev')
     await submitReviewDecision({
       db: c.db,
@@ -754,6 +789,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       db: c.db,
       clarifyNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
+      // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
+      directive: 'stop',
     })
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
@@ -852,6 +889,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       db: c.db,
       clarifyNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
+      // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
+      directive: 'stop',
     })
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
@@ -955,6 +994,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       db: c.db,
       clarifyNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
+      // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
+      directive: 'stop',
     })
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
@@ -1042,6 +1083,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       db: c.db,
       clarifyNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
+      // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
+      directive: 'stop',
     })
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
@@ -1234,6 +1277,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       db: c.db,
       clarifyNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
+      // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
+      directive: 'stop',
     })
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
@@ -1243,6 +1288,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       db: c.db,
       clarifyNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
+      // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
+      directive: 'stop',
     })
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
@@ -1347,6 +1394,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       db: c.db,
       clarifyNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
+      // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
+      directive: 'stop',
     })
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
@@ -1455,6 +1504,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       db: c.db,
       clarifyNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
+      // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
+      directive: 'stop',
     })
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
@@ -1915,6 +1966,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       db: c.db,
       clarifyNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
+      // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
+      directive: 'stop',
     })
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })

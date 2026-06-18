@@ -102,7 +102,7 @@ describe('renderUserPrompt — RFC-026 inline mode × RFC-056 cross-clarify (GAP
     expect(answersIdx).toBeLessThan(priorIdx)
   })
 
-  test('control: clarifyContext.mode=isolated flips to bi-modal preamble + keeps PAYLOAD, drops inline reminder', () => {
+  test('control: clarifyContext.mode=isolated flips to mandatory ask-back preamble + keeps PAYLOAD, drops inline reminder', () => {
     const out = renderUserPrompt({
       ...baseInput,
       clarifyContext: {
@@ -113,8 +113,8 @@ describe('renderUserPrompt — RFC-026 inline mode × RFC-056 cross-clarify (GAP
 
     // Isolated mode re-includes input port values...
     expect(out).toContain('PAYLOAD')
-    // ...and emits the bi-modal preamble (hasClarifyChannel: true)...
-    expect(out).toContain('This node has a clarify channel.')
+    // ...and emits the RFC-100 mandatory ask-back preamble (hasClarifyChannel: true)...
+    expect(out).toContain('MANDATORY ASK-BACK')
     // ...and does NOT use the inline reminder. Confirms the divergence is
     // driven solely by cc.mode.
     expect(out).not.toContain(buildClarifyInlineReminder().trim())
@@ -141,6 +141,10 @@ describe('renderUserPrompt — RFC-026 inline mode × RFC-066 multi-repo tokens 
       ],
     },
     agentOutputs: ['result'],
+    // RFC-100: an inline rerun only happens for a clarify channel; mark it
+    // active (continue round) so the trailer is the inline reminder, not the
+    // stop-round output block (hasClarifyChannel-first routing in renderUserPrompt).
+    hasClarifyChannel: true,
     clarifyContext: { mode: 'inline' as const, answersBlock: 'ans' },
   }
 

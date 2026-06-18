@@ -173,6 +173,7 @@ describe('RFC-026 regression — isolated mode never resumes', () => {
       await submitClarifyAnswers({
         db: h.db,
         clarifyNodeRunId: sessionRow!.clarifyNodeRunId,
+        directive: 'stop', // RFC-100: finalize round → <workflow-output> accepted
         answers: [
           {
             questionId: 'q1',

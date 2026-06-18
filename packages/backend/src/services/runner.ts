@@ -41,6 +41,7 @@ import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
 import { createLogger, type Logger } from '@/util/log'
 import {
+  CLARIFY_REQUIRED_PREFIX,
   detectEnvelopeKind,
   extractClarifyEnvelopeBody,
   extractLastEnvelope,
@@ -293,6 +294,7 @@ export interface RunNodeOptions {
     | 'both-present'
     | 'clarify-malformed'
     | 'port-validation'
+    | 'clarify-required'
   envelopeFollowupClarifyDirective?: 'continue' | 'stop'
   /**
    * RFC-049: structured failures persisted into the previous attempt's
@@ -1070,7 +1072,26 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   if (status === 'done') {
     const accumulatedText = agentText.join('\n')
     const kind = detectEnvelopeKind(accumulatedText)
-    if (kind === 'both') {
+    // RFC-100: while a clarify channel is ACTIVE (wired AND the user has not
+    // clicked "Stop clarifying" — the scheduler passes that state as
+    // opts.hasClarifyChannel = effectiveHasClarifyChannel), the ONLY valid
+    // reply is a `<workflow-clarify>` envelope. Any `<workflow-output>` / both /
+    // neither is a violation: fail with a `clarify-required-*` errorMessage so
+    // `decideEnvelopeFollowup` drives a same-session follow-up that re-demands
+    // the clarify envelope (and the node hard-fails after retries — there is no
+    // output escape hatch). On the stop round the scheduler passes
+    // hasClarifyChannel=false, so this guard is skipped and the agent finalizes
+    // through the normal `<workflow-output>` path below.
+    const clarifyActive = opts.hasClarifyChannel === true
+    if (clarifyActive && kind !== 'clarify') {
+      status = 'failed'
+      errorMessage =
+        kind === 'output'
+          ? `${CLARIFY_REQUIRED_PREFIX}-output-emitted: node is in mandatory ask-back mode; emit <workflow-clarify>, not <workflow-output>`
+          : kind === 'both'
+            ? `${CLARIFY_REQUIRED_PREFIX}-both-present: node is in mandatory ask-back mode; emit only <workflow-clarify>, no <workflow-output>`
+            : `${CLARIFY_REQUIRED_PREFIX}-missing: node is in mandatory ask-back mode; reply must be a <workflow-clarify> envelope`
+    } else if (kind === 'both') {
       status = 'failed'
       errorMessage =
         'clarify-and-output-both-present: agent reply contained BOTH <workflow-output> and <workflow-clarify>; the framework requires exactly one'

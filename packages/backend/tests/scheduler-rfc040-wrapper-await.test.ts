@@ -316,6 +316,7 @@ describe('RFC-040 wrapper-loop bubbles awaiting_human (clarify inside loop)', ()
     await submitClarifyAnswers({
       db: h.db,
       clarifyNodeRunId: clarifyRunId,
+      directive: 'stop', // RFC-100: finalize round → wrapper-inner agent's <workflow-output> accepted
       answers: [
         {
           questionId: 'q1',
@@ -528,6 +529,7 @@ describe('RFC-040 wrapper-git bubbles awaiting_human (clarify inside git wrapper
     await submitClarifyAnswers({
       db: h.db,
       clarifyNodeRunId: sessions[0]!.clarifyNodeRunId,
+      directive: 'stop', // RFC-100: finalize round → wrapper-inner agent's <workflow-output> accepted
       answers: [
         {
           questionId: 'q1',

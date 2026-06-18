@@ -70,6 +70,23 @@ describe('RFC-042 decideEnvelopeFollowup', () => {
     ).toEqual({ followup: true, reason: 'clarify-malformed', failures: [] })
   })
 
+  // RFC-100: every `clarify-required-*` prefix (output-emitted / both-present /
+  // missing) maps to reason='clarify-required' → same-session followup that
+  // re-demands the clarify envelope.
+  test('clarify-required-* errMsg → followup, reason=clarify-required', () => {
+    for (const errorMessage of [
+      'clarify-required-output-emitted: node is in mandatory ask-back mode; emit <workflow-clarify>, not <workflow-output>',
+      'clarify-required-both-present: node is in mandatory ask-back mode; emit only <workflow-clarify>, no <workflow-output>',
+      'clarify-required-missing: node is in mandatory ask-back mode; reply must be a <workflow-clarify> envelope',
+    ]) {
+      expect(decideEnvelopeFollowup({ ...BASE, errorMessage })).toEqual({
+        followup: true,
+        reason: 'clarify-required',
+        failures: [],
+      })
+    }
+  })
+
   // §5.2 case 7
   test('non-envelope errorMessage prefixes do not trigger followup', () => {
     expect(

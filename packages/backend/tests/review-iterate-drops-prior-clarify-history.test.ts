@@ -85,11 +85,15 @@ if [[ "$1" == "run" ]]; then
   N=$((N + 1))
   echo $N > "$COUNTER_FILE"
   if [[ $N -eq 1 ]]; then
+    # RFC-100: clarify channel ⇒ mandatory ask-back on the designer's first reply.
+    ENV='<workflow-clarify>{"questions":[{"id":"q-db","title":"Which database?","kind":"single","options":["Postgres","MySQL"]}]}</workflow-clarify>'
+  elif [[ $N -eq 2 ]]; then
     BODY='${v1}'
+    ENV='<workflow-output><port name="design">'"$BODY"'</port></workflow-output>'
   else
     BODY='${v2}'
+    ENV='<workflow-output><port name="design">'"$BODY"'</port></workflow-output>'
   fi
-  ENV='<workflow-output><port name="design">'"$BODY"'</port></workflow-output>'
   TS=$(date +%s%3N)
   printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
   exit 0
@@ -211,92 +215,45 @@ async function buildHarness(): Promise<Harness> {
     { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
   )
 
-  // After startTask the stub responds workflow-output → designer is `done`
-  // and rev_1 is `awaiting_review`. Locate both rows so the test can stage
-  // the clarify Q&A retroactively (simpler than building a multi-step stub
-  // that produces workflow-clarify on the first call). The clarify session
-  // is anchored on the (currently done) designer run and bumps its
-  // clarifyIteration to 1 — semantically: "this done was the post-clarify
-  // rerun".
-  const designerRows = await db
-    .select()
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, 'designer')))
-  const designerDone = designerRows.find((r) => r.status === 'done' && r.parentNodeRunId === null)
-  if (designerDone === undefined) throw new Error('designer done row not found')
-  const reviewRows = await db
-    .select()
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, 'rev_1')))
-  if (reviewRows.length === 0) throw new Error('rev_1 node_run not created')
-
-  // Synthetic prior-round source row at clarifyIteration=0 (the run that
-  // would have emitted `<workflow-clarify>` in a real flow). createClarifySession
-  // looks up sourceAgentNodeRunId to pull display info; the row need only exist.
-  // RFC-074 PR-C: freshness is pure ULID id-order. This canceled "asking" row
-  // is the OLDER generation (superseded by the post-clarify done row), so it
-  // must carry a SMALLER id than designerDone (which startTask minted as a real
-  // ULID). An explicit `0000…` id sorts before any 2026-era ULID.
-  const priorAskingRunId = '0000_prior_asking_designer'
-  await db.insert(nodeRuns).values({
-    id: priorAskingRunId,
-    taskId: task.id,
-    nodeId: 'designer',
-    status: 'canceled', // would be replaced by the clarify-rerun row in real flow
-    retryIndex: 0,
-    iteration: 0,
-    startedAt: Date.now() - 5000,
-    finishedAt: Date.now() - 4500,
-    errorMessage: 'clarify-rerun-superseded',
-  })
-
-  await createClarifySession({
-    db,
-    taskId: task.id,
-    sourceAgentNodeId: 'designer',
-    sourceAgentNodeRunId: priorAskingRunId,
-    sourceShardKey: null,
-    clarifyNodeId: 'clarify1',
-    iterationIndex: 0,
-    questions: [CLARIFY_QUESTION],
-  })
-  // Find the clarify session's clarifyNodeRunId so we can answer it.
+  // RFC-100: the designer has a clarify channel, so its FIRST reply is a
+  // mandatory `<workflow-clarify>` (stub call 1) → awaiting_human. Answer with
+  // stop → the rerun (stub call 2) produces output v1 → designer `done`, rev_1
+  // awaiting_review. The runner stamps the answered clarify round
+  // consumed_by_consumer_run_id = the v1 output run (RFC-070, runner.ts mark
+  // gate) — exactly the state this test needs (a prior ANSWERED, CONSUMED clarify
+  // round), now via the real flow instead of retroactive staging + manual stamp.
   const { clarifySessions } = await import('../src/db/schema')
   const sessionRows = await db
     .select()
     .from(clarifySessions)
     .where(eq(clarifySessions.taskId, task.id))
   const clarifyNodeRunId = sessionRows[0]?.clarifyNodeRunId
-  if (clarifyNodeRunId === undefined) throw new Error('clarify session not created')
-
-  // Answering normally would mint a fresh source-agent rerun row at cli=1.
-  // We immediately remove that auto-minted row (the existing `done` row from
-  // startTask is acting as the "post-clarify rerun done" stand-in) and bump
-  // the done row's clarifyIteration to 1 so the cutoff logic sees it as
-  // "this node previously completed an output cycle AFTER session iterIdx=0".
-  const answerResult = await submitClarifyAnswers({
+  if (clarifyNodeRunId === undefined) throw new Error('clarify session not created on first run')
+  await submitClarifyAnswers({
     db,
     clarifyNodeRunId,
     answers: [CLARIFY_ANSWER],
+    directive: 'stop', // finalize → the designer outputs v1
   })
-  await db.delete(nodeRuns).where(eq(nodeRuns.id, answerResult.rerunNodeRunId))
-  // RFC-070: under the consumed-by-run aging model, the post-clarify done
-  // designer run (designerDone) is also the consumer that baked the answered
-  // round into its `<workflow-output>`. In real flow runner.ts stamps this
-  // automatically (services/runner.ts mark gate); the test bypasses runner
-  // for the seeded round so we mirror the stamp here. Without this, the
-  // round would be NULL-consumed and the IS NULL filter would surface it
-  // again on the iterate rerun — the exact regression this test prevents
-  // for the iteration-cutoff era is now governed by the consumed stamp.
-  const { clarifyRounds: cr2, clarifySessions: cs2 } = await import('../src/db/schema')
-  await db
-    .update(cr2)
-    .set({ consumedByConsumerRunId: designerDone.id })
-    .where(eq(cr2.taskId, task.id))
-  await db
-    .update(cs2)
-    .set({ consumedByConsumerRunId: designerDone.id })
-    .where(eq(cs2.taskId, task.id))
+  await reenterScheduler(db, task.id)
+  await runTask({ taskId: task.id, db, appHome, opencodeCmd: [stubOpencode] })
+
+  const designerRows = await db
+    .select()
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, 'designer')))
+  // The designer now has TWO done top-level rows: the clarify run (stub call 1)
+  // and the v1 OUTPUT run (stub call 2, after the stop answer). The review
+  // consumes the output run, so pick the latest (ULID id-order) done row.
+  const designerDone = designerRows
+    .filter((r) => r.status === 'done' && r.parentNodeRunId === null)
+    .sort((a, b) => (a.id > b.id ? -1 : 1))[0]
+  if (designerDone === undefined) throw new Error('designer done row not found')
+  const reviewRows = await db
+    .select()
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, 'rev_1')))
+  if (reviewRows.length === 0) throw new Error('rev_1 node_run not created')
 
   return {
     db,

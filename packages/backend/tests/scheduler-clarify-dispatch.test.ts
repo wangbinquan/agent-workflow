@@ -252,7 +252,11 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     expect(cRun?.status).toBe('awaiting_human')
   })
 
-  test('agent with clarify channel that emits normal <workflow-output> proceeds to done', async () => {
+  // RFC-100: a wired clarify channel is MANDATORY ask-back. An agent that emits
+  // <workflow-output> instead of asking is rejected (clarify-required); with the
+  // mock stubbornly re-emitting output across followup retries the node — and the
+  // task — hard-fail. There is no output escape hatch while clarify is active.
+  test('agent with clarify channel that emits <workflow-output> instead of asking → task failed (clarify-required)', async () => {
     await seedAgent(h.db, 'designer', ['design'])
     const def: WorkflowDefinition = {
       $schema_version: 3,
@@ -287,8 +291,10 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     )
 
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
-    expect(taskRow?.status).toBe('done')
+    expect(taskRow?.status).toBe('failed')
+    expect(taskRow?.errorMessage ?? '').toContain('clarify-required')
 
+    // The agent never emitted a clarify envelope, so no session was ever created.
     const sessions = await h.db
       .select()
       .from(clarifySessions)
@@ -387,7 +393,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         answersJson: ANSWERS_JSON_S2,
       })
       .where(eq(clarifySessions.id, sessRow.id))
-    await mirrorClarifyAnswered(h.db, sessRow.id, { answersJson: ANSWERS_JSON_S2 })
+    // RFC-100: directive='stop' so this rerun is the finalize round — the agent
+    // is released from ask-back mode and its <workflow-output> is accepted.
+    await mirrorClarifyAnswered(h.db, sessRow.id, {
+      answersJson: ANSWERS_JSON_S2,
+      directive: 'stop',
+    })
     await h.db
       .update(nodeRuns)
       .set({ status: 'done', finishedAt: Date.now() })
@@ -506,13 +517,14 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         status: 'answered',
         answeredAt: Date.now(),
         answeredBy: 'local',
-        directive: 'continue',
+        // RFC-100: stop = finalize round, so the rerun's <workflow-output> is accepted.
+        directive: 'stop',
         answersJson: ANSWERS_JSON_S3A,
       })
       .where(eq(clarifySessions.id, sessRow.id))
     await mirrorClarifyAnswered(h.db, sessRow.id, {
       answersJson: ANSWERS_JSON_S3A,
-      directive: 'continue',
+      directive: 'stop',
     })
     await h.db
       .update(nodeRuns)
@@ -618,6 +630,12 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         status: 'answered',
         answeredAt: Date.now(),
         answeredBy: 'local',
+        // RFC-100 + RFC-098 revival boundary: the interrupted rerun below is
+        // revived with cause='revival', which isClarifyRerunCause excludes — so
+        // applyLatestDirective=false and the revived run re-enters mandatory
+        // ask-back regardless of this directive. The directive is therefore not
+        // load-bearing here; the revived run is driven by a clarify body below
+        // (it asks again rather than finalizing). Documented RFC-100 limitation.
         directive: 'continue',
         answersJson: ANSWERS_JSON_S2B,
       })
@@ -653,8 +671,10 @@ describe('scheduler RFC-023 clarify dispatch', () => {
 
     // Step 4: re-enter the scheduler (what /resume or runTask after restart
     // does). The scheduler must mint a fresh attempt that INHERITS
-    // clarifyIteration=1 — not reset it to 0.
-    await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'with pg' }) }, () =>
+    // clarifyIteration=1 — not reset it to 0. RFC-100: the revived run is
+    // mandatory ask-back (directive dropped on revival), so the agent asks
+    // again — the assertions below lock clarifyIteration inheritance + Q&A.
+    await withEnv({ MOCK_OPENCODE_CLARIFY_BODY: CLARIFY_BODY }, () =>
       runTask({
         taskId,
         db: h.db,
@@ -803,6 +823,10 @@ describe('scheduler RFC-023 clarify dispatch', () => {
         status: 'answered',
         answeredAt: Date.now(),
         answeredBy: 'local',
+        // RFC-100 + RFC-098 revival boundary: the ci=2 rerun is revived with
+        // cause='revival' (isClarifyRerunCause excludes it), so the revived run
+        // re-enters mandatory ask-back regardless of this directive and asks
+        // again — locking Round 1 + Round 2 Q&A rendering, the test's intent.
         directive: 'continue',
         answersJson: ANSWERS_JSON_R2,
       })
@@ -830,8 +854,9 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
 
     // Re-enter scheduler. Fresh row must inherit ci=2 and prompt must carry
-    // BOTH 'Postgres' (Round 1) and 'Staging' (Round 2).
-    await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'pg + staging' }) }, () =>
+    // BOTH 'Postgres' (Round 1) and 'Staging' (Round 2). RFC-100: the revived
+    // run is mandatory ask-back (directive dropped on revival), so it asks again.
+    await withEnv({ MOCK_OPENCODE_CLARIFY_BODY: ROUND2_BODY }, () =>
       runTask({
         taskId,
         db: h.db,

@@ -128,7 +128,10 @@ describe('RFC-058 baseline — buildClarifyPromptBlock (Q&A render)', () => {
     )
   })
 
-  test('directive=continue appends KEEP CLARIFYING trailer (4 lines)', () => {
+  // RFC-100: the continue trailer is now mandatory ask-back (3 lines, no output
+  // escape hatch); the old RFC-039 "you may emit <workflow-output> if zero
+  // unresolved decisions remain" soft escape was removed.
+  test('directive=continue appends KEEP CLARIFYING trailer (3 lines)', () => {
     const ans: ClarifyAnswer[] = [
       {
         questionId: 'q1',
@@ -143,10 +146,9 @@ describe('RFC-058 baseline — buildClarifyPromptBlock (Q&A render)', () => {
         '### Q1: Database choice?',
         '- User chose: "Postgres"',
         '',
-        '### User directive: KEEP CLARIFYING IF NEEDED',
-        '- The user has explicitly clicked "Keep clarifying" — they want you to ask another round.',
-        '- Your next reply is REQUIRED to be another `<workflow-clarify>` envelope unless every single unresolved detail has been fully pinned down by the answers above. Inventing a "good enough" excuse to skip to <workflow-output> defeats the user\'s stated intent.',
-        '- If — and only if — re-reading the answers above leaves zero unresolved decisions, you may emit <workflow-output> instead. Otherwise emit <workflow-clarify> with every still-open question.',
+        '### User directive: KEEP CLARIFYING',
+        '- The user has clicked "Keep clarifying" — they want another round. This node is in mandatory ask-back mode: your next reply MUST be another `<workflow-clarify>` envelope.',
+        '- Keep probing every still-unresolved detail that matters. Do not attempt <workflow-output> — the framework will reject it until the user clicks "Stop clarifying".',
       ].join('\n'),
     )
   })
@@ -167,7 +169,7 @@ describe('RFC-058 baseline — buildClarifyPromptBlock (Q&A render)', () => {
         '- User chose: "Postgres"',
         '',
         '### User directive: STOP CLARIFYING',
-        '- The user has explicitly asked you NOT to emit another <workflow-clarify> envelope this round.',
+        '- The user has ended clarification. You are now RELEASED from ask-back mode — do NOT emit another <workflow-clarify> envelope.',
         '- Produce your final <workflow-output> reply now using the answers above. If any detail is still ambiguous, make your best informed call based on the answers and proceed.',
       ].join('\n'),
     )
@@ -186,13 +188,12 @@ describe('RFC-058 baseline — renderClarifyDirectiveTrailer standalone', () => 
     expect(renderClarifyDirectiveTrailer(undefined)).toBe('')
   })
 
-  test('continue → byte-exact 4-line trailer', () => {
+  test('continue → byte-exact 3-line trailer (RFC-100 mandatory ask-back)', () => {
     expect(renderClarifyDirectiveTrailer('continue')).toBe(
       [
-        '### User directive: KEEP CLARIFYING IF NEEDED',
-        '- The user has explicitly clicked "Keep clarifying" — they want you to ask another round.',
-        '- Your next reply is REQUIRED to be another `<workflow-clarify>` envelope unless every single unresolved detail has been fully pinned down by the answers above. Inventing a "good enough" excuse to skip to <workflow-output> defeats the user\'s stated intent.',
-        '- If — and only if — re-reading the answers above leaves zero unresolved decisions, you may emit <workflow-output> instead. Otherwise emit <workflow-clarify> with every still-open question.',
+        '### User directive: KEEP CLARIFYING',
+        '- The user has clicked "Keep clarifying" — they want another round. This node is in mandatory ask-back mode: your next reply MUST be another `<workflow-clarify>` envelope.',
+        '- Keep probing every still-unresolved detail that matters. Do not attempt <workflow-output> — the framework will reject it until the user clicks "Stop clarifying".',
       ].join('\n'),
     )
   })
@@ -201,7 +202,7 @@ describe('RFC-058 baseline — renderClarifyDirectiveTrailer standalone', () => 
     expect(renderClarifyDirectiveTrailer('stop')).toBe(
       [
         '### User directive: STOP CLARIFYING',
-        '- The user has explicitly asked you NOT to emit another <workflow-clarify> envelope this round.',
+        '- The user has ended clarification. You are now RELEASED from ask-back mode — do NOT emit another <workflow-clarify> envelope.',
         '- Produce your final <workflow-output> reply now using the answers above. If any detail is still ambiguous, make your best informed call based on the answers and proceed.',
       ].join('\n'),
     )

@@ -17,7 +17,7 @@ const PROMPT_SRC = readFileSync(join(import.meta.dir, '../src/prompt.ts'), 'utf8
 
 describe('RFC-049 buildProtocolBlock — handler dispatch', () => {
   test('declares only string/markdown → no markdown_file guidance appears', () => {
-    const block = buildProtocolBlock(['a', 'b'], false, { a: 'string', b: 'markdown' })
+    const block = buildProtocolBlock(['a', 'b'], { a: 'string', b: 'markdown' })
     expect(block).not.toContain('For ports declared `markdown_file` above')
     expect(block).not.toContain('USE A FILE-WRITING TOOL')
     expect(block).not.toContain('two-step protocol')
@@ -28,7 +28,7 @@ describe('RFC-049 buildProtocolBlock — handler dispatch', () => {
     // 'markdown_file' folds to path<md> at parse time, so the PATH handler's
     // two-step guidance is emitted (text differs from the legacy markdownFile
     // handler but is semantically equivalent — D1).
-    const block = buildProtocolBlock(['report'], false, { report: 'markdown_file' })
+    const block = buildProtocolBlock(['report'], { report: 'markdown_file' })
     expect(block).toContain('For path-kind ports above')
     expect(block).toContain('`report` (extension .md/.markdown)')
     expect(block).toContain('USE A FILE-WRITING TOOL')

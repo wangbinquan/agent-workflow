@@ -549,7 +549,7 @@ describe('buildClarifyPromptContext', () => {
     // agent if echoed verbatim.
     const aBlock = ctx?.answersBlock ?? ''
     expect(aBlock).toContain('User directive: STOP CLARIFYING')
-    expect(aBlock).not.toContain('User directive: KEEP CLARIFYING IF NEEDED')
+    expect(aBlock).not.toContain('User directive: KEEP CLARIFYING')
     expect(ctx?.directive).toBe('stop')
   })
 
@@ -689,9 +689,9 @@ describe('buildClarifyPromptContext', () => {
       shardKey: null,
     })
     expect(ctx?.directive).toBe('continue')
-    expect(ctx?.answersBlock ?? '').toContain('User directive: KEEP CLARIFYING IF NEEDED')
-    // RFC-039: continue trailer is now a strong directive
-    expect(ctx?.answersBlock ?? '').toContain('REQUIRED to be another')
+    expect(ctx?.answersBlock ?? '').toContain('User directive: KEEP CLARIFYING')
+    // RFC-100: continue trailer is mandatory ask-back (no output escape)
+    expect(ctx?.answersBlock ?? '').toContain('MUST be another `<workflow-clarify>` envelope')
   })
 })
 

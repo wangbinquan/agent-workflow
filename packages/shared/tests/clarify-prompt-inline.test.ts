@@ -87,17 +87,17 @@ describe('RFC-026 renderUserPrompt — inline mode', () => {
     expect(reminder).toMatch(/session/i)
   })
 
-  // RFC-039: inline reminder was NOT touched by the ask-back-bias rewrite —
-  // it is a short kickoff for an opencode session that already has the full
-  // bi-modal preamble in its memory, so re-strengthening here would just
-  // duplicate context the agent already saw. Lock the wording verbatim so a
-  // future RFC-039-adjacent edit doesn't inadvertently re-touch this string.
-  test('RFC-039: inline reminder wording locked verbatim', () => {
+  // RFC-100: the inline reminder is now mandatory ask-back — it fires only on
+  // inline CONTINUE rounds (the stop round routes to the output protocol block,
+  // since the inline session never saw the output format). Lock the wording
+  // verbatim so a future edit doesn't inadvertently re-touch this string.
+  test('RFC-100: inline reminder wording locked verbatim', () => {
     expect(buildClarifyInlineReminder()).toBe(
       '\n\n---\n' +
         'The user has answered your previous `<workflow-clarify>` round (see "Clarify Q&A — User Answers (Current Round)" above). ' +
-        'Reply with EXACTLY ONE envelope — either `<workflow-output>` if the answers unblocked you, or another `<workflow-clarify>` if real blockers remain. ' +
-        'Earlier rounds, the full envelope formats, and the asking-back rules are still in this session — they have not been re-emitted.',
+        'This node stays in MANDATORY ask-back mode until the user clicks "Stop clarifying" — your next reply MUST be another `<workflow-clarify>` envelope. ' +
+        'Do not emit `<workflow-output>`; it will be rejected. ' +
+        'The full clarify format and asking-back rules from earlier in this session still apply and have not been re-emitted.',
     )
   })
 
@@ -105,7 +105,7 @@ describe('RFC-026 renderUserPrompt — inline mode', () => {
   // RFC-026 regression hard contract — isolated path stays byte-for-byte.
   // ---------------------------------------------------------------------------
 
-  test('default (no mode) preserves RFC-023 bi-modal output byte-for-byte', () => {
+  test('default (no mode) isolated path renders the RFC-100 mandatory preamble + clarify format', () => {
     const baseInput = {
       promptTemplate: 'go',
       inputs: {},
@@ -124,13 +124,14 @@ describe('RFC-026 renderUserPrompt — inline mode', () => {
     expect(out).toContain('Clarify Q&A — Prior Rounds (Answers)')
     expect(out).toContain('Q-PRIOR')
     expect(out).toContain('A-PRIOR')
-    // RFC-023 bi-modal preamble + clarify format both fired
-    expect(out).toContain('This node has a clarify channel.')
-    expect(out).toContain('Clarify mode is enabled for this node')
+    // RFC-100 mandatory ask-back preamble + clarify format both fired (no output format)
+    expect(out).toContain('MANDATORY ASK-BACK')
+    expect(out).toContain('Clarify format.')
+    expect(out).not.toContain('MUST end your reply with a `<workflow-output>` block')
     // Inline reminder must NOT leak into isolated path
     expect(out).not.toContain('User Answers (Current Round)')
     expect(out).not.toContain(
-      'Earlier rounds, the full envelope formats, and the asking-back rules are still in this session',
+      'The full clarify format and asking-back rules from earlier in this session still apply',
     )
   })
 

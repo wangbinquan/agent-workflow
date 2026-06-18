@@ -101,7 +101,7 @@ import {
   wrapperRevivalEvidence,
 } from '@/services/dispatchFrontier'
 import { runNode, type AgentOverrides, type ResolvedSkill, type RunResult } from '@/services/runner'
-import { parsePortValidationFailuresJson } from '@/services/envelope'
+import { CLARIFY_REQUIRED_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
 import { runCommitPush } from '@/services/commitPushRunner'
 import {
   buildCommitAgent,
@@ -581,7 +581,12 @@ export interface PreviousAttemptShape {
 export type EnvelopeFollowupDecision =
   | {
       followup: true
-      reason: 'envelope-missing' | 'both-present' | 'clarify-malformed' | 'port-validation'
+      reason:
+        | 'envelope-missing'
+        | 'both-present'
+        | 'clarify-malformed'
+        | 'port-validation'
+        | 'clarify-required'
       /**
        * Failures payload to thread into the runner / shared renderer when
        * reason is 'port-validation'. Empty array for the other reasons (and
@@ -612,6 +617,14 @@ export function decideEnvelopeFollowup(prev: PreviousAttemptShape): EnvelopeFoll
   }
   if (m.startsWith('clarify-questions-')) {
     return { followup: true, reason: 'clarify-malformed', failures: [] }
+  }
+  // RFC-100: `clarify-required-*` — the agent was in mandatory ask-back mode but
+  // replied with `<workflow-output>` / both / neither. Same-session follow-up
+  // re-demands the clarify envelope (the follow-up renderer still sees
+  // hasClarifyChannel=true this round, so it emits the mandatory-ask-back
+  // wording). Hard-fails after retries — no output escape hatch.
+  if (m.startsWith(CLARIFY_REQUIRED_PREFIX)) {
+    return { followup: true, reason: 'clarify-required', failures: [] }
   }
   // RFC-049: any `port-validation-<kind>-<sub>` prefix → same-session
   // followup. The `<kind>` segment routing happens later in
@@ -2231,14 +2244,25 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
             crossClarifyContext.priorOutputBlock = priorOutputBlock
           }
         }
-        // RFC-023 directive iteration: when the last answered session was
-        // submitted with directive='stop', this single rerun MUST NOT see
-        // the <workflow-clarify> protocol block — the answersBlock already
-        // carries the stop-clarifying sentence the agent reads instead.
-        // Retries inside this attempt loop inherit the same gate. The next
-        // round (clarifyIteration + 1) walks back through scheduleAgentNode
-        // and re-derives the flag, so 'stop' naturally scopes to one rerun.
-        const effectiveHasClarifyChannel = hasClarifyChannel && clarifyContext?.directive !== 'stop'
+        // effectiveHasClarifyChannel is the "mandatory ask-back is ACTIVE" signal
+        // threaded to the runner + renderUserPrompt (RFC-100). It is TRUE only
+        // when the agent is in a genuine clarify round and must ask back:
+        //   - hasClarifyChannel: the agent wired a clarify channel, AND
+        //   - directive !== 'stop' (RFC-023): the user has not clicked
+        //     "Stop clarifying" — a stop round finalizes with <workflow-output>;
+        //     the answersBlock already carries the STOP CLARIFYING sentence. The
+        //     next round walks back through scheduleAgentNode and re-derives the
+        //     flag, so 'stop' naturally scopes to one rerun, AND
+        //   - reviewContext === undefined (RFC-100): this is NOT a review reject/
+        //     iterate rerun. A review-driven rerun RE-PRODUCES output to address
+        //     the reviewer's comments — it must NOT be compelled back into ask-back
+        //     mode (the prior clarify round is over; its Q&A ages out via RFC-070).
+        //     Without this, a clarify-channel designer could never satisfy a review
+        //     iterate — its <workflow-output> v2 would be rejected as
+        //     clarify-required. The agent may still CHOOSE to emit <workflow-clarify>
+        //     on an iterate (the runner accepts it); it just isn't forced to.
+        const effectiveHasClarifyChannel =
+          hasClarifyChannel && clarifyContext?.directive !== 'stop' && reviewContext === undefined
         if (resumeDecision.inlineMode && resumeDecision.resumeSessionId !== undefined) {
           await recordClarifyInlineEvent(db, nodeRunId, {
             level: 'info',

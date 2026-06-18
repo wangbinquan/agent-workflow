@@ -137,7 +137,7 @@ describe('RFC-042 follow-up + RFC-039 directive bias passthrough', () => {
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
     const prompt = row?.promptText ?? ''
     expect(prompt).toContain('Keep clarifying')
-    expect(prompt).toContain('REQUIRED to be another `<workflow-clarify>`')
+    expect(prompt).toContain('MUST be another `<workflow-clarify>` envelope')
   })
 
   test('hasClarifyChannel=true + directive=stop → followup prompt does NOT contain "Keep clarifying"', async () => {
@@ -166,8 +166,8 @@ describe('RFC-042 follow-up + RFC-039 directive bias passthrough', () => {
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
     const prompt = row?.promptText ?? ''
     expect(prompt).not.toContain('Keep clarifying')
-    expect(prompt).not.toContain('REQUIRED to be another')
-    // Bi-modal body still appears (clarify channel is wired).
-    expect(prompt).toContain('(B) `<workflow-clarify>`')
+    expect(prompt).not.toContain('MUST be another `<workflow-clarify>` envelope')
+    // RFC-100: the mandatory ask-back body still appears (clarify channel is wired).
+    expect(prompt).toContain('MANDATORY ask-back mode')
   })
 })

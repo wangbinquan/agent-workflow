@@ -66,10 +66,12 @@ describe('scheduler ↔ runner clarify prompt wire-up (RFC-023 T12)', () => {
   test('shared/src/prompt.ts mounts buildClarifyProtocolBlock inside renderUserPrompt', () => {
     const src = readFileSync(join(SHARED_SRC, 'prompt.ts'), 'utf8')
     expect(src).toContain('buildClarifyProtocolBlock()')
-    // Locator is regex-shaped because a later RFC-005 change added an
-    // optional third arg (`agentOutputKinds`) — the bi-modal lock cares
-    // that `hasClarifyChannel=true` is wired, not the exact arity.
-    expect(src).toMatch(/buildProtocolBlock\(input\.agentOutputs,\s*true[,)]/)
+    // RFC-100: the clarify-active path mounts the mandatory ask-back preamble +
+    // clarify format, gated on `hasClarifyChannel === true`. The bi-modal
+    // `buildProtocolBlock(input.agentOutputs, true, ...)` call was removed —
+    // while clarify is active the agent is given NO `<workflow-output>` format.
+    expect(src).toContain('buildMandatoryClarifyPreamble()')
+    expect(src).toMatch(/input\.hasClarifyChannel === true/)
   })
 
   test('runner.ts wires detectEnvelopeKind + extractClarifyEnvelopeBody for the envelope kind branch', () => {

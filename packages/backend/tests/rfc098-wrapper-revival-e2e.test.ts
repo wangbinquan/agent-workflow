@@ -494,6 +494,7 @@ describe('RFC-098 B3 — RFC-092 已知限制解除：wrapper 内 clarify mid-ru
         db: h.db,
         clarifyNodeRunId: session.clarifyNodeRunId,
         answers: [CLARIFY_ANSWER],
+        directive: 'stop', // RFC-100: finalize round → wrapper-inner agent's <workflow-output> accepted
       })
     } finally {
       writeFileSync(h.gateFile, 'go\n')

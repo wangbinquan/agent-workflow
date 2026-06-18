@@ -32,7 +32,7 @@ describe('RFC-080 — parametric kinds reach buildProtocolBlock without throwing
       tags: 'list<string>',
       docs: 'list<path<md>>',
     }
-    const block = buildProtocolBlock(Object.keys(kinds), false, kinds)
+    const block = buildProtocolBlock(Object.keys(kinds), kinds)
     expect(block.endsWith('</workflow-output>')).toBe(true)
     // signal — control-flow bullet + empty example
     expect(block).toContain('(signal — control-flow only')
@@ -44,7 +44,7 @@ describe('RFC-080 — parametric kinds reach buildProtocolBlock without throwing
   })
 
   test('legacy string/markdown ports stay byte-identical (plain bullet + ... example)', () => {
-    const block = buildProtocolBlock(['a', 'b'], false, { a: 'string', b: 'markdown' })
+    const block = buildProtocolBlock(['a', 'b'], { a: 'string', b: 'markdown' })
     expect(block).toContain('  - a\n')
     expect(block).toContain('  - b\n')
     expect(block).toContain('<port name="a">...</port>')

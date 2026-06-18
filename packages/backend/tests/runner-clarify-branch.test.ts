@@ -158,11 +158,16 @@ describe('runNode envelope branching (RFC-023)', () => {
     expect(result.clarify).toBeDefined()
     expect(result.clarify?.questions).toHaveLength(1)
     expect(result.clarify?.questions[0]?.id).toBe('q1')
-    // The clarify protocol block must be in the prompt when hasClarifyChannel=true
-    expect(result.prompt).toContain('Clarify mode is enabled')
+    // RFC-100: the mandatory ask-back block must be in the prompt when hasClarifyChannel=true
+    expect(result.prompt).toContain('MANDATORY ASK-BACK')
   })
 
-  test('both envelopes: status=failed with clarify-and-output-both-present', async () => {
+  // RFC-100: while a clarify channel is ACTIVE, `both` (output + clarify) is a
+  // clarify-required violation (the agent must ask back, not finalize), so the
+  // errorMessage is `clarify-required-both-present` rather than the generic
+  // `clarify-and-output-both-present` (which now only fires when clarify is off
+  // — see the RFC-100 runtime-guard test file).
+  test('both envelopes while clarify-active: status=failed with clarify-required-both-present', async () => {
     const agent = makeAgent({ outputs: ['summary'] })
     const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
     const clarifyBody = JSON.stringify({
@@ -198,7 +203,7 @@ describe('runNode envelope branching (RFC-023)', () => {
         }),
     )
     expect(result.status).toBe('failed')
-    expect(result.errorMessage).toContain('clarify-and-output-both-present')
+    expect(result.errorMessage).toContain('clarify-required-both-present')
     expect(result.clarify).toBeUndefined()
   })
 
@@ -293,5 +298,65 @@ describe('runNode envelope branching (RFC-023)', () => {
     expect(result.clarify?.questions.length).toBe(5)
     expect(result.clarify?.questions.every((q) => q.options.length === 4)).toBe(true)
     expect(result.clarify?.truncationWarnings.length).toBeGreaterThan(0)
+  })
+
+  // RFC-100 runtime ask-back guard: while a clarify channel is ACTIVE
+  // (opts.hasClarifyChannel=true = effectiveHasClarifyChannel, the user has not
+  // clicked "Stop clarifying"), the ONLY valid reply is <workflow-clarify>. An
+  // agent that emits <workflow-output> instead is rejected with a
+  // `clarify-required-*` error (→ same-session followup re-demands clarify; node
+  // hard-fails after retries). There is no output escape hatch. Covers BOTH
+  // self-clarify and the cross-clarify questioner (identical runner path).
+  test('RFC-100: <workflow-output> while clarify-active → failed clarify-required-output-emitted', async () => {
+    const agent = makeAgent({ outputs: ['summary'] })
+    const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
+    const result = await withEnv(
+      { MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'guessed' }) },
+      () =>
+        runNode({
+          taskId: h.taskId,
+          nodeRunId,
+          nodeId: 'asker',
+          agent,
+          inputs: {},
+          worktreePath: h.worktreePath,
+          templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
+          skills: [],
+          appHome: h.appHome,
+          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          db: h.db,
+          hasClarifyChannel: true,
+        }),
+    )
+    expect(result.status).toBe('failed')
+    expect(result.errorMessage).toContain('clarify-required-output-emitted')
+    // The output was NOT persisted — no silent finalize-on-assumptions.
+    expect(result.outputs).toEqual({})
+  })
+
+  test('RFC-100: cross-clarify questioner is guarded identically (clarifyMode=cross)', async () => {
+    const agent = makeAgent({ outputs: ['summary'] })
+    const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
+    const result = await withEnv(
+      { MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'guessed' }) },
+      () =>
+        runNode({
+          taskId: h.taskId,
+          nodeRunId,
+          nodeId: 'asker',
+          agent,
+          inputs: {},
+          worktreePath: h.worktreePath,
+          templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
+          skills: [],
+          appHome: h.appHome,
+          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          db: h.db,
+          hasClarifyChannel: true,
+          clarifyMode: 'cross',
+        }),
+    )
+    expect(result.status).toBe('failed')
+    expect(result.errorMessage).toContain('clarify-required-output-emitted')
   })
 })
