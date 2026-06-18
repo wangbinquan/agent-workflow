@@ -43,12 +43,12 @@ import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
-import { createClarifySession, submitClarifyAnswers } from '../src/services/clarify'
+import { submitClarifyAnswers } from '../src/services/clarify'
 import { addReviewComment, submitReviewDecision } from '../src/services/review'
 import { runTask } from '../src/services/scheduler'
 import { startTask } from '../src/services/task'
 import { reenterScheduler } from './reenter-scheduler'
-import type { ClarifyAnswer, ClarifyQuestion } from '@agent-workflow/shared'
+import type { ClarifyAnswer } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -104,17 +104,6 @@ exit 1
   writeFileSync(path, script)
   chmodSync(path, 0o755)
   return path
-}
-
-const CLARIFY_QUESTION: ClarifyQuestion = {
-  id: 'q-db',
-  title: 'Which database?',
-  kind: 'single',
-  recommended: false,
-  options: [
-    { label: 'Postgres', description: '', recommended: true, recommendationReason: '' },
-    { label: 'MySQL', description: '', recommended: false, recommendationReason: '' },
-  ],
 }
 
 const CLARIFY_ANSWER: ClarifyAnswer = {
