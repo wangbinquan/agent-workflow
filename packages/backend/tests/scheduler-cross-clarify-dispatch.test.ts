@@ -19,7 +19,7 @@
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -129,6 +129,14 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
       else process.env[k] = p
     }
   })
+}
+
+function readCapturedArgvLines(path: string): Array<{ agent: string; argv: string[] }> {
+  if (!existsSync(path)) return []
+  return readFileSync(path, 'utf8')
+    .split('\n')
+    .filter((l) => l.trim().length > 0)
+    .map((l) => JSON.parse(l) as { agent: string; argv: string[] })
 }
 
 /**
@@ -632,5 +640,139 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
     // does not re-ask. RED today: cci=0 → isQuestionerCrossClarifyRerun gate
     // drops it. GREEN once PR-C makes the gate session-state-based.
     expect(rerun.promptText ?? '').toContain('CCQ_TITLE_MARKER_为何')
+  })
+})
+
+// RFC-056 A16 (completed) — the scheduler now honors the cross-clarify node's
+// `sessionModeForQuestioner` for questioner reruns (previously the self-clarify
+// findClarifyNode lookup returned undefined for the cross node, so the setting
+// the editor exposed was silently ignored and the questioner always ran
+// isolated). These lock the spawn-arg contract: inline → `--session <prior-id>`,
+// isolated → no `--session`. Building blocks (resolveCrossClarifySessionMode +
+// the RFC-026 fallback) are unit-tested in cross-clarify-inline-fallback.test.ts;
+// this locks the scheduler WIRING end-to-end.
+describe('RFC-056 A16 — cross-clarify questioner inline session resume', () => {
+  let h: Harness
+  beforeEach(async () => {
+    h = await buildHarness()
+  })
+  afterEach(() => h.cleanup())
+
+  // input → questioner → cross1 → designer (external feedback). The questioner
+  // asks; the user answers with stop; the questioner stop-rerun
+  // (cause='cross-clarify-questioner-rerun') finalizes. Whether that rerun
+  // resumes the prior opencode session is driven SOLELY by sessionModeForQuestioner.
+  function questionerInlineDef(mode: 'isolated' | 'inline'): WorkflowDefinition {
+    return {
+      $schema_version: 4,
+      inputs: [{ kind: 'text', key: 'req', label: 'r' }],
+      nodes: [
+        { id: 'in1', kind: 'input', inputKey: 'req' },
+        { id: 'questioner', kind: 'agent-single', agentName: 'questioner' },
+        { id: 'cross1', kind: 'clarify-cross-agent', sessionModeForQuestioner: mode },
+        { id: 'designer', kind: 'agent-single', agentName: 'designer' },
+      ],
+      edges: [
+        {
+          id: 'e_in_q',
+          source: { nodeId: 'in1', portName: 'req' },
+          target: { nodeId: 'questioner', portName: 'req' },
+        },
+        {
+          id: 'e_q_cross',
+          source: { nodeId: 'questioner', portName: '__clarify__' },
+          target: { nodeId: 'cross1', portName: 'questions' },
+        },
+        {
+          id: 'e_cross_q',
+          source: { nodeId: 'cross1', portName: 'to_questioner' },
+          target: { nodeId: 'questioner', portName: '__clarify_response__' },
+        },
+        {
+          id: 'e_cross_d',
+          source: { nodeId: 'cross1', portName: 'to_designer' },
+          target: { nodeId: 'designer', portName: '__external_feedback__' },
+        },
+      ],
+      outputs: [],
+    } as WorkflowDefinition
+  }
+
+  async function questionerSpawns(
+    mode: 'isolated' | 'inline',
+  ): Promise<Array<{ agent: string; argv: string[] }>> {
+    const argvPath = join(h.appHome, `argv-${mode}.jsonl`)
+    await seedAgent(h.db, 'questioner', ['main'])
+    await seedAgent(h.db, 'designer', ['design'])
+    const { taskId } = await seedWorkflowAndTask(h, questionerInlineDef(mode), { req: 'pick' })
+    const clarifyBody = JSON.stringify({
+      questions: [{ id: 'q1', title: 'Why?', kind: 'single', options: ['a', 'b'] }],
+    })
+
+    // Round 0: questioner asks + reports opencode session id opc_Q0.
+    await withEnv(
+      {
+        MOCK_OPENCODE_CLARIFY_BODY: clarifyBody,
+        MOCK_OPENCODE_EMIT_SESSION_ID: 'opc_Q0',
+        MOCK_OPENCODE_CAPTURE_ARGV_TO: argvPath,
+      },
+      () =>
+        runTask({
+          taskId,
+          db: h.db,
+          appHome: h.appHome,
+          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        }),
+    )
+    const sess = (
+      await h.db.select().from(crossClarifySessions).where(eq(crossClarifySessions.taskId, taskId))
+    )[0]!
+    expect(sess.status).toBe('awaiting_human')
+
+    // Answer with stop → questioner stop-rerun (cross-clarify-questioner-rerun).
+    await submitCrossClarifyAnswers({
+      db: h.db,
+      crossClarifyNodeRunId: sess.crossClarifyNodeRunId,
+      answers: [
+        { questionId: 'q1', selectedOptionIndices: [0], selectedOptionLabels: [], customText: '' },
+      ],
+      directive: 'stop',
+    })
+    // RFC-097: runTask's entry CAS only claims pending tasks (test stand-in for resumeTask).
+    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+
+    // Round 1: questioner stop-rerun spawns + finalizes (outputs).
+    await withEnv(
+      {
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({ main: 'done' }),
+        MOCK_OPENCODE_EMIT_SESSION_ID: 'opc_Q0',
+        MOCK_OPENCODE_CAPTURE_ARGV_TO: argvPath,
+      },
+      () =>
+        runTask({
+          taskId,
+          db: h.db,
+          appHome: h.appHome,
+          opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        }),
+    )
+    return readCapturedArgvLines(argvPath).filter((l) => l.agent === 'questioner')
+  }
+
+  test('sessionModeForQuestioner=inline → questioner rerun spawn carries --session <prior-id>', async () => {
+    const qSpawns = await questionerSpawns('inline')
+    expect(qSpawns.length).toBeGreaterThanOrEqual(2)
+    // Round 0 (first run) never resumes.
+    expect(qSpawns[0]!.argv).not.toContain('--session')
+    // The stop-rerun resumes the prior round's opencode session.
+    const rerun = qSpawns[qSpawns.length - 1]!
+    expect(rerun.argv).toContain('--session')
+    expect(rerun.argv[rerun.argv.indexOf('--session') + 1]).toBe('opc_Q0')
+  })
+
+  test('sessionModeForQuestioner=isolated → questioner rerun never carries --session', async () => {
+    const qSpawns = await questionerSpawns('isolated')
+    expect(qSpawns.length).toBeGreaterThanOrEqual(2)
+    for (const s of qSpawns) expect(s.argv).not.toContain('--session')
   })
 })

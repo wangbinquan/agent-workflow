@@ -15,6 +15,7 @@
 
 import type {
   Agent,
+  ClarifyCrossAgentNode,
   ClarifyNode,
   Mcp,
   NodeKind,
@@ -38,6 +39,7 @@ import {
   findQuestionerNodeForCrossClarify,
   isClarifyChannelEdge,
   resolveClarifySessionMode,
+  resolveCrossClarifySessionMode,
   resolveKeyOf,
   tryParseKind,
 } from '@agent-workflow/shared'
@@ -2094,9 +2096,24 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         const clarifyNodeObjForGate = clarifyNodeForGate
           ? (findClarifyNode(definition, clarifyNodeForGate) as ClarifyNode | undefined)
           : undefined
-        const sessionMode = clarifyNodeObjForGate
-          ? resolveClarifySessionMode(clarifyNodeObjForGate)
-          : 'isolated'
+        // RFC-056 A16: a cross-clarify questioner rerun honors the cross-clarify
+        // node's `sessionModeForQuestioner`. The self-clarify findClarifyNode
+        // lookup above returns undefined for the cross node (it is not a
+        // `clarify` kind), so without this the questioner would silently stay
+        // isolated even when the user picked inline in the editor. For a
+        // cross-questioner, clarifyNodeForGate IS the cross node id (the
+        // questioner's __clarify__ edge targets it).
+        const crossQuestionerNode =
+          clarifyMode === 'cross' && clarifyNodeForGate !== undefined
+            ? (definition.nodes.find(
+                (n) => n.id === clarifyNodeForGate && n.kind === 'clarify-cross-agent',
+              ) as ClarifyCrossAgentNode | undefined)
+            : undefined
+        const sessionMode = crossQuestionerNode
+          ? resolveCrossClarifySessionMode(crossQuestionerNode, 'questioner')
+          : clarifyNodeObjForGate
+            ? resolveClarifySessionMode(clarifyNodeObjForGate)
+            : 'isolated'
         const isClarifyRerun = isClarifyRerunCause(currentRunRow?.rerunCause)
         const priorSessionId =
           isClarifyRerun && currentRunRow
@@ -2194,6 +2211,12 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
                 consumerNodeId: node.id,
                 targetIteration: clarifyGeneration,
                 loopIter: iteration,
+                // RFC-056 A16: inline-mode questioner rerun renders only the
+                // latest round + tags ctx.mode='inline'; the resumed opencode
+                // session already holds prior rounds + the mandatory ask-back
+                // block, so renderUserPrompt emits the short inline reminder
+                // (continue) / the output protocol block (stop) instead.
+                ...(resumeDecision.inlineMode ? { sessionMode: 'inline' as const } : {}),
                 applyLatestDirective: isClarifyRerun,
               })
             : await buildPromptContext({
