@@ -662,7 +662,26 @@ describe('RFC-056 A16 — cross-clarify questioner inline session resume', () =>
   // asks; the user answers with stop; the questioner stop-rerun
   // (cause='cross-clarify-questioner-rerun') finalizes. Whether that rerun
   // resumes the prior opencode session is driven SOLELY by sessionModeForQuestioner.
-  function questionerInlineDef(mode: 'isolated' | 'inline'): WorkflowDefinition {
+  function questionerInlineDef(
+    mode: 'isolated' | 'inline',
+    opts: { selfClarifyEdgeFirst?: boolean } = {},
+  ): WorkflowDefinition {
+    // Codex review #3: when selfClarifyEdgeFirst, the questioner ALSO wires a
+    // self-clarify `__clarify__` edge listed BEFORE the cross edge. The scheduler
+    // must still resolve the CROSS node's sessionModeForQuestioner — not the self
+    // node's — even though findClarifyNodeForAgent would return the self node.
+    const selfNodes = opts.selfClarifyEdgeFirst
+      ? [{ id: 'cs1', kind: 'clarify', title: 'self' }]
+      : []
+    const selfEdges = opts.selfClarifyEdgeFirst
+      ? [
+          {
+            id: 'e_q_self',
+            source: { nodeId: 'questioner', portName: '__clarify__' },
+            target: { nodeId: 'cs1', portName: 'questions' },
+          },
+        ]
+      : []
     return {
       $schema_version: 4,
       inputs: [{ kind: 'text', key: 'req', label: 'r' }],
@@ -671,6 +690,7 @@ describe('RFC-056 A16 — cross-clarify questioner inline session resume', () =>
         { id: 'questioner', kind: 'agent-single', agentName: 'questioner' },
         { id: 'cross1', kind: 'clarify-cross-agent', sessionModeForQuestioner: mode },
         { id: 'designer', kind: 'agent-single', agentName: 'designer' },
+        ...selfNodes,
       ],
       edges: [
         {
@@ -678,6 +698,10 @@ describe('RFC-056 A16 — cross-clarify questioner inline session resume', () =>
           source: { nodeId: 'in1', portName: 'req' },
           target: { nodeId: 'questioner', portName: 'req' },
         },
+        // The self-clarify edge (if any) is listed FIRST among the `__clarify__`
+        // edges so findClarifyNodeForAgent returns the self node — the scheduler
+        // must look past it to the cross node.
+        ...selfEdges,
         {
           id: 'e_q_cross',
           source: { nodeId: 'questioner', portName: '__clarify__' },
@@ -700,11 +724,14 @@ describe('RFC-056 A16 — cross-clarify questioner inline session resume', () =>
 
   async function questionerSpawns(
     mode: 'isolated' | 'inline',
+    opts: { selfClarifyEdgeFirst?: boolean } = {},
   ): Promise<Array<{ agent: string; argv: string[] }>> {
     const argvPath = join(h.appHome, `argv-${mode}.jsonl`)
     await seedAgent(h.db, 'questioner', ['main'])
     await seedAgent(h.db, 'designer', ['design'])
-    const { taskId } = await seedWorkflowAndTask(h, questionerInlineDef(mode), { req: 'pick' })
+    const { taskId } = await seedWorkflowAndTask(h, questionerInlineDef(mode, opts), {
+      req: 'pick',
+    })
     const clarifyBody = JSON.stringify({
       questions: [{ id: 'q1', title: 'Why?', kind: 'single', options: ['a', 'b'] }],
     })
@@ -774,5 +801,20 @@ describe('RFC-056 A16 — cross-clarify questioner inline session resume', () =>
     const qSpawns = await questionerSpawns('isolated')
     expect(qSpawns.length).toBeGreaterThanOrEqual(2)
     for (const s of qSpawns) expect(s.argv).not.toContain('--session')
+  })
+
+  // Codex review #3 regression: a questioner wired with BOTH a self-clarify edge
+  // (listed FIRST) AND a cross-clarify edge. findClarifyNodeForAgent returns the
+  // self node, so the old wiring (which reused clarifyNodeForGate) resolved the
+  // SELF node's sessionMode (isolated) and silently ignored the cross node's
+  // sessionModeForQuestioner='inline'. The fix resolves the cross node via
+  // findCrossClarifyNodeForQuestioner, so inline still takes effect (--session).
+  test('cross inline resolves from the cross edge even when a self-clarify edge is wired first', async () => {
+    const qSpawns = await questionerSpawns('inline', { selfClarifyEdgeFirst: true })
+    expect(qSpawns.length).toBeGreaterThanOrEqual(2)
+    expect(qSpawns[0]!.argv).not.toContain('--session')
+    const rerun = qSpawns[qSpawns.length - 1]!
+    expect(rerun.argv).toContain('--session')
+    expect(rerun.argv[rerun.argv.indexOf('--session') + 1]).toBe('opc_Q0')
   })
 })

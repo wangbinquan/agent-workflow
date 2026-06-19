@@ -2100,15 +2100,23 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // node's `sessionModeForQuestioner`. The self-clarify findClarifyNode
         // lookup above returns undefined for the cross node (it is not a
         // `clarify` kind), so without this the questioner would silently stay
-        // isolated even when the user picked inline in the editor. For a
-        // cross-questioner, clarifyNodeForGate IS the cross node id (the
-        // questioner's __clarify__ edge targets it).
-        const crossQuestionerNode =
-          clarifyMode === 'cross' && clarifyNodeForGate !== undefined
-            ? (definition.nodes.find(
-                (n) => n.id === clarifyNodeForGate && n.kind === 'clarify-cross-agent',
-              ) as ClarifyCrossAgentNode | undefined)
+        // isolated even when the user picked inline in the editor. Resolve the
+        // cross node via the SAME helper `clarifyMode` itself uses
+        // (findCrossClarifyNodeForQuestioner) rather than reusing
+        // clarifyNodeForGate: a questioner can wire BOTH a self-clarify and a
+        // cross-clarify `__clarify__` edge, and findClarifyNodeForAgent returns
+        // whichever edge is first — if the self edge wins, clarifyNodeForGate
+        // points at the self clarify node and the cross node's
+        // sessionModeForQuestioner would be silently ignored. (Codex review #3.)
+        const crossQuestionerNodeId =
+          clarifyMode === 'cross'
+            ? findCrossClarifyNodeForQuestioner(definition, node.id)
             : undefined
+        const crossQuestionerNode = crossQuestionerNodeId
+          ? (definition.nodes.find(
+              (n) => n.id === crossQuestionerNodeId && n.kind === 'clarify-cross-agent',
+            ) as ClarifyCrossAgentNode | undefined)
+          : undefined
         const sessionMode = crossQuestionerNode
           ? resolveCrossClarifySessionMode(crossQuestionerNode, 'questioner')
           : clarifyNodeObjForGate
