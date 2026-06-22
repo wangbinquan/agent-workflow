@@ -8621,6 +8621,42 @@ mark.comment-anchor[data-active='true'] {
   color: var(--muted);
 }
 
+/* RFC-101 — fused status + provenance chip + fuse multi-select picker. */
+.memory-row__status--fused {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+.memory-row__fused {
+  font-size: 0.75rem;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+.memory-row__select {
+  margin-right: 6px;
+  align-self: center;
+}
+.fusion-picker {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.fusion-picker__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.fusion-picker__row:hover {
+  background: color-mix(in srgb, var(--muted) 10%, transparent);
+}
+
 /* RFC-050 — per-candidate distill output language chip. Lives next to the
    status chip in the row head; only rendered when the row is still a
    candidate AND the distill job's outputLang is non-null. */

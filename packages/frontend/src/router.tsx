@@ -35,6 +35,7 @@ import { LaunchRoute as workflowLaunchRoute } from '@/routes/workflows.launch'
 import { ReposRoute as reposRoute } from '@/routes/repos'
 import { Route as memoryRoute } from '@/routes/memory'
 import { Route as memoryDistillJobDetailRoute } from '@/routes/memory.distill-jobs.$jobId'
+import { Route as fusionDetailRoute } from '@/routes/fusions.detail'
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -72,6 +73,8 @@ const routeTree = rootRoute.addChildren([
   memoryDistillJobDetailRoute,
   // RFC-041 PR4: platform memory tab.
   memoryRoute,
+  // RFC-101: memory→skill fusion detail + approval gate.
+  fusionDetailRoute,
   settingsRoute,
   // RFC-036
   accountRoute,

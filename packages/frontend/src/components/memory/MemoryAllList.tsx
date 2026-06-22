@@ -22,6 +22,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { LoadingState } from '@/components/LoadingState'
 import { describeApiError } from '@/i18n'
 import { sortByRecency } from '@/lib/memory'
+import { FuseDialog } from '@/components/fusion/FuseDialog'
 import { MemoryEditDialog } from './MemoryEditDialog'
 import { MemoryRow } from './MemoryRow'
 
@@ -42,6 +43,16 @@ export function MemoryAllList({ isAdmin }: MemoryAllListProps) {
   const qc = useQueryClient()
   const [view, setView] = useState<View>('approved')
   const [pending, setPending] = useState<PendingConfirm>(null)
+  // RFC-101: approved-view multi-select → "Fuse into skill".
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [fuseOpen, setFuseOpen] = useState(false)
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   // RFC-045: id of the row whose Edit button was clicked. We then fetch the
   // full Memory (the list endpoint returns MemorySummary only) and feed it
   // to <MemoryEditDialog>.
@@ -107,6 +118,19 @@ export function MemoryAllList({ isAdmin }: MemoryAllListProps) {
         ))}
       </div>
 
+      {view === 'approved' && selected.size > 0 && (
+        <div className="memory-all__bulk page__actions">
+          <button
+            type="button"
+            className="btn btn--sm btn--primary"
+            onClick={() => setFuseOpen(true)}
+            data-testid="memory-fuse-button"
+          >
+            {`${t('fusion.launchButton')} · ${t('fusion.selectedCount', { n: selected.size })}`}
+          </button>
+        </div>
+      )}
+
       {renderBody({
         list,
         view,
@@ -118,8 +142,16 @@ export function MemoryAllList({ isAdmin }: MemoryAllListProps) {
         onUnarchive: (id) => unarchive.mutate(id),
         onDelete: (id) => setPending({ kind: 'delete', id }),
         onEdit: (id) => setEditingId(id),
+        selected,
+        onToggleSelect: toggleSelect,
         t,
       })}
+
+      <FuseDialog
+        open={fuseOpen}
+        onClose={() => setFuseOpen(false)}
+        presetMemoryIds={Array.from(selected)}
+      />
 
       {editingId !== null && editingMemory.data?.memory !== undefined && (
         <MemoryEditDialog
@@ -181,6 +213,9 @@ interface BodyArgs {
   onUnarchive: (id: string) => void
   onDelete: (id: string) => void
   onEdit?: (id: string) => void
+  /** RFC-101: approved-view multi-select for the fuse picker. */
+  selected?: ReadonlySet<string>
+  onToggleSelect?: (id: string) => void
   t: (key: string) => string
 }
 
@@ -196,6 +231,8 @@ function renderBody(args: BodyArgs) {
     onUnarchive,
     onDelete,
     onEdit,
+    selected,
+    onToggleSelect,
     t,
   } = args
   if (list.isLoading) return <LoadingState />
@@ -220,6 +257,11 @@ function renderBody(args: BodyArgs) {
             memory={m}
             onEdit={onEdit !== undefined && rowManage ? () => onEdit(m.id) : undefined}
             editable={rowManage}
+            select={
+              view === 'approved' && rowManage && onToggleSelect !== undefined
+                ? { checked: selected?.has(m.id) ?? false, onChange: () => onToggleSelect(m.id) }
+                : undefined
+            }
             actions={
               <>
                 {view === 'approved' ? (

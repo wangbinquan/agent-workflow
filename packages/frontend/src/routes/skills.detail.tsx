@@ -9,6 +9,7 @@ import { api, ApiError } from '@/api/client'
 import { AclDialogButton } from '@/components/AclPanel'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { Field, TextInput } from '@/components/Form'
+import { FuseDialog } from '@/components/fusion/FuseDialog'
 import { MarkdownEditor } from '@/components/MarkdownEditor'
 import { SkillFileTree } from '@/components/SkillFileTree'
 import { SkillVersionHistory } from '@/components/skill/SkillVersionHistory'
@@ -39,6 +40,7 @@ function SkillDetailPage() {
   const [description, setDescription] = useState('')
   const [bodyMd, setBodyMd] = useState('')
   const [loaded, setLoaded] = useState(false)
+  const [fuseOpen, setFuseOpen] = useState(false)
 
   useEffect(() => {
     if (!loaded && meta.data !== undefined && content.data !== undefined) {
@@ -96,6 +98,11 @@ function SkillDetailPage() {
           </p>
         </div>
         <div className="page__actions">
+          {isManaged && (
+            <button type="button" className="btn" onClick={() => setFuseOpen(true)}>
+              {t('fusion.launchFromSkillButton')}
+            </button>
+          )}
           <AclDialogButton
             resourceBaseUrl={`/api/skills/${encodeURIComponent(name)}`}
             invalidateKey={['skills']}
@@ -157,6 +164,8 @@ function SkillDetailPage() {
       {isManaged && (
         <SkillVersionHistory skillName={name} currentVersion={meta.data.contentVersion} />
       )}
+
+      <FuseDialog open={fuseOpen} onClose={() => setFuseOpen(false)} lockedSkillName={name} />
     </div>
   )
 }

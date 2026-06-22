@@ -841,6 +841,55 @@ export interface Resources {
     versionRestoreReasonPlaceholder: string
     versionRestoreFusionNote: string
   }
+  fusion: {
+    launchButton: string
+    launchFromSkillButton: string
+    launchTitle: string
+    fieldSkill: string
+    fieldSkillHint: string
+    pickSkillPlaceholder: string
+    noManagedSkills: string
+    fieldMemories: string
+    fieldMemoriesHint: string
+    noSelectableMemories: string
+    selectedCount: string
+    fieldIntent: string
+    fieldIntentHint: string
+    intentPlaceholder: string
+    submit: string
+    submitting: string
+    needSkill: string
+    needMemories: string
+    detailTitle: string
+    backToSkill: string
+    status: {
+      running: string
+      awaiting_approval: string
+      applying: string
+      done: string
+      rejected: string
+      canceled: string
+      failed: string
+    }
+    iteration: string
+    runningHint: string
+    clarifyLink: string
+    proposedHeading: string
+    changelogHeading: string
+    incorporatedHeading: string
+    skippedHeading: string
+    approve: string
+    approving: string
+    reject: string
+    rejectTitle: string
+    rejectFeedbackPlaceholder: string
+    rejectSubmit: string
+    cancel: string
+    cancelConfirm: string
+    appliedVersion: string
+    fusedChip: string
+    errorHeading: string
+  }
   workflows: {
     title: string
     hint: string
@@ -2064,6 +2113,7 @@ export interface Resources {
       archived: string
       superseded: string
       rejected: string
+      fused: string
     }
     conflictDialog: {
       title: string
@@ -3008,6 +3058,55 @@ export const zhCN: Resources = {
     versionBy: '由 {{who}}',
     versionRestoreReasonPlaceholder: '回退原因（可选）',
     versionRestoreFusionNote: 'v{{n}} 之后被融合的记忆将被解融合并退回审批池。',
+  },
+  fusion: {
+    launchButton: '融合进技能…',
+    launchFromSkillButton: '融合记忆…',
+    launchTitle: '把记忆融合进技能',
+    fieldSkill: '目标技能',
+    fieldSkillHint: '只能融合进 managed 技能。',
+    pickSkillPlaceholder: '选择一个 managed 技能',
+    noManagedSkills: '没有你可写的 managed 技能。',
+    fieldMemories: '要融合的记忆',
+    fieldMemoriesHint: '你可管理的已批准记忆。',
+    noSelectableMemories: '没有可管理的已批准记忆。',
+    selectedCount: '已选 {{n}} 条',
+    fieldIntent: '意图',
+    fieldIntentHint: '描述融合目标；agent 编辑前必须先与你确认。',
+    intentPlaceholder: '例如：把这些 lint 偏好整理进技能、去重、按类别归类',
+    submit: '开始融合',
+    submitting: '启动中…',
+    needSkill: '请选择目标技能。',
+    needMemories: '至少选择一条记忆。',
+    detailTitle: '融合',
+    backToSkill: '返回技能',
+    status: {
+      running: '执行中',
+      awaiting_approval: '待批准',
+      applying: '应用中',
+      done: '已完成',
+      rejected: '已退回',
+      canceled: '已取消',
+      failed: '失败',
+    },
+    iteration: '第 {{n}} 轮',
+    runningHint: 'skill-merger agent 正在工作。若它提问，请到「反问」中回答。',
+    clarifyLink: '打开反问',
+    proposedHeading: '改动预览（当前 → 提议）',
+    changelogHeading: '变更摘要',
+    incorporatedHeading: '已吸收记忆（{{n}}）',
+    skippedHeading: '已跳过记忆（{{n}}）',
+    approve: '批准并应用',
+    approving: '应用中…',
+    reject: '退回并修改',
+    rejectTitle: '退回并重跑',
+    rejectFeedbackPlaceholder: 'agent 应如何修改？',
+    rejectSubmit: '提交并重跑',
+    cancel: '取消融合',
+    cancelConfirm: '取消这次融合？',
+    appliedVersion: '已应用为 v{{n}}',
+    fusedChip: '已融合 → {{skill}} v{{n}}',
+    errorHeading: '错误',
   },
   mcps: {
     title: 'MCP 服务器',
@@ -4415,6 +4514,7 @@ export const zhCN: Resources = {
       archived: '已归档',
       superseded: '已覆盖',
       rejected: '已驳回',
+      fused: '已融合',
     },
     conflictDialog: {
       title: '与已有记忆冲突 — 并排对比',

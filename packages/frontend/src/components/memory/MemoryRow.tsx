@@ -19,6 +19,8 @@ export interface MemoryRowProps {
   /** RFC-045: optional override for editability (parents that already gate
    *  on isAdmin pass false to hide the button). Defaults to true. */
   editable?: boolean
+  /** RFC-101: optional leading multi-select checkbox (used by the fuse picker). */
+  select?: { checked: boolean; onChange: () => void }
   'data-testid'?: string
 }
 
@@ -29,6 +31,7 @@ export function MemoryRow({
   actions,
   onEdit,
   editable = true,
+  select,
   'data-testid': testId,
 }: MemoryRowProps) {
   const { t } = useTranslation()
@@ -39,6 +42,16 @@ export function MemoryRow({
       data-testid={testId ?? `memory-row-${memory.id}`}
     >
       <div className="memory-row__head">
+        {select !== undefined && (
+          <input
+            type="checkbox"
+            className="memory-row__select"
+            checked={select.checked}
+            onChange={select.onChange}
+            data-testid={`memory-row-${memory.id}-select`}
+            aria-label={memory.title}
+          />
+        )}
         <span className={`memory-row__scope memory-row__scope--${memory.scopeType}`}>
           {t(`memory.scope.${memory.scopeType}`)}
         </span>
@@ -46,6 +59,14 @@ export function MemoryRow({
         <span className={`memory-row__status memory-row__status--${memory.status}`}>
           {t(`memory.status.${memory.status}`)}
         </span>
+        {memory.status === 'fused' && memory.fusedIntoSkill != null && (
+          <span className="memory-row__fused" data-testid={`memory-row-${memory.id}-fused`}>
+            {t('fusion.fusedChip', {
+              skill: memory.fusedIntoSkill,
+              n: memory.fusedIntoSkillVersion ?? '',
+            })}
+          </span>
+        )}
         {memory.status === 'candidate' &&
           (memory.outputLang === 'zh-CN' || memory.outputLang === 'en-US') && (
             <span
