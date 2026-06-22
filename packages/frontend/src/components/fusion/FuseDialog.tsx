@@ -5,7 +5,7 @@
 
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Fusion, MemorySummary, Skill } from '@agent-workflow/shared'
 import { api, type ApiError } from '@/api/client'
@@ -36,6 +36,20 @@ export function FuseDialog({
   const [picked, setPicked] = useState<Set<string>>(new Set(presetMemoryIds ?? []))
   const [intent, setIntent] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
+
+  // The dialog stays mounted while closed (parents toggle `open`), so re-seed
+  // from the current props each time it opens — otherwise a /memory bulk
+  // selection made after first mount never reaches `picked` (Codex P2).
+  useEffect(() => {
+    if (open) {
+      setSkillName(lockedSkillName ?? '')
+      setPicked(new Set(presetMemoryIds ?? []))
+      setIntent('')
+      setLocalError(null)
+    }
+    // presetMemoryIds is a fresh array each render; key off open + its contents.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, lockedSkillName, (presetMemoryIds ?? []).join(',')])
 
   // Managed skills the user can write (the list endpoint already filters by
   // visibility; ownership is re-checked server-side at launch).

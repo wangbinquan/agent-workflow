@@ -315,15 +315,22 @@ describe('lazy backfill + reconcile', () => {
     )
   })
 
-  test('reconcileSkillLiveFiles re-syncs a stale live files/ from the current version', async () => {
+  test('reconcileSkillLiveFiles restores live files/ ONLY when it is lost entirely', async () => {
     await createManagedSkill(h.db, h.fsOpts, {
       name: 'lint',
       description: 'd',
       bodyMd: 'good',
       frontmatterExtra: {},
     })
-    // Corrupt live files/ to simulate a crash between archive-tx and live-sync.
-    writeFileSync(join(h.fsOpts.appHome, 'skills', 'lint', 'files', 'SKILL.md'), 'CORRUPT', 'utf-8')
+    const filesDir = join(h.fsOpts.appHome, 'skills', 'lint', 'files')
+    // Live present but DIFFERENT (e.g. an out-of-funnel ZIP overwrite): must NOT
+    // be clobbered by the snapshot (Codex P1 — that would lose the write).
+    writeFileSync(join(filesDir, 'SKILL.md'), 'EXTERNAL EDIT', 'utf-8')
+    reconcileSkillLiveFiles(h.db, h.fsOpts)
+    expect(liveSkillMd(h, 'lint')).toContain('EXTERNAL EDIT') // preserved
+
+    // Live lost entirely (files/ deleted): restored from the current snapshot.
+    rmSync(filesDir, { recursive: true, force: true })
     reconcileSkillLiveFiles(h.db, h.fsOpts)
     expect(liveSkillMd(h, 'lint')).toContain('good')
   })

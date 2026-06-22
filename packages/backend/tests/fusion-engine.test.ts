@@ -275,4 +275,39 @@ describe('launch → reconcile → approve', () => {
     expect(failed!.status).toBe('failed')
     expect(statusOf(h.db, mem)).toBe('approved') // not fused — apply rolled back
   })
+
+  test('reconcile fails when the manifest omits a selected memory (Codex P2 #5)', async () => {
+    const fsOpts: SkillFsOptions = { appHome: h.appHome }
+    await createManagedSkill(h.db, fsOpts, {
+      name: 'lint',
+      description: 'd',
+      bodyMd: 'orig',
+      frontmatterExtra: {},
+    })
+    const memA = approvedGlobalMemory(h.db, 'a')
+    const memB = approvedGlobalMemory(h.db, 'b')
+    const fusion = await createFusion(
+      { skillName: 'lint', memoryIds: [memA, memB], intent: '' },
+      h.deps,
+      adminActor,
+    )
+    const task = await getTask(h.db, fusion.currentTaskId!)
+    const wt = task!.worktreePath
+    writeFileSync(pjoin(wt, 'SKILL.md'), '---\nname: lint\ndescription: d\n---\nproposed')
+    mkdirSync(pjoin(wt, '__fusion__'), { recursive: true })
+    // memB is in NEITHER incorporated nor skipped → contract violation.
+    writeFileSync(
+      pjoin(wt, '__fusion__', 'result.json'),
+      JSON.stringify({ incorporatedMemoryIds: [memA], skipped: [], changelog: 'x' }),
+    )
+    h.db
+      .update(tasks)
+      .set({ status: 'done', finishedAt: Date.now() })
+      .where(eq(tasks.id, task!.id))
+      .run()
+    await reconcileFusion(h.deps, fusion.id)
+    const f = await getFusion(h.deps, fusion.id)
+    expect(f!.status).toBe('failed')
+    expect(f!.error).toContain(memB)
+  })
 })

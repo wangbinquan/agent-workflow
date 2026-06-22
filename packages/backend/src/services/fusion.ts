@@ -34,9 +34,10 @@ import type { DbClient } from '@/db/client'
 import { agents, fusions } from '@/db/schema'
 import { createAgent } from '@/services/agent'
 import { canManageMemory, fuseMemoriesTx, getMemoryById } from '@/services/memory'
-import { isAdminActor, isResourceOwner } from '@/services/resourceAcl'
+import { canViewResource, isAdminActor, isResourceOwner } from '@/services/resourceAcl'
 import { getSkill } from '@/services/skill'
 import { commitSkillVersion, type SkillVersionFsOptions } from '@/services/skillVersion'
+import { trySetTaskStatus } from '@/services/lifecycle'
 import { cancelTask, getTask, startTask, type StartTaskDeps } from '@/services/task'
 import { listWorkflows, createWorkflow } from '@/services/workflow'
 import { ConflictError, NotFoundError } from '@/util/errors'
@@ -328,9 +329,12 @@ export async function createFusion(
   const { db, appHome } = deps
   await seedFusionResources(db)
 
-  // 1. Target skill must exist, be managed, and be writable by the actor.
+  // 1. Target skill must exist, be visible (RFC-099 D1 existence isolation:
+  //    invisible ⇒ identical 404 as missing, before any source-kind/owner
+  //    error, so a guessed skillName can't probe a private skill's existence),
+  //    be managed, and be writable by the actor.
   const skill = await getSkill(db, input.skillName)
-  if (skill === null) {
+  if (skill === null || !(await canViewResource(db, actor, 'skill', skill))) {
     throw new NotFoundError('skill-not-found', `skill '${input.skillName}' not found`)
   }
   if (skill.sourceKind !== 'managed') {
@@ -468,6 +472,19 @@ export async function reconcileFusion(deps: FusionDeps, id: string): Promise<voi
     const skipped = parsed.data.skipped.filter(
       (s) => selected.has(s.memoryId) && !incSet.has(s.memoryId),
     )
+    // Launch contract (D12): every selected memory must be accounted for exactly
+    // once. If the agent's manifest leaves any selected id in neither bucket,
+    // fail loudly rather than silently leave it approved-but-unexplained.
+    const accounted = new Set([...incSet, ...skipped.map((s) => s.memoryId)])
+    const unaccounted = [...selected].filter((m) => !accounted.has(m))
+    if (unaccounted.length > 0) {
+      failFusion(
+        db,
+        id,
+        `agent manifest omitted ${unaccounted.length} selected memory id(s): ${unaccounted.join(', ')}`,
+      )
+      return
+    }
     db.update(fusions)
       .set({
         status: 'awaiting_approval',
@@ -658,14 +675,23 @@ export async function rejectFusion(
   const nextIter = row.iteration + 1
   const workDir = fusionWorkDir(appHome, row.id, nextIter)
   mkdirSync(workDir, { recursive: true })
-  // Seed the next iteration from the PRIOR proposal so the agent refines.
-  if (row.proposedWorktreePath !== null && existsSync(row.proposedWorktreePath)) {
-    copyWorktreeContent(row.proposedWorktreePath, workDir)
-  } else {
-    const skillFilesDir = join(appHome, 'skills', row.skillName, 'files')
-    if (existsSync(skillFilesDir)) copyWorktreeContent(skillFilesDir, workDir)
-  }
+  // Baseline commit = the CURRENT skill files, so the approval diff is always
+  // current-skill → proposed. apply() copies the whole worktree over the skill
+  // under OCC, so the displayed diff must be measured from the skill — NOT the
+  // per-iteration prior proposal (Codex P2: otherwise a re-run hides the
+  // earlier iteration's changes from the diff the merger approves).
+  const skillFilesDir = join(appHome, 'skills', row.skillName, 'files')
+  if (existsSync(skillFilesDir)) copyWorktreeContent(skillFilesDir, workDir)
   const baseCommit = await seedWorktree(workDir)
+  // Then overlay the PRIOR proposal as uncommitted working changes, so the
+  // agent refines its last attempt while the diff vs baseline stays full.
+  if (row.proposedWorktreePath !== null && existsSync(row.proposedWorktreePath)) {
+    for (const e of readdirSync(workDir)) {
+      if (e === '.git') continue
+      rmSync(join(workDir, e), { recursive: true, force: true })
+    }
+    copyWorktreeContent(row.proposedWorktreePath, workDir)
+  }
 
   const taskId = ulid()
   const startDeps: StartTaskDeps = {
@@ -726,6 +752,22 @@ export async function cancelFusion(deps: FusionDeps, id: string, actor: Actor): 
     const task = await getTask(db, row.currentTaskId)
     if (task !== null && (task.status === 'pending' || task.status === 'running')) {
       await cancelTask(db, row.currentTaskId).catch(() => undefined)
+    } else if (
+      task !== null &&
+      (task.status === 'awaiting_human' || task.status === 'awaiting_review')
+    ) {
+      // A fusion task spends its mandatory-clarify round in awaiting_human;
+      // cancelTask refuses those, so terminalize directly (CAS) — this lets the
+      // RFC-053 reconciler abandon the now-orphaned clarify session instead of
+      // leaving it open in the clarify inbox forever.
+      await trySetTaskStatus({
+        db,
+        taskId: row.currentTaskId,
+        to: 'canceled',
+        allowedFrom: ['awaiting_human', 'awaiting_review'],
+        extra: { finishedAt: Date.now(), errorSummary: 'fusion canceled' },
+        reason: 'cancelFusion: terminalize parked engine task',
+      }).catch(() => false)
     }
   }
   setFusionStatus(db, id, 'canceled', { decidedByUserId: actor.user.id, decidedAt: Date.now() })
