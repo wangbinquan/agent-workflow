@@ -183,6 +183,19 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/skills/import-external' },
   { method: 'POST', path: '/api/skills/import-zip/parse' },
   { method: 'POST', path: '/api/skills/import-zip/commit' },
+  // RFC-101: skill content version history.
+  { method: 'GET', path: '/api/skills/:name/versions' },
+  { method: 'GET', path: '/api/skills/:name/versions/diff' },
+  { method: 'GET', path: '/api/skills/:name/versions/:v/content' },
+  { method: 'POST', path: '/api/skills/:name/versions/:v/restore' },
+
+  // ---- fusions (RFC-101 memory→skill fusion) ----
+  { method: 'POST', path: '/api/fusions' },
+  { method: 'GET', path: '/api/fusions' },
+  { method: 'GET', path: '/api/fusions/:id' },
+  { method: 'POST', path: '/api/fusions/:id/approve' },
+  { method: 'POST', path: '/api/fusions/:id/reject' },
+  { method: 'POST', path: '/api/fusions/:id/cancel' },
 
   // ---- skill-sources (RFC-017) ----
   { method: 'GET', path: '/api/skill-sources' },
