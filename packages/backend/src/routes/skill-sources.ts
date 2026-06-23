@@ -19,6 +19,7 @@ import type { SkillFsOptions } from '@/services/skill'
 import {
   createSkillSource,
   deleteSkillSource,
+  filterVisibleSkillSources,
   getSkillSourceWithStats,
   listSkillSourcesWithStats,
   replaceSourceConflict,
@@ -48,7 +49,15 @@ export function mountSkillSourceRoutes(app: Hono, deps: AppDeps): void {
   }
 
   app.get('/api/skill-sources', async (c) => {
-    const sources = await listSkillSourcesWithStats(deps.db)
+    const actor = actorOf(c)
+    const all = await listSkillSourcesWithStats(deps.db)
+    // RFC-103 T10 (12-RES): a source's local ABSOLUTE path (+ label/stats) is
+    // sensitive; only its registrar (created_by) or an admin may see it. Was
+    // previously returned in full (incl. host absolute paths) to any user.
+    const sources = filterVisibleSkillSources(
+      { isAdmin: isAdminActor(actor), userId: actor.user?.id ?? null },
+      all,
+    )
     return c.json({ sources })
   })
 

@@ -152,6 +152,21 @@ export async function listSkillSourcesWithStats(db: DbClient): Promise<SkillSour
   return out
 }
 
+/**
+ * RFC-103 T10 (12-RES): visibility filter for skill-source listings. A source's
+ * local ABSOLUTE path (+ label / stats) is sensitive, so it is visible only to
+ * an admin or its registrar (created_by). Sources predating RFC-099 (created_by
+ * NULL) stay admin-only. Mirrors `requireSourceRegistrar`'s authorization rule
+ * — pure so the route's `/api/skill-sources` filter is unit-testable.
+ */
+export function filterVisibleSkillSources<S extends { createdBy?: string | null }>(
+  viewer: { isAdmin: boolean; userId: string | null },
+  sources: readonly S[],
+): S[] {
+  if (viewer.isAdmin) return [...sources]
+  return sources.filter((s) => s.createdBy != null && s.createdBy === viewer.userId)
+}
+
 export async function getSkillSource(db: DbClient, id: string): Promise<SkillSource | null> {
   const rows = await db.select().from(skillSources).where(eq(skillSources.id, id)).limit(1)
   const row = rows[0]

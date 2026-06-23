@@ -12,7 +12,7 @@ import {
   type Permission,
 } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
-import { hashPassword, verifyPassword } from '@/auth/passwords'
+import { hashPassword, verifyPassword, verifyPasswordDummy } from '@/auth/passwords'
 import { requirePermission } from '@/auth/permissions'
 import { createPat, listPatsForUser, revokePat } from '@/auth/patStore'
 import {
@@ -38,7 +38,10 @@ export function mountAuthRoutes(app: Hono, deps: AppDeps): void {
     const rows = await deps.db.select().from(users).where(eq(users.username, username)).limit(1)
     const row = rows[0]
     if (!row || row.status !== 'active' || !row.passwordHash) {
-      // Constant-time response — do not differentiate "no user" vs "bad pw".
+      // RFC-103 T9: run a real argon2 verify against a dummy hash so timing does
+      // not distinguish "no user / inactive / no passwordHash" from a wrong
+      // password (the comment used to claim constant-time but skipped argon2).
+      await verifyPasswordDummy(password)
       throw new UnauthorizedError('invalid username or password')
     }
     const ok = await verifyPassword(password, row.passwordHash)

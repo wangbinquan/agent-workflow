@@ -26,3 +26,28 @@ export async function verifyPassword(plaintext: string, hash: string): Promise<b
     return false
   }
 }
+
+// RFC-103 T9 (10-ACL): a fixed dummy argon2id hash (same params as real ones),
+// computed lazily once and reused. Login's "no user / inactive / no passwordHash"
+// branches verify against it so an attacker can't distinguish those from a
+// "wrong password" by timing (only the real path used to run argon2).
+let dummyHashPromise: Promise<string> | null = null
+function getDummyHash(): Promise<string> {
+  dummyHashPromise ??= Bun.password.hash('aw-constant-time-dummy-secret', HASH_OPTS)
+  return dummyHashPromise
+}
+
+/**
+ * RFC-103 T9: run a real argon2id verify against a constant dummy hash and
+ * always resolve `false`. Call this on login paths that reject BEFORE checking a
+ * real hash (unknown user / inactive / no passwordHash) so total response time
+ * matches the wrong-password path and does not leak account existence/state.
+ */
+export async function verifyPasswordDummy(plaintext: string): Promise<false> {
+  try {
+    await Bun.password.verify(plaintext, await getDummyHash())
+  } catch {
+    // ignore — timing is the point, not the result
+  }
+  return false
+}
