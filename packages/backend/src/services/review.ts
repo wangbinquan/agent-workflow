@@ -48,6 +48,7 @@ import {
   extractDocTitle,
   isMultiDocReviewInput,
   isInlineMarkdownListReviewInput,
+  isReviewableBodyKindString,
   splitListItems,
   splitMarkdownDocs,
   joinMarkdownDocs,
@@ -2455,7 +2456,8 @@ function readBool(node: WorkflowNode, key: string, fallback: boolean): boolean {
   return typeof v === 'boolean' ? v : fallback
 }
 
-async function loadUpstreamPortKind(
+// Exported for the regression test that locks the path<md> recognition fix.
+export async function loadUpstreamPortKind(
   db: DbClient,
   definition: WorkflowDefinition,
   nodeId: string,
@@ -2474,13 +2476,24 @@ async function loadUpstreamPortKind(
     const kinds = parsed.outputKinds
     if (kinds !== undefined && kinds !== null && typeof kinds === 'object') {
       const v = (kinds as Record<string, unknown>)[portName]
-      if (v === 'markdown' || v === 'markdown_file' || v === 'string') return v
+      if (typeof v !== 'string') return undefined
+      // 'string' = opaque passthrough (legacy; not markdown but harmless —
+      // resolvePortContentDetailed passes it through unchanged).
+      if (v === 'string') return v
+      // Single-document markdownish input: base 'markdown' or path<md> /
+      // path<markdown> (the legacy 'markdown_file' folds to path<md> at parse).
+      // Use the canonical kindParser predicate so this never drifts from the
+      // validator / resolvePortContentDetailed. CRITICAL: a bare path<md> MUST
+      // resolve here and be returned — otherwise dispatchReviewNode passes
+      // `kind: undefined` to resolvePortContentDetailed, which raw-passes the
+      // worktree path string through as the document body instead of reading
+      // the .md file from disk (the reported bug: review sees the path, not the
+      // file content).
+      if (isReviewableBodyKindString(v)) return v
       // RFC-079: a list<markdownish> kind (list<path<md>> / list<markdown>)
       // drives multi-document review — return it so dispatchReviewNode enters
-      // multi-doc mode. Every OTHER kind keeps returning undefined (the
-      // single-document forgiveness path, e.g. bare path<md>), so single-doc
-      // behavior is unchanged.
-      if (typeof v === 'string' && isMultiDocReviewInput(v)) return v
+      // multi-doc mode.
+      if (isMultiDocReviewInput(v)) return v
     }
   } catch {
     /* fall through */
