@@ -43,8 +43,11 @@ import { listWorkflows, createWorkflow } from '@/services/workflow'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { gitDiffSnapshot, runGit } from '@/util/git'
 
-export const SKILL_MERGER_AGENT_NAME = 'aw-skill-merger'
-export const SKILL_FUSION_WORKFLOW_NAME = 'aw-skill-fusion'
+// Built-in resource names live in the leaf systemResources module (single
+// source of truth shared with the list-hiding filter); re-exported here so
+// existing `@/services/fusion` importers are unaffected.
+export { SKILL_FUSION_WORKFLOW_NAME, SKILL_MERGER_AGENT_NAME } from '@/services/systemResources'
+import { SKILL_FUSION_WORKFLOW_NAME, SKILL_MERGER_AGENT_NAME } from '@/services/systemResources'
 /** Reserved scaffolding dir inside the fusion worktree; never written to the skill. */
 const SCAFFOLD = '__fusion__'
 const MANIFEST_REL = `${SCAFFOLD}/result.json`

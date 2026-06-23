@@ -12,6 +12,7 @@ import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
+import { excludeBuiltinWorkflows } from '@/services/systemResources'
 import {
   assertNewRefsUsable,
   diffNewNames,
@@ -40,7 +41,18 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
   }
 
   app.get('/api/workflows', async (c) =>
-    c.json(await filterVisibleRows(deps.db, actorOf(c), 'workflow', await listWorkflows(deps.db))),
+    // Hide the built-in aw-skill-fusion workflow (RFC-101): infrastructure the
+    // daemon references by name, not a user list row. Discriminator = reserved
+    // name AND __system__ owner — workflows.name is non-unique, so a user-owned
+    // workflow named aw-skill-fusion must stay visible. See systemResources.ts.
+    c.json(
+      await filterVisibleRows(
+        deps.db,
+        actorOf(c),
+        'workflow',
+        excludeBuiltinWorkflows(await listWorkflows(deps.db)),
+      ),
+    ),
   )
 
   app.get('/api/workflows/:id', async (c) => {

@@ -25,6 +25,7 @@ import {
 } from '@/services/agent'
 import { resolveDependsClosure, validateDependsOn } from '@/services/agentDeps'
 import { canViewResource, filterVisibleRows, requireResourceOwner } from '@/services/resourceAcl'
+import { excludeBuiltinAgents } from '@/services/systemResources'
 import { assertNewRefsUsable, diffNewNames } from '@/services/resourceRefs'
 import { mountAclEndpoints } from './resourceAcl'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
@@ -42,7 +43,10 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
   }
 
   app.get('/api/agents', async (c) => {
-    const list = await listAgents(deps.db)
+    // Hide framework built-ins (RFC-101 aw-skill-merger): infrastructure, never
+    // a user-managed list row. Discriminator = reserved name AND __system__
+    // owner (see systemResources.ts) — neither half alone is safe.
+    const list = excludeBuiltinAgents(await listAgents(deps.db))
     return c.json(await filterVisibleRows(deps.db, actorOf(c), 'agent', list))
   })
 
