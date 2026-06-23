@@ -832,6 +832,7 @@ export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): stri
     bullets =
       '- If you have finished the requested work, end your NEXT reply with a `<workflow-output>` block using the EXACT format previously specified in this session (the same port list, the same `<port name="...">...</port>` shape). Do not summarize, do not omit the block.\n' +
       '- If you were not finished, complete the remaining work first, THEN emit the `<workflow-output>` block. The envelope is mandatory either way.\n' +
+      '- For any list-typed port, re-emit EVERY item using the SAME per-item format previously specified in this session (one item per line, or — for a list of markdown documents — one full body per boundary-separated block). Sending only the first item or a truncated subset is the most common failure; the framework keeps only what this reply contains, so output the complete list.\n' +
       '- Do not emit anything after the closing `</workflow-output>` tag.'
   } else {
     bullets =

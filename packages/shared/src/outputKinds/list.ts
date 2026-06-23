@@ -41,8 +41,46 @@ const handler: ParametricOutputKindHandler = {
   // RFC-080: list serves a SHAPE, not a base name.
   baseNames: [],
   carriesData: () => true,
-  bulletSuffix: () => null,
-  examplePlaceholder: () => '...',
+  // List-completeness guidance: bullet + example + prompt guidance all push the
+  // SAME signal — emit the WHOLE list, never a single representative item.
+  // Agents were observed returning one element for a list<T> port because the
+  // Format example rendered a single-line `<port>...</port>` shape that
+  // contradicted the "one item per line" wording; the multi-line example below
+  // plus the "EVERY item" bullet/guidance remove that misread.
+  bulletSuffix: (parsed) => {
+    const isInlineMd =
+      parsed.kind === 'list' && parsed.item.kind === 'base' && parsed.item.name === 'markdown'
+    if (isInlineMd) {
+      // list<markdown> items are boundary-separated multi-line documents, NOT
+      // one item per line — keep this bullet consistent with the example +
+      // guidance below so the agent never gets a contradictory wire-format cue.
+      return '(list<markdown> — emit EVERY document, one body per boundary-separated block; output the complete list, not a single example)'
+    }
+    return '(list — emit EVERY item, one per line; output the complete list, not a single example)'
+  },
+  examplePlaceholder: (parsed) => {
+    const isInlineMd =
+      parsed.kind === 'list' && parsed.item.kind === 'base' && parsed.item.name === 'markdown'
+    if (isInlineMd) {
+      // list<markdown>: multiple inline docs framed by the boundary line.
+      return (
+        '\n<full markdown body of item 1 — multi-line is fine>\n' +
+        `${MARKDOWN_DOC_BOUNDARY}\n` +
+        '<full markdown body of item 2>\n' +
+        `${MARKDOWN_DOC_BOUNDARY}\n` +
+        '...one body per item — include EVERY item, do not stop after one\n'
+      )
+    }
+    // Every other list is one-item-per-line. A multi-line example is the key
+    // anti-"single element" cue: the agent sees ≥2 lines + an explicit
+    // "list EVERY item" tail, not a lone `...`.
+    const itemKind = parsed.kind === 'list' ? stringifyKind(parsed.item) : 'string'
+    return (
+      `\nfirst ${itemKind} item\n` +
+      `second ${itemKind} item\n` +
+      '...one item per line — list EVERY item, do not stop after the first\n'
+    )
+  },
   // A list is not itself a single reviewable body. Multi-doc review keys on
   // "a list whose ITEM is reviewable" — a structural check callers do against
   // `parsed.item` (RFC-081); the list level is always false here.
@@ -68,12 +106,16 @@ const handler: ParametricOutputKindHandler = {
         return `  - \`${port}\` (list<${itemKind}>)`
       })
       out +=
-        'For these list ports, emit each item on its own line inside the `<port>` tag:\n' +
+        'For these list ports, emit each item on its own line inside the `<port>` tag — ' +
+        'output the COMPLETE list, every item, not just one representative example:\n' +
         lines.join('\n') +
         '\n' +
-        "  Empty lines are dropped. Each item must satisfy its inner kind's contract (e.g. " +
-        'list<path<md>> requires every line to be a worktree-relative .md/.markdown path ' +
-        'pointing to a non-empty file).\n'
+        '  Return ALL items you found or produced. Do NOT stop after the first item, do NOT ' +
+        'truncate the list, summarize it, or replace the tail with "..." / "and so on" — if there ' +
+        'are 20 items, emit 20 lines. Leaving the tag empty is correct ONLY when you genuinely ' +
+        "have zero items. Empty lines are dropped. Each item must satisfy its inner kind's " +
+        'contract (e.g. list<path<md>> requires every line to be a worktree-relative ' +
+        '.md/.markdown path pointing to a non-empty file).\n'
     }
     if (inlineMd.length > 0) {
       const names = inlineMd.map((p) => `\`${p}\``).join(', ')
@@ -82,7 +124,9 @@ const handler: ParametricOutputKindHandler = {
         '`<port>` tag. Separate consecutive documents with a line containing EXACTLY:\n' +
         `  ${MARKDOWN_DOC_BOUNDARY}\n` +
         '  Put the full markdown body of each document between the boundaries (multi-line is ' +
-        'fine). Do NOT include the boundary line inside a document. Empty documents are dropped.\n'
+        'fine). Do NOT include the boundary line inside a document. Empty documents are dropped. ' +
+        'Emit EVERY document — do not stop after one; if you produced N documents, output all N ' +
+        'bodies separated by N-1 boundary lines, never just the first.\n'
     }
     return out
   },
@@ -143,7 +187,7 @@ const handler: ParametricOutputKindHandler = {
     }
     const reminderPorts = ports.length > 0 ? ports.map((p) => `\`${p}\``).join(', ') : ''
     const reminder = reminderPorts
-      ? `\n\nFor list-kind ports (${reminderPorts}) emit each item on its own line; each line must satisfy the inner kind's contract.`
+      ? `\n\nFor list-kind ports (${reminderPorts}) emit each item on its own line and include EVERY item — re-emit the COMPLETE list, not just the first item or a subset; each line must satisfy the inner kind's contract.`
       : ''
     return `\n\n**Port content validation — list.**\n${lines.join('\n')}${reminder}`
   },
