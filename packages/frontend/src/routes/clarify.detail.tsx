@@ -644,16 +644,26 @@ export function ClarifyDetailPage() {
             const nodeLabel = nodeTitle ?? nodeId
             const hasTaskName =
               typeof taskQuery.data?.name === 'string' && taskQuery.data.name.length > 0
-            return hasTaskName ? `${taskQuery.data!.name} / ${nodeLabel}` : nodeLabel
+            if (!hasTaskName) return nodeLabel
+            return (
+              <>
+                {/* Task name links to the owning task detail page, kept inline
+                    in the H1 (no extra row) so the clarify header stays compact.
+                    data-testid preserved here for the baseline source-lock that
+                    used to sit on the now-removed standalone task-name row. */}
+                <Link
+                  to="/tasks/$id"
+                  params={{ id: s.taskId }}
+                  className="link"
+                  data-testid="clarify-detail-task-name"
+                >
+                  {taskQuery.data!.name}
+                </Link>
+                {` / ${nodeLabel}`}
+              </>
+            )
           })()}
         </h1>
-        {taskQuery.data?.name && taskQuery.data.name.length > 0 && (
-          <div className="muted" data-testid="clarify-detail-task-name">
-            <Link to="/tasks/$id" params={{ id: s.taskId }} className="link">
-              {t('clarify.taskNameLabel')}: {taskQuery.data.name}
-            </Link>
-          </div>
-        )}
         <p className="page__hint" data-testid="clarify-context-card">
           {isCross
             ? t('crossClarify.contextCard', { name: sourceName, n: iteration })
@@ -839,7 +849,7 @@ export function ClarifyDetailPage() {
                               ? t('crossClarify.questionScope.designer')
                               : t('crossClarify.questionScope.questioner')}
                             <kbd
-                              className="segmented__shortcut"
+                              className="kbd-shortcut segmented__shortcut"
                               aria-hidden="true"
                               data-testid={`clarify-scope-${q.id}-${mode}-kbd`}
                             >

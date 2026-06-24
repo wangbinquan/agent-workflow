@@ -4,6 +4,14 @@
 // Accept button hits the selection endpoint for the active document.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Outlet,
+  RouterProvider,
+} from '@tanstack/react-router'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import type * as ApiClientModule from '../src/api/client'
@@ -96,7 +104,36 @@ const detail: ReviewDetail = {
 
 function wrap(node: React.ReactElement): ReturnType<typeof render> {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
-  return render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>)
+  // The multi-doc header now renders a <Link to="/tasks/$id"> (jump to the
+  // owning task), which needs a router context. Mount under a minimal memory
+  // router that registers that route so the Link resolves.
+  const rootRoute = createRootRoute({
+    component: () => (
+      <>
+        {node}
+        <Outlet />
+      </>
+    ),
+  })
+  const indexRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/',
+    component: () => null,
+  })
+  const tasksRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/tasks/$id',
+    component: () => null,
+  })
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([indexRoute, tasksRoute]),
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  })
+  return render(
+    <QueryClientProvider client={qc}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  )
 }
 
 beforeEach(() => {
@@ -171,6 +208,30 @@ describe('MultiDocReviewView', () => {
         selection: 'not_accepted',
       })
     })
+  })
+
+  // The per-document accept / reject buttons must advertise their Q / W
+  // shortcut with the same inline <kbd> chip the cross-clarify scope picker
+  // uses (.kbd-shortcut). Mirrors cross-clarify-scope-shortcut.test.tsx's
+  // "(Q)/(W) shortcut hint chips" lock. The chip is aria-hidden so it never
+  // leaks into the button's accessible name, and it must reuse the shared
+  // .kbd-shortcut primitive rather than fork a per-component class.
+  test('accept / reject buttons render Q / W shortcut chips reusing .kbd-shortcut', async () => {
+    wrap(<MultiDocReviewView nodeRunId="run" />)
+    await screen.findByText('Case A')
+    const acceptKbd = screen.getByTestId('multidoc-accept-kbd')
+    const rejectKbd = screen.getByTestId('multidoc-not-accept-kbd')
+    expect(acceptKbd.textContent).toBe('Q')
+    expect(rejectKbd.textContent).toBe('W')
+    // Shared primitive, not a fork.
+    expect(acceptKbd.classList.contains('kbd-shortcut')).toBe(true)
+    expect(rejectKbd.classList.contains('kbd-shortcut')).toBe(true)
+    // aria-hidden keeps the button's accessible name as the label alone.
+    expect(acceptKbd.getAttribute('aria-hidden')).toBe('true')
+    expect(rejectKbd.getAttribute('aria-hidden')).toBe('true')
+    // The chips live inside their respective action buttons.
+    expect(acceptKbd.closest('[data-testid="multidoc-accept"]')).not.toBeNull()
+    expect(rejectKbd.closest('[data-testid="multidoc-not-accept"]')).not.toBeNull()
   })
 
   // The popover / inline-edit comment textareas (and the reject-reason textarea)

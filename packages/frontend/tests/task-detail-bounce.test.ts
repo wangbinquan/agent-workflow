@@ -47,7 +47,9 @@ describe('task-detail bounce after clarify answer / review decision', () => {
 
   test('multi-doc review wires useNavigate (previously had no router import)', () => {
     const s = src(REVIEW_MULTI)
-    expect(s).toMatch(/import\s*\{\s*useNavigate\s*\}\s*from\s*'@tanstack\/react-router'/)
+    // Allow other named imports alongside useNavigate — the header task-name
+    // link later added `Link` to this same react-router import.
+    expect(s).toMatch(/import\s*\{[^}]*\buseNavigate\b[^}]*\}\s*from\s*'@tanstack\/react-router'/)
     expect(s).toMatch(/const\s+navigate\s*=\s*useNavigate\(\)/)
   })
 

@@ -419,9 +419,18 @@ function ReviewDetailPage() {
       <header className="page__header review-detail__page-header">
         <div className="review-detail__page-header-text">
           <h1>
-            {/* RFC-037: lead with the user-supplied task name; workflow
-                name + review node title stay as muted breadcrumbs. */}
-            {data.summary.taskName.length > 0 ? data.summary.taskName : data.summary.workflowName}
+            {/* RFC-037: lead with the user-supplied task name, linked to the
+                owning task detail page; workflow name + review node title stay
+                as muted breadcrumbs. The link is inline in the H1 (no extra
+                row) so the header stays compact. */}
+            <Link
+              to="/tasks/$id"
+              params={{ id: data.summary.taskId }}
+              className="link"
+              data-testid="review-detail-task-link"
+            >
+              {data.summary.taskName.length > 0 ? data.summary.taskName : data.summary.workflowName}
+            </Link>
             {' / '}
             {hasTitle ? data.summary.title : <code>{data.summary.reviewNodeId}</code>}
             <span className="muted">

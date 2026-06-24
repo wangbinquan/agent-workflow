@@ -12,7 +12,7 @@
 // round-level approve/iterate/reject decision.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -206,6 +206,20 @@ export function MultiDocReviewView({ nodeRunId }: { nodeRunId: string }) {
       <header className="page__header page__header--row">
         <div>
           <h1 className="page__title">
+            {/* Lead with the task name linked to its detail page (inline, no
+                extra row — keeps the multi-doc header compact), then the review
+                round's title / node id. */}
+            <Link
+              to="/tasks/$id"
+              params={{ id: detail.data.summary.taskId }}
+              className="link"
+              data-testid="review-multidoc-task-link"
+            >
+              {detail.data.summary.taskName.length > 0
+                ? detail.data.summary.taskName
+                : detail.data.summary.workflowName}
+            </Link>
+            {' / '}
             {detail.data.summary.title || detail.data.summary.reviewNodeId}
           </h1>
           <div className="muted">
@@ -311,6 +325,9 @@ export function MultiDocReviewView({ nodeRunId }: { nodeRunId: string }) {
                 }
               >
                 {t('reviews.multiDoc.accept')}
+                <kbd className="kbd-shortcut" aria-hidden="true" data-testid="multidoc-accept-kbd">
+                  Q
+                </kbd>
               </button>
               <button
                 type="button"
@@ -325,6 +342,13 @@ export function MultiDocReviewView({ nodeRunId }: { nodeRunId: string }) {
                 }
               >
                 {t('reviews.multiDoc.notAccept')}
+                <kbd
+                  className="kbd-shortcut"
+                  aria-hidden="true"
+                  data-testid="multidoc-not-accept-kbd"
+                >
+                  W
+                </kbd>
               </button>
               <span className="muted review-multidoc__shortcut-hint">
                 {t('reviews.multiDoc.shortcutHint')}

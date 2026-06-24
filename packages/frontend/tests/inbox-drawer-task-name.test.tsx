@@ -44,7 +44,13 @@ describe('RFC-037 — inbox / clarify / reviews chain renders taskName', () => {
 
   test('/clarify/:id detail surfaces taskName via /api/tasks fetch', () => {
     const src = read('routes/clarify.detail.tsx')
-    expect(src).toContain('clarify.taskNameLabel')
+    // 2026-06-24: the task name moved out of a standalone "Task: {name}" muted
+    // row and into the H1 itself, as a /tasks/$id link (compact header — the
+    // separate row was eating body space). It's still sourced from the
+    // /api/tasks fetch (taskQuery) and still carries the clarify-detail-task-name
+    // testid, so the feature this test guards (clarify detail surfaces the task
+    // name) is intact; only the presentation changed.
+    expect(src).toContain('taskQuery.data')
     expect(src).toContain('clarify-detail-task-name')
   })
 

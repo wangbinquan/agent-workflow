@@ -120,6 +120,21 @@ a {
   text-decoration: none;
 }
 
+/* Opt-in link styling. The base `a` reset above strips link affordance
+   (color: inherit; no underline) so chrome like nav items / cards stay
+   neutral; `.link` turns an <a>/<Link> back into a recognisable text link —
+   accent colour + underline on hover. Used by the review / clarify detail
+   headers' task-name jump links, the reviews & clarify lists, and the memory
+   back-links (all previously referenced `.link` with NO rule defined, so the
+   links rendered as plain inherited text). */
+.link {
+  color: var(--accent);
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
 button {
   font: inherit;
   cursor: pointer;
@@ -2049,11 +2064,13 @@ code {
   opacity: 0.6;
   cursor: progress;
 }
-/* Inline keyboard-shortcut hint chip rendered after a segmented option's
-   label (e.g. "反问者 Q" / "设计者 W"). Visually demoted so the label
-   stays primary; on the active option it borrows the white foreground
-   from `--active` so contrast stays readable. */
-.segmented__option .segmented__shortcut {
+/* Shared inline keyboard-shortcut hint chip rendered after a control's label
+   (segmented scope picker → "反问者 Q" / "设计者 W"; multi-doc review accept /
+   reject buttons → "采纳 Q" / "不采纳 W"). Uses `currentColor` so it tints to
+   whatever foreground the host control carries (accent-on-white primary, red
+   danger, plain text) and stays readable everywhere. Visually demoted so the
+   label remains primary. Single source of truth — do NOT fork per-component. */
+.kbd-shortcut {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2070,6 +2087,8 @@ code {
   letter-spacing: 0.02em;
   opacity: 0.85;
 }
+/* On an active segmented option (accent bg + white text) the chip borrows the
+   white foreground so contrast stays readable against the filled background. */
 .segmented__option--active .segmented__shortcut {
   background: color-mix(in srgb, #fff 30%, transparent);
 }
