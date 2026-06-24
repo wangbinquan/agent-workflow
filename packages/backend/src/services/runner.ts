@@ -43,6 +43,7 @@ import { createLogger, type Logger } from '@/util/log'
 import {
   CLARIFY_REQUIRED_PREFIX,
   detectEnvelopeKind,
+  ENVELOPE_PORT_MALFORMED_PREFIX,
   extractClarifyEnvelopeBody,
   extractLastEnvelope,
   parseEnvelope,
@@ -295,6 +296,7 @@ export interface RunNodeOptions {
     | 'clarify-malformed'
     | 'port-validation'
     | 'clarify-required'
+    | 'envelope-port-malformed'
   envelopeFollowupClarifyDirective?: 'continue' | 'stop'
   /**
    * RFC-049: structured failures persisted into the previous attempt's
@@ -1150,6 +1152,28 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           })
         }
 
+        // A `<port name="...">` was opened but never closed with a parseable
+        // `</port>` (corrupted / truncated close tag — e.g. a leaked special
+        // token produced `</|DSML|port>`). The tolerant scanner can't extract
+        // such a port, so without this guard it would degrade to an empty
+        // string and the node would complete `done` with a blank port — a
+        // downstream doc-review node then silently produces nothing, and the
+        // failure-only retry path (decideEnvelopeFollowup) never fires. Fail
+        // BEFORE RFC-049 validation + the node_run_outputs INSERT so the
+        // scheduler drives a same-session retry (and a hard fail after retries)
+        // instead of swallowing the corruption. Runs for ALL ports regardless
+        // of outputKind — this is more fundamental than per-kind validation and
+        // also catches string / markdown / undeclared-kind ports that RFC-049
+        // skips.
+        if (parsed.malformedPorts.length > 0) {
+          log.warn('agent emitted malformed (unclosed) ports', {
+            malformed: parsed.malformedPorts,
+            nodeRunId: opts.nodeRunId,
+          })
+          status = 'failed'
+          errorMessage = `${ENVELOPE_PORT_MALFORMED_PREFIX}: agent opened <port name="..."> tag(s) without a parseable </port> close (corrupted or truncated close tag): ${parsed.malformedPorts.join(', ')}`
+        }
+
         // RFC-049: eagerly validate port content against the declared
         // OutputKindHandler BEFORE persisting to node_run_outputs. Failures
         // here surface the producer's session immediately so the scheduler
@@ -1165,7 +1189,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         // prevents a markdown_file port with a missing on-disk file from
         // leaving a ghost row that downstream readers might misuse.
         const outputKinds = opts.agent.outputKinds
-        if (outputKinds !== undefined) {
+        // status may already be 'failed' from the malformed-port guard above —
+        // skip per-kind validation in that case (the node is failing regardless
+        // and we must not overwrite the malformed errorMessage).
+        if (status === 'done' && outputKinds !== undefined) {
           for (const [name, content] of parsed.ports) {
             const kind = outputKinds[name]
             if (kind === undefined) continue

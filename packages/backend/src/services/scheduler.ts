@@ -107,7 +107,11 @@ import {
   wrapperRevivalEvidence,
 } from '@/services/dispatchFrontier'
 import { runNode, type AgentOverrides, type ResolvedSkill, type RunResult } from '@/services/runner'
-import { CLARIFY_REQUIRED_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
+import {
+  CLARIFY_REQUIRED_PREFIX,
+  ENVELOPE_PORT_MALFORMED_PREFIX,
+  parsePortValidationFailuresJson,
+} from '@/services/envelope'
 import { runCommitPush } from '@/services/commitPushRunner'
 import {
   buildCommitAgent,
@@ -593,6 +597,7 @@ export type EnvelopeFollowupDecision =
         | 'clarify-malformed'
         | 'port-validation'
         | 'clarify-required'
+        | 'envelope-port-malformed'
       /**
        * Failures payload to thread into the runner / shared renderer when
        * reason is 'port-validation'. Empty array for the other reasons (and
@@ -631,6 +636,16 @@ export function decideEnvelopeFollowup(prev: PreviousAttemptShape): EnvelopeFoll
   // wording). Hard-fails after retries — no output escape hatch.
   if (m.startsWith(CLARIFY_REQUIRED_PREFIX)) {
     return { followup: true, reason: 'clarify-required', failures: [] }
+  }
+  // The agent emitted a `<workflow-output>` envelope but a `<port>` was opened
+  // without a parseable `</port>` close (corrupted / truncated close tag — e.g.
+  // `</|DSML|port>`). Same-session follow-up re-demands a clean envelope with
+  // every port properly closed; hard-fails after retries (no silent escape to a
+  // blank port). Checked before PORT_VALIDATION_PREFIX so an unclosed port that
+  // would ALSO have failed RFC-049 (it never reached validation) routes to the
+  // malformed repair text, not the per-kind one.
+  if (m.startsWith(ENVELOPE_PORT_MALFORMED_PREFIX)) {
+    return { followup: true, reason: 'envelope-port-malformed', failures: [] }
   }
   // RFC-049: any `port-validation-<kind>-<sub>` prefix → same-session
   // followup. The `<kind>` segment routing happens later in

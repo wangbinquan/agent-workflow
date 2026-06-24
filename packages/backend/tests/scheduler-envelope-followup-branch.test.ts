@@ -87,6 +87,21 @@ describe('RFC-042 decideEnvelopeFollowup', () => {
     }
   })
 
+  // 损坏端口急修（2026-06-24）: an `envelope-port-malformed-*` errorMessage (a
+  // <port> was opened but never closed with a parseable </port>, e.g. a leaked
+  // token produced `</|DSML|port>`) drives a same-session followup so the agent
+  // re-emits a clean envelope instead of the run silently completing with a
+  // blank port. Checked before any port-validation routing.
+  test('envelope-port-malformed errMsg → followup, reason=envelope-port-malformed', () => {
+    expect(
+      decideEnvelopeFollowup({
+        ...BASE,
+        errorMessage:
+          'envelope-port-malformed: agent opened <port name="..."> tag(s) without a parseable </port> close (corrupted or truncated close tag): doc',
+      }),
+    ).toEqual({ followup: true, reason: 'envelope-port-malformed', failures: [] })
+  })
+
   // §5.2 case 7
   test('non-envelope errorMessage prefixes do not trigger followup', () => {
     expect(

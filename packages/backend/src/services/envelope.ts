@@ -13,6 +13,10 @@
 //     as `undeclared` for the caller to warn on.
 //   - Declared ports missing from the envelope come back as empty strings
 //     so downstream nodes get an explicit "" rather than undefined.
+//   - A port whose opening tag was found but whose `</port>` close is
+//     missing/corrupted is reported in `malformedPorts` (distinct from a
+//     legitimately-omitted port) so the runner can fail+retry rather than
+//     silently emit a blank port — see ENVELOPE_PORT_MALFORMED_PREFIX.
 //
 // RFC-005 layer on top: ports whose agent.outputKinds declares
 // `markdown_file` carry a worktree-relative path inside the envelope
@@ -166,6 +170,24 @@ export interface EnvelopeParseResult {
   missingDeclared: string[]
   /** Ports emitted by the agent that aren't declared in agent.outputs. */
   undeclared: Array<{ name: string; content: string }>
+  /**
+   * Names of ports the agent clearly STARTED emitting but that could not be
+   * cleanly framed — a strong corruption signal, distinct from a port the agent
+   * legitimately omitted (`missingDeclared`). Two detection signals feed it:
+   *   1. An opening `<port name="...">` whose `</port>` close is missing /
+   *      truncated / corrupted (e.g. `</|DSML|port>`). Includes undeclared
+   *      names — an unclosed port mid-envelope makes the scanner abandon every
+   *      port after it (the cursor jumps to the envelope end), so even an
+   *      undeclared malformed port corrupts framing.
+   *   2. A DECLARED port that is missing yet whose opening tag still appears in
+   *      the envelope body — it was absorbed into a preceding port whose own
+   *      close was corrupted (the scanner used THIS port's clean `</port>` as
+   *      the corrupted port's structural close). Legitimately-omitted ports
+   *      have no opening tag, so they are never flagged.
+   * The runner turns a non-empty list into a retriable `failed` (see
+   * {@link ENVELOPE_PORT_MALFORMED_PREFIX}).
+   */
+  malformedPorts: string[]
 }
 
 /**
@@ -211,6 +233,23 @@ export type DetectedEnvelopeKind = 'output' | 'clarify' | 'both' | 'none'
  * one literal — no runner↔scheduler import cycle.
  */
 export const CLARIFY_REQUIRED_PREFIX = 'clarify-required'
+
+/**
+ * Error-message prefix the runner stamps when the agent DID emit a
+ * `<workflow-output>` envelope but one or more `<port name="...">` tags were
+ * opened without a parseable structural close (`</port>` missing, truncated, or
+ * corrupted — e.g. a model leaked a special token into the tag, producing
+ * `</|DSML|port>` instead of `</port>`). The tolerant scanner in
+ * {@link parseEnvelope} cannot extract such a port, so it would otherwise come
+ * back as an empty string and the run would silently complete `done` with a
+ * blank port — downstream consumers (e.g. a doc-review node) then produce
+ * nothing. Surfacing it as a `failed` with this prefix routes it through
+ * `decideEnvelopeFollowup` for a same-session retry (and a hard fail after
+ * retries) instead of silent data loss. Defined here (a leaf module imported by
+ * both runner.ts and scheduler.ts) so producer and matcher share one literal —
+ * no runner↔scheduler import cycle. Mirrors {@link CLARIFY_REQUIRED_PREFIX}.
+ */
+export const ENVELOPE_PORT_MALFORMED_PREFIX = 'envelope-port-malformed'
 
 /**
  * Cheap pre-scan over agent stdout to decide which envelope path the runner
@@ -264,6 +303,7 @@ export function extractClarifyEnvelopeBody(stdout: string): string | null {
 export function parseEnvelope(envelopeXml: string, declaredOutputs: string[]): EnvelopeParseResult {
   const collected = new Map<string, string>()
   const undeclared: Array<{ name: string; content: string }> = []
+  const malformed = new Set<string>()
 
   // RFC-103 T6 (05-PORT-02): structural port parsing. Reduce to the inner body
   // (so the last port can't absorb `</workflow-output>`), then for each
@@ -298,12 +338,22 @@ export function parseEnvelope(envelopeXml: string, declaredOutputs: string[]): E
       searchFrom = afterStart
     }
     PORT_OPEN_RE.lastIndex = resumeFrom
-    // RFC-103 T6 (Codex impl-gate): a port with NO structural close is malformed
-    // (e.g. the agent dropped the trailing `</port>`). The pre-RFC-103 regex
-    // required `</port>`, so such a port was simply not collected → reported as
-    // missing → repair path. Keep that: skip ports without a structural close so
-    // truncated/garbled output is not silently marked successful.
-    if (closeIdx < 0) continue
+    // A port with NO parseable structural close is MALFORMED (the agent dropped
+    // / truncated / corrupted the trailing `</port>` — e.g. a leaked special
+    // token turned it into `</|DSML|port>`, which the literal `</port>` scan
+    // above never matches). Record it so the runner can fail+retry instead of
+    // silently degrading it to an empty string.
+    //
+    // RFC-103 T6 history: this branch used to merely `continue` (so the port
+    // landed in `missingDeclared` as `''`). The comment claimed that routed to a
+    // "repair path", but `missingDeclared` never drove a failure — the runner
+    // only `log.warn`'d it, so a port with no validating outputKind completed
+    // `done` with blank content and downstream nodes (e.g. doc-review) produced
+    // nothing. The `malformedPorts` signal closes that silent-data-loss gap.
+    if (closeIdx < 0) {
+      if (name.length > 0) malformed.add(name)
+      continue
+    }
     if (name.length === 0) continue
     const content = inner.slice(contentStart, closeIdx).trim()
     if (declaredOutputs.includes(name)) {
@@ -321,7 +371,27 @@ export function parseEnvelope(envelopeXml: string, declaredOutputs: string[]): E
   }
   const missingDeclared = declaredOutputs.filter((p) => !collected.has(p))
 
-  return { ports, missingDeclared, undeclared }
+  // Signal #2 — absorption detection. When a port's `</port>` close is corrupted
+  // but a LATER port has a clean `</port>`, the scanner above grabs that later
+  // close as the corrupted port's structural close — so the corrupted port is
+  // "collected" with the later port's open tag + body absorbed into its content,
+  // and the later (declared) port silently lands in `missingDeclared` with a
+  // blank value. Signal #1 (closeIdx<0) can't see this (the corrupted port DID
+  // find a close). Catch it here: a DECLARED port that is missing BUT whose
+  // opening `<port name="...">` tag still appears in the envelope body was
+  // present-but-absorbed, not legitimately omitted. (A legitimately-omitted port
+  // has no opening tag anywhere — that's the false-positive-free discriminator,
+  // and it leaves the RFC-103 "content contains a literal <port name=> for an
+  // UNDECLARED name" cases untouched, since those names aren't in
+  // `missingDeclared`.) Codex impl-gate P2 (2026-06-24).
+  for (const name of missingDeclared) {
+    if (malformed.has(name)) continue
+    const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const openRe = new RegExp(`<port\\s+name=(?:"${esc}"|'${esc}')\\s*>`)
+    if (openRe.test(inner)) malformed.add(name)
+  }
+
+  return { ports, missingDeclared, undeclared, malformedPorts: [...malformed] }
 }
 
 // ---------------------------------------------------------------------------

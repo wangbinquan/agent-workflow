@@ -754,15 +754,22 @@ export interface EnvelopeFollowupInput {
    *                          clarify channel is ACTIVE and the agent produced
    *                          <workflow-output> / both / neither instead of a
    *                          <workflow-clarify> envelope)
+   *   'envelope-port-malformed' ← 'envelope-port-malformed: ...' (a port was
+   *                          opened but its </port> close was missing/corrupted,
+   *                          e.g. `</|DSML|port>`, so the port could not be
+   *                          extracted)
    *
    * When hasClarifyChannel is false, 'both-present' / 'clarify-malformed' /
    * 'clarify-required' are not reachable (those errors require an active
    * clarify channel); the function falls back to the 'envelope-missing'
    * opening line in that case.
    *
-   * 'port-validation' is reachable in BOTH clarify-on and clarify-off modes
-   * because port content validation runs against `<workflow-output>` ports
-   * regardless of channel wiring.
+   * 'port-validation' and 'envelope-port-malformed' are reachable in BOTH
+   * clarify-on and clarify-off modes because they concern `<workflow-output>`
+   * ports regardless of channel wiring (in practice malformed-port only fires
+   * with the channel inactive — RFC-100's runtime guard rejects output before
+   * the envelope is even parsed while clarify is active — so both are preserved
+   * across the hasClarifyChannel=false narrowing below).
    */
   reason:
     | 'envelope-missing'
@@ -770,6 +777,7 @@ export interface EnvelopeFollowupInput {
     | 'clarify-malformed'
     | 'port-validation'
     | 'clarify-required'
+    | 'envelope-port-malformed'
   /**
    * RFC-049: backend-prerendered per-kind repair segments. shared/prompt.ts
    * does NOT import the OutputKindHandler registry (handlers live in
@@ -790,14 +798,19 @@ export interface EnvelopeFollowupInput {
 export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): string {
   const hasClarify = input.hasClarifyChannel
   // hasClarifyChannel=false narrows the reason — 'both-present' and
-  // 'clarify-malformed' both require a clarify channel; 'port-validation'
-  // is preserved across both modes (port content validation runs against
-  // <workflow-output> regardless of channel wiring).
+  // 'clarify-malformed' both require a clarify channel; 'port-validation' AND
+  // 'envelope-port-malformed' are preserved across both modes (both concern
+  // <workflow-output> ports regardless of channel wiring — and malformed-port
+  // in practice only occurs with the channel inactive, so coercing it to
+  // 'envelope-missing' here would drop its tailored opening line exactly when
+  // it fires).
   const reason = hasClarify
     ? input.reason
     : input.reason === 'port-validation'
       ? 'port-validation'
-      : 'envelope-missing'
+      : input.reason === 'envelope-port-malformed'
+        ? 'envelope-port-malformed'
+        : 'envelope-missing'
 
   const isPortValidation = reason === 'port-validation'
 
@@ -808,6 +821,14 @@ export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): stri
   if (isPortValidation) {
     opening =
       'Your previous reply in this session emitted a `<workflow-output>` envelope, but one or more of its ports failed content validation. Re-emit the envelope with the failing ports fixed per the per-kind notes below.'
+  } else if (reason === 'envelope-port-malformed') {
+    // Placed before the generic `!hasClarify` branch: malformed-port failures
+    // occur with the clarify channel inactive, so this would otherwise be
+    // swallowed by the envelope-missing wording. A targeted message tells the
+    // agent exactly what broke (the </port> close), which is more actionable
+    // than "no envelope found".
+    opening =
+      'Your previous reply in this session emitted a `<workflow-output>` envelope, but one or more `<port name="...">` tags were never properly closed — the matching `</port>` was missing or corrupted (for example a stray token turned it into `</|...|port>`), so the framework could not extract those ports. Re-emit the envelope and make sure EVERY port is closed with a literal `</port>` tag — nothing inside the close tag, no extra characters.'
   } else if (!hasClarify) {
     opening =
       'Your previous reply in this session did not contain a `<workflow-output>` envelope. The framework cannot parse your result without it.'
@@ -837,7 +858,7 @@ export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): stri
   // It therefore uses the output-oriented bullets regardless of channel.
   // ---------------------------------------------------------------------------
   let bullets: string
-  if (isPortValidation || !hasClarify) {
+  if (isPortValidation || reason === 'envelope-port-malformed' || !hasClarify) {
     bullets =
       '- If you have finished the requested work, end your NEXT reply with a `<workflow-output>` block using the EXACT format previously specified in this session (the same port list, the same `<port name="...">...</port>` shape). Do not summarize, do not omit the block.\n' +
       '- If you were not finished, complete the remaining work first, THEN emit the `<workflow-output>` block. The envelope is mandatory either way.\n' +

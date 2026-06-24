@@ -1092,7 +1092,9 @@ function parseEnvelope(xml: string, declaredOutputs: string[]): Map<string, stri
 }
 ```
 
-> 容错策略：如果 agent 用 `name='x'` 单引号，或者 attribute 顺序不同，都补一个备用正则。但故意不写完备 XML parser —— 信封约定就一种合法形态。
+> 容错策略：如果 agent 用 `name='x'` 单引号，或者 attribute 顺序不同，都补一个备用正则。但故意不写完备 XML parser —— 信封约定就一种合法形态（端口正文是任意 markdown，含裸 `<`/`>`/`&`，本就不是合法 XML，严格 XML parser 会在大量合法内容上报错）。
+
+> **损坏端口检测（2026-06-24 急修）**：容错扫描遇到「开了 `<port name="...">` 但 `</port>` 闭合缺失/截断/被污染」（典型：模型漏出 special token 把 `</port>` 写成 `</|DSML|port>`，字面 `indexOf('</port>')` 失配）时，**不再**把该端口静默吞成空串。`parseEnvelope` 返回 `malformedPorts`，由两条信号填充：① 端口开标签存在但其后找不到合法 `</port>`（未闭合，含未声明端口）；② 某**声明**端口缺失、但其开标签仍在信封里——它被前一个闭合损坏的端口「吸收」了（扫描器把后者的干净 `</port>` 当成损坏端口的闭合）。合法省略的端口（信封里根本没有其开标签）不会被判 malformed，故无误伤。runner 见 `malformedPorts` 非空即把 node_run 标 `failed` 错误码 `envelope-port-malformed`（落库前，不留空端口幽灵行），经 `decideEnvelopeFollowup` 同会话重试、重试耗尽则硬失败——封死「agent 跑完 done 但端口空白、下游文档审核节点静默不产文档」的静默丢数据路径。
 
 #### 7.4.1 反问澄清信封（RFC-023 起）
 

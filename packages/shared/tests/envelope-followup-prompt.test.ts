@@ -97,6 +97,40 @@ describe('RFC-042 renderEnvelopeFollowupPrompt', () => {
     expect(out).toContain('MANDATORY ask-back mode')
   })
 
+  // 损坏端口急修（2026-06-24）: reason='envelope-port-malformed' (a <port> was
+  // opened but its </port> close was missing/corrupted). The agent DID emit an
+  // envelope, so the opening must NOT say "did not contain an envelope" — it
+  // must point at the unclosed port. Bullets stay output-oriented.
+  test('hasClarifyChannel=false + reason=envelope-port-malformed → targeted close-tag wording', () => {
+    const out = renderEnvelopeFollowupPrompt({
+      hasClarifyChannel: false,
+      reason: 'envelope-port-malformed',
+    })
+    expect(out).toContain('were never properly closed')
+    expect(out).toContain('closed with a literal `</port>` tag')
+    // Output-oriented bullets, not clarify-only.
+    expect(out).toContain('`<workflow-output>` block using the EXACT format previously specified')
+    expect(out).not.toContain('MANDATORY ask-back mode')
+    // Must NOT degrade to the generic envelope-missing wording.
+    expect(out).not.toContain('did not contain a `<workflow-output>` envelope')
+  })
+
+  // Defensive: malformed-port only fires with the clarify channel inactive, but
+  // if hasClarifyChannel=true ever reaches the renderer the reason must be
+  // PRESERVED (not narrowed) so the tailored close-tag wording survives.
+  test('hasClarifyChannel=true + reason=envelope-port-malformed preserves wording (no clarify narrowing)', () => {
+    const out = renderEnvelopeFollowupPrompt({
+      hasClarifyChannel: true,
+      reason: 'envelope-port-malformed',
+    })
+    expect(out).toContain('were never properly closed')
+    expect(out).toContain('closed with a literal `</port>` tag')
+    // Even with the channel on, malformed-port wants output-format bullets, not
+    // the mandatory-ask-back clarify bullets.
+    expect(out).toContain('`<workflow-output>` block using the EXACT format previously specified')
+    expect(out).not.toContain('MANDATORY ask-back mode')
+  })
+
   // Defensive: hasClarifyChannel=false + reason='both-present' is not a
   // reachable combination in production (only clarify channels produce that
   // failure), but renderer must still degrade gracefully.

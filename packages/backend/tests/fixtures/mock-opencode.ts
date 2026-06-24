@@ -6,6 +6,14 @@
 //   MOCK_OPENCODE_OUTPUTS        JSON object port -> content; rendered into the
 //                                trailing <workflow-output> envelope
 //   MOCK_OPENCODE_SKIP_ENVELOPE  '1' to suppress the envelope (simulates a broken agent)
+//   MOCK_OPENCODE_RAW_AGENT_TEXT verbatim agent text emitted as a single `text`
+//                                event, bypassing the structured envelope
+//                                renderer. Lets tests reproduce malformed
+//                                envelopes the MOCK_OPENCODE_OUTPUTS renderer
+//                                can't express (e.g. a corrupted `</port>` close
+//                                tag like `</|DSML|port>`). When set, the normal
+//                                <workflow-output>/<workflow-clarify> emission is
+//                                suppressed so this is the ONLY agent text.
 //   MOCK_OPENCODE_EXIT_CODE      number; default 0
 //   MOCK_OPENCODE_DELAY_MS       sleep this long before exiting (for timeout tests)
 //   MOCK_OPENCODE_STDERR         emit this string on stderr (line by line)
@@ -310,7 +318,24 @@ if (forceSkipEnvelope) {
   process.stdout.write(JSON.stringify(placeholder) + '\n')
 }
 
-if (env.MOCK_OPENCODE_SKIP_ENVELOPE !== '1' && !forceFail && !forceSkipEnvelope) {
+// Raw verbatim agent text — emitted INSTEAD of the structured envelope so tests
+// can reproduce malformed output the OUTPUTS renderer can't express (e.g. a
+// corrupted `</port>` close tag). Suppresses the normal envelope block below.
+if (env.MOCK_OPENCODE_RAW_AGENT_TEXT !== undefined && !forceFail && !forceSkipEnvelope) {
+  const textEvent = {
+    type: 'text',
+    timestamp: Date.now(),
+    part: { type: 'text', text: env.MOCK_OPENCODE_RAW_AGENT_TEXT },
+  }
+  process.stdout.write(JSON.stringify(textEvent) + '\n')
+}
+
+if (
+  env.MOCK_OPENCODE_SKIP_ENVELOPE !== '1' &&
+  env.MOCK_OPENCODE_RAW_AGENT_TEXT === undefined &&
+  !forceFail &&
+  !forceSkipEnvelope
+) {
   const blocks: string[] = []
   const wantOutput =
     env.MOCK_OPENCODE_OUTPUTS !== undefined || env.MOCK_OPENCODE_CLARIFY_BODY === undefined
