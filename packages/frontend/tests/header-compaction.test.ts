@@ -3,7 +3,8 @@
 // stacked an <h1> + breadcrumbs + optional hint rows, each carrying the
 // UA-default <h1>/<p> margins (~16–21px) with the heading at the UA-default
 // ~32px. The compaction CSS collapses those margins to a --space token rhythm
-// and drops the heading to --font-xl, WITHOUT removing any row and WITHOUT
+// and drops the heading to a --font-* token (currently --font-lg, 16px),
+// WITHOUT removing any row and WITHOUT
 // touching the locked layout invariants (full-height flex column + internally
 // scrolling body — see reviews-detail-layout / reviews-multidoc-viewport-fit).
 //
@@ -29,7 +30,7 @@ describe('review-detail header compaction', () => {
   })
   test('the heading is shrunk to a token font-size (not the UA-default ~32px)', () => {
     expect(CSS).toMatch(
-      /\.review-detail__page-header-text h1[^{]*\{[^}]*font-size:\s*var\(--font-xl\)/,
+      /\.review-detail__page-header-text h1[^{]*\{[^}]*font-size:\s*var\(--font-[a-z]+\)/,
     )
   })
 })
@@ -37,7 +38,7 @@ describe('review-detail header compaction', () => {
 describe('multi-doc review header compaction', () => {
   test('the page__title heading is shrunk to a token font-size', () => {
     expect(CSS).toMatch(
-      /\.review-multidoc > \.page__header \.page__title[^{]*\{[^}]*font-size:\s*var\(--font-xl\)/,
+      /\.review-multidoc > \.page__header \.page__title[^{]*\{[^}]*font-size:\s*var\(--font-[a-z]+\)/,
     )
   })
 })
@@ -54,7 +55,7 @@ describe('clarify header compaction', () => {
   test('clarify header rows collapse margins + shrink the heading', () => {
     expect(CSS).toMatch(/\.page--clarify-detail > \.page__header > \*[^{]*\{[^}]*margin:\s*0/)
     expect(CSS).toMatch(
-      /\.page--clarify-detail > \.page__header h1[^{]*\{[^}]*font-size:\s*var\(--font-xl\)/,
+      /\.page--clarify-detail > \.page__header h1[^{]*\{[^}]*font-size:\s*var\(--font-[a-z]+\)/,
     )
   })
   test('clarify header no longer carries the back-to-/clarify-list link', () => {

@@ -5618,7 +5618,7 @@ code {
 .review-detail__page-header-text h1,
 .review-multidoc > .page__header .page__title,
 .page--clarify-detail > .page__header h1 {
-  font-size: var(--font-xl);
+  font-size: var(--font-lg);
   line-height: 1.25;
 }
 /* Clarify isn't a viewport-locked flex column (the form flows and the page
