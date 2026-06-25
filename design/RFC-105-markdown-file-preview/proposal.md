@@ -1,6 +1,6 @@
 # RFC-105 — 任务详情 Markdown 文件预览（独立路由页）+ PlantUML 通用化
 
-状态：Done（实现完成，Codex 双 gate fold，本地全门禁绿；待 push 查 CI）
+状态：Done（commit `90d16f2`；CI run 28149347427 全绿；Codex 双 gate fold）
 
 > 范围：**WP-A** 任务详情 Markdown 预览（纯前端）；**WP-B** PlantUML 后端代理通用化（前后端）。WP-B 由 WP-A 的 PlantUML 验收标准触发——Codex 设计 gate 指出 `/api/config` 仅 admin 可读、非 admin 渲染不出 PlantUML；用户判定「PlantUML 是通用阅读能力、只给 admin 不合理」，选「后端代理渲染」根治，让预览 / 评审界面 / 编辑器预览一起受益。
 
