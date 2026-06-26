@@ -66,6 +66,24 @@ export function pidCommandLooksLikeAgentChild(pid: number): boolean {
   }
 }
 
+/**
+ * RFC-108 T9 (AR-14): the SPECIFIC variant — does the live pid's `ps` command
+ * contain the EXACT binary path we spawned for this run? This distinguishes
+ * "our child is still alive" from "the pid was recycled onto an unrelated
+ * process" far more reliably than the fuzzy `/opencode|bun/` regex (which a
+ * recycled pid running any `bun`/`opencode` would also match). Substring match
+ * keeps it portable across macOS/Linux `ps`.
+ */
+export function pidCommandContainsBinary(pid: number, binaryPath: string): boolean {
+  try {
+    const res = Bun.spawnSync(['ps', '-p', String(pid), '-o', 'command='])
+    if (res.exitCode !== 0) return false
+    return res.stdout.toString().includes(binaryPath)
+  } catch {
+    return false
+  }
+}
+
 export type StaleRunKillOutcome =
   | 'no-pid'
   | 'not-alive'
@@ -91,17 +109,30 @@ export interface StaleRunKillOpts {
  * caller proceeds with its rollback / status flip regardless of the outcome.
  */
 export async function killStaleRunProcessTree(
-  run: { pid: number | null; startedAt: number | null },
+  run: { pid: number | null; startedAt: number | null; spawnBinaryPath?: string | null },
   opts: StaleRunKillOpts = {},
 ): Promise<StaleRunKillOutcome> {
   const pid = run.pid
   if (typeof pid !== 'number' || pid <= 0) return 'no-pid'
   if (!isProcessAlive(pid)) return 'not-alive'
   const now = opts.now ?? Date.now()
-  if (typeof run.startedAt !== 'number' || now - run.startedAt >= STALE_RUN_PID_MAX_AGE_MS) {
-    return 'window-expired'
+  // RFC-108 T9 (AR-14): when we persisted the spawn binary path, identity is the
+  // gate — match the live pid's command against THAT exact binary. A mismatch is
+  // a confidently-recycled pid (safe → 'command-mismatch'); a match means it is
+  // genuinely OUR child and MUST be killed (no 48h window: a long-running agent
+  // is still ours, and T4's per-node floor makes >48h nearly impossible). A
+  // 'kill-failed' from here is the high-confidence DANGER signal the callers
+  // act on (refuse the resume rather than git-reset under a live writer).
+  if (typeof run.spawnBinaryPath === 'string' && run.spawnBinaryPath.length > 0) {
+    if (!pidCommandContainsBinary(pid, run.spawnBinaryPath)) return 'command-mismatch'
+  } else {
+    // Legacy rows (pre-RFC-108) / no recorded binary: keep the old fuzzy gates
+    // (startedAt window + `/opencode|bun/` regex).
+    if (typeof run.startedAt !== 'number' || now - run.startedAt >= STALE_RUN_PID_MAX_AGE_MS) {
+      return 'window-expired'
+    }
+    if (!pidCommandLooksLikeAgentChild(pid)) return 'command-mismatch'
   }
-  if (!pidCommandLooksLikeAgentChild(pid)) return 'command-mismatch'
 
   killProcessTree(pid, 'SIGTERM')
   const termWaitMs = opts.termWaitMs ?? 1_000

@@ -351,6 +351,13 @@
       "when": 1782500000000,
       "tag": "0050_rfc109_task_workflow_version",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1782600000000,
+      "tag": "0051_rfc108_node_run_spawn_binary",
+      "breakpoints": true
     }
   ]
 }

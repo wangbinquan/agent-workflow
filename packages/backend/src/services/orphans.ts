@@ -75,11 +75,20 @@ export async function reapOrphanRuns(db: DbClient): Promise<ReapResult> {
     // must look like opencode/bun) before signaling; any non-kill outcome
     // falls through to the status flip exactly as before.
     const killOutcome = await killStaleRunProcessTree(r, { now })
-    if (killOutcome === 'killed' || killOutcome === 'kill-failed') {
+    if (killOutcome === 'kill-failed') {
+      // RFC-108 T9 (AR-14): a child that survived SIGKILL is still alive and may
+      // keep writing the worktree after we flip the row. Boot reaping can't
+      // refuse (it must clear the row), but a later resume IS guarded
+      // (resumeKick escalateLiveChildSurvived) — surface this at error level so
+      // the survivor is visible.
+      log.error('orphan run child SURVIVED SIGKILL — still alive after reap (resume will refuse)', {
+        nodeRunId: r.id,
+        pid: r.pid,
+      })
+    } else if (killOutcome === 'killed') {
       log.warn('orphan run had a live child process — group-killed (best-effort)', {
         nodeRunId: r.id,
         pid: r.pid,
-        outcome: killOutcome,
       })
     }
     try {

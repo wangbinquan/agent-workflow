@@ -779,7 +779,13 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   })
 
   if (typeof child.pid === 'number') {
-    await opts.db.update(nodeRuns).set({ pid: child.pid }).where(eq(nodeRuns.id, opts.nodeRunId))
+    // RFC-108 T9 (AR-14): persist the spawned binary path (cmd[0]) alongside pid
+    // so the stale-process reaper can match a live pid against THIS specific
+    // binary, not a fuzzy regex — telling "our child still alive" from a recycled pid.
+    await opts.db
+      .update(nodeRuns)
+      .set({ pid: child.pid, spawnBinaryPath: cmd[0] })
+      .where(eq(nodeRuns.id, opts.nodeRunId))
   }
 
   // 5. Wire up cancellation + timeout.

@@ -1080,6 +1080,41 @@ async function escalateSnapshotLost(
   )
 }
 
+/**
+ * RFC-108 T9 (AR-14): a node_run's opencode child is still alive AND survived
+ * SIGTERM→SIGKILL (identity-matched to our recorded spawn binary, so confidently
+ * ours), so rolling its worktree back would git-reset UNDER a live writer
+ * (double-write corruption). Fail SAFE: flip the task pending → failed
+ * (`errorSummary='live-child-survived'`) and surface a 409 instead of resetting.
+ * Mirrors escalateSnapshotLost's contract. Returns `never`.
+ */
+async function escalateLiveChildSurvived(
+  db: DbClient,
+  taskId: string,
+  run: { id: string; nodeId: string; pid: number | null },
+  reason: 'resumeTask' | 'retryNode' | 'syncTaskWorkflow',
+): Promise<never> {
+  await setTaskStatus({
+    db,
+    taskId,
+    to: 'failed',
+    allowedFrom: ['pending'],
+    extra: {
+      finishedAt: Date.now(),
+      errorSummary: 'live-child-survived',
+      errorMessage: `node_run ${run.id} (node ${run.nodeId}) opencode child pid ${run.pid ?? '?'} is still alive and survived SIGTERM→SIGKILL; refusing to reset the worktree under a live writer`,
+      failedNodeId: run.nodeId,
+    },
+    reason: `${reason}:live-child-survived`,
+  })
+  const failed = await getTask(db, taskId)
+  if (failed !== null) emitTaskStatus(failed)
+  throw new ConflictError(
+    'live-child-survived',
+    `cannot ${reason === 'resumeTask' ? 'resume' : 'retry'}: node_run ${run.id} child pid ${run.pid ?? '?'} is still alive and unkillable; the worktree cannot be safely reset under it`,
+  )
+}
+
 export async function cancelTask(db: DbClient, id: string): Promise<Task> {
   const task = await getTask(db, id)
   if (task === null) {
@@ -1260,20 +1295,28 @@ async function resumeKick(
     }
   }
 
+  // RFC-098 WP-8 (audit S-15) + RFC-108 T9 (AR-14): kill pass FIRST, separated
+  // from the rollback pass for cross-row safety. If the row's opencode child
+  // from a previous daemon is still alive, group-kill it (SIGTERM→SIGKILL)
+  // BEFORE any worktree is rolled back — a survivor would keep writing into a
+  // worktree we are about to reset. T9: a child that SURVIVES the kill (matched
+  // to our recorded spawn binary, so confidently OURS + alive) is the
+  // double-write danger the old fuzzy gate let slip — REFUSE the whole resume
+  // (409) rather than git-reset under a live writer. Killing is idempotent and
+  // safe; only the rollback is gated on every child being dead/recycled.
   for (const r of toRollback) {
-    // RFC-098 WP-8 (audit S-15): kill-then-proceed, not 409 — if the row's
-    // opencode child from a previous daemon is still alive (pid + startedAt
-    // window + `ps` command gates inside the helper), group-kill it BEFORE
-    // rolling the worktree back; a survivor would keep writing into the
-    // worktree we are about to reset.
     const killOutcome = await killStaleRunProcessTree(r)
-    if (killOutcome === 'killed' || killOutcome === 'kill-failed') {
-      log.warn(`${opts.verb}: live child process group-killed before rollback (best-effort)`, {
+    if (killOutcome === 'killed') {
+      log.warn(`${opts.verb}: stale opencode child group-killed before rollback`, {
         nodeRunId: r.id,
         pid: r.pid,
-        outcome: killOutcome,
       })
+    } else if (killOutcome === 'kill-failed') {
+      await escalateLiveChildSurvived(db, id, r, opts.reason) // throws 409
     }
+  }
+
+  for (const r of toRollback) {
     const outcome = await rollbackNodeRunForResume(task, r, log)
     // RFC-098 WP-9: a gc-pruned pre-snapshot is NOT warn-and-continue — the
     // fail-closed rollback touched nothing, but the baseline is gone forever;
@@ -1784,12 +1827,14 @@ export async function retryNode(
   // RFC-098 WP-8: same kill-then-proceed as resumeTask — group-kill the
   // target row's still-alive child (if any) before touching the worktree.
   const retryKillOutcome = await killStaleRunProcessTree(runRow)
-  if (retryKillOutcome === 'killed' || retryKillOutcome === 'kill-failed') {
-    log.warn('retryNode: live child process group-killed before rollback (best-effort)', {
+  if (retryKillOutcome === 'killed') {
+    log.warn('retryNode: stale opencode child group-killed before rollback', {
       nodeRunId: runRow.id,
       pid: runRow.pid,
-      outcome: retryKillOutcome,
     })
+  } else if (retryKillOutcome === 'kill-failed') {
+    // RFC-108 T9 (AR-14): our child survived SIGKILL — do NOT git-reset under it.
+    await escalateLiveChildSurvived(db, taskId, runRow, 'retryNode') // throws 409
   }
   // RFC-098 WP-9: snapshot-missing escalates to task failed + 409 (same
   // contract as resumeTask) — no placeholder rows are minted and no

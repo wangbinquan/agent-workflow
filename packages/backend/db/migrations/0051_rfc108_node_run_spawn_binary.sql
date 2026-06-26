@@ -1,0 +1,16 @@
+-- RFC-108 T9 (AR-14) — node_run spawn-identity (additive, hand-written; the
+-- repo stopped using drizzle-kit generate after 0012, so every migration since
+-- 0013 is authored by hand and registered in meta/_journal.json).
+--
+-- `node_runs.spawn_binary_path` records the absolute path of the opencode binary
+-- (cmd[0]) spawned for this run, persisted alongside `pid`. The stale-process
+-- reaper (`killStaleRunProcessTree`) matches a live pid's `ps` command against
+-- THIS specific path instead of a fuzzy `/opencode|bun/` regex, so it can tell
+-- "our child is still alive" (must NOT git-reset under it — fail SAFE: refuse the
+-- resume / 409) from "the pid was recycled onto an unrelated process" (safe to
+-- flip). Before this, a false PID-reuse verdict on a genuinely-alive child let
+-- resume git-reset under a live writer (double-write corruption).
+--
+-- Nullable: legacy rows (and non-agent runs that never spawn opencode) stay NULL
+-- and fall back to the old `/opencode|bun/` heuristic. No backfill.
+ALTER TABLE `node_runs` ADD COLUMN `spawn_binary_path` text;

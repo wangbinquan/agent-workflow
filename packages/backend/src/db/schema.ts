@@ -576,6 +576,15 @@ export const nodeRuns = sqliteTable(
     startedAt: integer('started_at'),
     finishedAt: integer('finished_at'),
     pid: integer('pid'),
+    /**
+     * RFC-108 T9 (AR-14): absolute path of the opencode binary spawned for this
+     * run (cmd[0]), persisted alongside `pid`. The stale-process reaper matches
+     * a live pid's `ps` command against THIS specific path instead of a fuzzy
+     * `/opencode|bun/` regex, so it can reliably tell "our child is still alive"
+     * (must NOT git-reset under it) from "the pid was recycled onto an unrelated
+     * process" (safe to flip). NULL for non-agent runs / rows predating RFC-108.
+     */
+    spawnBinaryPath: text('spawn_binary_path'),
     exitCode: integer('exit_code'),
     errorMessage: text('error_message'),
     promptText: text('prompt_text'), // actual user prompt sent to opencode

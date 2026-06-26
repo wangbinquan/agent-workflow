@@ -123,9 +123,9 @@ describe('RFC-074 migration 0041 — DROP clarify_iteration preserves row data',
       migrate(drizzle(up, {}), { migrationsFolder: MIGRATIONS })
 
       // 4a. clarify_iteration gone; net column delta vs the 0040 freeze is
-      //     +1: 0041 drops exactly one (cci), and the LATER RFC-098
-      //     migrations (applied by the same HEAD migrate) add two back onto
-      //     node_runs — 0043 shard_value_hash + 0044 rerun_cause.
+      //     +2: 0041 drops exactly one (cci), and LATER migrations (applied by
+      //     the same HEAD migrate) add THREE back onto node_runs — 0043
+      //     shard_value_hash + 0044 rerun_cause + 0051 spawn_binary_path (RFC-108 T9).
       const cols = (up.query('PRAGMA table_info(node_runs)').all() as Array<{ name: string }>).map(
         (c) => c.name,
       )
@@ -133,7 +133,8 @@ describe('RFC-074 migration 0041 — DROP clarify_iteration preserves row data',
       expect(cols).toContain('consumed_upstream_runs_json')
       expect(cols).toContain('shard_value_hash')
       expect(cols).toContain('rerun_cause')
-      expect(cols.length).toBe(cols0040.length - 1 + 2)
+      expect(cols).toContain('spawn_binary_path')
+      expect(cols.length).toBe(cols0040.length - 1 + 3)
 
       // 4b. row count unchanged.
       const n = (up.query('SELECT count(*) AS n FROM node_runs').get() as { n: number }).n
