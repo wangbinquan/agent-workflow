@@ -30,7 +30,7 @@
 import { and, eq, inArray, isNull, max } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
-import { clarifySessions, docVersions, nodeRunEvents, nodeRuns, tasks } from '@/db/schema'
+import { clarifyRounds, docVersions, nodeRunEvents, nodeRuns, tasks } from '@/db/schema'
 import { createLogger } from '@/util/log'
 
 import {
@@ -151,11 +151,17 @@ async function hasPendingDocVersion(db: DbClient, taskId: string): Promise<boole
 }
 
 async function hasOpenClarifySession(db: DbClient, taskId: string): Promise<boolean> {
+  // RFC-108 T8 (AR-16): read the UNIFIED clarify_rounds table, not the legacy
+  // clarify_sessions. RFC-058 dual-writes BOTH self-clarify (clarify.ts) and
+  // cross-clarify (crossClarify.ts) as an 'awaiting_human' round here, but
+  // cross-clarify NEVER writes clarify_sessions — so the old query made S2
+  // false-fire on a genuinely-answerable cross-clarify task, and the only repair
+  // (S2.demote-task) then demoted it, destroying an in-flight cross round.
   const row = (
     await db
-      .select({ id: clarifySessions.id })
-      .from(clarifySessions)
-      .where(and(eq(clarifySessions.taskId, taskId), eq(clarifySessions.status, 'awaiting_human')))
+      .select({ id: clarifyRounds.id })
+      .from(clarifyRounds)
+      .where(and(eq(clarifyRounds.taskId, taskId), eq(clarifyRounds.status, 'awaiting_human')))
       .limit(1)
   )[0]
   return row !== undefined

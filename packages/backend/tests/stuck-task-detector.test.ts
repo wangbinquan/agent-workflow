@@ -20,7 +20,7 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import {
-  clarifySessions,
+  clarifyRounds,
   docVersions,
   lifecycleAlerts,
   nodeRunEvents,
@@ -184,45 +184,106 @@ describe('RFC-053 PR-E — S2 (awaiting_human without open clarify_session)', ()
     expect(r.openAlerts.filter((a) => a.rule === 'S2')).toHaveLength(1)
   })
 
-  test('not stuck: has an open clarify_session → no S2 alert', async () => {
+  test('not stuck: has an open clarify round (self) → no S2 alert', async () => {
     h = await buildHarness('awaiting_human', T0 - 45 * MIN_MS)
+    const srcRun = await insertRun(h.db, h.taskId, { nodeId: 'src', status: 'done' })
     const run = await insertRun(h.db, h.taskId, { nodeId: 'clr', status: 'awaiting_human' })
-    await h.db.insert(clarifySessions).values({
+    // RFC-108 T8 (AR-16): the detector now reads the unified clarify_rounds
+    // (self-clarify dual-writes it, RFC-058). Insert an OPEN self round.
+    await h.db.insert(clarifyRounds).values({
       id: ulid(),
       taskId: h.taskId,
-      sourceAgentNodeId: 'src',
-      sourceAgentNodeRunId: ulid(),
-      sourceShardKey: null,
-      clarifyNodeId: 'clr',
-      clarifyNodeRunId: run,
-      iterationIndex: 0,
+      kind: 'self',
+      askingNodeId: 'src',
+      askingNodeRunId: srcRun,
+      askingShardKey: null,
+      intermediaryNodeId: 'clr',
+      intermediaryNodeRunId: run,
+      targetConsumerNodeId: null,
+      loopIter: 0,
+      iteration: 0,
       questionsJson: '[]',
       answersJson: null,
+      directive: null,
       status: 'awaiting_human',
+      truncationWarningsJson: null,
+      designerRunTriggeredAt: null,
+      abandonedAt: null,
+      createdAt: T0 - 45 * MIN_MS,
+      answeredAt: null,
+      answeredBy: null,
     })
     const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
     expect(r.openAlerts.filter((a) => a.rule === 'S2')).toHaveLength(0)
   })
 
-  test('closed sessions do NOT save S2 from firing', async () => {
+  test('closed (answered) clarify rounds do NOT save S2 from firing', async () => {
     h = await buildHarness('awaiting_human', T0 - 45 * MIN_MS)
+    const srcRun = await insertRun(h.db, h.taskId, { nodeId: 'src', status: 'done' })
     const run = await insertRun(h.db, h.taskId, { nodeId: 'clr', status: 'awaiting_human' })
-    await h.db.insert(clarifySessions).values({
+    // RFC-108 T8 (AR-16): an ANSWERED round in the unified clarify_rounds is not
+    // "open" — S2 must still fire (the task is parked with nothing live to answer).
+    await h.db.insert(clarifyRounds).values({
       id: ulid(),
       taskId: h.taskId,
-      sourceAgentNodeId: 'src',
-      sourceAgentNodeRunId: ulid(),
-      sourceShardKey: null,
-      clarifyNodeId: 'clr',
-      clarifyNodeRunId: run,
-      iterationIndex: 0,
+      kind: 'self',
+      askingNodeId: 'src',
+      askingNodeRunId: srcRun,
+      askingShardKey: null,
+      intermediaryNodeId: 'clr',
+      intermediaryNodeRunId: run,
+      targetConsumerNodeId: null,
+      loopIter: 0,
+      iteration: 0,
       questionsJson: '[]',
       answersJson: '[]',
+      directive: null,
       status: 'answered', // ← closed
+      truncationWarningsJson: null,
+      designerRunTriggeredAt: null,
+      abandonedAt: null,
+      createdAt: T0 - 45 * MIN_MS,
       answeredAt: T0 - 40 * MIN_MS,
+      answeredBy: null,
     })
     const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
     expect(r.openAlerts.filter((a) => a.rule === 'S2')).toHaveLength(1)
+  })
+
+  // RFC-108 T8 (AR-16) — cross-clarify parks write cross_clarify_sessions +
+  // clarify_rounds but NOT the legacy clarify_sessions. S2 must read the
+  // unified clarify_rounds table; otherwise a genuinely-answerable cross-clarify
+  // task false-fires S2 and the only available repair (S2.demote-task) flips it
+  // to interrupted, destroying an in-flight cross-clarify round.
+  test('regression: cross-clarify awaiting_human with open clarify_rounds → NO S2', async () => {
+    h = await buildHarness('awaiting_human', T0 - 45 * MIN_MS)
+    const askingRun = await insertRun(h.db, h.taskId, { nodeId: 'questioner', status: 'done' })
+    const crossRun = await insertRun(h.db, h.taskId, { nodeId: 'xclr', status: 'awaiting_human' })
+    await h.db.insert(clarifyRounds).values({
+      id: ulid(),
+      taskId: h.taskId,
+      kind: 'cross',
+      askingNodeId: 'questioner',
+      askingNodeRunId: askingRun,
+      askingShardKey: null,
+      intermediaryNodeId: 'xclr',
+      intermediaryNodeRunId: crossRun,
+      targetConsumerNodeId: 'designer',
+      loopIter: 0,
+      iteration: 0,
+      questionsJson: '[]',
+      answersJson: null,
+      directive: null,
+      status: 'awaiting_human', // ← open cross round (no clarify_sessions row)
+      truncationWarningsJson: null,
+      designerRunTriggeredAt: null,
+      abandonedAt: null,
+      createdAt: T0 - 45 * MIN_MS,
+      answeredAt: null,
+      answeredBy: null,
+    })
+    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    expect(r.openAlerts.filter((a) => a.rule === 'S2')).toHaveLength(0)
   })
 })
 
