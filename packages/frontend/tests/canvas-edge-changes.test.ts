@@ -171,7 +171,10 @@ describe('WorkflowCanvas does not enable selectionOnDrag', () => {
     // setEdges still wraps toFlowEdges in applySelection. After RFC-015 the
     // path additionally spreads buildSourcePortDisplayEdges alongside, so we
     // allow an optional `[` + spread between `setEdges(` and `applySelection`.
-    expect(src).toMatch(/setEdges\(\s*\[?\s*\.{0,3}\s*applySelection\(toFlowEdges\(/)
+    // The control-flow change (toFlowEdges' 2nd arg) lengthens the call so
+    // prettier may wrap it onto its own line — allow whitespace between
+    // `applySelection(` and `toFlowEdges(` (the locked intent is the wrap).
+    expect(src).toMatch(/setEdges\(\s*\[?\s*\.{0,3}\s*applySelection\(\s*toFlowEdges\(/)
   })
 
   test('Delete-key paths clear parent selection so the inspector column folds away', async () => {

@@ -5011,6 +5011,26 @@ code {
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 60%, transparent));
 }
 
+/* Control-flow edges (RFC-060): an edge whose SOURCE port is a no-data kind
+ * such as `signal` (e.g. a wrapper-fanout's implicit `__done__` outlet).
+ * WorkflowCanvas tags these `canvas-edge--control` (see controlFlowEdge.ts).
+ * Render them as a grey dashed line — the same visual language as the signal
+ * PORT chrome above (`.canvas-node__handle--signal`: dashed var(--muted)) — so
+ * authors tell control flow from data flow at a glance. The extra classes give
+ * this enough specificity to win over xyflow's default `.react-flow__edge-path`
+ * stroke; the `.selected` rule re-asserts the grey so xyflow's selected stroke
+ * doesn't override it, keeping the dashes while thickening + glowing on click. */
+.workflow-canvas .react-flow__edge.canvas-edge--control .react-flow__edge-path {
+  stroke: var(--muted);
+  stroke-dasharray: 6 4;
+}
+.workflow-canvas .react-flow__edge.canvas-edge--control.selected .react-flow__edge-path,
+.workflow-canvas .react-flow__edge.canvas-edge--control:focus .react-flow__edge-path {
+  stroke: var(--muted);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--muted) 60%, transparent));
+}
+
 /* ---- Task output panel ---- */
 
 /* RFC-072: Outputs tab two-pane browser (left port list + right detail),

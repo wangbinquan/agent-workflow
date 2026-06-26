@@ -65,6 +65,7 @@ import {
 } from './crossClarifyDragHelper'
 import { existingInputPorts, nextFreeInputPort } from './dropTarget'
 import { getNodeBoxes, resolveDropTarget } from './connectResolve'
+import { buildControlFlowEdgeIds, CONTROL_FLOW_EDGE_CLASS } from './controlFlowEdge'
 import { ConnectDropHint, type ConnectPreviewTarget } from './ConnectDropHint'
 import { ClarifyNode } from './nodes/ClarifyNode'
 import { CrossClarifyNode } from './nodes/CrossClarifyNode'
@@ -251,7 +252,7 @@ function CanvasInner({
     projectDefinitionForXyflow(definition, toFlowNodes(definition, agentByName, nodeStatuses)),
   )
   const [edges, setEdges] = useState<Edge[]>(() => [
-    ...toFlowEdges(definition.edges),
+    ...toFlowEdges(definition.edges, buildControlFlowEdgeIds(definition, agentByName)),
     ...buildSourcePortDisplayEdges(definition),
   ])
   const externalDefRef = useRef(definition)
@@ -310,9 +311,17 @@ function CanvasInner({
           sel.nodes,
         ),
       )
-      if (defChanged)
+      // Rebuild edges on a definition OR agents change. Control-flow tagging
+      // (toFlowEdges' second arg) reads agent.outputKinds, which arrive
+      // asynchronously once the agents query resolves (see externalAgentsRef
+      // above) — without the agentsChanged arm a signal edge stays drawn as a
+      // data edge until the next definition edit.
+      if (defChanged || agentsChanged)
         setEdges([
-          ...applySelection(toFlowEdges(definition.edges), sel.edges),
+          ...applySelection(
+            toFlowEdges(definition.edges, buildControlFlowEdgeIds(definition, agentByName)),
+            sel.edges,
+          ),
           ...buildSourcePortDisplayEdges(definition),
         ])
     }
@@ -1695,13 +1704,20 @@ export function nodeTitle(n: WorkflowNode): string {
   return n.id
 }
 
-function toFlowEdges(defEdges: WorkflowDefinition['edges']): Edge[] {
+function toFlowEdges(
+  defEdges: WorkflowDefinition['edges'],
+  controlFlowEdgeIds?: ReadonlySet<string>,
+): Edge[] {
   return defEdges.map((e) => ({
     id: e.id,
     source: e.source.nodeId,
     target: e.target.nodeId,
     sourceHandle: e.source.portName,
     targetHandle: e.target.portName,
+    // RFC-060 signal ports carry no data — render their edge as a grey dashed
+    // control-flow line (styles.css `.canvas-edge--control`). Absent set ⇒ no
+    // tagging, so the existing unit-test call sites round-trip unchanged.
+    ...(controlFlowEdgeIds?.has(e.id) ? { className: CONTROL_FLOW_EDGE_CLASS } : {}),
   }))
 }
 
