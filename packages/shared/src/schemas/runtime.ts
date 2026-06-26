@@ -17,6 +17,16 @@ export const RuntimeOpencodeStatusSchema = z.object({
 })
 export type RuntimeOpencodeStatus = z.infer<typeof RuntimeOpencodeStatusSchema>
 
+/** RFC-111: GET /api/runtime/claude — live `claude --version` probe (soft, D10). */
+export const RuntimeClaudeStatusSchema = z.object({
+  binary: z.string(),
+  version: z.string().nullable(),
+  compatible: z.boolean(),
+  minVersion: z.string(),
+  incompatibleReason: z.string().optional(),
+})
+export type RuntimeClaudeStatus = z.infer<typeof RuntimeClaudeStatusSchema>
+
 export const OpencodeModelSchema = z.object({
   id: z.string(),
   provider: z.string(),

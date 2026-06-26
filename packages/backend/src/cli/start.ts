@@ -28,6 +28,7 @@ import { acquireLock, DaemonLockHeldError, type Lock } from '@/util/lock'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
 import { MIN_OPENCODE_VERSION, probeOpencode } from '@/util/opencode'
+import { MIN_CLAUDE_CODE_VERSION, probeClaudeCode } from '@/services/runtime/claudeCode/probe'
 import { Paths } from '@/util/paths'
 import { buildWebSocketAdapter } from '@/ws/server'
 import { existsSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
@@ -99,6 +100,29 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     process.exit(1)
   }
   log.info('opencode probe ok', { version: probe.version, binary: probe.binary })
+
+  // RFC-111 D10: claude-code is an OPTIONAL second runtime — probe it SOFT
+  // (warn only, NEVER refuse to start). A missing/old claude only fails nodes
+  // whose agent selected it; opencode-only installs are unaffected. We probe
+  // when claude is the configured default (the clearest "claude is needed"
+  // signal available before the DB opens); per-agent claude selection surfaces
+  // as a clear spawn-time failure on the node itself.
+  if (config.defaultRuntime === 'claude-code') {
+    const claudeProbe = await probeClaudeCode(config.claudeCodePath)
+    if (!claudeProbe.compatible) {
+      log.warn('claude-code default runtime unavailable (nodes selecting it will fail)', {
+        binary: claudeProbe.binary,
+        found: claudeProbe.version,
+        requiredMinimum: MIN_CLAUDE_CODE_VERSION,
+        reason: claudeProbe.incompatibleReason ?? 'not found',
+      })
+    } else {
+      log.info('claude-code probe ok', {
+        version: claudeProbe.version,
+        binary: claudeProbe.binary,
+      })
+    }
+  }
 
   // 5. DB — open + apply migrations. dbVersion = number of SQL files in the
   // bundled migrations folder (== the highest version we've applied, since

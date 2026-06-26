@@ -238,3 +238,49 @@ describe('GET /api/runtime/models', () => {
     expect(String(json.message)).toContain('kaboom')
   })
 })
+
+// RFC-111 — claude-code runtime probe + static model list.
+describe('GET /api/runtime/claude + models?runtime=claude (RFC-111)', () => {
+  let h: Harness
+  let claudeBin: string
+  beforeEach(() => {
+    // opencode path is a non-empty placeholder (claude routes never invoke it).
+    h = makeHarness({ binary: 'opencode' })
+    claudeBin = join(h.tmp, 'fake-claude')
+    writeBinary(claudeBin, { versionStdout: '2.1.193 (Claude Code)' })
+    applyConfigPatch(h.configPath, { claudeCodePath: claudeBin })
+  })
+  afterEach(() => rmSync(h.tmp, { recursive: true, force: true }))
+
+  test('probe returns version + compatible for a present claude', async () => {
+    const res = await req(h.app, '/api/runtime/claude')
+    expect(res.status).toBe(200)
+    const json = (await res.json()) as Record<string, unknown>
+    expect(json.binary).toBe(claudeBin)
+    expect(json.version).toBe('2.1.193')
+    expect(json.compatible).toBe(true)
+    expect(typeof json.minVersion).toBe('string')
+  })
+
+  test('probe reports compatible=false when claude binary is missing (soft, no crash)', async () => {
+    applyConfigPatch(h.configPath, { claudeCodePath: join(h.tmp, 'nonexistent-claude') })
+    const res = await req(h.app, '/api/runtime/claude')
+    expect(res.status).toBe(200)
+    const json = (await res.json()) as Record<string, unknown>
+    expect(json.version).toBeNull()
+    expect(json.compatible).toBe(false)
+  })
+
+  test('models?runtime=claude returns the curated static list (cached)', async () => {
+    const res = await req(h.app, '/api/runtime/models?runtime=claude')
+    expect(res.status).toBe(200)
+    const json = (await res.json()) as {
+      models: Array<{ id: string; provider: string }>
+      cached: boolean
+    }
+    expect(json.cached).toBe(true)
+    expect(json.models.length).toBeGreaterThan(0)
+    expect(json.models.some((m) => m.id === 'opus')).toBe(true)
+    expect(json.models.every((m) => m.provider === 'anthropic')).toBe(true)
+  })
+})
