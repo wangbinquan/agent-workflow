@@ -71,6 +71,19 @@ export interface NormalizedEvent {
   rawLine: string
 }
 
+/**
+ * A driver's argv + env + stdin plan for one node_run spawn. `stdin: pipe`
+ * delivers the prompt over stdin (claude, D12); omitted / `ignore` = no stdin
+ * (opencode passes the prompt positionally). `cleanup` removes any per-run temp
+ * the driver created.
+ */
+export interface SpawnPlan {
+  cmd: string[]
+  env: Record<string, string>
+  stdin?: { mode: 'ignore' } | { mode: 'pipe'; data: string }
+  cleanup?: () => void
+}
+
 /** Version probe result for a runtime binary (PR-B fills this in per runtime). */
 export interface RuntimeProbe {
   binary: string

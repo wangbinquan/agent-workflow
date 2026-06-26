@@ -8,6 +8,7 @@
 
 import type { RuntimeDriver, RuntimeKind } from './types'
 import { opencodeDriver } from './opencode/driver'
+import { claudeCodeDriver } from './claudeCode/driver'
 
 export type { RuntimeKind, RuntimeDriver } from './types'
 
@@ -31,10 +32,9 @@ export function resolveRuntime(
   return raw === 'claude-code' ? 'claude-code' : 'opencode'
 }
 
-// 'claude-code' lands in PR-B; until then only opencode is registered and
-// resolveRuntime never returns 'claude-code' (no agent can select it yet).
-const DRIVERS: Partial<Record<RuntimeKind, RuntimeDriver>> = {
+const DRIVERS: Record<RuntimeKind, RuntimeDriver> = {
   opencode: opencodeDriver,
+  'claude-code': claudeCodeDriver,
 }
 
 /** Look up the driver for a (frozen) runtime kind. Unregistered → opencode. */

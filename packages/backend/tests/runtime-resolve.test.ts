@@ -38,8 +38,7 @@ describe('getRuntimeDriver — factory (RFC-111 PR-A)', () => {
     expect(getRuntimeDriver('opencode').kind).toBe('opencode')
   })
 
-  it('falls back to opencode for not-yet-registered runtimes (claude lands in PR-B)', () => {
-    // 'claude-code' is unregistered in PR-A; the factory must not throw.
-    expect(getRuntimeDriver('claude-code').kind).toBe('opencode')
+  it('returns the claude-code driver (RFC-111 PR-B registered it)', () => {
+    expect(getRuntimeDriver('claude-code').kind).toBe('claude-code')
   })
 })

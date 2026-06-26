@@ -53,12 +53,15 @@ import {
   type PortValidationFailure,
 } from './envelope'
 import { renderUserPrompt } from './protocol'
-// RFC-111 PR-A: opencode runtime behind the driver seam. The runNode stdout
-// pump uses `opencodeDriver.parseEvent`; the spawn site uses `buildOpencodeSpawn`
-// for argv+env. The event helpers + buildCommand are re-exported at the bottom
-// so existing importers (tests, memoryDistiller) keep resolving from './runner'.
-import { opencodeDriver } from './runtime/opencode/driver'
+// RFC-111 PR-A/B: agent runtime behind the driver seam. The stdout pump uses
+// `getRuntimeDriver(runtime).parseEvent` (runtime-agnostic); spawn assembly is
+// runtime-branched (opencode inline config vs claude system-prompt-file). The
+// event helpers + buildCommand are re-exported at the bottom so existing
+// importers (tests, memoryDistiller) keep resolving from './runner'.
+import { getRuntimeDriver, type RuntimeKind } from './runtime'
+import type { SpawnPlan } from './runtime/types'
 import { buildOpencodeSpawn } from './runtime/opencode/spawn'
+import { buildClaudeSpawn } from './runtime/claudeCode/spawn'
 import { captureChildSessions } from './sessionCapture'
 import { startLiveSubagentCapture } from './subagentLiveCapture'
 import { setNodeRunStatus, transitionNodeRunStatus } from './lifecycle'
@@ -243,10 +246,19 @@ export interface RunNodeOptions {
   /** App home dir (parent of runs/, snapshots/, worktrees/, ...). */
   appHome: string
   /**
-   * Command to spawn instead of `['opencode']`. Tests pass
-   * `['bun', 'run', /path/to/mock-opencode.ts]`.
+   * Command to spawn instead of the runtime's default binary. Tests pass
+   * `['bun', 'run', /path/to/mock-opencode.ts]` (or mock-claude). Used as the
+   * argv head for whichever runtime this node resolves to.
    */
   opencodeCmd?: string[]
+  /**
+   * RFC-111 D15: the FROZEN runtime for this node_run (resolved once at dispatch
+   * from `agent.runtime ?? config.defaultRuntime`, persisted to
+   * `node_runs.runtime`, and read back on resume/retry so a mutated agent /
+   * default can't re-route a captured session to the wrong runtime). Omitted /
+   * undefined → `'opencode'` (legacy zero-change default).
+   */
+  runtime?: RuntimeKind
   db: DbClient
   log?: Logger
   /** When aborted, runner SIGTERMs the child and returns status='canceled'. */
@@ -386,6 +398,13 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   const runRoot = join(opts.appHome, 'runs', opts.taskId, opts.nodeRunId)
   const runDir = join(runRoot, '.opencode')
 
+  // RFC-111 D15: the runtime is frozen by the dispatcher into node_runs.runtime
+  // and threaded here. opencode is the default and its spawn/pump path is
+  // byte-identical to pre-RFC-111; claude-code branches at the spawn site below.
+  // The stdout pump is runtime-agnostic (driver.parseEvent normalizes events).
+  const runtime: RuntimeKind = opts.runtime ?? 'opencode'
+  const driver = getRuntimeDriver(runtime)
+
   // 1. Prepare per-run config dir and inject skills.
   prepareSkills(runDir, opts.skills, log)
 
@@ -420,7 +439,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // block.
   const inventoryNodeKind = opts.nodeKind ?? 'agent-single'
   let inventoryOutPath: string | undefined
-  if (isAgentRunKind(inventoryNodeKind) && opts.envelopeFollowup !== true) {
+  if (
+    isAgentRunKind(inventoryNodeKind) &&
+    opts.envelopeFollowup !== true &&
+    runtime === 'opencode'
+  ) {
     try {
       mkdirSync(runRoot, { recursive: true })
       // materializeInventoryPlugin handles both dev (source tree) and
@@ -456,6 +479,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // so the column distinguishes legitimate zero-inject runs from
   // "captured but empty" runs (see RFC-046 design.md §3.2).
   let injectedSnapshot: InjectedMemorySnapshot[] | null = null
+  // RFC-111: the injected memory text, hoisted so the claude branch can weave it
+  // into the system-prompt-file (opencode appends it to the inline agent prompt).
+  let injectedMemoryBlock: string | null = null
   if (opts.envelopeFollowup !== true) {
     try {
       const { block: memoryBlock, snapshot } = await injectMemoryForRun({
@@ -466,6 +492,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         budget: opts.memoryInjectionBudget,
       })
       injectedSnapshot = snapshot
+      injectedMemoryBlock = memoryBlock
       if (memoryBlock !== null) {
         const primary = inlineConfig.agent[opts.agent.name]
         if (primary !== undefined && typeof primary.prompt === 'string') {
@@ -694,20 +721,44 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     status: 'running',
   })
 
-  // 4. Spawn opencode (RFC-111 PR-A: argv + env assembled by the opencode driver).
-  const { cmd, env } = buildOpencodeSpawn({
-    opencodeCmd: opts.opencodeCmd,
-    agentName: opts.agent.name,
-    prompt,
-    dangerouslySkipPermissions: opts.dangerouslySkipPermissions,
-    resumeSessionId: opts.resumeSessionId,
-    worktreePath: opts.worktreePath,
-    runDir,
-    inlineConfigSerialized: serializedInline,
-    inventoryOutPath,
-    gitUserName: opts.gitUserName,
-    gitUserEmail: opts.gitUserEmail,
-  })
+  // 4. Spawn the agent runtime. opencode assembles argv+env from the inline
+  // config; claude (RFC-111 PR-B) writes a system-prompt-file and delivers the
+  // prompt over stdin. Everything below (lifecycle / kill / pump / exit) is
+  // runtime-agnostic.
+  let plan: SpawnPlan
+  if (runtime === 'claude-code') {
+    const systemPromptText =
+      injectedMemoryBlock !== null
+        ? `${opts.agent.bodyMd}\n\n${injectedMemoryBlock}`
+        : opts.agent.bodyMd
+    plan = buildClaudeSpawn({
+      claudeCmd: opts.opencodeCmd,
+      prompt,
+      systemPromptText,
+      model: opts.overrides?.model ?? opts.agent.model,
+      readonly: opts.agent.readonly,
+      resumeSessionId: opts.resumeSessionId,
+      attemptDir: runRoot,
+      worktreePath: opts.worktreePath,
+      gitUserName: opts.gitUserName,
+      gitUserEmail: opts.gitUserEmail,
+    })
+  } else {
+    plan = buildOpencodeSpawn({
+      opencodeCmd: opts.opencodeCmd,
+      agentName: opts.agent.name,
+      prompt,
+      dangerouslySkipPermissions: opts.dangerouslySkipPermissions,
+      resumeSessionId: opts.resumeSessionId,
+      worktreePath: opts.worktreePath,
+      runDir,
+      inlineConfigSerialized: serializedInline,
+      inventoryOutPath,
+      gitUserName: opts.gitUserName,
+      gitUserEmail: opts.gitUserEmail,
+    })
+  }
+  const { cmd, env } = plan
   // Diagnostic: surface the model/variant/temperature that actually landed in
   // the inline-agent JSON. Lets operators tell "scheduler dropped the override
   // on the floor" apart from "opencode received it but ignored it" without
@@ -718,7 +769,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // this out explicitly. If the count seems wrong (e.g. user expected 3 but
   // log shows 1) the operator can grep `mcpKeys` to see which names actually
   // landed without redacting the inline JSON.
-  log.info('spawning opencode', {
+  log.info('spawning agent runtime', {
+    runtime,
     bin: cmd[0],
     agent: opts.agent.name,
     cwd: opts.worktreePath,
@@ -746,13 +798,24 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     env,
     stdout: 'pipe',
     stderr: 'pipe',
-    stdin: 'ignore',
+    // RFC-111 D12: claude receives the prompt over stdin (avoids argv E2BIG);
+    // opencode passes it positionally and ignores stdin.
+    stdin: plan.stdin?.mode === 'pipe' ? 'pipe' : 'ignore',
     // RFC-098 WP-8 (audit S-15): POSIX setsid() — the child becomes its own
     // process-group leader, so killTree's `process.kill(-pid, sig)` reaches
     // grandchildren (docker MCP / shell-tool descendants) that a single-pid
     // SIGTERM would orphan with the write end of our pipes still open.
     detached: true,
   })
+
+  // RFC-111 D12: stream the prompt into the child's stdin then close it (claude).
+  if (plan.stdin?.mode === 'pipe') {
+    const sink = child.stdin as { write: (s: string) => void; end: () => void } | undefined
+    if (sink !== undefined) {
+      sink.write(plan.stdin.data)
+      sink.end()
+    }
+  }
 
   if (typeof child.pid === 'number') {
     // RFC-108 T9 (AR-14): persist the spawned binary path (cmd[0]) alongside pid
@@ -853,11 +916,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   }
 
   const stdoutPump = pumpLines(child.stdout, async (line) => {
-    // RFC-111 PR-A: normalize one stdout line through the (frozen-opencode)
+    // RFC-111 PR-A/B: normalize one stdout line through the frozen runtime's
     // driver. `parseEvent` returns null for non-JSON / falsy-JSON lines, which
     // routes them through the raw-text fallback exactly as the old inline
-    // `if (evt) {...} else {...}` selection did.
-    const ev = opencodeDriver.parseEvent(line)
+    // opencode `if (evt) {...} else {...}` selection did.
+    const ev = driver.parseEvent(line)
     if (ev) {
       if (ev.sessionId !== undefined && sessionId === undefined) {
         sessionId = ev.sessionId
@@ -1264,7 +1327,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // legitimate snapshot. Leave the column at its prior value by skipping the
   // read entirely.
   let inventoryJson: string | null = null
-  if (isAgentRunKind(inventoryNodeKind) && opts.envelopeFollowup !== true) {
+  if (
+    isAgentRunKind(inventoryNodeKind) &&
+    opts.envelopeFollowup !== true &&
+    runtime === 'opencode'
+  ) {
     try {
       const snapshot = await readSnapshotFromRunDir({
         runDir: runRoot,
