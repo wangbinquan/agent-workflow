@@ -215,9 +215,20 @@ export function isTerminalTaskStatus(s: string): boolean {
 
 /** Whitelisted companion columns (mirrors NodeRunStatusUpdateExtra; explicit
  *  null is allowed — resume clears the error quadruple, repair T3 clears
- *  finishedAt). `status` itself cannot be smuggled through here. */
+ *  finishedAt). `status` itself cannot be smuggled through here. RFC-109 adds
+ *  `workflowSnapshot` + `workflowVersion` so syncTaskWorkflow can swap the
+ *  frozen snapshot ATOMICALLY inside the same status CAS (no torn state where
+ *  the snapshot changed but the ownership flip lost the race). */
 export type TaskStatusUpdateExtra = Partial<
-  Pick<typeof tasks.$inferInsert, 'finishedAt' | 'errorSummary' | 'errorMessage' | 'failedNodeId'>
+  Pick<
+    typeof tasks.$inferInsert,
+    | 'finishedAt'
+    | 'errorSummary'
+    | 'errorMessage'
+    | 'failedNodeId'
+    | 'workflowSnapshot'
+    | 'workflowVersion'
+  >
 >
 
 export class ConcurrentTaskTransition extends ConflictError {
@@ -232,8 +243,9 @@ export class ConcurrentTaskTransition extends ConflictError {
 /**
  * CAS-strict task status write. `allowedFrom` is the explicit legal-source
  * set for this transition (RFC-097 design §1 matrix); terminal sources are
- * refused unless the caller holds the `allowTerminal` escape hatch (exactly
- * four holders: resumeTask, retryNode, repair CR-1, repair T3).
+ * refused unless the caller holds the `allowTerminal` escape hatch (holders:
+ * resumeTask, retryNode, repair CR-1, repair T3, and RFC-109 syncTaskWorkflow
+ * — all via the `transitionTaskStatusByEvent` event path).
  *
  * Throws ConflictError('illegal-task-transition') when the current status is
  * outside `allowedFrom`, ConcurrentTaskTransition when the CAS lost a race.

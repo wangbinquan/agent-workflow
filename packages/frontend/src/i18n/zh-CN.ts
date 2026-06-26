@@ -952,6 +952,31 @@ export interface Resources {
     cancelButton: string
     resumeButton: string
     resuming: string
+    syncWorkflow: {
+      bannerTitle: string
+      bannerHint: string
+      button: string
+      dialogTitle: string
+      versionLabel: string
+      unknownVersion: string
+      confirm: string
+      cancel: string
+      syncing: string
+      invalidTitle: string
+      blockerTitle: string
+      sectionAdded: string
+      sectionRemoved: string
+      sectionModified: string
+      sectionWarnings: string
+      warn: {
+        'removed-node-feeds-downstream': string
+        'dangling-input-port': string
+        'new-upstream-into-completed-node': string
+      }
+      blocker: {
+        'wrapper-structure-changed-with-live-state': string
+      }
+    }
     resumeUnavailableNoWorktree: string
     resumeLaunchLink: string
     failedBanner: string
@@ -3344,6 +3369,33 @@ export const zhCN: Resources = {
     cancelButton: '取消任务',
     resumeButton: '继续任务',
     resuming: '继续中…',
+    // RFC-109 — 同步最新工作流并继续
+    syncWorkflow: {
+      bannerTitle: '工作流有更新',
+      bannerHint: '关联工作流有更新版本，可同步并按最新定义继续运行',
+      button: '同步并继续',
+      dialogTitle: '同步工作流并继续',
+      versionLabel: '版本',
+      unknownVersion: '未知',
+      confirm: '同步并继续',
+      cancel: '取消',
+      syncing: '同步中…',
+      invalidTitle: '最新工作流当前校验不通过——请先修复再同步。',
+      blockerTitle: '无法同步',
+      sectionAdded: '新增节点',
+      sectionRemoved: '删除节点',
+      sectionModified: '修改节点',
+      sectionWarnings: '警告',
+      warn: {
+        'removed-node-feeds-downstream': '删除的节点曾向保留节点供数',
+        'dangling-input-port': '保留产出里没有该输入端口',
+        'new-upstream-into-completed-node': '新上游指向已完成节点（按原样保留）',
+      },
+      blocker: {
+        'wrapper-structure-changed-with-live-state':
+          '某包装节点在有进行中状态时改了结构，同步会破坏其续跑。请改用新任务。',
+      },
+    },
     resumeUnavailableNoWorktree:
       'worktree 创建阶段就失败了（根本没建出 worktree），resume 救不了。请新建一个任务。',
     resumeLaunchLink: '启动新任务 →',

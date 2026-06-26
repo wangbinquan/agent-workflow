@@ -154,6 +154,11 @@ export const TaskSchema = z.object({
   workflowName: z.string().nullable(),
   /** Snapshotted workflow definition; survives later workflow edits. */
   workflowSnapshot: z.unknown(),
+  /**
+   * RFC-109: the `workflows.version` the snapshot was taken from (or last
+   * synced to). Null for legacy tasks launched before migration 0050.
+   */
+  workflowVersion: z.number().nullable(),
   repoPath: z.string(),
   /**
    * RFC-024: original Git URL the task was launched from (when the user picked
@@ -720,3 +725,13 @@ export const TaskDiffSchema = z.object({
   truncated: z.boolean(),
 })
 export type TaskDiff = z.infer<typeof TaskDiffSchema>
+
+/**
+ * RFC-109 — `POST /api/tasks/:id/sync-workflow` body. `expectedVersion` is the
+ * `latestVersion` the user saw in the preview; the server rejects with
+ * `workflow-sync-preview-stale` if the live workflow advanced since (TOCTOU).
+ */
+export const SyncWorkflowBodySchema = z.object({
+  expectedVersion: z.number().int().nonnegative(),
+})
+export type SyncWorkflowBody = z.infer<typeof SyncWorkflowBodySchema>

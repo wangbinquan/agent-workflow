@@ -2248,6 +2248,40 @@ code {
   cursor: pointer;
 }
 
+/* RFC-109 — workflow sync dialog content */
+.workflow-sync {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.workflow-sync__version {
+  margin: 0;
+  font-size: 14px;
+}
+.workflow-sync__section {
+  margin: 0;
+}
+.workflow-sync__section > h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+.workflow-sync__count,
+.workflow-sync__kind {
+  color: var(--text-muted, #888);
+  font-weight: 400;
+  font-size: 12px;
+}
+.workflow-sync__nodes,
+.workflow-sync__warnings,
+.workflow-sync__issues {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .task-error-banner__details > pre {
   margin: 4px 0 0;
   white-space: pre-wrap;

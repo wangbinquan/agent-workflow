@@ -225,6 +225,7 @@ export type TaskTransitionEvent =
   | { kind: 'interrupt' } // pending|running → interrupted (reaper / shutdown)
   | { kind: 'resume' } // failed|interrupted|awaiting_* → pending (resumeTask / auto-resume)
   | { kind: 'retry' } // done|failed|canceled|interrupted → pending (retryNode)
+  | { kind: 'sync-workflow' } // RFC-109: any non-active → pending (syncTaskWorkflow); = resume ∪ retry
 
 export class IllegalTaskTransition extends Error {
   readonly code = 'illegal-task-transition' as const
@@ -259,6 +260,7 @@ export function targetForTaskEvent(ev: TaskTransitionEvent): TaskStatus {
       return 'interrupted'
     case 'resume':
     case 'retry':
+    case 'sync-workflow':
       return 'pending'
     default: {
       const _exhaustive: never = ev
@@ -306,6 +308,10 @@ export function nextTaskStatus(cur: TaskStatus, ev: TaskTransitionEvent): TaskSt
     case 'retry':
       // single-node retry can re-open any terminal task.
       return ok(['done', 'failed', 'canceled', 'interrupted'])
+    case 'sync-workflow':
+      // RFC-109: re-point a non-active task at the latest workflow definition
+      // and continue. Spans every non-active status = resume ∪ retry.
+      return ok(['failed', 'interrupted', 'done', 'canceled', 'awaiting_review', 'awaiting_human'])
     default: {
       const _exhaustive: never = ev
       void _exhaustive

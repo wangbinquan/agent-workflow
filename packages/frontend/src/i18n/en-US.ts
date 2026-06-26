@@ -1011,6 +1011,34 @@ export const enUS: Resources = {
     cancelButton: 'Cancel task',
     resumeButton: 'Resume task',
     resuming: 'Resuming…',
+    // RFC-109 — sync latest workflow & continue
+    syncWorkflow: {
+      bannerTitle: 'Workflow updated',
+      bannerHint:
+        'A newer version of this workflow is available; sync to continue with the latest definition',
+      button: 'Sync & continue',
+      dialogTitle: 'Sync workflow & continue',
+      versionLabel: 'Version',
+      unknownVersion: 'unknown',
+      confirm: 'Sync & continue',
+      cancel: 'Cancel',
+      syncing: 'Syncing…',
+      invalidTitle: 'The latest workflow currently fails validation — fix it before syncing.',
+      blockerTitle: 'Sync blocked',
+      sectionAdded: 'Added nodes',
+      sectionRemoved: 'Removed nodes',
+      sectionModified: 'Changed nodes',
+      sectionWarnings: 'Warnings',
+      warn: {
+        'removed-node-feeds-downstream': 'Removed node fed a surviving node',
+        'dangling-input-port': 'Input port not produced by the preserved run',
+        'new-upstream-into-completed-node': 'New upstream into a completed node (preserved as-is)',
+      },
+      blocker: {
+        'wrapper-structure-changed-with-live-state':
+          'A wrapper changed structure while holding in-progress state; sync would corrupt its resume. Launch a fresh task instead.',
+      },
+    },
     resumeUnavailableNoWorktree:
       'Resume cannot recover from a worktree-creation failure (no worktree was ever created). Launch a fresh task instead.',
     resumeLaunchLink: 'Launch a new task →',

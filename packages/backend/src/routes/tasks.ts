@@ -28,9 +28,15 @@ import { canViewTask, getTaskMembers, updateTaskMembers } from '@/services/taskC
 import { canViewResource } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { ForbiddenError } from '@/util/errors'
-import { UpdateTaskMembersBodySchema } from '@agent-workflow/shared'
+import {
+  SyncWorkflowBodySchema,
+  UpdateTaskMembersBodySchema,
+  emptyWorkflowSyncDiff,
+  type WorkflowSyncPreview,
+} from '@agent-workflow/shared'
 import {
   cancelTask,
+  computeWorkflowSyncPreview,
   getNodeRunEvents,
   getNodeRunStdout,
   getTask,
@@ -44,6 +50,7 @@ import {
   resumeTask,
   retryNode,
   startTask,
+  syncTaskWorkflow,
 } from '@/services/task'
 import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
 import { getCallTargets } from '@/services/structuralDiff/callGraph/expandService'
@@ -389,6 +396,69 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       ...resolveLaunchRuntimeConfig(deps.configPath),
     })
     return c.json(task)
+  })
+
+  // RFC-109 — preview the delta between the task's frozen workflow snapshot and
+  // the latest definition of its workflow (drives the "workflow updated" banner
+  // + confirm dialog). Read-only; visibilityCheck already gates task membership,
+  // and the workflow must be visible (RFC-099, 404-shaped to avoid probing).
+  app.get('/api/tasks/:id/workflow-sync-preview', async (c) => {
+    const id = c.req.param('id')
+    const task = await getTask(deps.db, id)
+    if (task === null) throw new NotFoundError('task-not-found', `task '${id}' not found`)
+    const notSyncable = (reason: WorkflowSyncPreview['reason']): WorkflowSyncPreview => ({
+      syncable: false,
+      reason,
+      workflowId: task.workflowId,
+      workflowName: task.workflowName,
+      currentVersion: task.workflowVersion,
+      latestVersion: null,
+      differs: false,
+      invalid: false,
+      invalidIssues: [],
+      diff: emptyWorkflowSyncDiff(),
+    })
+    const workflow = await getWorkflow(deps.db, task.workflowId)
+    if (workflow === null) return c.json(notSyncable('workflow-deleted'))
+    if (!(await canViewResource(deps.db, actorOf(c), 'workflow', workflow))) {
+      return c.json(notSyncable('workflow-not-visible'))
+    }
+    return c.json(await computeWorkflowSyncPreview(deps.db, task, workflow))
+  })
+
+  // RFC-109 — apply the sync: swap the task's snapshot to the latest definition
+  // (recording its version) and continue from the breakpoint. Built-in guard
+  // (RFC-104) + workflow visibility (RFC-099) mirror launch; the service owns
+  // the version-TOCTOU / invalid / noop / wrapper-blocker / status gates.
+  app.post('/api/tasks/:id/sync-workflow', async (c) => {
+    const id = c.req.param('id')
+    await assertTaskWorkflowNotBuiltin(deps, id) // RFC-104: no manual exec of built-ins
+    const task = await getTask(deps.db, id)
+    if (task === null) throw new NotFoundError('task-not-found', `task '${id}' not found`)
+    const workflow = await getWorkflow(deps.db, task.workflowId)
+    if (workflow === null) {
+      throw new NotFoundError('workflow-deleted', `workflow '${task.workflowId}' no longer exists`)
+    }
+    if (!(await canViewResource(deps.db, actorOf(c), 'workflow', workflow))) {
+      // 404-shaped (RFC-099 anti-probing) — same as an unknown workflow.
+      throw new NotFoundError('workflow-not-visible', `workflow '${task.workflowId}' not found`)
+    }
+    const body = SyncWorkflowBodySchema.safeParse(await c.req.json().catch(() => ({})))
+    if (!body.success) {
+      throw new ValidationError('invalid-body', 'expectedVersion (number) required', {
+        issues: body.error.issues,
+      })
+    }
+    const opencodeCmd = resolveOpencodeCmd(deps.configPath)
+    const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
+    const updated = await syncTaskWorkflow(deps.db, id, {
+      db: deps.db,
+      expectedVersion: body.data.expectedVersion,
+      ...(opencodeCmd ? { opencodeCmd } : {}),
+      ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
+      ...resolveLaunchRuntimeConfig(deps.configPath),
+    })
+    return c.json(updated)
   })
 
   // RFC-057: Diagnose-Panel repair options.

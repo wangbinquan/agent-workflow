@@ -258,6 +258,9 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/tasks' },
   { method: 'POST', path: '/api/tasks/:id/cancel' },
   { method: 'POST', path: '/api/tasks/:id/resume' },
+  // RFC-109 — workflow re-sync
+  { method: 'GET', path: '/api/tasks/:id/workflow-sync-preview' },
+  { method: 'POST', path: '/api/tasks/:id/sync-workflow' },
   { method: 'POST', path: '/api/tasks/:id/diagnose' },
   { method: 'GET', path: '/api/tasks/:id/alerts' },
   // RFC-057: Diagnose-Panel repair options.

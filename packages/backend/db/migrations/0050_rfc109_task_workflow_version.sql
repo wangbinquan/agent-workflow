@@ -1,0 +1,15 @@
+-- RFC-109 — task workflow re-sync (additive, hand-written; the repo stopped
+-- using drizzle-kit generate after 0012, so every migration since 0013 is
+-- authored by hand and registered in meta/_journal.json).
+--
+-- `tasks.workflow_version` records WHICH `workflows.version` the task's frozen
+-- `workflow_snapshot` was taken from. Until now a task only stored `workflow_id`
+-- + the frozen snapshot, so there was no way to tell "this task is on v3 while
+-- the workflow is now v7" — the version delta the sync preview must show.
+--
+-- Nullable: legacy rows (launched before this migration) stay NULL — their
+-- historical snapshot version cannot be reconstructed, and the UI renders NULL
+-- as "unknown → vM". startTask writes `workflows.version` for every new task;
+-- syncTaskWorkflow overwrites it (atomically, inside the status CAS) on each
+-- sync. No backfill.
+ALTER TABLE `tasks` ADD COLUMN `workflow_version` integer;

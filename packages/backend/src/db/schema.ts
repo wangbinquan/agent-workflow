@@ -409,6 +409,10 @@ export const tasks = sqliteTable(
       .notNull()
       .references(() => workflows.id),
     workflowSnapshot: text('workflow_snapshot').notNull(), // JSON: workflow definition at start time
+    // RFC-109: which workflows.version the frozen snapshot was taken from. NULL
+    // for legacy rows (pre-0050; historical version unrecoverable). startTask
+    // writes workflows.version; syncTaskWorkflow overwrites it on each re-sync.
+    workflowVersion: integer('workflow_version'),
     repoPath: text('repo_path').notNull(),
     // RFC-024: original Git URL when launched from a remote URL. NULL for path-mode
     // tasks. May contain credentials; render via redactGitUrl before display.

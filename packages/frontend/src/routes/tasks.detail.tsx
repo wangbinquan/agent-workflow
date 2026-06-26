@@ -20,6 +20,7 @@ import { WorkflowCanvas, type WorkflowCanvasHandle } from '@/components/canvas/W
 import type { CanvasNodeData } from '@/components/canvas/nodes/types'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { StuckTaskBanner } from '@/components/tasks/StuckTaskBanner'
+import { WorkflowSyncBanner } from '@/components/tasks/WorkflowSyncBanner'
 import { TaskFeedbackList } from '@/components/tasks/TaskFeedbackList'
 import { TaskMembersDialogButton } from '@/components/tasks/TaskMembersPanel'
 import { NodeDetailDrawer } from '@/components/NodeDetailDrawer'
@@ -221,6 +222,7 @@ function TaskDetailPage() {
         </div>
       </header>
       <StuckTaskBanner taskId={id} />
+      <WorkflowSyncBanner taskId={id} />
       {cancel.error !== null && cancel.error !== undefined && (
         <div className="error-box">{describeError(cancel.error)}</div>
       )}

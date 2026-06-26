@@ -15,8 +15,24 @@ import type {
   TaskRepo,
   TaskSummary,
 } from '@agent-workflow/shared'
-import { CommitPushMetaSchema, NODE_KIND_BEHAVIORS } from '@agent-workflow/shared'
-import type { CommitPushMeta } from '@agent-workflow/shared'
+import {
+  CommitPushMetaSchema,
+  NODE_KIND_BEHAVIORS,
+  WorkflowDefinitionSchema,
+  allowedFromForTaskEvent,
+  diffWorkflowForSync,
+  emptyWorkflowSyncDiff,
+  isTerminalNodeRunStatus,
+} from '@agent-workflow/shared'
+import type {
+  CommitPushMeta,
+  NodeRunStatus,
+  NodeRunSyncSummary,
+  TaskTransitionEvent,
+  Workflow,
+  WorkflowDefinition,
+  WorkflowSyncPreview,
+} from '@agent-workflow/shared'
 import { and, asc, desc, eq, gt, inArray, ne, or } from 'drizzle-orm'
 import { existsSync, mkdirSync } from 'node:fs'
 import { basename, join } from 'node:path'
@@ -41,7 +57,8 @@ import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { WRAPPER_KINDS } from '@/services/dispatchFrontier'
 import type { RollbackOutcome } from '@/services/nodeRollback'
 import { killStaleRunProcessTree } from '@/util/process'
-import { setTaskStatus, trySetTaskStatus } from '@/services/lifecycle'
+import { setTaskStatus, transitionTaskStatusByEvent, trySetTaskStatus } from '@/services/lifecycle'
+import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
 import { mintNodeRun } from '@/services/nodeRunMint'
 import { pickFreshestRun } from '@/services/freshness'
 import { listAvailableRefs, resolveCachedRepo } from '@/services/gitRepoCache'
@@ -417,6 +434,42 @@ export function selectResumeRollbackTargets<
 }
 
 /**
+ * RFC-109 (Codex design-gate F4) — generalized rollback-target selector for the
+ * resume/sync core. Same freshest-top-level-per-node selection as
+ * `selectResumeRollbackTargets`, but the allowed status set is a parameter:
+ *
+ *   - resume passes ['failed','interrupted'] → byte-identical to the original.
+ *   - syncTaskWorkflow passes ['failed','interrupted','canceled'] so a canceled
+ *     WRITE node's partial worktree writes are rolled back to its pre_snapshot
+ *     BEFORE the scheduler revives it (RFC-095 makes canceled rows dispatchable;
+ *     the whole-task sync path — unlike retryNode — had no rollback for them).
+ *
+ * `isWrapperNode` carves out wrapper rows from the canceled case: a canceled
+ * wrapper row is an RFC-095 revival signal that resumes IN-PLACE (loop keeps its
+ * iteration, git keeps its baseline) — rolling it back would undo completed inner
+ * work. resume never hits this branch (no canceled in its status set).
+ */
+export function selectSyncRollbackTargets<
+  R extends { id: string; nodeId: string; parentNodeRunId: string | null; status: string },
+>(
+  runs: readonly R[],
+  statuses: readonly string[],
+  isWrapperNode: (nodeId: string) => boolean,
+): R[] {
+  const latestPerNode = new Map<string, R>()
+  for (const r of runs) {
+    if (r.parentNodeRunId !== null) continue
+    const prev = latestPerNode.get(r.nodeId)
+    if (prev === undefined || r.id > prev.id) latestPerNode.set(r.nodeId, r)
+  }
+  return [...latestPerNode.values()].filter((r) => {
+    if (!statuses.includes(r.status)) return false
+    if (r.status === 'canceled' && isWrapperNode(r.nodeId)) return false
+    return true
+  })
+}
+
+/**
  * RFC-103 T2 — single source for threading runtime config (auto commit&push +
  * global concurrency) from `StartTaskDeps` into `RunTaskOptions`. Used by
  * startTask / resumeTask / retryNode so the three kick sites can't drift: the
@@ -746,6 +799,7 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
     name: input.name,
     workflowId: workflow.id,
     workflowSnapshot: JSON.stringify(workflow.definition),
+    workflowVersion: workflow.version, // RFC-109: record the version this snapshot froze
     repoPath: headRepoPath,
     // RFC-054 W3-4 KNOWN_GAP fix: never persist the credentialed URL.
     // gitRepoCache has already used the cleartext form to clone (line
@@ -963,7 +1017,7 @@ async function escalateSnapshotLost(
   taskId: string,
   run: { id: string; nodeId: string },
   outcome: RollbackOutcome,
-  reason: 'resumeTask' | 'retryNode',
+  reason: 'resumeTask' | 'retryNode' | 'syncTaskWorkflow',
 ): Promise<never> {
   const detail = outcome.failures
     .filter((f) => f.code === 'snapshot-missing')
@@ -1042,74 +1096,107 @@ export async function cancelTask(db: DbClient, id: string): Promise<Task> {
 }
 
 /**
- * Resume a failed or interrupted task (P-3-08).
- *
- * Walks all node_runs in failed/interrupted state, rolls the worktree back
- * to each one's pre_snapshot (write nodes only — readers leave the
- * worktree alone), flips the surviving runs back to `pending`, then kicks
- * the scheduler. Done node_runs stay untouched so the resumed task picks
- * up where it left off.
+ * Resume a failed or interrupted task (P-3-08). Thin shell over `resumeKick`
+ * (RFC-109 D5 — abstract once, don't fork). Behaviour is byte-identical to the
+ * pre-RFC-109 implementation: the `{kind:'resume'}` event derives the same
+ * allowed-from set (failed/interrupted/awaiting_review/awaiting_human) and
+ * rollback targets (failed/interrupted) as before.
  */
 export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps): Promise<Task> {
+  return resumeKick(db, id, deps, {
+    event: { kind: 'resume' },
+    selectRollback: (runs) => selectResumeRollbackTargets(runs),
+    reason: 'resumeTask',
+    conflictCode: 'task-not-resumable',
+    verb: 'resume',
+  })
+}
+
+/**
+ * RFC-109 — shared "reanimate a parked/terminal task and continue from the
+ * breakpoint" core, extracted from resumeTask. Both resumeTask and
+ * syncTaskWorkflow drive it; the ONLY differences are the transition event
+ * (which fixes the allowed-from set via the shared `nextTaskStatus` table), the
+ * optional `extra` columns written ATOMICALLY inside the ownership CAS (sync
+ * swaps `workflow_snapshot` + `workflow_version` here), and the rollback-target
+ * selector.
+ *
+ * The pending CAS (RFC-097 audit S-8) IS the ownership lock and moves BEFORE any
+ * git rollback, so a concurrent resume/retry/sync loses with zero side effects.
+ */
+async function resumeKick(
+  db: DbClient,
+  id: string,
+  deps: StartTaskDeps,
+  opts: {
+    event: TaskTransitionEvent
+    extra?: TaskStatusUpdateExtra
+    selectRollback: (
+      runs: Array<typeof nodeRuns.$inferSelect>,
+    ) => Array<typeof nodeRuns.$inferSelect>
+    reason: 'resumeTask' | 'syncTaskWorkflow'
+    conflictCode: string
+    verb: string
+  },
+): Promise<Task> {
   const task = await getTask(db, id)
   if (task === null) {
     throw new NotFoundError('task-not-found', `task '${id}' not found`)
   }
+  const allowedFrom = allowedFromForTaskEvent(opts.event)
   // RFC-097 (audit S-8): an in-process scheduler loop already owns this task —
-  // a second driver would double-write the worktree. Same 409 code as the
-  // status gate below (the resume contract exposes one code).
+  // a second driver would double-write the worktree.
   if (isTaskActive(id)) {
     throw new ConflictError(
-      'task-not-resumable',
-      `task '${id}' is actively running (scheduler attached); cannot resume`,
+      opts.conflictCode,
+      `task '${id}' is actively running (scheduler attached); cannot ${opts.verb}`,
     )
   }
-  if (
-    task.status !== 'failed' &&
-    task.status !== 'interrupted' &&
-    task.status !== 'awaiting_review' && // RFC-005: decision handler resumes after pause
-    task.status !== 'awaiting_human' // RFC-023: clarify answer submit resumes after pause
-  ) {
+  if (!allowedFrom.includes(task.status)) {
     throw new ConflictError(
-      'task-not-resumable',
-      `task '${id}' is ${task.status}; only failed/interrupted/awaiting_review/awaiting_human tasks can resume`,
+      opts.conflictCode,
+      `task '${id}' is ${task.status}; only [${allowedFrom.join('/')}] tasks can ${opts.verb}`,
     )
   }
 
-  // RFC-097 (audit S-8): the pending CAS IS the ownership lock — it moves
-  // BEFORE the git rollback so a concurrent resume/retry loses here with zero
-  // side effects (the old order let both racers roll the worktree back and
-  // kick two schedulers). Losing the race surfaces as the same 409 the status
-  // gate above produces.
+  // RFC-097 ownership lock — the pending CAS moves BEFORE the git rollback so a
+  // concurrent resume/retry/sync loses here with zero side effects. RFC-109:
+  // routed through the shared event table; `extra` carries sync's atomic
+  // snapshot+version swap (one CAS UPDATE — a lost race never tears the row).
   try {
-    await setTaskStatus({
+    await transitionTaskStatusByEvent({
       db,
       taskId: id,
-      to: 'pending',
-      allowedFrom: ['failed', 'interrupted', 'awaiting_review', 'awaiting_human'],
+      event: opts.event,
       allowTerminal: true,
-      extra: { finishedAt: null, errorSummary: null, errorMessage: null, failedNodeId: null },
-      reason: 'resumeTask',
+      extra: {
+        finishedAt: null,
+        errorSummary: null,
+        errorMessage: null,
+        failedNodeId: null,
+        ...opts.extra,
+      },
+      reason: opts.reason,
     })
   } catch (err) {
     if (err instanceof ConflictError) {
       throw new ConflictError(
-        'task-not-resumable',
-        `task '${id}' changed state concurrently; only failed/interrupted/awaiting_review/awaiting_human tasks can resume`,
+        opts.conflictCode,
+        `task '${id}' changed state concurrently; only [${allowedFrom.join('/')}] tasks can ${opts.verb}`,
       )
     }
     throw err
   }
 
-  // Collect the latest non-done run per nodeId — those are the ones that
-  // need rollback + a fresh attempt. Freshness is ULID id-order, matching the
-  // scheduler's authority (isFresherNodeRun). retryIndex ordering was wrong: a
-  // clarify-driven rerun is minted with retryIndex 0 but a newer id, so an older
-  // failed retry with a higher retryIndex would shadow it and resume would roll
-  // the worktree back to the wrong row's pre_snapshot. See
+  // Collect the latest non-done run per nodeId — those need rollback + a fresh
+  // attempt. Freshness is ULID id-order, matching the scheduler's authority
+  // (isFresherNodeRun). retryIndex ordering was wrong: a clarify-driven rerun is
+  // minted with retryIndex 0 but a newer id, so an older failed retry with a
+  // higher retryIndex would shadow it and resume would roll the worktree back to
+  // the wrong row's pre_snapshot. See
   // scheduler-boundary-resume-retryindex-vs-id.test.ts.
   const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
-  const toRollback = selectResumeRollbackTargets(runs)
+  const toRollback = opts.selectRollback(runs)
 
   for (const r of toRollback) {
     // RFC-098 WP-8 (audit S-15): kill-then-proceed, not 409 — if the row's
@@ -1119,7 +1206,7 @@ export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps):
     // worktree we are about to reset.
     const killOutcome = await killStaleRunProcessTree(r)
     if (killOutcome === 'killed' || killOutcome === 'kill-failed') {
-      log.warn('resume: live child process group-killed before rollback (best-effort)', {
+      log.warn(`${opts.verb}: live child process group-killed before rollback (best-effort)`, {
         nodeRunId: r.id,
         pid: r.pid,
         outcome: killOutcome,
@@ -1131,7 +1218,7 @@ export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps):
     // flip the task failed (errorSummary='snapshot-lost') and surface a 409.
     // Other failure codes keep the historical warn-and-continue net below.
     if (outcome.failures.some((f) => f.code === 'snapshot-missing')) {
-      await escalateSnapshotLost(db, id, r, outcome, 'resumeTask')
+      await escalateSnapshotLost(db, id, r, outcome, opts.reason)
     }
     // The scheduler creates a new node_run with retry_index = max+1 on its
     // own when it sees no pending run for the node, so we just leave the
@@ -1150,10 +1237,10 @@ export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps):
   const controller = new AbortController()
   if (activeTasks.has(id)) {
     // Should be unreachable (entry check + ownership CAS) — defensive only.
-    log.error('resumeTask: controller already registered for task', { taskId: id })
+    log.error(`${opts.reason}: controller already registered for task`, { taskId: id })
   }
   activeTasks.set(id, controller)
-  void runTask({
+  const schedulerPromise = runTask({
     taskId: id,
     db,
     appHome: deps.appHome ?? Paths.root,
@@ -1171,7 +1258,7 @@ export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps):
     signal: controller.signal,
   })
     .catch((err) => {
-      log.error('runTask threw on resume', {
+      log.error(`runTask threw on ${opts.verb}`, {
         taskId: id,
         error: err instanceof Error ? err.message : String(err),
       })
@@ -1181,7 +1268,332 @@ export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps):
       // controller.
       if (activeTasks.get(id) === controller) activeTasks.delete(id)
     })
+
+  // Mirror startTask: tests opt into awaiting the scheduler; production callers
+  // (HTTP routes) fire-and-forget and get the post-flip task immediately.
+  if (deps.awaitScheduler === true) {
+    await schedulerPromise
+    return (await getTask(db, id)) as Task
+  }
   return next
+}
+
+/**
+ * RFC-109 — parse a task's frozen `workflow_snapshot` (already JSON-decoded into
+ * an object by rowToTask, so `unknown` here) into a structured definition, the
+ * same schema the scheduler parses at runTask entry. Throws on a corrupt
+ * snapshot (an exceptional state for a task that launched successfully).
+ */
+function parseSnapshotDefinition(snapshot: unknown): WorkflowDefinition {
+  return WorkflowDefinitionSchema.parse(snapshot)
+}
+
+/**
+ * RFC-109 (Codex impl-gate re-review P2) — the wrapper top-level statuses after
+ * which `wrapper_progress_json` is a pure debug breadcrumb the scheduler never
+ * re-reads. Mirrors `findResumableWrapperRun` exactly (scheduler.ts), which
+ * returns null (→ fresh wrapper row, no progress decode) for these and resumes
+ * from progress for everything else (RFC-095 keeps canceled/interrupted live).
+ */
+const WRAPPER_BREADCRUMB_TERMINAL: ReadonlySet<string> = new Set(['done', 'failed', 'exhausted'])
+
+/**
+ * RFC-109 — assemble the per-node `NodeRunSyncSummary` the sync diff consumes,
+ * from a task's node_runs. `hasCompletedRun` / `hasLiveWrapperState` come from
+ * the rows alone; `producedPorts` (the preserved run's actual output ports, used
+ * only by the preview's data-loss warnings) is supplied by the caller when it
+ * has queried node_run_outputs — the sync SERVICE leaves it empty because it
+ * only acts on `differs` + `blockers`, neither of which reads producedPorts.
+ */
+export function buildSyncRunSummary(
+  runs: ReadonlyArray<typeof nodeRuns.$inferSelect>,
+  producedPortsByNode?: ReadonlyMap<string, ReadonlySet<string>>,
+): Map<string, NodeRunSyncSummary> {
+  const runIdToNode = new Map(runs.map((r) => [r.id, r.nodeId]))
+  const completed = new Set<string>()
+  const liveWrapper = new Set<string>()
+  for (const r of runs) {
+    if (r.parentNodeRunId === null && r.status === 'done') completed.add(r.nodeId)
+    // Live wrapper state = state the scheduler would actually RE-READ on resume.
+    // Codex impl-gate re-review P2: `wrapper_progress_json` is left in place after
+    // a TERMINAL wrapper transition as a debug breadcrumb and is never read again
+    // (scheduler.ts ~2736). Mirror findResumableWrapperRun's gate exactly — it
+    // resumes (and decodes progress for) every status EXCEPT done/failed/exhausted
+    // (RFC-095 keeps canceled/interrupted resumable). So a done/failed/exhausted
+    // wrapper with a leftover breadcrumb must NOT count as live (else a completed
+    // task false-blocks). A non-terminal child row is an in-progress shard.
+    if (
+      r.parentNodeRunId === null &&
+      r.wrapperProgressJson != null &&
+      !WRAPPER_BREADCRUMB_TERMINAL.has(r.status)
+    ) {
+      liveWrapper.add(r.nodeId) // parked / resumable wrapper holding real progress
+    }
+    if (r.parentNodeRunId !== null && !isTerminalNodeRunStatus(r.status as NodeRunStatus)) {
+      const parentNode = runIdToNode.get(r.parentNodeRunId)
+      if (parentNode !== undefined) liveWrapper.add(parentNode) // wrapper has an in-progress shard/iteration child
+    }
+  }
+  const nodeIds = new Set<string>([
+    ...runs.map((r) => r.nodeId),
+    ...(producedPortsByNode?.keys() ?? []),
+  ])
+  const out = new Map<string, NodeRunSyncSummary>()
+  for (const nodeId of nodeIds) {
+    out.set(nodeId, {
+      hasCompletedRun: completed.has(nodeId),
+      producedPorts: producedPortsByNode?.get(nodeId) ?? new Set<string>(),
+      hasLiveWrapperState: liveWrapper.has(nodeId),
+    })
+  }
+  return out
+}
+
+/**
+ * RFC-109 — re-point a non-active task at the LATEST definition of its workflow
+ * and continue from the breakpoint, instead of forcing a from-scratch relaunch.
+ * Swaps the frozen `workflow_snapshot` (+ records the new version) ATOMICALLY
+ * inside the ownership CAS via `resumeKick`'s `extra`, then lets the scheduler
+ * re-derive the frontier from the new graph (new nodes dispatch, completed
+ * done∧fresh nodes are preserved, failed nodes re-run under the new definition).
+ *
+ * Guards (Codex design-gate, design §9): worktree-missing (AC-10), workflow
+ * deleted, version TOCTOU (F5), invalid def, same-def short-circuit (F7), and
+ * the wrapper-structure-changed-with-live-state BLOCKER (F3). ACL + built-in
+ * checks live in the route (mirrors resume — service is actor-agnostic).
+ */
+export async function syncTaskWorkflow(
+  db: DbClient,
+  id: string,
+  deps: StartTaskDeps & { expectedVersion: number },
+): Promise<Task> {
+  const task = await getTask(db, id)
+  if (task === null) {
+    throw new NotFoundError('task-not-found', `task '${id}' not found`)
+  }
+  // Fast-fail on a non-syncable status BEFORE loading the workflow / diffing.
+  // Critical for the concurrent case: a racer that already swapped the snapshot
+  // makes the diff `differs=false`, so without this gate a second sync would
+  // report a misleading `workflow-sync-noop` instead of `task-not-syncable`.
+  // resumeKick's CAS remains the real ownership gate (this is best-effort TOCTOU
+  // fast-fail with the right error code).
+  if (isTaskActive(id)) {
+    throw new ConflictError(
+      'task-not-syncable',
+      `task '${id}' is actively running (scheduler attached); cannot sync`,
+    )
+  }
+  const syncableFrom = allowedFromForTaskEvent({ kind: 'sync-workflow' })
+  if (!syncableFrom.includes(task.status)) {
+    throw new ConflictError(
+      'task-not-syncable',
+      `task '${id}' is ${task.status}; only [${syncableFrom.join('/')}] tasks can sync`,
+    )
+  }
+  // AC-10: worktree already GC'd → clean 409 instead of a 500 mid-rollback.
+  if (task.worktreePath === '') {
+    throw new ConflictError(
+      'worktree-missing',
+      `task '${id}' has no worktree (likely GC'd); cannot sync`,
+    )
+  }
+
+  const workflow = await getWorkflow(db, task.workflowId)
+  if (workflow === null) {
+    throw new ConflictError('workflow-deleted', `workflow '${task.workflowId}' no longer exists`)
+  }
+  // F5: the user confirmed a specific preview version; refuse if the live
+  // workflow moved underneath them (another PUT bumped it after preview).
+  if (workflow.version !== deps.expectedVersion) {
+    throw new ConflictError(
+      'workflow-sync-preview-stale',
+      `workflow advanced to v${workflow.version} since the preview (v${deps.expectedVersion}); refresh and re-confirm`,
+    )
+  }
+  // Same static validation gate as launch — never sync an invalid definition in.
+  const validation = validateWorkflowDef(workflow.definition, {
+    agents: await listAgents(db),
+    skills: await listSkills(db),
+  })
+  if (!validation.ok) {
+    const errors = validation.issues.filter((i) => (i.severity ?? 'error') === 'error')
+    throw new ValidationError(
+      'workflow-invalid',
+      `workflow '${task.workflowId}' failed static validation (${errors.length} error${errors.length === 1 ? '' : 's'}); fix it before syncing`,
+      { issues: validation.issues },
+    )
+  }
+
+  const oldDef = parseSnapshotDefinition(task.workflowSnapshot)
+  const newDef = workflow.definition
+  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
+  // The service only needs `differs` (F7) + `blockers` (F3); both are
+  // independent of producedPorts, so the run summary stays output-port-free.
+  const diff = diffWorkflowForSync(oldDef, newDef, buildSyncRunSummary(runs))
+  // F7: definitions are semantically identical → nothing to sync; don't churn
+  // the task status (done → pending → running → done) for a no-op.
+  if (!diff.differs) {
+    throw new ConflictError(
+      'workflow-sync-noop',
+      `task '${id}' is already on the latest workflow definition`,
+    )
+  }
+  // F3: a wrapper changed structure while holding live parked/shard state —
+  // swapping it would corrupt resume. Block (the user can launch a fresh task).
+  if (diff.blockers.length > 0) {
+    throw new ConflictError(
+      'wrapper-structure-changed-with-live-state',
+      diff.blockers.map((b) => b.detail).join('; '),
+    )
+  }
+
+  // Wrapper carve-out for the canceled rollback (selectSyncRollbackTargets):
+  // keyed to the OLD definition only (Codex impl-gate F2) — a canceled row's
+  // rollback decision depends on what the node WAS when it ran (its pre_snapshot
+  // + write semantics come from the old graph). If the old node was an agent
+  // write canceled mid-write, roll it back even if the new graph turns that id
+  // into a wrapper; if it was a wrapper, spare it (RFC-095 revives in place). A
+  // wrapper↔non-wrapper kind change WITH live state is already blocked above by
+  // the F1 fingerprint, so this only governs the no-live-state cases.
+  const oldWrapperNodeIds = new Set<string>()
+  for (const n of oldDef.nodes) {
+    if (WRAPPER_KINDS.has(n.kind)) oldWrapperNodeIds.add(n.id)
+  }
+
+  // F5 TOCTOU re-check (Codex impl-gate F3): validation + diff above are local DB
+  // reads, but a concurrent workflow PUT could have bumped the version in that
+  // window. Re-assert it immediately before the ownership CAS so we never write a
+  // snapshot the user did not confirm. This closes the real (seconds-long)
+  // preview→POST window; a sub-ms residual remains (this re-read → the CAS still
+  // does its own task read), but it is BENIGN — sync only ever writes the
+  // user-confirmed `expectedVersion`, so even if a PUT lands there the task gets
+  // the confirmed definition and the next preview shows the new delta (banner
+  // reappears, no corruption). Folding the workflow-version predicate into the
+  // CAS UPDATE would be fully atomic but is deliberately NOT done: it would put
+  // resumeKick's worktree reset + process spawn inside one DB transaction
+  // (Codex re-review agreed this is not warranted). See design §10 F3.
+  const recheck = await db
+    .select({ version: workflows.version })
+    .from(workflows)
+    .where(eq(workflows.id, task.workflowId))
+    .limit(1)
+  if (recheck[0]?.version !== deps.expectedVersion) {
+    throw new ConflictError(
+      'workflow-sync-preview-stale',
+      `workflow advanced since validation; refresh and re-confirm`,
+    )
+  }
+
+  return resumeKick(db, id, deps, {
+    event: { kind: 'sync-workflow' },
+    extra: {
+      workflowSnapshot: JSON.stringify(newDef),
+      workflowVersion: workflow.version,
+    },
+    selectRollback: (rs) =>
+      selectSyncRollbackTargets(rs, ['failed', 'interrupted', 'canceled'], (nodeId) =>
+        oldWrapperNodeIds.has(nodeId),
+      ),
+    reason: 'syncTaskWorkflow',
+    conflictCode: 'task-not-syncable',
+    verb: 'sync',
+  })
+}
+
+/**
+ * RFC-109 — assemble the `workflow-sync-preview` for a task whose workflow is
+ * resolved + visible (the route handles deleted / not-visible before calling).
+ * Computes the version delta, the full node diff (with the data-loss warnings
+ * that need the preserved runs' actual produced ports), and whether the live
+ * definition currently fails static validation.
+ */
+export async function computeWorkflowSyncPreview(
+  db: DbClient,
+  task: Task,
+  workflow: Workflow,
+): Promise<WorkflowSyncPreview> {
+  // RFC-104 built-in workflows are never manually executed (POST sync-workflow
+  // would 403) — so the banner must not appear for them (Codex impl-gate F4).
+  if (workflow.builtin) {
+    return {
+      syncable: false,
+      reason: 'builtin-workflow',
+      workflowId: task.workflowId,
+      workflowName: task.workflowName,
+      currentVersion: task.workflowVersion,
+      latestVersion: workflow.version,
+      differs: false,
+      invalid: false,
+      invalidIssues: [],
+      diff: emptyWorkflowSyncDiff(),
+    }
+  }
+  const oldDef = parseSnapshotDefinition(task.workflowSnapshot)
+  const newDef = workflow.definition
+  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
+
+  // The freshest done top-level run per node + the output ports it produced —
+  // the basis for the `dangling-input-port` warning (Codex F2).
+  const freshestDoneRunIdByNode = new Map<string, string>()
+  const runsByNode = new Map<string, Array<typeof nodeRuns.$inferSelect>>()
+  for (const r of runs) {
+    const list = runsByNode.get(r.nodeId)
+    if (list === undefined) runsByNode.set(r.nodeId, [r])
+    else list.push(r)
+  }
+  for (const [nodeId, rows] of runsByNode) {
+    const fresh = pickFreshestRun(rows, { topLevelOnly: true, statusIn: ['done'] })
+    if (fresh !== undefined) freshestDoneRunIdByNode.set(nodeId, fresh.id)
+  }
+  const runIds = [...freshestDoneRunIdByNode.values()]
+  const outRows =
+    runIds.length > 0
+      ? await db.select().from(nodeRunOutputs).where(inArray(nodeRunOutputs.nodeRunId, runIds))
+      : []
+  const portsByRun = new Map<string, Set<string>>()
+  for (const o of outRows) {
+    const set = portsByRun.get(o.nodeRunId)
+    if (set === undefined) portsByRun.set(o.nodeRunId, new Set([o.portName]))
+    else set.add(o.portName)
+  }
+  const producedPortsByNode = new Map<string, ReadonlySet<string>>()
+  for (const [nodeId, runId] of freshestDoneRunIdByNode) {
+    producedPortsByNode.set(nodeId, portsByRun.get(runId) ?? new Set<string>())
+  }
+
+  const diff = diffWorkflowForSync(oldDef, newDef, buildSyncRunSummary(runs, producedPortsByNode))
+  const validation = validateWorkflowDef(newDef, {
+    agents: await listAgents(db),
+    skills: await listSkills(db),
+  })
+  const invalidIssues = validation.ok
+    ? []
+    : validation.issues
+        .filter((i) => (i.severity ?? 'error') === 'error')
+        .map((i) => ({ code: i.code, message: i.message }))
+
+  const syncableStatuses = allowedFromForTaskEvent({ kind: 'sync-workflow' })
+  const worktreeMissing = task.worktreePath === ''
+  const statusSyncable = syncableStatuses.includes(task.status)
+  const syncable = statusSyncable && !worktreeMissing
+  const reason: WorkflowSyncPreview['reason'] = syncable
+    ? 'ok'
+    : worktreeMissing
+      ? 'worktree-missing'
+      : 'task-active'
+
+  return {
+    syncable,
+    reason,
+    workflowId: task.workflowId,
+    workflowName: task.workflowName,
+    currentVersion: task.workflowVersion,
+    latestVersion: workflow.version,
+    differs: diff.differs,
+    invalid: !validation.ok,
+    invalidIssues,
+    diff,
+  }
 }
 
 /**
@@ -1961,6 +2373,8 @@ function rowToTask(
     workflowId: row.workflowId,
     workflowName,
     workflowSnapshot: snapshot,
+    workflowVersion: row.workflowVersion ?? null, // RFC-109
+
     repoPath: row.repoPath,
     repoUrl: row.repoUrl ?? null,
     worktreePath: row.worktreePath,
