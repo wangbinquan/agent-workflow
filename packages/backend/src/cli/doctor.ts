@@ -1,6 +1,7 @@
 // `agent-workflow doctor` — run all health checks without starting daemon.
 // Mirrors design.md §11.3.
 
+import { Database } from 'bun:sqlite'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { loadConfig } from '@/config'
 import { countEmbeddedSqlMigrations, IS_EMBEDDED } from '@/embed'
@@ -66,8 +67,78 @@ export async function doctorCommand(): Promise<DoctorResult> {
   // 6. migrations present
   checks.push(checkMigrations())
 
+  // 7. RFC-108 T16 (AR-20): lifecycle health — surface recoverable/parked tasks
+  // + open alerts so an operator running `doctor` sees a stuck fleet without
+  // opening the UI. Informational (never fails doctor — these are recoverable
+  // runtime states, not setup errors).
+  checks.push(checkLifecycleHealth())
+
   const ok = checks.every((c) => c.ok)
   return { ok, checks }
+}
+
+export interface LifecycleHealthCounts {
+  interrupted: number
+  failed: number
+  awaitingReview: number
+  awaitingHuman: number
+  quarantined: number
+  openAlerts: number
+}
+
+/**
+ * Pure decision for the lifecycle-health check (no DB), so tests cover the
+ * summary wording directly. Always `ok: true` — a stuck fleet is a recoverable
+ * runtime state, not a `doctor` failure; the message just makes it visible.
+ */
+export function evaluateLifecycleHealth(c: LifecycleHealthCounts): CheckResult {
+  const notable = c.interrupted + c.awaitingReview + c.awaitingHuman + c.quarantined + c.openAlerts
+  if (notable === 0) {
+    return { name: 'lifecycle', ok: true, message: 'no parked / interrupted tasks, no open alerts' }
+  }
+  const parts = [
+    `${c.interrupted} interrupted (resumable)`,
+    `${c.awaitingReview} awaiting-review`,
+    `${c.awaitingHuman} awaiting-human`,
+    `${c.quarantined} auto-recovery-quarantined`,
+    `${c.openAlerts} open alert${c.openAlerts === 1 ? '' : 's'}`,
+  ]
+  return { name: 'lifecycle', ok: true, message: parts.join(', ') }
+}
+
+function checkLifecycleHealth(): CheckResult {
+  if (!existsSync(Paths.db)) {
+    return { name: 'lifecycle', ok: true, message: '(no database yet)' }
+  }
+  let dbh: Database | null = null
+  try {
+    dbh = new Database(Paths.db, { readonly: true })
+    const taskCount = (status: string): number =>
+      (dbh!.query('SELECT count(*) AS n FROM tasks WHERE status = ?').get(status) as { n: number })
+        .n
+    const counts: LifecycleHealthCounts = {
+      interrupted: taskCount('interrupted'),
+      failed: taskCount('failed'),
+      awaitingReview: taskCount('awaiting_review'),
+      awaitingHuman: taskCount('awaiting_human'),
+      quarantined: (
+        dbh.query('SELECT count(*) AS n FROM tasks WHERE auto_recovery_suspended = 1').get() as {
+          n: number
+        }
+      ).n,
+      openAlerts: (
+        dbh.query('SELECT count(*) AS n FROM lifecycle_alerts WHERE resolved_at IS NULL').get() as {
+          n: number
+        }
+      ).n,
+    }
+    return evaluateLifecycleHealth(counts)
+  } catch (err) {
+    // DB locked / pre-migration / missing column — informational, never fatal.
+    return { name: 'lifecycle', ok: true, message: `(unavailable: ${(err as Error).message})` }
+  } finally {
+    dbh?.close()
+  }
 }
 
 async function checkGit(): Promise<CheckResult> {
