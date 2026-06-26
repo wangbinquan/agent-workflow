@@ -38,6 +38,9 @@ import {
   getTaskNodeRuns,
   listTasks,
   materializeWorktree,
+  normalizeStartTaskRepos,
+  resolveRepoSourceSingle,
+  type ResolvedRepoSource,
   resumeTask,
   retryNode,
   startTask,
@@ -52,6 +55,7 @@ import {
   type UploadFile,
   type UploadInputDef,
   type UploadLimits,
+  validateUploadPlan,
 } from '@/services/upload'
 import { getSessionTree } from '@/services/sessionView'
 import { getInventorySnapshot } from '@/services/inventory'
@@ -60,6 +64,9 @@ import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
 import { applyRepairOption, listRepairOptionsForAlert } from '@/services/lifecycleRepair'
 import { listOpenLifecycleAlertsForTask } from '@/services/taskAlerts'
 import { getWorkflow } from '@/services/workflow'
+import { validateWorkflowDef } from '@/services/workflow.validator'
+import { listAgents } from '@/services/agent'
+import { listSkills } from '@/services/skill'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { Paths } from '@/util/paths'
 import { NotFoundError, ValidationError } from '@/util/errors'
@@ -781,15 +788,6 @@ async function handleMultipartTaskStart(
   // 4. Materialize the worktree first so we have a real path to write into.
   const appHome = Paths.root
   const taskId = ulid()
-  // RFC-024 NOTE: multipart upload path currently requires path-mode launch
-  // (URL-mode uploads would need to resolve the cache before this point).
-  // Refuse URL+upload combos with a clear 422 instead of silently dropping.
-  if (startInput.repoUrl) {
-    throw new ValidationError(
-      'multipart-upload-requires-path-mode',
-      'multipart uploads currently require launching with a local repoPath; URL launches are JSON-only',
-    )
-  }
   // RFC-066: multi-repo + multipart uploads is not supported in v1. The
   // upload pipeline writes files into a single worktree; with N sibling
   // worktrees there's no obvious target. Gate at the route so the caller
@@ -803,26 +801,71 @@ async function handleMultipartTaskStart(
       { repoCount: startInput.repos.length },
     )
   }
-  // RFC-066: accept the v2 single-entry `repos:[{...}]` body shape in addition
-  // to the legacy top-level `repoPath`/`baseBranch` fields. The multi-repo
-  // case (length > 1) was already rejected above; here we just normalize so
-  // materializeWorktree always sees a concrete repoPath even when the caller
-  // used the new shape. We narrow to a non-empty string via an explicit
-  // runtime check rather than an `as string` cast (RFC-054 W1-7 route-cast
-  // guard prefers this pattern).
-  const multipartRepoPath = startInput.repoPath ?? startInput.repos?.[0]?.repoPath
-  const multipartBaseBranch = startInput.baseBranch ?? startInput.repos?.[0]?.baseBranch
-  if (!multipartRepoPath) {
-    throw new ValidationError(
-      'multipart-upload-requires-path-mode',
-      'multipart uploads require a local repoPath (top-level repoPath or repos[0].repoPath)',
-    )
+  // RFC-107 (Codex design-gate F1): run the SAME static workflow validation
+  // startTask runs (services/task.ts) BEFORE resolving/cloning the repo. JSON
+  // launches validate before any repo resolution; the multipart path
+  // materializes the worktree before startTask, so without this an
+  // invalid-but-visible workflow with an upload input would clone + populate
+  // the gitRepoCache (network + a cache row) and only THEN fail validation —
+  // diverging from JSON URL mode. Refuse up front so a bad workflow never
+  // triggers a clone. startTask validates again; validateWorkflowDef is a pure,
+  // side-effect-free function so the double check is cheap.
+  {
+    const validation = validateWorkflowDef(workflow.definition, {
+      agents: await listAgents(deps.db),
+      skills: await listSkills(deps.db),
+    })
+    if (!validation.ok) {
+      const errors = validation.issues.filter((i) => (i.severity ?? 'error') === 'error')
+      throw new ValidationError(
+        'workflow-invalid',
+        `workflow '${startInput.workflowId}' failed static validation (${errors.length} error${errors.length === 1 ? '' : 's'}); fix issues before starting a task`,
+        { issues: validation.issues },
+      )
+    }
   }
+  // RFC-107 (Codex impl-gate): validate the uploads (count / total + per-file
+  // size / accept / min-max) BEFORE resolving or cloning the repo. Otherwise a
+  // valid repoUrl + a bad upload would clone the repo and leave an orphan
+  // worktree before applyUploadsToWorktree rejected it. The write phase re-runs
+  // these checks; limits are resolved once and reused at step 5.
+  const limits = resolveUploadLimits(deps.configPath)
+  validateUploadPlan({ defs: uploadDefs, files: uploadFiles, limits })
+  // RFC-107: resolve the (single) repo source BEFORE materializing the worktree.
+  // resolveRepoSourceSingle handles BOTH path mode (repoPath passes through) and
+  // URL mode (clones into the gitRepoCache and returns the local cache path) —
+  // so URL + upload now works. A URL clone/resolve failure throws the SAME
+  // structured error a JSON URL-mode launch would (parity); it propagates as a
+  // 4xx and no task row is created. The resolved source is threaded into
+  // startTask via `preResolvedSource` so the URL is resolved EXACTLY ONCE
+  // (RFC-107 D1-B) on both the success and the materialize-failure handoff.
+  // `normalizeStartTaskRepos` reuses startTask's own legacy/v2 body normalization
+  // (the multi-repo>1 case was rejected above, so [0] is the single repo).
+  const multipartSpec = normalizeStartTaskRepos(startInput)[0]!
+  const resolvedSource: ResolvedRepoSource = await resolveRepoSourceSingle(
+    multipartSpec,
+    startInput,
+    {
+      db: deps.db,
+      appHome,
+    },
+  )
+  // RFC-107 (Codex design-gate F2 / D5): thread the working branch + git identity
+  // into materializeWorktree exactly like the JSON single-repo path
+  // (services/task.ts) so an upload launch with a working branch actually checks
+  // it out instead of silently persisting workingBranch while running on the
+  // default `agent-workflow/{taskId}` isolation branch.
   const wt = await materializeWorktree({
-    repoPath: multipartRepoPath,
-    baseBranch: multipartBaseBranch,
+    repoPath: resolvedSource.repoPath,
+    baseBranch: resolvedSource.baseBranch,
     taskId,
     appHome,
+    // Normalize null → undefined to match materializeWorktree's `workingBranch?:
+    // string` contract (null/unset → default isolation branch; a string → check
+    // it out). Same observable behavior as the JSON single-repo path.
+    workingBranch: startInput.workingBranch ?? undefined,
+    gitUserName: startInput.gitUserName ?? null,
+    gitUserEmail: startInput.gitUserEmail ?? null,
   })
   const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
   if (wt.earlyError !== null) {
@@ -835,12 +878,14 @@ async function handleMultipartTaskStart(
       ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
       // RFC-103 T2: multipart (upload) start must thread runtime config too.
       ...resolveLaunchRuntimeConfig(deps.configPath),
+      // RFC-107 (D1-B): reuse the route's already-resolved source so the
+      // materialize-failure path does NOT re-resolve (no second clone/fetch).
+      preResolvedSource: resolvedSource,
     })
     return task
   }
 
-  // 5. Write uploads + pack paths back into inputs[].
-  const limits = resolveUploadLimits(deps.configPath)
+  // 5. Write uploads + pack paths back into inputs[] (limits resolved at step 4).
   try {
     const result = await applyUploadsToWorktree({
       worktreePath: wt.worktreePath,
@@ -862,6 +907,9 @@ async function handleMultipartTaskStart(
         ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
         // RFC-103 T2: multipart (upload) start must thread runtime config too.
         ...resolveLaunchRuntimeConfig(deps.configPath),
+        // RFC-107 (D1-B): reuse the route's already-resolved source so startTask
+        // does not resolve the URL a second time (resolve exactly once).
+        preResolvedSource: resolvedSource,
         preCreatedWorktree: {
           taskId,
           worktreePath: wt.worktreePath,

@@ -137,6 +137,18 @@ export interface StartTaskDeps {
    */
   preCreatedWorktree?: PreCreatedWorktree
   /**
+   * RFC-107 — the multipart-upload route resolves the (single) repo source
+   * BEFORE materializing the worktree (it must turn a `repoUrl` into a local
+   * cache path so it can clone, build the worktree, and write uploads into it).
+   * It threads that already-resolved source back in here so `startTask`'s own
+   * resolution loop reuses it for the single repo (index 0) instead of calling
+   * `resolveRepoSourceSingle` a second time — guaranteeing the URL is resolved
+   * EXACTLY ONCE (no redundant clone/fetch) on both the success handoff and the
+   * materialize-failure (`earlyError`) handoff. Only meaningful for single-repo
+   * bodies (multipart upload is single-repo only); multi-repo ignores it.
+   */
+  preResolvedSource?: ResolvedRepoSource
+  /**
    * RFC-036 — launcher user id. NULL falls back to the legacy single-user
    * behavior (ownerUserId stays NULL; no collab/assignment rows written).
    * The route passes actor.user.id when the actor is a real user; daemon-
@@ -241,7 +253,7 @@ export async function materializeWorktree(opts: {
   }
 }
 
-interface ResolvedRepoSource {
+export interface ResolvedRepoSource {
   repoPath: string
   baseBranch: string | undefined
   repoUrl: string | null
@@ -260,7 +272,7 @@ interface ResolvedRepoSource {
  * is left on `input` (a single top-level flag covers every repo in a
  * multi-repo task by design — see RFC-068 §"多仓" interaction notes).
  */
-function normalizeStartTaskRepos(input: StartTask): StartTaskRepo[] {
+export function normalizeStartTaskRepos(input: StartTask): StartTaskRepo[] {
   if (Array.isArray(input.repos) && input.repos.length > 0) {
     return input.repos
   }
@@ -288,7 +300,7 @@ function normalizeStartTaskRepos(input: StartTask): StartTaskRepo[] {
  * `resolveCachedRepo` per (cacheDir, syncBranch) pair so each multi-repo
  * URL entry hits its own cached mirror with no cross-talk.
  */
-async function resolveRepoSourceSingle(
+export async function resolveRepoSourceSingle(
   spec: StartTaskRepo,
   input: StartTask,
   deps: StartTaskDeps,
@@ -495,8 +507,13 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
   // path-mode opt-in fetch (RFC-068) or URL-mode FF; warnings collected per
   // repo and surfaced after materialization.
   const resolvedSources: ResolvedRepoSource[] = []
-  for (const spec of repoSpecs) {
-    const r = await resolveRepoSourceSingle(spec, input, deps)
+  for (const [i, spec] of repoSpecs.entries()) {
+    // RFC-107: reuse the route's pre-resolved source for the single repo so a
+    // URL is cloned/resolved exactly once across the route → startTask handoff.
+    const r =
+      deps.preResolvedSource !== undefined && repoSpecs.length === 1 && i === 0
+        ? deps.preResolvedSource
+        : await resolveRepoSourceSingle(spec, input, deps)
     if (r.pathFetchError !== null) {
       log.warn('rfc068/path-fetch-failed', {
         repoPath: r.repoPath,

@@ -95,9 +95,10 @@ export function buildLaunchBody(
 /**
  * Same shape as `buildLaunchBody`, but stamps it into the existing multipart
  * envelope used by RFC-020 uploads. Wrapping in this helper keeps the
- * launcher's "uploads + url" combo encoded consistently — though the
- * backend currently rejects that combo with `multipart-upload-requires-
- * path-mode`, the frontend still has to send the bytes somewhere.
+ * launcher's "uploads + url" combo encoded consistently. RFC-107: the backend
+ * now accepts the url + uploads combo (the multipart route resolves the URL
+ * into the repo cache before materializing the worktree), so this is a fully
+ * supported launch path. The url body carries `repoUrl` + optional `ref`.
  */
 export function buildLaunchFormDataV2(
   source: RepoSource,

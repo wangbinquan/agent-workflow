@@ -62,9 +62,12 @@ describe('RFC-037 — buildLaunchFormData (path-multipart) emits name in payload
   })
 })
 
-describe('RFC-037 — buildLaunchFormDataV2 (url-multipart) emits name in payload', () => {
-  test('payload JSON carries name even though backend rejects url+uploads', async () => {
-    const src: RepoSource = { kind: 'url', repoUrl: 'git@h:o/r.git', ref: '' }
+describe('RFC-037 / RFC-107 — buildLaunchFormDataV2 (url-multipart) carries name + repoUrl + ref', () => {
+  // RFC-107 lifted the URL + uploads limit: the backend now resolves the URL
+  // into the repo cache before materializing the worktree. The multipart
+  // payload must therefore carry repoUrl AND ref so the right branch is cloned.
+  test('payload JSON carries name, repoUrl and ref', async () => {
+    const src: RepoSource = { kind: 'url', repoUrl: 'git@h:o/r.git', ref: 'release/1.2' }
     const fd = buildLaunchFormDataV2(
       src,
       { workflowId: 'wf-1', name: 'url multipart', inputs: {} },
@@ -73,6 +76,8 @@ describe('RFC-037 — buildLaunchFormDataV2 (url-multipart) emits name in payloa
     const json = await readPayloadAsync(fd)
     expect(json.name).toBe('url multipart')
     expect(json.repoUrl).toBe('git@h:o/r.git')
+    expect(json.ref).toBe('release/1.2')
+    expect(fd.getAll('files[up][]').length).toBe(1)
   })
 })
 

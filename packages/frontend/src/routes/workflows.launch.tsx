@@ -174,8 +174,9 @@ function LaunchPage() {
         return api.postMultipart<Task>('/api/tasks', buildLaunchFormData(payload, uploads))
       }
       if (onlySource.kind === 'url' && (hasUploadKind || hasUploads)) {
-        // RFC-024: URL + uploads not supported by the backend yet — keep the
-        // multipart envelope for parity, backend will 422 us politely.
+        // RFC-107: URL + uploads is now supported. The multipart route resolves
+        // the URL into the repo cache before materializing the worktree, then
+        // lands the files; buildLaunchFormDataV2 carries repoUrl + ref.
         return api.postMultipart<Task>(
           '/api/tasks',
           buildLaunchFormDataV2(onlySource, launchCommon, uploads),
