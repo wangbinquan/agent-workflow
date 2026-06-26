@@ -182,6 +182,41 @@ describe('POST /api/tasks multipart (RFC-020)', () => {
     expect(body.inputs.topic).toBe('orders')
   })
 
+  // Regression: a file part with an empty filename ("filename=\"\"" in the
+  // multipart Content-Disposition — e.g. a drag-dropped Blob the browser never
+  // named) is parsed by bun as a File whose `.name` is `undefined`, not ''. The
+  // route's `value.name === '' ? ...` guard missed that, so `filename` landed as
+  // `undefined` and `sanitizeFilename` crashed with "undefined is not an object
+  // (evaluating 'e.replace')", surfacing to the user as task-upload-failed:
+  // "failed to land uploads into worktree". Must succeed under a fallback name.
+  test('upload with empty filename → 201, file lands under fallback name', async () => {
+    const h = await buildHarness()
+    const fd = new FormData()
+    fd.set(
+      'payload',
+      new Blob(
+        [
+          JSON.stringify({
+            workflowId: h.workflowId,
+            name: 'fixture-task',
+            repoPath: h.repoPath,
+            baseBranch: 'main',
+            inputs: { topic: 'orders', refs: '' },
+          }),
+        ],
+        { type: 'application/json' },
+      ),
+    )
+    // Empty filename — third arg is '' so the serialized part is filename="".
+    fd.append('files[refs][]', new Blob(['alpha']), '')
+    const res = await postMultipart(h.app, '/api/tasks', fd)
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as { worktreePath: string; inputs: Record<string, string> }
+    expect(body.inputs.refs).toBe('inputs/refs/upload.bin')
+    expect(existsSync(join(body.worktreePath, 'inputs/refs/upload.bin'))).toBe(true)
+    expect(readFileSync(join(body.worktreePath, 'inputs/refs/upload.bin'), 'utf8')).toBe('alpha')
+  })
+
   test('missing payload field → 422 and no task row', async () => {
     const h = await buildHarness()
     const fd = new FormData()

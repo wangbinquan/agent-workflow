@@ -59,6 +59,15 @@ describe('sanitizeFilename', () => {
     expect(sanitizeFilename('', 7)).toBe('upload-7.bin')
     expect(sanitizeFilename('\x00\x01\x1f\x7f', 3)).toBe('upload-3.bin')
   })
+  // Regression: bun parses a multipart part whose Content-Disposition carries
+  // `filename=""` as a File whose `.name` is `undefined` (not ''), so the route
+  // can hand us a non-string raw. Before the fix this hit `raw.replace(...)` and
+  // crashed with "undefined is not an object (evaluating 'e.replace')", surfacing
+  // as "failed to land uploads into worktree". Defense-in-depth: coerce to fallback.
+  test('non-string / undefined raw → fallback name (no .replace crash)', () => {
+    expect(sanitizeFilename(undefined as unknown as string, 4)).toBe('upload-4.bin')
+    expect(sanitizeFilename(null as unknown as string, 2)).toBe('upload-2.bin')
+  })
   test('preserves CJK and spaces', () => {
     expect(sanitizeFilename('  报告 v1.pdf  ')).toBe('报告 v1.pdf')
   })
@@ -251,6 +260,18 @@ describe('applyUploadsToWorktree', () => {
         ),
       ),
     ).rejects.toThrow(ValidationError)
+  })
+
+  test('undefined filename (empty filename="" multipart part) lands as fallback name', async () => {
+    const ghost: UploadFile = {
+      inputKey: 'refs',
+      filename: undefined as unknown as string,
+      declaredMime: 'application/octet-stream',
+      bytes: TXT_BYTES,
+    }
+    const out = await applyUploadsToWorktree(plan([{ key: 'refs', targetDir: 'inputs' }], [ghost]))
+    expect(out.packedByKey.get('refs')).toEqual(['inputs/upload-1.bin'])
+    expect(existsSync(join(root, 'inputs/upload-1.bin'))).toBe(true)
   })
 
   test('"." targetDir lands at worktree root and packed path has no prefix', async () => {

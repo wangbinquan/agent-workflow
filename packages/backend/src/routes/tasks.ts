@@ -766,9 +766,13 @@ async function handleMultipartTaskStart(
       )
     }
     const buf = new Uint8Array(await value.arrayBuffer())
+    // bun parses a part whose Content-Disposition carries `filename=""` (a
+    // browser Blob that was never named) as a File whose `.name` is `undefined`,
+    // NOT ''. Treat both empty and missing names as unnamed so we don't hand a
+    // non-string filename to sanitizeFilename (which would crash on `.replace`).
     uploadFiles.push({
       inputKey,
-      filename: value.name === '' ? 'upload.bin' : value.name,
+      filename: value.name ? value.name : 'upload.bin',
       declaredMime: value.type,
       bytes: buf,
     })
