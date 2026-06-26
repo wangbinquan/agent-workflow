@@ -7,7 +7,6 @@
 
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '../src/db/client'
