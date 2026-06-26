@@ -58,17 +58,30 @@ describe('RFC-108 T9 (AR-14) — spawn-binary identity gate', () => {
     expect(pidCommandContainsBinary(pid, '/no/such/opencode-binary')).toBe(false)
   })
 
-  test('alive + matching binary → killed, even with a >48h startedAt (identity beats the window)', async () => {
+  test('alive + within window + matching binary → killed', async () => {
     const child = spawnLongLived()
     await Bun.sleep(120)
     const pid = child.pid as number
     const outcome = await killStaleRunProcessTree({
       pid,
-      startedAt: Date.now() - STALE_RUN_PID_MAX_AGE_MS - 60_000, // "old"
+      startedAt: Date.now(),
       spawnBinaryPath: process.execPath,
     })
     expect(outcome).toBe('killed')
     expect(isProcessAlive(pid)).toBe(false)
+  })
+
+  test('alive + matching binary but OUTSIDE the 48h window → window-expired (Codex T9 P1: identity is NOT unique, the time guard always applies)', async () => {
+    const child = spawnLongLived()
+    await Bun.sleep(120)
+    const pid = child.pid as number
+    const outcome = await killStaleRunProcessTree({
+      pid,
+      startedAt: Date.now() - STALE_RUN_PID_MAX_AGE_MS - 60_000, // "old" → recycled-pid risk
+      spawnBinaryPath: process.execPath, // even a matching binary does NOT override the window
+    })
+    expect(outcome).toBe('window-expired')
+    expect(isProcessAlive(pid)).toBe(true) // never signalled
   })
 
   test('alive but binary MISMATCH → command-mismatch (recycled pid, left alone)', async () => {

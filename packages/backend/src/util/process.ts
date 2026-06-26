@@ -116,23 +116,26 @@ export async function killStaleRunProcessTree(
   if (typeof pid !== 'number' || pid <= 0) return 'no-pid'
   if (!isProcessAlive(pid)) return 'not-alive'
   const now = opts.now ?? Date.now()
-  // RFC-108 T9 (AR-14): when we persisted the spawn binary path, identity is the
-  // gate — match the live pid's command against THAT exact binary. A mismatch is
-  // a confidently-recycled pid (safe → 'command-mismatch'); a match means it is
-  // genuinely OUR child and MUST be killed (no 48h window: a long-running agent
-  // is still ours, and T4's per-node floor makes >48h nearly impossible). A
-  // 'kill-failed' from here is the high-confidence DANGER signal the callers
-  // act on (refuse the resume rather than git-reset under a live writer).
-  if (typeof run.spawnBinaryPath === 'string' && run.spawnBinaryPath.length > 0) {
-    if (!pidCommandContainsBinary(pid, run.spawnBinaryPath)) return 'command-mismatch'
-  } else {
-    // Legacy rows (pre-RFC-108) / no recorded binary: keep the old fuzzy gates
-    // (startedAt window + `/opencode|bun/` regex).
-    if (typeof run.startedAt !== 'number' || now - run.startedAt >= STALE_RUN_PID_MAX_AGE_MS) {
-      return 'window-expired'
-    }
-    if (!pidCommandLooksLikeAgentChild(pid)) return 'command-mismatch'
+  // The startedAt window is the TIME-based PID-reuse guard and ALWAYS applies
+  // (Codex T9 review P1): after the window, the OS has likely recycled the pid,
+  // so we never signal — `spawn_binary_path` is NOT a unique identity (cmd[0] may
+  // be a bare `opencode` PATH lookup, or an absolute binary SHARED by concurrent
+  // tasks), and skipping the window here could SIGKILL an unrelated recycled pid.
+  if (typeof run.startedAt !== 'number' || now - run.startedAt >= STALE_RUN_PID_MAX_AGE_MS) {
+    return 'window-expired'
   }
+  // RFC-108 T9 (AR-14): command-shape gate. When we recorded the spawn binary,
+  // match the live pid's command against THAT exact path (more specific than the
+  // fuzzy `/opencode|bun/` regex — fewer false "our child" verdicts on an
+  // in-window pid running some other bun/opencode). Mismatch ⟹ recycled pid
+  // (safe → 'command-mismatch'); match ⟹ ours → kill. A 'kill-failed' from here
+  // is the DANGER signal callers act on (refuse the resume rather than git-reset
+  // under a live writer).
+  const matchesShape =
+    typeof run.spawnBinaryPath === 'string' && run.spawnBinaryPath.length > 0
+      ? pidCommandContainsBinary(pid, run.spawnBinaryPath)
+      : pidCommandLooksLikeAgentChild(pid)
+  if (!matchesShape) return 'command-mismatch'
 
   killProcessTree(pid, 'SIGTERM')
   const termWaitMs = opts.termWaitMs ?? 1_000
