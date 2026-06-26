@@ -23,21 +23,31 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const SPAWN_SITES = [
-  // (file, identifier the spawn cwd is read from)
+// RFC-111 PR-A: the opencode spawn ENV literal (the `const env = {...}` block
+// carrying `PWD = cwd`) moved out of runner.ts into the runtime driver
+// (runtime/opencode/spawn.ts, `PWD: ctx.worktreePath`). runner.ts still owns the
+// `Bun.spawn({ cwd, env })` call. memoryDistiller.ts keeps both inline. So the
+// env-block check and the Bun.spawn-cwd check now target (sometimes) different
+// files; both halves of the PWD=cwd contract stay locked.
+const ENV_PWD_SITES = [
+  // (file, identifier PWD is set from in the env block)
+  ['src/services/runtime/opencode/spawn.ts', 'ctx.worktreePath'],
+  ['src/services/memoryDistiller.ts', 'input.cwd'],
+] as const
+const SPAWN_CWD_SITES = [
+  // (file, identifier the Bun.spawn cwd is read from)
   ['src/services/runner.ts', 'opts.worktreePath'],
   ['src/services/memoryDistiller.ts', 'input.cwd'],
 ] as const
 
 describe('opencode spawn sites set PWD = cwd in env', () => {
-  for (const [rel, cwdExpr] of SPAWN_SITES) {
-    test(`${rel} sets PWD: ${cwdExpr} in the spawn env`, () => {
+  for (const [rel, cwdExpr] of ENV_PWD_SITES) {
+    test(`${rel} sets PWD: ${cwdExpr} in the spawn env block`, () => {
       const src = readFileSync(resolve(import.meta.dir, '..', rel), 'utf-8')
 
-      // The env literal lives just above the Bun.spawn(...) call. Both files
-      // build a `const env: Record<string, string> = { ... }` block then pass
-      // it into `Bun.spawn({ cmd, cwd, env, ... })`. Assert that block carries
-      // the PWD override pointing at the same expression as `cwd`.
+      // The env literal is a `const env: Record<string, string> = { ... }`
+      // block. Assert it carries the PWD override pointing at the same
+      // expression the Bun.spawn cwd will use, plus the process.env baseline.
       const envBlockRe = /const env: Record<string, string> = \{([\s\S]*?)\n\s*\}/g
       const matches: string[] = []
       let m: RegExpExecArray | null
@@ -50,25 +60,22 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
       )
       expect(found).toBe(true)
     })
+  }
 
-    test(`${rel} passes the same identifier to both cwd: and PWD:`, () => {
+  for (const [rel, cwdExpr] of SPAWN_CWD_SITES) {
+    test(`${rel} passes cwd: ${cwdExpr} + env into Bun.spawn`, () => {
       // Why: a future refactor that changes the spawn cwd (say to
       // `runDir` or `repoPath`) but forgets to update PWD would silently
-      // reintroduce the 1.14.51 stdout break. This grep keeps the two in
-      // lock-step at the source level.
+      // reintroduce the 1.14.51 stdout break. This grep keeps the Bun.spawn
+      // cwd and the passed-in env in lock-step at the source level.
       const src = readFileSync(resolve(import.meta.dir, '..', rel), 'utf-8')
       const spawnBlockRe = /Bun\.spawn\(\{([\s\S]*?)\n\s*\}\)/g
       let m: RegExpExecArray | null
       let asserted = false
       while ((m = spawnBlockRe.exec(src)) !== null) {
         const block = m[1]!
-        // Only enforce on the opencode spawn (skips git / tar / etc. blocks
-        // in other files; both opencode sites pass `cwd:` followed by the
-        // tracked expression).
+        // Only enforce on the opencode spawn (skips git / tar / etc. blocks).
         if (!block.includes(`cwd: ${cwdExpr}`)) continue
-        // The env passed in must carry PWD = cwdExpr. Earlier test already
-        // checked the env-block content; this one just confirms the spawn
-        // block references the same cwd identifier we expect.
         expect(block).toContain('env,')
         asserted = true
       }

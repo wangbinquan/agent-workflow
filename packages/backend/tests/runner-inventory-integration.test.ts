@@ -289,7 +289,15 @@ describe('runner.ts source: dump plugin wiring lock', () => {
     // fallback. The grep lock follows the post-refactor wiring.
     expect(src).toContain('materializeInventoryPlugin')
     expect(src).toContain('isAgentRunKind')
-    expect(src).toContain('OPENCODE_AW_INVENTORY_OUT')
+    // RFC-111 PR-A: the OPENCODE_AW_INVENTORY_OUT env assignment moved into the
+    // opencode runtime driver's spawn env builder (runner.ts still computes the
+    // inventoryOutPath and threads it through buildOpencodeSpawn).
+    expect(src).toContain('inventoryOutPath')
+    const spawnSrc = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'spawn.ts'),
+      'utf-8',
+    )
+    expect(spawnSrc).toContain('OPENCODE_AW_INVENTORY_OUT')
   })
 
   test('opencode-plugin/index exports both helpers and references PLUGIN_FILES embed table', () => {

@@ -1,8 +1,9 @@
 // RFC-067 — source-layer guards locking the runner / service / schema
 // wiring against silent regressions. Targets:
-//   (a) services/runner.ts must inject ALL FOUR `GIT_AUTHOR_*` /
-//       `GIT_COMMITTER_*` env keys in the SAME conditional block, so a
-//       future refactor cannot ship a half identity to opencode.
+//   (a) the opencode spawn env (RFC-111 PR-A: runtime/opencode/spawn.ts) must
+//       inject ALL FOUR `GIT_AUTHOR_*` / `GIT_COMMITTER_*` env keys in the SAME
+//       conditional block, so a future refactor cannot ship a half identity to
+//       opencode. (RunNodeOptions still declares the fields in runner.ts.)
 //   (b) services/task.ts must persist the trimmed identity into the
 //       tasks INSERT — and must NOT write to the worktree's `.git/config`
 //       (which would race-overwrite across concurrent same-repo tasks;
@@ -19,6 +20,13 @@ const RUNNER_SRC = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
   'utf-8',
 )
+// RFC-111 PR-A: the opencode spawn env (incl. the RFC-067 GIT_* injection) moved
+// into the opencode runtime driver. RunNodeOptions still declares the fields in
+// runner.ts; the env-key injection now lives in spawn.ts.
+const SPAWN_SRC = readFileSync(
+  resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'spawn.ts'),
+  'utf-8',
+)
 const TASK_SRC = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf-8')
 const SCHEMA_SRC = readFileSync(
   resolve(import.meta.dir, '..', '..', 'shared', 'src', 'schemas', 'task.ts'),
@@ -30,19 +38,19 @@ const SCHEDULER_SRC = readFileSync(
 )
 
 describe('RFC-067 source-text guards', () => {
-  test('runner.ts injects all four GIT_AUTHOR_* / GIT_COMMITTER_* env keys', () => {
-    expect(RUNNER_SRC).toContain('GIT_AUTHOR_NAME')
-    expect(RUNNER_SRC).toContain('GIT_AUTHOR_EMAIL')
-    expect(RUNNER_SRC).toContain('GIT_COMMITTER_NAME')
-    expect(RUNNER_SRC).toContain('GIT_COMMITTER_EMAIL')
+  test('spawn.ts injects all four GIT_AUTHOR_* / GIT_COMMITTER_* env keys', () => {
+    expect(SPAWN_SRC).toContain('GIT_AUTHOR_NAME')
+    expect(SPAWN_SRC).toContain('GIT_AUTHOR_EMAIL')
+    expect(SPAWN_SRC).toContain('GIT_COMMITTER_NAME')
+    expect(SPAWN_SRC).toContain('GIT_COMMITTER_EMAIL')
   })
 
-  test('runner.ts gates the four-tuple behind a single AND check (no half identity)', () => {
+  test('spawn.ts gates the four-tuple behind a single AND check (no half identity)', () => {
     // The defensive `if (gitName.length > 0 && gitEmail.length > 0)` block
     // is the second line of defense after the schema's XOR superRefine.
     // A regression that splits these into two if blocks (one per pair)
     // could ship author-only or committer-only envs.
-    expect(RUNNER_SRC).toMatch(
+    expect(SPAWN_SRC).toMatch(
       /if\s*\(\s*gitName\.length\s*>\s*0\s*&&\s*gitEmail\.length\s*>\s*0\s*\)/,
     )
   })

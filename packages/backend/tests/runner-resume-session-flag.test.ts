@@ -5,11 +5,11 @@
 //     is emitted — review reject / iterate / technical retry / loop paths
 //     must never accidentally inherit a clarify-inline-only behavior.
 //
-// Also enforces a source-code-text invariant: the literal string `--session`
-// only appears in runner.ts (the place that constructs the argv), NOT in
-// scheduler.ts or any other service. Scheduler decides the resumeSessionId
-// value; only runner concatenates it into the CLI. See proposal §C2 + design
-// §13 grep guards.
+// Also enforces a source-code-text invariant: the literal `cmd.push('--session'`
+// only appears in the opencode spawn module (RFC-111 PR-A: runtime/opencode/
+// spawn.ts, where the argv is constructed), NOT in scheduler.ts or any other
+// service. Scheduler decides the resumeSessionId value; only the spawn module
+// concatenates it into the CLI. See proposal §C2 + design §13 grep guards.
 //
 // If these fail, RFC-026's A12 / A13 / proposal §2.1 "review-reject MUST NOT
 // resume sessions" claim is at risk — investigate before relaxing.
@@ -80,7 +80,7 @@ describe('RFC-026 runner buildCommand — resumeSessionId', () => {
     expect(cmd).not.toContain('--session')
   })
 
-  test('source-code-text grep: only runner.ts constructs the `--session` CLI flag', () => {
+  test('source-code-text grep: only the opencode spawn module constructs the `--session` CLI flag', () => {
     // Reading source files via fs keeps the test deterministic and immune to
     // refactors that might move the flag construction elsewhere. We match
     // `cmd.push('--session'` specifically — comments mentioning `--session`
@@ -88,15 +88,17 @@ describe('RFC-026 runner buildCommand — resumeSessionId', () => {
     // sessionId it'll pass downstream). If a future refactor genuinely
     // needs scheduler to construct the CLI directly, update this test
     // deliberately — that's exactly when we want to re-think A12 / §C2.
-    const runnerSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
+    // RFC-111 PR-A: buildCommand moved out of runner.ts into the opencode
+    // runtime driver — the argv-constructing module is now spawn.ts.
+    const spawnSrc = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'spawn.ts'),
       'utf8',
     )
     const schedulerSrc = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
       'utf8',
     )
-    expect(runnerSrc).toMatch(/cmd\.push\(\s*['"]--session['"]/)
+    expect(spawnSrc).toMatch(/cmd\.push\(\s*['"]--session['"]/)
     expect(schedulerSrc).not.toMatch(/cmd\.push\(\s*['"]--session['"]/)
   })
 })

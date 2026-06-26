@@ -53,10 +53,12 @@ import {
   type PortValidationFailure,
 } from './envelope'
 import { renderUserPrompt } from './protocol'
-// RFC-111 PR-A: opencode stdout event parsing extracted to a leaf module. The
-// runNode pump uses these imports locally; runner.ts re-exports them below so
-// existing importers (tests, memoryDistiller) keep resolving from './runner'.
-import { accumulateTokens, extractTextFromEvent, inferEventKind } from './runtime/opencode/events'
+// RFC-111 PR-A: opencode runtime behind the driver seam. The runNode stdout
+// pump uses `opencodeDriver.parseEvent`; the spawn site uses `buildOpencodeSpawn`
+// for argv+env. The event helpers + buildCommand are re-exported at the bottom
+// so existing importers (tests, memoryDistiller) keep resolving from './runner'.
+import { opencodeDriver } from './runtime/opencode/driver'
+import { buildOpencodeSpawn } from './runtime/opencode/spawn'
 import { captureChildSessions } from './sessionCapture'
 import { startLiveSubagentCapture } from './subagentLiveCapture'
 import { setNodeRunStatus, transitionNodeRunStatus } from './lifecycle'
@@ -692,8 +694,20 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     status: 'running',
   })
 
-  // 4. Spawn opencode.
-  const cmd = buildCommand(opts, prompt)
+  // 4. Spawn opencode (RFC-111 PR-A: argv + env assembled by the opencode driver).
+  const { cmd, env } = buildOpencodeSpawn({
+    opencodeCmd: opts.opencodeCmd,
+    agentName: opts.agent.name,
+    prompt,
+    dangerouslySkipPermissions: opts.dangerouslySkipPermissions,
+    resumeSessionId: opts.resumeSessionId,
+    worktreePath: opts.worktreePath,
+    runDir,
+    inlineConfigSerialized: serializedInline,
+    inventoryOutPath,
+    gitUserName: opts.gitUserName,
+    gitUserEmail: opts.gitUserEmail,
+  })
   // Diagnostic: surface the model/variant/temperature that actually landed in
   // the inline-agent JSON. Lets operators tell "scheduler dropped the override
   // on the floor" apart from "opencode received it but ignored it" without
@@ -723,51 +737,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     pluginNames: (opts.plugins ?? []).filter((p) => p.enabled !== false).map((p) => p.name),
   })
 
-  const env: Record<string, string> = {
-    ...(process.env as Record<string, string>),
-    // opencode 1.14.51+ (upstream commit 7f2b5ee8c, the Effect-TS run.ts rewrite)
-    // resolves its root via `process.env.PWD ?? process.cwd()`, NOT just
-    // `process.cwd()`. Bun.spawn's `cwd:` updates the child's
-    // `process.cwd()` but leaves `PWD` inherited from the daemon's parent
-    // shell. When daemon's PWD (e.g. the repo source root) differs from the
-    // spawn cwd (the worktree), opencode loads TWO Instances (one for cwd via
-    // effectCmd's directory preload, one for PWD as the SDK default), the
-    // session lands in the wrong one, and `--format json` events stop reaching
-    // our stdout pump entirely — the run exits 0 with zero parseable lines and
-    // every node fails "no <workflow-output> envelope found in stdout".
-    // Reproduced 2026-05-20 against opencode-ai 1.14.51 on this machine.
-    // Forcing PWD = cwd is no-op for pre-1.14.30 versions (they used
-    // `process.cwd()` only) and restores the legacy behavior for 1.14.30+.
-    PWD: opts.worktreePath,
-    OPENCODE_CONFIG_DIR: runDir,
-    OPENCODE_CONFIG_CONTENT: JSON.stringify(inlineConfig),
-  }
-  // RFC-029: tell the dump plugin where to write the snapshot file. Set only
-  // when the plugin was actually injected — otherwise leaving it unset keeps
-  // any externally-set value (e.g. a developer running mock-opencode) from
-  // accidentally hijacking the path.
-  if (inventoryOutPath !== undefined) {
-    env.OPENCODE_AW_INVENTORY_OUT = inventoryOutPath
-  }
-
-  // RFC-067: inject the per-task Git commit identity into the spawn env so
-  // any `git commit` invocation by the agent (opencode shell tool transmits
-  // process.env wholesale per opencode src/tool/shell.ts:419) inherits the
-  // task-scoped author + committer. Author + committer are set together —
-  // if either side is empty/null the entire block is skipped so the daemon's
-  // existing identity resolution (inherited `GIT_AUTHOR_*` from parent shell
-  // or `git config user.*`) keeps working unchanged. This defensive `&&`
-  // guard is the second line of defense after StartTaskSchema's XOR
-  // superRefine — both must be true before we mint a half-identity env.
-  const gitName = typeof opts.gitUserName === 'string' ? opts.gitUserName : ''
-  const gitEmail = typeof opts.gitUserEmail === 'string' ? opts.gitUserEmail : ''
-  if (gitName.length > 0 && gitEmail.length > 0) {
-    env.GIT_AUTHOR_NAME = gitName
-    env.GIT_AUTHOR_EMAIL = gitEmail
-    env.GIT_COMMITTER_NAME = gitName
-    env.GIT_COMMITTER_EMAIL = gitEmail
-  }
-
+  // env (PWD fix / OPENCODE_CONFIG_DIR+CONTENT / RFC-029 inventory path /
+  // RFC-067 git identity) is assembled above by buildOpencodeSpawn — see
+  // ./runtime/opencode/spawn.ts for the byte-for-byte construction.
   const child = Bun.spawn({
     cmd,
     cwd: opts.worktreePath,
@@ -881,31 +853,34 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   }
 
   const stdoutPump = pumpLines(child.stdout, async (line) => {
-    let evt: Record<string, unknown> | null = null
-    try {
-      evt = JSON.parse(line) as Record<string, unknown>
-    } catch {
-      // non-JSON line — store as text and ignore
-    }
-    if (evt) {
-      if (typeof evt.sessionID === 'string' && sessionId === undefined) {
-        sessionId = evt.sessionID
+    // RFC-111 PR-A: normalize one stdout line through the (frozen-opencode)
+    // driver. `parseEvent` returns null for non-JSON / falsy-JSON lines, which
+    // routes them through the raw-text fallback exactly as the old inline
+    // `if (evt) {...} else {...}` selection did.
+    const ev = opencodeDriver.parseEvent(line)
+    if (ev) {
+      if (ev.sessionId !== undefined && sessionId === undefined) {
+        sessionId = ev.sessionId
       }
-      accumulateTokens(evt, tokenUsage)
-      const text = extractTextFromEvent(evt)
-      if (text !== null) agentText.push(text)
-      const kind = inferEventKind(evt)
-      const ts = typeof evt.timestamp === 'number' ? evt.timestamp : Date.now()
+      if (ev.tokens) {
+        tokenUsage.input += ev.tokens.input
+        tokenUsage.output += ev.tokens.output
+        tokenUsage.cacheCreate += ev.tokens.cacheCreate
+        tokenUsage.cacheRead += ev.tokens.cacheRead
+        tokenUsage.total =
+          tokenUsage.input + tokenUsage.output + tokenUsage.cacheCreate + tokenUsage.cacheRead
+      }
+      if (typeof ev.text === 'string') agentText.push(ev.text)
+      const ts = ev.timestamp ?? Date.now()
       // RFC-027: tag every stdout-derived row with the (root) sessionID +
       // parent_session_id=null so the SessionTab parser can bucket parent
       // events against post-run captured child events without ambiguity.
-      const evtSessionId =
-        typeof evt.sessionID === 'string' ? (evt.sessionID as string) : (sessionId ?? null)
+      const evtSessionId = ev.sessionId ?? sessionId ?? null
       await opts.db.insert(nodeRunEvents).values({
         nodeRunId: opts.nodeRunId,
         ts,
-        kind,
-        payload: line,
+        kind: ev.kind,
+        payload: ev.rawLine,
         sessionId: evtSessionId,
         parentSessionId: null,
       })
@@ -1635,22 +1610,8 @@ export function detectPluginLoadFailure(
   return { pluginName, message: message.length > 0 ? message : spec }
 }
 
-export function buildCommand(opts: RunNodeOptions, prompt: string): string[] {
-  const head = opts.opencodeCmd ?? ['opencode']
-  // `--thinking` makes opencode emit `reasoning` events to stdout in
-  // `--format json` mode; without it `cli/cmd/run.ts:671` filters them
-  // out and the SessionTab can never show the model's thinking blocks.
-  const cmd = [...head, 'run', prompt, '--agent', opts.agent.name, '--format', 'json', '--thinking']
-  if (opts.dangerouslySkipPermissions ?? true) cmd.push('--dangerously-skip-permissions')
-  // RFC-026: clarify-inline rerun — resume the prior opencode session so the
-  // agent has its full prior transcript + state. Only ever populated by the
-  // scheduler on the clarify-driven path (review / retry / loop paths leave
-  // it undefined). Empty string is treated the same as undefined.
-  if (opts.resumeSessionId !== undefined && opts.resumeSessionId.length > 0) {
-    cmd.push('--session', opts.resumeSessionId)
-  }
-  return cmd
-}
+// RFC-111 PR-A: buildCommand moved to ./runtime/opencode/spawn.ts (re-exported
+// at the bottom of this file); buildOpencodeSpawn there assembles argv + env.
 
 function safeKill(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
   try {
@@ -1763,9 +1724,9 @@ function pumpLines(
   }
 }
 
-// RFC-111 PR-A: extractTextFromEvent / inferEventKind / accumulateTokens (+ the
-// private pickTokens / numOrZero) moved verbatim to ./runtime/opencode/events.ts
-// (a leaf module, no runner.ts import → no module-init cycle). Re-exported here
-// so the existing import sites (tests, memoryDistiller) keep resolving from
-// './runner'. The runNode stdout pump uses the top-of-file imports.
-export { accumulateTokens, extractTextFromEvent, inferEventKind }
+// RFC-111 PR-A: opencode runtime helpers moved to ./runtime/opencode/* (leaf
+// modules, no runner.ts import → no module-init cycle). Re-export the public
+// surface so existing import sites (tests, memoryDistiller) keep resolving from
+// './runner'.
+export { accumulateTokens, extractTextFromEvent, inferEventKind } from './runtime/opencode/events'
+export { buildCommand } from './runtime/opencode/spawn'
