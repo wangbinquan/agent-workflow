@@ -16,15 +16,15 @@ const detail = read('../src/routes/tasks.detail.tsx')
 const zh = read('../src/i18n/zh-CN.ts')
 const en = read('../src/i18n/en-US.ts')
 
-const section = (() => {
-  const start = detail.indexOf('function RecoverySection(')
-  const end = detail.indexOf('function tabLabel(', start)
-  return detail.slice(start, end)
-})()
+// RecoverySection was extracted out of tasks.detail.tsx into its own component
+// when it was reworked into a compact collapsible banner (user feedback: the old
+// <h2> page__section was too tall, looked like a second heading, and leaked raw
+// enum kinds). Same contract, new home — read it from there.
+const section = read('../src/components/tasks/RecoverySection.tsx')
 
 describe('RFC-108 T21 — task-detail RecoverySection', () => {
   test('RecoverySection exists and is rendered in the task detail', () => {
-    expect(/function RecoverySection\(/.test(detail)).toBe(true)
+    expect(/export function RecoverySection\(/.test(section)).toBe(true)
     expect(detail.includes('<RecoverySection taskId={id} status={tk.status} />')).toBe(true)
   })
 

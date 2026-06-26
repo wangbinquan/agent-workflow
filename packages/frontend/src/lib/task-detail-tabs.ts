@@ -3,7 +3,7 @@
 // Lives outside `routes/tasks.detail.tsx` so the React component can stay
 // focused on JSX wiring while these branches get exhaustive unit coverage.
 
-import type { NodeRun } from '@agent-workflow/shared'
+import type { NodeRun, Task } from '@agent-workflow/shared'
 
 export type TaskDetailTab =
   | 'workflow-status'
@@ -71,4 +71,17 @@ export function nextTabForFailedJump(
     }
   }
   return { runId: pick?.id ?? null, tab: 'workflow-status' }
+}
+
+/**
+ * Terminal task statuses — no further node runs or recovery events can land, so
+ * the detail page's live-poll queries (task / node-runs / recovery) switch off
+ * their `refetchInterval`. Shared by `routes/tasks.detail.tsx` and
+ * `components/tasks/RecoverySection.tsx` so the two never drift. Exported for
+ * unit testing.
+ */
+export function isTerminal(status: Task['status'] | undefined): boolean {
+  return (
+    status === 'done' || status === 'failed' || status === 'canceled' || status === 'interrupted'
+  )
 }

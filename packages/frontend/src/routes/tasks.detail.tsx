@@ -19,6 +19,7 @@ import { api, ApiError } from '@/api/client'
 import { WorkflowCanvas, type WorkflowCanvasHandle } from '@/components/canvas/WorkflowCanvas'
 import type { CanvasNodeData } from '@/components/canvas/nodes/types'
 import { ConfirmButton } from '@/components/ConfirmButton'
+import { RecoverySection } from '@/components/tasks/RecoverySection'
 import { StuckTaskBanner } from '@/components/tasks/StuckTaskBanner'
 import { WorkflowSyncBanner } from '@/components/tasks/WorkflowSyncBanner'
 import { TaskFeedbackList } from '@/components/tasks/TaskFeedbackList'
@@ -34,7 +35,12 @@ import { Select } from '@/components/Select'
 import { WorktreeFilesPanel } from '@/components/WorktreeFilesPanel'
 import { classifyCanceled, displayNoderunStatusKey } from '@/lib/noderun-status'
 import { reviewRunDisplay } from '@/lib/reviewRunDisplay'
-import { availableTabs, nextTabForFailedJump, type TaskDetailTab } from '@/lib/task-detail-tabs'
+import {
+  availableTabs,
+  isTerminal,
+  nextTabForFailedJump,
+  type TaskDetailTab,
+} from '@/lib/task-detail-tabs'
 import { useTaskSync } from '@/hooks/useTaskSync'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Route as RootRoute } from './__root'
@@ -547,66 +553,6 @@ function TaskDetailPage() {
   )
 }
 
-// RFC-108 T21 (AR-11) — per-task system-recovery audit + quarantine clear.
-// Renders nothing unless there is recovery history or an active quarantine, so
-// it stays invisible for the common healthy task.
-interface RecoveryEventRow {
-  id: string
-  kind: string
-  reason: string | null
-  createdAt: number
-}
-
-function RecoverySection({ taskId, status }: { taskId: string; status: Task['status'] }) {
-  const { t } = useTranslation()
-  const qc = useQueryClient()
-  const q = useQuery<{ events: RecoveryEventRow[]; suspended: boolean }>({
-    queryKey: ['recovery-events', taskId],
-    queryFn: ({ signal }) =>
-      api.get(`/api/tasks/${encodeURIComponent(taskId)}/recovery-events`, undefined, signal),
-    // RFC-108 T23: live recovery view — poll while the task is active so an
-    // auto-resume / reap / quarantine shows up without a manual refresh; stop
-    // once terminal (no further recovery events can land). Mirrors the task /
-    // node-runs queries' refetchInterval idiom above.
-    refetchInterval: isTerminal(status) ? false : 5000,
-  })
-  const clear = useMutation({
-    mutationFn: () =>
-      api.post(`/api/tasks/${encodeURIComponent(taskId)}/clear-recovery-suspension`),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['recovery-events', taskId] }),
-  })
-  const data = q.data
-  if (data === undefined || (data.events.length === 0 && !data.suspended)) return null
-  return (
-    <section className="page__section task-detail__recovery">
-      <h2>{t('tasks.recovery.title')}</h2>
-      {data.suspended && (
-        <div className="info-box">
-          <span>{t('tasks.recovery.quarantined')}</span>
-          <button
-            type="button"
-            className="btn btn--sm"
-            disabled={clear.isPending}
-            onClick={() => clear.mutate()}
-          >
-            {t('tasks.recovery.clearQuarantine')}
-          </button>
-        </div>
-      )}
-      {data.events.length > 0 && (
-        <ul className="task-detail__recovery-list">
-          {data.events.map((e) => (
-            <li key={e.id}>
-              <code>{e.kind}</code>
-              {e.reason !== null && e.reason !== '' && <span> — {e.reason}</span>}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  )
-}
-
 function tabLabel(t: (key: string) => string, k: TaskDetailTab): string {
   switch (k) {
     case 'workflow-status':
@@ -962,12 +908,6 @@ function noderunTone(status: NodeRun['status']): string {
     case 'canceled':
       return 'gray'
   }
-}
-
-function isTerminal(status: Task['status'] | undefined): boolean {
-  return (
-    status === 'done' || status === 'failed' || status === 'canceled' || status === 'interrupted'
-  )
 }
 
 /**

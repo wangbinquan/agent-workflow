@@ -2296,6 +2296,49 @@ code {
   color: var(--warning);
 }
 
+/* RFC-108 — compact recovery banner. Reuses the .task-error-banner shell; the
+   --muted variant is the neutral "just history" tone (the warning variant above
+   is reused for the quarantined state). Mirrors .info-box--muted's palette. */
+.task-error-banner--muted {
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
+  border-color: var(--muted);
+  color: var(--text);
+}
+
+.task-recovery__hint {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.task-recovery__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.task-recovery__list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.task-recovery__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.task-recovery__time {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
 .diagnose-table {
   width: 100%;
   border-collapse: collapse;
