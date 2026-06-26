@@ -12,6 +12,7 @@ import { reapOrphanRuns } from '@/services/orphans'
 import { autoResumeInterruptedTasks } from '@/services/autoResume'
 import { startAutoRepairLoop } from '@/services/autoRepair'
 import { startHeartbeatKillLoop } from '@/services/autoKill'
+import { startOrphanReconcileLoop } from '@/services/orphanReconcile'
 import { resumeTask } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { startEventsArchiver } from '@/services/eventsArchive'
@@ -319,6 +320,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // RFC-108 T20 (AR-05a) — heartbeat stalled-child auto-kill (DEFAULT OFF).
   const heartbeatKillTicker = startHeartbeatKillLoop({ db, configPath: Paths.config })
 
+  // RFC-108 T17 (AR-10) — periodic post-boot orphan reconciler (reap-to-
+  // interrupted is the safe-on default; auto-resume stays behind T18's opt-in).
+  const orphanReconcileTicker = startOrphanReconcileLoop({ db, configPath: Paths.config })
+
   // RFC-108 T18 (AR-03) — boot auto-resume (DEFAULT OFF, decision D1). Closes
   // the daemon-restart loop: every task `reapOrphanRuns` just flipped to
   // `interrupted` is re-driven automatically, but only through the breaker +
@@ -386,6 +391,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     fusionReconcileTicker.stop()
     autoRepairTicker.stop()
     heartbeatKillTicker.stop()
+    orphanReconcileTicker.stop()
     removeDaemonInfo()
     server.stop(true)
     try {
