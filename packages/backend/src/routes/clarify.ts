@@ -262,6 +262,10 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
         db: deps.db,
         appHome: Paths.root,
         ...(opencodeCmdCC ? { opencodeCmd: opencodeCmdCC } : {}),
+        // RFC-108 T4 (Codex re-review P2): the cross-clarify resume branch must
+        // thread the per-node timeout floor too, else a parked cross-clarify
+        // task resumes with unbounded nodes under the default config.
+        ...resolveLaunchRuntimeConfig(deps.configPath),
       }
       void resumeTask(deps.db, ccResult.session.taskId, resumeDepsCC).catch((err) => {
         if (err instanceof ConflictError && err.code === 'task-not-resumable') {
