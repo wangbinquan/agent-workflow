@@ -276,6 +276,9 @@ function TaskDetailPage() {
         </div>
       )}
 
+      {/* RFC-108 T21: system-recovery audit + auto-recovery quarantine clear. */}
+      <RecoverySection taskId={id} />
+
       <nav role="tablist" className="task-detail__tab-bar tabs">
         {tabs.map((k) => (
           <button
@@ -540,6 +543,61 @@ function TaskDetailPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// RFC-108 T21 (AR-11) — per-task system-recovery audit + quarantine clear.
+// Renders nothing unless there is recovery history or an active quarantine, so
+// it stays invisible for the common healthy task.
+interface RecoveryEventRow {
+  id: string
+  kind: string
+  reason: string | null
+  createdAt: number
+}
+
+function RecoverySection({ taskId }: { taskId: string }) {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+  const q = useQuery<{ events: RecoveryEventRow[]; suspended: boolean }>({
+    queryKey: ['recovery-events', taskId],
+    queryFn: ({ signal }) =>
+      api.get(`/api/tasks/${encodeURIComponent(taskId)}/recovery-events`, undefined, signal),
+  })
+  const clear = useMutation({
+    mutationFn: () =>
+      api.post(`/api/tasks/${encodeURIComponent(taskId)}/clear-recovery-suspension`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['recovery-events', taskId] }),
+  })
+  const data = q.data
+  if (data === undefined || (data.events.length === 0 && !data.suspended)) return null
+  return (
+    <section className="page__section task-detail__recovery">
+      <h2>{t('tasks.recovery.title')}</h2>
+      {data.suspended && (
+        <div className="info-box">
+          <span>{t('tasks.recovery.quarantined')}</span>
+          <button
+            type="button"
+            className="btn btn--sm"
+            disabled={clear.isPending}
+            onClick={() => clear.mutate()}
+          >
+            {t('tasks.recovery.clearQuarantine')}
+          </button>
+        </div>
+      )}
+      {data.events.length > 0 && (
+        <ul className="task-detail__recovery-list">
+          {data.events.map((e) => (
+            <li key={e.id}>
+              <code>{e.kind}</code>
+              {e.reason !== null && e.reason !== '' && <span> — {e.reason}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }
 

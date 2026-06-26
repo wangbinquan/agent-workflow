@@ -1113,6 +1113,12 @@ export const enUS: Resources = {
     clarifyButton: 'Answer',
     worktreePreserved:
       'Worktree preserved at {{path}}. You can inspect it manually, or run git worktree remove when done.',
+    recovery: {
+      title: 'Recovery',
+      quarantined:
+        'This task was quarantined by the circuit-breaker after repeated auto-recovery failures; auto-recovery is paused.',
+      clearQuarantine: 'Clear quarantine',
+    },
     sectionWorkflowStatus: 'Workflow status',
     sectionNodeRuns: 'Node runs',
     sectionWorktreeDiff: 'Worktree diff',

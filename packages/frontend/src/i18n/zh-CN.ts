@@ -1052,6 +1052,11 @@ export interface Resources {
     reviewButton: string
     clarifyButton: string
     worktreePreserved: string
+    recovery: {
+      title: string
+      quarantined: string
+      clearQuarantine: string
+    }
     sectionWorkflowStatus: string
     sectionNodeRuns: string
     sectionWorktreeDiff: string
@@ -3492,6 +3497,11 @@ export const zhCN: Resources = {
     clarifyButton: '去回答',
     worktreePreserved:
       'Worktree 仍保留在 {{path}}。可手动检查；结束后执行 git worktree remove 清理。',
+    recovery: {
+      title: '恢复',
+      quarantined: '该任务因反复自动恢复失败被熔断隔离，已暂停自动恢复。',
+      clearQuarantine: '解除隔离',
+    },
     sectionWorkflowStatus: '工作流状态',
     sectionNodeRuns: '节点运行',
     sectionWorktreeDiff: 'Worktree diff',

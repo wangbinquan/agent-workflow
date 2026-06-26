@@ -70,7 +70,7 @@ import { listWorktreeDir, readWorktreeFile } from '@/services/worktreeFiles'
 import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { listRecoveryEventsForTask } from '@/services/recovery'
-import { clearAutoRecoverySuspension } from '@/services/recoveryBreaker'
+import { clearAutoRecoverySuspension, isAutoRecoverySuspended } from '@/services/recoveryBreaker'
 import { applyRepairOption, listRepairOptionsForAlert } from '@/services/lifecycleRepair'
 import { listOpenLifecycleAlertsForTask } from '@/services/taskAlerts'
 import { getWorkflow } from '@/services/workflow'
@@ -351,8 +351,12 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
   // shutdown-flip / limit-cancel / snapshot-lost / live-child-survived / …).
   // Behind the same /api/tasks/:id visibility middleware mounted above.
   app.get('/api/tasks/:id/recovery-events', async (c) => {
-    const events = await listRecoveryEventsForTask(deps.db, c.req.param('id'))
-    return c.json({ events })
+    const taskId = c.req.param('id')
+    const [events, suspended] = await Promise.all([
+      listRecoveryEventsForTask(deps.db, taskId),
+      isAutoRecoverySuspended(deps.db, taskId),
+    ])
+    return c.json({ events, suspended })
   })
 
   // RFC-108 T11 (AR-09): human one-click clear of an auto-recovery quarantine
