@@ -276,8 +276,9 @@ function TaskDetailPage() {
         </div>
       )}
 
-      {/* RFC-108 T21: system-recovery audit + auto-recovery quarantine clear. */}
-      <RecoverySection taskId={id} />
+      {/* RFC-108 T21/T23: system-recovery audit + auto-recovery quarantine clear,
+          live-polled while the task is active (same idiom as the task/node-runs queries). */}
+      <RecoverySection taskId={id} status={tk.status} />
 
       <nav role="tablist" className="task-detail__tab-bar tabs">
         {tabs.map((k) => (
@@ -556,13 +557,18 @@ interface RecoveryEventRow {
   createdAt: number
 }
 
-function RecoverySection({ taskId }: { taskId: string }) {
+function RecoverySection({ taskId, status }: { taskId: string; status: Task['status'] }) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const q = useQuery<{ events: RecoveryEventRow[]; suspended: boolean }>({
     queryKey: ['recovery-events', taskId],
     queryFn: ({ signal }) =>
       api.get(`/api/tasks/${encodeURIComponent(taskId)}/recovery-events`, undefined, signal),
+    // RFC-108 T23: live recovery view — poll while the task is active so an
+    // auto-resume / reap / quarantine shows up without a manual refresh; stop
+    // once terminal (no further recovery events can land). Mirrors the task /
+    // node-runs queries' refetchInterval idiom above.
+    refetchInterval: isTerminal(status) ? false : 5000,
   })
   const clear = useMutation({
     mutationFn: () =>

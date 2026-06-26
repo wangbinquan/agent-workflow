@@ -25,7 +25,7 @@ const section = (() => {
 describe('RFC-108 T21 — task-detail RecoverySection', () => {
   test('RecoverySection exists and is rendered in the task detail', () => {
     expect(/function RecoverySection\(/.test(detail)).toBe(true)
-    expect(detail.includes('<RecoverySection taskId={id} />')).toBe(true)
+    expect(detail.includes('<RecoverySection taskId={id} status={tk.status} />')).toBe(true)
   })
 
   test('queries recovery-events and posts clear-recovery-suspension', () => {
@@ -35,6 +35,11 @@ describe('RFC-108 T21 — task-detail RecoverySection', () => {
 
   test('reuses the shared btn class for the clear-quarantine action', () => {
     expect(/className="btn btn--sm"/.test(section)).toBe(true)
+  })
+
+  test('T23: live-polls the recovery view while the task is active (stops when terminal)', () => {
+    expect(section.includes('refetchInterval')).toBe(true)
+    expect(section.includes('isTerminal(status)')).toBe(true)
   })
 
   test('renders nothing for a healthy task (no events + not suspended → early return null)', () => {
