@@ -87,7 +87,12 @@ export function RuntimeList() {
 
   const del = useMutation({
     mutationFn: (name: string) => api.delete(`/api/runtimes/${encodeURIComponent(name)}`),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: RUNTIMES_QUERY_KEY }),
+    onSuccess: (_data, name) => {
+      void qc.invalidateQueries({ queryKey: RUNTIMES_QUERY_KEY })
+      // RFC-114 Codex P2-2: the deleted runtime's cached model list (?runtime=name)
+      // is now stale — drop it so a same-name re-create re-fetches the new binary.
+      void qc.invalidateQueries({ queryKey: ['runtime', 'models', 'rt', name] })
+    },
   })
 
   // RFC-113 D3: the in-table "set as default" marker writes config.defaultRuntime.
@@ -224,6 +229,7 @@ function RuntimeFormDialog(props: {
   onSaved: () => void
 }) {
   const { t } = useTranslation()
+  const qc = useQueryClient()
   const isEdit = props.existing !== null
   const [name, setName] = useState(props.existing?.name ?? '')
   const [protocol, setProtocol] = useState<RuntimeProtocol>(props.existing?.protocol ?? 'opencode')
@@ -277,7 +283,13 @@ function RuntimeFormDialog(props: {
         ...profileBody(),
       })
     },
-    onSuccess: () => props.onSaved(),
+    onSuccess: () => {
+      // RFC-114 Codex P2-2: a saved binary change means this runtime's cached
+      // model list (?runtime=name, staleTime Infinity) is stale — invalidate it so
+      // re-opening the dialog re-fetches the new binary's models.
+      void qc.invalidateQueries({ queryKey: ['runtime', 'models', 'rt', name.trim()] })
+      props.onSaved()
+    },
   })
 
   return (

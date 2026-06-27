@@ -199,4 +199,28 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     // no ModelSelect → no /api/runtime/models fetch for the new form.
     expect(fetchUrls.some((u) => u.includes('/api/runtime/models'))).toBe(false)
   })
+
+  // RFC-114 Codex P2-2: a runtime's model list is cached per-name with
+  // staleTime:Infinity. Deleting (or saving a changed binary for) that runtime
+  // must invalidate ['runtime','models','rt',<name>] — else a same-name re-create
+  // or a reopened edit serves the OLD binary's models.
+  test('deleting a runtime invalidates its per-name model query (RFC-114 P2-2)', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } },
+    })
+    const spy = vi.spyOn(client, 'invalidateQueries')
+    render(
+      <QueryClientProvider client={client}>
+        <RuntimeList />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.getByText('my-oc')).toBeTruthy())
+    // only the custom my-oc row has a Delete button.
+    fireEvent.click(screen.getByRole('button', { name: /^Delete$/ }))
+    await waitFor(() =>
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['runtime', 'models', 'rt', 'my-oc'] }),
+      ),
+    )
+  })
 })
