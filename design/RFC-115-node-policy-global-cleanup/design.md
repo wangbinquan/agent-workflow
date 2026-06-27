@@ -39,7 +39,7 @@
 - ⚠️ `migrateConfigIntoBuiltins` **别整删**——它还 backfill `opencodePath`(:452) / `claudeCodePath`(:460) 两个**活**字段。
 - `settings.tsx` 已不再渲染这 6 字段（PR-C 清过）；对应 i18n key 是 PR-C 漏删的死字符串。
 
-**(f) `node_runs.agent_snapshot`**（`schema.ts:849`，JSON `{model,variant,temperature}`）：写 `review.ts:783/807`（恒 `?? null`，**全仓无非 null 生产者**）、读 `review.ts:2408` → ReviewVersion DTO（`shared/schemas/review.ts:163`）。死列。
+**(f) `doc_versions.agent_snapshot`**（`schema.ts:849`，在 **docVersions 表**〔Codex 设计 gate F1 纠正：审计误判为 node_runs，实为 `doc_versions`，migration `0002_melted_stryfe.sql` 创建〕，JSON `{model,variant,temperature}`）：写 `review.ts:783/807`（恒 `?? null`，**全仓无非 null 生产者**）、读 `review.ts:2408` → ReviewVersion DTO（`shared/schemas/review.ts:163`）。死列。doc_versions 约 22 列、2 FK（`task_id`→tasks、`review_node_run_id`→node_runs，均 cascade）、3 索引（`idx_doc_versions_review_run` / `_task` / `_review_item`）——比 node_runs 轻得多，非任务执行承重表。
 
 ### 0.3 Agent 运行时列（G3 目标面）
 
@@ -56,9 +56,10 @@
 - **D4 agent 参数契约收口 + DROP 列**：补做 RFC-113 T6 + DROP `agents` 5 列。shared schema / agent.ts / agent-md / 前端残留 / schema.ts 列定义**同一 PR 原子**落地（否则 typecheck / drizzle SELECT 崩）。`migrateAgentParamsToRuntimes` + `profileKey` 整删、`cli/start.ts` 调用删。
 - **D5 agent.md 遗留键降级路由**（不丢数据）：旧 `agent.md` 的 `model:` / `variant:` 等 frontmatter 键，导入时**路由进 `frontmatterExtra`/`extras`**（`agent-md.ts` 对非法值已是此行为，`:140/150/160`），而非进 `partial`。前端 `AgentImportDialog` 删 `ROUTE_KEYS` 5 键 + `add()` 5 行；老定义不报错、参数进 frontmatterExtra 预览、不进 DB。
 - **D6 config 死字段删除 + 迁移收敛**：删 6 字段 schema；`migrateConfigIntoBuiltins` 删这 6 字段的参数类型与 backfill 读、**保留** opencodePath/claudeCodePath backfill（函数不整删）。
-- **D7 `node_runs.agent_snapshot` 彻底删**（用户「死数据库列也同步清理」）：删代码引用链（review.ts + shared review schema + ReviewVersion DTO 字段）+ DROP DB 列。⚠️ 这是本 RFC **最高风险子任务**（node_runs ~30 列重建），用**列名快照测试**守卫（见 §4.2）。若复审认为风险 > 收益，降级方案 = 仅删代码引用、DB 列留作 follow-up（恒 NULL 无害）——在 plan 标为可回退。
+- **D7 `doc_versions.agent_snapshot` 彻底删**（用户「死数据库列也同步清理」；Codex F1 纠正：在 `doc_versions` 非 node_runs）：删代码引用链（review.ts + shared review schema + ReviewVersion DTO 字段）+ DROP DB 列。重建 **doc_versions**（约 22 列，比 node_runs 轻；但**必须保留** 2 FK〔task_id→tasks、review_node_run_id→node_runs，均 cascade〕+ 3 索引〔idx_doc_versions_review_run/_task/_review_item〕），用 `PRAGMA table_info/index_list/foreign_key_list(doc_versions)` 守卫（见 §4.2）。降级方案 = 仅删代码引用、DB 列留 follow-up——plan 标可回退。
 - **D8 运行时列展示**（用户拍板）：`a.runtime ?? <isDefault 运行时名>`；未指定时附公共 `StatusChip kind="neutral" size="sm"`「默认」标记。数据源 `['runtimes']` 的 `isDefault`。
-- **D9 硬切迁移**（pre-prod）：DROP 列采用本仓 0041 确立的「platform is pre-prod (no live user data); hard-cut is safe」惯例；跨 RFC-113 跳级升级的数据丢失记为**已知限制**（§5 P0），不为它保留兼容垫片（与「彻底清理」目标一致）。
+- **D9 pre-drop fail-loud 守卫**（Codex 设计 gate F2 强化，取代原「硬切+记已知限制」）：0057 在重建 agents 去列**之前**先跑守卫——若 `agents` 任一参数列存在非 NULL 值（即该库尚未经 RFC-113 的 `migrateAgentParamsToRuntimes` re-home），migration **ABORT**（SQLite CHECK 技巧，见 §4.1），明确提示「先经 RFC-113 启动一次完成 re-home」。已 re-home 的库（参数列全 NULL）守卫通过 → DROP 无损。如此跨 RFC-113 跳级升级 **fail-loud、绝不静默丢 model 数据**（pre-prod 实际无 live 数据、守卫几乎恒通过，但机制上堵死数据丢失）。
+- **D10 修复 `config.defaultRuntime` 接线 gap**（Codex F3）：审计发现 `config.defaultRuntime` 经 `resolveLaunchRuntimeConfig` 返回、scheduler `opts.defaultRuntime`(:199-204) 消费，但 **`StartTaskDeps` 缺该字段、`runtimeConfigOpts`(task.ts:481 `Pick<...'commitPush'|'maxConcurrentNodes'>`) 不转发** → 生产 startTask 路径上 `config.defaultRuntime` 从未生效（agent.runtime=null 的节点 fallback opencode 而非配置默认）。本 RFC 顺带修复：`defaultRuntime` + 新增 `defaultNodeRetries` 一并接进 `StartTaskDeps`→`runtimeConfigOpts` 单一漏斗（连既有 3 处手动 `defaultPerNodeTimeoutMs` spread 一并收编，§2.4）。这是 G3 运行时列「显示=实际执行」正确性的前提。
 
 ## 2. 接口契约
 
@@ -92,13 +93,17 @@ if (cfg.defaultNodeRetries !== undefined) out.defaultNodeRetries = cfg.defaultNo
 - `:1714/3686/3956`：`pickNumber(innerNode/aggNode/node, 'timeoutMs') ?? opts.defaultPerNodeTimeoutMs` → `opts.defaultPerNodeTimeoutMs`（去掉 `pickNumber(...,'timeoutMs')`）。
 - 删 `pickOverrides`(:4727-4738) + `:1722/3687/3957` nodeOverrides + `:2423/3731/3998` 透传 + `:115` import。
 
-### 2.4 StartTaskDeps 透传（展开式，自动覆盖 13+ 入口）
+### 2.4 StartTaskDeps → runtimeConfigOpts 单一漏斗（Codex F3：收编 + 补 defaultRuntime）
 
-各 Deps 类型加 `defaultNodeRetries?: number` 声明并在 kick 点仿 timeout 透传进 scheduler opts：
-- `task.ts`：类型 `:124`；kick `:946-947 / :1371-1372 / :1959-1960`。
-- `fusion.ts`：类型 `:70`；kick `:463-464 / :851-852`。
-- **唯一非展开入口** `routes/fusions.ts:50,55`：显式解构需把 `defaultNodeRetries` 一并解构 + 下传。
-- 其余入口（tasks.ts / reviews.ts / clarify.ts / cli/start.ts / autoRepair.ts）用 `...resolveLaunchRuntimeConfig(...)` 展开，**自动获得**（前提：各 Deps 类型已声明该键）。
+**现状**：`runtimeConfigOpts(deps)`（task.ts:481-496，`Pick<StartTaskDeps,'commitPush'|'maxConcurrentNodes'>`）只转发 commitPush*/maxConcurrentNodes；`defaultPerNodeTimeoutMs` 反而是 task.ts 三处（:946/1371/1959）**手动 spread**（dedup 债）；`defaultRuntime` **既不在 StartTaskDeps 也不在 runtimeConfigOpts** → `config.defaultRuntime` 在生产 startTask 路径失效（F3，agent.runtime=null 时 fallback opencode）。
+
+**改法**——把 timeout/retries/runtime 三者统一收进 `runtimeConfigOpts` 单一漏斗：
+- `StartTaskDeps`（:124 区）补 `defaultNodeRetries?: number` + `defaultRuntime?: string`（`defaultPerNodeTimeoutMs` 已有）。
+- `runtimeConfigOpts` 的 `Pick` 扩为含 `defaultPerNodeTimeoutMs | defaultNodeRetries | defaultRuntime`；返回里条件 spread 这三者（仿 commitPush）。
+- **删** task.ts 三处手动 `defaultPerNodeTimeoutMs` spread（:946/1371/1959）——统一由 `...runtimeConfigOpts(deps)` 注入（三处已在调它）。
+- `fusion.ts`（:70 类型 + :463/851 kick）与 `routes/fusions.ts:50,55`（显式解构入口）同步补三字段 / 改走漏斗。
+- 上游 `resolveLaunchRuntimeConfig` 已返回 `defaultRuntime`（§2.2 再加 `defaultNodeRetries`）→ 确保进 deps。
+- **G3 正确性前提**：修后 agent.runtime=null 节点冻结 `node_runs.runtime = config.defaultRuntime`，运行时列「默认」标记 = 实际执行运行时；回归测试见 §6。
 
 ### 2.5 runner
 
@@ -133,26 +138,39 @@ config.json defaultNodeRetries(3)
 ### 4.1 agents 5 列 DROP（0057，PR-C）
 
 - journal 追加 `idx:56, version:"6", when:<固定常量>, tag:"0057_rfc115_drop_agent_params", breakpoints:true`（`Date.now()` 不可用，用与 0056 同风格的递增常量）。
+- **pre-drop fail-loud 守卫（D9 / Codex F2，置于重建之前、migration 首段）**：用 SQLite CHECK 技巧断言 agents 参数列已被 RFC-113 re-home（全 NULL），否则整个 migration ABORT、绝不静默丢 model 数据：
+  ```sql
+  CREATE TEMP TABLE __rfc115_guard (n INTEGER CHECK (n = 0));--> statement-breakpoint
+  INSERT INTO __rfc115_guard SELECT COUNT(*) FROM agents
+    WHERE model IS NOT NULL OR variant IS NOT NULL OR temperature IS NOT NULL
+       OR steps IS NOT NULL OR max_steps IS NOT NULL;--> statement-breakpoint
+  DROP TABLE __rfc115_guard;--> statement-breakpoint
+  ```
+  未 re-home 的库（跳过 RFC-113）COUNT>0 违反 `CHECK(n=0)` → ABORT，提示「先经 RFC-113 启动一次」；已 re-home（全 NULL）→ 通过后继续重建。
 - bun:sqlite 无 `ALTER TABLE DROP COLUMN` → **12 步表重建**（0041/0035 模板）：`PRAGMA foreign_keys=OFF` → `CREATE __new_agents`（**显式列清单 = 当前全列 − 5 参数列**）→ `INSERT INTO __new_agents SELECT <显式列> FROM agents` → `DROP TABLE agents` → `ALTER RENAME __new_agents → agents` → `PRAGMA foreign_keys=ON`，每句 `--> statement-breakpoint`。
 - agents 表**无二级索引**（仅内联 `name unique`、`owner_user_id` 为 app 层 FK 无真实约束）→ 无需重建 CREATE INDEX，重建轻。
 - **schema.ts 同步删 5 列**（同 PR），否则 drizzle 无投影 `select()` 生成的列清单与 DB 不符。
 
-### 4.2 node_runs.agent_snapshot DROP（0058，PR-D，D7）
+### 4.2 doc_versions.agent_snapshot DROP（0058，PR-E，D7；Codex F1 纠正表名）
 
-- 同 12 步重建，但 node_runs ~30 列 → **列清单极易漏**。来源 = 0041 重建后的 node_runs 全列 **+** 0042-0056 后续新增列（含 `runtime`/`runtime_binary`/`runtime_params_json`/`spawn_binary_path` 等）**−** `agent_snapshot`。重建 node_runs **必须重建其索引**（`idx_node_runs_task` / `idx_node_runs_parent` 等，参 0041）。
-- **守卫**：`migration-0058-*.test.ts` 断言重建后 node_runs **列名集合快照**（精确列名数组）+ 行数不变 + 关键活列（runtime_params_json 等）值保留。任何漏/多列即红。
-- 若复审判定风险 > 收益：降级为「仅删代码引用、保留 DB 列」（plan 标 PR-D 可回退点）。
+- 同 12 步重建，目标表 **doc_versions**（非 node_runs，约 22 列）。显式列清单 = doc_versions 当前全列 − `agent_snapshot`。
+- **必须保留** 2 FK（`task_id`→tasks cascade、`review_node_run_id`→node_runs cascade）+ 3 索引（`idx_doc_versions_review_run` / `_task` / `_review_item`）——重建后逐一 `CREATE INDEX`。
+- **守卫**：`migration-0058-*.test.ts` 用 `PRAGMA table_info(doc_versions)`（agent_snapshot 消失、其余列名集合不变）+ `PRAGMA index_list` / `PRAGMA foreign_key_list`（索引/FK 保留）+ 行数不变断言。
+- 风险显著低于原误判的 node_runs（doc_versions 非任务执行承重表）；仍标可回退（仅删代码引用、DB 列留 follow-up）。
 
 ### 4.3 迁移退役顺序
 
-`cli/start.ts` 启动序列：`migrate(db)`（应用 0057/0058 SQL）→ `seedBuiltinRuntimes` → `migrateConfigIntoBuiltins`（收敛后保留）→ ~~`migrateAgentParamsToRuntimes`~~（删）。已跑过 RFC-113 的库：agent 列已被清空 NULL → DROP 无损。
+`cli/start.ts` 启动序列：`migrate(db)`（应用 0057〔守卫→重建 agents〕/0058 SQL）→ `seedBuiltinRuntimes` → `migrateConfigIntoBuiltins`（收敛后保留）→ ~~`migrateAgentParamsToRuntimes`~~（删）。
+- 已跑过 RFC-113 的库：参数列已 re-home 清空 NULL → 0057 守卫通过 → DROP 无损。
+- 跳级库（pre-0056 直接 → 本版）：0057 守卫检出非 NULL → ABORT（fail-loud，§4.1），不静默丢；须先经 RFC-113 build re-home。
+- 删 `migrateAgentParamsToRuntimes` 与 DROP 必须同 PR：该函数读被删的列，留它则 TS 编译错。
 
 ## 5. 失败模式与风险
 
-- **P0 跨版本跳级数据丢失**（已知限制，D9）：从未在 RFC-113 上启动过、直接 pre-RFC-113 → RFC-115 的库，其 config / agents 里的 model 参数会在 backfill / re-home **之前**被 zod strip / DROP 丢弃。缓解：RFC-113 已随 main 滚动发布、开发者每次 pull 启动即迁移；pre-prod 无 live 数据。文档显式声明「需先经 RFC-113 启动一次（或全新库无影响）」。
+- **P0 跨版本跳级数据丢失 → 已由 D9 pre-drop 守卫堵死**（Codex F2）：原「硬切+记已知限制」会让 pre-0056 直接跳本版的库在 re-home 前被 DROP 丢 model 数据。改为 0057 fail-loud 守卫（§4.1）：未 re-home 的库 migration ABORT 而非静默丢。**config 6 死字段**无列 DROP（仅 schema 删 + zod strip 残值），其值经 `migrateConfigIntoBuiltins` 已 backfill 进内置运行时行；跳级库 config.json 残值被 strip——同样依赖「先经 RFC-113」，但属值丢失非列丢失、pre-prod 可接受，PR-D 文档声明该前提（不另加 config 守卫，agents 守卫已覆盖更危险路径）。
 - **DROP 与代码删除非原子 → typecheck/SELECT 崩**：schema.ts 删列、agent.ts、shared schema、agent-md、前端残留必须**同一 PR**。
-- **误删活资产**：`claudeCodePath`（8+ 处活 fallback）/ `claudeCodeEnabled`（AgentForm gate）/ `defaultRuntime` / `runtimeProfileOf` / `resolveRuntimeByName` / `migrateConfigIntoBuiltins`（托二进制 backfill）/ `RuntimeList` profile / `inventory` modelId / `mcps.fieldTimeoutMs` —— 逐一在 plan 标「勿删」。
-- **node_runs 重建漏列**（D7/§4.2）：列名快照测试守卫。
+- **误删活资产**：`claudeCodePath`（8+ 处活 fallback）/ `claudeCodeEnabled`（AgentForm gate）/ `defaultRuntime`（D10 接线后更不能删）/ `runtimeProfileOf` / `resolveRuntimeByName` / `migrateConfigIntoBuiltins`（托二进制 backfill）/ `RuntimeList` profile / `inventory` modelId / `mcps.fieldTimeoutMs` —— 逐一在 plan 标「勿删」。
+- **doc_versions 重建漏列 / 丢 FK·索引**（D7/§4.2）：`PRAGMA table_info/index_list/foreign_key_list` 守卫。
 - **NUL 守卫**：`runtimeRegistry.ts:468-478 profileKey` 用 `'\x00'`/`'\x1f'`（d15546d 修过），随函数删除；其余改动勿引入字面 NUL（`no-nul-bytes-in-source.test.ts` 守）。
 
 ## 6. 测试策略（必写 case）
@@ -160,10 +178,16 @@ config.json defaultNodeRetries(3)
 - **G1 后端**：`config.test.ts` 加 `defaultNodeRetries` round-trip + 默认=3 + 缺字段 backfill（**必填+有默认**风格，非 optional）；scheduler 断言 node 无 retries 时取 `opts.defaultNodeRetries`、node 有 retries 时**被忽略**（锁 D2）；timeout 同构忽略断言。
 - **G1 前端**：翻转 `node-inspector.test.tsx:309-322` 为 `queryByText('Retries'|'Timeout (ms)')` 均 `toBeNull()`（保留 promptTemplate/agent 选择正向断言）；源码文本兜底「`NodeInspector.tsx` 不含 `inspector.fieldRetries`」；settings 含 `defaultNodeRetries` 输入。
 - **G2 死资产**：`scheduler-node-overrides.test.ts` 简化为纯「忽略」；删 `runtime-profile-migration.test.ts`（随 `migrateAgentParamsToRuntimes` 退役）；agent SELECT 不含 5 列（migration 列计数）；`config.test.ts` 删 default* 系列用例；`agent-md.test.ts` 加「遗留 `model:` 键路由进 frontmatterExtra、不进 partial」红→绿；源码文本「`agents.detail.tsx` 不含 `a.model`/`out.model`」防回潮。
-- **G2 migration**：`migration-0057-*.test.ts`（agents 列名快照、行数不变、5 列消失）；`migration-0058-*.test.ts`（node_runs 列名快照 + 活列值保留，D7）；upgrade-rolling 计数更新。
-- **G3 运行时列**：`agents.tsx` 集成（`findByRole('columnheader', {name:/运行时|Runtime/})`；指定运行时行显名无 chip；未指定行显默认名 + 「默认」chip）。
+- **G2 migration**：`migration-0057-*.test.ts`（agents 列名快照 / 行数不变 / 5 列消失；**pre-drop 守卫**：含非 NULL agent 参数的 pre-0056 fixture → 0057 **ABORT**〔Codex F2〕、已全 NULL → 成功）；`migration-0058-*.test.ts`（`PRAGMA table_info/index_list/foreign_key_list(doc_versions)` 列名/索引/FK 守卫 + 活列值保留，D7 doc_versions）；upgrade-rolling 计数更新。
+- **G3 运行时列 + defaultRuntime 接线**（Codex F3）：`agents.tsx` 集成（`findByRole('columnheader',{name:/运行时|Runtime/})`；指定运行时行显名无 chip；未指定行显默认名 + 「默认」chip）；**后端冻结回归**：agent.runtime=null + `config.defaultRuntime='claude-code'` → 启动后 `node_runs.runtime` 冻结为 `claude-code`（证明 D10 接线生效、列显示=实际执行，否则该测试红）。
 - **门禁**：`bun run typecheck && bun run test && bun run format:check` 全绿 + 单二进制 smoke（0057/0058 嵌入、无模块环）+ i18n parity。
 
 ## 7. Codex 设计 gate / 实现 gate 记录
 
-（落档后跑 Codex 设计 gate，findings 在此登记后再进实现；实现后跑实现 gate。）
+### 设计 gate（adversarial-review，base HEAD~1，verdict needs-attention）— 3 findings 全 fold
+- **F1 [high] agent_snapshot 表名错**：审计误判在 node_runs，实为 `doc_versions`（schema.ts:821-849 / migration 0002 创建；nodeRuns 无此列）。→ Fold：§0.2(f)/§4.2/D7/PR-E 全改 doc_versions 重建（保 2 FK + 3 索引、`PRAGMA table_info/index_list/foreign_key_list` 守卫），风险下调（非承重表）。
+- **F2 [high] 硬切在 re-home 前删源列丢数据**：start.ts 先 SQL migrate（DROP agents 列）后 TS re-home（读列），跳级库丢 model。→ Fold：D9 改 0057 **pre-drop fail-loud 守卫**（§4.1 CHECK 技巧，未 re-home 则 ABORT、不静默丢）+ §5 P0 重写 + §6 升级测试（pre-0056 含非空 params → abort）。
+- **F3 [medium] 运行时列显示执行不用的默认运行时**：`config.defaultRuntime` 未接进 StartTaskDeps→runTask（`runtimeConfigOpts` 只转发 commitPush/maxConcurrent，timeout 还是手动 spread），生产路径 fallback opencode。→ Fold：新增 D10 + §2.4 把 `defaultRuntime` + `defaultNodeRetries` 收进 `runtimeConfigOpts` 单一漏斗（收编 timeout 手动 spread）+ §6 加 `node_runs.runtime` 冻结回归；PR-B 标依赖 PR-A 接线修复。
+
+### 实现 gate
+（实现后跑，findings 在此登记。）
