@@ -202,8 +202,7 @@ function plantS3Violation(taskId: string): { reviewRunId: string; alertId: strin
     rule: 'S3',
     message: 'task running but every node_run is terminal',
     repairHint: { kind: 'review', nodeRunId: reviewRunId },
-  })
-    .replace(/'/g, "''")
+  }).replace(/'/g, "''")
   runSql(`
     UPDATE tasks SET status='running' WHERE id='${taskId}';
     INSERT INTO node_runs (id, task_id, node_id, parent_node_run_id, iteration,

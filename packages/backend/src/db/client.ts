@@ -32,13 +32,24 @@ export function openDb(opts: OpenDbOptions): DbClient {
   sqlite.exec('PRAGMA journal_mode = WAL;')
   sqlite.exec('PRAGMA synchronous = NORMAL;')
   sqlite.exec('PRAGMA busy_timeout = 5000;')
-  sqlite.exec('PRAGMA foreign_keys = ON;')
-
   const db = drizzle(sqlite, { schema })
 
   if (!opts.skipMigrations) {
+    // RFC-115 (Codex audit F1): run migrations with foreign_keys OFF. drizzle
+    // wraps ALL migrations in ONE transaction, and `PRAGMA foreign_keys` is a
+    // no-op INSIDE a transaction — so a 12-step rebuild's own
+    // `PRAGMA foreign_keys=OFF` never takes effect and its `DROP TABLE <x>`
+    // cascade-deletes child rows on upgrade (0058 DROP doc_versions →
+    // review_comments wiped via ON DELETE cascade; 0035/0041 are the same shape
+    // for node_runs). Toggle OUTSIDE drizzle's tx, then re-enable + verify.
+    sqlite.exec('PRAGMA foreign_keys = OFF;')
     migrate(db, { migrationsFolder: resolve(opts.migrationsFolder) })
+    const violations = sqlite.query('PRAGMA foreign_key_check;').all()
+    if (violations.length > 0) {
+      throw new Error(`post-migration foreign_key_check failed: ${JSON.stringify(violations)}`)
+    }
   }
+  sqlite.exec('PRAGMA foreign_keys = ON;')
 
   return db
 }
@@ -61,8 +72,11 @@ function migratedSnapshot(migrationsFolder: string): Uint8Array {
   let snapshot = migratedSnapshotCache.get(key)
   if (!snapshot) {
     const template = new Database(':memory:')
-    template.exec('PRAGMA foreign_keys = ON;')
+    // RFC-115 (Codex audit F1): migrate with FK OFF (see openDb) so 12-step
+    // rebuilds don't cascade-delete child rows; the serialized image is FK-ON.
+    template.exec('PRAGMA foreign_keys = OFF;')
     migrate(drizzle(template, { schema }), { migrationsFolder: key })
+    template.exec('PRAGMA foreign_keys = ON;')
     snapshot = template.serialize()
     template.close()
     migratedSnapshotCache.set(key, snapshot)

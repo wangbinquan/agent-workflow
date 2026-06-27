@@ -146,3 +146,58 @@ describe('RFC-115 migration 0058 — DROP doc_versions.agent_snapshot', () => {
     }
   })
 })
+
+// Codex audit F1 regression: 0058's 12-step rebuild DROPs doc_versions, which —
+// if migrations run with foreign_keys ON — cascade-deletes EVERY review_comments
+// row (FK doc_version_id ON DELETE cascade). The fix (db/client.ts openDb /
+// migratedSnapshot) runs migrations with FK OFF so the rebuild is FK-inert and
+// child rows survive the upgrade. New installs never hit it (empty child table
+// on replay), which is why CI was green — only "DB with review comments → RFC-115"
+// loses data.
+describe('RFC-115 migration 0058 — Codex F1: review_comments survive the upgrade', () => {
+  test('FK-safe migrate (FK OFF, as openDb does) keeps review_comments through the rebuild', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'aw-mig0058-fk-'))
+    const dbPath = join(tmp, 'pre.sqlite')
+    try {
+      freezeAt(idx0057(), dbPath) // pre-0058: doc_versions still has agent_snapshot
+      const pre = new Database(dbPath)
+      pre.exec('PRAGMA foreign_keys = OFF;')
+      pre.run(
+        `INSERT INTO doc_versions (id, task_id, review_node_id, review_node_run_id,
+           source_node_id, source_port_name, version_index, review_iteration, body_path,
+           comments_json, decision, created_at)
+         VALUES ('01DVX','t1','rev','run1','src','answer',1,0,'b.md','[]','approved',1)`,
+      )
+      pre.run(
+        `INSERT INTO review_comments (id, doc_version_id, anchor_section_path,
+           anchor_paragraph_idx, anchor_offset_start, anchor_offset_end, selected_text,
+           context_before, context_after, occurrence_index, comment_text, created_at)
+         VALUES ('01RC1','01DVX','/s',0,0,5,'sel','before','after',0,'nice work',1)`,
+      )
+      pre.close()
+
+      // Apply 0058 the way production openDb does: FK OFF OUTSIDE drizzle's tx →
+      // migrate → FK ON. Under the OLD FK-ON path the DROP TABLE doc_versions
+      // would cascade-delete the review_comment.
+      const up = new Database(dbPath)
+      up.exec('PRAGMA foreign_keys = OFF;')
+      migrate(drizzle(up, {}), { migrationsFolder: MIGRATIONS })
+      up.exec('PRAGMA foreign_keys = ON;')
+      expect(docVersionCols(up)).not.toContain('agent_snapshot')
+      expect((up.query('SELECT COUNT(*) AS n FROM review_comments').get() as { n: number }).n).toBe(
+        1,
+      )
+      expect((up.query('SELECT COUNT(*) AS n FROM doc_versions').get() as { n: number }).n).toBe(1)
+      up.close()
+    } finally {
+      rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  test('openDb source runs migrations with foreign_keys OFF (防回退到 FK-ON 级联)', () => {
+    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'db', 'client.ts'), 'utf8')
+    // The FK-OFF toggle must precede migrate() so a 12-step rebuild's DROP TABLE
+    // can't cascade-delete child rows.
+    expect(src).toMatch(/foreign_keys = OFF[\s\S]{0,400}migrate\(/)
+  })
+})
