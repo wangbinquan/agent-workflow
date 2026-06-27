@@ -110,6 +110,13 @@ export async function resolveRuntimeByName(
   if (n !== null) {
     const row = await getRuntime(db, n)
     if (row !== null) return { name: row.name, protocol: row.protocol, binaryPath: row.binaryPath }
+    // RFC-112: the two built-in NAMES resolve to their protocol (default binary)
+    // even when the registry row isn't seeded — so RFC-111 'opencode' /
+    // 'claude-code' values keep working in any context (tests, a dispatch that
+    // races startup seeding). Only CUSTOM names require a registered row.
+    if (n === 'opencode' || n === 'claude-code') {
+      return { name: n, protocol: n, binaryPath: null }
+    }
     log.warn('runtime-name-unknown-fallback-opencode', { name: n })
   }
   return { name: 'opencode', protocol: 'opencode', binaryPath: null }

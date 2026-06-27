@@ -2381,7 +2381,8 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           nodeRunId,
           nodeId: node.id,
           agent,
-          runtime: frozenRuntime,
+          runtime: frozenRuntime.protocol,
+          runtimeBinary: frozenRuntime.binary,
           inputs: upstreamInputs,
           worktreePath: task.worktreePath,
           // RFC-067: thread per-task Git commit identity through to the runner
@@ -3694,7 +3695,8 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
       nodeRunId: shardRunId,
       nodeId: innerNode.id,
       agent: innerAgent,
-      runtime: shardRuntime,
+      runtime: shardRuntime.protocol,
+      runtimeBinary: shardRuntime.binary,
       inputs,
       worktreePath: task.worktreePath,
       // RFC-067: per-task Git identity threaded through fanout shard dispatch.
@@ -3960,7 +3962,8 @@ async function dispatchFanoutAggregator(
       nodeRunId: aggRunId,
       nodeId: aggNode.id,
       agent: aggAgent,
-      runtime: aggRuntime,
+      runtime: aggRuntime.protocol,
+      runtimeBinary: aggRuntime.binary,
       inputs: aggInputs,
       worktreePath: task.worktreePath,
       // RFC-067: per-task Git identity threaded through fanout aggregator dispatch.

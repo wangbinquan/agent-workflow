@@ -26,7 +26,8 @@ import { ulid } from 'ulid'
 import type { NodeRunStatus, RerunCause } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { nodeRuns } from '@/db/schema'
-import { resolveRuntime, type RuntimeKind } from '@/services/runtime'
+import type { RuntimeKind } from '@/services/runtime'
+import { resolveAgentRuntime } from '@/services/runtimeRegistry'
 import { createLogger } from '@/util/log'
 
 /**
@@ -213,41 +214,55 @@ export function isClarifyRerunCause(cause: string | null | undefined): boolean {
   return cause === 'clarify-answer' || cause === 'cross-clarify-questioner-rerun'
 }
 
+/** RFC-112: the frozen (protocol, binary) pair a node_run dispatches/resumes on. */
+export interface FrozenRuntime {
+  /** RuntimeDriver kind — decides the driver + session-id format. */
+  protocol: RuntimeKind
+  /** The custom binary head snapshot, or null = the protocol's default binary. */
+  binary: string | null
+}
+
 /**
- * RFC-111 D15 — read the runtime frozen onto a node_run, or on the FIRST
- * dispatch (runtime still NULL) resolve it from `agent.runtime ?? defaultRuntime`
- * and freeze it. resume/retry of the SAME row read the frozen value, so a
- * mutated agent / default can't re-route a captured session to the wrong
- * runtime (session id + runtime must be consumed as a pair, D11). An
- * unrecognized stored value reads as 'opencode' (legacy rows are NULL).
+ * RFC-111 D15 + RFC-112 (Codex P1) — read the (protocol, binary) frozen onto a
+ * node_run, or on the FIRST dispatch (runtime still NULL) resolve the agent's
+ * runtime NAME via the registry to a (protocol, binary) and freeze BOTH onto the
+ * row. resume/retry read the frozen SNAPSHOT — never the mutable registry — so
+ * deleting / renaming / re-pointing a runtime can't re-route a captured session
+ * to the wrong driver or binary (session id + runtime are a pair, D11). An
+ * unrecognized stored protocol re-resolves (forward-compatible recovery, logged).
  */
 export async function resolveFrozenRuntime(
   db: DbClient,
   nodeRunId: string,
   agentRuntime: string | null | undefined,
   defaultRuntime: string | null | undefined,
-): Promise<RuntimeKind> {
+): Promise<FrozenRuntime> {
   const row = (
     await db
-      .select({ runtime: nodeRuns.runtime })
+      .select({ runtime: nodeRuns.runtime, runtimeBinary: nodeRuns.runtimeBinary })
       .from(nodeRuns)
       .where(eq(nodeRuns.id, nodeRunId))
       .limit(1)
   )[0]
-  if (row?.runtime === 'opencode' || row?.runtime === 'claude-code') return row.runtime
-  // Codex impl-gate P2-2: a NON-null stored value that isn't a known kind means
-  // corruption or a future runtime that was downgraded away. We re-resolve (a
-  // recovery that keeps the run alive — forward-compatible) but log loudly so it
-  // is never silent. The D15 session/runtime pairing is only at risk if a
-  // captured session id is ALSO present; resolveResumeSessionId pairs the id with
-  // this frozen value, so a re-resolved opencode run simply starts a fresh session.
+  if (row?.runtime === 'opencode' || row?.runtime === 'claude-code') {
+    // already frozen — return the self-contained snapshot, registry-independent.
+    return { protocol: row.runtime, binary: row.runtimeBinary ?? null }
+  }
+  // Codex impl-gate P2-2: a NON-null stored value that isn't a known protocol
+  // means corruption or a future runtime downgraded away. Re-resolve (a recovery
+  // that keeps the run alive) but log loudly so it is never silent.
   if (row?.runtime != null && row.runtime !== '') {
     createLogger('nodeRunMint').warn('frozen-runtime-invalid-reresolved', {
       nodeRunId,
       stored: row.runtime,
     })
   }
-  const resolved = resolveRuntime(agentRuntime, defaultRuntime)
-  await db.update(nodeRuns).set({ runtime: resolved }).where(eq(nodeRuns.id, nodeRunId))
-  return resolved
+  // First dispatch: resolve the runtime NAME (agent ?? default) through the
+  // registry to (protocol, binary) and freeze both.
+  const resolved = await resolveAgentRuntime(db, agentRuntime, defaultRuntime)
+  await db
+    .update(nodeRuns)
+    .set({ runtime: resolved.protocol, runtimeBinary: resolved.binaryPath })
+    .where(eq(nodeRuns.id, nodeRunId))
+  return { protocol: resolved.protocol, binary: resolved.binaryPath }
 }

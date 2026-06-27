@@ -270,6 +270,15 @@ export interface RunNodeOptions {
    * undefined → `'opencode'` (legacy zero-change default).
    */
   runtime?: RuntimeKind
+  /**
+   * RFC-112: the FROZEN custom binary head for this node_run (the resolved
+   * runtime's `binaryPath` snapshot, frozen onto `node_runs.runtime_binary`
+   * alongside `runtime`). null / undefined = use the protocol's DEFAULT binary
+   * (built-in runtimes) — which preserves RFC-111 behavior byte-for-byte
+   * (opencode → opts.opencodeCmd, claude → opts.runtimeCmd). A non-empty value
+   * (a custom fork) overrides the head for BOTH protocols.
+   */
+  runtimeBinary?: string | null
   db: DbClient
   log?: Logger
   /** When aborted, runner SIGTERMs the child and returns status='canceled'. */
@@ -402,6 +411,20 @@ export interface RunResult {
     questions: ClarifyQuestion[]
     truncationWarnings: ClarifyTruncationWarning[]
   }
+}
+
+/**
+ * RFC-112: pick the spawn argv head. A custom runtime's frozen binary
+ * (`runtimeBinary`) overrides the protocol default; null / empty (the built-in
+ * runtimes) falls back to the RFC-111 head (`opencodeCmd` for opencode, the
+ * test-only `runtimeCmd` for claude), so a built-in spawn is byte-for-byte
+ * unchanged. Exported so the golden head-selection contract can be unit-locked.
+ */
+export function pickRuntimeHead(
+  runtimeBinary: string | null | undefined,
+  fallback: string[] | undefined,
+): string[] | undefined {
+  return runtimeBinary != null && runtimeBinary.length > 0 ? [runtimeBinary] : fallback
 }
 
 export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
@@ -747,8 +770,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     const claudeAgents = toClaudeAgents(opts.dependents ?? [])
     plan = buildClaudeSpawn({
       // Codex impl-gate P1-1: claude uses runtimeCmd (test-only), NEVER the
-      // opencode-specific opencodeCmd. Production → undefined → ['claude'].
-      claudeCmd: opts.runtimeCmd,
+      // opencode-specific opencodeCmd. RFC-112: a custom claude fork's binary
+      // wins; else production → undefined → ['claude'].
+      claudeCmd: pickRuntimeHead(opts.runtimeBinary, opts.runtimeCmd),
       prompt,
       systemPromptText,
       model: opts.overrides?.model ?? opts.agent.model,
@@ -767,7 +791,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     })
   } else {
     plan = buildOpencodeSpawn({
-      opencodeCmd: opts.opencodeCmd,
+      // RFC-112: a custom opencode fork's binary wins; else the RFC-111 head
+      // (production config.opencodePath via resolveOpencodeCmd, or a test mock)
+      // — byte-for-byte unchanged for built-ins.
+      opencodeCmd: pickRuntimeHead(opts.runtimeBinary, opts.opencodeCmd),
       agentName: opts.agent.name,
       prompt,
       dangerouslySkipPermissions: opts.dangerouslySkipPermissions,
