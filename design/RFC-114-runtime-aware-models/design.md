@@ -115,3 +115,14 @@ RuntimeFormDialog(model 下拉)
 | 5 | P2 | 「唯一前端消费方」claim 错（settings commitPush/memoryDistill 也用 ModelSelect） | **§5 更正 + §7 保留默认 ModelSelect 逐字不变测试** |
 | 6 | P3 | D4 Map 无界（daemon 生命周期） | **D4 加失效**：删运行时/改二进制清槽 + 文档低基数假设 |
 | 7 | P3 | O2 claude fork 静态列表易误读 | **D3 加 UI 提示「静态未探测」+ §7 测试** |
+
+## 10. Codex 实现 gate
+
+实现（`226faa4`）后 `codex exec` 实现审查，2 P2 findings **全部 fold**：
+
+| # | 级别 | finding | 处置 |
+|---|------|---------|------|
+| 1 | P2 | `listOpencodeModels` 超时只 SIGKILL 直接子进程，shell 包装/孙进程持有 stdout 管道 → 排空阻塞到孙进程退出（CI ubuntu 实测跑满 5s） | **改 detached spawn + `killProcessTree` 进程组 kill**（`b5e50bb`，与 runtimeSmoke 一致；本机 3/3 ~225ms） |
+| 2 | P2 | 前端运行时模型查询 key 只含 name + `staleTime:Infinity`，改 binaryPath 保存/同名删除重建后复用旧二进制列表（RuntimeList 只 invalidate `['runtimes']`） | **save/delete 后 invalidate `['runtime','models','rt',<name>]`**（`6d5379b`，后端 evict + 前端 invalidate 双侧；回归测试断言失效） |
+
+注：P2-1 在跑实现 gate 前已被 CI 同源暴露并修复（`b5e50bb`），Codex 独立复核确认同一根因。

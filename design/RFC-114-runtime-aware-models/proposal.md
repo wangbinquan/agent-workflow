@@ -1,6 +1,6 @@
 # RFC-114 — 运行时感知的模型列表（按运行时二进制取模型，而非写死默认）
 
-状态：**Draft**（三件套落档 + Codex 设计 gate **已跑** → 7 findings〔2 P1 + 3 P2 + 2 P3〕**全部 fold**〔见 design §9〕，verdict needs-rework → 已处置；**待用户批准后进入实现**）
+状态：**Done**（三件套 + 双 gate 全部上库：Codex 设计 gate 7 findings〔见 design §9〕+ 实现 gate 2 P2 findings〔见 design §10〕全部 fold；`226faa4` PR-A+PR-B〔缓存 Map+收口+路由按二进制+脱敏 / 前端按运行时取模型+新建自由文本+claude 静态提示+错误态〕→ `b5e50bb`〔P2-1 进程组 kill〕→ `6d5379b`〔P2-2 前端查询失效〕；backend opencode-models 12 + runtime-routes 17 + 前端 vitest 2773 全过，CI〔`b5e50bb`〕success）
 
 ## 背景
 
