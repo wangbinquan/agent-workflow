@@ -20,6 +20,7 @@ const SETTINGS = read('src/routes/settings.tsx')
 const INSPECTOR = read('src/components/canvas/NodeInspector.tsx')
 const ZH = read('src/i18n/zh-CN.ts')
 const EN = read('src/i18n/en-US.ts')
+const AGENTS = read('src/routes/agents.tsx')
 
 describe('RFC-115 settings — global defaultNodeRetries knob', () => {
   test('LimitsTab persists defaultNodeRetries in the draft slice', () => {
@@ -53,5 +54,33 @@ describe('RFC-115 i18n — new key added, dead inspector keys removed, mcps kept
   })
   test('mcps.fieldTimeoutMs (a different key, same English label) is preserved', () => {
     expect(EN).toContain("fieldTimeoutMs: 'Timeout (ms)'")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// PR-B — /agents runtime column (G3)
+// ---------------------------------------------------------------------------
+
+describe('RFC-115 PR-B — /agents runtime column', () => {
+  test('agents list renders a runtime column header reading each agent runtime', () => {
+    expect(AGENTS).toContain("t('agents.colRuntime')")
+    expect(AGENTS).toMatch(/a\.runtime/)
+  })
+  test('unspecified runtime falls back to the global isDefault runtime + a default tag', () => {
+    // Reuse the shared ['runtimes'] query key + public StatusChip primitive (no fork).
+    expect(AGENTS).toContain('RUNTIMES_QUERY_KEY')
+    expect(AGENTS).toMatch(/isDefault/)
+    expect(AGENTS).toContain('defaultRuntimeName')
+    expect(AGENTS).toContain('StatusChip')
+    expect(AGENTS).toContain("t('agents.runtimeDefaultTag')")
+  })
+})
+
+describe('RFC-115 PR-B i18n — runtime column keys in both locales', () => {
+  test('agents.colRuntime + runtimeDefaultTag present in both locales', () => {
+    expect(EN).toContain("colRuntime: 'Runtime'")
+    expect(EN).toContain("runtimeDefaultTag: 'default'")
+    expect(ZH).toContain("colRuntime: '运行时'")
+    expect(ZH).toContain("runtimeDefaultTag: '默认'")
   })
 })

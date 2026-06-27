@@ -10,6 +10,8 @@ import { ConfirmButton } from '@/components/ConfirmButton'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import { RUNTIMES_QUERY_KEY } from '@/components/RuntimeList'
+import { StatusChip } from '@/components/StatusChip'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -33,6 +35,15 @@ function AgentsPage() {
 
   // RFC-099 — resolve owner ids to display names for the list badge.
   const owners = useUserLookup((data ?? []).map((r) => r.ownerUserId))
+
+  // RFC-115: show each agent's runtime; agents that didn't pick one fall back to
+  // the global default runtime (config.defaultRuntime → the registry row flagged
+  // isDefault). Reuse the same ['runtimes'] query key as the settings list.
+  const runtimes = useQuery<{ runtimes: Array<{ name: string; isDefault: boolean }> }>({
+    queryKey: RUNTIMES_QUERY_KEY,
+    queryFn: ({ signal }) => api.get('/api/runtimes', undefined, signal),
+  })
+  const defaultRuntimeName = runtimes.data?.runtimes.find((r) => r.isDefault)?.name
 
   return (
     <div className="page">
@@ -62,6 +73,7 @@ function AgentsPage() {
               <th>{t('agents.colDescription')}</th>
               <th>{t('agents.colOutputs')}</th>
               <th>{t('agents.colReadonly')}</th>
+              <th>{t('agents.colRuntime')}</th>
               <th aria-label={t('common.ariaActions')} />
             </tr>
           </thead>
@@ -101,6 +113,14 @@ function AgentsPage() {
                   )}
                 </td>
                 <td>{a.readonly ? t('common.yes') : t('common.no')}</td>
+                <td className="data-table__nowrap">
+                  {a.runtime ?? defaultRuntimeName ?? t('common.emDash')}
+                  {a.runtime == null && defaultRuntimeName != null && (
+                    <StatusChip kind="neutral" size="sm">
+                      {t('agents.runtimeDefaultTag')}
+                    </StatusChip>
+                  )}
+                </td>
                 <td className="data-table__actions">
                   <Link to="/agents/$name" params={{ name: a.name }} className="btn btn--sm">
                     {t('common.open')}

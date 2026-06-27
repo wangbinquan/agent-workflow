@@ -767,6 +767,8 @@ export interface Resources {
     colDescription: string
     colOutputs: string
     colReadonly: string
+    colRuntime: string
+    runtimeDefaultTag: string
     loadingAgent: string
     detailHint: string
     saveButton: string
@@ -3133,6 +3135,8 @@ export const zhCN: Resources = {
     colDescription: '描述',
     colOutputs: '输出端口',
     colReadonly: '只读',
+    colRuntime: '运行时',
+    runtimeDefaultTag: '默认',
     loadingAgent: '加载代理中…',
     detailHint: '代理定义；保存会写入数据库。',
     saveButton: '保存修改',

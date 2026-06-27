@@ -662,6 +662,8 @@ export const enUS: Resources = {
     colDescription: 'Description',
     colOutputs: 'Outputs',
     colReadonly: 'Read-only',
+    colRuntime: 'Runtime',
+    runtimeDefaultTag: 'default',
     loadingAgent: 'Loading agent…',
     detailHint: 'Agent definition; updates write to the DB.',
     saveButton: 'Save changes',
