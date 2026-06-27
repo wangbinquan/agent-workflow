@@ -131,8 +131,12 @@ export function RuntimeList() {
             >
               <div className="runtime-list__main">
                 <span className="runtime-list__name">{rt.name}</span>
+                {/* a11y: a `success` chip (green text on translucent green) misses
+                    the WCAG contrast floor (axe-core /settings gate). The default
+                    row is already accented by the green left border (.row--default);
+                    a neutral chip labels it without the low-contrast green-on-green. */}
                 {rt.isDefault && (
-                  <StatusChip kind="success" size="sm">
+                  <StatusChip kind="neutral" size="sm">
                     {t('runtimes.isDefault')}
                   </StatusChip>
                 )}
