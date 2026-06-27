@@ -44,9 +44,18 @@ export function openDb(opts: OpenDbOptions): DbClient {
     // for node_runs). Toggle OUTSIDE drizzle's tx, then re-enable + verify.
     sqlite.exec('PRAGMA foreign_keys = OFF;')
     migrate(db, { migrationsFolder: resolve(opts.migrationsFolder) })
+    // F1-followup (Codex gate): WARN, don't throw. foreign_key_check runs AFTER
+    // drizzle's migration tx has COMMITTED, so throwing can't roll back — it would
+    // only brick startup on a pre-existing orphan (a half-upgraded DB that fails
+    // every boot). Normal INSERT..SELECT rebuilds introduce no violations; a real
+    // one is a migration bug for migration tests to catch, not a reason to fail
+    // every boot. Surface it (scoped to the offending rows) and continue.
     const violations = sqlite.query('PRAGMA foreign_key_check;').all()
     if (violations.length > 0) {
-      throw new Error(`post-migration foreign_key_check failed: ${JSON.stringify(violations)}`)
+      console.warn(
+        `[db] post-migration foreign_key_check found ${violations.length} violation(s); ` +
+          `continuing (a committed migration cannot be rolled back here): ${JSON.stringify(violations)}`,
+      )
     }
   }
   sqlite.exec('PRAGMA foreign_keys = ON;')

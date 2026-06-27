@@ -493,12 +493,6 @@ export async function assertConfigDefaultsMigrated(
     })
     .from(runtimes)
     .where(eq(runtimes.builtin, true))
-  // F4 (Codex audit): if the built-ins aren't present at all (seedBuiltinRuntimes
-  // failed/was skipped upstream — already warn-logged in start.ts), don't
-  // misattribute the empty set to an un-migrated config: the "every profile NULL"
-  // check below would FALSE-ABORT with a misleading "backfill never ran" message
-  // when the real cause is the missing seed. Let the seed warning surface instead.
-  if (builtins.length === 0) return
   const anyProfileSet = builtins.some(
     (r) =>
       r.model !== null ||
@@ -507,11 +501,19 @@ export async function assertConfigDefaultsMigrated(
       r.steps !== null ||
       r.maxSteps !== null,
   )
+  // F4 (Codex gate): abort whether the built-ins are MISSING (seed failed) or all
+  // their profiles are NULL (RFC-113 backfill never ran) — both mean no runtime
+  // profile preserves these defaults, so loadConfig having stripped them + the
+  // next config save would permanently lose them. Name both causes so the message
+  // isn't misleading when the real cause is a failed seed (empty built-ins make
+  // `anyProfileSet` false, which lands here exactly as the all-NULL case does).
   if (!anyProfileSet) {
     throw new Error(
       `RFC-115: config.json still has un-migrated generation defaults (${present.join(', ')}) ` +
-        `but every built-in runtime profile is NULL — RFC-113's config→runtime backfill never ran. ` +
-        `Start the RFC-113 build once to migrate them, or remove these keys from config.json before upgrading.`,
+        `but no built-in runtime profile carries them (built-in rows are missing or all-NULL). ` +
+        `Either the built-in runtime seed failed or RFC-113's config→runtime backfill never ran — ` +
+        `ensure the runtimes are seeded and start the RFC-113 build once to migrate them, ` +
+        `or remove these keys from config.json before upgrading.`,
     )
   }
 }
