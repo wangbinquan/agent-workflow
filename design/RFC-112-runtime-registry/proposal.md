@@ -1,6 +1,6 @@
 # RFC-112 — 运行时注册表（自定义二进制按 opencode / claude 协议纳管）
 
-状态：**Draft**（Codex 设计 gate **已跑** → 8 findings〔1 P1 + 5 P2 + 2 P3〕**全部 fold**〔见 design §10〕，verdict needs-rework → 已处置；**待用户批准后进入实现**）
+状态：**Done**（4 PR + 落档 + 双 gate 全部上库、PR-A/B/C/D CI 绿；Codex 设计 gate 8 findings + 实现 gate 4 findings 全 fold〔见 design §10〕；门禁 typecheck×3 + backend 4151 pass/0 fail + 前端 vitest 2761 + binary smoke + lint + format）
 
 触发：2026-06-27 用户「有些环境基于 opencode / claude code 源码定制了功能、启动二进制已不叫 opencode / claude，希望按这两个运行时的模式探测、纳管、使用；既探测默认的，也支持探测给定二进制是否符合协议要求并纳入；可配置默认运行时、agent 可自定义覆盖」。
 
