@@ -88,7 +88,7 @@ async function buildHarness(): Promise<Harness> {
     $schema_version: 3,
     inputs: [],
     nodes: [
-      { id: 'work', kind: 'agent-single', agentName: 'worker', retries: 0 },
+      { id: 'work', kind: 'agent-single', agentName: 'worker' },
     ] as unknown as WorkflowDefinition['nodes'],
     edges: [],
   }
@@ -180,6 +180,8 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
       db: h.db,
       appHome: h.appHome,
       opencodeCmd: ['bun', 'run', h.slowMock],
+      // RFC-115: retry budget via StartTaskDeps (was node.retries: 0).
+      defaultNodeRetries: 0,
     })
     await waitFor(() => existsSync(join(h.ctrlDir, 'work-started')), 'work node spawn')
 

@@ -125,9 +125,11 @@ async function buildHarness(): Promise<Harness> {
   const definition: WorkflowDefinition = {
     $schema_version: 3,
     inputs: [],
-    // retries: 0 → fail-mock 一次即败，避免调度器默认 3 次重试拖慢失败路径。
+    // RFC-115: retry budget via StartTaskDeps (was node.retries: 0) — fail-mock
+    // 一次即败，避免调度器默认 3 次重试拖慢失败路径。预算 0 由 deps() 透传
+    // defaultNodeRetries: 0 进 resumeTask / retryNode（见下）。
     nodes: [
-      { id: 'work', kind: 'agent-single', agentName: 'worker', retries: 0 },
+      { id: 'work', kind: 'agent-single', agentName: 'worker' },
     ] as unknown as WorkflowDefinition['nodes'],
     edges: [],
   }
@@ -183,7 +185,15 @@ async function buildHarness(): Promise<Harness> {
 }
 
 function deps(h: Harness, mockPath: string) {
-  return { db: h.db, appHome: h.appHome, opencodeCmd: ['bun', 'run', mockPath] }
+  // RFC-115: retry budget via StartTaskDeps (was node.retries: 0). Threaded
+  // through both resumeTask and retryNode so fail-mock stays one-shot — without
+  // it the scheduler's default budget (3) would inflate the count-* oracles.
+  return {
+    db: h.db,
+    appHome: h.appHome,
+    opencodeCmd: ['bun', 'run', mockPath],
+    defaultNodeRetries: 0,
+  }
 }
 
 async function waitFor(cond: () => boolean, what: string): Promise<void> {

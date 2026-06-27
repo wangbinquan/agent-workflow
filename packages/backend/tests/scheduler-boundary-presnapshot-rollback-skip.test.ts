@@ -153,7 +153,6 @@ describe('scheduler retry rollback: writer fail-then-succeed must clear partial 
           id: 'a1',
           kind: 'agent-single',
           agentName: 'fixer',
-          retries: 1,
         } as unknown as WorkflowDefinition['nodes'][number],
       ],
       edges: [],
@@ -175,6 +174,8 @@ describe('scheduler retry rollback: writer fail-then-succeed must clear partial 
           db: h.db,
           appHome: h.appHome,
           opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          // RFC-115: retry budget via runTask opts (was node.retries: 1).
+          defaultNodeRetries: 1,
         }),
     )
 

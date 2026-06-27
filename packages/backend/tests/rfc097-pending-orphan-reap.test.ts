@@ -79,7 +79,7 @@ async function buildHarness(): Promise<Harness> {
     $schema_version: 3,
     inputs: [],
     nodes: [
-      { id: 'work', kind: 'agent-single', agentName: 'worker', retries: 0 },
+      { id: 'work', kind: 'agent-single', agentName: 'worker' },
     ] as unknown as WorkflowDefinition['nodes'],
     edges: [],
   }
@@ -177,6 +177,8 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
       db: h.db,
       appHome: h.appHome,
       opencodeCmd: ['bun', 'run', h.doneMock],
+      // RFC-115: retry budget via StartTaskDeps (was node.retries: 0).
+      defaultNodeRetries: 0,
     })
     expect(resumed.status).toBe('pending')
     const final = await waitForTerminalTask(h.db, taskId)
@@ -203,6 +205,8 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
         appHome: h.appHome,
         opencodeCmd: ['bun', 'run', h.doneMock],
         awaitScheduler: true,
+        // RFC-115: retry budget via StartTaskDeps (was node.retries: 0).
+        defaultNodeRetries: 0,
       },
     )
     expect(`${task.status}:${task.errorSummary ?? ''}`).toBe('done:')

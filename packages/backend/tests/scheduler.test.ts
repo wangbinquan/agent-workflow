@@ -480,7 +480,6 @@ describe('runTask: linear DAG (M1)', () => {
           id: 'a1',
           kind: 'agent-single',
           agentName: 'flaky',
-          retries: 2,
         } as unknown as WorkflowDefinition['nodes'][number],
       ],
       edges: [],
@@ -499,6 +498,8 @@ describe('runTask: linear DAG (M1)', () => {
           db: h.db,
           appHome: h.appHome,
           opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          // RFC-115: retry budget via runTask opts (was node.retries: 2).
+          defaultNodeRetries: 2,
         }),
     )
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
@@ -522,7 +523,6 @@ describe('runTask: linear DAG (M1)', () => {
           id: 'a1',
           kind: 'agent-single',
           agentName: 'persistent',
-          retries: 1,
         } as unknown as WorkflowDefinition['nodes'][number],
       ],
       edges: [],
@@ -540,6 +540,8 @@ describe('runTask: linear DAG (M1)', () => {
           db: h.db,
           appHome: h.appHome,
           opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          // RFC-115: retry budget via runTask opts (was node.retries: 1).
+          defaultNodeRetries: 1,
         }),
     )
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]

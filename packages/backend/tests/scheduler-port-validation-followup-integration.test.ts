@@ -127,7 +127,7 @@ describe('RFC-049 scheduler port-validation follow-up integration', () => {
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
-      nodes: [{ id: 'n1', kind: 'agent-single', agentName: 'a1', retries: 1 }],
+      nodes: [{ id: 'n1', kind: 'agent-single', agentName: 'a1' }],
       edges: [],
     }
     const { taskId } = await seedTask(h, def)
@@ -145,6 +145,8 @@ describe('RFC-049 scheduler port-validation follow-up integration', () => {
           db: h.db,
           appHome: h.appHome,
           opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+          // RFC-115: retry budget via runTask opts (was node.retries: 1).
+          defaultNodeRetries: 1,
         }),
     )
 

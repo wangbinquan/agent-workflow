@@ -175,7 +175,6 @@ async function seedSingleRepoTask(h: Harness): Promise<string> {
         id: 'a1',
         kind: 'agent-single',
         agentName: 'fixer',
-        retries: 2, // attempts 0 (fresh), 1 (followup), 2 (fresh)
       } as unknown as WorkflowDefinition['nodes'][number],
     ],
     edges: [],
@@ -257,6 +256,9 @@ describe('S-2b followup-chain retry rollback restores the last FRESH baseline (R
           db: h.db,
           appHome: h.appHome,
           opencodeCmd: ['bun', 'run', h.miniMockPath],
+          // RFC-115: retry budget via runTask opts (was node.retries: 2 →
+          // attempts 0 fresh, 1 followup, 2 fresh).
+          defaultNodeRetries: 2,
         }),
     )
 

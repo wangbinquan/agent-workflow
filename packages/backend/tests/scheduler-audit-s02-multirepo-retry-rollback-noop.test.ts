@@ -155,7 +155,6 @@ async function seedMultiRepoTask(h: Harness): Promise<string> {
         id: 'a1',
         kind: 'agent-single',
         agentName: 'fixer',
-        retries: 1,
       } as unknown as WorkflowDefinition['nodes'][number],
     ],
     edges: [],
@@ -249,6 +248,8 @@ describe('S-2 multi-repo in-process retry rollback rolls each sub-repo back (RFC
           db: h.db,
           appHome: h.appHome,
           opencodeCmd: ['bun', 'run', h.miniMockPath],
+          // RFC-115: retry budget via runTask opts (was node.retries: 1).
+          defaultNodeRetries: 1,
         }),
     )
 
