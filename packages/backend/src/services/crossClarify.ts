@@ -88,6 +88,7 @@ import { pickFreshestRun } from '@/services/freshness'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { buildFrozenAttributionSet } from '@/services/clarifyRounds'
+import { reconcileTaskQuestionsForRound } from '@/services/taskQuestions'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
 const log = createLogger('cross-clarify')
@@ -352,6 +353,11 @@ export interface SubmitCrossClarifyAnswersResult {
     | { kind: 'questioner-stop-triggered'; questionerNodeRunId: string }
     | { kind: 'questioner-continue-triggered'; questionerNodeRunId: string }
     | { kind: 'designer-skipped-all-questioner-scope' }
+    // RFC-120 T9 (model A): the task opted into deferred dispatch, so the
+    // designer-scoped answer was recorded + its designer task_questions entries
+    // created undispatched, but the designer rerun is NOT triggered here — it
+    // waits for an explicit dispatchTaskQuestions batch-dispatch.
+    | { kind: 'designer-deferred'; deferredQuestionCount: number }
 }
 
 /**
@@ -537,6 +543,28 @@ export async function submitCrossClarifyAnswers(
   if (taskRow === undefined) {
     throw new NotFoundError('task-not-found', `task ${row.taskId} not found`)
   }
+
+  // RFC-120 T9 (model A) — deferred question dispatch. When the task opted in,
+  // a designer-scoped answer is recorded above (status='answered' + node_run
+  // done + questioner cascade is unchanged), but the designer rerun is NOT
+  // triggered here. Instead the round's designer task_questions entries are
+  // created eagerly (the read-side reconcile is otherwise lazy, and the
+  // scheduler park gate must see the undispatched designer rows), so the task
+  // parks awaiting_human until an explicit dispatchTaskQuestions batch-dispatch
+  // mints the rerun. Flag false → this whole block is skipped and the path
+  // below is byte-for-byte the immediate-dispatch behavior (golden-lock).
+  if (taskRow.deferredQuestionDispatch) {
+    const roundRow = (
+      await args.db.select().from(clarifyRounds).where(eq(clarifyRounds.id, row.id)).limit(1)
+    )[0]
+    if (roundRow !== undefined) reconcileTaskQuestionsForRound(args.db, roundRow)
+    broadcastCrossClarifyAnswered(row.taskId, sessionAfter)
+    return {
+      session: sessionAfter,
+      outcome: { kind: 'designer-deferred', deferredQuestionCount: designerSplit.questions.length },
+    }
+  }
+
   const definition = parseDefinitionFromSnapshot(taskRow.workflowSnapshot)
   if (definition === null) {
     broadcastCrossClarifyAnswered(row.taskId, sessionAfter)

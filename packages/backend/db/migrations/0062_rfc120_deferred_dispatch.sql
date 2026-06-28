@@ -1,0 +1,12 @@
+-- RFC-120 T9 — model A deferred question dispatch opt-in flag (hand-written; additive;
+-- registered in meta/_journal.json). Single statement; the convention header stays
+-- (RFC-108 0052/0053 incident — never write the breakpoint marker literal inside a
+-- comment, or the migrator splits the comment off as an empty statement).
+--
+-- deferred_question_dispatch : when 1, a cross-clarify answer carrying ≥1 designer-scoped
+--   question does NOT auto-trigger the designer rerun at submit time — the answer is
+--   recorded + the designer task_questions entries are created undispatched, and the task
+--   parks awaiting_human until an explicit dispatchTaskQuestions batch-dispatch. Default 0
+--   = byte-for-byte today's immediate-dispatch behavior (the golden-lock boundary).
+-- Additive; touches no existing column.
+ALTER TABLE `tasks` ADD COLUMN `deferred_question_dispatch` integer DEFAULT 0 NOT NULL;

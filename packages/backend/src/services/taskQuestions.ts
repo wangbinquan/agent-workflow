@@ -17,7 +17,7 @@
 //
 // See design/RFC-120-task-question-list §2.3 / §4 / §11.
 
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, isNull, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
@@ -268,6 +268,74 @@ function summarizeAnswer(round: ClarifyRoundRow, questionId: string): string | n
   if (ans.customText.trim()) parts.push(ans.customText.trim())
   const s = parts.join(' · ')
   return s.length > 200 ? `${s.slice(0, 200)}…` : s || null
+}
+
+// ---------------------------------------------------------------------------
+// RFC-120 T9 (model A) — deferred-dispatch park gate (read-only).
+//
+// A deferred-dispatch task parks awaiting_human while it has ANY designer-role
+// task_questions entry whose source round is answered, not yet dispatched
+// (trigger_run_id IS NULL) and not confirmed. The scheduler frontier keeps the
+// entry's effective handler node (override ?? default designer) OUT of
+// `completed` and bubbles awaiting_human; the T2 invariant + S2 stuck detector
+// treat that park as VALID (not corrupt/stuck).
+//
+// SELF-GATED on tasks.deferred_question_dispatch: a non-deferred task always
+// resolves to the empty set (its designer rerun already fired immediately at
+// submit, so a lazily-reconciled entry with NULL trigger_run_id must NOT be
+// mistaken for "undispatched"). Every gate consumer therefore sees byte-for-byte
+// today's behavior for non-deferred tasks — the golden-lock boundary.
+// ---------------------------------------------------------------------------
+
+/** Effective handler nodes (override ?? default designer) of every undispatched
+ *  designer entry that should park a deferred-dispatch task. Empty for any
+ *  non-deferred task (golden-lock). */
+export async function loadUndispatchedDesignerTargets(
+  db: DbClient,
+  taskId: string,
+): Promise<Set<string>> {
+  const taskRow = (
+    await db
+      .select({ deferred: tasks.deferredQuestionDispatch })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
+  )[0]
+  if (taskRow?.deferred !== true) return new Set()
+  const rows = await db
+    .select({
+      defaultTargetNodeId: taskQuestions.defaultTargetNodeId,
+      overrideTargetNodeId: taskQuestions.overrideTargetNodeId,
+    })
+    .from(taskQuestions)
+    .innerJoin(
+      clarifyRounds,
+      eq(taskQuestions.originNodeRunId, clarifyRounds.intermediaryNodeRunId),
+    )
+    .where(
+      and(
+        eq(taskQuestions.taskId, taskId),
+        eq(taskQuestions.roleKind, 'designer'),
+        isNull(taskQuestions.triggerRunId),
+        ne(taskQuestions.confirmation, 'confirmed'),
+        eq(clarifyRounds.status, 'answered'),
+      ),
+    )
+  const out = new Set<string>()
+  for (const r of rows) {
+    const target = r.overrideTargetNodeId ?? r.defaultTargetNodeId
+    if (target !== null && target !== '') out.add(target)
+  }
+  return out
+}
+
+/** Does the task currently park on ≥1 undispatched designer entry? (Self-gated on
+ *  the deferred flag — always false for non-deferred tasks.) */
+export async function hasUndispatchedDesignerQuestions(
+  db: DbClient,
+  taskId: string,
+): Promise<boolean> {
+  return (await loadUndispatchedDesignerTargets(db, taskId)).size > 0
 }
 
 // ---------------------------------------------------------------------------

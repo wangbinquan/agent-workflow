@@ -526,6 +526,17 @@ export const tasks = sqliteTable(
      * migration 0034).
      */
     repoCount: integer('repo_count').notNull().default(1),
+    /**
+     * RFC-120 T9 (model A): opt-in deferred question dispatch. false → byte-for-byte
+     * today's behavior: a cross-clarify answer with designer-scoped questions triggers
+     * the designer rerun immediately at submit. true → the designer rerun is deferred
+     * (answer recorded + designer task_questions entries created undispatched), the task
+     * parks awaiting_human, and an explicit dispatchTaskQuestions batch-dispatch mints the
+     * rerun. The flag is the golden-lock boundary — gates every deferred-dispatch path.
+     */
+    deferredQuestionDispatch: integer('deferred_question_dispatch', { mode: 'boolean' })
+      .notNull()
+      .default(false),
   },
   (t) => ({
     statusIdx: index('idx_tasks_status').on(t.status, t.startedAt),

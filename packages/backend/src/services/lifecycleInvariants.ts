@@ -50,6 +50,7 @@ import {
   nodeRuns,
   tasks,
 } from '@/db/schema'
+import { hasUndispatchedDesignerQuestions } from '@/services/taskQuestions'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('lifecycle.invariants')
@@ -387,6 +388,12 @@ async function checkT2(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInv
       .limit(1)
   )[0]
   if (row !== undefined) return []
+  // RFC-120 T9 (model A): a deferred-dispatch task legitimately parks awaiting_human
+  // on undispatched designer task_questions — the designer's draft run is `done`
+  // (NOT awaiting_human), so the scheduler bubbles the park from the frontier, not a
+  // node_run. That is the deferred gate, not corruption. (Self-gated on the deferred
+  // flag → always false for non-deferred tasks; T2 fires as before for them.)
+  if (await hasUndispatchedDesignerQuestions(db, ctx.taskId)) return []
   return [
     {
       taskId: ctx.taskId,

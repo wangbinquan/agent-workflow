@@ -83,6 +83,7 @@ import {
   type ClarifyInlineFallbackReason,
 } from '@/services/clarifyFallback'
 import { evaluateExitCondition, parseExitCondition } from '@/services/exitCondition'
+import { loadUndispatchedDesignerTargets } from '@/services/taskQuestions'
 import { trySetTaskStatus, setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
 import {
   frozenRuntimeOfSession,
@@ -786,6 +787,13 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
 
     const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const openClarify = await loadOpenClarify(db, taskId)
+    // RFC-120 T9 (model A): the deferred-dispatch park gate. Skip the query
+    // entirely for non-deferred tasks (the overwhelming majority) so the hot
+    // path stays byte-for-byte today's behavior (golden-lock); only an opted-in
+    // task ever consults its undispatched designer entries.
+    const deferredHandlerNodeIds = state.task.deferredQuestionDispatch
+      ? await loadUndispatchedDesignerTargets(db, taskId)
+      : EMPTY_NODE_ID_SET
     const f = deriveFrontier(
       rows,
       definition,
@@ -798,6 +806,7 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
       openClarify.clarifyNodeIds,
       openClarify.askingRunIds,
       dispatchedPendingRowIds,
+      deferredHandlerNodeIds,
     )
 
     for (const nodeId of f.ready) {
@@ -1213,6 +1222,10 @@ export interface Frontier {
 // settle without one once upstreams are done and no session is open (N6).
 const SETTLES_WITHOUT_ROW_KINDS = new Set<NodeKind>(['clarify', 'clarify-cross-agent'])
 
+// RFC-120 T9: shared empty set for the non-deferred frontier path — avoids a
+// per-tick allocation when the deferred-dispatch gate is inactive.
+const EMPTY_NODE_ID_SET: ReadonlySet<string> = new Set()
+
 function isLiveStatus(status: string): boolean {
   return (
     status === 'pending' ||
@@ -1254,6 +1267,12 @@ export function deriveFrontier(
   openClarifyNodeIds: ReadonlySet<string>,
   askingRunIds: ReadonlySet<string> = new Set(),
   dispatchedPendingRowIds: ReadonlySet<string> = new Set(),
+  // RFC-120 T9 (model A): effective handler nodes (override ?? designer) of a
+  // deferred-dispatch task's undispatched designer task_questions. Each is kept
+  // OUT of `completed` (its done draft is NOT a completion — downstream blocks)
+  // and parked awaiting_human until batch-dispatch mints its rerun. Empty for
+  // every non-deferred task → byte-for-byte today's frontier (golden-lock).
+  deferredHandlerNodeIds: ReadonlySet<string> = new Set(),
 ): Frontier {
   const latestPerNode = new Map<string, typeof nodeRuns.$inferSelect>()
   for (const r of rows) {
@@ -1273,6 +1292,9 @@ export function deriveFrontier(
   const exhausted: string[] = []
   for (const [nodeId, r] of latestPerNode) {
     if (askingRunIds.has(r.id)) continue
+    // RFC-120 T9: a deferred designer handler's done draft is NOT a completion —
+    // exclude it from `completed` so its downstream stays blocked until dispatch.
+    if (deferredHandlerNodeIds.has(nodeId)) continue
     if (r.status === 'done' && isNodeRunFresh(r, freshestDone)) completed.add(nodeId)
     // 'exhausted' (loop hit maxIterations without exit) is a TERMINAL FAILURE,
     // not a completion. Marking it completed made a resume invocation see an
@@ -1317,6 +1339,15 @@ export function deriveFrontier(
   for (const n of scopeNodes) {
     if (completed.has(n.id)) continue
     remainingCount += 1
+    // RFC-120 T9 (model A): a deferred designer handler parks awaiting_human until
+    // batch-dispatch mints its rerun (mirrors the askingRunIds park below). Its
+    // done draft is not (re-)dispatchable here — dispatchTaskQuestions stamps
+    // trigger_run_id + mints the pending rerun, which the next tick picks up once
+    // this node leaves the deferred set.
+    if (deferredHandlerNodeIds.has(n.id)) {
+      awaitingHuman.push(n.id)
+      continue
+    }
     const latest = latestPerNode.get(n.id)
     // Asking agent parked on an open clarify: its `done` row is mid-conversation,
     // not a completion and not (re-)dispatchable — submitClarifyAnswers mints the

@@ -182,6 +182,12 @@ export const TaskSchema = z.object({
    * pre-RFC-075 behavior.
    */
   autoCommitPush: z.boolean().default(false),
+  /**
+   * RFC-120 T9 (model A): when true, designer-scoped cross-clarify answers defer the
+   * designer rerun until an explicit batch-dispatch (task parks awaiting_human in the
+   * meantime). Default false → byte-for-byte today's immediate-dispatch behavior.
+   */
+  deferredQuestionDispatch: z.boolean().default(false),
   baseCommit: z.string().nullable(),
   status: TaskStatusSchema,
   inputs: z.record(z.string(), z.string()),
@@ -331,6 +337,12 @@ export const StartTaskSchema = z
      * set). Default false → no commit/push, legacy behavior.
      */
     autoCommitPush: z.boolean().optional(),
+    /**
+     * RFC-120 T9 (model A): opt the launched task into deferred question dispatch
+     * (see TaskSchema.deferredQuestionDispatch). Omitted → false (legacy immediate
+     * dispatch, byte-for-byte unchanged).
+     */
+    deferredQuestionDispatch: z.boolean().optional(),
   })
   .superRefine((value, ctx) => {
     const hasLegacyPath = typeof value.repoPath === 'string' && value.repoPath.length > 0

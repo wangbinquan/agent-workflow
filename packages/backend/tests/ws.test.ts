@@ -260,6 +260,8 @@ describe('WebSocket channels', () => {
       // RFC-075: TaskSchema now carries the working branch + commit&push flag.
       workingBranch: null,
       autoCommitPush: false,
+      // RFC-120 T9: TaskSchema now carries the deferred-dispatch opt-in flag.
+      deferredQuestionDispatch: false,
       // RFC-066: TaskSchema now requires per-task repo metadata.
       repoCount: 1,
       repos: [],

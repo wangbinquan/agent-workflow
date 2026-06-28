@@ -49,6 +49,7 @@ import {
   type LifecycleAlertRow,
   type StuckRule,
 } from './lifecycleInvariants'
+import { hasUndispatchedDesignerQuestions } from '@/services/taskQuestions'
 
 const log = createLogger('lifecycle.stuck')
 
@@ -324,7 +325,13 @@ async function checkOne(
     }
   } else if (c.status === 'awaiting_human') {
     const hasOpen = await hasOpenClarifySession(db, c.taskId)
-    if (!hasOpen) {
+    // RFC-120 T9 (model A): a deferred-dispatch task parks awaiting_human on
+    // undispatched designer task_questions, NOT an open clarify_session (the cross
+    // round is already `answered`). That park is legitimate — not stuck. (Self-gated
+    // on the deferred flag → always false for non-deferred tasks, so S2 fires as
+    // before for them.)
+    const hasUndispatchedDesigner = await hasUndispatchedDesignerQuestions(db, c.taskId)
+    if (!hasOpen && !hasUndispatchedDesigner) {
       const hint = await findRepairHint(db, c.taskId, 'clarify-awaiting')
       out.push({
         taskId: c.taskId,

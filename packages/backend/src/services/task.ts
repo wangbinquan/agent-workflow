@@ -866,6 +866,9 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
     // the auto commit&push toggle (false → legacy, no commit/push).
     workingBranch: input.workingBranch ?? null,
     autoCommitPush: input.autoCommitPush ?? false,
+    // RFC-120 T9 (model A): opt-in deferred question dispatch (false → legacy
+    // immediate dispatch, byte-for-byte unchanged).
+    deferredQuestionDispatch: input.deferredQuestionDispatch ?? false,
     // RFC-066: count of `task_repos` rows. Single-repo path always = 1;
     // multi-repo populates with the materialized count (zero only when the
     // first repo failed before any task_repos row was minted).
@@ -2570,6 +2573,7 @@ function rowToTask(
     // RFC-075: working branch (NULL → isolation branch) + auto commit&push.
     workingBranch: row.workingBranch ?? null,
     autoCommitPush: row.autoCommitPush,
+    deferredQuestionDispatch: row.deferredQuestionDispatch,
     // RFC-066: per-task repo metadata. `repoCount` is sourced from the
     // denormalized column on `tasks` (cheap for list queries); `repos[]` is
     // hydrated by the caller from `task_repos` ordered by `repo_index`.
