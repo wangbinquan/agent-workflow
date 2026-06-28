@@ -62,6 +62,7 @@ interface Ctx {
   db: DbClient
   appHome: string
   repoPath: string
+  stateDir: string
   cleanup: () => void
 }
 let idx = 0
@@ -84,12 +85,23 @@ function freshCtx(): Ctx {
     db: createInMemoryDb(MIGRATIONS),
     appHome,
     repoPath,
+    stateDir,
     cleanup: () => {
       rmSync(tmp, { recursive: true, force: true })
       delete process.env.SCENARIO_PLAN_FILE
       delete process.env.SCENARIO_STATE_DIR
       delete process.env.AGENT_WORKFLOW_HOME
     },
+  }
+}
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+async function poll<T>(fn: () => Promise<T | undefined>, timeoutMs = 20_000): Promise<T> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const v = await fn()
+    if (v !== undefined) return v
+    if (Date.now() > deadline) throw new Error('poll timed out')
+    await sleep(25)
   }
 }
 function writePlan(tmpHome: string, plan: Record<string, unknown[]>): void {
@@ -236,6 +248,70 @@ describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', 
   })
 })
 
+// RFC-122 H1 regression: the directive is read per-ATTEMPT inside the retry loop,
+// so an error-retry's freshly-minted process-retry row honors a toggle flipped
+// while the failed attempt was running — not a value cached once before the loop.
+describe('RFC-122 H1 — process retry reads the LATEST directive per attempt', () => {
+  let c: Ctx
+  beforeEach(() => {
+    c = freshCtx()
+  })
+  afterEach(() => {
+    c.cleanup()
+  })
+
+  test('a flip between a failed attempt and its process-retry is honored by the retry prompt', async () => {
+    // attempt 0: no directive row → default 'continue' → mandatory ask-back; the
+    //   stub WAITS for a sentinel then crashes (exit 1) → fresh-session retry.
+    // attempt 1 (process-retry): must read the directive flipped to 'stop' while
+    //   attempt 0 was paused → ask-back suppressed + STOP CLARIFYING.
+    writePlan(c.appHome, {
+      designer: [{ waitFile: 'go', crash: true }, { output: { design: 'D1' } }],
+    })
+    const wf = await designerSelfClarifyWorkflow(c, 'h1')
+    const task = await startTask(
+      {
+        workflowId: wf.id,
+        name: 'h1',
+        repoPath: c.repoPath,
+        baseBranch: 'main',
+        inputs: { topic: 'x' },
+      },
+      { db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd(), awaitScheduler: false },
+    )
+
+    // Wait until attempt 0 (retry_index 0) has rendered its prompt under the
+    // DEFAULT directive (the stub is now paused on the sentinel).
+    const attempt0 = await poll(async () => {
+      const r = (await designerTop(c.db, task.id)).find((x) => x.retryIndex === 0)
+      return r?.promptText ? r : undefined
+    })
+    expect(attempt0.promptText ?? '').toContain(MANDATORY)
+    expect(attempt0.promptText ?? '').not.toContain(STOP_TRAILER)
+
+    // Flip the toggle to STOP, THEN release attempt 0 (→ crash → process-retry).
+    await setNodeClarifyDirective(c.db, task.id, 'designer', 'stop', 'u1')
+    writeFileSync(join(c.stateDir, 'go'), '1')
+
+    // attempt 1 (retry_index 1, cause=process-retry) must reflect the NEW value.
+    const attempt1 = await poll(async () => {
+      const r = (await designerTop(c.db, task.id)).find((x) => x.retryIndex === 1)
+      return r?.promptText ? r : undefined
+    })
+    expect(attempt1.rerunCause).toBe('process-retry')
+    expect(attempt1.promptText ?? '').toContain(STOP_TRAILER)
+    expect(attempt1.promptText ?? '').toContain(OUTPUT_PROTO)
+    expect(attempt1.promptText ?? '').not.toContain(MANDATORY)
+
+    // Let the background scheduler settle (attempt 1 outputs → done) before
+    // afterEach removes the worktree, so its final writes don't race the rmSync.
+    await poll(async () => {
+      const s = await taskStatus(c.db, task.id)
+      return s === 'done' || s === 'failed' ? s : undefined
+    })
+  })
+})
+
 describe('RFC-122 store round-trip + scheduler wiring lock', () => {
   test('set / get / list round-trip; continue is read back identically', async () => {
     const db = createInMemoryDb(MIGRATIONS)
@@ -284,6 +360,20 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
     expect(src).toContain('resolveEffectiveClarifyChannel({')
     expect(src).toContain('nodeStopOverride,')
     expect(src).toContain("directiveOverride: 'stop' as const")
-    expect(src).toContain('clarifyStopNotice')
+    expect(src).toContain('shouldInjectStopNotice({')
+  })
+
+  test('H1: the override is read INSIDE the retry loop (per attempt), not cached before it', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      'utf8',
+    )
+    // The getNodeClarifyDirective read must sit AFTER the retry-loop header so each
+    // attempt's freshly-minted process-retry row re-reads the latest toggle. A
+    // refactor that hoists it back above the loop (stale cache) → red.
+    const loopIdx = src.indexOf('for (let attempt = retryIndex;')
+    const readIdx = src.indexOf('getNodeClarifyDirective(db, taskId, node.id)')
+    expect(loopIdx).toBeGreaterThan(0)
+    expect(readIdx).toBeGreaterThan(loopIdx)
   })
 })

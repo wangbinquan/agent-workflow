@@ -47,16 +47,25 @@ const agentFlagIdx = argv.indexOf('--agent')
 const agentName = agentFlagIdx >= 0 ? (argv[agentFlagIdx + 1] ?? '') : ''
 if (!agentName) fail('missing --agent <name>')
 
-interface OutputStep {
+// RFC-122: any step may carry `waitFile` — the stub busy-waits (Bun.sleepSync
+// poll, generous timeout) until `<stateDir>/<waitFile>` exists before executing
+// the step's normal behavior. Lets a test deterministically pause an attempt
+// (e.g. attempt 0 before it crashes) so it can mutate state the NEXT attempt's
+// prompt build must pick up (the per-attempt clarify-directive read). Absent ⇒
+// no wait (every existing plan is unaffected).
+interface WaitMixin {
+  waitFile?: string
+}
+interface OutputStep extends WaitMixin {
   output: Record<string, string>
 }
-interface ClarifyStep {
+interface ClarifyStep extends WaitMixin {
   clarify: unknown
 }
-interface SkipStep {
+interface SkipStep extends WaitMixin {
   skipEnvelope: true
 }
-interface CrashStep {
+interface CrashStep extends WaitMixin {
   crash: true
 }
 type Step = OutputStep | ClarifyStep | SkipStep | CrashStep
@@ -98,6 +107,18 @@ function emitText(text: string): void {
   process.stdout.write(
     JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text } }) + '\n',
   )
+}
+
+// RFC-122: optional deterministic pause — block this attempt until the test
+// touches the sentinel, so the test can flip per-attempt state in between.
+const waitFile = (step as { waitFile?: unknown }).waitFile
+if (typeof waitFile === 'string' && waitFile.length > 0) {
+  const target = join(stateDir, waitFile)
+  const deadline = Date.now() + 30_000
+  while (!existsSync(target)) {
+    if (Date.now() > deadline) fail(`waitFile '${waitFile}' never appeared`, 3)
+    Bun.sleepSync(20)
+  }
 }
 
 if ('crash' in step && step.crash) {

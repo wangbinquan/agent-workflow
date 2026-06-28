@@ -76,7 +76,11 @@ import {
   createCrossClarifySession,
   hasPersistentStop,
 } from '@/services/crossClarify'
-import { buildPromptContext, resolveEffectiveClarifyChannel } from '@/services/clarifyRounds'
+import {
+  buildPromptContext,
+  resolveEffectiveClarifyChannel,
+  shouldInjectStopNotice,
+} from '@/services/clarifyRounds'
 import { getNodeClarifyDirective } from '@/services/taskClarifyDirective'
 import {
   decideResumeSessionId,
@@ -1805,17 +1809,6 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   // runner to disable the 5-question cap on the envelope parser.
   const clarifyMode: 'self' | 'cross' =
     findCrossClarifyNodeForQuestioner(definition, node.id) !== undefined ? 'cross' : 'self'
-  // RFC-122: per-(task, asking-node) clarify-directive override, read AT
-  // DISPATCH (parallel to RFC-056 hasPersistentStop) so a not-yet-run node AND an
-  // error-retry's freshly-minted run both honor the LATEST toggle. Only meaningful
-  // for an asking-agent node (hasClarifyChannel covers self-clarify AND
-  // cross-questioner — both wire the same `__clarify__` source port); for every
-  // other node the read is skipped and the flag stays false ⇒ golden-lock. When
-  // 'stop' the scheduler forces the agent out of mandatory ask-back for this
-  // dispatch (suppress the protocol + inject STOP CLARIFYING), for BOTH self and
-  // cross. No row ⇒ undefined ⇒ false ⇒ byte-for-byte unchanged behavior.
-  const nodeStopOverride =
-    hasClarifyChannel && (await getNodeClarifyDirective(db, taskId, node.id)) === 'stop'
   // RFC-056 + RFC-064: designer agents may receive External Feedback from
   // one or more cross-clarify nodes via the system port __external_feedback__.
   // When the current rerun has clarifyIteration > 0 (RFC-064 unified counter
@@ -2332,6 +2325,17 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // (finalize) round dropped the directive → re-forced mandatory ask-back →
         // rejected the agent's <workflow-output> even though the user clicked Stop.
         const applyLatestDirective = isClarifyRerun || reviewContext === undefined
+        // RFC-122 (H1 fix): per-(task, asking-node) clarify-directive override,
+        // read AT DISPATCH (parallel to RFC-056 hasPersistentStop) INSIDE the
+        // retry loop so EVERY attempt's freshly-minted process-retry row reads the
+        // LATEST toggle — a flip while attempt N runs is honored by attempt N+1's
+        // prompt (the read used to be cached once before the loop, dragging a
+        // stale directive across attempts). Gated on hasClarifyChannel, which
+        // covers self-clarify AND cross-questioner (both wire the same `__clarify__`
+        // source port); every other node skips the read ⇒ false. No row ⇒
+        // undefined ⇒ false ⇒ byte-for-byte unchanged behavior (golden-lock).
+        const nodeStopOverride =
+          hasClarifyChannel && (await getNodeClarifyDirective(db, taskId, node.id)) === 'stop'
         const clarifyContext = hasClarifyChannel
           ? isQuestionerCrossClarifyRerun
             ? await buildPromptContext({
@@ -2469,13 +2473,19 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           reviewActive: reviewContext !== undefined,
           isClarifyRerun,
         })
-        // RFC-122: when the STOP toggle is set but there is no prior answered
-        // clarify round to carry the trailer (a first run / a pre-clarify
-        // error-retry → clarifyContext is undefined), tell the renderer to inject
-        // the STOP CLARIFYING trailer directly. When clarifyContext IS present the
-        // trailer is already inside its answersBlock (rebuilt via directiveOverride
-        // above) — never both, so the trailer appears exactly once.
-        const clarifyStopNotice = nodeStopOverride && clarifyContext === undefined
+        // RFC-122 (H2 fix): inject the standalone STOP CLARIFYING trailer when the
+        // STOP toggle is set AND the clarifyContext does not already carry it
+        // (ctx.directive !== 'stop'). Covers a first run / pre-clarify error-retry
+        // (clarifyContext undefined) AND a review reject/iterate rerun that still
+        // carries prior clarify Q&A but withheld the trailer because
+        // applyLatestDirective=false. The old `=== undefined` test dropped the STOP
+        // text in that second case — suppressing ask-back without telling the agent
+        // why. Exactly-once: a context that DOES carry the STOP trailer
+        // (directiveOverride applied) returns false here.
+        const clarifyStopNotice = shouldInjectStopNotice({
+          nodeStopOverride,
+          contextDirective: clarifyContext?.directive,
+        })
         // RFC-119: generalized prior-output for a NON-cross-clarify rerun. When
         // this node has an earlier captured output at the SAME (iteration,
         // shardKey) — review reject/iterate (supersede→canceled), manual retry,

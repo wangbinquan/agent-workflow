@@ -18,7 +18,11 @@ import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { buildPromptContext, resolveEffectiveClarifyChannel } from '../src/services/clarifyRounds'
+import {
+  buildPromptContext,
+  resolveEffectiveClarifyChannel,
+  shouldInjectStopNotice,
+} from '../src/services/clarifyRounds'
 import {
   isClarifyAskingNode,
   renderUserPrompt,
@@ -305,5 +309,103 @@ describe('RFC-122 isClarifyAskingNode', () => {
     expect(isClarifyAskingNode(def, 'clar')).toBe(false)
     expect(isClarifyAskingNode(def, 'cc1')).toBe(false)
     expect(isClarifyAskingNode(def, 'plain')).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 5. H2 — STOP CLARIFYING injected EXACTLY ONCE, incl. a review rerun that
+//    carries prior clarify Q&A but withheld the trailer (applyLatestDirective=false).
+// ---------------------------------------------------------------------------
+const countStop = (s: string) => (s.match(/### User directive: STOP CLARIFYING/g) ?? []).length
+
+describe('RFC-122 H2 shouldInjectStopNotice', () => {
+  test('truth table', () => {
+    // Inject ⟺ override is stop AND the context does not already carry the trailer.
+    expect(shouldInjectStopNotice({ nodeStopOverride: true, contextDirective: undefined })).toBe(
+      true,
+    )
+    expect(shouldInjectStopNotice({ nodeStopOverride: true, contextDirective: 'continue' })).toBe(
+      true,
+    )
+    expect(shouldInjectStopNotice({ nodeStopOverride: true, contextDirective: 'stop' })).toBe(false)
+    // No override ⇒ never inject (golden-lock — the trailer source is unchanged).
+    expect(shouldInjectStopNotice({ nodeStopOverride: false, contextDirective: undefined })).toBe(
+      false,
+    )
+    expect(shouldInjectStopNotice({ nodeStopOverride: false, contextDirective: 'continue' })).toBe(
+      false,
+    )
+  })
+})
+
+describe('RFC-122 H2 — STOP CLARIFYING appears exactly once on a review rerun with prior Q&A', () => {
+  test('applyLatestDirective=false + override=stop ⇒ trailer via the notice (exactly once)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const def: WorkflowDefinition = { $schema_version: 3, inputs: [], nodes: [], edges: [] }
+    await seedAnsweredRound(db, 't-rev', 'self', 'designer', 'clar')
+
+    // A review reject/iterate rerun: NOT a clarify-answer rerun, so the scheduler
+    // sets applyLatestDirective=false → buildPromptContext withholds the trailer
+    // even though directiveOverride='stop'. The context still carries the prior Q&A.
+    const ctx = await buildPromptContext({
+      db,
+      definition: def,
+      taskId: 't-rev',
+      consumerKind: 'self',
+      consumerNodeId: 'designer',
+      targetIteration: 1,
+      applyLatestDirective: false,
+      directiveOverride: 'stop',
+    })
+    expect(ctx).toBeDefined()
+    expect(ctx?.directive).not.toBe('stop') // trailer withheld → notice MUST fire
+    expect(countStop(ctx?.answersBlock ?? '')).toBe(0)
+
+    const notice = shouldInjectStopNotice({
+      nodeStopOverride: true,
+      contextDirective: ctx?.directive,
+    })
+    expect(notice).toBe(true)
+
+    const prompt = renderMinimal({
+      hasClarifyChannel: false, // ask-back suppressed by the override
+      ...(ctx !== undefined ? { clarifyContext: ctx } : {}),
+      clarifyStopNotice: notice,
+    })
+    expect(prompt).not.toContain(MANDATORY)
+    expect(prompt).toContain(OUTPUT_PROTO)
+    expect(countStop(prompt)).toBe(1) // EXACTLY once — the H2 regression
+  })
+
+  test('applyLatestDirective=true + override=stop ⇒ trailer via answersBlock (no double)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const def: WorkflowDefinition = { $schema_version: 3, inputs: [], nodes: [], edges: [] }
+    await seedAnsweredRound(db, 't-clr', 'self', 'designer', 'clar')
+
+    const ctx = await buildPromptContext({
+      db,
+      definition: def,
+      taskId: 't-clr',
+      consumerKind: 'self',
+      consumerNodeId: 'designer',
+      targetIteration: 1,
+      applyLatestDirective: true,
+      directiveOverride: 'stop',
+    })
+    expect(ctx?.directive).toBe('stop')
+    expect(countStop(ctx?.answersBlock ?? '')).toBe(1)
+
+    const notice = shouldInjectStopNotice({
+      nodeStopOverride: true,
+      contextDirective: ctx?.directive,
+    })
+    expect(notice).toBe(false) // answersBlock already carries it
+
+    const prompt = renderMinimal({
+      hasClarifyChannel: false,
+      ...(ctx !== undefined ? { clarifyContext: ctx } : {}),
+      clarifyStopNotice: notice,
+    })
+    expect(countStop(prompt)).toBe(1) // still exactly once — no double inject
   })
 })

@@ -452,6 +452,29 @@ export function resolveEffectiveClarifyChannel(args: {
 }
 
 /**
+ * RFC-122 (H2 fix): should the renderer inject the standalone
+ * `### User directive: STOP CLARIFYING` trailer for this dispatch?
+ *
+ * Inject exactly when the per-(task, asking-node) override is 'stop' AND the
+ * clarifyContext's `answersBlock` does NOT already carry the trailer — which it
+ * does iff `ctx.directive === 'stop'` (set by buildPromptContext when the
+ * directiveOverride was applied, i.e. `applyLatestDirective` was in effect).
+ * This guarantees the STOP text appears EXACTLY ONCE across all cases:
+ *   - undefined context (first run / pre-clarify error-retry)              → notice,
+ *   - context whose trailer was withheld because `applyLatestDirective=false`
+ *     (a review reject/iterate rerun that still carries prior clarify Q&A)  → notice,
+ *   - context that already carries the STOP trailer                        → no notice.
+ * No override ⇒ false (golden-lock — the trailer source is unchanged).
+ */
+export function shouldInjectStopNotice(args: {
+  nodeStopOverride: boolean
+  /** `clarifyContext?.directive`. */
+  contextDirective?: ClarifyDirective
+}): boolean {
+  return args.nodeStopOverride && args.contextDirective !== 'stop'
+}
+
+/**
  * RFC-023 design §5.6 wrapper-loop remaining counter — copied from
  * services/clarify.ts so this module stays self-contained. Returns '' when
  * the consumer is not inside an enclosing loop with a maxIterations cap.
