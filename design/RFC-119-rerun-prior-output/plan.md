@@ -4,24 +4,24 @@
 
 ## 子任务
 
-### RFC-119-T1 共享层：常量 + 字段 + 渲染分支
-- `packages/shared/src/clarify.ts`：新增 `RERUN_PRIOR_OUTPUT_BLOCK_TITLE`、`RERUN_UPDATE_DIRECTIVE_TEXT`（design §3.1）。
-- `packages/shared/src/prompt.ts`：`RenderPromptInput` 加 `priorOutputUpdate?: PriorOutputUpdateContext` + 导出 `PriorOutputUpdateContext`；在 xcc 段落之后插入泛化渲染分支（design §3.3），门控：block 非空 ∧ 非 xcc 占用 ∧ 非 inlineMode ∧ 非 hasClarifyChannel。
-- `packages/shared/src/index.ts`（若有 re-export 清单）导出新常量/类型。
+### RFC-119-T1 共享层：统一常量 + 字段 + 渲染分支
+- `packages/shared/src/clarify.ts`：`CROSS_CLARIFY_PRIOR_OUTPUT_BLOCK_TITLE`/`CROSS_CLARIFY_UPDATE_DIRECTIVE_BLOCK_TITLE`/`CROSS_CLARIFY_UPDATE_DIRECTIVE_TEXT` **改名去前缀**为中性 `PRIOR_OUTPUT_BLOCK_TITLE`/`UPDATE_DIRECTIVE_BLOCK_TITLE`/`UPDATE_DIRECTIVE_TEXT`，标题值改 `to update or regenerate`、directive 换中性文案（design §3.1，D4）。
+- `packages/shared/src/prompt.ts`：`RenderPromptInput` 加 `priorOutputUpdate?: PriorOutputUpdateContext` + 导出类型；xcc 渲染处改用新常量名；在 xcc 段落之后插入泛化渲染分支（design §3.3），门控：block 非空 ∧ 非 xcc 占用 ∧ 非 inlineMode ∧ 非 hasClarifyChannel。
+- `packages/shared/src/index.ts`：re-export 改名后的常量/新类型（删旧 `CROSS_CLARIFY_*` 导出）。
 - 依赖：无。
 
 ### RFC-119-T2 后端：helper + cross-clarify 重构 + 泛化计算 + runner 透传
-- `scheduler.ts`：新增 `composePriorOutputBlock` + `freshestPriorRunWithOutput`（design §3.4）。
-- `scheduler.ts`：cross-clarify 块（2345-2356）改调 `composePriorOutputBlock`（byte-identical，design §3.5）。
-- `scheduler.ts`：在 `effectiveHasClarifyChannel` 已知之后计算 `priorOutputUpdate`（design §3.6），并透传进 `runNode({...})`。
+- `scheduler.ts`：新增 `composePriorOutputBlock`（含 `onlyPorts` 限定，D10）+ `freshestPriorRunWithOutput`（design §3.4）。
+- `scheduler.ts`：cross-clarify 块（2345-2356）改调 `composePriorOutputBlock`（不传 onlyPorts；块 byte-identical，design §3.5）。
+- `scheduler.ts`：在 `effectiveHasClarifyChannel` 已知之后计算 `priorOutputUpdate`（design §3.6），review-iterate 时按 `reviewContext.iterateTargetPort` 传 `onlyPorts`（D10），并透传进 `runNode({...})`。
 - `runner.ts`：`RunNodeOptions` 加 `priorOutputUpdate?`；非-followup 的 `renderUserPrompt` 调用透传（design §3.7）。
 - 依赖：T1（类型/常量）。
 
 ### RFC-119-T3 测试
 - `packages/shared/tests/rerun-prior-output.test.ts`（design §6.1）。
-- `packages/backend/tests/rerun-prior-output-injection.test.ts`（design §6.3）。
-- 源码文本回归断言（design §6.4）——可并进 backend 测试文件或单列。
-- 跑既有 cross-clarify 回归（§6.2）确认全绿。
+- `packages/backend/tests/rerun-prior-output-injection.test.ts`（design §6.3，含 D10 互补去重 + 文件端口路径）。
+- 源码文本回归断言（design §6.4）。
+- **更新 cross-clarify 既有测试**到统一中性措辞 + 新常量名（design §6.2，D4）：`cross-clarify-update-mode.test.ts`、`cross-clarify-update-mode-injection.test.ts` 及其它引用旧常量/旧文案处。
 - 依赖：T1、T2。
 
 ### RFC-119-T4 门禁 + 落档收尾
@@ -37,9 +37,10 @@
 - [ ] AC-4 循环下一迭代不注入
 - [ ] AC-5 同会话续跑（inline/followup）不注入
 - [ ] AC-6 强制反问态不注入
-- [ ] AC-7 cross-clarify 逐字不变、不重复注入
+- [ ] AC-7 cross-clarify 统一中性指令（块本身不变、测试更新）、不重复注入
 - [ ] AC-8 全端口空不注入
 - [ ] AC-9 零 migration、三门禁全绿、smoke 无环
+- [ ] D10 review-iterate 只示目标端口、reject/非评审示全部
 
 ## 风险与缓解
 - **R1 误改 `priorDoneGenerationsForRun`**：T2 只**新增** `freshestPriorRunWithOutput`，绝不动前者；§6.4 源码断言锁 done-only。
