@@ -89,6 +89,15 @@ class NodeDispatchInFlight extends Error {
   }
 }
 
+/** Thrown inside the atomic tx to roll it back when a concurrent reassign/reconcile moved an
+ *  entry's effective target (or origin) since the mint plan was computed (→ retryable
+ *  ConflictError so the caller re-plans against the new target). */
+class TargetChanged extends Error {
+  constructor(readonly entryId: string) {
+    super(`task_question ${entryId} effective target changed since the dispatch plan was computed`)
+  }
+}
+
 function parseDefinition(snapshot: string): WorkflowDefinition | null {
   try {
     return JSON.parse(snapshot) as WorkflowDefinition
@@ -307,16 +316,40 @@ export async function dispatchTaskQuestions(
   //    batch is stamped BELOW). Within ONE dispatch the byTarget grouping already yields
   //    exactly one rerun per node (q1+q2 to the same node → one mint plan → one rerun).
   const requestedIds = requested.map((e) => e.id)
+  // Codex (ship-gate) — the snapshot the mint plan was computed from: each entry's effective
+  // target (override ?? default) + origin round. A concurrent reassignTaskQuestion can change
+  // override_target_node_id while dispatched_at is NULL (between this read and the tx below),
+  // which would make the planned frontier mint serve a STALE handler — the entry's NEW handler
+  // gets no rerun + the old node's queue won't bind it → stranded `processing`. The tx re-
+  // verifies this snapshot is still current before stamping.
+  const plannedByEntry = new Map(
+    requested.map((e) => [e.id, { target: effectiveTarget(e), origin: e.originNodeRunId }]),
+  )
   const now = Date.now()
   let committed = false
   try {
     dbTxSync(db, (tx) => {
       const stillNull = tx
-        .select({ id: taskQuestions.id })
+        .select({
+          id: taskQuestions.id,
+          override: taskQuestions.overrideTargetNodeId,
+          def: taskQuestions.defaultTargetNodeId,
+          origin: taskQuestions.originNodeRunId,
+        })
         .from(taskQuestions)
         .where(and(inArray(taskQuestions.id, requestedIds), isNull(taskQuestions.dispatchedAt)))
         .all()
       if (stillNull.length !== requestedIds.length) throw new ConcurrentClaim()
+      // Re-verify the planned snapshot is unchanged (atomic with the stamp+mint). A concurrent
+      // reassign/reconcile that moved any entry's effective target (or origin) → retryable
+      // rollback; the caller re-plans against the new target and retries (nothing stamped/minted).
+      for (const c of stillNull) {
+        const planned = plannedByEntry.get(c.id)
+        const curTarget = c.override ?? c.def
+        if (planned === undefined || curTarget !== planned.target || c.origin !== planned.origin) {
+          throw new TargetChanged(c.id)
+        }
+      }
       const txEntries = tx
         .select()
         .from(taskQuestions)
@@ -372,6 +405,12 @@ export async function dispatchTaskQuestions(
       throw new ConflictError(
         'task-question-node-dispatch-in-flight',
         `cannot dispatch to '${e.nodeId}': it already has an OPEN (unconsumed) dispatched designer question (a concurrent dispatch won). Dispatch the remaining questions after that node's rerun finishes (done with output).`,
+      )
+    }
+    if (e instanceof TargetChanged) {
+      throw new ConflictError(
+        'task-question-target-changed',
+        `task question ${e.entryId} was reassigned to a different handler while this dispatch was being planned. Re-run the dispatch to plan against the new target.`,
       )
     }
     throw e

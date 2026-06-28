@@ -880,6 +880,84 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
     expect(d2.reruns[0]?.nodeRunId).not.toBe(P)
   })
 
+  test('(dispatch/reassign race) a concurrent reassign before the tx → ROLLS BACK task-question-target-changed; re-run with the new target succeeds', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    // OTHER (the reassign target B) needs a prior run to be a valid frontier mint target.
+    await db.insert(nodeRuns).values({
+      id: ulid(),
+      taskId,
+      nodeId: OTHER,
+      status: 'done',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: Date.now() - 500,
+    })
+    await submitCrossClarifyAnswers({
+      db,
+      crossClarifyNodeRunId,
+      answers: [ans('q1')],
+      directive: 'continue',
+    })
+    const entry = (await designerEntries(db, taskId))[0]!
+    expect(entry.defaultTargetNodeId).toBe(DESIGNER)
+
+    // A db Proxy that fires a ONE-SHOT reassign (override → OTHER) on the FIRST nodeRuns read,
+    // which happens AFTER dispatch snapshots `requested` (target DESIGNER) and BEFORE its tx.
+    // The reassign uses the REAL db so it doesn't re-trigger the proxy.
+    let fired = false
+    const racingDb = new Proxy(db, {
+      get(target, prop, receiver) {
+        const orig = Reflect.get(target, prop, receiver)
+        if (prop !== 'select') return orig
+        return (...selectArgs: unknown[]) => {
+          const builder = (orig as (...a: unknown[]) => Record<string, unknown>).apply(
+            target,
+            selectArgs,
+          )
+          const origFrom = (builder.from as (t: unknown) => Record<string, unknown>).bind(builder)
+          builder.from = (tbl: unknown) => {
+            const q = origFrom(tbl)
+            if (tbl === nodeRuns && !fired) {
+              fired = true
+              const origThen = (q.then as (...a: unknown[]) => unknown).bind(q)
+              q.then = (onF: unknown, onR: unknown) =>
+                reassignTaskQuestion(db, entry.id, OTHER, actor).then(
+                  () => origThen(onF, onR),
+                  onR as never,
+                )
+            }
+            return q
+          }
+          return builder
+        }
+      },
+    }) as typeof db
+
+    let threw: unknown = null
+    try {
+      await dispatchTaskQuestions(racingDb, taskId, [entry.id], actor)
+    } catch (e) {
+      threw = e
+    }
+    expect(fired).toBe(true) // the concurrent reassign actually ran mid-dispatch
+    expect((threw as { code?: string }).code).toBe('task-question-target-changed')
+    // Nothing stamped; the reassign DID commit (override = OTHER); NO rerun minted anywhere.
+    const after = (await designerEntries(db, taskId))[0]!
+    expect(after.dispatchedAt).toBeNull()
+    expect(after.overrideTargetNodeId).toBe(OTHER)
+    const pending = await db
+      .select()
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.status, 'pending')))
+    expect(pending.length).toBe(0)
+
+    // Re-run the dispatch (fresh plan, target OTHER now) → succeeds, mints for OTHER.
+    const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+    expect(result.reruns.length).toBe(1)
+    expect(result.reruns[0]?.targetNodeId).toBe(OTHER)
+  })
+
   test('a stamped frontier rerun always resolves to an EXISTING node_run (no phantom / orphan)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
