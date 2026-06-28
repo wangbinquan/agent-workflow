@@ -1,0 +1,271 @@
+// RFC-119 END-TO-END verification — prior-output injection in a REAL task.
+//
+// Unlike the unit tests (which exercise freshestPriorRunWithOutput /
+// composePriorOutputBlock / renderUserPrompt in isolation), this drives the
+// FULL scheduler `runTask` through a real review-iterate rerun with a stub
+// opencode binary, and asserts the prompt the re-run agent ACTUALLY receives
+// carries the prior output + the neutral update-or-regenerate directive.
+//
+// Flow:
+//   1. workflow: input → auditor(outputs:[report]) → review.
+//   2. runTask → auditor's first opencode call emits report = V1 (with a unique
+//      marker); review enters awaiting_review.
+//   3. reviewer iterates with a comment → submitReviewDecision('iterated')
+//      supersedes the auditor's done row (canceled, output rows kept) + mints a
+//      fresh pending row (retryIndex=1).
+//   4. runTask re-runs the auditor.
+//   5. CORE: the fresh row's promptText contains
+//      `## Prior Output (to update or regenerate)` + the V1 marker + the neutral
+//      `## Update Directive` — i.e. the agent is told "here's what you produced;
+//      update or regenerate it" with the actual prior body inlined.
+//
+// If this goes red, RFC-119's scheduler wiring (freshestPriorRunWithOutput →
+// composePriorOutputBlock → priorOutputUpdate → renderUserPrompt) regressed on
+// the real review-iterate path.
+
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { mkdtempSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { execSync } from 'node:child_process'
+import { and, eq } from 'drizzle-orm'
+import type { DbClient } from '../src/db/client'
+import { createInMemoryDb } from '../src/db/client'
+import { nodeRuns } from '../src/db/schema'
+import { createAgent } from '../src/services/agent'
+import { createWorkflow } from '../src/services/workflow'
+import { addReviewComment, submitReviewDecision } from '../src/services/review'
+import { runTask } from '../src/services/scheduler'
+import { startTask } from '../src/services/task'
+import { reenterScheduler } from './reenter-scheduler'
+
+const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+const V1_MARKER = 'PRIOR-AUDIT-MARKER-V1'
+const REPORT_V1 = `# Audit Report v1\n\nFINDING: ${V1_MARKER} — the login handler lacks rate limiting.\n`
+const REPORT_V2 = '# Audit Report v2\n\nAddressed the reviewer comment.\n'
+
+interface Harness {
+  db: DbClient
+  appHome: string
+  stubOpencode: string
+  taskId: string
+  auditorDoneRunId: string
+  reviewNodeRunId: string
+  cleanup: () => void
+}
+
+let runIdx = 0
+
+function makeStubOpencode(dir: string): string {
+  const path = join(dir, 'stub-opencode.sh')
+  const v1 = REPORT_V1.replace(/\n/g, '\\n')
+  const v2 = REPORT_V2.replace(/\n/g, '\\n')
+  const counterFile = join(dir, '.invoke-counter')
+  writeFileSync(counterFile, '0')
+  // First auditor call → V1; every later call (the rerun) → V2. The review node
+  // is not an agent, so it does not bump the counter.
+  const script = `#!/usr/bin/env bash
+set -e
+if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
+if [[ "$1" == "run" ]]; then
+  COUNTER_FILE='${counterFile}'
+  N=$(cat "$COUNTER_FILE"); N=$((N + 1)); echo $N > "$COUNTER_FILE"
+  if [[ $N -eq 1 ]]; then BODY='${v1}'; else BODY='${v2}'; fi
+  ENV='<workflow-output><port name="report">'"$BODY"'</port></workflow-output>'
+  TS=$(date +%s%3N)
+  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
+  exit 0
+fi
+echo "unknown subcommand $1"; exit 1
+`
+  writeFileSync(path, script)
+  chmodSync(path, 0o755)
+  return path
+}
+
+async function buildHarness(): Promise<Harness> {
+  runIdx++
+  const tmp = mkdtempSync(join(tmpdir(), `aw-rfc119-e2e-${runIdx}-`))
+  const appHome = join(tmp, 'appHome')
+  const repoPath = join(tmp, 'repo')
+  const db = createInMemoryDb(MIGRATIONS)
+
+  execSync(`mkdir -p "${repoPath}"`, { stdio: 'ignore' })
+  execSync(`git init -b main "${repoPath}"`, { stdio: 'ignore' })
+  execSync(`git -C "${repoPath}" config user.email t@t.test`, { stdio: 'ignore' })
+  execSync(`git -C "${repoPath}" config user.name t`, { stdio: 'ignore' })
+  writeFileSync(join(repoPath, 'README.md'), '# repo\n')
+  execSync(`git -C "${repoPath}" add . && git -C "${repoPath}" commit -m init`, { stdio: 'ignore' })
+
+  const stubOpencode = makeStubOpencode(tmp)
+
+  await createAgent(db, {
+    name: 'auditor',
+    description: '',
+    outputs: ['report'],
+    outputKinds: { report: 'markdown' },
+    readonly: false,
+    syncOutputsOnIterate: false,
+    permission: {},
+    skills: [],
+    dependsOn: [],
+    mcp: [],
+    plugins: [],
+    frontmatterExtra: {},
+    bodyMd: '',
+  })
+
+  const wf = await createWorkflow(db, {
+    name: 'audit-with-review',
+    description: '',
+    definition: {
+      $schema_version: 2,
+      inputs: [{ kind: 'text', key: 'topic', label: 'topic' }],
+      nodes: [
+        { id: 'in_1', kind: 'input', inputKey: 'topic' },
+        {
+          id: 'auditor',
+          kind: 'agent-single',
+          agentName: 'auditor',
+          promptTemplate: 'Audit {{topic}}',
+        },
+        {
+          id: 'rev_1',
+          kind: 'review',
+          inputSource: { nodeId: 'auditor', portName: 'report' },
+          rerunnableOnIterate: ['auditor'],
+          rerunnableOnReject: ['auditor'],
+        },
+      ],
+      edges: [
+        {
+          id: 'e1',
+          source: { nodeId: 'in_1', portName: 'topic' },
+          target: { nodeId: 'auditor', portName: 'topic' },
+        },
+      ],
+    },
+  })
+
+  process.env.AGENT_WORKFLOW_HOME = appHome
+
+  const task = await startTask(
+    {
+      workflowId: wf.id,
+      name: 'fixture-task',
+      repoPath,
+      baseBranch: 'main',
+      inputs: { topic: 'orders' },
+    },
+    { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+  )
+
+  const auditorRows = await db
+    .select()
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, 'auditor')))
+  const auditorDone = auditorRows
+    .filter((r) => r.status === 'done' && r.parentNodeRunId === null)
+    .sort((a, b) => (a.id > b.id ? -1 : 1))[0]
+  if (auditorDone === undefined) throw new Error('auditor done row not found')
+  const reviewRows = await db
+    .select()
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, 'rev_1')))
+  if (reviewRows.length === 0) throw new Error('rev_1 node_run not created')
+
+  return {
+    db,
+    appHome,
+    stubOpencode,
+    taskId: task.id,
+    auditorDoneRunId: auditorDone.id,
+    reviewNodeRunId: reviewRows[0]!.id,
+    cleanup: () => {
+      rmSync(tmp, { recursive: true, force: true })
+      delete process.env.AGENT_WORKFLOW_HOME
+    },
+  }
+}
+
+describe('RFC-119 e2e — review-iterate rerun gets the prior output in its prompt', () => {
+  let h: Harness
+  beforeEach(async () => {
+    h = await buildHarness()
+  })
+  afterEach(() => {
+    h.cleanup()
+  })
+
+  test('the fresh auditor prompt carries `## Prior Output` + the V1 body + the update directive', async () => {
+    const COMMENT = 'add a concrete remediation for the rate-limit finding'
+
+    await addReviewComment({
+      db: h.db,
+      appHome: h.appHome,
+      nodeRunId: h.reviewNodeRunId,
+      anchor: {
+        sectionPath: '# Audit Report v1',
+        paragraphIdx: 1,
+        offsetStart: 0,
+        offsetEnd: 7,
+        selectedText: 'FINDING',
+        contextBefore: '',
+        contextAfter: ': ',
+        occurrenceIndex: 1,
+      },
+      commentText: COMMENT,
+    })
+
+    const result = await submitReviewDecision({
+      db: h.db,
+      appHome: h.appHome,
+      nodeRunId: h.reviewNodeRunId,
+      decision: 'iterated',
+      expectedReviewIteration: 0,
+    })
+    expect(result.resumeRequired).toBe(true)
+
+    // The original done row is now a canceled supersede marker — but its
+    // node_run_outputs row (report=V1) is kept, which is what RFC-119 reads.
+    const superseded = (
+      await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.auditorDoneRunId))
+    )[0]
+    expect(superseded?.status).toBe('canceled')
+
+    // Re-run the auditor (RFC-097: reset the terminal task so runTask's CAS claims it).
+    await reenterScheduler(h.db, h.taskId)
+    await runTask({
+      taskId: h.taskId,
+      db: h.db,
+      appHome: h.appHome,
+      opencodeCmd: [h.stubOpencode],
+    })
+
+    const fresh = (
+      await h.db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'auditor')))
+    )
+      .filter((r) => r.parentNodeRunId === null && r.id !== h.auditorDoneRunId && r.retryIndex >= 1)
+      .sort((a, b) => b.retryIndex - a.retryIndex)[0]
+    expect(fresh?.promptText).toBeTruthy()
+    const prompt = fresh!.promptText!
+
+    // CORE RFC-119 assertions — the re-run agent's REAL prompt.
+    expect(prompt).toContain('## Prior Output (to update or regenerate)')
+    expect(prompt).toContain(V1_MARKER) // the actual prior output body is inlined
+    expect(prompt).toContain('## Update Directive')
+    // neutral directive: offers update AND regenerate, demands the COMPLETE output.
+    expect(prompt.toLowerCase()).toContain('regenerate')
+    expect(prompt.toLowerCase()).toContain('complete')
+    expect(prompt.toLowerCase()).not.toContain('do not regenerate')
+
+    // Sanity: the review-iterate context is still wired (the comment surfaces),
+    // so prior-output rides ALONGSIDE the feedback, not instead of it.
+    expect(prompt).toContain('## Review Comments')
+    expect(prompt).toContain(COMMENT)
+  })
+})
