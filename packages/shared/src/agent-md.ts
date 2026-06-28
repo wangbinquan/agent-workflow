@@ -46,6 +46,10 @@ const KNOWN_KEYS = new Set<string>([
   // Same shape policy as dependsOn / mcp. Existence + enabled check happens
   // server-side at save time (services/agent.ts `validatePluginReferences`).
   'plugins',
+  // RFC-111 (Codex audit F6): runtime name this agent dispatches to. String
+  // shape; the named runtime's existence is checked server-side at save time
+  // (services/agent.ts), same policy as mcp / plugins.
+  'runtime',
 ])
 
 /** RFC-022: matches AGENT_NAME_RE in schemas/agent.ts so import-time and
@@ -116,6 +120,21 @@ export function parseAgentMarkdown(
     } else {
       extras.description = data.description
       warnings.push('description must be string; kept in frontmatterExtra')
+    }
+  }
+
+  // RFC-111 (Codex audit F6): runtime — the runtime name this agent dispatches
+  // to. Like description, a non-string / empty shape demotes to frontmatterExtra;
+  // the named runtime's existence is validated server-side at save time
+  // (services/agent.ts), same policy as mcp / plugins. Before this, `runtime`
+  // wasn't in KNOWN_KEYS, so an authored `runtime:` silently fell through to
+  // frontmatterExtra and never applied on import.
+  if (data.runtime !== undefined) {
+    if (isNonEmptyString(data.runtime)) {
+      partial.runtime = data.runtime
+    } else {
+      extras.runtime = data.runtime
+      warnings.push('runtime must be a non-empty string; kept in frontmatterExtra')
     }
   }
 

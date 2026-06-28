@@ -314,4 +314,24 @@ describe('parseAgentMarkdown', () => {
     expect(r.partial.frontmatterExtra?.plugins).toBe('dd-trace')
     expect(r.warnings.some((w) => w.startsWith('plugins must be an array'))).toBe(true)
   })
+
+  // RFC-111 (Codex audit F6): `runtime` must parse into partial.runtime, not get
+  // silently dropped into frontmatterExtra — it was missing from KNOWN_KEYS, so an
+  // authored `runtime:` never applied on import.
+  test('RFC-111/F6: runtime parses into partial.runtime (not frontmatterExtra)', () => {
+    const src = ['---', 'name: r', 'runtime: claude-code', '---', 'b'].join('\n')
+    const r = parseAgentMarkdown(src)
+    expect(r.partial.runtime).toBe('claude-code')
+    expect(r.partial.frontmatterExtra).toBeUndefined()
+    expect(r.unrecognizedKeys).not.toContain('runtime')
+    expect(r.warnings).toEqual([])
+  })
+
+  test('RFC-111/F6: non-string runtime demotes to frontmatterExtra with a warning', () => {
+    const src = ['---', 'name: r', 'runtime: 123', '---', 'b'].join('\n')
+    const r = parseAgentMarkdown(src)
+    expect(r.partial.runtime).toBeUndefined()
+    expect(r.partial.frontmatterExtra).toEqual({ runtime: 123 })
+    expect(r.warnings.some((w) => w.startsWith('runtime must be a non-empty string'))).toBe(true)
+  })
 })
