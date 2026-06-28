@@ -2448,6 +2448,8 @@ export interface Resources {
     stage: string
     unstage: string
     allNodes: string
+    answer: string
+    viewClarify: string
     phase: {
       pending: string
       staged: string
@@ -5063,6 +5065,8 @@ export const zhCN: Resources = {
     stage: '加入待下发',
     unstage: '移出待下发',
     allNodes: '全部节点',
+    answer: '回答',
+    viewClarify: '查看反问',
     phase: {
       pending: '待指派',
       staged: '待下发',

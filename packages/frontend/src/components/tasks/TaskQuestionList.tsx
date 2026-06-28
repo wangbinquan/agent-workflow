@@ -12,6 +12,7 @@
 // the existing auto-dispatch flow.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, type ApiError } from '@/api/client'
@@ -34,6 +35,8 @@ export interface TaskQuestionEntry {
   id: string
   questionId: string
   questionTitle: string
+  /** The clarify/cross-clarify node-run id — the `/clarify/$nodeRunId` answer page. */
+  originNodeRunId: string
   sourceKind: 'self' | 'cross'
   roleKind: 'self' | 'questioner' | 'designer'
   sourceNodeId: string
@@ -177,6 +180,17 @@ export function TaskQuestionList({ taskId, nodeOptions = [] }: TaskQuestionListP
                     <div className="task-questions__answer">{e.answerSummary}</div>
                   )}
                   <div className="task-questions__actions">
+                    {/* RFC-120: the path to ANSWER each question — links to its
+                        clarify/cross-clarify page (answer if unanswered, view if
+                        answered). The task center was missing this entirely. */}
+                    <Link
+                      to="/clarify/$nodeRunId"
+                      params={{ nodeRunId: e.originNodeRunId }}
+                      className="btn btn--xs"
+                      data-testid={`tq-answer-${e.id}`}
+                    >
+                      {e.answerSummary ? t('taskQuestions.viewClarify') : t('taskQuestions.answer')}
+                    </Link>
                     {e.phase === 'awaiting_confirm' && (
                       <ConfirmButton
                         label={t('taskQuestions.confirm')}

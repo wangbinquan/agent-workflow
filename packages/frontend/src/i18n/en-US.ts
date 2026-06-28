@@ -2702,6 +2702,8 @@ export const enUS: Resources = {
     stage: 'Stage',
     unstage: 'Unstage',
     allNodes: 'All nodes',
+    answer: 'Answer',
+    viewClarify: 'View clarify',
     phase: {
       pending: 'To assign',
       staged: 'Staged',

@@ -19,6 +19,7 @@ const designerEntry = (over: Partial<TaskQuestionEntry> = {}): TaskQuestionEntry
   id: 'e1',
   questionId: 'q1',
   questionTitle: 't',
+  originNodeRunId: 'origin-1',
   sourceKind: 'cross',
   roleKind: 'designer',
   sourceNodeId: 'auditor',

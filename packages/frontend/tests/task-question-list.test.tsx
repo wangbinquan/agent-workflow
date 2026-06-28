@@ -3,6 +3,14 @@
 // roles (not translated text) so it's i18n-agnostic.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { api } from '@/api/client'
@@ -17,6 +25,7 @@ const entry = (over: Partial<TaskQuestionEntry>): TaskQuestionEntry => ({
   id: 'e0',
   questionId: 'q1',
   questionTitle: 'Pick a strategy?',
+  originNodeRunId: 'origin-1',
   sourceKind: 'self',
   roleKind: 'self',
   sourceNodeId: 'designer',
@@ -30,27 +39,45 @@ const entry = (over: Partial<TaskQuestionEntry>): TaskQuestionEntry => ({
   ...over,
 })
 
-function wrap(entries: TaskQuestionEntry[]) {
+// The board renders a <Link to="/clarify/$nodeRunId"> per card, so it needs a
+// router context with that route registered (TaskOutputPanel test pattern).
+async function wrap(entries: TaskQuestionEntry[]) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   })
   qc.setQueryData(['task-questions', 'task-1'], entries)
-  return render(
-    <QueryClientProvider client={qc}>
-      <TaskQuestionList
-        taskId="task-1"
-        nodeOptions={[
-          { id: 'designer', label: 'designer' },
-          { id: 'fixer', label: 'fixer' },
-        ]}
-      />
-    </QueryClientProvider>,
-  )
+  const rootRoute = createRootRoute({ component: () => <Outlet /> })
+  const index = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/',
+    component: () => (
+      <QueryClientProvider client={qc}>
+        <TaskQuestionList
+          taskId="task-1"
+          nodeOptions={[
+            { id: 'designer', label: 'designer' },
+            { id: 'fixer', label: 'fixer' },
+          ]}
+        />
+      </QueryClientProvider>
+    ),
+  })
+  const clarify = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/clarify/$nodeRunId',
+    component: () => null,
+  })
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([index, clarify]),
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  })
+  await router.load()
+  return render(<RouterProvider router={router as never} />)
 }
 
 describe('TaskQuestionList board', () => {
-  test('renders entries as cards on the board', () => {
-    wrap([
+  test('renders entries as cards on the board', async () => {
+    await wrap([
       entry({ id: 'e1', phase: 'pending' }),
       entry({ id: 'e2', phase: 'awaiting_confirm' }),
       entry({ id: 'e3', phase: 'done', roleKind: 'designer' }),
@@ -63,7 +90,7 @@ describe('TaskQuestionList board', () => {
 
   test('stage button posts to /stage with staged:true', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue(undefined as never)
-    wrap([entry({ id: 'e1', phase: 'pending', staged: false })])
+    await wrap([entry({ id: 'e1', phase: 'pending', staged: false })])
     const card = screen.getByTestId('tq-card-e1')
     fireEvent.click(within(card).getByRole('button'))
     await waitFor(() =>
@@ -71,8 +98,8 @@ describe('TaskQuestionList board', () => {
     )
   })
 
-  test('awaiting_confirm card shows a confirm control; designer card shows a reassign select', () => {
-    wrap([
+  test('awaiting_confirm card shows a confirm control; designer card shows a reassign select', async () => {
+    await wrap([
       entry({ id: 'e2', phase: 'awaiting_confirm' }),
       entry({
         id: 'e3',
@@ -91,13 +118,19 @@ describe('TaskQuestionList board', () => {
     )
   })
 
-  test('empty list renders the empty state', () => {
-    wrap([])
+  test('empty list renders the empty state', async () => {
+    await wrap([])
     expect(screen.queryByTestId('task-questions-board')).toBeNull()
   })
 
-  test('D13: source-node filter chips + click narrows the board to that node', () => {
-    wrap([
+  test('每张卡片给出回答路径 → 链到该问题的 /clarify/$nodeRunId 反问页', async () => {
+    await wrap([entry({ id: 'e1', phase: 'pending', originNodeRunId: 'run-xyz' })])
+    const link = within(screen.getByTestId('tq-card-e1')).getByTestId('tq-answer-e1')
+    expect(link.getAttribute('href')).toBe('/clarify/run-xyz')
+  })
+
+  test('D13: source-node filter chips + click narrows the board to that node', async () => {
+    await wrap([
       entry({ id: 'a1', sourceNodeId: 'nodeA', phase: 'pending' }),
       entry({ id: 'a2', sourceNodeId: 'nodeA', phase: 'processing' }),
       entry({ id: 'b1', sourceNodeId: 'nodeB', phase: 'pending' }),
