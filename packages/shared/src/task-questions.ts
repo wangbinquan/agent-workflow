@@ -171,6 +171,40 @@ export function canReassign(
   return entry.roleKind === 'designer' && agentNodeIds.has(targetNodeId)
 }
 
+/** RFC-120 T7（override 重跑核心）：把一轮里**设计者域**问题按「有效承接节点」分组——
+ *  有效承接 = `override ?? 图设计者`。返回 `有效节点 → 该节点承接的 questionId[]`（保序）。
+ *
+ *  - **黄金锁**：全部无 override 时只产出一组 `{图设计者: 全部问题}`——与改派前的单设计者
+ *    重跑逐字一致（override 空 = 原行为）。
+ *  - **不交叉污染**：Q1 改派到 X、Q2 默认到 Y → `{X:[Q1], Y:[Q2]}`，各节点只见自己的问题；
+ *    X 的重跑反馈绝不含 Q2，反之亦然（design §2.4 / T7 验收）。
+ *  纯函数：入参已是「设计者域问题 + 其图设计者 + 其 override」，scope 过滤在调用方先做。 */
+export function partitionDesignerQuestionsByTarget(
+  questions: ReadonlyArray<{
+    questionId: string
+    graphDesignerNodeId: string
+    overrideNodeId: string | null
+  }>,
+): Map<string, string[]> {
+  const byTarget = new Map<string, string[]>()
+  for (const q of questions) {
+    const target = q.overrideNodeId ?? q.graphDesignerNodeId
+    const list = byTarget.get(target)
+    if (list) list.push(q.questionId)
+    else byTarget.set(target, [q.questionId])
+  }
+  return byTarget
+}
+
+/** 一个有效承接节点是否「被改派而来」（即承接了至少一个 override 到它的问题）——
+ *  用于 dispatch 决定走 override 分支还是黄金锁默认分支。 */
+export function isOverrideTarget(
+  targetNodeId: string,
+  questions: ReadonlyArray<{ graphDesignerNodeId: string; overrideNodeId: string | null }>,
+): boolean {
+  return questions.some((q) => q.overrideNodeId === targetNodeId)
+}
+
 /** RFC-120 Codex F1：「新一轮反问触发的承接 rerun」的 cause 集合——用作 lineage
  *  窗口上界。一个条目的承接 lineage = 它的 trigger run + 其 process-retry/级联子代，
  *  止于**下一条**带这些 cause 的更新 rerun（那属于另一条目/另一轮的承接）。
