@@ -13,6 +13,7 @@ import {
 } from '@tanstack/react-router'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
+import { useRef, useState } from 'react'
 import { api } from '@/api/client'
 import { TaskQuestionList, type TaskQuestionEntry } from '../src/components/tasks/TaskQuestionList'
 
@@ -59,6 +60,65 @@ async function wrap(entries: TaskQuestionEntry[]) {
             { id: 'fixer', label: 'fixer' },
           ]}
         />
+      </QueryClientProvider>
+    ),
+  })
+  const clarify = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/clarify/$nodeRunId',
+    component: () => null,
+  })
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([index, clarify]),
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  })
+  await router.load()
+  return render(<RouterProvider router={router as never} />)
+}
+
+// RFC-120 D13 — harness for the canvas-badge focus signal. Holds {nodeId, key}
+// state (like tasks.detail) with buttons that mint a FRESH key each push, so we
+// can drive `focusSourceNode` and assert the board filters to that node — incl.
+// pushing the SAME node twice (a new key must still re-apply the filter).
+function FocusHarness() {
+  const [focus, setFocus] = useState<{ nodeId: string; key: number } | null>(null)
+  const keyRef = useRef(0)
+  const push = (nodeId: string) => {
+    keyRef.current += 1
+    setFocus({ nodeId, key: keyRef.current })
+  }
+  return (
+    <>
+      <button type="button" data-testid="push-nodeA" onClick={() => push('nodeA')}>
+        A
+      </button>
+      <button type="button" data-testid="push-nodeB" onClick={() => push('nodeB')}>
+        B
+      </button>
+      <TaskQuestionList
+        taskId="task-1"
+        nodeOptions={[
+          { id: 'nodeA', label: 'nodeA' },
+          { id: 'nodeB', label: 'nodeB' },
+        ]}
+        focusSourceNode={focus}
+      />
+    </>
+  )
+}
+
+async function wrapFocus(entries: TaskQuestionEntry[]) {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  })
+  qc.setQueryData(['task-questions', 'task-1'], entries)
+  const rootRoute = createRootRoute({ component: () => <Outlet /> })
+  const index = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/',
+    component: () => (
+      <QueryClientProvider client={qc}>
+        <FocusHarness />
       </QueryClientProvider>
     ),
   })
@@ -154,6 +214,39 @@ describe('TaskQuestionList board', () => {
     expect(screen.getByTestId('tq-card-b1')).toBeTruthy()
     // click nodeA → only nodeA's cards remain
     fireEvent.click(screen.getByTestId('tq-node-filter-nodeA'))
+    expect(screen.getByTestId('tq-card-a1')).toBeTruthy()
+    expect(screen.queryByTestId('tq-card-b1')).toBeNull()
+  })
+})
+
+describe('TaskQuestionList focusSourceNode (D13 canvas-badge jump)', () => {
+  test('a fresh focusSourceNode.key filters the board to that node — incl. the same node twice', async () => {
+    await wrapFocus([
+      entry({ id: 'a1', sourceNodeId: 'nodeA', phase: 'pending' }),
+      entry({ id: 'b1', sourceNodeId: 'nodeB', phase: 'pending' }),
+    ])
+    // Initially unfiltered: both cards visible.
+    expect(screen.getByTestId('tq-card-a1')).toBeTruthy()
+    expect(screen.getByTestId('tq-card-b1')).toBeTruthy()
+
+    // Push nodeA → board narrows to nodeA.
+    fireEvent.click(screen.getByTestId('push-nodeA'))
+    expect(screen.getByTestId('tq-card-a1')).toBeTruthy()
+    expect(screen.queryByTestId('tq-card-b1')).toBeNull()
+
+    // Push nodeB → board switches to nodeB.
+    fireEvent.click(screen.getByTestId('push-nodeB'))
+    expect(screen.getByTestId('tq-card-b1')).toBeTruthy()
+    expect(screen.queryByTestId('tq-card-a1')).toBeNull()
+
+    // Reset the filter via the in-board "All nodes" chip (does NOT touch focus
+    // state), then push nodeA AGAIN. The effect keys off `.key`, so the same
+    // node with a fresh key must re-apply the filter (a nodeId-keyed effect
+    // would no-op here and leave the board unfiltered).
+    const allNodesChip = within(screen.getByTestId('tq-node-filter')).getAllByRole('button')[0]
+    fireEvent.click(allNodesChip!)
+    expect(screen.getByTestId('tq-card-b1')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('push-nodeA'))
     expect(screen.getByTestId('tq-card-a1')).toBeTruthy()
     expect(screen.queryByTestId('tq-card-b1')).toBeNull()
   })
