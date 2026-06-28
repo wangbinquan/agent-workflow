@@ -282,3 +282,14 @@ Codex adversarial 设计 gate（聚焦本三件套、显式忽略并发 RFC-119 
 - 任务详情画布（`TaskStatusCanvas`/`WorkflowCanvas` readOnly）上每个节点标一个**待处理问题数徽标**——计数 = 以该节点为**来源节点**、且**需人处理**的问题（phase ∈ `待指派`/`待下发`/`已处理待确认`；具体集合可在实现时收口）。
 - **点徽标数字 → 打开问题看板/列表，过滤条件 = 该来源节点**（复用同一看板界面，仅给筛选加一个 **source-node 维度**，可与 phase 过滤叠加）。
 - 数据来自 `GET /api/tasks/:id/questions`（按 source node 分组计数；列表/看板支持 `?sourceNodeId=` 过滤）；画布徽标复用既有节点渲染 + 角标，点击 `navigate` 到看板 tab 并预置 source-node 过滤。**纯前端 + 复用**，归 **PR-C**。
+
+## 12. Codex 实现 gate fold（2026-06-28，落码后）
+
+实现核心后经 Codex adversarial 实现 gate（聚焦本 RFC committed diff、忽略并发 RFC-119 工作树代码）= **needs-attention，4 findings（3 high + 1 medium）全采纳并修复（commit `78bb888`）**：
+
+- **F1 [high] in-flight 条目绑到「freshest later rerun」而非自己的下发**：消费戳为 NULL 时旧实现按 cause+节点+iteration 取 freshest，多轮同节点会把老条目绑到**后一轮**的 rerun。**Fold**：`resolveTriggerForEntry` 只认 RFC-070 消费戳 id（不猜）；答而无戳=in-flight → `deriveQuestionPhase` 新增 `dispatchedInFlight` 分支判「处理中」（不绑具体 run）。
+- **F2 [high] fanout 子 run 被 top-level 过滤丢掉**：承接 rerun 可能是 `parentNodeRunId` 非空的子行（含产出），旧 `resolveHandlerRun` 只留 top-level → 返回 null → 误判 pending。**Fold**：service 改按**消费戳 id 直取**承接 run（含子行），不再走 `resolveHandlerRun` 的 top-level 窗口（该纯函数保留为「未来 stamped-dispatch」oracle）。
+- **F3 [high] reassign 可改派已下发/终态条目、破坏 lineage**：旧 reassign 只校验 role/节点、不看 phase。**Fold**：`reassignTaskQuestion` 拒 `done`/`closed` 终态（`task-question-terminal` 409）；前端终态卡隐藏改派 `Select`。
+- **F4 [medium] 看板不随 node/clarify 事件刷新**：`['task-questions']` 未接 `useTaskSync`。**Fold**：`node.status` + `clarify.created/answered` 失效 `['task-questions', taskId]`，看板实时刷新。
+
+回归：+3 backend（in-flight 不绑后轮 / fanout 子 run 承接 / reassign 拒终态）+ 2 phase 测；30 测全绿、typecheck×3/eslint/format 净。
