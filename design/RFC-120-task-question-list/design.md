@@ -294,3 +294,22 @@ Codex adversarial 设计 gate（聚焦本三件套、显式忽略并发 RFC-119 
 - **F4 [medium] 看板不随 node/clarify 事件刷新**：`['task-questions']` 未接 `useTaskSync`。**Fold**：`node.status` + `clarify.created/answered` 失效 `['task-questions', taskId]`，看板实时刷新。
 
 回归：+3 backend（in-flight 不绑后轮 / fanout 子 run 承接 / reassign 拒终态）+ 2 phase 测；30 测全绿、typecheck×3/eslint/format 净。
+
+## 13. PR-B 派发执行半 — RFC-119 落库后实现计划（2026-06-28）
+
+RFC-119 已落库（HEAD `880dc4a`，代码 `4656fba` 单进程 + `f249855` 多进程聚合；`crossClarify.ts`/`scheduler.ts`/`runner.ts`/`shared/clarify.ts` 均干净）。F6 fence 条件满足，PR-B 解锁。
+
+**已确认的流与键（前置调研，file:line）**：
+- 双写两表同一 run id：`createCrossClarifySession` 把 `crossClarifyNodeRunId` 同时写入 `cross_clarify_sessions.crossClarifyNodeRunId`（dispatch 读）**和** `clarify_rounds.intermediaryNodeRunId`（reconcile 读）。⟹ **`task_questions.originNodeRunId === cross_clarify_sessions.crossClarifyNodeRunId`**，override 读可由 session 直接定位 task_questions。
+- 派发链：`submitCrossClarifyAnswers`（crossClarify.ts:584 触发 `triggerDesignerRerun(designerNodeId=row.targetDesignerNodeId)`）→ 调度期 `buildExternalFeedbackContext(designerNodeId=node.id)`（:1089，按**图** `findCrossClarifyNodesPointingToDesigner` 找 sibling）→ done 时 `markClarifyRoundsConsumedBy`（clarifyRounds.ts:146，按 `targetDesignerNodeId==run.nodeId` 盖消费戳）。
+- 消费戳 + 调度 dispatch 已是 **node-id 灵活**（盖谁/派谁都按实际 node.id）；唯两处**图查找**把承接钉死在图设计者。
+
+**T7 改点（4 处，全部「golden-lock」结构——无 override 即逐字同原行为，保护现有 4248 测）**：
+1. **override 读** helper（crossClarify.ts）：`resolveDesignerOverrides(db, crossClarifyNodeRunId)` → `Map<questionId, overrideNodeId>`（查 `task_questions` `roleKind='designer'` 且 `overrideTargetNodeId!=null`）。给 `DesignerRerunReadinessSource` 加 `crossClarifyNodeRunId` 字段（readiness 构造 source 时从 session 行带出）。
+2. **submit 分组重跑**（crossClarify.ts:584）：用 `partitionDesignerQuestionsByTarget`（已落 oracle）把本批 designer 域问题按有效承接分组 → **逐有效目标** `triggerDesignerRerun`。默认目标（=图设计者、无 override）= 原单次调用。`readiness` **不动**（它定 sibling 是否齐、给 sources；override 只改「派给谁重跑」不改 source 集）。
+3. **`buildExternalFeedbackContext` override 感知**（crossClarify.ts:1089）：候选 session = `targetDesignerNodeId==dispatchedNode`（原图路径）∪「有 designer 域问题 override 到 dispatchedNode 的 session」（新 DB 查 task_questions）；每个 session 内**只纳入有效承接==dispatchedNode 的问题**（被 override 走的从图设计者反馈里剔除）。无 override → 候选集 == 原图路径、逐字一致。
+4. **消费戳 override 感知**（clarifyRounds.ts:146）：`markClarifyRoundsConsumedBy` 的 `targetDesignerNodeId==run.nodeId` 过滤补上「OR 该 session 有 designer 域问题 override 到 run.nodeId」，让 override 节点重跑 done 也能盖戳老化 session。
+
+**测试（design §测试策略 + plan T7）**：`rfc120-reassign-rerun.test.ts` —— ① override 空 = 原行为黄金锁；② 同轮 Q1 改派 X + Q2 默认 Y → 两 rerun 不交叉污染（X 反馈无 Q2）；③ override 重跑 + 注入 + 级联下游；④ 未改派题批处理仍成立。**纪律**：每改一处跑全 cross-clarify 套（数百测）当护栏，红即回退该步。
+
+**纯核心已交付**：`partitionDesignerQuestionsByTarget` + `isOverrideTarget`（commit 已上，8 测）。**T8（打回 reopen）/ T9（批量下发 + `awaiting_human` gate）在 T7 之后**，按 §11.7 / plan PR-B。
