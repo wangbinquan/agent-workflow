@@ -10,6 +10,14 @@
 
 > 前端与后端等粒度（[feedback_audit_fanout_frontend_parity]）：PR-C 含独立的「公共组件复用 / 视觉对齐」自查环节（改派下拉走 `Select`、状态走 `StatusChip`、确认走 `ConfirmButton`、空/错/载入走 `EmptyState`/`ErrorBanner`/`LoadingState`，禁原生 chrome）。
 
+## v2 设计讨论调整（2026-06-28，详见 design.md §11）
+
+问题清单升级为「任务中心」主动处理面后，PR-B/PR-C 范围相应扩展（北极星 = multica 问题流转看板）。**已交付的 PR-A 数据层 + 纯 oracle 不受影响**（加性），新增：
+
+- **新增 RFC-120-T1b｜migration 0061 + staged 字段**：`task_questions` 加 `staged_at INTEGER` + `staged_by TEXT`（`待下发` 暂存态）；`TaskQuestionPhase` 枚举加 `'staged'`、`deriveQuestionPhase` 加分支（pure，补单测）。**不动已提交 0060**（避 shared `.git` amend 风险）。可并入 PR-A 收尾或 PR-B 起头。
+- **PR-B 扩展（仍待 RFC-119 稳定）**：在「下发」backend 路径加 ① answer-without-immediate-dispatch（看板路径）② stage（拖待下发）③ batch-dispatch（批量 mint handler rerun）④ task `awaiting_human` gate 联动（未下发 hold、批量下发放行，model A，确认非 gate）⑤ reassign→override。**反问页现有 submit-自动下发不变**（加性）。
+- **PR-C 改为看板**：问题看板（替代 AC-14 的 table，列 `待指派→待下发→处理中→已处理待确认→完成`+已关闭、卡片标来源+目标）+ **共享 handler 选择器**（反问页 `clarify.detail.tsx` + 看板卡，designer 可改/self·questioner 只读、写同一 `override`、互相回显）+ 批量下发交互 + **节点级待处理徽标**（画布节点角标计数 + 点击跳看板按 `sourceNodeId` 过滤，列表/看板端点支持 `?sourceNodeId=`）。v1-A 复用 `QuestionForm`；全局看板/退役 `/clarify` 留 Phase 2。
+
 ## 子任务
 
 ### PR-A — 只读台账

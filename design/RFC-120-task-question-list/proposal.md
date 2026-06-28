@@ -104,4 +104,11 @@
 - **D8（隔离）= 归属只入审计与 UI、绝不进 prompt**：沿用 RFC-099 prompt-isolation 铁律；新增确认人/改派人字段同等约束，测试双层锁。
 - **D9（UI）= 新任务页签、复用公共原语**：不落原生 chrome；改派下拉/确认按钮/状态 chip 全用既有组件。
 
-> **Codex 设计 gate fold（待落码前补）**：本三件套将经 Codex 设计 gate 核读源码，findings 折叠记录于 `design.md §10`。
+> **2026-06-28 设计讨论新增 D10–D12（问题清单升级为「任务中心」主动处理面，详见 design.md §11）**：
+
+- **D10（任务状态联动）= `awaiting_human` gate on 未下发、下发即放行(A)、确认非 gate**：问题处于 `待指派`/`待下发`（=未下发）时任务停 `awaiting_human`；下发（反问页提交 / 看板批量）放行到 `处理中`→`running`；确认（已处理待确认→完成）仍非 gate（D5 保留）。**复用 `awaiting_human`、不新开状态**（反问页/收件箱/看板都是它的不同 UI）。
+- **D11（看板 v1-A + 两并存处理面）**：问题清单升级为 multica 式看板（列 `待指派→待下发→处理中→已处理待确认→完成`(+已关闭)、卡片标来源+目标节点、拖 `待下发` 后批量下发）。反问页与看板是**两个对等处理面、同一后端**——反问页快路径（默认 handler 立即下发、行为不变）、看板控制路径（指定 agent + 暂存 + 批量下发）。v1-A 复用 `QuestionForm`；全局跨任务看板 / 退役 `/clarify` / 拖拽流转留 **Phase 2**。
+- **D12（handler 单一事实源 + 两面对等选择器）**：有效 handler = `override_target_node_id ?? 图默认（线上连着的）agent`；反问页与看板**都挂同款 handler 选择器**（仅 designer/修订型可改、self/questioner 固定只读），写同一 `override`、互相回显最新值。新增 `待下发`（已批准·未下发）暂存态 → `task_questions` 加 `staged_at/staged_by`、phase 枚举 +1、新迁移 **0061**（不动已提交 0060）。
+- **D13（节点级待处理徽标）**：任务详情画布每个节点标该节点**来源**的待处理问题数；点数字 → 跳问题看板并**按该来源节点过滤**（复用看板、加 `sourceNodeId` 过滤维度）。纯前端 + 复用，归 PR-C。详见 design §11.8。
+
+> **Codex 设计 gate fold（2026-06-28，落码前）**：原始三件套经 Codex adversarial 设计 gate 核读源码，**6 findings（4 high + 2 medium）全采纳**，折叠记录于 `design.md §10`。D10–D12 的看板/gate 升级为本轮设计讨论后追加，留实现 gate 再过 Codex。

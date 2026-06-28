@@ -222,3 +222,58 @@ Codex adversarial 设计 gate（聚焦本三件套、显式忽略并发 RFC-119 
 - **F6 [medium] plan 缺 RFC-119 协调栅栏**（plan.md:44-55）：并发 RFC-119 改 `shared/clarify.ts`（`CROSS_CLARIFY_*` 改名 + `composePriorOutputBlock`）、与 RFC-120 PR-B 要扩展的 `triggerDesignerRerun`/`buildExternalFeedbackContext` 同面。**Fold**：plan.md 风险段加显式栅栏——PR-A（新文件+schema，零 cross-clarify 改动）独立先行；**PR-B 在 RFC-119 合并后 rebase / 按落码当时真实符号名编码**，prompt-isolation 源码 grep 对齐改名后路径。
 
 > 第二轮 Codex 复核留实现期（实现 gate，§见 plan 验收清单）。本轮的「native code review」误命中并发 RFC-119 代码（非本 RFC）已忽略、不代修。
+
+## 11. 任务中心 v2 — 看板 / 任务状态联动 / 两并存处理面（2026-06-28 设计讨论收敛）
+
+> 本节是落码前与用户多轮设计讨论的收敛结论，**升级**了 §1–§8 把问题清单当「纯观察层」的早期设定：问题清单从被动台账升级为**主动的问题处理面（看板）**、并与任务生命周期联动。冲突处**以本节为准**。
+
+### 11.1 为什么需要 gate（不再是纯观察）
+
+「灵活指定修改方」要真能用，就必须有个**停顿窗口**让人在 handler 自动跑掉之前介入选择——否则图默认 handler 一被答题触发就抢跑、改派来不及。所以"还没决定/还没下发"的问题必须**把任务 hold 住**。又因为提问节点（self 提问节点 / cross 反问者）是「阻塞-产出型」（用提问代替了产出、下游在等它），只要它的问题没下发，任务**本就过不去**——这是真实的「等人」。
+
+### 11.2 任务状态联动（gate，决策 D10）
+
+- **复用 `awaiting_human`、不新开状态**：反问页 / 公共收件箱 / 问题看板都是同一个 `awaiting_human` 的不同 UI（用户洞察："状态只有一个，UI 可以有多张"）。新开状态要牵动 RFC-097 转移表 / RFC-108 恢复 / `TaskStatusChip` / i18n 一整圈，性价比低。
+- **gate 条件**：只要还有问题处于 `待指派` 或 `待下发`（=**未下发**），任务停 `awaiting_human`。
+- **放行点 = 下发（model A）**：「下发 = mint handler rerun」。反问页提交 / 看板批量下发都是下发动作，把问题推进 `处理中`、任务转 `running`。
+- **确认非 gate（D5 保留）**：`已处理待确认 → 完成` 仍是事后台账、不二次挡下游；结果不满意走打回重跑。
+- 结构边角：cross 反问者续跑只要答案、答完即可推进它那条 branch；真正被挂起的是设计者/修改方那条。任务可能"反问者已推进、设计者还 hold"的混合态，对外仍统一显示 `awaiting_human`。
+
+### 11.3 问题看板（v1-A，决策 D11）
+
+- **列**：`待指派 → 待下发 → 处理中 → 已处理待确认 → 完成`（+ `已关闭`）。multica 式问题流转看板是北极星。
+- **卡片正面**：标 **来源节点**（谁提的）+ **目标处理节点**（谁来修）。
+- **交互**：`待指派`（handler 未定/待答）→ 卡片详情答题 + 指定处理节点 → **拖到 `待下发`**（暂存·已批准未下发）→ 攒一批点 **批量提交执行** → 一起下发、转 `处理中`。
+- **v1-A 边界**：看板雏形 + **复用现有 `QuestionForm`**（嵌卡片详情 Dialog）；全局跨任务看板 / 退役 `/clarify` / 拖拽流转留 **Phase 2**。
+
+### 11.4 两并存处理面（决策 D11）
+
+反问页与问题看板是**两个对等版本的处理面、同一套后端状态**：
+- **反问页（`/clarify`，复用不重写）**：答题 → 确认 → 提交 → 该节点这批问题（默认 handler）**立即下发**。快路径、行为不变。
+- **看板（新）**：跨任务看全部问题；**指定 agent（改派）+ 答题 → 拖 `待下发` → 批量下发**。控制路径。
+- 两面动同一批 `task_questions`/`clarify_rounds`、最终都走同一个「下发」。**反问页现有自动下发不改**（避开 RFC-119 后端），看板只**新增**「答而不立即下发 + 暂存 + 批量下发 + 改派」路径——**加性、低风险**。
+
+### 11.5 handler 单一事实源 + 两面对等选择器（决策 D12）
+
+- **唯一事实源 = `task_questions.override_target_node_id`**；**有效 handler = `override ?? 默认（线上连着的图 agent）`**。
+- **两面对等**：反问页**每个问题也挂一个和看板同款的处理 agent 选择器**（不是只读回显）；两边都只对**可改派的 designer/修订型**问题开放选择、对 self/反问者固定只读（与 F5 一致）。
+- 实现：抽一个**共享 handler 选择器组件**，反问页（`clarify.detail.tsx`，纯前端）+ 看板卡都用它、都调 RFC-120 `reassign` 端点 → 写同一 `override`。**不动 clarify 后端**。改派后两面都显示最新 handler。
+
+### 11.6 数据模型 / 状态机 delta（对已提交 PR-A 的小扩展）
+
+- `task_questions` 加 **`待下发` 暂存**字段：`staged_at INTEGER` + `staged_by TEXT`（谁批准进待下发）。
+- `TaskQuestionPhase` 枚举 **+1**：`'staged'`（待下发，已批准·未下发），夹在 `pending` 与 `processing` 之间。`deriveQuestionPhase` 增分支：`confirmation≠confirmed && handlerRun==null && staged_at!=null → 'staged'`（已批准但 trigger 还没 mint）。
+- **新迁移 `0061`**（**不动已提交的 0060**，避免 shared `.git` amend 风险）。
+- gate 判定：`待下发` = phase ∈ {`pending`, `staged`} 且 round 未取消（即"未下发"集合）。
+
+### 11.7 实现影响（PR 调整）
+
+- **PR-B（仍待 RFC-119 真正稳定落库）**：在「下发」backend 路径上加 ① `answer-without-immediate-dispatch`（看板路径）② `stage`（拖待下发）③ `batch-dispatch`（批量 mint handler rerun）④ task `awaiting_human` gate 联动（未下发即 hold、批量下发即放行）⑤ `reassign → override`。**反问页现有 submit-自动下发不变**（加性）。
+- **PR-C**：问题看板（替代 §AC-14 的 table）+ **共享 handler 选择器**（反问页 + 看板卡）+ 反问页 handler 回显/可改 + 批量下发交互。
+- **Phase 2（非 v1）**：全局跨任务看板（统一收件箱）、彻底退役 `/clarify`、multica 式拖拽流转。
+
+### 11.8 节点级待处理徽标（决策 D13）
+
+- 任务详情画布（`TaskStatusCanvas`/`WorkflowCanvas` readOnly）上每个节点标一个**待处理问题数徽标**——计数 = 以该节点为**来源节点**、且**需人处理**的问题（phase ∈ `待指派`/`待下发`/`已处理待确认`；具体集合可在实现时收口）。
+- **点徽标数字 → 打开问题看板/列表，过滤条件 = 该来源节点**（复用同一看板界面，仅给筛选加一个 **source-node 维度**，可与 phase 过滤叠加）。
+- 数据来自 `GET /api/tasks/:id/questions`（按 source node 分组计数；列表/看板支持 `?sourceNodeId=` 过滤）；画布徽标复用既有节点渲染 + 角标，点击 `navigate` 到看板 tab 并预置 source-node 过滤。**纯前端 + 复用**，归 **PR-C**。
