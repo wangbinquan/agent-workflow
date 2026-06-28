@@ -19,17 +19,18 @@
 ## 1. 核心:`RuntimeDriver.buildSpawn` slice(PR-A,行为不变)
 
 ### 1.1 接口(`runtime/types.ts`)
+
 新增面向**系统 agent**(无 skills/mcp/plugins/inventory/inline-config-mutate)的精简 spawn 上下文 + driver 方法:
 
 ```ts
 export interface SystemAgentSpawnContext {
   agentName: string
-  systemPrompt: string          // persona(opencode→inline config.prompt;claude→--append-system-prompt-file)
-  model?: string | null         // 来自所选 runtime profile;null/'' → 运行时自选
+  systemPrompt: string // persona(opencode→inline config.prompt;claude→--append-system-prompt-file)
+  model?: string | null // 来自所选 runtime profile;null/'' → 运行时自选
   readonly?: boolean
-  prompt: string                // user prompt
-  worktreePath: string          // 子进程 cwd(distiller:一次性临时目录)
-  runDir: string                // 配置目录(opencode:OPENCODE_CONFIG_DIR;claude:attemptDir)
+  prompt: string // user prompt
+  worktreePath: string // 子进程 cwd(distiller:一次性临时目录)
+  runDir: string // 配置目录(opencode:OPENCODE_CONFIG_DIR;claude:attemptDir)
   resumeSessionId?: string
   gitUserName?: string | null
   gitUserEmail?: string | null
@@ -37,33 +38,40 @@ export interface SystemAgentSpawnContext {
 export interface RuntimeDriver {
   readonly kind: RuntimeKind
   parseEvent(line: string): NormalizedEvent | null
-  buildSpawn(ctx: SystemAgentSpawnContext): SpawnPlan   // 新增
+  buildSpawn(ctx: SystemAgentSpawnContext): SpawnPlan // 新增
 }
 ```
 
 ### 1.2 opencode driver(`runtime/opencode/`)
+
 `buildSpawn(ctx)`:就地构造**极简 inline config**(与 distiller 现状逐字等价)`JSON.stringify({agent:{[ctx.agentName]:{prompt:ctx.systemPrompt, ...(ctx.model? {model:ctx.model}:{})}}})`,调已有 `buildOpencodeSpawn({opencodeCmd:undefined, agentName, prompt, worktreePath, runDir, inlineConfigSerialized, gitUserName, gitUserEmail, resumeSessionId})` 得 `{cmd,env}`,返回 `{cmd, env, stdin:{mode:'ignore'}}`(opencode prompt 在 argv)。
 
 ### 1.3 claude driver(`runtime/claudeCode/`)
+
 `buildSpawn(ctx)`:调已有 `buildClaudeSpawn({claudeCmd:undefined, prompt, systemPromptText:ctx.systemPrompt, model:ctx.model??undefined, readonly:ctx.readonly, attemptDir:ctx.runDir, worktreePath:ctx.worktreePath, resumeSessionId, gitUserName, gitUserEmail})` 直接返回其 `SpawnPlan`(已含 `stdin:{mode:'pipe',data:prompt}`)。
 
 ### 1.4 边界
+
 - **不动 runner 业务节点路径**(`runner.ts:795-876` + `buildInlineConfig`)。它的 inline config 带 skills/mcp/inventory/mutate,与 system-agent buildSpawn 不同;切它会动 RFC-111/112 golden 断言。新 `buildSpawn` 首个且唯一消费者 = distiller(PR-B)。commit/fusion 走 runNode,不用它。
 - `getRuntimeDriver(kind)`(`runtime/index.ts:41`)已存在,distiller 用它取 driver。
 
 ## 2. distiller 收编(PR-B)
 
 ### 2.1 runtime 解析
+
 - config 加 `memoryDistillRuntime?: z.string().min(1).optional()`。
 - `distillTick`(`memoryDistillScheduler.ts`,持有 db)解析:`const rt = await resolveAgentRuntime(db, memoryDistillRuntime, defaultRuntime)`(优先级 = 字段 ?? defaultRuntime ?? opencode),把 `{protocol, binaryPath, model}` 透传进 `runDistill` 的 options(distiller 不直接依赖 db 做 runtime 解析;`defaultRuntime` 从 `start.ts` thread,见 §4)。
 
 ### 2.2 spawn 改造
+
 `defaultDistillerSpawn` 改签名收 `{protocol, runtimeBinary, model, userPrompt, systemPrompt, cwd, timeoutMs, resumeSessionId?}`:
+
 - `const driver = getRuntimeDriver(protocol)`;`const plan = driver.buildSpawn({agentName:'aw-memory-distiller', systemPrompt:DISTILLER_SYSTEM_PROMPT, model, prompt:userPrompt, worktreePath:cwd, runDir:cwd})`。
 - `Bun.spawn` 用 `plan.cmd` + `{...process.env, ...plan.env}` + `cwd`;**stdin**:`plan.stdin.mode==='pipe'` 则写入 `plan.stdin.data`(claude),否则 `'ignore'`(opencode)。保留 distiller 特有的临时目录(`mkdtemp`)+ 超时 SIGTERM。
 - 二进制 head:opencode driver 内 `opencodeCmd` 默认 `['opencode']`;**自定义 fork** 的 `runtimeBinary` 需作为 head——`buildSpawn` 的 ctx 暂无 binary 字段,故 §1.1 的 `SystemAgentSpawnContext` 加可选 `runtimeBinary?: string`,driver 以 `[runtimeBinary]` 覆盖默认 head(对齐 `pickRuntimeHead` 语义)。`AGENT_WORKFLOW_OPENCODE_BIN` 兜底保留。
 
 ### 2.3 解析改造
+
 `parseDistillerOutput(stdout, protocol)`:逐行 `const ev = getRuntimeDriver(protocol).parseEvent(line)`;`ev` 非 null → 收 `ev.text`;`ev` 为 null(非结构化)→ 把原始行当 raw text 并入(保留 mock 直吐 envelope 的测试路径)。其余(`extractLastEnvelope` + `candidates` port 提取 + JSON 解析)**不变**。**删除** `extractEventText`(`792`)。
 
 ### 2.4 model 迁移:废弃 `memoryDistillModel`(见 §5)。
@@ -114,6 +122,7 @@ export interface RuntimeDriver {
 ## 8. 测试策略(CLAUDE.md test-with-every-change)
 
 后端:
+
 - **buildSpawn**:opencode driver → 极简 inline config + argv(`run … --agent … --format json`)+ `stdin:ignore`;claude driver → `claude -p --output-format stream-json` + system-prompt-file + `stdin:pipe`;`runtimeBinary` 覆盖 head。
 - **distiller**:注入 fake spawn 断言 protocol→对应 driver 的 cmd;`parseDistillerOutput` 对 opencode(`{part:{type:'text'}}`)+ claude(stream-json) + mock 直吐 envelope 三形状都提取 `candidates`(**回归** silently-`[]`);stdin pipe(claude)写入。
 - **commit**:`commitPushRuntime` 设了 → runNode 收到对应 runtime/params;留空 → 继承 `defaultRuntime`;全空 → opencode(回归「曾写死 opencode」修复)。
@@ -130,5 +139,12 @@ export interface RuntimeDriver {
 **2026-06-28 设计 gate（codex-cli read-only，`--base f7f36bd` 框住三件套 commit `1015803`）= CLEAN**：对 RFC-117 三件套设计**零 findings**（codex 调研了 `runtimeRegistry`/`agent`/`fusion`/`schema`/`start`/migrations 等核实设计与现有代码吻合）。
 
 **顺带发现（非本 RFC 范围）**：因 `--base f7f36bd...HEAD` 区间含协作者并行 commit `e8c796c`（RFC-111/F6 给 agent 保存加 runtime 引用校验），codex 报 1 个 P2——`validateRuntimeReference`（`agent.ts:363`）对内置名 `opencode`/`claude-code` 在 seed 行缺失时误拒（`resolveRuntimeByName` 有 builtin fallback、校验却只查表）。**属协作者 `e8c796c` 代码、不在 RFC-117 范围**；与本 RFC PR-D（放开 builtin agent 选 runtime）弱相关（正常 seed 在时不触发），已转交协作者 / RFC-118 处理。PR-D 实装若需豁免内置名，须与协作者 agent.ts 改动协调（CLAUDE.md 多人协作冲突调和）。
+
+### 实现关键调整（vs 落档设计）
+
+- **D2 迁移改两阶段 deprecated fallback**（非立即物理迁移/写 config）：在多人共享树写 config 文件做迁移有并发风险，照 RFC-113→115 先例——`memoryDistillModel`/`commitPushModel` 转 `@deprecated` 保留，`resolveInternalAgentRuntime`（`runtimeRegistry.ts`）解析优先级 `runtimeName → deprecatedModel`（opencode + 该 model）`→ defaultRuntime`；物理删字段留后续清理 RFC。无写 config、无损、幂等、fail-safe。
+- **D7 fusion 入口 /agents → settings**：`aw-skill-merger` 在 `/api/agents` 列表隐藏（RFC-101 `excludeBuiltinAgents`），经 /agents 编辑不可达；改为后端放开 builtin 的 **runtime-only PUT**（`routes/agents.ts`，admin via `requireResourceOwner`），前端经 settings 专门选择器按 name 编辑——该 settings UI 选择器留后续（后端已就绪 + 测试锁）。
+- **PR-E 不改 AgentForm**：协作者并行 RFC-118 正改 `AgentForm`（disabled 过滤），为避交织，`useRuntimesList` 新建给 settings 用；AgentForm 复用该 hook 的 dedup 留后续。
+- **协作并发**：`resolveInternalAgentRuntime` 因与 RFC-118 共享 `runtimeRegistry.ts`，被协作者 `8d1df44` 的 commit gate 一并带入库（commit-race，内容无损）；顺手修协作者 RFC-118 的前端测试回归（`runtime-claude-frontend` mock 漏 `enabled`，用户拍板）+ PR-B lint（unused import）+ distiller PWD 断言随收编更新。
 
 （实现 gate 各 PR 复审后续在此追加。）
