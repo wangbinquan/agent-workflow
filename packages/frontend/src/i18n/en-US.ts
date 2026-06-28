@@ -471,6 +471,10 @@ export const enUS: Resources = {
     memoryDistillModelLabel: 'Memory distill model',
     memoryDistillModelHint:
       "Model the distiller agent uses to extract memory candidates. Leave empty to fall back to opencode's installed default (RFC-041 baseline). Independent from the runtime default model.",
+    memoryDistillRuntimeLabel: 'Memory distill runtime',
+    memoryDistillRuntimeHint:
+      'Runtime profile the memory distiller runs on; its model and other params come from the profile. Leave empty to inherit the global default runtime.',
+    runtimeInherit: 'Inherit (global default)',
     restartRequiredTitle: 'Daemon restart required',
     restartRequiredHint:
       'The new value was written to config.json, but bind host / bind port only apply on the next agent-workflow start. Run `agent-workflow stop` and then `agent-workflow start` in your terminal.',
@@ -1939,6 +1943,9 @@ export const enUS: Resources = {
     commitPushModel: 'Commit & push model',
     commitPushModelHint:
       'Model that writes commit messages / repairs rejected pushes for RFC-075 auto commit&push. Blank = opencode default (a cheap model is recommended).',
+    commitPushRuntime: 'Commit & push runtime',
+    commitPushRuntimeHint:
+      'Runtime profile the built-in commit agent runs on; its model comes from the profile. Leave empty to inherit the global default runtime.',
     commitPushMaxRepairRetries: 'Push repair retry limit',
     commitPushMaxRepairRetriesHint:
       'Max repair-and-repush cycles when a push is rejected by a server policy (default 3; auth failures never retry).',

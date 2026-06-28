@@ -594,6 +594,9 @@ export interface Resources {
     memoryDistillLangEnUS: string
     memoryDistillModelLabel: string
     memoryDistillModelHint: string
+    memoryDistillRuntimeLabel: string
+    memoryDistillRuntimeHint: string
+    runtimeInherit: string
     restartRequiredTitle: string
     restartRequiredHint: string
     renderingPlantumlEndpointLabel: string
@@ -1836,6 +1839,8 @@ export interface Resources {
   settingsForm: {
     commitPushModel: string
     commitPushModelHint: string
+    commitPushRuntime: string
+    commitPushRuntimeHint: string
     commitPushMaxRepairRetries: string
     commitPushMaxRepairRetriesHint: string
     commitPushDiffMaxBytes: string
@@ -2892,6 +2897,10 @@ export const zhCN: Resources = {
     memoryDistillModelLabel: '记忆提炼模型',
     memoryDistillModelHint:
       '记忆提炼 agent 使用的模型，留空时跟随 opencode 的安装默认（RFC-041 基线行为）。与运行时默认模型独立配置。',
+    memoryDistillRuntimeLabel: '记忆提炼运行时',
+    memoryDistillRuntimeHint:
+      '记忆提炼运行的运行时 profile，其 model 及其它参数都来自该 profile；留空则继承全局默认运行时。',
+    runtimeInherit: '继承（全局默认）',
     restartRequiredTitle: '需要重启守护进程',
     restartRequiredHint:
       '新值已写入 config.json，但 bind host / bind port 仅在下次 agent-workflow start 时生效。请在终端先 agent-workflow stop，再 agent-workflow start。',
@@ -4295,6 +4304,9 @@ export const zhCN: Resources = {
     commitPushModel: '提交&推送模型',
     commitPushModelHint:
       'RFC-075 自动提交时生成 commit message / 修复被拒推送的模型；留空用 opencode 默认（建议填便宜模型）。',
+    commitPushRuntime: '提交&推送运行时',
+    commitPushRuntimeHint:
+      '内置 commit agent 运行的运行时 profile，其 model 来自该 profile；留空则继承全局默认运行时。',
     commitPushMaxRepairRetries: '推送修复重试上限',
     commitPushMaxRepairRetriesHint:
       '推送被规范拒收时起修复会话改 message 重推的最大次数（默认 3；鉴权失败不重试）。',

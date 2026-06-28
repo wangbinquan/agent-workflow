@@ -17,7 +17,7 @@ import type { Config, ConfigPatch } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { Field, NumberInput, Switch, TextInput } from '@/components/Form'
-import { ModelSelect } from '@/components/ModelSelect'
+import { RuntimeSelect } from '@/components/RuntimeSelect'
 import { Select } from '@/components/Select'
 import { RuntimeList } from '@/components/RuntimeList'
 import { describeApiError, setLanguage, type SupportedLanguage } from '@/i18n'
@@ -171,7 +171,7 @@ function LimitsTab({ config }: TabProps) {
     'maxConcurrentNodes',
     'multiProcessSubprocessConcurrency',
     'logLevel',
-    'commitPushModel',
+    'commitPushRuntime',
     'commitPushMaxRepairRetries',
     'commitPushDiffMaxBytes',
   ])
@@ -262,10 +262,14 @@ function LimitsTab({ config }: TabProps) {
           ]}
         />
       </Field>
-      <Field label={t('settingsForm.commitPushModel')} hint={t('settingsForm.commitPushModelHint')}>
-        <ModelSelect
-          value={state.commitPushModel}
-          onChange={(v) => setState({ ...state, commitPushModel: v })}
+      <Field
+        label={t('settingsForm.commitPushRuntime')}
+        hint={t('settingsForm.commitPushRuntimeHint')}
+      >
+        <RuntimeSelect
+          value={state.commitPushRuntime}
+          ariaLabel={t('settingsForm.commitPushRuntime')}
+          onChange={(v) => setState({ ...state, commitPushRuntime: v })}
         />
       </Field>
       <div className="form-grid form-grid--cols-2">
@@ -570,7 +574,10 @@ export function AppearanceTab({ config }: TabProps) {
 // follow-ups so the JSON-only config surface gets a visible home.
 export function MemoryTab({ config }: TabProps) {
   const { t } = useTranslation()
-  const { state, setState, save } = useTabState(config, ['memoryDistillLang', 'memoryDistillModel'])
+  const { state, setState, save } = useTabState(config, [
+    'memoryDistillLang',
+    'memoryDistillRuntime',
+  ])
   return (
     <SectionForm
       onSave={save.mutate}
@@ -579,12 +586,13 @@ export function MemoryTab({ config }: TabProps) {
       success={save.isSuccess && save.error === null ? 'saved' : null}
     >
       <Field
-        label={t('settings.memoryDistillModelLabel')}
-        hint={t('settings.memoryDistillModelHint')}
+        label={t('settings.memoryDistillRuntimeLabel')}
+        hint={t('settings.memoryDistillRuntimeHint')}
       >
-        <ModelSelect
-          value={state.memoryDistillModel}
-          onChange={(v) => setState({ ...state, memoryDistillModel: v })}
+        <RuntimeSelect
+          value={state.memoryDistillRuntime}
+          ariaLabel={t('settings.memoryDistillRuntimeLabel')}
+          onChange={(v) => setState({ ...state, memoryDistillRuntime: v })}
         />
       </Field>
       <Field
