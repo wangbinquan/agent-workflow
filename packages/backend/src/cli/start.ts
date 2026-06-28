@@ -321,6 +321,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const memoryDistillTicker = startMemoryDistillLoop({
     db,
     enabled: batchImportCfg.memoryDistillerEnabled !== false,
+    // RFC-117: distiller runtime profile (per-feature name → default → deprecated model).
+    runtimeName: batchImportCfg.memoryDistillRuntime ?? null,
+    defaultRuntime: batchImportCfg.defaultRuntime ?? null,
     model: batchImportCfg.memoryDistillModel ?? null,
     // RFC-044: per-source byte budget for the new distiller context blocks.
     // Undefined falls back to DEFAULT_SOURCE_CONTEXT_BUDGET inside runDistill.

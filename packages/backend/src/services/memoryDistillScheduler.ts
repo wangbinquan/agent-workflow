@@ -23,6 +23,7 @@ import type {
 import type { DbClient } from '@/db/client'
 import { agents, cachedRepos, memoryDistillJobs, tasks } from '@/db/schema'
 import { runDistill, type DistillerSpawnFn, rowToDistillJob } from '@/services/memoryDistiller'
+import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
 import { MEMORY_DISTILL_JOB_CHANNEL, memoryDistillJobBroadcaster } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'
 
@@ -201,7 +202,11 @@ export interface DistillTickOptions {
   db: DbClient
   /** Inject a fake spawn for tests; production uses defaultDistillerSpawn. */
   spawnFn?: DistillerSpawnFn
-  /** Default model for distiller agent. Settings: memoryDistillModel. */
+  /** RFC-117 — runtime profile NAME (config.memoryDistillRuntime); wins over `model`. */
+  runtimeName?: string | null
+  /** RFC-117 — global default runtime name (config.defaultRuntime) for inheritance. */
+  defaultRuntime?: string | null
+  /** @deprecated RFC-117 — transition fallback (config.memoryDistillModel). */
   model?: string | null
   /**
    * RFC-044: per-source byte budget for distiller user prompt context.
@@ -266,6 +271,14 @@ export async function distillTick(options: DistillTickOptions): Promise<{
   let succeeded = 0
   let failed = 0
   let candidatesCreated = 0
+  // RFC-117: resolve the distiller runtime once per tick (per-feature profile
+  // name → default → deprecated model fallback). Runtime config can't change
+  // within a tick; resolving once keeps every merged bundle on the same runtime.
+  const rt = await resolveInternalAgentRuntime(options.db, {
+    runtimeName: options.runtimeName,
+    deprecatedModel: options.model,
+    defaultRuntime: options.defaultRuntime,
+  })
   for (const head of heads) {
     // Pull every pending sibling sharing this debounce_key in one shot.
     const siblings = (await options.db
@@ -289,7 +302,9 @@ export async function distillTick(options: DistillTickOptions): Promise<{
         job: rowToDistillJob(head),
         siblings: siblings.map(rowToDistillJob),
         spawnFn: options.spawnFn,
-        model: options.model,
+        protocol: rt.protocol,
+        runtimeBinary: rt.binaryPath,
+        model: rt.model,
         sourceContextBudget: options.sourceContextBudget,
       })
       await options.db
@@ -348,6 +363,11 @@ export interface StartLoopOptions {
   enabled?: boolean
   /** Default 1000ms (1Hz). Tests can shorten / lengthen. */
   intervalMs?: number
+  /** RFC-117 — runtime profile NAME (config.memoryDistillRuntime); wins over `model`. */
+  runtimeName?: string | null
+  /** RFC-117 — global default runtime name (config.defaultRuntime) for inheritance. */
+  defaultRuntime?: string | null
+  /** @deprecated RFC-117 — transition fallback (config.memoryDistillModel). */
   model?: string | null
   /** RFC-044: forwarded to distillTick → runDistill on every tick. */
   sourceContextBudget?: SourceContextBudget
@@ -379,6 +399,8 @@ export function startMemoryDistillLoop(options: StartLoopOptions): DistillLoopHa
     distillTick({
       db: options.db,
       spawnFn: options.spawnFn,
+      runtimeName: options.runtimeName,
+      defaultRuntime: options.defaultRuntime,
       model: options.model,
       sourceContextBudget: options.sourceContextBudget,
     }).catch((err) => {

@@ -37,6 +37,8 @@ import {
   redactGitUrl,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
+import { getRuntimeDriver } from '@/services/runtime'
+import type { RuntimeKind } from '@/services/runtime/types'
 import {
   clarifySessions,
   docVersions,
@@ -209,10 +211,15 @@ export interface RunDistillOptions {
   /** Default 120_000ms; tests override to keep cases fast. */
   timeoutMs?: number
   /**
-   * Default model for the distiller agent. Falls back to inline-null
-   * (opencode picks its installed default). Settings field
-   * `memoryDistillModel` is plumbed through by the scheduler.
+   * RFC-117 — resolved runtime for the distiller. `protocol` (which driver),
+   * `runtimeBinary` (custom fork) and `model` all come from the runtime profile
+   * selected via `config.memoryDistillRuntime` (or the global default); the
+   * scheduler resolves the profile and plumbs these through. Omitted → opencode
+   * with the binary's own default model (legacy behavior).
    */
+  protocol?: RuntimeKind
+  runtimeBinary?: string | null
+  /** Model from the resolved runtime profile; null → the runtime's own default. */
   model?: string | null
   /**
    * RFC-044: per-source byte budget for the new transcript / body context
@@ -224,10 +231,14 @@ export interface RunDistillOptions {
 }
 
 export interface DistillerSpawnInput {
+  /** RFC-117: resolved runtime protocol — which driver assembles the spawn. */
+  protocol: RuntimeKind
+  /** RFC-117: resolved runtime binary (RFC-112 custom fork); null → driver default head. */
+  runtimeBinary: string | null
+  /** RFC-117: model from the resolved runtime profile; null → the runtime's own default. */
+  model: string | null
   /** Hardcoded English user prompt assembled in buildDistillerUserPrompt. */
   userPrompt: string
-  /** Inline agent JSON to pass via OPENCODE_CONFIG_CONTENT. */
-  inlineConfigJson: string
   /** Tmp cwd allocated for this distill — no git side-effects. */
   cwd: string
   timeoutMs: number
@@ -742,25 +753,27 @@ export interface RawCandidate {
  * thrown, so a bad envelope produces an empty distill result rather than
  * a permanent failed job. Genuine spawn failures are still thrown.
  */
-export function parseDistillerOutput(stdout: string): RawCandidate[] {
-  // opencode --format json emits line-delimited JSON; each line is an event.
-  // Concatenate text bodies, then pull the envelope.
+export function parseDistillerOutput(
+  stdout: string,
+  protocol: RuntimeKind = 'opencode',
+): RawCandidate[] {
+  // RFC-117: normalize each stdout line through the runtime driver (was the
+  // hand-rolled opencode event-shape walker `extractEventText`, which mirrored
+  // runner.ts::extractTextFromEvent). `driver.parseEvent` returns the visible
+  // agent text per event for ANY runtime (opencode --format json / claude
+  // stream-json); `null` = a non-event line, kept verbatim (a test mock can dump
+  // the <workflow-output> envelope straight to stdout). Then pull the envelope.
+  const driver = getRuntimeDriver(protocol)
   const buffer: string[] = []
   for (const rawLine of stdout.split('\n')) {
     const line = rawLine.trim()
     if (line.length === 0) continue
-    let evt: Record<string, unknown> | null = null
-    try {
-      evt = JSON.parse(line) as Record<string, unknown>
-    } catch {
-      // Not JSON — could be a test-only mock dumping the envelope verbatim
-      // to stdout. Take it as-is.
+    const evt = driver.parseEvent(line)
+    if (evt === null) {
       buffer.push(line)
       continue
     }
-    if (evt === null) continue
-    const text = extractEventText(evt)
-    if (text !== null) buffer.push(text)
+    if (typeof evt.text === 'string' && evt.text.length > 0) buffer.push(evt.text)
   }
   const text = buffer.join('')
   const envelope = extractLastEnvelope(text)
@@ -789,47 +802,12 @@ export function parseDistillerOutput(stdout: string): RawCandidate[] {
   return parsed.candidates
 }
 
-function extractEventText(evt: Record<string, unknown>): string | null {
-  // opencode --format json (1.15.x) emits per-part events shaped like:
-  //   { type: 'text', sessionID, messageID, part: { type: 'text', text: '...' }, timestamp }
-  // We check this FIRST because it's what every real distiller run produces;
-  // missing it caused the envelope to never reach extractLastEnvelope and
-  // every candidate batch silently became `[]` (no memory rows linked back
-  // to the job). Mirrors runner.ts::extractTextFromEvent so distiller and
-  // worker-node tolerance stay in lockstep.
-  const part = evt.part as Record<string, unknown> | undefined
-  if (part && typeof part === 'object') {
-    const ptype = part.type
-    const ptext = part.text
-    if (ptype === 'text' && typeof ptext === 'string') return ptext
-  }
-  // Legacy / synthetic / unit-test shapes we also accept.
-  if (evt.type === 'text' && typeof evt.text === 'string') return evt.text
-  const direct = evt.text
-  if (typeof direct === 'string') return direct
-  const message = evt.message
-  if (typeof message === 'object' && message !== null) {
-    const content = (message as Record<string, unknown>).content
-    if (typeof content === 'string') return content
-    if (Array.isArray(content)) {
-      const parts: string[] = []
-      for (const item of content) {
-        if (typeof item === 'string') parts.push(item)
-        else if (typeof item === 'object' && item !== null) {
-          const text = (item as Record<string, unknown>).text
-          if (typeof text === 'string') parts.push(text)
-        }
-      }
-      if (parts.length > 0) return parts.join('')
-    }
-  }
-  const delta = evt.delta
-  if (typeof delta === 'object' && delta !== null) {
-    const text = (delta as Record<string, unknown>).text
-    if (typeof text === 'string') return text
-  }
-  return null
-}
+// RFC-117: the hand-rolled per-event text walker `extractEventText` was removed
+// here. Its opencode `part.text` shape now lives in runtime/opencode/events.ts
+// and its claude-style `message.content[]` shape in runtime/claudeCode/events.ts;
+// parseDistillerOutput reaches both via `driver.parseEvent` (one source per
+// runtime — distiller and worker-node text tolerance now genuinely share a path,
+// no longer a drifted copy that claimed to mirror runner.ts but was wider).
 
 // -----------------------------------------------------------------------------
 // Candidate validation + persistence
@@ -937,33 +915,43 @@ export async function validateAndPersistCandidate(
 export async function defaultDistillerSpawn(
   input: DistillerSpawnInput,
 ): Promise<DistillerSpawnResult> {
-  const opencodeBin = process.env.AGENT_WORKFLOW_OPENCODE_BIN ?? 'opencode'
-  const cmd = [
-    opencodeBin,
-    'run',
-    input.userPrompt,
-    '--agent',
-    DISTILLER_AGENT_NAME,
-    '--format',
-    'json',
-    '--dangerously-skip-permissions',
-  ]
-  const env: Record<string, string> = {
-    ...(process.env as Record<string, string>),
-    // See runner.ts for the full rationale — opencode 1.14.51+ resolves root
-    // from `process.env.PWD` before `process.cwd()`, so PWD must match the
-    // spawn cwd or `--format json` events go missing.
-    PWD: input.cwd,
-    OPENCODE_CONFIG_CONTENT: input.inlineConfigJson,
-    OPENCODE_CONFIG_DIR: input.cwd,
-  }
+  // RFC-117: route through the runtime driver (was a hand-rolled opencode argv +
+  // env here, ~duplicating runtime/opencode/spawn + the event walker below).
+  // buildSpawn yields the protocol-correct cmd/env/stdin; opencode keeps its
+  // prior byte-for-byte form, claude gets system-prompt-file + stdin pipe.
+  const driver = getRuntimeDriver(input.protocol)
+  // Preserve the distiller-private opencode bin override for the built-in
+  // opencode case where the resolved profile has no custom binary.
+  const runtimeBinary =
+    input.runtimeBinary ??
+    (input.protocol === 'opencode' ? (process.env.AGENT_WORKFLOW_OPENCODE_BIN ?? null) : null)
+  const plan = driver.buildSpawn({
+    agentName: DISTILLER_AGENT_NAME,
+    systemPrompt: DISTILLER_SYSTEM_PROMPT,
+    model: input.model,
+    prompt: input.userPrompt,
+    worktreePath: input.cwd,
+    runDir: input.cwd,
+    ...(runtimeBinary != null && runtimeBinary !== '' ? { runtimeBinary } : {}),
+    // distiller is a real (non-mock) claude run → bridge the subscription
+    // credential into the relocated config dir so auth survives (opencode no-op).
+    ...(input.protocol === 'claude-code' ? { bridgeCredentials: true } : {}),
+  })
+  const wantStdin = plan.stdin?.mode === 'pipe'
   const child = Bun.spawn({
-    cmd,
+    cmd: plan.cmd,
     cwd: input.cwd,
-    env,
+    env: plan.env,
     stdout: 'pipe',
     stderr: 'pipe',
+    stdin: wantStdin ? 'pipe' : 'ignore',
   })
+  if (plan.stdin?.mode === 'pipe') {
+    // stdin:'pipe' above (wantStdin) makes child.stdin a FileSink; ?. satisfies the
+    // FileSink|undefined static type from the dynamic stdin option.
+    child.stdin?.write(plan.stdin.data)
+    child.stdin?.end()
+  }
   let timedOut = false
   const timeoutHandle = setTimeout(() => {
     timedOut = true
@@ -978,6 +966,7 @@ export async function defaultDistillerSpawn(
     exitCode = await child.exited
   } finally {
     clearTimeout(timeoutHandle)
+    plan.cleanup?.()
   }
   const stdout = await new Response(child.stdout).text()
   const stderr = await new Response(child.stderr).text()
@@ -1037,20 +1026,18 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
     }
   }
 
-  const inlineConfig: { agent: Record<string, Record<string, unknown>> } = {
-    agent: {
-      [DISTILLER_AGENT_NAME]: {
-        prompt: DISTILLER_SYSTEM_PROMPT,
-        ...(options.model !== undefined && options.model !== null ? { model: options.model } : {}),
-      },
-    },
-  }
+  // RFC-117: the inline config / argv / env are assembled by the runtime driver
+  // inside spawnFn (defaultDistillerSpawn → getRuntimeDriver(protocol).buildSpawn);
+  // runDistill only forwards the resolved (protocol, binary, model).
+  const protocol: RuntimeKind = options.protocol ?? 'opencode'
   const cwd = await mkdtemp(join(tmpdir(), 'aw-distiller-'))
   let result: DistillerSpawnResult
   try {
     result = await spawnFn({
+      protocol,
+      runtimeBinary: options.runtimeBinary ?? null,
+      model: options.model ?? null,
       userPrompt,
-      inlineConfigJson: JSON.stringify(inlineConfig),
       cwd,
       timeoutMs,
     })
@@ -1105,7 +1092,7 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
       `distiller subprocess exited with code ${result.exitCode}: ${result.stderr.slice(0, 400)}`,
     )
   }
-  const rawCandidates = parseDistillerOutput(result.stdout)
+  const rawCandidates = parseDistillerOutput(result.stdout, options.protocol ?? 'opencode')
   const persisted: string[] = []
   for (const raw of rawCandidates) {
     const ok = await validateAndPersistCandidate(options.db, raw, options.job)

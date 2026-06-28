@@ -137,10 +137,20 @@ export const ConfigSchema = z.object({
    */
   memoryDistillerEnabled: z.boolean().optional(),
   /**
-   * Model the distiller agent uses. Falls back to opencode's installed
-   * default when unset. Settings → Memory section will surface this.
+   * @deprecated RFC-117 — superseded by `memoryDistillRuntime` (select a full
+   * runtime profile; model comes from it). Kept as a transition fallback: when
+   * `memoryDistillRuntime` is unset but this is set, the distiller keeps its
+   * prior behavior (opencode + this model). Physical removal is a follow-up
+   * cleanup (RFC-113→115 two-phase precedent). New UI writes `memoryDistillRuntime`.
    */
   memoryDistillModel: z.string().min(1).optional(),
+  /**
+   * RFC-117 — runtime profile NAME the distiller runs on (like an agent's
+   * `runtime`): protocol + binary + model all come from the selected profile.
+   * Unset → fall back to the deprecated `memoryDistillModel`, then inherit
+   * `defaultRuntime` (then opencode). Resolved via `resolveInternalAgentRuntime`.
+   */
+  memoryDistillRuntime: z.string().min(1).optional(),
   /**
    * RFC-050: language the distiller emits candidate `title` (after the
    * `[category:xxx]` prefix) + `bodyMd` in. Independent from the frontend

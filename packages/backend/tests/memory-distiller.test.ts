@@ -93,15 +93,17 @@ describe('parseDistillerOutput', () => {
     expect(cands[0]!.title).toContain('plural')
   })
 
-  test('extracts candidates from opencode --format json stdout (line-delimited)', () => {
+  test('extracts candidates from opencode part.text line-delimited stdout (empty array → [])', () => {
+    // RFC-117: parseDistillerOutput routes each line through the opencode driver's
+    // parseEvent (part.text shape, the real 1.15.x form). Multiple line-delimited
+    // parts concatenate into one envelope; an empty candidates array yields [].
+    const part = (text: string): string =>
+      JSON.stringify({ type: 'text', sessionID: 's1', part: { type: 'text', text } })
     const lines = [
       JSON.stringify({ type: 'session.created', sessionID: 's1' }),
-      JSON.stringify({
-        type: 'message',
-        message: { content: '<workflow-output>\n<port name="candidates">' },
-      }),
-      JSON.stringify({ type: 'message', message: { content: '{"candidates":[]}' } }),
-      JSON.stringify({ type: 'message', message: { content: '</port>\n</workflow-output>' } }),
+      part('<workflow-output>\n<port name="candidates">'),
+      part('{"candidates":[]}'),
+      part('</port>\n</workflow-output>'),
     ].join('\n')
     expect(parseDistillerOutput(lines)).toEqual([])
   })
@@ -140,6 +142,34 @@ describe('parseDistillerOutput', () => {
     expect(cands.length).toBe(1)
     expect(cands[0]!.title).toBe('perf matters')
     expect(cands[0]!.scopeType).toBe('global')
+  })
+
+  // RFC-117: the distiller can run on claude-code too. claude stream-json emits
+  // one event per assistant turn with message.content[] text parts; driver.parseEvent
+  // ('claude-code') concatenates them, so the envelope reaches extractLastEnvelope
+  // exactly like opencode. Locks distiller↔claude parity (no silently-[] regression).
+  test('extracts candidates from claude-code stream-json (message.content[] text)', () => {
+    const candidatesPort =
+      '{"candidates":[{"scopeType":"global","scopeId":null,"title":"claude works","bodyMd":"b","knownTags":[],"newTags":[],"action":"new","referenceMemoryId":null,"sourceRefs":[{"kind":"review","id":"r1"}]}]}'
+    const lines = [
+      JSON.stringify({ type: 'system', subtype: 'init', session_id: 'ses_c' }),
+      JSON.stringify({
+        type: 'assistant',
+        session_id: 'ses_c',
+        message: {
+          content: [
+            {
+              type: 'text',
+              text: `<workflow-output>\n<port name="candidates">${candidatesPort}</port>\n</workflow-output>`,
+            },
+          ],
+        },
+      }),
+      JSON.stringify({ type: 'result', subtype: 'success', is_error: false, session_id: 'ses_c' }),
+    ].join('\n')
+    const cands = parseDistillerOutput(lines, 'claude-code')
+    expect(cands.length).toBe(1)
+    expect(cands[0]!.title).toBe('claude works')
   })
 
   test('returns [] on missing envelope rather than throwing', () => {
@@ -493,10 +523,13 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
     const jobRow = db.select().from(memoryDistillJobs).all()[0]!
     const spawnFn: DistillerSpawnFn = async (input) => {
       expect(input.cwd).toContain('aw-distiller-')
-      const cfg = JSON.parse(input.inlineConfigJson) as {
-        agent: Record<string, { prompt: string }>
-      }
-      expect(cfg.agent[DISTILLER_AGENT_NAME]?.prompt).toContain('aw-memory-distiller')
+      // RFC-117: inline config / argv assembly moved into the runtime driver
+      // (covered by runtime-buildspawn.test.ts). runDistill now forwards the
+      // resolved (protocol, binary, model); default = opencode + null model.
+      expect(input.protocol).toBe('opencode')
+      expect(input.runtimeBinary).toBeNull()
+      expect(input.model).toBeNull()
+      expect(typeof input.userPrompt).toBe('string')
       return {
         exitCode: 0,
         stderr: '',
@@ -519,6 +552,48 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
     const inserted = db.select().from(memories).all()
     expect(inserted.length).toBe(1)
     expect(inserted[0]!.status).toBe('candidate')
+  })
+
+  test('forwards the resolved protocol/binary/model to spawnFn (RFC-117)', async () => {
+    const { taskId } = seedTask(db)
+    const jobRow = {
+      id: ulid(),
+      debounceKey: `${taskId}:clarify`,
+      sourceKind: 'clarify' as const,
+      sourceEventId: 'c1',
+      taskId,
+      scopeResolvedJson: '{}',
+      status: 'running' as const,
+      attempts: 0,
+      nextRunAt: Date.now(),
+      lastError: null,
+      createdAt: Date.now(),
+      startedAt: Date.now(),
+      finishedAt: null,
+    }
+    const job = rowToDistillJob(jobRow)
+    let captured: Parameters<DistillerSpawnFn>[0] | null = null
+    const spawnFn: DistillerSpawnFn = async (input) => {
+      captured = input
+      return {
+        exitCode: 0,
+        stderr: '',
+        stdout:
+          '<workflow-output><port name="candidates">{"candidates":[]}</port></workflow-output>',
+      }
+    }
+    await runDistill({
+      db,
+      job,
+      siblings: [job],
+      spawnFn,
+      protocol: 'claude-code',
+      runtimeBinary: '/opt/cc',
+      model: 'claude-x',
+    })
+    expect(captured!.protocol).toBe('claude-code')
+    expect(captured!.runtimeBinary).toBe('/opt/cc')
+    expect(captured!.model).toBe('claude-x')
   })
 
   test('non-zero exit propagates as thrown error (scheduler retries / records last_error)', async () => {
@@ -549,14 +624,20 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
     )
   })
 
-  test('grep guards: source file pins protocol invariants', () => {
+  test('grep guards: source file pins RFC-117 runtime-driver seam + invariants', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'memoryDistiller.ts'),
       'utf8',
     )
-    expect(src).toContain('OPENCODE_CONFIG_CONTENT')
+    // RFC-117: opencode argv/env (OPENCODE_CONFIG_CONTENT) assembly moved into
+    // runtime/opencode/spawn.ts; the distiller now routes through the driver.
+    expect(src).toContain('getRuntimeDriver')
+    expect(src).toContain('buildSpawn')
+    expect(src).toContain('parseEvent')
     expect(src).toContain('mkdtemp')
     expect(src).toContain('aw-memory-distiller')
+    // the hand-rolled opencode event walker is gone (folded into driver.parseEvent)
+    expect(src).not.toContain('function extractEventText')
     expect(DISTILLER_SYSTEM_PROMPT.length).toBeGreaterThan(200)
   })
 
