@@ -60,9 +60,13 @@ export const RERUN_UPDATE_DIRECTIVE_TEXT = [
   'parts it does not contradict; regenerate it from scratch only if the feedback',
   'requires fundamental changes. Either way you MUST emit the COMPLETE updated',
   'output in the workflow-output envelope — never a diff or a description of',
-  'changes alone.',
+  'changes alone. If a Prior Output port shows a worktree-relative file path, read',
+  'that file for its full prior contents; if the file is absent it was rolled back',
+  'for this rerun — regenerate that output from scratch.',
 ].join(' ')
 ```
+
+> **Codex 设计 gate fold (P2, design §8)**：末尾两句处理「文件型端口在回滚重跑后路径失效」——手动重试 / review-reject-with-rollback / resume 会回滚 worktree、删掉上次写的文件，prior-output 里的路径会指向不存在的文件。指令显式告诉 agent「文件在就读、不在就是被回滚了→重新生成」，把退化行为收敛成**正确动作**而非困惑。完整「回滚前捕获文件正文」是 v2（需存储，见 D8）。
 
 （标题 `## Update Directive` 与 cross-clarify 复用同一字面量——它是通用标题，且两路径互斥，不会同现。）
 
@@ -209,7 +213,11 @@ if (
 - **D5 同会话续跑不注入**：envelope-followup 天然走 `renderEnvelopeFollowupPrompt`；inline clarify resume 由 `resumeDecision.inlineMode`（scheduler）+ `inlineMode`（prompt）双门控。会话里已有上次输出，重灌浪费 token 且诱发陈旧锚定。
 - **D6 强制反问态不注入**：`effectiveHasClarifyChannel=true` 时协议块是 clarify-only、要求 agent 反问，注入「更新你的输出」自相矛盾。scheduler + prompt 双门控（纯防御——该组合正常流几乎不可能：产出 output 需 'stop' 轮，'stop' 后 effectiveHasClarifyChannel 即 false）。
 - **D7 始终开启、无开关**（用户决策）：前提不满足时自然不注入。
-- **D8 文件型端口逐字渲染存储内容（路径）**：与 cross-clarify 一致。iterate 通常不回滚→文件在→agent 读路径增量改；reject 若回滚→文件没→中性指令「重新生成」臂兜底。**已知边界**：reject+回滚+文件型端口时 prior output 指向已删文件——文档化，v2 可选「文件存在时内联正文」增强（best-effort，经 RFC-049/107 既有 worktree 内安全读取）。
+- **D8 文件型端口逐字渲染存储内容（路径）+ 收窄 AC（Codex 设计 gate P2 fold）**：`node_run_outputs.content` 对文件型端口（`markdown_file`/`path<ext>`）存的是 **worktree-相对路径**（这是下游消费契约，`resolveUpstreamInputs` 逐字喂下游，不能改）。v1 prior-output 逐字渲染该路径（与 cross-clarify 一致、零新 I/O、`buildPriorOutputBlock` 保持纯函数）。
+  - **不回滚的重跑**（review-iterate 默认不回滚 / self-clarify / cross-clarify / 级联到未回滚节点）：文件还在 → agent 按路径 `Read` 取正文增量改 → **完整可用**。
+  - **回滚的重跑**（**手动重试 `retryNode` 重跑前必回滚到 `preSnapshot`**〔`task.ts` rollback〕 / review-reject 当 review 节点配了 rollback / resume 回滚 failed·interrupted 节点）：文件常被删 → 路径失效。此时中性指令末句显式告诉 agent「文件不在=被回滚→重新生成」，把退化收敛成**正确动作**（regenerate 正是这些场景的本意）而非困惑。
+  - **inline 型端口**（string/markdown，正文在 DB）：**任何重跑都完整可用**，不受回滚影响。
+  - **收窄后的承诺**：v1 对**所有重跑**注入 prior-output；其中 inline 端口给完整正文、文件端口给路径（在则 agent 读、不在则按指令重新生成）。**文件端口在回滚重跑后回灌完整正文**属 v2——需「回滚前捕获文件正文」的存储（新列/表 = migration，超出本 RFC 零-migration 范围），文档化待后续。Codex P2 明确接受「收窄 AC/设计 for file ports」这条路径。
 - **D9 不覆盖多进程 shard 子运行**：查找限 `parentNodeRunId=null`；shard 从各自 diff 切片重导。
 
 ## 5. 失败模式 / 边界
@@ -226,13 +234,15 @@ if (
 | inline clarify 续跑 | 双门控跳过 ✓ |
 | envelope-followup | 走 `renderEnvelopeFollowupPrompt`，不经此路径 ✓ |
 | 强制反问轮 | `effectiveHasClarifyChannel` 门控跳过 ✓ |
-| reject+回滚+文件端口 | 渲染存储的（现已失效）路径；中性指令「重新生成」兜底（D8 已知边界） |
+| 文件端口·不回滚重跑（review-iterate/clarify/cross-clarify） | 渲染 worktree-相对路径，文件在 → agent `Read` 取正文 → 完整可用 ✓ |
+| 文件端口·回滚重跑（手动重试 / reject+回滚 / resume） | 渲染（现已失效）路径；中性指令末句「文件不在=被回滚→重新生成」收敛成正确动作（D8·Codex P2 fold；完整正文回灌属 v2） |
+| inline 端口·任何重跑 | 正文在 DB → 完整可用、不受回滚影响 ✓ |
 | 多进程 shard 子 run | `parentNodeRunId≠null` 被过滤 → 不注入（D9） |
 
 ## 6. 测试策略（每条都必写）
 
 ### 6.1 shared 纯函数（`packages/shared/tests/rerun-prior-output.test.ts`）
-- 常量锁：`RERUN_PRIOR_OUTPUT_BLOCK_TITLE === '## Prior Output (to update or regenerate)'`；`RERUN_UPDATE_DIRECTIVE_TEXT` 含 'update' 且含 'regenerate' 且含 'complete'（区别于 cross-clarify 的 'not regenerate'，防被误改成同一文案）。
+- 常量锁：`RERUN_PRIOR_OUTPUT_BLOCK_TITLE === '## Prior Output (to update or regenerate)'`；`RERUN_UPDATE_DIRECTIVE_TEXT` 含 'update' 且含 'regenerate' 且含 'complete'（区别于 cross-clarify 的 'not regenerate'，防被误改成同一文案）；含「rolled back」类指引（Codex P2 fold——防失效文件路径指引被删）。
 - `renderUserPrompt` + `priorOutputUpdate.block` 非空 → 含两段、顺序（prior output 在 review/clarify 反馈之后、trailing 之前）。
 - `priorOutputUpdate.block` 空/undefined → 不含两段。
 - **互斥**：同时给 `crossClarifyContext.priorOutputBlock` 与 `priorOutputUpdate.block` → 只 emit cross-clarify 的 `## Prior Output (to be updated)`，**不** emit 泛化的 `(to update or regenerate)`、不重复。
@@ -254,3 +264,11 @@ if (
 
 ## 7. 运行门槛
 `bun run typecheck && bun run test && bun run format:check` 全绿；二进制 build smoke 无模块环；推后查 GitHub Actions（按 [feedback_post_commit_ci_check]）。Codex 设计 gate（本文档）+ 实现 gate（改完）各跑一次、findings 全 fold（按 [feedback_codex_review_after_changes]）。
+
+## 8. Codex gate fold 记录
+
+### 设计 gate（落档 commit `c6949ad`，`--base HEAD~1`）—— 1 finding，已 fold
+- **[P2] 文件型端口正文在回滚重跑后丢失**（design §3.1 directive / D8 / §5 表）：`markdown_file`/`path<ext>` 端口存的是路径；手动重试（`retryNode` 重跑前必回滚 `preSnapshot`）、review-reject-with-rollback、resume 会回滚 worktree、删掉文件 → prior-output 只剩失效路径，未真正给到上次产物，违背「覆盖手动重试/恢复」。**Fold**：采纳 Codex 接受的「收窄 AC/设计 for file ports」——v1 逐字渲染路径（inline 端口完整正文、文件端口路径〔在则读·不在则按指令重生成〕），中性指令末句显式处理失效路径把退化收敛成正确动作；**文件端口回滚后回灌完整正文**（需回滚前捕获 = 存储/migration）明确列为 v2、超出零-migration 范围。proposal AC-1/AC-2 同步收窄。
+
+### 实现 gate
+- 待实现后补跑、findings 记于此。

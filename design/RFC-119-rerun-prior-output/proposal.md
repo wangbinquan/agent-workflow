@@ -51,8 +51,8 @@
 
 ## 验收标准
 
-- **AC-1**：评审 reject/iterate 重跑某 agent 节点时，若该节点本轮有过 done 产出（即便旧 run 已被 supersede 成 `canceled`），新 prompt 含 `## Prior Output (to update or regenerate)`（含各端口上次内容）+ `## Update Directive`（中性「更新或重新生成、吐完整结果」文案）。
-- **AC-2**：手动重试 / 级联 / 恢复 / 反问重跑时，同样满足前提即注入；不满足前提（无上次产物）则不注入。
+- **AC-1**：评审 reject/iterate 重跑某 agent 节点时，若该节点本轮有过 done 产出（即便旧 run 已被 supersede 成 `canceled`），新 prompt 含 `## Prior Output (to update or regenerate)` + `## Update Directive`（中性「更新或重新生成、吐完整结果」文案）。其中 **inline 型端口（string/markdown）回灌完整正文**；**文件型端口（`markdown_file`/`path<ext>`）回灌 worktree-相对路径**（文件在则 agent 读取、不在则按指令重新生成）。
+- **AC-2**：手动重试 / 级联 / 恢复 / 反问重跑时，同样满足前提即注入；不满足前提（无上次产物）则不注入。**文件端口在回滚重跑（手动重试必回滚 / reject·resume 视配置回滚）后正文不保证可得**——块给路径 + 中性指令的「失效路径→重新生成」指引（Codex 设计 gate P2 fold，design §8/D8）；inline 端口不受回滚影响、始终完整。文件端口回滚后回灌完整正文属 v2（需存储/migration）。
 - **AC-3**：**首次运行**该节点（无更早 done 产出）→ 不注入。
 - **AC-4**：**循环下一迭代**（上次产出在 iteration-1）→ 不注入（按同一 iteration 判定）。
 - **AC-5**：**同会话续跑**（inline clarify resume / envelope-followup）→ 不注入。
