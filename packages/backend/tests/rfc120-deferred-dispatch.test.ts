@@ -23,8 +23,13 @@ import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
-import { createCrossClarifySession, submitCrossClarifyAnswers } from '../src/services/crossClarify'
+import { crossClarifySessions, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
+import { markClarifyRoundsConsumedBy } from '../src/services/clarifyRounds'
+import {
+  buildExternalFeedbackContext,
+  createCrossClarifySession,
+  submitCrossClarifyAnswers,
+} from '../src/services/crossClarify'
 import {
   loadUndispatchedDesignerTargets,
   reassignTaskQuestion,
@@ -496,9 +501,64 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
     expect(run?.nodeId).toBe(DESIGNER)
   })
 
-  test('H3: dispatching an entry reassigned (override) to a non-graph-designer node is REJECTED, mints nothing, leaves it claimable', async () => {
+  // Run-scoped injection layer — override to a node WITH a prior run but NO
+  // __external_feedback__ edge now SUCCEEDS and the rerun carries the answer
+  // (flips the old H3 reject). Never-run override is still rejected.
+  test('override to a run-but-no-edge node → dispatch succeeds; run-scoped feedback carries the answer; stamped', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    // OTHER has a prior node_run (so it is not never-run) but no feedback edge.
+    await db.insert(nodeRuns).values({
+      id: `nr_other_${taskId}`,
+      taskId,
+      nodeId: OTHER,
+      status: 'done',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: Date.now() - 500,
+    })
+    await submitCrossClarifyAnswers({
+      db,
+      crossClarifyNodeRunId,
+      answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
+      directive: 'continue',
+    })
+    const entries = await designerEntries(db, taskId)
+    await reassignTaskQuestion(db, entries[0]!.id, OTHER, actor)
+
+    const result = await dispatchTaskQuestions(db, taskId, [entries[0]!.id], actor)
+    expect(result.reruns.length).toBe(1)
+    expect(result.reruns[0]?.targetNodeId).toBe(OTHER) // dispatched to the override node
+    const runId = result.reruns[0]!.nodeRunId
+
+    // entry stamped + a pending rerun minted on OTHER (no edge), not on DESIGNER
+    expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBe(runId)
+    const otherRuns = await db
+      .select()
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, OTHER)))
+    expect(otherRuns.some((r) => r.id === runId && r.status === 'pending')).toBe(true)
+
+    // run-scoped External Feedback for THIS run carries the human answer, even
+    // though OTHER has no __external_feedback__ graph edge.
+    const ctx = await buildExternalFeedbackContext({
+      db,
+      taskId,
+      designerNodeId: OTHER,
+      loopIter: 0,
+      designerGeneration: 1,
+      definition: liveDef(),
+      dispatchedRunId: runId,
+    })
+    expect(ctx).toBeDefined()
+    expect(ctx?.block).toContain('A') // the selected answer label
+    expect(ctx?.block).toContain(QUESTIONER) // the source questioner heading
+  })
+
+  test('never-run override target → rejected (clean ConflictError, nothing minted)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    // OTHER has NO prior node_run.
     await submitCrossClarifyAnswers({
       db,
       crossClarifyNodeRunId,
@@ -506,31 +566,118 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
       directive: 'continue',
     })
     const entries = await designerEntries(db, taskId)
-    // reassign the designer entry to OTHER (a valid agent node, but no feedback edge)
     await reassignTaskQuestion(db, entries[0]!.id, OTHER, actor)
 
-    // dispatch → rejected (override execution is the next layer), as a clean
-    // ConflictError (NOT an escaping triggerDesignerRerun 500)
     let threw: unknown = null
     try {
       await dispatchTaskQuestions(db, taskId, [entries[0]!.id], actor)
     } catch (e) {
       threw = e
     }
-    expect(threw).not.toBeNull()
-    expect((threw as { code?: string }).code).toBe('task-question-override-unsupported')
-
-    // no rerun minted (rollback / no partial); entry stays claimable (NULL trigger)
-    const designerRuns = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DESIGNER)))
-    expect(designerRuns.filter((r) => r.status === 'pending').length).toBe(0)
+    expect((threw as { code?: string }).code).toBe('task-question-unsafe-dispatch-target')
+    // nothing minted; entry stays claimable
+    expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBeNull()
     const otherRuns = await db
       .select()
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, OTHER)))
-    expect(otherRuns.length).toBe(0) // never minted to the unsafe override target
-    expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBeNull()
+    expect(otherRuns.length).toBe(0)
+  })
+
+  test('golden-lock: buildExternalFeedbackContext with no dispatchedRunId (or no claiming entries) uses the graph path', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    await submitCrossClarifyAnswers({
+      db,
+      crossClarifyNodeRunId,
+      answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
+      directive: 'continue',
+    })
+    // No dispatchedRunId → graph path. The designer (DESIGNER) HAS the edge, so
+    // the graph path surfaces the answered unconsumed session.
+    const graph = await buildExternalFeedbackContext({
+      db,
+      taskId,
+      designerNodeId: DESIGNER,
+      loopIter: 0,
+      designerGeneration: 1,
+      definition: liveDef(),
+    })
+    expect(graph?.block).toContain('A')
+    // A bogus dispatchedRunId with NO claiming entries → falls through to the
+    // SAME graph path (byte-for-byte).
+    const fallthrough = await buildExternalFeedbackContext({
+      db,
+      taskId,
+      designerNodeId: DESIGNER,
+      loopIter: 0,
+      designerGeneration: 1,
+      definition: liveDef(),
+      dispatchedRunId: 'nr_does_not_claim_anything',
+    })
+    expect(fallthrough?.block).toBe(graph?.block ?? '')
+  })
+
+  test('override-aware consumption: the overridden round is consumed by the OVERRIDE run, so the graph designer no longer re-injects it', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    await db.insert(nodeRuns).values({
+      id: `nr_other_${taskId}`,
+      taskId,
+      nodeId: OTHER,
+      status: 'done',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: Date.now() - 500,
+    })
+    await submitCrossClarifyAnswers({
+      db,
+      crossClarifyNodeRunId,
+      answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
+      directive: 'continue',
+    })
+    const entries = await designerEntries(db, taskId)
+    await reassignTaskQuestion(db, entries[0]!.id, OTHER, actor)
+    const result = await dispatchTaskQuestions(db, taskId, [entries[0]!.id], actor)
+    const overrideRunId = result.reruns[0]!.nodeRunId
+
+    // Before consumption: the graph designer (DESIGNER) would still see the round.
+    const before = await buildExternalFeedbackContext({
+      db,
+      taskId,
+      designerNodeId: DESIGNER,
+      loopIter: 0,
+      designerGeneration: 1,
+      definition: liveDef(),
+    })
+    expect(before?.block).toContain('A')
+
+    // The OVERRIDE run completes → override-aware markClarifyRoundsConsumedBy
+    // consumes the round even though its targetConsumerNodeId is DESIGNER, not OTHER.
+    await markClarifyRoundsConsumedBy(db, {
+      id: overrideRunId,
+      taskId,
+      nodeId: OTHER,
+      shardKey: null,
+    })
+    const session = (
+      await db
+        .select()
+        .from(crossClarifySessions)
+        .where(eq(crossClarifySessions.crossClarifyNodeRunId, crossClarifyNodeRunId))
+    )[0]
+    expect(session?.consumedByConsumerRunId).toBe(overrideRunId)
+
+    // After consumption: the graph designer no longer re-injects the overridden
+    // round (no double-handling).
+    const after = await buildExternalFeedbackContext({
+      db,
+      taskId,
+      designerNodeId: DESIGNER,
+      loopIter: 0,
+      designerGeneration: 1,
+      definition: liveDef(),
+    })
+    expect(after).toBeUndefined()
   })
 })

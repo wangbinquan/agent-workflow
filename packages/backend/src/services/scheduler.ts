@@ -2354,6 +2354,14 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // the prior output block. RFC-070: aging applied inside
         // `buildExternalFeedbackContext` via `consumed_by_consumer_run_id
         // IS NULL`.
+        // RFC-120 T9 (model A, run-scoped injection): a graph designer (node with
+        // an __external_feedback__ edge) uses the graph path unchanged. A node with
+        // NO such edge gets the run-scoped path ONLY in a deferred-dispatch task —
+        // a dispatched OVERRIDE rerun then carries the human answer via the
+        // task_questions claiming its run (dispatchedRunId = nodeRunId). The
+        // `task.deferredQuestionDispatch` guard keeps this zero-cost + byte-for-byte
+        // for every non-deferred task (golden-lock); buildExternalFeedbackContext
+        // returns undefined when no entries claim the run.
         const crossClarifyContext = hasExternalFeedbackChannel
           ? await buildExternalFeedbackContext({
               db,
@@ -2363,7 +2371,17 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
               designerGeneration: clarifyGeneration,
               definition,
             })
-          : undefined
+          : task.deferredQuestionDispatch
+            ? await buildExternalFeedbackContext({
+                db,
+                taskId,
+                designerNodeId: node.id,
+                loopIter: iteration,
+                designerGeneration: clarifyGeneration,
+                definition,
+                dispatchedRunId: nodeRunId,
+              })
+            : undefined
         // Compose the prior-output block from the latest done designer's
         // captured port outputs. The agent's declared outputs[] determines
         // the order so the block is deterministic across reruns. Empty

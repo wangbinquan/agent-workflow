@@ -80,7 +80,7 @@ import { and, asc, desc, eq, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
-import { clarifyRounds, crossClarifySessions, nodeRuns, tasks } from '@/db/schema'
+import { clarifyRounds, crossClarifySessions, nodeRuns, taskQuestions, tasks } from '@/db/schema'
 import { sealAnswersServerSide } from '@/services/clarify'
 import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
 import { mintNodeRun } from '@/services/nodeRunMint'
@@ -1088,6 +1088,17 @@ export interface BuildExternalFeedbackArgs {
    *  itself is the RFC-070 `consumedByConsumerRunId IS NULL` stamp below. */
   designerGeneration: number
   definition: WorkflowDefinition
+  /**
+   * RFC-120 T9 (model A, run-scoped injection): the dispatched rerun's OWN
+   * node_run id. When set, buildExternalFeedbackContext first tries the
+   * RUN-SCOPED path — building the block from the task_questions that CLAIM this
+   * run (trigger_run_id = dispatchedRunId), independent of the
+   * `__external_feedback__` graph edge — so a dispatched OVERRIDE rerun on an
+   * arbitrary agent node still carries the human answer. Falls through to the
+   * graph path when no entries claim the run (every normal cross-clarify rerun →
+   * byte-for-byte the existing behaviour). Omitted on the graph path call.
+   */
+  dispatchedRunId?: string
 }
 
 export interface ExternalFeedbackPromptContext {
@@ -1117,6 +1128,22 @@ export interface ExternalFeedbackPromptContext {
 export async function buildExternalFeedbackContext(
   args: BuildExternalFeedbackArgs,
 ): Promise<ExternalFeedbackPromptContext | undefined> {
+  // RFC-120 T9 (model A, run-scoped injection) — a DISPATCHED rerun (an override
+  // target on an arbitrary agent node, dispatchTaskQuestions) carries the human
+  // answer via the task_questions that claim THIS run, independent of the graph
+  // `__external_feedback__` edge. Try that first; fall through to the graph path
+  // when no entries claim the run (every normal cross-clarify rerun → undefined
+  // here, then the graph path runs byte-for-byte → golden-lock).
+  if (args.dispatchedRunId !== undefined) {
+    const runScoped = await buildRunScopedExternalFeedback(
+      args.db,
+      args.taskId,
+      args.dispatchedRunId,
+      args.designerGeneration,
+    )
+    if (runScoped !== undefined) return runScoped
+  }
+
   if (args.designerGeneration <= 0) return undefined
 
   const siblingNodeIds = findCrossClarifyNodesPointingToDesigner(
@@ -1192,6 +1219,86 @@ export async function buildExternalFeedbackContext(
     iteration: String(args.designerGeneration),
     sourcesCsv: csv,
   }
+}
+
+/**
+ * RFC-120 T9 run-scoped External Feedback — build the `## External Feedback`
+ * block from the task_questions that CLAIM `dispatchedRunId` (trigger_run_id =
+ * the dispatched rerun's id), independent of any graph `__external_feedback__`
+ * edge. Each claiming designer entry → its origin clarify_round → the
+ * designer-scoped Q&A for that entry's questionId → one CrossClarifySourceContext
+ * per round → the SAME `buildExternalFeedbackBlock` the graph path uses. Returns
+ * undefined when no entries claim the run (caller falls through to the graph
+ * path). This is what lets a dispatched OVERRIDE rerun on a node with no feedback
+ * edge still receive the human answer.
+ */
+async function buildRunScopedExternalFeedback(
+  db: DbClient,
+  taskId: string,
+  dispatchedRunId: string,
+  generation: number,
+): Promise<ExternalFeedbackPromptContext | undefined> {
+  const entries = await db
+    .select()
+    .from(taskQuestions)
+    .where(
+      and(
+        eq(taskQuestions.taskId, taskId),
+        eq(taskQuestions.roleKind, 'designer'),
+        eq(taskQuestions.triggerRunId, dispatchedRunId),
+      ),
+    )
+  if (entries.length === 0) return undefined
+
+  // Group the claimed questionIds by their origin round.
+  const byRound = new Map<string, Set<string>>()
+  for (const e of entries) {
+    const set = byRound.get(e.originNodeRunId) ?? new Set<string>()
+    set.add(e.questionId)
+    byRound.set(e.originNodeRunId, set)
+  }
+
+  const sources: CrossClarifySourceContext[] = []
+  for (const [originRunId, questionIds] of byRound) {
+    const round = (
+      await db
+        .select()
+        .from(clarifyRounds)
+        .where(eq(clarifyRounds.intermediaryNodeRunId, originRunId))
+        .limit(1)
+    )[0]
+    if (round === undefined || round.status !== 'answered' || round.answersJson === null) continue
+    const allQuestions = JSON.parse(round.questionsJson) as ClarifyQuestion[]
+    const allAnswers = JSON.parse(round.answersJson) as ClarifyAnswer[]
+    const answerById = new Map(allAnswers.map((a) => [a.questionId, a]))
+    const questions: ClarifyQuestion[] = []
+    const answers: ClarifyAnswer[] = []
+    for (const q of allQuestions) {
+      if (!questionIds.has(q.id)) continue
+      const a = answerById.get(q.id)
+      if (a === undefined) continue
+      questions.push(q)
+      answers.push(a)
+    }
+    if (questions.length === 0) continue
+    sources.push({
+      sourceQuestionerNodeId: round.askingNodeId,
+      // unused by buildExternalFeedbackBlock; the origin run id keeps the type total.
+      crossClarifyNodeId: originRunId,
+      iteration: round.iteration,
+      questions,
+      answers,
+    })
+  }
+  if (sources.length === 0) return undefined
+
+  const block = buildExternalFeedbackBlock(sources)
+  const csv = sources
+    .slice()
+    .sort((a, b) => a.sourceQuestionerNodeId.localeCompare(b.sourceQuestionerNodeId))
+    .map((s) => s.sourceQuestionerNodeId)
+    .join(', ')
+  return { block, iteration: String(generation), sourcesCsv: csv }
 }
 
 // ---------------------------------------------------------------------------

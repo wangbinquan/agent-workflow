@@ -91,6 +91,12 @@ function parseDefinition(snapshot: string): WorkflowDefinition | null {
   }
 }
 
+/** The handler that actually runs this entry: the override target if reassigned,
+ *  else the graph designer (default). */
+function effectiveTarget(e: TaskQuestionRow): string | null {
+  return e.overrideTargetNodeId ?? e.defaultTargetNodeId
+}
+
 /**
  * Batch-dispatch the deferred designer task_questions reachable from `entryIds`.
  * Expands to whole graph-designer-node groups (H1), guards override/target safety
@@ -118,13 +124,16 @@ export async function dispatchTaskQuestions(
     )
   if (requested.length === 0) return { reruns: [] }
 
-  // 2. H1 — expand to ALL open designer entries of each requested graph designer
-  //    (default target), across every round (graph-scoped consumption unit).
-  const graphTargets = [
-    ...new Set(requested.map((e) => e.defaultTargetNodeId).filter((t): t is string => !!t)),
-  ]
-  if (graphTargets.length === 0) return { reruns: [] } // all unresolved → nothing dispatchable
-  const groupEntries = await db
+  // 2. Expand to ALL open designer entries sharing a requested EFFECTIVE target
+  //    (override ?? graph designer), across every round. The dispatch +
+  //    consumption unit is the effective handler NODE: one rerun per node carries
+  //    the answer (graph or run-scoped) + consumes every round it handles, so a
+  //    subset dispatch can't strand the rest (Codex H1).
+  const requestedTargets = new Set(
+    requested.map(effectiveTarget).filter((t): t is string => t !== null && t !== ''),
+  )
+  if (requestedTargets.size === 0) return { reruns: [] }
+  const allOpen = await db
     .select()
     .from(taskQuestions)
     .where(
@@ -132,27 +141,38 @@ export async function dispatchTaskQuestions(
         eq(taskQuestions.taskId, taskId),
         eq(taskQuestions.roleKind, 'designer'),
         isNull(taskQuestions.triggerRunId),
-        inArray(taskQuestions.defaultTargetNodeId, graphTargets),
       ),
     )
+  const groupEntries = allOpen.filter((e) => {
+    const t = effectiveTarget(e)
+    return t !== null && requestedTargets.has(t)
+  })
 
-  // 3. H3 — reject any entry whose effective target diverges from its graph
-  //    designer (override execution is the next layer). Fail fast — no partial
-  //    dispatch, no orphaned mint.
+  // 3. A cross round is consumed as a UNIT (round-scoped consumption), so a round
+  //    whose open designer entries span >1 effective target can't be split in v1.
+  //    Reject it — fail fast, no partial dispatch.
+  const targetsByRound = new Map<string, Set<string>>()
   for (const e of groupEntries) {
-    if (e.overrideTargetNodeId !== null && e.overrideTargetNodeId !== e.defaultTargetNodeId) {
+    const t = effectiveTarget(e)
+    if (t === null) continue
+    const set = targetsByRound.get(e.originNodeRunId) ?? new Set<string>()
+    set.add(t)
+    targetsByRound.set(e.originNodeRunId, set)
+  }
+  for (const [roundOrigin, targets] of targetsByRound) {
+    if (targets.size > 1) {
       throw new ConflictError(
-        'task-question-override-unsupported',
-        `cannot dispatch entry ${e.id}: it is reassigned to '${e.overrideTargetNodeId}', but in v1 a round's answer is only consumed by + injected into its graph designer '${e.defaultTargetNodeId}' (consumption + External Feedback are graph-keyed). Arbitrary-node override unlocks when run-scoped injection lands (RFC-120 §16 H2). Un-assign the override to dispatch to the graph designer.`,
+        'task-question-round-multi-target',
+        `round ${roundOrigin} has designer questions dispatched to multiple handler nodes (${[...targets].join(', ')}); a cross-clarify round is consumed as a unit in v1 — reassign its designer questions to a single handler first.`,
       )
     }
   }
 
-  // 4. Group by graph designer node + guard every target BEFORE minting (H3 a/b;
-  //    fail fast → no partial dispatch).
+  // 4. Group by effective target + guard every target BEFORE minting (fail fast →
+  //    no partial dispatch).
   const byTarget = new Map<string, TaskQuestionRow[]>()
   for (const e of groupEntries) {
-    const t = e.defaultTargetNodeId
+    const t = effectiveTarget(e)
     if (t === null) continue
     const list = byTarget.get(t)
     if (list) list.push(e)
@@ -167,8 +187,8 @@ export async function dispatchTaskQuestions(
       .limit(1)
   )[0]
   const definition = taskRow ? parseDefinition(taskRow.snapshot) : null
-  for (const targetNodeId of byTarget.keys()) {
-    await assertSafeDispatchTarget(db, taskId, targetNodeId, definition)
+  for (const [targetNodeId, group] of byTarget) {
+    await assertSafeDispatchTarget(db, taskId, targetNodeId, group, definition)
   }
 
   // 5. Per target: atomic claim+mint (H2).
@@ -188,14 +208,26 @@ export async function dispatchTaskQuestions(
   return { reruns }
 }
 
-/** H3 guard — the graph designer must (a) have a prior node_run to inherit AND
- *  (b) have an inbound __external_feedback__ channel, else its rerun can't be
- *  safely minted / wouldn't receive the answer. Throws ConflictError naming the
- *  unmet condition(s). */
+/**
+ * H3 guard (relaxed once run-scoped injection landed). A dispatchable handler
+ * node must:
+ *   (a) have a prior node_run to inherit — the mint inherits the freshest run;
+ *       safe first-run minting for never-run targets is still the deferred F3
+ *       item, so a never-run target is rejected; AND
+ *   (b) carry the human answer. The GRAPH DESIGNER (its own rounds, has the
+ *       __external_feedback__ edge) carries it via the graph path; an OVERRIDE
+ *       target (a node with NO edge) carries it via the run-scoped path
+ *       (buildRunScopedExternalFeedback). The ONLY remaining reject (besides
+ *       never-run) is an override TO a node that ITSELF has a feedback edge — the
+ *       scheduler routes edge nodes through the graph path, which wouldn't see the
+ *       override-claimed round (overriding to another cross-clarify designer is
+ *       v1-unsupported).
+ */
 async function assertSafeDispatchTarget(
   db: DbClient,
   taskId: string,
   targetNodeId: string,
+  group: TaskQuestionRow[],
   definition: WorkflowDefinition | null,
 ): Promise<void> {
   const hasRun =
@@ -206,17 +238,24 @@ async function assertSafeDispatchTarget(
         .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, targetNodeId)))
         .limit(1)
     )[0] !== undefined
+  if (!hasRun) {
+    throw new ConflictError(
+      'task-question-unsafe-dispatch-target',
+      `cannot dispatch to '${targetNodeId}': no prior node_run to inherit. Safe first-run minting for never-run targets is the next layer (RFC-120 §16 F3).`,
+    )
+  }
+  // An entry is an OVERRIDE to this target when its graph designer (default) is a
+  // different node. Such an entry rides the run-scoped path, which the scheduler
+  // only takes for a node WITHOUT a feedback edge.
+  const overridden = group.some((e) => e.defaultTargetNodeId !== targetNodeId)
   const hasFeedback =
     definition !== null && agentHasExternalFeedbackChannel(definition, targetNodeId)
-  if (hasRun && hasFeedback) return
-  const missing = [
-    hasRun ? null : 'no prior node_run to inherit',
-    hasFeedback ? null : 'no inbound __external_feedback__ channel',
-  ].filter((m): m is string => m !== null)
-  throw new ConflictError(
-    'task-question-unsafe-dispatch-target',
-    `cannot dispatch to '${targetNodeId}': ${missing.join(' + ')}. Safe first-run minting + run-scoped injection for such targets is the next layer (RFC-120 §16 H2/F3).`,
-  )
+  if (overridden && hasFeedback) {
+    throw new ConflictError(
+      'task-question-override-to-designer-unsupported',
+      `cannot dispatch override to '${targetNodeId}': it is itself a cross-clarify designer (has an __external_feedback__ edge), so the scheduler routes it through the graph path which would not carry the overridden round. Override to a node that is NOT a cross-clarify designer (run-scoped injection), or reassign back to the graph designer.`,
+    )
+  }
 }
 
 /**
