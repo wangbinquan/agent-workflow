@@ -312,6 +312,12 @@ export const ENDPOINTS: EndpointSpec[] = [
   // RFC-099 (D8): collaborative per-question answer draft.
   { method: 'PUT', path: '/api/clarify/:nodeRunId/draft' },
 
+  // ---- task question list / 任务中心 (RFC-120) ----
+  { method: 'GET', path: '/api/tasks/:id/questions' },
+  { method: 'POST', path: '/api/tasks/:id/questions/:entryId/confirm' },
+  { method: 'POST', path: '/api/tasks/:id/questions/:entryId/reassign' },
+  { method: 'POST', path: '/api/tasks/:id/questions/:entryId/stage' },
+
   // ---- memories (RFC-041 / RFC-043 / RFC-045) ----
   { method: 'GET', path: '/api/memories' },
   { method: 'POST', path: '/api/memories' },
