@@ -18,6 +18,7 @@ import {
   getRuntime,
   listRuntimes,
   runtimeRowToView,
+  setRuntimeEnabled,
   updateRuntime,
 } from '@/services/runtimeRegistry'
 import { smokeRuntime, type SmokeResult } from '@/services/runtimeSmoke'
@@ -51,6 +52,9 @@ const UpdateBody = z.object({
   binaryPath: z.string().nullable().optional(),
   ...ProfileFields,
 })
+
+// RFC-118: enable/disable toggle body.
+const EnabledBody = z.object({ enabled: z.boolean() })
 
 function parseBody<T>(schema: z.ZodType<T>, body: unknown): T {
   const parsed = schema.safeParse(body)
@@ -132,6 +136,18 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       maxSteps: body.maxSteps,
     })
     return c.json({ runtime: runtimeRowToView(row, loadConfig(deps.configPath).defaultRuntime) })
+  })
+
+  // RFC-118: enable/disable a runtime (incl. built-ins) — admin only. A disabled
+  // runtime stays in the list but drops out of the agent / default-runtime pickers.
+  // The effective default (config.defaultRuntime ?? 'opencode') can't be disabled
+  // (setRuntimeEnabled guards → 409).
+  app.post('/api/runtimes/:name/enabled', requireAdmin(), async (c) => {
+    const name = c.req.param('name')
+    const body = parseBody(EnabledBody, await c.req.json().catch(() => ({})))
+    const cfg = loadConfig(deps.configPath)
+    const row = await setRuntimeEnabled(deps.db, name, body.enabled, cfg.defaultRuntime)
+    return c.json({ runtime: runtimeRowToView(row, cfg.defaultRuntime) })
   })
 
   // Delete a custom runtime (blocked while referenced by an agent / the default).

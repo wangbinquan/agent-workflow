@@ -130,8 +130,10 @@ export async function updateAgent(db: DbClient, name: string, patch: UpdateAgent
 
   // RFC-111 (Codex audit F6): same guard for a patched runtime pin — a NAME must
   // resolve to an existing runtimes row (null = clear to inherit, skips the check).
+  // RFC-118: pass the existing pin so re-saving an already-pinned (now-disabled)
+  // runtime is allowed (D6); only a CHANGED pin must target an enabled runtime.
   if (patch.runtime !== undefined) {
-    await validateRuntimeReference(db, patch.runtime)
+    await validateRuntimeReference(db, patch.runtime, existing.runtime)
   }
 
   const set: Partial<typeof agents.$inferInsert> = { updatedAt: Date.now() }
@@ -358,6 +360,7 @@ function parseDependsOnColumn(value: string | null | undefined): string[] {
 async function validateRuntimeReference(
   db: DbClient,
   name: string | null | undefined,
+  previous?: string | null,
 ): Promise<void> {
   if (name === null || name === undefined) return
   const row = await getRuntime(db, name)
@@ -365,6 +368,17 @@ async function validateRuntimeReference(
     throw new ValidationError('runtime-not-found', `agent references unknown runtime: ${name}`, {
       notFound: [name],
     })
+  }
+  // RFC-118: a runtime can be disabled (kept in the list but hidden from pickers).
+  // A NEW pin (changed from `previous`) must target an ENABLED runtime; KEEPING an
+  // already-pinned, now-disabled runtime is allowed so editing the agent's OTHER
+  // fields isn't blocked (D6 — mirrors RFC-099 "only validate NEW refs").
+  if (!row.enabled && name !== (previous ?? undefined)) {
+    throw new ValidationError(
+      'runtime-disabled',
+      `agent references disabled runtime: ${name}; enable it or pick another`,
+      { disabled: [name] },
+    )
   }
 }
 

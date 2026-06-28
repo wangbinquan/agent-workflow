@@ -25,6 +25,7 @@ const RUNTIMES_BODY = {
       builtin: true,
       isDefault: true,
       ...NULL_PROFILE,
+      enabled: true,
       lastProbe: null,
       createdAt: 0,
       updatedAt: 0,
@@ -36,6 +37,7 @@ const RUNTIMES_BODY = {
       builtin: true,
       isDefault: false,
       ...NULL_PROFILE,
+      enabled: true,
       lastProbe: null,
       createdAt: 0,
       updatedAt: 0,
@@ -47,6 +49,7 @@ const RUNTIMES_BODY = {
       builtin: false,
       isDefault: false,
       ...NULL_PROFILE,
+      enabled: true,
       model: 'anthropic/claude-opus-4-7',
       lastProbe: {
         outcome: 'conforms',
@@ -107,6 +110,67 @@ afterEach(() => {
 })
 
 describe('RuntimeList (RFC-112 PR-D)', () => {
+  // RFC-118: a disabled runtime stays in the list — dimmed row + "disabled" chip +
+  // an Enable button; the effective-default row's toggle is present but disabled.
+  test('disabled runtime: dimmed row + disabled chip + Enable; default toggle is disabled', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as URL | Request).toString()
+      if (url.includes('/api/runtime/models'))
+        return jsonResponse({ binary: 'x', cached: false, models: [] })
+      if (url.includes('/api/runtimes'))
+        return jsonResponse({
+          runtimes: [
+            {
+              name: 'opencode',
+              protocol: 'opencode',
+              binaryPath: null,
+              builtin: true,
+              isDefault: true,
+              ...NULL_PROFILE,
+              enabled: true,
+              lastProbe: null,
+              createdAt: 0,
+              updatedAt: 0,
+            },
+            {
+              name: 'claude-code',
+              protocol: 'claude-code',
+              binaryPath: null,
+              builtin: true,
+              isDefault: false,
+              ...NULL_PROFILE,
+              enabled: false,
+              lastProbe: null,
+              createdAt: 0,
+              updatedAt: 0,
+            },
+          ],
+        })
+      return jsonResponse({})
+    })
+    wrap(<RuntimeList />)
+    await waitFor(() => expect(document.querySelector('.runtime-list__name')).toBeTruthy())
+    const rowOf = (name: string) =>
+      Array.from(document.querySelectorAll('.runtime-list__row')).find(
+        (el) => el.querySelector('.runtime-list__name')?.textContent === name,
+      )
+    // claude-code disabled → dimmed row + "disabled" chip + Enable button.
+    expect(rowOf('claude-code')?.className).toContain('runtime-list__row--disabled')
+    expect(screen.getByText('disabled')).toBeTruthy()
+    // RFC-118: the Enable button is the recovery path — it must be genuinely
+    // clickable, NOT greyed-disabled (the dim is scoped to the identity/meta columns
+    // only; a row-level opacity used to grey the button while it stayed clickable).
+    const enableBtn = screen.getByText('Enable') as HTMLButtonElement
+    expect(enableBtn.disabled).toBe(false)
+    // opencode is the default → its Disable toggle is present but disabled, and the
+    // row is NOT dimmed.
+    const ocDisable = Array.from(rowOf('opencode')?.querySelectorAll('button') ?? []).find(
+      (b) => b.textContent === 'Disable',
+    )
+    expect(ocDisable?.disabled).toBe(true)
+    expect(rowOf('opencode')?.className).not.toContain('runtime-list__row--disabled')
+  })
+
   test('renders built-ins + the custom fork as rows', async () => {
     wrap(<RuntimeList />)
     await waitFor(() => expect(document.querySelector('.runtime-list__name')).toBeTruthy())
@@ -139,6 +203,7 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
               builtin: true,
               isDefault: false,
               ...NULL_PROFILE,
+              enabled: true,
               lastProbe: {
                 outcome: 'network-blocked',
                 conforms: false,

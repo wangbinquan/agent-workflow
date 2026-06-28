@@ -407,6 +407,13 @@
       "when": 1783300000000,
       "tag": "0058_rfc115_drop_agent_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "6",
+      "when": 1783400000000,
+      "tag": "0059_rfc118_runtime_enabled",
+      "breakpoints": true
     }
   ]
 }

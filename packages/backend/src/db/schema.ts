@@ -102,6 +102,11 @@ export const runtimes = sqliteTable('runtimes', {
   protocol: text('protocol', { enum: ['opencode', 'claude-code'] }).notNull(), // = RuntimeDriver kind
   binaryPath: text('binary_path'), // NULL → protocol default binary (RFC-111 behavior)
   builtin: integer('builtin', { mode: 'boolean' }).notNull().default(false), // RFC-104 read-only lock
+  // RFC-118: admin can disable a runtime (incl. built-ins) — it drops out of the
+  // agent / default-runtime pickers but STAYS in the list (reversible, not deleted).
+  // The effective-default runtime can't be disabled (service guard, D3); resolve
+  // IGNORES this flag so in-flight agents pinning a disabled runtime keep dispatching.
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   // RFC-113: a runtime IS a full execution profile. These are the model + gen
   // params the runner spawns with (agents only SELECT a runtime; they no longer
   // carry their own). variant/temperature/steps are opencode-only (claude has

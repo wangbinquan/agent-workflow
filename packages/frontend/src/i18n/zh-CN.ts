@@ -749,6 +749,10 @@ export interface Resources {
     claudeStaticModelHint: string
     isDefault: string
     setDefault: string
+    enable: string
+    disable: string
+    disabled: string
+    defaultCannotDisable: string
     smoke: {
       conforms: string
       'spawn-failed': string
@@ -3053,6 +3057,10 @@ export const zhCN: Resources = {
     claudeStaticModelHint: '模型列表是 Anthropic 的静态集 —— 未按该二进制探测。',
     isDefault: '默认',
     setDefault: '设为默认',
+    enable: '启用',
+    disable: '禁用',
+    disabled: '已禁用',
+    defaultCannotDisable: '默认运行时不可禁用，请先更改默认。',
     smoke: {
       conforms: '符合',
       'spawn-failed': '无法启动',

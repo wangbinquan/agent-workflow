@@ -51,6 +51,8 @@ export interface RuntimeRow extends RuntimeProfile {
   protocol: RuntimeProtocol
   binaryPath: string | null
   builtin: boolean
+  /** RFC-118: false = disabled (hidden from agent/default pickers, kept in list). */
+  enabled: boolean
   lastProbeJson: string | null
   createdBy: string | null
   createdAt: number
@@ -76,6 +78,8 @@ export interface RuntimeView extends RuntimeProfile {
   protocol: RuntimeProtocol
   binaryPath: string | null
   builtin: boolean
+  /** RFC-118: false = disabled (filtered from agent/default pickers, kept in list). */
+  enabled: boolean
   /** RFC-113: this row is the global default (name === config.defaultRuntime). */
   isDefault: boolean
   lastProbe: unknown
@@ -118,6 +122,7 @@ export function runtimeRowToView(
     protocol: row.protocol,
     binaryPath: row.binaryPath,
     builtin: row.builtin,
+    enabled: row.enabled,
     isDefault: row.name === (defaultRuntimeName ?? 'opencode'),
     ...runtimeProfileOf(row),
     lastProbe,
@@ -180,6 +185,45 @@ export async function resolveAgentRuntime(
   const pick = (v: string | null | undefined): string | undefined =>
     typeof v === 'string' && v.length > 0 ? v : undefined
   return resolveRuntimeByName(db, pick(agentRuntime) ?? pick(defaultRuntime) ?? 'opencode')
+}
+
+/**
+ * RFC-117 — resolve the runtime for an internal framework agent (distiller /
+ * commit-push), which selects a profile via a per-feature config field rather
+ * than an agents-table row. Priority:
+ *   1. the per-feature runtime profile NAME (e.g. `config.memoryDistillRuntime`);
+ *   2. the DEPRECATED per-feature model (`config.memoryDistillModel` /
+ *      `commitPushModel`) — a transition fallback that keeps the prior behavior
+ *      (opencode + that model) until the admin selects a profile; physical
+ *      removal of the model field is a follow-up cleanup (RFC-113→115 two-phase);
+ *   3. the global `defaultRuntime` (then opencode).
+ * Like `resolveAgentRuntime` (and unlike the fail-loud `validateRuntimeReference`
+ * on agent save), this is fall-safe — a dangling name can't brick a background
+ * job / a commit.
+ */
+export async function resolveInternalAgentRuntime(
+  db: DbClient,
+  opts: {
+    runtimeName?: string | null
+    deprecatedModel?: string | null
+    defaultRuntime?: string | null
+  },
+): Promise<ResolvedRuntime> {
+  const pick = (v: string | null | undefined): string | null =>
+    typeof v === 'string' && v.length > 0 ? v : null
+  const runtimeName = pick(opts.runtimeName)
+  if (runtimeName !== null) return resolveRuntimeByName(db, runtimeName)
+  const legacyModel = pick(opts.deprecatedModel)
+  if (legacyModel !== null) {
+    return {
+      name: 'opencode',
+      protocol: 'opencode',
+      binaryPath: null,
+      ...NULL_PROFILE,
+      model: legacyModel,
+    }
+  }
+  return resolveAgentRuntime(db, null, opts.defaultRuntime)
 }
 
 /**
@@ -363,6 +407,36 @@ export async function cacheRuntimeProbe(
     .update(runtimes)
     .set({ lastProbeJson, updatedAt: Date.now() })
     .where(eq(runtimes.name, name))
+}
+
+/**
+ * RFC-118: enable/disable a runtime. A disabled runtime STAYS in the list but
+ * drops out of the agent / default-runtime pickers (frontend filter + save-time
+ * guard). Built-ins MAY be disabled — EXCEPT the effective default
+ * (`config.defaultRuntime ?? 'opencode'`), protected (D3) so dispatch + the
+ * resolve fail-safe always have a live target. Enabling is unconditional. resolve
+ * IGNORES `enabled` (D4): an in-flight agent pinning a disabled runtime keeps
+ * dispatching — disabling only blocks NEW selections. Idempotent.
+ */
+export async function setRuntimeEnabled(
+  db: DbClient,
+  name: string,
+  enabled: boolean,
+  defaultRuntimeName: string | null | undefined,
+): Promise<RuntimeRow> {
+  const row = await getRuntime(db, name)
+  if (row === null) throw new NotFoundError('runtime-not-found', `runtime '${name}' not found`)
+  if (!enabled && name === (defaultRuntimeName ?? 'opencode')) {
+    throw new ConflictError(
+      'runtime-default-cannot-disable',
+      `runtime '${name}' is the effective default and cannot be disabled; change the default first`,
+    )
+  }
+  if (row.enabled === enabled) return row // no-op
+  await db.update(runtimes).set({ enabled, updatedAt: Date.now() }).where(eq(runtimes.name, name))
+  const updated = await getRuntime(db, name)
+  if (updated === null) throw new Error('runtime enabled-toggle vanished')
+  return updated
 }
 
 export async function deleteRuntime(

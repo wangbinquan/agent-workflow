@@ -11165,6 +11165,16 @@ mark.comment-anchor[data-active='true'] {
   border-left-width: 3px;
 }
 
+/* RFC-118: dim a disabled runtime's identity + metadata only — keep the actions
+   column at FULL opacity so the Enable button (the recovery path) reads as clearly
+   clickable. A row-level opacity also greyed the actions, making "Enable" look
+   disabled while it was actually clickable; opacity can't be undone on a child, so
+   the dim is scoped to the non-action columns. */
+.runtime-list__row--disabled .runtime-list__main,
+.runtime-list__row--disabled .runtime-list__meta {
+  opacity: 0.55;
+}
+
 .runtime-list__main {
   display: flex;
   align-items: center;

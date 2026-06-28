@@ -161,6 +161,32 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     expect(((await inUse.json()) as { code: string }).code).toBe('runtime-in-use')
   })
 
+  // RFC-118: enable/disable toggle.
+  test('POST /:name/enabled: disable non-default built-in ok; default → 409; user → 403', async () => {
+    // disable a non-default built-in (claude-code) → 200, enabled=false
+    const dis = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/claude-code/enabled', {
+      method: 'POST',
+      body: JSON.stringify({ enabled: false }),
+    })
+    expect(dis.status).toBe(200)
+    expect(((await dis.json()) as { runtime: { enabled: boolean } }).runtime.enabled).toBe(false)
+
+    // disabling the effective default (opencode) → 409
+    const def = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/opencode/enabled', {
+      method: 'POST',
+      body: JSON.stringify({ enabled: false }),
+    })
+    expect(def.status).toBe(409)
+    expect(((await def.json()) as { code: string }).code).toBe('runtime-default-cannot-disable')
+
+    // admin-only → 403 for a regular user
+    const forbidden = await reqAs(h.app, h.userToken, '/api/runtimes/claude-code/enabled', {
+      method: 'POST',
+      body: JSON.stringify({ enabled: true }),
+    })
+    expect(forbidden.status).toBe(403)
+  })
+
   test('POST /api/runtimes/probe deep-smokes a mock binary → conforms', async () => {
     process.env.MOCK_OPENCODE_ECHO_PROMPT = '1'
     process.env.MOCK_OPENCODE_EMIT_SESSION_ID = '1'

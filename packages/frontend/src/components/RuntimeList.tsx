@@ -49,6 +49,8 @@ interface RuntimeView {
   protocol: RuntimeProtocol
   binaryPath: string | null
   builtin: boolean
+  // RFC-118: false = disabled (filtered from agent/default pickers, kept in list).
+  enabled: boolean
   isDefault: boolean
   // RFC-113: the execution profile (variant/temperature/steps are opencode-only).
   model: string | null
@@ -110,6 +112,15 @@ export function RuntimeList() {
     },
   })
 
+  // RFC-118: enable/disable toggle. A disabled runtime stays in the list but drops
+  // out of the agent / default pickers. The effective default can't be disabled
+  // (server 409 guard); its button is also disabled client-side.
+  const toggleEnabled = useMutation({
+    mutationFn: (v: { name: string; enabled: boolean }) =>
+      api.post(`/api/runtimes/${encodeURIComponent(v.name)}/enabled`, { enabled: v.enabled }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: RUNTIMES_QUERY_KEY }),
+  })
+
   const runtimes = list.data?.runtimes ?? []
 
   return (
@@ -137,7 +148,9 @@ export function RuntimeList() {
           {runtimes.map((rt) => (
             <li
               key={rt.name}
-              className={`runtime-list__row${rt.isDefault ? ' runtime-list__row--default' : ''}`}
+              className={`runtime-list__row${rt.isDefault ? ' runtime-list__row--default' : ''}${
+                rt.enabled ? '' : ' runtime-list__row--disabled'
+              }`}
               role="listitem"
             >
               <div className="runtime-list__main">
@@ -161,6 +174,11 @@ export function RuntimeList() {
                     {t('runtimes.builtin')}
                   </StatusChip>
                 )}
+                {!rt.enabled && (
+                  <StatusChip kind="neutral" size="sm">
+                    {t('runtimes.disabled')}
+                  </StatusChip>
+                )}
                 <StatusChip kind={smokeChipKind(rt.lastProbe)} size="sm" withDot>
                   {rt.lastProbe === null
                     ? t('runtimes.smokeUntested')
@@ -173,7 +191,9 @@ export function RuntimeList() {
                 </code>
               </div>
               <div className="runtime-list__actions">
-                {!rt.isDefault && (
+                {/* RFC-118: a disabled runtime can't be made the default (server
+                    rejects it too) — hide Set-default on disabled rows. */}
+                {!rt.isDefault && rt.enabled && (
                   <button
                     type="button"
                     className="btn btn--xs"
@@ -197,6 +217,17 @@ export function RuntimeList() {
                     custom-only: a built-in can't be removed. */}
                 <button type="button" className="btn btn--xs" onClick={() => setEditing(rt)}>
                   {t('runtimes.edit')}
+                </button>
+                {/* RFC-118: enable/disable (incl. built-ins). The effective-default
+                    row can't be disabled (server 409) — shown disabled + hint. */}
+                <button
+                  type="button"
+                  className="btn btn--xs"
+                  disabled={toggleEnabled.isPending || rt.isDefault}
+                  title={rt.isDefault ? t('runtimes.defaultCannotDisable') : undefined}
+                  onClick={() => toggleEnabled.mutate({ name: rt.name, enabled: !rt.enabled })}
+                >
+                  {rt.enabled ? t('runtimes.disable') : t('runtimes.enable')}
                 </button>
                 {!rt.builtin && (
                   <button

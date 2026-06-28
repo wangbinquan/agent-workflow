@@ -19,6 +19,7 @@ import {
   resolveRuntimeByName,
   runtimeHead,
   seedBuiltinRuntimes,
+  setRuntimeEnabled,
   updateRuntime,
 } from '../src/services/runtimeRegistry'
 
@@ -316,5 +317,55 @@ describe('runtimeHead (RFC-112 PR-A)', () => {
         { claudeCodePath: '/p/cc' },
       ),
     ).toEqual(['/p/cc'])
+  })
+})
+
+describe('setRuntimeEnabled (RFC-118)', () => {
+  let db: DbClient
+  beforeEach(async () => {
+    db = freshDb()
+    await seedBuiltinRuntimes(db)
+  })
+
+  test('disables a non-default built-in (claude-code) — stays in the list', async () => {
+    const row = await setRuntimeEnabled(db, 'claude-code', false, 'opencode')
+    expect(row.enabled).toBe(false)
+    expect((await listRuntimes(db)).some((r) => r.name === 'claude-code')).toBe(true)
+  })
+
+  test('rejects disabling the effective default (opencode = config.defaultRuntime)', async () => {
+    await expect(setRuntimeEnabled(db, 'opencode', false, 'opencode')).rejects.toThrow(
+      /cannot be disabled/,
+    )
+  })
+
+  test('rejects disabling opencode when config.defaultRuntime is unset (effective default)', async () => {
+    // null config → effective default is 'opencode' (runtimeRowToView / resolve fail-safe).
+    await expect(setRuntimeEnabled(db, 'opencode', false, null)).rejects.toThrow(
+      /cannot be disabled/,
+    )
+  })
+
+  test('re-enables a disabled runtime', async () => {
+    await setRuntimeEnabled(db, 'claude-code', false, 'opencode')
+    const row = await setRuntimeEnabled(db, 'claude-code', true, 'opencode')
+    expect(row.enabled).toBe(true)
+  })
+
+  test('seedBuiltinRuntimes does NOT re-enable a disabled built-in (no resurrection on restart)', async () => {
+    await setRuntimeEnabled(db, 'claude-code', false, 'opencode')
+    await seedBuiltinRuntimes(db) // simulate a daemon restart
+    expect((await getRuntime(db, 'claude-code'))!.enabled).toBe(false)
+  })
+
+  test('resolveRuntimeByName still resolves a DISABLED runtime (D4 — dispatch unaffected)', async () => {
+    await setRuntimeEnabled(db, 'claude-code', false, 'opencode')
+    const resolved = await resolveRuntimeByName(db, 'claude-code')
+    expect(resolved.name).toBe('claude-code')
+    expect(resolved.protocol).toBe('claude-code')
+  })
+
+  test('404 on unknown runtime', async () => {
+    await expect(setRuntimeEnabled(db, 'nope', false, 'opencode')).rejects.toThrow(/not found/)
   })
 })

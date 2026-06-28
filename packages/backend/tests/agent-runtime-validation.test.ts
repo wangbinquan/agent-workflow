@@ -10,7 +10,11 @@ import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { CreateAgent } from '@agent-workflow/shared'
 import { createAgent, updateAgent } from '../src/services/agent'
-import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
+import {
+  createRuntime,
+  seedBuiltinRuntimes,
+  setRuntimeEnabled,
+} from '../src/services/runtimeRegistry'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -58,5 +62,32 @@ describe('RFC-111/F6: agent runtime reference validation', () => {
     await createAgent(db, { ...base, name: 'a', runtime: 'opencode' })
     const cleared = await updateAgent(db, 'a', { runtime: null })
     expect(cleared.runtime).toBeUndefined()
+  })
+
+  // RFC-118: a disabled runtime stays registered but can't be a NEW pin.
+  test('RFC-118: createAgent rejects a NEW pin to a disabled runtime', async () => {
+    await createRuntime(db, { name: 'oc-x', protocol: 'opencode' })
+    await setRuntimeEnabled(db, 'oc-x', false, 'opencode')
+    await expect(createAgent(db, { ...base, name: 'a', runtime: 'oc-x' })).rejects.toThrow(
+      /disabled runtime/,
+    )
+  })
+
+  // RFC-118 D6: KEEPING an already-pinned, now-disabled runtime is allowed so the
+  // agent's OTHER fields stay editable (mirrors RFC-099 "only validate NEW refs").
+  test('RFC-118: updateAgent allows re-saving an already-pinned now-disabled runtime', async () => {
+    await createRuntime(db, { name: 'oc-y', protocol: 'opencode' })
+    await createAgent(db, { ...base, name: 'a', runtime: 'oc-y' })
+    await setRuntimeEnabled(db, 'oc-y', false, 'opencode') // disabled AFTER the agent pinned it
+    const updated = await updateAgent(db, 'a', { runtime: 'oc-y', description: 'edited' })
+    expect(updated.runtime).toBe('oc-y')
+    expect(updated.description).toBe('edited')
+  })
+
+  test('RFC-118: updateAgent rejects CHANGING the pin to a disabled runtime', async () => {
+    await createRuntime(db, { name: 'oc-z', protocol: 'opencode' })
+    await setRuntimeEnabled(db, 'oc-z', false, 'opencode')
+    await createAgent(db, { ...base, name: 'a', runtime: 'opencode' })
+    await expect(updateAgent(db, 'a', { runtime: 'oc-z' })).rejects.toThrow(/disabled runtime/)
   })
 })

@@ -72,7 +72,9 @@ export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
   // RFC-112: registered runtimes (GET /api/runtimes — open to all users, unlike
   // admin-only /api/config) drive the picker options + each runtime's protocol,
   // which is used below to hide claude-protocol runtimes when claude-code is off.
-  const runtimesQuery = useQuery<{ runtimes: Array<{ name: string; protocol: string }> }>({
+  const runtimesQuery = useQuery<{
+    runtimes: Array<{ name: string; protocol: string; enabled: boolean }>
+  }>({
     queryKey: ['runtimes'],
     queryFn: ({ signal }) => api.get('/api/runtimes', undefined, signal),
     staleTime: 30_000,
@@ -81,9 +83,13 @@ export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
   // When claude is disabled, hide claude-protocol runtimes from the options — an
   // agent can't run on a disabled runtime (Codex P2: but DON'T hide the whole
   // picker, opencode profiles must stay selectable).
-  const selectableRuntimes = claudeEnabled
-    ? registeredRuntimes
-    : registeredRuntimes.filter((r) => r.protocol !== 'claude-code')
+  // RFC-118: also drop DISABLED runtimes from the picker — EXCEPT the one this agent
+  // already pins (keep it visible so editing other fields doesn't silently switch the
+  // runtime; the backend allows KEEPING an already-pinned disabled runtime, D6).
+  const selectableRuntimes = registeredRuntimes.filter(
+    (r) =>
+      (r.enabled || r.name === value.runtime) && (claudeEnabled || r.protocol !== 'claude-code'),
+  )
   // RFC-113: the runtime selector is the ONLY per-agent profile control, so show it
   // whenever there's a real choice — claude available, the agent already pins a
   // runtime, or custom (non-built-in) opencode profiles exist (e.g. opencode-opus /

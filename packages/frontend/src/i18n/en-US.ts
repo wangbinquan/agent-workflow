@@ -644,6 +644,10 @@ export const enUS: Resources = {
       'The model list is Anthropic’s static set — not probed from this binary.',
     isDefault: 'default',
     setDefault: 'Set default',
+    enable: 'Enable',
+    disable: 'Disable',
+    disabled: 'disabled',
+    defaultCannotDisable: 'The default runtime cannot be disabled — change the default first.',
     smoke: {
       conforms: 'conforms',
       'spawn-failed': 'cannot start',
