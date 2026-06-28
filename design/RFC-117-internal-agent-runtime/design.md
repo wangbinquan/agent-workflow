@@ -147,4 +147,8 @@ export interface RuntimeDriver {
 - **PR-E 不改 AgentForm**：协作者并行 RFC-118 正改 `AgentForm`（disabled 过滤），为避交织，`useRuntimesList` 新建给 settings 用；AgentForm 复用该 hook 的 dedup 留后续。
 - **协作并发**：`resolveInternalAgentRuntime` 因与 RFC-118 共享 `runtimeRegistry.ts`，被协作者 `8d1df44` 的 commit gate 一并带入库（commit-race，内容无损）；顺手修协作者 RFC-118 的前端测试回归（`runtime-claude-frontend` mock 漏 `enabled`，用户拍板）+ PR-B lint（unused import）+ distiller PWD 断言随收编更新。
 
+**2026-06-28 实现 gate（codex-cli，`--base f7f36bd`）= 1 P2 fold**：
+
+- [P2] RuntimeSelect 的「Inherit」无法清除已保存的 runtime override——`onChange(undefined)` 被 `JSON.stringify`（PUT body 丢字段）+ `mergePatch`（`v===undefined` 跳过）双重忽略，旧值留在 config.json，内部 agent 永不回到继承全局默认。**fold**：`mergePatch`（`config/index.ts`）加显式 `null → delete key`（通用清除语义，现有无人发 null 故不破坏现有字段）+ `ConfigPatchSchema` 的 `memoryDistillRuntime`/`commitPushRuntime` 加 `.nullable()`（仅 PATCH 接受 null，base ConfigSchema 不变）+ RuntimeSelect 的 Inherit 改发 `null`（非 undefined）。测试：`config.test.ts`「null 清除字段、scoped 不误删兄弟字段」+ `runtime-select.test.tsx`「Inherit → onChange(null)」。
+
 （实现 gate 各 PR 复审后续在此追加。）

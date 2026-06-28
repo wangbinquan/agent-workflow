@@ -58,7 +58,7 @@ describe('RuntimeSelect (RFC-117)', () => {
   test('renders the inherit option + registered runtimes; picking one → onChange(name)', async () => {
     mockFetch()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    const changes: Array<string | undefined> = []
+    const changes: Array<string | null> = []
     render(
       <RuntimeSelect
         value={undefined}
@@ -75,10 +75,10 @@ describe('RuntimeSelect (RFC-117)', () => {
     expect(changes).toContain('oc-haiku')
   })
 
-  test('selecting the inherit option → onChange(undefined)', async () => {
+  test('selecting the inherit option → onChange(null)（清除已保存的 override）', async () => {
     mockFetch()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    const changes: Array<string | undefined> = []
+    const changes: Array<string | null> = []
     render(
       <RuntimeSelect
         value="oc-haiku"
@@ -91,6 +91,7 @@ describe('RuntimeSelect (RFC-117)', () => {
     fireEvent.click(trigger)
     const inherit = await screen.findByRole('option', { name: /Inherit/ })
     fireEvent.mouseDown(inherit)
-    expect(changes).toContain(undefined)
+    // null (not undefined) so the PATCH clears a saved override (impl-gate P2).
+    expect(changes).toContain(null)
   })
 })

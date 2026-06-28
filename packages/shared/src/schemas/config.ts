@@ -351,7 +351,15 @@ export const DEFAULT_CONFIG: Config = {
  * Patch schema: any subset of the full config (except $schema_version),
  * sent by PUT /api/config and merged onto the current config.
  */
-export const ConfigPatchSchema = ConfigSchema.partial().omit({ $schema_version: true })
+export const ConfigPatchSchema = ConfigSchema.partial()
+  .omit({ $schema_version: true })
+  // RFC-117: the runtime-selector "Inherit" option clears these by sending null
+  // (mergePatch deletes the key → back to inheriting the global default). The
+  // base ConfigSchema keeps them string|undefined; only the PATCH accepts null.
+  .extend({
+    memoryDistillRuntime: z.string().min(1).nullable().optional(),
+    commitPushRuntime: z.string().min(1).nullable().optional(),
+  })
 export type ConfigPatch = z.infer<typeof ConfigPatchSchema>
 
 /**

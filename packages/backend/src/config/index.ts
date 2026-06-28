@@ -104,6 +104,13 @@ function mergePatch(current: Config, patch: ConfigPatch): Config {
   const next: Config = { ...current }
   for (const [k, v] of Object.entries(patch)) {
     if (v === undefined) continue
+    // RFC-117: explicit null clears the field (back to "unset" → inherits the
+    // global default), e.g. the settings runtime "Inherit" option. JSON.stringify
+    // drops undefined, so the UI sends null to actually remove a saved override.
+    if (v === null) {
+      delete (next as Record<string, unknown>)[k]
+      continue
+    }
     if (k === 'worktreeAutoGc' && typeof v === 'object' && v !== null) {
       next.worktreeAutoGc = {
         ...current.worktreeAutoGc,

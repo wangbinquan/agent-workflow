@@ -85,6 +85,22 @@ describe('config load/save', () => {
     expect(reread.opencodePath).toBe('/opt/homebrew/bin/opencode')
   })
 
+  // RFC-117 (impl-gate P2): the settings runtime "Inherit" option sends null to
+  // clear a saved per-feature runtime override — mergePatch deletes the key so the
+  // internal agent goes back to inheriting the global default. undefined alone
+  // can't do it (JSON.stringify drops it; the merge then leaves the old value).
+  test('applyConfigPatch clears a field patched with null (back to unset)', () => {
+    loadConfig(path)
+    applyConfigPatch(path, { memoryDistillRuntime: 'oc-haiku', commitPushRuntime: 'oc-fast' })
+    expect(loadConfig(path).memoryDistillRuntime).toBe('oc-haiku')
+
+    const updated = applyConfigPatch(path, { memoryDistillRuntime: null })
+    expect(updated.memoryDistillRuntime).toBeUndefined()
+    expect(loadConfig(path).memoryDistillRuntime).toBeUndefined()
+    // the null clear is scoped — the other override is untouched.
+    expect(loadConfig(path).commitPushRuntime).toBe('oc-fast')
+  })
+
   test('applyConfigPatch rejects invalid field type', () => {
     loadConfig(path)
     expect(() => applyConfigPatch(path, { maxConcurrentNodes: -1 })).toThrow(ValidationError)

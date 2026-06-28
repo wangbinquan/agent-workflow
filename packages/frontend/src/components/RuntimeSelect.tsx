@@ -10,7 +10,9 @@ import { Select } from './Select'
 
 interface Props {
   value: string | null | undefined
-  onChange: (next: string | undefined) => void
+  /** A runtime name, or `null` for the "Inherit (global default)" option — null
+   *  (not undefined) so the PATCH actually clears a saved override (RFC-117). */
+  onChange: (next: string | null) => void
   ariaLabel: string
 }
 
@@ -29,7 +31,7 @@ export function RuntimeSelect({ value, onChange, ariaLabel }: Props) {
     <Select<string>
       value={value ?? ''}
       ariaLabel={ariaLabel}
-      onChange={(v) => onChange(v === '' ? undefined : v)}
+      onChange={(v) => onChange(v === '' ? null : v)}
       options={[
         { value: '', label: t('settings.runtimeInherit') },
         ...(selectableRuntimes.length > 0
