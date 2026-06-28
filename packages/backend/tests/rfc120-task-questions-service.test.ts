@@ -20,7 +20,28 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { listTaskQuestions } from '../src/services/taskQuestions'
+import {
+  confirmTaskQuestion,
+  listTaskQuestions,
+  reassignTaskQuestion,
+  stageTaskQuestion,
+} from '../src/services/taskQuestions'
+
+const AGENT_SNAPSHOT = JSON.stringify({
+  $schema_version: 3,
+  inputs: [],
+  nodes: [
+    { id: 'designer', kind: 'agent-single', agentName: 'designer' },
+    { id: 'coder', kind: 'agent-single', agentName: 'coder' },
+    { id: 'fixer', kind: 'agent-single', agentName: 'fixer' },
+    { id: 'auditor', kind: 'agent-single', agentName: 'auditor' },
+    { id: 'c1', kind: 'clarify' },
+  ],
+  edges: [],
+  outputs: [],
+})
+
+const ACTOR = { userId: 'u1', role: 'owner' }
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -48,7 +69,7 @@ async function seedTask(db: DbClient, taskId = 'task-1') {
     id: taskId,
     name: 'fixture',
     workflowId: 'wf-1',
-    workflowSnapshot: '{}',
+    workflowSnapshot: AGENT_SNAPSHOT,
     repoPath: '/tmp/r',
     worktreePath: '',
     baseBranch: 'main',
@@ -259,5 +280,116 @@ describe('RFC-120 T3 listTaskQuestions', () => {
     expect(pending).toHaveLength(2)
     const processing = await listTaskQuestions(db, taskId, { phase: 'processing' })
     expect(processing).toHaveLength(0)
+  })
+})
+
+describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
+  async function seedSelfAwaitingConfirm(db: DbClient) {
+    const taskId = await seedTask(db)
+    await seedRun(db, taskId, 'r-handler', 'designer', {
+      rerunCause: 'clarify-answer',
+      status: 'done',
+      withOutput: true,
+    })
+    await seedRound(db, taskId, {
+      id: 'c1',
+      kind: 'self',
+      askingNodeId: 'designer',
+      intermediaryNodeRunId: 'c1-int',
+      questionsJson: JSON.stringify([Q('q1')]),
+      status: 'answered',
+      consumedByConsumerRunId: 'r-handler',
+    })
+    return taskId
+  }
+
+  test('confirm: awaiting_confirm → done with confirmedBy', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedSelfAwaitingConfirm(db)
+    const [entry] = await listTaskQuestions(db, taskId)
+    expect(entry!.phase).toBe('awaiting_confirm')
+    await confirmTaskQuestion(db, entry!.id, ACTOR)
+    const [after] = await listTaskQuestions(db, taskId)
+    expect(after!.phase).toBe('done')
+    expect(after!.confirmation).toBe('confirmed')
+    expect(after!.confirmedBy).toBe('u1')
+  })
+
+  test('confirm: rejects when not awaiting_confirm', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db)
+    await seedRound(db, taskId, {
+      id: 'p1',
+      kind: 'self',
+      askingNodeId: 'designer',
+      intermediaryNodeRunId: 'p1-int',
+      questionsJson: JSON.stringify([Q('q1')]),
+      status: 'awaiting_human',
+    })
+    const [entry] = await listTaskQuestions(db, taskId)
+    expect(entry!.phase).toBe('pending')
+    await expect(confirmTaskQuestion(db, entry!.id, ACTOR)).rejects.toThrow()
+  })
+
+  test('reassign: designer entry → agent node overrides effective target', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db)
+    await seedRound(db, taskId, {
+      id: 'x1',
+      kind: 'cross',
+      askingNodeId: 'auditor',
+      targetConsumerNodeId: 'coder',
+      intermediaryNodeRunId: 'x1-int',
+      questionsJson: JSON.stringify([Q('q1')]),
+      questionScopesJson: JSON.stringify({ q1: 'designer' }),
+      status: 'answered',
+    })
+    const designer = (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!
+    expect(designer.effectiveTargetNodeId).toBe('coder')
+    await reassignTaskQuestion(db, designer.id, 'fixer', ACTOR)
+    const after = (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!
+    expect(after.overrideTargetNodeId).toBe('fixer')
+    expect(after.effectiveTargetNodeId).toBe('fixer')
+  })
+
+  test('reassign: rejects questioner entry and non-agent target', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db)
+    await seedRound(db, taskId, {
+      id: 'x2',
+      kind: 'cross',
+      askingNodeId: 'auditor',
+      targetConsumerNodeId: 'coder',
+      intermediaryNodeRunId: 'x2-int',
+      questionsJson: JSON.stringify([Q('q1')]),
+      questionScopesJson: JSON.stringify({ q1: 'designer' }),
+      status: 'answered',
+    })
+    const list = await listTaskQuestions(db, taskId)
+    const questioner = list.find((e) => e.roleKind === 'questioner')!
+    const designer = list.find((e) => e.roleKind === 'designer')!
+    // questioner is not re-targetable (阻塞-产出型)
+    await expect(reassignTaskQuestion(db, questioner.id, 'fixer', ACTOR)).rejects.toThrow()
+    // 'c1' is a clarify node, not an agent node
+    await expect(reassignTaskQuestion(db, designer.id, 'c1', ACTOR)).rejects.toThrow()
+  })
+
+  test('stage / unstage toggles the 待下发 phase', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db)
+    await seedRound(db, taskId, {
+      id: 's1',
+      kind: 'self',
+      askingNodeId: 'designer',
+      intermediaryNodeRunId: 's1-int',
+      questionsJson: JSON.stringify([Q('q1')]),
+      status: 'awaiting_human',
+    })
+    const [entry] = await listTaskQuestions(db, taskId)
+    expect(entry!.phase).toBe('pending')
+    await stageTaskQuestion(db, entry!.id, true, ACTOR)
+    expect((await listTaskQuestions(db, taskId))[0]!.phase).toBe('staged')
+    await stageTaskQuestion(db, entry!.id, false, ACTOR)
+    expect((await listTaskQuestions(db, taskId))[0]!.phase).toBe('pending')
   })
 })

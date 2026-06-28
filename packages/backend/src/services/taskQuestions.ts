@@ -17,13 +17,15 @@
 //
 // See design/RFC-120-task-question-list §2.3 / §4 / §11.
 
-import { eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
-import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions } from '@/db/schema'
+import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
+import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
+  canReassign,
   deriveQuestionPhase,
   NEW_CLARIFY_TRIGGER_CAUSES,
   reconcileDesiredEntries,
@@ -33,6 +35,7 @@ import {
   type ClarifyQuestionScope,
   type RunLineageView,
   type TaskQuestionPhase,
+  type WorkflowDefinition,
 } from '@agent-workflow/shared'
 
 type ClarifyRoundRow = typeof clarifyRounds.$inferSelect
@@ -210,21 +213,7 @@ export async function listTaskQuestions(
     if (!round) continue // round vanished (task edited); skip defensively
     const effectiveTargetNodeId = e.overrideTargetNodeId ?? e.defaultTargetNodeId
     const triggerRunId = resolveTriggerForEntry(round, e.roleKind, effectiveTargetNodeId, runs)
-    const lineageRuns: RunLineageView[] = runs.map((r) => ({
-      id: r.id,
-      nodeId: r.nodeId,
-      // node_runs carries a single `iteration` = the loop iteration; clarify_rounds
-      // tracks loopIter separately. Match the run's iteration against the entry's
-      // loopIter on both axes (the round-counter `iteration` is disambiguated by the
-      // trigger anchor + lineage window, not by a run column).
-      iteration: r.iteration,
-      loopIter: r.iteration,
-      rerunCause: r.rerunCause,
-      status: r.status,
-      startedAt: r.startedAt,
-      hasOutput: outputRunIds.has(r.id),
-      parentNodeRunId: r.parentNodeRunId,
-    }))
+    const lineageRuns = runs.map((r) => toLineageView(r, outputRunIds))
     const handlerRun = resolveHandlerRun({
       effectiveTargetNodeId,
       iteration: e.loopIter,
@@ -284,4 +273,156 @@ function summarizeAnswer(round: ClarifyRoundRow, questionId: string): string | n
   if (ans.customText.trim()) parts.push(ans.customText.trim())
   const s = parts.join(' · ')
   return s.length > 200 ? `${s.slice(0, 200)}…` : s || null
+}
+
+/** Project a node_run row → the lineage view resolveHandlerRun expects. node_runs
+ *  carries one `iteration` (the loop iteration); both lineage axes use it (the
+ *  round-counter is disambiguated by the trigger anchor + window, not a run col). */
+function toLineageView(r: NodeRunRow, outputRunIds: Set<string>): RunLineageView {
+  return {
+    id: r.id,
+    nodeId: r.nodeId,
+    iteration: r.iteration,
+    loopIter: r.iteration,
+    rerunCause: r.rerunCause,
+    status: r.status,
+    startedAt: r.startedAt,
+    hasOutput: outputRunIds.has(r.id),
+    parentNodeRunId: r.parentNodeRunId,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// RFC-120 PR-B writes — confirm / reassign / stage. All write only the manual
+// overlay on task_questions (collision-free; the answer→dispatch backend is
+// untouched). The actor's identity is UI/audit-only — NEVER enters a prompt
+// (RFC-099 prompt-isolation; these columns are not read by any prompt builder).
+// ---------------------------------------------------------------------------
+
+export interface TaskQuestionActor {
+  userId: string
+  /** task-relationship role snapshot (owner|user|admin). */
+  role: string
+}
+
+async function loadEntry(db: DbClient, entryId: string): Promise<TaskQuestionRow> {
+  const [e] = await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)).limit(1)
+  if (!e) throw new NotFoundError('task-question-not-found', `task question ${entryId} not found`)
+  return e
+}
+
+/** Derive one entry's current phase (loads its round + the task's runs). */
+async function deriveEntryPhase(db: DbClient, entry: TaskQuestionRow): Promise<TaskQuestionPhase> {
+  const [round] = await db
+    .select()
+    .from(clarifyRounds)
+    .where(eq(clarifyRounds.intermediaryNodeRunId, entry.originNodeRunId))
+    .limit(1)
+  if (!round) return entry.stagedAt !== null ? 'staged' : 'pending'
+  const effectiveTargetNodeId = entry.overrideTargetNodeId ?? entry.defaultTargetNodeId
+  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, entry.taskId))
+  const outputRunIds = await runIdsWithOutput(
+    db,
+    runs.map((r) => r.id),
+  )
+  const triggerRunId = resolveTriggerForEntry(round, entry.roleKind, effectiveTargetNodeId, runs)
+  const handlerRun = resolveHandlerRun({
+    effectiveTargetNodeId,
+    iteration: entry.loopIter,
+    loopIter: entry.loopIter,
+    triggerRunId,
+    runs: runs.map((r) => toLineageView(r, outputRunIds)),
+  })
+  return deriveQuestionPhase({
+    roundStatus: round.status,
+    confirmation: entry.confirmation,
+    isStaged: entry.stagedAt !== null,
+    handlerRun,
+  })
+}
+
+/** Agent-kind node ids of the task's frozen workflow snapshot (reassign candidates). */
+async function agentNodeIdsForTask(db: DbClient, taskId: string): Promise<Set<string>> {
+  const [t] = await db
+    .select({ snapshot: tasks.workflowSnapshot })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1)
+  if (!t) return new Set()
+  try {
+    const def = JSON.parse(t.snapshot) as WorkflowDefinition
+    return new Set(def.nodes.filter((n) => n.kind.startsWith('agent')).map((n) => n.id))
+  } catch {
+    return new Set()
+  }
+}
+
+/** Confirm (已处理待确认 → 完成). Only from awaiting_confirm; pure closure (D5). */
+export async function confirmTaskQuestion(
+  db: DbClient,
+  entryId: string,
+  actor: TaskQuestionActor,
+): Promise<void> {
+  const entry = await loadEntry(db, entryId)
+  const phase = await deriveEntryPhase(db, entry)
+  if (phase !== 'awaiting_confirm') {
+    throw new ConflictError(
+      'task-question-not-awaiting-confirm',
+      `task question is '${phase}', not awaiting_confirm`,
+    )
+  }
+  await db
+    .update(taskQuestions)
+    .set({
+      confirmation: 'confirmed',
+      confirmedBy: actor.userId,
+      confirmedByRole: actor.role,
+      confirmedAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    .where(and(eq(taskQuestions.id, entryId), eq(taskQuestions.confirmation, 'open')))
+}
+
+/** Re-target (改派) a designer entry's handler to a workflow agent node (Codex F5). */
+export async function reassignTaskQuestion(
+  db: DbClient,
+  entryId: string,
+  targetNodeId: string,
+  actor: TaskQuestionActor,
+): Promise<void> {
+  const entry = await loadEntry(db, entryId)
+  const agentNodeIds = await agentNodeIdsForTask(db, entry.taskId)
+  if (!canReassign({ roleKind: entry.roleKind }, targetNodeId, agentNodeIds)) {
+    throw new ValidationError(
+      'task-question-reassign-invalid',
+      `cannot reassign '${entry.roleKind}' entry to '${targetNodeId}' (designer-only + must be an agent node)`,
+    )
+  }
+  await db
+    .update(taskQuestions)
+    .set({
+      overrideTargetNodeId: targetNodeId,
+      lastReassignedBy: actor.userId,
+      lastReassignedAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    .where(eq(taskQuestions.id, entryId))
+}
+
+/** Stage / unstage (拖入·拖出「待下发」). Approves an entry for batch dispatch. */
+export async function stageTaskQuestion(
+  db: DbClient,
+  entryId: string,
+  staged: boolean,
+  actor: TaskQuestionActor,
+): Promise<void> {
+  await loadEntry(db, entryId)
+  await db
+    .update(taskQuestions)
+    .set(
+      staged
+        ? { stagedAt: Date.now(), stagedBy: actor.userId, updatedAt: Date.now() }
+        : { stagedAt: null, stagedBy: null, updatedAt: Date.now() },
+    )
+    .where(eq(taskQuestions.id, entryId))
 }
