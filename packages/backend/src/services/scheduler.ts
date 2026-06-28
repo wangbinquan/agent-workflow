@@ -2456,6 +2456,11 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         if (
           currentRunRow !== undefined &&
           !crossClarifyOwnsPriorOutput &&
+          // RFC-120 T9 (Codex M1): a run-scoped override target is handed a NEW
+          // question via External Feedback, not asked to revise its OWN prior
+          // draft — suppress the generic Update Directive even when it has prior
+          // outputs of its own.
+          crossClarifyContext?.runScoped !== true &&
           !resumeDecision.inlineMode &&
           !effectiveHasClarifyChannel
         ) {

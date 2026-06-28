@@ -21,8 +21,13 @@
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
+import { readFileSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createApp } from '../src/server'
 import { crossClarifySessions, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { markClarifyRoundsConsumedBy } from '../src/services/clarifyRounds'
 import {
@@ -105,7 +110,7 @@ function mkQ(id: string, title: string): ClarifyQuestion {
  *  cross-clarify session and return its node_run id. */
 async function seedTask(
   db: DbClient,
-  opts: { deferred: boolean; questions?: ClarifyQuestion[] },
+  opts: { deferred: boolean; questions?: ClarifyQuestion[]; ownerUserId?: string },
 ): Promise<{ taskId: string; crossClarifyNodeRunId: string }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = liveDef()
@@ -122,6 +127,7 @@ async function seedTask(
     id: taskId,
     name: 'rfc120-t9',
     workflowId,
+    ...(opts.ownerUserId !== undefined ? { ownerUserId: opts.ownerUserId } : {}),
     workflowSnapshot: JSON.stringify(def),
     repoPath: '/tmp/aw-rfc120-t9/repo',
     worktreePath: '',
@@ -679,5 +685,187 @@ describe('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2/H3)', () =>
       definition: liveDef(),
     })
     expect(after).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F — Codex impl-gate folds on the run-scoped layer: H1 (split-round per-origin),
+// M1 (override target gets no Update Directive), H2 (the HTTP release path).
+// ---------------------------------------------------------------------------
+describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
+  const actor = { userId: 'u1', role: 'owner' as const }
+  const TOKEN = 'a'.repeat(64)
+  const AUTH = { Authorization: `Bearer ${TOKEN}` }
+
+  function makeApp(db: DbClient) {
+    process.env.AGENT_WORKFLOW_HOME = mkdtempSync(join(tmpdir(), 'aw-t9-home-'))
+    return createApp({
+      token: TOKEN,
+      configPath: join(mkdtempSync(join(tmpdir(), 'aw-t9-cfg-')), 'config.json'),
+      opencodeVersion: '1.14.25',
+      dbVersion: 1,
+      db,
+    })
+  }
+
+  async function designerEntries(db: DbClient, taskId: string) {
+    return db
+      .select()
+      .from(taskQuestions)
+      .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'designer')))
+  }
+
+  test('H1: a round split q1→override / q2→graph-designer is REJECTED per-origin (nothing stamped/minted)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { taskId, crossClarifyNodeRunId } = await seedTask(db, {
+      deferred: true,
+      questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
+    })
+    await db.insert(nodeRuns).values({
+      id: `nr_other_${taskId}`,
+      taskId,
+      nodeId: OTHER,
+      status: 'done',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: Date.now() - 500,
+    })
+    await submitCrossClarifyAnswers({
+      db,
+      crossClarifyNodeRunId,
+      answers: [ans('q1'), ans('q2')],
+      directive: 'continue',
+    })
+    const entries = await designerEntries(db, taskId)
+    const q1Entry = entries.find((e) => e.questionId === 'q1')!
+    // override ONLY q1 → the round now spans {OTHER, DESIGNER}
+    await reassignTaskQuestion(db, q1Entry.id, OTHER, actor)
+
+    // dispatching q1 must be rejected: the per-origin guard sees q2 (still →
+    // DESIGNER) in the SAME round, even though q2 is outside the requested group.
+    let threw: unknown = null
+    try {
+      await dispatchTaskQuestions(db, taskId, [q1Entry.id], actor)
+    } catch (e) {
+      threw = e
+    }
+    expect((threw as { code?: string }).code).toBe('task-question-round-multi-target')
+    // nothing stamped, nothing minted (no partial dispatch)
+    const after = await designerEntries(db, taskId)
+    expect(after.every((e) => e.triggerRunId === null)).toBe(true)
+    const minted = await db
+      .select()
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.status, 'pending')))
+    expect(minted.length).toBe(0)
+  })
+
+  test('M1: the run-scoped override context is flagged runScoped (drives Update-Directive suppression)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: true })
+    await db.insert(nodeRuns).values({
+      id: `nr_other_${taskId}`,
+      taskId,
+      nodeId: OTHER,
+      status: 'done',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: Date.now() - 500,
+    })
+    await submitCrossClarifyAnswers({
+      db,
+      crossClarifyNodeRunId,
+      answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
+      directive: 'continue',
+    })
+    const entry = (await designerEntries(db, taskId))[0]!
+    await reassignTaskQuestion(db, entry.id, OTHER, actor)
+    const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+    const ctx = await buildExternalFeedbackContext({
+      db,
+      taskId,
+      designerNodeId: OTHER,
+      loopIter: 0,
+      designerGeneration: 1,
+      definition: liveDef(),
+      dispatchedRunId: result.reruns[0]!.nodeRunId,
+    })
+    expect(ctx?.runScoped).toBe(true)
+    // The graph path (no claiming entries) is NOT flagged run-scoped → the generic
+    // priorOutputUpdate stays available there (golden-lock).
+    const graph = await buildExternalFeedbackContext({
+      db,
+      taskId,
+      designerNodeId: DESIGNER,
+      loopIter: 0,
+      designerGeneration: 1,
+      definition: liveDef(),
+    })
+    expect(graph?.runScoped).toBeUndefined()
+  })
+
+  test('M1: scheduler suppresses the generic priorOutputUpdate for a run-scoped context (source lock)', () => {
+    // The giant runOneNode prompt assembly can't be unit-run (it spawns opencode);
+    // lock the suppression at the source so a refactor that drops it goes red.
+    const src = readFileSync(join(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'), 'utf8')
+    expect(src).toContain('crossClarifyContext?.runScoped !== true')
+  })
+
+  test('H2: full HTTP path — deferred submit parks, POST .../questions/dispatch stamps + mints + releases the gate', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const app = makeApp(db)
+    // owner = the daemon TOKEN actor (__system__) so the member gate passes.
+    const { taskId, crossClarifyNodeRunId } = await seedTask(db, {
+      deferred: true,
+      ownerUserId: '__system__',
+    })
+    // designer-scoped submit → deferred (entry created, no rerun); simulate the park.
+    const submit = await submitCrossClarifyAnswers({
+      db,
+      crossClarifyNodeRunId,
+      answers: [ans('q1')],
+      directive: 'continue',
+    })
+    expect(submit.outcome.kind).toBe('designer-deferred')
+    await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
+    expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(1) // parked
+
+    const entry = (await designerEntries(db, taskId))[0]!
+    const res = await app.request(`/api/tasks/${taskId}/questions/dispatch`, {
+      method: 'POST',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ entryIds: [entry.id] }),
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { ok: boolean; reruns: Array<{ nodeRunId: string }> }
+    expect(body.ok).toBe(true)
+    expect(body.reruns.length).toBe(1)
+
+    // entry stamped + a pending designer rerun minted + gate released.
+    expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBe(body.reruns[0]?.nodeRunId)
+    const pending = await db
+      .select()
+      .from(nodeRuns)
+      .where(
+        and(
+          eq(nodeRuns.taskId, taskId),
+          eq(nodeRuns.nodeId, DESIGNER),
+          eq(nodeRuns.status, 'pending'),
+        ),
+      )
+    expect(pending.length).toBe(1)
+    expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(0) // released
+  })
+
+  test('H2: dispatch route rejects empty entryIds (422)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const app = makeApp(db)
+    const { taskId } = await seedTask(db, { deferred: true, ownerUserId: '__system__' })
+    const res = await app.request(`/api/tasks/${taskId}/questions/dispatch`, {
+      method: 'POST',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ entryIds: [] }),
+    })
+    expect(res.status).toBe(422)
   })
 })

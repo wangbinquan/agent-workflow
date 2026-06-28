@@ -317,6 +317,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/tasks/:id/questions/:entryId/confirm' },
   { method: 'POST', path: '/api/tasks/:id/questions/:entryId/reassign' },
   { method: 'POST', path: '/api/tasks/:id/questions/:entryId/stage' },
+  { method: 'POST', path: '/api/tasks/:id/questions/dispatch' },
 
   // ---- memories (RFC-041 / RFC-043 / RFC-045) ----
   { method: 'GET', path: '/api/memories' },

@@ -148,22 +148,29 @@ export async function dispatchTaskQuestions(
     return t !== null && requestedTargets.has(t)
   })
 
-  // 3. A cross round is consumed as a UNIT (round-scoped consumption), so a round
-  //    whose open designer entries span >1 effective target can't be split in v1.
-  //    Reject it — fail fast, no partial dispatch.
-  const targetsByRound = new Map<string, Set<string>>()
-  for (const e of groupEntries) {
-    const t = effectiveTarget(e)
-    if (t === null) continue
-    const set = targetsByRound.get(e.originNodeRunId) ?? new Set<string>()
-    set.add(t)
-    targetsByRound.set(e.originNodeRunId, set)
+  // 3. A cross round is consumed as a UNIT (round-scoped consumption + G3 block
+  //    2b). So for every origin (round) TOUCHED by this dispatch, EVERY still-open
+  //    designer question of that round must share ONE effective target — checked
+  //    against ALL open entries of the origin, NOT just the requested subset
+  //    (Codex H1: dispatching q1→X of a round whose q2→its graph designer would
+  //    otherwise consume the whole round when X completes and strand q2). Reject —
+  //    fail fast, no partial dispatch.
+  const touchedOrigins = new Set(groupEntries.map((e) => e.originNodeRunId))
+  const openByOrigin = new Map<string, TaskQuestionRow[]>()
+  for (const e of allOpen) {
+    if (!touchedOrigins.has(e.originNodeRunId)) continue
+    const list = openByOrigin.get(e.originNodeRunId) ?? []
+    list.push(e)
+    openByOrigin.set(e.originNodeRunId, list)
   }
-  for (const [roundOrigin, targets] of targetsByRound) {
+  for (const [roundOrigin, roundEntries] of openByOrigin) {
+    const targets = new Set(
+      roundEntries.map(effectiveTarget).filter((t): t is string => t !== null),
+    )
     if (targets.size > 1) {
       throw new ConflictError(
         'task-question-round-multi-target',
-        `round ${roundOrigin} has designer questions dispatched to multiple handler nodes (${[...targets].join(', ')}); a cross-clarify round is consumed as a unit in v1 — reassign its designer questions to a single handler first.`,
+        `round ${roundOrigin} has open designer questions for multiple handler nodes (${[...targets].join(', ')}); a cross-clarify round is consumed as a unit in v1 — reassign its designer questions to a single handler before dispatching.`,
       )
     }
   }

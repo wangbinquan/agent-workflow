@@ -4,6 +4,7 @@
 //   POST /api/tasks/:id/questions/:entryId/confirm      已处理待确认 → 完成
 //   POST /api/tasks/:id/questions/:entryId/reassign     改派 designer handler {targetNodeId}
 //   POST /api/tasks/:id/questions/:entryId/stage        拖入/出「待下发」{staged}
+//   POST /api/tasks/:id/questions/dispatch              批量下发 {entryIds} → release gate
 //
 // Auth: token middleware applies via createApp's app.use('/api/*', ...).
 // Read inherits task visibility (canViewTask → 404 mirrors task routes); writes
@@ -14,6 +15,7 @@ import { eq } from 'drizzle-orm'
 import type { Context, Hono } from 'hono'
 import type { TaskActorRole, TaskQuestionPhase } from '@agent-workflow/shared'
 import { actorOf, type Actor } from '@/auth/actor'
+import { loadConfig } from '@/config'
 import { taskQuestions, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import {
@@ -22,8 +24,28 @@ import {
   reassignTaskQuestion,
   stageTaskQuestion,
 } from '@/services/taskQuestions'
+import { dispatchTaskQuestions } from '@/services/taskQuestionDispatch'
 import { canViewTask, requireTaskMember } from '@/services/taskCollab'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
+import { resumeTask } from '@/services/task'
+import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { createLogger } from '@/util/log'
+import { Paths } from '@/util/paths'
+
+const log = createLogger('task-questions-route')
+
+function resolveOpencodeCmd(configPath: string): string[] | undefined {
+  if (configPath === '') return undefined
+  try {
+    const cfg = loadConfig(configPath)
+    if (typeof cfg.opencodePath === 'string' && cfg.opencodePath.length > 0) {
+      return [cfg.opencodePath]
+    }
+  } catch {
+    /* nothing */
+  }
+  return undefined
+}
 
 async function loadVisibleTask(deps: AppDeps, taskId: string, actor: Actor) {
   const [t] = await deps.db.select().from(tasksTable).where(eq(tasksTable.id, taskId)).limit(1)
@@ -87,5 +109,51 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
     const staged = body.staged !== false // default true
     await stageTaskQuestion(deps.db, entryId, staged, { userId: actor.user.id, role })
     return c.json({ ok: true })
+  })
+
+  // RFC-120 T9 (model A) — batch-dispatch the chosen entries: mint the handler
+  // reruns + stamp trigger_run_id (dispatchTaskQuestions) then resumeTask to
+  // RELEASE the deferred park (the same resume the clarify route uses). Without
+  // this route a deferred-dispatch task parks awaiting_human forever (Codex H2).
+  app.post('/api/tasks/:id/questions/dispatch', async (c) => {
+    const taskId = c.req.param('id')
+    const actor = actorOf(c)
+    const task = await loadVisibleTask(deps, taskId, actor)
+    const role = await requireTaskMember(deps.db, actor, task)
+    const body = (await c.req.json().catch(() => ({}))) as { entryIds?: unknown }
+    const entryIds = Array.isArray(body.entryIds)
+      ? body.entryIds.filter((x): x is string => typeof x === 'string')
+      : []
+    if (entryIds.length === 0) {
+      throw new ValidationError(
+        'entry-ids-required',
+        'entryIds (a non-empty array of task_question ids) is required',
+      )
+    }
+    const result = await dispatchTaskQuestions(deps.db, taskId, entryIds, {
+      userId: actor.user.id,
+      role,
+    })
+    // Release the gate: re-enter scheduling so the minted reruns dispatch and the
+    // task leaves awaiting_human. Best-effort, mirroring the clarify route — a
+    // live scheduler racing us surfaces task-not-resumable, which is expected.
+    const opencodeCmd = resolveOpencodeCmd(deps.configPath)
+    const resumeDeps: Parameters<typeof resumeTask>[2] = {
+      db: deps.db,
+      appHome: Paths.root,
+      ...(opencodeCmd ? { opencodeCmd } : {}),
+      ...resolveLaunchRuntimeConfig(deps.configPath),
+    }
+    void resumeTask(deps.db, taskId, resumeDeps).catch((err) => {
+      if (err instanceof ConflictError && err.code === 'task-not-resumable') {
+        log.info('task-questions dispatch resume deferred', { taskId })
+        return
+      }
+      log.warn('task-questions dispatch resume threw', {
+        taskId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
+    return c.json({ ok: true, reruns: result.reruns })
   })
 }

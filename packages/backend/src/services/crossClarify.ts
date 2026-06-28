@@ -1115,6 +1115,15 @@ export interface ExternalFeedbackPromptContext {
    * preserves legacy regenerate-from-inputs behaviour.
    */
   priorOutputBlock?: string
+  /**
+   * RFC-120 T9 (model A): true when this context came from the RUN-SCOPED override
+   * path (buildRunScopedExternalFeedback) — the handler is an override target
+   * handed a NEW question via External Feedback, NOT a designer revising its own
+   * prior draft. The scheduler suppresses the generic RFC-119 `priorOutputUpdate`
+   * (Update Directive) for such a run so an override target with its own prior
+   * outputs is not wrongly told to "update" them (Codex M1).
+   */
+  runScoped?: boolean
 }
 
 /**
@@ -1298,7 +1307,7 @@ async function buildRunScopedExternalFeedback(
     .sort((a, b) => a.sourceQuestionerNodeId.localeCompare(b.sourceQuestionerNodeId))
     .map((s) => s.sourceQuestionerNodeId)
     .join(', ')
-  return { block, iteration: String(generation), sourcesCsv: csv }
+  return { block, iteration: String(generation), sourcesCsv: csv, runScoped: true }
 }
 
 // ---------------------------------------------------------------------------
