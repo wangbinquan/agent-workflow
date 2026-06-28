@@ -53,8 +53,15 @@ if (!agentName) fail('missing --agent <name>')
 // (e.g. attempt 0 before it crashes) so it can mutate state the NEXT attempt's
 // prompt build must pick up (the per-attempt clarify-directive read). Absent ⇒
 // no wait (every existing plan is unaffected).
+//
+// `sessionId` (opt-in) makes the step pre-emit a `{type:'session.created',
+// sessionID}` event so the runner captures a sessionId — the precondition for a
+// same-session envelope FOLLOW-UP (decideEnvelopeFollowup needs sessionId !==
+// null). Absent ⇒ no session event (so existing crash/skip plans keep failing
+// into the FRESH-session retry path, unchanged).
 interface WaitMixin {
   waitFile?: string
+  sessionId?: string
 }
 interface OutputStep extends WaitMixin {
   output: Record<string, string>
@@ -106,6 +113,16 @@ if (steps && steps.length > 0) {
 function emitText(text: string): void {
   process.stdout.write(
     JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text } }) + '\n',
+  )
+}
+
+// RFC-122: optionally pre-emit a session.created event (real opencode emits an
+// event carrying `sessionID`; the runner grabs the first one) so this attempt is
+// eligible for a same-session envelope follow-up.
+const sessionId = (step as { sessionId?: unknown }).sessionId
+if (typeof sessionId === 'string' && sessionId.length > 0) {
+  process.stdout.write(
+    JSON.stringify({ type: 'session.created', sessionID: sessionId, timestamp: Date.now() }) + '\n',
   )
 }
 

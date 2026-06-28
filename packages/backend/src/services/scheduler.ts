@@ -1911,6 +1911,17 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     preSnapshot: string | null
     preSnapshotReposJson: string | null
   } | null = null
+  // RFC-122 (same-session follow-up fix): the PRIOR attempt's
+  // effectiveHasClarifyChannel. A same-session envelope follow-up re-anchors the
+  // agent on "the format previously specified in this session"; that is only
+  // valid when this attempt runs in the SAME mode (clarify vs output) as the
+  // prior one. A per-attempt STOP-toggle flip can switch the mode mid-loop (e.g.
+  // attempt 0 clarify-only → attempt 1 output), and the prior session never
+  // emitted the now-needed protocol. When the mode flips we bypass the follow-up
+  // and rebuild the FULL renderUserPrompt instead. Seeded false (attempt 0 never
+  // follows up). Within a retry loop only nodeStopOverride varies per attempt, so
+  // a flip ⟺ a toggle change ⇒ golden-lock: no toggle ⇒ never flips.
+  let priorAttemptClarifyActive = false
 
   try {
     for (let attempt = retryIndex; attempt <= retryIndex + maxRetries; attempt++) {
@@ -2486,6 +2497,19 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           nodeStopOverride,
           contextDirective: clarifyContext?.directive,
         })
+        // RFC-122 (same-session follow-up fix): a same-session envelope follow-up
+        // (renderEnvelopeFollowupPrompt) re-anchors on "the format previously
+        // specified in this session" WITHOUT re-emitting the full protocol. If the
+        // per-attempt STOP toggle flipped this attempt's clarify-vs-output mode
+        // relative to the prior attempt, that format was never specified in the
+        // resumed session — so bypass the follow-up and let the FULL
+        // renderUserPrompt render the correct protocol (output-port list +
+        // clarifyStopNotice, or the mandatory ask-back block) from scratch.
+        // Bidirectional (stop→output AND output→stop). Golden-lock: with no toggle
+        // the mode is stable across attempts ⇒ false ⇒ follow-up path unchanged.
+        const clarifyModeFlip =
+          followupDecision.followup && priorAttemptClarifyActive !== effectiveHasClarifyChannel
+        priorAttemptClarifyActive = effectiveHasClarifyChannel
         // RFC-119: generalized prior-output for a NON-cross-clarify rerun. When
         // this node has an earlier captured output at the SAME (iteration,
         // shardKey) — review reject/iterate (supersede→canceled), manual retry,
@@ -2619,7 +2643,12 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           ...(effectiveResumeSessionId !== undefined
             ? { resumeSessionId: effectiveResumeSessionId }
             : {}),
-          ...(followupDecision.followup
+          // RFC-122: a same-session follow-up is bypassed when the STOP toggle
+          // flipped this attempt's clarify-vs-output mode (clarifyModeFlip) — the
+          // resumed session never emitted the now-needed protocol, so the runner
+          // takes the FULL renderUserPrompt path instead (clarifyStopNotice + the
+          // complete output protocol, or the mandatory ask-back block).
+          ...(followupDecision.followup && !clarifyModeFlip
             ? {
                 envelopeFollowup: true as const,
                 envelopeFollowupReason: followupDecision.reason,

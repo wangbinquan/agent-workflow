@@ -312,6 +312,102 @@ describe('RFC-122 H1 — process retry reads the LATEST directive per attempt', 
   })
 })
 
+// RFC-122 same-session follow-up edge: when the STOP toggle flips a retry from
+// clarify-active to output mode, the same-session envelope follow-up (which only
+// re-anchors on "the format previously specified in this session") is bypassed in
+// favor of the FULL renderUserPrompt — so the agent gets the STOP notice + the
+// complete output protocol it never saw in the clarify-only session.
+describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full output protocol', () => {
+  let c: Ctx
+  beforeEach(() => {
+    c = freshCtx()
+  })
+  afterEach(() => {
+    c.cleanup()
+  })
+
+  test('clarify-required follow-up + mid-loop stop flip → attempt 1 has STOP CLARIFYING + output protocol', async () => {
+    // attempt 0: clarify-active; emits a session id (→ follow-up eligible) then
+    //   WAITS, then emits <workflow-output> while ask-back is mandatory →
+    //   clarify-required failure (exit 0) → same-session FOLLOW-UP eligible.
+    // attempt 1: toggle flipped to stop → effectiveHasClarifyChannel=false; the
+    //   follow-up is BYPASSED → full renderUserPrompt with STOP + output protocol.
+    writePlan(c.appHome, {
+      designer: [
+        { output: { design: 'x' }, sessionId: 'ses_h3', waitFile: 'go' },
+        { output: { design: 'D1' } },
+      ],
+    })
+    const wf = await designerSelfClarifyWorkflow(c, 'fu')
+    const task = await startTask(
+      {
+        workflowId: wf.id,
+        name: 'fu',
+        repoPath: c.repoPath,
+        baseBranch: 'main',
+        inputs: { topic: 'x' },
+      },
+      { db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd(), awaitScheduler: false },
+    )
+
+    const attempt0 = await poll(async () => {
+      const r = (await designerTop(c.db, task.id)).find((x) => x.retryIndex === 0)
+      return r?.promptText ? r : undefined
+    })
+    // Precondition: attempt 0 ran clarify-only (no output protocol in its prompt).
+    expect(attempt0.promptText ?? '').toContain(MANDATORY)
+    expect(attempt0.promptText ?? '').not.toContain(OUTPUT_PROTO)
+
+    await setNodeClarifyDirective(c.db, task.id, 'designer', 'stop', 'u1')
+    writeFileSync(join(c.stateDir, 'go'), '1')
+
+    const attempt1 = await poll(async () => {
+      const r = (await designerTop(c.db, task.id)).find((x) => x.retryIndex === 1)
+      return r?.promptText ? r : undefined
+    })
+    // The bypass: the FULL output protocol + STOP CLARIFYING (not the short
+    // "format previously specified in this session" follow-up re-anchor).
+    expect(attempt1.promptText ?? '').toContain(STOP_TRAILER)
+    expect(attempt1.promptText ?? '').toContain(OUTPUT_PROTO)
+    expect(attempt1.promptText ?? '').not.toContain(MANDATORY)
+    expect(attempt1.promptText ?? '').not.toContain('previously specified in this session')
+
+    await poll(async () => {
+      const s = await taskStatus(c.db, task.id)
+      return s === 'done' || s === 'failed' ? s : undefined
+    })
+  })
+
+  test('golden-lock: no override ⇒ the same-session follow-up prompt is unchanged', async () => {
+    // Same clarify-required failure, but NO toggle flip: attempt 1 stays a normal
+    // clarify-mode follow-up (short re-anchor), byte-for-byte today's behavior.
+    writePlan(c.appHome, {
+      designer: [{ output: { design: 'x' }, sessionId: 'ses_gl' }, { clarify: { questions: [Q] } }],
+    })
+    const wf = await designerSelfClarifyWorkflow(c, 'fugl')
+    const task = await startTask(
+      {
+        workflowId: wf.id,
+        name: 'fugl',
+        repoPath: c.repoPath,
+        baseBranch: 'main',
+        inputs: { topic: 'x' },
+      },
+      { db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd(), awaitScheduler: true },
+    )
+
+    const attempt1 = (await designerTop(c.db, task.id)).find((x) => x.retryIndex === 1)
+    expect(attempt1?.rerunCause).toBe('process-retry')
+    // The follow-up path (clarify-mode) — NOT the full renderUserPrompt: it re-
+    // anchors on the format "previously specified in this session" and does NOT
+    // emit a STOP notice.
+    expect(attempt1?.promptText ?? '').toContain('previously specified in this session')
+    expect(attempt1?.promptText ?? '').not.toContain(STOP_TRAILER)
+    // No override row was ever created.
+    expect(await listNodeClarifyDirectives(c.db, task.id)).toEqual({})
+  })
+})
+
 describe('RFC-122 store round-trip + scheduler wiring lock', () => {
   test('set / get / list round-trip; continue is read back identically', async () => {
     const db = createInMemoryDb(MIGRATIONS)
@@ -375,5 +471,18 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
     const readIdx = src.indexOf('getNodeClarifyDirective(db, taskId, node.id)')
     expect(loopIdx).toBeGreaterThan(0)
     expect(readIdx).toBeGreaterThan(loopIdx)
+  })
+
+  test('same-session follow-up is bypassed when the STOP toggle flips the mode', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      'utf8',
+    )
+    // The clarifyModeFlip guard + the gated envelopeFollowup arg. Without the
+    // `&& !clarifyModeFlip` the runner would re-anchor on a protocol the resumed
+    // clarify-only session never emitted.
+    expect(src).toContain('const clarifyModeFlip =')
+    expect(src).toContain('priorAttemptClarifyActive !== effectiveHasClarifyChannel')
+    expect(src).toContain('followupDecision.followup && !clarifyModeFlip')
   })
 })
