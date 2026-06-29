@@ -678,13 +678,15 @@ export async function resolveBorrowForNode(
 ): Promise<string | null> {
   const immediate = await resolveImmediateBorrowForNode(db, taskId, nodeId, iteration, workflowDef)
   const designer = await resolveDesignerBorrowForNode(db, taskId, nodeId, iteration, workflowDef)
-  // P2-2: an open self/questioner reassignment AND an open dispatched designer reassignment on
-  // the SAME home at the SAME iteration is ambiguous — the scheduler can't tell which ledger the
-  // current rerun belongs to. Reject rather than silently letting one ledger win.
-  if (immediate !== null && designer !== null) {
+  // P2-2 (Codex re-gate): a self/questioner reassignment AND a dispatched designer reassignment
+  // open on the SAME home+iteration is ambiguous ONLY when they name DIFFERENT borrowed agents —
+  // the scheduler can't tell which ledger the current rerun belongs to. If BOTH ledgers agree on
+  // the same agent there is no selection ambiguity (the rerun runs X either way), so let it
+  // proceed instead of failing a valid task.
+  if (immediate !== null && designer !== null && immediate !== designer) {
     throw new ConflictError(
       'task-question-borrow-ledger-conflict',
-      `node '${nodeId}' (iter ${iteration}) has BOTH an open self/questioner reassignment and an open dispatched designer reassignment; the borrowed agent is ambiguous — resolve one before the node reruns.`,
+      `node '${nodeId}' (iter ${iteration}) has an open self/questioner reassignment (→ ${immediate}) and an open dispatched designer reassignment (→ ${designer}) naming DIFFERENT borrowed agents; resolve one before the node reruns.`,
     )
   }
   return immediate ?? designer
