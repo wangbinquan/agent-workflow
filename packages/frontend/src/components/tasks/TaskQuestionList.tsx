@@ -16,6 +16,7 @@ import { Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError } from '@/api/client'
+import { Card } from '@/components/Card'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
@@ -215,17 +216,15 @@ export function TaskQuestionList({
   // is empty (so the first manual question can be added), but ONLY on a deferred-dispatch
   // task (a manual question is undispatchable otherwise — H2). The form is a portal Dialog
   // (no-op chrome while closed). Non-deferred ⇒ null toolbar/form (golden-lock).
-  const toolbar = deferred ? (
-    <div className="task-questions__toolbar">
-      <button
-        type="button"
-        className="btn btn--sm btn--primary"
-        onClick={openNewQuestion}
-        data-testid="tq-add-question"
-      >
-        {t('taskQuestions.addQuestion')}
-      </button>
-    </div>
+  const addBtn = deferred ? (
+    <button
+      type="button"
+      className="btn btn--sm"
+      onClick={openNewQuestion}
+      data-testid="tq-add-question"
+    >
+      {t('taskQuestions.addQuestion')}
+    </button>
   ) : null
   const authorForm = deferred ? (
     <QuestionAuthorForm
@@ -240,7 +239,12 @@ export function TaskQuestionList({
   if (entries.length === 0) {
     return (
       <div className="task-questions-wrap">
-        {toolbar}
+        {addBtn !== null && (
+          <div className="task-questions__toolbar">
+            <div className="task-questions__filter" />
+            <div className="task-questions__actions">{addBtn}</div>
+          </div>
+        )}
         <EmptyState title={t('taskQuestions.empty')} />
         {authorForm}
       </div>
@@ -270,49 +274,59 @@ export function TaskQuestionList({
 
   return (
     <div className="task-questions-wrap">
-      {toolbar}
-      <div className="task-questions__filter" data-testid="tq-node-filter">
-        <button
-          type="button"
-          className={'btn btn--xs' + (sourceFilter === null ? ' btn--primary' : '')}
-          onClick={() => setSourceFilter(null)}
-        >
-          {t('taskQuestions.allNodes')} ({entries.length})
-        </button>
-        {[...counts.entries()].map(([nodeId, n]) => (
-          <button
-            key={nodeId}
-            type="button"
-            className={'btn btn--xs' + (sourceFilter === nodeId ? ' btn--primary' : '')}
-            onClick={() => setSourceFilter(nodeId)}
-            data-testid={`tq-node-filter-${nodeId}`}
-          >
-            {nodeId} ({n})
-          </button>
-        ))}
-      </div>
-      {/* RFC-120 §18 — batch-dispatch action bar. Only present when there is at
-          least one staged card (golden-lock). The button dispatches the visible
-          staged cards the user has selected. */}
-      {stagedShown.length > 0 && (
-        <div className="task-questions__dispatch-bar" data-testid="tq-batch-dispatch-bar">
+      {/* RFC-124 — single-row toolbar: source-node filter (left) + actions (right). */}
+      <div className="task-questions__toolbar">
+        <div className="task-questions__filter" data-testid="tq-node-filter">
           <button
             type="button"
-            className="btn btn--primary btn--sm"
-            data-testid="tq-batch-dispatch"
-            disabled={stagedSelectedIds.length === 0 || dispatchM.isPending}
-            onClick={() => {
-              if (stagedSelectedIds.length === 0) return
-              setDispatchError(null)
-              dispatchM.mutate(stagedSelectedIds)
-            }}
+            className={
+              'task-questions__filter-chip' +
+              (sourceFilter === null ? ' task-questions__filter-chip--active' : '')
+            }
+            onClick={() => setSourceFilter(null)}
           >
-            {stagedSelectedIds.length > 0
-              ? t('taskQuestions.batchDispatchCount', { count: stagedSelectedIds.length })
-              : t('taskQuestions.batchDispatch')}
+            {t('taskQuestions.allNodes')} ({entries.length})
           </button>
+          {[...counts.entries()].map(([nodeId, n]) => (
+            <button
+              key={nodeId}
+              type="button"
+              className={
+                'task-questions__filter-chip' +
+                (sourceFilter === nodeId ? ' task-questions__filter-chip--active' : '')
+              }
+              onClick={() => setSourceFilter(nodeId)}
+              data-testid={`tq-node-filter-${nodeId}`}
+            >
+              {nodeId} ({n})
+            </button>
+          ))}
         </div>
-      )}
+        <div className="task-questions__actions">
+          {/* RFC-120 §18 — batch-dispatch. Only present when ≥1 staged card is visible
+              (golden-lock: no staged ⇒ no bar); enables once ≥1 is selected. */}
+          {stagedShown.length > 0 && (
+            <div className="task-questions__batch" data-testid="tq-batch-dispatch-bar">
+              <button
+                type="button"
+                className="btn btn--sm btn--primary"
+                data-testid="tq-batch-dispatch"
+                disabled={stagedSelectedIds.length === 0 || dispatchM.isPending}
+                onClick={() => {
+                  if (stagedSelectedIds.length === 0) return
+                  setDispatchError(null)
+                  dispatchM.mutate(stagedSelectedIds)
+                }}
+              >
+                {stagedSelectedIds.length > 0
+                  ? t('taskQuestions.batchDispatchCount', { count: stagedSelectedIds.length })
+                  : t('taskQuestions.batchDispatch')}
+              </button>
+            </div>
+          )}
+          {addBtn}
+        </div>
+      </div>
       {dispatchError !== null && <ErrorBanner error={dispatchError} />}
       <div className="task-questions" data-testid="task-questions-board">
         {PHASE_ORDER.map((phase) => {
@@ -325,94 +339,123 @@ export function TaskQuestionList({
                 </StatusChip>
                 <span className="task-questions__count">{col.length}</span>
               </div>
-              {col.map((e) => (
-                <div className="task-questions__card" key={e.id} data-testid={`tq-card-${e.id}`}>
-                  {/* RFC-120 §18 — staged cards are batch-dispatch selectable. */}
-                  {phase === 'staged' && (
-                    <label className="task-questions__select">
-                      <input
-                        type="checkbox"
-                        checked={selected.has(e.id)}
-                        onChange={() => toggleSelected(e.id)}
-                        aria-label={t('taskQuestions.selectForDispatch')}
-                        data-testid={`tq-select-${e.id}`}
-                      />
-                      <span>{t('taskQuestions.selectForDispatch')}</span>
-                    </label>
-                  )}
-                  <div className="task-questions__title">{e.questionTitle}</div>
-                  {/* RFC-120: 答案紧贴问题——节点信息(meta)不得插在问与答之间（用户反馈）。 */}
-                  {e.answerSummary && (
-                    <div className="task-questions__answer">{e.answerSummary}</div>
-                  )}
-                  <dl className="task-questions__meta">
-                    <dt>{t('taskQuestions.source')}</dt>
-                    {/* RFC-120 §15 — a manual question has no source node: show "手动". */}
-                    <dd>{e.sourceNodeId ?? t('taskQuestions.manualSource')}</dd>
-                    <dt>{t('taskQuestions.target')}</dt>
-                    <dd>
-                      {/* RFC-120 Codex impl gate F3: only re-targetable while non-terminal. */}
-                      {e.roleKind === 'designer' && e.phase !== 'done' && e.phase !== 'closed' ? (
-                        <Select
-                          value={e.effectiveTargetNodeId ?? ''}
-                          ariaLabel={t('taskQuestions.reassign')}
-                          onChange={(v) => reassignM.mutate({ id: e.id, targetNodeId: v })}
-                          options={nodeOptions.map((n) => ({ value: n.id, label: n.label }))}
-                        />
-                      ) : (
-                        <span>{labelFor(e.effectiveTargetNodeId)}</span>
-                      )}
-                    </dd>
-                  </dl>
-                  <div className="task-questions__actions">
-                    {/* RFC-120: the path to ANSWER each clarify question — links to its
-                        clarify/cross-clarify page (answer if unanswered, view if
-                        answered). A manual question (originNodeRunId null) has no clarify
-                        page, so the link is omitted (§15). */}
-                    {e.originNodeRunId !== null && (
-                      <Link
-                        to="/clarify/$nodeRunId"
-                        params={{ nodeRunId: e.originNodeRunId }}
-                        className="btn btn--xs"
-                        data-testid={`tq-answer-${e.id}`}
-                      >
-                        {e.answerSummary
-                          ? t('taskQuestions.viewClarify')
-                          : t('taskQuestions.answer')}
-                      </Link>
+              {col.map((e) => {
+                // RFC-120 Codex impl gate F3: only re-targetable while non-terminal.
+                const reassignable =
+                  e.roleKind === 'designer' && e.phase !== 'done' && e.phase !== 'closed'
+                const hasAnswerLink = e.originNodeRunId !== null
+                const hasCopy = deferred && e.phase === 'pending'
+                const hasConfirm = e.phase === 'awaiting_confirm'
+                const hasStage = e.phase === 'pending' || e.phase === 'staged'
+                const hasActions = hasAnswerLink || hasCopy || hasConfirm || hasStage
+                return (
+                  <Card
+                    key={e.id}
+                    data-testid={`tq-card-${e.id}`}
+                    interactive
+                    highlighted={phase === 'staged' && selected.has(e.id)}
+                    header={
+                      // RFC-120 §18 — staged cards are batch-dispatch selectable.
+                      phase === 'staged' ? (
+                        <label className="task-questions__select">
+                          <input
+                            type="checkbox"
+                            checked={selected.has(e.id)}
+                            onChange={() => toggleSelected(e.id)}
+                            aria-label={t('taskQuestions.selectForDispatch')}
+                            data-testid={`tq-select-${e.id}`}
+                          />
+                          <span>{t('taskQuestions.selectForDispatch')}</span>
+                        </label>
+                      ) : undefined
+                    }
+                    footer={
+                      hasActions ? (
+                        <>
+                          {/* Path to ANSWER each clarify question — links to its
+                              clarify/cross page (answer if unanswered, view if answered).
+                              A manual question (originNodeRunId null) has none → omit (§15). */}
+                          {e.originNodeRunId !== null && (
+                            <Link
+                              to="/clarify/$nodeRunId"
+                              params={{ nodeRunId: e.originNodeRunId }}
+                              className={
+                                'btn btn--sm' + (e.answerSummary ? ' btn--ghost' : ' btn--primary')
+                              }
+                              data-testid={`tq-answer-${e.id}`}
+                            >
+                              {e.answerSummary
+                                ? t('taskQuestions.viewClarify')
+                                : t('taskQuestions.answer')}
+                            </Link>
+                          )}
+                          {/* §15 — 复制 a 待指派 card → author form prefilled (deferred-only). */}
+                          {hasCopy && (
+                            <button
+                              type="button"
+                              className="btn btn--sm btn--ghost"
+                              onClick={() => openCopyQuestion(e)}
+                              data-testid={`tq-copy-${e.id}`}
+                            >
+                              {t('taskQuestions.copy')}
+                            </button>
+                          )}
+                          {hasConfirm && (
+                            <ConfirmButton
+                              label={t('taskQuestions.confirm')}
+                              size="sm"
+                              onConfirm={() => confirmM.mutate(e.id)}
+                            />
+                          )}
+                          {hasStage && (
+                            <button
+                              type="button"
+                              className="btn btn--sm"
+                              onClick={() => stageM.mutate({ id: e.id, staged: !e.staged })}
+                              data-testid={`tq-stage-${e.id}`}
+                            >
+                              {e.staged ? t('taskQuestions.unstage') : t('taskQuestions.stage')}
+                            </button>
+                          )}
+                        </>
+                      ) : undefined
+                    }
+                  >
+                    <div className="card__title">{e.questionTitle}</div>
+                    {/* RFC-120 lock: 答案紧贴问题、排在 meta 之前（节点信息不得插在问与答之间）。 */}
+                    {e.answerSummary && (
+                      <div className="task-questions__answer">{e.answerSummary}</div>
                     )}
-                    {/* RFC-120 §15 — 复制 a 待指派 card: open the author form prefilled with
-                        its title/body; Save creates a NEW manual question. Deferred-only
-                        (manual questions only dispatch on a deferred task — H2). */}
-                    {deferred && e.phase === 'pending' && (
-                      <button
-                        type="button"
-                        className="btn btn--xs"
-                        onClick={() => openCopyQuestion(e)}
-                        data-testid={`tq-copy-${e.id}`}
-                      >
-                        {t('taskQuestions.copy')}
-                      </button>
-                    )}
-                    {e.phase === 'awaiting_confirm' && (
-                      <ConfirmButton
-                        label={t('taskQuestions.confirm')}
-                        onConfirm={() => confirmM.mutate(e.id)}
-                      />
-                    )}
-                    {(e.phase === 'pending' || e.phase === 'staged') && (
-                      <button
-                        type="button"
-                        className="btn btn--sm"
-                        onClick={() => stageM.mutate({ id: e.id, staged: !e.staged })}
-                        data-testid={`tq-stage-${e.id}`}
-                      >
-                        {e.staged ? t('taskQuestions.unstage') : t('taskQuestions.stage')}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                    <div className="task-questions__meta">
+                      <span className="task-questions__meta-pair">
+                        <span className="task-questions__meta-k">{t('taskQuestions.source')}</span>
+                        {/* §15 — a manual question has no source node: show "手动". */}
+                        <span className="task-questions__meta-v">
+                          {e.sourceNodeId ?? t('taskQuestions.manualSource')}
+                        </span>
+                      </span>
+                      <span className="task-questions__meta-flow" aria-hidden="true">
+                        →
+                      </span>
+                      <span className="task-questions__meta-pair">
+                        <span className="task-questions__meta-k">{t('taskQuestions.target')}</span>
+                        {reassignable ? (
+                          <Select
+                            value={e.effectiveTargetNodeId ?? ''}
+                            ariaLabel={t('taskQuestions.reassign')}
+                            onChange={(v) => reassignM.mutate({ id: e.id, targetNodeId: v })}
+                            options={nodeOptions.map((n) => ({ value: n.id, label: n.label }))}
+                          />
+                        ) : (
+                          <span className="task-questions__meta-v">
+                            {labelFor(e.effectiveTargetNodeId)}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  </Card>
+                )
+              })}
             </div>
           )
         })}

@@ -218,6 +218,20 @@ describe('TaskQuestionList board', () => {
     expect(screen.getByTestId('tq-card-a1')).toBeTruthy()
     expect(screen.queryByTestId('tq-card-b1')).toBeNull()
   })
+
+  // RFC-124 source-lock — board action buttons are visually unified: every `.btn`
+  // inside a card is `btn--sm` (incl. ConfirmButton size="sm"); no full-size `.btn`
+  // and no `btn--xs` survive. Locks the "按钮样式不统一" fix from this RFC.
+  test('RFC-124: all in-card action buttons are unified to btn--sm', async () => {
+    await wrap([entry({ id: 'e1', phase: 'awaiting_confirm', answerSummary: 'a' })])
+    const card = screen.getByTestId('tq-card-e1')
+    const btns = Array.from(card.querySelectorAll('.btn'))
+    expect(btns.length).toBeGreaterThan(0)
+    for (const b of btns) {
+      expect(b.className).toContain('btn--sm')
+      expect(b.className).not.toContain('btn--xs')
+    }
+  })
 })
 
 // RFC-120 §18 — batch-dispatch (一键下发) of staged (待下发) designer questions.
