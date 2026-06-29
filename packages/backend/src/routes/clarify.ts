@@ -26,6 +26,7 @@ import { clarifyRounds, nodeRuns, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { countPendingClarifications, submitClarifyAnswers } from '@/services/clarify'
 import { submitCrossClarifyAnswers } from '@/services/crossClarify'
+import { sealRoundQuestions } from '@/services/clarifySeal'
 import {
   getClarifyRoundDetail,
   listClarifyRoundSummaries,
@@ -228,6 +229,40 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     const role = await ensureClarifyMember(deps, nodeRunId, actor)
 
+    // RFC-128 P2 (T5) — optional questionIds subset cap: when supplied, restrict this
+    // submission to answers whose questionId is in the list (the centralized pane / the
+    // /clarify coordination declare exactly which questions they seal, so a stale tab can
+    // never re-touch a sibling sealed elsewhere). Omitted ⇒ all answers (golden lock: the
+    // filtered array is the SAME reference, so the quick channel below is byte-for-byte).
+    const subsetIds = parsed.data.questionIds
+    const answers =
+      subsetIds !== undefined
+        ? parsed.data.answers.filter((a) => subsetIds.includes(a.questionId))
+        : parsed.data.answers
+
+    // RFC-128 P2 (T6) — defer routing. defer=true → CONTROL channel: seal the answered
+    // subset (sealRoundQuestions, P1) WITHOUT minting a rerun or resuming the task; the
+    // sealed question(s) enter 待指派 for the centralized-answer pane / batch dispatch. The
+    // seal primitive is kind-agnostic (reads round.kind internally + dual-writes the legacy
+    // session), so no self/cross branch is needed here. defer=false (the default, and the
+    // value when omitted) falls through to the unchanged quick channel below.
+    if (parsed.data.defer) {
+      const sealResult = await sealRoundQuestions({
+        db: deps.db,
+        originNodeRunId: nodeRunId,
+        answers,
+        // Per-question scope is chosen when a (cross) question is answered; harmless for
+        // self rounds (reconcile never derives a designer entry from scope there). Mirror
+        // the quick channel — forward questionScopes only when the client sent it.
+        ...(parsed.data.questionScopes !== undefined ? { scopes: parsed.data.questionScopes } : {}),
+        // RFC-099: audit-only setter id — NEVER enters an agent prompt.
+        sealedBy: actor.user.id,
+      })
+      // NB: no resumeTask — the whole point of defer is to NOT advance execution; the
+      // user dispatches later from the board (P3 designer 借壳 / P5 self·questioner rerun).
+      return c.json({ ok: true, kind: 'seal' as const, ...sealResult })
+    }
+
     // RFC-056: branch by node kind. Cross-clarify routes through
     // submitCrossClarifyAnswers which knows the 'continue' (submit) +
     // 'stop' (reject) directives.
@@ -245,7 +280,7 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
       const ccResult = await submitCrossClarifyAnswers({
         db: deps.db,
         crossClarifyNodeRunId: nodeRunId,
-        answers: parsed.data.answers,
+        answers,
         directive: parsed.data.directive,
         answeredBy: actor.user.id,
         submittedByRole: role,
@@ -283,7 +318,7 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
     const result = await submitClarifyAnswers({
       db: deps.db,
       clarifyNodeRunId: nodeRunId,
-      answers: parsed.data.answers,
+      answers,
       directive: parsed.data.directive,
       answeredBy: actor.user.id,
       submittedByRole: role,

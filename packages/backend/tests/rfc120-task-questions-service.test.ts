@@ -11,6 +11,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
+import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   clarifyRounds,
@@ -394,6 +395,14 @@ describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
     })
     const [entry] = await listTaskQuestions(db, taskId)
     expect(entry!.phase).toBe('pending')
+    // RFC-128 P2 §11 — 待下发 gate: a question must be SEALED before it can be staged. Stamp
+    // the per-question seal marker directly (a partial control-channel seal leaves the round
+    // awaiting_human, so the entry stays 'pending' yet is now stageable). Without this the
+    // stage below would (correctly) reject with `task-question-not-sealed`.
+    await db
+      .update(taskQuestions)
+      .set({ sealedAt: Date.now() })
+      .where(eq(taskQuestions.id, entry!.id))
     await stageTaskQuestion(db, entry!.id, true, ACTOR)
     expect((await listTaskQuestions(db, taskId))[0]!.phase).toBe('staged')
     await stageTaskQuestion(db, entry!.id, false, ACTOR)

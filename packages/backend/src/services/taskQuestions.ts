@@ -858,6 +858,27 @@ export async function reassignTaskQuestion(
   }
 }
 
+/** RFC-128 §11 (D5) — is this entry's answer sealed? The SAME predicate the DTO's
+ *  `sealed` field uses (see {@link listTaskQuestions}), so the board's per-question
+ *  `hasStage` and this server-side stage gate agree:
+ *    - manual question → always sealed (the human-authored instruction IS the content);
+ *    - clarify entry → its own per-question marker `sealed_at` is set OR the whole round
+ *      is answered (a pre-RFC-128 answered round carries no `sealed_at` — golden-lock for
+ *      legacy data + the whole-round designer entries reconcile creates on a full seal).
+ *  Keyed on the seal MARKER (sealed_at / round status), NOT on answerSummary: a partial
+ *  round leaves answerSummary independent of round.status (Codex design gate F3), so
+ *  answerSummary is unreliable as a "has an answer" signal here. */
+async function isEntrySealed(db: DbClient, entry: TaskQuestionRow): Promise<boolean> {
+  if (entry.sourceKind === 'manual') return true
+  if (entry.sealedAt !== null) return true
+  const [round] = await db
+    .select({ status: clarifyRounds.status })
+    .from(clarifyRounds)
+    .where(eq(clarifyRounds.intermediaryNodeRunId, entry.originNodeRunId))
+    .limit(1)
+  return round?.status === 'answered'
+}
+
 /** Stage / unstage (拖入·拖出「待下发」). Approves an entry for batch dispatch. */
 export async function stageTaskQuestion(
   db: DbClient,
@@ -865,7 +886,17 @@ export async function stageTaskQuestion(
   staged: boolean,
   actor: TaskQuestionActor,
 ): Promise<void> {
-  await loadEntry(db, entryId)
+  const entry = await loadEntry(db, entryId)
+  // RFC-128 §11 (D5) — 待下发 gate: a question may only ENTER 待下发 once its answer is
+  // sealed (otherwise a later batch-dispatch would mint a handler rerun with no answer to
+  // inject). Only the stage DIRECTION is gated; un-staging (移出待下发) is always allowed so
+  // a mistaken stage can be undone even before the question is sealed.
+  if (staged && !(await isEntrySealed(db, entry))) {
+    throw new ConflictError(
+      'task-question-not-sealed',
+      `task question ${entryId} is not yet sealed; answer (seal) it before staging it for dispatch`,
+    )
+  }
   await db
     .update(taskQuestions)
     .set(

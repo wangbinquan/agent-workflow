@@ -167,6 +167,21 @@ export const SubmitClarifyAnswersSchema = z.object({
    *  Self-clarify route accepts but ignores this field — it is not written
    *  to clarify_rounds and does not influence rerun routing. */
   questionScopes: z.record(z.string(), ClarifyQuestionScopeSchema).optional(),
+  /** RFC-128 P2 (T6) — defer intent / channel selector. Omitted / falsy = QUICK channel:
+   *  the current whole-round behaviour (seal + mint the source/handler rerun + resume the
+   *  task). `true` = CONTROL channel: seal the answered SUBSET via `sealRoundQuestions`
+   *  WITHOUT minting any rerun or resuming — the sealed question(s) enter 待指派 for the
+   *  centralized-answer pane / batch dispatch. Kept `.optional()` (NOT `.default(false)`)
+   *  so the inferred type stays back-compatible: existing whole-round callers that omit it
+   *  still satisfy `SubmitClarifyAnswers` ⇒ byte-for-byte the pre-RFC-128 submit (golden
+   *  lock). */
+  defer: z.boolean().optional(),
+  /** RFC-128 P2 (T5) — optional subset cap. When present, only the answers whose
+   *  `questionId` is in this list are sealed/submitted (the rest are ignored). Lets the
+   *  centralized pane and the /clarify coordination (P4) declare EXACTLY which questions a
+   *  submission may touch (so it never re-seals a sibling already sealed by another tab).
+   *  Omitted ⇒ every answer is processed (golden lock — unchanged whole-round submit). */
+  questionIds: z.array(z.string()).optional(),
 })
 export type SubmitClarifyAnswers = z.infer<typeof SubmitClarifyAnswersSchema>
 
