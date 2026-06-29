@@ -1398,10 +1398,6 @@ export interface Resources {
       label: string
       hint: string
     }
-    deferredDispatch: {
-      label: string
-      hint: string
-    }
     rawInputPlaceholder: string
     filesPicker: {
       pickRepoFirst: string
@@ -3910,10 +3906,6 @@ export const zhCN: Resources = {
     autoCommitPush: {
       label: '完成后自动提交并推送',
       hint: '每个写文件的 agent 产出最终内容后，框架自动提交全部变更并推送到远端',
-    },
-    deferredDispatch: {
-      label: '问题延迟下发（任务中心批量处理）',
-      hint: '开启后，面向设计者的反问答案先停在任务中心看板，由你改派/攒批后再批量下发，而不是答完即自动下发',
     },
     pathFetch: {
       label: '启动前刷新远端引用',

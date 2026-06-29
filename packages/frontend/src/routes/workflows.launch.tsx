@@ -75,10 +75,6 @@ function LaunchPage() {
   // remembered in localStorage; the branch name is task-specific so it isn't.
   const [workingBranch, setWorkingBranch] = useState('')
   const [autoCommitPush, setAutoCommitPush] = useState(loadAutoCommitPushPref())
-  // RFC-120 §18 (T9 model A): opt this task into deferred question dispatch. When
-  // on, designer-scoped clarify answers park for batch-dispatch from the task
-  // center board instead of auto-dispatching. Default off → legacy immediate flow.
-  const [deferredQuestionDispatch, setDeferredQuestionDispatch] = useState(false)
   // RFC-024 + RFC-066: 1..N repo sources. Single-row state is byte-baseline
   // against pre-RFC-066 (default = one empty path-mode row, recents
   // auto-fills the first row); the `+ Add` button in `<RepoSourceList>`
@@ -175,8 +171,10 @@ function LaunchPage() {
           : {}),
         ...(trimWorkingBranch !== '' ? { workingBranch: trimWorkingBranch } : {}),
         ...(autoCommitPush ? { autoCommitPush: true } : {}),
-        // RFC-120 §18: omit when false so legacy bodies stay byte-identical.
-        ...(deferredQuestionDispatch ? { deferredQuestionDispatch: true } : {}),
+        // RFC-125: all UI-launched tasks default to deferred question dispatch —
+        // designer-scoped clarify answers park in the task board for manual batch-
+        // dispatch (the launch-time on/off toggle was removed).
+        deferredQuestionDispatch: true,
       }
       // RFC-066: multi-repo (length > 1) → always JSON post via the v2 body
       // helper. Multi-repo + uploads is gated by T6's `canSubmit` predicate
@@ -392,15 +390,6 @@ function LaunchPage() {
           label={t('launch.autoCommitPush.label')}
           hint={t('launch.autoCommitPush.hint')}
         />
-        {/* RFC-120 §18 (T9 model A): defer designer-scoped clarify answers for
-            batch-dispatch from the task center board. */}
-        <Switch
-          checked={deferredQuestionDispatch}
-          onChange={setDeferredQuestionDispatch}
-          label={t('launch.deferredDispatch.label')}
-          hint={t('launch.deferredDispatch.hint')}
-        />
-
         {inputDefs.length === 0 && <div className="muted">{t('launch.noInputs')}</div>}
 
         {inputDefs.map((def) => (

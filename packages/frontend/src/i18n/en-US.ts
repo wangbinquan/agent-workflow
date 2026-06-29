@@ -1464,10 +1464,6 @@ export const enUS: Resources = {
       label: 'Auto commit & push on completion',
       hint: 'After each writer agent emits its final output, the framework commits all changes and pushes to the remote',
     },
-    deferredDispatch: {
-      label: 'Defer question dispatch (batch from the task center)',
-      hint: 'When on, designer-scoped clarify answers park on the task center board for you to reassign / batch before dispatching, instead of auto-dispatching on answer',
-    },
     pathFetch: {
       label: 'Refresh remote refs before launch',
       switchLabel: 'Run `git fetch --all --prune --tags` before starting the task',
