@@ -647,6 +647,27 @@ async function deriveEntryPhase(db: DbClient, entry: TaskQuestionRow): Promise<T
   })
 }
 
+/** Does `nodeId` have ≥1 prior node_run in this task? RFC-120 §15 (Codex re-gate): the SAME
+ *  predicate dispatchTaskQuestions' assertSafeFrontierTarget uses — a node with no prior run
+ *  cannot be "rerun" (a frontier mint inherits the freshest run; §18 F3). A manual question
+ *  always reruns its handler, so its target MUST have run (else it would park-but-never-
+ *  dispatch). Shared so create / reassign / dispatch agree on "runnable". */
+export async function taskNodeHasRun(
+  db: DbClient,
+  taskId: string,
+  nodeId: string,
+): Promise<boolean> {
+  return (
+    (
+      await db
+        .select({ id: nodeRuns.id })
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+        .limit(1)
+    )[0] !== undefined
+  )
+}
+
 /** Agent-kind node ids of the task's frozen workflow snapshot (reassign candidates). */
 async function agentNodeIdsForTask(db: DbClient, taskId: string): Promise<Set<string>> {
   const [t] = await db
@@ -710,6 +731,19 @@ export async function reassignTaskQuestion(
   if (phase === 'done' || phase === 'closed') {
     throw new ConflictError('task-question-terminal', `cannot reassign a '${phase}' question`)
   }
+  // RFC-120 §15 (Codex re-gate): a MANUAL question has NO graph default to fall back to, so
+  // its handler must ALWAYS be a node that has run (else the §18 park gate parks it on a
+  // target dispatch can never mint → stranded awaiting_human). Require a run node here too,
+  // matching createManualTaskQuestion. The clarify-designer override path is intentionally
+  // NOT gated here: it keeps the shipped §18 design (reassign records intent, dispatch's
+  // assertSafeFrontierTarget rejects a never-run frontier; the run graph-default is the
+  // recoverable fallback — locked by the "never-run override target → rejected" test).
+  if (entry.sourceKind === 'manual' && !(await taskNodeHasRun(db, entry.taskId, targetNodeId))) {
+    throw new ValidationError(
+      'manual-question-target-never-run',
+      `cannot assign a manual question to '${targetNodeId}': it has no prior node_run (a manual question reruns its handler, so the handler must have run at least once)`,
+    )
+  }
   // RFC-120 §18 (model A, corrected): once dispatched (`dispatched_at` set), the
   // entry is committed for execution — the upstream-frontier rerun was minted and the
   // scheduler cascade will bind + inject it; a late reassign would silently re-target
@@ -771,8 +805,9 @@ const MANUAL_BODY_MAX = 20000
 /** RFC-120 §15 (Codex re-gate) — task statuses that will NEVER re-enter scheduling, so a
  *  manual question created / dispatched on them would strand (no scheduler to run the rerun).
  *  `failed`/`interrupted`/`awaiting_*` are resumable/active (resumeTask resumes them), so they
- *  are NOT terminal here. Shared by createManualTaskQuestion + dispatchTaskQuestions. */
-const TERMINAL_TASK_STATUSES = new Set(['done', 'canceled'])
+ *  are NOT terminal here. Shared by createManualTaskQuestion + dispatchTaskQuestions (incl.
+ *  the in-tx CAS re-read). */
+export const TERMINAL_TASK_STATUSES: ReadonlySet<string> = new Set(['done', 'canceled'])
 
 /** Throw a ConflictError when the task is terminal (done/canceled). Used BEFORE any insert /
  *  dispatched_at stamp / node_run mint so nothing is left orphaned on a finished task. */
@@ -873,31 +908,55 @@ export async function createManualTaskQuestion(
       `target node '${target}' is not an agent node in this task's workflow`,
     )
   }
+  // (Codex re-gate H1): the handler must have RUN — a manual question reruns its handler, and
+  // dispatch's assertSafeFrontierTarget rejects a never-run frontier. A manual has no graph
+  // default to fall back to, so without this the row would park on a node dispatch can never
+  // mint → stranded awaiting_human. (v1 limit: can't pre-assign to a not-yet-run node.)
+  if (!(await taskNodeHasRun(db, taskId, target))) {
+    throw new ValidationError(
+      'manual-question-target-never-run',
+      `target node '${target}' has no prior node_run (a manual question reruns its handler, so the handler must have run at least once)`,
+    )
+  }
   const id = ulid()
   const now = Date.now()
-  await db.insert(taskQuestions).values({
-    id,
-    taskId,
-    // §16 H4: non-null synthetic identity (no real node_run; the read-side branches on
-    // source_kind, not on this resolving to a round).
-    originNodeRunId: ulid(),
-    questionId: ulid(),
-    questionTitle: title,
-    sourceKind: 'manual',
-    roleKind: 'designer',
-    iteration: 0,
-    loopIter: 0,
-    defaultTargetNodeId: null,
-    overrideTargetNodeId: target,
-    manualTitle: title,
-    manualBody: body,
-    manualCreatedBy: actor.userId,
-    // §15: a handler is required → the row is created staged (待下发) so the park gate holds
-    // the task awaiting_human until the human dispatches it.
-    stagedAt: now,
-    stagedBy: actor.userId,
-    createdAt: now,
-    updatedAt: now,
+  // (Codex re-gate H2): the terminal pre-check above is a TOCTOU window — the scheduler can
+  // flip the task to done/canceled before this insert. Re-read tasks.status INSIDE the tx and
+  // roll back (no row) if it went terminal, so a manual row is never inserted on a finished task.
+  dbTxSync(db, (tx) => {
+    const cur = tx.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).all()[0]
+    if (cur === undefined || TERMINAL_TASK_STATUSES.has(cur.status)) {
+      throw new ConflictError(
+        'task-terminal',
+        `task ${taskId} became ${cur?.status ?? 'missing'} before the manual question was inserted; nothing inserted`,
+      )
+    }
+    tx.insert(taskQuestions)
+      .values({
+        id,
+        taskId,
+        // §16 H4: non-null synthetic identity (no real node_run; the read-side branches on
+        // source_kind, not on this resolving to a round).
+        originNodeRunId: ulid(),
+        questionId: ulid(),
+        questionTitle: title,
+        sourceKind: 'manual',
+        roleKind: 'designer',
+        iteration: 0,
+        loopIter: 0,
+        defaultTargetNodeId: null,
+        overrideTargetNodeId: target,
+        manualTitle: title,
+        manualBody: body,
+        manualCreatedBy: actor.userId,
+        // §15: a handler is required → the row is created staged (待下发) so the park gate
+        // holds the task awaiting_human until the human dispatches it.
+        stagedAt: now,
+        stagedBy: actor.userId,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run()
   })
   return { id }
 }

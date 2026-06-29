@@ -39,7 +39,11 @@ import { dbTxSync } from '@/db/txSync'
 import { evaluateDesignerRerunReadiness } from '@/services/crossClarify'
 import { pickFreshestRun } from '@/services/freshness'
 import { buildMintNodeRunValues } from '@/services/nodeRunMint'
-import { assertTaskAcceptsQuestions } from '@/services/taskQuestions'
+import {
+  assertTaskAcceptsQuestions,
+  taskNodeHasRun,
+  TERMINAL_TASK_STATUSES,
+} from '@/services/taskQuestions'
 import { ConflictError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import {
@@ -338,6 +342,22 @@ export async function dispatchTaskQuestions(
   let committed = false
   try {
     dbTxSync(db, (tx) => {
+      // (Codex re-gate H2): the terminal pre-check (assertTaskAcceptsQuestions, above) is a
+      // TOCTOU window — the scheduler can trySetTaskStatus(done/canceled) between it and this
+      // tx. Re-read tasks.status INSIDE the tx and roll back the WHOLE tx (no stamp, no mint)
+      // if the task went terminal, so nothing is minted onto a finished task. Reuses the SAME
+      // terminal set as the pre-check (no drift).
+      const curTask = tx
+        .select({ status: tasks.status })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .all()[0]
+      if (curTask === undefined || TERMINAL_TASK_STATUSES.has(curTask.status)) {
+        throw new ConflictError(
+          'task-terminal',
+          `task ${taskId} became ${curTask?.status ?? 'missing'} before dispatch committed; nothing stamped or minted`,
+        )
+      }
       const stillNull = tx
         .select({
           id: taskQuestions.id,
@@ -572,15 +592,9 @@ async function assertSafeFrontierTarget(
   taskId: string,
   targetNodeId: string,
 ): Promise<void> {
-  const hasRun =
-    (
-      await db
-        .select({ id: nodeRuns.id })
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, targetNodeId)))
-        .limit(1)
-    )[0] !== undefined
-  if (!hasRun) {
+  // Shared predicate (RFC-120 §15 Codex re-gate): create / reassign / dispatch all agree on
+  // "runnable" via taskNodeHasRun, so a manual/override target accepted upstream is dispatchable.
+  if (!(await taskNodeHasRun(db, taskId, targetNodeId))) {
     throw new ConflictError(
       'task-question-unsafe-dispatch-target',
       `cannot dispatch to frontier '${targetNodeId}': no prior node_run to inherit. Safe first-run minting for never-run frontier targets is the next layer (RFC-120 §16 F3).`,

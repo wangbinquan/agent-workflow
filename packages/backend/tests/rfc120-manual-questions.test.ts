@@ -150,6 +150,16 @@ describe('RFC-120 §15 — manual question lifecycle', () => {
   test('create(target=DESIGNER) → reassign(FIXER) → dispatch → inject manual_body+bind → done → confirm', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
+    // DESIGNER needs a prior run too (the §15 re-gate requires the manual handler to have run).
+    await db.insert(nodeRuns).values({
+      id: ulid(),
+      taskId,
+      nodeId: DESIGNER,
+      status: 'done',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: Date.now() - 900,
+    })
 
     // create WITH a handler (required, §15) → 待下发 (staged). DESIGNER first to exercise reassign.
     const { id } = await createManualTaskQuestion(
@@ -374,23 +384,26 @@ describe('RFC-120 §15 — manual flows through dispatch like a pure-override', 
     expect(result.reruns.map((r) => r.targetNodeId).sort()).toEqual([DESIGNER, FIXER].sort())
   })
 
-  test('dispatch to a never-run node → rejected unsafe-dispatch-target (v1 limit, shared with override)', async () => {
+  test('Codex re-gate H1: a never-run target is rejected at CREATION (not parked-then-undispatchable)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
-    // QUESTIONER has no prior run → unsafe frontier target.
-    const { id } = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 't', body: 'b', targetNodeId: QUESTIONER },
-      actor,
-    )
+    // QUESTIONER has no prior run. The §15 re-gate rejects it at CREATION (a manual on a never-
+    // run node would park via H1 but dispatch's assertSafeFrontierTarget could never mint it →
+    // stranded). So the unsafe-dispatch state is now unreachable for manual: nothing inserted.
     let threw: unknown = null
     try {
-      await dispatchTaskQuestions(db, taskId, [id], actor)
+      await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 't', body: 'b', targetNodeId: QUESTIONER },
+        actor,
+      )
     } catch (e) {
       threw = e
     }
-    expect((threw as { code?: string }).code).toBe('task-question-unsafe-dispatch-target')
+    expect((threw as { code?: string }).code).toBe('manual-question-target-never-run')
+    const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
+    expect(rows.length).toBe(0)
   })
 })
 
@@ -721,5 +734,129 @@ describe('RFC-120 §15 — golden-lock (no manual rows ⇒ clarify unchanged)', 
     expect(ctx?.block).not.toContain('Manual instruction') // no manual contamination
     expect(ctx?.sourcesCsv).not.toContain('manual')
     expect(ctx?.graphOwned).toBe(true) // genuine graph designer round
+  })
+})
+
+// ---------------------------------------------------------------------------
+// I — Codex re-gate: H1 (manual reassign to a never-run node rejected) + H2 (terminal status
+// is an IN-TX CAS, not just a pre-check — a status flip between guard and write rolls back).
+// (The clarify-designer OVERRIDE path keeps its shipped reject-at-dispatch design — proven by
+// rfc120-deferred-dispatch.test.ts's "never-run override target → rejected"; the manual guard
+// is scoped to source_kind='manual', so that override test is unaffected.)
+// ---------------------------------------------------------------------------
+describe('RFC-120 §15 — Codex re-gate H1 (manual reassign never-run) + H2 (terminal CAS)', () => {
+  test('H1: reassign a manual question to a never-run node → rejected; to a run node → allowed', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db)
+    // DESIGNER gets a run so it is a valid (runnable) re-target; QUESTIONER stays never-run.
+    await db.insert(nodeRuns).values({
+      id: ulid(),
+      taskId,
+      nodeId: DESIGNER,
+      status: 'done',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: Date.now() - 900,
+    })
+    const { id } = await createManualTaskQuestion(
+      db,
+      taskId,
+      { title: 't', body: 'b', targetNodeId: FIXER },
+      actor,
+    )
+    // never-run QUESTIONER → rejected (no park-but-undispatchable).
+    let threw: unknown = null
+    try {
+      await reassignTaskQuestion(db, id, QUESTIONER, actor)
+    } catch (e) {
+      threw = e
+    }
+    expect((threw as { code?: string }).code).toBe('manual-question-target-never-run')
+    expect((await listOne(db, taskId))?.effectiveTargetNodeId).toBe(FIXER) // unchanged
+    // run DESIGNER → allowed.
+    await reassignTaskQuestion(db, id, DESIGNER, actor)
+    expect((await listOne(db, taskId))?.effectiveTargetNodeId).toBe(DESIGNER)
+  })
+
+  // A db Proxy that flips tasks.status to `status` exactly once, on the FIRST nodeRuns read —
+  // which for BOTH create (taskNodeHasRun) and dispatch (assertSafeFrontierTarget) is the last
+  // async read BEFORE the write tx. So the pre-check sees a live task, the status flips, and
+  // the in-tx CAS re-read must catch it. Mirrors the dispatch/reassign-race test's Proxy.
+  function flipStatusOnFirstNodeRunsRead(db: DbClient, taskId: string, status: string) {
+    let fired = false
+    return new Proxy(db, {
+      get(target, prop, receiver) {
+        const orig = Reflect.get(target, prop, receiver)
+        if (prop !== 'select') return orig
+        return (...selectArgs: unknown[]) => {
+          const builder = (orig as (...a: unknown[]) => Record<string, unknown>).apply(
+            target,
+            selectArgs,
+          )
+          const origFrom = (builder.from as (t: unknown) => Record<string, unknown>).bind(builder)
+          builder.from = (tbl: unknown) => {
+            const q = origFrom(tbl)
+            if (tbl === nodeRuns && !fired) {
+              fired = true
+              const origThen = (q.then as (...a: unknown[]) => unknown).bind(q)
+              q.then = (onF: unknown, onR: unknown) =>
+                db
+                  .update(tasks)
+                  .set({ status: status as never })
+                  .where(eq(tasks.id, taskId))
+                  .then(() => origThen(onF, onR), onR as never)
+            }
+            return q
+          }
+          return builder
+        }
+      },
+    }) as typeof db
+  }
+
+  test('H2: create — task flips to done BETWEEN the pre-check and the insert tx → rolls back, nothing inserted', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db) // running; FIXER has a run
+    const racingDb = flipStatusOnFirstNodeRunsRead(db, taskId, 'done')
+    let threw: unknown = null
+    try {
+      await createManualTaskQuestion(
+        racingDb,
+        taskId,
+        { title: 't', body: 'b', targetNodeId: FIXER },
+        actor,
+      )
+    } catch (e) {
+      threw = e
+    }
+    expect((threw as { code?: string }).code).toBe('task-terminal')
+    // in-tx CAS rolled back → NO row inserted.
+    const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
+    expect(rows.length).toBe(0)
+  })
+
+  test('H2: dispatch — task flips to canceled BETWEEN the pre-check and the stamp+mint tx → rolls back, no dispatched_at / no node_run', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db)
+    const { id } = await createManualTaskQuestion(
+      db,
+      taskId,
+      { title: 't', body: 'b', targetNodeId: FIXER },
+      actor,
+    )
+    const runsBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+    const racingDb = flipStatusOnFirstNodeRunsRead(db, taskId, 'canceled')
+    let threw: unknown = null
+    try {
+      await dispatchTaskQuestions(racingDb, taskId, [id], actor)
+    } catch (e) {
+      threw = e
+    }
+    expect((threw as { code?: string }).code).toBe('task-terminal')
+    // in-tx CAS rolled back → entry NOT stamped, NO node_run minted.
+    const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
+    expect(row?.dispatchedAt).toBeNull()
+    const runsAfter = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+    expect(runsAfter).toBe(runsBefore)
   })
 })
