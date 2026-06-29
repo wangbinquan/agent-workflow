@@ -13,21 +13,21 @@
  * CSS 布局无法在 jsdom 断言（vitest css:false、jsdom 不做布局），故以源码层文本断言兜底
  * 锁定这条规则——改回去本测试即转红。
  */
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { describe, expect, it } from 'vitest'
 
-const css = readFileSync(
-  fileURLToPath(new URL("../../../styles.css", import.meta.url)),
-  "utf8",
-);
+// `__dirname` (the pattern the repo's other source-guard tests use) — NOT
+// `fileURLToPath(new URL(..., import.meta.url))`, which throws "The URL must be of
+// scheme file" under vitest (import.meta.url is not a file:// URL there) → 0 tests.
+const css = readFileSync(resolve(__dirname, '..', '..', '..', 'styles.css'), 'utf8')
 
-describe("task questions card title overflow guard", () => {
+describe('task questions card title overflow guard', () => {
   it("wraps .card__title inside .task-questions so long titles don't overflow the column", () => {
-    const idx = css.indexOf(".task-questions .card__title {");
-    expect(idx).toBeGreaterThan(-1);
-    const body = css.slice(idx, css.indexOf("}", idx));
-    expect(body).toMatch(/overflow-wrap\s*:\s*anywhere/);
-    expect(body).toMatch(/word-break\s*:\s*break-word/);
-  });
-});
+    const idx = css.indexOf('.task-questions .card__title {')
+    expect(idx).toBeGreaterThan(-1)
+    const body = css.slice(idx, css.indexOf('}', idx))
+    expect(body).toMatch(/overflow-wrap\s*:\s*anywhere/)
+    expect(body).toMatch(/word-break\s*:\s*break-word/)
+  })
+})
