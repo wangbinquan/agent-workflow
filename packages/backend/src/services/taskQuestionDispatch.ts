@@ -626,6 +626,69 @@ async function runIdsWithOutput(db: DbClient, runIds: string[]): Promise<Set<str
 }
 
 /**
+ * RFC-127 borrow authority for scheduler dispatch. The durable source is the
+ * node's still-open dispatched task_question, not the freshest node_run audit
+ * column:
+ *   - queued / failed / outputless lineage => keep borrowing for retry/revival;
+ *   - done+output lineage => consumed, drop borrow for unrelated future reruns;
+ *   - non-frontier cascade mint => resolve this home node's own queued question.
+ */
+export async function resolveBorrowForNode(
+  db: DbClient,
+  taskId: string,
+  nodeId: string,
+  iteration: number,
+  workflowDef: WorkflowDefinition,
+): Promise<string | null> {
+  const entries = await db
+    .select()
+    .from(taskQuestions)
+    .where(
+      and(
+        eq(taskQuestions.taskId, taskId),
+        eq(taskQuestions.roleKind, 'designer'),
+        eq(taskQuestions.loopIter, iteration),
+        isNotNull(taskQuestions.dispatchedAt),
+        isNotNull(taskQuestions.overrideTargetNodeId),
+      ),
+    )
+  const candidates = entries.filter((e) => {
+    const home = homeTarget(e)
+    return home === nodeId && e.overrideTargetNodeId !== null && e.overrideTargetNodeId !== home
+  })
+  if (candidates.length === 0) return null
+
+  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const outputRunIds = await runIdsWithOutput(
+    db,
+    runs.map((r) => r.id),
+  )
+  const lineageViews: RunLineageView[] = runs.map((r) => ({
+    id: r.id,
+    nodeId: r.nodeId,
+    iteration: r.iteration,
+    loopIter: 0,
+    rerunCause: r.rerunCause,
+    status: r.status,
+    startedAt: r.startedAt,
+    hasOutput: outputRunIds.has(r.id),
+    parentNodeRunId: r.parentNodeRunId,
+  }))
+  const open = candidates
+    .slice()
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .find((e) => !isDispatchedEntryConsumed(e, runs, lineageViews))
+  if (open?.overrideTargetNodeId === undefined || open.overrideTargetNodeId === null) return null
+  return (
+    (
+      (workflowDef.nodes ?? []).find((n) => n.id === open.overrideTargetNodeId) as
+        | { agentName?: string }
+        | undefined
+    )?.agentName ?? null
+  )
+}
+
+/**
  * A frontier mint inherits the node's freshest run. Reject a never-run target — safe
  * first-run minting for never-run frontier targets is the deferred F3 item (a never-run
  * NON-frontier target is fine: the scheduler first-runs it when its upstream frontier

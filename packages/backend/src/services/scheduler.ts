@@ -90,6 +90,7 @@ import {
 } from '@/services/clarifyFallback'
 import { evaluateExitCondition, parseExitCondition } from '@/services/exitCondition'
 import { loadUndispatchedDesignerTargets } from '@/services/taskQuestions'
+import { resolveBorrowForNode } from '@/services/taskQuestionDispatch'
 import { trySetTaskStatus, setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
 import {
   frozenRuntimeOfSession,
@@ -1773,37 +1774,12 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   if (nodeAgent === null) {
     return { kind: 'failed', summary: `agent '${agentName}' not found`, message: 'agent-not-found' }
   }
-  // RFC-127 借壳顶替: the pending top-level row about to run may carry an
-  // `agent_override_name` (the borrowed agent X stamped at reassign-dispatch).
-  // If so, run with X's agent definition (X's "brain") but KEEP the original
-  // node P's output port contract (outputs/outputKinds) — downstream consumes by
-  // node_id=P so it naturally receives the produced ports (design §3.3 / Codex
-  // F2: runNode renders/validates/persists via agent.outputs/outputKinds, so
-  // passing the effective agent makes the WHOLE path use P's contract). Every
-  // other agent derivative (runtime/session/skill/mcp/readonly) follows X — see
-  // F1 at `effectiveResumeSessionId`. node_id / promptTemplate / upstream inputs
-  // stay P's (they key off node.id, not the agent).
-  const borrowRow = (
-    await db
-      .select({ ov: nodeRuns.agentOverrideName })
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.taskId, taskId),
-          eq(nodeRuns.nodeId, node.id),
-          eq(nodeRuns.iteration, iteration),
-          isNull(nodeRuns.parentNodeRunId),
-        ),
-      )
-      // Codex impl-gate P2: freshest top-level row of ANY status (not just
-      // pending) — a borrowed row revived from a failed/interrupted attempt has
-      // no pending row at this pre-mint lookup, so pending-only would lose the
-      // override and silently switch back to P. The override is carried onto the
-      // fresh retry row minted below, so the chain survives cross-tick retries.
-      .orderBy(desc(nodeRuns.id))
-      .limit(1)
-  )[0]
-  const overrideName = borrowRow?.ov ?? null
+  // RFC-127 借壳顶替: resolve the borrowed agent from this node's still-open
+  // dispatched task_question, not from node_runs.agent_override_name. The row
+  // column remains audit, but task_questions distinguishes retry/revival of the
+  // same unconsumed question from an unrelated future stale rerun after the
+  // question was consumed, and lets non-frontier cascade mints borrow too.
+  const overrideName = await resolveBorrowForNode(db, taskId, node.id, iteration, definition)
   let agent = nodeAgent
   let isBorrowed = false
   if (overrideName !== null && overrideName !== '') {

@@ -18,27 +18,34 @@
 // positive net so a refactor that re-introduces "override moves the home" goes red here.
 
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
+import { nodeRunOutputs, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
+import { createAgent } from '../src/services/agent'
 import {
   buildExternalFeedbackContext,
   createCrossClarifySession,
   submitCrossClarifyAnswers,
 } from '../src/services/crossClarify'
+import { runTask } from '../src/services/scheduler'
 import { reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 const DESIGNER = 'designer'
 const QUESTIONER = 'questioner'
 const CC = 'cross1'
+const DOWN = 'downstream'
+const DOWN_AGENT = 'downstream'
 // A plain agent node (no __external_feedback__ edge) — a valid reassign/borrow target. Its
 // agentName is what a clarify-designer override BORROWS (rides on the home designer's rerun).
 const OTHER = 'other'
@@ -180,6 +187,359 @@ async function designerEntries(db: DbClient, taskId: string) {
     .select()
     .from(taskQuestions)
     .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'designer')))
+}
+
+interface RunHarness {
+  db: DbClient
+  appHome: string
+  worktreePath: string
+  argvLog: string
+  cleanup: () => void
+}
+
+function buildRunHarness(): RunHarness {
+  const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc127-borrow-'))
+  const worktreePath = join(appHome, 'wt')
+  mkdirSync(worktreePath, { recursive: true })
+  const argvLog = join(appHome, 'argv.log')
+  writeFileSync(argvLog, '')
+  return {
+    db: createInMemoryDb(MIGRATIONS),
+    appHome,
+    worktreePath,
+    argvLog,
+    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+  }
+}
+
+function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promise<T> {
+  const prev: Record<string, string | undefined> = {}
+  for (const k of Object.keys(env)) {
+    prev[k] = process.env[k]
+    process.env[k] = env[k]
+  }
+  return body().finally(() => {
+    for (const k of Object.keys(env)) {
+      const old = prev[k]
+      if (old === undefined) delete process.env[k]
+      else process.env[k] = old
+    }
+  })
+}
+
+function readSpawnedAgents(path: string): string[] {
+  return readFileSync(path, 'utf8')
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line).agent as string)
+}
+
+async function seedRunnableAgent(db: DbClient, name: string): Promise<void> {
+  await createAgent(db, {
+    name,
+    description: '',
+    outputs: ['result'],
+    outputKinds: { result: 'markdown' },
+    readonly: true,
+    syncOutputsOnIterate: true,
+    permission: {},
+    skills: [],
+    dependsOn: [],
+    mcp: [],
+    plugins: [],
+    frontmatterExtra: {},
+    bodyMd: '',
+  })
+}
+
+async function seedRunnableAgents(db: DbClient, names: string[]): Promise<void> {
+  for (const name of names) await seedRunnableAgent(db, name)
+}
+
+function chainDef(): WorkflowDefinition {
+  const nodes: WorkflowNode[] = [
+    { id: DESIGNER, kind: 'agent-single', agentName: 'designer' } as WorkflowNode,
+    { id: DOWN, kind: 'agent-single', agentName: DOWN_AGENT } as WorkflowNode,
+    { id: QUESTIONER, kind: 'agent-single', agentName: 'questioner' } as WorkflowNode,
+    { id: 'q_down', kind: 'agent-single', agentName: 'q_down' } as WorkflowNode,
+    { id: OTHER, kind: 'agent-single', agentName: OTHER_AGENT } as WorkflowNode,
+    { id: 'cc_a', kind: 'clarify-cross-agent', title: 'cc_a' } as WorkflowNode,
+    { id: 'cc_b', kind: 'clarify-cross-agent', title: 'cc_b' } as WorkflowNode,
+  ]
+  return {
+    $schema_version: 4,
+    inputs: [],
+    nodes,
+    edges: [
+      {
+        id: 'e_designer_down',
+        source: { nodeId: DESIGNER, portName: 'result' },
+        target: { nodeId: DOWN, portName: 'design' },
+      },
+      {
+        id: 'e_q_a',
+        source: { nodeId: QUESTIONER, portName: '__clarify__' },
+        target: { nodeId: 'cc_a', portName: 'questions' },
+      },
+      {
+        id: 'e_cc_a_d',
+        source: { nodeId: 'cc_a', portName: 'to_designer' },
+        target: { nodeId: DESIGNER, portName: '__external_feedback__' },
+      },
+      {
+        id: 'e_cc_a_q',
+        source: { nodeId: 'cc_a', portName: 'to_questioner' },
+        target: { nodeId: QUESTIONER, portName: '__clarify_response__' },
+      },
+      {
+        id: 'e_q_b',
+        source: { nodeId: 'q_down', portName: '__clarify__' },
+        target: { nodeId: 'cc_b', portName: 'questions' },
+      },
+      {
+        id: 'e_cc_b_down',
+        source: { nodeId: 'cc_b', portName: 'to_designer' },
+        target: { nodeId: DOWN, portName: '__external_feedback__' },
+      },
+      {
+        id: 'e_cc_b_q',
+        source: { nodeId: 'cc_b', portName: 'to_questioner' },
+        target: { nodeId: 'q_down', portName: '__clarify_response__' },
+      },
+    ],
+    outputs: [],
+  }
+}
+
+function upstreamDesignerDef(): WorkflowDefinition {
+  const nodes: WorkflowNode[] = [
+    { id: 'source', kind: 'agent-single', agentName: 'source' } as WorkflowNode,
+    { id: DESIGNER, kind: 'agent-single', agentName: 'designer' } as WorkflowNode,
+    { id: QUESTIONER, kind: 'agent-single', agentName: 'questioner' } as WorkflowNode,
+    { id: OTHER, kind: 'agent-single', agentName: OTHER_AGENT } as WorkflowNode,
+    { id: CC, kind: 'clarify-cross-agent', title: 'cc' } as WorkflowNode,
+  ]
+  return {
+    $schema_version: 4,
+    inputs: [],
+    nodes,
+    edges: [
+      {
+        id: 'e_source_designer',
+        source: { nodeId: 'source', portName: 'result' },
+        target: { nodeId: DESIGNER, portName: 'source' },
+      },
+      {
+        id: 'e_q_cc',
+        source: { nodeId: QUESTIONER, portName: '__clarify__' },
+        target: { nodeId: CC, portName: 'questions' },
+      },
+      {
+        id: 'e_cc_d',
+        source: { nodeId: CC, portName: 'to_designer' },
+        target: { nodeId: DESIGNER, portName: '__external_feedback__' },
+      },
+      {
+        id: 'e_cc_q',
+        source: { nodeId: CC, portName: 'to_questioner' },
+        target: { nodeId: QUESTIONER, portName: '__clarify_response__' },
+      },
+    ],
+    outputs: [],
+  }
+}
+
+async function insertRunnableTask(h: RunHarness, def: WorkflowDefinition, name: string) {
+  const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
+  const workflowId = `wf_${taskId}`
+  await h.db.insert(workflows).values({
+    id: workflowId,
+    name,
+    description: '',
+    definition: JSON.stringify(def),
+    version: 1,
+    schemaVersion: 4,
+  })
+  await h.db.insert(tasks).values({
+    id: taskId,
+    name,
+    workflowId,
+    workflowSnapshot: JSON.stringify(def),
+    repoPath: '/tmp/aw-rfc127-borrow/repo',
+    worktreePath: h.worktreePath,
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status: 'pending',
+    inputs: JSON.stringify({}),
+    startedAt: Date.now(),
+    deferredQuestionDispatch: true,
+  })
+  return taskId
+}
+
+async function seedDoneRun(
+  db: DbClient,
+  taskId: string,
+  nodeId: string,
+  opts: {
+    retryIndex?: number
+    consumedUpstreamRunsJson?: string | null
+    output?: string
+    startedAt?: number
+  } = {},
+): Promise<string> {
+  const id = ulid()
+  await db.insert(nodeRuns).values({
+    id,
+    taskId,
+    nodeId,
+    status: 'done',
+    retryIndex: opts.retryIndex ?? 0,
+    iteration: 0,
+    consumedUpstreamRunsJson: opts.consumedUpstreamRunsJson ?? null,
+    startedAt: opts.startedAt,
+  })
+  if (opts.output !== undefined) {
+    await db
+      .insert(nodeRunOutputs)
+      .values({ nodeRunId: id, portName: 'result', content: opts.output })
+  }
+  return id
+}
+
+async function seedCascadeBorrowTask(h: RunHarness): Promise<{
+  taskId: string
+  entryAId: string
+  entryBId: string
+}> {
+  const def = chainDef()
+  await seedRunnableAgents(h.db, ['designer', DOWN_AGENT, 'questioner', 'q_down', OTHER_AGENT])
+  const taskId = await insertRunnableTask(h, def, 'rfc127-cascade-borrow')
+  await seedDoneRun(h.db, taskId, OTHER, {
+    startedAt: Date.now() - 4000,
+    output: 'old-other',
+  })
+  const designerDoneId = await seedDoneRun(h.db, taskId, DESIGNER, {
+    startedAt: Date.now() - 3000,
+    output: 'old-a',
+  })
+  await seedDoneRun(h.db, taskId, DOWN, {
+    consumedUpstreamRunsJson: JSON.stringify({ [DESIGNER]: designerDoneId }),
+    startedAt: Date.now() - 2000,
+    output: 'old-b',
+  })
+  const questionerRunId = await seedDoneRun(h.db, taskId, QUESTIONER, {
+    startedAt: Date.now() - 1000,
+  })
+  const qDownRunId = await seedDoneRun(h.db, taskId, 'q_down', { startedAt: Date.now() - 500 })
+  const ccA = (
+    await createCrossClarifySession({
+      db: h.db,
+      taskId,
+      crossClarifyNodeId: 'cc_a',
+      sourceQuestionerNodeId: QUESTIONER,
+      sourceQuestionerNodeRunId: questionerRunId,
+      targetDesignerNodeId: DESIGNER,
+      loopIter: 0,
+      questions: [mkQ('a1', 'designer-scoped?')],
+    })
+  ).crossClarifyNodeRunId
+  const ccB = (
+    await createCrossClarifySession({
+      db: h.db,
+      taskId,
+      crossClarifyNodeId: 'cc_b',
+      sourceQuestionerNodeId: 'q_down',
+      sourceQuestionerNodeRunId: qDownRunId,
+      targetDesignerNodeId: DOWN,
+      loopIter: 0,
+      questions: [mkQ('b1', 'downstream-scoped?')],
+    })
+  ).crossClarifyNodeRunId
+  await submitCrossClarifyAnswers({
+    db: h.db,
+    crossClarifyNodeRunId: ccA,
+    answers: [ans('a1')],
+    directive: 'continue',
+  })
+  await submitCrossClarifyAnswers({
+    db: h.db,
+    crossClarifyNodeRunId: ccB,
+    answers: [ans('b1')],
+    directive: 'continue',
+  })
+  const entries = await designerEntries(h.db, taskId)
+  const entryA = entries.find((e) => e.originNodeRunId === ccA)!
+  const entryB = entries.find((e) => e.originNodeRunId === ccB)!
+  await reassignTaskQuestion(h.db, entryB.id, OTHER, actor)
+  const result = await dispatchTaskQuestions(h.db, taskId, [entryA.id, entryB.id], actor)
+  expect(result.reruns.map((r) => r.targetNodeId)).toEqual([DESIGNER])
+  return { taskId, entryAId: entryA.id, entryBId: entryB.id }
+}
+
+async function seedBorrowDispatchTask(h: RunHarness): Promise<{
+  taskId: string
+  sourceDoneId: string
+  entryId: string
+}> {
+  const def = upstreamDesignerDef()
+  await seedRunnableAgents(h.db, ['source', 'designer', 'questioner', OTHER_AGENT])
+  const taskId = await insertRunnableTask(h, def, 'rfc127-borrow-lifecycle')
+  await seedDoneRun(h.db, taskId, OTHER, {
+    startedAt: Date.now() - 3000,
+    output: 'old-other',
+  })
+  const sourceDoneId = await seedDoneRun(h.db, taskId, 'source', {
+    startedAt: Date.now() - 2000,
+    output: 'old-source',
+  })
+  await seedDoneRun(h.db, taskId, DESIGNER, {
+    consumedUpstreamRunsJson: JSON.stringify({ source: sourceDoneId }),
+    startedAt: Date.now() - 1000,
+  })
+  const questionerRunId = await seedDoneRun(h.db, taskId, QUESTIONER)
+  const cc = (
+    await createCrossClarifySession({
+      db: h.db,
+      taskId,
+      crossClarifyNodeId: CC,
+      sourceQuestionerNodeId: QUESTIONER,
+      sourceQuestionerNodeRunId: questionerRunId,
+      targetDesignerNodeId: DESIGNER,
+      loopIter: 0,
+      questions: [mkQ('q1', 'designer-scoped?')],
+    })
+  ).crossClarifyNodeRunId
+  await submitCrossClarifyAnswers({
+    db: h.db,
+    crossClarifyNodeRunId: cc,
+    answers: [ans('q1')],
+    directive: 'continue',
+  })
+  const entry = (await designerEntries(h.db, taskId))[0]!
+  await reassignTaskQuestion(h.db, entry.id, OTHER, actor)
+  const result = await dispatchTaskQuestions(h.db, taskId, [entry.id], actor)
+  expect(result.reruns.map((r) => r.targetNodeId)).toEqual([DESIGNER])
+  return { taskId, sourceDoneId, entryId: entry.id }
+}
+
+async function runSchedulerOnce(h: RunHarness, taskId: string, env: Record<string, string> = {}) {
+  await withEnv(
+    {
+      MOCK_OPENCODE_CAPTURE_ARGV_TO: h.argvLog,
+      MOCK_OPENCODE_OUTPUTS: JSON.stringify({ result: 'ok' }),
+      ...env,
+    },
+    () =>
+      runTask({
+        taskId,
+        db: h.db,
+        appHome: h.appHome,
+        opencodeCmd: ['bun', 'run', MOCK_OPENCODE],
+        defaultNodeRetries: 0,
+      }),
+  )
 }
 
 beforeEach(() => resetBroadcastersForTests())
@@ -400,5 +760,146 @@ describe('RFC-127 T5 — designer dispatch 借壳 (borrow the shell)', () => {
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, OTHER)))
     expect(otherRuns.length).toBe(0)
+  })
+
+  test('cascade 保留 borrow: downstream non-frontier B is scheduler-minted but still runs borrowed agent X', async () => {
+    const h = buildRunHarness()
+    try {
+      const { taskId, entryBId } = await seedCascadeBorrowTask(h)
+      await runSchedulerOnce(h, taskId)
+
+      const spawned = readSpawnedAgents(h.argvLog)
+      expect(spawned).toContain('designer')
+      expect(spawned).toContain(OTHER_AGENT)
+      expect(spawned).not.toContain(DOWN_AGENT)
+      const entryB = (
+        await h.db.select().from(taskQuestions).where(eq(taskQuestions.id, entryBId))
+      )[0]
+      expect(entryB?.triggerRunId).toBeTruthy()
+      const downRuns = await h.db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DOWN)))
+      const cascadeRun = downRuns.find((r) => r.id === entryB?.triggerRunId)
+      expect(cascadeRun?.agentOverrideName).toBe(OTHER_AGENT)
+      expect(cascadeRun?.status).toBe('done')
+    } finally {
+      h.cleanup()
+    }
+  })
+
+  test('carry 不泄漏: consumed borrow question does not carry override into unrelated future stale rerun', async () => {
+    const h = buildRunHarness()
+    try {
+      const { taskId } = await seedBorrowDispatchTask(h)
+      await runSchedulerOnce(h, taskId)
+      expect(readSpawnedAgents(h.argvLog)).toEqual([OTHER_AGENT])
+
+      const newSourceRunId = ulid()
+      await h.db.insert(nodeRuns).values({
+        id: newSourceRunId,
+        taskId,
+        nodeId: 'source',
+        status: 'done',
+        retryIndex: 1,
+        iteration: 0,
+        startedAt: Date.now(),
+      })
+      await h.db
+        .insert(nodeRunOutputs)
+        .values({ nodeRunId: newSourceRunId, portName: 'result', content: 'new-source' })
+      await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+      writeFileSync(h.argvLog, '')
+
+      await runSchedulerOnce(h, taskId)
+
+      expect(readSpawnedAgents(h.argvLog)).toEqual(['designer'])
+      const designerRows = await h.db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DESIGNER)))
+      const latest = designerRows.sort((a, b) => b.id.localeCompare(a.id))[0]
+      expect(latest?.status).toBe('done')
+      expect(latest?.agentOverrideName).toBeNull()
+    } finally {
+      h.cleanup()
+    }
+  })
+
+  test('retry 保留: failed borrowed dispatch remains borrowed on scheduler revival retry', async () => {
+    const h = buildRunHarness()
+    try {
+      const { taskId } = await seedBorrowDispatchTask(h)
+      await runSchedulerOnce(h, taskId, {
+        MOCK_OPENCODE_EXIT_CODE: '7',
+        MOCK_OPENCODE_SKIP_ENVELOPE: '1',
+      })
+      expect(readSpawnedAgents(h.argvLog)).toEqual([OTHER_AGENT])
+
+      await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+      writeFileSync(h.argvLog, '')
+      await runSchedulerOnce(h, taskId)
+
+      expect(readSpawnedAgents(h.argvLog)).toEqual([OTHER_AGENT])
+      const designerRows = await h.db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DESIGNER)))
+      const latest = designerRows.sort((a, b) => b.id.localeCompare(a.id))[0]
+      expect(latest?.status).toBe('done')
+      expect(latest?.agentOverrideName).toBe(OTHER_AGENT)
+    } finally {
+      h.cleanup()
+    }
+  })
+
+  test('golden-lock: no reassignment dispatch runs home agent and never stamps agent_override_name', async () => {
+    const h = buildRunHarness()
+    try {
+      const def = upstreamDesignerDef()
+      await seedRunnableAgents(h.db, ['source', 'designer', 'questioner', OTHER_AGENT])
+      const taskId = await insertRunnableTask(h, def, 'rfc127-no-borrow-golden')
+      await seedDoneRun(h.db, taskId, OTHER, { output: 'old-other' })
+      const sourceDoneId = await seedDoneRun(h.db, taskId, 'source', { output: 'old-source' })
+      await seedDoneRun(h.db, taskId, DESIGNER, {
+        consumedUpstreamRunsJson: JSON.stringify({ source: sourceDoneId }),
+      })
+      const questionerRunId = await seedDoneRun(h.db, taskId, QUESTIONER)
+      const cc = (
+        await createCrossClarifySession({
+          db: h.db,
+          taskId,
+          crossClarifyNodeId: CC,
+          sourceQuestionerNodeId: QUESTIONER,
+          sourceQuestionerNodeRunId: questionerRunId,
+          targetDesignerNodeId: DESIGNER,
+          loopIter: 0,
+          questions: [mkQ('q1', 'designer-scoped?')],
+        })
+      ).crossClarifyNodeRunId
+      await submitCrossClarifyAnswers({
+        db: h.db,
+        crossClarifyNodeRunId: cc,
+        answers: [ans('q1')],
+        directive: 'continue',
+      })
+      const entry = (await designerEntries(h.db, taskId))[0]!
+      const result = await dispatchTaskQuestions(h.db, taskId, [entry.id], actor)
+      const minted = (
+        await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, result.reruns[0]!.nodeRunId))
+      )[0]
+      expect(minted?.agentOverrideName).toBeNull()
+
+      await runSchedulerOnce(h, taskId)
+
+      expect(readSpawnedAgents(h.argvLog)).toEqual(['designer'])
+      const designerRows = await h.db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DESIGNER)))
+      expect(designerRows.every((r) => r.agentOverrideName === null)).toBe(true)
+    } finally {
+      h.cleanup()
+    }
   })
 })
