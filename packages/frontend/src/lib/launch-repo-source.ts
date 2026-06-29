@@ -49,6 +49,31 @@ export interface LaunchCommonPayload {
    * falls back to `?? false`, silently making UI launches non-deferred.
    */
   deferredQuestionDispatch?: boolean
+  /**
+   * RFC-075 (workingBranch / autoCommitPush) + RFC-036 (collaboratorUserIds):
+   * optional launch settings the launcher spreads onto `launchCommon`. Both body
+   * helpers MUST stamp them onto the wire — the whitelist would otherwise DROP
+   * them on the no-upload single-repo + multi-repo + url+upload paths (only the
+   * path+uploads path's verbatim spread carried them), silently disabling these
+   * features. (Confirmed dropped + fixed as an RFC-125 follow-up bug.)
+   */
+  workingBranch?: string
+  autoCommitPush?: boolean
+  collaboratorUserIds?: string[]
+}
+
+/**
+ * Stamp the optional `launchCommon` "extras" that the whitelist body helpers
+ * would otherwise drop. Conditional inclusion mirrors how the launcher spreads
+ * them, so blank / false / empty values keep the wire byte-identical.
+ */
+function stampLaunchExtras(out: Record<string, unknown>, common: LaunchCommonPayload): void {
+  if (typeof common.workingBranch === 'string' && common.workingBranch.length > 0)
+    out.workingBranch = common.workingBranch
+  if (common.autoCommitPush === true) out.autoCommitPush = true
+  if (common.collaboratorUserIds !== undefined && common.collaboratorUserIds.length > 0)
+    out.collaboratorUserIds = common.collaboratorUserIds
+  if (common.deferredQuestionDispatch === true) out.deferredQuestionDispatch = true
 }
 
 /**
@@ -84,8 +109,7 @@ export function buildLaunchBody(
       out.gitUserName = common.gitUserName
       out.gitUserEmail = common.gitUserEmail
     }
-    // RFC-125: carry the deferred flag onto the wire (whitelist would drop it).
-    if (common.deferredQuestionDispatch === true) out.deferredQuestionDispatch = true
+    stampLaunchExtras(out, common)
     return out
   }
   const out: Record<string, unknown> = {
@@ -99,8 +123,7 @@ export function buildLaunchBody(
     out.gitUserName = common.gitUserName
     out.gitUserEmail = common.gitUserEmail
   }
-  // RFC-125: carry the deferred flag onto the wire (whitelist would drop it).
-  if (common.deferredQuestionDispatch === true) out.deferredQuestionDispatch = true
+  stampLaunchExtras(out, common)
   return out
 }
 
@@ -274,7 +297,6 @@ export function buildLaunchBodyMultiRepo(
     out.gitUserName = common.gitUserName
     out.gitUserEmail = common.gitUserEmail
   }
-  // RFC-125: carry the deferred flag onto the wire (whitelist would drop it).
-  if (common.deferredQuestionDispatch === true) out.deferredQuestionDispatch = true
+  stampLaunchExtras(out, common)
   return out
 }
