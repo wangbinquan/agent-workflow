@@ -17,14 +17,18 @@ export type TaskDetailTab =
   // RFC-120: task question list / 任务中心 board.
   | 'task-questions'
 
-/** Canonical left-to-right tab order shown in the page tab bar. The
- *  product spec pins this sequence; do not reorder without an RFC.
- *  `feedback` sits last — it's a reflective companion to the run, not part
- *  of the run-monitoring flow above. Moving it into a tab (instead of a
- *  fixed footer panel) was a deliberate call: a long feedback thread used
- *  to squeeze the panes' `flex:1; min-height:0` track down to zero. */
+/** Canonical left-to-right tab order shown in the page tab bar.
+ *  RFC-128 (用户 2026-06-29): the task-question board moves to SECOND (right after
+ *  workflow-status) so pending questions are prominent; the tab also carries a
+ *  pending-question count badge (wired in tasks.detail.tsx).
+ *  `feedback` sits last — it's a reflective companion to the run, not part of the
+ *  run-monitoring flow above. Moving it into a tab (instead of a fixed footer
+ *  panel) was a deliberate call: a long feedback thread used to squeeze the
+ *  panes' `flex:1; min-height:0` track down to zero. */
 export const TAB_ORDER: readonly TaskDetailTab[] = [
   'workflow-status',
+  // RFC-120 task-question board, RFC-128 hoisted to second for prominence.
+  'task-questions',
   'node-runs',
   'details',
   'outputs',
@@ -33,8 +37,6 @@ export const TAB_ORDER: readonly TaskDetailTab[] = [
   // RFC-083: structural-diff overlay, immediately after the textual diff.
   'worktree-structure',
   'feedback',
-  // RFC-120: task question list / 任务中心 board (always present).
-  'task-questions',
 ] as const
 
 /**

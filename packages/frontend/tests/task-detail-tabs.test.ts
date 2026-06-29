@@ -43,6 +43,7 @@ describe('TAB_ORDER', () => {
     // `feedback` remains last as the RFC-041 reflective tab.
     expect(TAB_ORDER).toEqual([
       'workflow-status',
+      'task-questions',
       'node-runs',
       'details',
       'outputs',
@@ -50,7 +51,6 @@ describe('TAB_ORDER', () => {
       'worktree-diff',
       'worktree-structure',
       'feedback',
-      'task-questions',
     ])
   })
 
@@ -73,6 +73,7 @@ describe('availableTabs', () => {
   test('returns all 8 tabs when the workflow declares outputs', () => {
     expect(availableTabs({ hasOutputs: true })).toEqual([
       'workflow-status',
+      'task-questions',
       'node-runs',
       'details',
       'outputs',
@@ -80,7 +81,6 @@ describe('availableTabs', () => {
       'worktree-diff',
       'worktree-structure',
       'feedback',
-      'task-questions',
     ])
   })
 
@@ -88,13 +88,13 @@ describe('availableTabs', () => {
     const tabs = availableTabs({ hasOutputs: false })
     expect(tabs).toEqual([
       'workflow-status',
+      'task-questions',
       'node-runs',
       'details',
       'worktree-files',
       'worktree-diff',
       'worktree-structure',
       'feedback',
-      'task-questions',
     ])
     expect(tabs.includes('outputs' as never)).toBe(false)
     // worktree-files is unconditional — a task's worktree is always worth

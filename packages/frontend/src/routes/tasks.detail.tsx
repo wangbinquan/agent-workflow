@@ -116,6 +116,20 @@ function TaskDetailPage() {
     retry: false,
   })
 
+  // RFC-128: task-question count for the 「问题」tab badge. Same query key as the
+  // canvas badges (TaskStatusCanvas) so they share one cache entry + useTaskSync
+  // invalidation. Non-member / no-questions → [] → 0 → no badge.
+  const taskQuestionsForBadge = useQuery<TaskQuestionEntry[], ApiError>({
+    queryKey: ['task-questions', id],
+    queryFn: ({ signal }) =>
+      api.get(`/api/tasks/${encodeURIComponent(id)}/questions`, undefined, signal),
+    retry: false,
+  })
+  const pendingQuestionCount = useMemo(
+    () => (taskQuestionsForBadge.data ?? []).filter((e) => e.phase !== 'done').length,
+    [taskQuestionsForBadge.data],
+  )
+
   // RFC-083 — structural (semantic) diff for the task scope. Same gating as the
   // textual diff (needs a base commit); refetches while the task is live.
   const structuralDiff = useQuery<StructuralDiff>({
@@ -320,6 +334,12 @@ function TaskDetailPage() {
             onClick={() => setTab(k)}
           >
             {tabLabel(t, k)}
+            {/* RFC-128: 「问题」tab carries a non-terminal pending-question count badge. */}
+            {k === 'task-questions' && pendingQuestionCount > 0 && (
+              <span className="tabs__tab-badge" data-testid="tq-tab-badge">
+                {pendingQuestionCount}
+              </span>
+            )}
           </button>
         ))}
       </nav>

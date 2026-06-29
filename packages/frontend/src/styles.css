@@ -3399,6 +3399,25 @@ code {
   border-bottom-color: var(--accent);
 }
 
+/* RFC-128: 「问题」tab 待处理问题数角标（沿用 .sidebar__badge 的 count-pill 风格，
+   略小、随 tab label 内联）。count 本身是信号，active 态不改背景。 */
+.tabs__tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  vertical-align: middle;
+}
+
 /* RFC-035 PR2 — three modifier flavours of the .tabs bar so the three
    bespoke implementations (.inspector__tabs / .agent-import__tabs /
    .repo-source-tabs) can collapse into the shared primitive.
