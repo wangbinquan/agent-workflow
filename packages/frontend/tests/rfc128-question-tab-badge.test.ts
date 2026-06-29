@@ -19,8 +19,8 @@ describe('RFC-128 question tab badge (source-level lock)', () => {
     expect(SRC).toContain("k === 'task-questions' && pendingQuestionCount > 0")
   })
 
-  test('badge count = non-terminal (needs-attention) questions, incl. manual', () => {
+  test('badge count = 待指派(pending) + 待下发(staged) only (needs-action), incl. manual', () => {
     expect(SRC).toMatch(/const pendingQuestionCount = useMemo/)
-    expect(SRC).toContain("filter((e) => e.phase !== 'done')")
+    expect(SRC).toContain("e.phase === 'pending' || e.phase === 'staged'")
   })
 })

@@ -126,7 +126,12 @@ function TaskDetailPage() {
     retry: false,
   })
   const pendingQuestionCount = useMemo(
-    () => (taskQuestionsForBadge.data ?? []).filter((e) => e.phase !== 'done').length,
+    // RFC-128 (用户 2026-06-29): 「待处理」= 待指派(pending) + 待下发(staged) 两态——
+    // 需人答/分配/下发的那些；不含处理中(在跑) / 已处理待确认(待确认) / 完成。
+    () =>
+      (taskQuestionsForBadge.data ?? []).filter(
+        (e) => e.phase === 'pending' || e.phase === 'staged',
+      ).length,
     [taskQuestionsForBadge.data],
   )
 
