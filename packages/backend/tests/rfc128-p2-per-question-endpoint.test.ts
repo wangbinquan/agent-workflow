@@ -36,7 +36,7 @@ import { createApp } from '../src/server'
 import { createSession } from '../src/auth/sessionStore'
 import { createUser } from '../src/services/users'
 import { createClarifySession } from '../src/services/clarify'
-import { createCrossClarifySession } from '../src/services/crossClarify'
+import { createCrossClarifySession, hasPersistentStop } from '../src/services/crossClarify'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { loadUndispatchedDesignerTargets } from '../src/services/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -626,7 +626,9 @@ describe('RFC-128 P2 — Codex P2-1: questionIds 须配 defer', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Codex P2-2 — defer 透传 directive：cross full seal + stop → directive 落库 + 无 designer 条目
+// Codex P2-2 — defer 透传 directive：full seal + stop → directive 落库 + 无 designer 条目；
+// PARTIAL seal + stop → directive 两表都不提前落（hasPersistentStop=false，节点不被提前
+// short-circuit）——directive 只在整轮成形时写（hasPersistentStop 不按 session.status 过滤）。
 // ---------------------------------------------------------------------------
 
 describe('RFC-128 P2 — Codex P2-2: defer 透传 directive (stop)', () => {
@@ -656,11 +658,46 @@ describe('RFC-128 P2 — Codex P2-2: defer 透传 directive (stop)', () => {
       .from(crossClarifySessions)
       .where(eq(crossClarifySessions.id, round!.id))
     expect(legacy?.directive).toBe('stop')
+    // Full seal: a real persistent stop (round answered) — short-circuits the node legitimately.
+    expect(await hasPersistentStop(h.db, taskId, 'cross1')).toBe(true)
 
     // stop ⇒ reconcile produces NO designer entry (only the questioner). Without threading the
     // directive the round would default to 'continue' and emit a dispatchable designer entry.
     const list = await listQuestions(h.app, h.alice.token, taskId)
     expect(list.some((q) => q.roleKind === 'designer')).toBe(false)
     expect(list.some((q) => q.roleKind === 'questioner')).toBe(true)
+  })
+
+  test('cross PARTIAL seal + directive=stop → 两表 directive 仍 NULL（hasPersistentStop=false，节点不被提前 short-circuit）', async () => {
+    const h = await buildHarness()
+    // 2-question round; defer-seal only q1 with stop → PARTIAL (round stays awaiting_human).
+    const { taskId, nodeRunId } = await seedCrossRound(
+      h.db,
+      h.alice.id,
+      [makeQ('q1'), makeQ('q2')],
+      {
+        deferred: true,
+      },
+    )
+
+    const res = await req(h.app, h.alice.token, `/api/clarify/${nodeRunId}/answers`, {
+      method: 'POST',
+      body: JSON.stringify({ defer: true, directive: 'stop', answers: [makeAns('q1')] }),
+    })
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as { roundFullySealed: boolean }).roundFullySealed).toBe(false)
+
+    // Directive must NOT be persisted while the round is partial: the legacy session's
+    // directive is read by hasPersistentStop WITHOUT a status filter, so a premature 'stop'
+    // would short-circuit the cross node before q2 is ever answered.
+    const [round] = await roundOf(h.db, taskId)
+    expect(round?.status).toBe('awaiting_human')
+    expect(round?.directive ?? null).toBeNull() // clarify_rounds: not prematurely 'stop'
+    const [legacy] = await h.db
+      .select()
+      .from(crossClarifySessions)
+      .where(eq(crossClarifySessions.id, round!.id))
+    expect(legacy?.directive ?? null).toBeNull() // legacy session: still NULL
+    expect(await hasPersistentStop(h.db, taskId, 'cross1')).toBe(false) // node NOT short-circuited
   })
 })

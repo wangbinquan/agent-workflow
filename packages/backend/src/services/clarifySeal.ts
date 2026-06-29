@@ -199,23 +199,37 @@ export async function sealRoundQuestions(
     const fullySealed = questions.every((q) => newSealed.has(q.id))
 
     // RFC-128 P2 (Codex P2-2) — round-level directive. Provided wins; else keep the round's
-    // existing value; else default 'continue'. Persisted below (round + legacy session) AND
-    // fed to the reconcile designer gate. The 'continue' default is REQUIRED for the §18
-    // designer park: loadUndispatchedDesignerTargets filters clarify_rounds.directive =
-    // 'continue', so a NULL directive would leave a fully-sealed designer round un-parked →
-    // (with the node-run closed below) the task would advance past it instead of waiting for
-    // board dispatch. A 'stop' round produces NO designer entries (reconcileDesiredEntries).
+    // existing value; else default 'continue'. Fed (in-memory) to the reconcile designer gate
+    // and persisted to clarify_rounds + the legacy session ONLY on a FULL seal (see directive
+    // gate below). The 'continue' default is REQUIRED for the §18 designer park:
+    // loadUndispatchedDesignerTargets filters clarify_rounds.directive='continue', so a NULL
+    // directive would leave a fully-sealed designer round un-parked → (with the node-run
+    // closed below) the task would advance past it instead of waiting for board dispatch. A
+    // 'stop' round produces NO designer entries (reconcileDesiredEntries).
     const effectiveDirective: ClarifyDirective =
       args.directive ?? (round.directive as ClarifyDirective | null) ?? 'continue'
 
-    // Write clarify_rounds (the SoT): merged answers + merged scopes + directive; flip status
-    // only when fully sealed. Keep status 'awaiting_human' on a partial seal (NEVER a new DB
-    // 'partial' status — RFC-128 §2 / RFC-126).
+    // RFC-128 P2 (Codex P2-2 follow-up) — persist the directive ONLY when the round fully
+    // seals; a PARTIAL seal writes it to NEITHER table:
+    //   - the legacy session's directive is read by hasPersistentStop / resolveCrossNodeStopped
+    //     WITHOUT a status filter (crossClarify.ts) — a 'stop' written while the session is
+    //     still awaiting_human would be taken as a PERMANENT node stop and short-circuit the
+    //     cross node BEFORE the round is answered;
+    //   - clarify_rounds.directive's only scheduling reader (loadUndispatchedDesignerTargets)
+    //     filters status='answered', so a partial round's directive is never consulted.
+    // Deferring both writes to full seal matches "partial seal is pure derived state, changes
+    // nothing schedulable". The reconcile below still uses the IN-MEMORY effectiveDirective (a
+    // partial seal produces no designer entries regardless — P2-4a).
+    const directiveSet = fullySealed ? { directive: effectiveDirective } : {}
+
+    // Write clarify_rounds (the SoT): merged answers + merged scopes; flip status (+ directive
+    // + answeredAt) only when fully sealed. Keep status 'awaiting_human' on a partial seal
+    // (NEVER a new DB 'partial' status — RFC-128 §2 / RFC-126).
     tx.update(clarifyRounds)
       .set({
         answersJson: mergedJson,
         questionScopesJson: scopesJson,
-        directive: effectiveDirective,
+        ...directiveSet,
         ...(fullySealed
           ? {
               status: 'answered' as const,
@@ -229,13 +243,13 @@ export async function sealRoundQuestions(
 
     // Dual-write the legacy session table (RFC-058 keeps both in lockstep on the
     // overlapping columns) by the SHARED row id. crossClarifySessions has no answered_by
-    // column (matches submitCrossClarifyAnswers), so we mirror answers + scopes + directive +
-    // status + answeredAt — the fields the dual-write-consistency nets assert.
+    // column (matches submitCrossClarifyAnswers), so we mirror answers + scopes + (on full
+    // seal only) directive + status + answeredAt — the fields the dual-write-consistency nets
+    // assert. Directive is gated on fullySealed for the hasPersistentStop reason above.
     const legacySet = {
       answersJson: mergedJson,
       questionScopesJson: scopesJson,
-      directive: effectiveDirective,
-      ...(fullySealed ? { status: 'answered' as const, answeredAt: ts } : {}),
+      ...(fullySealed ? { status: 'answered' as const, answeredAt: ts, ...directiveSet } : {}),
     }
     if (round.kind === 'self') {
       tx.update(clarifySessions).set(legacySet).where(eq(clarifySessions.id, round.id)).run()
