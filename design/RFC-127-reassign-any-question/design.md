@@ -66,9 +66,11 @@
 
 `scheduler.ts:1764-1772` 解析前先读「本次要跑的那行」的 `agent_override_name`：非空 → `agentName = override`（再 `getAgent`）。**必须早于** `prepareNodeRunInjection`（闭包/skill/mcp/plugin 随 X，`scheduler.ts:1797`）与 `resolveFrozenRuntime`（runtime 随 X 的 `agent.runtime`，`:2659`）。当前 pending 行读取在 agent 解析之后（`:1838`）——落地时把行读取上提或 agent 解析下移到行已知之后（实现 gate 细化）。
 
+**借壳必须断开原节点的 session / runtime 继承（Codex 设计 gate F1）**：clarify 续跑路径会从原 `node.id` 派生 `resumeSessionId` 并继承该 session owner 的 frozen runtime——借壳行若不处理，X 会 **resume P 的 opencode 历史对话 + 跑 P 的 runtime**，违反「runtime 随 X / X 的脑子」且泄漏 P 的 session 历史。故 `agent_override_name` 行须：① **清除 / 不继承 `resumeSessionId`**（X 全新 session、不接 P 的对话）；② frozen runtime 取 **X 的** `agent.runtime`（不继承 P 的）。统一原则：借壳行的一切「agent 派生物」（runtime / session / skill / mcp / readonly）都随 X，只有 `node_id` / promptTemplate / 上游输入 / **输出端口契约**随 P。
+
 ### 3.3 端口契约：用**原节点**的 outputs（不是 X 的）
 
-借壳的产出协议块必须按**原节点声明的 outputs** 注入（让 X 吐 P 的端口），否则下游边引用 `P:port` 拿空。`buildInlineAgentEntry`（`runner.ts:1675-1701`）的 `options.outputs` 现取自传入 agent（X）——借壳路径要改成「outputs 取原节点 P 的 agent 声明、其余（prompt body/model）取 X」。即注入的 inline agent = **X 的脑子 + P 的输出契约**。promptTemplate 本就 per-node（`scheduler.ts:1800`，node=P）→ 天然是 P 的；上游输入经 `resolveUpstreamInputs`（node=P）→ 天然是 P 的入边。
+借壳的产出协议块必须按**原节点声明的 outputs** 注入（让 X 吐 P 的端口），否则下游边引用 `P:port` 拿空。**但只改 `buildInlineAgentEntry` 不够（Codex 设计 gate F2）**：`runNode` 的**输出协议渲染、envelope 校验、产出持久化**都读 `opts.agent.outputs` / `opts.agent.outputKinds`（传入的 agent 对象），不是 inline `options.outputs`——只改 inline config 的话 X 仍按**自己**的 outputs 被 prompt / 校验，不会被要求吐 P 的端口、且 P 的 outputKind metadata 被跳过。**正解 = 构造一个「effective agent」对象传给 `runNode`**：`{ ...X〔body/model/runtime/readonly/skill 等〕, outputs: P.outputs, outputKinds: P.outputKinds }`——让 prompt 渲染（要 X 吐 P 的端口）、envelope 校验、产出持久化**全程**用 P 的输出契约，X 只贡献「脑子」。这个「X 的 agent 定义 + P 的输入/输出契约」混合在 effective agent 对象层一次性表达，而非散落 inline config。promptTemplate 本就 per-node（`scheduler.ts:1800`，node=P）→ 天然是 P 的；上游输入经 `resolveUpstreamInputs`（node=P）→ 天然是 P 的入边。
 
 ### 3.4 readonly 随 X（D4）
 
