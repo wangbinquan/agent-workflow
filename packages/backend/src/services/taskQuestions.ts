@@ -451,7 +451,7 @@ export async function loadUndispatchedDesignerTargets(
       .limit(1)
   )[0]
   if (taskRow?.deferred !== true) return new Set()
-  const entries = await db
+  const clarifyDesigner = await db
     .select({
       dispatchedAt: taskQuestions.dispatchedAt,
       triggerRunId: taskQuestions.triggerRunId,
@@ -474,6 +474,30 @@ export async function loadUndispatchedDesignerTargets(
         eq(clarifyRounds.directive, 'continue'),
       ),
     )
+  // RFC-120 §15 (Codex impl-gate H1): a MANUAL designer row has a synthetic origin with NO
+  // clarify round, so the INNER JOIN above misses it — yet an undispatched manual row with a
+  // handler MUST park its node exactly like a clarify designer row (else the scheduler can
+  // complete the task past it, and a later dispatch can't resume a `done` task → the
+  // instruction is lost / a rerun is minted post-completion). Manual content is always
+  // ready (the instruction IS the content), so it joins NO round — just the same designer
+  // park columns, fed through the IDENTICAL undispatched/in-flight/consumed classification.
+  const manualDesigner = await db
+    .select({
+      dispatchedAt: taskQuestions.dispatchedAt,
+      triggerRunId: taskQuestions.triggerRunId,
+      defaultTargetNodeId: taskQuestions.defaultTargetNodeId,
+      overrideTargetNodeId: taskQuestions.overrideTargetNodeId,
+    })
+    .from(taskQuestions)
+    .where(
+      and(
+        eq(taskQuestions.taskId, taskId),
+        eq(taskQuestions.roleKind, 'designer'),
+        eq(taskQuestions.sourceKind, 'manual'),
+        ne(taskQuestions.confirmation, 'confirmed'),
+      ),
+    )
+  const entries = [...clarifyDesigner, ...manualDesigner]
   if (entries.length === 0) return new Set()
   const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   const outputRunIds = await runIdsWithOutput(
@@ -767,6 +791,23 @@ export async function createManualTaskQuestion(
   input: CreateManualTaskQuestionInput,
   actor: TaskQuestionActor,
 ): Promise<{ id: string }> {
+  // RFC-120 §15 (Codex impl-gate H2): a manual question can ONLY ever be dispatched +
+  // injected on a deferred-dispatch task (dispatchTaskQuestions + buildNodeQueueExternalFeedback
+  // are deferred-gated). Creating one on a non-deferred task would be undispatchable orphan
+  // data, so reject up front with the SAME code the dispatch route uses.
+  const taskRow = (
+    await db
+      .select({ deferred: tasks.deferredQuestionDispatch })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
+  )[0]
+  if (taskRow?.deferred !== true) {
+    throw new ConflictError(
+      'task-not-deferred-dispatch',
+      `task ${taskId} is not a deferred-dispatch task; manual questions cannot be created (they could never be dispatched / injected)`,
+    )
+  }
   const title = input.title.trim()
   const body = input.body.trim()
   if (title === '') {

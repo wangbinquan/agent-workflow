@@ -63,6 +63,15 @@ export interface TaskQuestionListProps {
    * null ⇒ no effect, so existing callers are unaffected (golden-lock).
    */
   focusSourceNode?: { nodeId: string; key: number } | null
+  /**
+   * RFC-120 §15 — the manual-question entry points ("+ 新增问题" + per-card "复制") are
+   * shown ONLY for a deferred-dispatch task, because dispatch + injection of a manual
+   * question are deferred-gated (a manual row on a non-deferred task is undispatchable
+   * orphan data; the create route rejects it too). Default false ⇒ a board rendered
+   * without this prop (or a non-deferred task) shows NO manual buttons (golden-lock:
+   * today's board, unchanged).
+   */
+  deferred?: boolean
 }
 
 const PHASE_ORDER: TaskQuestionPhase[] = [
@@ -93,8 +102,9 @@ const DISPATCH_ERROR_KEYS: Record<string, string> = {
   'task-question-designer-not-ready': 'taskQuestions.dispatchDesignerNotReady',
   'task-question-round-multi-target': 'taskQuestions.dispatchRoundMultiTarget',
   'task-question-unsafe-dispatch-target': 'taskQuestions.dispatchUnsafeTarget',
-  // RFC-120 §15: a manual question can be staged on any task, but dispatch (mint + inject)
-  // reuses the §18 per-node queue, which only runs on a deferred-dispatch task.
+  // RFC-120 §15: dispatch (mint + inject) reuses the §18 per-node queue, which only runs on
+  // a deferred-dispatch task — defensive mapping (the board only shows manual buttons when
+  // deferred, so this is a belt-and-suspenders for any edge path).
   'task-not-deferred-dispatch': 'taskQuestions.dispatchNotDeferred',
 }
 
@@ -102,6 +112,7 @@ export function TaskQuestionList({
   taskId,
   nodeOptions = [],
   focusSourceNode = null,
+  deferred = false,
 }: TaskQuestionListProps) {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -201,9 +212,10 @@ export function TaskQuestionList({
   const entries = query.data ?? []
 
   // RFC-120 §15 — the "+ 新增问题" toolbar + author form are available even when the board
-  // is empty (so the first manual question can be added). The form is a portal Dialog (no-op
-  // chrome while closed).
-  const toolbar = (
+  // is empty (so the first manual question can be added), but ONLY on a deferred-dispatch
+  // task (a manual question is undispatchable otherwise — H2). The form is a portal Dialog
+  // (no-op chrome while closed). Non-deferred ⇒ null toolbar/form (golden-lock).
+  const toolbar = deferred ? (
     <div className="task-questions__toolbar">
       <button
         type="button"
@@ -214,8 +226,8 @@ export function TaskQuestionList({
         {t('taskQuestions.addQuestion')}
       </button>
     </div>
-  )
-  const authorForm = (
+  ) : null
+  const authorForm = deferred ? (
     <QuestionAuthorForm
       open={authorOpen}
       onClose={() => setAuthorOpen(false)}
@@ -223,7 +235,7 @@ export function TaskQuestionList({
       nodeOptions={nodeOptions}
       initial={authorInitial}
     />
-  )
+  ) : null
 
   if (entries.length === 0) {
     return (
@@ -370,8 +382,9 @@ export function TaskQuestionList({
                       </Link>
                     )}
                     {/* RFC-120 §15 — 复制 a 待指派 card: open the author form prefilled with
-                        its title/body; Save creates a NEW manual question. */}
-                    {e.phase === 'pending' && (
+                        its title/body; Save creates a NEW manual question. Deferred-only
+                        (manual questions only dispatch on a deferred task — H2). */}
+                    {deferred && e.phase === 'pending' && (
                       <button
                         type="button"
                         className="btn btn--xs"

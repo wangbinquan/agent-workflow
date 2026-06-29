@@ -33,9 +33,11 @@ import {
   confirmTaskQuestion,
   createManualTaskQuestion,
   listTaskQuestions,
+  loadUndispatchedDesignerTargets,
   reassignTaskQuestion,
 } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
+import { deriveFrontier } from '../src/services/scheduler'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
@@ -426,6 +428,126 @@ describe('RFC-120 §15 — create validation + audit isolation', () => {
       dispatchedRunId: result.reruns[0]!.nodeRunId,
     })
     expect(ctx?.block).not.toContain('SECRET-AUTHOR-ID') // prompt isolation (RFC-099)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F — Codex impl-gate H1: a staged manual row parks the deferred task (scheduler-level).
+// A synthetic-origin manual row has NO clarify round, so the park gate's INNER JOIN used to
+// miss it → the scheduler could complete the task past an undispatched manual question (then
+// a later dispatch can't resume a `done` task → instruction lost). The gate now includes
+// manual designer rows via their own content-ready semantics.
+// ---------------------------------------------------------------------------
+describe('RFC-120 §15 — Codex impl-gate H1 (manual park gate)', () => {
+  test('a staged-undispatched manual row enters loadUndispatchedDesignerTargets; dispatch releases it', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db) // deferred; FIXER has a prior run
+    const { id } = await createManualTaskQuestion(
+      db,
+      taskId,
+      { title: 't', body: 'b', targetNodeId: FIXER },
+      actor,
+    )
+    // undispatched manual WITH a handler → parks FIXER (was INVISIBLE before the H1 fix:
+    // the synthetic origin has no clarify round so the INNER JOIN dropped it).
+    expect((await loadUndispatchedDesignerTargets(db, taskId)).has(FIXER)).toBe(true)
+    await dispatchTaskQuestions(db, taskId, [id], actor)
+    // dispatched → leaves the undispatched set (gate released).
+    expect((await loadUndispatchedDesignerTargets(db, taskId)).has(FIXER)).toBe(false)
+  })
+
+  test('scheduler deriveFrontier PARKS the manual handler (awaiting_human, not completed) until dispatched', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db)
+    const { id } = await createManualTaskQuestion(
+      db,
+      taskId,
+      { title: 't', body: 'b', targetNodeId: FIXER },
+      actor,
+    )
+    const scopeNodes = liveDef().nodes as unknown as WorkflowNode[]
+    const scopeIds = new Set(scopeNodes.map((n) => n.id))
+    const NONE: ReadonlySet<string> = new Set()
+
+    // BEFORE dispatch: FIXER is undispatched → deriveFrontier must NOT complete it (the
+    // scheduler keeps the task awaiting_human so it can't finish past the manual question).
+    const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const deferredBefore = await loadUndispatchedDesignerTargets(db, taskId)
+    expect(deferredBefore.has(FIXER)).toBe(true)
+    const fBefore = deriveFrontier(
+      rows,
+      liveDef(),
+      scopeNodes,
+      scopeIds,
+      0,
+      new Map(),
+      NONE,
+      NONE,
+      NONE,
+      NONE,
+      NONE,
+      deferredBefore,
+    )
+    expect(fBefore.awaitingHuman).toContain(FIXER)
+    expect(fBefore.completed.has(FIXER)).toBe(false)
+
+    // AFTER dispatch: FIXER leaves the set → deriveFrontier no longer parks it (its rerun runs).
+    await dispatchTaskQuestions(db, taskId, [id], actor)
+    const rows2 = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const deferredAfter = await loadUndispatchedDesignerTargets(db, taskId)
+    expect(deferredAfter.has(FIXER)).toBe(false)
+    const fAfter = deriveFrontier(
+      rows2,
+      liveDef(),
+      scopeNodes,
+      scopeIds,
+      0,
+      new Map(),
+      NONE,
+      NONE,
+      NONE,
+      NONE,
+      NONE,
+      deferredAfter,
+    )
+    expect(fAfter.awaitingHuman).not.toContain(FIXER)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// G — Codex impl-gate H2: manual creation rejected on a non-deferred task (it could never
+// be dispatched / injected → undispatchable orphan data).
+// ---------------------------------------------------------------------------
+describe('RFC-120 §15 — Codex impl-gate H2 (non-deferred create rejected)', () => {
+  test('create on a NON-deferred task → ConflictError task-not-deferred-dispatch; nothing inserted', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db, { deferred: false })
+    let threw: unknown = null
+    try {
+      await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 't', body: 'b', targetNodeId: FIXER },
+        actor,
+      )
+    } catch (e) {
+      threw = e
+    }
+    expect((threw as { code?: string }).code).toBe('task-not-deferred-dispatch')
+    const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
+    expect(rows.length).toBe(0) // nothing inserted
+  })
+
+  test('create on a deferred task → succeeds (control)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db) // deferred
+    const { id } = await createManualTaskQuestion(
+      db,
+      taskId,
+      { title: 't', body: 'b', targetNodeId: FIXER },
+      actor,
+    )
+    expect(id).toBeTruthy()
   })
 })
 
