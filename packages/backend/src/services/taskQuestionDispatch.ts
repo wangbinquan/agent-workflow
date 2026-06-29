@@ -911,6 +911,12 @@ async function assertDesignerReady(
 ): Promise<void> {
   const graphSubset = group.filter((e) => e.defaultTargetNodeId === targetNodeId)
   if (graphSubset.length === 0) return // pure-override group — not the graph designer
+  // RFC-128 P3: the rounds we are dispatching FROM are exempt from the awaiting_human "pending"
+  // gate — their sealed questions are the whole point of this dispatch (a partial-seal round
+  // stays awaiting_human). origin_node_run_id == cross_clarify_sessions.cross_clarify_node_run_id,
+  // so the readiness scan can match the dispatched sessions and skip them; an UNRESOLVED sibling
+  // (not in this set) still rejects the dispatch (golden lock H3/H2 multi-source readiness).
+  const dispatchedOrigins = new Set(graphSubset.map((e) => e.originNodeRunId))
   for (const loopIter of new Set(graphSubset.map((e) => e.loopIter))) {
     const readiness = await evaluateDesignerRerunReadiness({
       db,
@@ -918,6 +924,7 @@ async function assertDesignerReady(
       designerNodeId: targetNodeId,
       definition,
       loopIter,
+      dispatchedOrigins,
     })
     if (!readiness.ready) {
       throw new ConflictError(

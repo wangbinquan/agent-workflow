@@ -14,9 +14,9 @@
 //      `answers_json` (per-question merge-write; answers stay the content SoT);
 //   2. merges any per-question scope choice into the round's `question_scopes_json`
 //      (scope is chosen when a cross question is answered — RFC-128 §4 / P2-3);
-//   3. reconciles the round's task_questions entries (questioner/self always; designer
-//      ONLY once the whole round is sealed — P2-4 option (a); per-question designer
-//      entries + dispatch are P3);
+//   3. reconciles the round's task_questions entries (questioner/self always; a designer
+//      entry per SEALED designer-scope question — RFC-128 P3 per-question gate, including
+//      the just-sealed subset of THIS call, since the sealed_at stamp (4) runs after);
 //   4. stamps `sealed_at` on the (question × role) entries sealed by THIS call;
 //   5. flips the round → 'answered' ONLY when EVERY question is now sealed (T4); a
 //      partial seal leaves the round 'awaiting_human' (partial is a pure derived state,
@@ -281,17 +281,25 @@ export async function sealRoundQuestions(
     }
 
     // (3) Reconcile against the EFFECTIVE round (status + directive reflect the writes
-    // above). P2-4(a): designer entries appear only once the round is fully sealed (=
-    // answered) AND directive!=='stop'; a partial seal (or a stop round) creates only
-    // questioner/self entries. Done on the SAME tx (dbTxSync can't nest).
-    reconcileRoundEntriesTx(tx, {
-      ...round,
-      status: fullySealed ? 'answered' : round.status,
-      directive: effectiveDirective,
-      answersJson: mergedJson,
-      questionScopesJson: scopesJson,
-      answeredAt: fullySealed ? ts : round.answeredAt,
-    })
+    // above). RFC-128 P3: the reconcile designer gate is per-question — pass THIS call's
+    // sealing subset as `additionalSealedQuestionIds` because the `sealed_at` stamp (4) runs
+    // AFTER this reconcile in the same tx, so a just-sealed designer-scope question's entry
+    // must be created HERE (before it can be stamped). A partial seal of a designer-scope
+    // question now emits its designer entry (P3 放开 P2-4a); a full seal marks every question
+    // sealed (golden lock). A 'stop' round still emits no designer entries. Done on the SAME
+    // tx (dbTxSync can't nest).
+    reconcileRoundEntriesTx(
+      tx,
+      {
+        ...round,
+        status: fullySealed ? 'answered' : round.status,
+        directive: effectiveDirective,
+        answersJson: mergedJson,
+        questionScopesJson: scopesJson,
+        answeredAt: fullySealed ? ts : round.answeredAt,
+      },
+      { additionalSealedQuestionIds: sealingSet },
+    )
 
     // (4) Stamp sealed_at on the (question × role) entries sealed by THIS call that are
     // not yet stamped. Idempotent via IS NULL. (Designer entries created above for a

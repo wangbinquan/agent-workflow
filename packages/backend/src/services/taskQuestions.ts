@@ -127,23 +127,46 @@ function graphForRound(round: ClarifyRoundRow) {
  *  single atomic dbTxSync (dbTxSync does not nest). Idempotent; preserves the manual
  *  overlay (override / confirmation / staged / sealed / audit) on existing rows.
  *
- *  RFC-128 P2-4 option (a): in P1 a designer entry is created ONLY when the WHOLE round
- *  is sealed (round.status === 'answered') — byte-for-byte the RFC-120 `roundAnswered`
- *  gate. A PARTIAL seal deliberately produces NO designer entry: dispatch/render
- *  (assertDesignerReady / buildExternalFeedbackContext / stageTaskQuestion / the §18
- *  park gate) still key on whole-round answered, so a per-question designer row would be
- *  half-usable (looks stageable but cannot dispatch/inject until every sibling is
- *  sealed). Per-question designer entries + per-question dispatch/render land together in
- *  P3 (designer 逐题下发). The questioner/self entries stay unconditional (always re-run).
- *  We feed the per-question `questionSealed` gate the AGGREGATE so the pure
- *  reconcileDesiredEntries stays P3-ready (P3 flips this to a true per-question map). */
-export function reconcileRoundEntriesTx(tx: DbTxSync, round: ClarifyRoundRow): void {
+ *  RFC-128 P3 (designer 逐题下发) — the designer gate is now TRULY per-question: a designer
+ *  entry is created for each question that is SEALED (its own task_questions `sealed_at` is
+ *  set, OR the whole round is answered) AND designer-scoped. This replaces the P2-4a interim
+ *  that keyed the WHOLE round (`round.status === 'answered'`); a PARTIAL seal of Q1 (designer
+ *  scope) now emits Q1's designer entry while an unsealed Q2 emits none. The matching
+ *  per-question dispatch (assertDesignerReady readiness exempts the dispatched origins) +
+ *  injection (buildNodeQueueExternalFeedback renders a partial round) land in the same P3, so
+ *  a per-question designer row is fully usable (stageable + dispatchable + injects only its
+ *  own Q&A). Golden lock: a FULL seal marks every question sealed (round answered ⇒ the
+ *  `roundAnswered` short-circuit below), reproducing the old whole-round behavior
+ *  byte-for-byte. The questioner/self entries stay unconditional (always re-run).
+ *
+ *  The per-question sealed set = the round's already-stamped `sealed_at` entries (read off
+ *  the GIVEN tx, so a lazy reconcile sees prior committed seals) UNION
+ *  `opts.additionalSealedQuestionIds` — the in-flight seal subset sealRoundQuestions passes
+ *  because its `sealed_at` stamp runs AFTER this reconcile in the same tx (the new designer
+ *  entry must appear in THIS pass, before it can be stamped). */
+export function reconcileRoundEntriesTx(
+  tx: DbTxSync,
+  round: ClarifyRoundRow,
+  opts: { additionalSealedQuestionIds?: Iterable<string> } = {},
+): void {
   if (round.status === 'canceled' || round.status === 'abandoned') return
   const questions = parseQuestions(round.questionsJson)
   if (questions.length === 0) return
+  // RFC-128 P3 per-question seal gate (see the doc comment): a full seal (round answered)
+  // marks every question sealed (golden lock); otherwise a question is sealed iff its own
+  // entry carries `sealed_at` OR it is in this call's in-flight seal subset.
   const roundAnswered = round.status === 'answered'
+  const sealedIds = new Set<string>(opts.additionalSealedQuestionIds ?? [])
+  if (!roundAnswered) {
+    const existing = tx
+      .select({ questionId: taskQuestions.questionId, sealedAt: taskQuestions.sealedAt })
+      .from(taskQuestions)
+      .where(eq(taskQuestions.originNodeRunId, round.intermediaryNodeRunId))
+      .all()
+    for (const e of existing) if (e.sealedAt !== null) sealedIds.add(e.questionId)
+  }
   const questionSealed: Record<string, boolean> = {}
-  for (const q of questions) questionSealed[q.id] = roundAnswered
+  for (const q of questions) questionSealed[q.id] = roundAnswered || sealedIds.has(q.id)
   const desired = reconcileDesiredEntries({
     kind: round.kind,
     questions,

@@ -710,6 +710,17 @@ export interface EvaluateDesignerRerunReadinessArgs {
   definition: WorkflowDefinition
   /** Limit the readiness scan to a specific loop iteration. Non-loop = 0. */
   loopIter: number
+  /**
+   * RFC-128 P3 — origin node-run ids (= cross_clarify_sessions.cross_clarify_node_run_id,
+   * which equals task_questions.origin_node_run_id) of the designer questions being DISPATCHED
+   * right now. A per-question dispatch explicitly dispatches the SEALED questions of these
+   * sources even while their round is still awaiting_human (a partial seal), so a sibling
+   * whose latest session is one of these is NOT counted as "pending" — we are not waiting for
+   * its remaining (unsealed) questions. Other awaiting_human siblings (not in this set) still
+   * gate the dispatch (golden lock: rfc120 H3/H2 multi-source readiness). Empty / omitted on
+   * the immediate-submit path → byte-for-byte the pre-RFC-128 readiness (golden lock).
+   */
+  dispatchedOrigins?: ReadonlySet<string>
 }
 
 export interface DesignerRerunReadinessSource {
@@ -784,6 +795,13 @@ export async function evaluateDesignerRerunReadiness(
       continue
     }
     if (latest.status === 'awaiting_human') {
+      // RFC-128 P3: a per-question dispatch explicitly dispatches THIS source's sealed
+      // questions even though its round is still awaiting_human (a partial seal). So a
+      // sibling whose latest session is being dispatched from is NOT pending — we are not
+      // waiting for its remaining questions; its sealed Q&A is injected via the per-node
+      // queue at dispatch (buildNodeQueueExternalFeedback), not via readiness.sources. Other
+      // awaiting_human siblings still gate (golden lock H3/H2).
+      if (args.dispatchedOrigins?.has(latest.crossClarifyNodeRunId)) continue
       pending.push(nodeId)
       continue
     }
@@ -1485,7 +1503,21 @@ async function buildNodeQueueExternalFeedback(
         .where(eq(clarifyRounds.intermediaryNodeRunId, originRunId))
         .limit(1)
     )[0]
-    if (round === undefined || round.status !== 'answered' || round.answersJson === null) continue
+    // RFC-128 P3: a designer entry can be dispatched once ITS question is sealed, even while
+    // the round is still awaiting_human (a PARTIAL seal). The queued `questionIds` come from
+    // dispatched designer entries, which are necessarily sealed (the stage gate requires it),
+    // and `answers_json` carries ONLY sealed answers (mergeSealedAnswers) — an unsealed
+    // sibling's answer is simply absent. So we no longer require the WHOLE round to be
+    // 'answered'; restricting to `questionIds` below injects only the sealed Q&A. We still skip
+    // a vanished / terminal (canceled/abandoned) round and one with no answers at all. A
+    // fully-answered round still passes (golden lock).
+    if (
+      round === undefined ||
+      round.status === 'canceled' ||
+      round.status === 'abandoned' ||
+      round.answersJson === null
+    )
+      continue
     const allQuestions = JSON.parse(round.questionsJson) as ClarifyQuestion[]
     const allAnswers = JSON.parse(round.answersJson) as ClarifyAnswer[]
     const answerById = new Map(allAnswers.map((a) => [a.questionId, a]))

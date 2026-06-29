@@ -253,13 +253,13 @@ describe('RFC-128 P1 — AC-3 轮 answered 仅全 seal 才翻', () => {
 })
 
 // ---------------------------------------------------------------------------
-// AC-2 — reconcile 门控 (cross), RFC-128 P2-4 option (a): P1 只在「整轮全 seal」才出
-// designer 条目（与旧 roundAnswered 逐字一致）；partial seal 不留半可用 designer row。
-// 逐题 designer 条目 + 逐题下发是 P3。
+// AC-2 — reconcile 门控 (cross). RFC-128 P3 放开了 P1 阶段的 P2-4a 临时「整轮 gate」：现在
+// partial seal 一个 designer-scope 题即逐题出它的 designer 条目，未 seal 的兄弟题不出；整轮
+// 全 seal = 全题 designer 条目（黄金锁，= 旧 roundAnswered 逐字一致）。
 // ---------------------------------------------------------------------------
 
-describe('RFC-128 P1 — AC-2 reconcile 门控: 整轮全 seal 才出 designer (P2-4a)', () => {
-  test('partial seal Q1(designer scope) → 仍无任何 designer 条目（只 questioner，不留半可用 row）', async () => {
+describe('RFC-128 P1/P3 — AC-2 reconcile 逐题门控: seal 一题即出它的 designer 条目', () => {
+  test('partial seal Q1(designer scope) → 出 Q1 designer 条目；Q2 未 seal 不出（P3 放开 P2-4a）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1'), makeQ('q2')])
 
@@ -273,9 +273,11 @@ describe('RFC-128 P1 — AC-2 reconcile 门控: 整轮全 seal 才出 designer (
 
     const dtos = await listTaskQuestions(db, taskId)
     const sig = dtos.map((d) => `${d.questionId}:${d.roleKind}`).sort()
-    // partial → 只有 questioner 条目，绝不出 designer（P2-4a：避免半可用 row）。
-    expect(sig).toEqual(['q1:questioner', 'q2:questioner'])
-    expect(sig.some((s) => s.endsWith(':designer'))).toBe(false)
+    // P3 逐题：Q1 已 seal + designer scope → 出 Q1 designer 条目；Q2 未 seal → 只 questioner。
+    expect(sig).toEqual(['q1:designer', 'q1:questioner', 'q2:questioner'])
+    // Q1 designer 条目 sealed=true（即便轮仍 awaiting_human——partial 派生），故可 stage/dispatch。
+    const q1Designer = dtos.find((d) => d.questionId === 'q1' && d.roleKind === 'designer')!
+    expect(q1Designer.sealed).toBe(true)
   })
 
   test('全题 seal（designer scope）→ 轮 answered → 两题 designer 条目都出现（= 旧整轮行为）', async () => {
