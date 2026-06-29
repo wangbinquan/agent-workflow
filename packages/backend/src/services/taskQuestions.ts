@@ -64,8 +64,18 @@ export interface TaskQuestionDTO {
   confirmedBy: string | null
   /** staged into 待下发 but not yet dispatched. */
   staged: boolean
+  /** RFC-128 §10 — this (question × role) entry's answer is sealed/locked. Derived from
+   *  `sealed_at != null` OR the whole round being answered (a pre-RFC-128 answered round
+   *  needs no backfill). Manual questions are always sealed (the instruction IS the
+   *  content). Drives the centralized-answer pane (which unsealed questions remain),
+   *  the /clarify grey-out, and the stage gate — these must use `sealed`, NOT
+   *  `answerSummary !== null`, since a partial round leaves `answerSummary` independent
+   *  of round status (Codex design gate F3). */
+  sealed: boolean
   reopenCount: number
-  /** Brief of the human's answer for this question (null if unanswered). */
+  /** Brief of the human's answer for this question (null if not yet sealed). Computed
+   *  per-question independent of the round's `status` (RFC-128 F3): a sealed question in
+   *  a still-awaiting_human (partial) round still shows its answer. */
   answerSummary: string | null
   createdAt: number
   updatedAt: number
@@ -112,26 +122,53 @@ function graphForRound(round: ClarifyRoundRow) {
 }
 
 /** One clarify_round → upsert its desired handler entries (idempotent; preserves
- *  override / confirmation / staged / audit on existing rows). */
-export function reconcileTaskQuestionsForRound(db: DbClient, round: ClarifyRoundRow): void {
+ *  override / confirmation / staged / audit on existing rows).
+ *
+ *  RFC-128 §4 — `alsoSealed` lets the per-question seal primitive reconcile the
+ *  designer entries for questions it is sealing RIGHT NOW, before it stamps their
+ *  `sealed_at` (avoids a chicken-and-egg: the designer entry must exist before it can
+ *  be stamped). Lazy callers (listTaskQuestions) pass nothing and the gate derives
+ *  the sealed set from the round + already-stamped `sealed_at` markers. */
+export function reconcileTaskQuestionsForRound(
+  db: DbClient,
+  round: ClarifyRoundRow,
+  alsoSealed?: ReadonlySet<string>,
+): void {
   // RFC-126: terminal/aborted rounds produce NO board entries — they aren't
   // actionable. 'abandoned' is migrated away + CR-1 retired (never produced anew);
   // 'canceled' (RFC-023 task-cancel path, schema-allowed) is skipped defensively so
   // it never surfaces as a stage/dispatch-able card.
   if (round.status === 'canceled' || round.status === 'abandoned') return
-  const desired = reconcileDesiredEntries({
-    kind: round.kind,
-    questions: parseQuestions(round.questionsJson),
-    roundAnswered: round.status === 'answered',
-    // RFC-120 T9 (Codex H2): a directive='stop' round intentionally skips the
-    // designer rerun → no designer entry (else a deferred task parks forever on it).
-    directive: round.directive,
-    scopes: parseScopes(round.questionScopesJson),
-    graph: graphForRound(round),
-  })
-  if (desired.length === 0) return
+  const questions = parseQuestions(round.questionsJson)
+  if (questions.length === 0) return
   const now = Date.now()
   dbTxSync(db, (tx) => {
+    // RFC-128 §4 — per-question seal gate. A question counts as sealed when: the whole
+    // round is answered (golden-lock = the old `roundAnswered`), OR an existing entry
+    // for it already carries a `sealed_at` marker (partial seal via the per-question
+    // path), OR the caller is sealing it right now (`alsoSealed`). Read inside the tx so
+    // it's a consistent snapshot with the upsert below.
+    const existing = tx
+      .select({ questionId: taskQuestions.questionId, sealedAt: taskQuestions.sealedAt })
+      .from(taskQuestions)
+      .where(eq(taskQuestions.originNodeRunId, round.intermediaryNodeRunId))
+      .all()
+    const sealedIds = new Set<string>()
+    for (const e of existing) if (e.sealedAt !== null) sealedIds.add(e.questionId)
+    if (alsoSealed) for (const id of alsoSealed) sealedIds.add(id)
+    const roundAnswered = round.status === 'answered'
+    const questionSealed: Record<string, boolean> = {}
+    for (const q of questions) questionSealed[q.id] = roundAnswered || sealedIds.has(q.id)
+    const desired = reconcileDesiredEntries({
+      kind: round.kind,
+      questions,
+      questionSealed,
+      // RFC-120 T9 (Codex H2): a directive='stop' round intentionally skips the
+      // designer rerun → no designer entry (else a deferred task parks forever on it).
+      directive: round.directive,
+      scopes: parseScopes(round.questionScopesJson),
+      graph: graphForRound(round),
+    })
     for (const d of desired) {
       tx.insert(taskQuestions)
         .values({
@@ -339,6 +376,9 @@ export async function listTaskQuestions(
         confirmation: e.confirmation,
         confirmedBy: e.confirmedBy,
         staged: e.stagedAt !== null,
+        // Manual questions are always sealed — the human-authored instruction IS the
+        // answer/content; there is no separate human-answer step to seal.
+        sealed: true,
         reopenCount: e.reopenCount,
         answerSummary: e.manualBody ?? null,
         createdAt: e.createdAt,
@@ -365,6 +405,10 @@ export async function listTaskQuestions(
     })
     if (opts.sourceNodeId && round.askingNodeId !== opts.sourceNodeId) continue
     if (opts.phase && phase !== opts.phase) continue
+    // RFC-128 §10 — a question is sealed when its own per-question marker is set OR the
+    // whole round is answered (golden-lock for pre-RFC-128 answered rounds, which carry
+    // no sealed_at). answerSummary is then computed independent of round.status (F3).
+    const sealed = round.status === 'answered' || e.sealedAt !== null
     out.push({
       id: e.id,
       taskId: e.taskId,
@@ -381,8 +425,9 @@ export async function listTaskQuestions(
       confirmation: e.confirmation,
       confirmedBy: e.confirmedBy,
       staged: e.stagedAt !== null,
+      sealed,
       reopenCount: e.reopenCount,
-      answerSummary: summarizeAnswer(round, e.questionId),
+      answerSummary: summarizeAnswer(round, e.questionId, sealed),
       createdAt: e.createdAt,
       updatedAt: e.updatedAt,
     })
@@ -399,9 +444,18 @@ async function runIdsWithOutput(db: DbClient, runIds: string[]): Promise<Set<str
   return new Set(rows.map((r) => r.nodeRunId))
 }
 
-/** Short human-readable summary of the answer to one question (labels + custom). */
-function summarizeAnswer(round: ClarifyRoundRow, questionId: string): string | null {
-  if (round.status !== 'answered') return null
+/** Short human-readable summary of the answer to one question (labels + custom).
+ *  RFC-128 F3: gated on the per-question `sealed` flag, NOT on round.status — a sealed
+ *  question in a still-awaiting_human (partial) round must still show its answer, and an
+ *  unsealed question must not (even after the round flips, an unsealed sibling has no
+ *  answer). For a pre-RFC-128 answered round every question is sealed, so this is
+ *  byte-for-byte the old `round.status !== 'answered' → null` behavior (golden-lock). */
+function summarizeAnswer(
+  round: ClarifyRoundRow,
+  questionId: string,
+  sealed: boolean,
+): string | null {
+  if (!sealed) return null
   const ans = parseAnswers(round.answersJson).find((a) => a.questionId === questionId)
   if (!ans) return null
   const parts: string[] = []

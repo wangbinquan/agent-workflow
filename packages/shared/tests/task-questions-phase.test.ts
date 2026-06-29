@@ -136,3 +136,36 @@ describe('deriveQuestionPhase (v2)', () => {
     ).toBe('processing')
   })
 })
+
+// RFC-128 §2 — partial is a PURE DERIVED state: within ONE still-awaiting_human round,
+// different questions sit in different phases (one sealed+dispatched → processing, a
+// sibling still unsealed/undispatched → pending). deriveQuestionPhase is per-entry, so
+// it expresses this naturally with NO new DB 'partial' status (protecting RFC-126's
+// "a round is either answered or not" invariant). This locks that the function never
+// keys phase off the round being wholly answered — only off the entry's own handler
+// state — so a partial round yields a heterogeneous board.
+describe('deriveQuestionPhase — RFC-128 同轮逐题不同相位 (partial = derived)', () => {
+  test('same awaiting_human round: a dispatched Q1 reads processing while an unsealed Q2 reads pending', () => {
+    // Q1: control channel sealed it + dispatched the handler (in flight).
+    const q1 = deriveQuestionPhase(
+      input({ roundStatus: 'awaiting_human', dispatchedInFlight: true, handlerRun: null }),
+    )
+    // Q2: still unsealed, never dispatched.
+    const q2 = deriveQuestionPhase(
+      input({ roundStatus: 'awaiting_human', dispatchedInFlight: false, handlerRun: null }),
+    )
+    expect(q1).toBe('processing')
+    expect(q2).toBe('pending')
+    expect(q1).not.toBe(q2) // heterogeneous within one (un-answered) round
+  })
+
+  test('and a third Q3 already done+output reads awaiting_confirm in the SAME round', () => {
+    const q3 = deriveQuestionPhase(
+      input({
+        roundStatus: 'awaiting_human',
+        handlerRun: handler({ status: 'done', hasOutput: true }),
+      }),
+    )
+    expect(q3).toBe('awaiting_confirm')
+  })
+})

@@ -55,6 +55,7 @@ import {
   type WorkflowNode,
   buildClarifyPromptBlock,
   findClarifyNodeForAgent,
+  mergeSealedAnswers,
   renderClarifyQuestionsBlock,
   resolveClarifySessionMode,
 } from '@agent-workflow/shared'
@@ -368,7 +369,15 @@ export async function submitClarifyAnswers(
   }
 
   const questions = JSON.parse(sessionRow.questionsJson) as ClarifyQuestion[]
-  const sealedAnswers = sealAnswersServerSide(questions, args.answers)
+  const sealedSubset = sealAnswersServerSide(questions, args.answers)
+  // RFC-128 §7 — per-question merge-write. The whole-round quick channel seals every
+  // question of the round in one shot, so for a virgin round (answers_json NULL/empty)
+  // the existing set is empty and the merge returns `sealedSubset` byte-for-byte (golden-
+  // lock vs the old overwrite). The merge only changes anything once a sibling question
+  // was pre-sealed via the per-question control channel (RFC-128 P2+), in which case
+  // those prior answers are preserved instead of clobbered. Parse defensively: a
+  // non-array answers_json (legacy '{}' placeholders seeded in some fixtures) → [].
+  const sealedAnswers = mergeSealedAnswers(parseAnswersArray(sessionRow.answersJson), sealedSubset)
 
   const answeredAt = now()
   const answersJson = JSON.stringify(sealedAnswers)
@@ -994,6 +1003,21 @@ async function findClarifyNodeRunForShard(
   return runRows[0]
 }
 
+/** RFC-128 §7 — safe parse of a round's `answers_json` into a ClarifyAnswer[] for the
+ *  per-question merge-write. Returns [] for NULL, malformed JSON, or a non-array payload
+ *  (some fixtures seed a legacy '{}' placeholder; production seeds NULL). Keeping this
+ *  tolerant means the merge boundary never throws on a virgin/legacy round (golden-lock:
+ *  empty existing → merge returns the incoming subset unchanged). */
+export function parseAnswersArray(json: string | null): ClarifyAnswer[] {
+  if (json === null) return []
+  try {
+    const v = JSON.parse(json)
+    return Array.isArray(v) ? (v as ClarifyAnswer[]) : []
+  } catch {
+    return []
+  }
+}
+
 /**
  * Rebuild selectedOptionLabels from selectedOptionIndices + question.options.
  * Clients post both fields; only the indices are trusted. This defends
@@ -1004,8 +1028,12 @@ async function findClarifyNodeRunForShard(
  * array and drops answers whose questionId is unknown to the session
  * (silently — the agent's next-round prompt will simply not see them).
  *
- * Throws ValidationError on a totally empty answers array — agents that ask
- * for required input deserve a hard error rather than a silent "no answers".
+ * RFC-128 §1/§7: this is a pure SUBSET sealer — it validates+normalises exactly the
+ * answers passed in (whether the whole round or a single question) and returns them;
+ * per-question merging into the round's `answers_json` is the caller's job (via
+ * {@link mergeSealedAnswers}). A non-array payload throws `clarify-answers-not-array`
+ * (runtime guard, kept). An EMPTY array is a no-op that returns `[]` (NOT an error —
+ * the loop simply doesn't run); this is locked by rfc128-p0-whole-round-seal-net.
  */
 export function sealAnswersServerSide(
   questions: ClarifyQuestion[],

@@ -5,9 +5,11 @@
 //
 //   * reconcileDesiredEntries — 一轮 clarify_round → 该轮应有的「承接条目」身份集合。
 //     条目 = (问题 × 承接角色)。self→{self}；cross→{questioner}（恒有）∪
-//     {designer | 该题 scope=designer 且轮已回答}。**未回答前不出 designer 条目**
-//     （scope 是回答期的人工选择，答前未知；不能用 CLARIFY_QUESTION_SCOPE_DEFAULT
-//     在创建时就臆造 designer 条目）。幂等：service 按唯一键 upsert、保人工覆盖层。
+//     {designer | 该题 scope=designer 且**该题已 seal**}。**未 seal 前不出 designer 条目**
+//     （scope 是回答期的人工选择，seal 前未知；不能用 CLARIFY_QUESTION_SCOPE_DEFAULT
+//     在创建时就臆造 designer 条目）。RFC-128：门控从整轮 `roundAnswered` 改为逐题
+//     `questionSealed[qid]`——整轮一次答完 = 全题 seal（与旧 roundAnswered 逐字一致），
+//     partial 答时只为已 seal 的题出 designer 条目。幂等：service 按唯一键 upsert、保人工覆盖层。
 //
 //   * deriveQuestionPhase — 条目的展示态（待处理/处理中/已处理待确认/完成/已关闭），
 //     **派生**自来源轮 status + 人工确认覆盖层 + 承接 run 生命周期。执行三态不落库
@@ -70,9 +72,12 @@ export interface ReconcileRoundInput {
   kind: TaskQuestionRoundSourceKind
   /** 本轮问题（只需 id/title；其余字段 reconcile 不关心）。 */
   questions: Pick<ClarifyQuestion, 'id' | 'title'>[]
-  /** 轮是否已回答。**false 时（未答 / 取消 / 放弃）cross 只出 questioner 条目**
-   *  ——scope 是回答期人工选择，答前未知，不能臆造 designer 条目。 */
-  roundAnswered: boolean
+  /** RFC-128 §4 — 逐题 seal 门控（取代 RFC-120 的整轮 `roundAnswered`）。
+   *  `questionSealed[qid] === true` ⟺ 该题答案已 seal（人工锁定）——只有此时才出
+   *  designer 条目（scope 是回答期人工选择，未 seal 前未知，不能臆造）。整轮一次答完
+   *  时调用方把全题都标 true（= 旧 `roundAnswered=true` 逐字一致，黄金锁）；partial 答时
+   *  只标已 seal 的题（答 Q1 出 Q1 designer 条目、Q2 未答不出）。缺省题按未 seal（false）。 */
+  questionSealed: Record<string, boolean>
   /** RFC-120 T9 (Codex H2): 本轮 directive。`'stop'`（拒绝轮）**有意跳过设计者重跑**，
    *  故不产 designer 条目——否则 deferred 任务会在一条永不下发的 stop 轮上永久 park。
    *  缺省 / null → 按 `'continue'` 处理（向后兼容：既有调用方不传即原行为，黄金锁）。 */
@@ -110,9 +115,10 @@ export function reconcileDesiredEntries(input: ReconcileRoundInput): DesiredTask
       roleKind: 'questioner',
       defaultTargetNodeId: input.graph.questionerNodeId,
     })
-    // designer 条目：仅当轮已回答 + directive≠stop + 该题 scope=designer 才出（答前
-    // scope 未知；stop 轮有意跳过设计者重跑，不产承接条目）。
-    if (input.roundAnswered && input.directive !== 'stop') {
+    // designer 条目：仅当该题已 seal + directive≠stop + 该题 scope=designer 才出（未 seal 前
+    // scope 未知；stop 轮有意跳过设计者重跑，不产承接条目）。RFC-128：门控从整轮
+    // roundAnswered 改为逐题 questionSealed[qid]——每 seal 一题即可单独出它的 designer 条目。
+    if ((input.questionSealed[q.id] ?? false) && input.directive !== 'stop') {
       const scope = input.scopes[q.id] ?? CLARIFY_QUESTION_SCOPE_DEFAULT
       if (scope === 'designer') {
         out.push({

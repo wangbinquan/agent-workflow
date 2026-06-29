@@ -1780,6 +1780,19 @@ export const taskQuestions = sqliteTable(
     // split in deriveQuestionPhase; task gate parks while any entry is pending/staged.
     stagedAt: integer('staged_at'),
     stagedBy: text('staged_by'),
+    // RFC-128 §7 (落库方案 C; migration 0068) — per-question seal marker. The clarify
+    // round's `answers_json` stays the answer-content SoT (per-question merge-write);
+    // THIS column records that one (question × role) entry's answer is sealed/locked
+    // (the human committed it), enabling per-question seal/dispatch while the round
+    // stays awaiting_human (partial). NULL = not yet sealed via the per-question path;
+    // a whole-round answered round derives "all sealed" from clarify_rounds.status
+    // (no backfill — migration 0068 only adds the column). Drives: reconcile's
+    // per-question designer gate, the DTO `sealed` field, the stage gate (P2), and the
+    // "flip round answered only when ALL questions sealed" rule (P1 T4). sealed_by is
+    // the audit-only setter id (RFC-099 prompt-isolation) — NEVER enters a prompt,
+    // same layer as confirmed_by / dispatched_by / staged_by.
+    sealedAt: integer('sealed_at'),
+    sealedBy: text('sealed_by'),
     confirmation: text('confirmation', { enum: ['open', 'confirmed'] })
       .notNull()
       .default('open'),

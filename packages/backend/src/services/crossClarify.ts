@@ -61,6 +61,7 @@ import {
   buildExternalFeedbackBlock,
   countDesignerScopedAcrossSources,
   extractDesignerScopedSubset,
+  mergeSealedAnswers,
   NEW_CLARIFY_TRIGGER_CAUSES,
   findCrossClarifyNodesPointingToDesigner,
   findDesignerNodeForCrossClarify,
@@ -90,7 +91,7 @@ import {
   taskQuestions,
   tasks,
 } from '@/db/schema'
-import { sealAnswersServerSide } from '@/services/clarify'
+import { parseAnswersArray, sealAnswersServerSide } from '@/services/clarify'
 import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
 import { mintNodeRun } from '@/services/nodeRunMint'
 import { pickFreshestRun } from '@/services/freshness'
@@ -419,7 +420,13 @@ export async function submitCrossClarifyAnswers(
 
   // Seal answers server-side defending against client option-label injection.
   const questions = JSON.parse(row.questionsJson) as ClarifyQuestion[]
-  const sealedAnswers = sealAnswersServerSide(questions, args.answers)
+  const sealedSubset = sealAnswersServerSide(questions, args.answers)
+  // RFC-128 §7 — per-question merge-write. The whole-round quick channel seals every
+  // question at once, so for a virgin round (answers_json NULL/empty) the merge returns
+  // `sealedSubset` byte-for-byte (golden-lock vs the old overwrite); it only preserves
+  // prior answers when a sibling was pre-sealed via the per-question control channel.
+  // Parse defensively (non-array '{}' placeholders in some fixtures → []).
+  const sealedAnswers = mergeSealedAnswers(parseAnswersArray(row.answersJson), sealedSubset)
 
   // RFC-059: validate questionScopes against the session's questions BEFORE
   // any write so a malformed map can't reach the DB. Throws ValidationError

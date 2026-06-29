@@ -565,6 +565,34 @@ export function extractDesignerScopedSubset(
   return { questions: designerQuestions, answers: designerAnswers }
 }
 
+/** RFC-128 §7 — merge a freshly-sealed answer subset into a round's existing answers
+ *  (per-question merge-write; the round's `answers_json` stays the answer-content SoT).
+ *  Incoming answers WIN per `questionId`; existing answers for questions NOT in the
+ *  incoming subset are preserved untouched. Order is stable: existing answers keep
+ *  their position (value replaced in place when re-sealed), then never-before-seen
+ *  incoming answers are appended in incoming order. So a whole-round one-shot seal
+ *  (existing empty) returns exactly the incoming array — byte-for-byte identical to the
+ *  pre-RFC-128 overwrite (golden-lock). Returns a fresh array (no input aliasing). */
+export function mergeSealedAnswers(
+  existing: ClarifyAnswer[],
+  incoming: ClarifyAnswer[],
+): ClarifyAnswer[] {
+  const incomingById = new Map(incoming.map((a) => [a.questionId, a]))
+  const merged: ClarifyAnswer[] = []
+  const seen = new Set<string>()
+  for (const a of existing) {
+    merged.push(incomingById.get(a.questionId) ?? a)
+    seen.add(a.questionId)
+  }
+  for (const a of incoming) {
+    if (!seen.has(a.questionId)) {
+      merged.push(a)
+      seen.add(a.questionId)
+    }
+  }
+  return merged
+}
+
 /** Sum the designer-scoped question count across multiple already-resolved
  *  cross-clarify sources. Used by `submitCrossClarifyAnswers` to decide
  *  whether the aggregated External Feedback batch is empty — when it is,
