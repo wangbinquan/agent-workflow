@@ -768,46 +768,69 @@ export async function stageTaskQuestion(
 const MANUAL_TITLE_MAX = 512
 const MANUAL_BODY_MAX = 20000
 
+/** RFC-120 §15 (Codex re-gate) — task statuses that will NEVER re-enter scheduling, so a
+ *  manual question created / dispatched on them would strand (no scheduler to run the rerun).
+ *  `failed`/`interrupted`/`awaiting_*` are resumable/active (resumeTask resumes them), so they
+ *  are NOT terminal here. Shared by createManualTaskQuestion + dispatchTaskQuestions. */
+const TERMINAL_TASK_STATUSES = new Set(['done', 'canceled'])
+
+/** Throw a ConflictError when the task is terminal (done/canceled). Used BEFORE any insert /
+ *  dispatched_at stamp / node_run mint so nothing is left orphaned on a finished task. */
+export function assertTaskAcceptsQuestions(taskId: string, status: string): void {
+  if (TERMINAL_TASK_STATUSES.has(status)) {
+    throw new ConflictError(
+      'task-terminal',
+      `task ${taskId} is ${status}; it will not re-enter scheduling, so questions cannot be created or dispatched on it`,
+    )
+  }
+}
+
 export interface CreateManualTaskQuestionInput {
   title: string
   body: string
-  /** Optional handler agent node. Given → the row is created staged (待下发, ready for
-   *  batch-dispatch, §15.2); omitted → pending (待指派). */
+  /** REQUIRED handler agent node (RFC-120 §15 semantics: 人提问→指派 agent 处理 — a manual
+   *  question is always posed TO a node). The row is created staged (待下发, ready for batch-
+   *  dispatch). An absent / non-agent target is rejected. (Re-target later via reassign.) */
   targetNodeId?: string | null
 }
 
 /** RFC-120 §15 — create a manual question (自主新增/复制): a human authors a title +
- *  instruction and (optionally) assigns an agent node. It is inserted DIRECTLY (not via
- *  reconcile) as a source_kind='manual', role_kind='designer' (修订型 → re-targetable /
- *  dispatchable) row. It has no clarify round, so it stores its OWN fresh ULID as
- *  origin_node_run_id — a non-null synthetic identity (§16 H4) that keeps the column NOT
- *  NULL and the identity unique (no collision with the full unique index). Dispatch + the
- *  External-Feedback injection of `manual_body` reuse the §18 per-node queue UNCHANGED.
- *  The author id is recorded for audit ONLY — it NEVER enters an agent prompt (RFC-099
- *  prompt-isolation; no prompt builder reads manual_created_by). */
+ *  instruction and ASSIGNS an agent node. It is inserted DIRECTLY (not via reconcile) as a
+ *  source_kind='manual', role_kind='designer' (修订型 → re-targetable / dispatchable) row,
+ *  created staged (待下发) so the §18 park gate keeps the task awaiting_human until it is
+ *  dispatched. It has no clarify round, so it stores its OWN fresh ULID as origin_node_run_id
+ *  — a non-null synthetic identity (§16 H4) that keeps the column NOT NULL and the identity
+ *  unique (no collision with the full unique index). Dispatch + the External-Feedback
+ *  injection of `manual_body` reuse the §18 per-node queue UNCHANGED. The author id is
+ *  recorded for audit ONLY — it NEVER enters an agent prompt (RFC-099 prompt-isolation; no
+ *  prompt builder reads manual_created_by). */
 export async function createManualTaskQuestion(
   db: DbClient,
   taskId: string,
   input: CreateManualTaskQuestionInput,
   actor: TaskQuestionActor,
 ): Promise<{ id: string }> {
-  // RFC-120 §15 (Codex impl-gate H2): a manual question can ONLY ever be dispatched +
-  // injected on a deferred-dispatch task (dispatchTaskQuestions + buildNodeQueueExternalFeedback
-  // are deferred-gated). Creating one on a non-deferred task would be undispatchable orphan
-  // data, so reject up front with the SAME code the dispatch route uses.
+  // RFC-120 §15 — load the gating facts together: deferred flag (H2) + task status (re-gate).
   const taskRow = (
     await db
-      .select({ deferred: tasks.deferredQuestionDispatch })
+      .select({ deferred: tasks.deferredQuestionDispatch, status: tasks.status })
       .from(tasks)
       .where(eq(tasks.id, taskId))
       .limit(1)
   )[0]
+  // (Codex impl-gate H2): a manual question can ONLY ever be dispatched + injected on a
+  // deferred-dispatch task (dispatchTaskQuestions + buildNodeQueueExternalFeedback are
+  // deferred-gated). Creating one on a non-deferred task would be undispatchable orphan data.
   if (taskRow?.deferred !== true) {
     throw new ConflictError(
       'task-not-deferred-dispatch',
       `task ${taskId} is not a deferred-dispatch task; manual questions cannot be created (they could never be dispatched / injected)`,
     )
   }
+  // (Codex re-gate): reject on a TERMINAL task (done/canceled) — it will never re-enter
+  // scheduling, so the row could never park / dispatch (orphan). failed/interrupted/awaiting_*
+  // are resumable/active (resumeTask resumes them), so they are allowed.
+  assertTaskAcceptsQuestions(taskId, taskRow.status)
   const title = input.title.trim()
   const body = input.body.trim()
   if (title === '') {
@@ -828,20 +851,27 @@ export async function createManualTaskQuestion(
       `body exceeds ${MANUAL_BODY_MAX} characters`,
     )
   }
+  // (Codex re-gate): a handler is REQUIRED — a target-less manual row has NULL effective
+  // target, which the park gate cannot park on (the gate is node-keyed) → the task could
+  // complete past it. Requiring assignment at creation guarantees every manual row parks.
   const target =
     typeof input.targetNodeId === 'string' && input.targetNodeId.length > 0
       ? input.targetNodeId
       : null
-  if (target !== null) {
-    // Same guard as reassign: a manual question is 修订型 (role designer), so its handler
-    // must be a workflow AGENT node (canReassign / Codex F5) — never an io/review/wrapper.
-    const agentNodeIds = await agentNodeIdsForTask(db, taskId)
-    if (!agentNodeIds.has(target)) {
-      throw new ValidationError(
-        'manual-question-target-invalid',
-        `target node '${target}' is not an agent node in this task's workflow`,
-      )
-    }
+  if (target === null) {
+    throw new ValidationError(
+      'manual-question-target-required',
+      'targetNodeId is required (a manual question must be assigned to an agent node)',
+    )
+  }
+  // Same guard as reassign: a manual question is 修订型 (role designer), so its handler
+  // must be a workflow AGENT node (canReassign / Codex F5) — never an io/review/wrapper.
+  const agentNodeIds = await agentNodeIdsForTask(db, taskId)
+  if (!agentNodeIds.has(target)) {
+    throw new ValidationError(
+      'manual-question-target-invalid',
+      `target node '${target}' is not an agent node in this task's workflow`,
+    )
   }
   const id = ulid()
   const now = Date.now()
@@ -862,9 +892,10 @@ export async function createManualTaskQuestion(
     manualTitle: title,
     manualBody: body,
     manualCreatedBy: actor.userId,
-    // §15.2: handler chosen at creation → directly staged (待下发); else 待指派.
-    stagedAt: target !== null ? now : null,
-    stagedBy: target !== null ? actor.userId : null,
+    // §15: a handler is required → the row is created staged (待下发) so the park gate holds
+    // the task awaiting_human until the human dispatches it.
+    stagedAt: now,
+    stagedBy: actor.userId,
     createdAt: now,
     updatedAt: now,
   })

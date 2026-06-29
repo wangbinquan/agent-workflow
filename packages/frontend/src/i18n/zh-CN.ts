@@ -2483,7 +2483,7 @@ export interface Resources {
       bodyHint: string
       handlerLabel: string
       handlerHint: string
-      unassigned: string
+      handlerPlaceholder: string
       save: string
       cancel: string
     }
@@ -5135,8 +5135,8 @@ export const zhCN: Resources = {
       bodyPlaceholder: '写清要承接节点执行的具体指令',
       bodyHint: '下发后将作为「外部反馈」注入承接节点的重跑',
       handlerLabel: '承接节点',
-      handlerHint: '选择由哪个 agent 节点处理（可稍后再指派）',
-      unassigned: '未指派',
+      handlerHint: '选择由哪个 agent 节点处理（必填，可稍后改派）',
+      handlerPlaceholder: '请选择承接节点',
       save: '保存',
       cancel: '取消',
     },

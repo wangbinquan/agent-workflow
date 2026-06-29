@@ -97,6 +97,15 @@ function wrapForm(props: Partial<React.ComponentProps<typeof QuestionAuthorForm>
   )
 }
 
+// Pick a node in the shared <Select> (role=combobox trigger → portal listbox; options fire
+// on mouseDown). Used to satisfy the §15 required-handler rule in the form tests.
+function selectHandler(label: string) {
+  fireEvent.click(screen.getByRole('combobox'))
+  fireEvent.mouseDown(screen.getByRole('option', { name: label }))
+}
+
+const saveBtn = () => screen.getByTestId('question-author-save') as HTMLButtonElement
+
 describe('QuestionAuthorForm', () => {
   test('renders title input, instruction textarea, handler select (shared primitives)', () => {
     wrapForm()
@@ -109,28 +118,32 @@ describe('QuestionAuthorForm', () => {
     expect(within(dialog).getByRole('combobox')).toBeTruthy()
   })
 
-  test('save is disabled until BOTH title and body are non-empty', () => {
+  test('save is disabled until title, body AND a handler node are all set', () => {
     wrapForm()
-    const save = screen.getByTestId('question-author-save') as HTMLButtonElement
-    expect(save.disabled).toBe(true)
+    expect(saveBtn().disabled).toBe(true)
     fireEvent.change(screen.getByTestId('question-author-title'), { target: { value: 'T' } })
-    expect((screen.getByTestId('question-author-save') as HTMLButtonElement).disabled).toBe(true)
+    expect(saveBtn().disabled).toBe(true)
     fireEvent.change(screen.getByTestId('question-author-body'), { target: { value: 'B' } })
-    expect((screen.getByTestId('question-author-save') as HTMLButtonElement).disabled).toBe(false)
+    // §15 re-gate: a handler is REQUIRED — still disabled until a node is chosen.
+    expect(saveBtn().disabled).toBe(true)
+    selectHandler('fixer')
+    expect(saveBtn().disabled).toBe(false)
   })
 
-  test('save POSTs /questions/manual with the trimmed title + body (no handler ⇒ no targetNodeId)', async () => {
+  test('save POSTs /questions/manual with trimmed title + body + the chosen targetNodeId', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({ ok: true, id: 'm1' } as never)
     wrapForm()
     fireEvent.change(screen.getByTestId('question-author-title'), {
       target: { value: '  Fix it  ' },
     })
     fireEvent.change(screen.getByTestId('question-author-body'), { target: { value: ' do X ' } })
-    fireEvent.click(screen.getByTestId('question-author-save'))
+    selectHandler('fixer')
+    fireEvent.click(saveBtn())
     await waitFor(() =>
       expect(post).toHaveBeenCalledWith('/api/tasks/task-1/questions/manual', {
         title: 'Fix it',
         body: 'do X',
+        targetNodeId: 'fixer',
       }),
     )
   })

@@ -67,7 +67,7 @@ export function QuestionAuthorForm({
       api.post<CreatedResponse>(`/api/tasks/${taskId}/questions/manual`, {
         title: title.trim(),
         body: body.trim(),
-        ...(targetNodeId ? { targetNodeId } : {}),
+        targetNodeId,
       }),
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ['task-questions', taskId] })
@@ -76,11 +76,11 @@ export function QuestionAuthorForm({
     },
   })
 
-  const isInvalid = title.trim().length === 0 || body.trim().length === 0
-  const handlerOptions = [
-    { value: '', label: t('taskQuestions.author.unassigned') },
-    ...nodeOptions.map((n) => ({ value: n.id, label: n.label })),
-  ]
+  // RFC-120 §15 — a manual question is always posed TO a node, so a handler is REQUIRED:
+  // Save stays disabled until title, body AND a handler node are all chosen.
+  const isInvalid =
+    title.trim().length === 0 || body.trim().length === 0 || targetNodeId.length === 0
+  const handlerOptions = nodeOptions.map((n) => ({ value: n.id, label: n.label }))
 
   return (
     <Dialog
@@ -151,11 +151,13 @@ export function QuestionAuthorForm({
       <Field
         label={t('taskQuestions.author.handlerLabel')}
         hint={t('taskQuestions.author.handlerHint')}
+        required
       >
         <Select
           value={targetNodeId}
           onChange={setTargetNodeId}
           options={handlerOptions}
+          placeholder={t('taskQuestions.author.handlerPlaceholder')}
           ariaLabel={t('taskQuestions.author.handlerLabel')}
         />
       </Field>

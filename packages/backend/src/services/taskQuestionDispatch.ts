@@ -39,6 +39,7 @@ import { dbTxSync } from '@/db/txSync'
 import { evaluateDesignerRerunReadiness } from '@/services/crossClarify'
 import { pickFreshestRun } from '@/services/freshness'
 import { buildMintNodeRunValues } from '@/services/nodeRunMint'
+import { assertTaskAcceptsQuestions } from '@/services/taskQuestions'
 import { ConflictError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import {
@@ -183,7 +184,11 @@ export async function dispatchTaskQuestions(
   //    is the defensive net for any direct service caller.
   const taskRow = (
     await db
-      .select({ deferred: tasks.deferredQuestionDispatch, snapshot: tasks.workflowSnapshot })
+      .select({
+        deferred: tasks.deferredQuestionDispatch,
+        snapshot: tasks.workflowSnapshot,
+        status: tasks.status,
+      })
       .from(tasks)
       .where(eq(tasks.id, taskId))
       .limit(1)
@@ -194,6 +199,10 @@ export async function dispatchTaskQuestions(
       `task ${taskId} is not a deferred-dispatch task; refusing to mint (its designer rerun already fired immediately at submit)`,
     )
   }
+  // RFC-120 §15 (Codex re-gate): reject on a TERMINAL task (done/canceled) BEFORE stamping
+  // dispatched_at or minting any node_run — a finished task has no scheduler to run the rerun
+  // (resumeTask can't resume done/canceled), so a mint here would strand a pending rerun.
+  assertTaskAcceptsQuestions(taskId, taskRow.status)
 
   // 1. The requested still-undispatched designer entries (dispatched_at IS NULL).
   const requested = await db

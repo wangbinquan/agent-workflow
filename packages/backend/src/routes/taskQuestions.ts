@@ -175,8 +175,11 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
       role,
     })
     // Release the gate: re-enter scheduling so the minted reruns dispatch and the
-    // task leaves awaiting_human. Best-effort, mirroring the clarify route — a
-    // live scheduler racing us surfaces task-not-resumable, which is expected.
+    // task leaves awaiting_human. Best-effort, mirroring the clarify route. NB: a
+    // TERMINAL task (done/canceled) is already rejected by dispatchTaskQuestions'
+    // status pre-check ABOVE (nothing minted), so `task-not-resumable` here is ONLY
+    // the benign live-scheduler race (a `running` deferred task — the live loop picks
+    // up the freshly-minted rerun); it is logged at info, not surfaced as an error.
     const opencodeCmd = resolveOpencodeCmd(deps.configPath)
     const resumeDeps: Parameters<typeof resumeTask>[2] = {
       db: deps.db,

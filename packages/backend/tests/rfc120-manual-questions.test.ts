@@ -147,15 +147,19 @@ afterAll(() => resetBroadcastersForTests())
 // A — full manual lifecycle.
 // ---------------------------------------------------------------------------
 describe('RFC-120 §15 — manual question lifecycle', () => {
-  test('create(no target) → reassign → dispatch → inject manual_body+bind → done → confirm', async () => {
+  test('create(target=DESIGNER) → reassign(FIXER) → dispatch → inject manual_body+bind → done → confirm', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
 
-    // create WITHOUT a handler → 待指派 (pending).
+    // create WITH a handler (required, §15) → 待下发 (staged). DESIGNER first to exercise reassign.
     const { id } = await createManualTaskQuestion(
       db,
       taskId,
-      { title: 'Tighten the retry backoff', body: 'Cap retries at 3 with jitter.' },
+      {
+        title: 'Tighten the retry backoff',
+        body: 'Cap retries at 3 with jitter.',
+        targetNodeId: DESIGNER,
+      },
       actor,
     )
     let dto = await listOne(db, taskId)
@@ -166,15 +170,15 @@ describe('RFC-120 §15 — manual question lifecycle', () => {
     expect(dto?.answerSummary).toBe('Cap retries at 3 with jitter.')
     expect(dto?.sourceNodeId).toBeNull()
     expect(dto?.originNodeRunId).toBeNull()
-    expect(dto?.effectiveTargetNodeId).toBeNull()
-    expect(dto?.phase).toBe('pending')
+    expect(dto?.effectiveTargetNodeId).toBe(DESIGNER)
+    expect(dto?.phase).toBe('staged')
 
-    // assign a handler via the SAME reassign service used for clarify designer entries.
+    // re-target the handler via the SAME reassign service used for clarify designer entries.
     await reassignTaskQuestion(db, id, FIXER, actor)
     dto = await listOne(db, taskId)
     expect(dto?.effectiveTargetNodeId).toBe(FIXER)
-    // not staged yet (reassign only sets override) → still pending.
-    expect(dto?.phase).toBe('pending')
+    // still staged (reassign only moves the handler) → awaiting dispatch.
+    expect(dto?.phase).toBe('staged')
 
     // dispatch via the §18 per-node-queue (UNCHANGED) → frontier mint on FIXER.
     const result = await dispatchTaskQuestions(db, taskId, [id], actor)
@@ -265,8 +269,18 @@ describe('RFC-120 §16 H4 — manual identity + visibility', () => {
   test('two manual rows with the SAME title/body coexist (no unique collision) + both visible', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
-    const a = await createManualTaskQuestion(db, taskId, { title: 'dupe', body: 'same' }, actor)
-    const b = await createManualTaskQuestion(db, taskId, { title: 'dupe', body: 'same' }, actor)
+    const a = await createManualTaskQuestion(
+      db,
+      taskId,
+      { title: 'dupe', body: 'same', targetNodeId: FIXER },
+      actor,
+    )
+    const b = await createManualTaskQuestion(
+      db,
+      taskId,
+      { title: 'dupe', body: 'same', targetNodeId: FIXER },
+      actor,
+    )
     expect(a.id).not.toBe(b.id)
     const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
     expect(rows.length).toBe(2)
@@ -388,9 +402,25 @@ describe('RFC-120 §15 — create validation + audit isolation', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
     expect(
-      createManualTaskQuestion(db, taskId, { title: '  ', body: 'b' }, actor),
+      createManualTaskQuestion(db, taskId, { title: '  ', body: 'b', targetNodeId: FIXER }, actor),
     ).rejects.toThrow()
-    expect(createManualTaskQuestion(db, taskId, { title: 't', body: ' ' }, actor)).rejects.toThrow()
+    expect(
+      createManualTaskQuestion(db, taskId, { title: 't', body: ' ', targetNodeId: FIXER }, actor),
+    ).rejects.toThrow()
+  })
+
+  test('Codex re-gate: a handler is REQUIRED — create WITHOUT targetNodeId → rejected, nothing inserted', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db)
+    let threw: unknown = null
+    try {
+      await createManualTaskQuestion(db, taskId, { title: 't', body: 'b' }, actor)
+    } catch (e) {
+      threw = e
+    }
+    expect((threw as { code?: string }).code).toBe('manual-question-target-required')
+    const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
+    expect(rows.length).toBe(0) // nothing inserted
   })
 
   test('non-agent / unknown target node → ValidationError (canReassign parity)', async () => {
@@ -548,6 +578,77 @@ describe('RFC-120 §15 — Codex impl-gate H2 (non-deferred create rejected)', (
       actor,
     )
     expect(id).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// H — Codex re-gate: create + dispatch rejected on a TERMINAL task (done/canceled) so no row
+// is inserted / no node_run minted on a finished task with no scheduler to run it.
+// ---------------------------------------------------------------------------
+describe('RFC-120 §15 — Codex re-gate (terminal task guard)', () => {
+  for (const status of ['done', 'canceled'] as const) {
+    test(`create on a ${status} deferred task → rejected task-terminal; nothing inserted`, async () => {
+      const db = createInMemoryDb(MIGRATIONS)
+      const taskId = await seedTask(db)
+      await db.update(tasks).set({ status }).where(eq(tasks.id, taskId))
+      let threw: unknown = null
+      try {
+        await createManualTaskQuestion(
+          db,
+          taskId,
+          { title: 't', body: 'b', targetNodeId: FIXER },
+          actor,
+        )
+      } catch (e) {
+        threw = e
+      }
+      expect((threw as { code?: string }).code).toBe('task-terminal')
+      const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
+      expect(rows.length).toBe(0)
+    })
+
+    test(`dispatch on a ${status} deferred task → rejected task-terminal; no dispatched_at, no node_run minted`, async () => {
+      const db = createInMemoryDb(MIGRATIONS)
+      const taskId = await seedTask(db)
+      // create + stage WHILE running (allowed), then the task goes terminal before dispatch.
+      const { id } = await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 't', body: 'b', targetNodeId: FIXER },
+        actor,
+      )
+      const runsBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+        .length
+      await db.update(tasks).set({ status }).where(eq(tasks.id, taskId))
+      let threw: unknown = null
+      try {
+        await dispatchTaskQuestions(db, taskId, [id], actor)
+      } catch (e) {
+        threw = e
+      }
+      expect((threw as { code?: string }).code).toBe('task-terminal')
+      // nothing stamped, nothing minted.
+      const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
+      expect(row?.dispatchedAt).toBeNull()
+      const runsAfter = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+      expect(runsAfter).toBe(runsBefore) // no new node_run
+    })
+  }
+
+  test('control: create + dispatch on a FAILED (resumable) deferred task → allowed (not terminal)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db)
+    await db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, taskId))
+    // failed is resumable (resumeTask resumes it), so manual create + dispatch are allowed.
+    const { id } = await createManualTaskQuestion(
+      db,
+      taskId,
+      { title: 't', body: 'b', targetNodeId: FIXER },
+      actor,
+    )
+    const result = await dispatchTaskQuestions(db, taskId, [id], actor)
+    expect(result.reruns.length).toBe(1)
+    expect(result.reruns[0]?.targetNodeId).toBe(FIXER)
   })
 })
 
