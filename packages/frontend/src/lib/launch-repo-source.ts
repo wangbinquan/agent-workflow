@@ -41,6 +41,14 @@ export interface LaunchCommonPayload {
    */
   gitUserName?: string
   gitUserEmail?: string
+  /**
+   * RFC-125: when true, the created task defers designer-scoped clarify answers
+   * to the task-center board for manual batch-dispatch (the launch UI now always
+   * sends true; the on/off toggle was removed). Both body helpers emit it onto
+   * the wire when true — without this the whitelist drops it and the backend
+   * falls back to `?? false`, silently making UI launches non-deferred.
+   */
+  deferredQuestionDispatch?: boolean
 }
 
 /**
@@ -76,6 +84,8 @@ export function buildLaunchBody(
       out.gitUserName = common.gitUserName
       out.gitUserEmail = common.gitUserEmail
     }
+    // RFC-125: carry the deferred flag onto the wire (whitelist would drop it).
+    if (common.deferredQuestionDispatch === true) out.deferredQuestionDispatch = true
     return out
   }
   const out: Record<string, unknown> = {
@@ -89,6 +99,8 @@ export function buildLaunchBody(
     out.gitUserName = common.gitUserName
     out.gitUserEmail = common.gitUserEmail
   }
+  // RFC-125: carry the deferred flag onto the wire (whitelist would drop it).
+  if (common.deferredQuestionDispatch === true) out.deferredQuestionDispatch = true
   return out
 }
 
@@ -262,5 +274,7 @@ export function buildLaunchBodyMultiRepo(
     out.gitUserName = common.gitUserName
     out.gitUserEmail = common.gitUserEmail
   }
+  // RFC-125: carry the deferred flag onto the wire (whitelist would drop it).
+  if (common.deferredQuestionDispatch === true) out.deferredQuestionDispatch = true
   return out
 }

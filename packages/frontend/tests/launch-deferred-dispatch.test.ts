@@ -12,6 +12,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
+import { buildLaunchBody, buildLaunchBodyMultiRepo } from '../src/lib/launch-repo-source'
 
 const LAUNCH_SRC = readFileSync(
   resolve(import.meta.dirname, '..', 'src', 'routes', 'workflows.launch.tsx'),
@@ -84,5 +85,33 @@ describe('i18n — RFC-120 batch-dispatch keys parity (board unchanged)', () => 
   test('en-US board values present', () => {
     expect(EN).toContain("batchDispatch: 'Batch dispatch'")
     expect(EN).toContain("dispatchTargetChanged: 'Target changed, please retry'")
+  })
+})
+
+// RFC-125 Codex impl-gate P1 lock — the body helpers whitelist fields and DROP
+// extras, so `launchCommon.deferredQuestionDispatch` was silently lost on the
+// common single-repo (buildLaunchBody) + url-upload (V2 → buildLaunchBody) +
+// multi-repo (buildLaunchBodyMultiRepo) paths, making UI launches non-deferred
+// despite the removed toggle. These assert the flag reaches the WIRE per path.
+describe('launch body helpers — RFC-125 propagate deferredQuestionDispatch onto the wire', () => {
+  const common = { workflowId: 'wf', name: 't', inputs: {}, deferredQuestionDispatch: true }
+  const pathSource = { kind: 'path' as const, repoPath: '/r', baseBranch: 'main' }
+
+  test('buildLaunchBody (path) emits deferredQuestionDispatch: true', () => {
+    expect(buildLaunchBody(pathSource, common).deferredQuestionDispatch).toBe(true)
+  })
+
+  test('buildLaunchBody (url) emits deferredQuestionDispatch: true', () => {
+    const body = buildLaunchBody({ kind: 'url', repoUrl: 'https://x/r.git', ref: '' }, common)
+    expect(body.deferredQuestionDispatch).toBe(true)
+  })
+
+  test('buildLaunchBodyMultiRepo emits deferredQuestionDispatch: true', () => {
+    expect(buildLaunchBodyMultiRepo([pathSource], common).deferredQuestionDispatch).toBe(true)
+  })
+
+  test('omitted when common lacks it (programmatic / legacy non-deferred caller)', () => {
+    const body = buildLaunchBody(pathSource, { workflowId: 'wf', name: 't', inputs: {} })
+    expect(body.deferredQuestionDispatch).toBeUndefined()
   })
 })
