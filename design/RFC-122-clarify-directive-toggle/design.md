@@ -26,3 +26,10 @@
 - stop override：dispatch（首跑 + retry）压制 ask-back + 注入 STOP（恰一次）；retry 取最新；review 重跑带 prior 轮也注 STOP。
 - 归属不进 prompt（`set_by` 仅库/UI）。
 - route 鉴权（成员、提问节点校验、ACL、registry）。
+
+## 已知限制（窄边角，立后续专项修 — 2026-06-29 用户拍板「先上线」）
+**残留**：mode-flip（开关在某次重试窗口翻转）走 same-session followup 时，**rollback-to-pre_snapshot + 重拍 pre-snapshot 未执行**（仍 gate 在 `followupDecision.followup`，scheduler.ts ~1976/~2100）。故一个 **writer 反问 agent**（`readonly:false`）attempt-0 改了工作区 + 以 followup-eligible envelope-format 错失败（干净退出 + 捕获 session + ≥1 text 事件，非崩溃）+ 中途翻开关 → attempt-1 在 attempt-0 **未回滚的脏工作区**上跑、潜在带走半成品改动。
+**已缓解（已上线）**：facet-1 让 mode-flip 走**新 session**（`effectiveResumeSessionId` gate `followup && !clarifyModeFlip`，scheduler.ts ~2585）+ 全 prompt 路径（round-3）。残留仅「脏工作区未回滚」这一面。
+**为何未当场修**：`clarifyModeFlip` 需 `effectiveHasClarifyChannel`（scheduler.ts:2480-2486，**真依赖** `clarifyContext.directive` = 最新已答轮 directive，需 post-mint shardKey/loopIter/clarifyGeneration/resumeDecision）→ 要在 rollback（mint 前）前算它，须把 mint 重排到 rollback 前（大改最敏感重试/快照/clarify-resume 核心）或在 2510 复制回滚+多仓 pre-snapshot+缺快照升级逻辑（drift / byte-identical 风险）→ 风险（广泛工作区损坏）> 该窄边角。属 CLAUDE.md「比看上去更纠缠 → STOP green」情形。
+**不回退 round-3**：round-3 是**常见** followup（只读 / 未改写的 writer）的正确性修；回退使窄写边角变「响亮失败（无端口表）」却牺牲广泛正确性，net-worse（且 output→clarify 方向的脏工作区残留**本就 predates round-3**）。
+**后续专项修配方**（独立 PR、单独评审，retry-path 专项）：抽 `buildPromptContext` 的 directive 解析为 loop-top 可调助手 → 在 rollback 前算 `effectiveHasClarifyChannel`+`clarifyModeFlip` → 三处 gate（rollback/pre-snapshot/session）统一改 `followupDecision.followup && !clarifyModeFlip`（**复用既有 fresh-retry 站点、不新增回滚逻辑**）+ writer 脏工作区回归 + 多仓 + 缺快照升级测试。

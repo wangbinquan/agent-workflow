@@ -97,8 +97,16 @@ const callIndex = n // 0-based for this invocation
 writeFileSync(counterFile, String(n + 1))
 
 // Trace each invocation so the test can assert how many times each agent ran.
+// RFC-122: also record the `--session <id>` arg (null when absent) so a test can
+// distinguish a same-session RESUME (follow-up) from a FRESH session (mode-flip
+// downgrade) per attempt.
+const sessionFlagIdx = argv.indexOf('--session')
+const sessionArg = sessionFlagIdx >= 0 ? (argv[sessionFlagIdx + 1] ?? null) : null
 const traceFile = join(stateDir, 'trace.jsonl')
-appendFileSync(traceFile, JSON.stringify({ agent: agentName, callIndex }) + '\n')
+appendFileSync(
+  traceFile,
+  JSON.stringify({ agent: agentName, callIndex, session: sessionArg }) + '\n',
+)
 
 const steps = plan[agentName]
 let step: Step

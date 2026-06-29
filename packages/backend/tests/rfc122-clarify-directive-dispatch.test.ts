@@ -15,7 +15,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { execSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -103,6 +103,22 @@ async function poll<T>(fn: () => Promise<T | undefined>, timeoutMs = 20_000): Pr
     if (Date.now() > deadline) throw new Error('poll timed out')
     await sleep(25)
   }
+}
+// RFC-122: read the scenario stub's per-invocation trace (the `--session` arg it
+// was spawned with) to tell a same-session RESUME apart from a FRESH session.
+interface TraceEntry {
+  agent: string
+  callIndex: number
+  session: string | null
+}
+function readTrace(stateDir: string, agent: string): TraceEntry[] {
+  const f = join(stateDir, 'trace.jsonl')
+  if (!existsSync(f)) return []
+  return readFileSync(f, 'utf8')
+    .split('\n')
+    .filter((l) => l.trim().length > 0)
+    .map((l) => JSON.parse(l) as TraceEntry)
+    .filter((e) => e.agent === agent)
 }
 function writePlan(tmpHome: string, plan: Record<string, unknown[]>): void {
   const f = join(tmpHome, 'plan.json')
@@ -376,6 +392,10 @@ describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full out
       const s = await taskStatus(c.db, task.id)
       return s === 'done' || s === 'failed' ? s : undefined
     })
+    // Session-clear: the mode-flip retry runs in a FRESH opencode session (no
+    // `--session`), NOT the prior clarify-only follow-up session 'ses_h3'.
+    const flipTrace = readTrace(c.stateDir, 'designer').find((e) => e.callIndex === 1)
+    expect(flipTrace?.session ?? null).toBeNull()
   })
 
   test('golden-lock: no override ⇒ the same-session follow-up prompt is unchanged', async () => {
@@ -403,6 +423,10 @@ describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full out
     // emit a STOP notice.
     expect(attempt1?.promptText ?? '').toContain('previously specified in this session')
     expect(attempt1?.promptText ?? '').not.toContain(STOP_TRAILER)
+    // Golden-lock: the same-session follow-up RESUMES the captured session
+    // 'ses_gl' (`--session ses_gl`) — byte-for-byte today's behavior.
+    const glTrace = readTrace(c.stateDir, 'designer').find((e) => e.callIndex === 1)
+    expect(glTrace?.session).toBe('ses_gl')
     // No override row was ever created.
     expect(await listNodeClarifyDirectives(c.db, task.id)).toEqual({})
   })
@@ -484,5 +508,16 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
     expect(src).toContain('const clarifyModeFlip =')
     expect(src).toContain('priorAttemptClarifyActive !== effectiveHasClarifyChannel')
     expect(src).toContain('followupDecision.followup && !clarifyModeFlip')
+  })
+
+  test('mode-flip session-clear: effectiveResumeSessionId also gates on !clarifyModeFlip', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      'utf8',
+    )
+    // A mode-flip retry must NOT resume the prior (wrong-mode) session — the
+    // resume id also drops to the isolated/fresh path on a flip.
+    const m = src.match(/const effectiveResumeSessionId =\s*([\s\S]{0,80})/)
+    expect(m?.[1] ?? '').toContain('followupDecision.followup && !clarifyModeFlip')
   })
 })

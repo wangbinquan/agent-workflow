@@ -2582,9 +2582,22 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // FALSE) so the two paths cannot fight over the same
         // `resumeSessionId` slot. When both contexts are present,
         // follow-up wins because it expresses what THIS attempt is for.
-        const effectiveResumeSessionId = followupDecision.followup
-          ? followupResumeSessionId
-          : resumeDecision.resumeSessionId
+        // RFC-122 (mode-flip session-clear): a STOP-toggle mode flip already
+        // bypasses the same-session follow-up PROMPT (clarifyModeFlip → full
+        // renderUserPrompt). Don't then resume the prior (wrong-mode) opencode
+        // session for it — the prior session is clarify-only or output-only and
+        // resuming it would feed the full fresh-mode prompt into a contradictory
+        // conversation. On a flip we fall to resumeDecision.resumeSessionId, which
+        // for a process-retry ('isolated') is undefined ⇒ a FRESH session matching
+        // the full prompt. Golden-lock: no flip ⇒ `&& !clarifyModeFlip` is a no-op
+        // ⇒ same-session resume byte-identical to today. (The worktree rollback +
+        // pre-snapshot stay gated on followupDecision.followup — see the RFC-122
+        // residual note: downgrading those needs the directive at loop top, which
+        // is entangled with buildPromptContext; tracked as a follow-up.)
+        const effectiveResumeSessionId =
+          followupDecision.followup && !clarifyModeFlip
+            ? followupResumeSessionId
+            : resumeDecision.resumeSessionId
         const followupClarifyDirective =
           followupDecision.followup && effectiveHasClarifyChannel
             ? clarifyContext?.directive
