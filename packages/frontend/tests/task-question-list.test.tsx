@@ -151,8 +151,9 @@ describe('TaskQuestionList board', () => {
   test('stage button posts to /stage with staged:true', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue(undefined as never)
     await wrap([entry({ id: 'e1', phase: 'pending', staged: false })])
-    const card = screen.getByTestId('tq-card-e1')
-    fireEvent.click(within(card).getByRole('button'))
+    // A pending card now has both a "复制" and a stage button (RFC-120 §15), so target
+    // the stage button by its stable testid rather than the (ambiguous) sole role.
+    fireEvent.click(screen.getByTestId('tq-stage-e1'))
     await waitFor(() =>
       expect(post).toHaveBeenCalledWith('/api/tasks/task-1/questions/e1/stage', { staged: true }),
     )

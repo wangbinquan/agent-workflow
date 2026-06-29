@@ -480,6 +480,26 @@ export function renderCrossClarifySource(src: CrossClarifySourceContext): string
   return buildExternalFeedbackBlock([src])
 }
 
+/**
+ * RFC-120 §15 — render ONE manual question's contribution to the `## External Feedback`
+ * body. A manual question carries a human-authored instruction (no questioner Q&A), so it
+ * renders as a `### Manual instruction: {title}` sub-section (same `###` level as a cross-
+ * clarify source's `### From '...'`) followed by the body verbatim. This is the manual side
+ * of the §15.4 "注入面归一": the per-node queue resolves each entry's content — cross from
+ * the session Q&A (buildExternalFeedbackBlock), manual from manual_body (here) — and the two
+ * concatenate into one block. Returns '' when both title and body are empty (skip the entry).
+ */
+export function renderManualFeedbackSection(title: string | null, body: string | null): string {
+  const t = (title ?? '').trim()
+  const b = (body ?? '').trim()
+  if (t.length === 0 && b.length === 0) return ''
+  const lines: string[] = []
+  lines.push(`### Manual instruction: ${t.length > 0 ? t : '(untitled)'}`)
+  lines.push('')
+  if (b.length > 0) lines.push(b)
+  return lines.join('\n').trimEnd()
+}
+
 // -----------------------------------------------------------------------------
 // RFC-059 per-question scope helpers
 //

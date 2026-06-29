@@ -2469,6 +2469,24 @@ export interface Resources {
     dispatchDesignerNotReady: string
     dispatchRoundMultiTarget: string
     dispatchUnsafeTarget: string
+    dispatchNotDeferred: string
+    addQuestion: string
+    copy: string
+    manualSource: string
+    author: {
+      newTitle: string
+      copyTitle: string
+      titleLabel: string
+      titlePlaceholder: string
+      bodyLabel: string
+      bodyPlaceholder: string
+      bodyHint: string
+      handlerLabel: string
+      handlerHint: string
+      unassigned: string
+      save: string
+      cancel: string
+    }
     phase: {
       pending: string
       staged: string
@@ -5104,6 +5122,24 @@ export const zhCN: Resources = {
     dispatchDesignerNotReady: '设计者尚未就绪，暂时无法下发',
     dispatchRoundMultiTarget: '同一轮的问题被指派到了多个处理节点；v1 需先统一为单一处理节点再下发',
     dispatchUnsafeTarget: '所选处理节点当前不可安全下发',
+    dispatchNotDeferred: '该任务未开启延迟下发，手动问题无法下发执行',
+    addQuestion: '+ 新增问题',
+    copy: '复制',
+    manualSource: '手动',
+    author: {
+      newTitle: '新增问题',
+      copyTitle: '复制问题',
+      titleLabel: '标题',
+      titlePlaceholder: '一句话描述这条问题/指令',
+      bodyLabel: '指令',
+      bodyPlaceholder: '写清要承接节点执行的具体指令',
+      bodyHint: '下发后将作为「外部反馈」注入承接节点的重跑',
+      handlerLabel: '承接节点',
+      handlerHint: '选择由哪个 agent 节点处理（可稍后再指派）',
+      unassigned: '未指派',
+      save: '保存',
+      cancel: '取消',
+    },
     phase: {
       pending: '待指派',
       staged: '待下发',

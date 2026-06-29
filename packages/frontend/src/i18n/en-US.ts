@@ -2723,6 +2723,25 @@ export const enUS: Resources = {
     dispatchRoundMultiTarget:
       'Questions from one round are assigned to multiple handler nodes; in v1 reassign them to a single handler before dispatching',
     dispatchUnsafeTarget: 'The selected handler node cannot be safely dispatched right now',
+    dispatchNotDeferred:
+      'This task does not have deferred dispatch enabled; manual questions cannot be dispatched',
+    addQuestion: '+ New question',
+    copy: 'Copy',
+    manualSource: 'Manual',
+    author: {
+      newTitle: 'New question',
+      copyTitle: 'Copy question',
+      titleLabel: 'Title',
+      titlePlaceholder: 'One line describing this question / instruction',
+      bodyLabel: 'Instruction',
+      bodyPlaceholder: 'Spell out exactly what the handler node should do',
+      bodyHint: 'On dispatch this is injected as External Feedback into the handler rerun',
+      handlerLabel: 'Handler node',
+      handlerHint: 'Pick which agent node handles it (you can assign later)',
+      unassigned: 'Unassigned',
+      save: 'Save',
+      cancel: 'Cancel',
+    },
     phase: {
       pending: 'To assign',
       staged: 'Staged',

@@ -1732,10 +1732,16 @@ export const taskQuestions = sqliteTable(
       .references(() => tasks.id, { onDelete: 'cascade' }),
     // The source clarify round's intermediary node_run id (locates clarify_rounds).
     // Plain text (logical pointer; tolerated-if-stale, cleaned up via task cascade).
+    // RFC-120 §15/§16 H4: a source_kind='manual' row has NO clarify round, so it
+    // stores its OWN fresh ULID here — a non-null synthetic identity (H4's sanctioned
+    // alternative to nullable+partial-index). This keeps the column NOT NULL (no SQLite
+    // table rebuild) and keeps uniq_task_questions_identity below collision-free + byte-
+    // for-byte for clarify rows (synthetic origins are unique). It points to no real
+    // node_run; the read-side/injection branch on source_kind, not on this resolving.
     originNodeRunId: text('origin_node_run_id').notNull(),
-    questionId: text('question_id').notNull(), // round-local question id
+    questionId: text('question_id').notNull(), // round-local question id (manual: fresh ULID)
     questionTitle: text('question_title').notNull(), // snapshot (title is stable across reopen)
-    sourceKind: text('source_kind', { enum: ['self', 'cross'] }).notNull(),
+    sourceKind: text('source_kind', { enum: ['self', 'cross', 'manual'] }).notNull(),
     roleKind: text('role_kind', { enum: ['self', 'questioner', 'designer'] }).notNull(),
     // Round iteration / loop_iter snapshot — used by resolveHandlerRun to frame
     // the exact handler lineage (Codex F1).
@@ -1775,6 +1781,15 @@ export const taskQuestions = sqliteTable(
     reopenCount: integer('reopen_count').notNull().default(0),
     // Pre-edit answer snapshot captured at reopen (audit of the "解冻前" value).
     priorAnswerSnapshotJson: text('prior_answer_snapshot_json'),
+    // RFC-120 §15 — manual question (自主新增/复制; migration 0065). For a
+    // source_kind='manual' row a human authored the question/instruction directly:
+    // manual_title is the title (DTO questionTitle), manual_body is the instruction
+    // injected as External Feedback when the assigned node reruns (DTO answerSummary).
+    // manual_created_by is the audit-only author id — NEVER enters an agent prompt
+    // (RFC-099 prompt-isolation). All NULL for clarify rows (golden-lock).
+    manualTitle: text('manual_title'),
+    manualBody: text('manual_body'),
+    manualCreatedBy: text('manual_created_by'),
     createdAt: integer('created_at')
       .notNull()
       .default(sql`(unixepoch() * 1000)`),

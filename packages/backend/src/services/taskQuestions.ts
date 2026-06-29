@@ -45,13 +45,16 @@ type NodeRunRow = typeof nodeRuns.$inferSelect
 export interface TaskQuestionDTO {
   id: string
   taskId: string
-  originNodeRunId: string
+  /** The clarify/cross-clarify round's node-run id (the `/clarify/$id` page). NULL for a
+   *  manual question (RFC-120 §15) — it has no clarify round / answer page. */
+  originNodeRunId: string | null
   questionId: string
   questionTitle: string
-  sourceKind: 'self' | 'cross'
+  sourceKind: 'self' | 'cross' | 'manual'
   roleKind: 'self' | 'questioner' | 'designer'
-  /** The node that ASKED the question (round.askingNodeId) — drives the node badge. */
-  sourceNodeId: string
+  /** The node that ASKED the question (round.askingNodeId) — drives the node badge.
+   *  NULL for a manual question (no source node; the board shows "手动"). */
+  sourceNodeId: string | null
   defaultTargetNodeId: string | null
   overrideTargetNodeId: string | null
   /** override ?? default — who currently handles it. */
@@ -179,6 +182,64 @@ function resolveTriggerForEntry(
  *  (processing → awaiting_confirm). For NON-deferred tasks (and questioner/self
  *  entries), the immediate flow never touches `dispatched_at`/`trigger_run_id`, so
  *  the consumption-stamp logic stays byte-for-byte (golden-lock). */
+/** Entry-level handler resolution from the entry's OWN dispatch state (dispatched_at +
+ *  trigger_run_id + run lineage) — independent of any clarify round. Shared by deferred
+ *  designer entries AND manual entries (RFC-120 §15): both ride the §18 per-node queue,
+ *  bind at the node's RERUN, and never consult a clarify_round here.
+ *
+ *    dispatched_at NULL              → pending/staged (not dispatched).
+ *    trigger_run_id NULL            → processing (dispatched, queued/rerunning, unbound).
+ *    trigger_run_id set, anchor GC'd → processing (in-flight; don't reset).
+ *    trigger_run_id set, anchor live → resolveHandlerRun lineage (Codex H1: anchor +
+ *      process-retries up to the next clarify-cause rerun) → processing/awaiting_confirm. */
+function resolveDispatchedEntryHandler(
+  entry: TaskQuestionRow,
+  runs: NodeRunRow[],
+  outputRunIds: Set<string>,
+): { handlerRun: HandlerRunView | null; dispatchedInFlight: boolean } {
+  if (entry.dispatchedAt === null) {
+    // Not yet dispatched → pending/staged (the gate parks the task here).
+    return { handlerRun: null, dispatchedInFlight: false }
+  }
+  if (entry.triggerRunId === null) {
+    // Dispatched (committed for execution) but not yet bound to a handler run —
+    // the frontier rerun is queued / a cascade rerun hasn't reached it yet. The
+    // binding happens at the node's RERUN (buildExternalFeedbackContext), not at
+    // batch-dispatch, so the entry reads processing until then.
+    return { handlerRun: null, dispatchedInFlight: true }
+  }
+  const anchorRow = runs.find((r) => r.id === entry.triggerRunId)
+  // Stamped but the run row is gone (GC) → treat as in-flight rather than reset.
+  if (!anchorRow) return { handlerRun: null, dispatchedInFlight: true }
+  // RFC-120 T9 (Codex H1): resolve through the dispatched run's LINEAGE — the
+  // anchor + any technical process-retries the scheduler minted (same node +
+  // iteration, cause 'process-retry') up to the next clarify-cause rerun — via the
+  // shared oracle. A later successful retry then reads awaiting_confirm instead of
+  // sticking on a failed anchor. Anchor on the run's OWN node/iteration
+  // (node_runs.iteration IS the loop index; loopIter is projected 0 to neutralize
+  // the unused dimension, since the lineage is already framed by node+iteration).
+  const handlerRun = resolveHandlerRun({
+    effectiveTargetNodeId: anchorRow.nodeId,
+    iteration: anchorRow.iteration,
+    loopIter: 0,
+    triggerRunId: entry.triggerRunId,
+    runs: runs.map(
+      (r): RunLineageView => ({
+        id: r.id,
+        nodeId: r.nodeId,
+        iteration: r.iteration,
+        loopIter: 0,
+        rerunCause: r.rerunCause,
+        status: r.status,
+        startedAt: r.startedAt,
+        hasOutput: outputRunIds.has(r.id),
+        parentNodeRunId: r.parentNodeRunId,
+      }),
+    ),
+  })
+  return { handlerRun, dispatchedInFlight: handlerRun === null }
+}
+
 function resolveEntryHandler(
   round: ClarifyRoundRow,
   entry: TaskQuestionRow,
@@ -187,47 +248,7 @@ function resolveEntryHandler(
   deferred: boolean,
 ): { handlerRun: HandlerRunView | null; dispatchedInFlight: boolean } {
   if (deferred && entry.roleKind === 'designer') {
-    if (entry.dispatchedAt === null) {
-      // Not yet dispatched → pending/staged (the gate parks the task here).
-      return { handlerRun: null, dispatchedInFlight: false }
-    }
-    if (entry.triggerRunId === null) {
-      // Dispatched (committed for execution) but not yet bound to a handler run —
-      // the frontier rerun is queued / a cascade rerun hasn't reached it yet. The
-      // binding happens at the node's RERUN (buildExternalFeedbackContext), not at
-      // batch-dispatch, so the entry reads processing until then.
-      return { handlerRun: null, dispatchedInFlight: true }
-    }
-    const anchorRow = runs.find((r) => r.id === entry.triggerRunId)
-    // Stamped but the run row is gone (GC) → treat as in-flight rather than reset.
-    if (!anchorRow) return { handlerRun: null, dispatchedInFlight: true }
-    // RFC-120 T9 (Codex H1): resolve through the dispatched run's LINEAGE — the
-    // anchor + any technical process-retries the scheduler minted (same node +
-    // iteration, cause 'process-retry') up to the next clarify-cause rerun — via the
-    // shared oracle. A later successful retry then reads awaiting_confirm instead of
-    // sticking on a failed anchor. Anchor on the run's OWN node/iteration
-    // (node_runs.iteration IS the loop index; loopIter is projected 0 to neutralize
-    // the unused dimension, since the lineage is already framed by node+iteration).
-    const handlerRun = resolveHandlerRun({
-      effectiveTargetNodeId: anchorRow.nodeId,
-      iteration: anchorRow.iteration,
-      loopIter: 0,
-      triggerRunId: entry.triggerRunId,
-      runs: runs.map(
-        (r): RunLineageView => ({
-          id: r.id,
-          nodeId: r.nodeId,
-          iteration: r.iteration,
-          loopIter: 0,
-          rerunCause: r.rerunCause,
-          status: r.status,
-          startedAt: r.startedAt,
-          hasOutput: outputRunIds.has(r.id),
-          parentNodeRunId: r.parentNodeRunId,
-        }),
-      ),
-    })
-    return { handlerRun, dispatchedInFlight: handlerRun === null }
+    return resolveDispatchedEntryHandler(entry, runs, outputRunIds)
   }
   const triggerRunId = resolveTriggerForEntry(round, entry.roleKind)
   const row = triggerRunId ? runs.find((r) => r.id === triggerRunId) : undefined
@@ -276,6 +297,50 @@ export async function listTaskQuestions(
 
   const out: TaskQuestionDTO[] = []
   for (const e of entries) {
+    // RFC-120 §15 — manual question: human-authored, no clarify round. Phase derives
+    // from the entry's OWN dispatch state (treat content as always answered; no human-
+    // answer step), and it has no source node / clarify page. NEVER falls into a source-
+    // node filter (it isn't a graph node). Branch BEFORE the round lookup (H4 read-side
+    // fix: a manual row's synthetic origin matches no round → the old `if (!round) continue`
+    // would drop it, making manual questions invisible).
+    if (e.sourceKind === 'manual') {
+      if (opts.sourceNodeId) continue
+      const { handlerRun, dispatchedInFlight } = resolveDispatchedEntryHandler(
+        e,
+        runs,
+        outputRunIds,
+      )
+      const phase = deriveQuestionPhase({
+        roundStatus: 'answered',
+        confirmation: e.confirmation,
+        isStaged: e.stagedAt !== null,
+        dispatchedInFlight,
+        handlerRun,
+      })
+      if (opts.phase && phase !== opts.phase) continue
+      out.push({
+        id: e.id,
+        taskId: e.taskId,
+        originNodeRunId: null,
+        questionId: e.questionId,
+        questionTitle: e.manualTitle ?? e.questionTitle,
+        sourceKind: 'manual',
+        roleKind: e.roleKind,
+        sourceNodeId: null,
+        defaultTargetNodeId: e.defaultTargetNodeId,
+        overrideTargetNodeId: e.overrideTargetNodeId,
+        effectiveTargetNodeId: e.overrideTargetNodeId ?? e.defaultTargetNodeId,
+        phase,
+        confirmation: e.confirmation,
+        confirmedBy: e.confirmedBy,
+        staged: e.stagedAt !== null,
+        reopenCount: e.reopenCount,
+        answerSummary: e.manualBody ?? null,
+        createdAt: e.createdAt,
+        updatedAt: e.updatedAt,
+      })
+      continue
+    }
     const round = roundByOrigin.get(e.originNodeRunId)
     if (!round) continue // round vanished (task edited); skip defensively
     const effectiveTargetNodeId = e.overrideTargetNodeId ?? e.defaultTargetNodeId
@@ -500,6 +565,28 @@ async function loadEntry(db: DbClient, entryId: string): Promise<TaskQuestionRow
 
 /** Derive one entry's current phase (loads its round + the task's runs). */
 async function deriveEntryPhase(db: DbClient, entry: TaskQuestionRow): Promise<TaskQuestionPhase> {
+  // RFC-120 §15 — manual question: no clarify round. Phase from the entry's OWN dispatch
+  // state (content always answered; no human-answer step) — the SAME resolution the
+  // read-side uses for manual rows.
+  if (entry.sourceKind === 'manual') {
+    const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, entry.taskId))
+    const outputRunIds = await runIdsWithOutput(
+      db,
+      runs.map((r) => r.id),
+    )
+    const { handlerRun, dispatchedInFlight } = resolveDispatchedEntryHandler(
+      entry,
+      runs,
+      outputRunIds,
+    )
+    return deriveQuestionPhase({
+      roundStatus: 'answered',
+      confirmation: entry.confirmation,
+      isStaged: entry.stagedAt !== null,
+      dispatchedInFlight,
+      handlerRun,
+    })
+  }
   const [round] = await db
     .select()
     .from(clarifyRounds)
@@ -651,4 +738,94 @@ export async function stageTaskQuestion(
         : { stagedAt: null, stagedBy: null, updatedAt: Date.now() },
     )
     .where(eq(taskQuestions.id, entryId))
+}
+
+/** Max lengths for a manual question (title mirrors ClarifyQuestion.title ≤ 512). */
+const MANUAL_TITLE_MAX = 512
+const MANUAL_BODY_MAX = 20000
+
+export interface CreateManualTaskQuestionInput {
+  title: string
+  body: string
+  /** Optional handler agent node. Given → the row is created staged (待下发, ready for
+   *  batch-dispatch, §15.2); omitted → pending (待指派). */
+  targetNodeId?: string | null
+}
+
+/** RFC-120 §15 — create a manual question (自主新增/复制): a human authors a title +
+ *  instruction and (optionally) assigns an agent node. It is inserted DIRECTLY (not via
+ *  reconcile) as a source_kind='manual', role_kind='designer' (修订型 → re-targetable /
+ *  dispatchable) row. It has no clarify round, so it stores its OWN fresh ULID as
+ *  origin_node_run_id — a non-null synthetic identity (§16 H4) that keeps the column NOT
+ *  NULL and the identity unique (no collision with the full unique index). Dispatch + the
+ *  External-Feedback injection of `manual_body` reuse the §18 per-node queue UNCHANGED.
+ *  The author id is recorded for audit ONLY — it NEVER enters an agent prompt (RFC-099
+ *  prompt-isolation; no prompt builder reads manual_created_by). */
+export async function createManualTaskQuestion(
+  db: DbClient,
+  taskId: string,
+  input: CreateManualTaskQuestionInput,
+  actor: TaskQuestionActor,
+): Promise<{ id: string }> {
+  const title = input.title.trim()
+  const body = input.body.trim()
+  if (title === '') {
+    throw new ValidationError('manual-question-title-required', 'title is required')
+  }
+  if (title.length > MANUAL_TITLE_MAX) {
+    throw new ValidationError(
+      'manual-question-title-too-long',
+      `title exceeds ${MANUAL_TITLE_MAX} characters`,
+    )
+  }
+  if (body === '') {
+    throw new ValidationError('manual-question-body-required', 'body is required')
+  }
+  if (body.length > MANUAL_BODY_MAX) {
+    throw new ValidationError(
+      'manual-question-body-too-long',
+      `body exceeds ${MANUAL_BODY_MAX} characters`,
+    )
+  }
+  const target =
+    typeof input.targetNodeId === 'string' && input.targetNodeId.length > 0
+      ? input.targetNodeId
+      : null
+  if (target !== null) {
+    // Same guard as reassign: a manual question is 修订型 (role designer), so its handler
+    // must be a workflow AGENT node (canReassign / Codex F5) — never an io/review/wrapper.
+    const agentNodeIds = await agentNodeIdsForTask(db, taskId)
+    if (!agentNodeIds.has(target)) {
+      throw new ValidationError(
+        'manual-question-target-invalid',
+        `target node '${target}' is not an agent node in this task's workflow`,
+      )
+    }
+  }
+  const id = ulid()
+  const now = Date.now()
+  await db.insert(taskQuestions).values({
+    id,
+    taskId,
+    // §16 H4: non-null synthetic identity (no real node_run; the read-side branches on
+    // source_kind, not on this resolving to a round).
+    originNodeRunId: ulid(),
+    questionId: ulid(),
+    questionTitle: title,
+    sourceKind: 'manual',
+    roleKind: 'designer',
+    iteration: 0,
+    loopIter: 0,
+    defaultTargetNodeId: null,
+    overrideTargetNodeId: target,
+    manualTitle: title,
+    manualBody: body,
+    manualCreatedBy: actor.userId,
+    // §15.2: handler chosen at creation → directly staged (待下发); else 待指派.
+    stagedAt: target !== null ? now : null,
+    stagedBy: target !== null ? actor.userId : null,
+    createdAt: now,
+    updatedAt: now,
+  })
+  return { id }
 }

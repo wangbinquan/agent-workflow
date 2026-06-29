@@ -124,6 +124,7 @@ interface TextAreaProps {
   placeholder?: string
   monospace?: boolean
   disabled?: boolean
+  maxLength?: number
   'data-testid'?: string
 }
 
@@ -134,6 +135,7 @@ export function TextArea({
   placeholder,
   monospace,
   disabled,
+  maxLength,
   'data-testid': testid,
 }: TextAreaProps) {
   return (
@@ -144,6 +146,7 @@ export function TextArea({
       rows={rows}
       placeholder={placeholder}
       disabled={disabled}
+      maxLength={maxLength}
       data-testid={testid}
     />
   )

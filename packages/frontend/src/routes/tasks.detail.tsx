@@ -650,8 +650,9 @@ function TaskStatusCanvas({
   const questionCounts = useMemo<Record<string, number>>(() => {
     const out: Record<string, number> = {}
     for (const e of questions.data ?? []) {
-      // "Needs human attention" = non-terminal (mirrors the board filter chips).
-      if (e.phase !== 'done' && e.phase !== 'closed') {
+      // "Needs human attention" = non-terminal (mirrors the board filter chips). A manual
+      // question (sourceNodeId null, RFC-120 §15) has no graph source node → no canvas badge.
+      if (e.sourceNodeId !== null && e.phase !== 'done' && e.phase !== 'closed') {
         out[e.sourceNodeId] = (out[e.sourceNodeId] ?? 0) + 1
       }
     }

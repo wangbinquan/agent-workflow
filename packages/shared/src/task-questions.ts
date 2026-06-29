@@ -28,7 +28,13 @@ import type { NodeRunStatus } from './schemas/task'
  *  仅 designer 为「修订型」可改派；self/questioner 为「阻塞-产出型」恒自我续跑。 */
 export type TaskQuestionRoleKind = 'self' | 'questioner' | 'designer'
 
-export type TaskQuestionSourceKind = 'self' | 'cross'
+/** Stored / DTO source kind. `self`/`cross` come from a clarify round (via reconcile);
+ *  `manual` (RFC-120 §15) is a human-authored question inserted directly (no round). */
+export type TaskQuestionSourceKind = 'self' | 'cross' | 'manual'
+
+/** The clarify-round source kinds only — reconcile is clarify-only and never sees
+ *  `manual` (manual rows bypass reconcile), so its inputs/outputs use this narrower type. */
+export type TaskQuestionRoundSourceKind = 'self' | 'cross'
 
 /** 条目展示态（RFC-120 v2 看板列）。`下发`（mint 承接 rerun）是 pending/staged→processing
  *  的边界（design §11.2/11.6）——一旦有承接 run 即「已下发=处理中」，不再以 run 是否
@@ -51,14 +57,14 @@ export type TaskQuestionConfirmation = 'open' | 'confirmed'
 export interface DesiredTaskQuestionEntry {
   questionId: string
   questionTitle: string
-  sourceKind: TaskQuestionSourceKind
+  sourceKind: TaskQuestionRoundSourceKind
   roleKind: TaskQuestionRoleKind
   /** 图解析的默认承接节点；解析不到（边缺失/畸形）为 null。落库 default_target_node_id。 */
   defaultTargetNodeId: string | null
 }
 
 export interface ReconcileRoundInput {
-  kind: TaskQuestionSourceKind
+  kind: TaskQuestionRoundSourceKind
   /** 本轮问题（只需 id/title；其余字段 reconcile 不关心）。 */
   questions: Pick<ClarifyQuestion, 'id' | 'title'>[]
   /** 轮是否已回答。**false 时（未答 / 取消 / 放弃）cross 只出 questioner 条目**

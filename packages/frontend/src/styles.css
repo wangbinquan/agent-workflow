@@ -11377,6 +11377,12 @@ mark.comment-anchor[data-active='true'] {
   flex-direction: column;
   gap: 8px;
 }
+/* RFC-120 §15 — "+ 新增问题" toolbar (manual question author entry point). */
+.task-questions__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
 .task-questions__filter {
   display: flex;
   flex-wrap: wrap;

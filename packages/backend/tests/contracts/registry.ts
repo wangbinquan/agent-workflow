@@ -314,6 +314,7 @@ export const ENDPOINTS: EndpointSpec[] = [
 
   // ---- task question list / 任务中心 (RFC-120) ----
   { method: 'GET', path: '/api/tasks/:id/questions' },
+  { method: 'POST', path: '/api/tasks/:id/questions/manual' },
   { method: 'POST', path: '/api/tasks/:id/questions/:entryId/confirm' },
   { method: 'POST', path: '/api/tasks/:id/questions/:entryId/reassign' },
   { method: 'POST', path: '/api/tasks/:id/questions/:entryId/stage' },

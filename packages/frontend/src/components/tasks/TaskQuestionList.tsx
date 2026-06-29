@@ -22,6 +22,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
+import { QuestionAuthorForm } from '@/components/tasks/QuestionAuthorForm'
 
 export type TaskQuestionPhase =
   | 'pending'
@@ -35,11 +36,13 @@ export interface TaskQuestionEntry {
   id: string
   questionId: string
   questionTitle: string
-  /** The clarify/cross-clarify node-run id — the `/clarify/$nodeRunId` answer page. */
-  originNodeRunId: string
-  sourceKind: 'self' | 'cross'
+  /** The clarify/cross-clarify node-run id — the `/clarify/$nodeRunId` answer page. NULL
+   *  for a manual question (RFC-120 §15): it has no clarify round / answer page. */
+  originNodeRunId: string | null
+  sourceKind: 'self' | 'cross' | 'manual'
   roleKind: 'self' | 'questioner' | 'designer'
-  sourceNodeId: string
+  /** The node that ASKED the question. NULL for a manual question (board shows "手动"). */
+  sourceNodeId: string | null
   defaultTargetNodeId: string | null
   overrideTargetNodeId: string | null
   effectiveTargetNodeId: string | null
@@ -90,6 +93,9 @@ const DISPATCH_ERROR_KEYS: Record<string, string> = {
   'task-question-designer-not-ready': 'taskQuestions.dispatchDesignerNotReady',
   'task-question-round-multi-target': 'taskQuestions.dispatchRoundMultiTarget',
   'task-question-unsafe-dispatch-target': 'taskQuestions.dispatchUnsafeTarget',
+  // RFC-120 §15: a manual question can be staged on any task, but dispatch (mint + inject)
+  // reuses the §18 per-node queue, which only runs on a deferred-dispatch task.
+  'task-not-deferred-dispatch': 'taskQuestions.dispatchNotDeferred',
 }
 
 export function TaskQuestionList({
@@ -126,6 +132,18 @@ export function TaskQuestionList({
   // on a successful dispatch.
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [dispatchError, setDispatchError] = useState<unknown>(null)
+  // RFC-120 §15 — manual question author form. `authorInitial` null = 新增 (empty form);
+  // a {title,body} = 复制 (prefilled from a 待指派 card → Save creates a NEW manual row).
+  const [authorOpen, setAuthorOpen] = useState(false)
+  const [authorInitial, setAuthorInitial] = useState<{ title: string; body: string } | null>(null)
+  const openNewQuestion = () => {
+    setAuthorInitial(null)
+    setAuthorOpen(true)
+  }
+  const openCopyQuestion = (e: TaskQuestionEntry) => {
+    setAuthorInitial({ title: e.questionTitle, body: e.answerSummary ?? '' })
+    setAuthorOpen(true)
+  }
   const toggleSelected = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev)
@@ -181,8 +199,40 @@ export function TaskQuestionList({
   if (query.isLoading) return <LoadingState />
   if (query.error) return <ErrorBanner error={query.error} />
   const entries = query.data ?? []
+
+  // RFC-120 §15 — the "+ 新增问题" toolbar + author form are available even when the board
+  // is empty (so the first manual question can be added). The form is a portal Dialog (no-op
+  // chrome while closed).
+  const toolbar = (
+    <div className="task-questions__toolbar">
+      <button
+        type="button"
+        className="btn btn--sm btn--primary"
+        onClick={openNewQuestion}
+        data-testid="tq-add-question"
+      >
+        {t('taskQuestions.addQuestion')}
+      </button>
+    </div>
+  )
+  const authorForm = (
+    <QuestionAuthorForm
+      open={authorOpen}
+      onClose={() => setAuthorOpen(false)}
+      taskId={taskId}
+      nodeOptions={nodeOptions}
+      initial={authorInitial}
+    />
+  )
+
   if (entries.length === 0) {
-    return <EmptyState title={t('taskQuestions.empty')} />
+    return (
+      <div className="task-questions-wrap">
+        {toolbar}
+        <EmptyState title={t('taskQuestions.empty')} />
+        {authorForm}
+      </div>
+    )
   }
 
   const labelFor = (nodeId: string | null) =>
@@ -190,10 +240,11 @@ export function TaskQuestionList({
       ? (nodeOptions.find((n) => n.id === nodeId)?.label ?? nodeId)
       : t('taskQuestions.noTarget')
 
-  // Per source-node count of questions still needing attention (non-terminal).
+  // Per source-node count of questions still needing attention (non-terminal). Manual
+  // questions (sourceNodeId null) have no graph source node → they get no node chip.
   const counts = new Map<string, number>()
   for (const e of entries) {
-    if (e.phase !== 'done' && e.phase !== 'closed') {
+    if (e.sourceNodeId !== null && e.phase !== 'done' && e.phase !== 'closed') {
       counts.set(e.sourceNodeId, (counts.get(e.sourceNodeId) ?? 0) + 1)
     }
   }
@@ -207,6 +258,7 @@ export function TaskQuestionList({
 
   return (
     <div className="task-questions-wrap">
+      {toolbar}
       <div className="task-questions__filter" data-testid="tq-node-filter">
         <button
           type="button"
@@ -283,7 +335,8 @@ export function TaskQuestionList({
                   )}
                   <dl className="task-questions__meta">
                     <dt>{t('taskQuestions.source')}</dt>
-                    <dd>{e.sourceNodeId}</dd>
+                    {/* RFC-120 §15 — a manual question has no source node: show "手动". */}
+                    <dd>{e.sourceNodeId ?? t('taskQuestions.manualSource')}</dd>
                     <dt>{t('taskQuestions.target')}</dt>
                     <dd>
                       {/* RFC-120 Codex impl gate F3: only re-targetable while non-terminal. */}
@@ -300,17 +353,34 @@ export function TaskQuestionList({
                     </dd>
                   </dl>
                   <div className="task-questions__actions">
-                    {/* RFC-120: the path to ANSWER each question — links to its
+                    {/* RFC-120: the path to ANSWER each clarify question — links to its
                         clarify/cross-clarify page (answer if unanswered, view if
-                        answered). The task center was missing this entirely. */}
-                    <Link
-                      to="/clarify/$nodeRunId"
-                      params={{ nodeRunId: e.originNodeRunId }}
-                      className="btn btn--xs"
-                      data-testid={`tq-answer-${e.id}`}
-                    >
-                      {e.answerSummary ? t('taskQuestions.viewClarify') : t('taskQuestions.answer')}
-                    </Link>
+                        answered). A manual question (originNodeRunId null) has no clarify
+                        page, so the link is omitted (§15). */}
+                    {e.originNodeRunId !== null && (
+                      <Link
+                        to="/clarify/$nodeRunId"
+                        params={{ nodeRunId: e.originNodeRunId }}
+                        className="btn btn--xs"
+                        data-testid={`tq-answer-${e.id}`}
+                      >
+                        {e.answerSummary
+                          ? t('taskQuestions.viewClarify')
+                          : t('taskQuestions.answer')}
+                      </Link>
+                    )}
+                    {/* RFC-120 §15 — 复制 a 待指派 card: open the author form prefilled with
+                        its title/body; Save creates a NEW manual question. */}
+                    {e.phase === 'pending' && (
+                      <button
+                        type="button"
+                        className="btn btn--xs"
+                        onClick={() => openCopyQuestion(e)}
+                        data-testid={`tq-copy-${e.id}`}
+                      >
+                        {t('taskQuestions.copy')}
+                      </button>
+                    )}
                     {e.phase === 'awaiting_confirm' && (
                       <ConfirmButton
                         label={t('taskQuestions.confirm')}
@@ -322,6 +392,7 @@ export function TaskQuestionList({
                         type="button"
                         className="btn btn--sm"
                         onClick={() => stageM.mutate({ id: e.id, staged: !e.staged })}
+                        data-testid={`tq-stage-${e.id}`}
                       >
                         {e.staged ? t('taskQuestions.unstage') : t('taskQuestions.stage')}
                       </button>
@@ -333,6 +404,7 @@ export function TaskQuestionList({
           )
         })}
       </div>
+      {authorForm}
     </div>
   )
 }

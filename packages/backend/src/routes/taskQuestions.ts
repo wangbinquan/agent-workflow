@@ -1,6 +1,7 @@
 // RFC-120 — REST endpoints for the task question list / 任务中心.
 //
 //   GET  /api/tasks/:id/questions                       list (filter: sourceNodeId / phase)
+//   POST /api/tasks/:id/questions/manual                §15 新增/复制手动问题 {title,body,targetNodeId?}
 //   POST /api/tasks/:id/questions/:entryId/confirm      已处理待确认 → 完成
 //   POST /api/tasks/:id/questions/:entryId/reassign     改派 designer handler {targetNodeId}
 //   POST /api/tasks/:id/questions/:entryId/stage        拖入/出「待下发」{staged}
@@ -20,6 +21,7 @@ import { taskQuestions, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import {
   confirmTaskQuestion,
+  createManualTaskQuestion,
   listTaskQuestions,
   reassignTaskQuestion,
   stageTaskQuestion,
@@ -84,6 +86,34 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
     const sourceNodeId = c.req.query('sourceNodeId') || undefined
     const phase = (c.req.query('phase') as TaskQuestionPhase | undefined) || undefined
     return c.json(await listTaskQuestions(deps.db, taskId, { sourceNodeId, phase }))
+  })
+
+  // RFC-120 §15 — author a MANUAL question (自主新增/复制). Member-gated (任务成员；ACL
+  // 同 reassign/stage). Body { title, body, targetNodeId? }: title+body required; if
+  // targetNodeId is given it must be a workflow agent node and the row is created staged
+  // (待下发) ready for batch-dispatch (§15.2), else 待指派. Dispatch + manual_body injection
+  // reuse the §18 per-node queue (which requires a deferred-dispatch task). The creator is
+  // recorded for audit only — NEVER enters a prompt (RFC-099 prompt-isolation).
+  app.post('/api/tasks/:id/questions/manual', async (c) => {
+    const taskId = c.req.param('id')
+    const actor = actorOf(c)
+    const task = await loadVisibleTask(deps, taskId, actor)
+    const role = await requireTaskMember(deps.db, actor, task)
+    const body = (await c.req.json().catch(() => ({}))) as {
+      title?: unknown
+      body?: unknown
+      targetNodeId?: unknown
+    }
+    const title = typeof body.title === 'string' ? body.title : ''
+    const instruction = typeof body.body === 'string' ? body.body : ''
+    const targetNodeId = typeof body.targetNodeId === 'string' ? body.targetNodeId : null
+    const { id } = await createManualTaskQuestion(
+      deps.db,
+      taskId,
+      { title, body: instruction, targetNodeId },
+      { userId: actor.user.id, role },
+    )
+    return c.json({ ok: true, id })
   })
 
   app.post('/api/tasks/:id/questions/:entryId/confirm', async (c) => {

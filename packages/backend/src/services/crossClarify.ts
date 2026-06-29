@@ -66,6 +66,7 @@ import {
   findDesignerNodeForCrossClarify,
   findQuestionerNodeForCrossClarify,
   renderClarifyQuestionsBlock,
+  renderManualFeedbackSection,
   resolveCrossClarifySessionMode,
   type ClarifyAnswer,
   type ClarifyCrossAgentNode,
@@ -1342,9 +1343,17 @@ async function buildNodeQueueExternalFeedback(
       .where(inArray(taskQuestions.id, toBind))
   }
 
-  // Group the queued questionIds by their origin round.
+  // RFC-120 §15 (§15.4 注入面归一): resolve each queued entry's content by source. CLARIFY
+  // entries (self/cross) derive Q&A from their origin clarify round (session); MANUAL entries
+  // (§15) inject manual_body — a human-authored instruction with no round. Both render into
+  // the SAME `## External Feedback` block. A manual row's synthetic origin matches no round,
+  // so it MUST be handled here (not via the byRound lookup below).
+  const clarifyEntries = entries.filter((e) => e.sourceKind !== 'manual')
+  const manualEntries = entries.filter((e) => e.sourceKind === 'manual')
+
+  // Group the queued CLARIFY questionIds by their origin round.
   const byRound = new Map<string, Set<string>>()
-  for (const e of entries) {
+  for (const e of clarifyEntries) {
     const set = byRound.get(e.originNodeRunId) ?? new Set<string>()
     set.add(e.questionId)
     byRound.set(e.originNodeRunId, set)
@@ -1382,19 +1391,31 @@ async function buildNodeQueueExternalFeedback(
       answers,
     })
   }
-  if (sources.length === 0) return undefined
+  // RFC-120 §15: manual entries render their human-authored instruction (manual_body).
+  const manualBlock = manualEntries
+    .map((e) => renderManualFeedbackSection(e.manualTitle, e.manualBody))
+    .filter((s) => s.length > 0)
+    .join('\n\n')
+
+  if (sources.length === 0 && manualBlock.length === 0) return undefined
 
   // RFC-120 §18 (ship-gate): does THIS node own ≥1 GRAPH-designer round in the rendered queue
   // (an entry whose default == this node)? Drives the scheduler's ownership-gated prior-output:
   // a pure-override handoff (graphOwned=false) must NOT be told to update its own old artifact.
+  // A manual entry's default is NULL, so a pure-manual queue keeps graphOwned=false correctly
+  // (the handler must PROCESS the instruction, not rewrite its own old artifact).
   const graphOwned = entries.some((e) => e.defaultTargetNodeId === handlerNodeId)
 
-  const block = buildExternalFeedbackBlock(sources)
-  const csv = sources
+  // RFC-120 §15: concatenate the clarify Q&A block + the manual instruction block into one
+  // `## External Feedback` body (clarify first for stable ordering; either may be empty).
+  const clarifyBlock = buildExternalFeedbackBlock(sources)
+  const block = [clarifyBlock, manualBlock].filter((s) => s.length > 0).join('\n\n')
+  const csvParts = sources
     .slice()
     .sort((a, b) => a.sourceQuestionerNodeId.localeCompare(b.sourceQuestionerNodeId))
     .map((s) => s.sourceQuestionerNodeId)
-    .join(', ')
+  if (manualEntries.length > 0) csvParts.push('manual')
+  const csv = csvParts.join(', ')
   return { block, iteration: String(generation), sourcesCsv: csv, runScoped: true, graphOwned }
 }
 
