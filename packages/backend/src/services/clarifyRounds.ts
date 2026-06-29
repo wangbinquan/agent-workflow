@@ -335,6 +335,11 @@ export interface BuildPromptContextArgs {
    *  only when `applyLatestDirective` is in effect, mirroring the row-directive
    *  gate. `undefined` (default) ⇒ byte-for-byte unchanged. */
   directiveOverride?: ClarifyDirective
+  /** RFC-123: the toggle row's `updatedAt`. When set AND `directiveOverride` is
+   *  'continue', the override (re-enable) applies ONLY if it is at least as recent
+   *  as the last answered round — a stale pre-RFC-123 'continue' toggle must not
+   *  re-enable a LATER 'stop' answer. A 'stop' override stays unconditional. */
+  directiveOverrideAt?: number
 }
 
 /**
@@ -398,7 +403,21 @@ export async function buildPromptContext(
     // ctx.directive='stop' even if the user's last answer clicked "keep". No
     // override ⇒ `args.directiveOverride` is undefined ⇒ row directive (unchanged).
     const rowDirective = (row.directive ?? 'continue') as ClarifyDirective
-    const directive = isLast ? (args.directiveOverride ?? rowDirective) : rowDirective
+    // RFC-122: the on-canvas toggle (directiveOverride) overrides the last round's
+    // own directive. RFC-123: a 'continue' override (re-enable) applies ONLY when it
+    // is at least as recent as this answered round — a stale pre-RFC-123 'continue'
+    // toggle row must not re-enable a LATER 'stop' answer. 'stop' is unconditional
+    // (RFC-122 durable); no directiveOverrideAt ⇒ no recency gate (byte-for-byte for
+    // callers that don't pass it).
+    let overrideApplies = isLast && args.directiveOverride !== undefined
+    if (
+      overrideApplies &&
+      args.directiveOverride === 'continue' &&
+      args.directiveOverrideAt !== undefined
+    ) {
+      overrideApplies = args.directiveOverrideAt >= (row.answeredAt ?? 0)
+    }
+    const directive = overrideApplies ? (args.directiveOverride as ClarifyDirective) : rowDirective
     if (isLast && applyLatestDirective) latestDirective = directive
     const roundLabel = `### Round ${row.iteration + 1}`
     questionParts.push(`${roundLabel}\n${renderClarifyQuestionsBlock(questions)}`)

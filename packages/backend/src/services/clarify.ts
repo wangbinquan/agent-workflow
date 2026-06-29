@@ -68,6 +68,7 @@ import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRol
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { createLogger } from '@/util/log'
 import { buildFrozenAttributionSet } from '@/services/clarifyRounds'
+import { setNodeClarifyDirective } from '@/services/taskClarifyDirective'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
 const log = createLogger('clarify')
@@ -516,6 +517,22 @@ export async function submitClarifyAnswers(
       ...attributionSet,
     })
     .where(eq(clarifyRounds.id, sessionRow.id))
+
+  // RFC-123: a 'stop' answer writes the per-(task, asking-node) clarify directive
+  // (the canvas "继续/停止反问" toggle's single source of truth) so the toggle
+  // reflects the choice AND the stop rides the same `nodeStopOverride` channel as
+  // the toggle — durable across retry/review reruns, not just this clarify-answer
+  // rerun. Only 'stop' writes (D1): 'continue' is the default and must not clobber a
+  // deliberate prior toggle. `answeredBy` is the audit-only setter id (never a prompt).
+  if (directive === 'stop') {
+    await setNodeClarifyDirective(
+      db,
+      sessionRow.taskId,
+      sessionRow.sourceAgentNodeId,
+      'stop',
+      answeredBy,
+    )
+  }
 
   // (3) Close the clarify node_run LAST. RFC-053: resume-clarify enforces
   // awaiting_human → done. By the time clarify is `done`, the rerun row above

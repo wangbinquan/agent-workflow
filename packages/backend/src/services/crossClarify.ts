@@ -98,6 +98,10 @@ import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { buildFrozenAttributionSet } from '@/services/clarifyRounds'
 import { reconcileTaskQuestionsForRound } from '@/services/taskQuestions'
+import {
+  getNodeClarifyDirectiveRow,
+  setNodeClarifyDirective,
+} from '@/services/taskClarifyDirective'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
 const log = createLogger('cross-clarify')
@@ -495,6 +499,17 @@ export async function submitCrossClarifyAnswers(
 
   // Branch on directive.
   if (args.directive === 'stop') {
+    // RFC-123: mirror the stop into the per-(task, asking-node) directive (canvas
+    // toggle single source of truth) for the QUESTIONER node — so the toggle shows
+    // 停止反问 and the stop rides nodeStopOverride. Additive: cross also persists via
+    // hasPersistentStop. `answeredBy` is the audit-only setter id (never a prompt).
+    await setNodeClarifyDirective(
+      args.db,
+      row.taskId,
+      row.sourceQuestionerNodeId,
+      'stop',
+      answeredBy,
+    )
     const outcome = await triggerQuestionerStopRerun({
       db: args.db,
       taskId: row.taskId,
@@ -1034,10 +1049,23 @@ export async function dispatchCrossClarifyNode(args: {
   nodeRunId: string
   definition: WorkflowDefinition
 }): Promise<DispatchCrossClarifyResult> {
-  if (findQuestionerNodeForCrossClarify(args.definition, args.crossClarifyNodeId) === undefined) {
+  const questionerNodeId = findQuestionerNodeForCrossClarify(
+    args.definition,
+    args.crossClarifyNodeId,
+  )
+  if (questionerNodeId === undefined) {
     return { kind: 'no-questioner' }
   }
-  const stopped = await hasPersistentStop(args.db, args.taskId, args.crossClarifyNodeId)
+  // RFC-123 (B2): the questioner's canvas toggle is authoritative for re-enable —
+  // an explicit, RECENT 'continue' (user flipped the toggle back AFTER the stop)
+  // overrides hasPersistentStop so the questioner can ask again. A stale 'continue'
+  // (older than the stop), a 'stop', or no row ⇒ hasPersistentStop unchanged.
+  const stopped = await resolveCrossNodeStopped(
+    args.db,
+    args.taskId,
+    args.crossClarifyNodeId,
+    questionerNodeId,
+  )
   if (stopped) {
     // RFC-053: mark-done is running → done; we set the node_run to running
     // first (mark-running from pending). The cross-clarify node has no
@@ -1079,6 +1107,62 @@ export async function hasPersistentStop(
     )
     .limit(1)
   return rows.length > 0
+}
+
+/**
+ * RFC-123: the timestamp of the most-recent directive='stop' session for this
+ * cross-clarify node (answeredAt, createdAt fallback), or null if none. Used to
+ * recency-gate the questioner toggle's 'continue' re-enable against the stop it
+ * would override.
+ */
+export async function latestPersistentStopAt(
+  db: DbClient,
+  taskId: string,
+  crossClarifyNodeId: string,
+): Promise<number | null> {
+  const rows = await db
+    .select({
+      answeredAt: crossClarifySessions.answeredAt,
+      createdAt: crossClarifySessions.createdAt,
+    })
+    .from(crossClarifySessions)
+    .where(
+      and(
+        eq(crossClarifySessions.taskId, taskId),
+        eq(crossClarifySessions.crossClarifyNodeId, crossClarifyNodeId),
+        eq(crossClarifySessions.directive, 'stop'),
+      ),
+    )
+  let latest: number | null = null
+  for (const r of rows) {
+    const t = r.answeredAt ?? r.createdAt
+    if (t !== null && (latest === null || t > latest)) latest = t
+  }
+  return latest
+}
+
+/**
+ * RFC-056 + RFC-123: should the cross-clarify NODE short-circuit to done?
+ * True when a persistent 'stop' exists AND the questioner's canvas toggle does NOT
+ * explicitly re-enable it. The toggle re-enables ('continue') only when it is at
+ * least as RECENT as the latest stop — a stale pre-RFC-123 'continue' row (kept by
+ * the canvas API while answer-stop did not update the table) must not re-open a
+ * later stop. No persistent stop ⇒ false; no toggle row / 'stop' toggle / stale
+ * 'continue' ⇒ plain hasPersistentStop (golden-lock).
+ */
+export async function resolveCrossNodeStopped(
+  db: DbClient,
+  taskId: string,
+  crossClarifyNodeId: string,
+  questionerNodeId: string,
+): Promise<boolean> {
+  if (!(await hasPersistentStop(db, taskId, crossClarifyNodeId))) return false
+  const qRow = await getNodeClarifyDirectiveRow(db, taskId, questionerNodeId)
+  if (qRow?.directive !== 'continue') return true
+  const stopAt = await latestPersistentStopAt(db, taskId, crossClarifyNodeId)
+  // re-enable (not stopped) only when the 'continue' toggle is at least as recent
+  // as the stop it overrides; otherwise stay stopped (conservative on unknown time).
+  return stopAt === null || stopAt > qRow.updatedAt
 }
 
 // ---------------------------------------------------------------------------

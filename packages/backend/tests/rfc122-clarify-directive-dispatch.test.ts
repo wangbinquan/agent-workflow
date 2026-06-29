@@ -474,12 +474,15 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
       'utf8',
     )
     // Dispatch read (parallel to hasPersistentStop) gated on hasClarifyChannel.
-    expect(src).toContain('getNodeClarifyDirective(db, taskId, node.id)')
+    expect(src).toContain('getNodeClarifyDirectiveRow(db, taskId, node.id)')
     expect(src).toContain('const nodeStopOverride =')
     // Three threads: effective-channel oracle, buildPromptContext override, runNode notice.
     expect(src).toContain('resolveEffectiveClarifyChannel({')
     expect(src).toContain('nodeStopOverride,')
-    expect(src).toContain("directiveOverride: 'stop' as const")
+    // RFC-123 generalized the threaded override from the 'stop' literal to the full
+    // node directive, so an explicit 'continue' toggle re-enables ask-back (re-enable
+    // direction). nodeStopOverride stays the boolean for the oracle / notice.
+    expect(src).toContain('directiveOverride: nodeDirective')
     expect(src).toContain('shouldInjectStopNotice({')
   })
 
@@ -492,7 +495,7 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
     // attempt's freshly-minted process-retry row re-reads the latest toggle. A
     // refactor that hoists it back above the loop (stale cache) → red.
     const loopIdx = src.indexOf('for (let attempt = retryIndex;')
-    const readIdx = src.indexOf('getNodeClarifyDirective(db, taskId, node.id)')
+    const readIdx = src.indexOf('getNodeClarifyDirectiveRow(db, taskId, node.id)')
     expect(loopIdx).toBeGreaterThan(0)
     expect(readIdx).toBeGreaterThan(loopIdx)
   })

@@ -29,6 +29,7 @@ import {
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { submitClarifyAnswers } from '../src/services/clarify'
+import { setNodeClarifyDirective } from '../src/services/taskClarifyDirective'
 import { submitCrossClarifyAnswers } from '../src/services/crossClarify'
 import { addReviewComment, submitReviewDecision } from '../src/services/review'
 import { runTask } from '../src/services/scheduler'
@@ -465,6 +466,13 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       decision: 'iterated',
       expectedReviewIteration: 0,
     })
+    // RFC-123: answering the round-0 clarify with stop now writes the durable
+    // per-(task, asking-node) directive (canvas toggle = single source of truth), so
+    // the designer would stay muzzled (STOP CLARIFYING) on the iterate rerun. The
+    // user re-enables clarification the way they would on the canvas — flip the
+    // asking node's toggle back to 'continue' once the agent is re-triggered — which
+    // restores the RFC-100 mandatory-ask-back flow the rest of this scenario locks.
+    await setNodeClarifyDirective(c.db, task.id, 'designer', 'continue', 'local')
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human') // designer asked clarify #1

@@ -56,6 +56,37 @@ export async function getNodeClarifyDirective(
 }
 
 /**
+ * RFC-123: like `getNodeClarifyDirective` but also returns the row's `updatedAt`,
+ * so a 'continue' re-enable can be RECENCY-checked against the stop signal it
+ * would override. A stale pre-RFC-123 'continue' row (the canvas API kept
+ * 'continue' rows while answer-stop did NOT update this table) must not re-enable
+ * a LATER 'stop' — the override only wins when the toggle is at least as fresh as
+ * the stop it overrides. Returns `undefined` when no row exists.
+ */
+export async function getNodeClarifyDirectiveRow(
+  db: DbClient,
+  taskId: string,
+  nodeId: string,
+): Promise<{ directive: ClarifyDirective; updatedAt: number } | undefined> {
+  const rows = await db
+    .select({
+      directive: taskNodeClarifyDirectives.directive,
+      updatedAt: taskNodeClarifyDirectives.updatedAt,
+    })
+    .from(taskNodeClarifyDirectives)
+    .where(
+      and(
+        eq(taskNodeClarifyDirectives.taskId, taskId),
+        eq(taskNodeClarifyDirectives.nodeId, nodeId),
+      ),
+    )
+    .limit(1)
+  const row = rows[0]
+  if (row === undefined) return undefined
+  return { directive: row.directive as ClarifyDirective, updatedAt: row.updatedAt }
+}
+
+/**
  * Upsert the override for one (task, node). Keeps the row on 'continue' (rather
  * than deleting) so the audit trail (setBy / updatedAt) survives a flip back;
  * the scheduler only ever branches on `=== 'stop'`, so a 'continue' row is

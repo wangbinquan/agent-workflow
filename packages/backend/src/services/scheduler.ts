@@ -75,13 +75,14 @@ import {
   buildExternalFeedbackContext,
   createCrossClarifySession,
   hasPersistentStop,
+  resolveCrossNodeStopped,
 } from '@/services/crossClarify'
 import {
   buildPromptContext,
   resolveEffectiveClarifyChannel,
   shouldInjectStopNotice,
 } from '@/services/clarifyRounds'
-import { getNodeClarifyDirective } from '@/services/taskClarifyDirective'
+import { getNodeClarifyDirectiveRow } from '@/services/taskClarifyDirective'
 import {
   decideResumeSessionId,
   detectSessionNotFoundFromStderr,
@@ -1691,7 +1692,13 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     // Persistent-stop check: if a prior directive='stop' session exists for
     // this cross-clarify node, mint a done row immediately so the workflow
     // advances past this point without parking awaiting_human.
-    const stopped = await hasPersistentStop(db, taskId, node.id)
+    // RFC-123 (B2): an explicit 'continue' on the questioner's canvas toggle
+    // overrides the stale hasPersistentStop so a re-enabled questioner asks again.
+    // No row / 'stop' ⇒ unchanged (golden-lock).
+    const reenableQuestionerNodeId = findQuestionerNodeForCrossClarify(definition, node.id)
+    const stopped = reenableQuestionerNodeId
+      ? await resolveCrossNodeStopped(db, taskId, node.id, reenableQuestionerNodeId)
+      : await hasPersistentStop(db, taskId, node.id)
     if (stopped) {
       const stopRunId = await mintNodeRun(db, {
         taskId,
@@ -2345,8 +2352,18 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // covers self-clarify AND cross-questioner (both wire the same `__clarify__`
         // source port); every other node skips the read ⇒ false. No row ⇒
         // undefined ⇒ false ⇒ byte-for-byte unchanged behavior (golden-lock).
-        const nodeStopOverride =
-          hasClarifyChannel && (await getNodeClarifyDirective(db, taskId, node.id)) === 'stop'
+        // RFC-123 (B1): read the FULL directive (not just === 'stop') so an explicit
+        // 'continue' toggle can OVERRIDE a stale answered 'stop' round (re-enable) —
+        // passing directiveOverride:'continue' below makes buildPromptContext rebuild
+        // the ask-back trailer + resolveEffectiveClarifyChannel re-open the channel.
+        // nodeStopOverride keeps its boolean meaning (=== 'stop') for
+        // resolveEffectiveClarifyChannel / shouldInjectStopNotice. No row ⇒ undefined
+        // ⇒ no override passed ⇒ byte-for-byte unchanged (golden-lock).
+        const nodeDirectiveRow = hasClarifyChannel
+          ? await getNodeClarifyDirectiveRow(db, taskId, node.id)
+          : undefined
+        const nodeDirective = nodeDirectiveRow?.directive
+        const nodeStopOverride = nodeDirective === 'stop'
         const clarifyContext = hasClarifyChannel
           ? isQuestionerCrossClarifyRerun
             ? await buildPromptContext({
@@ -2367,7 +2384,12 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
                 // RFC-122: on-canvas STOP toggle wins over the answered round's
                 // own directive so a prior "keep clarifying" answer's trailer is
                 // rebuilt to STOP CLARIFYING (cross-questioner path).
-                ...(nodeStopOverride ? { directiveOverride: 'stop' as const } : {}),
+                ...(nodeDirective !== undefined
+                  ? {
+                      directiveOverride: nodeDirective,
+                      directiveOverrideAt: nodeDirectiveRow?.updatedAt,
+                    }
+                  : {}),
               })
             : await buildPromptContext({
                 db,
@@ -2381,7 +2403,12 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
                 applyLatestDirective,
                 // RFC-122: on-canvas STOP toggle wins over the answered round's
                 // own directive (self-clarify path).
-                ...(nodeStopOverride ? { directiveOverride: 'stop' as const } : {}),
+                ...(nodeDirective !== undefined
+                  ? {
+                      directiveOverride: nodeDirective,
+                      directiveOverrideAt: nodeDirectiveRow?.updatedAt,
+                    }
+                  : {}),
               })
           : undefined
         // RFC-056: build the External Feedback context + (if update-mode)

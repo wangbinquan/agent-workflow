@@ -78,7 +78,19 @@ export function useTaskSync(taskId: string | null): void {
         if (msg.type === 'clarify.answered') {
           void qc.invalidateQueries({ queryKey: ['tasks', taskId] })
           void qc.invalidateQueries({ queryKey: ['tasks', taskId, 'node-runs'] })
+          // RFC-123: a 'stop' answer writes the per-(task, asking-node) clarify
+          // directive (the canvas toggle's single source of truth). Refresh the
+          // toggles so an already-mounted canvas reflects 停止反问 immediately, not
+          // only after the follow-up node.status from the rerun.
+          void qc.invalidateQueries({ queryKey: ['task-clarify-directives', taskId] })
         }
+      }
+      // RFC-123: cross-clarify answer/reject likewise writes the questioner node's
+      // clarify directive on 'stop' — refresh the canvas toggles. (Cross events are
+      // otherwise not threaded through this hook; this is the directive facet the
+      // single-source toggle needs.)
+      if (msg.type === 'cross-clarify.answered' || msg.type === 'cross-clarify.rejected') {
+        void qc.invalidateQueries({ queryKey: ['task-clarify-directives', taskId] })
       }
     },
   })
