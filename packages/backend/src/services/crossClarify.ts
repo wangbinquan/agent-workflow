@@ -104,11 +104,7 @@ import { pickFreshestRun } from '@/services/freshness'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { buildFrozenAttributionSet } from '@/services/clarifyRounds'
-import {
-  loadSealedQuestionIds,
-  reconcileRoundEntriesTx,
-  reconcileTaskQuestionsForRound,
-} from '@/services/taskQuestions'
+import { loadSealedQuestionIds, reconcileRoundEntriesTx } from '@/services/taskQuestions'
 import {
   getNodeClarifyDirectiveRow,
   setNodeClarifyDirective,
@@ -452,138 +448,141 @@ export async function submitCrossClarifyAnswers(
   // Seal answers server-side defending against client option-label injection.
   const questions = JSON.parse(row.questionsJson) as ClarifyQuestion[]
   const sealedSubset = sealAnswersServerSide(questions, args.answers)
-  // RFC-128 §7 — per-question merge-write. The whole-round quick channel seals every
-  // question at once, so for a virgin round (answers_json NULL/empty) the merge returns
-  // `sealedSubset` byte-for-byte (golden-lock vs the old overwrite). Parse defensively
-  // (non-array '{}' placeholders in some fixtures → []).
-  // RFC-128 P2-2 — protect already-sealed answers: a question pre-sealed via the
-  // per-question control channel is `locked`, so this finalize keeps its locked answer
-  // instead of overwriting it. No prior seal ⇒ lockedIds empty ⇒ old behavior (golden-lock).
-  const lockedIds = await loadSealedQuestionIds(args.db, args.crossClarifyNodeRunId)
-  const sealedAnswers = mergeSealedAnswers(
-    parseAnswersArray(row.answersJson),
-    sealedSubset,
-    lockedIds,
-  )
-
-  // RFC-059: validate questionScopes against the session's questions BEFORE
-  // any write so a malformed map can't reach the DB. Throws ValidationError
-  // 400 'cross-clarify-question-scopes-malformed' on any rejected key / value.
+  // RFC-059: validate questionScopes against the session's questions BEFORE any write so a malformed
+  // map can't reach the DB (throws ValidationError 400 'cross-clarify-question-scopes-malformed'). Pure
+  // (args + questions, not answer-dependent) → stays before the lock.
   const validatedScopes = validateQuestionScopes(args.questionScopes, questions)
-  // RFC-128 P2-3 — MERGE scopes with the round's already-stored scopes (per-question, like
-  // answers) instead of rebuilding from only this request. A sparse questionScopes that
-  // omits an earlier-sealed questioner-scope question must NOT drop its scope (which would
-  // wrongly fall back to the 'designer' default and mis-route feedback). No stored scopes
-  // + no request scopes ⇒ null (golden-lock); first whole-round submit ⇒ just this request.
-  // RFC-128 P2-3b (Codex re-gate): a LOCKED (already-sealed) question's SCOPE is sealed too —
-  // keep its STORED scope and ignore any incoming scope for it (mirrors the answer `lockedIds`),
-  // so a stale whole-round tab can't re-route a sealed questioner-scope answer back to designer
-  // even though its answer value is protected.
-  const existingScopes = parseQuestionScopesJson(row.questionScopesJson)
-  const mergedScopes: Record<string, ClarifyQuestionScope> = { ...(existingScopes ?? {}) }
-  for (const [qid, scope] of Object.entries(validatedScopes ?? {})) {
-    if (!lockedIds.has(qid)) mergedScopes[qid] = scope
-  }
-  // Normalize to null when empty (matches the old `?? null` convention; `{}` and `null`
-  // resolve identically in resolveQuestionScope → golden-lock for the no-prior-scope case).
-  // Used for BOTH persistence and this submit's designer-split routing so a prior-sealed
-  // questioner-scope question omitted from this request is not re-routed to designer.
-  const effectiveScopes = Object.keys(mergedScopes).length > 0 ? mergedScopes : null
-  const questionScopesJson = effectiveScopes === null ? null : JSON.stringify(effectiveScopes)
-
-  const answersJson = JSON.stringify(sealedAnswers)
-  // RFC-076 T0-extend note: unlike submitClarifyAnswers, this session → answered
-  // flip CANNOT be deferred past the rerun mints below — the multi-source
-  // readiness check (extractDesignerScopedSubset + peer aggregation, see the
-  // `continue` branch) requires THIS session to read as resolved so a peer's
-  // submit sees it. The asking questioner's park keys off this same status
-  // (deriveFrontier.askingRunIds), so a concurrent runScope tick landing between
-  // this flip and the questioner rerun mint could briefly judge the questioner
-  // complete. That window is (a) only reachable when an INDEPENDENT parallel
-  // branch is still in flight at answer time (a downstream questioner parks its
-  // own subtree, so its direct downstream can't race), and (b) self-correcting:
-  // the questioner rerun re-mints as a fresher run, so any downstream that ran on
-  // the questioner's clarify-emit output goes stale and re-dispatches (RFC-074
-  // provenance). Net effect under the race is a wasted re-run, never a wrong
-  // final state — so we keep peer-aggregation correctness and accept it.
-  // RFC-058 T12 dual-write attribution — computed BEFORE the tx (async read), applied in the tx.
-  const attributionSet =
-    args.submittedByRole !== undefined
-      ? {
-          answeredBy,
-          ...(await buildFrozenAttributionSet(args.db, row.id, sealedAnswers, {
-            userId: answeredBy,
-            role: args.submittedByRole,
-          })),
-        }
-      : {}
-  // RFC-058 dual-write: the clarify_round row mirrors this cross session (id == session id). Loaded
-  // for the §5.2.14 finding-3 in-tx reconcile of the QUESTIONER entries.
+  // RFC-058 dual-write: the clarify_round row mirrors this cross session (id == session id). Loaded for
+  // the §5.2.14 finding-3 in-tx reconcile of the QUESTIONER entries (+ finding-1 deferred designer).
   const roundRow = (
     await args.db.select().from(clarifyRounds).where(eq(clarifyRounds.id, row.id)).limit(1)
   )[0]
-  // §5.2.14 finding 2: this submit CASCADES the questioner (→ its entries are superseded) iff it is
-  // a 'stop' finalize OR the RFC-059 all-questioner-scope fast path (0 designer-scoped questions).
-  // When a designer-scoped subset exists the questioner is NOT cascaded here (the designer rerun /
-  // deferred dispatch owns the round), so its entries must NOT be consumed — leave them to the
-  // designer/deferred path (RFC-059 unchanged).
-  const cascadesQuestioner =
-    args.directive === 'stop' ||
-    extractDesignerScopedSubset(questions, sealedAnswers, effectiveScopes).questions.length === 0
-
-  // RFC-128 P5-BC §5.2.14 finding 2 (final gate) — the questioner cascade rerun mint must be IN the
-  // tx. Leaving it async AFTER the tx left a window: between the flip+consume commit and the cascade
-  // mint, confirmation='confirmed' only blocks dispatching the SAME entries, while the immediate-
-  // ledger gate cannot see a not-yet-existing pending cross-clarify-questioner-rerun → a concurrent
-  // dispatch of ANOTHER staged entry to the same questioner home mints first, then the cascade mints
-  // → two pending reruns on one home. Fix: compute the cascade rerun VALUES now (async read of the
-  // questioner run) + INSERT them inside the tx, so the pending rerun commits atomically with the
-  // flip and is immediately visible to any concurrent dispatch's in-flight / immediate-ledger gate.
-  // (mintQuestionerRerun = read lastRun + buildMintNodeRunValues + insert; the async read is hoisted
-  // out, the sync insert goes in the tx — same row, same cause.) Only the SYNC part is in the tx; the
-  // multi-source designer readiness / designer rerun stay async after (peer-aggregation, finding 3).
+  // §5.2.14 finding 1 — load the task row BEFORE the lock so the deferred-designer branch can
+  // MATERIALIZE its designer task_questions IN the same B-protected tx as the flip (was a post-lock
+  // reconcileTaskQuestionsForRound → the designer rows + the answered flip were not atomic, so a
+  // concurrent dispatch / scheduler park could observe the answered round with no designer rows yet and
+  // mis-decide). Reused post-tx for the workflow snapshot / readiness.
+  const taskRow = (await args.db.select().from(tasks).where(eq(tasks.id, row.taskId)).limit(1))[0]
+  if (taskRow === undefined) {
+    throw new NotFoundError('task-not-found', `task ${row.taskId} not found`)
+  }
+  // §5.2.14 finding 2 — the answer/scope MERGE and everything derived from it (attribution, the
+  // questioner cascade mint values, the designer split) are computed UNDER the per-task QUESTION-WRITE
+  // lock B, from the round's CURRENT answers_json + scopes (re-read inside the lock) — NOT from the
+  // pre-lock `row` snapshot. Else a concurrent control-channel seal (sealRoundQuestions, also under B)
+  // committing a locked answer after a pre-lock read would be OVERWRITTEN by this submit's stale
+  // whole-round answers_json (data loss, breaks the P2-2 locked-answer guarantee). Hoisted for the
+  // post-lock sessionAfter / branch.
+  let sealedAnswers: ClarifyAnswer[] = []
+  let effectiveScopes: Record<string, ClarifyQuestionScope> | null = null
+  let designerSplit!: ReturnType<typeof extractDesignerScopedSubset>
   let questionerCascadeRerunId: string | null = null
-  let questionerRerunValues: ReturnType<typeof buildMintNodeRunValues> | null = null
-  // (home node + iteration of the questioner rerun — typed-number, for the in-tx reciprocal check).
-  let questionerHome: { nodeId: string; iteration: number } | null = null
-  if (cascadesQuestioner) {
-    const lastRun = (
+  // RFC-128 P5-BC §5.2.14 — atomic {merge → claim → recheck → (cascade) reconcile+consume+questioner-
+  // mint → (deferred) designer reconcile → flip}, all UNDER the per-task QUESTION-WRITE lock B so the
+  // cross submit serializes against dispatchTaskQuestions + sealRoundQuestions + the other submit path.
+  // B only (cross submit has NO worktree rollback → no worktree write lock A needed). Lock order:
+  // cross-submit takes B alone (no nesting) → no B→A → deadlock-free; B is short. The cross flip stays
+  // committed here so peers + the questioner park read this session resolved (peer-aggregation
+  // invariant). The questioner cascade MINT is in the tx (finding 2); only the async designer / multi-
+  // source readiness stay AFTER the tx. session CAS (finding 1) + in-tx consume+mint (finding 2/3) +
+  // confirmation-gated dispatch (finding B) close the double-submit AND dispatch double-mint.
+  await getTaskQuestionWriteSem(row.taskId).run(async () => {
+    // finding 2 — re-read the round's CURRENT answers_json + scopes UNDER the lock (a concurrent seal
+    // committed before we acquired B is now visible) and MERGE against them, so a sealed/locked answer
+    // is never clobbered by this submit's stale whole-round value (P2-2). B is held across the whole
+    // callback (incl. these awaits) so no other writer interleaves between the read and the tx.
+    const cur = (
       await args.db
-        .select()
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, row.sourceQuestionerNodeRunId))
+        .select({
+          answersJson: crossClarifySessions.answersJson,
+          questionScopesJson: crossClarifySessions.questionScopesJson,
+        })
+        .from(crossClarifySessions)
+        .where(eq(crossClarifySessions.id, row.id))
         .limit(1)
     )[0]
-    if (lastRun === undefined) {
-      throw new NotFoundError(
-        'cross-clarify-questioner-run-not-found',
-        `questioner node_run ${row.sourceQuestionerNodeRunId} not found`,
-      )
+    // RFC-128 §7 per-question merge-write + P2-2: a locked (already-sealed) question keeps its sealed
+    // answer instead of being overwritten by the posted whole-round value. No prior seal ⇒ lockedIds
+    // empty ⇒ merge == overwrite (golden-lock).
+    const lockedIds = await loadSealedQuestionIds(args.db, args.crossClarifyNodeRunId)
+    sealedAnswers = mergeSealedAnswers(
+      parseAnswersArray(cur?.answersJson ?? null),
+      sealedSubset,
+      lockedIds,
+    )
+    // RFC-128 P2-3 / P2-3b — MERGE scopes with the round's CURRENT stored scopes; a LOCKED question's
+    // scope is sealed too (keep stored, ignore incoming) so a stale tab can't re-route a sealed
+    // questioner-scope answer back to designer. Empty ⇒ null (golden-lock).
+    const existingScopes = parseQuestionScopesJson(cur?.questionScopesJson ?? null)
+    const mergedScopes: Record<string, ClarifyQuestionScope> = { ...(existingScopes ?? {}) }
+    for (const [qid, scope] of Object.entries(validatedScopes ?? {})) {
+      if (!lockedIds.has(qid)) mergedScopes[qid] = scope
     }
-    questionerHome = { nodeId: lastRun.nodeId, iteration: lastRun.iteration }
-    questionerRerunValues = buildMintNodeRunValues({
-      taskId: row.taskId,
-      nodeId: lastRun.nodeId,
-      status: 'pending',
-      cause: 'cross-clarify-questioner-rerun',
-      iteration: lastRun.iteration,
-      inheritFrom: lastRun,
-      overrides: { startedAt: null },
-    })
-  }
-
-  // RFC-128 P5-BC §5.2.14 — atomic {claim → recheck → (cascade) reconcile+consume+questioner-mint →
-  // flip}. The cross flip stays committed here so peers + the questioner park read this session
-  // resolved (unchanged peer-aggregation invariant, comment above). The questioner cascade MINT is in
-  // the tx (finding 2); only the async designer/deferred/multi-source readiness stay AFTER the tx
-  // (they cannot + need not go in a sync tx). session CAS (finding 1) + in-tx consume+mint (finding
-  // 2/3) + confirmation-gated dispatch (finding B) close the double-submit AND dispatch double-mint.
-  //
-  // §5.2.14 final-gate (user-authorized): hold the per-task QUESTION-WRITE lock (B) across this tx so
-  // the cross submit serializes against dispatchTaskQuestions symmetrically with the self path. B
-  // only (cross submit has NO worktree rollback → no worktree write lock A needed). Lock order:
-  // cross-submit takes B alone (no nesting) → no B→A → deadlock-free; B is short (sync tx).
-  await getTaskQuestionWriteSem(row.taskId).run(async () => {
+    effectiveScopes = Object.keys(mergedScopes).length > 0 ? mergedScopes : null
+    const questionScopesJson = effectiveScopes === null ? null : JSON.stringify(effectiveScopes)
+    const answersJson = JSON.stringify(sealedAnswers)
+    // RFC-058 T12 dual-write attribution — from the freshly-merged answers (RFC-099 freeze).
+    const attributionSet =
+      args.submittedByRole !== undefined
+        ? {
+            answeredBy,
+            ...(await buildFrozenAttributionSet(args.db, row.id, sealedAnswers, {
+              userId: answeredBy,
+              role: args.submittedByRole,
+            })),
+          }
+        : {}
+    // RFC-059 designer split (from the MERGED answers/scopes) — drives the questioner-cascade decision,
+    // the deferred-designer reconcile (finding 1) + the post-lock branch. effectiveScopes is used for
+    // BOTH persistence and routing so a prior-sealed questioner-scope question omitted from this
+    // request is not re-routed to designer.
+    designerSplit = extractDesignerScopedSubset(questions, sealedAnswers, effectiveScopes)
+    // This submit CASCADES the questioner (→ its entries superseded) iff a 'stop' finalize OR the
+    // RFC-059 all-questioner-scope fast path (0 designer-scoped questions). When a designer-scoped
+    // subset exists the questioner is NOT cascaded here (the designer/deferred path owns the round) so
+    // its entries are left to that path (RFC-059 unchanged).
+    const cascadesQuestioner = args.directive === 'stop' || designerSplit.questions.length === 0
+    // finding 1: the deferred-designer path (continue + a designer-scoped subset + a designer target +
+    // the task opted into deferred dispatch) MATERIALIZES its designer task_questions IN this tx (vs.
+    // the old post-lock reconcileTaskQuestionsForRound) so the designer rows + the answered flip commit
+    // atomically — a concurrent dispatch / scheduler park never sees the answered round row-less.
+    const isDeferredDesignerPath =
+      args.directive === 'continue' &&
+      designerSplit.questions.length > 0 &&
+      row.targetDesignerNodeId !== null &&
+      taskRow.deferredQuestionDispatch
+    // finding 2 — compute the questioner cascade rerun VALUES now (async read of the questioner run) so
+    // the INSERT runs inside the tx (atomic with the flip → visible to a concurrent dispatch's in-
+    // flight / immediate-ledger gate → no post-tx double-mint window). Only the SYNC insert is in the
+    // tx; the multi-source designer readiness / designer rerun stay async after (finding 3).
+    let questionerRerunValues: ReturnType<typeof buildMintNodeRunValues> | null = null
+    // (home node + iteration of the questioner rerun — typed-number, for the in-tx reciprocal check).
+    let questionerHome: { nodeId: string; iteration: number } | null = null
+    if (cascadesQuestioner) {
+      const lastRun = (
+        await args.db
+          .select()
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, row.sourceQuestionerNodeRunId))
+          .limit(1)
+      )[0]
+      if (lastRun === undefined) {
+        throw new NotFoundError(
+          'cross-clarify-questioner-run-not-found',
+          `questioner node_run ${row.sourceQuestionerNodeRunId} not found`,
+        )
+      }
+      questionerHome = { nodeId: lastRun.nodeId, iteration: lastRun.iteration }
+      questionerRerunValues = buildMintNodeRunValues({
+        taskId: row.taskId,
+        nodeId: lastRun.nodeId,
+        status: 'pending',
+        cause: 'cross-clarify-questioner-rerun',
+        iteration: lastRun.iteration,
+        inheritFrom: lastRun,
+        overrides: { startedAt: null },
+      })
+    }
     dbTxSync(args.db, (tx) => {
       // finding 1 (concurrent double-submit): atomically claim the session. The loser sees the
       // winner's committed 'answered' → reject (no second flip, no second cascade).
@@ -714,6 +713,34 @@ export async function submitCrossClarifyAnswers(
             .run()
         }
       }
+      // finding 1 (deferred designer) — when this submit records a designer-scoped continuation on a
+      // deferred-dispatch task, MATERIALIZE the round's task_questions (incl. the undispatched designer
+      // rows the scheduler park + batch dispatch key off) IN this tx, atomic with the answered flip.
+      // Mutually exclusive with the cascade branch above (cascadesQuestioner is false on this path).
+      // Idempotent (reconcileRoundEntriesTx's onConflictDoUpdate never touches `confirmation`). Replaces
+      // the old post-lock reconcileTaskQuestionsForRound, which left the designer rows + the flip in
+      // separate transactions → a concurrent dispatch / scheduler park could observe the round answered
+      // with no designer rows.
+      if (isDeferredDesignerPath && roundRow !== undefined) {
+        reconcileRoundEntriesTx(tx, {
+          ...roundRow,
+          status: 'answered',
+          answersJson,
+          directive: args.directive,
+          questionScopesJson,
+        })
+      }
+      // RFC-076 T0-extend note: unlike submitClarifyAnswers, this session → answered
+      // flip CANNOT be deferred past the (now in-tx) questioner cascade mint + the async designer
+      // trigger below — the
+      // multi-source readiness check (extractDesignerScopedSubset + peer aggregation, see the
+      // `continue` branch) requires THIS session to read as resolved so a peer's submit sees it, and the
+      // asking questioner's park keys off this same status (deriveFrontier.askingRunIds). A concurrent
+      // runScope tick landing between this committed flip and an async downstream could briefly judge the
+      // questioner complete, but that is self-correcting (the questioner rerun re-mints as a fresher run
+      // → stale downstream re-dispatches, RFC-074 provenance) — a wasted re-run, never a wrong final
+      // state. So the flip is committed here (in-tx, under lock B) and we keep peer-aggregation
+      // correctness.
       // flip cross_clarify_session → answered.
       tx.update(crossClarifySessions)
         .set({
@@ -794,7 +821,7 @@ export async function submitCrossClarifyAnswers(
   // > 0 will trigger the designer when they submit (their readiness check
   // aggregates all already-resolved peers including this one). Letting the
   // questioner cascade now means the user doesn't wait for peers.
-  const designerSplit = extractDesignerScopedSubset(questions, sealedAnswers, effectiveScopes)
+  // (designerSplit was computed UNDER lock B above, from the merged answers — finding 2.)
   if (designerSplit.questions.length === 0) {
     // §5.2.14 finding 2: questioner rerun already minted IN the tx above (atomic). Reuse the id.
     const questionerNodeRunId = questionerCascadeRerunId!
@@ -816,11 +843,7 @@ export async function submitCrossClarifyAnswers(
 
   // Multi-source aggregation: only fire when every sibling cross-clarify
   // pointing at this designer (within the same loop_iter on the questioner
-  // side; design.md §5.2) is resolved.
-  const taskRow = (await args.db.select().from(tasks).where(eq(tasks.id, row.taskId)).limit(1))[0]
-  if (taskRow === undefined) {
-    throw new NotFoundError('task-not-found', `task ${row.taskId} not found`)
-  }
+  // side; design.md §5.2) is resolved. (taskRow was loaded before lock B — finding 1.)
 
   // RFC-120 T9 (model A) — deferred question dispatch. When the task opted in,
   // a designer-scoped answer is recorded above (status='answered' + node_run
@@ -832,10 +855,10 @@ export async function submitCrossClarifyAnswers(
   // mints the rerun. Flag false → this whole block is skipped and the path
   // below is byte-for-byte the immediate-dispatch behavior (golden-lock).
   if (taskRow.deferredQuestionDispatch) {
-    const roundRow = (
-      await args.db.select().from(clarifyRounds).where(eq(clarifyRounds.id, row.id)).limit(1)
-    )[0]
-    if (roundRow !== undefined) reconcileTaskQuestionsForRound(args.db, roundRow)
+    // finding 1: the round's designer task_questions were already MATERIALIZED inside the B-protected
+    // flip tx above (reconcileRoundEntriesTx on the answered round, gated on isDeferredDesignerPath ==
+    // this exact branch) — atomic with the flip, so there is NO post-lock reconcile here (it would be a
+    // separate tx, re-opening the non-atomic window). Just broadcast + return the deferred outcome.
     broadcastCrossClarifyAnswered(row.taskId, sessionAfter)
     return {
       session: sessionAfter,

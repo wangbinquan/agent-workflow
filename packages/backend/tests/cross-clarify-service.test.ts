@@ -1057,6 +1057,53 @@ describe('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', () => {
     expect(reruns.length).toBe(1)
   })
 
+  // §5.2.14 final-gate (2nd round) finding 1 (regression ①): a deferred-DESIGNER continuation (a
+  // designer-scope question on a deferred task) MATERIALIZES the round's designer task_questions IN the
+  // same B-protected tx as the answered flip — so after the submit returns, the answered session AND
+  // the undispatched designer row are BOTH committed (atomic; a concurrent dispatch / scheduler park
+  // never sees the answered round row-less). Was a post-lock reconcile (separate tx) → non-atomic window.
+  test('finding 1 — deferred designer continuation materializes the designer entry atomically with the flip', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { taskId } = await seedTask(db, { deferred: true })
+    const qRunId = await seedQuestionerRun(db, taskId)
+    const { crossClarifyNodeRunId } = await createCrossClarifySession({
+      db,
+      taskId,
+      crossClarifyNodeId: 'cross1',
+      sourceQuestionerNodeId: 'questioner',
+      sourceQuestionerNodeRunId: qRunId,
+      targetDesignerNodeId: 'designer',
+      loopIter: 0,
+      questions: [makeQ('q1', 't')],
+    })
+    const res = await submitCrossClarifyAnswers({
+      db,
+      crossClarifyNodeRunId,
+      answers: [makeAns('q1')],
+      directive: 'continue',
+      questionScopes: { q1: 'designer' },
+    })
+    // deferred designer outcome (NOT triggered immediately).
+    expect(res.outcome.kind).toBe('designer-deferred')
+    // the session is answered AND the designer task_question row exists (undispatched / staged) — both
+    // committed by the single flip tx.
+    const sess = (
+      await db
+        .select()
+        .from(crossClarifySessions)
+        .where(eq(crossClarifySessions.crossClarifyNodeRunId, crossClarifyNodeRunId))
+    )[0]
+    expect(sess?.status).toBe('answered')
+    const designerRows = (
+      await db
+        .select()
+        .from(taskQuestions)
+        .where(eq(taskQuestions.originNodeRunId, crossClarifyNodeRunId))
+    ).filter((e) => e.roleKind === 'designer' && e.questionId === 'q1')
+    expect(designerRows.length).toBe(1)
+    expect(designerRows[0]!.dispatchedAt).toBeNull() // deferred → staged, not dispatched
+  })
+
   // 2nd-gate finding 2 (reciprocal in-flight check): a concurrent deferred dispatch of another staged
   // entry to the same questioner home already committed a pending cross-clarify-questioner-rerun
   // BEFORE this cascade's tx. The dispatch-mode recheck only sees THIS round's entries, so the

@@ -1684,6 +1684,119 @@ describe('RFC-128 P5-BC §5.2.14 mixed-path write-flow', () => {
 })
 
 // ===========================================================================
+// §5.2.14 final-gate (2nd round) — critical-section boundary findings:
+//   ②(b) sealRoundQuestions must take lock B (was its own unlocked tx);
+//   ②(a) the answer MERGE (lockedIds) must run UNDER B, not from a pre-lock snapshot, else a
+//         concurrent seal committed after the pre-lock read is overwritten (locked-answer data loss);
+//   ①   the deferred-designer task_questions reconcile must be IN the cross flip tx (atomic), not a
+//        post-lock reconcileTaskQuestionsForRound (answered-but-row-less window vs dispatch/park).
+// ===========================================================================
+describe('RFC-128 §5.2.14 final-gate (2nd round) — seal/merge/deferred critical-section under lock B', () => {
+  function fnBody(src: string, signature: string): string {
+    const start = src.indexOf(signature)
+    expect(start).toBeGreaterThan(-1)
+    const after = src.indexOf('\nexport ', start + 1)
+    return src.slice(start, after === -1 ? undefined : after)
+  }
+
+  // ②(b) — sealRoundQuestions writes the round's answers_json + task_questions, so it MUST serialize on
+  // the SAME per-task question-write lock B as the quick submits. Source-lock: its dbTxSync runs inside
+  // getTaskQuestionWriteSem(...).run(runSealTx). (Behaviorally hard to force the unlocked race; the lock
+  // closes it structurally.)
+  test('②(b) — sealRoundQuestions runs its tx under getTaskQuestionWriteSem (lock B)', () => {
+    const src = readFileSync(resolve(import.meta.dir, '../src/services/clarifySeal.ts'), 'utf8')
+    const fn = fnBody(src, 'export async function sealRoundQuestions')
+    expect(fn.includes('getTaskQuestionWriteSem(')).toBe(true)
+    expect(fn.includes('.run(runSealTx)')).toBe(true)
+    expect(fn.includes('dbTxSync(args.db')).toBe(true)
+  })
+
+  // ②(a) self — the lockedIds read + the answer merge are INSIDE the B closure (after `.run(`), so a
+  // seal committed before B is observed and its locked answer is kept (not clobbered by a stale merge).
+  test('②(a) self — loadSealedQuestionIds + mergeSealedAnswers are INSIDE the B closure', () => {
+    const src = readFileSync(resolve(import.meta.dir, '../src/services/clarify.ts'), 'utf8')
+    const fn = fnBody(src, 'export async function submitClarifyAnswers')
+    const bLockIdx = fn.indexOf('getTaskQuestionWriteSem(taskRow.id).run')
+    expect(bLockIdx).toBeGreaterThan(0)
+    expect(fn.indexOf('loadSealedQuestionIds(')).toBeGreaterThan(bLockIdx)
+    expect(fn.indexOf('mergeSealedAnswers(')).toBeGreaterThan(bLockIdx)
+  })
+
+  // ②(a) cross — same: the merge runs under B (was computed from the pre-lock `row` snapshot).
+  test('②(a) cross — loadSealedQuestionIds + mergeSealedAnswers are INSIDE the B closure', () => {
+    const src = readFileSync(resolve(import.meta.dir, '../src/services/crossClarify.ts'), 'utf8')
+    const fn = fnBody(src, 'export async function submitCrossClarifyAnswers')
+    const bLockIdx = fn.indexOf('getTaskQuestionWriteSem(row.taskId).run')
+    expect(bLockIdx).toBeGreaterThan(0)
+    expect(fn.indexOf('loadSealedQuestionIds(')).toBeGreaterThan(bLockIdx)
+    expect(fn.indexOf('mergeSealedAnswers(')).toBeGreaterThan(bLockIdx)
+  })
+
+  // ① cross — the deferred-designer reconcile (reconcileRoundEntriesTx gated on isDeferredDesignerPath)
+  // is IN the flip tx, BEFORE the flip; the old post-lock reconcileTaskQuestionsForRound is GONE.
+  test('① cross — deferred designer reconcile is IN the flip tx; no post-lock reconcile', () => {
+    const src = readFileSync(resolve(import.meta.dir, '../src/services/crossClarify.ts'), 'utf8')
+    const fn = fnBody(src, 'export async function submitCrossClarifyAnswers')
+    const deferredIdx = fn.indexOf('isDeferredDesignerPath && roundRow')
+    const flipIdx = fn.indexOf('flip cross_clarify_session → answered')
+    expect(deferredIdx).toBeGreaterThan(0)
+    expect(flipIdx).toBeGreaterThan(deferredIdx) // reconcile BEFORE the flip (same dbTxSync)
+    expect(fn.includes('reconcileTaskQuestionsForRound(')).toBe(false) // no separate post-lock tx
+  })
+
+  // ②(a) behavioral — control-seal q1 = option A, then quick-finalize the WHOLE round posting a
+  // DIFFERENT q1 = option B (+ q2): the sealed q1 stays A (locked-answer preserved), proving the
+  // under-B merge keeps a committed seal. (Sequential is the deterministic shadow of the race the
+  // under-B move closes; the concurrent serialization is covered by the lock test above.)
+  test('②(a) behavioral — a control-sealed answer is NOT overwritten by a later quick whole-round finalize', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    const dRun = await seedRun(db, taskId, D, { status: 'awaiting_human', iteration: 0 })
+    const { clarifyNodeRunId } = await createClarifySession({
+      db,
+      taskId,
+      sourceAgentNodeId: D,
+      sourceAgentNodeRunId: dRun,
+      sourceShardKey: null,
+      clarifyNodeId: CL,
+      iterationIndex: 0,
+      questions: [mkQ('q1', 't'), mkQ('q2', 't')],
+    })
+    // control-seal q1 = option A.
+    await sealRoundQuestions({ db, originNodeRunId: clarifyNodeRunId, answers: [ans('q1')] })
+    // quick-finalize, posting a DIFFERENT q1 (option B) + q2 (option A).
+    await submitClarifyAnswers({
+      db,
+      clarifyNodeRunId,
+      answers: [
+        {
+          questionId: 'q1',
+          selectedOptionIndices: [1],
+          selectedOptionLabels: ['B'],
+          customText: '',
+        },
+        ans('q2'),
+      ],
+    })
+    const sess = (
+      await db
+        .select()
+        .from(clarifySessions)
+        .where(eq(clarifySessions.clarifyNodeRunId, clarifyNodeRunId))
+    )[0]
+    expect(sess?.status).toBe('answered')
+    const finalAnswers = JSON.parse(sess!.answersJson ?? '[]') as Array<{
+      questionId: string
+      selectedOptionLabels: string[]
+    }>
+    // sealed q1 = A preserved (NOT the quick's posted B); q2 = A from the quick.
+    expect(finalAnswers.find((a) => a.questionId === 'q1')?.selectedOptionLabels).toEqual(['A'])
+    expect(finalAnswers.find((a) => a.questionId === 'q2')?.selectedOptionLabels).toEqual(['A'])
+  })
+})
+
+// ===========================================================================
 // 自检 ① 续 + clean-path ② — consume suppression (deferred dispatched self/q whole-round NOT stamped)
 // ===========================================================================
 describe('RFC-128 P5-BC consume suppression (clean-path ②)', () => {

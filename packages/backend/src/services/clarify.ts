@@ -398,24 +398,15 @@ export async function submitClarifyAnswers(
 
   const questions = JSON.parse(sessionRow.questionsJson) as ClarifyQuestion[]
   const sealedSubset = sealAnswersServerSide(questions, args.answers)
-  // RFC-128 §7 — per-question merge-write. The whole-round quick channel seals every
-  // question of the round in one shot, so for a virgin round (answers_json NULL/empty)
-  // the existing set is empty and the merge returns `sealedSubset` byte-for-byte (golden-
-  // lock vs the old overwrite). Parse defensively: a non-array answers_json (legacy '{}'
-  // placeholders seeded in some fixtures) → [].
-  // RFC-128 P2-2 — protect already-sealed answers: any question pre-sealed via the
-  // per-question control channel is `locked`, so this finalize keeps its locked answer
-  // instead of overwriting it with the posted whole-round value. No prior seal ⇒
-  // lockedIds is empty ⇒ byte-for-byte the old behavior (golden-lock).
-  const lockedIds = await loadSealedQuestionIds(db, clarifyNodeRunId)
-  const sealedAnswers = mergeSealedAnswers(
-    parseAnswersArray(sessionRow.answersJson),
-    sealedSubset,
-    lockedIds,
-  )
-
   const answeredAt = now()
-  const answersJson = JSON.stringify(sealedAnswers)
+  // RFC-128 §7 per-question merge-write + §5.2.14 finding 2: lockedIds + the answer MERGE are computed
+  // INSIDE the question-write lock B below (re-reading the round's CURRENT answers_json + sealed set),
+  // NOT here — else a concurrent control-channel seal (sealRoundQuestions, now also under B) committing
+  // a locked answer after a pre-lock read would be OVERWRITTEN by this submit's stale whole-round
+  // answers_json (data loss, breaks the P2-2 locked-answer guarantee). `sealedAnswers` is hoisted for
+  // the post-lock sealedSession return; the merge result fills it under B. (Golden-lock: no prior seal
+  // ⇒ lockedIds empty ⇒ merge-into-current == overwrite, byte-for-byte the old behavior.)
+  let sealedAnswers: ClarifyAnswer[] = []
 
   // RFC-076 PR-0 (T0) + T0-extend — torn-read write-ordering. Resuming a clarify
   // is several writes for ONE logical event: (1) mint the source-agent rerun,
@@ -521,17 +512,6 @@ export async function submitClarifyAnswers(
   })
   const rerunNodeRunId = rerunValues.id
 
-  // RFC-058 T12 dual-write attribution — computed BEFORE the tx (async read), applied in the tx.
-  // RFC-099: when the route supplied the submitter's role, this freezes per-question attribution +
-  // clears the draft (D8).
-  const attributionSet =
-    args.submittedByRole !== undefined
-      ? await buildFrozenAttributionSet(db, sessionRow.id, sealedAnswers, {
-          userId: answeredBy,
-          role: args.submittedByRole,
-        })
-      : {}
-
   // RFC-058 dual-write: the clarify_round row mirrors this session (id == session id). Loaded for
   // the §5.2.14 finding-3 in-tx reconcile (materialize the round's self entries so a later lazy
   // reconcile can't recreate them OPEN + dispatchable on this superseded round).
@@ -565,7 +545,7 @@ export async function submitClarifyAnswers(
     getTaskQuestionWriteSem(taskRow.id).run(async () => {
       const claimRow = (
         await db
-          .select({ status: clarifySessions.status })
+          .select({ status: clarifySessions.status, answersJson: clarifySessions.answersJson })
           .from(clarifySessions)
           .where(eq(clarifySessions.id, sessionRow.id))
           .limit(1)
@@ -576,6 +556,25 @@ export async function submitClarifyAnswers(
           `clarify_session ${sessionRow.id} was answered concurrently (lost the submit claim before rollback)`,
         )
       }
+      // §5.2.14 finding 2: merge the answers UNDER the lock, from the round's CURRENT answers_json
+      // (claimRow, re-read just now) + the CURRENT sealed set — so a concurrent control-channel seal
+      // (also under B) is observed and its locked answer is preserved (P2-2), never overwritten by a
+      // stale pre-lock merge.
+      const lockedIds = await loadSealedQuestionIds(db, clarifyNodeRunId)
+      sealedAnswers = mergeSealedAnswers(
+        parseAnswersArray(claimRow.answersJson),
+        sealedSubset,
+        lockedIds,
+      )
+      const answersJson = JSON.stringify(sealedAnswers)
+      // RFC-058 T12 dual-write attribution (under the lock, from the freshly-merged answers).
+      const attributionSet =
+        args.submittedByRole !== undefined
+          ? await buildFrozenAttributionSet(db, sessionRow.id, sealedAnswers, {
+              userId: answeredBy,
+              role: args.submittedByRole,
+            })
+          : {}
       // §5.2.14 PRE-ROLLBACK guards (under the question-write lock, BEFORE the destructive rollback) —
       // mirror the in-tx rejection checks so a conflict rejects WITHOUT first resetting the worktree
       // (which would clobber a concurrent dispatched rerun). A dispatch that won during the A-wait is
