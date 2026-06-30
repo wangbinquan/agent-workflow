@@ -328,20 +328,33 @@ export async function dispatchTaskQuestions(
   //    dispatched) designer entries of each TOUCHED origin, not just the requested subset
   //    (so dispatching q1→X of a round whose q2→default-designer is rejected, not silently
   //    split). Fail fast — no partial dispatch.
-  const touchedOrigins = new Set(requested.map((e) => e.originNodeRunId))
-  const allOpen = await db
-    .select()
-    .from(taskQuestions)
-    .where(
-      and(
-        eq(taskQuestions.taskId, taskId),
-        eq(taskQuestions.roleKind, 'designer'),
-        isNull(taskQuestions.dispatchedAt),
-      ),
-    )
+  //
+  //    RFC-128 P5-BC (Codex impl-gate, F4 mixed-role scoping): this is a DESIGNER-only constraint
+  //    (the designer session is consumed as a unit). Scope it to the origins of the requested
+  //    DESIGNER entries — NOT all requested origins. After the designer-only filter was removed
+  //    from `requested`, a pure self/questioner dispatch from a cross round would otherwise pull in
+  //    that round's split/undispatched DESIGNER entries and reject — even though the questioner
+  //    rerun neither consumes nor mints them. A pure self/questioner dispatch carries no designer
+  //    multi-target constraint.
+  const touchedDesignerOrigins = new Set(
+    requested.filter((e) => e.roleKind === 'designer').map((e) => e.originNodeRunId),
+  )
+  const allOpen =
+    touchedDesignerOrigins.size === 0
+      ? []
+      : await db
+          .select()
+          .from(taskQuestions)
+          .where(
+            and(
+              eq(taskQuestions.taskId, taskId),
+              eq(taskQuestions.roleKind, 'designer'),
+              isNull(taskQuestions.dispatchedAt),
+            ),
+          )
   const openByOrigin = new Map<string, TaskQuestionRow[]>()
   for (const e of allOpen) {
-    if (!touchedOrigins.has(e.originNodeRunId)) continue
+    if (!touchedDesignerOrigins.has(e.originNodeRunId)) continue
     const list = openByOrigin.get(e.originNodeRunId) ?? []
     list.push(e)
     openByOrigin.set(e.originNodeRunId, list)
@@ -817,6 +830,26 @@ function resolveNodeAgentName(def: WorkflowDefinition, nodeId: string): string |
  * unresolvable borrow (multi-borrow within a home — P2-1; or dual-ledger overlap — P2-2); the
  * scheduler converts it to a node-level failure.
  */
+/** RFC-128 P5-BC (Codex impl-gate, §5.2.3④ run-self) — a ledger's OPEN status + its borrow.
+ *  Distinguishes the THREE states the multi-ledger reject needs: CLOSED (no open rerun), OPEN
+ *  RUN-SELF (an open rerun that runs the home's OWN agent — no borrow), OPEN BORROWED (an open
+ *  rerun that borrows X). The early `string | null` shape conflated CLOSED with OPEN-RUN-SELF
+ *  (both null), so a run-self ledger went UNCOUNTED — a run-self ledger + another open ledger on
+ *  the same home escaped the reject (two separate pending reruns → duplicate execution). */
+interface LedgerResolution {
+  /** An open (unconsumed) pending/in-flight rerun exists for this ledger on (home, iteration). */
+  open: boolean
+  /** The borrowed agentName (null = run the home's OWN agent). Meaningful only when `open`. */
+  borrowAgentName: string | null
+}
+const CLOSED_LEDGER: LedgerResolution = { open: false, borrowAgentName: null }
+
+/** Human-readable ledger state for the conflict error (audit-only; no attribution). */
+function ledgerDesc(l: LedgerResolution): string {
+  if (!l.open) return '(none)'
+  return l.borrowAgentName !== null ? `→ ${l.borrowAgentName}` : 'open (run self)'
+}
+
 export async function resolveBorrowForNode(
   db: DbClient,
   taskId: string,
@@ -824,7 +857,40 @@ export async function resolveBorrowForNode(
   iteration: number,
   workflowDef: WorkflowDefinition,
 ): Promise<string | null> {
-  const immediate = await resolveImmediateBorrowForNode(db, taskId, nodeId, iteration, workflowDef)
+  // Hot-path gate: a multi-ledger conflict requires ≥1 DISPATCHED entry — the designer + the
+  // deferred-self/questioner ledgers are BOTH dispatched-only; the immediate ledger is the SOLE
+  // non-dispatched one. A task with NO dispatched entries (every non-deferred task — dispatch
+  // rejects them — and a deferred task pre-dispatch) can only have the immediate ledger open → no
+  // conflict possible → resolve it alone with its fast path (golden-lock: non-deferred reads
+  // nothing extra; open-detection of run-self is unnecessary because there is nothing to conflict
+  // with).
+  const hasDispatched =
+    (
+      await db
+        .select({ id: taskQuestions.id })
+        .from(taskQuestions)
+        .where(and(eq(taskQuestions.taskId, taskId), isNotNull(taskQuestions.dispatchedAt)))
+        .limit(1)
+    )[0] !== undefined
+  if (!hasDispatched) {
+    return (
+      await resolveImmediateBorrowForNode(db, taskId, nodeId, iteration, workflowDef, {
+        detectOpen: false,
+      })
+    ).borrowAgentName
+  }
+
+  // Dispatched entries exist → FULL open-detection on all three ledgers (counting OPEN RUN-SELF).
+  const immediate = await resolveImmediateBorrowForNode(
+    db,
+    taskId,
+    nodeId,
+    iteration,
+    workflowDef,
+    {
+      detectOpen: true,
+    },
+  )
   const designer = await resolveDesignerBorrowForNode(db, taskId, nodeId, iteration, workflowDef)
   // RFC-128 P5-BC (clean-path ④ / §5.2.12 F3): the THIRD ledger — control-channel DISPATCHED
   // self/questioner reruns (deferred per-question dispatch; dispatched_at + trigger_run_id
@@ -837,25 +903,25 @@ export async function resolveBorrowForNode(
     iteration,
     workflowDef,
   )
-  // P2-2 (Codex impl-gate, 2 rounds) + RFC-128 §5.2.12 F3 (collapse 推翻, dual→triple ledger):
-  // two reruns open on the SAME home+iteration across ANY two ledgers are SEPARATE pending
-  // node_runs with MUTUALLY-EXCLUSIVE causes (clarify-answer / cross-clarify-questioner-rerun
-  // [isClarifyRerun TRUE] vs cross-clarify-answer [FALSE]). runOneNode consumes/binds by NODE,
-  // not by ledger — the first run to fire binds, and the other pending row runs later as stale
-  // duplicate work (or orphans, per ULID order). So EVEN when two ledgers borrow the SAME agent
-  // the EXECUTION is ambiguous (duplicate work) AND a single node_run carries ONE rerun_cause
-  // that cannot serve two roles — reject any same-home multi-ledger overlap (the early-draft
-  // "same agent → collapse one rerun" is WRONG: cause is single-valued + exclusive). The user
-  // resolves one before the node reruns (dispatch serializes via single-cause gate + the
-  // in-flight gate). The two same-home borrows are serialized across batches, not collapsed.
-  const openLedgers = [immediate, designer, deferredSelfQ].filter((b): b is string => b !== null)
+  // P2-2 (Codex impl-gate, 2 rounds) + RFC-128 §5.2.12 F3 (collapse 推翻, dual→triple ledger) +
+  // Codex impl-gate run-self fix (§5.2.3④): two reruns OPEN on the SAME home+iteration across ANY
+  // two ledgers are SEPARATE pending node_runs with MUTUALLY-EXCLUSIVE causes (clarify-answer /
+  // cross-clarify-questioner-rerun [isClarifyRerun TRUE] vs cross-clarify-answer [FALSE]).
+  // runOneNode consumes/binds by NODE, not by ledger — the first run to fire binds, and the other
+  // pending row runs later as stale duplicate work (or orphans, per ULID order). So EVEN when two
+  // ledgers borrow the SAME agent — OR when one (or both) is OPEN RUN-SELF (no borrow) — the
+  // EXECUTION is ambiguous (duplicate work) AND a single node_run carries ONE rerun_cause that
+  // cannot serve two roles. Reject by counting OPEN ledgers (NOT non-null borrow agents — that
+  // early shape missed open run-self). The borrow returned is the single open ledger's (null =
+  // run self). The user serializes them (dispatch single-cause gate + the in-flight gate).
+  const openLedgers = [immediate, designer, deferredSelfQ].filter((l) => l.open)
   if (openLedgers.length > 1) {
     throw new ConflictError(
       'task-question-borrow-ledger-conflict',
-      `node '${nodeId}' (iter ${iteration}) has multiple open reassignment ledgers (self/questioner immediate → ${immediate ?? '(none)'}, dispatched designer → ${designer ?? '(none)'}, dispatched self/questioner → ${deferredSelfQ ?? '(none)'}); they are separate pending reruns with mutually-exclusive causes that would duplicate execution — resolve / serialize them before the node reruns.`,
+      `node '${nodeId}' (iter ${iteration}) has multiple open reassignment ledgers (self/questioner immediate ${ledgerDesc(immediate)}, dispatched designer ${ledgerDesc(designer)}, dispatched self/questioner ${ledgerDesc(deferredSelfQ)}); they are separate pending reruns with mutually-exclusive causes that would duplicate execution — resolve / serialize them before the node reruns.`,
     )
   }
-  return openLedgers[0] ?? null
+  return openLedgers[0]?.borrowAgentName ?? null
 }
 
 /**
@@ -874,9 +940,10 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
   nodeId: string,
   iteration: number,
   workflowDef: WorkflowDefinition,
-): Promise<string | null> {
+): Promise<LedgerResolution> {
   // Control-channel DISPATCHED self/questioner entries (dispatched_at set). Include no-override
-  // rows so a "borrow X + run self" mix on one home is DETECTED (P2-1), not first-picked.
+  // rows so a "borrow X + run self" mix on one home is DETECTED (P2-1), not first-picked, AND so
+  // an OPEN RUN-SELF dispatch is counted as an open ledger (Codex impl-gate run-self fix).
   const entries = await db
     .select()
     .from(taskQuestions)
@@ -888,9 +955,9 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
       ),
     )
   const homeEntries = entries.filter((e) => homeTarget(e) === nodeId)
-  if (homeEntries.length === 0) return null
-  // Golden-lock fast path: no real borrow on this home → no rounds/runs read needed.
-  if (!homeEntries.some((e) => isBorrowHomeFor(e, nodeId))) return null
+  if (homeEntries.length === 0) return CLOSED_LEDGER
+  // NB: NO "no borrow → return early" fast path — we must read to detect an OPEN RUN-SELF ledger
+  // (the early fast path returned null for run-self → it went uncounted in the multi-ledger reject).
 
   const rounds = await db
     .select()
@@ -932,7 +999,7 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
     if (askingRun === undefined || askingRun.iteration !== iteration) return false
     return !isDispatchedEntryConsumed(e, runs, lineageViews)
   })
-  if (open.length === 0) return null
+  if (open.length === 0) return CLOSED_LEDGER
 
   const borrows = new Set(
     open.map((e) => (isBorrowHomeFor(e, nodeId) ? e.overrideTargetNodeId : null)),
@@ -949,15 +1016,25 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
         )}) in one continuation; a single rerun runs one agent — align them to one handler.`,
     )
   }
+  // Ledger is OPEN (≥1 unconsumed dispatched entry). Borrow = the single named agent, or null
+  // (run self) — both are an OPEN ledger that the multi-ledger reject must count.
   const borrowNode = [...borrows][0] ?? null
-  if (borrowNode === null) return null
-  return resolveNodeAgentName(workflowDef, borrowNode)
+  return {
+    open: true,
+    borrowAgentName: borrowNode === null ? null : resolveNodeAgentName(workflowDef, borrowNode),
+  }
 }
 
 /**
- * RFC-127 designer borrow (deferred dispatch ledger) — the shipped path, unchanged except for
- * extraction. Consumption is dispatched_at + trigger_run_id (isDispatchedEntryConsumed); keyed on
- * task_questions.loop_iter (= round.loop_iter, the real wrapper-loop index for cross rounds).
+ * RFC-127 designer borrow (deferred dispatch ledger). Consumption is dispatched_at +
+ * trigger_run_id (isDispatchedEntryConsumed); keyed on task_questions.loop_iter (= round.loop_iter,
+ * the real wrapper-loop index for cross rounds).
+ *
+ * Codex impl-gate run-self fix (§5.2.3④): selects ALL dispatched designer home entries — NOT only
+ * `override IS NOT NULL` ones. The early override-only filter MISSED a run-self designer dispatch
+ * (no override) → it was reported CLOSED even when it was an open pending rerun, so a run-self
+ * designer + another open ledger on one home escaped the multi-ledger reject. Now an OPEN run-self
+ * designer dispatch is reported `{ open: true, borrowAgentName: null }`.
  */
 async function resolveDesignerBorrowForNode(
   db: DbClient,
@@ -965,7 +1042,7 @@ async function resolveDesignerBorrowForNode(
   nodeId: string,
   iteration: number,
   workflowDef: WorkflowDefinition,
-): Promise<string | null> {
+): Promise<LedgerResolution> {
   const entries = await db
     .select()
     .from(taskQuestions)
@@ -975,11 +1052,12 @@ async function resolveDesignerBorrowForNode(
         eq(taskQuestions.roleKind, 'designer'),
         eq(taskQuestions.loopIter, iteration),
         isNotNull(taskQuestions.dispatchedAt),
-        isNotNull(taskQuestions.overrideTargetNodeId),
       ),
     )
-  const candidates = entries.filter((e) => isBorrowHomeFor(e, nodeId))
-  if (candidates.length === 0) return null
+  // HOME match (default ?? override == nodeId) — includes run-self designer dispatches (override
+  // NULL), so an open run-self designer ledger is counted.
+  const candidates = entries.filter((e) => homeTarget(e) === nodeId)
+  if (candidates.length === 0) return CLOSED_LEDGER
 
   const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   const outputRunIds = await runIdsWithOutput(
@@ -997,12 +1075,20 @@ async function resolveDesignerBorrowForNode(
     hasOutput: outputRunIds.has(r.id),
     parentNodeRunId: r.parentNodeRunId,
   }))
-  const open = candidates
+  const openCandidates = candidates
     .slice()
     .sort((a, b) => a.id.localeCompare(b.id))
-    .find((e) => !isDispatchedEntryConsumed(e, runs, lineageViews))
-  if (open?.overrideTargetNodeId === undefined || open.overrideTargetNodeId === null) return null
-  return resolveNodeAgentName(workflowDef, open.overrideTargetNodeId)
+    .filter((e) => !isDispatchedEntryConsumed(e, runs, lineageViews))
+  if (openCandidates.length === 0) return CLOSED_LEDGER
+  // The dispatch per-home single-borrow gate (dispatchTaskQuestions step 4a) ensures the open
+  // designer entries on a home agree on ONE handler (one rerun runs one agent). Pick the borrowed
+  // one if any (else all run-self → null). The ledger is OPEN either way.
+  const borrowEntry = openCandidates.find((e) => isBorrowHomeFor(e, nodeId))
+  const borrowNode = borrowEntry?.overrideTargetNodeId ?? null
+  return {
+    open: true,
+    borrowAgentName: borrowNode === null ? null : resolveNodeAgentName(workflowDef, borrowNode),
+  }
 }
 
 /**
@@ -1033,7 +1119,12 @@ async function resolveImmediateBorrowForNode(
   nodeId: string,
   iteration: number,
   workflowDef: WorkflowDefinition,
-): Promise<string | null> {
+  // RFC-128 P5-BC (Codex impl-gate run-self fix): when `detectOpen` is true the resolver must do
+  // the read even for a no-borrow home, so an OPEN RUN-SELF immediate ledger is counted by the
+  // multi-ledger reject. When false (the no-dispatched-entries hot path, where nothing can
+  // conflict) it keeps the golden-lock fast path (no read for a no-borrow home).
+  opts: { detectOpen: boolean },
+): Promise<LedgerResolution> {
   // ALL self/questioner entries — include no-override ("run self") rows so a "borrow X + run
   // self" mix within one home is DETECTED (P2-1), not silently first-picked. No loop_iter filter
   // here (self rows project 0); iteration is matched via the round's asking run below (P2-3).
@@ -1053,9 +1144,10 @@ async function resolveImmediateBorrowForNode(
     )
   // home = default ?? override (self: the asking node P; questioner: the questioner node).
   const homeEntries = entries.filter((e) => homeTarget(e) === nodeId)
-  if (homeEntries.length === 0) return null
-  // Golden-lock fast path: no real borrow on this home → no rounds/runs read needed.
-  if (!homeEntries.some((e) => isBorrowHomeFor(e, nodeId))) return null
+  if (homeEntries.length === 0) return CLOSED_LEDGER
+  // Golden-lock fast path (only when open-detection isn't needed): no real borrow on this home →
+  // no rounds/runs read. With `detectOpen` we MUST read to count an open run-self ledger.
+  if (!opts.detectOpen && !homeEntries.some((e) => isBorrowHomeFor(e, nodeId))) return CLOSED_LEDGER
 
   const rounds = await db
     .select()
@@ -1085,7 +1177,7 @@ async function resolveImmediateBorrowForNode(
     if (askingRun === undefined || askingRun.iteration !== iteration) return false
     return !isRoundEntryConsumed(e, round, runs, outputRunIds)
   })
-  if (open.length === 0) return null
+  if (open.length === 0) return CLOSED_LEDGER
 
   // P2-1 single-borrow gate: each open entry's decision is its borrow node (or null = run self).
   // >1 distinct (incl. {X, self}) ⇒ ambiguous for the single continuation rerun ⇒ reject.
@@ -1104,9 +1196,13 @@ async function resolveImmediateBorrowForNode(
         )}) in one continuation; a single rerun runs one agent — align them to one handler.`,
     )
   }
+  // Ledger is OPEN (≥1 unconsumed home entry). Borrow = the single named agent, or null (run
+  // self) — an OPEN RUN-SELF ledger the multi-ledger reject must still count.
   const borrowNode = [...borrows][0] ?? null
-  if (borrowNode === null) return null
-  return resolveNodeAgentName(workflowDef, borrowNode)
+  return {
+    open: true,
+    borrowAgentName: borrowNode === null ? null : resolveNodeAgentName(workflowDef, borrowNode),
+  }
 }
 
 /** RFC-127 借壳: is a self/questioner clarify-round entry CONSUMED? = its role's RFC-070

@@ -548,13 +548,33 @@ describe('RFC-127 borrow — Codex P2 regressions', () => {
     )
   })
 
-  test('P2-2: designer ledger ALONE on a node (no self override) still resolves (no false conflict)', async () => {
+  // RFC-128 P5-BC (Codex impl-gate run-self fix, §5.2.3④): an OPEN RUN-SELF immediate ledger (a
+  // self round answered-unconsumed with NO override → a pending self continuation that runs P's
+  // OWN agent) + an open designer borrow on the SAME home P are STILL two separate pending reruns
+  // with mutually-exclusive causes → duplicate execution → REJECT. The earlier code treated
+  // run-self as "not a ledger" (returned the designer's agent), which would mis-run the self
+  // continuation under the designer's borrowed agent. (Was: "designer ledger ALONE ... resolves";
+  // that asserted the latent bug. Normal designer dispatch — no self round on the home — is
+  // unaffected: the immediate ledger is then genuinely CLOSED, so the designer resolves alone.)
+  test('P2-2: open RUN-SELF immediate ledger + same-home designer borrow → rejected (run-self counts)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seedTask(db, 'p2-2b', { deferred: true })
-    // Designer ledger on P, plus a self round on P with NO override (golden-lock immediate=null).
+    // Open run-self immediate ledger on P (answered self round, NO override) ...
     await seedSelfRoundMulti(db, 'p2-2b', { questions: [{ qid: 'q1', override: null }] })
+    // ... AND an open designer borrow on the SAME home P → two open ledgers → reject.
     await seedDispatchedDesignerEntry(db, 'p2-2b', P, D)
-    expect(await resolveBorrowForNode(db, 'p2-2b', P, 0, liveDef())).toBe(D_AGENT)
+    await expect(resolveBorrowForNode(db, 'p2-2b', P, 0, liveDef())).rejects.toThrow(
+      /duplicate execution/i,
+    )
+  })
+
+  // Companion golden-lock: a designer borrow on a home with NO self round (immediate ledger
+  // genuinely CLOSED) resolves alone — the run-self fix does NOT over-reject normal dispatch.
+  test('P2-2: designer borrow on a home with NO self round → resolves alone (immediate closed)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedTask(db, 'p2-2c', { deferred: true })
+    await seedDispatchedDesignerEntry(db, 'p2-2c', D, X) // designer home D, borrow X; no self on D
+    expect(await resolveBorrowForNode(db, 'p2-2c', D, 0, liveDef())).toBe(X_AGENT)
   })
 })
 

@@ -863,6 +863,55 @@ describe('RFC-128 P5-BC dispatch contracts', () => {
     expect(res.dispatchedEntryIds).toContain(dEid)
     expect(res.deferred.length).toBe(0)
   })
+
+  test('(c2) per-origin designer split does NOT block a pure questioner dispatch (Codex impl-gate F4 scoping)', async () => {
+    // Codex impl-gate F4 scoping fix: after the designer-only filter was removed from `requested`,
+    // a pure QUESTIONER dispatch from a cross round must NOT be blocked by that round's SPLIT
+    // (multi-target) undispatched DESIGNER entries — the questioner rerun neither consumes nor
+    // mints them. The per-origin designer single-target check is scoped to the origins of the
+    // requested DESIGNER entries (none here), so a pure self/questioner dispatch carries no
+    // designer multi-target constraint.
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    await seedRun(db, taskId, Q, { status: 'done', iteration: 0 })
+    const cross = await seedAnsweredRound(db, taskId, {
+      kind: 'cross',
+      askingNodeId: Q,
+      questions: [mkQ('q1', 't'), mkQ('q2', 't')],
+    })
+    // questioner entry (home Q) — the one we dispatch.
+    const qEid = await insertEntry(db, taskId, {
+      originNodeRunId: cross.intermediaryNodeRunId,
+      questionId: 'q1',
+      roleKind: 'questioner',
+      defaultTargetNodeId: Q,
+      sealed: true,
+    })
+    // SPLIT designer entries on the SAME round, undispatched: q1 → default D, q2 → override X (two
+    // effective targets D/X). Under the old (all-origin) scope these would reject the questioner.
+    await insertEntry(db, taskId, {
+      originNodeRunId: cross.intermediaryNodeRunId,
+      questionId: 'q1',
+      roleKind: 'designer',
+      defaultTargetNodeId: D,
+      sealed: true,
+    })
+    await insertEntry(db, taskId, {
+      originNodeRunId: cross.intermediaryNodeRunId,
+      questionId: 'q2',
+      roleKind: 'designer',
+      defaultTargetNodeId: D,
+      overrideTargetNodeId: X,
+      sealed: true,
+    })
+    // Pure questioner dispatch → succeeds (NOT blocked by the split designer entries).
+    const res = await dispatchTaskQuestions(db, taskId, [qEid], actor)
+    expect(res.dispatchedEntryIds).toContain(qEid)
+    expect((await runRow(db, res.reruns[0]!.nodeRunId))[0]?.rerunCause).toBe(
+      'cross-clarify-questioner-rerun',
+    )
+  })
 })
 
 // ===========================================================================
@@ -932,6 +981,54 @@ describe('RFC-128 P5-BC three-ledger borrow (collapse 推翻)', () => {
       dispatchedAt: Date.now(),
     })
     expect(await resolveBorrowForNode(db, taskId, P, 0, liveDef())).toBe('borrow-x')
+  })
+
+  test('deferred-selfQ RUN-SELF (no override) + same-home designer borrow → reject (run-self counts, Codex impl-gate)', async () => {
+    // Codex impl-gate run-self fix (§5.2.3④): a DISPATCHED self entry with NO override (run-self —
+    // reruns the home's OWN agent) is still an OPEN ledger. On the same home D as an open designer
+    // borrow, the two are separate pending reruns (clarify-answer vs cross-clarify-answer) →
+    // duplicate execution → reject. The earlier code's null-for-run-self made this escape.
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    // Dispatched self entry on home D, NO override (run-self), sealed → deferred-selfQ run-self ledger.
+    const self = await seedAnsweredRound(db, taskId, {
+      kind: 'self',
+      askingNodeId: D,
+      questions: [mkQ('sq', 't')],
+    })
+    await insertEntry(db, taskId, {
+      originNodeRunId: self.intermediaryNodeRunId,
+      questionId: 'sq',
+      roleKind: 'self',
+      defaultTargetNodeId: D,
+      overrideTargetNodeId: null, // run-self
+      sealed: true,
+      dispatchedAt: Date.now(),
+    })
+    // Dispatched designer entry on the SAME home D, borrow X → designer borrow ledger.
+    const cross = await seedAnsweredRound(db, taskId, {
+      kind: 'cross',
+      askingNodeId: Q,
+      questions: [mkQ('dq', 't')],
+    })
+    await insertEntry(db, taskId, {
+      originNodeRunId: cross.intermediaryNodeRunId,
+      questionId: 'dq',
+      roleKind: 'designer',
+      defaultTargetNodeId: D,
+      overrideTargetNodeId: X,
+      sealed: true,
+      dispatchedAt: Date.now(),
+    })
+    let caught: unknown
+    try {
+      await resolveBorrowForNode(db, taskId, D, 0, liveDef())
+    } catch (e) {
+      caught = e
+    }
+    expect(caught).toBeInstanceOf(ConflictError)
+    expect((caught as ConflictError).code).toBe('task-question-borrow-ledger-conflict')
   })
 })
 
