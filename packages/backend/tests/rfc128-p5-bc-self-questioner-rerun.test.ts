@@ -1031,6 +1031,37 @@ describe('RFC-128 P5-BC three-ledger borrow (collapse 推翻)', () => {
     expect(caught).toBeInstanceOf(ConflictError)
     expect((caught as ConflictError).code).toBe('task-question-borrow-ledger-conflict')
   })
+
+  test('Codex round-5 finding 1: a CONTROL-channel dispatched self + its pending rerun is NOT a false ledger-conflict', async () => {
+    // A fully-sealed control-channel self round, DISPATCHED (its continuation pending), is the
+    // DEFERRED self/questioner ledger — NOT the immediate ledger. The oracle must EXCLUDE it from
+    // the immediate ledger (it has a sealed self task_question), so resolving the legitimate
+    // control-channel rerun is a single open ledger (deferred), not a multi-ledger conflict. Before
+    // the round-5 fix the truth-source oracle counted it as BOTH immediate (round answered + pending
+    // role-cause run) AND deferred → false 'task-question-borrow-ledger-conflict'.
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    const self = await seedAnsweredRound(db, taskId, {
+      kind: 'self',
+      askingNodeId: P,
+      questions: [mkQ('sq', 't')],
+    })
+    // Control-channel: SEALED + DISPATCHED, run-self (no override) → deferred self ledger.
+    await insertEntry(db, taskId, {
+      originNodeRunId: self.intermediaryNodeRunId,
+      questionId: 'sq',
+      roleKind: 'self',
+      defaultTargetNodeId: P,
+      sealed: true,
+      dispatchedAt: Date.now(),
+    })
+    // The dispatched continuation rerun (same role-cause as a quick-channel continuation).
+    await seedRun(db, taskId, P, { status: 'pending', iteration: 0, rerunCause: 'clarify-answer' })
+    // Resolves WITHOUT throwing — control-channel round excluded from the immediate ledger → only
+    // the deferred ledger is open (run-self → null), no false conflict.
+    expect(await resolveBorrowForNode(db, taskId, P, 0, liveDef())).toBeNull()
+  })
 })
 
 // ===========================================================================
@@ -1088,6 +1119,52 @@ describe('RFC-128 P5-BC dispatch-time immediate-ledger gate (no double-mint)', (
     expect(caught).toBeInstanceOf(ConflictError)
     expect((caught as ConflictError).code).toBe('task-question-node-dispatch-in-flight')
     // No dispatched_at stamp on the designer entry; NO second pending rerun minted (no double-mint).
+    expect((await entryRow(db, desEid))[0]?.dispatchedAt).toBeNull()
+    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
+      runsBefore,
+    )
+  })
+
+  test('Codex round-5 finding 2: MINT-FIRST window (continuation minted, round still awaiting) blocks a same-home designer dispatch', async () => {
+    // submitClarifyAnswers mints the continuation BEFORE flipping the round 'answered'. In that
+    // window a concurrent dispatch must STILL see the open immediate ledger (awaiting round + a
+    // pending continuation), or it double-mints. The oracle has no status==='answered' requirement,
+    // so it catches this state.
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    await seedRun(db, taskId, D, { status: 'done', iteration: 0 })
+    // Mint-first state: a self round on D STILL awaiting_human, but the continuation is already
+    // minted (pending). NO sealed entry (quick channel) → not control-channel.
+    await seedAnsweredRound(db, taskId, {
+      kind: 'self',
+      askingNodeId: D,
+      questions: [mkQ('sq', 't')],
+      status: 'awaiting_human',
+    })
+    await seedRun(db, taskId, D, { status: 'pending', iteration: 0, rerunCause: 'clarify-answer' })
+    // A sealed, UNDISPATCHED designer entry whose HOME is the SAME node D.
+    const cross = await seedAnsweredRound(db, taskId, {
+      kind: 'cross',
+      askingNodeId: Q,
+      questions: [mkQ('dq', 't')],
+    })
+    const desEid = await insertEntry(db, taskId, {
+      originNodeRunId: cross.intermediaryNodeRunId,
+      questionId: 'dq',
+      roleKind: 'designer',
+      defaultTargetNodeId: D,
+      sealed: true,
+    })
+    const runsBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+    let caught: unknown
+    try {
+      await dispatchTaskQuestions(db, taskId, [desEid], actor)
+    } catch (e) {
+      caught = e
+    }
+    expect(caught).toBeInstanceOf(ConflictError)
+    expect((caught as ConflictError).code).toBe('task-question-node-dispatch-in-flight')
     expect((await entryRow(db, desEid))[0]?.dispatchedAt).toBeNull()
     expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
       runsBefore,
