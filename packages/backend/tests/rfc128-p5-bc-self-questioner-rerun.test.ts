@@ -31,7 +31,11 @@ import {
   markClarifyRoundsConsumedBy,
 } from '../src/services/clarifyRounds'
 import { dispatchTaskQuestions, resolveBorrowForNode } from '../src/services/taskQuestionDispatch'
-import { loadUndispatchedSelfQuestionerTargets } from '../src/services/taskQuestions'
+import {
+  listTaskQuestions,
+  loadUndispatchedSelfQuestionerTargets,
+} from '../src/services/taskQuestions'
+import { createClarifySession, submitClarifyAnswers } from '../src/services/clarify'
 import { ConflictError } from '../src/util/errors'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -1029,6 +1033,66 @@ describe('RFC-128 P5-BC three-ledger borrow (collapse 推翻)', () => {
     }
     expect(caught).toBeInstanceOf(ConflictError)
     expect((caught as ConflictError).code).toBe('task-question-borrow-ledger-conflict')
+  })
+})
+
+// ===========================================================================
+// Codex impl-gate (§5.2.3④ run-self) — dispatch-time in-flight gate covers the OPEN IMMEDIATE
+// self/questioner ledger. PRODUCTION-TRANSITION test: a REAL quick-channel self continuation
+// (pending) must REJECT a same-home designer dispatch BEFORE the irreversible stamp/mint — NOT
+// only later at resolveBorrowForNode (which fires after the double-mint already happened).
+// ===========================================================================
+describe('RFC-128 P5-BC dispatch-time immediate-ledger gate (no double-mint)', () => {
+  test('real immediate run-self continuation blocks a same-home designer dispatch → no stamp, no node_run insert', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    // REAL immediate run-self continuation on home D (quick channel): D self-clarifies, the human
+    // answers WITHOUT defer → submitClarifyAnswers mints a clarify-answer continuation (pending) +
+    // the self entry is reconciled (sealed_at NULL = immediate ledger), run-self (no reassign).
+    const dRun = await seedRun(db, taskId, D, { status: 'awaiting_human', iteration: 0 })
+    const { clarifyNodeRunId } = await createClarifySession({
+      db,
+      taskId,
+      sourceAgentNodeId: D,
+      sourceAgentNodeRunId: dRun,
+      sourceShardKey: null,
+      clarifyNodeId: CL,
+      iterationIndex: 0,
+      questions: [mkQ('sq', 't')],
+    })
+    await listTaskQuestions(db, taskId) // reconcile the self entry (sealed_at NULL)
+    await submitClarifyAnswers({ db, clarifyNodeRunId, answers: [ans('sq')] }) // mint continuation
+    // A sealed, UNDISPATCHED designer entry whose HOME is the SAME node D (cross-round coincidence).
+    const cross = await seedAnsweredRound(db, taskId, {
+      kind: 'cross',
+      askingNodeId: Q,
+      questions: [mkQ('dq', 't')],
+    })
+    const desEid = await insertEntry(db, taskId, {
+      originNodeRunId: cross.intermediaryNodeRunId,
+      questionId: 'dq',
+      roleKind: 'designer',
+      defaultTargetNodeId: D,
+      sealed: true,
+    })
+
+    const runsBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+    let caught: unknown
+    try {
+      await dispatchTaskQuestions(db, taskId, [desEid], actor)
+    } catch (e) {
+      caught = e
+    }
+    // The PRODUCTION TRANSITION (dispatchTaskQuestions) is rejected BEFORE any stamp/mint — not
+    // later at borrow resolution (which would be after the double-mint).
+    expect(caught).toBeInstanceOf(ConflictError)
+    expect((caught as ConflictError).code).toBe('task-question-node-dispatch-in-flight')
+    // No dispatched_at stamp on the designer entry; NO second pending rerun minted (no double-mint).
+    expect((await entryRow(db, desEid))[0]?.dispatchedAt).toBeNull()
+    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
+      runsBefore,
+    )
   })
 })
 

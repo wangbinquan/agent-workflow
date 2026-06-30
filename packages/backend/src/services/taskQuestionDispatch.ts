@@ -498,6 +498,13 @@ export async function dispatchTaskQuestions(
   //     can still be revived/retried and render its feedback in the meantime).
   await assertNoInFlightDispatch(db, taskId, affected)
 
+  // 5d. Codex impl-gate (§5.2.3④ run-self): extend the in-flight gate to the OPEN IMMEDIATE
+  //     self/questioner ledger (a quick-channel continuation: sealed_at NULL, NOT dispatched). The
+  //     gate above only sees `dispatched_at` rows — without this a home with an open immediate
+  //     continuation would still accept a same-home designer dispatch and DOUBLE-mint (a second
+  //     pending rerun) before resolveBorrowForNode could reject it. Reject BEFORE the stamp/mint.
+  await assertNoOpenImmediateLedger(db, taskId, affected)
+
   // 6. Pre-compute each frontier mint's inherited values (async reads) BEFORE the tx so the
   //    tx body is purely synchronous (atomic with the dispatched_at stamp).
   const mintPlans = await Promise.all(
@@ -578,11 +585,30 @@ export async function dispatchTaskQuestions(
           throw new TargetChanged(c.id)
         }
       }
-      // RFC-128 P5-BC (R2-2, §5.2.12 contract 3): the in-flight recheck spans ANY deferred role
-      // (self/questioner/designer) dispatched entry — the cross-batch serialization half. A
-      // home with an in-flight self/questioner dispatch must block a later designer dispatch (and
-      // vice-versa), or the two same-home reruns double-mint.
-      const txEntries = tx
+      // In-tx in-flight recheck (synchronous concurrency net, SAME oracles as the async prechecks)
+      // — re-run BOTH ledger gates inside the tx so a concurrent dispatch / quick-channel answer
+      // committed between the prechecks and here can't slip a double-mint past. Fetch the task's
+      // runs + output ids ONCE for both.
+      const txRuns = tx.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)).all()
+      const txOutputIds: ReadonlySet<string> =
+        txRuns.length === 0
+          ? new Set<string>()
+          : new Set(
+              tx
+                .select({ nodeRunId: nodeRunOutputs.nodeRunId })
+                .from(nodeRunOutputs)
+                .where(
+                  inArray(
+                    nodeRunOutputs.nodeRunId,
+                    txRuns.map((r) => r.id),
+                  ),
+                )
+                .all()
+                .map((r) => r.nodeRunId),
+            )
+      // (a) RFC-128 P5-BC (R2-2, §5.2.12 contract 3): the in-flight recheck spans ANY deferred role
+      //     (self/questioner/designer) DISPATCHED entry — the cross-batch serialization half.
+      const txDispatched = tx
         .select()
         .from(taskQuestions)
         .where(
@@ -593,28 +619,40 @@ export async function dispatchTaskQuestions(
           ),
         )
         .all()
-      if (txEntries.length > 0) {
-        const txRuns = tx.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)).all()
-        const outRows =
-          txRuns.length === 0
-            ? []
-            : tx
-                .select({ nodeRunId: nodeRunOutputs.nodeRunId })
-                .from(nodeRunOutputs)
-                .where(
-                  inArray(
-                    nodeRunOutputs.nodeRunId,
-                    txRuns.map((r) => r.id),
-                  ),
-                )
-                .all()
-        const txOutputIds = new Set(outRows.map((r) => r.nodeRunId))
+      if (txDispatched.length > 0) {
         const blocker = findOpenDispatchTarget(affected, {
-          entries: txEntries,
+          entries: txDispatched,
           runs: txRuns,
           outputRunIds: txOutputIds,
         })
         if (blocker !== null) throw new NodeDispatchInFlight(blocker)
+      }
+      // (b) Codex impl-gate (§5.2.3④ run-self): re-run the OPEN IMMEDIATE self/questioner ledger
+      //     gate in-tx — a quick-channel continuation (sealed_at NULL, non-dispatched) committed
+      //     between the precheck and here must still block the stamp/mint (no double-mint).
+      const txImmediate = tx
+        .select()
+        .from(taskQuestions)
+        .where(
+          and(
+            eq(taskQuestions.taskId, taskId),
+            inArray(taskQuestions.roleKind, ['self', 'questioner']),
+            isNull(taskQuestions.sealedAt),
+          ),
+        )
+        .all()
+      if (txImmediate.length > 0) {
+        const txRounds = tx
+          .select()
+          .from(clarifyRounds)
+          .where(eq(clarifyRounds.taskId, taskId))
+          .all()
+        const immBlocker = findOpenImmediateLedgerHome(
+          affected,
+          txRuns,
+          buildImmediateLedgerContext(txImmediate, txRounds, txRuns, txOutputIds),
+        )
+        if (immBlocker !== null) throw new NodeDispatchInFlight(immBlocker)
       }
       tx.update(taskQuestions)
         .set({ dispatchedAt: now, dispatchedBy: actor.userId, updatedAt: now })
@@ -775,6 +813,123 @@ async function assertNoInFlightDispatch(
     throw new ConflictError(
       'task-question-node-dispatch-in-flight',
       `cannot dispatch to '${blocker}': it already has an OPEN (unconsumed) dispatched question. Dispatch the remaining questions after that node's rerun finishes (done with output).`,
+    )
+  }
+}
+
+// RFC-128 P5-BC (Codex impl-gate, §5.2.3④) — the OPEN IMMEDIATE self/questioner ledger oracle.
+//
+// The dispatch-time in-flight gate (assertNoInFlightDispatch) only sees `dispatched_at IS NOT NULL`
+// entries — it MISSES the immediate ledger (a quick-channel self/questioner continuation:
+// `sealed_at` NULL, NOT dispatched, an answered-unconsumed round whose rerun is pending). So a home
+// with an open immediate continuation could still ACCEPT a same-home designer dispatch → stamp +
+// mint a SECOND pending rerun (double-mint). resolveBorrowForNode would reject it later, but only
+// AFTER the irreversible stamp/mint. This oracle lets the dispatch precheck + in-tx recheck count
+// the immediate ledger BEFORE the stamp/mint, sharing the SAME open-detection
+// (`openImmediateHomeEntries`) that resolveImmediateBorrowForNode uses.
+interface ImmediateLedgerContext {
+  /** self/questioner entries with `sealed_at` NULL (quick-channel, non-dispatched). */
+  entries: ReadonlyArray<TaskQuestionRow>
+  /** clarify_rounds keyed by intermediaryNodeRunId (= task_questions.originNodeRunId). */
+  roundByOrigin: ReadonlyMap<string, ClarifyRoundRow>
+  /** task node_runs keyed by id. */
+  runById: ReadonlyMap<string, NodeRunRow>
+  /** task node_runs (for the consumed-stamp lineage lookup). */
+  runs: ReadonlyArray<NodeRunRow>
+  /** node_run ids that captured ≥1 <workflow-output> row. */
+  outputRunIds: ReadonlySet<string>
+}
+
+function buildImmediateLedgerContext(
+  entries: ReadonlyArray<TaskQuestionRow>,
+  rounds: ReadonlyArray<ClarifyRoundRow>,
+  runs: ReadonlyArray<NodeRunRow>,
+  outputRunIds: ReadonlySet<string>,
+): ImmediateLedgerContext {
+  return {
+    entries,
+    roundByOrigin: new Map(rounds.map((r) => [r.intermediaryNodeRunId, r])),
+    runById: new Map(runs.map((r) => [r.id, r])),
+    runs,
+    outputRunIds,
+  }
+}
+
+/** Pure (shared oracle) — the OPEN immediate self/questioner home entries for (nodeId, iteration):
+ *  a quick-channel (sealed_at NULL, non-dispatched) self/q entry whose round is answered, whose
+ *  ASKING run is at this iteration (P2-3), and which is NOT yet consumed (RFC-070 stamp). Used by
+ *  BOTH resolveImmediateBorrowForNode (scheduler borrow) AND the dispatch-time gate, so the two
+ *  agree on what "open immediate ledger" means. */
+function openImmediateHomeEntries(
+  nodeId: string,
+  iteration: number,
+  ctx: ImmediateLedgerContext,
+): TaskQuestionRow[] {
+  return ctx.entries.filter((e) => {
+    if (homeTarget(e) !== nodeId) return false
+    const round = ctx.roundByOrigin.get(e.originNodeRunId)
+    if (round === undefined) return false // round vanished (task edited) → not borrowable
+    const askingRun = ctx.runById.get(round.askingNodeRunId)
+    if (askingRun === undefined || askingRun.iteration !== iteration) return false
+    return !isRoundEntryConsumed(e, round, ctx.runs, ctx.outputRunIds)
+  })
+}
+
+/** The FIRST affected home with an OPEN immediate self/questioner ledger, or null. Keyed per home
+ *  on its dispatch iteration = the freshest run iteration (where the dispatch rerun will be minted
+ *  — buildFrontierMintPlan's `last.iteration`), so it matches what resolveBorrowForNode sees when
+ *  the home reruns. */
+function findOpenImmediateLedgerHome(
+  affected: ReadonlySet<string>,
+  runs: ReadonlyArray<NodeRunRow>,
+  ctx: ImmediateLedgerContext,
+): string | null {
+  for (const home of affected) {
+    const iter =
+      pickFreshestRun(
+        runs.filter((r) => r.nodeId === home),
+        { topLevelOnly: false },
+      )?.iteration ?? 0
+    if (openImmediateHomeEntries(home, iter, ctx).length > 0) return home
+  }
+  return null
+}
+
+/**
+ * Async dispatch precheck (Codex impl-gate run-self fix): reject the dispatch BEFORE any stamp/mint
+ * when ANY affected home already has an OPEN immediate self/questioner continuation (quick-channel
+ * answer's rerun pending). Minting a dispatch rerun there would create a SECOND pending rerun on the
+ * same (home, iteration) → double-mint. Extends the in-flight gate beyond `dispatched_at` rows to
+ * the immediate (sealed_at NULL, non-dispatched) ledger — the SAME oracle resolveBorrowForNode uses.
+ */
+async function assertNoOpenImmediateLedger(
+  db: DbClient,
+  taskId: string,
+  affected: ReadonlySet<string>,
+): Promise<void> {
+  const entries = await db
+    .select()
+    .from(taskQuestions)
+    .where(
+      and(
+        eq(taskQuestions.taskId, taskId),
+        inArray(taskQuestions.roleKind, ['self', 'questioner']),
+        isNull(taskQuestions.sealedAt),
+      ),
+    )
+  if (entries.length === 0) return
+  const rounds = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const outputRunIds = await runIdsWithOutput(
+    db,
+    runs.map((r) => r.id),
+  )
+  const ctx = buildImmediateLedgerContext(entries, rounds, runs, outputRunIds)
+  const blocker = findOpenImmediateLedgerHome(affected, runs, ctx)
+  if (blocker !== null) {
+    throw new ConflictError(
+      'task-question-node-dispatch-in-flight',
+      `cannot dispatch to '${blocker}': it has an OPEN self/questioner continuation (a quick-channel answer's rerun is pending) — a second pending rerun would double-mint. Dispatch after that continuation finishes (done with output).`,
     )
   }
 }
@@ -1161,22 +1316,20 @@ async function resolveImmediateBorrowForNode(
         ),
       ),
     )
-  const roundByOrigin = new Map(rounds.map((r) => [r.intermediaryNodeRunId, r]))
   const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
-  const runById = new Map(runs.map((r) => [r.id, r]))
   const outputRunIds = await runIdsWithOutput(
     db,
     runs.map((r) => r.id),
   )
 
-  // OPEN (unconsumed) home entries at THIS loop iteration, matched via the asking run (P2-3).
-  const open = homeEntries.filter((e) => {
-    const round = roundByOrigin.get(e.originNodeRunId)
-    if (round === undefined) return false // round vanished (task edited) → not borrowable
-    const askingRun = runById.get(round.askingNodeRunId)
-    if (askingRun === undefined || askingRun.iteration !== iteration) return false
-    return !isRoundEntryConsumed(e, round, runs, outputRunIds)
-  })
+  // OPEN (unconsumed) home entries at THIS loop iteration, via the SHARED oracle the dispatch-time
+  // gate uses (openImmediateHomeEntries) — so resolveBorrowForNode and the dispatch precheck agree
+  // on what "open immediate ledger" means.
+  const open = openImmediateHomeEntries(
+    nodeId,
+    iteration,
+    buildImmediateLedgerContext(homeEntries, rounds, runs, outputRunIds),
+  )
   if (open.length === 0) return CLOSED_LEDGER
 
   // P2-1 single-borrow gate: each open entry's decision is its borrow node (or null = run self).
