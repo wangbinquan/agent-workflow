@@ -306,7 +306,15 @@ describe('RFC-128 P2 — T6 defer=true 控制通道 (seal 进待指派, 不续�
     expect(q2.phase).toBe('pending')
   })
 
-  test('全题 defer-seal：roundFullySealed=true、轮 answered，但仍 0 续跑（defer 不 mint）', async () => {
+  // RFC-128 P5-0 (hotfix stranding guard): a FULL defer-seal of a SELF round through the
+  // control channel is now REJECTED (409). It would close the asking node_run, flip the round
+  // 'answered' (releasing the asking-run park), and mint NO self continuation rerun — with no
+  // self/questioner undispatched-park source the task would advance past the asking node and
+  // strand the continuation. (This test previously asserted the full self seal "succeeds", which
+  // was exactly that latent bug.) The full-seal-mechanics + DESIGNER-照常 locks live in the
+  // ALLOWED path below (line ~550) and in rfc128-p5-0-stranding-guard.test.ts; partial seals stay
+  // allowed (the test above).
+  test('P5-0: 全题 defer-seal SELF 轮 → 409 clarify-selfq-full-seal-unsupported-pre-p5（轮不翻、0 续跑、不 strand）', async () => {
     const h = await buildHarness()
     const { taskId, nodeRunId } = await seedSelfRound(h.db, h.alice.id, [makeQ('q1'), makeQ('q2')])
 
@@ -314,13 +322,12 @@ describe('RFC-128 P2 — T6 defer=true 控制通道 (seal 进待指派, 不续�
       method: 'POST',
       body: JSON.stringify({ defer: true, answers: [makeAns('q1'), makeAns('q2')] }),
     })
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { roundFullySealed: boolean; kind: string }
-    expect(body.kind).toBe('seal')
-    expect(body.roundFullySealed).toBe(true)
-    expect((await roundOf(h.db, taskId))[0]?.status).toBe('answered')
-    // Even a FULL defer seal does not advance execution — that is what separates it from
-    // the quick channel (which would mint exactly one rerun here).
+    expect(res.status).toBe(409)
+    expect(((await res.json()) as { code: string }).code).toBe(
+      'clarify-selfq-full-seal-unsupported-pre-p5',
+    )
+    // Rejected atomically (guard throws before any write) — round untouched, no rerun minted.
+    expect((await roundOf(h.db, taskId))[0]?.status).toBe('awaiting_human')
     expect(await clarifyAnswerReruns(h.db, taskId)).toBe(0)
   })
 
@@ -342,6 +349,85 @@ describe('RFC-128 P2 — T6 defer=true 控制通道 (seal 进待指派, 不续�
     expect(scopes.q1).toBe('questioner')
     expect(round?.status).toBe('awaiting_human') // q2 未 seal → partial
     expect(await clarifyAnswerReruns(h.db, taskId)).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-128 P5-0 (route) — control-channel full-seal guard for self/questioner.
+//
+// 完整 route 矩阵（self full → 409 在 T6 与 Codex-P1/P5-0 块；designer full → 200 在
+// loadUndispatchedDesignerTargets 块 line ~550；partial → 200 在 T6 块）；本块补 CROSS 侧
+// 的两条 NEW route 用例：questioner-scope full seal 与 mixed full seal 经路由都 → 409。
+// 这些 full seal 会令反问者续跑 strand（控制通道不 mint cross-clarify-questioner-rerun、
+// 无 self/q park 源）——self/q 逐题重跑是 P5-C。
+// ---------------------------------------------------------------------------
+
+describe('RFC-128 P5-0 (route) — cross questioner-scope full seal → 409', () => {
+  test('cross full seal 单题 questioner scope → 409 clarify-selfq-full-seal-unsupported-pre-p5（轮不翻、不关 node_run）', async () => {
+    const h = await buildHarness()
+    const { taskId, nodeRunId } = await seedCrossRound(h.db, h.alice.id, [makeQ('q1')], {
+      deferred: true,
+    })
+
+    const res = await req(h.app, h.alice.token, `/api/clarify/${nodeRunId}/answers`, {
+      method: 'POST',
+      body: JSON.stringify({
+        defer: true,
+        answers: [makeAns('q1')],
+        questionScopes: { q1: 'questioner' }, // questioner-scope full seal → guard fires
+      }),
+    })
+    expect(res.status).toBe(409)
+    expect(((await res.json()) as { code: string }).code).toBe(
+      'clarify-selfq-full-seal-unsupported-pre-p5',
+    )
+    // Atomic rollback: nothing committed — round still awaiting_human, node_run still open.
+    expect((await roundOf(h.db, taskId))[0]?.status).toBe('awaiting_human')
+    expect(await nodeRunStatus(h.db, nodeRunId)).toBe('awaiting_human')
+  })
+
+  test('cross full seal 混合 scope（designer + questioner）→ 409（任一 questioner-scope 即拒）', async () => {
+    const h = await buildHarness()
+    const { taskId, nodeRunId } = await seedCrossRound(
+      h.db,
+      h.alice.id,
+      [makeQ('q1'), makeQ('q2')],
+      { deferred: true },
+    )
+
+    const res = await req(h.app, h.alice.token, `/api/clarify/${nodeRunId}/answers`, {
+      method: 'POST',
+      body: JSON.stringify({
+        defer: true,
+        answers: [makeAns('q1'), makeAns('q2')],
+        questionScopes: { q1: 'designer', q2: 'questioner' }, // mixed → q2 strands → guard
+      }),
+    })
+    expect(res.status).toBe(409)
+    expect(((await res.json()) as { code: string }).code).toBe(
+      'clarify-selfq-full-seal-unsupported-pre-p5',
+    )
+    expect((await roundOf(h.db, taskId))[0]?.status).toBe('awaiting_human')
+  })
+
+  test('对照：cross full seal 全 designer scope（+ stop）→ 200（designer 照常，guard 按 scope 非 directive）', async () => {
+    const h = await buildHarness()
+    const { taskId, nodeRunId } = await seedCrossRound(h.db, h.alice.id, [makeQ('q1')], {
+      deferred: true,
+    })
+
+    const res = await req(h.app, h.alice.token, `/api/clarify/${nodeRunId}/answers`, {
+      method: 'POST',
+      body: JSON.stringify({
+        defer: true,
+        directive: 'stop', // stop must NOT trip the guard — decision is by SCOPE, not directive
+        answers: [makeAns('q1')],
+        questionScopes: { q1: 'designer' },
+      }),
+    })
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as { roundFullySealed: boolean }).roundFullySealed).toBe(true)
+    expect((await roundOf(h.db, taskId))[0]?.status).toBe('answered')
   })
 })
 
@@ -515,10 +601,18 @@ describe('RFC-128 P2 — 端点鉴权 403 (ensureClarifyMember)', () => {
 // ---------------------------------------------------------------------------
 // Codex P1 — full defer seal 关闭中介 node_run（解永久 park）；partial 不动（对照锁）；
 // cross-designer 全 seal 后任务由 §18 designer park 把持 + 可被 dispatch 续跑。
+// RFC-128 P5-0：full seal 关 node_run 的「解永久 park」逻辑只对 DESIGNER 路径有效（见
+// 本块第 3 个 test, cross-designer）；SELF/questioner full seal 会被 P5-0 guard 在 close 之前
+// 拒绝（第 1 个 test 锁住「guard 原子回滚、node_run 不被关」），因为它没有 self/q park 源、关了
+// 就 strand——self/q 逐题重跑 + park 是 P5-B/C。
 // ---------------------------------------------------------------------------
 
-describe('RFC-128 P2 — Codex P1: full defer seal 关闭中介 node_run', () => {
-  test('full defer seal → 中介 clarify node_run awaiting_human→done（仍不 mint 续跑）', async () => {
+describe('RFC-128 P2 — Codex P1 / P5-0: full defer seal 关闭中介 node_run (designer) vs guard (self/q)', () => {
+  // RFC-128 P5-0: a SELF round full defer-seal is REJECTED before the node_run is closed —
+  // the guard rolls back ATOMICALLY so the close (which would strand the self continuation,
+  // since there is no self/q park source) never happens. The "full seal CLOSES the node_run"
+  // lock survives for the ALLOWED path (DESIGNER cross full seal) in the third test below.
+  test('P5-0: full defer seal SELF 轮 → 409 + 中介 node_run 仍 awaiting_human（guard 原子回滚，不关 node_run、不 strand）', async () => {
     const h = await buildHarness()
     const { taskId, nodeRunId } = await seedSelfRound(h.db, h.alice.id, [makeQ('q1')])
     expect(await nodeRunStatus(h.db, nodeRunId)).toBe('awaiting_human')
@@ -527,11 +621,12 @@ describe('RFC-128 P2 — Codex P1: full defer seal 关闭中介 node_run', () =>
       method: 'POST',
       body: JSON.stringify({ defer: true, answers: [makeAns('q1')] }),
     })
-    expect(res.status).toBe(200)
-    expect(((await res.json()) as { roundFullySealed: boolean }).roundFullySealed).toBe(true)
-    // P1: the answered round's clarify node_run is CLOSED — else deriveFrontier parks it
-    // (awaiting_human bucket) forever. Still no rerun (defer semantics preserved).
-    expect(await nodeRunStatus(h.db, nodeRunId)).toBe('done')
+    expect(res.status).toBe(409)
+    expect(((await res.json()) as { code: string }).code).toBe(
+      'clarify-selfq-full-seal-unsupported-pre-p5',
+    )
+    // Guard threw BEFORE the in-tx node_run close → node_run untouched (no strand), 0 reruns.
+    expect(await nodeRunStatus(h.db, nodeRunId)).toBe('awaiting_human')
     expect(await clarifyAnswerReruns(h.db, taskId)).toBe(0)
   })
 

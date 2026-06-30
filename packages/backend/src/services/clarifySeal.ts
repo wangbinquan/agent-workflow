@@ -46,6 +46,7 @@ import { setNodeClarifyDirective } from '@/services/taskClarifyDirective'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   mergeSealedAnswers,
+  resolveQuestionScope,
   type ClarifyAnswer,
   type ClarifyDirective,
   type ClarifyQuestion,
@@ -78,6 +79,16 @@ export interface SealRoundQuestionsArgs {
    *  also what the §18 designer park requires (loadUndispatchedDesignerTargets filters
    *  directive='continue'), so a full continue-seal correctly parks until board dispatch. */
   directive?: ClarifyDirective
+  /** RFC-128 P5-0 (hotfix stranding guard) — when true, REJECT a full seal of a round that
+   *  needs a self/questioner CONTINUATION rerun (a self round, or a cross round with any
+   *  questioner-scope question). The control channel mints no rerun and there is no
+   *  self/questioner undispatched-park source yet (per-question self/questioner rerun + park is
+   *  RFC-128 P5-B/C), so such a full seal would close the intermediary node_run, release the
+   *  asking-run park, and strand the continuation. The API route opts in; the raw storage
+   *  primitive (and the P1 golden-lock tests / future P5-B/C callers) leave it false. DESIGNER-
+   *  only cross full seal is unaffected (the §18 designer park holds it). Decision is by round
+   *  KIND + per-question SCOPE — never the directive — mirroring reconcileDesiredEntries. */
+  rejectSelfQuestionerFullSeal?: boolean
   now?: () => number
 }
 
@@ -197,6 +208,36 @@ export async function sealRoundQuestions(
     // (5) Flip the round → answered ONLY when EVERY question is now sealed.
     const newSealed = new Set<string>([...alreadySealed, ...sealingSet])
     const fullySealed = questions.every((q) => newSealed.has(q.id))
+
+    // RFC-128 P5-0 (hotfix stranding guard) — reject a full seal that would strand a
+    // self/questioner continuation. The control channel (defer / direct seal) mints NO rerun;
+    // on a FULL seal it closes the intermediary node_run (below) and the round flips 'answered',
+    // releasing the asking-run park (loadOpenClarify only parks awaiting_human sessions). For a
+    // DESIGNER-scope cross round that is fine — the §18 designer park (loadUndispatchedDesigner-
+    // Targets) holds the deferred task until a board dispatch mints the borrowed designer rerun
+    // (P3, shipped). But a SELF round, or a CROSS round with ANY questioner-scope question, needs
+    // a self/questioner continuation rerun (the quick channel mints clarify-answer / cross-
+    // clarify-questioner-rerun) and there is NO self/questioner undispatched-park source yet —
+    // so dispatchTaskQuestions (designer-only) never picks it up and the task advances past the
+    // asking node, stranding the continuation (data/progress lost). Per-question self/questioner
+    // rerun + park is RFC-128 P5-B/C; until then opted-in callers (the API route) REJECT it.
+    // PARTIAL seals are always allowed (the round stays awaiting_human, so the OPEN session keeps
+    // the asking run parked — no strand). Decision is by round KIND + per-question SCOPE (NOT the
+    // directive), the same self/questioner vs designer split reconcileDesiredEntries uses; thrown
+    // BEFORE any write so the tx rolls back cleanly (nothing sealed / closed / reconciled).
+    if (args.rejectSelfQuestionerFullSeal === true && fullySealed) {
+      const needsSelfQuestionerContinuation =
+        round.kind === 'self' ||
+        questions.some((q) => resolveQuestionScope(mergedScopes, q.id) === 'questioner')
+      if (needsSelfQuestionerContinuation) {
+        throw new ConflictError(
+          'clarify-selfq-full-seal-unsupported-pre-p5',
+          `cannot fully seal this ${
+            round.kind === 'self' ? 'self-clarify' : 'questioner-scope cross-clarify'
+          } round through the control channel: it needs a self/questioner continuation rerun, which per-question dispatch does not yet support (RFC-128 P5-C). Answer it through the quick channel (POST without defer) instead, or seal only a partial subset.`,
+        )
+      }
+    }
 
     // RFC-128 P2 (Codex P2-2) — round-level directive. Provided wins; else keep the round's
     // existing value; else default 'continue'. Fed (in-memory) to the reconcile designer gate
