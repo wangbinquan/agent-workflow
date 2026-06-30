@@ -130,6 +130,13 @@ export interface AutoDispatchClarifyRoundResult {
   roundFullySealed: boolean
   /** The dispatch outcome of the round's self/questioner entries. */
   dispatch: DispatchTaskQuestionsResult
+  /** Codex round-5 — set (to the dispatch conflict's error code) when the round WAS sealed but the
+   *  AUTO-dispatch was DEFERRED to manual board dispatch because dispatchTaskQuestions hit a conflict
+   *  gate (e.g. a same-home in-flight rerun). The answer is durably saved (round answered, entries
+   *  sealed-undispatched + parked) and recoverable via the board's 批量下发 — so the quick API returns
+   *  SUCCESS (idempotent: a retry hits the answered-round guard, but the entries are already parked
+   *  for manual dispatch) instead of surfacing a failed response for a committed answer. */
+  dispatchDeferredReason?: string
 }
 
 /**
@@ -319,6 +326,31 @@ export async function autoDispatchClarifyRound(
   //    BEFORE the dispatch mints the pending rerun (the rerun must not exist when the tree resets);
   //    A is OUTER, dispatch's B is INNER → lock order A ≻ B, no B held while taking A → deadlock-free.
   //    A no-op when there are no dispatchable self/questioner entries.
+  //
+  //    Codex round-5 — the seal above ALREADY committed (round answered + clarify node closed). If
+  //    dispatchTaskQuestions then hits a CONFLICT gate (e.g. a same-home in-flight rerun, a never-run
+  //    frontier, a concurrent target change), do NOT surface a FAILED response for the saved answer:
+  //    the entries are sealed-undispatched + parked (loadUndispatchedParkTargets) and recoverable via
+  //    the board's 批量下发, so DEFER the auto-dispatch (return success + dispatchDeferredReason) — the
+  //    quick API stays idempotent-safe. Only dispatch ConflictErrors are caught; other errors throw.
+  let dispatchDeferredReason: string | undefined
+  const tryDispatch = async (): Promise<DispatchTaskQuestionsResult> => {
+    try {
+      return await dispatchTaskQuestions(db, round.taskId, entryIds, args.actor)
+    } catch (err) {
+      if (err instanceof ConflictError) {
+        dispatchDeferredReason = err.code
+        log.warn('autodispatch deferred to manual board dispatch (post-seal dispatch conflict)', {
+          taskId: round.taskId,
+          originNodeRunId,
+          reason: err.code,
+        })
+        return EMPTY_DISPATCH
+      }
+      throw err
+    }
+  }
+
   let dispatch: DispatchTaskQuestionsResult
   if (entryIds.length === 0) {
     dispatch = EMPTY_DISPATCH
@@ -350,10 +382,10 @@ export async function autoDispatchClarifyRound(
         }
       }
       // Dispatch under A (B inner — A ≻ B, no reentry; sealRoundQuestions' B already released).
-      return dispatchTaskQuestions(db, round.taskId, entryIds, args.actor)
+      return tryDispatch()
     })
   } else {
-    dispatch = await dispatchTaskQuestions(db, round.taskId, entryIds, args.actor)
+    dispatch = await tryDispatch()
   }
 
   log.info('clarify round auto-dispatched (quick channel, deferred)', {
@@ -365,6 +397,7 @@ export async function autoDispatchClarifyRound(
     dispatchedEntryCount: dispatch.dispatchedEntryIds.length,
     deferredEntryCount: dispatch.deferred.length,
     rerunCount: dispatch.reruns.length,
+    ...(dispatchDeferredReason !== undefined ? { dispatchDeferredReason } : {}),
   })
 
   return {
@@ -373,5 +406,6 @@ export async function autoDispatchClarifyRound(
     sealedQuestionIds,
     roundFullySealed,
     dispatch,
+    ...(dispatchDeferredReason !== undefined ? { dispatchDeferredReason } : {}),
   }
 }

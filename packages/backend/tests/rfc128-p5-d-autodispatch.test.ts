@@ -1009,3 +1009,61 @@ describe('RFC-128 P5-D self-clarify isolated rollback (RFC-098 B1, Codex round-4
     }
   })
 })
+
+// ===========================================================================
+// post-seal dispatch 冲突（Codex round-5）— 答案已 seal、autodispatch 延后到手动（非失败）
+// ===========================================================================
+describe('RFC-128 P5-D post-seal dispatch conflict → deferred to manual (idempotent-safe)', () => {
+  test('a same-home IN-FLIGHT rerun makes dispatch conflict AFTER the seal → round SEALED + auto-dispatch DEFERRED (dispatchDeferredReason), NOT a failed request', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    // A prior IN-FLIGHT dispatched self entry on home P (dispatched, trigger NULL = queued/unconsumed)
+    // — blocks a new same-home dispatch via assertNoInFlightDispatch.
+    const priorOrigin = await seedRun(db, taskId, CL, { status: 'done' })
+    await insertEntry(db, taskId, {
+      originNodeRunId: priorOrigin,
+      questionId: 'prior',
+      roleKind: 'self',
+      defaultTargetNodeId: P,
+      sealed: true,
+      dispatchedAt: Date.now(),
+      triggerRunId: null,
+    })
+    // New self round on the SAME home P → quick autodispatch.
+    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const res = await autoDispatchClarifyRound({
+      db,
+      originNodeRunId: clarifyNodeRunId,
+      answers: [ans('q1')],
+      actor,
+    })
+    // The answer WAS sealed (round answered) — the request did NOT fail despite the dispatch conflict.
+    expect(res.roundFullySealed).toBe(true)
+    expect((await roundByOrigin(db, clarifyNodeRunId))[0]?.status).toBe('answered')
+    // Auto-dispatch was DEFERRED to the board (a post-seal conflict), not surfaced as an error.
+    expect(res.dispatch.reruns).toHaveLength(0)
+    expect(res.dispatchDeferredReason).toBe('task-question-node-dispatch-in-flight')
+    // The new self entry is sealed-undispatched → parked, recoverable via the board's manual dispatch.
+    const selfEntry = (await entriesByOrigin(db, clarifyNodeRunId)).find(
+      (e) => e.roleKind === 'self',
+    )
+    expect(selfEntry?.sealedAt).not.toBeNull()
+    expect(selfEntry?.dispatchedAt).toBeNull()
+  })
+
+  test('no conflict → dispatchDeferredReason is undefined (golden path)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const res = await autoDispatchClarifyRound({
+      db,
+      originNodeRunId: clarifyNodeRunId,
+      answers: [ans('q1')],
+      actor,
+    })
+    expect(res.dispatchDeferredReason).toBeUndefined()
+    expect(res.dispatch.reruns).toHaveLength(1)
+  })
+})

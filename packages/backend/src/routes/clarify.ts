@@ -348,6 +348,12 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
         reruns: auto.dispatch.reruns,
         dispatchedEntryIds: auto.dispatch.dispatchedEntryIds,
         deferred: auto.dispatch.deferred,
+        // Codex round-5: set when the answer WAS sealed but auto-dispatch was deferred to the board
+        // (a post-seal dispatch conflict, e.g. a same-home in-flight rerun). The answer is saved +
+        // parked; the user dispatches it from the board. The request still succeeds (not a failure).
+        ...(auto.dispatchDeferredReason !== undefined
+          ? { dispatchDeferredReason: auto.dispatchDeferredReason }
+          : {}),
       })
     }
 
