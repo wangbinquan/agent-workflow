@@ -27,6 +27,7 @@ import type { AppDeps } from '@/server'
 import { countPendingClarifications, submitClarifyAnswers } from '@/services/clarify'
 import { submitCrossClarifyAnswers } from '@/services/crossClarify'
 import { sealRoundQuestions } from '@/services/clarifySeal'
+import { autoDispatchClarifyRound } from '@/services/clarifyAutoDispatch'
 import {
   getClarifyRoundDetail,
   listClarifyRoundSummaries,
@@ -296,6 +297,58 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
       nrRow && ownerTask
         ? nodeKindFromSnapshot(ownerTask.workflowSnapshot, nrRow.nodeId)
         : undefined
+
+    // RFC-128 P5-D (§5.2.7 P5b single-path) — the quick channel (defer=false) on a DEFERRED task
+    // does NOT mint an immediate continuation. It seals the round + AUTO-triggers the SAME
+    // per-question dispatch the board's 批量下发 uses (autoDispatchClarifyRound). `defer` only chooses
+    // AUTO (here) vs MANUAL (the centralized-answer pane, defer=true) triggering of the ONE dispatch
+    // path — never a second delivery path. A NON-deferred task falls through to the legacy immediate
+    // mint below (submitClarifyAnswers / submitCrossClarifyAnswers, BYTE-FOR-BYTE unchanged —
+    // golden-lock). Kind-agnostic: autoDispatchClarifyRound reads round.kind internally + dispatches
+    // the round's self/questioner entries (designer entries keep the §18 manual board dispatch).
+    if (ownerTask?.deferredQuestionDispatch === true) {
+      const auto = await autoDispatchClarifyRound({
+        db: deps.db,
+        originNodeRunId: nodeRunId,
+        answers: parsed.data.answers,
+        directive: parsed.data.directive,
+        ...(parsed.data.questionScopes !== undefined ? { scopes: parsed.data.questionScopes } : {}),
+        actor: { userId: actor.user.id, role },
+      })
+      // Release the gate so the freshly-minted self/questioner reruns dispatch — mirroring the
+      // manual dispatch route + the legacy quick path. Best-effort: a `running` deferred task'
+      // live loop picks up the pending reruns (task-not-resumable logged at info, not surfaced).
+      const opencodeCmdAuto = resolveOpencodeCmd(deps.configPath)
+      const resumeDepsAuto: Parameters<typeof resumeTask>[2] = {
+        db: deps.db,
+        appHome: Paths.root,
+        ...(opencodeCmdAuto ? { opencodeCmd: opencodeCmdAuto } : {}),
+        ...resolveLaunchRuntimeConfig(deps.configPath),
+      }
+      void resumeTask(deps.db, auto.taskId, resumeDepsAuto).catch((err) => {
+        if (err instanceof ConflictError && err.code === 'task-not-resumable') {
+          log.info('clarify autodispatch resume deferred — live loop picks up the pending reruns', {
+            taskId: auto.taskId,
+          })
+          return
+        }
+        log.warn('clarify autodispatch resume threw', {
+          taskId: auto.taskId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
+      return c.json({
+        ok: true,
+        kind: 'autodispatch' as const,
+        roundKind: auto.kind,
+        sealedQuestionIds: auto.sealedQuestionIds,
+        roundFullySealed: auto.roundFullySealed,
+        reruns: auto.dispatch.reruns,
+        dispatchedEntryIds: auto.dispatch.dispatchedEntryIds,
+        deferred: auto.dispatch.deferred,
+      })
+    }
+
     if (nodeKind === 'clarify-cross-agent') {
       const ccResult = await submitCrossClarifyAnswers({
         db: deps.db,
