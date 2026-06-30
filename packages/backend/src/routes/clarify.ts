@@ -314,40 +314,57 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
     // golden-lock). Kind-agnostic: autoDispatchClarifyRound reads round.kind internally + dispatches
     // the round's self/questioner entries (designer entries keep the §18 manual board dispatch).
     if (ownerTask?.deferredQuestionDispatch === true) {
-      const auto = await autoDispatchClarifyRound({
-        db: deps.db,
-        originNodeRunId: nodeRunId,
-        answers: parsed.data.answers,
-        directive: parsed.data.directive,
-        ...(parsed.data.questionScopes !== undefined ? { scopes: parsed.data.questionScopes } : {}),
-        // RFC-023 optimistic lock — same If-Match the immediate path honors (the /clarify page sends it).
-        ...(ifMatch !== undefined ? { ifMatchIteration: ifMatch } : {}),
-        actor: { userId: actor.user.id, role },
-      })
-      // RFC-128 P5-D (Codex round-6): re-emit the legacy answered WS event(s) the deferred quick
+      // RFC-128 P5-D (Codex round-6/7): re-emit the legacy answered WS event(s) the deferred quick
       // branch otherwise skips, so OTHER clients (a mounted board / a collaborator) invalidate clarify
-      // list/detail/pending-count + node-runs + the directive toggle (the submitting client already
-      // navigates + invalidates). Fires even when dispatch was deferred (the round IS answered);
-      // rerunNodeRunId is the dispatched rerun or '' when deferred. A 'stop' cross round also fires
-      // the rejected event (parity with submitCrossClarifyAnswers). Best-effort — a broadcast failure
-      // must not fail the answer.
-      const firstRerunId = auto.dispatch.reruns[0]?.nodeRunId ?? ''
-      try {
-        if (auto.kind === 'self') {
-          await broadcastSelfClarifyAnsweredForRound(deps.db, nodeRunId, firstRerunId)
-        } else {
-          await broadcastCrossClarifyAnsweredForRound(deps.db, nodeRunId, {
-            ...(parsed.data.directive === 'stop'
-              ? { rejectedQuestionerNodeRunId: firstRerunId }
-              : {}),
+      // list/detail/pending-count + node-runs + the directive toggle (the submitting client navigates +
+      // invalidates). The helpers are NO-OP unless the round is ANSWERED, so this is safe to call on
+      // BOTH the success AND the error paths: autoDispatchClarifyRound seals (commits answered) BEFORE
+      // it may RETHROW a non-recoverable dispatch conflict — round-7: without broadcasting on the error
+      // path the committed answer would be hidden behind a failed response with no invalidation. A
+      // 'stop' cross round also fires the rejected event (parity with submitCrossClarifyAnswers).
+      // Best-effort — a broadcast failure must not affect the answer/error outcome. Routes by node kind
+      // (consistent on both paths); the wrong-kind helper finds no row → no-op.
+      const isCrossAuto = nodeKind === 'clarify-cross-agent'
+      const emitAutoAnswered = async (rerunId: string): Promise<void> => {
+        try {
+          if (isCrossAuto) {
+            await broadcastCrossClarifyAnsweredForRound(deps.db, nodeRunId, {
+              ...(parsed.data.directive === 'stop' ? { rejectedQuestionerNodeRunId: rerunId } : {}),
+            })
+          } else {
+            await broadcastSelfClarifyAnsweredForRound(deps.db, nodeRunId, rerunId)
+          }
+        } catch (err) {
+          log.warn('clarify autodispatch answered-broadcast threw', {
+            taskId: nrRow?.taskId,
+            error: err instanceof Error ? err.message : String(err),
           })
         }
-      } catch (err) {
-        log.warn('clarify autodispatch answered-broadcast threw', {
-          taskId: auto.taskId,
-          error: err instanceof Error ? err.message : String(err),
-        })
       }
+      let auto: Awaited<ReturnType<typeof autoDispatchClarifyRound>>
+      try {
+        auto = await autoDispatchClarifyRound({
+          db: deps.db,
+          originNodeRunId: nodeRunId,
+          answers: parsed.data.answers,
+          directive: parsed.data.directive,
+          ...(parsed.data.questionScopes !== undefined
+            ? { scopes: parsed.data.questionScopes }
+            : {}),
+          // RFC-023 optimistic lock — same If-Match the immediate path honors (/clarify page sends it).
+          ...(ifMatch !== undefined ? { ifMatchIteration: ifMatch } : {}),
+          actor: { userId: actor.user.id, role },
+        })
+      } catch (err) {
+        // A NON-recoverable dispatch conflict (terminal/snapshot/...) rethrown AFTER the seal committed:
+        // the round IS answered (the helper checks status), so broadcast the answered event (other
+        // clients invalidate) BEFORE surfacing the failure. Errors BEFORE the seal (iteration-mismatch,
+        // not-deferred, round-not-found) leave the round un-answered → the helper no-ops. Then rethrow.
+        await emitAutoAnswered('')
+        throw err
+      }
+      // Success: the dispatched rerun id (or '' when dispatch was deferred to the board).
+      await emitAutoAnswered(auto.dispatch.reruns[0]?.nodeRunId ?? '')
       // Release the gate so the freshly-minted self/questioner reruns dispatch — mirroring the
       // manual dispatch route + the legacy quick path. Best-effort: a `running` deferred task'
       // live loop picks up the pending reruns (task-not-resumable logged at info, not surfaced).

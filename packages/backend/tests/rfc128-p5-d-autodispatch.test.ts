@@ -1160,5 +1160,24 @@ describe('RFC-128 P5-D non-recoverable dispatch conflict NOT swallowed (Codex ro
     }
     expect(caught).toBeInstanceOf(ConflictError)
     expect((caught as ConflictError).code).toBe('task-question-snapshot-unparseable') // rethrown, NOT swallowed
+    // Codex round-7: the seal COMMITTED before the dispatch rethrew → the round IS answered, so the
+    // route's error-path broadcast (emitAutoAnswered on catch) WILL fire clarify.answered (other
+    // clients invalidate) before surfacing the failure. Prove the round is answered + the helper fires.
+    expect((await roundByOrigin(db, clarifyNodeRunId))[0]?.status).toBe('answered')
+    const received: Array<{ type: string }> = []
+    taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
+    await broadcastSelfClarifyAnsweredForRound(db, clarifyNodeRunId, '')
+    expect(received.find((m) => m.type === 'clarify.answered')).toBeDefined()
+  })
+
+  test('source — the route broadcasts the answered event on the autodispatch ERROR path too (catch → emit → rethrow), so a committed answer is never hidden behind a failed response', () => {
+    const src = readFileSync(resolve(import.meta.dir, '../src/routes/clarify.ts'), 'utf8')
+    // The autodispatch is wrapped in try/catch; the catch emits the answered broadcast then rethrows.
+    const autoIdx = src.indexOf('auto = await autoDispatchClarifyRound({')
+    const catchIdx = src.indexOf("await emitAutoAnswered('')")
+    const throwIdx = src.indexOf('throw err', catchIdx)
+    expect(autoIdx).toBeGreaterThan(0)
+    expect(catchIdx).toBeGreaterThan(autoIdx) // emit AFTER the try
+    expect(throwIdx).toBeGreaterThan(catchIdx) // rethrow AFTER the emit
   })
 })
