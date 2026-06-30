@@ -118,7 +118,7 @@ function renderDialog(entries: TaskQuestionEntry[], rounds: ClarifyRound[]) {
 }
 
 describe('groupUnsealedQuestions (oracle)', () => {
-  test('keeps only unsealed + cross-backed questions, grouped by round in stable order', () => {
+  test('keeps unsealed clarify-backed questions — self AND cross (RFC-128 P5-BC), grouped by round', () => {
     const groups = groupUnsealedQuestions([
       entry({ id: 'a', questionId: 'q1', originNodeRunId: 'nr_a' }),
       entry({ id: 'b', questionId: 'q2', originNodeRunId: 'nr_b' }),
@@ -127,7 +127,7 @@ describe('groupUnsealedQuestions (oracle)', () => {
       entry({ id: 'd', questionId: 'q4', originNodeRunId: 'nr_a', sealed: true }),
       // manual (no clarify round) → excluded
       entry({ id: 'e', questionId: 'q5', originNodeRunId: null, sourceKind: 'manual' }),
-      // self-clarify → excluded (Codex P1-2: not designer-dispatchable until P5)
+      // RFC-128 P5-BC: self-clarify is NOW included (park + dispatch path, no longer stranded).
       entry({
         id: 'f',
         questionId: 'q6',
@@ -139,6 +139,7 @@ describe('groupUnsealedQuestions (oracle)', () => {
     expect(groups).toEqual([
       { originNodeRunId: 'nr_a', questionIds: ['q1', 'q3'] },
       { originNodeRunId: 'nr_b', questionIds: ['q2'] },
+      { originNodeRunId: 'nr_self', questionIds: ['q6'] },
     ])
   })
 
@@ -175,7 +176,7 @@ describe('CentralizedAnswerDialog', () => {
     )
   })
 
-  test('self-clarify rounds are excluded from the pane (Codex P1-2)', async () => {
+  test('self-clarify rounds ARE included in the pane (RFC-128 P5-BC)', async () => {
     renderDialog(
       [
         entry({ id: 'a', questionId: 'q1', originNodeRunId: 'nr_x' }),
@@ -187,11 +188,34 @@ describe('CentralizedAnswerDialog', () => {
           roleKind: 'self',
         }),
       ],
-      [round({ intermediaryNodeRunId: 'nr_x' })],
+      [
+        round({ intermediaryNodeRunId: 'nr_x' }),
+        round({
+          intermediaryNodeRunId: 'nr_self',
+          kind: 'self',
+          askingNodeId: 'designer',
+          targetConsumerNodeId: null,
+          questions: [
+            {
+              id: 'qs',
+              title: 'Self question',
+              kind: 'single',
+              recommended: false,
+              options: [
+                { label: 'A', description: '', recommended: false, recommendationReason: '' },
+                { label: 'B', description: '', recommended: false, recommendationReason: '' },
+              ],
+            },
+          ],
+        }),
+      ],
     )
     await waitFor(() => screen.getByTestId('centralized-round-nr_x'))
-    // The self-clarify round never renders a block (it routes via /clarify quick channel).
-    expect(screen.queryByTestId('centralized-round-nr_self')).toBeNull()
+    // RFC-128 P5-BC: the self-clarify round NOW renders a block (it parks + board-dispatches).
+    await waitFor(() => screen.getByTestId('centralized-round-nr_self'))
+    // A self round renders NO scope picker (the asking agent is its own consumer).
+    await waitFor(() => screen.getByTestId('clarify-question-qs'))
+    expect(screen.queryByTestId('centralized-scope-qs')).toBeNull()
   })
 
   test('flattens 2 rounds, single submit seals each round subset (defer + questionIds + designer scope)', async () => {
@@ -257,7 +281,7 @@ describe('CentralizedAnswerDialog', () => {
     expect((calls['/api/clarify/nr_a/answers'] as { answers: unknown[] }).answers).toHaveLength(1)
   })
 
-  test('designer mainline — no scope picker is rendered; cross questions seal as designer', async () => {
+  test('cross round renders the scope picker; default seals designer, toggling routes to questioner (RFC-128 P5-BC)', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({ ok: true } as never)
     vi.spyOn(api, 'put').mockResolvedValue(undefined as never)
     renderDialog(
@@ -265,8 +289,11 @@ describe('CentralizedAnswerDialog', () => {
       [round({ intermediaryNodeRunId: 'nr_x' })],
     )
     await waitFor(() => screen.getByTestId('clarify-question-q1'))
-    // Codex P1-2: the pane offers no scope choice (no questioner routing here).
-    expect(screen.queryByTestId('centralized-scope-q1')).toBeNull()
+    // RFC-128 P5-BC: a cross round NOW offers a per-question scope picker (designer ↔ questioner).
+    const scope = screen.getByTestId('centralized-scope-q1')
+    expect(scope).toBeTruthy()
+    // Toggle to the questioner scope (the 2nd radio), then fill the answer.
+    fireEvent.click(within(scope).getAllByRole('radio')[1]!)
     fireEvent.click(within(screen.getByTestId('clarify-question-q1')).getAllByRole('radio')[0]!)
     const submit = screen.getByTestId('centralized-answer-submit') as HTMLButtonElement
     await waitFor(() => expect(submit.disabled).toBe(false))
@@ -275,7 +302,7 @@ describe('CentralizedAnswerDialog', () => {
     expect(post.mock.calls[0]![1]).toMatchObject({
       defer: true,
       questionIds: ['q1'],
-      questionScopes: { q1: 'designer' },
+      questionScopes: { q1: 'questioner' },
     })
   })
 })

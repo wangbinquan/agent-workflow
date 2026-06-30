@@ -17,7 +17,7 @@
 //
 // See design/RFC-120-task-question-list §2.3 / §4 / §11.
 
-import { and, eq, inArray, isNull, ne, notInArray } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull, isNull, ne, notInArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
@@ -389,6 +389,21 @@ function resolveEntryHandler(
   if (deferred && entry.roleKind === 'designer') {
     return resolveDispatchedEntryHandler(entry, runs, outputRunIds)
   }
+  // RFC-128 P5-BC (clean-path ②): a deferred self/questioner entry that went the CONTROL
+  // channel (per-question seal — `sealed_at` set) rides the §18 per-node queue exactly like a
+  // designer entry: its phase derives from its OWN dispatch state (dispatched_at + trigger_run_id
+  // + run lineage via resolveDispatchedEntryHandler), NOT the round consumption stamp. This
+  // covers all three states correctly — sealed-but-undispatched (dispatched_at NULL → pending/
+  // staged), dispatched-unbound (processing), dispatched-bound (lineage). A QUICK-channel
+  // self/questioner answer never seals per-question (`sealed_at` NULL), so it stays on the
+  // round-based path below (the immediate continuation rerun) — byte-for-byte golden-lock.
+  if (
+    deferred &&
+    (entry.roleKind === 'self' || entry.roleKind === 'questioner') &&
+    entry.sealedAt !== null
+  ) {
+    return resolveDispatchedEntryHandler(entry, runs, outputRunIds)
+  }
   const triggerRunId = resolveTriggerForEntry(round, entry.roleKind)
   const row = triggerRunId ? runs.find((r) => r.id === triggerRunId) : undefined
   if (!row) return { handlerRun: null, dispatchedInFlight: round.status === 'answered' }
@@ -660,6 +675,35 @@ export async function loadUndispatchedDesignerTargets(
     db,
     runs.map((r) => r.id),
   )
+  return partitionUndispatchedParkTargets(entries, runs, outputRunIds)
+}
+
+/** The minimal park-source entry projection both the designer (clarify + manual) and the
+ *  RFC-128 P5-BC self/questioner park sources feed to {@link partitionUndispatchedParkTargets}. */
+interface ParkTargetEntry {
+  dispatchedAt: number | null
+  triggerRunId: string | null
+  defaultTargetNodeId: string | null
+  overrideTargetNodeId: string | null
+}
+
+/** Shared HOME-node park classification (RFC-120 §18 Codex H1; RFC-128 P5-BC reuse). A home
+ *  node parks iff it has ≥1 UNDISPATCHED entry (`dispatched_at` NULL) AND NO IN-FLIGHT one.
+ *  A dispatched entry is in-flight UNTIL consumed (its handler run, via the SAME
+ *  resolveHandlerRun lineage the read-side uses, reaches done+output); once consumed a
+ *  still-undispatched sibling re-parks the node so a later dispatch isn't stranded. Parking
+ *  a node with an in-flight dispatched entry would STRAND its already-minted rerun
+ *  (deriveFrontier keeps a parked node out of `ready`), so such a node is NOT parked — it
+ *  RUNS; the undispatched sibling stays staged for a later dispatch that reruns the node
+ *  again. RFC-127 借壳: keys on the HOME node (default ?? override — where the borrowed run is
+ *  minted), not the override target, else the home completes before the borrowed rerun and
+ *  releases its downstream prematurely. */
+function partitionUndispatchedParkTargets(
+  entries: ReadonlyArray<ParkTargetEntry>,
+  runs: ReadonlyArray<NodeRunRow>,
+  outputRunIds: ReadonlySet<string>,
+): Set<string> {
+  if (entries.length === 0) return new Set()
   const lineageViews = runs.map(
     (r): RunLineageView => ({
       id: r.id,
@@ -676,9 +720,6 @@ export async function loadUndispatchedDesignerTargets(
   const hasUndispatched = new Set<string>()
   const hasInFlight = new Set<string>()
   for (const e of entries) {
-    // RFC-127 借壳: park the HOME node (where the borrowed run is minted), not the override
-    // — else the home/default designer completes before the borrowed rerun, releasing its
-    // downstream prematurely.
     const target = e.defaultTargetNodeId ?? e.overrideTargetNodeId
     if (target === null || target === '') continue
     if (e.dispatchedAt === null) {
@@ -717,6 +758,63 @@ export async function hasUndispatchedDesignerQuestions(
   taskId: string,
 ): Promise<boolean> {
   return (await loadUndispatchedDesignerTargets(db, taskId)).size > 0
+}
+
+/**
+ * RFC-128 P5-BC (clean-path ③) — the self/questioner mirror of
+ * {@link loadUndispatchedDesignerTargets}. Effective HOME nodes (default asking/questioner
+ * node ?? override) that should PARK a deferred-dispatch task because they hold a
+ * control-channel-SEALED but not-yet-dispatched self/questioner question.
+ *
+ * Differs from the designer source on the readiness key: a self/questioner park keys on the
+ * entry's OWN `sealed_at IS NOT NULL` (control-channel seal), NOT a `clarify_rounds.status =
+ * 'answered'` join. A PARTIAL seal leaves the round 'awaiting_human' forever (RFC-128 §2
+ * partial is pure-derived), so the designer source's `status='answered'` + `directive='continue'`
+ * join would miss every partial-sealed self/questioner question. `sealed_at` is the exact
+ * "answered (control channel), awaiting dispatch" marker — set ONLY by sealRoundQuestions, so
+ * a quick-channel immediate continuation (which never seals + mints right away, the immediate
+ * borrow ledger) is correctly absent here (golden-lock).
+ *
+ * The undispatched / in-flight / consumed classification is the SHARED
+ * {@link partitionUndispatchedParkTargets} (byte-for-byte the designer source's tail). Empty
+ * for any non-deferred task (golden-lock — `sealed_at` is only ever set on a deferred task's
+ * control-channel seal, but the deferred gate makes the boundary explicit + skips the query).
+ */
+export async function loadUndispatchedSelfQuestionerTargets(
+  db: DbClient,
+  taskId: string,
+): Promise<Set<string>> {
+  const taskRow = (
+    await db
+      .select({ deferred: tasks.deferredQuestionDispatch })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
+  )[0]
+  if (taskRow?.deferred !== true) return new Set()
+  const entries = await db
+    .select({
+      dispatchedAt: taskQuestions.dispatchedAt,
+      triggerRunId: taskQuestions.triggerRunId,
+      defaultTargetNodeId: taskQuestions.defaultTargetNodeId,
+      overrideTargetNodeId: taskQuestions.overrideTargetNodeId,
+    })
+    .from(taskQuestions)
+    .where(
+      and(
+        eq(taskQuestions.taskId, taskId),
+        inArray(taskQuestions.roleKind, ['self', 'questioner']),
+        ne(taskQuestions.confirmation, 'confirmed'),
+        isNotNull(taskQuestions.sealedAt),
+      ),
+    )
+  if (entries.length === 0) return new Set()
+  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const outputRunIds = await runIdsWithOutput(
+    db,
+    runs.map((r) => r.id),
+  )
+  return partitionUndispatchedParkTargets(entries, runs, outputRunIds)
 }
 
 // RFC-120 §18 (model A, corrected) — the per-node INJECTION gate is NOT a separate

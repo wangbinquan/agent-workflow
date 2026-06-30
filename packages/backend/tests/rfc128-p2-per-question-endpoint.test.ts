@@ -38,7 +38,10 @@ import { createUser } from '../src/services/users'
 import { createClarifySession } from '../src/services/clarify'
 import { createCrossClarifySession, hasPersistentStop } from '../src/services/crossClarify'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
-import { loadUndispatchedDesignerTargets } from '../src/services/taskQuestions'
+import {
+  loadUndispatchedDesignerTargets,
+  loadUndispatchedSelfQuestionerTargets,
+} from '../src/services/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyAnswer, ClarifyQuestion } from '@agent-workflow/shared'
 
@@ -353,18 +356,19 @@ describe('RFC-128 P2 — T6 defer=true 控制通道 (seal 进待指派, 不续�
 })
 
 // ---------------------------------------------------------------------------
-// RFC-128 P5-0 (route) — control-channel full-seal guard for self/questioner.
+// RFC-128 P5-BC (route) — control-channel full-seal of self/questioner on a DEFERRED task now
+// SUCCEEDS (the P5-0 guard is LIFTED for deferred tasks — §5.2.1). The seal parks the home via
+// loadUndispatchedSelfQuestionerTargets until board dispatch mints the continuation → no strand.
 //
-// 完整 route 矩阵（self full → 409 在 T6 与 Codex-P1/P5-0 块；designer CONTINUE full → 200 在
-// loadUndispatchedDesignerTargets 块 line ~550 + 本块对照；partial → 200 在 T6 块）；本块补
-// CROSS 侧 route 用例：questioner-scope full seal、mixed full seal、以及 directive=stop 的
-// full seal（即便全 designer-scope）经路由都 → 409。这些 full seal 会令反问者续跑 strand
-// （控制通道不 mint cross-clarify-questioner-rerun、无 self/q park 源）——stop 分支
-// （crossClarify.ts:534-560）在 scope 切分前恒发续跑（Codex PR-1 P1）。self/q 逐题重跑是 P5-C。
+// Migrated from the P5-0 "→ 409" locks (these are deferred tasks; P5-BC provides the park +
+// dispatch release path the guard waited for). The NON-deferred SELF full-seal route locks
+// (still 409 — no park source) stay green in the T6 / Codex-P1 blocks. The stop branch's
+// questioner continuation now rides the self/questioner park + dispatch (cross-clarify-questioner-
+// rerun minted at board dispatch), not the quick-path immediate mint.
 // ---------------------------------------------------------------------------
 
-describe('RFC-128 P5-0 (route) — cross full-seal guard (questioner-scope / mixed / stop) → 409', () => {
-  test('cross full seal 单题 questioner scope → 409 clarify-selfq-full-seal-unsupported-pre-p5（轮不翻、不关 node_run）', async () => {
+describe('RFC-128 P5-BC (route) — deferred cross full-seal of self/questioner → 200 + park (no strand)', () => {
+  test('cross full seal 单题 questioner scope (deferred) → 200 + 轮 answered + node_run 关 + questioner home parked', async () => {
     const h = await buildHarness()
     const { taskId, nodeRunId } = await seedCrossRound(h.db, h.alice.id, [makeQ('q1')], {
       deferred: true,
@@ -375,19 +379,20 @@ describe('RFC-128 P5-0 (route) — cross full-seal guard (questioner-scope / mix
       body: JSON.stringify({
         defer: true,
         answers: [makeAns('q1')],
-        questionScopes: { q1: 'questioner' }, // questioner-scope full seal → guard fires
+        questionScopes: { q1: 'questioner' }, // questioner-scope full seal — now parks, not strands
       }),
     })
-    expect(res.status).toBe(409)
-    expect(((await res.json()) as { code: string }).code).toBe(
-      'clarify-selfq-full-seal-unsupported-pre-p5',
-    )
-    // Atomic rollback: nothing committed — round still awaiting_human, node_run still open.
-    expect((await roundOf(h.db, taskId))[0]?.status).toBe('awaiting_human')
-    expect(await nodeRunStatus(h.db, nodeRunId)).toBe('awaiting_human')
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as { roundFullySealed: boolean }).roundFullySealed).toBe(true)
+    // Sealed: round answered, intermediary node_run closed; the questioner home is PARKED (the
+    // P5-BC self/questioner park source holds the deferred task until board dispatch).
+    expect((await roundOf(h.db, taskId))[0]?.status).toBe('answered')
+    expect(await nodeRunStatus(h.db, nodeRunId)).toBe('done')
+    const parked = await loadUndispatchedSelfQuestionerTargets(h.db, taskId)
+    expect(parked.has('questioner')).toBe(true)
   })
 
-  test('cross full seal 混合 scope（designer + questioner）→ 409（任一 questioner-scope 即拒）', async () => {
+  test('cross full seal 混合 scope（designer + questioner, deferred）→ 200 + 两 home 各自 park（designer + self/q 源）', async () => {
     const h = await buildHarness()
     const { taskId, nodeRunId } = await seedCrossRound(
       h.db,
@@ -401,21 +406,21 @@ describe('RFC-128 P5-0 (route) — cross full-seal guard (questioner-scope / mix
       body: JSON.stringify({
         defer: true,
         answers: [makeAns('q1'), makeAns('q2')],
-        questionScopes: { q1: 'designer', q2: 'questioner' }, // mixed → q2 strands → guard
+        questionScopes: { q1: 'designer', q2: 'questioner' }, // mixed — both park, neither strands
       }),
     })
-    expect(res.status).toBe(409)
-    expect(((await res.json()) as { code: string }).code).toBe(
-      'clarify-selfq-full-seal-unsupported-pre-p5',
-    )
-    expect((await roundOf(h.db, taskId))[0]?.status).toBe('awaiting_human')
+    expect(res.status).toBe(200)
+    expect((await roundOf(h.db, taskId))[0]?.status).toBe('answered')
+    // designer q1 → §18 designer park; questioner q2 → P5-BC self/questioner park.
+    expect((await loadUndispatchedDesignerTargets(h.db, taskId)).has('designer')).toBe(true)
+    expect((await loadUndispatchedSelfQuestionerTargets(h.db, taskId)).has('questioner')).toBe(true)
   })
 
-  test('cross full seal 全 designer scope + directive=stop → 409（Codex PR-1 P1: stop 恒发反问者续跑，不论 scope）', async () => {
-    // The quick path's stop branch (crossClarify.ts:534-560) ALWAYS mints a
-    // cross-clarify-questioner-rerun BEFORE the scope split, so an all-designer-scope cross-stop
-    // full seal still needs a questioner continuation the control channel can't provide → strand.
-    // The guard rejects by directive=stop here, NOT scope (scope-only would wrongly let it pass).
+  test('cross full seal 全 designer scope + directive=stop (deferred) → 200 + 仅 questioner park（stop 轮无 designer 条目）', async () => {
+    // A stop round produces NO designer entries (reconcileDesiredEntries), only the questioner
+    // continuation entry. On a deferred task that questioner entry parks via the P5-BC park source
+    // until board dispatch mints the cross-clarify-questioner-rerun — no strand (the P5-0 guard was
+    // for the pre-park-source era).
     const h = await buildHarness()
     const { taskId, nodeRunId } = await seedCrossRound(h.db, h.alice.id, [makeQ('q1')], {
       deferred: true,
@@ -430,13 +435,11 @@ describe('RFC-128 P5-0 (route) — cross full-seal guard (questioner-scope / mix
         questionScopes: { q1: 'designer' },
       }),
     })
-    expect(res.status).toBe(409)
-    expect(((await res.json()) as { code: string }).code).toBe(
-      'clarify-selfq-full-seal-unsupported-pre-p5',
-    )
-    // Atomic rollback: round stays awaiting_human, directive NOT persisted.
-    expect((await roundOf(h.db, taskId))[0]?.status).toBe('awaiting_human')
-    expect((await roundOf(h.db, taskId))[0]?.directive ?? null).toBeNull()
+    expect(res.status).toBe(200)
+    expect((await roundOf(h.db, taskId))[0]?.status).toBe('answered')
+    expect((await roundOf(h.db, taskId))[0]?.directive).toBe('stop')
+    // stop round → no designer entry; the questioner continuation entry parks the questioner home.
+    expect((await loadUndispatchedSelfQuestionerTargets(h.db, taskId)).has('questioner')).toBe(true)
   })
 
   test('对照（照常）：cross full seal 全 designer scope + directive=continue → 200（designer 主线，不发反问者续跑）', async () => {
@@ -759,8 +762,8 @@ describe('RFC-128 P2 — Codex P2-1: questionIds 须配 defer', () => {
 //     short-circuit）——partial 仍允许（轮停 awaiting_human）。
 // ---------------------------------------------------------------------------
 
-describe('RFC-128 P2/P5-0 — defer 透传 directive (stop): full→409 guard, partial→不落 directive', () => {
-  test('cross FULL seal + directive=stop（经路由）→ 409 clarify-selfq-full-seal-unsupported-pre-p5（不落 directive、不关 node_run、不 short-circuit）', async () => {
+describe('RFC-128 P2/P5-BC — defer 透传 directive (stop): full deferred→200+park, partial→不落 directive', () => {
+  test('cross FULL seal + directive=stop（deferred, 经路由）→ 200 + directive=stop 持久化 + node_run 关 + questioner park', async () => {
     const h = await buildHarness()
     const { taskId, nodeRunId } = await seedCrossRound(h.db, h.alice.id, [makeQ('q1')], {
       deferred: true,
@@ -772,25 +775,24 @@ describe('RFC-128 P2/P5-0 — defer 透传 directive (stop): full→409 guard, p
         defer: true,
         directive: 'stop',
         answers: [makeAns('q1')],
-        questionScopes: { q1: 'designer' }, // even all-designer-scope: stop strands the questioner
+        questionScopes: { q1: 'designer' },
       }),
     })
-    expect(res.status).toBe(409)
-    expect(((await res.json()) as { code: string }).code).toBe(
-      'clarify-selfq-full-seal-unsupported-pre-p5',
-    )
-    // Atomic rollback: directive NOT prematurely persisted; cross node_run NOT closed; node NOT
-    // short-circuited (the guard rejected before any write).
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as { roundFullySealed: boolean }).roundFullySealed).toBe(true)
+    // P5-BC: a deferred full seal SUCCEEDS — round answered + directive=stop persisted (both
+    // tables) + cross node_run closed. The questioner continuation entry parks the questioner home
+    // (P5-BC park source) until board dispatch mints the cross-clarify-questioner-rerun → no strand.
     const [round] = await roundOf(h.db, taskId)
-    expect(round?.status).toBe('awaiting_human')
-    expect(round?.directive ?? null).toBeNull()
+    expect(round?.status).toBe('answered')
+    expect(round?.directive).toBe('stop')
     const [legacy] = await h.db
       .select()
       .from(crossClarifySessions)
       .where(eq(crossClarifySessions.id, round!.id))
-    expect(legacy?.directive ?? null).toBeNull()
-    expect(await nodeRunStatus(h.db, nodeRunId)).toBe('awaiting_human')
-    expect(await hasPersistentStop(h.db, taskId, 'cross1')).toBe(false)
+    expect(legacy?.directive).toBe('stop')
+    expect(await nodeRunStatus(h.db, nodeRunId)).toBe('done')
+    expect((await loadUndispatchedSelfQuestionerTargets(h.db, taskId)).has('questioner')).toBe(true)
   })
 
   test('cross PARTIAL seal + directive=stop → 两表 directive 仍 NULL（hasPersistentStop=false，节点不被提前 short-circuit）', async () => {

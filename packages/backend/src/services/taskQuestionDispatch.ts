@@ -77,13 +77,23 @@ export interface DispatchTaskQuestionsResult {
   reruns: DispatchedRerun[]
   /** EVERY entry stamped dispatched_at this call (frontier + cascade handler nodes). */
   dispatchedEntryIds: string[]
+  /** RFC-128 P5-BC (R2-3 auto-split, §5.2.13): entries NOT dispatched this batch because their
+   *  home is serializing a different cause class first (a sealed designer + sealed self on the
+   *  same node). They stay STAGED — the next "批量下发" dispatches them once the first batch's
+   *  rerun is done+output (the in-flight gate releases it). Empty in the common single-cause
+   *  case (golden-lock). */
+  deferred: Array<{ entryId: string; homeNodeId: string; reason: string }>
 }
 
 type TaskQuestionRow = typeof taskQuestions.$inferSelect
 type ClarifyRoundRow = typeof clarifyRounds.$inferSelect
 type NodeRunRow = typeof nodeRuns.$inferSelect
 
-const EMPTY_RESULT: DispatchTaskQuestionsResult = { reruns: [], dispatchedEntryIds: [] }
+const EMPTY_RESULT: DispatchTaskQuestionsResult = {
+  reruns: [],
+  dispatchedEntryIds: [],
+  deferred: [],
+}
 
 /** Thrown inside the atomic tx to roll it back when a concurrent dispatcher already
  *  claimed part of the selection (→ no stamp, no mint, no orphan). */
@@ -136,6 +146,65 @@ function borrowAgentNode(e: TaskQuestionRow): string | null {
   return e.overrideTargetNodeId !== null && e.overrideTargetNodeId !== home
     ? e.overrideTargetNodeId
     : null
+}
+
+// RFC-128 P5-BC (§5.2.12 F3) — the rerun-cause class an entry's dispatch mints, derived from its
+//承接 role. A node_run carries ONE rerun_cause; entries of different classes on the same home are
+// SEPARATE reruns (serialized, never collapsed). self/questioner causes are isClarifyRerun=TRUE
+// (inline resume + directive gating); designer's cross-clarify-answer is FALSE (update mode).
+type CauseClass = 'clarify-answer' | 'cross-clarify-questioner-rerun' | 'cross-clarify-answer'
+function causeClassForEntry(e: TaskQuestionRow): CauseClass {
+  if (e.roleKind === 'self') return 'clarify-answer'
+  if (e.roleKind === 'questioner') return 'cross-clarify-questioner-rerun'
+  return 'cross-clarify-answer' // designer (incl. manual)
+}
+// Auto-split dispatch priority (§5.2.13): self/questioner (blocking-output, §0) BEFORE designer.
+const CAUSE_PRIORITY: Record<CauseClass, number> = {
+  'clarify-answer': 0,
+  'cross-clarify-questioner-rerun': 1,
+  'cross-clarify-answer': 2,
+}
+
+/**
+ * RFC-128 P5-BC dispatch readiness gate (F2, §5.2.11). Every CLARIFY-derived requested entry
+ * must be SEALED before dispatch (manual entries are always sealed — the instruction IS the
+ * content). Keyed on the seal MARKER: the entry's own `sealed_at` OR its round being 'answered'
+ * (a full seal backfills no per-entry sealed_at on the designer rows it creates) — NOT
+ * answerSummary (a partial round leaves it unreliable, Codex F3). Throws (fail-fast precondition,
+ * nothing stamped) when ANY requested clarify entry is unsealed.
+ */
+async function assertRequestedEntriesSealed(
+  db: DbClient,
+  requested: TaskQuestionRow[],
+): Promise<void> {
+  const clarifyEntries = requested.filter((e) => e.sourceKind !== 'manual')
+  const unsealed = clarifyEntries.filter((e) => e.sealedAt === null)
+  if (unsealed.length === 0) return
+  // The remaining (sealed_at NULL) entries may still be on a fully-answered round (full seal
+  // backfills no per-entry sealed_at). Resolve those rounds; only entries on a non-answered
+  // round are genuinely unsealed.
+  const originIds = Array.from(new Set(unsealed.map((e) => e.originNodeRunId)))
+  const rounds = await db
+    .select({
+      origin: clarifyRounds.intermediaryNodeRunId,
+      status: clarifyRounds.status,
+    })
+    .from(clarifyRounds)
+    .where(inArray(clarifyRounds.intermediaryNodeRunId, originIds))
+  const answeredOrigins = new Set(
+    rounds.filter((r) => r.status === 'answered').map((r) => r.origin),
+  )
+  const stillUnsealed = unsealed.filter((e) => !answeredOrigins.has(e.originNodeRunId))
+  if (stillUnsealed.length > 0) {
+    throw new ConflictError(
+      'task-question-not-sealed',
+      `cannot dispatch ${stillUnsealed.length} question(s) (${stillUnsealed
+        .map((e) => e.id)
+        .join(
+          ', ',
+        )}): their answer is not sealed yet. Seal (answer) every question before dispatching it.`,
+    )
+  }
 }
 
 /** Cross-clarify / RFC-023 CHANNEL edges (injected via prompt context, not consumed as
@@ -229,7 +298,9 @@ export async function dispatchTaskQuestions(
   // (resumeTask can't resume done/canceled), so a mint here would strand a pending rerun.
   assertTaskAcceptsQuestions(taskId, taskRow.status)
 
-  // 1. The requested still-undispatched designer entries (dispatched_at IS NULL).
+  // 1. The requested still-undispatched entries (dispatched_at IS NULL). RFC-128 P5-BC: the
+  //    designer-only filter is GONE — self/questioner entries dispatch too. Role-specific gating
+  //    (readiness, single-cause, single-borrow, in-flight, mint cause) is applied below.
   const requested = await db
     .select()
     .from(taskQuestions)
@@ -237,11 +308,20 @@ export async function dispatchTaskQuestions(
       and(
         inArray(taskQuestions.id, entryIds),
         eq(taskQuestions.taskId, taskId),
-        eq(taskQuestions.roleKind, 'designer'),
         isNull(taskQuestions.dispatchedAt),
       ),
     )
   if (requested.length === 0) return EMPTY_RESULT
+
+  // 1a. RFC-128 P5-BC dispatch readiness gate (F2, §5.2.11): every CLARIFY-derived requested
+  //     entry must be SEALED before dispatch — otherwise a not-yet-answered question would be
+  //     dispatched + bound (no answer exists) → an empty rerun that also suppresses the whole-
+  //     round path (read-side dispatched exclusion). Self/questioner entries are reconciled
+  //     UNCONDITIONALLY (not seal-gated like designer), so this is the real guard the broadening
+  //     needs. Keyed on `sealed_at` (or the whole round 'answered' — a full seal backfills no
+  //     per-entry sealed_at on designer rows) — NOT answerSummary (unreliable on a partial round,
+  //     Codex F3). Manual entries are always sealed (no clarify round). Fail-fast (precondition).
+  await assertRequestedEntriesSealed(db, requested)
 
   // 2. Per-origin single-target validation — a cross round must not be split across
   //    handlers in v1 (its session is shared). Checked against ALL still-open (un-
@@ -278,31 +358,85 @@ export async function dispatchTaskQuestions(
     }
   }
 
-  // 3. Group the requested entries by effective handler → the AFFECTED handler-node set.
-  const byTarget = new Map<string, TaskQuestionRow[]>()
+  // 3. Group the requested entries by (HOME node, rerun-cause class). RFC-127 借壳: the HOME node
+  //    (run.node_id = default ?? override) is where the borrowed rerun is minted. RFC-128 P5-BC:
+  //    the cause class (self→clarify-answer / questioner→cross-clarify-questioner-rerun /
+  //    designer→cross-clarify-answer) discriminates which entries can share ONE rerun — a single
+  //    node_run carries ONE rerun_cause (§5.2.12 F3), so different causes on the same home are
+  //    SEPARATE reruns that must serialize, never collapse.
+  const byHomeCause = new Map<string, Map<CauseClass, TaskQuestionRow[]>>()
   for (const e of requested) {
-    // RFC-127 借壳: group by HOME node (the run's node_id = default designer), not the
-    // override — the borrowed agent rides on the home node's rerun.
-    const t = homeTarget(e)
-    if (t === null) continue
-    const list = byTarget.get(t)
-    if (list) list.push(e)
-    else byTarget.set(t, [e])
+    const home = homeTarget(e)
+    if (home === null) continue
+    const cause = causeClassForEntry(e)
+    const causes = byHomeCause.get(home) ?? new Map<CauseClass, TaskQuestionRow[]>()
+    const list = causes.get(cause) ?? []
+    list.push(e)
+    causes.set(cause, list)
+    byHomeCause.set(home, causes)
   }
-  if (byTarget.size === 0) return EMPTY_RESULT
+  if (byHomeCause.size === 0) return EMPTY_RESULT
 
-  // 4a. RFC-127 借壳 per-home single-borrow gate: a home node mints ONE borrowed rerun,
-  //     which can run only ONE agent. Reject if a home group names >1 borrow agent (incl.
-  //     {X, null} = some borrowed + some self) — e.g. two rounds both onto graph designer D
-  //     but reassigned to X1/X2. The per-origin gate (above) only guards WITHIN a round;
-  //     this guards ACROSS rounds onto the same home. Dispatch them separately / align them.
-  for (const [home, group] of byTarget) {
-    const borrows = new Set(group.map(borrowAgentNode))
-    if (borrows.size > 1) {
-      throw new ConflictError(
-        'task-question-home-multi-borrow',
-        `node '${home}' would mint one borrowed rerun but its dispatched questions name multiple agents (${[...borrows].map((b) => b ?? '(self)').join(', ')}); a single rerun runs one agent — dispatch them separately or align their handler.`,
-      )
+  // 4a. Per-(home, cause) single-borrow gate (precondition, fail-fast — RFC-127 P2-1 / §5.2.13):
+  //     a (home, cause) group mints ONE borrowed rerun, which runs ONE agent. Reject if it names
+  //     >1 agent (incl. {X, null} = some borrowed + some self). Scoped PER CAUSE so a home that
+  //     legitimately holds different causes (self + designer) is NOT a multi-borrow — that is the
+  //     auto-split case below, not a reject.
+  for (const [home, causes] of byHomeCause) {
+    for (const group of causes.values()) {
+      const borrows = new Set(group.map(borrowAgentNode))
+      if (borrows.size > 1) {
+        throw new ConflictError(
+          'task-question-home-multi-borrow',
+          `node '${home}' would mint one borrowed rerun but its dispatched questions name multiple agents (${[...borrows].map((b) => b ?? '(self)').join(', ')}); a single rerun runs one agent — dispatch them separately or align their handler.`,
+        )
+      }
+    }
+  }
+
+  // 4b. RFC-128 P5-BC route auto-split (R2-3, §5.2.13): a home with MIXED cause classes (e.g. a
+  //     sealed self question + a sealed designer question both staged onto the same node) cannot
+  //     dispatch both in one batch — they are separate reruns with mutually-exclusive causes
+  //     (§5.2.12). Because §11.1 made "批量下发 = ALL staged" (no per-card checkbox),整批 reject
+  //     would dead-loop the user (全量提交 → 全量 reject). Instead AUTO-SPLIT: dispatch ONE cause
+  //     class per home this batch, DEFER the rest (stays staged). Each home keeps ≥1 cause, so the
+  //     affected-home set is UNCHANGED (only WHICH entries on a home dispatch changes). The next
+  //     "批量下发" dispatches the deferred cause once the first batch's rerun is done+output (the
+  //     in-flight gate releases it). Manual/single-cause homes are a no-op (golden-lock).
+  //
+  //     R3-2 (Codex design gate round 3, anti-starvation FAIRNESS): the cause to dispatch is the
+  //     one whose OLDEST queued entry is oldest (aging by `staged_at ?? created_at`). A fixed
+  //     "self/questioner ALWAYS first" order would starve an older delayed designer if a NEW
+  //     same-home self/questioner keeps getting (re-)staged after each batch — the next "all
+  //     staged" would forever re-pick self/questioner. Aging guarantees the delayed cause wins
+  //     once its entries are older than the newcomers. Ties (equal age) break to self/questioner
+  //     first (§0 blocking-output) so a fresh mixed batch keeps the intended ordering.
+  const dispatchEntries: TaskQuestionRow[] = []
+  const deferredEntries: Array<{ entryId: string; homeNodeId: string; reason: string }> = []
+  const byTarget = new Map<string, TaskQuestionRow[]>()
+  for (const [home, causes] of byHomeCause) {
+    // Aging key per cause = the OLDEST queued entry's (staged_at ?? created_at). The cause with
+    // the smallest key (oldest waiting) is dispatched first; CAUSE_PRIORITY tiebreaks equal ages.
+    const causeAge = (cause: CauseClass): number =>
+      Math.min(...causes.get(cause)!.map((e) => e.stagedAt ?? e.createdAt))
+    const sortedCauses = [...causes.keys()].sort((a, b) => {
+      const ageDiff = causeAge(a) - causeAge(b)
+      return ageDiff !== 0 ? ageDiff : CAUSE_PRIORITY[a] - CAUSE_PRIORITY[b]
+    })
+    const selected = sortedCauses[0]!
+    byTarget.set(home, causes.get(selected)!)
+    for (const cause of sortedCauses) {
+      if (cause === selected) {
+        dispatchEntries.push(...causes.get(cause)!)
+      } else {
+        for (const e of causes.get(cause)!) {
+          deferredEntries.push({
+            entryId: e.id,
+            homeNodeId: home,
+            reason: `node '${home}' is dispatching a different question type first (${selected}); dispatch this one after that rerun finishes (done with output).`,
+          })
+        }
+      }
     }
   }
 
@@ -354,14 +488,16 @@ export async function dispatchTaskQuestions(
   // 6. Pre-compute each frontier mint's inherited values (async reads) BEFORE the tx so the
   //    tx body is purely synchronous (atomic with the dispatched_at stamp).
   const mintPlans = await Promise.all(
-    // RFC-127 借壳: pass the home group's borrow agent (the per-home gate above ensures
-    // the group names exactly one) + the parsed definition (to resolve its agentName).
+    // RFC-127 借壳: pass the home group's borrow agent (the per-home gate above ensures the group
+    // names exactly one) + the parsed definition (to resolve its agentName). RFC-128 P5-BC: pass
+    // the home's ROLE-derived rerun cause (auto-split guarantees one cause per home this batch).
     [...frontier].map(async (nodeId) =>
       buildFrontierMintPlan(
         db,
         taskId,
         nodeId,
         borrowAgentNode(byTarget.get(nodeId)![0]!),
+        causeClassForEntry(byTarget.get(nodeId)![0]!),
         definition,
       ),
     ),
@@ -376,7 +512,9 @@ export async function dispatchTaskQuestions(
   //    → the same ConflictError; no double-mint). It reads PRIOR dispatched entries only (this
   //    batch is stamped BELOW). Within ONE dispatch the byTarget grouping already yields
   //    exactly one rerun per node (q1+q2 to the same node → one mint plan → one rerun).
-  const requestedIds = requested.map((e) => e.id)
+  // RFC-128 P5-BC: stamp + plan only the AUTO-SPLIT-selected entries (dispatchEntries), not the
+  // full requested set — the deferred (lower-cause) entries stay staged for a follow-up batch.
+  const dispatchIds = dispatchEntries.map((e) => e.id)
   // Codex (ship-gate) — the snapshot the mint plan was computed from: each entry's effective
   // target (override ?? default) + origin round. A concurrent reassignTaskQuestion can change
   // override_target_node_id while dispatched_at is NULL (between this read and the tx below),
@@ -384,7 +522,7 @@ export async function dispatchTaskQuestions(
   // gets no rerun + the old node's queue won't bind it → stranded `processing`. The tx re-
   // verifies this snapshot is still current before stamping.
   const plannedByEntry = new Map(
-    requested.map((e) => [e.id, { target: effectiveTarget(e), origin: e.originNodeRunId }]),
+    dispatchEntries.map((e) => [e.id, { target: effectiveTarget(e), origin: e.originNodeRunId }]),
   )
   const now = Date.now()
   let committed = false
@@ -414,9 +552,9 @@ export async function dispatchTaskQuestions(
           origin: taskQuestions.originNodeRunId,
         })
         .from(taskQuestions)
-        .where(and(inArray(taskQuestions.id, requestedIds), isNull(taskQuestions.dispatchedAt)))
+        .where(and(inArray(taskQuestions.id, dispatchIds), isNull(taskQuestions.dispatchedAt)))
         .all()
-      if (stillNull.length !== requestedIds.length) throw new ConcurrentClaim()
+      if (stillNull.length !== dispatchIds.length) throw new ConcurrentClaim()
       // Re-verify the planned snapshot is unchanged (atomic with the stamp+mint). A concurrent
       // reassign/reconcile that moved any entry's effective target (or origin) → retryable
       // rollback; the caller re-plans against the new target and retries (nothing stamped/minted).
@@ -427,13 +565,17 @@ export async function dispatchTaskQuestions(
           throw new TargetChanged(c.id)
         }
       }
+      // RFC-128 P5-BC (R2-2, §5.2.12 contract 3): the in-flight recheck spans ANY deferred role
+      // (self/questioner/designer) dispatched entry — the cross-batch serialization half. A
+      // home with an in-flight self/questioner dispatch must block a later designer dispatch (and
+      // vice-versa), or the two same-home reruns double-mint.
       const txEntries = tx
         .select()
         .from(taskQuestions)
         .where(
           and(
             eq(taskQuestions.taskId, taskId),
-            eq(taskQuestions.roleKind, 'designer'),
+            inArray(taskQuestions.roleKind, ['self', 'questioner', 'designer']),
             isNotNull(taskQuestions.dispatchedAt),
           ),
         )
@@ -463,7 +605,7 @@ export async function dispatchTaskQuestions(
       }
       tx.update(taskQuestions)
         .set({ dispatchedAt: now, dispatchedBy: actor.userId, updatedAt: now })
-        .where(and(inArray(taskQuestions.id, requestedIds), isNull(taskQuestions.dispatchedAt)))
+        .where(and(inArray(taskQuestions.id, dispatchIds), isNull(taskQuestions.dispatchedAt)))
         .run()
       for (const p of mintPlans) {
         // RFC-098 WP-10 forbids direct node_runs inserts outside the mint factory. This
@@ -497,16 +639,17 @@ export async function dispatchTaskQuestions(
   const reruns: DispatchedRerun[] = mintPlans.map((p) => ({
     targetNodeId: p.nodeId,
     nodeRunId: p.preId,
-    entryIds: requested.filter((e) => homeTarget(e) === p.nodeId).map((e) => e.id),
+    entryIds: dispatchEntries.filter((e) => homeTarget(e) === p.nodeId).map((e) => e.id),
   }))
   log.info('task questions dispatched', {
     taskId,
     actorUserId: actor.userId,
-    dispatchedEntryCount: requestedIds.length,
+    dispatchedEntryCount: dispatchIds.length,
+    deferredEntryCount: deferredEntries.length,
     affectedNodeCount: affected.size,
     frontierRerunCount: reruns.length,
   })
-  return { reruns, dispatchedEntryIds: requestedIds }
+  return { reruns, dispatchedEntryIds: dispatchIds, deferred: deferredEntries }
 }
 
 /** Minimal projection both the async pre-check and the in-tx recheck pass to the pure
@@ -593,13 +736,18 @@ async function assertNoInFlightDispatch(
   taskId: string,
   affected: ReadonlySet<string>,
 ): Promise<void> {
+  // RFC-128 P5-BC (R2-2, §5.2.12 contract 3): span ANY deferred role (self/questioner/designer),
+  // not designer-only — a home with an in-flight self/questioner dispatch must block a later
+  // designer dispatch (and vice-versa), or the same-home reruns double-mint (cross-batch
+  // serialization). isDispatchedEntryConsumed / findOpenDispatchTarget are already role-agnostic
+  // (they key on the HOME = default ?? override + trigger_run_id lineage).
   const entries = await db
     .select()
     .from(taskQuestions)
     .where(
       and(
         eq(taskQuestions.taskId, taskId),
-        eq(taskQuestions.roleKind, 'designer'),
+        inArray(taskQuestions.roleKind, ['self', 'questioner', 'designer']),
         isNotNull(taskQuestions.dispatchedAt),
       ),
     )
@@ -613,7 +761,7 @@ async function assertNoInFlightDispatch(
   if (blocker !== null) {
     throw new ConflictError(
       'task-question-node-dispatch-in-flight',
-      `cannot dispatch to '${blocker}': it already has an OPEN (unconsumed) dispatched designer question. Dispatch the remaining questions after that node's rerun finishes (done with output).`,
+      `cannot dispatch to '${blocker}': it already has an OPEN (unconsumed) dispatched question. Dispatch the remaining questions after that node's rerun finishes (done with output).`,
     )
   }
 }
@@ -678,24 +826,132 @@ export async function resolveBorrowForNode(
 ): Promise<string | null> {
   const immediate = await resolveImmediateBorrowForNode(db, taskId, nodeId, iteration, workflowDef)
   const designer = await resolveDesignerBorrowForNode(db, taskId, nodeId, iteration, workflowDef)
-  // P2-2 (Codex impl-gate, 2 rounds): a self/questioner continuation AND a dispatched designer
-  // rerun open on the SAME home+iteration are SEPARATE pending node_runs (clarify-answer /
-  // cross-clarify-questioner-rerun vs cross-clarify-answer; designer dispatch's in-flight gate
-  // only sees dispatched_at rows, NOT the immediate continuation). runOneNode consumes/binds by
-  // NODE (markClarifyRoundsConsumedBy + buildExternalFeedbackContext), not by ledger — the first
-  // run to fire stamps BOTH ledgers and the other pending row runs later as stale duplicate work
-  // (or orphans, per ULID order). So EVEN when both ledgers borrow the SAME agent the EXECUTION
-  // is ambiguous (duplicate work), not merely agent-selection — reject any same-home dual-ledger
-  // overlap; the user resolves one before the node reruns. (Gate round 1 said same-agent was
-  // fine — no agent-selection ambiguity — but round 2 caught the deeper duplicate-execution
-  // hazard; round 2 wins.)
-  if (immediate !== null && designer !== null) {
+  // RFC-128 P5-BC (clean-path ④ / §5.2.12 F3): the THIRD ledger — control-channel DISPATCHED
+  // self/questioner reruns (deferred per-question dispatch; dispatched_at + trigger_run_id
+  // consumption, mirroring the designer ledger but keyed by the asking run's iteration for the
+  // self loop_iter=0 projection — P2-3).
+  const deferredSelfQ = await resolveDeferredSelfQuestionerBorrowForNode(
+    db,
+    taskId,
+    nodeId,
+    iteration,
+    workflowDef,
+  )
+  // P2-2 (Codex impl-gate, 2 rounds) + RFC-128 §5.2.12 F3 (collapse 推翻, dual→triple ledger):
+  // two reruns open on the SAME home+iteration across ANY two ledgers are SEPARATE pending
+  // node_runs with MUTUALLY-EXCLUSIVE causes (clarify-answer / cross-clarify-questioner-rerun
+  // [isClarifyRerun TRUE] vs cross-clarify-answer [FALSE]). runOneNode consumes/binds by NODE,
+  // not by ledger — the first run to fire binds, and the other pending row runs later as stale
+  // duplicate work (or orphans, per ULID order). So EVEN when two ledgers borrow the SAME agent
+  // the EXECUTION is ambiguous (duplicate work) AND a single node_run carries ONE rerun_cause
+  // that cannot serve two roles — reject any same-home multi-ledger overlap (the early-draft
+  // "same agent → collapse one rerun" is WRONG: cause is single-valued + exclusive). The user
+  // resolves one before the node reruns (dispatch serializes via single-cause gate + the
+  // in-flight gate). The two same-home borrows are serialized across batches, not collapsed.
+  const openLedgers = [immediate, designer, deferredSelfQ].filter((b): b is string => b !== null)
+  if (openLedgers.length > 1) {
     throw new ConflictError(
       'task-question-borrow-ledger-conflict',
-      `node '${nodeId}' (iter ${iteration}) has BOTH an open self/questioner reassignment (→ ${immediate}) and an open dispatched designer reassignment (→ ${designer}); they are separate pending reruns that would duplicate execution — resolve one before the node reruns.`,
+      `node '${nodeId}' (iter ${iteration}) has multiple open reassignment ledgers (self/questioner immediate → ${immediate ?? '(none)'}, dispatched designer → ${designer ?? '(none)'}, dispatched self/questioner → ${deferredSelfQ ?? '(none)'}); they are separate pending reruns with mutually-exclusive causes that would duplicate execution — resolve / serialize them before the node reruns.`,
     )
   }
-  return immediate ?? designer
+  return openLedgers[0] ?? null
+}
+
+/**
+ * RFC-128 P5-BC (clean-path ④, §5.2.12 F3) — the deferred self/questioner borrow ledger.
+ * Control-channel DISPATCHED self/questioner reruns (dispatched_at set by dispatchTaskQuestions),
+ * mirroring resolveDesignerBorrowForNode's `isDispatchedEntryConsumed` consumption (dispatched_at
+ * + trigger_run_id lineage → done+output = consumed, drop borrow; queued/failed/outputless = keep
+ * borrowing). Unlike the designer ledger (keyed on task_questions.loop_iter), self rows project
+ * loop_iter=0, so the wrapper-loop iteration is matched via the round's ASKING run iteration
+ * (P2-3, same as the immediate ledger). Single-borrow gate (P2-1) rejects a home reassigned to
+ * conflicting agents in one continuation. Returns the borrowed agentName, or null.
+ */
+async function resolveDeferredSelfQuestionerBorrowForNode(
+  db: DbClient,
+  taskId: string,
+  nodeId: string,
+  iteration: number,
+  workflowDef: WorkflowDefinition,
+): Promise<string | null> {
+  // Control-channel DISPATCHED self/questioner entries (dispatched_at set). Include no-override
+  // rows so a "borrow X + run self" mix on one home is DETECTED (P2-1), not first-picked.
+  const entries = await db
+    .select()
+    .from(taskQuestions)
+    .where(
+      and(
+        eq(taskQuestions.taskId, taskId),
+        inArray(taskQuestions.roleKind, ['self', 'questioner']),
+        isNotNull(taskQuestions.dispatchedAt),
+      ),
+    )
+  const homeEntries = entries.filter((e) => homeTarget(e) === nodeId)
+  if (homeEntries.length === 0) return null
+  // Golden-lock fast path: no real borrow on this home → no rounds/runs read needed.
+  if (!homeEntries.some((e) => isBorrowHomeFor(e, nodeId))) return null
+
+  const rounds = await db
+    .select()
+    .from(clarifyRounds)
+    .where(
+      and(
+        eq(clarifyRounds.taskId, taskId),
+        inArray(
+          clarifyRounds.intermediaryNodeRunId,
+          homeEntries.map((e) => e.originNodeRunId),
+        ),
+      ),
+    )
+  const roundByOrigin = new Map(rounds.map((r) => [r.intermediaryNodeRunId, r]))
+  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const runById = new Map(runs.map((r) => [r.id, r]))
+  const outputRunIds = await runIdsWithOutput(
+    db,
+    runs.map((r) => r.id),
+  )
+  const lineageViews: RunLineageView[] = runs.map((r) => ({
+    id: r.id,
+    nodeId: r.nodeId,
+    iteration: r.iteration,
+    loopIter: 0,
+    rerunCause: r.rerunCause,
+    status: r.status,
+    startedAt: r.startedAt,
+    hasOutput: outputRunIds.has(r.id),
+    parentNodeRunId: r.parentNodeRunId,
+  }))
+  // OPEN (unconsumed) home entries at THIS loop iteration, matched via the asking run (P2-3),
+  // consumed via the dispatched-entry lineage (isDispatchedEntryConsumed, same oracle the
+  // read-side resolveDispatchedEntryHandler + park source use).
+  const open = homeEntries.filter((e) => {
+    const round = roundByOrigin.get(e.originNodeRunId)
+    if (round === undefined) return false
+    const askingRun = runById.get(round.askingNodeRunId)
+    if (askingRun === undefined || askingRun.iteration !== iteration) return false
+    return !isDispatchedEntryConsumed(e, runs, lineageViews)
+  })
+  if (open.length === 0) return null
+
+  const borrows = new Set(
+    open.map((e) => (isBorrowHomeFor(e, nodeId) ? e.overrideTargetNodeId : null)),
+  )
+  if (borrows.size > 1) {
+    throw new ConflictError(
+      'task-question-home-multi-borrow',
+      `node '${nodeId}' (iter ${iteration}) has dispatched self/questioner questions reassigned to conflicting handlers (${[
+        ...borrows,
+      ]
+        .map((b) => b ?? '(self)')
+        .join(
+          ', ',
+        )}) in one continuation; a single rerun runs one agent — align them to one handler.`,
+    )
+  }
+  const borrowNode = [...borrows][0] ?? null
+  if (borrowNode === null) return null
+  return resolveNodeAgentName(workflowDef, borrowNode)
 }
 
 /**
@@ -781,6 +1037,10 @@ async function resolveImmediateBorrowForNode(
   // ALL self/questioner entries — include no-override ("run self") rows so a "borrow X + run
   // self" mix within one home is DETECTED (P2-1), not silently first-picked. No loop_iter filter
   // here (self rows project 0); iteration is matched via the round's asking run below (P2-3).
+  // RFC-128 P5-BC: EXCLUDE control-channel per-question entries (`sealed_at` set) — those ride
+  // the DEFERRED self/questioner ledger (resolveDeferredSelfQuestionerBorrowForNode, dispatched_at
+  // consumption), not the quick-channel round-based immediate ledger. `sealed_at` NULL ⟺ a
+  // quick-channel continuation (the only thing this ledger owns) → byte-for-byte golden-lock.
   const entries = await db
     .select()
     .from(taskQuestions)
@@ -788,6 +1048,7 @@ async function resolveImmediateBorrowForNode(
       and(
         eq(taskQuestions.taskId, taskId),
         inArray(taskQuestions.roleKind, ['self', 'questioner']),
+        isNull(taskQuestions.sealedAt),
       ),
     )
   // home = default ?? override (self: the asking node P; questioner: the questioner node).
@@ -909,8 +1170,13 @@ async function assertDesignerReady(
   group: TaskQuestionRow[],
   definition: WorkflowDefinition,
 ): Promise<void> {
-  const graphSubset = group.filter((e) => e.defaultTargetNodeId === targetNodeId)
-  if (graphSubset.length === 0) return // pure-override group — not the graph designer
+  // RFC-128 P5-BC: scope to DESIGNER rows — a self/questioner home (self/cross-questioner entries)
+  // is NOT a cross-clarify graph designer, so multi-source designer readiness does not apply to it
+  // (assertDesignerReady 对 self/q 跳过, §5.2.12). A pure-override / self/q group → empty → skip.
+  const graphSubset = group.filter(
+    (e) => e.defaultTargetNodeId === targetNodeId && e.roleKind === 'designer',
+  )
+  if (graphSubset.length === 0) return // pure-override or self/questioner group — not the graph designer
   // RFC-128 P3: the rounds we are dispatching FROM are exempt from the awaiting_human "pending"
   // gate — their sealed questions are the whole point of this dispatch (a partial-seal round
   // stays awaiting_human). origin_node_run_id == cross_clarify_sessions.cross_clarify_node_run_id,
@@ -954,6 +1220,10 @@ async function buildFrontierMintPlan(
   targetNodeId: string,
   // RFC-127 借壳: the node whose agent X is borrowed (null = home runs its own agent).
   borrowOverrideNodeId: string | null,
+  // RFC-128 P5-BC (F3): the role-derived rerun cause (self→clarify-answer / questioner→
+  // cross-clarify-questioner-rerun / designer→cross-clarify-answer). The whole batch on a home
+  // is one cause (auto-split). Replaces the old hardcoded 'cross-clarify-answer'.
+  cause: CauseClass,
   definition: WorkflowDefinition,
 ): Promise<FrontierMintPlan> {
   const targetRuns = await db
@@ -981,7 +1251,7 @@ async function buildFrontierMintPlan(
     taskId,
     nodeId: targetNodeId,
     status: 'pending',
-    cause: 'cross-clarify-answer',
+    cause,
     retryIndex,
     iteration: last.iteration,
     inheritFrom: last,

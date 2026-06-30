@@ -39,6 +39,7 @@ import {
   crossClarifySessions,
   nodeRuns,
   taskQuestions,
+  tasks,
 } from '@/db/schema'
 import { parseAnswersArray, sealAnswersServerSide } from '@/services/clarify'
 import { reconcileRoundEntriesTx } from '@/services/taskQuestions'
@@ -79,15 +80,17 @@ export interface SealRoundQuestionsArgs {
    *  also what the §18 designer park requires (loadUndispatchedDesignerTargets filters
    *  directive='continue'), so a full continue-seal correctly parks until board dispatch. */
   directive?: ClarifyDirective
-  /** RFC-128 P5-0 (hotfix stranding guard) — when true, REJECT a full seal of a round that
-   *  needs a self/questioner CONTINUATION rerun (a self round, or a cross round with any
-   *  questioner-scope question). The control channel mints no rerun and there is no
-   *  self/questioner undispatched-park source yet (per-question self/questioner rerun + park is
-   *  RFC-128 P5-B/C), so such a full seal would close the intermediary node_run, release the
-   *  asking-run park, and strand the continuation. The API route opts in; the raw storage
-   *  primitive (and the P1 golden-lock tests / future P5-B/C callers) leave it false. DESIGNER-
-   *  only cross full seal is unaffected (the §18 designer park holds it). Decision is by round
-   *  KIND + per-question SCOPE — never the directive — mirroring reconcileDesiredEntries. */
+  /** RFC-128 P5-0 hotfix stranding guard, NARROWED by P5-BC (§5.2.1) — when true, REJECT a full
+   *  seal of a self/questioner-continuation round (a self round, or a cross round with a
+   *  questioner-scope question / directive=stop) **only on a NON-deferred task**. On a NON-deferred
+   *  task there is no self/questioner park source (loadUndispatchedSelfQuestionerTargets self-gates
+   *  on the deferred flag), so such a full seal would close the intermediary node_run, release the
+   *  asking-run park, and strand the continuation. On a DEFERRED task P5-BC's park + dispatch path
+   *  IS the release path — the seal is ALLOWED (the sealed entry parks its home until board
+   *  dispatch mints the continuation), so the guard is LIFTED. The API route opts in; the raw
+   *  storage primitive leaves it false. DESIGNER-only cross full seal is unaffected (the §18
+   *  designer park holds it). Decision is by round KIND + per-question SCOPE — never the directive
+   *  alone — mirroring reconcileDesiredEntries. */
   rejectSelfQuestionerFullSeal?: boolean
   now?: () => number
 }
@@ -247,7 +250,17 @@ export async function sealRoundQuestions(
     // rerun + park is RFC-128 P5-B/C; until then opted-in callers (the API route) REJECT it.
     // PARTIAL seals are always allowed (the round stays awaiting_human → the OPEN session keeps
     // the asking run parked → no strand). Thrown BEFORE any write so the tx rolls back cleanly.
-    if (args.rejectSelfQuestionerFullSeal === true && fullySealed) {
+    // RFC-128 P5-BC (§5.2.1): the guard is LIFTED on a DEFERRED task — P5-BC's self/questioner
+    // park source (loadUndispatchedSelfQuestionerTargets) + control-channel dispatch IS the
+    // release path, so a deferred full seal parks (not strands). It STILL fires on a NON-deferred
+    // task (no park source → strand). Read the task's deferred flag inside the tx (atomic).
+    const taskDeferred =
+      tx
+        .select({ deferred: tasks.deferredQuestionDispatch })
+        .from(tasks)
+        .where(eq(tasks.id, round.taskId))
+        .all()[0]?.deferred === true
+    if (args.rejectSelfQuestionerFullSeal === true && fullySealed && !taskDeferred) {
       const isSelf = round.kind === 'self'
       const isCrossStop = round.kind === 'cross' && effectiveDirective === 'stop'
       const hasQuestionerScope =

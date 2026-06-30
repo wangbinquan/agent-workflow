@@ -451,7 +451,9 @@ describe('TaskQuestionList centralized answer pane entry (RFC-128 T9)', () => {
     expect(screen.queryByTestId('tq-open-answer-pane')).toBeNull()
   })
 
-  test('deferred but only self-clarify unsealed → no entry button (Codex P1-2, pane is designer-mainline)', async () => {
+  test('deferred + an unsealed SELF-clarify pending question → entry button shows (RFC-128 P5-BC)', async () => {
+    setBaseUrl('http://daemon.test')
+    setToken('tok')
     await wrapDeferred([
       entry({
         id: 'e1',
@@ -462,7 +464,10 @@ describe('TaskQuestionList centralized answer pane entry (RFC-128 T9)', () => {
         roleKind: 'self',
       }),
     ])
-    expect(screen.queryByTestId('tq-open-answer-pane')).toBeNull()
+    // RFC-128 P5-BC: self-clarify is now answerable via the pane (park + dispatch path), so the
+    // entry button shows for a self-only unsealed pool (was hidden under the P4 designer-mainline).
+    fireEvent.click(screen.getByTestId('tq-open-answer-pane'))
+    await waitFor(() => expect(screen.getByTestId('centralized-answer-dialog')).toBeTruthy())
   })
 
   test('non-deferred task with an unsealed pending question → no entry button', async () => {

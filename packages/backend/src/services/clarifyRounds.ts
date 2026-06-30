@@ -19,13 +19,22 @@
 //     eliminating the cross-iteration vs unified-clarifyIteration counter
 //     mismatch class of bugs (see RFC-070 proposal §1).
 
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNotNull, isNull, notInArray, or } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { clarifyRounds, clarifySessions, crossClarifySessions, tasks } from '@/db/schema'
+import {
+  clarifyRounds,
+  clarifySessions,
+  crossClarifySessions,
+  nodeRunOutputs,
+  nodeRuns,
+  taskQuestions,
+  tasks,
+} from '@/db/schema'
 import {
   buildClarifyPromptBlock,
+  NEW_CLARIFY_TRIGGER_CAUSES,
   renderClarifyQuestionsBlock,
   type ClarifyAnswer,
   type ClarifyAnswerAttributions,
@@ -99,6 +108,19 @@ export async function markClarifyRoundsConsumedBy(
   run: MarkClarifyRoundsConsumedByArgs,
 ): Promise<void> {
   const shardKey = run.shardKey
+  // RFC-128 P5-BC (clean-path ②, §5.2.3②): on a DEFERRED task, a self/questioner round that
+  // went per-question DISPATCH is consumed PER-ENTRY (its trigger_run_id binding +
+  // resolveDispatchedEntryHandler), NOT by this whole-round stamp — a whole-round stamp would
+  // over-consume a partial round's still-undispatched sibling questions. So exclude those rounds
+  // from the self/questioner whole-round stamp below. A NON-deferred task (or a deferred round
+  // that never went per-question — the quick-channel immediate path) keeps the whole-round stamp
+  // byte-for-byte (golden-lock). The designer block (2) is unaffected — its per-node queue never
+  // reads the whole-round stamp, so the existing designer stamp is harmless.
+  const deferred = await isDeferredTask(db, run.taskId)
+  const excludedSelfRoundIds = deferred ? await dispatchedRoundIds(db, run.taskId, 'self') : []
+  const excludedQuestionerRoundIds = deferred
+    ? await dispatchedRoundIds(db, run.taskId, 'questioner')
+    : []
   // --- 1. self-clarify (clarify_rounds + clarify_sessions mirror) ---
   await db
     .update(clarifyRounds)
@@ -113,6 +135,9 @@ export async function markClarifyRoundsConsumedBy(
         shardKey === null
           ? isNull(clarifyRounds.askingShardKey)
           : eq(clarifyRounds.askingShardKey, shardKey),
+        ...(excludedSelfRoundIds.length > 0
+          ? [notInArray(clarifyRounds.id, excludedSelfRoundIds)]
+          : []),
       ),
     )
   await db
@@ -127,6 +152,11 @@ export async function markClarifyRoundsConsumedBy(
         shardKey === null
           ? isNull(clarifySessions.sourceShardKey)
           : eq(clarifySessions.sourceShardKey, shardKey),
+        // Legacy session shares its id with the clarify round (RFC-058 dual-write) → same
+        // exclusion set keeps the two tables in lockstep (dual-write-consistency nets).
+        ...(excludedSelfRoundIds.length > 0
+          ? [notInArray(clarifySessions.id, excludedSelfRoundIds)]
+          : []),
       ),
     )
   // --- 2. cross-clarify designer (clarify_rounds + cross_clarify_sessions mirror) ---
@@ -175,6 +205,11 @@ export async function markClarifyRoundsConsumedBy(
         eq(clarifyRounds.askingNodeId, run.nodeId),
         eq(clarifyRounds.status, 'answered'),
         isNull(clarifyRounds.consumedByQuestionerRunId),
+        // RFC-128 P5-BC (clean-path ②): exclude per-question DISPATCHED questioner rounds
+        // (consumed per-entry, not whole-round). golden-lock for quick-channel rounds.
+        ...(excludedQuestionerRoundIds.length > 0
+          ? [notInArray(clarifyRounds.id, excludedQuestionerRoundIds)]
+          : []),
       ),
     )
   await db
@@ -186,8 +221,49 @@ export async function markClarifyRoundsConsumedBy(
         eq(crossClarifySessions.sourceQuestionerNodeId, run.nodeId),
         eq(crossClarifySessions.status, 'answered'),
         isNull(crossClarifySessions.consumedByQuestionerRunId),
+        ...(excludedQuestionerRoundIds.length > 0
+          ? [notInArray(crossClarifySessions.id, excludedQuestionerRoundIds)]
+          : []),
       ),
     )
+}
+
+/** RFC-128 P5-BC (clean-path ②) — is the task a deferred-dispatch task? */
+async function isDeferredTask(db: DbClient, taskId: string): Promise<boolean> {
+  const row = (
+    await db
+      .select({ deferred: tasks.deferredQuestionDispatch })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
+  )[0]
+  return row?.deferred === true
+}
+
+/** RFC-128 P5-BC (clean-path ②) — clarify_rounds.id of every round with ≥1 per-question
+ *  DISPATCHED entry of the given self/questioner role. Those rounds are consumed PER-ENTRY
+ *  (trigger_run_id), so markClarifyRoundsConsumedBy excludes them from the whole-round stamp.
+ *  Keyed on `dispatched_at` (the per-question dispatch marker), matching the read-side exclusion. */
+async function dispatchedRoundIds(
+  db: DbClient,
+  taskId: string,
+  roleKind: 'self' | 'questioner',
+): Promise<string[]> {
+  const rows = await db
+    .select({ id: clarifyRounds.id })
+    .from(clarifyRounds)
+    .innerJoin(
+      taskQuestions,
+      eq(taskQuestions.originNodeRunId, clarifyRounds.intermediaryNodeRunId),
+    )
+    .where(
+      and(
+        eq(clarifyRounds.taskId, taskId),
+        eq(taskQuestions.roleKind, roleKind),
+        isNotNull(taskQuestions.dispatchedAt),
+      ),
+    )
+  return rows.map((r) => r.id)
 }
 
 // ---------------------------------------------------------------------------
@@ -243,8 +319,16 @@ export async function selectAnsweredRoundsForConsumer(
         ),
       )
     const shardKey = args.shardKey ?? null
+    // RFC-128 P5-BC (clean-path, double-injection 读侧半 §5.2.5): drop any round that has a
+    // per-question DISPATCHED self entry — it is now injected per-question by
+    // buildClarifyNodeQueueContext, so the whole-round path must not ALSO inject it. Keyed on
+    // `dispatched_at` (NOT `sealed_at`): a sealed-but-undispatched question is not yet
+    // per-question injected (dispatch is what triggers it), so it must still ride the
+    // whole-round path until dispatched (else it would be dropped from BOTH paths).
+    const dispatchedSelfOrigins = await roundsWithDispatchedEntries(args.db, args.taskId, 'self')
     return rows
       .filter((r) => (r.askingShardKey ?? null) === shardKey)
+      .filter((r) => !dispatchedSelfOrigins.has(r.intermediaryNodeRunId))
       .sort((a, b) => a.iteration - b.iteration)
   }
 
@@ -297,7 +381,42 @@ export async function selectAnsweredRoundsForConsumer(
         isNull(clarifyRounds.consumedByQuestionerRunId),
       ),
     )
-  return rows.sort((a, b) => a.iteration - b.iteration)
+  // RFC-128 P5-BC (double-injection 读侧半 §5.2.5): drop any round with a per-question
+  // DISPATCHED QUESTIONER entry (it is now injected per-question by buildClarifyNodeQueueContext).
+  // ROLE-SPECIFIC: a dispatched DESIGNER entry of the same cross round must NOT suppress the
+  // questioner's whole-round read — the designer rides its own per-node queue (P3 mainline) and
+  // the questioner keeps seeing the full round until ITS OWN question is dispatched (P5-BC).
+  const dispatchedQuestionerOrigins = await roundsWithDispatchedEntries(
+    args.db,
+    args.taskId,
+    'questioner',
+  )
+  return rows
+    .filter((r) => !dispatchedQuestionerOrigins.has(r.intermediaryNodeRunId))
+    .sort((a, b) => a.iteration - b.iteration)
+}
+
+/** RFC-128 P5-BC (double-injection 读侧半 §5.2.5) — origin node-run ids of the rounds that
+ *  have ≥1 per-question DISPATCHED entry of the given role (`dispatched_at IS NOT NULL`). A
+ *  round in this set is injected per-question (buildClarifyNodeQueueContext), so the whole-round
+ *  read path (selectAnsweredRoundsForConsumer) must exclude it — the scheduler 二选一 (XOR)
+ *  read-side half. `origin_node_run_id == clarify_rounds.intermediary_node_run_id`. */
+async function roundsWithDispatchedEntries(
+  db: DbClient,
+  taskId: string,
+  roleKind: 'self' | 'questioner',
+): Promise<Set<string>> {
+  const rows = await db
+    .select({ origin: taskQuestions.originNodeRunId })
+    .from(taskQuestions)
+    .where(
+      and(
+        eq(taskQuestions.taskId, taskId),
+        eq(taskQuestions.roleKind, roleKind),
+        isNotNull(taskQuestions.dispatchedAt),
+      ),
+    )
+  return new Set(rows.map((r) => r.origin))
 }
 
 // ---------------------------------------------------------------------------
@@ -397,27 +516,12 @@ export async function buildPromptContext(
       continue
     }
     const isLast = i === rows.length - 1
-    // RFC-122: the on-canvas STOP/CONTINUE toggle (directiveOverride) takes
-    // precedence over the answered round's own directive for the LAST round —
-    // so a node toggled to 'stop' renders the STOP CLARIFYING trailer + reports
-    // ctx.directive='stop' even if the user's last answer clicked "keep". No
-    // override ⇒ `args.directiveOverride` is undefined ⇒ row directive (unchanged).
-    const rowDirective = (row.directive ?? 'continue') as ClarifyDirective
-    // RFC-122: the on-canvas toggle (directiveOverride) overrides the last round's
-    // own directive. RFC-123: a 'continue' override (re-enable) applies ONLY when it
-    // is at least as recent as this answered round — a stale pre-RFC-123 'continue'
-    // toggle row must not re-enable a LATER 'stop' answer. 'stop' is unconditional
-    // (RFC-122 durable); no directiveOverrideAt ⇒ no recency gate (byte-for-byte for
-    // callers that don't pass it).
-    let overrideApplies = isLast && args.directiveOverride !== undefined
-    if (
-      overrideApplies &&
-      args.directiveOverride === 'continue' &&
-      args.directiveOverrideAt !== undefined
-    ) {
-      overrideApplies = args.directiveOverrideAt >= (row.answeredAt ?? 0)
-    }
-    const directive = overrideApplies ? (args.directiveOverride as ClarifyDirective) : rowDirective
+    const directive = resolveRoundDirective(
+      row,
+      isLast,
+      args.directiveOverride,
+      args.directiveOverrideAt,
+    )
     if (isLast && applyLatestDirective) latestDirective = directive
     const roundLabel = `### Round ${row.iteration + 1}`
     questionParts.push(`${roundLabel}\n${renderClarifyQuestionsBlock(questions)}`)
@@ -437,6 +541,299 @@ export async function buildPromptContext(
     ...(inlineMode ? { mode: 'inline' as const, currentRoundOnly: true } : {}),
   }
   return ctx
+}
+
+/**
+ * RFC-122/123 round directive resolution (extracted from buildPromptContext's loop so the
+ * per-question builder below renders the trailer byte-for-byte). The on-canvas STOP/CONTINUE
+ * toggle (directiveOverride) wins over the answered round's own directive for the LAST round.
+ * A 'continue' override (re-enable) applies ONLY when it is at least as recent as this round
+ * (RFC-123 recency gate); 'stop' is unconditional (RFC-122 durable). No override / no
+ * directiveOverrideAt ⇒ byte-for-byte the row's own directive.
+ */
+function resolveRoundDirective(
+  row: Pick<typeof clarifyRounds.$inferSelect, 'directive' | 'answeredAt'>,
+  isLast: boolean,
+  directiveOverride: ClarifyDirective | undefined,
+  directiveOverrideAt: number | undefined,
+): ClarifyDirective {
+  const rowDirective = (row.directive ?? 'continue') as ClarifyDirective
+  let overrideApplies = isLast && directiveOverride !== undefined
+  if (overrideApplies && directiveOverride === 'continue' && directiveOverrideAt !== undefined) {
+    overrideApplies = directiveOverrideAt >= (row.answeredAt ?? 0)
+  }
+  return overrideApplies ? (directiveOverride as ClarifyDirective) : rowDirective
+}
+
+// ---------------------------------------------------------------------------
+// buildClarifyNodeQueueContext (RFC-128 P5-BC, clean-path ①) — the self/questioner
+// per-question MIRROR of crossClarify.buildNodeQueueExternalFeedback, but rendered into the
+// SAME ClarifyPromptContext shape buildPromptContext returns (drop-in for the scheduler's
+// self / cross-questioner clarify injection). For a DEFERRED task whose asking/questioner node
+// holds DISPATCHED self/questioner questions, this is the AUTHORITATIVE injection (the
+// scheduler 二选一 XOR-suppresses the whole-round buildPromptContext path; the read-side
+// roundsWithDispatchedEntries exclusion is the other half — §5.2.5 double-injection root-out).
+// ---------------------------------------------------------------------------
+
+export interface BuildClarifyNodeQueueContextArgs {
+  db: DbClient
+  definition: WorkflowDefinition
+  taskId: string
+  /** 'self' → self entries (asking node == consumerNodeId); 'cross-questioner' → questioner
+   *  entries (questioner node == consumerNodeId). Designer uses the EF per-node queue, not this. */
+  consumerKind: 'self' | 'cross-questioner'
+  /** The HOME node this rerun runs on (= the run's node_id; the entry's default ?? override). */
+  consumerNodeId: string
+  /** This rerun's OWN node_run id — frames the lineage window (renderableForRun) + the
+   *  trigger_run_id binding (per-entry consume marker, clean-path ②). */
+  dispatchedRunId: string
+  /** ctx.iteration (clarifyGeneration) — matches buildPromptContext's targetIteration. */
+  targetIteration: number
+  sessionMode?: 'isolated' | 'inline'
+  applyLatestDirective?: boolean
+  directiveOverride?: ClarifyDirective
+  directiveOverrideAt?: number
+}
+
+/**
+ * Build the self/questioner clarify ClarifyPromptContext from THIS home node's
+ * dispatched-unconsumed per-question queue, and BIND that queue to the current rerun. Mirrors
+ * buildNodeQueueExternalFeedback's selection + lineage window + binding, then renders via the
+ * RFC-023 ClarifyPromptContext shape (so renderUserPrompt emits the same `## Clarify Q&A`
+ * sections). Returns undefined when this node has no renderable per-question queue.
+ *
+ * Golden-lock (R2-4 注入条件 §5.2.6): when the rendered round's dispatched set covers EVERY
+ * question of the round (a full-round same-batch dispatch) → render byte-for-byte the legacy
+ * whole-round buildPromptContext (NO sibling/scope block). Only a PARTIAL dispatch (a sibling
+ * question not in this batch) prepends a sibling-status scope block + "only this question"
+ * instruction. The scope block carries ZERO attribution (RFC-099 prompt-isolation).
+ */
+export async function buildClarifyNodeQueueContext(
+  args: BuildClarifyNodeQueueContextArgs,
+): Promise<ClarifyPromptContext | undefined> {
+  const roleKind = args.consumerKind === 'self' ? 'self' : 'questioner'
+  // 1. Dispatched self/questioner entries whose HOME (default ?? override) is this node. RFC-127
+  //    借壳: select by HOME (the borrowed run is minted on the home node), not the override.
+  const candidates = await args.db
+    .select()
+    .from(taskQuestions)
+    .where(
+      and(
+        eq(taskQuestions.taskId, args.taskId),
+        eq(taskQuestions.roleKind, roleKind),
+        isNotNull(taskQuestions.dispatchedAt),
+        or(
+          eq(taskQuestions.defaultTargetNodeId, args.consumerNodeId),
+          and(
+            isNull(taskQuestions.defaultTargetNodeId),
+            eq(taskQuestions.overrideTargetNodeId, args.consumerNodeId),
+          ),
+        ),
+      ),
+    )
+  if (candidates.length === 0) return undefined
+
+  // 2. Frame the lineage window on this run's node + iteration (mirrors resolveHandlerRun /
+  //    buildNodeQueueExternalFeedback): all of the node's runs at this iteration are the
+  //    process-retry / clarify-rerun chain.
+  const rRow = (
+    await args.db.select().from(nodeRuns).where(eq(nodeRuns.id, args.dispatchedRunId)).limit(1)
+  )[0]
+  const sameNode = rRow
+    ? await args.db
+        .select()
+        .from(nodeRuns)
+        .where(
+          and(
+            eq(nodeRuns.taskId, args.taskId),
+            eq(nodeRuns.nodeId, args.consumerNodeId),
+            eq(nodeRuns.iteration, rRow.iteration),
+          ),
+        )
+    : []
+  const outputRunIds = await runIdsWithOutput(
+    args.db,
+    sameNode.map((r) => r.id),
+  )
+  const entries = candidates.filter((e) =>
+    isQueueEntryRenderableForRun(e.triggerRunId, args.dispatchedRunId, sameNode, outputRunIds),
+  )
+  if (entries.length === 0) return undefined
+
+  // 3. BIND every rendered entry not already pinned to THIS run (unbound NULLs + earlier-lineage
+  //    rebinds) → the per-entry consume marker for the node's NEXT rerun + the read-side
+  //    (resolveDispatchedEntryHandler). clean-path ②.
+  const toBind = entries.filter((e) => e.triggerRunId !== args.dispatchedRunId).map((e) => e.id)
+  if (toBind.length > 0) {
+    await args.db
+      .update(taskQuestions)
+      .set({ triggerRunId: args.dispatchedRunId, updatedAt: Date.now() })
+      .where(inArray(taskQuestions.id, toBind))
+  }
+
+  // 4. Group the queued questionIds by their origin round + render.
+  const byRound = new Map<string, Set<string>>()
+  for (const e of entries) {
+    const set = byRound.get(e.originNodeRunId) ?? new Set<string>()
+    set.add(e.questionId)
+    byRound.set(e.originNodeRunId, set)
+  }
+  // Load the rounds in ascending iteration order (chronological, like buildPromptContext).
+  const rounds: Array<typeof clarifyRounds.$inferSelect> = []
+  for (const originRunId of byRound.keys()) {
+    const round = (
+      await args.db
+        .select()
+        .from(clarifyRounds)
+        .where(eq(clarifyRounds.intermediaryNodeRunId, originRunId))
+        .limit(1)
+    )[0]
+    if (
+      round === undefined ||
+      round.status === 'canceled' ||
+      round.status === 'abandoned' ||
+      round.answersJson === null
+    )
+      continue
+    rounds.push(round)
+  }
+  if (rounds.length === 0) return undefined
+  rounds.sort((a, b) => a.iteration - b.iteration)
+
+  const inlineMode = args.sessionMode === 'inline'
+  const renderRounds = inlineMode ? rounds.slice(-1) : rounds
+  const applyLatestDirective = args.applyLatestDirective ?? true
+
+  const questionParts: string[] = []
+  const answerParts: string[] = []
+  let latestDirective: ClarifyDirective = 'continue'
+  for (let i = 0; i < renderRounds.length; i++) {
+    const round = renderRounds[i]!
+    const dispatchedIds = byRound.get(round.intermediaryNodeRunId) ?? new Set<string>()
+    let allQuestions: ClarifyQuestion[]
+    let allAnswers: ClarifyAnswer[]
+    try {
+      allQuestions = JSON.parse(round.questionsJson) as ClarifyQuestion[]
+      allAnswers = JSON.parse(round.answersJson ?? '[]') as ClarifyAnswer[]
+    } catch (err) {
+      log.warn('clarify node-queue context JSON parse failed; skipping round', {
+        roundId: round.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+      continue
+    }
+    // R2-4 golden-lock: full-round same batch (every question dispatched) → render the WHOLE
+    // round byte-for-byte legacy; else partial → only the dispatched subset + sibling block.
+    const isFullRound = allQuestions.every((q) => dispatchedIds.has(q.id))
+    const questions = isFullRound
+      ? allQuestions
+      : allQuestions.filter((q) => dispatchedIds.has(q.id))
+    const answerById = new Map(allAnswers.map((a) => [a.questionId, a]))
+    const answers = questions
+      .map((q) => answerById.get(q.id))
+      .filter((a): a is ClarifyAnswer => a !== undefined)
+    if (questions.length === 0) continue
+    const isLast = i === renderRounds.length - 1
+    const directive = resolveRoundDirective(
+      round,
+      isLast,
+      args.directiveOverride,
+      args.directiveOverrideAt,
+    )
+    if (isLast && applyLatestDirective) latestDirective = directive
+    const roundLabel = `### Round ${round.iteration + 1}`
+    questionParts.push(`${roundLabel}\n${renderClarifyQuestionsBlock(questions)}`)
+    const answerBody = `${roundLabel}\n${buildClarifyPromptBlock(questions, answers, isLast && applyLatestDirective ? directive : undefined)}`
+    if (isFullRound) {
+      answerParts.push(answerBody)
+    } else {
+      // Partial: prepend a sibling-status scope block (ZERO attribution — RFC-099). The agent
+      // must address ONLY the dispatched question(s); siblings are handled by separate runs.
+      answerParts.push(`${renderSiblingScopeBlock(allQuestions, dispatchedIds)}\n\n${answerBody}`)
+    }
+  }
+  if (questionParts.length === 0) return undefined
+
+  return {
+    questionsBlock: questionParts.join('\n\n'),
+    answersBlock: answerParts.join('\n\n'),
+    iteration: String(args.targetIteration),
+    remaining: computeRemaining(args.definition, args.consumerNodeId, args.targetIteration),
+    directive: latestDirective,
+    ...(inlineMode ? { mode: 'inline' as const, currentRoundOnly: true } : {}),
+  }
+}
+
+/** RFC-128 P5-BC — the sibling-status scope block prepended to a PARTIAL per-question answers
+ *  block (R2-4 §5.2.6). Lists the round's OTHER questions (not in this dispatch) with a coarse
+ *  status and instructs the agent to address ONLY the dispatched question(s). Carries NO
+ *  attribution / owner / role ids (RFC-099 prompt-isolation — locked by the rfc128 prompt-
+ *  isolation test). */
+function renderSiblingScopeBlock(
+  allQuestions: ClarifyQuestion[],
+  dispatchedIds: ReadonlySet<string>,
+): string {
+  const siblings = allQuestions.filter((q) => !dispatchedIds.has(q.id))
+  const lines: string[] = [
+    '### Scope of this run (partial answer)',
+    '- This run addresses ONLY the question(s) shown below. The other questions of this clarify round are handled by SEPARATE runs — do NOT re-ask or re-answer them here.',
+  ]
+  if (siblings.length > 0) {
+    lines.push('- Sibling questions (handled elsewhere — for context only):')
+    for (const q of siblings) lines.push(`  - ${q.title}`)
+  }
+  return lines.join('\n')
+}
+
+/**
+ * RFC-128 P5-BC — pure mirror of crossClarify.renderableForRun (RFC-120 §18 Codex H2): should
+ * a dispatched per-question entry bound to `triggerRunId` render for run `currentRunId`?
+ * `sameNode` = every node_run on the home node at the current run's iteration (the
+ * process-retry / clarify-rerun chain). Renders iff: triggerRunId IS NULL (unbound → first
+ * render picks + binds), OR triggerRunId is in `sameNode` AND `currentRunId` is inside
+ * triggerRunId's lineage window [triggerRunId, next-clarify-rerun) AND that window has NO
+ * consumed (done+output) top-level run. Replicated here (not imported) to avoid a
+ * clarifyRounds↔crossClarify module cycle; both frame the SAME NEW_CLARIFY_TRIGGER_CAUSES window.
+ */
+function isQueueEntryRenderableForRun(
+  triggerRunId: string | null,
+  currentRunId: string,
+  sameNode: ReadonlyArray<typeof nodeRuns.$inferSelect>,
+  outputRunIds: ReadonlySet<string>,
+): boolean {
+  if (triggerRunId === null) return true
+  const anchor = sameNode.find((r) => r.id === triggerRunId)
+  if (anchor === undefined) return false // bound to a run in another frame / GC'd → not ours
+  const triggerCauses = new Set<string>(NEW_CLARIFY_TRIGGER_CAUSES)
+  let upperBound: string | null = null
+  for (const r of sameNode) {
+    if (r.id > triggerRunId && r.rerunCause !== null && triggerCauses.has(r.rerunCause)) {
+      if (upperBound === null || r.id < upperBound) upperBound = r.id
+    }
+  }
+  const inWindow = (id: string): boolean =>
+    id >= triggerRunId && (upperBound === null || id < upperBound)
+  if (!inWindow(currentRunId)) return false
+  for (const r of sameNode) {
+    if (
+      r.parentNodeRunId === null &&
+      inWindow(r.id) &&
+      r.status === 'done' &&
+      outputRunIds.has(r.id)
+    )
+      return false
+  }
+  return true
+}
+
+/** node_run ids (within `runIds`) that captured ≥1 `<workflow-output>` row. */
+async function runIdsWithOutput(db: DbClient, runIds: string[]): Promise<Set<string>> {
+  if (runIds.length === 0) return new Set()
+  const rows = await db
+    .select({ nodeRunId: nodeRunOutputs.nodeRunId })
+    .from(nodeRunOutputs)
+    .where(inArray(nodeRunOutputs.nodeRunId, runIds))
+  return new Set(rows.map((r) => r.nodeRunId))
 }
 
 /**

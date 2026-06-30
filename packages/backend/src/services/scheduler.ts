@@ -78,6 +78,7 @@ import {
   resolveCrossNodeStopped,
 } from '@/services/crossClarify'
 import {
+  buildClarifyNodeQueueContext,
   buildPromptContext,
   resolveEffectiveClarifyChannel,
   shouldInjectStopNotice,
@@ -89,7 +90,10 @@ import {
   type ClarifyInlineFallbackReason,
 } from '@/services/clarifyFallback'
 import { evaluateExitCondition, parseExitCondition } from '@/services/exitCondition'
-import { loadUndispatchedDesignerTargets } from '@/services/taskQuestions'
+import {
+  loadUndispatchedDesignerTargets,
+  loadUndispatchedSelfQuestionerTargets,
+} from '@/services/taskQuestions'
 import { resolveBorrowForNode } from '@/services/taskQuestionDispatch'
 import { trySetTaskStatus, setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
 import {
@@ -808,8 +812,15 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
     // entirely for non-deferred tasks (the overwhelming majority) so the hot
     // path stays byte-for-byte today's behavior (golden-lock); only an opted-in
     // task ever consults its undispatched designer entries.
+    // RFC-128 P5-BC (clean-path ③): the deferred park set is the UNION of the designer
+    // park source (RFC-120 §18) and the new self/questioner park source (control-channel
+    // SEALED but undispatched self/questioner questions). Both self-gate on the deferred
+    // flag → empty for every non-deferred task (golden-lock byte-for-byte frontier).
     const deferredHandlerNodeIds = state.task.deferredQuestionDispatch
-      ? await loadUndispatchedDesignerTargets(db, taskId)
+      ? new Set<string>([
+          ...(await loadUndispatchedDesignerTargets(db, taskId)),
+          ...(await loadUndispatchedSelfQuestionerTargets(db, taskId)),
+        ])
       : EMPTY_NODE_ID_SET
     const f = deriveFrontier(
       rows,
@@ -2412,53 +2423,80 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           : undefined
         const nodeDirective = nodeDirectiveRow?.directive
         const nodeStopOverride = nodeDirective === 'stop'
-        const clarifyContext = hasClarifyChannel
-          ? isQuestionerCrossClarifyRerun
-            ? await buildPromptContext({
-                db,
-                definition,
-                taskId,
-                consumerKind: 'cross-questioner',
-                consumerNodeId: node.id,
-                targetIteration: clarifyGeneration,
-                loopIter: iteration,
-                // RFC-056 A16: inline-mode questioner rerun renders only the
-                // latest round + tags ctx.mode='inline'; the resumed opencode
-                // session already holds prior rounds + the mandatory ask-back
-                // block, so renderUserPrompt emits the short inline reminder
-                // (continue) / the output protocol block (stop) instead.
-                ...(resumeDecision.inlineMode ? { sessionMode: 'inline' as const } : {}),
-                applyLatestDirective,
-                // RFC-122: on-canvas STOP toggle wins over the answered round's
-                // own directive so a prior "keep clarifying" answer's trailer is
-                // rebuilt to STOP CLARIFYING (cross-questioner path).
-                ...(nodeDirective !== undefined
-                  ? {
-                      directiveOverride: nodeDirective,
-                      directiveOverrideAt: nodeDirectiveRow?.updatedAt,
-                    }
-                  : {}),
-              })
-            : await buildPromptContext({
-                db,
-                definition,
-                taskId,
-                consumerKind: 'self',
-                consumerNodeId: node.id,
-                targetIteration: clarifyGeneration,
-                shardKey: currentShardKey,
-                ...(resumeDecision.inlineMode ? { sessionMode: 'inline' as const } : {}),
-                applyLatestDirective,
-                // RFC-122: on-canvas STOP toggle wins over the answered round's
-                // own directive (self-clarify path).
-                ...(nodeDirective !== undefined
-                  ? {
-                      directiveOverride: nodeDirective,
-                      directiveOverrideAt: nodeDirectiveRow?.updatedAt,
-                    }
-                  : {}),
-              })
-          : undefined
+        // RFC-128 P5-BC (clean-path ①, scheduler 二选一 XOR §5.2.5): for a DEFERRED task whose
+        // asking/questioner node holds DISPATCHED self/questioner questions, inject PER-QUESTION
+        // via buildClarifyNodeQueueContext (authoritative — binds the queue to this rerun);
+        // otherwise fall back to the whole-round buildPromptContext. The two are NEVER combined:
+        // `(deferred ? perQuestion : undefined) ?? wholeRound` uses EXACTLY one path, and the
+        // read-side roundsWithDispatchedEntries exclusion keeps the whole-round path from also
+        // surfacing a dispatched round (double-injection root-out). NON-deferred ⇒ the perQuestion
+        // builder is never called ⇒ byte-for-byte the legacy whole-round path (golden-lock).
+        const clarifyContext = !hasClarifyChannel
+          ? undefined
+          : ((task.deferredQuestionDispatch
+              ? await buildClarifyNodeQueueContext({
+                  db,
+                  definition,
+                  taskId,
+                  consumerKind: isQuestionerCrossClarifyRerun ? 'cross-questioner' : 'self',
+                  consumerNodeId: node.id,
+                  dispatchedRunId: nodeRunId,
+                  targetIteration: clarifyGeneration,
+                  ...(resumeDecision.inlineMode ? { sessionMode: 'inline' as const } : {}),
+                  applyLatestDirective,
+                  ...(nodeDirective !== undefined
+                    ? {
+                        directiveOverride: nodeDirective,
+                        directiveOverrideAt: nodeDirectiveRow?.updatedAt,
+                      }
+                    : {}),
+                })
+              : undefined) ??
+            (isQuestionerCrossClarifyRerun
+              ? await buildPromptContext({
+                  db,
+                  definition,
+                  taskId,
+                  consumerKind: 'cross-questioner',
+                  consumerNodeId: node.id,
+                  targetIteration: clarifyGeneration,
+                  loopIter: iteration,
+                  // RFC-056 A16: inline-mode questioner rerun renders only the
+                  // latest round + tags ctx.mode='inline'; the resumed opencode
+                  // session already holds prior rounds + the mandatory ask-back
+                  // block, so renderUserPrompt emits the short inline reminder
+                  // (continue) / the output protocol block (stop) instead.
+                  ...(resumeDecision.inlineMode ? { sessionMode: 'inline' as const } : {}),
+                  applyLatestDirective,
+                  // RFC-122: on-canvas STOP toggle wins over the answered round's
+                  // own directive so a prior "keep clarifying" answer's trailer is
+                  // rebuilt to STOP CLARIFYING (cross-questioner path).
+                  ...(nodeDirective !== undefined
+                    ? {
+                        directiveOverride: nodeDirective,
+                        directiveOverrideAt: nodeDirectiveRow?.updatedAt,
+                      }
+                    : {}),
+                })
+              : await buildPromptContext({
+                  db,
+                  definition,
+                  taskId,
+                  consumerKind: 'self',
+                  consumerNodeId: node.id,
+                  targetIteration: clarifyGeneration,
+                  shardKey: currentShardKey,
+                  ...(resumeDecision.inlineMode ? { sessionMode: 'inline' as const } : {}),
+                  applyLatestDirective,
+                  // RFC-122: on-canvas STOP toggle wins over the answered round's
+                  // own directive (self-clarify path).
+                  ...(nodeDirective !== undefined
+                    ? {
+                        directiveOverride: nodeDirective,
+                        directiveOverrideAt: nodeDirectiveRow?.updatedAt,
+                      }
+                    : {}),
+                })))
         // RFC-056: build the External Feedback context + (if update-mode)
         // the prior output block. RFC-070: aging applied inside
         // `buildExternalFeedbackContext` via `consumed_by_consumer_run_id
