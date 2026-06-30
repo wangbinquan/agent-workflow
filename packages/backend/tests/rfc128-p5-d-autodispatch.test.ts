@@ -821,22 +821,26 @@ describe('RFC-128 P5-D lock-B non-reentry', () => {
     expect(sem.queueLength).toBe(0)
   })
 
-  test('source — autoDispatchClarifyRound never takes the question-write lock B (getTaskQuestionWriteSem); each callee takes B itself → no B-in-B nesting. It MAY take the worktree lock A (getTaskWriteSem) for the self rollback (A ≻ B)', () => {
+  test('source — lock order A ≻ B + no B reentry: the self rollback holds A OUTER + B INNER around the preflight+rollback, then RELEASES B before dispatchTaskQuestions re-takes a fresh B (round-10 atomicity)', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '../src/services/clarifyAutoDispatch.ts'),
       'utf8',
     )
-    // The orchestrator must NOT acquire lock B itself — sealRoundQuestions / dispatchTaskQuestions each
-    // take + release B independently, so they run SEQUENTIALLY, never nesting B inside B (the
-    // non-reentrant Semaphore(1) would deadlock). The call form `getTaskQuestionWriteSem(` never
-    // appears (the doc comment references the bare name to explain WHY, which is fine).
-    expect(src).not.toContain('getTaskQuestionWriteSem(') // never CALLS lock B
-    // It MAY take the worktree write lock A (getTaskWriteSem) for the RFC-098 B1 self rollback — A is
-    // OUTER, dispatchTaskQuestions' B is INNER (A ≻ B), and B is never held while taking A.
-    expect(src).toContain('getTaskWriteSem(round.taskId).run')
-    // It calls both primitives (sequential).
-    expect(src).toContain('sealRoundQuestions(')
-    expect(src).toContain('dispatchTaskQuestions(')
+    const fn = src.slice(src.indexOf('export async function autoDispatchClarifyRound'))
+    const aIdx = fn.indexOf('getTaskWriteSem(round.taskId).run') // worktree lock A OUTER
+    // B is taken INNER and its .run RETURNS a `rolledBack` flag → B is RELEASED when the block returns.
+    const bIdx = fn.indexOf('const rolledBack = await getTaskQuestionWriteSem(round.taskId).run')
+    const preflightIdx = fn.indexOf('selfHomeHasOpenLedger(db, round.taskId') // preflight under B
+    const rollbackIdx = fn.indexOf('rollbackNodeRunWorktrees(') // rollback under B
+    const releaseCheckIdx = fn.indexOf('if (!rolledBack)') // checked AFTER B returned (B released)
+    const dispatchCallIdx = fn.indexOf('return tryDispatch()') // dispatch's OWN B re-taken AFTER, no nest
+    expect(aIdx).toBeGreaterThan(0)
+    expect(bIdx).toBeGreaterThan(aIdx) // A outer, B inner (A ≻ B)
+    expect(preflightIdx).toBeGreaterThan(bIdx) // preflight under B
+    expect(rollbackIdx).toBeGreaterThan(preflightIdx) // rollback AFTER the preflight, under B
+    expect(releaseCheckIdx).toBeGreaterThan(rollbackIdx) // B released after the rollback
+    expect(dispatchCallIdx).toBeGreaterThan(releaseCheckIdx) // dispatch AFTER B released → no B-in-B
+    expect(fn).toContain('sealRoundQuestions(') // seal before dispatch; takes its own B independently
   })
 })
 

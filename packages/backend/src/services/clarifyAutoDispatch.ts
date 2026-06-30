@@ -19,13 +19,19 @@
 //
 // LOCK ORDER / NO REENTRY (key correctness constraint): the per-task question-write lock B
 // (getTaskQuestionWriteSem) is a NON-reentrant Semaphore(1). sealRoundQuestions acquires + RELEASES
-// B for its tx; dispatchTaskQuestions acquires + RELEASES B for its tx. This module calls them
-// SEQUENTIALLY (never nesting one inside the other under a held B) — so B is taken twice in series,
-// never re-entered. Wrapping the dispatch inside the seal's B would deadlock (B is held → dispatch's
-// B.acquire() queues forever). The seal-commit→dispatch gap is race-safe: dispatchTaskQuestions
-// re-reads under B and CAS-guards every entry (`dispatched_at IS NULL` + `confirmation='open'`) +
-// re-runs its readiness / in-flight / immediate-ledger gates, so any interleaving is caught there
-// (no double-mint, no stamp of a superseded entry).
+// B for its tx; dispatchTaskQuestions acquires + RELEASES B for its tx. This module calls those two
+// SEQUENTIALLY (B taken twice in series, never nested) — wrapping the dispatch inside the seal's B
+// would deadlock (dispatch's B.acquire() would queue forever). The seal→dispatch gap is race-safe:
+// dispatchTaskQuestions re-reads under B + CAS-guards every entry (`dispatched_at IS NULL` +
+// `confirmation='open'`) + re-runs its readiness/in-flight/immediate-ledger gates, so any interleaving
+// is caught there (no double-mint, no stamp of a superseded entry).
+//
+// The ONLY place this module ITSELF acquires B is the self-clarify rollback branch (round-10): it
+// holds the worktree lock A OUTER and B INNER around the {same-home open-ledger preflight → worktree
+// rollback} so a concurrent dispatch cannot mint a same-home rerun in the preflight→rollback gap and
+// be clobbered (A ≻ B, matching submitClarifyAnswers' rollback critical section). That B is RELEASED
+// before tryDispatch → dispatchTaskQuestions re-acquires a FRESH B (sequential, never B-within-B). No
+// path acquires A while holding B → no A→B/B→A cycle → deadlock-free.
 //
 // SCOPE — self/questioner entries only. autoDispatch dispatches the round's self/questioner entries
 // (the reruns the legacy quick channel minted immediately). DESIGNER entries (a cross designer-scope
@@ -54,7 +60,7 @@ import {
   type DispatchTaskQuestionsResult,
 } from '@/services/taskQuestionDispatch'
 import { loadSealedQuestionIds } from '@/services/taskQuestions'
-import { getTaskWriteSem } from '@/services/taskWriteLocks'
+import { getTaskQuestionWriteSem, getTaskWriteSem } from '@/services/taskWriteLocks'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import {
@@ -452,52 +458,58 @@ export async function autoDispatchClarifyRound(
   } else if (selfRollbackRun !== null) {
     const selfRun = selfRollbackRun
     dispatch = await getTaskWriteSem(round.taskId).run(async () => {
-      // Codex round-8/9 (high) — PRE-ROLLBACK same-home open-ledger guard (mirrors the legacy submit-
-      // side pre-rollback guard, clarify.ts). The DESTRUCTIVE rollback below runs BEFORE tryDispatch,
+      // Codex round-8/9/10 (high) — PRE-ROLLBACK same-home open-ledger guard (mirrors the legacy
+      // submit-side pre-rollback guard, clarify.ts). The DESTRUCTIVE rollback runs BEFORE tryDispatch,
       // which treats a same-home in-flight conflict (task-question-node-dispatch-in-flight) as
       // RECOVERABLE + returns success. So if the self HOME already holds an OPEN (unconsumed) rerun
       // ledger — a DISPATCHED entry (any deferred role) OR an IMMEDIATE quick-channel continuation
-      // (pending node_run, no dispatched_at; round-9) — a queued/failed/unconsumed rerun NOT holding
-      // the worktree lock, an unconditional rollback would rewrite the worktree UNDER it while the
-      // request still succeeds. selfHomeHasOpenLedger mirrors BOTH gates dispatchTaskQuestions runs;
-      // on a hit, DEFER WITHOUT touching the worktree (the new entries stay parked for a later board
-      // dispatch once the owning rerun reaches done+output). `claimed` also short-circuits the older
-      // "these entries already dispatched" case (a concurrent dispatch owns them).
-      const claimed = await db
-        .select({ id: taskQuestions.id })
-        .from(taskQuestions)
-        .where(and(inArray(taskQuestions.id, entryIds), isNotNull(taskQuestions.dispatchedAt)))
-      if (claimed.length > 0 || (await selfHomeHasOpenLedger(db, round.taskId, selfRun.nodeId))) {
-        // A concurrent / prior in-flight rerun owns this home → DEFER without rolling back. Do NOT mint
-        // (the in-flight gate in dispatchTaskQuestions would reject anyway, AFTER the rollback). The
-        // entries stay sealed-undispatched + parked → recoverable via the board's 批量下发.
+      // (pending node_run, no dispatched_at; round-9) — an unconditional rollback would rewrite the
+      // worktree UNDER it while the request still succeeds. selfHomeHasOpenLedger mirrors BOTH gates
+      // dispatchTaskQuestions runs; on a hit, DEFER WITHOUT touching the worktree (the new entries stay
+      // parked for a later board dispatch once the owning rerun reaches done+output).
+      //
+      // Round-10 ATOMICITY: the {claimed/selfHomeHasOpenLedger recheck → rollback} MUST hold the
+      // question-write lock B too (under A), else a concurrent board dispatch / no-rollback autodispatch
+      // can acquire B in the gap, stamp dispatched_at + mint a same-home rerun AFTER this clean preflight
+      // but BEFORE the rollback resets the worktree → clobber. B serializes the preflight+rollback vs
+      // dispatchTaskQuestions (which takes B). B is RELEASED before tryDispatch (which re-takes B —
+      // non-reentrant Semaphore(1) would deadlock if B were still held). Lock order A ≻ B (A outer);
+      // B is taken twice SEQUENTIALLY under A (preflight+rollback, then the dispatch), never nested.
+      // This mirrors submitClarifyAnswers' A⊃B rollback critical section (RFC-098 B1 + §5.2.15).
+      const rolledBack = await getTaskQuestionWriteSem(round.taskId).run(async () => {
+        const claimed = await db
+          .select({ id: taskQuestions.id })
+          .from(taskQuestions)
+          .where(and(inArray(taskQuestions.id, entryIds), isNotNull(taskQuestions.dispatchedAt)))
+        if (claimed.length > 0 || (await selfHomeHasOpenLedger(db, round.taskId, selfRun.nodeId))) {
+          return false // an open same-home ledger owns the home → defer WITHOUT rolling back
+        }
+        const target = await loadRollbackTarget(db, round.taskId)
+        if (target !== null) {
+          try {
+            await rollbackNodeRunWorktrees(target, selfRun, { resetOnEmptySnapshot: false }, log)
+          } catch (err) {
+            log.warn('autodispatch self rollback failed', {
+              nodeRunId: selfRun.id,
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
+        }
+        return true
+      })
+      if (!rolledBack) {
+        // Same-home open ledger → DEFER (no rollback, no mint). The in-flight gate in
+        // dispatchTaskQuestions would reject anyway; the entries stay sealed-undispatched + parked.
         dispatchDeferredReason = 'task-question-node-dispatch-in-flight'
         log.warn(
           'autodispatch self rollback DEFERRED — same-home open rerun ledger owns the worktree',
-          {
-            taskId: round.taskId,
-            originNodeRunId,
-            home: selfRun.nodeId,
-          },
+          { taskId: round.taskId, originNodeRunId, home: selfRun.nodeId },
         )
         return EMPTY_DISPATCH
       }
-      // No open same-home ledger → safe to roll back, then dispatch. (A concurrent dispatch that mints
-      // AFTER this preflight is pending — blocked by the worktree lock A we hold — so the rollback never
-      // rewrites the tree under a RUNNING rerun; that rerun starts clean once A releases. tryDispatch
-      // then catches the in-flight conflict + defers, no double-mint.)
-      const target = await loadRollbackTarget(db, round.taskId)
-      if (target !== null) {
-        try {
-          await rollbackNodeRunWorktrees(target, selfRun, { resetOnEmptySnapshot: false }, log)
-        } catch (err) {
-          log.warn('autodispatch self rollback failed', {
-            nodeRunId: selfRun.id,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-      }
-      // Dispatch under A (B inner — A ≻ B, no reentry; sealRoundQuestions' B already released).
+      // B released → dispatch (re-takes B; A still held OUTER → A ≻ B, no reentry). A concurrent mint
+      // that lands AFTER this rollback is a FRESH pending rerun (blocked by A from running) → not
+      // clobbered; tryDispatch then catches its in-flight conflict + defers, no double-mint.
       return tryDispatch()
     })
   } else {
