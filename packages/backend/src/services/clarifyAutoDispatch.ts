@@ -41,7 +41,12 @@ import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
 import { resolveClarifyNodeFromTaskSnapshot } from '@/services/clarify'
-import { hasOpenDispatchedEntryOnHome } from '@/services/clarifyRerunLedger'
+import {
+  buildImmediateLedgerContext,
+  fetchDeferredDispatchedOrigins,
+  findOpenImmediateLedgerHome,
+  hasOpenDispatchedEntryOnHome,
+} from '@/services/clarifyRerunLedger'
 import { sealRoundQuestions } from '@/services/clarifySeal'
 import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import {
@@ -106,6 +111,78 @@ async function resolveSelfRollbackRun(
   if (sessionMode === 'inline') return null
   if (askingRun.preSnapshot === null && askingRun.preSnapshotReposJson === null) return null
   return askingRun
+}
+
+/**
+ * Codex round-8/9 — does `homeNodeId` already hold an OPEN (unconsumed) rerun ledger that the
+ * destructive self rollback must NOT clobber? Mirrors BOTH gates dispatchTaskQuestions runs before
+ * minting, so the pre-rollback preflight rejects exactly what the dispatch would (and never rolls back
+ * under an owning rerun):
+ *   (a) the DISPATCHED ledger (assertNoInFlightDispatch → hasOpenDispatchedEntryOnHome): an open
+ *       (unconsumed) `dispatched_at` self/questioner/designer entry whose home is this node; AND
+ *   (b) the IMMEDIATE quick-channel ledger (assertNoOpenImmediateLedger → findOpenImmediateLedgerHome):
+ *       a pending/unconsumed self/questioner continuation with NO `dispatched_at` row (round-9 — the
+ *       dispatched-only check missed this). If EITHER is open the autodispatch DEFERS without rolling
+ *       back, so the owning rerun resumes against an unclobbered worktree.
+ */
+async function selfHomeHasOpenLedger(
+  db: DbClient,
+  taskId: string,
+  homeNodeId: string,
+): Promise<boolean> {
+  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const outputRunIds = new Set(
+    runs.length === 0
+      ? []
+      : (
+          await db
+            .select({ id: nodeRunOutputs.nodeRunId })
+            .from(nodeRunOutputs)
+            .where(
+              inArray(
+                nodeRunOutputs.nodeRunId,
+                runs.map((r) => r.id),
+              ),
+            )
+        ).map((r) => r.id),
+  )
+  // (a) dispatched ledger on the home (any deferred role).
+  const dispatchedEntries = await db
+    .select({
+      triggerRunId: taskQuestions.triggerRunId,
+      defaultTargetNodeId: taskQuestions.defaultTargetNodeId,
+      overrideTargetNodeId: taskQuestions.overrideTargetNodeId,
+    })
+    .from(taskQuestions)
+    .where(
+      and(
+        eq(taskQuestions.taskId, taskId),
+        inArray(taskQuestions.roleKind, ['self', 'questioner', 'designer']),
+        isNotNull(taskQuestions.dispatchedAt),
+      ),
+    )
+  if (
+    dispatchedEntries.length > 0 &&
+    hasOpenDispatchedEntryOnHome(homeNodeId, dispatchedEntries, runs, outputRunIds)
+  ) {
+    return true
+  }
+  // (b) immediate quick-channel ledger on the home (a pending continuation with no dispatched_at).
+  const rounds = await db
+    .select()
+    .from(clarifyRounds)
+    .where(
+      and(
+        eq(clarifyRounds.taskId, taskId),
+        inArray(clarifyRounds.status, ['awaiting_human', 'answered']),
+      ),
+    )
+  if (rounds.length > 0) {
+    const deferredDispatchedOrigins = await fetchDeferredDispatchedOrigins(db, taskId)
+    const ctx = buildImmediateLedgerContext(rounds, runs, outputRunIds, deferredDispatchedOrigins)
+    if (findOpenImmediateLedgerHome(new Set([homeNodeId]), runs, ctx) !== null) return true
+  }
+  return false
 }
 
 export interface AutoDispatchClarifyRoundArgs {
@@ -375,63 +452,28 @@ export async function autoDispatchClarifyRound(
   } else if (selfRollbackRun !== null) {
     const selfRun = selfRollbackRun
     dispatch = await getTaskWriteSem(round.taskId).run(async () => {
-      // Codex round-8 (high) — PRE-ROLLBACK same-home in-flight guard (mirrors the legacy submit-side
-      // pre-rollback guard, clarify.ts). The DESTRUCTIVE rollback below runs BEFORE tryDispatch, which
-      // treats a same-home in-flight conflict (task-question-node-dispatch-in-flight) as RECOVERABLE +
-      // returns success. So if the self HOME already holds an OPEN (unconsumed) dispatched rerun ledger
-      // (any deferred role) — a queued/failed/unconsumed rerun NOT holding the worktree lock — an
-      // unconditional rollback would rewrite the worktree UNDER it while the request still succeeds.
-      // Detect that case FIRST and DEFER WITHOUT touching the worktree (the new entries stay parked for
-      // a later board dispatch once the in-flight rerun reaches done+output). `claimed` also short-
-      // circuits the older "these entries already dispatched" case (a concurrent dispatch owns them).
+      // Codex round-8/9 (high) — PRE-ROLLBACK same-home open-ledger guard (mirrors the legacy submit-
+      // side pre-rollback guard, clarify.ts). The DESTRUCTIVE rollback below runs BEFORE tryDispatch,
+      // which treats a same-home in-flight conflict (task-question-node-dispatch-in-flight) as
+      // RECOVERABLE + returns success. So if the self HOME already holds an OPEN (unconsumed) rerun
+      // ledger — a DISPATCHED entry (any deferred role) OR an IMMEDIATE quick-channel continuation
+      // (pending node_run, no dispatched_at; round-9) — a queued/failed/unconsumed rerun NOT holding
+      // the worktree lock, an unconditional rollback would rewrite the worktree UNDER it while the
+      // request still succeeds. selfHomeHasOpenLedger mirrors BOTH gates dispatchTaskQuestions runs;
+      // on a hit, DEFER WITHOUT touching the worktree (the new entries stay parked for a later board
+      // dispatch once the owning rerun reaches done+output). `claimed` also short-circuits the older
+      // "these entries already dispatched" case (a concurrent dispatch owns them).
       const claimed = await db
         .select({ id: taskQuestions.id })
         .from(taskQuestions)
         .where(and(inArray(taskQuestions.id, entryIds), isNotNull(taskQuestions.dispatchedAt)))
-      const dispatchedEntries = await db
-        .select({
-          triggerRunId: taskQuestions.triggerRunId,
-          defaultTargetNodeId: taskQuestions.defaultTargetNodeId,
-          overrideTargetNodeId: taskQuestions.overrideTargetNodeId,
-        })
-        .from(taskQuestions)
-        .where(
-          and(
-            eq(taskQuestions.taskId, round.taskId),
-            inArray(taskQuestions.roleKind, ['self', 'questioner', 'designer']),
-            isNotNull(taskQuestions.dispatchedAt),
-          ),
-        )
-      let openLedgerOnHome = false
-      if (dispatchedEntries.length > 0) {
-        const preRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, round.taskId))
-        const preOutputIds = new Set(
-          (
-            await db
-              .select({ id: nodeRunOutputs.nodeRunId })
-              .from(nodeRunOutputs)
-              .where(
-                inArray(
-                  nodeRunOutputs.nodeRunId,
-                  preRuns.map((r) => r.id),
-                ),
-              )
-          ).map((r) => r.id),
-        )
-        openLedgerOnHome = hasOpenDispatchedEntryOnHome(
-          selfRun.nodeId,
-          dispatchedEntries,
-          preRuns,
-          preOutputIds,
-        )
-      }
-      if (claimed.length > 0 || openLedgerOnHome) {
+      if (claimed.length > 0 || (await selfHomeHasOpenLedger(db, round.taskId, selfRun.nodeId))) {
         // A concurrent / prior in-flight rerun owns this home → DEFER without rolling back. Do NOT mint
         // (the in-flight gate in dispatchTaskQuestions would reject anyway, AFTER the rollback). The
         // entries stay sealed-undispatched + parked → recoverable via the board's 批量下发.
         dispatchDeferredReason = 'task-question-node-dispatch-in-flight'
         log.warn(
-          'autodispatch self rollback DEFERRED — same-home in-flight rerun owns the worktree',
+          'autodispatch self rollback DEFERRED — same-home open rerun ledger owns the worktree',
           {
             taskId: round.taskId,
             originNodeRunId,

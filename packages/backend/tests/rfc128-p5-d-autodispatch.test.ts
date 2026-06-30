@@ -1244,3 +1244,78 @@ describe('RFC-128 P5-D self rollback pre-flight (Codex round-8 finding 1 — no 
     }
   })
 })
+
+// ===========================================================================
+// Codex round-9 — self 回滚 preflight 也认「同 home 开放 immediate 续跑」（无 dispatched_at）
+// ===========================================================================
+describe('RFC-128 P5-D self rollback pre-flight covers the immediate ledger (Codex round-9)', () => {
+  test('a same-home OPEN IMMEDIATE continuation (pending quick-channel rerun, no dispatched_at) → autodispatch DEFERS without rolling back', async () => {
+    const repo = mkdtempSync(join(tmpdir(), 'aw-rfc128-p5d-imm-noclobber-'))
+    try {
+      await runGit(repo, ['init', '-q', '-b', 'main'])
+      await runGit(repo, ['config', 'user.email', 't@e.com'])
+      await runGit(repo, ['config', 'user.name', 'T'])
+      writeFileSync(join(repo, 'data.txt'), 'HEAD\n')
+      await runGit(repo, ['add', '.'])
+      await runGit(repo, ['commit', '-q', '-m', 'init'])
+      writeFileSync(join(repo, 'data.txt'), 'ASK-TIME\n')
+      const snap = await gitStashSnapshot(repo)
+
+      const db = createInMemoryDb(MIGRATIONS)
+      const taskId = `t_${ulid()}`
+      await seedTask(db, taskId)
+      await db.update(tasks).set({ worktreePath: repo }).where(eq(tasks.id, taskId))
+
+      // A PRIOR self round on home P (answered, in clarify_rounds ONLY — no clarify_sessions row, so
+      // the NEW round's createClarifySession at iterationIndex=0 still mints its own clarify node_run,
+      // no reuse) + a PENDING clarify-answer continuation on P: an OPEN IMMEDIATE ledger with NO
+      // dispatched_at row (the quick-channel "in flight" shape findOpenImmediateLedgerHome detects).
+      const priorAsk = await seedRun(db, taskId, P, { status: 'awaiting_human', iteration: 0 })
+      const priorCl = await seedRun(db, taskId, CL, { status: 'awaiting_human' })
+      await db.insert(clarifyRounds).values({
+        id: ulid(),
+        taskId,
+        kind: 'self',
+        askingNodeId: P,
+        askingNodeRunId: priorAsk,
+        intermediaryNodeId: CL,
+        intermediaryNodeRunId: priorCl,
+        loopIter: 0,
+        iteration: 0,
+        questionsJson: JSON.stringify([mkQ('pq', 't')]),
+        answersJson: JSON.stringify([ans('pq')]),
+        directive: 'continue',
+        status: 'answered',
+        answeredAt: Date.now(),
+      })
+      await seedRun(db, taskId, P, {
+        status: 'pending',
+        rerunCause: 'clarify-answer',
+        iteration: 0,
+      })
+
+      // A NEW self round on the SAME home P with a pre_snapshot (would trigger the rollback path).
+      const { clarifyNodeRunId, askingRunId } = await seedSealableSelfRound(db, taskId, [
+        mkQ('q1', 't'),
+      ])
+      await db.update(nodeRuns).set({ preSnapshot: snap }).where(eq(nodeRuns.id, askingRunId))
+      // Dirty the worktree — it must SURVIVE (the immediate-ledger preflight defers before rollback).
+      writeFileSync(join(repo, 'data.txt'), 'DIRTY\n')
+
+      const res = await autoDispatchClarifyRound({
+        db,
+        originNodeRunId: clarifyNodeRunId,
+        answers: [ans('q1')],
+        actor,
+      })
+
+      expect(res.dispatchDeferredReason).toBe('task-question-node-dispatch-in-flight')
+      expect(res.dispatch.reruns).toHaveLength(0)
+      // The open immediate continuation owns the worktree → NOT clobbered (round-9 fix).
+      expect(readFileSync(join(repo, 'data.txt'), 'utf8')).toBe('DIRTY\n')
+      expect((await roundByOrigin(db, clarifyNodeRunId))[0]?.status).toBe('answered')
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+    }
+  })
+})
