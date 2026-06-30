@@ -31,6 +31,11 @@ import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { createClarifySession, submitClarifyAnswers } from '../src/services/clarify'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
+import {
+  loadUndispatchedDesignerTargets,
+  loadUndispatchedParkTargets,
+  loadUndispatchedSelfQuestionerTargets,
+} from '../src/services/taskQuestions'
 import { buildClarifyNodeQueueContext, buildPromptContext } from '../src/services/clarifyRounds'
 import { getNodeClarifyDirectiveRow } from '../src/services/taskClarifyDirective'
 import { getTaskQuestionWriteSem } from '../src/services/taskWriteLocks'
@@ -215,6 +220,43 @@ function runRow(db: DbClient, id: string) {
 }
 function entryRow(db: DbClient, id: string) {
   return db.select().from(taskQuestions).where(eq(taskQuestions.id, id))
+}
+
+/** Insert a raw task_question entry (for the same-home park unit test). */
+async function insertEntry(
+  db: DbClient,
+  taskId: string,
+  e: {
+    originNodeRunId: string
+    questionId: string
+    roleKind: 'self' | 'questioner' | 'designer'
+    sourceKind?: 'self' | 'cross' | 'manual'
+    defaultTargetNodeId: string | null
+    sealed?: boolean
+    dispatchedAt?: number | null
+    triggerRunId?: string | null
+  },
+): Promise<string> {
+  const id = ulid()
+  await db.insert(taskQuestions).values({
+    id,
+    taskId,
+    originNodeRunId: e.originNodeRunId,
+    questionId: e.questionId,
+    questionTitle: e.questionId,
+    sourceKind: e.sourceKind ?? (e.roleKind === 'self' ? 'self' : 'cross'),
+    roleKind: e.roleKind,
+    iteration: 0,
+    loopIter: 0,
+    defaultTargetNodeId: e.defaultTargetNodeId,
+    sealedAt: e.sealed ? Date.now() : null,
+    dispatchedAt: e.dispatchedAt ?? null,
+    dispatchedBy: e.dispatchedAt ? 'u1' : null,
+    triggerRunId: e.triggerRunId ?? null,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
+  return id
 }
 function roundByOrigin(db: DbClient, originNodeRunId: string) {
   return db
@@ -802,5 +844,74 @@ describe('RFC-128 P5-D route defer=false routing (source lock)', () => {
     expect(autoIdx).toBeGreaterThan(0)
     expect(submitSelfIdx).toBeGreaterThan(autoIdx) // immediate mint is the non-deferred fallthrough
     expect(submitCrossIdx).toBeGreaterThan(autoIdx)
+  })
+})
+
+// ===========================================================================
+// 同 home 死锁修复（Codex round-3）— all-role deferred park（loadUndispatchedParkTargets）
+// ===========================================================================
+describe('RFC-128 P5-D all-role deferred park (same-home deadlock fix)', () => {
+  test('a home with an UNDISPATCHED designer entry + an IN-FLIGHT self entry is NOT parked (the in-flight rerun must run); the per-role union WOULD have parked it', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    // Node D is BOTH a designer home (undispatched manual designer entry) AND a self home with an
+    // IN-FLIGHT (dispatched, unconsumed) self entry — the §5.2.13 same-home coincidence.
+    const origin = await seedRun(db, taskId, CC, { status: 'done' })
+    await insertEntry(db, taskId, {
+      originNodeRunId: origin,
+      questionId: 'dq',
+      roleKind: 'designer',
+      sourceKind: 'manual',
+      defaultTargetNodeId: D,
+      // undispatched (dispatched_at NULL)
+    })
+    const selfOrigin = await seedRun(db, taskId, CL, { status: 'done' })
+    await insertEntry(db, taskId, {
+      originNodeRunId: selfOrigin,
+      questionId: 'sq',
+      roleKind: 'self',
+      defaultTargetNodeId: D, // same home D
+      sealed: true,
+      dispatchedAt: Date.now(), // in-flight (dispatched, trigger NULL = queued/unconsumed)
+      triggerRunId: null,
+    })
+
+    // The per-role sources, in isolation: the DESIGNER source parks D (blind to the in-flight self),
+    // the SELF/Q source does NOT park D (it sees the in-flight self). Their UNION = {D} → the old
+    // deadlock (D parked → the in-flight self rerun stalls; the in-flight gate blocks the designer
+    // dispatch).
+    const designerParked = await loadUndispatchedDesignerTargets(db, taskId)
+    const selfQParked = await loadUndispatchedSelfQuestionerTargets(db, taskId)
+    expect(designerParked.has(D)).toBe(true) // per-role designer source still parks (unchanged)
+    expect(selfQParked.has(D)).toBe(false) // self/q source releases an in-flight home (unchanged)
+
+    // The ALL-ROLE park (what the scheduler now uses) classifies both roles TOGETHER → D has an
+    // in-flight entry → NOT parked → the pending self rerun can run (deadlock broken).
+    const allRoleParked = await loadUndispatchedParkTargets(db, taskId)
+    expect(allRoleParked.has(D)).toBe(false)
+  })
+
+  test('all-role park is byte-identical to the union for a non-same-home case (undispatched designer alone → parked)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    const origin = await seedRun(db, taskId, CC, { status: 'done' })
+    await insertEntry(db, taskId, {
+      originNodeRunId: origin,
+      questionId: 'dq',
+      roleKind: 'designer',
+      sourceKind: 'manual',
+      defaultTargetNodeId: D, // undispatched designer, no in-flight on D
+    })
+    const designerParked = await loadUndispatchedDesignerTargets(db, taskId)
+    const allRoleParked = await loadUndispatchedParkTargets(db, taskId)
+    expect(designerParked.has(D)).toBe(true)
+    expect(allRoleParked.has(D)).toBe(true) // same as the union (no same-home in-flight)
+  })
+
+  test('source — scheduler uses loadUndispatchedParkTargets (all-role), not the per-role union', () => {
+    const src = readFileSync(resolve(import.meta.dir, '../src/services/scheduler.ts'), 'utf8')
+    expect(src).toContain('loadUndispatchedParkTargets(db, taskId)')
   })
 })

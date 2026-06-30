@@ -622,6 +622,21 @@ export async function loadUndispatchedDesignerTargets(
       .limit(1)
   )[0]
   if (taskRow?.deferred !== true) return new Set()
+  const entries = await fetchDesignerParkEntries(db, taskId)
+  if (entries.length === 0) return new Set()
+  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const outputRunIds = await runIdsWithOutput(
+    db,
+    runs.map((r) => r.id),
+  )
+  return partitionUndispatchedParkTargets(entries, runs, outputRunIds)
+}
+
+/** RFC-120 §18 designer park ENTRIES (clarify answered+continue designer rows + manual designer
+ *  rows), the projection partitionUndispatchedParkTargets consumes. Extracted so the per-role
+ *  designer source AND the RFC-128 P5-D all-role {@link loadUndispatchedParkTargets} share ONE
+ *  query (no drift). Caller applies the deferred-flag gate + the partition. */
+async function fetchDesignerParkEntries(db: DbClient, taskId: string): Promise<ParkTargetEntry[]> {
   const clarifyDesigner = await db
     .select({
       dispatchedAt: taskQuestions.dispatchedAt,
@@ -668,14 +683,7 @@ export async function loadUndispatchedDesignerTargets(
         ne(taskQuestions.confirmation, 'confirmed'),
       ),
     )
-  const entries = [...clarifyDesigner, ...manualDesigner]
-  if (entries.length === 0) return new Set()
-  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
-  const outputRunIds = await runIdsWithOutput(
-    db,
-    runs.map((r) => r.id),
-  )
-  return partitionUndispatchedParkTargets(entries, runs, outputRunIds)
+  return [...clarifyDesigner, ...manualDesigner]
 }
 
 /** The minimal park-source entry projection both the designer (clarify + manual) and the
@@ -792,7 +800,29 @@ export async function loadUndispatchedSelfQuestionerTargets(
       .limit(1)
   )[0]
   if (taskRow?.deferred !== true) return new Set()
-  const entries = await db
+  const entries = await fetchSelfQuestionerParkEntries(db, taskId)
+  if (entries.length === 0) return new Set()
+  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const outputRunIds = await runIdsWithOutput(
+    db,
+    runs.map((r) => r.id),
+  )
+  return partitionUndispatchedParkTargets(entries, runs, outputRunIds)
+}
+
+/** RFC-128 P5-BC self/questioner park ENTRIES (control-channel SEALED, not-confirmed self/q rows),
+ *  the projection partitionUndispatchedParkTargets consumes. Extracted so the per-role source AND
+ *  the all-role {@link loadUndispatchedParkTargets} share ONE query (no drift).
+ *  RFC-128 P5-BC §5.2.14 mixed-path step 2 (park-starve fix): a home that was sealed-undispatched
+ *  (q1, control channel) but whose round got QUICK-finalized no longer parks here — the quick
+ *  finalize CONSUMES (marks `confirmation='confirmed'`) the round's sealed-undispatched self/q
+ *  entries, and this query excludes `confirmation='confirmed'`. So the superseded q1 drops out
+ *  automatically (no starvation, no re-park duplicate). */
+async function fetchSelfQuestionerParkEntries(
+  db: DbClient,
+  taskId: string,
+): Promise<ParkTargetEntry[]> {
+  return db
     .select({
       dispatchedAt: taskQuestions.dispatchedAt,
       triggerRunId: taskQuestions.triggerRunId,
@@ -808,18 +838,52 @@ export async function loadUndispatchedSelfQuestionerTargets(
         isNotNull(taskQuestions.sealedAt),
       ),
     )
+}
+
+/**
+ * RFC-128 P5-D (Codex impl-gate round 3) — the ALL-ROLE deferred park source. The scheduler's
+ * deferred park set must classify in-flight HOME-level across EVERY deferred role (designer +
+ * self/questioner) TOGETHER, NOT as the per-role union of {@link loadUndispatchedDesignerTargets}
+ * and {@link loadUndispatchedSelfQuestionerTargets}.
+ *
+ * Why the per-role union deadlocks (Codex round-3 [high]): partitionUndispatchedParkTargets is
+ * in-flight-aware, but only WITHIN the entry set it is given. The per-role sources partition designer
+ * and self/questioner entries SEPARATELY, so a SAME-HOME node N that holds an UNDISPATCHED designer
+ * entry AND an IN-FLIGHT (dispatched, unconsumed) self/questioner rerun is parked by the designer
+ * source (it sees no in-flight DESIGNER entry) — stalling the pending self/questioner rerun forever,
+ * while the in-flight gate blocks the manual designer dispatch until that rerun finishes ⇒ permanent
+ * deadlock. P5-D autodispatch makes this reachable (it mints a self/questioner rerun on a node that
+ * may also be an undispatched designer home — the §5.2.13 same-home coincidence / 借壳).
+ *
+ * Fix: partition ALL deferred-role entries in ONE pass, so hasInFlight spans every role. A home with
+ * an undispatched entry of one role AND an in-flight entry of ANOTHER role is then correctly NOT
+ * parked — its in-flight rerun runs, and the undispatched sibling re-parks the node next tick once the
+ * rerun is consumed. For every NON-same-home case this is byte-identical to the old union (a home with
+ * only one role's undispatched entries, or in-flight entries of the same role, classifies the same).
+ * Empty for any non-deferred task (golden-lock; the per-role helpers stay for direct callers/tests).
+ */
+export async function loadUndispatchedParkTargets(
+  db: DbClient,
+  taskId: string,
+): Promise<Set<string>> {
+  const taskRow = (
+    await db
+      .select({ deferred: tasks.deferredQuestionDispatch })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
+  )[0]
+  if (taskRow?.deferred !== true) return new Set()
+  const entries = [
+    ...(await fetchDesignerParkEntries(db, taskId)),
+    ...(await fetchSelfQuestionerParkEntries(db, taskId)),
+  ]
   if (entries.length === 0) return new Set()
   const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   const outputRunIds = await runIdsWithOutput(
     db,
     runs.map((r) => r.id),
   )
-  // RFC-128 P5-BC §5.2.14 mixed-path step 2 (park-starve fix): a home that was sealed-undispatched
-  // (q1, control channel) but whose round got QUICK-finalized no longer parks here — the quick
-  // finalize CONSUMES (marks `confirmation='confirmed'`) the round's sealed-undispatched self/q
-  // entries (submitClarifyAnswers, atomic in its dbTxSync), and this query already excludes
-  // `confirmation='confirmed'`. So the superseded q1 drops out of the park set automatically (no
-  // starvation, no re-park duplicate) — no separate un-park pass needed.
   return partitionUndispatchedParkTargets(entries, runs, outputRunIds)
 }
 

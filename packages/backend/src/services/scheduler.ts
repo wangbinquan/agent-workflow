@@ -90,10 +90,7 @@ import {
   type ClarifyInlineFallbackReason,
 } from '@/services/clarifyFallback'
 import { evaluateExitCondition, parseExitCondition } from '@/services/exitCondition'
-import {
-  loadUndispatchedDesignerTargets,
-  loadUndispatchedSelfQuestionerTargets,
-} from '@/services/taskQuestions'
+import { loadUndispatchedParkTargets } from '@/services/taskQuestions'
 import { resolveBorrowForNode } from '@/services/taskQuestionDispatch'
 import { trySetTaskStatus, setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
 import {
@@ -812,15 +809,16 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
     // entirely for non-deferred tasks (the overwhelming majority) so the hot
     // path stays byte-for-byte today's behavior (golden-lock); only an opted-in
     // task ever consults its undispatched designer entries.
-    // RFC-128 P5-BC (clean-path ③): the deferred park set is the UNION of the designer
-    // park source (RFC-120 §18) and the new self/questioner park source (control-channel
-    // SEALED but undispatched self/questioner questions). Both self-gate on the deferred
-    // flag → empty for every non-deferred task (golden-lock byte-for-byte frontier).
+    // RFC-128 P5-BC (clean-path ③) + P5-D (Codex round-3 fix): the deferred park set classifies
+    // designer + self/questioner entries TOGETHER (loadUndispatchedParkTargets), NOT as the per-role
+    // UNION. The union deadlocks a SAME-HOME node that holds an undispatched entry of one role AND an
+    // in-flight rerun of another (the per-role designer source is blind to an in-flight questioner →
+    // parks the node → stalls its pending rerun forever). The all-role partition is in-flight-aware
+    // across every role, so such a node RUNS its in-flight rerun + re-parks next tick. Self-gates on
+    // the deferred flag → empty for every non-deferred task (golden-lock byte-for-byte frontier); for
+    // every non-same-home case it is byte-identical to the old union.
     const deferredHandlerNodeIds = state.task.deferredQuestionDispatch
-      ? new Set<string>([
-          ...(await loadUndispatchedDesignerTargets(db, taskId)),
-          ...(await loadUndispatchedSelfQuestionerTargets(db, taskId)),
-        ])
+      ? await loadUndispatchedParkTargets(db, taskId)
       : EMPTY_NODE_ID_SET
     const f = deriveFrontier(
       rows,
