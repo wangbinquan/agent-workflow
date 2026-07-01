@@ -1023,6 +1023,28 @@ export function isoRefGlob(taskId: string): string {
  * see the full canonical state incl. untracked upstream outputs) and for the node
  * snapshot (a node's new files are untracked in its iso worktree).
  */
+/**
+ * RFC-130 D22 — does the worktree have submodule(s) with UNCOMMITTED CONTENT (edits
+ * inside a submodule's own working tree)? `snapshotFullState` captures only the
+ * parent's gitlink commit for a submodule, NOT uncommitted content inside it, so
+ * such edits would be SILENTLY LOST on merge-back. Callers fail loudly instead.
+ * Fast path: a repo with no submodules returns false without the per-submodule scan.
+ */
+export async function hasDirtySubmoduleContent(worktreePath: string): Promise<boolean> {
+  const status = await runGit(worktreePath, ['submodule', 'status', '--recursive'])
+  if (status.exitCode !== 0 || status.stdout.trim() === '') return false // no submodules
+  // Ask each submodule (recursively) for its own dirty/untracked porcelain. --quiet
+  // suppresses the "Entering '<path>'" banner, so any stdout ⟹ a dirty submodule.
+  const r = await runGit(worktreePath, [
+    'submodule',
+    'foreach',
+    '--quiet',
+    '--recursive',
+    'git status --porcelain --untracked-files=all',
+  ])
+  return r.stdout.trim() !== ''
+}
+
 export async function snapshotFullState(
   worktreePath: string,
   opts?: { pinRef?: string; log?: Logger },

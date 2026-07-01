@@ -17,6 +17,7 @@ import {
   commitTree,
   createIsolatedWorktree,
   deleteIsoRefs,
+  hasDirtySubmoduleContent,
   isGitWorkTree,
   isoRefName,
   materializeTree,
@@ -225,6 +226,18 @@ export async function snapshotNodeIsoFinal(
   if (handle.passthrough) return {}
   const out: Record<string, string> = {}
   for (const r of handle.repos) {
+    // RFC-130 D22: fail LOUD if the node left uncommitted content INSIDE a submodule
+    // — the tree snapshot captures only the gitlink commit, so those edits would be
+    // silently dropped on merge-back. The node fails (merge-failed) with a clear
+    // message instead of losing work.
+    if (await hasDirtySubmoduleContent(r.isoWorktreePath)) {
+      throw new Error(
+        `submodule-dirty-content: node ${handle.nodeRunId} left uncommitted content inside a ` +
+          `submodule of '${r.worktreeDirName || 'repo'}'; the tree snapshot captures only the ` +
+          `gitlink commit, so those edits cannot merge back. Commit the submodule changes inside ` +
+          `the agent (or avoid editing submodule working trees).`,
+      )
+    }
     out[r.worktreeDirName] = await snapshotFullState(r.isoWorktreePath, {
       pinRef: isoRefName(handle.taskId, handle.nodeRunId, 'node'),
       log,

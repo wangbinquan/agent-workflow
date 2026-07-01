@@ -17,6 +17,7 @@ import { join } from 'node:path'
 import {
   commitTree,
   createIsolatedWorktree,
+  hasDirtySubmoduleContent,
   isoRefName,
   materializeTree,
   mergeTreeInMemory,
@@ -236,5 +237,26 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     expect(b).toBe('refs/agent-workflow/iso/task1/run1/base')
     expect(n).toBe('refs/agent-workflow/iso/task1/run1/node')
     expect(b).not.toBe(n)
+  })
+
+  // RFC-130 D22 — snapshotFullState captures only a submodule's gitlink commit, not
+  // uncommitted CONTENT inside it, so snapshotNodeIsoFinal must fail loud on such
+  // edits. Locks the detector: fast-path false with no submodules; true once a file
+  // inside a real submodule is edited.
+  test('hasDirtySubmoduleContent: false with no submodules, true with dirty submodule content (D22)', async () => {
+    const plain = await initRepo({ 'a.txt': 'x\n' })
+    expect(await hasDirtySubmoduleContent(plain)).toBe(false)
+    rmSync(plain, { recursive: true, force: true })
+
+    const sub = await initRepo({ 'lib.txt': 'v1\n' })
+    const parent = await initRepo({ 'main.txt': 'top\n' })
+    // A local-path submodule needs the file-protocol allowance (git ≥2.38 security).
+    await runGit(parent, ['-c', 'protocol.file.allow=always', 'submodule', 'add', sub, 'vendor'])
+    await runGit(parent, ['commit', '-qm', 'add submodule'])
+    expect(await hasDirtySubmoduleContent(parent)).toBe(false)
+    writeFileSync(join(parent, 'vendor', 'lib.txt'), 'edited\n')
+    expect(await hasDirtySubmoduleContent(parent)).toBe(true)
+    rmSync(sub, { recursive: true, force: true })
+    rmSync(parent, { recursive: true, force: true })
   })
 })
