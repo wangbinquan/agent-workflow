@@ -1,0 +1,18 @@
+-- RFC-129 — multi-document review cross-round selection inheritance staleness.
+-- Hand-written; additive; registered in meta/_journal.json. A SINGLE ALTER
+-- statement, so no breakpoint marker line is needed (and this comment must not
+-- contain the marker text itself, per the RFC-108 0052/0053 incident).
+--
+-- selection_stale: `1` when a multi-document member's `selection` was INHERITED
+-- from the immediately-previous review round (RFC-129) AND its body differs from
+-- the body the human last judged — propagated across rounds until a human
+-- re-marks, cleared to `0` on an explicit setDocumentSelection. Drives the
+-- "已变更" badge only; it never gates approve and never enters an agent prompt
+-- (RFC-099 prompt-isolation, same layer as decided_by).
+--
+-- NULL on every single-document row (item_index IS NULL), every pre-RFC-129 row,
+-- every unselected row, and every freshly human-judged row — so single-document
+-- dispatch / decision / output paths and existing multi-doc rows stay
+-- byte-for-byte unchanged (no backfill). Declared `integer` here; the drizzle
+-- layer overlays boolean mode (stored 0/1/NULL). Pure ADD COLUMN, no rebuild.
+ALTER TABLE `doc_versions` ADD COLUMN `selection_stale` integer;

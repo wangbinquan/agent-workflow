@@ -24,7 +24,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { and, asc, desc, eq, isNull, ne } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, ne } from 'drizzle-orm'
 import { dbTxSync } from '@/db/txSync'
 import { REVIEW_SUPERSEDE_MARKER_PREFIX } from '@/services/dispatchFrontier'
 import { ulid } from 'ulid'
@@ -45,7 +45,9 @@ import { isMultiMarkdownUpstream, SIBLING_OUTPUTS_INSTRUCTION } from '@agent-wor
 import {
   acceptedSubsetPaths,
   allDocumentsDecided,
+  buildPriorSelectionLookup,
   extractDocTitle,
+  inheritSelection,
   isMultiDocReviewInput,
   isInlineMarkdownListReviewInput,
   isReviewableBodyKindString,
@@ -53,7 +55,7 @@ import {
   splitMarkdownDocs,
   joinMarkdownDocs,
 } from '@agent-workflow/shared'
-import type { ReviewDocumentSummary } from '@agent-workflow/shared'
+import type { PriorRoundMember, ReviewDocumentSummary } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import {
   agents as agentsTable,
@@ -608,6 +610,18 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
         .sort((a, b) => (a.itemIndex ?? 0) - (b.itemIndex ?? 0))
     } else {
       docs = []
+      // RFC-129: carry each document's accept/not_accept choice forward from the
+      // immediately-previous round (item_path-first, item_index fallback),
+      // flagging any whose content changed since the human last judged it. This
+      // is the single injection point — iterate / reject / refresh / US-2 all
+      // re-mint here (design §5). Empty on the first round → all unselected.
+      const priorLookup = buildPriorSelectionLookup(
+        await loadPriorRoundMembers(db, appHome, {
+          taskId,
+          reviewNodeId: node.id,
+          iteration,
+        }),
+      )
       const itemCount = itemsInline ? inlineBodies.length : itemPaths.length
       for (let i = 0; i < itemCount; i++) {
         let body: string
@@ -627,6 +641,14 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
             body = `> ⚠️ RFC-079: file not found in worktree: \`${itemPath}\``
           }
         }
+        // RFC-129: inherit this item's selection from the prior round
+        // (path-first / index fallback), stale-flagged when its content changed.
+        // New items (no prior match) stay unselected — byte-identical to the old
+        // default; on the first round priorLookup is empty so every item is new.
+        const inh = inheritSelection(
+          { itemIndex: i, itemPath: itemPath ?? null, body },
+          priorLookup,
+        )
         const dv = await createDocVersion({
           db,
           appHome,
@@ -639,7 +661,8 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
           body,
           ...(itemPath !== undefined ? { sourceFilePath: itemPath, itemPath } : {}),
           itemIndex: i,
-          selection: 'unselected',
+          selection: inh.selection,
+          selectionStale: inh.stale,
         })
         docs.push(dv)
       }
@@ -720,6 +743,12 @@ export interface CreateDocVersionArgs {
   itemPath?: string
   /** RFC-079: initial per-document selection (defaults to 'unselected'). */
   selection?: 'unselected' | 'accepted' | 'not_accepted'
+  /**
+   * RFC-129: initial cross-round inheritance staleness for a multi-document
+   * member (defaults to false). Ignored on single-document rows (itemIndex
+   * undefined → column NULL). See loadPriorRoundMembers / inheritSelection.
+   */
+  selectionStale?: boolean
 }
 
 async function createDocVersion(args: CreateDocVersionArgs): Promise<DocVersion> {
@@ -764,6 +793,10 @@ async function createDocVersion(args: CreateDocVersionArgs): Promise<DocVersion>
   const itemPath = args.itemPath ?? null
   const selection: 'unselected' | 'accepted' | 'not_accepted' | null =
     args.itemIndex !== undefined ? (args.selection ?? 'unselected') : null
+  // RFC-129: single-document rows keep NULL (single-doc discriminator); a
+  // multi-document member carries its inherited staleness (default false).
+  const selectionStale: boolean | null =
+    args.itemIndex !== undefined ? (args.selectionStale ?? false) : null
   await args.db.insert(docVersions).values({
     id,
     taskId: args.taskId,
@@ -782,6 +815,7 @@ async function createDocVersion(args: CreateDocVersionArgs): Promise<DocVersion>
     itemIndex,
     selection,
     itemPath,
+    selectionStale,
     decidedAt: null,
     decidedBy: null,
     createdAt: now,
@@ -805,10 +839,89 @@ async function createDocVersion(args: CreateDocVersionArgs): Promise<DocVersion>
     itemIndex,
     selection,
     itemPath,
+    selectionStale,
     decidedAt: null,
     decidedBy: null,
     createdAt: now,
   }
+}
+
+/**
+ * RFC-129: load the IMMEDIATELY-PREVIOUS multi-document review round's members
+ * for a review node (design §3 / D9). Spans node_runs (covers US-2's fresh run)
+ * but is scoped to one workflow `iteration` so loop passes stay independent.
+ *
+ * The prior round is identified by `max(reviewIteration)` among the existing
+ * multi-doc rows: at the mint injection point the current round's rows do not
+ * exist yet, so the highest reviewIteration present is always the immediately-
+ * previous round — N-1 for iterate/reject (run bumped to N), or N for
+ * refresh/US-2 (not bumped; current rows not yet minted). Within that round each
+ * item_index resolves to its newest row (ulid id order — refresh can leave two
+ * generations at the same reviewIteration). Deliberately NOT "max versionIndex
+ * per key": that would resurrect an older round for a re-added document, and
+ * versionIndex is not comparable across US-2's fresh runs.
+ */
+async function loadPriorRoundMembers(
+  db: DbClient,
+  appHome: string,
+  args: { taskId: string; reviewNodeId: string; iteration: number },
+): Promise<PriorRoundMember[]> {
+  // Review node_runs at this workflow iteration (spans reruns + US-2 fresh run).
+  const runIds = (
+    await db
+      .select({ id: nodeRuns.id })
+      .from(nodeRuns)
+      .where(
+        and(
+          eq(nodeRuns.taskId, args.taskId),
+          eq(nodeRuns.nodeId, args.reviewNodeId),
+          eq(nodeRuns.iteration, args.iteration),
+        ),
+      )
+  ).map((r) => r.id)
+  if (runIds.length === 0) return []
+  const rows = (
+    await db
+      .select()
+      .from(docVersions)
+      .where(
+        and(
+          eq(docVersions.reviewNodeId, args.reviewNodeId),
+          inArray(docVersions.reviewNodeRunId, runIds),
+        ),
+      )
+  ).filter((r) => r.itemIndex !== null)
+  if (rows.length === 0) return []
+  // R* = the immediately-previous round = the highest reviewIteration present.
+  const maxIter = Math.max(...rows.map((r) => r.reviewIteration))
+  // Newest row per item_index within that round (ulid id = creation order, so a
+  // lexicographically greater id is newer — covers refresh's two generations).
+  const newestByIndex = new Map<number, (typeof rows)[number]>()
+  for (const r of rows) {
+    if (r.reviewIteration !== maxIter) continue
+    const idx = r.itemIndex as number
+    const cur = newestByIndex.get(idx)
+    if (cur === undefined || r.id > cur.id) newestByIndex.set(idx, r)
+  }
+  const members: PriorRoundMember[] = []
+  for (const r of newestByIndex.values()) {
+    let body = ''
+    try {
+      body = readFileSync(join(appHome, r.bodyPath), 'utf8')
+    } catch {
+      // Missing prior body → treat as "" so any real new content compares as
+      // changed (conservative: prefer an extra stale flag over a silent carry).
+      body = ''
+    }
+    members.push({
+      itemIndex: r.itemIndex as number,
+      itemPath: r.itemPath,
+      selection: (r.selection ?? 'unselected') as PriorRoundMember['selection'],
+      selectionStale: r.selectionStale ?? false,
+      body,
+    })
+  }
+  return members
 }
 
 export function readDocVersionBody(appHome: string, docVersion: DocVersion): string {
@@ -994,6 +1107,9 @@ export async function getReviewDetail(
         title: extractDocTitle(mbody, m.itemPath ?? m.id),
         selection: (m.selection ?? 'unselected') as 'unselected' | 'accepted' | 'not_accepted',
         commentCount: cc.length,
+        // RFC-129: inherited selection whose content changed since the human
+        // last judged it → "已变更" badge (advisory only; approve unaffected).
+        stale: m.selectionStale === true,
       })
     }
     dv = rowToDocVersion(members[0]!)
@@ -1882,7 +1998,9 @@ export async function setDocumentSelection(args: {
   }
   await args.db
     .update(docVersions)
-    .set({ selection: args.selection })
+    // RFC-129: a human judging the CURRENT content clears the inherited-stale
+    // flag (the sole clear path; see loadPriorRoundMembers stale propagation).
+    .set({ selection: args.selection, selectionStale: false })
     .where(eq(docVersions.id, args.docVersionId))
   emitReviewSelectionChanged(dvRow.taskId, args.nodeRunId, args.docVersionId, args.selection)
   return { taskId: dvRow.taskId, docVersionId: args.docVersionId, selection: args.selection }
@@ -2406,6 +2524,8 @@ function rowToDocVersion(row: typeof docVersions.$inferSelect): DocVersion {
     itemIndex: row.itemIndex,
     selection: row.selection,
     itemPath: row.itemPath,
+    // RFC-129: inheritance staleness ({ mode: 'boolean' } → boolean | null).
+    selectionStale: row.selectionStale ?? null,
     createdAt: row.createdAt,
     decidedAt: row.decidedAt,
     decidedBy: row.decidedBy,

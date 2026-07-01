@@ -335,6 +335,8 @@ export interface Resources {
       acceptHint: string
       notAcceptHint: string
       shortcutHint: string
+      changed: string
+      changedHint: string
     }
     decision: {
       approved: string
@@ -2686,6 +2688,8 @@ export const zhCN: Resources = {
       acceptHint: '采纳（快捷键 Q）',
       notAcceptHint: '不采纳（快捷键 W）',
       shortcutHint: '↑/↓ 切换文件 · Q 采纳 · W 不采纳',
+      changed: '已变更',
+      changedHint: '内容较你上次裁决时有变化，建议重看',
     },
     decision: {
       approved: '通过',

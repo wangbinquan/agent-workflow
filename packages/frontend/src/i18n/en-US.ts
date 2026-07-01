@@ -184,6 +184,8 @@ export const enUS: Resources = {
       acceptHint: 'Accept (shortcut: Q)',
       notAcceptHint: 'Exclude (shortcut: W)',
       shortcutHint: '↑/↓ switch file · Q accept · W exclude',
+      changed: 'Changed',
+      changedHint: 'Content changed since your last review',
     },
     decision: {
       approved: 'approved',

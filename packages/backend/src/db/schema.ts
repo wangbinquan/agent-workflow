@@ -896,6 +896,14 @@ export const docVersions = sqliteTable(
     // accepted-subset output so downstream nodes read the live file. NULL on
     // single-document / inline rows.
     itemPath: text('item_path'),
+    // RFC-129: cross-round selection inheritance staleness. `true` when this
+    // multi-document member's `selection` was INHERITED from the immediately-
+    // previous round AND its body differs from the body the human last judged
+    // (propagated across rounds until a human re-marks; cleared to `false` on an
+    // explicit setDocumentSelection). NULL on single-document / legacy /
+    // unselected / freshly human-judged rows. Drives the "已变更" badge only —
+    // never gates approve, never enters an agent prompt.
+    selectionStale: integer('selection_stale', { mode: 'boolean' }),
     createdAt: integer('created_at')
       .notNull()
       .default(sql`(unixepoch() * 1000)`),

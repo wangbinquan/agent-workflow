@@ -166,3 +166,106 @@ export function allDocumentsDecided(rows: readonly SelectableDoc[]): boolean {
   if (rows.length === 0) return true
   return rows.every((r) => r.selection === 'accepted' || r.selection === 'not_accepted')
 }
+
+// -----------------------------------------------------------------------------
+// RFC-129: cross-round selection inheritance.
+//
+// When a multi-document review round re-opens (iterate / reject / refresh /
+// US-2 re-review), the framework re-mints one doc_version per list item. Rather
+// than resetting every item to `unselected`, RFC-129 carries each document's
+// prior accept/not_accept choice forward from the IMMEDIATELY-PREVIOUS round,
+// matched item_path-first (unique) then item_index. A carried choice whose
+// content changed since the human last judged it is flagged stale ("已变更").
+//
+// These are the pure oracles for that matching + staleness decision; the
+// service (services/review.ts, loadPriorRoundMembers) picks the immediately-
+// previous round's members + reads their bodies and feeds them here. No DB / IO
+// — exhaustively tested in reviewMultiDoc.inherit.test.ts.
+// -----------------------------------------------------------------------------
+
+/**
+ * One member of the immediately-previous review round, projected by the service
+ * from a doc_versions row + its archived body. `selectionStale` is normalized to
+ * a boolean at the service boundary (`row.selectionStale ?? false`), since the
+ * column is nullable ({ mode: 'boolean' } → boolean | null).
+ */
+export interface PriorRoundMember {
+  itemIndex: number
+  itemPath: string | null
+  selection: DocumentSelection
+  /** Whether this member's selection was already stale (unresolved) last round. */
+  selectionStale: boolean
+  /** The archived body the prior round showed (for content-change compare). */
+  body: string
+}
+
+/** One item of the round being minted now (body in hand at mint time). */
+export interface NewRoundItem {
+  itemIndex: number
+  itemPath: string | null
+  body: string
+}
+
+export interface InheritedSelection {
+  selection: DocumentSelection
+  /** True → mint this member with selection_stale = true. */
+  stale: boolean
+}
+
+export interface PriorSelectionLookup {
+  /**
+   * Prior members keyed by item_path — ONLY paths that are UNIQUE among the
+   * prior members (ambiguous / duplicate paths are excluded so they fall back to
+   * item_index matching).
+   */
+  byPath: Map<string, PriorRoundMember>
+  byIndex: Map<number, PriorRoundMember>
+}
+
+/**
+ * Build the path/index lookup over ONE round's members (the immediately-previous
+ * round). A path present on more than one member is NOT indexed by path
+ * (ambiguous → index fallback); every member is indexed by item_index.
+ */
+export function buildPriorSelectionLookup(
+  prior: readonly PriorRoundMember[],
+): PriorSelectionLookup {
+  const pathCounts = new Map<string, number>()
+  for (const m of prior) {
+    if (m.itemPath != null && m.itemPath !== '') {
+      pathCounts.set(m.itemPath, (pathCounts.get(m.itemPath) ?? 0) + 1)
+    }
+  }
+  const byPath = new Map<string, PriorRoundMember>()
+  const byIndex = new Map<number, PriorRoundMember>()
+  for (const m of prior) {
+    if (m.itemPath != null && m.itemPath !== '' && pathCounts.get(m.itemPath) === 1) {
+      byPath.set(m.itemPath, m)
+    }
+    byIndex.set(m.itemIndex, m)
+  }
+  return { byPath, byIndex }
+}
+
+/**
+ * Resolve a new item's inherited selection from the immediately-previous round.
+ * Match priority (RFC-129 D1): unique item_path → item_index → none (new doc).
+ * A matched, non-`unselected` choice is carried; it is flagged stale when the
+ * new body differs from the prior member's body OR the prior member was itself
+ * stale (propagation until a human re-affirms — RFC-129 D4). No match /
+ * `unselected` prior → `unselected`, not stale.
+ */
+export function inheritSelection(
+  item: NewRoundItem,
+  lookup: PriorSelectionLookup,
+): InheritedSelection {
+  const m =
+    (item.itemPath != null && item.itemPath !== ''
+      ? lookup.byPath.get(item.itemPath)
+      : undefined) ?? lookup.byIndex.get(item.itemIndex)
+  if (m === undefined || m.selection === 'unselected') {
+    return { selection: 'unselected', stale: false }
+  }
+  const changed = item.body !== m.body
+  return { selection: m.selection, stale: changed || m.selectionStale }
+}

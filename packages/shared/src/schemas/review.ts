@@ -182,6 +182,13 @@ export const DocVersionSchema = z.object({
    * on single-document / inline rows.
    */
   itemPath: z.string().nullable().optional(),
+  /**
+   * RFC-129: cross-round selection inheritance staleness. true when this
+   * member's `selection` was inherited from the prior round and its content
+   * changed since the human last judged it (propagated until a human re-marks).
+   * NULL / absent on single-document / legacy / unselected / freshly-judged rows.
+   */
+  selectionStale: z.boolean().nullable().optional(),
   createdAt: z.number().int(),
   decidedAt: z.number().int().nullable(),
   decidedBy: z.string().nullable(),
@@ -343,6 +350,12 @@ export const ReviewDocumentSummarySchema = z.object({
   title: z.string(),
   selection: z.enum(['unselected', 'accepted', 'not_accepted']),
   commentCount: z.number().int().nonnegative(),
+  /**
+   * RFC-129: true when this document's `selection` was inherited from the prior
+   * round and its content changed since the human last judged it — drives the
+   * "已变更" badge. Absent / false on single-doc & first-round & re-affirmed docs.
+   */
+  stale: z.boolean().optional(),
 })
 export type ReviewDocumentSummary = z.infer<typeof ReviewDocumentSummarySchema>
 

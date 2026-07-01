@@ -287,6 +287,18 @@ export function MultiDocReviewView({ nodeRunId }: { nodeRunId: string }) {
                       <StatusChip kind={chip.kind} size="sm">
                         {t(chip.key)}
                       </StatusChip>
+                      {/* RFC-129: inherited selection whose content changed since
+                          the human last judged it — advisory "已变更" badge. */}
+                      {d.stale === true && (
+                        <StatusChip
+                          kind="warn"
+                          size="sm"
+                          data-testid="multidoc-stale-badge"
+                          title={t('reviews.multiDoc.changedHint')}
+                        >
+                          {t('reviews.multiDoc.changed')}
+                        </StatusChip>
+                      )}
                       {d.commentCount > 0 && (
                         <span className="review-multidoc__doc-comments" aria-hidden="true">
                           💬 {d.commentCount}
