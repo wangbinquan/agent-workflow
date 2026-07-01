@@ -372,22 +372,56 @@ export async function resolveConflictWithAgent(
   const repoGit = conflict.canonWorktreePath // shared-ODB git dir for worktree/commit ops
   // §6.2①: commit-tree the conflicted merged tree (worktree add needs a commit-ish),
   // then check it out detached — the working tree now carries the conflict markers.
-  const cmt = await commitTree(repoGit, conflict.mergedTree, conflict.base, 'aw-conflict')
+  // The commit's PARENT is canonical-at-conflict (`ours`), NOT the node base: this
+  // pins `ours-at-conflict` in git so a §6.3 RESUME can recover it via
+  // `git rev-parse HEAD^` and use it as the re-merge base — WITHOUT a new DB column.
+  // (Merging the human's resolution back against the node base instead would spuriously
+  // re-conflict on the very region both sides touched.) We hold writeSem across §6.2,
+  // so this `ours` equals the `ours` the materialize below re-snapshots.
+  const oursAtConflict = await snapshotFullState(repoGit, { log })
+  const cmt = await commitTree(repoGit, conflict.mergedTree, oursAtConflict, 'aw-conflict')
   const suffix = conflict.worktreeDirName === '' ? 'repo' : conflict.worktreeDirName
   const resolveIso = join(containerPath, `resolve-${suffix}`)
-  await runGit(repoGit, ['worktree', 'add', '--detach', resolveIso, cmt])
+  // A stale resolve-iso (crash mid-resolution) would make `worktree add` fail;
+  // remove it first (best-effort), then fail LOUD if the add still fails — running
+  // the agent against a missing/stale worktree would mis-judge resolution (Codex P2).
+  if (existsSync(resolveIso)) {
+    await removeWorktree({ repoPath: repoGit, worktreePath: resolveIso, force: true }).catch(
+      () => {},
+    )
+  }
+  const add = await runGit(repoGit, ['worktree', 'add', '--detach', resolveIso, cmt])
+  if (add.exitCode !== 0) {
+    throw new Error(`merge-resolve setup failed: worktree add ${resolveIso}: ${add.stderr.trim()}`)
+  }
 
   const manifest = parseConflictManifest(conflict.rawConflictOutput, conflict.worktreeDirName)
+  // Fail closed on UNRECOGNIZED conflict classes (Codex P1): git may report a class
+  // the classifier does not model (rename/rename, file/directory, …) — its path is
+  // in `conflict.paths` but absent from `manifest`, so the agent is never told and
+  // evaluateResolution can't judge it. Any such path makes the whole resolution
+  // UNRESOLVED so we never materialize an unhandled conflict into canonical. (The
+  // synthetic entry's `type` is only used for the detail message.)
+  const manifestPaths = new Set(manifest.map((e) => e.path))
+  const unhandled: MergeConflictEntry[] = conflict.paths
+    .filter((p) => !manifestPaths.has(p))
+    .map((p) => ({ worktreeDirName: conflict.worktreeDirName, path: p, type: 'content' }))
   let resolved = false
-  let unresolved: MergeConflictEntry[] = manifest
+  let unresolved: MergeConflictEntry[] = [...manifest, ...unhandled]
   try {
     // §6.2②: run the merge agent in the resolve-iso (scheduler bypasses globalSem).
     await runAgent(buildMergeResolvePrompt({ manifest }), resolveIso)
     // §6.2③: framework self-check from observed worktree state.
     const states = gatherResolvedStates(resolveIso, manifest)
     const verdict = evaluateResolution(manifest, states)
-    resolved = verdict.resolved
-    unresolved = verdict.unresolved
+    resolved = verdict.resolved && unhandled.length === 0
+    unresolved = [...verdict.unresolved, ...unhandled]
+    if (unhandled.length > 0) {
+      log?.warn('merge-back: unrecognized conflict class(es) → fail closed (unresolved)', {
+        resolveIso,
+        unhandled: unhandled.map((e) => e.path),
+      })
+    }
   } catch (err) {
     log?.warn('merge agent run failed → treat as unresolved', {
       resolveIso,
@@ -440,4 +474,88 @@ function gatherResolvedStates(
     out.push({ worktreeDirName: e.worktreeDirName, path: e.path, present: true, content })
   }
   return out
+}
+
+/**
+ * RFC-130 §6.3 resume — complete a conflict-human node whose human has resolved
+ * the conflict in the preserved resolve-iso worktree(s). Per repo (multi-repo
+ * independent): re-derive the conflict manifest against CURRENT canonical, verify
+ * the human left no unresolved path (§6.2③ per-path self-check, D6 — NOT the
+ * agent's self-report), then re-merge the human's resolution against the current
+ * canonical (siblings may have advanced it) and materialize on a clean re-merge.
+ * A repo whose resolve-iso is missing / still-conflicting / has residual markers
+ * stays unresolved → the caller keeps it parked (awaiting_human another round).
+ *
+ * `nodeTrees` maps worktreeDirName → the node's persisted final tree (iso_node_tree).
+ */
+export async function completeHumanResolvedConflict(
+  handle: IsoHandle,
+  nodeTrees: Record<string, string>,
+  log?: Logger,
+): Promise<{ allResolved: boolean; unresolvedRepos: string[] }> {
+  if (handle.passthrough) return { allResolved: true, unresolvedRepos: [] }
+  const unresolved: string[] = []
+  for (const r of handle.repos) {
+    const nodeTree = nodeTrees[r.worktreeDirName]
+    const suffix = r.worktreeDirName === '' ? 'repo' : r.worktreeDirName
+    const resolveIso = join(handle.containerPath, `resolve-${suffix}`)
+    // No recorded delta for this repo, or the human's resolve-iso is gone / not a
+    // worktree (GC'd, never created) → cannot complete; keep it parked.
+    if (nodeTree === undefined || !existsSync(resolveIso) || !(await isGitWorkTree(resolveIso))) {
+      unresolved.push(r.worktreeDirName)
+      continue
+    }
+    // ours-at-conflict = the resolve-iso commit's PARENT — pinned in §6.2① exactly
+    // so resume can recover it here (no DB column) as the correct re-merge base.
+    const oursAtConflict = (await runGit(resolveIso, ['rev-parse', 'HEAD^'])).stdout.trim()
+    // §6.2③ — reconstruct the ORIGINAL conflict (node base vs node_tree over
+    // ours-at-conflict) and confirm the human decided EVERY conflicted path (content:
+    // no residual markers; silent classes: a definite keep/delete/side; unrecognized
+    // class → fail closed). Never trust the agent's word (D6).
+    const probe = await mergeTreeInMemory(r.canonWorktreePath, {
+      base: r.baseSnapshot,
+      ours: oursAtConflict,
+      theirs: nodeTree,
+    })
+    const manifest = parseConflictManifest(probe.rawConflictOutput, r.worktreeDirName)
+    const states = gatherResolvedStates(resolveIso, manifest)
+    const manifestPaths = new Set(manifest.map((e) => e.path))
+    const unhandled = probe.conflicts.filter((p) => !manifestPaths.has(p))
+    if (!evaluateResolution(manifest, states).resolved || unhandled.length > 0) {
+      unresolved.push(r.worktreeDirName)
+      continue
+    }
+    // §6.3 — re-merge the human's resolution against the CURRENT canonical, based at
+    // ours-at-conflict so ONLY a post-conflict sibling advance INTO the same region
+    // re-conflicts (not the region the human just reconciled).
+    const resolvedTree = await snapshotFullState(resolveIso, { log })
+    const ours = await snapshotFullState(r.canonWorktreePath, { log })
+    const merge = await mergeTreeInMemory(r.canonWorktreePath, {
+      base: oursAtConflict,
+      ours,
+      theirs: resolvedTree,
+    })
+    if (merge.conflicts.length > 0) {
+      unresolved.push(r.worktreeDirName)
+      continue
+    }
+    const canonCurrentTree = await treeOf(r.canonWorktreePath, ours)
+    await materializeTree(r.canonWorktreePath, {
+      mergedTree: merge.mergedTree,
+      canonCurrentTree,
+      taskBaseHead: r.taskBaseHead,
+    })
+    // resolved — discard the resolve-iso.
+    await removeWorktree({
+      repoPath: r.canonWorktreePath,
+      worktreePath: resolveIso,
+      force: true,
+    }).catch((err) => {
+      log?.warn('resolve-iso remove failed after human resolution (leaving for GC)', {
+        resolveIso,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
+  }
+  return { allResolved: unresolved.length === 0, unresolvedRepos: unresolved }
 }

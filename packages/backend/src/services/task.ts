@@ -141,6 +141,15 @@ export interface StartTaskDeps {
     diffMaxBytes?: number
   }
   /**
+   * RFC-130 §6.1: built-in merge-conflict resolver runtime (config.mergeAgentRuntime
+   * / deprecated mergeAgentModel), threaded into RunTaskOptions so a real merge-back
+   * conflict resolves on the configured runtime (not just `defaultRuntime`).
+   */
+  mergeAgent?: {
+    model?: string
+    runtime?: string
+  }
+  /**
    * RFC-103 T2 (02-SCHED): global concurrency cap, resolved from settings
    * `maxConcurrentNodes` by the route and threaded into `RunTaskOptions` across
    * start / resume / retry. Omitted → scheduler default (4). Before RFC-103
@@ -501,6 +510,7 @@ export function runtimeConfigOpts(
   deps: Pick<
     StartTaskDeps,
     | 'commitPush'
+    | 'mergeAgent'
     | 'maxConcurrentNodes'
     | 'defaultPerNodeTimeoutMs'
     | 'defaultNodeRetries'
@@ -511,6 +521,11 @@ export function runtimeConfigOpts(
     ...(deps.commitPush?.model !== undefined ? { commitPushModel: deps.commitPush.model } : {}),
     ...(deps.commitPush?.runtime !== undefined
       ? { commitPushRuntime: deps.commitPush.runtime }
+      : {}),
+    // RFC-130 §6.1: built-in merge-conflict resolver runtime.
+    ...(deps.mergeAgent?.model !== undefined ? { mergeAgentModel: deps.mergeAgent.model } : {}),
+    ...(deps.mergeAgent?.runtime !== undefined
+      ? { mergeAgentRuntime: deps.mergeAgent.runtime }
       : {}),
     ...(deps.commitPush?.maxRepairRetries !== undefined
       ? { commitPushMaxRepairRetries: deps.commitPush.maxRepairRetries }

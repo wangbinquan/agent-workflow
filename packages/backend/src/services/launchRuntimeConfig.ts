@@ -60,6 +60,7 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
   defaultPerNodeTimeoutMs?: number
   defaultRuntime?: string // RFC-112: a registered runtime NAME (built-ins or custom)
   defaultNodeRetries?: number // RFC-115: global per-node retry budget
+  mergeAgent?: { model?: string; runtime?: string } // RFC-130: built-in merge resolver
 } {
   const out: {
     commitPush?: {
@@ -73,6 +74,7 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
     defaultRuntime?: string // RFC-112: a registered runtime NAME (built-ins or custom)
     defaultNodeRetries?: number // RFC-115: global per-node retry budget
     claudeCodePath?: string // RFC-112: built-in claude binary (config.claudeCodePath)
+    mergeAgent?: { model?: string; runtime?: string } // RFC-130: built-in merge resolver
   } = {}
   const commitPush = resolveCommitPushConfig(configPath)
   if (commitPush !== undefined) out.commitPush = commitPush
@@ -85,6 +87,13 @@ export function resolveLaunchRuntimeConfig(configPath: string): {
     if (cfg.defaultRuntime !== undefined) out.defaultRuntime = cfg.defaultRuntime
     // RFC-115: global per-node retry budget (no `> 0` guard — 0 disables retries).
     if (cfg.defaultNodeRetries !== undefined) out.defaultNodeRetries = cfg.defaultNodeRetries
+    // RFC-130 §6.1: built-in merge-conflict resolver runtime (profile wins over model).
+    if (cfg.mergeAgentModel !== undefined || cfg.mergeAgentRuntime !== undefined) {
+      out.mergeAgent = {
+        ...(cfg.mergeAgentModel !== undefined ? { model: cfg.mergeAgentModel } : {}),
+        ...(cfg.mergeAgentRuntime !== undefined ? { runtime: cfg.mergeAgentRuntime } : {}),
+      }
+    }
     // RFC-113 §5: claudeCodePath is no longer threaded (the claude runtime row's
     // binary_path carries it now — RFC-112 P2 is收口).
   } catch {

@@ -154,6 +154,7 @@ import { createLogger, type Logger } from '@/util/log'
 // shardSource instead of slicing a string diff.
 import { gitBlobHashes, gitChangedFiles, runGit } from '@/util/git'
 import {
+  completeHumanResolvedConflict,
   createNodeIso,
   discardNodeIso,
   type IsoHandle,
@@ -474,6 +475,10 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     // agent-success and merge-back BEFORE the scope runs (so the frontier only
     // sees merged rows). A no-op on a fresh run / non-isolated task.
     await replayPendingMerges(state, log)
+    // RFC-130 §6.3 resume: complete any conflict-human node whose human resolved
+    // its conflict in the preserved resolve-iso (flips 'merged' + releases
+    // downstream; still-unresolved stays parked). No-op on a fresh run.
+    await replayConflictHumanResolutions(state, log)
     result = await runScope(state, {
       scopeIds: topLevelIds,
       iteration: 0,
@@ -1725,13 +1730,87 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
       baseSnapshots,
       taskBaseHeads,
     })
-    const mergeRes = await state.writeSem.run(() => mergeBackNodeIso(handle, nodeTrees, log))
-    if (!mergeRes.clean) {
-      // T3 placeholder — PR-B resolves this via the merge agent → awaiting_human.
-      throw new Error(`pending-merge replay conflict for run ${r.id} (canonical advanced)`)
+    const merge = await state.writeSem.run(async () => {
+      const mergeRes = await mergeBackNodeIso(handle, nodeTrees, log)
+      if (mergeRes.clean) return { kind: 'merged' as const }
+      // RFC-130 §6.2 — a crash-recovered pending-merge that now conflicts (canonical
+      // advanced while the daemon was down) goes through the SAME merge agent as a
+      // live dispatch; unresolved → conflict-human (resume replay #2 completes the
+      // human fix). Resolve within the writeSem hold so canon stays stable.
+      const res = await resolveMergeConflicts(state, {
+        conflicts: mergeRes.conflicts,
+        containerPath: handle.containerPath,
+        conflictNodeRunId: r.id,
+        nodeId: r.nodeId,
+        iteration: r.iteration,
+      })
+      return res.allResolved
+        ? { kind: 'merged' as const }
+        : { kind: 'conflict-human' as const, detail: res.detail }
+    })
+    if (merge.kind === 'merged') {
+      await db.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, r.id))
+      log.info('pending-merge replay merged', { nodeRunId: r.id })
+    } else {
+      await db.update(nodeRuns).set({ mergeState: 'conflict-human' }).where(eq(nodeRuns.id, r.id))
+      log.warn('pending-merge replay conflict → conflict-human (merge agent could not resolve)', {
+        nodeRunId: r.id,
+        detail: merge.detail,
+      })
     }
-    await db.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, r.id))
-    log.info('pending-merge replay merged', { nodeRunId: r.id })
+  }
+}
+
+/**
+ * RFC-130 §6.3 resume — on task resume, complete any conflict-human node whose
+ * human has resolved its conflict in the preserved resolve-iso worktree(s). A repo
+ * that now merges cleanly → materialized + the row flips to 'merged' (the frontier
+ * releases its downstream); a repo still unresolved keeps the row at
+ * 'conflict-human' → the frontier re-parks the task at awaiting_human. Runs at the
+ * resume entry (before the scope loop), right after replayPendingMerges.
+ */
+async function replayConflictHumanResolutions(state: SchedulerState, log: Logger): Promise<void> {
+  const { db, taskId, task } = state
+  const rows = await db
+    .select()
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.mergeState, 'conflict-human')))
+  if (rows.length === 0) return
+  const taskBaseHeads: Record<string, string> = {}
+  for (const repo of state.repos) {
+    const h = await runGit(repo.worktreePath, ['rev-parse', 'HEAD'])
+    taskBaseHeads[repo.worktreeDirName] = h.stdout.trim()
+  }
+  for (const r of rows) {
+    const baseSnapshots: Record<string, string> = {}
+    const nodeTrees: Record<string, string> = {}
+    if (task.repoCount === 1) {
+      if (r.isoBaseSnapshot !== null) baseSnapshots[''] = r.isoBaseSnapshot
+      if (r.isoNodeTree !== null) nodeTrees[''] = r.isoNodeTree
+    } else {
+      Object.assign(baseSnapshots, parseIsoJsonMap(r.isoBaseSnapshotReposJson))
+      Object.assign(nodeTrees, parseIsoJsonMap(r.isoNodeTreeReposJson))
+    }
+    const handle = rebuildIsoHandle({
+      appHome: state.opts.appHome,
+      taskId,
+      nodeRunId: r.id,
+      canonRepos: state.repos,
+      baseSnapshots,
+      taskBaseHeads,
+    })
+    const outcome = await state.writeSem.run(() =>
+      completeHumanResolvedConflict(handle, nodeTrees, log),
+    )
+    if (outcome.allResolved) {
+      await db.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, r.id))
+      log.info('conflict-human resume: human resolution merged back', { nodeRunId: r.id })
+    } else {
+      log.info('conflict-human resume: still unresolved — staying parked', {
+        nodeRunId: r.id,
+        repos: outcome.unresolvedRepos,
+      })
+    }
   }
 }
 

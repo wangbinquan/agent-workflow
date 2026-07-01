@@ -13,8 +13,13 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mergeTreeInMemory, runGit, snapshotFullState } from '../src/util/git'
-import { type MergeBackConflict, resolveConflictWithAgent } from '../src/services/nodeIsolation'
+import { commitTree, mergeTreeInMemory, runGit, snapshotFullState } from '../src/util/git'
+import {
+  completeHumanResolvedConflict,
+  type IsoHandle,
+  type MergeBackConflict,
+  resolveConflictWithAgent,
+} from '../src/services/nodeIsolation'
 
 async function initRepo(seed: Record<string, string>): Promise<string> {
   const dir = mkdtempSync(join(tmpdir(), 'aw-rfc130-mr-'))
@@ -35,7 +40,11 @@ async function head(dir: string): Promise<string> {
  * scheduler would hand to resolveConflictWithAgent, leaving `canon` in its
  * "ours" working state (as merge-back sees it).
  */
-async function makeConflict(): Promise<{ canon: string; conflict: MergeBackConflict }> {
+async function makeConflict(): Promise<{
+  canon: string
+  conflict: MergeBackConflict
+  theirs: string
+}> {
   const canon = await initRepo({ 'f.txt': 'L1\nL2\nL3\n' })
   const taskBaseHead = await head(canon)
   const base = await snapshotFullState(canon) // == HEAD tree (clean)
@@ -59,7 +68,7 @@ async function makeConflict(): Promise<{ canon: string; conflict: MergeBackConfl
     canonWorktreePath: canon,
     taskBaseHead,
   }
-  return { canon, conflict }
+  return { canon, conflict, theirs }
 }
 
 describe('RFC-130 §6.2 — resolveConflictWithAgent (mock agent)', () => {
@@ -121,6 +130,94 @@ describe('RFC-130 §6.2 — resolveConflictWithAgent (mock agent)', () => {
     expect(out.resolved).toBe(false)
     expect(out.resolveIsoPath).not.toBeNull()
     expect(readFileSync(join(canon, 'f.txt'), 'utf8')).toBe('L1\nOURS\nL3\n')
+    rmSync(canon, { recursive: true, force: true })
+    rmSync(container, { recursive: true, force: true })
+  })
+
+  // Codex P1 — fail closed: git reports a conflicted PATH whose CLASS the manifest
+  // parser does not recognize (rename/rename, file/directory, …). Such a path is in
+  // `conflict.paths` but absent from the manifest, so the agent is never told and
+  // the per-path verdict can't judge it. Even a fully-resolving agent must NOT let
+  // the resolution succeed (which would materialize the unhandled conflict).
+  test('unrecognized conflict path (in conflict.paths, not in manifest) → fail closed, canon untouched', async () => {
+    const { canon, conflict } = await makeConflict()
+    // Inject a conflicted path the manifest classifier cannot see (no CONFLICT line
+    // for it in rawConflictOutput) — simulates rename/rename / file-directory.
+    conflict.paths = [...conflict.paths, 'ghost.txt']
+    const container = mkdtempSync(join(tmpdir(), 'aw-rfc130-ctr-'))
+    const out = await resolveConflictWithAgent(conflict, {
+      containerPath: container,
+      // Agent "resolves" the marked file, but the ghost path is unhandled.
+      runAgent: async (_prompt, cwd) => {
+        writeFileSync(join(cwd, 'f.txt'), 'L1\nMERGED\nL3\n')
+      },
+    })
+    expect(out.resolved).toBe(false)
+    expect(out.unresolved.map((e) => e.path)).toContain('ghost.txt')
+    expect(out.resolveIsoPath).not.toBeNull()
+    // The unhandled conflict must NOT reach canonical.
+    expect(readFileSync(join(canon, 'f.txt'), 'utf8')).toBe('L1\nOURS\nL3\n')
+    rmSync(canon, { recursive: true, force: true })
+    rmSync(container, { recursive: true, force: true })
+  })
+
+  // RFC-130 §6.3 resume — completeHumanResolvedConflict finishes a parked
+  // conflict-human node from the human's edited resolve-iso. Mirrors §6.2① exactly:
+  // the resolve-iso commit's PARENT is ours-at-conflict, which resume recovers via
+  // `HEAD^` as the re-merge base (no DB column).
+  async function makeConflictHumanState(humanContent: string): Promise<{
+    canon: string
+    handle: IsoHandle
+    theirs: string
+    container: string
+  }> {
+    const { canon, conflict, theirs } = await makeConflict() // canon left at "ours"
+    const container = mkdtempSync(join(tmpdir(), 'aw-rfc130-ctr-'))
+    const oursAtConflict = await snapshotFullState(canon)
+    const cmt = await commitTree(canon, conflict.mergedTree, oursAtConflict, 'aw-conflict')
+    const resolveIso = join(container, 'resolve-repo')
+    await runGit(canon, ['worktree', 'add', '--detach', resolveIso, cmt])
+    writeFileSync(join(resolveIso, 'f.txt'), humanContent)
+    const handle: IsoHandle = {
+      taskId: 't',
+      nodeRunId: 'n',
+      containerPath: container,
+      passthrough: false,
+      repos: [
+        {
+          repoPath: canon,
+          canonWorktreePath: canon,
+          isoWorktreePath: join(container, 'node'),
+          worktreeDirName: '',
+          baseBranch: 'main',
+          baseSnapshot: conflict.base,
+          taskBaseHead: conflict.taskBaseHead,
+        },
+      ],
+    }
+    return { canon, handle, theirs, container }
+  }
+
+  test('resume: human resolved cleanly → materialized into canon, all resolved, iso discarded', async () => {
+    const { canon, handle, theirs, container } = await makeConflictHumanState('L1\nHUMAN\nL3\n')
+    const res = await completeHumanResolvedConflict(handle, { '': theirs })
+    expect(res.allResolved).toBe(true)
+    expect(res.unresolvedRepos).toEqual([])
+    expect(readFileSync(join(canon, 'f.txt'), 'utf8')).toBe('L1\nHUMAN\nL3\n')
+    expect(existsSync(join(container, 'resolve-repo'))).toBe(false) // discarded on success
+    rmSync(canon, { recursive: true, force: true })
+    rmSync(container, { recursive: true, force: true })
+  })
+
+  test('resume: human left conflict markers → NOT resolved, canon untouched, iso kept', async () => {
+    const { canon, handle, theirs, container } = await makeConflictHumanState(
+      'L1\n<<<<<<< ours\nA\n=======\nB\n>>>>>>> theirs\nL3\n',
+    )
+    const res = await completeHumanResolvedConflict(handle, { '': theirs })
+    expect(res.allResolved).toBe(false)
+    expect(res.unresolvedRepos).toContain('')
+    expect(readFileSync(join(canon, 'f.txt'), 'utf8')).toBe('L1\nOURS\nL3\n')
+    expect(existsSync(join(container, 'resolve-repo'))).toBe(true) // kept for the human
     rmSync(canon, { recursive: true, force: true })
     rmSync(container, { recursive: true, force: true })
   })
