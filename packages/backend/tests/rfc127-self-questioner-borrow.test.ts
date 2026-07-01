@@ -1,5 +1,11 @@
 // RFC-127 self/questioner 借壳顶替 — the immediate (clarify-round) borrow path.
 //
+// RFC-132 PR-B UPDATE: production self/questioner reruns now go through the DISPATCH path (universal
+// deferred model) → MOVE, not borrow (Part 0 below locks resolveBorrowForNode(target)=null). The
+// IMMEDIATE borrow tests (Part 1+) still pass — they exercise the immediate ledger, RETAINED as the
+// migration net for pre-upgrade in-flight continuations (submitClarifyAnswers is route-unreachable
+// but still callable). Both paths coexist here: dispatch=move (new), immediate=borrow (migration).
+//
 // designer 借壳 rides the DEFERRED dispatch ledger (dispatched_at + trigger_run_id),
 // covered by rfc127-designer-borrow-dispatch.test.ts. self/questioner reruns are minted
 // the instant the human answers (clarify.ts 'clarify-answer' on the asking node P;
@@ -361,6 +367,60 @@ async function seedSelfEntry(
   return entryId
 }
 
+/** RFC-132 PR-B — seed an OPEN DISPATCHED self/questioner entry (dispatched_at set, trigger_run_id
+ *  NULL ⇒ unbound/unconsumed, NO immediate continuation), reassigned to `override`. This is the
+ *  PRODUCTION shape after PR-B: the quick channel auto-dispatches through dispatchTaskQuestions, which
+ *  keys the ledger on the EFFECTIVE TARGET (override ?? default) and mints the rerun ON that target
+ *  running its OWN agent — MOVE, not borrow (RFC-131 T4 去借壳). */
+async function seedDispatchedSelfQEntry(
+  db: DbClient,
+  taskId: string,
+  kind: 'self' | 'cross',
+  override: string | null,
+): Promise<{ home: string; intRunId: string }> {
+  const home = kind === 'self' ? P : Q
+  const asking = kind === 'self' ? P : Q
+  const intermediary = kind === 'self' ? CL : CC
+  const askingRunId = await seedRun(db, taskId, asking, { iteration: 0 })
+  const intRunId = await seedRun(db, taskId, intermediary, { iteration: 0 })
+  await db.insert(clarifyRounds).values({
+    id: ulid(),
+    taskId,
+    kind,
+    askingNodeId: asking,
+    askingNodeRunId: askingRunId,
+    intermediaryNodeId: intermediary,
+    intermediaryNodeRunId: intRunId,
+    targetConsumerNodeId: kind === 'cross' ? D : null,
+    loopIter: 0,
+    iteration: 0,
+    questionsJson: JSON.stringify([mkQ('q1', 't')]),
+    answersJson: JSON.stringify([ans('q1')]),
+    directive: 'continue',
+    status: 'answered',
+    createdAt: Date.now(),
+  })
+  await db.insert(taskQuestions).values({
+    id: ulid(),
+    taskId,
+    originNodeRunId: intRunId,
+    questionId: 'q1',
+    questionTitle: 't',
+    sourceKind: kind === 'self' ? 'self' : 'cross',
+    roleKind: kind === 'self' ? 'self' : 'questioner',
+    iteration: 0,
+    loopIter: 0,
+    defaultTargetNodeId: home,
+    overrideTargetNodeId: override,
+    dispatchedAt: Date.now(),
+    dispatchedBy: 'u1',
+    // trigger_run_id NULL ⇒ dispatched-but-unbound ⇒ open/unconsumed.
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
+  return { home, intRunId }
+}
+
 /** Seed an answered cross round + its reconciled questioner task_question (default=Q). */
 async function seedQuestionerEntry(
   db: DbClient,
@@ -411,6 +471,43 @@ async function seedQuestionerEntry(
 }
 
 // ---------------------------------------------------------------------------
+// Part 0 (RFC-132 PR-B) — self/questioner via the DISPATCH path is MOVE, not borrow.
+//
+// Under the universal deferred model the quick channel auto-dispatches through dispatchTaskQuestions
+// (no legacy immediate mint), so a reassigned self/questioner entry's ledger is the DEFERRED
+// self/questioner ledger (dispatched_at + effectiveTarget), which is RFC-131 T4 去借壳: the rerun is
+// minted ON the target node running its OWN agent. resolveBorrowForNode therefore returns null for
+// BOTH the target (X runs itself) and the origin home (the run moved away). The immediate-borrow
+// tests in Part 1+ below still exercise the IMMEDIATE ledger — retained as the migration net for
+// pre-upgrade in-flight continuations (submitClarifyAnswers stays callable but route-unreachable).
+describe('RFC-132 PR-B — self/questioner via dispatch is MOVE (去借壳, not borrow)', () => {
+  test('dispatched self entry reassigned to X → resolveBorrowForNode(X)=null (X runs its OWN agent)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedTask(db, 'move-self')
+    await seedDispatchedSelfQEntry(db, 'move-self', 'self', X)
+    // X runs its own agent (MOVE) — NOT P borrowing X's brain (the pre-131 borrow).
+    expect(await resolveBorrowForNode(db, 'move-self', X, 0, liveDef())).toBeNull()
+    // the origin home P does not borrow — the run moved to X (its ledger is empty on P).
+    expect(await resolveBorrowForNode(db, 'move-self', P, 0, liveDef())).toBeNull()
+  })
+
+  test('dispatched questioner entry reassigned to X → resolveBorrowForNode(X)=null (move)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedTask(db, 'move-q')
+    await seedDispatchedSelfQEntry(db, 'move-q', 'cross', X)
+    expect(await resolveBorrowForNode(db, 'move-q', X, 0, liveDef())).toBeNull()
+    expect(await resolveBorrowForNode(db, 'move-q', Q, 0, liveDef())).toBeNull()
+  })
+
+  test('golden: a dispatched self entry with NO override → resolveBorrowForNode(P)=null (P runs itself)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedTask(db, 'move-self-noov')
+    // no reassign (override NULL): effectiveTarget == default == P → the rerun mints on P.
+    await seedDispatchedSelfQEntry(db, 'move-self-noov', 'self', null)
+    expect(await resolveBorrowForNode(db, 'move-self-noov', P, 0, liveDef())).toBeNull()
+  })
+})
+
 // Part 1 — resolveBorrowForNode self/questioner resolution (direct seed).
 // ---------------------------------------------------------------------------
 describe('RFC-127 resolveBorrowForNode — self/questioner (round-based)', () => {

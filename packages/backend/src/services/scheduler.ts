@@ -825,21 +825,20 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
 
     const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const openClarify = await loadOpenClarify(db, taskId)
-    // RFC-120 T9 (model A): the deferred-dispatch park gate. Skip the query
-    // entirely for non-deferred tasks (the overwhelming majority) so the hot
-    // path stays byte-for-byte today's behavior (golden-lock); only an opted-in
-    // task ever consults its undispatched designer entries.
-    // RFC-128 P5-BC (clean-path ③) + P5-D (Codex round-3 fix): the deferred park set classifies
-    // designer + self/questioner entries TOGETHER (loadUndispatchedParkTargets), NOT as the per-role
-    // UNION. The union deadlocks a SAME-HOME node that holds an undispatched entry of one role AND an
-    // in-flight rerun of another (the per-role designer source is blind to an in-flight questioner →
-    // parks the node → stalls its pending rerun forever). The all-role partition is in-flight-aware
-    // across every role, so such a node RUNS its in-flight rerun + re-parks next tick. Self-gates on
-    // the deferred flag → empty for every non-deferred task (golden-lock byte-for-byte frontier); for
-    // every non-same-home case it is byte-identical to the old union.
-    const deferredHandlerNodeIds = state.task.deferredQuestionDispatch
-      ? await loadUndispatchedParkTargets(db, taskId)
-      : EMPTY_NODE_ID_SET
+    // RFC-132 PR-B (universal deferred model): the park gate applies to ALL tasks now — a
+    // sealed-undispatched entry (a designer waiting for its siblings — "park 等齐" — or a
+    // self/questioner entry whose auto-dispatch was deferred by a recoverable conflict) parks its
+    // home so the frontier never falsely completes the asking node on a clarify-only output
+    // (RFC-076 T0). loadUndispatchedParkTargets returns EMPTY for a task with no sealed-undispatched
+    // entries (every steady-state task the instant its answers dispatch), so this stays byte-for-byte
+    // the old frontier for that case; the `deferredQuestionDispatch` flag is no longer read.
+    // RFC-128 P5-BC (clean-path ③) + P5-D (Codex round-3 fix): the park set classifies designer +
+    // self/questioner entries TOGETHER (loadUndispatchedParkTargets), NOT as the per-role UNION. The
+    // union deadlocks a SAME-HOME node that holds an undispatched entry of one role AND an in-flight
+    // rerun of another (the per-role designer source is blind to an in-flight questioner → parks the
+    // node → stalls its pending rerun forever). The all-role partition is in-flight-aware across every
+    // role, so such a node RUNS its in-flight rerun + re-parks next tick.
+    const deferredHandlerNodeIds = await loadUndispatchedParkTargets(db, taskId)
     const f = deriveFrontier(
       rows,
       definition,
@@ -1267,10 +1266,6 @@ export interface Frontier {
 // clarify / cross-clarify graph-visit no-ops write NO node_run row (C1); they
 // settle without one once upstreams are done and no session is open (N6).
 const SETTLES_WITHOUT_ROW_KINDS = new Set<NodeKind>(['clarify', 'clarify-cross-agent'])
-
-// RFC-120 T9: shared empty set for the non-deferred frontier path — avoids a
-// per-tick allocation when the deferred-dispatch gate is inactive.
-const EMPTY_NODE_ID_SET: ReadonlySet<string> = new Set()
 
 function isLiveStatus(status: string): boolean {
   return (
@@ -2714,35 +2709,34 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           : undefined
         const nodeDirective = nodeDirectiveRow?.directive
         const nodeStopOverride = nodeDirective === 'stop'
-        // RFC-128 P5-BC (clean-path ①, scheduler 二选一 XOR §5.2.5): for a DEFERRED task whose
-        // asking/questioner node holds DISPATCHED self/questioner questions, inject PER-QUESTION
-        // via buildClarifyNodeQueueContext (authoritative — binds the queue to this rerun);
-        // otherwise fall back to the whole-round buildPromptContext. The two are NEVER combined:
-        // `(deferred ? perQuestion : undefined) ?? wholeRound` uses EXACTLY one path, and the
-        // read-side roundsWithDispatchedEntries exclusion keeps the whole-round path from also
-        // surfacing a dispatched round (double-injection root-out). NON-deferred ⇒ the perQuestion
-        // builder is never called ⇒ byte-for-byte the legacy whole-round path (golden-lock).
+        // RFC-132 PR-B (universal deferred model, §6/§3): ALL tasks inject PER-QUESTION via the
+        // deferred injector buildClarifyNodeQueueContext (authoritative — binds the dispatched
+        // queue to this rerun). The whole-round buildPromptContext is now ONLY a MIGRATION NET
+        // (§9): it self-excludes any round with a dispatched self/questioner entry (read-side
+        // roundsWithDispatchedEntries), so it fires ONLY for a legacy in-flight round answered
+        // before this upgrade (no dispatched entry) — never re-injecting a per-question-dispatched
+        // (aged) round. Steady state (every new round dispatched) ⇒ buildClarifyNodeQueueContext
+        // always resolves ⇒ the fallback is never reached. The `deferredQuestionDispatch` flag is
+        // no longer read (design §1 废弃; dropped in the final PR).
         const clarifyContext = !hasClarifyChannel
           ? undefined
-          : ((task.deferredQuestionDispatch
-              ? await buildClarifyNodeQueueContext({
-                  db,
-                  definition,
-                  taskId,
-                  consumerKind: isQuestionerCrossClarifyRerun ? 'cross-questioner' : 'self',
-                  consumerNodeId: node.id,
-                  dispatchedRunId: nodeRunId,
-                  targetIteration: clarifyGeneration,
-                  ...(resumeDecision.inlineMode ? { sessionMode: 'inline' as const } : {}),
-                  applyLatestDirective,
-                  ...(nodeDirective !== undefined
-                    ? {
-                        directiveOverride: nodeDirective,
-                        directiveOverrideAt: nodeDirectiveRow?.updatedAt,
-                      }
-                    : {}),
-                })
-              : undefined) ??
+          : ((await buildClarifyNodeQueueContext({
+              db,
+              definition,
+              taskId,
+              consumerKind: isQuestionerCrossClarifyRerun ? 'cross-questioner' : 'self',
+              consumerNodeId: node.id,
+              dispatchedRunId: nodeRunId,
+              targetIteration: clarifyGeneration,
+              ...(resumeDecision.inlineMode ? { sessionMode: 'inline' as const } : {}),
+              applyLatestDirective,
+              ...(nodeDirective !== undefined
+                ? {
+                    directiveOverride: nodeDirective,
+                    directiveOverrideAt: nodeDirectiveRow?.updatedAt,
+                  }
+                : {}),
+            })) ??
             (isQuestionerCrossClarifyRerun
               ? await buildPromptContext({
                   db,
@@ -2792,25 +2786,27 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // the prior output block. RFC-070: aging applied inside
         // `buildExternalFeedbackContext` via `consumed_by_consumer_run_id
         // IS NULL`.
-        // RFC-120 §18 (model A, corrected): per-node-queue injection. A DEFERRED task
-        // ALWAYS takes the queue branch (pass this rerun's own node_run id): the node
-        // binds + injects its dispatched-unconsumed designer queue — independent of the
-        // graph `__external_feedback__` edge — so a graph designer (frontier mint) AND an
-        // arbitrary override target (frontier OR cascade) both carry the human answer,
-        // and a non-handler node that merely re-ran via cascade gets undefined (no
-        // injection). A NON-deferred task uses the graph path unchanged, gated on the
-        // topology edge (golden-lock: deferred flag false → byte-for-byte today).
-        const crossClarifyContext = task.deferredQuestionDispatch
-          ? await buildExternalFeedbackContext({
-              db,
-              taskId,
-              designerNodeId: node.id,
-              loopIter: iteration,
-              designerGeneration: clarifyGeneration,
-              definition,
-              dispatchedRunId: nodeRunId,
-            })
-          : hasExternalFeedbackChannel
+        // RFC-132 PR-B (universal deferred model, §6/§3): ALL tasks take the per-node-queue
+        // designer branch (pass this rerun's own node_run id) — buildExternalFeedbackContext
+        // delegates to buildNodeQueueExternalFeedback, binding + injecting THIS node's
+        // dispatched-unconsumed designer queue (a graph designer OR an override target both carry
+        // the human answer; a non-handler cascade re-run gets undefined). The graph
+        // `__external_feedback__` path is now ONLY a MIGRATION NET (§9): it fires when the
+        // per-node queue is empty AND this node wires an external-feedback edge — i.e. a legacy
+        // designer session answered before this upgrade (no dispatched designer entry). Steady
+        // state (every designer round dispatched) ⇒ the per-node queue resolves ⇒ the graph
+        // fallback is never reached. `deferredQuestionDispatch` is no longer read.
+        const perNodeCrossClarify = await buildExternalFeedbackContext({
+          db,
+          taskId,
+          designerNodeId: node.id,
+          loopIter: iteration,
+          designerGeneration: clarifyGeneration,
+          definition,
+          dispatchedRunId: nodeRunId,
+        })
+        const graphCrossClarify =
+          perNodeCrossClarify === undefined && hasExternalFeedbackChannel
             ? await buildExternalFeedbackContext({
                 db,
                 taskId,
@@ -2820,6 +2816,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
                 definition,
               })
             : undefined
+        const crossClarifyContext = perNodeCrossClarify ?? graphCrossClarify
         // Compose the prior-output block from the latest done designer's
         // captured port outputs. The agent's declared outputs[] determines
         // the order so the block is deterministic across reruns. Empty
@@ -2831,10 +2828,11 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // includes GRAPH-owned work for this node (crossClarifyContext.graphOwned). A
         // pure-override target that merely happens to have its own __external_feedback__
         // edge + prior output must PROCESS the reassigned question, not rewrite its own
-        // old artifact. The non-deferred graph path leaves graphOwned undefined → the
-        // gate is a no-op there (golden-lock).
+        // old artifact. RFC-132 PR-B: the per-node-queue path gates on graphOwned; the legacy
+        // graph MIGRATION fallback (graphCrossClarify) always allows prior output (matches the
+        // pre-upgrade non-deferred behavior for a legacy designer session).
         const allowPriorOutput =
-          !task.deferredQuestionDispatch || crossClarifyContext?.graphOwned === true
+          crossClarifyContext?.graphOwned === true || graphCrossClarify !== undefined
         if (
           isCrossClarifyTriggeredRerun &&
           priorDoneDesigner !== undefined &&

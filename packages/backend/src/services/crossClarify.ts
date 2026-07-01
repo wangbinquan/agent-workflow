@@ -2061,7 +2061,7 @@ function mergeAnswered(
  * Empty object `{}` is accepted (every question defaults to 'designer').
  * Sparse maps are accepted (questions not mentioned default to 'designer').
  */
-function validateQuestionScopes(
+export function validateQuestionScopes(
   scopes: Record<string, ClarifyQuestionScope> | undefined,
   questions: ClarifyQuestion[],
 ): Record<string, ClarifyQuestionScope> | undefined {

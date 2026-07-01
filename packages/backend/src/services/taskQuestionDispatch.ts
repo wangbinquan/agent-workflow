@@ -53,7 +53,7 @@ import {
   taskNodeHasRun,
   TERMINAL_TASK_STATUSES,
 } from '@/services/taskQuestions'
-import { ConflictError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import {
   type RunLineageView,
@@ -267,14 +267,14 @@ export async function dispatchTaskQuestions(
 ): Promise<DispatchTaskQuestionsResult> {
   if (entryIds.length === 0) return EMPTY_RESULT
 
-  // 0. Batch-dispatch is ONLY valid on an opted-in deferred task. On a non-deferred task
-  //    the immediate flow already minted the designer rerun, so minting again off a
-  //    lazily-reconciled (NULL) entry would DOUBLE-mint. The route rejects this too; this
-  //    is the defensive net for any direct service caller.
+  // 0. RFC-132 PR-B (universal deferred model): every task dispatches through this ONE path now
+  //    (the route routes ALL clarify answers to autoDispatchClarifyRound → dispatchTaskQuestions).
+  //    The legacy immediate-mint path is route-unreachable, so there is no double-mint risk to gate
+  //    against; the `deferredQuestionDispatch` flag is no longer read. Only the not-found + terminal
+  //    guards remain.
   const taskRow = (
     await db
       .select({
-        deferred: tasks.deferredQuestionDispatch,
         snapshot: tasks.workflowSnapshot,
         status: tasks.status,
       })
@@ -282,11 +282,8 @@ export async function dispatchTaskQuestions(
       .where(eq(tasks.id, taskId))
       .limit(1)
   )[0]
-  if (taskRow?.deferred !== true) {
-    throw new ConflictError(
-      'task-not-deferred-dispatch',
-      `task ${taskId} is not a deferred-dispatch task; refusing to mint (its designer rerun already fired immediately at submit)`,
-    )
+  if (taskRow === undefined) {
+    throw new NotFoundError('task-not-found', `task ${taskId} not found`)
   }
   // RFC-120 §15 (Codex re-gate): reject on a TERMINAL task (done/canceled) BEFORE stamping
   // dispatched_at or minting any node_run — a finished task has no scheduler to run the rerun

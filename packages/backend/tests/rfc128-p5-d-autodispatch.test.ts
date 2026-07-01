@@ -191,6 +191,10 @@ async function seedSealableCrossRound(
 ): Promise<{ crossNodeRunId: string; questionerRunId: string; roundId: string }> {
   const questionerRunId = await seedRun(db, taskId, Q, { status: 'awaiting_human', iteration: 0 })
   const crossNodeRunId = await seedRun(db, taskId, CC, { status: 'awaiting_human' })
+  // Canonical cross-clarify topology: the designer produced a draft (a prior done run) BEFORE the
+  // questioner asked about it — so the designer rerun has a run to inherit (RFC-132 PR-B now
+  // AUTO-dispatches the designer; assertSafeFrontierTarget requires the prior run).
+  await seedRun(db, taskId, D, { status: 'done', iteration: 0 })
   const roundId = ulid()
   const common = {
     id: roundId,
@@ -465,26 +469,22 @@ describe('RFC-128 P5-D golden-lock (deferred full-seal autodispatch == legacy wh
     expect(ctx?.answersBlock).toBe(ref?.answersBlock)
   })
 
-  test('non-deferred quick channel is UNCHANGED — autoDispatchClarifyRound REJECTS a non-deferred task (the route uses the legacy immediate mint instead)', async () => {
+  test('RFC-132 PR-B — autoDispatchClarifyRound works on ANY task (the deferred-flag gate is removed)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
-    await seedTask(db, taskId, false) // NON-deferred
+    await seedTask(db, taskId, false) // formerly "non-deferred" — the flag is now vestigial
     const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
-    let caught: unknown
-    try {
-      await autoDispatchClarifyRound({
-        db,
-        originNodeRunId: clarifyNodeRunId,
-        answers: [ans('q1')],
-        actor,
-      })
-    } catch (e) {
-      caught = e
-    }
-    expect(caught).toBeInstanceOf(ConflictError)
-    expect((caught as ConflictError).code).toBe('task-not-deferred-dispatch')
-    // Nothing sealed / dispatched (round untouched).
-    expect((await roundByOrigin(db, clarifyNodeRunId))[0]?.status).toBe('awaiting_human')
+    // The unified path seals + auto-dispatches on every task now (no 'task-not-deferred-dispatch').
+    const result = await autoDispatchClarifyRound({
+      db,
+      originNodeRunId: clarifyNodeRunId,
+      answers: [ans('q1')],
+      actor,
+    })
+    expect(result.roundFullySealed).toBe(true)
+    expect((await roundByOrigin(db, clarifyNodeRunId))[0]?.status).toBe('answered')
+    // the self entry auto-dispatched → exactly one clarify-answer rerun.
+    expect(result.dispatch.reruns).toHaveLength(1)
   })
 
   test('optimistic lock — a STALE ifMatchIteration rejects (clarify-iteration-mismatch), nothing sealed (parity with the immediate path)', async () => {
@@ -690,7 +690,10 @@ describe('RFC-128 P5-D single-path (auto + manual never double-dispatch; RFC-125
 // designer entries 不进 autodispatch（§18 manual 留存）+ P5-0 guard 关系
 // ===========================================================================
 describe('RFC-128 P5-D designer-scope + P5-0 guard relationship', () => {
-  test('cross designer-scope round → questioner auto-dispatched, designer entry left sealed-undispatched for §18 board dispatch', async () => {
+  // RFC-132 PR-B (§6 designer 切自动下发): a single-source designer-scope round now AUTO-dispatches
+  // BOTH the questioner AND the designer (multi-source readiness is met — one source, answered), so
+  // the designer no longer waits for a manual board dispatch.
+  test('cross designer-scope round → questioner AND designer auto-dispatched (single-source readiness met)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
@@ -705,13 +708,14 @@ describe('RFC-128 P5-D designer-scope + P5-0 guard relationship', () => {
     const entries = await entriesByOrigin(db, crossNodeRunId)
     const qEntry = entries.find((e) => e.roleKind === 'questioner')
     const dEntry = entries.find((e) => e.roleKind === 'designer')
-    // questioner auto-dispatched; designer NOT (it rides the §18 designer park + manual board dispatch).
+    // BOTH the questioner and the designer entry are auto-dispatched now.
     expect(qEntry?.dispatchedAt).not.toBeNull()
     expect(dEntry).toBeDefined()
     expect(dEntry?.sealedAt).not.toBeNull()
-    expect(dEntry?.dispatchedAt).toBeNull()
-    // The single auto rerun is the questioner's (designer waits for board dispatch).
-    expect(res.dispatch.reruns.every((r) => r.targetNodeId === Q)).toBe(true)
+    expect(dEntry?.dispatchedAt).not.toBeNull()
+    // reruns include both the questioner (Q) and the designer (D).
+    expect(res.dispatch.reruns.some((r) => r.targetNodeId === Q)).toBe(true)
+    expect(res.dispatch.reruns.some((r) => r.targetNodeId === D)).toBe(true)
   })
 
   // Codex re-review (high) — a stale quick submit must NOT overwrite an already-sealed (control
@@ -753,16 +757,18 @@ describe('RFC-128 P5-D designer-scope + P5-0 guard relationship', () => {
     const round = (await roundByOrigin(db, crossNodeRunId))[0]
     const storedScopes = JSON.parse(round?.questionScopesJson ?? '{}') as Record<string, string>
     expect(storedScopes.q1).toBe('designer')
-    // q1's designer entry is PRESERVED (not deleted by a hijacked questioner re-scope) + still parked.
+    // q1's designer entry is PRESERVED (not deleted by a hijacked questioner re-scope). RFC-132 PR-B:
+    // the designer now auto-dispatches (single-source ready), so it is dispatched (not left parked) —
+    // the KEY guarantee is that q1's scope stayed designer + its designer entry survived.
     const q1DesignerAfter = (await entriesByOrigin(db, crossNodeRunId)).find(
       (e) => e.roleKind === 'designer' && e.questionId === 'q1',
     )
     expect(q1DesignerAfter).toBeDefined()
-    expect(q1DesignerAfter?.dispatchedAt).toBeNull()
+    expect(q1DesignerAfter?.dispatchedAt).not.toBeNull()
   })
 
-  test('P5-0 guard relationship — the guard is LIFTED on a deferred task (autodispatch full-seals a self round); it STILL fires on the NON-deferred control channel', async () => {
-    // Deferred: full self seal ALLOWED (autodispatch is the release path).
+  test('RFC-132 PR-B — the P5-0 guard is LIFTED universally (full self seal succeeds on ANY task)', async () => {
+    // Deferred: full self seal ALLOWED.
     const dbDef = createInMemoryDb(MIGRATIONS)
     const taskDef = `t_${ulid()}`
     await seedTask(dbDef, taskDef, true)
@@ -773,26 +779,21 @@ describe('RFC-128 P5-D designer-scope + P5-0 guard relationship', () => {
       answers: [ans('q1')],
       rejectSelfQuestionerFullSeal: true,
     })
-    expect(okSeal.roundFullySealed).toBe(true) // guard lifted on deferred
+    expect(okSeal.roundFullySealed).toBe(true)
 
-    // Non-deferred: the control channel full self seal STILL rejects (no park source → would strand).
+    // Formerly-"non-deferred": the control channel full self seal now ALSO succeeds — every task has
+    // the park + dispatch release path, so the guard no longer fires (the flag is vestigial).
     const dbNon = createInMemoryDb(MIGRATIONS)
     const taskNon = `t_${ulid()}`
     await seedTask(dbNon, taskNon, false)
     const non = await seedSealableSelfRound(dbNon, taskNon, [mkQ('q1', 't')])
-    let caught: unknown
-    try {
-      await sealRoundQuestions({
-        db: dbNon,
-        originNodeRunId: non.clarifyNodeRunId,
-        answers: [ans('q1')],
-        rejectSelfQuestionerFullSeal: true,
-      })
-    } catch (e) {
-      caught = e
-    }
-    expect(caught).toBeInstanceOf(ConflictError)
-    expect((caught as ConflictError).code).toBe('clarify-selfq-full-seal-unsupported-pre-p5')
+    const nonSeal = await sealRoundQuestions({
+      db: dbNon,
+      originNodeRunId: non.clarifyNodeRunId,
+      answers: [ans('q1')],
+      rejectSelfQuestionerFullSeal: true,
+    })
+    expect(nonSeal.roundFullySealed).toBe(true)
   })
 })
 
@@ -849,19 +850,16 @@ describe('RFC-128 P5-D lock-B non-reentry', () => {
 })
 
 // ===========================================================================
-// 源锁 — route defer=false 分支按 deferred flag 分路（autodispatch vs legacy immediate mint）
+// 源锁 — RFC-132 PR-B: route defer=false 恒走 autodispatch（legacy immediate mint 分支已删）
 // ===========================================================================
-describe('RFC-128 P5-D route defer=false routing (source lock)', () => {
-  test('routes/clarify.ts defer=false branch routes a DEFERRED task to autoDispatchClarifyRound, a NON-deferred task to submitClarifyAnswers/submitCrossClarifyAnswers', () => {
+describe('RFC-132 PR-B route defer=false routing (source lock)', () => {
+  test('routes/clarify.ts defer=false branch routes EVERY task to autoDispatchClarifyRound (no deferred-flag split, no legacy immediate-mint calls)', () => {
     const src = readFileSync(resolve(import.meta.dir, '../src/routes/clarify.ts'), 'utf8')
     expect(src).toContain('autoDispatchClarifyRound')
-    // The deferred branch is gated on the task flag and sits BEFORE the legacy immediate-mint calls.
-    const autoIdx = src.indexOf('ownerTask?.deferredQuestionDispatch === true')
-    const submitSelfIdx = src.indexOf('await submitClarifyAnswers({')
-    const submitCrossIdx = src.indexOf('await submitCrossClarifyAnswers({')
-    expect(autoIdx).toBeGreaterThan(0)
-    expect(submitSelfIdx).toBeGreaterThan(autoIdx) // immediate mint is the non-deferred fallthrough
-    expect(submitCrossIdx).toBeGreaterThan(autoIdx)
+    // The deferred-flag routing + the legacy immediate-mint calls are REMOVED from the route.
+    expect(src).not.toContain('ownerTask?.deferredQuestionDispatch === true')
+    expect(src).not.toContain('await submitClarifyAnswers({')
+    expect(src).not.toContain('await submitCrossClarifyAnswers({')
   })
 })
 

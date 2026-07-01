@@ -27,12 +27,8 @@ import type { AppDeps } from '@/server'
 import {
   broadcastSelfClarifyAnsweredForRound,
   countPendingClarifications,
-  submitClarifyAnswers,
 } from '@/services/clarify'
-import {
-  broadcastCrossClarifyAnsweredForRound,
-  submitCrossClarifyAnswers,
-} from '@/services/crossClarify'
+import { broadcastCrossClarifyAnsweredForRound } from '@/services/crossClarify'
 import { sealRoundQuestions } from '@/services/clarifySeal'
 import { autoDispatchClarifyRound } from '@/services/clarifyAutoDispatch'
 import {
@@ -147,24 +143,6 @@ async function filterRoundsByTaskVisibility<T extends { taskId: string }>(
     if (await canViewTask(deps.db, actor, t)) visible.add(t.id)
   }
   return rows.filter((r) => visible.has(r.taskId))
-}
-
-/** RFC-056: extract a node's `kind` field from a serialized
- *  WorkflowDefinition snapshot. Returns `undefined` when the JSON is
- *  malformed or the node id is absent (the caller falls through to
- *  RFC-023 self-clarify path by default). */
-function nodeKindFromSnapshot(snapshotJson: string, nodeId: string): string | undefined {
-  try {
-    const snap = JSON.parse(snapshotJson) as { nodes?: Array<{ id?: unknown; kind?: unknown }> }
-    const nodes = snap?.nodes
-    if (!Array.isArray(nodes)) return undefined
-    for (const n of nodes) {
-      if (n?.id === nodeId && typeof n.kind === 'string') return n.kind
-    }
-  } catch {
-    return undefined
-  }
-  return undefined
 }
 
 export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
@@ -296,29 +274,18 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
       return c.json({ ok: true, kind: 'seal' as const, ...sealResult })
     }
 
-    // RFC-056: branch by node kind. Cross-clarify routes through
-    // submitCrossClarifyAnswers which knows the 'continue' (submit) +
-    // 'stop' (reject) directives.
-    const nrRow = (
-      await deps.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
-    )[0]
-    const ownerTask = nrRow
-      ? (await deps.db.select().from(tasksTable).where(eq(tasksTable.id, nrRow.taskId)).limit(1))[0]
-      : undefined
-    const nodeKind =
-      nrRow && ownerTask
-        ? nodeKindFromSnapshot(ownerTask.workflowSnapshot, nrRow.nodeId)
-        : undefined
-
-    // RFC-128 P5-D (§5.2.7 P5b single-path) — the quick channel (defer=false) on a DEFERRED task
-    // does NOT mint an immediate continuation. It seals the round + AUTO-triggers the SAME
-    // per-question dispatch the board's 批量下发 uses (autoDispatchClarifyRound). `defer` only chooses
-    // AUTO (here) vs MANUAL (the centralized-answer pane, defer=true) triggering of the ONE dispatch
-    // path — never a second delivery path. A NON-deferred task falls through to the legacy immediate
-    // mint below (submitClarifyAnswers / submitCrossClarifyAnswers, BYTE-FOR-BYTE unchanged —
-    // golden-lock). Kind-agnostic: autoDispatchClarifyRound reads round.kind internally + dispatches
-    // the round's self/questioner entries (designer entries keep the §18 manual board dispatch).
-    if (ownerTask?.deferredQuestionDispatch === true) {
+    // RFC-132 PR-B (universal deferred model, §6) — EVERY quick-channel answer (defer=false) seals
+    // the round + AUTO-triggers the SAME per-question dispatch the board's 批量下发 uses
+    // (autoDispatchClarifyRound). `defer` only chooses AUTO (here) vs MANUAL (the centralized-answer
+    // pane, defer=true) triggering of the ONE dispatch path — never a second delivery path. The legacy
+    // immediate-mint branches (submitClarifyAnswers / submitCrossClarifyAnswers / triggerDesignerRerun)
+    // are no longer reached from the route (§4). Kind-agnostic: autoDispatchClarifyRound reads
+    // round.kind internally + dispatches the round's self/questioner AND designer entries (designer
+    // aggregates its siblings; multi-source not-ready parks 等齐 until the last sibling answers).
+    {
+      const nrRow = (
+        await deps.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
+      )[0]
       // RFC-128 P5-D (Codex round-6/7): re-emit the legacy answered WS event(s) the deferred quick
       // branch otherwise skips, so OTHER clients (a mounted board / a collaborator) invalidate clarify
       // list/detail/pending-count + node-runs + the directive toggle (the submitting client navigates +
@@ -417,95 +384,6 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
           : {}),
       })
     }
-
-    if (nodeKind === 'clarify-cross-agent') {
-      const ccResult = await submitCrossClarifyAnswers({
-        db: deps.db,
-        crossClarifyNodeRunId: nodeRunId,
-        answers: parsed.data.answers,
-        directive: parsed.data.directive,
-        answeredBy: actor.user.id,
-        submittedByRole: role,
-        ...(ifMatch !== undefined ? { ifMatchIteration: ifMatch } : {}),
-        // RFC-059: per-question scope mapping. Self-clarify branch below
-        // intentionally does NOT receive this field (the asking agent is
-        // itself the consumer, so there's no designer/questioner split).
-        ...(parsed.data.questionScopes !== undefined
-          ? { questionScopes: parsed.data.questionScopes }
-          : {}),
-      })
-      const opencodeCmdCC = resolveOpencodeCmd(deps.configPath)
-      const resumeDepsCC: Parameters<typeof resumeTask>[2] = {
-        db: deps.db,
-        appHome: Paths.root,
-        ...(opencodeCmdCC ? { opencodeCmd: opencodeCmdCC } : {}),
-        // RFC-108 T4 (Codex re-review P2): the cross-clarify resume branch must
-        // thread the per-node timeout floor too, else a parked cross-clarify
-        // task resumes with unbounded nodes under the default config.
-        ...resolveLaunchRuntimeConfig(deps.configPath),
-      }
-      void resumeTask(deps.db, ccResult.session.taskId, resumeDepsCC).catch((err) => {
-        if (err instanceof ConflictError && err.code === 'task-not-resumable') {
-          log.info('cross-clarify resume deferred', { taskId: ccResult.session.taskId })
-          return
-        }
-        log.warn('cross-clarify resume threw', {
-          taskId: ccResult.session.taskId,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      })
-      return c.json({ ok: true, kind: 'cross' as const, ...ccResult })
-    }
-
-    const result = await submitClarifyAnswers({
-      db: deps.db,
-      clarifyNodeRunId: nodeRunId,
-      answers: parsed.data.answers,
-      directive: parsed.data.directive,
-      answeredBy: actor.user.id,
-      submittedByRole: role,
-      ...(ifMatch !== undefined ? { ifMatchIteration: ifMatch } : {}),
-    })
-    // Re-enter the scheduler so the freshly minted rerun node_run starts.
-    //
-    // RFC-023 bug 13 / RFC-092 (audit S-1, S-26): when the task is still
-    // `running` at submit time (parallel branches keep the scheduler busy
-    // while the user answers), `resumeTask` throws `task-not-resumable` and
-    // that is EXPECTED — the live dispatch loop picks the fresh pending rerun
-    // row up on its next tick via deriveFrontier's pending-anchor release
-    // (scheduler.ts, RFC-092; the rescanScopeForNewPendingRows mechanism this
-    // comment used to cite was deleted in RFC-076, which made the swallow
-    // unsafe until RFC-092 restored a pickup path). So this resume is
-    // best-effort:
-    //   - We still TRY to resume in case the task is already paused
-    //     (awaiting_human / awaiting_review / failed / interrupted), which
-    //     covers the single-branch / parked path.
-    //   - `task-not-resumable` is logged at info — not silent — so the
-    //     deferral is visible in the daemon log if anyone needs to debug.
-    const opencodeCmd = resolveOpencodeCmd(deps.configPath)
-    const resumeDeps: Parameters<typeof resumeTask>[2] = {
-      db: deps.db,
-      appHome: Paths.root,
-      ...(opencodeCmd ? { opencodeCmd } : {}),
-      // RFC-108 T4 (Codex impl gate P2): a parked-clarify answer resumes the
-      // task; thread the per-node timeout floor (+commit&push/concurrency) so
-      // the continued nodes are not unbounded.
-      ...resolveLaunchRuntimeConfig(deps.configPath),
-    }
-    void resumeTask(deps.db, result.session.taskId, resumeDeps).catch((err) => {
-      if (err instanceof ConflictError && err.code === 'task-not-resumable') {
-        log.info('clarify resume deferred — live dispatch loop picks up the pending rerun', {
-          taskId: result.session.taskId,
-          rerunNodeRunId: result.rerunNodeRunId,
-        })
-        return
-      }
-      log.warn('clarify resume threw', {
-        taskId: result.session.taskId,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    })
-    return c.json({ ok: true, ...result })
   })
 
   // RFC-099 (D8/D14) — collaborative answer draft, one question per call,

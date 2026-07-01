@@ -316,15 +316,12 @@ describe('RFC-128 P2 — T6 defer=true 控制通道 (seal 进待下发/staged, �
     expect(q2.phase).toBe('pending')
   })
 
-  // RFC-128 P5-0 (hotfix stranding guard): a FULL defer-seal of a SELF round through the
-  // control channel is now REJECTED (409). It would close the asking node_run, flip the round
-  // 'answered' (releasing the asking-run park), and mint NO self continuation rerun — with no
-  // self/questioner undispatched-park source the task would advance past the asking node and
-  // strand the continuation. (This test previously asserted the full self seal "succeeds", which
-  // was exactly that latent bug.) The full-seal-mechanics + DESIGNER-照常 locks live in the
-  // ALLOWED path below (line ~550) and in rfc128-p5-0-stranding-guard.test.ts; partial seals stay
-  // allowed (the test above).
-  test('P5-0: 全题 defer-seal SELF 轮 → 409 clarify-selfq-full-seal-unsupported-pre-p5（轮不翻、0 续跑、不 strand）', async () => {
+  // RFC-132 PR-B (universal deferred model): the P5-0 stranding guard is REMOVED, so a FULL
+  // defer-seal of a SELF round through the CONTROL channel now SUCCEEDS (200). It seals + stages +
+  // flips the round 'answered' + closes the intermediary node_run, but mints NO rerun (the control
+  // channel never dispatches) — the self/questioner park source holds the asking node until the
+  // board's 批量下发 mints the continuation. No strand.
+  test('P5-0 (removed): 全题 defer-seal SELF 轮 → 200 seal + 轮 answered + 0 续跑（park 等 dispatch）', async () => {
     const h = await buildHarness()
     const { taskId, nodeRunId } = await seedSelfRound(h.db, h.alice.id, [makeQ('q1'), makeQ('q2')])
 
@@ -332,12 +329,10 @@ describe('RFC-128 P2 — T6 defer=true 控制通道 (seal 进待下发/staged, �
       method: 'POST',
       body: JSON.stringify({ defer: true, answers: [makeAns('q1'), makeAns('q2')] }),
     })
-    expect(res.status).toBe(409)
-    expect(((await res.json()) as { code: string }).code).toBe(
-      'clarify-selfq-full-seal-unsupported-pre-p5',
-    )
-    // Rejected atomically (guard throws before any write) — round untouched, no rerun minted.
-    expect((await roundOf(h.db, taskId))[0]?.status).toBe('awaiting_human')
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as { kind: string }).kind).toBe('seal')
+    // Full seal committed: round answered; the control channel mints NO rerun (dispatch does).
+    expect((await roundOf(h.db, taskId))[0]?.status).toBe('answered')
     expect(await clarifyAnswerReruns(h.db, taskId)).toBe(0)
   })
 
@@ -484,18 +479,21 @@ describe('RFC-128 P2 — defer=false/缺省 快通道逐字不变 (黄金锁)', 
       body: JSON.stringify({ answers: [makeAns('q1', 1), makeAns('q2', 0)] }),
     })
     expect(res.status).toBe(200)
+    // RFC-132 PR-B: the quick channel is now the unified AUTO-DISPATCH path (autoDispatchClarifyRound).
+    // The response is the autodispatch shape; the KEY invariant — round answered + EXACTLY ONE
+    // clarify-answer rerun (no double-mint) — is preserved (the dispatch mints it, not a legacy submit).
     const body = (await res.json()) as {
       ok: boolean
-      kind?: string
-      session: { status: string }
-      rerunNodeRunId: string
+      kind: string
+      roundKind: string
+      reruns: Array<{ nodeRunId: string }>
     }
     expect(body.ok).toBe(true)
-    expect(body.kind).toBeUndefined() // self quick channel → no 'seal'/'cross' tag
-    expect(body.session.status).toBe('answered')
-    expect(body.rerunNodeRunId.length).toBeGreaterThan(0)
+    expect(body.kind).toBe('autodispatch')
+    expect(body.roundKind).toBe('self')
+    expect((body.reruns[0]?.nodeRunId ?? '').length).toBeGreaterThan(0)
     expect((await roundOf(h.db, taskId))[0]?.status).toBe('answered')
-    expect(await clarifyAnswerReruns(h.db, taskId)).toBe(1) // quick channel mints exactly one
+    expect(await clarifyAnswerReruns(h.db, taskId)).toBe(1) // exactly one, via the single dispatch path
   })
 
   test('显式 defer=false：与缺省一致（轮 answered + 一条续跑）', async () => {
@@ -647,11 +645,10 @@ describe('RFC-128 P2 — 端点鉴权 403 (ensureClarifyMember)', () => {
 // ---------------------------------------------------------------------------
 
 describe('RFC-128 P2 — Codex P1 / P5-0: full defer seal 关闭中介 node_run (designer) vs guard (self/q)', () => {
-  // RFC-128 P5-0: a SELF round full defer-seal is REJECTED before the node_run is closed —
-  // the guard rolls back ATOMICALLY so the close (which would strand the self continuation,
-  // since there is no self/q park source) never happens. The "full seal CLOSES the node_run"
-  // lock survives for the ALLOWED path (DESIGNER cross full seal) in the third test below.
-  test('P5-0: full defer seal SELF 轮 → 409 + 中介 node_run 仍 awaiting_human（guard 原子回滚，不关 node_run、不 strand）', async () => {
+  // RFC-132 PR-B (universal deferred model): the P5-0 guard is REMOVED — a SELF round full
+  // defer-seal now CLOSES the intermediary node_run (same as the DESIGNER path). The self/questioner
+  // park source holds the asking node until board dispatch mints the continuation → no strand.
+  test('P5-0 (removed): full defer seal SELF 轮 → 200 + 中介 node_run 关（park 等 dispatch，不 strand）', async () => {
     const h = await buildHarness()
     const { taskId, nodeRunId } = await seedSelfRound(h.db, h.alice.id, [makeQ('q1')])
     expect(await nodeRunStatus(h.db, nodeRunId)).toBe('awaiting_human')
@@ -660,12 +657,9 @@ describe('RFC-128 P2 — Codex P1 / P5-0: full defer seal 关闭中介 node_run 
       method: 'POST',
       body: JSON.stringify({ defer: true, answers: [makeAns('q1')] }),
     })
-    expect(res.status).toBe(409)
-    expect(((await res.json()) as { code: string }).code).toBe(
-      'clarify-selfq-full-seal-unsupported-pre-p5',
-    )
-    // Guard threw BEFORE the in-tx node_run close → node_run untouched (no strand), 0 reruns.
-    expect(await nodeRunStatus(h.db, nodeRunId)).toBe('awaiting_human')
+    expect(res.status).toBe(200)
+    // Full seal closes the intermediary node_run; the control channel mints NO rerun (dispatch does).
+    expect(await nodeRunStatus(h.db, nodeRunId)).toBe('done')
     expect(await clarifyAnswerReruns(h.db, taskId)).toBe(0)
   })
 

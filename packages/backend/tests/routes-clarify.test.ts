@@ -13,12 +13,14 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
+import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createClarifySession } from '../src/services/clarify'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type {
+  ClarifyAnswer,
   ClarifySession,
   ClarifySessionSummary,
   WorkflowDefinition,
@@ -199,7 +201,10 @@ describe('GET /api/clarify/:nodeRunId', () => {
 })
 
 describe('POST /api/clarify/:nodeRunId/answers', () => {
-  test('valid submission seals labels, marks session answered, returns rerun id', async () => {
+  // RFC-132 PR-B (universal deferred model): the quick channel now AUTO-DISPATCHES for EVERY task
+  // (no legacy immediate mint). The response is the autodispatch shape ({ kind:'autodispatch',
+  // roundKind, reruns }); the server-sealed labels + answered flip persist on the round.
+  test('valid submission seals labels, marks round answered, auto-dispatches a rerun', async () => {
     const { db, app } = buildApp()
     const { clarifyNodeRunId } = await seedSession(db)
     const res = await req(app, `/api/clarify/${clarifyNodeRunId}/answers`, {
@@ -219,13 +224,26 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as {
       ok: boolean
-      session: ClarifySession
-      rerunNodeRunId: string
+      kind: string
+      roundKind: string
+      reruns: Array<{ nodeRunId: string }>
     }
     expect(body.ok).toBe(true)
-    expect(body.session.status).toBe('answered')
-    expect(body.session.answers?.[0]?.selectedOptionLabels).toEqual(['MySQL'])
-    expect(body.rerunNodeRunId.length).toBeGreaterThan(0)
+    expect(body.kind).toBe('autodispatch')
+    expect(body.roundKind).toBe('self')
+    // the auto-dispatched self continuation rerun
+    expect((body.reruns[0]?.nodeRunId ?? '').length).toBeGreaterThan(0)
+    // server-sealed labels (client forgery defended) + answered flip persist on the round.
+    const round = (
+      await db
+        .select()
+        .from(clarifyRounds)
+        .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
+        .limit(1)
+    )[0]
+    expect(round?.status).toBe('answered')
+    const answers = JSON.parse(round?.answersJson ?? '[]') as ClarifyAnswer[]
+    expect(answers[0]?.selectedOptionLabels).toEqual(['MySQL'])
   })
 
   test('If-Match header optimistic lock: mismatched iteration returns ConflictError (409)', async () => {
@@ -287,11 +305,15 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
         }),
       })
       expect(res.status).toBe(200)
-      const body = (await res.json()) as {
-        ok: boolean
-        session: ClarifySession
-      }
-      expect(body.session.directive).toBe('continue')
+      // RFC-132 PR-B: directive persists on the round via the seal (autodispatch path).
+      const round = (
+        await db
+          .select()
+          .from(clarifyRounds)
+          .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
+          .limit(1)
+      )[0]
+      expect(round?.directive).toBe('continue')
     })
 
     test('explicit directive="stop" round-trips to the session row', async () => {
@@ -313,11 +335,15 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
         }),
       })
       expect(res.status).toBe(200)
-      const body = (await res.json()) as {
-        ok: boolean
-        session: ClarifySession
-      }
-      expect(body.session.directive).toBe('stop')
+      // RFC-132 PR-B: 'stop' round-trips onto the round via the seal (autodispatch path).
+      const round = (
+        await db
+          .select()
+          .from(clarifyRounds)
+          .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
+          .limit(1)
+      )[0]
+      expect(round?.directive).toBe('stop')
     })
 
     test('unknown directive value returns 422 (schema enum guard)', async () => {

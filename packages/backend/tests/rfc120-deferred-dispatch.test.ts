@@ -51,6 +51,7 @@ import {
   stageTaskQuestion,
 } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
+import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { deriveFrontier } from '../src/services/scheduler'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
@@ -1361,40 +1362,42 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
     expect(res.status).toBe(422)
   })
 
-  test('H1(re-gate): dispatch on a NON-deferred task is rejected — no extra rerun, nothing stamped', async () => {
+  // RFC-132 PR-B (universal deferred model): the H1 re-gate ('dispatch rejects a NON-deferred task')
+  // is REMOVED. Every task dispatches through the ONE unified path (route → autoDispatchClarifyRound
+  // → dispatchTaskQuestions); the `deferredQuestionDispatch` flag is vestigial. Double-mint is now
+  // prevented by the SINGLE path (an already-dispatched entry is a no-op), not by a flag gate.
+  test('PR-B: the unified quick channel dispatches the designer on any task — exactly one rerun, no double-mint', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId, crossClarifyNodeRunId } = await seedTask(db, { deferred: false })
-    // non-deferred designer-scoped submit → immediate designer rerun.
-    const submit = await submitCrossClarifyAnswers({
+    // The unified quick channel seals + AUTO-dispatches the designer (single-source readiness met).
+    await autoDispatchClarifyRound({
       db,
-      crossClarifyNodeRunId,
+      originNodeRunId: crossClarifyNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',
+      actor,
     })
-    expect(submit.outcome.kind).toBe('designer-rerun-triggered')
-    // lazy reconcile creates the designer entry (trigger_run_id NULL).
     await listTaskQuestions(db, taskId)
     const entry = (await designerEntries(db, taskId))[0]!
-    expect(entry.triggerRunId).toBeNull()
-    const before = await db
+    // the designer entry is dispatched (stamped) → the designer rerun minted EXACTLY once.
+    expect(entry.dispatchedAt).not.toBeNull()
+    const designerReruns = await db
       .select()
       .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DESIGNER)))
-
-    let threw: unknown = null
-    try {
-      await dispatchTaskQuestions(db, taskId, [entry.id], actor)
-    } catch (e) {
-      threw = e
-    }
-    expect((threw as { code?: string }).code).toBe('task-not-deferred-dispatch')
-    // no DUPLICATE rerun minted; entry still un-stamped.
-    const after = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DESIGNER)))
-    expect(after.length).toBe(before.length)
-    expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBeNull()
+      .where(
+        and(
+          eq(nodeRuns.taskId, taskId),
+          eq(nodeRuns.nodeId, DESIGNER),
+          eq(nodeRuns.rerunCause, 'cross-clarify-answer'),
+        ),
+      )
+    expect(designerReruns.length).toBe(1)
+    // a naive re-dispatch of the already-dispatched entry is a no-op (no double-mint) — the single
+    // path's own in-flight/dispatched gate, not a deferred-flag rejection.
+    const before = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+    await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+    const after = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+    expect(after).toBe(before)
   })
 
   test('read-side phase: pending→staged pre-dispatch, processing (dispatched, queued) → awaiting_confirm after the run BINDS + finishes', async () => {

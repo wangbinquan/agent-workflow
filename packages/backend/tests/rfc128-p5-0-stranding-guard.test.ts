@@ -1,3 +1,9 @@
+// RFC-132 PR-B UPDATE: the P5-0 stranding guard is REMOVED (universal deferred model). A
+// self/questioner FULL seal no longer strands — every task has the park + control-channel dispatch
+// release path — so this file now locks that a full seal SUCCEEDS (parks + dispatch mints the
+// continuation), not that it 409s. The partial-seal / designer-continue / opt-in blocks below are
+// unchanged (they always succeeded). Original P5-0 rationale kept below for history.
+//
 // RFC-128 P5-0 — hotfix stranding guard（self/questioner 全 seal 防御，service 层 SoT）。
 //
 // 背景（P5 feasibility 研究发现的 latent bug，现状已可触发）：
@@ -32,7 +38,6 @@ import { createClarifySession } from '../src/services/clarify'
 import { createCrossClarifySession } from '../src/services/crossClarify'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
 import { listTaskQuestions } from '../src/services/taskQuestions'
-import { ConflictError } from '../src/util/errors'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type {
   ClarifyAnswer,
@@ -50,8 +55,6 @@ beforeEach(() => {
 afterAll(() => {
   resetBroadcastersForTests()
 })
-
-const GUARD_CODE = 'clarify-selfq-full-seal-unsupported-pre-p5'
 
 function makeQ(id: string, title = `q-${id}`): ClarifyQuestion {
   return {
@@ -212,75 +215,80 @@ async function sealGuarded(
 }
 
 // ---------------------------------------------------------------------------
-// self/questioner FULL seal → 409（拒绝），且原子回滚（什么都没写）
+// RFC-132 PR-B (universal deferred model): the P5-0 stranding guard is REMOVED. A self/questioner
+// FULL seal no longer strands — EVERY task now has the self/questioner park source
+// (loadUndispatchedParkTargets) + control-channel dispatch release path, so a full seal PARKS
+// (round answered, intermediary node closed, entries sealed-undispatched) until dispatch mints the
+// continuation. These tests (formerly asserting a 409 guard) now assert the full seal SUCCEEDS.
 // ---------------------------------------------------------------------------
 
-describe('RFC-128 P5-0 — self/questioner full seal 拒绝 (ConflictError 409)', () => {
-  test('SELF 轮全题 seal → 抛 ConflictError(clarify-selfq-full-seal-unsupported-pre-p5, 409)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
-
-    const { error } = await sealGuarded(db, originNodeRunId, [makeAns('q1'), makeAns('q2')])
-    expect(error).toBeInstanceOf(ConflictError)
-    expect((error as ConflictError).code).toBe(GUARD_CODE)
-    expect((error as ConflictError).status).toBe(409)
-  })
-
-  test('SELF 轮全题 seal 被拒 → 原子回滚：轮仍 awaiting_human、answers 仍 NULL、中介 node_run 未关', async () => {
+describe('RFC-132 PR-B — self/questioner full seal now ALLOWED (P5-0 guard removed)', () => {
+  test('SELF 轮全题 seal → 成功（roundFullySealed=true、轮 answered、中介 node_run 关）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
 
-    const { error } = await sealGuarded(db, originNodeRunId, [makeAns('q1'), makeAns('q2')])
-    expect(error).toBeInstanceOf(ConflictError)
-
-    // The guard throws BEFORE the first tx write → nothing committed.
+    const { error, result } = await sealGuarded(db, originNodeRunId, [makeAns('q1'), makeAns('q2')])
+    expect(error).toBeUndefined()
+    expect(result?.roundFullySealed).toBe(true)
+    // full seal commits: round answered + intermediary node closed. The entries are sealed-
+    // undispatched → the park source holds the asking node until dispatch mints the continuation.
     const [round] = await roundOf(db, taskId)
-    expect(round?.status).toBe('awaiting_human')
-    expect(round?.answersJson ?? null).toBeNull()
-    expect((await nodeRunStatusOf(db, originNodeRunId))[0]?.status).toBe('awaiting_human')
+    expect(round?.status).toBe('answered')
+    expect(round?.answersJson ?? null).not.toBeNull()
+    expect((await nodeRunStatusOf(db, originNodeRunId))[0]?.status).toBe('done')
   })
 
-  test('CROSS 轮全题 seal — 全 questioner-scope → 拒绝（反问者续跑无 park、会 strand）', async () => {
+  test('CROSS 轮全题 seal — 全 questioner-scope → 成功（park 等 dispatch，不 strand）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1'), makeQ('q2')])
 
-    const { error } = await sealGuarded(db, originNodeRunId, [makeAns('q1'), makeAns('q2')], {
-      q1: 'questioner',
-      q2: 'questioner',
-    })
-    expect(error).toBeInstanceOf(ConflictError)
-    expect((error as ConflictError).code).toBe(GUARD_CODE)
-    expect((await roundOf(db, taskId))[0]?.status).toBe('awaiting_human')
+    const { error, result } = await sealGuarded(
+      db,
+      originNodeRunId,
+      [makeAns('q1'), makeAns('q2')],
+      {
+        q1: 'questioner',
+        q2: 'questioner',
+      },
+    )
+    expect(error).toBeUndefined()
+    expect(result?.roundFullySealed).toBe(true)
+    expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
   })
 
-  test('CROSS 轮全题 seal — 混合 scope（designer + questioner）→ 拒绝（任一 questioner-scope 即 strand）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { originNodeRunId } = await seedCrossRound(db, [makeQ('q1'), makeQ('q2')])
-
-    const { error } = await sealGuarded(db, originNodeRunId, [makeAns('q1'), makeAns('q2')], {
-      q1: 'designer',
-      q2: 'questioner',
-    })
-    expect(error).toBeInstanceOf(ConflictError)
-    expect((error as ConflictError).code).toBe(GUARD_CODE)
-  })
-
-  test('CROSS 轮全题 seal — 跨多次 seal 累计成全题（partial 后补最后一题 questioner-scope）→ 末次拒绝', async () => {
+  test('CROSS 轮全题 seal — 混合 scope（designer + questioner）→ 成功', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1'), makeQ('q2')])
 
-    // First seal q1 (questioner) — PARTIAL, allowed.
+    const { error, result } = await sealGuarded(
+      db,
+      originNodeRunId,
+      [makeAns('q1'), makeAns('q2')],
+      {
+        q1: 'designer',
+        q2: 'questioner',
+      },
+    )
+    expect(error).toBeUndefined()
+    expect(result?.roundFullySealed).toBe(true)
+    expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
+  })
+
+  test('CROSS 轮全题 seal — 跨多次 seal 累计成全题（partial 后补最后一题）→ 末次成功（轮 answered）', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1'), makeQ('q2')])
+
+    // First seal q1 (questioner) — PARTIAL, allowed (round stays awaiting_human).
     const first = await sealGuarded(db, originNodeRunId, [makeAns('q1')], { q1: 'questioner' })
     expect(first.error).toBeUndefined()
     expect(first.result?.roundFullySealed).toBe(false)
     expect((await roundOf(db, taskId))[0]?.status).toBe('awaiting_human')
 
-    // Sealing the LAST question completes the round → full seal of a questioner-scope round → reject.
+    // Sealing the LAST question completes the round → full seal now SUCCEEDS (guard removed).
     const second = await sealGuarded(db, originNodeRunId, [makeAns('q2')], { q2: 'questioner' })
-    expect(second.error).toBeInstanceOf(ConflictError)
-    expect((second.error as ConflictError).code).toBe(GUARD_CODE)
-    // q1 stays sealed from the allowed partial; round NOT flipped.
-    expect((await roundOf(db, taskId))[0]?.status).toBe('awaiting_human')
+    expect(second.error).toBeUndefined()
+    expect(second.result?.roundFullySealed).toBe(true)
+    expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
   })
 })
 
@@ -353,34 +361,26 @@ describe('RFC-128 P5-0 — designer continue full seal 照常 (stop 反例)', ()
     expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
   })
 
-  test('对照（Codex PR-1 P1）：CROSS 全 designer-scope full seal + directive=stop（+ flag）→ 409，NOT 照常', async () => {
-    // directive DOES participate for stop: submitCrossClarifyAnswers's stop branch
-    // (crossClarify.ts:534-560) ALWAYS mints a cross-clarify-questioner-rerun BEFORE the scope
-    // split — so even an all-designer-scope cross-stop full seal needs a questioner stop rerun
-    // the control channel cannot provide → strand. The guard must reject it (scope-only would
-    // wrongly let it through; Codex PR-1 caught this).
+  test('RFC-132 PR-B：CROSS 全 designer-scope full seal + directive=stop → 现成功（guard 移除）', async () => {
+    // Formerly (P5-0) a cross-stop full seal was rejected — the stop branch needed a questioner stop
+    // rerun the control channel could not provide → strand. Under the universal deferred model the
+    // questioner park + dispatch release path exists, so a full seal now COMMITS: round answered,
+    // directive=stop persisted, intermediary node closed; the questioner stop rerun mints at dispatch.
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1')])
 
-    let error: unknown
-    try {
-      await sealRoundQuestions({
-        db,
-        originNodeRunId,
-        answers: [makeAns('q1')],
-        scopes: { q1: 'designer' },
-        directive: 'stop',
-        rejectSelfQuestionerFullSeal: true,
-      })
-    } catch (e) {
-      error = e
-    }
-    expect(error).toBeInstanceOf(ConflictError)
-    expect((error as ConflictError).code).toBe(GUARD_CODE)
-    // Atomic rollback: round NOT flipped, directive NOT persisted, node_run NOT closed.
-    expect((await roundOf(db, taskId))[0]?.status).toBe('awaiting_human')
-    expect((await roundOf(db, taskId))[0]?.directive ?? null).toBeNull()
-    expect((await nodeRunStatusOf(db, originNodeRunId))[0]?.status).toBe('awaiting_human')
+    const result = await sealRoundQuestions({
+      db,
+      originNodeRunId,
+      answers: [makeAns('q1')],
+      scopes: { q1: 'designer' },
+      directive: 'stop',
+      rejectSelfQuestionerFullSeal: true,
+    })
+    expect(result.roundFullySealed).toBe(true)
+    expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
+    expect((await roundOf(db, taskId))[0]?.directive).toBe('stop')
+    expect((await nodeRunStatusOf(db, originNodeRunId))[0]?.status).toBe('done')
   })
 
   test('raw 原语（flag 关）CROSS designer-scope full seal + stop → 照旧成功 + directive=stop 持久化（Codex P2-2 现状, 不破)', async () => {

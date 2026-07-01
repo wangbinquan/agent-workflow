@@ -54,6 +54,8 @@ import {
   hasOpenDispatchedEntryOnHome,
 } from '@/services/clarifyRerunLedger'
 import { sealRoundQuestions } from '@/services/clarifySeal'
+import { buildFrozenAttributionSet } from '@/services/clarifyRounds'
+import { validateQuestionScopes } from '@/services/crossClarify'
 import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import {
   dispatchTaskQuestions,
@@ -87,6 +89,16 @@ const EMPTY_DISPATCH: DispatchTaskQuestionsResult = {
 const RECOVERABLE_DISPATCH_CONFLICTS: ReadonlySet<string> = new Set([
   'task-question-node-dispatch-in-flight', // releases when the in-flight rerun reaches done+output
   'task-question-target-changed', // a concurrent reassign — re-plan against the new target
+])
+
+/** RFC-132 PR-B (§6 designer 切自动下发) — the ConflictError codes the DESIGNER auto-dispatch swallows
+ *  as a PARK (the designer entries stay sealed-undispatched until a later sibling answer / board
+ *  dispatch mints the rerun). Adds 'task-question-designer-not-ready' (multi-source readiness — sibling
+ *  cross-clarify rounds still awaiting an answer) to the shared recoverable set; everything else
+ *  (multi-target / unsafe frontier / terminal task) is RETHROWN. */
+const DESIGNER_DEFERRABLE_CONFLICTS: ReadonlySet<string> = new Set([
+  ...RECOVERABLE_DISPATCH_CONFLICTS,
+  'task-question-designer-not-ready', // sibling cross-clarify round(s) still awaiting an answer
 ])
 
 /** The question ids of a round from its questions_json (defensive parse; [] on malformed). */
@@ -250,6 +262,7 @@ export async function autoDispatchClarifyRound(
   const round = (
     await db
       .select({
+        id: clarifyRounds.id,
         kind: clarifyRounds.kind,
         taskId: clarifyRounds.taskId,
         status: clarifyRounds.status,
@@ -295,13 +308,13 @@ export async function autoDispatchClarifyRound(
     )
   }
 
-  // 2. Defensive deferred re-check — autodispatch is the SINGLE per-question path, valid ONLY on a
-  //    deferred task. The route routes non-deferred quick answers to the legacy immediate mint, so
-  //    this guards a direct service caller (and matches dispatchTaskQuestions' own deferred gate).
+  // 2. RFC-132 PR-B (universal deferred model): autodispatch is THE single per-question path for
+  //    EVERY task now (the route routes ALL clarify answers here). The `deferredQuestionDispatch`
+  //    flag is no longer read; only the worktree + snapshot (for the self-clarify rollback below)
+  //    are loaded, plus a not-found guard.
   const taskRow = (
     await db
       .select({
-        deferred: tasks.deferredQuestionDispatch,
         worktreePath: tasks.worktreePath,
         workflowSnapshot: tasks.workflowSnapshot,
       })
@@ -309,11 +322,23 @@ export async function autoDispatchClarifyRound(
       .where(eq(tasks.id, round.taskId))
       .limit(1)
   )[0]
-  if (taskRow?.deferred !== true) {
-    throw new ConflictError(
-      'task-not-deferred-dispatch',
-      `task ${round.taskId} is not a deferred-dispatch task; the quick channel mints immediately on a non-deferred task (autodispatch is the deferred single path)`,
-    )
+  if (taskRow === undefined) {
+    throw new NotFoundError('task-not-found', `task ${round.taskId} not found`)
+  }
+
+  // 2b. RFC-059 questionScopes validation (BEFORE any write) — the legacy submitCrossClarifyAnswers
+  //     validated the scope map against the round's questions (reject an unknown questionId / bad enum
+  //     → ValidationError 'cross-clarify-question-scopes-malformed'); RFC-132 PR-B preserves that on
+  //     the unified quick channel. Pure (args + questions); a malformed map never reaches the DB.
+  if (args.scopes !== undefined) {
+    const roundQuestions = ((): ClarifyQuestion[] => {
+      try {
+        return JSON.parse(round.questionsJson) as ClarifyQuestion[]
+      } catch {
+        return []
+      }
+    })()
+    validateQuestionScopes(args.scopes, roundQuestions)
   }
 
   // 3. Seal the round (control channel) as a WHOLE-ROUND FINALIZE. The quick channel finalizes the
@@ -375,6 +400,33 @@ export async function autoDispatchClarifyRound(
       `clarify round ${originNodeRunId} was not fully sealed by this quick-channel finalize; refusing to auto-dispatch a partially sealed round`,
     )
   }
+
+  // 3b. RFC-099 (D8/D14/D17) attribution FREEZE — the quick channel is the "submit" the legacy
+  //     submitClarifyAnswers / submitCrossClarifyAnswers froze attribution on (buildFrozenAttributionSet:
+  //     per-question editor kept where the sealed value matches their draft, else the submitter; clears
+  //     the draft; records the submitter's role). sealRoundQuestions does NOT freeze (it is the shared
+  //     seal primitive), so RFC-132 PR-B re-applies the freeze here on the whole-round finalize. Reads
+  //     the round's post-seal answers (authoritative merged set) so the draft-vs-submit comparison matches
+  //     what the legacy path did. Never enters a prompt (RFC-099 — audit/UI only).
+  const postSealRound = (
+    await db
+      .select({ answersJson: clarifyRounds.answersJson })
+      .from(clarifyRounds)
+      .where(eq(clarifyRounds.id, round.id))
+      .limit(1)
+  )[0]
+  const frozenAnswers = ((): ClarifyAnswer[] => {
+    try {
+      return JSON.parse(postSealRound?.answersJson ?? '[]') as ClarifyAnswer[]
+    } catch {
+      return args.answers
+    }
+  })()
+  const attributionSet = await buildFrozenAttributionSet(db, round.id, frozenAnswers, {
+    userId: args.actor.userId,
+    role: args.actor.role,
+  })
+  await db.update(clarifyRounds).set(attributionSet).where(eq(clarifyRounds.id, round.id))
 
   // 4. Collect the round's SELF/QUESTIONER entries to auto-dispatch (sealed, not yet dispatched,
   //    still open). Designer entries are intentionally excluded (see the module header). The dispatch
@@ -514,6 +566,91 @@ export async function autoDispatchClarifyRound(
     })
   } else {
     dispatch = await tryDispatch()
+  }
+
+  // 7. RFC-132 PR-B (§6 designer 切自动下发) — a CROSS round's DESIGNER-scoped entries (sealed in
+  //    step 3) are aggregated to their effective target designer(s) and auto-dispatched via the SAME
+  //    dispatchTaskQuestions the board uses, replacing the legacy submitCrossClarifyAnswers →
+  //    triggerDesignerRerun immediate mint. Multi-source readiness (assertDesignerReady inside
+  //    dispatchTaskQuestions) rejects with 'task-question-designer-not-ready' until EVERY sibling
+  //    cross-clarify round targeting the designer is answered — swallow it (park 等齐; the LAST
+  //    sibling's answer aggregates + dispatches the whole batch, so buildNodeQueueExternalFeedback
+  //    injects every source's Q&A in one designer rerun). A same-home in-flight designer rerun / a
+  //    concurrent reassign are likewise deferrable (a later dispatch mints it). dispatchTaskQuestions
+  //    takes lock B internally — this is a THIRD sequential B acquisition after the seal + self/q
+  //    dispatch (never nested). self rounds have no designer entries ⇒ no-op for kind==='self'.
+  let designerDispatch: DispatchTaskQuestionsResult = EMPTY_DISPATCH
+  if (round.kind === 'cross') {
+    // This round's sealed-undispatched-open designer entries → their effective target designer(s)
+    // (override ?? graph designer).
+    const thisRoundDesigner = await db
+      .select({
+        defaultTargetNodeId: taskQuestions.defaultTargetNodeId,
+        overrideTargetNodeId: taskQuestions.overrideTargetNodeId,
+      })
+      .from(taskQuestions)
+      .where(
+        and(
+          eq(taskQuestions.originNodeRunId, originNodeRunId),
+          eq(taskQuestions.roleKind, 'designer'),
+          isNull(taskQuestions.dispatchedAt),
+          eq(taskQuestions.confirmation, 'open'),
+          isNotNull(taskQuestions.sealedAt),
+        ),
+      )
+    const targetDesignerNodes = new Set(
+      thisRoundDesigner
+        .map((e) => e.overrideTargetNodeId ?? e.defaultTargetNodeId)
+        .filter((t): t is string => t !== null && t !== ''),
+    )
+    if (targetDesignerNodes.size > 0) {
+      // Aggregate ALL sibling rounds' sealed-undispatched-open designer entries for these designers,
+      // so the LAST sibling's answer dispatches the full multi-source batch in one call.
+      const allDesigner = await db
+        .select()
+        .from(taskQuestions)
+        .where(
+          and(
+            eq(taskQuestions.taskId, round.taskId),
+            eq(taskQuestions.roleKind, 'designer'),
+            isNull(taskQuestions.dispatchedAt),
+            eq(taskQuestions.confirmation, 'open'),
+            isNotNull(taskQuestions.sealedAt),
+          ),
+        )
+      const designerEntryIds = allDesigner
+        .filter((e) =>
+          targetDesignerNodes.has(e.overrideTargetNodeId ?? e.defaultTargetNodeId ?? ''),
+        )
+        .map((e) => e.id)
+      if (designerEntryIds.length > 0) {
+        try {
+          designerDispatch = await dispatchTaskQuestions(
+            db,
+            round.taskId,
+            designerEntryIds,
+            args.actor,
+          )
+        } catch (err) {
+          if (err instanceof ConflictError && DESIGNER_DEFERRABLE_CONFLICTS.has(err.code)) {
+            log.info('designer auto-dispatch deferred (park 等齐 — siblings pending / in-flight)', {
+              taskId: round.taskId,
+              originNodeRunId,
+              reason: err.code,
+            })
+          } else {
+            throw err
+          }
+        }
+      }
+    }
+  }
+  // Fold the designer dispatch into the returned result so the route resumes the designer rerun too
+  // (concat is a no-op when the designer batch was empty / deferred).
+  dispatch = {
+    reruns: [...dispatch.reruns, ...designerDispatch.reruns],
+    dispatchedEntryIds: [...dispatch.dispatchedEntryIds, ...designerDispatch.dispatchedEntryIds],
+    deferred: [...dispatch.deferred, ...designerDispatch.deferred],
   }
 
   log.info('clarify round auto-dispatched (quick channel, deferred)', {

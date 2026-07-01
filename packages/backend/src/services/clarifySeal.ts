@@ -39,7 +39,6 @@ import {
   crossClarifySessions,
   nodeRuns,
   taskQuestions,
-  tasks,
 } from '@/db/schema'
 import { parseAnswersArray, sealAnswersServerSide } from '@/services/clarify'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
@@ -48,7 +47,6 @@ import { setNodeClarifyDirective } from '@/services/taskClarifyDirective'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   mergeSealedAnswers,
-  resolveQuestionScope,
   type ClarifyAnswer,
   type ClarifyDirective,
   type ClarifyQuestion,
@@ -252,61 +250,14 @@ export async function sealRoundQuestions(
       const effectiveDirective: ClarifyDirective =
         args.directive ?? (round.directive as ClarifyDirective | null) ?? 'continue'
 
-      // RFC-128 P5-0 (hotfix stranding guard) — reject a control-channel FULL seal that would
-      // strand a self/questioner CONTINUATION rerun the quick channel WOULD mint but the control
-      // channel does not (and there is no self/questioner undispatched-park source yet). On a full
-      // seal this primitive closes the intermediary node_run (below) + flips the round 'answered',
-      // releasing the asking-run park (loadOpenClarify only parks awaiting_human sessions). The
-      // three stranding inputs — each mints a rerun in the quick path that gets NO park/dispatch
-      // release here, so the task advances past the asking node and loses the continuation:
-      //   • SELF round              → submitClarifyAnswers ALWAYS mints a 'clarify-answer' rerun.
-      //   • CROSS + directive='stop' → submitCrossClarifyAnswers's stop branch ALWAYS mints a
-      //                               'cross-clarify-questioner-rerun' (triggerQuestionerStopRerun,
-      //                               crossClarify.ts:534-560) BEFORE any scope split — so a stop
-      //                               round strands REGARDLESS of scope, INCLUDING all-designer
-      //                               (Codex PR-1 P1; the P0-net stop test mints it on default
-      //                               designer scope). This is why the decision needs the directive,
-      //                               not scope alone.
-      //   • CROSS + continue + any questioner-scope → the all-questioner-scope fast path mints a
-      //                               'cross-clarify-questioner-rerun' (triggerQuestionerContinue-
-      //                               Rerun, crossClarify.ts:570); a MIXED round is rejected too
-      //                               (conservative — its questioner-scope answers are P5-C work;
-      //                               the UI never produces a mixed full seal — §10/P4).
-      // DESIGNER-only cross + continue is the ONLY full seal allowed: it mints NO questioner rerun
-      // (triggerDesignerRerun does not cascade the questioner, crossClarify.ts:945) and the §18
-      // designer park (loadUndispatchedDesignerTargets) holds the deferred task until a board
-      // dispatch mints the borrowed designer rerun (P3, shipped). Per-question self/questioner
-      // rerun + park is RFC-128 P5-B/C; until then opted-in callers (the API route) REJECT it.
-      // PARTIAL seals are always allowed (the round stays awaiting_human → the OPEN session keeps
-      // the asking run parked → no strand). Thrown BEFORE any write so the tx rolls back cleanly.
-      // RFC-128 P5-BC (§5.2.1): the guard is LIFTED on a DEFERRED task — P5-BC's self/questioner
-      // park source (loadUndispatchedSelfQuestionerTargets) + control-channel dispatch IS the
-      // release path, so a deferred full seal parks (not strands). It STILL fires on a NON-deferred
-      // task (no park source → strand). Read the task's deferred flag inside the tx (atomic).
-      const taskDeferred =
-        tx
-          .select({ deferred: tasks.deferredQuestionDispatch })
-          .from(tasks)
-          .where(eq(tasks.id, round.taskId))
-          .all()[0]?.deferred === true
-      if (args.rejectSelfQuestionerFullSeal === true && fullySealed && !taskDeferred) {
-        const isSelf = round.kind === 'self'
-        const isCrossStop = round.kind === 'cross' && effectiveDirective === 'stop'
-        const hasQuestionerScope =
-          round.kind === 'cross' &&
-          questions.some((q) => resolveQuestionScope(mergedScopes, q.id) === 'questioner')
-        if (isSelf || isCrossStop || hasQuestionerScope) {
-          const detail = isSelf
-            ? 'self-clarify'
-            : isCrossStop
-              ? 'cross-clarify with directive=stop'
-              : 'cross-clarify with a questioner-scope question'
-          throw new ConflictError(
-            'clarify-selfq-full-seal-unsupported-pre-p5',
-            `cannot fully seal this clarify round through the control channel (${detail}): a full seal needs a self/questioner continuation rerun (a self continuation, or a questioner stop/continue rerun) that per-question dispatch does not yet support (RFC-128 P5-C). Answer it through the quick channel (POST without defer) instead, or seal only a partial subset.`,
-          )
-        }
-      }
+      // RFC-132 PR-B (universal deferred model, §6) — the RFC-128 P5-0 stranding guard is REMOVED.
+      // It rejected a self/questioner FULL seal on a NON-deferred task (no park/dispatch release path
+      // → the quick channel's continuation would strand). Under the universal deferred model EVERY
+      // task has the self/questioner park source (loadUndispatchedParkTargets) + control-channel
+      // dispatch release path, so a full seal parks (never strands) for all tasks — the guard is
+      // lifted universally. `rejectSelfQuestionerFullSeal` callers still pass the flag (kept in the
+      // args for a narrow boundary; now a no-op); the `deferredQuestionDispatch` flag is no longer
+      // read here.
 
       // RFC-128 P2 (Codex P2-2 follow-up) — persist the directive ONLY when the round fully
       // seals; a PARTIAL seal writes it to NEITHER table:
