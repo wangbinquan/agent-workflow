@@ -165,6 +165,7 @@ import {
   discardNodeIso,
   type IsoHandle,
   mergeBackNodeIso,
+  rebuildIsoHandle,
   snapshotNodeIsoFinal,
 } from '@/services/nodeIsolation'
 import { Semaphore } from '@/util/semaphore'
@@ -469,6 +470,10 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   // scheduler-boundary-wrapper-resume-interrupted.test.ts.
   let result: ScopeResult
   try {
+    // RFC-130 T3c2: recover any 'pending-merge' rows from a crash between
+    // agent-success and merge-back BEFORE the scope runs (so the frontier only
+    // sees merged rows). A no-op on a fresh run / non-isolated task.
+    await replayPendingMerges(state, log)
     result = await runScope(state, {
       scopeIds: topLevelIds,
       iteration: 0,
@@ -1328,7 +1333,20 @@ export function deriveFrontier(
     // RFC-120 T9: a deferred designer handler's done draft is NOT a completion —
     // exclude it from `completed` so its downstream stays blocked until dispatch.
     if (deferredHandlerNodeIds.has(nodeId)) continue
-    if (r.status === 'done' && isNodeRunFresh(r, freshestDone)) completed.add(nodeId)
+    // RFC-130 D15: an ISOLATED done run counts as complete ONLY once its delta has
+    // been merged back into the canonical worktree (merge_state='merged'). A row
+    // still in 'pending-merge' / 'conflict-*' / 'isolating' / 'merge-failed' has a
+    // 'done' status (the runner set it) but its output never reached canonical —
+    // gating downstream on merge_state closes the crash window (runner-done →
+    // daemon crash → merge-back never ran). Legacy / passthrough rows leave
+    // merge_state NULL and pass this gate byte-for-byte (golden-lock).
+    if (
+      r.status === 'done' &&
+      isNodeRunFresh(r, freshestDone) &&
+      (r.mergeState === null || r.mergeState === 'merged')
+    ) {
+      completed.add(nodeId)
+    }
     // 'exhausted' (loop hit maxIterations without exit) is a TERMINAL FAILURE,
     // not a completion. Marking it completed made a resume invocation see an
     // exhausted top-level loop as done → the task silently flipped failed→done
@@ -1635,6 +1653,70 @@ async function persistIsoNodeTree(
     .update(nodeRuns)
     .set({ isoNodeTree: null, isoNodeTreeReposJson: JSON.stringify(nodeTrees), mergeState })
     .where(eq(nodeRuns.id, nodeRunId))
+}
+
+function parseIsoJsonMap(s: string | null): Record<string, string> {
+  if (s === null || s === '') return {}
+  try {
+    const o = JSON.parse(s) as unknown
+    return o !== null && typeof o === 'object' ? (o as Record<string, string>) : {}
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * RFC-130 D15/T3c2: on resume, replay merge-back for any 'pending-merge' row. A
+ * daemon crash between agent-success (runner wrote status='done') and merge-back
+ * leaves a done row whose delta never reached the canonical worktree — deriveFrontier
+ * gates it out of `completed` (D15), so without replay the scope would stall.
+ *
+ * Replays from the PINNED node_tree (iso_node_tree column), so the iso worktree may
+ * be gone and the agent is NEVER re-run. Runs BEFORE the scope so the frontier only
+ * ever sees merged/failed rows. A conflict or missing node_tree throws → the caller
+ * fails the task loudly (PR-B upgrades the conflict path to the merge agent).
+ */
+async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<void> {
+  const { db, taskId, task } = state
+  const rows = await db
+    .select()
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.mergeState, 'pending-merge')))
+  if (rows.length === 0) return
+  const taskBaseHeads: Record<string, string> = {}
+  for (const repo of state.repos) {
+    const h = await runGit(repo.worktreePath, ['rev-parse', 'HEAD'])
+    taskBaseHeads[repo.worktreeDirName] = h.stdout.trim()
+  }
+  for (const r of rows) {
+    const baseSnapshots: Record<string, string> = {}
+    const nodeTrees: Record<string, string> = {}
+    if (task.repoCount === 1) {
+      if (r.isoBaseSnapshot !== null) baseSnapshots[''] = r.isoBaseSnapshot
+      if (r.isoNodeTree !== null) nodeTrees[''] = r.isoNodeTree
+    } else {
+      Object.assign(baseSnapshots, parseIsoJsonMap(r.isoBaseSnapshotReposJson))
+      Object.assign(nodeTrees, parseIsoJsonMap(r.isoNodeTreeReposJson))
+    }
+    if (Object.keys(nodeTrees).length === 0) {
+      throw new Error(`pending-merge replay: node_tree missing for run ${r.id}`)
+    }
+    const handle = rebuildIsoHandle({
+      appHome: state.opts.appHome,
+      taskId,
+      nodeRunId: r.id,
+      canonRepos: state.repos,
+      baseSnapshots,
+      taskBaseHeads,
+    })
+    const mergeRes = await state.writeSem.run(() => mergeBackNodeIso(handle, nodeTrees, log))
+    if (!mergeRes.clean) {
+      // T3 placeholder — PR-B resolves this via the merge agent → awaiting_human.
+      throw new Error(`pending-merge replay conflict for run ${r.id} (canonical advanced)`)
+    }
+    await db.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, r.id))
+    log.info('pending-merge replay merged', { nodeRunId: r.id })
+  }
 }
 
 async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
