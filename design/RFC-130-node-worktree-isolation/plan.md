@@ -74,7 +74,7 @@ PR-A 隔离核心（顶层干净路径）── PR-B 冲突/合并 agent/awaitin
   - **✅ 已验证的实现路径（2026-07-01，PB/PC/resume 交付后勘定，可直接照做，避免重造）**：wrapper-canonical **就是把 wrapper 当一个「节点」复用 `createNodeIso`/`mergeBackNodeIso`**——① 进 wrapper：`const wrapperHandle = await createNodeIso({ appHome, taskId, nodeRunId: wrapperRunId, canonRepos: state.repos })`（wrapper iso worktree = wrapper-canonical，从任务主树分叉）② 内部 scope 换用 **override 的 state**：`const innerState = { ...state, repos: wrapperHandle.repos.map(r => ({ repoPath: r.repoPath, worktreePath: r.isoWorktreePath, worktreeDirName: r.worktreeDirName, baseBranch: r.baseBranch })) }` → `runScope(innerState, { scopeIds: inner, ... })`；**已核实所有 6 处 `createNodeIso` 调用都取 `canonRepos: state.repos`、runOneNode 里 `task.worktreePath` 仅作 passthrough fallback**，故 override `state.repos` 即把内部节点隔离/合并全路由到 wrapper-canonical、零遗漏 ③ `git_diff` 改在 `wrapperHandle.repos[0].isoWorktreePath` 上取（baseline 亦在其上）④ 内部全完成后 `snapshotNodeIsoFinal(wrapperHandle)` + `mergeBackNodeIso(wrapperHandle, nodeTrees)` 把 wrapper 总 delta 合并回任务主树（冲突走 §6 合并 agent，同 `resolveMergeConflicts`）⑤ 弃 wrapperHandle（`discardNodeIso`）。**resume**：wrapper 已持久化 `wrapperProgressJson`（baseline/preDirty），加持久化 wrapper iso base（`persistIsoBase(wrapperRunId)`）+ resume 首 tick `rebuildIsoHandle` 重建 wrapper-canonical 续跑内部 scope（同 node iso resume）。**风险控制**：改 `runGitWrapperNode` 热路径，须先跑全 wrapper 回归（git-in-loop/cumulative-diff/s04）确认 diff 等价、再加 AC-10 并行兄弟测试。
 - **RFC-130-T12**：wrapper-loop（git-in-loop / loop-in-git / loop-in-loop）内部节点隔离 + 合并；每迭代/全循环 diff 语义锁（AC-11）。
 - **RFC-130-T13 ✅ 完成**：wrapper-fanout shard（`dispatchFanoutShard`）+ aggregator 隔离 + 合并——front-half 隔离 + PR-B 的 `resolveMergeConflicts` 接入两站点（冲突走合并 agent）已交付；nested fanout（fanout-in-git/loop）经 `runScope(innerState)` 传播自动继承父层 canonical。value-hash replay 跳段①③（`reuseDisabled` 门）。§8.3 的显式 fanout-canonical 层由 per-shard 隔离+合并功能等价覆盖。
-- **RFC-130-T14（最高风险，末位——设计明确「最后交付」，唯一未落项）**：shard-rerun 定向撤销（§8.3 D9）。**背景**：shard value 变 → rerun，iso base = canon（含本 shard 上次 delta）；新输出**改同路径**则 3-way merge 正确替换（**常见情形已 OK**），改**不同文件集**则旧文件残留 = 叠加而非替换（rare 边角）。**已勘定的实现路径**（供专项交付）：`dispatchFanoutShard` branch-3（`freshest` done 且 value-hash mismatch → mint fresh 前，`scheduler.ts:4336`）插入定向撤销——`state.writeSem.run` 内对**每仓** `merge-tree(base=freshest.isoNodeTree, ours=snapshotFullState(canon-now), theirs=freshest.isoBaseSnapshot)` → `materializeTree` 把本 shard 上次 delta 从 canon 撤销，再让 rerun 正常建 iso base + 合并回（净 = 替换）。多仓从 `iso_node_tree_repos_json`/`iso_base_snapshot_repos_json` 取每仓 tree。**专项回归**：fanout 跑 shard 'a'→delta_a，改 value→rerun→断言 delta_a 被替换（旧文件消失）非叠加。**为何单列**：改 fanout 热路径（问题高发区）+ 多仓撤销需谨慎测试，在超长交付尾部仓促改风险 > 收益（common case 已 OK），故按设计「最后交付」以新焦点专项落地。
+- **RFC-130-T14 ✅ 完成**：shard-rerun 定向撤销（§8.3 D9）。**背景**：shard value 变 → rerun，fresh iso 从 canon（含本 shard 上次 delta）checkout；新输出**改不同文件集**则旧文件残留 = 叠加而非替换（common 同路径情形本就 OK）。**最终实现（较原勘定路径更稳、经 4 轮 Codex impl-gate 收敛）**：撤销在**新 iso worktree 内、agent 运行前**做——`nodeIsolation.undoPriorShardDeltaInIso(isoWorktreePath, priorNode, priorBase)`：`merge-tree(base=prior iso_node_tree, ours=snapshot(iso now = canon-at-dispatch), theirs=prior iso_base_snapshot)` → `materializeTree` 把上次 delta 从 **iso** 抹掉（**非 canon**），agent 在干净基上写，merge-back 走常规路径即净替换。**为何选 iso-内撤销**：① 失败零污染（AC-6 / Codex P1）——只动私有 iso，rerun 失败/取消时 canon 与上次 delta 全保留；② 幂等重产出保留（Codex P2）——撤销在 agent 前，agent 若重写同名同内容文件会作为自身产出重现留存（撤销后再 tree-reverse 无法区分「继承的旧文件」vs「agent 重产」会误删）；③ sibling-safe（base→ours 携带无关兄弟 delta）。**单层替换门（Codex P1）**：`dispatchFanoutShard` 仅当**恰好一个** done+merged 候选时撤销（其 base 才是真 pre-shard 态）；≥2 代已合并则回退叠加（== pre-T14，绝不破坏）。多仓逐仓（`iso_*_repos_json`）。fail-open：prior 快照被 GC / reverse 冲突 → 跳过撤销回退叠加。**回归**：`rfc130-shard-rerun-undo.test.ts`（10 例：iso 撤销单测 + e2e 改文件替换 + 幂等重产出存活〔P2〕+ 失败安全〔P1〕+ branch-2 resume + 3 代单层回退 + source guard）。
 - **测试**：wrapper-git 并行 vs 串行 `git_diff` 等价；fanout 多 shard 并行改不同文件并集；shard-rerun 等价；loop 每迭代累积正确。
 
 ## PR-E —— 多仓 + resume/GC 收尾
@@ -88,15 +88,15 @@ PR-A 隔离核心（顶层干净路径）── PR-B 冲突/合并 agent/awaitin
 
 ## 全局验收清单（映射 proposal §5 AC）
 
-- [ ] AC-1/2/3 并行 + 隔离 + 依赖可见（PR-A）
-- [ ] AC-4/5/6 合并回收 / 自动并 / 失败零污染（PR-A）
-- [ ] AC-7/8/9 冲突 → 合并 agent → awaiting_human + 运行时配置（PR-B）
-- [ ] AC-10/11/12 wrapper-git/loop/fanout（PR-D）
-- [ ] AC-13 多仓（PR-E）
-- [ ] AC-14 重试/resume/GC（PR-A 重试 + PR-E resume/GC）
-- [ ] AC-15/16 readonly 删除 + 旧键降级（PR-C）
-- [ ] AC-17 线性零回归（PR-A）
-- [ ] AC-18 全门禁（每 PR）
+- [x] AC-1/2/3 并行 + 隔离 + 依赖可见（PR-A）
+- [x] AC-4/5/6 合并回收 / 自动并 / 失败零污染（PR-A；T14 iso-内撤销强化 AC-6）
+- [x] AC-7/8/9 冲突 → 合并 agent → awaiting_human + 运行时配置（PR-B）
+- [x] AC-10/11/12 wrapper-git/loop/fanout（PR-D：T11 git canonical / T12 loop / T13 fanout / T14 shard-rerun 替换）
+- [x] AC-13 多仓（PR-E T15：逐仓隔离/合并，`nodeIsolation` 全函数 loop `repos`）
+- [x] AC-14 重试/resume/GC（PR-A 重试 + T3c2 pending-merge replay + T6 conflict-human 续跑 + PR-E T16 GC 孤立 iso）
+- [x] AC-15/16 readonly 删除 + 旧键降级（PR-C）
+- [x] AC-17 线性零回归（PR-A）
+- [x] AC-18 全门禁（每 PR：typecheck+test+lint+format+单二进制 build + Codex impl-gate）
 
 ## 风险与缓解
 

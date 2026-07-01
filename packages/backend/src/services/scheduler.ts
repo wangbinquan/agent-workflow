@@ -163,6 +163,7 @@ import {
   rebuildIsoHandle,
   resolveConflictWithAgent,
   snapshotNodeIsoFinal,
+  undoPriorShardDeltaInIso,
 } from '@/services/nodeIsolation'
 import { buildMergeAgent, mergeResolveNodeId } from '@/services/mergeAgent'
 import { Semaphore } from '@/util/semaphore'
@@ -4354,6 +4355,35 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
     ? undefined
     : pickReusableShardRun(candidates, { shardKey: rowShardKey, valueHash })
   let shardRunId: string
+  // RFC-130 §8.3 D9 (T14): when this dispatch RE-RUNS a shard whose prior attempt's
+  // delta is already merged into canon, undo that prior delta INSIDE the fresh iso
+  // (below, after createNodeIso, before the agent) so the rerun's output REPLACES the
+  // prior output instead of superimposing on it. SINGLE REPLACEMENT LEVEL (Codex
+  // impl-gate P1): only when EXACTLY ONE done+merged candidate exists — its persisted
+  // base_snapshot is then the true pre-shard state. With ≥2 merged generations the
+  // older row's base already carries an earlier delta, so a further undo would
+  // resurrect stale files; we fall back to superimposition (== pre-T14 for that rare
+  // 3rd+ generation, never destructive). Covers branch-2 resume too (the merged row is
+  // an older candidate, not the non-done freshest). Passthrough rows keep NULL iso
+  // columns → skipped. Applied only to the private iso — canon is never touched before
+  // the rerun succeeds (AC-6). Branch 1 (reuse) returns before the iso is built.
+  let priorShardUndo: { base: Record<string, string>; node: Record<string, string> } | null = null
+  const doneMergedCandidates = candidates.filter(
+    (c) => c.status === 'done' && c.mergeState === 'merged',
+  )
+  if (doneMergedCandidates.length === 1) {
+    const priorMergedRow = doneMergedCandidates[0]!
+    const priorBase: Record<string, string> = {}
+    const priorNode: Record<string, string> = {}
+    if (task.repoCount === 1) {
+      if (priorMergedRow.isoBaseSnapshot !== null) priorBase[''] = priorMergedRow.isoBaseSnapshot
+      if (priorMergedRow.isoNodeTree !== null) priorNode[''] = priorMergedRow.isoNodeTree
+    } else {
+      Object.assign(priorBase, parseIsoJsonMap(priorMergedRow.isoBaseSnapshotReposJson))
+      Object.assign(priorNode, parseIsoJsonMap(priorMergedRow.isoNodeTreeReposJson))
+    }
+    if (Object.keys(priorNode).length > 0) priorShardUndo = { base: priorBase, node: priorNode }
+  }
   if (freshest !== undefined && reusable !== undefined && reusable.id === freshest.id) {
     // Branch 1 — replay. The `reusable.id === freshest.id` guard refuses a
     // done row that has been SUPERSEDED by a fresher attempt of any status
@@ -4389,7 +4419,9 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
     // so future reuse decisions compare against what actually ran.
     await db.update(nodeRuns).set({ shardValueHash: valueHash }).where(eq(nodeRuns.id, shardRunId))
   } else {
-    // Branch 3 — mint a fresh row under this wrapper.
+    // Branch 3 — mint a fresh row under this wrapper. The T14 replacement target
+    // (priorShardUndo) was already derived above from the latest done+merged
+    // candidate and is applied at merge-back.
     shardRunId = await mintNodeRun(db, {
       taskId,
       nodeId: innerNode.id,
@@ -4485,6 +4517,30 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
       }),
     )
     if (!shardIso.passthrough) await persistIsoBase(db, shardRunId, task.repoCount, shardIso)
+    // RFC-130 §8.3 D9 (T14): undo the prior merged delta INSIDE this fresh iso BEFORE
+    // the agent runs, so the rerun's output REPLACES (not superimposes on) the prior
+    // output — and a file the agent re-produces identically still survives (it lands
+    // as the agent's own write on the cleaned base). Fail-open: any glitch falls back
+    // to superimposition (never fails an otherwise-good shard). The iso is private, so
+    // this never touches canon (a failed rerun leaves the prior delta intact, AC-6).
+    if (priorShardUndo !== null && !shardIso.passthrough) {
+      for (const r of shardIso.repos) {
+        try {
+          await undoPriorShardDeltaInIso(
+            r.isoWorktreePath,
+            priorShardUndo.node[r.worktreeDirName],
+            priorShardUndo.base[r.worktreeDirName],
+            log,
+          )
+        } catch (err) {
+          log.warn('T14 iso-undo failed — superimposition fallback', {
+            shardKey,
+            worktreeDirName: r.worktreeDirName,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
+    }
   } catch (err) {
     releaseSub()
     releaseGlobal()
@@ -4562,6 +4618,8 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
       }
     }
     // RFC-130 §段③: merge the shard's iso delta back into the canonical worktree.
+    // The T14 prior-delta undo (if any) already ran INSIDE the iso before the agent,
+    // so the iso final is the clean replacement — merge-back is the normal path.
     if (!shardIso.passthrough) {
       try {
         const nodeTrees = await snapshotNodeIsoFinal(shardIso, log)

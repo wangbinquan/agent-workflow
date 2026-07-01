@@ -17,6 +17,7 @@ import {
   commitTree,
   createIsolatedWorktree,
   deleteIsoRefs,
+  gitCommitExists,
   hasDirtySubmoduleContent,
   isGitWorkTree,
   isoRefName,
@@ -320,6 +321,76 @@ export async function mergeBackNodeIso(
     })
   }
   return { clean: conflicts.length === 0, conflicts }
+}
+
+/**
+ * RFC-130 §8.3 D9 (T14): before a fan-out shard is RE-RUN to REPLACE a prior merged
+ * attempt, undo that prior delta INSIDE THE ISO WORKTREE — so the agent starts from
+ * the pre-shard state and its output cleanly REPLACES (not superimposes on) the prior
+ * output. Called AFTER createNodeIso (iso checked out from canon, which still carries
+ * the prior delta) and BEFORE the agent runs.
+ *
+ * Why the ISO (not canon, not the post-run node tree):
+ *  - Canon-safe / failure-safe (Codex impl-gate P1, AC-6): the iso is isolated, so a
+ *    failed/canceled rerun leaves canon — and the prior merged delta — untouched.
+ *    Canon changes only at merge-back, after success.
+ *  - Correct for IDENTICAL re-output (Codex impl-gate P2): because we undo BEFORE the
+ *    agent writes, a file the agent later RE-PRODUCES with identical bytes survives
+ *    (it reappears as the agent's own write on the clean base), whereas a post-run
+ *    tree-reverse could not tell "inherited prior file" from "agent re-wrote it" and
+ *    would wrongly drop it.
+ *  - Sibling-safe: the undo is a 3-way merge (base = prior node_tree, ours = iso now
+ *    == canon-at-dispatch, theirs = prior base_snapshot); base→ours carries unrelated
+ *    sibling deltas already in canon, base→theirs removes only the prior shard delta.
+ *
+ * At undo time the iso content EQUALS the prior node_tree (+ any sibling deltas), so
+ * the 3-way merge is unambiguous. The merge base for the eventual merge-back stays the
+ * iso's own base_snapshot (canon-at-dispatch, which HAS the prior delta) — that is what
+ * lets the merge-back drop prior files the agent didn't reproduce.
+ *
+ * FAIL-OPEN: a pruned prior snapshot (unpinned after discardNodeIso) or a reverse
+ * conflict returns false (no change) → pre-T14 superimposition, never destructive.
+ * Returns true iff the iso worktree was rewritten. The caller MUST hold no canon lock
+ * (this only touches the private iso worktree).
+ */
+export async function undoPriorShardDeltaInIso(
+  isoWorktreePath: string,
+  priorNodeCommit: string | undefined,
+  priorBaseCommit: string | undefined,
+  log?: Logger,
+): Promise<boolean> {
+  if (priorNodeCommit === undefined || priorBaseCommit === undefined) return false
+  if (!(await isGitWorkTree(isoWorktreePath))) return false
+  if (
+    !(await gitCommitExists(isoWorktreePath, priorNodeCommit)) ||
+    !(await gitCommitExists(isoWorktreePath, priorBaseCommit))
+  ) {
+    log?.warn('T14 iso-undo: prior shard snapshot pruned — superimposition fallback', {
+      priorNodeCommit,
+      priorBaseCommit,
+    })
+    return false
+  }
+  const isoCurrent = await snapshotFullState(isoWorktreePath, { log })
+  const rev = await mergeTreeInMemory(isoWorktreePath, {
+    base: priorNodeCommit,
+    ours: isoCurrent,
+    theirs: priorBaseCommit,
+  })
+  if (rev.conflicts.length > 0) {
+    log?.warn('T14 iso-undo: reverse-merge conflicted — superimposition fallback', {
+      conflicts: rev.conflicts,
+    })
+    return false
+  }
+  const canonCurrentTree = await treeOf(isoWorktreePath, isoCurrent)
+  const taskBaseHead = await headOf(isoWorktreePath)
+  await materializeTree(isoWorktreePath, {
+    mergedTree: rev.mergedTree,
+    canonCurrentTree,
+    taskBaseHead,
+  })
+  return true
 }
 
 /** Remove all iso worktrees + delete the base/node pin refs for a run (best-effort). */
