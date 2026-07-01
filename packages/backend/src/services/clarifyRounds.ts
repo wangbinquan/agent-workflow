@@ -700,8 +700,40 @@ export async function buildClarifyNodeQueueContext(
   if (rounds.length === 0) return undefined
   rounds.sort((a, b) => a.iteration - b.iteration)
 
+  // RFC-128 P5 deadlock follow-up (2026-07-01, live task 01KWDKBS): the per-question node-queue path
+  // above only collects the rounds of THIS rerun's dispatched-UNCONSUMED entries — a PRIOR round's
+  // entries were consumed by an earlier rerun and dropped by isQueueEntryRenderableForRun, so a
+  // multi-round chain rendered ONLY the latest round. But each dispatch runs in a FRESH opencode
+  // session (no inline carry), so the agent must still receive EVERY prior answered round as read-only
+  // history context, or it loses earlier rounds' decisions (shared/prompt.ts contract "every prior
+  // round's Q&A ... treat earlier rounds as already-resolved decisions"; round 1's "API / UI wireframe
+  // / pseudocode" requirement was lost). Load all answered rounds on this home DIRECTLY — NOT via
+  // selectAnsweredRoundsForConsumer, which drops rounds with dispatched entries (exactly the ones we
+  // need here). Exclude the current dispatched rounds (rendered below with per-question scope); the
+  // history rounds render FULL + read-only.
+  const currentOrigins = new Set(rounds.map((r) => r.intermediaryNodeRunId))
+  const historyRounds = (
+    await args.db
+      .select()
+      .from(clarifyRounds)
+      .where(
+        and(
+          eq(clarifyRounds.taskId, args.taskId),
+          eq(clarifyRounds.kind, roleKind === 'self' ? 'self' : 'cross'),
+          eq(clarifyRounds.askingNodeId, args.consumerNodeId),
+          eq(clarifyRounds.status, 'answered'),
+        ),
+      )
+  )
+    .filter((r) => !currentOrigins.has(r.intermediaryNodeRunId))
+    .filter((r) => r.answersJson !== null)
+
   const inlineMode = args.sessionMode === 'inline'
-  const renderRounds = inlineMode ? rounds.slice(-1) : rounds
+  // inline sessions carry prior rounds in the resumed transcript → only the latest round is rendered
+  // (unchanged). A fresh-session dispatch (non-inline) prepends the history rounds so nothing is lost.
+  const renderRounds = inlineMode
+    ? rounds.slice(-1)
+    : [...historyRounds, ...rounds].sort((a, b) => a.iteration - b.iteration)
   const applyLatestDirective = args.applyLatestDirective ?? true
 
   const questionParts: string[] = []
@@ -709,7 +741,6 @@ export async function buildClarifyNodeQueueContext(
   let latestDirective: ClarifyDirective = 'continue'
   for (let i = 0; i < renderRounds.length; i++) {
     const round = renderRounds[i]!
-    const dispatchedIds = byRound.get(round.intermediaryNodeRunId) ?? new Set<string>()
     let allQuestions: ClarifyQuestion[]
     let allAnswers: ClarifyAnswer[]
     try {
@@ -722,13 +753,29 @@ export async function buildClarifyNodeQueueContext(
       })
       continue
     }
-    // R2-4 golden-lock: full-round same batch (every question dispatched) → render the WHOLE
-    // round byte-for-byte legacy; else partial → only the dispatched subset + sibling block.
+    const roundLabel = `### Round ${round.iteration + 1}`
+    const answerById = new Map(allAnswers.map((a) => [a.questionId, a]))
+    // HISTORY round (a prior answered round NOT in this dispatch): render FULL + read-only — every
+    // question with its resolved answer, NO sibling scope, NO directive (only the current round
+    // carries the standing continue/stop). Zero attribution (RFC-099 — sourced from clarify_rounds).
+    if (!currentOrigins.has(round.intermediaryNodeRunId)) {
+      const histAnswers = allQuestions
+        .map((q) => answerById.get(q.id))
+        .filter((a): a is ClarifyAnswer => a !== undefined)
+      questionParts.push(`${roundLabel}\n${renderClarifyQuestionsBlock(allQuestions)}`)
+      answerParts.push(
+        `${roundLabel}\n${buildClarifyPromptBlock(allQuestions, histAnswers, undefined)}`,
+      )
+      continue
+    }
+    // CURRENT dispatched round — R2-4 golden-lock: full-round same batch (every question dispatched)
+    // → render the WHOLE round byte-for-byte legacy; else partial → only the dispatched subset +
+    // sibling block.
+    const dispatchedIds = byRound.get(round.intermediaryNodeRunId) ?? new Set<string>()
     const isFullRound = allQuestions.every((q) => dispatchedIds.has(q.id))
     const questions = isFullRound
       ? allQuestions
       : allQuestions.filter((q) => dispatchedIds.has(q.id))
-    const answerById = new Map(allAnswers.map((a) => [a.questionId, a]))
     const answers = questions
       .map((q) => answerById.get(q.id))
       .filter((a): a is ClarifyAnswer => a !== undefined)
@@ -741,7 +788,6 @@ export async function buildClarifyNodeQueueContext(
       args.directiveOverrideAt,
     )
     if (isLast && applyLatestDirective) latestDirective = directive
-    const roundLabel = `### Round ${round.iteration + 1}`
     questionParts.push(`${roundLabel}\n${renderClarifyQuestionsBlock(questions)}`)
     const answerBody = `${roundLabel}\n${buildClarifyPromptBlock(questions, answers, isLast && applyLatestDirective ? directive : undefined)}`
     if (isFullRound) {

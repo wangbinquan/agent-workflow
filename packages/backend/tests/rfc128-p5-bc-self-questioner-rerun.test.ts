@@ -173,6 +173,7 @@ async function seedAnsweredRound(
     questions: ClarifyQuestion[]
     status?: 'answered' | 'awaiting_human'
     loopIter?: number
+    iteration?: number
   },
 ): Promise<{ roundId: string; askingRunId: string; intermediaryNodeRunId: string }> {
   const askingRunId = await seedRun(db, taskId, opts.askingNodeId, {
@@ -194,7 +195,7 @@ async function seedAnsweredRound(
     intermediaryNodeRunId: intRunId,
     targetConsumerNodeId: opts.kind === 'cross' ? D : null,
     loopIter: opts.loopIter ?? 0,
-    iteration: 0,
+    iteration: opts.iteration ?? 0,
     questionsJson: JSON.stringify(opts.questions),
     answersJson: JSON.stringify(opts.questions.map((q) => ans(q.id))),
     directive: 'continue',
@@ -590,6 +591,89 @@ describe('RFC-128 P5-BC per-question injection (golden-lock R2-4 + RFC-099)', ()
     // RFC-099 prompt isolation: no owner/user/role id leaks.
     expect(ctx?.answersBlock).not.toContain('u1')
     expect(ctx?.answersBlock).not.toContain('owner')
+  })
+
+  test('MULTI-ROUND: a round-2 dispatch rerun still injects round-1 as read-only history (2026-07-01 deadlock followup)', async () => {
+    // Live task 01KWDKBS: round 1 dispatched + consumed by an earlier rerun (its per-question window is
+    // upper-bounded by the next clarify rerun); round 2 dispatched to THIS rerun. The OLD node-queue
+    // path rendered ONLY round 2 (round 1's entries excluded by isQueueEntryRenderableForRun), so the
+    // agent lost round 1's decisions (the generated doc dropped round 1's "API / UI wireframe /
+    // pseudocode" requirement). NOW round 1 must appear as full read-only history + round 2 as current.
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    // Round 1 (iteration 0) — dispatched, consumed by prevRerun; curRerun (next clarify rerun) upper-
+    // bounds round-1's window so its entries are NOT renderable for the current run.
+    const r1 = await seedAnsweredRound(db, taskId, {
+      kind: 'self',
+      askingNodeId: P,
+      iteration: 0,
+      questions: [mkQ('r1q1', 'ROUND1-PLATFORM'), mkQ('r1q2', 'ROUND1-DOCDEPTH')],
+    })
+    const prevRerun = await seedRun(db, taskId, P, {
+      status: 'done',
+      iteration: 0,
+      rerunCause: 'clarify-answer',
+    })
+    for (const q of ['r1q1', 'r1q2']) {
+      await insertEntry(db, taskId, {
+        originNodeRunId: r1.intermediaryNodeRunId,
+        questionId: q,
+        roleKind: 'self',
+        defaultTargetNodeId: P,
+        sealed: true,
+        dispatchedAt: Date.now(),
+        triggerRunId: prevRerun,
+      })
+    }
+    // Round 2 (iteration 1) — dispatched to THIS rerun.
+    const r2 = await seedAnsweredRound(db, taskId, {
+      kind: 'self',
+      askingNodeId: P,
+      iteration: 1,
+      questions: [mkQ('r2q1', 'ROUND2-LANG'), mkQ('r2q2', 'ROUND2-GRID')],
+    })
+    const curRerun = await seedRun(db, taskId, P, {
+      status: 'running',
+      iteration: 0,
+      rerunCause: 'clarify-answer',
+    })
+    for (const q of ['r2q1', 'r2q2']) {
+      await insertEntry(db, taskId, {
+        originNodeRunId: r2.intermediaryNodeRunId,
+        questionId: q,
+        roleKind: 'self',
+        defaultTargetNodeId: P,
+        sealed: true,
+        dispatchedAt: Date.now(),
+      })
+    }
+
+    const ctx = await buildClarifyNodeQueueContext({
+      db,
+      definition: liveDef(),
+      taskId,
+      consumerKind: 'self',
+      consumerNodeId: P,
+      dispatchedRunId: curRerun,
+      targetIteration: 1,
+    })
+    expect(ctx).toBeDefined()
+    // BOTH rounds present — round 1 was silently dropped before the fix.
+    expect(ctx?.questionsBlock).toContain('ROUND1-PLATFORM')
+    expect(ctx?.questionsBlock).toContain('ROUND1-DOCDEPTH')
+    expect(ctx?.questionsBlock).toContain('ROUND2-LANG')
+    expect(ctx?.questionsBlock).toContain('ROUND2-GRID')
+    // Round 1's ANSWERS injected too (agent sees resolved prior decisions).
+    expect(ctx?.answersBlock).toContain('ROUND1-PLATFORM')
+    expect(ctx?.answersBlock).toContain('ROUND2-LANG')
+    // Chronological: Round 1 before Round 2.
+    const r1idx = ctx!.questionsBlock.indexOf('### Round 1')
+    const r2idx = ctx!.questionsBlock.indexOf('### Round 2')
+    expect(r1idx).toBeGreaterThanOrEqual(0)
+    expect(r2idx).toBeGreaterThan(r1idx)
+    // Round 1 is read-only history — RFC-099: no attribution leak.
+    expect(ctx?.answersBlock).not.toContain('u1')
   })
 
   test('binds trigger_run_id on the rendered entries (per-entry consume marker)', async () => {
