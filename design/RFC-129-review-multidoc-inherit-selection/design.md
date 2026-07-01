@@ -197,7 +197,10 @@ async function loadPriorRoundMembers(db, appHome, args): Promise<PriorRoundMembe
   某文档若不在上一轮（例：a.md 在 R1 有、R2 无、R3 又出现）→ **不复活更早轮的选择、按新文档 unselected**。
   （弃用「每键 max versionIndex」：`versionIndex` 按 item_index 递增、item 增删/改序时会串不同文档，且跨 US-2
   新 run 会重置、不可跨轮比较。）
-- **`selectionStale` 读取**：列声明 `{ mode: 'boolean' }` → `row.selectionStale`（`boolean | null`）直接用。
+- **`selectionStale` 读取/归一**（Codex 确认 gate P2）：列 `{ mode: 'boolean' }` → `row.selectionStale` 为
+  `boolean | null`（legacy / 单文档 / unselected / 刚人工裁决行为 NULL）。构造 `PriorRoundMember.selectionStale`
+  （oracle 输入、`boolean`）用 **`row.selectionStale ?? false`**（NULL = 未 stale）；`DocVersionSchema` 公开字段
+  保持 nullable（`?? null`）。
 - 读正文失败（bodyPath 缺失）→ 该篇 body 记空串（比对必判「变化」、偏保守多提示，不 wedge）。
 
 ### 3.2 人工重标清 stale（`setDocumentSelection`，:1839）
@@ -220,7 +223,8 @@ await args.db
 selectionStale?: boolean
 ```
 
-insert values 增 `selectionStale: args.selectionStale ?? null`（bool→0/1；未传→NULL，单文档零回归）。
+insert values 增 `selectionStale: args.selectionStale ?? null`（`boolean | null`；drizzle `mode:'boolean'` 落库
+为 0/1/NULL；未传 → NULL，单文档零回归）。
 
 ### 3.4 `rowToDocVersion` / 读回
 

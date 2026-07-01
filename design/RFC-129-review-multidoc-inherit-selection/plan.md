@@ -38,18 +38,19 @@ T1 / T2 无依赖可并行起手；T3 依赖 T1+T2；T4 依赖 T3；T5 依赖 T4
 - 新 helper `loadPriorRoundMembers(db, appHome, {taskId, reviewNodeId, iteration})`（**Codex P1/P2a**）：
   join `node_runs` 过滤同 iteration、`item_index` 非空、跨 node_run（by `reviewNodeId`）、**不排除当前 run**；
   `R* = max(reviewIteration)` 锁「紧邻上一轮」整组、同 R* 多代取最新（id/createdAt DESC）、读 bodyPath 正文 →
-  `PriorRoundMember[]`。**不用「每键 max versionIndex」**（会串文档 / 跨 US-2 run 重置）。
+  `PriorRoundMember[]`（`selectionStale` 用 `row.selectionStale ?? false` 归一，NULL=未 stale；Codex 确认 gate P2）。
+  **不用「每键 max versionIndex」**（会串文档 / 跨 US-2 run 重置）。
 - `dispatchReviewNode` mint 循环（:609-645）：mint 前建 lookup；:642 `selection:'unselected'` →
   `inheritSelection(...)` 结果 + 透传 `selectionStale`。
 - `CreateDocVersionArgs` 加 `selectionStale?: boolean`；insert 增 `selectionStale: args.selectionStale ?? null`。
 - `setDocumentSelection`（:1883）：`.set({ selection, selectionStale: false })`。
-- `rowToDocVersion`：映射 `selectionStale`（1/0/NULL → true/false/null）。
+- `rowToDocVersion`：映射 `selectionStale: row.selectionStale ?? null`（列 `{ mode: 'boolean' }` 已是 `boolean | null`，不做数值转换）。
 - **测试**：`backend/tests/review-multidoc-inherit.test.ts`（iterate / reject / US-2 跨 run / 人工重标清 stale /
   单文档 golden / loop 隔离）。
 - 验收：backend 全量 pass，单文档 golden 不变。
 
 ### RFC-129-T4 —— 读路径（`getReviewDetail`）
-- `review.ts:990` `documents.push` 增 `stale: m.selectionStale === 1`。
+- `review.ts:990` `documents.push` 增 `stale: m.selectionStale === true`。
 - 测试并入 T3 backend（detail.documents[i].stale 断言）。
 
 ### RFC-129-T5 —— 前端徽标（`MultiDocReviewView.tsx` + i18n）
