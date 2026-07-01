@@ -2,7 +2,7 @@
 
 > 状态：Draft
 > 触发：2026-07-01 用户「取消 agent 的只读标记，在调度执行的时候，让多个节点可以按照树的依赖关系并行执行下去」
-> 关联：重写 [RFC-098](../RFC-098-scheduler-audit/) 建立的「单 worktree + 写锁串行」隔离模型；影响 RFC-092（pre-snapshot 回滚）、RFC-060（fanout）、RFC-066（多仓）、RFC-075（auto commit&push）、wrapper-git / wrapper-loop。
+> 关联：重写 RFC-098（scheduler-closeout）建立的「单 worktree + 写锁串行」隔离模型；影响 RFC-092（pre-snapshot 回滚）、RFC-060（fanout）、RFC-066（多仓）、RFC-075（auto commit&push）、wrapper-git / wrapper-loop。
 > 决策来源：2026-07-01 用户三轮拍板 —— ① 隔离 worktree + 串行合并回主树；② 彻底删除 readonly；③ 冲突交给内置合并 agent、解不了转 awaiting_human；④ 一次性覆盖全部 wrapper 组合。
 
 ## 0. 一句话
