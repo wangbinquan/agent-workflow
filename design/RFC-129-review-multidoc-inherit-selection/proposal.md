@@ -81,6 +81,10 @@ RFC-079 把 review 节点扩展为多文档模式：上游端口是 `list<path<m
 - **AC-9**：**单文档 review 零回归**——`item_index IS NULL` 的行 `selection_stale` 恒 NULL，dispatch / decision /
   输出路径逐字不变。
 - **AC-10**：继承不跨 workflow `iteration`（loop 每趟独立）。
+- **AC-11**：只从**紧邻上一轮**继承——某文档在紧邻上一轮缺席（如 R1 有、R2 无、R3 又出现）→ R3 视其为新文档
+  `unselected`，**不复活更早轮**的选择（Codex 设计 gate P2a）。
+- **AC-12**：iterate/reject **复用同一 review node_run** 时上一轮成员就在该 run 上，继承照常生效（不因「同 run」
+  被误排除；Codex 设计 gate P1）。
 
 ## 6. 影响面
 

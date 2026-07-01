@@ -26,8 +26,8 @@ T1 / T2 无依赖可并行起手；T3 依赖 T1+T2；T4 依赖 T3；T5 依赖 T4
 - 验收：`bun test` 纯 oracle 全绿；无 IO 导入（保持 dependency-free 惯例）。
 
 ### RFC-129-T2 —— 数据层（列 + schema）
-- migration `0069_rfc129_review_selection_stale.sql`：`ALTER TABLE doc_versions ADD COLUMN selection_stale integer;`（单 statement）。
-- `schema.ts`：`docVersions` 加 `selectionStale: integer('selection_stale')`（紧随 itemPath）。
+- migration `0069_rfc129_review_selection_stale.sql`：`ALTER TABLE doc_versions ADD COLUMN selection_stale integer;`（单 statement；SQL 层裸 integer 存 0/1/NULL）。
+- `schema.ts`：`docVersions` 加 `selectionStale: integer('selection_stale', { mode: 'boolean' })`（**nullable 布尔列**，本仓惯例；紧随 itemPath；Codex P2b）。
 - `shared/schemas/review.ts`：`DocVersionSchema` 加 `selectionStale: z.boolean().nullable().optional()`；
   `ReviewDocumentSummarySchema` 加 `stale: z.boolean().optional()`。
 - 更新 drizzle meta `_journal.json` / snapshot（`bun run db:generate` 或手写 + breakpoint 规则核对——本 migration
@@ -35,9 +35,10 @@ T1 / T2 无依赖可并行起手；T3 依赖 T1+T2；T4 依赖 T3；T5 依赖 T4
 - 验收：typecheck 绿；migration 应用不报错。
 
 ### RFC-129-T3 —— 后端注入（`services/review.ts`）
-- 新 helper `loadPriorRoundMembers(db, appHome, {taskId, reviewNodeId, iteration, currentReviewNodeRunId})`：
-  join `node_runs` 过滤同 iteration、`item_index` 非空、跨 node_run（by `reviewNodeId`）、按匹配键取 max
-  `versionIndex`、读 bodyPath 正文 → `PriorRoundMember[]`。
+- 新 helper `loadPriorRoundMembers(db, appHome, {taskId, reviewNodeId, iteration})`（**Codex P1/P2a**）：
+  join `node_runs` 过滤同 iteration、`item_index` 非空、跨 node_run（by `reviewNodeId`）、**不排除当前 run**；
+  `R* = max(reviewIteration)` 锁「紧邻上一轮」整组、同 R* 多代取最新（id/createdAt DESC）、读 bodyPath 正文 →
+  `PriorRoundMember[]`。**不用「每键 max versionIndex」**（会串文档 / 跨 US-2 run 重置）。
 - `dispatchReviewNode` mint 循环（:609-645）：mint 前建 lookup；:642 `selection:'unselected'` →
   `inheritSelection(...)` 结果 + 透传 `selectionStale`。
 - `CreateDocVersionArgs` 加 `selectionStale?: boolean`；insert 增 `selectionStale: args.selectionStale ?? null`。
@@ -73,7 +74,7 @@ T1 / T2 无依赖可并行起手；T3 依赖 T1+T2；T4 依赖 T3；T5 依赖 T4
 
 ## 验收清单（交付门槛）
 
-- [ ] proposal AC-1~AC-10 全部有对应测试。
+- [ ] proposal AC-1~AC-12 全部有对应测试（含 Codex P1 同-run 继承、P2a 紧邻上一轮）。
 - [ ] 纯 oracle `reviewMultiDoc.inherit.test.ts` 全 case 绿。
 - [ ] backend `review-multidoc-inherit.test.ts`：iterate / reject / US-2 / 重标清 stale / 单文档 golden / loop 隔离。
 - [ ] frontend `review-multidoc-stale-badge.test.tsx` + 源码锚点。
