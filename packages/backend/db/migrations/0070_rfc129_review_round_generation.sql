@@ -1,0 +1,18 @@
+-- RFC-129 — multi-document review per-mint generation stamp (Codex impl-gate P2
+-- follow-up; split out of 0069 rather than mutating that already-numbered
+-- migration). Hand-written; additive; registered in meta/_journal.json. A SINGLE
+-- ALTER statement, so no breakpoint marker line is needed.
+--
+-- round_generation: a per-mint MONOTONIC counter — dispatchReviewNode stamps
+-- every member of one round with `(max round_generation for this review node at
+-- this iteration) + 1`, so it strictly increases across mints regardless of wall
+-- clock (an earlier draft used Date.now(), which is not collision-free). It is
+-- the round/generation key inheritance uses: loadPriorRound picks the members
+-- with the MAX round_generation (the immediately-previous generation) as a
+-- coherent whole, so a refresh/US-2 that leaves two generations at the same
+-- review_iteration can never mix rows across generations.
+--
+-- NULL on every single-document row (item_index IS NULL) and every pre-RFC-129
+-- row (which simply do not participate in inheritance). Pure ADD COLUMN, no
+-- table rebuild.
+ALTER TABLE `doc_versions` ADD COLUMN `round_generation` integer;

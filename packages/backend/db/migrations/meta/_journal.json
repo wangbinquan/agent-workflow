@@ -484,6 +484,13 @@
       "when": 1784400000000,
       "tag": "0069_rfc129_review_selection_stale",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "6",
+      "when": 1784500000000,
+      "tag": "0070_rfc129_review_round_generation",
+      "breakpoints": true
     }
   ]
 }

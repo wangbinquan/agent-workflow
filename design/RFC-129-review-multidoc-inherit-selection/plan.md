@@ -27,6 +27,7 @@ T1 / T2 无依赖可并行起手；T3 依赖 T1+T2；T4 依赖 T3；T5 依赖 T4
 
 ### RFC-129-T2 —— 数据层（列 + schema）
 - migration `0069_rfc129_review_selection_stale.sql`：`ALTER TABLE doc_versions ADD COLUMN selection_stale integer;`（单 statement；SQL 层裸 integer 存 0/1/NULL）。
+- migration `0070_rfc129_review_round_generation.sql`：`ALTER TABLE doc_versions ADD COLUMN round_generation integer;`（Codex 实现 gate P2 拆分——round_generation 单独立、不改已应用的 0069）。
 - `schema.ts`：`docVersions` 加 `selectionStale: integer('selection_stale', { mode: 'boolean' })`（**nullable 布尔列**，本仓惯例；紧随 itemPath；Codex P2b）。
 - `shared/schemas/review.ts`：`DocVersionSchema` 加 `selectionStale: z.boolean().nullable().optional()`；
   `ReviewDocumentSummarySchema` 加 `stale: z.boolean().optional()`。
@@ -64,7 +65,7 @@ T1 / T2 无依赖可并行起手；T3 依赖 T1+T2；T4 依赖 T3；T5 依赖 T4
 - 已分述于 T1 / T3 / T5。确保正向 + 边界（改序 / 内联 / 重复 path / 空 body）+ 回归（单文档 golden）全覆盖。
 
 ### RFC-129-T7 —— journal 计数回归锁
-- `upgrade-rolling.test.ts`：HEAD journal「N entries」**68 → 69**（标题 + 断言 + 注释同步，per memory
+- `upgrade-rolling.test.ts`：HEAD journal「N entries」**68 → 70**（0069+0070）（标题 + 断言 + 注释同步，per memory
   [reference_migration_bumps_journal_count_test]）。
 
 ---
@@ -79,7 +80,7 @@ T1 / T2 无依赖可并行起手；T3 依赖 T1+T2；T4 依赖 T3；T5 依赖 T4
 - [ ] 纯 oracle `reviewMultiDoc.inherit.test.ts` 全 case 绿。
 - [ ] backend `review-multidoc-inherit.test.ts`：iterate / reject / US-2 / 重标清 stale / 单文档 golden / loop 隔离。
 - [ ] frontend `review-multidoc-stale-badge.test.tsx` + 源码锚点。
-- [ ] `upgrade-rolling.test.ts` journal 68→69。
+- [ ] `upgrade-rolling.test.ts` journal 68→70（0069+0070）。
 - [ ] `bun run typecheck && bun run test && bun run format:check` 全绿。
 - [ ] 单二进制 smoke（per memory [reference_binary_build_module_cycle]，本 RFC 动 shared 导出，务必跑）。
 - [ ] 明暗主题「已变更」徽标视觉自查。

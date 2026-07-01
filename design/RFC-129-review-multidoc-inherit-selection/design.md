@@ -8,22 +8,25 @@
 
 ## 1. 数据模型
 
-### 1.1 新列 `doc_versions.selection_stale` + `round_generation`（migration 0069）
+### 1.1 新列 `doc_versions.selection_stale`（migration 0069）+ `round_generation`（migration 0070）
 
 ```sql
--- 0069_rfc129_review_selection_stale.sql —— 两条 ADD COLUMN，中间加真 breakpoint 行。
+-- 0069_rfc129_review_selection_stale.sql —— 单条 ADD COLUMN。
 ALTER TABLE `doc_versions` ADD COLUMN `selection_stale` integer;
--- (breakpoint marker line here)
+
+-- 0070_rfc129_review_round_generation.sql —— 单条 ADD COLUMN（Codex 实现 gate P2 拆分）。
 ALTER TABLE `doc_versions` ADD COLUMN `round_generation` integer;
 ```
 
-- **两条 ADD COLUMN**（纯增列、无 table-rebuild；两条 statement → 中间需 breakpoint 行，注释里绝不写 marker 字面，
-  否则 drizzle splitter 会从注释切开——本实现踩过一次、已改）。
+- **两个独立 migration**（各一条 ADD COLUMN）：`round_generation` 单独立 0070，**绝不改已编号的 0069**——已跑过旧
+  0069（仅 selection_stale）的 DB 会记为已应用、往里加第 2 条 ALTER 不会再执行 → 缺列、升级后 dispatch 崩
+  （Codex 实现 gate P1）。
 - **`selection_stale`**：`1` = 该多文档成员的 `selection` 是**从紧邻上一轮继承**而来，且**当前正文与「上次人工裁决时
   的正文」不一致**（内容变了、裁决可能过时、建议重看）。`0` / `NULL` = 未继承 / 内容未变 / 从未裁决 / 单文档。
-- **`round_generation`（Codex 实现 gate P2）**：**每-mint 代际戳**——`dispatchReviewNode` mint 循环前 `Date.now()` 捕获
-  一次，同一轮所有成员共享、跨 mint 严格递增。它是继承取「紧邻上一轮」的**轮键**：`loadPriorRoundMembers` 取
-  `max(round_generation)` 那**一整代**（见 §3）。NULL 于单文档 / 历史行。**纯内部字段，不进 DocVersion DTO / prompt**。
+- **`round_generation`（Codex 实现 gate P2）**：**每-mint 严格单调计数器**——`dispatchReviewNode` mint 用
+  `max(现存 round_generation) + 1` 戳该轮所有成员（**不用 `Date.now()`**：毫秒会重复/回拨、两 mint 撞同值就把两代
+  当一代混选）。它是继承取「紧邻上一轮」的**轮键**：`loadPriorRound` 取 `max(round_generation)` 那**一整代**（见 §3）。
+  NULL 于单文档 / 历史行。**纯内部字段，不进 DocVersion DTO / prompt**。
 - 两列均 **nullable、无 DB default**；值域应用层约定，与 RFC-079 三列一样**不加 DB CHECK**。
 
 drizzle（`schema.ts`，`docVersions` 表，紧随 `itemPath` :898 之后）：
@@ -153,12 +156,12 @@ export function inheritSelection(
 // —— 新增：加载「紧邻上一轮」多文档成员（本 review 节点、同 workflow iteration、item_index 非空）。
 //        跨 node_run（覆盖 US-2 新 run）；锚定到 max(round_generation) 那一整代再匹配（见下 loadPriorRoundMembers）。
 //        注意：不按 reviewNodeRunId 排除——iterate/reject/refresh 的上一轮就在这个复用 run 上（Codex P1）。
-const priorMembers = await loadPriorRoundMembers(db, appHome, {
+const prior = await loadPriorRound(db, appHome, {
   taskId, reviewNodeId: node.id, iteration,
 })
-const lookup = buildPriorSelectionLookup(priorMembers)
-// 本代际戳，同一轮所有成员共享、跨 mint 递增（Codex 实现 gate P2）。
-const roundGeneration = Date.now()
+const lookup = buildPriorSelectionLookup(prior.members)
+// 本代际戳 = max(现存)+1，严格单调（Codex 实现 gate P2；不用 Date.now 防同毫秒撞值）。
+const roundGeneration = prior.nextGeneration
 
 for (let i = 0; i < itemCount; i++) {
   // …（沿用现有 body / itemPath 读取，:612-628 不动）…
@@ -345,7 +348,7 @@ stale: m.selectionStale === true,
 - `documents[i].stale=true` → 左栏该行渲染 `multidoc-stale-badge`；false → 无。
 - 源码断言（兜底）：`MultiDocReviewView.tsx` 含 `multidoc-stale-badge` testid + 走 `<StatusChip>`（不自写 chrome）。
 
-**回归锁**：`upgrade-rolling.test.ts` HEAD journal 计数 **68 → 69**（migration 0069；per memory
+**回归锁**：`upgrade-rolling.test.ts` HEAD journal 计数 **68 → 70**（migration 0069 + 0070；per memory
 [reference_migration_bumps_journal_count_test]，同步 bump 标题 + 断言 + 注释 N）。
 
 **门槛**：`bun run typecheck && bun run test && bun run format:check` 全绿 + 单二进制 smoke + 前端 vitest。
@@ -376,4 +379,4 @@ stale: m.selectionStale === true,
 | **D7** | 全部跨轮语义抽 `reviewMultiDoc.ts` 纯 oracle | CLAUDE.md「首选可断言面」；RFC-079 已在此放同类纯 helper |
 | **D8** | 单列 `selection_stale`，drizzle `integer(..., { mode: 'boolean' })` **nullable**（`boolean \| null`），不加索引、不加 CHECK；SQL 层裸 `integer`（存 0/1/NULL）| 本仓 15+ 布尔列惯例（Codex 设计 gate P2b 纠正原 plain int + 布尔写入不过类型）；数据量小 |
 | **D9** | `loadPriorRoundMembers` = **紧邻上一轮整组**（组内 path/index 匹配），**不排除同 run** | Codex 设计 gate P1（同 run 上一轮被排除 → 主路径不继承）|
-| **D10** | 轮键改用**每-mint 代际戳 `round_generation`**（`max(round_generation)` 取整代），弃「max(reviewIteration)」/「每键 max version」；加第 2 列进 migration 0069 | Codex 实现 gate P2：refresh/US-2 同 `reviewIteration` 留两代时「每 item_index 取最新」会**跨代混选**（丢弃后重加的文档复活旧代选择）；`round_generation` 一代共享、跨 mint 递增，结构上杜绝混选 |
+| **D10** | 轮键改用**每-mint 单调计数器 `round_generation`**（`max(现存)+1` 戳、`max(round_generation)` 取整代），弃「max(reviewIteration)」/「每键 max version」/`Date.now()`；单独立 **migration 0070**（不改已应用的 0069）| Codex 实现 gate P2：refresh/US-2 同 `reviewIteration` 留两代时「每 item_index 取最新」会**跨代混选**（丢弃后重加的文档复活旧代选择）；`Date.now()` 毫秒会撞值/回拨→仍混选，故用严格单调计数器。P1：改已编号 migration 会让已升级 DB 缺列 |

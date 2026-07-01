@@ -615,17 +615,17 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
       // flagging any whose content changed since the human last judged it. This
       // is the single injection point — iterate / reject / refresh / US-2 all
       // re-mint here (design §5). Empty on the first round → all unselected.
-      const priorLookup = buildPriorSelectionLookup(
-        await loadPriorRoundMembers(db, appHome, {
-          taskId,
-          reviewNodeId: node.id,
-          iteration,
-        }),
-      )
-      // RFC-129: one generation stamp shared by every member minted in THIS round
-      // (strictly increases across mints) — the round key loadPriorRoundMembers
-      // reads next time to isolate the immediately-previous generation as a whole.
-      const roundGeneration = Date.now()
+      const prior = await loadPriorRound(db, appHome, {
+        taskId,
+        reviewNodeId: node.id,
+        iteration,
+      })
+      const priorLookup = buildPriorSelectionLookup(prior.members)
+      // RFC-129: one generation stamp shared by every member minted in THIS round —
+      // a strictly-monotonic counter (prev max + 1, immune to clock ties/rewinds;
+      // Codex impl-gate P2) that loadPriorRound reads next time to isolate the
+      // immediately-previous generation as a whole.
+      const roundGeneration = prior.nextGeneration
       const itemCount = itemsInline ? inlineBodies.length : itemPaths.length
       for (let i = 0; i < itemCount; i++) {
         let body: string
@@ -755,9 +755,9 @@ export interface CreateDocVersionArgs {
    */
   selectionStale?: boolean
   /**
-   * RFC-129: per-mint generation stamp (see schema.ts / loadPriorRoundMembers).
-   * The dispatchReviewNode mint loop captures Date.now() once and passes the same
-   * value to every item's create; undefined on single-document rows → column NULL.
+   * RFC-129: per-mint monotonic generation counter (see schema.ts / loadPriorRound).
+   * The dispatchReviewNode mint loop passes the same value (prev max + 1) to every
+   * item's create; undefined on single-document rows → column NULL.
    */
   roundGeneration?: number
 }
@@ -861,26 +861,27 @@ async function createDocVersion(args: CreateDocVersionArgs): Promise<DocVersion>
 
 /**
  * RFC-129: load the IMMEDIATELY-PREVIOUS multi-document review round's members
- * for a review node (design §3). Spans node_runs (covers US-2's fresh run) but is
- * scoped to one workflow `iteration` so loop passes stay independent.
+ * for a review node (design §3) AND the next generation stamp to mint with.
+ * Spans node_runs (covers US-2's fresh run) but is scoped to one workflow
+ * `iteration` so loop passes stay independent.
  *
- * The prior generation is the rows with the MAX `round_generation` (a per-mint
- * stamp shared by every member of one round, strictly increasing across mints).
- * At the mint injection point the current round's rows do not exist yet, so the
- * highest round_generation present is always the immediately-previous round.
- * Taking a whole generation — rather than newest-row-per-item_index — is what
- * keeps a refresh/US-2 that dropped then later re-added a document from
- * resurrecting an older generation's selection (Codex impl-gate P2 / AC-11):
- * two generations can share a review_iteration, but never a round_generation.
- * Rows with a NULL round_generation (pre-RFC-129 upgrade-window data) are
- * skipped — they simply do not inherit, the same conservative stance as
- * elsewhere.
+ * The prior generation is the rows with the MAX `round_generation` — a per-mint
+ * strictly-monotonic counter (this function returns `nextGeneration = maxGen + 1`,
+ * which the mint stamps on every member so the key can never tie or rewind, cf.
+ * Date.now(); Codex impl-gate P2). At the mint injection point the current round's
+ * rows do not exist yet, so the highest round_generation present is always the
+ * immediately-previous round. Taking a whole generation — rather than
+ * newest-row-per-item_index — is what keeps a refresh/US-2 that dropped then
+ * later re-added a document from resurrecting an older generation's selection
+ * (AC-11): two generations can share a review_iteration, but never a
+ * round_generation. Rows with a NULL round_generation (pre-RFC-129 upgrade-window
+ * data) are skipped — they do not inherit, and `nextGeneration` restarts at 1.
  */
-async function loadPriorRoundMembers(
+async function loadPriorRound(
   db: DbClient,
   appHome: string,
   args: { taskId: string; reviewNodeId: string; iteration: number },
-): Promise<PriorRoundMember[]> {
+): Promise<{ members: PriorRoundMember[]; nextGeneration: number }> {
   // Review node_runs at this workflow iteration (spans reruns + US-2 fresh run).
   const runIds = (
     await db
@@ -894,7 +895,7 @@ async function loadPriorRoundMembers(
         ),
       )
   ).map((r) => r.id)
-  if (runIds.length === 0) return []
+  if (runIds.length === 0) return { members: [], nextGeneration: 1 }
   const rows = (
     await db
       .select()
@@ -906,8 +907,10 @@ async function loadPriorRoundMembers(
         ),
       )
   ).filter((r) => r.itemIndex !== null && r.roundGeneration !== null)
-  if (rows.length === 0) return []
-  // The immediately-previous generation = rows carrying the max round_generation.
+  if (rows.length === 0) return { members: [], nextGeneration: 1 }
+  // The immediately-previous generation = rows carrying the max round_generation;
+  // the next mint takes maxGen + 1 so the stamp is a strictly-monotonic counter
+  // (no Date.now() ties/rewinds — Codex impl-gate P2). Scoped to this iteration.
   const maxGen = Math.max(...rows.map((r) => r.roundGeneration as number))
   // A mint creates each item_index exactly once, so within one generation
   // item_index is unique; dedup by newest id defensively (belt-and-suspenders).
@@ -936,7 +939,7 @@ async function loadPriorRoundMembers(
       body,
     })
   }
-  return members
+  return { members, nextGeneration: maxGen + 1 }
 }
 
 export function readDocVersionBody(appHome: string, docVersion: DocVersion): string {

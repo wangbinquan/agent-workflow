@@ -1,8 +1,7 @@
--- RFC-129 — multi-document review cross-round selection inheritance.
--- Hand-written; additive; registered in meta/_journal.json. TWO ALTER
--- statements, separated by the breakpoint marker line below (REQUIRED — without
--- it only the first ALTER applies; the marker text must never appear inside a
--- comment, per the RFC-108 0052/0053 incident).
+-- RFC-129 — multi-document review cross-round selection inheritance staleness.
+-- Hand-written; additive; registered in meta/_journal.json. A SINGLE ALTER
+-- statement, so no breakpoint marker line is needed (and this comment must not
+-- contain the marker text itself, per the RFC-108 0052/0053 incident).
 --
 -- selection_stale: `1` when a multi-document member's `selection` was INHERITED
 -- from the immediately-previous review round (RFC-129) AND its body differs from
@@ -11,20 +10,13 @@
 -- "已变更" badge only; it never gates approve and never enters an agent prompt
 -- (RFC-099 prompt-isolation, same layer as decided_by).
 --
--- round_generation: a per-mint monotonic stamp (Date.now() captured once per
--- dispatchReviewNode mint loop; every member of one round shares it, and it
--- strictly increases across mints). It is the round/generation key inheritance
--- uses: loadPriorRoundMembers picks the members with the MAX round_generation
--- (the immediately-previous generation) as a coherent whole, so a refresh/US-2
--- that leaves two generations at the same review_iteration can never mix rows
--- across generations (Codex impl-gate P2).
+-- NULL on every single-document row (item_index IS NULL), every pre-RFC-129 row,
+-- every unselected row, and every freshly human-judged row — so single-document
+-- dispatch / decision / output paths and existing multi-doc rows stay
+-- byte-for-byte unchanged (no backfill). Declared `integer` here; the drizzle
+-- layer overlays boolean mode (stored 0/1/NULL). Pure ADD COLUMN, no rebuild.
 --
--- Both are NULL on every single-document row (item_index IS NULL), every
--- pre-RFC-129 row, and (selection_stale) every unselected / freshly human-judged
--- row — so single-document dispatch / decision / output paths and existing
--- multi-doc rows stay byte-for-byte unchanged (no backfill). Declared `integer`
--- here; the drizzle layer overlays boolean mode on selection_stale (stored
--- 0/1/NULL). Pure ADD COLUMN, no table rebuild.
+-- round_generation (the sibling column this feature also needs) lands in the
+-- follow-up migration 0070 — never mutate an already-numbered migration, since a
+-- DB that already ran this one would silently skip a second ALTER added here.
 ALTER TABLE `doc_versions` ADD COLUMN `selection_stale` integer;
---> statement-breakpoint
-ALTER TABLE `doc_versions` ADD COLUMN `round_generation` integer;
