@@ -89,9 +89,15 @@ T1 ─→ T2 ─→ T3 ─→ T4
 - T6 回归锁：`rfc120-deferred-dispatch`（T9/§18 修）+ `rfc128-p5-bc`（多轮 + 注入层 老化/round N+1/failed 三新测试，`1f63919`）。
 - design 勘误 `44059e5` + §4 去借壳（本次）；单二进制 smoke 绿。
 
-**剩余（依赖协作者 RFC-130 scheduler 稳定后做，用户已拍板方向）**：
-- T4 去借壳大改：改派 rerun 在 target mint、退役 `buildBorrowedAgent`/`resolveBorrowForNode`、注入 `consumerNodeId` 用 target。撞 `scheduler.ts`。
-- T5 scheduler e2e：新建 `scheduler-clarify-multiround-aging.test.ts`（runTask 端到端多轮 deferred self-clarify 复现 `01KWDKBS`）。
-- 注入层补充：cross-questioner 多轮、review reject + 老化组合。
+**已交付续（2026-07-01 本 session 再续）**：
+- cross-questioner 域注入 2 测试（`54500fb`）+ self 注入层 3 测试（`1f63919`）+ **T5 scheduler e2e**（`78df761`：`scheduler-clarify-multiround-aging.test.ts` runTask 端到端复现锁死 `01KWDKBS`，1 pass 7 expect）。
+- 注入层测试全集完成（self×3 + cross-questioner×2 + designer〔rfc120 §18〕+ round N+1 + failed + 多轮 + 老化不重注〔§18 afterA〕+ golden-lock）。
+- design §4 去借壳设计（`6504cfd`）。
 
-**阻塞**：协作者 RFC-130 破共享门禁（`rfc130-crash-replay.test.ts` typecheck 缺 edge id + `rfc130-node-isolation.test.ts` prettier）——用户拍板**等协作者修**，我不擅改。CI 绿 + T4/T5 待其解除后继续。
+**唯一剩 T4 去借壳的 spawn 层退役（用户 2026-07-01 拍板：等协作者 PR-C 落定后做）**：
+- 注入层去借壳**已随 T2/T4-designer 交付**（问题按 target 投影 + `isTargetNodeConsumed(target)` = 改派进 target 队列的核心已达）。
+- 剩 spawn 层：退役 `buildBorrowedAgent`（`agent.ts:39`）/`resolveBorrowForNode`（`taskQuestionDispatch.ts:966` 三账本）+ scheduler borrow spawn 调用。
+- **硬冲突铁证**：`buildBorrowedAgent` 处理借壳的 `readonly` 继承，而协作者 RFC-130 **PR-C 此刻正改同一函数**（working tree 未提交 diff `@@ -27,14 @@` buildBorrowedAgent 注释 + createAgent/updateAgent/rowToAgent 删 readonly）。T4 退役 buildBorrowedAgent = 同函数覆盖 → CLAUDE.md「同一函数冲突→停下问用户」；+ classifier 拦 `scheduler.ts`。
+- **用户拍板等 PR-C 落定**（AskUserQuestion 2026-07-01），PR-C commit 后我在稳定基线上做 T4（避免同函数 git 冲突 + 覆盖协作者未提交改动）。
+
+**CI 状态**：前序 unused-import blocker 协作者自己修了（`8025194`+`c4b8c24`）。当前唯一红 = 协作者 RFC-130 `scheduler.test.ts:681`「two write agents serialize through write semaphore」（`expect(elapsed).toBeGreaterThan(450)`，s17 改并行 writeSem 后 timing 系统性 384/413ms < 450，非 flaky）——协作者改并行 writeSem 未同步此 serialize test，需协作者更新，非本 RFC。我方 RFC-131 committed typecheck 绿 + 运行时全 pass。
