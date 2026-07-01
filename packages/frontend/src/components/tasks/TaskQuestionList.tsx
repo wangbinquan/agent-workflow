@@ -361,7 +361,16 @@ export function TaskQuestionList({
                 const reassignable = e.phase === 'pending' || e.phase === 'staged'
                 const hasCopy = deferred && e.phase === 'pending'
                 const hasConfirm = e.phase === 'awaiting_confirm'
-                const hasStage = e.phase === 'pending' || e.phase === 'staged'
+                // RFC-128 §11 (D5, 用户 2026-07-01) — 「加入待下发」only makes sense once the
+                // answer is sealed: the server stage gate rejects staging an unsealed entry
+                // (ConflictError 'task-question-not-sealed', services/taskQuestions.ts
+                // isEntrySealed/stageTaskQuestion), so a shown-but-always-erroring 加入 button is
+                // worse than an absent one — hide it for an unanswered card. 移出待下发 (unstage,
+                // the e.staged direction) stays available regardless of seal so a mistaken stage
+                // can be undone before the answer lands (mirrors the server allowing unstage on an
+                // unsealed entry). Keeps `hasStage` in agreement with that server gate.
+                const hasStage =
+                  (e.phase === 'pending' || e.phase === 'staged') && (e.staged || e.sealed)
                 const hasActions = hasCopy || hasConfirm || hasStage
                 return (
                   <Card

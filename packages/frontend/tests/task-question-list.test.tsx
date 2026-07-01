@@ -156,7 +156,9 @@ describe('TaskQuestionList board', () => {
 
   test('stage button posts to /stage with staged:true', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue(undefined as never)
-    await wrap([entry({ id: 'e1', phase: 'pending', staged: false })])
+    // sealed:true — 「加入待下发」only shows once the answer is sealed (待下发 gate, below);
+    // an unsealed pending card hides the button (the server would reject the stage anyway).
+    await wrap([entry({ id: 'e1', phase: 'pending', staged: false, sealed: true })])
     // A pending card now has both a "复制" and a stage button (RFC-120 §15), so target
     // the stage button by its stable testid rather than the (ambiguous) sole role.
     fireEvent.click(screen.getByTestId('tq-stage-e1'))
@@ -173,6 +175,9 @@ describe('TaskQuestionList board', () => {
         phase: 'pending',
         roleKind: 'designer',
         effectiveTargetNodeId: 'designer',
+        // A designer entry only exists once its source question is sealed, so it carries the
+        // 加入待下发 button (which the button-count assertion below relies on).
+        sealed: true,
       }),
     ])
     // confirm card has at least one button (the ConfirmButton)
@@ -281,6 +286,34 @@ describe('TaskQuestionList board', () => {
       expect(b.className).toContain('btn--sm')
       expect(b.className).not.toContain('btn--xs')
     }
+  })
+})
+
+// 用户 2026-07-01 —「加入待下发」only makes sense once the question is answered (sealed):
+// the server stage gate rejects staging an unsealed entry (ConflictError
+// 'task-question-not-sealed', services/taskQuestions.ts isEntrySealed/stageTaskQuestion), so
+// an unanswered 待指派 card must NOT show the 加入待下发 button (a shown-but-always-erroring
+// button is worse than an absent one). 移出待下发 (unstage) stays available on a staged card
+// regardless of seal so a mistaken stage can be undone. Locks TaskQuestionList `hasStage` in
+// agreement with that server gate.
+describe('TaskQuestionList 待下发 gate (加入 hidden until answered)', () => {
+  test('未回答(unsealed)的待指派问题 → 不显示「加入待下发」按钮', async () => {
+    await wrap([entry({ id: 'e1', phase: 'pending', staged: false, sealed: false })])
+    // Card still renders (and can be reassigned) — only the 加入待下发 action is withheld.
+    expect(screen.getByTestId('tq-card-e1')).toBeTruthy()
+    expect(screen.queryByTestId('tq-stage-e1')).toBeNull()
+  })
+
+  test('已回答(sealed)的待指派问题 → 显示「加入待下发」按钮', async () => {
+    await wrap([entry({ id: 'e1', phase: 'pending', staged: false, sealed: true })])
+    expect(screen.getByTestId('tq-stage-e1')).toBeTruthy()
+  })
+
+  test('已在待下发(staged)的问题即便未 seal → 仍显示「移出待下发」按钮(可撤销)', async () => {
+    // The unstage direction is ALWAYS allowed (server permits unstage on an unsealed entry)
+    // so a mistaken stage can be undone even before the answer lands.
+    await wrap([entry({ id: 's1', phase: 'staged', staged: true, sealed: false })])
+    expect(screen.getByTestId('tq-stage-s1')).toBeTruthy()
   })
 })
 
@@ -530,6 +563,9 @@ describe('TaskQuestionList centralized answer pane entry (RFC-128 T9)', () => {
         originNodeRunId: 'nr_p',
         sourceKind: 'cross',
         roleKind: 'designer',
+        // sealed:true so the 加入待下发 button is present (待下发 gate hides it while unsealed);
+        // this test asserts tq-stage-p1 survives the tq-answer removal.
+        sealed: true,
       }),
       entry({
         id: 'c1',
