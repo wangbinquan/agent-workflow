@@ -70,8 +70,18 @@ describe('RFC-130 node isolation lifecycle', () => {
 
   test('two concurrent nodes from same base → canonical UNION of non-overlapping edits (AC-5)', async () => {
     const canon = await initCanon({ 'a.txt': 'A\n', 'b.txt': 'B\n' })
-    const hA = await createNodeIso({ appHome, taskId: 't2', nodeRunId: 'a', canonRepos: [canonRepo(canon)] })
-    const hB = await createNodeIso({ appHome, taskId: 't2', nodeRunId: 'b', canonRepos: [canonRepo(canon)] })
+    const hA = await createNodeIso({
+      appHome,
+      taskId: 't2',
+      nodeRunId: 'a',
+      canonRepos: [canonRepo(canon)],
+    })
+    const hB = await createNodeIso({
+      appHome,
+      taskId: 't2',
+      nodeRunId: 'b',
+      canonRepos: [canonRepo(canon)],
+    })
     // both branched from the same base; each edits a DIFFERENT file
     writeFileSync(join(hA.repos[0]!.isoWorktreePath, 'a.txt'), 'A-edited\n')
     writeFileSync(join(hB.repos[0]!.isoWorktreePath, 'b.txt'), 'B-edited\n')
@@ -87,8 +97,18 @@ describe('RFC-130 node isolation lifecycle', () => {
 
   test('overlapping edits → conflict, canonical for that repo left clean (D27)', async () => {
     const canon = await initCanon({ 'c.txt': 'L1\nL2\nL3\n' })
-    const hA = await createNodeIso({ appHome, taskId: 't3', nodeRunId: 'a', canonRepos: [canonRepo(canon)] })
-    const hB = await createNodeIso({ appHome, taskId: 't3', nodeRunId: 'b', canonRepos: [canonRepo(canon)] })
+    const hA = await createNodeIso({
+      appHome,
+      taskId: 't3',
+      nodeRunId: 'a',
+      canonRepos: [canonRepo(canon)],
+    })
+    const hB = await createNodeIso({
+      appHome,
+      taskId: 't3',
+      nodeRunId: 'b',
+      canonRepos: [canonRepo(canon)],
+    })
     // both change L1 differently → true conflict
     writeFileSync(join(hA.repos[0]!.isoWorktreePath, 'c.txt'), 'A1\nL2\nL3\n')
     writeFileSync(join(hB.repos[0]!.isoWorktreePath, 'c.txt'), 'B1\nL2\nL3\n')
@@ -126,7 +146,12 @@ describe('RFC-130 node isolation lifecycle', () => {
 
   test('failed node: no merge-back → canonical untouched (AC-6/I-5)', async () => {
     const canon = await initCanon({ 'f.txt': 'orig\n' })
-    const h = await createNodeIso({ appHome, taskId: 't5', nodeRunId: 'f', canonRepos: [canonRepo(canon)] })
+    const h = await createNodeIso({
+      appHome,
+      taskId: 't5',
+      nodeRunId: 'f',
+      canonRepos: [canonRepo(canon)],
+    })
     // agent wrote something in iso, then "failed" → we never merge back, just discard
     writeFileSync(join(h.repos[0]!.isoWorktreePath, 'f.txt'), 'partial garbage\n')
     await discardNodeIso(h)
