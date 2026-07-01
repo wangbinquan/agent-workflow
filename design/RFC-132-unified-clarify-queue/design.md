@@ -184,3 +184,26 @@ const clarifyContext = agentHasClarifyChannel(definition, node.id)
 - `taskClarifyDirective.ts:95`(setNodeClarifyDirective，节点反问状态)
 - `shared/clarify.ts:453`(buildExternalFeedbackBlock) / `:236`(buildClarifyPromptBlock)——收敛为 renderFlatClarifyQueue
 - `tests/rfc128-p5-bc:482`(整轮 byte 锁，改) / `rfc070-aging-stamp-grep-guards`(戳锁，删)
+
+## 13. PR-D 安全实施路线（research 2026-07-02 更正，已逐条亲验源码）
+
+原 §6/§9 低估了 consumed_by 的耦合。immediate 路径 research 更正三点（HEAD=`ddad0ce`）：
+
+**更正① HEAD 已存在迁移数据丢失缺口（最高风险）**：PR-B 的迁移兜底「legacy 无 dispatched round → `buildPromptContext` fallback」被 **PR-C 删除**（`buildPromptContext` 现零 caller，scheduler 仅 `buildClarifyQueueContext`；`scheduler.ts:2819` 自注释承认遗留）。而 `selectAgentQueue` 要 `dispatched_at IS NOT NULL AND (sealed_at IS NOT NULL OR manual)`（`clarifyQueue.ts:96/106`）。⇒ 升级前 `answered` 但无 `dispatched_at` 的遗留 round（+ 在飞 continuation）恢复后注入空 → **丢答案**。必须先补迁移垫片。
+
+**更正② consumed_by 对新「非 deferred」任务仍活写 + 活读**（推翻 §9「升级后不再读戳」）：`markClarifyRoundsConsumedBy`（`runner.ts:1550`）对 flag=false 任务照写整轮戳；`resolveEntryHandler`（`taskQuestions.ts:407`）对非 deferred 看板 DTO 经 `resolveTriggerForEntry` 活读 consumed_by 定相位（`listTaskQuestions` deferred=false 分支）。⇒ 删 consumed_by 的真正阻塞是 **T8 flag 停读**，非 immediate 账本。
+
+**更正③ 顺序**：**T8（flag 停读）必须先于 T4（停写 consumed_by）**——否则非 deferred 看板相位读恒 null 戳 → 全卡 in-flight（回归）。原 plan D(T4)<E(T8) 反了。
+
+**已验证成立（§6 断言无误）**：immediate 账本/借壳/mint 确已死或 inert-live——PR-B 后 self/q 答复恒经 `autoDispatchClarifyRound` 打 `dispatched_at` → 进 `deferredDispatchedOrigins` → `openImmediateRounds` 恒排除（返回空）→ `resolveImmediateBorrowForNode` 恒 CLOSED → borrow 恒 null（`buildBorrowedAgent` 对新数据不可达）。
+
+**安全删除顺序（5 步，取代 §9 粗描述）**：
+- **步骤0（迁移垫片，最先）**：daemon resume 前、持 lock B、幂等 reconcile——遗留「answered + continuation 未完成」immediate round 补 `sealed_at`+`dispatched_at` 并把 `trigger_run_id` 绑到**已存在**的 continuation run（不新 mint）。修更正①丢答案。三不变式：不产生「dispatched 但 continuation immediate」hybrid；不「answered 却既非 dispatched 又非 immediate」；补 dispatched+绑 trigger 同事务。
+- **步骤1（T8 flag 停读）**：`listTaskQuestions`/`deriveEntryPhase`/park 源/`createManualTaskQuestion`/`isDeferredTask` 一律视 deferred=true → self/q 走 `resolveDispatchedEntryHandler`（不再 `:407`）。前置：步骤0。
+- **步骤2（T4 停写 + oracle 派生化）**：删 `markClarifyRoundsConsumedBy`+runner 调用点；`openImmediateRounds` 删 consumed_by 读（`:149-150` 冗余——continuation-run 扫描 `:173-182` 四态等价）。前置：步骤1。
+- **步骤3（删 reader + no-residue，PR-E）**：删 `resolveTriggerForEntry`+`:407` 分支、E 组 8 个死注入器、immediate 账本（`resolveImmediateBorrowForNode` 等）、`buildBorrowedAgent`+scheduler borrow 分支；legacy mint（`submit*`/`trigger*`）可拆独立 PR。清空 `rg consumed_by` src（基线 40→0）。
+- **步骤4（drop-column，PR-F，forward-only）**：**先 DROP INDEX 5 个再 DROP COLUMN**（SQLite 限制）；删 3 表 consumed_by 列（clarify_rounds/cross_clarify_sessions/clarify_sessions）；`--> statement-breakpoint`；bump upgrade-rolling journal 72→73。删前门禁：`rg consumed_by` src 空 + typecheck + 全量 test + smoke。
+
+**PR 重排**：PR-D'=步骤0+1+2；PR-E=步骤3（legacy-mint 可再拆 PR-E2）；PR-F=步骤4。
+
+**测试影响 + 风险（按 regression 概率）**：① 迁移丢答案（步骤0 先补 + 红→绿迁移集成测试兜底）；② 停写早于 flag 停读（严格 T8→T4）；③ 过早删 oracle 致在飞 continuation 双 mint（oracle 保留 inert 网到步骤3 + 删前确认 `answered + dispatched_at NULL` 计数=0）；④ trigger 锚点（`isTargetNodeConsumed` 全 case 派生锁）；⑤ drop-column 崩库（先 DROP INDEX + statement-breakpoint + journal bump）。受影响测试：`rfc070-aging-stamp-*`/`clarify-rerun-ledger-deadlock`/`rfc127-borrow`(Part0 move 保留、Part1 borrow 删)/~26 legacy-mint 测试迁移到 `autoDispatchClarifyRound`。

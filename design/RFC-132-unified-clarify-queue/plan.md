@@ -75,11 +75,13 @@
 | PR-1 ✅ | T1 `renderFlatClarifyQueue` + T2 `selectAgentQueue`/`bindTriggerRun`（纯函数,未接入） | 低（已落 `660f4b9`） |
 | **PR-B** | **T6「universal deferred model」**:路由放宽**所有任务**走 `autoDispatchClarifyRound`（已存在、deferred 生产验证）+ designer 也切自动下发（扩 auto-dispatch）+ scheduler XOR **恒走 deferred 注入器**（`buildClarifyNodeQueueContext`/`buildNodeQueueExternalFeedback`,已派生老化 + 读 dispatched）+ 删 legacy immediate mint + 迁移垫片 | 🔴 高（行为变更:borrow→move、自动下发;但**注入器代码不动**、用已验证 deferred 机器,**强制 Codex gate**） |
 | **PR-C** | T3 `buildClarifyQueueContext`（组装 PR-1）+ scheduler 单调用替换两 deferred 注入器 + T5 designer 渲染并入平铺块（删 External Feedback）| 🟡 中（单一路径上**纯重构**,golden 换平铺锁;可用 PR-2 已写的 worktree 成果） |
-| **PR-D** | T4 删 `markClarifyRoundsConsumedBy`/consumed_by 停写 + T7 directive→节点状态 | 🟡 中（PR-B 后 `buildPromptContext` 已死、不读戳） |
-| **PR-E** | T8 死代码（`buildPromptContext`/`selectAnsweredRoundsForConsumer`/`buildQuestionerCrossClarifyContext`/flag 停读 + source-guard 更新〔见 §T8 清单〕）+ T9 golden 网 | 🟡 中 |
-| **PR-F** | T10 drop-column（forward-only 删列） | 🟡 中（不可回退,删前 `rg` 无 reader） |
+| **PR-D'** | 步骤0 迁移垫片(修 HEAD 丢答案缺口)+ 步骤1 T8 flag 停读 + 步骤2 T4 停写 consumed_by + `openImmediateRounds` 派生化 + T7 directive 收敛(`hasPersistentStop`→节点状态)| 🔴 高(迁移 + **顺序:T8 必先于 T4**;见 design §13) |
+| **PR-E** | 步骤3:删 consumed_by reader(`resolveTriggerForEntry`/E 组 8 死注入器/immediate 账本/`buildBorrowedAgent`)+ no-residue(`rg consumed_by` src 40→0)+ T9 golden 网;legacy mint(`submit*`/`trigger*`)可拆 PR-E2 | 🔴 高(borrow ledger / ~26 legacy-mint 测试迁移) |
+| **PR-F** | 步骤4 drop-column(**先 DROP INDEX 5 个再 DROP COLUMN** 3 表;forward-only)| 🟡 中(不可回退,删前 `rg` 无 reader + journal 72→73) |
 
-每 PR 独立门禁（typecheck + 全量 test + format + 单二进制 smoke + Codex impl gate）+ CI 绿。**PR-B/PR-C 强制 Codex adversarial gate**（行为变更 + 热点）。
+**⚠️ research 二次更正（2026-07-02，已亲验，详见 design §13）**：consumed_by 不只被"已死"的 immediate oracle 读——① **HEAD 已有丢答案 bug**（PR-C 删了 PR-B 的 `buildPromptContext` fallback，遗留 answered-无-dispatched round 注入空）；② consumed_by 对新非 deferred 任务**仍活写+活读**（`resolveTriggerForEntry` 看板 DTO）；③ 故 **T8 flag 停读必须先于 T4 停写**（原表 D<E 顺序反了）。安全序：步骤0 迁移垫片 → 步骤1 T8 → 步骤2 T4+oracle → 步骤3 删 reader → 步骤4 drop-column。
+
+每 PR 独立门禁（typecheck + 全量 test + format + 单二进制 smoke + Codex impl gate）+ CI 绿。**PR-B/PR-C/PR-D' 强制 Codex adversarial gate**（行为变更 + 热点 + 迁移）。
 
 **为什么 PR-B 比原 PR-2 安全**:把危险的**行为变更**（自动下发、borrow→move、老化统一）隔离在**注入器代码不变**的 PR（用已证明的 deferred 注入器）;PR-C 再做**机械的注入器合并**（单一路径纯重构、golden 天然）。原 PR-2 把「换注入器」和「行为变更」缠在一起、中间还有 non-deferred 断注入的 gap。**注**:PR-2 已实现的 worktree（buildClarifyQueueContext + scheduler 单调用)保留、并入 PR-C（其行为变更部分靠 PR-B 先铺垫）。
 
