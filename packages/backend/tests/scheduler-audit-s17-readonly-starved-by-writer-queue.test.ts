@@ -108,13 +108,12 @@ function buildHarness(): Harness {
   }
 }
 
-async function seedAgent(db: DbClient, name: string, readonly: boolean): Promise<void> {
+async function seedAgent(db: DbClient, name: string): Promise<void> {
   await db.insert(agents).values({
     id: ulid(),
     name,
     description: 'test',
     outputs: JSON.stringify(['summary']),
-    readonly,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',
@@ -163,10 +162,10 @@ describe('S-17 — queued writers no longer hold global slots; readonly runs par
     // Definition order drives dispatch order: w1, w2 take the 2 global
     // slots, w3 queues on writeSem holding a would-be slot request, and the
     // readonly auditor sits behind all of them on globalSem.
-    await seedAgent(h.db, 'w1', false)
-    await seedAgent(h.db, 'w2', false)
-    await seedAgent(h.db, 'w3', false)
-    await seedAgent(h.db, 'auditor', true)
+    await seedAgent(h.db, 'w1')
+    await seedAgent(h.db, 'w2')
+    await seedAgent(h.db, 'w3')
+    await seedAgent(h.db, 'auditor')
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],

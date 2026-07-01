@@ -15,7 +15,6 @@ function agent(over: Partial<Agent>): Agent {
     name: 'a',
     description: '',
     outputs: [],
-    readonly: false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

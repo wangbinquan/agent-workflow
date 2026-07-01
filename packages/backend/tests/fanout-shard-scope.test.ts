@@ -24,7 +24,6 @@ function baseAgent(name: string, fields: Partial<Agent> = {}): Agent {
     name,
     description: '',
     outputs: ['out'],
-    readonly: false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

@@ -28,7 +28,6 @@ export interface DependencyTreeAgent {
   /** RFC-031: plugin names this agent itself references. Empty → no
    *  plugin chip. */
   plugins: readonly string[]
-  readonly: boolean
   dependsOn: readonly string[]
 }
 
@@ -38,7 +37,6 @@ export interface DependencyTreeNode {
   skills: readonly string[]
   mcps: readonly string[]
   plugins: readonly string[]
-  readonly: boolean
   /** True when an earlier sighting of this name already expanded its
    *  children; the rendering layer shows `↑ see above` and stops. */
   duplicateRef: boolean
@@ -68,7 +66,6 @@ export function buildDependencyTree(
         skills: [],
         mcps: [],
         plugins: [],
-        readonly: false,
         duplicateRef: false,
         children: [],
       }
@@ -81,7 +78,6 @@ export function buildDependencyTree(
         skills: agent.skills,
         mcps: agent.mcps,
         plugins: agent.plugins,
-        readonly: agent.readonly,
         duplicateRef: true,
         children: [],
       }
@@ -94,7 +90,6 @@ export function buildDependencyTree(
       skills: agent.skills,
       mcps: agent.mcps,
       plugins: agent.plugins,
-      readonly: agent.readonly,
       duplicateRef: false,
       children: agent.dependsOn.map((child) => walk(child, nextPath)),
     }

@@ -18,7 +18,6 @@ function mkAgent(overrides: Partial<Agent> = {}): Agent {
     name: 'x',
     description: 'desc',
     outputs: [],
-    readonly: false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],
@@ -109,6 +108,6 @@ describe('RFC-022 buildInlineConfig (primary + dependents)', () => {
     expect(entry.prompt).toBe('## body')
     expect(entry.description).toBe('desc')
     expect(entry.permission).toEqual({})
-    expect(entry.options).toEqual({ outputs: [], readonly: false })
+    expect(entry.options).toEqual({ outputs: [] })
   })
 })

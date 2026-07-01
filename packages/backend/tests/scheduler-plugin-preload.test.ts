@@ -28,7 +28,6 @@ async function seedAgent(
     name,
     description: '',
     outputs: [],
-    readonly: false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

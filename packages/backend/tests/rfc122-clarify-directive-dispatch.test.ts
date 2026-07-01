@@ -134,7 +134,6 @@ async function designerSelfClarifyWorkflow(c: Ctx, name: string) {
     description: '',
     outputs: ['design'],
     outputKinds: { design: 'markdown' },
-    readonly: false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

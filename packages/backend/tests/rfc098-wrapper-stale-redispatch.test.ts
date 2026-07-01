@@ -82,7 +82,6 @@ async function seedReadonlyAgent(db: DbClient, name: string, outputs: string[]):
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
-    readonly: true,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',

@@ -65,7 +65,6 @@ async function setup() {
     description: '',
     outputs: ['out'],
     outputKinds: { out: 'string' },
-    readonly: true,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

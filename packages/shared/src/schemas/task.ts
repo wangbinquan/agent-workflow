@@ -524,6 +524,8 @@ export const RERUN_CAUSES = [
   'commit-push',
   /** Commit&push per-session child row (scheduler genViaOpencode). */
   'commit-push-session',
+  /** RFC-130 §6.2 built-in merge-conflict resolver child row (scheduler resolveMergeConflicts). */
+  'merge-resolve',
   /** Virtual done row for input / output IO nodes. */
   'io-virtual',
   /** Cross-clarify scheduler guard rows (missing-questioner failure /

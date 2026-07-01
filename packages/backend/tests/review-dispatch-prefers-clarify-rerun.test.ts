@@ -60,7 +60,6 @@ describe('dispatchReviewNode upstream selection — clarify rerun must beat stal
       name: 'doc',
       description: '',
       outputs: JSON.stringify(['docpath']),
-      readonly: false,
       permission: '{}',
       skills: '[]',
       frontmatterExtra: '{}',

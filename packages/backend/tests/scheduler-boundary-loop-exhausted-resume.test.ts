@@ -56,7 +56,6 @@ async function seedAgent(
   db: DbClient,
   name: string,
   outputs: string[],
-  readonly = true,
   extra: Record<string, unknown> = {},
 ): Promise<void> {
   await db.insert(agents).values({
@@ -64,7 +63,6 @@ async function seedAgent(
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
-    readonly,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: JSON.stringify(extra),

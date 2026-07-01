@@ -186,7 +186,6 @@ describe('RFC-056 patch-2026-05-26 — dispatchReviewNode cci-aware short-circui
       name: 'designer',
       description: '',
       outputs: JSON.stringify(['docpath']),
-      readonly: false,
       permission: '{}',
       skills: '[]',
       frontmatterExtra: '{}',

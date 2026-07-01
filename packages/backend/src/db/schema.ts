@@ -24,7 +24,6 @@ export const agents = sqliteTable('agents', {
   name: text('name').notNull().unique(), // URL identifier (/agents/{name})
   description: text('description').notNull().default(''),
   outputs: text('outputs').notNull().default('[]'), // JSON string[] of port names
-  readonly: integer('readonly', { mode: 'boolean' }).notNull().default(false),
   // RFC-014: agent-level switch. When true (default), an iterate review decision
   // on a node whose upstream agent declares ≥ 2 markdown[_file] outputs will
   // re-generate every markdown[_file] sibling port and cascade their sibling
@@ -819,7 +818,7 @@ export const nodeRuns = sqliteTable(
      * RFC-127 借壳: borrowed agent name for reassignment. When a clarify rerun
      * (self/questioner/designer) is reassigned to another workflow node's agent
      * X, this row keeps node_id = original node P but runs with X's agent
-     * definition (X's body/model/runtime/readonly/skill + P's output port
+     * definition (X's body/model/runtime/skill + P's output port
      * contract). NULL = the node's own agentName (normal path). The scheduler
      * resolves this BEFORE agent/runtime/injection resolution (design §3.2);
      * audit + cross-tick re-dispatch visibility only — NEVER enters a prompt.

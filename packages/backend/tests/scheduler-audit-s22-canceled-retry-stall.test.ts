@@ -191,7 +191,6 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
       name: 'x',
       description: 'test',
       outputs: JSON.stringify(['summary']),
-      readonly: true,
       permission: '{}',
       skills: '[]',
       frontmatterExtra: '{}',

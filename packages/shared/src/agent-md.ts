@@ -146,6 +146,12 @@ export function parseAgentMarkdown(
   // land in `frontmatterExtra` (surfaced in the import preview), never in
   // `partial`. This preserves the author's data without re-introducing the
   // dropped fields onto CreateAgent.
+  //
+  // RFC-130: `readonly` is likewise no longer an agent field — per-node worktree
+  // isolation replaced readonly-based write serialization, so the flag was
+  // deleted. It was never in KNOWN_KEYS (and never extracted into `partial`), so
+  // an authored `readonly:` already demotes to frontmatterExtra via the same
+  // catch-all; a legacy agent.md carrying it still imports without error.
 
   // tools + permission normalization
   const derivedPermission: AgentPermission = {}

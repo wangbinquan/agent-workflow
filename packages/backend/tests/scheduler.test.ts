@@ -58,7 +58,6 @@ async function seedAgent(
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
-    readonly: true,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',
@@ -444,8 +443,8 @@ describe('runTask: linear DAG (M1)', () => {
 
   test('two read-only agents at the same level run in parallel under the global semaphore', async () => {
     // No edges between r1 and r2 → same level → eligible for parallel.
-    await seedReadonlyAgent(h.db, 'r1', ['summary'], true)
-    await seedReadonlyAgent(h.db, 'r2', ['summary'], true)
+    await seedReadonlyAgent(h.db, 'r1', ['summary'])
+    await seedReadonlyAgent(h.db, 'r2', ['summary'])
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
@@ -484,7 +483,7 @@ describe('runTask: linear DAG (M1)', () => {
   })
 
   test('node with retries=2 fails twice then succeeds', async () => {
-    await seedReadonlyAgent(h.db, 'flaky', ['summary'], true)
+    await seedReadonlyAgent(h.db, 'flaky', ['summary'])
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
@@ -527,7 +526,7 @@ describe('runTask: linear DAG (M1)', () => {
   })
 
   test('node with retries=1 exhausts retries → task fails', async () => {
-    await seedReadonlyAgent(h.db, 'persistent', ['summary'], true)
+    await seedReadonlyAgent(h.db, 'persistent', ['summary'])
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
@@ -583,7 +582,7 @@ describe('runTask: linear DAG (M1)', () => {
     await runGit(repoDir, ['add', '.'])
     await runGit(repoDir, ['commit', '-q', '-m', 'init'])
 
-    await seedReadonlyAgent(h.db, 'writer', ['summary'], false)
+    await seedReadonlyAgent(h.db, 'writer', ['summary'])
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
@@ -649,9 +648,21 @@ process.exit(0)
   // now exercised in scheduler-wrapper-fanout-e2e.test.ts case 1 ("empty
   // shardSource short-circuits to done with empty __done__ signal").
 
-  test('two write agents at the same level serialize through the write semaphore', async () => {
-    await seedReadonlyAgent(h.db, 'w1', ['summary'], false)
-    await seedReadonlyAgent(h.db, 'w2', ['summary'], false)
+  // RFC-130 SUPERSEDES the pre-isolation "writers serialize through writeSem"
+  // model. Two write agents at the same level now each run in their OWN isolated
+  // worktree — their AGENT RUNS proceed in parallel (globalSem); only the brief
+  // §段① snapshot + §段③ merge-back touch the canonical worktree under writeSem.
+  // Wall-clock is therefore NOT a serialization signal here: with a mock agent that
+  // only sleeps, the per-node iso git overhead (worktree add + snapshot + merge-back,
+  // itself serialized) is the same order as the 250ms run, so elapsed is machine-
+  // speed-dependent (it was RED on fast CI, green on slower local — a flake). We lock
+  // the deterministic RFC-130 invariant instead: both writers complete AND each
+  // cleanly merged its iso delta back into the canonical worktree (merge_state=
+  // 'merged'), no shared-worktree corruption. The parallelism itself is wall-clock-
+  // locked by the large-delay read-only test above.
+  test('two write agents at the same level each run isolated and merge back cleanly', async () => {
+    await seedReadonlyAgent(h.db, 'w1', ['summary'])
+    await seedReadonlyAgent(h.db, 'w2', ['summary'])
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
@@ -662,7 +673,6 @@ process.exit(0)
       edges: [],
     }
     const { taskId } = await seedWorkflowAndTask(h, def)
-    const t0 = Date.now()
     await withEnv(
       {
         MOCK_OPENCODE_DELAY_MS: '250',
@@ -677,11 +687,17 @@ process.exit(0)
           maxConcurrentNodes: 4,
         }),
     )
-    const elapsed = Date.now() - t0
-    // Two 250ms writers must serialize → at least ~500ms wall clock.
-    expect(elapsed).toBeGreaterThan(450)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('done')
+    // Both writers reached done AND merged their iso delta back into canonical.
+    // merge_state='merged' proves the isolate→merge-back path ran per node (a
+    // shared-worktree run would leave it null / 'conflict-*' / 'merge-failed').
+    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    for (const name of ['w1', 'w2']) {
+      const r = runs.find((x) => x.nodeId === name)
+      expect(r?.status).toBe('done')
+      expect(r?.mergeState).toBe('merged')
+    }
   })
 })
 
@@ -693,7 +709,7 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
   afterEach(() => h.cleanup())
 
   test('loop exits on iteration 0 when port-empty satisfied', async () => {
-    await seedReadonlyAgent(h.db, 'auditor', ['findings'], true)
+    await seedReadonlyAgent(h.db, 'auditor', ['findings'])
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
@@ -748,7 +764,7 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
   })
 
   test('loop exhausted when exit condition never satisfied', async () => {
-    await seedReadonlyAgent(h.db, 'auditor', ['findings'], true)
+    await seedReadonlyAgent(h.db, 'auditor', ['findings'])
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
@@ -794,7 +810,7 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
   })
 
   test('port-count-lt exit condition triggers when token count is below n', async () => {
-    await seedReadonlyAgent(h.db, 'auditor', ['findings'], true)
+    await seedReadonlyAgent(h.db, 'auditor', ['findings'])
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
@@ -839,7 +855,7 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
   })
 
   test('port-equals exit condition matches exact value', async () => {
-    await seedReadonlyAgent(h.db, 'auditor', ['decision'], true)
+    await seedReadonlyAgent(h.db, 'auditor', ['decision'])
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
@@ -886,7 +902,7 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
     await runGit(repoDir, ['add', '.'])
     await runGit(repoDir, ['commit', '-q', '-m', 'init'])
 
-    await seedReadonlyAgent(h.db, 'auditor', ['findings'], true)
+    await seedReadonlyAgent(h.db, 'auditor', ['findings'])
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
@@ -926,19 +942,13 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
   })
 })
 
-async function seedReadonlyAgent(
-  db: DbClient,
-  name: string,
-  outputs: string[],
-  readonly: boolean,
-): Promise<string> {
+async function seedReadonlyAgent(db: DbClient, name: string, outputs: string[]): Promise<string> {
   const id = ulid()
   await db.insert(agents).values({
     id,
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
-    readonly,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',

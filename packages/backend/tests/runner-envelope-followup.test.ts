@@ -44,7 +44,6 @@ function makeAgent(): Agent {
     name: 'followup-agent',
     description: 'rfc-042 fixture',
     outputs: ['design'],
-    readonly: true,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

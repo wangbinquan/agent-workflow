@@ -132,7 +132,6 @@ describe('RFC-098 B3 (S-4) — pre-dirty 差集按 blob hash / deleted 哨兵判
       name: 'writer',
       description: 'test',
       outputs: JSON.stringify(['summary']),
-      readonly: false,
       permission: '{}',
       skills: '[]',
       frontmatterExtra: '{}',

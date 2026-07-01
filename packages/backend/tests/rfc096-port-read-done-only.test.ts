@@ -105,7 +105,6 @@ async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
-    readonly: true, // permissive stash path — plain-dir worktree suffices
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',

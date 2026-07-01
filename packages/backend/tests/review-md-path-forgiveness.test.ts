@@ -64,7 +64,6 @@ describe('dispatchReviewNode + RFC-049 PR-B explicit outputKinds contract', () =
       name: 'designer',
       description: '',
       outputs: JSON.stringify(['design']),
-      readonly: false,
       permission: '{}',
       skills: '[]',
       frontmatterExtra: frontmatter,

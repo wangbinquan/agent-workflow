@@ -17,7 +17,6 @@ function agent(name: string, role: Agent['role'] = undefined): Agent {
     name,
     description: '',
     outputs: ['out'],
-    readonly: false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

@@ -30,7 +30,6 @@ function valAgent(name: string, fields: Partial<Agent> = {}): Agent {
     name,
     description: '',
     outputs: ['result'],
-    readonly: true,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

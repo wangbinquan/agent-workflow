@@ -164,7 +164,6 @@ describe('/api/plugins CRUD (service-seeded)', () => {
       name: 'consumer',
       description: '',
       outputs: [],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],

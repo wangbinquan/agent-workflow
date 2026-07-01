@@ -21,7 +21,6 @@ async function seed(db: DbClient, name: string, dependsOn: string[] = []): Promi
     name,
     description: '',
     outputs: [],
-    readonly: false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

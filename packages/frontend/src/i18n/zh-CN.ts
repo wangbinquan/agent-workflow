@@ -767,7 +767,6 @@ export interface Resources {
     colName: string
     colDescription: string
     colOutputs: string
-    colReadonly: string
     colRuntime: string
     runtimeDefaultTag: string
     loadingAgent: string
@@ -1599,8 +1598,6 @@ export interface Resources {
     pluginsPickerEmpty: string
     pluginsPickerLoadFailed: string
     fieldDependencyTree: string
-    fieldReadonly: string
-    fieldReadonlyHint: string
     fieldSyncOutputsOnIterate: string
     fieldSyncOutputsOnIterateHint: string
     /** RFC-060 PR-B — agent role flavor selector (normal / aggregator). */
@@ -1684,8 +1681,6 @@ export interface Resources {
     mcps: string
     /** RFC-031: plugin names chip — shown only when the agent declares plugins[]. */
     plugins: string
-    readonly: string
-    writes: string
     seeAbove: string
     cycleHeading: string
     ariaTreeLabel: string
@@ -1766,7 +1761,6 @@ export interface Resources {
         name: string
         mode: string
         model: string
-        readonly: string
         source: string
         path: string
         desc: string
@@ -3038,8 +3032,7 @@ export const zhCN: Resources = {
     title: '欢迎使用 Agent Workflow',
     intro: '看起来这是新仓 — 还没有任何 agent 或 workflow。跟着下面四步建一条最小流水线。',
     step1Title: '1. 创建第一个 agent',
-    step1Body:
-      '取名为 coder，把 outputs 设为 [code]，readonly 关闭，把 prompt body 留空或粘一段简单的指令即可。',
+    step1Body: '取名为 coder，把 outputs 设为 [code]，把 prompt body 留空或粘一段简单的指令即可。',
     step1Cta: '创建 agent →',
     step2Title: '2. （可选）添加 skill',
     step2Body:
@@ -3145,7 +3138,6 @@ export const zhCN: Resources = {
     colName: '名称',
     colDescription: '描述',
     colOutputs: '输出端口',
-    colReadonly: '只读',
     colRuntime: '运行时',
     runtimeDefaultTag: '默认',
     loadingAgent: '加载代理中…',
@@ -4127,8 +4119,6 @@ export const zhCN: Resources = {
     pluginsPickerEmpty: '暂无可选插件（已全部添加 / 仓库为空）',
     pluginsPickerLoadFailed: '加载插件列表失败；仍可在下方手动输入。',
     fieldDependencyTree: '闭包依赖（预览）',
-    fieldReadonly: '只读',
-    fieldReadonlyHint: '只读 agent 可在同一 task 中并发；可写 agent 会串行。',
     fieldSyncOutputsOnIterate: '文档迭代期间是否同步刷新本代理生成的其他文档',
     fieldSyncOutputsOnIterateHint:
       '仅当本代理 outputs 含 ≥ 2 个 markdown / markdown_file 时实际生效；关闭则在用户点"返回修改"时只重生被评审的那一份，其他文档沿用上一版本。',
@@ -4150,8 +4140,7 @@ export const zhCN: Resources = {
     fieldPermissionHint: 'opencode permission 对象，透传。',
     permissionPlaceholder: '{"edit":"allow","webfetch":"deny"}',
     fieldFrontmatterExtra: '额外 frontmatter (JSON)',
-    fieldFrontmatterExtraHint:
-      '除 name/description/outputs/readonly/model/variant/temperature/steps/permission/skills 之外的其它键。',
+    fieldFrontmatterExtraHint: '除 name/description/outputs/permission/skills 之外的其它键。',
     fieldBody: '正文 (Markdown)',
     bodyPlaceholder: 'Agent 系统提示词；Markdown。',
     rawBodySummary: '裸 markdown（无预览）',
@@ -4209,8 +4198,6 @@ export const zhCN: Resources = {
     skills: '技能：{{names}}',
     mcps: 'MCP：{{names}}',
     plugins: '插件：{{names}}',
-    readonly: '只读',
-    writes: '可写',
     seeAbove: '↑ 见上',
     cycleHeading: '依赖闭包检测到环：',
     ariaTreeLabel: '依赖树',
@@ -4291,7 +4278,6 @@ export const zhCN: Resources = {
         name: '名称',
         mode: '模式',
         model: '模型',
-        readonly: '只读',
         source: '来源',
         path: '路径',
         desc: '描述',

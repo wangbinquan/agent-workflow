@@ -17,7 +17,6 @@ describe('agentToDraft mcp + plugins round-trip', () => {
       name: 'demo',
       description: 'd',
       outputs: [],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: ['skill-a'],

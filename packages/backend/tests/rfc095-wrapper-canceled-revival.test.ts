@@ -108,7 +108,6 @@ async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): 
     name: 'worker',
     description: 'test',
     outputs: JSON.stringify(['out']),
-    readonly: true,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',

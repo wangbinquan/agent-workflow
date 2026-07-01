@@ -157,10 +157,13 @@ import {
   createNodeIso,
   discardNodeIso,
   type IsoHandle,
+  type MergeBackConflict,
   mergeBackNodeIso,
   rebuildIsoHandle,
+  resolveConflictWithAgent,
   snapshotNodeIsoFinal,
 } from '@/services/nodeIsolation'
+import { buildMergeAgent, mergeResolveNodeId } from '@/services/mergeAgent'
 import { Semaphore } from '@/util/semaphore'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
@@ -213,6 +216,10 @@ export interface RunTaskOptions {
   commitPushModel?: string
   /** RFC-117: runtime profile NAME for the built-in commit agent (config.commitPushRuntime); wins over commitPushModel. */
   commitPushRuntime?: string
+  /** RFC-130 §6.1: deprecated model fallback for the built-in merge-conflict resolver agent (config.mergeAgentModel). */
+  mergeAgentModel?: string
+  /** RFC-130 §6.1: runtime profile NAME for the built-in merge agent (config.mergeAgentRuntime); wins over mergeAgentModel. */
+  mergeAgentRuntime?: string
   /** RFC-075: repair-retry budget; falls back to DEFAULT_COMMIT_PUSH_MAX_REPAIR_RETRIES. */
   commitPushMaxRepairRetries?: number
   /** RFC-075: diff byte cap for the commit-message prompt; falls back to DEFAULT_COMMIT_PUSH_DIFF_MAX_BYTES. */
@@ -729,8 +736,10 @@ async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeRe
   // Newly-ready nodes start IMMEDIATELY and we await the FIRST in-flight
   // completion (`Promise.race`), so a finished node's downstream dispatches the
   // instant its last upstream settles — no waiting on the slowest sibling in a
-  // batch. Writers still serialize via `writeSem` inside runOneNode; readonly
-  // nodes run truly in parallel.
+  // batch. RFC-130: every node runs in its OWN isolated worktree, so ALL nodes
+  // run truly in parallel under `globalSem` (the `readonly` flag was removed —
+  // there is no read/write distinction); `writeSem` only serializes the brief
+  // per-node snapshot-at-dispatch (§段①) + merge-back (§段③), not the agent run.
   //
   // `scopeNodes` includes output sinks: each gets a virtual node_run mirroring
   // its upstream port content, so invariant T3 (task.done ⟹ every output node
@@ -1541,11 +1550,22 @@ export function deriveFrontier(
             })
             break
           case 'done':
-            blocked.push({
-              nodeId: n.id,
-              status: st,
-              reason: 'stale-done-in-invocation-dedup',
-            })
+            // RFC-130 §6.3: a done row whose merge-back could not be resolved by the
+            // merge agent is parked for a human (merge_state='conflict-human') → the
+            // scope bubbles awaiting_human (decideScopeOutcome). merge_state=
+            // 'merge-failed' is a hard merge failure → the scope fails. Everything
+            // else is the pre-RFC-130 stale-done in-invocation dedup artifact.
+            if (latest?.mergeState === 'conflict-human') {
+              awaitingHuman.push(n.id)
+            } else if (latest?.mergeState === 'merge-failed') {
+              failed.push(n.id)
+            } else {
+              blocked.push({
+                nodeId: n.id,
+                status: st,
+                reason: 'stale-done-in-invocation-dedup',
+              })
+            }
             break
           case 'interrupted':
             blocked.push({
@@ -1713,6 +1733,110 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
     await db.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, r.id))
     log.info('pending-merge replay merged', { nodeRunId: r.id })
   }
+}
+
+/**
+ * RFC-130 §6.2 — attempt to auto-resolve merge-back conflict(s) with the built-in
+ * merge agent. For each conflicted repo, spins a resolve-iso from the conflicted
+ * merged tree and dispatches the merge agent there (as a child node_run under the
+ * conflicting run, `cause='merge-resolve'`). The dispatch is a DIRECT `runNode`
+ * call — it deliberately does NOT acquire `globalSem`, because the caller holds
+ * `writeSem` across §6.2 and a globalSem wait here would close the writeSem↔globalSem
+ * cycle (§7 deadlock analysis). Framework self-checks the resolution (D6); on
+ * success the resolution is materialized into the canonical worktree and the
+ * resolve-iso discarded, on failure the resolve-iso is preserved for awaiting_human.
+ *
+ * Runtime: `resolveInternalAgentRuntime(mergeAgentRuntime → mergeAgentModel →
+ * defaultRuntime)`. Threading `mergeAgentRuntime`/`mergeAgentModel` from config →
+ * RunTaskOptions is a follow-up (mirrors commit&push Settings wiring); until then
+ * the merge agent runs on the task's `defaultRuntime`.
+ */
+async function resolveMergeConflicts(
+  state: SchedulerState,
+  opts: {
+    conflicts: MergeBackConflict[]
+    containerPath: string
+    conflictNodeRunId: string
+    nodeId: string
+    iteration: number
+  },
+): Promise<{ allResolved: boolean; detail: string }> {
+  const { db, task, log } = state
+  const rt = await resolveInternalAgentRuntime(db, {
+    runtimeName: state.opts.mergeAgentRuntime,
+    deprecatedModel: state.opts.mergeAgentModel,
+    defaultRuntime: state.opts.defaultRuntime,
+  })
+  const mergeNodeId = mergeResolveNodeId(opts.nodeId, opts.iteration)
+  const runAgent = async (prompt: string, cwd: string): Promise<void> => {
+    const sessionRunId = await mintNodeRun(db, {
+      taskId: task.id,
+      nodeId: mergeNodeId,
+      status: 'pending',
+      cause: 'merge-resolve',
+      iteration: opts.iteration,
+      overrides: { parentNodeRunId: opts.conflictNodeRunId },
+    })
+    const frozen = await resolveFrozenRuntime(db, sessionRunId, null, null, {
+      protocol: rt.protocol,
+      binary: rt.binaryPath,
+      params: {
+        model: rt.model,
+        variant: rt.variant,
+        temperature: rt.temperature,
+        steps: rt.steps,
+        maxSteps: rt.maxSteps,
+      },
+    })
+    // DIRECT runNode — bypasses globalSem on purpose (§7 deadlock avoidance).
+    await runNode({
+      taskId: task.id,
+      nodeRunId: sessionRunId,
+      nodeId: mergeNodeId,
+      agent: buildMergeAgent(),
+      runtime: frozen.protocol,
+      runtimeBinary: frozen.binary,
+      runtimeParams: frozen.params,
+      inputs: {},
+      worktreePath: cwd,
+      promptTemplate: prompt,
+      templateMeta: {
+        repoPath: cwd,
+        baseBranch: task.baseBranch,
+        taskId: task.id,
+        nodeId: mergeNodeId,
+        iteration: opts.iteration,
+        repos: state.repos,
+      },
+      skills: [],
+      dependents: [],
+      mcps: [],
+      plugins: [],
+      appHome: state.opts.appHome,
+      db,
+      log: log.child('merge'),
+      gitUserName: task.gitUserName,
+      gitUserEmail: task.gitUserEmail,
+      ...(state.opts.opencodeCmd ? { opencodeCmd: state.opts.opencodeCmd } : {}),
+      ...(state.opts.signal ? { signal: state.opts.signal } : {}),
+    })
+  }
+  let allResolved = true
+  const parts: string[] = []
+  for (const conflict of opts.conflicts) {
+    const outcome = await resolveConflictWithAgent(conflict, {
+      containerPath: opts.containerPath,
+      runAgent,
+      log,
+    })
+    if (!outcome.resolved) {
+      allResolved = false
+      parts.push(
+        `${conflict.worktreeDirName || '(repo)'}: ${outcome.unresolved.map((e) => e.path).join(', ')}`,
+      )
+    }
+  }
+  return { allResolved, detail: parts.join('; ') }
 }
 
 async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
@@ -2094,14 +2218,11 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   }
   broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
 
-  // RFC-098 B1 (audit S-17): writers take the WRITE lock FIRST, then the
-  // global slot — a writer queuing for the write lock no longer occupies a
-  // globalSem slot, so ready readonly nodes keep running truly in parallel
-  // (the old global-first order let 3 queued writers starve every reader).
-  // Global lock order: writeSem ≺ globalSem ≺ subprocessSem (no cycles — see
-  // RFC-098 survey §wp5-4).
-  // RFC-130 §7: no whole-run write lock — each node runs in its OWN isolated
-  // worktree; writeSem is held only for the brief snapshot-at-dispatch (§段①) and
+  // Lock order: writeSem ≺ globalSem ≺ subprocessSem (no cycles — RFC-098 survey
+  // §wp5-4). RFC-130 §7 SUPERSEDED the RFC-098 B1 "writer acquires writeSem before
+  // its global slot" model (which existed to stop queued writers starving readers):
+  // there is no whole-run write lock now — each node runs in its OWN isolated
+  // worktree, so writeSem is held only for the brief snapshot-at-dispatch (§段①) +
   // merge-back (§段③), never across the multi-minute agent run. globalSem is the
   // real DAG-parallelism cap now (writeSem + globalSem are never held together —
   // §7.2 deadlock analysis; the merge agent bypasses globalSem to avoid a cycle).
@@ -2981,30 +3102,45 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       try {
         const nodeTrees = await snapshotNodeIsoFinal(isoHandle, log)
         await persistIsoNodeTree(db, nodeRunId, task.repoCount, nodeTrees, 'pending-merge')
-        const mergeRes = await writeSem.run(() => mergeBackNodeIso(isoHandle, nodeTrees, log))
-        if (mergeRes.clean) {
+        const merge = await writeSem.run(async () => {
+          const mergeRes = await mergeBackNodeIso(isoHandle, nodeTrees, log)
+          if (mergeRes.clean) return { kind: 'merged' as const }
+          // RFC-130 §6.2 — resolve the conflict(s) with the built-in merge agent
+          // WITHIN the same writeSem hold so a sibling merge-back can't advance the
+          // canonical worktree under us (which would invalidate the merged tree).
+          // Canon for the conflicted repo(s) was NOT touched (D27); the agent works
+          // inside a resolve-iso and materializes back only on success. Holding
+          // writeSem across the (rare) agent run is the §6.2/D5 tradeoff; the agent's
+          // runNode bypasses globalSem (§7 — no writeSem↔globalSem cycle).
+          const res = await resolveMergeConflicts(state, {
+            conflicts: mergeRes.conflicts,
+            containerPath: isoHandle.containerPath,
+            conflictNodeRunId: nodeRunId,
+            nodeId: node.id,
+            iteration,
+          })
+          return res.allResolved
+            ? { kind: 'merged' as const }
+            : { kind: 'conflict-human' as const, detail: res.detail }
+        })
+        if (merge.kind === 'merged') {
           await db.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, nodeRunId))
         } else {
-          // RFC-130 T3 placeholder — PR-B replaces this with the built-in merge
-          // agent (§6). Until then a real conflict parks the task at awaiting_human
-          // so the conflict is NEVER silently lost; the canonical worktree for the
-          // conflicted repo(s) was NOT touched (D27), so sibling merge-backs stay
-          // safe, and the iso is preserved (keepIso) for the future merge agent.
+          // §6.3 — merge agent could not resolve → park human. Conflict is NEVER
+          // silently lost; canonical stays clean for siblings; the resolve-iso(s)
+          // are kept (keepIso) so the human finishes there and resume re-merges (#4).
           await db
             .update(nodeRuns)
             .set({ mergeState: 'conflict-human' })
             .where(eq(nodeRuns.id, nodeRunId))
-          const detail = mergeRes.conflicts
-            .map((c) => `${c.worktreeDirName || '(repo)'}: ${c.paths.join(', ')}`)
-            .join('; ')
-          log.warn('merge-back conflict → awaiting_human (T3 placeholder; PR-B adds merge agent)', {
+          log.warn('merge-back conflict unresolved by merge agent → awaiting_human', {
             nodeId: node.id,
-            detail,
+            detail: merge.detail,
           })
           keepIso = true
           return {
             kind: 'awaiting_human',
-            summary: `merge-back conflict: ${detail}`,
+            summary: `merge conflict unresolved: ${merge.detail}`,
             message: 'merge-conflict',
           }
         }
@@ -4312,24 +4448,42 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
       try {
         const nodeTrees = await snapshotNodeIsoFinal(shardIso, log)
         await persistIsoNodeTree(db, shardRunId, task.repoCount, nodeTrees, 'pending-merge')
-        const mergeRes = await state.writeSem.run(() => mergeBackNodeIso(shardIso, nodeTrees, log))
-        if (!mergeRes.clean) {
-          // T3 placeholder — PR-B resolves shard conflicts via the merge agent.
+        const merge = await state.writeSem.run(async () => {
+          const mergeRes = await mergeBackNodeIso(shardIso, nodeTrees, log)
+          if (mergeRes.clean) return { kind: 'merged' as const }
+          // RFC-130 §6.2 — resolve shard conflict(s) with the merge agent within the
+          // writeSem hold (canon stays stable). The resolve-iso lives under the
+          // shard's container; the shard's own iso is discarded in `finally`, while
+          // a kept resolve-iso (on failure) survives for GC / a human.
+          const res = await resolveMergeConflicts(state, {
+            conflicts: mergeRes.conflicts,
+            containerPath: shardIso.containerPath,
+            conflictNodeRunId: shardRunId,
+            nodeId: innerNode.id,
+            iteration,
+          })
+          return res.allResolved
+            ? { kind: 'merged' as const }
+            : { kind: 'conflict-human' as const, detail: res.detail }
+        })
+        if (merge.kind === 'merged') {
+          await db.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, shardRunId))
+        } else {
+          // §6.3 — unresolved shard conflict: mark conflict-human + fail loudly so the
+          // conflict is surfaced (never silently lost) and canonical stays clean.
+          // Per-shard awaiting_human bubbling through the fanout aggregation is a
+          // follow-up (#4/PR-E); today an unresolvable shard conflict fails the task.
           await db
             .update(nodeRuns)
             .set({ mergeState: 'conflict-human' })
             .where(eq(nodeRuns.id, shardRunId))
-          const detail = mergeRes.conflicts
-            .map((c) => `${c.worktreeDirName || '(repo)'}: ${c.paths.join(', ')}`)
-            .join('; ')
           return {
             kind: 'failed',
             shardKey,
             outputs: {},
-            message: `merge-back-conflict: ${detail}`,
+            message: `merge-back-conflict (merge agent could not resolve): ${merge.detail}`,
           }
         }
-        await db.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, shardRunId))
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         await db
@@ -4655,8 +4809,27 @@ async function dispatchFanoutAggregator(
       try {
         const nodeTrees = await snapshotNodeIsoFinal(aggIso, log)
         await persistIsoNodeTree(db, aggRunId, task.repoCount, nodeTrees, 'pending-merge')
-        const mergeRes = await state.writeSem.run(() => mergeBackNodeIso(aggIso, nodeTrees, log))
-        if (!mergeRes.clean) {
+        const merge = await state.writeSem.run(async () => {
+          const mergeRes = await mergeBackNodeIso(aggIso, nodeTrees, log)
+          if (mergeRes.clean) return { kind: 'merged' as const }
+          // RFC-130 §6.2 — resolve the aggregator's conflict(s) with the merge agent
+          // inside the writeSem hold (canon stays stable).
+          const res = await resolveMergeConflicts(state, {
+            conflicts: mergeRes.conflicts,
+            containerPath: aggIso.containerPath,
+            conflictNodeRunId: aggRunId,
+            nodeId: aggNode.id,
+            iteration,
+          })
+          return res.allResolved
+            ? { kind: 'merged' as const }
+            : { kind: 'conflict-human' as const, detail: res.detail }
+        })
+        if (merge.kind === 'merged') {
+          await db.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, aggRunId))
+        } else {
+          // §6.3 — unresolved: conflict-human + fail loudly (per-node awaiting_human
+          // bubbling for fanout is a follow-up, #4/PR-E); conflict never lost.
           await db
             .update(nodeRuns)
             .set({ mergeState: 'conflict-human' })
@@ -4664,11 +4837,10 @@ async function dispatchFanoutAggregator(
           return {
             kind: 'failed',
             summary: 'aggregator merge conflict',
-            message: 'merge-back-conflict',
+            message: `merge-back-conflict (merge agent could not resolve): ${merge.detail}`,
             outputs: {},
           }
         }
-        await db.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, aggRunId))
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         await db

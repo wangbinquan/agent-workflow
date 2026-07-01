@@ -156,7 +156,6 @@ describe('RFC-099 prompt isolation — opencode injection', () => {
       name: 'leaky',
       description: 'd',
       outputs: [],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],

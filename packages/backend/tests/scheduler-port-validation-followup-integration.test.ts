@@ -56,7 +56,6 @@ async function seedAgent(db: DbClient, name: string) {
     name,
     description: 'rfc-049',
     outputs: JSON.stringify(['design']),
-    readonly: true,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: JSON.stringify({ outputKinds: { design: 'markdown_file' } }),

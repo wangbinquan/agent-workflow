@@ -80,7 +80,7 @@ interface Snapshot {
   captured: boolean
   schemaVersion?: number
   capturedAt?: number
-  agents?: Array<{ name: string; mode: string; source: string; readonly: boolean }>
+  agents?: Array<{ name: string; mode: string; source: string }>
   skills?: Array<{ name: string; source: string; path: string | null }>
   mcps?: Array<{ name: string; type: string; status: string; hint: string | null }>
   plugins?: Array<{ specifier: string; source: string }>
@@ -168,7 +168,6 @@ describe('aw-inventory-dump runtime: v1 opencode SDK (no app.skills method)', ()
     expect(snap.captured).toBe(true)
     expect(snap.agents).toHaveLength(1)
     expect(snap.agents?.[0]?.name).toBe('reviewer')
-    expect(snap.agents?.[0]?.readonly).toBe(true) // permission.{edit,bash}: deny
     expect(snap.skills).toHaveLength(1)
     expect(snap.skills?.[0]?.name).toBe('foo')
     expect(snap.skills?.[0]?.path).toBe('/x/foo')
@@ -574,32 +573,7 @@ describe('aw-inventory-dump runtime: module export shape', () => {
 // -------------------------------------------------------------------------
 
 describe('aw-inventory-dump runtime: opencode SDK field mapping', () => {
-  test('agent.permission.{edit,bash} both deny → readonly:true', async () => {
-    const plugin = await loadPlugin()
-    await plugin.server({
-      client: {
-        app: {
-          agents: () =>
-            Promise.resolve({
-              data: [
-                {
-                  name: 'ro',
-                  mode: 'primary',
-                  permission: { edit: 'deny', bash: 'deny' },
-                  source: { type: 'inline' },
-                },
-              ],
-            }),
-          skills: () => Promise.resolve({ data: [] }),
-        },
-        mcp: { status: () => Promise.resolve({ data: {} }) },
-      },
-    })
-    await flushMicrotasks()
-    expect(readSnapshot().agents?.[0]?.readonly).toBe(true)
-  })
-
-  test('agent.permission.bash=allow → readonly:false even if edit=deny', async () => {
+  test('agent.source.type maps through (project)', async () => {
     const plugin = await loadPlugin()
     await plugin.server({
       client: {
@@ -622,7 +596,6 @@ describe('aw-inventory-dump runtime: opencode SDK field mapping', () => {
     })
     await flushMicrotasks()
     const snap = readSnapshot()
-    expect(snap.agents?.[0]?.readonly).toBe(false)
     expect(snap.agents?.[0]?.source).toBe('project')
   })
 

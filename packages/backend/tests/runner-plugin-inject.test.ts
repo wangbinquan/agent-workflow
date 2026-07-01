@@ -25,7 +25,6 @@ function agent(name: string): Agent {
     name,
     description: '',
     outputs: [],
-    readonly: false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

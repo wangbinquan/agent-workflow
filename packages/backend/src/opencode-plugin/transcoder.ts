@@ -26,10 +26,6 @@ function nullableStr(v: unknown): string | null {
   return String(v)
 }
 
-function bool(v: unknown, fallback: boolean): boolean {
-  return typeof v === 'boolean' ? v : fallback
-}
-
 /**
  * opencode `Agent.Info` → framework `InventoryAgent`.
  * Source field mapping (opencode 1.15):
@@ -37,21 +33,16 @@ function bool(v: unknown, fallback: boolean): boolean {
  *   - mode: top-level `mode` ('primary' | 'subagent' | …)
  *   - model.providerID / model.modelID
  *   - source.type ('inline' | 'project' | 'global' | 'native' | …)
- *   - readonly: derived from permission.{edit,bash}==='deny' (both required)
  */
 export function transcodeAgent(raw: unknown): InventoryAgent {
   const r = (raw ?? {}) as Json
   const model = (r.model ?? {}) as Json
   const source = (r.source ?? {}) as Json
-  const permission = (r.permission ?? {}) as Json
-  const readonly =
-    permission.edit === 'deny' && permission.bash === 'deny' ? true : bool(r.readonly, false)
   return {
     name: str(r.name, '(unnamed)'),
     mode: str(r.mode, 'unknown'),
     modelProviderId: nullableStr(model.providerID ?? r.modelProviderId),
     modelId: nullableStr(model.modelID ?? r.modelId),
-    readonly,
     source: str(source.type ?? r.source, 'unknown'),
   }
 }

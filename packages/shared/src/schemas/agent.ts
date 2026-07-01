@@ -95,7 +95,6 @@ export const AgentSchema = z.object({
    * + scheduler aggregator dispatch in PR-D).
    */
   role: AgentRoleSchema.optional(),
-  readonly: z.boolean(),
   /**
    * RFC-014: when true (default), an iterate decision on a multi-markdown
    * upstream node re-generates every markdown[_file] sibling port and resets
@@ -162,7 +161,6 @@ export const CreateAgentSchema = z.object({
   outputWrapperPortNames: AgentOutputWrapperPortNamesSchema.optional(),
   /** RFC-060 PR-B — agent role flag; optional, treat absent as 'normal'. */
   role: AgentRoleSchema.optional(),
-  readonly: z.boolean().default(false),
   /** RFC-014: default true — author must explicitly opt-out. */
   syncOutputsOnIterate: z.boolean().default(true),
   /** RFC-111 / RFC-112: agent runtime — a registered runtime NAME (built-ins

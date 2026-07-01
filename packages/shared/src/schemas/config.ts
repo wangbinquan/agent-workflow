@@ -255,6 +255,21 @@ export const ConfigSchema = z.object({
    */
   commitPushDiffMaxBytes: z.number().int().min(0).max(262144).optional(),
 
+  // --- RFC-130 built-in merge-conflict resolver agent ---
+  /**
+   * @deprecated RFC-130 — superseded by `mergeAgentRuntime` (select a full runtime
+   * profile; model comes from it). Transition fallback: when `mergeAgentRuntime`
+   * is unset but this is set, the merge agent runs on opencode + this model.
+   */
+  mergeAgentModel: z.string().min(1).optional(),
+  /**
+   * RFC-130 §6.1 — runtime profile NAME the built-in merge-conflict resolver agent
+   * runs on when a per-node isolated merge-back hits a real 3-way conflict (mirrors
+   * `commitPushRuntime`: protocol + binary + model from the selected profile). Unset
+   * → fall back to deprecated `mergeAgentModel`, then inherit `defaultRuntime`.
+   */
+  mergeAgentRuntime: z.string().min(1).optional(),
+
   // --- RFC-083 structural deep-mode (optional external SCIP indexers) ---
   // Absolute-path overrides per indexer binary; unset = looked up on PATH.
   structuralDeepIndexers: z

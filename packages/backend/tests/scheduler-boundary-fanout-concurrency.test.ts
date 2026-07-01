@@ -61,7 +61,6 @@ async function seedAgent(
   db: DbClient,
   name: string,
   outputs: string[],
-  readonly = true,
   extra: Record<string, unknown> = {},
 ): Promise<void> {
   await db.insert(agents).values({
@@ -69,7 +68,6 @@ async function seedAgent(
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
-    readonly,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: JSON.stringify(extra),
@@ -209,7 +207,7 @@ describe('regression: wrapper-fanout shard dispatch MUST honor concurrency caps 
     // guarantee that matters here: three writer shards complete WITHOUT corrupting
     // each other (no shared worktree), and the task finishes. The generous timeout
     // still guards against a merge-back/writeSem deadlock regression.
-    await seedAgent(h.db, 'worker', ['result'], false) // writer
+    await seedAgent(h.db, 'worker', ['result']) // writer
     const def = fanoutDef()
     const taskId = await seedWorkflowAndTask(h, def, { docs: 'a.md\nb.md\nc.md' })
     await withEnv(

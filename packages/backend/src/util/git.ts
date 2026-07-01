@@ -1132,6 +1132,14 @@ export interface MergeTreeResult {
   mergedTree: string
   /** Conflicted paths reported by merge-tree (empty ⟹ clean auto-merge). */
   conflicts: string[]
+  /**
+   * Full `git merge-tree` stdout including the `CONFLICT (<class>): ...` info
+   * messages (RFC-130 §6.2③). Downstream (mergeAgent.parseConflictManifest)
+   * classifies the conflict CLASS from this — content conflicts carry text
+   * markers, but modify-delete/rename-delete/binary/submodule are SILENT and can
+   * only be recovered from these messages. Empty tail when the merge is clean.
+   */
+  rawConflictOutput: string
 }
 
 /**
@@ -1139,6 +1147,13 @@ export interface MergeTreeResult {
  * D7). Produces a merged tree OID + conflicted-path list WITHOUT touching any
  * worktree. base = the node's isolation snapshot; ours = canonical NOW; theirs =
  * the node's final iso snapshot. Empty `conflicts` ⟹ clean → materialize directly.
+ *
+ * NOTE: intentionally NOT `--name-only` — that flag suppresses the
+ * `CONFLICT (<class>)` info messages we need to classify silent conflicts
+ * (§6.2③). Without it, the lines after the tree OID up to the first blank line
+ * are the conflicted-file-info stanzas (`<mode> <oid> <stage>\t<path>`), from
+ * which we recover the (deduped) conflicted paths; the blank-line-separated tail
+ * carries the human-readable CONFLICT messages, preserved in `rawConflictOutput`.
  */
 export async function mergeTreeInMemory(
   repoPath: string,
@@ -1147,7 +1162,6 @@ export async function mergeTreeInMemory(
   const r = await runGit(repoPath, [
     'merge-tree',
     '--write-tree',
-    '--name-only',
     `--merge-base=${opts.base}`,
     opts.ours,
     opts.theirs,
@@ -1161,12 +1175,16 @@ export async function mergeTreeInMemory(
   if (mergedTree === '') {
     throw new DomainError('merge-tree-failed', 'git merge-tree produced no tree oid', 500)
   }
-  // With --name-only the lines after the tree oid are the conflicted file names.
-  const conflicts = lines
-    .slice(1)
-    .map((l) => l.trim())
-    .filter((l) => l !== '')
-  return { mergedTree, conflicts }
+  // Conflicted-file-info stanzas run from line 1 until the first blank line;
+  // each is `<mode> <oid> <stage>\t<path>` (a path recurs across stages 1/2/3).
+  const paths = new Set<string>()
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i]!
+    if (line === '') break // blank line separates stanzas from CONFLICT messages
+    const tab = line.indexOf('\t')
+    if (tab >= 0) paths.add(line.slice(tab + 1))
+  }
+  return { mergedTree, conflicts: [...paths], rawConflictOutput: r.stdout }
 }
 
 /** RFC-130 P2-2: wrap a tree OID in a commit so `git worktree add` (which needs a

@@ -25,23 +25,15 @@ function nullableStr(v) {
   return String(v)
 }
 
-function bool(v, fallback) {
-  return typeof v === 'boolean' ? v : fallback
-}
-
 function transcodeAgent(raw) {
   const r = raw ?? {}
   const model = r.model ?? {}
   const source = r.source ?? {}
-  const permission = r.permission ?? {}
-  const readonly =
-    permission.edit === 'deny' && permission.bash === 'deny' ? true : bool(r.readonly, false)
   return {
     name: str(r.name, '(unnamed)'),
     mode: str(r.mode, 'unknown'),
     modelProviderId: nullableStr(model.providerID ?? r.modelProviderId),
     modelId: nullableStr(model.modelID ?? r.modelId),
-    readonly,
     source: str(source.type ?? r.source, 'unknown'),
   }
 }

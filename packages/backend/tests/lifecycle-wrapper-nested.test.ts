@@ -60,7 +60,6 @@ async function buildHarness(): Promise<Harness> {
     name: 'doc',
     description: '',
     outputs: JSON.stringify(['docpath']),
-    readonly: false,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',

@@ -88,7 +88,6 @@ async function seedAgent(
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
-    readonly: true,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: JSON.stringify(extra),

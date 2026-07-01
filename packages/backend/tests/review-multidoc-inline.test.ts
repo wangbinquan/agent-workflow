@@ -65,7 +65,6 @@ describe('RFC-081 — multi-document review over inline list<markdown>', () => {
       name: 'caseGen',
       description: '',
       outputs: JSON.stringify(['cases']),
-      readonly: false,
       permission: '{}',
       skills: '[]',
       // RFC-081: list<markdown> upstream → inline multi-document review.

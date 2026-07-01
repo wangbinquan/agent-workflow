@@ -40,7 +40,6 @@ function makeAgent(): Agent {
     name: 'test-agent',
     description: '',
     outputs: ['summary'],
-    readonly: true,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

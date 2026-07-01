@@ -179,7 +179,6 @@ function makeAgent(): Agent {
     name: 'test-agent',
     description: 'an agent',
     outputs: ['summary'],
-    readonly: true,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

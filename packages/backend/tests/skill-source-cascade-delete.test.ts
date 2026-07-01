@@ -105,7 +105,6 @@ describe('DELETE /api/skill-sources/:id', () => {
       name: 'agent-a',
       description: '',
       outputs: JSON.stringify(['result']),
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: '{}',
       skills: JSON.stringify(['pinned']),

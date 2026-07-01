@@ -25,7 +25,6 @@ export const claudeCodeDriver: RuntimeDriver = {
       prompt: ctx.prompt,
       systemPromptText: ctx.systemPrompt,
       ...(ctx.model != null && ctx.model !== '' ? { model: ctx.model } : {}),
-      ...(ctx.readonly != null ? { readonly: ctx.readonly } : {}),
       attemptDir: ctx.runDir,
       worktreePath: ctx.worktreePath,
       ...(ctx.resumeSessionId != null && ctx.resumeSessionId !== ''

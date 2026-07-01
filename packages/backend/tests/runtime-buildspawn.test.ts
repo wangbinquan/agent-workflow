@@ -113,13 +113,6 @@ describe('claudeCodeDriver.buildSpawn (RFC-117 system agent)', () => {
     })
   })
 
-  test('readonly → --disallowed-tools write gate', () => {
-    withTmp((dir) => {
-      const plan = claudeCodeDriver.buildSpawn({ ...BASE, runDir: dir, readonly: true })
-      expect(plan.cmd).toContain('--disallowed-tools')
-    })
-  })
-
   test('runtimeBinary overrides the claude head', () => {
     withTmp((dir) => {
       const plan = claudeCodeDriver.buildSpawn({

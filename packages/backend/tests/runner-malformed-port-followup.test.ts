@@ -45,7 +45,6 @@ function makeAgent(): Agent {
     description: '',
     outputs: ['doc'],
     outputKinds: {},
-    readonly: true,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

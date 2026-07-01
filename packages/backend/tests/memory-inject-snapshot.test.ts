@@ -38,7 +38,6 @@ function mkAgent(id: string, name = id): Agent {
     enabled: true,
     sourceKind: 'managed',
     bodyMd: '',
-    readonly: false,
     createdAt: 0,
     updatedAt: 0,
   } as unknown as Agent

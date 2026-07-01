@@ -18,7 +18,6 @@ function fakeAgent(name: string, mcp: string[] = []): Agent {
     name,
     description: '',
     outputs: [],
-    readonly: false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

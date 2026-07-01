@@ -180,7 +180,6 @@ describe('DELETE /api/mcps/:name', () => {
       name: 'consumer',
       description: '',
       outputs: [],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],

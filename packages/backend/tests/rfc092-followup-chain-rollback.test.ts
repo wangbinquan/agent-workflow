@@ -154,7 +154,6 @@ async function seedWriterAgent(db: DbClient, name: string): Promise<void> {
     name,
     description: 'test',
     outputs: JSON.stringify(['summary']),
-    readonly: false, // WRITER — pre-snapshot + retry rollback are in play
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',

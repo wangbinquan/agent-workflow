@@ -21,7 +21,6 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const base: Omit<CreateAgent, 'name' | 'runtime'> = {
   description: 'x',
   outputs: [],
-  readonly: false,
   syncOutputsOnIterate: false,
   permission: {},
   skills: [],

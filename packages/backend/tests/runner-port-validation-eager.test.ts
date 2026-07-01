@@ -46,7 +46,6 @@ function makeAgent(): Agent {
     description: '',
     outputs: ['docpath'],
     outputKinds: { docpath: 'markdown_file' },
-    readonly: true,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

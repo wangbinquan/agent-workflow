@@ -66,7 +66,6 @@ describe('RFC-129 — cross-round selection inheritance', () => {
       name: 'caseGen',
       description: '',
       outputs: JSON.stringify(['cases']),
-      readonly: false,
       permission: '{}',
       skills: '[]',
       frontmatterExtra: JSON.stringify({ outputKinds: { cases: upstreamKind } }),

@@ -21,7 +21,6 @@ function critical(src: string): string[] {
     "mode: str(r.mode, 'unknown')",
     'modelProviderId: nullableStr(model.providerID ?? r.modelProviderId)',
     'modelId: nullableStr(model.modelID ?? r.modelId)',
-    "permission.edit === 'deny' && permission.bash === 'deny'",
     "source: str(source.type ?? r.source, 'unknown')",
     'path: nullableStr(source.path ?? r.path)',
     'description: nullableStr(r.description)',

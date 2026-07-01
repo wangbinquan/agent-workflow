@@ -141,13 +141,12 @@ async function buildHarness(slug: string): Promise<Harness> {
   }
 }
 
-async function seedAgent(db: DbClient, name: string, readonly: boolean): Promise<void> {
+async function seedAgent(db: DbClient, name: string): Promise<void> {
   await db.insert(agents).values({
     id: ulid(),
     name,
     description: 'test',
     outputs: JSON.stringify(['out']),
-    readonly,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',
@@ -161,8 +160,8 @@ async function seedAgent(db: DbClient, name: string, readonly: boolean): Promise
  *  "n2 dispatched while n1's commit session runs" is a real ordering claim,
  *  not a same-frame coincidence. */
 async function seedTask(h: Harness): Promise<string> {
-  await seedAgent(h.db, 'n1', false)
-  await seedAgent(h.db, 'n2', true)
+  await seedAgent(h.db, 'n1')
+  await seedAgent(h.db, 'n2')
   const def: WorkflowDefinition = {
     $schema_version: 1,
     inputs: [],

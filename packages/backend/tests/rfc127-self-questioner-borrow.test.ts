@@ -773,7 +773,6 @@ async function seedRunnableAgent(db: DbClient, name: string): Promise<void> {
     description: '',
     outputs: ['result'],
     outputKinds: { result: 'markdown' },
-    readonly: true,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

@@ -45,7 +45,6 @@ function makeAgent(): Agent {
     name: 'live-capture-agent',
     description: '',
     outputs: ['summary'],
-    readonly: true,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

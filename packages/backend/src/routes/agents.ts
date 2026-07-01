@@ -255,7 +255,6 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
           name: parsed.data.name,
           description: '',
           outputs: [],
-          readonly: false,
           syncOutputsOnIterate: true,
           permission: {},
           skills: [],
@@ -313,7 +312,6 @@ function toAgentClosureSummaries(
    */
   skills: string[]
   skillCount: number
-  readonly: boolean
   dependsOn: string[]
   /**
    * RFC-028: include this agent's mcp[] in the closure summary so the
@@ -334,7 +332,6 @@ function toAgentClosureSummaries(
     description: string
     skills: string[]
     skillCount: number
-    readonly: boolean
     dependsOn: string[]
     mcp: string[]
     plugins: string[]
@@ -344,7 +341,6 @@ function toAgentClosureSummaries(
     description: a.description,
     skills: a.skills,
     skillCount: a.skills.length,
-    readonly: a.readonly,
     dependsOn: a.dependsOn,
     mcp: a.mcp ?? [],
     plugins: a.plugins ?? [],
@@ -368,7 +364,6 @@ function toAgentClosureSummaries(
       description: '',
       skills: [],
       skillCount: 0,
-      readonly: false,
       dependsOn: [],
       mcp: [],
       plugins: [],

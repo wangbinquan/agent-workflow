@@ -120,7 +120,6 @@ describe('RFC-130 crash replay (D15 gate + T3c2 replay)', () => {
       name: 'a',
       description: '',
       outputs: JSON.stringify(['summary']),
-      readonly: false,
       permission: '{}',
       skills: '[]',
       frontmatterExtra: '{}',

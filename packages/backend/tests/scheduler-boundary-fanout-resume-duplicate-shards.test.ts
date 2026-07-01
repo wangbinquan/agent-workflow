@@ -66,7 +66,6 @@ async function seedAgent(
   db: DbClient,
   name: string,
   outputs: string[],
-  readonly = true,
   extra: Record<string, unknown> = {},
 ): Promise<void> {
   await db.insert(agents).values({
@@ -74,7 +73,6 @@ async function seedAgent(
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
-    readonly,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: JSON.stringify(extra),
@@ -138,7 +136,7 @@ describe('wrapper-fanout resume — shard children must be idempotent (no duplic
 
   test('resume of a half-done fanout does NOT re-mint already-present shard children', async () => {
     await seedAgent(h.db, 'worker', ['result'])
-    await seedAgent(h.db, 'agg', ['result'], true, {
+    await seedAgent(h.db, 'agg', ['result'], {
       role: 'aggregator',
       outputWrapperPortNames: { result: 'final' },
     })

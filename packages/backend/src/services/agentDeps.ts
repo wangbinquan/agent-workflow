@@ -153,7 +153,6 @@ export async function validateDependsOn(
         name: selfName,
         description: '',
         outputs: [],
-        readonly: false,
         syncOutputsOnIterate: true,
         permission: {},
         skills: [],

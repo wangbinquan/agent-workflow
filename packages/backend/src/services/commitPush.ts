@@ -22,9 +22,9 @@ export const COMMIT_AGENT_NAME = 'commit'
  * RFC-075 T12: the framework's built-in "commit" agent. Not persisted to the
  * `agents` table — constructed on the fly and handed to `runNode` so it spawns
  * an opencode session (captured under the commit node_run) that summarizes the
- * staged diff / repairs a rejected push. Read-only (it only emits text; the
- * framework runs git), no skills / deps / mcp / plugins. `model` falls back to
- * opencode's installed default when unset.
+ * staged diff / repairs a rejected push. It only emits text (the framework runs
+ * git), no skills / deps / mcp / plugins. `model` falls back to opencode's
+ * installed default when unset.
  */
 export function buildCommitAgent(): Agent {
   const now = Date.now()
@@ -33,7 +33,6 @@ export function buildCommitAgent(): Agent {
     name: COMMIT_AGENT_NAME,
     description: 'Framework built-in: write commit messages and repair rejected pushes (RFC-075).',
     outputs: [COMMIT_MESSAGE_PORT],
-    readonly: true,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

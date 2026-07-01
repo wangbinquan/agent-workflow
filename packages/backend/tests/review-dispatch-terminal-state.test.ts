@@ -61,7 +61,6 @@ describe('dispatchReviewNode terminal-state short-circuit (RFC-052)', () => {
       name: 'doc',
       description: '',
       outputs: JSON.stringify(['docpath']),
-      readonly: false,
       permission: '{}',
       skills: '[]',
       frontmatterExtra: '{}',

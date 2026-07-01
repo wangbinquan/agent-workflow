@@ -71,7 +71,6 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     name: 'asker',
     description: 'an agent that may clarify',
     outputs: ['summary'],
-    readonly: true,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

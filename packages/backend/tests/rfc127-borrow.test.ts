@@ -24,7 +24,6 @@ describe('RFC-127 buildBorrowedAgent — X 的脑子 + P 的输出端口契约',
   const X = {
     name: 'X',
     bodyMd: 'X brain',
-    readonly: true,
     runtime: 'rt-x',
     outputs: ['xout'],
     outputKinds: { xout: 'text' },
@@ -32,7 +31,6 @@ describe('RFC-127 buildBorrowedAgent — X 的脑子 + P 的输出端口契约',
   const P = {
     name: 'P',
     bodyMd: 'P brain',
-    readonly: false,
     runtime: 'rt-p',
     outputs: ['code', 'notes'],
     outputKinds: { code: 'file' },
@@ -42,7 +40,6 @@ describe('RFC-127 buildBorrowedAgent — X 的脑子 + P 的输出端口契约',
     const eff = buildBorrowedAgent(X, P)
     expect(eff.name).toBe('X')
     expect(eff.bodyMd).toBe('X brain')
-    expect(eff.readonly).toBe(true)
     expect(eff.runtime).toBe('rt-x')
   })
 
@@ -121,11 +118,10 @@ describe('RFC-127 scheduler borrow wiring (source-level lock)', () => {
 // If layer 1 goes red, someone wired an attribution column into the borrow path; do NOT
 // "fix" the test — re-read RFC-127 proposal 目标 #6 / AC-9.
 describe('RFC-127 AC-9 — borrow prompt isolation (attribution never reaches the borrowed run)', () => {
-  const X = { name: 'X', bodyMd: 'X brain', readonly: true, outputs: ['xout'] } as unknown as Agent
+  const X = { name: 'X', bodyMd: 'X brain', outputs: ['xout'] } as unknown as Agent
   const P = {
     name: 'P',
     bodyMd: 'P brain',
-    readonly: false,
     outputs: ['code'],
   } as unknown as Agent
 

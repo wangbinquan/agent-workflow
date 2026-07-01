@@ -36,7 +36,6 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     name: 'sample-agent',
     description: 'fixture',
     outputs: ['result'],
-    readonly: true,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

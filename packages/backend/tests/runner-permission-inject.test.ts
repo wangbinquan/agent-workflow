@@ -32,7 +32,6 @@ function agent(name: string, permission: Record<string, unknown> = {}): Agent {
     name,
     description: '',
     outputs: [],
-    readonly: false,
     syncOutputsOnIterate: true,
     permission,
     skills: [],

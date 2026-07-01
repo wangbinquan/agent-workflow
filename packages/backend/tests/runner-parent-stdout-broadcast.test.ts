@@ -40,7 +40,6 @@ function makeAgent(): Agent {
     name: 'parent-broadcast-agent',
     description: '',
     outputs: ['summary'],
-    readonly: true,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

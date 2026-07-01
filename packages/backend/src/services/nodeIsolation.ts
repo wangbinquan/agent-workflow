@@ -11,8 +11,10 @@
 // merge-back are per-repo and independent (a conflict in one repo does not touch
 // another — design.md §9).
 
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  commitTree,
   createIsolatedWorktree,
   deleteIsoRefs,
   isGitWorkTree,
@@ -23,6 +25,13 @@ import {
   runGit,
   snapshotFullState,
 } from '@/util/git'
+import {
+  buildMergeResolvePrompt,
+  evaluateResolution,
+  type MergeConflictEntry,
+  parseConflictManifest,
+  type ResolvedPathState,
+} from '@/services/mergeAgent'
 import type { Logger } from '@/util/log'
 
 /** One canonical repo + its isolated mirror for a single node run. */
@@ -224,10 +233,32 @@ export async function snapshotNodeIsoFinal(
   return out
 }
 
+/**
+ * One conflicted repo from a merge-back. Carries everything the merge agent
+ * (§6) needs to build a resolve-iso and materialize a resolution WITHOUT going
+ * back to the DB: the conflicted auto-merge tree, the raw merge-tree output (for
+ * conflict-CLASS classification), and the merge base + canon refs.
+ */
+export interface MergeBackConflict {
+  worktreeDirName: string
+  /** Conflicted paths (back-compat with pre-PR-B callers). */
+  paths: string[]
+  /** Conflicted auto-merge tree OID — `commit-tree` this to seed resolve-iso (§6.2①). */
+  mergedTree: string
+  /** Raw `git merge-tree` stdout → parseConflictManifest for the 5-class manifest. */
+  rawConflictOutput: string
+  /** Merge base (iso baseSnapshot) — the commit-tree parent (§6.2①). */
+  base: string
+  /** git-ops dir = canonical worktree (shared ODB); the resolution's materialize target. */
+  canonWorktreePath: string
+  /** Canonical HEAD when the iso was created — materializeTree's taskBaseHead (§5.3). */
+  taskBaseHead: string
+}
+
 export interface MergeBackResult {
   clean: boolean
-  /** Per-repo conflicted paths (only repos that conflicted appear). */
-  conflicts: Array<{ worktreeDirName: string; paths: string[] }>
+  /** Per-repo conflicts (only repos that conflicted appear). */
+  conflicts: MergeBackConflict[]
 }
 
 /**
@@ -257,7 +288,15 @@ export async function mergeBackNodeIso(
       theirs,
     })
     if (merge.conflicts.length > 0) {
-      conflicts.push({ worktreeDirName: r.worktreeDirName, paths: merge.conflicts })
+      conflicts.push({
+        worktreeDirName: r.worktreeDirName,
+        paths: merge.conflicts,
+        mergedTree: merge.mergedTree,
+        rawConflictOutput: merge.rawConflictOutput,
+        base: r.baseSnapshot,
+        canonWorktreePath: r.canonWorktreePath,
+        taskBaseHead: r.taskBaseHead,
+      })
       continue
     }
     const canonCurrentTree = await treeOf(r.canonWorktreePath, ours)
@@ -288,4 +327,117 @@ export async function discardNodeIso(handle: IsoHandle, log?: Logger): Promise<v
     }
     await deleteIsoRefs(r.canonWorktreePath, handle.taskId, handle.nodeRunId)
   }
+}
+
+// ---------------------------------------------------------------------------
+// RFC-130 §6.2 — merge-agent conflict resolution (git orchestration).
+// The scheduler injects `runAgent` (a runNode call that BYPASSES globalSem, §7)
+// so this git-only orchestration stays unit-testable with a mock agent.
+// ---------------------------------------------------------------------------
+
+export interface ResolveConflictOutcome {
+  resolved: boolean
+  /** Manifest entries the framework could NOT confirm resolved (empty if resolved). */
+  unresolved: MergeConflictEntry[]
+  /**
+   * The resolve-iso worktree. On SUCCESS it has been removed (null). On FAILURE
+   * it is KEPT (D27/§6.3) so a human can finish the resolution there; the path is
+   * returned for the awaiting_human detail + resume.
+   */
+  resolveIsoPath: string | null
+}
+
+/**
+ * RFC-130 §6.2: try to auto-resolve ONE conflicted repo with the built-in merge
+ * agent. Seeds a detached resolve-iso from the conflicted auto-merge tree (so
+ * content conflicts carry markers), runs the agent there, then judges resolution
+ * from the framework's OWN observation of the worktree (D6) — never the agent's
+ * self-report. On success the resolution is materialized into the canonical
+ * worktree and the resolve-iso removed; on failure the resolve-iso is preserved.
+ *
+ * `runAgent(prompt, cwd)` is injected by the scheduler and MUST dispatch the merge
+ * agent WITHOUT acquiring globalSem (§7 deadlock avoidance). Setup failures
+ * (commit-tree / worktree add) throw → caller treats as merge-failed; a failed
+ * agent RUN resolves to `{ resolved: false }` with the iso kept.
+ */
+export async function resolveConflictWithAgent(
+  conflict: MergeBackConflict,
+  opts: {
+    containerPath: string
+    runAgent: (prompt: string, cwd: string) => Promise<void>
+    log?: Logger
+  },
+): Promise<ResolveConflictOutcome> {
+  const { containerPath, runAgent, log } = opts
+  const repoGit = conflict.canonWorktreePath // shared-ODB git dir for worktree/commit ops
+  // §6.2①: commit-tree the conflicted merged tree (worktree add needs a commit-ish),
+  // then check it out detached — the working tree now carries the conflict markers.
+  const cmt = await commitTree(repoGit, conflict.mergedTree, conflict.base, 'aw-conflict')
+  const suffix = conflict.worktreeDirName === '' ? 'repo' : conflict.worktreeDirName
+  const resolveIso = join(containerPath, `resolve-${suffix}`)
+  await runGit(repoGit, ['worktree', 'add', '--detach', resolveIso, cmt])
+
+  const manifest = parseConflictManifest(conflict.rawConflictOutput, conflict.worktreeDirName)
+  let resolved = false
+  let unresolved: MergeConflictEntry[] = manifest
+  try {
+    // §6.2②: run the merge agent in the resolve-iso (scheduler bypasses globalSem).
+    await runAgent(buildMergeResolvePrompt({ manifest }), resolveIso)
+    // §6.2③: framework self-check from observed worktree state.
+    const states = gatherResolvedStates(resolveIso, manifest)
+    const verdict = evaluateResolution(manifest, states)
+    resolved = verdict.resolved
+    unresolved = verdict.unresolved
+  } catch (err) {
+    log?.warn('merge agent run failed → treat as unresolved', {
+      resolveIso,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    resolved = false
+  }
+
+  if (!resolved) {
+    // §6.3: KEEP the resolve-iso (do NOT materialize markers into canon) — the
+    // canonical worktree stays clean for sibling merge-backs; human resolves here.
+    return { resolved: false, unresolved, resolveIsoPath: resolveIso }
+  }
+  // §6.2④: snapshot the resolution + materialize into the canonical worktree.
+  const resolvedTree = await snapshotFullState(resolveIso, { log })
+  const ours = await snapshotFullState(conflict.canonWorktreePath, { log })
+  const canonCurrentTree = await treeOf(conflict.canonWorktreePath, ours)
+  await materializeTree(conflict.canonWorktreePath, {
+    mergedTree: resolvedTree,
+    canonCurrentTree,
+    taskBaseHead: conflict.taskBaseHead,
+  })
+  // §6.2⑤: discard the resolve-iso (resolution now lives in canon).
+  await removeWorktree({ repoPath: repoGit, worktreePath: resolveIso, force: true }).catch(
+    (err) => {
+      log?.warn('resolve-iso remove failed (leaving for GC)', {
+        resolveIso,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    },
+  )
+  return { resolved: true, unresolved: [], resolveIsoPath: null }
+}
+
+/** Read each manifest path's state from the resolve-iso worktree (§6.2③ inputs). */
+function gatherResolvedStates(
+  resolveIso: string,
+  manifest: MergeConflictEntry[],
+): ResolvedPathState[] {
+  const out: ResolvedPathState[] = []
+  for (const e of manifest) {
+    const abs = join(resolveIso, e.path)
+    if (!existsSync(abs)) {
+      out.push({ worktreeDirName: e.worktreeDirName, path: e.path, present: false, content: null })
+      continue
+    }
+    const buf = readFileSync(abs)
+    // git's binary heuristic: a NUL byte ⟹ binary → no text markers to grep.
+    const content = buf.includes(0) ? null : buf.toString('utf8')
+    out.push({ worktreeDirName: e.worktreeDirName, path: e.path, present: true, content })
+  }
+  return out
 }

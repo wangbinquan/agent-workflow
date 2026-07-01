@@ -148,7 +148,6 @@ describe('reconcileSource', () => {
       name: 'agent-x',
       description: '',
       outputs: JSON.stringify(['result']),
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: '{}',
       skills: JSON.stringify(['pinned']),

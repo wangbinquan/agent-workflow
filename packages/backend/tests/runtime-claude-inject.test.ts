@@ -56,7 +56,6 @@ function depAgent(name: string, bodyMd: string, description = 'd'): Agent {
     name,
     description,
     outputs: [],
-    readonly: false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

@@ -41,7 +41,6 @@ export const InventoryAgentSchema = z.object({
   mode: z.string(),
   modelProviderId: z.string().nullable(),
   modelId: z.string().nullable(),
-  readonly: z.boolean(),
   source: z.string(),
 })
 export type InventoryAgent = z.infer<typeof InventoryAgentSchema>
@@ -123,11 +122,6 @@ function asNullableString(value: unknown): string | null {
   return String(value)
 }
 
-function asBool(value: unknown, fallback = false): boolean {
-  if (typeof value === 'boolean') return value
-  return fallback
-}
-
 function normalizeAgent(raw: unknown): InventoryAgent {
   const r = (raw ?? {}) as Record<string, unknown>
   return {
@@ -135,7 +129,6 @@ function normalizeAgent(raw: unknown): InventoryAgent {
     mode: asString(r.mode, 'unknown'),
     modelProviderId: asNullableString(r.modelProviderId),
     modelId: asNullableString(r.modelId),
-    readonly: asBool(r.readonly, false),
     source: asString(r.source, 'unknown'),
   }
 }

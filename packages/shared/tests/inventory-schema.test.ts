@@ -23,7 +23,6 @@ describe('InventorySnapshotSchema', () => {
           mode: 'primary',
           modelProviderId: 'anthropic',
           modelId: 'claude-opus-4-7',
-          readonly: false,
           source: 'inline',
         },
       ],
@@ -106,8 +105,7 @@ describe('InventorySnapshotSchema', () => {
         mode: 'primary',
         modelProviderId: null,
         modelId: null,
-        // readonly missing
-        source: 'inline',
+        // source missing
       }),
     ).toThrow()
   })

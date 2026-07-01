@@ -257,7 +257,6 @@ describe('skill service', () => {
       name: 'a1',
       description: '',
       outputs: '[]',
-      readonly: false,
       permission: '{}',
       skills: JSON.stringify(['foo']),
       frontmatterExtra: '{}',

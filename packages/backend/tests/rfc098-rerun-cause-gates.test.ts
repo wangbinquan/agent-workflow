@@ -68,6 +68,7 @@ const GATE2_EXPECTED: Record<RerunCause, boolean> = {
   'wrapper-init': false,
   'commit-push': false,
   'commit-push-session': false,
+  'merge-resolve': false, // RFC-130 internal merge-agent session — not a clarify rerun
   'io-virtual': false,
   'cross-clarify-guard': false,
 }

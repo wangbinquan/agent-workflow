@@ -46,7 +46,6 @@ const CODER: Agent = {
   name: 'coder',
   description: 'coder',
   outputs: ['software_design', 'test_design'],
-  readonly: false,
   skills: [],
   dependsOn: [],
   mcp: [],

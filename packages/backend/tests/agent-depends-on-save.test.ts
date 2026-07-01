@@ -38,7 +38,6 @@ async function seed(db: DbClient, ...rows: AgentSeed[]): Promise<void> {
       name: r.name,
       description: '',
       outputs: [],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],

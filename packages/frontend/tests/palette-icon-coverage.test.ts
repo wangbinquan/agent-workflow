@@ -16,7 +16,6 @@ const STUB_AGENT: Agent = {
   name: 'coder',
   description: 'writes code',
   outputs: ['code'],
-  readonly: false,
   syncOutputsOnIterate: true,
   permission: {},
   skills: [],

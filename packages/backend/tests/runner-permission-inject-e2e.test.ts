@@ -43,7 +43,6 @@ function makeAgent(permission: Record<string, unknown> = {}): Agent {
     name: 'test-agent',
     description: '',
     outputs: ['summary'],
-    readonly: true,
     syncOutputsOnIterate: true,
     permission,
     skills: [],

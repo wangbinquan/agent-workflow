@@ -153,7 +153,6 @@ async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
-    readonly: true, // readonly ⇒ 两分支真并行（writer 会被 writeSem 串行化）
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',

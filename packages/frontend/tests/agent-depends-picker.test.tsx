@@ -24,7 +24,6 @@ function fakeAgent(name: string, description = ''): Agent {
     name,
     description,
     outputs: [],
-    readonly: false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

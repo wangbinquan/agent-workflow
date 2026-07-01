@@ -71,7 +71,6 @@ function samplePayload(name: string): Record<string, unknown> {
     name,
     description: 'sample',
     outputs: ['out1', 'out2'],
-    readonly: false,
     syncOutputsOnIterate: true,
     model: 'anthropic/claude-opus-4-7',
     permission: { edit: 'deny' },

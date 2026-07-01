@@ -15,13 +15,12 @@ function mk(
   dependsOn: string[] = [],
   description = `desc:${name}`,
   skills: readonly string[] = [],
-  readonly = false,
   // RFC-030 follow-up — default [] keeps every existing test case meaningful;
   // new tests below pass non-empty names to exercise the MCP chip path.
   mcps: readonly string[] = [],
   plugins: readonly string[] = [],
 ): DependencyTreeAgent {
-  return { name, description, skills, mcps, plugins, readonly, dependsOn }
+  return { name, description, skills, mcps, plugins, dependsOn }
 }
 
 describe('buildDependencyTree', () => {
@@ -47,7 +46,7 @@ describe('buildDependencyTree', () => {
       mk('top', ['mid1', 'mid2']),
       mk('mid1', ['leaf']),
       mk('mid2', ['leaf']),
-      mk('leaf', [], 'desc:leaf', ['s1', 's2', 's3'], true),
+      mk('leaf', [], 'desc:leaf', ['s1', 's2', 's3']),
     ]
     const tree = buildDependencyTree(flat, 'top')
     expect(tree.children.map((c) => c.name)).toEqual(['mid1', 'mid2'])
@@ -56,10 +55,9 @@ describe('buildDependencyTree', () => {
     const leafViaMid2 = tree.children[1]!.children[0]
     expect(leafViaMid1!.name).toBe('leaf')
     expect(leafViaMid1!.duplicateRef).toBe(false)
-    // Even leaf nodes carry their skill names + readonly so the chip
-    // renders identically on the first sighting.
+    // Even leaf nodes carry their skill names so the chip renders identically
+    // on the first sighting.
     expect(leafViaMid1!.skills).toEqual(['s1', 's2', 's3'])
-    expect(leafViaMid1!.readonly).toBe(true)
 
     expect(leafViaMid2!.name).toBe('leaf')
     expect(leafViaMid2!.duplicateRef).toBe(true)
@@ -67,7 +65,6 @@ describe('buildDependencyTree', () => {
     // Duplicate leaves still carry the same chips so the rendered row is
     // visually consistent (just with `↑ see above` instead of recursion).
     expect(leafViaMid2!.skills).toEqual(['s1', 's2', 's3'])
-    expect(leafViaMid2!.readonly).toBe(true)
   })
 
   test('dangling name (in dependsOn but absent from flat) renders as missing placeholder', () => {

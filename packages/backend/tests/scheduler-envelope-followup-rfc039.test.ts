@@ -32,7 +32,6 @@ function makeAgent(): Agent {
     name: 'rfc039-agent',
     description: '',
     outputs: ['design'],
-    readonly: true,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

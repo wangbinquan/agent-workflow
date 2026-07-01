@@ -48,7 +48,6 @@ function samplePayload(name: string): Record<string, unknown> {
     name,
     description: 'sample',
     outputs: ['out1', 'out2'],
-    readonly: false,
     syncOutputsOnIterate: true,
     model: 'anthropic/claude-opus-4-7',
     permission: { edit: 'deny' },
@@ -76,7 +75,6 @@ describe('agent service', () => {
       name: 'auditor',
       description: 'audits code',
       outputs: ['findings', 'summary'],
-      readonly: true,
       syncOutputsOnIterate: true,
       permission: { edit: 'deny', bash: 'deny' },
       skills: ['go-conventions'],
@@ -88,7 +86,6 @@ describe('agent service', () => {
     })
     expect(created.id).toBeTruthy()
     expect(created.outputs).toEqual(['findings', 'summary'])
-    expect(created.readonly).toBe(true)
     expect(created.permission).toEqual({ edit: 'deny', bash: 'deny' })
     expect(created.skills).toEqual(['go-conventions'])
     expect(created.frontmatterExtra).toEqual({ custom: 'value' })
@@ -103,7 +100,6 @@ describe('agent service', () => {
       name: 'a',
       description: '',
       outputs: [],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
@@ -118,7 +114,6 @@ describe('agent service', () => {
         name: 'a',
         description: '',
         outputs: [],
-        readonly: false,
         syncOutputsOnIterate: true,
         permission: {},
         skills: [],
@@ -136,7 +131,6 @@ describe('agent service', () => {
       name: 'a',
       description: 'orig',
       outputs: ['x'],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: { edit: 'allow' },
       skills: ['s1'],
@@ -146,9 +140,8 @@ describe('agent service', () => {
       frontmatterExtra: {},
       bodyMd: 'body',
     })
-    const updated = await updateAgent(db, 'a', { description: 'new desc', readonly: true })
+    const updated = await updateAgent(db, 'a', { description: 'new desc' })
     expect(updated.description).toBe('new desc')
-    expect(updated.readonly).toBe(true)
     expect(updated.outputs).toEqual(['x']) // preserved
     expect(updated.permission).toEqual({ edit: 'allow' }) // preserved
     expect(updated.skills).toEqual(['s1']) // preserved
@@ -167,7 +160,6 @@ describe('agent service', () => {
       name: 'rt',
       description: 'orig',
       outputs: [],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
@@ -198,7 +190,6 @@ describe('agent service', () => {
       name: 'a',
       description: '',
       outputs: [],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
@@ -218,7 +209,6 @@ describe('agent service', () => {
       name: 'a',
       description: '',
       outputs: [],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
@@ -247,7 +237,6 @@ describe('agent service', () => {
       name: 'a',
       description: '',
       outputs: [],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
@@ -261,7 +250,6 @@ describe('agent service', () => {
       name: 'b',
       description: '',
       outputs: [],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
@@ -283,7 +271,6 @@ describe('agent service', () => {
       name: 'a',
       description: '',
       outputs: [],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
@@ -314,7 +301,6 @@ describe('agent service', () => {
     const leafSeed = {
       description: '',
       outputs: [] as string[],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [] as string[],
@@ -331,7 +317,6 @@ describe('agent service', () => {
       name: 'orchestrator',
       description: '',
       outputs: [],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
@@ -347,7 +332,6 @@ describe('agent service', () => {
       name: 'lonely',
       description: '',
       outputs: [],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
@@ -367,7 +351,6 @@ describe('agent service', () => {
       name: 'dupes',
       description: '',
       outputs: [],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
@@ -443,12 +426,11 @@ describe('agent HTTP routes', () => {
     await req(app, '/api/agents', { method: 'POST', body: JSON.stringify(samplePayload('a1')) })
     const res = await req(app, '/api/agents/a1', {
       method: 'PUT',
-      body: JSON.stringify({ description: 'updated', readonly: true }),
+      body: JSON.stringify({ description: 'updated' }),
     })
     expect(res.status).toBe(200)
     const updated = (await res.json()) as Record<string, unknown>
     expect(updated.description).toBe('updated')
-    expect(updated.readonly).toBe(true)
     expect(updated.outputs).toEqual(['out1', 'out2'])
 
     const miss = await req(app, '/api/agents/nope', {

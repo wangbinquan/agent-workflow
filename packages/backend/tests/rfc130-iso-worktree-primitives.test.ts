@@ -24,6 +24,7 @@ import {
   runGit,
   snapshotFullState,
 } from '../src/util/git'
+import { parseConflictManifest } from '../src/services/mergeAgent'
 
 async function initRepo(seed: Record<string, string> = { 'base.txt': 'base\n' }): Promise<string> {
   const dir = mkdtempSync(join(tmpdir(), 'aw-rfc130-'))
@@ -124,6 +125,42 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     const theirsC = await snapshotFullState(repo)
     const conflicted = await mergeTreeInMemory(repo, { base, ours, theirs: theirsC })
     expect(conflicted.conflicts).toContain('f.txt')
+    // The enriched result carries the raw CONFLICT messages (RFC-130 §6.2③).
+    expect(conflicted.rawConflictOutput).toContain('CONFLICT (content): Merge conflict in f.txt')
+    rmSync(repo, { recursive: true, force: true })
+  })
+
+  // RFC-130 §6.2③ — the producer→classifier seam against REAL git: enriched
+  // mergeTreeInMemory.rawConflictOutput → parseConflictManifest must recover the
+  // conflict CLASS for content / modify-delete / binary in one three-way merge.
+  // Binary + modify-delete are SILENT (no text markers) — the ONLY way to know
+  // they conflicted is these messages, so a regression that drops --name-only's
+  // replacement parsing would blind the merge agent to them.
+  test('mergeTreeInMemory.rawConflictOutput classifies content + modify-delete + binary via parseConflictManifest', async () => {
+    const bin0 = 'BIN\x00AAAA\n' // NUL byte ⟹ git treats it as binary
+    const repo = await initRepo({ 'f.txt': 'L1\nL2\nL3\n', 'del.txt': 'keep\n', 'b.bin': bin0 })
+    const base = await head(repo)
+    // ours: edit f.txt L2, DELETE del.txt, change b.bin
+    writeFileSync(join(repo, 'f.txt'), 'L1\nOURS\nL3\n')
+    rmSync(join(repo, 'del.txt'))
+    writeFileSync(join(repo, 'b.bin'), 'BIN\x00OURS\n')
+    const ours = await snapshotFullState(repo)
+    await runGit(repo, ['checkout', '--', '.'])
+    await runGit(repo, ['clean', '-fdq'])
+    // theirs: edit f.txt L2 differently, MODIFY del.txt, change b.bin differently
+    writeFileSync(join(repo, 'f.txt'), 'L1\nTHEIRS\nL3\n')
+    writeFileSync(join(repo, 'del.txt'), 'keep+theirs\n')
+    writeFileSync(join(repo, 'b.bin'), 'BIN\x00THEIRS\n')
+    const theirs = await snapshotFullState(repo)
+
+    const res = await mergeTreeInMemory(repo, { base, ours, theirs })
+    const manifest = parseConflictManifest(res.rawConflictOutput, 'repo')
+    const byPath = Object.fromEntries(manifest.map((e) => [e.path, e.type]))
+    expect(byPath['f.txt']).toBe('content')
+    expect(byPath['del.txt']).toBe('modify-delete')
+    expect(byPath['b.bin']).toBe('binary')
+    // conflicts[] (paths) stays back-compat: all three present.
+    expect(new Set(res.conflicts)).toEqual(new Set(['f.txt', 'del.txt', 'b.bin']))
     rmSync(repo, { recursive: true, force: true })
   })
 

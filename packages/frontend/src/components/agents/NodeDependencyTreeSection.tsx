@@ -21,7 +21,6 @@ interface ClosureSummary {
   mcp?: string[]
   /** RFC-031 — plugin names this agent itself references. */
   plugins?: string[]
-  readonly: boolean
   dependsOn: readonly string[]
   missing?: boolean
 }
@@ -33,7 +32,6 @@ function toTreeAgents(rows: readonly ClosureSummary[]): DependencyTreeAgent[] {
     skills: r.skills ?? [],
     mcps: r.mcp ?? [],
     plugins: r.plugins ?? [],
-    readonly: r.readonly,
     dependsOn: r.dependsOn,
   }))
 }

@@ -64,7 +64,6 @@ async function buildFixture(opts: {
     name: 'doc',
     description: '',
     outputs: JSON.stringify(['design']),
-    readonly: false,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',

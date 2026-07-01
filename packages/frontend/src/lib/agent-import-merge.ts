@@ -5,7 +5,7 @@
 //  - any key with `partial[key] !== undefined` overwrites current[key]
 //  - `frontmatterExtra` is shallow-merged (imported keys overwrite same-name
 //    current keys; current-only keys are preserved)
-//  - `outputs / outputKinds / readonly / syncOutputsOnIterate / skills` are
+//  - `outputs / outputKinds / syncOutputsOnIterate / skills` are
 //    never touched by the parser, so the current value is preserved as-is
 
 import type { AgentMarkdownParseResult, CreateAgent } from '@agent-workflow/shared'

@@ -32,7 +32,6 @@ const DEFAULT: CreateAgent = {
   name: '',
   description: '',
   outputs: [],
-  readonly: false,
   syncOutputsOnIterate: true,
   permission: {},
   skills: [],
@@ -175,13 +174,6 @@ export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
             onNodeClick={(n) => navigate({ to: '/agents/$name', params: { name: n } })}
           />
         </Field>
-
-        <Switch
-          checked={value.readonly === true}
-          onChange={(v) => patch('readonly', v)}
-          label={t('agentForm.fieldReadonly')}
-          hint={t('agentForm.fieldReadonlyHint')}
-        />
 
         <Switch
           checked={value.syncOutputsOnIterate !== false}

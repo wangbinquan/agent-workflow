@@ -17,7 +17,6 @@ const CODER: Agent = {
   name: 'coder',
   description: '',
   outputs: ['code', 'notes'],
-  readonly: false,
   syncOutputsOnIterate: true,
   permission: {},
   skills: [],

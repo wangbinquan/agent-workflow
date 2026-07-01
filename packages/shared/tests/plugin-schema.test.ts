@@ -193,7 +193,6 @@ describe('AgentSchema.plugins', () => {
       name: 'a',
       description: '',
       outputs: [],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],

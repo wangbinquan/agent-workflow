@@ -47,14 +47,12 @@ async function seedAgent(
     skills?: string[]
     mcp?: string[]
     description?: string
-    readonly?: boolean
   } = {},
 ): Promise<void> {
   await createAgent(db, {
     name,
     description: opts.description ?? '',
     outputs: [],
-    readonly: opts.readonly ?? false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: opts.skills ?? [],
@@ -74,7 +72,7 @@ describe('GET /api/agents/:name/closure', () => {
   })
 
   test('returns BFS-ordered agents with root first; closure summary fields populated', async () => {
-    await seedAgent(db, 'leaf', { skills: ['s1'], readonly: true, description: 'leaf-desc' })
+    await seedAgent(db, 'leaf', { skills: ['s1'], description: 'leaf-desc' })
     await seedAgent(db, 'mid', { dependsOn: ['leaf'], skills: ['s1', 's2'] })
     await seedAgent(db, 'top', { dependsOn: ['mid'], description: 'top-desc' })
 
@@ -89,7 +87,6 @@ describe('GET /api/agents/:name/closure', () => {
         skillCount: number
         mcp: string[]
         plugins: string[]
-        readonly: boolean
         dependsOn: string[]
         missing: boolean
       }>
@@ -105,7 +102,6 @@ describe('GET /api/agents/:name/closure', () => {
     expect(leaf.skillCount).toBe(1)
     expect(leaf.mcp).toEqual([])
     expect(leaf.plugins).toEqual([])
-    expect(leaf.readonly).toBe(true)
     expect(leaf.description).toBe('leaf-desc')
     expect(leaf.missing).toBe(false)
   })

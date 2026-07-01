@@ -116,7 +116,6 @@ async function buildHarness(): Promise<Harness> {
     name: 'worker',
     description: 'test',
     outputs: JSON.stringify(['out']),
-    readonly: true,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',

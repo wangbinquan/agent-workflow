@@ -87,7 +87,6 @@ async function setup(): Promise<Harness> {
     description: '',
     outputs: ['out'],
     outputKinds: { out: 'string' },
-    readonly: false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

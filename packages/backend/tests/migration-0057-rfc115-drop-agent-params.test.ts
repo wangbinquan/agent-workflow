@@ -77,6 +77,27 @@ function freezeAt(idx: number, outDbPath: string): void {
   }
 }
 
+/** Build (but do NOT apply) a temp migrations folder holding the first `idx + 1`
+ *  migrations. The caller runs migrate() against an EXISTING db so only the
+ *  not-yet-applied tail runs, isolating one migration's effect from later ones.
+ *  Needed because RFC-130's 0072 also drops an `agents` column, so applying the
+ *  full folder would confound 0057's column-delta assertion. */
+function buildPartialFolder(idx: number): { dir: string; cleanup: () => void } {
+  const full = readJournal()
+  const dir = mkdtempSync(join(tmpdir(), 'aw-mig0057-thru-'))
+  mkdirSync(join(dir, 'meta'), { recursive: true })
+  const partial: Journal = { ...full, entries: full.entries.slice(0, idx + 1) }
+  writeFileSync(join(dir, 'meta', '_journal.json'), JSON.stringify(partial, null, 2), 'utf-8')
+  for (const e of partial.entries) {
+    copyFileSync(join(MIGRATIONS, `${e.tag}.sql`), join(dir, `${e.tag}.sql`))
+    const snap = `${String(e.idx).padStart(4, '0')}_snapshot.json`
+    if (existsSync(join(MIGRATIONS, 'meta', snap))) {
+      copyFileSync(join(MIGRATIONS, 'meta', snap), join(dir, 'meta', snap))
+    }
+  }
+  return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) }
+}
+
 function agentCols(db: Database): string[] {
   return (db.query('PRAGMA table_info(agents)').all() as Array<{ name: string }>).map((c) => c.name)
 }
@@ -84,6 +105,12 @@ function agentCols(db: Database): string[] {
 const idx0056 = (): number => {
   const e = readJournal().entries.find((j) => j.tag.startsWith('0056'))
   if (e === undefined) throw new Error('0056 not in journal')
+  return e.idx
+}
+
+const idx0057 = (): number => {
+  const e = readJournal().entries.find((j) => j.tag.startsWith('0057'))
+  if (e === undefined) throw new Error('0057 not in journal')
   return e.idx
 }
 
@@ -107,11 +134,16 @@ describe('RFC-115 migration 0057 — DROP agent params (re-homed DBs)', () => {
       )
       pre.close()
 
-      // Apply 0057 (drizzle incremental by hash → only 0057 runs). FK OFF so the
+      // Apply migrations only THROUGH 0057 (partial folder), NOT the full folder:
+      // RFC-130's 0072 also drops an `agents` column (`readonly`), so applying
+      // everything would make the column-delta below 6, not 5. drizzle skips
+      // 0..0056 (already applied by hash) and runs just 0057. FK OFF so the
       // rebuild's INSERT..SELECT doesn't reject (agents has no real FK anyway).
       const up = new Database(dbPath)
       up.exec('PRAGMA foreign_keys = OFF;')
-      migrate(drizzle(up, {}), { migrationsFolder: MIGRATIONS })
+      const thru0057 = buildPartialFolder(idx0057())
+      migrate(drizzle(up, {}), { migrationsFolder: thru0057.dir })
+      thru0057.cleanup()
 
       const cols0057 = agentCols(up)
       for (const c of PARAM_COLS) expect(cols0057).not.toContain(c)

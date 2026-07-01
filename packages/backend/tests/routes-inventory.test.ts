@@ -122,7 +122,6 @@ describe('GET /api/tasks/:id/node-runs/:nodeRunId/inventory', () => {
           mode: 'primary',
           modelProviderId: 'anthropic',
           modelId: 'claude-opus-4-7',
-          readonly: false,
           source: 'inline',
         },
       ],

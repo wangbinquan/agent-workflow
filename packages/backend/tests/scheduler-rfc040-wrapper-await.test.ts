@@ -89,14 +89,12 @@ async function seedAgent(
   db: DbClient,
   name: string,
   outputs: string[] = ['design'],
-  readonly = true,
 ): Promise<void> {
   await db.insert(agents).values({
     id: ulid(),
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
-    readonly,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',
@@ -395,7 +393,7 @@ describe('RFC-040 wrapper-git bubbles awaiting_human (clarify inside git wrapper
   afterEach(() => h.cleanup())
 
   test('agent inside wrapper-git asks clarify → no git_diff written, baseline persisted', async () => {
-    await seedAgent(h.db, 'designer', ['design'], false)
+    await seedAgent(h.db, 'designer', ['design'])
     const def: WorkflowDefinition = {
       $schema_version: 3,
       inputs: [{ kind: 'text', key: 'req', label: 'r' }],
@@ -467,7 +465,7 @@ describe('RFC-040 wrapper-git bubbles awaiting_human (clarify inside git wrapper
   })
 
   test('resume after answer: wrapper-git reuses the same row, writes git_diff once', async () => {
-    await seedAgent(h.db, 'designer', ['design'], false)
+    await seedAgent(h.db, 'designer', ['design'])
     const def: WorkflowDefinition = {
       $schema_version: 3,
       inputs: [{ kind: 'text', key: 'req', label: 'r' }],
@@ -580,7 +578,7 @@ describe('RFC-040 nested wrapper-git ∋ wrapper-loop ∋ {agent, clarify}', () 
   afterEach(() => h.cleanup())
 
   test('inner loop bubble propagates through outer git wrapper — both park, no diff', async () => {
-    await seedAgent(h.db, 'designer', ['design'], false)
+    await seedAgent(h.db, 'designer', ['design'])
     const def: WorkflowDefinition = {
       $schema_version: 3,
       inputs: [{ kind: 'text', key: 'req', label: 'r' }],

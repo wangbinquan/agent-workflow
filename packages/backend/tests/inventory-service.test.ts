@@ -121,7 +121,7 @@ describe('readSnapshotFromRunDir — file reading', () => {
       JSON.stringify({
         schemaVersion: 1,
         capturedAt: 1700000000999,
-        agents: [{ name: 'reviewer', mode: 'primary', readonly: false, source: 'inline' }],
+        agents: [{ name: 'reviewer', mode: 'primary', source: 'inline' }],
         skills: [],
         // dump plugin already transcodes to top-level `type`; tests the
         // services/normalize path, not the SDK→inventory mapping (that's

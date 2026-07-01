@@ -75,7 +75,6 @@ async function seedAgentWithDefaults(
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
-    readonly: true,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',

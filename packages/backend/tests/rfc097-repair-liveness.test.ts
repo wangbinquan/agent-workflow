@@ -124,7 +124,6 @@ async function seedInterruptedTask(h: LiveHarness): Promise<string> {
     name: 'slow',
     description: 'test',
     outputs: JSON.stringify(['out']),
-    readonly: true,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',

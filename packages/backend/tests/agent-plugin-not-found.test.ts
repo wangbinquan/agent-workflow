@@ -38,7 +38,6 @@ function agentInput(name: string, plugins: string[] = []): Parameters<typeof cre
     name,
     description: '',
     outputs: [],
-    readonly: false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

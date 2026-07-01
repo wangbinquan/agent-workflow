@@ -75,7 +75,6 @@ async function buildHarness(opts?: {
     name: 'doc',
     description: '',
     outputs: JSON.stringify(['docpath', 'sidecar']),
-    readonly: false,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',

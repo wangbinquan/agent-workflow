@@ -106,7 +106,6 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     name: agentName,
     description: 'contract-suite seed',
     outputs: JSON.stringify(['answer']),
-    readonly: true,
   })
   await db.insert(skills).values({
     id: ulid(),

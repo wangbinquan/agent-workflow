@@ -36,7 +36,6 @@ const CODER: Agent = {
   name: 'coder',
   description: '',
   outputs: ['code'],
-  readonly: false,
   syncOutputsOnIterate: true,
   permission: {},
   skills: [],

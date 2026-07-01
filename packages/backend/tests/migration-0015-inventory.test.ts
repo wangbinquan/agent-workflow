@@ -83,7 +83,6 @@ describe('migration 0015 (RFC-029 node_runs.inventory_snapshot_json)', () => {
           mode: 'primary',
           modelProviderId: 'anthropic',
           modelId: 'claude-opus-4-7',
-          readonly: false,
           source: 'inline',
         },
       ],

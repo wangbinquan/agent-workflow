@@ -142,18 +142,12 @@ async function buildHarness(slug: string): Promise<Harness> {
   }
 }
 
-async function seedAgent(
-  db: DbClient,
-  name: string,
-  outputs: string[],
-  readonly: boolean,
-): Promise<void> {
+async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
   await db.insert(agents).values({
     id: ulid(),
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
-    readonly,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',
@@ -217,8 +211,8 @@ describe('AUDIT S-4 current-behavior lock: wrapper-git baseline = HEAD only, no 
 
   test('S-4a sequential wrapper-git pair: second wrapper git_diff is POLLUTED by first stage uncommitted file', async () => {
     h = await buildHarness('seq')
-    await seedAgent(h.db, 'coder', ['summary'], false)
-    await seedAgent(h.db, 'fixer', ['summary'], false)
+    await seedAgent(h.db, 'coder', ['summary'])
+    await seedAgent(h.db, 'fixer', ['summary'])
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
@@ -314,7 +308,7 @@ describe('AUDIT S-4 current-behavior lock: wrapper-git baseline = HEAD only, no 
 
   test('S-4b git-in-loop: iteration-1 git_diff is the CUMULATIVE union of iterations 0..1, not that round alone', async () => {
     h = await buildHarness('loop')
-    await seedAgent(h.db, 'audit', ['findings'], false)
+    await seedAgent(h.db, 'audit', ['findings'])
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],

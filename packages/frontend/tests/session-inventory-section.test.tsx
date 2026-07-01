@@ -53,7 +53,6 @@ const CAPTURED: InventorySnapshot = {
       mode: 'primary',
       modelProviderId: 'anthropic',
       modelId: 'claude-opus-4-7',
-      readonly: false,
       source: 'inline',
     },
     {
@@ -61,7 +60,6 @@ const CAPTURED: InventorySnapshot = {
       mode: 'subagent',
       modelProviderId: null,
       modelId: null,
-      readonly: true,
       source: 'project',
     },
   ],

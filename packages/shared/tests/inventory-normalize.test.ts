@@ -18,10 +18,7 @@ describe('normalizeInventoryRaw', () => {
 
   test('agents: missing fields → defaults; sorted by name', () => {
     const out = normalizeInventoryRaw({
-      agents: [
-        { name: 'zeta' },
-        { name: 'alpha', mode: 'subagent', readonly: true, source: 'project' },
-      ],
+      agents: [{ name: 'zeta' }, { name: 'alpha', mode: 'subagent', source: 'project' }],
     })
     expect(out.agents.map((a) => a.name)).toEqual(['alpha', 'zeta'])
     expect(out.agents[0]).toEqual({
@@ -29,11 +26,9 @@ describe('normalizeInventoryRaw', () => {
       mode: 'subagent',
       modelProviderId: null,
       modelId: null,
-      readonly: true,
       source: 'project',
     })
     expect(out.agents[1]!.mode).toBe('unknown')
-    expect(out.agents[1]!.readonly).toBe(false)
   })
 
   test('skills: nullable path & description preserved', () => {

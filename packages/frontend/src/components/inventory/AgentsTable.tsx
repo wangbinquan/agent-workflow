@@ -17,7 +17,6 @@ export function AgentsTable({ agents }: { agents: readonly InventoryAgent[] }) {
         <col className="col-name" />
         <col className="col-mode" />
         <col className="col-model" />
-        <col className="col-ro" />
         <col className="col-source" />
       </colgroup>
       <thead>
@@ -25,7 +24,6 @@ export function AgentsTable({ agents }: { agents: readonly InventoryAgent[] }) {
           <th>{t('nodeDrawer.inventory.col.name')}</th>
           <th>{t('nodeDrawer.inventory.col.mode')}</th>
           <th>{t('nodeDrawer.inventory.col.model')}</th>
-          <th>{t('nodeDrawer.inventory.col.readonly')}</th>
           <th>{t('nodeDrawer.inventory.col.source')}</th>
         </tr>
       </thead>
@@ -39,7 +37,6 @@ export function AgentsTable({ agents }: { agents: readonly InventoryAgent[] }) {
                 ? `${a.modelProviderId ?? '?'} / ${a.modelId ?? '?'}`
                 : '—'}
             </td>
-            <td>{a.readonly ? '✓' : ''}</td>
             <td>{sourceLabel(a.source, t)}</td>
           </tr>
         ))}

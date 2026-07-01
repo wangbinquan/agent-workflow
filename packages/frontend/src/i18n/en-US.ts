@@ -553,7 +553,7 @@ export const enUS: Resources = {
       "It looks like a fresh setup — there aren't any agents or workflows yet. Follow these four steps to build a minimal pipeline.",
     step1Title: '1. Create your first agent',
     step1Body:
-      "Name it 'coder', set outputs to [code], leave readonly off, and paste any short instruction into the prompt body.",
+      "Name it 'coder', set outputs to [code], and paste any short instruction into the prompt body.",
     step1Cta: 'Create agent →',
     step2Title: '2. (Optional) add a skill',
     step2Body:
@@ -664,7 +664,6 @@ export const enUS: Resources = {
     colName: 'Name',
     colDescription: 'Description',
     colOutputs: 'Outputs',
-    colReadonly: 'Read-only',
     colRuntime: 'Runtime',
     runtimeDefaultTag: 'default',
     loadingAgent: 'Loading agent…',
@@ -1695,8 +1694,6 @@ export const enUS: Resources = {
     pluginsPickerEmpty: 'No plugins available (all added / none registered)',
     pluginsPickerLoadFailed: 'Failed to load plugin list; you can still type names below.',
     fieldDependencyTree: 'Dependency tree (preview)',
-    fieldReadonly: 'Read-only',
-    fieldReadonlyHint: 'Read-only agents can run concurrently in the same task; writers serialize.',
     fieldSyncOutputsOnIterate: 'Sync-refresh sibling documents when one is returned for revision',
     fieldSyncOutputsOnIterateHint:
       'Only applies when this agent emits ≥ 2 markdown / markdown_file outputs. When off, an iterate decision regenerates only the reviewed document; siblings keep their previous version.',
@@ -1718,8 +1715,7 @@ export const enUS: Resources = {
     fieldPermissionHint: 'opencode permission object; pass-through.',
     permissionPlaceholder: '{"edit":"allow","webfetch":"deny"}',
     fieldFrontmatterExtra: 'Extra frontmatter (JSON)',
-    fieldFrontmatterExtraHint:
-      'Any keys other than name/description/outputs/readonly/model/variant/temperature/steps/permission/skills.',
+    fieldFrontmatterExtraHint: 'Any keys other than name/description/outputs/permission/skills.',
     fieldBody: 'Body (Markdown)',
     bodyPlaceholder: 'Agent system prompt body. Markdown.',
     rawBodySummary: 'Raw body (no preview)',
@@ -1777,8 +1773,6 @@ export const enUS: Resources = {
     skills: 'Skills: {{names}}',
     mcps: 'MCPs: {{names}}',
     plugins: 'Plugins: {{names}}',
-    readonly: 'readonly',
-    writes: 'writes',
     seeAbove: '↑ see above',
     cycleHeading: 'Dependency cycle detected:',
     ariaTreeLabel: 'Dependency tree',
@@ -1860,7 +1854,6 @@ export const enUS: Resources = {
         name: 'Name',
         mode: 'Mode',
         model: 'Model',
-        readonly: 'Readonly',
         source: 'Source',
         path: 'Path',
         desc: 'Description',

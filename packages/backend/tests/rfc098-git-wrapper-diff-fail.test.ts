@@ -102,7 +102,6 @@ async function seedTask(h: Harness): Promise<string> {
     name: 'probe',
     description: 'test',
     outputs: JSON.stringify(['summary']),
-    readonly: true,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',

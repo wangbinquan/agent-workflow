@@ -30,7 +30,6 @@ describe('mergeAgentImport', () => {
     // untouched defaults preserved
     expect(merged.outputs).toEqual([])
     expect(merged.skills).toEqual([])
-    expect(merged.readonly).toBe(false)
   })
 
   test('shallow-merges frontmatterExtra: distinct keys preserved', () => {
@@ -52,12 +51,11 @@ describe('mergeAgentImport', () => {
     expect(merged.bodyMd).toBe('new body')
   })
 
-  test('outputs / skills / readonly never touched by parser are preserved', () => {
+  test('outputs / skills never touched by parser are preserved', () => {
     const current: CreateAgent = {
       ...emptyAgent(),
       outputs: ['p1'],
       skills: ['s1'],
-      readonly: true,
     }
     const merged = mergeAgentImport(
       current,
@@ -65,7 +63,6 @@ describe('mergeAgentImport', () => {
     )
     expect(merged.outputs).toEqual(['p1'])
     expect(merged.skills).toEqual(['s1'])
-    expect(merged.readonly).toBe(true)
   })
 })
 

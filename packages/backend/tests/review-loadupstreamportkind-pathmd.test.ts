@@ -25,7 +25,6 @@ function agentPayload(name: string, outputKinds: Record<string, string>) {
     name,
     description: '',
     outputs: Object.keys(outputKinds),
-    readonly: false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

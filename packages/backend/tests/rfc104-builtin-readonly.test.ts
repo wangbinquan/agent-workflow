@@ -63,7 +63,6 @@ function agentPayload(name: string): Record<string, unknown> {
     name,
     description: 'sample',
     outputs: ['out1'],
-    readonly: false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

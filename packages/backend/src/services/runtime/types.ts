@@ -115,8 +115,6 @@ export interface SystemAgentSpawnContext {
   systemPrompt: string
   /** Model from the resolved runtime profile; null/'' → the runtime's own default. */
   model?: string | null
-  /** readonly → claude write-tool gate (opencode ignores). */
-  readonly?: boolean
   /** User prompt — opencode positional argv / claude stdin. */
   prompt: string
   /** Subprocess cwd (distiller: a throwaway temp dir). */

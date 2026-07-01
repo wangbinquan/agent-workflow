@@ -31,7 +31,6 @@ const SIGNALER: Agent = {
   description: '',
   outputs: ['done', 'report'],
   outputKinds: { done: 'signal' },
-  readonly: false,
   syncOutputsOnIterate: true,
   permission: {},
   skills: [],

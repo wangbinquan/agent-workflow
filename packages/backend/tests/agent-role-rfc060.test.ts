@@ -26,7 +26,6 @@ function basePayload(name: string) {
     name,
     description: '',
     outputs: ['report'],
-    readonly: false,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],

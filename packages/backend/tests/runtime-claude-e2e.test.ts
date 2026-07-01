@@ -34,7 +34,6 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     name: 'claude-agent',
     description: 'a claude agent',
     outputs: ['summary'],
-    readonly: true,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],
@@ -169,10 +168,10 @@ describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
     expect(row?.status).toBe('done')
   })
 
-  test('argv contract: -p / stream-json / --append-system-prompt-file(=bodyMd) / --model / --disallowed-tools', async () => {
+  test('argv contract: -p / stream-json / --append-system-prompt-file(=bodyMd) / --model', async () => {
     // RFC-113: --model now comes from the RUNTIME profile (runtimeParams), not
-    // agent.model. readonly stays an agent concern.
-    const agent = makeAgent({ readonly: true })
+    // agent.model.
+    const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     const argvFile = join(h.appHome, 'argv.jsonl')
     const sysFile = join(h.appHome, 'sys.md')
@@ -206,7 +205,6 @@ describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
     expect(argv.join(' ')).toContain('--permission-mode bypassPermissions')
     expect(argv.join(' ')).toContain('--model opus')
     expect(argv).toContain('--append-system-prompt-file')
-    expect(argv).toContain('--disallowed-tools') // readonly agent
     // persona = agent.bodyMd written to the system-prompt file (D6 append form)
     expect(readFileSync(sysFile, 'utf-8')).toBe('You are a Claude-driven test agent.')
     // prompt delivered over stdin (D12), equals the rendered user prompt
@@ -214,8 +212,8 @@ describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
     expect(result.prompt).toContain('<workflow-output>')
   })
 
-  test('non-readonly agent omits --disallowed-tools; no --model when unset', async () => {
-    const agent = makeAgent({ readonly: false })
+  test('agent omits --model when unset', async () => {
+    const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     const argvFile = join(h.appHome, 'argv2.jsonl')
     await withEnv(
@@ -226,7 +224,6 @@ describe('runNode — claude-code runtime (RFC-111 PR-B)', () => {
       () => runClaude({ agent, nodeRunId, h }),
     )
     const argv = JSON.parse(readFileSync(argvFile, 'utf-8').trim()) as string[]
-    expect(argv).not.toContain('--disallowed-tools')
     expect(argv).not.toContain('--model')
   })
 

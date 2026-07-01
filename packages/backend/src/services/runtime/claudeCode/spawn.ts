@@ -30,8 +30,6 @@ export interface ClaudeSpawnContext {
   systemPromptText: string
   /** claude --model (alias or full id). Omitted → claude's own default. */
   model?: string
-  /** readonly agent → best-effort write-tool gate (D7). */
-  readonly?: boolean
   /** RFC-026 clarify-inline rerun → --resume <id> (PR-C wires this). */
   resumeSessionId?: string
   /** Per-attempt config-dir root; `.claude/` is created under it. */
@@ -55,9 +53,6 @@ export interface ClaudeSpawnContext {
   bridgeCredentials?: boolean
   log?: Logger
 }
-
-/** Best-effort readonly write-tool denial (D7 — not a sandbox; Bash/MCP still write). */
-export const CLAUDE_READONLY_DISALLOWED_TOOLS = 'Write Edit MultiEdit NotebookEdit'
 
 export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
   const log: Logger = ctx.log ?? createLogger('claude-code')
@@ -84,7 +79,6 @@ export function buildClaudeSpawn(ctx: ClaudeSpawnContext): SpawnPlan {
   ]
   if (ctx.model !== undefined && ctx.model.length > 0) cmd.push('--model', ctx.model)
   cmd.push('--append-system-prompt-file', systemPromptFile)
-  if (ctx.readonly === true) cmd.push('--disallowed-tools', CLAUDE_READONLY_DISALLOWED_TOOLS)
   // RFC-111 PR-C: MCP via --mcp-config (+ --strict-mcp-config so repo .mcp.json
   // can't shadow the platform set, mirroring opencode's inline-config precedence).
   if (ctx.mcpConfigJson !== undefined && ctx.mcpConfigJson.length > 0) {

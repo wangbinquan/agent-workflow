@@ -132,7 +132,6 @@ function makeCapturedSnapshot(label = 'coder'): InventorySnapshot {
         mode: 'primary',
         modelProviderId: 'anthropic',
         modelId: 'claude-opus-4-7',
-        readonly: false,
         source: 'inline',
       },
     ],

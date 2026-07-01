@@ -69,18 +69,12 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function seedAgent(
-  db: DbClient,
-  name: string,
-  outputs: string[] = ['main'],
-  readonly = true,
-): Promise<void> {
+async function seedAgent(db: DbClient, name: string, outputs: string[] = ['main']): Promise<void> {
   await db.insert(agents).values({
     id: ulid(),
     name,
     description: 'test',
     outputs: JSON.stringify(outputs),
-    readonly,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',

@@ -63,7 +63,6 @@ const BASE_AGENT_FIELDS = {
   name: 'reporter',
   description: '',
   outputs: ['report'],
-  readonly: false,
   syncOutputsOnIterate: true,
   permission: {},
   skills: [],

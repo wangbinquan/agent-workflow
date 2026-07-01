@@ -64,7 +64,6 @@ async function setup(
     name: 'designer',
     description: 't',
     outputs: JSON.stringify(['design']),
-    readonly: true,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',

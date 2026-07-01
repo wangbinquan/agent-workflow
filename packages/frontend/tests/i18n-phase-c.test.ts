@@ -10,10 +10,8 @@ describe('Phase C bundles', () => {
   test('agentForm core keys reachable both locales', () => {
     setLanguage('en-US')
     expect(i18n.t('agentForm.fieldName')).toBe('Name')
-    expect(i18n.t('agentForm.fieldReadonlyHint')).toContain('serialize')
     setLanguage('zh-CN')
     expect(i18n.t('agentForm.fieldName')).toBe('名称')
-    expect(i18n.t('agentForm.fieldReadonlyHint')).toContain('串行')
   })
 
   test('nodeDrawer stats column titles', () => {

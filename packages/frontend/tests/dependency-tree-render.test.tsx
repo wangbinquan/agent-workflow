@@ -14,13 +14,12 @@ function mk(
   dependsOn: string[] = [],
   description = `desc:${name}`,
   skills: readonly string[] = [],
-  readonly = false,
   // RFC-030 follow-up — default [] (no MCP chip), explicit names in the
   // dedicated MCP-chip test case below.
   mcps: readonly string[] = [],
   plugins: readonly string[] = [],
 ): DependencyTreeAgent {
-  return { name, description, skills, mcps, plugins, readonly, dependsOn }
+  return { name, description, skills, mcps, plugins, dependsOn }
 }
 
 afterEach(() => {
@@ -62,14 +61,7 @@ describe('<DependencyTree>', () => {
   test('renders MCP chip with names when mcps non-empty, omits it when empty', () => {
     const flat = [
       mk('top', ['mid']),
-      mk(
-        'mid',
-        ['leaf'],
-        'desc:mid',
-        /* skills */ [],
-        /* readonly */ false,
-        /* mcps */ ['m-a', 'm-b'],
-      ),
+      mk('mid', ['leaf'], 'desc:mid', /* skills */ [], /* mcps */ ['m-a', 'm-b']),
       mk('leaf'),
     ]
     const tree = buildDependencyTree(flat, 'top')
@@ -102,15 +94,7 @@ describe('<DependencyTree>', () => {
   test('renders Plugins chip with names when plugins non-empty, omits it when empty', () => {
     const flat = [
       mk('top', ['mid']),
-      mk(
-        'mid',
-        [],
-        'desc:mid',
-        /* skills */ [],
-        /* readonly */ false,
-        /* mcps */ [],
-        /* plugins */ ['plug-x'],
-      ),
+      mk('mid', [], 'desc:mid', /* skills */ [], /* mcps */ [], /* plugins */ ['plug-x']),
     ]
     const tree = buildDependencyTree(flat, 'top')
     render(<DependencyTree tree={tree} />)

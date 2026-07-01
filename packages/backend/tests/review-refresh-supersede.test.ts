@@ -57,7 +57,6 @@ describe('RFC-074 — review awaiting-refresh: supersede + recomment-drop + v(n+
       name: 'doc',
       description: '',
       outputs: JSON.stringify(['docpath']),
-      readonly: false,
       permission: '{}',
       skills: '[]',
       frontmatterExtra: '{}',

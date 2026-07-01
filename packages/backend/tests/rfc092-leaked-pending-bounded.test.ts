@@ -284,7 +284,6 @@ describe('RFC-092 集成层 — 泄漏 pending 行在真实 runTask 下有界终
       name: 'designer',
       description: 'test',
       outputs: JSON.stringify(['design']),
-      readonly: true,
       permission: '{}',
       skills: '[]',
       frontmatterExtra: '{}',

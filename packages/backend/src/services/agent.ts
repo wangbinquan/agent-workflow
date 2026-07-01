@@ -27,14 +27,14 @@ export async function getAgent(db: DbClient, name: string): Promise<Agent | null
 
 /**
  * RFC-127 借壳: the "effective agent" for a borrowed reassignment run. Combines
- * the borrowed agent X's BRAIN (body/model/runtime/readonly/skills/permission/…)
+ * the borrowed agent X's BRAIN (body/model/runtime/skills/permission/…)
  * with the ORIGINAL node P's OUTPUT PORT CONTRACT (outputs/outputKinds). The
  * borrowed run keeps node_id=P, so downstream — which consumes upstream by
  * node_id — receives P's ports naturally. runNode renders the output protocol,
  * validates the envelope, and persists ports all via `agent.outputs` /
  * `agent.outputKinds`, so passing THIS object makes the whole output path honor
  * P's contract while X does the work (Codex design-gate F2). Everything else
- * (runtime/session/skill/mcp/readonly) follows X.
+ * (runtime/session/skill/mcp) follows X.
  */
 export function buildBorrowedAgent(borrowed: Agent, nodeAgent: Agent): Agent {
   return { ...borrowed, outputs: nodeAgent.outputs, outputKinds: nodeAgent.outputKinds }
@@ -94,7 +94,6 @@ export async function createAgent(
     name: input.name,
     description: input.description,
     outputs: JSON.stringify(input.outputs),
-    readonly: input.readonly,
     syncOutputsOnIterate: input.syncOutputsOnIterate,
     runtime: input.runtime ?? null, // RFC-111
     permission: JSON.stringify(input.permission),
@@ -154,7 +153,6 @@ export async function updateAgent(db: DbClient, name: string, patch: UpdateAgent
   const set: Partial<typeof agents.$inferInsert> = { updatedAt: Date.now() }
   if (patch.description !== undefined) set.description = patch.description
   if (patch.outputs !== undefined) set.outputs = JSON.stringify(patch.outputs)
-  if (patch.readonly !== undefined) set.readonly = patch.readonly
   if (patch.syncOutputsOnIterate !== undefined)
     set.syncOutputsOnIterate = patch.syncOutputsOnIterate
   if (patch.permission !== undefined) set.permission = JSON.stringify(patch.permission)
@@ -527,7 +525,6 @@ function rowToAgent(row: AgentRow): Agent {
     name: row.name,
     description: row.description,
     outputs: JSON.parse(row.outputs) as string[],
-    readonly: row.readonly,
     syncOutputsOnIterate: row.syncOutputsOnIterate,
     permission: JSON.parse(row.permission) as Record<string, unknown>,
     skills: JSON.parse(row.skills) as string[],

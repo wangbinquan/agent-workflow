@@ -58,7 +58,6 @@ describe('RFC-029 i18n — inventory keys', () => {
         'name',
         'mode',
         'model',
-        'readonly',
         'source',
         'path',
         'desc',

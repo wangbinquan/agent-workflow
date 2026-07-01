@@ -69,7 +69,6 @@ const AGENT_BODY = {
   name: 'secret-agent',
   description: 'private things',
   outputs: ['result'],
-  readonly: true,
   syncOutputsOnIterate: true,
   permission: {},
   skills: [],

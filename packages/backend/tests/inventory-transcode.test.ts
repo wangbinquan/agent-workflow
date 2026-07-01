@@ -27,18 +27,8 @@ describe('transcodeAgent', () => {
       mode: 'primary',
       modelProviderId: 'anthropic',
       modelId: 'claude-opus-4-7',
-      readonly: false,
       source: 'inline',
     })
-  })
-
-  test('readonly derived from permission.edit==="deny" && permission.bash==="deny"', () => {
-    expect(transcodeAgent({ name: 'r', permission: { edit: 'deny', bash: 'deny' } }).readonly).toBe(
-      true,
-    )
-    expect(
-      transcodeAgent({ name: 'r', permission: { edit: 'deny', bash: 'allow' } }).readonly,
-    ).toBe(false)
   })
 
   test('falls back to (unnamed)/unknown for missing fields', () => {
@@ -47,7 +37,6 @@ describe('transcodeAgent', () => {
       mode: 'unknown',
       modelProviderId: null,
       modelId: null,
-      readonly: false,
       source: 'unknown',
     })
   })

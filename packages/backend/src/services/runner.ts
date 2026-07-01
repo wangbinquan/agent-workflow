@@ -845,7 +845,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       systemPromptText,
       // RFC-113 (Codex P1-3): claude's model is the RUNTIME's, not the agent's.
       model: opts.runtimeParams?.model ?? undefined,
-      readonly: opts.agent.readonly,
       resumeSessionId: opts.resumeSessionId,
       attemptDir: runRoot,
       worktreePath: opts.worktreePath,
@@ -1688,7 +1687,7 @@ export function buildInlineAgentEntry(
     // Platform-only fields live under `options` so opencode passes them through
     // without trying to parse. The runner doesn't read these back; they exist
     // for observability when an operator dumps `opencode debug agent`.
-    options: { outputs: agent.outputs, readonly: agent.readonly },
+    options: { outputs: agent.outputs },
   }
   // RFC-113: emit only the params the runtime actually set (NULL = omit, so the
   // binary uses its own default — a distinct, preserved profile).

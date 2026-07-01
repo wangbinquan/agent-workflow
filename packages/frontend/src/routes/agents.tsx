@@ -72,7 +72,6 @@ function AgentsPage() {
               <th>{t('agents.colName')}</th>
               <th>{t('agents.colDescription')}</th>
               <th>{t('agents.colOutputs')}</th>
-              <th>{t('agents.colReadonly')}</th>
               <th>{t('agents.colRuntime')}</th>
               <th aria-label={t('common.ariaActions')} />
             </tr>
@@ -112,7 +111,6 @@ function AgentsPage() {
                     </span>
                   )}
                 </td>
-                <td>{a.readonly ? t('common.yes') : t('common.no')}</td>
                 <td className="data-table__nowrap">
                   {a.runtime ?? defaultRuntimeName ?? t('common.emDash')}
                   {a.runtime == null && defaultRuntimeName != null && (

@@ -121,9 +121,6 @@ function NodeLabel({
               {t('dependencyTree.plugins', { names: node.plugins.join(', ') })}
             </span>
           )}
-          <span className="dep-tree__chip">
-            {node.readonly ? t('dependencyTree.readonly') : t('dependencyTree.writes')}
-          </span>
         </span>
       )}
       {node.duplicateRef && (

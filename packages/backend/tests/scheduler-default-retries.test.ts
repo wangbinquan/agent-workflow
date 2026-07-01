@@ -47,7 +47,6 @@ async function seedAgent(db: DbClient, name: string) {
     name,
     description: '',
     outputs: JSON.stringify(['design']),
-    readonly: true,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',

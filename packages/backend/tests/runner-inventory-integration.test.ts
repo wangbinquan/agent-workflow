@@ -29,7 +29,6 @@ function makeAgent(): Agent {
     name: 'inv-agent',
     description: 'inventory test agent',
     outputs: ['summary'],
-    readonly: true,
     syncOutputsOnIterate: true,
     permission: {},
     skills: [],
@@ -132,7 +131,7 @@ describe('runNode RFC-029 inventory snapshot', () => {
       JSON.stringify({
         schemaVersion: 1,
         capturedAt: 1700000000000,
-        agents: [{ name: 'inv-agent', mode: 'primary', readonly: false, source: 'inline' }],
+        agents: [{ name: 'inv-agent', mode: 'primary', source: 'inline' }],
         skills: [],
         mcps: [{ name: 'memcache', type: 'local', status: 'connected', hint: null }],
         plugins: [{ specifier: 'file:///tmp/x.mjs', source: 'inline' }],

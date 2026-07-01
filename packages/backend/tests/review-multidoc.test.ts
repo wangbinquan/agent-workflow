@@ -75,7 +75,6 @@ describe('RFC-079 — review multi-document mode', () => {
       name: 'caseGen',
       description: '',
       outputs: JSON.stringify(['cases']),
-      readonly: false,
       permission: '{}',
       skills: '[]',
       // RFC-079: list<path<md>> upstream port → multi-document review.

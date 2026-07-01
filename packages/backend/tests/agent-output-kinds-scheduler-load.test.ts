@@ -38,7 +38,6 @@ describe('scheduler agent-load hydrates outputKinds (regression for task 01KS045
       name: 'doc',
       description: '',
       outputs: ['docpath'],
-      readonly: false,
       syncOutputsOnIterate: true,
       permission: {},
       skills: [],
