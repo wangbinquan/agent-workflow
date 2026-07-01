@@ -33,7 +33,7 @@
 ## 非目标
 
 - **不改 agent 怎么提问**（`<workflow-clarify>` envelope 协议、mandatory ask-back 机制不变）。
-- **不改 review / prior-output / 借壳改派**（RFC-119/127/131 T4 的行为保持；本 RFC 只统一「注入」）。
+- **不改 review / prior-output**（RFC-119 行为保持）。**借壳改派勘误（research 揪出：§非目标原判「借壳保持」有误）**：自动下发删 immediate mint，顺带把 self/questioner 改派从 borrow（home 跑 X 脑）**统一为 T4 move 语义**（X 跑自己）——**行为变更**（immediate 账本借壳分支死；dispatched 两账本 RFC-131 T4 已去借壳）。`resolveBorrowForNode`/`buildBorrowedAgent` 回落 null 成死代码，RFC-132 **不主动删**（留后续 RFC、保窄边界）。见 design §6。
 - **不改 RFC-099 归属隔离**（问题渲染仍零 attribution）。
 - **不引入新的 clarify 能力**——纯粹是把现有行为收敛到单一模型。
 
@@ -52,7 +52,7 @@
 4. **平铺无轮次**：渲染无 `### Round N` / 历史轮 / sibling scope；`clarify_rounds.directive`、`round_generation` 等轮次态废弃或降级。
 5. **单一路径**：`deferredQuestionDispatch` flag **删列**（所有任务走统一模型）；quick-channel 即时注入收敛为「答完自动下发」。
 6. **节点反问状态**：`continue/stop` 由「下发」设置到 `task_node_clarify_directives`；无 per-round directive。
-7. **行为等价**（除有意变更）：多轮丢历史、老化、review-reject 老化、prior-output、借壳改派——RFC-119/127/131 的行为在新模型下**逐一保持**（有回归测试佐证）。**有意变更**仅两处：① prompt 中反问块从「轮次分组」变为「平铺清单」；② 非 deferred 答完从「即时注入」变为「自动下发后注入」（对用户等价）。
+7. **行为等价**（除有意变更）：多轮丢历史、老化、review-reject 老化、prior-output——RFC-119/131 的行为在新模型下**逐一保持**（有回归测试佐证）。**有意变更三处**：① prompt 反问块「轮次分组」→「平铺清单」；② 非 deferred 答完「即时注入」→「自动下发后注入」（用户等价）；③ **self/questioner 改派 borrow→move**（统一 T4 语义，`rfc127-self-questioner-borrow` 测试改 move 语义）。
 8. **迁移**：升级窗口的在飞任务（deferred + non-deferred）平滑迁移到统一模型，不丢已答问题、不错误重问；废弃列 **forward-only 删除**（drop-column migration 排最后 PR、删前确认无 reader、不可回退）。
 9. **门槛**：typecheck×3 + 全量 backend test + format + 单二进制 smoke + CI 全绿；Codex adversarial gate（broker 恢复后）。
 
@@ -61,6 +61,7 @@
 - **RFC-131**（任务级队列 + 派生老化）：本 RFC 是其 design §3「统一注入器」的兑现 + 把派生老化推广为**唯一**判据。
 - **RFC-125**（quick-channel 即时下发）：其「即时」语义收敛为「自动下发」，双路径合一。
 - **RFC-070**（consumed_by 消费戳）：其戳老化被派生老化取代、废弃。
-- **RFC-127 T4（去借壳）/ RFC-119（prior-output）/ RFC-099（归属隔离）**：行为保持，本 RFC 不动。
+- **RFC-119（prior-output）/ RFC-099（归属隔离）**：行为保持，本 RFC 不动。
+- **RFC-127 借壳 / RFC-131 T4 去借壳**：本 RFC 删 immediate mint → 借壳最后一条活路径（immediate 账本）也去借壳，self/questioner 改派统一为 T4 move 语义（borrow→move）。**事实上完成 RFC-131 T4 对 immediate 路径的收尾**——RFC-131 只对 dispatched 路径去借壳、故意保留 non-deferred immediate 借壳并行路径，本 RFC 删这条并行路径。
 
 > 详见 `design.md`（技术设计：统一注入器契约、数据模型迁移、平铺渲染、单一派生判据、节点反问状态、golden-lock 处理、失败模式、测试策略）与 `plan.md`（任务分解与 PR 拆分）。

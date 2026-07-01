@@ -105,14 +105,19 @@ const clarifyContext = agentHasClarifyChannel(definition, node.id)
 
 **designer 合并（②b）**：designer 问题不再 `## External Feedback` / 不再 `{{__external_feedback__}}` token；进 `## Clarify Q&A` 同块。**注**：这改变 designer agent 看到的 prompt 结构（有意变更，验收标准 #7②）——需确认 designer agent 的 prompt 模板不硬依赖 `## External Feedback` 字面（plan T5 审）。
 
-## 6. 自动下发（quick-channel 收敛）
+## 6. 自动下发（quick-channel 收敛 —— 复用已有 `autoDispatchClarifyRound`）
 
-现状：非 deferred 任务 `submitClarifyAnswers` 答完**立即** mint continuation + 整轮注入（跳过 dispatch）。
+**关键（research 更正，避免天真做法引 regression）**：**不在 `submitClarifyAnswers` 里加 dispatch 逻辑**——那会产生「条目 sealed+dispatched 但复用 home immediate continuation」的 hybrid 态，落入借壳账本 immediate/deferred 两不入 → `resolveBorrowForNode` 返 null → 借壳改派丢 agent + rerun stranded（已验证的 regression）。正确做法:复用**已存在并在 deferred 路径生产验证**的 `autoDispatchClarifyRound`（`clarifyAutoDispatch.ts:243`，RFC-128 P5-D：seal→`dispatchTaskQuestions`，mint 承接 rerun on target、**不** mint immediate continuation）。
 
-统一后：**答完 = 自动下发**。`submitClarifyAnswers` / `sealRoundQuestions` 的成功路径末尾自动调 dispatch（设 `dispatched_at` + 节点反问状态 + mint 承接 rerun）——与显式 board 下发走**同一** `dispatchTaskQuestions` 代码。UX 不变（答完照样自动继续），底层单一路径。
+现状:路由 `routes/clarify.ts:321` 按 `deferredQuestionDispatch===true` 分流——deferred 走 `autoDispatchClarifyRound`;non-deferred 落 `submitClarifyAnswers`/`submitCrossClarifyAnswers` 的 legacy immediate mint（`clarify.ts:504` / `crossClarify.ts:576`）。
 
-- 用户原话印证：「旧反问语义就是先改节点反问状态、然后下发问题」——自动下发把这套显式化。
-- 显式下发（board 批量、deferred 场景）与自动下发（答完即发）共用 dispatch，差别仅「谁触发」。
+统一后:**路由放宽——所有任务走 `autoDispatchClarifyRound`**;删 legacy immediate mint 成功路径。答完 = seal + 自动 dispatch（设 `dispatched_at` + 节点反问状态 + mint 承接 rerun on target），与显式 board 下发共用 `dispatchTaskQuestions`。UX 不变（答完自动继续、旧语义本就是「改反问状态 + 下发」），底层单一 deferred 路径。
+
+**锁序契约（复用、勿重导）**:`clarifyAutoDispatch.ts` 文件头——seal-tx→dispatch-tx **串行两次 lock B、绝不嵌套**;self isolated worktree rollback 在 A≻B（A OUTER）下;sealed-undispatched 由 park 源（`partitionUndispatchedParkTargets`）钉住 home、frontier 不越（RFC-076 T0 等价保护）。deferred 路径已验证。
+
+**designer immediate 缺口（plan 漏，本 RFC 裁决）**:`autoDispatchClarifyRound` 只 auto-dispatch **self/questioner**,designer 留 §18 手动 board。但 non-deferred designer 现走 `submitCrossClarifyAnswers`→`triggerDesignerRerun`（`crossClarify.ts:1119`）immediate mint（不打 `dispatched_at`）;统一注入器（`selectAgentQueue` 要 dispatched）后 non-deferred designer 注入会空。**裁决:designer 也切自动下发**（扩 `autoDispatchClarifyRound` 覆盖 designer,处理 multi-source readiness 在首个 sibling answer 触发的 `assertDesignerReady`）——与 self/questioner 一致走 dispatched 队列。
+
+**借壳语义 borrow→move（§非目标勘误）**:借壳（RFC-127）现只活在 **immediate 账本**（dispatched 两账本已 RFC-131 T4 去借壳、borrow 恒 null）。删 immediate mint → immediate 账本 borrow 分支成死代码 → **self/questioner 改派从 borrow（home 跑 X 脑）变 move（X 跑自己 = T4 语义）**。这是**行为变更**(proposal §非目标原写「借壳行为保持」勘误为「统一为 T4 move 语义」)。immediate-ledger oracle（`openImmediateRounds` 等）**保留作迁移期 gate**（检测升级前遗留 continuation,§9）。`resolveBorrowForNode`/`buildBorrowedAgent` 回落 null 后成死代码,但 **RFC-132 不主动删**（留后续 RFC,保持窄边界）;`rfc127-self-questioner-borrow` 测试更新到 move 语义。
 
 ## 7. 节点反问状态（directive 收敛）
 
@@ -135,8 +140,9 @@ const clarifyContext = agentHasClarifyChannel(definition, node.id)
 派生老化零新列，但**行为变更 + 双路径合一**需迁移在飞任务：
 
 - **consumed_by 戳 → 派生**：升级后不再读戳。历史已戳 round → 其 target run 若 done+output，派生判据同样判老化（等价）；未戳但 done+output → 也老化（派生更宽松、正确）。无回填。
-- **non-deferred 在飞任务**：升级后走统一模型。已答未下发的 round → 迁移期一次性「自动下发」（补 `dispatched_at`）或 lazy（下次运行时 selection 容忍无 dispatched 的 legacy round，见 plan T6 迁移垫片）。
-- **deferredQuestionDispatch flag**：停读（视所有任务为统一模型）；列保留避免 migration。
+- **non-deferred 在飞任务**：升级后走统一模型。两类在飞态需迁移垫片：① 已答未下发的 legacy round（无 `dispatched_at`）；② **升级前 mint 的 immediate continuation**（pending run、无 dispatched entry）。对 ①/②：immediate-ledger oracle（§6 保留）作迁移期安全网检测遗留 continuation；scheduler 恒走 deferred 注入器时,对无 dispatched 的在飞 round **迁移期一次性补 `dispatched_at`**（首选,走 `autoDispatchClarifyRound` 补下发）或短期 `buildPromptContext` fallback 容忍——不丢在飞 continuation。
+- **borrow→move 回退边界**：§6 的 borrow→move 是行为变更——已 move 的 reassigned 问题产出挂 target 节点、下游接线随之变;**这层不可无缝回退**（非仅删列问题）。PR-B（行为变更）之后回退需考量已 move 的数据态;派生老化/注入本身仍可回退（无持久态）。
+- **deferredQuestionDispatch flag**：先停读（视所有任务为统一模型）,列在最后 PR 删（下条）。
 - **forward-only（用户拍板删列）**：废弃列本 RFC 删除、不保留。删列**不可回退**——故 drop-column migration 排在**最后一个 PR**（所有 reader 移除〔T4/T7/T8〕+ 在飞任务迁移完成后），删前全量确认无 reader（`rg` 列名空 + typecheck + 全量 test）。中间 PR 保持列存在（渐进停写），最后一 PR 一次性 drop。派生老化本身无持久态（不落库）——故删列**之前**的所有行为可回退；仅「drop-column migration」这一步单向，回退只能回到该 migration 之前的 commit。
 
 ## 10. 失败模式

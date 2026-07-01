@@ -66,28 +66,31 @@
 - **forward-only**：不可回退（design §9）——删列前行为已可回退（派生无持久态），此步单向。
 - 依赖：T4/T7/T8（所有 reader 移除）+ T9（回归绿）。
 
-## PR 拆分建议
+## PR 拆分建议（research 更正 —— 原顺序反了）
+
+**关键耦合（research 揪出）**:统一注入器 `selectAgentQueue` 要 `dispatched_at IS NOT NULL`,而 non-deferred quick-channel 不打 dispatched → T3(换注入器) 与 T6(自动下发打 dispatched) **互为前提**,任一单独落不 full-green(原 PR-2 先换注入器 → non-deferred 立即断注入)。故重排:**先「让所有走 deferred model」(T6,注入器代码不动)→ 再「机械合并注入器」(T3,单一路径纯重构)**。
 
 | PR | 内容 | 风险 |
 |----|------|------|
-| PR-1 | T1 + T2（纯函数/helper + 单测，未接入） | 低 |
-| PR-2 | T3（统一注入器 + scheduler 单调用） | 🔴 高（热点调度器 + 行为变更） |
-| PR-3 | T4 + T7（戳废弃 + directive 收敛） | 🟡 中 |
-| PR-4 | T5（designer 渲染合并 + 模板审） | 🟡 中（agent prompt 结构变） |
-| PR-5 | T6（自动下发 + 迁移垫片） | 🔴 高（quick-channel 合一 + 在飞迁移） |
-| PR-6 | T8 + T9（死代码/flag 停写 + golden 网） | 🟡 中 |
-| PR-7 | T10（drop-column migration，forward-only 删列） | 🟡 中（不可回退，删前确认无 reader） |
+| PR-1 ✅ | T1 `renderFlatClarifyQueue` + T2 `selectAgentQueue`/`bindTriggerRun`（纯函数,未接入） | 低（已落 `660f4b9`） |
+| **PR-B** | **T6「universal deferred model」**:路由放宽**所有任务**走 `autoDispatchClarifyRound`（已存在、deferred 生产验证）+ designer 也切自动下发（扩 auto-dispatch）+ scheduler XOR **恒走 deferred 注入器**（`buildClarifyNodeQueueContext`/`buildNodeQueueExternalFeedback`,已派生老化 + 读 dispatched）+ 删 legacy immediate mint + 迁移垫片 | 🔴 高（行为变更:borrow→move、自动下发;但**注入器代码不动**、用已验证 deferred 机器,**强制 Codex gate**） |
+| **PR-C** | T3 `buildClarifyQueueContext`（组装 PR-1）+ scheduler 单调用替换两 deferred 注入器 + T5 designer 渲染并入平铺块（删 External Feedback）| 🟡 中（单一路径上**纯重构**,golden 换平铺锁;可用 PR-2 已写的 worktree 成果） |
+| **PR-D** | T4 删 `markClarifyRoundsConsumedBy`/consumed_by 停写 + T7 directive→节点状态 | 🟡 中（PR-B 后 `buildPromptContext` 已死、不读戳） |
+| **PR-E** | T8 死代码（`buildPromptContext`/`selectAnsweredRoundsForConsumer`/`buildQuestionerCrossClarifyContext`/flag 停读 + source-guard 更新〔见 §T8 清单〕）+ T9 golden 网 | 🟡 中 |
+| **PR-F** | T10 drop-column（forward-only 删列） | 🟡 中（不可回退,删前 `rg` 无 reader） |
 
-每 PR 独立门禁（typecheck + test + format + 单二进制 smoke + Codex impl gate）+ CI 绿。**PR-2/PR-5 强制 Codex adversarial gate**（热点 + 迁移）。
+每 PR 独立门禁（typecheck + 全量 test + format + 单二进制 smoke + Codex impl gate）+ CI 绿。**PR-B/PR-C 强制 Codex adversarial gate**（行为变更 + 热点）。
+
+**为什么 PR-B 比原 PR-2 安全**:把危险的**行为变更**（自动下发、borrow→move、老化统一）隔离在**注入器代码不变**的 PR（用已证明的 deferred 注入器）;PR-C 再做**机械的注入器合并**（单一路径纯重构、golden 天然）。原 PR-2 把「换注入器」和「行为变更」缠在一起、中间还有 non-deferred 断注入的 gap。**注**:PR-2 已实现的 worktree（buildClarifyQueueContext + scheduler 单调用)保留、并入 PR-C（其行为变更部分靠 PR-B 先铺垫）。
 
 ## 依赖图
 
 ```
 T1 ─┐
-T2 ─┴→ T3 ─┬→ T4 ─→ (T7)
-           ├→ T5
-           └→ T6 ─→ T7
-   T4..T7 ─────────→ T8 ─→ T9
+T2 ─┴──────────────────────────────→ [T3+T5 = PR-C]
+T6(PR-B: 所有走 deferred model,注入器不动) ──┘  → [T4+T7 = PR-D] → [T8+T9 = PR-E] → [T10 = PR-F]
+   ↑ PR-B 必先:让所有条目走 dispatched(自动下发)+ scheduler 恒 deferred 注入器,
+     注入器代码不动、full-green;PR-C 才能安全把两注入器合并成 selectAgentQueue(要 dispatched)。
 ```
 
 ## 验收清单（交付前必绿）
