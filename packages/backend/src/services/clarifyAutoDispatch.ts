@@ -170,6 +170,7 @@ async function selfHomeHasOpenLedger(
       triggerRunId: taskQuestions.triggerRunId,
       defaultTargetNodeId: taskQuestions.defaultTargetNodeId,
       overrideTargetNodeId: taskQuestions.overrideTargetNodeId,
+      roleKind: taskQuestions.roleKind,
     })
     .from(taskQuestions)
     .where(
@@ -181,7 +182,14 @@ async function selfHomeHasOpenLedger(
     )
   if (
     dispatchedEntries.length > 0 &&
-    hasOpenDispatchedEntryOnHome(homeNodeId, dispatchedEntries, runs, outputRunIds)
+    // RFC-133: this preflight guards the SELF rollback+dispatch — its mint is 'clarify-answer'.
+    hasOpenDispatchedEntryOnHome(
+      homeNodeId,
+      dispatchedEntries,
+      runs,
+      outputRunIds,
+      'clarify-answer',
+    )
   ) {
     return true
   }

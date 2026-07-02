@@ -241,7 +241,14 @@ describe('isDispatchedEntryConsumed — dispatched-ledger multi-round deadlock (
   // stayed in-flight → round 2 dispatch permanently blocked. This is the gate that ACTUALLY fired for
   // the deferred task (assertNoInFlightDispatch runs BEFORE assertNoOpenImmediateLedger), so the
   // openImmediateRounds fix alone did not unblock it — isDispatchedEntryConsumed needed the same split.
-  const entry = { triggerRunId: 'h1' }
+  // RFC-133 widened the entry Pick (effective-target + roleKind feed the queued cause guard).
+  const mkEntry = (triggerRunId: string | null) => ({
+    triggerRunId,
+    defaultTargetNodeId: P,
+    overrideTargetNodeId: null,
+    roleKind: 'self' as const,
+  })
+  const entry = mkEntry('h1')
   const runs = [
     mkRun({ id: 'h1', nodeId: P, iteration: 0, rerunCause: 'clarify-answer', status: 'done' }),
   ]
@@ -269,13 +276,27 @@ describe('isDispatchedEntryConsumed — dispatched-ledger multi-round deadlock (
     expect(isDispatchedEntryConsumed(entry, failedRuns, lineage, 'revivable')).toBe(false)
   })
 
-  test('queued (triggerRunId null) / GC-d anchor: NOT consumed (open) — unchanged', () => {
+  // RFC-133 (design/RFC-133-dispatch-queued-run-obligation): the queued lock is now CONDITIONAL —
+  // a queued (trigger NULL) entry is open in-flight ONLY while its target owes a run obligation
+  // (non-done top-level run) or the caller mints an alien cause there. The unconditional
+  // "queued → open" contract this test used to lock caused the QMGP5 live deadlock
+  // (task 01KWFZRQFPZFQQEM8JTCHQMGP5: entries reassigned to a never-run downstream node wedged
+  // every later batch dispatch — the "wait for done+output" exit could never be satisfied).
+  // The queued matrix lives in rfc133-queued-run-obligation.test.ts; here we keep the parts of
+  // the old lock that still hold.
+  test('queued on a target with an OPEN (non-done) run: still open in-flight; GC-d anchor: open — unchanged', () => {
     const lineage = [mkLineage({ id: 'h1' })]
-    expect(isDispatchedEntryConsumed({ triggerRunId: null }, runs, lineage, 'in-flight')).toBe(
-      false,
-    )
-    expect(isDispatchedEntryConsumed({ triggerRunId: 'gone' }, runs, lineage, 'in-flight')).toBe(
-      false,
-    )
+    const busyRuns = [
+      ...runs,
+      mkRun({ id: 'h2', nodeId: P, iteration: 0, rerunCause: 'clarify-answer', status: 'running' }),
+    ]
+    expect(isDispatchedEntryConsumed(mkEntry(null), busyRuns, lineage, 'in-flight')).toBe(false)
+    expect(isDispatchedEntryConsumed(mkEntry('gone'), runs, lineage, 'in-flight')).toBe(false)
+  })
+
+  test('queued in revivable mode: open unconditionally (borrow oracle unchanged by RFC-133)', () => {
+    const lineage = [mkLineage({ id: 'h1' })]
+    expect(isDispatchedEntryConsumed(mkEntry(null), runs, lineage, 'revivable')).toBe(false)
+    expect(isDispatchedEntryConsumed(mkEntry(null), [], lineage, 'revivable')).toBe(false)
   })
 })

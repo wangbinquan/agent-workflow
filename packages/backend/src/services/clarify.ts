@@ -595,6 +595,7 @@ export async function submitClarifyAnswers(
           triggerRunId: taskQuestions.triggerRunId,
           defaultTargetNodeId: taskQuestions.defaultTargetNodeId,
           overrideTargetNodeId: taskQuestions.overrideTargetNodeId,
+          roleKind: taskQuestions.roleKind,
         })
         .from(taskQuestions)
         .where(
@@ -623,7 +624,14 @@ export async function submitClarifyAnswers(
           ).map((r) => r.id),
         )
         if (
-          hasOpenDispatchedEntryOnHome(sourceRunRow.nodeId, dispatchedPre, preRuns, preOutputIds)
+          // RFC-133: the quick-finalize mints a 'clarify-answer' continuation on this home.
+          hasOpenDispatchedEntryOnHome(
+            sourceRunRow.nodeId,
+            dispatchedPre,
+            preRuns,
+            preOutputIds,
+            'clarify-answer',
+          )
         ) {
           throw new ConflictError(
             'clarify-quick-finalize-rerun-in-flight',
@@ -709,6 +717,7 @@ export async function submitClarifyAnswers(
             triggerRunId: taskQuestions.triggerRunId,
             defaultTargetNodeId: taskQuestions.defaultTargetNodeId,
             overrideTargetNodeId: taskQuestions.overrideTargetNodeId,
+            roleKind: taskQuestions.roleKind,
           })
           .from(taskQuestions)
           .where(
@@ -739,7 +748,14 @@ export async function submitClarifyAnswers(
               .map((r) => r.id),
           )
           if (
-            hasOpenDispatchedEntryOnHome(sourceRunRow.nodeId, dispatchedHome, txRuns, txOutputIds)
+            // RFC-133: same 'clarify-answer' mint-cause as the async pre-check above.
+            hasOpenDispatchedEntryOnHome(
+              sourceRunRow.nodeId,
+              dispatchedHome,
+              txRuns,
+              txOutputIds,
+              'clarify-answer',
+            )
           ) {
             throw new ConflictError(
               'clarify-quick-finalize-rerun-in-flight',

@@ -2708,10 +2708,12 @@ export const enUS: Resources = {
     viewClarify: 'View clarify',
     nodeBadgeAria: '{{count}} pending questions on this node',
     batchDispatch: 'Batch dispatch',
-    batchDispatchCount: 'Batch dispatch ({{count}})',
+    batchDispatchCount: 'Dispatch selected ({{count}})',
     selectForDispatch: 'Select',
     dispatchTargetChanged: 'Target changed, please retry',
     dispatchInFlight: 'That node is re-running; wait for it to finish before dispatching',
+    dispatchInFlightNode:
+      'Node {{node}} still has an unfinished rerun (or an open dispatched question of a different kind); wait for it to finish before dispatching',
     dispatchDesignerNotReady: 'Designer is not ready yet; dispatch is unavailable',
     dispatchRoundMultiTarget:
       'Questions from one round are assigned to multiple handler nodes; in v1 reassign them to a single handler before dispatching',

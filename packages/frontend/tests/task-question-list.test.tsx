@@ -355,22 +355,20 @@ describe('TaskQuestionList 待下发 gate (加入 hidden until answered)', () =>
   })
 })
 
-// RFC-128 §11.1 — batch-dispatch (一键下发) of staged (待下发) questions. 语义「进待下发=
-// 已确定，批量下发=全下」：staged 卡**去 checkbox**（删 tq-select-*），「批量下发」收集当前
-// 视图(尊重 source filter)的**全部** staged 条目 id 下发。golden-lock: no staged ⇒ no bar.
-// (Reverses RFC-120 §18 的「per-card checkbox → 下发所选」——现在无逐卡勾选、全下当前视图。)
-describe('TaskQuestionList batch-dispatch (RFC-128 §11.1)', () => {
-  test('点「批量下发」→ POST dispatch 带**全部** staged ids（无需勾选；staged 卡无 checkbox）', async () => {
+// RFC-133 — batch-dispatch of staged (待下发) questions with PER-CARD selection restored
+// (design/RFC-133-dispatch-queued-run-obligation §4; 显式推翻 RFC-128 §11.1「全下、无逐卡
+// 勾选」拍板，用户 2026-07-02). staged 卡带 checkbox（tq-select-*，默认全选 = 旧全下体验
+// golden）；「下发所选 (N)」只发所选；0 选禁用；勾选尊重节点 filter。
+describe('TaskQuestionList batch-dispatch (RFC-133 逐卡勾选)', () => {
+  test('默认全选：不动勾选直接点 → POST 全部 staged ids（旧全下体验 golden-lock）', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue(undefined as never)
     await wrap([
       entry({ id: 's1', phase: 'staged', roleKind: 'designer' }),
       entry({ id: 's2', phase: 'staged', roleKind: 'designer' }),
     ])
-    // §11.1: staged 卡不再有勾选 checkbox（去 tq-select-*）。
-    expect(screen.queryByTestId('tq-select-s1')).toBeNull()
-    expect(screen.queryByTestId('tq-select-s2')).toBeNull()
-    expect(within(screen.getByTestId('tq-card-s1')).queryByRole('checkbox')).toBeNull()
-    // 批量下发按钮无需勾选即可用（仅 isPending 时禁用），点击即下发**全部** staged。
+    // RFC-133: staged 卡有勾选框且默认选中。
+    expect((screen.getByTestId('tq-select-s1') as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByTestId('tq-select-s2') as HTMLInputElement).checked).toBe(true)
     const btn = screen.getByTestId('tq-batch-dispatch') as HTMLButtonElement
     expect(btn.disabled).toBe(false)
     fireEvent.click(btn)
@@ -381,32 +379,59 @@ describe('TaskQuestionList batch-dispatch (RFC-128 §11.1)', () => {
     )
   })
 
-  test('任何卡片都不渲染勾选控件（§11.1 去 checkbox：staged 也不例外）', async () => {
+  test('取消勾选一条 → 只 POST 所选子集', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue(undefined as never)
+    await wrap([
+      entry({ id: 's1', phase: 'staged', roleKind: 'designer' }),
+      entry({ id: 's2', phase: 'staged', roleKind: 'designer' }),
+      entry({ id: 's3', phase: 'staged', roleKind: 'designer' }),
+    ])
+    fireEvent.click(screen.getByTestId('tq-select-s2'))
+    expect((screen.getByTestId('tq-select-s2') as HTMLInputElement).checked).toBe(false)
+    fireEvent.click(screen.getByTestId('tq-batch-dispatch'))
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/api/tasks/task-1/questions/dispatch', {
+        entryIds: ['s1', 's3'],
+      }),
+    )
+  })
+
+  test('全部取消勾选 → 按钮禁用（0 选不发）', async () => {
+    await wrap([entry({ id: 's1', phase: 'staged', roleKind: 'designer' })])
+    const btn = screen.getByTestId('tq-batch-dispatch') as HTMLButtonElement
+    expect(btn.disabled).toBe(false)
+    fireEvent.click(screen.getByTestId('tq-select-s1'))
+    expect(btn.disabled).toBe(true)
+  })
+
+  test('仅 staged 卡渲染勾选控件（其它相位不渲染）', async () => {
     await wrap([
       entry({ id: 's1', phase: 'staged', roleKind: 'designer' }),
       entry({ id: 'p1', phase: 'pending' }),
       entry({ id: 'c1', phase: 'awaiting_confirm' }),
       entry({ id: 'd1', phase: 'done', roleKind: 'designer' }),
     ])
-    for (const id of ['s1', 'p1', 'c1', 'd1']) {
+    expect(screen.getByTestId('tq-select-s1')).toBeTruthy()
+    for (const id of ['p1', 'c1', 'd1']) {
       expect(within(screen.getByTestId(`tq-card-${id}`)).queryByRole('checkbox')).toBeNull()
       expect(screen.queryByTestId(`tq-select-${id}`)).toBeNull()
     }
   })
 
-  test('有节点 filter 时批量下发只发该 filter 视图的 staged（尊重当前视图）', async () => {
+  test('有节点 filter 时只发该 filter 视图中的所选 staged（勾选跟随视图）', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue(undefined as never)
     await wrap([
       entry({ id: 'a1', effectiveTargetNodeId: 'nodeA', phase: 'staged', roleKind: 'designer' }),
       entry({ id: 'a2', effectiveTargetNodeId: 'nodeA', phase: 'staged', roleKind: 'designer' }),
       entry({ id: 'b1', effectiveTargetNodeId: 'nodeB', phase: 'staged', roleKind: 'designer' }),
     ])
-    // 过滤到 nodeA → 批量下发只发 nodeA 视图的 staged（a1,a2），不含 b1。
+    // 过滤到 nodeA，再取消 a2 → 只发 a1（不含 b1，也不含被取消的 a2）。
     fireEvent.click(screen.getByTestId('tq-node-filter-nodeA'))
+    fireEvent.click(screen.getByTestId('tq-select-a2'))
     fireEvent.click(screen.getByTestId('tq-batch-dispatch'))
     await waitFor(() =>
       expect(post).toHaveBeenCalledWith('/api/tasks/task-1/questions/dispatch', {
-        entryIds: ['a1', 'a2'],
+        entryIds: ['a1'],
       }),
     )
   })
@@ -420,14 +445,27 @@ describe('TaskQuestionList batch-dispatch (RFC-128 §11.1)', () => {
     expect(screen.queryByTestId('tq-batch-dispatch')).toBeNull()
   })
 
-  test('409 task-question-node-dispatch-in-flight → 显示错误提示（ErrorBanner）', async () => {
+  test('409 in-flight 带 details.nodeId → 错误提示含节点 label（nodeOptions 映射）', async () => {
+    vi.spyOn(api, 'post').mockRejectedValue(
+      new ApiError(409, 'task-question-node-dispatch-in-flight', 'node busy', {
+        nodeId: 'fixer',
+        runId: 'r1',
+        runStatus: 'pending',
+      }),
+    )
+    await wrap([entry({ id: 's1', phase: 'staged', roleKind: 'designer' })])
+    fireEvent.click(screen.getByTestId('tq-batch-dispatch'))
+    await waitFor(() => expect(document.querySelector('.error-box')).toBeTruthy())
+    // RFC-133: the banner names the blocker node (label resolved via nodeOptions).
+    expect(document.querySelector('.error-box')?.textContent ?? '').toContain('fixer')
+  })
+
+  test('409 in-flight 无 details → 回退静态文案（仍显示 ErrorBanner）', async () => {
     vi.spyOn(api, 'post').mockRejectedValue(
       new ApiError(409, 'task-question-node-dispatch-in-flight', 'node busy'),
     )
     await wrap([entry({ id: 's1', phase: 'staged', roleKind: 'designer' })])
-    // §11.1: 无勾选步骤——直接点批量下发。
     fireEvent.click(screen.getByTestId('tq-batch-dispatch'))
-    // ErrorBanner renders a .error-box notice (i18n-agnostic assertion)
     await waitFor(() => expect(document.querySelector('.error-box')).toBeTruthy())
   })
 })

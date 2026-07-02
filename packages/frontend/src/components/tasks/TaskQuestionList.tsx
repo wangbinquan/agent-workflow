@@ -103,6 +103,9 @@ const PHASE_KIND: Record<TaskQuestionPhase, 'neutral' | 'info' | 'warn' | 'succe
 // (node busy / designer not ready / mixed-target round / unsafe target). The
 // retryable `task-question-target-changed` is handled separately (re-fetch + retry
 // prompt). Any unmapped code falls back to the raw server message via ErrorBanner.
+// RFC-133: `task-question-node-dispatch-in-flight` now carries `details.nodeId` —
+// when present the notice interpolates the blocker node (dispatchInFlightNode);
+// the static dispatchInFlight text stays as the no-details fallback.
 const DISPATCH_ERROR_KEYS: Record<string, string> = {
   'task-question-node-dispatch-in-flight': 'taskQuestions.dispatchInFlight',
   'task-question-designer-not-ready': 'taskQuestions.dispatchDesignerNotReady',
@@ -143,10 +146,19 @@ export function TaskQuestionList({
       api.post(`/api/tasks/${taskId}/questions/${v.id}/reassign`, { targetNodeId: v.targetNodeId }),
     onSuccess: invalidate,
   })
-  // RFC-128 §11.1 — 批量下发 (batch-dispatch) of staged (待下发) questions. 语义「进待下发=
-  // 已确定，批量下发=全下」：一键下发当前视图(尊重节点 filter)的**全部** staged 条目——不再
-  // 逐卡勾选子集（删了 per-card checkbox + 局部 selection state）。后端请求体不变(仍接 entryIds)。
+  // RFC-133（推翻 RFC-128 §11.1「批量下发=全下、无逐卡勾选」，用户 2026-07-02 拍板）——
+  // staged 卡恢复逐卡勾选：`excluded` 存**反选集**（默认空 = 全选，与旧「全下」体验一致；
+  // refetch / 新问题进 staged 时天然默认选中，无需同步 effect）。「下发所选 (N)」只发
+  // 当前视图（尊重节点 filter）中未被排除的 staged 条目；0 选禁用。后端请求体不变。
   const [dispatchError, setDispatchError] = useState<unknown>(null)
+  const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set())
+  const toggleExcluded = (id: string) =>
+    setExcluded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   // RFC-120 §15 — manual question author form. `authorInitial` null = 新增 (empty form);
   // a {title,body} = 复制 (prefilled from a 待指派 card → Save creates a NEW manual row).
   const [authorOpen, setAuthorOpen] = useState(false)
@@ -168,6 +180,9 @@ export function TaskQuestionList({
       api.post(`/api/tasks/${taskId}/questions/dispatch`, { entryIds }),
     onSuccess: () => {
       setDispatchError(null)
+      // RFC-133: the dispatched cards left `staged` — reset the exclusion set so the next
+      // batch starts from the default all-selected state again.
+      setExcluded(new Set())
       invalidate()
       // Dispatch flips entries into 处理中 and resumes the task → refresh the task +
       // node-runs queries so the rest of the detail page reflects the processing state.
@@ -183,8 +198,16 @@ export function TaskQuestionList({
         return
       }
       // Terminal ConflictErrors — surface WHY (localized for known codes, raw server
-      // message otherwise so the user still understands the failure).
+      // message otherwise so the user still understands the failure). RFC-133: the
+      // in-flight rejection carries `details.nodeId` — name the blocker node (label via
+      // nodeOptions, raw id fallback) so the user knows WHAT to wait for.
       if (err instanceof ApiError) {
+        const nodeId = (err.details as { nodeId?: unknown } | undefined)?.nodeId
+        if (err.code === 'task-question-node-dispatch-in-flight' && typeof nodeId === 'string') {
+          const label = nodeOptions.find((n) => n.id === nodeId)?.label ?? nodeId
+          setDispatchError(new Error(t('taskQuestions.dispatchInFlightNode', { node: label })))
+          return
+        }
         const mapped = DISPATCH_ERROR_KEYS[err.code]
         setDispatchError(mapped ? new Error(t(mapped)) : err)
         return
@@ -274,11 +297,12 @@ export function TaskQuestionList({
     ? entries.filter((e) => e.effectiveTargetNodeId === targetFilter)
     : entries
 
-  // RFC-128 §11.1 — only staged (待下发) cards are dispatch candidates. The board action
-  // bar renders ONLY when ≥1 staged card is visible in the CURRENT view (golden-lock: no
-  // staged cards ⇒ no batch-dispatch bar). 「批量下发」= 下发这批 stagedShown 的**全部** id
-  // （尊重节点 filter；无 filter 时=全部 staged），不再逐卡勾选。
+  // Only staged (待下发) cards are dispatch candidates. The board action bar renders ONLY
+  // when ≥1 staged card is visible in the CURRENT view (golden-lock: no staged cards ⇒ no
+  // batch-dispatch bar). RFC-133: 「下发所选 (N)」 = stagedShown minus the excluded set
+  // (per-card checkbox, default all-selected; respects the node filter).
   const stagedShown = shown.filter((e) => e.phase === 'staged')
+  const stagedSelected = stagedShown.filter((e) => !excluded.has(e.id))
 
   return (
     <div className="task-questions-wrap">
@@ -311,22 +335,22 @@ export function TaskQuestionList({
           ))}
         </div>
         <div className="task-questions__actions">
-          {/* RFC-128 §11.1 — batch-dispatch. Only present when ≥1 staged card is visible
-              (golden-lock: no staged ⇒ no bar). 语义「进待下发=已确定，批量下发=全下」：一键
-              下发当前视图(尊重节点 filter)的全部 staged 条目——无逐卡勾选。 */}
+          {/* RFC-133 batch-dispatch (推翻 RFC-128 §11.1 全下). Only present when ≥1 staged
+              card is visible (golden-lock: no staged ⇒ no bar). 「下发所选 (N)」发当前视图中
+              勾选的 staged 条目（默认全选 = 旧全下体验）；0 选禁用。 */}
           {stagedShown.length > 0 && (
             <div className="task-questions__batch" data-testid="tq-batch-dispatch-bar">
               <button
                 type="button"
                 className="btn btn--sm btn--primary"
                 data-testid="tq-batch-dispatch"
-                disabled={dispatchM.isPending}
+                disabled={dispatchM.isPending || stagedSelected.length === 0}
                 onClick={() => {
                   setDispatchError(null)
-                  dispatchM.mutate(stagedShown.map((e) => e.id))
+                  dispatchM.mutate(stagedSelected.map((e) => e.id))
                 }}
               >
-                {t('taskQuestions.batchDispatchCount', { count: stagedShown.length })}
+                {t('taskQuestions.batchDispatchCount', { count: stagedSelected.length })}
               </button>
             </div>
           )}
@@ -425,6 +449,20 @@ export function TaskQuestionList({
                       ) : undefined
                     }
                   >
+                    {/* RFC-133 — staged 卡逐卡勾选（默认选中；反选集 excluded）。原生 inline
+                        checkbox 模式与 FilesPicker / MemoryRow 一致。 */}
+                    {e.phase === 'staged' && (
+                      <label className="task-questions__select">
+                        <input
+                          type="checkbox"
+                          data-testid={`tq-select-${e.id}`}
+                          aria-label={e.questionTitle}
+                          checked={!excluded.has(e.id)}
+                          onChange={() => toggleExcluded(e.id)}
+                        />
+                        <span>{t('taskQuestions.selectForDispatch')}</span>
+                      </label>
+                    )}
                     <div className="card__title">{e.questionTitle}</div>
                     {/* RFC-120 lock: 答案紧贴问题、排在 meta 之前（节点信息不得插在问与答之间）。 */}
                     {e.answerSummary && (

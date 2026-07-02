@@ -50,15 +50,16 @@ describe('TaskQuestionList.tsx — RFC-120 §18 batch-dispatch wiring (unchanged
     expect(BOARD_SRC).toMatch(/questions\/dispatch`, \{ entryIds \}/)
   })
 
-  // RFC-128 §11.1 — the per-card selection checkbox is REMOVED; 「批量下发」dispatches ALL
-  // staged cards in the current view (stagedShown, source-filter-respecting). The golden-lock
-  // (no staged ⇒ no bar) is retained. (Reverses RFC-120 §18's "checkbox → 下发所选".)
-  test('RFC-128 §11.1: no per-card checkbox; the bar dispatches all staged (golden-locked to staged)', () => {
-    // per-card selection checkbox + its testid are gone
-    expect(BOARD_SRC).not.toMatch(/type="checkbox"/)
-    expect(BOARD_SRC).not.toContain('tq-select-')
-    // 批量下发下发当前视图的全部 staged 条目 id
-    expect(BOARD_SRC).toMatch(/stagedShown\.map\(\(e\) => e\.id\)/)
+  // RFC-133 (推翻 RFC-128 §11.1，用户 2026-07-02 拍板) — per-card selection is BACK: staged
+  // cards carry a tq-select-* checkbox (default all-selected via the `excluded` inverse set),
+  // 「下发所选 (N)」posts the SELECTED subset of the current view. The golden-lock
+  // (no staged ⇒ no bar) is retained.
+  test('RFC-133: per-card checkbox restored; the bar dispatches the SELECTED staged subset', () => {
+    expect(BOARD_SRC).toMatch(/type="checkbox"/)
+    expect(BOARD_SRC).toContain('tq-select-')
+    // 下发所选：只发未被排除的 staged 条目 id
+    expect(BOARD_SRC).toMatch(/stagedSelected\.map\(\(e\) => e\.id\)/)
+    expect(BOARD_SRC).toMatch(/stagedSelected\.length === 0/)
     // action bar still only renders when there is at least one staged card
     expect(BOARD_SRC).toMatch(/stagedShown\.length > 0 &&/)
   })

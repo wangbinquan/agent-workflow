@@ -40,6 +40,7 @@ import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import {
   buildImmediateLedgerContext,
   type CauseClass,
+  causeClassForEntry,
   fetchDeferredDispatchedOrigins,
   findOpenImmediateLedgerHome,
   isDispatchedEntryConsumed,
@@ -105,10 +106,11 @@ const EMPTY_RESULT: DispatchTaskQuestionsResult = {
 class ConcurrentClaim extends Error {}
 
 /** Thrown inside the atomic tx to roll it back when a concurrent dispatch already left an
- *  OPEN (unconsumed) dispatched designer question on an affected node (→ ConflictError). */
+ *  OPEN (unconsumed) dispatched question on an affected node (→ ConflictError). RFC-133: carries
+ *  the blocker run (when one exists) so the ConflictError can surface WHAT to wait for. */
 class NodeDispatchInFlight extends Error {
-  constructor(readonly nodeId: string) {
-    super(`node ${nodeId} already has an open (unconsumed) dispatched designer question`)
+  constructor(readonly blocker: { nodeId: string; runId?: string; runStatus?: string }) {
+    super(`node ${blocker.nodeId} already has an open (unconsumed) dispatched question`)
   }
 }
 
@@ -144,15 +146,9 @@ function homeTarget(e: TaskQuestionRow): string | null {
 }
 
 // RFC-128 P5-BC (§5.2.12 F3) — the rerun-cause class an entry's dispatch mints, derived from its
-//承接 role. A node_run carries ONE rerun_cause; entries of different classes on the same home are
-// SEPARATE reruns (serialized, never collapsed). self/questioner causes are isClarifyRerun=TRUE
-// (inline resume + directive gating); designer's cross-clarify-answer is FALSE (update mode).
-// CauseClass + the immediate-ledger oracle now live in @/services/clarifyRerunLedger (shared).
-function causeClassForEntry(e: TaskQuestionRow): CauseClass {
-  if (e.roleKind === 'self') return 'clarify-answer'
-  if (e.roleKind === 'questioner') return 'cross-clarify-questioner-rerun'
-  return 'cross-clarify-answer' // designer (incl. manual)
-}
+// 承接 role. CauseClass + causeClassForEntry + the immediate-ledger oracle live in
+// @/services/clarifyRerunLedger (RFC-133 moved causeClassForEntry there so the queued-entry
+// cause guard shares the ONE definition).
 // Auto-split dispatch priority (§5.2.13): self/questioner (blocking-output, §0) BEFORE designer.
 const CAUSE_PRIORITY: Record<CauseClass, number> = {
   'clarify-answer': 0,
@@ -483,10 +479,16 @@ export async function dispatchTaskQuestions(
   //     lineage window, so a failed-then-revived run never re-renders its feedback). REJECT
   //     the dispatch when ANY affected target node has an open dispatched question — open ==
   //     NOT consumed, where "consumed" is the SAME resolveHandlerRun lineage the read-side
-  //     uses (done+output). This covers a pending/running rerun AND a FAILED / un-run one. The
-  //     user dispatches the rest AFTER that node's rerun reaches done+output (its failed run
-  //     can still be revived/retried and render its feedback in the meantime).
-  await assertNoInFlightDispatch(db, taskId, affected)
+  //     uses. This covers a pending/running rerun AND a FAILED one.
+  //     RFC-133 (live deadlock QMGP5): a QUEUED (trigger NULL) entry is open only while its
+  //     target owes a RUN OBLIGATION (non-done top-level run) or this batch mints an ALIEN
+  //     cause there — a never-run / all-done target releases (its next run binds the queue).
+  //     mintCauseByTarget = the cause this batch mints per FRONTIER node (non-frontier
+  //     affected nodes are not minted here → pure run-obligation check for them).
+  const mintCauseByTarget: ReadonlyMap<string, CauseClass> = new Map(
+    [...frontier].map((n) => [n, causeClassForEntry(byTarget.get(n)![0]!)]),
+  )
+  await assertNoInFlightDispatch(db, taskId, affected, mintCauseByTarget)
 
   // 5d. Codex impl-gate (§5.2.3④ run-self): extend the in-flight gate to the OPEN IMMEDIATE
   //     self/questioner ledger (a quick-channel continuation: sealed_at NULL, NOT dispatched). The
@@ -634,11 +636,15 @@ export async function dispatchTaskQuestions(
           )
           .all()
         if (txDispatched.length > 0) {
-          const blocker = findOpenDispatchTarget(affected, {
-            entries: txDispatched,
-            runs: txRuns,
-            outputRunIds: txOutputIds,
-          })
+          const blocker = findOpenDispatchTarget(
+            affected,
+            {
+              entries: txDispatched,
+              runs: txRuns,
+              outputRunIds: txOutputIds,
+            },
+            mintCauseByTarget,
+          )
           if (blocker !== null) throw new NodeDispatchInFlight(blocker)
         }
         // (b) Codex impl-gate (§5.2.3④ run-self): re-run the OPEN IMMEDIATE (quick-channel)
@@ -678,7 +684,7 @@ export async function dispatchTaskQuestions(
             txRuns,
             buildImmediateLedgerContext(txRounds, txRuns, txOutputIds, txDeferredDispatchedOrigins),
           )
-          if (immBlocker !== null) throw new NodeDispatchInFlight(immBlocker)
+          if (immBlocker !== null) throw new NodeDispatchInFlight({ nodeId: immBlocker })
         }
         tx.update(taskQuestions)
           .set({ dispatchedAt: now, dispatchedBy: actor.userId, updatedAt: now })
@@ -710,7 +716,12 @@ export async function dispatchTaskQuestions(
     if (e instanceof NodeDispatchInFlight) {
       throw new ConflictError(
         'task-question-node-dispatch-in-flight',
-        `cannot dispatch to '${e.nodeId}': it already has an OPEN (unconsumed) dispatched designer question (a concurrent dispatch won). Dispatch the remaining questions after that node's rerun finishes (done with output).`,
+        `cannot dispatch to '${e.blocker.nodeId}': it has an unfinished rerun obligation${
+          e.blocker.runStatus !== undefined
+            ? ` (run ${e.blocker.runId}: ${e.blocker.runStatus})`
+            : ''
+        } or an open dispatched question of a different kind (a concurrent dispatch won). Dispatch the remaining questions after that node's run finishes.`,
+        e.blocker,
       )
     }
     if (e instanceof TargetChanged) {
@@ -742,9 +753,12 @@ export async function dispatchTaskQuestions(
 /** Minimal projection both the async pre-check and the in-tx recheck pass to the pure
  *  predicate, so "unconsumed" is defined IDENTICALLY in both (and to the read-side). */
 interface OpenDispatchInputs {
-  /** Every dispatched (dispatched_at-set) designer task_question of the task. */
+  /** Every dispatched (dispatched_at-set) task_question of the task. */
   entries: ReadonlyArray<
-    Pick<TaskQuestionRow, 'triggerRunId' | 'defaultTargetNodeId' | 'overrideTargetNodeId'>
+    Pick<
+      TaskQuestionRow,
+      'triggerRunId' | 'defaultTargetNodeId' | 'overrideTargetNodeId' | 'roleKind'
+    >
   >
   /** Every node_run of the task. */
   runs: ReadonlyArray<typeof nodeRuns.$inferSelect>
@@ -752,21 +766,30 @@ interface OpenDispatchInputs {
   outputRunIds: ReadonlySet<string>
 }
 
+/** RFC-133: the blocker surfaced by the in-flight gate — the node plus (when one exists) the
+ *  open run the user is actually waiting on, so the 409 is actionable. */
+interface OpenDispatchBlocker {
+  nodeId: string
+  runId?: string
+  runStatus?: string
+}
+
 /**
  * Codex (ship-gate) — the FIRST affected node that already holds an OPEN (unconsumed)
- * dispatched designer question, or null. "Unconsumed" is the SAME oracle the read-side uses
- * (resolveHandlerRun lineage → done+output == consumed): a dispatched entry is open while it
- * is queued (trigger_run_id NULL), running, OR its handler run FAILED with no output — only a
- * done+output handler run counts as consumed. This is wider than "pending/running rerun":
- * minting a newer cross-clarify-answer rerun on the same (node, iteration) while a prior
- * dispatched question is unconsumed would make the newer run the upper bound of the prior
- * question's lineage window → a later revival/retry of the failed run never re-renders its
- * feedback → the question strands `processing` forever. So we reject the new dispatch.
+ * dispatched question, or null. "Unconsumed" is the SAME oracle the read-side uses
+ * (resolveHandlerRun lineage): a dispatched entry is open while its handler run is
+ * pending/running, or FAILED (revivable — a newer mint would clobber its lineage window).
+ * RFC-133: a QUEUED (trigger NULL) entry is open only while its target owes a run obligation
+ * (non-done top-level run) or `mintCauseByTarget` says this batch mints an ALIEN cause there
+ * (Codex design-gate P2) — a never-run / all-done target no longer wedges the dispatch
+ * (isDispatchedEntryConsumed §RFC-133).
  */
 function findOpenDispatchTarget(
   affected: ReadonlySet<string>,
   inputs: OpenDispatchInputs,
-): string | null {
+  /** cause this batch will mint per FRONTIER node; absent key = no mint on that node. */
+  mintCauseByTarget: ReadonlyMap<string, CauseClass>,
+): OpenDispatchBlocker | null {
   const lineageViews: RunLineageView[] = inputs.runs.map((r) => ({
     id: r.id,
     nodeId: r.nodeId,
@@ -783,8 +806,23 @@ function findOpenDispatchTarget(
     // node where the rerun is minted (a reassign moves the run to the target, not the origin home).
     const target = e.overrideTargetNodeId ?? e.defaultTargetNodeId
     if (target === null || target === '' || !affected.has(target)) continue
-    if (!isDispatchedEntryConsumed(e, inputs.runs, lineageViews, 'in-flight')) {
-      return target
+    if (
+      !isDispatchedEntryConsumed(
+        e,
+        inputs.runs,
+        lineageViews,
+        'in-flight',
+        mintCauseByTarget.get(target),
+      )
+    ) {
+      // Best-effort blocker run: the open (non-done top-level) run on the target — present for
+      // the run-obligation & bound-handler cases, absent for a pure cause-serialization block.
+      const blockerRun = inputs.runs.find(
+        (r) => r.nodeId === target && r.parentNodeRunId === null && r.status !== 'done',
+      )
+      return blockerRun !== undefined
+        ? { nodeId: target, runId: blockerRun.id, runStatus: blockerRun.status }
+        : { nodeId: target }
     }
   }
   return null
@@ -792,15 +830,16 @@ function findOpenDispatchTarget(
 
 /**
  * Async pre-check: reject the dispatch when ANY affected target node already has an OPEN
- * (unconsumed) dispatched designer question — covers a pending/running rerun AND a FAILED /
- * un-run one (a dispatched question whose handler run failed is still unconsumed). The user
- * dispatches the remaining questions AFTER that node's rerun reaches done+output (its failed
- * run can still be revived/retried and render its feedback in the meantime).
+ * (unconsumed) dispatched question — a pending/running/FAILED handler rerun, a queued entry
+ * whose target still owes a run obligation, or a queued entry this batch would collapse into
+ * an alien-cause mint (RFC-133). The user dispatches the remaining questions AFTER that
+ * node's open run finishes.
  */
 async function assertNoInFlightDispatch(
   db: DbClient,
   taskId: string,
   affected: ReadonlySet<string>,
+  mintCauseByTarget: ReadonlyMap<string, CauseClass>,
 ): Promise<void> {
   // RFC-128 P5-BC (R2-2, §5.2.12 contract 3): span ANY deferred role (self/questioner/designer),
   // not designer-only — a home with an in-flight self/questioner dispatch must block a later
@@ -823,11 +862,18 @@ async function assertNoInFlightDispatch(
     db,
     runs.map((r) => r.id),
   )
-  const blocker = findOpenDispatchTarget(affected, { entries, runs, outputRunIds })
+  const blocker = findOpenDispatchTarget(
+    affected,
+    { entries, runs, outputRunIds },
+    mintCauseByTarget,
+  )
   if (blocker !== null) {
     throw new ConflictError(
       'task-question-node-dispatch-in-flight',
-      `cannot dispatch to '${blocker}': it already has an OPEN (unconsumed) dispatched question. Dispatch the remaining questions after that node's rerun finishes (done with output).`,
+      `cannot dispatch to '${blocker.nodeId}': it has an unfinished rerun obligation${
+        blocker.runStatus !== undefined ? ` (run ${blocker.runId}: ${blocker.runStatus})` : ''
+      } or an open dispatched question of a different kind. Dispatch the remaining questions after that node's run finishes.`,
+      blocker,
     )
   }
 }
@@ -868,6 +914,7 @@ async function assertNoOpenImmediateLedger(
     throw new ConflictError(
       'task-question-node-dispatch-in-flight',
       `cannot dispatch to '${blocker}': it has an OPEN self/questioner continuation (a quick-channel answer's rerun is pending) — a second pending rerun would double-mint. Dispatch after that continuation finishes (done with output).`,
+      { nodeId: blocker },
     )
   }
 }

@@ -11463,6 +11463,16 @@ mark.comment-anchor[data-active='true'] {
   padding: var(--space-2) var(--space-3);
   line-height: 1.5;
 }
+/* RFC-133 — staged 卡逐卡勾选行（inline checkbox 模式同 FilesPicker/MemoryRow）。 */
+.task-questions__select {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-sm);
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
 
 /* RFC-120 D12 — clarify-page per-question handler echo + picker. */
 .clarify-handler {

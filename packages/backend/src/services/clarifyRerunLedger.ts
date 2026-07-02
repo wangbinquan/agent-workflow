@@ -32,6 +32,14 @@ export type CauseClass =
   | 'cross-clarify-questioner-rerun'
   | 'cross-clarify-answer'
 
+/** RFC-133: single definition shared by the dispatch grouping/auto-split AND the queued-entry
+ *  cause guard in isDispatchedEntryConsumed (moved here from taskQuestionDispatch's private copy). */
+export function causeClassForEntry(e: Pick<TaskQuestionRow, 'roleKind'>): CauseClass {
+  if (e.roleKind === 'self') return 'clarify-answer'
+  if (e.roleKind === 'questioner') return 'cross-clarify-questioner-rerun'
+  return 'cross-clarify-answer' // designer (incl. manual)
+}
+
 // RFC-128 P5-BC (Codex impl-gate, §5.2.3④) — the OPEN IMMEDIATE self/questioner ledger oracle.
 //
 // The dispatch-time in-flight gate (assertNoInFlightDispatch) only sees `dispatched_at IS NOT NULL`
@@ -225,11 +233,25 @@ export function findOpenImmediateLedgerHome(
 }
 
 /** Is a dispatched entry CONSUMED? = its handler run (resolved through the same resolveHandlerRun
- *  lineage the read-side uses) has reached the terminal-success bar for `mode`. Queued (trigger
- *  NULL), running, GC'd anchor, and every NON-done terminal (failed/canceled/interrupted) →
- *  NOT consumed (still open — revivable via retry/resume) in EITHER mode.
+ *  lineage the read-side uses) has reached the terminal-success bar for `mode`. Running, GC'd
+ *  anchor, and every NON-done terminal (failed/canceled/interrupted) → NOT consumed (still open —
+ *  revivable via retry/resume) in EITHER mode.
  *
- *  `mode` diverges ONLY on a done-NO-output handler (the SAME split as openImmediateRounds —
+ *  QUEUED (trigger NULL — dispatched but not yet bound by any run's queue injection):
+ *   - 'revivable' (borrow oracle): open, unconditionally (unchanged — the deferred rerun is still
+ *     owed to this entry).
+ *   - 'in-flight' (RFC-133, live-deadlock fix — task 01KWFZRQFPZFQQEM8JTCHQMGP5 "QMGP5"): open ⟺
+ *     the entry's EFFECTIVE TARGET (override ?? default) owes a RUN OBLIGATION — it has a
+ *     top-level run with `status !== 'done'` (same bar as openImmediateRounds' in-flight scan) —
+ *     OR the caller is about to MINT a rerun of a DIFFERENT cause class there (`mintCause`,
+ *     Codex design-gate P2: releasing a queued cross-cause entry would let the mint's queue
+ *     injection bind it into that alien-cause rerun, collapsing causes §5.2.12 keeps serialized;
+ *     a SAME-cause queued entry legitimately rides the mint, like q1+q2 in one batch).
+ *     A target with NO runs at all (never-run downstream — its first natural run binds the queue)
+ *     or only done runs (idle — the next mint binds it) has no obligation: blocking there is the
+ *     circular-wait bug (the "wait for done+output" exit condition could never be satisfied).
+ *
+ *  `mode` also diverges on a done-NO-output handler (the SAME split as openImmediateRounds —
  *  2026-07-01 deadlock fix): a clarify handler that ASKS a follow-up round exits `done` with NO
  *  <workflow-output> port (runner.ts:1321), and that state is PERMANENT (a clarify-ask never
  *  becomes done+output).
@@ -240,12 +262,28 @@ export function findOpenImmediateLedgerHome(
  *   - 'revivable' (RFC-127 borrow oracle): done && hasOutput = consumed. A done-no-output handler
  *     has produced nothing → keeps borrowing the same handler (RFC-127 consumed→null tests). */
 export function isDispatchedEntryConsumed(
-  entry: Pick<TaskQuestionRow, 'triggerRunId'>,
+  entry: Pick<
+    TaskQuestionRow,
+    'triggerRunId' | 'defaultTargetNodeId' | 'overrideTargetNodeId' | 'roleKind'
+  >,
   runs: ReadonlyArray<NodeRunRow>,
   lineageViews: RunLineageView[],
   mode: LedgerOpenMode,
+  /** in-flight only: the cause class the CALLER will mint on this entry's target in the current
+   *  operation (dispatch frontier mint / quick-finalize continuation). undefined = no mint there
+   *  (the entry just queues — pure run-obligation check). Ignored in 'revivable' mode. */
+  mintCause?: CauseClass,
 ): boolean {
-  if (entry.triggerRunId === null) return false // queued (not yet bound) → open
+  if (entry.triggerRunId === null) {
+    if (mode === 'revivable') return false // queued → open, unconditionally (borrow unchanged)
+    const target = entry.overrideTargetNodeId ?? entry.defaultTargetNodeId
+    if (target === null || target === '') return false // no target (data anomaly) → conservative
+    if (mintCause !== undefined && causeClassForEntry(entry) !== mintCause) return false // (b)
+    const hasRunObligation = runs.some(
+      (r) => r.nodeId === target && r.parentNodeRunId === null && r.status !== 'done',
+    )
+    return !hasRunObligation // (a) no open run on the target → nothing in flight → consumed
+  }
   const anchorRow = runs.find((r) => r.id === entry.triggerRunId)
   if (anchorRow === undefined) return false // anchor GC'd → treat as open (conservative)
   const hr = resolveHandlerRun({
@@ -299,17 +337,27 @@ function toLineageViews(
 export function hasOpenDispatchedEntryOnHome(
   homeNodeId: string,
   dispatchedEntries: ReadonlyArray<
-    Pick<TaskQuestionRow, 'triggerRunId' | 'defaultTargetNodeId' | 'overrideTargetNodeId'>
+    Pick<
+      TaskQuestionRow,
+      'triggerRunId' | 'defaultTargetNodeId' | 'overrideTargetNodeId' | 'roleKind'
+    >
   >,
   runs: ReadonlyArray<NodeRunRow>,
   outputRunIds: ReadonlySet<string>,
+  /** RFC-133: the cause class of the continuation the CALLER is about to mint on this home
+   *  (quick-finalize self → 'clarify-answer', questioner → 'cross-clarify-questioner-rerun').
+   *  A queued entry of a DIFFERENT cause must still block the mint (it would otherwise be
+   *  bound into the alien-cause continuation — Codex design-gate P2). */
+  mintCause: CauseClass,
 ): boolean {
   const onHome = dispatchedEntries.filter(
     (e) => (e.overrideTargetNodeId ?? e.defaultTargetNodeId) === homeNodeId,
   )
   if (onHome.length === 0) return false
   const lineageViews = toLineageViews(runs, outputRunIds)
-  return onHome.some((e) => !isDispatchedEntryConsumed(e, runs, lineageViews, 'in-flight'))
+  return onHome.some(
+    (e) => !isDispatchedEntryConsumed(e, runs, lineageViews, 'in-flight', mintCause),
+  )
 }
 
 /** RFC-128 P5-BC §5.2.14 mixed-path step 1 — submit-side dispatch-mode guard. Does `originNodeRunId`

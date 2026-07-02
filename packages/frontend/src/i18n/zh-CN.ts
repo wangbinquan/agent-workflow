@@ -2459,6 +2459,7 @@ export interface Resources {
     selectForDispatch: string
     dispatchTargetChanged: string
     dispatchInFlight: string
+    dispatchInFlightNode: string
     dispatchDesignerNotReady: string
     dispatchRoundMultiTarget: string
     dispatchUnsafeTarget: string
@@ -5104,10 +5105,12 @@ export const zhCN: Resources = {
     viewClarify: '查看反问',
     nodeBadgeAria: '该节点 {{count}} 个待处理问题',
     batchDispatch: '批量下发',
-    batchDispatchCount: '批量下发（{{count}}）',
+    batchDispatchCount: '下发所选（{{count}}）',
     selectForDispatch: '选择',
     dispatchTargetChanged: '目标已变，请重试',
     dispatchInFlight: '该节点正在重跑，请等其完成后再下发',
+    dispatchInFlightNode:
+      '节点 {{node}} 还有未完成的重跑（或不同类型的已下发问题在途），请等其完成后再下发',
     dispatchDesignerNotReady: '设计者尚未就绪，暂时无法下发',
     dispatchRoundMultiTarget: '同一轮的问题被指派到了多个处理节点；v1 需先统一为单一处理节点再下发',
     dispatchUnsafeTarget: '所选处理节点当前不可安全下发',

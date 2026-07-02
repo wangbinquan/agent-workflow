@@ -633,6 +633,7 @@ export async function submitCrossClarifyAnswers(
               triggerRunId: taskQuestions.triggerRunId,
               defaultTargetNodeId: taskQuestions.defaultTargetNodeId,
               overrideTargetNodeId: taskQuestions.overrideTargetNodeId,
+              roleKind: taskQuestions.roleKind,
             })
             .from(taskQuestions)
             .where(
@@ -659,11 +660,13 @@ export async function submitCrossClarifyAnswers(
                 .map((r) => r.id),
             )
             if (
+              // RFC-133: this tx mints the questioner cascade rerun on this home.
               hasOpenDispatchedEntryOnHome(
                 questionerHome.nodeId,
                 dispatchedHome,
                 txRuns,
                 txOutputIds,
+                'cross-clarify-questioner-rerun',
               )
             ) {
               throw new ConflictError(
