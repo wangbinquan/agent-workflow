@@ -173,6 +173,19 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     log.warn('orphan reap failed', { error: err instanceof Error ? err.message : String(err) })
   }
 
+  // 5b2. RFC-132 PR-D' 步骤0: reconcile 升级前遗留的 immediate 反问 round（answered 但没打
+  // dispatched_at）—— 补 sealed+dispatched 并把 trigger_run_id 绑到【已存在】的 continuation
+  // run，令统一注入器 buildClarifyQueueContext 能重新注入用户答案。必须在任何 resume 之前跑
+  // （否则 continuation 恢复时注入空 → 丢答案，design §13 更正①）。幂等 + best-effort（自带 log）。
+  try {
+    const { reconcileLegacyImmediateRounds } = await import('@/services/clarifyMigration')
+    await reconcileLegacyImmediateRounds(db)
+  } catch (err) {
+    log.warn('legacy immediate clarify reconcile on boot failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
   // 5c. RFC-017: reconcile registered skill_sources up-front so the first
   // /api/skills hit (likely the SPA's skills query) sees the current set of
   // child skills. Per-source failures are already swallowed into
