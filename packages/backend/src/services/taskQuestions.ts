@@ -1060,25 +1060,18 @@ export async function stageTaskQuestion(
     )
   }
   if (staged) {
-    // RFC-134 D10（Codex R2-F4 + R3-F7）——已下发行不可 stage：dispatch 后条目已「提交执行」，
-    // stage 只会留下脏戳（生来已下发的 echo 回执同理）。守卫必须是**原子条件更新**（同列 CAS，
-    // 镜像 reassignTaskQuestion / dispatch 的 `dispatched_at IS NULL` 语义）而非先查后改——并发
-    // dispatch 可在检查与更新的间隙 stamp `dispatched_at`；0 行生效 → Conflict、无脏写。
-    let updated = false
-    dbTxSync(db, (tx) => {
-      const stillOpen = tx
-        .select({ id: taskQuestions.id })
-        .from(taskQuestions)
-        .where(and(eq(taskQuestions.id, entryId), isNull(taskQuestions.dispatchedAt)))
-        .all()
-      if (stillOpen.length === 0) return // dispatched concurrently (or born-dispatched echo) → reject below
-      tx.update(taskQuestions)
-        .set({ stagedAt: Date.now(), stagedBy: actor.userId, updatedAt: Date.now() })
-        .where(and(eq(taskQuestions.id, entryId), isNull(taskQuestions.dispatchedAt)))
-        .run()
-      updated = true
-    })
-    if (!updated) {
+    // RFC-134 D10（Codex R2-F4 + R3-F7 + 实现 gate fold）——已下发行不可 stage：dispatch 后
+    // 条目已「提交执行」，stage 只会留下脏戳（生来已下发的 echo 回执同理）。守卫是**单条条件
+    // 更新**（语句级原子）+ 受影响行数判定——没有任何先查后改窗口：并发 dispatch 在同列上
+    // stamp `dispatched_at`，输掉 CAS 的一方恰得 0 行 → Conflict、零脏写。changes 非数字按 0
+    // 处理（fail-closed：误报冲突可重试，静默脏戳不可挽回；驱动实际恒返 ChangeStats，同
+    // auth/sessionStore.ts 成例）。
+    const result = await db
+      .update(taskQuestions)
+      .set({ stagedAt: Date.now(), stagedBy: actor.userId, updatedAt: Date.now() })
+      .where(and(eq(taskQuestions.id, entryId), isNull(taskQuestions.dispatchedAt)))
+    const changes = (result as unknown as { changes?: number }).changes
+    if (typeof changes !== 'number' || changes !== 1) {
       throw new ConflictError(
         'task-question-already-dispatched',
         `cannot stage a dispatched question (dispatched_at is set) — it is already committed for execution`,

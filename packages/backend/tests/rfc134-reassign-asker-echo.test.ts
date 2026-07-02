@@ -799,6 +799,46 @@ describe('RFC-134 echo 生命周期（AC-6/AC-7）', () => {
     expect((await echoRows(db, taskId)).length).toBe(before)
   })
 
+  test('D10 交错回归（实现 gate fold）：seal 门通过后、CAS 前被 dispatch 抢戳 → 0 行 → Conflict、零脏戳', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    const origin = await seedRound(db, taskId, {
+      kind: 'self',
+      askingNodeId: ASKER,
+      questions: [mkQ('q1')],
+    })
+    // sealed + 未下发：seal 门必过——此时「dispatch 抢先 stamp」是 stage 单语句 CAS 前
+    // 唯一可能的交错；直接落戳模拟赢家（stage 的 staged=true 路径没有任何 dispatched 预读，
+    // 该交错与「调用时已下发」命中同一条条件更新——单语句原子，输者恰得 0 行）。
+    const entry = await insertEntry(db, taskId, {
+      originNodeRunId: origin,
+      questionId: 'q1',
+      roleKind: 'self',
+      defaultTargetNodeId: ASKER,
+    })
+    await db
+      .update(taskQuestions)
+      .set({ dispatchedAt: Date.now(), dispatchedBy: 'racer' })
+      .where(eq(taskQuestions.id, entry))
+    await expect(stageTaskQuestion(db, entry, true, actor)).rejects.toThrow(ConflictError)
+    const row = (await allEntries(db, taskId)).find((e) => e.id === entry)!
+    expect(row.stagedAt).toBeNull() // 零脏戳
+    expect(row.stagedBy).toBeNull()
+  })
+
+  test('D10 源码形态锁：stage 的 staged=true 路径是单条条件更新 + 受影响行数判定（无先查后改）', async () => {
+    const src = await Bun.file(
+      new URL('../src/services/taskQuestions.ts', import.meta.url).pathname,
+    ).text()
+    const start = src.indexOf('export async function stageTaskQuestion')
+    const end = src.indexOf('export', start + 10)
+    const fn = src.slice(start, end)
+    expect(fn).toContain('isNull(taskQuestions.dispatchedAt)') // 条件更新（同列 CAS）
+    expect(fn).toContain('changes') // 受影响行数判定
+    expect(fn).not.toContain('stillOpen') // 不得回退成 tx 内先查后改
+  })
+
   test('D10 通用性：任何已下发行都不可 stage（补 pre-existing 缺口）；未下发行 stage/un-stage 照常', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
