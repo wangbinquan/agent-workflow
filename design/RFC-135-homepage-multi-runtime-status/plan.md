@@ -53,9 +53,9 @@
 - 门禁：`bun run typecheck && bun run test && bun run format:check` + 前端 vitest
   + `bun run build:binary` smoke；推送后查 GitHub Actions。
 - Playwright 视觉基线：`e2e/visual-regression.spec.ts:120`（homepage/dashboard）
-  截图基线随 hero 改动更新。**注意**：该 spec 在 nightly 已连续失败
-  （2026-07-01/07-02，失败页面正是 homepage——本 RFC 之前的既有漂移），实现时
-  先确认基线现状、区分既有漂移与本 RFC 引入的变化，勿把旧漂移一并「重拍」掩盖。
+  截图基线随 hero 改动更新。背景：该基线曾因 RFC-130 删 readonly 文案漂移导致
+  nightly 连续失败（2026-07-01/07-02），已由 `dea4a8f7` 更新基线修复——本 RFC
+  实现时基于**修复后的基线**重拍 hero 变化即可，diff 里只应出现状态行区域。
 - Codex 实现 gate review + 视觉自查（首页明暗双主题截图，对照 /settings 等核心页）。
 
 ## 验收清单
