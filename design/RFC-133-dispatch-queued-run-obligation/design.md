@@ -43,19 +43,32 @@
 
 ```
 in-flight 模式,triggerRunId === null 时:
-  open(阻塞) ⟺ ∃ r ∈ runs:
-      r.nodeId === effectiveTarget(entry)   // override ?? default
-   && r.parentNodeRunId === null            // top-level(与 openImmediateRounds 扫描一致)
-   && r.status !== 'done'                   // 未终结 run 义务
+  open(阻塞) ⟺
+      ∃ r ∈ runs:                            // (a) run 义务
+          r.nodeId === effectiveTarget(entry)   // override ?? default
+       && r.parentNodeRunId === null            // top-level(与 openImmediateRounds 扫描一致)
+       && r.status !== 'done'                   // 未终结 run 义务
+   ∨ (mintCause !== undefined                 // (b) cause 序列化(Codex 设计 gate P2)
+       && causeClassForEntry(entry) !== mintCause)
   否则 consumed(放行)。
-revivable 模式,triggerRunId === null 时:open,恒成立(不变)。
+revivable 模式,triggerRunId === null 时:open,恒成立(不变;不接受 mintCause)。
 ```
 
+`mintCause` = **本次调用方将在该目标上 mint 的 rerun 的 cause class**;undefined = 本次不在
+该目标 mint(纯排队)。(b) 是 Codex 设计 gate P2 的 fold:若无此项,idle 目标上挂一条
+cause A(如 designer `cross-clarify-answer`)的 queued entry 时,以 cause B(如 self
+`clarify-answer`)为由在该目标 mint 的 rerun 会在注入时把 A 也一并 `bindTriggerRun` 绑进来
+——异类 cause 塌缩进单个 run,违反 §5.2.12「一个 node_run 一个 rerun_cause、异类分 rerun
+串行」契约。加 (b) 后:同 cause 的 queued entry 合法搭车(与单批内 q1+q2 共享一个 mint
+plan 同语义),异 cause 的阻塞本次下发、等其自身义务先行解决。
+
 签名变化:`entry` 的 Pick 从 `'triggerRunId'` 加宽为
-`'triggerRunId' | 'defaultTargetNodeId' | 'overrideTargetNodeId'`——两个 in-flight 调用点
-(`findOpenDispatchTarget` 的 `OpenDispatchInputs.entries`、`hasOpenDispatchedEntryOnHome`
-的 `dispatchedEntries`)的既有 Pick 已含这两列,revivable 调用点传的是整行,均零改动直接
-满足。effective target 为 NULL(数据异常)→ 保守 open(维持现状路径)。
+`'triggerRunId' | 'defaultTargetNodeId' | 'overrideTargetNodeId' | 'roleKind'`
+(`causeClassForEntry` 需 roleKind);新增可选参 `mintCause?: CauseClass`(仅 in-flight
+分支读取)。`causeClassForEntry` 从 `taskQuestionDispatch.ts:151`(私有)**迁移导出**到
+`clarifyRerunLedger.ts`(oracle 同模块;dispatch 已 import ledger,方向无环),dispatch 侧
+改 import——单定义不 fork。两个 in-flight 调用点的既有行对象均含以上列,revivable 调用点
+传整行,零额外取数。effective target 为 NULL(数据异常)→ 保守 open(维持现状路径)。
 
 ### 2.2 口径对齐论证
 
@@ -71,6 +84,13 @@ revivable 模式,triggerRunId === null 时:open,恒成立(不变)。
   **保守方向**(只可能多拦、不可能误放),且对本 RFC 要修的两类死锁(零 run / 全 done)
   判定完全一致。loop 场景里旧 iteration 残留 failed run 会多拦一次下发——该 run 本就该先
   resume/retry 清理,不构成新死锁(run 终结后守卫即开)。
+- **cause 守卫只作用于「本次会 mint 的目标」**((b) 项 `mintCause` 由调用方给):
+  dispatch 只在 frontier mint,非 frontier affected 目标传 undefined——其 entry 纯排队,
+  等目标**自然 run**(initial / 级联)时才绑定,而自然 run 混绑任意 cause 的 queued entry
+  本就是 RFC-131 平铺队列的既有设计(QMGP5 的 grid-spec 正是走这条路);§5.2.12 的
+  cause 串行化边界只覆盖 **dispatch/quick mint 出来的 clarify-cause rerun**。quick-finalize
+  的三个 mint 守卫恒传其 continuation 的 cause(self→`clarify-answer` /
+  questioner→`cross-clarify-questioner-rerun`)。
 - **GC-anchor 分支不变**:anchor 曾存在说明曾有绑定 run,信息丢失时保守 open 合理。
 
 ### 2.3 并发安全矩阵(double-mint 防护不回归)
@@ -78,14 +98,15 @@ revivable 模式,triggerRunId === null 时:open,恒成立(不变)。
 dispatch 的 stamp+mint 在单个 `dbTxSync` 内原子提交(`taskQuestionDispatch.ts:547-706`),
 in-tx 复检与异步预检共用同一 oracle。逐态核对新谓词:
 
-| 目标节点状态 | queued entry 判定 | 说明 |
+| 目标节点状态 × cause | queued entry 判定 | 说明 |
 | --- | --- | --- |
-| 零 run(never-run 下游) | 放行 | 本 RFC 主修:mint 只在 frontier,该节点无 mint、无危害;entry 等首跑 `bindTriggerRun` |
-| 全部 top-level run done(idle) | 放行 | 本 RFC 主修:后续 mint(该次 dispatch 自己或 scheduler)绑定所有 queued entry |
+| 零 run(never-run 下游)+ 本次不 mint(非 frontier) | 放行 | 本 RFC 主修:该节点无 mint、无危害;entry 等首跑 `bindTriggerRun` |
+| 全部 top-level run done(idle)+ 同 cause mint | 放行 | 本 RFC 主修:mint 的 rerun 绑定同 cause 的全部 queued entry(与单批共享 mint plan 同语义) |
+| 全部 done / 零 run + **异 cause** mint | **阻塞** | Codex 设计 gate P2:异类塌缩违反 §5.2.12,谓词 (b) 项拦住;等 queued entry 自身义务先解决 |
 | 存在 pending run(mint 未 spawn) | 阻塞 | 批 1 tx 已提交 mint,批 2 预检/复检都看得到 → 序列化保持 |
 | 存在 running run | 阻塞 | 同上;运行中 run spawn 时已 bind 的 entry 走 handler 分支,本分支管未 bind 的 |
 | 存在 failed/canceled/interrupted | 阻塞 | 可复活,放行会与复活 run 冲突(§2.2) |
-| done-无-output(又反问) | 放行 | 与 handler 分支的 2026-07-01 死锁修复语义一致 |
+| done-无-output(又反问) | 放行((b) 仍适用) | 与 handler 分支的 2026-07-01 死锁修复语义一致 |
 
 并发窗口:两个 dispatch 同时过异步预检 → `getTaskQuestionWriteSem` 串行 → 后者 in-tx 复检
 看到前者**同 tx 提交**的 pending mint run(`tx.insert(nodeRuns)`)→ `NodeDispatchInFlight`
@@ -100,16 +121,22 @@ keyed `dispatched_at` 含已消费)在其之前运行,不受影响。
 ### 2.4 QMGP5 修复后走查
 
 第 5 批原样重试:affected={`agent_m7p3n1`,`agent_1k2ftd`}。grid-spec queued、
-`agent_1k2ftd` 零 run → 放行;`agent_m7p3n1` 的 19 条 bound entry → handler retry-4 done →
-consumed(不变)。frontier={`agent_m7p3n1`} mint 1 rerun;5 条 entry 全落 `dispatched_at`;
+`agent_1k2ftd` 零 run 且非 frontier(本次不 mint,`mintCause`=undefined;即便按 frontier
+评估也是同 cause self)→ (a)(b) 均不命中 → 放行;`agent_m7p3n1` 的 19 条 bound entry →
+handler retry-4 done → consumed(不变)。frontier={`agent_m7p3n1`} mint 1 rerun;5 条 entry 全落 `dispatched_at`;
 powerup(→`agent_1k2ftd`)queued 加入 grid-spec 行列。`agent_m7p3n1` rerun 注入 5 答案 →
 最终产出 → 评审 → `agent_1k2ftd` 首跑 `bindTriggerRun` 双条一起注入。零数据丢失。
 
 ## 3. 报错 details + 文案
 
+- `findOpenDispatchTarget` 入参加 `mintCauseByTarget: ReadonlyMap<string, CauseClass>`
+  (= 本批 frontier 的 `byTarget` cause 选择;非 frontier affected 不入 map → 谓词收到
+  undefined)。异步预检与 in-tx 复检传同一份(均在 tx 前算好,无新增 tx 读)。
+  `hasOpenDispatchedEntryOnHome` 加必传参 `mintCause: CauseClass`(三个 quick 调用点都
+  静态知道自己 continuation 的 cause)。
 - `findOpenDispatchTarget` 返回值从 `string | null` 改为
-  `{ nodeId: string; runId?: string; runStatus?: string } | null`(阻塞成立时带上命中的
-  blocker run;queued-无-run 分支永不阻塞故无此形态)。`NodeDispatchInFlight` 同步携带。
+  `{ nodeId: string; runId?: string; runStatus?: string } | null`(run 义务阻塞带命中的
+  blocker run;cause 序列化阻塞只带 nodeId)。`NodeDispatchInFlight` 同步携带。
 - 三处 `task-question-node-dispatch-in-flight` ConflictError(`taskQuestionDispatch.ts:711/
   828/868`)统一挂 `details: { nodeId, runId?, runStatus? }`——`DomainError` 封套本就支持
   `details`(`util/errors.ts` §4.2.1),**纯新增字段、无 API 破坏**。message 文本同步改为
@@ -156,35 +183,42 @@ powerup(→`agent_1k2ftd`)queued 加入 grid-spec 行列。`agent_m7p3n1` rerun 
 
 后端单元(新文件 `rfc133-queued-run-obligation.test.ts`,顶注链接本 RFC + QMGP5 事故):
 
-1. queued + 目标零 run → in-flight consumed(放行)、revivable open(不变)。
-2. queued + 目标全 top-level done(有/无 output 两种)→ in-flight 放行。
-3. queued + 目标存在 pending / running run → 阻塞。
+1. queued + 目标零 run(无 mintCause)→ in-flight consumed(放行)、revivable open(不变)。
+2. queued + 目标全 top-level done(有/无 output 两种,无 mintCause)→ in-flight 放行。
+3. queued + 目标存在 pending / running run → 阻塞(mintCause 有无均然)。
 4. queued + 目标存在 failed / canceled / interrupted run → 阻塞。
 5. queued + 目标仅有 wrapper 子 run(parent 非 null)非 done → 放行(top-level only)。
 6. effective target NULL → open(保守,现状)。
-7. bound 分支(handler done±output / failed / GC-anchor)逐态回归断言(不变)。
+7. **cause 序列化(Codex P2)**:queued(designer)+ 目标无义务 + `mintCause='clarify-answer'`
+   → 阻塞;queued(self)+ `mintCause='clarify-answer'` → 放行;同两例 revivable 模式忽略
+   mintCause 恒 open。
+8. bound 分支(handler done±output / failed / GC-anchor)逐态回归断言(不变;bound 分支
+   不读 mintCause)。
 
 锁定测试修订:`clarify-rerun-ledger-deadlock.test.ts:272` 拆分——GC-anchor 恒 open 保留;
 queued 改为条件化断言并注明本 RFC。
 
 后端集成(`dispatchTaskQuestions` / quick 路径):
 
-8. QMGP5 复现 e2e:self-clarify 两轮、各改派 1 条到 never-run 下游节点,第二轮批量下发
+9. QMGP5 复现 e2e:self-clarify 两轮、各改派 1 条到 never-run 下游节点,第二轮批量下发
    **成功**(修复前 409,红→绿),断言:全部 entry 落戳、仅 frontier mint、queued entry
    保持 NULL、目标首跑 `bindTriggerRun` 双条绑定注入。
-9. idle 变体:目标节点全 done 后再次下发通过。
-10. 反例回归:同 home 存在 pending/running rerun 时二批下发仍 409(in-tx 复检路径沿用既有
+10. idle 变体:目标节点全 done 后再次下发(同 cause)通过。
+11. **异 cause 仍串行(Codex P2)**:idle 目标挂 queued designer entry,self 批下发以该目标
+    为 frontier → 仍 409;同场景改为同 cause → 通过且 mint 的 rerun 绑定两条。
+12. 反例回归:同 home 存在 pending/running rerun 时二批下发仍 409(in-tx 复检路径沿用既有
     并发测试)。
-11. quick-finalize:home 挂 queued entry 且无 open run → 提交成功并 mint continuation;
-    home 有 pending continuation → 仍拒(`clarify.ts` 与 `crossClarify.ts` 各一)。
-12. 409 载荷:`details.nodeId` 存在且正确。
+13. quick-finalize:home 挂**同 cause** queued entry 且无 open run → 提交成功并 mint
+    continuation;home 挂**异 cause**(designer)queued entry → 仍拒;home 有 pending
+    continuation → 仍拒(`clarify.ts` 与 `crossClarify.ts` 各一)。
+14. 409 载荷:`details.nodeId` 存在且正确。
 
 前端 vitest:
 
-13. staged 卡渲染勾选框、默认全选;取消 2 条后按钮计数与请求体 `entryIds` 只含所选。
-14. 0 选 → 按钮 disabled;dispatch 成功后 excluded 清空。
-15. 节点 filter 下勾选集合跟随 `stagedShown`。
-16. `dispatchInFlight` 带 `details.nodeId` → 文案含节点 label;无 details → 回退静态文案。
+15. staged 卡渲染勾选框、默认全选;取消 2 条后按钮计数与请求体 `entryIds` 只含所选。
+16. 0 选 → 按钮 disabled;dispatch 成功后 excluded 清空。
+17. 节点 filter 下勾选集合跟随 `stagedShown`。
+18. `dispatchInFlight` 带 `details.nodeId` → 文案含节点 label;无 details → 回退静态文案。
 
 门槛:`bun run typecheck && bun run test && bun run format:check` + 前端 vitest +
 `bun run build:binary` smoke;push 后查 GitHub Actions。

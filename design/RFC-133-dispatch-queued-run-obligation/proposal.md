@@ -57,7 +57,10 @@ queued entry 在目标首跑时一起绑定注入(`bindTriggerRun`,`clarifyQueue
 1. **修死锁(后端根因)**:in-flight 口径下,queued(`trigger_run_id=NULL`)entry 仅当其
    effective target 节点**存在未终结(status ≠ 'done')的 top-level run** 时才阻塞;目标节点
    零 run 或全部 done → 不阻塞。与 `openImmediateRounds` 的 in-flight 口径
-   (`status !== 'done'`,2026-07-01 死锁修复)完全统一成「**run 义务**」判定。
+   (`status !== 'done'`,2026-07-01 死锁修复)完全统一成「**run 义务**」判定。附加
+   **cause 序列化守卫**(Codex 设计 gate P2 fold):当本次会在该目标 mint rerun 且 queued
+   entry 的 cause class 与 mint cause 不同,仍阻塞——保住 RFC-128 §5.2.12「一个 run 一个
+   cause、异类分 rerun 串行」契约(同 cause 搭车合法;非 mint 目标的纯排队不受影响)。
 2. **共享 oracle 一处修**:直接改 `isDispatchedEntryConsumed` 的 in-flight NULL 分支,
    dispatch 守卫(异步预检+in-tx 复检)与 quick 提交路径的 mint 守卫五个消费点统一受益;
    `'revivable'`(RFC-127 borrow oracle)模式行为**不变**。
@@ -98,8 +101,9 @@ queued entry 在目标首跑时一起绑定注入(`bindTriggerRun`,`clarifyQueue
 2. 后端单元矩阵(见 design §7)全绿,`clarify-rerun-ledger-deadlock.test.ts:272` 的
    「queued 恒 open」锁**改写**为条件化新契约(附本 RFC 链接)。
 3. 集成:never-run 与 idle 两类死锁场景的 dispatch 通过;「同 home 在途 rerun(pending/
-   running/failed)」场景仍 409(double-mint 防护不回归);quick-finalize 在「home 挂 queued
-   entry 且无 open run」时放行、「有 pending continuation」时仍拒。
+   running/failed)」场景仍 409(double-mint 防护不回归);「异 cause queued entry + 本次
+   mint」场景仍 409(§5.2.12 串行化不回归);quick-finalize 在「home 挂同 cause queued
+   entry 且无 open run」时放行、「异 cause queued / 有 pending continuation」时仍拒。
 4. 409 响应携带 `details.nodeId`;前端展示含节点名的本地化文案;无 `details` 时回退静态文案。
 5. 看板:staged 卡有勾选框,默认全选;「下发所选 (N)」只发所选 id;0 选禁用;勾选尊重节点
    filter;refetch 后勾选集合收敛到仍 staged 的 entry。
