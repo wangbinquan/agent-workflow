@@ -207,3 +207,11 @@ const clarifyContext = agentHasClarifyChannel(definition, node.id)
 **PR 重排**：PR-D'=步骤0+1+2；PR-E=步骤3（legacy-mint 可再拆 PR-E2）；PR-F=步骤4。
 
 **测试影响 + 风险（按 regression 概率）**：① 迁移丢答案（步骤0 先补 + 红→绿迁移集成测试兜底）；② 停写早于 flag 停读（严格 T8→T4）；③ 过早删 oracle 致在飞 continuation 双 mint（oracle 保留 inert 网到步骤3 + 删前确认 `answered + dispatched_at NULL` 计数=0）；④ trigger 锚点（`isTargetNodeConsumed` 全 case 派生锁）；⑤ drop-column 崩库（先 DROP INDEX + statement-breakpoint + journal bump）。受影响测试：`rfc070-aging-stamp-*`/`clarify-rerun-ledger-deadlock`/`rfc127-borrow`(Part0 move 保留、Part1 borrow 删)/~26 legacy-mint 测试迁移到 `autoDispatchClarifyRound`。
+
+## 14. PR-F 删列范围勘定（2026-07-02 侦察，亲验 grep）
+
+原 §1 删列清单按实际 reader 勘定为**只删两组**：
+- **`consumed_by_*`（3 表 5 索引）**：③ 完成后 reader 归零 → **删**（原计划）。
+- **`tasks.deferred_question_dispatch`**：backend reader 4 处（crossClarify 2 处在 submit* 死代码里随 ②b 删；task.ts:886 launch 默认 + :2591 DTO）+ **前端 3 处**（`launch-repo-source.ts:51/76`〔buildLaunchBody whitelist,记 [reference_launch_body_helper_whitelist]〕、`tasks.detail.tsx:608` badge、`workflows.launch.tsx:177` 发送）+ shared schema（task.ts:190/345）→ **删列须连前端/shared 一起**。
+- **`clarify_rounds.directive` 保留（偏差,原 §1 计划删）**：它有 3 个**活 reader**——`taskQuestions.ts:191`（reconcile desired：stop 轮不出 designer 条目,per-round 历史决策）、`:581`（designer park 源 continue 过滤）、`clarifySeal.ts:251`（seal base directive）。per-round 不可用 node 级替代：node 级是 last-write-wins,后来的 toggle continue 会错误"复活"老 stop 轮的 designer 条目。**注入语义已死**（平铺块无 directive trailer,scheduler 读 node 级）——列降级为「轮次历史决策记录」,与 `crossClarifySessions.directive`（审计,T7 保留）同类。
+- **`round_generation` 保留（条件不成立）**：grep 证实它是 **review 表**列（`schema.ts:934-937`,RFC-129 review 代际,`review.ts` 唯一 user）,与 clarify 轮次无关。
