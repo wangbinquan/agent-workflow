@@ -151,17 +151,19 @@ export interface WorkflowCanvasProps {
    */
   taskContext?: { reviewIteration: Record<string, number> }
   /**
-   * RFC-120 D13: per source-node count of pending (non-terminal) questions,
-   * keyed by workflow node id. Only entries `> 0` paint a count badge on the
-   * "asking" nodes (agent / clarify / cross-clarify). Undefined (editor canvas)
-   * ⇒ no badges and a byte-for-byte unchanged canvas (golden-lock). Changing
-   * this map rebuilds node data the same way `nodeStatuses` does.
+   * RFC-120 D13: per-node count of questions the node is HANDLING (processing-
+   * phase entries whose effective target = override ?? default is this node —
+   * 2026-07-02 badge-dimension fix), keyed by workflow node id. Only entries
+   * `> 0` paint a count badge (agent / clarify / cross-clarify renderers).
+   * Undefined (editor canvas) ⇒ no badges and a byte-for-byte unchanged canvas
+   * (golden-lock). Changing this map rebuilds node data the same way
+   * `nodeStatuses` does.
    */
   questionCounts?: Record<string, number>
   /**
    * RFC-120 D13: invoked with a node id when that node's question badge is
    * clicked. The task-detail page uses it to switch to the questions board and
-   * filter it to this source node.
+   * filter it to this handler node.
    */
   onNodeQuestionBadgeClick?: (nodeId: string) => void
   /**
