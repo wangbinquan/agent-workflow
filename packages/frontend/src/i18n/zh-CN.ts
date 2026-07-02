@@ -2461,6 +2461,7 @@ export interface Resources {
     answerPaneTitle: string
     answerPaneEmpty: string
     answerPaneHint: string
+    answerPaneResubmitHint: string
     answerPaneSubmit: string
     answerPaneSubmitCount: string
     author: {
@@ -5102,6 +5103,7 @@ export const zhCN: Resources = {
     answerPaneTitle: '集中回答待指派问题',
     answerPaneEmpty: '没有待回答的问题。',
     answerPaneHint: '在此回答所有待指派问题；提交后进入「待指派」，再到看板选择处理 agent 并下发。',
+    answerPaneResubmitHint: '该问题已回答——已预填原答案，重新提交将覆盖。',
     answerPaneSubmit: '提交答案',
     answerPaneSubmitCount: '提交答案（{{count}}）',
     author: {

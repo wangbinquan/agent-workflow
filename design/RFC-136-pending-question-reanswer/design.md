@@ -1,7 +1,29 @@
 # RFC-136 — 技术设计：待指派问题重答
 
-- 状态：Draft
+- 状态：Done（2026-07-02 交付）
 - 前置阅读：`proposal.md`（含 D1–D6 决策）；RFC-128 design（seal 原语 / 控制通道 / autoStage）
+
+## 0. 实现期补充决策（2026-07-02，随实现 gate 落定）
+
+- **D7 重答按题显式声明（并发防线，两轮收敛）**：重 seal 放宽不是无条件的——「待指派已答」
+  形态同时是 quick 通道（autoDispatchClarifyRound）seal→dispatch 两段锁 B 临界区**之间的瞬时
+  中间态**，行状态上与「移出待下发回到待指派」不可区分。若无条件放开，并发双提交能在窗口里
+  二次 seal → 二次 dispatch → double-mint（`rfc128-p5-bc §5.2.14 finding 1` 两测试实红为证）。
+  第一轮落为路由级布尔 `allowReseal`（用户质询后拍板保留）；实现门 Codex P2 指出布尔仍留**跨
+  通道**洞——面板 defer 提交落在**他人** quick 提交的窗口里时会静默覆盖 in-flight 答案。终态
+  收敛为**按题声明**：请求体 `resubmitQuestionIds`（面板只声明「预填过已提交答案、用户有意修
+  改」的题）→ 路由透传 `SealRoundQuestionsArgs.allowResealFor` → 服务端仅对声明且全条目待指派
+  的题放行覆盖。窗口场景中面板用户以为该题是新题、不会声明 → fresh 路径 409 → 刷新可见对方
+  答案，不覆盖。quick 通道从不声明（exactly-once 保持）；quick 分支带 `resubmitQuestionIds`
+  被 `clarify-resubmit-requires-defer` 拒绝。
+- **D8 unstage 按题级联**（用户实测「回答问题的按键又没了」触发）：cross 题 questioner+designer
+  两行两张卡，只移出一张会留下「半 staged」题——重答守卫 409 + 答题池整题排除（见 D9）双死路。
+  用户在看板的心智单位是**问题**而非角色行 → `stageTaskQuestion` 的 unstage 方向改为按
+  `(originNodeRunId, questionId)` 级联清 `staged_at`（仅未下发行；已下发行留审计戳、echo 天然
+  豁免）。stage 方向保持逐行（gate 逐行 CAS；正常路径 autoStage 本就全行同进）。
+- **D9 半 staged 题不进答题池**（防御深度）：`groupAnswerableQuestions` 对 sealed 题要求该题
+  **全部**条目 pending 才纳入——半 staged 题若进池等于「可编辑但服务端必 409」的死路 UI。D8
+  级联后正常路径不再产生该形态；此防护兜并发窗口与历史残留。
 
 ## 1. 现状与改动总览
 

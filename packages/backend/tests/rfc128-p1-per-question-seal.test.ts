@@ -213,10 +213,15 @@ describe('RFC-128 P1 — AC-1 逐题 seal (self round)', () => {
     expect(answers.find((a) => a.questionId === 'q2')?.selectedOptionIndices).toEqual([1])
   })
 
-  test('同题不可重复 seal：再次 seal q1 抛 clarify-question-already-sealed', async () => {
+  // RFC-136（用户 2026-07-02 拍板「问题返回待指派应允许修改答案」）改写原「同题不可重复
+  // seal」锁：exactly-once 的边界收窄到「已 staged / 已下发」——一个 sealed 但仍 待指派
+  // （staged_at/dispatched_at 均 NULL）的题现在允许重 seal（覆盖），正向 case 在
+  // rfc136-reanswer.test.ts。本测试守住收窄后的 409 边界（staged 后不可重答）。
+  test('RFC-136 边界：已 staged 的题重复 seal 仍抛 clarify-question-already-sealed', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
-    await sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1')] })
+    // autoStage: seal 即进 待下发（staged_at 非空）——重 seal 必须仍被拒。
+    await sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1')], autoStage: true })
     await expect(
       sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1')] }),
     ).rejects.toThrow('already sealed')

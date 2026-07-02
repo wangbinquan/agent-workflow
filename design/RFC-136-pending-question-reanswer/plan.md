@@ -1,6 +1,6 @@
 # RFC-136 — 任务分解
 
-- 状态：Draft（待用户批准后开工）
+- 状态：Done（2026-07-02 用户批准〔D1–D6 + 实现期 D7 allowReseal 质询后确认〕，全 4 task 交付）
 - 单 PR（commit 前缀 `feat(clarify): RFC-136 …`）；T1→T2→T3 有依赖，T4 随各任务同 commit。
 
 | 任务 | 内容 | 依赖 |
@@ -12,7 +12,9 @@
 
 验收清单（交付时逐项勾）：
 
-- [ ] proposal.md AC-1 … AC-8 全绿（对应测试见 design §5 编号映射）
-- [ ] golden-lock：既有 seal/面板/看板测试零改动全绿（除 `groupUnsealedQuestions` 更名的机械替换）
-- [ ] `bun run typecheck && bun run test && bun run format:check` + 前端 vitest 全绿
-- [ ] Codex 设计门（落档后、批准前）+ 实现门（声明完成前）两轮评审发现全部处理
+- [x] proposal.md AC-1 … AC-8 全绿（后端 rfc136-reanswer 12 case + 前端 pane 6 case + 入口 1 case）
+- [x] golden-lock：既有 seal/面板/看板测试全绿；三处按新契约的有意改写——rfc128-p1「同题不可
+      重复 seal」→「staged 后不可重 seal」、pane「空池」fixture 换 past-pending、pane oracle
+      更名 + resubmitQuestionIds（均注明推翻缘由）
+- [x] `bun run typecheck && bun test && bun run format:check` + 前端 vitest 2933 + 单二进制 smoke 全绿
+- [x] Codex 设计门（落档后、批准前，无阻断）+ 实现门（声明完成前）两轮评审发现全部处理

@@ -550,11 +550,21 @@ describe('TaskQuestionList centralized answer pane entry (RFC-128 T9)', () => {
     await waitFor(() => expect(screen.getByTestId('centralized-answer-dialog')).toBeTruthy())
   })
 
-  test('deferred but every question sealed → no entry button', async () => {
+  test('deferred but every question sealed AND past pending → no entry button', async () => {
     await wrapDeferred([
       entry({ id: 'e1', phase: 'awaiting_confirm', sealed: true, sourceKind: 'cross' }),
     ])
     expect(screen.queryByTestId('tq-open-answer-pane')).toBeNull()
+  })
+
+  // RFC-136（用户 2026-07-02 拍板）— 已答（sealed）的待指派题现在可重答：入口按钮对
+  // 「全部已答但仍在待指派」的池子也显示（移出待下发的题要能改答案）。
+  test('RFC-136: 全部 sealed 但仍 pending（待指派）→ 入口按钮显示', async () => {
+    await wrap([
+      entry({ id: 'e1', phase: 'pending', sealed: true, originNodeRunId: 'nr_a' }),
+      entry({ id: 'e2', phase: 'pending', sealed: true, originNodeRunId: 'nr_b' }),
+    ])
+    expect(screen.getByTestId('tq-open-answer-pane')).toBeTruthy()
   })
 
   test('deferred + an unsealed SELF-clarify pending question → entry button shows (RFC-128 P5-BC)', async () => {

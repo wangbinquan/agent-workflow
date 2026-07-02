@@ -2717,6 +2717,8 @@ export const enUS: Resources = {
     answerPaneEmpty: 'No pending questions to answer.',
     answerPaneHint:
       'Answer all pending questions here; on submit they enter "To assign", then pick a handler agent on the board and dispatch.',
+    answerPaneResubmitHint:
+      'Already answered — prefilled with the committed answer; resubmitting overwrites it.',
     answerPaneSubmit: 'Submit answers',
     answerPaneSubmitCount: 'Submit answers ({{count}})',
     author: {

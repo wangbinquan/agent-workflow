@@ -182,6 +182,15 @@ export const SubmitClarifyAnswersSchema = z.object({
    *  submission may touch (so it never re-seals a sibling already sealed by another tab).
    *  Omitted ⇒ every answer is processed (golden lock — unchanged whole-round submit). */
   questionIds: z.array(z.string()).optional(),
+  /** RFC-136 (D7, Codex 实现门 P2 fold) — explicit RE-answer declaration, defer-only. A
+   *  sealed 待指派 question may only be overwritten when the client DECLARES it here —
+   *  i.e. the pane showed the committed answer and the user edited it on purpose. Without
+   *  the declaration a sealed question keeps the exactly-once 409 even on the defer
+   *  channel: a pane submission racing a quick submit's seal→dispatch window would
+   *  otherwise silently overwrite the in-flight answer (the pane user never SAW it, so
+   *  they cannot have meant to replace it). Omitted ⇒ no re-answers (pre-RFC-136 byte
+   *  behaviour). */
+  resubmitQuestionIds: z.array(z.string()).optional(),
 })
 export type SubmitClarifyAnswers = z.infer<typeof SubmitClarifyAnswersSchema>
 

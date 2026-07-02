@@ -27,9 +27,14 @@
 // status flip), since merge-into-empty == overwrite and all-sealed == flip.
 //
 // Re-sealing an already-sealed question is rejected (the quick channel + control
-// channel share this per-question state — a question can be sealed exactly once).
+// channel share this per-question state — a question can be sealed exactly once) —
+// EXCEPT the RFC-136 re-answer path: a sealed question whose every non-echo entry is
+// still 待指派 (dispatched_at IS NULL AND staged_at IS NULL — e.g. moved back out of
+// 待下发) may be RE-sealed, overwriting its answers_json value in place (用户拍板
+// 直接覆盖，无 prior_answer_snapshot_json / reopen_count — those stay dormant for the
+// future RFC-120 AC-11 打回 flow). Any staged/dispatched entry keeps the 409.
 
-import { and, eq, inArray, isNull } from 'drizzle-orm'
+import { and, eq, inArray, isNull, ne } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
@@ -103,12 +108,29 @@ export interface SealRoundQuestionsArgs {
    *  (loadUndispatched{Designer,SelfQuestioner}Targets key on round status / sealed_at, not
    *  staged_at) → RFC-076 定序 / P5 park behaviour unchanged. */
   autoStage?: boolean
+  /** RFC-136 (D7, Codex 实现门 P2 fold) — per-question re-answer DECLARATION: a sealed
+   *  question may be RE-sealed (overwritten in place) ONLY when (a) its id is in this set
+   *  AND (b) its every non-echo entry is still 待指派 (un-staged, un-dispatched). Only the
+   *  centralized-answer control channel (routes/clarify.ts defer=true) forwards the
+   *  client's `resubmitQuestionIds` here — the declaration means the pane SHOWED the
+   *  committed answer and the user edited it on purpose. A per-question set (not a route
+   *  boolean) closes the cross-channel race: a pane submission landing inside a QUICK
+   *  submit's seal→dispatch lock-B window sees the question sealed, but the pane user
+   *  never declared it (they thought it fresh) → exactly-once 409 → no silent overwrite
+   *  of the in-flight answer. The quick channel itself never passes this (its own
+   *  double-submit stays 409 → no double-mint, rfc128-p5-bc §5.2.14 finding 1).
+   *  Omitted/empty ⇒ pre-RFC-136 behaviour byte-for-byte. */
+  allowResealFor?: readonly string[]
   now?: () => number
 }
 
 export interface SealRoundQuestionsResult {
-  /** Question ids sealed by THIS call (after dropping unknowns + de-dup). */
+  /** Question ids FRESH-sealed by THIS call (after dropping unknowns + de-dup). RFC-136:
+   *  re-sealed (re-answer) ids are NOT in here — see resealedQuestionIds. */
   sealedQuestionIds: string[]
+  /** RFC-136 — question ids RE-sealed by this call (a previously-sealed 待指派 question
+   *  whose answer was overwritten in place). Empty on a pure fresh seal (golden-lock). */
+  resealedQuestionIds: string[]
   /** True when, after this call, EVERY question of the round is sealed → the round was
    *  flipped to 'answered'. False = partial seal (round stays 'awaiting_human'). */
   roundFullySealed: boolean
@@ -198,46 +220,83 @@ export async function sealRoundQuestions(
       }
 
       // Which questions are ALREADY sealed: the whole round answered (all) OR an entry with
-      // a sealed_at marker. A re-seal of any of those is rejected (seal-exactly-once). Read
-      // inside the tx so the check + the stamp below are atomic (no double-seal race).
+      // a sealed_at marker. Read inside the tx so the check + the stamp below are atomic
+      // (no double-seal race). RFC-136 — per-question triage instead of a blanket reject:
+      //   fresh    not sealed yet → the unchanged exactly-once path (golden-lock);
+      //   reseal   sealed, and EVERY non-echo entry of the (origin, question) is still
+      //            待指派 (dispatched_at IS NULL AND staged_at IS NULL — e.g. moved back
+      //            out of 待下发) → overwrite the answer in place (用户拍板 直接覆盖);
+      //   rejected everything else (staged / dispatched / no visible entry) → 409, the
+      //            pre-RFC-136 behaviour. echo entries (RFC-134, born-dispatched) neither
+      //            veto nor get re-stamped: the receipt card reads the injection face, not
+      //            the seal face.
       const existingEntries = tx
-        .select({ questionId: taskQuestions.questionId, sealedAt: taskQuestions.sealedAt })
+        .select({
+          questionId: taskQuestions.questionId,
+          sealedAt: taskQuestions.sealedAt,
+          stagedAt: taskQuestions.stagedAt,
+          dispatchedAt: taskQuestions.dispatchedAt,
+          roleKind: taskQuestions.roleKind,
+        })
         .from(taskQuestions)
         .where(eq(taskQuestions.originNodeRunId, args.originNodeRunId))
         .all()
       const alreadySealed = new Set<string>()
       if (round.status === 'answered') for (const q of questions) alreadySealed.add(q.id)
       for (const e of existingEntries) if (e.sealedAt !== null) alreadySealed.add(e.questionId)
+      const declaredReseal = new Set(args.allowResealFor ?? [])
+      const resealSet = new Set<string>()
       for (const id of sealingSet) {
-        if (alreadySealed.has(id)) {
+        if (!alreadySealed.has(id)) continue
+        const rows = existingEntries.filter((e) => e.questionId === id && e.roleKind !== 'echo')
+        const resealable =
+          declaredReseal.has(id) &&
+          rows.length > 0 &&
+          rows.every((e) => e.dispatchedAt === null && e.stagedAt === null)
+        if (!resealable) {
           throw new ConflictError(
             'clarify-question-already-sealed',
-            `question '${id}' is already sealed; it cannot be sealed again`,
+            `question '${id}' is already sealed; only a 待指派 (pending, un-staged, un-dispatched) question explicitly declared for re-answer can be overwritten`,
           )
         }
+        resealSet.add(id)
       }
+      const freshSet = new Set([...sealingSet].filter((id) => !resealSet.has(id)))
 
       // (1) Merge the sealed subset into the round's answers_json (per-question merge-write).
-      // No lockedIds needed here: the seal subset is disjoint from already-sealed ids
-      // (rejected above), so it never overwrites a locked answer.
+      // Fresh ids never overwrite a locked answer (they were unsealed); RFC-136 reseal ids
+      // overwrite their previous value ON PURPOSE (直接覆盖 — D3).
       const merged = mergeSealedAnswers(parseAnswersArray(round.answersJson), sealedSubset)
       const mergedJson = JSON.stringify(merged)
 
       // (2) Merge any per-question scope choice into the round's question_scopes_json
-      // (P2-3: never drop a previously-stored scope).
+      // (P2-3: never drop a previously-stored scope). RFC-136 (D6): a RESEAL keeps its
+      // originally-committed scope — a scope flip would make reconcile grow/drop
+      // designer/questioner entries on a mere answer edit, so client-sent scopes for
+      // reseal ids are ignored here (defense; the pane doesn't send them).
       const mergedScopes = { ...parseScopes(round.questionScopesJson) }
       if (args.scopes) {
         for (const [qid, scope] of Object.entries(args.scopes)) {
-          if ((scope === 'designer' || scope === 'questioner') && questionIds.has(qid)) {
+          if (
+            (scope === 'designer' || scope === 'questioner') &&
+            questionIds.has(qid) &&
+            !resealSet.has(qid)
+          ) {
             mergedScopes[qid] = scope
           }
         }
       }
       const scopesJson = Object.keys(mergedScopes).length > 0 ? JSON.stringify(mergedScopes) : null
 
-      // (5) Flip the round → answered ONLY when EVERY question is now sealed.
+      // (5) Flip the round → answered ONLY when EVERY question is now sealed. RFC-136:
+      // `flipNow` gates every flip side effect (status/answeredAt/directive persist, legacy
+      // dual-write flip, node_run close, stop finalization) to the transition INTO answered —
+      // a re-answer on an already-answered round only rewrites answers_json + entry stamps
+      // (AC-3: no re-flip, answeredAt/answeredBy preserved, no duplicate park/WS side effects).
+      const wasAnswered = round.status === 'answered'
       const newSealed = new Set<string>([...alreadySealed, ...sealingSet])
       const fullySealed = questions.every((q) => newSealed.has(q.id))
+      const flipNow = fullySealed && !wasAnswered
 
       // RFC-128 P2 (Codex P2-2) — round-level directive. Provided wins; else keep the round's
       // existing value; else default 'continue'. Fed (in-memory) to the reconcile designer gate
@@ -247,8 +306,12 @@ export async function sealRoundQuestions(
       // directive would leave a fully-sealed designer round un-parked → (with the node-run
       // closed below) the task would advance past it instead of waiting for board dispatch. A
       // 'stop' round produces NO designer entries (reconcileDesiredEntries).
-      const effectiveDirective: ClarifyDirective =
-        args.directive ?? (round.directive as ClarifyDirective | null) ?? 'continue'
+      // RFC-136: an ALREADY-answered round keeps its committed directive — the re-answer body
+      // carries the schema default 'continue', which must NOT re-run reconcile with continue
+      // semantics on a finalized 'stop' round (it would wrongly grow designer entries).
+      const effectiveDirective: ClarifyDirective = wasAnswered
+        ? ((round.directive as ClarifyDirective | null) ?? 'continue')
+        : (args.directive ?? (round.directive as ClarifyDirective | null) ?? 'continue')
 
       // RFC-132 PR-B (universal deferred model, §6) — the RFC-128 P5-0 stranding guard is REMOVED.
       // It rejected a self/questioner FULL seal on a NON-deferred task (no park/dispatch release path
@@ -272,17 +335,18 @@ export async function sealRoundQuestions(
       // Deferring both writes to full seal matches "partial seal is pure derived state, changes
       // nothing schedulable". The reconcile below still uses the IN-MEMORY effectiveDirective (a
       // partial seal produces no designer entries regardless — P2-4a).
-      const directiveSet = fullySealed ? { directive: effectiveDirective } : {}
+      const directiveSet = flipNow ? { directive: effectiveDirective } : {}
 
       // Write clarify_rounds (the SoT): merged answers + merged scopes; flip status (+ directive
-      // + answeredAt) only when fully sealed. Keep status 'awaiting_human' on a partial seal
-      // (NEVER a new DB 'partial' status — RFC-128 §2 / RFC-126).
+      // + answeredAt) only when fully sealed NOW (RFC-136: an answered round being re-answered
+      // keeps its original answeredAt/answeredBy/directive). Keep status 'awaiting_human' on a
+      // partial seal (NEVER a new DB 'partial' status — RFC-128 §2 / RFC-126).
       tx.update(clarifyRounds)
         .set({
           answersJson: mergedJson,
           questionScopesJson: scopesJson,
           ...directiveSet,
-          ...(fullySealed
+          ...(flipNow
             ? {
                 status: 'answered' as const,
                 answeredAt: ts,
@@ -301,7 +365,7 @@ export async function sealRoundQuestions(
       const legacySet = {
         answersJson: mergedJson,
         questionScopesJson: scopesJson,
-        ...(fullySealed ? { status: 'answered' as const, answeredAt: ts, ...directiveSet } : {}),
+        ...(flipNow ? { status: 'answered' as const, answeredAt: ts, ...directiveSet } : {}),
       }
       if (round.kind === 'self') {
         tx.update(clarifySessions).set(legacySet).where(eq(clarifySessions.id, round.id)).run()
@@ -325,7 +389,9 @@ export async function sealRoundQuestions(
       // meanwhile by the §18 designer park (directive='continue' written above). The CAS on
       // status='awaiting_human' makes it a safe no-op if the node already left that state.
       // rfc053-allow-direct-status-write -- atomic clarify-node close on full seal (mirrors resume-clarify)
-      if (fullySealed) {
+      // (RFC-136: flipNow — an answered round's node_run is already closed; the CAS would
+      // no-op anyway, the gate just keeps the re-answer path free of flip side effects.)
+      if (flipNow) {
         tx.update(nodeRuns)
           .set({ status: 'done', finishedAt: ts })
           .where(and(eq(nodeRuns.id, args.originNodeRunId), eq(nodeRuns.status, 'awaiting_human')))
@@ -348,7 +414,8 @@ export async function sealRoundQuestions(
           directive: effectiveDirective,
           answersJson: mergedJson,
           questionScopesJson: scopesJson,
-          answeredAt: fullySealed ? ts : round.answeredAt,
+          // RFC-136: keep the committed answeredAt on a re-answer (flipNow only).
+          answeredAt: flipNow ? ts : round.answeredAt,
         },
         { additionalSealedQuestionIds: sealingSet },
       )
@@ -367,15 +434,34 @@ export async function sealRoundQuestions(
         )
         .run()
 
+      // (4a) RFC-136 — RE-seal stamp: a re-answered question's non-echo entries get their
+      // sealed_at/sealed_by moved to THIS call (unconditional — they are already stamped, the
+      // IS-NULL write above skips them). echo entries stay untouched (born-dispatched receipt
+      // cards read the injection face; their D11 seal stamp is answered-round audit evidence,
+      // not this edit's).
+      if (resealSet.size > 0) {
+        tx.update(taskQuestions)
+          .set({ sealedAt: ts, sealedBy: args.sealedBy ?? null, updatedAt: ts })
+          .where(
+            and(
+              eq(taskQuestions.originNodeRunId, args.originNodeRunId),
+              inArray(taskQuestions.questionId, [...resealSet]),
+              ne(taskQuestions.roleKind, 'echo'),
+            ),
+          )
+          .run()
+      }
+
       // (4b) RFC-128 (用户 2026-07-01) — AUTO-STAGE: opt-in (centralized-answer control channel).
       // Stamp `staged_at` on THIS call's sealed entries in the SAME tx so a sealed question lands
       // directly in 待下发 (staged) — pickup-ready for the board's "批量下发全下" — instead of 待指派
       // (pending, which needs a manual 移入待下发). Target set + IS-NULL idempotency MIRROR (4)'s
-      // sealed_at stamp (every role entry of the freshly-sealed questions; a question in sealingSet
-      // was NOT sealed before this call, so it could not have been staged before — the IS-NULL guard
-      // just makes the write idempotent). staged_by mirrors sealed_by (RFC-099 audit-only). NOT set
+      // sealed_at stamp. staged_by mirrors sealed_by (RFC-099 audit-only). NOT set
       // when autoStage is falsy → golden-lock: autoDispatch / raw-primitive seals are byte-for-byte
       // unchanged, and the park sources are unaffected (they key on round status / sealed_at).
+      // RFC-136 (D4): reseal ids are in sealingSet too — the reseal guard proved staged_at IS NULL
+      // on every non-echo entry, so a re-answered question auto-stages back into 待下发 exactly
+      // like a fresh answer (改完即待发); echo rows keep their stamp via the IS-NULL guard.
       if (args.autoStage === true) {
         tx.update(taskQuestions)
           .set({ stagedAt: ts, stagedBy: args.sealedBy ?? null, updatedAt: ts })
@@ -390,11 +476,15 @@ export async function sealRoundQuestions(
       }
 
       return {
-        sealedQuestionIds: [...sealingSet],
+        // RFC-136: fresh-only — reseal ids are reported separately (quick-path consumers
+        // like autoDispatch count fresh seals; a reseal never happens on their virgin rounds).
+        sealedQuestionIds: [...freshSet],
+        resealedQuestionIds: [...resealSet],
         roundFullySealed: fullySealed,
         // Post-tx side effect inputs (RFC-128 P2 Codex P2-2): mirror the quick path's
-        // stop → canvas directive write when the round FINALIZES with 'stop'.
-        stopFinalized: fullySealed && effectiveDirective === 'stop',
+        // stop → canvas directive write when the round FINALIZES with 'stop'. RFC-136:
+        // flipNow — a re-answer on an answered round never re-fires the canvas write.
+        stopFinalized: flipNow && effectiveDirective === 'stop',
         taskId: round.taskId,
         askingNodeId: round.askingNodeId,
       }
@@ -423,6 +513,7 @@ export async function sealRoundQuestions(
   }
   return {
     sealedQuestionIds: txResult.sealedQuestionIds,
+    resealedQuestionIds: txResult.resealedQuestionIds,
     roundFullySealed: txResult.roundFullySealed,
   }
 }

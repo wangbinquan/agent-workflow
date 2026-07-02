@@ -1079,10 +1079,23 @@ export async function stageTaskQuestion(
     }
     return
   }
+  // RFC-136（用户 2026-07-02「回答问题的按键又没了」）——unstage 按「题」级联：同
+  // (originNodeRunId, questionId) 的全部未下发行一起移出待下发。用户在看板操作的心智单位
+  // 是问题，而一个 cross 题有 questioner+designer 两行两张卡——只移一张会留下「半 staged」
+  // 题：重答守卫（sealRoundQuestions reseal 判定）与答题池（groupAnswerableQuestions
+  // pastPending 排除）都要求整题回到待指派，半 staged 让问题从面板消失且无法重答。已下发
+  // 行不动（staged_at 留作审计，echo 生来已下发天然豁免）；stage 方向保持逐行（gate 逐行
+  // CAS，且正常路径 autoStage 本就全行同进）。
   await db
     .update(taskQuestions)
     .set({ stagedAt: null, stagedBy: null, updatedAt: Date.now() })
-    .where(eq(taskQuestions.id, entryId))
+    .where(
+      and(
+        eq(taskQuestions.originNodeRunId, entry.originNodeRunId),
+        eq(taskQuestions.questionId, entry.questionId),
+        isNull(taskQuestions.dispatchedAt),
+      ),
+    )
 }
 
 /** Max lengths for a manual question (title mirrors ClarifyQuestion.title ≤ 512). */

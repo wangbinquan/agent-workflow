@@ -226,6 +226,14 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
         'questionIds is only honored with defer=true (the control channel); a quick-channel submit answers the whole round',
       )
     }
+    // RFC-136 — the re-answer declaration is control-channel-only for the same reason:
+    // the quick channel is seal-exactly-once (its seal→dispatch must never overwrite).
+    if (parsed.data.resubmitQuestionIds !== undefined && parsed.data.defer !== true) {
+      throw new ValidationError(
+        'clarify-resubmit-requires-defer',
+        'resubmitQuestionIds is only honored with defer=true (the centralized answer pane); the quick channel cannot re-answer',
+      )
+    }
 
     // RFC-128 P2 (T6) — defer routing. defer=true → CONTROL channel: seal the answered
     // subset (sealRoundQuestions, P1) WITHOUT minting a rerun or resuming the task; the
@@ -258,6 +266,15 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
         // = ALL staged) can pick it up, instead of leaving it in 待指派 (pending) needing a manual
         // 移入待下发. Only THIS branch opts in; autoDispatchClarifyRound (P5-D) never passes it.
         autoStage: true,
+        // RFC-136 (Codex 实现门 P2 fold) — the control channel may RE-answer a sealed 待指派
+        // question, but ONLY the ones the client explicitly DECLARED (the pane showed the
+        // committed answer and the user edited it). Forwarding the declaration (instead of a
+        // route-level boolean) closes the cross-channel race with a quick submit's
+        // seal→dispatch window; the quick channel stays exactly-once (see
+        // SealRoundQuestionsArgs.allowResealFor).
+        ...(parsed.data.resubmitQuestionIds !== undefined
+          ? { allowResealFor: parsed.data.resubmitQuestionIds }
+          : {}),
         // RFC-128 P2 (Codex P2-2): thread the round directive so the control channel matches
         // quick-path stop semantics (no designer entries + directive persisted; 'continue'
         // also satisfies the §18 designer park). Schema defaults it to 'continue'.

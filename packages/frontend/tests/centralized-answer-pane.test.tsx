@@ -1,9 +1,10 @@
 // RFC-128 P4 (T9) — centralized answer pane.
 //
 // Locks:
-//   1. groupUnsealedQuestions oracle — only UNSEALED + clarify-backed + DESIGNER-mainline
-//      (cross) questions, grouped by originNodeRunId in stable order, deduped. Self-clarify
-//      is excluded (Codex P1-2: defer-sealing self/questioner work would strand it pre-P5).
+//   1. groupAnswerableQuestions oracle — clarify-backed 待指派 (pending) questions grouped by
+//      originNodeRunId in stable order, deduped. RFC-136: SEALED pending questions are now
+//      included as re-answers (resubmitQuestionIds) — the pane prefills the committed answer
+//      and resubmission overwrites in place (用户 2026-07-02 拍板).
 //   2. isAnswerFilled oracle.
 //   3. The dialog flattens the task's answerable questions (grouped by round) into
 //      QuestionForm blocks; the SINGLE submit button seals each round's filled subset via
@@ -21,7 +22,7 @@ import { api } from '@/api/client'
 import {
   CentralizedAnswerDialog,
   flattenCentralizedNavKeys,
-  groupUnsealedQuestions,
+  groupAnswerableQuestions,
 } from '@/components/clarify/CentralizedAnswerDialog'
 import { isAnswerFilled } from '@/lib/clarify/answers'
 import type { TaskQuestionEntry } from '@/components/tasks/TaskQuestionList'
@@ -136,13 +137,13 @@ function renderDialog(
   )
 }
 
-describe('groupUnsealedQuestions (oracle)', () => {
-  test('keeps unsealed clarify-backed questions — self AND cross (RFC-128 P5-BC), grouped by round', () => {
-    const groups = groupUnsealedQuestions([
+describe('groupAnswerableQuestions (oracle)', () => {
+  test('keeps clarify-backed pending questions — self AND cross (RFC-128 P5-BC), grouped by round; RFC-136: sealed pending 纳入为重答', () => {
+    const groups = groupAnswerableQuestions([
       entry({ id: 'a', questionId: 'q1', originNodeRunId: 'nr_a' }),
       entry({ id: 'b', questionId: 'q2', originNodeRunId: 'nr_b' }),
       entry({ id: 'c', questionId: 'q3', originNodeRunId: 'nr_a' }),
-      // sealed → excluded
+      // RFC-136: sealed pending → INCLUDED as a re-answer (was excluded pre-136).
       entry({ id: 'd', questionId: 'q4', originNodeRunId: 'nr_a', sealed: true }),
       // manual (no clarify round) → excluded
       entry({ id: 'e', questionId: 'q5', originNodeRunId: null, sourceKind: 'manual' }),
@@ -156,32 +157,75 @@ describe('groupUnsealedQuestions (oracle)', () => {
       }),
     ])
     expect(groups).toEqual([
-      { originNodeRunId: 'nr_a', questionIds: ['q1', 'q3'] },
-      { originNodeRunId: 'nr_b', questionIds: ['q2'] },
-      { originNodeRunId: 'nr_self', questionIds: ['q6'] },
+      { originNodeRunId: 'nr_a', questionIds: ['q1', 'q3', 'q4'], resubmitQuestionIds: ['q4'] },
+      { originNodeRunId: 'nr_b', questionIds: ['q2'], resubmitQuestionIds: [] },
+      { originNodeRunId: 'nr_self', questionIds: ['q6'], resubmitQuestionIds: [] },
     ])
   })
 
   test('dedupes a questionId that appears under multiple role rows in one round', () => {
-    const groups = groupUnsealedQuestions([
+    const groups = groupAnswerableQuestions([
       entry({ id: 'a', questionId: 'q1', originNodeRunId: 'nr_a', roleKind: 'questioner' }),
       entry({ id: 'b', questionId: 'q1', originNodeRunId: 'nr_a', roleKind: 'designer' }),
     ])
-    expect(groups).toEqual([{ originNodeRunId: 'nr_a', questionIds: ['q1'] }])
+    expect(groups).toEqual([
+      { originNodeRunId: 'nr_a', questionIds: ['q1'], resubmitQuestionIds: [] },
+    ])
   })
 
-  // RFC-128 P4/P5 (用户 2026-07-01) — the pool tightens to 待指派 (pending) only. An unsealed but
-  // non-pending entry (staged/processing/awaiting_confirm/done) is EXCLUDED: the control channel
-  // (defer → 待指派 → board dispatch) only applies BEFORE dispatch. Locks the new phase gate.
-  test('只纳 pending 待指派：非 pending 的未 seal 条目被排除', () => {
-    const groups = groupUnsealedQuestions([
+  // RFC-128 P4/P5 (用户 2026-07-01) — the pool tightens to 待指派 (pending) only. A non-pending
+  // entry (staged/processing/awaiting_confirm/done) is EXCLUDED regardless of seal state: the
+  // control channel (defer → 待指派 → board dispatch) only applies BEFORE dispatch. RFC-136 keeps
+  // this phase gate — a sealed STAGED question is still out (先移出待下发才能重答).
+  test('只纳 pending 待指派：非 pending 条目（无论 seal 与否）被排除', () => {
+    const groups = groupAnswerableQuestions([
       entry({ id: 'a', questionId: 'q1', originNodeRunId: 'nr_a', phase: 'pending' }),
       entry({ id: 'b', questionId: 'q2', originNodeRunId: 'nr_b', phase: 'staged' }),
       entry({ id: 'c', questionId: 'q3', originNodeRunId: 'nr_c', phase: 'processing' }),
       entry({ id: 'd', questionId: 'q4', originNodeRunId: 'nr_d', phase: 'awaiting_confirm' }),
       entry({ id: 'e', questionId: 'q5', originNodeRunId: 'nr_e', phase: 'done' }),
+      // sealed + staged → still excluded (重答范围仅待指派，D1).
+      entry({ id: 'f', questionId: 'q6', originNodeRunId: 'nr_f', phase: 'staged', sealed: true }),
     ])
-    expect(groups).toEqual([{ originNodeRunId: 'nr_a', questionIds: ['q1'] }])
+    expect(groups).toEqual([
+      { originNodeRunId: 'nr_a', questionIds: ['q1'], resubmitQuestionIds: [] },
+    ])
+  })
+
+  // RFC-136 — 半 staged 题不进池：cross 双角色条目只移回一行（另一行仍待下发）时，后端
+  // 重 seal 守卫必 409（半新半旧）——把这种题放进面板等于可编辑但必失败的死路 UI。
+  test('sealed 题存在非 pending 兄弟条目 → 整题不纳入（防 409 死路）', () => {
+    const groups = groupAnswerableQuestions([
+      // q1：questioner 行已移回 pending，designer 行仍 staged → 整题排除。
+      entry({
+        id: 'a',
+        questionId: 'q1',
+        originNodeRunId: 'nr_a',
+        phase: 'pending',
+        sealed: true,
+        roleKind: 'questioner',
+      }),
+      entry({
+        id: 'b',
+        questionId: 'q1',
+        originNodeRunId: 'nr_a',
+        phase: 'staged',
+        sealed: true,
+        roleKind: 'designer',
+      }),
+      // q2：全部行 pending → 正常纳入为重答。
+      entry({
+        id: 'c',
+        questionId: 'q2',
+        originNodeRunId: 'nr_a',
+        phase: 'pending',
+        sealed: true,
+        roleKind: 'questioner',
+      }),
+    ])
+    expect(groups).toEqual([
+      { originNodeRunId: 'nr_a', questionIds: ['q2'], resubmitQuestionIds: ['q2'] },
+    ])
   })
 })
 
@@ -191,8 +235,8 @@ describe('groupUnsealedQuestions (oracle)', () => {
 describe('flattenCentralizedNavKeys (oracle)', () => {
   test('flattens rounds in group order + questions in reported render order (across boundaries)', () => {
     const groups = [
-      { originNodeRunId: 'nr_a', questionIds: ['q1', 'q2'] },
-      { originNodeRunId: 'nr_b', questionIds: ['q3'] },
+      { originNodeRunId: 'nr_a', questionIds: ['q1', 'q2'], resubmitQuestionIds: [] },
+      { originNodeRunId: 'nr_b', questionIds: ['q3'], resubmitQuestionIds: [] },
     ]
     const reported = new Map<string, string[]>([
       ['nr_a', ['q1', 'q2']],
@@ -202,7 +246,7 @@ describe('flattenCentralizedNavKeys (oracle)', () => {
   })
 
   test('reported render order OVERRIDES group storage order; unreported round falls back to group', () => {
-    const groups = [{ originNodeRunId: 'nr_a', questionIds: ['q1', 'q2'] }]
+    const groups = [{ originNodeRunId: 'nr_a', questionIds: ['q1', 'q2'], resubmitQuestionIds: [] }]
     // Reported order is reversed vs storage → nav follows what the reviewer sees.
     expect(flattenCentralizedNavKeys(groups, new Map([['nr_a', ['q2', 'q1']]]))).toEqual([
       'nr_a:q2',
@@ -230,7 +274,9 @@ describe('isAnswerFilled (oracle)', () => {
 
 describe('CentralizedAnswerDialog', () => {
   test('no answerable questions → empty state, submit disabled', async () => {
-    renderDialog([entry({ id: 'a', sealed: true })], [])
+    // RFC-136: a sealed PENDING entry is now answerable (re-answer), so the empty pool is
+    // built from past-pending entries instead (dispatched questions never enter the pane).
+    renderDialog([entry({ id: 'a', sealed: true, phase: 'processing' })], [])
     await waitFor(() => expect(screen.getByTestId('empty-state')).toBeTruthy())
     expect((screen.getByTestId('centralized-answer-submit') as HTMLButtonElement).disabled).toBe(
       true,
@@ -310,7 +356,145 @@ describe('CentralizedAnswerDialog', () => {
       .querySelector('.card__title') as HTMLElement
     expect(title.textContent).toContain('questioner')
   })
+})
 
+// RFC-136（用户 2026-07-02 拍板）— 已答（sealed）待指派题纳入面板为重答：预填**已提交答案**
+// （忽略遗留草稿，D5）、显示「重新提交将覆盖」提示、cross 重答题 scope 只读（D6）、提交体
+// questionIds 含重答题而 questionScopes 只含 fresh 题。
+describe('CentralizedAnswerDialog — RFC-136 重答', () => {
+  test('reseal 题预填已提交答案（忽略 server draft）+ 显示重答提示', async () => {
+    renderDialog(
+      [entry({ id: 'a', questionId: 'q1', originNodeRunId: 'nr_a', sealed: true })],
+      [
+        round({
+          intermediaryNodeRunId: 'nr_a',
+          status: 'answered',
+          answers: [
+            {
+              questionId: 'q1',
+              selectedOptionIndices: [1],
+              selectedOptionLabels: ['MySQL'],
+              customText: 'committed detail',
+            },
+          ],
+          // 遗留草稿（提交前的旧编辑态）——D5 要求被忽略，预填以已提交答案为基线。
+          draftAnswers: {
+            q1: { selectedOptionIndices: [0], customText: 'stale draft' },
+          } as ClarifyRound['draftAnswers'],
+        }),
+      ],
+    )
+    await waitFor(() => screen.getByTestId('clarify-question-q1'))
+    expect(screen.getByTestId('centralized-resubmit-hint-q1')).toBeTruthy()
+    const radios = within(screen.getByTestId('clarify-question-q1')).getAllByRole('radio')
+    // 已提交答案选项 1（MySQL）被预选；草稿的选项 0 未生效。
+    expect((radios[1] as HTMLInputElement).checked).toBe(true)
+    expect((radios[0] as HTMLInputElement).checked).toBe(false)
+  })
+
+  test('cross 重答题 scope 只读（无 segmented 切换）；fresh 题仍有切换', async () => {
+    renderDialog(
+      [
+        entry({ id: 'a', questionId: 'q1', originNodeRunId: 'nr_a', sealed: true }),
+        entry({ id: 'b', questionId: 'q2', originNodeRunId: 'nr_a', sealed: false }),
+      ],
+      [
+        round({
+          intermediaryNodeRunId: 'nr_a',
+          questions: [singleQ('q1'), singleQ('q2')],
+          answers: [
+            {
+              questionId: 'q1',
+              selectedOptionIndices: [0],
+              selectedOptionLabels: ['A'],
+              customText: '',
+            },
+          ],
+          questionScopes: { q1: 'questioner' },
+        }),
+      ],
+    )
+    await waitFor(() => screen.getByTestId('clarify-question-q1'))
+    // 重答题：只读 scope 文本在场、segmented 不渲染。
+    expect(screen.getByTestId('centralized-scope-readonly-q1')).toBeTruthy()
+    expect(screen.queryByTestId('centralized-scope-q1')).toBeNull()
+    // fresh 题：segmented 正常渲染。
+    expect(screen.getByTestId('centralized-scope-q2')).toBeTruthy()
+    expect(screen.queryByTestId('centralized-scope-readonly-q2')).toBeNull()
+  })
+
+  test('提交体：fresh+reseal 混合 → questionIds 含两者、questionScopes 只含 fresh', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ ok: true } as never)
+    vi.spyOn(api, 'put').mockResolvedValue(undefined as never)
+    renderDialog(
+      [
+        entry({ id: 'a', questionId: 'q1', originNodeRunId: 'nr_a', sealed: true }),
+        entry({ id: 'b', questionId: 'q2', originNodeRunId: 'nr_a', sealed: false }),
+      ],
+      [
+        round({
+          intermediaryNodeRunId: 'nr_a',
+          questions: [singleQ('q1'), singleQ('q2')],
+          answers: [
+            {
+              questionId: 'q1',
+              selectedOptionIndices: [0],
+              selectedOptionLabels: ['A'],
+              customText: '',
+            },
+          ],
+          questionScopes: { q1: 'designer' },
+        }),
+      ],
+    )
+    await waitFor(() => screen.getByTestId('clarify-question-q2'))
+    // 改 reseal 题的选项 + 回答 fresh 题。
+    fireEvent.click(within(screen.getByTestId('clarify-question-q1')).getAllByRole('radio')[1]!)
+    fireEvent.click(within(screen.getByTestId('clarify-question-q2')).getAllByRole('radio')[0]!)
+    const submit = screen.getByTestId('centralized-answer-submit') as HTMLButtonElement
+    await waitFor(() => expect(submit.disabled).toBe(false))
+    fireEvent.click(submit)
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
+    const body = post.mock.calls[0]?.[1] as {
+      defer: boolean
+      questionIds: string[]
+      resubmitQuestionIds?: string[]
+      questionScopes?: Record<string, string>
+      answers: Array<{ questionId: string; selectedOptionIndices: number[] }>
+    }
+    expect(body.defer).toBe(true)
+    expect([...body.questionIds].sort()).toEqual(['q1', 'q2'])
+    // D7（Codex 实现门 P2）：重答按题显式声明——服务端只对声明的题放行覆盖。
+    expect(body.resubmitQuestionIds).toEqual(['q1'])
+    // D6：重答题不发 scope；fresh 题发默认 designer。
+    expect(body.questionScopes).toEqual({ q2: 'designer' })
+    expect(body.answers.find((a) => a.questionId === 'q1')?.selectedOptionIndices).toEqual([1])
+  })
+
+  test('预填的重答答案立即计入提交集（不交互即可重新提交原答案）', async () => {
+    renderDialog(
+      [entry({ id: 'a', questionId: 'q1', originNodeRunId: 'nr_a', sealed: true })],
+      [
+        round({
+          intermediaryNodeRunId: 'nr_a',
+          answers: [
+            {
+              questionId: 'q1',
+              selectedOptionIndices: [0],
+              selectedOptionLabels: ['A'],
+              customText: '',
+            },
+          ],
+        }),
+      ],
+    )
+    await waitFor(() => screen.getByTestId('clarify-question-q1'))
+    const submit = screen.getByTestId('centralized-answer-submit') as HTMLButtonElement
+    await waitFor(() => expect(submit.disabled).toBe(false))
+  })
+})
+
+describe('CentralizedAnswerDialog — submit 流程', () => {
   test('flattens 2 rounds, single submit seals each round subset (defer + questionIds + designer scope)', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({ ok: true } as never)
     vi.spyOn(api, 'put').mockResolvedValue(undefined as never)

@@ -45,6 +45,10 @@ const DRAFT_DEBOUNCE_MS = 500
 export interface CentralizedAnswerGroup {
   originNodeRunId: string
   questionIds: string[]
+  /** RFC-136 — the subset of questionIds that are RE-answers (sealed 待指派 questions,
+   *  e.g. moved back out of 待下发): prefilled from the committed answer, resubmission
+   *  overwrites in place. Empty when the round only has fresh questions. */
+  resubmitQuestionIds: string[]
 }
 
 /** Pure oracle (unit-tested): the task's UNSEALED clarify questions grouped by their
@@ -56,33 +60,53 @@ export interface CentralizedAnswerGroup {
  *  its home (loadUndispatchedSelfQuestionerTargets) until board dispatch mints the continuation.
  *  Cross questions get a per-question scope picker (designer ↔ questioner) below.
  *
- *  Excluded: already-sealed questions (`sealed` per-question DTO field, NOT
- *  `answerSummary !== null` — F3), manual questions (originNodeRunId null — the instruction
- *  IS the content, nothing to answer), and — RFC-128 P4/P5 (用户 2026-07-01) — any entry past
- *  the 待指派 ('pending') phase: the defer→待指派→dispatch control channel only applies before
+ *  Excluded: manual questions (originNodeRunId null — the instruction IS the content,
+ *  nothing to answer), and — RFC-128 P4/P5 (用户 2026-07-01) — any entry past the 待指派
+ *  ('pending') phase: the defer→待指派→dispatch control channel only applies before
  *  dispatch, so a staged/processing/awaiting_confirm/done entry is out. Dedup is by (round,
- *  questionId): a cross round's questioner + designer entries share a questionId → one render. */
-export function groupUnsealedQuestions(entries: TaskQuestionEntry[]): CentralizedAnswerGroup[] {
+ *  questionId): a cross round's questioner + designer entries share a questionId → one render.
+ *
+ *  RFC-136 (用户 2026-07-02「问题返回待指派应允许修改答案」) — SEALED pending questions are
+ *  now INCLUDED as re-answers (`resubmitQuestionIds`): the pane prefills the committed answer
+ *  and resubmission overwrites it in place (直接覆盖). The seal state is judged per (round,
+ *  question) — every entry of the question carries the same `sealed` (seal stamps all roles).
+ *  (Renamed from groupUnsealedQuestions — the pool is no longer unsealed-only.) */
+export function groupAnswerableQuestions(entries: TaskQuestionEntry[]): CentralizedAnswerGroup[] {
+  // RFC-136 — a SEALED question is only re-answerable when EVERY entry of its (round,
+  // question) is still 待指派: the server re-seal guard rejects a question with any
+  // staged/dispatched sibling row (半新半旧守卫), so pooling a half-staged question would
+  // build a dead-end UI (editable but guaranteed 409). Pre-compute the blocked keys.
+  // (An UNSEALED question can't have a staged sibling — the stage gate requires sealed —
+  // so this only ever excludes re-answers; fresh behaviour is untouched.)
+  const pastPending = new Set<string>()
+  for (const e of entries) {
+    if (e.originNodeRunId === null) continue
+    if (e.phase !== 'pending') pastPending.add(`${e.originNodeRunId}\x1f${e.questionId}`)
+  }
   const order: string[] = []
   const byRound = new Map<string, string[]>()
+  const resubmitByRound = new Map<string, Set<string>>()
   for (const e of entries) {
-    if (e.sealed) continue
     if (e.originNodeRunId === null) continue
     // RFC-128 P4/P5 (用户 2026-07-01): pool is gated to the 待指派 ('pending') phase. The
-    // control channel (defer → 待指派 → board dispatch) only applies BEFORE dispatch, so an
-    // unsealed-but-past-pending entry (staged/processing/awaiting_confirm/done) is excluded.
+    // control channel (defer → 待指派 → board dispatch) only applies BEFORE dispatch, so a
+    // past-pending entry (staged/processing/awaiting_confirm/done) is excluded.
     if (e.phase !== 'pending') continue
+    if (e.sealed && pastPending.has(`${e.originNodeRunId}\x1f${e.questionId}`)) continue
     let qids = byRound.get(e.originNodeRunId)
     if (qids === undefined) {
       qids = []
       byRound.set(e.originNodeRunId, qids)
+      resubmitByRound.set(e.originNodeRunId, new Set())
       order.push(e.originNodeRunId)
     }
     if (!qids.includes(e.questionId)) qids.push(e.questionId)
+    if (e.sealed) resubmitByRound.get(e.originNodeRunId)!.add(e.questionId)
   }
   return order.map((originNodeRunId) => ({
     originNodeRunId,
     questionIds: byRound.get(originNodeRunId)!,
+    resubmitQuestionIds: [...resubmitByRound.get(originNodeRunId)!],
   }))
 }
 
@@ -119,6 +143,10 @@ interface RoundSubmission {
   answers: ClarifyAnswer[]
   /** questionIds of `answers` — the subset cap sent to the backend. */
   questionIds: string[]
+  /** RFC-136 (Codex 实现门 P2) — the RE-answer declaration: the subset of questionIds the
+   *  pane prefilled from a committed answer (the user SAW and edited it). The server only
+   *  overwrites a sealed question when it is declared here. */
+  resubmitQuestionIds: string[]
   /** cross only — per-question scope for the filled questions. */
   questionScopes?: Record<string, ClarifyQuestionScope>
 }
@@ -140,7 +168,7 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
     retry: false,
   })
   const groups = useMemo(
-    () => groupUnsealedQuestions(Array.isArray(tqQuery.data) ? tqQuery.data : []),
+    () => groupAnswerableQuestions(Array.isArray(tqQuery.data) ? tqQuery.data : []),
     [tqQuery.data],
   )
 
@@ -225,6 +253,12 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
             defer: true,
             ifMatchIteration: sub.iteration,
           }
+          // RFC-136 — declare the re-answers so the server may overwrite ONLY those
+          // (an undeclared sealed question keeps the exactly-once 409, closing the
+          // cross-channel race with a quick submit's seal→dispatch window).
+          if (sub.resubmitQuestionIds.length > 0) {
+            body.resubmitQuestionIds = sub.resubmitQuestionIds
+          }
           if (sub.kind === 'cross' && sub.questionScopes !== undefined) {
             body.questionScopes = sub.questionScopes
           }
@@ -268,7 +302,8 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
             key={g.originNodeRunId}
             taskId={taskId}
             originNodeRunId={g.originNodeRunId}
-            unsealedQuestionIds={g.questionIds}
+            answerableQuestionIds={g.questionIds}
+            resubmitQuestionIds={g.resubmitQuestionIds}
             disabled={submitMut.isPending}
             onSubmissionChange={onSubmissionChange}
             registerQuestionRef={registerQuestionRef}
@@ -317,7 +352,11 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
 interface RoundAnswerBlockProps {
   taskId: string
   originNodeRunId: string
-  unsealedQuestionIds: string[]
+  /** The answerable (待指派) question ids of this round — fresh AND re-answers (RFC-136). */
+  answerableQuestionIds: string[]
+  /** RFC-136 — subset of answerableQuestionIds that are RE-answers (sealed, prefilled from
+   *  the committed answer; resubmission overwrites; scope locked). */
+  resubmitQuestionIds: string[]
   disabled: boolean
   onSubmissionChange: (originNodeRunId: string, sub: RoundSubmission | null) => void
   /** RFC-128 (用户 2026-07-01) cross-round keyboard nav — register/unregister this round's
@@ -340,7 +379,8 @@ interface RoundAnswerBlockProps {
 function RoundAnswerBlock({
   taskId,
   originNodeRunId,
-  unsealedQuestionIds,
+  answerableQuestionIds,
+  resubmitQuestionIds,
   disabled,
   onSubmissionChange,
   registerQuestionRef,
@@ -362,10 +402,11 @@ function RoundAnswerBlock({
   const round = roundQuery.data
   const isCross = round?.kind === 'cross'
 
-  const unsealedSet = useMemo(() => new Set(unsealedQuestionIds), [unsealedQuestionIds])
+  const answerableSet = useMemo(() => new Set(answerableQuestionIds), [answerableQuestionIds])
+  const resubmitSet = useMemo(() => new Set(resubmitQuestionIds), [resubmitQuestionIds])
   const visibleQuestions = useMemo(
-    () => (round?.questions ?? []).filter((q) => unsealedSet.has(q.id)),
-    [round?.questions, unsealedSet],
+    () => (round?.questions ?? []).filter((q) => answerableSet.has(q.id)),
+    [round?.questions, answerableSet],
   )
 
   // Report this round's visible render order up for the dialog's cross-round nav order. Ref-only
@@ -391,6 +432,13 @@ function RoundAnswerBlock({
 
   // Seed once the round loads: server drafts (collaborative SoT, shared with /clarify)
   // win; the local IDB draft is the offline fallback when there's no server draft.
+  // RFC-136 (D5): a RE-answer question seeds from its COMMITTED answer (round.answers) and
+  // ignores any leftover draft — the seal path never clears drafts, so a stale pre-commit
+  // draft would pollute the "edit the committed answer" mental model. Codex 实现门 P3 fold:
+  // re-answer edits are deliberately NOT draft-persisted either (the autosave below is gated
+  // to awaiting_human rounds, and seed ignores drafts for resubmit ids anyway) — the
+  // committed answer IS the durable baseline; closing the pane discards an un-submitted
+  // edit, same as any unsaved form.
   useEffect(() => {
     if (round === undefined || seeded) return
     const fresh: Record<string, ClarifyAnswer> = {}
@@ -402,6 +450,16 @@ function RoundAnswerBlock({
         customText: '',
       }
     }
+    for (const a of round.answers ?? []) {
+      if (resubmitSet.has(a.questionId) && fresh[a.questionId] !== undefined) {
+        fresh[a.questionId] = {
+          questionId: a.questionId,
+          selectedOptionIndices: a.selectedOptionIndices ?? [],
+          selectedOptionLabels: [],
+          customText: a.customText ?? '',
+        }
+      }
+    }
     const finalize = () => {
       serverDraftRef.current = { ...fresh }
       setAnswers(fresh)
@@ -410,7 +468,7 @@ function RoundAnswerBlock({
     const serverDrafts = round.draftAnswers ?? null
     if (serverDrafts !== null && Object.keys(serverDrafts).length > 0) {
       for (const [qid, v] of Object.entries(serverDrafts)) {
-        if (fresh[qid] !== undefined) {
+        if (fresh[qid] !== undefined && !resubmitSet.has(qid)) {
           fresh[qid] = {
             questionId: qid,
             selectedOptionIndices: v.selectedOptionIndices ?? [],
@@ -427,7 +485,9 @@ function RoundAnswerBlock({
       .then((stored) => {
         if (cancelled || stored === null) return
         for (const a of stored) {
-          if (fresh[a.questionId] !== undefined) fresh[a.questionId] = a
+          if (fresh[a.questionId] !== undefined && !resubmitSet.has(a.questionId)) {
+            fresh[a.questionId] = a
+          }
         }
       })
       .finally(() => {
@@ -436,24 +496,30 @@ function RoundAnswerBlock({
     return () => {
       cancelled = true
     }
-  }, [round, seeded, visibleQuestions, taskId, originNodeRunId])
+  }, [round, seeded, visibleQuestions, resubmitSet, taskId, originNodeRunId])
 
   // Debounced draft autosave — one server PUT per changed question (shared key with
   // /clarify) + an IDB mirror. Only while the round is still awaiting answers.
+  // RFC-136 (Codex 实现门 P3 fold): resubmit (re-answer) questions are EXCLUDED — their
+  // durable baseline is the committed answer (seed ignores drafts for them, D5), so a
+  // draft write would only pollute the shared /clarify draft face without ever being read.
   useEffect(() => {
     if (round === undefined || !seeded || round.status !== 'awaiting_human') return
     if (draftTimerRef.current !== null) clearTimeout(draftTimerRef.current)
     const roundId = round.id
     draftTimerRef.current = setTimeout(() => {
-      const arr = visibleQuestions.map(
-        (q) =>
-          answers[q.id] ?? {
-            questionId: q.id,
-            selectedOptionIndices: [],
-            selectedOptionLabels: [],
-            customText: '',
-          },
-      )
+      const arr = visibleQuestions
+        .filter((q) => !resubmitSet.has(q.id))
+        .map(
+          (q) =>
+            answers[q.id] ?? {
+              questionId: q.id,
+              selectedOptionIndices: [],
+              selectedOptionLabels: [],
+              customText: '',
+            },
+        )
+      if (arr.length === 0) return
       const puts: Array<Promise<unknown>> = []
       if (!serverDraftDisabledRef.current) {
         for (const a of arr) {
@@ -484,7 +550,7 @@ function RoundAnswerBlock({
     return () => {
       if (draftTimerRef.current !== null) clearTimeout(draftTimerRef.current)
     }
-  }, [answers, seeded, round, visibleQuestions, taskId, originNodeRunId])
+  }, [answers, seeded, round, visibleQuestions, resubmitSet, taskId, originNodeRunId])
 
   // Report the filled subset up so the dialog's single submit can collect it.
   useEffect(() => {
@@ -506,17 +572,34 @@ function RoundAnswerBlock({
       kind: round.kind,
       answers: filled,
       questionIds,
+      // RFC-136 — declare which of the filled ids are re-answers (prefilled from the
+      // committed answer); the server only overwrites declared ids.
+      resubmitQuestionIds: questionIds.filter((qid) => resubmitSet.has(qid)),
     }
     // RFC-128 P5-BC: send the per-question scope the user chose (default designer). A
     // designer-scope question → §18 designer dispatch; a questioner-scope question → P5-BC
-    // self/questioner park + dispatch. Self rounds carry no scope.
+    // self/questioner park + dispatch. Self rounds carry no scope. RFC-136 (D6): a RE-answer
+    // keeps its committed scope — none is sent for resubmit ids (the server ignores them as a
+    // second layer of defense).
     if (round.kind === 'cross') {
       const qs: Record<string, ClarifyQuestionScope> = {}
-      for (const qid of questionIds) qs[qid] = scopes[qid] ?? CLARIFY_QUESTION_SCOPE_DEFAULT
-      sub.questionScopes = qs
+      for (const qid of questionIds) {
+        if (resubmitSet.has(qid)) continue
+        qs[qid] = scopes[qid] ?? CLARIFY_QUESTION_SCOPE_DEFAULT
+      }
+      if (Object.keys(qs).length > 0) sub.questionScopes = qs
     }
     onSubmissionChange(originNodeRunId, sub)
-  }, [answers, scopes, seeded, round, visibleQuestions, originNodeRunId, onSubmissionChange])
+  }, [
+    answers,
+    scopes,
+    seeded,
+    round,
+    visibleQuestions,
+    resubmitSet,
+    originNodeRunId,
+    onSubmissionChange,
+  ])
 
   // Drop this round's contribution when it unmounts (left `groups`).
   useEffect(
@@ -549,6 +632,7 @@ function RoundAnswerBlock({
         visibleQuestions.map((q, idx) => {
           const a = answers[q.id]
           if (a === undefined) return null
+          const isResubmit = resubmitSet.has(q.id)
           return (
             <div key={q.id} className="clarify-question-wrapper" data-question-wrapper-id={q.id}>
               {/* designer-domain reassign picker — scoped to THIS round (Codex P2-2) so it
@@ -559,10 +643,26 @@ function RoundAnswerBlock({
                 questionId={q.id}
                 originNodeRunId={originNodeRunId}
               />
+              {/* RFC-136 — 重答提示：预填的是已提交答案，重新提交将就地覆盖。 */}
+              {isResubmit && (
+                <p className="muted" data-testid={`centralized-resubmit-hint-${q.id}`}>
+                  {t('taskQuestions.answerPaneResubmitHint')}
+                </p>
+              )}
               {/* RFC-128 P5-BC: per-question scope picker for a CROSS round (designer ↔
                   questioner). Mirrors the /clarify .segmented control; reuses its i18n. A self
-                  round renders none (the asking agent is its own consumer). */}
-              {isCross && (
+                  round renders none (the asking agent is its own consumer). RFC-136 (D6): a
+                  RE-answer keeps its committed scope — read-only text instead of the picker
+                  (a scope flip would grow/drop reconcile entries on a mere answer edit). */}
+              {isCross && isResubmit && (
+                <p className="muted" data-testid={`centralized-scope-readonly-${q.id}`}>
+                  {t('crossClarify.questionScope.label')}:{' '}
+                  {(round.questionScopes?.[q.id] ?? CLARIFY_QUESTION_SCOPE_DEFAULT) === 'designer'
+                    ? t('crossClarify.questionScope.designer')
+                    : t('crossClarify.questionScope.questioner')}
+                </p>
+              )}
+              {isCross && !isResubmit && (
                 <div
                   className="segmented"
                   role="radiogroup"
