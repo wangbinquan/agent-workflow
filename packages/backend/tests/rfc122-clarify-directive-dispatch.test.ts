@@ -521,12 +521,10 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
     )
     // A mode-flip retry must NOT resume the prior (wrong-mode) session — the
     // resume id also drops to the isolated/fresh path on a flip.
-    // RFC-127 借壳: an `isBorrowed ?` branch (a borrowed row must not resume the
-    // original node P's session) now precedes the definition, pushing RFC-122's
-    // !clarifyModeFlip gate into the else branch — widen the window to span the
-    // isBorrowed branch and assert BOTH gates still exist.
+    // (RFC-132 ③: the RFC-127 `isBorrowed ?` special case is gone with the borrow
+    // ledger — a node always runs its own agent, so only the mode-flip gate remains.)
     const m = src.match(/const effectiveResumeSessionId =\s*([\s\S]{0,600})/)
     expect(m?.[1] ?? '').toContain('followupDecision.followup && !clarifyModeFlip')
-    expect(m?.[1] ?? '').toContain('isBorrowed')
+    expect(m?.[1] ?? '').not.toContain('isBorrowed')
   })
 })

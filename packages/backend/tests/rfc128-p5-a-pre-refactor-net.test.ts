@@ -34,7 +34,6 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { resolveBorrowForNode } from '../src/services/taskQuestionDispatch'
 import { loadUndispatchedDesignerTargets } from '../src/services/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -201,107 +200,6 @@ describe('RFC-128 P5-A #1 → RFC-132 PR-C — self/q 注入收敛为统一平�
     expect(src).not.toContain('await buildPromptContext(')
     expect(src).not.toContain("consumerKind: 'self'")
     expect(src).not.toContain("consumerKind: 'cross-questioner'")
-  })
-})
-
-// ===========================================================================
-
-// ===========================================================================
-// #3 — resolveBorrowForNode 去借壳分离 (RFC-131 T4)
-//
-// RFC-131 T4 去借壳: 延迟账本（immediate self/q + designer deferred-dispatch）改按 EFFECTIVE
-// TARGET（override ?? default）归属。原「同一 home P 两账本都开 → reject」的场景在去借壳后自然
-// 分离——designer 条目按其 override 目标归到 D，不再落在 origin P 上，所以 resolveBorrowForNode(P)
-// 只剩 immediate 账本、单账本解析借壳 agent；designer 在其 target D 上 run-self（null，无借壳）。
-// 两账本真正落在同一 node 时仍 reject（code='task-question-borrow-ledger-conflict'），该守卫由
-// rfc128-p5-bc-self-questioner-rerun.test.ts three-ledger SAME TARGET 用例覆盖。
-// ===========================================================================
-
-describe('RFC-128 P5-A #3 — resolveBorrowForNode 去借壳分离 (RFC-131 T4)', () => {
-  /** Immediate ledger: an answered self round on home P reassigned to X (unconsumed). */
-  async function seedImmediateBorrow(db: DbClient, taskId: string): Promise<void> {
-    const { intermediaryNodeRunId } = await seedAnsweredRound(db, taskId, {
-      kind: 'self',
-      askingNodeId: P,
-      questions: [mkQ('q1', 't')],
-    })
-    await db.insert(taskQuestions).values({
-      id: ulid(),
-      taskId,
-      originNodeRunId: intermediaryNodeRunId,
-      questionId: 'q1',
-      questionTitle: 't',
-      sourceKind: 'self',
-      roleKind: 'self',
-      iteration: 0,
-      loopIter: 0,
-      defaultTargetNodeId: P,
-      overrideTargetNodeId: X, // borrow X on home P (immediate ledger)
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    // RFC-128 P5-BC (Codex impl-gate round 4): the OPEN immediate ledger is keyed on a PENDING
-    // continuation node_run (truth source), so seed the clarify-answer continuation on P.
-    await db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId,
-      nodeId: P,
-      status: 'pending',
-      rerunCause: 'clarify-answer',
-      retryIndex: 0,
-      iteration: 0,
-    })
-  }
-
-  /** Designer ledger: a dispatched designer entry natively for P, reassigned to D. RFC-131 T4 去借壳:
-   *  its ledger is keyed on the effective target D (not the origin P), and it runs D's own agent. */
-  async function seedDesignerBorrowOnHomeP(db: DbClient, taskId: string): Promise<void> {
-    const { intermediaryNodeRunId } = await seedAnsweredRound(db, taskId, {
-      kind: 'cross',
-      askingNodeId: Q,
-      loopIter: 0,
-      questions: [mkQ('dq', 't')],
-    })
-    await db.insert(taskQuestions).values({
-      id: ulid(),
-      taskId,
-      originNodeRunId: intermediaryNodeRunId,
-      questionId: 'dq',
-      questionTitle: 't',
-      sourceKind: 'cross',
-      roleKind: 'designer',
-      iteration: 0,
-      loopIter: 0,
-      defaultTargetNodeId: P, // graph home P (so it lands on the SAME home as the self borrow)
-      overrideTargetNodeId: D,
-      dispatchedAt: Date.now(), // dispatched + trigger NULL ⇒ open/unconsumed (designer ledger)
-      dispatchedBy: 'u1',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-  }
-
-  test('去借壳: designer 移到其 target D → P 上不再撞 → immediate 单账本解析借壳 agent', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId, true)
-    await seedImmediateBorrow(db, taskId)
-    await seedDesignerBorrowOnHomeP(db, taskId)
-
-    // RFC-131 T4 去借壳: the designer entry (default P, override D) is keyed on its effective target D,
-    // so P no longer holds two ledgers — resolveBorrowForNode(P) resolves the immediate ledger alone.
-    expect(await resolveBorrowForNode(db, taskId, P, 0, liveDef())).toBe('borrow-x')
-    // The designer ledger resolves run-self (null) on its target D — no borrow (去借壳).
-    expect(await resolveBorrowForNode(db, taskId, D, 0, liveDef())).toBeNull()
-  })
-
-  test('对照：只有 immediate 账本（无 designer dispatch）→ 不冲突，返回借壳 agent', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId, true)
-    await seedImmediateBorrow(db, taskId)
-    // No designer ledger → single ledger → resolves to X's agentName (no conflict).
-    expect(await resolveBorrowForNode(db, taskId, P, 0, liveDef())).toBe('borrow-x')
   })
 })
 

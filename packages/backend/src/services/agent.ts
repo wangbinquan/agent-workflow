@@ -25,21 +25,6 @@ export async function getAgent(db: DbClient, name: string): Promise<Agent | null
   return row ? rowToAgent(row) : null
 }
 
-/**
- * RFC-127 借壳: the "effective agent" for a borrowed reassignment run. Combines
- * the borrowed agent X's BRAIN (body/model/runtime/skills/permission/…)
- * with the ORIGINAL node P's OUTPUT PORT CONTRACT (outputs/outputKinds). The
- * borrowed run keeps node_id=P, so downstream — which consumes upstream by
- * node_id — receives P's ports naturally. runNode renders the output protocol,
- * validates the envelope, and persists ports all via `agent.outputs` /
- * `agent.outputKinds`, so passing THIS object makes the whole output path honor
- * P's contract while X does the work (Codex design-gate F2). Everything else
- * (runtime/session/skill/mcp) follows X.
- */
-export function buildBorrowedAgent(borrowed: Agent, nodeAgent: Agent): Agent {
-  return { ...borrowed, outputs: nodeAgent.outputs, outputKinds: nodeAgent.outputKinds }
-}
-
 export async function createAgent(
   db: DbClient,
   input: CreateAgent,

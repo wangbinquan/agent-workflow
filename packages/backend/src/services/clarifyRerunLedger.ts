@@ -1,25 +1,16 @@
-// RFC-128 P5-BC — the SHARED clarify-rerun ledger oracle (immediate quick-channel + deferred
-// dispatched). Extracted from taskQuestionDispatch.ts so its consumers can share ONE oracle without
-// an import cycle:
-//   - taskQuestionDispatch.ts (dispatch precheck + in-tx recheck + resolveImmediateBorrowForNode):
-//     the immediate-ledger oracle (openImmediateRounds / findOpenImmediateLedgerHome /
-//     fetchDeferredDispatchedOrigins / isDispatchedEntryConsumed).
-//   - clarify.ts / crossClarify.ts (quick-finalize submit — §5.2.14 mixed-path step 1):
-//     roundHasDispatchedSelfQuestioner, the submit-side "round is in control-channel dispatch mode"
-//     guard (reject a quick whole-round finalize that would drop the un-dispatched answers).
+// RFC-128 P5-BC — the SHARED clarify-rerun ledger oracle (RFC-132 ③: dispatched-only — the
+// immediate quick-channel half was deleted with the legacy immediate mint). Consumers:
+//   - taskQuestionDispatch.ts (dispatch precheck + in-tx recheck + borrow-conflict reject):
+//     isDispatchedEntryConsumed / causeClassForEntry.
+//   - clarifyAutoDispatch.ts (self-rollback preflight): hasOpenDispatchedEntryOnHome.
+//   - clarifyQueue.ts / crossClarify.ts (derived aging): isTargetNodeConsumed.
 //
 // This module sits BELOW all of {clarify, crossClarify, taskQuestions, taskQuestionDispatch} in the
-// dependency order (it imports only schema/drizzle/freshness/shared), so any of them may import it.
+// dependency order (it imports only schema/shared), so any of them may import it.
 
-import { and, eq, inArray, isNotNull } from 'drizzle-orm'
-
-import type { DbClient } from '@/db/client'
-import { taskQuestions } from '@/db/schema'
-import type { clarifyRounds, nodeRuns } from '@/db/schema'
-import { pickFreshestRun } from '@/services/freshness'
+import type { nodeRuns, taskQuestions } from '@/db/schema'
 import { resolveHandlerRun, type RunLineageView } from '@agent-workflow/shared'
 
-type ClarifyRoundRow = typeof clarifyRounds.$inferSelect
 type NodeRunRow = typeof nodeRuns.$inferSelect
 type TaskQuestionRow = typeof taskQuestions.$inferSelect
 
@@ -40,75 +31,6 @@ export function causeClassForEntry(e: Pick<TaskQuestionRow, 'roleKind'>): CauseC
   return 'cross-clarify-answer' // designer (incl. manual)
 }
 
-// RFC-128 P5-BC (Codex impl-gate, §5.2.3④) — the OPEN IMMEDIATE self/questioner ledger oracle.
-//
-// The dispatch-time in-flight gate (assertNoInFlightDispatch) only sees `dispatched_at IS NOT NULL`
-// entries — it MISSES the immediate ledger (a quick-channel self/questioner continuation:
-// `sealed_at` NULL, NOT dispatched, an answered-unconsumed round whose rerun is pending). So a home
-// with an open immediate continuation could still ACCEPT a same-home designer dispatch → stamp +
-// mint a SECOND pending rerun (double-mint). resolveBorrowForNode would reject it later, but only
-// AFTER the irreversible stamp/mint. This oracle lets the dispatch precheck + in-tx recheck count
-// the immediate ledger BEFORE the stamp/mint, sharing the SAME open-detection (`openImmediateRounds`)
-// that resolveImmediateBorrowForNode uses.
-//
-// Codex impl-gate (round 4, §5.2.3④ — lazy-reconcile bypass): the oracle reads the TRUTH SOURCE
-// (clarify_rounds + the pending continuation node_run), NOT the lazily-projected task_questions. A
-// quick-channel answer (submitClarifyAnswers) writes clarify_rounds (answered) + mints a pending
-// continuation node_run BEFORE any board read reconciles the task_question — so a task_questions-based
-// gate would MISS it on the direct/API/race path and still accept a same-home designer dispatch
-// (double-mint). Distinguishing a quick-channel continuation (OPEN — has a pending continuation run)
-// from a control-channel sealed-but-parked round (NOT open — no continuation minted) is done by the
-// PRESENCE of the pending continuation run, so the oracle never touches task_questions. This aligns
-// with the scheduler: it runs that same pending continuation node_run + resolves its agent via
-// resolveBorrowForNode — both key on the pending continuation (loadOpenClarify parks awaiting_human;
-// after answer the continuation is a normal pending run).
-export interface ImmediateLedgerContext {
-  /** clarify_rounds of the task (awaiting_human + answered — the immediate-ledger truth source).
-   *  NB awaiting_human is included on purpose (Codex round-5 finding 2): submitClarifyAnswers mints
-   *  the continuation BEFORE flipping the round 'answered', so the mint-first window has an awaiting
-   *  round with a pending continuation. */
-  rounds: ReadonlyArray<ClarifyRoundRow>
-  /** task node_runs keyed by id (asking-run iteration lookup — P2-3). */
-  runById: ReadonlyMap<string, NodeRunRow>
-  /** task node_runs (the pending continuation scan). */
-  runs: ReadonlyArray<NodeRunRow>
-  /** node_run ids that captured ≥1 <workflow-output> row (consumed = done+output). Read by
-   *  openImmediateRounds in 'revivable' (borrow) mode — a done-no-output continuation is NOT consumed
-   *  so it keeps borrowing; the 'in-flight' (dispatch-gate) mode ignores it (keys on non-terminal). */
-  outputRunIds: ReadonlySet<string>
-  /** origin node-run ids of rounds whose self/questioner rerun is OWNED BY THE DEFERRED LEDGER —
-   *  i.e. the round has a DISPATCHED self/q task_question (`dispatched_at` set). Such a round's
-   *  pending role-cause rerun is the control-channel dispatch (resolveDeferredSelfQuestionerBorrow-
-   *  ForNode), NOT a quick-channel continuation, so the immediate oracle excludes it (else finding 1:
-   *  a legitimate control rerun is double-counted as immediate + deferred → false conflict).
-   *
-   *  Codex round-6 fix (root cause of finding 6): keyed on `dispatched_at` ONLY — NOT `sealed_at`. A
-   *  SEALED-but-undispatched question is not yet owned by the deferred ledger; in a MIXED round
-   *  (q1 control-sealed-undispatched + q2 quick-finalized, with q1's answer preserved via
-   *  loadSealedQuestionIds/mergeSealedAnswers — clarify.ts:383) the round still has a QUICK
-   *  continuation that IS immediate. Excluding on `sealed_at` (fix #5) hid that quick continuation →
-   *  double-mint. Dispatched-only exactly mirrors resolveDeferredSelfQuestionerBorrowForNode's
-   *  ownership (it keys on `dispatched_at`), so immediate ⊎ deferred partition the rerun cleanly.
-   *  (A pure sealed-undispatched control round has no continuation at all → not immediate either,
-   *  and is held by the §18 self/q park source until dispatch.) */
-  deferredDispatchedOrigins: ReadonlySet<string>
-}
-
-export function buildImmediateLedgerContext(
-  rounds: ReadonlyArray<ClarifyRoundRow>,
-  runs: ReadonlyArray<NodeRunRow>,
-  outputRunIds: ReadonlySet<string>,
-  deferredDispatchedOrigins: ReadonlySet<string>,
-): ImmediateLedgerContext {
-  return {
-    rounds,
-    runById: new Map(runs.map((r) => [r.id, r])),
-    runs,
-    outputRunIds,
-    deferredDispatchedOrigins,
-  }
-}
-
 /** RFC-128 P5-BC — the two OPEN semantics the shared oracle serves. They agree on everything EXCEPT
  *  a done-NO-output continuation:
  *   - 'revivable' (BORROW — resolveImmediateBorrowForNode): open = NOT consumed. A continuation is
@@ -124,115 +46,6 @@ export function buildImmediateLedgerContext(
  *     dispatch mint a second same-home rerun → an irreversible multi-ledger conflict (Codex impl-gate).
  *     So in-flight diverges from revivable ONLY on done-no-output. */
 export type LedgerOpenMode = 'revivable' | 'in-flight'
-
-/** Pure (shared truth-source oracle) — the OPEN immediate (QUICK-channel) self/questioner clarify
- *  rounds whose HOME (the asking node) is `nodeId` at `iteration`. A round qualifies iff: it is a
- *  self/questioner round on the home with its ASKING run at `iteration` (P2-3); it is NOT a
- *  canceled/abandoned round; it is NOT owned by the DEFERRED ledger (no DISPATCHED self/q entry —
- *  finding 1+6, so a control dispatch stays deferred while a mixed round's quick continuation stays
- *  immediate); its RFC-070 role stamp is unconsumed; AND a continuation node_run for the role's cause
- *  exists on the home at `iteration` that is OPEN per `mode` (see LedgerOpenMode). The continuation is
- *  the quick-channel signal, recognised even in the MINT-FIRST window before the round flips
- *  'answered' (finding 2) — hence no status==='answered' requirement. Uses node_runs + the
- *  dispatched-only deferred exclusion, so the lazy task_question projection never hides an open
- *  quick-channel ledger. */
-export function openImmediateRounds(
-  nodeId: string,
-  iteration: number,
-  ctx: ImmediateLedgerContext,
-  mode: LedgerOpenMode,
-): ClarifyRoundRow[] {
-  return ctx.rounds.filter((round) => {
-    const isSelf = round.kind === 'self' && round.askingNodeId === nodeId
-    const isQuestioner = round.kind === 'cross' && round.askingNodeId === nodeId
-    if (!isSelf && !isQuestioner) return false
-    if (round.status === 'canceled' || round.status === 'abandoned') return false // terminal
-    const askingRun = ctx.runById.get(round.askingNodeRunId)
-    if (askingRun === undefined || askingRun.iteration !== iteration) return false
-    // Finding 1+6 — exclude rounds OWNED BY THE DEFERRED LEDGER (a DISPATCHED self/q entry). A
-    // sealed-but-undispatched question does NOT exclude (its round's quick continuation, if any,
-    // is still immediate — the mixed-path root cause).
-    if (ctx.deferredDispatchedOrigins.has(round.intermediaryNodeRunId)) return false
-    // RFC-132 PR-D' 步骤2 (T4): consumed_by 戳废弃——派生。continuation-run 扫描（下方
-    // finding 2）对 done+output 的判定与旧戳等价（戳恰在 done+output 时落），故删 short-circuit。
-    // Finding 2 — a continuation run on the home at this iteration with the role's cause, OPEN per
-    // `mode`, INCLUDING the mint-first window (continuation minted, round not yet flipped 'answered').
-    // A non-dispatched round mints a quick continuation only via the quick channel; the deferred
-    // ledger's dispatched reruns were excluded above.
-    //
-    // The two modes diverge ONLY on a done-NO-output continuation. 'revivable' (borrow) counts it as
-    // open (NOT consumed → keeps borrowing). 'in-flight' (dispatch gate) does NOT — deadlock fix
-    // (2026-07-01, live task 01KWDKBS9K22KB6HH4KNR3XMX6 — see clarify-rerun-ledger-deadlock.test.ts):
-    // a self/questioner continuation that ASKS a follow-up round exits `done` WITH NO OUTPUT
-    // (runner.ts:1321 — a valid <workflow-clarify> keeps status=done, writes no <workflow-output>
-    // port). That done run is the PRIOR round's already-finished continuation; the scan is by
-    // (nodeId, iteration, cause) and cannot tell it from the NEXT round's not-yet-minted continuation,
-    // so counting it as in-flight wedged the next round's dispatch permanently (blocked by an already-
-    // done run → the user's answers could never leave the board).
-    //
-    // The gate keys on `status !== 'done'` — NOT `!isTerminalNodeRunStatus` (Codex impl-gate): a
-    // FAILED/canceled/interrupted continuation is revivable (retry/resume re-runs it) and the borrow
-    // side keeps it open, so gate-releasing it would let dispatch mint a SECOND same-home rerun while
-    // the old ledger is still borrow-open → an irreversible multi-ledger conflict. Only `done`
-    // (succeeded, never re-run) is safe to release; that also uniquely covers the done-no-output
-    // deadlock while leaving every non-done status blocked exactly like revivable.
-    const cause: CauseClass = isSelf ? 'clarify-answer' : 'cross-clarify-questioner-rerun'
-    return ctx.runs.some(
-      (r) =>
-        r.nodeId === nodeId &&
-        r.iteration === iteration &&
-        r.parentNodeRunId === null &&
-        r.rerunCause === cause &&
-        (mode === 'in-flight'
-          ? // RFC-132 ②a 缺口②:review-superseded canceled 行已终结(不可 revival),不算 open
-            // ——否则 review-iterate 后 immediate gate 永久挡答复的 dispatch。
-            r.status !== 'done' && !isReviewSupersededCanceled(r)
-          : !(r.status === 'done' && ctx.outputRunIds.has(r.id))),
-    )
-  })
-}
-
-/** Origin node-run ids of rounds OWNED BY THE DEFERRED self/questioner ledger — ≥1 self/questioner
- *  task_question with `dispatched_at` set (NOT `sealed_at` — round-6 fix: a sealed-but-undispatched
- *  question keeps its round's quick continuation in the immediate ledger). The immediate-ledger
- *  oracle excludes these; this exactly mirrors resolveDeferredSelfQuestionerBorrowForNode's
- *  `dispatched_at` ownership. Async; the in-tx recheck builds the same set synchronously. */
-export async function fetchDeferredDispatchedOrigins(
-  db: DbClient,
-  taskId: string,
-): Promise<Set<string>> {
-  const rows = await db
-    .select({ origin: taskQuestions.originNodeRunId })
-    .from(taskQuestions)
-    .where(
-      and(
-        eq(taskQuestions.taskId, taskId),
-        inArray(taskQuestions.roleKind, ['self', 'questioner']),
-        isNotNull(taskQuestions.dispatchedAt),
-      ),
-    )
-  return new Set(rows.map((r) => r.origin))
-}
-
-/** The FIRST affected home with an OPEN immediate self/questioner ledger, or null. Keyed per home
- *  on its dispatch iteration = the freshest run iteration (where the dispatch rerun will be minted
- *  — buildFrontierMintPlan's `last.iteration`), so it matches what resolveBorrowForNode sees when
- *  the home reruns. */
-export function findOpenImmediateLedgerHome(
-  affected: ReadonlySet<string>,
-  runs: ReadonlyArray<NodeRunRow>,
-  ctx: ImmediateLedgerContext,
-): string | null {
-  for (const home of affected) {
-    const iter =
-      pickFreshestRun(
-        runs.filter((r) => r.nodeId === home),
-        { topLevelOnly: false },
-      )?.iteration ?? 0
-    if (openImmediateRounds(home, iter, ctx, 'in-flight').length > 0) return home
-  }
-  return null
-}
 
 /** Is a dispatched entry CONSUMED? = its handler run (resolved through the same resolveHandlerRun
  *  lineage the read-side uses) has reached the terminal-success bar for `mode`. Running, GC'd

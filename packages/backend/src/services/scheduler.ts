@@ -65,7 +65,7 @@ import {
   taskRepos,
   tasks,
 } from '@/db/schema'
-import { buildBorrowedAgent, getAgent } from '@/services/agent'
+import { getAgent } from '@/services/agent'
 import { resolveDependsClosure } from '@/services/agentDeps'
 import { collectMcpNamesFromClosure, loadMcpsByNames } from '@/services/mcpClosure'
 import { collectPluginNamesFromClosure, loadPluginsByNames } from '@/services/pluginClosure'
@@ -2122,40 +2122,21 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   if (nodeAgent === null) {
     return { kind: 'failed', summary: `agent '${agentName}' not found`, message: 'agent-not-found' }
   }
-  // RFC-127 借壳顶替: resolve the borrowed agent from this node's still-open
-  // dispatched task_question, not from node_runs.agent_override_name. The row
-  // column remains audit, but task_questions distinguishes retry/revival of the
-  // same unconsumed question from an unrelated future stale rerun after the
-  // question was consumed, and lets non-frontier cascade mints borrow too.
-  // RFC-127 P2-1/P2-2: an UNRESOLVABLE borrow (a self/questioner round reassigned to >1 agent,
-  // or a self/q + designer dual-ledger overlap on this home) throws ConflictError. resolveBorrow
-  // runs BEFORE this fn's try block, so catch it here and surface a node-level failure (don't let
-  // it reject the scope tick — runTask would fail the WHOLE task).
-  let overrideName: string | null
+  // RFC-132 ③ (借壳收官): the borrow ledgers are move-semantics (RFC-131 T4) and the immediate
+  // ledger is deleted, so resolveBorrowForNode never returns an agent anymore — its remaining
+  // job is the multi-ledger duplicate-execution REJECT (designer + dispatched self/q both open
+  // on this home). Keep the call for that reject; the node always runs its OWN agent.
+  // ConflictError surfaces as a node-level failure (don't reject the scope tick — runTask would
+  // fail the WHOLE task).
   try {
-    overrideName = await resolveBorrowForNode(db, taskId, node.id, iteration, definition)
+    await resolveBorrowForNode(db, taskId, node.id, iteration, definition)
   } catch (err) {
     if (err instanceof ConflictError) {
       return { kind: 'failed', summary: err.message, message: err.code }
     }
     throw err
   }
-  let agent = nodeAgent
-  let isBorrowed = false
-  if (overrideName !== null && overrideName !== '') {
-    const borrowed = await getAgent(db, overrideName)
-    if (borrowed === null) {
-      return {
-        kind: 'failed',
-        summary: `borrowed agent '${overrideName}' not found`,
-        message: 'borrowed-agent-not-found',
-      }
-    }
-    // effective agent = X's brain (body/model/runtime/readonly/skill) + P's
-    // output port contract. promptTemplate / upstream inputs are per-node=P.
-    agent = buildBorrowedAgent(borrowed, nodeAgent)
-    isBorrowed = true
-  }
+  const agent = nodeAgent
 
   // RFC-060 PR-E: agent-multi NodeKind was removed in favor of wrapper-fanout.
   // The agent-single path below is now the sole agent dispatch path.
@@ -2278,9 +2259,9 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         shardKey: inheritedShardKey,
         parentNodeRunId: inheritedParentNodeRunId,
         consumedUpstreamRunsJson: consumedUpstreamJson,
-        // RFC-127 (Codex impl-gate P2): carry the borrowed agent onto the fresh
-        // retry/revival row so cross-tick retries keep running under X, not P.
-        agentOverrideName: overrideName,
+        // RFC-132 ③: the borrow ledger is gone — a retry/revival row never carries an
+        // agent override anymore (the column stays as historical audit on old rows).
+        agentOverrideName: null,
       },
     })
   }
@@ -2816,18 +2797,14 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // residual note: downgrading those needs the directive at loop top, which
         // is entangled with buildPromptContext; tracked as a follow-up.)
         // RFC-127 F1 + Codex impl-gate P2: a same-attempt envelope follow-up
-        // (followupResumeSessionId is THIS borrowed attempt's own X session) MUST
-        // stay paired with envelopeFollowup mode (the runner renders only the
-        // short repair prompt), so follow-up wins for everyone — borrowed or not.
-        // Only when NOT a follow-up does a borrowed row drop P's inline clarify
-        // resume (undefined ⇒ X fresh session, runtime follows X, no P session-
-        // history leak); a non-borrowed row keeps P's inline resume.
+        // (followupResumeSessionId is THIS attempt's own session) stays paired with
+        // envelopeFollowup mode (the runner renders only the short repair prompt).
+        // (RFC-132 ③: the borrowed-row special case is gone with the borrow ledger —
+        // a node always runs its own agent, so the inline resume is always its own.)
         const effectiveResumeSessionId =
           followupDecision.followup && !clarifyModeFlip
             ? followupResumeSessionId
-            : isBorrowed
-              ? undefined
-              : resumeDecision.resumeSessionId
+            : resumeDecision.resumeSessionId
         // RFC-132 (PR-C): the follow-up strong-bias trailer (renderEnvelopeFollowupPrompt) fires on
         // clarifyDirective==='continue'. When effectiveHasClarifyChannel is true the node IS in
         // ask-back ("keep clarifying") mode, so the directive is 'continue' by construction. Gate on a

@@ -47,12 +47,7 @@ import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
 import { resolveClarifyNodeFromTaskSnapshot } from '@/services/clarify'
-import {
-  buildImmediateLedgerContext,
-  fetchDeferredDispatchedOrigins,
-  findOpenImmediateLedgerHome,
-  hasOpenDispatchedEntryOnHome,
-} from '@/services/clarifyRerunLedger'
+import { hasOpenDispatchedEntryOnHome } from '@/services/clarifyRerunLedger'
 import { sealRoundQuestions } from '@/services/clarifySeal'
 import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 import { buildFrozenAttributionSet } from '@/services/clarifyRounds'
@@ -134,15 +129,12 @@ async function resolveSelfRollbackRun(
 
 /**
  * Codex round-8/9 — does `homeNodeId` already hold an OPEN (unconsumed) rerun ledger that the
- * destructive self rollback must NOT clobber? Mirrors BOTH gates dispatchTaskQuestions runs before
- * minting, so the pre-rollback preflight rejects exactly what the dispatch would (and never rolls back
- * under an owning rerun):
- *   (a) the DISPATCHED ledger (assertNoInFlightDispatch → hasOpenDispatchedEntryOnHome): an open
- *       (unconsumed) `dispatched_at` self/questioner/designer entry whose home is this node; AND
- *   (b) the IMMEDIATE quick-channel ledger (assertNoOpenImmediateLedger → findOpenImmediateLedgerHome):
- *       a pending/unconsumed self/questioner continuation with NO `dispatched_at` row (round-9 — the
- *       dispatched-only check missed this). If EITHER is open the autodispatch DEFERS without rolling
- *       back, so the owning rerun resumes against an unclobbered worktree.
+ * destructive self rollback must NOT clobber? Mirrors the dispatch gate
+ * (assertNoInFlightDispatch → hasOpenDispatchedEntryOnHome): an open (unconsumed) `dispatched_at`
+ * self/questioner/designer entry whose home is this node. If open the autodispatch DEFERS without
+ * rolling back, so the owning rerun resumes against an unclobbered worktree.
+ * (RFC-132 ③: the immediate quick-channel half was deleted with the immediate ledger — the boot
+ * shim converts pre-upgrade leftovers to dispatched entries, so this ONE gate covers all owners.)
  */
 async function selfHomeHasOpenLedger(
   db: DbClient,
@@ -194,21 +186,10 @@ async function selfHomeHasOpenLedger(
   ) {
     return true
   }
-  // (b) immediate quick-channel ledger on the home (a pending continuation with no dispatched_at).
-  const rounds = await db
-    .select()
-    .from(clarifyRounds)
-    .where(
-      and(
-        eq(clarifyRounds.taskId, taskId),
-        inArray(clarifyRounds.status, ['awaiting_human', 'answered']),
-      ),
-    )
-  if (rounds.length > 0) {
-    const deferredDispatchedOrigins = await fetchDeferredDispatchedOrigins(db, taskId)
-    const ctx = buildImmediateLedgerContext(rounds, runs, outputRunIds, deferredDispatchedOrigins)
-    if (findOpenImmediateLedgerHome(new Set([homeNodeId]), runs, ctx) !== null) return true
-  }
+  // RFC-132 ③: the (b) immediate quick-channel half is GONE with the immediate ledger — every
+  // live self/q rerun is a dispatched entry (autoDispatchClarifyRound), and pre-upgrade immediate
+  // leftovers are converted to dispatched by the boot shim (reconcileLegacyImmediateRounds), so the
+  // (a) dispatched gate above covers everything the destructive rollback must not clobber.
   return false
 }
 
