@@ -39,10 +39,11 @@ import {
   createCrossClarifySession,
   dispatchCrossClarifyNode,
   evaluateDesignerRerunReadiness,
-  hasPersistentStop,
+  resolveCrossNodeStopped,
   submitCrossClarifyAnswers,
   triggerDesignerRerun,
 } from '../src/services/crossClarify'
+import { reconcileLegacyCrossPersistentStop } from '../src/services/clarifyMigration'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src/ws/broadcaster'
 import type {
@@ -738,7 +739,11 @@ describe('RFC-056 dispatchCrossClarifyNode persistent-stop short-circuit', () =>
       answeredAt: Date.now(),
     })
 
-    expect(await hasPersistentStop(db, taskId, 'cross1')).toBe(true)
+    // RFC-132 T7: a legacy crossClarifySessions.directive='stop' (written pre-migration, with no
+    // node-level directive) is reconciled onto the questioner node's node-level directive by the
+    // boot migration shim; resolveCrossNodeStopped / dispatchCrossClarifyNode then read it.
+    await reconcileLegacyCrossPersistentStop(db)
+    expect(await resolveCrossNodeStopped(db, taskId, 'questioner')).toBe(true)
 
     // Now mint a fresh cross-clarify node_run pending and dispatch it.
     const nrId = `nr_cross_${Math.random().toString(36).slice(2, 8)}`

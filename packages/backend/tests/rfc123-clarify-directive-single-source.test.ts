@@ -12,9 +12,9 @@
 //      时，即便最新已答轮 directive='stop'，ctx.directive 也被覆盖为 'continue'、
 //      answersBlock 渲染 KEEP CLARIFYING（非 STOP）→ resolveEffectiveClarifyChannel
 //      重新放行 ask-back。无 override ⇒ 读 rowDirective（golden-lock）。
-//   C. 重启用 B2（cross 节点短路）：questioner 画布 toggle='continue' 覆盖 stale
-//      hasPersistentStop → dispatchCrossClarifyNode 不再 short-circuit；无 continue
-//      行 ⇒ 仍 short-circuit（golden-lock）。
+//   C. 重启用 B2（cross 节点短路）：RFC-132 T7 起 questioner 节点的 node 级 directive 是唯一
+//      事实源；toggle='continue'（写序晚于 stop）→ resolveCrossNodeStopped=false →
+//      dispatchCrossClarifyNode 不再 short-circuit；directive='stop' / 无行 ⇒ 仍 short-circuit。
 //   D. 源码 wiring 守卫：scheduler directiveOverride 泛化 + 两处 questioner toggle 闸 +
 //      两写点存在（catches a refactor that drops the single-source wiring）。
 //
@@ -36,7 +36,7 @@ import { createClarifySession, submitClarifyAnswers } from '../src/services/clar
 import {
   createCrossClarifySession,
   dispatchCrossClarifyNode,
-  hasPersistentStop,
+  resolveCrossNodeStopped,
   submitCrossClarifyAnswers,
 } from '../src/services/crossClarify'
 import {
@@ -287,13 +287,13 @@ describe('RFC-123 A: 答 stop 回写 task_node_clarify_directives', () => {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// C. 重启用 B2（cross 节点短路）— questioner toggle=continue 覆盖 hasPersistentStop
+// C. 重启用 B2（cross 节点短路）— questioner node 级 directive last-write-wins（RFC-132 T7）
 // ---------------------------------------------------------------------------
-describe('RFC-123 C: questioner toggle=continue 覆盖 cross hasPersistentStop（重启用）', () => {
+describe('RFC-123 C: questioner node 级 directive 决定 cross 节点短路（RFC-132 T7 last-write-wins）', () => {
   async function seedRejectedCross(db: DbClient, taskId: string): Promise<void> {
     await seedCrossStopAnswered(db, taskId, 'stop')
-    // sanity: persistent stop is in force.
-    expect(await hasPersistentStop(db, taskId, 'cross1')).toBe(true)
+    // sanity: the questioner node's node-level directive is 'stop'.
+    expect(await resolveCrossNodeStopped(db, taskId, 'qA')).toBe(true)
   }
 
   async function dispatchFresh(db: DbClient, taskId: string) {
@@ -380,13 +380,20 @@ describe('RFC-123 D: 源码 wiring 守卫', () => {
     expect(schedulerSrc).not.toContain('applyLatestDirective')
   })
 
-  test('scheduler + crossClarify：cross 短路经 resolveCrossNodeStopped（B2 recency 闸）', () => {
+  test('scheduler + crossClarify：cross 短路经 resolveCrossNodeStopped（questioner node 级 directive 单一事实源）', () => {
     const norm = (s: string) => s.replace(/\s+/g, ' ')
-    expect(norm(schedulerSrc)).toContain('resolveCrossNodeStopped(db, taskId, node.id')
+    // RFC-132 T7: scheduler 传 questioner 节点（reenableQuestionerNodeId），非 cross node.id；
+    // resolveCrossNodeStopped 收敛为只读 questioner 节点的 node 级 directive（node last-write-wins
+    // 天然等价 RFC-123 recency gate）。旧 recency 闸（latestPersistentStopAt + stopAt 比较）已删。
+    expect(norm(schedulerSrc)).toContain(
+      'resolveCrossNodeStopped(db, taskId, reenableQuestionerNodeId',
+    )
     expect(crossSrc).toContain('export async function resolveCrossNodeStopped')
-    expect(crossSrc).toContain('latestPersistentStopAt')
-    // recency 闸本体：continue 仅在 ≥ stop 时间戳时覆盖（否则维持 stopped）。
-    expect(norm(crossSrc)).toContain('return stopAt === null || stopAt > qRow.updatedAt')
+    expect(norm(crossSrc)).toContain(
+      "getNodeClarifyDirectiveRow(db, taskId, questionerNodeId))?.directive === 'stop'",
+    )
+    expect(crossSrc).not.toContain('latestPersistentStopAt')
+    expect(crossSrc).not.toContain('function hasPersistentStop')
   })
 
   test('clarify + crossClarify：答 stop 两写点存在（写 asking/questioner 节点 directive）', () => {

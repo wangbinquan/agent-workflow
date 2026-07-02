@@ -27,7 +27,7 @@ import { crossClarifySessions, nodeRuns, tasks, workflows } from '../src/db/sche
 import {
   createCrossClarifySession,
   evaluateDesignerRerunReadiness,
-  hasPersistentStop,
+  resolveCrossNodeStopped,
   submitCrossClarifyAnswers,
 } from '../src/services/crossClarify'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -403,7 +403,7 @@ describe('RFC-058 baseline T3 — submitCrossClarifyAnswers outcomes', () => {
     }
   })
 
-  test('stop directive → questioner-stop-triggered + hasPersistentStop=true', async () => {
+  test('stop directive → questioner-stop-triggered + resolveCrossNodeStopped=true', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId, crossClarifyNodeRunIds } = await seedSubmittable(db)
     const r = await submitCrossClarifyAnswers({
@@ -415,7 +415,7 @@ describe('RFC-058 baseline T3 — submitCrossClarifyAnswers outcomes', () => {
     })
     expect(r.session.directive).toBe('stop')
     expect(r.outcome.kind).toBe('questioner-stop-triggered')
-    const persistentStop = await hasPersistentStop(db, taskId, 'cc1')
+    const persistentStop = await resolveCrossNodeStopped(db, taskId, 'questioner')
     expect(persistentStop).toBe(true)
   })
 
@@ -533,11 +533,11 @@ describe('RFC-058 baseline T3 — evaluateDesignerRerunReadiness ready/pending l
   })
 })
 
-describe('RFC-058 baseline T3 — hasPersistentStop reject persistence', () => {
+describe('RFC-058 baseline T3 — resolveCrossNodeStopped reject persistence', () => {
   test('returns false when no stop submit yet', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId } = await seedCrossClarifyTask(db)
-    expect(await hasPersistentStop(db, taskId, 'cc1')).toBe(false)
+    expect(await resolveCrossNodeStopped(db, taskId, 'questioner')).toBe(false)
   })
 
   test('returns true after stop submit, persists across additional continue submits on other ccs', async () => {
@@ -581,7 +581,7 @@ describe('RFC-058 baseline T3 — hasPersistentStop reject persistence', () => {
       directive: 'stop',
       ifMatchIteration: 0,
     })
-    expect(await hasPersistentStop(db, taskId, 'cc_stop')).toBe(true)
-    expect(await hasPersistentStop(db, taskId, 'cc_continue')).toBe(false)
+    expect(await resolveCrossNodeStopped(db, taskId, 'questioner_a')).toBe(true)
+    expect(await resolveCrossNodeStopped(db, taskId, 'questioner_b')).toBe(false)
   })
 })

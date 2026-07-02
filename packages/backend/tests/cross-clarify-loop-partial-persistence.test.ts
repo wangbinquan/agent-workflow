@@ -41,7 +41,7 @@ import {
   createCrossClarifySession,
   dispatchCrossClarifyNode,
   evaluateDesignerRerunReadiness,
-  hasPersistentStop,
+  resolveCrossNodeStopped,
   submitCrossClarifyAnswers,
 } from '../src/services/crossClarify'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -163,7 +163,7 @@ afterAll(() => {
 })
 
 describe('RFC-056 C5 — wrapper-loop partial persistence', () => {
-  test('iter 0 reject → hasPersistentStop true; persists into iter 1 query', async () => {
+  test('iter 0 reject → resolveCrossNodeStopped true; persists into iter 1 query', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId, 0)
@@ -184,8 +184,8 @@ describe('RFC-056 C5 — wrapper-loop partial persistence', () => {
       answers: [makeAns('q1')],
       directive: 'stop',
     })
-    // Persistence is keyed by (task, node) — loop-iter agnostic.
-    expect(await hasPersistentStop(db, taskId, 'cross1')).toBe(true)
+    // Persistence is keyed by (task, questioner node) — loop-iter agnostic.
+    expect(await resolveCrossNodeStopped(db, taskId, 'questioner')).toBe(true)
   })
 
   test('iter 1 evaluateDesignerRerunReadiness does NOT see iter 0 continue submissions as iter-1 feedback', async () => {

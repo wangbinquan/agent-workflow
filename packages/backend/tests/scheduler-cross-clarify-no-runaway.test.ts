@@ -173,7 +173,7 @@ describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
     // Three locks: live-row probe, persistent-stop fallback, and the
     // common path explicitly returning without minting a row.
     expect(body).toContain('cross-clarify-live-row-exists')
-    expect(body).toContain('hasPersistentStop(db, taskId, node.id)')
+    expect(body).toContain('resolveCrossNodeStopped(db, taskId, reenableQuestionerNodeId)')
     expect(body).toContain('// Common path: no live row, no persistent stop')
 
     // Pre-existing row still in DB unchanged.
@@ -205,7 +205,8 @@ describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
   test('persistent-stop case still mints a done row so cascade reset advances', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTaskAndWorkflow(db)
-    // Seed a prior directive='stop' session so hasPersistentStop returns true.
+    // Seed a legacy directive='stop' session; the boot migration shim backfills the questioner
+    // node-level directive so resolveCrossNodeStopped returns true (RFC-132 T7).
     const prevQRunId = ulid()
     await db.insert(nodeRuns).values({
       id: prevQRunId,
@@ -241,7 +242,9 @@ describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
       createdAt: Date.now() - 1000,
       answeredAt: Date.now() - 500,
     })
-    const { hasPersistentStop } = await import('../src/services/crossClarify')
-    expect(await hasPersistentStop(db, taskId, 'cross1')).toBe(true)
+    const { resolveCrossNodeStopped } = await import('../src/services/crossClarify')
+    const { reconcileLegacyCrossPersistentStop } = await import('../src/services/clarifyMigration')
+    await reconcileLegacyCrossPersistentStop(db)
+    expect(await resolveCrossNodeStopped(db, taskId, 'questioner')).toBe(true)
   })
 })

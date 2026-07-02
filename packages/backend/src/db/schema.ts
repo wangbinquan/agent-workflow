@@ -1295,7 +1295,7 @@ export const clarifyRounds = sqliteTable(
 // RFC-122 — per-(task, asking-node) clarify directive override. A task member
 // flips the on-canvas "继续反问 / 停止反问" toggle for an asking-agent node; the
 // scheduler reads `directive='stop'` AT DISPATCH (parallel to RFC-056
-// hasPersistentStop) and forces the asking agent out of mandatory ask-back for
+// resolveCrossNodeStopped) and forces the asking agent out of mandatory ask-back for
 // that dispatch — so a not-yet-run node and an error-retry's fresh run both pick
 // up the LATEST toggle for free. Absent row ⇒ 'continue' (legacy behavior,
 // byte-for-byte). `set_by` is audit-only (the task-member user id) and, like

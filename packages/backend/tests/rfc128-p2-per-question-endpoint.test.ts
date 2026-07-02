@@ -37,7 +37,7 @@ import { createApp } from '../src/server'
 import { createSession } from '../src/auth/sessionStore'
 import { createUser } from '../src/services/users'
 import { createClarifySession } from '../src/services/clarify'
-import { createCrossClarifySession, hasPersistentStop } from '../src/services/crossClarify'
+import { createCrossClarifySession, resolveCrossNodeStopped } from '../src/services/crossClarify'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import {
   loadUndispatchedDesignerTargets,
@@ -763,8 +763,8 @@ describe('RFC-128 P2 — Codex P2-1: questionIds 须配 defer', () => {
 //     反问者续跑（crossClarify.ts:534-560），控制通道不发 → strand（Codex PR-1 P1）。
 //     「directive 落库 + 无 designer 条目」的原语行为改由 rfc128-p5-0-stranding-guard.test.ts
 //     的 raw-primitive（flag 关）service 测锁（控制通道不再 reach 它）。
-//   - PARTIAL seal + stop → directive 两表都不提前落（hasPersistentStop=false，节点不被提前
-//     short-circuit）——partial 仍允许（轮停 awaiting_human）。
+//   - PARTIAL seal + stop → directive 两表都不提前落（resolveCrossNodeStopped=false，节点不被
+//     提前 short-circuit）——partial 仍允许（轮停 awaiting_human）。
 // ---------------------------------------------------------------------------
 
 describe('RFC-128 P2/P5-BC — defer 透传 directive (stop): full deferred→200+park, partial→不落 directive', () => {
@@ -800,7 +800,7 @@ describe('RFC-128 P2/P5-BC — defer 透传 directive (stop): full deferred→20
     expect((await loadUndispatchedSelfQuestionerTargets(h.db, taskId)).has('questioner')).toBe(true)
   })
 
-  test('cross PARTIAL seal + directive=stop → 两表 directive 仍 NULL（hasPersistentStop=false，节点不被提前 short-circuit）', async () => {
+  test('cross PARTIAL seal + directive=stop → 两表 directive 仍 NULL（resolveCrossNodeStopped=false，节点不被提前 short-circuit）', async () => {
     const h = await buildHarness()
     // 2-question round; defer-seal only q1 with stop → PARTIAL (round stays awaiting_human).
     const { taskId, nodeRunId } = await seedCrossRound(
@@ -819,9 +819,9 @@ describe('RFC-128 P2/P5-BC — defer 透传 directive (stop): full deferred→20
     expect(res.status).toBe(200)
     expect(((await res.json()) as { roundFullySealed: boolean }).roundFullySealed).toBe(false)
 
-    // Directive must NOT be persisted while the round is partial: the legacy session's
-    // directive is read by hasPersistentStop WITHOUT a status filter, so a premature 'stop'
-    // would short-circuit the cross node before q2 is ever answered.
+    // Directive must NOT be persisted while the round is partial: stop detection reads the
+    // questioner node's node-level directive (RFC-132 T7, via resolveCrossNodeStopped), so a
+    // premature 'stop' would short-circuit the cross node before q2 is ever answered.
     const [round] = await roundOf(h.db, taskId)
     expect(round?.status).toBe('awaiting_human')
     expect(round?.directive ?? null).toBeNull() // clarify_rounds: not prematurely 'stop'
@@ -830,6 +830,7 @@ describe('RFC-128 P2/P5-BC — defer 透传 directive (stop): full deferred→20
       .from(crossClarifySessions)
       .where(eq(crossClarifySessions.id, round!.id))
     expect(legacy?.directive ?? null).toBeNull() // legacy session: still NULL
-    expect(await hasPersistentStop(h.db, taskId, 'cross1')).toBe(false) // node NOT short-circuited
+    // node NOT short-circuited (questioner node-level directive not written on a partial seal)
+    expect(await resolveCrossNodeStopped(h.db, taskId, 'questioner')).toBe(false)
   })
 })

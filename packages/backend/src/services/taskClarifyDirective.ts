@@ -2,7 +2,7 @@
 //
 // The single source of truth for the on-canvas "继续反问 / 停止反问" toggle. The
 // scheduler reads `getNodeClarifyDirective` AT DISPATCH (parallel to RFC-056
-// `hasPersistentStop`) and, when it returns 'stop', forces the asking agent out
+// `resolveCrossNodeStopped`) and, when it returns 'stop', forces the asking agent out
 // of mandatory ask-back for that dispatch. An absent row ⇒ undefined ⇒ the
 // caller treats it as 'continue' (legacy behavior, byte-for-byte) — golden-lock
 // hinges on this: no row → the scheduler's effectiveHasClarifyChannel boolean is

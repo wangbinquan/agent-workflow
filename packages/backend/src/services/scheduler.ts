@@ -70,11 +70,7 @@ import { resolveDependsClosure } from '@/services/agentDeps'
 import { collectMcpNamesFromClosure, loadMcpsByNames } from '@/services/mcpClosure'
 import { collectPluginNamesFromClosure, loadPluginsByNames } from '@/services/pluginClosure'
 import { createClarifySession, findClarifyNode } from '@/services/clarify'
-import {
-  createCrossClarifySession,
-  hasPersistentStop,
-  resolveCrossNodeStopped,
-} from '@/services/crossClarify'
+import { createCrossClarifySession, resolveCrossNodeStopped } from '@/services/crossClarify'
 import {
   computeRemaining,
   resolveEffectiveClarifyChannel,
@@ -2049,16 +2045,18 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         message: 'cross-clarify-input-source-missing-at-runtime',
       }
     }
-    // Persistent-stop check: if a prior directive='stop' session exists for
-    // this cross-clarify node, mint a done row immediately so the workflow
-    // advances past this point without parking awaiting_human.
-    // RFC-123 (B2): an explicit 'continue' on the questioner's canvas toggle
-    // overrides the stale hasPersistentStop so a re-enabled questioner asks again.
-    // No row / 'stop' ⇒ unchanged (golden-lock).
+    // Persistent-stop check: if the questioner node's node-level clarify directive is
+    // 'stop', mint a done row immediately so the workflow advances past this point
+    // without parking awaiting_human.
+    // RFC-132 T7: the questioner node's directive (task_node_clarify_directives) is the
+    // single source of truth (answer-stop + canvas toggle both write it; node
+    // last-write-wins subsumes the RFC-123 recency gate). The questioner is guaranteed
+    // to exist here (the missing-questioner guard above already failed the node), so the
+    // fallback is defensive only.
     const reenableQuestionerNodeId = findQuestionerNodeForCrossClarify(definition, node.id)
     const stopped = reenableQuestionerNodeId
-      ? await resolveCrossNodeStopped(db, taskId, node.id, reenableQuestionerNodeId)
-      : await hasPersistentStop(db, taskId, node.id)
+      ? await resolveCrossNodeStopped(db, taskId, reenableQuestionerNodeId)
+      : false
     if (stopped) {
       const stopRunId = await mintNodeRun(db, {
         taskId,
@@ -2631,7 +2629,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // plumbing (which only fed the round-grouped injectors) are gone — selectAgentQueue queries
         // every role in one shot.
         //
-        // RFC-122 (H1 fix): read the node directive AT DISPATCH (parallel to RFC-056 hasPersistentStop)
+        // RFC-122 (H1 fix): read the node directive AT DISPATCH (parallel to RFC-056 resolveCrossNodeStopped)
         // INSIDE the retry loop so EVERY attempt's freshly-minted process-retry row reads the LATEST
         // toggle (a flip while attempt N runs is honored by attempt N+1). Gated on hasClarifyChannel
         // (self-clarify AND cross-questioner both wire the same `__clarify__` source port); every

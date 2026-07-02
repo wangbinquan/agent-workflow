@@ -28,7 +28,11 @@
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
-import { clarifyRounds, nodeRuns, taskQuestions } from '@/db/schema'
+import { clarifyRounds, crossClarifySessions, nodeRuns, taskQuestions } from '@/db/schema'
+import {
+  getNodeClarifyDirectiveRow,
+  setNodeClarifyDirective,
+} from '@/services/taskClarifyDirective'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('clarify-migration')
@@ -131,4 +135,60 @@ export async function reconcileLegacyImmediateRounds(
     log.info('reconciled legacy immediate clarify rounds', { reconciled, skipped })
   }
   return { reconciled, skipped }
+}
+
+export interface ReconcileLegacyCrossStopResult {
+  /** questioner nodes with a legacy cross 'stop' but no node-level directive → backfilled 'stop'. */
+  backfilled: number
+  /** questioner nodes that already had a node-level directive row (left untouched). */
+  skipped: number
+}
+
+/**
+ * RFC-132 T7 迁移垫片。`resolveCrossNodeStopped` 现只读 questioner 节点的 node 级 directive
+ * (`task_node_clarify_directives`)，不再读 `crossClarifySessions.directive`。升级前遗留的
+ * cross 'stop'（pre-RFC-123 写入，未镜像到 node 级 directive）会因此"复活"——cross 节点不再被
+ * short-circuit（回归为反复反问）。修复：扫每条 `crossClarifySessions.directive='stop'`，对其
+ * `sourceQuestionerNodeId` 若 node 级【无 row】→ 补 `setNodeClarifyDirective('stop')`。
+ *
+ * 幂等 + 不覆盖：只在 `getNodeClarifyDirectiveRow` 返回 undefined（完全没有 node 级 row）时补；
+ * 已有 node 级 row 一律不碰——包括用户在 canvas 上 re-enable 写下的 'continue'（覆盖它会把
+ * re-enable 错误地退回 stop）。新数据无碍：seal-stop 与 legacy submit-stop 都已同写 node 级
+ * directive，故其 questioner 节点必有 row → 命中 skip 分支。boot 时调一次（daemon resume 之前，
+ * cli/start.ts），best-effort。
+ */
+export async function reconcileLegacyCrossPersistentStop(
+  db: DbClient,
+): Promise<ReconcileLegacyCrossStopResult> {
+  const stopRows = await db
+    .select({
+      taskId: crossClarifySessions.taskId,
+      questionerNodeId: crossClarifySessions.sourceQuestionerNodeId,
+    })
+    .from(crossClarifySessions)
+    .where(eq(crossClarifySessions.directive, 'stop'))
+
+  // Distinct (task, questioner) — multiple stop sessions can share one questioner node.
+  const seen = new Set<string>()
+  let backfilled = 0
+  let skipped = 0
+  for (const row of stopRows) {
+    const key = `${row.taskId}\x00${row.questionerNodeId}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    const existing = await getNodeClarifyDirectiveRow(db, row.taskId, row.questionerNodeId)
+    if (existing !== undefined) {
+      // A node-level row already exists (a mirrored 'stop', or a user re-enable 'continue')
+      // — never overwrite; node last-write-wins already owns the truth.
+      skipped += 1
+      continue
+    }
+    await setNodeClarifyDirective(db, row.taskId, row.questionerNodeId, 'stop', MIGRATION_ACTOR)
+    backfilled += 1
+  }
+
+  if (backfilled > 0 || skipped > 0) {
+    log.info('reconciled legacy cross persistent-stop directives', { backfilled, skipped })
+  }
+  return { backfilled, skipped }
 }

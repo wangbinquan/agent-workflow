@@ -32,7 +32,7 @@ import { clarifySessions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   createCrossClarifySession,
   dispatchCrossClarifyNode,
-  hasPersistentStop,
+  resolveCrossNodeStopped,
   submitCrossClarifyAnswers,
 } from '../src/services/crossClarify'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -156,7 +156,7 @@ afterAll(() => {
 })
 
 describe('RFC-056 C4 — reject persistence cross-cascade', () => {
-  test('after one reject on cross1, hasPersistentStop(task, cross1) is true', async () => {
+  test('after one reject on cross1, resolveCrossNodeStopped(task, qA) is true', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId)
@@ -177,8 +177,8 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
       answers: [makeAns('q1')],
       directive: 'stop',
     })
-    expect(await hasPersistentStop(db, taskId, 'cross1')).toBe(true)
-    expect(await hasPersistentStop(db, taskId, 'cross2')).toBe(false)
+    expect(await resolveCrossNodeStopped(db, taskId, 'qA')).toBe(true)
+    expect(await resolveCrossNodeStopped(db, taskId, 'qB')).toBe(false)
   })
 
   test('persistence survives a sibling cross-clarify submit on a different cross node', async () => {
@@ -221,7 +221,7 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
       answers: [makeAns('q1')],
       directive: 'continue',
     })
-    expect(await hasPersistentStop(db, taskId, 'cross1')).toBe(true)
+    expect(await resolveCrossNodeStopped(db, taskId, 'qA')).toBe(true)
   })
 
   test('persistence survives a designer self-clarify iterate on the same designer node', async () => {
@@ -270,7 +270,7 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
       createdAt: Date.now(),
       answeredAt: Date.now(),
     })
-    expect(await hasPersistentStop(db, taskId, 'cross1')).toBe(true)
+    expect(await resolveCrossNodeStopped(db, taskId, 'qA')).toBe(true)
   })
 
   test('persistence is keyed by (task, node_id) — a different cross node remains unaffected', async () => {
@@ -294,8 +294,8 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
       answers: [makeAns('q1')],
       directive: 'stop',
     })
-    expect(await hasPersistentStop(db, taskId, 'cross1')).toBe(true)
-    expect(await hasPersistentStop(db, taskId, 'cross2')).toBe(false)
+    expect(await resolveCrossNodeStopped(db, taskId, 'qA')).toBe(true)
+    expect(await resolveCrossNodeStopped(db, taskId, 'qB')).toBe(false)
   })
 
   test('dispatchCrossClarifyNode on a fresh node_run for the stopped node short-circuits to done (no new awaiting session)', async () => {

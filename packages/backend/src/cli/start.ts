@@ -186,6 +186,19 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
   }
 
+  // 5b3. RFC-132 T7: reconcile 升级前遗留的 cross 'stop'。resolveCrossNodeStopped 现只读
+  // questioner 节点的 node 级 directive；未镜像到 node 级的 legacy cross stop 会"复活"（cross
+  // 节点不再 short-circuit）。补 node 级 'stop'（幂等 + 不覆盖已有 row，含用户 re-enable）。
+  // 同样在 resume 之前跑。幂等 + best-effort（自带 log）。
+  try {
+    const { reconcileLegacyCrossPersistentStop } = await import('@/services/clarifyMigration')
+    await reconcileLegacyCrossPersistentStop(db)
+  } catch (err) {
+    log.warn('legacy cross persistent-stop reconcile on boot failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
   // 5c. RFC-017: reconcile registered skill_sources up-front so the first
   // /api/skills hit (likely the SPA's skills query) sees the current set of
   // child skills. Per-source failures are already swallowed into

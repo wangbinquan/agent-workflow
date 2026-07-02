@@ -259,12 +259,14 @@ export async function sealRoundQuestions(
       // args for a narrow boundary; now a no-op); the `deferredQuestionDispatch` flag is no longer
       // read here.
 
-      // RFC-128 P2 (Codex P2-2 follow-up) — persist the directive ONLY when the round fully
-      // seals; a PARTIAL seal writes it to NEITHER table:
-      //   - the legacy session's directive is read by hasPersistentStop / resolveCrossNodeStopped
-      //     WITHOUT a status filter (crossClarify.ts) — a 'stop' written while the session is
-      //     still awaiting_human would be taken as a PERMANENT node stop and short-circuit the
-      //     cross node BEFORE the round is answered;
+      // RFC-128 P2 (Codex P2-2 follow-up) + RFC-132 T7 — persist the directive ONLY when the
+      // round fully seals; a PARTIAL seal writes it to NEITHER table:
+      //   - stop detection now reads the questioner node's node-level directive
+      //     (task_node_clarify_directives, via resolveCrossNodeStopped). The node-level write
+      //     below (setNodeClarifyDirective, gated on stopFinalized = fullySealed) must NOT fire
+      //     on a partial seal, or a 'stop' would be taken as a PERMANENT node stop and
+      //     short-circuit the cross node BEFORE the round is answered. crossClarifySessions.directive
+      //     is audit-only now, but is kept in lockstep (gated the same way) so the two never disagree;
       //   - clarify_rounds.directive's only scheduling reader (loadUndispatchedDesignerTargets)
       //     filters status='answered', so a partial round's directive is never consulted.
       // Deferring both writes to full seal matches "partial seal is pure derived state, changes
@@ -295,7 +297,7 @@ export async function sealRoundQuestions(
       // overlapping columns) by the SHARED row id. crossClarifySessions has no answered_by
       // column (matches submitCrossClarifyAnswers), so we mirror answers + scopes + (on full
       // seal only) directive + status + answeredAt — the fields the dual-write-consistency nets
-      // assert. Directive is gated on fullySealed for the hasPersistentStop reason above.
+      // assert. Directive is gated on fullySealed for the stop-detection reason above.
       const legacySet = {
         answersJson: mergedJson,
         questionScopesJson: scopesJson,

@@ -28,7 +28,7 @@
 //     prior draft is supplied via the scheduler's `## Prior Output (to be
 //     updated)` prompt block, and downstream re-dispatch is lazy (RFC-074).
 //     Persistent-stop cross-clarify nodes stay reset to pending but dispatch
-//     detects them via hasPersistentStop.
+//     detects them via resolveCrossNodeStopped (questioner node-level directive).
 //   - triggerQuestionerStopRerun: cascade-reset the questioner. dispatch
 //     time the questioner's prompt picks up the STOP CLARIFYING anchor +
 //     full Q&A history via the cross-clarify path.
@@ -38,7 +38,7 @@
 //     clarify lands here via createCrossClarifySession.
 //   - buildExternalFeedbackSources: pulls the latest directive='continue'
 //     session per source-questioner-node for the upcoming designer rerun.
-//   - hasPersistentStop / listSummaries / getDetail / cleanupForTask:
+//   - resolveCrossNodeStopped / listSummaries / getDetail / cleanupForTask:
 //     read-side helpers used by REST + scheduler / runner.
 //
 // Source-of-truth contracts:
@@ -1347,16 +1347,12 @@ export async function dispatchCrossClarifyNode(args: {
   if (questionerNodeId === undefined) {
     return { kind: 'no-questioner' }
   }
-  // RFC-123 (B2): the questioner's canvas toggle is authoritative for re-enable —
-  // an explicit, RECENT 'continue' (user flipped the toggle back AFTER the stop)
-  // overrides hasPersistentStop so the questioner can ask again. A stale 'continue'
-  // (older than the stop), a 'stop', or no row ⇒ hasPersistentStop unchanged.
-  const stopped = await resolveCrossNodeStopped(
-    args.db,
-    args.taskId,
-    args.crossClarifyNodeId,
-    questionerNodeId,
-  )
+  // RFC-132 T7: the questioner's node-level clarify directive is the single source of
+  // truth for stop/continue. answer-stop (sealRoundQuestions) and the canvas toggle both
+  // write the questioner node's directive, so node last-write-wins subsumes the RFC-123
+  // recency gate (a stale 'continue' is overwritten by a later answer-stop → stopped; a
+  // toggle 'continue' after a stop → re-enabled).
+  const stopped = await resolveCrossNodeStopped(args.db, args.taskId, questionerNodeId)
   if (stopped) {
     // RFC-053: mark-done is running → done; we set the node_run to running
     // first (mark-running from pending). The cross-clarify node has no
@@ -1376,84 +1372,21 @@ export async function dispatchCrossClarifyNode(args: {
 }
 
 /**
- * RFC-056: returns true if any directive='stop' row exists for this
- * (taskId, crossClarifyNodeId), regardless of loop_iter. Persistence is
- * defined at the cross-clarify node level — once rejected, the questioner
- * never asks via this node again in the same task.
- */
-export async function hasPersistentStop(
-  db: DbClient,
-  taskId: string,
-  crossClarifyNodeId: string,
-): Promise<boolean> {
-  const rows = await db
-    .select({ id: crossClarifySessions.id })
-    .from(crossClarifySessions)
-    .where(
-      and(
-        eq(crossClarifySessions.taskId, taskId),
-        eq(crossClarifySessions.crossClarifyNodeId, crossClarifyNodeId),
-        eq(crossClarifySessions.directive, 'stop'),
-      ),
-    )
-    .limit(1)
-  return rows.length > 0
-}
-
-/**
- * RFC-123: the timestamp of the most-recent directive='stop' session for this
- * cross-clarify node (answeredAt, createdAt fallback), or null if none. Used to
- * recency-gate the questioner toggle's 'continue' re-enable against the stop it
- * would override.
- */
-export async function latestPersistentStopAt(
-  db: DbClient,
-  taskId: string,
-  crossClarifyNodeId: string,
-): Promise<number | null> {
-  const rows = await db
-    .select({
-      answeredAt: crossClarifySessions.answeredAt,
-      createdAt: crossClarifySessions.createdAt,
-    })
-    .from(crossClarifySessions)
-    .where(
-      and(
-        eq(crossClarifySessions.taskId, taskId),
-        eq(crossClarifySessions.crossClarifyNodeId, crossClarifyNodeId),
-        eq(crossClarifySessions.directive, 'stop'),
-      ),
-    )
-  let latest: number | null = null
-  for (const r of rows) {
-    const t = r.answeredAt ?? r.createdAt
-    if (t !== null && (latest === null || t > latest)) latest = t
-  }
-  return latest
-}
-
-/**
- * RFC-056 + RFC-123: should the cross-clarify NODE short-circuit to done?
- * True when a persistent 'stop' exists AND the questioner's canvas toggle does NOT
- * explicitly re-enable it. The toggle re-enables ('continue') only when it is at
- * least as RECENT as the latest stop — a stale pre-RFC-123 'continue' row (kept by
- * the canvas API while answer-stop did not update the table) must not re-open a
- * later stop. No persistent stop ⇒ false; no toggle row / 'stop' toggle / stale
- * 'continue' ⇒ plain hasPersistentStop (golden-lock).
+ * RFC-056 + RFC-123 + RFC-132 T7: should the cross-clarify NODE short-circuit to done?
+ * The questioner node's node-level clarify directive (`task_node_clarify_directives`) is the
+ * SINGLE source of truth. Both the answer-stop path (sealRoundQuestions → setNodeClarifyDirective
+ * on the questioner node) and the canvas toggle write it, so node last-write-wins subsumes the
+ * old RFC-123 recency gate: a stale 'continue' followed by a later answer-stop resolves to
+ * 'stop' (stopped); a toggle 'continue' after a stop re-enables the questioner. No row or
+ * 'continue' ⇒ not stopped. The legacy `crossClarifySessions.directive` column is retained for
+ * audit only and no longer read here (design §1).
  */
 export async function resolveCrossNodeStopped(
   db: DbClient,
   taskId: string,
-  crossClarifyNodeId: string,
   questionerNodeId: string,
 ): Promise<boolean> {
-  if (!(await hasPersistentStop(db, taskId, crossClarifyNodeId))) return false
-  const qRow = await getNodeClarifyDirectiveRow(db, taskId, questionerNodeId)
-  if (qRow?.directive !== 'continue') return true
-  const stopAt = await latestPersistentStopAt(db, taskId, crossClarifyNodeId)
-  // re-enable (not stopped) only when the 'continue' toggle is at least as recent
-  // as the stop it overrides; otherwise stay stopped (conservative on unknown time).
-  return stopAt === null || stopAt > qRow.updatedAt
+  return (await getNodeClarifyDirectiveRow(db, taskId, questionerNodeId))?.directive === 'stop'
 }
 
 // ---------------------------------------------------------------------------
