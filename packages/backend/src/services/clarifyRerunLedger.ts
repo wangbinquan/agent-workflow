@@ -145,9 +145,8 @@ export function openImmediateRounds(
     // sealed-but-undispatched question does NOT exclude (its round's quick continuation, if any,
     // is still immediate — the mixed-path root cause).
     if (ctx.deferredDispatchedOrigins.has(round.intermediaryNodeRunId)) return false
-    // RFC-070 consumed → the quick continuation already ran done+output → closed.
-    const consumed = isSelf ? round.consumedByConsumerRunId : round.consumedByQuestionerRunId
-    if (consumed !== null) return false
+    // RFC-132 PR-D' 步骤2 (T4): consumed_by 戳废弃——派生。continuation-run 扫描（下方
+    // finding 2）对 done+output 的判定与旧戳等价（戳恰在 done+output 时落），故删 short-circuit。
     // Finding 2 — a continuation run on the home at this iteration with the role's cause, OPEN per
     // `mode`, INCLUDING the mint-first window (continuation minted, round not yet flipped 'answered').
     // A non-dispatched round mints a quick continuation only via the quick channel; the deferred

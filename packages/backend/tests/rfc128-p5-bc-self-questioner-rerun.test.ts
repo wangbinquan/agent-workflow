@@ -27,11 +27,7 @@ import {
   workflows,
 } from '../src/db/schema'
 import { readFileSync } from 'node:fs'
-import {
-  buildClarifyNodeQueueContext,
-  buildPromptContext,
-  markClarifyRoundsConsumedBy,
-} from '../src/services/clarifyRounds'
+import { buildClarifyNodeQueueContext, buildPromptContext } from '../src/services/clarifyRounds'
 import { dispatchTaskQuestions, resolveBorrowForNode } from '../src/services/taskQuestionDispatch'
 import {
   loadUndispatchedSelfQuestionerTargets,
@@ -2077,63 +2073,5 @@ describe('RFC-128 §5.2.14 final-gate (2nd round) — seal/merge/deferred critic
     // sealed q1 = A preserved (NOT the quick's posted B); q2 = A from the quick.
     expect(finalAnswers.find((a) => a.questionId === 'q1')?.selectedOptionLabels).toEqual(['A'])
     expect(finalAnswers.find((a) => a.questionId === 'q2')?.selectedOptionLabels).toEqual(['A'])
-  })
-})
-
-// ===========================================================================
-// 自检 ① 续 + clean-path ② — consume suppression (deferred dispatched self/q whole-round NOT stamped)
-// ===========================================================================
-describe('RFC-128 P5-BC consume suppression (clean-path ②)', () => {
-  test('deferred dispatched self round → markClarifyRoundsConsumedBy does NOT whole-round stamp it', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId)
-    const self = await seedAnsweredRound(db, taskId, {
-      kind: 'self',
-      askingNodeId: P,
-      questions: [mkQ('q1', 't')],
-    })
-    await insertEntry(db, taskId, {
-      originNodeRunId: self.intermediaryNodeRunId,
-      questionId: 'q1',
-      roleKind: 'self',
-      defaultTargetNodeId: P,
-      sealed: true,
-      dispatchedAt: Date.now(),
-    })
-    const consumerRun = await seedRun(db, taskId, P, {
-      status: 'done',
-      iteration: 1,
-      hasOutput: true,
-    })
-    await markClarifyRoundsConsumedBy(db, { id: consumerRun, taskId, nodeId: P, shardKey: null })
-    // Per-question consume (trigger_run_id) owns it → whole-round stamp suppressed.
-    expect((await roundRow(db, self.roundId))[0]?.consumedByConsumerRunId).toBeNull()
-  })
-
-  test('deferred QUICK-channel self round (sealed_at NULL, undispatched) → whole-round stamp APPLIES (golden-lock)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId)
-    const self = await seedAnsweredRound(db, taskId, {
-      kind: 'self',
-      askingNodeId: P,
-      questions: [mkQ('q1', 't')],
-    })
-    // A quick-channel entry: sealed_at NULL, dispatched_at NULL → NOT a per-question round.
-    await insertEntry(db, taskId, {
-      originNodeRunId: self.intermediaryNodeRunId,
-      questionId: 'q1',
-      roleKind: 'self',
-      defaultTargetNodeId: P,
-      sealed: false,
-    })
-    const consumerRun = await seedRun(db, taskId, P, {
-      status: 'done',
-      iteration: 1,
-      hasOutput: true,
-    })
-    await markClarifyRoundsConsumedBy(db, { id: consumerRun, taskId, nodeId: P, shardKey: null })
-    expect((await roundRow(db, self.roundId))[0]?.consumedByConsumerRunId).toBe(consumerRun)
   })
 })

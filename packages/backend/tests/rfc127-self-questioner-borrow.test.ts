@@ -42,7 +42,6 @@ import {
 } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createClarifySession, submitClarifyAnswers } from '../src/services/clarify'
-import { markClarifyRoundsConsumedBy } from '../src/services/clarifyRounds'
 import { createCrossClarifySession, submitCrossClarifyAnswers } from '../src/services/crossClarify'
 import { runTask } from '../src/services/scheduler'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
@@ -781,12 +780,6 @@ describe('RFC-127 self/questioner borrow — real-services integration', () => {
     await db
       .insert(nodeRunOutputs)
       .values({ nodeRunId: rerun.id, portName: 'result', content: 'r' })
-    await markClarifyRoundsConsumedBy(db, {
-      id: rerun.id,
-      taskId: 'int-self',
-      nodeId: P,
-      shardKey: null,
-    })
 
     // Consumed → an unrelated future rerun on P runs P's own agent (no stale borrow).
     expect(await resolveBorrowForNode(db, 'int-self', P, 0, liveDef())).toBeNull()

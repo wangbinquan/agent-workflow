@@ -37,7 +37,6 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { markClarifyRoundsConsumedBy } from '../src/services/clarifyRounds'
 import {
   buildExternalFeedbackContext,
   createCrossClarifySession,
@@ -2473,12 +2472,6 @@ describe('RFC-120 §18 — frontier mint + per-node queue + consumption', () => 
     await db
       .insert(nodeRunOutputs)
       .values({ nodeRunId: designerRerunId, portName: 'result', content: 'x' })
-    await markClarifyRoundsConsumedBy(db, {
-      id: designerRerunId,
-      taskId: seed.taskId,
-      nodeId: DESIGNER,
-      shardKey: null,
-    })
 
     // A's NEXT rerun's queue no longer includes entryA (bound to the finished run).
     // RFC-131: the derived-aging predicate reads the home node's runs at the NEXT rerun's

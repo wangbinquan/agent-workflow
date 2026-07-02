@@ -69,25 +69,10 @@ describe('RFC-070 C-guard — counter-based aging path is gone in production cod
   })
 })
 
-describe('RFC-070 C-guard — mark helper has single definition + single call site', () => {
-  test('`markClarifyRoundsConsumedBy` defined exactly once in services/clarifyRounds.ts', () => {
-    const txt = readFileSync(join(BACKEND_SRC, 'services/clarifyRounds.ts'), 'utf8')
-    const defOccurrences = txt.split('export async function markClarifyRoundsConsumedBy').length - 1
-    expect(defOccurrences).toBe(1)
-  })
-
-  test('`markClarifyRoundsConsumedBy(` called from services/runner.ts', () => {
-    const txt = readFileSync(join(BACKEND_SRC, 'services/runner.ts'), 'utf8')
-    expect(txt).toContain('markClarifyRoundsConsumedBy(opts.db')
-    // Gate: only invoked when outputs were persisted.
-    expect(txt).toContain('outputsPersistedCount > 0')
-  })
-
-  test('mark helper is NOT called from services/lifecycle.ts (setNodeRunStatus general helper)', () => {
-    const txt = readFileSync(join(BACKEND_SRC, 'services/lifecycle.ts'), 'utf8')
-    expect(txt).not.toContain('markClarifyRoundsConsumedBy')
-  })
-})
+// RFC-132 PR-D' 步骤2 (T4): C-guard「mark helper 单定义 + 单调用」describe 删除——
+// markClarifyRoundsConsumedBy 已删（consumed_by 消费戳废弃，派生老化 isTargetNodeConsumed
+// 取代）。counter-aging（下方 #1）+ schema 列（#3，PR-F drop-column 前保留）+ read-path（#4，
+// 步骤3 删死注入器时更新）仍锁。
 
 describe('RFC-070 C-guard — schema declares consumed_by columns on all three tables', () => {
   test('schema.ts has consumedByConsumerRunId in clarify_sessions, cross_clarify_sessions, clarify_rounds', () => {

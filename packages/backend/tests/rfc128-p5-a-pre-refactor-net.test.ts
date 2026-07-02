@@ -34,7 +34,7 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { buildPromptContext, markClarifyRoundsConsumedBy } from '../src/services/clarifyRounds'
+import { buildPromptContext } from '../src/services/clarifyRounds'
 import { resolveBorrowForNode } from '../src/services/taskQuestionDispatch'
 import { loadUndispatchedDesignerTargets } from '../src/services/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -263,82 +263,6 @@ describe('RFC-128 P5-A #1/#2 — buildPromptContext 整轮渲染全 Q&A (self / 
 })
 
 // ===========================================================================
-// #2 — self/q 整轮消费：markClarifyRoundsConsumedBy 整轮戳 → buildPromptContext 整轮 age-out
-//
-// 现状 self/q 消费是 ROUND 级（RFC-070）：一条 done+output 的 consumer run 一次性把整条轮的
-// consumed_by_*_run_id 戳上，之后 buildPromptContext 整轮消失（无逐题消费列）。P5-C 计划改
-// per-entry trigger_run_id——届时一条轮可部分消费，本锁须迁移到逐题语义。
-// ===========================================================================
-
-describe('RFC-128 P5-A #2 — markClarifyRoundsConsumedBy 整轮戳 + 整轮 age-out', () => {
-  test('self: 多题轮被一条 done+output run 整轮 stamp → 整轮 consumed → buildPromptContext 返回 undefined', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId)
-    const { roundId } = await seedAnsweredRound(db, taskId, {
-      kind: 'self',
-      askingNodeId: P,
-      questions: [mkQ('q1', 'Q1?'), mkQ('q2', 'Q2?')],
-    })
-
-    // Before consume: the whole round is injected.
-    const before = await buildPromptContext({
-      db,
-      definition: liveDef(),
-      taskId,
-      consumerKind: 'self',
-      consumerNodeId: P,
-      targetIteration: 1,
-      shardKey: null,
-    })
-    expect(before).toBeDefined()
-
-    // The consumer (the asking node P) finishes done+output → ONE whole-round stamp covers the
-    // entire round (no per-question consumption column exists).
-    const consumerRunId = await seedRun(db, taskId, P, { iteration: 1, hasOutput: true })
-    await markClarifyRoundsConsumedBy(db, { id: consumerRunId, taskId, nodeId: P, shardKey: null })
-
-    expect((await roundById(db, roundId))[0]?.consumedByConsumerRunId).toBe(consumerRunId)
-    // After the whole-round stamp the round ages out entirely (both questions gone at once).
-    const after = await buildPromptContext({
-      db,
-      definition: liveDef(),
-      taskId,
-      consumerKind: 'self',
-      consumerNodeId: P,
-      targetIteration: 2,
-      shardKey: null,
-    })
-    expect(after).toBeUndefined()
-  })
-
-  test('cross-questioner: 整轮 stamp consumed_by_questioner_run_id → 整轮 age-out', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId)
-    const { roundId } = await seedAnsweredRound(db, taskId, {
-      kind: 'cross',
-      askingNodeId: Q,
-      loopIter: 0,
-      questions: [mkQ('q1', 'Q1?'), mkQ('q2', 'Q2?')],
-    })
-
-    const consumerRunId = await seedRun(db, taskId, Q, { iteration: 1, hasOutput: true })
-    await markClarifyRoundsConsumedBy(db, { id: consumerRunId, taskId, nodeId: Q, shardKey: null })
-
-    expect((await roundById(db, roundId))[0]?.consumedByQuestionerRunId).toBe(consumerRunId)
-    const after = await buildPromptContext({
-      db,
-      definition: liveDef(),
-      taskId,
-      consumerKind: 'cross-questioner',
-      consumerNodeId: Q,
-      targetIteration: 2,
-      loopIter: 0,
-    })
-    expect(after).toBeUndefined()
-  })
-})
 
 // ===========================================================================
 // #3 — resolveBorrowForNode 去借壳分离 (RFC-131 T4)

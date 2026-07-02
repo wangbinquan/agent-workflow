@@ -79,7 +79,6 @@ import { captureChildSessions } from './sessionCapture'
 import { captureClaudeSessions } from './runtime/claudeCode/sessionCapture'
 import { startLiveSubagentCapture } from './subagentLiveCapture'
 import { setNodeRunStatus, transitionNodeRunStatus } from './lifecycle'
-import { markClarifyRoundsConsumedBy } from './clarifyRounds'
 import { isAgentRunKind, readSnapshotFromRunDir } from './inventory'
 import {
   injectMemoryForRun,
@@ -1258,10 +1257,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   //    (both / neither). detectEnvelopeKind is the single source of truth
   //    for which form the reply took.
   let outputs: Record<string, string> = {}
-  // RFC-070: tracks the number of `<workflow-output>` ports actually persisted
-  // to `node_run_outputs`. Drives the mark-consumed gate at runner tail so
-  // clarify-only / no-output completions don't age out unconsumed Q&A rounds.
-  let outputsPersistedCount = 0
   let clarifyResult:
     | { questions: ClarifyQuestion[]; truncationWarnings: ClarifyTruncationWarning[] }
     | undefined
@@ -1439,7 +1434,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
                 target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
                 set: { content, kind },
               })
-            outputsPersistedCount += 1
           }
         }
       }
@@ -1542,18 +1536,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       tokTotal: tokenUsage.total,
     },
   })
-  // RFC-070: stamp every clarify Q&A row this consumer just baked into a
-  // captured `<workflow-output>`. Gated on outputs presence so clarify-only
-  // (no-output) completions don't age out unconsumed rounds. Single mark
-  // entry point — keeps the aging contract verifiable by grep.
-  if (status === 'done' && outputsPersistedCount > 0) {
-    await markClarifyRoundsConsumedBy(opts.db, {
-      id: opts.nodeRunId,
-      taskId: opts.taskId,
-      nodeId: opts.nodeId,
-      shardKey: opts.templateMeta.shardKey ?? null,
-    })
-  }
+  // RFC-132 PR-D' 步骤2 (T4): consumed_by 消费戳废弃——派生老化 isTargetNodeConsumed
+  // (clarifyRerunLedger) 已是唯一老化判据（读 run 状态，零持久戳）。此处不再落戳。
   // Runner-specific JSON fields not in NodeRunStatusUpdateExtra — write
   // them as a follow-up non-status update.
   // rfc053-allow-direct-status-write -- writing non-status fields
