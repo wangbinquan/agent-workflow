@@ -63,8 +63,9 @@
 - [ ] 塌缩 golden-lock（第三节点 override 不变）+ 409 边界 + designer 行补建 + 既存行
       override 归一化 + echo 物化
 - [ ] 真异类混批：deferred 盖列 → 续跑 done 后 tick 自动补发（`__system__`），嵌套 defer 收敛
-- [ ] stage 未点发不被自动下发；unstage 撤回后不被自动下发（re-stage 不复活登记，含
-      pre-lock 窗口竞态 CAS case）
+- [ ] stage 未点发不被自动下发；unstage 撤回后不被自动下发（re-stage 不复活登记；锁串行断
+      言：dispatch 持锁期间的 unstage 等待锁、完成后登记必为空 + 锁获取点在读条目之前的源级
+      文本锁）
 - [ ] daemon 重启后补发不丢；可恢复 409 自愈；不可恢复 Conflict 清登记 + WARN 不空转
 - [ ] tick 补发一次全量调用（frontier 保全：上下游两 home 只 mint 上游，源级断言禁逐 home 拆分）
 - [ ] 看板 deferred 徽标 + 塌缩知会 + i18n
