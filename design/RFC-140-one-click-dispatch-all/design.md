@@ -97,16 +97,18 @@ round.targetConsumerNodeId`（非 null）。任一不满足 ⇒ 回落常规 ove
 - **盖**：`dispatchTaskQuestions` 的 stamp tx 内（:512-761），对 `deferredEntries` 的行
   `SET auto_dispatch_deferred_at = now`——与 dispatch 批的 `dispatched_at` stamp 同 tx 原子。
   语义 = **用户已对该条目表达过下发意图，仅因 cause 序列化被排队**。
-- **清（撤回，Codex 设计门 P1 + 二轮竞态收紧）**：登记的生命周期不变量 = **登记只能由「点批
-  量下发被 auto-split defer」产生，任何 stage 状态变更都消灭它**：
+- **清（撤回，Codex 设计门 P1 + 二/三轮竞态收紧）**：登记的生命周期不变量 = **登记只能由
+  「点批量下发被 auto-split defer」产生，任何 stage 状态变更都消灭它**：
   - `stageTaskQuestion` 的 **unstage 分支**（taskQuestions.ts:1236 按题级联 UPDATE）同一语句
     清 `auto_dispatch_deferred_at`——拖出待下发 = 撤回意图；
   - **stage 方向**（:1216 单行 CAS UPDATE）同样清列——re-stage 回到的是「暂存」态，登记不随
     之复活，**必须重新点批量下发**；
-  - `stageTaskQuestion` 全函数纳入 per-task **question-write lock (B)**（dispatch 的
-    stamp+mint tx 已持有同一把锁，:538）——串行化「dispatch 读 staged → 用户 unstage/re-stage
-    → dispatch tx 盖登记」的交错（Codex 二轮 P2：无锁时晚盖的登记会在 re-stage 后被选择器命
-    中 → 未重新点发即自动发）。stage 是轻写，锁开销可忽略。
+  - **盖登记用观测值 CAS**（Codex 三轮 P2——stage 纳锁方案被推翻：dispatch 的
+    requested/deferred 计算发生在锁 B **之前**，锁不住 pre-lock 窗口）：stamp tx 内对
+    deferredEntries 盖列的 UPDATE 带条件 `staged_at = :observedStagedAt`（pre-lock 读取的
+    值）。窗口内发生过 unstage（staged 变 NULL）或 unstage+re-stage（staged_at 时间戳变化）
+    → CAS 失防 → 不盖登记 → 条目留在纯暂存态（正确：用户的最后动作是 stage 而非点发）。CAS
+    失防的条目不影响本批 dispatch 主体（登记只关乎后续自动补发）。
 - **读**：待补发集合 = `auto_dispatch_deferred_at IS NOT NULL AND dispatched_at IS NULL AND
   staged_at IS NOT NULL`（staged 条件为兜底双保险——防历史/未知路径遗留孤儿登记，孤儿只作审
   计残留、永不触发）。dispatched_at 盖上后登记自然失效（不清列——保留「曾被 defer」审计痕
@@ -119,26 +121,32 @@ round.targetConsumerNodeId`（非 null）。任一不满足 ⇒ 回落常规 ove
 每轮 tick 在 deriveFrontier **之前**：
 
 ```
-const deferred = SELECT id, effectiveTarget FROM task_questions
+const deferredIds = SELECT id FROM task_questions
   WHERE task_id = ? AND auto_dispatch_deferred_at IS NOT NULL
     AND dispatched_at IS NULL AND staged_at IS NOT NULL
-for (const [home, ids] of groupBy(deferred, effectiveTarget)) {   // 逐 home 隔离（Codex 二轮 P2）
-  try { await dispatchTaskQuestions(db, taskId, ids, SYSTEM_ACTOR) }
+if (deferredIds.length > 0) {
+  try { await dispatchTaskQuestions(db, taskId, deferredIds, SYSTEM_ACTOR) }   // 一次全量（保 frontier）
   catch (e) {
     if (e instanceof ConflictError && DEFERRED_RETRYABLE_CONFLICTS.has(e.code)) {
-      log.debug(...)               // 可恢复：下一 tick 幂等重试，该 home 登记保留
+      log.debug(...)               // 可恢复：下一 tick 幂等重试，登记保留
     } else if (e instanceof ConflictError) {
-      clearDeferredMarker(ids); log.warn(...)  // 不可恢复：仅清该 home 的登记，回手动轨道
+      clearDeferredMarker(deferredIds); log.warn(...)  // 不可恢复：全清回手动轨道（裁决见下）
     } else throw
   }
 }
 ```
 
-**逐 home 故障隔离**（Codex 二轮 P2）：`dispatchTaskQuestions` 是整批失败语义（任一行非法 →
-全批 Conflict）——单次全量调用会让一个 home 的不可恢复态（如某 origin multi-target）连坐清掉
-其他 home 本可自动发的登记，破坏一次点击保证。按 effective target 分组逐 home 调用：语义与
-一次全量等价（跨 home 本就各自 mint；同 home 内多 cause 仍由 auto-split 处理、嵌套 defer 留
-登记），失败清列精确到 home。
+**必须一次全量调用，不得逐 home 拆分**（Codex 三轮 P1，推翻二轮的逐 home 隔离）：
+`dispatchTaskQuestions` 从**整个 affected 集**计算 upstream frontier（:450-451）——deferred
+集中两个 home 若在 DAG 上有上下游关系，一次全量调用只 mint 上游（下游作为非 frontier 留给调
+度级联、在上游完成后按新输入跑）；逐 home 拆分会把下游 home 当作自己批次的 frontier 直接
+mint → **下游拿旧输入跑**，语义错误且不可挽回。
+
+**不可恢复态的连坐裁决**：全量调用是整批失败语义，一个 home 的不可恢复态（如某 origin
+multi-target）会连坐清掉其他 home 的登记。权衡明确取「**宁可回手动轨道，不可错 frontier**」
+——清列不丢数据（条目留 staged，看板批量下发照常可用、且会显示同样的真实报错），只丢自动化；
+而错误 frontier 是拿错输入执行。不可恢复态本身几乎都是结构级问题（terminal / snapshot /
+multi-target / unsafe frontier），用户本就需要介入。WARN log 列明 code + 影响条目数。
 
 - **执行体 = 完整复用 `dispatchTaskQuestions`**：seal/readiness 检查、auto-split（三类 cause
   嵌套 defer 自动逐批收敛——本批又 defer 的行保持登记）、in-flight 门、mint、echo、审计 log
@@ -185,8 +193,8 @@ deferred 条目本就在 `loadUndispatchedParkTargets` 的 park 集里（sealed-
 | H. migration 破坏滚动升级 | 单列 ADD COLUMN（可空、无 backfill）；`--> statement-breakpoint` 不需要（单语句）；**必须 bump `upgrade-rolling.test.ts` journal 计数断言**（reference_migration_bumps_journal_count_test） | 流程项 |
 | I. 塌缩与并发 dispatch 竞争 | CAS 在 `dispatched_at` 同列（镜像 RFC-138）：dispatch 赢 → 塌缩 409；塌缩赢 → dispatch 的 `TargetChanged` 快照校验兜底 | 复用既有防线 |
 | J. `__system__` 下发的归属审计 | `dispatched_by='__system__'` 已有先例（QMGP5 历史行）；RFC-099 prompt-isolation 不受影响（归属列绝不进 prompt） | 无新面 |
-| K. unstage 撤回后仍被自动发（Codex P1 + 二轮竞态） | 登记生命周期不变量：stage **与** unstage 都清登记列 + `stageTaskQuestion` 纳入 question-write lock (B) 与 dispatch 串行 + 选择器 staged 兜底（孤儿登记永不触发） | 已防（验收 4b） |
-| L. 不可恢复 Conflict 空转 / 连坐清列（Codex P2 两轮） | `DEFERRED_RETRYABLE_CONFLICTS` 白名单（复用 `DESIGNER_DEFERRABLE_CONFLICTS`，不 fork）+ **逐 home 隔离**：失败只清该 home 登记，其他 home 照常自动发 | 已防（验收 6b） |
+| K. unstage 撤回后仍被自动发（Codex P1 + 二/三轮竞态） | 登记生命周期不变量：stage **与** unstage 都清登记列 + **盖登记观测值 CAS**（stamp tx 内 `staged_at = :observed`，锁不住的 pre-lock 窗口由 CAS 自足关闭）+ 选择器 staged 兜底（孤儿登记永不触发） | 已防（验收 4b） |
+| L. 不可恢复 Conflict 空转（Codex P2）/ 逐 home 拆分破坏 frontier（Codex 三轮 P1） | `DEFERRED_RETRYABLE_CONFLICTS` 白名单（复用 `DESIGNER_DEFERRABLE_CONFLICTS`，不 fork）；**一次全量调用保 frontier 全局计算**；不可恢复 → 全清回手动轨道（「宁可回手动、不可错 frontier」裁决，WARN 列明） | 已防（验收 6b） |
 | M. 幸存 designer 行带旧第三节点 override（Codex P2 两轮） | 三分支：未下发 → CAS 清 override + 审计戳；已下发且 effective==设计节点 → 零改动（D6 对称）；已下发且 effective≠设计节点 → 409 拒塌缩指引 reopen（post-dispatch 不可改目标守卫不破） | 已防（验收 2）；RFC-138 方向同型洞落档提请 |
 
 ## 5. 测试策略（随改动落地）
@@ -212,13 +220,13 @@ deferred 条目本就在 `loadUndispatchedParkTargets` 的 park 集里（sealed-
    模拟第一条续跑 done → 触发 tick（或直接调抽出的 `autoDispatchDeferred` 纯入口）→ 第二批
    dispatched（`dispatched_by='__system__'`）、mint 修订 rerun；
 7. 越权防护：同任务另一条 staged 未点发（登记列空）→ tick 不动它；
-7b. 撤回防护（Codex P1 + 二轮竞态）：deferred 条目被 unstage → 登记列清空 → tick 不再发；
-   re-stage 后仍不自动发（stage 方向也清列，须重新点批量下发）；stage/unstage 持锁串行断言
-   （源级或行为级）；
+7b. 撤回防护（Codex P1 + 二/三轮竞态）：deferred 条目被 unstage → 登记列清空 → tick 不再
+   发；re-stage 后仍不自动发（stage 方向也清列 + 盖登记观测值 CAS：模拟 pre-lock 窗口内
+   unstage+re-stage → stamp 后登记为空，须重新点批量下发）；
 8. 409 自愈：第二批目标仍有 running rerun → tick 静默、登记保留 → run done 后下一 tick 成功；
-8b. 不可恢复码 + 逐 home 隔离（Codex P2 两轮）：两 home 各有 deferred 登记，home A 构造白名
-   单外 Conflict（如 origin multi-target）→ 仅 A 的登记被清 + WARN；home B 照常自动
-   dispatched；
+8b. 不可恢复码（Codex P2 + 三轮 P1）：构造白名单外 Conflict → 全部登记被清 + WARN、条目留
+   staged、tick 不再重试；**frontier 保全**：deferred 集含上下游两 home → 一次全量补发只
+   mint 上游、下游走级联（源级断言 tick 补发不做逐 home 拆分）；
 9. 三类 cause 嵌套：第一轮 defer 两类 → 第二轮再 defer 一类 → 两轮 tick 后全部 dispatched
    （收敛断言）；
 10. 重启韧性：登记列落库后重建 scheduler 状态（新 runTask 入口）→ tick 照常补发。

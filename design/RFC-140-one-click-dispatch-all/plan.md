@@ -24,15 +24,17 @@
   `upgrade-rolling.test.ts` journal 计数断言**（标题 + 断言 + 注释）。
 - `dispatchTaskQuestions`：stamp tx 内对 deferredEntries 盖列。
 - `stageTaskQuestion`：stage **与** unstage 分支同语句清 `auto_dispatch_deferred_at`（登记
-  生命周期不变量），全函数纳入 per-task question-write lock (B)（与 dispatch 串行，消除晚盖
-  登记竞态——Codex P1 + 二轮 P2）。
+  生命周期不变量）。`dispatchTaskQuestions` stamp tx 内**盖登记用观测值 CAS**
+  （`staged_at = :observed`，关闭 pre-lock 计算窗口的 unstage/re-stage 竞态——Codex P1 +
+  三轮 P2，stage 纳锁方案被推翻）。
 - scheduler runTask tick 顶（deriveFrontier 前）：读登记集（登记 + 未下发 + **staged 兜底条
-  件**）→ **按 effective target 逐 home** 调 `dispatchTaskQuestions(db, taskId, ids,
-  SYSTEM_ACTOR)`（故障隔离，Codex 二轮 P2）；`DEFERRED_RETRYABLE_CONFLICTS`（export 复用
-  `DESIGNER_DEFERRABLE_CONFLICTS`，不 fork）内 → debug + 下 tick 重试；白名单外 Conflict →
-  仅清该 home 登记 + WARN 回手动轨道。抽出可测入口（如
-  `autoDispatchDeferredQuestions(db, taskId)`），tick 内调用。
-- 测试：design §5.6-5.10（含 7b 撤回/竞态防护、8b 逐 home 隔离）+ §5.13（migration journal）。
+  件**）→ **一次全量**调 `dispatchTaskQuestions(db, taskId, deferredIds, SYSTEM_ACTOR)`
+  （frontier 全局计算，禁止逐 home 拆分——Codex 三轮 P1）；`DEFERRED_RETRYABLE_CONFLICTS`
+  （export 复用 `DESIGNER_DEFERRABLE_CONFLICTS`，不 fork）内 → debug + 下 tick 重试；白名单
+  外 Conflict → 清登记 + WARN 回手动轨道（连坐裁决：宁可回手动、不可错 frontier）。抽出可测
+  入口（如 `autoDispatchDeferredQuestions(db, taskId)`），tick 内调用。
+- 测试：design §5.6-5.10（含 7b 撤回/竞态防护、8b frontier 保全 + 不可恢复清列）+ §5.13
+  （migration journal）。
 - 依赖：无（与 T1 并行；验收 1 的端到端 case 需要 T1）。
 
 ### RFC-140-T3 前端知会（W3）
@@ -60,8 +62,10 @@
 - [ ] 塌缩 golden-lock（第三节点 override 不变）+ 409 边界 + designer 行补建 + 既存行
       override 归一化 + echo 物化
 - [ ] 真异类混批：deferred 盖列 → 续跑 done 后 tick 自动补发（`__system__`），嵌套 defer 收敛
-- [ ] stage 未点发不被自动下发；unstage 撤回后不被自动下发（re-stage 不复活登记）
+- [ ] stage 未点发不被自动下发；unstage 撤回后不被自动下发（re-stage 不复活登记，含
+      pre-lock 窗口竞态 CAS case）
 - [ ] daemon 重启后补发不丢；可恢复 409 自愈；不可恢复 Conflict 清登记 + WARN 不空转
+- [ ] tick 补发一次全量调用（frontier 保全：上下游两 home 只 mint 上游，源级断言禁逐 home 拆分）
 - [ ] 看板 deferred 徽标 + 塌缩知会 + i18n
 - [ ] migration journal 计数 bump；三门禁 + binary smoke + CI 绿
 - [ ] 收口时向用户提请：RFC-138 方向幸存 questioner 行旧 override 同型洞是否另立修复
