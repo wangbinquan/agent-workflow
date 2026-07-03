@@ -24,7 +24,7 @@
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
-import { and, eq, inArray } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
