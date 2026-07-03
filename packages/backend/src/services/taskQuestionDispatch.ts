@@ -971,8 +971,8 @@ function resolveNodeAgentName(def: WorkflowDefinition, nodeId: string): string |
  * two reassign flows consume on different signals:
  *   - **designer** (deferred dispatch): the durable source is the node's still-open
  *     dispatched task_question (dispatched_at + trigger_run_id consumption) — queued /
- *     failed / outputless => keep borrowing for retry/revival; done+output => consumed,
- *     drop borrow; non-frontier cascade mint => resolve this home node's own queued one.
+ *     failed => keep open for retry/revival; done (regardless of output — RFC-139) =>
+ *     consumed; non-frontier cascade mint => resolve this home node's own queued one.
  *     Keyed on task_questions.loop_iter (= round.loop_iter, the real wrapper-loop index for
  *     cross rounds).
  *   - **self / questioner** (immediate clarify-round continuation): the entry never
@@ -999,8 +999,17 @@ interface LedgerResolution {
   open: boolean
   /** The borrowed agentName (null = run the home's OWN agent). Meaningful only when `open`. */
   borrowAgentName: string | null
+  /** RFC-139 ②: the open BOUND entries' trigger_run_ids — the ledger's 承接锚 (handler-chain
+   *  anchors). Queued entries mint NO anchor (not yet on any chain). Two open ledgers whose
+   *  anchor sets INTERSECT share one handler chain (bindTriggerRun rebinds every injected entry
+   *  across ledgers to the same run): one pending rerun serves both — NOT duplicate execution. */
+  anchorRunIds: ReadonlySet<string>
 }
-const CLOSED_LEDGER: LedgerResolution = { open: false, borrowAgentName: null }
+const CLOSED_LEDGER: LedgerResolution = {
+  open: false,
+  borrowAgentName: null,
+  anchorRunIds: new Set(),
+}
 
 /** Human-readable ledger state for the conflict error (audit-only; no attribution). */
 function ledgerDesc(l: LedgerResolution): string {
@@ -1054,12 +1063,25 @@ export async function resolveBorrowForNode(
   // cannot serve two roles. Reject by counting OPEN ledgers (NOT non-null borrow agents — that
   // early shape missed open run-self). The borrow returned is the single open ledger's (null =
   // run self). The user serializes them (dispatch single-cause gate + the in-flight gate).
+  //
+  // RFC-139 ② (anchor coalescing): duplicate execution is a property of HANDLER CHAINS, not
+  // ledger count. Once a released rerun starts, buildClarifyQueueContext → bindTriggerRun rebinds
+  // EVERY injected entry (across both ledgers) to that one run; if it then fails / is interrupted,
+  // both ledgers point at the SAME chain — its revival is ONE rerun serving both, and killing it
+  // here would dead-loop every revival attempt (QMGP5 post-bind shape, Codex design-gate P1). So
+  // reject only when the open ledgers' anchor sets are DISJOINT (incl. an all-queued ledger, whose
+  // empty anchor set means its rerun is NOT yet on the other ledger's chain — the dual-queued /
+  // hand-crafted divergent-bound shapes stay rejected).
   const openLedgers = [designer, deferredSelfQ].filter((l) => l.open)
   if (openLedgers.length > 1) {
-    throw new ConflictError(
-      'task-question-borrow-ledger-conflict',
-      `node '${nodeId}' (iter ${iteration}) has multiple open reassignment ledgers (dispatched designer ${ledgerDesc(designer)}, dispatched self/questioner ${ledgerDesc(deferredSelfQ)}); they are separate pending reruns with mutually-exclusive causes that would duplicate execution — resolve / serialize them before the node reruns.`,
-    )
+    const [a, b] = openLedgers as [LedgerResolution, LedgerResolution]
+    const coalesced = [...a.anchorRunIds].some((id) => b.anchorRunIds.has(id))
+    if (!coalesced) {
+      throw new ConflictError(
+        'task-question-borrow-ledger-conflict',
+        `node '${nodeId}' (iter ${iteration}) has multiple open reassignment ledgers (dispatched designer ${ledgerDesc(designer)}, dispatched self/questioner ${ledgerDesc(deferredSelfQ)}); they are separate pending reruns with mutually-exclusive causes that would duplicate execution — resolve / serialize them before the node reruns.`,
+      )
+    }
   }
   return openLedgers[0]?.borrowAgentName ?? null
 }
@@ -1068,8 +1090,8 @@ export async function resolveBorrowForNode(
  * RFC-128 P5-BC (clean-path ④, §5.2.12 F3) — the deferred self/questioner borrow ledger.
  * Control-channel DISPATCHED self/questioner reruns (dispatched_at set by dispatchTaskQuestions),
  * mirroring resolveDesignerBorrowForNode's `isDispatchedEntryConsumed` consumption (dispatched_at
- * + trigger_run_id lineage → done+output = consumed, drop borrow; queued/failed/outputless = keep
- * borrowing). Unlike the designer ledger (keyed on task_questions.loop_iter), self rows project
+ * + trigger_run_id lineage → done = consumed regardless of output [RFC-139]; queued/failed = keep
+ * open). Unlike the designer ledger (keyed on task_questions.loop_iter), self rows project
  * loop_iter=0, so the wrapper-loop iteration is matched via the round's ASKING run iteration
  * (P2-3, same as the immediate ledger). Single-borrow gate (P2-1) rejects a home reassigned to
  * conflicting agents in one continuation. Returns the borrowed agentName, or null.
@@ -1164,6 +1186,10 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
   return {
     open: true,
     borrowAgentName: borrowNode === null ? null : resolveNodeAgentName(workflowDef, borrowNode),
+    // RFC-139 ②: open BOUND entries' triggers = this ledger's handler-chain anchors (queued → none).
+    anchorRunIds: new Set(
+      open.map((e) => e.triggerRunId).filter((id): id is string => id !== null),
+    ),
   }
 }
 
@@ -1231,6 +1257,10 @@ async function resolveDesignerBorrowForNode(
   return {
     open: true,
     borrowAgentName: borrowNode === null ? null : resolveNodeAgentName(workflowDef, borrowNode),
+    // RFC-139 ②: open BOUND entries' triggers = this ledger's handler-chain anchors (queued → none).
+    anchorRunIds: new Set(
+      openCandidates.map((e) => e.triggerRunId).filter((id): id is string => id !== null),
+    ),
   }
 }
 

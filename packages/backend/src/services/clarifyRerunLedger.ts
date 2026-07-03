@@ -38,20 +38,25 @@ export function causeClassForEntry(
   return 'cross-clarify-answer' // designer (incl. manual)
 }
 
-/** RFC-128 P5-BC — the two OPEN semantics the shared oracle serves. They agree on everything EXCEPT
- *  a done-NO-output continuation:
- *   - 'revivable' (BORROW — resolveImmediateBorrowForNode): open = NOT consumed. A continuation is
- *     consumed only when it finished done WITH output (markClarifyRoundsConsumedBy). A done-no-output
- *     continuation is NOT consumed → revivable → keeps borrowing the same handler (locked by the
- *     RFC-127 "done but emitted NO output → still open (keeps borrowing)" test).
- *   - 'in-flight' (DISPATCH GATE — findOpenImmediateLedgerHome): open = status !== 'done'. ONLY a
- *     `done` continuation is gate-closed — done (incl. done-no-output: it ASKED a follow-up round;
- *     runner.ts:1321 keeps status=done with no <workflow-output> port) SUCCEEDED and will not be
- *     re-run, so it cannot double-mint and must NOT block a fresh per-question dispatch (2026-07-01
- *     deadlock fix). A FAILED/canceled/interrupted continuation is NOT gate-closed: it is revivable
- *     (retry/resume re-runs it) and the borrow side still treats it as open, so releasing it would let
- *     dispatch mint a second same-home rerun → an irreversible multi-ledger conflict (Codex impl-gate).
- *     So in-flight diverges from revivable ONLY on done-no-output. */
+/** RFC-128 P5-BC — the two OPEN semantics the shared oracle serves. RFC-139: they agree on every
+ *  BOUND (trigger set) state — done (regardless of output) = consumed in BOTH modes; the ONLY
+ *  divergence left is the QUEUED (trigger NULL) branch:
+ *   - 'revivable' (BORROW-side ledger count — resolveBorrowForNode's two ledgers): queued = open,
+ *     unconditionally (the entry IS the ledger of its own pending rerun).
+ *   - 'in-flight' (DISPATCH GATE — findOpenDispatchTarget): queued open ⟺ run obligation /
+ *     alien mintCause (RFC-133 matrix).
+ *  Bound semantics (shared): a done continuation — INCLUDING done-no-output: it ASKED a follow-up
+ *  round (runner.ts kind==='clarify' keeps status=done with no <workflow-output> port, PERMANENTLY)
+ *  — has executed with the answers injected; its rerun debt is paid and the follow-up round's own
+ *  entries carry the continuation. It cannot double-mint (2026-07-01 deadlock fix) and it must not
+ *  count as an open ledger (RFC-139 / task QMGP5 second incident: the old 'revivable' done+output
+ *  bar kept the designer ledger open FOREVER after a clarify-ask ending, so the next round's
+ *  dispatch deterministically died on task-question-borrow-ledger-conflict — the "keeps borrowing"
+ *  semantics it preserved was the RFC-127 borrow relic, consumerless since RFC-131 T4 de-borrow +
+ *  RFC-132 ③). A FAILED/canceled/interrupted continuation stays open in BOTH modes: it is revivable
+ *  (retry/resume still owes that rerun), and releasing it at the gate would let dispatch mint a
+ *  second same-home rerun (Codex impl-gate). Locked by rfc139-clarify-ask-closes-ledger.test.ts +
+ *  rfc133-queued-run-obligation.test.ts case 8. */
 export type LedgerOpenMode = 'revivable' | 'in-flight'
 
 /** Is a dispatched entry CONSUMED? = its handler run (resolved through the same resolveHandlerRun
@@ -73,16 +78,14 @@ export type LedgerOpenMode = 'revivable' | 'in-flight'
  *     or only done runs (idle — the next mint binds it) has no obligation: blocking there is the
  *     circular-wait bug (the "wait for done+output" exit condition could never be satisfied).
  *
- *  `mode` also diverges on a done-NO-output handler (the SAME split as openImmediateRounds —
- *  2026-07-01 deadlock fix): a clarify handler that ASKS a follow-up round exits `done` with NO
- *  <workflow-output> port (runner.ts:1321), and that state is PERMANENT (a clarify-ask never
- *  becomes done+output).
- *   - 'in-flight' (dispatch gate / mint guard / park): done = consumed. A done handler has
- *     terminated and cannot double-mint, so it must NOT keep the home blocked — else a multi-round
- *     clarify chain DEAD-LOCKS (its round-N handler is done-no-output forever, and the gate's
- *     "dispatch after done+output" can never be satisfied → the next round can never dispatch).
- *   - 'revivable' (RFC-127 borrow oracle): done && hasOutput = consumed. A done-no-output handler
- *     has produced nothing → keeps borrowing the same handler (RFC-127 consumed→null tests). */
+ *  BOUND handler semantics (RFC-139 — SHARED by both modes): done = consumed, regardless of
+ *  output. A clarify handler that ASKS a follow-up round exits `done` with NO <workflow-output>
+ *  port (runner.ts kind==='clarify' branch), and that state is PERMANENT (a clarify-ask never
+ *  becomes done+output) — treating it as open was a forever-open ledger, the QMGP5 second
+ *  incident (see LedgerOpenMode doc above). A done handler has terminated and cannot double-mint,
+ *  so it must neither keep the home dispatch-blocked (else a multi-round clarify chain DEAD-LOCKS
+ *  — 2026-07-01 fix) nor count as an open rerun ledger (else the next round's rerun dies on the
+ *  borrow-ledger-conflict reject — RFC-139 fix). */
 export function isDispatchedEntryConsumed(
   entry: Pick<
     TaskQuestionRow,
@@ -133,7 +136,9 @@ export function isDispatchedEntryConsumed(
     runs: projected,
   })
   if (hr === null || hr.status !== 'done') return false
-  return mode === 'in-flight' ? true : hr.hasOutput
+  // RFC-139: done = consumed in BOTH modes (output presence is irrelevant — a done-no-output
+  // handler asked a follow-up round; its rerun debt is paid, the new round's entries carry on).
+  return true
 }
 
 /** RFC-132 ②a 缺口② — review supersede 例外的单一判据(与 isTargetNodeConsumed :447 /

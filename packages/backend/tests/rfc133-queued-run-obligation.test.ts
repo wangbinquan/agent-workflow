@@ -149,14 +149,19 @@ describe('RFC-133 queued run-obligation matrix — isDispatchedEntryConsumed (in
     )
   })
 
-  test('case 8: bound branches unchanged — done±output / failed handler / GC anchor ignore mintCause', () => {
+  test('case 8: bound branches — done±output consumed in BOTH modes (RFC-139) / failed handler / GC anchor ignore mintCause', () => {
     const bound: EntryPick = { ...queued(), triggerRunId: 'h1' }
     const doneRuns = [mkRun({ id: 'h1', rerunCause: 'clarify-answer', status: 'done' })]
     const doneNoOut = [mkLineage({ id: 'h1', hasOutput: false })]
     expect(
       isDispatchedEntryConsumed(bound, doneRuns, doneNoOut, 'in-flight', 'cross-clarify-answer'),
     ).toBe(true)
-    expect(isDispatchedEntryConsumed(bound, doneRuns, doneNoOut, 'revivable')).toBe(false)
+    // RFC-139 flip: done-no-output = consumed in 'revivable' too. The old `false` locked the
+    // RFC-127 "keeps borrowing the same handler" relic — consumerless since RFC-131 T4 de-borrow;
+    // keeping it open made the ledger permanent (a clarify-ask never becomes done+output) and
+    // deterministically killed the next round's rerun on task-question-borrow-ledger-conflict
+    // (task QMGP5). Full matrix: rfc139-clarify-ask-closes-ledger.test.ts.
+    expect(isDispatchedEntryConsumed(bound, doneRuns, doneNoOut, 'revivable')).toBe(true)
     const doneOut = [mkLineage({ id: 'h1', hasOutput: true })]
     expect(isDispatchedEntryConsumed(bound, doneRuns, doneOut, 'revivable')).toBe(true)
     const failedRuns = [mkRun({ id: 'h1', rerunCause: 'clarify-answer', status: 'failed' })]
