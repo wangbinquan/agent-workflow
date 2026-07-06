@@ -57,6 +57,9 @@ export function useTaskSync(taskId: string | null): void {
         void qc.invalidateQueries({ queryKey: ['reviews', 'detail', msg.nodeRunId] })
         void qc.invalidateQueries({ queryKey: ['reviews', 'list'] })
         void qc.invalidateQueries({ queryKey: ['reviews', 'pending-count'] })
+        // RFC-142: a decision / fresh round also changes the round history
+        // (list expand + multi-doc historical view both key off it).
+        void qc.invalidateQueries({ queryKey: ['reviews', 'rounds', msg.nodeRunId] })
         // The decision flip also moves the host task between statuses
         // (awaiting_review ↔ running ↔ done), so refresh that too.
         if (msg.type === 'review.decision_made') {

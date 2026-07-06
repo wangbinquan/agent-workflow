@@ -297,6 +297,8 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/reviews/:nodeRunId' },
   { method: 'GET', path: '/api/reviews/:nodeRunId/versions' },
   { method: 'GET', path: '/api/reviews/:nodeRunId/versions/:versionId' },
+  // RFC-142: multi-doc round history (list expand + read-only historical-round view).
+  { method: 'GET', path: '/api/reviews/:nodeRunId/rounds' },
   { method: 'POST', path: '/api/reviews/:nodeRunId/decision' },
   { method: 'POST', path: '/api/reviews/:nodeRunId/comments' },
   { method: 'PATCH', path: '/api/reviews/:nodeRunId/comments/:commentId' },

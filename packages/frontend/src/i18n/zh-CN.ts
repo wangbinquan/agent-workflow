@@ -348,7 +348,23 @@ export interface Resources {
       rejected: string
       iterated: string
       pending: string
+      superseded: string
     }
+    // RFC-142: 决策信息块（详情视图，历史 + 当前已决策版本）。
+    decisionInfo: {
+      decidedAt: string
+      rejectReason: string
+      supersededReason: string
+      reasonMissing: string
+      systemDecider: string
+    }
+    // RFC-142: 多文档评审分轮历史。
+    roundLabel: string
+    roundHistoryHeader: string
+    roundDocCount: string
+    historicalRoundBanner: string
+    backToCurrentRound: string
+    unknownRound: string
     rerunDirectUpstream: string
     decisionActionsAria: string
     plantumlUnknownError: string
@@ -2691,7 +2707,21 @@ export const zhCN: Resources = {
       rejected: '退回',
       iterated: '迭代',
       pending: '待定',
+      superseded: '已作废',
     },
+    decisionInfo: {
+      decidedAt: '决策时间',
+      rejectReason: '退回原因',
+      supersededReason: '上游产出已刷新，本版已被系统作废。',
+      reasonMissing: '（未记录）',
+      systemDecider: '系统',
+    },
+    roundLabel: '第 {{n}} 轮',
+    roundHistoryHeader: '评审轮次 · {{count}}',
+    roundDocCount: '{{count}} 篇文档',
+    historicalRoundBanner: '只读 · 正在查看第 {{n}} 轮（{{decision}}）· 决策与采纳编辑已禁用',
+    backToCurrentRound: '回到当前轮',
+    unknownRound: '未知轮次：{{id}}。已跳回当前轮。',
     rerunDirectUpstream: '（直接上游）',
     decisionActionsAria: '决策',
     plantumlUnknownError: '未知错误',

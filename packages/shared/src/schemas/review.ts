@@ -385,6 +385,48 @@ export const ReviewPendingCountSchema = z.object({
 export type ReviewPendingCount = z.infer<typeof ReviewPendingCountSchema>
 
 // -----------------------------------------------------------------------------
+// RFC-142: multi-document review rounds.
+//
+// `GET /api/reviews/:nodeRunId/rounds` returns one entry per review round
+// (grouped by review_iteration + RFC-129 round_generation; legacy NULL-
+// generation rows group by review_iteration alone). Drives the round rows in
+// the /reviews list expand and the read-only historical-round view
+// (`?round=<roundKey>`). Empty array for single-document reviews.
+// -----------------------------------------------------------------------------
+export const ReviewRoundMemberSchema = ReviewDocumentSummarySchema.extend({
+  /** Member-level decision (superseded members surface in retired rounds). */
+  decision: DocVersionDecisionSchema,
+})
+export type ReviewRoundMember = z.infer<typeof ReviewRoundMemberSchema>
+
+export const ReviewRoundSummarySchema = z.object({
+  /** Opaque round handle for `?round=` — 'g{generation}' | 'i{iteration}-legacy'. */
+  roundKey: z.string(),
+  reviewIteration: z.number().int().nonnegative(),
+  /** NULL on pre-RFC-129 (migration 0070) legacy rounds. */
+  roundGeneration: z.number().int().positive().nullable(),
+  /** Round-level decision (the decision writer stamps a whole round at once). */
+  decision: DocVersionDecisionSchema,
+  /**
+   * Round-level reason: rejected → the shared reject reason; superseded →
+   * the system retirement marker ('upstream-refreshed'). NULL on iterated
+   * rounds (per-document feedback lives in each member's frozen comments),
+   * approved and pending rounds.
+   */
+  decisionReason: z.string().nullable(),
+  decidedAt: z.number().int().nullable(),
+  decidedBy: z.string().nullable(),
+  decidedByRole: z.enum(['owner', 'user', 'admin']).nullable(),
+  /** min(member.createdAt) — when the round was minted. */
+  createdAt: z.number().int(),
+  /** True on the round the interactive detail view renders (pending, else newest). */
+  isCurrent: z.boolean(),
+  /** item_index ascending. */
+  members: z.array(ReviewRoundMemberSchema),
+})
+export type ReviewRoundSummary = z.infer<typeof ReviewRoundSummarySchema>
+
+// -----------------------------------------------------------------------------
 // RFC-013: historical-version detail endpoint payload.
 //
 // `GET /api/reviews/:nodeRunId/versions/:versionId` returns the doc_version

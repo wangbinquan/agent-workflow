@@ -5970,6 +5970,23 @@ code {
   margin-bottom: var(--space-2);
 }
 
+/* ---- RFC-142: review decision info block (shared by the single-doc detail
+   header and the multi-doc round view). Reason text preserves the reject
+   textarea's line breaks. ---- */
+.review-decision-info__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.review-decision-info__reason {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.review-decision-info__reason-label {
+  font-weight: 600;
+}
+
 /* ---- Review detail (RFC-005) ---- */
 
 /* Lock the review-detail page to the available viewport height so the body

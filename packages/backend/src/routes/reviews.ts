@@ -3,6 +3,7 @@
 // GET    /api/reviews/:nodeRunId                  detail + comments + current body
 // GET    /api/reviews/:nodeRunId/versions         all doc_versions for history dropdown
 // GET    /api/reviews/:nodeRunId/versions/:vid    one historical version (body + meta)
+// GET    /api/reviews/:nodeRunId/rounds           RFC-142 multi-doc round history
 // POST   /api/reviews/:nodeRunId/decision         approve / reject / iterate
 // POST   /api/reviews/:nodeRunId/comments         add review comment
 // PATCH  /api/reviews/:nodeRunId/comments/:id     edit comment body (RFC-009)
@@ -35,6 +36,7 @@ import {
   getDocVersionDetail,
   getReviewDetail,
   listDocVersionsForReview,
+  listReviewRounds,
   listReviewSummaries,
   setDocumentSelection,
   submitReviewDecision,
@@ -203,6 +205,14 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       throw new NotFoundError('review-version-not-found', `doc_version ${versionId} not found`)
     }
     return c.json(dv)
+  })
+
+  // RFC-142: multi-document round history for the list expand + the read-only
+  // historical-round view. [] for single-document reviews.
+  app.get('/api/reviews/:nodeRunId/rounds', async (c) => {
+    const nodeRunId = c.req.param('nodeRunId')
+    await ensureReviewVisible(deps, nodeRunId, actorOf(c))
+    return c.json(await listReviewRounds(deps.db, appHomeFor(deps), nodeRunId))
   })
 
   app.post('/api/reviews/:nodeRunId/decision', async (c) => {

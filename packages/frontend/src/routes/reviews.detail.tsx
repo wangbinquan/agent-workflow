@@ -17,7 +17,7 @@ import type {
 } from '@agent-workflow/shared'
 import type { DocVersion } from '@agent-workflow/shared'
 import { api, type ApiError } from '@/api/client'
-import { AttributionChip } from '@/components/AttributionChip'
+import { ReviewDecisionInfo } from '@/components/review/ReviewDecisionInfo'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { DiffView, type DiffGranularity } from '@/components/review/DiffView'
 import { Dialog } from '@/components/Dialog'
@@ -30,10 +30,13 @@ import { goToTaskDetail } from '@/lib/nav/taskNav'
 import { Route as RootRoute } from './__root'
 
 // RFC-013: optional ?version=<vid> for the read-only historical view.
+// RFC-142: optional ?round=<roundKey> for the multi-doc historical-round view
+// (consumed by the multi-doc branch only; single-doc keeps ?version).
 // The search object must always be defined (TanStack invariant), so we
 // hand back `{}` for the no-query path.
 interface ReviewDetailSearch {
   version?: string
+  round?: string
 }
 
 export const Route = createRoute({
@@ -42,6 +45,7 @@ export const Route = createRoute({
   validateSearch: (raw: Record<string, unknown>): ReviewDetailSearch => {
     const out: ReviewDetailSearch = {}
     if (typeof raw.version === 'string' && raw.version.length > 0) out.version = raw.version
+    if (typeof raw.round === 'string' && raw.round.length > 0) out.round = raw.round
     return out
   },
   component: ReviewDetailRoute,
@@ -54,12 +58,13 @@ export const Route = createRoute({
 // views' hook lists stable.
 function ReviewDetailRoute() {
   const { nodeRunId } = Route.useParams()
+  const search = useSearch({ from: Route.id }) as ReviewDetailSearch
   const detail = useQuery<ReviewDetail>({
     queryKey: ['reviews', 'detail', nodeRunId],
     queryFn: ({ signal }) => api.get(`/api/reviews/${nodeRunId}`, undefined, signal),
   })
   if (detail.data?.documents !== undefined && detail.data.documents.length > 0) {
-    return <MultiDocReviewView nodeRunId={nodeRunId} />
+    return <MultiDocReviewView nodeRunId={nodeRunId} historicalRoundKey={search.round} />
   }
   return <ReviewDetailPage />
 }
@@ -376,6 +381,14 @@ function ReviewDetailPage() {
     view.mode === 'historical'
       ? historicalDetail.data?.decidedByRole
       : data.currentVersion.decidedByRole
+  // RFC-142: full decision info for the viewed version — decision chip +
+  // decider + decidedAt + reason (reject reason / superseded system note).
+  const decisionReason =
+    view.mode === 'historical'
+      ? historicalDetail.data?.decisionReason
+      : data.currentVersion.decisionReason
+  const decidedAt =
+    view.mode === 'historical' ? historicalDetail.data?.decidedAt : data.currentVersion.decidedAt
 
   // Download the markdown body the user is currently viewing (current or
   // historical version) as a `.md` file. Filename combines a sanitized title
@@ -443,20 +456,22 @@ function ReviewDetailPage() {
           {data.summary.description !== '' && data.summary.description !== data.summary.title && (
             <p className="page__hint review-detail__description">{data.summary.description}</p>
           )}
-          {headerDecision !== undefined &&
-            headerDecision !== 'pending' &&
-            deciderId !== null &&
-            deciderId !== undefined &&
-            deciderId !== 'system' && (
-              <p className="page__hint review-detail__decider" data-testid="review-decider">
-                {t('attribution.decidedBy')}:{' '}
-                <AttributionChip
-                  userId={deciderId}
-                  role={deciderRole ?? null}
-                  user={deciderLookup.get(deciderId)}
-                />
-              </p>
-            )}
+          {/* RFC-142: 决策信息块——决策 chip + 决策人 + 时间 + 退回原因/系统作废
+              说明（替换 RFC-099 只有决策人 chip 的旧行；superseded 的系统行
+              不再整体隐藏）。 */}
+          <ReviewDecisionInfo
+            decision={headerDecision}
+            decisionReason={decisionReason}
+            decidedAt={decidedAt}
+            decidedBy={deciderId}
+            decidedByRole={deciderRole ?? null}
+            user={
+              deciderId !== null && deciderId !== undefined
+                ? deciderLookup.get(deciderId)
+                : undefined
+            }
+            data-testid="review-decider"
+          />
           {!readonly && (
             <p className="page__hint">
               {t('reviews.detailHint', {

@@ -55,7 +55,12 @@ import {
   splitMarkdownDocs,
   joinMarkdownDocs,
 } from '@agent-workflow/shared'
-import type { PriorRoundMember, ReviewDocumentSummary } from '@agent-workflow/shared'
+import type {
+  PriorRoundMember,
+  ReviewDocumentSummary,
+  ReviewRoundMember,
+  ReviewRoundSummary,
+} from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import {
   agents as agentsTable,
@@ -1097,38 +1102,27 @@ export async function getReviewDetail(
   let body: string
   let documents: ReviewDocumentSummary[] | undefined
   if (isMulti) {
-    // Current round = pending members (awaiting); if decided, the members at
-    // the highest reviewIteration (historical view).
-    let members = allRows.filter((r) => r.decision === 'pending' && r.itemIndex !== null)
+    // Current round = pending members (awaiting); if decided, the members of
+    // the newest round at the highest reviewIteration. RFC-142 (G4): "newest
+    // round" must respect RFC-129 round_generation — an upstream refresh
+    // leaves two generations at the SAME reviewIteration (superseded old gen
+    // + fresh gen), and iteration-only filtering mixed both generations into
+    // the document list (duplicate itemIndex entries). Legacy iterations
+    // whose rows all predate migration 0070 (NULL generation) keep the
+    // whole-iteration behavior unchanged.
+    const itemRows = allRows.filter((r) => r.itemIndex !== null)
+    let members = itemRows.filter((r) => r.decision === 'pending')
     if (members.length === 0) {
-      const maxIter = Math.max(...allRows.map((r) => r.reviewIteration))
-      members = allRows.filter((r) => r.reviewIteration === maxIter && r.itemIndex !== null)
+      const maxIter = Math.max(...itemRows.map((r) => r.reviewIteration))
+      const atIter = itemRows.filter((r) => r.reviewIteration === maxIter)
+      const gens = atIter.map((r) => r.roundGeneration).filter((g): g is number => g !== null)
+      members =
+        gens.length > 0 ? atIter.filter((r) => r.roundGeneration === Math.max(...gens)) : atIter
     }
     members.sort((a, b) => (a.itemIndex ?? 0) - (b.itemIndex ?? 0))
     documents = []
     for (const m of members) {
-      const mdv = rowToDocVersion(m)
-      let mbody = ''
-      try {
-        mbody = readDocVersionBody(appHome, mdv)
-      } catch {
-        mbody = ''
-      }
-      const cc = await db
-        .select({ id: reviewComments.id })
-        .from(reviewComments)
-        .where(eq(reviewComments.docVersionId, m.id))
-      documents.push({
-        docVersionId: m.id,
-        itemIndex: m.itemIndex ?? 0,
-        itemPath: m.itemPath ?? '',
-        title: extractDocTitle(mbody, m.itemPath ?? m.id),
-        selection: (m.selection ?? 'unselected') as 'unselected' | 'accepted' | 'not_accepted',
-        commentCount: cc.length,
-        // RFC-129: inherited selection whose content changed since the human
-        // last judged it → "已变更" badge (advisory only; approve unaffected).
-        stale: m.selectionStale === true,
-      })
+      documents.push((await buildRoundMember(db, appHome, m)).summary)
     }
     dv = rowToDocVersion(members[0]!)
     try {
@@ -1142,12 +1136,12 @@ export async function getReviewDetail(
     dv = rowToDocVersion(latest)
     body = readDocVersionBody(appHome, dv)
   }
-  const commentsRows = await db
-    .select()
-    .from(reviewComments)
-    .where(eq(reviewComments.docVersionId, dv.id))
-    .orderBy(asc(reviewComments.anchorParagraphIdx), asc(reviewComments.anchorOffsetStart))
-  const comments = commentsRows.map(rowToReviewComment)
+  // RFC-142 (Codex impl-gate P2): decided versions must read the FROZEN
+  // comment snapshot — the live rows are deleted at decision time, so the old
+  // live-only read rendered a decided round's first document (and a decided
+  // single-doc current view) with an empty comment pane while the navigator
+  // badge counted the archive.
+  const comments = await commentsForDocVersion(db, dv)
 
   // Reach for the review node's per-node rerunnable configs.
   const taskRows = await db.select().from(tasks).where(eq(tasks.id, summary.taskId)).limit(1)
@@ -1209,17 +1203,8 @@ export async function getDocVersion(db: DbClient, versionId: string): Promise<Do
  * endpoint would let a caller probe doc_versions across unrelated reviews by
  * brute-forcing ULIDs.
  *
- * Comment source per decision state:
- *   - `pending`   → live `review_comments` rows for this docVersionId
- *                   (the user is still actively annotating it).
- *   - decided     → parse `doc_versions.commentsJson` (the archived
- *                   snapshot captured at decision time). The live rows
- *                   are deleted by `submitReviewDecision`, so the JSON
- *                   blob is the only remaining source of truth.
- *
- * Comments are sorted by anchor position (paragraph index, then offset)
- * so the UI's bubble layout matches the in-doc reading order without an
- * extra client-side sort. Empty array when there are no comments.
+ * Comment source per decision state: see `commentsForDocVersion` (pending →
+ * live rows, decided → frozen commentsJson; anchor-sorted; empty when none).
  */
 export async function getDocVersionDetail(
   db: DbClient,
@@ -1231,24 +1216,40 @@ export async function getDocVersionDetail(
   if (dv === null) return null
   if (dv.reviewNodeRunId !== nodeRunId) return null
   const body = readDocVersionBody(appHome, dv)
-  let comments: ReviewComment[]
+  const comments = await commentsForDocVersion(db, dv)
+  return { ...dv, body, comments }
+}
+
+/**
+ * Comment source per decision state — the SINGLE rule shared by
+ * getReviewDetail / getDocVersionDetail / buildRoundMember (RFC-142, Codex
+ * impl-gate P2 unified the three forks):
+ *   - `pending` → live `review_comments` rows (the user is annotating it);
+ *   - decided   → parse the frozen `commentsJson` snapshot
+ *                 (`submitReviewDecision` deletes the live rows at decision
+ *                 time, so the archive is the only remaining source).
+ * Sorted by anchor position (paragraph index, then offset) either way.
+ */
+async function commentsForDocVersion(
+  db: DbClient,
+  dv: { id: string; decision: string; commentsJson: string },
+): Promise<ReviewComment[]> {
   if (dv.decision === 'pending') {
-    const commentsRows = await db
+    const rows = await db
       .select()
       .from(reviewComments)
       .where(eq(reviewComments.docVersionId, dv.id))
       .orderBy(asc(reviewComments.anchorParagraphIdx), asc(reviewComments.anchorOffsetStart))
-    comments = commentsRows.map(rowToReviewComment)
-  } else {
-    comments = parseArchivedComments(dv.commentsJson)
-    comments.sort((a, b) => {
-      if (a.anchor.paragraphIdx !== b.anchor.paragraphIdx) {
-        return a.anchor.paragraphIdx - b.anchor.paragraphIdx
-      }
-      return a.anchor.offsetStart - b.anchor.offsetStart
-    })
+    return rows.map(rowToReviewComment)
   }
-  return { ...dv, body, comments }
+  const comments = parseArchivedComments(dv.commentsJson)
+  comments.sort((a, b) => {
+    if (a.anchor.paragraphIdx !== b.anchor.paragraphIdx) {
+      return a.anchor.paragraphIdx - b.anchor.paragraphIdx
+    }
+    return a.anchor.offsetStart - b.anchor.offsetStart
+  })
+  return comments
 }
 
 /**
@@ -1281,6 +1282,207 @@ function parseArchivedComments(json: string | null | undefined): ReviewComment[]
     })
     return []
   }
+}
+
+// ---------------------------------------------------------------------------
+// RFC-142: multi-document review rounds.
+// ---------------------------------------------------------------------------
+
+/**
+ * RFC-142: build one document's list-entry summary + its member-level
+ * decision. Shared by getReviewDetail's current-round `documents` and the
+ * /rounds member lists — extracted so the two constructions never fork.
+ *
+ * commentCount follows `commentsForDocVersion`'s single rule: pending → live
+ * review_comments rows; decided → the frozen commentsJson snapshot
+ * (submitReviewDecision deletes the live rows, so counting them yielded a
+ * constant 0 for every decided round — fixed here).
+ */
+async function buildRoundMember(
+  db: DbClient,
+  appHome: string,
+  m: typeof docVersions.$inferSelect,
+): Promise<{ summary: ReviewDocumentSummary; decision: DocVersionDecision }> {
+  const mdv = rowToDocVersion(m)
+  let mbody = ''
+  try {
+    mbody = readDocVersionBody(appHome, mdv)
+  } catch {
+    mbody = ''
+  }
+  const commentCount = (await commentsForDocVersion(db, m)).length
+  return {
+    summary: {
+      docVersionId: m.id,
+      itemIndex: m.itemIndex ?? 0,
+      itemPath: m.itemPath ?? '',
+      title: extractDocTitle(mbody, m.itemPath ?? m.id),
+      selection: (m.selection ?? 'unselected') as 'unselected' | 'accepted' | 'not_accepted',
+      commentCount,
+      // RFC-129: inherited selection whose content changed since the human
+      // last judged it → "已变更" badge (advisory only; approve unaffected).
+      stale: m.selectionStale === true,
+    },
+    decision: m.decision as DocVersionDecision,
+  }
+}
+
+/**
+ * Minimal doc_versions row slice `groupDocVersionRounds` needs. Structurally
+ * satisfied by drizzle's full row; tests can hand-build these (pure, no IO).
+ */
+export interface RoundGroupRow {
+  id: string
+  reviewIteration: number
+  roundGeneration: number | null
+  itemIndex: number | null
+  decision: string
+  decisionReason: string | null
+  decidedAt: number | null
+  decidedBy: string | null
+  decidedByRole: string | null
+  createdAt: number
+}
+
+export interface DocVersionRound<R extends RoundGroupRow> {
+  roundKey: string
+  reviewIteration: number
+  roundGeneration: number | null
+  decision: DocVersionDecision
+  decisionReason: string | null
+  decidedAt: number | null
+  decidedBy: string | null
+  decidedByRole: 'owner' | 'user' | 'admin' | null
+  createdAt: number
+  isCurrent: boolean
+  /** item_index ascending. */
+  members: R[]
+  /** Diagnostics only: members disagree on decision (writer stamps a whole round at once). */
+  hasMixedDecisions: boolean
+}
+
+/**
+ * RFC-142: group a review's doc_versions rows into rounds (pure, exported for
+ * unit tests).
+ *
+ * Grouping key: rows with a round_generation group by it (`g{n}`); legacy
+ * NULL-generation rows (pre-migration-0070) group by review_iteration
+ * (`i{n}-legacy`). Order: legacy rounds first by iteration — every post-0070
+ * mint stamps a generation, so legacy rows are necessarily older — then
+ * generation rounds in generation order (strictly monotonic per mint,
+ * loadPriorRound's counter).
+ *
+ * Round-level fields (design D4): decision = first non-pending member (the
+ * decision writer stamps a whole round at once — heterogeneity is surfaced
+ * via hasMixedDecisions for the caller to warn on); decisionReason only for
+ * rejected (shared reject reason) and superseded ('upstream-refreshed'
+ * system marker) — iterated feedback lives in each member's frozen comments;
+ * decided* from the member with the newest decidedAt; createdAt =
+ * min(member.createdAt); isCurrent = the pending round, else the newest —
+ * matching what getReviewDetail renders (G4-fixed selection).
+ */
+export function groupDocVersionRounds<R extends RoundGroupRow>(
+  rows: readonly R[],
+): DocVersionRound<R>[] {
+  const items = rows.filter((r) => r.itemIndex !== null)
+  if (items.length === 0) return []
+  const byKey = new Map<string, R[]>()
+  for (const r of items) {
+    const key =
+      r.roundGeneration !== null ? `g${r.roundGeneration}` : `i${r.reviewIteration}-legacy`
+    const list = byKey.get(key)
+    if (list === undefined) byKey.set(key, [r])
+    else list.push(r)
+  }
+  const groups: DocVersionRound<R>[] = [...byKey.entries()].map(([roundKey, members]) => {
+    members.sort((a, b) =>
+      (a.itemIndex ?? 0) !== (b.itemIndex ?? 0)
+        ? (a.itemIndex ?? 0) - (b.itemIndex ?? 0)
+        : a.id < b.id
+          ? -1
+          : 1,
+    )
+    const decision = (members.find((m) => m.decision !== 'pending')?.decision ??
+      'pending') as DocVersionDecision
+    const decisionReason =
+      decision === 'rejected' || decision === 'superseded'
+        ? (members.find((m) => m.decisionReason !== null && m.decisionReason !== '')
+            ?.decisionReason ?? null)
+        : null
+    let decider: R | undefined
+    for (const m of members) {
+      if (m.decidedAt === null) continue
+      if (decider === undefined || (decider.decidedAt ?? 0) < m.decidedAt) decider = m
+    }
+    const first = members[0]!
+    return {
+      roundKey,
+      reviewIteration: first.reviewIteration,
+      roundGeneration: first.roundGeneration,
+      decision,
+      decisionReason,
+      decidedAt: decider?.decidedAt ?? null,
+      decidedBy: decider?.decidedBy ?? null,
+      decidedByRole: (decider?.decidedByRole ?? null) as DocVersionRound<R>['decidedByRole'],
+      createdAt: Math.min(...members.map((m) => m.createdAt)),
+      isCurrent: false,
+      members,
+      hasMixedDecisions: new Set(members.map((m) => m.decision)).size > 1,
+    }
+  })
+  groups.sort((a, b) => {
+    const aLegacy = a.roundGeneration === null
+    const bLegacy = b.roundGeneration === null
+    if (aLegacy !== bLegacy) return aLegacy ? -1 : 1
+    if (aLegacy) return a.reviewIteration - b.reviewIteration
+    return (a.roundGeneration as number) - (b.roundGeneration as number)
+  })
+  const pendingIdx = groups.findIndex((g) => g.decision === 'pending')
+  ;(pendingIdx >= 0 ? groups[pendingIdx]! : groups[groups.length - 1]!).isCurrent = true
+  return groups
+}
+
+/**
+ * RFC-142: list a multi-document review's rounds (ascending, oldest → newest)
+ * for the /reviews list expand and the read-only historical-round view
+ * (`?round=<roundKey>`). Returns [] for single-document reviews (no
+ * item_index rows). Scoped to one nodeRunId — exactly /versions' scope.
+ */
+export async function listReviewRounds(
+  db: DbClient,
+  appHome: string,
+  nodeRunId: string,
+): Promise<ReviewRoundSummary[]> {
+  const rows = await db.select().from(docVersions).where(eq(docVersions.reviewNodeRunId, nodeRunId))
+  const groups = groupDocVersionRounds(rows)
+  const out: ReviewRoundSummary[] = []
+  for (const g of groups) {
+    if (g.hasMixedDecisions) {
+      log.warn('review round members disagree on decision — writer invariant broken', {
+        nodeRunId,
+        roundKey: g.roundKey,
+      })
+    }
+    const members: ReviewRoundMember[] = []
+    for (const m of g.members) {
+      const built = await buildRoundMember(db, appHome, m)
+      members.push({ ...built.summary, decision: built.decision })
+    }
+    out.push({
+      roundKey: g.roundKey,
+      reviewIteration: g.reviewIteration,
+      roundGeneration: g.roundGeneration,
+      decision: g.decision,
+      decisionReason: g.decisionReason,
+      decidedAt: g.decidedAt,
+      decidedBy: g.decidedBy,
+      decidedByRole: g.decidedByRole,
+      createdAt: g.createdAt,
+      isCurrent: g.isCurrent,
+      members,
+    })
+  }
+  return out
 }
 
 // ---------------------------------------------------------------------------

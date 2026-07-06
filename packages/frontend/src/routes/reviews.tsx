@@ -16,7 +16,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, createRoute } from '@tanstack/react-router'
 import { Fragment, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { DocVersion, ReviewSummary } from '@agent-workflow/shared'
+import type { DocVersion, ReviewRoundSummary, ReviewSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { describeApiError } from '@/i18n'
 import { EmptyState } from '@/components/EmptyState'
@@ -208,10 +208,16 @@ export function ReviewsListPage() {
                     {isOpen && (
                       <tr className="reviews-row__history">
                         <td colSpan={6}>
-                          <HistoryRows
-                            nodeRunId={r.nodeRunId}
-                            currentVersionIndex={r.currentVersionIndex}
-                          />
+                          {/* RFC-142: 多文档评审按轮展开（第 n 轮 + 轮决策 chip），
+                              单文档保持 v1..vN 版本行不变。 */}
+                          {r.isMultiDoc === true ? (
+                            <RoundRows nodeRunId={r.nodeRunId} />
+                          ) : (
+                            <HistoryRows
+                              nodeRunId={r.nodeRunId}
+                              currentVersionIndex={r.currentVersionIndex}
+                            />
+                          )}
                         </td>
                       </tr>
                     )}
@@ -303,6 +309,75 @@ export function HistoryRows({
             </li>
           )
         })}
+      </ul>
+    </div>
+  )
+}
+
+// RFC-142: multi-document reviews expand by ROUND instead of the flat
+// doc_versions list — versionIndex is per-item there (v1,v1,v1,v2,…), so the
+// version rows carried no round information. One row per round with its
+// 1-based ordinal, round decision chip, member count and decision time; the
+// current round's Open goes to the interactive view (empty search),
+// historical rounds go to `?round=<roundKey>` (read-only MultiDocReviewView).
+export function RoundRows({ nodeRunId }: { nodeRunId: string }) {
+  const { t } = useTranslation()
+  const q = useQuery<ReviewRoundSummary[]>({
+    queryKey: ['reviews', 'rounds', nodeRunId],
+    queryFn: ({ signal }) => api.get(`/api/reviews/${nodeRunId}/rounds`, undefined, signal),
+  })
+  if (q.isLoading) {
+    return <div className="muted reviews-version-loading">{t('common.loading')}</div>
+  }
+  if (q.error !== null && q.error !== undefined) {
+    return (
+      <div className="reviews-version-error" role="alert">
+        <span>{t('reviews.loadVersionsFailed')}</span>
+        <button
+          type="button"
+          className="btn btn--sm"
+          onClick={() => {
+            void q.refetch()
+          }}
+        >
+          {t('reviews.retry')}
+        </button>
+      </div>
+    )
+  }
+  const rounds = q.data ?? []
+  return (
+    <div className="reviews-version-panel">
+      <div className="reviews-version-panel__header">
+        {t('reviews.roundHistoryHeader', { count: rounds.length })}
+      </div>
+      <ul className="reviews-version-list">
+        {rounds.map((r, i) => (
+          <li key={r.roundKey} className="reviews-version-list__item">
+            <span className="reviews-version-list__label">
+              {t('reviews.roundLabel', { n: i + 1 })}
+            </span>
+            <span className={`status-chip status-chip--${decisionChipColor(r.decision)}`}>
+              {t(`reviews.decision.${r.decision}`)}
+            </span>
+            {r.isCurrent && (
+              <span className="reviews-version-list__current-pill">{t('reviews.currentTag')}</span>
+            )}
+            <span className="muted">{t('reviews.roundDocCount', { count: r.members.length })}</span>
+            <span className="reviews-version-list__date">
+              {formatTimestamp(r.decidedAt ?? r.createdAt)}
+            </span>
+            <Link
+              to="/reviews/$nodeRunId"
+              params={{ nodeRunId }}
+              search={r.isCurrent ? {} : { round: r.roundKey }}
+              className="reviews-version-list__open"
+            >
+              {t('reviews.openButton')}
+              <span aria-hidden="true"> ›</span>
+            </Link>
+          </li>
+        ))}
       </ul>
     </div>
   )
