@@ -38,6 +38,7 @@ import {
   findQuestionerNodeForCrossClarify,
   isClarifyChannelEdge,
   isInlineMarkdownItemKind,
+  isWrapperKind,
   resolveClarifySessionMode,
   resolveCrossClarifySessionMode,
   resolveKeyOf,
@@ -372,9 +373,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
       node.kind !== 'input' &&
       node.kind !== 'agent-single' &&
       node.kind !== 'output' &&
-      node.kind !== 'wrapper-git' &&
-      node.kind !== 'wrapper-loop' &&
-      node.kind !== 'wrapper-fanout' && // RFC-060
+      !isWrapperKind(node.kind) &&
       node.kind !== 'review' && // RFC-005
       node.kind !== 'clarify' && // RFC-023
       node.kind !== 'clarify-cross-agent' // RFC-056
@@ -6058,9 +6057,7 @@ function buildContainerMap(def: WorkflowDefinition): Map<string, string> {
   // we sort by nesting depth: wrappers whose inner ids include other
   // wrappers are processed AFTER those other wrappers. This is implemented
   // by repeated passes — small N, cheap.
-  const wrappers = def.nodes.filter(
-    (n) => n.kind === 'wrapper-git' || n.kind === 'wrapper-loop' || n.kind === 'wrapper-fanout',
-  )
+  const wrappers = def.nodes.filter((n) => isWrapperKind(n.kind))
   const processed = new Set<string>()
   let safety = wrappers.length + 1
   while (processed.size < wrappers.length && safety-- > 0) {
@@ -6071,9 +6068,7 @@ function buildContainerMap(def: WorkflowDefinition): Map<string, string> {
       const blocked = inner.some(
         (id) =>
           nodeById.get(id) !== undefined &&
-          (nodeById.get(id)!.kind === 'wrapper-git' ||
-            nodeById.get(id)!.kind === 'wrapper-loop' ||
-            nodeById.get(id)!.kind === 'wrapper-fanout') &&
+          isWrapperKind(nodeById.get(id)!.kind) &&
           !processed.has(id),
       )
       if (blocked) continue

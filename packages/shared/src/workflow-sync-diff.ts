@@ -20,13 +20,8 @@
 //     swapping a wrapper's structure under live rows corrupts resume — hence the
 //     `wrapper-structure-changed-with-live-state` BLOCKER (not a warning).
 
-import type { WorkflowDefinition, WorkflowNode, WorkflowEdge, NodeKind } from './schemas/workflow'
-
-const WRAPPER_KINDS: ReadonlySet<NodeKind> = new Set<NodeKind>([
-  'wrapper-git',
-  'wrapper-loop',
-  'wrapper-fanout',
-])
+import { isWrapperKind } from './schemas/workflow'
+import type { WorkflowDefinition, WorkflowNode, WorkflowEdge } from './schemas/workflow'
 
 // Channel / back-edge port names that carry control signals, not data outputs —
 // excluded from data-loss warnings (mirrors buildScopeUpstreams's edge filter in
@@ -329,8 +324,8 @@ export function diffWorkflowForSync(
   // edges). Changing only an inner node's prompt leaves the fingerprint stable —
   // the killer use case stays unblocked.
   const wrapperIds = new Set<string>()
-  for (const n of oldDef.nodes) if (WRAPPER_KINDS.has(n.kind)) wrapperIds.add(n.id)
-  for (const n of newDef.nodes) if (WRAPPER_KINDS.has(n.kind)) wrapperIds.add(n.id)
+  for (const n of oldDef.nodes) if (isWrapperKind(n.kind)) wrapperIds.add(n.id)
+  for (const n of newDef.nodes) if (isWrapperKind(n.kind)) wrapperIds.add(n.id)
   for (const id of wrapperIds) {
     if (!(runSummary.get(id)?.hasLiveWrapperState ?? false)) continue
     if (

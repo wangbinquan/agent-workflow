@@ -47,6 +47,7 @@ import type {
 import {
   deriveWrapperFanoutOutputs,
   isClarifyAskingNode,
+  isWrapperKind,
   reviewApprovedPortName,
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
@@ -1048,12 +1049,7 @@ function CanvasInner({
       if (onChange === undefined || readOnly === true) return
       const node = definition.nodes.find((n) => n.id === wrapperId)
       if (node === undefined) return
-      if (
-        node.kind !== 'wrapper-git' &&
-        node.kind !== 'wrapper-loop' &&
-        node.kind !== 'wrapper-fanout'
-      )
-        return
+      if (!isWrapperKind(node.kind)) return
       const inner = (node as Record<string, unknown>).nodeIds
       const innerIds = Array.isArray(inner)
         ? inner.filter((s): s is string => typeof s === 'string')
@@ -1340,12 +1336,7 @@ function CanvasInner({
           const absoluteNodes = projectXyflowPositionsToAbsolute(definition, nodes, measured)
           const wrappers: WrapperHitInput[] = []
           for (const fn of nodes) {
-            if (
-              fn.type !== 'wrapper-git' &&
-              fn.type !== 'wrapper-loop' &&
-              fn.type !== 'wrapper-fanout'
-            )
-              continue
+            if (!isWrapperKind(fn.type)) continue
             const style = fn.style as { width?: unknown; height?: unknown } | undefined
             const w = typeof style?.width === 'number' ? style.width : 200
             const h = typeof style?.height === 'number' ? style.height : 120
@@ -1367,12 +1358,7 @@ function CanvasInner({
           for (const dn of draggedNodes) {
             // Wrapper-on-wrapper or non-wrapper-into-wrapper both go through
             // the same path. Wrapper-on-itself is excluded inside resolve().
-            if (
-              dn.type === 'wrapper-git' ||
-              dn.type === 'wrapper-loop' ||
-              dn.type === 'wrapper-fanout'
-            )
-              continue
+            if (isWrapperKind(dn.type)) continue
             const absNode = absoluteNodes.find((n) => n.id === dn.id)
             if (absNode === undefined) continue
             const m = measured.get(dn.id)
@@ -1400,12 +1386,7 @@ function CanvasInner({
           // or already matches the target clearance.
           const wrapperParentOf = new Map<string, string>()
           for (const wn of nextDef.nodes) {
-            if (
-              wn.kind !== 'wrapper-git' &&
-              wn.kind !== 'wrapper-loop' &&
-              wn.kind !== 'wrapper-fanout'
-            )
-              continue
+            if (!isWrapperKind(wn.kind)) continue
             const innerIds = (wn as unknown as { nodeIds?: unknown }).nodeIds
             if (!Array.isArray(innerIds)) continue
             for (const id of innerIds) {
@@ -1706,7 +1687,7 @@ function toFlowNodes(
       }
     }
     if (loopBodyIds.has(n.id)) data.loopBody = true
-    if (n.kind === 'wrapper-git' || n.kind === 'wrapper-loop' || n.kind === 'wrapper-fanout') {
+    if (isWrapperKind(n.kind)) {
       const inner = (n as unknown as { nodeIds?: string[] }).nodeIds
       ;(data as CanvasNodeData & { innerCount?: number }).innerCount = inner?.length ?? 0
     }
@@ -1964,11 +1945,7 @@ function toDefinition(
       // RFC-016: persist wrapper.size when xyflow has resolved it (either
       // from our projection layer or a user-driven NodeResizer drag). Only
       // wrapper nodes get this; non-wrappers leave size untouched.
-      if (
-        out.kind === 'wrapper-git' ||
-        out.kind === 'wrapper-loop' ||
-        out.kind === 'wrapper-fanout'
-      ) {
+      if (isWrapperKind(out.kind)) {
         const style = fn.style as { width?: unknown; height?: unknown } | undefined
         const w = typeof style?.width === 'number' ? style.width : undefined
         const h = typeof style?.height === 'number' ? style.height : undefined
@@ -2139,10 +2116,7 @@ export function ensureWrapperFanoutInputForEdge(
 function isWrapperNode(def: WorkflowDefinition, nodeId: string | null): boolean {
   if (nodeId === null) return false
   const n = def.nodes.find((x) => x.id === nodeId)
-  return (
-    n !== undefined &&
-    (n.kind === 'wrapper-git' || n.kind === 'wrapper-loop' || n.kind === 'wrapper-fanout')
-  )
+  return n !== undefined && isWrapperKind(n.kind)
 }
 
 // Test helpers (exported but underscored).

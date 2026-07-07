@@ -46,6 +46,24 @@ export const NODE_KIND = [
 export const NodeKindSchema = z.enum(NODE_KIND)
 export type NodeKind = z.infer<typeof NodeKindSchema>
 
+// flag-audit W0 (§4.2) — the container ("wrapper") kind set, SINGLE SOURCE.
+// This membership was previously hand-copied as or-chains / private Sets in
+// ~20 sites across all three packages; the RFC-060 fanout rollout missed one
+// of them (canvas coordProjection) and shipped a wrapper-sizing bug — exactly
+// the drift this constant exists to prevent. New wrapper kinds join NODE_KIND
+// and this list together; every "is this node a container?" check must go
+// through `isWrapperKind` / `WRAPPER_NODE_KINDS` instead of enumerating kinds.
+export const WRAPPER_NODE_KINDS = [
+  'wrapper-git',
+  'wrapper-loop',
+  'wrapper-fanout',
+] as const satisfies readonly NodeKind[]
+
+/** Accepts plain strings too (xyflow `node.type` is `string | undefined`). */
+export function isWrapperKind(kind: NodeKind | string | null | undefined): boolean {
+  return (WRAPPER_NODE_KINDS as readonly string[]).includes(kind ?? '')
+}
+
 // RFC-052: kinds that actually spawn a process / hold a per-attempt node_run
 // row the scheduler dispatches. Used by retry cascades to decide whether to
 // mint a `retryIndex+1` placeholder for a downstream node — the non-process
@@ -59,12 +77,7 @@ export type NodeKind = z.infer<typeof NodeKindSchema>
 // node_run row whose status reflects the shard fan-out + aggregator
 // completion (mirroring wrapper-git's container-row semantics).
 export function isProcessNodeKind(kind: NodeKind): boolean {
-  return (
-    kind === 'agent-single' ||
-    kind === 'wrapper-git' ||
-    kind === 'wrapper-loop' ||
-    kind === 'wrapper-fanout'
-  )
+  return kind === 'agent-single' || isWrapperKind(kind)
 }
 
 // RFC-020: 'upload' joins as a sibling of 'files'. `files` picks paths

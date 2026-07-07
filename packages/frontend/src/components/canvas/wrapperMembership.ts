@@ -7,6 +7,7 @@
 // dragged node falls inside its rect — avoids edge-jitter when corners brush.
 // Nested wrappers: the innermost (smallest area) hit wraps.
 
+import { isWrapperKind } from '@agent-workflow/shared'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 export interface Rect {
@@ -82,8 +83,7 @@ export function applyMembershipPatch(
   if (patch.joinWrapperId === null && patch.leaveWrapperId === null) return prevDef
   let touched = false
   const nodes = prevDef.nodes.map((n) => {
-    if (n.kind !== 'wrapper-git' && n.kind !== 'wrapper-loop' && n.kind !== 'wrapper-fanout')
-      return n
+    if (!isWrapperKind(n.kind)) return n
     if (n.id !== patch.joinWrapperId && n.id !== patch.leaveWrapperId) return n
     const rec = n as Record<string, unknown>
     const prevIds = Array.isArray(rec.nodeIds)

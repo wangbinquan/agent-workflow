@@ -3,6 +3,7 @@
 // setSelection; everything that touches the WorkflowDefinition lives here
 // so tests can exercise it without rendering the canvas.
 
+import { isWrapperKind } from '@agent-workflow/shared'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 /** Clear `size` (and any sizeLocked flag) on a wrapper so the next render
@@ -14,12 +15,7 @@ export function clearWrapperSize(
 ): WorkflowDefinition {
   const target = prevDef.nodes.find((n) => n.id === wrapperId)
   if (target === undefined) return prevDef
-  if (
-    target.kind !== 'wrapper-git' &&
-    target.kind !== 'wrapper-loop' &&
-    target.kind !== 'wrapper-fanout'
-  )
-    return prevDef
+  if (!isWrapperKind(target.kind)) return prevDef
   let changed = false
   const nodes = prevDef.nodes.map((n) => {
     if (n.id !== wrapperId) return n
@@ -42,12 +38,7 @@ export function deleteWrapperWithChildren(
 ): WorkflowDefinition {
   const target = prevDef.nodes.find((n) => n.id === wrapperId)
   if (target === undefined) return prevDef
-  if (
-    target.kind !== 'wrapper-git' &&
-    target.kind !== 'wrapper-loop' &&
-    target.kind !== 'wrapper-fanout'
-  )
-    return prevDef
+  if (!isWrapperKind(target.kind)) return prevDef
   const inner = (target as Record<string, unknown>).nodeIds
   const innerIds = Array.isArray(inner)
     ? (inner as unknown[]).filter((s): s is string => typeof s === 'string')

@@ -8,6 +8,7 @@
 // a wrapper that has no persisted `size`, on inner-node add/remove, and on
 // "Fit to children" right-click.
 
+import { isWrapperKind } from '@agent-workflow/shared'
 import type { NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 /** Default fallback dimensions per node kind. Used when the inner node has no
@@ -184,12 +185,7 @@ export function fitWrapperToInner(
 ): WorkflowDefinition {
   const target = prevDef.nodes.find((n) => n.id === wrapperId)
   if (target === undefined) return prevDef
-  if (
-    target.kind !== 'wrapper-git' &&
-    target.kind !== 'wrapper-loop' &&
-    target.kind !== 'wrapper-fanout'
-  )
-    return prevDef
+  if (!isWrapperKind(target.kind)) return prevDef
   const rec = target as Record<string, unknown>
   const sizeRec = rec.size as
     | { width?: unknown; height?: unknown; sizeLocked?: unknown }

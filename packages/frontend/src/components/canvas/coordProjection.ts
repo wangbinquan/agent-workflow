@@ -24,16 +24,13 @@
 // array; this module returns a stably-reordered list to satisfy that.
 
 import type { Node } from '@xyflow/react'
+import { isWrapperKind } from '@agent-workflow/shared'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { computeFitBounds } from './wrapperFit'
 
-function isWrapperKind(kind: string): boolean {
-  // RFC-060 — wrapper-fanout is a real container too; without it here, the
-  // projection layer never stamps style.width/height on the xyflow node so
-  // a freshly dragged-out fanout wrapper renders at its intrinsic content
-  // size (just header), making it visibly smaller than wrapper-git / loop.
-  return kind === 'wrapper-git' || kind === 'wrapper-loop' || kind === 'wrapper-fanout'
-}
+// flag-audit W0: the private wrapper-kind predicate that once lived here (and
+// missed wrapper-fanout during the RFC-060 rollout — wrapper-sizing bug) is
+// replaced by the shared single-source `isWrapperKind`.
 
 /** Build the {nodeId → measured size} map that the projection layer uses to
  * pick wrapper fit dimensions over DEFAULT_NODE_SIZE_BY_KIND estimates.

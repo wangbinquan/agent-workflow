@@ -34,6 +34,7 @@ import {
   isClarifyChannelEdge,
   isMultiDocReviewInput,
   isReviewableBodyKind,
+  isWrapperKind,
   reviewApprovedPortName,
   tryParseKind,
 } from '@agent-workflow/shared'
@@ -218,11 +219,7 @@ export function validateWorkflowDef(
   // in O(1).
   const innerToWrapper = new Map<string, string>()
   for (const node of nodes) {
-    if (
-      node.kind === 'wrapper-git' ||
-      node.kind === 'wrapper-loop' ||
-      node.kind === 'wrapper-fanout'
-    ) {
+    if (isWrapperKind(node.kind)) {
       for (const innerId of readStringArray(node, 'nodeIds')) {
         // Multi-wrapper containment is an authoring error; the last write
         // wins here, RFC-016 wrapper-children-outside-bounds catches the

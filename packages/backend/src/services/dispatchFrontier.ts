@@ -38,6 +38,7 @@
 // → completed → ready) lives in scheduler.ts deriveFrontier (PR-B, live).
 // Pure-function locks: dispatch-frontier.test.ts + derive-frontier.test.ts.
 
+import { WRAPPER_NODE_KINDS } from '@agent-workflow/shared'
 import type { NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { nodeRuns } from '../db/schema'
 import { buildFreshestDonePerNode, isFresherNodeRun, isNodeRunFresh } from './freshness'
@@ -45,13 +46,10 @@ import { decodeWrapperProgress } from './wrapperProgress'
 
 type NodeRunRow = typeof nodeRuns.$inferSelect
 
-/** The three container kinds whose parked rows are resume anchors (exported
- *  for deriveFrontier's wrapper-anchor release and retryNode's ⑥-11 carve-out). */
-export const WRAPPER_KINDS: ReadonlySet<NodeKind> = new Set<NodeKind>([
-  'wrapper-loop',
-  'wrapper-git',
-  'wrapper-fanout',
-])
+/** The container kinds whose parked rows are resume anchors (exported for
+ *  deriveFrontier's wrapper-anchor release and retryNode's ⑥-11 carve-out).
+ *  flag-audit W0: membership now derives from shared WRAPPER_NODE_KINDS. */
+export const WRAPPER_KINDS: ReadonlySet<NodeKind> = new Set<NodeKind>(WRAPPER_NODE_KINDS)
 
 /**
  * RFC-095 — the stable prefix review.ts stamps onto `error_message` when a

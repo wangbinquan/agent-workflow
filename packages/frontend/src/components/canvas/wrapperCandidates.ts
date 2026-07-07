@@ -8,6 +8,7 @@
 // wrappers (their outputs flow through their own outputBindings rather than
 // surfacing a port directly).
 
+import { isWrapperKind } from '@agent-workflow/shared'
 import type { WorkflowNode } from '@agent-workflow/shared'
 
 export interface LoopMemberCandidate {
@@ -70,8 +71,7 @@ export function loopMemberCandidates(
   const result: LoopMemberCandidate[] = []
   for (const n of allNodes) {
     if (!idSet.has(n.id)) continue
-    if (n.kind === 'wrapper-git' || n.kind === 'wrapper-loop' || n.kind === 'wrapper-fanout')
-      continue
+    if (isWrapperKind(n.kind)) continue
     const outputPorts = deriveOutputPorts(n, agents)
     result.push({
       nodeId: n.id,
