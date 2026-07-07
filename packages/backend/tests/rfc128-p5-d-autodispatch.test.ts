@@ -481,7 +481,6 @@ describe('RFC-128 P5-D golden-lock (full-seal autodispatch keeps the legacy whol
       db,
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
-      rejectSelfQuestionerFullSeal: true,
     })
     expect(sealed.roundFullySealed).toBe(true)
     const selfEntryBefore = (await entriesByOrigin(db, clarifyNodeRunId)).find(
@@ -575,7 +574,6 @@ describe('RFC-128 P5-D single-path (auto + manual never double-dispatch; RFC-125
       db,
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
-      rejectSelfQuestionerFullSeal: true,
     })
     expect(partial.roundFullySealed).toBe(false)
     expect((await roundByOrigin(db, clarifyNodeRunId))[0]?.status).toBe('awaiting_human')
@@ -655,7 +653,6 @@ describe('RFC-128 P5-D designer-scope + P5-0 guard relationship', () => {
       originNodeRunId: crossNodeRunId,
       answers: [ans('q1')],
       scopes: { q1: 'designer' },
-      rejectSelfQuestionerFullSeal: true,
     })
     expect(partial.roundFullySealed).toBe(false)
     const q1DesignerBefore = (await entriesByOrigin(db, crossNodeRunId)).find(
@@ -695,7 +692,6 @@ describe('RFC-128 P5-D designer-scope + P5-0 guard relationship', () => {
       db: dbDef,
       originNodeRunId: def.clarifyNodeRunId,
       answers: [ans('q1')],
-      rejectSelfQuestionerFullSeal: true,
     })
     expect(okSeal.roundFullySealed).toBe(true)
 
@@ -709,7 +705,6 @@ describe('RFC-128 P5-D designer-scope + P5-0 guard relationship', () => {
       db: dbNon,
       originNodeRunId: non.clarifyNodeRunId,
       answers: [ans('q1')],
-      rejectSelfQuestionerFullSeal: true,
     })
     expect(nonSeal.roundFullySealed).toBe(true)
   })

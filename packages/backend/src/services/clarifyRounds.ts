@@ -1,23 +1,18 @@
-// RFC-058 T12 — unified clarify_rounds service helpers. Provides the
-// kind-discriminated read APIs that the scheduler + REST routes use.
+// RFC-058 T12 — unified clarify_rounds service helpers（现役出口以下列为准；
+// 旧的 selectAnsweredRoundsForConsumer / buildPromptContext /
+// markClarifyRoundsConsumedBy 已随 RFC-132 PR-C/PR-E 删除，prompt 注入统一走
+// clarifyQueue.selectAgentQueue 的 flatBlock 单路径）。
 //
-//   - `selectAnsweredRoundsForConsumer` reads from clarify_rounds with the
-//     right WHERE clause per `consumerKind` ∈ {self | cross-designer |
-//     cross-questioner}, including the wrapper-loop `loopIter` filter so the
-//     RFC-056 缺口 2 (iter ≥ 2 reading prior iter Q&A) is structurally fixed.
-//
-//   - `buildPromptContext` composes the `ClarifyPromptContext` from the
-//     selected rows. Replaces both `buildClarifyPromptContext` (RFC-023)
-//     and `buildQuestionerCrossClarifyContext` (RFC-056) — three
-//     consumerKind branches share one render path.
-//
-//   - `markClarifyRoundsConsumedBy` (RFC-070) is the post-done stamp helper:
-//     when a consumer agent finishes 'done' with at least one captured
-//     `<workflow-output>` row, every Q&A row this run consumed has its
-//     consumption-stamp column stamped with the run's id. The aging
-//     filter then becomes a plain `IS NULL` predicate on subsequent reads,
-//     eliminating the cross-iteration vs unified-clarifyIteration counter
-//     mismatch class of bugs (see RFC-070 proposal §1).
+//   - `resolveEffectiveClarifyChannel` / `shouldInjectStopNotice`（RFC-122）——
+//     scheduler 消费的纯决策 oracle：本次运行的有效反问通道与 stop 提示注入。
+//   - `computeRemaining` —— 反问轮剩余提问预算的唯一计算口。
+//   - `listClarifyRounds` / `listClarifyRoundSummaries` / `getClarifyRoundDetail`
+//     —— REST 读路径（kind-discriminated，含 wrapper-loop `loopIter` 过滤，
+//     RFC-056 缺口 2 的结构性修复保留在 WHERE 子句里）。
+//   - `saveClarifyDraft`（RFC-099）—— 服务端逐题协作草稿（last-write-wins +
+//     逐题归属 + 提交冻结）。
+//   - `freezeAnswerAttributions` / `buildFrozenAttributionSet` —— 提交时点的
+//     归属快照（审计列/只读 UI 用，绝不进 agent prompt）。
 
 import { desc, eq } from 'drizzle-orm'
 

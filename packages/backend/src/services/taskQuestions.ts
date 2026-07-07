@@ -539,11 +539,9 @@ function summarizeAnswer(
 // it leaves the gate; the frontier then mints only the upstream-frontier handlers
 // and the scheduler cascade re-dispatches the rest.
 //
-// SELF-GATED on tasks.deferred_question_dispatch: a non-deferred task always
-// resolves to the empty set (its designer rerun already fired immediately at
-// submit, so a lazily-reconciled entry with NULL trigger_run_id must NOT be
-// mistaken for "undispatched"). Every gate consumer therefore sees byte-for-byte
-// today's behavior for non-deferred tasks — the golden-lock boundary.
+// RFC-132 (universal deferred model): the per-task `deferred_question_dispatch`
+// flag is DELETED — every task takes this park path (T8 flag 停读; the immediate
+// designer-rerun-at-submit path no longer exists).
 // ---------------------------------------------------------------------------
 
 /** Effective handler nodes (override ?? default designer) that should PARK a
@@ -727,14 +725,12 @@ export async function hasUndispatchedDesignerQuestions(
  * 'answered'` join. A PARTIAL seal leaves the round 'awaiting_human' forever (RFC-128 §2
  * partial is pure-derived), so the designer source's `status='answered'` + `directive='continue'`
  * join would miss every partial-sealed self/questioner question. `sealed_at` is the exact
- * "answered (control channel), awaiting dispatch" marker — set ONLY by sealRoundQuestions, so
- * a quick-channel immediate continuation (which never seals + mints right away, the immediate
- * borrow ledger) is correctly absent here (golden-lock).
+ * "answered (control channel), awaiting dispatch" marker — set ONLY by sealRoundQuestions
+ * (RFC-132 deleted the quick-channel immediate-mint path, so every continuation flows
+ * through a seal).
  *
  * The undispatched / in-flight / consumed classification is the SHARED
- * {@link partitionUndispatchedParkTargets} (byte-for-byte the designer source's tail). Empty
- * for any non-deferred task (golden-lock — `sealed_at` is only ever set on a deferred task's
- * control-channel seal, but the deferred gate makes the boundary explicit + skips the query).
+ * {@link partitionUndispatchedParkTargets} (byte-for-byte the designer source's tail).
  */
 export async function loadUndispatchedSelfQuestionerTargets(
   db: DbClient,
@@ -801,7 +797,7 @@ async function fetchSelfQuestionerParkEntries(
  * parked — its in-flight rerun runs, and the undispatched sibling re-parks the node next tick once the
  * rerun is consumed. For every NON-same-home case this is byte-identical to the old union (a home with
  * only one role's undispatched entries, or in-flight entries of the same role, classifies the same).
- * Empty for any non-deferred task (golden-lock; the per-role helpers stay for direct callers/tests).
+ * The per-role helpers stay for direct callers/tests (RFC-132: every task takes this path).
  */
 export async function loadUndispatchedParkTargets(
   db: DbClient,

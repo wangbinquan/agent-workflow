@@ -1,21 +1,17 @@
 // RFC-128 P5-D — quick-channel seal + AUTODISPATCH (the final P5 phase).
 //
-// §5.2.7 P5b single-path decision: a task's `deferred_question_dispatch` flag is the ONLY path
-// source. On a DEFERRED task the self/questioner quick channel (反问页 quick answer, defer=false)
-// is ALSO delayed — it does NOT mint an immediate continuation. Instead `defer` only decides
-// AUTO vs MANUAL triggering of the SAME per-question dispatch (RFC-125 single delivery path, never
-// a second path):
+// RFC-132 (universal deferred model) UPDATE: the per-task `deferred_question_dispatch` flag and the
+// legacy immediate-mint path are DELETED — every task takes the deferred path, and this module is
+// THE single per-question delivery entry for ALL clarify answers (RFC-125 single delivery path,
+// never a second path). The API body's `defer` only decides AUTO vs MANUAL triggering of the SAME
+// per-question dispatch:
 //
-//   • Quick channel (defer=false) on a DEFERRED task → autoDispatchClarifyRound: seal the round
-//     (the SAME control-channel sealRoundQuestions the defer=true path uses) then AUTO-trigger the
-//     SAME dispatchTaskQuestions the board's 批量下发 uses (readiness + rerun-cause + auto-split +
-//     in-flight gate all reused). NOT the legacy immediate mint.
+//   • Quick channel (defer=false) → autoDispatchClarifyRound: seal the round (the SAME
+//     control-channel sealRoundQuestions the defer=true path uses) then AUTO-trigger the SAME
+//     dispatchTaskQuestions the board's 批量下发 uses (readiness + rerun-cause + auto-split +
+//     in-flight gate all reused).
 //   • Manual control channel (defer=true, centralized-answer pane P4) → seal + leave the entry
 //     STAGED; the user dispatches it explicitly later (P5-BC, unchanged).
-//   • NON-deferred task → the quick channel keeps the legacy immediate mint
-//     (submitClarifyAnswers / submitCrossClarifyAnswers, BYTE-FOR-BYTE unchanged — golden-lock).
-//     The route NEVER calls this module for a non-deferred task; the deferred re-check below is the
-//     defensive net for a direct service caller.
 //
 // LOCK ORDER / NO REENTRY (key correctness constraint): the per-task question-write lock B
 // (getTaskQuestionWriteSem) is a NON-reentrant Semaphore(1). sealRoundQuestions acquires + RELEASES
@@ -377,10 +373,6 @@ export async function autoDispatchClarifyRound(
     db,
     originNodeRunId,
     answers: sealAnswers,
-    // RFC-128 P5-0 stranding guard, NARROWED by P5-BC (§5.2.1): the guard is LIFTED on a deferred
-    // task (the self/questioner park + dispatch path below IS the release path). Opt in anyway so a
-    // direct misuse on a non-deferred task (already rejected above) stays consistent with the route.
-    rejectSelfQuestionerFullSeal: true,
     ...(args.directive !== undefined ? { directive: args.directive } : {}),
     ...(unlockedScopes !== undefined && Object.keys(unlockedScopes).length > 0
       ? { scopes: unlockedScopes }

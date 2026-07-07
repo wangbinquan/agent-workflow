@@ -253,14 +253,6 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
         db: deps.db,
         originNodeRunId: nodeRunId,
         answers: sealAnswers,
-        // RFC-128 P5-0 stranding guard, NARROWED by P5-BC (§5.2.1): the route still opts in, but
-        // the guard now only fires on a NON-deferred task (no self/questioner park source → a
-        // self/questioner full seal would strand). On a DEFERRED task P5-BC's park + dispatch path
-        // IS the release path, so the seal is ALLOWED — sealRoundQuestions lifts the guard for
-        // deferred tasks (the sealed entry parks its home until board dispatch mints the
-        // continuation). PARTIAL seals and DESIGNER-only cross CONTINUE full seals (the §18-parked
-        // P3 mainline) pass through unchanged.
-        rejectSelfQuestionerFullSeal: true,
         // RFC-128 (用户 2026-07-01) — AUTO-STAGE: the centralized-answer control channel seals a
         // question straight into 待下发 (staged) so the board's "批量下发全下" (dispatchTaskQuestions
         // = ALL staged) can pick it up, instead of leaving it in 待指派 (pending) needing a manual

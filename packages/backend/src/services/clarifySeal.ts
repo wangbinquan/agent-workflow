@@ -84,18 +84,6 @@ export interface SealRoundQuestionsArgs {
    *  also what the §18 designer park requires (loadUndispatchedDesignerTargets filters
    *  directive='continue'), so a full continue-seal correctly parks until board dispatch. */
   directive?: ClarifyDirective
-  /** RFC-128 P5-0 hotfix stranding guard, NARROWED by P5-BC (§5.2.1) — when true, REJECT a full
-   *  seal of a self/questioner-continuation round (a self round, or a cross round with a
-   *  questioner-scope question / directive=stop) **only on a NON-deferred task**. On a NON-deferred
-   *  task there is no self/questioner park source (loadUndispatchedSelfQuestionerTargets self-gates
-   *  on the deferred flag), so such a full seal would close the intermediary node_run, release the
-   *  asking-run park, and strand the continuation. On a DEFERRED task P5-BC's park + dispatch path
-   *  IS the release path — the seal is ALLOWED (the sealed entry parks its home until board
-   *  dispatch mints the continuation), so the guard is LIFTED. The API route opts in; the raw
-   *  storage primitive leaves it false. DESIGNER-only cross full seal is unaffected (the §18
-   *  designer park holds it). Decision is by round KIND + per-question SCOPE — never the directive
-   *  alone — mirroring reconcileDesiredEntries. */
-  rejectSelfQuestionerFullSeal?: boolean
   /** RFC-128 (用户 2026-07-01) — AUTO-STAGE: when true, stamp `staged_at` on THIS call's sealed
    *  entries INSIDE the seal tx, so a sealed question lands directly in 待下发 (staged) — ready for
    *  the board's "批量下发全下" (dispatchTaskQuestions = ALL staged) — instead of 待指派 (pending,
@@ -318,9 +306,9 @@ export async function sealRoundQuestions(
       // → the quick channel's continuation would strand). Under the universal deferred model EVERY
       // task has the self/questioner park source (loadUndispatchedParkTargets) + control-channel
       // dispatch release path, so a full seal parks (never strands) for all tasks — the guard is
-      // lifted universally. `rejectSelfQuestionerFullSeal` callers still pass the flag (kept in the
-      // args for a narrow boundary; now a no-op); the `deferredQuestionDispatch` flag is no longer
-      // read here.
+      // lifted universally. The former opt-in guard arg (a no-op after the lift) was deleted in
+      // the flag audit W0 (design/flag-audit-2026-07-07.md §3); the `deferredQuestionDispatch`
+      // flag is no longer read here.
 
       // RFC-128 P2 (Codex P2-2 follow-up) + RFC-132 T7 — persist the directive ONLY when the
       // round fully seals; a PARTIAL seal writes it to NEITHER table:
