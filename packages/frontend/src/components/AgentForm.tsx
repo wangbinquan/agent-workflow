@@ -5,9 +5,10 @@
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import type { Config, CreateAgent } from '@agent-workflow/shared'
+import type { CreateAgent } from '@agent-workflow/shared'
 import { AGENT_NAME_RE } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { hasEnabledClaudeRuntime } from '@/hooks/useRuntimesList'
 import { AgentDependsPicker } from './AgentDependsPicker'
 import { DependencyAutodetectButton } from './agents/DependencyAutodetectButton'
 import { DependencyTreePreview } from './agents/DependencyTreePreview'
@@ -51,26 +52,15 @@ export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
   const navigate = useNavigate()
   // RFC-113: the runtime selector is the only per-agent profile control here —
   // model / variant / temperature / steps now live on the runtime profile, so
-  // AgentForm no longer renders ModelSelect. We still read the ['config'] cache
-  // (shared with the agent routes) for `claudeCodeEnabled`, which gates whether
-  // claude-protocol runtimes are offered in the picker.
-  const config = useQuery<Config>({
-    queryKey: ['config'],
-    queryFn: ({ signal }) => api.get('/api/config', undefined, signal),
-    staleTime: 30_000,
-    retry: false,
-  })
+  // AgentForm no longer renders ModelSelect.
   function patch<K extends keyof CreateAgent>(key: K, next: CreateAgent[K]) {
     onChange({ ...value, [key]: next })
   }
 
-  // RFC-111 D17: surface the runtime selector unless claude is explicitly
-  // disabled (undefined ⇒ enabled now parity shipped). Keep showing it when
-  // the agent already pins a runtime so an existing value is never hidden.
-  const claudeEnabled = config.data?.claudeCodeEnabled !== false
-  // RFC-112: registered runtimes (GET /api/runtimes — open to all users, unlike
-  // admin-only /api/config) drive the picker options + each runtime's protocol,
-  // which is used below to hide claude-protocol runtimes when claude-code is off.
+  // RFC-112: registered runtimes (GET /api/runtimes — open to all users) drive
+  // the picker options + each runtime's protocol. flag-audit §8 决策：claude
+  // 可用性由注册表派生（存在 enabled 的 claude-protocol 行）——RFC-111 D17 的
+  // `claudeCodeEnabled` 配置门已删除，per-runtime `enabled` 是唯一开关。
   const runtimesQuery = useQuery<{
     runtimes: Array<{ name: string; protocol: string; enabled: boolean }>
   }>({
@@ -79,16 +69,13 @@ export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
     staleTime: 30_000,
   })
   const registeredRuntimes = runtimesQuery.data?.runtimes ?? []
-  // When claude is disabled, hide claude-protocol runtimes from the options — an
-  // agent can't run on a disabled runtime (Codex P2: but DON'T hide the whole
-  // picker, opencode profiles must stay selectable).
-  // RFC-118: also drop DISABLED runtimes from the picker — EXCEPT the one this agent
+  const claudeEnabled = hasEnabledClaudeRuntime(registeredRuntimes)
+  // RFC-118: drop DISABLED runtimes from the picker — EXCEPT the one this agent
   // already pins (keep it visible so editing other fields doesn't silently switch the
   // runtime; the backend allows KEEPING an already-pinned disabled runtime, D6).
-  const selectableRuntimes = registeredRuntimes.filter(
-    (r) =>
-      (r.enabled || r.name === value.runtime) && (claudeEnabled || r.protocol !== 'claude-code'),
-  )
+  // A disabled claude-protocol runtime is excluded by its own `enabled` flag —
+  // the former blanket claude gate is gone.
+  const selectableRuntimes = registeredRuntimes.filter((r) => r.enabled || r.name === value.runtime)
   // RFC-113: the runtime selector is the ONLY per-agent profile control, so show it
   // whenever there's a real choice — claude available, the agent already pins a
   // runtime, or custom (non-built-in) opencode profiles exist (e.g. opencode-opus /

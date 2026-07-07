@@ -1910,10 +1910,13 @@ export async function submitReviewDecision(
       ? (sourcePath as string)
       : readDocVersionBody(args.appHome, dv)
     // RFC-072: when the approved doc is a passed-through file path (upstream
-    // port was kind markdown_file → sourceFilePath set), persist that kind so
-    // the task-detail Outputs tab offers a Download button. Inline-markdown
+    // port was a markdownish file kind → sourceFilePath set), persist that kind
+    // so the task-detail Outputs tab offers a Download button. Inline-markdown
     // approvals carry the body verbatim → no file kind, no download.
-    const approvedDocKind = hasSourcePath ? 'markdown_file' : null
+    // flag-audit §8 决策：写 canonical 'path<md>'，不再向新行倒灌 legacy 别名
+    // 'markdown_file'（kindParser 约定 stringifyKind 永不输出别名；存量行由
+    // migration 0075 清洗，读侧 parse 时两者本就等价折叠）。
+    const approvedDocKind = hasSourcePath ? 'path<md>' : null
     // RFC-099 prompt isolation: no decider identity in the port payload.
     const meta = JSON.stringify({
       decision: 'approved',

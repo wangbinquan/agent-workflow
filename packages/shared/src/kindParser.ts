@@ -145,6 +145,18 @@ export function isValidKindString(text: string): boolean {
 }
 
 /**
+ * Canonicalize a kind string for PERSISTENCE（flag-audit §8 决策，用户
+ * 2026-07-07）：解析后重新 stringify——别名 'markdown_file' 折叠为 'path<md>'、
+ * 空白剥离；解析不了的字符串原样返回（防御：未知值照旧透传，行为不变）。
+ * node_run_outputs.kind 的所有写入点必须过这一层，别再把 agent frontmatter
+ * 里的 legacy 别名倒灌进库（migration 0075 已清洗存量）。
+ */
+export function normalizeKindString(text: string): string {
+  const parsed = tryParseKind(text)
+  return parsed === null ? text : stringifyKind(parsed)
+}
+
+/**
  * Base kind names recognized by the shared schemas as valid
  * AgentOutputKind ingredients. PR-A locked in 'string' / 'markdown';
  * PR-B (RFC-060) adds 'signal' as the control-flow-only base kind.

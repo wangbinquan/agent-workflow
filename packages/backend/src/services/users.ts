@@ -79,7 +79,6 @@ export async function createUser(db: DbClient, input: CreateUserInput): Promise<
 export interface ResetPasswordInput {
   newPassword: string
   force?: boolean
-  revokePats?: boolean
   now?: number
 }
 
@@ -105,7 +104,6 @@ export async function resetPassword(
     })
     .where(eq(users.id, id))
   await revokeAllSessionsForUser(db, id, now)
-  // PR2 handles revokePats; left as TODO so the API contract is stable.
 }
 
 /**

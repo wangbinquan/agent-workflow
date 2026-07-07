@@ -57,10 +57,12 @@ export const PatchUserBodySchema = z
 
 export type PatchUserBody = z.infer<typeof PatchUserBodySchema>
 
+// flag-audit §8 决策（用户 2026-07-07）：曾经的 `revokePats` 选项被删除——它在
+// schema 公开、service 收而不办（安全假旋钮）。未来要做「重置密码连带吊销 PAT」
+// 请连实现一起落，不再允许契约先行。
 export const ResetPasswordBodySchema = z.object({
   newPassword: z.string().min(8).max(256),
   force: z.boolean().optional(),
-  revokePats: z.boolean().optional(),
 })
 
 export type ResetPasswordBody = z.infer<typeof ResetPasswordBodySchema>

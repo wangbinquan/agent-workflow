@@ -30,6 +30,7 @@ import type {
 } from '@agent-workflow/shared'
 import {
   composePerParsedKindRepairBlocks,
+  normalizeKindString,
   parseClarifyEnvelopeBody,
   renderEnvelopeFollowupPrompt,
   SignalPortInPromptError,
@@ -1424,8 +1425,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           for (const [name, content] of parsed.ports) {
             // RFC-072: persist the resolved output kind so the Outputs tab can
             // tell file-path ports from text. NULL when the agent declared no
-            // kind for this port.
-            const kind = outputKinds?.[name] ?? null
+            // kind for this port. flag-audit §8 决策：入库前 canonical 化——
+            // agent frontmatter 仍可声明 legacy 别名 'markdown_file'，但持久列
+            // 统一存 'path<md>'（migration 0075 清洗了存量，别再倒灌）。
+            const rawKind = outputKinds?.[name]
+            const kind = rawKind !== undefined ? normalizeKindString(rawKind) : null
             await opts.db
               .insert(nodeRunOutputs)
               .values({ nodeRunId: opts.nodeRunId, portName: name, content, kind })

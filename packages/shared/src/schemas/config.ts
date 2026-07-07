@@ -47,11 +47,10 @@ export const ConfigSchema = z.object({
   defaultRuntime: z.string().min(1).optional(),
   /** RFC-111: override the `claude` binary path. Falls back to PATH. */
   claudeCodePath: z.string().min(1).optional(),
-  /**
-   * RFC-111 D17: gate user-visible claude-code selection (Agent form / settings)
-   * until injection parity (PR-C) + capture (PR-D) land. Default off.
-   */
-  claudeCodeEnabled: z.boolean().optional(),
+  // （flag-audit §8 决策，用户 2026-07-07：RFC-111 D17 的 `claudeCodeEnabled`
+  // 配置门已删除——三重矛盾的假门：注释称默认关、前端按默认开消费、后端从不
+  // enforce。claude 可用性以 runtimes 注册表内建行的 per-runtime `enabled`
+  // 为单一事实源；存量 config.json 里的旧 key 被 zod 静默剥离。）
   /** Global semaphore capacity. design.md §11 default = 4. */
   maxConcurrentNodes: z.number().int().positive(),
   /** Independent sub-process pool capacity inside a multi-process node. */

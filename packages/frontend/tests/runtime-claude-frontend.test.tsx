@@ -13,8 +13,9 @@
 //  4. RFC-113: the AgentForm renders ONLY that runtime Select for runtime
 //     concerns — model / variant / temperature / steps moved onto the runtime, so
 //     the agent form no longer carries any generation-param field.
-//  5. The Runtime selector is gated: hidden when config.claudeCodeEnabled is
-//     explicitly false (and the agent doesn't already pin a runtime).
+//  5. flag-audit §8：`claudeCodeEnabled` 配置门删除后，claude 可用性 = 注册表里
+//     存在 enabled 的 claude-protocol 行；无该行时 claude 选项从 picker 消失，
+//     picker 只在还有别的可选 runtime 时保留（否则隐藏）。
 //
 // The ModelSelect runtime-namespace behavior (#1/#2) still matters — RFC-113's
 // RuntimeFormDialog reuses <ModelSelect> per protocol — so those tests stay.
@@ -28,14 +29,15 @@ import { ModelSelect } from '../src/components/ModelSelect'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
 let fetchUrls: string[] = []
-// Each test may override what `/api/config` returns (drives the gating).
-let configResponse: unknown = { claudeCodeEnabled: true }
-// Each test may override the registered-runtimes list (drives the picker options).
-// Default mirrors a real daemon: the two read-only built-ins are always present.
+// Each test may override what `/api/config` returns.
+let configResponse: unknown = {}
+// Each test may override the registered-runtimes list (drives the picker options
+// AND — flag-audit §8 — claude availability). Default mirrors a real daemon: the
+// two read-only built-ins, both enabled.
 let runtimesResponse: unknown = {
   runtimes: [
-    { name: 'opencode', protocol: 'opencode' },
-    { name: 'claude-code', protocol: 'claude-code' },
+    { name: 'opencode', protocol: 'opencode', enabled: true },
+    { name: 'claude-code', protocol: 'claude-code', enabled: true },
   ],
 }
 
@@ -80,11 +82,11 @@ beforeEach(() => {
   setBaseUrl('http://daemon.test')
   setToken('tok')
   fetchUrls = []
-  configResponse = { claudeCodeEnabled: true }
+  configResponse = {}
   runtimesResponse = {
     runtimes: [
-      { name: 'opencode', protocol: 'opencode' },
-      { name: 'claude-code', protocol: 'claude-code' },
+      { name: 'opencode', protocol: 'opencode', enabled: true },
+      { name: 'claude-code', protocol: 'claude-code', enabled: true },
     ],
   }
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
@@ -150,21 +152,25 @@ describe('ModelSelect — runtime namespace (RFC-111)', () => {
 })
 
 describe('AgentForm — runtime selector (RFC-111)', () => {
-  test('renders a Runtime combobox defaulting to "inherit"', () => {
+  test('renders a Runtime combobox defaulting to "inherit"', async () => {
     const initial: CreateAgent = { ...emptyAgent(), name: 'demo' }
     wrap(<AgentForm value={initial} onChange={() => {}} />)
 
-    const trigger = screen.getByRole('combobox', { name: /^Runtime$/ })
-    expect(trigger).toBeTruthy()
+    // flag-audit §8: claude availability is derived from /api/runtimes (config
+    // gate deleted), so the picker mounts once the registry query resolves.
+    const trigger = await screen.findByRole('combobox', { name: /^Runtime$/ })
     expect(trigger.textContent).toMatch(/Inherit/)
   })
 
-  test('selecting "Claude Code" surfaces runtime: claude-code on onChange', () => {
+  test('selecting "Claude Code" surfaces runtime: claude-code on onChange', async () => {
     const onChange = vi.fn<(next: CreateAgent) => void>()
     const initial: CreateAgent = { ...emptyAgent(), name: 'demo' }
     wrap(<AgentForm value={initial} onChange={onChange} />)
 
-    clickSelectOption(/^Runtime$/, 'Claude Code')
+    await screen.findByRole('combobox', { name: /^Runtime$/ })
+    // Registry-loaded options label by runtime name (`claude-code`); the static
+    // "Claude Code" fallback only shows before /api/runtimes resolves.
+    clickSelectOption(/^Runtime$/, 'claude-code')
 
     expect(onChange).toHaveBeenCalledTimes(1)
     const next = onChange.mock.calls[0]?.[0] as CreateAgent
@@ -186,36 +192,34 @@ describe('AgentForm — runtime selector (RFC-111)', () => {
     for (const label of ['Model', 'Variant', 'Temperature', 'Steps', 'Max steps']) {
       expect(screen.queryByText(label, { selector: '.form-field__label' })).toBeNull()
     }
-    // and the form never reaches for /api/runtime/models (that was the ModelSelect).
-    await waitFor(() => expect(fetchUrls.some((u) => u.includes('/api/config'))).toBe(true))
+    // flag-audit §8: the form drives its runtime concerns off /api/runtimes only
+    // (config gate deleted) and never reaches for /api/runtime/models (ModelSelect).
+    await waitFor(() => expect(fetchUrls.some((u) => u.includes('/api/runtimes'))).toBe(true))
     expect(fetchUrls.some((u) => u.includes('/api/runtime/models'))).toBe(false)
   })
 
-  test('Runtime selector hidden when config.claudeCodeEnabled === false', async () => {
-    configResponse = { claudeCodeEnabled: false }
+  test('Runtime selector hidden when no claude runtime AND only one built-in opencode', async () => {
+    // flag-audit §8: claude 不可用 = 注册表无 enabled 的 claude-protocol 行；
+    // 且只剩单个内建 opencode ⇒ 无从选择 ⇒ picker 隐藏。
+    runtimesResponse = { runtimes: [{ name: 'opencode', protocol: 'opencode', enabled: true }] }
     const initial: CreateAgent = { ...emptyAgent(), name: 'demo' }
     wrap(<AgentForm value={initial} onChange={() => {}} />)
 
-    // Selector is shown optimistically until config resolves, then hidden.
+    // Selector shows optimistically until the registry resolves, then hides.
     await waitFor(() => {
       expect(screen.queryByRole('combobox', { name: /^Runtime$/ })).toBeNull()
     })
   })
 
-  // Codex P2 regression: with claude disabled, the runtime selector is the ONLY
-  // way to assign a custom opencode profile (opencode-opus / opencode-haiku), so
-  // it must STAY visible when such runtimes exist — only the claude-protocol
-  // options get filtered out. Before the fix the whole picker was hidden when
-  // claude was off, stranding opencode-only installs on the default runtime.
-  test('claude disabled + custom opencode runtimes → selector shows, claude options filtered', async () => {
-    configResponse = { claudeCodeEnabled: false }
+  // With no claude runtime, the selector is the ONLY way to assign a custom
+  // opencode profile (opencode-opus / opencode-haiku), so it must STAY visible
+  // when such runtimes exist — the claude-protocol option simply isn't offered.
+  test('no claude runtime + custom opencode runtimes → selector shows, no claude option', async () => {
     runtimesResponse = {
       runtimes: [
-        // RFC-118 added an `enabled` filter to the AgentForm runtime picker, so
-        // this mock must carry `enabled: true` or every runtime is filtered out
-        // (RFC-117 follow-up: RFC-118 missed updating this mock).
         { name: 'opencode', protocol: 'opencode', enabled: true },
-        { name: 'claude-code', protocol: 'claude-code', enabled: true },
+        // claude built-in present but DISABLED → not offered, not counted as available.
+        { name: 'claude-code', protocol: 'claude-code', enabled: false },
         { name: 'opencode-opus', protocol: 'opencode', enabled: true },
       ],
     }

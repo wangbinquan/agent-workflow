@@ -1,7 +1,7 @@
 // RFC-117 — RuntimeSelect, the shared settings runtime-profile picker used by the
 // distiller / commit / fusion runtime selectors (replacing the old per-feature
 // ModelSelect pickers; model now comes from the chosen runtime profile). Mounts it
-// with a mocked /api/runtimes + /api/config and locks: the "Inherit (global
+// with a mocked /api/runtimes and locks: the "Inherit (global
 // default)" empty option, the registered runtimes render as options, picking one
 // calls onChange(name), and picking inherit calls onChange(undefined).
 
@@ -33,12 +33,9 @@ function mockFetch(): void {
         { status: 200, headers: { 'content-type': 'application/json' } },
       )
     }
-    if (s.includes('/api/config')) {
-      return new Response(JSON.stringify({ claudeCodeEnabled: false }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      })
-    }
+    // flag-audit §8: RuntimeSelect drives off /api/runtimes only now — the
+    // `claudeCodeEnabled` /api/config gate was deleted (claude availability is
+    // derived from the registry). No config fetch to mock.
     return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
   })
 }
