@@ -171,15 +171,16 @@ export async function transitionMergeState(args: {
 abandoned，转移合法性由谓词保证，且幂等）。单条 SQL、mint 热路径零额外往返：
 
 ```ts
-export async function abandonSupersededMergeStates(args: {
-  db: DbClient
+export function abandonSupersededMergeStates(args: {
+  /** db 或事务客户端——同步执行（.run()），可进 bun:sqlite 同步事务回调（§4 原子性要求）。 */
+  db: DbClient | DbTx
   taskId: string
   nodeId: string
   iteration: number
   /** 新一代行的 ULID；只废弃严格更旧（id <）的行。 */
   supersededByRunId: string
   reason: string   // 对齐取代行的 rerunCause（'retry-node' / 'review-iterate' / …），进日志
-}): Promise<number>  // 返回废弃行数（=0 是常态：首次派发无前代）
+}): number  // 返回废弃行数（=0 是常态：首次派发无前代）
 ```
 
 ```sql
@@ -215,13 +216,20 @@ freshness.ts:156-162），`id < :supersededByRunId` 与 sanctioned picker 同构
 
 mint 是所有取代路径的汇聚点（调研 §1/§6）：retryNode（task.ts:1985）、review supersede
 （review.ts:2097）、scheduler stale-redispatch/revival（scheduler.ts:2259 等 13 处）、clarify
-答后重跑（clarify.ts:166 / crossClarify.ts:202）……全部经由两个入口落行：
+答后重跑（clarify.ts:166 / crossClarify.ts:202)……全部经由两个入口落行：
 
-1. **`mintNodeRun`**（nodeRunMint.ts:186-190）——异步工厂，values 里已有
-   (taskId, nodeId, iteration, id)。insert 成功后调 `abandonSupersededMergeStates`。
+1. **`mintNodeRun`**（nodeRunMint.ts:186-190）——异步工厂。改为在**单个同步
+   `db.transaction`** 内执行 `abandonSupersededMergeStates(tx, …) + tx.insert(nodeRuns)` 两步
+   （bun:sqlite 同步事务；对外 async 签名不变、调用点零改动）。**abandon 与 insert 必须原子**：
+   若先 insert 后独立 UPDATE，daemon 在两语句间崩溃会留下「新行已在 + 旧行仍 pending-merge」
+   ——本 RFC 要修的 stale replay 以另一形态存活（Codex 设计门 P1-1）；单事务下崩溃要么两者都
+   没发生（回到修复前语义、下次取代重来）、要么都已提交。
 2. **`taskQuestionDispatch.ts:759`** 的同步 `tx.insert(nodeRuns)`（RFC-120 原子 claim+mint，
-   带 `rfc098-allow-direct-node-run-insert` 豁免标记）——在同一 tx 内以相同参数调同步版 abandon
-   （bun:sqlite 同步 API；helper 提供 sync 变体或直接内联同一条 SQL + 同一豁免标记）。
+   带 `rfc098-allow-direct-node-run-insert` 豁免标记）——在**同一既有 tx** 内以相同参数调
+   abandon，天然原子。
+
+据此 `abandonSupersededMergeStates` 做成**同步**函数（drizzle bun-sqlite `.run()`），第一参数
+接受 db 或 tx 客户端——同步形态才能进 bun:sqlite 同步事务回调（回调内不可 await）。
 
 **时序正确性**（为什么 mint 时废弃能关住 replay 竞态）：所有「取代 → 踢起 runTask」路径中，
 mint 都发生在 runTask 之前——
@@ -302,11 +310,14 @@ W1/W2 由 `persistIsoBase` 收口（其 5 个调用点不变）；W3/W4 由 `per
 UPDATE node_runs SET merge_state = 'abandoned'
 WHERE merge_state IN ('isolating', 'pending-merge', 'conflict-human')
   AND (
-    EXISTS (SELECT 1 FROM node_runs s
-            WHERE s.task_id = node_runs.task_id AND s.node_id = node_runs.node_id
-              AND s.iteration = node_runs.iteration AND s.parent_node_run_id IS NULL
-              AND s.id > node_runs.id)
-    OR parent_node_run_id IN (
+    -- (a) 被取代的 top-level 行：存在同代 top-level 更大 ULID 兄弟
+    (node_runs.parent_node_run_id IS NULL
+     AND EXISTS (SELECT 1 FROM node_runs s
+                 WHERE s.task_id = node_runs.task_id AND s.node_id = node_runs.node_id
+                   AND s.iteration = node_runs.iteration AND s.parent_node_run_id IS NULL
+                   AND s.id > node_runs.id))
+    -- (b) 被取代父行的子行（shard / aggregator / merge-resolve 子行随父废弃）
+    OR node_runs.parent_node_run_id IN (
         SELECT r.id FROM node_runs r
         WHERE EXISTS (SELECT 1 FROM node_runs s
                       WHERE s.task_id = r.task_id AND s.node_id = r.node_id
@@ -318,13 +329,11 @@ WHERE merge_state IN ('isolating', 'pending-merge', 'conflict-human')
 - 单语句，无需 `--> statement-breakpoint`；journal 75→76，`upgrade-rolling.test.ts`
   「HEAD journal has 75 entries」锁同步 bump（标题+断言+注释）。
 - 语义：与 §3.2 运行时 abandon 完全同构（top-level 非 freshest + 其子行闭包）。合法崩溃窗口行
-  （该节点 freshest、无更新兄弟）不匹配 EXISTS——不受影响。
-- 注意 (a) 支的 EXISTS 对**子行**同样成立吗？——不成立也不需要：子行的取代由 (b) 支表达；(a) 支
-  的 `parent_node_run_id IS NULL` 谓词在外层 WHERE 没有，但 EXISTS 只要求存在**同代 top-level
-  更新行**，对子行而言其兄弟判定走 (b)。为避免歧义，外层 (a) 支显式限定
-  `node_runs.parent_node_run_id IS NULL`（实现时以此为准，上面 SQL 已按此写）。
-  ——实现时用测试锁死三类行的判定：freshest 崩溃窗口行不动、被取代 top-level 行清洗、
-  被取代父行的子行清洗。
+  （该节点 freshest、无更新兄弟）不匹配 (a)/(b) 任一支——不受影响。
+- **(a) 支必须带 `parent_node_run_id IS NULL` 谓词**（Codex 设计门 P1-2）：否则子行会经 (a) 支
+  的「存在更新 top-level 兄弟」误判——子行的取代性只能由父行取代闭包（(b) 支）表达，(a) 支只
+  裁决 top-level 行。实现时用测试锁死三类行的判定：freshest 崩溃窗口行不动（含「wrapper 未被
+  取代、其子行不动」）、被取代 top-level 行清洗、被取代父行的子行清洗。
 
 ## 9. 守卫与源码锁（第 3/4 层）
 
@@ -353,6 +362,7 @@ WHERE merge_state IN ('isolating', 'pending-merge', 'conflict-human')
 | 非法转移（逻辑 bug 暴露） | `IllegalMergeStateTransition` → ConflictError → runTask catch-all → 任务 fail-loud（现状是静默乱写；fail-loud 是改进目标本身） |
 | CAS 输（并发覆盖被拦截） | 单任务单 scheduler 所有权（task CAS pending→running）下常态不可达；发生即说明出现了第二写者——主路径抛（暴露），catch 内错误路径 try+log（不掩盖原始错误） |
 | abandon 与 live merge-back 竞速 | abandon 只在 mint 链上发生；mint 与该节点自身的 merge-back 在同一 scheduler 串行域内，不同节点的 merge-back 不触碰彼此行。集合式 abandon 的 WHERE from-集保证已 merged/failed 的行不可能被误废弃 |
+| mint 与 abandon 之间崩溃 | 结构上不可达：两步在单个同步 `db.transaction` 内提交（§4，Codex 设计门 P1-1）——崩溃后要么新行与废弃都未发生（回到取代前语义），要么都已生效 |
 | replay 撞 abandoned | 不可能命中（replay WHERE 按值捞，abandoned 不在捞取值内）——这正是修复本体 |
 | migration 误清洗合法行 | EXISTS 谓词要求「存在更新兄弟」，freshest 崩溃窗口行天然不匹配；migration 测试三类行全锁 |
 | abandon 误删 iso | 结构上不可能：abandon 是纯 UPDATE merge_state，不调 `discardNodeIso`（D19 kept-iso 依赖此约定，测试断言 abandon 后 iso 目录仍在） |
@@ -398,6 +408,10 @@ WHERE merge_state IN ('isolating', 'pending-merge', 'conflict-human')
   park-human 未写）由既有 frontier done 分支兜底（done+conflict-human → awaitingHuman 桶）。
 - **D11 `persistIsoNodeTree` 的 mergeState 参数删除**：4 调用点全传 `'pending-merge'` 字面量，
   假旋钮（flag-audit 判据 (a)），事件化后由 `mark-pending-merge` 内定。
+- **D12 mint 与 abandon 单事务原子**（Codex 设计门 P1-1 产物）：`mintNodeRun` 内部改为同步
+  `db.transaction` 包 abandon+insert 两步；`abandonSupersededMergeStates` 做成同步函数
+  （接受 db 或 tx）以进入 bun:sqlite 同步事务回调。分两条独立语句会在语句间崩溃时留下
+  「新行在 + 旧行仍可重放」——被修的 bug 换形态存活。
 
 ## 13. 测试策略（test-with-every-change 清单）
 
@@ -414,7 +428,8 @@ WHERE merge_state IN ('isolating', 'pending-merge', 'conflict-human')
    UPDATE 间插竞争写者 → `ConcurrentMergeStateTransition`；**NULL-from 格单独覆盖**（isNull 谓词）；
 8. try 变体 boolean 语义（Conflict/NotFound → false，其余重抛）；
 9. `abandonSupersededMergeStates`：废弃 (a) 支 / (b) 支 / 幂等（二次调用 0 行）/ merged 行不可
-   误废弃 / `id <` 边界（新行自身不废弃）。
+   误废弃 / `id <` 边界（新行自身不废弃）/ **(a) 支不误伤「父行未被取代」的子行**（P1-2 对应格）
+   / **mint 事务原子性**（tx 内注入故障 → abandon 与 insert 全回滚，P1-1 对应格）。
 
 **行为回归（backend）**
 10. **stale replay 场景 A 先红后绿**（rfc144-stale-replay-regression.test.ts，文件头注明锁

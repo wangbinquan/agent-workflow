@@ -19,8 +19,8 @@
 
 - `packages/backend/src/services/lifecycle.ts` 追加：`ConcurrentMergeStateTransition` /
   `MergeStateUpdateExtra` / `transitionMergeState`（NULL-from 用 `isNull` 谓词）/
-  `tryTransitionMergeState` / `abandonSupersededMergeStates`（集合式守卫写，含
-  taskQuestionDispatch 同步 tx 可用的形态）——两处直写各带
+  `tryTransitionMergeState` / `abandonSupersededMergeStates`（**同步**集合式守卫写，接受
+  db 或 tx——必须可进 bun:sqlite 同步事务回调，design §4/D12）——两处直写各带
   `// rfc144-allow-direct-merge-state-write` 标记。
 - 新测试 `packages/backend/tests/rfc144-merge-state-cas.test.ts`（design §13 项 6-9）。
 - 验收：CAS/竞态/abandon 单测绿；生产码尚无调用者（此刻 scheduler 仍裸写，守卫未落地，不红）。
@@ -44,8 +44,10 @@
 
 - **先写红测试**：`rfc144-stale-replay-regression.test.ts` 场景 A（design §7/§13-10），确认在
   T3 完成、T4 未接线时为红（复现 bug）。
-- `mintNodeRun`（nodeRunMint.ts:186）insert 后调 `abandonSupersededMergeStates`；
-  `taskQuestionDispatch.ts:759` 同步 tx 内同参调用（同豁免标记）。
+- `mintNodeRun`（nodeRunMint.ts:186）改为**单个同步 `db.transaction` 内执行
+  abandon + insert 两步**（design §4/D12——分两条语句会留崩溃窗口，Codex 设计门 P1-1）；
+  `taskQuestionDispatch.ts:759` 在既有 tx 内同参调用（同豁免标记），天然原子。
+- 崩溃窗口断言：新增测试用注入故障（tx 内抛错）证明 abandon 与 insert 要么全生效要么全回滚。
 - 补场景 B / C 测试（§13-11）、clarify D19 交互测试（§13-14，abandon 后 iso 目录仍在）、
   merge-failed 行为测试（§13-12，顺带补 RFC-130 缺口）。
 - 验收：场景 A 红转绿；B/C/D19/merge-failed 全绿；rfc130-* golden 仍绿。
