@@ -166,12 +166,13 @@ describe('RFC-028 buildInlineConfig MCP injection', () => {
     expect(serialized).not.toContain('"env":{')
   })
 
-  test('source-code lock: buildInlineConfig in runner.ts emits the opencode wire names', () => {
-    // Locks the WHY of the test above: a reader who refactors runner.ts can
-    // grep for these literal strings to confirm the translation is in place
-    // (the test above only catches it in the output of one snapshot input).
+  test('source-code lock: buildInlineConfig emits the opencode wire names', () => {
+    // Locks the WHY of the test above: a reader who refactors the inline-config
+    // assembly can grep for these literal strings to confirm the translation is
+    // in place (the test above only catches it in the output of one snapshot
+    // input). RFC-143 PR-4: definition moved to runtime/opencode/inlineConfig.ts.
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
+      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'inlineConfig.ts'),
       'utf-8',
     )
     expect(src).toContain('entry.environment = m.config.env')

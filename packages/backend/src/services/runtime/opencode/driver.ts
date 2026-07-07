@@ -6,6 +6,7 @@
 // extracted logic stays byte-identical to the pre-RFC-111 runner.ts.
 
 import type {
+  BusinessNodeSpawnContext,
   InventoryReadContext,
   NormalizedEvent,
   ProbeOpts,
@@ -20,13 +21,18 @@ import type {
 } from '../types'
 import type { InventorySnapshot } from '@agent-workflow/shared'
 import type { LivePollOptions, LivePollerHandle } from '@/services/subagentLiveCapture'
+import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { parseEvent } from './events'
 import { buildOpencodeSpawn } from './spawn'
+import { buildInlineConfig } from './inlineConfig'
+import { pickRuntimeHead } from '../head'
 import { MIN_OPENCODE_VERSION, probeOpencode } from '@/util/opencode'
 import { listOpencodeModels } from '@/util/opencode-models'
 import { captureChildSessions } from '@/services/sessionCapture'
 import { readSnapshotFromRunDir } from '@/services/inventory'
 import { startLiveSubagentCapture } from '@/services/subagentLiveCapture'
+import { materializeInventoryPlugin } from '@/opencode-plugin'
 
 export const opencodeDriver: RuntimeDriver = {
   kind: 'opencode',
@@ -70,10 +76,20 @@ export const opencodeDriver: RuntimeDriver = {
         },
       },
     }
+    // RFC-143 PR-4: the AGENT_WORKFLOW_OPENCODE_BIN env override (previously a
+    // `protocol === 'opencode'` branch in memoryDistiller) is internalized here:
+    // a system-agent run with NO explicit binary falls back to it before the
+    // built-in `opencode` head. Callers that pass a binary (smoke probes, custom
+    // forks) are unaffected. claude has no analogous override.
+    const envBin = process.env.AGENT_WORKFLOW_OPENCODE_BIN
+    const head =
+      ctx.runtimeBinary != null && ctx.runtimeBinary !== ''
+        ? [ctx.runtimeBinary]
+        : envBin != null && envBin !== ''
+          ? [envBin]
+          : undefined
     const { cmd, env } = buildOpencodeSpawn({
-      ...(ctx.runtimeBinary != null && ctx.runtimeBinary !== ''
-        ? { opencodeCmd: [ctx.runtimeBinary] }
-        : {}),
+      ...(head !== undefined ? { opencodeCmd: head } : {}),
       agentName: ctx.agentName,
       prompt: ctx.prompt,
       worktreePath: ctx.worktreePath,
@@ -86,6 +102,99 @@ export const opencodeDriver: RuntimeDriver = {
       gitUserEmail: ctx.gitUserEmail ?? null,
     })
     return { cmd, env, stdin: { mode: 'ignore' } }
+  },
+  // RFC-143 PR-4 — business-node spawn: the ENTIRE opencode assembly the runner
+  // used to do inline (runner.ts:491-905 pre-collapse), moved VERBATIM so the
+  // inputs to buildOpencodeSpawn stay byte-for-byte identical (golden lock):
+  // inline-config build → RFC-029 inventory plugin append → RFC-041 memory
+  // block append → serialize → spawn. async for materializeInventoryPlugin.
+  async buildBusinessSpawn(ctx: BusinessNodeSpawnContext): Promise<SpawnPlan> {
+    // RFC-022/028/031: primary + closure dependents + mcp + plugin entries.
+    const inlineConfig = buildInlineConfig(
+      ctx.agent,
+      ctx.resolvedParamsByAgent,
+      ctx.dependents,
+      ctx.mcps,
+      ctx.plugins,
+    )
+
+    // RFC-029: wire the inventory dump plugin (business gate — agent kind +
+    // not a followup — is precomputed by the runner as `wantsInventory`; that
+    // opencode is the runtime that HAS this capability is embodied right here).
+    let inventoryOutPath: string | undefined
+    if (ctx.wantsInventory) {
+      try {
+        mkdirSync(ctx.runRoot, { recursive: true })
+        // materializeInventoryPlugin handles both dev (source tree) and
+        // single-binary (embed table) layouts — see opencode-plugin/index.ts.
+        const pluginPath = await materializeInventoryPlugin(ctx.runRoot)
+        const fileSpec: string | [string, Record<string, unknown>] = `file://${pluginPath}`
+        inlineConfig.plugin = [...(inlineConfig.plugin ?? []), fileSpec]
+        inventoryOutPath = join(ctx.runRoot, 'inventory.json')
+      } catch (err) {
+        // Non-fatal: if we can't materialize the plugin (disk full / permission
+        // denied / asset missing in binary mode), the run continues without
+        // inventory capture and the post-exit read lands on `plugin-load-failed`.
+        ctx.log.warn('inventory-plugin-materialize-failed', {
+          nodeRunId: ctx.nodeRunId,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
+    // RFC-041: weave the injected memory block into the primary agent's inline
+    // prompt (the runner resolved the block; HOW it reaches the model is ours).
+    if (ctx.injectedMemoryBlock !== null) {
+      const primary = inlineConfig.agent[ctx.agent.name]
+      if (primary !== undefined && typeof primary.prompt === 'string') {
+        primary.prompt = `${primary.prompt}\n\n${ctx.injectedMemoryBlock}`
+      }
+    }
+
+    // RFC-022 §design B6: warn (don't fail) when the serialized config crosses
+    // the soft cap. Real OS env-var ceilings are well above this; the warning
+    // helps catch authors stuffing massive bodies into every dependent agent
+    // OR cramming many MCP servers' env / headers maps.
+    const serializedInline = JSON.stringify(inlineConfig)
+    if (serializedInline.length > 32 * 1024) {
+      ctx.log.warn('inline-config-large', {
+        bytes: serializedInline.length,
+        agents: Object.keys(inlineConfig.agent),
+        mcpCount: inlineConfig.mcp ? Object.keys(inlineConfig.mcp).length : 0,
+      })
+    }
+
+    const { cmd, env } = buildOpencodeSpawn({
+      // RFC-112: a custom opencode fork's binary wins; else the RFC-111 head
+      // (production config.opencodePath via resolveOpencodeCmd, or a test mock)
+      // — byte-for-byte unchanged for built-ins.
+      opencodeCmd: pickRuntimeHead(ctx.runtimeBinary, ctx.opencodeCmd),
+      agentName: ctx.agent.name,
+      prompt: ctx.prompt,
+      resumeSessionId: ctx.resumeSessionId,
+      worktreePath: ctx.worktreePath,
+      runDir: join(ctx.runRoot, '.opencode'),
+      inlineConfigSerialized: serializedInline,
+      inventoryOutPath,
+      gitUserName: ctx.gitUserName,
+      gitUserEmail: ctx.gitUserEmail,
+    })
+    // §4.4: what actually landed in the inline JSON, for the runner's
+    // `spawning agent runtime` diagnostic line (same fields it used to derive).
+    const primaryInline = inlineConfig.agent[ctx.agent.name] as Record<string, unknown> | undefined
+    return {
+      cmd,
+      env,
+      diagnostics: {
+        inlineModel: primaryInline?.model ?? null,
+        inlineVariant: primaryInline?.variant ?? null,
+        inlineTemperature: primaryInline?.temperature ?? null,
+        mcpCount: inlineConfig.mcp ? Object.keys(inlineConfig.mcp).length : 0,
+        mcpKeys: inlineConfig.mcp ? Object.keys(inlineConfig.mcp) : [],
+        pluginCount: ctx.plugins.filter((p) => p.enabled !== false).length,
+        pluginNames: ctx.plugins.filter((p) => p.enabled !== false).map((p) => p.name),
+      },
+    }
   },
   // —— optional capabilities (opencode implements; claude omits) ——
   async readInventory(ctx: InventoryReadContext): Promise<InventorySnapshot | null> {

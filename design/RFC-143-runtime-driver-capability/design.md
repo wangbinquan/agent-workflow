@@ -164,6 +164,16 @@ PR-1/2/3 落地后深读 runner 业务 spawn，暴露 §4.2「分支体整块下
 
 **G. golden 保护（验收硬约束）**：`runtime-opencode-golden.test.ts` 锁 `buildOpencodeSpawn` 输出。opencode driver.buildBusinessSpawn 内部调 buildOpencodeSpawn 时，传入的 `{opencodeCmd, agentName, prompt, resumeSessionId, worktreePath, runDir, inlineConfigSerialized, inventoryOutPath, gitUserName, gitUserEmail}` 必须与收口前 runner:861 完全一致 → 输出 byte-for-byte 不变。先跑基线绿，收口后逐字对拍。`runtime-buildspawn.test.ts`（system-agent）+ `memory-distiller.test.ts:633` 源码文本锁（getRuntimeDriver+buildSpawn）按需同步。
 
+### 4.7 PR-4 落地勘误（2026-07-07 实现后固化，以此为准）
+
+1. **§4.3/§5 的 `testBinaryOverride` 单字段收敛不可行，ctx 保留双字段**。实测 `opencodeCmd` 是**生产字段**（routes×5 经 `resolveOpencodeCmd(config.opencodePath)` 对所有 runtime 的 dispatch 无差别传入，claude 节点也会收到），`runtimeCmd` 才是纯测试字段。若合并成单字段：claude driver 要么吃到 opencode 的生产路径当自己的 argv 头（Codex P1-1 复活），要么因字段恒存在而永关凭据桥（bridge gate 依赖 `runtimeCmd === undefined`）。落地形态：`BusinessNodeSpawnContext` 同时带 `opencodeCmd?`（opencode 专属，其他 driver 必须忽略）+ `runtimeCmd?`（test-only，presence = mock 信号），runner 双双透传、零判别，各 driver 各取所需。真正的单字段收敛依赖 PR-5 把 launch 线程改为 per-runtime 解析（`driver.defaultBinary`）后再评估。
+2. **smoke 收口落地**：`buildSmokePlan` 全体走 `driver.buildSpawn`，`runDir=attemptDir`（mkdtemp 已存在 → 满足 opencode 1.17 「OPENCODE_CONFIG_DIR 必须先存在」契约，协议特定的 `.opencode` 子目录形状对 smoke 不承载语义——与 distiller `runDir=cwd` 同形）。三个有意的行为对齐：opencode smoke 的 persona 统一为 claude 侧长句（`…Follow the user prompt exactly.`）；opencode smoke 现在会把 `model` 注入 inline config（修「opencode 探针忽略配置 model」的疏漏，probe 语义与 claude 对齐）；`SystemAgentSpawnContext` 增加可选 `log`（claude driver 转发给 buildClaudeSpawn，保 smoke 的 logger 上下文）。
+3. **memoryDistiller 两处判别的收口方式**：`AGENT_WORKFLOW_OPENCODE_BIN` env 覆盖内化进 **opencode driver 的 buildSpawn**（无显式 binary 时的回退；语义从「distiller 专属」扩为「system-agent 通用」——smoke 恒传 binaryPath 不受影响，distiller 行为逐字不变）；`bridgeCredentials: true` 改为**无条件传**（opencode driver 忽略该字段，null-object 消判别）。
+4. **buildBusinessSpawn 抛错处置落地**（§6 设计的实现）：runner 对 `await driver.buildBusinessSpawn(ctx)` 包同款 `runtime-spawn-failed` catch——收口前 buildClaudeSpawn 的同步 throw 会把行卡死在 running，现在干净落 failed（顺带修的行为改进）。
+5. **源码文本锁随定义点搬迁**：runner-plugin-inject / runner-permission-inject / runner-mcp-inject 三处锁改读 `runtime/opencode/inlineConfig.ts`；runner-inventory-integration 的 materialize/outPath 锁改读 `runtime/opencode/driver.ts`（runner 侧改锁 `isAgentRunKind`+`wantsInventory` 业务门）。断言内容不变，只跟定义点走。
+6. **诊断字段两 runtime 同形**：收口前 runner 对 claude 也从（无条件构建的）inline config 派生 `inlineModel/inlineVariant/inlineTemperature/mcpCount/mcpKeys/pluginCount/pluginNames` 日志字段——claude driver 的 `diagnostics` 按同公式回传（含 plugin 字段，尽管 claude 忽略 plugins），日志行 byte 级同形。§4.4 初稿的「claude 填 model/mcpKeys/agentNames」不准确，以此为准。
+7. **claude 运行不再空跑 inline-config 构建**：收口前 runner 对 claude 也构建（然后丢弃）opencode inline config，`inline-config-large` 警告因此可能对 claude 误发——收口后该构建只存在于 opencode driver 内，claude 自然消失（无害的顺带清理；`resolvedParamsByAgent` 的 async 解析仍 runtime 无关地留在 runner，claude 依赖它取 root model）。
+
 ## 5. 派生清理（dedup + 半死代码）
 
 | 项 | 现状 | 收口 |

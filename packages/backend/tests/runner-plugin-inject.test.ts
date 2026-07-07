@@ -130,8 +130,10 @@ describe('buildInlineConfig — RFC-031 plugin injection', () => {
 
 describe('runner source anchor — RFC-031 regression guards', () => {
   test('buildInlineConfig source mentions `file://` and `enabled` filtering', () => {
+    // RFC-143 PR-4: buildInlineConfig moved to runtime/opencode/inlineConfig.ts
+    // (runner re-exports); the lock follows the definition site.
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
+      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'inlineConfig.ts'),
       'utf-8',
     )
     // file:// prefix is the contract with opencode's resolvePathPluginTarget;

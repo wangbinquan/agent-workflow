@@ -18,10 +18,26 @@
 
 import type { DbClient } from '@/db/client'
 import type { Logger } from '@/util/log'
-import type { InventorySnapshot } from '@agent-workflow/shared'
+import type { Agent, InventorySnapshot, Mcp, Plugin } from '@agent-workflow/shared'
 import type { LivePollOptions, LivePollerHandle } from '@/services/subagentLiveCapture'
+// Type-only (erased at runtime): runtimeRegistry value-imports runtime/index,
+// so a VALUE import here would close a module-init cycle. RuntimeProfile is the
+// RFC-113 resolved param set threaded through BusinessNodeSpawnContext.
+import type { RuntimeProfile } from '@/services/runtimeRegistry'
 
 export type RuntimeKind = 'opencode' | 'claude-code'
+
+/** Where an injected skill comes from (RFC-004; moved here from runner.ts so
+ *  drivers can type their skill inputs without a runner import — RFC-143 PR-4;
+ *  runner re-exports both for existing import sites). */
+export type SkillSource = 'managed' | 'external' | 'project'
+
+export interface ResolvedSkill {
+  name: string
+  sourceKind: SkillSource
+  /** Absolute path for managed/external. Unused for project. */
+  sourcePath?: string
+}
 
 /** The config subset `defaultBinary` reads — the per-runtime binary path keys.
  *  Narrow (not the full Config) so runtimeRegistry / routes can pass their own
@@ -101,6 +117,13 @@ export interface SpawnPlan {
   env: Record<string, string>
   stdin?: { mode: 'ignore' } | { mode: 'pipe'; data: string }
   cleanup?: () => void
+  /**
+   * RFC-143 §4.4 — spawn-assembly facts the runner's `spawning agent runtime`
+   * diagnostic log flat-spreads (inlineModel / mcpKeys / pluginNames …). The
+   * inline-config build lives inside `buildBusinessSpawn` now, so the driver
+   * reports what actually landed; the runner never re-derives it.
+   */
+  diagnostics?: Record<string, unknown>
 }
 
 /** Version probe result for a runtime binary. RFC-143: the union superset of
@@ -196,6 +219,83 @@ export interface SystemAgentSpawnContext {
   /** RFC-067 per-task git identity (both non-empty to inject). */
   gitUserName?: string | null
   gitUserEmail?: string | null
+  /** Caller's logger for driver-internal warnings (claude config-dir prep);
+   *  omitted → the driver's own default logger. RFC-143 PR-4 (smoke parity). */
+  log?: Logger
+}
+
+/**
+ * RFC-143 PR-4 — spawn inputs for a BUSINESS node run (the runner.ts path with
+ * skills / mcp / plugins / inventory / memory weave — everything
+ * `SystemAgentSpawnContext` deliberately excludes). A union ctx: each driver
+ * takes what it needs and ignores the rest. The runner renders the prompt,
+ * resolves the per-agent runtime profiles (async DB) and the memory block, then
+ * hands these raw materials over; the driver owns its runtime's ENTIRE assembly
+ * (opencode: inline-config build + inventory plugin + memory append + serialize;
+ * claude: system-prompt-file + mcp/agents flags + credential-bridge decision).
+ */
+export interface BusinessNodeSpawnContext {
+  /** The (node-selected) primary agent. */
+  agent: Agent
+  /** The fully rendered user prompt (runner-side; drivers only deliver it). */
+  prompt: string
+  /**
+   * RFC-041 injected memory block (null = no inject / followup). Drivers weave
+   * it into their persona surface: opencode appends to the inline agent prompt,
+   * claude appends to the system-prompt-file text.
+   */
+  injectedMemoryBlock: string | null
+  /** RFC-022: dependsOn closure (BFS order, root excluded). */
+  dependents: readonly Agent[]
+  /** RFC-028 MCP rows (drivers apply their own enabled-filter + translation). */
+  mcps: readonly Mcp[]
+  /** RFC-031 opencode plugin rows (claude ignores). */
+  plugins: readonly Plugin[]
+  /**
+   * RFC-113: resolved runtime profile per agent name (root INCLUDED — frozen
+   * params for the root, live-resolved for each dependent). Resolved in the
+   * runner (async DB reads stay out of drivers — RFC-143 §4.6C).
+   */
+  resolvedParamsByAgent: ReadonlyMap<string, RuntimeProfile>
+  /** Skills for this agent (claude injects into CLAUDE_CONFIG_DIR/skills;
+   *  opencode ignores — the runner's prepareSkills already populated runDir). */
+  skills: readonly ResolvedSkill[]
+  /** RFC-026 clarify-inline rerun: resume the prior session. */
+  resumeSessionId?: string
+  /** Subprocess cwd = task worktree. */
+  worktreePath: string
+  /**
+   * Per-run root (`<appHome>/runs/<taskId>/<nodeRunId>`). opencode derives
+   * OPENCODE_CONFIG_DIR=<runRoot>/.opencode + inventory out under it; claude
+   * uses it as the attempt dir holding `.claude/` + `system.md`.
+   */
+  runRoot: string
+  /** RFC-067 per-task git identity (both non-empty to inject). */
+  gitUserName?: string | null
+  gitUserEmail?: string | null
+  /** RFC-112: frozen custom-fork binary — overrides every default head. */
+  runtimeBinary?: string | null
+  /**
+   * opencode-ONLY head fallback: production `config.opencodePath`
+   * (resolveOpencodeCmd) or a test mock. Other drivers MUST ignore it (Codex
+   * P1-1: a custom opencodePath must never become another runtime's argv head).
+   */
+  opencodeCmd?: string[]
+  /**
+   * Generic TEST-ONLY head override (mock-claude / future mocks). Production
+   * never sets it; its PRESENCE is the signal that gates claude's subscription
+   * credential bridge OFF so CI never touches the keychain.
+   */
+  runtimeCmd?: string[]
+  /**
+   * RFC-029/042 business gate the runner already computed:
+   * `isAgentRunKind(nodeKind) && !envelopeFollowup`. Whether the runtime CAN
+   * produce an inventory is the driver's own capability (claude ignores).
+   */
+  wantsInventory: boolean
+  /** For driver-internal log lines (inventory materialize failure etc.). */
+  nodeRunId: string
+  log: Logger
 }
 
 /**
@@ -216,10 +316,17 @@ export interface RuntimeDriver {
   parseEvent(line: string): NormalizedEvent | null
   /**
    * RFC-117 — assemble the spawn plan for a framework system agent (distiller /
-   * commit / fusion). The business-node spawn path (runner.ts) does NOT route
-   * through this yet — RFC-143 PR-4 adds `buildBusinessSpawn` for that.
+   * commit / fusion / the runtimeSmoke conformance probe). Minimal surface: one
+   * persona + model, no skills/mcp/plugins/inventory.
    */
   buildSpawn(ctx: SystemAgentSpawnContext): SpawnPlan
+  /**
+   * RFC-143 PR-4 — assemble the spawn plan for a BUSINESS node run (was the
+   * `runtime === 'claude-code'` if/else in runner.ts). async because opencode's
+   * inventory-plugin materialization reads embedded bytes (§4.6B). The driver
+   * owns the entire runtime-specific assembly; the runner stays kind-blind.
+   */
+  buildBusinessSpawn(ctx: BusinessNodeSpawnContext): Promise<SpawnPlan>
   /**
    * RFC-143 — the argv head this runtime spawns by default: its per-runtime
    * config path (config.opencodePath / claudeCodePath) else the built-in name.

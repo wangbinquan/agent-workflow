@@ -11,13 +11,11 @@
 // throwaway temp cwd, a try/finally that drains stdout+stderr under a byte cap,
 // a process-group kill escalation on timeout, and temp-dir cleanup on every exit.
 
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
-import { buildOpencodeSpawn } from '@/services/runtime/opencode/spawn'
-import { buildClaudeSpawn } from '@/services/runtime/claudeCode/spawn'
 import type { SpawnPlan } from '@/services/runtime/types'
 import { createLogger, type Logger } from '@/util/log'
 
@@ -86,7 +84,19 @@ function killGroup(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
   }
 }
 
-/** Build the protocol's minimal smoke spawn plan (binary head = [binaryPath]). */
+/**
+ * Build the protocol's minimal smoke spawn plan (binary head = [binaryPath]).
+ * RFC-143 PR-4: the smoke IS a system agent (one persona, no skills / mcp /
+ * plugins / inventory), so it routes through `driver.buildSpawn` instead of
+ * hand-assembling per-protocol argv here — the second spawn-assembly site is
+ * gone and a third runtime's probe needs zero smoke changes.
+ *
+ * runDir = attemptDir: the config dir must EXIST before spawn (opencode 1.17+
+ * writes a `.gitignore` into OPENCODE_CONFIG_DIR on startup and exits 1 when
+ * it's missing — locked by runtime-smoke.test.ts). mkdtempSync created
+ * attemptDir, so the contract holds without a protocol-specific mkdir; claude
+ * treats it as the attempt dir and creates `.claude/` under it as before.
+ */
 function buildSmokePlan(
   protocol: RuntimeKind,
   binaryPath: string,
@@ -96,36 +106,17 @@ function buildSmokePlan(
   bridgeCredentials: boolean,
   log: Logger,
 ): SpawnPlan {
-  if (protocol === 'claude-code') {
-    return buildClaudeSpawn({
-      claudeCmd: [binaryPath],
-      prompt,
-      systemPromptText: 'You are a runtime smoke-test agent. Follow the user prompt exactly.',
-      ...(model !== undefined ? { model } : {}),
-      attemptDir,
-      worktreePath: attemptDir,
-      bridgeCredentials,
-      log,
-    })
-  }
-  // opencode: prompt is positional; a minimal inline agent named aw-smoke.
-  // opencode 1.17+ writes a `.gitignore` into OPENCODE_CONFIG_DIR on startup, so
-  // the dir MUST exist before spawn. The real runner mkdirs runRoot (runner.ts);
-  // the smoke path must do the same — otherwise opencode exits 1 before emitting
-  // a single event and EVERY probe misclassifies as `stream-nonconforming`.
-  const runDir = join(attemptDir, '.opencode')
-  mkdirSync(runDir, { recursive: true })
-  const { cmd, env } = buildOpencodeSpawn({
-    opencodeCmd: [binaryPath],
+  return getRuntimeDriver(protocol).buildSpawn({
     agentName: 'aw-smoke',
+    systemPrompt: 'You are a runtime smoke-test agent. Follow the user prompt exactly.',
+    ...(model !== undefined ? { model } : {}),
     prompt,
-    inlineConfigSerialized: JSON.stringify({
-      agent: { 'aw-smoke': { prompt: 'You are a runtime smoke-test agent.' } },
-    }),
-    runDir,
     worktreePath: attemptDir,
+    runDir: attemptDir,
+    runtimeBinary: binaryPath,
+    bridgeCredentials,
+    log,
   })
-  return { cmd, env }
 }
 
 /**
