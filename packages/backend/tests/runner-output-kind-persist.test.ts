@@ -2,9 +2,13 @@
 //
 // The runner already resolves agent.outputKinds[port] to validate file-path
 // ports (envelope.ts resolvePortContent); before RFC-072 it dropped the kind on
-// the floor. This locks that a `markdown_file` port lands with kind='markdown_file'
-// and a port the agent declared no kind for lands with kind=null — that NULL is
-// what the Outputs tab treats as "plain text, no download button".
+// the floor. This locks that a file-path port lands with a persisted kind and a
+// port the agent declared no kind for lands with kind=null — that NULL is what
+// the Outputs tab treats as "plain text, no download button".
+//
+// flag-audit §8：agent frontmatter 仍可声明 legacy 别名 'markdown_file'，但
+// 持久列过 normalizeKindString 归一为 canonical 'path<md>'（读侧等价折叠、
+// 零行为差异；migration 0075 清洗了存量，写入点不再倒灌别名）。
 
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -147,8 +151,10 @@ describe('RFC-072 — runNode persists output kind', () => {
       .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
     const report = rows.find((r) => r.portName === 'report')
     const note = rows.find((r) => r.portName === 'note')
-    // File-path port: kind persisted verbatim, content is the relative path.
-    expect(report?.kind).toBe('markdown_file')
+    // File-path port: legacy alias 'markdown_file' declared in frontmatter is
+    // canonicalized to 'path<md>' at persist time (flag-audit §8); content is
+    // the relative path.
+    expect(report?.kind).toBe('path<md>')
     expect(report?.content).toBe('report.md')
     // Port the agent declared no kind for: kind is NULL.
     expect(note?.kind).toBeNull()

@@ -273,9 +273,10 @@ describe('RFC-053 PR-A T1g — review decision full-field assertions', () => {
     const approved = outs.find((o) => o.portName === 'approved_doc')!
     // approved_doc must mirror the source's shape — a path, not inline body.
     expect(approved.content).toBe('docs/design.md')
-    // RFC-072: file-path passthrough persists kind='markdown_file' so the
-    // task-detail Outputs tab renders a Download button for the approved doc.
-    expect(approved.kind).toBe('markdown_file')
+    // RFC-072: file-path passthrough persists a markdownish file kind so the
+    // task-detail Outputs tab renders a Download button. flag-audit §8：持久列
+    // 统一 canonical 'path<md>'（不再倒灌 legacy 别名 'markdown_file'）。
+    expect(approved.kind).toBe('path<md>')
   })
 
   test('A3 iterate full delta — node_run pending + reviewIteration bumped + comments archived + upstream re-mint', async () => {
