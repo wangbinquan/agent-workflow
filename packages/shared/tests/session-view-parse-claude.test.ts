@@ -186,6 +186,31 @@ describe('parseSessionTree — claude stream-json root session', () => {
     })
   })
 
+  test('tool_result sorted before its tool_use still folds (Codex review P2)', () => {
+    // A result row carrying its own ISO timestamp can sort before the
+    // tool_use row stamped with the pump's arrival Date.now() (ms-level
+    // skew across the two clocks/sources). It must be held pending and
+    // folded once the call appears, not silently dropped.
+    const tree = parseSessionTree({
+      ...baseInput,
+      events: [
+        streamToolResult({ ts: 10, toolUseId: 'toolu_early', content: 'early result' }),
+        streamAssistant({
+          ts: 20,
+          msgId: 'msg_1',
+          block: { type: 'tool_use', id: 'toolu_early', name: 'Bash', input: { command: 'x' } },
+        }),
+      ],
+    })
+    expect(tree.messages).toHaveLength(1)
+    expect(tree.messages[0]).toMatchObject({
+      kind: 'tool-call',
+      callId: 'toolu_early',
+      status: 'completed',
+      output: 'early result',
+    })
+  })
+
   test('system / result / rate_limit_event / attachment rows render nothing', () => {
     const tree = parseSessionTree({
       ...baseInput,

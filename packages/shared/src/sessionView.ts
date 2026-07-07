@@ -228,6 +228,15 @@ export function parseSessionTree(input: ParseSessionInput): SessionTree {
     // subagent prompt line can arrive from both the live stream and the
     // captured transcript (and is re-synthesized from task_started.prompt).
     const claudeUserSeen = new Set<string>()
+    // Claude dialect: tool_result rows whose tool_use hasn't been seen yet.
+    // The (ts, id) bucket sort can put a result first when the result row
+    // carries its own ISO timestamp while the tool_use row got the pump's
+    // arrival Date.now() (ms-level skew across the two clocks/sources).
+    // Folded after the event loop instead of being silently dropped.
+    const claudePendingResults = new Map<
+      string,
+      { output: string | null; isError: boolean; isAsyncLaunch: boolean }
+    >()
 
     /**
      * Claude Code row handler (payloads without opencode's `part`). Ignores
@@ -338,16 +347,18 @@ export function parseSessionTree(input: ParseSessionInput): SessionTree {
         if (blockType === 'tool_result') {
           const callId = typeof block.tool_use_id === 'string' ? block.tool_use_id : null
           if (callId === null) continue
+          const fold = {
+            output: flattenClaudeToolResultContent(block.content),
+            isError: block.is_error === true,
+            isAsyncLaunch: turn.toolUseResult?.isAsync === true,
+          }
           const target = tools.get(callId)
-          if (target === undefined) continue
-          // Async Agent launches ack immediately with placeholder metadata
-          // ("Async agent launched successfully…"); the real completion comes
-          // via the system task_notification event (folded in the post-pass
-          // below). Keep the call running and drop the placeholder text.
-          if (target.kind === 'subagent-call' && turn.toolUseResult?.isAsync === true) continue
-          target.status = block.is_error === true ? 'error' : 'completed'
-          target.output = flattenClaudeToolResultContent(block.content)
-          if (target.kind === 'subagent-call') target.childOutputFallback = target.output
+          if (target === undefined) {
+            // tool_use not seen yet (result row sorted first) — fold later.
+            claudePendingResults.set(callId, fold)
+            continue
+          }
+          applyClaudeToolResult(target, fold)
         } else if (blockType === 'text') {
           pushUser(typeof block.text === 'string' ? block.text : '')
         }
@@ -479,6 +490,16 @@ export function parseSessionTree(input: ParseSessionInput): SessionTree {
           tools.set(callId, block)
         }
       }
+    }
+
+    // Claude: fold tool_result rows that sorted before their tool_use row
+    // (Codex review P2). Only fills still-running calls — a call that already
+    // folded a direct result keeps it (the pending copy is a duplicate).
+    for (const [callId, fold] of claudePendingResults) {
+      const target = tools.get(callId)
+      if (target === undefined) continue
+      if (target.status !== 'running' || target.output !== null) continue
+      applyClaudeToolResult(target, fold)
     }
 
     // Claude: fold system task_notification results into their subagent-call
@@ -759,6 +780,23 @@ function claudeContentBlocks(message: Record<string, unknown>): Array<Record<str
   const content = message.content
   if (!Array.isArray(content)) return []
   return content.filter(isRecord)
+}
+
+/**
+ * Fold one claude tool_result onto its tool-call / subagent-call block.
+ * Async Agent launches ack immediately with placeholder metadata ("Async
+ * agent launched successfully…"); the real completion arrives via the
+ * system task_notification event (folded in build()'s post-pass), so those
+ * keep the call running and drop the placeholder text.
+ */
+function applyClaudeToolResult(
+  target: SessionToolCall | SessionSubagentCall,
+  fold: { output: string | null; isError: boolean; isAsyncLaunch: boolean },
+): void {
+  if (target.kind === 'subagent-call' && fold.isAsyncLaunch) return
+  target.status = fold.isError ? 'error' : 'completed'
+  target.output = fold.output
+  if (target.kind === 'subagent-call') target.childOutputFallback = fold.output
 }
 
 /** tool_result.content is either a plain string or [{type:'text', text}, …]. */
