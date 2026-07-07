@@ -68,7 +68,7 @@ describe('RFC-027 role-badge UX', () => {
     })
     expect(document.querySelector('.session-role-badge--tool')).not.toBeNull()
     expect(document.querySelector('.session-block__tool-name')?.textContent).toBe('read_file')
-    expect(document.querySelector('.status-chip--green')).not.toBeNull()
+    expect(document.querySelector('.status-chip--success')).not.toBeNull()
   })
 
   test('subagent role renders a .session-role-badge--subagent pill on its card', () => {

@@ -35,7 +35,11 @@ import { WorktreeDiffPanel } from '@/components/WorktreeDiffPanel'
 import { StructuralDiffView } from '@/components/structure/StructuralDiffView'
 import { Select } from '@/components/Select'
 import { WorktreeFilesPanel } from '@/components/WorktreeFilesPanel'
-import { classifyCanceled, displayNoderunStatusKey } from '@/lib/noderun-status'
+import {
+  classifyCanceled,
+  displayNoderunStatusKey,
+  nodeRunStatusToKind,
+} from '@/lib/noderun-status'
 import { agentNodeOptionsFromSnapshot, resolveNodeNameFromSnapshot } from '@/lib/node-names'
 import { reviewRunDisplay } from '@/lib/reviewRunDisplay'
 import {
@@ -870,7 +874,7 @@ function NodeRunsTable({ runs, workflowSnapshot }: { runs: NodeRun[]; workflowSn
                 {r.shardKey !== null && <span className="muted"> · {r.shardKey}</span>}
               </td>
               <td>
-                <span className={`status-chip status-chip--${noderunTone(r.status)}`}>
+                <span className={`status-chip status-chip--${nodeRunStatusToKind(r.status)}`}>
                   {t(displayNoderunStatusKey(r))}
                 </span>
                 {shouldShowReviewJump(r.status) && (
@@ -956,7 +960,7 @@ function CommitRunRow({ run, allRuns }: { run: NodeRun; allRuns: NodeRun[] }) {
       </td>
       <td>
         <span
-          className={`status-chip status-chip--${noderunTone(run.status)}`}
+          className={`status-chip status-chip--${nodeRunStatusToKind(run.status)}`}
           data-testid="commit-push-outcome"
         >
           {t(commitOutcomeKey(cp.pushOutcome))}
@@ -1027,26 +1031,6 @@ export function shouldShowClarifyJump(status: NodeRun['status']): boolean {
   return status === 'awaiting_human'
 }
 
-function noderunTone(status: NodeRun['status']): string {
-  switch (status) {
-    case 'pending':
-    case 'skipped':
-      return 'gray'
-    case 'running':
-      return 'blue'
-    case 'done':
-      return 'green'
-    case 'failed':
-    case 'exhausted':
-      return 'red'
-    case 'interrupted':
-    case 'awaiting_review':
-    case 'awaiting_human':
-      return 'amber'
-    case 'canceled':
-      return 'gray'
-  }
-}
 
 /**
  * Class list for the task-detail canvas grid. The `--with-drawer`

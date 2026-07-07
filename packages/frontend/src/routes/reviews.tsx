@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next'
 import type { DocVersion, ReviewRoundSummary, ReviewSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { describeApiError } from '@/i18n'
+import { decisionChipKind } from '@/lib/review/decisionChip'
 import { EmptyState } from '@/components/EmptyState'
 import { LoadingState } from '@/components/LoadingState'
 import { Route as RootRoute } from './__root'
@@ -31,13 +32,6 @@ export const Route = createRoute({
 
 const FILTERS = ['pending', 'all', 'approved', 'rejected', 'iterated'] as const
 type Filter = (typeof FILTERS)[number]
-
-function decisionChipColor(decision: DocVersion['decision']): string {
-  if (decision === 'approved') return 'green'
-  if (decision === 'rejected') return 'red'
-  if (decision === 'iterated') return 'blue'
-  return 'gray' // pending
-}
 
 export function ReviewsListPage() {
   const { t } = useTranslation()
@@ -176,15 +170,7 @@ export function ReviewsListPage() {
                       <td>
                         <span
                           className={`status-chip status-chip--${
-                            r.awaitingReview
-                              ? 'amber'
-                              : r.decision === 'approved'
-                                ? 'green'
-                                : r.decision === 'rejected'
-                                  ? 'red'
-                                  : r.decision === 'iterated'
-                                    ? 'blue'
-                                    : 'gray'
+                            r.awaitingReview ? 'warn' : decisionChipKind(r.decision)
                           }`}
                         >
                           {r.awaitingReview
@@ -288,7 +274,7 @@ export function HistoryRows({
           return (
             <li key={v.id} className="reviews-version-list__item">
               <span className="reviews-version-list__label">v{v.versionIndex}</span>
-              <span className={`status-chip status-chip--${decisionChipColor(v.decision)}`}>
+              <span className={`status-chip status-chip--${decisionChipKind(v.decision)}`}>
                 {t(`reviews.decision.${v.decision}`)}
               </span>
               {isCurrent && (
@@ -357,7 +343,7 @@ export function RoundRows({ nodeRunId }: { nodeRunId: string }) {
             <span className="reviews-version-list__label">
               {t('reviews.roundLabel', { n: i + 1 })}
             </span>
-            <span className={`status-chip status-chip--${decisionChipColor(r.decision)}`}>
+            <span className={`status-chip status-chip--${decisionChipKind(r.decision)}`}>
               {t(`reviews.decision.${r.decision}`)}
             </span>
             {r.isCurrent && (

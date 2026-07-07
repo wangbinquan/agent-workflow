@@ -20,6 +20,7 @@ import { InjectedMemoriesCard } from './InjectedMemoriesCard'
 import { RuntimeInventorySection } from '@/components/inventory/RuntimeInventorySection'
 import { Select, type SelectOption } from '@/components/Select'
 import { clarifyRoundForRun } from '@/lib/node-history'
+import { nodeRunStatusToKind } from '@/lib/noderun-status'
 
 interface Props {
   taskId: string
@@ -176,7 +177,7 @@ function AttemptPicker({
     const inline = g.attempts.length > 1
     return (
       <span className={`session-attempts__row ${inline ? 'is-inline' : ''}`}>
-        <span className={`session-attempts__dot status-dot--${toneFor(latest.status)}`} />
+        <span className={`session-attempts__dot status-dot--${nodeRunStatusToKind(latest.status)}`} />
         <span className="session-attempts__iter">{opt.label}</span>
         {!inline && latest.shardKey !== null && latest.shardKey !== '' && (
           <span className="session-attempts__shard">{latest.shardKey}</span>
@@ -268,23 +269,6 @@ function iterLabel(a: NodeRun, t: TFunction, clarifyRound = 0): string {
   if (a.iteration > 0) return t('nodeDrawer.iterLoop', { n: a.iteration })
   if (a.retryIndex > 0) return t('nodeDrawer.iterRetry', { n: a.retryIndex })
   return t('nodeDrawer.iterInitial')
-}
-
-function toneFor(status: NodeRun['status']): string {
-  switch (status) {
-    case 'done':
-      return 'green'
-    case 'running':
-      return 'blue'
-    case 'failed':
-    case 'exhausted':
-      return 'red'
-    case 'awaiting_review':
-    case 'awaiting_human':
-      return 'amber'
-    default:
-      return 'gray'
-  }
 }
 
 function SessionBody({ taskId, nodeRunId }: { taskId: string; nodeRunId: string }) {

@@ -16,6 +16,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ClarifyRoundSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { clarifyRoundStatusChip } from '@/lib/clarify-status'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -79,14 +80,8 @@ function renderRow(entry: ClarifyRoundSummary, t: (key: string) => string): Reac
           </code>
         </td>
         <td>
-          <span
-            className={`status-chip status-chip--${
-              s.status === 'awaiting_human' ? 'amber' : 'green'
-            }`}
-          >
-            {s.status === 'awaiting_human'
-              ? t('clarify.list.statusAwaiting')
-              : t('clarify.list.statusAnswered')}
+          <span className={`status-chip status-chip--${clarifyRoundStatusChip(s.status).kind}`}>
+            {t(clarifyRoundStatusChip(s.status).labelKey)}
           </span>
         </td>
         <td>{s.iteration}</td>
@@ -126,20 +121,8 @@ function renderRow(entry: ClarifyRoundSummary, t: (key: string) => string): Reac
         </code>
       </td>
       <td>
-        <span
-          className={`status-chip status-chip--${
-            cross.status === 'awaiting_human'
-              ? 'amber'
-              : cross.status === 'abandoned'
-                ? 'red'
-                : 'green'
-          }`}
-        >
-          {cross.status === 'awaiting_human'
-            ? t('clarify.list.statusAwaiting')
-            : cross.status === 'abandoned'
-              ? t('crossClarify.abandonedChip')
-              : t('clarify.list.statusAnswered')}
+        <span className={`status-chip status-chip--${clarifyRoundStatusChip(cross.status).kind}`}>
+          {t(clarifyRoundStatusChip(cross.status).labelKey)}
         </span>
       </td>
       <td>{cross.iteration}</td>

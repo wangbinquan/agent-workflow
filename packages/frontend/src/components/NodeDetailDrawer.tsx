@@ -18,7 +18,12 @@ import { NodeDependencyTreeSection } from './agents/NodeDependencyTreeSection'
 import { SessionTab } from './node-session/SessionTab'
 import { api, ApiError } from '@/api/client'
 import { clarifyRoundForRun, formatIterationLabel, nodeRunHistory } from '@/lib/node-history'
-import { classifyCanceled, displayNoderunStatusKey, supersededDecision } from '@/lib/noderun-status'
+import {
+  classifyCanceled,
+  displayNoderunStatusKey,
+  nodeRunStatusToKind,
+  supersededDecision,
+} from '@/lib/noderun-status'
 import { reviewRunDisplay } from '@/lib/reviewRunDisplay'
 import { parseRfc026Event } from '@/lib/rfc026-events'
 import { parseRfc031Event } from '@/lib/rfc031-events'
@@ -205,7 +210,7 @@ function SubProcessList({ shards, onPick }: { shards: NodeRun[]; onPick?: (id: s
                 className="subprocess-list__item"
                 onClick={() => onPick?.(c.id)}
               >
-                <span className={`status-chip status-chip--${noderunTone(c.status)}`}>
+                <span className={`status-chip status-chip--${nodeRunStatusToKind(c.status)}`}>
                   {t(displayNoderunStatusKey(c))}
                 </span>
                 <code className="subprocess-list__shard">
@@ -220,27 +225,6 @@ function SubProcessList({ shards, onPick }: { shards: NodeRun[]; onPick?: (id: s
       </ul>
     </div>
   )
-}
-
-function noderunTone(s: NodeRun['status']): string {
-  switch (s) {
-    case 'running':
-      return 'blue'
-    case 'done':
-      return 'green'
-    case 'failed':
-    case 'exhausted':
-      return 'red'
-    case 'canceled':
-    case 'interrupted':
-      return 'gray'
-    case 'pending':
-    case 'skipped':
-      return 'gray'
-    case 'awaiting_review':
-    case 'awaiting_human':
-      return 'amber'
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -400,7 +384,7 @@ function StatsTab({
                       onClick={() => onPickRetry?.(r.id)}
                     >
                       <code>{formatIterationLabel(r, { t }, clarifyRoundForRun(r, history))}</code>{' '}
-                      <span className={`status-chip status-chip--${noderunTone(r.status)}`}>
+                      <span className={`status-chip status-chip--${nodeRunStatusToKind(r.status)}`}>
                         {t(displayNoderunStatusKey(r))}
                       </span>
                       {r.startedAt !== null && (

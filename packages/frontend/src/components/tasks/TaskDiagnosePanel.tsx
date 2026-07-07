@@ -169,7 +169,7 @@ function DiagnoseTable({ response, onRepair }: DiagnoseTableProps): ReactElement
             </td>
             <td>
               <span
-                className={`status-chip status-chip--${a.severity === 'error' ? 'danger' : 'warning'}`}
+                className={`status-chip status-chip--${a.severity === 'error' ? 'danger' : 'warn'}`}
               >
                 {t(`tasks.diagnose.severity.${a.severity}`)}
               </span>

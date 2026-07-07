@@ -2089,6 +2089,9 @@ export const enUS: Resources = {
       openButton: 'Open',
       statusAwaiting: 'Awaiting',
       statusAnswered: 'Answered',
+      // flag-audit W0: 'canceled' is reachable for self rounds (task-cancel
+      // path) — it used to fall into the "Answered" branch and render green.
+      statusCanceled: 'Canceled',
       // RFC-056: chips distinguish self-clarify (RFC-023 same-agent
       // self-ask) from cross-clarify (RFC-056 questioner asks designer).
       chip: { self: 'Self-clarify', cross: 'Cross-clarify' },

@@ -7,6 +7,7 @@
 import { useTranslation } from 'react-i18next'
 import type { SessionMessage, SessionTree } from '@agent-workflow/shared'
 import { SubagentBlock } from './SubagentBlock'
+import { toolStatusKind, toolStatusLabel } from './toolStatus'
 
 interface Props {
   tree: SessionTree
@@ -78,8 +79,8 @@ function MessageBlock({ message }: { message: SessionMessage }) {
           <header className="session-block__head">
             <RoleBadge variant="tool" icon="🔧" label={t('session.toolCall')} />
             <code className="session-block__tool-name">{message.toolName}</code>
-            <span className={`status-chip status-chip--${toneFor(message.status)}`}>
-              {statusLabel(message.status, t)}
+            <span className={`status-chip status-chip--${toolStatusKind(message.status)}`}>
+              {toolStatusLabel(message.status, t)}
             </span>
             <Ts ts={message.ts} />
           </header>
@@ -135,34 +136,6 @@ export function RoleBadge({
 function Ts({ ts }: { ts: number }) {
   if (!Number.isFinite(ts) || ts <= 0) return null
   return <span className="session-block__ts">{new Date(ts).toLocaleTimeString()}</span>
-}
-
-function toneFor(status: string): string {
-  switch (status) {
-    case 'completed':
-      return 'green'
-    case 'running':
-      return 'blue'
-    case 'error':
-      return 'red'
-    default:
-      return 'gray'
-  }
-}
-
-function statusLabel(status: string, t: (key: string) => string): string {
-  switch (status) {
-    case 'pending':
-      return t('session.statusPending')
-    case 'running':
-      return t('session.statusRunning')
-    case 'completed':
-      return t('session.statusCompleted')
-    case 'error':
-      return t('session.statusError')
-    default:
-      return status
-  }
 }
 
 function stringify(value: unknown): string {

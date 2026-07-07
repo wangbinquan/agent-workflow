@@ -9,12 +9,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { TaskStatus, TaskSummary } from '@agent-workflow/shared'
+import { isTerminalTaskStatus } from '@agent-workflow/shared'
+import type { TaskSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { TASKS_HOMEPAGE_QUERY_KEY } from './RunningTaskList'
 import { TaskRow } from './task-row'
 
-const FINISHED_STATUSES: TaskStatus[] = ['done', 'failed', 'canceled', 'interrupted']
+// flag-audit W0: single source — shared/lifecycle.ts TERMINAL_TASK_STATUSES
+// (was a hand-copied 4-value list that could drift from the state machine).
 
 export const RECENT_LIMIT = 8
 
@@ -36,7 +38,7 @@ export function RecentlyDoneList({ onCount }: RecentlyDoneListProps) {
   }, [])
 
   const recent = (tasks.data ?? [])
-    .filter((task) => FINISHED_STATUSES.includes(task.status))
+    .filter((task) => isTerminalTaskStatus(task.status))
     .sort((a, b) => (b.finishedAt ?? b.startedAt) - (a.finishedAt ?? a.startedAt))
     .slice(0, RECENT_LIMIT)
 

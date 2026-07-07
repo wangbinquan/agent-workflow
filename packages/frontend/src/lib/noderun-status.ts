@@ -14,6 +14,7 @@
 // in lock-step with that file's marker format.
 
 import type { NodeRun, NodeRunStatus } from '@agent-workflow/shared'
+import type { StatusChipKind } from '@/components/StatusChip'
 
 const PREFIX_PLAIN_ITERATE = 'superseded-by-review-iterated:'
 const PREFIX_PLAIN_REJECT = 'superseded-by-review-rejected:'
@@ -75,4 +76,29 @@ export function displayNoderunStatusKey(run: NodeRun): string {
 
 export function statusKeyForRawStatus(s: NodeRunStatus): string {
   return `noderunStatus.${s}`
+}
+
+/**
+ * flag-audit W0 (§4.6) — single source of truth for NodeRunStatus → chip kind.
+ * Replaces three drifted per-file `noderunTone`/`toneFor` switches
+ * (routes/tasks.detail.tsx / NodeDetailDrawer.tsx / node-session/SessionTab.tsx)
+ * that had already disagreed on `interrupted` (amber in the task table, gray in
+ * the drawer). Canonical choice: `interrupted` is 'warn' — same semantics as
+ * the task-level TASK_STATUS_KIND (lib/task-status.ts).
+ */
+export const NODE_RUN_STATUS_KIND: Record<NodeRunStatus, StatusChipKind> = {
+  pending: 'neutral',
+  running: 'info',
+  done: 'success',
+  failed: 'danger',
+  canceled: 'neutral',
+  interrupted: 'warn',
+  skipped: 'neutral',
+  exhausted: 'danger',
+  awaiting_review: 'warn',
+  awaiting_human: 'warn',
+}
+
+export function nodeRunStatusToKind(s: NodeRunStatus): StatusChipKind {
+  return NODE_RUN_STATUS_KIND[s]
 }

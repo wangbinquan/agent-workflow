@@ -1973,6 +1973,7 @@ export interface Resources {
       openButton: string
       statusAwaiting: string
       statusAnswered: string
+      statusCanceled: string
       // RFC-056: per-row chip label.
       chip: { self: string; cross: string }
     }
@@ -4515,6 +4516,9 @@ export const zhCN: Resources = {
       openButton: '打开',
       statusAwaiting: '待回答',
       statusAnswered: '已回答',
+      // flag-audit W0：self 轮存在 'canceled'（任务取消路径），此前落进
+      // 「已回答」分支显示绿色。
+      statusCanceled: '已取消',
       // RFC-056: 列表项 chip 区分两种反问通道。
       chip: { self: '自反问', cross: '跨 agent 反问' },
     },

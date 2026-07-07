@@ -2787,36 +2787,8 @@ code {
   color: var(--muted);
 }
 
-/* Backward-compat aliases (cleanup PR will remove after one release). */
-.status-chip--gray {
-  background: var(--bg);
-  border-color: var(--border);
-  color: var(--muted);
-}
-
-.status-chip--blue {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.status-chip--green {
-  background: var(--success-bg);
-  border-color: var(--success);
-  color: var(--success);
-}
-
-.status-chip--red {
-  background: color-mix(in srgb, var(--danger) 18%, transparent);
-  border-color: var(--danger);
-  color: var(--danger);
-}
-
-.status-chip--amber {
-  background: color-mix(in srgb, #d29922 18%, transparent);
-  border-color: #d29922;
-  color: #d29922;
-}
+/* (flag-audit W0) legacy raw-color chip aliases removed — every producer now
+   emits the semantic kinds above (success/warn/danger/info/neutral). */
 
 .status-filter {
   display: flex;
@@ -8005,19 +7977,20 @@ mark.comment-anchor[data-active='true'] {
   border-radius: 50%;
   flex-shrink: 0;
 }
-.status-dot--green {
+/* Semantic status dots — same kind vocabulary as .status-chip--* (flag-audit W0). */
+.status-dot--success {
   background: #16a34a;
 }
-.status-dot--blue {
+.status-dot--info {
   background: #2563eb;
 }
-.status-dot--red {
+.status-dot--danger {
   background: #dc2626;
 }
-.status-dot--amber {
+.status-dot--warn {
   background: #d97706;
 }
-.status-dot--gray {
+.status-dot--neutral {
   background: #9ca3af;
 }
 .session-attempts__iter {

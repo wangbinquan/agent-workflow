@@ -179,7 +179,7 @@ describe('RFC-056 /clarify list — mixed self + cross with kind chip', () => {
     await waitFor(() => screen.getByTestId('clarify-row-sess_abd'))
     const row = screen.getByTestId('clarify-row-sess_abd')
     const statusChip = row.querySelector('.status-chip')
-    expect(statusChip?.className ?? '').toContain('status-chip--red')
+    expect(statusChip?.className ?? '').toContain('status-chip--danger')
   })
 })
 

@@ -12,16 +12,12 @@
 import { useTranslation } from 'react-i18next'
 import type { UserPublic } from '@agent-workflow/shared'
 import { AttributionChip, type AttributionRole } from '@/components/AttributionChip'
-import { StatusChip, type StatusChipKind } from '@/components/StatusChip'
+import { StatusChip } from '@/components/StatusChip'
+import { DECISION_CHIP_KIND, type ReviewDecisionView } from '@/lib/review/decisionChip'
 
-export type ReviewDecisionView = 'pending' | 'approved' | 'rejected' | 'iterated' | 'superseded'
-
-function chipKind(decision: ReviewDecisionView): StatusChipKind {
-  if (decision === 'approved') return 'success'
-  if (decision === 'rejected') return 'danger'
-  if (decision === 'iterated') return 'info'
-  return 'neutral'
-}
+// 决策→chip kind 映射的单一事实源在 lib/review/decisionChip.ts（flag-audit W0）；
+// 这里 re-export 类型保持既有导入路径兼容。
+export type { ReviewDecisionView }
 
 /** superseded 的机器标记（services/review.ts 刷新退休路径写死的值）。 */
 const UPSTREAM_REFRESHED = 'upstream-refreshed'
@@ -59,7 +55,7 @@ export function ReviewDecisionInfo(props: ReviewDecisionInfoProps) {
       data-testid={props['data-testid'] ?? 'review-decision-info'}
     >
       <p className="page__hint review-decision-info__row">
-        <StatusChip kind={chipKind(decision)} size="sm">
+        <StatusChip kind={DECISION_CHIP_KIND[decision]} size="sm">
           {t(`reviews.decision.${decision}` as const)}
         </StatusChip>{' '}
         {t('attribution.decidedBy')}:{' '}

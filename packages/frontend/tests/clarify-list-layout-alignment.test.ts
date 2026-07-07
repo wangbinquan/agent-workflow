@@ -42,10 +42,12 @@ describe('clarify ↔ reviews list — aligned page shell', () => {
     expect(clarify).not.toMatch(/reviews-group__item"/)
   })
 
-  test('clarify rows carry a status-chip column with amber/green by status', () => {
-    expect(clarify).toMatch(
-      /status-chip status-chip--\$\{[^}]*s\.status === 'awaiting_human' \? 'amber' : 'green'/,
-    )
+  test('clarify rows carry a status-chip column driven by the shared status table', () => {
+    // flag-audit W0: the inline `awaiting_human ? 'amber' : 'green'` ternary
+    // (which rendered a CANCELED round as green "Answered") was replaced by the
+    // CLARIFY_ROUND_STATUS_CHIP table in lib/clarify-status.ts.
+    expect(clarify).toMatch(/status-chip status-chip--\$\{clarifyRoundStatusChip\(/)
+    expect(clarify).not.toMatch(/\? 'amber' : 'green'/)
   })
 
   test('clarify rows carry a per-row Open button using the same .btn .btn--sm style as reviews', () => {

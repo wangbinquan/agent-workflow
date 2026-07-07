@@ -822,7 +822,7 @@ export function ClarifyDetailPage() {
           feedback. The CR-1 invariant flipped status='abandoned'. */}
       {isCross && s.status === 'abandoned' && (
         <div
-          className="status-chip status-chip--red"
+          className="status-chip status-chip--danger"
           data-testid="cross-clarify-abandoned-chip"
           title={t('crossClarify.abandonedTooltip')}
         >
