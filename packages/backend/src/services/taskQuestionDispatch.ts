@@ -48,7 +48,7 @@ import { buildMintNodeRunValues } from '@/services/nodeRunMint'
 import {
   assertTaskAcceptsQuestions,
   taskNodeHasRun,
-  TERMINAL_TASK_STATUSES,
+  QUESTION_DISPATCH_CLOSED_TASK_STATUSES,
 } from '@/services/taskQuestions'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -621,7 +621,7 @@ async function dispatchTaskQuestionsLocked(
           .from(tasks)
           .where(eq(tasks.id, taskId))
           .all()[0]
-        if (curTask === undefined || TERMINAL_TASK_STATUSES.has(curTask.status)) {
+        if (curTask === undefined || QUESTION_DISPATCH_CLOSED_TASK_STATUSES.has(curTask.status)) {
           throw new ConflictError(
             'task-terminal',
             `task ${taskId} became ${curTask?.status ?? 'missing'} before dispatch committed; nothing stamped or minted`,

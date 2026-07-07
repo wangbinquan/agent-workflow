@@ -17,6 +17,7 @@
 // launch machinery; start.ts passes a thunk that calls resumeTask with real deps.
 
 import { and, eq } from 'drizzle-orm'
+import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
 import { tasks } from '@/db/schema'
@@ -59,7 +60,9 @@ export async function autoResumeInterruptedTasks(
   const candidates = await db
     .select({ id: tasks.id })
     .from(tasks)
-    .where(and(eq(tasks.status, 'interrupted'), eq(tasks.errorSummary, 'daemon-restart')))
+    .where(
+      and(eq(tasks.status, 'interrupted'), eq(tasks.errorSummary, DAEMON_RESTART_ERROR_SUMMARY)),
+    )
 
   const resumed: string[] = []
   const skipped: string[] = []

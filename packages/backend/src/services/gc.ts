@@ -10,7 +10,8 @@
 import { inArray } from 'drizzle-orm'
 import { existsSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Config } from '@agent-workflow/shared'
+import { TERMINAL_TASK_STATUSES, isTerminalTaskStatus } from '@agent-workflow/shared'
+import type { Config, TaskStatus } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { tasks } from '@/db/schema'
 import { deleteSnapshotRefs, removeWorktree, runGit } from '@/util/git'
@@ -21,12 +22,9 @@ const log = createLogger('gc')
 
 const HOUR_MS = 60 * 60 * 1000
 
-const TERMINAL_STATUSES: Array<'done' | 'failed' | 'canceled' | 'interrupted'> = [
-  'done',
-  'failed',
-  'canceled',
-  'interrupted',
-]
+// flag-audit W0（dedup-audit `task-terminal-status-set` 同项）：终态集合改引
+// shared 单源——此前是无 satisfies 守卫的裸字面量拷贝，TASK_STATUS 扩枚举时
+// GC 会静默漏收。
 
 export interface GcRunResult {
   scanned: number
@@ -48,7 +46,10 @@ export async function runWorktreeGc(
       : 0
   const onlyMerged = gc.onlyMerged === true
 
-  const candidates = await db.select().from(tasks).where(inArray(tasks.status, TERMINAL_STATUSES))
+  const candidates = await db
+    .select()
+    .from(tasks)
+    .where(inArray(tasks.status, [...TERMINAL_TASK_STATUSES]))
 
   const result: GcRunResult = { scanned: candidates.length, removed: [], skipped: 0 }
   for (const t of candidates) {
@@ -142,10 +143,7 @@ export async function runIsoWorktreeGc(
   for (const taskId of taskDirs) {
     const t = byId.get(taskId)
     // Skip a task that still has a row and is NOT terminal — its iso may be in flight.
-    if (
-      t !== undefined &&
-      !TERMINAL_STATUSES.includes(t.status as (typeof TERMINAL_STATUSES)[number])
-    ) {
+    if (t !== undefined && !isTerminalTaskStatus(t.status as TaskStatus)) {
       continue
     }
     const containerRoot = join(isoRoot, taskId)

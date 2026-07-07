@@ -16,6 +16,7 @@
 // flip-only path.
 
 import { inArray } from 'drizzle-orm'
+import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { nodeRuns, tasks } from '@/db/schema'
 import { transitionNodeRunStatus, trySetTaskStatus } from '@/services/lifecycle'
@@ -62,7 +63,7 @@ export async function reapOrphanRuns(db: DbClient): Promise<ReapResult> {
       allowedFrom: [t.status as 'running' | 'pending'],
       extra: {
         finishedAt: now,
-        errorSummary: 'daemon-restart',
+        errorSummary: DAEMON_RESTART_ERROR_SUMMARY,
         errorMessage: 'daemon restarted while this task was running; please resume',
       },
       reason: 'reapOrphanRuns',
@@ -75,7 +76,7 @@ export async function reapOrphanRuns(db: DbClient): Promise<ReapResult> {
     await recordRecoveryEvent(db, {
       taskId: t.id,
       kind: 'boot-reap',
-      reason: 'daemon-restart',
+      reason: DAEMON_RESTART_ERROR_SUMMARY,
       before: { status: t.status },
       after: { status: 'interrupted' },
       now,

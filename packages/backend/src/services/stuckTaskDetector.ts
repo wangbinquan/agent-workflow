@@ -29,6 +29,7 @@
 
 import { and, eq, inArray, isNull, max } from 'drizzle-orm'
 
+import { TERMINAL_NODE_RUN_STATUSES as SHARED_TERMINAL_NODE_RUN_STATUSES } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import {
   clarifyRounds,
@@ -184,14 +185,9 @@ async function hasOpenClarifySession(db: DbClient, taskId: string): Promise<bool
   return row !== undefined
 }
 
-const TERMINAL_NODE_RUN_STATUSES: readonly string[] = [
-  'done',
-  'failed',
-  'canceled',
-  'interrupted',
-  'skipped',
-  'exhausted',
-]
+// flag-audit W0：终态集合改引 shared 单源（原为手抄副本；NODE_RUN_STATUS 扩
+// 枚举时由 shared 的 satisfies 守卫接管）。
+const TERMINAL_NODE_RUN_SET: ReadonlySet<string> = new Set(SHARED_TERMINAL_NODE_RUN_STATUSES)
 
 interface NodeRunCounts {
   total: number
@@ -215,7 +211,7 @@ async function nodeRunCounts(db: DbClient, taskId: string): Promise<NodeRunCount
   let terminal = 0
   const activeRows: NodeRunCounts['activeRows'] = []
   for (const r of rows) {
-    if (TERMINAL_NODE_RUN_STATUSES.includes(r.status)) terminal++
+    if (TERMINAL_NODE_RUN_SET.has(r.status)) terminal++
     else activeRows.push(r)
   }
   return { total: rows.length, terminal, active: rows.length - terminal, activeRows }

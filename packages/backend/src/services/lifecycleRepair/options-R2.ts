@@ -15,6 +15,8 @@
 // The shared design.md §4.3 row for R2 lists both options.
 
 import { eq } from 'drizzle-orm'
+import { isTerminalTaskStatus } from '@agent-workflow/shared'
+import type { TaskStatus } from '@agent-workflow/shared'
 
 import { nodeRuns } from '@/db/schema'
 import { setNodeRunStatus, setTaskStatus } from '@/services/lifecycle'
@@ -111,8 +113,7 @@ const R2_MARK_FAILED: RepairOptionDef = {
   risk: 'high',
   destructive: true,
   async preflight(rc): Promise<PreflightResult> {
-    const TERMINAL = ['done', 'failed', 'canceled', 'interrupted']
-    if (TERMINAL.includes(rc.task.status)) {
+    if (isTerminalTaskStatus(rc.task.status as TaskStatus)) {
       return {
         available: false,
         unavailableReasonKey: 'diagnose.repair.R2.unavailable.taskTerminal',

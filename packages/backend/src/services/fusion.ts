@@ -27,7 +27,7 @@ import {
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type { Fusion, FusionSkipped, FusionStatus, LaunchFusion } from '@agent-workflow/shared'
-import { FusionResultManifestSchema } from '@agent-workflow/shared'
+import { FusionResultManifestSchema, TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -509,7 +509,11 @@ export async function createFusion(
 // Done-detection (lazy reconcile + tick)
 // ---------------------------------------------------------------------------
 
-const TERMINAL_TASK = new Set(['done', 'failed', 'canceled', 'interrupted'])
+// flag-audit W0：任务终态集合改引 shared 单源（原手抄副本）。
+const TERMINAL_TASK: ReadonlySet<string> = new Set(TERMINAL_TASK_STATUSES)
+
+/** FUSION 自身状态机的终态（与任务终态是不同枚举——fusion 无 interrupted）。 */
+const FUSION_TERMINAL_STATUSES: ReadonlySet<string> = new Set(['done', 'failed', 'canceled'])
 
 /** Settle a running fusion against its engine task's terminal state. */
 export async function reconcileFusion(deps: FusionDeps, id: string): Promise<void> {
@@ -906,7 +910,7 @@ export async function cancelFusion(deps: FusionDeps, id: string, actor: Actor): 
   if (!canDecide(actor, row)) {
     throw new ConflictError('fusion-forbidden', 'only the fusion owner or an admin may cancel')
   }
-  if (['done', 'failed', 'canceled'].includes(row.status)) {
+  if (FUSION_TERMINAL_STATUSES.has(row.status)) {
     throw new ConflictError('fusion-terminal', `fusion is already '${row.status}'`)
   }
   if (row.currentTaskId !== null) {

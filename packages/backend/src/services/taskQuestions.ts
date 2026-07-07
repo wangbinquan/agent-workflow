@@ -1566,13 +1566,21 @@ const MANUAL_BODY_MAX = 20000
  *  manual question created / dispatched on them would strand (no scheduler to run the rerun).
  *  `failed`/`interrupted`/`awaiting_*` are resumable/active (resumeTask resumes them), so they
  *  are NOT terminal here. Shared by createManualTaskQuestion + dispatchTaskQuestions (incl.
- *  the in-tx CAS re-read). */
-export const TERMINAL_TASK_STATUSES: ReadonlySet<string> = new Set(['done', 'canceled'])
+ *  the in-tx CAS re-read).
+ *
+ *  flag-audit W0（§3-13）: renamed from `TERMINAL_TASK_STATUSES` — that name collided with
+ *  shared/lifecycle.ts's 4-value lifecycle terminal set (this one is a deliberately NARROWER
+ *  question-dispatch policy), and the same-name-different-meaning pair was a standing
+ *  import-autocomplete trap (structuralDiff/store.ts already had to alias around it). */
+export const QUESTION_DISPATCH_CLOSED_TASK_STATUSES: ReadonlySet<string> = new Set([
+  'done',
+  'canceled',
+])
 
 /** Throw a ConflictError when the task is terminal (done/canceled). Used BEFORE any insert /
  *  dispatched_at stamp / node_run mint so nothing is left orphaned on a finished task. */
 export function assertTaskAcceptsQuestions(taskId: string, status: string): void {
-  if (TERMINAL_TASK_STATUSES.has(status)) {
+  if (QUESTION_DISPATCH_CLOSED_TASK_STATUSES.has(status)) {
     throw new ConflictError(
       'task-terminal',
       `task ${taskId} is ${status}; it will not re-enter scheduling, so questions cannot be created or dispatched on it`,
@@ -1676,7 +1684,7 @@ export async function createManualTaskQuestion(
   // roll back (no row) if it went terminal, so a manual row is never inserted on a finished task.
   dbTxSync(db, (tx) => {
     const cur = tx.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).all()[0]
-    if (cur === undefined || TERMINAL_TASK_STATUSES.has(cur.status)) {
+    if (cur === undefined || QUESTION_DISPATCH_CLOSED_TASK_STATUSES.has(cur.status)) {
       throw new ConflictError(
         'task-terminal',
         `task ${taskId} became ${cur?.status ?? 'missing'} before the manual question was inserted; nothing inserted`,

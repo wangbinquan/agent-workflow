@@ -211,6 +211,13 @@ export function isTerminalTaskStatus(s: TaskStatus): boolean {
   return (TERMINAL_TASK_STATUSES as readonly TaskStatus[]).includes(s)
 }
 
+/** flag-audit W0（§4.3）— the `tasks.error_summary` marker orphan reaping stamps
+ *  on daemon-restart interruptions. MACHINE-READ CONTRACT: autoResume's boot
+ *  pass selects candidates by exact equality on this value, so a wording tweak
+ *  at the write site would silently disable boot auto-resume. Both sides now
+ *  import this constant instead of carrying independent string literals. */
+export const DAEMON_RESTART_ERROR_SUMMARY = 'daemon-restart'
+
 /** Task-level transition events (business transitions). Mirrors the node_run
  *  ADT. Targets are fixed per event (independent of the source within the
  *  event's allowed-from set), so `targetForTaskEvent` is total. */

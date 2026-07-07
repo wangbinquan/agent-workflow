@@ -16,6 +16,8 @@
 //   - R1.mark-task-failed   — escape hatch; task → failed.
 
 import { eq } from 'drizzle-orm'
+import { isTerminalTaskStatus } from '@agent-workflow/shared'
+import type { TaskStatus } from '@agent-workflow/shared'
 
 import { docVersions, nodeRunOutputs, nodeRuns } from '@/db/schema'
 import { setNodeRunStatus, setTaskStatus } from '@/services/lifecycle'
@@ -271,8 +273,7 @@ const R1_MARK_FAILED: RepairOptionDef = {
   risk: 'high',
   destructive: true,
   async preflight(rc): Promise<PreflightResult> {
-    const TERMINAL = ['done', 'failed', 'canceled', 'interrupted']
-    if (TERMINAL.includes(rc.task.status)) {
+    if (isTerminalTaskStatus(rc.task.status as TaskStatus)) {
       return {
         available: false,
         unavailableReasonKey: 'diagnose.repair.R1.unavailable.taskTerminal',
