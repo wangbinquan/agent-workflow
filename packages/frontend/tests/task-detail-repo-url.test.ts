@@ -14,7 +14,9 @@ const SRC = readFileSync(
 
 describe('tasks.detail.tsx URL row (RFC-024 T8)', () => {
   test('imports redactGitUrl from shared', () => {
-    expect(SRC).toMatch(/import \{ redactGitUrl \} from '@agent-workflow\/shared'/)
+    // flag-audit W0 后该 import 行还带 COMMIT_PUSH_NODE_PREFIX 等兄弟符号——
+    // 锁的契约是「redactGitUrl 来自 shared」，不锁具体同行符号集。
+    expect(SRC).toMatch(/import \{[^}]*\bredactGitUrl\b[^}]*\} from '@agent-workflow\/shared'/)
   })
 
   test('only renders the URL row when tk.repoUrl !== null', () => {

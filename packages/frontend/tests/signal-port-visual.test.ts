@@ -24,8 +24,9 @@ const wrapperNodesSrc = readFileSync(
 const stylesCss = readFileSync(resolve(REPO, 'packages/frontend/src/styles.css'), 'utf-8')
 
 describe('RFC-060 F.T2 — wrapper-fanout signal-port visual contract', () => {
-  test('WrapperNodes branches on `__done__` to apply --signal modifier', () => {
-    expect(wrapperNodesSrc).toContain("const isSignal = p === '__done__'")
+  test('WrapperNodes branches on the shared FANOUT_DONE_PORT_NAME to apply --signal modifier', () => {
+    // flag-audit W0：'__done__' 裸字面量改为 shared 常量（单源）；契约不变。
+    expect(wrapperNodesSrc).toContain('const isSignal = p === FANOUT_DONE_PORT_NAME')
     expect(wrapperNodesSrc).toContain('canvas-node__bottom-port--signal')
     expect(wrapperNodesSrc).toContain('canvas-node__handle--signal')
   })
