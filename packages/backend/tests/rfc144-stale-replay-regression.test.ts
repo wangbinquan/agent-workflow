@@ -400,6 +400,49 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     expect(existsSync(join(handle.repos[0]!.isoWorktreePath, 'gen1-output.txt'))).toBe(true)
   }, 30000)
 
+  test('崩溃窗口恢复：reenter 清列后崩溃（旧 iso 目录残留）→ 容忍清理 + 全新重建，不 wedge', async () => {
+    const { taskId, runId } = await seedWrapperTaskRow()
+    const state = fakeSchedulerState(taskId)
+    // gen-1 建 iso（目录真实落盘）。
+    const gen1Handle = await createOrRebuildWrapperIso(state, runId, null)
+    expect(existsSync(gen1Handle.repos[0]!.isoWorktreePath)).toBe(true)
+    // 伪造「reenter CAS 已提交（列/progress 原子清空）、清理/重建前崩溃」的现场：
+    // 行 isolating + 基列空 + 旧 iso 目录仍在派生路径上。
+    await h.db
+      .update(nodeRuns)
+      .set({
+        isoWorktreePath: null,
+        isoBaseSnapshot: null,
+        isoBaseSnapshotReposJson: null,
+        wrapperProgressJson: null,
+      })
+      .where(eq(nodeRuns.id, runId))
+    const crashed = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
+    expect(crashed.mergeState).toBe('isolating')
+    // 下次 resume：`git worktree add` 对既存目录硬失败——helper 必须先按派生
+    // 路径容忍清理再重建（修复前：iso-worktree-add-failed → 任务每次 resume 都 wedge）。
+    const handle = await createOrRebuildWrapperIso(state, runId, crashed)
+    expect(handle.passthrough).toBe(false)
+    expect(existsSync(handle.repos[0]!.isoWorktreePath)).toBe(true)
+    const after = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
+    expect(after.mergeState).toBe('isolating') // begin-isolation 自环重盖章
+    expect(after.isoBaseSnapshot).not.toBeNull() // 基列已重新就位
+    expect(handle.repos[0]!.baseSnapshot).toBe(after.isoBaseSnapshot!)
+  }, 30000)
+
+  test('源码顺序锁：merged 再入的 reenter CAS（夺权）先于任何销毁性清理', () => {
+    const src = readFileSync(join(BACKEND_SRC, 'services', 'scheduler.ts'), 'utf-8')
+    const fnStart = src.indexOf('export async function createOrRebuildWrapperIso(')
+    const fnEnd = src.indexOf('async function mergeBackWrapperIso(', fnStart)
+    const body = src.slice(fnStart, fnEnd)
+    const casAt = body.indexOf("event: { kind: 'reenter-isolation' }")
+    const discardAt = body.indexOf('discardNodeIso(')
+    expect(casAt).toBeGreaterThan(-1)
+    expect(discardAt).toBeGreaterThan(-1)
+    // 并发败者必须在 CAS 处输掉并抛出、在任何 discard 之前——防止删掉赢家的新 iso。
+    expect(casAt).toBeLessThan(discardAt)
+  })
+
   test('conflict-human 再入：delta 未进 canon，保持旧 base rebuild（列不动）', async () => {
     const { taskId, runId } = await seedWrapperTaskRow()
     const state = fakeSchedulerState(taskId)

@@ -464,6 +464,15 @@ WHERE merge_state IN ('isolating', 'pending-merge', 'conflict-human')
   收敛为 `upsertWrapperOutput`（onConflictDoUpdate on (node_run_id, port_name)）——真实崩溃
   现场旧代输出行已落库（输出先写、merge-back 后崩），再入代重写撞主键；e2e fixture 补预置
   旧 git_diff 行 + 断言内容被本代覆写为空。
+  **D13 第五半（PR-6 复核 2 P2，终局）**：①顺序回正——reenter CAS（夺权）**先于**任何销毁性
+  清理：并发复活者在 CAS 处输掉并抛出、绝无机会删掉赢家的新 iso；弃旧 iso 改为 create 路径上
+  的**无列值容忍清理**（discardNodeIso 只需派生路径+refs，snapshot 值不参与删除——
+  rebuildIsoHandle 空 map 即可），复活行到达 create 时统一预清理，任何崩溃残留目录都不再让
+  `git worktree add` wedge 任务。②基线建立**恒为代起点语义**：progress 持久化严格先于
+  runScope，「无持久化基线 ⟺ 本代零内部工作」——建立基线时无条件捕 preDirty（loop 内嵌 git
+  wrapper 的入场脏集必须被减掉，否则漏进 git_diff）并立即持久化（同代 resume 耐久）；
+  malformed-progress 角落继承 fresh 语义（原本就是未定义行为的猜测）。崩溃矩阵测试：
+  「reenter 清列后崩溃 + 旧目录残留」→ 容忍清理 + 重建不 wedge；源码顺序锁：CAS 先于 discard。
 
 ## 13. 测试策略（test-with-every-change 清单）
 

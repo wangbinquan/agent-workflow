@@ -5063,42 +5063,19 @@ export async function createOrRebuildWrapperIso(
       // canonical — the new generation must branch from the CURRENT canonical,
       // NOT the stale gen-1 base. A three-way merge against the old base would
       // treat gen-1 files (now in canon) as `ours` additions and resurrect
-      // content the new generation deleted. Discard the stale iso FIRST
-      // (tolerant — may already be gone; crash before the reenter below just
-      // repeats this), then flip merged→isolating while ATOMICALLY clearing
-      // the base columns + wrapperProgressJson (impl-gate P2 third half /
-      // durability): a crash after the flip leaves an isolating row with NULL
-      // base/progress, which the next resume reads as "generation start
-      // needed" — it can never be mistaken for a mid-generation row carrying
-      // the old baseline. persistIsoBase then re-stamps fresh columns via the
-      // begin-isolation isolating self-edge. conflict-human re-entry keeps
-      // base + progress: its delta never reached canonical (D27), so the old
-      // base/baseline stay the correct merge/diff anchors.
-      if (existing !== null) {
-        const staleBases: Record<string, string> = {}
-        if (task.repoCount === 1) {
-          if (existing.isoBaseSnapshot !== null) staleBases[''] = existing.isoBaseSnapshot
-        } else {
-          Object.assign(staleBases, parseIsoJsonMap(existing.isoBaseSnapshotReposJson))
-        }
-        if (Object.keys(staleBases).length > 0) {
-          const taskBaseHeads: Record<string, string> = {}
-          for (const repo of state.repos) {
-            taskBaseHeads[repo.worktreeDirName] = (
-              await runGit(repo.worktreePath, ['rev-parse', 'HEAD'])
-            ).stdout.trim()
-          }
-          const staleHandle = rebuildIsoHandle({
-            appHome: state.opts.appHome,
-            taskId,
-            nodeRunId: wrapperRunId,
-            canonRepos: state.repos,
-            baseSnapshots: staleBases,
-            taskBaseHeads,
-          })
-          await discardNodeIso(staleHandle, state.log)
-        }
-      }
+      // content the new generation deleted.
+      //
+      // ORDER (impl-gate P2 rounds 3-5): the reenter CAS runs FIRST — it is the
+      // ownership claim. A concurrent reviver that also read 'merged' loses the
+      // CAS here and throws BEFORE any destructive cleanup (it can never remove
+      // the winner's freshly-built iso). The CAS ATOMICALLY clears the base
+      // columns + wrapperProgressJson, so a crash anywhere after it leaves an
+      // isolating row with NULL base/progress — the next resume re-detects
+      // "generation start" from durable state and the stale-iso cleanup below
+      // (derived paths only, no column values needed) makes the re-create
+      // idempotent. conflict-human re-entry keeps base + progress: its delta
+      // never reached canonical (D27), so the old base/baseline stay the
+      // correct merge/diff anchors.
       await transitionMergeState({
         db,
         nodeRunId: wrapperRunId,
@@ -5145,6 +5122,27 @@ export async function createOrRebuildWrapperIso(
       })
     }
     // No persisted iso base (legacy / passthrough row) — fall through to create.
+  }
+  if (existing !== null) {
+    // Reaching CREATE for a row that has lived before (merged re-entry, or a
+    // crash inside a prior re-entry window that cleared the base columns): a
+    // stale iso worktree may still sit at this wrapper's derived path, and
+    // `git worktree add` fails LOUDLY on an existing dir — without cleanup the
+    // task would wedge on every resume. discardNodeIso only needs the derived
+    // paths + refs (base snapshot VALUES are unused for removal), so a handle
+    // rebuilt with empty snapshot maps cleans up regardless of what the crash
+    // left behind. Tolerant: nothing there → warn-and-continue.
+    await discardNodeIso(
+      rebuildIsoHandle({
+        appHome: state.opts.appHome,
+        taskId,
+        nodeRunId: wrapperRunId,
+        canonRepos: state.repos,
+        baseSnapshots: {},
+        taskBaseHeads: {},
+      }),
+      state.log,
+    )
   }
   const handle = await createNodeIso({
     appHome: state.opts.appHome,
@@ -5362,26 +5360,31 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
   // (which the loop hasn't merged into yet) would leave preDirty empty and wrongly
   // report the cumulative union. RFC-098 B1 (S-24): captured under the write lock.
   if (baseline === undefined) {
-    // freshGeneration (merged re-entry) captures like a fresh mint: the new
-    // wrapper-canonical's dirty-at-entry set is the pre-set to subtract, and
-    // the progress row is OVERWRITTEN so a later resume of THIS generation
-    // reads the new baseline (not the stale gen-1 one).
-    const isFresh = existing === null || freshGeneration
+    // Establishing this generation's baseline — ALWAYS generation-start
+    // semantics (impl-gate P2 round 5): `persistWrapperProgress` runs strictly
+    // BEFORE runScope, so a row with no persisted git baseline means no inner
+    // work has happened in this generation yet — whether it's a fresh mint, a
+    // merged re-entry, or a crash after the re-entry cleared progress (even
+    // one landing after persistIsoBase re-stamped the base columns). Capturing
+    // preDirty here is therefore always correct and REQUIRED: a git wrapper
+    // nested in a loop branches from the loop's dirty wrapper-canonical, and
+    // skipping the pre-set would leak those entry-dirty files into git_diff.
+    // Persisting immediately makes the baseline durable for same-generation
+    // resumes. (The pre-RFC-144 malformed-progress corner inherits these
+    // fresh semantics — it was an unspecified guess either way.)
     const entry = await state.writeSem.run(async () => {
       const base = await captureHead(wrapperCanonPath)
-      const pre = isFresh ? await captureGitPreDirty(wrapperCanonPath, base, log) : {}
+      const pre = await captureGitPreDirty(wrapperCanonPath, base, log)
       return { base, pre }
     })
     baseline = entry.base
     preDirty = entry.pre
-    if (isFresh) {
-      await persistWrapperProgress(db, wrapperRunId, {
-        kind: 'git',
-        baseline,
-        preDirty,
-        phase: 'inner-running',
-      })
-    }
+    await persistWrapperProgress(db, wrapperRunId, {
+      kind: 'git',
+      baseline,
+      preDirty,
+      phase: 'inner-running',
+    })
   }
 
   const subRes = await runScope(innerState, {
