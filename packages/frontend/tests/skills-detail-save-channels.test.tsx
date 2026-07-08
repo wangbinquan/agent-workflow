@@ -10,6 +10,13 @@
 //   3. BOTH fail                            → two spans render side by side.
 //   4. external skill                        → Save skips the content PUT
 //      entirely (capability gate), only meta goes out on the wire.
+//   5. managed, both succeed                 → navigate fires exactly ONCE.
+//
+// Impl-gate regression (scenarios 1-3 + 5): navigation must be a whole-save
+// outcome. Per-channel navigate-on-success let the first fulfilled PUT unmount
+// the page and mask the sibling's failure (the mocked navigate hid the unmount
+// here, so these tests also assert `h.navigate` is NEVER called while any
+// channel failed — the JSDOM-faithful proxy for "the page stays mounted").
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -143,6 +150,8 @@ describe('skills.detail save channels (DetailHeaderActions errors array)', () =>
       expect(spans).toHaveLength(1)
       expect(spans[0]).toContain('meta went boom')
     })
+    // The succeeding content channel must NOT navigate away from the failure.
+    expect(h.navigate).not.toHaveBeenCalled()
   })
 
   test('content save failure surfaces its own form-actions error', async () => {
@@ -158,6 +167,8 @@ describe('skills.detail save channels (DetailHeaderActions errors array)', () =>
       expect(spans).toHaveLength(1)
       expect(spans[0]).toContain('content went boom')
     })
+    // The succeeding meta channel must NOT navigate away from the failure.
+    expect(h.navigate).not.toHaveBeenCalled()
   })
 
   test('double failure renders BOTH channel errors side by side', async () => {
@@ -175,6 +186,7 @@ describe('skills.detail save channels (DetailHeaderActions errors array)', () =>
       expect(spans[0]).toContain('meta went boom')
       expect(spans[1]).toContain('content went boom')
     })
+    expect(h.navigate).not.toHaveBeenCalled()
   })
 
   test('external skill: Save PUTs meta only — the content channel is skipped', async () => {
@@ -191,8 +203,21 @@ describe('skills.detail save channels (DetailHeaderActions errors array)', () =>
       expect(puts[0]!.url.endsWith('/api/skills/sk1')).toBe(true)
     })
     // Successful meta save navigates back to the list; no error spans.
-    await waitFor(() => expect(h.navigate).toHaveBeenCalled())
+    await waitFor(() => expect(h.navigate).toHaveBeenCalledTimes(1))
     expect(errorSpans()).toHaveLength(0)
     expect(calls.some((c) => c.method === 'PUT' && c.url.endsWith('/content'))).toBe(false)
+  })
+
+  test('managed, both channels succeed: navigate fires exactly once (coordinated, not per-channel)', async () => {
+    installFetch({
+      sourceKind: 'managed',
+      putMeta: () => json(skillRow('managed')),
+      putContent: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 2 }),
+    })
+    renderDetail()
+    await clickSave()
+    // Pre-fix shape navigated once per fulfilled channel (twice here).
+    await waitFor(() => expect(h.navigate).toHaveBeenCalledTimes(1))
+    expect(errorSpans()).toHaveLength(0)
   })
 })

@@ -3,9 +3,14 @@
 // in the 2026-05-16 conversation — stale "stay on page after save" behavior
 // re-appearing would silently regress this. The runtime route components are
 // non-trivial to JSDOM-render (TanStack Router + React Query + many child
-// components), so we assert at the source level: the onSuccess callback for
-// each save mutation must contain a `navigate({ to: '/agents' })` /
-// `navigate({ to: '/skills' })` call.
+// components), so we assert at the source level.
+//
+// skills.detail re-anchor (RFC-151 impl gate): navigation moved OUT of the two
+// save mutations into a coordinated handler — per-channel navigate was itself
+// a bug (the first fulfilled PUT unmounted the page and masked the sibling
+// channel's failure). The lock now asserts the corrected shape: navigate fires
+// behind an all-channels-fulfilled check, and NEVER inside saveMeta /
+// saveContent. Behavior coverage: skills-detail-save-channels.test.tsx.
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -21,16 +26,25 @@ describe('edit routes navigate to list on save (source layer)', () => {
     expect(block).toMatch(/navigate\(\s*\{\s*to:\s*'\/agents'\s*\}\s*\)/)
   })
 
-  test('skills.detail saveMeta.onSuccess navigates to /skills', () => {
+  test('skills.detail coordinated save navigates to /skills only after ALL channels fulfil', () => {
     const src = readFileSync(skillDetailPath, 'utf-8')
-    const block = extractMutationBlock(src, 'saveMeta')
-    expect(block).toMatch(/navigate\(\s*\{\s*to:\s*'\/skills'\s*\}\s*\)/)
+    const start = src.indexOf('const handleSave = async')
+    expect(start).toBeGreaterThan(-1)
+    const end = src.indexOf('const del = useMutation', start)
+    expect(end).toBeGreaterThan(start)
+    const block = src.slice(start, end)
+    expect(block).toContain('Promise.allSettled')
+    expect(block).toMatch(
+      /every\(\(r\) => r\.status === 'fulfilled'\)\)\s*navigate\(\s*\{\s*to:\s*'\/skills'\s*\}\s*\)/,
+    )
   })
 
-  test('skills.detail saveContent.onSuccess navigates to /skills', () => {
+  test('skills.detail save mutations must NOT navigate per-channel (failure-mask regression)', () => {
     const src = readFileSync(skillDetailPath, 'utf-8')
-    const block = extractMutationBlock(src, 'saveContent')
-    expect(block).toMatch(/navigate\(\s*\{\s*to:\s*'\/skills'\s*\}\s*\)/)
+    for (const varName of ['saveMeta', 'saveContent']) {
+      const block = extractMutationBlock(src, varName)
+      expect(block).not.toMatch(/navigate\(/)
+    }
   })
 })
 

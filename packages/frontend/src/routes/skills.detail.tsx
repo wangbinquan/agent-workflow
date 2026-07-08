@@ -68,7 +68,6 @@ function SkillDetailPage() {
     onSuccess: (s) => {
       void qc.invalidateQueries({ queryKey: ['skills'] })
       qc.setQueryData(['skills', name], s)
-      navigate({ to: '/skills' })
     },
   })
   const saveContent = useMutation({
@@ -77,9 +76,20 @@ function SkillDetailPage() {
     onSuccess: (next) => {
       void qc.invalidateQueries({ queryKey: ['skills'] })
       qc.setQueryData(['skills', name, 'content'], next)
-      navigate({ to: '/skills' })
     },
   })
+  // Navigation is a whole-save outcome, NOT a per-channel one: when each
+  // mutation navigated on its own success, the first fulfilled PUT unmounted
+  // the page and the sibling's later failure had nowhere to render — the user
+  // returned to the list as if Save succeeded while one channel was never
+  // persisted. Leave the page only when ALL required channels fulfil; any
+  // failure keeps the page mounted with its per-channel error visible.
+  const handleSave = async () => {
+    const channels: Promise<unknown>[] = [saveMeta.mutateAsync()]
+    if (caps.canEditContent) channels.push(saveContent.mutateAsync())
+    const results = await Promise.allSettled(channels)
+    if (results.every((r) => r.status === 'fulfilled')) navigate({ to: '/skills' })
+  }
   const del = useMutation({
     mutationFn: () => api.delete(`/api/skills/${encodeURIComponent(name)}`),
     onSuccess: () => {
@@ -116,8 +126,7 @@ function SkillDetailPage() {
           label:
             saveMeta.isPending || saveContent.isPending ? t('common.saving') : t('common.save'),
           onClick: () => {
-            saveMeta.mutate()
-            if (caps.canEditContent) saveContent.mutate()
+            void handleSave()
           },
           disabled: saveMeta.isPending || saveContent.isPending || !loaded,
         }}
