@@ -141,6 +141,19 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     await expectNoCriticalOrSeriousAxeViolations(page, '/agents')
   })
 
+  test('/agents/new (RFC-155 FormSection form) passes a11y', async ({ page }) => {
+    // RFC-155 — the agent form is the first consumer of the FormSection
+    // primitive (details/summary > h2 collapsible sections); scan it so the
+    // new DOM shape stays inside the axe gate. The two collapsed sections are
+    // also expanded so their inner fields are scanned, not skipped as hidden.
+    await primeAuth(page, daemon)
+    await page.goto(`${daemon.baseUrl}/agents/new`)
+    await expect(page.getByRole('heading', { name: 'Basics', exact: true })).toBeVisible()
+    await page.getByRole('heading', { name: 'Resources & references', exact: true }).click()
+    await page.getByRole('heading', { name: 'Advanced', exact: true }).click()
+    await expectNoCriticalOrSeriousAxeViolations(page, '/agents/new')
+  })
+
   test('/workflows list passes a11y', async ({ page }) => {
     await primeAuth(page, daemon)
     await page.goto(`${daemon.baseUrl}/workflows`)
