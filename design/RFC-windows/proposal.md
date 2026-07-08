@@ -1,4 +1,4 @@
-# RFC-144 — 全功能 Windows 适配（Windows adaptation）
+# RFC-windows — 全功能 Windows 适配（Windows adaptation）
 
 状态：Draft（待用户批准 → 进入实现）
 触发：用户 2026-07-07「将这个工程的所有功能都适配 windows」。现 README Requirements 明写「OS: macOS or Linux / Windows is not supported in v1」。

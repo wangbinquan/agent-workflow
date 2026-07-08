@@ -1,6 +1,6 @@
-# RFC-144 — 任务分解与 PR 拆分
+# RFC-windows — 任务分解与 PR 拆分
 
-原则：**底层先行**——平台原语（`util/platform.ts`）与文件系统/ACL 先落（POSIX 不回归、Windows 自洽），PR-3 验证原生 opencode 在 Windows 跑通。单个 RFC 拆 5 个 PR（`plan.md` 说明拆分，各自立 PR，commit 前缀 `feat(windows): RFC-144 ...`）。
+原则：**底层先行**——平台原语（`util/platform.ts`）与文件系统/ACL 先落（POSIX 不回归、Windows 自洽），PR-3 验证原生 opencode 在 Windows 跑通。单个 RFC 拆 5 个 PR（`plan.md` 说明拆分，各自立 PR，commit 前缀 `feat(windows): RFC-windows ...`）。
 
 > **策略枢转（2026-07-08）**：初版用策略 C（WSL），PR-3 设计为 `wsl-opencode` driver + 强依赖 RFC-143。实测原生 opencode 在 Windows 完整跑通后，改走策略 D——**PR-3 不建新 driver、不依赖 RFC-143**，收窄为验证现有 driver + 修小坑 + 文档。
 
@@ -14,7 +14,7 @@ PR-1（util/platform.ts 平台原语：kill-tree/优雅停机/ps 指纹）✅
  └── PR-3（原生 opencode on Windows 验证 + 修小坑 + 文档收尾）✅
 ```
 
-**RFC-144 全 5 PR 完成。** Windows 适配落地：daemon 原生 Windows + opencode 原生 spawn（不用 WSL、不建新 driver、不依赖 RFC-143）。
+**RFC-windows 全 5 PR 完成。** Windows 适配落地：daemon 原生 Windows + opencode 原生 spawn（不用 WSL、不建新 driver、不依赖 RFC-143）。
 
 ---
 
@@ -59,12 +59,12 @@ PR-1（util/platform.ts 平台原语：kill-tree/优雅停机/ps 指纹）✅
 - ✅ **T21** SCIP indexers：不改代码（`probeIndexer` 已是「缺失即 available:false、不抛」）；`platform-pr4.test.ts` 加 2 case 确认 Windows 上 absent binary → available:false 不抛。文档列明六 indexer Windows 可得性（scip-ts/py/go/rust-analyzer/scip-java 多数有 Win 构建，scip-clang 可能无——走降级）。
 - ✅ 验收：typecheck×3 / lint / format / platform-pr4 + PR-1/2 全套 69 pass / 5 skip / 0 fail + buildStdioEnv 3/3 + backup 6/6 + indexer-discovery 5/5。
 
-> **意外收获**：T20 本是「加 Windows 分支」，取证时发现 backup 在 Windows 上**根本跑不起来**（GNU tar `C:` host-parse，预存 bug，基线 0/6）——本 PR 顺手修好，backup 现在在 Windows 全绿。这是 RFC-144「适配 Windows」价值的直接体现。
+> **意外收获**：T20 本是「加 Windows 分支」，取证时发现 backup 在 Windows 上**根本跑不起来**（GNU tar `C:` host-parse，预存 bug，基线 0/6）——本 PR 顺手修好，backup 现在在 Windows 全绿。这是 RFC-windows「适配 Windows」价值的直接体现。
 
 ## PR-5｜构建 / CI / 文档（收口，最后）✅ 已完成
 
 - ✅ **T22** `scripts/build-binary.ts`：`platformSuffix()` 加 `win32 → windows` 映射 + `binaryExtension()`（Windows `.exe`，POSIX 无）；outfile 用 `agent-workflow-${suffix}${ext}`。**本地实证**：`bun run build:binary` 在 Windows 产出 `dist/agent-workflow-windows-x86_64.exe`（124.4 MiB），`version` smoke 通过。embed 逻辑不动。`--target=bun`（无交叉编译，CI 每平台跑）。**`longPathAware` manifest 未加**——Bun `--compile` 不易注入 Windows app manifest；`toLongPath`（`\\?\` 前缀）+ doctor `LongPathsEnabled` 检查（PR-2）已是真实兜底，manifest 列未来硬化。
-- ✅ **T23** CI：新建 `.gitattributes`（`* text=auto eol=lf` + 二进制资产白名单）——让 Windows CI checkout 是 LF，`format:check` 有意义（本机 `core.autocrlf=true` 的 CRLF 红是本地假象，CI 不受影响）。`ci.yml` `build-binary` matrix 加 `windows-latest`（Windows leg 不装 native opencode——daemon 经 wsl-opencode driver〔PR-3〕spawn，`version`/`doctor` smoke 不需 opencode）；新增 `check-windows` job（typecheck + lint + format:check + RFC-144 平台层测试：platform/platform-fs/platform-pr4/lock/shutdown-route/backup/indexer-discovery）——**不全量跑 `bun test`**，因 opencode-dependent + POSIX 信号语义测试在 Windows 仍红，等 PR-3；`e2e` 暂不加 Windows（需 daemon+opencode=PR-3）。`release.yml` build matrix 加 `windows-latest`（产 `agent-workflow-windows-x86_64.exe` 上传 GitHub Releases）。
+- ✅ **T23** CI：新建 `.gitattributes`（`* text=auto eol=lf` + 二进制资产白名单）——让 Windows CI checkout 是 LF，`format:check` 有意义（本机 `core.autocrlf=true` 的 CRLF 红是本地假象，CI 不受影响）。`ci.yml` `build-binary` matrix 加 `windows-latest`（Windows leg 不装 native opencode——daemon 经 wsl-opencode driver〔PR-3〕spawn，`version`/`doctor` smoke 不需 opencode）；新增 `check-windows` job（typecheck + lint + format:check + RFC-windows 平台层测试：platform/platform-fs/platform-pr4/lock/shutdown-route/backup/indexer-discovery）——**不全量跑 `bun test`**，因 opencode-dependent + POSIX 信号语义测试在 Windows 仍红，等 PR-3；`e2e` 暂不加 Windows（需 daemon+opencode=PR-3）。`release.yml` build matrix 加 `windows-latest`（产 `agent-workflow-windows-x86_64.exe` 上传 GitHub Releases）。
 - ✅ **T24** README：Requirements OS 行改「macOS, Linux, or Windows 10/11 / Server 2022」+ Windows note（daemon 原生，opencode 经 WSL2，PR-3 driver）；Install 增 Windows PowerShell 下载 + 「Windows setup」小节（WSL2+Ubuntu+发行版内装 opencode+git + `doctor` 验证 + LongPathsEnabled 建议）。
 - ✅ **T25** 端到端验收（PR-3 前可达部分）：`agent-workflow doctor` 在 Windows 二进制上跑通——✓ git 2.53、✓ 75 migrations embedded、✓ **long paths**（LongPathsEnabled=0 + `\\?\` fallback，PR-2 检查工作）、✓ app home/config/token/lifecycle；✗ opencode 1.4.3（native，预期——PR-3 改查 WSL opencode）。单二进制 `agent-workflow-windows-x86_64.exe` 构建成功 + `version` smoke 绿。**完整端到端 Code→Audit→Fix 任务跑通 + 杀树（Job Object）+ ACL 实证（`icacls` 断言 secret.key/token）等 PR-3 落地后补**（需 wsl-opencode driver 才能启动 agent 任务）。
 - ✅ 验收：typecheck×3 / lint / format:check（改动文件全 clean）/ platform 测试 44 pass / 0 fail；Windows 二进制构建 + smoke 绿；doctor 在 Windows 跑通（opencode ✗ 为 PR-3 预期）。

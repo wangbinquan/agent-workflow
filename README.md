@@ -226,7 +226,7 @@ below `1.14.0` _or_ at/above the `1.17.0` ceiling (every `1.14.x`, `1.15.x`, and
 `config.json`. The same range is reported by `agent-workflow doctor` and the
 **Settings → Runtime** tab.
 
-> **Windows note (RFC-144).** The daemon runs natively on Windows 10/11 and
+> **Windows note (RFC-windows).** The daemon runs natively on Windows 10/11 and
 > Windows Server 2022, and spawns `opencode` directly — opencode is a Node CLI
 > (npm `opencode-ai`) that runs natively on Windows (verified with 1.15.5). No
 > WSL is required. The daemon builds, runs, and launches agent tasks on
