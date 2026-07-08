@@ -6,7 +6,8 @@ import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { isAgentRunKind, readSnapshotFromRunDir } from '../src/services/inventory'
+import { readSnapshotFromRunDir } from '../src/services/inventory'
+import { isAgentNodeKind } from '@agent-workflow/shared'
 
 let dir: string
 beforeEach(() => {
@@ -16,9 +17,12 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
 
-describe('isAgentRunKind', () => {
+// RFC-146: inventory.isAgentRunKind was replaced by shared isAgentNodeKind.
+// Keep the raw-surface tolerance lock here at the consumer boundary: DB rows
+// hand this predicate plain strings / undefined, and those must stay false.
+describe('isAgentNodeKind (raw-surface tolerance)', () => {
   test('only agent-single returns true (RFC-060 PR-E removed agent-multi)', () => {
-    expect(isAgentRunKind('agent-single')).toBe(true)
+    expect(isAgentNodeKind('agent-single')).toBe(true)
     for (const k of [
       'input',
       'output',
@@ -30,7 +34,7 @@ describe('isAgentRunKind', () => {
       undefined,
       '',
     ]) {
-      expect(isAgentRunKind(k as string | undefined)).toBe(false)
+      expect(isAgentNodeKind(k)).toBe(false)
     }
   })
 })

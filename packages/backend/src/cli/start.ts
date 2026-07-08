@@ -28,9 +28,8 @@ import {
 import { acquireLock, DaemonLockHeldError, type Lock } from '@/util/lock'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
-import { MIN_OPENCODE_VERSION, probeOpencode } from '@/util/opencode'
+import { getRuntimeDriver } from '@/services/runtime'
 import { isWindows } from '@/util/platform'
-import { MIN_CLAUDE_CODE_VERSION, probeClaudeCode } from '@/services/runtime/claudeCode/probe'
 import { Paths } from '@/util/paths'
 import { buildWebSocketAdapter } from '@/ws/server'
 import { existsSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
@@ -75,12 +74,15 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   log.info('config loaded', { path: Paths.config, language: config.language, theme: config.theme })
 
   // 4. opencode version probe — daemon refuses to start on incompatible version.
-  const probe = await probeOpencode(config.opencodePath)
+  // RFC-143: opencode is the hard-required boot runtime — probe it via its
+  // driver (the exit-on-incompatible gate stays here, a boot-policy call).
+  const ocDriver = getRuntimeDriver('opencode')
+  const probe = await ocDriver.probe(ocDriver.defaultBinary(config)[0]!)
   if (probe.version === null) {
     log.error('opencode binary not found or unreadable', { binary: probe.binary })
     console.error(
       `agent-workflow: cannot execute "${probe.binary}".\n` +
-        `  install opencode (>=${MIN_OPENCODE_VERSION}) and ensure it is on PATH,\n` +
+        `  install opencode (>=${ocDriver.minVersion}) and ensure it is on PATH,\n` +
         `  or set 'opencodePath' in ${Paths.config}.`,
     )
     lock.release()
@@ -89,14 +91,14 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   if (!probe.compatible) {
     log.error('opencode incompatible', {
       found: probe.version,
-      requiredMinimum: MIN_OPENCODE_VERSION,
+      requiredMinimum: ocDriver.minVersion,
       reason: probe.incompatibleReason,
     })
     console.error(
       `agent-workflow: opencode ${probe.version} is incompatible.\n` +
-        `  required: version >= ${MIN_OPENCODE_VERSION}\n` +
+        `  required: version >= ${ocDriver.minVersion}\n` +
         `  reason: ${probe.incompatibleReason ?? 'unknown'}\n` +
-        `  to recover: \`npm install -g opencode-ai@latest\` (or any version >= ${MIN_OPENCODE_VERSION}) or set 'opencodePath' in ${Paths.config}.`,
+        `  to recover: \`npm install -g opencode-ai@latest\` (or any version >= ${ocDriver.minVersion}) or set 'opencodePath' in ${Paths.config}.`,
     )
     lock.release()
     process.exit(1)
@@ -133,12 +135,13 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // signal available before the DB opens); per-agent claude selection surfaces
   // as a clear spawn-time failure on the node itself.
   if (config.defaultRuntime === 'claude-code') {
-    const claudeProbe = await probeClaudeCode(config.claudeCodePath)
+    const ccDriver = getRuntimeDriver('claude-code')
+    const claudeProbe = await ccDriver.probe(ccDriver.defaultBinary(config)[0]!)
     if (!claudeProbe.compatible) {
       log.warn('claude-code default runtime unavailable (nodes selecting it will fail)', {
         binary: claudeProbe.binary,
         found: claudeProbe.version,
-        requiredMinimum: MIN_CLAUDE_CODE_VERSION,
+        requiredMinimum: ccDriver.minVersion,
         reason: claudeProbe.incompatibleReason ?? 'not found',
       })
     } else {
@@ -261,10 +264,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
   }
 
-  // 5f. RFC-112: ensure the two built-in runtimes (opencode / claude-code) exist
-  // as read-only registry rows so agents / config.defaultRuntime can reference
-  // them by name and the Settings runtime list always shows them. Hard-resets
-  // them to canonical shape (Codex P2); idempotent.
+  // 5f. RFC-112/153: on FIRST startup (empty runtimes table) seed opencode /
+  // claude-code as ordinary rows so agents / config.defaultRuntime can reference
+  // them by name and the Settings list shows them out of the box. RFC-153: they
+  // are editable + deletable now; a deleted row is NOT re-seeded (seed no-ops on a
+  // non-empty table). migrateConfigIntoBuiltins then backfills binary from config.
   try {
     const { seedBuiltinRuntimes, migrateConfigIntoBuiltins } =
       await import('@/services/runtimeRegistry')

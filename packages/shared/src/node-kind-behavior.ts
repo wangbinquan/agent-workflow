@@ -1,32 +1,37 @@
-// RFC-053 PR-C P-2 — single source of truth for per-NodeKind cross-cutting
-// behavior.
+// RFC-053 PR-C P-2 / RFC-146 — single source of truth for per-NodeKind
+// cross-cutting behavior.
 //
-// Many "scan all nodes / for-each kind" operations (retry cascade, resource
-// limits, daemon-restart orphan reap, worktree GC, graceful shutdown) used
-// to hardcode kind checks inline — `if (kind === 'review' || kind ===
-// 'clarify') skip…`. That style means adding a new NodeKind silently does
-// the wrong thing in every cross-cutting site until each is audited.
+// Many "scan all nodes / for-each kind" operations used to hardcode kind
+// checks inline — `if (kind === 'review' || kind === 'clarify') skip…`. That
+// style means adding a new NodeKind silently does the wrong thing in every
+// cross-cutting site until each is audited.
 //
 // `NODE_KIND_BEHAVIORS satisfies Record<NodeKind, NodeKindBehavior>` flips
 // the responsibility: a new NodeKind must fill in every behavior dimension
-// at compile time (TypeScript exhaustiveness on the `satisfies` Record),
-// so the system stays consistent by construction.
+// at compile time, so the system stays consistent by construction.
 //
-// **Today**: only `retryCascade` is consulted at runtime (services/task.ts
-// retryNode). The other four dimensions document intended behavior and
-// stand ready for the future per-kind hooks called out in RFC-053
-// design.md §P-2. Their values can disagree with the current code paths
-// (which are kind-blind) without breaking anything — the table is the
-// "what should happen", not the "what does happen" until each consumer is
-// updated to query it.
+// RFC-146 admission rule: **every dimension in this table has a real runtime
+// consumer** — grep-provable. The original RFC-053 table carried four
+// aspirational dimensions (limits / orphanReap / gc / shutdown) that nothing
+// ever consulted; they were a fake SSOT (the table said "what should happen"
+// while kind-blind status-driven code did the real work) and were REMOVED:
+//   - orphan reaping needs no per-kind knowledge: `orphans.ts` reaps rows in
+//     status ∈ {running, pending} — review/clarify's awaiting_* rows survive a
+//     daemon restart because of the STATUS filter, not a kind table.
+//   - resource limits are task-level (`limits.ts`); per-node timeouts are
+//     enforced inside the runner via SIGTERM.
+//   - worktree GC and graceful shutdown operate on TASK state; node kind
+//     never enters the decision.
+// If a future feature genuinely needs per-kind behavior in those areas, add
+// the dimension TOGETHER WITH its consumer.
 //
-// Add a new NodeKind? Add a new behavior dimension? TypeScript will fail
-// to compile until you fill in the matrix.
+// Add a new NodeKind? Add a new behavior dimension? TypeScript will fail to
+// compile until you fill in the matrix.
 
 import { type NodeKind } from './schemas/workflow'
 
 // ---------------------------------------------------------------------------
-// Behavior dimensions.
+// Behavior dimensions — each one names its runtime consumer(s).
 // ---------------------------------------------------------------------------
 
 /**
@@ -47,69 +52,32 @@ import { type NodeKind } from './schemas/workflow'
  */
 export type RetryCascadeBehavior = 'mint-placeholder' | 'skip'
 
-/**
- * Per-node resource limits (future hook). Today `services/limits.ts`
- * operates at task level only; the per-node-timeout (`node.timeoutMs`)
- * is enforced inside the runner via `SIGTERM`. This dimension documents
- * which kinds participate in a hypothetical per-node time budget the
- * limits service might enforce in the future.
- *
- *   - 'enforce-time-budget' — agent / wrapper kinds, running as
- *     subprocesses with measurable wall-clock cost.
- *   - 'opt-out' — input/output/review/clarify never "run" in a way that
- *     consumes server-side compute; their elapsed time is just
- *     "waiting for user / data routing".
- */
-export type LimitsBehavior = 'enforce-time-budget' | 'opt-out'
-
-/**
- * `services/orphans.ts reapOrphanRuns` on daemon start: which kinds, if
- * their node_run is in non-terminal status when the daemon comes back
- * up, should be flipped to `interrupted`?
- *
- *   - 'mark-interrupted' — agent / wrapper rows that were `running` /
- *     `pending` at the moment of crash — those processes are gone.
- *   - 'leave-alone' — review / clarify rows in `awaiting_*` represent
- *     user-pending state that survives a daemon restart. Today this is
- *     ENFORCED implicitly by orphans.ts querying only
- *     `status IN ('running', 'pending')`. Listing here as documentation.
- *
- * `input` / `output` kinds rarely have node_run rows in non-terminal
- * status (their runOneNode is a no-op / synchronous), but if any
- * orphaned row appears it's safer to mark-interrupted than leave alone.
- */
-export type OrphanReapBehavior = 'mark-interrupted' | 'leave-alone'
-
-/**
- * Worktree GC (services/gc.ts) — does a task-level GC interact with this
- * node kind differently? Today GC operates on TASK terminal status; node-
- * kind doesn't matter. Documented here for future "pin worktree as long
- * as any pending review exists" semantics.
- *
- *   - 'gc-with-task' — normal. When the task is terminal + age ≥ threshold
- *     the worktree is collected.
- *   - 'pin' — placeholder for future "this kind keeps the worktree alive
- *     even when task is terminal" semantics (none today).
- */
-export type GcBehavior = 'gc-with-task' | 'pin'
-
-/**
- * `services/shutdown.ts gracefulShutdown` — task-level today (calls
- * `abortAllActiveTasks` which signals the per-task controller). Per-node
- * shutdown participation is implicit through the runner's abort path.
- *
- *   - 'graceful-abort' — agent / wrapper kinds; their runner subprocess
- *     receives SIGTERM on shutdown.
- *   - 'no-op' — input/output/review/clarify have no subprocess to abort.
- */
-export type ShutdownBehavior = 'graceful-abort' | 'no-op'
-
 export interface NodeKindBehavior {
   retryCascade: RetryCascadeBehavior
-  limits: LimitsBehavior
-  orphanReap: OrphanReapBehavior
-  gc: GcBehavior
-  shutdown: ShutdownBehavior
+  /**
+   * Process kinds spawn real work (an agent subprocess or a wrapper
+   * container run). Consumed via `isProcessNodeKind`
+   * (schemas/workflow.ts — RFC-146 made it table-backed; the historical
+   * or-chain twin is gone) and by extension everywhere that predicate is
+   * used (validator, canvas, retry cascade agreement tests).
+   */
+  isProcess: boolean
+  /**
+   * Agent kinds own an opencode/claude SESSION: a prompt, an inventory
+   * snapshot, a live-capturable transcript. Consumed by
+   * `isAgentNodeKind` — the single predicate that replaced five copies
+   * (backend inventory.isAgentRunKind + PROMPT_CAPABLE_KINDS ×2, frontend
+   * isPromptCapableKind + isAgentKind).
+   */
+  isAgent: boolean
+  /**
+   * deriveFrontier pass-2 (C1/N6): the kind's graph visit is a no-op that
+   * writes NO node_run row; the node counts as settled once its upstreams
+   * are done and no open session blocks it. Consumed by the scheduler's
+   * SETTLES_WITHOUT_ROW_KINDS derivation and stuckTaskDetector's
+   * awaiting-human family scan.
+   */
+  settlesWithoutRow: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -121,89 +89,74 @@ export interface NodeKindBehavior {
  * makes adding a NodeKind without filling in all dimensions a compile
  * error.
  *
- * "Process kinds" (those that actually spawn subprocesses) — agent-single,
- * wrapper-git, wrapper-loop, wrapper-fanout — share the same row: cascade,
- * enforce limits, reap on orphan, GC with task, graceful abort. (RFC-060
- * PR-E removed agent-multi.)
+ * "Process kinds" — agent-single, wrapper-git, wrapper-loop, wrapper-fanout —
+ * cascade on retry and are process-bearing. Only agent-single owns a session.
+ * (RFC-060 PR-E removed agent-multi.)
  *
- * "Non-process kinds" — input, output, review, clarify — share the dual
- * row: no cascade (RFC-052), opt-out of time budgets, leave-alone on
- * orphan reap, normal GC, no-op shutdown.
+ * "Non-process kinds" — input, output, review, clarify family — no cascade
+ * (RFC-052), no process, no session. The clarify family additionally settles
+ * without a row (C1/N6).
  */
 export const NODE_KIND_BEHAVIORS = {
   'agent-single': {
     retryCascade: 'mint-placeholder',
-    limits: 'enforce-time-budget',
-    orphanReap: 'mark-interrupted',
-    gc: 'gc-with-task',
-    shutdown: 'graceful-abort',
+    isProcess: true,
+    isAgent: true,
+    settlesWithoutRow: false,
   },
   'wrapper-git': {
     retryCascade: 'mint-placeholder',
-    limits: 'enforce-time-budget',
-    orphanReap: 'mark-interrupted',
-    gc: 'gc-with-task',
-    shutdown: 'graceful-abort',
+    isProcess: true,
+    isAgent: false,
+    settlesWithoutRow: false,
   },
   'wrapper-loop': {
     retryCascade: 'mint-placeholder',
-    limits: 'enforce-time-budget',
-    orphanReap: 'mark-interrupted',
-    gc: 'gc-with-task',
-    shutdown: 'graceful-abort',
+    isProcess: true,
+    isAgent: false,
+    settlesWithoutRow: false,
   },
   // RFC-060 — wrapper-fanout shares the wrapper-* row: holds a container
-  // node_run whose status is driven by inner subgraph shards + aggregator;
-  // when daemon restarts mid-shard, the container row is marked interrupted
-  // so the next runTask pass can resume from the per-shard state.
+  // node_run whose status is driven by inner subgraph shards + aggregator.
   'wrapper-fanout': {
     retryCascade: 'mint-placeholder',
-    limits: 'enforce-time-budget',
-    orphanReap: 'mark-interrupted',
-    gc: 'gc-with-task',
-    shutdown: 'graceful-abort',
+    isProcess: true,
+    isAgent: false,
+    settlesWithoutRow: false,
   },
   review: {
     retryCascade: 'skip',
-    limits: 'opt-out',
-    orphanReap: 'leave-alone',
-    gc: 'gc-with-task',
-    shutdown: 'no-op',
+    isProcess: false,
+    isAgent: false,
+    settlesWithoutRow: false,
   },
   clarify: {
     retryCascade: 'skip',
-    limits: 'opt-out',
-    orphanReap: 'leave-alone',
-    gc: 'gc-with-task',
-    shutdown: 'no-op',
+    isProcess: false,
+    isAgent: false,
+    settlesWithoutRow: true,
   },
-  // RFC-056 — cross-agent clarify shares the same five-dimensional row as
-  // RFC-023 clarify: no process to retry, no time budget to enforce, awaiting_*
-  // rows survive daemon restart (the human is the source of progress), normal
-  // GC, no subprocess to abort on shutdown. The distinct runtime semantics
-  // (multi-source aggregation, reject persistence, designer rerun trigger)
-  // live in services/crossClarify.ts and the scheduler hook, not in this
-  // cross-cutting table.
+  // RFC-056 — cross-agent clarify shares the clarify row. The distinct
+  // runtime semantics (multi-source aggregation, reject persistence,
+  // designer rerun trigger) live in services/crossClarify.ts and the
+  // scheduler hook, not in this cross-cutting table.
   'clarify-cross-agent': {
     retryCascade: 'skip',
-    limits: 'opt-out',
-    orphanReap: 'leave-alone',
-    gc: 'gc-with-task',
-    shutdown: 'no-op',
+    isProcess: false,
+    isAgent: false,
+    settlesWithoutRow: true,
   },
   input: {
     retryCascade: 'skip',
-    limits: 'opt-out',
-    orphanReap: 'leave-alone',
-    gc: 'gc-with-task',
-    shutdown: 'no-op',
+    isProcess: false,
+    isAgent: false,
+    settlesWithoutRow: false,
   },
   output: {
     retryCascade: 'skip',
-    limits: 'opt-out',
-    orphanReap: 'leave-alone',
-    gc: 'gc-with-task',
-    shutdown: 'no-op',
+    isProcess: false,
+    isAgent: false,
+    settlesWithoutRow: false,
   },
 } as const satisfies Record<NodeKind, NodeKindBehavior>
 
@@ -214,10 +167,45 @@ export const NODE_KIND_BEHAVIORS = {
 /**
  * Convenience predicate equivalent to
  * `NODE_KIND_BEHAVIORS[kind].retryCascade === 'mint-placeholder'`.
- * Same semantics as the legacy `isProcessNodeKind` shipped in RFC-052;
- * both implementations agree by the table above. `isProcessNodeKind`
- * remains the public name to minimise churn.
+ * Agrees with `isProcessNodeKind` by construction (both read this table
+ * since RFC-146; the historical or-chain twin is gone).
  */
 export function nodeKindParticipatesInRetryCascade(kind: NodeKind): boolean {
   return NODE_KIND_BEHAVIORS[kind].retryCascade === 'mint-placeholder'
+}
+
+/**
+ * RFC-052/RFC-146 — kinds that actually spawn a process / hold a per-attempt
+ * node_run row the scheduler dispatches (agent + the three wrappers).
+ * RFC-146 moved this here from schemas/workflow.ts and made it table-backed —
+ * the historical or-chain (`kind === 'agent-single' || isWrapperKind(kind)`)
+ * and this table agreed only by convention; now there is one source.
+ */
+export function isProcessNodeKind(kind: NodeKind): boolean {
+  return NODE_KIND_BEHAVIORS[kind].isProcess
+}
+
+/**
+ * RFC-146 — THE agent-kind predicate. Replaced five scattered copies of
+ * `kind === 'agent-single'` (backend inventory.isAgentRunKind +
+ * PROMPT_CAPABLE_KINDS ×2, frontend isPromptCapableKind + isAgentKind).
+ * Callers with nullable input keep their own null guard.
+ */
+export function isAgentNodeKind(kind: NodeKind | string | null | undefined): boolean {
+  // Raw-surface tolerant (isWrapperKind idiom): rows carry plain strings and
+  // callers pass nullable kinds — unknown/absent kinds are simply not agents.
+  return kind != null && kind in NODE_KIND_BEHAVIORS
+    ? NODE_KIND_BEHAVIORS[kind as NodeKind].isAgent
+    : false
+}
+
+/**
+ * RFC-146 — settles-without-row family (C1/N6): graph-visit no-op kinds
+ * whose completion is derived, not row-backed. The scheduler derives its
+ * SETTLES_WITHOUT_ROW set from this.
+ */
+export function nodeKindSettlesWithoutRow(kind: NodeKind | string | null | undefined): boolean {
+  return kind != null && kind in NODE_KIND_BEHAVIORS
+    ? NODE_KIND_BEHAVIORS[kind as NodeKind].settlesWithoutRow
+    : false
 }

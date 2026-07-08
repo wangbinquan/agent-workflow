@@ -3,9 +3,9 @@
 // tab). Each row is a registered runtime: name + protocol + the in-table default
 // marker + deep-smoke conformance chip + binary path + the execution profile
 // (model / variant / temperature / steps), with Test / Set-default / Edit /
-// Delete actions. RFC-113 D8: built-ins (opencode / claude-code) are EDITABLE
-// (binary / model / profile) — only their name + protocol identity is locked, and
-// only custom forks can be Deleted. "Add runtime" + Edit open a Dialog that
+// Delete actions. RFC-153: opencode / claude-code are ORDINARY rows (no built-in
+// badge, deletable like any other) — only their name + protocol identity is locked
+// on edit. "Add runtime" + Edit open a Dialog that
 // deep-smokes the binary before saving. Admin-only writes are enforced
 // server-side; non-admins still see the list (the agent / settings pickers read
 // it).
@@ -48,7 +48,6 @@ interface RuntimeView {
   name: string
   protocol: RuntimeProtocol
   binaryPath: string | null
-  builtin: boolean
   // RFC-118: false = disabled (filtered from agent/default pickers, kept in list).
   enabled: boolean
   isDefault: boolean
@@ -169,11 +168,6 @@ export function RuntimeList() {
                     ? t('runtimes.protocolClaude')
                     : t('runtimes.protocolOpencode')}
                 </StatusChip>
-                {rt.builtin && (
-                  <StatusChip kind="neutral" size="sm">
-                    {t('runtimes.builtin')}
-                  </StatusChip>
-                )}
                 {!rt.enabled && (
                   <StatusChip kind="neutral" size="sm">
                     {t('runtimes.disabled')}
@@ -211,10 +205,10 @@ export function RuntimeList() {
                 >
                   {t('runtimes.test')}
                 </button>
-                {/* RFC-113 D8: built-ins are editable too (binary / model /
-                    profile params) — only name + protocol identity stay locked
-                    (the dialog disables those when editing). Delete stays
-                    custom-only: a built-in can't be removed. */}
+                {/* RFC-153: every runtime is editable + deletable; opencode /
+                    claude-code are no different (name + protocol identity stay
+                    locked in the dialog). Delete is blocked server-side only while
+                    the row is the effective default or referenced by an agent. */}
                 <button type="button" className="btn btn--xs" onClick={() => setEditing(rt)}>
                   {t('runtimes.edit')}
                 </button>
@@ -229,16 +223,14 @@ export function RuntimeList() {
                 >
                   {rt.enabled ? t('runtimes.disable') : t('runtimes.enable')}
                 </button>
-                {!rt.builtin && (
-                  <button
-                    type="button"
-                    className="btn btn--xs btn--danger"
-                    disabled={del.isPending}
-                    onClick={() => del.mutate(rt.name)}
-                  >
-                    {t('runtimes.delete')}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="btn btn--xs btn--danger"
+                  disabled={del.isPending}
+                  onClick={() => del.mutate(rt.name)}
+                >
+                  {t('runtimes.delete')}
+                </button>
               </div>
             </li>
           ))}

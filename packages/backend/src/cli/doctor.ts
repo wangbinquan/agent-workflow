@@ -6,7 +6,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs'
 import { loadConfig } from '@/config'
 import { countEmbeddedSqlMigrations, IS_EMBEDDED } from '@/embed'
 import { capabilitiesFromVersion, MIN_GIT_VERSION, parseGitVersion } from '@/services/gitVersion'
-import { MIN_OPENCODE_VERSION, probeOpencode } from '@/util/opencode'
+import { getRuntimeDriver } from '@/services/runtime'
 import { Paths } from '@/util/paths'
 import { isWindows } from '@/util/platform'
 
@@ -31,7 +31,9 @@ export async function doctorCommand(): Promise<DoctorResult> {
   } catch {
     // ignore — separate check below catches config issues
   }
-  const probe = await probeOpencode(opencodePath)
+  // RFC-143: probe opencode via its driver (single source for probe + minVersion).
+  const ocDriver = getRuntimeDriver('opencode')
+  const probe = await ocDriver.probe(ocDriver.defaultBinary({ opencodePath })[0]!)
   if (probe.version === null) {
     checks.push({
       name: 'opencode binary',
@@ -44,13 +46,13 @@ export async function doctorCommand(): Promise<DoctorResult> {
       ok: false,
       message:
         probe.incompatibleReason ??
-        `${probe.version} is older than required minimum ${MIN_OPENCODE_VERSION}`,
+        `${probe.version} is older than required minimum ${ocDriver.minVersion}`,
     })
   } else {
     checks.push({
       name: 'opencode version',
       ok: true,
-      message: `${probe.version} (>= ${MIN_OPENCODE_VERSION})`,
+      message: `${probe.version} (>= ${ocDriver.minVersion})`,
     })
   }
 

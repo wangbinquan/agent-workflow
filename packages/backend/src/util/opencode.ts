@@ -5,6 +5,13 @@
 
 import { createLogger } from './log'
 import { killProcessTree } from './platform'
+import { loadConfig } from '@/config'
+import { compareSemver, extractVersion } from './semver'
+
+// RFC-143 PR-5: extractVersion/compareSemver live in ./semver (single copy,
+// shared with the claude probe); re-exported so existing import sites
+// (opencode-version.test.ts) keep resolving from this module.
+export { compareSemver, extractVersion } from './semver'
 
 const log = createLogger('opencode')
 
@@ -154,33 +161,24 @@ export async function probeOpencode(
   return { binary, version, compatible: true, ran }
 }
 
-/** Extract first "X.Y.Z" from arbitrary output. */
-export function extractVersion(s: string): string | null {
-  const m = s.match(/(\d+)\.(\d+)\.(\d+)/)
-  return m ? `${m[1]}.${m[2]}.${m[3]}` : null
-}
-
 /**
- * Compare two semver strings (major.minor.patch only; prerelease ignored).
- * Returns negative / 0 / positive (sortable).
+ * RFC-143 PR-5 — resolve the opencode launch head from the daemon config file:
+ * `[config.opencodePath]` when set, else `undefined` (spawn falls back to the
+ * PATH-resolved built-in `opencode`). Was copy-pasted verbatim in FIVE route
+ * files (tasks / clarify / taskQuestions / reviews / fusions — dedup-audit
+ * entry); this is the single copy. opencode-only by design: the claude head
+ * comes from the runtime row's binary_path (RFC-113), surfacing as
+ * `runtimeBinary`, so there is no claude analog of this config-file thread.
  */
-export function compareSemver(a: string, b: string): number {
-  const pa = parse(a)
-  const pb = parse(b)
-  if (pa === null || pb === null) return 0
-  for (let i = 0; i < 3; i++) {
-    const ai = pa[i]
-    const bi = pb[i]
-    if (ai === undefined || bi === undefined) continue
-    if (ai !== bi) return ai - bi
+export function resolveOpencodeCmd(configPath: string): string[] | undefined {
+  if (configPath === '') return undefined
+  try {
+    const cfg = loadConfig(configPath)
+    if (typeof cfg.opencodePath === 'string' && cfg.opencodePath.length > 0) {
+      return [cfg.opencodePath]
+    }
+  } catch {
+    // config unreadable — fall back to default PATH lookup
   }
-  return 0
-}
-
-function parse(v: string): [number, number, number] | null {
-  const m = v.match(/^(\d+)\.(\d+)\.(\d+)/)
-  if (!m) return null
-  const out: [number, number, number] = [Number(m[1]), Number(m[2]), Number(m[3])]
-  if (out.some((n) => !Number.isFinite(n))) return null
-  return out
+  return undefined
 }

@@ -11,6 +11,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import {
+  isAgentNodeKind,
   inventoryReasonCode,
   InventorySnapshotCapturedSchema,
   InventorySnapshotMissingSchema,
@@ -30,10 +31,8 @@ import { Paths } from '@/util/paths'
  * inventory pipeline cares about. Centralized here so a future agent kind
  * gets one edit instead of N.
  */
-export function isAgentRunKind(nodeKind: string | undefined): boolean {
-  // RFC-060 PR-E: agent-multi removed; agent-single is the only agent kind.
-  return nodeKind === 'agent-single'
-}
+// RFC-146: the agent-kind predicate moved to shared `isAgentNodeKind`
+// (NODE_KIND_BEHAVIORS.isAgent) — one table row instead of five copies.
 
 export interface ReadSnapshotOptions {
   /** Per-run dir (the framework-controlled `<runRoot>` that gets cleaned up). */
@@ -57,7 +56,7 @@ export async function readSnapshotFromRunDir(
   opts: ReadSnapshotOptions,
 ): Promise<InventorySnapshot> {
   // 1) Kind / pure-mode short-circuits before we even check disk.
-  if (!isAgentRunKind(opts.nodeKind)) {
+  if (!isAgentNodeKind(opts.nodeKind)) {
     return missing('non-agent-kind', null)
   }
   if (opts.pureMode) {
@@ -123,9 +122,6 @@ function errorMessage(err: unknown): string | null {
 // GET /api/tasks/:taskId/node-runs/:nodeRunId/inventory — REST helper.
 // ---------------------------------------------------------------------------
 
-// RFC-060 PR-E: agent-multi removed; agent-single is the only prompt-capable kind.
-const PROMPT_CAPABLE_KINDS = new Set(['agent-single'])
-
 /**
  * RFC-062: per-run dir layout for the read end.
  *
@@ -178,7 +174,7 @@ export async function getInventorySnapshot(
   }
 
   const { nodeKind } = resolveNodeKindFromSnapshot(taskRows[0]!.snapshot, run.nodeId)
-  if (nodeKind !== null && !PROMPT_CAPABLE_KINDS.has(nodeKind)) {
+  if (nodeKind !== null && !isAgentNodeKind(nodeKind)) {
     throw new DomainError(
       'node-kind-not-supported',
       `node '${run.nodeId}' (kind=${nodeKind}) does not produce an opencode inventory`,

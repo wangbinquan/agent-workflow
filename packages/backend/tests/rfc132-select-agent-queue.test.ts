@@ -84,7 +84,13 @@ async function seedRun(
   db: DbClient,
   taskId: string,
   nodeId: string,
-  over: { status?: string; iteration?: number; hasOutput?: boolean; errorMessage?: string } = {},
+  over: {
+    status?: string
+    iteration?: number
+    hasOutput?: boolean
+    errorMessage?: string
+    supersededByReview?: 'iterated' | 'rejected'
+  } = {},
 ): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({
@@ -95,6 +101,7 @@ async function seedRun(
     retryIndex: 0,
     iteration: over.iteration ?? 0,
     ...(over.errorMessage ? { errorMessage: over.errorMessage } : {}),
+    ...(over.supersededByReview ? { supersededByReview: over.supersededByReview } : {}),
   })
   if (over.hasOutput) {
     await db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'out', content: 'x' })
@@ -512,6 +519,8 @@ describe('RFC-132 T2 — selectAgentQueue derived aging', () => {
     const superseded = await seedRun(db, taskId, P, {
       status: 'canceled',
       hasOutput: true,
+      // RFC-145：老化判据读结构化列；errorMessage 仅人读 breadcrumb。
+      supersededByReview: 'rejected',
       errorMessage: 'superseded-by-review-rejected: Replaced by retry_index 1',
     })
     await insertEntry(db, taskId, {

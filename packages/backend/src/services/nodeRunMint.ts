@@ -26,6 +26,8 @@ import { ulid } from 'ulid'
 import type { NodeRunStatus, RerunCause } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { nodeRuns } from '@/db/schema'
+import { dbTxSync } from '@/db/txSync'
+import { abandonSupersededMergeStates } from '@/services/lifecycle'
 import type { RuntimeKind } from '@/services/runtime'
 import { isKnownRuntimeKind } from '@/services/runtime'
 import { resolveAgentRuntime, type RuntimeProfile } from '@/services/runtimeRegistry'
@@ -185,7 +187,21 @@ export function buildMintNodeRunValues(
 
 export async function mintNodeRun(db: DbClient, args: MintNodeRunArgs): Promise<string> {
   const values = buildMintNodeRunValues(args)
-  await db.insert(nodeRuns).values(values)
+  // RFC-144 D12 (stale-replay fix): abandoning the superseded generations'
+  // in-flight merge_state and inserting the successor MUST commit atomically —
+  // a crash between two separate statements would leave the old pending-merge
+  // row replayable at the next runTask entry (the exact bug this closes), or
+  // conversely a successor row whose predecessors were never retired.
+  dbTxSync(db, (tx) => {
+    abandonSupersededMergeStates({
+      db: tx,
+      taskId: values.taskId,
+      nodeId: values.nodeId,
+      iteration: values.iteration ?? 0,
+      supersededByRunId: values.id,
+    })
+    tx.insert(nodeRuns).values(values).run()
+  })
   return values.id
 }
 

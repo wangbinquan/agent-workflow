@@ -87,9 +87,11 @@ export const agents = sqliteTable('agents', {
 // -----------------------------------------------------------------------------
 // runtimes — RFC-112. Named runtime INSTANCES: each row is a registered binary
 // that speaks one of the two RuntimeDriver protocols (opencode | claude-code).
-// The two built-ins (opencode, claude-code) are framework-seeded (builtin=1,
-// RFC-104 read-only lock) with binary_path=NULL → the protocol's default binary
-// (config.opencodePath / claudeCodePath / PATH). Custom forks (renamed binaries)
+// opencode / claude-code are framework-seeded on FIRST startup only (empty table;
+// RFC-153) with binary_path=NULL → the protocol's default binary
+// (config.opencodePath / claudeCodePath / PATH). They are ORDINARY editable +
+// deletable rows — RFC-153 removed the built-in vs non-built-in distinction;
+// deleted rows are never re-seeded. Custom forks (renamed binaries)
 // register additional rows. agents.runtime / config.defaultRuntime reference a
 // row by `name`; node_runs freeze (protocol, binary) so the registry stays
 // mutable without re-routing live sessions. Admin-managed (no per-user ACL —
@@ -100,8 +102,8 @@ export const runtimes = sqliteTable('runtimes', {
   name: text('name').notNull().unique(), // referenced by agents.runtime / config.defaultRuntime
   protocol: text('protocol', { enum: ['opencode', 'claude-code'] }).notNull(), // = RuntimeDriver kind
   binaryPath: text('binary_path'), // NULL → protocol default binary (RFC-111 behavior)
-  builtin: integer('builtin', { mode: 'boolean' }).notNull().default(false), // RFC-104 read-only lock
-  // RFC-118: admin can disable a runtime (incl. built-ins) — it drops out of the
+  // RFC-118: admin can disable a runtime (incl. the preseeded opencode / claude-code)
+  // — it drops out of the
   // agent / default-runtime pickers but STAYS in the list (reversible, not deleted).
   // The effective-default runtime can't be disabled (service guard, D3); resolve
   // IGNORES this flag so in-flight agents pinning a disabled runtime keep dispatching.
@@ -641,7 +643,20 @@ export const nodeRuns = sqliteTable(
      */
     spawnBinaryPath: text('spawn_binary_path'),
     exitCode: integer('exit_code'),
+    /** Human-readable failure breadcrumbs ONLY (RFC-145): machine consumers
+     *  read `failure_code` / `superseded_by_review` / `rolled_back` instead —
+     *  a source guard forbids startsWith/includes/=== reads of this column in
+     *  production code. */
     errorMessage: text('error_message'),
+    /**
+     * RFC-145 (migration 0077): machine-readable failure taxonomy — one of
+     * shared FAILURE_CODES (7 values) or NULL (= no machine-readable failure
+     * shape; the common case). Declared by the runner at each stamp point;
+     * `decideEnvelopeFollowup` looks it up via FOLLOWUP_POLICY instead of
+     * parsing errorMessage prefixes. Plain TEXT — enum enforced at the TS
+     * boundary (rerun_cause precedent). Backend-internal (not in the DTO).
+     */
+    failureCode: text('failure_code'),
     promptText: text('prompt_text'), // actual user prompt sent to opencode
     // token usage
     tokInput: integer('tok_input'),
@@ -767,10 +782,21 @@ export const nodeRuns = sqliteTable(
      *   (single / multi-repo) of the iso final state — pinned so a crash between
      *   agent-success and merge-back can REPLAY the merge without re-running the
      *   agent (D15). Distinct pin ref from base (D26).
-     * - merge_state: NULL (not reached / non-isolated) | 'pending-merge' (agent ok,
-     *   outputs+node_tree persisted, NOT yet merged — status stays non-done, D15) |
-     *   'merged' | 'conflict-resolving' | 'conflict-human'. Downstream readiness +
-     *   resume replay gate on this.
+     * - merge_state: the RFC-130 iso lifecycle, state-machined by RFC-144
+     *   (value universe = shared/lifecycle.ts MERGE_STATES; the ONLY sanctioned
+     *   writers are transitionMergeState / abandonSupersededMergeStates in
+     *   services/lifecycle.ts — the rfc144 blind-write inventory guard enforces
+     *   this). NULL (never isolated: passthrough/legacy; every mint is born
+     *   NULL) | 'isolating' (iso created, agent not finished) | 'pending-merge'
+     *   (agent ok, outputs+node_tree pinned, NOT yet merged, D15) | 'merged'
+     *   (delta reached canonical) | 'conflict-human' (merge agent could not
+     *   resolve; parked for a human, resolve-iso kept) | 'merge-failed'
+     *   (merge-back threw; hard failure) | 'abandoned' (RFC-144: superseded by
+     *   a fresher generation — its delta will never merge; abandoned ⇔
+     *   superseded). Downstream readiness + resume replay gate on this.
+     *   (The pre-RFC-144 doc listed a 'conflict-resolving' value that was never
+     *   written and omitted 'isolating'/'merge-failed' — classic blind-write
+     *   drift; the transition table is now the single source.)
      */
     isoWorktreePath: text('iso_worktree_path'),
     isoBaseSnapshot: text('iso_base_snapshot'),
@@ -809,6 +835,24 @@ export const nodeRuns = sqliteTable(
      * the TypeScript boundary so new causes never need a migration.
      */
     rerunCause: text('rerun_cause'),
+    /**
+     * RFC-145 (migration 0077): review-supersede lineage, structured. When a
+     * review reject/iterate retires this row (review.ts supersede path), the
+     * user decision lands here ('iterated' | 'rejected' — shared
+     * SUPERSEDE_DECISIONS; 'approved' never supersedes). NULL = not a review
+     * supersede. `isReviewSupersededRow` (LOAD-BEARING dispatch contract,
+     * RFC-095) now reads THIS column — the old errorMessage prefix marker
+     * remains as human breadcrumbs only. Serialized to the frontend (the
+     * noderun-status decode consumes it).
+     */
+    supersededByReview: text('superseded_by_review'),
+    /**
+     * RFC-145: whether the supersede actually rolled the worktree(s) back
+     * (review.ts `rolledBack` — attempted with zero failures). Orthogonal to
+     * the decision value; drives the frontend canceled-row classification
+     * (rollback vs superseded vs manual). NULL ⇔ false.
+     */
+    rolledBack: integer('rolled_back', { mode: 'boolean' }),
     /**
      * RFC-127 借壳: borrowed agent name for reassignment. When a clarify rerun
      * (self/questioner/designer) is reassigned to another workflow node's agent

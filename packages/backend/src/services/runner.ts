@@ -29,6 +29,7 @@ import type {
   ReviewPromptContext,
 } from '@agent-workflow/shared'
 import {
+  isAgentNodeKind,
   composePerParsedKindRepairBlocks,
   normalizeKindString,
   parseClarifyEnvelopeBody,
@@ -42,7 +43,7 @@ import { dirname, join } from 'node:path'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
 import { createLogger, type Logger } from '@/util/log'
-import { killProcessTree, linkSkillDir, toFileUrl, fromFileUrl } from '@/util/platform'
+import { killProcessTree, linkSkillDir, fromFileUrl } from '@/util/platform'
 import {
   CLARIFY_FORBIDDEN_PREFIX,
   CLARIFY_REQUIRED_PREFIX,
@@ -57,48 +58,30 @@ import {
   type PortValidationFailure,
 } from './envelope'
 import { renderUserPrompt } from './protocol'
-// RFC-111 PR-A/B: agent runtime behind the driver seam. The stdout pump uses
-// `getRuntimeDriver(runtime).parseEvent` (runtime-agnostic); spawn assembly is
-// runtime-branched (opencode inline config vs claude system-prompt-file). The
-// event helpers + buildCommand are re-exported at the bottom so existing
-// importers (tests, memoryDistiller) keep resolving from './runner'.
+// RFC-111 PR-A/B + RFC-143 PR-4: agent runtime behind the driver seam. The
+// stdout pump uses `getRuntimeDriver(runtime).parseEvent` and the spawn goes
+// through `driver.buildBusinessSpawn` — runNode is fully kind-blind (zero
+// `runtime === 'xxx'` branches; the runtime-specific assembly lives in
+// runtime/opencode + runtime/claudeCode). The event helpers, buildCommand and
+// the inline-config surface are re-exported at the bottom so existing importers
+// (tests, memoryDistiller) keep resolving from './runner'.
 import { getRuntimeDriver, type RuntimeKind } from './runtime'
 import { resolveAgentRuntime, type RuntimeProfile } from '@/services/runtimeRegistry'
-import type { SpawnPlan } from './runtime/types'
-
-/** RFC-113: a profile that omits all params (the binary uses its own defaults). */
-const EMPTY_RUNTIME_PROFILE: RuntimeProfile = {
-  model: null,
-  variant: null,
-  temperature: null,
-  steps: null,
-  maxSteps: null,
-}
-import { buildOpencodeSpawn } from './runtime/opencode/spawn'
-import { buildClaudeSpawn } from './runtime/claudeCode/spawn'
-import { toClaudeAgents, toClaudeMcpConfig } from './runtime/claudeCode/inject'
-import { captureChildSessions } from './sessionCapture'
-import { captureClaudeSessions } from './runtime/claudeCode/sessionCapture'
-import { startLiveSubagentCapture } from './subagentLiveCapture'
+import type { ResolvedSkill, SpawnPlan } from './runtime/types'
+import { EMPTY_RUNTIME_PROFILE } from './runtime/opencode/inlineConfig'
+import { NOOP_HANDLE } from './subagentLiveCapture'
 import { setNodeRunStatus, transitionNodeRunStatus } from './lifecycle'
-import { isAgentRunKind, readSnapshotFromRunDir } from './inventory'
 import {
   injectMemoryForRun,
   loadInjectedSnapshotFromFirstAttempt,
   type ScopeBudget,
 } from './memoryInject'
-import type { InjectedMemorySnapshot } from '@agent-workflow/shared'
-import { materializeInventoryPlugin } from '@/opencode-plugin'
+import type { FailureCode, InjectedMemorySnapshot } from '@agent-workflow/shared'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
-export type SkillSource = 'managed' | 'external' | 'project'
-
-export interface ResolvedSkill {
-  name: string
-  sourceKind: SkillSource
-  /** Absolute path for managed/external. Unused for project. */
-  sourcePath?: string
-}
+// RFC-143 PR-4: SkillSource / ResolvedSkill moved to runtime/types.ts (drivers
+// type their skill inputs there); re-exported so scheduler/tests keep resolving.
+export type { SkillSource, ResolvedSkill } from './runtime/types'
 
 export interface RunNodeOptions {
   taskId: string
@@ -437,6 +420,13 @@ export interface RunResult {
     total: number
   }
   errorMessage?: string
+  /**
+   * RFC-145: machine-readable failure taxonomy (shared FAILURE_CODES),
+   * declared HERE at the stamp point that also writes errorMessage — the
+   * scheduler's decideEnvelopeFollowup consumes the persisted column instead
+   * of parsing errorMessage prefixes. Absent = no machine-readable shape.
+   */
+  failureCode?: FailureCode
   /** The exact user prompt sent to opencode (also written to node_runs.promptText). */
   prompt: string
   /** opencode sessionID first seen in stdout events, if any. */
@@ -455,19 +445,9 @@ export interface RunResult {
   }
 }
 
-/**
- * RFC-112: pick the spawn argv head. A custom runtime's frozen binary
- * (`runtimeBinary`) overrides the protocol default; null / empty (the built-in
- * runtimes) falls back to the RFC-111 head (`opencodeCmd` for opencode, the
- * test-only `runtimeCmd` for claude), so a built-in spawn is byte-for-byte
- * unchanged. Exported so the golden head-selection contract can be unit-locked.
- */
-export function pickRuntimeHead(
-  runtimeBinary: string | null | undefined,
-  fallback: string[] | undefined,
-): string[] | undefined {
-  return runtimeBinary != null && runtimeBinary.length > 0 ? [runtimeBinary] : fallback
-}
+// RFC-143 PR-4: pickRuntimeHead moved to ./runtime/head.ts (both drivers select
+// their argv head there); re-exported for the runtime-spawn-head contract lock.
+export { pickRuntimeHead } from './runtime/head'
 
 export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   const log = opts.log ?? createLogger('runner')
@@ -484,82 +464,40 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // 1. Prepare per-run config dir and inject skills.
   prepareSkills(runDir, opts.skills, log)
 
-  // 2. Build OPENCODE_CONFIG_CONTENT inline agent + mcp JSON. RFC-022:
-  // primary agent plus every closure dependent gets a `agent.<name>` entry.
-  // RFC-028: every Mcp the scheduler pre-loaded becomes an `mcp.<name>` entry
-  // (field names translated env→environment / timeoutMs→timeout to match
-  // opencode's `McpLocalConfig` / `McpRemoteConfig` wire format — see
-  // OPENCODE_CONFIG.md §3.3). opencode merges this AFTER all directory scans
-  // so platform definitions win at field level.
-  const inlineConfig: {
-    agent: Record<string, Record<string, unknown>>
-    mcp?: Record<string, Record<string, unknown>>
-    plugin?: Array<string | [string, Record<string, unknown>]>
-  } = await (async () => {
-    // RFC-113: the root agent uses its FROZEN runtime profile (opts.runtimeParams);
-    // each dependent subagent uses ITS OWN runtime's profile (resolved live — they
-    // aren't the session owner, so they don't need freezing). Built once here so
-    // buildInlineConfig stays a pure function over the resolved map.
-    const paramsByAgent = new Map<string, RuntimeProfile>()
-    paramsByAgent.set(opts.agent.name, opts.runtimeParams ?? EMPTY_RUNTIME_PROFILE)
-    for (const dep of opts.dependents ?? []) {
-      if (paramsByAgent.has(dep.name)) continue
-      const r = await resolveAgentRuntime(opts.db, dep.runtime, undefined)
-      paramsByAgent.set(dep.name, {
-        model: r.model,
-        variant: r.variant,
-        temperature: r.temperature,
-        steps: r.steps,
-        maxSteps: r.maxSteps,
-      })
-    }
-    return buildInlineConfig(
-      opts.agent,
-      paramsByAgent,
-      opts.dependents ?? [],
-      opts.mcps ?? [],
-      opts.plugins ?? [],
-    )
-  })()
+  // 2. Resolve the per-agent runtime profiles (RFC-113): the root agent uses its
+  // FROZEN profile (opts.runtimeParams); each dependent subagent uses ITS OWN
+  // runtime's profile (resolved live — they aren't the session owner, so they
+  // don't need freezing). The async DB resolve stays HERE (RFC-143 §4.6C:
+  // drivers are DB-free); the map is raw material for driver.buildBusinessSpawn
+  // (opencode folds it into the inline config; claude reads the root model).
+  const resolvedParamsByAgent = new Map<string, RuntimeProfile>()
+  resolvedParamsByAgent.set(opts.agent.name, opts.runtimeParams ?? EMPTY_RUNTIME_PROFILE)
+  for (const dep of opts.dependents ?? []) {
+    if (resolvedParamsByAgent.has(dep.name)) continue
+    const r = await resolveAgentRuntime(opts.db, dep.runtime, undefined)
+    resolvedParamsByAgent.set(dep.name, {
+      model: r.model,
+      variant: r.variant,
+      temperature: r.temperature,
+      steps: r.steps,
+      maxSteps: r.maxSteps,
+    })
+  }
 
-  // RFC-029: only wire the dump plugin for agent kinds (single / multi). For
-  // wrapper / clarify / review etc. runNode is not invoked anyway, but the
-  // explicit guard keeps the behavior stable even if a future caller routes
-  // non-agent kinds through here.
+  // RFC-029: the inventory dump plugin is wired only for agent kinds (single /
+  // multi). For wrapper / clarify / review etc. runNode is not invoked anyway,
+  // but the explicit guard keeps the behavior stable even if a future caller
+  // routes non-agent kinds through here.
   //
   // RFC-042: on a same-session envelope follow-up, the first attempt already
   // wrote the inventory snapshot. Re-materializing the plugin just to nudge
-  // the model into emitting an envelope is pure overhead (extra plugin-load
-  // failure surface for no gain), so the followup path skips this entire
-  // block.
+  // the model into emitting an envelope is pure overhead, so followups skip it.
+  //
+  // RFC-143 PR-4: this is a pure BUSINESS gate — whether the runtime can even
+  // produce an inventory is the driver's capability (claude simply lacks it);
+  // the materialization itself lives in opencode's buildBusinessSpawn.
   const inventoryNodeKind = opts.nodeKind ?? 'agent-single'
-  let inventoryOutPath: string | undefined
-  if (
-    isAgentRunKind(inventoryNodeKind) &&
-    opts.envelopeFollowup !== true &&
-    runtime === 'opencode'
-  ) {
-    try {
-      mkdirSync(runRoot, { recursive: true })
-      // materializeInventoryPlugin handles both dev (source tree) and
-      // single-binary (embed table) layouts — see opencode-plugin/index.ts.
-      // Async because the binary-mode branch reads bytes via Bun.file(); the
-      // surrounding `runNode` is already async so awaiting here doesn't
-      // change the call-graph.
-      const pluginPath = await materializeInventoryPlugin(runRoot)
-      const fileSpec: string | [string, Record<string, unknown>] = toFileUrl(pluginPath)
-      inlineConfig.plugin = [...(inlineConfig.plugin ?? []), fileSpec]
-      inventoryOutPath = join(runRoot, 'inventory.json')
-    } catch (err) {
-      // Non-fatal: if we can't materialize the plugin (disk full / permission
-      // denied / asset missing in binary mode), the run continues without
-      // inventory capture and the post-exit read lands on `plugin-load-failed`.
-      log.warn('inventory-plugin-materialize-failed', {
-        nodeRunId: opts.nodeRunId,
-        err: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }
+  const wantsInventory = isAgentNodeKind(inventoryNodeKind) && opts.envelopeFollowup !== true
 
   // RFC-041 PR3: silent inject of approved memories into the primary agent's
   // inline prompt. Best-effort — a broken memory table degrades to "no
@@ -574,8 +512,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // so the column distinguishes legitimate zero-inject runs from
   // "captured but empty" runs (see RFC-046 design.md §3.2).
   let injectedSnapshot: InjectedMemorySnapshot[] | null = null
-  // RFC-111: the injected memory text, hoisted so the claude branch can weave it
-  // into the system-prompt-file (opencode appends it to the inline agent prompt).
+  // RFC-111/143: the injected memory text — HOW it reaches the model is each
+  // driver's job (opencode appends it to the inline agent prompt inside
+  // buildBusinessSpawn; claude weaves it into the system-prompt-file).
   let injectedMemoryBlock: string | null = null
   if (opts.envelopeFollowup !== true) {
     try {
@@ -588,12 +527,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       })
       injectedSnapshot = snapshot
       injectedMemoryBlock = memoryBlock
-      if (memoryBlock !== null) {
-        const primary = inlineConfig.agent[opts.agent.name]
-        if (primary !== undefined && typeof primary.prompt === 'string') {
-          primary.prompt = `${primary.prompt}\n\n${memoryBlock}`
-        }
-      }
     } catch (err) {
       log.warn('memory-inject-failed', {
         nodeRunId: opts.nodeRunId,
@@ -672,19 +605,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     })
     // Non-fatal: the final UPDATE at step 11 still carries injectedMemoriesJson,
     // so behavior degrades exactly to RFC-046 (column visible only after run ends).
-  }
-
-  // RFC-022 §design B6: warn (don't fail) when the serialized config crosses
-  // the soft cap. Real OS env-var ceilings are well above this; the warning
-  // helps catch authors stuffing massive bodies into every dependent agent
-  // OR cramming many MCP servers' env / headers maps.
-  const serializedInline = JSON.stringify(inlineConfig)
-  if (serializedInline.length > 32 * 1024) {
-    log.warn('inline-config-large', {
-      bytes: serializedInline.length,
-      agents: Object.keys(inlineConfig.agent),
-      mcpCount: inlineConfig.mcp ? Object.keys(inlineConfig.mcp).length : 0,
-    })
   }
 
   // 3. Render the user prompt.
@@ -823,90 +743,78 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     status: 'running',
   })
 
-  // 4. Spawn the agent runtime. opencode assembles argv+env from the inline
-  // config; claude (RFC-111 PR-B) writes a system-prompt-file and delivers the
-  // prompt over stdin. Everything below (lifecycle / kill / pump / exit) is
-  // runtime-agnostic.
+  // 4. Spawn the agent runtime — one kind-blind call (RFC-143 PR-4). The driver
+  // owns its runtime's ENTIRE assembly: opencode builds + mutates + serializes
+  // the inline config (incl. RFC-029 inventory plugin + RFC-041 memory append)
+  // into OPENCODE_CONFIG_CONTENT; claude writes the system-prompt-file, converts
+  // MCP/subagents to flags and decides the credential bridge. Everything below
+  // (lifecycle / kill / pump / exit) is runtime-agnostic.
   let plan: SpawnPlan
-  if (runtime === 'claude-code') {
-    const systemPromptText =
-      injectedMemoryBlock !== null
-        ? `${opts.agent.bodyMd}\n\n${injectedMemoryBlock}`
-        : opts.agent.bodyMd
-    // RFC-111 PR-C: MCP + dependsOn-closure subagents → inline-JSON flags.
-    const claudeMcp = toClaudeMcpConfig(opts.mcps ?? [])
-    const claudeAgents = toClaudeAgents(opts.dependents ?? [])
-    plan = buildClaudeSpawn({
-      // Codex impl-gate P1-1: claude uses runtimeCmd (test-only), NEVER the
-      // opencode-specific opencodeCmd. RFC-112/113: a custom claude fork's binary
-      // (runtimeBinary, incl. the built-in's migrated config.claudeCodePath) wins;
-      // else a test runtimeCmd; else production → undefined → ['claude'].
-      claudeCmd: pickRuntimeHead(opts.runtimeBinary, opts.runtimeCmd),
+  try {
+    plan = await driver.buildBusinessSpawn({
+      agent: opts.agent,
       prompt,
-      systemPromptText,
-      // RFC-113 (Codex P1-3): claude's model is the RUNTIME's, not the agent's.
-      model: opts.runtimeParams?.model ?? undefined,
+      injectedMemoryBlock,
+      dependents: opts.dependents ?? [],
+      mcps: opts.mcps ?? [],
+      plugins: opts.plugins ?? [],
+      resolvedParamsByAgent,
+      skills: opts.skills,
       resumeSessionId: opts.resumeSessionId,
-      attemptDir: runRoot,
       worktreePath: opts.worktreePath,
+      runRoot,
       gitUserName: opts.gitUserName,
       gitUserEmail: opts.gitUserEmail,
-      skills: opts.skills,
-      ...(claudeMcp !== null ? { mcpConfigJson: JSON.stringify(claudeMcp) } : {}),
-      ...(claudeAgents !== null ? { agentsJson: JSON.stringify(claudeAgents) } : {}),
-      // bridge subscription creds only on REAL claude runs (tests set runtimeCmd).
-      bridgeCredentials: opts.runtimeCmd === undefined,
+      runtimeBinary: opts.runtimeBinary,
+      opencodeCmd: opts.opencodeCmd,
+      runtimeCmd: opts.runtimeCmd,
+      wantsInventory,
+      nodeRunId: opts.nodeRunId,
       log,
     })
-  } else {
-    plan = buildOpencodeSpawn({
-      // RFC-112: a custom opencode fork's binary wins; else the RFC-111 head
-      // (production config.opencodePath via resolveOpencodeCmd, or a test mock)
-      // — byte-for-byte unchanged for built-ins.
-      opencodeCmd: pickRuntimeHead(opts.runtimeBinary, opts.opencodeCmd),
-      agentName: opts.agent.name,
-      prompt,
-      resumeSessionId: opts.resumeSessionId,
-      worktreePath: opts.worktreePath,
-      runDir,
-      inlineConfigSerialized: serializedInline,
-      inventoryOutPath,
-      gitUserName: opts.gitUserName,
-      gitUserEmail: opts.gitUserEmail,
+  } catch (err) {
+    // RFC-143 §6: a driver that fails to ASSEMBLE the spawn (system-prompt-file
+    // write EACCES, config-dir prep failure) lands on the same failure mode as
+    // an unspawnable binary below — mark failed cleanly instead of throwing out
+    // of runNode and stranding the row at 'running'.
+    const errorMessage = `spawn ${runtime} failed: ${err instanceof Error ? err.message : String(err)}`
+    log.warn('runtime-spawn-failed', { nodeRunId: opts.nodeRunId, runtime, errorMessage })
+    await setNodeRunStatus({
+      db: opts.db,
+      nodeRunId: opts.nodeRunId,
+      to: 'failed',
+      allowedFrom: ['running', 'pending'],
+      reason: 'runtime-spawn-failed',
+      extra: { finishedAt: Date.now(), errorMessage },
     })
+    return {
+      status: 'failed',
+      exitCode: null,
+      outputs: {},
+      tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
+      prompt,
+      errorMessage,
+    }
   }
   const { cmd, env } = plan
-  // Diagnostic: surface the model/variant/temperature that actually landed in
-  // the inline-agent JSON. Lets operators tell "scheduler dropped the override
-  // on the floor" apart from "opencode received it but ignored it" without
-  // having to dump the full OPENCODE_CONFIG_CONTENT.
-  const primaryInline = inlineConfig.agent[opts.agent.name] as Record<string, unknown> | undefined
-  // RFC-028: log only the count + names of injected MCPs — never the config
-  // bodies. env / headers may contain user tokens; OPENCODE_CONFIG.md §6 calls
-  // this out explicitly. If the count seems wrong (e.g. user expected 3 but
-  // log shows 1) the operator can grep `mcpKeys` to see which names actually
-  // landed without redacting the inline JSON.
+  // Diagnostic: surface the model/variant/temperature/mcp/plugin facts that
+  // actually landed in the driver's spawn assembly (plan.diagnostics, RFC-143
+  // §4.4 — same fields the runner used to derive from the inline config). Lets
+  // operators tell "scheduler dropped the override on the floor" apart from
+  // "the runtime received it but ignored it" without dumping the full config.
+  // Names/counts only — never config bodies (env / headers may contain user
+  // tokens; OPENCODE_CONFIG.md §6).
   log.info('spawning agent runtime', {
     runtime,
     bin: cmd[0],
     agent: opts.agent.name,
     cwd: opts.worktreePath,
     nodeRunId: opts.nodeRunId,
-    inlineModel: primaryInline?.model ?? null,
-    inlineVariant: primaryInline?.variant ?? null,
-    inlineTemperature: primaryInline?.temperature ?? null,
-    mcpCount: inlineConfig.mcp ? Object.keys(inlineConfig.mcp).length : 0,
-    mcpKeys: inlineConfig.mcp ? Object.keys(inlineConfig.mcp) : [],
-    // RFC-031: log only the count + names of injected plugins — never the
-    // options bodies (may contain API keys / tokens). pluginNames lets the
-    // operator spot "expected dd-trace, got nothing" without dumping the full
-    // OPENCODE_CONFIG_CONTENT to logs.
-    pluginCount: (opts.plugins ?? []).filter((p) => p.enabled !== false).length,
-    pluginNames: (opts.plugins ?? []).filter((p) => p.enabled !== false).map((p) => p.name),
+    ...(plan.diagnostics ?? {}),
   })
 
   // env (PWD fix / OPENCODE_CONFIG_DIR+CONTENT / RFC-029 inventory path /
-  // RFC-067 git identity) is assembled above by buildOpencodeSpawn — see
+  // RFC-067 git identity) is assembled by the driver — see
   // ./runtime/opencode/spawn.ts for the byte-for-byte construction.
   const trySpawn = (): Bun.Subprocess<'ignore' | 'pipe', 'pipe', 'pipe'> =>
     Bun.spawn({
@@ -1118,33 +1026,37 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   const livePollMs = opts.subagentLiveCapture?.pollMs ?? 1500
   const liveFailureLimit = opts.subagentLiveCapture?.consecutiveFailureLimit ?? 5
   const liveCtrl = new AbortController()
-  const livePoller = startLiveSubagentCapture({
-    nodeRunId: opts.nodeRunId,
-    taskId: opts.taskId,
-    nodeId: opts.nodeId,
-    getRootSessionId: () => sessionId ?? null,
-    db: opts.db,
-    log: log.child('subagent-live-poll'),
-    pollMs: livePollMs,
-    consecutiveFailureLimit: liveFailureLimit,
-    signal: liveCtrl.signal,
-    onInsert: (info) => {
-      // Reuse the existing `node.status: running` broadcast lane so the
-      // frontend `useTaskSync` invalidates `['tasks', taskId, 'node-runs']`
-      // without an additional WS schema entry. The status hasn't actually
-      // changed — we're piggybacking the cheap idempotent ping that already
-      // triggers the right invalidation. Empty ticks don't reach this
-      // callback so we never spam empty broadcasts.
-      void info
-      taskBroadcaster.broadcast(TASK_CHANNEL(opts.taskId), {
-        id: -1,
-        type: 'node.status',
-        nodeRunId: opts.nodeRunId,
-        nodeId: opts.nodeId,
-        status: 'running',
-      })
-    },
-  })
+  // RFC-143: live subagent capture is an opencode-only capability. claude's
+  // driver omits `startLiveCapture` → NOOP_HANDLE (was an UNCONDITIONAL start
+  // that spun uselessly against opencode's SQLite on every claude run).
+  const livePoller =
+    driver.startLiveCapture?.({
+      nodeRunId: opts.nodeRunId,
+      taskId: opts.taskId,
+      nodeId: opts.nodeId,
+      getRootSessionId: () => sessionId ?? null,
+      db: opts.db,
+      log: log.child('subagent-live-poll'),
+      pollMs: livePollMs,
+      consecutiveFailureLimit: liveFailureLimit,
+      signal: liveCtrl.signal,
+      onInsert: (info) => {
+        // Reuse the existing `node.status: running` broadcast lane so the
+        // frontend `useTaskSync` invalidates `['tasks', taskId, 'node-runs']`
+        // without an additional WS schema entry. The status hasn't actually
+        // changed — we're piggybacking the cheap idempotent ping that already
+        // triggers the right invalidation. Empty ticks don't reach this
+        // callback so we never spam empty broadcasts.
+        void info
+        taskBroadcaster.broadcast(TASK_CHANNEL(opts.taskId), {
+          id: -1,
+          type: 'node.status',
+          nodeRunId: opts.nodeRunId,
+          nodeId: opts.nodeId,
+          status: 'running',
+        })
+      },
+    }) ?? NOOP_HANDLE
 
   const stderrPump = pumpLines(child.stderr, async (line) => {
     await opts.db.insert(nodeRunEvents).values({
@@ -1228,6 +1140,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // 8. Resolve final status.
   let status: RunFinalStatus
   let errorMessage: string | undefined
+  // RFC-145: set in lock-step with every machine-relevant errorMessage stamp
+  // below; persisted alongside it in the runner-exit extra.
+  let failureCode: FailureCode | undefined
   // RFC-049: structured port-validation failures captured eagerly after
   // parseEnvelope (see section below). Persisted to
   // node_runs.port_validation_failures_json so the scheduler can route the
@@ -1277,6 +1192,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     const clarifyActive = opts.hasClarifyChannel === true
     if (clarifyActive && kind !== 'clarify') {
       status = 'failed'
+      failureCode = 'clarify-required'
       errorMessage =
         kind === 'output'
           ? `${CLARIFY_REQUIRED_PREFIX}-output-emitted: node is in mandatory ask-back mode; emit <workflow-clarify>, not <workflow-output>`
@@ -1294,9 +1210,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // renderer coerces the reason to 'envelope-missing' while hasClarify=false). Hard
       // fails after retries (the stop is enforced; the agent must produce output).
       status = 'failed'
+      failureCode = 'clarify-forbidden'
       errorMessage = `${CLARIFY_FORBIDDEN_PREFIX}: node is in STOP CLARIFYING mode; emit <workflow-output>, not <workflow-clarify>`
     } else if (kind === 'both') {
       status = 'failed'
+      failureCode = 'clarify-and-output-both'
       errorMessage =
         'clarify-and-output-both-present: agent reply contained BOTH <workflow-output> and <workflow-clarify>; the framework requires exactly one'
     } else if (kind === 'clarify') {
@@ -1308,6 +1226,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       if (parsed === null || parsed.body === null) {
         const firstErr = parsed?.errors[0]
         status = 'failed'
+        // RFC-145 D8: only the clarify-questions-* validator-code family is a
+        // follow-up-able failure (matches the old router's startsWith); other
+        // codes (clarify-options-* …) stay unstructured — no follow-up.
+        if (firstErr === undefined || firstErr.code.startsWith('clarify-questions-')) {
+          failureCode = 'clarify-questions-malformed'
+        }
         errorMessage =
           firstErr !== undefined
             ? `${firstErr.code}: ${firstErr.detail}`
@@ -1329,6 +1253,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       }
     } else if (kind === 'none') {
       status = 'failed'
+      failureCode = 'envelope-missing'
       errorMessage = 'no <workflow-output> envelope found in stdout'
     } else {
       // kind === 'output' — legacy happy path.
@@ -1337,6 +1262,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // guard defensively for type narrowing.
       if (envelope === null) {
         status = 'failed'
+        failureCode = 'envelope-missing'
         errorMessage = 'no <workflow-output> envelope found in stdout'
       } else {
         const parsed = parseEnvelope(envelope, opts.agent.outputs)
@@ -1373,6 +1299,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             nodeRunId: opts.nodeRunId,
           })
           status = 'failed'
+          failureCode = 'envelope-port-malformed'
           errorMessage = `${ENVELOPE_PORT_MALFORMED_PREFIX}: agent opened <port name="..."> tag(s) without a parseable </port> close (corrupted or truncated close tag): ${parsed.malformedPorts.join(', ')}`
         }
 
@@ -1409,6 +1336,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
               if (err instanceof PortValidationError) {
                 portValidationFailures.push(err.failure)
                 status = 'failed'
+                failureCode = 'port-validation-failed'
                 errorMessage = err.message
                 break
               }
@@ -1455,29 +1383,19 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // call falls back to RFC-027 byte-for-byte behavior.
   if (sessionId !== undefined) {
     try {
-      if (runtime === 'claude-code') {
-        // RFC-111 PR-D: claude persists subagent transcripts as JSONL files
-        // under the per-run CLAUDE_CONFIG_DIR's projects dir (parent turns are
-        // already captured live by the stdout pump). Mirrors RFC-027 for claude.
-        await captureClaudeSessions({
-          rootSessionId: sessionId,
-          nodeRunId: opts.nodeRunId,
-          taskId: opts.taskId,
-          db: opts.db,
-          log,
-          configDir: join(runRoot, '.claude'),
-          worktreePath: opts.worktreePath,
-        })
-      } else {
-        await captureChildSessions({
-          rootSessionId: sessionId,
-          nodeRunId: opts.nodeRunId,
-          taskId: opts.taskId,
-          db: opts.db,
-          log,
-          alreadyInsertedPartIds: livePoller.stats().insertedPartIdsBySession,
-        })
-      }
+      // RFC-143: each driver captures its own subagent transcripts (opencode:
+      // SQLite BFS + the live poller's partId dedupe; claude: JSONL files under
+      // <runRoot>/.claude/projects). The union ctx carries both runtimes' inputs.
+      await driver.captureSessions({
+        rootSessionId: sessionId,
+        nodeRunId: opts.nodeRunId,
+        taskId: opts.taskId,
+        db: opts.db,
+        log,
+        worktreePath: opts.worktreePath,
+        runRoot,
+        alreadyInsertedPartIds: livePoller.stats().insertedPartIdsBySession,
+      })
     } catch (err) {
       log.warn('subagent-capture-unhandled', {
         nodeRunId: opts.nodeRunId,
@@ -1498,18 +1416,20 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // legitimate snapshot. Leave the column at its prior value by skipping the
   // read entirely.
   let inventoryJson: string | null = null
-  if (
-    isAgentRunKind(inventoryNodeKind) &&
-    opts.envelopeFollowup !== true &&
-    runtime === 'opencode'
-  ) {
+  // RFC-143: inventory read is an opencode-only capability. The agent-kind +
+  // non-followup gates are business conditions (`wantsInventory`, same value the
+  // spawn-side injection used); the runtime gate is expressed by `readInventory`
+  // being present — claude's driver omits it → `?.` short-circuits and the
+  // column stays null.
+  if (wantsInventory) {
     try {
-      const snapshot = await readSnapshotFromRunDir({
-        runDir: runRoot,
+      const snapshot = await driver.readInventory?.({
+        runRoot,
         nodeKind: inventoryNodeKind,
-        pureMode: process.env.OPENCODE_PURE === '1' || process.env.OPENCODE_PURE === 'true',
       })
-      inventoryJson = JSON.stringify(snapshot)
+      if (snapshot !== undefined && snapshot !== null) {
+        inventoryJson = JSON.stringify(snapshot)
+      }
     } catch (err) {
       log.warn('inventory-read-unhandled', {
         nodeRunId: opts.nodeRunId,
@@ -1533,6 +1453,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       finishedAt: Date.now(),
       exitCode: exitCode ?? null,
       errorMessage: errorMessage ?? null,
+      failureCode: failureCode ?? null,
       tokInput: tokenUsage.input,
       tokOutput: tokenUsage.output,
       tokCacheCreate: tokenUsage.cacheCreate,
@@ -1569,6 +1490,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
 
   const result: RunResult = { status, exitCode, outputs, tokenUsage, prompt }
   if (errorMessage !== undefined) result.errorMessage = errorMessage
+  if (failureCode !== undefined) result.failureCode = failureCode
   if (sessionId !== undefined) result.sessionId = sessionId
   if (clarifyResult !== undefined) result.clarify = clarifyResult
   return result
@@ -1597,192 +1519,6 @@ function prepareSkills(runDir: string, skills: ResolvedSkill[], log: Logger): vo
       linkSkillDir(skill.sourcePath, dst)
     }
   }
-}
-
-/**
- * RFC-073: global permission injected at the TOP LEVEL of OPENCODE_CONFIG_CONTENT
- * (not under any agent). opencode folds a top-level `permission` into
- * `config.permission` (config/config.ts), which `agent/agent.ts:124` reads as
- * `user` and merges into EVERY agent's ruleset (`:290` `merge(defaults, user)`).
- * Because `session/prompt.ts`'s `ctx.ask` and `session/llm.ts:resolveTools`
- * recompute the ruleset per-session from the CURRENT session's agent.permission,
- * this reaches the root AND every nested subagent — without relying on
- * opencode's subagent permission forwarding (subagent-permissions.ts only
- * forwards external_directory/deny, never allow).
- *
- *   "*": "allow"       — evaluate() (permission/evaluate.ts) returns allow for
- *                        every permission on every session, so `ask()` never
- *                        publishes `permission.asked`. Kills the subagent
- *                        deadlock: `opencode run`'s loop only replies to the
- *                        ROOT session's permission (cli/cmd/run.ts:708 skips
- *                        child sessions) and we have no reverse channel in CLI
- *                        mode, so a child's `permission.asked` would otherwise
- *                        block forever.
- *   "question": "deny" — Permission.disabled (permission/index.ts:293-302,
- *                        called from llm.ts:resolveTools) drops the `question`
- *                        tool from the model's tool list on every session, so
- *                        the agent can't invoke it → no `question.asked`
- *                        deadlock (run.ts has no question.asked handler at all).
- *                        Orthogonal to our own clarify flow, which travels via
- *                        the `<workflow-clarify>` envelope (shared/clarify.ts),
- *                        not opencode's question tool.
- *
- * ORDER IS LOAD-BEARING: `Permission.disabled` resolves a tool via `findLast`.
- * For `question` BOTH `{*,allow}` and `{question,deny}` match; the LAST wins.
- * `question` MUST stay AFTER `*` or it is not disabled. Locked by
- * runner-permission-inject.test.ts (serialization-order assertion).
- */
-export const AW_GLOBAL_PERMISSION: Record<string, string> = {
-  '*': 'allow',
-  question: 'deny',
-}
-
-/**
- * RFC-073: strip any `question` key from an agent's own permission overrides
- * before injecting it under `agent.<name>.permission`. opencode merges the
- * per-agent permission LAST (agent.ts:306), so a `question: "allow"` there
- * would override the global `question: "deny"` from AW_GLOBAL_PERMISSION and
- * revive the deadlock-prone question tool. No product surface sets this today;
- * the guard is defensive + future-proof. Other keys pass through verbatim.
- */
-function sanitizeInjectedAgentPermission(
-  permission: Record<string, unknown>,
-): Record<string, unknown> {
-  if (!('question' in permission)) return permission
-  const { question: _dropped, ...rest } = permission
-  return rest
-}
-
-/**
- * RFC-022: build the inline-agent JSON for one agent. Pulled out so the
- * primary agent and every closure dependent share one definition formula;
- * the only difference is that dependents pass `overrides = {}` so per-node
- * model/variant/temperature tweaks only apply to the selected primary.
- */
-export function buildInlineAgentEntry(
-  agent: Agent,
-  // RFC-113: model/variant/temperature/steps/maxSteps now come from the agent's
-  // RUNTIME (resolved + frozen at dispatch), NOT from the agent or a node
-  // override. The caller passes the resolved profile for THIS agent.
-  params: RuntimeProfile = EMPTY_RUNTIME_PROFILE,
-): Record<string, unknown> {
-  const inlineAgent: Record<string, unknown> = {
-    prompt: agent.bodyMd,
-    description: agent.description,
-    // RFC-073: drop any `question:"allow"` so it can't override the global
-    // `question:"deny"` (AW_GLOBAL_PERMISSION) and revive the question tool.
-    permission: sanitizeInjectedAgentPermission(agent.permission),
-    // Platform-only fields live under `options` so opencode passes them through
-    // without trying to parse. The runner doesn't read these back; they exist
-    // for observability when an operator dumps `opencode debug agent`.
-    options: { outputs: agent.outputs },
-  }
-  // RFC-113: emit only the params the runtime actually set (NULL = omit, so the
-  // binary uses its own default — a distinct, preserved profile).
-  if (params.model !== null) inlineAgent.model = params.model
-  if (params.variant !== null) inlineAgent.variant = params.variant
-  if (params.temperature !== null) inlineAgent.temperature = params.temperature
-  if (params.steps !== null) inlineAgent.steps = params.steps
-  if (params.maxSteps !== null) inlineAgent.maxSteps = params.maxSteps // Codex P2-3
-  return inlineAgent
-}
-
-export function buildInlineConfig(
-  agent: Agent,
-  // RFC-113: resolved runtime profile per agent name (root + each dependent).
-  // Missing → EMPTY_RUNTIME_PROFILE (omit all params).
-  paramsByAgent: ReadonlyMap<string, RuntimeProfile>,
-  dependents: readonly Agent[],
-  mcps: readonly Mcp[] = [],
-  plugins: readonly Plugin[] = [],
-): {
-  agent: Record<string, Record<string, unknown>>
-  mcp?: Record<string, Record<string, unknown>>
-  /**
-   * RFC-031: opencode `config.plugin` is an array of `Spec` values. Each
-   * element is either a bare `file://<path>` string or a `[file://..., options]`
-   * tuple when the plugin record carries non-empty options. We NEVER inject
-   * the raw user-supplied spec — opencode would re-resolve it through npm,
-   * defeating the eager-install + cache contract.
-   */
-  plugin?: Array<string | [string, Record<string, unknown>]>
-  /** RFC-073: global permission injected at the top level — see AW_GLOBAL_PERMISSION. */
-  permission?: Record<string, string>
-} {
-  const map: Record<string, Record<string, unknown>> = {
-    [agent.name]: buildInlineAgentEntry(agent, paramsByAgent.get(agent.name)),
-  }
-  for (const dep of dependents) {
-    if (dep.name === agent.name) continue // root would shadow itself; defensive
-    if (map[dep.name] !== undefined) continue // closure already deduped, but guard anyway
-    map[dep.name] = buildInlineAgentEntry(dep, paramsByAgent.get(dep.name))
-  }
-  const out: {
-    agent: Record<string, Record<string, unknown>>
-    mcp?: Record<string, Record<string, unknown>>
-    plugin?: Array<string | [string, Record<string, unknown>]>
-    permission?: Record<string, string>
-  } = { agent: map }
-  // RFC-073: inject global permission at the TOP LEVEL of the inline config
-  // (= OPENCODE_CONFIG_CONTENT) so opencode folds it into `config.permission`
-  // → every agent + every nested subagent. Roots out the subagent
-  // permission.asked / question.asked deadlock at the source. See
-  // AW_GLOBAL_PERMISSION for the full mechanism + the load-bearing key order.
-  out.permission = AW_GLOBAL_PERMISSION
-  // RFC-028: emit the mcp record only when at least one ENABLED entry exists.
-  // Disabled entries are skipped entirely to keep the env-var compact AND to
-  // avoid masking a same-name inherited entry from repo .opencode/config.json
-  // — leaving inherited config alone is the v1 stance (OPENCODE_CONFIG.md §6).
-  const mcpMap: Record<string, Record<string, unknown>> = {}
-  for (const m of mcps) {
-    if (m.enabled === false) continue
-    if (mcpMap[m.name] !== undefined) continue // closure dedupe
-    mcpMap[m.name] = buildInlineMcpEntry(m)
-  }
-  if (Object.keys(mcpMap).length > 0) out.mcp = mcpMap
-  // RFC-031: emit the plugin array only when at least one ENABLED entry
-  // resolves. Dedupe by plugin.name (closure may visit the same plugin via
-  // multiple agents). Each element is `file://<cachedPath>` so opencode's
-  // `resolvePathPluginTarget` handles it without npm.
-  const pluginArr: Array<string | [string, Record<string, unknown>]> = []
-  const pluginSeen = new Set<string>()
-  for (const p of plugins) {
-    if (p.enabled === false) continue
-    if (pluginSeen.has(p.name)) continue
-    pluginSeen.add(p.name)
-    const pathSpec = p.cachedPath.startsWith('file://') ? p.cachedPath : toFileUrl(p.cachedPath)
-    const opts = p.options && Object.keys(p.options).length > 0 ? p.options : undefined
-    pluginArr.push(opts === undefined ? pathSpec : [pathSpec, opts])
-  }
-  if (pluginArr.length > 0) out.plugin = pluginArr
-  return out
-}
-
-/**
- * Translate one DB-shape Mcp into the opencode-wire shape consumed by
- * `OPENCODE_CONFIG_CONTENT.mcp.<name>`:
- *   - Local : `command` array kept verbatim; `env` → `environment`;
- *             `timeoutMs` → `timeout`. **No `cwd` field** (opencode lacks it
- *             — stdio child cwd is taken from the opencode process directory
- *             = our worktree). See OPENCODE_CONFIG.md §3.3.
- *   - Remote: `url` / `headers` / `oauth` kept verbatim; `timeoutMs` → `timeout`.
- *
- * Undefined fields are stripped so the resulting JSON does not include `null`
- * values that opencode's Effect Schema would reject.
- */
-function buildInlineMcpEntry(m: Mcp): Record<string, unknown> {
-  const entry: Record<string, unknown> = { type: m.type, enabled: m.enabled }
-  if (m.type === 'local') {
-    entry.command = m.config.command
-    if (m.config.env !== undefined) entry.environment = m.config.env
-    if (m.config.timeoutMs !== undefined) entry.timeout = m.config.timeoutMs
-  } else {
-    entry.url = m.config.url
-    if (m.config.headers !== undefined) entry.headers = m.config.headers
-    if (m.config.oauth !== undefined) entry.oauth = m.config.oauth
-    if (m.config.timeoutMs !== undefined) entry.timeout = m.config.timeoutMs
-  }
-  return entry
 }
 
 /**
@@ -1965,3 +1701,11 @@ function pumpLines(
 // './runner'.
 export { accumulateTokens, extractTextFromEvent, inferEventKind } from './runtime/opencode/events'
 export { buildCommand } from './runtime/opencode/spawn'
+// RFC-143 PR-4: the OPENCODE_CONFIG_CONTENT assembly moved to
+// ./runtime/opencode/inlineConfig.ts so the opencode driver's buildBusinessSpawn
+// can import it cycle-free. Same re-export contract as above.
+export {
+  AW_GLOBAL_PERMISSION,
+  buildInlineAgentEntry,
+  buildInlineConfig,
+} from './runtime/opencode/inlineConfig'

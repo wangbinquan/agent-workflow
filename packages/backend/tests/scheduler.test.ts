@@ -203,7 +203,12 @@ describe('runTask: linear DAG (M1)', () => {
     expect(t?.failedNodeId).toBe('a1')
   })
 
-  test('wrapper kinds rejected as M3 unsupported', async () => {
+  test('empty wrapper fails the task with a node-anchored error', async () => {
+    // Historically this locked the M3-era kind whitelist ("wrapper kinds
+    // rejected as unsupported"). Wrappers are long supported and RFC-146
+    // made the whitelist positive table membership, so the surviving
+    // contract is downstream: a wrapper-git with no inner nodes fails the
+    // task with an errorSummary naming the node ("has no inner nodes").
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],

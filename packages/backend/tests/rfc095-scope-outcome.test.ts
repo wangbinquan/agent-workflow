@@ -38,7 +38,6 @@ import {
   decideScopeOutcome,
   isDispatchable,
   isReviewSupersededRow,
-  REVIEW_SUPERSEDE_MARKER_PREFIX,
   type ScopeOutcome,
   type ScopeOutcomeInput,
 } from '../src/services/dispatchFrontier'
@@ -361,10 +360,8 @@ describe('RFC-095 — NodeRunStatus universe → exactly one frontier bucket', (
     expect(buckets(f, 'n')).toEqual(['ready'])
   })
 
-  test('control — supersede-marker canceled row, dedup empty → blocked(review-superseded), NOT ready', () => {
-    const marked = row('n', 'canceled', {
-      errorMessage: `${REVIEW_SUPERSEDE_MARKER_PREFIX}01HREVIEWDECISION`,
-    })
+  test('control — superseded canceled row, dedup empty → blocked(review-superseded), NOT ready', () => {
+    const marked = row('n', 'canceled', { supersededByReview: 'iterated' })
     const f = frontierFor(marked, { dedup: NONE })
     expect(buckets(f, 'n')).toEqual(['blocked'])
     const b = f.blocked.find((x) => x.nodeId === 'n')
@@ -511,31 +508,29 @@ describe('RFC-095 — supersede window (isDispatchable / isReviewSupersededRow)'
     expect(isDispatchable(aborted, 'agent-single', NO_FRESH, [], definition)).toBe(true)
   })
 
-  test('canceled WITH supersede marker → NOT dispatchable (parked in the supersede→mint window)', () => {
+  test('canceled WITH superseded_by_review → NOT dispatchable (parked in the supersede→mint window)', () => {
+    // RFC-145: the dispatch contract reads the structured column (review.ts
+    // writes it in the same supersede write; migration 0077 backfilled legacy
+    // rows). errorMessage 只是人读 breadcrumb，不参与判定。
     const marked = row('n', 'canceled', {
-      errorMessage: `${REVIEW_SUPERSEDE_MARKER_PREFIX}01HREVIEWDECISION`,
+      supersededByReview: 'iterated',
+      errorMessage:
+        'superseded-by-review-iterated: Replaced by retry_index 2 due to review iterated of rv',
     })
     expect(isDispatchable(marked, 'agent-single', NO_FRESH, [], definition)).toBe(false)
   })
 
-  test('isReviewSupersededRow boundaries (null / empty / partial prefix / full prefix / embedded)', () => {
-    expect(isReviewSupersededRow({ errorMessage: null })).toBe(false)
-    expect(isReviewSupersededRow({ errorMessage: '' })).toBe(false)
-    // Partial prefixes (missing trailing dash / truncated) must NOT match.
-    expect(isReviewSupersededRow({ errorMessage: 'superseded-by-review' })).toBe(false)
-    expect(isReviewSupersededRow({ errorMessage: 'superseded-by-' })).toBe(false)
-    // Bare prefix and prefix + review-decision id both match.
-    expect(isReviewSupersededRow({ errorMessage: REVIEW_SUPERSEDE_MARKER_PREFIX })).toBe(true)
-    expect(isReviewSupersededRow({ errorMessage: `${REVIEW_SUPERSEDE_MARKER_PREFIX}01HXYZ` })).toBe(
-      true,
-    )
-    // Marker must be a PREFIX — an embedded occurrence is not a supersede row.
-    expect(
-      isReviewSupersededRow({ errorMessage: `note: ${REVIEW_SUPERSEDE_MARKER_PREFIX}01H` }),
-    ).toBe(false)
+  test('isReviewSupersededRow：列判定语义（非空即 superseded；errorMessage 不参与）', () => {
+    expect(isReviewSupersededRow({ supersededByReview: null })).toBe(false)
+    expect(isReviewSupersededRow({ supersededByReview: 'iterated' })).toBe(true)
+    expect(isReviewSupersededRow({ supersededByReview: 'rejected' })).toBe(true)
   })
 
-  test('marker prefix constant is the review.ts grep contract string', () => {
-    expect(REVIEW_SUPERSEDE_MARKER_PREFIX).toBe('superseded-by-review-')
+  test('列未置时即便 errorMessage 带旧 marker 文案也不判 superseded（机器地位已取消）', () => {
+    const breadcrumbOnly = row('n', 'canceled', {
+      errorMessage: 'superseded-by-review-iterated: legacy-looking breadcrumb',
+    })
+    // 现实中 0077 backfill + review.ts 双写保证列恒在；此格锁「列是唯一判据」。
+    expect(isDispatchable(breadcrumbOnly, 'agent-single', NO_FRESH, [], definition)).toBe(true)
   })
 })

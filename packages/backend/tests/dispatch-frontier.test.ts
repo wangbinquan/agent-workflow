@@ -8,7 +8,7 @@
 // "canceled / running → NOT dispatchable" case: a plain canceled row is now a
 // REVIVAL signal (same N1 class as failed/interrupted — task-cancel keeps the
 // worktree; retryNode on a canceled task is a designed UI flow). Only a
-// review-supersede marker row (errorMessage prefixed REVIEW_SUPERSEDE_MARKER_PREFIX)
+// review-supersede row (superseded_by_review column non-null, RFC-145)
 // stays parked — see design/RFC-095-scope-outcome-exhaustive/design.md §1.
 
 import { describe, expect, test } from 'bun:test'
@@ -16,7 +16,6 @@ import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
 import type { nodeRuns } from '../src/db/schema'
 import {
   isDispatchable,
-  REVIEW_SUPERSEDE_MARKER_PREFIX,
   wrapperExternalUpstreamSources,
   wrapperHasFreshInnerWork,
   wrapperInnerDescendants,
@@ -130,7 +129,8 @@ describe('RFC-076 PR-A — isDispatchable (trim-B status gate)', () => {
       isDispatchable(
         run({
           status: 'canceled',
-          errorMessage: `${REVIEW_SUPERSEDE_MARKER_PREFIX}iterate: superseded by review decision`,
+          supersededByReview: 'iterated',
+          errorMessage: 'superseded-by-review-iterated: superseded by review decision',
         }),
         'agent-single',
         NO_FRESH,

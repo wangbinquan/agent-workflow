@@ -629,7 +629,6 @@ export const enUS: Resources = {
     subtitle:
       'Register opencode / Claude Code binaries — including custom forks with a renamed binary. Agents pick a runtime by name; the framework drives it with the matching protocol.',
     add: '+ Add runtime',
-    builtin: 'built-in',
     protocolOpencode: 'opencode',
     protocolClaude: 'Claude Code',
     defaultBinary: 'default (PATH / configured)',

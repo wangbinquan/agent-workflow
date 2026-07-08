@@ -16,7 +16,8 @@ import { eq } from 'drizzle-orm'
 import type { Context, Hono } from 'hono'
 import type { TaskActorRole, TaskQuestionPhase } from '@agent-workflow/shared'
 import { actorOf, type Actor } from '@/auth/actor'
-import { loadConfig } from '@/config'
+// RFC-143 PR-5: resolveOpencodeCmd deduped to util/opencode (was 5 route-local copies).
+import { resolveOpencodeCmd } from '@/util/opencode'
 import { taskQuestions, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import {
@@ -35,19 +36,6 @@ import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 
 const log = createLogger('task-questions-route')
-
-function resolveOpencodeCmd(configPath: string): string[] | undefined {
-  if (configPath === '') return undefined
-  try {
-    const cfg = loadConfig(configPath)
-    if (typeof cfg.opencodePath === 'string' && cfg.opencodePath.length > 0) {
-      return [cfg.opencodePath]
-    }
-  } catch {
-    /* nothing */
-  }
-  return undefined
-}
 
 async function loadVisibleTask(deps: AppDeps, taskId: string, actor: Actor) {
   const [t] = await deps.db.select().from(tasksTable).where(eq(tasksTable.id, taskId)).limit(1)

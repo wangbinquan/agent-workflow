@@ -1,18 +1,17 @@
 // RFC-049 — decideEnvelopeFollowup port-validation branch coverage.
 //
 // Pure-function tests for the same-session followup decision when the prior
-// attempt failed with a `port-validation-<kind>-<sub>:` errorMessage prefix.
-// Cases:
-//   * 5 markdown_file subReasons each map → followup, reason='port-validation'
-//     with the failures array forwarded.
+// attempt failed port content validation. RFC-145: the decision anchor moved
+// from the `port-validation-<kind>-<sub>:` errorMessage prefix to
+// failureCode='port-validation-failed'（runner 在 PortValidationError 处置码；
+// <kind>/<sub> 细节继续走 port_validation_failures_json 载荷列）。Cases:
+//   * followup fires with the failures array forwarded（各 subReason 同码——
+//     子理由是载荷不是路由键）.
 //   * The 3 RFC-042 prerequisites are still respected — non-zero exit,
 //     missing sessionId, no agent text all suppress the followup.
-//   * Degraded mode: errorMessage matches the prefix but the failures column
-//     is missing (or returned null from parsePortValidationFailuresJson).
-//     The followup still fires; failures is the empty array.
-//   * Unknown kind in the prefix (e.g. `port-validation-code_file-bad`) still
-//     triggers a followup because the outer prefix is the decision anchor;
-//     downstream composePerKindRepairBlocks degrades the per-kind text.
+//   * Degraded mode: code present but the failures column is missing (or
+//     returned null from parsePortValidationFailuresJson). The followup still
+//     fires; failures is the empty array.
 
 import { describe, expect, test } from 'bun:test'
 
@@ -21,7 +20,7 @@ import { decideEnvelopeFollowup, type PreviousAttemptShape } from '@/services/sc
 const BASE: PreviousAttemptShape = {
   status: 'failed',
   exitCode: 0,
-  errorMessage: 'port-validation-markdown_file-missing-file: ...',
+  failureCode: 'port-validation-failed',
   sessionId: 'opc_session_xyz',
   agentTextCount: 5,
 }
@@ -47,7 +46,6 @@ describe('RFC-049 decideEnvelopeFollowup port-validation', () => {
       const failure = { port: 'p', kind: 'markdown_file', subReason: sub }
       const d = decideEnvelopeFollowup({
         ...BASE,
-        errorMessage: `port-validation-markdown_file-${sub}: ...`,
         portValidationFailures: [failure],
       })
       expect(d).toEqual({
@@ -76,7 +74,7 @@ describe('RFC-049 decideEnvelopeFollowup port-validation', () => {
     ).toEqual({ followup: false })
   })
 
-  test('errorMessage matches prefix but failures column is missing → degraded followup with []', () => {
+  test('code present but failures column missing → degraded followup with []', () => {
     // Field omitted entirely (pre-RFC-049 row, or parsePortValidationFailuresJson
     // returned null and the caller coerced to undefined).
     expect(decideEnvelopeFollowup({ ...BASE })).toEqual({
@@ -86,15 +84,17 @@ describe('RFC-049 decideEnvelopeFollowup port-validation', () => {
     })
   })
 
-  test('unknown kind in prefix still triggers followup (router degrades downstream)', () => {
+  test('非 port-validation 码不携带 failures（载荷只随该码转发）', () => {
+    const failure = { port: 'p', kind: 'markdown_file', subReason: 'empty-file' }
     expect(
       decideEnvelopeFollowup({
         ...BASE,
-        errorMessage: 'port-validation-code_file-lint-failed: ...',
+        failureCode: 'envelope-missing',
+        portValidationFailures: [failure],
       }),
     ).toEqual({
       followup: true,
-      reason: 'port-validation',
+      reason: 'envelope-missing',
       failures: [],
     })
   })

@@ -1,121 +1,117 @@
-// RFC-053 PR-C P-2 — kind behavior matrix tests.
+// RFC-053 P-2 / RFC-146 — NODE_KIND_BEHAVIORS 全真行为表锁。
 //
-// Locks the table itself (every NodeKind × every dimension) + the
-// compile-time invariant (exhaustiveness via `satisfies Record<NodeKind, _>`).
-// PR-C consumers (retryNode + the fixup script) query the table; this file
-// catches drift between table values and the documented intent.
+// 为什么这条测试存在：RFC-053 的原表五维只有 retryCascade 被运行时消费，其余
+// 四维（limits/orphanReap/gc/shutdown）是「愿望文档」假 SSOT（flag-audit §4.2）。
+// RFC-146 重铸后表的准入标准 = 每一维都有 grep 可证的运行时消费者：
+//   retryCascade → services/task.ts retryNode 级联；
+//   isProcess → isProcessNodeKind（表化后单源，历史 or-chain 孪生已删）；
+//   isAgent → isAgentNodeKind（收敛 5 处 agent-single 判定）；
+//   settlesWithoutRow → scheduler SETTLES_WITHOUT_ROW 派生 + stuckTaskDetector。
+// 本文件锁：①逐 kind × 逐维值（意图确认）；②key 全集与 NODE_KIND 自洽；
+// ③三个派生谓词与表引用同源（不再是「巧合等价靠测试对齐」）；④四个愿望维
+// 确已删除（防回潮）。
 
 import { describe, expect, test } from 'bun:test'
 import {
+  NODE_KIND,
   NODE_KIND_BEHAVIORS,
+  isAgentNodeKind,
   isProcessNodeKind,
+  isWrapperKind,
   nodeKindParticipatesInRetryCascade,
+  nodeKindSettlesWithoutRow,
   type NodeKind,
-  type NodeKindBehavior,
 } from '@agent-workflow/shared'
 
-describe('RFC-053 PR-C — NODE_KIND_BEHAVIORS matrix', () => {
-  test('process kinds (agent / wrapper) get the "live process" row', () => {
-    const processKinds: NodeKind[] = [
-      'agent-single',
-      'wrapper-git',
-      'wrapper-loop',
-      'wrapper-fanout',
-    ]
-    for (const k of processKinds) {
-      const b = NODE_KIND_BEHAVIORS[k]
-      expect({ k, ...b }).toEqual({
-        k,
+describe('RFC-146 NODE_KIND_BEHAVIORS — 全真表', () => {
+  test('key 全集与 NODE_KIND 完全自洽', () => {
+    expect(Object.keys(NODE_KIND_BEHAVIORS).sort()).toEqual([...NODE_KIND].sort())
+  })
+
+  test('逐 kind × 逐维值锁（意图确认——改表须过这里）', () => {
+    const expectRow = (
+      kind: NodeKind,
+      row: {
+        retryCascade: 'mint-placeholder' | 'skip'
+        isProcess: boolean
+        isAgent: boolean
+        settlesWithoutRow: boolean
+      },
+    ) => expect(NODE_KIND_BEHAVIORS[kind] as unknown).toEqual(row)
+
+    expectRow('agent-single', {
+      retryCascade: 'mint-placeholder',
+      isProcess: true,
+      isAgent: true,
+      settlesWithoutRow: false,
+    })
+    for (const k of ['wrapper-git', 'wrapper-loop', 'wrapper-fanout'] as const) {
+      expectRow(k, {
         retryCascade: 'mint-placeholder',
-        limits: 'enforce-time-budget',
-        orphanReap: 'mark-interrupted',
-        gc: 'gc-with-task',
-        shutdown: 'graceful-abort',
+        isProcess: true,
+        isAgent: false,
+        settlesWithoutRow: false,
       })
     }
-  })
-
-  test('non-process kinds (input / output / review / clarify) get the "user-pending" row', () => {
-    const nonProcessKinds: NodeKind[] = ['input', 'output', 'review', 'clarify']
-    for (const k of nonProcessKinds) {
-      const b = NODE_KIND_BEHAVIORS[k]
-      expect({ k, ...b }).toEqual({
-        k,
+    expectRow('review', {
+      retryCascade: 'skip',
+      isProcess: false,
+      isAgent: false,
+      settlesWithoutRow: false,
+    })
+    for (const k of ['clarify', 'clarify-cross-agent'] as const) {
+      expectRow(k, {
         retryCascade: 'skip',
-        limits: 'opt-out',
-        orphanReap: 'leave-alone',
-        gc: 'gc-with-task',
-        shutdown: 'no-op',
+        isProcess: false,
+        isAgent: false,
+        settlesWithoutRow: true,
+      })
+    }
+    for (const k of ['input', 'output'] as const) {
+      expectRow(k, {
+        retryCascade: 'skip',
+        isProcess: false,
+        isAgent: false,
+        settlesWithoutRow: false,
       })
     }
   })
 
-  test('every NodeKind has an entry (exhaustiveness via satisfies Record)', () => {
-    const expectedKinds: NodeKind[] = [
-      'agent-single',
-      'input',
-      'output',
-      'wrapper-git',
-      'wrapper-loop',
-      // RFC-060 — wrapper-fanout joins the wrapper-* row.
-      'wrapper-fanout',
-      'review',
-      'clarify',
-      // RFC-056 — cross-agent clarify joins the non-process row.
-      'clarify-cross-agent',
-    ]
-    const tableKeys = Object.keys(NODE_KIND_BEHAVIORS).sort()
-    expect(tableKeys).toEqual(expectedKinds.sort())
-  })
-
-  test('every behavior dimension is filled for every kind', () => {
-    for (const k of Object.keys(NODE_KIND_BEHAVIORS) as NodeKind[]) {
-      const b: NodeKindBehavior = NODE_KIND_BEHAVIORS[k]
-      expect(b.retryCascade).toBeOneOf(['mint-placeholder', 'skip'])
-      expect(b.limits).toBeOneOf(['enforce-time-budget', 'opt-out'])
-      expect(b.orphanReap).toBeOneOf(['mark-interrupted', 'leave-alone'])
-      expect(b.gc).toBeOneOf(['gc-with-task', 'pin'])
-      expect(b.shutdown).toBeOneOf(['graceful-abort', 'no-op'])
+  test('派生谓词与表引用同源（逐 kind property）', () => {
+    for (const k of NODE_KIND) {
+      expect(isProcessNodeKind(k)).toBe(NODE_KIND_BEHAVIORS[k].isProcess)
+      expect(isAgentNodeKind(k)).toBe(NODE_KIND_BEHAVIORS[k].isAgent)
+      expect(nodeKindSettlesWithoutRow(k)).toBe(NODE_KIND_BEHAVIORS[k].settlesWithoutRow)
+      expect(nodeKindParticipatesInRetryCascade(k)).toBe(
+        NODE_KIND_BEHAVIORS[k].retryCascade === 'mint-placeholder',
+      )
     }
   })
 
-  test('nodeKindParticipatesInRetryCascade matches table retryCascade', () => {
-    for (const k of Object.keys(NODE_KIND_BEHAVIORS) as NodeKind[]) {
-      const fromTable = NODE_KIND_BEHAVIORS[k].retryCascade === 'mint-placeholder'
-      expect({ k, derived: nodeKindParticipatesInRetryCascade(k) }).toEqual({
-        k,
-        derived: fromTable,
-      })
+  test('结构关系：isAgent ⊂ isProcess；isProcess = agent ∪ wrapper；settlesWithoutRow ∩ isProcess = ∅', () => {
+    for (const k of NODE_KIND) {
+      const row = NODE_KIND_BEHAVIORS[k]
+      if (row.isAgent) expect(row.isProcess).toBe(true)
+      expect(row.isProcess).toBe(row.isAgent || isWrapperKind(k))
+      if (row.settlesWithoutRow) expect(row.isProcess).toBe(false)
+      // RFC-052 语义：级联恰是 process 家族。
+      expect(row.retryCascade === 'mint-placeholder').toBe(row.isProcess)
     }
   })
 
-  test('legacy isProcessNodeKind (RFC-052 ship) agrees with the table', () => {
-    // RFC-052 added isProcessNodeKind as a hardcoded check; PR-C makes
-    // NODE_KIND_BEHAVIORS authoritative. If anyone changes one without
-    // updating the other, this test fails immediately.
-    for (const k of Object.keys(NODE_KIND_BEHAVIORS) as NodeKind[]) {
-      const tableSays = NODE_KIND_BEHAVIORS[k].retryCascade === 'mint-placeholder'
-      expect({ k, legacy: isProcessNodeKind(k), table: tableSays }).toEqual({
-        k,
-        legacy: tableSays,
-        table: tableSays,
-      })
+  test('四个愿望维已删除（防回潮——表准入标准 = 有运行时消费者）', () => {
+    for (const k of NODE_KIND) {
+      const row = NODE_KIND_BEHAVIORS[k] as Record<string, unknown>
+      expect(row.limits).toBeUndefined()
+      expect(row.orphanReap).toBeUndefined()
+      expect(row.gc).toBeUndefined()
+      expect(row.shutdown).toBeUndefined()
+      expect(Object.keys(row).sort()).toEqual([
+        'isAgent',
+        'isProcess',
+        'retryCascade',
+        'settlesWithoutRow',
+      ])
     }
-  })
-})
-
-describe('RFC-053 PR-C — retryNode uses the table (RFC-052 cascade behavior preserved)', () => {
-  test('mint-placeholder kinds: agent-single, wrapper-git, wrapper-loop, wrapper-fanout', () => {
-    expect(nodeKindParticipatesInRetryCascade('agent-single')).toBe(true)
-    expect(nodeKindParticipatesInRetryCascade('wrapper-git')).toBe(true)
-    expect(nodeKindParticipatesInRetryCascade('wrapper-loop')).toBe(true)
-    expect(nodeKindParticipatesInRetryCascade('wrapper-fanout')).toBe(true)
-  })
-
-  test('skip kinds: input, output, review, clarify (the RFC-052 fix)', () => {
-    expect(nodeKindParticipatesInRetryCascade('input')).toBe(false)
-    expect(nodeKindParticipatesInRetryCascade('output')).toBe(false)
-    expect(nodeKindParticipatesInRetryCascade('review')).toBe(false)
-    expect(nodeKindParticipatesInRetryCascade('clarify')).toBe(false)
   })
 })

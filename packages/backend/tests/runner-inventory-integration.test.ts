@@ -277,21 +277,29 @@ describe('runNode RFC-029 inventory snapshot', () => {
 })
 
 describe('runner.ts source: dump plugin wiring lock', () => {
-  test('runner imports materializeInventoryPlugin and isAgentRunKind', () => {
-    const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
+  test('opencode driver materializes the dump plugin; runner keeps the business gate', () => {
+    // RFC-143 PR-4: the plugin materialization + inventoryOutPath threading
+    // moved into the opencode driver's buildBusinessSpawn (runtime capability);
+    // the runner keeps only the BUSINESS gate (agent kind + not-a-followup →
+    // wantsInventory). The grep lock follows the post-collapse wiring.
+    const driverSrc = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'driver.ts'),
       'utf-8',
     )
     // materializeInventoryPlugin replaced the older awInventoryDumpSourcePath
     // + copyFileSync pair so binary-mode runs (which have no plugin .mjs on
     // disk) still get the file written via the embed.generated PLUGIN_FILES
-    // fallback. The grep lock follows the post-refactor wiring.
-    expect(src).toContain('materializeInventoryPlugin')
-    expect(src).toContain('isAgentRunKind')
-    // RFC-111 PR-A: the OPENCODE_AW_INVENTORY_OUT env assignment moved into the
-    // opencode runtime driver's spawn env builder (runner.ts still computes the
-    // inventoryOutPath and threads it through buildOpencodeSpawn).
-    expect(src).toContain('inventoryOutPath')
+    // fallback.
+    expect(driverSrc).toContain('materializeInventoryPlugin')
+    expect(driverSrc).toContain('inventoryOutPath')
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
+      'utf-8',
+    )
+    // RFC-146: the agent-kind gate is the shared isAgentNodeKind now
+    // (inventory.isAgentRunKind was a local copy of it and is gone).
+    expect(src).toContain('isAgentNodeKind')
+    expect(src).toContain('wantsInventory')
     const spawnSrc = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'spawn.ts'),
       'utf-8',

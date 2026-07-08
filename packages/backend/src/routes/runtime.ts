@@ -8,9 +8,8 @@
 import type { Hono } from 'hono'
 import { loadConfig } from '@/config'
 import type { AppDeps } from '@/server'
-import { listOpencodeModels } from '@/util/opencode-models'
 import { parseBoolQuery } from '@/util/http'
-import { listClaudeModels } from '@/services/runtime/claudeCode/models'
+import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
 import { resolveRuntimeByName } from '@/services/runtimeRegistry'
 import { redactSensitiveString } from '@/util/redact'
 
@@ -32,30 +31,21 @@ export function mountRuntimeRoutes(app: Hono, deps: AppDeps): void {
     // real match is `resolved.name === rtParam`; the bare alias is when it didn't.
     const matchedReal = resolved !== null && resolved.name === rtParam
     const resolvedBinary = matchedReal ? resolved.binaryPath : null
-    const isClaude =
-      (matchedReal && resolved.protocol === 'claude-code') ||
-      (!matchedReal && (rtParam === 'claude' || rtParam === 'claude-code'))
-
-    if (isClaude) {
-      // D3: claude (incl. forks) → curated static list; `binary` reflects the
-      // runtime's binary so the UI can label "static, not probed for this binary".
-      const models = listClaudeModels()
-      return c.json({
-        binary: resolvedBinary ?? cfg.claudeCodePath ?? 'claude',
-        models: models.map((m) => ({
-          id: m.id,
-          provider: m.provider ?? 'anthropic',
-          modelID: m.modelID ?? m.id,
-          name: m.name,
-        })),
-        cached: true,
-      })
-    }
+    // RFC-143: resolve the runtime KIND (name resolution stays here — a routing
+    // concern), then let its driver produce the model list (opencode: CLI+cache;
+    // claude: static table incl. the provider/modelID defaults, now in the
+    // driver). `resolved.protocol` is already the kind; the bare `claude` /
+    // `claude-code` alias (RFC-114 Codex P1-1) maps when no runtime matched.
+    const kind: RuntimeKind = matchedReal
+      ? resolved.protocol
+      : rtParam === 'claude' || rtParam === 'claude-code'
+        ? 'claude-code'
+        : 'opencode'
+    const driver = getRuntimeDriver(kind)
+    const binary = resolvedBinary ?? driver.defaultBinary(cfg)[0]!
     const refresh = parseBoolQuery(c, 'refresh', { default: false })
-    const binary = resolvedBinary ?? cfg.opencodePath ?? 'opencode'
     try {
-      const result = await listOpencodeModels(binary, { refresh })
-      return c.json(result)
+      return c.json(await driver.listModels(binary, { refresh }))
     } catch (err) {
       // Codex P2-4: the message can carry the fork's raw stderr → redact before
       // it reaches the client.

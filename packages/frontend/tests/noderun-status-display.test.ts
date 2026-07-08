@@ -1,11 +1,13 @@
-// Locks the contract between services/review.ts supersede markers and the
-// frontend's user-facing status label. If services/review.ts changes the
-// `superseded-by-review-*` prefix shape, this file must move with it.
+// Locks the contract between services/review.ts supersede writes and the
+// frontend's user-facing status label. RFC-145: the contract is the
+// STRUCTURED DTO fields (supersededByReview / rolledBack) — errorMessage is
+// human breadcrumbs only, and review.ts wording changes can no longer break
+// this classification (the old prefix lock-step note is retired).
 //
 // Why these cases matter: a "canceled" row produced by review iterate that
 // kept worktree files should read as "Superseded", not "Canceled" — the
-// user only thinks of "canceled" as something they did manually. The
-// `-rollback` suffix is the reverse signal: rollback succeeded, the row
+// user only thinks of "canceled" as something they did manually.
+// rolledBack === true is the reverse signal: rollback succeeded, the row
 // IS truly canceled, label stays "Canceled".
 
 import { describe, expect, test } from 'vitest'
@@ -34,6 +36,8 @@ function makeRun(partial: Partial<NodeRun> & { id: string }): NodeRun {
     pid: partial.pid ?? null,
     exitCode: partial.exitCode ?? null,
     errorMessage: partial.errorMessage ?? null,
+    supersededByReview: partial.supersededByReview ?? null,
+    rolledBack: partial.rolledBack ?? null,
     promptText: partial.promptText ?? null,
     tokInput: partial.tokInput ?? null,
     tokOutput: partial.tokOutput ?? null,
@@ -45,60 +49,51 @@ function makeRun(partial: Partial<NodeRun> & { id: string }): NodeRun {
 }
 
 describe('classifyCanceled', () => {
-  test('plain superseded-by-review-iterated → superseded', () => {
-    const r = makeRun({
-      id: 'a',
-      status: 'canceled',
-      errorMessage:
-        'superseded-by-review-iterated: Replaced by retry_index 1 due to review iterated of rev_1',
-    })
+  test('superseded (iterated, files kept) → superseded', () => {
+    const r = makeRun({ id: 'a', status: 'canceled', supersededByReview: 'iterated' })
     expect(classifyCanceled(r)).toBe('superseded')
   })
 
-  test('plain superseded-by-review-rejected → superseded', () => {
-    const r = makeRun({
-      id: 'a',
-      status: 'canceled',
-      errorMessage: 'superseded-by-review-rejected: …',
-    })
+  test('superseded (rejected, files kept) → superseded', () => {
+    const r = makeRun({ id: 'a', status: 'canceled', supersededByReview: 'rejected' })
     expect(classifyCanceled(r)).toBe('superseded')
   })
 
-  test('superseded-by-review-iterated-rollback → rollback', () => {
+  test('superseded + rolledBack (iterated) → rollback', () => {
     const r = makeRun({
       id: 'a',
       status: 'canceled',
-      errorMessage:
-        'superseded-by-review-iterated-rollback: Replaced by retry_index 1 due to review iterated of rev_1',
+      supersededByReview: 'iterated',
+      rolledBack: true,
     })
     expect(classifyCanceled(r)).toBe('rollback')
   })
 
-  test('superseded-by-review-rejected-rollback → rollback', () => {
+  test('superseded + rolledBack (rejected) → rollback', () => {
     const r = makeRun({
       id: 'a',
       status: 'canceled',
-      errorMessage:
-        'superseded-by-review-rejected-rollback: Replaced by retry_index 1 due to review rejected of rev_1',
+      supersededByReview: 'rejected',
+      rolledBack: true,
     })
     expect(classifyCanceled(r)).toBe('rollback')
   })
 
-  test('canceled row with null errorMessage is manual', () => {
-    const r = makeRun({ id: 'a', status: 'canceled', errorMessage: null })
+  test('canceled row without supersede lineage is manual', () => {
+    const r = makeRun({ id: 'a', status: 'canceled' })
     expect(classifyCanceled(r)).toBe('manual')
   })
 
-  test('canceled row with unrelated errorMessage is manual', () => {
+  test('canceled row with legacy-looking errorMessage but NULL columns is manual（机器地位已取消）', () => {
     const r = makeRun({
       id: 'a',
       status: 'canceled',
-      errorMessage: 'task interrupted by user',
+      errorMessage: 'superseded-by-review-iterated: breadcrumb only',
     })
     expect(classifyCanceled(r)).toBe('manual')
   })
 
-  test('non-canceled status is always manual (no marker classification)', () => {
+  test('non-canceled status is always manual (no supersede classification)', () => {
     for (const s of [
       'pending',
       'running',
@@ -106,69 +101,48 @@ describe('classifyCanceled', () => {
       'failed',
       'awaiting_review',
     ] as NodeRunStatus[]) {
-      const r = makeRun({
-        id: 's',
-        status: s,
-        // Even with a stray supersede-looking message we should ignore it
-        // when status !== 'canceled' — services/review.ts never writes the
-        // marker on a non-canceled row.
-        errorMessage: 'superseded-by-review-iterated: not real',
-      })
+      // Even with stray supersede fields we ignore them when status !==
+      // 'canceled' — services/review.ts only writes them on the canceled flip.
+      const r = makeRun({ id: 's', status: s, supersededByReview: 'iterated' })
       expect(classifyCanceled(r)).toBe('manual')
     }
   })
 })
 
 describe('supersededDecision', () => {
-  test('iterated marker (plain or rollback) → "iterated"', () => {
+  test('iterated（含 rollback）→ "iterated"', () => {
     expect(
-      supersededDecision(
-        makeRun({ id: 'a', status: 'canceled', errorMessage: 'superseded-by-review-iterated: …' }),
-      ),
+      supersededDecision(makeRun({ id: 'a', status: 'canceled', supersededByReview: 'iterated' })),
     ).toBe('iterated')
     expect(
       supersededDecision(
-        makeRun({
-          id: 'b',
-          status: 'canceled',
-          errorMessage: 'superseded-by-review-iterated-rollback: …',
-        }),
+        makeRun({ id: 'b', status: 'canceled', supersededByReview: 'iterated', rolledBack: true }),
       ),
     ).toBe('iterated')
   })
 
-  test('rejected marker (plain or rollback) → "rejected"', () => {
+  test('rejected（含 rollback）→ "rejected"', () => {
     expect(
-      supersededDecision(
-        makeRun({ id: 'a', status: 'canceled', errorMessage: 'superseded-by-review-rejected: …' }),
-      ),
+      supersededDecision(makeRun({ id: 'a', status: 'canceled', supersededByReview: 'rejected' })),
     ).toBe('rejected')
     expect(
       supersededDecision(
-        makeRun({
-          id: 'b',
-          status: 'canceled',
-          errorMessage: 'superseded-by-review-rejected-rollback: …',
-        }),
+        makeRun({ id: 'b', status: 'canceled', supersededByReview: 'rejected', rolledBack: true }),
       ),
     ).toBe('rejected')
   })
 
   test('non-supersede canceled or non-canceled rows return null', () => {
+    expect(supersededDecision(makeRun({ id: 'a', status: 'canceled' }))).toBeNull()
     expect(
-      supersededDecision(makeRun({ id: 'a', status: 'canceled', errorMessage: null })),
+      supersededDecision(makeRun({ id: 'b', status: 'failed', supersededByReview: 'iterated' })),
     ).toBeNull()
-    expect(supersededDecision(makeRun({ id: 'b', status: 'failed' }))).toBeNull()
   })
 })
 
 describe('displayNoderunStatusKey', () => {
   test('superseded canceled row returns the friendly key', () => {
-    const r = makeRun({
-      id: 'a',
-      status: 'canceled',
-      errorMessage: 'superseded-by-review-iterated: …',
-    })
+    const r = makeRun({ id: 'a', status: 'canceled', supersededByReview: 'iterated' })
     expect(displayNoderunStatusKey(r)).toBe('noderunStatus.superseded')
   })
 
@@ -176,15 +150,16 @@ describe('displayNoderunStatusKey', () => {
     const r = makeRun({
       id: 'a',
       status: 'canceled',
-      errorMessage: 'superseded-by-review-rejected-rollback: …',
+      supersededByReview: 'rejected',
+      rolledBack: true,
     })
     expect(displayNoderunStatusKey(r)).toBe('noderunStatus.canceled')
   })
 
   test('plain canceled row falls back to per-status key (Canceled)', () => {
-    expect(
-      displayNoderunStatusKey(makeRun({ id: 'a', status: 'canceled', errorMessage: null })),
-    ).toBe('noderunStatus.canceled')
+    expect(displayNoderunStatusKey(makeRun({ id: 'a', status: 'canceled' }))).toBe(
+      'noderunStatus.canceled',
+    )
   })
 
   test('every NodeRunStatus value gets a per-status key when not superseded', () => {

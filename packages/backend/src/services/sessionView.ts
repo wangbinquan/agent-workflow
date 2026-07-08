@@ -12,6 +12,7 @@
 
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import {
+  isAgentNodeKind,
   parseSessionTree,
   type ParseSessionInputEvent,
   type SessionTree,
@@ -28,7 +29,6 @@ import { DomainError, NotFoundError } from '@/util/errors'
  * "session not applicable" hint instead of an empty tree.
  */
 // RFC-060 PR-E: agent-multi removed; agent-single is the only prompt-capable kind.
-const PROMPT_CAPABLE_KINDS = new Set(['agent-single'])
 
 export async function getSessionTree(
   db: DbClient,
@@ -69,7 +69,7 @@ export async function getSessionTree(
     taskRows[0]!.snapshot,
     run.nodeId,
   )
-  if (nodeKind !== null && !PROMPT_CAPABLE_KINDS.has(nodeKind)) {
+  if (nodeKind !== null && !isAgentNodeKind(nodeKind)) {
     throw new DomainError(
       'node-kind-not-supported',
       `node '${run.nodeId}' (kind=${nodeKind}) does not produce an opencode session`,

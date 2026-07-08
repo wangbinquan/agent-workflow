@@ -2243,6 +2243,8 @@ export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<Tas
       pid: r.pid,
       exitCode: r.exitCode,
       errorMessage: r.errorMessage,
+      supersededByReview: (r.supersededByReview ?? null) as 'iterated' | 'rejected' | null,
+      rolledBack: r.rolledBack ?? null,
       promptText: r.promptText,
       tokInput: r.tokInput,
       tokOutput: r.tokOutput,

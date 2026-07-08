@@ -29,7 +29,10 @@
 
 import { and, eq, inArray, isNull, max } from 'drizzle-orm'
 
-import { TERMINAL_NODE_RUN_STATUSES as SHARED_TERMINAL_NODE_RUN_STATUSES } from '@agent-workflow/shared'
+import {
+  TERMINAL_NODE_RUN_STATUSES as SHARED_TERMINAL_NODE_RUN_STATUSES,
+  nodeKindSettlesWithoutRow,
+} from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import {
   clarifyRounds,
@@ -426,7 +429,10 @@ async function findRepairHint(
   for (const n of nodes) {
     if (typeof n?.id !== 'string' || typeof n?.kind !== 'string') continue
     if (n.kind === 'review') reviewIds.add(n.id)
-    if (n.kind === 'clarify' || n.kind === 'clarify-cross-agent') clarifyIds.add(n.id)
+    // RFC-146 (design D7): the awaiting-human clarify family here is exactly
+    // the settles-without-row family — both mean "parks on a human session,
+    // no per-attempt row of its own". Derive from the behavior table.
+    if (nodeKindSettlesWithoutRow(n.kind)) clarifyIds.add(n.id)
   }
   if (reviewIds.size === 0 && clarifyIds.size === 0) return null
 

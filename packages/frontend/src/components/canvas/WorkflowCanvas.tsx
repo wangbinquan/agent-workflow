@@ -44,12 +44,7 @@ import type {
   WorkflowEdge,
   WorkflowNode,
 } from '@agent-workflow/shared'
-import {
-  deriveWrapperFanoutOutputs,
-  isClarifyAskingNode,
-  isWrapperKind,
-  reviewApprovedPortName,
-} from '@agent-workflow/shared'
+import { declaredPorts, isClarifyAskingNode, isWrapperKind } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { AgentNode } from './nodes/AgentNode'
 import { applyPaste, buildSlice, getClipboard, setClipboard } from './canvasClipboard'
@@ -1489,7 +1484,6 @@ export function computePorts(
   agentByName: Map<string, Agent>,
   definition: WorkflowDefinition,
 ): PortInventory {
-  const rec = node as unknown as Record<string, unknown>
   const inputs: string[] = []
   const outputs: string[] = []
 
@@ -1499,12 +1493,12 @@ export function computePorts(
   // RFC-060 §3 — skip `boundary: 'wrapper-output'` edges. Their target is
   // conceptually an OUTPUT port of the wrapper-fanout (re-used as a target
   // so the inner aggregator can drag boundary-output edges onto it); the
-  // declared output is already surfaced by the wrapper-fanout case of the
-  // switch below. Without this skip the boundary-output edge would also
-  // append the output port name to `inputs[]`, drawing a phantom INPUT
-  // port row on the wrapper's left side that mirrors the output port name
-  // — symmetric to the inputs-leak-into-outputs bug fixed in the outputs
-  // fallback at the bottom of this function.
+  // declared output is already surfaced via the declaration table below.
+  // Without this skip the boundary-output edge would also append the output
+  // port name to `inputs[]`, drawing a phantom INPUT port row on the
+  // wrapper's left side that mirrors the output port name — symmetric to
+  // the inputs-leak-into-outputs bug fixed in the outputs fallback at the
+  // bottom of this function.
   for (const e of definition.edges) {
     if (
       e.target.nodeId === node.id &&
@@ -1515,99 +1509,22 @@ export function computePorts(
     }
   }
 
-  switch (node.kind) {
-    case 'input': {
-      const key = typeof rec.inputKey === 'string' ? rec.inputKey : 'out'
-      outputs.push(key)
-      break
-    }
-    case 'output': {
-      const ports = Array.isArray(rec.ports) ? (rec.ports as Array<{ name?: unknown }>) : []
-      for (const p of ports) {
-        if (typeof p.name === 'string' && !inputs.includes(p.name)) inputs.push(p.name)
-      }
-      break
-    }
-    case 'agent-single': {
-      const agentName = typeof rec.agentName === 'string' ? rec.agentName : ''
-      const agent = agentByName.get(agentName)
-      for (const o of agent?.outputs ?? []) outputs.push(o)
-      // RFC-023 bugfix (now generalized): when an outbound edge references a
-      // port the live agent no longer declares — frozen task snapshots vs
-      // edited agent.outputs, or the `__clarify__` channel — render a
-      // fallback Handle so the edge stays visible. Without this, xyflow
-      // drops the edge and logs "Couldn't create edge for source handle id".
-      break
-    }
-    case 'wrapper-git':
-      outputs.push('git_diff')
-      break
-    case 'wrapper-loop': {
-      const bindings = Array.isArray(rec.outputBindings)
-        ? (rec.outputBindings as Array<{ name?: unknown }>)
-        : []
-      for (const b of bindings) {
-        if (typeof b.name === 'string') outputs.push(b.name)
-      }
-      break
-    }
-    case 'wrapper-fanout': {
-      // RFC-060 — wrapper-fanout outputs are DERIVED at render time:
-      // either the inner aggregator agent's renamed outputs OR the
-      // implicit `__done__` signal outlet. We import the helper lazily via
-      // the agent map already on hand.
-      const derived = deriveWrapperFanoutOutputs(definition, node.id, agentByName)
-      for (const p of derived) {
-        if (!outputs.includes(p.name)) outputs.push(p.name)
-      }
-      // Surface declared input ports (shardSource + auxiliary broadcast
-      // ports) so the canvas renders them as left-side target Handles.
-      // Without this, users can author a fanout wrapper but have no
-      // canvas affordance to drag an upstream edge into it — the only
-      // wiring route would be hand-editing YAML.
-      const declaredInputs = Array.isArray(rec.inputs)
-        ? (rec.inputs as Array<{ name?: unknown }>)
-        : []
-      for (const p of declaredInputs) {
-        if (typeof p.name === 'string' && !inputs.includes(p.name)) inputs.push(p.name)
-      }
-      break
-    }
-    case 'review': {
-      // RFC-005 / RFC-079/081: review nodes publish two ports downstream after
-      // approve. The curated/approved outlet is `accepted` for multi-document
-      // review (inputSource is a list<markdownish> port) and `approved_doc` for
-      // single-document review. The canvas MUST derive this the same way the
-      // validator does (`reviewApprovedPortName`) — hard-coding `approved_doc`
-      // here drew a phantom outlet on multi-doc review nodes, so a downstream
-      // edge wired to the real `accepted` port looked correct on the canvas yet
-      // tripped `edge-source-port-missing` at validate time.
-      const inputSource = rec.inputSource
-      let inputKind: string | undefined
-      if (inputSource !== null && typeof inputSource === 'object') {
-        const srcRec = inputSource as Record<string, unknown>
-        const srcNode =
-          typeof srcRec.nodeId === 'string'
-            ? definition.nodes.find((n) => n.id === srcRec.nodeId)
-            : undefined
-        const srcRecNode = srcNode as Record<string, unknown> | undefined
-        if (
-          srcRecNode?.kind === 'agent-single' &&
-          typeof srcRecNode.agentName === 'string' &&
-          typeof srcRec.portName === 'string'
-        ) {
-          inputKind = agentByName.get(srcRecNode.agentName)?.outputKinds?.[srcRec.portName]
-        }
-      }
-      outputs.push(reviewApprovedPortName(inputKind))
-      outputs.push('approval_meta')
-      break
-    }
+  // RFC-146: the per-kind switch that lived here (fork #1 of five parallel
+  // port derivations) moved to the shared declaration table. The canvas
+  // renders the DATA projection only — system channels (clarify family,
+  // __clarify__/…) keep their historical "render only when an edge exists"
+  // behavior via the edge-derived passes around this block.
+  const declared = declaredPorts(node, definition, agentByName)
+  for (const p of declared.dataInputs) {
+    if (!inputs.includes(p.name)) inputs.push(p.name)
   }
+  for (const p of declared.dataOutputs) outputs.push(p.name)
+
   // Final pass: any outbound edge referencing a port we didn't declare above
-  // (stale snapshot vs edited agent/wrapper definition) still needs a Handle
-  // so xyflow can route the edge. Without this, the edge silently disappears
-  // and the console fills with "Couldn't create edge for source handle id".
+  // (stale snapshot vs edited agent/wrapper definition, or a system channel
+  // such as `__clarify__`) still needs a Handle so xyflow can route the
+  // edge. Without this, the edge silently disappears and the console fills
+  // with "Couldn't create edge for source handle id".
   //
   // RFC-060 §3 — skip `boundary: 'wrapper-input'` edges here. Their source
   // is conceptually an INPUT port of the wrapper-fanout (re-used as a source
@@ -1615,9 +1532,8 @@ export function computePorts(
   // input port name to `outputs[]` would render a phantom OUTPUT port on the
   // wrapper's right side that mirrors the input port name (the duplicate
   // user-visible bug after the dual-purpose-handle landing). The matching
-  // left-side input Handle is already declared above (case 'wrapper-fanout'
-  // / `declaredInputs` loop), so xyflow can route the edge without this
-  // fallback.
+  // left-side input Handle is already declared above (declaration-table
+  // dataInputs), so xyflow can route the edge without this fallback.
   for (const e of definition.edges) {
     if (
       e.source.nodeId === node.id &&

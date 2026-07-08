@@ -49,6 +49,12 @@ export type NodeRunStatusUpdateExtra = Partial<
     | 'finishedAt'
     | 'startedAt'
     | 'errorMessage'
+    // RFC-145: the structured failure companions ride the same atomic write as
+    // status + errorMessage (runner-exit stamps failureCode; the review
+    // supersede path stamps supersededByReview/rolledBack).
+    | 'failureCode'
+    | 'supersededByReview'
+    | 'rolledBack'
     | 'exitCode'
     | 'pid'
     | 'reviewIteration'
@@ -348,4 +354,195 @@ export async function transitionTaskStatusByEvent(args: {
     ...(args.extra !== undefined ? { extra: args.extra } : {}),
     reason: args.reason,
   })
+}
+
+// -----------------------------------------------------------------------------
+// RFC-144 — node_runs.merge_state CAS (the third lifecycle: RFC-130 iso
+// merge-back). Same triple as status: shared transition table
+// (`nextMergeState`) + CAS helpers here + the rfc144 blind-write inventory
+// guard keeping raw `update(nodeRuns).set({ mergeState: … })` out of every
+// other module. merge_state's NULL is a REAL state (non-isolated /
+// passthrough rows; every mint is born NULL), so the CAS predicate switches
+// to IS NULL when from === null — `eq(col, null)` never matches in SQL.
+// -----------------------------------------------------------------------------
+
+import { inArray, isNull, lt, or } from 'drizzle-orm'
+import {
+  IllegalMergeStateTransition,
+  type MergeState,
+  type MergeStateOrNull,
+  type MergeStateTransitionEvent,
+  allowedFromForMergeEvent,
+  nextMergeState,
+} from '@agent-workflow/shared'
+import type { DbTxSync } from '@/db/txSync'
+
+/** Companion columns that may ride along a merge_state transition — the iso
+ *  snapshot quintet (begin-isolation pins the base, mark-pending-merge pins
+ *  the result tree) plus wrapperProgressJson (reenter-isolation clears the
+ *  prior generation's baseline ATOMICALLY with the merged→isolating flip, so
+ *  a crash inside the re-entry window cannot leave a stale-baseline row that
+ *  the next resume mistakes for a mid-generation one — RFC-144 D13).
+ *  `mergeState` itself cannot be smuggled through. */
+export type MergeStateUpdateExtra = Partial<
+  Pick<
+    typeof nodeRuns.$inferInsert,
+    | 'isoWorktreePath'
+    | 'isoBaseSnapshot'
+    | 'isoBaseSnapshotReposJson'
+    | 'isoNodeTree'
+    | 'isoNodeTreeReposJson'
+    | 'wrapperProgressJson'
+  >
+>
+
+export class ConcurrentMergeStateTransition extends ConflictError {
+  constructor(nodeRunId: string, expectedFrom: MergeStateOrNull, eventKind: string) {
+    super(
+      'concurrent-merge-state-transition',
+      `node_run ${nodeRunId} merge_state changed concurrently (expected '${expectedFrom ?? 'NULL'}', event '${eventKind}')`,
+    )
+  }
+}
+
+/**
+ * High-level merge_state transition by named event — the ONLY sanctioned
+ * writer besides `abandonSupersededMergeStates` below. The event determines
+ * both the legal `from` set and the resulting `to` (via `nextMergeState`).
+ *
+ * Throws:
+ *   - NotFoundError('node-run-not-found') — row doesn't exist
+ *   - IllegalMergeStateTransition — current merge_state doesn't allow this
+ *     event (a logic bug surfacing; runTask's catch-all fails the task loud)
+ *   - ConcurrentMergeStateTransition — CAS lost; another writer moved the row
+ *     between our read and update
+ */
+export async function transitionMergeState(args: {
+  db: DbClient
+  nodeRunId: string
+  event: MergeStateTransitionEvent
+  extra?: MergeStateUpdateExtra
+}): Promise<{ from: MergeStateOrNull; to: MergeState }> {
+  const row = (
+    await args.db
+      .select({ mergeState: nodeRuns.mergeState })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, args.nodeRunId))
+      .limit(1)
+  )[0]
+  if (row === undefined) {
+    throw new NotFoundError('node-run-not-found', `node_run ${args.nodeRunId} not found`)
+  }
+  const from = (row.mergeState ?? null) as MergeStateOrNull
+  const to = nextMergeState(from, args.event)
+  // rfc144-allow-direct-merge-state-write -- single allowlisted writer
+  const updated = await args.db
+    .update(nodeRuns)
+    .set({ mergeState: to, ...(args.extra ?? {}) })
+    .where(
+      and(
+        eq(nodeRuns.id, args.nodeRunId),
+        from === null ? isNull(nodeRuns.mergeState) : eq(nodeRuns.mergeState, from),
+      ),
+    )
+    .returning({ id: nodeRuns.id })
+  if (updated.length === 0) {
+    throw new ConcurrentMergeStateTransition(args.nodeRunId, from, args.event.kind)
+  }
+  return { from, to }
+}
+
+/**
+ * Non-throwing variant for the merge-back ERROR paths (W10/W13/W16/W19 sit
+ * inside catch blocks — a throw there would mask the original merge error).
+ * Domain misses (illegal transition / concurrent write / row gone) fold to
+ * false; everything else rethrows.
+ */
+export async function tryTransitionMergeState(args: {
+  db: DbClient
+  nodeRunId: string
+  event: MergeStateTransitionEvent
+  extra?: MergeStateUpdateExtra
+}): Promise<boolean> {
+  try {
+    await transitionMergeState(args)
+    return true
+  } catch (err) {
+    if (
+      err instanceof ConflictError ||
+      err instanceof NotFoundError ||
+      err instanceof IllegalMergeStateTransition
+    ) {
+      return false
+    }
+    throw err
+  }
+}
+
+/** The abandon event's from-set, DERIVED from the transition table so the
+ *  set-based WHERE below can never drift from `nextMergeState` (add a state
+ *  to the abandon row there and this picks it up automatically). */
+const ABANDONABLE_MERGE_STATES = allowedFromForMergeEvent({
+  kind: 'abandon',
+  reason: 'derive-from-set',
+}).filter((s): s is MergeState => s !== null)
+
+/**
+ * RFC-144 abandon invariant (abandoned ⇔ superseded): flip every prior
+ * generation of `(taskId, nodeId, iteration)` still parked in an in-flight
+ * merge_state — plus the CHILD rows of those prior generations (fanout
+ * shard / aggregator / merge-resolve children are superseded with their
+ * parent) — to 'abandoned', so the runTask-entry replays can never
+ * materialize a superseded delta into canonical (the stale-replay bug).
+ *
+ * Set-based guarded write: the IN(from-set) predicate IS the transition
+ * guard — only legal abandon sources can flip; merged / merge-failed /
+ * abandoned rows are untouchable through this path. Idempotent.
+ *
+ * SYNCHRONOUS on purpose (drizzle `.all()` surface): the mint chokepoint
+ * must run abandon + insert atomically inside ONE dbTxSync (design D12 —
+ * a crash between two separate statements would leave the superseded row
+ * replayable, resurrecting the bug this exists to fix).
+ *
+ * The abandon REASON is not persisted here: the superseding row's
+ * `rerun_cause` column already records why the generation turned over.
+ */
+export function abandonSupersededMergeStates(args: {
+  db: DbClient | DbTxSync
+  taskId: string
+  nodeId: string
+  iteration: number
+  /** ULID of the freshly-minted superseding row; only strictly-older rows flip. */
+  supersededByRunId: string
+}): number {
+  // (a) prior top-level generations of the same (task, node, iteration).
+  const priorTopLevel = args.db
+    .select({ id: nodeRuns.id })
+    .from(nodeRuns)
+    .where(
+      and(
+        eq(nodeRuns.taskId, args.taskId),
+        eq(nodeRuns.nodeId, args.nodeId),
+        eq(nodeRuns.iteration, args.iteration),
+        isNull(nodeRuns.parentNodeRunId),
+        lt(nodeRuns.id, args.supersededByRunId),
+      ),
+    )
+    .all()
+    .map((r) => r.id)
+  if (priorTopLevel.length === 0) return 0
+  // rfc144-allow-direct-merge-state-write -- set-based abandon (WHERE 即转移守卫)
+  const abandoned = args.db
+    .update(nodeRuns)
+    .set({ mergeState: 'abandoned' })
+    .where(
+      and(
+        eq(nodeRuns.taskId, args.taskId),
+        inArray(nodeRuns.mergeState, ABANDONABLE_MERGE_STATES),
+        or(inArray(nodeRuns.id, priorTopLevel), inArray(nodeRuns.parentNodeRunId, priorTopLevel)),
+      ),
+    )
+    .returning({ id: nodeRuns.id })
+    .all()
+  return abandoned.length
 }

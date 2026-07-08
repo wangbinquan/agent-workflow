@@ -524,6 +524,44 @@ export const RerunCauseSchema = z.enum(RERUN_CAUSES)
 export type RerunCause = z.infer<typeof RerunCauseSchema>
 
 /**
+ * RFC-145 — `node_runs.failure_code` (migration 0077): the machine-readable
+ * failure taxonomy that used to live as errorMessage PREFIXES parsed by
+ * `decideEnvelopeFollowup`'s order-sensitive startsWith chain. The runner now
+ * declares the code at each stamp point (producer-side, 7 values);
+ * `FOLLOWUP_POLICY` (shared/prompt.ts) projects it onto the 6-value render
+ * reason (clarify-forbidden deliberately renders as envelope-missing — the
+ * previously implicit downgrade, now explicit in the table).
+ *
+ * NULL = this row carries no machine-readable failure shape (the common case:
+ * most failures are not follow-up-able). errorMessage remains human-readable
+ * breadcrumbs only — a source guard forbids machine reads of it.
+ *
+ * Like RERUN_CAUSES this is a plain nullable TEXT column — the enum is
+ * enforced at the TypeScript boundary, not by SQLite.
+ */
+export const FAILURE_CODES = [
+  /** No <workflow-output> envelope in stdout (incl. the output-null defensive branch). */
+  'envelope-missing',
+  /** Both <workflow-clarify> and <workflow-output> present outside ask-back mode. */
+  'clarify-and-output-both',
+  /** Clarify envelope present but unparseable — only the `clarify-questions-*`
+   *  validator-code family (D8: `clarify-options-*` and other codes stay
+   *  unstructured; today's router gives them NO follow-up). */
+  'clarify-questions-malformed',
+  /** Clarify channel ACTIVE but the agent produced output / both / neither. */
+  'clarify-required',
+  /** Clarify channel STOPPED but the agent produced another clarify. */
+  'clarify-forbidden',
+  /** A port opened but its close tag was missing/corrupted. */
+  'envelope-port-malformed',
+  /** RFC-049 port content validation failed (payload rides in
+   *  port_validation_failures_json, NOT in this code). */
+  'port-validation-failed',
+] as const
+export const FailureCodeSchema = z.enum(FAILURE_CODES)
+export type FailureCode = z.infer<typeof FailureCodeSchema>
+
+/**
  * RFC-075: metadata recorded on a framework-synthesized commit&push node_run.
  * Non-null presence marks the row as a commit node (the synthetic `nodeId` is
  * `__commit_push__:{agentNodeId}` (+ `:{repoSlug}` in multi-repo); the row's
@@ -587,6 +625,11 @@ export const NodeRunSchema = z.object({
   pid: z.number().int().nullable(),
   exitCode: z.number().int().nullable(),
   errorMessage: z.string().nullable(),
+  /** RFC-145: structured review-supersede lineage — the frontend canceled-row
+   *  classification (rollback vs superseded vs manual) reads these instead of
+   *  parsing errorMessage prefixes. */
+  supersededByReview: z.enum(['iterated', 'rejected']).nullable().default(null),
+  rolledBack: z.boolean().nullable().default(null),
   /** User prompt sent to opencode (populated after runner builds it). */
   promptText: z.string().nullable(),
   tokInput: z.number().int().nullable(),

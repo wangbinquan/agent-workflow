@@ -4,62 +4,47 @@
 // users read raw `canceled` as "I cancelled it manually". The right label
 // depends on whether the worktree files were actually rolled back:
 //
-//   - `superseded-by-review-{decision}-rollback:` — files reset to the
-//     pre-attempt snapshot, this attempt is genuinely undone → "Canceled".
-//   - `superseded-by-review-{decision}:` — files kept, only a fresh retry
-//     was minted alongside → "Superseded" (the more accurate label).
+//   - rolledBack === true — files reset to the pre-attempt snapshot, this
+//     attempt is genuinely undone → "Canceled".
+//   - supersededByReview non-null (no rollback) — files kept, only a fresh
+//     retry was minted alongside → "Superseded" (the more accurate label).
 //
-// The marker is encoded into `errorMessage` by services/review.ts; tests in
-// reviews-iterate-mints-new-run.test.ts lock both shapes. Keep this helper
-// in lock-step with that file's marker format.
+// RFC-145: the classification reads the STRUCTURED DTO fields
+// (`supersededByReview` / `rolledBack` — written by services/review.ts in the
+// same supersede write; legacy rows backfilled by migration 0077). The old
+// `superseded-by-review-*` errorMessage prefixes are human breadcrumbs only —
+// this module no longer parses them, so review.ts wording changes can never
+// silently break the frontend classification again.
 
 import type { NodeRun, NodeRunStatus } from '@agent-workflow/shared'
 import type { StatusChipKind } from '@/components/StatusChip'
 
-const PREFIX_PLAIN_ITERATE = 'superseded-by-review-iterated:'
-const PREFIX_PLAIN_REJECT = 'superseded-by-review-rejected:'
-const PREFIX_ROLLBACK_ITERATE = 'superseded-by-review-iterated-rollback:'
-const PREFIX_ROLLBACK_REJECT = 'superseded-by-review-rejected-rollback:'
-
 export type CanceledKind = 'manual' | 'superseded' | 'rollback'
 
 /**
- * Classify a `canceled` node_run row by its supersede marker.
+ * Classify a `canceled` node_run row by its structured supersede lineage.
  *   - 'rollback'   — review decision caused rollbackToSnapshot to succeed;
  *                    the row is effectively a true cancellation.
  *   - 'superseded' — review decision minted a fresh retry but kept files;
  *                    this row is alive in the prompt-history switcher only.
- *   - 'manual'     — every other case (incl. status !== 'canceled', null
- *                    errorMessage, or unrelated cancellation reason). The
- *                    UI should fall back to the raw status label.
+ *   - 'manual'     — every other case (incl. status !== 'canceled' or a
+ *                    non-review cancellation). The UI falls back to the raw
+ *                    status label.
  */
 export function classifyCanceled(run: NodeRun): CanceledKind {
   if (run.status !== 'canceled') return 'manual'
-  const msg = run.errorMessage ?? ''
-  if (msg.startsWith(PREFIX_ROLLBACK_ITERATE) || msg.startsWith(PREFIX_ROLLBACK_REJECT)) {
-    return 'rollback'
-  }
-  if (msg.startsWith(PREFIX_PLAIN_ITERATE) || msg.startsWith(PREFIX_PLAIN_REJECT)) {
-    return 'superseded'
-  }
-  return 'manual'
+  if ((run.supersededByReview ?? null) === null) return 'manual'
+  return run.rolledBack === true ? 'rollback' : 'superseded'
 }
 
 /**
- * The review decision that produced this supersede marker — needed by
- * the hint i18n string ("after review iterate" / "after review reject").
- * Returns null when classifyCanceled !== 'superseded' / 'rollback'.
+ * The review decision that retired this row — needed by the hint i18n string
+ * ("after review iterate" / "after review reject"). Returns null when the row
+ * is not a review supersede (or not canceled).
  */
 export function supersededDecision(run: NodeRun): 'iterated' | 'rejected' | null {
   if (run.status !== 'canceled') return null
-  const msg = run.errorMessage ?? ''
-  if (msg.startsWith(PREFIX_ROLLBACK_ITERATE) || msg.startsWith(PREFIX_PLAIN_ITERATE)) {
-    return 'iterated'
-  }
-  if (msg.startsWith(PREFIX_ROLLBACK_REJECT) || msg.startsWith(PREFIX_PLAIN_REJECT)) {
-    return 'rejected'
-  }
-  return null
+  return run.supersededByReview ?? null
 }
 
 /**

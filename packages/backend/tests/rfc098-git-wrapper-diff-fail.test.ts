@@ -258,9 +258,10 @@ describe('RFC-098 B1 — S-24: wrapper-git finalize diff failure is fail-closed'
     )
     // The typed short-code is minted in the finalize catch…
     expect(src).toContain('`git-diff-failed:${msg}`')
-    // …and the wrapper-git-list-path text anchor (portName git_diff +
-    // paths.join) still holds — locked in wrapper-git-list-path.test.ts; the
-    // companion assertion here ties the two contracts to the same block.
-    expect(src).toMatch(/portName:\s*'git_diff',\s*content:\s*paths\.join\('\\n'\)/)
+    // …and the wrapper-git-list-path text anchor (git_diff port receives
+    // paths.join via the RFC-144 multi-generation upsert) still holds —
+    // locked in wrapper-git-list-path.test.ts; the companion assertion here
+    // ties the two contracts to the same block.
+    expect(src).toMatch(/upsertWrapperOutput\(db, wrapperRunId, 'git_diff', paths\.join\('\\n'\)\)/)
   })
 })

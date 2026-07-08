@@ -1,11 +1,11 @@
-// RFC-112 PR-D + RFC-113 (frontend) — the runtime registry list replaces the two
-// stacked RFC-111 status cards. Locks: built-ins + custom forks render as rows;
-// every row is editable (RFC-113 D8 — built-ins' binary/model/profile are
-// config-editable; only their name/protocol identity is locked in the dialog) but
-// only custom rows can be Deleted; the config-default row shows the in-table
-// "default" marker + no "Set default" button; a conforming smoke result shows its
-// status; "Add runtime" opens the form dialog (public Dialog chrome, not a raw
-// modal).
+// RFC-112 PR-D + RFC-113 + RFC-153 (frontend) — the runtime registry list replaces
+// the two stacked RFC-111 status cards. Locks: preseeded (opencode / claude-code)
+// + custom rows render alike; every row is editable (name/protocol identity locked
+// in the dialog) AND deletable (RFC-153 removed the built-in read-only flag +
+// badge; the server 409s only on the effective default / a referenced row); the
+// config-default row shows the in-table "default" marker + no "Set default"
+// button; a conforming smoke result shows its status; "Add runtime" opens the form
+// dialog (public Dialog chrome, not a raw modal).
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -22,7 +22,6 @@ const RUNTIMES_BODY = {
       name: 'opencode',
       protocol: 'opencode',
       binaryPath: null,
-      builtin: true,
       isDefault: true,
       ...NULL_PROFILE,
       enabled: true,
@@ -34,7 +33,6 @@ const RUNTIMES_BODY = {
       name: 'claude-code',
       protocol: 'claude-code',
       binaryPath: null,
-      builtin: true,
       isDefault: false,
       ...NULL_PROFILE,
       enabled: true,
@@ -46,7 +44,6 @@ const RUNTIMES_BODY = {
       name: 'my-oc',
       protocol: 'opencode',
       binaryPath: '/usr/local/bin/my-oc',
-      builtin: false,
       isDefault: false,
       ...NULL_PROFILE,
       enabled: true,
@@ -124,7 +121,6 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
               name: 'opencode',
               protocol: 'opencode',
               binaryPath: null,
-              builtin: true,
               isDefault: true,
               ...NULL_PROFILE,
               enabled: true,
@@ -136,7 +132,6 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
               name: 'claude-code',
               protocol: 'claude-code',
               binaryPath: null,
-              builtin: true,
               isDefault: false,
               ...NULL_PROFILE,
               enabled: false,
@@ -200,7 +195,6 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
               name: 'claude-code',
               protocol: 'claude-code',
               binaryPath: null,
-              builtin: true,
               isDefault: false,
               ...NULL_PROFILE,
               enabled: true,
@@ -227,14 +221,15 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     expect(chip.closest('.status-chip')?.className).toContain('status-chip--warn')
   })
 
-  test('every row is editable (RFC-113 D8); only the custom row can be Deleted', async () => {
+  test('RFC-153: every row is editable AND deletable (Test / Edit / Delete on all three)', async () => {
     wrap(<RuntimeList />)
     await waitFor(() => expect(screen.getByText('my-oc')).toBeTruthy())
-    // three rows → three Test + three Edit buttons (built-ins' binary/model/profile
-    // are config-editable now); only the custom row → one Delete.
+    // three rows → three Test + three Edit + three Delete (preseeded rows are
+    // ordinary now; the server, not the UI, blocks deleting the default / a
+    // referenced row).
     expect(screen.getAllByRole('button', { name: /^Test$/ }).length).toBe(3)
     expect(screen.getAllByRole('button', { name: /^Edit$/ }).length).toBe(3)
-    expect(screen.getAllByRole('button', { name: /^Delete$/ }).length).toBe(1)
+    expect(screen.getAllByRole('button', { name: /^Delete$/ }).length).toBe(3)
   })
 
   test('the config-default row shows the default marker + no "Set default" button', async () => {
@@ -321,8 +316,9 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
       </QueryClientProvider>,
     )
     await waitFor(() => expect(screen.getByText('my-oc')).toBeTruthy())
-    // only the custom my-oc row has a Delete button.
-    fireEvent.click(screen.getByRole('button', { name: /^Delete$/ }))
+    // RFC-153: all three rows have a Delete button; my-oc is the 3rd (opencode /
+    // claude-code / my-oc) → click its Delete to invalidate its per-name model query.
+    fireEvent.click(screen.getAllByRole('button', { name: /^Delete$/ })[2]!)
     await waitFor(() =>
       expect(spy).toHaveBeenCalledWith(
         expect.objectContaining({ queryKey: ['runtime', 'models', 'rt', 'my-oc'] }),

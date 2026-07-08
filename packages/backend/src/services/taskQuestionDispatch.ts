@@ -44,6 +44,7 @@ import {
 } from '@/services/clarifyRerunLedger'
 import { evaluateDesignerRerunReadiness } from '@/services/crossClarify'
 import { pickFreshestRun } from '@/services/freshness'
+import { abandonSupersededMergeStates } from '@/services/lifecycle'
 import { buildMintNodeRunValues } from '@/services/nodeRunMint'
 import {
   assertTaskAcceptsQuestions,
@@ -750,6 +751,16 @@ async function dispatchTaskQuestionsLocked(
             .run()
         }
         for (const p of mintPlans) {
+          // RFC-144 D12: same abandon-before-insert invariant as mintNodeRun —
+          // this sync-mint escape hatch is the ONE insert path outside the
+          // factory, so it carries the same supersede retirement in the same tx.
+          abandonSupersededMergeStates({
+            db: tx,
+            taskId: p.values.taskId,
+            nodeId: p.values.nodeId,
+            iteration: p.values.iteration ?? 0,
+            supersededByRunId: p.values.id,
+          })
           // RFC-098 WP-10 forbids direct node_runs inserts outside the mint factory. This
           // site is SAFE: (1) the row's fields come from buildMintNodeRunValues — the SAME
           // factory mintNodeRun uses, so zero hand-copied inheritance / cause drift; (2) the

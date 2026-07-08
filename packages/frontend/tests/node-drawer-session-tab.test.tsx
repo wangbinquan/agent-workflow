@@ -27,6 +27,8 @@ function run(partial: Partial<NodeRun> & { id: string }): NodeRun {
     pid: partial.pid ?? null,
     exitCode: partial.exitCode ?? null,
     errorMessage: partial.errorMessage ?? null,
+    supersededByReview: partial.supersededByReview ?? null,
+    rolledBack: partial.rolledBack ?? null,
     promptText: partial.promptText ?? null,
     tokInput: partial.tokInput ?? null,
     tokOutput: partial.tokOutput ?? null,

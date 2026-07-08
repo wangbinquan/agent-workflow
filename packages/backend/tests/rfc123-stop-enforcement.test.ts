@@ -33,10 +33,11 @@ const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 // --- A. decideEnvelopeFollowup pure ----------------------------------------
 
+// RFC-145: decide 入参从 errorMessage 前缀换 failureCode 列（runner 产出点自述）。
 const PREV_BASE: PreviousAttemptShape = {
   status: 'failed',
   exitCode: 0,
-  errorMessage: 'clarify-forbidden: node is in STOP CLARIFYING mode; emit <workflow-output>',
+  failureCode: 'clarify-forbidden',
   sessionId: 'opc_session_abc',
   agentTextCount: 10,
 }
@@ -220,12 +221,21 @@ describe('RFC-123 D: stop-enforcement wiring guards', () => {
       'const clarifyStopped = hasClarifyChannel && nodeStopOverride',
     )
     expect(norm(schedulerSrc)).toContain('clarifyStopped ? { clarifyStopped: true as const } : {}')
-    // followup mapping: clarify-forbidden → re-demand output.
-    expect(norm(schedulerSrc)).toContain('m.startsWith(CLARIFY_FORBIDDEN_PREFIX)')
   })
 
-  test('runner rejects clarify when explicitly stopped', () => {
+  test('followup mapping: clarify-forbidden → re-demand output（RFC-145 查表格）', () => {
+    // RFC-145: the mapping moved from the scheduler's startsWith chain into the
+    // shared FOLLOWUP_POLICY table — the explicit downgrade row is the contract.
+    const promptSrc = readFileSync(
+      resolve(import.meta.dir, '..', '..', 'shared', 'src', 'prompt.ts'),
+      'utf-8',
+    )
+    expect(norm(promptSrc)).toContain("'clarify-forbidden': { reason: 'envelope-missing' }")
+  })
+
+  test('runner rejects clarify when explicitly stopped（且置 clarify-forbidden 码）', () => {
     expect(norm(runnerSrc)).toContain("opts.clarifyStopped === true && kind === 'clarify'")
     expect(norm(runnerSrc)).toContain('CLARIFY_FORBIDDEN_PREFIX')
+    expect(norm(runnerSrc)).toContain("failureCode = 'clarify-forbidden'")
   })
 })

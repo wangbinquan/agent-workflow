@@ -28,7 +28,6 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { REVIEW_SUPERSEDE_MARKER_PREFIX } from '../src/services/dispatchFrontier'
 import { runTask } from '../src/services/scheduler'
 import { retryNode } from '../src/services/task'
 import { decodeWrapperProgress } from '../src/services/wrapperProgress'
@@ -218,9 +217,8 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
       (r) => r.nodeId === 'inner1' && r.iteration === 1 && r.status === 'canceled',
     )
     expect(innerCanceled).toBeDefined()
-    expect((innerCanceled!.errorMessage ?? '').startsWith(REVIEW_SUPERSEDE_MARKER_PREFIX)).toBe(
-      false,
-    )
+    // RFC-145：非 supersede 的普通取消行——结构化列必为 NULL。
+    expect(innerCanceled!.supersededByReview !== null).toBe(false)
     const innerDone0 = midRows.filter(
       (r) => r.nodeId === 'inner1' && r.iteration === 0 && r.status === 'done',
     )

@@ -526,6 +526,27 @@
       "when": 1785000000000,
       "tag": "0075_flag_audit_markdown_file_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "6",
+      "when": 1785100000000,
+      "tag": "0076_rfc144_abandon_superseded_merge_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "6",
+      "when": 1785200000000,
+      "tag": "0077_rfc145_failure_code",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "6",
+      "when": 1785300000000,
+      "tag": "0078_rfc153_drop_runtime_builtin",
+      "breakpoints": true
     }
   ]
 }

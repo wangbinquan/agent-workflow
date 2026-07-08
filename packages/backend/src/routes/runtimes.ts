@@ -23,9 +23,8 @@ import {
   updateRuntime,
 } from '@/services/runtimeRegistry'
 import type { RuntimeKind } from '@/services/runtime'
+import { getRuntimeDriver } from '@/services/runtime'
 import { smokeRuntime, type SmokeResult } from '@/services/runtimeSmoke'
-import { probeOpencode } from '@/util/opencode'
-import { probeClaudeCode } from '@/services/runtime/claudeCode/probe'
 
 // RFC-143: derived from the DRIVERS registry (via RUNTIME_PROTOCOLS) rather than
 // a re-hardcoded literal enum — a new runtime kind is accepted automatically.
@@ -76,15 +75,12 @@ function parseBody<T>(schema: z.ZodType<T>, body: unknown): T {
  * status endpoint AND the per-runtime deep-smoke probe below.
  */
 function resolveRuntimeBinary(
-  row: { protocol: 'opencode' | 'claude-code'; binaryPath: string | null },
+  row: { protocol: RuntimeKind; binaryPath: string | null },
   cfg: { opencodePath?: string | null; claudeCodePath?: string | null },
 ): string {
-  return (
-    row.binaryPath ??
-    (row.protocol === 'opencode'
-      ? (cfg.opencodePath ?? 'opencode')
-      : (cfg.claudeCodePath ?? 'claude'))
-  )
+  // RFC-143: custom binaryPath wins, else the driver's default (config path /
+  // built-in name) — one source, no re-hardcoded per-protocol config-key pick.
+  return row.binaryPath ?? getRuntimeDriver(row.protocol).defaultBinary(cfg)[0]!
 }
 
 /**
@@ -130,10 +126,10 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
         // here (opencode-only installs keep the claude-code builtin enabled)
         // and the homepage polls every 60s — the response already carries the
         // failure, so per-probe warns would just flood the log (D5/§6).
-        const probe =
-          row.protocol === 'opencode'
-            ? await probeOpencode(binary, { timeoutMs, quiet: true })
-            : await probeClaudeCode(binary, { timeoutMs, quiet: true })
+        const probe = await getRuntimeDriver(row.protocol).probe(binary, {
+          timeoutMs,
+          quiet: true,
+        })
         return {
           name: row.name,
           protocol: row.protocol,

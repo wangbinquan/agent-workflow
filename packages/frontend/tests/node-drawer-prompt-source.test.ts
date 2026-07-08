@@ -29,15 +29,19 @@ describe('RFC-011 prompt/attempts source contract (now hosted by SessionTab)', (
 
   test('SessionTab renders the attempts switcher + uses the capability gate', () => {
     const src = readFileSync(SESSION_TAB, 'utf8')
-    expect(src).toContain('isPromptCapableKind(')
+    // RFC-146: the capability gate is the shared agent-kind predicate now
+    // (isPromptCapableKind was a local copy of it and is gone).
+    expect(src).toContain('isAgentNodeKind(')
     expect(src).toContain('sortNodeRunsForPromptHistory')
     expect(src).toContain('isFanoutParentRun')
   })
 
-  test('helper module exports the four pure functions the session tab relies on', () => {
+  test('helper module exports the three pure functions the session tab relies on', () => {
+    // RFC-146: isPromptCapableKind left this module for shared
+    // isAgentNodeKind (NODE_KIND_BEHAVIORS.isAgent), so the helper surface
+    // is three functions now.
     const src = readFileSync(HELPER, 'utf8')
     expect(src).toMatch(/export function sortNodeRunsForPromptHistory/)
-    expect(src).toMatch(/export function isPromptCapableKind/)
     expect(src).toMatch(/export function isFanoutParentRun/)
     expect(src).toMatch(/export function formatAttemptLabel/)
   })

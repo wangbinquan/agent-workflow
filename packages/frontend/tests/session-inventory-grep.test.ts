@@ -47,7 +47,9 @@ describe('RFC-029 wiring lock', () => {
     expect(src).toContain('SkillsTable')
     expect(src).toContain('McpsTable')
     expect(src).toContain('PluginsTable')
-    expect(src).toContain('isPromptCapableKind')
+    // RFC-146: the capability gate is the shared agent-kind predicate now
+    // (isPromptCapableKind was a local copy of it and is gone).
+    expect(src).toContain('isAgentNodeKind')
     expect(src).toContain("'inventory'")
   })
 

@@ -91,9 +91,11 @@ describe('RFC-073 buildInlineConfig global permission injection', () => {
 
   test('source-code lock: AW_GLOBAL_PERMISSION declares * BEFORE question', () => {
     // Locks the WHY of the order test above at the definition site, so a reader
-    // refactoring runner.ts sees the constraint without running the snapshot.
+    // refactoring the inline-config assembly sees the constraint without running
+    // the snapshot. RFC-143 PR-4: definition moved to runtime/opencode/
+    // inlineConfig.ts (runner re-exports); the lock follows it.
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
+      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'inlineConfig.ts'),
       'utf-8',
     )
     expect(src).toContain('AW_GLOBAL_PERMISSION')

@@ -101,7 +101,12 @@ describe('RFC-060 PR-E — scheduler finalize uses gitChangedFiles, not gitDiffS
   })
 
   test('finalize block writes `paths.join("\\n")` as git_diff port content', () => {
-    expect(src).toMatch(/portName:\s*'git_diff',\s*content:\s*paths\.join\('\\n'\)/)
+    // RFC-144 D13: the write moved from a raw insert to upsertWrapperOutput —
+    // wrapper rows are multi-generation (same-row revival), so the re-entry
+    // generation REPLACES the prior generation's git_diff row instead of
+    // violating the (node_run_id, port_name) PK. Same contract: the joined
+    // changed-path list lands on the wrapper's git_diff port.
+    expect(src).toMatch(/upsertWrapperOutput\(db, wrapperRunId, 'git_diff', paths\.join\('\\n'\)\)/)
   })
 
   test('scheduler no longer imports gitDiffSnapshot (gitChangedFiles replaces it)', () => {

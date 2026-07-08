@@ -24,23 +24,12 @@ import {
   rejectFusion,
   type FusionDeps,
 } from '@/services/fusion'
-import { loadConfig } from '@/config'
+// RFC-143 PR-5: resolveOpencodeCmd deduped to util/opencode (was 5 route-local copies).
+import { resolveOpencodeCmd } from '@/util/opencode'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { isAdminActor } from '@/services/resourceAcl'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
-
-function resolveOpencodeCmd(configPath: string): string[] | undefined {
-  try {
-    const cfg = loadConfig(configPath)
-    if (typeof cfg.opencodePath === 'string' && cfg.opencodePath.length > 0) {
-      return [cfg.opencodePath]
-    }
-  } catch {
-    // config unreadable — fall back to default PATH lookup
-  }
-  return undefined
-}
 
 export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
   function fusionDeps(): FusionDeps {

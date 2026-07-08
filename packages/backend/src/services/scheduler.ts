@@ -17,7 +17,11 @@ import type {
   Agent,
   ClarifyCrossAgentNode,
   ClarifyNode,
+  EnvelopeFollowupReason,
+  FailureCode,
   Mcp,
+  MergeState,
+  MergeStateOrNull,
   NodeKind,
   Plugin,
   WorkflowDefinition,
@@ -27,6 +31,9 @@ import type {
 } from '@agent-workflow/shared'
 import {
   FANOUT_DONE_PORT_NAME,
+  FOLLOWUP_POLICY,
+  NODE_KIND,
+  NODE_KIND_BEHAVIORS,
   WorkflowDefinitionSchema,
   agentHasClarifyChannel,
   buildPriorOutputBlock,
@@ -38,6 +45,7 @@ import {
   findQuestionerNodeForCrossClarify,
   isClarifyChannelEdge,
   isInlineMarkdownItemKind,
+  isMergeStateSettled,
   isWrapperKind,
   resolveClarifySessionMode,
   resolveCrossClarifySessionMode,
@@ -88,7 +96,13 @@ import { evaluateExitCondition, parseExitCondition } from '@/services/exitCondit
 import { loadUndispatchedParkTargets } from '@/services/taskQuestions'
 import { resolveBorrowForNode } from '@/services/taskQuestionDispatch'
 import { autoDispatchDeferredQuestions } from '@/services/clarifyAutoDispatch'
-import { trySetTaskStatus, setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
+import {
+  trySetTaskStatus,
+  setNodeRunStatus,
+  transitionNodeRunStatus,
+  transitionMergeState,
+  tryTransitionMergeState,
+} from '@/services/lifecycle'
 import {
   frozenRuntimeOfSession,
   isClarifyRerunCause,
@@ -119,12 +133,7 @@ import {
   wrapperRevivalEvidence,
 } from '@/services/dispatchFrontier'
 import { runNode, type ResolvedSkill, type RunResult } from '@/services/runner'
-import {
-  CLARIFY_FORBIDDEN_PREFIX,
-  CLARIFY_REQUIRED_PREFIX,
-  ENVELOPE_PORT_MALFORMED_PREFIX,
-  parsePortValidationFailuresJson,
-} from '@/services/envelope'
+import { parsePortValidationFailuresJson } from '@/services/envelope'
 import { runCommitPush } from '@/services/commitPushRunner'
 import {
   buildCommitAgent,
@@ -367,17 +376,14 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   }
   await emitStatus(db, taskId)
 
-  // 4. Validate node kinds.
+  // 4. Validate node kinds. RFC-146: positive membership in the behavior
+  // table — a kind the scheduler knows is exactly a kind with a behavior row.
+  // (The historical negative enum listed 6 `!==` clauses and silently
+  // admitted nothing new; now adding a NodeKind admits it here by
+  // construction, and runOneNode's fall-through guard catches kinds the
+  // dispatch switch doesn't actually handle yet.)
   for (const node of definition.nodes) {
-    if (
-      node.kind !== 'input' &&
-      node.kind !== 'agent-single' &&
-      node.kind !== 'output' &&
-      !isWrapperKind(node.kind) &&
-      node.kind !== 'review' && // RFC-005
-      node.kind !== 'clarify' && // RFC-023
-      node.kind !== 'clarify-cross-agent' // RFC-056
-    ) {
+    if (!(node.kind in NODE_KIND_BEHAVIORS)) {
       await failTask(
         db,
         taskId,
@@ -615,7 +621,14 @@ export { isFresherNodeRun } from '@/services/freshness'
 export interface PreviousAttemptShape {
   status: 'done' | 'failed' | 'canceled' | null
   exitCode: number | null
-  errorMessage: string | null
+  /**
+   * RFC-145: the machine-readable failure taxonomy the runner declared at its
+   * stamp point (persisted on `node_runs.failure_code`). Replaces the old
+   * errorMessage-prefix parsing — errorMessage is human breadcrumbs only and
+   * is deliberately NOT part of this shape anymore. NULL = no follow-up-able
+   * failure (legacy rows were backfilled by migration 0077).
+   */
+  failureCode: FailureCode | null
   sessionId: string | null
   /** Count of `kind='text'` rows the runner persisted for the previous run. */
   agentTextCount: number
@@ -624,12 +637,11 @@ export interface PreviousAttemptShape {
    * runner persisted to `node_runs.port_validation_failures_json`. Defaults
    * to undefined; callers that have the JSON-parsed array can thread it
    * through here so the scheduler can route per-kind repair text via
-   * `composePerKindRepairBlocks`. When the errorMessage carries the
-   * `port-validation-` prefix but this field is missing (e.g. legacy rows
-   * pre-RFC-049 / malformed JSON degraded by parsePortValidationFailuresJson),
-   * the followup still fires but `failures` in the decision is an empty
-   * array — degraded mode: prompt still nudges the agent, just without
-   * per-port specifics.
+   * `composePerKindRepairBlocks`. When failureCode is 'port-validation-failed'
+   * but this field is missing (e.g. legacy rows pre-RFC-049 / malformed JSON
+   * degraded by parsePortValidationFailuresJson), the followup still fires but
+   * `failures` in the decision is an empty array — degraded mode: prompt still
+   * nudges the agent, just without per-port specifics.
    */
   portValidationFailures?: ReadonlyArray<{
     port: string
@@ -642,13 +654,8 @@ export interface PreviousAttemptShape {
 export type EnvelopeFollowupDecision =
   | {
       followup: true
-      reason:
-        | 'envelope-missing'
-        | 'both-present'
-        | 'clarify-malformed'
-        | 'port-validation'
-        | 'clarify-required'
-        | 'envelope-port-malformed'
+      /** RFC-145: 6-value render domain, single-sourced in shared/prompt.ts. */
+      reason: EnvelopeFollowupReason
       /**
        * Failures payload to thread into the runner / shared renderer when
        * reason is 'port-validation'. Empty array for the other reasons (and
@@ -663,61 +670,29 @@ export type EnvelopeFollowupDecision =
     }
   | { followup: false }
 
-export const PORT_VALIDATION_PREFIX = 'port-validation-'
-
+/**
+ * RFC-145: table lookup replaces the old 7-branch order-sensitive
+ * errorMessage-startsWith chain. The runner declares `failureCode` at the
+ * same stamp that writes errorMessage; FOLLOWUP_POLICY (shared/prompt.ts)
+ * projects the 7-value producer domain onto the 6-value render reason —
+ * including the previously implicit clarify-forbidden → envelope-missing
+ * downgrade, now an explicit table row. Order sensitivity is gone: the
+ * runner distinguishes malformed-port vs port-validation at the source
+ * (parse layer vs validation layer — mutually exclusive by construction).
+ */
 export function decideEnvelopeFollowup(prev: PreviousAttemptShape): EnvelopeFollowupDecision {
   if (prev.status !== 'failed') return { followup: false }
   if (prev.exitCode !== 0) return { followup: false }
   if (prev.sessionId === null || prev.sessionId === '') return { followup: false }
   if (prev.agentTextCount <= 0) return { followup: false }
-  const m = prev.errorMessage ?? ''
-  if (m.startsWith('no <workflow-output> envelope found in stdout')) {
-    return { followup: true, reason: 'envelope-missing', failures: [] }
+  if (prev.failureCode === null) return { followup: false }
+  const policy = FOLLOWUP_POLICY[prev.failureCode]
+  return {
+    followup: true,
+    reason: policy.reason,
+    failures:
+      prev.failureCode === 'port-validation-failed' ? (prev.portValidationFailures ?? []) : [],
   }
-  if (m.startsWith('clarify-and-output-both-present')) {
-    return { followup: true, reason: 'both-present', failures: [] }
-  }
-  if (m.startsWith('clarify-questions-')) {
-    return { followup: true, reason: 'clarify-malformed', failures: [] }
-  }
-  // RFC-100: `clarify-required-*` — the agent was in mandatory ask-back mode but
-  // replied with `<workflow-output>` / both / neither. Same-session follow-up
-  // re-demands the clarify envelope (the follow-up renderer still sees
-  // hasClarifyChannel=true this round, so it emits the mandatory-ask-back
-  // wording). Hard-fails after retries — no output escape hatch.
-  if (m.startsWith(CLARIFY_REQUIRED_PREFIX)) {
-    return { followup: true, reason: 'clarify-required', failures: [] }
-  }
-  // RFC-123 follow-up: `clarify-forbidden` — an EXPLICITLY-stopped node emitted a
-  // `<workflow-clarify>` despite STOP CLARIFYING. Re-demand `<workflow-output>`: the
-  // follow-up renderer coerces the reason to 'envelope-missing' while hasClarify=false
-  // (the stopped node) → output-oriented wording. Hard-fails after retries (enforces
-  // the stop; a disobedient agent never re-opens a clarify session).
-  if (m.startsWith(CLARIFY_FORBIDDEN_PREFIX)) {
-    return { followup: true, reason: 'envelope-missing', failures: [] }
-  }
-  // The agent emitted a `<workflow-output>` envelope but a `<port>` was opened
-  // without a parseable `</port>` close (corrupted / truncated close tag — e.g.
-  // `</|DSML|port>`). Same-session follow-up re-demands a clean envelope with
-  // every port properly closed; hard-fails after retries (no silent escape to a
-  // blank port). Checked before PORT_VALIDATION_PREFIX so an unclosed port that
-  // would ALSO have failed RFC-049 (it never reached validation) routes to the
-  // malformed repair text, not the per-kind one.
-  if (m.startsWith(ENVELOPE_PORT_MALFORMED_PREFIX)) {
-    return { followup: true, reason: 'envelope-port-malformed', failures: [] }
-  }
-  // RFC-049: any `port-validation-<kind>-<sub>` prefix → same-session
-  // followup. The `<kind>` segment routing happens later in
-  // composePerKindRepairBlocks; here we only need the outermost prefix to
-  // make the on/off decision.
-  if (m.startsWith(PORT_VALIDATION_PREFIX)) {
-    return {
-      followup: true,
-      reason: 'port-validation',
-      failures: prev.portValidationFailures ?? [],
-    }
-  }
-  return { followup: false }
 }
 
 async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeResult> {
@@ -1266,9 +1241,13 @@ export interface Frontier {
   allSettled: boolean
 }
 
-// clarify / cross-clarify graph-visit no-ops write NO node_run row (C1); they
-// settle without one once upstreams are done and no session is open (N6).
-const SETTLES_WITHOUT_ROW_KINDS = new Set<NodeKind>(['clarify', 'clarify-cross-agent'])
+// Graph-visit no-op kinds write NO node_run row (C1); they settle without one
+// once upstreams are done and no session is open (N6). RFC-146: derived from
+// the behavior table (today: clarify / clarify-cross-agent) instead of a
+// hand-maintained literal twin.
+const SETTLES_WITHOUT_ROW_KINDS = new Set<NodeKind>(
+  NODE_KIND.filter((k) => NODE_KIND_BEHAVIORS[k].settlesWithoutRow),
+)
 
 function isLiveStatus(status: string): boolean {
   return (
@@ -1349,10 +1328,11 @@ export function deriveFrontier(
     if (
       r.status === 'done' &&
       isNodeRunFresh(r, freshestDone) &&
-      // Normalize undefined (plain test rows) → null (real DB column) so only the
-      // in-flight iso merge states ('pending-merge' / 'isolating' / 'conflict-*' /
-      // 'merge-failed') are gated out; null/'merged' pass (legacy golden-lock).
-      ((r.mergeState ?? null) === null || r.mergeState === 'merged')
+      // RFC-144: the settled set {NULL, merged} now derives from the shared
+      // transition table (SETTLED_MERGE_STATES) — in-flight iso states
+      // ('isolating' / 'pending-merge' / 'conflict-human' / 'merge-failed' /
+      // 'abandoned') are gated out; null/'merged' pass (legacy golden-lock).
+      isMergeStateSettled(r.mergeState)
     ) {
       completed.add(nodeId)
     }
@@ -1553,24 +1533,45 @@ export function deriveFrontier(
               reason: 'skipped-has-no-dispatch-semantics',
             })
             break
-          case 'done':
-            // RFC-130 §6.3: a done row whose merge-back could not be resolved by the
-            // merge agent is parked for a human (merge_state='conflict-human') → the
-            // scope bubbles awaiting_human (decideScopeOutcome). merge_state=
-            // 'merge-failed' is a hard merge failure → the scope fails. Everything
-            // else is the pre-RFC-130 stale-done in-invocation dedup artifact.
-            if (latest?.mergeState === 'conflict-human') {
-              awaitingHuman.push(n.id)
-            } else if (latest?.mergeState === 'merge-failed') {
-              failed.push(n.id)
-            } else {
-              blocked.push({
-                nodeId: n.id,
-                status: st,
-                reason: 'stale-done-in-invocation-dedup',
-              })
+          case 'done': {
+            // RFC-130 §6.3 / RFC-144: exhaustive over MergeStateOrNull — a done row
+            // parked at 'conflict-human' bubbles awaiting_human (decideScopeOutcome);
+            // 'merge-failed' is a hard merge failure → the scope fails; 'abandoned'
+            // (superseded generation, RFC-144) joins the stale-done dedup bucket like
+            // every other stale row; a NEW merge state added to the union without a
+            // bucket here is a compile error.
+            const ms = (latest?.mergeState ?? null) as MergeStateOrNull
+            switch (ms) {
+              case 'conflict-human':
+                awaitingHuman.push(n.id)
+                break
+              case 'merge-failed':
+                failed.push(n.id)
+                break
+              case null:
+              case 'isolating':
+              case 'pending-merge':
+              case 'merged':
+              case 'abandoned':
+                blocked.push({
+                  nodeId: n.id,
+                  status: st,
+                  reason: 'stale-done-in-invocation-dedup',
+                })
+                break
+              default: {
+                const _exhaustive: never = ms
+                void _exhaustive
+                // Runtime-unknown legacy value — same dedup bucket as before.
+                blocked.push({
+                  nodeId: n.id,
+                  status: st,
+                  reason: 'stale-done-in-invocation-dedup',
+                })
+              }
             }
             break
+          }
           case 'interrupted':
             blocked.push({
               nodeId: n.id,
@@ -1621,6 +1622,8 @@ interface OneNodeArgs {
  * RFC-130: persist the iso base columns after createNodeIso (single vs multi-repo,
  * design.md §3.2). merge_state='isolating' marks the row as an isolated run whose
  * agent has not yet finished — deriveFrontier treats it as not-yet-complete.
+ * RFC-144: the write goes through the merge_state CAS (NULL → isolating); the
+ * iso base columns ride along atomically as transition extras.
  */
 async function persistIsoBase(
   db: DbClient,
@@ -1630,49 +1633,51 @@ async function persistIsoBase(
 ): Promise<void> {
   if (handle.passthrough) return // in-place run — leave iso columns NULL (golden-lock)
   if (repoCount === 1) {
-    await db
-      .update(nodeRuns)
-      .set({
+    await transitionMergeState({
+      db,
+      nodeRunId,
+      event: { kind: 'begin-isolation' },
+      extra: {
         isoWorktreePath: handle.containerPath,
         isoBaseSnapshot: handle.repos[0]?.baseSnapshot ?? null,
         isoBaseSnapshotReposJson: null,
-        mergeState: 'isolating',
-      })
-      .where(eq(nodeRuns.id, nodeRunId))
+      },
+    })
     return
   }
   const map: Record<string, string> = {}
   for (const r of handle.repos) map[r.worktreeDirName] = r.baseSnapshot
-  await db
-    .update(nodeRuns)
-    .set({
+  await transitionMergeState({
+    db,
+    nodeRunId,
+    event: { kind: 'begin-isolation' },
+    extra: {
       isoWorktreePath: handle.containerPath,
       isoBaseSnapshot: null,
       isoBaseSnapshotReposJson: JSON.stringify(map),
-      mergeState: 'isolating',
-    })
-    .where(eq(nodeRuns.id, nodeRunId))
+    },
+  })
 }
 
-/** RFC-130: persist the iso node_tree columns + merge_state on agent success (D15). */
+/** RFC-130: persist the iso node_tree columns + merge_state on agent success (D15).
+ *  RFC-144: isolating → pending-merge via the merge_state CAS; the former
+ *  `mergeState: string` parameter was a dead knob (all 4 callers passed the
+ *  literal 'pending-merge') — the event now fixes the target. */
 async function persistIsoNodeTree(
   db: DbClient,
   nodeRunId: string,
   repoCount: number,
   nodeTrees: Record<string, string>,
-  mergeState: string,
 ): Promise<void> {
-  if (repoCount === 1) {
-    await db
-      .update(nodeRuns)
-      .set({ isoNodeTree: nodeTrees[''] ?? null, isoNodeTreeReposJson: null, mergeState })
-      .where(eq(nodeRuns.id, nodeRunId))
-    return
-  }
-  await db
-    .update(nodeRuns)
-    .set({ isoNodeTree: null, isoNodeTreeReposJson: JSON.stringify(nodeTrees), mergeState })
-    .where(eq(nodeRuns.id, nodeRunId))
+  await transitionMergeState({
+    db,
+    nodeRunId,
+    event: { kind: 'mark-pending-merge' },
+    extra:
+      repoCount === 1
+        ? { isoNodeTree: nodeTrees[''] ?? null, isoNodeTreeReposJson: null }
+        : { isoNodeTree: null, isoNodeTreeReposJson: JSON.stringify(nodeTrees) },
+  })
 }
 
 function parseIsoJsonMap(s: string | null): Record<string, string> {
@@ -1701,7 +1706,12 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
   const rows = await db
     .select()
     .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.mergeState, 'pending-merge')))
+    .where(
+      and(
+        eq(nodeRuns.taskId, taskId),
+        eq(nodeRuns.mergeState, 'pending-merge' satisfies MergeState),
+      ),
+    )
   if (rows.length === 0) return
   const taskBaseHeads: Record<string, string> = {}
   for (const repo of state.repos) {
@@ -1748,10 +1758,18 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
         : { kind: 'conflict-human' as const, detail: res.detail }
     })
     if (merge.kind === 'merged') {
-      await db.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, r.id))
+      await transitionMergeState({
+        db,
+        nodeRunId: r.id,
+        event: { kind: 'mark-merged', via: 'replay' },
+      })
       log.info('pending-merge replay merged', { nodeRunId: r.id })
     } else {
-      await db.update(nodeRuns).set({ mergeState: 'conflict-human' }).where(eq(nodeRuns.id, r.id))
+      await transitionMergeState({
+        db,
+        nodeRunId: r.id,
+        event: { kind: 'park-conflict-human', via: 'replay' },
+      })
       log.warn('pending-merge replay conflict → conflict-human (merge agent could not resolve)', {
         nodeRunId: r.id,
         detail: merge.detail,
@@ -1773,7 +1791,12 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
   const rows = await db
     .select()
     .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.mergeState, 'conflict-human')))
+    .where(
+      and(
+        eq(nodeRuns.taskId, taskId),
+        eq(nodeRuns.mergeState, 'conflict-human' satisfies MergeState),
+      ),
+    )
   if (rows.length === 0) return
   const taskBaseHeads: Record<string, string> = {}
   for (const repo of state.repos) {
@@ -1802,7 +1825,11 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
       completeHumanResolvedConflict(handle, nodeTrees, log),
     )
     if (outcome.allResolved) {
-      await db.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, r.id))
+      await transitionMergeState({
+        db,
+        nodeRunId: r.id,
+        event: { kind: 'complete-human-resolution' },
+      })
       log.info('conflict-human resume: human resolution merged back', { nodeRunId: r.id })
     } else {
       log.info('conflict-human resume: still unresolved — staying parked', {
@@ -2119,6 +2146,20 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     return { kind: 'ok', summary: '', message: '' }
   }
 
+  // RFC-146: exhaustiveness guard. Every kind above returned inside its own
+  // branch; only agent-single may fall through into the agent dispatch path
+  // below. A NodeKind admitted by the behavior table but not yet given a
+  // runOneNode branch fails loud here instead of being silently driven as an
+  // agent. (Dispatch stays an if-chain by design — the handlers close over
+  // SchedulerState; see RFC-146 design D2.)
+  if (node.kind !== 'agent-single') {
+    return {
+      kind: 'failed',
+      summary: `runOneNode has no dispatch branch for node kind ${node.kind}`,
+      message: 'unhandled-node-kind',
+    }
+  }
+
   const agentName = pickString(node, 'agentName')
   if (agentName === null) {
     return {
@@ -2369,7 +2410,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         followupDecision = decideEnvelopeFollowup({
           status: lastResult.status,
           exitCode: lastResult.exitCode,
-          errorMessage: lastResult.errorMessage ?? null,
+          failureCode: lastResult.failureCode ?? null,
           sessionId: lastResult.sessionId ?? null,
           agentTextCount: Number(textCountRow[0]?.c ?? 0),
           ...(priorFailures !== null ? { portValidationFailures: priorFailures } : {}),
@@ -2983,7 +3024,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     } else if (!isoHandle.passthrough && lastResult !== null && lastResult.status === 'done') {
       try {
         const nodeTrees = await snapshotNodeIsoFinal(isoHandle, log)
-        await persistIsoNodeTree(db, nodeRunId, task.repoCount, nodeTrees, 'pending-merge')
+        await persistIsoNodeTree(db, nodeRunId, task.repoCount, nodeTrees)
         const merge = await writeSem.run(async () => {
           const mergeRes = await mergeBackNodeIso(isoHandle, nodeTrees, log)
           if (mergeRes.clean) return { kind: 'merged' as const }
@@ -3006,15 +3047,16 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
             : { kind: 'conflict-human' as const, detail: res.detail }
         })
         if (merge.kind === 'merged') {
-          await db.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, nodeRunId))
+          await transitionMergeState({ db, nodeRunId, event: { kind: 'mark-merged', via: 'live' } })
         } else {
           // §6.3 — merge agent could not resolve → park human. Conflict is NEVER
           // silently lost; canonical stays clean for siblings; the resolve-iso(s)
           // are kept (keepIso) so the human finishes there and resume re-merges (#4).
-          await db
-            .update(nodeRuns)
-            .set({ mergeState: 'conflict-human' })
-            .where(eq(nodeRuns.id, nodeRunId))
+          await transitionMergeState({
+            db,
+            nodeRunId,
+            event: { kind: 'park-conflict-human', via: 'live' },
+          })
           log.warn('merge-back conflict unresolved by merge agent → awaiting_human', {
             nodeId: node.id,
             detail: merge.detail,
@@ -3033,10 +3075,14 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // downstream gated (D15); the failed result fails the task.
         const msg = err instanceof Error ? err.message : String(err)
         log.warn('merge-back failed', { nodeId: node.id, error: msg })
-        await db
-          .update(nodeRuns)
-          .set({ mergeState: 'merge-failed' })
-          .where(eq(nodeRuns.id, nodeRunId))
+        // try-variant: this catch must surface the ORIGINAL merge error via the
+        // failed result — a CAS/illegal throw here would mask it (RFC-144 §5).
+        const flipped = await tryTransitionMergeState({
+          db,
+          nodeRunId,
+          event: { kind: 'mark-merge-failed', reason: msg },
+        })
+        if (!flipped) log.warn('merge_state flip to merge-failed lost/illegal', { nodeRunId })
         lastResult = { ...lastResult, status: 'failed', errorMessage: `merge-back-failed: ${msg}` }
       }
     }
@@ -3527,15 +3573,14 @@ async function runLoopWrapperNode(
     if (evaluateExitCondition(cond, portContent)) {
       for (const b of bindings) {
         const v = await readPortAtIteration(db, taskId, b.bind.nodeId, b.bind.portName, i)
-        await db
-          .insert(nodeRunOutputs)
-          .values({ nodeRunId: wrapperRunId, portName: b.name, content: v })
+        await upsertWrapperOutput(db, wrapperRunId, b.name, v)
       }
       // RFC-130 T12: merge the loop's total (all-iterations) delta back into the
       // task canonical as one unit when it exits.
       if (!wrapperIso.passthrough) {
         const mb = await mergeBackWrapperIso(state, wrapperIso, wrapperRunId, node, i, log)
-        if (mb.kind === 'awaiting_human') {
+        if (mb.kind === 'conflict-human') {
+          // row parked conflict-human → the scope outcome is awaiting_human.
           return {
             kind: 'awaiting_human',
             summary: `loop merge conflict: ${mb.detail}`,
@@ -3776,9 +3821,7 @@ async function runFanoutWrapperNode(
     : splitListItems(rawContent)
   if (items.length === 0) {
     for (const port of derivedOutputs) {
-      await db
-        .insert(nodeRunOutputs)
-        .values({ nodeRunId: wrapperRunId, portName: port.name, content: '' })
+      await upsertWrapperOutput(db, wrapperRunId, port.name, '')
     }
     await markWrapperTerminal(db, wrapperRunId, 'done')
     broadcastNodeStatus(taskId, wrapperRunId, node.id, 'done')
@@ -4012,19 +4055,13 @@ async function runFanoutWrapperNode(
     for (const port of aggInfo.agent.outputs) {
       const outletName = renames[port] ?? port
       const content = aggRes.outputs[port] ?? ''
-      await db
-        .insert(nodeRunOutputs)
-        .values({ nodeRunId: wrapperRunId, portName: outletName, content })
+      await upsertWrapperOutput(db, wrapperRunId, outletName, content)
     }
   } else {
     // No aggregator: emit the implicit __done__ signal outlet. Empty content;
     // downstream can chain on it but must NOT reference it inside {{...}} —
     // assertNoPromptSignalRefs (D.T7) catches that at prompt-render time.
-    await db.insert(nodeRunOutputs).values({
-      nodeRunId: wrapperRunId,
-      portName: FANOUT_DONE_PORT_NAME,
-      content: '',
-    })
+    await upsertWrapperOutput(db, wrapperRunId, FANOUT_DONE_PORT_NAME, '')
   }
 
   await markWrapperTerminal(db, wrapperRunId, 'done')
@@ -4171,7 +4208,7 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
   // the rerun succeeds (AC-6). Branch 1 (reuse) returns before the iso is built.
   let priorShardUndo: { base: Record<string, string>; node: Record<string, string> } | null = null
   const doneMergedCandidates = candidates.filter(
-    (c) => c.status === 'done' && c.mergeState === 'merged',
+    (c) => c.status === 'done' && c.mergeState === ('merged' satisfies MergeState),
   )
   if (doneMergedCandidates.length === 1) {
     const priorMergedRow = doneMergedCandidates[0]!
@@ -4425,7 +4462,7 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
     if (!shardIso.passthrough) {
       try {
         const nodeTrees = await snapshotNodeIsoFinal(shardIso, log)
-        await persistIsoNodeTree(db, shardRunId, task.repoCount, nodeTrees, 'pending-merge')
+        await persistIsoNodeTree(db, shardRunId, task.repoCount, nodeTrees)
         const merge = await state.writeSem.run(async () => {
           const mergeRes = await mergeBackNodeIso(shardIso, nodeTrees, log)
           if (mergeRes.clean) return { kind: 'merged' as const }
@@ -4445,16 +4482,21 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
             : { kind: 'conflict-human' as const, detail: res.detail }
         })
         if (merge.kind === 'merged') {
-          await db.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, shardRunId))
+          await transitionMergeState({
+            db,
+            nodeRunId: shardRunId,
+            event: { kind: 'mark-merged', via: 'live' },
+          })
         } else {
           // §6.3 — unresolved shard conflict: mark conflict-human + fail loudly so the
           // conflict is surfaced (never silently lost) and canonical stays clean.
           // Per-shard awaiting_human bubbling through the fanout aggregation is a
           // follow-up (#4/PR-E); today an unresolvable shard conflict fails the task.
-          await db
-            .update(nodeRuns)
-            .set({ mergeState: 'conflict-human' })
-            .where(eq(nodeRuns.id, shardRunId))
+          await transitionMergeState({
+            db,
+            nodeRunId: shardRunId,
+            event: { kind: 'park-conflict-human', via: 'live' },
+          })
           return {
             kind: 'failed',
             shardKey,
@@ -4464,10 +4506,14 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        await db
-          .update(nodeRuns)
-          .set({ mergeState: 'merge-failed' })
-          .where(eq(nodeRuns.id, shardRunId))
+        const flipped = await tryTransitionMergeState({
+          db,
+          nodeRunId: shardRunId,
+          event: { kind: 'mark-merge-failed', reason: msg },
+        })
+        if (!flipped) {
+          log.warn('merge_state flip to merge-failed lost/illegal', { nodeRunId: shardRunId })
+        }
         return { kind: 'failed', shardKey, outputs: {}, message: `merge-back-failed: ${msg}` }
       }
     }
@@ -4786,7 +4832,7 @@ async function dispatchFanoutAggregator(
     if (!aggIso.passthrough) {
       try {
         const nodeTrees = await snapshotNodeIsoFinal(aggIso, log)
-        await persistIsoNodeTree(db, aggRunId, task.repoCount, nodeTrees, 'pending-merge')
+        await persistIsoNodeTree(db, aggRunId, task.repoCount, nodeTrees)
         const merge = await state.writeSem.run(async () => {
           const mergeRes = await mergeBackNodeIso(aggIso, nodeTrees, log)
           if (mergeRes.clean) return { kind: 'merged' as const }
@@ -4804,14 +4850,19 @@ async function dispatchFanoutAggregator(
             : { kind: 'conflict-human' as const, detail: res.detail }
         })
         if (merge.kind === 'merged') {
-          await db.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, aggRunId))
+          await transitionMergeState({
+            db,
+            nodeRunId: aggRunId,
+            event: { kind: 'mark-merged', via: 'live' },
+          })
         } else {
           // §6.3 — unresolved: conflict-human + fail loudly (per-node awaiting_human
           // bubbling for fanout is a follow-up, #4/PR-E); conflict never lost.
-          await db
-            .update(nodeRuns)
-            .set({ mergeState: 'conflict-human' })
-            .where(eq(nodeRuns.id, aggRunId))
+          await transitionMergeState({
+            db,
+            nodeRunId: aggRunId,
+            event: { kind: 'park-conflict-human', via: 'live' },
+          })
           return {
             kind: 'failed',
             summary: 'aggregator merge conflict',
@@ -4821,10 +4872,14 @@ async function dispatchFanoutAggregator(
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        await db
-          .update(nodeRuns)
-          .set({ mergeState: 'merge-failed' })
-          .where(eq(nodeRuns.id, aggRunId))
+        const flipped = await tryTransitionMergeState({
+          db,
+          nodeRunId: aggRunId,
+          event: { kind: 'mark-merge-failed', reason: msg },
+        })
+        if (!flipped) {
+          log.warn('merge_state flip to merge-failed lost/illegal', { nodeRunId: aggRunId })
+        }
         return {
           kind: 'failed',
           summary: 'aggregator merge failed',
@@ -4937,7 +4992,31 @@ async function captureGitPreDirty(
  * changes — so it must NOT be recreated). A non-git task worktree (mock harness)
  * yields a passthrough handle (the wrapper runs directly on the task canonical).
  */
-async function createOrRebuildWrapperIso(
+/**
+ * RFC-144 (PR-5 review P2) — wrapper outputs are written onto the wrapper's
+ * OWN row, and wrapper rows are multi-generation (same-row revival after a
+ * merged/conflict-human prior generation). The prior generation may have
+ * already written its output rows before its merge-back crashed/parked, so a
+ * plain INSERT would violate the (node_run_id, port_name) PK on the rerun.
+ * Upsert: the new generation's content REPLACES the stale one (mirrors the
+ * runner's same-session envelope upsert, runner.ts).
+ */
+async function upsertWrapperOutput(
+  db: DbClient,
+  wrapperRunId: string,
+  portName: string,
+  content: string,
+): Promise<void> {
+  await db
+    .insert(nodeRunOutputs)
+    .values({ nodeRunId: wrapperRunId, portName, content })
+    .onConflictDoUpdate({
+      target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+      set: { content },
+    })
+}
+
+export async function createOrRebuildWrapperIso(
   state: SchedulerState,
   wrapperRunId: string,
   existing: {
@@ -4946,12 +5025,69 @@ async function createOrRebuildWrapperIso(
   } | null,
 ): Promise<IsoHandle> {
   const { db, task, taskId } = state
-  if (existing !== null) {
+  // RFC-144 (Codex impl-gate P2) — same-row wrapper revival: a revived wrapper
+  // row may arrive with a SETTLED prior generation ('merged': crash inside
+  // mergeBackWrapperIso got its pending-merge replayed at entry;
+  // 'conflict-human': canceled while parked). This run opens a NEW isolation
+  // generation on the same row — re-enter 'isolating' so the strict machine's
+  // mark-pending-merge (from=isolating) holds at the wrapper's merge-back.
+  // isolating (mid-run revival, the common case) and NULL (fresh row /
+  // passthrough) rows never emit this.
+  const cur = (
+    await db
+      .select({ mergeState: nodeRuns.mergeState })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, wrapperRunId))
+      .limit(1)
+  )[0]
+  let effectiveExisting = existing
+  if (cur !== undefined && (cur.mergeState === 'merged' || cur.mergeState === 'conflict-human')) {
+    if (cur.mergeState === 'merged') {
+      // Impl-gate P2 second half: the prior generation's delta is ALREADY in
+      // canonical — the new generation must branch from the CURRENT canonical,
+      // NOT the stale gen-1 base. A three-way merge against the old base would
+      // treat gen-1 files (now in canon) as `ours` additions and resurrect
+      // content the new generation deleted.
+      //
+      // ORDER (impl-gate P2 rounds 3-5): the reenter CAS runs FIRST — it is the
+      // ownership claim. A concurrent reviver that also read 'merged' loses the
+      // CAS here and throws BEFORE any destructive cleanup (it can never remove
+      // the winner's freshly-built iso). The CAS ATOMICALLY clears the base
+      // columns + wrapperProgressJson, so a crash anywhere after it leaves an
+      // isolating row with NULL base/progress — the next resume re-detects
+      // "generation start" from durable state and the stale-iso cleanup below
+      // (derived paths only, no column values needed) makes the re-create
+      // idempotent. conflict-human re-entry keeps base + progress: its delta
+      // never reached canonical (D27), so the old base/baseline stay the
+      // correct merge/diff anchors.
+      await transitionMergeState({
+        db,
+        nodeRunId: wrapperRunId,
+        event: { kind: 'reenter-isolation' },
+        extra: {
+          isoWorktreePath: null,
+          isoBaseSnapshot: null,
+          isoBaseSnapshotReposJson: null,
+          wrapperProgressJson: null,
+        },
+      })
+      effectiveExisting = null
+    } else {
+      await transitionMergeState({
+        db,
+        nodeRunId: wrapperRunId,
+        event: { kind: 'reenter-isolation' },
+      })
+    }
+  }
+  if (effectiveExisting !== null) {
     const baseSnapshots: Record<string, string> = {}
     if (task.repoCount === 1) {
-      if (existing.isoBaseSnapshot !== null) baseSnapshots[''] = existing.isoBaseSnapshot
+      if (effectiveExisting.isoBaseSnapshot !== null) {
+        baseSnapshots[''] = effectiveExisting.isoBaseSnapshot
+      }
     } else {
-      Object.assign(baseSnapshots, parseIsoJsonMap(existing.isoBaseSnapshotReposJson))
+      Object.assign(baseSnapshots, parseIsoJsonMap(effectiveExisting.isoBaseSnapshotReposJson))
     }
     if (Object.keys(baseSnapshots).length > 0) {
       const taskBaseHeads: Record<string, string> = {}
@@ -4970,6 +5106,27 @@ async function createOrRebuildWrapperIso(
       })
     }
     // No persisted iso base (legacy / passthrough row) — fall through to create.
+  }
+  if (existing !== null) {
+    // Reaching CREATE for a row that has lived before (merged re-entry, or a
+    // crash inside a prior re-entry window that cleared the base columns): a
+    // stale iso worktree may still sit at this wrapper's derived path, and
+    // `git worktree add` fails LOUDLY on an existing dir — without cleanup the
+    // task would wedge on every resume. discardNodeIso only needs the derived
+    // paths + refs (base snapshot VALUES are unused for removal), so a handle
+    // rebuilt with empty snapshot maps cleans up regardless of what the crash
+    // left behind. Tolerant: nothing there → warn-and-continue.
+    await discardNodeIso(
+      rebuildIsoHandle({
+        appHome: state.opts.appHome,
+        taskId,
+        nodeRunId: wrapperRunId,
+        canonRepos: state.repos,
+        baseSnapshots: {},
+        taskBaseHeads: {},
+      }),
+      state.log,
+    )
   }
   const handle = await createNodeIso({
     appHome: state.opts.appHome,
@@ -4999,14 +5156,18 @@ async function mergeBackWrapperIso(
   iteration: number,
   log: Logger,
 ): Promise<
+  // RFC-144 naming收敛: the parked-conflict variant is 'conflict-human' — same
+  // vocabulary as the merge_state column and the node-path union above (the
+  // old 'awaiting_human' kind said what the TASK would do, not what the row
+  // is; callers translate conflict-human → awaiting_human scope outcome).
   | { kind: 'merged' }
-  | { kind: 'awaiting_human'; detail: string }
+  | { kind: 'conflict-human'; detail: string }
   | { kind: 'merge-failed'; msg: string }
 > {
   const { db, task, taskId } = state
   try {
     const nodeTrees = await snapshotNodeIsoFinal(wrapperIso, log)
-    await persistIsoNodeTree(db, wrapperRunId, task.repoCount, nodeTrees, 'pending-merge')
+    await persistIsoNodeTree(db, wrapperRunId, task.repoCount, nodeTrees)
     const merge = await state.writeSem.run(async () => {
       const mr = await mergeBackNodeIso(wrapperIso, nodeTrees, log)
       if (mr.clean) return { kind: 'merged' as const }
@@ -5022,23 +5183,35 @@ async function mergeBackWrapperIso(
         : { kind: 'conflict-human' as const, detail: res.detail }
     })
     if (merge.kind !== 'merged') {
-      await db
-        .update(nodeRuns)
-        .set({ mergeState: 'conflict-human' })
-        .where(eq(nodeRuns.id, wrapperRunId))
+      await transitionMergeState({
+        db,
+        nodeRunId: wrapperRunId,
+        event: { kind: 'park-conflict-human', via: 'live' },
+      })
+      // D10: merge_state and status are two orthogonal machines — two CAS
+      // writes, not one cross-machine tx; the frontier's done-branch bridges
+      // the (rare) crash window between them.
       await transitionNodeRunStatus({ db, nodeRunId: wrapperRunId, event: { kind: 'park-human' } })
       broadcastNodeStatus(taskId, wrapperRunId, node.id, 'awaiting_human')
-      return { kind: 'awaiting_human', detail: merge.detail }
+      return { kind: 'conflict-human', detail: merge.detail }
     }
-    await db.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, wrapperRunId))
+    await transitionMergeState({
+      db,
+      nodeRunId: wrapperRunId,
+      event: { kind: 'mark-merged', via: 'live' },
+    })
     await discardNodeIso(wrapperIso, log)
     return { kind: 'merged' }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    await db
-      .update(nodeRuns)
-      .set({ mergeState: 'merge-failed' })
-      .where(eq(nodeRuns.id, wrapperRunId))
+    const flipped = await tryTransitionMergeState({
+      db,
+      nodeRunId: wrapperRunId,
+      event: { kind: 'mark-merge-failed', reason: msg },
+    })
+    if (!flipped) {
+      log.warn('merge_state flip to merge-failed lost/illegal', { nodeRunId: wrapperRunId })
+    }
     return { kind: 'merge-failed', msg }
   }
 }
@@ -5064,10 +5237,31 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
   // the WRAPPER-canonical (below), NOT the task canonical.
   let baseline: string | undefined
   let preDirty: Record<string, string> = {}
+  // RFC-144 D13 second half (PR-4 review P2): a revived row whose prior
+  // generation is 'merged' gets a FRESH wrapper-canonical from the CURRENT
+  // task canonical (createOrRebuildWrapperIso replaces the iso). The persisted
+  // baseline/preDirty belong to the OLD generation's canon — reusing them
+  // would make the final gitChangedFiles report gen-1's already-merged files
+  // in this generation's git_diff. Treat it as a fresh generation: skip the
+  // persisted progress, recapture + re-persist on the new wrapper-canonical
+  // below. (conflict-human / mid-run revival keep the S-4 never-recapture
+  // rule — their iso and its inner writes are preserved.)
+  // Crash durability (PR-5 review P2): the re-entry flip clears base cols +
+  // progress ATOMICALLY, so a crash inside the re-entry window leaves an
+  // isolating row with NULL base columns — the second disjunct re-detects it
+  // as a generation start on the next resume (a genuine mid-generation row
+  // always carries the base columns persistIsoBase stamped before any inner
+  // work; passthrough rows have NULL merge_state and never match).
+  const freshGeneration =
+    existing !== null &&
+    (existing.mergeState === 'merged' ||
+      (existing.mergeState === 'isolating' &&
+        existing.isoBaseSnapshot === null &&
+        existing.isoBaseSnapshotReposJson === null))
   if (existing !== null) {
     const progress = decodeWrapperProgress(existing.wrapperProgressJson, (msg) => log.warn(msg))
     wrapperRunId = existing.id
-    if (progress?.kind === 'git' && typeof progress.baseline === 'string') {
+    if (!freshGeneration && progress?.kind === 'git' && typeof progress.baseline === 'string') {
       baseline = progress.baseline
       // S-4: resume reads the persisted pre-set; NEVER re-capture — the inner scope's
       // own writes are already in the (wrapper-)worktree.
@@ -5150,15 +5344,35 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
   // (which the loop hasn't merged into yet) would leave preDirty empty and wrongly
   // report the cumulative union. RFC-098 B1 (S-24): captured under the write lock.
   if (baseline === undefined) {
-    const isFresh = existing === null
+    // Establishing this generation's baseline. Two states land here, split by
+    // a DURABLE discriminator (impl-gate P2 rounds 5-6):
+    //
+    // ① Generation start — fresh mint / merged re-entry / a crash after the
+    //   re-entry cleared progress (even one landing after persistIsoBase
+    //   re-stamped the base columns). Invariant: persistWrapperProgress runs
+    //   strictly BEFORE runScope, and the ONLY writer that nulls it is the
+    //   re-entry CAS — so `wrapperProgressJson IS NULL` ⟹ zero inner work in
+    //   this generation. Capture preDirty (a git wrapper nested in a loop
+    //   branches from the loop's DIRTY wrapper-canonical; skipping the pre-set
+    //   would leak those entry-dirty files into git_diff) and persist
+    //   immediately (durable for same-generation resumes).
+    //
+    // ② Malformed NON-NULL progress — mid-generation corruption; inner work
+    //   may already sit in the wrapper worktree. Capturing preDirty here would
+    //   hash-match those real inner changes and SWALLOW them from git_diff
+    //   (under-report breaks downstream consumers). Keep the documented
+    //   pre-RFC-144 fallback: empty pre-set (over-report, never drop) and no
+    //   progress overwrite.
+    const generationStart =
+      existing === null || freshGeneration || existing.wrapperProgressJson === null
     const entry = await state.writeSem.run(async () => {
       const base = await captureHead(wrapperCanonPath)
-      const pre = isFresh ? await captureGitPreDirty(wrapperCanonPath, base, log) : {}
+      const pre = generationStart ? await captureGitPreDirty(wrapperCanonPath, base, log) : {}
       return { base, pre }
     })
     baseline = entry.base
     preDirty = entry.pre
-    if (isFresh) {
+    if (generationStart) {
       await persistWrapperProgress(db, wrapperRunId, {
         kind: 'git',
         baseline,
@@ -5255,9 +5469,7 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
     broadcastNodeStatus(taskId, wrapperRunId, node.id, 'failed')
     return { kind: 'failed', summary: `git diff failed: ${msg}`, message: 'git-diff-failed' }
   }
-  await db
-    .insert(nodeRunOutputs)
-    .values({ nodeRunId: wrapperRunId, portName: 'git_diff', content: paths.join('\n') })
+  await upsertWrapperOutput(db, wrapperRunId, 'git_diff', paths.join('\n'))
   // RFC-130 T11: merge the wrapper's total delta (its wrapper-canonical) back into
   // the TASK canonical as ONE unit — the wrapper is isolated like a node. Clean →
   // materialized + merge_state='merged' (D15 lets downstream consume the git_diff);
@@ -5266,7 +5478,8 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
   // wrappers already ran on the task canonical (nothing to merge, merge_state NULL).
   if (!wrapperIso.passthrough) {
     const mb = await mergeBackWrapperIso(state, wrapperIso, wrapperRunId, node, iteration, log)
-    if (mb.kind === 'awaiting_human') {
+    if (mb.kind === 'conflict-human') {
+      // row parked conflict-human → the scope outcome is awaiting_human.
       return {
         kind: 'awaiting_human',
         summary: `wrapper merge conflict: ${mb.detail}`,

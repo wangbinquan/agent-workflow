@@ -6,7 +6,6 @@ import {
   decideStatus,
   findFirstAttemptSibling,
   groupByScope,
-  isAgentKind,
   isFollowupInherit,
   previewOf,
   SCOPE_ORDER,
@@ -54,21 +53,9 @@ function run(overrides: Partial<NodeRun> = {}): NodeRun {
   } as NodeRun
 }
 
-describe('isAgentKind', () => {
-  test('only agent-single returns true (RFC-060 PR-E removed agent-multi)', () => {
-    expect(isAgentKind('agent-single')).toBe(true)
-  })
-  test('non-agent kinds and null/undefined return false', () => {
-    expect(isAgentKind('input')).toBe(false)
-    expect(isAgentKind('output')).toBe(false)
-    expect(isAgentKind('wrapper-git')).toBe(false)
-    expect(isAgentKind('wrapper-loop')).toBe(false)
-    expect(isAgentKind('review')).toBe(false)
-    expect(isAgentKind('clarify')).toBe(false)
-    expect(isAgentKind(null)).toBe(false)
-    expect(isAgentKind(undefined)).toBe(false)
-  })
-})
+// RFC-146: isAgentKind was replaced by shared `isAgentNodeKind`; its
+// value/tolerance locks live in packages/backend/tests
+// (node-kind-behavior-table.test.ts + inventory-service.test.ts).
 
 describe('decideStatus', () => {
   test('null → pre-rfc046', () => {

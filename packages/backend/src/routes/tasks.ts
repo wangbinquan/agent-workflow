@@ -22,6 +22,8 @@ import { eq } from 'drizzle-orm'
 import type { Context } from 'hono'
 import { actorOf } from '@/auth/actor'
 import { loadConfig } from '@/config'
+// RFC-143 PR-5: resolveOpencodeCmd deduped to util/opencode (was 5 route-local copies).
+import { resolveOpencodeCmd } from '@/util/opencode'
 import { tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { canViewTask, getTaskMembers, updateTaskMembers } from '@/services/taskCollab'
@@ -81,24 +83,6 @@ import { listSkills } from '@/services/skill'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { Paths } from '@/util/paths'
 import { NotFoundError, ValidationError } from '@/util/errors'
-
-/**
- * Resolve the opencode subprocess command for the current config. When the
- * user sets `opencodePath` we pass it through to the runner so tasks spawn
- * the exact binary that was probed at daemon start. Without it, the runner
- * keeps falling back to a bare `['opencode']` PATH lookup.
- */
-function resolveOpencodeCmd(configPath: string): string[] | undefined {
-  try {
-    const cfg = loadConfig(configPath)
-    if (typeof cfg.opencodePath === 'string' && cfg.opencodePath.length > 0) {
-      return [cfg.opencodePath]
-    }
-  } catch {
-    // config unreadable — fall back to default PATH lookup
-  }
-  return undefined
-}
 
 /** RFC-083: resolve deep-mode indexer path overrides + timeout from settings.
  *  Unreadable config → PATH lookup + default timeout. */

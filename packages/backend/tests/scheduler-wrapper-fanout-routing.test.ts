@@ -33,12 +33,13 @@ const runnerSrc = readFileSync(
 
 describe('D.T2 — scheduler accepts wrapper-fanout kind', () => {
   test("validate-node-kinds whitelist includes 'wrapper-fanout'", () => {
-    // flag-audit W0-4: the hand-written `node.kind !== 'wrapper-*'` triple in the
-    // kind whitelist was replaced by the shared single-source predicate. The
-    // contract (fanout passes the whitelist) now rests on !isWrapperKind(...) +
-    // the shared WRAPPER_NODE_KINDS membership lock in
-    // packages/shared/tests/wrapper-kind-single-source.test.ts.
-    expect(schedulerSrc).toMatch(/!isWrapperKind\(node\.kind\)/)
+    // flag-audit W0-4 replaced the hand-written `node.kind !== 'wrapper-*'`
+    // triple with !isWrapperKind; RFC-146 then replaced the whole negative
+    // enum with positive behavior-table membership. The contract (fanout
+    // passes the whitelist) now rests on the table lock: wrapper-fanout is a
+    // NODE_KIND_BEHAVIORS key (packages/backend/tests/
+    // node-kind-behavior-table.test.ts asserts key-set === NODE_KIND).
+    expect(schedulerSrc).toMatch(/!\(node\.kind in NODE_KIND_BEHAVIORS\)/)
   })
 
   test("runOneNode dispatches to runFanoutWrapperNode on kind === 'wrapper-fanout'", () => {

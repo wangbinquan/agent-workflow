@@ -8,8 +8,8 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import type { InventorySnapshot } from '@agent-workflow/shared'
+import { isAgentNodeKind } from '@agent-workflow/shared'
 import { api } from '@/api/client'
-import { isPromptCapableKind } from '@/lib/node-prompt'
 import { AgentsTable } from './AgentsTable'
 import { SkillsTable } from './SkillsTable'
 import { McpsTable } from './McpsTable'
@@ -30,7 +30,7 @@ export function RuntimeInventorySection({ taskId, nodeRunId, workflowNodeKind }:
   // nothing so the Session tab's `sessionNotApplicable` placeholder owns the
   // layout. The query is kept enabled-by-flag so hook order stays stable
   // (react-hooks/rules-of-hooks).
-  const enabled = isPromptCapableKind(workflowNodeKind)
+  const enabled = isAgentNodeKind(workflowNodeKind)
   const query = useQuery<InventorySnapshot>({
     queryKey: ['tasks', taskId, 'node-runs', nodeRunId, 'inventory'],
     enabled,

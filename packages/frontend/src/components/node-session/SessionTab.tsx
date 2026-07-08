@@ -9,12 +9,9 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import type { NodeRun, SessionViewResponse } from '@agent-workflow/shared'
+import { isAgentNodeKind } from '@agent-workflow/shared'
 import { api } from '@/api/client'
-import {
-  isFanoutParentRun,
-  isPromptCapableKind,
-  sortNodeRunsForPromptHistory,
-} from '@/lib/node-prompt'
+import { isFanoutParentRun, sortNodeRunsForPromptHistory } from '@/lib/node-prompt'
 import { ConversationFlow } from './ConversationFlow'
 import { InjectedMemoriesCard } from './InjectedMemoriesCard'
 import { RuntimeInventorySection } from '@/components/inventory/RuntimeInventorySection'
@@ -55,7 +52,7 @@ export function SessionTab({ taskId, runs, nodeId, selectedRunId, workflowNodeKi
   // inner shard rows carry the actual sessions — surface the shard picker.
   // Non-agent / non-fan-out kinds (input, output, review, clarify, plain
   // wrapper-git, wrapper-loop) still get "session not applicable".
-  if (!isPromptCapableKind(workflowNodeKind) && !fanoutParent) {
+  if (!isAgentNodeKind(workflowNodeKind) && !fanoutParent) {
     return <div className="muted">{t('nodeDrawer.sessionNotApplicable')}</div>
   }
 

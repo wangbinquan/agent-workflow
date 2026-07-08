@@ -26,7 +26,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { and, asc, desc, eq, inArray, isNull, ne } from 'drizzle-orm'
 import { dbTxSync } from '@/db/txSync'
-import { REVIEW_SUPERSEDE_MARKER_PREFIX } from '@/services/dispatchFrontier'
 import { ulid } from 'ulid'
 import type {
   AgentOutputKind,
@@ -82,6 +81,10 @@ import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
+
+/** RFC-145: human-readable supersede breadcrumb prefix (message builder only —
+ *  the machine contract is the superseded_by_review / rolled_back columns). */
+const REVIEW_SUPERSEDE_MARKER_PREFIX = 'superseded-by-review-'
 
 const log = createLogger('review')
 
@@ -2066,8 +2069,10 @@ export async function submitReviewDecision(
       }
     }
     const nextRetryIndex = latest.retryIndex + 1
-    // node_runs has no error_summary column; encode the supersede marker as
-    // a stable prefix on error_message so tests / future GC can grep it.
+    // RFC-145: the marker string is HUMAN BREADCRUMBS only — the machine
+    // facts land on superseded_by_review / rolled_back in the same write.
+    // The prefix constant lives here (message builder) now that
+    // isReviewSupersededRow reads the column instead of parsing it.
     // The optional `-rollback` suffix marks "worktree was actually reset to
     // preSnapshot". Substring matches like `.toContain('superseded-by-review-iterated')`
     // still work either way. RFC-095: the prefix is now a LOAD-BEARING dispatch
@@ -2091,7 +2096,13 @@ export async function submitReviewDecision(
       reason: supersedeMarker,
       extra: {
         finishedAt: latest.finishedAt ?? Date.now(),
+        // RFC-145: errorMessage keeps the human-readable marker string
+        // (breadcrumbs; substring test locks stay green), but the MACHINE
+        // facts land structured — isReviewSupersededRow / clarifyRerunLedger /
+        // the frontend decode read these columns, never the prefix.
         errorMessage: `${supersedeMarker}: Replaced by retry_index ${nextRetryIndex} due to review ${args.decision} of ${dv.reviewNodeId}`,
+        supersededByReview: args.decision === 'iterated' ? 'iterated' : 'rejected',
+        rolledBack,
       },
     })
     await mintNodeRun(args.db, {

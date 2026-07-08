@@ -33,10 +33,8 @@ export function sortNodeRunsForPromptHistory(runs: readonly NodeRun[]): NodeRun[
   })
 }
 
-export function isPromptCapableKind(kind: string | null | undefined): boolean {
-  // RFC-060 PR-E: agent-multi removed; agent-single is the only agent kind.
-  return kind === 'agent-single'
-}
+// RFC-146: isPromptCapableKind was a copy of the agent-kind predicate —
+// callers now import shared `isAgentNodeKind` (NODE_KIND_BEHAVIORS.isAgent).
 
 /**
  * True iff this run row represents a multi-process fan-out parent — it has

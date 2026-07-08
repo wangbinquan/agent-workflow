@@ -93,12 +93,14 @@
 - **`errorSummary === 'daemon-restart'`**：写 `orphans.ts:65`、读 `autoResume.ts:62` 精确匹配选 boot auto-resume 候选——两个独立裸字面量，orphans 改一个字即静默瘫痪 autoResume。
 
 **重构方向（RFC-G3）**：正解是 node_runs 加 `failure_code` 枚举列（errorMessage 回归纯人读），`decideEnvelopeFollowup` 变 `Record<code, {reason, followup}>` 查表、prompt 渲染同表取值（`FOLLOWUP_REASONS` 表）；supersede 加 `superseded_by_review` + `rolled_back` 列。过渡方案（不动 schema）：有序前缀注册表数组、双端 import 同一常量。`daemon-restart` 最小修是 shared 常量。与 scheduler-audit **WP-10（rerun_cause 持久化）同族**，建议排期相邻或合并。
+**✅ 已由 [RFC-145](RFC-145-failure-code-structuring/proposal.md) 落地（2026-07-08，走正解非过渡）**：failure_code 7 值生产域 + FOLLOWUP_POLICY 7→6 投影表（clarify-forbidden 隐式降级显式化）、runner 11 stamp 点正向声明、7 连 startsWith 链删除；supersede 三事实列化（isReviewSupersededRow 改 IS-NOT-NULL、双 fork 字面量 + parity 锁退役、前端 decode 字段化）；migration 0077 三列 + 11 条 backfill；errorMessage 机器读源码守卫禁令。daemon-restart 已由 W0-5 先行治理确认。
 
 ### 4.4 merge_state 五值状态列全裸直写 —— 与本仓自建的状态机范式直接冲突
 
 node_runs.merge_state（RFC-130：NULL/isolating/pending-merge/merged/conflict-human/merge-failed）驱动第二正交生命周期（settled 判定 `scheduler.ts:1356`、frontier 分桶 `:1563-1565`、重放 `:1705/:1777`、fanout `:4175`），但 **~19 处写点全部 `db.update(nodeRuns).set({ mergeState })` 裸直写**（scheduler.ts:1640-5041 间 19 处）。对比：status 列有转移表+CAS+ESLint ratchet+s14 源码守卫**四层防护**，merge_state **零层**——转移合法性（isolating→pending-merge→merged|conflict-human…）全靠隐式约定，并发 merge-back 与冲突决议可互相覆盖。
 
 **重构方向（RFC-G2）**：照抄 RFC-053 三件套——`transitionMergeState(db, nodeRunId, event)` + 转移表 + 源码守卫测试；frontier 分桶从表派生。工作量 M、风险中（RFC-130 测试群现成）。
+**✅ 已由 [RFC-144](RFC-144-merge-state-machine/proposal.md) 落地（2026-07-08）**：五件套全落 + 第 7 值 `abandoned`（abandoned ⇔ 被取代，mint 收口点单事务废弃前代）+ 顺手修出并坐实一个真 bug——**stale replay**（入口 replay 只按 (taskId,mergeState) 捞行，被 retry/review 取代的旧行重放会把过期 delta 物化进主树；先红后绿 + migration 0076 清洗存量）。勘误：本节所称「ESLint ratchet」实为 grep-guard 单测（services/lifecycle.ts:18 注释陈旧）；「dispatchFrontier 分桶」实在 scheduler.ts deriveFrontier（dispatchFrontier.ts 不读 merge_state）。
 
 ### 4.5 「channel/系统端口」判定 6 处分叉、3 种语义家族
 

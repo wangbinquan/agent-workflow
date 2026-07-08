@@ -6,12 +6,12 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { InjectedMemorySnapshot, NodeRun } from '@agent-workflow/shared'
+import { isAgentNodeKind } from '@agent-workflow/shared'
 import {
   SCOPE_ORDER,
   decideStatus,
   findFirstAttemptSibling,
   groupByScope,
-  isAgentKind,
   isFollowupInherit,
   previewOf,
 } from '@/lib/injected-memories-card'
@@ -39,7 +39,7 @@ export function InjectedMemoriesCard({ run, attempts, workflowNodeKind }: Props)
   // call the runner inject path; rendering an empty card there would be
   // misleading. The component returns null so the SessionTab DOM stays
   // identical to pre-RFC-046 for those nodes.
-  if (!isAgentKind(workflowNodeKind)) return null
+  if (!isAgentNodeKind(workflowNodeKind)) return null
 
   const status = decideStatus(list)
   const followupInherit = isFollowupInherit(run, attempt0)

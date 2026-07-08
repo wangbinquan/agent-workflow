@@ -8,8 +8,8 @@
 // wrappers (their outputs flow through their own outputBindings rather than
 // surfacing a port directly).
 
-import { isWrapperKind, reviewApprovedPortName } from '@agent-workflow/shared'
-import type { WorkflowNode } from '@agent-workflow/shared'
+import { declaredPorts, isWrapperKind } from '@agent-workflow/shared'
+import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 export interface LoopMemberCandidate {
   nodeId: string
@@ -49,51 +49,26 @@ function deriveTitle(node: WorkflowNode, agents: AgentSummary[]): string {
   return ''
 }
 
-/** Resolve a review node's input KIND the same way the authoritative
- *  WorkflowCanvas.computePorts does: inputSource → source agent node →
- *  agent.outputKinds[portName]. Undefined when any link is missing —
- *  reviewApprovedPortName treats that as single-document. */
-function resolveReviewInputKind(
-  node: WorkflowNode,
-  allNodes: WorkflowNode[],
-  agents: AgentSummary[],
-): string | undefined {
-  const src = (node as Record<string, unknown>).inputSource as
-    | { nodeId?: unknown; portName?: unknown }
-    | undefined
-  if (typeof src?.nodeId !== 'string' || typeof src.portName !== 'string') return undefined
-  const sourceNode = allNodes.find((n) => n.id === src.nodeId)
-  if (sourceNode === undefined || sourceNode.kind !== 'agent-single') return undefined
-  const agentName = (sourceNode as Record<string, unknown>).agentName
-  if (typeof agentName !== 'string') return undefined
-  return agents.find((a) => a.name === agentName)?.outputKinds?.[src.portName]
-}
-
 function deriveOutputPorts(
   node: WorkflowNode,
   agents: AgentSummary[],
-  allNodes: WorkflowNode[],
+  definition: WorkflowDefinition,
 ): string[] {
-  if (node.kind === 'agent-single') {
-    const rec = node as Record<string, unknown>
-    const agentName = typeof rec.agentName === 'string' ? rec.agentName : ''
-    const agent = agents.find((a) => a.name === agentName)
-    const outputs = agent?.outputs ?? []
-    if (outputs.length === 0) return ['out']
-    return outputs.filter((n) => typeof n === 'string' && n.length > 0)
-  }
-  if (node.kind === 'review') {
-    // flag-audit W0（§3-3）：旧代码返回不存在的 ['output']（loop Inspector 的
-    // exitCondition / outputBindings 下拉出现假端口）。与 computePorts 同源：
-    // shared 的 reviewApprovedPortName oracle + 恒定的 approval_meta。
-    return [reviewApprovedPortName(resolveReviewInputKind(node, allNodes, agents)), 'approval_meta']
-  }
-  return []
+  // RFC-146: read the shared port-declaration table (this was fork #3 of
+  // five — it knew agent/review only; review had already drifted once,
+  // flag-audit W0 §3-3 假端口 bug). Wrapper members are filtered out by the
+  // caller, so only leaf kinds reach here.
+  const declared = declaredPorts(node, definition, new Map(agents.map((a) => [a.name, a])))
+  const names = declared.dataOutputs.map((p) => p.name).filter((n) => n.length > 0)
+  // Agent fallback preserved at the call site: an agent with no declared
+  // outputs is still referenceable via the conventional 'out' port.
+  if (node.kind === 'agent-single' && names.length === 0) return ['out']
+  return names
 }
 
 export function loopMemberCandidates(
   wrapper: WorkflowNode,
-  allNodes: WorkflowNode[],
+  definition: WorkflowDefinition,
   agents: AgentSummary[],
 ): LoopMemberCandidate[] {
   const innerIds = (wrapper as Record<string, unknown>).nodeIds
@@ -102,10 +77,10 @@ export function loopMemberCandidates(
     : []
   const idSet = new Set(ids)
   const result: LoopMemberCandidate[] = []
-  for (const n of allNodes) {
+  for (const n of definition.nodes) {
     if (!idSet.has(n.id)) continue
     if (isWrapperKind(n.kind)) continue
-    const outputPorts = deriveOutputPorts(n, agents, allNodes)
+    const outputPorts = deriveOutputPorts(n, agents, definition)
     result.push({
       nodeId: n.id,
       title: deriveTitle(n, agents),

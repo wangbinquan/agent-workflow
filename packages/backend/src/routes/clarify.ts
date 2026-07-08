@@ -21,7 +21,8 @@ import {
 import { desc, eq, inArray } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
-import { loadConfig } from '@/config'
+// RFC-143 PR-5: resolveOpencodeCmd deduped to util/opencode (was 5 route-local copies).
+import { resolveOpencodeCmd } from '@/util/opencode'
 import { clarifyRounds, nodeRuns, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import {
@@ -44,19 +45,6 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@
 import { createLogger } from '@/util/log'
 
 const log = createLogger('clarify-route')
-
-function resolveOpencodeCmd(configPath: string): string[] | undefined {
-  if (configPath === '') return undefined
-  try {
-    const cfg = loadConfig(configPath)
-    if (typeof cfg.opencodePath === 'string' && cfg.opencodePath.length > 0) {
-      return [cfg.opencodePath]
-    }
-  } catch {
-    /* nothing */
-  }
-  return undefined
-}
 
 /**
  * RFC-099 (D5/D7) — answer-rights gate for clarify writes: any task member

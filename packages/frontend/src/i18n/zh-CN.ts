@@ -738,7 +738,6 @@ export interface Resources {
     title: string
     subtitle: string
     add: string
-    builtin: string
     protocolOpencode: string
     protocolClaude: string
     defaultBinary: string
@@ -3120,7 +3119,6 @@ export const zhCN: Resources = {
     subtitle:
       '注册 opencode / Claude Code 二进制——包括改名的定制 fork。Agent 按名称选用运行时，框架以对应协议驱动它。',
     add: '+ 添加运行时',
-    builtin: '内置',
     protocolOpencode: 'opencode',
     protocolClaude: 'Claude Code',
     defaultBinary: '默认（PATH / 已配置）',

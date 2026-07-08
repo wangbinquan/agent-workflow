@@ -52,18 +52,23 @@ type NodeRunRow = typeof nodeRuns.$inferSelect
 export const WRAPPER_KINDS: ReadonlySet<NodeKind> = new Set<NodeKind>(WRAPPER_NODE_KINDS)
 
 /**
- * RFC-095 — the stable prefix review.ts stamps onto `error_message` when a
- * supersede flips an old author row to `canceled` (review.ts documents the
- * prefix as a grep contract). Single source of truth: review.ts imports this
- * constant to BUILD the marker; isDispatchable uses it to keep marker rows
- * parked (the pending rerun row minted right after carries the revival —
- * dispatching the marker row inside the supersede→mint await window would run
- * the agent without its review context).
+ * RFC-095 — keeps review-superseded canceled rows PARKED (the pending rerun
+ * row minted right after carries the revival — dispatching the superseded row
+ * inside the supersede→mint await window would run the agent without its
+ * review context). LOAD-BEARING dispatch contract.
+ *
+ * RFC-145: the judgment reads the structured `superseded_by_review` column
+ * (written by review.ts in the same atomic supersede write; legacy rows were
+ * backfilled by migration 0077). The old errorMessage prefix marker remains
+ * as human breadcrumbs only — machine reads of errorMessage are forbidden by
+ * the rfc145 source guard. The startsWith edge cases (null / empty / partial
+ * prefix / embedded note) are structurally gone: a row is superseded iff the
+ * column is non-null.
  */
-export const REVIEW_SUPERSEDE_MARKER_PREFIX = 'superseded-by-review-'
-
-export function isReviewSupersededRow(row: Pick<NodeRunRow, 'errorMessage'>): boolean {
-  return row.errorMessage !== null && row.errorMessage.startsWith(REVIEW_SUPERSEDE_MARKER_PREFIX)
+export function isReviewSupersededRow(row: Pick<NodeRunRow, 'supersededByReview'>): boolean {
+  // Normalize undefined (plain test-fixture rows) → null (real DB column):
+  // a row is superseded iff the column carries a decision.
+  return (row.supersededByReview ?? null) !== null
 }
 
 /** Safe read of a wrapper node's inner `nodeIds` (absent / non-array → []). */

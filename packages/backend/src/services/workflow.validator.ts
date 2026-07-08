@@ -31,11 +31,11 @@ import {
   BUILTIN_VARS,
   CLARIFY_SOURCE_PORT_NAME,
   countFanoutAggregators,
+  declaredPorts,
   isClarifyChannelEdge,
   isMultiDocReviewInput,
   isReviewableBodyKind,
   isWrapperKind,
-  reviewApprovedPortName,
   tryParseKind,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
@@ -262,89 +262,30 @@ export function validateWorkflowDef(
   const outputPorts = new Map<string, Set<string>>()
   const inputPorts = new Map<string, Set<string>>()
 
+  // RFC-146: the per-kind port switch (historically fork #5 of five parallel
+  // implementations) is gone — ports come from the shared declaration table
+  // (`declaredPorts`, packages/shared/src/nodePorts.ts). The validator takes
+  // BOTH projections: data ports and framework system channels (clarify
+  // family, __clarify__/__clarify_response__/__external_feedback__) are
+  // accepted on edges exactly as the old hardcoded switch did.
+  //
+  // Behavior fix riding along: the old switch had NO wrapper-fanout case, so
+  // a fanout outlet (aggregator-renamed port or the implicit __done__) wired
+  // to a plain downstream edge / output binding / loop exitCondition
+  // false-errored (`edge-source-port-missing` family) and blocked task
+  // launch. The table derives fanout outlets via `deriveWrapperFanoutOutputs`
+  // — the same oracle the canvas renders with — so those wirings validate.
+  const defnForPorts: WorkflowDefinition = { ...def, nodes, edges }
   for (const node of nodes) {
-    const outs = new Set<string>()
-    const ins = new Set<string>()
-    switch (node.kind) {
-      case 'input': {
-        const key = readString(node, 'inputKey')
-        if (key !== undefined) outs.add(key)
-        break
-      }
-      case 'output': {
-        const ports = readBindings(node, 'ports')
-        for (const p of ports) ins.add(p.name)
-        break
-      }
-      case 'agent-single': {
-        const agent = agentByName.get(readString(node, 'agentName') ?? '')
-        for (const o of agent?.outputs ?? []) outs.add(o)
-        // RFC-023: when an outbound edge wires this agent's __clarify__ system
-        // port, accept it as a valid output port. The corresponding
-        // __clarify_response__ inbound is added below alongside the
-        // ins-from-edges sweep.
-        outs.add('__clarify__')
-        ins.add('__clarify_response__')
-        // RFC-056: when a cross-clarify node's `to_designer` manual-edge lands
-        // on this agent it targets the system-injected `__external_feedback__`
-        // inbound port. Accept it pre-emptively on every agent-single node —
-        // the canvas hides the handle until at least one edge points there,
-        // but the validator should never flag a wired manual-edge as having
-        // an unknown target port. (RFC-060 PR-E removed agent-multi.)
-        ins.add('__external_feedback__')
-        // Inputs are derived from incoming edges (handled in rule 1 / 5).
-        break
-      }
-      case 'wrapper-git':
-        outs.add('git_diff')
-        break
-      case 'wrapper-loop': {
-        const bindings = readBindings(node, 'outputBindings')
-        for (const b of bindings) outs.add(b.name)
-        break
-      }
-      case 'review': {
-        // RFC-005 / RFC-079: review nodes publish two ports downstream after
-        // approve. Single-document review → `approved_doc` (the source doc
-        // passes through). Multi-document review (inputSource is a
-        // list<markdownish> port) → `accepted` (the curated subset, kind
-        // list<path<md>>). Both carry `approval_meta`. inputSource validity is
-        // checked separately below; here we only choose the port name so
-        // downstream edge validation accepts the right outlet.
-        let inputKind: string | undefined
-        const inputSource = (node as Record<string, unknown>).inputSource
-        if (inputSource !== null && typeof inputSource === 'object') {
-          const rec = inputSource as Record<string, unknown>
-          const src = typeof rec.nodeId === 'string' ? nodeById.get(rec.nodeId) : undefined
-          if (src?.kind === 'agent-single' && typeof rec.portName === 'string') {
-            inputKind = agentByName.get(readString(src, 'agentName') ?? '')?.outputKinds?.[
-              rec.portName
-            ]
-          }
-        }
-        outs.add(reviewApprovedPortName(inputKind))
-        outs.add('approval_meta')
-        break
-      }
-      case 'clarify': {
-        // RFC-023: fixed 1-in / 1-out shape — port names are hard-coded.
-        ins.add('questions')
-        outs.add('answers')
-        break
-      }
-      case 'clarify-cross-agent': {
-        // RFC-056: fixed 1-in / 2-out shape — port names are hard-coded.
-        //   in:  questions         (auto-mints alongside reverse-drag)
-        //   out: to_questioner     (auto-mints alongside reverse-drag)
-        //   out: to_designer       (manual edge to a designer ancestor)
-        ins.add('questions')
-        outs.add('to_designer')
-        outs.add('to_questioner')
-        break
-      }
-    }
-    outputPorts.set(node.id, outs)
-    inputPorts.set(node.id, ins)
+    const declared = declaredPorts(node, defnForPorts, agentByName)
+    outputPorts.set(
+      node.id,
+      new Set([...declared.dataOutputs, ...declared.systemOutputs].map((p) => p.name)),
+    )
+    inputPorts.set(
+      node.id,
+      new Set([...declared.dataInputs, ...declared.systemInputs].map((p) => p.name)),
+    )
   }
 
   // Collect inbound edges per (target nodeId → portName set) for prompt check.

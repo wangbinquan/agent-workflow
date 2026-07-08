@@ -26,6 +26,8 @@ function makeRun(id: string, nodeId: string): NodeRun {
     pid: null,
     exitCode: null,
     errorMessage: null,
+    supersededByReview: null,
+    rolledBack: null,
     promptText: null,
     tokInput: null,
     tokOutput: null,

@@ -3,6 +3,7 @@
 // imports. Mirrors design.md §7.2.
 
 import type { AgentOutputKindsMap } from './schemas/agent'
+import type { FailureCode } from './schemas/task'
 import {
   ASKBACK_PRIOR_OUTPUT_BLOCK_TITLE,
   ASKBACK_PRIOR_OUTPUT_DIRECTIVE_BLOCK_TITLE,
@@ -835,6 +836,46 @@ export function buildClarifyInlineReminder(): string {
  * explicitly clicked "Keep clarifying" on the previous round and the followup
  * must not let the agent skip back to <workflow-output> for brevity.
  */
+/**
+ * RFC-145 — the 6-value RENDER domain for envelope follow-up prompts. This
+ * union used to be copied verbatim in three places (scheduler decision output,
+ * runner RunNodeOptions, this input type); it is now defined once here and
+ * imported by both backend sites.
+ */
+export type EnvelopeFollowupReason =
+  | 'envelope-missing'
+  | 'both-present'
+  | 'clarify-malformed'
+  | 'port-validation'
+  | 'clarify-required'
+  | 'envelope-port-malformed'
+
+/**
+ * RFC-145 — projection from the 7-value PRODUCER domain (`FAILURE_CODES`,
+ * declared by the runner at each stamp point and persisted on
+ * `node_runs.failure_code`) onto the 6-value render reason above.
+ * `decideEnvelopeFollowup` (scheduler) looks this up instead of parsing
+ * errorMessage prefixes with an order-sensitive startsWith chain.
+ *
+ * The one deliberate many-to-one edge: `clarify-forbidden` renders as
+ * 'envelope-missing' — the agent asked another clarify after the user chose
+ * "stop asking"; the correct follow-up instruction is "produce the output
+ * envelope now", which IS the envelope-missing wording. This downgrade was
+ * previously an implicit branch buried at the tail of the startsWith chain.
+ *
+ * `Record<FailureCode, …>` makes adding a code without a policy row a compile
+ * error (same exhaustiveness idiom as GATE2_EXPECTED in the rerun-cause gates).
+ */
+export const FOLLOWUP_POLICY: Record<FailureCode, { reason: EnvelopeFollowupReason }> = {
+  'envelope-missing': { reason: 'envelope-missing' },
+  'clarify-and-output-both': { reason: 'both-present' },
+  'clarify-questions-malformed': { reason: 'clarify-malformed' },
+  'clarify-required': { reason: 'clarify-required' },
+  'clarify-forbidden': { reason: 'envelope-missing' },
+  'envelope-port-malformed': { reason: 'envelope-port-malformed' },
+  'port-validation-failed': { reason: 'port-validation' },
+}
+
 export interface EnvelopeFollowupInput {
   /**
    * Whether the agent node has a clarify channel wired (RFC-023). Drives the
@@ -880,13 +921,7 @@ export interface EnvelopeFollowupInput {
    * the envelope is even parsed while clarify is active — so both are preserved
    * across the hasClarifyChannel=false narrowing below).
    */
-  reason:
-    | 'envelope-missing'
-    | 'both-present'
-    | 'clarify-malformed'
-    | 'port-validation'
-    | 'clarify-required'
-    | 'envelope-port-malformed'
+  reason: EnvelopeFollowupReason
   /**
    * RFC-049: backend-prerendered per-kind repair segments. shared/prompt.ts
    * does NOT import the OutputKindHandler registry (handlers live in

@@ -426,7 +426,7 @@ function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps)
               // TextInputs. Candidates are computed from the wrapper's
               // current nodeIds + each member's declared output ports so a
               // node moved out of the loop can no longer be referenced.
-              const candidates = loopMemberCandidates(node, definition.nodes, agents)
+              const candidates = loopMemberCandidates(node, definition, agents)
               const currentCand = candidates.find((c) => c.nodeId === exitNodeId)
               const nodeIdInvalid = exitNodeId.length > 0 && currentCand === undefined
               const portCandidates = currentCand?.outputPorts ?? []
@@ -526,7 +526,7 @@ function EditForm({ node, agents, definition, onPatch, onCommitDef }: EditProps)
                 // RFC-016 T7: same candidate-driven select pattern used in
                 // exitCondition target — each binding row references an
                 // inner member node + its declared output port.
-                const candidates = loopMemberCandidates(node, definition.nodes, agents)
+                const candidates = loopMemberCandidates(node, definition, agents)
                 const currentCand = candidates.find((c) => c.nodeId === b.bind.nodeId)
                 const bindNodeInvalid = b.bind.nodeId.length > 0 && currentCand === undefined
                 const bindPortCandidates = currentCand?.outputPorts ?? []

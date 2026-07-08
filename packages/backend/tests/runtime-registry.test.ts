@@ -1,9 +1,10 @@
-// RFC-112 PR-A — runtime registry data layer: CRUD + built-in read-only guards
-// + in-use delete block + name/protocol validation + hard-reset seed + name →
-// (protocol, binary) resolution. The two built-ins (opencode/claude-code) are
-// seeded read-only; custom forks (renamed binaries) register additional rows.
-// agents.runtime / config.defaultRuntime reference a row by name; node_runs
-// freeze (protocol, binary) so the registry stays mutable (tested in PR-C).
+// RFC-112 PR-A / RFC-153 — runtime registry data layer: CRUD + in-use / effective-
+// default delete block + name/protocol validation + first-startup seed + name →
+// (protocol, binary) resolution. RFC-153 removed the built-in read-only flag:
+// opencode / claude-code are ORDINARY editable + deletable rows, seeded only on an
+// empty table (a deleted row is never re-seeded). agents.runtime /
+// config.defaultRuntime reference a row by name; node_runs freeze (protocol,
+// binary) so the registry stays mutable (tested in PR-C).
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -15,9 +16,9 @@ import {
   deleteRuntime,
   getRuntime,
   listRuntimes,
+  migrateConfigIntoBuiltins,
   resolveAgentRuntime,
   resolveRuntimeByName,
-  runtimeHead,
   seedBuiltinRuntimes,
   setRuntimeEnabled,
   updateRuntime,
@@ -39,17 +40,16 @@ describe('seedBuiltinRuntimes (RFC-112 PR-A)', () => {
     db = freshDb()
   })
 
-  test('seeds opencode + claude-code as read-only rows with NULL binary', async () => {
+  test('seeds opencode + claude-code as ordinary rows with NULL binary/model', async () => {
     await seedBuiltinRuntimes(db)
     const rows = await listRuntimes(db)
     expect(rows.length).toBe(2)
     const oc = rows.find((r) => r.name === 'opencode')!
     const cc = rows.find((r) => r.name === 'claude-code')!
     expect(oc.protocol).toBe('opencode')
-    expect(oc.builtin).toBe(true)
     expect(oc.binaryPath).toBeNull()
+    expect(oc.model).toBeNull() // RFC-153: NULL = opencode's own default, not preset
     expect(cc.protocol).toBe('claude-code')
-    expect(cc.builtin).toBe(true)
   })
 
   test('idempotent — re-seeding keeps exactly two rows', async () => {
@@ -58,24 +58,24 @@ describe('seedBuiltinRuntimes (RFC-112 PR-A)', () => {
     expect((await listRuntimes(db)).length).toBe(2)
   })
 
-  test('resets IDENTITY (protocol/builtin) but PRESERVES binary/profile (RFC-113 D8)', async () => {
-    // corruption: wrong protocol + non-builtin. RFC-113 narrows the reset to
-    // identity only — a legitimately admin-set binary_path / model must survive
-    // (built-in rows now carry editable binary + profile params).
+  test('RFC-153: non-empty table → seed is a full no-op (never touches rows, never adds)', async () => {
+    // A user row (even one reusing a preseeded name under a DIFFERENT protocol)
+    // makes the table non-empty; seed must NOT run, correct identity, or add the
+    // other preseeded row — a deletion/customization sticks across restarts.
     await db.insert(runtimes).values({
       id: ulid(),
       name: 'opencode',
       protocol: 'claude-code',
       binaryPath: '/usr/local/bin/oc',
       model: 'opus',
-      builtin: false,
     })
     await seedBuiltinRuntimes(db)
-    const oc = await getRuntime(db, 'opencode')
-    expect(oc!.protocol).toBe('opencode') // identity corrected
-    expect(oc!.builtin).toBe(true) // identity corrected
-    expect(oc!.binaryPath).toBe('/usr/local/bin/oc') // PRESERVED (was reset to NULL pre-RFC-113)
-    expect(oc!.model).toBe('opus') // PRESERVED
+    const rows = await listRuntimes(db)
+    expect(rows.length).toBe(1) // no claude-code added
+    const oc = rows[0]!
+    expect(oc.protocol).toBe('claude-code') // NOT corrected — no identity reset anymore
+    expect(oc.binaryPath).toBe('/usr/local/bin/oc')
+    expect(oc.model).toBe('opus')
   })
 })
 
@@ -96,14 +96,18 @@ describe('createRuntime (RFC-112 PR-A)', () => {
     expect(row.name).toBe('my-oc')
     expect(row.protocol).toBe('opencode')
     expect(row.binaryPath).toBe('/usr/local/bin/my-oc')
-    expect(row.builtin).toBe(false)
     expect(row.createdBy).toBe('admin-1')
   })
 
-  test('rejects a reserved built-in name', async () => {
+  test('RFC-153: names are not reserved — recreate collides on uniqueness, not reservation', async () => {
+    // preseeded opencode exists (beforeEach) → name uniqueness blocks it as exists.
     await expect(
       createRuntime(db, { name: 'opencode', protocol: 'opencode' }),
-    ).rejects.toMatchObject({ code: 'runtime-name-reserved' })
+    ).rejects.toMatchObject({ code: 'runtime-exists' })
+    // Once the preseeded row is deleted the name is free to recreate (any protocol).
+    await deleteRuntime(db, 'opencode', 'claude-code') // non-default here → allowed
+    const recreated = await createRuntime(db, { name: 'opencode', protocol: 'claude-code' })
+    expect(recreated.protocol).toBe('claude-code')
   })
 
   test('rejects an invalid name (uppercase / spaces / symbols)', async () => {
@@ -149,10 +153,11 @@ describe('updateRuntime / deleteRuntime guards (RFC-112 PR-A)', () => {
     expect(updated.protocol).toBe('opencode') // identity still immutable
   })
 
-  test('built-in delete is 403 read-only (identity locked)', async () => {
-    await expect(deleteRuntime(db, 'claude-code', null)).rejects.toMatchObject({
-      code: 'runtime-builtin-readonly',
-    })
+  test('RFC-153: a preseeded runtime is deletable (not the default, not referenced)', async () => {
+    // claude-code is not the effective default (opencode is, config unset) and no
+    // agent pins it → deletion succeeds and sticks (seed won't re-add it).
+    await deleteRuntime(db, 'claude-code', null)
+    expect(await getRuntime(db, 'claude-code')).toBeNull()
   })
 
   test('custom update changes binary_path + profile', async () => {
@@ -169,6 +174,14 @@ describe('updateRuntime / deleteRuntime guards (RFC-112 PR-A)', () => {
 
   test('delete blocked while it is the config default', async () => {
     await expect(deleteRuntime(db, 'my-oc', 'my-oc')).rejects.toMatchObject({
+      code: 'runtime-in-use',
+    })
+  })
+
+  test('RFC-153 F1: deleting effective default opencode (config.defaultRuntime unset) is blocked', async () => {
+    // findRuntimeReferences folds unset → 'opencode', so the fallback default can't
+    // be deleted out from under dispatch even when config never set it explicitly.
+    await expect(deleteRuntime(db, 'opencode', null)).rejects.toMatchObject({
       code: 'runtime-in-use',
     })
   })
@@ -234,92 +247,6 @@ describe('resolution: name → (protocol, binary) (RFC-112 PR-A)', () => {
   })
 })
 
-describe('runtimeHead (RFC-112 PR-A)', () => {
-  test('custom binary → that binary', () => {
-    expect(
-      runtimeHead(
-        {
-          name: 'my-oc',
-          protocol: 'opencode',
-          binaryPath: '/a/my-oc',
-          model: null,
-          variant: null,
-          temperature: null,
-          steps: null,
-          maxSteps: null,
-        },
-        {},
-      ),
-    ).toEqual(['/a/my-oc'])
-  })
-
-  test('built-in opencode → config.opencodePath ?? PATH', () => {
-    expect(
-      runtimeHead(
-        {
-          name: 'opencode',
-          protocol: 'opencode',
-          binaryPath: null,
-          model: null,
-          variant: null,
-          temperature: null,
-          steps: null,
-          maxSteps: null,
-        },
-        {},
-      ),
-    ).toEqual(['opencode'])
-    expect(
-      runtimeHead(
-        {
-          name: 'opencode',
-          protocol: 'opencode',
-          binaryPath: null,
-          model: null,
-          variant: null,
-          temperature: null,
-          steps: null,
-          maxSteps: null,
-        },
-        { opencodePath: '/p/oc' },
-      ),
-    ).toEqual(['/p/oc'])
-  })
-
-  test('built-in claude → config.claudeCodePath ?? PATH', () => {
-    expect(
-      runtimeHead(
-        {
-          name: 'claude-code',
-          protocol: 'claude-code',
-          binaryPath: null,
-          model: null,
-          variant: null,
-          temperature: null,
-          steps: null,
-          maxSteps: null,
-        },
-        {},
-      ),
-    ).toEqual(['claude'])
-    expect(
-      runtimeHead(
-        {
-          name: 'claude-code',
-          protocol: 'claude-code',
-          binaryPath: null,
-          model: null,
-          variant: null,
-          temperature: null,
-          steps: null,
-          maxSteps: null,
-        },
-        { claudeCodePath: '/p/cc' },
-      ),
-    ).toEqual(['/p/cc'])
-  })
-})
-
 describe('setRuntimeEnabled (RFC-118)', () => {
   let db: DbClient
   beforeEach(async () => {
@@ -367,5 +294,31 @@ describe('setRuntimeEnabled (RFC-118)', () => {
 
   test('404 on unknown runtime', async () => {
     await expect(setRuntimeEnabled(db, 'nope', false, 'opencode')).rejects.toThrow(/not found/)
+  })
+})
+
+describe('migrateConfigIntoBuiltins (RFC-153 F2 — protocol-guarded backfill)', () => {
+  let db: DbClient
+  beforeEach(() => {
+    db = freshDb()
+  })
+
+  test('backfills binary onto the canonical rows (protocol matches)', async () => {
+    await seedBuiltinRuntimes(db)
+    await migrateConfigIntoBuiltins(db, { opencodePath: '/opt/oc', claudeCodePath: '/opt/cc' })
+    expect((await getRuntime(db, 'opencode'))!.binaryPath).toBe('/opt/oc')
+    expect((await getRuntime(db, 'claude-code'))!.binaryPath).toBe('/opt/cc')
+  })
+
+  test('does NOT write the opencode binary into a user row reusing the name under claude-code protocol', async () => {
+    await db.insert(runtimes).values({
+      id: ulid(),
+      name: 'opencode',
+      protocol: 'claude-code',
+      binaryPath: null,
+    })
+    await migrateConfigIntoBuiltins(db, { opencodePath: '/opt/oc' })
+    // protocol mismatch (claude-code !== opencode) → binary stays NULL.
+    expect((await getRuntime(db, 'opencode'))!.binaryPath).toBeNull()
   })
 })

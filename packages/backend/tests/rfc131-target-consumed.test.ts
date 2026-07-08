@@ -10,14 +10,10 @@
 //     老化——只有「id >= 问题承接 rerun」的产出才老化它。
 //   - sinceRunId===null（问题尚未被任何 rerun 承接注入）→ NOT consumed（首次注入）。
 
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-
 import { describe, expect, test } from 'bun:test'
 
 import type { nodeRuns } from '../src/db/schema'
 import { isTargetNodeConsumed } from '../src/services/clarifyRerunLedger'
-import { REVIEW_SUPERSEDE_MARKER_PREFIX } from '../src/services/dispatchFrontier'
 
 type NodeRunRow = typeof nodeRuns.$inferSelect
 const T = 'agent_T'
@@ -78,6 +74,7 @@ describe('isTargetNodeConsumed — RFC-131 派生式老化', () => {
           mkRun({
             id: 'r1',
             status: 'canceled',
+            supersededByReview: 'rejected',
             errorMessage: 'superseded-by-review-rejected: Replaced by retry_index 1',
           }),
         ],
@@ -139,15 +136,6 @@ describe('isTargetNodeConsumed — RFC-131 派生式老化', () => {
     expect(isTargetNodeConsumed(T, 0, 'r0', runs, new Set(['r1']))).toBe(true)
   })
 
-  test('source-text lock: 本模块 inline 的 REVIEW_SUPERSEDE_MARKER_PREFIX 与 dispatchFrontier canonical 同值（防 fork 漂移）', () => {
-    // clarifyRerunLedger 是底层模块（只 import schema/drizzle/freshness/shared），不 import
-    // dispatchFrontier（避免破底层原则 + 传递循环），故 inline 同值常量；此锁保证两处不漂移。
-    const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'clarifyRerunLedger.ts'),
-      'utf8',
-    )
-    expect(src).toContain(
-      `const REVIEW_SUPERSEDE_MARKER_PREFIX = '${REVIEW_SUPERSEDE_MARKER_PREFIX}'`,
-    )
-  })
+  // RFC-145：inline 前缀常量随列化退役（isTargetNodeConsumed / isReviewSupersededCanceled
+  // 改读 superseded_by_review 列），原「双份同值 parity source-text 锁」失去对象——fork 消亡。
 })

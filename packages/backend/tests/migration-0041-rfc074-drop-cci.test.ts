@@ -149,7 +149,11 @@ describe('RFC-074 migration 0041 — DROP clarify_iteration preserves row data',
       expect(cols).toContain('iso_node_tree')
       expect(cols).toContain('iso_node_tree_repos_json')
       expect(cols).toContain('merge_state')
-      expect(cols.length).toBe(cols0040.length - 1 + 7 + 6)
+      // RFC-145 (0077): failure_code + superseded_by_review + rolled_back.
+      expect(cols).toContain('failure_code')
+      expect(cols).toContain('superseded_by_review')
+      expect(cols).toContain('rolled_back')
+      expect(cols.length).toBe(cols0040.length - 1 + 7 + 6 + 3)
 
       // 4b. row count unchanged.
       const n = (up.query('SELECT count(*) AS n FROM node_runs').get() as { n: number }).n

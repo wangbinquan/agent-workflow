@@ -83,7 +83,9 @@ export interface LivePollerHandle {
   stats(): LivePollerStats
 }
 
-const NOOP_HANDLE: LivePollerHandle = {
+/** RFC-143: exported so runner's `driver.startLiveCapture?.(ctx) ?? NOOP_HANDLE`
+ *  falls back cleanly when a runtime (claude) doesn't implement live capture. */
+export const NOOP_HANDLE: LivePollerHandle = {
   stop: () => {},
   tickOnce: async () => 0,
   stats: () => ({

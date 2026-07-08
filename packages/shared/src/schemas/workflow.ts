@@ -64,22 +64,6 @@ export function isWrapperKind(kind: NodeKind | string | null | undefined): boole
   return (WRAPPER_NODE_KINDS as readonly string[]).includes(kind ?? '')
 }
 
-// RFC-052: kinds that actually spawn a process / hold a per-attempt node_run
-// row the scheduler dispatches. Used by retry cascades to decide whether to
-// mint a `retryIndex+1` placeholder for a downstream node — the non-process
-// kinds (input/output/review/clarify) have no process state to retry; their
-// runOneNode paths are either no-ops (input/output) or driven by external
-// events (review → user decision, clarify → agent envelope). Cascading
-// retries onto them only produces stale `queued for retry` placeholder rows
-// that confuse downstream `isFresherNodeRun` selection.
-//
-// RFC-060: wrapper-fanout joins the process-kind set — it holds a parent
-// node_run row whose status reflects the shard fan-out + aggregator
-// completion (mirroring wrapper-git's container-row semantics).
-export function isProcessNodeKind(kind: NodeKind): boolean {
-  return kind === 'agent-single' || isWrapperKind(kind)
-}
-
 // RFC-020: 'upload' joins as a sibling of 'files'. `files` picks paths
 // already inside the worktree; `upload` writes user-selected local files
 // into the worktree at a per-input `targetDir`. Packed value is identical

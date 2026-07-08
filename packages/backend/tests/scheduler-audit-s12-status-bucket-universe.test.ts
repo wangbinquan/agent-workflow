@@ -10,7 +10,7 @@
 //
 //   - canceled（无 supersede 标记）→ ready（S-22：复活信号，与 interrupted 同类；
 //     task cancel 保留 worktree，retryNode 复活是设计内 UI 流）。
-//   - canceled + errorMessage 以 REVIEW_SUPERSEDE_MARKER_PREFIX 开头 → blocked
+//   - canceled + superseded_by_review 列非空（RFC-145 列化）→ blocked
 //     ('review-superseded')：submitReviewDecision 先翻旧行再铸 pending rerun，
 //     窗口内派发会让 agent 丢失 review 上下文——标记行永久停泊，rerun 行承载复活。
 //   - running（不在飞）→ blocked('orphaned-running-row' 前缀)：遗弃 running 行
@@ -42,11 +42,7 @@ import { describe, expect, test } from 'bun:test'
 import { NODE_RUN_STATUS, type NodeRunStatus } from '@agent-workflow/shared'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
 import type { nodeRuns } from '../src/db/schema'
-import {
-  REVIEW_SUPERSEDE_MARKER_PREFIX,
-  decideScopeOutcome,
-  isDispatchable,
-} from '../src/services/dispatchFrontier'
+import { decideScopeOutcome, isDispatchable } from '../src/services/dispatchFrontier'
 import { deriveFrontier } from '../src/services/scheduler'
 
 type Row = typeof nodeRuns.$inferSelect
@@ -176,9 +172,9 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
 
   // EXPECTED 表按 status 单行建模、表不下 errorMessage 维度，故独立成 case：
   // supersede 标记行是 canceled → ready 的唯一例外（design §1 标记守卫）。
-  test("补充表项：canceled + errorMessage 'superseded-by-review-*' → blocked('review-superseded')（supersede 等待窗口，rerun 行承载复活）", () => {
+  test("补充表项：canceled + superseded_by_review 列非空 → blocked('review-superseded')（supersede 等待窗口，rerun 行承载复活）", () => {
     const got = classify('canceled', 'agent-single', {
-      errorMessage: `${REVIEW_SUPERSEDE_MARKER_PREFIX}01REVIEWRUN`,
+      supersededByReview: 'iterated',
     })
     expect(got.bucket).toBe('blocked')
     expect((got.reason ?? '').startsWith('review-superseded')).toBe(true)
@@ -193,7 +189,7 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
     const rows = [
       row('orphanA', 'running'),
       row('supersededB', 'canceled', {
-        errorMessage: `${REVIEW_SUPERSEDE_MARKER_PREFIX}01REVIEWRUN`,
+        supersededByReview: 'iterated',
       }),
       row('skippedC', 'skipped'),
     ]

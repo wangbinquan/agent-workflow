@@ -25,6 +25,8 @@ function makeRun(over: Partial<NodeRun>): NodeRun {
     pid: null,
     exitCode: null,
     errorMessage: null,
+    supersededByReview: null,
+    rolledBack: null,
     promptText: null,
     tokInput: null,
     tokOutput: null,

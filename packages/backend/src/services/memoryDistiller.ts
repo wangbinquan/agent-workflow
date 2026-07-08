@@ -919,12 +919,13 @@ export async function defaultDistillerSpawn(
   // env here, ~duplicating runtime/opencode/spawn + the event walker below).
   // buildSpawn yields the protocol-correct cmd/env/stdin; opencode keeps its
   // prior byte-for-byte form, claude gets system-prompt-file + stdin pipe.
+  //
+  // RFC-143 PR-4: both former `input.protocol === 'xxx'` branches here are
+  // internalized into the drivers — the AGENT_WORKFLOW_OPENCODE_BIN override
+  // is opencode buildSpawn's own no-binary fallback, and bridgeCredentials is
+  // passed unconditionally (the distiller is a real non-mock run; opencode's
+  // driver ignores the field, claude's bridges the subscription credential).
   const driver = getRuntimeDriver(input.protocol)
-  // Preserve the distiller-private opencode bin override for the built-in
-  // opencode case where the resolved profile has no custom binary.
-  const runtimeBinary =
-    input.runtimeBinary ??
-    (input.protocol === 'opencode' ? (process.env.AGENT_WORKFLOW_OPENCODE_BIN ?? null) : null)
   const plan = driver.buildSpawn({
     agentName: DISTILLER_AGENT_NAME,
     systemPrompt: DISTILLER_SYSTEM_PROMPT,
@@ -932,10 +933,10 @@ export async function defaultDistillerSpawn(
     prompt: input.userPrompt,
     worktreePath: input.cwd,
     runDir: input.cwd,
-    ...(runtimeBinary != null && runtimeBinary !== '' ? { runtimeBinary } : {}),
-    // distiller is a real (non-mock) claude run → bridge the subscription
-    // credential into the relocated config dir so auth survives (opencode no-op).
-    ...(input.protocol === 'claude-code' ? { bridgeCredentials: true } : {}),
+    ...(input.runtimeBinary != null && input.runtimeBinary !== ''
+      ? { runtimeBinary: input.runtimeBinary }
+      : {}),
+    bridgeCredentials: true,
   })
   const wantStdin = plan.stdin?.mode === 'pipe'
   const child = Bun.spawn({

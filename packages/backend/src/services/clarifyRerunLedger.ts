@@ -141,12 +141,11 @@ export function isDispatchedEntryConsumed(
   return true
 }
 
-/** RFC-132 ②a 缺口② — review supersede 例外的单一判据(与 isTargetNodeConsumed :447 /
- *  dispatchFrontier.isReviewSupersededRow 同源):canceled + errorMessage 带 supersede marker。 */
-function isReviewSupersededCanceled(r: Pick<NodeRunRow, 'status' | 'errorMessage'>): boolean {
-  return (
-    r.status === 'canceled' && r.errorMessage?.startsWith(REVIEW_SUPERSEDE_MARKER_PREFIX) === true
-  )
+/** RFC-132 ②a 缺口② — review supersede 例外的单一判据(与 isTargetNodeConsumed /
+ *  dispatchFrontier.isReviewSupersededRow 同源)：canceled + superseded_by_review 列非空
+ *  （RFC-145 列化，零前缀解析）。 */
+function isReviewSupersededCanceled(r: Pick<NodeRunRow, 'status' | 'supersededByReview'>): boolean {
+  return r.status === 'canceled' && (r.supersededByReview ?? null) !== null
 }
 
 /** The resolveHandlerRun lineage projection (the SAME shape findOpenDispatchTarget passes) so
@@ -237,11 +236,9 @@ export function hasOpenDispatchedEntryOnHome(
  *
  *  派生式（读时按 run 状态 + id 序算、不落库）：单一事实源、崩溃 replay 一致、零 schema migration、
  *  幂等。fanout 子 run（parentNodeRunId 非 null）不作数——只看 top-level 产出。 */
-// review reject/iterate supersede 把 done+output run 翻成 canceled 但保留 output（review.ts）。canonical
-// 定义在 dispatchFrontier.REVIEW_SUPERSEDE_MARKER_PREFIX / isReviewSupersededRow；本模块是底层（文件头注释：
-// 只 import schema/drizzle/freshness/shared），不 import dispatchFrontier（避免破底层原则 + 传递循环
-// dispatchFrontier→wrapperProgress）。用同值常量 + source-text 测试锁（review-supersede-marker-parity）防漂移。
-const REVIEW_SUPERSEDE_MARKER_PREFIX = 'superseded-by-review-'
+// review reject/iterate supersede 把 done+output run 翻成 canceled 但保留 output（review.ts）。
+// RFC-145：判据切到结构化列 superseded_by_review（与 dispatchFrontier.isReviewSupersededRow 同源
+// 语义、零常量 fork——旧 inline 前缀常量与其 parity 文本锁随列化退役）。
 
 export function isTargetNodeConsumed(
   targetNodeId: string,
@@ -260,8 +257,7 @@ export function isTargetNodeConsumed(
       // 即永久老化」：reject 把产出 run 翻 canceled 但保留 output，若不认它则 reject 重做会重注已答 clarify
       // ——验收4 bug）。failed / 非-review canceled / interrupted / pending / running+output 仍不老化（revivable / 在飞）。
       (r.status === 'done' ||
-        (r.status === 'canceled' &&
-          r.errorMessage?.startsWith(REVIEW_SUPERSEDE_MARKER_PREFIX) === true)) &&
+        (r.status === 'canceled' && (r.supersededByReview ?? null) !== null)) &&
       outputRunIds.has(r.id) &&
       r.id >= sinceRunId,
   )

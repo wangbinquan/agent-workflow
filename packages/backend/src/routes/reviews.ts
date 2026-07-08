@@ -23,7 +23,8 @@ import type { TaskActorRole } from '@agent-workflow/shared'
 import { eq, inArray } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
-import { loadConfig } from '@/config'
+// RFC-143 PR-5: resolveOpencodeCmd deduped to util/opencode (was 5 route-local copies).
+import { resolveOpencodeCmd } from '@/util/opencode'
 import { nodeRuns, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { canViewTask, requireTaskMember } from '@/services/taskCollab'
@@ -130,19 +131,6 @@ function appHomeFor(_deps: AppDeps): string {
   // We do NOT touch config.json here to avoid spuriously writing a default
   // config when configPath is empty (e.g. tests inject deps.configPath = '').
   return Paths.root
-}
-
-function resolveOpencodeCmd(configPath: string): string[] | undefined {
-  if (configPath === '') return undefined
-  try {
-    const cfg = loadConfig(configPath)
-    if (typeof cfg.opencodePath === 'string' && cfg.opencodePath.length > 0) {
-      return [cfg.opencodePath]
-    }
-  } catch {
-    /* nothing */
-  }
-  return undefined
 }
 
 export function mountReviewRoutes(app: Hono, deps: AppDeps): void {

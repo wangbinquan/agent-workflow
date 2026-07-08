@@ -3,18 +3,9 @@
 
 import type { InjectedMemorySnapshot, NodeRun } from '@agent-workflow/shared'
 
-/**
- * Which workflow-node kinds ever call the runner inject path (and so can
- * meaningfully show "injected memories"). Mirrors `isAgentRunKind` from the
- * backend but lives in the frontend so the component can early-return for
- * non-agent runs without an extra prop. Defensive on unknown strings: the
- * scheduler may grow new kinds, but only the agent ones need this card.
- */
-export function isAgentKind(kind: string | null | undefined): boolean {
-  if (kind === null || kind === undefined) return false
-  // RFC-060 PR-E: agent-multi removed; agent-single is the only agent kind.
-  return kind === 'agent-single'
-}
+// RFC-146: isAgentKind was a copy of the agent-kind predicate — callers now
+// import shared `isAgentNodeKind` (NODE_KIND_BEHAVIORS.isAgent), which is
+// already defensive on unknown/null strings.
 
 /**
  * Three render branches for the card body:

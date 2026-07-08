@@ -118,6 +118,20 @@ export const REVIEW_DECISION_KIND = ['approved', 'rejected', 'iterated'] as cons
 export const ReviewDecisionKindSchema = z.enum(REVIEW_DECISION_KIND)
 export type ReviewDecisionKind = z.infer<typeof ReviewDecisionKindSchema>
 
+/**
+ * RFC-145 — `node_runs.superseded_by_review` value domain: the decision that
+ * retired a run row (review.ts supersede path). `approved` never supersedes
+ * (the approve branch early-returns before any marker/mint), so this is
+ * REVIEW_DECISION_KIND minus 'approved'.
+ *
+ * NOT to be confused with `DOC_VERSION_DECISION`'s 'superseded' below — that
+ * one is a doc_versions lifecycle value (RFC-074: system retires an awaiting
+ * version when upstream refreshes) and has nothing to do with node_run rows.
+ */
+export const SUPERSEDE_DECISIONS = ['iterated', 'rejected'] as const
+export const SupersedeDecisionSchema = z.enum(SUPERSEDE_DECISIONS)
+export type SupersedeDecision = z.infer<typeof SupersedeDecisionSchema>
+
 // -----------------------------------------------------------------------------
 // Doc version — one snapshot per (review node run, version_index).
 //
@@ -131,6 +145,10 @@ export type ReviewDecisionKind = z.infer<typeof ReviewDecisionKindSchema>
 // produced a fresher run; the stale doc_version is retired and v(n+1) minted
 // (design §7). Not user-selectable (ReviewDecisionSchema stays approve/reject/
 // iterate); it only ever appears on a historical doc_version row.
+// RFC-145: distinct concept from `node_runs.superseded_by_review`
+// (SUPERSEDE_DECISIONS above) — that column records which USER DECISION
+// retired a run row; this 'superseded' is a SYSTEM retirement of a doc
+// version. Same word, different lifecycles.
 export const DOC_VERSION_DECISION = [
   'pending',
   'approved',
