@@ -72,6 +72,7 @@ export type PromptMode =
   | { kind: 'initial' }
   | {
       kind: 'followup'
+      resumeSessionId: string // D2 修订：非法态「followup 无 session」不可表示
       reason: EnvelopeFollowupReason // RFC-145 单源，消灭 runner 内联第三份
       clarifyDirective?: 'continue' | 'stop'
       portValidations?: ReadonlyArray<PortValidationFailure>
