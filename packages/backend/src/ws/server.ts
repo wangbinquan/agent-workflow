@@ -5,80 +5,40 @@
 // `buildWebSocketAdapter(deps)` which returns both, so the daemon entry point
 // stays a thin shim around `Bun.serve({ fetch, websocket })`.
 //
-// Channels:
-//   /ws/tasks/{taskId}    — single-task detail; `?since=N` replays events
-//   /ws/tasks             — task list
-//   /ws/workflows         — workflow list + editor multi-tab sync
+// RFC-152 — everything channel-specific (path regex + param parsing, hello
+// frame, broadcaster key, upgrade-time gates, per-frame gates, `?since`
+// replay) lives in ws/registry.ts as data. This file only owns the
+// channel-agnostic transport skeleton:
 //
-// Token auth: `?token=` matches AppDeps.token exactly (constant-time).
+//   tryUpgrade:  parse (registry iteration) → token → registry upgradeGate
+//                → server.upgrade
+//   open:        registry openWsChannel (gatedSubscribe + hello + onOpenExtra)
+//   close:       unsubscribe
+//   message:     ignored (v1 channels are server→client only)
 //
-// On open, the server emits a `hello` control frame so the client knows the
-// subscription is live.
+// There must be NO per-channel `kind === '…'` branch in this file — adding a
+// channel means adding a registry spec, nothing here. A source-level ratchet
+// test (tests/rfc152-ws-task-channel.test.ts) locks that in.
+//
+// Token auth: `?token=` accepts session tokens (aws_s_…), PATs (aws_pat_…)
+// and the legacy daemon token — the same set the HTTP `multiAuth` middleware
+// recognises (RFC-036).
 
-import type {
-  MemoryDistillJobWsMessage,
-  MemoryWsMessage,
-  RepoImportWsMessage,
-  TaskWsMessage,
-  TasksListWsMessage,
-  WorkflowsWsMessage,
-  WsControlMessage,
-} from '@agent-workflow/shared'
 import type { ServerWebSocket } from 'bun'
-import { and, eq, gt, asc } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { resolveActor } from '@/auth/session'
 import type { DbClient } from '@/db/client'
-import { memories as memoriesTable, nodeRunEvents, nodeRuns, tasks, workflows } from '@/db/schema'
-import { canViewResource } from '@/services/resourceAcl'
-import { canViewMemory } from '@/services/memory'
-import { canViewTask } from '@/services/taskCollab'
 import { createLogger } from '@/util/log'
-import {
-  MEMORY_CHANNEL,
-  MEMORY_DISTILL_JOB_CHANNEL,
-  REPO_IMPORT_CHANNEL,
-  TASK_CHANNEL,
-  TASKS_LIST_CHANNEL,
-  WORKFLOWS_CHANNEL,
-  memoryBroadcaster,
-  memoryDistillJobBroadcaster,
-  repoImportsBroadcaster,
-  taskBroadcaster,
-  tasksListBroadcaster,
-  workflowsBroadcaster,
-} from './broadcaster'
+import { checkUpgradeGate, openWsChannel, parseWsChannel, type WsConnectionData } from './registry'
 
 const log = createLogger('ws.server')
 
-interface ConnectionData {
-  channel:
-    | { kind: 'task'; taskId: string; since?: number }
-    | { kind: 'tasks-list' }
-    | { kind: 'workflows' }
-    | { kind: 'repo-import'; batchId: string }
-    | { kind: 'memories' }
-    | { kind: 'memory-distill-jobs' }
-  /**
-   * The resolved actor that owns this connection. Pinned at upgrade time so
-   * per-actor logging / per-user channel filtering doesn't need a second
-   * DB round-trip on every broadcast.
-   */
-  actor: Actor
-  unsubscribe: () => void
-  /**
-   * RFC-054 W2-4 fix — per-task visibility cache for the `/ws/tasks` list
-   * channel. The broadcaster fires every task event globally; this cache
-   * remembers whether the connection's actor is allowed to see each
-   * taskId mentioned in an outgoing frame, so we only do the canViewTask
-   * DB lookup once per (connection, taskId) pair. Cleared on close.
-   *
-   * For the per-task `/ws/tasks/{taskId}` channel a single visibility
-   * check at upgrade time gates the WHOLE connection (see tryUpgrade);
-   * no cache needed.
-   */
-  visibilityCache: Map<string, boolean>
-}
+/**
+ * Per-connection data — derived from the registry's channel-params union
+ * (RFC-152: the previously hand-written kind union now comes from
+ * ChannelParamsByKind).
+ */
+type ConnectionData = WsConnectionData
 
 export interface WebSocketAdapterDeps {
   /**
@@ -116,44 +76,11 @@ export interface WebSocketAdapter {
 
 type BunUpgradeFn = (req: Request, opts: { data: ConnectionData }) => boolean
 
-const WS_PATH_RE = {
-  task: /^\/ws\/tasks\/([^/?#]+)$/,
-  list: /^\/ws\/tasks$/,
-  flows: /^\/ws\/workflows$/,
-  repoImport: /^\/ws\/repo-imports\/([^/?#]+)$/,
-  memories: /^\/ws\/memories$/,
-  memoryDistillJobs: /^\/ws\/memory-distill-jobs$/,
-}
-
 export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdapter {
   // Pre-allocate the daemon-token Buffer once — `resolveActor` does a
   // length-check + timing-safe equality, so we avoid Buffer.from() per
   // upgrade attempt.
   const daemonTokenBuf = Buffer.from(deps.daemonToken, 'utf-8')
-
-  function parseChannel(url: URL): ConnectionData['channel'] | null {
-    const m = WS_PATH_RE.task.exec(url.pathname)
-    if (m !== null) {
-      const ch: ConnectionData['channel'] = {
-        kind: 'task',
-        taskId: decodeURIComponent(m[1] ?? ''),
-      }
-      const since = url.searchParams.get('since')
-      if (since !== null && since !== '' && Number.isInteger(Number(since))) {
-        ch.since = Number(since)
-      }
-      return ch
-    }
-    if (WS_PATH_RE.list.test(url.pathname)) return { kind: 'tasks-list' }
-    if (WS_PATH_RE.flows.test(url.pathname)) return { kind: 'workflows' }
-    const rm = WS_PATH_RE.repoImport.exec(url.pathname)
-    if (rm !== null) {
-      return { kind: 'repo-import', batchId: decodeURIComponent(rm[1] ?? '') }
-    }
-    if (WS_PATH_RE.memories.test(url.pathname)) return { kind: 'memories' }
-    if (WS_PATH_RE.memoryDistillJobs.test(url.pathname)) return { kind: 'memory-distill-jobs' }
-    return null
-  }
 
   async function tryUpgrade(
     req: Request,
@@ -161,7 +88,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
   ): Promise<true | false | Response> {
     const url = new URL(req.url)
     if (!url.pathname.startsWith('/ws/')) return false
-    const channel = parseChannel(url)
+    const channel = parseWsChannel(url)
     if (channel === null) {
       return new Response(
         JSON.stringify({ error: { code: 'ws-unknown-channel', message: 'unknown ws channel' } }),
@@ -196,39 +123,18 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
         { status: 401, headers: { 'Content-Type': 'application/json' } },
       )
     }
-    // RFC-054 W2-4 fix — per-task channel upgrade is gated by
-    // canViewTask. The tasks-list channel does per-frame filtering
-    // (see handleOpen below) because the channel itself enumerates
-    // all tasks system-wide.
-    if (channel.kind === 'task') {
-      const visible = await isTaskVisibleTo(deps.db, actor, channel.taskId)
-      if (!visible) {
-        return new Response(
-          JSON.stringify({
-            error: {
-              code: 'task-not-visible',
-              message: 'task not visible to current actor',
-            },
-          }),
-          { status: 403, headers: { 'Content-Type': 'application/json' } },
-        )
-      }
-    }
-    // RFC-152 P0（漏鉴权修复）：/ws/memory-distill-jobs 一直被声明为
-    // admin-only（shared/schemas/ws.ts、broadcaster.ts、两个前端 hook 的
-    // 注释 + HTTP 侧 routes/memoryDistillJobs.ts 全 requireAdmin），但
-    // upgrade/open 路径从未 enforce——任何有效 token 都能订阅蒸馏队列帧。
-    // 与 HTTP 侧同门禁：非 admin 升级直接 403。
-    if (channel.kind === 'memory-distill-jobs' && actor.user.role !== 'admin') {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'admin-required',
-            message: 'memory-distill-jobs channel is admin-only',
-          },
-        }),
-        { status: 403, headers: { 'Content-Type': 'application/json' } },
-      )
+    // RFC-152 — upgrade-time whole-connection gates come from the registry:
+    //   task               → canViewTask (RFC-054 W2-4; the tasks-list channel
+    //                        does per-frame filtering instead because it
+    //                        enumerates all tasks system-wide),
+    //   memory-distill-jobs → admin-only (P0 fix 682de313),
+    //   everything else     → gate-less, passes through.
+    const verdict = await checkUpgradeGate(deps.db, actor, channel)
+    if (verdict !== true) {
+      return new Response(JSON.stringify({ error: verdict }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
     const data: ConnectionData = {
       channel,
@@ -245,234 +151,13 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     return true
   }
 
-  /**
-   * Look up a task's ownerUserId once and ask canViewTask. Returns false
-   * if the task no longer exists (e.g. just got deleted between
-   * broadcaster fire + this handler running).
-   */
-  async function isTaskVisibleTo(db: DbClient, actor: Actor, taskId: string): Promise<boolean> {
-    const rows = await db
-      .select({ id: tasks.id, ownerUserId: tasks.ownerUserId })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1)
-    if (rows.length === 0) return false
-    return canViewTask(db, actor, rows[0]!)
-  }
-
-  /**
-   * Cached variant: stores the result per-connection so a hot task
-   * status stream doesn't N+1 the DB. The cache is bounded by the
-   * number of distinct tasks the connection sees, which is bounded by
-   * the system's total task count — acceptable for v1.
-   */
-  async function cachedIsTaskVisible(
-    ws: ServerWebSocket<ConnectionData>,
-    taskId: string,
-  ): Promise<boolean> {
-    const cached = ws.data.visibilityCache.get(taskId)
-    if (cached !== undefined) return cached
-    const visible = await isTaskVisibleTo(deps.db, ws.data.actor, taskId)
-    ws.data.visibilityCache.set(taskId, visible)
-    return visible
-  }
-
-  /**
-   * RFC-099 — workflow-row visibility, cached per connection under a `wf:`
-   * key prefix so task ids and workflow ids never collide in the shared
-   * cache map. Entries for a workflow are invalidated when a
-   * 'workflow.acl.updated' frame passes through (see the workflows channel
-   * handler) and on 'workflow.deleted'.
-   */
-  async function cachedIsWorkflowVisible(
-    ws: ServerWebSocket<ConnectionData>,
-    workflowId: string,
-  ): Promise<boolean> {
-    const key = `wf:${workflowId}`
-    const cached = ws.data.visibilityCache.get(key)
-    if (cached !== undefined) return cached
-    const rows = await deps.db
-      .select({
-        id: workflows.id,
-        ownerUserId: workflows.ownerUserId,
-        visibility: workflows.visibility,
-      })
-      .from(workflows)
-      .where(eq(workflows.id, workflowId))
-      .limit(1)
-    const visible =
-      rows.length === 0
-        ? false
-        : await canViewResource(deps.db, ws.data.actor, 'workflow', rows[0]!)
-    ws.data.visibilityCache.set(key, visible)
-    return visible
-  }
-
   async function handleOpen(ws: ServerWebSocket<ConnectionData>): Promise<void> {
     const ch = ws.data.channel
     log.debug('open', { channel: ch })
-    let hello: WsControlMessage
-
-    switch (ch.kind) {
-      case 'task': {
-        const channelKey = TASK_CHANNEL(ch.taskId)
-        ws.data.unsubscribe = taskBroadcaster.subscribe(channelKey, (msg: TaskWsMessage) => {
-          safeSend(ws, msg)
-        })
-        hello = { type: 'hello', channel: `tasks/${ch.taskId}` }
-        if (ch.since !== undefined) hello.since = ch.since
-        safeSend(ws, hello)
-        if (ch.since !== undefined) {
-          await replayTaskEvents(deps.db, ch.taskId, ch.since, ws)
-        }
-        return
-      }
-      case 'tasks-list': {
-        // RFC-054 W2-4 fix — per-frame RBAC filter. Every TasksListWsMessage
-        // mentions exactly one task; pull the task id, run canViewTask
-        // (cached per connection), and drop the frame if not visible.
-        // Admins (`tasks:read:all`) shortcut to true inside canViewTask
-        // so this stays O(1) DB lookup for the global view.
-        ws.data.unsubscribe = tasksListBroadcaster.subscribe(
-          TASKS_LIST_CHANNEL,
-          (msg: TasksListWsMessage) => {
-            const taskId = extractTaskIdFromListMessage(msg)
-            if (taskId === null) {
-              // Defensive: future TasksListWsMessage variants without a
-              // taskId would skip the gate. We default to NOT sending
-              // unknown shapes — safer than leaking by accident.
-              return
-            }
-            // Fire-and-forget the async check; if visible, send. If the
-            // check throws (DB blip), fall back to NOT sending — same
-            // safer-default as the unknown-shape branch above.
-            cachedIsTaskVisible(ws, taskId)
-              .then((visible) => {
-                if (visible) safeSend(ws, msg)
-              })
-              .catch((err) => {
-                log.warn('tasks-list visibility check threw', {
-                  taskId,
-                  err: err instanceof Error ? err.message : String(err),
-                })
-              })
-          },
-        )
-        safeSend(ws, { type: 'hello', channel: 'tasks' } satisfies WsControlMessage)
-        return
-      }
-      case 'workflows': {
-        // RFC-099 — per-frame ACL filter, mirroring the tasks-list pattern
-        // above. Every WorkflowsWsMessage carries exactly one workflowId.
-        //   - 'workflow.acl.updated' frames FIRST invalidate this
-        //     connection's cached visibility for that workflow (the ACL just
-        //     changed), then go through the same visible-check before send.
-        //   - 'workflow.deleted': the row is already gone, so fall back to
-        //     the cached visibility (the client only renders workflows it
-        //     could see); with no cache entry, only admins get the frame.
-        ws.data.unsubscribe = workflowsBroadcaster.subscribe(
-          WORKFLOWS_CHANNEL,
-          (msg: WorkflowsWsMessage) => {
-            if (ws.data.actor.user.role === 'admin') {
-              safeSend(ws, msg)
-              return
-            }
-            if (msg.type === 'workflow.acl.updated') {
-              ws.data.visibilityCache.delete(`wf:${msg.workflowId}`)
-            }
-            if (msg.type === 'workflow.deleted') {
-              const cached = ws.data.visibilityCache.get(`wf:${msg.workflowId}`)
-              if (cached === true) safeSend(ws, msg)
-              ws.data.visibilityCache.delete(`wf:${msg.workflowId}`)
-              return
-            }
-            cachedIsWorkflowVisible(ws, msg.workflowId)
-              .then((visible) => {
-                if (visible) safeSend(ws, msg)
-              })
-              .catch((err) => {
-                log.warn('workflows visibility check threw', {
-                  workflowId: msg.workflowId,
-                  err: err instanceof Error ? err.message : String(err),
-                })
-              })
-          },
-        )
-        safeSend(ws, { type: 'hello', channel: 'workflows' } satisfies WsControlMessage)
-        return
-      }
-      case 'repo-import': {
-        ws.data.unsubscribe = repoImportsBroadcaster.subscribe(
-          REPO_IMPORT_CHANNEL(ch.batchId),
-          (msg: RepoImportWsMessage) => safeSend(ws, msg),
-        )
-        safeSend(ws, {
-          type: 'hello',
-          channel: `repo-imports/${ch.batchId}`,
-        } satisfies WsControlMessage)
-        return
-      }
-      case 'memories': {
-        // RFC-099 (D12) — per-frame scope-visibility filter. candidate.created
-        // carries the scope inline; the id-only variants resolve scope from
-        // the row (no cache: memory events are low-frequency and RFC-045
-        // edits can move a row between scopes).
-        ws.data.unsubscribe = memoryBroadcaster.subscribe(
-          MEMORY_CHANNEL,
-          (msg: MemoryWsMessage) => {
-            if (ws.data.actor.user.role === 'admin') {
-              safeSend(ws, msg)
-              return
-            }
-            const check =
-              msg.type === 'memory.candidate.created'
-                ? canViewMemory(deps.db, ws.data.actor, {
-                    scopeType: msg.memory.scopeType,
-                    scopeId: msg.memory.scopeId,
-                  })
-                : (async () => {
-                    const memoryId = (msg as { memoryId?: string }).memoryId
-                    if (typeof memoryId !== 'string') return false // unknown shape → drop
-                    const rows = await deps.db
-                      .select({
-                        scopeType: memoriesTable.scopeType,
-                        scopeId: memoriesTable.scopeId,
-                      })
-                      .from(memoriesTable)
-                      .where(eq(memoriesTable.id, memoryId))
-                      .limit(1)
-                    const row = rows[0]
-                    // Row already hard-deleted → only admins (handled above)
-                    // get the frame.
-                    if (row === undefined) return false
-                    return canViewMemory(deps.db, ws.data.actor, row)
-                  })()
-            check
-              .then((visible) => {
-                if (visible) safeSend(ws, msg)
-              })
-              .catch((err) => {
-                log.warn('memories visibility check threw', {
-                  err: err instanceof Error ? err.message : String(err),
-                })
-              })
-          },
-        )
-        safeSend(ws, { type: 'hello', channel: 'memories' } satisfies WsControlMessage)
-        return
-      }
-      case 'memory-distill-jobs': {
-        ws.data.unsubscribe = memoryDistillJobBroadcaster.subscribe(
-          MEMORY_DISTILL_JOB_CHANNEL,
-          (msg: MemoryDistillJobWsMessage) => safeSend(ws, msg),
-        )
-        safeSend(ws, {
-          type: 'hello',
-          channel: 'memory-distill-jobs',
-        } satisfies WsControlMessage)
-        return
-      }
-    }
+    // RFC-152 — gatedSubscribe (admin short-circuit → frameGate → error ⇒
+    // drop) + hello frame + onOpenExtra (task `?since` replay), all driven
+    // by the channel's registry spec.
+    await openWsChannel(ws, ch, deps.db)
   }
 
   function handleClose(ws: ServerWebSocket<ConnectionData>): void {
@@ -496,90 +181,5 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
       close: handleClose,
       message: handleMessage,
     },
-  }
-}
-
-async function replayTaskEvents(
-  db: DbClient,
-  taskId: string,
-  since: number,
-  ws: ServerWebSocket<ConnectionData>,
-): Promise<void> {
-  // node_run_events is per-node-run; join via nodeRuns.taskId.
-  const rows = await db
-    .select({
-      id: nodeRunEvents.id,
-      nodeRunId: nodeRunEvents.nodeRunId,
-      ts: nodeRunEvents.ts,
-      kind: nodeRunEvents.kind,
-      payload: nodeRunEvents.payload,
-    })
-    .from(nodeRunEvents)
-    .innerJoin(nodeRuns, eq(nodeRunEvents.nodeRunId, nodeRuns.id))
-    .where(and(eq(nodeRuns.taskId, taskId), gt(nodeRunEvents.id, since)))
-    .orderBy(asc(nodeRunEvents.id))
-
-  for (const r of rows) {
-    let payload: unknown
-    try {
-      payload = JSON.parse(r.payload)
-    } catch {
-      payload = r.payload
-    }
-    const msg: TaskWsMessage = {
-      id: r.id,
-      type: 'node.event',
-      nodeRunId: r.nodeRunId,
-      ts: r.ts,
-      kind: r.kind,
-      payload,
-    }
-    safeSend(ws, msg)
-  }
-}
-
-/**
- * Extract the task id a TasksListWsMessage refers to. Each shape in the
- * discriminated union mentions exactly one task; if the union grows a
- * new variant in the future, the default-null branch causes the WS
- * server to DROP the frame (safer than leaking by accident — see
- * RFC-054 W2-4 fix in handleOpen for `tasks-list`).
- */
-function extractTaskIdFromListMessage(msg: TasksListWsMessage): string | null {
-  switch (msg.type) {
-    case 'task.created':
-      return msg.task.id
-    case 'task.status':
-      return msg.taskId
-    case 'task.deleted':
-      return msg.taskId
-    case 'lifecycle.alert':
-      // lifecycle.alert carries the alert payload's taskId.
-      // Defensive narrowing — payload shape may evolve.
-      return typeof (msg as unknown as { taskId?: string }).taskId === 'string'
-        ? (msg as unknown as { taskId: string }).taskId
-        : null
-    default:
-      return null
-  }
-}
-
-function safeSend(
-  ws: ServerWebSocket<ConnectionData>,
-  msg:
-    | TaskWsMessage
-    | TasksListWsMessage
-    | WorkflowsWsMessage
-    | RepoImportWsMessage
-    | MemoryWsMessage
-    | MemoryDistillJobWsMessage
-    | WsControlMessage,
-): void {
-  try {
-    ws.send(JSON.stringify(msg))
-  } catch (err) {
-    log.warn('send failed', {
-      error: err instanceof Error ? err.message : String(err),
-    })
   }
 }
