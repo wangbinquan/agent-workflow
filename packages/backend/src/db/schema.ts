@@ -87,9 +87,11 @@ export const agents = sqliteTable('agents', {
 // -----------------------------------------------------------------------------
 // runtimes — RFC-112. Named runtime INSTANCES: each row is a registered binary
 // that speaks one of the two RuntimeDriver protocols (opencode | claude-code).
-// The two built-ins (opencode, claude-code) are framework-seeded (builtin=1,
-// RFC-104 read-only lock) with binary_path=NULL → the protocol's default binary
-// (config.opencodePath / claudeCodePath / PATH). Custom forks (renamed binaries)
+// opencode / claude-code are framework-seeded on FIRST startup only (empty table;
+// RFC-153) with binary_path=NULL → the protocol's default binary
+// (config.opencodePath / claudeCodePath / PATH). They are ORDINARY editable +
+// deletable rows — RFC-153 removed the built-in vs non-built-in distinction;
+// deleted rows are never re-seeded. Custom forks (renamed binaries)
 // register additional rows. agents.runtime / config.defaultRuntime reference a
 // row by `name`; node_runs freeze (protocol, binary) so the registry stays
 // mutable without re-routing live sessions. Admin-managed (no per-user ACL —
@@ -100,8 +102,8 @@ export const runtimes = sqliteTable('runtimes', {
   name: text('name').notNull().unique(), // referenced by agents.runtime / config.defaultRuntime
   protocol: text('protocol', { enum: ['opencode', 'claude-code'] }).notNull(), // = RuntimeDriver kind
   binaryPath: text('binary_path'), // NULL → protocol default binary (RFC-111 behavior)
-  builtin: integer('builtin', { mode: 'boolean' }).notNull().default(false), // RFC-104 read-only lock
-  // RFC-118: admin can disable a runtime (incl. built-ins) — it drops out of the
+  // RFC-118: admin can disable a runtime (incl. the preseeded opencode / claude-code)
+  // — it drops out of the
   // agent / default-runtime pickers but STAYS in the list (reversible, not deleted).
   // The effective-default runtime can't be disabled (service guard, D3); resolve
   // IGNORES this flag so in-flight agents pinning a disabled runtime keep dispatching.

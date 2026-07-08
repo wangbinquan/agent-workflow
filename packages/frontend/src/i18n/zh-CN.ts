@@ -738,7 +738,6 @@ export interface Resources {
     title: string
     subtitle: string
     add: string
-    builtin: string
     protocolOpencode: string
     protocolClaude: string
     defaultBinary: string
@@ -3120,7 +3119,6 @@ export const zhCN: Resources = {
     subtitle:
       '注册 opencode / Claude Code 二进制——包括改名的定制 fork。Agent 按名称选用运行时，框架以对应协议驱动它。',
     add: '+ 添加运行时',
-    builtin: '内置',
     protocolOpencode: 'opencode',
     protocolClaude: 'Claude Code',
     defaultBinary: '默认（PATH / 已配置）',
@@ -3837,21 +3835,21 @@ export const zhCN: Resources = {
     paletteFanOutDesc: '多进程（按 sourcePort 分片）',
     paletteAgentFallbackDesc: '代理节点',
     paletteWrappers: '包装器',
-    paletteWrapperGitLabel: '⎈ Git 包装器',
+    paletteWrapperGitLabel: 'Git 包装器',
     paletteWrapperGitDesc: '在子节点前后快照 diff',
-    paletteWrapperLoopLabel: '⟳ 循环包装器',
+    paletteWrapperLoopLabel: '循环包装器',
     paletteWrapperLoopDesc: '重复执行子节点直到退出条件满足',
-    paletteWrapperFanoutLabel: '⫶ 分片包装器',
+    paletteWrapperFanoutLabel: '分片包装器',
     paletteWrapperFanoutDesc: '把 list<T> 端口的每个元素分配给内部子图独立执行；用聚合 agent 收口',
     paletteIo: 'IO',
-    paletteInputLabel: '↳ 输入',
+    paletteInputLabel: '输入',
     paletteInputDesc: 'launcher 表单值',
-    paletteOutputLabel: '⤴ 输出',
+    paletteOutputLabel: '输出',
     paletteOutputDesc: '任务详情页输出面板',
     paletteHuman: '人工',
-    paletteReviewLabel: '⚖ 评审',
+    paletteReviewLabel: '评审',
     paletteReviewDesc: '挂在 markdown port 下游，让人评审后再继续。',
-    paletteClarifyLabel: '⚡ 反问',
+    paletteClarifyLabel: '反问',
     paletteClarifyDesc: '让 agent 在无法决断时主动反问；从节点左侧 input 端往 agent 上拖即可挂接。',
     menuPaste: '粘贴',
     menuSelectAll: '全选',
@@ -4634,7 +4632,7 @@ export const zhCN: Resources = {
       inLoopNo: '⚠ 未在 wrapper-loop 内 — 反问轮数不会被限制，建议套一层 loop。',
     },
     canvas: {
-      paletteLabel: '⚡ 跨代理反问',
+      paletteLabel: '跨代理反问',
       paletteHint: '拖到下游反问 agent 上自动建反问通道；再手动连 to_designer → 上游 designer。',
       handleLabel: {
         toQuestioner: '→ 反问者',

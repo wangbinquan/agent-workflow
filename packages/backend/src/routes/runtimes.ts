@@ -221,11 +221,17 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     return c.json({ runtime: runtimeRowToView(row, cfg.defaultRuntime) })
   })
 
-  // Delete a custom runtime (blocked while referenced by an agent / the default).
+  // Delete a runtime — blocked while referenced by an agent, the effective default,
+  // or a per-feature config runtime field, and blocked if it's the last row (RFC-153).
   app.delete('/api/runtimes/:name', requireAdmin(), async (c) => {
     const name = c.req.param('name')
     const cfg = loadConfig(deps.configPath)
-    await deleteRuntime(deps.db, name, cfg.defaultRuntime)
+    await deleteRuntime(deps.db, name, {
+      defaultRuntime: cfg.defaultRuntime,
+      memoryDistillRuntime: cfg.memoryDistillRuntime,
+      commitPushRuntime: cfg.commitPushRuntime,
+      mergeAgentRuntime: cfg.mergeAgentRuntime,
+    })
     return c.json({ ok: true })
   })
 

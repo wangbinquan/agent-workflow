@@ -77,4 +77,22 @@ describe('RFC-115 assertConfigDefaultsMigrated — config skip-upgrade guard', (
       /seed failed|rows are missing or all-NULL/,
     )
   })
+
+  test('RFC-153 F3: a user row reusing a preseeded NAME under a mismatched protocol does NOT satisfy the guard', async () => {
+    // Delete the canonical opencode row and recreate 'opencode' as a claude-code
+    // row WITH a model. The name matches BUILTIN_NAMES but protocol !== name, so it
+    // must NOT count as proof the RFC-113 backfill preserved the legacy defaults —
+    // the surviving canonical claude-code row is still all-NULL → still ABORT.
+    await db.delete(runtimes).where(eq(runtimes.name, 'opencode'))
+    await db.insert(runtimes).values({
+      id: 'r-fake-oc',
+      name: 'opencode',
+      protocol: 'claude-code',
+      model: 'anthropic/opus',
+    })
+    writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultModel: 'anthropic/opus' }))
+    await expect(assertConfigDefaultsMigrated(db, cfg)).rejects.toThrow(
+      /un-migrated generation defaults/,
+    )
+  })
 })

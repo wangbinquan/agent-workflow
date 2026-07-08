@@ -540,6 +540,13 @@
       "when": 1785200000000,
       "tag": "0077_rfc145_failure_code",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "6",
+      "when": 1785300000000,
+      "tag": "0078_rfc153_drop_runtime_builtin",
+      "breakpoints": true
     }
   ]
 }

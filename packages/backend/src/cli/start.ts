@@ -263,10 +263,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
   }
 
-  // 5f. RFC-112: ensure the two built-in runtimes (opencode / claude-code) exist
-  // as read-only registry rows so agents / config.defaultRuntime can reference
-  // them by name and the Settings runtime list always shows them. Hard-resets
-  // them to canonical shape (Codex P2); idempotent.
+  // 5f. RFC-112/153: on FIRST startup (empty runtimes table) seed opencode /
+  // claude-code as ordinary rows so agents / config.defaultRuntime can reference
+  // them by name and the Settings list shows them out of the box. RFC-153: they
+  // are editable + deletable now; a deleted row is NOT re-seeded (seed no-ops on a
+  // non-empty table). migrateConfigIntoBuiltins then backfills binary from config.
   try {
     const { seedBuiltinRuntimes, migrateConfigIntoBuiltins } =
       await import('@/services/runtimeRegistry')

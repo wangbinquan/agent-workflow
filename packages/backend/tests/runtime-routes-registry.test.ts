@@ -81,13 +81,14 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
   })
   afterEach(() => rmSync(h.tmp, { recursive: true, force: true }))
 
-  test('GET /api/runtimes lists the seeded built-ins (open to any user)', async () => {
+  test('GET /api/runtimes lists the seeded runtimes (open to any user)', async () => {
     const res = await reqAs(h.app, h.userToken, '/api/runtimes')
     expect(res.status).toBe(200)
-    const json = (await res.json()) as { runtimes: Array<{ name: string; builtin: boolean }> }
+    const json = (await res.json()) as { runtimes: Array<{ name: string }> }
     const names = json.runtimes.map((r) => r.name).sort()
     expect(names).toEqual(['claude-code', 'opencode'])
-    expect(json.runtimes.every((r) => r.builtin)).toBe(true)
+    // RFC-153: the built-in flag is gone from the wire shape entirely.
+    expect(json.runtimes.some((r) => 'builtin' in r)).toBe(false)
   })
 
   test('POST /api/runtimes (admin, probe:false) registers a custom runtime → 201', async () => {
@@ -114,14 +115,16 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     expect(res.status).toBe(403)
   })
 
-  test('POST /api/runtimes rejects a reserved built-in name → 409', async () => {
+  test('POST /api/runtimes with an existing preseeded name → 409 runtime-exists (not reserved)', async () => {
+    // RFC-153: opencode is no longer a reserved name — it collides only because the
+    // preseeded row already exists (name uniqueness), which reads as runtime-exists.
     const res = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes', {
       method: 'POST',
       body: JSON.stringify({ name: 'opencode', protocol: 'opencode', probe: false }),
     })
     expect(res.status).toBe(409)
     const json = (await res.json()) as { code: string }
-    expect(json.code).toBe('runtime-name-reserved')
+    expect(json.code).toBe('runtime-exists')
   })
 
   test('PUT /api/runtimes/:name updates a custom binary; built-in PUT now ALLOWED (RFC-113 D8)', async () => {
@@ -144,15 +147,17 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     expect(((await builtin.json()) as { runtime: { model: string } }).runtime.model).toBe('sonnet')
   })
 
-  test('DELETE custom ok; built-in → 403; in-use → 409', async () => {
+  test('DELETE custom ok; preseeded claude-code ok (RFC-153); in-use → 409', async () => {
     await createRuntime(h.db, { name: 'my-oc', protocol: 'opencode' })
     const del = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/my-oc', { method: 'DELETE' })
     expect(del.status).toBe(200)
 
-    const builtin = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/claude-code', {
+    // RFC-153: claude-code is an ordinary row now — deletable (not the effective
+    // default, not referenced). The default opencode stays protected (F1).
+    const preseeded = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/claude-code', {
       method: 'DELETE',
     })
-    expect(builtin.status).toBe(403)
+    expect(preseeded.status).toBe(200)
 
     await createRuntime(h.db, { name: 'used-rt', protocol: 'opencode' })
     await h.db.insert(agents).values({ id: ulid(), name: 'auditor', runtime: 'used-rt' })
