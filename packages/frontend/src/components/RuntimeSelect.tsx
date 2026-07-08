@@ -14,9 +14,12 @@ interface Props {
    *  (not undefined) so the PATCH actually clears a saved override (RFC-117). */
   onChange: (next: string | null) => void
   ariaLabel: string
+  /** RFC-156: disable the picker while its source value is still loading / failed
+   *  to load, so a not-yet-resolved value can't be mistaken for "Inherit". */
+  disabled?: boolean
 }
 
-export function RuntimeSelect({ value, onChange, ariaLabel }: Props) {
+export function RuntimeSelect({ value, onChange, ariaLabel, disabled }: Props) {
   const { t } = useTranslation()
   const { selectableRuntimes, claudeEnabled } = useRuntimesList(value)
   // Fallback options when the registry hasn't loaded / is empty — the two
@@ -31,6 +34,7 @@ export function RuntimeSelect({ value, onChange, ariaLabel }: Props) {
     <Select<string>
       value={value ?? ''}
       ariaLabel={ariaLabel}
+      disabled={disabled}
       onChange={(v) => onChange(v === '' ? null : v)}
       options={[
         { value: '', label: t('settings.runtimeInherit') },

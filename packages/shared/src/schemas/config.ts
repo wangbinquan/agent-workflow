@@ -370,9 +370,22 @@ export const ConfigPatchSchema = ConfigSchema.partial()
   // RFC-117: the runtime-selector "Inherit" option clears these by sending null
   // (mergePatch deletes the key → back to inheriting the global default). The
   // base ConfigSchema keeps them string|undefined; only the PATCH accepts null.
+  //
+  // RFC-156: the "System agents" tab widens this to ALL three internal-agent
+  // runtimes (adds mergeAgentRuntime — previously UI-less so its "inherit" was
+  // never sendable → 400) AND to the three deprecated per-agent model fields. D6:
+  // every runtime-selector interaction also clears its paired legacy `*Model`, so
+  // "inherit" is honest even on a migrated config that still carries a stale model
+  // (resolveInternalAgentRuntime falls runtimeName → deprecatedModel → defaultRuntime;
+  // deleting only the runtime would otherwise fall THROUGH to the legacy model).
+  // The base ConfigSchema is unchanged (still min(1)); null is patch-only = delete.
   .extend({
     memoryDistillRuntime: z.string().min(1).nullable().optional(),
     commitPushRuntime: z.string().min(1).nullable().optional(),
+    mergeAgentRuntime: z.string().min(1).nullable().optional(),
+    memoryDistillModel: z.string().min(1).nullable().optional(),
+    commitPushModel: z.string().min(1).nullable().optional(),
+    mergeAgentModel: z.string().min(1).nullable().optional(),
   })
 export type ConfigPatch = z.infer<typeof ConfigPatchSchema>
 

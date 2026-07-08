@@ -434,6 +434,7 @@ export const enUS: Resources = {
   settings: {
     title: 'Settings',
     tabRuntime: 'Runtime',
+    tabSystemAgents: 'System agents',
     tabLimits: 'Limits',
     tabRecovery: 'Recovery',
     tabGc: 'GC',
@@ -475,6 +476,23 @@ export const enUS: Resources = {
     memoryDistillRuntimeHint:
       'Runtime profile the memory distiller runs on; its model and other params come from the profile. Leave empty to inherit the global default runtime.',
     runtimeInherit: 'Inherit (global default)',
+    systemAgents: {
+      commitPushTitle: 'Commit & push',
+      commitPushHint:
+        'Built-in agent that writes commit messages and repairs rejected pushes during auto-commit (RFC-075).',
+      memoryTitle: 'Memory distiller',
+      memoryHint:
+        'Built-in agent that distills long-term memory candidates from task output (RFC-041).',
+      mergeTitle: 'Merge-conflict resolver',
+      mergeHint:
+        'Built-in agent that resolves real 3-way conflicts during isolated per-node merge-back (RFC-130).',
+      fusionTitle: 'Skill fusion',
+      fusionHint:
+        'Built-in aw-skill-merger agent that fuses multiple skills into one (RFC-101); its runtime lives on the agent row and is written together with the others on Save.',
+      fusionRuntime: 'Fusion runtime',
+      fusionRuntimeHint:
+        'Runtime profile the skill-fusion agent runs on (its model comes from that profile); leave empty to inherit the global default runtime.',
+    },
     restartRequiredTitle: 'Daemon restart required',
     restartRequiredHint:
       'The new value was written to config.json, but bind host / bind port only apply on the next agent-workflow start. Run `agent-workflow stop` and then `agent-workflow start` in your terminal.',
@@ -1928,6 +1946,9 @@ export const enUS: Resources = {
     commitPushDiffMaxBytes: 'Commit-message diff byte cap',
     commitPushDiffMaxBytesHint:
       'Truncation cap for the diff fed to the commit-message session (default 16384; 0 = --stat only).',
+    mergeAgentRuntime: 'Merge-conflict runtime',
+    mergeAgentRuntimeHint:
+      'Runtime profile the built-in merge-conflict resolver runs on (its model comes from that profile); leave empty to inherit the global default runtime.',
     maxConcurrentNodes: 'Max concurrent nodes',
     multiProcessConc: 'Multi-process subprocess concurrency',
     logLevel: 'Log level',

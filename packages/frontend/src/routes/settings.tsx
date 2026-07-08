@@ -1,5 +1,11 @@
-// /settings — config editor split into per-concern tabs (Runtime / Limits /
-// Recovery / GC / Network / Appearance / Memory / Rendering / Authentication).
+// /settings — config editor split into per-concern tabs (Runtime / System agents /
+// Limits / Recovery / GC / Network / Appearance / Rendering / Authentication).
+//
+// RFC-156: the "System agents" tab collects the internal framework agents'
+// runtime + run-config (commit-push, memory distiller, merge-conflict resolver
+// off config.json; skill-fusion off the aw-skill-merger builtin agent row). It
+// absorbed the commit-push block from Limits and the whole (now-removed) Memory
+// tab (distiller runtime + output language).
 //
 // Each section owns a draft slice of the config, posts ConfigPatch via PUT,
 // shows a "saved" toast, and labels fields that need a daemon restart.
@@ -13,8 +19,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useRouterState } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Config, ConfigPatch } from '@agent-workflow/shared'
+import type { Agent, Config, ConfigPatch } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
+import { Card } from '@/components/Card'
 import { Dialog } from '@/components/Dialog'
 import { Field, NumberInput, Switch, TextInput } from '@/components/Form'
 import { RuntimeSelect } from '@/components/RuntimeSelect'
@@ -33,12 +40,14 @@ export const Route = createRoute({
 
 type Tab =
   | 'runtime'
+  // RFC-156: the internal framework agents' runtime + run-config live here now,
+  // pulled out of Limits (commit-push) and the removed Memory tab (distiller).
+  | 'systemAgents'
   | 'limits'
   | 'recovery'
   | 'gc'
   | 'network'
   | 'appearance'
-  | 'memory'
   | 'rendering'
   | 'authentication'
 
@@ -73,12 +82,12 @@ function SettingsPage() {
         tabs={(
           [
             ['runtime', t('settings.tabRuntime')],
+            ['systemAgents', t('settings.tabSystemAgents')],
             ['limits', t('settings.tabLimits')],
             ['recovery', t('settings.tabRecovery')],
             ['gc', t('settings.tabGc')],
             ['network', t('settings.tabNetwork')],
             ['appearance', t('settings.tabAppearance')],
-            ['memory', t('settings.tabMemory')],
             ['rendering', t('settings.tabRendering')],
             ['authentication', t('settings.tabAuthentication')],
           ] as Array<[Tab, string]>
@@ -94,12 +103,12 @@ function SettingsPage() {
       {config.data !== undefined && (
         <>
           {tab === 'runtime' && <RuntimeTab flashKey={runtimeFlashKey} />}
+          {tab === 'systemAgents' && <SystemAgentsTab config={config.data} />}
           {tab === 'limits' && <LimitsTab config={config.data} />}
           {tab === 'recovery' && <RecoveryTab config={config.data} />}
           {tab === 'gc' && <GcTab config={config.data} />}
           {tab === 'network' && <NetworkTab config={config.data} />}
           {tab === 'appearance' && <AppearanceTab config={config.data} />}
-          {tab === 'memory' && <MemoryTab config={config.data} />}
           {tab === 'rendering' && <RenderingTab config={config.data} />}
           {tab === 'authentication' && <AuthenticationTab />}
         </>
@@ -158,9 +167,8 @@ function LimitsTab({ config }: TabProps) {
     'maxConcurrentNodes',
     'multiProcessSubprocessConcurrency',
     'logLevel',
-    'commitPushRuntime',
-    'commitPushMaxRepairRetries',
-    'commitPushDiffMaxBytes',
+    // RFC-156: the commit-push runtime + repair/diff knobs moved to the
+    // "System agents" tab (SystemAgentsTab), alongside the other internal agents.
   ])
   return (
     <SectionForm
@@ -249,40 +257,6 @@ function LimitsTab({ config }: TabProps) {
           ]}
         />
       </Field>
-      <Field
-        label={t('settingsForm.commitPushRuntime')}
-        hint={t('settingsForm.commitPushRuntimeHint')}
-      >
-        <RuntimeSelect
-          value={state.commitPushRuntime}
-          ariaLabel={t('settingsForm.commitPushRuntime')}
-          onChange={(v) => setState({ ...state, commitPushRuntime: v })}
-        />
-      </Field>
-      <div className="form-grid form-grid--cols-2">
-        <Field
-          label={t('settingsForm.commitPushMaxRepairRetries')}
-          hint={t('settingsForm.commitPushMaxRepairRetriesHint')}
-        >
-          <NumberInput
-            value={state.commitPushMaxRepairRetries}
-            onChange={(v) => setState({ ...state, commitPushMaxRepairRetries: v })}
-            min={0}
-            max={10}
-          />
-        </Field>
-        <Field
-          label={t('settingsForm.commitPushDiffMaxBytes')}
-          hint={t('settingsForm.commitPushDiffMaxBytesHint')}
-        >
-          <NumberInput
-            value={state.commitPushDiffMaxBytes}
-            onChange={(v) => setState({ ...state, commitPushDiffMaxBytes: v })}
-            min={0}
-            max={262144}
-          />
-        </Field>
-      </div>
     </SectionForm>
   )
 }
@@ -601,50 +575,252 @@ export function AppearanceTab({ config }: TabProps) {
   )
 }
 
-// RFC-050 — Memory tab. Hosts the distill output language + the distiller
-// model override (RFC-041 T5.3). Future distiller knobs
-// (e.g. memoryDistillerEnabled / per-scope inject budgets) can move here in
-// follow-ups so the JSON-only config surface gets a visible home.
-export function MemoryTab({ config }: TabProps) {
-  const { t } = useTranslation()
-  const { state, setState, save } = useTabState(config, [
-    'memoryDistillLang',
-    'memoryDistillRuntime',
-  ])
+// RFC-156 / RFC-101 — the skill-fusion engine is the builtin `aw-skill-merger`
+// agent, whose runtime lives on the agent ROW (not config.json). RFC-117 D7
+// carved a backend exemption (isRuntimeOnlyAgentPatch) letting a RUNTIME-ONLY
+// PATCH through the RFC-104 builtin read-only lock, and this tab is the "settings
+// picker" it anticipated. Module-level so the query key + patch URL share a source.
+const SKILL_MERGER_AGENT_NAME = 'aw-skill-merger'
+
+// RFC-156 — the config.json keys the three config-driven internal agents own. One
+// source for the useTabState slice AND the "did any config field change?" check
+// (so a fusion-only save can skip the config PUT — Codex impl-gate P2c).
+const SYSTEM_AGENT_CONFIG_KEYS = [
+  'commitPushRuntime',
+  'commitPushModel',
+  'commitPushMaxRepairRetries',
+  'commitPushDiffMaxBytes',
+  'memoryDistillRuntime',
+  'memoryDistillModel',
+  'memoryDistillLang',
+  'mergeAgentRuntime',
+  'mergeAgentModel',
+] as const satisfies ReadonlyArray<keyof ConfigPatch>
+
+// RFC-156 — each internal agent renders as a bordered <Card> (shared RFC-124
+// primitive) so the blocks read as four DISTINCT panels instead of blending into
+// one scroll. Header = title + one-line role hint; `children` = that agent's
+// fields (kept in a `.form-section__body` for the 16px field rhythm).
+function AgentCard({
+  title,
+  hint,
+  children,
+}: {
+  title: string
+  hint: string
+  children: React.ReactNode
+}) {
   return (
-    <SectionForm
-      onSave={save.mutate}
-      busy={save.isPending}
-      error={save.error}
-      success={save.isSuccess && save.error === null ? 'saved' : null}
-    >
-      <Field
-        label={t('settings.memoryDistillRuntimeLabel')}
-        hint={t('settings.memoryDistillRuntimeHint')}
+    <Card className="system-agent-card">
+      <div>
+        <div className="form-section__title">{title}</div>
+        <p className="settings-hint settings-hint--tight">{hint}</p>
+      </div>
+      <div className="form-section__body">{children}</div>
+    </Card>
+  )
+}
+
+// RFC-156 — "System agents" tab. One card per internal framework agent, each a
+// "runtime selector + that agent's run-config":
+//   • commit-push / memory distiller / merge-conflict resolver persist to
+//     config.json (a single ConfigPatch PUT);
+//   • skill-fusion persists to the aw-skill-merger agent ROW (a runtime-only PUT).
+// The ONE Save button at the bottom flushes BOTH — so it saves all four internal
+// agents, not just the config ones. The fusion agent-row PATCH only fires when
+// its runtime actually changed (untouched → no redundant write). Absorbed the
+// commit-push block from Limits + the whole former Memory tab (distiller runtime
+// + output language).
+//
+// D6 — a runtime selector's onChange sets the runtime AND nulls the paired
+// deprecated `*Model`. resolveInternalAgentRuntime resolves runtimeName →
+// deprecatedModel → defaultRuntime, so clearing only the runtime on "inherit"
+// would fall THROUGH to a stale legacy model instead of the global default.
+// RFC-117 D2 already made the model come from the profile, so a lingering
+// `*Model` is pure vestige — every interaction sweeps it.
+export function SystemAgentsTab({ config }: TabProps) {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+  const { state, setState, save } = useTabState(config, [...SYSTEM_AGENT_CONFIG_KEYS])
+
+  // Fusion runtime lives on the aw-skill-merger agent row, not config. A local
+  // draft (undefined = untouched → mirror the loaded pin) lets the one Save
+  // button flush it next to the config PUT; the PATCH body stays runtime-only.
+  const fusion = useQuery<Agent>({
+    queryKey: ['agents', SKILL_MERGER_AGENT_NAME],
+    queryFn: ({ signal }) => api.get(`/api/agents/${SKILL_MERGER_AGENT_NAME}`, undefined, signal),
+  })
+  const [fusionDraft, setFusionDraft] = useState<string | null | undefined>(undefined)
+  const fusionCurrent = fusion.data?.runtime ?? null
+  const fusionValue = fusionDraft === undefined ? fusionCurrent : fusionDraft
+  const fusionSave = useMutation({
+    // Runtime-ONLY body — exactly { runtime } (null clears the pin → inherit); any
+    // extra key re-trips the RFC-104 builtin lock (403 builtin-readonly).
+    mutationFn: (runtime: string | null) =>
+      api.put<Agent>(`/api/agents/${SKILL_MERGER_AGENT_NAME}`, { runtime }),
+    onSuccess: (a) => {
+      qc.setQueryData(['agents', SKILL_MERGER_AGENT_NAME], a)
+      setFusionDraft(undefined)
+    },
+  })
+
+  // Fusion is dirty only once its real runtime has loaded (`fusion.isSuccess` — an
+  // unresolved / failed GET leaves fusionCurrent=null / the field disabled, so it
+  // can't be edited or mistaken for "Inherit"; Codex impl-gate P2a) AND the draft
+  // actually diverges from that loaded pin.
+  const fusionDirty = fusion.isSuccess && fusionDraft !== undefined && fusionDraft !== fusionCurrent
+  // Config is dirty only if the user touched a config field — a fusion-only save
+  // must NOT re-PUT the (possibly now-stale) config slice and clobber a concurrent
+  // edit to commit/memory/merge (Codex impl-gate P2c).
+  const configDirty = SYSTEM_AGENT_CONFIG_KEYS.some((k) => state[k] !== config[k])
+
+  // One Save, two endpoints. When config changed, PUT it first and PATCH the fusion
+  // row only in its onSuccess — SEQUENCED so a rejected config PUT (e.g. an
+  // out-of-range field) leaves the fusion row untouched rather than half-applied
+  // under a "failed" banner (Codex impl-gate P2b). When only fusion changed, PATCH
+  // it directly and skip the config PUT entirely (P2c).
+  const onSave = () => {
+    if (configDirty) {
+      save.mutate(undefined, {
+        onSuccess: () => {
+          if (fusionDirty) fusionSave.mutate(fusionDraft ?? null)
+        },
+      })
+    } else if (fusionDirty) {
+      fusionSave.mutate(fusionDraft ?? null)
+    }
+  }
+
+  return (
+    <div>
+      <SectionForm
+        onSave={onSave}
+        busy={save.isPending || fusionSave.isPending}
+        error={save.error ?? fusionSave.error}
+        // "saved" once whichever mutation ran has settled OK and neither errored —
+        // a fusion-only save never runs `save`, so keying only off save.isSuccess
+        // would hide the confirmation there.
+        success={
+          !save.isPending &&
+          !fusionSave.isPending &&
+          (save.isSuccess || fusionSave.isSuccess) &&
+          save.error === null &&
+          fusionSave.error === null
+            ? 'saved'
+            : null
+        }
       >
-        <RuntimeSelect
-          value={state.memoryDistillRuntime}
-          ariaLabel={t('settings.memoryDistillRuntimeLabel')}
-          onChange={(v) => setState({ ...state, memoryDistillRuntime: v })}
-        />
-      </Field>
-      <Field
-        label={t('settings.memoryDistillLangLabel')}
-        hint={t('settings.memoryDistillLangHint')}
-      >
-        <Select<'' | NonNullable<Config['memoryDistillLang']>>
-          data-testid="settings-memory-distill-lang-select"
-          ariaLabel={t('settings.memoryDistillLangLabel')}
-          value={state.memoryDistillLang ?? ''}
-          onChange={(v) => setState({ ...state, memoryDistillLang: v === '' ? undefined : v })}
-          options={[
-            { value: '', label: t('settings.memoryDistillLangDefault') },
-            { value: 'en-US', label: t('settings.memoryDistillLangEnUS') },
-            { value: 'zh-CN', label: t('settings.memoryDistillLangZhCN') },
-          ]}
-        />
-      </Field>
-    </SectionForm>
+        <AgentCard
+          title={t('settings.systemAgents.commitPushTitle')}
+          hint={t('settings.systemAgents.commitPushHint')}
+        >
+          <Field
+            label={t('settingsForm.commitPushRuntime')}
+            hint={t('settingsForm.commitPushRuntimeHint')}
+          >
+            <RuntimeSelect
+              value={state.commitPushRuntime}
+              ariaLabel={t('settingsForm.commitPushRuntime')}
+              onChange={(v) => setState({ ...state, commitPushRuntime: v, commitPushModel: null })}
+            />
+          </Field>
+          <div className="form-grid form-grid--cols-2">
+            <Field
+              label={t('settingsForm.commitPushMaxRepairRetries')}
+              hint={t('settingsForm.commitPushMaxRepairRetriesHint')}
+            >
+              <NumberInput
+                value={state.commitPushMaxRepairRetries}
+                onChange={(v) => setState({ ...state, commitPushMaxRepairRetries: v })}
+                min={0}
+                max={10}
+              />
+            </Field>
+            <Field
+              label={t('settingsForm.commitPushDiffMaxBytes')}
+              hint={t('settingsForm.commitPushDiffMaxBytesHint')}
+            >
+              <NumberInput
+                value={state.commitPushDiffMaxBytes}
+                onChange={(v) => setState({ ...state, commitPushDiffMaxBytes: v })}
+                min={0}
+                max={262144}
+              />
+            </Field>
+          </div>
+        </AgentCard>
+
+        <AgentCard
+          title={t('settings.systemAgents.memoryTitle')}
+          hint={t('settings.systemAgents.memoryHint')}
+        >
+          <Field
+            label={t('settings.memoryDistillRuntimeLabel')}
+            hint={t('settings.memoryDistillRuntimeHint')}
+          >
+            <RuntimeSelect
+              value={state.memoryDistillRuntime}
+              ariaLabel={t('settings.memoryDistillRuntimeLabel')}
+              onChange={(v) =>
+                setState({ ...state, memoryDistillRuntime: v, memoryDistillModel: null })
+              }
+            />
+          </Field>
+          <Field
+            label={t('settings.memoryDistillLangLabel')}
+            hint={t('settings.memoryDistillLangHint')}
+          >
+            <Select<'' | NonNullable<Config['memoryDistillLang']>>
+              data-testid="settings-memory-distill-lang-select"
+              ariaLabel={t('settings.memoryDistillLangLabel')}
+              value={state.memoryDistillLang ?? ''}
+              onChange={(v) => setState({ ...state, memoryDistillLang: v === '' ? undefined : v })}
+              options={[
+                { value: '', label: t('settings.memoryDistillLangDefault') },
+                { value: 'en-US', label: t('settings.memoryDistillLangEnUS') },
+                { value: 'zh-CN', label: t('settings.memoryDistillLangZhCN') },
+              ]}
+            />
+          </Field>
+        </AgentCard>
+
+        <AgentCard
+          title={t('settings.systemAgents.mergeTitle')}
+          hint={t('settings.systemAgents.mergeHint')}
+        >
+          <Field
+            label={t('settingsForm.mergeAgentRuntime')}
+            hint={t('settingsForm.mergeAgentRuntimeHint')}
+          >
+            <RuntimeSelect
+              value={state.mergeAgentRuntime}
+              ariaLabel={t('settingsForm.mergeAgentRuntime')}
+              onChange={(v) => setState({ ...state, mergeAgentRuntime: v, mergeAgentModel: null })}
+            />
+          </Field>
+        </AgentCard>
+
+        <AgentCard
+          title={t('settings.systemAgents.fusionTitle')}
+          hint={t('settings.systemAgents.fusionHint')}
+        >
+          <Field
+            label={t('settings.systemAgents.fusionRuntime')}
+            hint={t('settings.systemAgents.fusionRuntimeHint')}
+            error={fusion.isError ? describeError(fusion.error) : undefined}
+          >
+            <RuntimeSelect
+              value={fusionValue}
+              ariaLabel={t('settings.systemAgents.fusionRuntime')}
+              // Disabled until the merger row's real runtime has loaded, so a
+              // not-yet-resolved / failed GET can't be edited or read as "Inherit".
+              disabled={!fusion.isSuccess}
+              onChange={(v) => setFusionDraft(v)}
+            />
+          </Field>
+        </AgentCard>
+      </SectionForm>
+    </div>
   )
 }
 

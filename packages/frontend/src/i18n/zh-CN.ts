@@ -557,6 +557,7 @@ export interface Resources {
   settings: {
     title: string
     tabRuntime: string
+    tabSystemAgents: string
     tabLimits: string
     tabRecovery: string
     tabGc: string
@@ -593,6 +594,20 @@ export interface Resources {
     memoryDistillRuntimeLabel: string
     memoryDistillRuntimeHint: string
     runtimeInherit: string
+    // RFC-156 — "System agents" tab: per-card titles + one-line role hints for the
+    // internal framework agents, plus the fusion card's own runtime field.
+    systemAgents: {
+      commitPushTitle: string
+      commitPushHint: string
+      memoryTitle: string
+      memoryHint: string
+      mergeTitle: string
+      mergeHint: string
+      fusionTitle: string
+      fusionHint: string
+      fusionRuntime: string
+      fusionRuntimeHint: string
+    }
     restartRequiredTitle: string
     restartRequiredHint: string
     renderingPlantumlEndpointLabel: string
@@ -1825,6 +1840,8 @@ export interface Resources {
     commitPushMaxRepairRetriesHint: string
     commitPushDiffMaxBytes: string
     commitPushDiffMaxBytesHint: string
+    mergeAgentRuntime: string
+    mergeAgentRuntimeHint: string
     maxConcurrentNodes: string
     multiProcessConc: string
     logLevel: string
@@ -2898,6 +2915,7 @@ export const zhCN: Resources = {
   settings: {
     title: '设置',
     tabRuntime: '运行时',
+    tabSystemAgents: '系统 Agent',
     tabLimits: '限额',
     tabRecovery: '恢复',
     tabGc: 'GC',
@@ -2938,6 +2956,20 @@ export const zhCN: Resources = {
     memoryDistillRuntimeHint:
       '记忆提炼运行的运行时 profile，其 model 及其它参数都来自该 profile；留空则继承全局默认运行时。',
     runtimeInherit: '继承（全局默认）',
+    systemAgents: {
+      commitPushTitle: '提交推送',
+      commitPushHint: '自动提交时生成 commit message、修复被拒推送的内置 agent（RFC-075）。',
+      memoryTitle: '记忆提取',
+      memoryHint: '从任务产物提炼长期记忆候选的内置 agent（RFC-041）。',
+      mergeTitle: '合并冲突解决',
+      mergeHint: '按节点隔离合并回主干、遇真实三方冲突时解决冲突的内置 agent（RFC-130）。',
+      fusionTitle: '技能融合',
+      fusionHint:
+        '把多个技能融合成一个的内置 aw-skill-merger agent（RFC-101）；运行时写在该 agent 行上，点“保存”与其余内置 agent 一并写入。',
+      fusionRuntime: '融合运行时',
+      fusionRuntimeHint:
+        '技能融合运行的运行时 profile，其 model 来自该 profile；留空则继承全局默认运行时。',
+    },
     restartRequiredTitle: '需要重启守护进程',
     restartRequiredHint:
       '新值已写入 config.json，但 bind host / bind port 仅在下次 agent-workflow start 时生效。请在终端先 agent-workflow stop，再 agent-workflow start。',
@@ -4323,6 +4355,9 @@ export const zhCN: Resources = {
     commitPushDiffMaxBytes: 'commit message diff 字节上限',
     commitPushDiffMaxBytesHint:
       '喂给生成 commit message 的 diff 截断阈值（默认 16384；0 表示只用 --stat）。',
+    mergeAgentRuntime: '合并冲突运行时',
+    mergeAgentRuntimeHint:
+      '内置合并冲突解决 agent 运行的运行时 profile，其 model 来自该 profile；留空则继承全局默认运行时。',
     maxConcurrentNodes: '最大并发节点数',
     multiProcessConc: 'Multi-process 子进程并发',
     logLevel: '日志级别',

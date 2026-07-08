@@ -2,6 +2,9 @@
 // Settings. RFC-117 replaced the per-feature `commitPushModel` / `memoryDistillModel`
 // ModelSelect pickers with `commitPushRuntime` / `memoryDistillRuntime`
 // RuntimeSelect profile pickers (model now comes from the chosen runtime profile).
+// RFC-156 moved BOTH out of the Limits / Memory tabs into the new "System agents"
+// tab (SystemAgentsTab) — these grep the whole settings.tsx so they stay green
+// through the move; settings-system-agents.test.ts locks the new tab placement.
 // Source + i18n grep (the settings route is heavy to mount); a regression that
 // dropped a key from the useTabState slice would silently stop persisting it.
 
@@ -17,7 +20,7 @@ const ZH = readFileSync(resolve(import.meta.dirname, '..', 'src', 'i18n', 'zh-CN
 const EN = readFileSync(resolve(import.meta.dirname, '..', 'src', 'i18n', 'en-US.ts'), 'utf-8')
 
 describe('settings.tsx — RFC-117 commit&push runtime config', () => {
-  test('persists runtime + repair keys in the Limits tab draft slice', () => {
+  test('persists runtime + repair keys in the System agents tab draft slice', () => {
     expect(SETTINGS).toContain("'commitPushRuntime'")
     expect(SETTINGS).toContain("'commitPushMaxRepairRetries'")
     expect(SETTINGS).toContain("'commitPushDiffMaxBytes'")
@@ -32,7 +35,7 @@ describe('settings.tsx — RFC-117 commit&push runtime config', () => {
 })
 
 describe('settings.tsx — RFC-117 memory-distill runtime config', () => {
-  test('persists memoryDistillRuntime in the Memory tab draft slice', () => {
+  test('persists memoryDistillRuntime in the System agents tab draft slice', () => {
     expect(SETTINGS).toContain("'memoryDistillRuntime'")
     expect(SETTINGS).toMatch(/state\.memoryDistillRuntime/)
     expect(SETTINGS).toContain("t('settings.memoryDistillRuntimeLabel')")
