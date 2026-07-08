@@ -101,6 +101,9 @@ jobs:
         run: bun run build:binary
 
       - name: Show artifact size
+        # RFC-windows: `shell: bash` so `ls -lh` works on windows-latest
+        # (PowerShell's `ls` alias = Get-ChildItem, rejects `-lh`).
+        shell: bash
         run: ls -lh dist/
 
       # Upload the freshly built binary to the draft release. `gh release
@@ -108,6 +111,8 @@ jobs:
       # body/metadata), so the matrix jobs never contend, and re-runs
       # overwrite the asset cleanly instead of erroring on a duplicate.
       - name: Upload release asset
+        # RFC-windows: bash for `find | head` + `set -euo pipefail` on windows-latest.
+        shell: bash
         run: |
           set -euo pipefail
           file=$(find dist -maxdepth 1 -type f -name 'agent-workflow-*' | head -n 1)

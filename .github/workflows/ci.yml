@@ -327,6 +327,9 @@ jobs:
         run: bun run build:binary
 
       - name: Show artifact size
+        # RFC-windows: `shell: bash` so `ls -lh` works on windows-latest
+        # (PowerShell's `ls` alias = Get-ChildItem, rejects `-lh`).
+        shell: bash
         run: ls -lh dist/
 
       - name: Smoke-run binary (version + doctor)
@@ -350,6 +353,9 @@ jobs:
         # `chmod +x` is a no-op there (Windows doesn't use the +x bit) and the
         # `.exe` is directly executable from bash. opencode is installed on all
         # legs now (strategy D — native), so `doctor` should be fully green.
+        # RFC-windows: `shell: bash` — `find | head` + `set -euxo pipefail` +
+        # `chmod` are bash, not PowerShell (windows-latest defaults to pwsh).
+        shell: bash
         run: |
           set -euxo pipefail
           bin=$(find dist -maxdepth 1 -type f -name 'agent-workflow-*' | head -n 1)
