@@ -67,7 +67,7 @@ errorMessage 的同时置码（errorMessage 文案逐字节保持原状）：
 | runner.ts:1186/1188/1189（clarify-required 三变体） | `clarify-required` |
 | runner.ts:1201（clarify-forbidden） | `clarify-forbidden` |
 | runner.ts:1205（both-present 裸字面量） | `clarify-and-output-both` |
-| runner.ts:1217/1218（clarify code 族 + 空 body fallback） | `clarify-questions-malformed` |
+| runner.ts:1217/1218（clarify code 族 + 空 body fallback） | `clarify-questions-malformed`——**仅当 `firstErr.code.startsWith('clarify-questions-')`**（设计门 P2/D8）：clarify 校验器还会产 `clarify-options-*` 等码，今日 decide 链对它们不给 follow-up（落 default `{followup:false}`），置码会把无 follow-up 错误升级成同 session 续跑；非该族保持 failureCode 未置（unstructured）。:1218 空 body fallback 的字面量本就是 `clarify-questions-malformed:` 前缀，恒置码 |
 | runner.ts:1236/1244（no envelope 两份裸字面量） | `envelope-missing` |
 | runner.ts:1280（malformed ports） | `envelope-port-malformed` |
 | runner.ts:1316（PortValidationError，`instanceof` 判定） | `port-validation-failed` |
@@ -207,6 +207,12 @@ UPDATE node_runs SET rolled_back = 1 WHERE error_message LIKE 'superseded-by-rev
 - **D6 breadcrumb 短码族不纳入**：零消费者，结构化无收益；留人读。
 - **D7 常量归位**：REVIEW_SUPERSEDE_MARKER_PREFIX 移居 review.ts（message 构造器）；
   envelope.ts 三常量保留为 message 构造器；scheduler 的 PORT_VALIDATION_PREFIX 删除。
+- **D8 clarify 解析失败的条件置码**（设计门 P2 产物）：runner.ts:1217 的 `firstErr.code`
+  值域超出 `clarify-questions-*`（含 `clarify-options-*` 等），今日路由只认
+  `startsWith('clarify-questions-')`——stamp 点按同谓词条件置码，非该族留 NULL，保住
+  「查表后与旧真值表逐格等价」承诺；migration backfill 的 `LIKE 'clarify-questions-%'`
+  本就同谓词、无需改。测试补一格：`clarify-options-*` 类 errorMessage 的行
+  failureCode 为 NULL 且 decide 返回 `{followup:false}`。
 
 ## 8. 测试策略
 
