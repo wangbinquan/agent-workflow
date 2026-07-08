@@ -123,6 +123,11 @@ function connect(conn: SharedConn): void {
   }
   conn.socket = ws
   ws.addEventListener('message', (e) => {
+    // A superseded socket (auth rotation detached it; closeSocket may be
+    // waiting on its deferred CONNECTING→open close) can still complete and
+    // flush queued frames — those carry the OLD token/daemon's view and must
+    // never reach listeners that now represent the new credentials.
+    if (conn.socket !== ws || conn.stopped) return
     let msg: unknown
     try {
       msg = JSON.parse(String(e.data))
@@ -142,6 +147,7 @@ function connect(conn: SharedConn): void {
     }
   })
   ws.addEventListener('open', () => {
+    if (conn.socket !== ws) return // superseded — don't reset the live backoff
     conn.backoff = BASE_BACKOFF_MS
   })
   ws.addEventListener('close', () => {
