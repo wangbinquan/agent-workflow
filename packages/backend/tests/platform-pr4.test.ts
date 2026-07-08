@@ -1,4 +1,4 @@
-// RFC-144 PR-4 — MCP env + backup + indexers oracle (T18).
+// RFC-windows PR-4 — MCP env + backup + indexers oracle (T18).
 //
 // 为什么这条测试存在：PR-4 T19 给 stdio MCP 子进程的 env 白名单加 Windows
 // 键（USERPROFILE/PATHEXT/SystemRoot/ComSpec 等）+ HOME→USERPROFILE 兼容注入；
@@ -11,7 +11,7 @@ import { buildStdioEnv } from '../src/services/mcpProbe'
 import { probeIndexer, INDEXER_SPECS } from '../src/services/structuralDiff/deep/indexers'
 import { isWindows } from '../src/util/platform'
 
-describe('RFC-144 PR-4 T19 — buildStdioEnv Windows keys', () => {
+describe('RFC-windows PR-4 T19 — buildStdioEnv Windows keys', () => {
   test('POSIX source: only PATH/HOME/LANG copied (Windows keys absent → no-op)', () => {
     const out = buildStdioEnv(undefined, {
       PATH: '/usr/bin',
@@ -74,7 +74,7 @@ describe('RFC-144 PR-4 T19 — buildStdioEnv Windows keys', () => {
   })
 })
 
-describe('RFC-144 PR-4 T21 — SCIP indexer absence degrades cleanly', () => {
+describe('RFC-windows PR-4 T21 — SCIP indexer absence degrades cleanly', () => {
   test('probeIndexer of a definitely-absent binary → available:false, no throw', async () => {
     const spec = INDEXER_SPECS['scip-clang']!
     const r = await probeIndexer(spec, { scipClang: '/definitely/absent/scip-clang-bin' })

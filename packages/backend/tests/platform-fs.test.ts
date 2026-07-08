@@ -1,4 +1,4 @@
-// RFC-144 PR-2 — filesystem + ACL oracle (T6).
+// RFC-windows PR-2 — filesystem + ACL oracle (T6).
 //
 // 为什么这条测试存在：PR-2 把 file:// 字符串拼接（`file://${path}`，Windows
 // 上产 `file://C:\…` 畸形）改成 `toFileUrl`/`fromFileUrl`（node:url 跨平台）；
@@ -25,7 +25,7 @@ afterEach(() => {
   rmSync(tmp, { recursive: true, force: true })
 })
 
-describe('RFC-144 PR-2 T7 — file:// round-trip (toFileUrl / fromFileUrl)', () => {
+describe('RFC-windows PR-2 T7 — file:// round-trip (toFileUrl / fromFileUrl)', () => {
   test('POSIX absolute path round-trips', () => {
     if (isWindows()) return // `/x/y` is not a Node-absolute path on Windows
     const path = '/x/y/z/plugin.mjs'
@@ -55,7 +55,7 @@ describe('RFC-144 PR-2 T7 — file:// round-trip (toFileUrl / fromFileUrl)', () 
   })
 })
 
-describe('RFC-144 PR-2 T8 — linkSkillDir (symlink / junction)', () => {
+describe('RFC-windows PR-2 T8 — linkSkillDir (symlink / junction)', () => {
   test('links an external skill dir into the per-run skills dir', () => {
     const src = join(tmp, 'source-skill')
     mkdirSync(src, { recursive: true })
@@ -70,7 +70,7 @@ describe('RFC-144 PR-2 T8 — linkSkillDir (symlink / junction)', () => {
   })
 })
 
-describe('RFC-144 PR-2 T9 — secureFile / secureDir', () => {
+describe('RFC-windows PR-2 T9 — secureFile / secureDir', () => {
   test('secureFile restricts a file (no throw)', () => {
     const f = join(tmp, 'secret.key')
     writeFileSync(f, 'x'.repeat(32))
@@ -83,7 +83,7 @@ describe('RFC-144 PR-2 T9 — secureFile / secureDir', () => {
   })
 })
 
-describe('RFC-144 PR-2 T9 — doctor Windows ACL decision', () => {
+describe('RFC-windows PR-2 T9 — doctor Windows ACL decision', () => {
   test('broad group present → not ok', () => {
     const out = 'token.txt BUILTIN\\Administrators:F\nBUILTIN\\Users:(RX)\n'
     const r = evaluateWindowsAclDecision(out, 'token file')
@@ -105,7 +105,7 @@ describe('RFC-144 PR-2 T9 — doctor Windows ACL decision', () => {
   })
 })
 
-describe('RFC-144 PR-2 T10 — toLongPath + checkLongPaths', () => {
+describe('RFC-windows PR-2 T10 — toLongPath + checkLongPaths', () => {
   test('toLongPath is a no-op on POSIX', () => {
     if (isWindows()) return
     expect(toLongPath('/x/y')).toBe('/x/y')

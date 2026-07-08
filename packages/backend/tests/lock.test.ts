@@ -77,7 +77,7 @@ describe('flock (PID-file)', () => {
 
   test('cross-process: child holding lock blocks parent acquire', async () => {
     const fixturePath = resolve(import.meta.dir, 'fixtures', 'lock-holder.ts')
-    // RFC-144: spawn via process.execPath (the bun binary itself) instead of the
+    // RFC-windows: spawn via process.execPath (the bun binary itself) instead of the
     // bare `bun` command. On Windows `bun` resolves to a `bun.cmd` shim, so
     // `child.pid` would be cmd.exe's pid — different from the bun process that
     // writes its own `process.pid` into the lock file, breaking the assertion

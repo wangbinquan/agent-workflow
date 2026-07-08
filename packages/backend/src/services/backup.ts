@@ -152,7 +152,7 @@ function countDirEntries(dir: string): number {
 /**
  * Produce the backup archive from the staging dir.
  *
- * RFC-144 PR-4 T20: prefers the system `tar` (produces `.tar.gz`; present on
+ * RFC-windows PR-4 T20: prefers the system `tar` (produces `.tar.gz`; present on
  * all POSIX + Windows 10 1803+ which ships bsdtar on PATH). When `tar` is
  * absent (old Windows / stripped Server Core), falls back to PowerShell
  * `Compress-Archive` producing a `.zip` — the backup is a one-way export with
@@ -165,7 +165,7 @@ function countDirEntries(dir: string): number {
  */
 async function tarGz(stagingDir: string, proposedOutPath: string): Promise<string> {
   if (await hasTar()) {
-    // RFC-144 PR-4 T20: GNU tar (MSYS / Git-for-Windows) parses a `C:\…` drive
+    // RFC-windows PR-4 T20: GNU tar (MSYS / Git-for-Windows) parses a `C:\…` drive
     // path as a remote `host:path` ("Cannot connect to C: resolve failed"),
     // and bsdtar (Win10 native) does not. `--force-local` is GNU-only, so the
     // portable fix is to run tar with `cwd = stagingDir` and a RELATIVE out

@@ -289,7 +289,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # RFC-144 PR-5: windows-latest produces agent-workflow-windows-x86_64.exe.
+        # RFC-windows PR-5: windows-latest produces agent-workflow-windows-x86_64.exe.
         # The Windows leg does NOT install opencode (the daemon spawns it via
         # the wsl-opencode driver — PR-3, not yet landed); `version` + `doctor`
         # smoke still run (they don't need a running opencode).
@@ -314,7 +314,7 @@ jobs:
         # The smoke test invokes `agent-workflow version`, which does not touch
         # opencode — but the start path does, and we want the binary to be
         # ready to run an end-to-end smoke locally if anyone reuses this job.
-        # RFC-144 PR-3 (strategy D): opencode runs natively on Windows too —
+        # RFC-windows PR-3 (strategy D): opencode runs natively on Windows too —
         # install it on all legs so `doctor` is fully green.
         run: |
           bun install -g opencode-ai@${{ env.OPENCODE_VERSION }}
@@ -346,7 +346,7 @@ jobs:
         # `find` instead of `ls | head` to satisfy actionlint's embedded
         # shellcheck (SC2012) — robust under names with whitespace even
         # though the canonical asset names here never contain any.
-        # RFC-144 PR-3: on Windows the binary is `agent-workflow-windows-x86_64.exe`;
+        # RFC-windows PR-3: on Windows the binary is `agent-workflow-windows-x86_64.exe`;
         # `chmod +x` is a no-op there (Windows doesn't use the +x bit) and the
         # `.exe` is directly executable from bash. opencode is installed on all
         # legs now (strategy D — native), so `doctor` should be fully green.
@@ -365,12 +365,12 @@ jobs:
           if-no-files-found: error
 
   check-windows:
-    # RFC-144 PR-5 — Windows platform-layer gate. The full `bun test` suite is
+    # RFC-windows PR-5 — Windows platform-layer gate. The full `bun test` suite is
     # NOT green on Windows yet: opencode is spawned via the wsl-opencode driver
     # (PR-3, not landed), and a number of pre-existing tests assume POSIX
     # SIGTERM / chmod-mode / mock-opencode-shim behaviour. Until PR-3 lands,
     # this job gates the Windows-only layer that DOES work: typecheck + lint +
-    # format:check + the RFC-144 platform/backup/fs-prms/shutdown tests. Full
+    # format:check + the RFC-windows platform/backup/fs-prms/shutdown tests. Full
     # suite + e2e on Windows waits for PR-3.
     name: Windows platform-layer gate
     runs-on: windows-latest
@@ -401,7 +401,7 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      - name: RFC-144 platform-layer tests
+      - name: RFC-windows platform-layer tests
         working-directory: packages/backend
         run: |
           bun test tests/platform.test.ts tests/platform-fs.test.ts tests/platform-pr4.test.ts tests/lock.test.ts tests/shutdown-route.test.ts tests/backup.test.ts tests/structural-diff-indexer-discovery.test.ts

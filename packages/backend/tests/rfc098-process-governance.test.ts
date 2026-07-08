@@ -35,7 +35,7 @@ import { runNode } from '../src/services/runner'
 import { resumeTask } from '../src/services/task'
 import { STALE_RUN_PID_MAX_AGE_MS } from '../src/util/process'
 
-// RFC-144 PR-1: this file locks POSIX-specific SIGTERM-trapping + process-group
+// RFC-windows PR-1: this file locks POSIX-specific SIGTERM-trapping + process-group
 // kill behaviour (the stubborn-opencode fixture traps SIGTERM; the grandchild
 // is only reaped because `process.kill(-pid)` reaches it across the group).
 // Windows has neither SIGTERM delivery nor process groups — kill escalation

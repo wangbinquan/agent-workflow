@@ -261,7 +261,7 @@ chmod +x agent-workflow
 ```powershell
 # Windows (x86_64) — PowerShell
 Invoke-WebRequest `
-  https://github.com/wangbinquan/agent-workflow/releases/latest/download/agent-workflow-windows-x86_64.exe `
+  https://github.com/1589701052p-alt/agent-workflow/releases/latest/download/agent-workflow-windows-x86_64.exe `
   -OutFile agent-workflow.exe
 ```
 

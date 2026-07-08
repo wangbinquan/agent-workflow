@@ -102,7 +102,7 @@ export async function probeOpencode(
       opts.timeoutMs !== undefined
         ? setTimeout(() => {
             timedOut = true
-            // RFC-144 PR-1: delegate to platform.killProcessTree — POSIX still
+            // RFC-windows PR-1: delegate to platform.killProcessTree — POSIX still
             // group-kills via `process.kill(-pid)` (byte-for-byte), Windows uses
             // `taskkill /T /F`. The previous `proc.kill` fallback is handled
             // inside killProcessTree's single-pid branch.
@@ -138,7 +138,7 @@ export async function probeOpencode(
         // leaked descendant of a misbehaving wrapper (e.g. it forked then
         // exited non-zero BEFORE the timer fired, so the timeout never reaped
         // the group). Kill unconditionally; an already-gone group is a no-op.
-        // RFC-144 PR-1: delegated to platform.killProcessTree (cross-platform).
+        // RFC-windows PR-1: delegated to platform.killProcessTree (cross-platform).
         if (typeof proc.pid === 'number') killProcessTree(proc.pid, 'SIGKILL')
       }
     }

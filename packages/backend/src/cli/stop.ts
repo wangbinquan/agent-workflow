@@ -71,7 +71,7 @@ export async function stopCommand(opts: StopOptions = {}): Promise<StopResult> {
     }
   }
 
-  // RFC-144 PR-1: Windows has no SIGTERM delivery from another process —
+  // RFC-windows PR-1: Windows has no SIGTERM delivery from another process —
   // `process.kill(pid, 'SIGTERM')` is a hard TerminateProcess that bypasses the
   // daemon's graceful-shutdown handler (running tasks would be orphaned, the DB
   // unsynced, the lock left behind). Instead POST the token-gated

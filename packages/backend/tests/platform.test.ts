@@ -1,4 +1,4 @@
-// RFC-144 PR-1 — platform primitive oracle + source-text guards.
+// RFC-windows PR-1 — platform primitive oracle + source-text guards.
 //
 // 为什么这条测试存在：PR-1 把 OS-specific 的进程原语（liveness / kill-tree /
 // PID 命令指纹）从 util/process.ts 收口到 util/platform.ts 单源。POSIX 行为
@@ -37,7 +37,7 @@ const spawned: Bun.Subprocess[] = []
 function spawnLongLived(): Bun.Subprocess {
   // Use process.execPath (the bun binary itself) — NOT the bare `bun` command,
   // which on Windows resolves to a `bun.cmd` shim and would make child.pid the
-  // cmd.exe pid instead of the bun process pid (RFC-144 PR-1 lock-test parity).
+  // cmd.exe pid instead of the bun process pid (RFC-windows PR-1 lock-test parity).
   const child = Bun.spawn({
     cmd: [process.execPath, '-e', 'setTimeout(() => {}, 60000)'],
     stdout: 'ignore',
@@ -60,7 +60,7 @@ afterEach(() => {
   spawned.length = 0
 })
 
-describe('RFC-144 PR-1 — platform primitives (behavioural)', () => {
+describe('RFC-windows PR-1 — platform primitives (behavioural)', () => {
   test('pidCommandLine returns a string containing the spawned binary', async () => {
     const child = spawnLongLived()
     await Bun.sleep(150)
@@ -113,7 +113,7 @@ describe('RFC-144 PR-1 — platform primitives (behavioural)', () => {
   })
 })
 
-describe('RFC-144 PR-1 — Windows-specific fingerprint semantics', () => {
+describe('RFC-windows PR-1 — Windows-specific fingerprint semantics', () => {
   test('pidCommandContainsBinary is case-insensitive on Windows (path case may differ)', async () => {
     if (process.platform !== 'win32') return // POSIX keeps case-sensitive byte-for-byte
     const child = spawnLongLived()
@@ -125,7 +125,7 @@ describe('RFC-144 PR-1 — Windows-specific fingerprint semantics', () => {
   })
 })
 
-describe('RFC-144 PR-1 — platform.ts is the single source of platform branching', () => {
+describe('RFC-windows PR-1 — platform.ts is the single source of platform branching', () => {
   const src = readFileSync(PLATFORM_UTIL, 'utf8')
 
   test('exposes isWindows + the liveness / kill-tree / fingerprint primitives', () => {

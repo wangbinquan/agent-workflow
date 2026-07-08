@@ -72,7 +72,7 @@ export async function doctorCommand(): Promise<DoctorResult> {
   // 6. migrations present
   checks.push(checkMigrations())
 
-  // 7. RFC-144 PR-2 T10: Windows long-path support (informational — the
+  // 7. RFC-windows PR-2 T10: Windows long-path support (informational — the
   // daemon uses the `\\?\` prefix fallback via util/platform.toLongPath when
   // LongPathsEnabled is off, so this never fails doctor, only surfaces the
   // registry state). POSIX skips (no MAX_PATH limit).
@@ -227,7 +227,7 @@ function checkTokenFileMode(): CheckResult {
   }
   try {
     if (isWindows()) {
-      // RFC-144 PR-2 T9: Windows has no unix mode — verify via icacls that
+      // RFC-windows PR-2 T9: Windows has no unix mode — verify via icacls that
       // no broad group (Everyone / BUILTIN\Users / Authenticated Users) has
       // access. The daemon's secureFile() restricts to the current user only.
       return evaluateWindowsAclCheck(Paths.tokenFile, 'token file')

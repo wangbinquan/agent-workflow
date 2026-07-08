@@ -1,4 +1,4 @@
-// RFC-144 PR-3 T11 — verify the daemon's ACTUAL spawn model works on Windows.
+// RFC-windows PR-3 T11 — verify the daemon's ACTUAL spawn model works on Windows.
 //
 // 为什么这条测试存在：PR-3 策略 D（原生 opencode，不用 WSL）的核心假设是
 // 现有 `runtime/opencode/` driver（`buildOpencodeSpawn` + `buildInlineConfig`）
@@ -34,7 +34,7 @@ const RUN_INTEGRATION = process.env.RUN_OPENCODE_INTEGRATION === '1'
 function detectAuthAvailable(): boolean {
   if (process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY) return true
   if (process.env.OPENCODE_AUTH_CONTENT) return true
-  // RFC-144: opencode also accepts provider config in ~/.config/opencode/opencode.json
+  // RFC-windows: opencode also accepts provider config in ~/.config/opencode/opencode.json
   // (e.g. aliyun-bailian with an inline apiKey) — treat that as auth-available too.
   try {
     if (existsSync(join(homedir(), '.config', 'opencode', 'opencode.json'))) return true
@@ -54,7 +54,7 @@ function makeAgent(): Agent {
   return {
     id: ulid(),
     name: 'aw-pr3-native',
-    description: 'RFC-144 PR-3 native Windows spawn verification',
+    description: 'RFC-windows PR-3 native Windows spawn verification',
     outputs: ['summary'],
     syncOutputsOnIterate: true,
     permission: {},
@@ -104,7 +104,7 @@ async function runViaDaemonSpawnPlan(
   const inlineConfig = buildInlineConfig(agent, new Map(), [], [], [])
   let inventoryOutPath: string | undefined
   if (opts.withInventoryPlugin) {
-    // RFC-144 PR-3 T12: verify the inventory dump plugin (.mjs + file:// +
+    // RFC-windows PR-3 T12: verify the inventory dump plugin (.mjs + file:// +
     // OPENCODE_AW_INVENTORY_OUT) loads on Windows. Mirrors runner.ts:549-552.
     const pluginPath = await materializeInventoryPlugin(runDir)
     inlineConfig.plugin = [toFileUrl(pluginPath)]
@@ -159,7 +159,7 @@ async function runViaDaemonSpawnPlan(
         stdoutBuf += decoder.decode(value, { stream: true })
         let nl: number
         while ((nl = stdoutBuf.indexOf('\n')) >= 0) {
-          // RFC-144 PR-3 T11: strip trailing \r — opencode.cmd shim on Windows
+          // RFC-windows PR-3 T11: strip trailing \r — opencode.cmd shim on Windows
           // may emit CRLF line endings; JSON.parse tolerates no trailing whitespace
           // but a stray \r must not survive into the parsed event.
           const line = stdoutBuf.slice(0, nl).replace(/\r$/, '').trimEnd()
@@ -204,7 +204,7 @@ async function runViaDaemonSpawnPlan(
   })
 }
 
-describe.skipIf(SKIP)('RFC-144 PR-3 — daemon spawn plan on native opencode', () => {
+describe.skipIf(SKIP)('RFC-windows PR-3 — daemon spawn plan on native opencode', () => {
   test('buildOpencodeSpawn + inline agent + --agent → stdout JSON event stream', async () => {
     const r = await runViaDaemonSpawnPlan()
     // opencode ran the inline-defined agent and produced parseable JSON events.
@@ -228,7 +228,7 @@ describe.skipIf(SKIP)('RFC-144 PR-3 — daemon spawn plan on native opencode', (
   }, 120_000)
 
   test('inventory dump plugin (.mjs + file:// + OPENCODE_AW_INVENTORY_OUT) loads on Windows', async () => {
-    // RFC-144 PR-3 T12: the inventory plugin is materialized into runDir +
+    // RFC-windows PR-3 T12: the inventory plugin is materialized into runDir +
     // injected as a file:// spec (PR-2's toFileUrl). Verify opencode loads it
     // on Windows + writes the inventory snapshot to OPENCODE_AW_INVENTORY_OUT.
     const r = await runViaDaemonSpawnPlan({ withInventoryPlugin: true })

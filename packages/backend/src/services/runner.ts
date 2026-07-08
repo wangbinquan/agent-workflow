@@ -1602,7 +1602,7 @@ const FINAL_REAP_MARGIN_MS = 5_000
  * kills a bash child's forked sleep). Falls back to the single-process
  * safeKill when the group signal fails (ESRCH after exit / EPERM).
  *
- * RFC-144 PR-1: the group-kill / tree-kill mechanism is delegated to
+ * RFC-windows PR-1: the group-kill / tree-kill mechanism is delegated to
  * util/platform.ts `killProcessTree` — POSIX still does `process.kill(-pid)`
  * (byte-for-byte) with a single-pid fallback; Windows uses `taskkill /T /F`
  * (no process groups on Windows). `safeKill` remains the last-ditch fallback

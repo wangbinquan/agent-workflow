@@ -107,7 +107,7 @@ jobs:
             **/*.log
 
   integration-windows:
-    # RFC-144 PR-3 — Windows native-opencode integration leg. Runs the same
+    # RFC-windows PR-3 — Windows native-opencode integration leg. Runs the same
     # live suite (incl. opencode-native-spawn.integration.test.ts which drives
     # the daemon's real buildOpencodeSpawn + inline agent + inventory plugin
     # path) on Windows. opencode 1.15.5 only (no `latest` — keep it cheap;

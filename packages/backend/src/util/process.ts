@@ -1,8 +1,8 @@
 // RFC-098 WP-8 (scheduler audit S-15) — process-tree governance primitives.
-// RFC-144 PR-1 — platform branching moved to util/platform.ts (single source);
+// RFC-windows PR-1 — platform branching moved to util/platform.ts (single source);
 // this module keeps its public API stable (callers in services/* import from
 // here) and delegates the primitives that differ by OS. POSIX behaviour is
-// byte-for-byte identical to the pre-RFC-144 implementation.
+// byte-for-byte identical to the pre-RFC-windows implementation.
 
 // Re-export the platform primitives so existing callers keep their import path
 // (`@/util/process`). The implementations live in util/platform.ts.
@@ -53,7 +53,7 @@ export interface StaleRunKillOpts {
  * shape) must pass before any signal is sent. Best-effort by contract — the
  * caller proceeds with its rollback / status flip regardless of the outcome.
  *
- * RFC-144: the per-platform kill mechanism (POSIX group-kill / Windows
+ * RFC-windows: the per-platform kill mechanism (POSIX group-kill / Windows
  * taskkill tree) and the command-fingerprint lookup (ps / wmic) are delegated
  * to util/platform.ts; this orchestrator is platform-agnostic.
  */

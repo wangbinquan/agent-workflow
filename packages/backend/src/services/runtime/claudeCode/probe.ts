@@ -61,7 +61,7 @@ export async function probeClaudeCode(
       opts.timeoutMs !== undefined
         ? setTimeout(() => {
             timedOut = true
-            // RFC-144 PR-1: delegate to platform.killProcessTree (POSIX group-kill
+            // RFC-windows PR-1: delegate to platform.killProcessTree (POSIX group-kill
             // byte-for-byte; Windows taskkill /T /F).
             if (typeof proc.pid === 'number') killProcessTree(proc.pid, 'SIGKILL')
           }, opts.timeoutMs)
@@ -93,7 +93,7 @@ export async function probeClaudeCode(
         // Unconditional group reap once the probe is over — a wrapper that
         // forked then exited before the timer would otherwise leak its
         // descendants (see util/opencode.ts, same shape).
-        // RFC-144 PR-1: delegated to platform.killProcessTree (cross-platform).
+        // RFC-windows PR-1: delegated to platform.killProcessTree (cross-platform).
         if (typeof proc.pid === 'number') killProcessTree(proc.pid, 'SIGKILL')
       }
     }

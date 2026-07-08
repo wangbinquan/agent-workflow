@@ -1,4 +1,4 @@
-// RFC-144 PR-1 — POST /api/shutdown route (Windows graceful-stop channel).
+// RFC-windows PR-1 — POST /api/shutdown route (Windows graceful-stop channel).
 //
 // 为什么这条测试存在：Windows 无 SIGTERM 跨进程投递，`agent-workflow stop`
 // 改走 token 守卫的 HTTP /api/shutdown 触发 daemon 的 shutdown() 闭包。这条
@@ -36,7 +36,7 @@ async function reqAs(app: Hono, token: string | null, path: string): Promise<Res
   return app.request(path, { method: 'POST', headers })
 }
 
-describe('RFC-144 PR-1 — POST /api/shutdown', () => {
+describe('RFC-windows PR-1 — POST /api/shutdown', () => {
   test('with daemon token: fires shutdown callback, returns 200', async () => {
     let called = 0
     const { app } = buildApp(() => {

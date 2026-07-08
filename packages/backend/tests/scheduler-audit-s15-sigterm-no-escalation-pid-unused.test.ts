@@ -67,7 +67,7 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (runner.ts)', ()
     // precondition for `-pid` group signals reaching grandchildren.
     expect(countNonCommentMatches(runnerSrc, /detached: true/g)).toBe(1)
 
-    // RFC-144 PR-1: killTree delegates to util/platform.ts `killProcessTree`
+    // RFC-windows PR-1: killTree delegates to util/platform.ts `killProcessTree`
     // (POSIX `process.kill(-pid)` byte-for-byte; Windows `taskkill /T /F`),
     // with the single-process `safeKill` as the last-ditch fallback. The
     // `process.kill(-pid, signal)` literal now lives in platform.ts (asserted
@@ -108,7 +108,7 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (runner.ts)', ()
 
 describe('S-15 guard: nodeRuns.pid is consumed by process governance', () => {
   test('util/platform.ts owns the liveness + kill-tree vocabulary; process.ts re-exports + owns the orchestrator; lock.ts re-exports', () => {
-    // RFC-144 PR-1: the OS-specific primitives (isProcessAlive / killProcessTree
+    // RFC-windows PR-1: the OS-specific primitives (isProcessAlive / killProcessTree
     // / pidCommandLine) moved to util/platform.ts — the single source of
     // platform branching. util/process.ts re-exports them (callers keep their
     // `@/util/process` import path) and still owns the platform-agnostic

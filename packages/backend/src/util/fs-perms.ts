@@ -1,5 +1,5 @@
 // util/fs-perms.ts — cross-platform "restrict a sensitive file/dir to the
-// current user only" helper (RFC-144 PR-2 T9).
+// current user only" helper (RFC-windows PR-2 T9).
 //
 // 为什么单独一个模块：`auth/secretBox.ts`（OIDC client_secret 密封密钥）、
 // `auth/token.ts`（daemon token）、`pluginInstaller.ts`（plugin 安装根）、

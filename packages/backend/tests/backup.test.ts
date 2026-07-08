@@ -28,7 +28,7 @@ function buildHarness(): Harness {
   }
 }
 
-// RFC-144 PR-4 T20: tar helpers run with `cwd` + a RELATIVE path so GNU tar
+// RFC-windows PR-4 T20: tar helpers run with `cwd` + a RELATIVE path so GNU tar
 // (MSYS / Git-for-Windows) doesn't parse a `C:\…` drive path as a remote
 // `host:path` ("Cannot connect to C: resolve failed"). `--force-local` is
 // GNU-only (bsdtar rejects it), so the relative-path form is the portable fix.

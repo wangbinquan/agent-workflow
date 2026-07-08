@@ -35,7 +35,7 @@ name: Release
 # - ubuntu-24.04-arm  (arm64)         -> dist/agent-workflow-linux-arm64
 # - windows-latest    (x86_64)        -> dist/agent-workflow-windows-x86_64.exe
 # macOS Intel (macos-13) was dropped — GitHub Actions retired the runner.
-# RFC-144 PR-5: windows-latest added — the daemon runs natively on Windows;
+# RFC-windows PR-5: windows-latest added — the daemon runs natively on Windows;
 # opencode is spawned via the wsl-opencode driver (PR-3) at task time, but the
 # binary itself builds + ships the SPA + daemon + migrations like the others.
 #

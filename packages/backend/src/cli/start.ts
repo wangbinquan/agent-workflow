@@ -306,7 +306,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   log.info('secret box ready', { keyFile: Paths.secretKeyFile })
 
   // 7. HTTP server.
-  // RFC-144 PR-1: the `POST /api/shutdown` route calls deps.shutdown(); the
+  // RFC-windows PR-1: the `POST /api/shutdown` route calls deps.shutdown(); the
   // real closure is defined later (after `server` + tickers exist), so we wire
   // it through a mutable holder assigned once `shutdown()` is in scope.
   const shutdownTrigger: { fn: (() => void) | undefined } = { fn: undefined }
@@ -532,7 +532,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     removeDaemonInfo()
     void shutdown('SIGINT')
   })
-  // RFC-144 PR-1: Windows has no SIGTERM delivery from another process
+  // RFC-windows PR-1: Windows has no SIGTERM delivery from another process
   // (`process.kill(pid, 'SIGTERM')` on Windows is a hard TerminateProcess that
   // bypasses JS signal handlers). SIGBREAK is the Windows console-ctrl signal
   // (Ctrl-Break) that DOES reach a handler, so a Ctrl-Break in the daemon's

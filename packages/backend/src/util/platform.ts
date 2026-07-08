@@ -1,15 +1,15 @@
 // util/platform.ts — the SINGLE source of platform branching for the daemon.
 //
-// RFC-144 PR-1: every `process.platform === 'win32'` check in the business
+// RFC-windows PR-1: every `process.platform === 'win32'` check in the business
 // layer must live here (or in runtime/wsl-opencode/). Callers in runner /
 // scheduler / routes / services call these primitives and never inspect the
 // platform themselves — same discipline as RFC-143's "判别归零" rule, applied
 // to the OS axis. Source-text lock in tests/platform.test.ts guards this.
 //
-// POSIX behaviour is byte-for-byte identical to the pre-RFC-144 implementations
+// POSIX behaviour is byte-for-byte identical to the pre-RFC-windows implementations
 // that lived in util/process.ts (which now delegates here). Windows branches
 // realise the same semantics via Job-Object-equivalent / wmic / taskkill
-// mechanisms — see design/RFC-144-windows-adaptation/design.md §3.
+// mechanisms — see design/RFC-windows-windows-adaptation/design.md §3.
 
 import { cpSync, lstatSync, symlinkSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -20,7 +20,7 @@ export function isWindows(): boolean {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// External-skill linking (RFC-144 PR-2 T8)
+// External-skill linking (RFC-windows PR-2 T8)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -51,7 +51,7 @@ export function linkSkillDir(target: string, dst: string): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// file:// plugin spec (RFC-144 PR-2 T7)
+// file:// plugin spec (RFC-windows PR-2 T7)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -92,7 +92,7 @@ export function fromFileUrl(spec: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Long paths (RFC-144 PR-2 T10)
+// Long paths (RFC-windows PR-2 T10)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -148,7 +148,7 @@ export type KillTreeSignal = 'SIGTERM' | 'SIGKILL'
  * - POSIX: the runner spawns opencode with `detached: true` (setsid() → the
  *   child is its own group leader), so `process.kill(-pid, sig)` reaches
  *   grandchildren too. Falls back to a single-pid kill when the group signal
- *   fails. Byte-for-byte identical to the pre-RFC-144 implementation.
+ *   fails. Byte-for-byte identical to the pre-RFC-windows implementation.
  * - Windows: there are no process groups / setsid. `taskkill /T /F /PID` kills
  *   the whole tree (the closest equivalent without a kernel Job Object).
  *   Job-Object hardening for grandchildren that detach from the tree is

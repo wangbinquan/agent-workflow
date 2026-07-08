@@ -367,7 +367,7 @@ function extractHttpStatus(err: unknown): number | null {
 /**
  * Minimal environment passed to stdio MCP children — never inherit daemon creds.
  *
- * RFC-144 PR-4 T19: Windows stdio children (npx / uvx `.cmd` shims, node
+ * RFC-windows PR-4 T19: Windows stdio children (npx / uvx `.cmd` shims, node
  * scripts) need more than PATH/HOME/LANG — Windows has no HOME (it's
  * USERPROFILE), and the PATHEXT / SystemRoot / ComSpec keys are required for
  * `.cmd` shim resolution + sub-process spawning. The POSIX-only set would
@@ -404,7 +404,7 @@ export function buildStdioEnv(
     const v = source[k]
     if (typeof v === 'string') out[k] = v
   }
-  // RFC-144 PR-4 T19: Windows has no HOME env var (it's USERPROFILE). MCP
+  // RFC-windows PR-4 T19: Windows has no HOME env var (it's USERPROFILE). MCP
   // servers / node tools that read HOME (e.g. for ~/.config) would break
   // without it; inject HOME=USERPROFILE when HOME is absent. No-op on POSIX
   // (HOME is always in the inherited set there) and when the daemon's own env

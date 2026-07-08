@@ -60,7 +60,7 @@ export interface AppDeps {
    */
   secretBox?: SecretBox
   /**
-   * RFC-144 PR-1 — graceful shutdown trigger for the `POST /api/shutdown`
+   * RFC-windows PR-1 — graceful shutdown trigger for the `POST /api/shutdown`
    * route. Windows has no SIGTERM delivery from another process, so
    * `agent-workflow stop` POSTs this endpoint (token-gated via the normal
    * /api/* auth) instead of `process.kill(pid, 'SIGTERM')`. start.ts wires
@@ -108,7 +108,7 @@ export function createApp(deps: AppDeps): Hono {
     })
   })
 
-  // RFC-144 PR-1 — graceful shutdown over HTTP. Mounted AFTER the /api/*
+  // RFC-windows PR-1 — graceful shutdown over HTTP. Mounted AFTER the /api/*
   // multiAuth gate so the daemon token (or any authorised actor) is required;
   // no permission gate (token holders could already SIGTERM the daemon on
   // POSIX, so the HTTP equivalent is the same trust level). Windows has no

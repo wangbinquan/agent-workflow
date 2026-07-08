@@ -92,7 +92,7 @@ function bridgeClaudeCredentials(configDir: string, log: Logger): void {
         const json = out.stdout.toString().trim()
         if (json.length > 0) {
           writeFileSync(dest, json + '\n', { mode: 0o600 })
-          // RFC-144 PR-2 T9: the bridged credentials file is sensitive —
+          // RFC-windows PR-2 T9: the bridged credentials file is sensitive —
           // restrict to current user (POSIX chmod already done via mode flag;
           // Windows needs icacls since chmod is a no-op there).
           secureFile(dest)

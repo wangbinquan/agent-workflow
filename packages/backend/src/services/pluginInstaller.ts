@@ -181,7 +181,7 @@ async function installPluginInner(
   const root = opts.pluginsDir ?? Paths.pluginsDir
   const pluginDir = join(root, pluginId)
   await mkdir(pluginDir, { recursive: true })
-  // RFC-144 PR-2 T9: restrict the plugin install root to the current user.
+  // RFC-windows PR-2 T9: restrict the plugin install root to the current user.
   // POSIX: chmod 0o700 (was the mkdir `mode`, which some umasks ignore);
   // Windows: icacls (chmod is a no-op there).
   secureDir(pluginDir)
@@ -232,7 +232,7 @@ async function installPluginInner(
 }
 
 async function installFilePlugin(spec: string): Promise<InstallResult> {
-  // RFC-144 PR-2 T7: resolve a file:// spec to a host path cross-platform.
+  // RFC-windows PR-2 T7: resolve a file:// spec to a host path cross-platform.
   // `new URL(spec).pathname` returned `/C:/x/y` on Windows; fromFileUrl uses
   // node:url.fileURLToPath which maps `file:///C:/x/y` → `C:\x\y` correctly.
   const raw = fromFileUrl(spec)
