@@ -16,6 +16,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ClarifyRoundSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { LoadingState } from '@/components/LoadingState'
 import { StatusChip } from '@/components/StatusChip'
 import { TabBar } from '@/components/TabBar'
 import { clarifyRoundStatusChip } from '@/lib/clarify-status'
@@ -180,7 +181,7 @@ export function ClarifyListPage() {
         active={filter}
         onSelect={setFilter}
       />
-      {list.isLoading && <div className="muted">{t('common.loading')}</div>}
+      {list.isLoading && <LoadingState />}
       {list.error !== null && list.error !== undefined && (
         <div className="error-box">{(list.error as Error).message}</div>
       )}

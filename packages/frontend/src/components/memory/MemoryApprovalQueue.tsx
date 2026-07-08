@@ -73,7 +73,7 @@ export function MemoryApprovalQueue({ isAdmin }: MemoryApprovalQueueProps) {
   })
 
   if (candidates.isLoading) {
-    return <LoadingState label={t('common.loading')} />
+    return <LoadingState />
   }
   if (candidates.error !== null && candidates.error !== undefined) {
     return <div className="error-box">{describeApiError(candidates.error)}</div>

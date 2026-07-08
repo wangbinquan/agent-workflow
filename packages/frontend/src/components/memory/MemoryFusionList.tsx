@@ -28,7 +28,7 @@ export function MemoryFusionList() {
     refetchInterval: 15_000,
   })
 
-  if (fusions.isLoading) return <LoadingState label={t('common.loading')} />
+  if (fusions.isLoading) return <LoadingState />
   if (fusions.error !== null && fusions.error !== undefined) {
     return (
       <div className="error-box" role="alert" data-testid="memory-fusion-error">

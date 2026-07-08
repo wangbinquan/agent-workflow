@@ -14,6 +14,7 @@ import { api } from '@/api/client'
 import { isFanoutParentRun, sortNodeRunsForPromptHistory } from '@/lib/node-prompt'
 import { ConversationFlow } from './ConversationFlow'
 import { InjectedMemoriesCard } from './InjectedMemoriesCard'
+import { LoadingState } from '@/components/LoadingState'
 import { RuntimeInventorySection } from '@/components/inventory/RuntimeInventorySection'
 import { Select, type SelectOption } from '@/components/Select'
 import { clarifyRoundForRun } from '@/lib/node-history'
@@ -281,7 +282,7 @@ function SessionBody({ taskId, nodeRunId }: { taskId: string; nodeRunId: string 
         signal,
       ),
   })
-  if (query.isLoading) return <div className="muted">{t('common.loading')}</div>
+  if (query.isLoading) return <LoadingState size="compact" />
   if (query.error !== null && query.error !== undefined) {
     return <div className="error-box">{t('session.loadError')}</div>
   }

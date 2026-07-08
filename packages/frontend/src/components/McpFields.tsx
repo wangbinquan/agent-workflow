@@ -1,9 +1,12 @@
 // RFC-028 — MCP form widget shared by /mcps/new and /mcps/$name. Uses the
 // same `<Field>` + `<TextInput>` primitives as AgentForm / SkillCreatePage
 // so the three "new" pages look visually identical.
+// RFC-151 PR-1 — the two hand-rolled chip-radio groups (type, oauthMode)
+// now render the shared <Segmented> primitive (RFC-150 adoption set).
 
 import { useTranslation } from 'react-i18next'
 import { Field, Switch, TextArea, TextInput } from './Form'
+import { Segmented } from './Segmented'
 import { MCP_NAME_RE } from '@agent-workflow/shared'
 import type { McpFormState } from '@/lib/mcp-form'
 
@@ -39,27 +42,19 @@ export function McpFields({ value, onChange, nameLocked, errors }: McpFieldsProp
         <TextInput value={value.description} onChange={(v) => set('description', v)} />
       </Field>
 
-      <Field label={t('mcps.fieldType')}>
-        <div role="radiogroup" aria-label={t('mcps.fieldType')} className="chip-row">
-          <label className="chip">
-            <input
-              type="radio"
-              checked={value.type === 'local'}
-              disabled={nameLocked === true}
-              onChange={() => set('type', 'local')}
-            />
-            {t('mcps.typeLocal')}
-          </label>
-          <label className="chip">
-            <input
-              type="radio"
-              checked={value.type === 'remote'}
-              disabled={nameLocked === true}
-              onChange={() => set('type', 'remote')}
-            />
-            {t('mcps.typeRemote')}
-          </label>
-        </div>
+      {/* `group` — a Segmented is a composite control; wrapping it in the
+          default <label> would hijack each option's accessible name. */}
+      <Field label={t('mcps.fieldType')} group>
+        <Segmented
+          value={value.type}
+          onChange={(v) => set('type', v)}
+          ariaLabel={t('mcps.fieldType')}
+          disabled={nameLocked === true}
+          options={[
+            { value: 'local', label: t('mcps.typeLocal') },
+            { value: 'remote', label: t('mcps.typeRemote') },
+          ]}
+        />
       </Field>
 
       <Switch
@@ -116,25 +111,16 @@ export function McpFields({ value, onChange, nameLocked, errors }: McpFieldsProp
               monospace
             />
           </Field>
-          <Field label={t('mcps.fieldOauth')} hint={t('mcps.fieldOauthHint')}>
-            <div role="radiogroup" aria-label={t('mcps.fieldOauth')} className="chip-row">
-              <label className="chip">
-                <input
-                  type="radio"
-                  checked={value.oauthMode === 'auto'}
-                  onChange={() => set('oauthMode', 'auto')}
-                />
-                {t('mcps.oauthModeAuto')}
-              </label>
-              <label className="chip">
-                <input
-                  type="radio"
-                  checked={value.oauthMode === 'disabled'}
-                  onChange={() => set('oauthMode', 'disabled')}
-                />
-                {t('mcps.oauthModeDisabled')}
-              </label>
-            </div>
+          <Field label={t('mcps.fieldOauth')} hint={t('mcps.fieldOauthHint')} group>
+            <Segmented
+              value={value.oauthMode}
+              onChange={(v) => set('oauthMode', v)}
+              ariaLabel={t('mcps.fieldOauth')}
+              options={[
+                { value: 'auto', label: t('mcps.oauthModeAuto') },
+                { value: 'disabled', label: t('mcps.oauthModeDisabled') },
+              ]}
+            />
           </Field>
           <p className="form-field__hint">{t('mcps.oauthCliHint')}</p>
         </>

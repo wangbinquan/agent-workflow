@@ -266,7 +266,7 @@ export function MultiDocReviewView({
     }
   }, [activeDocId])
 
-  if (detail.isLoading) return <LoadingState label={t('common.loading')} />
+  if (detail.isLoading) return <LoadingState />
   if (detail.isError || detail.data === undefined) return <ErrorBanner error={detail.error} />
   // RFC-149: while the rounds list loads, the historical view renders
   // OPTIMISTICALLY (read-only shell + placeholder labels + pane loading state)
@@ -488,7 +488,7 @@ export function MultiDocReviewView({
             </div>
           )}
           {activeBody === undefined ? (
-            <LoadingState label={t('common.loading')} />
+            <LoadingState />
           ) : (
             <ReviewDocPane
               nodeRunId={nodeRunId}

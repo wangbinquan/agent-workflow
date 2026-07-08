@@ -17,6 +17,7 @@ import type {
 } from '@agent-workflow/shared'
 import { COMMIT_PUSH_NODE_PREFIX, redactGitUrl } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
+import { LoadingState } from '@/components/LoadingState'
 import { WorkflowCanvas, type WorkflowCanvasHandle } from '@/components/canvas/WorkflowCanvas'
 import type { CanvasNodeData } from '@/components/canvas/nodes/types'
 import { ConfirmButton } from '@/components/ConfirmButton'
@@ -386,7 +387,7 @@ function TaskDetailPage() {
         </div>
 
         <div className="task-detail__pane" hidden={tab !== 'node-runs'}>
-          {nodeRuns.isLoading && <div className="muted">{t('common.loading')}</div>}
+          {nodeRuns.isLoading && <LoadingState size="compact" />}
           {nodeRuns.error !== null && nodeRuns.error !== undefined && (
             <div className="error-box">{describeError(nodeRuns.error)}</div>
           )}

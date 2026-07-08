@@ -12,10 +12,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Plugin } from '@agent-workflow/shared'
+import type { Plugin, UpdatePlugin } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { AclDialogButton } from '@/components/AclPanel'
 import { ConfirmButton } from '@/components/ConfirmButton'
+import { LoadingState } from '@/components/LoadingState'
 import { PluginFields } from '@/components/PluginFields'
 import { describeApiError } from '@/i18n'
 import {
@@ -54,22 +55,30 @@ function PluginDetailPage() {
   }, [loaded, query.data])
 
   const save = useMutation({
-    mutationFn: async (): Promise<Plugin> => {
-      if (query.data === undefined) throw new Error('plugin-not-loaded')
-      const built = buildUpdatePayload(form, query.data)
-      if (!built.ok) {
-        setErrors(built.errors)
-        throw new Error('form-invalid')
-      }
-      setErrors({})
-      return api.put<Plugin>(`/api/plugins/${encodeURIComponent(id)}`, built.payload)
-    },
+    mutationFn: (patch: UpdatePlugin): Promise<Plugin> =>
+      api.put<Plugin>(`/api/plugins/${encodeURIComponent(id)}`, patch),
     onSuccess: (p) => {
       void qc.invalidateQueries({ queryKey: ['plugins'] })
       qc.setQueryData(['plugins', id], p)
       navigate({ to: '/plugins' })
     },
   })
+
+  // RFC-151 PR-1 — validate before mutate; an invalid form sets inline field
+  // errors only (previously a thrown validation sentinel leaked into the
+  // form-actions banner as a raw untranslated string). The save button is
+  // disabled until `loaded`, so `query.data` is always present here.
+  function submitSave() {
+    if (query.data === undefined) return
+    const built = buildUpdatePayload(form, query.data)
+    if (!built.ok) {
+      setErrors(built.errors)
+      save.reset()
+      return
+    }
+    setErrors({})
+    save.mutate(built.payload)
+  }
 
   const del = useMutation({
     mutationFn: () => api.delete(`/api/plugins/${encodeURIComponent(id)}`),
@@ -79,7 +88,12 @@ function PluginDetailPage() {
     },
   })
 
-  if (query.isLoading) return <div className="page muted">{t('common.loading')}</div>
+  if (query.isLoading)
+    return (
+      <div className="page">
+        <LoadingState />
+      </div>
+    )
   if (query.error !== null && query.error !== undefined)
     return <div className="page error-box">{describeApiError(query.error)}</div>
 
@@ -101,7 +115,7 @@ function PluginDetailPage() {
             type="button"
             className="btn btn--primary"
             disabled={save.isPending || !loaded}
-            onClick={() => save.mutate()}
+            onClick={submitSave}
             data-testid="plugin-save-button"
           >
             {save.isPending ? t('plugins.saving') : t('plugins.saveButton')}

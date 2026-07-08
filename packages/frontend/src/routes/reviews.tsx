@@ -234,7 +234,11 @@ export function HistoryRows({
     queryFn: ({ signal }) => api.get(`/api/reviews/${nodeRunId}/versions`, undefined, signal),
   })
   if (q.isLoading) {
-    return <div className="muted reviews-version-loading">{t('common.loading')}</div>
+    return (
+      <div className="reviews-version-loading">
+        <LoadingState size="compact" />
+      </div>
+    )
   }
   if (q.error !== null && q.error !== undefined) {
     return (
@@ -305,7 +309,11 @@ export function RoundRows({ nodeRunId }: { nodeRunId: string }) {
     queryFn: ({ signal }) => api.get(`/api/reviews/${nodeRunId}/rounds`, undefined, signal),
   })
   if (q.isLoading) {
-    return <div className="muted reviews-version-loading">{t('common.loading')}</div>
+    return (
+      <div className="reviews-version-loading">
+        <LoadingState size="compact" />
+      </div>
+    )
   }
   if (q.error !== null && q.error !== undefined) {
     return (

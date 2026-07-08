@@ -18,6 +18,7 @@ import type {
 } from '@agent-workflow/shared'
 import type { DocVersion } from '@agent-workflow/shared'
 import { api, type ApiError } from '@/api/client'
+import { LoadingState } from '@/components/LoadingState'
 import { ReviewDecisionInfo } from '@/components/review/ReviewDecisionInfo'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { DiffView, type DiffGranularity } from '@/components/review/DiffView'
@@ -362,7 +363,7 @@ function ReviewDetailPage() {
   // sit above the early returns; tolerant of undefined while loading.
   const deciderLookup = useUserLookup([viewed.decidedBy])
 
-  if (detail.isLoading) return <div className="muted">{t('common.loading')}</div>
+  if (detail.isLoading) return <LoadingState />
   if (detail.error !== null && detail.error !== undefined) {
     const err = detail.error as ApiError
     return <div className="error-box">{err.message}</div>

@@ -152,6 +152,7 @@ node_runs.merge_state（RFC-130：NULL/isolating/pending-merge/merged/conflict-h
 ### 5.3 五资源页骨架 ×5 与「新建 vs 编辑」三种矛盾 idiom（前端资源域）
 
 - 列表页同构骨架 **5 份完整拷贝**（agents/skills/mcps/plugins/workflows 路由）：`visibility==='private'` chip、owner 徽标、`useUserLookup`、Loading/Error/Empty 三连、del mutation——RFC-099 后端统一了模型、`AclDialogButton` 统一了管理入口，唯独列表展示层没统一。→ `<ResourceNameCell>` + `useResourceList()`；顺带裁决 `ResourceList.tsx` 死组件（复活成真 DataTable 或删除）。
+  **更正（RFC-151）**：`ResourceList.tsx` 已删除（§8 决策④落地），「去留」裁决作废；`.data-table` 为事实标准与抽取基线。
 - 新建/编辑双模式三种 idiom 并存：`nameLocked` 布尔 prop（agents/mcps/plugins，调用点全传字面量）、组件级整体 fork（memory 双 Dialog ~120 行逐字重复）、单组件 mode 字符串 7 处分支（`settings.tsx:863-1080` OidcProviderDialog，含「测试连接」按 mode 既隐藏按钮又 throw 的双重编码）。→ 钦定一个 idiom：共享 fields + `useResourceFormPage({load, buildCreate, buildUpdate})`；OIDC 差异收敛为 submit 策略对象。
 - detail 页 `loaded` hydrate-once 布尔 ×4 份（手工模拟 seed-once 状态机，MemoryEditDialog 已衍生第 5 变体并自带 stale-race 长注释）→ `useDraftFromQuery()`。
 - Picker 四份 ~75 行逐字复制（SkillsPicker/McpsPicker/PluginsPicker/AgentDependsPicker，dedup-audit §list-multiselect-picker 已登记）→ `ResourcePicker<T>` 配置化。

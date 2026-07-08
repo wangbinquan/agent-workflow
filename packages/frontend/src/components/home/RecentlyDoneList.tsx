@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { isTerminalTaskStatus } from '@agent-workflow/shared'
 import type { TaskSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { LoadingState } from '@/components/LoadingState'
 import { TASKS_HOMEPAGE_QUERY_KEY } from './RunningTaskList'
 import { TaskRow } from './task-row'
 
@@ -47,7 +48,7 @@ export function RecentlyDoneList({ onCount }: RecentlyDoneListProps) {
   }, [recent.length, onCount])
 
   if (tasks.isLoading) {
-    return <div className="muted homepage-section__loading">{t('common.loading')}</div>
+    return <LoadingState size="compact" />
   }
   if (tasks.error !== null && tasks.error !== undefined) {
     return (

@@ -10,9 +10,11 @@ import { AclDialogButton } from '@/components/AclPanel'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { Field, TextInput } from '@/components/Form'
 import { FuseDialog } from '@/components/fusion/FuseDialog'
+import { LoadingState } from '@/components/LoadingState'
 import { MarkdownEditor } from '@/components/MarkdownEditor'
 import { SkillFileTree } from '@/components/SkillFileTree'
 import { SkillVersionHistory } from '@/components/skill/SkillVersionHistory'
+import { skillCapabilities } from '@/lib/skill-capabilities'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -50,7 +52,11 @@ function SkillDetailPage() {
     }
   }, [loaded, meta.data, content.data])
 
-  const isManaged = meta.data?.sourceKind === 'managed'
+  // RFC-151 PR-1 — read named capability bits instead of re-deriving
+  // `sourceKind === 'managed'` at every consumption site. While the query is
+  // still loading the page renders the (all-false) external capability set;
+  // the early returns below keep that state invisible.
+  const caps = skillCapabilities(meta.data?.sourceKind ?? 'external')
 
   const saveMeta = useMutation({
     mutationFn: () => api.put<Skill>(`/api/skills/${encodeURIComponent(name)}`, { description }),
@@ -78,7 +84,11 @@ function SkillDetailPage() {
   })
 
   if (meta.isLoading || content.isLoading)
-    return <div className="page muted">{t('common.loading')}</div>
+    return (
+      <div className="page">
+        <LoadingState />
+      </div>
+    )
   if (meta.error !== null && meta.error !== undefined)
     return <div className="page error-box">{describeError(meta.error)}</div>
   if (content.error !== null && content.error !== undefined)
@@ -98,7 +108,7 @@ function SkillDetailPage() {
           </p>
         </div>
         <div className="page__actions">
-          {isManaged && (
+          {caps.canFuse && (
             <button type="button" className="btn" onClick={() => setFuseOpen(true)}>
               {t('fusion.launchFromSkillButton')}
             </button>
@@ -113,7 +123,7 @@ function SkillDetailPage() {
             disabled={saveMeta.isPending || saveContent.isPending || !loaded}
             onClick={() => {
               saveMeta.mutate()
-              if (isManaged) saveContent.mutate()
+              if (caps.canEditContent) saveContent.mutate()
             }}
           >
             {saveMeta.isPending || saveContent.isPending ? t('common.saving') : t('common.save')}
@@ -141,7 +151,7 @@ function SkillDetailPage() {
       <section className="form-grid">
         <Field
           label={t('skills.fieldDescription')}
-          hint={isManaged ? t('skills.descHintManaged') : t('skills.descHintExternal')}
+          hint={caps.showManagedHint ? t('skills.descHintManaged') : t('skills.descHintExternal')}
         >
           <TextInput value={description} onChange={setDescription} />
         </Field>
@@ -149,7 +159,7 @@ function SkillDetailPage() {
 
       <section className="page__section">
         <h2>{t('skills.bodySection')}</h2>
-        {isManaged ? (
+        {caps.canEditContent ? (
           <MarkdownEditor value={bodyMd} onChange={setBodyMd} rows={16} />
         ) : (
           <pre className="readonly-pre">{bodyMd || t('skills.emptyBody')}</pre>
@@ -158,14 +168,18 @@ function SkillDetailPage() {
 
       <section className="page__section">
         <h2>{t('skills.filesSection')}</h2>
-        <SkillFileTree skillName={name} readonly={!isManaged} />
+        <SkillFileTree skillName={name} readonly={!caps.canBrowseFilesWritable} />
       </section>
 
-      {isManaged && (
+      {caps.showVersionHistory && (
         <SkillVersionHistory skillName={name} currentVersion={meta.data.contentVersion} />
       )}
 
-      <FuseDialog open={fuseOpen} onClose={() => setFuseOpen(false)} lockedSkillName={name} />
+      <FuseDialog
+        open={fuseOpen}
+        onClose={() => setFuseOpen(false)}
+        entry={{ kind: 'from-skill', skillName: name }}
+      />
     </div>
   )
 }

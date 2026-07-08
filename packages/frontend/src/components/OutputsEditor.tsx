@@ -4,10 +4,14 @@
 // design.md §line 120; RFC-080 PR-B swaps the bespoke 3-option native dropdown
 // for the shared KindSelect so the full kind grammar (path / list / signal) is
 // selectable and the option set derives from the OUTPUT_KIND_UI catalog.
+// RFC-151 PR-1 — the add-input's commit logic (Enter/comma commit, Backspace
+// delete-last, dedup, pattern validate) no longer forks ChipsInput's: it is
+// the shared `useChipsCommit` hook. Rendering (per-port rows + KindSelect)
+// stays bespoke — this editor is NOT a plain chips list.
 
-import { useState, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DEFAULT_OUTPUT_KIND, type AgentOutputKindsMap } from '@agent-workflow/shared'
+import { useChipsCommit } from './ChipsInput'
 import { KindSelect } from './KindSelect'
 
 const PORT_NAME_RE = /^[a-z][a-z0-9_]*$/
@@ -25,34 +29,7 @@ function compact(map: AgentOutputKindsMap): AgentOutputKindsMap | undefined {
 
 export function OutputsEditor({ outputs, outputKinds, onChange, placeholder }: OutputsEditorProps) {
   const { t } = useTranslation()
-  const [pending, setPending] = useState('')
-  const [error, setError] = useState<string | null>(null)
   const kinds: AgentOutputKindsMap = outputKinds ?? {}
-
-  function commit(raw: string) {
-    const token = raw.trim()
-    if (token === '') return
-    if (outputs.includes(token)) {
-      setError(t('common.duplicateError', { token }))
-      return
-    }
-    if (!PORT_NAME_RE.test(token)) {
-      setError(t('agentForm.outputsValidate'))
-      return
-    }
-    onChange([...outputs, token], outputKinds)
-    setPending('')
-    setError(null)
-  }
-
-  function handleKey(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault()
-      commit(pending)
-    } else if (e.key === 'Backspace' && pending === '' && outputs.length > 0) {
-      removeAt(outputs.length - 1)
-    }
-  }
 
   function removeAt(idx: number) {
     const name = outputs[idx]
@@ -64,6 +41,15 @@ export function OutputsEditor({ outputs, outputKinds, onChange, placeholder }: O
       onChange(nextOutputs, outputKinds)
     }
   }
+
+  const chips = useChipsCommit({
+    values: outputs,
+    validate: (token) => (PORT_NAME_RE.test(token) ? null : t('agentForm.outputsValidate')),
+    // Adding a port never touches outputKinds (new ports default to string).
+    onCommit: (token) => onChange([...outputs, token], outputKinds),
+    // Backspace on empty input removes the last port AND its kind entry.
+    onRemoveLast: () => removeAt(outputs.length - 1),
+  })
 
   function setKind(name: string, kind: string) {
     if (kind === DEFAULT_OUTPUT_KIND) {
@@ -105,16 +91,13 @@ export function OutputsEditor({ outputs, outputKinds, onChange, placeholder }: O
       )}
       <input
         className="form-input outputs-editor__add"
-        value={pending}
-        onChange={(e) => {
-          setPending(e.target.value)
-          setError(null)
-        }}
-        onKeyDown={handleKey}
-        onBlur={() => commit(pending)}
+        value={chips.pending}
+        onChange={(e) => chips.setPendingValue(e.target.value)}
+        onKeyDown={chips.handleKeyDown}
+        onBlur={chips.handleBlur}
         placeholder={placeholder}
       />
-      {error !== null && <div className="chips-input__error">{error}</div>}
+      {chips.error !== null && <div className="chips-input__error">{chips.error}</div>}
     </div>
   )
 }

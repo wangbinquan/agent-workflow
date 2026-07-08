@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 import type { ClarifyRoundSummary, ReviewSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
+import { LoadingState } from '@/components/LoadingState'
 import {
   INBOX_PREVIEW_LIMIT,
   formatRelativeTime,
@@ -55,7 +56,7 @@ export function InboxPreviewList({ onCount }: InboxPreviewListProps) {
   const isLoading = reviews.isLoading || clarify.isLoading
   const bothErrored = reviews.error !== null && clarify.error !== null
   if (isLoading && items.length === 0) {
-    return <div className="muted homepage-section__loading">{t('common.loading')}</div>
+    return <LoadingState size="compact" />
   }
   if (bothErrored) {
     return (

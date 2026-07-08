@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next'
 import type { Memory } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
+import { LoadingState } from '@/components/LoadingState'
 
 interface MemoryDetailResponse {
   memory: Memory
@@ -53,7 +54,7 @@ export function MemoryConflictCompareDialog(props: MemoryConflictCompareDialogPr
         <section className="memory-compare__col" data-testid="memory-compare-existing">
           <h3 className="memory-compare__col-title">{t('memory.conflictDialog.existing')}</h3>
           {existing.isLoading ? (
-            <div className="muted">{t('common.loading')}</div>
+            <LoadingState size="compact" />
           ) : existing.error !== null && existing.error !== undefined ? (
             <div className="error-box">{String(existing.error)}</div>
           ) : existing.data !== undefined ? (

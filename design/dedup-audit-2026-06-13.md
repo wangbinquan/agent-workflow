@@ -104,6 +104,7 @@
 ### 4.7 前端 · 页面骨架 & 公共组件复用（直接对应 `CLAUDE.md` 前台统一风格条款）
 
 - **`resource-list-page-scaffold`**（人工补验）——`components/ResourceList.tsx` 是 `P-1-17` 占位实现、**全仓无人 import**；10 个 list 路由各手写 `page__header + loading(muted) + error-box + empty + 列表`。→ 要么把 `ResourceList` 补成真正的 DataTable+状态壳并全量采用，要么删掉它，二选一别留孤儿。
+  **更正（RFC-151）**：`ResourceList.tsx` 已删除（flag-audit §8 决策④落地），「去留」裁决作废；`.data-table`（11 路由）即事实标准与抽取基线。
 - **`resource-create-page-scaffold`** / **`resource-detail-edit-scaffold`**（7 站, M）——4 个 detail 页 header action cluster（`AclDialogButton + Save + ConfirmButton 删除`）结构一致 → 抽 `DetailHeaderActions.tsx`（注意 skills 是双 query/双 mutation，别强塞进一个 hook）。
 - **`inline-muted-loading-bypasses-loadingstate`**（人工补验，26 处 inline `common.loading`）——绕过 `LoadingState`（19 处已用）→ 收敛。
 - **`segmented-vs-chip-radio`**（6 站, M）——`McpFields.tsx` 用了**原生 radio / 自写 chip-row**，**违反 `CLAUDE.md` 前台统一风格**（应走 `.segmented` / `Select`）→ 必须改。

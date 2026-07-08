@@ -6,11 +6,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Mcp } from '@agent-workflow/shared'
+import type { CreateMcp, Mcp } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { AclDialogButton } from '@/components/AclPanel'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { describeApiError } from '@/i18n'
+import { LoadingState } from '@/components/LoadingState'
 import { McpFields } from '@/components/McpFields'
 import { McpInventoryPanel } from '@/components/mcps/McpInventoryPanel'
 import { buildCreatePayload, EMPTY_LOCAL_FORM, mcpToForm, type McpFormState } from '@/lib/mcp-form'
@@ -44,15 +45,9 @@ function McpDetailPage() {
   }, [loaded, query.data])
 
   const save = useMutation({
-    mutationFn: async (): Promise<Mcp> => {
-      const built = buildCreatePayload(form)
-      if (!built.ok) {
-        setErrors(built.errors)
-        throw new Error('form-invalid')
-      }
-      setErrors({})
+    mutationFn: (payload: CreateMcp): Promise<Mcp> => {
       // Strip `name` — PUT cannot change it; rename has its own endpoint.
-      const { name: _drop, ...patch } = built.payload
+      const { name: _drop, ...patch } = payload
       return api.put<Mcp>(`/api/mcps/${encodeURIComponent(name)}`, patch)
     },
     onSuccess: (m) => {
@@ -62,6 +57,20 @@ function McpDetailPage() {
     },
   })
 
+  // RFC-151 PR-1 — validate before mutate; an invalid form sets inline field
+  // errors only (previously a thrown validation sentinel leaked into the
+  // form-actions banner as a raw untranslated string).
+  function submitSave() {
+    const built = buildCreatePayload(form)
+    if (!built.ok) {
+      setErrors(built.errors)
+      save.reset()
+      return
+    }
+    setErrors({})
+    save.mutate(built.payload)
+  }
+
   const del = useMutation({
     mutationFn: () => api.delete(`/api/mcps/${encodeURIComponent(name)}`),
     onSuccess: () => {
@@ -70,7 +79,12 @@ function McpDetailPage() {
     },
   })
 
-  if (query.isLoading) return <div className="page muted">{t('common.loading')}</div>
+  if (query.isLoading)
+    return (
+      <div className="page">
+        <LoadingState />
+      </div>
+    )
   if (query.error !== null && query.error !== undefined)
     return <div className="page error-box">{describeApiError(query.error)}</div>
 
@@ -90,7 +104,7 @@ function McpDetailPage() {
             type="button"
             className="btn btn--primary"
             disabled={save.isPending || !loaded}
-            onClick={() => save.mutate()}
+            onClick={submitSave}
             data-testid="mcp-save-button"
           >
             {save.isPending ? t('common.saving') : t('common.save')}

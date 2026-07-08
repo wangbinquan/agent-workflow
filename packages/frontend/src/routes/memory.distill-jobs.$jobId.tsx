@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next'
 import type { MemoryDistillJobDetail, MemoryDistillSessionView } from '@agent-workflow/shared'
 import { api, type ApiError } from '@/api/client'
 import { DetailLayout } from '@/components/DetailLayout'
+import { LoadingState } from '@/components/LoadingState'
 import { usePermission } from '@/hooks/useActor'
 import { useMemoryDistillJobWs } from '@/hooks/useMemoryDistillJobWs'
 import { describeApiError } from '@/i18n'
@@ -74,7 +75,7 @@ function DistillJobDetailPage() {
   if (detailQ.isLoading) {
     return (
       <div className="page page--memory page--distill-job-detail">
-        <div className="muted">{t('common.loading')}</div>
+        <LoadingState />
       </div>
     )
   }

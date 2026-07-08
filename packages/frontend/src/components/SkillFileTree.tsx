@@ -12,6 +12,7 @@ import { api } from '@/api/client'
 import { describeApiError } from '@/i18n'
 import { ConfirmButton } from './ConfirmButton'
 import { TextArea, TextInput } from './Form'
+import { LoadingState } from './LoadingState'
 
 interface Props {
   skillName: string
@@ -121,7 +122,7 @@ export function SkillFileTree({ skillName, readonly = false }: Props) {
     <div className="file-tree">
       <div className="file-tree__sidebar">
         <div className="file-tree__header">{t('skills.fileTreeHeader')}</div>
-        {tree.isLoading && <div className="muted">{t('common.loading')}</div>}
+        {tree.isLoading && <LoadingState size="compact" />}
         {tree.error !== null && tree.error !== undefined && (
           <div className="error-box">{describeApiError(tree.error)}</div>
         )}

@@ -32,6 +32,7 @@ import type {
 import { CLARIFY_QUESTION_SCOPE_DEFAULT } from '@agent-workflow/shared'
 import { api, type ApiError } from '@/api/client'
 import { AttributionChip } from '@/components/AttributionChip'
+import { LoadingState } from '@/components/LoadingState'
 import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
 import { QuestionForm, type QuestionFormHandle } from '@/components/clarify/QuestionForm'
@@ -657,7 +658,11 @@ export function ClarifyDetailPage() {
   // ----------------------------------------------------------------------
 
   if (session.isLoading) {
-    return <div className="page muted">{t('common.loading')}</div>
+    return (
+      <div className="page">
+        <LoadingState />
+      </div>
+    )
   }
   if (session.error !== null && session.error !== undefined) {
     return <div className="page error-box">{(session.error as Error).message}</div>

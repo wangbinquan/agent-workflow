@@ -6,7 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Mcp } from '@agent-workflow/shared'
+import type { CreateMcp, Mcp } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { McpFields } from '@/components/McpFields'
 import { describeApiError } from '@/i18n'
@@ -27,22 +27,27 @@ function McpCreatePage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const create = useMutation({
-    mutationFn: async (): Promise<Mcp> => {
-      const built = buildCreatePayload(form)
-      if (!built.ok) {
-        setErrors(built.errors)
-        // Internal validation sentinel: surfaced as inline field errors via
-        // setErrors, never shown in the form-actions error banner.
-        throw new Error('form-invalid')
-      }
-      setErrors({})
-      return api.post<Mcp>('/api/mcps', built.payload)
-    },
+    mutationFn: (payload: CreateMcp): Promise<Mcp> => api.post<Mcp>('/api/mcps', payload),
     onSuccess: (m) => {
       void qc.invalidateQueries({ queryKey: ['mcps'] })
       navigate({ to: '/mcps/$name', params: { name: m.name } })
     },
   })
+
+  // RFC-151 PR-1 — validation happens BEFORE mutate: buildCreatePayload
+  // returns a discriminated union, and an invalid form only sets inline field
+  // errors. The mutation never sees a sentinel error, so the form-actions
+  // banner is reserved for real API failures.
+  function submit() {
+    const built = buildCreatePayload(form)
+    if (!built.ok) {
+      setErrors(built.errors)
+      create.reset()
+      return
+    }
+    setErrors({})
+    create.mutate(built.payload)
+  }
 
   return (
     <div className="page">
@@ -58,16 +63,14 @@ function McpCreatePage() {
           type="button"
           className="btn btn--primary"
           disabled={create.isPending || form.name === ''}
-          onClick={() => create.mutate()}
+          onClick={submit}
           data-testid="mcp-save-button"
         >
           {create.isPending ? t('common.creating') : t('mcps.createButton')}
         </button>
-        {create.error !== null &&
-          create.error !== undefined &&
-          !(create.error instanceof Error && create.error.message === 'form-invalid') && (
-            <span className="form-actions__error">{describeApiError(create.error)}</span>
-          )}
+        {create.error !== null && create.error !== undefined && (
+          <span className="form-actions__error">{describeApiError(create.error)}</span>
+        )}
       </div>
     </div>
   )

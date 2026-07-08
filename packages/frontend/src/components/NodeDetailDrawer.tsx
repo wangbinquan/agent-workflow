@@ -15,6 +15,7 @@ import type { NodeRun, NodeRunEventsResponse, NodeRunOutput, Task } from '@agent
 import { NODE_EVENT_KIND } from '@agent-workflow/shared'
 import { useNavigate } from '@tanstack/react-router'
 import { NodeDependencyTreeSection } from './agents/NodeDependencyTreeSection'
+import { LoadingState } from './LoadingState'
 import { SessionTab } from './node-session/SessionTab'
 import { StatusChip } from './StatusChip'
 import { TabBar, type TabDef } from './TabBar'
@@ -434,7 +435,7 @@ function EventsTab({ taskId, nodeRunId }: { taskId: string; nodeRunId: string })
           </button>
         ))}
       </div>
-      {query.isLoading && <div className="muted">{t('common.loading')}</div>}
+      {query.isLoading && <LoadingState size="compact" />}
       {query.error !== null && query.error !== undefined && (
         <div className="error-box">{describeError(query.error)}</div>
       )}

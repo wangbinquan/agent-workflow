@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next'
 import type { Skill, SkillSkipReport, SkillSourceWithStats } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { ConfirmButton } from '@/components/ConfirmButton'
+import { LoadingState } from '@/components/LoadingState'
 import { useActor } from '@/hooks/useActor'
 
 interface SourcesResponse {
@@ -102,7 +103,7 @@ export function SkillSourcesCard() {
   return (
     <section className="skill-sources" aria-label={t('skills.sourcesTitle')}>
       <h2 className="skill-sources__title">{t('skills.sourcesTitle')}</h2>
-      {isLoading && <div className="muted">{t('common.loading')}</div>}
+      {isLoading && <LoadingState size="compact" />}
       {error !== null && error !== undefined && (
         <div className="form-actions__error">{describeError(error, t)}</div>
       )}

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 import type { MemoryDistillSessionAttempt, MemoryDistillSessionView } from '@agent-workflow/shared'
 import { ConversationFlow } from '@/components/node-session/ConversationFlow'
 import { EmptyState } from '@/components/EmptyState'
+import { LoadingState } from '@/components/LoadingState'
 import { selectAttempts } from '@/lib/distill-job-detail'
 
 interface Props {
@@ -18,7 +19,7 @@ interface Props {
 
 export function ConversationSection({ sessionData, loading, error }: Props) {
   const { t } = useTranslation()
-  if (loading) return <div className="muted">{t('common.loading')}</div>
+  if (loading) return <LoadingState size="compact" />
   if (error !== null) return error
   const attempts = selectAttempts(sessionData?.attempts ?? [])
   if (attempts.length === 0) {

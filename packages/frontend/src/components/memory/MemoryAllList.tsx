@@ -149,7 +149,7 @@ export function MemoryAllList({ isAdmin }: MemoryAllListProps) {
       <FuseDialog
         open={fuseOpen}
         onClose={() => setFuseOpen(false)}
-        presetMemoryIds={Array.from(selected)}
+        entry={{ kind: 'from-memories', memoryIds: Array.from(selected) }}
       />
 
       {editingId !== null && editingMemory.data?.memory !== undefined && (
