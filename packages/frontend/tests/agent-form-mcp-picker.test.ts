@@ -28,9 +28,15 @@ describe('RFC-028 T10 — AgentForm MCP picker', () => {
   })
 
   test('McpsPicker.tsx uses the /api/mcps endpoint via TanStack query', () => {
+    // RFC-151 PR-2: the query itself moved into the shared <ResourcePicker>;
+    // the wrapper pins the cache key + endpoint config. Same intent as the
+    // original lock — saves must keep reading real /api/mcps rows.
     const src = read('components/McpsPicker.tsx')
-    expect(src).toContain('queryKey: MCPS_QUERY_KEY')
-    expect(src).toContain("api.get('/api/mcps'")
+    expect(src).toContain('queryKey={MCPS_QUERY_KEY}')
+    expect(src).toContain('endpoint="/api/mcps"')
+    const shared = read('components/ResourcePicker.tsx')
+    expect(shared).toContain('useQuery')
+    expect(shared).toContain('api.get(props.endpoint')
   })
 })
 

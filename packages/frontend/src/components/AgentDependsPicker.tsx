@@ -2,14 +2,12 @@
 // SkillsPicker. Lets the form author pick the closure members from
 // /api/agents instead of typing names; self-name is filtered out because
 // the save-time guard refuses self-references.
+//
+// RFC-151 PR-2: thin config shell over the shared <ResourcePicker>.
 
-import { useQuery } from '@tanstack/react-query'
-import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Agent } from '@agent-workflow/shared'
-import { api } from '@/api/client'
-import { ChipsInput } from './ChipsInput'
-import { Select } from './Select'
+import { ResourcePicker } from './ResourcePicker'
 
 export const AGENTS_QUERY_KEY = ['agents'] as const
 
@@ -24,54 +22,21 @@ interface Props {
 
 export function AgentDependsPicker({ value, onChange, selfName, placeholder }: Props) {
   const { t } = useTranslation()
-  const list = useQuery<Agent[]>({
-    queryKey: AGENTS_QUERY_KEY,
-    queryFn: ({ signal }) => api.get('/api/agents', undefined, signal),
-    staleTime: 30_000,
-    retry: false,
-  })
-
-  const available = useMemo(() => {
-    const existing = new Set(value)
-    return (list.data ?? []).filter((a) => !existing.has(a.name) && a.name !== selfName)
-  }, [list.data, value, selfName])
-
-  const failed = list.error !== null && list.error !== undefined
-
-  // One-shot "add to list" dropdown: value stays "" so the trigger always
-  // shows the picker label; picking a row appends it to the chips.
-  const pickerLabel = list.isLoading
-    ? t('agentForm.dependsPickerLoading')
-    : available.length === 0
-      ? t('agentForm.dependsPickerEmpty')
-      : t('agentForm.dependsPickerLabel')
-
   return (
-    <div>
-      {!failed && (
-        <div style={{ marginBottom: 6 }}>
-          <Select<string>
-            value=""
-            placeholder={pickerLabel}
-            ariaLabel={pickerLabel}
-            disabled={list.isLoading || available.length === 0}
-            options={available.map((a) => ({
-              value: a.name,
-              label: a.description ? `${a.name} — ${a.description}` : a.name,
-            }))}
-            onChange={(name) => {
-              if (name === '' || value.includes(name)) return
-              onChange([...value, name])
-            }}
-          />
-        </div>
-      )}
-      <ChipsInput value={value} onChange={onChange} placeholder={placeholder} />
-      {failed && (
-        <p style={{ marginTop: 4, marginBottom: 0, fontSize: 12 }} className="muted">
-          {t('agentForm.dependsPickerLoadFailed')}
-        </p>
-      )}
-    </div>
+    <ResourcePicker<Agent>
+      value={value}
+      onChange={onChange}
+      queryKey={AGENTS_QUERY_KEY}
+      endpoint="/api/agents"
+      filter={(a, existing) => !existing.has(a.name) && a.name !== selfName}
+      labelFn={(a) => (a.description ? `${a.name} — ${a.description}` : a.name)}
+      placeholder={placeholder}
+      labels={{
+        loading: t('agentForm.dependsPickerLoading'),
+        empty: t('agentForm.dependsPickerEmpty'),
+        pick: t('agentForm.dependsPickerLabel'),
+        loadFailed: t('agentForm.dependsPickerLoadFailed'),
+      }}
+    />
   )
 }
