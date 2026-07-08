@@ -142,11 +142,17 @@ describe('RFC-023 prompt.ts source-code-text grep guard', () => {
   // These are stable, externally visible token names per the RFC. Renaming any
   // of them silently is a contract break (frontend / backend / agent prompts
   // all reference the same strings). The guard makes any rename loud.
-  // RFC-148: the questions/answers tokens are deleted with the legacy
-  // round-grouped path — the guard now locks BOTH directions: the two live
-  // tokens stay, the two dead ones must never reappear.
+  // RFC-148: the questions/answers tokens are retired with the legacy
+  // round-grouped path. The impl-gate compat fix reintroduced their NAMES
+  // into prompt.ts as the DEPRECATED_PROMPT_TOKENS set (saved templates keep
+  // launching with a warning), so a file-level "never mentions" lock is the
+  // wrong shape — the real contract is table membership: live tokens in
+  // BUILTIN_VARS, retired names ONLY in the deprecated set (locked in
+  // rfc103-validator-builtin-vars.test.ts). Here we keep the live-token
+  // anchors plus a substitution-case lock: the retired tokens must never
+  // regrow a dedicated substitution case (their rendering is the default
+  // empty-string branch).
   const required = ['__clarify_iteration__', '__clarify_remaining__']
-  const banned = ['__clarify_questions__', '__clarify_answers__']
   const src = readFileSync(PROMPT_TS_PATH, 'utf8')
 
   for (const token of required) {
@@ -154,11 +160,10 @@ describe('RFC-023 prompt.ts source-code-text grep guard', () => {
       expect(src).toContain(token)
     })
   }
-  for (const token of banned) {
-    test(`prompt.ts no longer mentions ${token}`, () => {
-      expect(src).not.toContain(token)
-    })
-  }
+  test('retired tokens have no dedicated substitution case', () => {
+    expect(src).not.toMatch(/case '__clarify_questions__'/)
+    expect(src).not.toMatch(/case '__clarify_answers__'/)
+  })
 })
 
 // RFC-039 — strong ask-back bias when a clarify channel is wired. The user's
