@@ -75,7 +75,7 @@ import {
   loadInjectedSnapshotFromFirstAttempt,
   type ScopeBudget,
 } from './memoryInject'
-import type { InjectedMemorySnapshot } from '@agent-workflow/shared'
+import type { FailureCode, InjectedMemorySnapshot } from '@agent-workflow/shared'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
 // RFC-143 PR-4: SkillSource / ResolvedSkill moved to runtime/types.ts (drivers
@@ -419,6 +419,13 @@ export interface RunResult {
     total: number
   }
   errorMessage?: string
+  /**
+   * RFC-145: machine-readable failure taxonomy (shared FAILURE_CODES),
+   * declared HERE at the stamp point that also writes errorMessage — the
+   * scheduler's decideEnvelopeFollowup consumes the persisted column instead
+   * of parsing errorMessage prefixes. Absent = no machine-readable shape.
+   */
+  failureCode?: FailureCode
   /** The exact user prompt sent to opencode (also written to node_runs.promptText). */
   prompt: string
   /** opencode sessionID first seen in stdout events, if any. */
@@ -1132,6 +1139,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // 8. Resolve final status.
   let status: RunFinalStatus
   let errorMessage: string | undefined
+  // RFC-145: set in lock-step with every machine-relevant errorMessage stamp
+  // below; persisted alongside it in the runner-exit extra.
+  let failureCode: FailureCode | undefined
   // RFC-049: structured port-validation failures captured eagerly after
   // parseEnvelope (see section below). Persisted to
   // node_runs.port_validation_failures_json so the scheduler can route the
@@ -1181,6 +1191,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     const clarifyActive = opts.hasClarifyChannel === true
     if (clarifyActive && kind !== 'clarify') {
       status = 'failed'
+      failureCode = 'clarify-required'
       errorMessage =
         kind === 'output'
           ? `${CLARIFY_REQUIRED_PREFIX}-output-emitted: node is in mandatory ask-back mode; emit <workflow-clarify>, not <workflow-output>`
@@ -1198,9 +1209,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // renderer coerces the reason to 'envelope-missing' while hasClarify=false). Hard
       // fails after retries (the stop is enforced; the agent must produce output).
       status = 'failed'
+      failureCode = 'clarify-forbidden'
       errorMessage = `${CLARIFY_FORBIDDEN_PREFIX}: node is in STOP CLARIFYING mode; emit <workflow-output>, not <workflow-clarify>`
     } else if (kind === 'both') {
       status = 'failed'
+      failureCode = 'clarify-and-output-both'
       errorMessage =
         'clarify-and-output-both-present: agent reply contained BOTH <workflow-output> and <workflow-clarify>; the framework requires exactly one'
     } else if (kind === 'clarify') {
@@ -1212,6 +1225,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       if (parsed === null || parsed.body === null) {
         const firstErr = parsed?.errors[0]
         status = 'failed'
+        // RFC-145 D8: only the clarify-questions-* validator-code family is a
+        // follow-up-able failure (matches the old router's startsWith); other
+        // codes (clarify-options-* …) stay unstructured — no follow-up.
+        if (firstErr === undefined || firstErr.code.startsWith('clarify-questions-')) {
+          failureCode = 'clarify-questions-malformed'
+        }
         errorMessage =
           firstErr !== undefined
             ? `${firstErr.code}: ${firstErr.detail}`
@@ -1233,6 +1252,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       }
     } else if (kind === 'none') {
       status = 'failed'
+      failureCode = 'envelope-missing'
       errorMessage = 'no <workflow-output> envelope found in stdout'
     } else {
       // kind === 'output' — legacy happy path.
@@ -1241,6 +1261,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // guard defensively for type narrowing.
       if (envelope === null) {
         status = 'failed'
+        failureCode = 'envelope-missing'
         errorMessage = 'no <workflow-output> envelope found in stdout'
       } else {
         const parsed = parseEnvelope(envelope, opts.agent.outputs)
@@ -1277,6 +1298,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             nodeRunId: opts.nodeRunId,
           })
           status = 'failed'
+          failureCode = 'envelope-port-malformed'
           errorMessage = `${ENVELOPE_PORT_MALFORMED_PREFIX}: agent opened <port name="..."> tag(s) without a parseable </port> close (corrupted or truncated close tag): ${parsed.malformedPorts.join(', ')}`
         }
 
@@ -1313,6 +1335,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
               if (err instanceof PortValidationError) {
                 portValidationFailures.push(err.failure)
                 status = 'failed'
+                failureCode = 'port-validation-failed'
                 errorMessage = err.message
                 break
               }
@@ -1429,6 +1452,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       finishedAt: Date.now(),
       exitCode: exitCode ?? null,
       errorMessage: errorMessage ?? null,
+      failureCode: failureCode ?? null,
       tokInput: tokenUsage.input,
       tokOutput: tokenUsage.output,
       tokCacheCreate: tokenUsage.cacheCreate,
@@ -1465,6 +1489,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
 
   const result: RunResult = { status, exitCode, outputs, tokenUsage, prompt }
   if (errorMessage !== undefined) result.errorMessage = errorMessage
+  if (failureCode !== undefined) result.failureCode = failureCode
   if (sessionId !== undefined) result.sessionId = sessionId
   if (clarifyResult !== undefined) result.clarify = clarifyResult
   return result

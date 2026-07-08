@@ -49,6 +49,12 @@ export type NodeRunStatusUpdateExtra = Partial<
     | 'finishedAt'
     | 'startedAt'
     | 'errorMessage'
+    // RFC-145: the structured failure companions ride the same atomic write as
+    // status + errorMessage (runner-exit stamps failureCode; the review
+    // supersede path stamps supersededByReview/rolledBack).
+    | 'failureCode'
+    | 'supersededByReview'
+    | 'rolledBack'
     | 'exitCode'
     | 'pid'
     | 'reviewIteration'

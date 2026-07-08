@@ -2091,7 +2091,13 @@ export async function submitReviewDecision(
       reason: supersedeMarker,
       extra: {
         finishedAt: latest.finishedAt ?? Date.now(),
+        // RFC-145: errorMessage keeps the human-readable marker string
+        // (breadcrumbs; substring test locks stay green), but the MACHINE
+        // facts land structured — isReviewSupersededRow / clarifyRerunLedger /
+        // the frontend decode read these columns, never the prefix.
         errorMessage: `${supersedeMarker}: Replaced by retry_index ${nextRetryIndex} due to review ${args.decision} of ${dv.reviewNodeId}`,
+        supersededByReview: args.decision === 'iterated' ? 'iterated' : 'rejected',
+        rolledBack,
       },
     })
     await mintNodeRun(args.db, {
