@@ -366,6 +366,9 @@ export const ENDPOINTS: EndpointSpec[] = [
   },
   { method: 'PUT', path: '/api/config' },
 
+  // ---- daemon effective binding (settings:read; Network tab readout) ----
+  { method: 'GET', path: '/api/daemon' },
+
   // ---- plantuml proxy (RFC-105 WP-B; any logged-in user) ----
   // No endpoint configured in the contract harness → 200 { unconfigured: true }.
   {

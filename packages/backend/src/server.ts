@@ -144,6 +144,11 @@ export function createApp(deps: AppDeps): Hono {
   }
   app.use('/api/config', configGate)
   app.use('/api/config/*', configGate)
+  // GET /api/daemon surfaces the same Network-settings readout as /api/config
+  // (daemon bind host/port + pid/startedAt). Gate it with settings:read like
+  // config so a regular user session / narrow PAT can't read daemon internals
+  // through the generic /api/* auth. Read-only route → no write variant.
+  app.use('/api/daemon', requirePermission('settings:read'))
   app.use('/api/backup', requirePermission('backup:run'))
   app.use('/api/backup/*', requirePermission('backup:run'))
 
