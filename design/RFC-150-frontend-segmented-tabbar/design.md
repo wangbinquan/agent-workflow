@@ -24,10 +24,14 @@ interface SegmentedProps<V extends string> {
   ariaLabel: string
   className?: string // 追加命名空间（memory-form__scope-segmented 等）
   testidPrefix?: string // ChipsInput 规程：`${prefix}` 容器 / `${prefix}-${value}` 项
+  rootTestid?: string // 设计门修订：容器显式 testid（优先于 prefix 推导）
   disabled?: boolean
-  /** canvas 场景需要 stopPropagation（ClarifyDirectiveToggle）。 */
+  /** canvas 场景（ClarifyDirectiveToggle）。契约（设计门修订，先锁后迁）：
+   *  同时 stop mouseDown 与 click 冒泡；点击已 active 值不触发 onChange。 */
   stopPointerPropagation?: boolean
 }
+// SegmentedOption 增 testid?/shortcutTestid?——clarify.detail 的
+// `clarify-scope-${id}-${mode}` 与 `...-kbd` 是独立于 prefix 推导的模式。
 ```
 
 - DOM 固化：容器 `.segmented` role=radiogroup aria-label；项 button role=radio
