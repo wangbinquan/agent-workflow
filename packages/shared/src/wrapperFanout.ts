@@ -29,11 +29,17 @@ export interface DerivedWrapperFanoutOutput {
 }
 
 /** Lookup type the helper accepts — either a Map or a plain object. */
-type AgentLookup = ReadonlyMap<string, Agent> | Readonly<Record<string, Agent | undefined>>
+export type AgentLookup = ReadonlyMap<string, Agent> | Readonly<Record<string, Agent | undefined>>
 
-function lookupAgent(table: AgentLookup, name: string): Agent | undefined {
+/** Generic lookup over Map-or-Record tables. Exported (RFC-146) so
+ *  `nodePorts.ts` can share the same lookup contract with its narrower
+ *  structural agent type. */
+export function lookupAgent<T>(
+  table: ReadonlyMap<string, T> | Readonly<Record<string, T | undefined>>,
+  name: string,
+): T | undefined {
   if (table instanceof Map) return table.get(name)
-  return (table as Readonly<Record<string, Agent | undefined>>)[name]
+  return (table as Readonly<Record<string, T | undefined>>)[name]
 }
 
 function readWrapperFanout(

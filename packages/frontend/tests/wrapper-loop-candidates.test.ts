@@ -7,6 +7,13 @@ import { describe, expect, test } from 'vitest'
 import type { WorkflowNode } from '@agent-workflow/shared'
 import { loopMemberCandidates } from '../src/components/canvas/wrapperCandidates'
 
+// RFC-146: loopMemberCandidates 签名改吃 WorkflowDefinition（声明层需要邻居
+// 节点做 review inputKind 解析）；测试用最小定义包一层。
+const defOf = (nodes: WorkflowNode[]) =>
+  ({ $schema_version: 1, inputs: [], nodes, edges: [] }) as unknown as Parameters<
+    typeof loopMemberCandidates
+  >[1]
+
 function loop(id: string, nodeIds: string[]): WorkflowNode {
   return { id, kind: 'wrapper-loop', position: { x: 0, y: 0 }, nodeIds } as unknown as WorkflowNode
 }
@@ -36,7 +43,9 @@ describe('loopMemberCandidates', () => {
   test('agent node candidates carry declared outputs', () => {
     const l = loop('loop1', ['a1'])
     const a = agent('a1', 'fixer')
-    const out = loopMemberCandidates(l, [l, a], [{ name: 'fixer', outputs: ['passed', 'issues'] }])
+    const out = loopMemberCandidates(l, defOf([l, a]), [
+      { name: 'fixer', outputs: ['passed', 'issues'] },
+    ])
     expect(out).toEqual([{ nodeId: 'a1', title: 'fixer', outputPorts: ['passed', 'issues'] }])
   })
 
@@ -46,7 +55,7 @@ describe('loopMemberCandidates', () => {
     // WorkflowCanvas.computePorts 同源（多文档 accepted 场景见新测试文件）。
     const l = loop('loop1', ['r1'])
     const r = review('r1', 'design')
-    const out = loopMemberCandidates(l, [l, r], [])
+    const out = loopMemberCandidates(l, defOf([l, r]), [])
     expect(out).toEqual([
       { nodeId: 'r1', title: 'review:design', outputPorts: ['approved_doc', 'approval_meta'] },
     ])
@@ -57,21 +66,17 @@ describe('loopMemberCandidates', () => {
     const a = agent('a1', 'fixer')
     const inner = gitWrap('inner_git', ['a2'])
     const a2 = agent('a2', 'helper')
-    const out = loopMemberCandidates(
-      l,
-      [l, a, inner, a2],
-      [
-        { name: 'fixer', outputs: ['passed'] },
-        { name: 'helper', outputs: ['done'] },
-      ],
-    )
+    const out = loopMemberCandidates(l, defOf([l, a, inner, a2]), [
+      { name: 'fixer', outputs: ['passed'] },
+      { name: 'helper', outputs: ['done'] },
+    ])
     expect(out.map((c) => c.nodeId)).toEqual(['a1'])
   })
 
   test('agent without declared outputs falls back to [out]', () => {
     const l = loop('loop1', ['a1'])
     const a = agent('a1', 'unknown_agent')
-    const out = loopMemberCandidates(l, [l, a], [])
+    const out = loopMemberCandidates(l, defOf([l, a]), [])
     expect(out).toEqual([{ nodeId: 'a1', title: 'unknown_agent', outputPorts: ['out'] }])
   })
 })

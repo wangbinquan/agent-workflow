@@ -50,6 +50,7 @@ export * from './kindParser'
 export * from './shardingRegistry'
 export * from './signalPromptGuard'
 export * from './wrapperFanout'
+export * from './nodePorts'
 export * from './worktree-files'
 // RFC-079 — review multi-document mode pure helpers.
 export * from './reviewMultiDoc'

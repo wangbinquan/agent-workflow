@@ -23,25 +23,27 @@ import { describe, expect, test } from 'vitest'
 
 const REPO = resolve(import.meta.dirname, '..', '..', '..')
 
+// RFC-146 T3: the wrapper-fanout branch is its own component file now — the
+// whole file IS the block (no more case-label slicing inside the switch).
 const inspectorSrc = readFileSync(
-  resolve(REPO, 'packages/frontend/src/components/canvas/NodeInspector.tsx'),
+  resolve(REPO, 'packages/frontend/src/components/canvas/inspector/WrapperFanoutEdit.tsx'),
   'utf-8',
 )
 
-// Slice the wrapper-fanout case from NodeInspector for tighter assertions.
 function wrapperFanoutBlock(): string {
-  const start = inspectorSrc.indexOf("case 'wrapper-fanout':")
-  const end = inspectorSrc.indexOf("case 'review':", start)
-  expect(start).toBeGreaterThan(-1)
-  expect(end).toBeGreaterThan(start)
-  return inspectorSrc.slice(start, end)
+  return inspectorSrc
 }
 
 describe('RFC-060 F.T1 — wrapper-fanout inspector reuses public form primitives', () => {
   const block = wrapperFanoutBlock()
 
-  test('wrapper-fanout branch exists in NodeInspector', () => {
+  test('wrapper-fanout Edit component exists and is registered', () => {
     expect(block.length).toBeGreaterThan(100)
+    const registry = readFileSync(
+      resolve(REPO, 'packages/frontend/src/components/canvas/NodeInspector.tsx'),
+      'utf-8',
+    )
+    expect(registry).toMatch(/'wrapper-fanout':\s*WrapperFanoutEdit/)
   })
 
   test('uses Field wrapper for every editable group (no naked DOM input)', () => {

@@ -193,13 +193,22 @@ describe('RFC-056 palette catalog', () => {
 })
 
 describe('RFC-056 source-text grep guards (T9)', () => {
-  test('NodeInspector.tsx references cross-clarify-inspector + session-mode-* testids', () => {
-    const src = readFileSync(NODE_INSPECTOR_TSX, 'utf-8')
+  test('CrossClarifyEdit references cross-clarify-inspector + session-mode-* testids', () => {
+    // RFC-146 T3: the cross-clarify branch moved from the NodeInspector
+    // switch to inspector/CrossClarifyEdit.tsx; NodeInspector keeps the
+    // 'clarify-cross-agent' registry entry (checked below).
+    const src = readFileSync(
+      resolve(__dirname, '..', 'src', 'components', 'canvas', 'inspector', 'CrossClarifyEdit.tsx'),
+      'utf-8',
+    )
     expect(src).toContain('cross-clarify-inspector')
     expect(src).toContain('cross-clarify-session-mode-questioner')
     expect(src).toContain('sessionModeForQuestioner')
     // Designer session-mode toggle removed (RFC-056 patch 2026-06-22).
     expect(src).not.toContain('sessionModeForDesigner')
+    // The registry itself still names the kind.
+    const inspector = readFileSync(NODE_INSPECTOR_TSX, 'utf-8')
+    expect(inspector).toMatch(/'clarify-cross-agent':\s*CrossClarifyEdit/)
   })
 
   test('nodePalette.ts has clarify-cross-agent in PaletteItem + SHORT', () => {

@@ -22,7 +22,6 @@ const FRONTEND_SRC = resolve(__dirname, '..', 'src')
 const REVIEW_NODE_TSX = resolve(FRONTEND_SRC, 'components', 'canvas', 'nodes', 'ReviewNode.tsx')
 const CONNECTION_SYNC_TS = resolve(FRONTEND_SRC, 'components', 'canvas', 'connectionSync.ts')
 const WORKFLOW_CANVAS_TSX = resolve(FRONTEND_SRC, 'components', 'canvas', 'WorkflowCanvas.tsx')
-const NODE_INSPECTOR_TSX = resolve(FRONTEND_SRC, 'components', 'canvas', 'NodeInspector.tsx')
 const WORKFLOWS_EDIT_TSX = resolve(FRONTEND_SRC, 'routes', 'workflows.edit.tsx')
 const STYLES_CSS = resolve(FRONTEND_SRC, 'styles.css')
 
@@ -56,11 +55,22 @@ describe('RFC-007 source-level guard', () => {
     expect(tsx).toContain('isValidConnection')
   })
 
-  test('NodeInspector.tsx imports REVIEW_INPUT_HANDLE_ID + uses syncEdgeFromFormField', () => {
-    const tsx = readFileSync(NODE_INSPECTOR_TSX, 'utf8')
-    expect(tsx).toMatch(/from\s+['"]\.\/connectionSync['"]/)
-    expect(tsx).toContain('REVIEW_INPUT_HANDLE_ID')
-    expect(tsx).toContain('syncEdgeFromFormField')
+  test('ReviewEdit imports REVIEW_INPUT_HANDLE_ID + uses syncEdgeFromFormField', () => {
+    // RFC-146 T3: the review branch moved from the NodeInspector switch to
+    // inspector/ReviewEdit.tsx (OutputEdit.tsx carries the other
+    // syncEdgeFromFormField call for output-port binds).
+    const reviewTsx = readFileSync(
+      resolve(FRONTEND_SRC, 'components', 'canvas', 'inspector', 'ReviewEdit.tsx'),
+      'utf8',
+    )
+    expect(reviewTsx).toMatch(/from\s+['"]\.\.\/connectionSync['"]/)
+    expect(reviewTsx).toContain('REVIEW_INPUT_HANDLE_ID')
+    expect(reviewTsx).toContain('syncEdgeFromFormField')
+    const outputTsx = readFileSync(
+      resolve(FRONTEND_SRC, 'components', 'canvas', 'inspector', 'OutputEdit.tsx'),
+      'utf8',
+    )
+    expect(outputTsx).toContain('syncEdgeFromFormField')
   })
 
   test('workflows.edit.tsx threads healFieldEdgeConsistency into healLoadedDefinition', () => {

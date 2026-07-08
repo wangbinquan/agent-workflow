@@ -17,7 +17,12 @@ import { describe, expect, test } from 'vitest'
 
 const read = (p: string): string => readFileSync(resolve(import.meta.dirname, '..', p), 'utf-8')
 const SETTINGS = read('src/routes/settings.tsx')
-const INSPECTOR = read('src/components/canvas/NodeInspector.tsx')
+// RFC-146 T3: the per-kind Edit branches live under inspector/ now — the
+// absence lock must cover the agent Edit component (where the removed
+// retries/timeout fields used to render) as well as the drawer shell.
+const INSPECTOR =
+  read('src/components/canvas/NodeInspector.tsx') +
+  read('src/components/canvas/inspector/AgentSingleEdit.tsx')
 const ZH = read('src/i18n/zh-CN.ts')
 const EN = read('src/i18n/en-US.ts')
 const AGENTS = read('src/routes/agents.tsx')

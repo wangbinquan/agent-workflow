@@ -296,7 +296,9 @@ describe('runner.ts source: dump plugin wiring lock', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
       'utf-8',
     )
-    expect(src).toContain('isAgentRunKind')
+    // RFC-146: the agent-kind gate is the shared isAgentNodeKind now
+    // (inventory.isAgentRunKind was a local copy of it and is gone).
+    expect(src).toContain('isAgentNodeKind')
     expect(src).toContain('wantsInventory')
     const spawnSrc = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'spawn.ts'),

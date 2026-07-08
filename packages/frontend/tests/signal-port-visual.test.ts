@@ -42,12 +42,17 @@ describe('RFC-060 F.T2 — wrapper-fanout signal-port visual contract', () => {
     expect(stylesCss).toMatch(/\.canvas-node__handle--signal[^}]*border[^}]*dashed/s)
   })
 
-  test('WorkflowCanvas computePorts emits derived wrapper-fanout outputs', () => {
+  test('computePorts emits derived wrapper-fanout outputs (via the shared declaration table)', () => {
+    // RFC-146: the per-kind switch left WorkflowCanvas — computePorts reads
+    // the shared declaredPorts table, whose wrapper-fanout row derives
+    // outlets via deriveWrapperFanoutOutputs. Anchor both hops so neither
+    // silently regresses to a local fork.
     const canvasSrc = readFileSync(
       resolve(REPO, 'packages/frontend/src/components/canvas/WorkflowCanvas.tsx'),
       'utf-8',
     )
-    expect(canvasSrc).toContain("case 'wrapper-fanout':")
-    expect(canvasSrc).toContain('deriveWrapperFanoutOutputs(definition, node.id, agentByName)')
+    expect(canvasSrc).toContain('declaredPorts(node, definition, agentByName)')
+    const tableSrc = readFileSync(resolve(REPO, 'packages/shared/src/nodePorts.ts'), 'utf-8')
+    expect(tableSrc).toMatch(/'wrapper-fanout':[\s\S]*?deriveWrapperFanoutOutputs\(defn, node\.id/)
   })
 })

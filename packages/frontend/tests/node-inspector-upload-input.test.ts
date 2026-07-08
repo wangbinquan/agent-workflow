@@ -6,7 +6,9 @@ import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 
 const SRC = readFileSync(
-  resolve(import.meta.dirname, '..', 'src', 'components', 'canvas', 'NodeInspector.tsx'),
+  // RFC-146 T3: the input branch (incl. UploadInputFields) lives in
+  // inspector/InputEdit.tsx now.
+  resolve(import.meta.dirname, '..', 'src', 'components', 'canvas', 'inspector', 'InputEdit.tsx'),
   'utf-8',
 )
 

@@ -18,14 +18,20 @@
 // and wrapper-loop/git (reject inbound edges in v1) are NOT targets — those
 // gestures fall through to the existing connect paths with zero behavior change.
 
-import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { declaredPorts } from '@agent-workflow/shared'
 
 /**
  * The target node's current input port names, mirroring how `computePorts`
  * derives the left-side inputs: distinct inbound-edge target port names
- * (excluding `wrapper-output` boundary edges), plus an output node's declared
- * `ports[].name`. Pure over the definition (no agents lookup needed — inputs
- * are edge-derived).
+ * (excluding `wrapper-output` boundary edges), plus the node's DECLARED data
+ * inputs from the shared port table (RFC-146 — fork #5 of five is gone).
+ * Declared inputs now include a wrapper-fanout's `inputs[]` (previously only
+ * an output node's `ports[].name` was known here), aligning drop-target /
+ * free-port-picking with the Handles the canvas actually renders.
+ *
+ * Input declarations never consult the agent set (agent inputs are pure
+ * edge-derived prompt vars), so an empty lookup is passed.
  */
 export function existingInputPorts(def: WorkflowDefinition, node: WorkflowNode): string[] {
   const out: string[] = []
@@ -34,17 +40,13 @@ export function existingInputPorts(def: WorkflowDefinition, node: WorkflowNode):
     if (e.boundary === 'wrapper-output') continue
     if (!out.includes(e.target.portName)) out.push(e.target.portName)
   }
-  if (node.kind === 'output') {
-    const ports = (node as { ports?: unknown }).ports
-    if (Array.isArray(ports)) {
-      for (const p of ports) {
-        const name = (p as { name?: unknown })?.name
-        if (typeof name === 'string' && !out.includes(name)) out.push(name)
-      }
-    }
+  for (const p of declaredPorts(node, def, EMPTY_AGENTS).dataInputs) {
+    if (!out.includes(p.name)) out.push(p.name)
   }
   return out
 }
+
+const EMPTY_AGENTS: ReadonlyMap<string, Agent> = new Map<string, Agent>()
 
 /**
  * Pick a port name that does not collide with `existing`. `desired` if free,

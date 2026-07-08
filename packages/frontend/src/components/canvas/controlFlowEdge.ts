@@ -20,7 +20,7 @@
 // signalPromptGuard.ts).
 
 import {
-  deriveWrapperFanoutOutputs,
+  declaredPorts,
   tryHandlerForParsedKind,
   tryParseKind,
   type Agent,
@@ -53,13 +53,12 @@ export function isControlFlowKind(kind: string | undefined): boolean {
 /**
  * Resolve the declared kind string of an edge's SOURCE port.
  *
- * - agent-single: the agent's `outputKinds[portName]` (absent ⇒ undefined ⇒ the
- *   default `string` data edge).
- * - wrapper-fanout: output kinds are derived at render time
- *   (`deriveWrapperFanoutOutputs`: mirror the aggregator's outputKinds when one
- *   exists, otherwise the single `__done__` = signal outlet).
- * - every other node kind (input/output/review/clarify/wrapper-git/
- *   wrapper-loop…): never produces a signal output ⇒ undefined (data edge).
+ * RFC-146: reads the shared port-declaration table (fork #4 of five is gone).
+ * The table carries kinds exactly where this function historically derived
+ * them — agent outputs (`agent.outputKinds`), wrapper-fanout outlets
+ * (aggregator mirror or the `__done__` = signal outlet) — and no kind
+ * elsewhere (input/output/review/clarify/wrapper-git/wrapper-loop ⇒ undefined
+ * ⇒ default data edge).
  *
  * A missing source node (stale snapshot vs edited definition) also ⇒ undefined.
  */
@@ -70,16 +69,9 @@ export function sourcePortKind(
 ): string | undefined {
   const src = definition.nodes.find((n) => n.id === edge.source.nodeId)
   if (src === undefined) return undefined
-  const rec = src as unknown as Record<string, unknown>
-  if (src.kind === 'agent-single') {
-    const agentName = typeof rec.agentName === 'string' ? rec.agentName : ''
-    return agentByName.get(agentName)?.outputKinds?.[edge.source.portName]
-  }
-  if (src.kind === 'wrapper-fanout') {
-    const derived = deriveWrapperFanoutOutputs(definition, src.id, agentByName)
-    return derived.find((p) => p.name === edge.source.portName)?.kind
-  }
-  return undefined
+  return declaredPorts(src, definition, agentByName).dataOutputs.find(
+    (p) => p.name === edge.source.portName,
+  )?.kind
 }
 
 /**
