@@ -28,6 +28,10 @@ import type {
   WorkflowValidationResult,
 } from '@agent-workflow/shared'
 import {
+  CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT,
+  CROSS_CLARIFY_OUT_TO_DESIGNER_PORT,
+  CLARIFY_RESPONSE_TARGET_PORT_NAME,
+  CROSS_CLARIFY_EXTERNAL_FEEDBACK_PORT,
   BUILTIN_VARS,
   CLARIFY_SOURCE_PORT_NAME,
   countFanoutAggregators,
@@ -471,14 +475,15 @@ export function validateWorkflowDef(
       const s = nodeById.get(edge.source.nodeId)
       const t = nodeById.get(edge.target.nodeId)
       if (s === undefined || t === undefined) continue
-      // Exclude clarify / cross-clarify channel edges (mirrors buildScopeUpstreams
-      // — these carry feedback out-of-band, not as same-iteration dataflow).
+      // Exclude clarify / cross-clarify channel edges — these carry feedback
+      // out-of-band, not as same-iteration dataflow. RFC-147: the port-level
+      // half was a hand-decomposed copy of the side-respecting classifier;
+      // now the shared registry projection (consumer #7 of the design-gate
+      // sweep — cycle detection wants the uniform family-A semantics, same
+      // as topologicalOrder).
       if (s.kind === 'clarify' || t.kind === 'clarify') continue
       if (s.kind === 'clarify-cross-agent' || t.kind === 'clarify-cross-agent') continue
-      const sp = edge.source.portName
-      const tp = edge.target.portName
-      if (sp === '__clarify__' || sp === 'to_designer' || sp === 'to_questioner') continue
-      if (tp === '__clarify_response__' || tp === '__external_feedback__') continue
+      if (isClarifyChannelEdge(edge)) continue
       dataEdges.push({ from: edge.source.nodeId, to: edge.target.nodeId })
     }
     if (hasCycle(dataEdges, [...innerIds])) {
@@ -1112,7 +1117,10 @@ export function validateWorkflowDef(
       // any outgoing edge MUST originate from one of the two legal output ports.
       const outboundEdges = edges.filter((e) => e.source.nodeId === node.id)
       for (const e of outboundEdges) {
-        if (e.source.portName !== 'to_designer' && e.source.portName !== 'to_questioner') {
+        if (
+          e.source.portName !== CROSS_CLARIFY_OUT_TO_DESIGNER_PORT &&
+          e.source.portName !== CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT
+        ) {
           issues.push({
             code: 'cross-clarify-has-downstream',
             message: `clarify-cross-agent node '${node.id}' has an outgoing edge from non-system port '${e.source.portName}'; only 'to_designer' and 'to_questioner' are allowed`,
@@ -1122,7 +1130,9 @@ export function validateWorkflowDef(
       }
 
       // `to_designer` wired? (warning if not)
-      const toDesignerOut = outboundEdges.filter((e) => e.source.portName === 'to_designer')
+      const toDesignerOut = outboundEdges.filter(
+        (e) => e.source.portName === CROSS_CLARIFY_OUT_TO_DESIGNER_PORT,
+      )
       if (toDesignerOut.length === 0) {
         issues.push({
           code: 'cross-clarify-manual-edge-missing',
@@ -1190,9 +1200,13 @@ export function validateWorkflowDef(
       // reverse-drag mints it; user-deletion is allowed (the runtime injects
       // answers via cross_clarify_sessions, not via this edge) but the canvas
       // hides the closed feedback loop and that warrants a warning.
-      const toQuestionerOut = outboundEdges.filter((e) => e.source.portName === 'to_questioner')
+      const toQuestionerOut = outboundEdges.filter(
+        (e) => e.source.portName === CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT,
+      )
       const properlyWiredAutoEdge = toQuestionerOut.some(
-        (e) => e.target.nodeId === questionerId && e.target.portName === '__clarify_response__',
+        (e) =>
+          e.target.nodeId === questionerId &&
+          e.target.portName === CLARIFY_RESPONSE_TARGET_PORT_NAME,
       )
       if (!properlyWiredAutoEdge && questionerId !== undefined) {
         issues.push({
@@ -1245,7 +1259,8 @@ export function validateWorkflowDef(
   // source side is valid (Codex P2: target-not-paired-agent).
   const clarifyAskersByNode = new Map<string, Set<string>>()
   for (const edge of edges) {
-    if (edge.source.portName !== '__clarify__' || edge.target.portName !== 'questions') continue
+    if (edge.source.portName !== CLARIFY_SOURCE_PORT_NAME || edge.target.portName !== 'questions')
+      continue
     const tgtKind = nodeById.get(edge.target.nodeId)?.kind
     if (tgtKind !== 'clarify' && tgtKind !== 'clarify-cross-agent') continue
     const set = clarifyAskersByNode.get(edge.target.nodeId) ?? new Set<string>()
@@ -1264,7 +1279,7 @@ export function validateWorkflowDef(
     // hand-edited `cross.to_designer → review.__external_feedback__` would pass
     // and the runtime would try to rerun a non-agent node as the designer.
     if (
-      (tp === '__clarify_response__' || tp === '__external_feedback__') &&
+      (tp === CLARIFY_RESPONSE_TARGET_PORT_NAME || tp === CROSS_CLARIFY_EXTERNAL_FEEDBACK_PORT) &&
       tgt !== undefined &&
       tgt.kind !== 'agent-single'
     ) {
@@ -1276,10 +1291,10 @@ export function validateWorkflowDef(
     }
     // accept only the channel source AND (for `__clarify_response__`) inject the
     // answer back into the asking agent that owns the channel.
-    if (tp === '__clarify_response__') {
+    if (tp === CLARIFY_RESPONSE_TARGET_PORT_NAME) {
       const okSource =
         (src.kind === 'clarify' && sp === 'answers') ||
-        (src.kind === 'clarify-cross-agent' && sp === 'to_questioner')
+        (src.kind === 'clarify-cross-agent' && sp === CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT)
       if (!okSource) {
         issues.push({
           code: 'system-port-illegal-source',
@@ -1302,8 +1317,8 @@ export function validateWorkflowDef(
         }
       }
     }
-    if (tp === '__external_feedback__') {
-      const ok = src.kind === 'clarify-cross-agent' && sp === 'to_designer'
+    if (tp === CROSS_CLARIFY_EXTERNAL_FEEDBACK_PORT) {
+      const ok = src.kind === 'clarify-cross-agent' && sp === CROSS_CLARIFY_OUT_TO_DESIGNER_PORT
       if (!ok) {
         issues.push({
           code: 'system-port-illegal-source',
@@ -1322,7 +1337,7 @@ export function validateWorkflowDef(
     if (
       tp === 'questions' &&
       (tgt?.kind === 'clarify' || tgt?.kind === 'clarify-cross-agent') &&
-      sp !== '__clarify__'
+      sp !== CLARIFY_SOURCE_PORT_NAME
     ) {
       issues.push({
         code: 'system-port-illegal-source',
@@ -1335,7 +1350,7 @@ export function validateWorkflowDef(
     // which rejects `__clarify__` as a stray source). Any other target leaves
     // a dangling ask channel the runtime never discovers.
     if (
-      sp === '__clarify__' &&
+      sp === CLARIFY_SOURCE_PORT_NAME &&
       !((tgt?.kind === 'clarify' || tgt?.kind === 'clarify-cross-agent') && tp === 'questions')
     ) {
       issues.push({
@@ -1348,7 +1363,7 @@ export function validateWorkflowDef(
     // `__clarify_response__` injection port. A normal downstream consumer wired
     // to `answers` would dispatch the moment the clarify node settles (it has no
     // structural upstream), i.e. before the asking agent has actually run.
-    if (src.kind === 'clarify' && sp === 'answers' && tp !== '__clarify_response__') {
+    if (src.kind === 'clarify' && sp === 'answers' && tp !== CLARIFY_RESPONSE_TARGET_PORT_NAME) {
       issues.push({
         code: 'system-port-illegal-target',
         message: `edge '${edge.id}': clarify node '${edge.source.nodeId}' 'answers' port may only feed an agent's '__clarify_response__' port (got target '${edge.target.nodeId}.${tp}')`,
@@ -1364,8 +1379,8 @@ export function validateWorkflowDef(
     // source kind AND right injection target) is required, closing both the
     // wrong-source-node and wrong-target gaps.
     if (
-      sp === 'to_questioner' &&
-      !(src.kind === 'clarify-cross-agent' && tp === '__clarify_response__')
+      sp === CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT &&
+      !(src.kind === 'clarify-cross-agent' && tp === CLARIFY_RESPONSE_TARGET_PORT_NAME)
     ) {
       issues.push({
         code: 'system-port-illegal-target',
@@ -1374,8 +1389,8 @@ export function validateWorkflowDef(
       })
     }
     if (
-      sp === 'to_designer' &&
-      !(src.kind === 'clarify-cross-agent' && tp === '__external_feedback__')
+      sp === CROSS_CLARIFY_OUT_TO_DESIGNER_PORT &&
+      !(src.kind === 'clarify-cross-agent' && tp === CROSS_CLARIFY_EXTERNAL_FEEDBACK_PORT)
     ) {
       issues.push({
         code: 'system-port-illegal-target',

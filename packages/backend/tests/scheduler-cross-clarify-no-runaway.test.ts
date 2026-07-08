@@ -134,10 +134,19 @@ describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
     const buildIdx = src.indexOf('function buildScopeUpstreams')
     expect(buildIdx).toBeGreaterThan(-1)
     const body = src.slice(buildIdx, buildIdx + 3000)
-    // The new logic checks `e.source.portName === '__clarify__'` then
-    // conditionally `continue` ONLY when target kind is 'clarify'.
-    expect(body).toContain("e.source.portName === '__clarify__'")
-    expect(body).toContain("tgtKind === 'clarify'")
+    // RFC-147: the inline predicate moved to the shared registry — anchor
+    // both hops so neither silently regresses: buildScopeUpstreams consults
+    // channelEdgeDataflowSkip, and the registry marks __clarify__ as
+    // 'unless-target-clarify' (cross-clarify targets KEEP the edge; the
+    // behavior grid lives in rfc147-system-channel-ports.test.ts).
+    expect(body).toContain('channelEdgeDataflowSkip(')
+    const registrySrc = readFileSync(
+      resolve(import.meta.dir, '..', '..', 'shared', 'src', 'systemChannelPorts.ts'),
+      'utf-8',
+    )
+    expect(registrySrc).toMatch(
+      /\[CLARIFY_SOURCE_PORT_NAME\]:\s*\{[^}]*dataflow:\s*'unless-target-clarify'/,
+    )
   })
 
   test('scheduler.runOneNode case clarify-cross-agent is idempotent: NO new pending row when a live (pending) row already exists', async () => {

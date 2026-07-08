@@ -9,8 +9,8 @@
 「哪些端口是系统通道、图遍历时该不该当数据流依赖」这份知识存在 **6 份、3 种语义家族**，
 成员集互不一致：
 
-1. `shared/clarify.ts isClarifyChannelEdge` — 5 端口、**分侧判**（source∈{__clarify__,
-   to_designer, to_questioner} / target∈{__clarify_response__, __external_feedback__}）。
+1. `shared/clarify.ts isClarifyChannelEdge` — 5 端口、**分侧判**（source∈{**clarify**,
+   to_designer, to_questioner} / target∈{**clarify_response**, **external_feedback**}）。
 2. `shared/workflow-sync-diff.ts` 私有 `CHANNEL_PORTS` — 同 5 端口但**任一侧命中即算**
    （更宽，展示防御性语义）。
 3. `shared/prompt.ts` 私有 `SYSTEM_PORT_NAMES` — 仅 2 端口（`__clarify_response__` /
@@ -30,7 +30,7 @@
 
 1. **单一注册表**：shared `SYSTEM_CHANNEL_PORTS: Record<portName, SystemChannelPortSpec>`
    （spec = `{ side: 'source'|'target', promptInjected: boolean,
-   dataflow: 'never'|'unless-target-clarify' }`），键用既有端口常量（schemas/workflow.ts）。
+dataflow: 'never'|'unless-target-clarify' }`），键用既有端口常量（schemas/workflow.ts）。
 2. **三个语义家族全部改为表投影**：
    - 分侧成员判 `isClarifyChannelEdge`（#1/#6 及其 canvas/validator 消费者）；
    - 任一侧宽判（#2，sync-diff 展示）；
@@ -39,7 +39,9 @@
    - prompt 注入集（#3）。
 3. **先钉后收**：收敛前先用 shared 单测把 #4 的 nuanced 语义逐格钉死（`__clarify__`→
    clarify 跳 / →cross 保留 / →agent（残迹边）保留 / 其余四端口按侧跳）。
-4. 新增一种通道端口的改动面收敛为：注册表 1 行（+ 各消费面自动生效）。
+4. 新增一种通道端口的改动面收敛为：**注册表 1 行 + declaredPorts owner 行**
+   （漂移互锁测试强制两处同步；家族语义各消费面自动生效。设计门修订：原
+   「仅 1 行」的说法低估了 kind 归属维，validator 环检补录为第 7 消费点）。
 
 ## 3. 非目标
 

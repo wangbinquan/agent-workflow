@@ -21,21 +21,16 @@
 //     `wrapper-structure-changed-with-live-state` BLOCKER (not a warning).
 
 import { isWrapperKind } from './schemas/workflow'
+import { touchesSystemChannelPort } from './systemChannelPorts'
 import type { WorkflowDefinition, WorkflowNode, WorkflowEdge } from './schemas/workflow'
 
-// Channel / back-edge port names that carry control signals, not data outputs —
-// excluded from data-loss warnings (mirrors buildScopeUpstreams's edge filter in
-// scheduler.ts: clarify channels + reverse-feed edges are out-of-band).
-const CHANNEL_PORTS: ReadonlySet<string> = new Set([
-  '__clarify__',
-  '__clarify_response__',
-  '__external_feedback__',
-  'to_designer',
-  'to_questioner',
-])
-
+// RFC-147: the private 5-port set moved to the shared system-channel-port
+// registry (systemChannelPorts.ts). This diff view keeps its deliberately
+// WIDE either-side match (`touchesSystemChannelPort`) — a channel port name
+// on the wrong side of a corrupt edge must still be filtered out of the
+// "data edge changed" rows.
 function isChannelEdge(e: WorkflowEdge): boolean {
-  return CHANNEL_PORTS.has(e.source.portName) || CHANNEL_PORTS.has(e.target.portName)
+  return touchesSystemChannelPort(e)
 }
 
 export interface WorkflowSyncNodeChange {

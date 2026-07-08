@@ -32,6 +32,7 @@ import type {
 import {
   FANOUT_DONE_PORT_NAME,
   FOLLOWUP_POLICY,
+  channelEdgeDataflowSkip,
   NODE_KIND,
   NODE_KIND_BEHAVIORS,
   WorkflowDefinitionSchema,
@@ -6189,31 +6190,15 @@ function buildScopeUpstreams(
   for (const e of edges) {
     if (!ids.has(e.target.nodeId)) continue
     if (!ids.has(e.source.nodeId)) continue
-    // RFC-023: agent.__clarify__ → clarify.questions is a channel edge
-    // (clarify node is dispatched by the runner via createClarifySession,
-    // not by the scheduler's dataflow walk); skip to prevent agent→clarify
-    // → agent cycles. RFC-056 cross-clarify TARGETS are NOT skipped here:
-    // a cross-clarify node legitimately waits for its questioner to
-    // complete before runtime activates it (see 2026-05-22 bug: skipping
-    // this edge made cross-clarify a no-upstream leaf, dispatcher
-    // re-fired it every scheduler tick, accumulating orphan pending rows).
-    if (e.source.portName === '__clarify__') {
-      const tgtKind = kindById.get(e.target.nodeId)
-      if (tgtKind === 'clarify') continue
-      // tgtKind === 'clarify-cross-agent' → fall through, KEEP edge as
-      // dataflow dep so cross-clarify waits for questioner.
-    }
-    // Other channel edges (RFC-023 answer / RFC-056 back-channels) stay
-    // skipped — they're injected via prompt context, not consumed as
+    // RFC-147: channel-edge dataflow semantics come from the shared
+    // system-channel-port registry. The nuanced rule lives there —
+    // agent.__clarify__ → clarify is dispatched out-of-band (skip to
+    // prevent agent→clarify→agent cycles) while a cross-clarify TARGET
+    // keeps the edge as a real dependency (2026-05-22 bug: skipping it
+    // made cross-clarify a no-upstream leaf the dispatcher re-fired every
+    // tick); answer / back-channel ports are prompt-injected, never
     // dataflow inputs.
-    if (
-      e.target.portName === '__clarify_response__' ||
-      e.target.portName === '__external_feedback__' ||
-      e.source.portName === 'to_designer' ||
-      e.source.portName === 'to_questioner'
-    ) {
-      continue
-    }
+    if (channelEdgeDataflowSkip(e, (id) => kindById.get(id))) continue
     const list = m.get(e.target.nodeId) ?? []
     if (!list.includes(e.source.nodeId)) list.push(e.source.nodeId)
     m.set(e.target.nodeId, list)

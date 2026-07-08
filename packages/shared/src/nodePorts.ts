@@ -29,7 +29,15 @@
 // pure declaration, no edges consulted.
 
 import type { WorkflowDefinition, WorkflowNode } from './schemas/workflow'
-import { NODE_KIND, type NodeKind } from './schemas/workflow'
+import {
+  CLARIFY_RESPONSE_TARGET_PORT_NAME,
+  CLARIFY_SOURCE_PORT_NAME,
+  CROSS_CLARIFY_EXTERNAL_FEEDBACK_PORT,
+  CROSS_CLARIFY_OUT_TO_DESIGNER_PORT,
+  CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT,
+  NODE_KIND,
+  type NodeKind,
+} from './schemas/workflow'
 import { deriveWrapperFanoutOutputs, lookupAgent, type AgentLookup } from './wrapperFanout'
 import { reviewApprovedPortName } from './reviewMultiDoc'
 
@@ -153,8 +161,14 @@ const PORT_DERIVERS = {
       // RFC-023/RFC-056 framework channels: __clarify__ outbound is accepted
       // on every agent; __clarify_response__ / __external_feedback__ inbound
       // likewise (canvas hides these Handles until an edge exists).
-      systemInputs: [{ name: '__clarify_response__' }, { name: '__external_feedback__' }],
-      systemOutputs: [{ name: '__clarify__' }],
+      // RFC-147: names via the shared constants — the registry↔declaredPorts
+      // drift test (rfc147-system-channel-ports.test.ts) cross-locks that
+      // every registry port is declared on its owner kind here.
+      systemInputs: [
+        { name: CLARIFY_RESPONSE_TARGET_PORT_NAME },
+        { name: CROSS_CLARIFY_EXTERNAL_FEEDBACK_PORT },
+      ],
+      systemOutputs: [{ name: CLARIFY_SOURCE_PORT_NAME }],
     }
   },
   'wrapper-git': (): DeclaredPorts => ({
@@ -204,7 +218,10 @@ const PORT_DERIVERS = {
     ...NO_PORTS,
     // RFC-056 fixed 1-in/2-out shape.
     systemInputs: [{ name: 'questions' }],
-    systemOutputs: [{ name: 'to_designer' }, { name: 'to_questioner' }],
+    systemOutputs: [
+      { name: CROSS_CLARIFY_OUT_TO_DESIGNER_PORT },
+      { name: CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT },
+    ],
   }),
 } as const satisfies Record<NodeKind, (ctx: DeriverCtx) => DeclaredPorts>
 

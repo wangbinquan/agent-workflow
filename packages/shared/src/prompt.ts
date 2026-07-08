@@ -3,6 +3,7 @@
 // imports. Mirrors design.md §7.2.
 
 import type { AgentOutputKindsMap } from './schemas/agent'
+import { PROMPT_INJECTED_PORT_NAMES } from './systemChannelPorts'
 import type { FailureCode } from './schemas/task'
 import {
   ASKBACK_PRIOR_OUTPUT_BLOCK_TITLE,
@@ -358,10 +359,9 @@ export const BUILTIN_VARS = new Set([
  * misleading `## __port_name__` headers that make the human reader (and
  * the agent) think the cross-channel content is missing.
  */
-const SYSTEM_PORT_NAMES = new Set<string>([
-  '__clarify_response__', // RFC-023 self-clarify answers target
-  '__external_feedback__', // RFC-056 cross-clarify designer feedback target
-])
+// RFC-147: the private 2-port set moved to the shared system-channel-port
+// registry — PROMPT_INJECTED_PORT_NAMES is the registry's promptInjected
+// projection (today: __clarify_response__ + __external_feedback__).
 
 /**
  * Compose the user-prompt string sent to opencode for one node invocation:
@@ -462,7 +462,7 @@ export function renderUserPrompt(input: RenderPromptInput): string {
     // sections produces empty / misleading headers that imply the
     // cross-clarify or self-clarify content is missing when it's actually
     // present further down. Skip the auto-append entry for them.
-    if (SYSTEM_PORT_NAMES.has(name)) continue
+    if (PROMPT_INJECTED_PORT_NAMES.has(name)) continue
     sections += `\n\n## ${name}\n${content}`
   }
 

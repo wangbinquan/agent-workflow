@@ -29,6 +29,7 @@ import {
   CROSS_CLARIFY_OUT_TO_DESIGNER_PORT,
   CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT,
 } from './schemas/workflow'
+import { isSystemChannelEdge } from './systemChannelPorts'
 import {
   ClarifyEnvelopeBodySchema,
   ClarifyQuestionSchema,
@@ -788,13 +789,12 @@ export function resolveCrossClarifySessionMode(
  * that connects the self-clarify cycle or the cross-clarify cycle.
  */
 export function isClarifyChannelEdge(e: WorkflowEdge): boolean {
-  return (
-    e.source.portName === CLARIFY_SOURCE_PORT_NAME ||
-    e.target.portName === CLARIFY_RESPONSE_TARGET_PORT_NAME ||
-    e.target.portName === CROSS_CLARIFY_EXTERNAL_FEEDBACK_PORT ||
-    e.source.portName === CROSS_CLARIFY_OUT_TO_DESIGNER_PORT ||
-    e.source.portName === CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT
-  )
+  // RFC-147: thin alias over the system-channel-port registry
+  // (systemChannelPorts.ts) — the historical 5-port or-chain lived here;
+  // the registry is now the single source and this name stays for its
+  // established import surface (canvas cascade delete, validator
+  // dangling-edge exemption, scheduler topologicalOrder cycle-break).
+  return isSystemChannelEdge(e)
 }
 
 /**

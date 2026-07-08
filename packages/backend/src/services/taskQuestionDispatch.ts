@@ -54,13 +54,13 @@ import {
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import {
+  isClarifyChannelEdge,
   echoSiblingKey,
   planEchoEntries,
   type EchoPlan,
   type EchoSiblingSnapshot,
   type RunLineageView,
   type WorkflowDefinition,
-  type WorkflowEdge,
 } from '@agent-workflow/shared'
 
 const log = createLogger('task-questions.dispatch')
@@ -199,20 +199,13 @@ async function assertRequestedEntriesSealed(
   }
 }
 
-/** Cross-clarify / RFC-023 CHANNEL edges (injected via prompt context, not consumed as
- *  dataflow inputs) — mirrors the scheduler's buildScopeUpstreams filter, so the frontier
- *  is computed on the SAME dataflow DAG that drives RFC-074 provenance freshness (the
- *  cascade). Two agent handler nodes are never connected through a cross-clarify node
- *  (both hops are channel edges), so dropping these uniformly is exact for agent ancestry. */
-function isChannelEdge(e: WorkflowEdge): boolean {
-  return (
-    e.source.portName === '__clarify__' ||
-    e.target.portName === '__clarify_response__' ||
-    e.target.portName === '__external_feedback__' ||
-    e.source.portName === 'to_designer' ||
-    e.source.portName === 'to_questioner'
-  )
-}
+// RFC-147: the private fourth variant was byte-equivalent to the shared
+// side-respecting classifier `isClarifyChannelEdge` — replaced. Semantics
+// note kept: dropping channel edges UNIFORMLY (no target-kind nuance) is
+// exact for AGENT ancestry — two agent handler nodes are never connected
+// through a cross-clarify node (both hops are channel edges), so the
+// nuanced keep of questioner→cross that dispatch gating needs never
+// affects agent-to-agent reachability here.
 
 /** Does `node` have ANY node in `affected` as a transitive dataflow ancestor? */
 function hasAffectedAncestor(
@@ -239,7 +232,7 @@ function computeUpstreamFrontier(
 ): Set<string> {
   const upstreams = new Map<string, string[]>()
   for (const e of definition.edges ?? []) {
-    if (isChannelEdge(e)) continue
+    if (isClarifyChannelEdge(e)) continue
     const list = upstreams.get(e.target.nodeId) ?? []
     if (!list.includes(e.source.nodeId)) list.push(e.source.nodeId)
     upstreams.set(e.target.nodeId, list)

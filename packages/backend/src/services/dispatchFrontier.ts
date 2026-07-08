@@ -38,7 +38,7 @@
 // → completed → ready) lives in scheduler.ts deriveFrontier (PR-B, live).
 // Pure-function locks: dispatch-frontier.test.ts + derive-frontier.test.ts.
 
-import { WRAPPER_NODE_KINDS } from '@agent-workflow/shared'
+import { channelEdgeDataflowSkip, WRAPPER_NODE_KINDS } from '@agent-workflow/shared'
 import type { NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { nodeRuns } from '../db/schema'
 import { buildFreshestDonePerNode, isFresherNodeRun, isNodeRunFresh } from './freshness'
@@ -118,12 +118,10 @@ export function wrapperInnerDescendants(
  *     validator rejects them but the scheduler honors them — see
  *     scheduler-audit-s04's wg1→wg2 sequencing edge).
  *
- * Edge filtering MIRRORS buildScopeUpstreams (scheduler.ts) — the same five
- * channel-edge rules isClarifyChannelEdge (shared/clarify.ts) classifies,
- * including the carve-out that `questioner.__clarify__ → clarify-cross-agent`
- * is a REAL dataflow dep (kept), plus the review `inputSource` implicit
- * dependency. Keep the two in lockstep: a source buildScopeUpstreams would
- * gate dispatch on must also be provenance-tracked here, and vice versa.
+ * Edge filtering is the SAME registry projection buildScopeUpstreams
+ * (scheduler.ts) uses — `channelEdgeDataflowSkip` (RFC-147), including the
+ * carve-out that `questioner.__clarify__ → clarify-cross-agent` is a REAL
+ * dataflow dep (kept) — plus the review `inputSource` implicit dependency.
  *
  * Pure function — definition-only, no DB / rows.
  */
@@ -138,23 +136,10 @@ export function wrapperExternalUpstreamSources(
   for (const e of definition.edges) {
     if (!scope.has(e.target.nodeId)) continue
     if (scope.has(e.source.nodeId)) continue
-    // Channel-edge skip rules — verbatim from buildScopeUpstreams:
-    // agent.__clarify__ → clarify is dispatched out-of-band (skip), but
-    // questioner.__clarify__ → clarify-cross-agent is a kept dataflow dep.
-    if (e.source.portName === '__clarify__') {
-      if (kindById.get(e.target.nodeId) === 'clarify') continue
-      // clarify-cross-agent target → fall through (kept).
-    }
-    // Answer / cross-clarify back-channels are prompt-injected, not consumed
-    // as dataflow inputs — never provenance sources.
-    if (
-      e.target.portName === '__clarify_response__' ||
-      e.target.portName === '__external_feedback__' ||
-      e.source.portName === 'to_designer' ||
-      e.source.portName === 'to_questioner'
-    ) {
-      continue
-    }
+    // RFC-147: same shared registry projection buildScopeUpstreams uses —
+    // the historical hand-copied block (whose comment demanded "keep the
+    // two in lockstep") is gone; lockstep is now structural.
+    if (channelEdgeDataflowSkip(e, (id) => kindById.get(id))) continue
     sources.add(e.source.nodeId)
   }
   // review.inputSource is an implicit upstream dep (no user-authored edge) —
