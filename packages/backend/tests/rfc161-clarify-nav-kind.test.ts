@@ -14,7 +14,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { clarifyNavKindForRoundStatus, type ClarifyRoundStatus } from '@agent-workflow/shared'
+import {
+  clarifyNavKindForRoundStatus,
+  type ClarifyRoundStatus,
+  type NodeRunStatus,
+} from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { getTaskNodeRuns } from '../src/services/task'
@@ -60,7 +64,7 @@ function seedTask(db: DbClient, status: TaskStatus = 'running'): string {
 function seedRun(
   db: DbClient,
   taskId: string,
-  opts: { id?: string; nodeId: string; status: string; startedAt?: number },
+  opts: { id?: string; nodeId: string; status: NodeRunStatus; startedAt?: number },
 ): string {
   const id = opts.id ?? ulid()
   db.insert(nodeRuns)
@@ -120,7 +124,7 @@ function seedRound(
 async function navKindOf(
   db: DbClient,
   taskId: string,
-  runOpts: { nodeId?: string; runStatus: string },
+  runOpts: { nodeId?: string; runStatus: NodeRunStatus },
   roundOpts?: { status: ClarifyRoundStatus; kind?: 'self' | 'cross' } | 'no-round',
 ): Promise<'awaiting' | 'answered' | null | undefined> {
   const asking = seedRun(db, taskId, { nodeId: 'designer', status: 'done' })
