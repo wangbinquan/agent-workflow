@@ -576,13 +576,17 @@ function describeError(e: unknown): string {
 // RFC-075: remember the auto commit&push toggle across reloads. Kept in
 // localStorage (not user settings) — it's a per-machine launch convenience,
 // mirroring RFC-068's fetch-before-launch preference.
+//
+// Default ON (2026-07): a fresh launcher (no stored preference) starts with the
+// toggle enabled; only an explicit opt-out — persisted as '0' when the user
+// unchecks it — keeps it off across reloads. Stored '1' (or unset) reads as on.
 export const AUTO_COMMIT_PUSH_LS_KEY = 'agent-workflow.launcher.autoCommitPush'
 export function loadAutoCommitPushPref(): boolean {
-  if (typeof window === 'undefined') return false
+  if (typeof window === 'undefined') return true
   try {
-    return window.localStorage.getItem(AUTO_COMMIT_PUSH_LS_KEY) === '1'
+    return window.localStorage.getItem(AUTO_COMMIT_PUSH_LS_KEY) !== '0'
   } catch {
-    return false
+    return true
   }
 }
 export function saveAutoCommitPushPref(v: boolean): void {

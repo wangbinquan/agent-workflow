@@ -8,7 +8,12 @@
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, expect, test } from 'vitest'
+import { beforeEach, describe, expect, test } from 'vitest'
+import {
+  AUTO_COMMIT_PUSH_LS_KEY,
+  loadAutoCommitPushPref,
+  saveAutoCommitPushPref,
+} from '../src/routes/workflows.launch'
 
 const LAUNCH_SRC = readFileSync(
   resolve(import.meta.dirname, '..', 'src', 'routes', 'workflows.launch.tsx'),
@@ -63,6 +68,33 @@ describe('workflows.launch.tsx — RFC-075 working branch + auto commit&push wir
     expect(LAUNCH_SRC).toContain('saveAutoCommitPushPref')
     expect(LAUNCH_SRC).toContain('loadAutoCommitPushPref')
     expect(LAUNCH_SRC).toContain('AUTO_COMMIT_PUSH_LS_KEY')
+  })
+})
+
+// Behavioral lock for the 2026-07 change: the auto commit&push toggle now
+// defaults ON for a fresh launcher (no stored preference), while an explicit
+// opt-out ('0') must still survive reloads. Seeding the <Switch> from
+// loadAutoCommitPushPref() (asserted above) means these semantics decide the
+// initial checked state, so if the default silently flips back to OFF the
+// user's requested "on by default" regresses without any DOM change.
+describe('loadAutoCommitPushPref — default ON with sticky opt-out (RFC-075)', () => {
+  beforeEach(() => window.localStorage.clear())
+
+  test('unset preference defaults to ON', () => {
+    expect(window.localStorage.getItem(AUTO_COMMIT_PUSH_LS_KEY)).toBeNull()
+    expect(loadAutoCommitPushPref()).toBe(true)
+  })
+
+  test('explicit opt-out persists as OFF across reloads', () => {
+    saveAutoCommitPushPref(false)
+    expect(window.localStorage.getItem(AUTO_COMMIT_PUSH_LS_KEY)).toBe('0')
+    expect(loadAutoCommitPushPref()).toBe(false)
+  })
+
+  test('explicit opt-in reads back as ON', () => {
+    saveAutoCommitPushPref(true)
+    expect(window.localStorage.getItem(AUTO_COMMIT_PUSH_LS_KEY)).toBe('1')
+    expect(loadAutoCommitPushPref()).toBe(true)
   })
 })
 
