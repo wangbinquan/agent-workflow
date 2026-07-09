@@ -235,6 +235,49 @@ export function isOverrideTarget(
   return questions.some((q) => q.overrideNodeId === targetNodeId)
 }
 
+/** RFC-162 T1 — dispatch 起跑前沿 oracle（纯函数、可断言）。
+ *
+ *  给定一批处理节点 `handlerNodes`（已过相关性就绪 barrier 的**就绪**集），返回其中「最前沿」的
+ *  子集：在 dataflow DAG 上**没有其它组内节点作为传递祖先**的那些节点。dispatch 只 mint 这个子集，
+ *  其余组内节点由 RFC-074 freshness 级联重跑（design/RFC-162-clarify-unification §dispatch）。
+ *
+ *  - 上游关系经 `upstreamsOf(nodeId) → 直接 dataflow 上游[]`（与 `freshness.ts`
+ *    `areTransitiveUpstreamsCompleted` 同形；调用方传入的是**已剔除 clarify 通道相关性边**〔
+ *    `to_designer` / `__external_feedback__` 等 `dataflow='never'`〕的纯 dataflow 邻接）。
+ *  - **有界防环**：上游遍历带 `seen` 集，畸形环图不死循环、结果确定（design §失败模式 F2）。
+ *  - 保序去重：按 `handlerNodes` 首现序返回。
+ *
+ *  n ∈ frontier ⟺ `handlerNodes` 里没有**别的**节点是 n 的传递 dataflow 祖先。互不依赖的组员各自
+ *  成前沿（多起跑点）；单元素/默认组（只提问节点）→ 前沿 = 它自己（黄金锁：与旧「逐个 mint 提问
+ *  节点」逐字一致）。改派到上游 → 上游成前沿、提问节点级联；改派到下游 → 提问节点仍最前成前沿。 */
+export function computeDispatchFrontier(
+  handlerNodes: ReadonlyArray<string>,
+  upstreamsOf: (nodeId: string) => ReadonlyArray<string>,
+): string[] {
+  const handlerSet = new Set(handlerNodes)
+  // n 有「组内祖先」⟺ 它的传递上游里存在**别的** handler（找到即真、提前返回）。
+  const hasHandlerAncestor = (start: string): boolean => {
+    const seen = new Set<string>([start]) // start 不算自己的祖先；同时防环
+    const stack = [...upstreamsOf(start)]
+    while (stack.length > 0) {
+      const u = stack.pop()!
+      if (seen.has(u)) continue
+      seen.add(u)
+      if (handlerSet.has(u)) return true
+      for (const p of upstreamsOf(u)) if (!seen.has(p)) stack.push(p)
+    }
+    return false
+  }
+  const out: string[] = []
+  const emitted = new Set<string>()
+  for (const n of handlerNodes) {
+    if (emitted.has(n)) continue // 去重、保首现序
+    emitted.add(n)
+    if (!hasHandlerAncestor(n)) out.push(n)
+  }
+  return out
+}
+
 /** RFC-120 Codex F1：「新一轮反问触发的承接 rerun」的 cause 集合——用作 lineage
  *  窗口上界。一个条目的承接 lineage = 它的 trigger run + 其 process-retry/级联子代，
  *  止于**下一条**带这些 cause 的更新 rerun（那属于另一条目/另一轮的承接）。
