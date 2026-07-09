@@ -11643,12 +11643,6 @@ mark.comment-anchor[data-active='true'] {
 .detail-grid dd {
   margin: 0;
 }
-.detail-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  align-items: flex-start;
-}
 .schedule-dialog__row {
   display: flex;
   gap: 1rem;
