@@ -202,6 +202,12 @@ export interface StartTaskDeps {
    * token callers can leave it unset or pass '__system__' explicitly.
    */
   actorUserId?: string
+  /**
+   * RFC-159 — when the scheduled-task background loop fires a task it passes the
+   * originating `scheduled_tasks.id` here; `startTask` stamps it onto the task row
+   * (`tasks.scheduled_task_id`) atomically. Omitted for manual launches.
+   */
+  scheduledTaskId?: string
 }
 
 /**
@@ -893,6 +899,10 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
     errorMessage: earlyError,
     // RFC-036: launcher identity (NULL = legacy / __system__ fallback).
     ownerUserId: deps.actorUserId ?? null,
+    // RFC-159: the scheduled_tasks row that auto-launched this task (NULL =
+    // manual). Stamped atomically with the row so the schedule's run history is
+    // durable regardless of any later bookkeeping write.
+    scheduledTaskId: deps.scheduledTaskId ?? null,
   })
 
   // RFC-066: persist per-repo metadata. Single-repo tasks land one row at
@@ -2097,6 +2107,8 @@ export interface ListTasksFilters {
   status?: Task['status']
   workflowId?: string
   repoPath?: string
+  /** RFC-159: filter to tasks launched by a given `scheduled_tasks` id (run history). */
+  scheduledTaskId?: string
   limit?: number
   /**
    * RFC-036 visibility filter. When set, the SQL also requires either
@@ -2119,6 +2131,8 @@ export async function listTasks(
   if (filters.status !== undefined) conditions.push(eq(tasks.status, filters.status))
   if (filters.workflowId !== undefined) conditions.push(eq(tasks.workflowId, filters.workflowId))
   if (filters.repoPath !== undefined) conditions.push(eq(tasks.repoPath, filters.repoPath))
+  if (filters.scheduledTaskId !== undefined)
+    conditions.push(eq(tasks.scheduledTaskId, filters.scheduledTaskId))
   if (filters.visibility) {
     const { actorUserId, scope } = filters.visibility
     const ownerEq = eq(tasks.ownerUserId, actorUserId)
@@ -2661,6 +2675,8 @@ function rowToTask(
     // denormalized column on `tasks` (cheap for list queries); `repos[]` is
     // hydrated by the caller from `task_repos` ordered by `repo_index`.
     repoCount: row.repoCount,
+    // RFC-159: link back to the scheduled_tasks row that launched this (NULL = manual).
+    scheduledTaskId: row.scheduledTaskId ?? null,
     repos,
   }
 }
@@ -2680,6 +2696,8 @@ function rowToSummary(row: typeof tasks.$inferSelect, workflowName: string | nul
     // RFC-066: source-of-truth `tasks.repo_count`. Migration 0034 defaulted
     // every existing row to 1; multi-repo launches set it explicitly.
     repoCount: row.repoCount,
+    // RFC-159: link back to the scheduled_tasks row that launched this (NULL = manual).
+    scheduledTaskId: row.scheduledTaskId ?? null,
   }
 }
 
