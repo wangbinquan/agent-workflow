@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-053 PR-D — invariant C1 (clarify_session ↔ clarify node_run).
 //
 // Closed clarify_session (status ∈ {answered, canceled}) ⟹ its
@@ -55,7 +56,7 @@ async function buildHarness(): Promise<Harness> {
     inputs: '{}',
     startedAt: Date.now(),
   })
-  return { db, taskId, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
+  return { db, taskId, cleanup: () => rimrafDir(tmp) }
 }
 
 async function insertClarifyRun(

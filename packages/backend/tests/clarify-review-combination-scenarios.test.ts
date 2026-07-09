@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // EXPLORATORY combination-scenario probes (agent × review × clarify).
 //
 // Goal: drive end-to-end flows through the REAL scheduler (runTask) + REAL
@@ -116,7 +117,7 @@ function freshCtx(): Ctx {
     stateDir,
     planFile,
     cleanup: () => {
-      rmSync(tmp, { recursive: true, force: true })
+      rimrafDir(tmp)
       delete process.env.SCENARIO_PLAN_FILE
       delete process.env.SCENARIO_STATE_DIR
       delete process.env.AGENT_WORKFLOW_HOME
@@ -161,6 +162,27 @@ async function awaitingReviewRun(db: DbClient, taskId: string, nodeId: string) {
 async function taskStatus(db: DbClient, taskId: string): Promise<string> {
   const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
   return t?.status ?? '??'
+}
+
+async function waitForTaskStatus(
+  db: DbClient,
+  taskId: string,
+  expected: string,
+  timeoutMs = 5000,
+): Promise<string> {
+  // RFC-W001: runTask drives the demote cascade to a terminal status before
+  // returning, but on a loaded Windows host the final setTaskStatus('done')
+  // commit can land an event-loop tick after runTask resolves. Poll briefly
+  // instead of racing it. (The test's own per-test timeout is raised below so
+  // the demote - which re-runs 3 nodes - never trips bun's 5s default and
+  // clobbers this file's shared `c` / process.env mid-run.)
+  const deadline = Date.now() + timeoutMs
+  let s = await taskStatus(db, taskId)
+  while (s !== expected && Date.now() < deadline) {
+    await Bun.sleep(10)
+    s = await taskStatus(db, taskId)
+  }
+  return s
 }
 
 async function makeDesigner(c: Ctx, name = 'designer', outs = ['design']): Promise<void> {
@@ -1219,7 +1241,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     await c.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, task.id))
 
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
-    expect(await taskStatus(c.db, task.id)).toBe('done')
+    // RFC-W001: the demote cascade re-runs 3 nodes (A->B->C), so this runTask
+    // alone runs ~6s on Windows - over bun's 5s default per-test timeout. This
+    // test's timeout is raised to 60s (see the test() call below); without that,
+    // bun fires the timeout mid-runTask, starts the NEXT test's beforeEach
+    // (clobbering this file's shared `c` + global process.env.SCENARIO_PLAN_FILE),
+    // and the scenario stub then reads a wrong plan -> the demote fails. Poll
+    // briefly for the terminal status in case the final commit lands a tick
+    // after runTask resolves.
+    expect(await waitForTaskStatus(c.db, task.id, 'done')).toBe('done')
 
     const doneA2 = (await topLevel(c.db, task.id, 'agentA')).filter((r) => r.status === 'done')
     const doneB2 = (await topLevel(c.db, task.id, 'agentB')).filter((r) => r.status === 'done')
@@ -1237,7 +1267,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     // leave newC consuming the OLD B here.
     expect(consumedOf(newB).agentA).toBe(newA.id)
     expect(consumedOf(newC).agentB).toBe(newB.id)
-  })
+  }, 60_000)
 
   // ---------------------------------------------------------------------------
   // S11 — A(clarify)→B(clarify)→review. A non-clarifying intermediate is the

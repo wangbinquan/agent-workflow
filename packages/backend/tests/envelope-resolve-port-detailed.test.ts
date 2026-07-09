@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locks in resolvePortContentDetailed — the variant of resolvePortContent
 // that also reports the worktree-relative file path the body was read from.
 //
@@ -12,10 +13,27 @@
 // sourcePath shape every dispatchReviewNode invocation depends on.
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolvePortContentDetailed } from '../src/services/envelope'
+import { isWindows } from './helpers/stub-runtime'
+
+const canSymlink = isWindows
+  ? (() => {
+      try {
+        const { mkdirSync, symlinkSync, rmSync } = require('node:fs')
+        const { join } = require('node:path')
+        const { tmpdir } = require('node:os')
+        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true })
+        symlinkSync(join(d, 'x'), join(d, 'y'), 'file')
+        rimrafDir(d)
+        return true
+      } catch {
+        return false
+      }
+    })()
+  : true
 
 describe('resolvePortContentDetailed sourcePath', () => {
   let worktree: string
@@ -27,8 +45,8 @@ describe('resolvePortContentDetailed sourcePath', () => {
   })
 
   afterEach(() => {
-    rmSync(worktree, { recursive: true, force: true })
-    rmSync(outside, { recursive: true, force: true })
+    rimrafDir(worktree)
+    rimrafDir(outside)
   })
 
   test('kind=markdown_file + relative path → sourcePath = relative path', () => {
@@ -109,7 +127,11 @@ describe('resolvePortContentDetailed sourcePath', () => {
   })
 
   test('kind=undefined + symlink inside worktree pointing outside → sourcePath undefined, passthrough', () => {
+    // On Windows, file symlinks need developer mode; if unavailable, the
+    // passthrough behavior still exists in the code — just skip the test case.
+    if (!canSymlink) return
     writeFileSync(join(outside, 'leak.md'), 'TOP SECRET')
+    const { symlinkSync } = require('node:fs')
     symlinkSync(join(outside, 'leak.md'), join(worktree, 'evil.md'))
     const result = resolvePortContentDetailed({
       rawContent: 'evil.md',
@@ -131,7 +153,7 @@ describe('RFC-080 — parametric kinds resolve via the registry', () => {
     worktree = mkdtempSync(join(tmpdir(), 'aw-rpcd80-wt-'))
   })
   afterEach(() => {
-    rmSync(worktree, { recursive: true, force: true })
+    rimrafDir(worktree)
   })
 
   test('kind=path<json> + .json file → body read, sourcePath = relative path', () => {

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-109 — syncTaskWorkflow: pull the latest workflow definition into a task's
 // frozen snapshot and continue from the breakpoint. Locks the service contract:
 //   - atomic snapshot + version swap inside the ownership CAS (AC-1)
@@ -113,7 +114,7 @@ async function buildHarness(
     appHome,
     workflowId,
     taskId,
-    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(tmp),
   }
 }
 

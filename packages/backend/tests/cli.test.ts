@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Coverage for the CLI subcommands wired in P-1-05.
 //
 // Strategy: call the command functions in-process where possible. For stop +
@@ -12,6 +13,7 @@ import { doctorCommand, formatDoctor } from '../src/cli/doctor'
 import { migrateCommand } from '../src/cli/migrate'
 import { statusCommand, formatStatus } from '../src/cli/status'
 import { stopCommand } from '../src/cli/stop'
+import { isWindows } from './helpers/stub-runtime'
 
 const mainPath = resolve(import.meta.dir, '..', 'src', 'main.ts')
 
@@ -28,7 +30,7 @@ describe('CLI subcommands (P-1-05)', () => {
   afterEach(() => {
     if (origHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
     else process.env.AGENT_WORKFLOW_HOME = origHome
-    rmSync(tmp, { recursive: true, force: true })
+    rimrafDir(tmp)
   })
 
   // --- config get / set ---
@@ -105,9 +107,18 @@ describe('CLI subcommands (P-1-05)', () => {
     // invasive. Instead, just verify token-file mode check works:
     writeFileSync(join(tmp, 'token'), 'a'.repeat(64), { mode: 0o644 })
     const result = await doctorCommand()
-    const tokenCheck = result.checks.find((c) => c.name === 'token file mode')
-    expect(tokenCheck?.ok).toBe(false)
-    expect(tokenCheck?.message).toContain('600')
+    if (!isWindows) {
+      const tokenCheck = result.checks.find((c) => c.name === 'token file mode')
+      expect(tokenCheck?.ok).toBe(false)
+      expect(tokenCheck?.message).toContain('600')
+    } else {
+      // Windows has no unix mode; the token file is checked via ACL (icacls)
+      // under the name "token file acl". Assert that check runs and reports a
+      // boolean verdict rather than the POSIX 0600 mode check.
+      const aclCheck = result.checks.find((c) => c.name === 'token file acl')
+      expect(aclCheck).toBeDefined()
+      expect(typeof aclCheck?.ok).toBe('boolean')
+    }
   })
 
   // --- status / stop (require a real daemon subprocess) ---
@@ -133,18 +144,24 @@ describe('CLI subcommands (P-1-05)', () => {
       // status sees the daemon, /health is reachable.
       const status = await statusCommand()
       expect(status.state).toBe('running')
-      expect(status.pid).toBe(child.pid ?? -1)
+      // On Windows Bun.spawn wraps an array cmd in a shell, so child.pid is the
+      // shell's pid, not the daemon's. The daemon writes its own pid to
+      // .daemon.info, which status reads back; assert against that, not the
+      // shell pid. (On POSIX the daemon pid === child.pid, asserted as such.)
+      expect(typeof status.pid).toBe('number')
+      expect((status.pid ?? -1) > 0).toBe(true)
+      if (!isWindows) expect(status.pid).toBe(child.pid ?? -1)
       expect(status.info?.host).toBe('127.0.0.1')
       expect(status.health?.ok).toBe(true)
       expect(typeof status.health?.opencodeVersion).toBe('string')
       const text = formatStatus(status)
       expect(text).toContain('daemon running')
-      expect(text).toContain(`pid:        ${child.pid}`)
+      expect(text).toContain(`pid:        ${status.pid}`)
 
       // stop terminates the daemon and removes the lock.
       const stopResult = await stopCommand({ timeoutMs: 10_000 })
       expect(stopResult.status).toBe('stopped')
-      expect(stopResult.pid).toBe(child.pid ?? -1)
+      expect(stopResult.pid).toBe(status.pid ?? -1)
       expect(existsSync(join(tmp, '.daemon.lock'))).toBe(false)
     } finally {
       // Defensive: kill the child if not already exited.
@@ -155,7 +172,7 @@ describe('CLI subcommands (P-1-05)', () => {
       }
       await child.exited
     }
-  })
+  }, 30_000)
 
   test('stop reports not-running when there is no lock', async () => {
     const result = await stopCommand()
@@ -184,19 +201,38 @@ describe('CLI subcommands (P-1-05)', () => {
       const infoPath = join(tmp, '.daemon.info')
       expect(existsSync(infoPath)).toBe(true)
       const info = JSON.parse(readFileSync(infoPath, 'utf-8')) as Record<string, unknown>
-      expect(info.pid).toBe(child.pid ?? -1)
+      // See status test above re: Windows shell-wrapped child.pid.
+      expect(typeof info.pid).toBe('number')
+      expect(((info.pid as number) ?? -1) > 0).toBe(true)
+      if (!isWindows) expect(info.pid).toBe(child.pid ?? -1)
       expect(info.host).toBe('127.0.0.1')
       expect(typeof info.port).toBe('number')
       expect(typeof info.url).toBe('string')
 
       // token file mode 0600 (sanity, since doctor checks this too).
-      expect(statSync(join(tmp, 'token')).mode & 0o777).toBe(0o600)
+      // On Windows, chmod is no-op; ACL verified separately in platform-fs.test.ts.
+      if (!isWindows) {
+        expect(statSync(join(tmp, 'token')).mode & 0o777).toBe(0o600)
+      }
     } finally {
-      child.kill('SIGTERM')
+      // On Windows, child.kill only terminates the shell wrapper Bun.spawn
+      // creates for an array cmd - not the daemon process. Stop the daemon via
+      // its own pid so the exit handler removes .daemon.info. POSIX also uses
+      // this path; child.kill below stays as a defensive backstop.
+      try {
+        await stopCommand({ timeoutMs: 10_000 })
+      } catch {
+        /* ignore */
+      }
+      try {
+        child.kill('SIGTERM')
+      } catch {
+        /* ignore */
+      }
       await child.exited
     }
     expect(existsSync(join(tmp, '.daemon.info'))).toBe(false)
-  })
+  }, 30_000)
 })
 
 async function waitForReady(

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Service + HTTP coverage for Skills CRUD (P-1-09).
 // Uses real temp filesystem (skill content lives on disk) + in-memory SQLite.
 
@@ -57,7 +58,7 @@ function buildHarness(): Harness {
     app,
     appHome,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
+      rimrafDir(appHome)
       if (prev === undefined) delete process.env.AGENT_WORKFLOW_HOME
       else process.env.AGENT_WORKFLOW_HOME = prev
     },
@@ -150,7 +151,7 @@ describe('skill service', () => {
         importExternalSkill(h.db, { name: 'isfile', externalPath: f, description: '' }),
       ).rejects.toBeInstanceOf(ValidationError)
     } finally {
-      rmSync(ext, { recursive: true, force: true })
+      rimrafDir(ext)
     }
   })
 
@@ -194,7 +195,7 @@ describe('skill service', () => {
         writeSkillContent(h.db, fsOpts, 'e', { bodyMd: 'changed' }),
       ).rejects.toBeInstanceOf(ConflictError)
     } finally {
-      rmSync(ext, { recursive: true, force: true })
+      rimrafDir(ext)
     }
   })
 
@@ -409,7 +410,7 @@ describe('skill HTTP routes', () => {
       expect(skill.sourceKind).toBe('external')
       expect(skill.externalPath).toBe(ext)
     } finally {
-      rmSync(ext, { recursive: true, force: true })
+      rimrafDir(ext)
     }
   })
 
@@ -428,7 +429,7 @@ describe('skill HTTP routes', () => {
       expect(res.status).toBe(409)
       expect(((await res.json()) as { code: string }).code).toBe('skill-external-readonly')
     } finally {
-      rmSync(ext, { recursive: true, force: true })
+      rimrafDir(ext)
     }
   })
 

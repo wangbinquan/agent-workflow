@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-079 PR-A — review multi-document mode (dispatch + selection + the three
 // decisions) integration locks.
 //
@@ -58,8 +59,8 @@ describe('RFC-079 — review multi-document mode', () => {
     db = createInMemoryDb(MIGRATIONS)
   })
   afterEach(() => {
-    rmSync(appHome, { recursive: true, force: true })
-    rmSync(worktree, { recursive: true, force: true })
+    rimrafDir(appHome)
+    rimrafDir(worktree)
   })
 
   const PATHS = ['cases/a.md', 'cases/b.md', 'cases/c.md']

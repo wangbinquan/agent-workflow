@@ -82,20 +82,34 @@ export async function stopCommand(opts: StopOptions = {}): Promise<StopResult> {
   if (isWindows()) {
     const info = readDaemonInfo()
     const token = readDaemonToken()
+    let shutdownInitiated = false
     if (info && token) {
       try {
         const res = await fetch(`${info.url}api/shutdown?token=${token}`, {
           method: 'POST',
         })
         if (res.ok) {
-          return await waitForExit(lockPath, pid, opts.timeoutMs)
+          shutdownInitiated = true
         }
-        // Non-OK → fall through to the hard-kill fallback below.
+        // Non-OK (e.g. 503 shutdown-not-wired on a daemon that predates the
+        // route) → leave shutdownInitiated false; hard-kill fallback below.
       } catch {
-        // Network error / daemon not reachable on the recorded port → fall through.
+        // The route handler is fire-and-forget: it calls deps.shutdown() and
+        // returns, and the daemon tears its listening socket down as it exits.
+        // That closes the connection mid-response, so fetch throws even though
+        // the POST reached the handler and a graceful shutdown is in flight.
+        // Treat the throw as "shutdown initiated" — do NOT fall through to
+        // the hard-kill, which would TerminateProcess the daemon mid-shutdown,
+        // racing the exit handler that unlinks the lock (and leave it behind).
+        shutdownInitiated = true
       }
     }
+    if (shutdownInitiated) {
+      return await waitForExit(lockPath, pid, opts.timeoutMs)
+    }
     // Fallback: hard-kill the pid (last resort; matches the pre-RFC behaviour).
+    // TerminateProcess bypasses the exit handler, so the lock + info file would
+    // be left behind; waitForExit reaps them once the process is gone.
     try {
       process.kill(pid)
     } catch (err) {
@@ -115,11 +129,28 @@ export async function stopCommand(opts: StopOptions = {}): Promise<StopResult> {
   return await waitForExit(lockPath, pid, opts.timeoutMs)
 }
 
-/** Poll for the lock file to vanish (daemon exited). Shared by both branches. */
+/** Poll for the lock file to vanish (daemon exited). Shared by both branches.
+ *  Also reaps a stale lock + info file if the process has died without removing
+ *  them (e.g. a Windows hard-kill TerminateProcess bypasses the exit handler) -
+ *  the daemon is gone, so the lock is definitively stale. RFC-W001. */
 async function waitForExit(lockPath: string, pid: number, timeoutMs?: number): Promise<StopResult> {
   const deadline = Date.now() + (timeoutMs ?? 30_000)
   while (Date.now() < deadline) {
     if (!existsSync(lockPath)) {
+      return { status: 'stopped', pid, message: `daemon (PID ${pid}) stopped` }
+    }
+    if (!isProcessAlive(pid)) {
+      // Process is gone but left the lock behind - reap it.
+      try {
+        unlinkSync(lockPath)
+      } catch {
+        /* race; ignore */
+      }
+      try {
+        unlinkSync(Paths.daemonInfo)
+      } catch {
+        /* may not exist */
+      }
       return { status: 'stopped', pid, message: `daemon (PID ${pid}) stopped` }
     }
     await Bun.sleep(100)

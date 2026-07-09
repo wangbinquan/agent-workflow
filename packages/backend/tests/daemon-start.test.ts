@@ -1,9 +1,29 @@
+import { rimrafDir } from './helpers/cleanup'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { isWindows } from './helpers/stub-runtime'
+import { stopCommand } from '../src/cli/stop'
+import { readPidFromLock } from '../src/util/lock'
 
 const mainPath = resolve(import.meta.dir, '..', 'src', 'main.ts')
+
+/** Stop the daemon whose home is `homeTmp` via the in-process `stop` command.
+ *  On Windows `child.kill('SIGTERM')` only terminates the shell wrapper that
+ *  Bun.spawn creates for an array cmd - the daemon process keeps running and
+ *  holds the lock, blocking the next spawn. `stopCommand` POSTs /api/shutdown
+ *  for a graceful exit (lock removed). POSIX uses the same path. RFC-W001. */
+async function stopDaemon(homeTmp: string): Promise<void> {
+  const prev = process.env.AGENT_WORKFLOW_HOME
+  process.env.AGENT_WORKFLOW_HOME = homeTmp
+  try {
+    await stopCommand({ timeoutMs: 10_000 })
+  } finally {
+    if (prev === undefined) delete process.env.AGENT_WORKFLOW_HOME
+    else process.env.AGENT_WORKFLOW_HOME = prev
+  }
+}
 
 // Tests 1-3 are read-only / idempotent contract checks against an IDENTICAL
 // fresh daemon, so they share ONE spawn (beforeAll) instead of paying the
@@ -25,9 +45,18 @@ describe('daemon start — read-only contract on a shared daemon (M1 P-1-01..P-1
   })
 
   afterAll(async () => {
-    child.kill('SIGTERM')
-    await child.exited
-    rmSync(tmp, { recursive: true, force: true })
+    await stopDaemon(tmp)
+    try {
+      child.kill('SIGTERM')
+    } catch {
+      /* ignore */
+    }
+    try {
+      await child.exited
+    } catch {
+      /* ignore */
+    }
+    rimrafDir(tmp)
   })
 
   test('serves /health with full schema after successful startup', async () => {
@@ -121,7 +150,7 @@ describe('daemon start — lifecycle (per-test daemon)', () => {
   })
 
   afterEach(() => {
-    rmSync(tmp, { recursive: true, force: true })
+    rimrafDir(tmp)
   })
 
   test('token + config persist across daemon restarts', async () => {
@@ -131,8 +160,17 @@ describe('daemon start — lifecycle (per-test daemon)', () => {
       try {
         ;({ token: token1 } = await waitForReady(child.stdout, 10_000))
       } finally {
-        child.kill('SIGTERM')
-        await child.exited
+        await stopDaemon(tmp)
+        try {
+          child.kill('SIGTERM')
+        } catch {
+          /* ignore */
+        }
+        try {
+          await child.exited
+        } catch {
+          /* ignore */
+        }
       }
     }
     {
@@ -141,15 +179,27 @@ describe('daemon start — lifecycle (per-test daemon)', () => {
         const { token: token2 } = await waitForReady(child.stdout, 10_000)
         expect(token2).toBe(token1)
       } finally {
-        child.kill('SIGTERM')
-        await child.exited
+        await stopDaemon(tmp)
+        try {
+          child.kill('SIGTERM')
+        } catch {
+          /* ignore */
+        }
+        try {
+          await child.exited
+        } catch {
+          /* ignore */
+        }
       }
     }
 
     // Token file mode preserved across restarts.
+    // On Windows, chmod is no-op; ACL verified separately in platform-fs.test.ts.
     const tokenFile = join(tmp, 'token')
     expect(existsSync(tokenFile)).toBe(true)
-    expect(statSync(tokenFile).mode & 0o777).toBe(0o600)
+    if (!isWindows) {
+      expect(statSync(tokenFile).mode & 0o777).toBe(0o600)
+    }
 
     // Daemon log accumulated info.
     const logFile = join(tmp, 'logs', 'daemon.log')
@@ -165,15 +215,28 @@ describe('daemon start — lifecycle (per-test daemon)', () => {
     try {
       await waitForReady(first.stdout, 10_000)
 
+      // The lock file holds the daemon's real pid. On Windows Bun.spawn wraps
+      // the array cmd in a shell, so first.pid is the shell's pid, not the
+      // daemon's - the second start reports the daemon pid from the lock.
+      const lockPid = readPidFromLock(join(tmp, '.daemon.lock'))
       const second = spawnDaemon(env)
       const exitCode = await second.exited
       expect(exitCode).toBe(1)
       const stderr = await new Response(second.stderr).text()
       expect(stderr).toContain('another daemon is already running')
-      expect(stderr).toContain(`PID ${first.pid ?? -1}`)
+      expect(stderr).toContain(`PID ${lockPid ?? first.pid ?? -1}`)
     } finally {
-      first.kill('SIGTERM')
-      await first.exited
+      await stopDaemon(tmp)
+      try {
+        first.kill('SIGTERM')
+      } catch {
+        /* ignore */
+      }
+      try {
+        await first.exited
+      } catch {
+        /* ignore */
+      }
     }
   })
 })

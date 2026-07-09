@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-034 T4 — gitSubmodule.syncSubmodules behavior across mode × .gitmodules
 // presence × git outcome. Uses an in-memory runGit stub so we can assert
 // exact argv ordering and verify stderr redaction without spinning real git.
@@ -23,7 +24,7 @@ function makeRepo(withGitmodules: boolean): string {
 }
 
 afterEach(() => {
-  if (tmp) rmSync(tmp, { recursive: true, force: true })
+  if (tmp) rimrafDir(tmp)
 })
 
 describe('detectSubmodules', () => {

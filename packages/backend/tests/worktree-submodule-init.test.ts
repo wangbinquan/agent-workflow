@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-034 T6 — createWorktree triggers `submodule update --init --recursive`
 // inside the fresh worktree when the parent repo has a `.gitmodules` file.
 //
@@ -85,8 +86,8 @@ describe.skipIf(!RUN_GIT_NETWORK)('createWorktree RFC-034 submodule init', () =>
   afterEach(() => {
     if (savedGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL
     else process.env.GIT_CONFIG_GLOBAL = savedGlobal
-    rmSync(root, { recursive: true, force: true })
-    rmSync(appHome, { recursive: true, force: true })
+    rimrafDir(root)
+    rimrafDir(appHome)
   })
 
   test('worktree on parent w/ .gitmodules populates submodule dir (mode=auto)', async () => {

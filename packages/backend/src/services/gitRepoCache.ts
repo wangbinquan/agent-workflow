@@ -436,6 +436,10 @@ export async function resolveCachedRepo(
     // policy and stays compatible with git < 2.13 if effective jobs got
     // clamped to 1).
     const cloneArgs: string[] = ['clone']
+    // Windows MAX_PATH=260: enable long path support in git
+    if (process.platform === 'win32') {
+      cloneArgs.push('-c', 'core.longPaths=true')
+    }
     if (submodule.mode !== 'never') {
       cloneArgs.push('--recurse-submodules')
       if (submodule.jobs > 1) {

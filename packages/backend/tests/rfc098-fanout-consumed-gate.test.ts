@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-098 B3 (audit S-20 + adversarial-review revision #7) — the fanout
 // consumed GENERATION GATE and its PERSISTED reuseDisabled flag.
 //
@@ -64,7 +65,7 @@ function buildHarness(): Harness {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

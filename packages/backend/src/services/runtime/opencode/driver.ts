@@ -101,7 +101,12 @@ export const opencodeDriver: RuntimeDriver = {
       gitUserName: ctx.gitUserName ?? null,
       gitUserEmail: ctx.gitUserEmail ?? null,
     })
-    return { cmd, env, stdin: { mode: 'ignore' } }
+    return {
+      cmd,
+      env,
+      // Windows: prompt is piped via stdin (Bun truncates argv at '\n').
+      ...(process.platform === 'win32' ? { stdin: { mode: 'pipe' as const, data: ctx.prompt } } : { stdin: { mode: 'ignore' as const } }),
+    }
   },
   // RFC-143 PR-4 — business-node spawn: the ENTIRE opencode assembly the runner
   // used to do inline (runner.ts:491-905 pre-collapse), moved VERBATIM so the
@@ -185,6 +190,8 @@ export const opencodeDriver: RuntimeDriver = {
     return {
       cmd,
       env,
+      // Windows: prompt is piped via stdin (Bun truncates argv at '\n').
+      ...(process.platform === 'win32' ? { stdin: { mode: 'pipe' as const, data: ctx.prompt } } : {}),
       diagnostics: {
         inlineModel: primaryInline?.model ?? null,
         inlineVariant: primaryInline?.variant ?? null,

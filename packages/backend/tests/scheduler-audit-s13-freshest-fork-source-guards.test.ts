@@ -35,7 +35,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 
 const SRC_ROOT = resolve(import.meta.dir, '..', 'src')
 
@@ -80,7 +80,12 @@ function srcInventory(needle: string): Record<string, number> {
     if (!entry.isFile() || !entry.name.endsWith('.ts')) continue
     const abs = join(entry.parentPath, entry.name)
     const n = countOccurrences(readFileSync(abs, 'utf-8'), needle)
-    if (n > 0) inventory[relative(SRC_ROOT, abs)] = n
+    if (n > 0) {
+      // RFC-W001: normalize to forward slashes so the inventory keys match the
+      // POSIX-shaped expectations on Windows (relative() yields backslashes).
+      const rel = relative(SRC_ROOT, abs)
+      inventory[sep === '/' ? rel : rel.split(sep).join('/')] = n
+    }
   }
   return inventory
 }

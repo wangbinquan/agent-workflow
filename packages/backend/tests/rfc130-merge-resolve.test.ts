@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-130 §6.2 — merge-agent conflict-resolution git orchestration
 // (services/nodeIsolation.resolveConflictWithAgent), against real temp git repos
 // with a MOCK injected agent. Locks the two outcomes that matter:
@@ -94,8 +95,8 @@ describe('RFC-130 §6.2 — resolveConflictWithAgent (mock agent)', () => {
     // Canonical worktree now carries the resolution (unstaged, HEAD unchanged).
     expect(readFileSync(join(canon, 'f.txt'), 'utf8')).toBe('L1\nMERGED\nL3\n')
     expect(await head(canon)).toBe(conflict.taskBaseHead)
-    rmSync(canon, { recursive: true, force: true })
-    rmSync(container, { recursive: true, force: true })
+    rimrafDir(canon)
+    rimrafDir(container)
   })
 
   test('agent leaves markers → unresolved, canon UNTOUCHED, resolve-iso kept (D27/§6.3)', async () => {
@@ -114,8 +115,8 @@ describe('RFC-130 §6.2 — resolveConflictWithAgent (mock agent)', () => {
     expect(existsSync(out.resolveIsoPath!)).toBe(true)
     // Canonical worktree is NOT polluted with markers — stays at "ours".
     expect(readFileSync(join(canon, 'f.txt'), 'utf8')).toBe('L1\nOURS\nL3\n')
-    rmSync(canon, { recursive: true, force: true })
-    rmSync(container, { recursive: true, force: true })
+    rimrafDir(canon)
+    rimrafDir(container)
   })
 
   test('agent throws (opencode died) → unresolved, resolve-iso kept, canon untouched', async () => {
@@ -130,8 +131,8 @@ describe('RFC-130 §6.2 — resolveConflictWithAgent (mock agent)', () => {
     expect(out.resolved).toBe(false)
     expect(out.resolveIsoPath).not.toBeNull()
     expect(readFileSync(join(canon, 'f.txt'), 'utf8')).toBe('L1\nOURS\nL3\n')
-    rmSync(canon, { recursive: true, force: true })
-    rmSync(container, { recursive: true, force: true })
+    rimrafDir(canon)
+    rimrafDir(container)
   })
 
   // Codex P1 — fail closed: git reports a conflicted PATH whose CLASS the manifest
@@ -157,8 +158,8 @@ describe('RFC-130 §6.2 — resolveConflictWithAgent (mock agent)', () => {
     expect(out.resolveIsoPath).not.toBeNull()
     // The unhandled conflict must NOT reach canonical.
     expect(readFileSync(join(canon, 'f.txt'), 'utf8')).toBe('L1\nOURS\nL3\n')
-    rmSync(canon, { recursive: true, force: true })
-    rmSync(container, { recursive: true, force: true })
+    rimrafDir(canon)
+    rimrafDir(container)
   })
 
   // RFC-130 §6.3 resume — completeHumanResolvedConflict finishes a parked
@@ -205,8 +206,8 @@ describe('RFC-130 §6.2 — resolveConflictWithAgent (mock agent)', () => {
     expect(res.unresolvedRepos).toEqual([])
     expect(readFileSync(join(canon, 'f.txt'), 'utf8')).toBe('L1\nHUMAN\nL3\n')
     expect(existsSync(join(container, 'resolve-repo'))).toBe(false) // discarded on success
-    rmSync(canon, { recursive: true, force: true })
-    rmSync(container, { recursive: true, force: true })
+    rimrafDir(canon)
+    rimrafDir(container)
   })
 
   test('resume: human left conflict markers → NOT resolved, canon untouched, iso kept', async () => {
@@ -218,7 +219,7 @@ describe('RFC-130 §6.2 — resolveConflictWithAgent (mock agent)', () => {
     expect(res.unresolvedRepos).toContain('')
     expect(readFileSync(join(canon, 'f.txt'), 'utf8')).toBe('L1\nOURS\nL3\n')
     expect(existsSync(join(container, 'resolve-repo'))).toBe(true) // kept for the human
-    rmSync(canon, { recursive: true, force: true })
-    rmSync(container, { recursive: true, force: true })
+    rimrafDir(canon)
+    rimrafDir(container)
   })
 })

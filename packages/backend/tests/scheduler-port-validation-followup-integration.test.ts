@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-049 — scheduler integration for same-session port-validation follow-up.
 //
 // End-to-end smoke against mock-opencode. The agent emits a markdown_file
@@ -46,7 +47,7 @@ function buildHarness(): Harness {
     appHome,
     worktreePath,
     argvLog,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

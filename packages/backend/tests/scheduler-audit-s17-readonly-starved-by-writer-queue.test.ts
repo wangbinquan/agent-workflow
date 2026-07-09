@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-098 B1 REGRESSION LOCK — design/scheduler-audit-2026-06-10.md S-17 (WP-5)
 // （此文件由修复前的 CURRENT-BEHAVIOR LOCK 按原头注 FLIP 指引翻转而来。）
 //
@@ -104,7 +105,7 @@ function buildHarness(): Harness {
     worktreePath,
     mockPath,
     tracePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

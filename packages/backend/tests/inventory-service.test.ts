@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-029 T5 — services/inventory.ts.readSnapshotFromRunDir total-function
 // coverage. Test discipline: assert the *reason code* + the *snapshot
 // discriminator*, not exact error messages (those vary by node version).
@@ -14,7 +15,7 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'aw-inventory-'))
 })
 afterEach(() => {
-  rmSync(dir, { recursive: true, force: true })
+  rimrafDir(dir)
 })
 
 // RFC-146: inventory.isAgentRunKind was replaced by shared isAgentNodeKind.

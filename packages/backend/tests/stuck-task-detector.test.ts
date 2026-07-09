@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-053 PR-E — stuck-task detector (S1/S2/S3/S4), extended by RFC-098 WP-8
 // with S5 (running task, active node_run(s), events stalled — the wedged
 // opencode child the scheduler audit S-15 called a blind spot).
@@ -67,7 +68,7 @@ async function buildHarness(
     inputs: '{}',
     startedAt,
   })
-  return { db, taskId, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
+  return { db, taskId, cleanup: () => rimrafDir(tmp) }
 }
 
 async function insertRun(

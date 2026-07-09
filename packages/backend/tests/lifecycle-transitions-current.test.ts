@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-053 PR-A T1a — node_run.status transition matrix, *current* behavior.
 //
 // Each test exercises one service-layer entry point that mutates
@@ -130,7 +131,7 @@ async function buildHarness(opts?: {
     repoPath,
     taskId,
     definition,
-    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(tmp),
   }
 }
 

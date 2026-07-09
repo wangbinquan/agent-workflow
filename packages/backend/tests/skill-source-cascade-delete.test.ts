@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locks RFC-017 §A5 — DELETE /api/skill-sources/:id behaviour:
 //   - no agent references → 204 + cascade delete of all child skills
 //   - any agent reference → 422 skill-source-children-referenced + blockers
@@ -43,8 +44,8 @@ function build(): H {
     parent,
     appHome,
     cleanup: () => {
-      rmSync(parent, { recursive: true, force: true })
-      rmSync(appHome, { recursive: true, force: true })
+      rimrafDir(parent)
+      rimrafDir(appHome)
       if (prev === undefined) delete process.env.AGENT_WORKFLOW_HOME
       else process.env.AGENT_WORKFLOW_HOME = prev
     },

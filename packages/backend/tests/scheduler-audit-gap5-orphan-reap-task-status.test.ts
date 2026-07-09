@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // design/scheduler-audit-2026-06-10.md §⑥ 缺口5 (orphans 收割与任务状态) — 半锁半修。
 //
 // RFC-097 之后本缺口拆成两半，本文件相应一半锁缺陷、一半锁新语义：
@@ -48,7 +49,7 @@ interface Harness {
 function buildHarness(): Harness {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-gap5-orphans-'))
   const db = createInMemoryDb(MIGRATIONS)
-  return { db, tmp, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
+  return { db, tmp, cleanup: () => rimrafDir(tmp) }
 }
 
 async function seedTask(db: DbClient, status: string): Promise<string> {

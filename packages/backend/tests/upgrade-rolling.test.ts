@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-054 W1-6 — rolling upgrade test.
 //
 // LOCKS: a daemon home stopped at an old migration must (a) accept the
@@ -110,7 +111,7 @@ function freezeAt(idx: number, outDbPath: string): void {
     migrate(db, { migrationsFolder: partialMigDir })
     sqlite.close()
   } finally {
-    rmSync(partialMigDir, { recursive: true, force: true })
+    rimrafDir(partialMigDir)
   }
 }
 
@@ -153,7 +154,7 @@ function buildHarness(label: string): Harness {
     home,
     cleanup: () => {
       try {
-        rmSync(home, { recursive: true, force: true })
+        rimrafDir(home)
       } catch {
         /* best-effort */
       }

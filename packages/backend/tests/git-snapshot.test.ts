@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // gitStashSnapshot + rollbackToSnapshot end-to-end against a real git
 // fixture (P-3-07).
 
@@ -20,7 +21,7 @@ async function buildRepo(): Promise<Repo> {
   writeFileSync(join(path, 'a.txt'), 'original\n')
   await runGit(path, ['add', '.'])
   await runGit(path, ['commit', '-q', '-m', 'init'])
-  return { path, cleanup: () => rmSync(path, { recursive: true, force: true }) }
+  return { path, cleanup: () => rimrafDir(path) }
 }
 
 describe('gitStashSnapshot + rollbackToSnapshot', () => {

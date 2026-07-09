@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-135 — GET /api/runtimes/status (homepage multi-runtime status line).
 //
 // Locks the contract that replaced the legacy single-runtime probe
@@ -31,6 +32,7 @@ import {
 import { createSession } from '../src/auth/sessionStore'
 import { createPat } from '../src/auth/patStore'
 import { createUser } from '../src/services/users'
+import { isWindows, isProcessRunningByCmd } from './helpers/stub-runtime'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -45,8 +47,26 @@ interface Harness {
   claudeBin: string
 }
 
-/** Minimal `--version`-only stub; non-version args exit 99. */
-function writeVersionBinary(path: string, stdout: string, exit = 0): void {
+/** Minimal `--version`-only stub; non-version args exit 99. Returns the executable path. */
+function writeVersionBinary(path: string, stdout: string, exit = 0): string {
+  if (isWindows) {
+    // Write a .js stub and a .cmd wrapper; return the .cmd path.
+    const jsPath = path + '.js'
+    const js = `// Auto-generated version stub for Windows test compatibility
+const args = process.argv.slice(2)
+if (args.includes('--version') || args.includes('-v')) {
+  process.stdout.write(${JSON.stringify(stdout + '\\n')})
+  process.exit(${exit})
+}
+process.stderr.write('unknown: ' + args.join(' ') + '\\n')
+process.exit(99)
+`
+    writeFileSync(jsPath, js)
+    const cmdPath = path + '.cmd'
+    writeFileSync(cmdPath, `@echo off\nbun run "${jsPath}" %*\n`)
+    return cmdPath
+  }
+
   const escaped = stdout.replace(/'/g, `'\\''`)
   writeFileSync(
     path,
@@ -58,6 +78,7 @@ esac
 `,
   )
   chmodSync(path, 0o755)
+  return path
 }
 
 /**
@@ -65,21 +86,33 @@ esac
  * FORKS the sleep (no exec), so the hang lives in a grandchild: killing only
  * the direct child would leave it running and holding the stdout pipe. The
  * odd duration doubles as a unique pgrep marker for the reap assertion.
+ *
+ * On Windows, the .js stub uses setInterval to hang; the marker is a unique
+ * string in the script for process detection via wmic.
+ * Returns the executable path.
  */
-const HANG_MARKER = 'sleep 63047'
-function writeHangingBinary(path: string): void {
+const HANG_MARKER = isWindows ? 'aw-hang-marker-63047' : 'sleep 63047'
+function writeHangingBinary(path: string): string {
+  if (isWindows) {
+    const jsPath = path + '.js'
+    writeFileSync(jsPath, `// ${HANG_MARKER}\nsetInterval(() => {}, 60000)\n`)
+    const cmdPath = path + '.cmd'
+    writeFileSync(cmdPath, `@echo off\nbun run "${jsPath}" %*\n`)
+    return cmdPath
+  }
   writeFileSync(path, `#!/bin/sh\n${HANG_MARKER}\n`)
   chmodSync(path, 0o755)
+  return path
 }
 
 async function makeHarness(): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc135-'))
   const configPath = join(tmp, 'config.json')
   loadConfig(configPath) // write defaults
-  const opencodeBin = join(tmp, 'opencode-stub')
-  const claudeBin = join(tmp, 'claude-stub')
-  writeVersionBinary(opencodeBin, 'stub-opencode 1.14.25')
-  writeVersionBinary(claudeBin, '2.1.193 (Claude Code)')
+  const opencodeBinBase = join(tmp, 'opencode-stub')
+  const claudeBinBase = join(tmp, 'claude-stub')
+  const opencodeBin = writeVersionBinary(opencodeBinBase, 'stub-opencode 1.14.25')
+  const claudeBin = writeVersionBinary(claudeBinBase, '2.1.193 (Claude Code)')
   // Pin BOTH protocol defaults to controlled stubs — the machine running the
   // tests may or may not have real opencode/claude on PATH.
   applyConfigPatch(configPath, { opencodePath: opencodeBin, claudeCodePath: claudeBin })
@@ -118,7 +151,7 @@ describe('RFC-135 GET /api/runtimes/status', () => {
 
   afterEach(() => {
     delete process.env[TIMEOUT_ENV]
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 
   test('default registry → both builtins probed, opencode isDefault, schema-clean', async () => {
@@ -155,8 +188,8 @@ describe('RFC-135 GET /api/runtimes/status', () => {
   })
 
   test('custom fork row probes ITS binaryPath, not the protocol default', async () => {
-    const forkBin = join(h.tmp, 'my-fork')
-    writeVersionBinary(forkBin, 'myfork 9.9.9')
+    const forkBinBase = join(h.tmp, 'my-fork')
+    const forkBin = writeVersionBinary(forkBinBase, 'myfork 9.9.9')
     await createRuntime(h.db, { name: 'my-fork', protocol: 'opencode', binaryPath: forkBin })
     const json = await bodyOf(await req(h.app))
     const fork = json.runtimes.find((r) => r.name === 'my-fork')
@@ -170,8 +203,8 @@ describe('RFC-135 GET /api/runtimes/status', () => {
   test('unparseable version string still reads ok (version-gate-free core)', async () => {
     // The user-reported case: a custom binary whose --version output has no
     // X.Y.Z shape. It RUNS, so it must read available — version is display-only.
-    const weirdBin = join(h.tmp, 'weird-fork')
-    writeVersionBinary(weirdBin, 'fork build fortytwo')
+    const weirdBinBase = join(h.tmp, 'weird-fork')
+    const weirdBin = writeVersionBinary(weirdBinBase, 'fork build fortytwo')
     await createRuntime(h.db, { name: 'weird-fork', protocol: 'opencode', binaryPath: weirdBin })
     const json = await bodyOf(await req(h.app))
     const weird = json.runtimes.find((r) => r.name === 'weird-fork')
@@ -239,8 +272,8 @@ describe('RFC-135 GET /api/runtimes/status', () => {
     // that the parallel healthy stubs never trip it on a loaded CI machine
     // (300ms proved flaky — spawn jitter SIGKILLed the healthy row too).
     process.env[TIMEOUT_ENV] = '2000'
-    const hangBin = join(h.tmp, 'hangs')
-    writeHangingBinary(hangBin)
+    const hangBinBase = join(h.tmp, 'hangs')
+    const hangBin = writeHangingBinary(hangBinBase)
     await createRuntime(h.db, { name: 'hangs', protocol: 'opencode', binaryPath: hangBin })
 
     const started = performance.now()
@@ -259,25 +292,37 @@ describe('RFC-135 GET /api/runtimes/status', () => {
     // Codex impl gate: the WHOLE process tree must be reaped, not just the
     // sh wrapper — the forked grandchild is the thing actually hanging. The
     // probe kills the detached process group, so no marker process survives.
-    const survivors = Bun.spawnSync({ cmd: ['pgrep', '-f', HANG_MARKER] })
-    expect(survivors.stdout.toString().trim()).toBe('')
+    expect(isProcessRunningByCmd(HANG_MARKER)).toBe(false)
   })
 
   test('wrapper that forks then exits BEFORE the timeout still gets its descendants reaped', async () => {
     // Codex impl gate round 2: exiting non-zero clears the timer, so the
     // timeout path never fires — the finally-side unconditional group reap is
     // what prevents this from leaking one forked child per homepage poll.
-    const marker = 'sleep 63053'
-    const bin = join(h.tmp, 'forks-and-dies')
-    writeFileSync(bin, `#!/bin/sh\n${marker} &\nexit 7\n`)
-    chmodSync(bin, 0o755)
+    const marker = isWindows ? 'aw-fork-marker-63053' : 'sleep 63053'
+    const binBase = join(h.tmp, 'forks-and-dies')
+    let bin: string
+    if (isWindows) {
+      // On Windows, spawn a long-lived child process then exit the parent.
+      // The child is a separate bun process running an infinite loop.
+      const childScript = join(h.tmp, 'fork-child.js')
+      writeFileSync(childScript, `// ${marker}\nsetInterval(() => {}, 60000)\n`)
+      const jsPath = binBase + '.js'
+      writeFileSync(jsPath, `// fork-and-die stub\nimport { spawn } from 'node:child_process'\nconst child = spawn('bun', ['run', ${JSON.stringify(childScript)}], { detached: true, stdio: 'ignore' })\nchild.unref()\nprocess.exit(7)\n`)
+      const cmdPath = binBase + '.cmd'
+      writeFileSync(cmdPath, `@echo off\nbun run "${jsPath}" %*\n`)
+      bin = cmdPath
+    } else {
+      bin = binBase
+      writeFileSync(bin, `#!/bin/sh\n${marker} &\nexit 7\n`)
+      chmodSync(bin, 0o755)
+    }
     await createRuntime(h.db, { name: 'forks-and-dies', protocol: 'opencode', binaryPath: bin })
 
     const res = await req(h.app)
     expect(res.status).toBe(200)
     expect((await bodyOf(res)).runtimes.find((r) => r.name === 'forks-and-dies')!.ok).toBe(false)
 
-    const survivors = Bun.spawnSync({ cmd: ['pgrep', '-f', marker] })
-    expect(survivors.stdout.toString().trim()).toBe('')
+    expect(isProcessRunningByCmd(marker)).toBe(false)
   })
 })

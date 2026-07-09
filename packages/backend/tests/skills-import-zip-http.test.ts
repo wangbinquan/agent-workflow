@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-019: HTTP layer for ZIP batch import.
 // Locks the parse / commit contracts: multipart wiring, decisions JSON,
 // error code surface area.
@@ -38,7 +39,7 @@ function build(): H {
     app,
     appHome,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
+      rimrafDir(appHome)
       if (prev === undefined) delete process.env.AGENT_WORKFLOW_HOME
       else process.env.AGENT_WORKFLOW_HOME = prev
     },

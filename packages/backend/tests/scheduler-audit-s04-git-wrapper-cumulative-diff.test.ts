@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // REGRESSION GUARD — audit S-4 修复锁（RFC-098 B3 / WP-6c；原 CURRENT-BEHAVIOR
 // LOCK 已按头注指引翻转）。
 //
@@ -138,7 +139,7 @@ async function buildHarness(slug: string): Promise<Harness> {
     repoPath,
     shimPath,
     stateDir,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

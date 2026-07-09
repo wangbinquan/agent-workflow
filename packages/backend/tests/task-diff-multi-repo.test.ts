@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // LOCKS: RFC-066 PR-B T12 — getTaskDiff multi-repo concatenation.
 //
 // Cases covered:
@@ -57,8 +58,8 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     appHome,
     repos,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(reposParent, { recursive: true, force: true })
+      rimrafDir(appHome)
+      rimrafDir(reposParent)
     },
   }
 }

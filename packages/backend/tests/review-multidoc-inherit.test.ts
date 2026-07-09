@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-129 — multi-document review cross-round selection inheritance (integration).
 //
 // WHY THIS FILE EXISTS (regression intent, proposal AC-1..AC-12):
@@ -51,8 +52,8 @@ describe('RFC-129 — cross-round selection inheritance', () => {
     db = createInMemoryDb(MIGRATIONS)
   })
   afterEach(() => {
-    rmSync(appHome, { recursive: true, force: true })
-    rmSync(worktree, { recursive: true, force: true })
+    rimrafDir(appHome)
+    rimrafDir(worktree)
   })
 
   async function seed(upstreamKind: string): Promise<{

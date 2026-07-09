@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -5,6 +6,7 @@ import { join } from 'node:path'
 import { ensureTokenFile, generateToken, rotateTokenFile, tokenAuth } from '../src/auth/token'
 import { Hono } from 'hono'
 import { errorHandler } from '../src/util/errors'
+import { isWindows } from './helpers/stub-runtime'
 
 describe('token file management', () => {
   let tmp: string
@@ -16,7 +18,7 @@ describe('token file management', () => {
   })
 
   afterEach(() => {
-    rmSync(tmp, { recursive: true, force: true })
+    rimrafDir(tmp)
   })
 
   test('generateToken returns 64-char hex string', () => {
@@ -35,8 +37,11 @@ describe('token file management', () => {
     expect(second).toBe(first) // stable across reads
   })
 
+  // Windows has no unix permission bits; secureFile uses icacls ACL instead
+  // (tested in platform-fs.test.ts). Skip mode assertion on Windows.
   test('ensureTokenFile sets mode 0600', () => {
     ensureTokenFile(tokenPath)
+    if (isWindows) return // chmod is no-op on Windows; ACL verified separately
     const mode = statSync(tokenPath).mode & 0o777
     expect(mode).toBe(0o600)
   })

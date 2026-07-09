@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-098 B3 (audit S-20) — shard value-hash gate: after a daemon restart, a
 // shard whose UPSTREAM CONTENT changed must re-run; siblings whose content is
 // unchanged are replayed from their done rows without a spawn.
@@ -56,7 +57,7 @@ function buildHarness(): Harness {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

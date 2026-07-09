@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Integration tests for the opencode runner (P-1-13b).
 //
 // Strategy: opencode is replaced with a Bun-script mock fixture that the
@@ -84,7 +85,7 @@ async function buildHarness(): Promise<Harness> {
     worktreePath,
     taskId,
     workflowId,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 
@@ -376,7 +377,7 @@ describe('runNode', () => {
       // on the runner's behavior is the exit code + outputs.
       expect(result.outputs.summary).toBe('ok')
     } finally {
-      rmSync(skillSource, { recursive: true, force: true })
+      rimrafDir(skillSource)
     }
   })
 

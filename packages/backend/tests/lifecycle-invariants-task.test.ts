@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-053 PR-D — task-level invariants T1/T2/T3/U1.
 //
 //   T1  task.status='awaiting_review' ⟹ ∃ node_run.status='awaiting_review'
@@ -58,7 +59,7 @@ async function buildHarness(taskStatus: TaskStatus, nodes: WorkflowNode[]): Prom
     inputs: '{}',
     startedAt: Date.now(),
   })
-  return { db, taskId, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
+  return { db, taskId, cleanup: () => rimrafDir(tmp) }
 }
 
 async function insertRun(

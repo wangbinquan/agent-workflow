@@ -17,6 +17,7 @@
 // These are pure unit tests on the exported oracle; the gate integration (dispatchTaskQuestions /
 // quick-finalize) is covered in rfc133-dispatch-queued-deadlock.test.ts.
 
+import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'bun:test'
 
 import type { nodeRuns, taskQuestions } from '../src/db/schema'
@@ -185,7 +186,7 @@ describe('RFC-133 causeClassForEntry — single shared definition', () => {
 
   test('grep guard: taskQuestionDispatch has NO private causeClassForEntry definition left', async () => {
     const src = await Bun.file(
-      new URL('../src/services/taskQuestionDispatch.ts', import.meta.url).pathname,
+      fileURLToPath(new URL('../src/services/taskQuestionDispatch.ts', import.meta.url)),
     ).text()
     expect(src).not.toMatch(/function causeClassForEntry/)
     expect(src).toContain('causeClassForEntry,')

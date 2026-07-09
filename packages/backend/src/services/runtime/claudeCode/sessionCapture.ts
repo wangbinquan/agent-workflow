@@ -30,9 +30,18 @@ export interface CaptureClaudeSessionsOpts {
   worktreePath: string
 }
 
-/** Derive claude's project-dir slug from a cwd (path with `/` replaced by `-`). */
+/**
+ * Derive claude's project-dir slug from a cwd. Real claude code replaces every
+ * path separator (and the Windows drive `:`) with `-`, e.g. on win32
+ * `C:\Users\foo\proj` -> `C--Users-foo-proj` (verified against the actual
+ * `~/.claude/projects/` layout). Replacing only `/` (the old behavior) left
+ * backslashes and the drive colon in the slug on Windows, so the resulting
+ * `join(configDir, 'projects', slug, ...)` produced an invalid mid-path `C:`
+ * and the transcript dir was never found. POSIX paths are unaffected (they
+ * contain neither `\` nor `:`).
+ */
 export function cwdSlug(cwd: string): string {
-  return cwd.replace(/\//g, '-')
+  return cwd.replace(/[/\\:]/g, '-')
 }
 
 export async function captureClaudeSessions(opts: CaptureClaudeSessionsOpts): Promise<void> {

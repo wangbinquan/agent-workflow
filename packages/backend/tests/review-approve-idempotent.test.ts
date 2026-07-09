@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-052 regression: `submitReviewDecision({ decision: 'approved' })` must
 // upsert (NOT plain-insert) the `approved_doc` + `approval_meta` rows into
 // node_run_outputs. Without that, a second approve on the same node_run
@@ -36,8 +37,8 @@ describe('submitReviewDecision approved branch is idempotent (RFC-052)', () => {
   })
 
   afterEach(() => {
-    rmSync(appHome, { recursive: true, force: true })
-    rmSync(worktree, { recursive: true, force: true })
+    rimrafDir(appHome)
+    rimrafDir(worktree)
   })
 
   test('approve does NOT crash when node_run_outputs already has approved_doc/approval_meta rows', async () => {

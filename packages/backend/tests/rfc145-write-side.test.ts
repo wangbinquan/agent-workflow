@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-145 T3 — 写侧正向声明：runner 在 stamp 点落 failure_code。
 //
 // 为什么这条测试存在：failure_code 的产出从「scheduler 反解 errorMessage 前缀」
@@ -46,7 +47,7 @@ process.exit(0)
     appHome,
     worktreePath,
     mockPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

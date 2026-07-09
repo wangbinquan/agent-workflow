@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-053 — edge-case coverage for runLifecycleInvariants /
 // reconcileLifecycleAlerts that the PR-D test suite skipped:
 //
@@ -37,7 +38,7 @@ async function freshDb(): Promise<{ db: DbClient; cleanup: () => void }> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-edge-'))
   mkdirSync(tmp, { recursive: true })
   const db = createInMemoryDb(MIGRATIONS)
-  return { db, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
+  return { db, cleanup: () => rimrafDir(tmp) }
 }
 
 async function seedTask(

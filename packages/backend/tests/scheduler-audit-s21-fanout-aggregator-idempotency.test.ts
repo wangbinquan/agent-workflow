@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // REGRESSION LOCK — design/scheduler-audit-2026-06-10.md S-21 (WP-6b，
 // RFC-098 B3 已修复；本文件自此锁定修复后语义，不再是缺陷现状锁定)
 //
@@ -59,7 +60,7 @@ function buildHarness(): Harness {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

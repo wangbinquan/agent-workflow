@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-130 T1 — per-node isolated worktree + serial merge-back git primitives.
 //
 // Locks the util/git.ts primitives that PR-A's scheduler wiring builds on, against
@@ -55,7 +56,7 @@ async function porcelain(dir: string): Promise<string> {
 }
 function freshIsoPath(): string {
   const p = mkdtempSync(join(tmpdir(), 'aw-rfc130-iso-'))
-  rmSync(p, { recursive: true, force: true }) // worktree add requires the path to not exist
+  rimrafDir(p) // worktree add requires the path to not exist
   return p
 }
 
@@ -69,7 +70,7 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     expect(await show(repo, `${snap}:new.txt`)).toBe('untracked\n')
     // real worktree/index untouched: new.txt still untracked (temp index was used)
     expect(await porcelain(repo)).toContain('?? new.txt')
-    rmSync(repo, { recursive: true, force: true })
+    rimrafDir(repo)
   })
 
   test('createIsolatedWorktree: upstream changes UNSTAGED via plain git diff, untracked stays untracked, deletion reflected (D23/D28)', async () => {
@@ -102,7 +103,7 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     expect(await porcelain(iso)).toContain('?? added.txt')
 
     await runGit(repo, ['worktree', 'remove', '--force', iso])
-    rmSync(repo, { recursive: true, force: true })
+    rimrafDir(repo)
   })
 
   test('mergeTreeInMemory: non-overlapping edits auto-merge clean; overlapping edits conflict (D3)', async () => {
@@ -128,7 +129,7 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     expect(conflicted.conflicts).toContain('f.txt')
     // The enriched result carries the raw CONFLICT messages (RFC-130 §6.2③).
     expect(conflicted.rawConflictOutput).toContain('CONFLICT (content): Merge conflict in f.txt')
-    rmSync(repo, { recursive: true, force: true })
+    rimrafDir(repo)
   })
 
   // RFC-130 §6.2③ — the producer→classifier seam against REAL git: enriched
@@ -162,7 +163,7 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     expect(byPath['b.bin']).toBe('binary')
     // conflicts[] (paths) stays back-compat: all three present.
     expect(new Set(res.conflicts)).toEqual(new Set(['f.txt', 'del.txt', 'b.bin']))
-    rmSync(repo, { recursive: true, force: true })
+    rimrafDir(repo)
   })
 
   test('commitTree wraps a tree OID into a worktree-add-able commit (P2-2)', async () => {
@@ -176,7 +177,7 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     expect(add.exitCode).toBe(0)
     expect(existsSync(join(iso, 'base.txt'))).toBe(true)
     await runGit(repo, ['worktree', 'remove', '--force', iso])
-    rmSync(repo, { recursive: true, force: true })
+    rimrafDir(repo)
   })
 
   test('materializeTree applies add/mod/delete, keeps HEAD, leaves delta UNSTAGED (§5.3)', async () => {
@@ -202,7 +203,7 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     const diff = (await runGit(repo, ['diff', '--name-only'])).stdout
     expect(diff).toContain('base.txt')
     expect(diff).toContain('del.txt')
-    rmSync(repo, { recursive: true, force: true })
+    rimrafDir(repo)
   })
 
   test('materializeTree handles file→dir replacement (blocking path removed before checkout, Codex 五/六轮)', async () => {
@@ -220,7 +221,7 @@ describe('RFC-130 T1 iso worktree primitives', () => {
 
     await materializeTree(repo, { mergedTree, canonCurrentTree: canonTree, taskBaseHead: taskBase })
     expect(readFileSync(join(repo, 'foo', 'bar'), 'utf8')).toBe('now a dir\n')
-    rmSync(repo, { recursive: true, force: true })
+    rimrafDir(repo)
   })
 
   test('residualConflictMarkers pure oracle', () => {
@@ -246,7 +247,7 @@ describe('RFC-130 T1 iso worktree primitives', () => {
   test('hasDirtySubmoduleContent: false with no submodules, true with dirty submodule content (D22)', async () => {
     const plain = await initRepo({ 'a.txt': 'x\n' })
     expect(await hasDirtySubmoduleContent(plain)).toBe(false)
-    rmSync(plain, { recursive: true, force: true })
+    rimrafDir(plain)
 
     const sub = await initRepo({ 'lib.txt': 'v1\n' })
     const parent = await initRepo({ 'main.txt': 'top\n' })
@@ -256,7 +257,7 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     expect(await hasDirtySubmoduleContent(parent)).toBe(false)
     writeFileSync(join(parent, 'vendor', 'lib.txt'), 'edited\n')
     expect(await hasDirtySubmoduleContent(parent)).toBe(true)
-    rmSync(sub, { recursive: true, force: true })
-    rmSync(parent, { recursive: true, force: true })
+    rimrafDir(sub)
+    rimrafDir(parent)
   })
 })

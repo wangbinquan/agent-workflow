@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-037 T5 — locks `POST /api/tasks` rejecting missing / blank / overlong
 // names with 422, persisting the trimmed value on accept, and behaving the
 // same way for JSON and multipart body paths.
@@ -70,8 +71,8 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     wfId,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(repoPath, { recursive: true, force: true })
+      rimrafDir(appHome)
+      rimrafDir(repoPath)
       if (prevHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
       else process.env.AGENT_WORKFLOW_HOME = prevHome
     },

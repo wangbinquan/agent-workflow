@@ -162,6 +162,9 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
     }
 
     try {
+      // On Windows, detached breaks the stdout pipe (child gets its own console),
+      // so we skip it there — killProcessTree handles Windows via taskkill /T /F.
+      const isWindows = process.platform === 'win32'
       child = Bun.spawn({
         cmd: plan.cmd,
         cwd: attemptDir,
@@ -169,7 +172,7 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
         stdout: 'pipe',
         stderr: 'pipe',
         stdin: plan.stdin?.mode === 'pipe' ? 'pipe' : 'ignore',
-        detached: true,
+        ...(isWindows ? {} : { detached: true }),
       })
     } catch (err) {
       return {

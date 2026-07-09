@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-024 T3 — locks the cold-clone / warm-hit / fetch-on-reuse /
 // concurrent-same-URL behavior of services/gitRepoCache.ts. Uses a real
 // local bare repo as the "remote" so the suite exercises git itself.
@@ -66,12 +67,12 @@ describe('gitRepoCache (RFC-024 T3)', () => {
 
   afterEach(() => {
     try {
-      rmSync(appHome, { recursive: true, force: true })
+      rimrafDir(appHome)
     } catch {
       /* noop */
     }
     try {
-      rmSync(remoteDir, { recursive: true, force: true })
+      rimrafDir(remoteDir)
     } catch {
       /* noop */
     }
@@ -153,7 +154,7 @@ describe('gitRepoCache (RFC-024 T3)', () => {
 
   test('cache row pointing at missing dir self-heals on next resolve', async () => {
     const a = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
-    rmSync(a.cached.localPath, { recursive: true, force: true })
+    rimrafDir(a.cached.localPath)
     const b = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
     expect(b.cold).toBe(true)
     expect(existsSync(b.cached.localPath)).toBe(true)
@@ -177,7 +178,7 @@ describe('gitRepoCache (RFC-024 T3)', () => {
       // urlRedacted is always populated.
       for (const it of items) expect(it.urlRedacted.length).toBeGreaterThan(0)
     } finally {
-      rmSync(r2.dir, { recursive: true, force: true })
+      rimrafDir(r2.dir)
     }
   })
 
@@ -191,7 +192,7 @@ describe('gitRepoCache (RFC-024 T3)', () => {
 
   test('refreshCachedRepo on missing dir throws repo-cache-corrupt', async () => {
     const a = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
-    rmSync(a.cached.localPath, { recursive: true, force: true })
+    rimrafDir(a.cached.localPath)
     let err: unknown
     try {
       await refreshCachedRepo({ db, appHome }, a.cached.id)
@@ -234,7 +235,7 @@ async function advanceFixtureRemote(bareUrl: string): Promise<string> {
     return r.stdout.trim()
   } finally {
     try {
-      rmSync(workRoot, { recursive: true, force: true })
+      rimrafDir(workRoot)
     } catch {
       /* noop */
     }
@@ -257,12 +258,12 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
 
   afterEach(() => {
     try {
-      rmSync(appHome, { recursive: true, force: true })
+      rimrafDir(appHome)
     } catch {
       /* noop */
     }
     try {
-      rmSync(remoteDir, { recursive: true, force: true })
+      rimrafDir(remoteDir)
     } catch {
       /* noop */
     }
@@ -340,7 +341,7 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
       { url: remoteUrl },
     )
     // Nuke the bare remote so subsequent fetch fails.
-    rmSync(remoteDir, { recursive: true, force: true })
+    rimrafDir(remoteDir)
     const r = await resolveCachedRepo({ db, appHome, syncBranches: ['main'] }, { url: remoteUrl })
     expect(r.fetchOk).toBe(false)
     // FF must be skipped entirely when fetch failed (no new origin commits).
@@ -382,7 +383,7 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
       await spawnGitInit(work, '-C', work, 'commit', '-m', 'foo')
       await spawnGitInit(work, '-C', work, 'push', 'origin', 'feature/foo')
     } finally {
-      rmSync(workRoot, { recursive: true, force: true })
+      rimrafDir(workRoot)
     }
     // First resolve clones the cache. classifyBaseRef on cold-clone won't see
     // the local branch yet — but warm path will. Run twice.

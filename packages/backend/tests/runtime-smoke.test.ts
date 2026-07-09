@@ -11,6 +11,7 @@ import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { smokeRuntime } from '../src/services/runtimeSmoke'
+import { isWindows } from './helpers/stub-runtime'
 
 const MOCK_CLAUDE = resolve(import.meta.dir, 'fixtures', 'mock-claude.ts')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -19,6 +20,21 @@ const SMOKE_TIMEOUT = 30_000
 /** A single executable wrapper that execs `bun run <mock>` (binaryPath is one path). */
 function wrapperFor(mockFile: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'aw-smoke-bin-'))
+  if (isWindows) {
+    // On Windows, write a .js wrapper that spawns bun with the mock file.
+    // buildCommand in spawn.ts detects .js and prefixes with ['bun', 'run'],
+    // so the final spawn becomes: bun run wrapper.js <args>
+    // The wrapper forwards args to the mock via bun run.
+    // Use require (not import) so the .js runs as CJS under bun run.
+    // Use stdio:'pipe' + manual forwarding (not 'inherit') because Bun's
+    // pipe to the parent is a ReadableStream that 'inherit' bypasses on Windows.
+    const wrapper = join(dir, 'runtime-bin.js')
+    writeFileSync(
+      wrapper,
+      `const { spawn } = require('node:child_process')\nconst child = spawn('bun', ['run', ${JSON.stringify(mockFile)}, ...process.argv.slice(2)], { stdio: ['inherit', 'pipe', 'pipe'], env: process.env })\nchild.stdout.pipe(process.stdout)\nchild.stderr.pipe(process.stderr)\nchild.on('exit', (code) => process.exit(code ?? 0))\n`,
+    )
+    return wrapper
+  }
   const wrapper = join(dir, 'runtime-bin')
   writeFileSync(wrapper, `#!/bin/sh\nexec bun run ${mockFile} "$@"\n`)
   chmodSync(wrapper, 0o755)
@@ -216,11 +232,13 @@ describe('smokeRuntime (RFC-112 PR-B)', () => {
   )
 
   test(
-    'a non-protocol binary (/bin/echo) emits no parseable events → stream-nonconforming',
+    'a non-protocol binary emits no parseable events → stream-nonconforming',
     async () => {
+      // On Windows use cmd.exe (always present); on POSIX use /bin/echo.
+      const nonProtocolBin = isWindows ? process.env.ComSpec ?? 'cmd.exe' : '/bin/echo'
       const r = await smokeRuntime({
         protocol: 'claude-code',
-        binaryPath: '/bin/echo',
+        binaryPath: nonProtocolBin,
         bridgeCredentials: false,
         timeoutMs: SMOKE_TIMEOUT,
       })

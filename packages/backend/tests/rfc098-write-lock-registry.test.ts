@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-098 B1 REGRESSION LOCK — per-task write-lock registry (audit S-9 / ⑥-10,
 // design/RFC-098-scheduler-closeout/design.md §B1 + 对抗检视修订 #1).
 //
@@ -363,7 +364,7 @@ describe('RFC-098 B1 — S-9: clarify rollback serializes behind the task write 
 
       gcTaskWriteSem(seeded.taskId) // idle now — keep the registry clean
     } finally {
-      rmSync(tmp, { recursive: true, force: true })
+      rimrafDir(tmp)
     }
   }, 20_000)
 })
@@ -445,7 +446,7 @@ describe('RFC-098 B1 — ⑥-10: clarify answer rolls back EVERY sub-repo of a m
 
       gcTaskWriteSem(seeded.taskId)
     } finally {
-      rmSync(tmp, { recursive: true, force: true })
+      rimrafDir(tmp)
     }
   }, 20_000)
 })

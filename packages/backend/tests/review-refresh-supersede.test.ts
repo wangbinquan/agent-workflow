@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-074 PR-B — review awaiting-refresh (B14-B15, design §7 / decision D5).
 //
 // When a review is parked at awaiting_review and its upstream source produces a
@@ -42,8 +43,8 @@ describe('RFC-074 — review awaiting-refresh: supersede + recomment-drop + v(n+
     db = createInMemoryDb(MIGRATIONS)
   })
   afterEach(() => {
-    rmSync(appHome, { recursive: true, force: true })
-    rmSync(worktree, { recursive: true, force: true })
+    rimrafDir(appHome)
+    rimrafDir(worktree)
   })
 
   async function seed(): Promise<{

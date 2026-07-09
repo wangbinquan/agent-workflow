@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-029: real-runtime tests for aw-inventory-dump.mjs.
 //
 // Background: every other inventory test in this RFC mocks one layer *above*
@@ -73,7 +74,7 @@ beforeEach(() => {
 afterEach(() => {
   if (prevOut === undefined) delete process.env.OPENCODE_AW_INVENTORY_OUT
   else process.env.OPENCODE_AW_INVENTORY_OUT = prevOut
-  rmSync(tmpDir, { recursive: true, force: true })
+  rimrafDir(tmpDir)
 })
 
 interface Snapshot {

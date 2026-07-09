@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-048 — Subagent live capture poller unit tests.
 //
 // Exercises startLiveSubagentCapture's pure logic against a hand-built
@@ -522,6 +523,6 @@ describe('startLiveSubagentCapture', () => {
   // sequentially so leaking is bounded by the test count, but rmSync keeps
   // CI tidy.
   test('cleanup', () => {
-    rmSync(workdir, { recursive: true, force: true })
+    rimrafDir(workdir)
   })
 })

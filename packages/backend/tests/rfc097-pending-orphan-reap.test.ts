@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-097 — pending 孤儿任务的 boot 收割 + 恢复（design/RFC-097-task-status-cas/
 // design.md §3「崩溃窗口补偿」）。
 //
@@ -94,7 +95,7 @@ async function buildHarness(): Promise<Harness> {
     repoPath,
     workflowId,
     doneMock,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-083 PR-C — assembly + git-backed orchestration.
 //  - assembleStructuralDiff: injected in-memory readers, mixes code + manifest
 //    files into one artifact (files + dependencyChanges + summary).
@@ -73,7 +74,7 @@ describe('assembleStructuralDiff — in-memory', () => {
 describe('computeFromWorktree — real git repo', () => {
   const dirs: string[] = []
   afterAll(() => {
-    for (const d of dirs) rmSync(d, { recursive: true, force: true })
+    for (const d of dirs) rimrafDir(d)
   })
 
   async function makeRepo(): Promise<string> {

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-windows PR-2 — filesystem + ACL oracle (T6).
 //
 // 为什么这条测试存在：PR-2 把 file:// 字符串拼接（`file://${path}`，Windows
@@ -22,7 +23,7 @@ beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'aw-pr2-'))
 })
 afterEach(() => {
-  rmSync(tmp, { recursive: true, force: true })
+  rimrafDir(tmp)
 })
 
 describe('RFC-windows PR-2 T7 — file:// round-trip (toFileUrl / fromFileUrl)', () => {

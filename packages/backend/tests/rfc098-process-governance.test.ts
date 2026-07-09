@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-098 WP-8 — process-tree governance oracle (scheduler audit S-15).
 //
 // The cooperative mock-opencode dies on first SIGTERM, so it can never
@@ -159,7 +160,7 @@ async function buildHarness(taskStatus: 'running' | 'failed' = 'running'): Promi
     worktreePath,
     taskId,
     pidFile: join(appHome, 'grandchild.pid'),
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

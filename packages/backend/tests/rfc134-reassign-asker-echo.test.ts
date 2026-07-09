@@ -22,6 +22,7 @@
 //   9. RFC-099：echo 渲染块无归属字段。
 //  10. 源码文本锁（AC-2/AC-3）：clarifyQueue.ts 无 'echo' 字面量；两文件守卫白名单恒三角色。
 
+import { fileURLToPath } from 'node:url'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -829,7 +830,7 @@ describe('RFC-134 echo 生命周期（AC-6/AC-7）', () => {
 
   test('D10 源码形态锁：stage 的 staged=true 路径是单条条件更新 + 受影响行数判定（无先查后改）', async () => {
     const src = await Bun.file(
-      new URL('../src/services/taskQuestions.ts', import.meta.url).pathname,
+      fileURLToPath(new URL('../src/services/taskQuestions.ts', import.meta.url)),
     ).text()
     const start = src.indexOf('export async function stageTaskQuestion')
     const end = src.indexOf('export', start + 10)
@@ -962,7 +963,7 @@ describe('RFC-134 cause 防御映射 + 源码锁', () => {
 
   test("源码锁：clarifyQueue.ts 不含 'echo' 字面量（注入层零特判，AC-2）", async () => {
     const src = await Bun.file(
-      new URL('../src/services/clarifyQueue.ts', import.meta.url).pathname,
+      fileURLToPath(new URL('../src/services/clarifyQueue.ts', import.meta.url)),
     ).text()
     expect(src).not.toContain("'echo'")
   })
@@ -972,7 +973,7 @@ describe('RFC-134 cause 防御映射 + 源码锁', () => {
       '../src/services/taskQuestionDispatch.ts',
       '../src/services/clarifyAutoDispatch.ts',
     ]) {
-      const src = await Bun.file(new URL(rel, import.meta.url).pathname).text()
+      const src = await Bun.file(fileURLToPath(new URL(rel, import.meta.url))).text()
       const whitelists = src.match(/inArray\(taskQuestions\.roleKind,\s*\[[^\]]*\]\)/g) ?? []
       expect(whitelists.length).toBeGreaterThan(0)
       for (const w of whitelists) {

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-053 PR-D — invariants R1/R2 (review ↔ doc_versions / node_runs).
 //
 // Calls the real services/lifecycleInvariants.runLifecycleInvariants(); each
@@ -80,7 +81,7 @@ async function buildHarness(taskStatus: HarnessTaskStatus): Promise<Harness> {
     inputs: '{}',
     startedAt: Date.now(),
   })
-  return { db, taskId, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
+  return { db, taskId, cleanup: () => rimrafDir(tmp) }
 }
 
 async function insertReviewRun(

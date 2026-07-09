@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-092 §1.2 / §1.3 — 泄漏 pending 行的有界终结（对抗检视反例回归）。
 // 设计依据：design/RFC-092-scheduler-p0-stopgap/design.md §1.2（行 id 一次性豁免）、
 // §1.3（busy-loop 安全论证）、§5-10；调研：design/scheduler-audit-2026-06-10.md S-1。
@@ -169,7 +170,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     repoPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

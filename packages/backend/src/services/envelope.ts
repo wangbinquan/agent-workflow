@@ -143,7 +143,11 @@ const NODE_VALIDATE_IO: ValidateIO = {
         // target (or root) not resolvable yet → keep the lexical verdict.
       }
     }
-    const relativePath = relative(rootAbs, targetAbs)
+    // Normalize to forward slashes: `sourcePath` is derived from this and
+    // flows into agent prompts / doc_versions, where a stable POSIX form is
+    // expected regardless of host OS (`path.relative` returns backslashes on
+    // win32). Extension suffix checks downstream are separator-agnostic.
+    const relativePath = relative(rootAbs, targetAbs).split(sep).join('/')
     return { targetAbs, relativePath, insideWorktree }
   },
   readFileUtf8(absPath) {

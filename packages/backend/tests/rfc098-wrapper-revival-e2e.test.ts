@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-098 B3（audit S-3 + RFC-092 已知限制解除）端到端验收 — 修复后正确语义锁定。
 //
 // 三个场景（修复前全部 RED）：
@@ -146,7 +147,7 @@ async function buildHarness(): Promise<Harness> {
     planFile,
     gateFile,
     mockPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

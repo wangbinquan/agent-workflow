@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-130 §8.3 D9 (T14) — fan-out shard-rerun directional-undo.
 //
 // When a fan-out shard is RE-RUN to REPLACE a prior merged attempt, the fresh iso is
@@ -67,7 +68,7 @@ describe('RFC-130 T14 — undoPriorShardDeltaInIso (iso pre-agent undo, §8.3 D9
       expect(readFileSync(join(iso, 'sib.txt'), 'utf8')).toBe('SIB\n') // sibling kept
       expect(readFileSync(join(iso, 'seed.txt'), 'utf8')).toBe('S\n') // committed base kept
     } finally {
-      rmSync(iso, { recursive: true, force: true })
+      rimrafDir(iso)
     }
   })
 
@@ -85,7 +86,7 @@ describe('RFC-130 T14 — undoPriorShardDeltaInIso (iso pre-agent undo, §8.3 D9
       expect(applied).toBe(false) // fell back
       expect(readFileSync(join(iso, 'shared.txt'), 'utf8')).toBe('DIVERGED\n') // untouched
     } finally {
-      rmSync(iso, { recursive: true, force: true })
+      rimrafDir(iso)
     }
   })
 
@@ -97,7 +98,7 @@ describe('RFC-130 T14 — undoPriorShardDeltaInIso (iso pre-agent undo, §8.3 D9
       expect(applied).toBe(false)
       expect(readFileSync(join(iso, 'live.txt'), 'utf8')).toBe('L\n')
     } finally {
-      rmSync(iso, { recursive: true, force: true })
+      rimrafDir(iso)
     }
   })
 
@@ -106,7 +107,7 @@ describe('RFC-130 T14 — undoPriorShardDeltaInIso (iso pre-agent undo, §8.3 D9
     try {
       expect(await undoPriorShardDeltaInIso(iso, undefined, undefined)).toBe(false)
     } finally {
-      rmSync(iso, { recursive: true, force: true })
+      rimrafDir(iso)
     }
   })
 
@@ -115,7 +116,7 @@ describe('RFC-130 T14 — undoPriorShardDeltaInIso (iso pre-agent undo, §8.3 D9
     try {
       expect(await undoPriorShardDeltaInIso(plain, 'a', 'b')).toBe(false)
     } finally {
-      rmSync(plain, { recursive: true, force: true })
+      rimrafDir(plain)
     }
   })
 
@@ -148,9 +149,17 @@ function valueFileShim(appHome: string): string {
   writeFileSync(
     shimPath,
     `
-import { writeFileSync } from 'node:fs'
+import { writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-const promptArg = process.argv.find((a) => a.startsWith('Process ')) ?? 'Process unknown'
+// The prompt is \`Process <value>\` (single-line, derived from the shard value).
+// On Windows the runner pipes the prompt via stdin instead of argv (Bun.spawn
+// truncates argv elements at '\\n' on win32), so argv-based extraction returns
+// nothing and the value would silently become 'unknown'. Fall back to stdin.
+let promptArg = process.argv.find((a) => a.startsWith('Process ')) ?? ''
+if (!promptArg && process.platform === 'win32') {
+  try { promptArg = readFileSync(0, 'utf-8') } catch { /* stdin unavailable */ }
+}
+if (!promptArg) promptArg = 'Process unknown'
 const value = (promptArg.split('\\n')[0] ?? '').slice('Process '.length).trim()
 const safe = value.replace(/[^a-zA-Z0-9]/g, '_')
 if (value.includes('FAIL')) {
@@ -296,7 +305,7 @@ async function seedGen1(
 describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', () => {
   const cleanups: string[] = []
   afterAll(() => {
-    for (const d of cleanups) rmSync(d, { recursive: true, force: true })
+    for (const d of cleanups) rimrafDir(d)
   })
 
   test('different-file rerun REPLACES prior delta, and IDENTICAL re-output survives (P2)', async () => {

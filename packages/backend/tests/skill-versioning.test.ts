@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-101 PR-A — general skill content versioning + history + restore.
 //
 // Locks: every managed-skill write funnels through commitSkillVersion (a v1 on
@@ -50,7 +51,7 @@ function build(): H {
   return {
     db: createInMemoryDb(MIGRATIONS),
     fsOpts: { appHome },
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 
@@ -330,7 +331,7 @@ describe('lazy backfill + reconcile', () => {
     expect(liveSkillMd(h, 'lint')).toContain('EXTERNAL EDIT') // preserved
 
     // Live lost entirely (files/ deleted): restored from the current snapshot.
-    rmSync(filesDir, { recursive: true, force: true })
+    rimrafDir(filesDir)
     reconcileSkillLiveFiles(h.db, h.fsOpts)
     expect(liveSkillMd(h, 'lint')).toContain('good')
   })

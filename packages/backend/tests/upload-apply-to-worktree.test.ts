@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-020: applyUploadsToWorktree and its helpers — pure-ish I/O with no DB.
 // We point it at a temp directory standing in for a task worktree and assert
 // (a) happy multi-file write, (b) filename sanitization, (c) the various
@@ -27,7 +28,7 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'upload-test-'))
 })
 afterEach(() => {
-  if (root !== '') rmSync(root, { recursive: true, force: true })
+  if (root !== '') rimrafDir(root)
 })
 
 function makeDefs(...defs: UploadInputDef[]): Map<string, UploadInputDef> {
@@ -77,7 +78,7 @@ describe('resolveUniqueName', () => {
   test('returns same name when no collision', () => {
     const d = mkdtempSync(join(tmpdir(), 'uniq-'))
     expect(resolveUniqueName(d, 'report.pdf')).toBe('report.pdf')
-    rmSync(d, { recursive: true, force: true })
+    rimrafDir(d)
   })
   test('inserts " (1)" then " (2)" suffix', () => {
     const d = mkdtempSync(join(tmpdir(), 'uniq-'))
@@ -85,7 +86,7 @@ describe('resolveUniqueName', () => {
     expect(resolveUniqueName(d, 'report.pdf')).toBe('report (1).pdf')
     writeFileSync(join(d, 'report (1).pdf'), 'x')
     expect(resolveUniqueName(d, 'report.pdf')).toBe('report (2).pdf')
-    rmSync(d, { recursive: true, force: true })
+    rimrafDir(d)
   })
 })
 

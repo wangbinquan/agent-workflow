@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // CURRENT-BEHAVIOR LOCK — design/scheduler-audit-2026-06-10.md §⑥ 缺口3 (GC 把可恢复任务的 worktree 当垃圾)
 //
 // 当前缺陷行为（已对照 src/services/gc.ts:23-28 核实）：
@@ -56,7 +57,7 @@ async function buildHarness(): Promise<Harness> {
     db,
     appHome,
     repoPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

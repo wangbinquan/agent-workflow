@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // P-4-08: workflow YAML import / export.
 
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
@@ -33,7 +34,7 @@ function buildHarness(): Harness {
     db,
     appHome,
     app,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

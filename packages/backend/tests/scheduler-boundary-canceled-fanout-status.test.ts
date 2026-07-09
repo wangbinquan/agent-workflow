@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locked regression — cancelling a running wrapper-fanout leaves the wrapper
 // node_run row 'failed' instead of 'canceled'.
 //
@@ -50,7 +51,7 @@ function buildHarness(): Harness {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 async function seedAgent(

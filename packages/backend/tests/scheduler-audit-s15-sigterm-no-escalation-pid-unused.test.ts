@@ -63,9 +63,12 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (runner.ts)', ()
   const runnerSrc = readFileSync(RUNNER, 'utf8')
 
   test('spawn is detached and killTree group-kills with safeKill fallback', () => {
-    // detached: true ⟹ the child is its own process-group leader, the
-    // precondition for `-pid` group signals reaching grandchildren.
-    expect(countNonCommentMatches(runnerSrc, /detached: true/g)).toBe(1)
+    // POSIX: `detached: true` makes the child its own process-group leader, the
+    // precondition for `-pid` group signals reaching grandchildren. RFC-windows
+    // PR-1 made this platform-conditional (Windows has no process groups; it
+    // uses `taskkill /T /F` via killProcessTree), so the source carries the
+    // conditional expression, not the bare `true` literal. Lock that expression.
+    expect(countNonCommentMatches(runnerSrc, /detached: process\.platform !== 'win32'/g)).toBe(1)
 
     // RFC-windows PR-1: killTree delegates to util/platform.ts `killProcessTree`
     // (POSIX `process.kill(-pid)` byte-for-byte; Windows `taskkill /T /F`),

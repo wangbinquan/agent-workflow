@@ -13,7 +13,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 const LIFECYCLE_HELPER = resolve(BACKEND_SRC, 'services', 'lifecycle.ts')
@@ -90,7 +90,7 @@ function findDirectStatusWrites(): Match[] {
             continue
           }
           matches.push({
-            file: file.replace(`${BACKEND_SRC}/`, ''),
+            file: file.split(sep).join("/").replace(`${BACKEND_SRC.split(sep).join("/")}/`, ""),
             line: i + 1,
             preview: lines
               .slice(Math.max(0, upstreamLine), Math.min(lines.length, i + 2))
@@ -119,11 +119,11 @@ function findDirectStatusWrites(): Match[] {
         // captured at this line.
         if (
           !matches.some(
-            (m) => m.file.endsWith(file.replace(`${BACKEND_SRC}/`, '')) && m.line === i + 1,
+            (m) => m.file.endsWith(file.split(sep).join("/").replace(`${BACKEND_SRC.split(sep).join("/")}/`, "")) && m.line === i + 1,
           )
         ) {
           matches.push({
-            file: file.replace(`${BACKEND_SRC}/`, ''),
+            file: file.split(sep).join("/").replace(`${BACKEND_SRC.split(sep).join("/")}/`, ""),
             line: i + 1,
             preview: `  ${i + 1}: ${line}`,
           })

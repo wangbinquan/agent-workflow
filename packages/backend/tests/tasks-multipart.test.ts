@@ -7,33 +7,29 @@
 import { describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { execSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, chmodSync, existsSync, readFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
+import { isWindows, writeStubOpencode } from './helpers/stub-runtime'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function makeStubOpencode(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
-if [[ "$1" == "run" ]]; then
-  ENV='<workflow-output><port name="out">ok</port></workflow-output>'
-  TS=$(date +%s%3N)
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
-  exit 0
-fi
-exit 1
-`
-  writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
+  const stubPath = writeStubOpencode(dir)
+  if (isWindows) {
+    // On Windows, writeStubOpencode returns a .js path.
+    // config.opencodePath needs a single executable path, so we
+    // write a .cmd wrapper that calls `bun run` on the .js stub.
+    const cmdPath = join(dir, 'stub-opencode.cmd')
+    writeFileSync(cmdPath, '@echo off\r\nbun "%~dp0stub-opencode.js" %*\r\n')
+    return cmdPath
+  }
+  return stubPath
 }
 
 interface Harness {

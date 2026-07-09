@@ -15,6 +15,21 @@ export { compareSemver, extractVersion } from './semver'
 
 const log = createLogger('opencode')
 
+const isWindows = process.platform === 'win32'
+
+/**
+ * Resolve the spawn command for a binary path.
+ * On POSIX: [binary, ...rest] — shebang handles the interpreter.
+ * On Windows: if the binary is a .js file, prefix with ['bun', 'run'] so
+ * Bun.spawn can execute it; otherwise [binary, ...rest] as-is (e.g. .cmd/.exe).
+ */
+export function resolveSpawnCmd(binary: string, ...rest: string[]): string[] {
+  if (isWindows && binary.endsWith('.js')) {
+    return ['bun', 'run', binary, ...rest]
+  }
+  return [binary, ...rest]
+}
+
 /**
  * Minimum supported opencode version.
  * Below this the daemon refuses to start (design.md §11.2).
@@ -91,11 +106,14 @@ export async function probeOpencode(
     // timeout can SIGKILL the whole tree: killing only the direct child leaves
     // a hung wrapper's grandchild alive and leaking once per poll (Codex impl
     // gate). Without a timeout the historical flat spawn is kept byte-for-byte.
+    // On Windows, detached breaks the stdout pipe (the child gets its own console),
+    // so we skip it there — killProcessTree handles Windows via taskkill /T /F.
+    const useDetached = opts.timeoutMs !== undefined && !isWindows
     const proc = Bun.spawn({
-      cmd: [binary, '--version'],
+      cmd: resolveSpawnCmd(binary, '--version'),
       stdout: 'pipe',
       stderr: 'pipe',
-      ...(opts.timeoutMs !== undefined ? { detached: true } : {}),
+      ...(useDetached ? { detached: true } : {}),
     })
     let timedOut = false
     const timer =

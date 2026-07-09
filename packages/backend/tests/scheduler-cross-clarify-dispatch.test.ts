@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-056 PR-B T6 — scheduler / runner integration for the cross-clarify path.
 //
 // LOCKS:
@@ -72,7 +73,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     repoPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

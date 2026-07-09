@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-047 — locks the runner's EAGER write path for
 // `node_runs.injected_memories_json`:
 //   - Normal agent run with approved memories present → column populated AND
@@ -93,7 +94,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     taskId,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

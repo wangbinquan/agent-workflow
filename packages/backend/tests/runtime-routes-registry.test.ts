@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-112 PR-B — runtime registry HTTP routes: GET open to any authed user;
 // all writes + /probe admin-only (D3). Built-in read-only + in-use delete guards
 // surface as 403 / 409. The deep-smoke /probe is exercised once with a mock
@@ -17,6 +18,7 @@ import { createUser } from '../src/services/users'
 import { createRuntime, seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
 import { agents } from '../src/db/schema'
 import { ulid } from 'ulid'
+import { isWindows } from './helpers/stub-runtime'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -68,6 +70,18 @@ async function reqAs(
 
 function wrapperFor(mockFile: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'aw-rt-bin-'))
+  if (isWindows) {
+    // On Windows, write a .js wrapper that spawns bun with the mock file.
+    // buildCommand in spawn.ts detects .js and prefixes with ['bun', 'run'],
+    // so the final spawn becomes: bun run wrapper.js <args>
+    // The wrapper forwards args to the mock via bun run.
+    const wrapper = join(dir, 'runtime-bin.js')
+    writeFileSync(
+      wrapper,
+      `import { spawn } from 'node:child_process'\nconst child = spawn('bun', ['run', ${JSON.stringify(mockFile)}, ...process.argv.slice(2)], { stdio: 'inherit' })\nchild.on('exit', (code) => process.exit(code ?? 0))\n`,
+    )
+    return wrapper
+  }
   const wrapper = join(dir, 'runtime-bin')
   writeFileSync(wrapper, `#!/bin/sh\nexec bun run ${mockFile} "$@"\n`)
   chmodSync(wrapper, 0o755)
@@ -79,7 +93,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
   beforeEach(async () => {
     h = await buildHarness()
   })
-  afterEach(() => rmSync(h.tmp, { recursive: true, force: true }))
+  afterEach(() => rimrafDir(h.tmp))
 
   test('GET /api/runtimes lists the seeded runtimes (open to any user)', async () => {
     const res = await reqAs(h.app, h.userToken, '/api/runtimes')

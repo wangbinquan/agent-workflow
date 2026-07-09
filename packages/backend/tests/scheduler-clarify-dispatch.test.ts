@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-023 PR-B T11 — scheduler dispatch / state machine for clarify.
 //
 // What this locks in:
@@ -150,7 +151,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     repoPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

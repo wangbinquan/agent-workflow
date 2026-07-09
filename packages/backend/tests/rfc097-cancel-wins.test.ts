@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-097 — cancel 赢家语义 + limits 不污染终态（design/RFC-097-task-status-cas/
 // design.md §2 写点 4/6/10、§6 失败模式「done-vs-cancel」「limits 文案污染」）。
 //
@@ -131,7 +132,7 @@ async function buildHarness(): Promise<Harness> {
     ctrlDir,
     taskId,
     slowMock,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

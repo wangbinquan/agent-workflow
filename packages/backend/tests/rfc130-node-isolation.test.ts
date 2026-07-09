@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-130 T3 — per-node isolated worktree lifecycle (services/nodeIsolation.ts).
 //
 // Real git fixtures. Asserts the design-model end to end at the node-run level:
@@ -65,7 +66,7 @@ describe('RFC-130 node isolation lifecycle', () => {
     expect(diff).toContain('base.txt')
     await discardNodeIso(handle)
     expect(existsSync(iso)).toBe(false)
-    rmSync(canon, { recursive: true, force: true })
+    rimrafDir(canon)
   })
 
   test('two concurrent nodes from same base → canonical UNION of non-overlapping edits (AC-5)', async () => {
@@ -92,7 +93,7 @@ describe('RFC-130 node isolation lifecycle', () => {
     expect(readFileSync(join(canon, 'b.txt'), 'utf8')).toBe('B-edited\n')
     await discardNodeIso(hA)
     await discardNodeIso(hB)
-    rmSync(canon, { recursive: true, force: true })
+    rimrafDir(canon)
   })
 
   test('overlapping edits → conflict, canonical for that repo left clean (D27)', async () => {
@@ -122,7 +123,7 @@ describe('RFC-130 node isolation lifecycle', () => {
     expect(canonC).not.toContain('<<<<<<<')
     await discardNodeIso(hA)
     await discardNodeIso(hB)
-    rmSync(canon, { recursive: true, force: true })
+    rimrafDir(canon)
   })
 
   test('multi-repo: isolate + merge-back per repo independently (AC-13)', async () => {
@@ -140,8 +141,8 @@ describe('RFC-130 node isolation lifecycle', () => {
     expect(readFileSync(join(r1, 'x.txt'), 'utf8')).toBe('x-edited\n')
     expect(readFileSync(join(r2, 'y.txt'), 'utf8')).toBe('y-edited\n')
     await discardNodeIso(h)
-    rmSync(r1, { recursive: true, force: true })
-    rmSync(r2, { recursive: true, force: true })
+    rimrafDir(r1)
+    rimrafDir(r2)
   })
 
   test('failed node: no merge-back → canonical untouched (AC-6/I-5)', async () => {
@@ -158,6 +159,6 @@ describe('RFC-130 node isolation lifecycle', () => {
     // canonical never saw the partial write
     expect(readFileSync(join(canon, 'f.txt'), 'utf8')).toBe('orig\n')
     expect((await runGit(canon, ['status', '--porcelain'])).stdout.trim()).toBe('')
-    rmSync(canon, { recursive: true, force: true })
+    rimrafDir(canon)
   })
 })

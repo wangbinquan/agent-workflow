@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-128 P5-D — quick-channel seal + AUTODISPATCH (the FINAL P5 phase).
 //
 // §5.2.7 P5b single-path: the quick channel (defer=false) does NOT mint an immediate
@@ -894,7 +895,7 @@ describe('RFC-128 P5-D self-clarify isolated rollback (RFC-098 B1, Codex round-4
         'clarify-answer',
       )
     } finally {
-      rmSync(repo, { recursive: true, force: true })
+      rimrafDir(repo)
     }
   })
 
@@ -930,7 +931,7 @@ describe('RFC-128 P5-D self-clarify isolated rollback (RFC-098 B1, Codex round-4
       // The worktree is UNCHANGED (cross/questioner path never rolls back).
       expect(readFileSync(join(repo, 'data.txt'), 'utf8')).toBe('DIRTY\n')
     } finally {
-      rmSync(repo, { recursive: true, force: true })
+      rimrafDir(repo)
     }
   })
 })
@@ -1160,7 +1161,7 @@ describe('RFC-128 P5-D self rollback pre-flight (Codex round-8 finding 1 — no 
       )
       expect(selfEntry?.dispatchedAt).toBeNull()
     } finally {
-      rmSync(repo, { recursive: true, force: true })
+      rimrafDir(repo)
     }
   })
 })

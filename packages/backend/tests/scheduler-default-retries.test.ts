@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-042 §A4 / §5.4 — default retries fallback = 3.
 //
 // Locks in: when no per-task retry budget is supplied, the scheduler treats it
@@ -37,7 +38,7 @@ function makeHarness() {
     appHome,
     worktreePath,
     argvLog,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

@@ -112,6 +112,28 @@ try {
 const agentFlagIdx = argv.indexOf('--agent')
 if (agentFlagIdx < 0 || !argv[agentFlagIdx + 1]) fail('missing --agent <name>')
 
+// The rendered user prompt: on POSIX it sits at argv[1] (cmd shape
+// `<bin> <shim> run <prompt> --agent <name>`); on win32 the runner pipes it
+// via stdin instead (Bun.spawn truncates argv at '\n' on win32, so the prompt
+// is omitted from argv). Read it once and cache: stdin can only be consumed
+// once (a second readFileSync(0) hits EOF -> ''), and both the argv-capture
+// log and ECHO_PROMPT below need it. On win32 a non-piped stdin ({mode:'ignore'})
+// yields '' immediately (no block).
+let _stdinPrompt: string | undefined
+function stdinPrompt(): string {
+  if (_stdinPrompt !== undefined) return _stdinPrompt
+  if (process.platform === 'win32') {
+    try {
+      _stdinPrompt = readFileSync(0, 'utf-8')
+    } catch {
+      _stdinPrompt = ''
+    }
+  } else {
+    _stdinPrompt = argv[1] ?? ''
+  }
+  return _stdinPrompt
+}
+
 if (env.MOCK_OPENCODE_REQUIRE_TOKEN === '1') {
   if (!env.OPENCODE_CONFIG_CONTENT.includes('"prompt"')) {
     fail('OPENCODE_CONFIG_CONTENT does not contain inline agent prompt')
@@ -154,9 +176,15 @@ const mockedAgentName = argv[agentFlagIdx + 1] ?? ''
 if (env.MOCK_OPENCODE_CAPTURE_ARGV_TO) {
   try {
     const agentName = argv[agentFlagIdx + 1] ?? ''
+    // On win32 the prompt is piped via stdin, not argv. Insert it at index 1
+    // (the POSIX prompt slot) so capture-argv tests that read argv[1] as the
+    // rendered prompt work cross-platform without per-test branches. Flag-based
+    // lookups (argv.indexOf('--session')) still resolve correctly after insert.
+    const capturedArgv =
+      process.platform === 'win32' ? [argv[0] ?? 'run', stdinPrompt(), ...argv.slice(1)] : argv
     appendFileSync(
       env.MOCK_OPENCODE_CAPTURE_ARGV_TO,
-      JSON.stringify({ agent: agentName, argv }) + '\n',
+      JSON.stringify({ agent: agentName, argv: capturedArgv }) + '\n',
     )
   } catch (e) {
     fail(`MOCK_OPENCODE_CAPTURE_ARGV_TO write failed: ${(e as Error).message}`)
@@ -296,11 +324,13 @@ if (env.MOCK_OPENCODE_EMIT_SESSION_ID) {
 // consumed the prompt + ran a turn). A binary that ignores the prompt would not
 // echo the nonce → smoke classifies it stream-nonconforming.
 if (env.MOCK_OPENCODE_ECHO_PROMPT === '1') {
+  // stdinPrompt() handles both POSIX (argv[1]) and win32 (stdin pipe).
+  const promptText = stdinPrompt()
   process.stdout.write(
     JSON.stringify({
       type: 'text',
       timestamp: Date.now(),
-      part: { type: 'text', text: argv[1] ?? '' },
+      part: { type: 'text', text: promptText },
     }) + '\n',
   )
 }

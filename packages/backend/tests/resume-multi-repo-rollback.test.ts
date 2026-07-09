@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // LOCKS: RFC-066 PR-B T13 — resume per-repo rollback. The single-repo path
 // must stay byte-baseline (read `pre_snapshot`, roll `task.worktreePath`);
 // the multi-repo path reads `pre_snapshot_repos_json` as a `{dirName: sha}`
@@ -59,8 +60,8 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     appHome,
     repos,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(reposParent, { recursive: true, force: true })
+      rimrafDir(appHome)
+      rimrafDir(reposParent)
     },
   }
 }

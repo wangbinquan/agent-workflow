@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // P-5-05: embed runtime helpers — in dev mode the tables are empty stubs so
 // the asset lookup returns null and the migrations extractor is a no-op. In
 // the compiled binary (IS_EMBEDDED=true) `scripts/build-binary.ts` regenerates
@@ -35,7 +36,7 @@ describe('embed (dev stub)', () => {
       expect(await extractMigrationsTo(join(dir, 'm1'))).toBe(0)
       expect(await extractMigrationsTo(join(dir, 'm1'))).toBe(0)
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      rimrafDir(dir)
     }
   })
 })

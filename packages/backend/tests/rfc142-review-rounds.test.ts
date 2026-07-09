@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-142 — 评审历史信息全量回显：多文档分轮（rounds）+ G4 混代修复。
 //
 // WHY THIS FILE EXISTS (regression intent):
@@ -214,8 +215,8 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
     db = createInMemoryDb(MIGRATIONS)
   })
   afterEach(() => {
-    rmSync(appHome, { recursive: true, force: true })
-    rmSync(worktree, { recursive: true, force: true })
+    rimrafDir(appHome)
+    rimrafDir(worktree)
   })
 
   const PATHS = ['cases/a.md', 'cases/b.md', 'cases/c.md']
@@ -645,7 +646,7 @@ describe('RFC-142 — /rounds 路由 ACL', () => {
     }
   })
   afterEach(() => {
-    rmSync(appHome, { recursive: true, force: true })
+    rimrafDir(appHome)
   })
 
   async function req(token: string, path: string): Promise<Response> {

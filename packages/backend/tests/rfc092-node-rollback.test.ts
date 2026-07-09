@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-092 T1 — direct unit coverage for the shared node-run worktree rollback
 // (services/nodeRollback.ts `rollbackNodeRunWorktrees`).
 //
@@ -84,7 +85,7 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
     root = mkdtempSync(join(tmpdir(), 'aw-rfc092-rollback-'))
   })
   afterEach(() => {
-    rmSync(root, { recursive: true, force: true })
+    rimrafDir(root)
   })
 
   test('single repo, non-empty sha: restores the stash body and clears strays — identical in both opts modes', async () => {

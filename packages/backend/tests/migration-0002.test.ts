@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locks in RFC-005 PR-A T2: the 0002 migration adds doc_versions +
 // review_comments + node_runs.review_iteration, and existing v1 task + node_run
 // rows survive intact. If this goes red, check
@@ -76,9 +77,9 @@ describe('RFC-005 0002 migration — data integrity + new schema', () => {
   })
 
   afterAll(() => {
-    rmSync(tmpDb, { recursive: true, force: true })
-    rmSync(v1MigrationsDir, { recursive: true, force: true })
-    rmSync(v2MigrationsDir, { recursive: true, force: true })
+    rimrafDir(tmpDb)
+    rimrafDir(v1MigrationsDir)
+    rimrafDir(v2MigrationsDir)
   })
 
   test('stage A: applies 0000 + 0001 only; v1 schema is reachable', () => {

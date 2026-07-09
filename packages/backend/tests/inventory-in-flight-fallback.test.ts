@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-062: in-flight inventory fallback. When the runner hasn't yet read
 // inventory.json off disk and persisted it to `node_runs.inventory_snapshot_json`
 // (i.e. the agent run is still `status='running'`), GET /inventory should
@@ -151,7 +152,7 @@ beforeAll(() => {
 afterAll(() => {
   if (originalAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
   else process.env.AGENT_WORKFLOW_HOME = originalAppHome
-  rmSync(appHomeOverride, { recursive: true, force: true })
+  rimrafDir(appHomeOverride)
 })
 
 beforeEach(() => {

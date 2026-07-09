@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-131 T5 — deferred self-clarify 多轮 scheduler e2e:runTask 端到端驱动
 // round1(agent 问)→答→round2(agent 再问)→答(stop)→产出 doc。锁死 01KWDKBS:最终产出
 // rerun 的 prompt 同时含 round1+round2 答案(旧 window 判据会丢 round1、导致最终 doc 丢首轮决策)。
@@ -73,7 +74,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     repoPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promise<T> {

@@ -6,6 +6,7 @@
 import { createLogger } from '@/util/log'
 import { killProcessTree } from '@/util/platform'
 import type { ProbeOpts } from '@/util/opencode'
+import { resolveSpawnCmd } from '@/util/opencode'
 // RFC-143 PR-5: single semver helper pair (was a byte-for-byte local copy).
 import { compareSemver, extractVersion } from '@/util/semver'
 
@@ -50,11 +51,15 @@ export async function probeClaudeCode(
   try {
     // Detached process group on the timeout path so SIGKILL reaps the whole
     // tree, not just a hung wrapper (see util/opencode.ts, same shape).
+    // On Windows, detached breaks the stdout pipe (child gets its own console),
+    // so we skip it there — killProcessTree handles Windows via taskkill /T /F.
+    const isWindows = process.platform === 'win32'
+    const useDetached = opts.timeoutMs !== undefined && !isWindows
     const proc = Bun.spawn({
-      cmd: [binary, '--version'],
+      cmd: resolveSpawnCmd(binary, '--version'),
       stdout: 'pipe',
       stderr: 'pipe',
-      ...(opts.timeoutMs !== undefined ? { detached: true } : {}),
+      ...(useDetached ? { detached: true } : {}),
     })
     let timedOut = false
     const timer =

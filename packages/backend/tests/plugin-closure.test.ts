@@ -12,11 +12,12 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { collectPluginNamesFromClosure, loadPluginsByNames } from '../src/services/pluginClosure'
 import { createPlugin } from '../src/services/plugin'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
+import { writeFakeNpm } from './helpers/stub-runtime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.sh')
 
 let pluginsDir = ''
+let fakeNpmBin = ''
 
 function fakeAgent(name: string, plugins: string[] = []): Agent {
   return {
@@ -74,6 +75,8 @@ describe('loadPluginsByNames', () => {
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
     pluginsDir = await mkdtemp(join(tmpdir(), 'rfc031-cls-'))
+    const npmDir = writeFakeNpm(pluginsDir)
+    fakeNpmBin = resolve(npmDir, process.platform === 'win32' ? 'npm.cmd' : 'npm')
     resetNpmProbeCacheForTests()
     process.env.FAKE_NPM_MODE = 'success'
   })
@@ -87,16 +90,16 @@ describe('loadPluginsByNames', () => {
   })
 
   test('hydrates matching names, preserves caller order', async () => {
-    await createPlugin(db, { name: 'p1', spec: 's@1' }, { pluginsDir, npmBin: FAKE_NPM })
-    await createPlugin(db, { name: 'p2', spec: 's@2' }, { pluginsDir, npmBin: FAKE_NPM })
-    await createPlugin(db, { name: 'p3', spec: 's@3' }, { pluginsDir, npmBin: FAKE_NPM })
+    await createPlugin(db, { name: 'p1', spec: 's@1' }, { pluginsDir, npmBin: fakeNpmBin })
+    await createPlugin(db, { name: 'p2', spec: 's@2' }, { pluginsDir, npmBin: fakeNpmBin })
+    await createPlugin(db, { name: 'p3', spec: 's@3' }, { pluginsDir, npmBin: fakeNpmBin })
 
     const r = await loadPluginsByNames(db, ['p2', 'p3', 'p1'])
     expect(r.map((p) => p.name)).toEqual(['p2', 'p3', 'p1'])
   })
 
   test('unknown names silently skipped (no throw)', async () => {
-    await createPlugin(db, { name: 'p1', spec: 's@1' }, { pluginsDir, npmBin: FAKE_NPM })
+    await createPlugin(db, { name: 'p1', spec: 's@1' }, { pluginsDir, npmBin: fakeNpmBin })
     const r = await loadPluginsByNames(db, ['p1', 'no-such', 'gone'])
     expect(r.map((p) => p.name)).toEqual(['p1'])
   })

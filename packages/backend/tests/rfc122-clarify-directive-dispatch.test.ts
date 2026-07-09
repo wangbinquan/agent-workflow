@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-122 — integration: a self-clarify node with a 'stop' override dispatches
 // WITHOUT the mandatory ask-back protocol (and WITH the STOP CLARIFYING trailer),
 // driven through the REAL scheduler (runTask) + the REAL unified answer driver
@@ -87,7 +88,7 @@ function freshCtx(): Ctx {
     repoPath,
     stateDir,
     cleanup: () => {
-      rmSync(tmp, { recursive: true, force: true })
+      rimrafDir(tmp)
       delete process.env.SCENARIO_PLAN_FILE
       delete process.env.SCENARIO_STATE_DIR
       delete process.env.AGENT_WORKFLOW_HOME

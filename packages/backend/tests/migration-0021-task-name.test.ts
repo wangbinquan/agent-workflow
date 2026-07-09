@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-037 T2 — locks migration 0021: tasks gains `name TEXT`, with the
 // UPDATE backfill setting historical rows to `workflows.name` (or a
 // `task-{shortId}` fallback when the workflow row no longer exists).
@@ -67,9 +68,9 @@ describe('RFC-037 migration 0021 — tasks.name + backfill', () => {
   })
 
   afterAll(() => {
-    rmSync(tmpDb, { recursive: true, force: true })
-    rmSync(prevMigrationsDir, { recursive: true, force: true })
-    rmSync(fullMigrationsDir, { recursive: true, force: true })
+    rimrafDir(tmpDb)
+    rimrafDir(prevMigrationsDir)
+    rimrafDir(fullMigrationsDir)
   })
 
   test('stage A: migrations 0000..0020 applied → tasks has no `name` column', () => {

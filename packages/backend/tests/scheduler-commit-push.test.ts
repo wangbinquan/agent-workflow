@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-075 T11 — end-to-end scheduler trigger for auto commit&push.
 //
 // Drives a real task (single writer agent) through the scheduler with a stub
@@ -11,7 +12,7 @@
 //     commit-agent message + git push).
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -23,6 +24,7 @@ import { createWorkflow } from '../src/services/workflow'
 import { startTask } from '../src/services/task'
 import { commitPushNodeId, isCommitPushNodeId } from '../src/services/commitPush'
 import type { CommitPushMeta } from '@agent-workflow/shared'
+import { stubCmd, writeStubOpencode } from './helpers/stub-runtime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -40,8 +42,8 @@ interface Harness {
 // emits a commit message and writes nothing; the writer agent dirties the
 // worktree and emits its output port.
 function makeStub(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
-  const script = `#!/usr/bin/env bash
+  return writeStubOpencode(dir, {
+    customBash: `#!/usr/bin/env bash
 set -e
 if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
 if [[ "$1" == "run" ]]; then
@@ -55,10 +57,32 @@ if [[ "$1" == "run" ]]; then
   exit 0
 fi
 exit 1
-`
-  writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
+`,
+    customJs: `// Auto-generated stub opencode for Windows test compatibility
+import { writeFileSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+const args = process.argv.slice(2)
+if (args.includes('--version') || args.includes('-v')) { process.stdout.write('stub-opencode 1.14.99\\n'); process.exit(0) }
+if (args[0] !== 'run') { process.stderr.write('stub-opencode: expected run, got: ' + args[0] + '\\n'); process.exit(2) }
+// win32 pipes the prompt via stdin (not argv), so argv alone can't see the
+// commit_message keyword used to tell the commit agent from the writer. Fold
+// stdin into the scan so role detection works cross-platform.
+let allArgs = args.join(' ')
+if (process.platform === 'win32') { try { allArgs += ' ' + readFileSync(0, 'utf-8') } catch {} }
+let outputs
+if (allArgs.includes('commit_message')) {
+  outputs = { commit_message: 'feat: stub commit' }
+} else {
+  writeFileSync(join(process.cwd(), 'agent-output.txt'), 'agent change ' + Date.now() + '\\n')
+  outputs = { out: 'ok' }
+}
+let envelope = '<workflow-output>'
+for (const [p, c] of Object.entries(outputs)) envelope += '<port name="' + p + '">' + c + '</port>'
+envelope += '</workflow-output>'
+process.stdout.write(JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: envelope } }) + '\\n')
+process.exit(0)
+`,
+  })
 }
 
 async function setup(): Promise<Harness> {
@@ -124,7 +148,7 @@ describe('RFC-075 scheduler auto commit&push', () => {
   beforeEach(async () => {
     h = await setup()
   })
-  afterEach(() => rmSync(h.tmp, { recursive: true, force: true }))
+  afterEach(() => rimrafDir(h.tmp))
 
   test('autoCommitPush ON → writer change is committed + pushed to the remote', async () => {
     const task = await startTask(
@@ -136,7 +160,7 @@ describe('RFC-075 scheduler auto commit&push', () => {
         inputs: { topic: 't' },
         autoCommitPush: true,
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stub], awaitScheduler: true },
+      { db: h.db, appHome: h.appHome, opencodeCmd: stubCmd(h.stub), awaitScheduler: true },
     )
 
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
@@ -178,7 +202,7 @@ describe('RFC-075 scheduler auto commit&push', () => {
         baseBranch: 'main',
         inputs: { topic: 't' },
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stub], awaitScheduler: true },
+      { db: h.db, appHome: h.appHome, opencodeCmd: stubCmd(h.stub), awaitScheduler: true },
     )
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
     expect(rows.some((r) => isCommitPushNodeId(r.nodeId))).toBe(false)

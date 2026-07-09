@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Regression: wrapper-fanout RESUME re-mints all shard children (no idempotency).
 //
 // DEFECT (HIGH): on resume, runFanoutWrapperNode reuses the wrapper row (via
@@ -58,7 +59,7 @@ function buildHarness(): Harness {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

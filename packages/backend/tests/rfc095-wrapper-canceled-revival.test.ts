@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-095 — wrapper canceled 复活：续跑而非重启（audit S-22 连带决策）。
 // design/RFC-095-scope-outcome-exhaustive/design.md §1（爆炸半径核查第 3 条）/ §5-6。
 //
@@ -97,7 +98,7 @@ function buildHarness(): Harness {
     worktreePath,
     ctrlDir,
     mockPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

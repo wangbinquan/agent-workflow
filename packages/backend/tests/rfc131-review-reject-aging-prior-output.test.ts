@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-131 验收 #4 组合 e2e — deferred self-clarify → done+output → review REJECT → 新 rerun，
 // 经 runTask 端到端驱动。锁「reject 重做的 prompt 组合行为」两半都成立：
 //   (a) RFC-119 prior-output：reject 重做带上上次产物（V1 doc）。
@@ -91,7 +92,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     repoPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

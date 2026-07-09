@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-101 PR-B — memory `fused` terminal status + provenance + restore un-fuse.
 //
 // Locks: fuseMemoriesTx only transitions `approved` rows (drifted rows
@@ -31,7 +32,7 @@ function build(): H {
   return {
     db: createInMemoryDb(MIGRATIONS),
     fsOpts: { appHome },
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

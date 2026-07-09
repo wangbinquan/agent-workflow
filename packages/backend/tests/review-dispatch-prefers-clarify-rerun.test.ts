@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Regression: when an upstream agent has multiple done node_runs at the same
 // iteration — a stale (clarifyIteration=0, retryIndex=N>0) row finished before
 // a clarify session opened, plus a fresh (clarifyIteration=1, retryIndex=0)
@@ -49,8 +50,8 @@ describe('dispatchReviewNode upstream selection — clarify rerun must beat stal
   })
 
   afterEach(() => {
-    rmSync(appHome, { recursive: true, force: true })
-    rmSync(worktree, { recursive: true, force: true })
+    rimrafDir(appHome)
+    rimrafDir(worktree)
   })
 
   test('picks the (clarifyIteration=1, retryIndex=0) run over the stale (clarifyIteration=0, retryIndex=1) run', async () => {

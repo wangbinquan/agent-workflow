@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Regression lock for the "node-level model override silently dropped" bug.
 //
 // Pre-fix the canvas inspector saved `node.overrides.{model,variant,temperature}`
@@ -48,7 +49,7 @@ function buildHarness(): Harness {
     appHome,
     worktreePath,
     capturePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

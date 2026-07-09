@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-053 PR-B P-1 — transitionNodeRunStatus / setNodeRunStatus CAS behavior.
 //
 // Each test seeds a node_run row, then exercises one race scenario against
@@ -54,7 +55,7 @@ async function buildHarness(): Promise<Harness> {
   return {
     db,
     taskId,
-    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(tmp),
   }
 }
 

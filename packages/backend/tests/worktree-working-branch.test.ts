@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-075 T3: createWorktree's optional `workingBranch` path.
 //
 // Locks the six branches of util/git checkoutWorkingBranch against real temp
@@ -45,9 +46,9 @@ async function buildRemoteAndClone(): Promise<Fixture> {
     remote,
     homes,
     cleanup: () => {
-      rmSync(remote, { recursive: true, force: true })
-      rmSync(source, { recursive: true, force: true })
-      for (const h of homes) rmSync(h, { recursive: true, force: true })
+      rimrafDir(remote)
+      rimrafDir(source)
+      for (const h of homes) rimrafDir(h)
     },
   }
 }

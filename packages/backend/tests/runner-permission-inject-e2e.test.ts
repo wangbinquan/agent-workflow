@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-073 T7 — integration: the deadlock-preventing global permission +
 // per-agent question strip ACTUALLY reach the spawned opencode subprocess
 // (buildInlineConfig → OPENCODE_CONFIG_CONTENT env-var → child), not just
@@ -89,7 +90,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     taskId,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

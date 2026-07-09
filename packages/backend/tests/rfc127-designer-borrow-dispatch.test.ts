@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-127 T5 → RFC-131 T4 «去借壳» (dispatch-only de-borrow). This file WAS the positive lock for the
 // RFC-127「借壳」(borrow-the-shell) path; RFC-131 T4 RETIRES 借壳 — a reassign now MOVES the rerun to
 // the target node (which runs its OWN agent), no borrow. design §4 authorizes「rfc127-*-borrow 改语义
@@ -204,7 +205,7 @@ function buildRunHarness(): RunHarness {
     appHome,
     worktreePath,
     argvLog,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

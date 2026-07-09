@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // CURRENT-BEHAVIOR LOCK — design/scheduler-audit-2026-06-10.md §⑥ 缺口4 + 附录C-4 (WP-6a)
 //
 // 纯函数面（evaluateExitCondition 喂空串）已被既有测试盖住，本文件不重复：
@@ -85,7 +86,7 @@ function buildHarness(): Harness {
     worktreePath,
     stateDir,
     planFile,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locks RFC-017 §4.4 — source-derived skill writes throw `skill-source-readonly`
 // (distinct from hand-imported external's `skill-external-readonly`). The UI
 // keys off the more-specific code to render the "edit files in the source
@@ -32,8 +33,8 @@ function build(): H {
     fsOpts: { appHome },
     parent,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(parent, { recursive: true, force: true })
+      rimrafDir(appHome)
+      rimrafDir(parent)
     },
   }
 }

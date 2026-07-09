@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Coverage for /api/repos/* (P-1-10).
 // Builds a small real git repo per test for the refs/files endpoints to query.
 
@@ -24,7 +25,7 @@ beforeAll(() => {
 })
 
 afterAll(() => {
-  rmSync(baseTmp, { recursive: true, force: true })
+  rimrafDir(baseTmp)
 })
 
 beforeEach(async () => {
@@ -49,7 +50,7 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
-  rmSync(repoPath, { recursive: true, force: true })
+  rimrafDir(repoPath)
 })
 
 async function req(path: string, init: RequestInit = {}): Promise<Response> {
@@ -92,7 +93,7 @@ describe('recent_repos service', () => {
     try {
       await expect(upsertRecentRepo(db, notRepo)).rejects.toThrow()
     } finally {
-      rmSync(notRepo, { recursive: true, force: true })
+      rimrafDir(notRepo)
     }
   })
 })
@@ -129,7 +130,7 @@ describe('repo HTTP routes', () => {
       const body = (await res.json()) as { code: string }
       expect(body.code).toBe('repo-not-git')
     } finally {
-      rmSync(notRepo, { recursive: true, force: true })
+      rimrafDir(notRepo)
     }
   })
 
@@ -188,7 +189,7 @@ describe('repo HTTP routes', () => {
       // currentBranch + defaultBranch are best-effort — we don't pin
       // their values here, only the launch-blocking signal.
     } finally {
-      rmSync(empty, { recursive: true, force: true })
+      rimrafDir(empty)
     }
   })
 
@@ -212,7 +213,7 @@ describe('repo HTTP routes', () => {
       expect(res.status).toBe(422)
       expect(((await res.json()) as { code: string }).code).toBe('repo-not-git')
     } finally {
-      rmSync(notRepo, { recursive: true, force: true })
+      rimrafDir(notRepo)
     }
   })
 

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locks in RFC-005 PR-B T13 worktree-files proxy + path traversal hardening.
 // If this goes red, check packages/backend/src/routes/worktree-files.ts —
 // a regression here means the markdown image proxy may read files outside
@@ -81,8 +82,8 @@ async function buildHarness(): Promise<Harness> {
     taskId,
     app,
     cleanup: () => {
-      rmSync(worktree, { recursive: true, force: true })
-      rmSync(outside, { recursive: true, force: true })
+      rimrafDir(worktree)
+      rimrafDir(outside)
     },
   }
 }

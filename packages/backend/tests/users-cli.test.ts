@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-036 — CLI happy paths via `userCommand`. AGENT_WORKFLOW_HOME isolates
 // the temp $HOME so the daemon DB lands in a tmp dir.
 
@@ -18,7 +19,7 @@ beforeEach(() => {
 afterEach(() => {
   if (prevHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
   else process.env.AGENT_WORKFLOW_HOME = prevHome
-  rmSync(homeDir, { recursive: true, force: true })
+  rimrafDir(homeDir)
 })
 
 describe('user CLI', () => {

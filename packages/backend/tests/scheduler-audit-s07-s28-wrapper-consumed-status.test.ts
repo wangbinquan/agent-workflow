@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // S-7 已修（RFC-098 B3 / WP-6c）→ [S-7 LOCK] 断言已按头注指引翻转为回归防护；
 // S-28 已修（RFC-098 B3 / WP-6d，Stage2）→ [S-28 LOCK] 三断言已翻转为回归防护。
 // 原始报告：design/scheduler-audit-2026-06-10.md S-7 (WP-6c) + S-28 (WP-6d)
@@ -134,7 +135,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     repoPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Regression: when a review's upstream agent has a clarify-rerun row
 // (clarifyIteration=N>0, retryIndex=0, done) as its freshest node_run,
 // submitReviewDecision('iterated' | 'rejected') must
@@ -214,8 +215,8 @@ describe('submitReviewDecision iterate/reject inherits clarifyIteration from lat
   })
 
   afterEach(() => {
-    rmSync(appHome, { recursive: true, force: true })
-    rmSync(worktree, { recursive: true, force: true })
+    rimrafDir(appHome)
+    rimrafDir(worktree)
   })
 
   test('iterate: new pending row carries clarifyIteration=N and retry_index=latest+1; supersede marker lands on the clarify-rerun row', async () => {

@@ -6,22 +6,22 @@
 // hermetic; the live `npm` binary is never invoked from these tests.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { chmod, mkdtemp, rm, symlink } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { delimiter, join, resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent } from '../src/services/agent'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
 import { createPlugin } from '../src/services/plugin'
 import { createApp } from '../src/server'
+import { writeFakeNpm } from './helpers/stub-runtime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.sh')
 const TOKEN = 'rfc031-token-fixture'
 
 let pluginsDir = ''
-let fakeNpmPathDir = ''
+let fakeNpmBin = ''
 let originalPath: string | undefined
 
 function buildHarness(): { db: DbClient; app: Hono } {
@@ -50,20 +50,19 @@ beforeEach(async () => {
   // Install dir under AGENT_WORKFLOW_HOME so the route layer (no installer
   // override available) resolves to it.
   process.env.AGENT_WORKFLOW_HOME = pluginsDir
-  // Prepend a PATH-shadow dir that aliases `npm` → fake-npm.sh so the
-  // installer's PATH lookup picks up the shim instead of the host npm.
-  fakeNpmPathDir = await mkdtemp(join(tmpdir(), 'rfc031-path-'))
-  await symlink(FAKE_NPM, join(fakeNpmPathDir, 'npm'))
-  await chmod(FAKE_NPM, 0o755).catch(() => undefined)
+  // Use writeFakeNpm to create a cross-platform fake npm shim, then PATH-inject
+  // the directory so the installer's PATH lookup picks up the shim instead of
+  // the host npm.
+  const npmDir = writeFakeNpm(pluginsDir)
+  fakeNpmBin = resolve(npmDir, process.platform === 'win32' ? 'npm.cmd' : 'npm')
   originalPath = process.env.PATH
-  process.env.PATH = `${fakeNpmPathDir}:${process.env.PATH ?? ''}`
+  process.env.PATH = `${npmDir}${delimiter}${process.env.PATH ?? ''}`
   resetNpmProbeCacheForTests()
   process.env.FAKE_NPM_MODE = 'success'
 })
 
 afterEach(async () => {
   await rm(pluginsDir, { recursive: true, force: true }).catch(() => undefined)
-  await rm(fakeNpmPathDir, { recursive: true, force: true }).catch(() => undefined)
   if (originalPath !== undefined) process.env.PATH = originalPath
   delete process.env.FAKE_NPM_MODE
   delete process.env.FAKE_NPM_VERSION
@@ -93,7 +92,7 @@ describe('/api/plugins CRUD (service-seeded)', () => {
   beforeEach(async () => {
     ;({ db, app } = buildHarness())
     // Seed via service layer so we don't need the http POST install path here.
-    await createPlugin(db, { name: 'seeded', spec: 'pkg@1' }, { pluginsDir, npmBin: FAKE_NPM })
+    await createPlugin(db, { name: 'seeded', spec: 'pkg@1' }, { pluginsDir, npmBin: fakeNpmBin })
   })
 
   test('GET /api/plugins lists seeded rows', async () => {
@@ -141,7 +140,7 @@ describe('/api/plugins CRUD (service-seeded)', () => {
 
   test('POST /api/plugins/:name/rename succeeds + 409 on name conflict', async () => {
     // Seed a second plugin so we can attempt to collide.
-    await createPlugin(db, { name: 'other', spec: 'o@1' }, { pluginsDir, npmBin: FAKE_NPM })
+    await createPlugin(db, { name: 'other', spec: 'o@1' }, { pluginsDir, npmBin: fakeNpmBin })
     const r1 = await req(app, '/api/plugins/seeded/rename', {
       method: 'POST',
       body: JSON.stringify({ newName: 'fresh' }),

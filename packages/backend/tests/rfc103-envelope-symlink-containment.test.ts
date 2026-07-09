@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-103 T7 (调研报告 05-PORT MISSED, Codex) — 端口文件 realpath 越界防护。
 //
 // 为什么这条测试存在：path / markdown_file 端口原本只做词法包含、不做 realpath，
@@ -10,6 +11,24 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolvePortContent } from '../src/services/envelope'
 import { ValidationError } from '../src/util/errors'
+import { isWindows, tryCreateSymlink } from './helpers/stub-runtime'
+
+const canSymlink = isWindows
+  ? // On Windows, file symlinks need developer mode; check at runtime
+    (() => {
+      try {
+        const { mkdirSync, symlinkSync, rmSync } = require('node:fs')
+        const { join } = require('node:path')
+        const { tmpdir } = require('node:os')
+        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true })
+        symlinkSync(join(d, 'x'), join(d, 'y'), 'file')
+        rimrafDir(d)
+        return true
+      } catch {
+        return false
+      }
+    })()
+  : true
 
 describe('RFC-103 T7 端口 symlink realpath 包含', () => {
   let worktree: string
@@ -22,11 +41,12 @@ describe('RFC-103 T7 端口 symlink realpath 包含', () => {
     writeFileSync(join(worktree, 'real.md'), 'INSIDE OK')
   })
   afterEach(() => {
-    rmSync(worktree, { recursive: true, force: true })
-    rmSync(outside, { recursive: true, force: true })
+    rimrafDir(worktree)
+    rimrafDir(outside)
   })
 
   test('worktree 内 symlink → 仓外文件：抛 ValidationError（不读穿）', () => {
+    if (!canSymlink) return // needs developer mode on Windows
     symlinkSync(join(outside, 'secrets.txt'), join(worktree, 'evil.md'))
     expect(() =>
       resolvePortContent({ rawContent: 'evil.md', kind: 'markdown_file', worktreePath: worktree }),
@@ -34,6 +54,7 @@ describe('RFC-103 T7 端口 symlink realpath 包含', () => {
   })
 
   test('worktree 内 symlink → 仓内文件：放行（realpath 仍在界内）', () => {
+    if (!canSymlink) return // needs developer mode on Windows
     symlinkSync(join(worktree, 'real.md'), join(worktree, 'inside-link.md'))
     expect(
       resolvePortContent({

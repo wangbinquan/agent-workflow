@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-092 §5-7 — S-1 端到端验收（修复后正确语义锁定）。
 //
 // 锁定 design/RFC-092-scheduler-p0-stopgap/design.md §1.2 的 pending 锚点行
@@ -72,7 +73,8 @@ let n = 0
 if (existsSync(counterFile)) n = Number(readFileSync(counterFile, 'utf-8').trim()) || 0
 const callIndex = n
 writeFileSync(counterFile, String(n + 1))
-appendFileSync(join(STATE_DIR, 'argv.jsonl'), JSON.stringify({ agent, callIndex, argv }) + '\\n')
+const capturedArgv = process.platform === 'win32' ? [argv[0] ?? 'run', (function () { try { return readFileSync(0, 'utf-8') } catch { return '' } })(), ...argv.slice(1)] : argv
+appendFileSync(join(STATE_DIR, 'argv.jsonl'), JSON.stringify({ agent, callIndex, argv: capturedArgv }) + '\\n')
 const gate = GATES[agent]
 if (gate !== undefined) {
   const deadline = Date.now() + 20000
@@ -148,7 +150,7 @@ async function buildHarness(): Promise<Harness> {
     planFile,
     gateFile,
     mockPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

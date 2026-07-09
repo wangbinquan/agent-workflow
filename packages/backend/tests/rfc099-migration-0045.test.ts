@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-099 T1 — locks migration 0045: the five resource tables gain
 // owner_user_id + visibility, resource_grants is created, and the backfill
 // assigns owner = earliest-created human admin (falling back to '__system__'
@@ -94,9 +95,9 @@ describe('RFC-099 migration 0045 — DB with human admins', () => {
     fullDir = makeMigrationsFolder(FULL_MAX_IDX)
   })
   afterAll(() => {
-    rmSync(tmp, { recursive: true, force: true })
-    rmSync(prevDir, { recursive: true, force: true })
-    rmSync(fullDir, { recursive: true, force: true })
+    rimrafDir(tmp)
+    rimrafDir(prevDir)
+    rimrafDir(fullDir)
   })
 
   test('stage A: 0000..0044 — no ACL columns yet; seed 2 admins + 1 user + resources', () => {
@@ -195,9 +196,9 @@ describe('RFC-099 migration 0045 — daemon-only DB (no human admin)', () => {
     fullDir = makeMigrationsFolder(FULL_MAX_IDX)
   })
   afterAll(() => {
-    rmSync(tmp, { recursive: true, force: true })
-    rmSync(prevDir, { recursive: true, force: true })
-    rmSync(fullDir, { recursive: true, force: true })
+    rimrafDir(tmp)
+    rimrafDir(prevDir)
+    rimrafDir(fullDir)
   })
 
   test('owner falls back to __system__ when no human admin exists', () => {

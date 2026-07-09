@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-004 regression: an input node's output port name MUST equal its
 // `inputKey`, and the value routed to that port MUST be `task.inputs[inputKey]`.
 // If this goes red, check scheduler.ts:319 and workflow.validator.ts around
@@ -39,7 +40,7 @@ function buildHarness(): Harness {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

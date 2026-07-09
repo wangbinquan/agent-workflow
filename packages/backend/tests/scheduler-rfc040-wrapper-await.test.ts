@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-040 — wrapper-loop / wrapper-git bubble awaiting_human / awaiting_review.
 //
 // Locks the contract that prior to RFC-040 was silently broken:
@@ -82,7 +83,7 @@ async function buildHarness(slug: string): Promise<Harness> {
     appHome,
     worktreePath,
     repoPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

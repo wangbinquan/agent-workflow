@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-075 T9/T10 — the commit&push executor against real git + a bare remote.
 // Covers: happy push, skipped-empty, fallback message, auth-fail degrade
 // (injected push stderr), server-hook rejection → repair → success, repair
@@ -5,7 +6,7 @@
 // git; the message/repair generators are injected (production wraps opencode).
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
@@ -14,6 +15,7 @@ import { nodeRuns } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { runCommitPush, type CommitPushParams } from '../src/services/commitPushRunner'
 import type { CommitPushMeta } from '@agent-workflow/shared'
+import { isWindows } from './helpers/stub-runtime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -29,6 +31,8 @@ async function build(opts?: { rejectUnlessOk?: boolean }): Promise<Fixture> {
   const remote = mkdtempSync(join(tmpdir(), 'aw-cpr-remote-'))
   await runGit(remote, ['init', '-q', '--bare', '-b', 'main'])
   if (opts?.rejectUnlessOk === true) {
+    // Git hooks are invoked by git itself, which uses its bundled bash on
+    // Windows — so .sh hooks work cross-platform without modification.
     const hook = join(remote, 'hooks', 'pre-receive')
     writeFileSync(
       hook,
@@ -43,7 +47,12 @@ done
 exit 0
 `,
     )
-    chmodSync(hook, 0o755)
+    // chmodSync is a no-op on Windows (NTFS has no executable bit);
+    // Git for Windows runs hooks via its bundled bash regardless.
+    if (!isWindows) {
+      const { chmodSync } = require('node:fs')
+      chmodSync(hook, 0o755)
+    }
   }
 
   const repo = mkdtempSync(join(tmpdir(), 'aw-cpr-repo-'))
@@ -79,8 +88,8 @@ exit 0
     db,
     taskId,
     cleanup: () => {
-      rmSync(remote, { recursive: true, force: true })
-      rmSync(repo, { recursive: true, force: true })
+      rimrafDir(remote)
+      rimrafDir(repo)
     },
   }
 }
@@ -227,7 +236,7 @@ describe('runCommitPush', () => {
     await runGit(other, ['add', '.'])
     await runGit(other, ['commit', '-q', '-m', 'remote work'])
     await runGit(other, ['push', '-q', 'origin', 'feature/x'])
-    rmSync(other, { recursive: true, force: true })
+    rimrafDir(other)
 
     // Local commit on the stale feature/x → first push is non-FF.
     writeFileSync(join(f.repo, 'local-side.txt'), 'from local\n')

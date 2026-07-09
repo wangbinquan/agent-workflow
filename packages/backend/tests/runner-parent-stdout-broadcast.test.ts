@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Regression test for the parent-stdout live broadcast gap that left the
 // SessionTab stuck mid-run for workflows whose worker never spawned a
 // subagent (so RFC-048's subagent live poller never fired). Once the runner
@@ -95,7 +96,7 @@ function buildHarness(): Harness {
     appHome,
     worktreePath,
     taskId,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

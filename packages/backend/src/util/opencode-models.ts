@@ -15,6 +15,7 @@
 import type { OpencodeModel } from '@agent-workflow/shared'
 import { createLogger } from './log'
 import { killProcessTree } from './process'
+import { resolveSpawnCmd } from './opencode'
 
 const log = createLogger('opencode-models')
 
@@ -76,14 +77,17 @@ async function readCapped(
 
 export async function listOpencodeModels(
   binary: string,
-  opts?: { refresh?: boolean; timeoutMs?: number },
+  opts?: { refresh?: boolean; timeoutMs?: number; cmd?: string[] },
 ): Promise<ListOpencodeModelsResult> {
   if (!opts?.refresh) {
     const hit = cache.get(binary)
     if (hit !== undefined) return { binary, models: hit, cached: true }
   }
 
-  const cmd = [binary, 'models', '--verbose']
+  // cmd override allows cross-platform test stubs (Windows can't spawn .js directly)
+  const cmd = opts?.cmd
+    ? [...opts.cmd, 'models', '--verbose']
+    : resolveSpawnCmd(binary, 'models', '--verbose')
   if (opts?.refresh) cmd.push('--refresh')
 
   // detached → the child leads its own process group, so the timeout can group-
@@ -91,7 +95,16 @@ export async function listOpencodeModels(
   // opencode can spawn helpers) would otherwise keep the inherited stdout pipe
   // open and block the drain past the timeout (CI caught this — a plain
   // `proc.kill` left the grandchild alive). Mirrors runtimeSmoke.
-  const proc = Bun.spawn({ cmd, stdout: 'pipe', stderr: 'pipe', stdin: 'ignore', detached: true })
+  // On Windows, detached breaks the stdout pipe (the child gets its own console),
+  // so we skip it there — killProcessTree handles Windows via taskkill /T /F.
+  const isWindows = process.platform === 'win32'
+  const proc = Bun.spawn({
+    cmd,
+    stdout: 'pipe',
+    stderr: 'pipe',
+    stdin: 'ignore',
+    ...(isWindows ? {} : { detached: true }),
+  })
   let timedOut = false
   const timer = setTimeout(() => {
     timedOut = true

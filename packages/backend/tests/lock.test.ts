@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -14,7 +15,7 @@ describe('flock (PID-file)', () => {
   })
 
   afterEach(() => {
-    rmSync(tmp, { recursive: true, force: true })
+    rimrafDir(tmp)
   })
 
   test('first acquire writes a PID file containing process.pid', () => {

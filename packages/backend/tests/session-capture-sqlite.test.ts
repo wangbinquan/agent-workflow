@@ -115,7 +115,9 @@ describe('resolveOpencodeDbPath', () => {
       OPENCODE_TEST_HOME: '/tmp/fake-home',
       XDG_DATA_HOME: '/tmp/fake-home/data',
     } as NodeJS.ProcessEnv)
-    expect(path).toBe('/tmp/fake-home/data/opencode/opencode.db')
+    // node:path.join is platform-native; compare against the same join so the
+    // assertion holds on Windows (backslashes) as well as POSIX. RFC-W001.
+    expect(path).toBe(join('/tmp/fake-home/data', 'opencode', 'opencode.db'))
   })
 
   test('falls back to ~/.local/share/opencode/opencode.db when no XDG override (regression: matches opencode xdg-basedir on macOS too)', () => {
@@ -130,7 +132,8 @@ describe('resolveOpencodeDbPath', () => {
     const path = resolveOpencodeDbPath({
       OPENCODE_TEST_HOME: '/users/me',
     } as NodeJS.ProcessEnv)
-    expect(path).toBe('/users/me/.local/share/opencode/opencode.db')
+    // Platform-native join (backslashes on Windows). RFC-W001.
+    expect(path).toBe(join('/users/me', '.local', 'share', 'opencode', 'opencode.db'))
   })
 })
 

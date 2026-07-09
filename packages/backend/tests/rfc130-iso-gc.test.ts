@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-130 PR-E — orphan iso worktree GC. A node run normally discardNodeIso's its
 // iso worktree on completion, but a crash / kept conflict-human iso / daemon restart
 // can leave {appHome}/iso/{taskId}/* behind. runIsoWorktreeGc removes the iso
@@ -53,7 +54,7 @@ describe('RFC-130 PR-E — orphan iso worktree GC', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc130-isogc-'))
     expect(await runIsoWorktreeGc(db, appHome)).toEqual({ scanned: 0, removed: [] })
-    rmSync(appHome, { recursive: true, force: true })
+    rimrafDir(appHome)
   })
 
   test('removes terminal + orphan-row iso containers, keeps active', async () => {
@@ -76,6 +77,6 @@ describe('RFC-130 PR-E — orphan iso worktree GC', () => {
     expect(existsSync(join(appHome, 'iso', doneTask))).toBe(false)
     expect(existsSync(join(appHome, 'iso', deletedTask))).toBe(false)
     expect(existsSync(join(appHome, 'iso', runningTask))).toBe(true)
-    rmSync(appHome, { recursive: true, force: true })
+    rimrafDir(appHome)
   })
 })

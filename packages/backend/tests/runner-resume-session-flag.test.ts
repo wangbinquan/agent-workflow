@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Agent } from '@agent-workflow/shared'
 import { buildCommand, type RunNodeOptions } from '../src/services/runner'
+import { isWindows } from './helpers/stub-runtime'
 
 const AGENT: Agent = {
   id: 'a',
@@ -62,10 +63,12 @@ describe('RFC-026 runner buildCommand — resumeSessionId', () => {
     expect(cmd).toContain('--session')
     const flagIdx = cmd.indexOf('--session')
     expect(cmd[flagIdx + 1]).toBe('opc_abc123')
-    // First three args remain the legacy positional layout
+    // First three args remain the legacy positional layout. Windows omits the
+    // positional prompt (piped via stdin, see buildCommand) so cmd[2] is the
+    // --agent flag there.
     expect(cmd[0]).toBe('opencode')
     expect(cmd[1]).toBe('run')
-    expect(cmd[2]).toBe('PROMPT')
+    expect(cmd[2]).toBe(isWindows ? '--agent' : 'PROMPT')
   })
 
   test('undefined resumeSessionId does NOT emit `--session`', () => {

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // REGRESSION LOCK: a validator-accepted same-iteration DATA cycle between two
 // agents inside a wrapper-loop must NOT degrade into an opaque "scheduler
 // stalled" failure at runtime.
@@ -60,7 +61,7 @@ function buildHarness(): Harness {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 async function seedAgent(

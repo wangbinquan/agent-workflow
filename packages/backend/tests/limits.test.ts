@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // P-4-04: per-task duration + token limit enforcement.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -24,7 +25,7 @@ function buildHarness(): Harness {
   return {
     db,
     appHome,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

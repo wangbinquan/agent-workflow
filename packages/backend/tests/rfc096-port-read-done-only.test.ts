@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // LOCKS: RFC-096 (audit S-13 / 附录 C #5, design §3.3) — readPortAtIteration
 // reads DONE rows only.
 //
@@ -95,7 +96,7 @@ function buildHarness(): Harness {
     worktreePath,
     stateDir,
     planFile: join(appHome, 'plan.json'),
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

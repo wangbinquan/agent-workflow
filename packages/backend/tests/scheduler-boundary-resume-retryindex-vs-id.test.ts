@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locked regression: resumeTask picks the rollback row by retryIndex instead of
 // id (ULID) order.
 //
@@ -44,7 +45,7 @@ function buildHarness(): Harness {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 async function seedAgent(

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Tests for the git util (P-1-12 helpers + parsers shared with P-1-10).
 // Builds a real fixture repo per test via `git init` + a few commits/branches.
 
@@ -30,7 +31,7 @@ beforeAll(() => {
 })
 
 afterAll(() => {
-  rmSync(baseTmp, { recursive: true, force: true })
+  rimrafDir(baseTmp)
 })
 
 beforeEach(async () => {
@@ -50,8 +51,8 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
-  rmSync(repoPath, { recursive: true, force: true })
-  rmSync(appHome, { recursive: true, force: true })
+  rimrafDir(repoPath)
+  rimrafDir(appHome)
 })
 
 describe('runGit + requireGitRepo', () => {
@@ -74,7 +75,7 @@ describe('runGit + requireGitRepo', () => {
     try {
       await expect(requireGitRepo(notRepo)).rejects.toBeInstanceOf(ValidationError)
     } finally {
-      rmSync(notRepo, { recursive: true, force: true })
+      rimrafDir(notRepo)
     }
   })
 })
@@ -176,7 +177,7 @@ describe('worktree create + remove', () => {
         createWorktree({ repoPath: notRepo, taskId: 'T', appHome }),
       ).rejects.toBeInstanceOf(ValidationError)
     } finally {
-      rmSync(notRepo, { recursive: true, force: true })
+      rimrafDir(notRepo)
     }
   })
 

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // P-4-09: worktree GC scan.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -32,7 +33,7 @@ async function buildHarness(): Promise<Harness> {
     db,
     appHome,
     repoPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

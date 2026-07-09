@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-026 T7 — scheduler integration for clarify inline-session mode.
 //
 // Drives runTask end-to-end against mock-opencode and asserts the scheduler:
@@ -79,7 +80,7 @@ async function buildHarness(): Promise<Harness> {
     worktreePath,
     repoPath,
     argvCapturePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

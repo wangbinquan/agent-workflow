@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-079 PR-A — migration 0042 (doc_versions multi-document columns) lock.
 //
 // WHY THIS FILE EXISTS (regression intent):
@@ -20,7 +21,7 @@ const migrationsFolder = resolve(import.meta.dir, '..', 'db', 'migrations')
 describe('migration 0042 — RFC-079 doc_versions multi-doc columns', () => {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-mig0042-'))
   const dbPath = join(tmp, 'test.sqlite')
-  afterAll(() => rmSync(tmp, { recursive: true, force: true }))
+  afterAll(() => rimrafDir(tmp))
 
   test('adds item_index / selection / item_path columns + review-item index', () => {
     openDb({ path: dbPath, migrationsFolder }) // applies through 0042

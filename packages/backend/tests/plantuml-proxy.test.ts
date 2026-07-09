@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-105 WP-B — PlantUML render proxy.
 //
 // Encoders round-trip through DEFLATE (pako-byte-equality is NOT required —
@@ -191,7 +192,7 @@ function buildApp(plantuml?: { endpoint: string; authHeader?: string }): AppCtx 
     dbVersion: 1,
     db,
   })
-  return { db, app, configPath, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
+  return { db, app, configPath, cleanup: () => rimrafDir(tmp) }
 }
 
 async function post(app: Hono, token: string, source: unknown): Promise<Response> {

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-054 W1-2 — API contract suite (response shape + auth gate per endpoint).
 //
 // LOCKS: every endpoint enumerated in `tests/contracts/registry.ts ENDPOINTS`
@@ -30,7 +31,7 @@ beforeAll(async () => {
 })
 afterAll(() => {
   try {
-    rmSync(harness.homePath, { recursive: true, force: true })
+    rimrafDir(harness.homePath)
   } catch {
     /* best-effort */
   }

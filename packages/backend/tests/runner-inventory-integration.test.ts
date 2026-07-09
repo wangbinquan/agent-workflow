@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-029 T4 + T8 — runner.ts must:
 //   1. copy aw-inventory-dump.mjs into the per-run dir before spawning,
 //   2. append a `file://` plugin spec into OPENCODE_CONFIG_CONTENT.plugin,
@@ -84,7 +85,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     taskId,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

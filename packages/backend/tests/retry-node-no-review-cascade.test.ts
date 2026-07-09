@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-052 regression: `retryNode` must NOT mint `retryIndex+1` placeholder
 // rows (status=failed, errorMessage='queued for retry') for downstream
 // non-process kinds: review, clarify, output, input. Those kinds don't have
@@ -40,8 +41,8 @@ describe('retryNode cascade skips non-process kinds (RFC-052)', () => {
   })
 
   afterEach(() => {
-    rmSync(appHome, { recursive: true, force: true })
-    rmSync(repoPath, { recursive: true, force: true })
+    rimrafDir(appHome)
+    rimrafDir(repoPath)
   })
 
   test('retry on agent does NOT mint placeholders for downstream review/clarify/output', async () => {

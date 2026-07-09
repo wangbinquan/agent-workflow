@@ -43,7 +43,12 @@ export interface ExpandCtx {
 
 function splitRef(ref: string): { file: string; qn: string } {
   const i = ref.indexOf('#')
-  return i < 0 ? { file: ref, qn: ref } : { file: ref.slice(0, i), qn: ref.slice(i + 1) }
+  // RFC-W001: normalize the file segment to forward slashes so a Windows-native
+  // ref (`src\OrderService.java#A.run`) matches the posix index keys produced
+  // by `listSourceFiles` and the `ownerFile === callerFile` comparison below.
+  const file = i < 0 ? ref : ref.slice(0, i)
+  const posix = file.includes('\\') ? file.replace(/\\/g, '/') : file
+  return i < 0 ? { file: posix, qn: ref } : { file: posix, qn: ref.slice(i + 1) }
 }
 function leaf(qn: string): string {
   const i = qn.lastIndexOf('.')

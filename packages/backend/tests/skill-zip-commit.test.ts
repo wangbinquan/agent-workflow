@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-019: backend commit logic — decision matrix + per-skill failure
 // isolation + filesystem layout invariants.
 //
@@ -45,7 +46,7 @@ function build(): H {
   return {
     db: createInMemoryDb(MIGRATIONS),
     fsOpts: { appHome },
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 
@@ -157,7 +158,7 @@ describe('commitSkillZipBuffer', () => {
       // External skill files must remain untouched.
       expect(existsSync(join(externalDir, 'SKILL.md'))).toBe(true)
     } finally {
-      rmSync(externalDir, { recursive: true, force: true })
+      rimrafDir(externalDir)
     }
   })
 
@@ -412,7 +413,7 @@ describe('RFC-102 overwrite permission', () => {
       expect(asAlice.response.skills[0]!.conflict).toBe('external')
       expect(asAlice.response.skills[0]!.canOverwrite).toBe(false)
     } finally {
-      rmSync(externalDir, { recursive: true, force: true })
+      rimrafDir(externalDir)
     }
   })
 })

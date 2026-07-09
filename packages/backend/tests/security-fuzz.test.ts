@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-054 W3-5 — security boundary fuzz with fast-check.
 //
 // LOCKS the three system-edge invariants where a single missed sanitization
@@ -35,6 +36,23 @@ import { ValidationError } from '../src/util/errors'
 import { realpathInside, safeJoin } from '../src/util/safePath'
 import { redactSensitiveString } from '../src/util/redact'
 import { redactGitUrl } from '@agent-workflow/shared'
+import { isWindows } from './helpers/stub-runtime'
+
+const canSymlink = isWindows
+  ? (() => {
+      try {
+        const { mkdirSync, symlinkSync, rmSync } = require('node:fs')
+        const { join } = require('node:path')
+        const { tmpdir } = require('node:os')
+        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true })
+        symlinkSync(join(d, 'x'), join(d, 'y'), 'file')
+        rimrafDir(d)
+        return true
+      } catch {
+        return false
+      }
+    })()
+  : true
 
 // ---------------------------------------------------------------------------
 // PATH: safeJoin must NEVER produce a path outside root for ANY user input.
@@ -61,7 +79,7 @@ describe('RFC-054 W3-5 — path-traversal fuzz on safeJoin', () => {
       // adversarial surface that an attacker would explore exhaustively.
       fc.assert(property, { numRuns: 300 })
     } finally {
-      rmSync(root, { recursive: true, force: true })
+      rimrafDir(root)
     }
   })
 
@@ -105,7 +123,7 @@ describe('RFC-054 W3-5 — path-traversal fuzz on safeJoin', () => {
         }
       }
     } finally {
-      rmSync(root, { recursive: true, force: true })
+      rimrafDir(root)
     }
   })
 
@@ -133,30 +151,22 @@ describe('RFC-054 W3-5 — path-traversal fuzz on safeJoin', () => {
         }
       }
     } finally {
-      rmSync(root, { recursive: true, force: true })
+      rimrafDir(root)
     }
   })
 
   test('realpathInside rejects symlinks that point outside the root', () => {
+    // On Windows, file symlinks need developer mode; if unavailable, the
+    // security guarantee still exists in the code — just skip the test case.
+    if (!canSymlink) return
     const root = mkdtempSync(join(tmpdir(), 'aw-fuzz-real-'))
     const outside = mkdtempSync(join(tmpdir(), 'aw-fuzz-outside-'))
     try {
       // Write a file under root and a symlink that escapes to outside.
       writeFileSync(join(root, 'inside.txt'), 'ok')
       writeFileSync(join(outside, 'secret.txt'), 'leak')
-      // Create the symlink only if the OS allows it (skip on win where
-      // privileges may be required). Bun uses node fs, so symlinkSync
-      // matches node behaviour.
-      try {
-        // Re-import here to keep top of file clean.
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const fs = require('node:fs')
-        fs.symlinkSync(join(outside, 'secret.txt'), join(root, 'escape'))
-      } catch {
-        // CI containers sometimes ban symlinks; skip the assertion in
-        // that case rather than failing the run.
-        return
-      }
+      const { symlinkSync } = require('node:fs')
+      symlinkSync(join(outside, 'secret.txt'), join(root, 'escape'))
       let thrown: unknown
       try {
         realpathInside(root, join(root, 'escape'))
@@ -165,8 +175,8 @@ describe('RFC-054 W3-5 — path-traversal fuzz on safeJoin', () => {
       }
       expect(thrown).toBeInstanceOf(ValidationError)
     } finally {
-      rmSync(root, { recursive: true, force: true })
-      rmSync(outside, { recursive: true, force: true })
+      rimrafDir(root)
+      rimrafDir(outside)
     }
   })
 })
@@ -387,7 +397,7 @@ describe('RFC-054 W3-5 — fuzz suite hygiene', () => {
       expect(d.startsWith(t)).toBe(true)
       mkdirSync(join(d, 'sub'), { recursive: true })
     } finally {
-      rmSync(d, { recursive: true, force: true })
+      rimrafDir(d)
     }
   })
 })

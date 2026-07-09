@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-143 — runtime 能力对象收口的 PR-1 验收锁。
 //
 // 两组锁：
@@ -290,7 +291,7 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 单份 + semver 单
       writeFileSync(p, JSON.stringify({}))
       expect(resolveOpencodeCmd(p)).toBeUndefined()
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      rimrafDir(dir)
     }
   })
 

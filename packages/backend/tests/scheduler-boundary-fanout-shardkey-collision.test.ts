@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Regression: duplicate items in a wrapper-fanout shardSource collide to the
 // same shardKey.
 //
@@ -50,7 +51,7 @@ function buildHarness(): Harness {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

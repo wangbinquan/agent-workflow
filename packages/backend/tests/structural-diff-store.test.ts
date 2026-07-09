@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-083 — eager on-disk persistence of the task-scope structural diff (so the
 // view survives worktree-GC). File-based (no DB migration), best-effort.
 
@@ -19,7 +20,7 @@ beforeAll(() => {
 })
 afterAll(() => {
   delete process.env.AGENT_WORKFLOW_HOME
-  rmSync(home, { recursive: true, force: true })
+  rimrafDir(home)
 })
 
 function sample(taskId: string): StructuralDiff {

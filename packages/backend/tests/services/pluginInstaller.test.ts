@@ -26,14 +26,16 @@ import {
   PluginInstallTimeoutError,
   resetNpmProbeCacheForTests,
 } from '../../src/services/pluginInstaller'
-
-const FAKE_NPM = resolve(import.meta.dir, '..', 'fixtures', 'fake-npm.sh')
+import { writeFakeNpm } from '../helpers/stub-runtime'
 
 let pluginsDir = ''
+let fakeNpmBin = ''
 const originalEnv: Record<string, string | undefined> = {}
 
 beforeEach(async () => {
   pluginsDir = await mkdtemp(join(tmpdir(), 'rfc031-plugins-'))
+  const npmDir = writeFakeNpm(pluginsDir)
+  fakeNpmBin = resolve(npmDir, process.platform === 'win32' ? 'npm.cmd' : 'npm')
   resetNpmProbeCacheForTests()
   // The installer reads `FAKE_NPM_MODE` from the env of the spawned child; we
   // set + restore per-test.
@@ -130,7 +132,7 @@ describe('installPlugin — npm path (with fake npm shim)', () => {
     process.env.FAKE_NPM_VERSION = '3.0.0'
     const result = await installPlugin('p10', 'my-plugin@3.0.0', {
       pluginsDir,
-      npmBin: FAKE_NPM,
+      npmBin: fakeNpmBin,
     })
     expect(result.sourceKind).toBe('npm')
     expect(result.resolvedVersion).toBe('3.0.0')
@@ -160,10 +162,10 @@ describe('installPlugin — npm path (with fake npm shim)', () => {
     process.env.FAKE_NPM_VERSION = '0.2.6'
     const result = await installPlugin('p-regression-readdir', 'opencode-toolkit@0.2.6', {
       pluginsDir,
-      npmBin: FAKE_NPM,
+      npmBin: fakeNpmBin,
     })
     expect(result.resolvedVersion).toBe('0.2.6')
-    expect(result.cachedPath).toContain('node_modules/opencode-toolkit')
+    expect(result.cachedPath).toContain(join('node_modules', 'opencode-toolkit'))
     expect(result.cachedPath).not.toContain('decoy')
     // Sanity: the decoys really were written (the fixture is doing its job).
     const decoyPkg = JSON.parse(
@@ -185,9 +187,9 @@ describe('installPlugin — npm path (with fake npm shim)', () => {
     process.env.FAKE_NPM_MODE = 'success'
     const result = await installPlugin('p11', '@scope/pkg@1.0.0', {
       pluginsDir,
-      npmBin: FAKE_NPM,
+      npmBin: fakeNpmBin,
     })
-    expect(result.cachedPath).toContain('node_modules/@scope/pkg')
+    expect(result.cachedPath).toContain(join('node_modules', '@scope', 'pkg'))
   })
 
   test('git source kind goes through same npm path', async () => {
@@ -195,7 +197,7 @@ describe('installPlugin — npm path (with fake npm shim)', () => {
     process.env.FAKE_NPM_MODE = 'success'
     const result = await installPlugin('p12', 'github:org/repo', {
       pluginsDir,
-      npmBin: FAKE_NPM,
+      npmBin: fakeNpmBin,
     })
     expect(result.sourceKind).toBe('git')
   })
@@ -203,14 +205,14 @@ describe('installPlugin — npm path (with fake npm shim)', () => {
   test('failure: non-zero exit → PluginInstallFailedError with stderr', async () => {
     process.env.FAKE_NPM_MODE = 'fail'
     await expect(
-      installPlugin('p13', 'nonexistent-pkg@99', { pluginsDir, npmBin: FAKE_NPM }),
+      installPlugin('p13', 'nonexistent-pkg@99', { pluginsDir, npmBin: fakeNpmBin }),
     ).rejects.toBeInstanceOf(PluginInstallFailedError)
   })
 
   test('failure: stderr containing token is redacted before surfacing', async () => {
     process.env.FAKE_NPM_MODE = 'leak-secret'
     try {
-      await installPlugin('p14', 'pkg', { pluginsDir, npmBin: FAKE_NPM })
+      await installPlugin('p14', 'pkg', { pluginsDir, npmBin: fakeNpmBin })
       throw new Error('expected throw')
     } catch (err) {
       expect(err).toBeInstanceOf(PluginInstallFailedError)
@@ -226,7 +228,7 @@ describe('installPlugin — npm path (with fake npm shim)', () => {
     await expect(
       installPlugin('p15', 'will-hang', {
         pluginsDir,
-        npmBin: FAKE_NPM,
+        npmBin: fakeNpmBin,
         timeoutMs: 250,
       }),
     ).rejects.toBeInstanceOf(PluginInstallTimeoutError)
@@ -238,8 +240,8 @@ describe('installPlugin — in-flight Map serialises concurrent installs', () =>
   test('two concurrent installs of same pluginId resolve to same result', async () => {
     process.env.FAKE_NPM_MODE = 'success'
     const [a, b] = await Promise.all([
-      installPlugin('p20', 'pkg-a@1', { pluginsDir, npmBin: FAKE_NPM }),
-      installPlugin('p20', 'pkg-a@1', { pluginsDir, npmBin: FAKE_NPM }),
+      installPlugin('p20', 'pkg-a@1', { pluginsDir, npmBin: fakeNpmBin }),
+      installPlugin('p20', 'pkg-a@1', { pluginsDir, npmBin: fakeNpmBin }),
     ])
     expect(a.cachedPath).toBe(b.cachedPath)
     expect(a.resolvedVersion).toBe(b.resolvedVersion)
@@ -248,8 +250,8 @@ describe('installPlugin — in-flight Map serialises concurrent installs', () =>
   test('different pluginIds run independently', async () => {
     process.env.FAKE_NPM_MODE = 'success'
     const [a, b] = await Promise.all([
-      installPlugin('p30', 'pkg-x@1', { pluginsDir, npmBin: FAKE_NPM }),
-      installPlugin('p31', 'pkg-y@1', { pluginsDir, npmBin: FAKE_NPM }),
+      installPlugin('p30', 'pkg-x@1', { pluginsDir, npmBin: fakeNpmBin }),
+      installPlugin('p31', 'pkg-y@1', { pluginsDir, npmBin: fakeNpmBin }),
     ])
     expect(a.cachedPath).not.toBe(b.cachedPath)
   })

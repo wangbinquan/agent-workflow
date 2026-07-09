@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-144 T4 — stale replay 回归（先红后绿）+ merge-failed 行为缺口补齐。
 //
 // 为什么这条测试存在（锁 design/RFC-144-merge-state-machine/design.md §7）：
@@ -70,7 +71,7 @@ async function buildGitHarness(): Promise<Harness> {
     db: createInMemoryDb(MIGRATIONS),
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 
@@ -310,7 +311,7 @@ describe('RFC-144 mint 收口 — mintNodeRun 原子废弃前代行及其子行'
       expect(row.mergeState).toBe('abandoned')
       expect(existsSync(isoDir)).toBe(true) // 目录原封不动（答后续跑还要用）
     } finally {
-      rmSync(isoDir, { recursive: true, force: true })
+      rimrafDir(isoDir)
     }
   })
 })

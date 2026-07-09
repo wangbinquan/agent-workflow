@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-052 regression: `dispatchReviewNode` must short-circuit when the
 // freshest top-level review node_run is already in a terminal state
 // (`done` / `canceled`). Without this short-circuit, an upstream
@@ -47,8 +48,8 @@ describe('dispatchReviewNode terminal-state short-circuit (RFC-052)', () => {
   })
 
   afterEach(() => {
-    rmSync(appHome, { recursive: true, force: true })
-    rmSync(worktree, { recursive: true, force: true })
+    rimrafDir(appHome)
+    rimrafDir(worktree)
   })
 
   async function seedWorkflow(): Promise<{

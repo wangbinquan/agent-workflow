@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -13,7 +14,7 @@ describe('db client', () => {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-db-'))
   const dbPath = join(tmp, 'test.sqlite')
 
-  afterAll(() => rmSync(tmp, { recursive: true, force: true }))
+  afterAll(() => rimrafDir(tmp))
 
   test('openDb applies migrations and round-trips an agent insert', async () => {
     const db = openDb({ path: dbPath, migrationsFolder })

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-034 T8 — locks the cached-repos HTTP surface emitting submodule
 // telemetry fields. We focus on serializer / schema shape rather than re-
 // exercising the full clone path (covered in git-repo-cache-submodule.test.ts).
@@ -101,6 +102,6 @@ describe('cached-repos HTTP RFC-034 submodule telemetry', () => {
     expect(legacy.lastSubmoduleSyncOk).toBeNull()
     expect(legacy.lastSubmoduleSyncError).toBeNull()
 
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 })

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // 损坏端口急修（2026-06-24）— runner 把「开了 <port> 但 </port> 闭合损坏」的信封
 // 判为可重试 failed，而非静默 done+空端口。
 //
@@ -91,7 +92,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     taskId,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

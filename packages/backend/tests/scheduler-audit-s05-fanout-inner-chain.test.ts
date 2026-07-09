@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // design/scheduler-audit-2026-06-10.md S-5 — 分层状态（RFC-094 / WP-6a 已部分修复）：
 //
 // 【层 2 = 已修复（RFC-094），断言锁定正确语义】
@@ -323,7 +324,7 @@ function buildHarness(): Harness {
     appHome,
     worktreePath,
     captureFile: join(appHome, 'argv-capture.jsonl'),
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

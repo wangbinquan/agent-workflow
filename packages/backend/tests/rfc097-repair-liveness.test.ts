@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-097 (audit S-23) — lifecycleRepair scheduler-liveness preflight.
 //
 // Locks in: repair options that flip tasks.status and/or resumeAfterApply must
@@ -95,7 +96,7 @@ async function buildLiveHarness(): Promise<LiveHarness> {
     appHome,
     gateFile,
     mockPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

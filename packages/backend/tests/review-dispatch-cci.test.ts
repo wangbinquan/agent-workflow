@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-056 patch 2026-05-26 — review dispatch must respect clarifyIteration.
 //
 // Symptom (live task 01KS86DPCSERV7S41GQA5Y81RN, fifth visit on the same
@@ -170,8 +171,8 @@ describe('RFC-056 patch-2026-05-26 — dispatchReviewNode cci-aware short-circui
   })
 
   afterEach(() => {
-    rmSync(appHome, { recursive: true, force: true })
-    rmSync(worktree, { recursive: true, force: true })
+    rimrafDir(appHome)
+    rimrafDir(worktree)
   })
 
   async function seed(): Promise<{

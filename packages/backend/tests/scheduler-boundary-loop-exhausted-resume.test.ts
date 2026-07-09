@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locked regression: an exhausted wrapper-loop silently flips failed->done on resume.
 //
 // DEFECT (HIGH): a wrapper-loop that reaches maxIterations without satisfying
@@ -49,7 +50,7 @@ function buildHarness(): Harness {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 async function seedAgent(

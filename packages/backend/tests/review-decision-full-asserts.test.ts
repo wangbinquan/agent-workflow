@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-053 PR-A T1g — full-field assertions for review decision paths.
 //
 // Each decision path (approve / iterate / reject) lays down a specific set
@@ -178,7 +179,7 @@ async function buildHarness(opts?: {
     dvId,
     agentRunId,
     definition,
-    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(tmp),
   }
 }
 

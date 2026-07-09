@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-068 — startTask integration: opt-in path fetch + URL-mode FF.
 // Two end-to-end scenarios:
 //   1. Path mode: fetchBeforeLaunch=true triggers `git fetch` (refreshes
@@ -9,7 +10,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { execSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb } from '../src/db/client'
@@ -17,26 +18,9 @@ import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { startTask } from '../src/services/task'
 import { runGit } from '../src/util/git'
+import { stubCmd, writeStubOpencode } from './helpers/stub-runtime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function makeStubOpencode(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
-if [[ "$1" == "run" ]]; then
-  ENV='<workflow-output><port name="out">hello</port></workflow-output>'
-  TS=$(date +%s%3N)
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
-  exit 0
-fi
-exit 1
-`
-  writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
-}
 
 async function setupPathMode() {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-068-task-path-'))
@@ -100,7 +84,7 @@ async function setupPathMode() {
     },
   })
 
-  const stubOpencode = makeStubOpencode(tmp)
+  const stubOpencode = writeStubOpencode(tmp, { outputs: { out: 'hello' } })
   return { tmp, db, appHome, workflow, repoPath, bareRemote, stubOpencode }
 }
 
@@ -115,7 +99,7 @@ async function advanceRemote(bareRemote: string, root: string, message: string):
     { stdio: 'ignore' },
   )
   const r = await runGit(tmpWork, ['rev-parse', 'HEAD'])
-  rmSync(tmpWork, { recursive: true, force: true })
+  rimrafDir(tmpWork)
   return r.stdout.trim()
 }
 
@@ -139,7 +123,7 @@ describe('startTask RFC-068 path-mode opt-in fetch', () => {
           fetchBeforeLaunch: true,
           inputs: { topic: 't' },
         },
-        { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+        { db: h.db, appHome: h.appHome, opencodeCmd: stubCmd(h.stubOpencode), awaitScheduler: true },
       )
       expect(task.status === 'done' || task.status === 'running').toBe(true)
 
@@ -154,9 +138,9 @@ describe('startTask RFC-068 path-mode opt-in fetch', () => {
       // User's WIP file survives.
       expect(readFileSync(join(h.repoPath, 'WIP.md'), 'utf-8')).toBe('wip\n')
 
-      rmSync(h.tmp, { recursive: true, force: true })
+      rimrafDir(h.tmp)
     } catch (e) {
-      rmSync(h.tmp, { recursive: true, force: true })
+      rimrafDir(h.tmp)
       throw e
     }
   })
@@ -177,7 +161,7 @@ describe('startTask RFC-068 path-mode opt-in fetch', () => {
           // fetchBeforeLaunch omitted — should preserve legacy behavior.
           inputs: { topic: 't' },
         },
-        { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+        { db: h.db, appHome: h.appHome, opencodeCmd: stubCmd(h.stubOpencode), awaitScheduler: true },
       )
       expect(task.status === 'done' || task.status === 'running').toBe(true)
 
@@ -187,9 +171,9 @@ describe('startTask RFC-068 path-mode opt-in fetch', () => {
       expect(originAfter).toBe(originBefore)
       expect(localAfter).toBe(localBefore)
 
-      rmSync(h.tmp, { recursive: true, force: true })
+      rimrafDir(h.tmp)
     } catch (e) {
-      rmSync(h.tmp, { recursive: true, force: true })
+      rimrafDir(h.tmp)
       throw e
     }
   })
@@ -198,7 +182,7 @@ describe('startTask RFC-068 path-mode opt-in fetch', () => {
     const h = await setupPathMode()
     try {
       // Yank the bare remote so fetch fails.
-      rmSync(h.bareRemote, { recursive: true, force: true })
+      rimrafDir(h.bareRemote)
 
       const task = await startTask(
         {
@@ -209,14 +193,14 @@ describe('startTask RFC-068 path-mode opt-in fetch', () => {
           fetchBeforeLaunch: true,
           inputs: { topic: 't' },
         },
-        { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+        { db: h.db, appHome: h.appHome, opencodeCmd: stubCmd(h.stubOpencode), awaitScheduler: true },
       )
       // Task still launches (not failed because of fetch).
       expect(task.status === 'done' || task.status === 'running').toBe(true)
 
-      rmSync(h.tmp, { recursive: true, force: true })
+      rimrafDir(h.tmp)
     } catch (e) {
-      rmSync(h.tmp, { recursive: true, force: true })
+      rimrafDir(h.tmp)
       throw e
     }
   })
@@ -279,7 +263,7 @@ describe('startTask RFC-068 URL-mode FF', () => {
           ],
         },
       })
-      const stubOpencode = makeStubOpencode(tmp)
+      const stubOpencode = writeStubOpencode(tmp, { outputs: { out: 'hello' } })
 
       // First launch — cold clone (no FF needed since clone is fresh).
       const t1 = await startTask(
@@ -289,7 +273,7 @@ describe('startTask RFC-068 URL-mode FF', () => {
           repoUrl: remoteUrl,
           inputs: { topic: 't' },
         },
-        { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+        { db, appHome, opencodeCmd: stubCmd(stubOpencode), awaitScheduler: true },
       )
       const c1 = t1.baseCommit
       expect(c1).toMatch(/^[0-9a-f]{40}$/)
@@ -306,13 +290,13 @@ describe('startTask RFC-068 URL-mode FF', () => {
           repoUrl: remoteUrl,
           inputs: { topic: 't' },
         },
-        { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+        { db, appHome, opencodeCmd: stubCmd(stubOpencode), awaitScheduler: true },
       )
       expect(t2.baseCommit).toBe(newSha)
 
-      rmSync(tmp, { recursive: true, force: true })
+      rimrafDir(tmp)
     } catch (e) {
-      rmSync(tmp, { recursive: true, force: true })
+      rimrafDir(tmp)
       throw e
     }
   })

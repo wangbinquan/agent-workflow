@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-053 PR-A T1b — multi-row dispatch consistency.
 //
 // When a (task, nodeId, iteration) has more than one top-level node_run row
@@ -114,7 +115,7 @@ async function buildHarness(): Promise<Harness> {
     repoPath,
     taskId,
     definition,
-    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(tmp),
   }
 }
 

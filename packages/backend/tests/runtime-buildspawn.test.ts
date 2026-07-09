@@ -1,3 +1,5 @@
+import { rimrafDir } from './helpers/cleanup'
+import { isWindows } from './helpers/stub-runtime'
 // RFC-117 — RuntimeDriver.buildSpawn (system-agent spawn) for the framework's
 // internal agents (distiller / commit / fusion-merger). Locks that:
 //   - opencode produces a MINIMAL inline config (prompt + model only, NO
@@ -31,18 +33,34 @@ const BASE: SystemAgentSpawnContext = {
 describe('opencodeDriver.buildSpawn (RFC-117 system agent)', () => {
   test('argv = opencode run/prompt/--agent/--format json/--thinking/--dangerously; stdin ignored', () => {
     const plan = opencodeDriver.buildSpawn(BASE)
-    expect(plan.cmd).toEqual([
-      'opencode',
-      'run',
-      'USER PROMPT',
-      '--agent',
-      'aw-memory-distiller',
-      '--format',
-      'json',
-      '--thinking',
-      '--dangerously-skip-permissions',
-    ])
-    expect(plan.stdin).toEqual({ mode: 'ignore' })
+    // Windows: Bun.spawn truncates argv elements at '\n', so the prompt is
+    // piped via stdin (omitted from argv) instead of passed positionally.
+    const expectedCmd = isWindows
+      ? [
+          'opencode',
+          'run',
+          '--agent',
+          'aw-memory-distiller',
+          '--format',
+          'json',
+          '--thinking',
+          '--dangerously-skip-permissions',
+        ]
+      : [
+          'opencode',
+          'run',
+          'USER PROMPT',
+          '--agent',
+          'aw-memory-distiller',
+          '--format',
+          'json',
+          '--thinking',
+          '--dangerously-skip-permissions',
+        ]
+    expect(plan.cmd).toEqual(expectedCmd)
+    expect(plan.stdin).toEqual(
+      isWindows ? { mode: 'pipe', data: 'USER PROMPT' } : { mode: 'ignore' },
+    )
   })
 
   test('inline config carries persona prompt + model only (no skills/mcp/plugins)', () => {
@@ -71,7 +89,8 @@ describe('opencodeDriver.buildSpawn (RFC-117 system agent)', () => {
   test('runtimeBinary overrides the opencode head (RFC-112 custom fork)', () => {
     const plan = opencodeDriver.buildSpawn({ ...BASE, runtimeBinary: '/opt/my-oc' })
     expect(plan.cmd[0]).toBe('/opt/my-oc')
-    expect(plan.cmd.slice(1, 3)).toEqual(['run', 'USER PROMPT'])
+    // Windows omits the positional prompt (piped via stdin); see the argv test.
+    expect(plan.cmd.slice(1, 3)).toEqual(isWindows ? ['run', '--agent'] : ['run', 'USER PROMPT'])
   })
 
   // IS_SANDBOX is a claude-code-only root-gate escape hatch; opencode has no
@@ -94,7 +113,7 @@ describe('claudeCodeDriver.buildSpawn (RFC-117 system agent)', () => {
     try {
       fn(dir)
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      rimrafDir(dir)
     }
   }
 

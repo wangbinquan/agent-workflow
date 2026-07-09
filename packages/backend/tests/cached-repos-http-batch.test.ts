@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-033-T4: HTTP surface for batch import + per-row retry + snapshot read.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -56,7 +57,7 @@ describe('cached-repos batch import HTTP (RFC-033)', () => {
   afterEach(() => {
     __resetBatchImportForTests()
     resetBroadcastersForTests()
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 
   test('POST /batch-import returns 201 + snapshot immediately', async () => {

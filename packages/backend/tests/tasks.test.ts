@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // HTTP coverage for /api/tasks (P-1-14).
 // Uses a real `git init` fixture so startTask's worktree creation works.
 
@@ -52,8 +53,8 @@ async function buildHarness(): Promise<Harness> {
     repoPath,
     appHome,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(repoPath, { recursive: true, force: true })
+      rimrafDir(appHome)
+      rimrafDir(repoPath)
       if (prevHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
       else process.env.AGENT_WORKFLOW_HOME = prevHome
     },
@@ -189,7 +190,7 @@ describe('task HTTP routes', () => {
       expect(task.status).toBe('failed')
       expect(task.errorSummary).toContain('worktree creation failed')
     } finally {
-      rmSync(notRepo, { recursive: true, force: true })
+      rimrafDir(notRepo)
     }
   })
 
@@ -524,7 +525,7 @@ describe('task HTTP routes', () => {
       // The message stays a single actionable line — no git usage-block spew.
       expect(body.message).not.toContain('usage: git diff')
     } finally {
-      rmSync(notARepo, { recursive: true, force: true })
+      rimrafDir(notARepo)
     }
   })
 
@@ -557,7 +558,7 @@ describe('task HTTP routes', () => {
       expect(body.code).toBe('task-worktree-missing')
       expect(body.message).not.toContain('usage: git diff')
     } finally {
-      rmSync(notARepo, { recursive: true, force: true })
+      rimrafDir(notARepo)
     }
   })
 

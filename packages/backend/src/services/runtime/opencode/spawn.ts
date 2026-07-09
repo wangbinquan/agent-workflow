@@ -19,7 +19,12 @@ export interface OpencodeCommandOptions {
 }
 
 export function buildCommand(opts: OpencodeCommandOptions, prompt: string): string[] {
-  const head = opts.opencodeCmd ?? ['opencode']
+  const rawHead = opts.opencodeCmd ?? ['opencode']
+  // On Windows, .js files cannot be spawned directly — prefix with ['bun', 'run'].
+  const isWindows = process.platform === 'win32'
+  const head = isWindows && rawHead[0]?.endsWith('.js')
+    ? ['bun', 'run', ...rawHead]
+    : rawHead
   // `--thinking` makes opencode emit `reasoning` events to stdout in
   // `--format json` mode; without it `cli/cmd/run.ts:671` filters them
   // out and the SessionTab can never show the model's thinking blocks.
@@ -28,10 +33,15 @@ export function buildCommand(opts: OpencodeCommandOptions, prompt: string): stri
   // permission-answer channel, so a non-skip run would hang on the first
   // tool prompt. flag-audit W0（§3 假旋钮）删掉了从未有生产调用方传值的
   // `dangerouslySkipPermissions?: boolean` 参数——想恢复可配置需先解决应答通道。
+  // Windows: Bun.spawn truncates argv elements at '\n', which corrupts
+  // multi-line prompts AND drops all argv args after the newline. opencode
+  // reads the prompt from stdin when no positional is given, so on Windows
+  // we omit the prompt from argv (the runner pipes it via stdin via
+  // buildOpencodeSpawn's stdin plan).
   const cmd = [
     ...head,
     'run',
-    prompt,
+    ...(isWindows ? [] : [prompt]),
     '--agent',
     opts.agent.name,
     '--format',

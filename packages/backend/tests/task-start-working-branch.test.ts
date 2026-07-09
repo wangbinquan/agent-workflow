@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-075 T4/T5/T6 — startTask wiring for the working branch.
 //   - workingBranch + autoCommitPush persist on `tasks` and `task_repos`,
 //     and getTask surfaces them.
@@ -10,7 +11,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { execSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -19,6 +20,7 @@ import { taskRepos, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { getTask, startTask } from '../src/services/task'
+import { stubCmd, writeStubOpencode } from './helpers/stub-runtime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -35,23 +37,6 @@ function git(repo: string, args: string): void {
   execSync(`git -C "${repo}" ${args}`, { stdio: 'ignore' })
 }
 
-function makeStub(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
-if [[ "$1" == "run" ]]; then
-  ENV='<workflow-output><port name="out">ok</port></workflow-output>'
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$(date +%s%3N)" "$ENV"
-  exit 0
-fi
-exit 1
-`
-  writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
-}
-
 async function setup(): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc075-'))
   const appHome = join(tmp, 'appHome')
@@ -66,7 +51,7 @@ async function setup(): Promise<Harness> {
   git(repoPath, 'add .')
   git(repoPath, 'commit -q -m init')
 
-  const stubOpencode = makeStub(tmp)
+  const stubOpencode = writeStubOpencode(tmp)
 
   await createAgent(db, {
     name: 'echoer',
@@ -111,7 +96,7 @@ describe('RFC-075 — startTask working branch', () => {
   beforeEach(async () => {
     h = await setup()
   })
-  afterEach(() => rmSync(h.tmp, { recursive: true, force: true }))
+  afterEach(() => rimrafDir(h.tmp))
 
   function launch(extra: Record<string, unknown>) {
     return startTask(
@@ -123,7 +108,7 @@ describe('RFC-075 — startTask working branch', () => {
         inputs: { topic: 't' },
         ...extra,
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+      { db: h.db, appHome: h.appHome, opencodeCmd: stubCmd(h.stubOpencode), awaitScheduler: true },
     )
   }
 

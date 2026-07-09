@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-067 — task-level Git commit identity. End-to-end behaviour:
 //   - startTask persists `gitUserName` / `gitUserEmail` (or NULL) on `tasks`.
 //   - startTask writes `[user]` to the worktree's `.git/config` ONLY when
@@ -18,6 +19,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
@@ -30,6 +32,7 @@ import { eq } from 'drizzle-orm'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { startTask } from '../src/services/task'
+import { isWindows, stubCmd } from './helpers/stub-runtime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -50,6 +53,44 @@ interface Harness {
  * standard <workflow-output> envelope so the scheduler marks the run done.
  */
 function makeEnvCapturingStub(dir: string, captureDir: string): string {
+  if (isWindows) {
+    const path = join(dir, 'stub-opencode-env.js')
+    const lines = [
+      `// Auto-generated env-capturing stub opencode for Windows test compatibility`,
+      `import { writeFileSync, existsSync } from 'node:fs'`,
+      `import { join, basename } from 'node:path'`,
+      ``,
+      `const args = process.argv.slice(2)`,
+      ``,
+      `if (args.includes('--version')) {`,
+      `  process.stdout.write(${JSON.stringify('stub-opencode 1.14.99\n')})`,
+      `  process.exit(0)`,
+      `}`,
+      ``,
+      `if (args[0] !== 'run') {`,
+      `  process.stderr.write('stub-opencode: expected run, got: ' + args[0] + '\\n')`,
+      `  process.exit(2)`,
+      `}`,
+      ``,
+      `const configDir = process.env.OPENCODE_CONFIG_DIR || 'pid-' + process.pid`,
+      `let key = basename(configDir)`,
+      `key = key.replace(/\\\\.opencode$/, '')`,
+      `if (!key) key = 'pid-' + process.pid`,
+      `const out = join(${JSON.stringify(captureDir)}, 'env-' + key + '.json')`,
+      `const env = {`,
+      `  GIT_AUTHOR_NAME: process.env.GIT_AUTHOR_NAME || '__unset__',`,
+      `  GIT_AUTHOR_EMAIL: process.env.GIT_AUTHOR_EMAIL || '__unset__',`,
+      `  GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME || '__unset__',`,
+      `  GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL || '__unset__',`,
+      `}`,
+      `writeFileSync(out, JSON.stringify(env) + '\\n')`,
+      `let envelope = '<workflow-output>\\n  <port name="out">ok</port>\\n</workflow-output>'`,
+      `process.stdout.write(JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: envelope } }) + '\\n')`,
+      `process.exit(0)`,
+    ]
+    writeFileSync(path, lines.join('\n'))
+    return path
+  }
   const path = join(dir, 'stub-opencode-env.sh')
   // Use the OPENCODE_CONFIG_DIR last segment as a unique key — runner.ts
   // constructs `~/.agent-workflow/runs/{task}/{nodeRun}/.opencode/`, so
@@ -149,10 +190,7 @@ interface CapturedEnv {
 
 function readCapturedEnvs(captureDir: string): CapturedEnv[] {
   if (!existsSync(captureDir)) return []
-  const files = execSync(`ls "${captureDir}"`, { encoding: 'utf8' })
-    .trim()
-    .split('\n')
-    .filter((f) => f.endsWith('.json'))
+  const files = readdirSync(captureDir).filter((f) => f.endsWith('.json'))
   return files.map((f) => JSON.parse(readFileSync(join(captureDir, f), 'utf8')))
 }
 
@@ -186,7 +224,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         baseBranch: 'main',
         inputs: { topic: 't' },
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+      { db: h.db, appHome: h.appHome, opencodeCmd: stubCmd(h.stubOpencode), awaitScheduler: true },
     )
 
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
@@ -202,7 +240,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       expect(e.GIT_COMMITTER_NAME).toBe('__unset__')
       expect(e.GIT_COMMITTER_EMAIL).toBe('__unset__')
     }
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 
   test('AC-2: both set → DB columns persist, env has 4-tuple on every spawn', async () => {
@@ -217,7 +255,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         gitUserName: 'AI Bot',
         gitUserEmail: 'bot@workflow.local',
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+      { db: h.db, appHome: h.appHome, opencodeCmd: stubCmd(h.stubOpencode), awaitScheduler: true },
     )
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
     expect(row.gitUserName).toBe('AI Bot')
@@ -232,7 +270,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       expect(e.GIT_COMMITTER_NAME).toBe('AI Bot')
       expect(e.GIT_COMMITTER_EMAIL).toBe('bot@workflow.local')
     }
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 
   test('AC-3: leading/trailing whitespace trimmed before persistence + env', async () => {
@@ -247,7 +285,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         gitUserName: '  Padded Bot  ',
         gitUserEmail: '  padded@bot.local  ',
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+      { db: h.db, appHome: h.appHome, opencodeCmd: stubCmd(h.stubOpencode), awaitScheduler: true },
     )
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
     expect(row.gitUserName).toBe('Padded Bot')
@@ -257,7 +295,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       expect(e.GIT_AUTHOR_NAME).toBe('Padded Bot')
       expect(e.GIT_AUTHOR_EMAIL).toBe('padded@bot.local')
     }
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 
   test('AC-4: daemon GIT_AUTHOR_NAME set, task identity wins inside spawn', async () => {
@@ -274,7 +312,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         gitUserName: 'Task Bot',
         gitUserEmail: 'task@bot.test',
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+      { db: h.db, appHome: h.appHome, opencodeCmd: stubCmd(h.stubOpencode), awaitScheduler: true },
     )
     expect(task.gitUserName).toBe('Task Bot')
     const envs = readCapturedEnvs(h.envCaptureDir)
@@ -286,7 +324,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       expect(e.GIT_COMMITTER_NAME).toBe('Task Bot')
       expect(e.GIT_COMMITTER_EMAIL).toBe('task@bot.test')
     }
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 
   test('AC-5: daemon GIT_AUTHOR_NAME set, no task identity → daemon value falls through (legacy)', async () => {
@@ -301,7 +339,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         baseBranch: 'main',
         inputs: { topic: 't' },
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+      { db: h.db, appHome: h.appHome, opencodeCmd: stubCmd(h.stubOpencode), awaitScheduler: true },
     )
     const envs = readCapturedEnvs(h.envCaptureDir)
     for (const e of envs) {
@@ -313,7 +351,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       expect(e.GIT_COMMITTER_NAME).toBe('__unset__')
       expect(e.GIT_COMMITTER_EMAIL).toBe('__unset__')
     }
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 
   test('AC-6: two concurrent tasks with different identities do not leak env into each other', async () => {
@@ -331,7 +369,12 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         gitUserName: 'Bot A',
         gitUserEmail: 'a@bot.test',
       },
-      { db: hA.db, appHome: hA.appHome, opencodeCmd: [hA.stubOpencode], awaitScheduler: true },
+      {
+        db: hA.db,
+        appHome: hA.appHome,
+        opencodeCmd: stubCmd(hA.stubOpencode),
+        awaitScheduler: true,
+      },
     )
     const taskB = await startTask(
       {
@@ -343,7 +386,12 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         gitUserName: 'Bot B',
         gitUserEmail: 'b@bot.test',
       },
-      { db: hA.db, appHome: hA.appHome, opencodeCmd: [hA.stubOpencode], awaitScheduler: true },
+      {
+        db: hA.db,
+        appHome: hA.appHome,
+        opencodeCmd: stubCmd(hA.stubOpencode),
+        awaitScheduler: true,
+      },
     )
     expect(taskA.gitUserName).toBe('Bot A')
     expect(taskB.gitUserName).toBe('Bot B')
@@ -353,7 +401,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
     // level either.
     expect(process.env.GIT_AUTHOR_NAME).toBeUndefined()
     expect(process.env.GIT_AUTHOR_EMAIL).toBeUndefined()
-    rmSync(hA.tmp, { recursive: true, force: true })
+    rimrafDir(hA.tmp)
   })
 
   test('AC-7: half-identity (only name, schema bypass) → service defensively nullifies BOTH', async () => {
@@ -373,7 +421,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         inputs: { topic: 't' },
         gitUserName: 'Lonely Bot',
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+      { db: h.db, appHome: h.appHome, opencodeCmd: stubCmd(h.stubOpencode), awaitScheduler: true },
     )
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
     // BOTH columns must be NULL — half-identity is never persisted.
@@ -387,7 +435,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       expect(e.GIT_COMMITTER_NAME).toBe('__unset__')
       expect(e.GIT_COMMITTER_EMAIL).toBe('__unset__')
     }
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 
   test('AC-8: half-identity (only email, schema bypass) → service defensively nullifies BOTH', async () => {
@@ -401,7 +449,7 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
         inputs: { topic: 't' },
         gitUserEmail: 'lonely@bot.local',
       },
-      { db: h.db, appHome: h.appHome, opencodeCmd: [h.stubOpencode], awaitScheduler: true },
+      { db: h.db, appHome: h.appHome, opencodeCmd: stubCmd(h.stubOpencode), awaitScheduler: true },
     )
     const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]!
     expect(row.gitUserName).toBeNull()
@@ -411,6 +459,6 @@ describe('RFC-067 — startTask + runner Git identity wiring', () => {
       expect(e.GIT_AUTHOR_NAME).toBe('__unset__')
       expect(e.GIT_AUTHOR_EMAIL).toBe('__unset__')
     }
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 })

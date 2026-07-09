@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-014 §2.1 #1 + #3 + C1 — multi-markdown upstream + iterate path locks.
 //
 // Reverses the RFC-005 §2.1 #8 "single-port partial merge" behavior for any
@@ -24,7 +25,7 @@
 //   - check buildSiblingOutputsBlock for the `__sibling_outputs__` payload
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { execSync } from 'node:child_process'
@@ -40,6 +41,7 @@ import {
   submitReviewDecision,
 } from '../src/services/review'
 import { startTask } from '../src/services/task'
+import { isWindows, stubCmd } from './helpers/stub-runtime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -54,8 +56,39 @@ let runIdx = 0
  * payload every call; the test cares about cascade state, not body contents.
  */
 function makeStubOpencode(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
   const escape = (s: string) => s.replace(/\n/g, '\\n')
+  if (isWindows) {
+    const path = join(dir, 'stub-opencode.js')
+    const lines = [
+      `// Auto-generated stub opencode for Windows test compatibility`,
+      ``,
+      `const args = process.argv.slice(2)`,
+      ``,
+      `if (args.includes('--version')) {`,
+      `  process.stdout.write(${JSON.stringify('stub-opencode 1.14.99\n')})`,
+      `  process.exit(0)`,
+      `}`,
+      ``,
+      `if (args[0] !== 'run') {`,
+      `  process.stderr.write('stub-opencode: expected run, got: ' + args[0] + '\\n')`,
+      `  process.exit(2)`,
+      `}`,
+      ``,
+      `const PROPOSAL = ${JSON.stringify(PROPOSAL_DOC)}`,
+      `const DESIGN = ${JSON.stringify(DESIGN_DOC)}`,
+      `const PLAN = ${JSON.stringify(PLAN_DOC)}`,
+      `let envelope = '<workflow-output>\\n'`,
+      `envelope += '  <port name="proposal">' + PROPOSAL + '</port>\\n'`,
+      `envelope += '  <port name="design">' + DESIGN + '</port>\\n'`,
+      `envelope += '  <port name="plan">' + PLAN + '</port>\\n'`,
+      `envelope += '</workflow-output>'`,
+      `process.stdout.write(JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: envelope } }) + '\\n')`,
+      `process.exit(0)`,
+    ]
+    writeFileSync(path, lines.join('\n'))
+    return path
+  }
+  const path = join(dir, 'stub-opencode.sh')
   const script = `#!/usr/bin/env bash
 set -e
 if [[ "$1" == "--version" ]]; then
@@ -100,7 +133,7 @@ async function buildHarness(opts: HarnessOpts): Promise<Harness> {
   const repoPath = join(tmp, 'repo')
   const db = createInMemoryDb(MIGRATIONS)
 
-  execSync(`mkdir -p "${repoPath}"`, { stdio: 'ignore' })
+  mkdirSync(repoPath, { recursive: true })
   execSync(`git init -b main "${repoPath}"`, { stdio: 'ignore' })
   execSync(`git -C "${repoPath}" config user.email t@t.test`, { stdio: 'ignore' })
   execSync(`git -C "${repoPath}" config user.name t`, { stdio: 'ignore' })
@@ -180,7 +213,7 @@ async function buildHarness(opts: HarnessOpts): Promise<Harness> {
       baseBranch: 'main',
       inputs: { topic: 'orders' },
     },
-    { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+    { db, appHome, opencodeCmd: stubCmd(stubOpencode), awaitScheduler: true },
   )
 
   const idFor = async (nodeId: string): Promise<string> => {
@@ -204,7 +237,7 @@ async function buildHarness(opts: HarnessOpts): Promise<Harness> {
       plan: await idFor('rev_plan'),
     },
     cleanup: async () => {
-      rmSync(tmp, { recursive: true, force: true })
+      rimrafDir(tmp)
       delete process.env.AGENT_WORKFLOW_HOME
     },
   }

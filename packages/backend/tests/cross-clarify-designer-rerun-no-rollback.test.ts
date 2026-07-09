@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // LOCKS: RFC-056 patch 2026-06-22 — the cross-clarify designer rerun must NOT
 // roll the worktree back to pre_snapshot.
 //
@@ -51,7 +52,7 @@ async function buildRepo(): Promise<Repo> {
   writeFileSync(join(path, 'a.txt'), 'original\n')
   await runGit(path, ['add', '.'])
   await runGit(path, ['commit', '-q', '-m', 'init'])
-  return { path, cleanup: () => rmSync(path, { recursive: true, force: true }) }
+  return { path, cleanup: () => rimrafDir(path) }
 }
 
 function makeQ(id: string): ClarifyQuestion {

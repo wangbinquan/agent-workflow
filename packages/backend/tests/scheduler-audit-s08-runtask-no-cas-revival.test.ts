@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // REGRESSION GUARD — RFC-097 (audit S-8 / WP-4): runTask 入口状态 CAS。
 //
 // 历史缺陷（本文件前身以 CURRENT-BEHAVIOR LOCK 形态锁定过）：runTask 入口
@@ -73,7 +74,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     repoPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

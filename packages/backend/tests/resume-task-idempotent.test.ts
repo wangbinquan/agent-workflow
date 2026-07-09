@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-053 PR-A T1e — resumeTask behavior + idempotency + race.
 //
 // Locks the current contract:
@@ -96,7 +97,7 @@ async function buildHarness(
     appHome,
     repoPath,
     taskId,
-    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(tmp),
   }
 }
 

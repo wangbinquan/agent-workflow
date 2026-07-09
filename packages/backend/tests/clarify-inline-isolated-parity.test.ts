@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-026 regression — strict isolated-mode parity.
 //
 // Hard contract from proposal §C1 / §A1: ANY ClarifyNode authored WITHOUT
@@ -51,7 +52,7 @@ async function buildHarness() {
     repoPath,
     worktreePath,
     argvPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

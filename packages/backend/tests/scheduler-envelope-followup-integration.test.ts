@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-042 — scheduler integration for same-session envelope follow-up.
 //
 // Drives runTask end-to-end against mock-opencode and asserts that on each
@@ -47,7 +48,7 @@ function buildHarness(): Harness {
     worktreePath,
     counterFile,
     argvLog,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

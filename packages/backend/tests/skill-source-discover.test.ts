@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locks RFC-017 §2.1 #1 — discoverSkillsInDir only walks direct child dirs,
 // requires SKILL.md, name must match SKILL_NAME_RE; deeper directories,
 // non-skill folders, name-violating dirs and frontmatter-parse failures
@@ -18,7 +19,7 @@ beforeEach(() => {
   parent = mkdtempSync(join(tmpdir(), 'aw-source-discover-'))
 })
 afterEach(() => {
-  rmSync(parent, { recursive: true, force: true })
+  rimrafDir(parent)
 })
 
 describe('discoverSkillsInDir', () => {

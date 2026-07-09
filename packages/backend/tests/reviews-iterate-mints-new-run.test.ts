@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locks in RFC-011 backend semantics: review reject / iterate must not
 // reset the latest upstream node_run in place. Instead it marks the old
 // row canceled (with a stable supersede prefix on errorMessage) and mints
@@ -9,7 +10,7 @@
 // branch is out of lock-step with RFC-011 design §3.1.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { execSync } from 'node:child_process'
@@ -21,6 +22,7 @@ import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { submitReviewDecision } from '../src/services/review'
 import { startTask } from '../src/services/task'
+import { isWindows, stubCmd } from './helpers/stub-runtime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -50,8 +52,34 @@ const REVIEW_DOC = '# Design v1\n\nThe `order_status` enum should include partia
 let runIdx = 0
 
 function makeStubOpencode(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
   const body = REVIEW_DOC.replace(/\n/g, '\\n')
+  if (isWindows) {
+    const path = join(dir, 'stub-opencode.js')
+    const lines = [
+      `// Auto-generated stub opencode for Windows test compatibility`,
+      `const { writeFileSync, readFileSync, existsSync } = require('node:fs')`,
+      ``,
+      `const args = process.argv.slice(2)`,
+      ``,
+      `if (args.includes('--version')) {`,
+      `  process.stdout.write(${JSON.stringify('stub-opencode 1.14.99\n')})`,
+      `  process.exit(0)`,
+      `}`,
+      ``,
+      `if (args[0] !== 'run') {`,
+      `  process.stderr.write('stub-opencode: expected run, got: ' + args[0] + '\\n')`,
+      `  process.exit(2)`,
+      `}`,
+      ``,
+      `const BODY = ${JSON.stringify(REVIEW_DOC)}`,
+      `let envelope = '<workflow-output>\\n  <port name="design">' + BODY + '</port>\\n</workflow-output>'`,
+      `process.stdout.write(JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: envelope } }) + '\\n')`,
+      `process.exit(0)`,
+    ]
+    writeFileSync(path, lines.join('\n'))
+    return path
+  }
+  const path = join(dir, 'stub-opencode.sh')
   const script = `#!/usr/bin/env bash
 set -e
 if [[ "$1" == "--version" ]]; then
@@ -81,7 +109,7 @@ async function buildHarness(opts?: HarnessOpts): Promise<Harness> {
   const db = createInMemoryDb(MIGRATIONS)
 
   execSync('git init -b main', { cwd: tmp, stdio: 'ignore' })
-  execSync(`mkdir -p "${repoPath}"`, { stdio: 'ignore' })
+  mkdirSync(repoPath, { recursive: true })
   execSync(`git init -b main "${repoPath}"`, { stdio: 'ignore' })
   execSync(`git -C "${repoPath}" config user.email t@t.test`, { stdio: 'ignore' })
   execSync(`git -C "${repoPath}" config user.name t`, { stdio: 'ignore' })
@@ -171,7 +199,7 @@ async function buildHarness(opts?: HarnessOpts): Promise<Harness> {
       baseBranch: 'main',
       inputs: { topic: 'orders' },
     },
-    { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+    { db, appHome, opencodeCmd: stubCmd(stubOpencode), awaitScheduler: true },
   )
 
   const reviewRuns = await db
@@ -187,7 +215,7 @@ async function buildHarness(opts?: HarnessOpts): Promise<Harness> {
     worktreePath: task.worktreePath,
     reviewNodeRunId: reviewRuns[0]!.id,
     cleanup: async () => {
-      rmSync(tmp, { recursive: true, force: true })
+      rimrafDir(tmp)
       delete process.env.AGENT_WORKFLOW_HOME
     },
   }

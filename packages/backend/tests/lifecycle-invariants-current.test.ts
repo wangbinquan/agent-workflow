@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-053 PR-A T1c — double-layer / cross-table invariant demonstrations.
 //
 // Each invariant is implemented here as a small async function. Tests
@@ -227,7 +228,7 @@ async function buildHarness(
   return {
     db,
     taskId,
-    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(tmp),
   }
 }
 

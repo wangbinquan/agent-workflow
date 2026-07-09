@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // LOCKS: RFC-057 — shared test harness for repair option suites.
 // Not a *.test.ts file so bun:test doesn't try to run it.
 
@@ -89,7 +90,7 @@ export async function buildHarness(opts: {
     taskId,
     workflowId,
     tmpDir: tmp,
-    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(tmp),
     deps: {
       db,
       appHome: tmp,

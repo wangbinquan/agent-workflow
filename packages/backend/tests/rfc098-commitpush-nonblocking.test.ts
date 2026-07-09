@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-098 B1 REGRESSION LOCK — commit&push moved OUT of the dispatch loop
 // (audit S-17 second half + adversarial-review revision #2,
 // design/RFC-098-scheduler-closeout/design.md §B1.4).
@@ -137,7 +138,7 @@ async function buildHarness(slug: string): Promise<Harness> {
     remote,
     shimPath,
     stateDir,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

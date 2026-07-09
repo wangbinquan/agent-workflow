@@ -25,15 +25,18 @@ import {
   updatePlugin,
 } from '../src/services/plugin'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
+import { writeFakeNpm } from './helpers/stub-runtime'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.sh')
 
 let pluginsDir = ''
+let fakeNpmBin = ''
 
 beforeEach(async () => {
   pluginsDir = await mkdtemp(join(tmpdir(), 'rfc031-svc-'))
+  const npmDir = writeFakeNpm(pluginsDir)
+  fakeNpmBin = resolve(npmDir, process.platform === 'win32' ? 'npm.cmd' : 'npm')
   resetNpmProbeCacheForTests()
   process.env.FAKE_NPM_MODE = 'success'
   delete process.env.FAKE_NPM_VERSION
@@ -45,7 +48,7 @@ afterEach(async () => {
   delete process.env.FAKE_NPM_VERSION
 })
 
-const opts = () => ({ pluginsDir, npmBin: FAKE_NPM })
+const opts = () => ({ pluginsDir, npmBin: fakeNpmBin })
 
 describe('services/plugin.ts CRUD', () => {
   let db: DbClient

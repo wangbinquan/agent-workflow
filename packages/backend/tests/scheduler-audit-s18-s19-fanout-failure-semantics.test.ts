@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // REGRESSION LOCK — design/scheduler-audit-2026-06-10.md S-18 + S-19 (WP-6a / WP-6b)
 // （S-18 = RFC-094 方案 A 定版的 fail-all 语义锁；S-19 = RFC-098 B3 修复后的
 //  done-shard 跨代复用语义锁——两段都不再是缺陷现状锁定。）
@@ -73,7 +74,7 @@ function buildHarness(): Harness {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

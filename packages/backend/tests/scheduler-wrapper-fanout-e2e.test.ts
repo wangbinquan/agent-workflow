@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-060 PR-D end-to-end — wrapper-fanout scheduler dispatch.
 //
 // Covers the three dispatch paths exposed in PR-D:
@@ -45,7 +46,7 @@ function buildHarness(): Harness {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

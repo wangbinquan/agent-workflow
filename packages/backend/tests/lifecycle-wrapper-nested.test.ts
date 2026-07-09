@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-053 PR-A T1f — loop / fan-out / wrapper nesting interactions.
 //
 // Locks key shape invariants for nested constructs:
@@ -111,7 +112,7 @@ async function buildHarness(): Promise<Harness> {
     repoPath,
     taskId,
     definition,
-    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(tmp),
   }
 }
 

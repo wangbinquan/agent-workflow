@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locked regression — wrapper-fanout shard dispatch ignores the concurrency caps.
 //
 // DEFECT (HIGH): wrapper-fanout shards bypass ALL concurrency control.
@@ -54,7 +55,7 @@ function buildHarness(): Harness {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 async function seedAgent(

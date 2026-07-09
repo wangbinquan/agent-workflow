@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-092 REGRESSION LOCK — design/scheduler-audit-2026-06-10.md S-2 (P0, WP-1)
 // 修复：RFC-092（design/RFC-092-scheduler-p0-stopgap/design.md §2）。
 // （此文件由修复前的 CURRENT-BEHAVIOR LOCK 按头部 FLIP 指引翻转而来。）
@@ -124,7 +125,7 @@ async function buildHarness(): Promise<Harness> {
     repoA,
     repoB,
     miniMockPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locks RFC-017 §A3 — lazy reconcile on GET /api/skills.
 // After registering a parent directory, dropping a new child subdir on disk
 // must surface on the very next list request, no explicit rescan needed.
@@ -40,8 +41,8 @@ function build(): H {
     parent,
     appHome,
     cleanup: () => {
-      rmSync(parent, { recursive: true, force: true })
-      rmSync(appHome, { recursive: true, force: true })
+      rimrafDir(parent)
+      rimrafDir(appHome)
       if (prev === undefined) delete process.env.AGENT_WORKFLOW_HOME
       else process.env.AGENT_WORKFLOW_HOME = prev
     },

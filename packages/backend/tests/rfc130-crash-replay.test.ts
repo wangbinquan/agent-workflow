@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-130 D15 / T3c2 — crash-safety: the deriveFrontier merge_state gate + the
 // resume-time pending-merge replay.
 //
@@ -47,7 +48,7 @@ async function buildHarness(): Promise<Harness> {
     db: createInMemoryDb(MIGRATIONS),
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

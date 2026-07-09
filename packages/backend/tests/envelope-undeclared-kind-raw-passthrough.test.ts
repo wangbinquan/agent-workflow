@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-049 PR-B — direct contract test for `kind === undefined` raw passthrough.
 //
 // The forgiveness path that used to auto-promote single-line .md paths into
@@ -23,7 +24,7 @@ describe('RFC-049 PR-B kind=undefined raw passthrough contract', () => {
   })
 
   afterEach(() => {
-    rmSync(worktree, { recursive: true, force: true })
+    rimrafDir(worktree)
   })
 
   test('rawContent looks like a relative .md path AND the file exists → still passthrough', () => {

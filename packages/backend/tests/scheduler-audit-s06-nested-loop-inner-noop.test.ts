@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // CURRENT-BEHAVIOR LOCK — design/scheduler-audit-2026-06-10.md S-6 (WP-6a 短期
 // validator 禁入 + 锁定现状；长期走 RFC 给 node_runs 加父作用域轴)
 //
@@ -68,7 +69,7 @@ function buildHarness(): Harness {
     worktreePath,
     stateDir,
     planFile,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

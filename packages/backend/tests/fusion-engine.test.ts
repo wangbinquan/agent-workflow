@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-101 PR-B — fusion engine.
 //
 // Validates the parts that don't need a live opencode: the fusion state
@@ -16,6 +17,7 @@ import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { isWindows, stubCmd } from './helpers/stub-runtime'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { memories, tasks } from '../src/db/schema'
@@ -49,9 +51,29 @@ const adminActor: Actor = {
 
 /** Stub opencode that always asks one clarify question (parks the task). */
 function makeClarifyStub(dir: string): string {
-  const path = pjoin(dir, 'stub-opencode.sh')
   const env =
     '<workflow-clarify>{\\"questions\\":[{\\"id\\":\\"q1\\",\\"title\\":\\"Proceed?\\",\\"kind\\":\\"single\\",\\"options\\":[{\\"label\\":\\"yes\\"},{\\"label\\":\\"no\\"}]}]}</workflow-clarify>'
+
+  if (isWindows) {
+    const path = pjoin(dir, 'stub-opencode.js')
+    const js = `// Auto-generated stub opencode for Windows test compatibility
+const args = process.argv.slice(2)
+if (args.includes('--version') || args.includes('-v')) {
+  process.stdout.write(${JSON.stringify('stub-opencode 1.14.99\n')})
+  process.exit(0)
+}
+if (args[0] === 'run') {
+  const env = ${JSON.stringify(env)}
+  process.stdout.write(JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: env } }) + '\\n')
+  process.exit(0)
+}
+process.exit(1)
+`
+    writeFileSync(path, js)
+    return path
+  }
+
+  const path = pjoin(dir, 'stub-opencode.sh')
   const script = `#!/usr/bin/env bash
 set -e
 if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
@@ -80,10 +102,10 @@ function build(): H {
   const deps: FusionDeps = {
     db,
     appHome,
-    opencodeCmd: [makeClarifyStub(tmp)],
+    opencodeCmd: stubCmd(makeClarifyStub(tmp)),
     awaitScheduler: true,
   }
-  return { db, appHome, deps, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
+  return { db, appHome, deps, cleanup: () => rimrafDir(tmp) }
 }
 
 function approvedGlobalMemory(db: DbClient, title: string): string {
@@ -142,7 +164,7 @@ describe('createFusion preconditions', () => {
       code = (err as { code?: string }).code
     }
     expect(code).toBe('fusion-skill-not-managed')
-    rmSync(ext, { recursive: true, force: true })
+    rimrafDir(ext)
   })
 
   test('rejects a non-approved memory', async () => {

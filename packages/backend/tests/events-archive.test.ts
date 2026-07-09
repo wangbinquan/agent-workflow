@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // P-5-01: events archival background task + endpoint fallback.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -25,7 +26,7 @@ function buildHarness(): Harness {
   return {
     db,
     logsDir: join(tmp, 'logs'),
-    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(tmp),
   }
 }
 

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-081 PR-C — multi-document review over an INLINE list<markdown> upstream.
 //
 // Mirrors review-multidoc.test.ts (list<path<md>>) but the upstream `cases`
@@ -51,8 +52,8 @@ describe('RFC-081 — multi-document review over inline list<markdown>', () => {
     db = createInMemoryDb(MIGRATIONS)
   })
   afterEach(() => {
-    rmSync(appHome, { recursive: true, force: true })
-    rmSync(worktree, { recursive: true, force: true })
+    rimrafDir(appHome)
+    rimrafDir(worktree)
   })
 
   async function seedAndDispatch(): Promise<{

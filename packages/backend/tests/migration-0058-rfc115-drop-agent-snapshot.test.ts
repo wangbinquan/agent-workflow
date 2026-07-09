@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-115 PR-E — migration 0058 (SQLite 12-step rebuild that DROPs the dead
 // doc_versions.agent_snapshot column) data-copy + index/FK survival lock.
 //
@@ -65,7 +66,7 @@ function freezeAt(idx: number, outDbPath: string): void {
     migrate(drizzle(sqlite, {}), { migrationsFolder: dir })
     sqlite.close()
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    rimrafDir(dir)
   }
 }
 
@@ -142,7 +143,7 @@ describe('RFC-115 migration 0058 — DROP doc_versions.agent_snapshot', () => {
       expect(fks).toContain('node_runs')
       up.close()
     } finally {
-      rmSync(tmp, { recursive: true, force: true })
+      rimrafDir(tmp)
     }
   })
 })
@@ -190,7 +191,7 @@ describe('RFC-115 migration 0058 — Codex F1: review_comments survive the upgra
       expect((up.query('SELECT COUNT(*) AS n FROM doc_versions').get() as { n: number }).n).toBe(1)
       up.close()
     } finally {
-      rmSync(tmp, { recursive: true, force: true })
+      rimrafDir(tmp)
     }
   })
 

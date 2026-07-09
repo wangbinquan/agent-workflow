@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // LOCKS: RFC-066 PR-A T3 — multi-repo task launch materialize behavior.
 //
 // Cases covered:
@@ -17,7 +18,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { resolve } from 'node:path'
+import { resolve, basename, sep } from 'node:path'
 import { eq, asc } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
@@ -48,9 +49,9 @@ async function seedRepo(parent: string, name: string): Promise<RepoHarness> {
   writeFileSync(join(repoPath, 'README.md'), `# ${name}\n`)
   await runGit(repoPath, ['add', '.'])
   await runGit(repoPath, ['commit', '-q', '-m', 'init'])
-  // Find the actual basename we got (mkdtempSync adds random suffix).
-  const parts = repoPath.split('/')
-  return { repoPath, basename: parts[parts.length - 1] ?? '' }
+  // Find the actual basename we got (mkdtempSync adds random suffix). Use
+  // path.basename (not split('/')) so it works on Windows backslash paths.
+  return { repoPath, basename: basename(repoPath) }
 }
 
 async function buildHarness(repoCount: number, sharedBasenameRoot?: string): Promise<Harness> {
@@ -94,8 +95,8 @@ async function buildHarness(repoCount: number, sharedBasenameRoot?: string): Pro
     appHome,
     repos,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(reposParent, { recursive: true, force: true })
+      rimrafDir(appHome)
+      rimrafDir(reposParent)
     },
   }
 }
@@ -243,7 +244,7 @@ describe('RFC-066 PR-A T3 — multi-repo materialize', () => {
       // tasks.error_summary surfaces the failing repo index.
       expect(task.errorSummary).toContain('repo[1]')
     } finally {
-      rmSync(notARepo, { recursive: true, force: true })
+      rimrafDir(notARepo)
     }
   })
 
@@ -260,9 +261,9 @@ describe('RFC-066 PR-A T3 — multi-repo materialize', () => {
     )
     // Single-repo always uses the legacy {repoSlug}/{taskId} layout — NOT
     // the multi/{taskId}/<basename>/ namespace.
-    expect(task.worktreePath).not.toContain('worktrees/multi/')
-    expect(task.worktreePath).toContain('worktrees/')
-    expect(task.worktreePath).toContain(`/${task.id}`)
+    expect(task.worktreePath).not.toContain(`worktrees${sep}multi${sep}`)
+    expect(task.worktreePath).toContain(`worktrees${sep}`)
+    expect(task.worktreePath).toContain(`${sep}${task.id}`)
     const rows = await h.db.select().from(tasks).where(eq(tasks.id, task.id))
     expect(rows[0]!.repoCount).toBe(1)
     const repoRows = await h.db.select().from(taskRepos).where(eq(taskRepos.taskId, task.id))

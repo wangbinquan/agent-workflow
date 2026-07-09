@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // P-4-06: graceful shutdown budget.
 //
 // We don't spawn a real daemon process here — the budget loop polls the DB
@@ -28,7 +29,7 @@ function buildHarness(): Harness {
   return {
     db,
     appHome,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // LOCKS: RFC-096 (audit S-13 / 附录 C #2, design §3.2) — retryNode cascade
 // inheritance source + conservative nextRetry.
 //
@@ -78,7 +79,7 @@ function buildHarness(): Harness {
     db: createInMemoryDb(MIGRATIONS),
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

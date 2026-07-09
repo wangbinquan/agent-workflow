@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Regression for the file-path follow-up to "review comments in iterate
 // prompt": when the upstream port is `markdown_file`, the rendered
 // comments block in the iterate re-run prompt must include a
@@ -19,7 +20,7 @@
 // the source_file_path column.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { execSync } from 'node:child_process'
@@ -33,6 +34,7 @@ import { addReviewComment, submitReviewDecision } from '../src/services/review'
 import { runTask } from '../src/services/scheduler'
 import { startTask } from '../src/services/task'
 import { reenterScheduler } from './reenter-scheduler'
+import { isWindows, stubCmd } from './helpers/stub-runtime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -56,11 +58,46 @@ let runIdx = 0
 // worktree (cwd) at SOURCE_PATH and emits an envelope whose `design` port
 // content is the relative path — i.e. the markdown_file kind contract.
 function makeStubOpencode(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
   const v1 = REVIEW_DOC_V1.replace(/\n/g, '\\n')
   const v2 = REVIEW_DOC_V2.replace(/\n/g, '\\n')
   const counterFile = join(dir, '.invoke-counter')
   writeFileSync(counterFile, '0')
+  if (isWindows) {
+    const path = join(dir, 'stub-opencode.js')
+    const lines = [
+      `// Auto-generated stub opencode for Windows test compatibility`,
+      `const { writeFileSync, readFileSync, existsSync, mkdirSync } = require('node:fs')`,
+      `const { join, dirname } = require('node:path')`,
+      ``,
+      `const args = process.argv.slice(2)`,
+      ``,
+      `if (args.includes('--version')) {`,
+      `  process.stdout.write(${JSON.stringify('stub-opencode 1.14.99\n')})`,
+      `  process.exit(0)`,
+      `}`,
+      ``,
+      `if (args[0] !== 'run') {`,
+      `  process.stderr.write('stub-opencode: expected run, got: ' + args[0] + '\\n')`,
+      `  process.exit(2)`,
+      `}`,
+      ``,
+      `const COUNTER_FILE = ${JSON.stringify(counterFile)}`,
+      `let n = 0`,
+      `if (existsSync(COUNTER_FILE)) n = Number(readFileSync(COUNTER_FILE, 'utf-8').trim()) || 0`,
+      `n++`,
+      `writeFileSync(COUNTER_FILE, String(n))`,
+      `const BODY = n === 1 ? ${JSON.stringify(REVIEW_DOC_V1)} : ${JSON.stringify(REVIEW_DOC_V2)}`,
+      `const SOURCE_PATH = ${JSON.stringify(SOURCE_PATH)}`,
+      `mkdirSync(dirname(join(process.cwd(), SOURCE_PATH)), { recursive: true })`,
+      `writeFileSync(join(process.cwd(), SOURCE_PATH), BODY.replace(/\\n/g, '\\n'))`,
+      `let envelope = '<workflow-output>\\n  <port name="design">' + SOURCE_PATH + '</port>\\n</workflow-output>'`,
+      `process.stdout.write(JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: envelope } }) + '\\n')`,
+      `process.exit(0)`,
+    ]
+    writeFileSync(path, lines.join('\n'))
+    return path
+  }
+  const path = join(dir, 'stub-opencode.sh')
   const script = `#!/usr/bin/env bash
 set -e
 if [[ "$1" == "--version" ]]; then
@@ -100,7 +137,7 @@ async function buildHarness(): Promise<Harness> {
   const db = createInMemoryDb(MIGRATIONS)
 
   execSync('git init -b main', { cwd: tmp, stdio: 'ignore' })
-  execSync(`mkdir -p "${repoPath}"`, { stdio: 'ignore' })
+  mkdirSync(repoPath, { recursive: true })
   execSync(`git init -b main "${repoPath}"`, { stdio: 'ignore' })
   execSync(`git -C "${repoPath}" config user.email t@t.test`, { stdio: 'ignore' })
   execSync(`git -C "${repoPath}" config user.name t`, { stdio: 'ignore' })
@@ -172,7 +209,7 @@ async function buildHarness(): Promise<Harness> {
       baseBranch: 'main',
       inputs: { topic: 'orders' },
     },
-    { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+    { db, appHome, opencodeCmd: stubCmd(stubOpencode), awaitScheduler: true },
   )
 
   const reviewRuns = await db
@@ -189,7 +226,7 @@ async function buildHarness(): Promise<Harness> {
     reviewNodeRunId: reviewRuns[0]!.id,
     sourcePath: SOURCE_PATH,
     cleanup: async () => {
-      rmSync(tmp, { recursive: true, force: true })
+      rimrafDir(tmp)
       delete process.env.AGENT_WORKFLOW_HOME
     },
   }
@@ -284,7 +321,7 @@ describe('RFC-005 followup — markdown_file source path lands in iterate prompt
       taskId: h.taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: [h.stubOpencode],
+      opencodeCmd: stubCmd(h.stubOpencode),
     })
 
     const designerRuns = await h.db

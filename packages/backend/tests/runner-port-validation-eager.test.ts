@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-049 — locks the runner's eager port-content validation path.
 //
 // Scenario: agent emits a `<workflow-output>` envelope whose markdown_file
@@ -92,7 +93,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     taskId,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

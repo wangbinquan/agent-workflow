@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-001 HTTP integration tests for /api/runtime/models (all namespaces).
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -10,6 +11,7 @@ import { createApp } from '../src/server'
 import { applyConfigPatch, loadConfig } from '../src/config'
 import { clearOpencodeModelsCache } from '../src/util/opencode-models'
 import { createRuntime, seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
+import { isWindows } from './helpers/stub-runtime'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -52,7 +54,7 @@ function writeBinary(
     modelsStderr?: string
     recordArgs?: string
   },
-): void {
+): string {
   const {
     // 1.14.25 is a verified-working version at/above MIN_OPENCODE_VERSION —
     // there is no upper bound, see `packages/backend/src/util/opencode.ts`.
@@ -63,6 +65,41 @@ function writeBinary(
     modelsStderr = '',
     recordArgs,
   } = body
+
+  if (isWindows) {
+    // Write a .js stub; resolveSpawnCmd / buildCommand will prefix with ['bun', 'run']
+    // when the path ends in .js on Windows. Return the .js path.
+    const jsPath = path + '.js'
+    const lines: string[] = ['// Auto-generated binary stub for Windows test compatibility']
+    if (recordArgs) {
+      lines.push(
+        `import { writeFileSync } from 'node:fs'`,
+        `if (process.argv.length > 2) writeFileSync(${JSON.stringify(recordArgs)}, process.argv.slice(2).join(' ') + '\\n', { flag: 'a' })`,
+      )
+    }
+    lines.push(
+      `const args = process.argv.slice(2)`,
+      `const sub = args[0] || ''`,
+      `if (sub === '--version' || sub === '-v') {`,
+      `  process.stdout.write(${JSON.stringify(versionStdout + '\\n')})`,
+      `  process.exit(${versionExit})`,
+      `}`,
+      `if (sub === 'models') {`,
+      `  process.stdout.write(${JSON.stringify(modelsStdout)})`,
+    )
+    if (modelsStderr) {
+      lines.push(`  process.stderr.write(${JSON.stringify(modelsStderr)})`)
+    }
+    lines.push(
+      `  process.exit(${modelsExit})`,
+      `}`,
+      `process.stderr.write('unknown subcommand: ' + args.join(' ') + '\\n')`,
+      `process.exit(99)`,
+    )
+    writeFileSync(jsPath, lines.join('\n'))
+    return jsPath
+  }
+
   const versionStdoutEscaped = versionStdout.replace(/'/g, `'\\''`)
   const modelsStdoutEscaped = modelsStdout.replace(/'/g, `'\\''`)
   const modelsStderrEscaped = modelsStderr.replace(/'/g, `'\\''`)
@@ -86,6 +123,7 @@ esac
 `
   writeFileSync(path, script)
   chmodSync(path, 0o755)
+  return path
 }
 
 // NOTE (RFC-135): the legacy GET /api/runtime/opencode probe endpoint was
@@ -99,8 +137,8 @@ describe('GET /api/runtime/models', () => {
 
   beforeEach(() => {
     const tmp = mkdtempSync(join(tmpdir(), 'aw-runtime-bin-'))
-    const bin = join(tmp, 'opencode')
-    writeBinary(bin, {
+    const binBase = join(tmp, 'opencode')
+    const bin = writeBinary(binBase, {
       modelsStdout: [
         'anthropic/claude-sonnet-4-6',
         '{',
@@ -114,7 +152,7 @@ describe('GET /api/runtime/models', () => {
   })
 
   afterEach(() => {
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 
   test('first call returns parsed list with cached=false', async () => {
@@ -143,10 +181,15 @@ describe('GET /api/runtime/models', () => {
 
   test('refresh=1 bypasses cache and forwards --refresh', async () => {
     const argsLog = join(h.tmp, 'args.log')
-    writeBinary(h.binaryPath, {
+    const actualBin = writeBinary(h.binaryPath, {
       modelsStdout: 'anthropic/foo',
       recordArgs: argsLog,
     })
+    // On Windows, writeBinary may return a .cmd wrapper path; update config.
+    if (actualBin !== h.binaryPath) {
+      applyConfigPatch(h.configPath, { opencodePath: actualBin })
+      h.binaryPath = actualBin
+    }
     await req(h.app, '/api/runtime/models')
     const res = await req(h.app, '/api/runtime/models?refresh=1')
     const json = (await res.json()) as Record<string, unknown>
@@ -158,18 +201,22 @@ describe('GET /api/runtime/models', () => {
   test('changing opencodePath invalidates cache', async () => {
     await req(h.app, '/api/runtime/models')
     const otherDir = mkdtempSync(join(tmpdir(), 'aw-runtime-other-'))
-    const otherBin = join(otherDir, 'opencode')
-    writeBinary(otherBin, { modelsStdout: 'openai/bar' })
+    const otherBinBase = join(otherDir, 'opencode')
+    const otherBin = writeBinary(otherBinBase, { modelsStdout: 'openai/bar' })
     applyConfigPatch(h.configPath, { opencodePath: otherBin })
     const res = await req(h.app, '/api/runtime/models')
     const json = (await res.json()) as Record<string, unknown>
     expect(json.cached).toBe(false)
     expect(json.binary).toBe(otherBin)
-    rmSync(otherDir, { recursive: true, force: true })
+    rimrafDir(otherDir)
   })
 
   test('returns 502 with error code on non-zero exit', async () => {
-    writeBinary(h.binaryPath, { modelsExit: 3, modelsStderr: 'kaboom' })
+    const actualBin = writeBinary(h.binaryPath, { modelsExit: 3, modelsStderr: 'kaboom' })
+    if (actualBin !== h.binaryPath) {
+      applyConfigPatch(h.configPath, { opencodePath: actualBin })
+      h.binaryPath = actualBin
+    }
     const res = await req(h.app, '/api/runtime/models')
     expect(res.status).toBe(502)
     const json = (await res.json()) as Record<string, unknown>
@@ -186,11 +233,11 @@ describe('GET /api/runtime/models?runtime=claude (RFC-111)', () => {
   beforeEach(() => {
     // opencode path is a non-empty placeholder (claude routes never invoke it).
     h = makeHarness({ binary: 'opencode' })
-    claudeBin = join(h.tmp, 'fake-claude')
-    writeBinary(claudeBin, { versionStdout: '2.1.193 (Claude Code)' })
+    const claudeBinBase = join(h.tmp, 'fake-claude')
+    claudeBin = writeBinary(claudeBinBase, { versionStdout: '2.1.193 (Claude Code)' })
     applyConfigPatch(h.configPath, { claudeCodePath: claudeBin })
   })
-  afterEach(() => rmSync(h.tmp, { recursive: true, force: true }))
+  afterEach(() => rimrafDir(h.tmp))
 
   test('models?runtime=claude returns the curated static list (cached)', async () => {
     const res = await req(h.app, '/api/runtime/models?runtime=claude')
@@ -212,16 +259,16 @@ describe('GET /api/runtime/models?runtime=<name> — runtime-aware binary (RFC-1
   let customBin: string
   beforeEach(async () => {
     const dir = mkdtempSync(join(tmpdir(), 'aw-rt114-default-'))
-    const defaultBin = join(dir, 'opencode')
-    writeBinary(defaultBin, { modelsStdout: 'default/d-model' })
+    const defaultBinBase = join(dir, 'opencode')
+    const defaultBin = writeBinary(defaultBinBase, { modelsStdout: 'default/d-model' })
     h = makeHarness({ binary: defaultBin })
     clearOpencodeModelsCache()
     await seedBuiltinRuntimes(h.db)
-    customBin = join(h.tmp, 'oc-fork')
-    writeBinary(customBin, { modelsStdout: 'fork/special' })
+    const customBinBase = join(h.tmp, 'oc-fork')
+    customBin = writeBinary(customBinBase, { modelsStdout: 'fork/special' })
     await createRuntime(h.db, { name: 'oc-fork', protocol: 'opencode', binaryPath: customBin })
   })
-  afterEach(() => rmSync(h.tmp, { recursive: true, force: true }))
+  afterEach(() => rimrafDir(h.tmp))
 
   test('?runtime=<custom opencode> lists the custom binary models, not the default (D1)', async () => {
     const res = await req(h.app, '/api/runtime/models?runtime=oc-fork')
@@ -241,8 +288,8 @@ describe('GET /api/runtime/models?runtime=<name> — runtime-aware binary (RFC-1
   })
 
   test('P1-1: a runtime NAMED "claude" (opencode) is NOT hijacked into the static list', async () => {
-    const claudeNamedBin = join(h.tmp, 'oc-claude')
-    writeBinary(claudeNamedBin, { modelsStdout: 'fork/named-claude' })
+    const claudeNamedBinBase = join(h.tmp, 'oc-claude')
+    const claudeNamedBin = writeBinary(claudeNamedBinBase, { modelsStdout: 'fork/named-claude' })
     await createRuntime(h.db, { name: 'claude', protocol: 'opencode', binaryPath: claudeNamedBin })
     const res = await req(h.app, '/api/runtime/models?runtime=claude')
     expect(res.status).toBe(200)
@@ -255,8 +302,8 @@ describe('GET /api/runtime/models?runtime=<name> — runtime-aware binary (RFC-1
   })
 
   test('502 carries the runtime name + a redacted message (P2-4)', async () => {
-    const failBin = join(h.tmp, 'oc-fail')
-    writeBinary(failBin, {
+    const failBinBase = join(h.tmp, 'oc-fail')
+    const failBin = writeBinary(failBinBase, {
       modelsExit: 4,
       modelsStderr: 'clone https://u:supersecrettoken@github.com/x.git failed',
     })

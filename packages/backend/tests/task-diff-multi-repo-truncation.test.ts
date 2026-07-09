@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // LOCKS: RFC-066 PR-B — getTaskDiff multi-repo byte-budget + all-clean fall-through.
 //
 // Sibling of task-diff-multi-repo.test.ts (B16/B17/B18), which only exercises
@@ -66,8 +67,8 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     appHome,
     repos,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(reposParent, { recursive: true, force: true })
+      rimrafDir(appHome)
+      rimrafDir(reposParent)
     },
   }
 }

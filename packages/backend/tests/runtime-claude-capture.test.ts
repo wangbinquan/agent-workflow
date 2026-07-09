@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-111 PR-D — captureClaudeSessions reads claude's JSONL subagent transcripts
 // (under the per-run CLAUDE_CONFIG_DIR projects dir) into node_run_events so the
 // task-detail SessionTab gets subagent visibility (parity with opencode's RFC-027
@@ -97,7 +98,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
       Date.parse('2026-07-07T04:50:52.174Z'),
       Date.parse('2026-07-07T04:50:53.500Z'),
     ])
-    rmSync(root, { recursive: true, force: true })
+    rimrafDir(root)
   })
 
   test('missing transcript dir → no rows, no throw (graceful)', async () => {

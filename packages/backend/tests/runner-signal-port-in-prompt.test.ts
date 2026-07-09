@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-060 PR-D D.T7 — runner rejects signal-port references in promptTemplate.
 //
 // When opts.inputPortKinds[port] is the `signal` kind and the promptTemplate
@@ -81,7 +82,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     taskId,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

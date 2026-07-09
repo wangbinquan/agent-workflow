@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-049 PR-B: integration test locking the post-forgiveness review-flow
 // contract. The original incident (linked in commit history) was: upstream
 // agent emitted an absolute .md path on an undeclared port → doc_versions
@@ -50,8 +51,8 @@ describe('dispatchReviewNode + RFC-049 PR-B explicit outputKinds contract', () =
   })
 
   afterEach(() => {
-    rmSync(appHome, { recursive: true, force: true })
-    rmSync(worktree, { recursive: true, force: true })
+    rimrafDir(appHome)
+    rimrafDir(worktree)
   })
 
   async function seedFixture(opts: { declareMarkdownFileKind: boolean }) {

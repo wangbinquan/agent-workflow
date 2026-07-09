@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-098 B1 REGRESSION LOCK — audit S-24 (WP-5): wrapper-git finalize diff is
 // fail-closed (design/RFC-098-scheduler-closeout/design.md §B1.5).
 //
@@ -90,7 +91,7 @@ async function buildHarness(slug: string): Promise<Harness> {
     appHome,
     worktreePath,
     shimPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

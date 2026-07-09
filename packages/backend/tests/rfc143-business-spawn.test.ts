@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-143 PR-4 (T14) — buildBusinessSpawn 收口前后对拍。
 //
 // §4.2 的验收方式：收口 = 把 runner 的两个 spawn 分支体整块搬进各自 driver，
@@ -191,7 +192,7 @@ describe('RFC-143 PR-4 — opencode buildBusinessSpawn 对拍（收口前 runner
       // 插件文件真的物化到了 runRoot 下（dev 源树路径 / 二进制 embed 都走这条）。
       expect(existsSync((last as string).replace(/^file:\/\//, ''))).toBe(true)
     } finally {
-      rmSync(runRoot, { recursive: true, force: true })
+      rimrafDir(runRoot)
     }
   })
 
@@ -249,7 +250,7 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
         pluginNames: ['tracer'],
       })
     } finally {
-      rmSync(runRoot, { recursive: true, force: true })
+      rimrafDir(runRoot)
     }
   })
 
@@ -282,7 +283,7 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
         pluginNames: [],
       })
     } finally {
-      rmSync(runRoot, { recursive: true, force: true })
+      rimrafDir(runRoot)
     }
   })
 
@@ -296,7 +297,7 @@ describe('RFC-143 PR-4 — claude buildBusinessSpawn 对拍（收口前 runner c
       const plan = await getRuntimeDriver('claude-code').buildBusinessSpawn(ctx)
       expect(plan.cmd[0]).toBe('/opt/fork-claude')
     } finally {
-      rmSync(runRoot, { recursive: true, force: true })
+      rimrafDir(runRoot)
     }
   })
 })

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locks RFC-017 §A3/A4/A5/A6 — reconcileSource three-state outcome:
 //   imported (new + same-source unchanged), deleted (vanished children),
 //   skipped (conflict / referenced / parse failures).
@@ -27,7 +28,7 @@ function build(): H {
   return {
     db,
     parent,
-    cleanup: () => rmSync(parent, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(parent),
   }
 }
 
@@ -133,7 +134,7 @@ describe('reconcileSource', () => {
       )[0]!
       expect(commonRow.description).toBe('first')
     } finally {
-      rmSync(otherParent, { recursive: true, force: true })
+      rimrafDir(otherParent)
     }
   })
 

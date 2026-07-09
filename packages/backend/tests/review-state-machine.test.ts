@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locks in RFC-005 PR-B T6 + T7 + T11 review state machine.
 //
 // If this goes red, scheduler.runOneNode review-branch + services/review.ts
@@ -9,7 +10,7 @@
 // kind=markdown 'design' port) → reviewDesign (review node) → output.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, chmodSync, existsSync, readFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, chmodSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { execSync } from 'node:child_process'
@@ -30,6 +31,7 @@ import {
 import { runTask } from '../src/services/scheduler'
 import { startTask } from '../src/services/task'
 import { reenterScheduler } from './reenter-scheduler'
+import { isWindows, stubCmd } from './helpers/stub-runtime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -52,11 +54,46 @@ let runIdx = 0
 function makeStubOpencode(dir: string): string {
   // Stub emits a markdown design payload via the workflow-output envelope.
   // First call returns v1; subsequent calls return v2 to simulate a regen.
-  const path = join(dir, 'stub-opencode.sh')
-  const v1 = REVIEW_DOC_V1.replace(/\n/g, '\\n')
-  const v2 = REVIEW_DOC_V2.replace(/\n/g, '\\n')
+  const v1 = REVIEW_DOC_V1
+  const v2 = REVIEW_DOC_V2
   const counterFile = join(dir, '.invoke-counter')
   writeFileSync(counterFile, '0')
+  if (isWindows) {
+    const path = join(dir, 'stub-opencode.js')
+    const lines = [
+      `// Auto-generated stub opencode for Windows test compatibility`,
+      `const { writeFileSync, readFileSync, existsSync } = require('node:fs')`,
+      ``,
+      `const args = process.argv.slice(2)`,
+      ``,
+      `if (args.includes('--version')) {`,
+      `  process.stdout.write(${JSON.stringify('stub-opencode 1.14.99\n')})`,
+      `  process.exit(0)`,
+      `}`,
+      ``,
+      `if (args[0] !== 'run') {`,
+      `  process.stderr.write('stub-opencode: expected run, got: ' + args[0] + '\\n')`,
+      `  process.exit(2)`,
+      `}`,
+      ``,
+      `const COUNTER_FILE = ${JSON.stringify(counterFile)}`,
+      `const V1 = ${JSON.stringify(v1)}`,
+      `const V2 = ${JSON.stringify(v2)}`,
+      `let n = 0`,
+      `if (existsSync(COUNTER_FILE)) n = Number(readFileSync(COUNTER_FILE, 'utf-8').trim()) || 0`,
+      `n++`,
+      `writeFileSync(COUNTER_FILE, String(n))`,
+      `const BODY = n === 1 ? V1 : V2`,
+      `let envelope = '<workflow-output>\\n  <port name="design">' + BODY + '</port>\\n</workflow-output>'`,
+      `process.stdout.write(JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: envelope } }) + '\\n')`,
+      `// Wait for stdout to flush before exiting (Windows pipe buffering).`,
+      `process.stdout.write('', () => process.exit(0))`,
+      `setTimeout(() => process.exit(0), 100)`,
+    ]
+    writeFileSync(path, lines.join('\n'))
+    return path
+  }
+  const path = join(dir, 'stub-opencode.sh')
   const script = `#!/usr/bin/env bash
 set -e
 if [[ "$1" == "--version" ]]; then
@@ -95,7 +132,7 @@ async function buildHarness(): Promise<Harness> {
 
   // Set up a real git repo so worktree creation actually works.
   execSync('git init -b main', { cwd: tmp, stdio: 'ignore' })
-  execSync(`mkdir -p "${repoPath}"`, { stdio: 'ignore' })
+  mkdirSync(repoPath, { recursive: true })
   execSync(`git init -b main "${repoPath}"`, { stdio: 'ignore' })
   execSync(`git -C "${repoPath}" config user.email t@t.test`, { stdio: 'ignore' })
   execSync(`git -C "${repoPath}" config user.name t`, { stdio: 'ignore' })
@@ -167,7 +204,7 @@ async function buildHarness(): Promise<Harness> {
       baseBranch: 'main',
       inputs: { topic: 'orders' },
     },
-    { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+    { db, appHome, opencodeCmd: stubCmd(stubOpencode), awaitScheduler: true },
   )
 
   // Locate the review node_run row.
@@ -187,7 +224,7 @@ async function buildHarness(): Promise<Harness> {
     taskId: task.id,
     reviewNodeRunId: reviewRuns[0]!.id,
     cleanup: async () => {
-      rmSync(tmp, { recursive: true, force: true })
+      rimrafDir(tmp)
       delete process.env.AGENT_WORKFLOW_HOME
     },
   }
@@ -434,7 +471,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
       taskId: h.taskId,
       db: h.db,
       appHome: h.appHome,
-      opencodeCmd: [h.stubOpencode],
+      opencodeCmd: stubCmd(h.stubOpencode),
     })
 
     const dvs = await h.db

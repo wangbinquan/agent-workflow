@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-024 T4 — locks the URL-mode branch of startTask:
 //   1. Cold path: clones the URL into the cache, materializes a worktree
 //      under appHome/worktrees/, persists tasks.repoUrl, does NOT touch
@@ -9,7 +10,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { execSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb } from '../src/db/client'
@@ -17,26 +18,9 @@ import { cachedRepos, recentRepos } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { startTask } from '../src/services/task'
+import { stubCmd, writeStubOpencode } from './helpers/stub-runtime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function makeStubOpencode(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
-if [[ "$1" == "run" ]]; then
-  ENV='<workflow-output><port name="out">hello</port></workflow-output>'
-  TS=$(date +%s%3N)
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
-  exit 0
-fi
-exit 1
-`
-  writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
-}
 
 async function setup() {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-start-url-'))
@@ -58,7 +42,7 @@ async function setup() {
   execSync(`git clone --bare "${working}" "${bare}"`, { stdio: 'ignore' })
   const remoteUrl = `file://${bare}`
 
-  const stubOpencode = makeStubOpencode(tmp)
+  const stubOpencode = writeStubOpencode(tmp, { outputs: { out: 'hello' } })
 
   await createAgent(db, {
     name: 'echoer',
@@ -108,7 +92,7 @@ describe('startTask URL mode (RFC-024)', () => {
     const { tmp, appHome, db, stubOpencode, wf, remoteUrl } = await setup()
     const task = await startTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'orders' } },
-      { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+      { db, appHome, opencodeCmd: stubCmd(stubOpencode), awaitScheduler: true },
     )
     expect(task.repoUrl).toBe(remoteUrl)
     expect(task.repoPath.startsWith(join(appHome, 'repos'))).toBe(true)
@@ -117,22 +101,22 @@ describe('startTask URL mode (RFC-024)', () => {
     // cached_repos got exactly one row; recent_repos got nothing.
     expect(db.select().from(cachedRepos).all().length).toBe(1)
     expect(db.select().from(recentRepos).all().length).toBe(0)
-    rmSync(tmp, { recursive: true, force: true })
+    rimrafDir(tmp)
   })
 
   test('warm launch (second task same URL) reuses cache', async () => {
     const { tmp, appHome, db, stubOpencode, wf, remoteUrl } = await setup()
     const t1 = await startTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'a' } },
-      { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+      { db, appHome, opencodeCmd: stubCmd(stubOpencode), awaitScheduler: true },
     )
     const t2 = await startTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'b' } },
-      { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+      { db, appHome, opencodeCmd: stubCmd(stubOpencode), awaitScheduler: true },
     )
     expect(t1.repoPath).toBe(t2.repoPath)
     expect(db.select().from(cachedRepos).all().length).toBe(1)
-    rmSync(tmp, { recursive: true, force: true })
+    rimrafDir(tmp)
   })
 
   test('unknown ref → ValidationError repo-ref-not-found with available refs', async () => {
@@ -147,7 +131,7 @@ describe('startTask URL mode (RFC-024)', () => {
           ref: 'this-ref-does-not-exist',
           inputs: { topic: 'orders' },
         },
-        { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+        { db, appHome, opencodeCmd: stubCmd(stubOpencode), awaitScheduler: true },
       )
     } catch (e) {
       err = e
@@ -159,6 +143,6 @@ describe('startTask URL mode (RFC-024)', () => {
     expect(Array.isArray(details?.availableRefs)).toBe(true)
     expect((details?.availableRefs ?? []).includes('main')).toBe(true)
     expect(details?.ref).toBe('this-ref-does-not-exist')
-    rmSync(tmp, { recursive: true, force: true })
+    rimrafDir(tmp)
   })
 })

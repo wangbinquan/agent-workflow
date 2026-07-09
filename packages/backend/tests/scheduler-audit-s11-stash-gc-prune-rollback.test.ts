@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // POSITIVE GUARD — design/scheduler-audit-2026-06-10.md S-11 (P1, WP-9),
 // fixed by RFC-098 B2 (design.md §B2-WP-9 + 修订#3). This file was the
 // CURRENT-BEHAVIOR LOCK for the pre-fix defect and has been FLIPPED per its
@@ -46,7 +47,7 @@ async function buildRepo(): Promise<Repo> {
   writeFileSync(join(path, 'a.txt'), 'original\n')
   await runGit(path, ['add', '.'])
   await runGit(path, ['commit', '-q', '-m', 'init'])
-  return { path, cleanup: () => rmSync(path, { recursive: true, force: true }) }
+  return { path, cleanup: () => rimrafDir(path) }
 }
 
 /** `git cat-file -e <sha>` — exitCode 0 iff the object exists in the odb. */

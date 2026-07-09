@@ -807,6 +807,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   log.info('spawning agent runtime', {
     runtime,
     bin: cmd[0],
+    cmdLength: cmd.length,
+    cmdPreview: cmd.slice(0, 3).join(' '),
+    hasOpencodeCmd: opts.opencodeCmd !== undefined,
+    runtimeBinary: opts.runtimeBinary,
     agent: opts.agent.name,
     cwd: opts.worktreePath,
     nodeRunId: opts.nodeRunId,
@@ -830,7 +834,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // process-group leader, so killTree's `process.kill(-pid, sig)` reaches
       // grandchildren (docker MCP / shell-tool descendants) that a single-pid
       // SIGTERM would orphan with the write end of our pipes still open.
-      detached: true,
+      detached: process.platform !== 'win32',
     })
   let child: ReturnType<typeof trySpawn>
   try {
@@ -1673,13 +1677,14 @@ function pumpLines(
         buffer += decoder.decode(value, { stream: true })
         let idx: number
         while ((idx = buffer.indexOf('\n')) >= 0) {
-          const line = buffer.slice(0, idx)
+          // Strip trailing '\r' (Windows CRLF) so JSON.parse doesn't choke.
+          const line = buffer.slice(0, idx).replace(/\r$/, '')
           buffer = buffer.slice(idx + 1)
           if (line.length > 0) await onLine(line)
         }
       }
       // Flush remaining tail (process emitted a line without trailing newline).
-      if (buffer.length > 0 && !canceled) await onLine(buffer)
+      if (buffer.length > 0 && !canceled) await onLine(buffer.replace(/\r$/, ''))
     } finally {
       reader.releaseLock()
     }

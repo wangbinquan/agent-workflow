@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-130 — internal iso/merge commits must use a FIXED platform git identity,
 // independent of the ambient git config.
 //
@@ -46,7 +47,7 @@ describe('RFC-130 — internal git commits use a fixed identity (ubuntu iso-setu
       // the injected env (which overrides ambient config) was applied.
       expect(await author(repo, sha)).toBe('agent-workflow <agent-workflow@localhost>')
     } finally {
-      rmSync(repo, { recursive: true, force: true })
+      rimrafDir(repo)
     }
   })
 
@@ -58,7 +59,7 @@ describe('RFC-130 — internal git commits use a fixed identity (ubuntu iso-setu
       const sha = await commitTree(repo, tree, head, 'aw-test')
       expect(await author(repo, sha)).toBe('agent-workflow <agent-workflow@localhost>')
     } finally {
-      rmSync(repo, { recursive: true, force: true })
+      rimrafDir(repo)
     }
   })
 
@@ -97,7 +98,7 @@ describe('RFC-130 — internal git commits use a fixed identity (ubuntu iso-setu
         if (prev[k] === undefined) delete process.env[k]
         else process.env[k] = prev[k]
       }
-      rmSync(repo, { recursive: true, force: true })
+      rimrafDir(repo)
     }
   })
 })

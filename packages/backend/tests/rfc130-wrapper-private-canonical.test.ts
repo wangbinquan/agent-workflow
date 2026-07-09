@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-130 T11 (D29) — wrapper-PRIVATE canonical (AC-10). A git wrapper's inner
 // scope runs in a wrapper-canonical (an iso worktree of the wrapper), so a PARALLEL
 // writer sibling merging into the TASK canonical while the wrapper runs CANNOT
@@ -45,7 +46,7 @@ async function buildHarness(): Promise<Harness> {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

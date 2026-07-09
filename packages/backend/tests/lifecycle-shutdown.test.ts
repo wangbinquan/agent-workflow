@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-053 — shutdown contract for the two background tickers.
 //
 // `startLifecycleInvariantsLoop` (boot timeout + 1h interval) and
@@ -26,7 +27,7 @@ function freshDb(): { db: DbClient; cleanup: () => void } {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-shutdown-'))
   mkdirSync(tmp, { recursive: true })
   const db = createInMemoryDb(MIGRATIONS)
-  return { db, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
+  return { db, cleanup: () => rimrafDir(tmp) }
 }
 
 async function seedRunningTask(db: DbClient): Promise<void> {

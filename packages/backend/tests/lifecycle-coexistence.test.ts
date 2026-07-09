@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-053 — coexistence + isolation tests across the two writers
 // (lifecycle invariants in PR-D + stuck-task detector in PR-E).
 //
@@ -76,7 +77,7 @@ async function freshDb(): Promise<{ db: DbClient; cleanup: () => void }> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-coexist-'))
   mkdirSync(tmp, { recursive: true })
   const db = createInMemoryDb(MIGRATIONS)
-  return { db, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
+  return { db, cleanup: () => rimrafDir(tmp) }
 }
 
 describe('RFC-053 — invariants + stuck-detector共存（同一 task 同时被两者写）', () => {

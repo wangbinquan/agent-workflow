@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-049 PR-B: locks the post-forgiveness contract. The old auto-promote
 // "if the port content is a single-line .md path inside the worktree, read
 // the file" behavior was removed; agents that want the file body delivered
@@ -13,11 +14,28 @@
 // when kind === undefined; no fs probe.
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolvePortContent } from '../src/services/envelope'
 import { ValidationError } from '../src/util/errors'
+import { isWindows } from './helpers/stub-runtime'
+
+const canSymlink = isWindows
+  ? (() => {
+      try {
+        const { mkdirSync, symlinkSync, rmSync } = require('node:fs')
+        const { join } = require('node:path')
+        const { tmpdir } = require('node:os')
+        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true })
+        symlinkSync(join(d, 'x'), join(d, 'y'), 'file')
+        rimrafDir(d)
+        return true
+      } catch {
+        return false
+      }
+    })()
+  : true
 
 describe('RFC-049 PR-B raw-passthrough (kind=undefined never reads file)', () => {
   let worktree: string
@@ -29,8 +47,8 @@ describe('RFC-049 PR-B raw-passthrough (kind=undefined never reads file)', () =>
   })
 
   afterEach(() => {
-    rmSync(worktree, { recursive: true, force: true })
-    rmSync(outside, { recursive: true, force: true })
+    rimrafDir(worktree)
+    rimrafDir(outside)
   })
 
   test('kind=undefined + absolute path inside worktree → raw passthrough (the path string)', () => {
@@ -79,7 +97,11 @@ describe('RFC-049 PR-B raw-passthrough (kind=undefined never reads file)', () =>
     // The strict markdown_file branch follows the symlink (legacy behavior
     // documented in envelope-parse-md-edge-cases.test.ts attack 4); the
     // forgiveness path is stricter precisely because it fires implicitly.
+    // On Windows, file symlinks need developer mode; if unavailable, the
+    // passthrough behavior still exists in the code — just skip the test case.
+    if (!canSymlink) return
     writeFileSync(join(outside, 'secrets.md'), 'TOP SECRET')
+    const { symlinkSync } = require('node:fs')
     symlinkSync(join(outside, 'secrets.md'), join(worktree, 'evil.md'))
     expect(
       resolvePortContent({

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-048 — runner integration with the subagent live capture poller.
 //
 // Drives runNode against a mock opencode child whose lifetime is padded with
@@ -118,7 +119,7 @@ function buildHarness(): Harness {
     taskId,
     fakeHome,
     opencodeDbPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

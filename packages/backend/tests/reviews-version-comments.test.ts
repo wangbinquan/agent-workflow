@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locks in RFC-013-T2: GET /api/reviews/:nodeRunId/versions/:versionId now
 // returns the doc_version's body plus the review_comments captured against
 // that specific version (not the currentVersion's comments, not the union
@@ -176,7 +177,7 @@ async function seed(): Promise<Seed> {
     nodeRunId,
     versions,
     commentsByVersion,
-    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(tmp),
   }
 }
 

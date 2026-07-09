@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-020 T3: startTask now accepts a `preCreatedWorktree` so the multipart
 // upload route can land user-uploaded files into the worktree BEFORE the
 // task row is created. When passed, startTask must NOT shell out to git;
@@ -5,7 +6,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { execSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, rmSync, chmodSync, existsSync, readFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb } from '../src/db/client'
@@ -13,26 +14,9 @@ import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { materializeWorktree, startTask } from '../src/services/task'
 import { ulid } from 'ulid'
+import { stubCmd, writeStubOpencode } from './helpers/stub-runtime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function makeStubOpencode(dir: string): string {
-  const path = join(dir, 'stub-opencode.sh')
-  const script = `#!/usr/bin/env bash
-set -e
-if [[ "$1" == "--version" ]]; then echo 'stub-opencode 1.14.99'; exit 0; fi
-if [[ "$1" == "run" ]]; then
-  ENV='<workflow-output><port name="out">hello</port></workflow-output>'
-  TS=$(date +%s%3N)
-  printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"
-  exit 0
-fi
-exit 1
-`
-  writeFileSync(path, script)
-  chmodSync(path, 0o755)
-  return path
-}
 
 async function setup() {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-start-pre-'))
@@ -48,7 +32,7 @@ async function setup() {
     stdio: 'ignore',
   })
 
-  const stubOpencode = makeStubOpencode(tmp)
+  const stubOpencode = writeStubOpencode(tmp, { outputs: { out: 'hello' } })
 
   await createAgent(db, {
     name: 'echoer',
@@ -121,7 +105,7 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
       {
         db,
         appHome,
-        opencodeCmd: [stubOpencode],
+        opencodeCmd: stubCmd(stubOpencode),
         awaitScheduler: true,
         preCreatedWorktree: {
           taskId,
@@ -138,7 +122,7 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
     // Marker file is still where the caller put it.
     expect(readFileSync(join(wt.worktreePath, 'uploaded.txt'), 'utf8')).toBe('hi')
 
-    rmSync(tmp, { recursive: true, force: true })
+    rimrafDir(tmp)
   })
 
   test('without preCreatedWorktree, falls back to the original git path', async () => {
@@ -151,11 +135,11 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
         baseBranch: 'main',
         inputs: { topic: 'orders' },
       },
-      { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
+      { db, appHome, opencodeCmd: stubCmd(stubOpencode), awaitScheduler: true },
     )
     expect(task.worktreePath).not.toBe('')
     expect(existsSync(task.worktreePath)).toBe(true)
-    rmSync(tmp, { recursive: true, force: true })
+    rimrafDir(tmp)
   })
 
   test('materializeWorktree returns earlyError on bad repo', async () => {
@@ -168,6 +152,6 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
     })
     expect(wt.earlyError).not.toBeNull()
     expect(wt.worktreePath).toBe('')
-    rmSync(tmp, { recursive: true, force: true })
+    rimrafDir(tmp)
   })
 })

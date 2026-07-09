@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-111 PR-B — end-to-end runNode against the claude-code runtime via the
 // mock-claude harness (no real API). Locks the claude headless contract:
 // argv (-p / --output-format stream-json / --append-system-prompt-file / --model
@@ -81,7 +82,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     taskId,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-053 PR-A T1d — retry-cascade kind matrix.
 //
 // For every NodeKind, verify retryNode's cascade behavior when that kind is
@@ -68,7 +69,7 @@ async function buildHarness(): Promise<Harness> {
     db,
     appHome,
     repoPath,
-    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(tmp),
   }
 }
 

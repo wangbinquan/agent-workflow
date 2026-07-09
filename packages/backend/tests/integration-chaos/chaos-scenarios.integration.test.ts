@@ -1,3 +1,4 @@
+import { rimrafDir } from '../helpers/cleanup'
 // RFC-054 W3-1 — chaos injection scenarios.
 //
 // LOCKS the daemon's "things go violently wrong" recovery paths:
@@ -106,7 +107,7 @@ describe.skipIf(!RUN_CHAOS)('RFC-054 W3-1 — chaos injection', () => {
     const seeded = await seedRunningTask(db, worktree)
 
     // External actor deletes the worktree from under the daemon.
-    rmSync(worktree, { recursive: true, force: true })
+    rimrafDir(worktree)
     expect(existsSync(worktree)).toBe(false)
 
     // The orphan reaper sweeps stale `running` node_runs on boot.
@@ -189,7 +190,7 @@ describe.skipIf(!RUN_CHAOS)('RFC-054 W3-1 — chaos injection', () => {
       expect(openErr).not.toBeNull()
     }
 
-    rmSync(dir, { recursive: true, force: true })
+    rimrafDir(dir)
   })
 
   // -------------------------------------------------------------------------
@@ -215,7 +216,7 @@ describe.skipIf(!RUN_CHAOS)('RFC-054 W3-1 — chaos injection', () => {
     // to ENOSPC for test purposes). Assert it's a Node SystemError
     // with a code property.
     const dir = mkdtempSync(join(tmpdir(), 'aw-chaos-enospc-'))
-    rmSync(dir, { recursive: true, force: true })
+    rimrafDir(dir)
     let err: NodeJS.ErrnoException | null = null
     try {
       writeFileSync(join(dir, 'doesnt-matter.txt'), 'oops')

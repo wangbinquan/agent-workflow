@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // End-to-end scheduler tests for one task (P-1-14).
 // Bypasses startTask's worktree creation by inserting the task row directly —
 // real worktree creation is exercised in tasks.test.ts.
@@ -43,7 +44,7 @@ async function buildHarness(): Promise<Harness> {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

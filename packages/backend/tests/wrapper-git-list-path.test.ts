@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-060 PR-E E.T3 — wrapper-git output kind upgrade.
 //
 // `wrapper-git.git_diff` outlet was a full unified-diff string; now it is a
@@ -28,7 +29,7 @@ async function makeRepo(): Promise<{ dir: string; cleanup: () => void }> {
   writeFileSync(join(dir, 'README.md'), '# r\n')
   await runGit(dir, ['add', '.'])
   await runGit(dir, ['commit', '-q', '-m', 'init'])
-  return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) }
+  return { dir, cleanup: () => rimrafDir(dir) }
 }
 
 describe('RFC-060 PR-E — gitChangedFiles helper', () => {

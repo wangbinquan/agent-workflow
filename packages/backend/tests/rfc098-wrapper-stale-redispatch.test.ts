@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-098 B3 (audit S-7) — loop/git wrapper provenance oracles.
 //
 // 锁定两组修复语义（survey §wp6c-loopgit 一节 + 对抗检视修订 #6）：
@@ -72,7 +73,7 @@ async function buildHarness(slug: string): Promise<Harness> {
     appHome,
     worktreePath,
     repoPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

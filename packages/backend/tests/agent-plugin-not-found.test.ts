@@ -13,15 +13,18 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent, updateAgent } from '../src/services/agent'
 import { createPlugin } from '../src/services/plugin'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
+import { writeFakeNpm } from './helpers/stub-runtime'
 import { ValidationError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.sh')
 
 let pluginsDir = ''
+let fakeNpmBin = ''
 
 beforeEach(async () => {
   pluginsDir = await mkdtemp(join(tmpdir(), 'rfc031-guard-'))
+  const npmDir = writeFakeNpm(pluginsDir)
+  fakeNpmBin = resolve(npmDir, process.platform === 'win32' ? 'npm.cmd' : 'npm')
   resetNpmProbeCacheForTests()
   process.env.FAKE_NPM_MODE = 'success'
 })
@@ -31,7 +34,7 @@ afterEach(async () => {
   delete process.env.FAKE_NPM_MODE
 })
 
-const opts = () => ({ pluginsDir, npmBin: FAKE_NPM })
+const opts = () => ({ pluginsDir, npmBin: fakeNpmBin })
 
 function agentInput(name: string, plugins: string[] = []): Parameters<typeof createAgent>[1] {
   return {

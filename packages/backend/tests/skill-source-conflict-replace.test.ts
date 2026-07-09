@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-102: replaceSourceConflict — resolving a source same-name conflict by
 // replacing the OCCUPYING skill with the source's version of `name`.
 //
@@ -46,8 +47,8 @@ function build(): H {
     parent,
     fsOpts: { appHome },
     cleanup: () => {
-      rmSync(parent, { recursive: true, force: true })
-      rmSync(appHome, { recursive: true, force: true })
+      rimrafDir(parent)
+      rimrafDir(appHome)
     },
   }
 }

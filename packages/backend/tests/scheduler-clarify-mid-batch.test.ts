@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-023 bug 13 — scheduler rescan + no-fail-fast aggregation.
 //
 // Locks two related behaviours that fix the "answer clarify while task is
@@ -66,7 +67,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     repoPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

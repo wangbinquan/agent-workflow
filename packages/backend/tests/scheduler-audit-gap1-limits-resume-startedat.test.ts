@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // CURRENT-BEHAVIOR LOCK — design/scheduler-audit-2026-06-10.md §⑥ 缺口1 (limits 墙钟把暂停时长计入)
 //
 // 当前缺陷行为（已对照源码核实）：
@@ -49,7 +50,7 @@ interface Harness {
 function buildHarness(): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-gap1-limits-'))
   const db = createInMemoryDb(MIGRATIONS)
-  return { db, appHome, cleanup: () => rmSync(appHome, { recursive: true, force: true }) }
+  return { db, appHome, cleanup: () => rimrafDir(appHome) }
 }
 
 // Empty workflow: resumeTask's fire-and-forget runTask parses it, marks the

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locked regression: clean-tree pre-snapshot ("") makes a writer retry SKIP rollback,
 // so a failed attempt's partial write leaks into the successful retry + final tree.
 //
@@ -53,7 +54,7 @@ function buildHarness(): Harness {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 async function seedAgent(

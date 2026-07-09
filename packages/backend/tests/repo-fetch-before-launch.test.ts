@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-068 — path mode opt-in `git fetch` helper. Locks behavior we *must
 // not* regress: never `pull` / `merge` / `checkout` / `reset` on a user-
 // supplied local repo; never mutate the user's HEAD branch or working tree.
@@ -48,7 +49,7 @@ async function advanceRemote(bareRemote: string, root: string): Promise<string> 
   await runGit(tmpWork, ['commit', '-q', '-m', 'advance'])
   await runGit(tmpWork, ['push', 'origin', 'main'])
   const r = await runGit(tmpWork, ['rev-parse', 'HEAD'])
-  rmSync(tmpWork, { recursive: true, force: true })
+  rimrafDir(tmpWork)
   return r.stdout.trim()
 }
 
@@ -61,7 +62,7 @@ describe('fetchPathRepoBeforeLaunch (RFC-068)', () => {
 
   afterEach(() => {
     try {
-      rmSync(fx.root, { recursive: true, force: true })
+      rimrafDir(fx.root)
     } catch {
       /* noop */
     }
@@ -94,7 +95,7 @@ describe('fetchPathRepoBeforeLaunch (RFC-068)', () => {
 
   test('BP-02 failure: remote unreachable returns ok=false without throwing', async () => {
     // Yank the bare remote so fetch fails.
-    rmSync(fx.bareRemote, { recursive: true, force: true })
+    rimrafDir(fx.bareRemote)
 
     const beforeLocal = (await runGit(fx.repoPath, ['rev-parse', 'main'])).stdout.trim()
     const r = await fetchPathRepoBeforeLaunch(fx.repoPath)
@@ -121,7 +122,14 @@ describe('fetchPathRepoBeforeLaunch (RFC-068)', () => {
 // If a future refactor adds any of those, this test fails fast.
 describe('fetchPathRepoBeforeLaunch source-level invariants (RFC-068)', () => {
   test('BP-05..08 helper source contains no pull/merge/reset/checkout', () => {
-    const src = readFileSync(resolve(__dirname, '../src/services/repo.ts'), 'utf-8')
+    // Normalize CRLF->LF: on a Windows working tree checked out before the
+    // repo's `eol=lf` .gitattributes landed, source files can still carry CRLF,
+    // which would break the `\n}\n` helper-boundary regex below. The guard's
+    // intent (no pull/merge/reset/checkout tokens) is line-ending-agnostic.
+    const src = readFileSync(resolve(__dirname, '../src/services/repo.ts'), 'utf-8').replace(
+      /\r\n/g,
+      '\n',
+    )
     const helperStart = src.indexOf('export async function fetchPathRepoBeforeLaunch')
     expect(helperStart).toBeGreaterThan(-1)
     // Capture the helper body (up to the next top-level export or EOF).

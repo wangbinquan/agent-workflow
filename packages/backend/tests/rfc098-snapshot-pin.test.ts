@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-098 B2 / WP-9 oracles — snapshot ref pinning end-to-end + gc ref
 // cleanup + multi-repo two-phase all-or-nothing rollback (design.md §B2-WP-9
 // + 对抗检视修订 #3).
@@ -96,7 +97,7 @@ describe('RFC-098 WP-9 — pinned snapshot survives source-repo gc; worktree GC 
     await runGit(repoPath, ['commit', '-q', '-m', 'init'])
     db = createInMemoryDb(MIGRATIONS)
   })
-  afterEach(() => rmSync(appHome, { recursive: true, force: true }))
+  afterEach(() => rimrafDir(appHome))
 
   test('worktree-pinned snapshot lives in the shared odb past gc; runWorktreeGc removes worktree + refs, re-exposing the object', async () => {
     const workflowId = ulid()
@@ -155,7 +156,7 @@ describe('RFC-098 WP-9 修订#3 — multi-repo rollback is two-phase all-or-noth
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'aw-rfc098-allornothing-'))
   })
-  afterEach(() => rmSync(root, { recursive: true, force: true }))
+  afterEach(() => rimrafDir(root))
 
   async function makeRepo(path: string): Promise<void> {
     mkdirSync(path, { recursive: true })

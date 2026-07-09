@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-108 PR-C T6 (AR-15) + T7 (AR-17) — resume worktree-missing 410 pre-flight
 // and cross-node-run all-or-nothing rollback.
 //
@@ -87,7 +88,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     repoPath,
     taskId,
-    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(tmp),
   }
 }
 
@@ -124,7 +125,7 @@ describe('RFC-108 T6 (AR-15) — resume worktree-missing 410 pre-flight', () => 
   test('resume on a gc-reclaimed worktree → clean 410, task NOT flipped to pending', async () => {
     h = await buildHarness()
     // Simulate worktreeAutoGc reclaiming the worktree of a resumable task.
-    rmSync(h.repoPath, { recursive: true, force: true })
+    rimrafDir(h.repoPath)
 
     let code: string | undefined
     let status: number | undefined

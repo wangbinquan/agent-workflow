@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-108 PR-B (AR-01) — per-node hard-timeout floor launch-path wiring lock.
 //
 // 为什么这条测试存在：`defaultPerNodeTimeoutMs`（config 默认 30min）在 RFC-108 之前
@@ -32,7 +33,7 @@ describe('RFC-108 T4 resolveLaunchRuntimeConfig — 接线 per-node timeout floo
     tmp = mkdtempSync(join(tmpdir(), 'aw-rfc108-cfg-'))
     path = join(tmp, 'config.json')
   })
-  afterEach(() => rmSync(tmp, { recursive: true, force: true }))
+  afterEach(() => rimrafDir(tmp))
 
   test('显式 defaultPerNodeTimeoutMs 从 settings 解析出来', () => {
     writeFileSync(path, JSON.stringify({ $schema_version: 1, defaultPerNodeTimeoutMs: 120_000 }))

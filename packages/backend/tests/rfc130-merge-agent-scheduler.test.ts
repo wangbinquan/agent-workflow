@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-130 §6.2 — end-to-end scheduler wiring of the built-in merge agent.
 //
 // Two writer nodes at the same level each run in their OWN iso worktree and both
@@ -52,7 +53,7 @@ async function buildHarness(): Promise<Harness> {
     db,
     appHome,
     worktreePath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 
@@ -67,7 +68,10 @@ import { writeFileSync } from 'node:fs'
 import { join, basename } from 'node:path'
 const cwd = process.cwd()
 const f = join(cwd, 'f.txt')
-const isMerge = cwd.includes('/resolve-')
+// Platform-agnostic: the merge agent runs in a cwd whose basename starts with
+// 'resolve-' (e.g. 'resolve-repo'). On POSIX the original cwd.includes('/resolve-')
+// worked, but Windows backslash paths never match a forward-slash segment.
+const isMerge = basename(cwd).startsWith('resolve-')
 let port
 if (isMerge) {
   // Merge agent. Resolve = write clean content; fail = leave conflict markers.

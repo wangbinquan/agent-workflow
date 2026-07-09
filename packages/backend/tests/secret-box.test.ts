@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-036 — AES-256-GCM secret box invariants.
 
 import { describe, expect, test } from 'bun:test'
@@ -6,6 +7,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSecretBox, createSecretBoxFromKey, ensureSecretKey } from '../src/auth/secretBox'
+import { isWindows } from './helpers/stub-runtime'
 
 describe('ensureSecretKey', () => {
   test('creates a 32-byte file with mode 0600 on first call', () => {
@@ -16,13 +18,16 @@ describe('ensureSecretKey', () => {
       const k = ensureSecretKey(keyPath)
       expect(k.length).toBe(32)
       expect(existsSync(keyPath)).toBe(true)
-      const mode = statSync(keyPath).mode & 0o777
-      expect(mode).toBe(0o600)
+      // On Windows, chmod is no-op; ACL verified separately in platform-fs.test.ts.
+      if (!isWindows) {
+        const mode = statSync(keyPath).mode & 0o777
+        expect(mode).toBe(0o600)
+      }
       const second = ensureSecretKey(keyPath)
       expect(Buffer.compare(k, second)).toBe(0)
       expect(Buffer.compare(k, readFileSync(keyPath))).toBe(0)
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      rimrafDir(dir)
     }
   })
 
@@ -34,7 +39,7 @@ describe('ensureSecretKey', () => {
       writeFileSync(keyPath, randomBytes(10), { mode: 0o600 })
       expect(() => ensureSecretKey(keyPath)).toThrow(/wrong size/)
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      rimrafDir(dir)
     }
   })
 })
@@ -79,7 +84,7 @@ describe('createSecretBox wires up a temp keyfile', () => {
       const pt = 'oidc-client-secret'
       expect(box.unseal(box.seal(pt))).toBe(pt)
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      rimrafDir(dir)
     }
   })
 })

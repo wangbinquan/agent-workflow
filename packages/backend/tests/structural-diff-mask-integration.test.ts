@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-087 — END-TO-END lock for the AST comment/string masking WIRING in the real
 // gitBackend pipeline (computeFromWorktree → augmentClassEdges →
 // maskCommentsAndStrings → computeClassEdges). The unit tests cover the mask
@@ -19,7 +20,7 @@ import { runGit } from '../src/util/git'
 describe('RFC-087 masking integration (computeFromWorktree, Python #/docstring)', () => {
   const dirs: string[] = []
   afterAll(() => {
-    for (const d of dirs) rmSync(d, { recursive: true, force: true })
+    for (const d of dirs) rimrafDir(d)
   })
 
   test('a class named only in a Python comment/docstring produces NO classEdge; a real reference does', async () => {

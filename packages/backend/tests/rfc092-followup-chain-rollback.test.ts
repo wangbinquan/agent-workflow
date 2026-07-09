@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-092 T2 — S-2b regression: fresh → followup → fresh retry chain rolls
 // back to the LAST FRESH-SESSION baseline, not to a bare reset+clean.
 //
@@ -144,7 +145,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktree,
     miniMockPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

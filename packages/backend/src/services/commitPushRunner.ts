@@ -236,7 +236,25 @@ export async function runCommitPush(
   }
 
   // 4. Commit locally with the task identity.
-  const commit = await g([...idArgs, 'commit', '-m', message])
+  let commit = await g([...idArgs, 'commit', '-m', message])
+  if (commit.exitCode !== 0) {
+    // RFC-W001: a concurrent sibling merge-back (`materializeTree`'s final
+    // `reset --mixed taskBaseHead`) can run between our staging step (§1+2,
+    // under the write lock) and this commit (released for the slow LLM
+    // message-gen, per RFC-130 §7's brief-writeSem-window discipline). That
+    // reset unstages our changes, so `git commit` reports "nothing added to
+    // commit but untracked files present" - the staging was correct, the index
+    // was reset out from under us. Re-stage under the write lock and retry
+    // once; the worktree still carries our files (reset --mixed doesn't drop
+    // untracked content). If it still fails, surface as commit-local-failed.
+    const releaseRetry = params.acquireWrite ? await params.acquireWrite() : null
+    try {
+      await g(['add', '-A'])
+      commit = await g([...idArgs, 'commit', '-m', message])
+    } finally {
+      releaseRetry?.()
+    }
+  }
   if (commit.exitCode !== 0) {
     // A failed commit is unusual (e.g. unknown identity, hook). Surface it as a
     // failed node but keep the staged changes for the user.

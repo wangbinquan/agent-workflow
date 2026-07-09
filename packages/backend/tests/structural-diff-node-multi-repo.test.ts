@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-089 P3 — getTaskStructuralDiff node scope must work for multi-repo tasks.
 // It threw `structural-node-scope-multi-repo-unsupported` before; it now resolves
 // + computes per repo (reusing resolveNodeScope over each repo's
@@ -55,8 +56,8 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     appHome,
     repos,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(reposParent, { recursive: true, force: true })
+      rimrafDir(appHome)
+      rimrafDir(reposParent)
     },
   }
 }

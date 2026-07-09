@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locks RFC-017 §A1 — HTTP surface of /api/skill-sources:
 //   POST happy path → 201 + imported / skipped
 //   POST duplicate path → 409 skill-source-path-in-use
@@ -41,8 +42,8 @@ function build(): H {
     parent,
     appHome,
     cleanup: () => {
-      rmSync(parent, { recursive: true, force: true })
-      rmSync(appHome, { recursive: true, force: true })
+      rimrafDir(parent)
+      rimrafDir(appHome)
       if (prev === undefined) delete process.env.AGENT_WORKFLOW_HOME
       else process.env.AGENT_WORKFLOW_HOME = prev
     },

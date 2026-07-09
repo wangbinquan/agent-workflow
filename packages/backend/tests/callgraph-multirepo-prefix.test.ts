@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-089 P4 — supplementary coverage for multi-repo call-chain re-prefixing.
 //
 // Locks two seams that the existing structural-diff-callchain-multi-repo.test.ts
@@ -95,8 +96,8 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     repos,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(reposParent, { recursive: true, force: true })
+      rimrafDir(appHome)
+      rimrafDir(reposParent)
     },
   }
 }

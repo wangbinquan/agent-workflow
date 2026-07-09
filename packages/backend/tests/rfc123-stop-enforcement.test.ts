@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-123 follow-up — enforce STOP CLARIFYING against a disobedient agent.
 //
 // 用户报（2026-06-29，RFC-123 之后）：「一个节点被跨节点反问了，但是没有自动切换为
@@ -117,7 +118,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     taskId,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-097 — resume/retry 任务级互斥竞态 oracle（design/RFC-097-task-status-cas/design.md §3 / §7.3）。
 //
 // 锁定的合同（任一回归即红）：
@@ -179,7 +180,7 @@ async function buildHarness(): Promise<Harness> {
     doneMock,
     failMock,
     slowMock,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

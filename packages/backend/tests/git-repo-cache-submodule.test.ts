@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-034 T5 — locks gitRepoCache behavior on repos with submodules.
 //
 // Builds a parent bare repo whose worktree references a child bare repo as a
@@ -117,17 +118,17 @@ describe.skipIf(!RUN_GIT_NETWORK)('gitRepoCache RFC-034 submodule recursion', ()
     if (savedGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL
     else process.env.GIT_CONFIG_GLOBAL = savedGlobal
     try {
-      rmSync(configHome, { recursive: true, force: true })
+      rimrafDir(configHome)
     } catch {
       /* noop */
     }
     try {
-      rmSync(appHome, { recursive: true, force: true })
+      rimrafDir(appHome)
     } catch {
       /* noop */
     }
     try {
-      rmSync(fix.root, { recursive: true, force: true })
+      rimrafDir(fix.root)
     } catch {
       /* noop */
     }

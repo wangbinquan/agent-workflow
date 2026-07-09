@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-089 P4 — call-chain expansion for multi-repo tasks. In a multi-repo diff
 // the graph's refs are `${worktreeDirName}/${filePath}#${qn}` (mergeStructuralDiffs
 // prefixes them). getCallTargets must route such a ref to THAT repo's worktree,
@@ -76,8 +77,8 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     repos,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(reposParent, { recursive: true, force: true })
+      rimrafDir(appHome)
+      rimrafDir(reposParent)
     },
   }
 }

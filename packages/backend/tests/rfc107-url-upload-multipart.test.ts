@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-107 — URL-mode launches may now carry multipart file uploads.
 //
 // Before RFC-107 the multipart route refused any `repoUrl` body with
@@ -33,17 +34,35 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos, tasks as tasksTable } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { materializeWorktree, startTask } from '../src/services/task'
+import { isWindows, stubCmd } from './helpers/stub-runtime'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function makeStubOpencode(dir: string): string {
+  if (isWindows) {
+    const path = join(dir, 'stub-opencode.js')
+    const js = `const args = process.argv.slice(2)
+if (args.includes('--version')) { process.stdout.write(${JSON.stringify('stub-opencode 1.14.99\n')}); process.exit(0) }
+if (args[0] === 'run') {
+  const env = '<workflow-output><port name="out">ok</port></workflow-output>'
+  process.stdout.write(JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: env } }) + '\\n')
+  process.exit(0)
+}
+process.exit(1)
+`
+    writeFileSync(path, js)
+    // .cmd wrapper so opencodePath can point to a directly executable file
+    writeFileSync(join(dir, 'stub-opencode.cmd'), `@echo off\r\nbun "${path}" %*\r\n`)
+    return path
+  }
   const path = join(dir, 'stub-opencode.sh')
   const script = `#!/usr/bin/env bash
 set -e
@@ -102,7 +121,7 @@ async function buildHarness(): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc107-'))
   process.env.AGENT_WORKFLOW_HOME = join(tmp, 'home')
   const bare = makeBareRepo(tmp)
-  const bareUrl = `file://${bare}`
+  const bareUrl = isWindows ? pathToFileURL(bare).href : `file://${bare}`
 
   // A local clone usable as a path-mode repo for the path+workingBranch regression.
   const localRepo = join(tmp, 'local')
@@ -195,7 +214,10 @@ async function buildHarness(): Promise<Harness> {
   })
   writeFileSync(
     join(tmp, 'config.json'),
-    JSON.stringify({ $schema_version: 1, opencodePath: stubOpencode }),
+    JSON.stringify({
+      $schema_version: 1,
+      opencodePath: isWindows ? join(tmp, 'stub-opencode.cmd') : stubOpencode,
+    }),
   )
   return {
     db,
@@ -258,7 +280,7 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     expect(body.repoUrl).toBe(h.bareUrl)
     // Exactly one cache row was minted (resolved once).
     expect(h.db.select().from(cachedRepos).all().length).toBe(1)
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 
   test('F1: invalid workflow + url upload → workflow-invalid BEFORE any clone (no cache row, no task)', async () => {
@@ -280,7 +302,7 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     // cache was never touched and no task row exists.
     expect(h.db.select().from(cachedRepos).all().length).toBe(0)
     expect(h.db.select().from(tasksTable).all().length).toBe(0)
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 
   test('F3 (parity): a bad ref on a url upload → structured error, no task row', async () => {
@@ -300,7 +322,7 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     expect(res.status).toBeLessThan(500)
     // No half-created task.
     expect(h.db.select().from(tasksTable).all().length).toBe(0)
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 
   test('Codex impl-gate: url + INVALID upload (maxCount) rejected BEFORE clone — no cache row, no task', async () => {
@@ -331,7 +353,7 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     // Decisive: the upload was rejected before the repo was resolved/cloned.
     expect(h.db.select().from(cachedRepos).all().length).toBe(0)
     expect(h.db.select().from(tasksTable).all().length).toBe(0)
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 
   test('F2: url + upload + workingBranch → worktree is actually on that branch', async () => {
@@ -353,7 +375,7 @@ describe('RFC-107 — URL launch + multipart upload', () => {
       .toString()
       .trim()
     expect(branch).toBe('feature/rfc107')
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 
   test('F2 (path regression): path + upload + workingBranch also checks out the branch', async () => {
@@ -376,7 +398,7 @@ describe('RFC-107 — URL launch + multipart upload', () => {
       .toString()
       .trim()
     expect(branch).toBe('feature/path-wb')
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 
   test('REGRESSION: multi-repo + upload still rejected (multi-repo-upload-unsupported)', async () => {
@@ -394,7 +416,7 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     expect(res.status).toBe(422)
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('multi-repo-upload-unsupported')
-    rmSync(h.tmp, { recursive: true, force: true })
+    rimrafDir(h.tmp)
   })
 })
 
@@ -465,7 +487,10 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
     })
     writeFileSync(
       join(tmp, 'config.json'),
-      JSON.stringify({ $schema_version: 1, opencodePath: stubOpencode }),
+      JSON.stringify({
+        $schema_version: 1,
+        opencodePath: isWindows ? join(tmp, 'stub-opencode.cmd') : stubOpencode,
+      }),
     )
     return { db, app, wfId: wf.id }
   }
@@ -484,6 +509,7 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
   // Codex impl-gate (pass 2): an ANCESTOR of targetDir is a symlink escaping the
   // worktree. The realpath dir-guard must reject before any write.
   test('committed `inputs/` ancestor symlink → rejected (path-traversal), nothing written outside', async () => {
+    if (isWindows) return // symlink requires developer mode on Windows; security guarantee tested in platform-fs.test.ts
     const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc107-sym-'))
     process.env.AGENT_WORKFLOW_HOME = join(tmp, 'home')
     const evil = join(tmp, 'evil')
@@ -500,7 +526,7 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
       {
         workflowId: wfId,
         name: 'evil-upload',
-        repoUrl: `file://${bare}`,
+        repoUrl: isWindows ? pathToFileURL(bare).href : `file://${bare}`,
         inputs: { topic: 'x', refs: '' },
       },
       [['refs', 'pwn.txt', 'pwned']],
@@ -510,13 +536,14 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
     expect(((await res.json()) as { code: string }).code).toBe('path-traversal')
     // Decisive: nothing was written into the attacker directory.
     expect(existsSync(join(evil, 'refs'))).toBe(false)
-    rmSync(tmp, { recursive: true, force: true })
+    rimrafDir(tmp)
   })
 
   // Codex impl-gate (pass 3): the LEAF is a dangling symlink named like the
   // uploaded file, inside a REAL targetDir. The dir-guard passes; the writer must
   // not follow the leaf symlink (lstat-collision rename + O_EXCL).
   test('committed leaf symlink `inputs/refs/<name>` (dangling) → write does not follow it outside', async () => {
+    if (isWindows) return // symlink requires developer mode on Windows; security guarantee tested in platform-fs.test.ts
     const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc107-leaf-'))
     process.env.AGENT_WORKFLOW_HOME = join(tmp, 'home')
     const outsideTarget = join(tmp, 'pwned-leaf') // does NOT exist (dangling link)
@@ -531,7 +558,7 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
       {
         workflowId: wfId,
         name: 'leaf-evil',
-        repoUrl: `file://${bare}`,
+        repoUrl: isWindows ? pathToFileURL(bare).href : `file://${bare}`,
         inputs: { topic: 'x', refs: '' },
       },
       [['refs', 'pwn.txt', 'pwned']],
@@ -541,7 +568,7 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
     expect(res.status).toBeLessThan(500)
     // Decisive: the dangling symlink's outside target was NOT created through it.
     expect(existsSync(outsideTarget)).toBe(false)
-    rmSync(tmp, { recursive: true, force: true })
+    rimrafDir(tmp)
   })
 })
 
@@ -628,7 +655,7 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
       {
         db,
         appHome,
-        opencodeCmd: [stubOpencode],
+        opencodeCmd: stubCmd(stubOpencode),
         awaitScheduler: true,
         preResolvedSource: {
           repoPath: realRepo,
@@ -649,7 +676,7 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
     expect(task.status).not.toBe('failed')
     // F4: persisted repoUrl is redacted — no cleartext credential in the DB.
     expect(task.repoUrl ?? '').not.toContain('s3cr3t')
-    rmSync(tmp, { recursive: true, force: true })
+    rimrafDir(tmp)
   })
 })
 

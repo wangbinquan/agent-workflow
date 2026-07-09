@@ -16,6 +16,15 @@ import { resolveLang } from '../lang/grammars'
 import { scanClassDecls, buildClassIndex } from './classIndex'
 import { expandMethod, type ExpandCtx } from './service'
 
+/** Normalize an OS-native relative path to forward slashes. Call-graph refs
+ *  (`${file}#${qn}`) and ownerClass ids are stored / surfaced as data, so they
+ *  must be portable: on Windows `path.relative` yields `src\OrderService.java`,
+ *  which would silently mismatch the `src/...` shape tests and the rest of the
+ *  platform expect. RFC-W001. */
+function toPosix(p: string): string {
+  return sep === '/' ? p : p.split(sep).join('/')
+}
+
 const IGNORE_DIRS = new Set([
   '.git',
   'node_modules',
@@ -43,7 +52,7 @@ async function listSourceFiles(root: string): Promise<string[]> {
       if (e.isDirectory()) {
         if (!IGNORE_DIRS.has(e.name) && !e.name.startsWith('.')) await walk(join(dir, e.name))
       } else if (e.isFile() && resolveLang(e.name) !== null) {
-        out.push(relative(root, join(dir, e.name)))
+        out.push(toPosix(relative(root, join(dir, e.name))))
       }
     }
   }

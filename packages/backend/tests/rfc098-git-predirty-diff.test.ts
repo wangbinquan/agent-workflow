@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-098 B3 (audit S-4, 对抗检视修订 #9) — git wrapper pre-dirty 差集的
 // hash 语义 oracle。
 //
@@ -102,7 +103,7 @@ async function buildHarness(): Promise<Harness> {
     worktreePath,
     repoPath,
     shimPath,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

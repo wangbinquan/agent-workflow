@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locks in RFC-005 PR-A T4 + RFC-023 PR-A T6: workflow $schema_version
 // transparent upgrade. As of RFC-023 the latest version is 3; v1 and v2 are
 // both upgraded on read to v3.
@@ -87,7 +88,7 @@ describe('GET path: legacy row → latest definition returned by getWorkflow', (
   })
 
   afterEach(() => {
-    rmSync(tmp, { recursive: true, force: true })
+    rimrafDir(tmp)
   })
 
   test('legacy v1 row → getWorkflow returns latest-version definition', async () => {
@@ -155,7 +156,7 @@ describe('POST / PUT paths normalize older versions → latest on write', () => 
   })
 
   afterEach(() => {
-    rmSync(tmp, { recursive: true, force: true })
+    rimrafDir(tmp)
   })
 
   test('createWorkflow with v1 def → DB row stores latest version', async () => {

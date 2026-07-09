@@ -7,6 +7,8 @@
 import { describe, expect, it } from 'bun:test'
 import { buildOpencodeSpawn } from '@/services/runtime/opencode/spawn'
 
+const isWindows = process.platform === 'win32'
+
 const BASE = {
   agentName: 'my-agent',
   prompt: 'THE PROMPT',
@@ -18,17 +20,12 @@ const BASE = {
 describe('buildOpencodeSpawn — argv golden (RFC-111 A2)', () => {
   it('default argv: run/prompt/--agent/--format json/--thinking/--dangerously-skip-permissions', () => {
     const { cmd } = buildOpencodeSpawn({ ...BASE })
-    expect(cmd).toEqual([
-      'opencode',
-      'run',
-      'THE PROMPT',
-      '--agent',
-      'my-agent',
-      '--format',
-      'json',
-      '--thinking',
-      '--dangerously-skip-permissions',
-    ])
+    // Windows: prompt is piped via stdin (Bun truncates argv at '\n'), absent from cmd.
+    expect(cmd).toEqual(
+      isWindows
+        ? ['opencode', 'run', '--agent', 'my-agent', '--format', 'json', '--thinking', '--dangerously-skip-permissions']
+        : ['opencode', 'run', 'THE PROMPT', '--agent', 'my-agent', '--format', 'json', '--thinking', '--dangerously-skip-permissions'],
+    )
   })
 
   it('honors opencodeCmd head + --session; --dangerously-skip-permissions is UNCONDITIONAL', () => {
@@ -40,21 +37,11 @@ describe('buildOpencodeSpawn — argv golden (RFC-111 A2)', () => {
       opencodeCmd: ['bun', 'run', '/mock.ts'],
       resumeSessionId: 'opc_9',
     })
-    expect(cmd).toEqual([
-      'bun',
-      'run',
-      '/mock.ts',
-      'run',
-      'THE PROMPT',
-      '--agent',
-      'my-agent',
-      '--format',
-      'json',
-      '--thinking',
-      '--dangerously-skip-permissions',
-      '--session',
-      'opc_9',
-    ])
+    expect(cmd).toEqual(
+      isWindows
+        ? ['bun', 'run', '/mock.ts', 'run', '--agent', 'my-agent', '--format', 'json', '--thinking', '--dangerously-skip-permissions', '--session', 'opc_9']
+        : ['bun', 'run', '/mock.ts', 'run', 'THE PROMPT', '--agent', 'my-agent', '--format', 'json', '--thinking', '--dangerously-skip-permissions', '--session', 'opc_9'],
+    )
   })
 
   it('empty resumeSessionId is treated as absent (no --session)', () => {

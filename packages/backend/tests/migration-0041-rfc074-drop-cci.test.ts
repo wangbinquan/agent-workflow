@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-074 PR-C — migration 0041 (SQLite 12-step rebuild that DROPs
 // node_runs.clarify_iteration) DATA-COPY lock.
 //
@@ -70,7 +71,7 @@ function freezeAt(idx: number, outDbPath: string): void {
     migrate(drizzle(sqlite, {}), { migrationsFolder: dir })
     sqlite.close()
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    rimrafDir(dir)
   }
 }
 
@@ -221,7 +222,7 @@ describe('RFC-074 migration 0041 — DROP clarify_iteration preserves row data',
 
       up.close()
     } finally {
-      rmSync(tmp, { recursive: true, force: true })
+      rimrafDir(tmp)
     }
   })
 })

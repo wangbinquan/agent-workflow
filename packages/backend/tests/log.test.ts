@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -25,7 +26,7 @@ describe('logger', () => {
 
   afterEach(() => {
     process.stdout.write = originalWrite
-    rmSync(tmp, { recursive: true, force: true })
+    rimrafDir(tmp)
     resetLoggerForTest()
   })
 

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-095 SEMANTICS LOCK — design/scheduler-audit-2026-06-10.md S-22 (WP-2)
 // design/RFC-095-scope-outcome-exhaustive/design.md §1 / §5-2 / §5-5
 //
@@ -42,7 +43,7 @@ const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 // 并行撞名，afterAll 尽力清理（/tmp 由 OS 兜底，这里只保证不留固定名脏目录）。
 const APP_HOME = `/tmp/aw-s22-apphome-${process.pid}`
 afterAll(() => {
-  rmSync(APP_HOME, { recursive: true, force: true })
+  rimrafDir(APP_HOME)
 })
 
 // ---------------------------------------------------------------------------

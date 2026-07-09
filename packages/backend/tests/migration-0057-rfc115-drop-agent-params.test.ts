@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-115 PR-C — migration 0057 (SQLite 12-step rebuild that DROPs the dead
 // agent generation-param columns model/variant/temperature/steps/max_steps)
 // data-copy + pre-drop guard lock.
@@ -73,7 +74,7 @@ function freezeAt(idx: number, outDbPath: string): void {
     migrate(drizzle(sqlite, {}), { migrationsFolder: dir })
     sqlite.close()
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    rimrafDir(dir)
   }
 }
 
@@ -95,7 +96,7 @@ function buildPartialFolder(idx: number): { dir: string; cleanup: () => void } {
       copyFileSync(join(MIGRATIONS, 'meta', snap), join(dir, 'meta', snap))
     }
   }
-  return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) }
+  return { dir, cleanup: () => rimrafDir(dir) }
 }
 
 function agentCols(db: Database): string[] {
@@ -176,7 +177,7 @@ describe('RFC-115 migration 0057 — DROP agent params (re-homed DBs)', () => {
       ).toThrow()
       up.close()
     } finally {
-      rmSync(tmp, { recursive: true, force: true })
+      rimrafDir(tmp)
     }
   })
 })
@@ -209,7 +210,7 @@ describe('RFC-115 migration 0057 — pre-drop fail-loud guard (Codex F2)', () =>
       expect(row.model).toBe('anthropic/claude-opus-4-8')
       up.close()
     } finally {
-      rmSync(tmp, { recursive: true, force: true })
+      rimrafDir(tmp)
     }
   })
 })

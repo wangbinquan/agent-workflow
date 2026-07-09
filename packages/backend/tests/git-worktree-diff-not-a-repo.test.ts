@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Regression: the task detail "工作目录 diff" tab surfaced the raw error
 //   worktree-diff-failed: git diff failed: warning: not a git repository. <...600-line git --no-index usage dump...>
 // whenever a task's worktree directory still existed on disk but was no longer
@@ -53,13 +54,13 @@ async function buildFixture(): Promise<Fixture> {
   await initRepo(source)
   const dangling = join(root, 'wt')
   await runGit(source, ['worktree', 'add', '-q', dangling])
-  rmSync(source, { recursive: true, force: true })
+  rimrafDir(source)
 
   return {
     repo,
     plain,
     dangling,
-    cleanup: () => rmSync(root, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(root),
   }
 }
 

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // LOCKS: RFC-066 PR-A T4 — getTask hydrates Task.repos[] from task_repos
 // rows sorted by repo_index ascending. Single-repo tasks (the legacy default
 // today) return a length-1 array mirroring the tasks.* columns; multi-repo
@@ -52,8 +53,8 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     appHome,
     repos,
     cleanup: () => {
-      rmSync(appHome, { recursive: true, force: true })
-      rmSync(reposParent, { recursive: true, force: true })
+      rimrafDir(appHome)
+      rimrafDir(reposParent)
     },
   }
 }

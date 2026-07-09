@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-042 T3 — runner envelopeFollowup wiring.
 //
 // Locks in:
@@ -93,7 +94,7 @@ async function buildHarness(): Promise<Harness> {
     worktreePath,
     taskId,
     argvLog,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-072 — runNode persists the resolved output kind into node_run_outputs.kind.
 //
 // The runner already resolves agent.outputKinds[port] to validate file-path
@@ -86,7 +87,7 @@ async function buildHarness(): Promise<Harness> {
     appHome,
     worktreePath,
     taskId,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

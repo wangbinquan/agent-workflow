@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-042 §A2 / §A6 / §5.5 — RFC-039 "Keep clarifying" strong-bias passthrough
 // to the same-session follow-up prompt.
 //
@@ -78,7 +79,7 @@ async function buildHarness() {
     appHome,
     worktreePath,
     taskId,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => rimrafDir(appHome),
   }
 }
 

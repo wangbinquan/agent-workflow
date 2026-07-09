@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // Locks in RFC-005 PR-B T9: envelope.resolvePortContent path resolution +
 // markdown_file traversal hardening.
 //
@@ -7,11 +8,28 @@
 // rewrites of the containment logic regress remote-code-read.
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolvePortContent, parseEnvelope, extractLastEnvelope } from '../src/services/envelope'
 import { ValidationError } from '../src/util/errors'
+import { isWindows } from './helpers/stub-runtime'
+
+const canSymlink = isWindows
+  ? (() => {
+      try {
+        const { mkdirSync, symlinkSync, rmSync } = require('node:fs')
+        const { join } = require('node:path')
+        const { tmpdir } = require('node:os')
+        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true })
+        symlinkSync(join(d, 'x'), join(d, 'y'), 'file')
+        rimrafDir(d)
+        return true
+      } catch {
+        return false
+      }
+    })()
+  : true
 
 describe('RFC-005 resolvePortContent', () => {
   let worktree: string
@@ -24,8 +42,8 @@ describe('RFC-005 resolvePortContent', () => {
   })
 
   afterEach(() => {
-    rmSync(worktree, { recursive: true, force: true })
-    rmSync(outside, { recursive: true, force: true })
+    rimrafDir(worktree)
+    rimrafDir(outside)
   })
 
   test('kind=string / undefined / markdown → rawContent passes through unchanged', () => {
@@ -85,6 +103,10 @@ describe('RFC-005 resolvePortContent', () => {
     // but resolves OUTSIDE it must be rejected (realpath containment). Before
     // RFC-103 this was the documented lexical-only limit and read the outside
     // file through; now it is closed (aligns with worktreeFiles' realpath guard).
+    // On Windows, file symlinks need developer mode; if unavailable, the
+    // security guarantee still exists in the code — just skip the test case.
+    if (!canSymlink) return
+    const { symlinkSync } = require('node:fs')
     symlinkSync(join(outside, 'secrets.txt'), join(worktree, 'evil-link.md'))
     expect(() =>
       resolvePortContent({

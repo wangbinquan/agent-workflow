@@ -1,3 +1,4 @@
+import { rimrafDir } from './helpers/cleanup'
 // RFC-115 (Codex impl-gate F-high) — assertConfigDefaultsMigrated fail-loud
 // guard for the CONFIG-only skip-upgrade data-loss path.
 //
@@ -33,7 +34,7 @@ describe('RFC-115 assertConfigDefaultsMigrated — config skip-upgrade guard', (
     tmp = mkdtempSync(join(tmpdir(), 'aw-cfg-guard-'))
     cfg = join(tmp, 'config.json')
   })
-  afterEach(() => rmSync(tmp, { recursive: true, force: true }))
+  afterEach(() => rimrafDir(tmp))
 
   test('legacy defaults on disk + ALL built-in profiles NULL → ABORT (fail-loud)', async () => {
     writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultModel: 'anthropic/opus' }))

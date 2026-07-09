@@ -16,7 +16,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 const MINT_FACTORY = resolve(BACKEND_SRC, 'services', 'nodeRunMint.ts')
@@ -62,7 +62,7 @@ function findDirectNodeRunInserts(): Match[] {
       const preceding = lines.slice(lookbackStart, i + 1).join('\n')
       if (ALLOW_MARKER.test(preceding)) continue
       matches.push({
-        file: file.replace(`${BACKEND_SRC}/`, ''),
+        file: file.split(sep).join('/').replace(`${BACKEND_SRC.split(sep).join('/')}/`, ''),
         line: i + 1,
         preview: `  ${i + 1}: ${line}`,
       })
