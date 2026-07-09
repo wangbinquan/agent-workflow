@@ -402,8 +402,8 @@ export async function autoDispatchClarifyRound(
   //    still open). Designer entries are intentionally excluded (see the module header). The dispatch
   //    re-applies the same `dispatched_at IS NULL` + `confirmation='open'` filter under lock B, so
   //    this read is just the candidate set.
-  const entries = await db
-    .select({ id: taskQuestions.id })
+  const askerRows = await db
+    .select({ id: taskQuestions.id, questionId: taskQuestions.questionId })
     .from(taskQuestions)
     .where(
       and(
@@ -414,8 +414,29 @@ export async function autoDispatchClarifyRound(
         isNotNull(taskQuestions.sealedAt),
       ),
     )
-
-  const entryIds = entries.map((e) => e.id)
+  // RFC-162 (Codex impl-gate P1) — a question with a COEXISTING undispatched designer (added via a
+  // pre-submit 改派 on the asker-anchored picker) must NOT quick-dispatch its asker in isolation.
+  // The quick path splits self/questioner (step 5) from designer (step 7) into two frontier
+  // computations, so an asker DOWNSTREAM of its newly-added upstream designer would be minted
+  // directly here — out of order with (and not cascading from) the true upstream frontier. Park
+  // such askers instead: they + their designer sibling ride the §18 park until the board's UNIFIED
+  // dispatchTaskQuestions computes ONE computeUpstreamFrontier over both (upstream designer starts,
+  // the asker cascades). Questions with no designer sibling (the common case) auto-dispatch as before.
+  const designerQuestionIds = new Set(
+    (
+      await db
+        .select({ questionId: taskQuestions.questionId })
+        .from(taskQuestions)
+        .where(
+          and(
+            eq(taskQuestions.originNodeRunId, originNodeRunId),
+            eq(taskQuestions.roleKind, 'designer'),
+            isNull(taskQuestions.dispatchedAt),
+          ),
+        )
+    ).map((d) => d.questionId),
+  )
+  const entryIds = askerRows.filter((e) => !designerQuestionIds.has(e.questionId)).map((e) => e.id)
 
   // 5. RFC-098 B1 worktree rollback for SELF-clarify ISOLATED reruns (Codex round-4 [high]). The
   //    legacy quick path (submitClarifyAnswers) resets the worktree to the asking run's pre_snapshot
@@ -588,10 +609,37 @@ export async function autoDispatchClarifyRound(
             isNotNull(taskQuestions.sealedAt),
           ),
         )
+      // RFC-162 (Codex impl-gate P1) — a designer that COEXISTS with an undispatched asker
+      // (self/questioner) for the same (round, question) must NOT be quick-dispatched in
+      // isolation: its asker was parked above (step 4), so dispatching the designer alone here
+      // would run the upstream + cascade the asker's node while the asker ENTRY lingers
+      // undispatched (a later board dispatch would then redundantly re-mint it). Such a designer
+      // rides the §18 park with its asker until the board's UNIFIED computeUpstreamFrontier
+      // dispatches both together. (Every RFC-162 clarify designer is reassign-created and thus
+      // has a coexisting asker — so this quick designer auto-dispatch is effectively board-only
+      // now; kept + gated rather than removed for defense.)
+      const undispatchedAskerKeys = new Set(
+        (
+          await db
+            .select({
+              originNodeRunId: taskQuestions.originNodeRunId,
+              questionId: taskQuestions.questionId,
+            })
+            .from(taskQuestions)
+            .where(
+              and(
+                eq(taskQuestions.taskId, round.taskId),
+                inArray(taskQuestions.roleKind, ['self', 'questioner']),
+                isNull(taskQuestions.dispatchedAt),
+              ),
+            )
+        ).map((a) => `${a.originNodeRunId}:${a.questionId}`),
+      )
       const designerEntryIds = allDesigner
         .filter((e) =>
           targetDesignerNodes.has(e.overrideTargetNodeId ?? e.defaultTargetNodeId ?? ''),
         )
+        .filter((e) => !undispatchedAskerKeys.has(`${e.originNodeRunId}:${e.questionId}`))
         .map((e) => e.id)
       if (designerEntryIds.length > 0) {
         try {

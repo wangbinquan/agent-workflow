@@ -365,6 +365,43 @@ describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
     expect(after.map((e) => e.roleKind).sort()).toEqual(['designer', 'questioner'])
   })
 
+  // RFC-162 (Codex impl-gate P1) — a designer added AFTER a PARTIAL (per-question) seal must
+  // inherit the asker's sealed state, not derive from whole-round status. RFC-128 P1 lets a
+  // question be individually sealed while the round stays 'awaiting_human' (clarifySeal.ts:22);
+  // keying the new designer's sealedAt only on round.status==='answered' would leave it NULL and
+  // unstageable forever (no later seal re-includes an already-sealed question) → stranded handler.
+  test('RFC-162: reassign after a PARTIAL seal — designer inherits the asker sealedAt (not stranded)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = await seedTask(db)
+    // UNANSWERED cross round — status stays 'awaiting_human' (the partial-seal state).
+    await seedRound(db, taskId, {
+      id: 'x1',
+      kind: 'cross',
+      askingNodeId: 'auditor',
+      targetConsumerNodeId: 'coder',
+      intermediaryNodeRunId: 'x1-int',
+      questionsJson: JSON.stringify([Q('q1')]),
+      status: 'awaiting_human',
+    })
+    const [questioner] = await listTaskQuestions(db, taskId)
+    expect(questioner!.roleKind).toBe('questioner')
+    // Simulate RFC-128 P1 per-question seal: stamp the asker entry sealedAt while the round
+    // stays 'awaiting_human' (a partial seal is a pure derived state — clarifySeal.ts:22).
+    const sealTs = Date.now()
+    await db
+      .update(taskQuestions)
+      .set({ sealedAt: sealTs })
+      .where(eq(taskQuestions.id, questioner!.id))
+
+    const action = await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
+    expect(action).toBe('added-designer')
+
+    // The new designer row inherits the asker's sealedAt → stageable, NOT stranded at NULL.
+    const designer = (await db.select().from(taskQuestions)).find((r) => r.roleKind === 'designer')!
+    expect(designer.sealedAt).not.toBeNull()
+    expect(designer.sealedAt).toBe(sealTs)
+  })
+
   // RFC-162 — reassign creates NO echo row (echo deleted; the asker keeps its own entry).
   test('RFC-162: reassign never materializes an echo row', async () => {
     const db = createInMemoryDb(MIGRATIONS)

@@ -2231,26 +2231,6 @@ export const enUS: Resources = {
     abandonedChip: 'Feedback not delivered (abandoned)',
     abandonedTooltip:
       'The designer task failed before this feedback could be consumed. Relaunch the task to retry.',
-    // RFC-059: per-question scope picker copy (rendered beside every question
-    // on cross-clarify; absent on self-clarify).
-    questionScope: {
-      label: 'Scope',
-      designer: 'Designer',
-      questioner: 'Asker',
-      designerTooltip:
-        'Answer is sent to both the designer (to update the doc) and the questioner.',
-      questionerTooltip:
-        'Answer is sent only to the questioner; the designer is not notified or rerun.',
-      shortcutHint: 'Press Q / W to set the current question scope (Q = designer, W = asker)',
-    },
-    submitHint: {
-      allDesigner:
-        'Submit will rerun the designer (with all {{n}} questions); the questioner reruns with full Q&A.',
-      allQuestioner:
-        'Submit will rerun only the questioner (with all {{n}} Q&A); the designer is not involved.',
-      mixed:
-        'Submit reruns the designer first (with {{d}} questions only); the questioner then reruns with full {{total}} Q&A.',
-    },
     inspector: {
       title: 'Cross Clarify',
       sessionModeForQuestioner: 'Questioner rerun session',

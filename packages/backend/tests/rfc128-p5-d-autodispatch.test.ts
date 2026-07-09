@@ -316,6 +316,51 @@ describe('RFC-128 P5-D — quick-channel seal + autodispatch (fast-path → auto
     expect(rerun?.rerunCause).toBe('clarify-answer')
   })
 
+  // RFC-162 (Codex impl-gate P1) — a question with a COEXISTING undispatched designer (added by a
+  // pre-submit 改派 to an upstream node) must NOT quick-dispatch its asker in isolation: the quick
+  // path splits self/questioner (step 5) from designer (step 7) into separate frontier plans, so an
+  // asker downstream of its new upstream designer would be minted directly, out of order with the
+  // designer. Such an asker is PARKED (sealed, dispatched_at NULL) for the board's UNIFIED
+  // computeUpstreamFrontier dispatch (upstream designer starts, the asker cascades).
+  test('RFC-162: SELF round with a coexisting undispatched designer → asker PARKS (not quick-dispatched)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    const { clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    // Simulate a pre-submit reassign-to-upstream: an undispatched designer handler row for the
+    // SAME (round, question) coexists with the asker. autoDispatch's own reconcile (step 3)
+    // creates the self entry; this designer sits alongside it (reconcile never touches designer).
+    await insertEntry(db, taskId, {
+      originNodeRunId: clarifyNodeRunId,
+      questionId: 'q1',
+      roleKind: 'designer',
+      defaultTargetNodeId: D, // an upstream agent node
+      // Added pre-submit while the question was unanswered → unsealed (mirrors reassign inheriting
+      // the asker's null seal). The exclusion keys on dispatched_at IS NULL, not the seal state.
+      sealed: false,
+    })
+
+    const res = await autoDispatchClarifyRound({
+      db,
+      originNodeRunId: clarifyNodeRunId,
+      answers: [ans('q1')],
+      actor,
+    })
+
+    // The round still seals (answer committed), but the asker is NOT auto-dispatched — it parks.
+    expect(res.roundFullySealed).toBe(true)
+    const entries = await entriesByOrigin(db, clarifyNodeRunId)
+    const selfEntry = entries.find((e) => e.roleKind === 'self')
+    expect(selfEntry?.sealedAt).not.toBeNull()
+    expect(selfEntry?.dispatchedAt).toBeNull() // PARKED, not minted out-of-order
+    // The designer sibling also stays undispatched (a self round skips the designer auto-dispatch);
+    // both ride the §18 park for a unified board dispatch.
+    const designerEntry = entries.find((e) => e.roleKind === 'designer')
+    expect(designerEntry?.dispatchedAt).toBeNull()
+    // No self rerun was minted directly (the cascade from the upstream designer is the board's job).
+    expect(res.dispatch.reruns).toHaveLength(0)
+  })
+
   test('CROSS round → auto-dispatches the questioner entry → cross-clarify-questioner-rerun on Q (no designer entry)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`

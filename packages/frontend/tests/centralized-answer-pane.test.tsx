@@ -11,12 +11,12 @@
 //      POST /api/clarify/:id/answers with defer:true + questionIds cap.
 //   4. Submit is disabled until ≥1 answer is filled.
 //   5. No answerable questions → empty state.
-//   6. RFC-137 (用户 2026-07-03) — the pane answers self and cross rounds UNIFORMLY: NO
+//   6. RFC-137 / RFC-162 — the pane answers self and cross rounds UNIFORMLY: NO
 //      per-question scope UI is rendered for ANY round (fresh or re-answer) and submit
-//      bodies never carry questionScopes; the server resolves unsent scopes to the
-//      'designer' default, so a cross answer's handler entry targets the designer node.
-//      Scope control lives only on the /clarify detail page (cross-clarify-scope-control
-//      tests). These locks guard against the picker being reintroduced here.
+//      bodies never carry questionScopes. RFC-162 removed the scope concept entirely, so
+//      there is no scope anywhere to send; the asker's own handler entry (self/questioner)
+//      reruns to consume the answer. These locks guard against a picker or a questionScopes
+//      body field being reintroduced here.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -471,8 +471,7 @@ describe('CentralizedAnswerDialog — RFC-136 重答', () => {
     expect([...body.questionIds].sort()).toEqual(['q1', 'q2'])
     // D7（Codex 实现门 P2）：重答按题显式声明——服务端只对声明的题放行覆盖。
     expect(body.resubmitQuestionIds).toEqual(['q1'])
-    // RFC-137：面板恒不发 questionScopes（键都不出现）——fresh 题由服务端解析为默认
-    // designer（处理节点默认=设计节点），reseal 题服务端锁定原 scope（D6）。
+    // RFC-162：scope 概念已删——面板恒不发 questionScopes（键都不出现），self/cross 同形。
     expect('questionScopes' in body).toBe(false)
     expect(body.answers.find((a) => a.questionId === 'q1')?.selectedOptionIndices).toEqual([1])
   })
@@ -558,16 +557,16 @@ describe('CentralizedAnswerDialog — submit 流程', () => {
       directive: 'continue',
       questionIds: ['q2'],
     })
-    // RFC-137: neither cross-round body carries questionScopes (server defaults to designer).
+    // RFC-162: neither cross-round body carries questionScopes (scope removed entirely).
     expect('questionScopes' in (calls['/api/clarify/nr_a/answers'] as object)).toBe(false)
     expect('questionScopes' in (calls['/api/clarify/nr_b/answers'] as object)).toBe(false)
     // Only filled answers are submitted (subset cap matches answers).
     expect((calls['/api/clarify/nr_a/answers'] as { answers: unknown[] }).answers).toHaveLength(1)
   })
 
-  // RFC-137 回归锁：把 RFC-128 P5-BC 的选择器重新引入面板（或恢复发送 questionScopes）
-  // 会让本 case 变红。scope 交互的正向覆盖在详情页测试（cross-clarify-scope-control）。
-  test('RFC-137: cross round renders NO scope picker; submit body carries NO questionScopes', async () => {
+  // RFC-162 回归锁：把 RFC-128 P5-BC 的选择器重新引入面板（或恢复发送 questionScopes）
+  // 会让本 case 变红。scope 概念已删，self/cross 在面板里完全同形。
+  test('RFC-137/RFC-162: cross round renders NO scope picker; submit body carries NO questionScopes', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({ ok: true } as never)
     vi.spyOn(api, 'put').mockResolvedValue(undefined as never)
     renderDialog(

@@ -2092,19 +2092,6 @@ export interface Resources {
     multiSourcePendingLinkLabel: string
     abandonedChip: string
     abandonedTooltip: string
-    questionScope: {
-      label: string
-      designer: string
-      questioner: string
-      designerTooltip: string
-      questionerTooltip: string
-      shortcutHint: string
-    }
-    submitHint: {
-      allDesigner: string
-      allQuestioner: string
-      mixed: string
-    }
     inspector: {
       title: string
       sessionModeForQuestioner: string
@@ -4698,21 +4685,6 @@ export const zhCN: Resources = {
     multiSourcePendingLinkLabel: '打开',
     abandonedChip: '反馈未送达 (abandoned)',
     abandonedTooltip: 'designer 任务在反馈被消费前已失败。需重启任务才能重试。',
-    // RFC-059: per-question scope picker文案（每道题旁的设计者/反问者切换）。
-    questionScope: {
-      label: '作用域',
-      designer: '设计者',
-      questioner: '反问者',
-      designerTooltip: '答案同时送达设计者与反问者（设计者用来更新文档）',
-      questionerTooltip: '答案只发给反问者；设计者不被通知、不重跑',
-      shortcutHint: 'Q/W 切换当前题的作用域（Q=设计者，W=反问者）',
-    },
-    submitHint: {
-      allDesigner: '提交后将触发设计者重跑（设计者收到全部 {{n}} 题），反问者随后用全部 Q&A 重跑',
-      allQuestioner: '提交后只重跑反问者（含全部 {{n}} 题与答案），设计者不参与',
-      mixed:
-        '提交后先触发设计者重跑（设计者仅收 {{d}} 题），反问者随后用全部 {{total}} 题与答案重跑',
-    },
     inspector: {
       title: '跨 agent 反问节点',
       sessionModeForQuestioner: 'questioner 重跑 session',

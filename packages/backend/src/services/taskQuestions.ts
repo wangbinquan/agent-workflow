@@ -1023,10 +1023,15 @@ export async function reassignTaskQuestion(
         // The designer handler's stable node IS the reassign target (default, no override). The
         // asker keeps its own self/questioner entry — this is an ADDITIONAL group member.
         defaultTargetNodeId: targetNodeId,
-        // Inherit the round's seal state: an ANSWERED round makes the new designer immediately
-        // sealed (stageable + injectable, matching the old designer-by-default's inherited seal);
-        // a not-yet-answered round leaves it NULL (unstageable until the answer lands — correct).
-        sealedAt: round.status === 'answered' ? (round.answeredAt ?? now) : null,
+        // Inherit the ASKER's actual seal state (Codex impl-gate P1): keying only on whole-round
+        // status strands a designer added after a PARTIAL (per-question) seal — RFC-128 P1 lets a
+        // question be individually sealed (entry.sealedAt set) while the round stays
+        // 'awaiting_human' (clarifySeal.ts:22), and no later seal re-includes an already-sealed
+        // question, so a `null` here would leave the designer unstageable forever. Inherit the
+        // source asker entry's sealedAt (covers both whole-round-answered and per-question seal);
+        // fall back to the answered-round timestamp only when the asker row itself carries none.
+        sealedAt:
+          entry.sealedAt ?? (round.status === 'answered' ? (round.answeredAt ?? now) : null),
         lastReassignedBy: actor.userId,
         lastReassignedAt: now,
         createdAt: now,
