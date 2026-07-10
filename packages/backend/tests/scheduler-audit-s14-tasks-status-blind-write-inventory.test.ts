@@ -54,6 +54,10 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // updates auto_recovery_{attempts,window_started_at,suspended};
   // clearAutoRecoverySuspension resets them. Neither touches `status`.
   'services/recoveryBreaker.ts': 2,
+  // RFC-164 PR-5: gate approve/reject + mid-run config edit both rewrite
+  // workgroup_config_json (the task-owned runtime copy) — never `status`
+  // (the gate's status flip rides transitionTaskStatusByEvent separately).
+  'routes/workgroupTasks.ts': 2,
 }
 
 function walkTsFiles(dir: string): string[] {
