@@ -9,7 +9,7 @@ import { rimrafDir } from './helpers/cleanup'
 //   - selectSyncRollbackTargets adds canceled write nodes but spares wrappers (F4)
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'

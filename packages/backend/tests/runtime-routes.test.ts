@@ -2,7 +2,7 @@ import { rimrafDir } from './helpers/cleanup'
 // RFC-001 HTTP integration tests for /api/runtime/models (all namespaces).
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'

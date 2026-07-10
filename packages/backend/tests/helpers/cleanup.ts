@@ -107,7 +107,6 @@ export function rimrafDir(target: string): void {
       }
       // Synchronous backoff so the OS / AV can release the handle.
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(Bun as unknown as { sleepSync?: (ms: number) => void }).sleepSync?.(20 * (attempt + 1))
       } catch {
         /* Bun.sleepSync unavailable; fall through to retry */

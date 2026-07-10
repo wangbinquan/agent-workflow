@@ -11,7 +11,7 @@ import { rimrafDir } from './helpers/cleanup'
 // Positive control: E references D in real code → the E→D edge DOES form, so the
 // negative assertion isn't vacuously passing.
 import { afterAll, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { computeFromWorktree } from '../src/services/structuralDiff/gitBackend'

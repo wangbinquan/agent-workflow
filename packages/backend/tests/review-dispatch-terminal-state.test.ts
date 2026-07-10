@@ -13,7 +13,7 @@ import { rimrafDir } from './helpers/cleanup'
 // Locks the fix for production task 01KS1N8WVZWE8FTR4K9WSETRNW.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'

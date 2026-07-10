@@ -6,21 +6,18 @@ import { rimrafDir } from './helpers/cleanup'
 // realpath 包含校验（与 worktreeFiles 一致）。本测试锁定：越界 symlink 抛错、
 // 界内 symlink 仍放行（不误伤合法用例）。
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolvePortContent } from '../src/services/envelope'
 import { ValidationError } from '../src/util/errors'
-import { isWindows, tryCreateSymlink } from './helpers/stub-runtime'
+import { isWindows } from './helpers/stub-runtime'
 
 const canSymlink = isWindows
   ? // On Windows, file symlinks need developer mode; check at runtime
     (() => {
       try {
-        const { mkdirSync, symlinkSync, rmSync } = require('node:fs')
-        const { join } = require('node:path')
-        const { tmpdir } = require('node:os')
-        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true })
+        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true }) as string
         symlinkSync(join(d, 'x'), join(d, 'y'), 'file')
         rimrafDir(d)
         return true

@@ -21,7 +21,7 @@ import { rimrafDir } from './helpers/cleanup'
 //       from B18 (one-of-two empty): here EVERY repo is empty.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 

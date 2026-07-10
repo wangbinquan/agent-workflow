@@ -2,7 +2,7 @@ import { rimrafDir } from './helpers/cleanup'
 // LOCKS: RFC-057 — shared test harness for repair option suites.
 // Not a *.test.ts file so bun:test doesn't try to run it.
 
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 

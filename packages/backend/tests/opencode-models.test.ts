@@ -2,7 +2,7 @@ import { rimrafDir } from './helpers/cleanup'
 // RFC-001 unit tests for the opencode-models parser + cache.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { isWindows, stubCmd } from './helpers/stub-runtime'

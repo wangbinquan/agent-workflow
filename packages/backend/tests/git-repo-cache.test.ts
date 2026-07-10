@@ -4,7 +4,7 @@ import { rimrafDir } from './helpers/cleanup'
 // local bare repo as the "remote" so the suite exercises git itself.
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'

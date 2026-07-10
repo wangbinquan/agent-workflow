@@ -22,7 +22,7 @@ import { rimrafDir } from './helpers/cleanup'
 //     call before runNode in BOTH the agent-single and agent-multi paths).
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { execSync } from 'node:child_process'

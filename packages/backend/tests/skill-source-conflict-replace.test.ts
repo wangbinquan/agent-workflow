@@ -9,7 +9,7 @@ import { rimrafDir } from './helpers/cleanup'
 // the "no permission ⇒ cannot replace" guarantee or the re-home drifted.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'

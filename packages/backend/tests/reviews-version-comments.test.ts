@@ -16,7 +16,7 @@ import { rimrafDir } from './helpers/cleanup'
 //   - HTTP route returns the same shape and 404s consistently.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { DbClient } from '../src/db/client'

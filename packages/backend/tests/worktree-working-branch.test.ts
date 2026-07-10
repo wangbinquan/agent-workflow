@@ -14,7 +14,7 @@ import { rimrafDir } from './helpers/cleanup'
 //   - invalid branch name → working-branch-invalid
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createWorktree, runGit } from '../src/util/git'

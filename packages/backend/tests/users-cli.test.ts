@@ -3,7 +3,7 @@ import { rimrafDir } from './helpers/cleanup'
 // the temp $HOME so the daemon DB lands in a tmp dir.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 

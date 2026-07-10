@@ -10,7 +10,7 @@ import { rimrafDir } from './helpers/cleanup'
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { inflateRawSync } from 'node:zlib'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'

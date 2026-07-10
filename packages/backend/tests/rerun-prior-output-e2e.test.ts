@@ -37,7 +37,7 @@ import { rimrafDir } from './helpers/cleanup'
 //     the hasClarifyChannel threading is locked by clarify-prompt-wire-up.test.ts.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { execSync } from 'node:child_process'

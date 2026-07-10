@@ -8,7 +8,7 @@ import { rimrafDir } from './helpers/cleanup'
 // rewrites of the containment logic regress remote-code-read.
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolvePortContent, parseEnvelope, extractLastEnvelope } from '../src/services/envelope'
@@ -18,10 +18,7 @@ import { isWindows } from './helpers/stub-runtime'
 const canSymlink = isWindows
   ? (() => {
       try {
-        const { mkdirSync, symlinkSync, rmSync } = require('node:fs')
-        const { join } = require('node:path')
-        const { tmpdir } = require('node:os')
-        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true })
+        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true }) as string
         symlinkSync(join(d, 'x'), join(d, 'y'), 'file')
         rimrafDir(d)
         return true
@@ -106,7 +103,6 @@ describe('RFC-005 resolvePortContent', () => {
     // On Windows, file symlinks need developer mode; if unavailable, the
     // security guarantee still exists in the code — just skip the test case.
     if (!canSymlink) return
-    const { symlinkSync } = require('node:fs')
     symlinkSync(join(outside, 'secrets.txt'), join(worktree, 'evil-link.md'))
     expect(() =>
       resolvePortContent({

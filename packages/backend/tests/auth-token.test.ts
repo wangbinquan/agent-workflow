@@ -1,6 +1,6 @@
 import { rimrafDir } from './helpers/cleanup'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ensureTokenFile, generateToken, rotateTokenFile, tokenAuth } from '../src/auth/token'

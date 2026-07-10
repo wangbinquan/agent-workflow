@@ -11,7 +11,7 @@ import { rimrafDir } from './helpers/cleanup'
 // (skill version bump + memory fuse) + OCC).
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { join as pjoin } from 'node:path'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'

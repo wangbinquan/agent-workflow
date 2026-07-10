@@ -12,7 +12,7 @@ import { rimrafDir } from './helpers/cleanup'
 //   - never blanks when submoduleMode='never' (escape-hatch parity)
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'

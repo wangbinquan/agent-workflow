@@ -10,7 +10,7 @@ import { rimrafDir } from './helpers/cleanup'
 // branch is out of lock-step with RFC-011 design §3.1.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { execSync } from 'node:child_process'

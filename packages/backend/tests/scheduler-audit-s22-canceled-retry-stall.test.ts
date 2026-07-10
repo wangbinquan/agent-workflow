@@ -22,7 +22,7 @@ import { rimrafDir } from './helpers/cleanup'
 
 import { afterAll, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'

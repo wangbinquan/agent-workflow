@@ -11,7 +11,7 @@ import { rimrafDir } from './helpers/cleanup'
 // structural-diff-refselect.test.ts and structural-diff-multi-repo-merge.test.ts.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createInMemoryDb, type DbClient } from '../src/db/client'

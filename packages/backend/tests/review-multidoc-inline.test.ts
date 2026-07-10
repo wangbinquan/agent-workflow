@@ -11,7 +11,7 @@ import { rimrafDir } from './helpers/cleanup'
 //   - getReviewDetail still exposes documents[] (titles from the body heading).
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'

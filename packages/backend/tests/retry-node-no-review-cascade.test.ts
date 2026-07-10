@@ -9,7 +9,7 @@ import { rimrafDir } from './helpers/cleanup'
 // Locks the upstream half of the fix for production task 01KS1N8WVZWE8FTR4K9WSETRNW.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'

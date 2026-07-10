@@ -29,7 +29,7 @@ import { rimrafDir } from './helpers/cleanup'
 //   git-snapshot.test.ts 同样不加门控。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { gitStashSnapshot, rollbackToSnapshot, runGit, snapshotRefName } from '../src/util/git'

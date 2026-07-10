@@ -13,7 +13,6 @@ import { rimrafDir } from './helpers/cleanup'
 // follow-up loop: schema gets exercised, regression catches sneak in.
 
 import { afterAll, beforeAll, describe, test, expect } from 'bun:test'
-import { rmSync } from 'node:fs'
 import { ErrorResponseSchema } from '@agent-workflow/shared'
 import {
   buildContractHarness,

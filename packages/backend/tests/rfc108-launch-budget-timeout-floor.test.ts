@@ -16,7 +16,7 @@ import { rimrafDir } from './helpers/cleanup'
 // 会把它当硬上限、limits ticker 取消任务，而 canceled 非 resumable（Codex 实现 gate
 // P1）。per-node floor 已兜住 hung 子进程的成本/挂死，per-task 预算自动默认推后。
 
-import { readFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { readFileSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'

@@ -1,6 +1,6 @@
 import { rimrafDir } from './helpers/cleanup'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { acquireLock, DaemonLockHeldError, writePidFileForTest } from '../src/util/lock'

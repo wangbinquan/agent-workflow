@@ -15,7 +15,7 @@ import { rimrafDir } from './helpers/cleanup'
 //       columns, same single task_repos row at repo_index=0.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { resolve, basename, sep } from 'node:path'

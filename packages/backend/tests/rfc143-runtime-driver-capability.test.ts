@@ -12,7 +12,7 @@ import { rimrafDir } from './helpers/cleanup'
 //      在 PR-4 补齐后此骨架扩为完整的零调用点改动集成证明。
 
 import { afterEach, describe, expect, it } from 'bun:test'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import {

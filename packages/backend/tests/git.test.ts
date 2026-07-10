@@ -3,7 +3,7 @@ import { rimrafDir } from './helpers/cleanup'
 // Builds a real fixture repo per test via `git init` + a few commits/branches.
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {

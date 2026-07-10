@@ -4,7 +4,7 @@ import { rimrafDir } from './helpers/cleanup'
 // discriminator*, not exact error messages (those vary by node version).
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { readSnapshotFromRunDir } from '../src/services/inventory'

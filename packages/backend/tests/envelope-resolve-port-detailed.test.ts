@@ -13,7 +13,7 @@ import { rimrafDir } from './helpers/cleanup'
 // sourcePath shape every dispatchReviewNode invocation depends on.
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolvePortContentDetailed } from '../src/services/envelope'
@@ -22,10 +22,7 @@ import { isWindows } from './helpers/stub-runtime'
 const canSymlink = isWindows
   ? (() => {
       try {
-        const { mkdirSync, symlinkSync, rmSync } = require('node:fs')
-        const { join } = require('node:path')
-        const { tmpdir } = require('node:os')
-        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true })
+        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true }) as string
         symlinkSync(join(d, 'x'), join(d, 'y'), 'file')
         rimrafDir(d)
         return true
@@ -131,7 +128,6 @@ describe('resolvePortContentDetailed sourcePath', () => {
     // passthrough behavior still exists in the code — just skip the test case.
     if (!canSymlink) return
     writeFileSync(join(outside, 'leak.md'), 'TOP SECRET')
-    const { symlinkSync } = require('node:fs')
     symlinkSync(join(outside, 'leak.md'), join(worktree, 'evil.md'))
     const result = resolvePortContentDetailed({
       rawContent: 'evil.md',

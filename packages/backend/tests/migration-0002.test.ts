@@ -18,7 +18,7 @@ import { rimrafDir } from './helpers/cleanup'
 
 import { describe, expect, test, beforeAll, afterAll } from 'bun:test'
 import { Database } from 'bun:sqlite'
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'

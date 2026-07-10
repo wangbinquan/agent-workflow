@@ -14,7 +14,7 @@ import { rimrafDir } from './helpers/cleanup'
 // when kind === undefined; no fs probe.
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolvePortContent } from '../src/services/envelope'
@@ -24,10 +24,7 @@ import { isWindows } from './helpers/stub-runtime'
 const canSymlink = isWindows
   ? (() => {
       try {
-        const { mkdirSync, symlinkSync, rmSync } = require('node:fs')
-        const { join } = require('node:path')
-        const { tmpdir } = require('node:os')
-        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true })
+        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true }) as string
         symlinkSync(join(d, 'x'), join(d, 'y'), 'file')
         rimrafDir(d)
         return true
@@ -101,7 +98,6 @@ describe('RFC-049 PR-B raw-passthrough (kind=undefined never reads file)', () =>
     // passthrough behavior still exists in the code — just skip the test case.
     if (!canSymlink) return
     writeFileSync(join(outside, 'secrets.md'), 'TOP SECRET')
-    const { symlinkSync } = require('node:fs')
     symlinkSync(join(outside, 'secrets.md'), join(worktree, 'evil.md'))
     expect(
       resolvePortContent({

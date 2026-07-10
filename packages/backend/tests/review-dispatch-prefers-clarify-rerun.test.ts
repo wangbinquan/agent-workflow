@@ -15,7 +15,7 @@ import { rimrafDir } from './helpers/cleanup'
 // `review-source-port-missing: upstream 'agent_p69bj1' did not emit port 'docpath'`.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'

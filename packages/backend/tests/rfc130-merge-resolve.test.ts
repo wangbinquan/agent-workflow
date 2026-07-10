@@ -11,7 +11,7 @@ import { rimrafDir } from './helpers/cleanup'
 // no scheduler/opencode — the same seam the scheduler wires runNode into (PR-B).
 
 import { describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { commitTree, mergeTreeInMemory, runGit, snapshotFullState } from '../src/util/git'

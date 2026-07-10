@@ -6,7 +6,8 @@ import { rimrafDir } from './helpers/cleanup'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { execSync } from 'node:child_process'
 import type { Hono } from 'hono'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -30,7 +31,6 @@ interface Harness {
 function buildBareRemote(tmp: string): string {
   const working = join(tmp, 'src-' + ulid())
   mkdirSync(working, { recursive: true })
-  const gitExtra = isWindows ? ['-c', 'core.longPaths=true'] : []
   execSync(`git init -b main "${working}"`, { stdio: 'ignore' })
   execSync(`git -C "${working}" config user.email t@t.test`, { stdio: 'ignore' })
   execSync(`git -C "${working}" config user.name t`, { stdio: 'ignore' })
@@ -45,7 +45,6 @@ function buildBareRemote(tmp: string): string {
   execSync(`git clone --bare "${working}" "${bare}"`, { stdio: 'ignore' })
   if (isWindows) {
     // file:// URL on Windows: use pathToFileURL for correct format (file:///C:/path)
-    const { pathToFileURL } = require('node:url')
     return pathToFileURL(bare).href
   }
   return `file://${bare}`

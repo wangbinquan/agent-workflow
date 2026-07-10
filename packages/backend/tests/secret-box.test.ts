@@ -3,7 +3,7 @@ import { rimrafDir } from './helpers/cleanup'
 
 import { describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSecretBox, createSecretBoxFromKey, ensureSecretKey } from '../src/auth/secretBox'

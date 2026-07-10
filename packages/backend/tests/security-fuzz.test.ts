@@ -28,7 +28,7 @@ import { rimrafDir } from './helpers/cleanup'
 
 import { describe, expect, test } from 'bun:test'
 import fc from 'fast-check'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -41,10 +41,7 @@ import { isWindows } from './helpers/stub-runtime'
 const canSymlink = isWindows
   ? (() => {
       try {
-        const { mkdirSync, symlinkSync, rmSync } = require('node:fs')
-        const { join } = require('node:path')
-        const { tmpdir } = require('node:os')
-        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true })
+        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true }) as string
         symlinkSync(join(d, 'x'), join(d, 'y'), 'file')
         rimrafDir(d)
         return true
@@ -165,7 +162,6 @@ describe('RFC-054 W3-5 — path-traversal fuzz on safeJoin', () => {
       // Write a file under root and a symlink that escapes to outside.
       writeFileSync(join(root, 'inside.txt'), 'ok')
       writeFileSync(join(outside, 'secret.txt'), 'leak')
-      const { symlinkSync } = require('node:fs')
       symlinkSync(join(outside, 'secret.txt'), join(root, 'escape'))
       let thrown: unknown
       try {

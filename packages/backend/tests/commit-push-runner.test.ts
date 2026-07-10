@@ -6,7 +6,7 @@ import { rimrafDir } from './helpers/cleanup'
 // git; the message/repair generators are injected (production wraps opencode).
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
@@ -50,7 +50,6 @@ exit 0
     // chmodSync is a no-op on Windows (NTFS has no executable bit);
     // Git for Windows runs hooks via its bundled bash regardless.
     if (!isWindows) {
-      const { chmodSync } = require('node:fs')
       chmodSync(hook, 0o755)
     }
   }

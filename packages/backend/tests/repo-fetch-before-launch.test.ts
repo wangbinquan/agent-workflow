@@ -4,7 +4,7 @@ import { rimrafDir } from './helpers/cleanup'
 // supplied local repo; never mutate the user's HEAD branch or working tree.
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fetchPathRepoBeforeLaunch } from '../src/services/repo'

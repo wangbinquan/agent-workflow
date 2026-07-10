@@ -7,7 +7,7 @@ import { rimrafDir } from './helpers/cleanup'
 // agents running inside the worktree see empty submodule directories.
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createWorktree } from '../src/util/git'

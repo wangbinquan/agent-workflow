@@ -8,7 +8,7 @@ import { rimrafDir } from './helpers/cleanup'
 // 因 chmod 在 Windows 是 no-op=安全回归）；长路径 `toLongPath`（`\\?\` 前缀）。
 // 这条测试锁四件事的跨平台正确性 + doctor 的 ACL 决策。
 
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'

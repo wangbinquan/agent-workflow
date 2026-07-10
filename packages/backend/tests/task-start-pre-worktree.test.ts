@@ -6,7 +6,7 @@ import { rimrafDir } from './helpers/cleanup'
 
 import { describe, expect, test } from 'bun:test'
 import { execSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb } from '../src/db/client'

@@ -13,7 +13,7 @@ import { isWindows } from './helpers/stub-runtime'
 // runtime-opencode-golden.test.ts / runtime-spawn-head.test.ts).
 
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { opencodeDriver } from '@/services/runtime/opencode/driver'

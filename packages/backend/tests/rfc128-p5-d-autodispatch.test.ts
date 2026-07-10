@@ -15,7 +15,7 @@ import { rimrafDir } from './helpers/cleanup'
 
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { join, resolve } from 'node:path'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'

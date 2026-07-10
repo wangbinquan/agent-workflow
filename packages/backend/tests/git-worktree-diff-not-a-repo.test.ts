@@ -15,7 +15,7 @@ import { rimrafDir } from './helpers/cleanup'
 //      hundreds of lines of stderr.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { gitDiffSnapshot, isGitWorkTree, runGit } from '../src/util/git'

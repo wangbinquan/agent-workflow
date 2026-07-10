@@ -4,7 +4,7 @@ import { rimrafDir } from './helpers/cleanup'
 // exact argv ordering and verify stderr redaction without spinning real git.
 
 import { describe, expect, test, afterEach } from 'bun:test'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { syncSubmodules, detectSubmodules } from '../src/services/gitSubmodule'

@@ -6,7 +6,8 @@ import { rimrafDir } from './helpers/cleanup'
 // root and asserts list / read behaviour.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtemp, mkdir, rm, writeFile, symlink } from 'node:fs/promises'
+import { copyFile, mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -21,10 +22,7 @@ import { isWindows } from './helpers/stub-runtime'
 const canSymlink = isWindows
   ? (() => {
       try {
-        const { mkdirSync, symlinkSync, rmSync } = require('node:fs')
-        const { join } = require('node:path')
-        const { tmpdir } = require('node:os')
-        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true })
+        const d = mkdirSync(join(tmpdir(), 'aw-symlink-probe-'), { recursive: true }) as string
         symlinkSync(join(d, 'x'), join(d, 'y'), 'file')
         rimrafDir(d)
         return true
@@ -53,7 +51,6 @@ async function createSymlink(
       // File symlinks unavailable on Windows without developer mode;
       // copy the file as a fallback (caller should check canSymlink first
       // for security tests where symlink semantics matter).
-      const { copyFile } = require('node:fs/promises')
       await copyFile(target, linkPath)
     }
   } else {

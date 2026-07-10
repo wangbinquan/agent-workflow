@@ -23,7 +23,7 @@ import { rimrafDir } from './helpers/cleanup'
 // 修复时本文件应翻红，按各断言旁注释翻转期望值。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'

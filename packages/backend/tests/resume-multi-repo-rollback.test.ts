@@ -14,7 +14,7 @@ import { rimrafDir } from './helpers/cleanup'
 //      the stash) — proves the helper followed the right code path.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { eq } from 'drizzle-orm'

@@ -10,7 +10,7 @@ import { rimrafDir } from './helpers/cleanup'
 // 决策。红了 = 收口引入了行为漂移，先回滚该处重做（design §6）。
 
 import { describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Agent, Mcp, Plugin } from '@agent-workflow/shared'

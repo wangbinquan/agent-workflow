@@ -228,7 +228,7 @@ function buildEmitEnvelopeJs(outputsVar: string): string {
   // (which runtime interprets as newline character)
   return [
     `let envelope = '<workflow-output>\\n'`,
-    `for (const [p, c] of Object.entries(${outputsVar})) envelope += '  <port name=\"' + p + '\">' + c + '</port>\\n'`,
+    `for (const [p, c] of Object.entries(${outputsVar})) envelope += '  <port name="' + p + '">' + c + '</port>\\n'`,
     `envelope += '</workflow-output>'`,
     `process.stdout.write(JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text: envelope } }) + '\\n')`,
   ].join('\n')

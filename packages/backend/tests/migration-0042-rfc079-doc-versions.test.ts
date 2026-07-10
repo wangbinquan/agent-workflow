@@ -11,7 +11,7 @@ import { rimrafDir } from './helpers/cleanup'
 
 import { afterAll, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { openDb } from '../src/db/client'

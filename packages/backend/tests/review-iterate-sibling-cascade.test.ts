@@ -25,7 +25,7 @@ import { rimrafDir } from './helpers/cleanup'
 //   - check buildSiblingOutputsBlock for the `__sibling_outputs__` payload
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { execSync } from 'node:child_process'

@@ -12,7 +12,7 @@ import { rimrafDir } from './helpers/cleanup'
 //       is silently dropped; only the changed repo appears in output.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'

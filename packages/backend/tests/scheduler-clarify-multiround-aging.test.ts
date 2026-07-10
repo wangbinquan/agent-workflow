@@ -12,7 +12,7 @@ import { rimrafDir } from './helpers/cleanup'
 // 用 MOCK_OPENCODE_OUTPUTS 让 agent 产出 doc。self-clarify 多轮不涉 fanout(与协作者 4220+ 无关)。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'

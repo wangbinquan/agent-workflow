@@ -6,7 +6,7 @@ import { rimrafDir } from './helpers/cleanup'
 //    enumeration + `git show <ref>:<path>` old side + worktree new side).
 
 import { afterAll, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { assembleStructuralDiff } from '../src/services/structuralDiff/assemble'

@@ -15,7 +15,7 @@ import { rimrafDir } from './helpers/cleanup'
 // that env, these assertions go red on ANY machine (the author reverts to ambient).
 
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { commitTree, runGit, snapshotFullState } from '../src/util/git'

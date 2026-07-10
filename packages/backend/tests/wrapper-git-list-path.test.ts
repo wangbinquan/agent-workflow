@@ -15,7 +15,7 @@ import { rimrafDir } from './helpers/cleanup'
 //   6. Source-text lock: gitDiffSnapshot is no longer imported by scheduler.
 
 import { describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { gitChangedFiles, runGit } from '../src/util/git'
