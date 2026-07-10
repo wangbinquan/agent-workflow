@@ -30,10 +30,11 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     const matches = src.match(/subagentLiveCapture: opts\.subagentLiveCapture/g) ?? []
     // RFC-060 PR-D added wrapper-fanout dispatch sites (dispatchFanoutShard +
     // dispatchFanoutAggregator); RFC-060 PR-E removed agent-multi's
-    // runFanOutNode call site. Currently: agent-single +
-    // dispatchFanoutShard + dispatchFanoutAggregator = 3. Future call sites
-    // should keep this lock in step.
-    expect(matches.length).toBe(3)
+    // runFanOutNode call site. RFC-164 added buildWorkgroupHooks.runHostNode.
+    // Currently: agent-single + dispatchFanoutShard + dispatchFanoutAggregator
+    // + workgroup runHostNode = 4. Future call sites should keep this lock in
+    // step.
+    expect(matches.length).toBe(4)
   })
 
   test('StartTaskDeps declares the field and runTask receives it from every kick-off path', () => {

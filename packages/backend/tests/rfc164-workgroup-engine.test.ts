@@ -1,0 +1,637 @@
+// RFC-164 PR-3 — launch path + round engine (leader_worker backend closure).
+//
+// Locks:
+//   - synthesized host snapshot is a VALID WorkflowDefinition with clarify
+//     channels wired on BOTH host nodes (design §2);
+//   - startWorkgroupTask: readiness gate (决策 #21), human-member temporary
+//     guard (plan T14 — removed by PR-5), config/snapshot/two-column stamp;
+//   - engine orchestration over fake hooks (no subprocesses): lw dispatch →
+//     result → re-wake → done; protocol-violation retry; member clarify park;
+//     max_rounds cap → failed; completion gate → awaiting_review + gate
+//     holder run (lifecycle invariant, 设计门 Finding-2);
+//   - prompt isolation (design §11 double lock): human user ids NEVER appear
+//     in composed prompts (roster uses display names);
+//   - stuck-detector S1/S2 workgroup exemption (Finding-2);
+//   - source locks: runTask branches on workgroup_id before runScope;
+//     renderUserPrompt REPLACES (not extends) the protocol block.
+
+import { beforeEach, describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { eq } from 'drizzle-orm'
+import { ulid } from 'ulid'
+import {
+  agentHasClarifyChannel,
+  renderUserPrompt,
+  WorkflowDefinitionSchema,
+  type WorkgroupRuntimeConfig,
+} from '@agent-workflow/shared'
+import { createSession } from '../src/auth/sessionStore'
+import { createInMemoryDb, type DbClient } from '../src/db/client'
+import {
+  lifecycleAlerts,
+  nodeRuns,
+  tasks,
+  workflows,
+  workgroupAssignments,
+  workgroupMessages,
+} from '../src/db/schema'
+import { createApp } from '../src/server'
+import { createAgent } from '../src/services/agent'
+import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
+import { createUser } from '../src/services/users'
+import { createWorkgroup } from '../src/services/workgroups'
+import {
+  buildWorkgroupHostSnapshot,
+  buildWorkgroupRuntimeConfig,
+  ensureWorkgroupHostWorkflow,
+  WG_LEADER_NODE_ID,
+  WG_MEMBER_NODE_ID,
+  WORKGROUP_HOST_WORKFLOW_ID,
+} from '../src/services/workgroupLaunch'
+import {
+  runWorkgroupEngine,
+  type WorkgroupEngineHooks,
+  type WorkgroupHostRunRequest,
+  type WorkgroupHostRunResult,
+} from '../src/services/workgroupRunner'
+import { createLogger } from '../src/util/log'
+
+const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const log = createLogger('rfc164-engine-test')
+
+function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
+  return {
+    workgroupId: 'wg1',
+    workgroupName: 'squad',
+    mode: 'leader_worker',
+    leaderMemberId: 'm-lead',
+    switches: { shareOutputs: true, directMessages: false, blackboard: false },
+    maxRounds: 10,
+    completionGate: false,
+    instructions: 'be kind',
+    goal: 'fix payments',
+    members: [
+      {
+        id: 'm-lead',
+        memberType: 'agent',
+        agentName: 'wg-planner',
+        userId: null,
+        displayName: 'planner',
+        roleDesc: '协调',
+      },
+      {
+        id: 'm-coder',
+        memberType: 'agent',
+        agentName: 'wg-coder',
+        userId: null,
+        displayName: 'coder',
+        roleDesc: '实现',
+      },
+      {
+        id: 'm-pm',
+        memberType: 'human',
+        agentName: null,
+        userId: 'u-pm-secret',
+        displayName: 'pm',
+        roleDesc: '把关',
+      },
+    ],
+    ...overrides,
+  }
+}
+
+async function seedEngineTask(
+  db: DbClient,
+  config: WorkgroupRuntimeConfig,
+): Promise<{ taskId: string }> {
+  const taskId = ulid()
+  const snapshot = buildWorkgroupHostSnapshot(config)
+  await db.insert(workflows).values({
+    id: ulid(),
+    name: `host-anchor-${taskId}`,
+    definition: '{}',
+    builtin: true,
+  })
+  const workflowRow = (await db.select().from(workflows).limit(1))[0]
+  await db.insert(tasks).values({
+    id: taskId,
+    name: 'wg-engine-task',
+    workflowId: workflowRow?.id ?? ulid(),
+    workflowSnapshot: JSON.stringify(snapshot),
+    repoPath: '/tmp/never-read',
+    worktreePath: '/tmp/never-read-wt',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status: 'running',
+    inputs: '{}',
+    startedAt: Date.now(),
+    workgroupId: config.workgroupId,
+    workgroupConfigJson: JSON.stringify(config),
+  })
+  await createAgent(db, {
+    name: 'wg-planner',
+    description: '',
+    outputs: [],
+    syncOutputsOnIterate: true,
+    permission: {},
+    skills: [],
+    dependsOn: [],
+    mcp: [],
+    plugins: [],
+    frontmatterExtra: {},
+    bodyMd: 'plan',
+  }).catch(() => undefined)
+  await createAgent(db, {
+    name: 'wg-coder',
+    description: '',
+    outputs: [],
+    syncOutputsOnIterate: true,
+    permission: {},
+    skills: [],
+    dependsOn: [],
+    mcp: [],
+    plugins: [],
+    frontmatterExtra: {},
+    bodyMd: 'code',
+  }).catch(() => undefined)
+  return { taskId }
+}
+
+/** Scripted hooks: pops the next result per (nodeId) queue; records requests. */
+function scriptedHooks(script: {
+  leader: WorkgroupHostRunResult[]
+  member: WorkgroupHostRunResult[]
+}): { hooks: WorkgroupEngineHooks; requests: WorkgroupHostRunRequest[] } {
+  const requests: WorkgroupHostRunRequest[] = []
+  const hooks: WorkgroupEngineHooks = {
+    runHostNode: (req) => {
+      requests.push(req)
+      const queue = req.nodeId === WG_LEADER_NODE_ID ? script.leader : script.member
+      const next = queue.shift()
+      if (next === undefined) {
+        return Promise.resolve({
+          status: 'failed',
+          outputs: {},
+          errorMessage: `script exhausted for ${req.nodeId}`,
+        })
+      }
+      return Promise.resolve(next)
+    },
+  }
+  return { hooks, requests }
+}
+
+const doneLeader = (opts: {
+  assignments?: Array<{ member: string; title: string; brief: string }>
+  decision: { action: 'continue' | 'done'; summary?: string }
+  messages?: Array<{ to: string | null; body: string }>
+}): WorkgroupHostRunResult => ({
+  status: 'done',
+  outputs: {
+    wg_decision: JSON.stringify(opts.decision),
+    ...(opts.assignments !== undefined ? { wg_assignments: JSON.stringify(opts.assignments) } : {}),
+    ...(opts.messages !== undefined ? { wg_messages: JSON.stringify(opts.messages) } : {}),
+  },
+})
+
+const doneMember = (summary: string): WorkgroupHostRunResult => ({
+  status: 'done',
+  outputs: { wg_result: JSON.stringify({ summary }) },
+})
+
+// ---------------------------------------------------------------------------
+// host snapshot
+// ---------------------------------------------------------------------------
+
+describe('RFC-164 engine — host snapshot', () => {
+  test('parses as a WorkflowDefinition; clarify channel wired on BOTH host nodes', () => {
+    const snapshot = buildWorkgroupHostSnapshot(cfg())
+    const def = WorkflowDefinitionSchema.parse(snapshot)
+    expect(def.nodes.map((n) => n.id).sort()).toEqual(
+      [WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID, '__wg_clarify__'].sort(),
+    )
+    expect(agentHasClarifyChannel(def, WG_LEADER_NODE_ID)).toBe(true)
+    expect(agentHasClarifyChannel(def, WG_MEMBER_NODE_ID)).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// launch path (HTTP)
+// ---------------------------------------------------------------------------
+
+describe('RFC-164 engine — launch path', () => {
+  let db: DbClient
+  let app: ReturnType<typeof createApp>
+  let token: string
+
+  beforeEach(async () => {
+    db = createInMemoryDb(MIGRATIONS)
+    app = createApp({
+      token: 'a'.repeat(64),
+      configPath: '/tmp/aw-rfc164-engine-config.json',
+      opencodeVersion: '1.14.25',
+      dbVersion: 1,
+      db,
+    })
+    const u = await createUser(db, {
+      username: 'alice',
+      displayName: 'alice',
+      role: 'user',
+      password: 'longEnoughPassword',
+    })
+    token = (await createSession({ db, userId: u.id })).token
+  })
+
+  async function req(path: string, init: RequestInit = {}): Promise<Response> {
+    const headers = new Headers(init.headers)
+    headers.set('Authorization', `Bearer ${token}`)
+    if (init.body) headers.set('content-type', 'application/json')
+    return app.request(path, { ...init, headers })
+  }
+
+  test('builtin host workflow row is lazily ensured (idempotent; NOT migration-seeded)', async () => {
+    // fresh DB stays clean — empty-fixture expectations elsewhere depend on it
+    const before = await db.select().from(workflows)
+    expect(before.some((w) => w.id === WORKGROUP_HOST_WORKFLOW_ID)).toBe(false)
+    await ensureWorkgroupHostWorkflow(db)
+    await ensureWorkgroupHostWorkflow(db) // idempotent
+    const rows = await db
+      .select()
+      .from(workflows)
+      .where(eq(workflows.id, WORKGROUP_HOST_WORKFLOW_ID))
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.name).toBe('__workgroup_host__')
+    expect(rows[0]?.builtin).toBe(true)
+  })
+
+  test('not launch-ready (leaderless lw) → 422 workgroup-not-ready with reasons', async () => {
+    await createWorkgroup(db, {
+      name: 'no-leader',
+      description: '',
+      instructions: '',
+      mode: 'leader_worker',
+      switches: { shareOutputs: true, directMessages: false, blackboard: false },
+      maxRounds: 5,
+      completionGate: false,
+      members: [{ memberType: 'agent', agentName: 'a1', displayName: 'a1', roleDesc: '' }],
+    })
+    const res = await req('/api/workgroups/no-leader/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ name: 't', goal: 'g', repoPath: '/tmp/x' }),
+    })
+    expect(res.status).toBe(422)
+    const body = (await res.json()) as { code: string; details?: { reasons?: string[] } }
+    expect(body.code).toBe('workgroup-not-ready')
+    expect(body.details?.reasons).toEqual(['leader-missing'])
+  })
+
+  test('human members → 422 temporary guard (plan T14; removed by PR-5)', async () => {
+    const u = await createUser(db, {
+      username: 'pm',
+      displayName: 'pm',
+      role: 'user',
+      password: 'longEnoughPassword',
+    })
+    await createWorkgroup(db, {
+      name: 'with-human',
+      description: '',
+      instructions: '',
+      mode: 'leader_worker',
+      leaderDisplayName: 'lead',
+      switches: { shareOutputs: true, directMessages: false, blackboard: false },
+      maxRounds: 5,
+      completionGate: false,
+      members: [
+        { memberType: 'agent', agentName: 'a1', displayName: 'lead', roleDesc: '' },
+        { memberType: 'human', userId: u.id, displayName: 'pm', roleDesc: '' },
+      ],
+    })
+    const res = await req('/api/workgroups/with-human/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ name: 't', goal: 'g', repoPath: '/tmp/x' }),
+    })
+    expect(res.status).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe(
+      'workgroup-human-members-unsupported',
+    )
+  })
+
+  test('invalid launch payload (no repo source) → 422 via StartTaskSchema single-sourcing', async () => {
+    await createWorkgroup(db, {
+      name: 'ready-group',
+      description: '',
+      instructions: '',
+      mode: 'leader_worker',
+      leaderDisplayName: 'lead',
+      switches: { shareOutputs: true, directMessages: false, blackboard: false },
+      maxRounds: 5,
+      completionGate: false,
+      members: [{ memberType: 'agent', agentName: 'a1', displayName: 'lead', roleDesc: '' }],
+    })
+    const res = await req('/api/workgroups/ready-group/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ name: 't', goal: 'g' }),
+    })
+    expect(res.status).toBe(422)
+    expect(((await res.json()) as { code: string }).code).toBe('workgroup-launch-invalid')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// engine orchestration (fake hooks — no subprocesses)
+// ---------------------------------------------------------------------------
+
+describe('RFC-164 engine — lw round orchestration', () => {
+  let db: DbClient
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+  })
+
+  test('happy path: dispatch → member result → leader re-wake → done', async () => {
+    const config = cfg()
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks, requests } = scriptedHooks({
+      leader: [
+        doneLeader({
+          assignments: [{ member: 'coder', title: 'do-x', brief: 'do x well' }],
+          decision: { action: 'continue' },
+          messages: [{ to: null, body: 'kickoff note' }],
+        }),
+        doneLeader({ decision: { action: 'done', summary: 'all shipped' } }),
+      ],
+      member: [doneMember('x is done')],
+    })
+
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('ok')
+
+    // three runs: leader, member, leader
+    expect(requests.map((r) => r.nodeId)).toEqual([
+      WG_LEADER_NODE_ID,
+      WG_MEMBER_NODE_ID,
+      WG_LEADER_NODE_ID,
+    ])
+    // member run carried the assignment brief + worker protocol
+    const memberReq = requests[1]
+    expect(memberReq?.promptTemplate).toContain('do x well')
+    expect(memberReq?.workgroupProtocolBlock).toContain('CANNOT delegate')
+    // leader turn 2 saw the member result via the ledger/new-activity block
+    expect(requests[2]?.promptTemplate).toContain('x is done')
+
+    const assignments = await db
+      .select()
+      .from(workgroupAssignments)
+      .where(eq(workgroupAssignments.taskId, taskId))
+    expect(assignments).toHaveLength(1)
+    expect(assignments[0]?.status).toBe('done')
+    expect(assignments[0]?.resultMessageId).toBeTruthy()
+
+    const messages = await db
+      .select()
+      .from(workgroupMessages)
+      .where(eq(workgroupMessages.taskId, taskId))
+    const kinds = messages.map((m) => m.kind).sort()
+    expect(kinds).toContain('dispatch')
+    expect(kinds).toContain('result')
+    expect(kinds).toContain('decision')
+    expect(kinds).toContain('chat') // blackboard kickoff note
+
+    // borrowing columns on the member run (agentOverrideName + shardKey)
+    const memberRuns = await db
+      .select()
+      .from(nodeRuns)
+      .where(eq(nodeRuns.nodeId, WG_MEMBER_NODE_ID))
+    expect(memberRuns).toHaveLength(1)
+    expect(memberRuns[0]?.agentOverrideName).toBe('wg-coder')
+    expect(memberRuns[0]?.shardKey).toBe(assignments[0]?.id ?? '')
+    expect(memberRuns[0]?.rerunCause).toBe('wg-assignment')
+  })
+
+  test('leader protocol violation retries once with error notice, then succeeds', async () => {
+    const config = cfg()
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks, requests } = scriptedHooks({
+      leader: [
+        { status: 'done', outputs: { wg_decision: 'not json' } },
+        doneLeader({ decision: { action: 'done', summary: 'ok' } }),
+      ],
+      member: [],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('ok')
+    expect(requests).toHaveLength(2)
+    expect(requests[1]?.promptTemplate).toContain('Protocol errors in your previous reply')
+  })
+
+  test('persistent leader protocol violation → task failed (no hot loop)', async () => {
+    const config = cfg()
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks } = scriptedHooks({
+      leader: [
+        { status: 'done', outputs: {} },
+        { status: 'done', outputs: {} },
+      ],
+      member: [],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('failed')
+    expect(result.detail?.summary).toContain('leader')
+  })
+
+  test('member clarify park → assignment awaiting_human + engine parks awaiting_human', async () => {
+    const config = cfg()
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks } = scriptedHooks({
+      leader: [
+        doneLeader({
+          assignments: [{ member: 'coder', title: 'do-x', brief: 'b' }],
+          decision: { action: 'continue' },
+        }),
+      ],
+      member: [{ status: 'awaiting', outputs: {}, clarifyQuestionCount: 1 }],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('awaiting_human')
+    const a = (
+      await db.select().from(workgroupAssignments).where(eq(workgroupAssignments.taskId, taskId))
+    )[0]
+    expect(a?.status).toBe('awaiting_human')
+  })
+
+  test('max_rounds cap: leader cannot re-wake → failed + system message', async () => {
+    const config = cfg({ maxRounds: 1 })
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks } = scriptedHooks({
+      leader: [
+        doneLeader({
+          assignments: [{ member: 'coder', title: 'do-x', brief: 'b' }],
+          decision: { action: 'continue' },
+        }),
+      ],
+      member: [doneMember('done but nobody will read this')],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('failed')
+    expect(result.detail?.message).toBe('max-rounds')
+    const sys = (
+      await db.select().from(workgroupMessages).where(eq(workgroupMessages.taskId, taskId))
+    ).filter((m) => m.kind === 'system')
+    expect(sys.some((m) => m.bodyMd.includes('max_rounds'))).toBe(true)
+  })
+
+  test('completion gate: decision done → awaiting_review + gate holder run (invariant)', async () => {
+    const config = cfg({ completionGate: true })
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks } = scriptedHooks({
+      leader: [doneLeader({ decision: { action: 'done', summary: 'ready for review' } })],
+      member: [],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('awaiting_review')
+    // gate holder run satisfies "task awaiting_review ⟹ ∃ awaiting_review node_run"
+    const gateRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
+      (r) => r.rerunCause === 'wg-gate',
+    )
+    expect(gateRuns).toHaveLength(1)
+    expect(gateRuns[0]?.status).toBe('awaiting_review')
+    // gate state persisted on the task's config copy
+    const taskRow = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const raw = JSON.parse(taskRow?.workgroupConfigJson ?? '{}') as {
+      gate?: { awaitingConfirmation?: boolean; declaredDone?: boolean }
+    }
+    expect(raw.gate?.awaitingConfirmation).toBe(true)
+    expect(raw.gate?.declaredDone).toBe(true)
+  })
+
+  test('prompt isolation (design §11): human user ids never reach any prompt', async () => {
+    const config = cfg() // includes human member with userId 'u-pm-secret'
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks, requests } = scriptedHooks({
+      leader: [
+        doneLeader({
+          assignments: [{ member: 'coder', title: 'do-x', brief: 'b' }],
+          decision: { action: 'continue' },
+        }),
+        doneLeader({ decision: { action: 'done', summary: 's' } }),
+      ],
+      member: [doneMember('r')],
+    })
+    await runWorkgroupEngine({ db, taskId, log, hooks })
+    for (const r of requests) {
+      expect(r.promptTemplate).not.toContain('u-pm-secret')
+      expect(r.workgroupProtocolBlock).not.toContain('u-pm-secret')
+      // the human member IS visible by display name
+      expect(r.promptTemplate).toContain('@pm')
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// stuck-detector exemption (Finding-2)
+// ---------------------------------------------------------------------------
+
+describe('RFC-164 engine — stuck detector S1/S2 workgroup exemption', () => {
+  test('workgroup awaiting_review task: no S1 alert; plain task still alerts', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const old = Date.now() - 2 * 60 * 60 * 1000
+    async function seedTask(workgroup: boolean): Promise<string> {
+      const id = ulid()
+      const wfId = ulid()
+      await db.insert(workflows).values({ id: wfId, name: `wf-${id}`, definition: '{}' })
+      await db.insert(tasks).values({
+        id,
+        name: workgroup ? 'wg-parked' : 'plain-parked',
+        workflowId: wfId,
+        workflowSnapshot: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
+        repoPath: '/tmp/x',
+        worktreePath: '/tmp/x-wt',
+        baseBranch: 'main',
+        branch: `agent-workflow/${id}`,
+        status: 'awaiting_review',
+        inputs: '{}',
+        startedAt: old,
+        ...(workgroup ? { workgroupId: 'wg1', workgroupConfigJson: '{}' } : {}),
+      })
+      return id
+    }
+    const wgTask = await seedTask(true)
+    const plainTask = await seedTask(false)
+    await runStuckTaskDetector({ db, now: () => Date.now() })
+    const alerts = await db.select().from(lifecycleAlerts)
+    const byTask = (id: string) => alerts.filter((a) => a.taskId === id && a.rule === 'S1')
+    expect(byTask(wgTask)).toHaveLength(0)
+    expect(byTask(plainTask).length).toBeGreaterThan(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// source locks
+// ---------------------------------------------------------------------------
+
+describe('RFC-164 engine — source locks', () => {
+  const SCHEDULER_SRC = readFileSync(
+    resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+    'utf8',
+  )
+  const PROMPT_SRC = readFileSync(
+    resolve(import.meta.dir, '..', '..', 'shared', 'src', 'prompt.ts'),
+    'utf8',
+  )
+
+  test('runTask branches to the workgroup engine BEFORE runScope (never frontier)', () => {
+    expect(SCHEDULER_SRC).toContain('task.workgroupId !== null')
+    expect(SCHEDULER_SRC).toContain('runWorkgroupEngine(')
+  })
+
+  test('renderUserPrompt: workgroup protocol REPLACES the agent-outputs block (else-if chain)', () => {
+    expect(PROMPT_SRC).toContain('} else if (input.workgroupProtocolBlock !== undefined) {')
+    // and the workgroup branch never concatenates buildProtocolBlock
+    const branch = PROMPT_SRC.split('} else if (input.workgroupProtocolBlock !== undefined) {')[1]
+    const body = branch?.split('} else {')[0] ?? ''
+    expect(body).not.toContain('buildProtocolBlock')
+  })
+
+  test('renderUserPrompt end-to-end: workgroup block replaces port list', () => {
+    const out = renderUserPrompt({
+      promptTemplate: 'hello',
+      inputs: {},
+      meta: { repoPath: '/r', baseBranch: 'main', taskId: 't' },
+      agentOutputs: ['legacy_port'],
+      workgroupProtocolBlock: '## WG PROTOCOL SENTINEL',
+    })
+    expect(out).toContain('## WG PROTOCOL SENTINEL')
+    expect(out).not.toContain('legacy_port')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// runtime config freeze
+// ---------------------------------------------------------------------------
+
+describe('RFC-164 engine — buildWorkgroupRuntimeConfig', () => {
+  test('freezes resource group + goal into the runtime copy', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const group = await createWorkgroup(db, {
+      name: 'freeze-me',
+      description: '',
+      instructions: 'charter',
+      mode: 'leader_worker',
+      leaderDisplayName: 'lead',
+      switches: { shareOutputs: true, directMessages: true, blackboard: false },
+      maxRounds: 7,
+      completionGate: true,
+      members: [
+        { memberType: 'agent', agentName: 'a1', displayName: 'lead', roleDesc: 'r1' },
+        { memberType: 'agent', agentName: 'a2', displayName: 'dev', roleDesc: 'r2' },
+      ],
+    })
+    const config = buildWorkgroupRuntimeConfig(group, 'the goal')
+    expect(config.goal).toBe('the goal')
+    expect(config.workgroupName).toBe('freeze-me')
+    expect(config.maxRounds).toBe(7)
+    expect(config.completionGate).toBe(true)
+    expect(config.members).toHaveLength(2)
+    expect(config.leaderMemberId).toBe(group.leaderMemberId)
+  })
+})

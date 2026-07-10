@@ -46,6 +46,9 @@ const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
  * RFC-097 §2 第 10 行——不翻状态，故不进 status 棘轮）。
  */
 const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
+  // RFC-164: persistGate writes workgroup_config_json only (gate state on the
+  // task's config copy) — never the status column.
+  'services/workgroupRunner.ts': 1,
   'services/limits.ts': 1,
   // RFC-108 T11 (AR-09): circuit-breaker accounting — recordAutoRecoveryAttempt
   // updates auto_recovery_{attempts,window_started_at,suspended};

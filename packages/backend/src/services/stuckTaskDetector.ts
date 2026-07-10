@@ -96,6 +96,8 @@ interface StuckCandidate {
   status: string
   startedAt: number
   ownerUserId: string | null
+  /** RFC-164: non-null = workgroup task (S1/S2 exempt — engine-owned parking). */
+  workgroupId: string | null
 }
 
 async function loadCandidates(db: DbClient, filter?: readonly string[]): Promise<StuckCandidate[]> {
@@ -112,6 +114,7 @@ async function loadCandidates(db: DbClient, filter?: readonly string[]): Promise
       status: tasks.status,
       startedAt: tasks.startedAt,
       ownerUserId: tasks.ownerUserId,
+      workgroupId: tasks.workgroupId,
     })
     .from(tasks)
     .where(
@@ -124,6 +127,7 @@ async function loadCandidates(db: DbClient, filter?: readonly string[]): Promise
     status: r.status,
     startedAt: r.startedAt,
     ownerUserId: r.ownerUserId,
+    workgroupId: r.workgroupId,
   }))
 }
 
@@ -305,6 +309,14 @@ async function checkOne(
   const lastActivityTs = latestEventTs ?? c.startedAt
   const inactiveForMs = now - lastActivityTs
   if (inactiveForMs <= stuckThresholdMs) return out // still active
+
+  // RFC-164 (设计门 Finding-2): workgroup tasks park awaiting_review with a
+  // gate holder run and NO doc_version, and park awaiting_human on
+  // leader-idle / clarify / delivery — all by design, engine-owned. S1/S2's
+  // review/clarify heuristics would permanently misfire; S3/S4/S5 still apply.
+  if (c.workgroupId !== null && (c.status === 'awaiting_review' || c.status === 'awaiting_human')) {
+    return out
+  }
 
   if (c.status === 'awaiting_review') {
     const hasPending = await hasPendingDocVersion(db, c.taskId)

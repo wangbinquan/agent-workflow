@@ -71,6 +71,10 @@ const GATE2_EXPECTED: Record<RerunCause, boolean> = {
   'merge-resolve': false, // RFC-130 internal merge-agent session — not a clarify rerun
   'io-virtual': false,
   'cross-clarify-guard': false,
+  'wg-leader-round': false, // RFC-164 workgroup turns are full-context re-injections, not clarify reruns
+  'wg-assignment': false,
+  'wg-message-turn': false,
+  'wg-gate': false,
 }
 
 describe('RFC-098 WP-10 — gate-2 (isClarifyRerun) × cause truth table', () => {

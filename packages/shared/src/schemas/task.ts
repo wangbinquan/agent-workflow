@@ -228,6 +228,8 @@ export const TaskSchema = z.object({
    * mapper always populates it (null = manual).
    */
   scheduledTaskId: z.string().nullable().optional(),
+  /** RFC-164: owning workgroup id (durable soft link; NULL = not a workgroup task). */
+  workgroupId: z.string().nullable().optional(),
 })
 export type Task = z.infer<typeof TaskSchema>
 
@@ -261,6 +263,8 @@ export const TaskSummarySchema = z.object({
   openAlertCount: z.number().int().nonnegative().optional(),
   /** RFC-159: `scheduled_tasks` id that launched this task (null = manual). */
   scheduledTaskId: z.string().nullable().optional(),
+  /** RFC-164: owning workgroup id (durable soft link; NULL = not a workgroup task). */
+  workgroupId: z.string().nullable().optional(),
 })
 export type TaskSummary = z.infer<typeof TaskSummarySchema>
 
@@ -529,6 +533,14 @@ export const RERUN_CAUSES = [
   /** Cross-clarify scheduler guard rows (missing-questioner failure /
    *  persistent-stop short-circuit). */
   'cross-clarify-guard',
+  /** RFC-164 workgroup leader turn (workgroupRunner). */
+  'wg-leader-round',
+  /** RFC-164 workgroup member assignment run (workgroupRunner). */
+  'wg-assignment',
+  /** RFC-164 workgroup assignment-less message-wake turn (workgroupRunner). */
+  'wg-message-turn',
+  /** RFC-164 free_collab completion-gate holder run (design §8.2). */
+  'wg-gate',
 ] as const
 export const RerunCauseSchema = z.enum(RERUN_CAUSES)
 export type RerunCause = z.infer<typeof RerunCauseSchema>

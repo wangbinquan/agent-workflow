@@ -169,6 +169,9 @@ export interface RunNodeOptions {
    * projections. Absent ⇒ { kind: 'none' } semantics.
    */
   clarifyChannel?: ClarifyChannel
+  /** RFC-164: workgroup protocol block replacing the agent-outputs protocol
+   *  (threaded to renderUserPrompt.workgroupProtocolBlock; design §5). */
+  workgroupProtocolBlock?: string
   /** Skills used by this agent. */
   skills: ResolvedSkill[]
   /**
@@ -653,6 +656,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           inputs: opts.inputs,
           meta: opts.templateMeta,
           agentOutputs: opts.agent.outputs,
+          ...(opts.workgroupProtocolBlock !== undefined
+            ? { workgroupProtocolBlock: opts.workgroupProtocolBlock }
+            : {}),
           // RFC-005 outputKinds: when any port is `markdown_file`, the trailing
           // protocol block surfaces the "write the file first, then emit only its
           // worktree-relative path" rule by name. Pass-through is unconditional so

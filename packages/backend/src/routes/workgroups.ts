@@ -14,6 +14,7 @@
 import {
   CreateWorkgroupSchema,
   RenameWorkgroupSchema,
+  StartWorkgroupTaskSchema,
   UpdateWorkgroupSchema,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
@@ -30,6 +31,9 @@ import {
   renameWorkgroup,
   updateWorkgroup,
 } from '@/services/workgroups'
+import { startWorkgroupTask } from '@/services/workgroupLaunch'
+import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import { resolveOpencodeCmd } from '@/util/opencode'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
 
@@ -111,6 +115,30 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
     await requireResourceOwner(deps.db, actor, 'workgroup', existing)
     const renamed = await renameWorkgroup(deps.db, name, parsed.data.newName)
     return c.json(renamed)
+  })
+
+  // RFC-164 PR-3 — launch a workgroup task. Service-layer entry (the builtin
+  // host workflow would 403 assertWorkflowLaunchable by design); the group
+  // itself is the launch permission surface (view ⇒ launch, RFC-099 D3).
+  app.post('/api/workgroups/:name/tasks', async (c) => {
+    const name = c.req.param('name')
+    const body = await safeJson(c.req.raw)
+    const parsed = StartWorkgroupTaskSchema.safeParse(body)
+    if (!parsed.success) {
+      throw new ValidationError('workgroup-launch-invalid', 'invalid workgroup launch payload', {
+        issues: parsed.error.issues,
+      })
+    }
+    const actor = actorOf(c)
+    const opencodeCmd = resolveOpencodeCmd(deps.configPath)
+    const task = await startWorkgroupTask(
+      deps.db,
+      actor,
+      name,
+      parsed.data,
+      buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, opencodeCmd),
+    )
+    return c.json(task, 201)
   })
 
   // RFC-099 — GET/PUT /api/workgroups/:name/acl

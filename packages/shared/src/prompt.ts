@@ -223,6 +223,15 @@ export interface RenderPromptInput {
    * (legacy behaviour — no extra wording).
    */
   agentOutputKinds?: AgentOutputKindsMap
+  /**
+   * RFC-164: when set, the trailing protocol block is REPLACED by this
+   * workgroup-generated block (leader/worker/fc variants) — the agent's own
+   * `outputs` declaration does not apply inside a workgroup task (design §5).
+   * Never concatenated with buildProtocolBlock; mandatory ask-back still wins
+   * (a workgroup member run is dispatched with directive 'suppressed', so in
+   * practice the mandatory branch never fires for workgroup runs).
+   */
+  workgroupProtocolBlock?: string
   /** RFC-005 review-driven re-run context. Absent for normal first-time runs. */
   reviewContext?: ReviewPromptContext
   /** RFC-023 clarify-driven re-run context. Absent for first runs and runs
@@ -543,6 +552,9 @@ export function renderUserPrompt(input: RenderPromptInput): string {
     trailing = inlineMode
       ? buildClarifyInlineReminder()
       : buildMandatoryClarifyPreamble() + buildClarifyProtocolBlock()
+  } else if (input.workgroupProtocolBlock !== undefined) {
+    // RFC-164: workgroup runs replace (never extend) the agent-outputs block.
+    trailing = input.workgroupProtocolBlock
   } else {
     trailing = buildProtocolBlock(input.agentOutputs, input.agentOutputKinds)
   }

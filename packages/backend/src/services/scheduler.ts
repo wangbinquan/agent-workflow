@@ -173,6 +173,12 @@ import {
   undoPriorShardDeltaInIso,
 } from '@/services/nodeIsolation'
 import { buildMergeAgent, mergeResolveNodeId } from '@/services/mergeAgent'
+import {
+  runWorkgroupEngine,
+  type WorkgroupEngineHooks,
+  type WorkgroupHostRunRequest,
+  type WorkgroupHostRunResult,
+} from '@/services/workgroupRunner'
 import { Semaphore } from '@/util/semaphore'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
@@ -485,11 +491,23 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     // its conflict in the preserved resolve-iso (flips 'merged' + releases
     // downstream; still-unresolved stays parked). No-op on a fresh run.
     await replayConflictHumanResolutions(state, log)
-    result = await runScope(state, {
-      scopeIds: topLevelIds,
-      iteration: 0,
-      log,
-    })
+    // RFC-164: workgroup tasks are driven by the round engine, NEVER by the
+    // DAG frontier (design §4). The host snapshot's nodes exist only as mint
+    // anchors + clarify wiring; runScope/deriveFrontier must not see them.
+    result =
+      task.workgroupId !== null
+        ? await runWorkgroupEngine({
+            db,
+            taskId,
+            log,
+            ...(opts.signal ? { signal: opts.signal } : {}),
+            hooks: buildWorkgroupHooks(state),
+          })
+        : await runScope(state, {
+            scopeIds: topLevelIds,
+            iteration: 0,
+            log,
+          })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     log.error('runTask: scope threw — failing task', { taskId, error: message })
@@ -582,6 +600,203 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     log.info('task done', { taskId })
   } else {
     log.warn('done write lost to a concurrent transition — respecting winner', { taskId })
+  }
+}
+
+// -----------------------------------------------------------------------------
+// RFC-164 — workgroup engine integration. The engine (workgroupRunner.ts) owns
+// orchestration; this hook owns the MECHANICS of one host-node run, copied
+// from the fanout-shard dispatch path (iso worktree + frozen runtime +
+// runNode + merge-back + clarify session). Kept here so workgroupRunner never
+// imports scheduler.ts (module-cycle ban — binary-build incident memory).
+// -----------------------------------------------------------------------------
+
+export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks {
+  const { db, taskId, task, opts, log, definition } = state
+  async function runHostNode(req: WorkgroupHostRunRequest): Promise<WorkgroupHostRunResult> {
+    const injection = await prepareNodeRunInjection(db, opts.appHome, req.agent, log)
+    if (injection.kind === 'failed') {
+      await setNodeRunStatus({
+        db,
+        nodeRunId: req.nodeRunId,
+        to: 'failed',
+        allowedFrom: ['pending'],
+        reason: 'wg-injection-failed',
+        extra: { finishedAt: Date.now(), errorMessage: injection.message },
+      })
+      broadcastNodeStatus(taskId, req.nodeRunId, req.nodeId, 'failed')
+      return { status: 'failed', outputs: {}, errorMessage: injection.message }
+    }
+
+    const releaseGlobal = await state.globalSem.acquire()
+    let iso: IsoHandle
+    try {
+      iso = await state.writeSem.run(() =>
+        createNodeIso({
+          appHome: opts.appHome,
+          taskId,
+          nodeRunId: req.nodeRunId,
+          canonRepos: state.repos,
+          log,
+        }),
+      )
+      if (!iso.passthrough) await persistIsoBase(db, req.nodeRunId, task.repoCount, iso)
+    } catch (err) {
+      releaseGlobal()
+      const message = err instanceof Error ? err.message : String(err)
+      log.warn('workgroup host-node iso setup failed', { nodeRunId: req.nodeRunId, message })
+      return { status: 'failed', outputs: {}, errorMessage: `iso-setup-failed: ${message}` }
+    }
+    try {
+      const frozen = await resolveFrozenRuntime(
+        db,
+        req.nodeRunId,
+        req.agent.runtime,
+        opts.defaultRuntime,
+      )
+      const result = await runNode({
+        taskId,
+        nodeRunId: req.nodeRunId,
+        nodeId: req.nodeId,
+        agent: req.agent,
+        runtime: frozen.protocol,
+        runtimeBinary: frozen.binary,
+        runtimeParams: frozen.params,
+        runtimeConfigDir: frozen.configDir,
+        inputs: {},
+        worktreePath: iso.repos[0]?.isoWorktreePath ?? task.worktreePath,
+        gitUserName: task.gitUserName,
+        gitUserEmail: task.gitUserEmail,
+        templateMeta: {
+          repoPath: iso.repos[0]?.isoWorktreePath ?? task.repoPath,
+          baseBranch: task.baseBranch,
+          taskId,
+          nodeId: req.nodeId,
+          repos: iso.repos.map((r) => ({
+            repoPath: r.repoPath,
+            worktreePath: r.isoWorktreePath,
+            worktreeDirName: r.worktreeDirName,
+            baseBranch: r.baseBranch,
+          })),
+        },
+        promptTemplate: req.promptTemplate,
+        workgroupProtocolBlock: req.workgroupProtocolBlock,
+        ...(opts.defaultPerNodeTimeoutMs !== undefined
+          ? { timeoutMs: opts.defaultPerNodeTimeoutMs }
+          : {}),
+        // Voluntary ask-back: the channel is wired (host snapshot) but never
+        // mandatory — workgroup members produce wg_result unless they choose
+        // to ask a human (design §5 / RFC-148 'suppressed').
+        clarifyChannel: { kind: 'self', directive: 'suppressed', injectStopNotice: false },
+        skills: injection.resolvedSkills,
+        dependents: injection.dependents,
+        mcps: injection.mcps,
+        plugins: injection.plugins,
+        appHome: opts.appHome,
+        ...(opts.opencodeCmd ? { opencodeCmd: opts.opencodeCmd } : {}),
+        db,
+        log,
+        ...(opts.signal ? { signal: opts.signal } : {}),
+        ...(opts.subagentLiveCapture !== undefined
+          ? { subagentLiveCapture: opts.subagentLiveCapture }
+          : {}),
+      })
+      broadcastNodeStatus(taskId, req.nodeRunId, req.nodeId, result.status)
+      if (result.status === 'canceled') {
+        return {
+          status: 'canceled',
+          outputs: {},
+          ...(result.errorMessage !== undefined ? { errorMessage: result.errorMessage } : {}),
+        }
+      }
+      if (result.clarify !== undefined) {
+        const clarifyNodeId = findClarifyNodeForAgent(definition, req.nodeId)
+        if (clarifyNodeId === undefined) {
+          return { status: 'failed', outputs: {}, errorMessage: 'clarify-no-channel' }
+        }
+        const currentRunRow = (
+          await db.select().from(nodeRuns).where(eq(nodeRuns.id, req.nodeRunId)).limit(1)
+        )[0]
+        await createClarifySession({
+          db,
+          taskId,
+          sourceAgentNodeId: req.nodeId,
+          sourceAgentNodeRunId: req.nodeRunId,
+          sourceShardKey: currentRunRow?.shardKey ?? null,
+          clarifyNodeId,
+          iterationIndex: 0,
+          questions: result.clarify.questions,
+          ...(result.clarify.truncationWarnings.length > 0
+            ? { truncationWarnings: result.clarify.truncationWarnings }
+            : {}),
+        })
+        return {
+          status: 'awaiting',
+          outputs: {},
+          clarifyQuestionCount: result.clarify.questions.length,
+        }
+      }
+      if (result.status !== 'done') {
+        return {
+          status: 'failed',
+          outputs: {},
+          errorMessage: result.errorMessage ?? `run-${result.status}`,
+        }
+      }
+      if (!iso.passthrough) {
+        const nodeTrees = await snapshotNodeIsoFinal(iso, log)
+        await persistIsoNodeTree(db, req.nodeRunId, task.repoCount, nodeTrees)
+        const merge = await state.writeSem.run(async () => {
+          const mergeRes = await mergeBackNodeIso(iso, nodeTrees, log)
+          if (mergeRes.clean) return { kind: 'merged' as const }
+          const res = await resolveMergeConflicts(state, {
+            conflicts: mergeRes.conflicts,
+            containerPath: iso.containerPath,
+            conflictNodeRunId: req.nodeRunId,
+            nodeId: req.nodeId,
+            iteration: 0,
+          })
+          return res.allResolved
+            ? { kind: 'merged' as const }
+            : { kind: 'conflict-human' as const, detail: res.detail }
+        })
+        if (merge.kind === 'merged') {
+          await transitionMergeState({
+            db,
+            nodeRunId: req.nodeRunId,
+            event: { kind: 'mark-merged', via: 'live' },
+          })
+        } else {
+          await transitionMergeState({
+            db,
+            nodeRunId: req.nodeRunId,
+            event: { kind: 'park-conflict-human', via: 'live' },
+          })
+          return {
+            status: 'failed',
+            outputs: {},
+            errorMessage: `merge-back-conflict (merge agent could not resolve): ${merge.detail}`,
+          }
+        }
+      }
+      return { status: 'done', outputs: result.outputs }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      log.error('workgroup host-node run threw', { nodeRunId: req.nodeRunId, message })
+      return { status: 'failed', outputs: {}, errorMessage: message }
+    } finally {
+      try {
+        await discardNodeIso(iso, log)
+      } catch {
+        /* best-effort */
+      }
+      releaseGlobal()
+    }
+  }
+  return {
+    runHostNode,
+    broadcastNodeStatus: (nodeRunId, nodeId, status) =>
+      broadcastNodeStatus(taskId, nodeRunId, nodeId, status as NodeStatus),
   }
 }
 

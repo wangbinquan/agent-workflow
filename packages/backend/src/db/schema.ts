@@ -729,6 +729,11 @@ export const tasks = sqliteTable(
     // run history + count derive from this column (stamped atomically inside the
     // task INSERT), so a failed post-launch bookkeeping write can't orphan the task.
     scheduledTaskId: text('scheduled_task_id'),
+    /** RFC-164: owning workgroup id (durable soft link; NULL = not a workgroup task). */
+    workgroupId: text('workgroup_id'),
+    /** RFC-164: launch snapshot + mid-run-editable copy of the group config
+     *  (WorkgroupRuntimeConfig JSON). The engine reads THIS, never the resource row. */
+    workgroupConfigJson: text('workgroup_config_json'),
     // （RFC-120 的 deferred_question_dispatch 列已由 RFC-132 T8 + migration 0073 物理删除——
     // universal deferred model 下所有任务同路径，无 per-task 开关。）
   },

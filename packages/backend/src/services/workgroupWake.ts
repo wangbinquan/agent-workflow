@@ -67,7 +67,12 @@ function isAgentAssignee(config: WorkgroupRuntimeConfig, a: WorkgroupAssignment)
 
 function hasUnconsumed(input: WakeInput, memberId: string): boolean {
   const cursor = input.cursors.get(memberId) ?? ''
-  return sliceMessagesAfter(input.messages, cursor).length > 0
+  // Self-authored messages are OUTPUT, not input — a leader's own dispatch
+  // notes must not re-wake it (the engine advances cursors BEFORE the run,
+  // so a turn's own writes land after its cursor).
+  return sliceMessagesAfter(input.messages, cursor).some(
+    (m: WorkgroupMessage) => m.authorMemberId !== memberId,
+  )
 }
 
 function hasUnconsumedMention(input: WakeInput, memberId: string): boolean {

@@ -208,6 +208,13 @@ export interface StartTaskDeps {
    * (`tasks.scheduled_task_id`) atomically. Omitted for manual launches.
    */
   scheduledTaskId?: string
+  /**
+   * RFC-164: workgroup launch payload. `snapshotJson` REPLACES the workflow
+   * row's definition as the frozen workflow_snapshot (the builtin host row is
+   * an FK anchor; the real per-launch structure is synthesized — design §2/§3).
+   * Stamped atomically with the task INSERT like scheduledTaskId.
+   */
+  workgroupLaunch?: { workgroupId: string; configJson: string; snapshotJson: string }
 }
 
 /**
@@ -863,7 +870,7 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
     // RFC-037: required name (StartTaskSchema already trimmed + length-validated).
     name: input.name,
     workflowId: workflow.id,
-    workflowSnapshot: JSON.stringify(workflow.definition),
+    workflowSnapshot: deps.workgroupLaunch?.snapshotJson ?? JSON.stringify(workflow.definition),
     workflowVersion: workflow.version, // RFC-109: record the version this snapshot froze
     repoPath: headRepoPath,
     // RFC-054 W3-4 KNOWN_GAP fix: never persist the credentialed URL.
@@ -903,6 +910,9 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
     // manual). Stamped atomically with the row so the schedule's run history is
     // durable regardless of any later bookkeeping write.
     scheduledTaskId: deps.scheduledTaskId ?? null,
+    // RFC-164: workgroup link + runtime config copy (NULL = not a workgroup task).
+    workgroupId: deps.workgroupLaunch?.workgroupId ?? null,
+    workgroupConfigJson: deps.workgroupLaunch?.configJson ?? null,
   })
 
   // RFC-066: persist per-repo metadata. Single-repo tasks land one row at
@@ -2677,6 +2687,7 @@ function rowToTask(
     repoCount: row.repoCount,
     // RFC-159: link back to the scheduled_tasks row that launched this (NULL = manual).
     scheduledTaskId: row.scheduledTaskId ?? null,
+    workgroupId: row.workgroupId ?? null,
     repos,
   }
 }
@@ -2698,6 +2709,7 @@ function rowToSummary(row: typeof tasks.$inferSelect, workflowName: string | nul
     repoCount: row.repoCount,
     // RFC-159: link back to the scheduled_tasks row that launched this (NULL = manual).
     scheduledTaskId: row.scheduledTaskId ?? null,
+    workgroupId: row.workgroupId ?? null,
   }
 }
 

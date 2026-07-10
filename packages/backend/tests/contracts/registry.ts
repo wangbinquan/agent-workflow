@@ -238,6 +238,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'PUT', path: '/api/workgroups/:name' },
   { method: 'DELETE', path: '/api/workgroups/:name' },
   { method: 'POST', path: '/api/workgroups/:name/rename' },
+  { method: 'POST', path: '/api/workgroups/:name/tasks' },
 
   // ---- repos (path / refs / file system) ----
   { method: 'GET', path: '/api/repos/recent' },

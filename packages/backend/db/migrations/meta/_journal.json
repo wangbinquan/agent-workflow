@@ -582,6 +582,13 @@
       "when": 1785510000002,
       "tag": "0083_rfc164_workgroup_engine",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "6",
+      "when": 1785510000003,
+      "tag": "0084_rfc164_workgroup_tasks",
+      "breakpoints": true
     }
   ]
 }
