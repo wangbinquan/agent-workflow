@@ -249,6 +249,18 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/workgroup-tasks/:taskId/confirm' },
   { method: 'PUT', path: '/api/workgroup-tasks/:taskId/config' },
 
+  // ---- dynamic workflow spaces (RFC-167) ----
+  {
+    method: 'GET',
+    path: '/api/dynamic-workflow-spaces',
+    happy: { schema: z.array(z.any()) },
+  },
+  { method: 'GET', path: '/api/dynamic-workflow-spaces/:name' },
+  { method: 'POST', path: '/api/dynamic-workflow-spaces' },
+  { method: 'PUT', path: '/api/dynamic-workflow-spaces/:name' },
+  { method: 'DELETE', path: '/api/dynamic-workflow-spaces/:name' },
+  { method: 'POST', path: '/api/dynamic-workflow-spaces/:name/rename' },
+
   // ---- repos (path / refs / file system) ----
   { method: 'GET', path: '/api/repos/files' },
   { method: 'GET', path: '/api/repos/refs' },

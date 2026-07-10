@@ -42,6 +42,7 @@ import { mountTaskRoutes } from '@/routes/tasks'
 import { mountScheduledTaskRoutes } from '@/routes/scheduledTasks'
 import { mountWorkflowRoutes } from '@/routes/workflows'
 import { mountWorkgroupRoutes } from '@/routes/workgroups'
+import { mountDynamicWorkflowSpaceRoutes } from '@/routes/dynamicWorkflowSpaces'
 import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'
 import { mountWorktreeFilesRoutes } from '@/routes/worktree-files'
 import { errorHandler } from '@/util/errors'
@@ -197,6 +198,7 @@ export function createApp(deps: AppDeps): Hono {
   mountWorkflowRoutes(app, deps)
   mountWorkgroupRoutes(app, deps) // RFC-164
   mountWorkgroupTaskRoutes(app, deps) // RFC-164 PR-4
+  mountDynamicWorkflowSpaceRoutes(app, deps) // RFC-167
   mountTaskRoutes(app, deps)
   mountScheduledTaskRoutes(app, deps) // RFC-159
   mountBackupRoutes(app, deps)
