@@ -134,6 +134,24 @@ describe('runCommitPush', () => {
     expect(status).toBe('done')
   })
 
+  test('null task identity → fixed platform fallback commits (never ambient config)', async () => {
+    // RFC-165 regression lock (CI incident 29104878034): a URL/scratch
+    // worktree's cache-clone parent carries no local user.*, and CI hosts
+    // have no global gitconfig — "inherit the ambient config" made every
+    // identity-less autoCommitPush task die as commit-local-failed. The
+    // runner must inject the fixed platform identity via `-c`, which also
+    // OVERRIDES whatever ambient config a dev machine happens to have —
+    // asserting the author string proves the fallback took effect here.
+    f = await build()
+    writeFileSync(join(f.repo, 'b.txt'), 'x\n')
+    const { meta } = await runCommitPush(baseParams(f, { gitUserName: null, gitUserEmail: null }), {
+      db: f.db,
+    })
+    expect(meta.pushOutcome).toBe('pushed')
+    const author = await runGit(f.repo, ['log', '-1', '--format=%an <%ae>'])
+    expect(author.stdout.trim()).toBe('agent-workflow <agent-workflow@localhost>')
+  })
+
   test('no changes → skipped-empty, no commit', async () => {
     f = await build()
     const { meta } = await runCommitPush(baseParams(f), { db: f.db })

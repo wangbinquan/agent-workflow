@@ -52,7 +52,10 @@ export function nonInteractiveGitEnv(): Record<string, string | undefined> {
  * user@host email) — so a bare `git commit-tree` there fails with "committer identity
  * unknown", which surfaced as `iso-setup-failed` on ubuntu-only. Injecting this env
  * makes those internal commits succeed regardless of the host/worktree git config.
- * (User-facing commits — RFC auto commit&push — keep using the task's own identity.)
+ * (RFC auto commit&push prefers the task's own identity when the launch
+ * supplied one; commitPushRunner falls back to THIS identity otherwise —
+ * a URL/scratch worktree's cache-clone parent carries no local user.*, so
+ * "inherit the ambient config" meant guaranteed failure on such hosts.)
  */
 export const AW_INTERNAL_GIT_IDENTITY: Record<string, string> = {
   GIT_AUTHOR_NAME: 'agent-workflow',

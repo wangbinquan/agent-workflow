@@ -19,7 +19,7 @@ import type { DbClient } from '@/db/client'
 import { nodeRuns } from '@/db/schema'
 import { mintNodeRun } from '@/services/nodeRunMint'
 import { createLogger, type Logger } from '@/util/log'
-import { runGit as realRunGit } from '@/util/git'
+import { AW_INTERNAL_GIT_IDENTITY, runGit as realRunGit } from '@/util/git'
 import {
   buildFallbackMessage,
   classifyPushFailure,
@@ -362,7 +362,18 @@ function identityArgs(name: string | null, email: string | null): string[] {
   const n = name?.trim()
   const e = email?.trim()
   if (n && e) return ['-c', `user.name=${n}`, '-c', `user.email=${e}`]
-  return []
+  // RFC-165: no task identity → fall back to the fixed platform identity.
+  // The framework's auto-commit used to inherit the ambient git config via
+  // the path-mode parent repo's local user.* — a URL/scratch worktree's
+  // parent is the cache clone, which carries none, so on hosts without a
+  // global gitconfig (CI runners, fresh servers) `git commit` refused and
+  // every autoCommitPush task degraded to commit-local-failed.
+  return [
+    '-c',
+    `user.name=${AW_INTERNAL_GIT_IDENTITY['GIT_AUTHOR_NAME']}`,
+    '-c',
+    `user.email=${AW_INTERNAL_GIT_IDENTITY['GIT_AUTHOR_EMAIL']}`,
+  ]
 }
 
 function basenameOf(p: string): string {
