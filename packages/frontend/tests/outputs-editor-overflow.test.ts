@@ -17,7 +17,9 @@ const STYLES = readFileSync(join(__dirname, '..', 'src', 'styles.css'), 'utf8').
 
 function ruleBody(selector: string): string {
   const escaped = selector.replace(/[.-]/g, (c) => `\\${c}`)
-  const re = new RegExp(`${escaped}\\s*\\{([^}]*)\\}`)
+  // `[^{}]*` tolerates comma-grouped selectors — RFC-166 shares the outputs
+  // rules with `.inputs-editor__*` via `.outputs-editor__kind, .inputs-editor__kind { }`.
+  const re = new RegExp(`${escaped}[^{}]*\\{([^}]*)\\}`)
   const m = STYLES.match(re)
   if (m === null) throw new Error(`rule ${selector} not found in styles.css`)
   return m[1] ?? ''

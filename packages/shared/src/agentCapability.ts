@@ -36,46 +36,96 @@ function clipSummary(text: string, budget: number): string {
   return `${(lastSpace > budget * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`
 }
 
-/** Render one input port: `name (kind, required)`. */
-function renderInputPort(p: NonNullable<Agent['inputs']>[number]): string {
-  const bits = [p.kind]
-  if (p.required === true) bits.push('required')
-  return `${p.name} (${bits.join(', ')})`
+/** A resolved input port for a capability card (required normalized to bool). */
+export interface CapabilityInputPort {
+  name: string
+  kind: string
+  required: boolean
 }
 
-/** Render one output port: `name (kind)` — kind from outputKinds, default string. */
-function renderOutputPort(name: string, kinds: Agent['outputKinds']): string {
-  const kind = kinds?.[name] ?? 'string'
-  return `${name} (${kind})`
+/** A resolved output port for a capability card (kind from the sidecar map). */
+export interface CapabilityOutputPort {
+  name: string
+  kind: string
 }
 
 /**
- * Render an agent's capability card. Pure — no DB, no ACL fields. Callers that
- * want the leaderboard-style compact form pass `promptBudget: 0`.
+ * The structured projection behind a capability card — the SINGLE source both
+ * the markdown renderer (backend prompt injection) and the frontend UI card
+ * derive from, so the two can never drift (design §2). Whitelisted fields only;
+ * no ownerUserId / visibility (the CapabilitySource Pick<> already excludes
+ * them, and nothing here re-introduces an ACL/audit field).
+ */
+export interface CapabilityCardModel {
+  name: string
+  /** trimmed; '' when the agent has no description. */
+  description: string
+  role: string
+  inputs: CapabilityInputPort[]
+  outputs: CapabilityOutputPort[]
+  /** clipped bodyMd summary, or null when promptBudget=0 / body is empty. */
+  promptSummary: string | null
+}
+
+/** Build the structured capability-card model. Pure — no DB, no ACL fields. */
+export function capabilityCardModel(
+  agent: CapabilitySource,
+  opts?: CapabilityCardOptions,
+): CapabilityCardModel {
+  const budget = opts?.promptBudget ?? DEFAULT_PROMPT_BUDGET
+  const inputs: CapabilityInputPort[] = (agent.inputs ?? []).map((p) => ({
+    name: p.name,
+    kind: p.kind,
+    required: p.required === true,
+  }))
+  const outputs: CapabilityOutputPort[] = (agent.outputs ?? []).map((name) => ({
+    name,
+    kind: agent.outputKinds?.[name] ?? 'string',
+  }))
+  const hasBody = agent.bodyMd !== undefined && agent.bodyMd.trim().length > 0
+  return {
+    name: agent.name,
+    // Defensive `?? ''`: the type says description is a required string, but a
+    // frontend preview may be fed a partial agent (e.g. a minimal picker mock,
+    // or a list endpoint that omits it) — a bare `.trim()` there would throw and
+    // unmount the surrounding UI. Guard so the model degrades to an empty desc.
+    description: (agent.description ?? '').trim(),
+    role: agent.role ?? 'normal',
+    inputs,
+    outputs,
+    promptSummary: budget > 0 && hasBody ? clipSummary(agent.bodyMd as string, budget) : null,
+  }
+}
+
+/** Render one input port: `name (kind, required)`. */
+function renderInputPort(p: CapabilityInputPort): string {
+  return `${p.name} (${p.required ? `${p.kind}, required` : p.kind})`
+}
+
+/**
+ * Render an agent's capability card as markdown. Pure — no DB, no ACL fields.
+ * Derived from `capabilityCardModel` so it never drifts from the UI card.
+ * Callers that want the compact form (no prompt summary) pass `promptBudget: 0`.
  */
 export function renderAgentCapabilityCard(
   agent: CapabilitySource,
   opts?: CapabilityCardOptions,
 ): string {
-  const budget = opts?.promptBudget ?? DEFAULT_PROMPT_BUDGET
-  const inputs = agent.inputs ?? []
-  const outputs = agent.outputs ?? []
-  const lines: string[] = [`### ${agent.name}`]
-  if (agent.description.trim().length > 0) lines.push(agent.description.trim())
-  lines.push(`- role: ${agent.role ?? 'normal'}`)
+  const m = capabilityCardModel(agent, opts)
+  const lines: string[] = [`### ${m.name}`]
+  if (m.description.length > 0) lines.push(m.description)
+  lines.push(`- role: ${m.role}`)
   lines.push(
-    `- inputs: ${inputs.length > 0 ? inputs.map(renderInputPort).join(', ') : '(none declared)'}`,
+    `- inputs: ${m.inputs.length > 0 ? m.inputs.map(renderInputPort).join(', ') : '(none declared)'}`,
   )
   lines.push(
     `- outputs: ${
-      outputs.length > 0
-        ? outputs.map((o) => renderOutputPort(o, agent.outputKinds)).join(', ')
+      m.outputs.length > 0
+        ? m.outputs.map((o) => `${o.name} (${o.kind})`).join(', ')
         : '(none declared)'
     }`,
   )
-  if (budget > 0 && agent.bodyMd !== undefined && agent.bodyMd.trim().length > 0) {
-    lines.push(`- prompt: ${clipSummary(agent.bodyMd, budget)}`)
-  }
+  if (m.promptSummary !== null) lines.push(`- prompt: ${m.promptSummary}`)
   return lines.join('\n')
 }
 

@@ -3261,13 +3261,18 @@ details.form-section[open] > summary {
 
 /* ---- Outputs editor (per-port name + kind select) ---- */
 
-.outputs-editor {
+/* RFC-166: InputsEditor shares OutputsEditor's row chrome (list of port rows).
+   Selectors are grouped so both stay visually identical with zero duplication;
+   InputsEditor adds only a `required` toggle cell (.inputs-editor__required). */
+.outputs-editor,
+.inputs-editor {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.outputs-editor__list {
+.outputs-editor__list,
+.inputs-editor__list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -3276,7 +3281,8 @@ details.form-section[open] > summary {
   gap: 4px;
 }
 
-.outputs-editor__row {
+.outputs-editor__row,
+.inputs-editor__row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3285,7 +3291,8 @@ details.form-section[open] > summary {
   min-width: 0;
 }
 
-.outputs-editor__name {
+.outputs-editor__name,
+.inputs-editor__name {
   flex: 1 1 0;
   min-width: 0;
   font-family: var(--font-mono, monospace);
@@ -3300,7 +3307,8 @@ details.form-section[open] > summary {
   white-space: nowrap;
 }
 
-.outputs-editor__kind {
+.outputs-editor__kind,
+.inputs-editor__kind {
   /* Override .form-input { width: 100% } — inside the flex row that 100%
      would force flex-basis to a full row width and shove the rest of the
      row past the viewport edge. */
@@ -3310,8 +3318,123 @@ details.form-section[open] > summary {
   max-width: 40%;
 }
 
-.outputs-editor__remove {
+.outputs-editor__remove,
+.inputs-editor__remove {
   flex: 0 0 auto;
+}
+
+/* RFC-166: the per-port `required` toggle — a compact inline switch label. */
+.inputs-editor__required {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted, #666);
+  white-space: nowrap;
+}
+
+.inputs-editor__required input {
+  margin: 0;
+}
+
+/* ---- RFC-166 §4.2 capability card preview (shared UI primitive) ---- */
+.capability-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 13px;
+}
+
+.capability-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.capability-card__name {
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+}
+
+.capability-card__role {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--border);
+  color: var(--text-muted, #666);
+}
+
+.capability-card__desc {
+  margin: 0;
+}
+
+.capability-card__ports {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.capability-card__ports-label {
+  flex: 0 0 auto;
+  min-width: 48px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #666);
+}
+
+.capability-card__ports-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.capability-card__port {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+.capability-card__port-kind {
+  color: var(--text-muted, #666);
+  font-size: 11px;
+}
+
+.capability-card__port-req {
+  color: var(--danger, #c0392b);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.capability-card__ports-none {
+  color: var(--text-muted, #999);
+  font-style: italic;
+}
+
+.capability-card__prompt {
+  margin: 0;
+  color: var(--text-muted, #666);
+  font-size: 12px;
+}
+
+.capability-card__prompt-label {
+  font-weight: 600;
+}
+
+/* RFC-166: capability preview slotted under the add-agent picker. */
+.workgroup-agent-preview {
+  margin-top: 4px;
 }
 
 /* ---- RFC-080 kind selector (shared by OutputsEditor + canvas fanout) ---- */

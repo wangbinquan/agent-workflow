@@ -1898,10 +1898,17 @@ export const enUS: Resources = {
     parseError: 'not a valid kind (e.g. list<path<md>>)',
     signalHint: 'control-flow only — carries no data',
   },
+  capabilityCard: {
+    inputs: 'Inputs',
+    outputs: 'Outputs',
+    prompt: 'Prompt:',
+    required: 'required',
+    noneDeclared: '(none declared)',
+  },
   agentForm: {
     sectionBasics: 'Basics',
     sectionPrompt: 'Prompt (body)',
-    sectionOutputs: 'Outputs',
+    sectionOutputs: 'Inputs & outputs',
     sectionDependencyGraph: 'Dependency tree (preview)',
     sectionResources: 'Resources & references',
     sectionAdvanced: 'Advanced',
@@ -1910,6 +1917,14 @@ export const enUS: Resources = {
     fieldNamePlaceholder: 'e.g. code-fixer',
     fieldDescription: 'Description',
     fieldDescriptionPlaceholder: 'One-line summary shown in lists',
+    fieldInputs: 'Inputs',
+    fieldInputsHint:
+      'Declarative input ports (name + kind + optional required flag). Optional — inputs are surfaced on the capability card that leaders / orchestrators read to know what this agent consumes; the agent still receives its prompt via {{token}} templating regardless of what is declared here.',
+    fieldInputsPlaceholder: 'add an input port name then Enter',
+    inputsValidate: 'lowercase + underscore only',
+    inputKindLabel: 'Input kind for {{port}}',
+    inputRequired: 'required',
+    inputRequiredLabel: 'Mark {{port}} as required',
     fieldOutputs: 'Outputs',
     fieldOutputsHint:
       'Port names declared in <port> envelopes. Pick a kind per port. Choosing "file path" with the Markdown (.md) extension makes the port carry a worktree-relative .md path that the framework reads as the file body.',

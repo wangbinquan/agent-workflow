@@ -1803,6 +1803,13 @@ export interface Resources {
     parseError: string
     signalHint: string
   }
+  capabilityCard: {
+    inputs: string
+    outputs: string
+    prompt: string
+    required: string
+    noneDeclared: string
+  }
   agentForm: {
     /** RFC-155 — form-section titles (visible + collapsible groups). */
     sectionBasics: string
@@ -1816,6 +1823,13 @@ export interface Resources {
     fieldNamePlaceholder: string
     fieldDescription: string
     fieldDescriptionPlaceholder: string
+    fieldInputs: string
+    fieldInputsHint: string
+    fieldInputsPlaceholder: string
+    inputsValidate: string
+    inputKindLabel: string
+    inputRequired: string
+    inputRequiredLabel: string
     fieldOutputs: string
     fieldOutputsHint: string
     fieldOutputsPlaceholder: string
@@ -4546,10 +4560,17 @@ export const zhCN: Resources = {
     parseError: '不是合法的 kind（如 list<path<md>>）',
     signalHint: '仅控制流——不携带数据',
   },
+  capabilityCard: {
+    inputs: '输入',
+    outputs: '输出',
+    prompt: '提示词：',
+    required: '必填',
+    noneDeclared: '（未声明）',
+  },
   agentForm: {
     sectionBasics: '基本信息',
     sectionPrompt: '提示词（正文）',
-    sectionOutputs: '输出',
+    sectionOutputs: '输入与输出',
     sectionDependencyGraph: '闭包依赖（预览）',
     sectionResources: '资源与依赖引用',
     sectionAdvanced: '高级设置',
@@ -4558,6 +4579,14 @@ export const zhCN: Resources = {
     fieldNamePlaceholder: '例如 code-fixer',
     fieldDescription: '描述',
     fieldDescriptionPlaceholder: '一行简介，会显示在列表中',
+    fieldInputs: '输入端口',
+    fieldInputsHint:
+      '声明式输入端口（名称 + 类型 + 可选的「必填」标记）。可选——输入端口会展示在能力卡上，供 leader / 编排 agent 了解该 agent 消费什么；无论此处声明与否，agent 仍通过 {{token}} 模板接收提示词。',
+    fieldInputsPlaceholder: '输入端口名后按 Enter',
+    inputsValidate: '只允许小写字母 + 下划线',
+    inputKindLabel: '{{port}} 的输入类型',
+    inputRequired: '必填',
+    inputRequiredLabel: '将 {{port}} 标记为必填',
     fieldOutputs: '输出端口',
     fieldOutputsHint:
       '在 <port> envelope 中声明的端口名。可为每个端口选择类型；选「文件路径」并把扩展名设为 Markdown（.md）时，端口内容是 worktree 内的 .md 相对路径，框架会自动读取文件内容。',

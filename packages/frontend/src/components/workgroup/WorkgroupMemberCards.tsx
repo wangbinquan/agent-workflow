@@ -13,6 +13,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Agent, UserPublic, Workgroup } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { AgentCapabilityCard } from '@/components/agent/AgentCapabilityCard'
 import { Card } from '@/components/Card'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { Dialog } from '@/components/Dialog'
@@ -293,6 +294,16 @@ export function AgentMemberDialog(
           data-testid="workgroup-agent-name-input"
         />
       </Field>
+      {/* RFC-166 §4.2 — preview the picked agent's real capability (what the
+          leader will see in the roster) as the name is typed/selected. */}
+      {(() => {
+        const picked = (agentsQ.data ?? []).find((a) => a.name === agentName)
+        return picked !== undefined ? (
+          <div className="workgroup-agent-preview">
+            <AgentCapabilityCard agent={picked} compact />
+          </div>
+        ) : null
+      })()}
       <Field
         label={t('workgroups.memberFieldDisplayName')}
         required

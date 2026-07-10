@@ -27,6 +27,7 @@ import {
   parseWgMessagesPort,
   parseWgResultPort,
   parseWgTasksAddPort,
+  renderAgentCapabilityCard,
   resolveWorkgroupSwitches,
   WG_PORT_ASSIGNMENTS,
   WG_PORT_DECISION,
@@ -152,6 +153,45 @@ interface EngineDbState {
   messages: WorkgroupMessage[]
   cursors: Map<string, string>
   hostRuns: Array<typeof nodeRuns.$inferSelect>
+  /** RFC-166 — pre-rendered capability card per AGENT member (memberId → card).
+   *  Injected into the roster block so the leader / peers coordinate against
+   *  each member's real declared capability. human members are absent (prompt
+   *  isolation — never render a card for a human). */
+  agentCards: Map<string, string>
+}
+
+/** RFC-166 — capability-card prompt-summary budget inside a workgroup roster.
+ *  Smaller than the standalone default (600) because a leader roster may list
+ *  many members and every card rides in every leader/peer turn — keep tokens
+ *  bounded. The description + port lines are always shown in full; only the
+ *  bodyMd prompt summary is clipped to this budget. */
+const ROSTER_CARD_PROMPT_BUDGET = 240
+
+/**
+ * RFC-166 — preload each AGENT member's capability card once per engine pass.
+ * agentName is a soft reference (launch-validated, may dangle if the agent was
+ * later deleted); a missing agent simply yields no card (the roster row still
+ * renders with displayName + roleDesc). human members are skipped entirely so
+ * no user identity can leak into the prompt.
+ */
+export async function buildRosterAgentCards(
+  db: DbClient,
+  config: WorkgroupRuntimeConfig,
+): Promise<Map<string, string>> {
+  const cards = new Map<string, string>()
+  // De-dupe DB reads: several members may reference the same agentName.
+  const agentByName = new Map<string, Agent | null>()
+  for (const m of config.members) {
+    if (m.memberType !== 'agent' || m.agentName === null) continue
+    let agent = agentByName.get(m.agentName)
+    if (agent === undefined) {
+      agent = await getAgent(db, m.agentName)
+      agentByName.set(m.agentName, agent)
+    }
+    if (agent === null) continue
+    cards.set(m.id, renderAgentCapabilityCard(agent, { promptBudget: ROSTER_CARD_PROMPT_BUDGET }))
+  }
+  return cards
 }
 
 function rowToAssignment(r: typeof workgroupAssignments.$inferSelect): WorkgroupAssignment {
@@ -250,6 +290,7 @@ async function loadDbState(db: DbClient, taskId: string): Promise<EngineDbState 
     messages: messageRows.map(rowToMessage),
     cursors: new Map(cursorRows.map((c) => [c.memberId, c.lastConsumedMessageId])),
     hostRuns,
+    agentCards: await buildRosterAgentCards(db, parsed.data),
   }
 }
 
@@ -334,7 +375,10 @@ function composeLeaderPrompt(state: EngineDbState): string {
   const fresh = state.messages.filter((m) => m.id > cursor)
   const blocks = [
     renderCharterBlock(config),
-    renderRosterBlock(config, { excludeMemberId: config.leaderMemberId ?? undefined }),
+    renderRosterBlock(config, {
+      excludeMemberId: config.leaderMemberId ?? undefined,
+      agentCards: state.agentCards,
+    }),
     renderLeaderLedger(config, ledger),
     renderMessagesBlock(config, 'New activity since your last turn', fresh),
   ]
@@ -364,7 +408,7 @@ function composeMemberPrompt(
   })
   const blocks = [
     renderCharterBlock(config),
-    renderRosterBlock(config, { excludeMemberId: memberId }),
+    renderRosterBlock(config, { excludeMemberId: memberId, agentCards: state.agentCards }),
   ]
   if (assignment !== null) {
     blocks.push(

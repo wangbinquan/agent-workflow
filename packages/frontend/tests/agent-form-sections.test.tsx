@@ -2,7 +2,7 @@
 //
 // The flat form-grid became six FormSections; these tests lock the section
 // contract the redesign promised:
-//   1. visible sections (Basics / Prompt / Outputs / Dependency tree) render
+//   1. visible sections (Basics / Prompt / Inputs & outputs / Dependency tree) render
 //      as static headings; Resources & Advanced render as details, closed on
 //      an empty draft;
 //   2. a draft that already holds section content opens that section from the
@@ -63,7 +63,12 @@ afterEach(() => {
 describe('RFC-155 — section layout on an empty draft', () => {
   test('visible sections render; Resources & Advanced are closed details', () => {
     mount(emptyAgent())
-    for (const title of ['Basics', 'Prompt (body)', 'Outputs', 'Dependency tree (preview)']) {
+    for (const title of [
+      'Basics',
+      'Prompt (body)',
+      'Inputs & outputs',
+      'Dependency tree (preview)',
+    ]) {
       expect(screen.getByRole('heading', { level: 2, name: title })).toBeTruthy()
     }
     expect(sectionEl('agent-form-section-resources').open).toBe(false)

@@ -126,5 +126,10 @@ export function agentToDraft(a: Agent): CreateAgent {
   // when the patch omits it); the form just lied.
   if (a.role !== undefined) out.role = a.role
   if (a.outputWrapperPortNames !== undefined) out.outputWrapperPortNames = a.outputWrapperPortNames
+  // RFC-166 round-trip (same shape as role/runtime above): carry declared input
+  // ports into the draft so the InputsEditor shows them and a subsequent save
+  // doesn't silently clear them. rowToAgent always populates inputs ([] or a
+  // value); the guard keeps hand-built agents without the field lossless too.
+  if (a.inputs !== undefined) out.inputs = a.inputs
   return out
 }

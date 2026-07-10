@@ -25,6 +25,7 @@ import { JsonField } from './JsonField'
 import { MarkdownEditor } from './MarkdownEditor'
 import { McpsPicker } from './McpsPicker'
 import { PluginsPicker } from './PluginsPicker'
+import { InputsEditor } from './InputsEditor'
 import { OutputsEditor } from './OutputsEditor'
 import { Select } from './Select'
 import { SkillsPicker } from './SkillsPicker'
@@ -187,6 +188,13 @@ export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
       </FormSection>
 
       <FormSection title={t('agentForm.sectionOutputs')}>
+        <Field label={t('agentForm.fieldInputs')} hint={t('agentForm.fieldInputsHint')}>
+          <InputsEditor
+            inputs={value.inputs ?? []}
+            onChange={(inputs) => onChange({ ...value, inputs })}
+            placeholder={t('agentForm.fieldInputsPlaceholder')}
+          />
+        </Field>
         <Field label={t('agentForm.fieldOutputs')} hint={t('agentForm.fieldOutputsHint')}>
           <OutputsEditor
             outputs={value.outputs ?? []}

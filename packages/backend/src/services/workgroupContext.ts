@@ -186,13 +186,26 @@ export function renderCharterBlock(config: WorkgroupRuntimeConfig): string {
 
 export function renderRosterBlock(
   config: WorkgroupRuntimeConfig,
-  opts: { excludeMemberId?: string } = {},
+  opts: { excludeMemberId?: string; agentCards?: ReadonlyMap<string, string> } = {},
 ): string {
   const rows = config.members
     .filter((m) => m.id !== opts.excludeMemberId)
     .map((m) => {
       const role = m.roleDesc.trim().length > 0 ? ` — ${m.roleDesc.trim()}` : ''
-      return `- @${m.displayName} (${m.memberType})${role}`
+      const head = `- @${m.displayName} (${m.memberType})${role}`
+      // RFC-166: agent members carry a capability card (real declared
+      // inputs/outputs/role/prompt summary) so the leader coordinates against
+      // actual capability, not just the group roleDesc. human members NEVER
+      // get a card — a human's userId must never enter a prompt (design §11
+      // prompt-isolation invariant); the card is keyed by memberId and only
+      // populated for agent members by buildRosterAgentCards.
+      const card = m.memberType === 'agent' ? opts.agentCards?.get(m.id) : undefined
+      if (card === undefined || card.trim().length === 0) return head
+      const indented = card
+        .split('\n')
+        .map((line) => (line.length > 0 ? `  ${line}` : line))
+        .join('\n')
+      return `${head}\n${indented}`
     })
   return ['## Workgroup roster', '', ...rows].join('\n')
 }
