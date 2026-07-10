@@ -491,6 +491,114 @@ export const workgroupMembers = sqliteTable(
 )
 
 // -----------------------------------------------------------------------------
+// workgroup_assignments — RFC-164 PR-2 (design §1.4). Dispatch cards AND the
+// free_collab shared task list in one table. `id` doubles as the member run's
+// shard_key on the __wg_member__ host node (PR-3). Status machine lives in
+// services/workgroupLifecycle.ts — writes go through casAssignmentStatus, not
+// raw UPDATEs. `created_by_user_id` is audit-only and never reaches prompts
+// (design §11).
+// -----------------------------------------------------------------------------
+export const workgroupAssignments = sqliteTable(
+  'workgroup_assignments',
+  {
+    id: text('id').primaryKey(), // ULID
+    taskId: text('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    round: integer('round').notNull().default(0),
+    source: text('source', { enum: ['leader', 'human', 'self_claim', 'system'] }).notNull(),
+    createdByRunId: text('created_by_run_id'),
+    createdByUserId: text('created_by_user_id'),
+    /** NULL = free_collab open (unclaimed) task. */
+    assigneeMemberId: text('assignee_member_id'),
+    title: text('title').notNull(),
+    briefMd: text('brief_md').notNull().default(''),
+    status: text('status', {
+      enum: [
+        'open',
+        'dispatched',
+        'running',
+        'awaiting_human',
+        'delivered',
+        'done',
+        'failed',
+        'canceled',
+      ],
+    }).notNull(),
+    nodeRunId: text('node_run_id'),
+    resultMessageId: text('result_message_id'),
+    /** free_collab title-dedup key (normalizeWgTaskTitle), design §7.3. */
+    dedupKey: text('dedup_key'),
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer('updated_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => ({
+    taskIdx: index('idx_wg_assign_task').on(t.taskId, t.status),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// workgroup_messages — RFC-164 PR-2 (design §1.5). The room = the blackboard:
+// dispatch anchors, result summaries, human chat, system markers. Humans (task
+// members) always see everything; what AGENTS see is sliced per the three
+// switches (services/workgroupContext.ts). `author_user_id` is audit/UI only.
+// Ordering key is the ULID id (lexical == chronological).
+// -----------------------------------------------------------------------------
+export const workgroupMessages = sqliteTable(
+  'workgroup_messages',
+  {
+    id: text('id').primaryKey(), // ULID — room ordering key
+    taskId: text('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    round: integer('round').notNull().default(0),
+    authorKind: text('author_kind', { enum: ['member', 'human', 'system'] }).notNull(),
+    authorMemberId: text('author_member_id'),
+    authorUserId: text('author_user_id'),
+    kind: text('kind', {
+      enum: ['chat', 'dispatch', 'result', 'delivery', 'decision', 'system'],
+    }).notNull(),
+    bodyMd: text('body_md').notNull(),
+    /** JSON string[] of mentioned member ids. */
+    mentionsJson: text('mentions_json').notNull().default('[]'),
+    assignmentId: text('assignment_id'),
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => ({
+    taskIdx: index('idx_wg_msg_task').on(t.taskId, t.id),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// workgroup_member_cursors — RFC-164 PR-2 (design §1.6, 设计门 Finding-3).
+// Per-(task, member) consumption watermark: the max message id already
+// injected into that member (leader included). Advanced in the SAME
+// transaction that mints the member's run — wake decisions (deriveWakeSet)
+// are therefore idempotent across daemon restarts and message storms.
+// -----------------------------------------------------------------------------
+export const workgroupMemberCursors = sqliteTable(
+  'workgroup_member_cursors',
+  {
+    taskId: text('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    /** Member id from tasks.workgroup_config_json (config snapshot ids). */
+    memberId: text('member_id').notNull(),
+    lastConsumedMessageId: text('last_consumed_message_id').notNull().default(''),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.taskId, t.memberId] }),
+  }),
+)
+
+// -----------------------------------------------------------------------------
 // recent_repos — cache of recently used repo paths for the launcher dropdown.
 // -----------------------------------------------------------------------------
 export const recentRepos = sqliteTable('recent_repos', {
