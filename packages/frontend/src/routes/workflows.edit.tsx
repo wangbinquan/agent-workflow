@@ -1,6 +1,6 @@
-// Workflow editor route — handles both /workflows/new and /workflows/$id.
-// M2 scope: pan/zoom canvas with delete-key removal. Sidebar drag-create
-// arrives in P-2-05; per-kind node renderers in P-2-04.
+// Workflow editor route — /workflows/$id. Creation happens in the /workflows
+// list page's quick-create dialog (RFC-164 workgroup pattern); the editor owns
+// every detail edit of the (initially empty) definition.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
@@ -29,13 +29,6 @@ function exportUrl(id: string): string {
   const url = new URL(`/api/workflows/${encodeURIComponent(id)}/export`, base)
   if (token !== null) url.searchParams.set('token', token)
   return url.toString()
-}
-
-const EMPTY_DEF: WorkflowDefinition = {
-  $schema_version: 1,
-  inputs: [],
-  nodes: [],
-  edges: [],
 }
 
 /**
@@ -71,103 +64,6 @@ export function healLoadedDefinition(def: WorkflowDefinition): WorkflowDefinitio
   const afterInputs =
     synced === (def.inputs ?? []) ? def : ({ ...def, inputs: synced } as WorkflowDefinition)
   return healFieldEdgeConsistency(afterInputs)
-}
-
-// /workflows/new ------------------------------------------------------------
-
-export const NewRoute = createRoute({
-  getParentRoute: () => RootRoute,
-  path: '/workflows/new',
-  component: WorkflowNewPage,
-})
-
-function WorkflowNewPage() {
-  const { t } = useTranslation()
-  const navigate = useNavigate()
-  const qc = useQueryClient()
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [definition, setDefinition] = useState<WorkflowDefinition>(EMPTY_DEF)
-  const [selection, setSelection] = useState<CanvasSelection | null>(null)
-  const selectedNodeId = selection?.kind === 'node' ? selection.id : null
-  const selectedEdge =
-    selection?.kind === 'edge'
-      ? (definition.edges.find((e) => e.id === selection.id) ?? null)
-      : null
-  const canvasRef = useRef<WorkflowCanvasHandle | null>(null)
-  const closeInspector = () => {
-    canvasRef.current?.clearSelection()
-    setSelection(null)
-  }
-  const agents = useQuery<Agent[]>({
-    queryKey: ['agents'],
-    queryFn: ({ signal }) => api.get('/api/agents', undefined, signal),
-  })
-
-  const create = useMutation({
-    mutationFn: () => api.post<Workflow>('/api/workflows', { name, description, definition }),
-    onSuccess: (wf) => {
-      void qc.invalidateQueries({ queryKey: ['workflows'] })
-      navigate({ to: '/workflows/$id', params: { id: wf.id } })
-    },
-  })
-
-  return (
-    <div className="page page--editor">
-      <header className="page__header page__header--row">
-        <div>
-          <h1>{t('editor.newTitle')}</h1>
-        </div>
-        <button
-          type="button"
-          className="btn btn--primary"
-          onClick={() => create.mutate()}
-          disabled={name === '' || create.isPending}
-        >
-          {create.isPending ? t('editor.creating') : t('editor.create')}
-        </button>
-      </header>
-      <div className="form-grid form-grid--cols-2">
-        <Field label={t('editor.fieldName')} required>
-          <TextInput value={name} onChange={setName} required />
-        </Field>
-        <Field label={t('editor.fieldDescription')}>
-          <TextInput value={description} onChange={setDescription} />
-        </Field>
-      </div>
-      {create.error !== null && create.error !== undefined && (
-        <div className="error-box">{describeError(create.error)}</div>
-      )}
-      <div className={editorLayoutClass(selection?.id ?? null)}>
-        <EditorSidebar agents={agents.data ?? []} />
-        <div className="canvas-frame">
-          <WorkflowCanvas
-            ref={canvasRef}
-            definition={definition}
-            onChange={setDefinition}
-            onSelect={setSelection}
-            agents={agents.data ?? []}
-          />
-        </div>
-        {selectedEdge !== null ? (
-          <EdgeInspector
-            edge={selectedEdge}
-            definition={definition}
-            onChange={setDefinition}
-            onClose={closeInspector}
-          />
-        ) : (
-          <NodeInspector
-            definition={definition}
-            selectedNodeId={selectedNodeId}
-            agents={agents.data ?? []}
-            onChange={setDefinition}
-            onClose={closeInspector}
-          />
-        )}
-      </div>
-    </div>
-  )
 }
 
 // /workflows/$id ------------------------------------------------------------
@@ -343,10 +239,13 @@ function WorkflowEditPage() {
     [id, navigate, validate, del, t],
   )
 
-  if (query.isLoading || draft === null)
-    return <div className="page muted">{t('editor.loadingWorkflow')}</div>
+  // Error must win over the draft===null loading guard: a failed GET (bad id,
+  // deleted workflow, expired bookmark) never populates the draft, and the
+  // old order left the page on the loading state forever.
   if (query.error !== null && query.error !== undefined)
     return <div className="page error-box">{describeError(query.error)}</div>
+  if (query.isLoading || draft === null)
+    return <div className="page muted">{t('editor.loadingWorkflow')}</div>
 
   return (
     <div className="page page--editor">

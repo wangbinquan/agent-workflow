@@ -104,7 +104,8 @@ export function Onboarding() {
                 ? t('onboarding.step3ImportRunning')
                 : t('onboarding.step3Import')}
             </button>
-            <Link to="/workflows/new" className="btn">
+            {/* Creation is a quick-create dialog on the workflows list page. */}
+            <Link to="/workflows" className="btn">
               {t('onboarding.step3Manual')}
             </Link>
           </div>

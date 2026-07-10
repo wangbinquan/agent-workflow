@@ -1,18 +1,25 @@
 // Workflows list. Each row links into the xyflow editor at /workflows/$id.
+// Creation is a QUICK-CREATE dialog (name + description only — the definition
+// starts empty; all canvas editing happens on the editor page). Mirrors the
+// RFC-164 workgroup list-page pattern.
 
-import { useQueryClient } from '@tanstack/react-query'
-import { Link, createRoute } from '@tanstack/react-router'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link, createRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Workflow } from '@agent-workflow/shared'
-import { ApiError } from '@/api/client'
+import type { CreateWorkflow, Workflow } from '@agent-workflow/shared'
+import { api, ApiError } from '@/api/client'
 import { useResourceList } from '@/hooks/useResourceList'
+import { describeApiError } from '@/i18n'
 import { getBaseUrl, getToken } from '@/stores/auth'
 import { ConfirmButton } from '@/components/ConfirmButton'
+import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { Field, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { ResourceNameCell } from '@/components/ResourceNameCell'
+import { buildQuickCreateWorkflowPayload } from '@/lib/workflow-form'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -21,8 +28,21 @@ export const Route = createRoute({
   component: WorkflowsPage,
 })
 
+// Retired creation URL — the full-page creator is gone, but old bookmarks /
+// browser history may still open it. Redirect to the list page (the dialog
+// lives there); registered before '/workflows/$id' so "new" never resolves
+// as a workflow id.
+export const NewRedirectRoute = createRoute({
+  getParentRoute: () => RootRoute,
+  path: '/workflows/new',
+  beforeLoad: () => {
+    throw redirect({ to: '/workflows' })
+  },
+})
+
 function WorkflowsPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const qc = useQueryClient()
   // RFC-151 PR-3 — shared list shell: query + delete mutation + owner lookup.
   // The YAML import flow below stays page-specific.
@@ -31,6 +51,42 @@ function WorkflowsPage() {
     endpoint: '/api/workflows',
     deleteBy: 'id',
   })
+
+  // Quick create — name + description only; navigate straight into the
+  // editor (where the empty definition gets built out) on success.
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createName, setCreateName] = useState('')
+  const [createDescription, setCreateDescription] = useState('')
+  const createTriggerRef = useRef<HTMLButtonElement | null>(null)
+  // Mirrors createOpen for the mutation callback: dismissing the dialog while
+  // a slow POST is in flight must NOT yank the user into the editor when the
+  // response lands later (the row still appears via the list invalidation).
+  const createOpenRef = useRef(false)
+  function setCreateOpenTracked(open: boolean): void {
+    createOpenRef.current = open
+    setCreateOpen(open)
+  }
+  const create = useMutation({
+    mutationFn: (body: CreateWorkflow): Promise<Workflow> => api.post('/api/workflows', body),
+    onSuccess: (wf) => {
+      void qc.invalidateQueries({ queryKey: ['workflows'] })
+      qc.setQueryData(['workflows', wf.id], wf)
+      if (!createOpenRef.current) return
+      setCreateOpenTracked(false)
+      navigate({ to: '/workflows/$id', params: { id: wf.id } })
+    },
+  })
+  const builtCreate = buildQuickCreateWorkflowPayload({
+    name: createName,
+    description: createDescription,
+  })
+
+  function openCreate(): void {
+    setCreateName('')
+    setCreateDescription('')
+    create.reset()
+    setCreateOpenTracked(true)
+  }
 
   const fileRef = useRef<HTMLInputElement | null>(null)
   const [importMsg, setImportMsg] = useState<string | null>(null)
@@ -82,9 +138,15 @@ function WorkflowsPage() {
           <button type="button" className="btn" onClick={() => fileRef.current?.click()}>
             {t('workflows.importButton')}
           </button>
-          <Link to="/workflows/new" className="btn btn--primary">
+          <button
+            type="button"
+            className="btn btn--primary"
+            ref={createTriggerRef}
+            onClick={openCreate}
+            data-testid="workflow-new-button"
+          >
             {t('workflows.newButton')}
-          </Link>
+          </button>
         </div>
       </header>
       {importMsg !== null && <div className="info-box info-box--muted">{importMsg}</div>}
@@ -142,6 +204,55 @@ function WorkflowsPage() {
           </tbody>
         </table>
       )}
+
+      <Dialog
+        open={createOpen}
+        onClose={() => setCreateOpenTracked(false)}
+        title={t('editor.newTitle')}
+        size="sm"
+        triggerRef={createTriggerRef}
+        data-testid="workflow-create-dialog"
+        footer={
+          <>
+            {create.error !== null && create.error !== undefined && (
+              <span className="form-actions__error">{describeApiError(create.error)}</span>
+            )}
+            <button type="button" className="btn" onClick={() => setCreateOpenTracked(false)}>
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={create.isPending || !builtCreate.ok}
+              onClick={() => {
+                if (builtCreate.ok) create.mutate(builtCreate.payload)
+              }}
+              data-testid="workflow-create-confirm"
+            >
+              {create.isPending ? t('editor.creating') : t('editor.create')}
+            </button>
+          </>
+        }
+      >
+        {/* Required-ness is conveyed by the disabled Create button — a
+            workflow name has no format rules, so there is no inline error. */}
+        <Field label={t('editor.fieldName')} required>
+          <TextInput
+            value={createName}
+            onChange={setCreateName}
+            maxLength={256}
+            required
+            data-testid="workflow-create-name"
+          />
+        </Field>
+        <Field label={t('editor.fieldDescription')}>
+          <TextInput
+            value={createDescription}
+            onChange={setCreateDescription}
+            data-testid="workflow-create-description"
+          />
+        </Field>
+      </Dialog>
     </div>
   )
 }

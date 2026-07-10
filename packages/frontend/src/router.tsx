@@ -29,14 +29,14 @@ import { Route as reviewsRoute } from '@/routes/reviews'
 import { Route as reviewDetailRoute } from '@/routes/reviews.detail'
 import { Route as clarifyRoute } from '@/routes/clarify'
 import { Route as clarifyDetailRoute } from '@/routes/clarify.detail'
-import { Route as workflowsRoute } from '@/routes/workflows'
+import {
+  NewRedirectRoute as workflowNewRedirectRoute,
+  Route as workflowsRoute,
+} from '@/routes/workflows'
 import { Route as workgroupsRoute } from '@/routes/workgroups'
 import { Route as workgroupDetailRoute } from '@/routes/workgroups.detail'
 import { Route as workgroupNewRoute } from '@/routes/workgroups.new'
-import {
-  EditRoute as workflowEditRoute,
-  NewRoute as workflowNewRoute,
-} from '@/routes/workflows.edit'
+import { EditRoute as workflowEditRoute } from '@/routes/workflows.edit'
 import { LaunchRoute as workflowLaunchRoute } from '@/routes/workflows.launch'
 import { ReposRoute as reposRoute } from '@/routes/repos'
 import { Route as memoryRoute } from '@/routes/memory'
@@ -61,7 +61,10 @@ const routeTree = rootRoute.addChildren([
   pluginNewRoute,
   pluginDetailRoute,
   pluginsRoute,
-  workflowNewRoute,
+  // Workflow creation is a quick-create dialog on the list page; the retired
+  // '/workflows/new' literal only redirects there, and must precede
+  // '/workflows/$id' so "new" never resolves as a workflow id.
+  workflowNewRedirectRoute,
   workflowLaunchRoute,
   workflowEditRoute,
   workflowsRoute,

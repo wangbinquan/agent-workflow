@@ -279,7 +279,8 @@ describe('clearFlowSelection (EdgeInspector close → reclick reachability)', ()
 })
 
 // Source-text assertion: the editor route MUST route both inspector
-// close paths (Edge + Node, in both /workflows/new and /workflows/$id)
+// close paths (Edge + Node in /workflows/$id — creation moved into the
+// /workflows list-page quick-create dialog and has no canvas anymore)
 // through `canvasRef.current?.clearSelection()` — otherwise the bug
 // regresses silently because the inspector still unmounts and looks
 // closed, but the underlying edge stays stuck-selected. Each individual
@@ -349,10 +350,11 @@ describe('workflows.edit.tsx wires clearSelection into inspector close', () => {
     const src = await fs.readFile(path.join(here, '../src/routes/workflows.edit.tsx'), 'utf8')
     expect(src).toMatch(/canvasRef\.current\?\.clearSelection\(\)/)
     // Both inspectors share the `closeInspector` helper; it must be
-    // wired on EdgeInspector AND NodeInspector. Each route block has
-    // its own pair (new + edit), so we expect at least 4 occurrences.
+    // wired on EdgeInspector AND NodeInspector. The edit route is the
+    // only canvas block left (creation is a list-page dialog), so we
+    // expect at least one Edge + one Node occurrence.
     const onCloseHits = src.match(/onClose=\{closeInspector\}/g) ?? []
-    expect(onCloseHits.length).toBeGreaterThanOrEqual(4)
+    expect(onCloseHits.length).toBeGreaterThanOrEqual(2)
     // Forbid the old pattern that left the edge stuck.
     expect(src).not.toMatch(/onClose=\{\(\) => setSelection\(null\)\}/)
   })

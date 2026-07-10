@@ -17,7 +17,7 @@ import { WS_PATHS } from '@agent-workflow/shared'
 import { useWsInvalidation, type WsInvalidationRules } from './useWsInvalidation'
 
 export interface WorkflowSyncOptions {
-  /** Current workflow id (or null on /workflows/new). */
+  /** Current workflow id (null disables the version gating). */
   workflowId: string | null
   /**
    * Latest version we have locally — incoming versions less or equal to
