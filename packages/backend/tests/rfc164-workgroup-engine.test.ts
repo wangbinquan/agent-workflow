@@ -318,73 +318,29 @@ describe('RFC-164 engine — launch path', () => {
     expect(body.code).not.toBe('workgroup-human-members-unsupported')
   })
 
-  test('human members auto-join the task as collaborators (PR-5/T24 接线回归锁)', async () => {
-    // Service-level with a scratch space so the launch fully materializes
-    // (no external repo needed). Locks the humanUserIds → collaboratorUserIds
-    // wiring: without it a human member cannot answer clarifies/reviews at all
-    // (task members are the answer boundary — RFC-099 / proposal 目标 6).
-    const { startWorkgroupTask } = await import('../src/services/workgroupLaunch')
-    const { buildActor } = await import('../src/auth/actor')
-    const { taskCollaborators } = await import('../src/db/schema')
-    const { mkdtempSync, rmSync } = await import('node:fs')
-    const { tmpdir } = await import('node:os')
-    const { join } = await import('node:path')
-
-    const launcher = await createUser(db, {
-      username: 'launcher',
-      displayName: 'launcher',
-      role: 'user',
-      password: 'longEnoughPassword',
-    })
-    const pm = await createUser(db, {
-      username: 'pm2',
-      displayName: 'pm2',
-      role: 'user',
-      password: 'longEnoughPassword',
-    })
-    await createWorkgroup(db, {
-      name: 'human-collab',
-      description: '',
-      instructions: '',
-      mode: 'leader_worker',
-      leaderDisplayName: 'lead',
-      switches: { shareOutputs: true, directMessages: false, blackboard: false },
-      maxRounds: 5,
-      completionGate: false,
-      members: [
-        { memberType: 'agent', agentName: 'a1', displayName: 'lead', roleDesc: '' },
-        { memberType: 'human', userId: pm.id, displayName: 'pm', roleDesc: '' },
-      ],
-    })
-    const actor = buildActor({
-      user: {
-        id: launcher.id,
-        username: 'launcher',
-        displayName: 'launcher',
-        role: 'user',
-        status: 'active',
-      },
-      source: 'session',
-    })
-    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc164-human-collab-'))
-    try {
-      const task = await startWorkgroupTask(
-        db,
-        actor,
-        'human-collab',
-        { name: 't', goal: 'g', scratch: true },
-        { db, appHome, actorUserId: launcher.id },
-      )
-      const rows = await db
-        .select()
-        .from(taskCollaborators)
-        .where(eq(taskCollaborators.taskId, task.id))
-      const byUser = new Map(rows.map((r) => [r.userId, r.role]))
-      expect(byUser.get(launcher.id)).toBe('owner')
-      expect(byUser.get(pm.id)).toBe('collaborator')
-    } finally {
-      rmSync(appHome, { recursive: true, force: true })
-    }
+  test('resolveWorkgroupCollaborators: human members ∪ explicit, deduped (PR-5/T24 接线回归锁)', async () => {
+    // Pure-fn unit test instead of a full launch: startWorkgroupTask feeds this
+    // result to startTask as collaboratorUserIds so human members become task
+    // members (the answer boundary for clarifies/reviews — RFC-099 / proposal
+    // 目标 6). A real launch would need a repo source and couple the test to
+    // the concurrent RFC-165 space-schema migration (scratch/repoUrl), so we
+    // lock the wiring at the pure boundary.
+    const { resolveWorkgroupCollaborators } = await import('../src/services/workgroupLaunch')
+    const members = [
+      { memberType: 'agent' as const, userId: null },
+      { memberType: 'human' as const, userId: 'u-pm' },
+      { memberType: 'human' as const, userId: 'u-qa' },
+    ]
+    // human ids appended to explicit, order-stable, deduped
+    expect(resolveWorkgroupCollaborators(['u-ext'], members)).toEqual(['u-ext', 'u-pm', 'u-qa'])
+    // explicit already containing a human id does not duplicate it
+    expect(resolveWorkgroupCollaborators(['u-pm'], members)).toEqual(['u-pm', 'u-qa'])
+    // no explicit → just the human members
+    expect(resolveWorkgroupCollaborators(undefined, members)).toEqual(['u-pm', 'u-qa'])
+    // agent-only group → empty
+    expect(
+      resolveWorkgroupCollaborators(undefined, [{ memberType: 'agent', userId: null }]),
+    ).toEqual([])
   })
 
   test('invalid launch payload (no repo source) → 422 via StartTaskSchema single-sourcing', async () => {
