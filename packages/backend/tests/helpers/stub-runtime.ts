@@ -356,14 +356,24 @@ function writeStubOpencodeSh(
   return shPath
 }
 
-function buildBashEnvelope(outputs: Record<string, string>): string {
+export function buildBashEnvelope(outputs: Record<string, string>): string {
   let envelope = `<workflow-output>\\n`
   for (const [p, c] of Object.entries(outputs)) {
     envelope += `  <port name="${p}">${c.replace(/'/g, "'\\''")}</port>\\n`
   }
   envelope += `</workflow-output>`
+  // printf %s substitutes ENV verbatim - it does NOT JSON-escape. The envelope
+  // contains `"` (every <port name="..."> attribute) which, left unescaped,
+  // closes the JSON text string early and parseEnvelope reports malformed
+  // (unclosed) ports - the task-fetch BP-01/02/03 CI failures on the .sh stub
+  // path (ubuntu/macOS). Escape `"` -> `\"` so the emitted event is valid JSON.
+  // Leave the literal `\n` (backslash-n) intact: printf %s passes it through
+  // and JSON reads it as a newline escape, matching the .js stub's
+  // JSON.stringify output. (Exported so the JSON-validity invariant is locked
+  // by a platform-independent regression test - see stub-runtime-bash-envelope.)
+  const jsonEnv = envelope.replace(/"/g, '\\"')
   return [
-    `ENV='${envelope}'`,
+    `ENV='${jsonEnv}'`,
     `TS=$(date +%s%3N)`,
     `printf '{"type":"text","ts":%s,"text":"%s"}\\n' "$TS" "$ENV"`,
   ].join('\n')
