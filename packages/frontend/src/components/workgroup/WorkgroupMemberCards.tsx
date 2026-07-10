@@ -204,10 +204,14 @@ export function WorkgroupMemberCards(props: WorkgroupMemberCardsProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Dialogs (private to the cards zone)
+// Dialogs — the add-agent / add-human dialogs are ALSO reused by the RFC-164
+// PR-5 mid-run config dialog (WorkgroupTaskConfigDialog), which stages the
+// submitted row into its PUT patch instead of an immediate resource save.
+// Contract: `onSubmit` receives a validated WorkgroupMemberRowState; `others`
+// feeds the displayName-uniqueness check.
 // ---------------------------------------------------------------------------
 
-interface MemberDialogCommonProps {
+export interface MemberDialogCommonProps {
   others: ReadonlyArray<Pick<WorkgroupMemberRowState, 'displayName'>>
   applying: boolean
   applyError: unknown
@@ -218,7 +222,7 @@ function fieldError(t: (k: string) => string, key: string | undefined): string |
   return key === undefined ? undefined : t(key)
 }
 
-function AgentMemberDialog(
+export function AgentMemberDialog(
   props: MemberDialogCommonProps & { onSubmit: (row: WorkgroupMemberRowState) => Promise<void> },
 ) {
   const { t } = useTranslation()
@@ -317,7 +321,7 @@ function AgentMemberDialog(
   )
 }
 
-function HumanMemberDialog(
+export function HumanMemberDialog(
   props: MemberDialogCommonProps & { onSubmit: (row: WorkgroupMemberRowState) => Promise<void> },
 ) {
   const { t } = useTranslation()

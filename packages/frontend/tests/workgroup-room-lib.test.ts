@@ -11,9 +11,12 @@ import {
   applyMention,
   assignmentStatusToKind,
   assignmentsForMessage,
+  buildDeliverBody,
   buildRoomTimeline,
   canPostRoomMessage,
+  groupFcAssignments,
   isAssignmentCancelable,
+  isHumanDeliveryCard,
   memberIsWorking,
   mentionCandidates,
   mentionQueryAt,
@@ -275,5 +278,75 @@ describe('mention completion', () => {
     const next = applyMention('ping @Wo tail', 8, ctx, 'Worker')
     expect(next.text).toBe('ping @Worker  tail')
     expect(next.caret).toBe('ping @Worker '.length)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// PR-5 — delivery / fc-list oracles
+// ---------------------------------------------------------------------------
+
+describe('isHumanDeliveryCard', () => {
+  const members = new Map([
+    ['mem_h', { memberType: 'human' as const }],
+    ['mem_a', { memberType: 'agent' as const }],
+  ])
+
+  test('human assignee + dispatched → to-do form', () => {
+    expect(isHumanDeliveryCard(card({ id: 'x', assigneeMemberId: 'mem_h' }), members)).toBe(true)
+  })
+
+  test('agent assignee / other statuses / unknown member → plain card', () => {
+    expect(isHumanDeliveryCard(card({ id: 'x', assigneeMemberId: 'mem_a' }), members)).toBe(false)
+    expect(
+      isHumanDeliveryCard(
+        card({ id: 'x', assigneeMemberId: 'mem_h', status: 'delivered' }),
+        members,
+      ),
+    ).toBe(false)
+    expect(
+      isHumanDeliveryCard(card({ id: 'x', assigneeMemberId: 'mem_h', status: 'done' }), members),
+    ).toBe(false)
+    expect(isHumanDeliveryCard(card({ id: 'x', assigneeMemberId: null }), members)).toBe(false)
+    expect(isHumanDeliveryCard(card({ id: 'x', assigneeMemberId: 'gone' }), members)).toBe(false)
+  })
+})
+
+describe('buildDeliverBody (拍板 #16 双形态)', () => {
+  test('quick reply → {body} (trimmed)', () => {
+    expect(buildDeliverBody({ kind: 'quick', body: '  looks good  ' })).toEqual({
+      body: 'looks good',
+    })
+  })
+
+  test('form → {summary} with detail only when non-blank', () => {
+    expect(buildDeliverBody({ kind: 'form', summary: ' ok ', detail: '' })).toEqual({
+      summary: 'ok',
+    })
+    expect(buildDeliverBody({ kind: 'form', summary: 'ok', detail: '  ' })).toEqual({
+      summary: 'ok',
+    })
+    expect(buildDeliverBody({ kind: 'form', summary: 'ok', detail: 'long text' })).toEqual({
+      summary: 'ok',
+      detail: 'long text',
+    })
+  })
+})
+
+describe('groupFcAssignments', () => {
+  test('open / active(dispatched|running|awaiting_human) / done; the rest stay off-panel', () => {
+    const rows = [
+      card({ id: 'o', status: 'open' }),
+      card({ id: 'd', status: 'dispatched' }),
+      card({ id: 'r', status: 'running' }),
+      card({ id: 'ah', status: 'awaiting_human' }),
+      card({ id: 'dn', status: 'done' }),
+      card({ id: 'dl', status: 'delivered' }),
+      card({ id: 'f', status: 'failed' }),
+      card({ id: 'c', status: 'canceled' }),
+    ]
+    const groups = groupFcAssignments(rows)
+    expect(groups.open.map((a) => a.id)).toEqual(['o'])
+    expect(groups.active.map((a) => a.id)).toEqual(['d', 'r', 'ah'])
+    expect(groups.done.map((a) => a.id)).toEqual(['dn'])
   })
 })

@@ -278,7 +278,7 @@ describe('RFC-164 engine — launch path', () => {
     })
     const res = await req('/api/workgroups/no-leader/tasks', {
       method: 'POST',
-      body: JSON.stringify({ name: 't', goal: 'g', repoPath: '/tmp/x' }),
+      body: JSON.stringify({ name: 't', goal: 'g' }),
     })
     expect(res.status).toBe(422)
     const body = (await res.json()) as { code: string; details?: { reasons?: string[] } }
@@ -309,7 +309,7 @@ describe('RFC-164 engine — launch path', () => {
     })
     const res = await req('/api/workgroups/with-human/tasks', {
       method: 'POST',
-      body: JSON.stringify({ name: 't', goal: 'g', repoPath: '/tmp/x' }),
+      body: JSON.stringify({ name: 't', goal: 'g' }),
     })
     // The old temporary guard must NOT fire; whatever the launch outcome is
     // (here it proceeds into worktree materialization against a fake repo),

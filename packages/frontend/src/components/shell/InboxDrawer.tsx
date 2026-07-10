@@ -23,6 +23,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { ClarifyRoundSummary, ReviewSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import type { WorkgroupPendingCount } from '@/lib/workgroup-room'
 
 export type InboxTab = 'all' | 'reviews' | 'clarify'
 
@@ -51,6 +52,17 @@ export function InboxDrawer({ open, onClose }: InboxDrawerProps) {
     enabled: open,
     refetchInterval: open ? 15_000 : false,
   })
+
+  // RFC-164 PR-6 — third source: workgroup to-dos (deliveries + gates). The
+  // endpoint is count-only, so the drawer renders a single summary row that
+  // jumps to the tasks list (each room carries its own to-do cards).
+  const workgroups = useQuery<WorkgroupPendingCount>({
+    queryKey: ['workgroup-tasks', 'pending-count'],
+    queryFn: ({ signal }) => api.get('/api/workgroup-tasks/pending-count', undefined, signal),
+    enabled: open,
+    refetchInterval: open ? 15_000 : false,
+  })
+  const wgTotal = tab === 'all' ? (workgroups.data?.total ?? 0) : 0
 
   // ESC closes; outside-click closes (only after the first paint, so the
   // very click that opened the drawer doesn't immediately close it).
@@ -169,9 +181,44 @@ export function InboxDrawer({ open, onClose }: InboxDrawerProps) {
       {(tab === 'all' || tab === 'clarify') && clarify.error !== null && (
         <ErrorRow message={t('nav.inbox.errorClarify')} onRetry={() => void clarify.refetch()} />
       )}
+      {tab === 'all' && workgroups.error !== null && (
+        <ErrorRow
+          message={t('nav.inbox.errorWorkgroups')}
+          onRetry={() => void workgroups.refetch()}
+        />
+      )}
 
-      {items.length === 0 && !reviews.isLoading && !clarify.isLoading && (
+      {items.length === 0 && wgTotal === 0 && !reviews.isLoading && !clarify.isLoading && (
         <div className="inbox-drawer__empty muted">{t('nav.inbox.empty')}</div>
+      )}
+
+      {/* RFC-164 PR-6 — workgroup to-dos summary row (count-only source; the
+          per-task room owns the actionable cards). */}
+      {wgTotal > 0 && (
+        <button
+          type="button"
+          className="inbox-drawer__item"
+          data-testid="inbox-row-workgroups"
+          onClick={() => {
+            onClose()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            void navigate({ to: '/tasks' } as any)
+          }}
+        >
+          <span className="inbox-drawer__kind inbox-drawer__kind--wg" data-kind="wg">
+            {t('nav.inbox.wgKind')}
+          </span>
+          <span className="inbox-drawer__title">{t('nav.inbox.wgRow', { n: wgTotal })}</span>
+          <span
+            className="inbox-drawer__subtitle muted"
+            data-testid="inbox-row-workgroups-breakdown"
+          >
+            {t('nav.inbox.wgBreakdown', {
+              d: workgroups.data?.deliveries ?? 0,
+              g: workgroups.data?.gates ?? 0,
+            })}
+          </span>
+        </button>
       )}
 
       <div className="inbox-drawer__list">

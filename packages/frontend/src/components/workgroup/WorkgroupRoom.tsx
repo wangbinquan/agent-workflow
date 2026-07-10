@@ -21,25 +21,32 @@ import { resolveWorkgroupSwitches } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Card } from '@/components/Card'
 import { ConfirmButton } from '@/components/ConfirmButton'
+import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
+import { Field, TextArea, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { NodeDetailDrawer } from '@/components/NodeDetailDrawer'
 import { StatusChip } from '@/components/StatusChip'
+import { WorkgroupTaskConfigDialog } from '@/components/workgroup/WorkgroupTaskConfigDialog'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { describeApiError } from '@/i18n'
 import {
   applyMention,
   assignmentStatusToKind,
   assignmentsForMessage,
+  buildDeliverBody,
   buildRoomTimeline,
   canPostRoomMessage,
+  groupFcAssignments,
   isAssignmentCancelable,
+  isHumanDeliveryCard,
   memberIndex,
   memberIsWorking,
   mentionCandidates,
   mentionQueryAt,
   resultBodyFor,
   workgroupRoomKey,
+  type WorkgroupDeliverInput,
   type WorkgroupRoomAssignment,
   type WorkgroupRoomMessage,
   type WorkgroupRoomResponse,
@@ -105,6 +112,39 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
       ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: workgroupRoomKey(taskId) }),
   })
+
+  // PR-5 (拍板 #16) — human-member delivery, both shapes normalized by
+  // buildDeliverBody. The room refresh flips the card to 'delivered'.
+  const deliver = useMutation({
+    mutationFn: ({ assignmentId, input }: { assignmentId: string; input: WorkgroupDeliverInput }) =>
+      api.post<{ messageId: string }>(
+        `/api/workgroup-tasks/${encodeURIComponent(taskId)}/assignments/${encodeURIComponent(assignmentId)}/deliver`,
+        buildDeliverBody(input),
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: workgroupRoomKey(taskId) }),
+  })
+
+  // PR-5 (design §8.2) — completion-gate decision. approve fires directly;
+  // reject goes through the comment dialog below (comment is REQUIRED).
+  const [rejectOpen, setRejectOpen] = useState(false)
+  const [rejectComment, setRejectComment] = useState('')
+  const confirmGate = useMutation({
+    mutationFn: (input: { decision: 'approve' | 'reject'; comment?: string }) =>
+      api.post<{ decision: string }>(
+        `/api/workgroup-tasks/${encodeURIComponent(taskId)}/confirm`,
+        input,
+      ),
+    onSuccess: () => {
+      setRejectOpen(false)
+      setRejectComment('')
+      void qc.invalidateQueries({ queryKey: workgroupRoomKey(taskId) })
+      // The decision also moves the task status (awaiting_review → running/done).
+      void qc.invalidateQueries({ queryKey: ['tasks', taskId] })
+    },
+  })
+
+  // PR-5 (design §8.4) — mid-run config dialog toggle.
+  const [configOpen, setConfigOpen] = useState(false)
 
   const timeline = useMemo(() => buildRoomTimeline(room.data?.messages ?? []), [room.data])
   const members = useMemo(
@@ -188,6 +228,8 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
                 canceling={cancelCard.isPending}
                 onCancel={(id) => cancelCard.mutateAsync(id)}
                 onViewRun={setDrawerRunId}
+                delivering={deliver.isPending}
+                onDeliver={(assignmentId, input) => deliver.mutateAsync({ assignmentId, input })}
               />
             ),
           )}
@@ -195,6 +237,11 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
 
         {cancelCard.error !== null && cancelCard.error !== undefined && (
           <div className="error-box">{describeApiError(cancelCard.error)}</div>
+        )}
+        {deliver.error !== null && deliver.error !== undefined && (
+          <div className="error-box" data-testid="workgroup-room-deliver-error">
+            {describeApiError(deliver.error)}
+          </div>
         )}
 
         <div className="workgroup-room__composer">
@@ -312,22 +359,22 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
             data-testid="workgroup-room-gate"
             footer={
               <div className="workgroup-room__card-actions">
-                {/* PR-4 renders the gate read-only; confirm/reject wire up in a
-                    later version (disabled buttons + hint say so). */}
+                {/* PR-5: the gate is live — approve fires directly, reject
+                    requires a comment (dialog below). */}
                 <button
                   type="button"
                   className="btn btn--sm btn--primary"
-                  disabled
-                  title={t('workgroups.room.gateActionsSoon')}
+                  disabled={confirmGate.isPending}
+                  onClick={() => confirmGate.mutate({ decision: 'approve' })}
                   data-testid="workgroup-room-gate-confirm"
                 >
-                  {t('workgroups.room.gateConfirm')}
+                  {confirmGate.isPending ? t('common.saving') : t('workgroups.room.gateConfirm')}
                 </button>
                 <button
                   type="button"
                   className="btn btn--sm"
-                  disabled
-                  title={t('workgroups.room.gateActionsSoon')}
+                  disabled={confirmGate.isPending}
+                  onClick={() => setRejectOpen(true)}
                   data-testid="workgroup-room-gate-reject"
                 >
                   {t('workgroups.room.gateReject')}
@@ -339,13 +386,41 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
             {data.gate.summary !== null && data.gate.summary !== '' && (
               <div className="workgroup-room__body">{data.gate.summary}</div>
             )}
-            <p className="form-field__hint">{t('workgroups.room.gateActionsSoon')}</p>
+            {confirmGate.error !== null && confirmGate.error !== undefined && (
+              <div className="error-box" data-testid="workgroup-room-gate-error">
+                {describeApiError(confirmGate.error)}
+              </div>
+            )}
           </Card>
+        )}
+
+        {/* PR-5 fc 观测面 — the shared task list, grouped open / active / done. */}
+        {data.config.mode === 'free_collab' && (
+          <FcTaskListCard
+            assignments={data.assignments}
+            members={members}
+            canceling={cancelCard.isPending}
+            onCancel={(id) => cancelCard.mutateAsync(id)}
+          />
         )}
 
         <Card
           header={<h3 className="workgroup-room__side-title">{t('workgroups.room.infoTitle')}</h3>}
           data-testid="workgroup-room-info"
+          footer={
+            // PR-5: mid-run config edits (switches / rounds / gate / members)
+            // — only while the task can still change course.
+            canPost ? (
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => setConfigOpen(true)}
+                data-testid="workgroup-room-config-btn"
+              >
+                {t('workgroups.room.configButton')}
+              </button>
+            ) : undefined
+          }
         >
           <dl className="workgroup-room__info">
             <dt>{t('workgroups.room.infoGoal')}</dt>
@@ -363,6 +438,58 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
           </dl>
         </Card>
       </aside>
+
+      {/* PR-5 — gate reject requires a comment (backend 422s without one). */}
+      <Dialog
+        open={rejectOpen}
+        onClose={() => setRejectOpen(false)}
+        title={t('workgroups.room.gateRejectTitle')}
+        size="sm"
+        data-testid="workgroup-room-gate-reject-dialog"
+        footer={
+          <>
+            {confirmGate.error !== null && confirmGate.error !== undefined && (
+              <span className="form-actions__error">{describeApiError(confirmGate.error)}</span>
+            )}
+            <button type="button" className="btn" onClick={() => setRejectOpen(false)}>
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              className="btn btn--danger"
+              disabled={confirmGate.isPending || rejectComment.trim().length === 0}
+              onClick={() =>
+                confirmGate.mutate({ decision: 'reject', comment: rejectComment.trim() })
+              }
+              data-testid="workgroup-room-gate-reject-submit"
+            >
+              {confirmGate.isPending ? t('common.saving') : t('workgroups.room.gateRejectSubmit')}
+            </button>
+          </>
+        }
+      >
+        <Field
+          label={t('workgroups.room.gateRejectCommentLabel')}
+          required
+          hint={t('workgroups.room.gateRejectCommentHint')}
+        >
+          <TextArea
+            value={rejectComment}
+            onChange={setRejectComment}
+            rows={4}
+            maxLength={65536}
+            data-testid="workgroup-room-gate-reject-comment"
+          />
+        </Field>
+      </Dialog>
+
+      {configOpen && (
+        <WorkgroupTaskConfigDialog
+          taskId={taskId}
+          config={data.config}
+          onClose={() => setConfigOpen(false)}
+        />
+      )}
 
       {drawerRunId !== null && nodeRuns.data !== undefined && (
         <NodeDetailDrawer
@@ -399,6 +526,8 @@ interface RoomMessageProps {
   canceling: boolean
   onCancel: (assignmentId: string) => Promise<unknown>
   onViewRun: (nodeRunId: string) => void
+  delivering: boolean
+  onDeliver: (assignmentId: string, input: WorkgroupDeliverInput) => Promise<unknown>
 }
 
 function RoomMessage({
@@ -409,6 +538,8 @@ function RoomMessage({
   canceling,
   onCancel,
   onViewRun,
+  delivering,
+  onDeliver,
 }: RoomMessageProps) {
   const { t } = useTranslation()
   const cards = assignmentsForMessage(message, data.assignments)
@@ -427,11 +558,16 @@ function RoomMessage({
     authorLabel = u?.displayName ?? u?.username ?? message.authorUserId ?? '?'
   }
 
+  // PR-6 观测面: the leader's convergence summary (kind='decision') stands
+  // out from plain chat — accent border via the modifier class.
+  const modifier = isSystem
+    ? ' workgroup-room__msg--system'
+    : message.kind === 'decision'
+      ? ' workgroup-room__msg--decision'
+      : ''
+
   return (
-    <div
-      className={`workgroup-room__msg${isSystem ? ' workgroup-room__msg--system' : ''}`}
-      data-testid={`wg-msg-${message.id}`}
-    >
+    <div className={`workgroup-room__msg${modifier}`} data-testid={`wg-msg-${message.id}`}>
       <div className="workgroup-room__msg-head">
         <span className="workgroup-room__author">{authorLabel}</span>
         {isLeader && (
@@ -458,6 +594,8 @@ function RoomMessage({
               canceling={canceling}
               onCancel={onCancel}
               onViewRun={onViewRun}
+              delivering={delivering}
+              onDeliver={onDeliver}
             />
           ))}
         </div>
@@ -473,6 +611,8 @@ function DispatchCard({
   canceling,
   onCancel,
   onViewRun,
+  delivering,
+  onDeliver,
 }: {
   assignment: WorkgroupRoomAssignment
   data: WorkgroupRoomResponse
@@ -480,13 +620,25 @@ function DispatchCard({
   canceling: boolean
   onCancel: (assignmentId: string) => Promise<unknown>
   onViewRun: (nodeRunId: string) => void
+  delivering: boolean
+  onDeliver: (assignmentId: string, input: WorkgroupDeliverInput) => Promise<unknown>
 }) {
   const { t } = useTranslation()
   const assignee =
     assignment.assigneeMemberId === null ? undefined : members.get(assignment.assigneeMemberId)
   const resultBody = resultBodyFor(assignment, data.messages)
+  // PR-5 (拍板 #16): a dispatched card assigned to a HUMAN member renders in
+  // the to-do form — highlighted + the two delivery entries.
+  const isTodo = isHumanDeliveryCard(assignment, members)
+  const [quickOpen, setQuickOpen] = useState(false)
+  const [quickText, setQuickText] = useState('')
+  const [formOpen, setFormOpen] = useState(false)
+
   return (
-    <div className="workgroup-room__card" data-testid={`wg-card-${assignment.id}`}>
+    <div
+      className={`workgroup-room__card${isTodo ? ' workgroup-room__card--todo' : ''}`}
+      data-testid={`wg-card-${assignment.id}`}
+    >
       <div className="workgroup-room__card-head">
         <strong className="workgroup-room__card-title">{assignment.title}</strong>
         <StatusChip
@@ -497,6 +649,11 @@ function DispatchCard({
           {t(`workgroups.room.assignmentStatus.${assignment.status}`)}
         </StatusChip>
         <span className="chip chip--tight">{t(`workgroups.room.source.${assignment.source}`)}</span>
+        {isTodo && (
+          <StatusChip kind="warn" size="sm" data-testid={`wg-card-todo-${assignment.id}`}>
+            {t('workgroups.room.deliverTodo')}
+          </StatusChip>
+        )}
       </div>
       <div className="workgroup-room__card-assignee">
         {t('workgroups.room.assignedTo')}{' '}
@@ -513,8 +670,30 @@ function DispatchCard({
           <div className="workgroup-room__body">{resultBody}</div>
         </details>
       )}
-      {(assignment.nodeRunId !== null || isAssignmentCancelable(assignment.status)) && (
+      {(assignment.nodeRunId !== null || isAssignmentCancelable(assignment.status) || isTodo) && (
         <div className="workgroup-room__card-actions">
+          {isTodo && (
+            <>
+              <button
+                type="button"
+                className="btn btn--xs btn--primary"
+                onClick={() => setQuickOpen((v) => !v)}
+                disabled={delivering}
+                data-testid={`wg-card-deliver-quick-${assignment.id}`}
+              >
+                {t('workgroups.room.deliverQuick')}
+              </button>
+              <button
+                type="button"
+                className="btn btn--xs"
+                onClick={() => setFormOpen(true)}
+                disabled={delivering}
+                data-testid={`wg-card-deliver-form-${assignment.id}`}
+              >
+                {t('workgroups.room.deliverForm')}
+              </button>
+            </>
+          )}
           {assignment.nodeRunId !== null && (
             <button
               type="button"
@@ -536,7 +715,173 @@ function DispatchCard({
           )}
         </div>
       )}
+      {/* Quick reply — inline textarea, POSTs the chat-body shape. */}
+      {isTodo && quickOpen && (
+        <div className="workgroup-room__card-quick">
+          <textarea
+            className="form-input"
+            rows={3}
+            value={quickText}
+            onChange={(e) => setQuickText(e.target.value)}
+            placeholder={t('workgroups.room.deliverQuickPlaceholder')}
+            disabled={delivering}
+            data-testid={`wg-card-quick-input-${assignment.id}`}
+          />
+          <button
+            type="button"
+            className="btn btn--sm btn--primary"
+            disabled={delivering || quickText.trim().length === 0}
+            onClick={() =>
+              void onDeliver(assignment.id, { kind: 'quick', body: quickText }).then(() => {
+                setQuickOpen(false)
+                setQuickText('')
+              })
+            }
+            data-testid={`wg-card-quick-submit-${assignment.id}`}
+          >
+            {t('workgroups.room.deliverSubmit')}
+          </button>
+        </div>
+      )}
+      {/* Form delivery — structured {summary, detail?} via the shared Dialog. */}
+      {isTodo && formOpen && (
+        <DeliverFormDialog
+          assignment={assignment}
+          delivering={delivering}
+          onClose={() => setFormOpen(false)}
+          onDeliver={onDeliver}
+        />
+      )}
     </div>
+  )
+}
+
+/** PR-5 结构化交付表单（拍板 #16 第二形态）。 */
+function DeliverFormDialog({
+  assignment,
+  delivering,
+  onClose,
+  onDeliver,
+}: {
+  assignment: WorkgroupRoomAssignment
+  delivering: boolean
+  onClose: () => void
+  onDeliver: (assignmentId: string, input: WorkgroupDeliverInput) => Promise<unknown>
+}) {
+  const { t } = useTranslation()
+  const [summary, setSummary] = useState('')
+  const [detail, setDetail] = useState('')
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={t('workgroups.room.deliverFormTitle')}
+      size="md"
+      data-testid={`wg-deliver-form-dialog-${assignment.id}`}
+      footer={
+        <>
+          <button type="button" className="btn" onClick={onClose}>
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={delivering || summary.trim().length === 0}
+            onClick={() =>
+              void onDeliver(assignment.id, { kind: 'form', summary, detail }).then(onClose)
+            }
+            data-testid={`wg-deliver-form-submit-${assignment.id}`}
+          >
+            {t('workgroups.room.deliverSubmit')}
+          </button>
+        </>
+      }
+    >
+      <Field label={t('workgroups.room.deliverSummaryLabel')} required>
+        <TextInput
+          value={summary}
+          onChange={setSummary}
+          maxLength={16384}
+          data-testid={`wg-deliver-summary-${assignment.id}`}
+        />
+      </Field>
+      <Field label={t('workgroups.room.deliverDetailLabel')}>
+        <TextArea
+          value={detail}
+          onChange={setDetail}
+          rows={6}
+          maxLength={65536}
+          data-testid={`wg-deliver-detail-${assignment.id}`}
+        />
+      </Field>
+    </Dialog>
+  )
+}
+
+/**
+ * PR-5 fc 观测面 — the shared task list, three groups (open / in-flight /
+ * done). Open rows keep their cancel affordance (same CAS as the cards).
+ */
+function FcTaskListCard({
+  assignments,
+  members,
+  canceling,
+  onCancel,
+}: {
+  assignments: WorkgroupRoomAssignment[]
+  members: Map<string, WorkgroupRuntimeMember>
+  canceling: boolean
+  onCancel: (assignmentId: string) => Promise<unknown>
+}) {
+  const { t } = useTranslation()
+  const groups = groupFcAssignments(assignments)
+  const sections = [
+    { key: 'open', label: t('workgroups.room.fcOpen'), rows: groups.open },
+    { key: 'active', label: t('workgroups.room.fcActive'), rows: groups.active },
+    { key: 'done', label: t('workgroups.room.fcDone'), rows: groups.done },
+  ] as const
+  return (
+    <Card
+      header={<h3 className="workgroup-room__side-title">{t('workgroups.room.fcListTitle')}</h3>}
+      data-testid="workgroup-room-fc-list"
+    >
+      {assignments.length === 0 && (
+        <p className="form-field__hint">{t('workgroups.room.fcEmpty')}</p>
+      )}
+      {sections.map((s) => (
+        <div key={s.key} className="workgroup-room__fc-group" data-testid={`wg-fc-group-${s.key}`}>
+          <div className="workgroup-room__fc-group-head">
+            <span>{s.label}</span>
+            <span className="chip chip--tight" data-testid={`wg-fc-count-${s.key}`}>
+              {s.rows.length}
+            </span>
+          </div>
+          <ul className="workgroup-room__fc-rows">
+            {s.rows.map((a) => {
+              const assignee =
+                a.assigneeMemberId === null ? undefined : members.get(a.assigneeMemberId)
+              return (
+                <li key={a.id} data-testid={`wg-fc-row-${a.id}`}>
+                  <span className="workgroup-room__fc-title" title={a.title}>
+                    {a.title}
+                  </span>
+                  {assignee !== undefined && <span className="muted">@{assignee.displayName}</span>}
+                  {a.status === 'open' && (
+                    <ConfirmButton
+                      label={t('workgroups.room.cancelCard')}
+                      onConfirm={() => onCancel(a.id)}
+                      variant="danger"
+                      size="sm"
+                      disabled={canceling}
+                    />
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ))}
+    </Card>
   )
 }
 

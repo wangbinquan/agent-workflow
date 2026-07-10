@@ -1609,6 +1609,11 @@ code {
   background: #c2410c;
 }
 
+/* RFC-164 PR-6: workgroup to-dos summary row. */
+.inbox-drawer__kind--wg {
+  background: #7c3aed;
+}
+
 .inbox-drawer__title {
   grid-row: 1;
   grid-column: 2;
@@ -12018,4 +12023,103 @@ mark.comment-anchor[data-active='true'] {
 .workgroup-room__goal {
   max-height: 6.5em;
   overflow: hidden;
+}
+
+/* ---- RFC-164 PR-5/6 — room additions (same .workgroup-room namespace) ---- */
+
+/* Human to-do card: accent-highlighted until delivered. */
+.workgroup-room__card--todo {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.workgroup-room__card-quick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.workgroup-room__card-quick .form-input {
+  resize: vertical;
+}
+
+.workgroup-room__card-quick .btn {
+  align-self: flex-end;
+}
+
+/* Leader convergence summary (kind='decision') stands out from plain chat. */
+.workgroup-room__msg--decision {
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-radius: 6px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+/* Mid-run config dialog: member staging rows. */
+.workgroup-room__config-members-title {
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.workgroup-room__config-members {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.workgroup-room__config-members li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.workgroup-room__config-member--removing .workgroup-room__member-name {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+/* free_collab task-list panel groups. */
+.workgroup-room__fc-group {
+  margin-top: 8px;
+}
+
+.workgroup-room__fc-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.workgroup-room__fc-rows {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workgroup-room__fc-rows li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.workgroup-room__fc-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
 }

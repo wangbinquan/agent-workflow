@@ -10,11 +10,15 @@
 // RFC-121: fusions left the inbox for the /memory page, so this badge no
 // longer counts awaiting-approval fusions — the sidebar Memory badge
 // (MemoryPendingBadge) carries the fusion + memory-candidate pending count.
+//
+// RFC-164 PR-6: third source — workgroup to-dos (my pending human-delivery
+// cards + confirmable completion gates), same failure-soft merge.
 
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import type { ClarifyPendingCount, ReviewPendingCount } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import type { WorkgroupPendingCount } from '@/lib/workgroup-room'
 
 interface InboxFooterButtonProps {
   open: boolean
@@ -33,12 +37,18 @@ export function InboxFooterButton({ open, onToggle }: InboxFooterButtonProps) {
     queryFn: ({ signal }) => api.get('/api/clarify/pending-count', undefined, signal),
     refetchInterval: 15_000,
   })
+  const workgroups = useQuery<WorkgroupPendingCount>({
+    queryKey: ['workgroup-tasks', 'pending-count'],
+    queryFn: ({ signal }) => api.get('/api/workgroup-tasks/pending-count', undefined, signal),
+    refetchInterval: 15_000,
+  })
 
   const reviewsCount = reviews.data?.count ?? 0
   const clarifyCount = clarify.data?.count ?? 0
-  const allFailed = reviews.error && clarify.error
-  // Even if one feed errors the other still contributes — design.md §5.
-  const total = reviewsCount + clarifyCount
+  const workgroupCount = workgroups.data?.total ?? 0
+  const allFailed = reviews.error && clarify.error && workgroups.error
+  // Even if one feed errors the others still contribute — design.md §5.
+  const total = reviewsCount + clarifyCount + workgroupCount
   const showBadge = !allFailed && total > 0
   const badgeText = total > 99 ? '99+' : String(total)
 

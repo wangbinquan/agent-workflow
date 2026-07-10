@@ -123,7 +123,16 @@ describe('i18n — chatroom keys ship in both bundles', () => {
         'send',
         'terminalNotice',
         'gateAwaiting',
-        'gateActionsSoon',
+        // PR-5: the gate went live — reject flows through a comment dialog.
+        'gateRejectTitle',
+        'gateRejectSubmit',
+        // PR-5: human delivery + mid-run config + fc panel.
+        'deliverQuick',
+        'deliverForm',
+        'deliverSubmit',
+        'configButton',
+        'configTitle',
+        'fcListTitle',
         'working',
         'idle',
       ] as const) {

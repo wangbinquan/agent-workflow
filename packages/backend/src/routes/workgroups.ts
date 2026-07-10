@@ -13,6 +13,7 @@
 
 import {
   CreateWorkgroupSchema,
+  rejectRetiredStartTaskKeys,
   RenameWorkgroupSchema,
   StartWorkgroupTaskSchema,
   UpdateWorkgroupSchema,
@@ -123,6 +124,16 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
   app.post('/api/workgroups/:name/tasks', async (c) => {
     const name = c.req.param('name')
     const body = await safeJson(c.req.raw)
+    // RFC-165 (F1): raw-key gate — see routes/tasks.ts.
+    {
+      const retired = rejectRetiredStartTaskKeys(body)
+      if (retired !== null) {
+        throw new ValidationError(
+          'start-task-path-retired',
+          `RFC-165 retired path-mode launches; remove '${retired}' (use a file:// repoUrl for local repos)`,
+        )
+      }
+    }
     const parsed = StartWorkgroupTaskSchema.safeParse(body)
     if (!parsed.success) {
       throw new ValidationError('workgroup-launch-invalid', 'invalid workgroup launch payload', {

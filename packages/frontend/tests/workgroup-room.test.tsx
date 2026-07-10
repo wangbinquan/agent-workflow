@@ -1,4 +1,4 @@
-// RFC-164 PR-4 — WorkgroupRoom contract (the group task's primary view).
+// RFC-164 PR-4/5/6 — WorkgroupRoom contract (the group task's primary view).
 //
 // Locks:
 //   1. Author forms: member (@displayName + leader badge), human (resolved
@@ -14,8 +14,13 @@
 //   5. Composer: send POSTs {body}; the roster @-completion appears while
 //      typing "@…" and clicking a suggestion commits it; terminal task
 //      statuses disable the composer.
-//   6. Gate rail: awaitingConfirmation renders the gate card with summary and
-//      DISABLED confirm/reject (copy says a later version unlocks them).
+//   6. Gate rail (PR-5, live): approve POSTs directly; reject flows through a
+//      REQUIRED-comment dialog; 409 gate-not-open maps to friendly copy.
+//   7. Human delivery (PR-5 拍板 #16): dispatched human cards render the
+//      to-do form with quick-reply {body} and form {summary, detail} shapes.
+//   8. fc task-list panel (PR-5) groups open/active/done; config entry (PR-5)
+//      opens WorkgroupTaskConfigDialog; decision messages carry the accent
+//      modifier (PR-6).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -199,7 +204,10 @@ interface FetchCall {
   body: unknown
 }
 
-function installFetch(room: WorkgroupRoomResponse): FetchCall[] {
+function installFetch(
+  room: WorkgroupRoomResponse,
+  overrides: { confirm?: () => Response; deliver?: () => Response } = {},
+): FetchCall[] {
   const calls: FetchCall[] = []
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -224,6 +232,14 @@ function installFetch(room: WorkgroupRoomResponse): FetchCall[] {
         return json({ messageId: 'new', assignmentIds: [] }, 201)
       }
       if (url.includes('/cancel') && method === 'POST') return new Response(null, { status: 204 })
+      if (url.includes('/deliver') && method === 'POST') {
+        return overrides.deliver !== undefined
+          ? overrides.deliver()
+          : json({ messageId: 'delivery' }, 201)
+      }
+      if (url.includes('/confirm') && method === 'POST') {
+        return overrides.confirm !== undefined ? overrides.confirm() : json({ decision: 'approve' })
+      }
       if (url.includes('/node-runs')) {
         return json({ runs: [makeRun({ id: 'nr1' })], outputs: [] })
       }
@@ -431,8 +447,9 @@ describe('WorkgroupRoom — side rail', () => {
     expect(within(leadRow).getByText('Leader')).toBeTruthy()
   })
 
-  test('gate card renders when awaitingConfirmation with summary + DISABLED confirm/reject', async () => {
+  test('gate card: approve POSTs {decision:approve} directly (PR-5 live gate)', async () => {
     const room = makeRoom({
+      taskStatus: 'awaiting_review',
       gate: {
         declaredDone: true,
         awaitingConfirmation: true,
@@ -440,16 +457,72 @@ describe('WorkgroupRoom — side rail', () => {
         summary: 'all done',
       },
     })
-    installFetch(room)
-    renderRoom(room)
+    const calls = installFetch(room)
+    renderRoom(room, 'awaiting_review')
     const gate = await screen.findByTestId('workgroup-room-gate')
     expect(within(gate).getByText('all done')).toBeTruthy()
-    const confirm = within(gate).getByTestId('workgroup-room-gate-confirm') as HTMLButtonElement
-    const reject = within(gate).getByTestId('workgroup-room-gate-reject') as HTMLButtonElement
-    expect(confirm.disabled).toBe(true)
-    expect(reject.disabled).toBe(true)
-    // Copy promises the actions unlock later.
-    expect(within(gate).getByText('Confirm / reject unlock in a later version.')).toBeTruthy()
+    fireEvent.click(within(gate).getByTestId('workgroup-room-gate-confirm'))
+    await waitFor(() => {
+      const post = calls.find(
+        (c) => c.method === 'POST' && c.url.endsWith('/api/workgroup-tasks/t1/confirm'),
+      )
+      expect(post).toBeTruthy()
+      expect(post?.body).toEqual({ decision: 'approve' })
+    })
+  })
+
+  test('gate reject: dialog requires a comment, then POSTs {decision:reject, comment}', async () => {
+    const room = makeRoom({
+      taskStatus: 'awaiting_review',
+      gate: { declaredDone: true, awaitingConfirmation: true, rejected: false, summary: 's' },
+    })
+    const calls = installFetch(room)
+    renderRoom(room, 'awaiting_review')
+    const gate = await screen.findByTestId('workgroup-room-gate')
+    fireEvent.click(within(gate).getByTestId('workgroup-room-gate-reject'))
+    const submit = (await screen.findByTestId(
+      'workgroup-room-gate-reject-submit',
+    )) as HTMLButtonElement
+    // Comment is REQUIRED (backend 422s without one) — submit stays disabled.
+    expect(submit.disabled).toBe(true)
+    fireEvent.change(screen.getByTestId('workgroup-room-gate-reject-comment'), {
+      target: { value: 'missing the perf part' },
+    })
+    expect(
+      (screen.getByTestId('workgroup-room-gate-reject-submit') as HTMLButtonElement).disabled,
+    ).toBe(false)
+    fireEvent.click(screen.getByTestId('workgroup-room-gate-reject-submit'))
+    await waitFor(() => {
+      const post = calls.find(
+        (c) => c.method === 'POST' && c.url.endsWith('/api/workgroup-tasks/t1/confirm'),
+      )
+      expect(post).toBeTruthy()
+      expect(post?.body).toEqual({ decision: 'reject', comment: 'missing the perf part' })
+    })
+  })
+
+  test('a 409 gate-not-open response surfaces the friendly copy on the card', async () => {
+    const room = makeRoom({
+      taskStatus: 'awaiting_review',
+      gate: { declaredDone: true, awaitingConfirmation: true, rejected: false, summary: null },
+    })
+    installFetch(room, {
+      confirm: () =>
+        new Response(
+          JSON.stringify({
+            ok: false,
+            code: 'workgroup-gate-not-open',
+            message: 'the completion gate is not awaiting confirmation',
+          }),
+          { status: 409, headers: { 'content-type': 'application/json' } },
+        ),
+    })
+    renderRoom(room, 'awaiting_review')
+    const gate = await screen.findByTestId('workgroup-room-gate')
+    fireEvent.click(within(gate).getByTestId('workgroup-room-gate-confirm'))
+    const err = await screen.findByTestId('workgroup-room-gate-error')
+    expect(err.textContent).toContain('The completion gate is not open for confirmation')
+    expect(err.textContent).not.toContain('workgroup-gate-not-open')
   })
 
   test('no gate card while the gate is not awaiting confirmation', async () => {
@@ -468,5 +541,236 @@ describe('WorkgroupRoom — side rail', () => {
     expect(within(info).getByText('20')).toBeTruthy()
     // shareOutputs + directMessages on, blackboard off (lw uses stored values).
     expect(within(info).getByText('Share outputs · Direct messages')).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// PR-5/6 — human delivery, fc task list, config entry, decision highlight
+// ---------------------------------------------------------------------------
+
+/** Two dispatched cards: a3 → Alice (human, to-do form), a4 → Worker (agent). */
+function deliveryRoom(): WorkgroupRoomResponse {
+  return makeRoom({
+    messages: [
+      {
+        id: '01F',
+        round: 1,
+        authorKind: 'member',
+        authorMemberId: 'mem_lead',
+        authorUserId: null,
+        kind: 'dispatch',
+        bodyMd: '@Alice review the copy',
+        mentionMemberIds: ['mem_alice'],
+        assignmentId: 'a3',
+        createdAt: 5000,
+      },
+      {
+        id: '01G',
+        round: 1,
+        authorKind: 'member',
+        authorMemberId: 'mem_lead',
+        authorUserId: null,
+        kind: 'dispatch',
+        bodyMd: '@Worker crunch the data',
+        mentionMemberIds: ['mem_work'],
+        assignmentId: 'a4',
+        createdAt: 5100,
+      },
+    ],
+    assignments: [
+      {
+        id: 'a3',
+        round: 1,
+        source: 'leader',
+        createdByUserId: null,
+        assigneeMemberId: 'mem_alice',
+        title: 'review the copy',
+        briefMd: 'please review',
+        status: 'dispatched',
+        nodeRunId: null,
+        resultMessageId: null,
+        createdAt: 5000,
+        updatedAt: 5000,
+      },
+      {
+        id: 'a4',
+        round: 1,
+        source: 'leader',
+        createdByUserId: null,
+        assigneeMemberId: 'mem_work',
+        title: 'crunch the data',
+        briefMd: 'crunch it',
+        status: 'dispatched',
+        nodeRunId: null,
+        resultMessageId: null,
+        createdAt: 5100,
+        updatedAt: 5100,
+      },
+    ],
+  })
+}
+
+describe('WorkgroupRoom — human delivery cards (PR-5 拍板 #16)', () => {
+  test('only the human-assigned dispatched card renders the to-do form + deliver entries', async () => {
+    installFetch(deliveryRoom())
+    renderRoom(deliveryRoom())
+    const humanCard = await screen.findByTestId('wg-card-a3')
+    expect(humanCard.className).toContain('workgroup-room__card--todo')
+    expect(within(humanCard).getByTestId('wg-card-todo-a3')).toBeTruthy()
+    expect(within(humanCard).getByTestId('wg-card-deliver-quick-a3')).toBeTruthy()
+    expect(within(humanCard).getByTestId('wg-card-deliver-form-a3')).toBeTruthy()
+    // Agent-assigned card: plain dispatch form, no delivery affordances.
+    const agentCard = screen.getByTestId('wg-card-a4')
+    expect(agentCard.className).not.toContain('workgroup-room__card--todo')
+    expect(within(agentCard).queryByTestId('wg-card-deliver-quick-a4')).toBeNull()
+    expect(within(agentCard).queryByTestId('wg-card-deliver-form-a4')).toBeNull()
+  })
+
+  test('quick reply expands inline and POSTs the {body} shape', async () => {
+    const calls = installFetch(deliveryRoom())
+    renderRoom(deliveryRoom())
+    fireEvent.click(await screen.findByTestId('wg-card-deliver-quick-a3'))
+    const input = (await screen.findByTestId('wg-card-quick-input-a3')) as HTMLTextAreaElement
+    const submit = screen.getByTestId('wg-card-quick-submit-a3') as HTMLButtonElement
+    expect(submit.disabled).toBe(true) // empty draft
+    fireEvent.change(input, { target: { value: 'looks good to me' } })
+    fireEvent.click(screen.getByTestId('wg-card-quick-submit-a3'))
+    await waitFor(() => {
+      const post = calls.find(
+        (c) =>
+          c.method === 'POST' && c.url.endsWith('/api/workgroup-tasks/t1/assignments/a3/deliver'),
+      )
+      expect(post).toBeTruthy()
+      expect(post?.body).toEqual({ body: 'looks good to me' })
+    })
+  })
+
+  test('form delivery opens the Dialog and POSTs the {summary, detail} shape', async () => {
+    const calls = installFetch(deliveryRoom())
+    renderRoom(deliveryRoom())
+    fireEvent.click(await screen.findByTestId('wg-card-deliver-form-a3'))
+    const submit = (await screen.findByTestId('wg-deliver-form-submit-a3')) as HTMLButtonElement
+    expect(submit.disabled).toBe(true) // summary required
+    fireEvent.change(screen.getByTestId('wg-deliver-summary-a3'), {
+      target: { value: 'copy approved' },
+    })
+    fireEvent.change(screen.getByTestId('wg-deliver-detail-a3'), {
+      target: { value: 'two nits inline' },
+    })
+    fireEvent.click(screen.getByTestId('wg-deliver-form-submit-a3'))
+    await waitFor(() => {
+      const post = calls.find(
+        (c) =>
+          c.method === 'POST' && c.url.endsWith('/api/workgroup-tasks/t1/assignments/a3/deliver'),
+      )
+      expect(post).toBeTruthy()
+      expect(post?.body).toEqual({ summary: 'copy approved', detail: 'two nits inline' })
+    })
+  })
+})
+
+describe('WorkgroupRoom — fc task list panel (PR-5)', () => {
+  function fcRoom(): WorkgroupRoomResponse {
+    const base = makeRoom()
+    const card = (
+      id: string,
+      status:
+        | 'open'
+        | 'dispatched'
+        | 'running'
+        | 'awaiting_human'
+        | 'done'
+        | 'canceled'
+        | 'delivered'
+        | 'failed',
+      assignee: string | null,
+    ) => ({
+      id,
+      round: 1,
+      source: 'self_claim' as const,
+      createdByUserId: null,
+      assigneeMemberId: assignee,
+      title: `task ${id}`,
+      briefMd: 'b',
+      status,
+      nodeRunId: null,
+      resultMessageId: null,
+      createdAt: 1000,
+      updatedAt: 1000,
+    })
+    return makeRoom({
+      config: { ...base.config, mode: 'free_collab', leaderMemberId: null },
+      messages: [],
+      assignments: [
+        card('o1', 'open', null),
+        card('d1', 'dispatched', 'mem_work'),
+        card('r1', 'running', 'mem_work'),
+        card('ah1', 'awaiting_human', 'mem_alice'),
+        card('done1', 'done', 'mem_work'),
+        card('c1', 'canceled', null),
+      ],
+    })
+  }
+
+  test('groups open / in-flight / done with counts; canceled stays off the panel', async () => {
+    installFetch(fcRoom())
+    renderRoom(fcRoom())
+    const panel = await screen.findByTestId('workgroup-room-fc-list')
+    expect(within(panel).getByTestId('wg-fc-count-open').textContent).toBe('1')
+    expect(within(panel).getByTestId('wg-fc-count-active').textContent).toBe('3')
+    expect(within(panel).getByTestId('wg-fc-count-done').textContent).toBe('1')
+    expect(within(panel).getByTestId('wg-fc-row-o1')).toBeTruthy()
+    expect(within(panel).getByTestId('wg-fc-row-r1')).toBeTruthy()
+    expect(within(panel).queryByTestId('wg-fc-row-c1')).toBeNull()
+    // Open rows keep the cancel affordance.
+    const openRow = within(panel).getByTestId('wg-fc-row-o1')
+    expect(within(openRow).getByRole('button', { name: 'Cancel' })).toBeTruthy()
+  })
+
+  test('leader_worker rooms render no fc panel', async () => {
+    installFetch(makeRoom())
+    renderRoom(makeRoom())
+    await screen.findByTestId('workgroup-room')
+    expect(screen.queryByTestId('workgroup-room-fc-list')).toBeNull()
+  })
+})
+
+describe('WorkgroupRoom — mid-run config entry + decision highlight (PR-5/6)', () => {
+  test('the side rail opens the config dialog while the task is live', async () => {
+    installFetch(makeRoom())
+    renderRoom(makeRoom())
+    fireEvent.click(await screen.findByTestId('workgroup-room-config-btn'))
+    await screen.findByTestId('workgroup-room-config-dialog')
+  })
+
+  test('terminal tasks hide the config entry', async () => {
+    installFetch(makeRoom({ taskStatus: 'done' }))
+    renderRoom(makeRoom({ taskStatus: 'done' }), 'done')
+    await screen.findByTestId('workgroup-room')
+    expect(screen.queryByTestId('workgroup-room-config-btn')).toBeNull()
+  })
+
+  test("the leader's decision message carries the accent modifier", async () => {
+    const room = makeRoom({
+      messages: [
+        {
+          id: '01Z',
+          round: 3,
+          authorKind: 'member',
+          authorMemberId: 'mem_lead',
+          authorUserId: null,
+          kind: 'decision',
+          bodyMd: 'we are done: shipped it',
+          mentionMemberIds: [],
+          assignmentId: null,
+          createdAt: 9000,
+        },
+      ],
+      assignments: [],
+    })
+    installFetch(room)
+    renderRoom(room)
+    const msg = await screen.findByTestId('wg-msg-01Z')
+    expect(msg.className).toContain('workgroup-room__msg--decision')
   })
 })

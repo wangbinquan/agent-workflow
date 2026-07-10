@@ -248,12 +248,11 @@ export const StartWorkgroupTaskSchema = z.object({
   name: z.string().trim().min(1).max(255),
   /** The group's mission statement — injected every turn (决策 #12 goal). */
   goal: z.string().trim().min(1).max(65536),
-  repoPath: z.string().min(1).optional(),
+  /** RFC-165: temporary-space launch (see StartTaskSchema.scratch). */
+  scratch: z.boolean().optional(),
   repoUrl: z.string().min(1).optional(),
   ref: z.string().min(1).optional(),
-  baseBranch: z.string().min(1).optional(),
   repos: z.array(z.unknown()).min(1).max(16).optional(),
-  fetchBeforeLaunch: z.boolean().optional(),
   collaboratorUserIds: z.array(z.string().min(1)).max(64).optional(),
   gitUserName: z.string().max(255).optional(),
   gitUserEmail: z.string().max(255).optional(),

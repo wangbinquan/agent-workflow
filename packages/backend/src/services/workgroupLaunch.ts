@@ -168,11 +168,6 @@ export async function startWorkgroupTask(
       workflowId: WORKGROUP_HOST_WORKFLOW_ID,
       name: input.name,
       inputs: {},
-      ...(input.repoPath !== undefined ? { repoPath: input.repoPath } : {}),
-      ...(input.baseBranch !== undefined ? { baseBranch: input.baseBranch } : {}),
-      ...(input.fetchBeforeLaunch !== undefined
-        ? { fetchBeforeLaunch: input.fetchBeforeLaunch }
-        : {}),
       ...(input.collaboratorUserIds !== undefined
         ? { collaboratorUserIds: input.collaboratorUserIds }
         : {}),

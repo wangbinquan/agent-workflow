@@ -16,6 +16,7 @@ import type {
   WorkgroupMessage,
   WorkgroupRuntimeConfig,
   WorkgroupRuntimeMember,
+  WorkgroupSwitches,
 } from '@agent-workflow/shared'
 import type { StatusChipKind } from '@/components/StatusChip'
 
@@ -251,4 +252,157 @@ export function applyMention(
   const after = text.slice(Math.max(ctx.start, Math.min(caret, text.length)))
   const inserted = `@${displayName} `
   return { text: before + inserted + after, caret: before.length + inserted.length }
+}
+
+// ---------------------------------------------------------------------------
+// PR-5/6 — human delivery, completion gate, fc task list, mid-run config
+// ---------------------------------------------------------------------------
+
+/** GET /api/workgroup-tasks/pending-count (inbox third source). */
+export interface WorkgroupPendingCount {
+  deliveries: number
+  gates: number
+  total: number
+}
+
+/**
+ * A card renders in the "human to-do" form (highlight + deliver actions) when
+ * its assignee is a HUMAN member and the card sits in `dispatched` (the only
+ * status the deliver endpoint's CAS accepts — dispatched→delivered).
+ */
+export function isHumanDeliveryCard(
+  assignment: Pick<WorkgroupRoomAssignment, 'assigneeMemberId' | 'status'>,
+  members: ReadonlyMap<string, Pick<WorkgroupRuntimeMember, 'memberType'>>,
+): boolean {
+  if (assignment.status !== 'dispatched' || assignment.assigneeMemberId === null) return false
+  return members.get(assignment.assigneeMemberId)?.memberType === 'human'
+}
+
+/** The two delivery shapes (拍板 #16) the deliver endpoint accepts. */
+export type WorkgroupDeliverInput =
+  | { kind: 'quick'; body: string }
+  | { kind: 'form'; summary: string; detail: string }
+
+/**
+ * POST body for /assignments/:id/deliver. Quick reply → `{body}`; form →
+ * `{summary}` (+ `detail` only when non-blank, so the wire stays minimal and
+ * the backend's `summary + \n\n + detail` normalization never sees '').
+ */
+export function buildDeliverBody(input: WorkgroupDeliverInput): Record<string, unknown> {
+  if (input.kind === 'quick') return { body: input.body.trim() }
+  const out: Record<string, unknown> = { summary: input.summary.trim() }
+  if (input.detail.trim().length > 0) out.detail = input.detail
+  return out
+}
+
+/**
+ * free_collab task-list panel grouping (design §7.3 观测面):
+ *   open   — unclaimed, still cancelable;
+ *   active — claimed and in flight (dispatched | running | awaiting_human);
+ *   done   — consumed results.
+ * delivered / failed / canceled rows stay off the panel by design — the
+ * dispatch cards in the stream carry those endings.
+ */
+export interface FcAssignmentGroups {
+  open: WorkgroupRoomAssignment[]
+  active: WorkgroupRoomAssignment[]
+  done: WorkgroupRoomAssignment[]
+}
+
+export function groupFcAssignments(
+  assignments: readonly WorkgroupRoomAssignment[],
+): FcAssignmentGroups {
+  const groups: FcAssignmentGroups = { open: [], active: [], done: [] }
+  for (const a of assignments) {
+    if (a.status === 'open') groups.open.push(a)
+    else if (a.status === 'dispatched' || a.status === 'running' || a.status === 'awaiting_human') {
+      groups.active.push(a)
+    } else if (a.status === 'done') groups.done.push(a)
+  }
+  return groups
+}
+
+// ---------------------------------------------------------------------------
+// Mid-run config patch (PUT /api/workgroup-tasks/:taskId/config, design §8.4)
+// ---------------------------------------------------------------------------
+
+/** Staged member addition (the wire shape of ConfigPatchSchema.addMembers[i]). */
+export interface WorkgroupConfigMemberAdd {
+  memberType: 'agent' | 'human'
+  agentName?: string
+  userId?: string
+  displayName: string
+  roleDesc: string
+}
+
+export interface WorkgroupTaskConfigDraft {
+  switches: WorkgroupSwitches
+  /** undefined = field cleared → treated as "unchanged". */
+  maxRounds: number | undefined
+  completionGate: boolean
+  addMembers: WorkgroupConfigMemberAdd[]
+  removeMemberIds: string[]
+}
+
+/** Dialog seed — mirrors the CURRENT task copy so diffing starts clean. */
+export function workgroupTaskConfigDraftFrom(
+  config: Pick<WorkgroupRuntimeConfig, 'switches' | 'maxRounds' | 'completionGate'>,
+): WorkgroupTaskConfigDraft {
+  return {
+    switches: { ...config.switches },
+    maxRounds: config.maxRounds,
+    completionGate: config.completionGate,
+    addMembers: [],
+    removeMemberIds: [],
+  }
+}
+
+/**
+ * Compose the PUT body carrying ONLY the fields that actually changed
+ * against the task's current config copy. Returns null when nothing changed
+ * (the dialog disables submit — the backend would 422 `workgroup-config-empty`).
+ * `switches` is all-or-nothing on the wire (the schema wants the full
+ * triple), included iff any one of the three flipped.
+ */
+export function buildWorkgroupConfigPatch(
+  config: Pick<WorkgroupRuntimeConfig, 'switches' | 'maxRounds' | 'completionGate'>,
+  draft: WorkgroupTaskConfigDraft,
+): Record<string, unknown> | null {
+  const out: Record<string, unknown> = {}
+  const s = draft.switches
+  if (
+    s.shareOutputs !== config.switches.shareOutputs ||
+    s.directMessages !== config.switches.directMessages ||
+    s.blackboard !== config.switches.blackboard
+  ) {
+    out.switches = { ...s }
+  }
+  if (draft.maxRounds !== undefined && draft.maxRounds !== config.maxRounds) {
+    out.maxRounds = draft.maxRounds
+  }
+  if (draft.completionGate !== config.completionGate) out.completionGate = draft.completionGate
+  if (draft.addMembers.length > 0) {
+    out.addMembers = draft.addMembers.map((m) =>
+      m.memberType === 'agent'
+        ? {
+            memberType: 'agent',
+            agentName: m.agentName ?? '',
+            displayName: m.displayName,
+            roleDesc: m.roleDesc,
+          }
+        : {
+            memberType: 'human',
+            userId: m.userId ?? '',
+            displayName: m.displayName,
+            roleDesc: m.roleDesc,
+          },
+    )
+  }
+  if (draft.removeMemberIds.length > 0) out.removeMemberIds = [...draft.removeMemberIds]
+  return Object.keys(out).length > 0 ? out : null
+}
+
+/** Valid maxRounds for the mid-run patch (mirrors ConfigPatchSchema: 1..500 int). */
+export function isValidTaskMaxRounds(n: number | undefined): boolean {
+  return n === undefined || (Number.isInteger(n) && n >= 1 && n <= 500)
 }

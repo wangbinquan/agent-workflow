@@ -16,13 +16,32 @@ import '../src/i18n'
 import { InboxFooterButton } from '../src/components/shell/InboxFooterButton'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
-function mockCounts(reviews: number | 'error', clarify: number | 'error', fusion?: number) {
+function mockCounts(
+  reviews: number | 'error',
+  clarify: number | 'error',
+  fusion?: number,
+  // RFC-164 PR-6: third source — workgroup to-dos. Defaults to 0 so the
+  // pre-existing two-source cases keep their exact expectations.
+  workgroups: number | 'error' = 0,
+) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
     const s = typeof url === 'string' ? url : url.toString()
     // RFC-121: when a fusion pending-count is mocked, the button must still
     // ignore it (fusions moved to the Memory badge). Unmocked by default.
     if (fusion !== undefined && s.includes('/api/fusions/pending-count')) {
       return new Response(JSON.stringify({ count: fusion }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+    if (s.includes('/api/workgroup-tasks/pending-count')) {
+      if (workgroups === 'error') {
+        return new Response('{"code":"x"}', {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({ deliveries: workgroups, gates: 0, total: workgroups }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
@@ -100,8 +119,8 @@ describe('RFC-032 InboxFooterButton', () => {
     })
   })
 
-  test('both feeds erroring → button rendered, badge hidden (no throw)', async () => {
-    mockCounts('error', 'error')
+  test('all three feeds erroring → button rendered, badge hidden (no throw)', async () => {
+    mockCounts('error', 'error', undefined, 'error')
     wrap(<InboxFooterButton open={false} onToggle={() => {}} />)
     // give react-query a tick to settle into the error state.
     await waitFor(() => {
@@ -127,6 +146,34 @@ describe('RFC-032 InboxFooterButton', () => {
     wrap(<InboxFooterButton open={false} onToggle={() => {}} />)
     await waitFor(() => {
       expect(screen.getByTestId('inbox-footer-badge').textContent).toBe('3')
+    })
+  })
+})
+
+// RFC-164 PR-6 — workgroup to-dos join the badge as the third source, with
+// the same failure-soft merge (any surviving feed still counts).
+describe('RFC-164 InboxFooterButton — workgroup third source', () => {
+  test('reviews=2 + clarify=1 + workgroups=4 → badge "7"', async () => {
+    mockCounts(2, 1, undefined, 4)
+    wrap(<InboxFooterButton open={false} onToggle={() => {}} />)
+    await waitFor(() => {
+      expect(screen.getByTestId('inbox-footer-badge').textContent).toBe('7')
+    })
+  })
+
+  test('workgroup feed erroring → badge shows the surviving two feeds', async () => {
+    mockCounts(2, 1, undefined, 'error')
+    wrap(<InboxFooterButton open={false} onToggle={() => {}} />)
+    await waitFor(() => {
+      expect(screen.getByTestId('inbox-footer-badge').textContent).toBe('3')
+    })
+  })
+
+  test('only the workgroup feed surviving → its count still shows', async () => {
+    mockCounts('error', 'error', undefined, 5)
+    wrap(<InboxFooterButton open={false} onToggle={() => {}} />)
+    await waitFor(() => {
+      expect(screen.getByTestId('inbox-footer-badge').textContent).toBe('5')
     })
   })
 })

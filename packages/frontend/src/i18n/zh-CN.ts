@@ -50,6 +50,11 @@ export interface Resources {
       badgeAria: string
       shardLabel: string
       iterLabel: string
+      // RFC-164 PR-6: workgroup to-dos third source.
+      errorWorkgroups: string
+      wgKind: string
+      wgRow: string
+      wgBreakdown: string
     }
     // RFC-041 PR4: top-level Memory route.
     memory: string
@@ -1084,7 +1089,35 @@ export interface Resources {
       gateAwaiting: string
       gateConfirm: string
       gateReject: string
-      gateActionsSoon: string
+      // PR-5: live gate — reject requires a comment (dialog).
+      gateRejectTitle: string
+      gateRejectCommentLabel: string
+      gateRejectCommentHint: string
+      gateRejectSubmit: string
+      // PR-5: human delivery (拍板 #16 双形态).
+      deliverTodo: string
+      deliverQuick: string
+      deliverQuickPlaceholder: string
+      deliverForm: string
+      deliverFormTitle: string
+      deliverSummaryLabel: string
+      deliverDetailLabel: string
+      deliverSubmit: string
+      // PR-5: mid-run config dialog.
+      configButton: string
+      configTitle: string
+      configSubmit: string
+      configEmptyHint: string
+      configMembersTitle: string
+      configWillRemove: string
+      configUndoRemove: string
+      configNewChip: string
+      // PR-5: free_collab task-list panel.
+      fcListTitle: string
+      fcOpen: string
+      fcActive: string
+      fcDone: string
+      fcEmpty: string
       infoTitle: string
       infoGoal: string
       infoMode: string
@@ -2750,6 +2783,10 @@ export const zhCN: Resources = {
       badgeAria: '{{n}} 项待处理',
       shardLabel: '分片 {{shard}}',
       iterLabel: '第 {{iter}} 轮',
+      errorWorkgroups: '工作组待办加载失败',
+      wgKind: '工作组',
+      wgRow: '{{n}} 项工作组待办',
+      wgBreakdown: '待交付 {{d}} · 待确认 {{g}}',
     },
     memory: '记忆',
     memoryHint: '从过往反问、评审与反馈中沉淀的长期上下文',
@@ -3806,7 +3843,31 @@ export const zhCN: Resources = {
       gateAwaiting: 'Leader 已宣布完成，等待人工确认。',
       gateConfirm: '确认完成',
       gateReject: '驳回',
-      gateActionsSoon: '确认 / 驳回操作将在后续版本开放。',
+      gateRejectTitle: '驳回完成申报',
+      gateRejectCommentLabel: '驳回意见',
+      gateRejectCommentHint: '必填。会作为高优先级内容注入给 leader 继续推进。',
+      gateRejectSubmit: '确认驳回',
+      deliverTodo: '待你交付',
+      deliverQuick: '快速回复',
+      deliverQuickPlaceholder: '直接输入交付内容…',
+      deliverForm: '表单交付',
+      deliverFormTitle: '结构化交付',
+      deliverSummaryLabel: '结论摘要',
+      deliverDetailLabel: '详细说明（可选）',
+      deliverSubmit: '交付',
+      configButton: '调整配置',
+      configTitle: '调整任务配置',
+      configSubmit: '保存调整',
+      configEmptyHint: '尚无改动。',
+      configMembersTitle: '成员',
+      configWillRemove: '将移除',
+      configUndoRemove: '撤销移除',
+      configNewChip: '新增',
+      fcListTitle: '任务清单',
+      fcOpen: '待认领',
+      fcActive: '进行中',
+      fcDone: '已完成',
+      fcEmpty: '清单还是空的。',
       infoTitle: '工作组信息',
       infoGoal: '目标',
       infoMode: '模式',
@@ -4886,6 +4947,17 @@ export const zhCN: Resources = {
     // RFC-164 PR-4: workgroup room endpoints.
     'workgroup-task-terminal': '任务已结束，无法再发送消息。',
     'workgroup-assignment-not-cancelable': '该派单已开始执行或已结束，无法取消。',
+    // RFC-164 PR-5: 交付 / 确认门 / 中途改配置。
+    'workgroup-delivery-invalid': '交付内容无效：正文或结论摘要必填其一。',
+    'workgroup-delivery-not-human': '只有人类成员的派单可以交付。',
+    'workgroup-delivery-conflict': '该派单不在待交付状态，可能已被交付或取消。',
+    'workgroup-confirm-invalid': '确认参数无效：驳回必须填写意见。',
+    'workgroup-gate-not-open': '完成门当前未开启，无法确认或驳回。',
+    'workgroup-config-invalid': '配置调整参数无效。',
+    'workgroup-config-leader-immutable': 'Leader 成员不可移除。',
+    'workgroup-config-no-agents': '移除后将没有任何 agent 成员，无法保存。',
+    'workgroup-config-duplicate-member': '成员显示名与现有成员重复。',
+    'workgroup-config-empty': '没有任何改动可保存。',
     fallback: '请求失败',
   },
   clarify: {
