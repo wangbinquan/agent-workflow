@@ -5,17 +5,24 @@
 
 ## 0. 总览
 
-三块，全部**纯叠加**（零回归）：
-1. `agents.inputs` 可选声明式输入端口（与 `outputs` 对称）。
-2. `renderAgentCapabilityCard` 纯函数——能力卡投影（shared，供后端注入 + 前端预览共用）。
-3. leader 花名册接入能力卡（补强 RFC-164 `services/workgroupContext.ts` 的 roleDesc-only）。
+> **现状 vs 新增**（措辞澄清，回应设计门）：下面三块全部是 RFC-166 **要新建的物**——当前
+> `shared/src/schemas/agent.ts` 无 `inputs` 字段、`workgroupContext.renderRosterBlock` 只输出
+> roleDesc、无能力卡纯函数。「当前代码没有」正是本 RFC 要做的原因，不是「文档宣称已存在」的
+> 断言不一致（设计门把 RFC 目标误读为现状断言，此处统一澄清；本节的 file:line 引用是**落点**
+> 而非「已实现」证据）。
 
-| 抉择 | 方案 | 理由 |
-| --- | --- | --- |
-| inputs 存哪 | `agents.inputs` JSON 列（照 `outputs` schema.ts:26 先例）+ kind 存 `inputKinds`（照 `outputKinds`/`frontmatter_extra` 先例，agent.ts:82） | 与 outputs 完全对称，最小认知负担 |
-| 是否强校验 inputs↔edge | v1 **不强校验**（validator 现 prompt-template 规则不动） | 存量兼容（决策 #4）；强校验作为叠加留后续，避免卡住存量工作流 |
-| 能力卡放哪 | shared 纯函数（`shared/src/prompt.ts` 旁或新 `agentCapability.ts`） | 后端注入（leader/编排 agent）+ 前端预览共用一份，杜绝漂移 |
-| prompt 隔离 | 能力卡只含 agent 自身声明字段（name/description/inputs/outputs/role/bodyMd 摘要）；**绝不含 user_id** | 沿 RFC-099 不变式；human 成员无能力卡（仍 displayName） |
+三块，全部**纯叠加**（零回归）：
+
+1. `agents.inputs` 可选声明式输入端口（与 `outputs` 对称）——新增字段。
+2. `renderAgentCapabilityCard` 纯函数——能力卡投影（shared，供后端注入 + 前端预览共用）——新增。
+3. leader 花名册接入能力卡（补强 RFC-164 `services/workgroupContext.ts` 的 roleDesc-only）——改造。
+
+| 抉择                   | 方案                                                                                                                                      | 理由                                                          |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| inputs 存哪            | `agents.inputs` JSON 列（照 `outputs` schema.ts:26 先例）+ kind 存 `inputKinds`（照 `outputKinds`/`frontmatter_extra` 先例，agent.ts:82） | 与 outputs 完全对称，最小认知负担                             |
+| 是否强校验 inputs↔edge | v1 **不强校验**（validator 现 prompt-template 规则不动）                                                                                  | 存量兼容（决策 #4）；强校验作为叠加留后续，避免卡住存量工作流 |
+| 能力卡放哪             | shared 纯函数（`shared/src/prompt.ts` 旁或新 `agentCapability.ts`）                                                                       | 后端注入（leader/编排 agent）+ 前端预览共用一份，杜绝漂移     |
+| prompt 隔离            | 能力卡只含 agent 自身声明字段（name/description/inputs/outputs/role/bodyMd 摘要）；**绝不含 user_id**                                     | 沿 RFC-099 不变式；human 成员无能力卡（仍 displayName）       |
 
 ## 1. 数据模型
 
@@ -46,6 +53,7 @@ export type AgentInputPort = z.infer<typeof AgentInputPortSchema>
 
 `inputs` 随 agent.md frontmatter 存取（照 outputs：DB 列 + frontmatter 双向，agent-md.ts）。
 frontmatter 形态：
+
 ```yaml
 inputs:
   - name: audit_report
@@ -71,6 +79,7 @@ export function renderAgentCapabilityCard(
 ```
 
 渲染（markdown 块，english headers 沿 prompt.ts 约定）：
+
 ```
 ### <name>
 <description>
@@ -85,6 +94,14 @@ export function renderAgentCapabilityCard(
 - prompt 摘要预算裁剪（`promptBudget=0` 时省略——leader 精简场景可关）。
 - **纯投影**：不读 DB、不含 user_id/ACL/时间戳——只 agent 自身能力字段。
 - 配套 `renderRosterCapabilityCards(agents[])` 批量渲染（编排 agent 一次注入整池）。
+
+**字段与脱敏契约（设计门 medium）**：能力卡的**白名单字段**恒定为
+`{name, description, inputs[], outputs[], role, promptSummary}`——**不含**任何 `ownerUserId`/
+`visibility`/`createdAt` 等 ACL/审计字段（`renderAgentCapabilityCard` 的入参类型用
+`Pick<Agent, ...>` 把可见字段钉死在类型层，杜绝误传）。长度约束：`description` 原样、
+`promptSummary` ≤ `promptBudget`（默认 600 字符）、单卡总长有软上限（多成员 leader 花名册
+按 `rosterBudget` 再裁）。**prompt 隔离双层锁**（rfc099-prompt-isolation 扩展）：① 类型层
+Pick 不含 userId；② 运行期文本断言——渲染输出不含任何 user id 子串。
 
 ## 3. leader 花名册接入（补强 RFC-164）
 
@@ -101,6 +118,7 @@ export function renderAgentCapabilityCard(
   能干什么」，roleDesc 说「在这个组里它负责什么」。
 
 改动面：
+
 - `renderRosterBlock` 签名加 `agentCards: Map<memberId, string>`（预渲染的能力卡）或改为接收
   已载入的 agent map；工作组引擎（workgroupRunner.ts composeLeaderPrompt/composeMemberPrompt）
   在组 prompt 前预载成员 agent 并渲染卡。
@@ -120,6 +138,7 @@ export function renderAgentCapabilityCard(
 
 `components/agent/AgentCapabilityCard.tsx`（新，公共原语）：把能力卡渲染成 UI 卡片（复用
 `renderAgentCapabilityCard` 的结构化数据或直接结构化组件）。复用点：
+
 - 工作组建组成员选择（RFC-164 WorkgroupMemberCards 的 agent 选择器旁显示候选能力）。
 - RFC-167 动态 workflow 空间选 agent 池。
 - agent 详情页自身预览。
