@@ -41,6 +41,10 @@ beforeEach(() => {
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(
     new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
   )
+  // jsdom lacks scrollIntoView; QuestionFormHandle.focus() calls it. 2026-07-10 the pane
+  // auto-focuses the FIRST question on open, so EVERY renderDialog with questions now hits
+  // focus() — patch file-wide (was previously only in the keyboard-nav describe).
+  Element.prototype.scrollIntoView = vi.fn()
 })
 
 afterEach(() => {
@@ -605,6 +609,32 @@ describe('CentralizedAnswerDialog — cross-round keyboard navigation', () => {
   // it, so patch it (per the QuestionForm focus test) — otherwise focus() throws.
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn()
+  })
+
+  // 用户 2026-07-10 —「点开处理待指派问题弹框时，默认 focus 第一个问题，好使用快捷键答题」。
+  // 打开弹框后（groups → 各轮 detail → QuestionForm 挂载的多段异步之后）自动聚焦平铺导航序
+  // 的第一题 root（tabIndex=0），数字/Enter 热键即刻可用；且只聚焦一次（后续注册不再抢焦）。
+  test('打开弹框自动聚焦第一题（跨轮取全局第一）→ 数字热键即刻可用', async () => {
+    vi.spyOn(api, 'put').mockResolvedValue(undefined as never)
+    renderDialog(
+      [
+        entry({ id: 'a', questionId: 'q1', originNodeRunId: 'nr_a' }),
+        entry({ id: 'b', questionId: 'q2', originNodeRunId: 'nr_a' }),
+        entry({ id: 'c', questionId: 'q3', originNodeRunId: 'nr_b' }),
+      ],
+      [
+        round({ intermediaryNodeRunId: 'nr_a', questions: [singleQ('q1'), singleQ('q2')] }),
+        round({ intermediaryNodeRunId: 'nr_b', questions: [singleQ('q3')] }),
+      ],
+    )
+    const q1 = await screen.findByTestId('clarify-question-q1')
+    // 自动聚焦经 rAF 异步落焦 → waitFor。全局第一题=第一轮的 q1（非 q2/q3）。
+    await waitFor(() => expect(document.activeElement).toBe(q1))
+    // 快捷键即刻可用：数字 1 直接选中第一个选项（无需先点击/Tab）。
+    fireEvent.keyDown(q1, { key: '1' })
+    await waitFor(() =>
+      expect((within(q1).getAllByRole('radio')[0] as HTMLInputElement).checked).toBe(true),
+    )
   })
 
   test('Enter advances focus across rounds; the LAST question is a NO-OP (submit NOT auto-focused)', async () => {

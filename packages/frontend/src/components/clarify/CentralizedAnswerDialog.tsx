@@ -210,13 +210,47 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
   // child effect (ref only ⇒ no re-render / loop); stale rounds are ignored (advance iterates
   // `groups`).
   const roundOrderRef = useRef<Map<string, string[]>>(new Map())
-  const registerQuestionRef = useCallback((key: string, handle: QuestionFormHandle | null) => {
-    if (handle === null) questionRefs.current.delete(key)
-    else questionRefs.current.set(key, handle)
-  }, [])
-  const reportRoundOrder = useCallback((originNodeRunId: string, questionIds: string[]) => {
-    roundOrderRef.current.set(originNodeRunId, questionIds)
-  }, [])
+  // 用户 2026-07-10 — 打开弹框即聚焦第一题（数字/Enter 热键直接可用，同 /clarify 详情页的
+  // rAF auto-focus 先例）。时序上 open → groups(tqQuery) → 每轮 detail → QuestionForm 挂载
+  // 是多段异步，单次 rAF 必抢跑，故用「一次性 pending 标志 + 事件驱动重试」：open 置位；
+  // ref 注册 / 轮序上报 / groups 就绪三个时机各试一次，首 key 的 handle 就绪即消费（focus
+  // 恰好一次，不会在后续注册时再抢焦）。关闭清位。
+  const pendingInitialFocusRef = useRef(false)
+  const tryInitialFocus = useCallback(() => {
+    if (!pendingInitialFocusRef.current) return
+    const first = flattenCentralizedNavKeys(groups, roundOrderRef.current)[0]
+    if (first === undefined) return
+    const handle = questionRefs.current.get(first)
+    if (!handle) return
+    pendingInitialFocusRef.current = false
+    // rAF: QuestionForm 刚挂载的同一 commit 里 ref 先于布局稳定，推迟一帧再落焦。
+    requestAnimationFrame(() => handle.focus())
+  }, [groups])
+  useEffect(() => {
+    // 只随 open 翻转置/清位——不得依赖 tryInitialFocus（groups 刷新会换其身份，若在此
+    // 重跑置位，已消费的 pending 会被复活、下一次 ref 注册再次抢焦）。
+    pendingInitialFocusRef.current = open
+  }, [open])
+  useEffect(() => {
+    if (open) tryInitialFocus() // 重开场景：refs/order 都已在缓存，直接消费；已消费则 no-op。
+  }, [open, tryInitialFocus])
+  const registerQuestionRef = useCallback(
+    (key: string, handle: QuestionFormHandle | null) => {
+      if (handle === null) questionRefs.current.delete(key)
+      else {
+        questionRefs.current.set(key, handle)
+        tryInitialFocus()
+      }
+    },
+    [tryInitialFocus],
+  )
+  const reportRoundOrder = useCallback(
+    (originNodeRunId: string, questionIds: string[]) => {
+      roundOrderRef.current.set(originNodeRunId, questionIds)
+      tryInitialFocus()
+    },
+    [tryInitialFocus],
+  )
   const advanceFromQuestion = useCallback(
     (originNodeRunId: string, questionId: string) => {
       const keys = flattenCentralizedNavKeys(groups, roundOrderRef.current)
