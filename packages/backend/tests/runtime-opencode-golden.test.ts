@@ -104,8 +104,10 @@ describe('buildOpencodeSpawn — env golden (RFC-111 A2)', () => {
     expect(env.OPENCODE_CONFIG_CONTENT).toBe('{"agent":{"my-agent":{}}}')
     expect(env.OPENCODE_AW_INVENTORY_OUT).toBeUndefined()
     expect(env.GIT_AUTHOR_NAME).toBeUndefined()
-    // inherits the daemon env baseline
-    expect('PATH' in env).toBe(true)
+    // inherits the daemon env baseline. Case-insensitive: on Windows the
+    // process.env key is `Path` (original casing preserved by spread), so a
+    // strict `'PATH' in env` is false there even though PATH is present.
+    expect('PATH' in env || 'Path' in env).toBe(true)
   })
 
   it('sets OPENCODE_AW_INVENTORY_OUT only when provided', () => {

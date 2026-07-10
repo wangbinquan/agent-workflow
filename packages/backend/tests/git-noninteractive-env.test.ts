@@ -39,9 +39,23 @@ describe('nonInteractiveGitEnv()', () => {
     }
   })
 
-  test('passes through unrelated env (e.g. PATH)', () => {
-    const env = nonInteractiveGitEnv()
-    expect(env.PATH).toBe(process.env.PATH)
+  test('passes through unrelated env', () => {
+    // Use a custom marker var (consistent case on every OS) instead of PATH:
+    // on Windows process.env preserves the original key casing (Path), so
+    // spread copies `Path` not `PATH`, and a case-sensitive `env.PATH` lookup
+    // is undefined while `process.env.PATH` (case-insensitive) returns the
+    // value - a false mismatch that has nothing to do with the passthrough the
+    // test means to lock in.
+    const key = 'AW_NONINTERACTIVE_TEST_MARKER'
+    const prev = process.env[key]
+    try {
+      process.env[key] = 'present'
+      const env = nonInteractiveGitEnv()
+      expect(env[key]).toBe('present')
+    } finally {
+      if (prev === undefined) delete process.env[key]
+      else process.env[key] = prev
+    }
   })
 })
 

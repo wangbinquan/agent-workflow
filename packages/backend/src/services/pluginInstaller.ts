@@ -368,7 +368,18 @@ function runCommand(
   opts: { timeoutMs: number },
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, {
+    // Windows: `npm` ships as `npm.cmd`. `spawn()` without a shell does not
+    // consult PATHEXT, so a bare `npm` resolves to nothing (ENOENT) even when
+    // `npm.cmd` is on PATH -- which broke plugin install on Windows (probeNpm
+    // returned false -> NpmUnavailableError, and the install spawn ENOENT'd).
+    // For a bare command name (no path separator, no extension) append `.cmd`
+    // so the PATH lookup hits the real shim. Full paths (e.g. the test's
+    // fakeNpmBin `...\npm.cmd`) are left untouched.
+    let effectiveBin = bin
+    if (process.platform === 'win32' && !/[\\/]/.test(bin) && !/\.[^\\/]*$/.test(bin)) {
+      effectiveBin = `${bin}.cmd`
+    }
+    const child = spawn(effectiveBin, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: process.env,
     })

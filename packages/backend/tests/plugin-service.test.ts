@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join, resolve, delimiter } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent, getAgent } from '../src/services/agent'
 import {
@@ -24,7 +24,7 @@ import {
   renamePlugin,
   updatePlugin,
 } from '../src/services/plugin'
-import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
+import { probeNpmBinary, resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
 import { writeFakeNpm } from './helpers/stub-runtime'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 
@@ -241,5 +241,47 @@ describe('services/plugin.ts rename + cascade', () => {
     // Looking up 'dd' must NOT return the agent that only has 'dd-trace'.
     const refs = await findAgentsReferencingPlugin(db, 'dd')
     expect(refs).toEqual([])
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Regression: bare `npm` PATH resolution on Windows.
+//
+// On Windows npm ships as `npm.cmd`; `spawn('npm', ...)` without a shell does
+// not consult PATHEXT, so a bare `npm` ENOENTs even when `npm.cmd` is on PATH.
+// pluginInstaller.runCommand appends `.cmd` for bare names on win32 to fix
+// this (otherwise probeNpmBinary() -> false -> NpmUnavailableError and every
+// plugin install on Windows returns 422). These tests lock that resolution by
+// relying on the *default* `npmBin` (no override) + a PATH-injected fake npm,
+// which only succeeds if runCommand can find `npm`/`npm.cmd` from PATH.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('services/plugin.ts bare-npm PATH resolution (no npmBin override)', () => {
+  let originalPath: string | undefined
+
+  beforeEach(() => {
+    // Outer beforeEach already created the fake-npm shim under pluginsDir.
+    const npmDir = join(pluginsDir, 'fake-npm-bin')
+    originalPath = process.env.PATH
+    process.env.PATH = `${npmDir}${delimiter}${process.env.PATH ?? ''}`
+    resetNpmProbeCacheForTests()
+    process.env.FAKE_NPM_MODE = 'success'
+    process.env.FAKE_NPM_VERSION = '3.2.1'
+  })
+
+  afterEach(() => {
+    if (originalPath !== undefined) process.env.PATH = originalPath
+    delete process.env.FAKE_NPM_VERSION
+  })
+
+  test('probeNpmBinary finds npm on PATH (npm.cmd on Windows)', async () => {
+    const ok = await probeNpmBinary()
+    expect(ok).toBe(true)
+  })
+
+  test('createPlugin without npmBin override installs via PATH-resolved npm', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const p = await createPlugin(db, { name: 'pathonly', spec: 'pkg@3' }, { pluginsDir })
+    expect(p.resolvedVersion).toBe('3.2.1')
+    expect(existsSync(p.cachedPath)).toBe(true)
   })
 })

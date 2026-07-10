@@ -399,6 +399,20 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install opencode (required by daemon/doctor tests)
+        # Same step the `check` and `build-binary` jobs run: daemon `start` and
+        # `cli doctor` assert opencode is in PATH, and several test files spawn
+        # the daemon end-to-end. Without it the gate fails ~18 tests with
+        # "opencode binary not executable / daemon exited before ready" (and the
+        # 5s-timeout cascade in combination/loop/startTask tests that wait on a
+        # daemon that never comes up). Fresh runner still has no
+        # ~/.agent-workflow/config.json (no mcpProbe timeouts) - opencode is the
+        # only missing piece.
+        run: |
+          bun install -g opencode-ai@${{ env.OPENCODE_VERSION }}
+          export PATH="$HOME/.bun/bin:$PATH"
+          opencode --version
+
       - name: Format check
         run: bun run format:check
 
