@@ -5,12 +5,12 @@
 import { describe, expect, test } from 'vitest'
 import { buildLaunchBody, type RepoSource } from '@/lib/launch-repo-source'
 
-const PATH_SRC: RepoSource = { kind: 'path', repoPath: '/tmp/repo', baseBranch: 'main' }
+const SRC_A: RepoSource = { kind: 'url', repoUrl: 'git@github.com:base/repo.git', ref: 'main' }
 const URL_SRC: RepoSource = { kind: 'url', repoUrl: 'git@github.com:foo/bar.git', ref: '' }
 
-describe('buildLaunchBody RFC-067 git identity (path mode)', () => {
+describe('buildLaunchBody RFC-067 git identity', () => {
   test('omitted → body has neither key', () => {
-    const body = buildLaunchBody(PATH_SRC, {
+    const body = buildLaunchBody(SRC_A, {
       workflowId: 'wf-1',
       name: 'fixture',
       inputs: { topic: 'a' },
@@ -20,7 +20,7 @@ describe('buildLaunchBody RFC-067 git identity (path mode)', () => {
   })
 
   test('both set → body carries both verbatim', () => {
-    const body = buildLaunchBody(PATH_SRC, {
+    const body = buildLaunchBody(SRC_A, {
       workflowId: 'wf-1',
       name: 'fixture',
       inputs: {},
@@ -32,7 +32,7 @@ describe('buildLaunchBody RFC-067 git identity (path mode)', () => {
   })
 
   test('only name set (caller bug) → helper drops both keys (defense in depth)', () => {
-    const body = buildLaunchBody(PATH_SRC, {
+    const body = buildLaunchBody(SRC_A, {
       workflowId: 'wf-1',
       name: 'fixture',
       inputs: {},
@@ -43,7 +43,7 @@ describe('buildLaunchBody RFC-067 git identity (path mode)', () => {
   })
 
   test('only email set (caller bug) → helper drops both keys', () => {
-    const body = buildLaunchBody(PATH_SRC, {
+    const body = buildLaunchBody(SRC_A, {
       workflowId: 'wf-1',
       name: 'fixture',
       inputs: {},
@@ -54,7 +54,7 @@ describe('buildLaunchBody RFC-067 git identity (path mode)', () => {
   })
 
   test('empty strings on both → treated as omitted (no half-identity wire)', () => {
-    const body = buildLaunchBody(PATH_SRC, {
+    const body = buildLaunchBody(SRC_A, {
       workflowId: 'wf-1',
       name: 'fixture',
       inputs: {},
@@ -66,8 +66,8 @@ describe('buildLaunchBody RFC-067 git identity (path mode)', () => {
   })
 })
 
-describe('buildLaunchBody RFC-067 git identity (URL mode)', () => {
-  test('URL mode + both set → body carries both alongside repoUrl', () => {
+describe('buildLaunchBody RFC-067 git identity (second fixture)', () => {
+  test('both set → body carries both alongside repoUrl', () => {
     const body = buildLaunchBody(URL_SRC, {
       workflowId: 'wf-1',
       name: 'fixture',
@@ -80,7 +80,7 @@ describe('buildLaunchBody RFC-067 git identity (URL mode)', () => {
     expect(body.gitUserEmail).toBe('bot@workflow.local')
   })
 
-  test('URL mode + half-set → helper drops both', () => {
+  test('half-set → helper drops both', () => {
     const body = buildLaunchBody(URL_SRC, {
       workflowId: 'wf-1',
       name: 'fixture',

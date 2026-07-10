@@ -263,6 +263,8 @@ describe('WebSocket channels', () => {
       // RFC-120 T9: TaskSchema now carries the deferred-dispatch opt-in flag.
       // RFC-066: TaskSchema now requires per-task repo metadata.
       repoCount: 1,
+      spaceKind: 'remote', // RFC-165
+      sourceAgentName: null,
       repos: [],
     })
 

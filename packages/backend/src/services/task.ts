@@ -8,7 +8,6 @@ import type {
   NodeRunEventsResponse,
   NodeRunOutput,
   StartTask,
-  StartTaskRepo,
   Task,
   TaskDiff,
   TaskNodeRuns,
@@ -36,6 +35,7 @@ import type {
 } from '@agent-workflow/shared'
 import { and, asc, count, desc, eq, gt, inArray, isNull, ne, or } from 'drizzle-orm'
 import { existsSync, mkdirSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
@@ -55,7 +55,7 @@ import { getWorkflow } from '@/services/workflow'
 import { listAgents } from '@/services/agent'
 import { listSkills } from '@/services/skill'
 import { validateWorkflowDef } from '@/services/workflow.validator'
-import { upsertRecentRepo } from '@/services/repo'
+import { materializingSpaces } from '@/services/gc'
 import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { WRAPPER_KINDS } from '@/services/dispatchFrontier'
 import type { RollbackOutcome } from '@/services/nodeRollback'
@@ -66,7 +66,13 @@ import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
 import { mintNodeRun } from '@/services/nodeRunMint'
 import { pickFreshestRun } from '@/services/freshness'
 import { listAvailableRefs, resolveCachedRepo } from '@/services/gitRepoCache'
-import { createWorktree, gitDiffSnapshot, isGitWorkTree, worktreeDiff } from '@/util/git'
+import {
+  createWorktree,
+  gitDiffSnapshot,
+  initScratchRepo,
+  isGitWorkTree,
+  worktreeDiff,
+} from '@/util/git'
 import { redactGitUrl } from '@agent-workflow/shared'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { readArchivedEvents } from '@/services/eventsArchive'
@@ -195,6 +201,27 @@ export interface StartTaskDeps {
    * bodies (multipart upload is single-repo only); multi-repo ignores it.
    */
   preResolvedSource?: ResolvedRepoSource
+  /**
+   * RFC-165 (F3): the fully-materialized space handed off by a route that had
+   * to touch the workspace before the task row exists (multipart uploads).
+   * Carries success OR failure (earlyError) — startTask consumes it verbatim
+   * and never re-resolves / re-materializes. Supersedes the
+   * preCreatedWorktree+preResolvedSource pair for the multipart flow (the
+   * pair remains for the legacy fusion handoff until its internalSource
+   * migration).
+   */
+  materializedSpace?: MaterializedSpace
+  /**
+   * RFC-165 (F4): the framework-INTERNAL local-path launch face. Deliberately
+   * a deps field (never a body field) so it is unreachable from any wire —
+   * the public StartTask contract retires path mode, but fusion (and the
+   * test suite via `startTaskWithLocalRepo`) legitimately launch against a
+   * pre-existing local repo. Mutually exclusive with `scratch` / `repoUrl` /
+   * `repos`; may be combined with `preCreatedWorktree` (paths must agree).
+   * Tasks launched through it persist `space_kind='internal'` (GC-excluded —
+   * fusion's approval flow needs the dirs to survive terminal states).
+   */
+  internalSource?: { kind: 'local-path'; repoPath: string; baseBranch: string }
   /**
    * RFC-036 — launcher user id. NULL falls back to the legacy single-user
    * behavior (ownerUserId stays NULL; no collab/assignment rows written).
@@ -332,19 +359,26 @@ export interface ResolvedRepoSource {
  * is left on `input` (a single top-level flag covers every repo in a
  * multi-repo task by design — see RFC-068 §"多仓" interaction notes).
  */
-export function normalizeStartTaskRepos(input: StartTask): StartTaskRepo[] {
+/**
+ * RFC-165: INTERNAL per-repo source spec — deliberately WIDER than the wire
+ * `StartTaskRepo` (URL-only): path specs survive here for the framework's
+ * internal local-path face (`deps.internalSource`, fusion, the test helper).
+ * Nothing on any route constructs a path variant.
+ */
+export type RepoSourceSpec =
+  | { repoUrl: string; ref?: string }
+  | { repoPath: string; baseBranch: string }
+
+export function normalizeStartTaskRepos(input: StartTask): RepoSourceSpec[] {
   if (Array.isArray(input.repos) && input.repos.length > 0) {
     return input.repos
   }
-  // Legacy single-repo body → length-1 array. Drop undefined fields so the
-  // StartTaskRepoSchema's superRefine sees the same shape it would for v2.
-  const entry: StartTaskRepo = {
-    ...(input.repoPath !== undefined ? { repoPath: input.repoPath } : {}),
-    ...(input.repoUrl !== undefined ? { repoUrl: input.repoUrl } : {}),
-    ...(input.baseBranch !== undefined ? { baseBranch: input.baseBranch } : {}),
-    ...(input.ref !== undefined ? { ref: input.ref } : {}),
+  if (typeof input.repoUrl === 'string' && input.repoUrl.length > 0) {
+    return [{ repoUrl: input.repoUrl, ...(input.ref !== undefined ? { ref: input.ref } : {}) }]
   }
-  return [entry]
+  // Schema guarantees a source (scratch handled before this call); an empty
+  // list only appears for hand-built inputs — materializeSpace guards it.
+  return []
 }
 
 /**
@@ -361,30 +395,24 @@ export function normalizeStartTaskRepos(input: StartTask): StartTaskRepo[] {
  * URL entry hits its own cached mirror with no cross-talk.
  */
 export async function resolveRepoSourceSingle(
-  spec: StartTaskRepo,
+  spec: RepoSourceSpec,
   input: StartTask,
   deps: StartTaskDeps,
 ): Promise<ResolvedRepoSource> {
-  if (spec.repoPath) {
-    let pathFetchError: string | null = null
-    if (input.fetchBeforeLaunch === true) {
-      const { fetchPathRepoBeforeLaunch } = await import('@/services/repo')
-      const r = await fetchPathRepoBeforeLaunch(spec.repoPath)
-      if (!r.ok) pathFetchError = r.error
-    }
+  if ('repoPath' in spec && spec.repoPath.length > 0) {
+    // RFC-165: internal local-path face only (deps.internalSource / fusion /
+    // test helper) — the public wire is URL-only, and the RFC-068 path-mode
+    // opt-in fetch retired with it (URL mirrors always auto-fetch + FF).
     return {
       repoPath: spec.repoPath,
       baseBranch: spec.baseBranch,
       repoUrl: null,
-      pathFetchError,
+      pathFetchError: null,
       ffWarnings: [],
     }
   }
-  if (!spec.repoUrl) {
-    throw new ValidationError(
-      'start-task-source-required',
-      'one of repoPath or repoUrl is required',
-    )
+  if (!('repoUrl' in spec) || spec.repoUrl.length === 0) {
+    throw new ValidationError('start-task-source-required', 'a repoUrl source is required')
   }
   const appHome = deps.appHome ?? Paths.root
   const syncCandidates = [spec.ref].filter((s): s is string => typeof s === 'string')
@@ -565,6 +593,318 @@ export function runtimeConfigOpts(
   }
 }
 
+/**
+ * RFC-165 (F3): the single space-materialization entry — one tagged result
+ * covering scratch / single-repo / multi-repo launches. Guarantees:
+ *   * resolve exactly once (a route-pre-resolved single source is reused
+ *     verbatim, never re-fetched — RFC-107 D1-B) and materialize exactly
+ *     once: the multipart route's failure handoff used to re-run BOTH;
+ *   * the failure arm carries the per-repo partial state and has already
+ *     completed its own cleanup (scratch dir removed); the caller mints ONE
+ *     failed task row from it and never re-materializes;
+ *   * scratch launches hold an in-process lease (`materializingSpaces`,
+ *     keyed by taskId, registered BEFORE mkdir) that startTask's finally
+ *     releases after the row committed — the scratch orphan scan skips
+ *     leased dirs (F9).
+ * Throws (ValidationError) only for the pre-existing 422 surfaces
+ * (`repo-ref-not-found`) where no task row must be minted.
+ */
+export interface MaterializedSpace {
+  kind: 'scratch' | 'single' | 'multi'
+  /** RFC-165: persisted `tasks.space_kind` value, decided at materialize time. */
+  spaceKind: 'local' | 'remote' | 'scratch' | 'internal'
+  taskId: string
+  /** Multi: the container dir; single: the worktree; scratch: the repo dir; '' on failure. */
+  worktreePath: string
+  branch: string
+  baseCommit: string | null
+  earlyError: string | null
+  resolvedSources: ResolvedRepoSource[]
+  repos: MaterializedRepo[]
+}
+
+export async function materializeSpace(
+  input: StartTask,
+  deps: StartTaskDeps,
+  appHome: string,
+): Promise<MaterializedSpace> {
+  const taskId = ulid()
+
+  // RFC-165 (F4): the internal local-path face is mutually exclusive with
+  // every public space field — a programming error, not user input, so the
+  // assertion is loud and unconditional.
+  if (deps.internalSource !== undefined) {
+    const hasPublicSource =
+      input.scratch === true ||
+      (typeof input.repoUrl === 'string' && input.repoUrl.length > 0) ||
+      (Array.isArray(input.repos) && input.repos.length > 0)
+    if (hasPublicSource) {
+      throw new ValidationError(
+        'internal-source-conflict',
+        'internalSource is mutually exclusive with scratch/repoUrl/repos',
+      )
+    }
+  }
+
+  // ---- scratch: the workspace IS a brand-new git repo (RFC-165 §3). ----
+  if (input.scratch === true) {
+    const scratchDir = join(appHome, 'scratch', taskId)
+    materializingSpaces.set(taskId, { dir: scratchDir, startedAt: Date.now() })
+    const init = await initScratchRepo({
+      dir: scratchDir,
+      gitUserName: input.gitUserName ?? null,
+      gitUserEmail: input.gitUserEmail ?? null,
+    })
+    if (init.ok) {
+      return {
+        kind: 'scratch',
+        spaceKind: 'scratch',
+        taskId,
+        worktreePath: scratchDir,
+        branch: 'main',
+        baseCommit: init.rootCommit,
+        earlyError: null,
+        resolvedSources: [],
+        repos: [
+          {
+            repoIndex: 0,
+            repoPath: scratchDir,
+            repoUrl: null,
+            baseBranch: 'main',
+            branch: 'main',
+            baseCommit: init.rootCommit,
+            worktreePath: scratchDir,
+            worktreeDirName: '',
+            submoduleInitOk: true,
+            submoduleInitError: null,
+            hasSubmodules: false,
+          },
+        ],
+      }
+    }
+    // Cleanup ownership = the materializing layer (design F9): remove the
+    // half-created dir best-effort; the caller mints exactly ONE failed row
+    // (workspace_pruned_at stamped there — no revivable workspace exists).
+    await rm(scratchDir, { recursive: true, force: true }).catch(() => {})
+    return {
+      kind: 'scratch',
+      spaceKind: 'scratch',
+      taskId,
+      worktreePath: '',
+      branch: '',
+      baseCommit: null,
+      earlyError: init.error,
+      resolvedSources: [],
+      repos: [],
+    }
+  }
+
+  const repoSpecs =
+    deps.internalSource !== undefined
+      ? [{ repoPath: deps.internalSource.repoPath, baseBranch: deps.internalSource.baseBranch }]
+      : normalizeStartTaskRepos(input)
+
+  // RFC-066: per-repo source resolution. Each spec independently runs
+  // path-mode opt-in fetch (RFC-068) or URL-mode FF; warnings collected per
+  // repo and surfaced after materialization.
+  const resolvedSources: ResolvedRepoSource[] = []
+  for (const [i, spec] of repoSpecs.entries()) {
+    // RFC-107: reuse the route's pre-resolved source for the single repo so a
+    // URL is cloned/resolved exactly once across the route → startTask handoff.
+    const r =
+      deps.preResolvedSource !== undefined && repoSpecs.length === 1 && i === 0
+        ? deps.preResolvedSource
+        : await resolveRepoSourceSingle(spec, input, deps)
+    if (r.pathFetchError !== null) {
+      log.warn('rfc068/path-fetch-failed', {
+        repoPath: r.repoPath,
+        error: r.pathFetchError,
+      })
+    }
+    if (r.ffWarnings.length > 0) {
+      log.warn('rfc068/ff-warnings', {
+        repoUrl: r.repoUrl,
+        warnings: r.ffWarnings,
+      })
+    }
+    resolvedSources.push(r)
+  }
+
+  // RFC-066: single-path byte-baseline branch — pre-RFC-066 behavior
+  // preserved bit-for-bit (RFC-165 moved it verbatim into materializeSpace).
+  // The G1/G3 source guards in tests/source-text-rfc066-guards.test.ts pin
+  // this comment so a future refactor cannot silently delete the branch.
+  if (repoSpecs.length === 1) {
+    const source = resolvedSources[0]!
+    const wt = await materializeWorktree({
+      repoPath: source.repoPath,
+      baseBranch: source.baseBranch,
+      taskId,
+      appHome,
+      // RFC-075: working branch (task-level) + identity for the merge commit.
+      ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
+      gitUserName: input.gitUserName ?? null,
+      gitUserEmail: input.gitUserEmail ?? null,
+    })
+
+    if (wt.earlyError === null && !wt.submoduleInitOk) {
+      log.warn('[rfc034/submodule-init-failed] worktree submodule init failed', {
+        taskId,
+        worktreePath: wt.worktreePath,
+        stderr: wt.submoduleInitError ?? '',
+      })
+    }
+
+    if (
+      wt.earlyError !== null &&
+      source.repoUrl !== null &&
+      /worktree-base-invalid|cannot resolve base ref/i.test(wt.earlyError)
+    ) {
+      const available = await listAvailableRefs(source.repoPath, 10)
+      throw new ValidationError(
+        'repo-ref-not-found',
+        `ref '${input.ref ?? source.baseBranch ?? '(default)'}' not found in ${redactGitUrl(source.repoUrl)}`,
+        { url: redactGitUrl(source.repoUrl), ref: input.ref ?? null, availableRefs: available },
+      )
+    }
+    return {
+      kind: 'single',
+      spaceKind:
+        deps.internalSource !== undefined
+          ? 'internal'
+          : source.repoUrl !== null
+            ? 'remote'
+            : 'local',
+      taskId,
+      worktreePath: wt.worktreePath,
+      branch: wt.branch,
+      baseCommit: wt.baseCommit,
+      earlyError: wt.earlyError,
+      resolvedSources,
+      repos: [
+        {
+          repoIndex: 0,
+          repoPath: source.repoPath,
+          repoUrl: source.repoUrl,
+          baseBranch: source.baseBranch ?? '',
+          branch: wt.branch !== '' ? wt.branch : `agent-workflow/${taskId}`,
+          baseCommit: wt.baseCommit,
+          worktreePath: wt.worktreePath,
+          worktreeDirName: '',
+          submoduleInitOk: wt.submoduleInitOk,
+          submoduleInitError: wt.submoduleInitError,
+          hasSubmodules: wt.hasSubmodules,
+        },
+      ],
+    }
+  }
+
+  // RFC-066: multi-repo materialize branch. cwd is the parent dir; each
+  // source repo becomes a per-basename sibling worktree under it. The
+  // legacy `tasks.*` repo/worktree/branch columns mirror repos[0] for
+  // back-compat with API consumers that haven't adopted `repos[]` yet.
+  const parentWorktree = join(appHome, 'worktrees', 'multi', taskId)
+  mkdirSync(parentWorktree, { recursive: true })
+  let earlyError: string | null = null
+  const repos: MaterializedRepo[] = []
+  const usedDirNames = new Set<string>()
+  for (let i = 0; i < resolvedSources.length; i++) {
+    const source = resolvedSources[i]!
+    const rawName = basename(source.repoPath)
+    const dirName = resolveMultiRepoDirName(rawName, usedDirNames)
+    usedDirNames.add(dirName)
+    const wt = await materializeWorktree({
+      repoPath: source.repoPath,
+      baseBranch: source.baseBranch,
+      taskId,
+      appHome,
+      overrideWorktreePath: join(parentWorktree, dirName),
+      // RFC-075: same working branch name applied to every repo in the task.
+      ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
+      gitUserName: input.gitUserName ?? null,
+      gitUserEmail: input.gitUserEmail ?? null,
+    })
+    if (wt.earlyError !== null) {
+      earlyError = `repo[${i}] (${dirName}) failed: ${wt.earlyError}`
+      // URL mode: rewrap missing-ref into the legacy `repo-ref-not-found`
+      // error shape so the launcher's existing helpful-list UI continues
+      // to work for the first failing repo.
+      if (
+        source.repoUrl !== null &&
+        /worktree-base-invalid|cannot resolve base ref/i.test(wt.earlyError)
+      ) {
+        const available = await listAvailableRefs(source.repoPath, 10)
+        const spec = repoSpecs[i]!
+        const specRef = 'ref' in spec ? spec.ref : undefined
+        throw new ValidationError(
+          'repo-ref-not-found',
+          `ref '${specRef ?? source.baseBranch ?? '(default)'}' not found in ${redactGitUrl(source.repoUrl)}`,
+          {
+            url: redactGitUrl(source.repoUrl),
+            ref: specRef ?? null,
+            availableRefs: available,
+            repoIndex: i,
+          },
+        )
+      }
+      break
+    }
+    if (!wt.submoduleInitOk) {
+      log.warn('[rfc034/submodule-init-failed] worktree submodule init failed', {
+        taskId,
+        worktreePath: wt.worktreePath,
+        repoIndex: i,
+        stderr: wt.submoduleInitError ?? '',
+      })
+    }
+    repos.push({
+      repoIndex: i,
+      repoPath: source.repoPath,
+      repoUrl: source.repoUrl,
+      baseBranch: source.baseBranch ?? '',
+      branch: wt.branch,
+      baseCommit: wt.baseCommit,
+      worktreePath: wt.worktreePath,
+      worktreeDirName: dirName,
+      submoduleInitOk: wt.submoduleInitOk,
+      submoduleInitError: wt.submoduleInitError,
+      hasSubmodules: wt.hasSubmodules,
+    })
+  }
+  // Mirror repos[0] into the legacy `tasks.*` columns for API back-compat.
+  const head0 = repos[0]
+  return {
+    kind: 'multi',
+    spaceKind: resolvedSources.some((s) => s.repoUrl === null) ? 'local' : 'remote',
+    taskId,
+    worktreePath: parentWorktree,
+    branch: head0?.branch ?? '',
+    baseCommit: head0?.baseCommit ?? null,
+    earlyError,
+    resolvedSources,
+    repos,
+  }
+}
+
+/**
+ * RFC-165 (F4): the framework-internal LOCAL-PATH launch face — a thin
+ * adapter that moves `{repoPath, baseBranch}` off the body and into
+ * `deps.internalSource` before delegating to startTask. Consumers: the test
+ * suite (the retired wire fields lived in ~300 fixtures) and any internal
+ * caller that owns a pre-existing local repo. NOT reachable from any route;
+ * the banned-lock allowlists exactly this symbol.
+ */
+export async function startTaskWithLocalRepo(
+  input: StartTask & { repoPath: string; baseBranch: string },
+  deps: StartTaskDeps,
+): Promise<Task> {
+  const { repoPath, baseBranch, ...rest } = input
+  return startTask(rest as StartTask, {
+    ...deps,
+    internalSource: { kind: 'local-path', repoPath, baseBranch },
+  })
+}
+
 export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<Task> {
   // Resolve workflow.
   const workflow = await getWorkflow(deps.db, input.workflowId)
@@ -572,8 +912,18 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
     throw new NotFoundError('workflow-not-found', `workflow '${input.workflowId}' not found`)
   }
 
+  // RFC-165: scratch tasks have no repo source at all — skip spec
+  // normalization/resolution and materialize a fresh scratch repo instead.
+  const isScratch = input.scratch === true
   // RFC-066: collapse legacy and v2 bodies into a uniform per-repo spec list.
-  const repoSpecs = normalizeStartTaskRepos(input)
+  // RFC-165: an internal launch (fusion / framework helpers) carries its repo
+  // via deps.internalSource, NOT the wire body — mirror materializeSpace's
+  // derivation or the preCreatedWorktree branch below sees zero specs.
+  const repoSpecs = isScratch
+    ? []
+    : deps.internalSource !== undefined
+      ? [{ repoPath: deps.internalSource.repoPath, baseBranch: deps.internalSource.baseBranch }]
+      : normalizeStartTaskRepos(input)
 
   // RFC-066: multi-repo gates. Reject up-front BEFORE the static workflow
   // validation step (which may itself reject the workflow for unrelated
@@ -628,42 +978,23 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
 
   const appHome = deps.appHome ?? Paths.root
 
-  // RFC-066: per-repo source resolution. Each spec independently runs
-  // path-mode opt-in fetch (RFC-068) or URL-mode FF; warnings collected per
-  // repo and surfaced after materialization.
-  const resolvedSources: ResolvedRepoSource[] = []
-  for (const [i, spec] of repoSpecs.entries()) {
-    // RFC-107: reuse the route's pre-resolved source for the single repo so a
-    // URL is cloned/resolved exactly once across the route → startTask handoff.
-    const r =
-      deps.preResolvedSource !== undefined && repoSpecs.length === 1 && i === 0
-        ? deps.preResolvedSource
-        : await resolveRepoSourceSingle(spec, input, deps)
-    if (r.pathFetchError !== null) {
-      log.warn('rfc068/path-fetch-failed', {
-        repoPath: r.repoPath,
-        error: r.pathFetchError,
-      })
+  // RFC-020/165: three handoffs into a materialized space —
+  //   (1) `deps.materializedSpace`: a route already resolved+materialized
+  //       (multipart; carries success OR failure) — consumed verbatim so
+  //       resolve/materialize run exactly once end-to-end (design F3);
+  //   (2) `deps.preCreatedWorktree`: legacy fusion handoff (single path-mode
+  //       repo; migrates to internalSource with RFC-165 T5);
+  //   (3) materialize here (JSON-body flow).
+  let space: MaterializedSpace
+  if (deps.materializedSpace !== undefined) {
+    space = deps.materializedSpace
+  } else if (deps.preCreatedWorktree !== undefined) {
+    if (input.scratch === true) {
+      throw new ValidationError(
+        'scratch-precreated-unsupported',
+        'multipart uploads into a scratch space must use the materializedSpace handoff',
+      )
     }
-    if (r.ffWarnings.length > 0) {
-      log.warn('rfc068/ff-warnings', {
-        repoUrl: r.repoUrl,
-        warnings: r.ffWarnings,
-      })
-    }
-    resolvedSources.push(r)
-  }
-
-  // RFC-020: multipart-upload flow creates the worktree before this call so
-  // it can write user files into it. JSON-body flow takes the original path:
-  // mint a fresh id, call materializeWorktree here.
-  let taskId: string
-  let worktreePath: string
-  let branch: string
-  let baseCommit: string | null
-  let earlyError: string | null
-  let materializedRepos: MaterializedRepo[]
-  if (deps.preCreatedWorktree !== undefined) {
     // Multipart-upload flow is single-repo only. RFC-066 routes/tasks.ts
     // wires a multi-repo + upload combo to 422 via T6's gate well before
     // this code path runs; the assertion is belt-and-suspenders.
@@ -673,172 +1004,63 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
         'preCreatedWorktree path can only be used with single-repo bodies',
       )
     }
-    taskId = deps.preCreatedWorktree.taskId
-    worktreePath = deps.preCreatedWorktree.worktreePath
-    branch = deps.preCreatedWorktree.branch
-    baseCommit = deps.preCreatedWorktree.baseCommit
-    earlyError = null
-    const onlySource = resolvedSources[0]!
-    materializedRepos = [
-      {
-        repoIndex: 0,
-        repoPath: onlySource.repoPath,
-        repoUrl: onlySource.repoUrl,
-        baseBranch: onlySource.baseBranch ?? '',
-        branch,
-        baseCommit,
-        worktreePath,
-        worktreeDirName: '',
-        submoduleInitOk: true,
-        submoduleInitError: null,
-        hasSubmodules: false,
-      },
-    ]
-  } else if (repoSpecs.length === 1) {
-    // RFC-066: single-path byte-baseline branch — pre-RFC-066 behavior
-    // preserved bit-for-bit. The G1 grep guard in
-    // tests/source/start-task-single-path-baseline.test.ts pins this
-    // comment so a future multi-path refactor cannot silently delete the
-    // single-repo path.
-    taskId = ulid()
-    const source = resolvedSources[0]!
-    const wt = await materializeWorktree({
-      repoPath: source.repoPath,
-      baseBranch: source.baseBranch,
-      taskId,
-      appHome,
-      // RFC-075: working branch (task-level) + identity for the merge commit.
-      ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
-      gitUserName: input.gitUserName ?? null,
-      gitUserEmail: input.gitUserEmail ?? null,
-    })
-    worktreePath = wt.worktreePath
-    branch = wt.branch
-    baseCommit = wt.baseCommit
-    earlyError = wt.earlyError
-
-    if (earlyError === null && !wt.submoduleInitOk) {
-      const { createLogger } = await import('@/util/log')
-      const log = createLogger('task')
-      log.warn('[rfc034/submodule-init-failed] worktree submodule init failed', {
-        taskId,
-        worktreePath,
-        stderr: wt.submoduleInitError ?? '',
-      })
-    }
-
-    if (
-      earlyError !== null &&
-      source.repoUrl !== null &&
-      /worktree-base-invalid|cannot resolve base ref/i.test(earlyError)
-    ) {
-      const available = await listAvailableRefs(source.repoPath, 10)
+    const source =
+      deps.preResolvedSource ??
+      (await resolveRepoSourceSingle(
+        deps.internalSource !== undefined
+          ? { repoPath: deps.internalSource.repoPath, baseBranch: deps.internalSource.baseBranch }
+          : repoSpecs[0]!,
+        input,
+        deps,
+      ))
+    // RFC-165 (F4): internalSource + preCreatedWorktree must agree on the repo.
+    if (deps.internalSource !== undefined && deps.internalSource.repoPath !== source.repoPath) {
       throw new ValidationError(
-        'repo-ref-not-found',
-        `ref '${input.ref ?? source.baseBranch ?? '(default)'}' not found in ${redactGitUrl(source.repoUrl)}`,
-        { url: redactGitUrl(source.repoUrl), ref: input.ref ?? null, availableRefs: available },
+        'internal-source-conflict',
+        'internalSource.repoPath must match the pre-created worktree source',
       )
     }
-    materializedRepos = [
-      {
-        repoIndex: 0,
-        repoPath: source.repoPath,
-        repoUrl: source.repoUrl,
-        baseBranch: source.baseBranch ?? '',
-        branch: branch !== '' ? branch : `agent-workflow/${taskId}`,
-        baseCommit,
-        worktreePath,
-        worktreeDirName: '',
-        submoduleInitOk: wt.submoduleInitOk,
-        submoduleInitError: wt.submoduleInitError,
-        hasSubmodules: wt.hasSubmodules,
-      },
-    ]
+    const pre = deps.preCreatedWorktree
+    space = {
+      kind: 'single',
+      spaceKind:
+        deps.internalSource !== undefined
+          ? 'internal'
+          : source.repoUrl !== null
+            ? 'remote'
+            : 'local',
+      taskId: pre.taskId,
+      worktreePath: pre.worktreePath,
+      branch: pre.branch,
+      baseCommit: pre.baseCommit,
+      earlyError: null,
+      resolvedSources: [source],
+      repos: [
+        {
+          repoIndex: 0,
+          repoPath: source.repoPath,
+          repoUrl: source.repoUrl,
+          baseBranch: source.baseBranch ?? '',
+          branch: pre.branch,
+          baseCommit: pre.baseCommit,
+          worktreePath: pre.worktreePath,
+          worktreeDirName: '',
+          submoduleInitOk: true,
+          submoduleInitError: null,
+          hasSubmodules: false,
+        },
+      ],
+    }
   } else {
-    // RFC-066: multi-repo materialize branch. cwd is the parent dir; each
-    // source repo becomes a per-basename sibling worktree under it. The
-    // legacy `tasks.*` repo/worktree/branch columns mirror repos[0] for
-    // back-compat with API consumers that haven't adopted `repos[]` yet.
-    taskId = ulid()
-    const parentWorktree = join(appHome, 'worktrees', 'multi', taskId)
-    mkdirSync(parentWorktree, { recursive: true })
-    worktreePath = parentWorktree
-    earlyError = null
-    materializedRepos = []
-    const usedDirNames = new Set<string>()
-    for (let i = 0; i < resolvedSources.length; i++) {
-      const source = resolvedSources[i]!
-      const rawName = basename(source.repoPath)
-      const dirName = resolveMultiRepoDirName(rawName, usedDirNames)
-      usedDirNames.add(dirName)
-      const wt = await materializeWorktree({
-        repoPath: source.repoPath,
-        baseBranch: source.baseBranch,
-        taskId,
-        appHome,
-        overrideWorktreePath: join(parentWorktree, dirName),
-        // RFC-075: same working branch name applied to every repo in the task.
-        ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
-        gitUserName: input.gitUserName ?? null,
-        gitUserEmail: input.gitUserEmail ?? null,
-      })
-      if (wt.earlyError !== null) {
-        earlyError = `repo[${i}] (${dirName}) failed: ${wt.earlyError}`
-        // URL mode: rewrap missing-ref into the legacy `repo-ref-not-found`
-        // error shape so the launcher's existing helpful-list UI continues
-        // to work for the first failing repo.
-        if (
-          source.repoUrl !== null &&
-          /worktree-base-invalid|cannot resolve base ref/i.test(wt.earlyError)
-        ) {
-          const available = await listAvailableRefs(source.repoPath, 10)
-          throw new ValidationError(
-            'repo-ref-not-found',
-            `ref '${repoSpecs[i]!.ref ?? source.baseBranch ?? '(default)'}' not found in ${redactGitUrl(source.repoUrl)}`,
-            {
-              url: redactGitUrl(source.repoUrl),
-              ref: repoSpecs[i]!.ref ?? null,
-              availableRefs: available,
-              repoIndex: i,
-            },
-          )
-        }
-        break
-      }
-      if (!wt.submoduleInitOk) {
-        const { createLogger } = await import('@/util/log')
-        const log = createLogger('task')
-        log.warn('[rfc034/submodule-init-failed] worktree submodule init failed', {
-          taskId,
-          worktreePath: wt.worktreePath,
-          repoIndex: i,
-          stderr: wt.submoduleInitError ?? '',
-        })
-      }
-      materializedRepos.push({
-        repoIndex: i,
-        repoPath: source.repoPath,
-        repoUrl: source.repoUrl,
-        baseBranch: source.baseBranch ?? '',
-        branch: wt.branch,
-        baseCommit: wt.baseCommit,
-        worktreePath: wt.worktreePath,
-        worktreeDirName: dirName,
-        submoduleInitOk: wt.submoduleInitOk,
-        submoduleInitError: wt.submoduleInitError,
-        hasSubmodules: wt.hasSubmodules,
-      })
-    }
-    // Mirror repos[0] into the legacy `tasks.*` columns for API back-compat.
-    if (materializedRepos.length > 0) {
-      const head = materializedRepos[0]!
-      branch = head.branch
-      baseCommit = head.baseCommit
-    } else {
-      branch = ''
-      baseCommit = null
-    }
+    space = await materializeSpace(input, deps, appHome)
   }
+  const taskId = space.taskId
+  const worktreePath = space.worktreePath
+  const branch = space.branch
+  const baseCommit = space.baseCommit
+  const earlyError = space.earlyError
+  const materializedRepos = space.repos
+  const resolvedSources = space.resolvedSources
 
   // RFC-067: trim and pair-validate the optional Git commit identity.
   // StartTaskSchema's superRefine already rejected the half-set case, but we
@@ -865,126 +1087,134 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
   const headBaseCommit = head?.baseCommit ?? baseCommit
 
   const now = Date.now()
-  await deps.db.insert(tasks).values({
-    id: taskId,
-    // RFC-037: required name (StartTaskSchema already trimmed + length-validated).
-    name: input.name,
-    workflowId: workflow.id,
-    workflowSnapshot: deps.workgroupLaunch?.snapshotJson ?? JSON.stringify(workflow.definition),
-    workflowVersion: workflow.version, // RFC-109: record the version this snapshot froze
-    repoPath: headRepoPath,
-    // RFC-054 W3-4 KNOWN_GAP fix: never persist the credentialed URL.
-    // gitRepoCache has already used the cleartext form to clone (line
-    // 197 above); from this point onward the daemon only needs the
-    // redacted form (for display, WS broadcast, error messages). The
-    // cleartext URL is reachable only ephemerally via the cache key
-    // hash, so even DB-level access can't reconstruct it.
-    repoUrl: headRepoUrl !== null ? redactGitUrl(headRepoUrl) : null,
-    worktreePath,
-    baseBranch: headBaseBranch,
-    branch: headBranch !== '' ? headBranch : `agent-workflow/${taskId}`,
-    baseCommit: headBaseCommit,
-    status: earlyError === null ? 'pending' : 'failed',
-    inputs: JSON.stringify(input.inputs),
-    maxDurationMs: input.maxDurationMs ?? null,
-    maxTotalTokens: input.maxTotalTokens ?? null,
-    // RFC-067: per-task Git commit identity (NULL when omitted or only
-    // half-set; runner.ts skips env injection when these are NULL).
-    gitUserName: persistedGitUserName,
-    gitUserEmail: persistedGitUserEmail,
-    // RFC-075: user-specified working branch (NULL → isolation branch) +
-    // the auto commit&push toggle (false → legacy, no commit/push).
-    workingBranch: input.workingBranch ?? null,
-    autoCommitPush: input.autoCommitPush ?? false,
-    // RFC-066: count of `task_repos` rows. Single-repo path always = 1;
-    // multi-repo populates with the materialized count (zero only when the
-    // first repo failed before any task_repos row was minted).
-    repoCount: Math.max(1, materializedRepos.length),
-    startedAt: now,
-    finishedAt: earlyError === null ? null : now,
-    errorSummary: earlyError !== null ? `worktree creation failed: ${earlyError}` : null,
-    errorMessage: earlyError,
-    // RFC-036: launcher identity (NULL = legacy / __system__ fallback).
-    ownerUserId: deps.actorUserId ?? null,
-    // RFC-159: the scheduled_tasks row that auto-launched this task (NULL =
-    // manual). Stamped atomically with the row so the schedule's run history is
-    // durable regardless of any later bookkeeping write.
-    scheduledTaskId: deps.scheduledTaskId ?? null,
-    // RFC-164: workgroup link + runtime config copy (NULL = not a workgroup task).
-    workgroupId: deps.workgroupLaunch?.workgroupId ?? null,
-    workgroupConfigJson: deps.workgroupLaunch?.configJson ?? null,
-  })
+  try {
+    await deps.db.insert(tasks).values({
+      id: taskId,
+      // RFC-037: required name (StartTaskSchema already trimmed + length-validated).
+      name: input.name,
+      workflowId: workflow.id,
+      workflowSnapshot: deps.workgroupLaunch?.snapshotJson ?? JSON.stringify(workflow.definition),
+      workflowVersion: workflow.version, // RFC-109: record the version this snapshot froze
+      repoPath: headRepoPath,
+      // RFC-054 W3-4 KNOWN_GAP fix: never persist the credentialed URL.
+      // gitRepoCache has already used the cleartext form to clone (line
+      // 197 above); from this point onward the daemon only needs the
+      // redacted form (for display, WS broadcast, error messages). The
+      // cleartext URL is reachable only ephemerally via the cache key
+      // hash, so even DB-level access can't reconstruct it.
+      repoUrl: headRepoUrl !== null ? redactGitUrl(headRepoUrl) : null,
+      worktreePath,
+      baseBranch: headBaseBranch,
+      branch: headBranch !== '' ? headBranch : `agent-workflow/${taskId}`,
+      baseCommit: headBaseCommit,
+      status: earlyError === null ? 'pending' : 'failed',
+      inputs: JSON.stringify(input.inputs),
+      maxDurationMs: input.maxDurationMs ?? null,
+      maxTotalTokens: input.maxTotalTokens ?? null,
+      // RFC-067: per-task Git commit identity (NULL when omitted or only
+      // half-set; runner.ts skips env injection when these are NULL).
+      gitUserName: persistedGitUserName,
+      gitUserEmail: persistedGitUserEmail,
+      // RFC-075: user-specified working branch (NULL → isolation branch) +
+      // the auto commit&push toggle (false → legacy, no commit/push).
+      workingBranch: input.workingBranch ?? null,
+      autoCommitPush: input.autoCommitPush ?? false,
+      // RFC-066: count of `task_repos` rows. Single-repo path always = 1;
+      // multi-repo populates with the materialized count (zero only when the
+      // first repo failed before any task_repos row was minted).
+      repoCount: Math.max(1, materializedRepos.length),
+      startedAt: now,
+      finishedAt: earlyError === null ? null : now,
+      errorSummary: earlyError !== null ? `worktree creation failed: ${earlyError}` : null,
+      errorMessage: earlyError,
+      // RFC-036: launcher identity (NULL = legacy / __system__ fallback).
+      ownerUserId: deps.actorUserId ?? null,
+      // RFC-159: the scheduled_tasks row that auto-launched this task (NULL =
+      // manual). Stamped atomically with the row so the schedule's run history is
+      // durable regardless of any later bookkeeping write.
+      scheduledTaskId: deps.scheduledTaskId ?? null,
+      // RFC-164: workgroup link + runtime config copy (NULL = not a workgroup task).
+      workgroupId: deps.workgroupLaunch?.workgroupId ?? null,
+      workgroupConfigJson: deps.workgroupLaunch?.configJson ?? null,
+      // RFC-165: execution-space kind. 'local' is transitional (path mode, until
+      // its public retirement lands within this PR); 'internal' is stamped via
+      // the internalSource dep (fusion) once that migration lands.
+      spaceKind: space.spaceKind,
+      // RFC-165 (R3-2-r4): a materialize-failure row has NO revivable workspace —
+      // stamp the tombstone atomically with the row so retry / sync-workflow can
+      // never CAS it back to pending against a missing directory.
+      workspacePrunedAt: earlyError !== null && worktreePath === '' ? now : null,
+    })
 
-  // RFC-066: persist per-repo metadata. Single-repo tasks land one row at
-  // repo_index=0 mirroring the legacy columns above; multi-repo tasks land
-  // N rows sorted by repo_index. The list view's `repoCount` chip is driven
-  // by `tasks.repo_count`; the detail page's `Task.repos[]` array is hydrated
-  // from this table by `getTask`.
-  if (materializedRepos.length > 0) {
-    await deps.db.insert(taskRepos).values(
-      materializedRepos.map((r) => ({
-        taskId,
-        repoIndex: r.repoIndex,
-        repoPath: r.repoPath,
-        repoUrl: r.repoUrl !== null ? redactGitUrl(r.repoUrl) : null,
-        baseBranch: r.baseBranch,
-        branch: r.branch,
-        // RFC-075: the single working-branch name is applied to every repo
-        // (NULL → this repo uses the isolation branch in `branch`).
-        workingBranch: input.workingBranch ?? null,
-        baseCommit: r.baseCommit,
-        worktreePath: r.worktreePath,
-        worktreeDirName: r.worktreeDirName,
-        hasSubmodules: r.hasSubmodules,
-        submoduleInitOk: r.submoduleInitOk,
-        submoduleInitError: r.submoduleInitError,
-        schemaVersion: 1,
-      })),
-    )
-  }
-
-  // RFC-067 NOTE: an earlier draft of this RFC also wrote `user.name` /
-  // `user.email` into the worktree's local `.git/config` as a defense-in-
-  // depth fallback for git invocations that bypass the runner's spawn env.
-  // We dropped that path: by default `git config <key> <value>` inside a
-  // worktree writes to the PARENT repo's shared `.git/config`, so two
-  // concurrent tasks against the same source repo race-overwrite each
-  // other's identity. Per-worktree config via `extensions.worktreeConfig=
-  // true` would have to be enabled on the parent repo (a global flag we do
-  // not own). Pure spawn-env injection (in services/runner.ts) is therefore
-  // the single source of truth for task identity; agents that bypass the
-  // runner fall back to the parent repo's default user, matching
-  // pre-RFC-067 behaviour.
-
-  // RFC-036/RFC-099: record owner + collaborators (assignments removed, D6).
-  if (deps.actorUserId) {
-    const { recordLaunchContext } = await import('@/services/taskCollab')
-    try {
-      await recordLaunchContext(deps.db, {
-        taskId,
-        ownerUserId: deps.actorUserId,
-        collaboratorUserIds: input.collaboratorUserIds ?? [],
-        now,
-      })
-    } catch (err) {
-      // Roll back the task row so the caller sees a clean 422 with no
-      // half-created row in /api/tasks.
-      await deps.db.delete(tasks).where(eq(tasks.id, taskId))
-      throw err
+    // RFC-066: persist per-repo metadata. Single-repo tasks land one row at
+    // repo_index=0 mirroring the legacy columns above; multi-repo tasks land
+    // N rows sorted by repo_index. The list view's `repoCount` chip is driven
+    // by `tasks.repo_count`; the detail page's `Task.repos[]` array is hydrated
+    // from this table by `getTask`.
+    if (materializedRepos.length > 0) {
+      await deps.db.insert(taskRepos).values(
+        materializedRepos.map((r) => ({
+          taskId,
+          repoIndex: r.repoIndex,
+          repoPath: r.repoPath,
+          repoUrl: r.repoUrl !== null ? redactGitUrl(r.repoUrl) : null,
+          baseBranch: r.baseBranch,
+          branch: r.branch,
+          // RFC-075: the single working-branch name is applied to every repo
+          // (NULL → this repo uses the isolation branch in `branch`).
+          workingBranch: input.workingBranch ?? null,
+          baseCommit: r.baseCommit,
+          worktreePath: r.worktreePath,
+          worktreeDirName: r.worktreeDirName,
+          hasSubmodules: r.hasSubmodules,
+          submoduleInitOk: r.submoduleInitOk,
+          submoduleInitError: r.submoduleInitError,
+          schemaVersion: 1,
+        })),
+      )
     }
-  }
 
-  // Mirror every path-mode repo into recent-repos — best-effort, never blocks.
-  // RFC-024: only path-mode entries belong in `recent_repos` (URL-mode tasks
-  // are tracked via `cached_repos` instead). RFC-066: in multi-repo tasks
-  // this runs N times so each user-picked path shows up in the next launch's
-  // dropdown.
-  for (const r of materializedRepos) {
-    if (r.repoUrl === null) {
-      upsertRecentRepo(deps.db, r.repoPath).catch((err) => {
-        log.warn('upsertRecentRepo failed', { error: (err as Error).message })
-      })
+    // RFC-067 NOTE: an earlier draft of this RFC also wrote `user.name` /
+    // `user.email` into the worktree's local `.git/config` as a defense-in-
+    // depth fallback for git invocations that bypass the runner's spawn env.
+    // We dropped that path: by default `git config <key> <value>` inside a
+    // worktree writes to the PARENT repo's shared `.git/config`, so two
+    // concurrent tasks against the same source repo race-overwrite each
+    // other's identity. Per-worktree config via `extensions.worktreeConfig=
+    // true` would have to be enabled on the parent repo (a global flag we do
+    // not own). Pure spawn-env injection (in services/runner.ts) is therefore
+    // the single source of truth for task identity; agents that bypass the
+    // runner fall back to the parent repo's default user, matching
+    // pre-RFC-067 behaviour.
+
+    // RFC-036/RFC-099: record owner + collaborators (assignments removed, D6).
+    if (deps.actorUserId) {
+      const { recordLaunchContext } = await import('@/services/taskCollab')
+      try {
+        await recordLaunchContext(deps.db, {
+          taskId,
+          ownerUserId: deps.actorUserId,
+          collaboratorUserIds: input.collaboratorUserIds ?? [],
+          now,
+        })
+      } catch (err) {
+        // Roll back the task row so the caller sees a clean 422 with no
+        // half-created row in /api/tasks.
+        await deps.db.delete(tasks).where(eq(tasks.id, taskId))
+        throw err
+      }
     }
+  } catch (err) {
+    // RFC-165 (F9): a scratch dir whose row failed to commit (insert error or
+    // collaborator rollback above) is unreachable from any task row — the
+    // launch flow owns its cleanup, best-effort, before rethrowing.
+    if (isScratch && worktreePath !== '') {
+      await rm(worktreePath, { recursive: true, force: true }).catch(() => {})
+    }
+    throw err
+  } finally {
+    // Row committed (or failure cleaned up) — release the materialize lease.
+    materializingSpaces.delete(taskId)
   }
 
   const task = (await getTask(deps.db, taskId)) as Task
@@ -1005,6 +1235,9 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
       // RFC-066: source of truth is the freshly-loaded Task (which read
       // `tasks.repo_count` directly). Single-repo = 1; multi-repo = N.
       repoCount: task.repoCount,
+      // RFC-165: execution-space kind + single-agent soft link.
+      spaceKind: task.spaceKind,
+      sourceAgentName: task.sourceAgentName ?? null,
     },
   })
 
@@ -2688,6 +2921,9 @@ function rowToTask(
     // RFC-159: link back to the scheduled_tasks row that launched this (NULL = manual).
     scheduledTaskId: row.scheduledTaskId ?? null,
     workgroupId: row.workgroupId ?? null,
+    // RFC-165: execution-space kind + single-agent soft link.
+    spaceKind: row.spaceKind,
+    sourceAgentName: row.sourceAgentName ?? null,
     repos,
   }
 }
@@ -2710,6 +2946,9 @@ function rowToSummary(row: typeof tasks.$inferSelect, workflowName: string | nul
     // RFC-159: link back to the scheduled_tasks row that launched this (NULL = manual).
     scheduledTaskId: row.scheduledTaskId ?? null,
     workgroupId: row.workgroupId ?? null,
+    // RFC-165: execution-space kind + single-agent soft link.
+    spaceKind: row.spaceKind,
+    sourceAgentName: row.sourceAgentName ?? null,
   }
 }
 

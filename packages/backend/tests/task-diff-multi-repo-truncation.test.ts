@@ -1,4 +1,7 @@
 // LOCKS: RFC-066 PR-B — getTaskDiff multi-repo byte-budget + all-clean fall-through.
+// RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
+// now (the wire is URL-only) — bodies are cast through the internal
+// RepoSourceSpec widening; runtime behavior is byte-identical to pre-165.
 //
 // Sibling of task-diff-multi-repo.test.ts (B16/B17/B18), which only exercises
 // the small-fixture path where `truncated === false`. This file locks the two
@@ -20,6 +23,7 @@
 //       from B18 (one-of-two empty): here EVERY repo is empty.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import type { StartTask } from '@agent-workflow/shared'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -96,7 +100,7 @@ describe('RFC-066 PR-B — getTaskDiff multi-repo truncation + all-clean fall-th
           { repoPath: h.repos[1]!, baseBranch: 'main' },
         ],
         inputs: {},
-      },
+      } as unknown as StartTask,
       { db: h.db, appHome: h.appHome },
     )
     const wtA = join(task.worktreePath, task.repos[0]!.worktreeDirName)
@@ -127,7 +131,7 @@ describe('RFC-066 PR-B — getTaskDiff multi-repo truncation + all-clean fall-th
           { repoPath: h.repos[1]!, baseBranch: 'main' },
         ],
         inputs: {},
-      },
+      } as unknown as StartTask,
       { db: h.db, appHome: h.appHome },
     )
     // Neither worktree is mutated: both repos are in `usable` (valid base +

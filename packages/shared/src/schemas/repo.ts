@@ -1,21 +1,8 @@
-// Repo-related schemas: recent list, ref dropdowns, file picker.
+// Repo-related schemas: ref dropdowns, file picker. (RFC-165 retired the
+// recent-repos DTOs together with path-mode launches; the pickers now target
+// cached URL mirrors — see schemas/cachedRepo.)
 
 import { z } from 'zod'
-
-export const RecentRepoSchema = z.object({
-  /** Absolute path on the host. */
-  path: z.string(),
-  /** Last time this repo was used to launch a task. */
-  lastUsedAt: z.number().int(),
-  /** Default branch detected at registration time (e.g. 'main'). */
-  defaultBranch: z.string().optional(),
-})
-export type RecentRepo = z.infer<typeof RecentRepoSchema>
-
-export const UpsertRecentRepoSchema = z.object({
-  path: z.string().min(1),
-})
-export type UpsertRecentRepo = z.infer<typeof UpsertRecentRepoSchema>
 
 export const GitRefSchema = z.object({
   sha: z.string(),

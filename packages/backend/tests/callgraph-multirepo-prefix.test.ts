@@ -1,4 +1,7 @@
 // RFC-089 P4 — supplementary coverage for multi-repo call-chain re-prefixing.
+// RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
+// now (the wire is URL-only) — bodies are cast through the internal
+// RepoSourceSpec widening; runtime behavior is byte-identical to pre-165.
 //
 // Locks two seams that the existing structural-diff-callchain-multi-repo.test.ts
 // does NOT exercise:
@@ -19,6 +22,7 @@
 //      inner ref. (expandService.ts:113.)
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import type { StartTask } from '@agent-workflow/shared'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -111,7 +115,7 @@ async function twoRepoTask(h: Harness) {
         { repoPath: h.repos[1]!, baseBranch: 'main' },
       ],
       inputs: {},
-    },
+    } as unknown as StartTask,
     { db: h.db, appHome: h.appHome },
   )
 }

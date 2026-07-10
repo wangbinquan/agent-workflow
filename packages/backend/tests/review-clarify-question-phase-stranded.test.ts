@@ -29,7 +29,7 @@ import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { runTask } from '../src/services/scheduler'
-import { startTask } from '../src/services/task'
+import { startTaskWithLocalRepo } from '../src/services/task'
 import { listTaskQuestions } from '../src/services/taskQuestions'
 import { reenterScheduler } from './reenter-scheduler'
 import type {
@@ -202,7 +202,7 @@ test('multi-round clarify: the round-0 question un-strands to 已处理待确认
     ],
   })
   const wf = await setupClarifyReviewWorkflow('strand')
-  const task = await startTask(
+  const task = await startTaskWithLocalRepo(
     {
       workflowId: wf.id,
       name: 'strand',

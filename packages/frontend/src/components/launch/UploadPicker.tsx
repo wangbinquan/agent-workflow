@@ -1,6 +1,6 @@
 // RFC-020: launcher widget for `kind: 'upload'` inputs. The user picks
 // local files from their machine; on Start we POST them as multipart to
-// /api/tasks (see buildLaunchFormData). We keep selected File[] in
+// /api/tasks (see buildLaunchFormDataV2). We keep selected File[] in
 // parallel-state with the inputs map so File objects don't need to be
 // serialized through the inputs[key] string slot.
 

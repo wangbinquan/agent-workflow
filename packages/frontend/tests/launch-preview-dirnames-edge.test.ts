@@ -20,21 +20,21 @@ import { computePreviewDirNames, type RepoSource } from '@/lib/launch-repo-sourc
 describe('computePreviewDirNames — literal pre-suffixed collisions (RFC-066)', () => {
   test('literal `utils-2` escalates to `utils-2-2` when an auto-suffix already took `utils-2`', () => {
     const repos: RepoSource[] = [
-      { kind: 'path', repoPath: '/a/utils', baseBranch: 'main' },
-      { kind: 'path', repoPath: '/b/utils', baseBranch: 'main' },
-      { kind: 'path', repoPath: '/c/utils-2', baseBranch: 'main' },
+      { kind: 'url', repoUrl: 'git@github.com:a/utils.git', ref: '' },
+      { kind: 'url', repoUrl: 'git@github.com:b/utils.git', ref: '' },
+      { kind: 'url', repoUrl: 'git@github.com:c/utils-2.git', ref: '' },
     ]
     // row1 'utils' free -> 'utils'; row2 'utils' taken -> 'utils-2';
     // row3 raw 'utils-2' is already taken by row2's auto-suffix -> 'utils-2-2'.
     expect(computePreviewDirNames(repos)).toEqual(['utils', 'utils-2', 'utils-2-2'])
   })
 
-  test('path basename and URL trailing segment (.git stripped) collide; URL row gets `-2`', () => {
+  test('SSH short form and HTTPS trailing segment (.git stripped) collide; second row gets `-2`', () => {
     const repos: RepoSource[] = [
-      { kind: 'path', repoPath: '/x/repo', baseBranch: 'main' },
+      { kind: 'url', repoUrl: 'https://github.com/x/repo', ref: '' },
       { kind: 'url', repoUrl: 'git@github.com:org/repo.git', ref: '' },
     ]
-    // row1 path basename 'repo'; row2 URL strips '.git' + trailing segment ->
+    // row1 trailing segment 'repo'; row2 strips '.git' + trailing segment ->
     // 'repo', collides -> 'repo-2'.
     expect(computePreviewDirNames(repos)).toEqual(['repo', 'repo-2'])
   })

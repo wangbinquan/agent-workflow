@@ -18,7 +18,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { taskRepos, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
-import { getTask, startTask } from '../src/services/task'
+import { getTask, startTaskWithLocalRepo } from '../src/services/task'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -114,7 +114,7 @@ describe('RFC-075 — startTask working branch', () => {
   afterEach(() => rmSync(h.tmp, { recursive: true, force: true }))
 
   function launch(extra: Record<string, unknown>) {
-    return startTask(
+    return startTaskWithLocalRepo(
       {
         workflowId: h.wfId,
         name: 'wb-task',

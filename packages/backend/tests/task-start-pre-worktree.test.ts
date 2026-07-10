@@ -1,9 +1,13 @@
 // RFC-020 T3: startTask now accepts a `preCreatedWorktree` so the multipart
+// RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
+// now (the wire is URL-only) — bodies are cast through the internal
+// RepoSourceSpec widening; runtime behavior is byte-identical to pre-165.
 // upload route can land user-uploaded files into the worktree BEFORE the
 // task row is created. When passed, startTask must NOT shell out to git;
 // when omitted, behavior is identical to the pre-RFC-020 path.
 
 import { describe, expect, test } from 'bun:test'
+import type { StartTask } from '@agent-workflow/shared'
 import { execSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, rmSync, chmodSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -110,19 +114,21 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
     // there before startTask runs.
     writeFileSync(join(wt.worktreePath, 'uploaded.txt'), 'hi')
 
+    // RFC-165: preCreatedWorktree's surviving consumer (fusion) pairs it with
+    // the internal launch face — the local repo rides deps.internalSource,
+    // never the retired repoPath wire field.
     const task = await startTask(
       {
         workflowId: wf.id,
         name: 'fixture-task',
-        repoPath,
-        baseBranch: 'main',
         inputs: { topic: 'orders' },
-      },
+      } as unknown as StartTask,
       {
         db,
         appHome,
         opencodeCmd: [stubOpencode],
         awaitScheduler: true,
+        internalSource: { kind: 'local-path', repoPath, baseBranch: 'main' },
         preCreatedWorktree: {
           taskId,
           worktreePath: wt.worktreePath,
@@ -150,7 +156,7 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
         repoPath,
         baseBranch: 'main',
         inputs: { topic: 'orders' },
-      },
+      } as unknown as StartTask,
       { db, appHome, opencodeCmd: [stubOpencode], awaitScheduler: true },
     )
     expect(task.worktreePath).not.toBe('')

@@ -50,24 +50,17 @@ const WORKFLOW = {
   },
 }
 
-const REFS = {
-  branches: ['main'],
-  tags: [],
-  recentCommits: [],
-  currentBranch: 'main',
-  defaultBranch: 'main',
-  hasCommits: true,
-}
-
 const SCHEDULE = {
   id: 'sched-1',
   name: 'nightly audit',
   ownerUserId: 'me',
+  // RFC-165: launch payloads are URL-only (path payloads only survive as
+  // healer-disabled rows and seed a blank repair form — covered elsewhere).
   launchPayload: {
     workflowId: 'wf-1',
     name: 'nightly',
-    repoPath: '/r',
-    baseBranch: 'main',
+    repoUrl: 'https://github.com/o/r.git',
+    ref: 'main',
     inputs: { topic: 'seeded topic' },
     workingBranch: 'feature/x',
     autoCommitPush: true,
@@ -96,9 +89,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function installFetch(
-  opts: { recent?: unknown[]; schedule?: unknown; failCollabLookup?: boolean } = {},
-): FetchCall[] {
+function installFetch(opts: { schedule?: unknown; failCollabLookup?: boolean } = {}): FetchCall[] {
   const calls: FetchCall[] = []
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -124,8 +115,6 @@ function installFetch(
       if (url.includes('/api/scheduled-tasks/sched-1')) return json(opts.schedule ?? SCHEDULE)
       if (url.includes('/api/users/lookup'))
         return opts.failCollabLookup ? json({ error: { code: 'boom' } }, 500) : json([BOB])
-      if (url.includes('/api/repos/refs')) return json(REFS)
-      if (url.includes('/api/repos/recent')) return json(opts.recent ?? [])
       if (url.includes('/api/cached-repos')) return json({ items: [] })
       if (url.includes('/api/workflows/wf-1')) return json(WORKFLOW)
       if (url.includes('/api/tasks')) return json({ id: 'task-new' }, 201)
@@ -179,7 +168,7 @@ describe('RFC-159 — launch form edit-config mode (?editScheduled)', () => {
     // Field prefill from the stored launchPayload.
     expect(await screen.findByDisplayValue('nightly')).toBeTruthy() // task name
     expect(await screen.findByText('Bob')).toBeTruthy() // collaborator chip (id → UserPublic)
-    expect(screen.getByDisplayValue('/r')).toBeTruthy() // repo path
+    expect(screen.getByDisplayValue('https://github.com/o/r.git')).toBeTruthy() // repo url
     expect(screen.getByDisplayValue('seeded topic')).toBeTruthy() // workflow input
     expect(screen.getByDisplayValue('feature/x')).toBeTruthy() // working branch
 
@@ -204,13 +193,17 @@ describe('RFC-159 — launch form edit-config mode (?editScheduled)', () => {
     expect(payload).toMatchObject({
       workflowId: 'wf-1',
       name: 'nightly',
-      repoPath: '/r',
-      baseBranch: 'main',
+      repoUrl: 'https://github.com/o/r.git',
+      ref: 'main',
       inputs: { topic: 'seeded topic' },
       workingBranch: 'feature/x',
       autoCommitPush: true,
       collaboratorUserIds: ['bob'],
     })
+    // RFC-165: the rebuilt payload never re-introduces retired path keys.
+    expect('repoPath' in payload).toBe(false)
+    expect('baseBranch' in payload).toBe(false)
+    expect('fetchBeforeLaunch' in payload).toBe(false)
 
     // Lands back on the schedule detail page.
     await waitFor(() => {
@@ -261,19 +254,20 @@ describe('RFC-159 — launch form edit-config mode (?editScheduled)', () => {
 
 describe('RFC-159 — launch form create mode (no editScheduled) is unchanged', () => {
   test('still POSTs /api/tasks and navigates to the new task', async () => {
-    const calls = installFetch({ recent: [{ path: '/r', defaultBranch: 'main' }] })
+    const calls = installFetch()
     await renderLaunch('/workflows/wf-1/launch')
 
-    // Recent-repo auto-pick fills the first row (create-mode behavior).
-    expect(await screen.findByDisplayValue('/r')).toBeTruthy()
-
     // Primary button is the launch label; save-as-scheduled is present.
-    const submit = screen.getByTestId('launch-submit')
+    const submit = await screen.findByTestId('launch-submit')
     expect(submit.textContent).toBe('Start task')
     expect(screen.getByTestId('save-as-scheduled')).toBeTruthy()
 
-    // Name is required — fill it, then Start enables.
+    // Name + repo URL are required — fill both, then Start enables.
+    // (RFC-165: no recent-repo prefill; the URL row starts blank.)
     fireEvent.change(screen.getByTestId('launch-task-name'), { target: { value: 'My task' } })
+    fireEvent.change(screen.getByTestId('repo-source-url-0'), {
+      target: { value: 'https://github.com/o/r.git' },
+    })
     await waitFor(() => {
       expect((screen.getByTestId('launch-submit') as HTMLButtonElement).disabled).toBe(false)
     })

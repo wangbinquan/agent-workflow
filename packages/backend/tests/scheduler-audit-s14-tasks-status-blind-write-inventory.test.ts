@@ -54,7 +54,16 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // updates auto_recovery_{attempts,window_started_at,suspended};
   // clearAutoRecoverySuspension resets them. Neither touches `status`.
   'services/recoveryBreaker.ts': 2,
-  // RFC-164 PR-5: gate approve/reject + mid-run config edit both rewrite
+  // RFC-165: two-phase workspace tombstone — every writer touches ONLY
+  // workspace_pruning_at / workspace_pruned_at (workspace claim /
+  // heal-missing-dir / finalize / boot reconcile / iso transient claim +
+  // CAS-scoped release). Status flips stay in setTaskStatus; its revive gate
+  // READS these columns inside the status CAS.
+  'services/gc.ts': 6,
+  // RFC-165 (R3-2-r4): the revive gate stamps workspace_pruned_at when the
+  // dir vanished pre-tombstone (heal-forward) — companion-column write only.
+  'services/lifecycle.ts': 1,
+  // RFC-164 PR-3: gate approve/reject + mid-run config edit both rewrite
   // workgroup_config_json (the task-owned runtime copy) — never `status`
   // (the gate's status flip rides transitionTaskStatusByEvent separately).
   'routes/workgroupTasks.ts': 2,

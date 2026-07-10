@@ -18,22 +18,23 @@ import { enUS } from '../src/i18n/en-US'
 import { zhCN } from '../src/i18n/zh-CN'
 
 describe('buildWorkgroupLaunchBody', () => {
-  test('single path repo: exact minimal wire shape (name/goal/repoPath/baseBranch)', () => {
-    const body = buildWorkgroupLaunchBody([{ kind: 'path', repoPath: '/r', baseBranch: 'main' }], {
-      name: 'audit run',
-      goal: 'find the bugs',
-    })
+  test('single url repo: exact minimal wire shape (name/goal/repoUrl)', () => {
+    const body = buildWorkgroupLaunchBody(
+      [{ kind: 'url', repoUrl: 'https://github.com/o/r.git', ref: '' }],
+      {
+        name: 'audit run',
+        goal: 'find the bugs',
+      },
+    )
     expect(body).toEqual({
       name: 'audit run',
       goal: 'find the bugs',
-      repoPath: '/r',
-      baseBranch: 'main',
+      repoUrl: 'https://github.com/o/r.git',
     })
     // Load-bearing single-field assertions (防静默丢字段).
     expect(body.name).toBe('audit run')
     expect(body.goal).toBe('find the bugs')
-    expect(body.repoPath).toBe('/r')
-    expect(body.baseBranch).toBe('main')
+    expect(body.repoUrl).toBe('https://github.com/o/r.git')
     // Borrowed workflow-launch keys must be stripped.
     expect(body.workflowId).toBeUndefined()
     expect(body.inputs).toBeUndefined()
@@ -53,26 +54,27 @@ describe('buildWorkgroupLaunchBody', () => {
     expect(noRef.ref).toBeUndefined()
   })
 
-  test('multi-repo: repos[] entries + top-level fetchBeforeLaunch flag', () => {
+  test('multi-repo: repos[] entries (RFC-165: url-only, no retired path keys)', () => {
     const body = buildWorkgroupLaunchBody(
       [
-        { kind: 'path', repoPath: '/a', baseBranch: 'main', fetchBeforeLaunch: true },
+        { kind: 'url', repoUrl: 'https://github.com/o/a.git', ref: '' },
         { kind: 'url', repoUrl: 'https://github.com/o/r.git', ref: 'dev' },
       ],
       { name: 't', goal: 'g' },
     )
     expect(body.repos).toEqual([
-      { repoPath: '/a', baseBranch: 'main' },
+      { repoUrl: 'https://github.com/o/a.git' },
       { repoUrl: 'https://github.com/o/r.git', ref: 'dev' },
     ])
-    expect(body.fetchBeforeLaunch).toBe(true)
+    expect(body.fetchBeforeLaunch).toBeUndefined()
     expect(body.repoPath).toBeUndefined()
+    expect(body.repoUrl).toBeUndefined()
     expect(body.workflowId).toBeUndefined()
     expect(body.inputs).toBeUndefined()
   })
 
   test('optional extras ride the wire: collaborators / git identity / branch / push / limits', () => {
-    const body = buildWorkgroupLaunchBody([{ kind: 'path', repoPath: '/r', baseBranch: 'main' }], {
+    const body = buildWorkgroupLaunchBody([{ kind: 'url', repoUrl: 'https://x/r.git', ref: '' }], {
       name: 't',
       goal: 'g',
       collaboratorUserIds: ['u1', 'u2'],
@@ -93,7 +95,7 @@ describe('buildWorkgroupLaunchBody', () => {
   })
 
   test('omitted extras keep the wire minimal (no half-identity, no false flags)', () => {
-    const body = buildWorkgroupLaunchBody([{ kind: 'path', repoPath: '/r', baseBranch: 'main' }], {
+    const body = buildWorkgroupLaunchBody([{ kind: 'url', repoUrl: 'https://x/r.git', ref: '' }], {
       name: 't',
       goal: 'g',
       autoCommitPush: false,

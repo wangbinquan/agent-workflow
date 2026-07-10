@@ -27,6 +27,7 @@
 // broadcastNodeStatus AFTER the helper returns; never the other way around.
 
 import { and, eq } from 'drizzle-orm'
+import { existsSync } from 'node:fs'
 import {
   type NodeRunTransitionEvent,
   type NodeRunStatus,
@@ -35,7 +36,7 @@ import {
 } from '@agent-workflow/shared'
 import { nodeRuns } from '@/db/schema'
 import type { DbClient } from '@/db/client'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 
 /**
  * Extra fields that may be written alongside a status transition (mirrors
@@ -266,14 +267,20 @@ export async function setTaskStatus(args: {
   reason: string
 }): Promise<{ from: TaskStatus; to: TaskStatus }> {
   const rows = await args.db
-    .select({ status: tasks.status })
+    .select({
+      status: tasks.status,
+      worktreePath: tasks.worktreePath,
+      workspacePruningAt: tasks.workspacePruningAt,
+      workspacePrunedAt: tasks.workspacePrunedAt,
+    })
     .from(tasks)
     .where(eq(tasks.id, args.taskId))
     .limit(1)
   if (rows.length === 0) {
     throw new NotFoundError('task-not-found', `task ${args.taskId} not found`)
   }
-  const from = rows[0]!.status as TaskStatus
+  const row = rows[0]!
+  const from = row.status as TaskStatus
   if (isTerminalTaskStatus(from) && args.allowTerminal !== true) {
     throw new ConflictError(
       'illegal-task-transition',
@@ -286,11 +293,61 @@ export async function setTaskStatus(args: {
       `task ${args.taskId} status='${from}' not in allowedFrom=[${args.allowedFrom.join(',')}] (${args.reason})`,
     )
   }
+  // RFC-165 (R3-2): the workspace-revival gate, enforced at the SINGLE task
+  // status writer so every revive path (resume / retry / sync-workflow /
+  // lifecycle repair / boot auto-resume) shares it. A revival = a terminal
+  // source resurrected to a live status; it needs a workspace, so:
+  //   * workspace_pruned_at set  → the dir was reclaimed by GC → 410.
+  //   * workspace_pruning_at set → GC holds the delete claim right now → 409.
+  //   * dir missing on disk (legacy pre-tombstone GC, manual rm) → stamp the
+  //     tombstone atomically and 410 (heals history forward — R3-2-r4).
+  // The UPDATE below re-checks both stamps so a claim landing between this
+  // read and the write loses cleanly (ConcurrentTaskTransition).
+  const isRevival =
+    args.allowTerminal === true && isTerminalTaskStatus(from) && !isTerminalTaskStatus(args.to)
+  if (isRevival) {
+    if (row.workspacePrunedAt !== null) {
+      throw new DomainError(
+        'workspace-pruned',
+        `task ${args.taskId} workspace was reclaimed by GC; cannot ${args.reason}`,
+        410,
+      )
+    }
+    if (row.workspacePruningAt !== null) {
+      throw new ConflictError(
+        'workspace-pruning',
+        `task ${args.taskId} workspace is being reclaimed by GC right now; retry after it finishes (${args.reason})`,
+      )
+    }
+    if (row.worktreePath !== '' && !existsSync(row.worktreePath)) {
+      await args.db
+        .update(tasks)
+        .set({ workspacePrunedAt: Date.now() })
+        .where(
+          and(
+            eq(tasks.id, args.taskId),
+            isNull(tasks.workspacePruningAt),
+            isNull(tasks.workspacePrunedAt),
+          ),
+        )
+      throw new DomainError(
+        'workspace-pruned',
+        `task ${args.taskId} workspace '${row.worktreePath}' no longer exists (reclaimed before tombstones existed); cannot ${args.reason}`,
+        410,
+      )
+    }
+  }
   // rfc097-allow-direct-task-status-write -- single allowlisted writer
   const updated = await args.db
     .update(tasks)
     .set({ status: args.to, ...(args.extra ?? {}) })
-    .where(and(eq(tasks.id, args.taskId), eq(tasks.status, from)))
+    .where(
+      and(
+        eq(tasks.id, args.taskId),
+        eq(tasks.status, from),
+        ...(isRevival ? [isNull(tasks.workspacePruningAt), isNull(tasks.workspacePrunedAt)] : []),
+      ),
+    )
     .returning({ id: tasks.id })
   if (updated.length === 0) {
     throw new ConcurrentTaskTransition(args.taskId, args.allowedFrom, args.reason)

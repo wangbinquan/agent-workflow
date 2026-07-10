@@ -3,9 +3,10 @@
 // wire contract:
 //   - length 1 of `repos` semantically equivalent to legacy single-repo body
 //   - length > 1 emits the v2 `repos: [...]` shape
-//   - empty body never carries `fetchBeforeLaunch` unless ANY path-mode row
-//     opted in (RFC-068 wiring stays the same)
 //   - git identity helpers carry through the same pair-check semantics
+//
+// RFC-165: rows are URL-only — the path-mode fixtures and the RFC-068
+// fetchBeforeLaunch carry-through went away with the local-path launch mode.
 
 import { describe, expect, test } from 'vitest'
 import {
@@ -17,27 +18,27 @@ import {
 } from '@/lib/launch-repo-source'
 
 describe('buildLaunchBodyMultiRepo (RFC-066)', () => {
-  // F7: 1 path-mode row in v2 shape parses to repos:[{...}], NOT legacy
-  // top-level repoPath. Confirms the byte-distinct envelope.
-  test('F7 single-entry v2 emits `repos:[...]` (NOT top-level repoPath)', () => {
-    const repos: RepoSource[] = [{ kind: 'path', repoPath: '/tmp/r', baseBranch: 'main' }]
+  // F7: 1 row in v2 shape parses to repos:[{...}], NOT legacy top-level
+  // repoUrl. Confirms the byte-distinct envelope.
+  test('F7 single-entry v2 emits `repos:[...]` (NOT top-level repoUrl)', () => {
+    const repos: RepoSource[] = [{ kind: 'url', repoUrl: 'git@h:o/r.git', ref: 'main' }]
     const body = buildLaunchBodyMultiRepo(repos, {
       workflowId: 'wf-1',
       name: 't',
       inputs: {},
     })
-    expect(body.repos).toEqual([{ repoPath: '/tmp/r', baseBranch: 'main' }])
+    expect(body.repos).toEqual([{ repoUrl: 'git@h:o/r.git', ref: 'main' }])
     // The launch route ROUTES via buildLaunchBody (legacy) for length 1,
     // but builders themselves remain orthogonal; v2 wins when explicitly
     // called.
-    expect('repoPath' in body).toBe(false)
+    expect('repoUrl' in body).toBe(false)
   })
 
-  // F8: 2 path-mode rows → repos:[{...},{...}], legacy fields absent.
+  // F8: 2 rows → repos:[{...},{...}], legacy top-level fields absent.
   test('F8 multi-entry v2 emits `repos:[{}, {}]` with no legacy top-level fields', () => {
     const repos: RepoSource[] = [
-      { kind: 'path', repoPath: '/tmp/a', baseBranch: 'main' },
-      { kind: 'path', repoPath: '/tmp/b', baseBranch: 'develop' },
+      { kind: 'url', repoUrl: 'git@github.com:org/a.git', ref: 'main' },
+      { kind: 'url', repoUrl: 'git@github.com:org/b.git', ref: 'develop' },
     ]
     const body = buildLaunchBodyMultiRepo(repos, {
       workflowId: 'wf-1',
@@ -45,28 +46,11 @@ describe('buildLaunchBodyMultiRepo (RFC-066)', () => {
       inputs: {},
     })
     expect(body.repos).toEqual([
-      { repoPath: '/tmp/a', baseBranch: 'main' },
-      { repoPath: '/tmp/b', baseBranch: 'develop' },
+      { repoUrl: 'git@github.com:org/a.git', ref: 'main' },
+      { repoUrl: 'git@github.com:org/b.git', ref: 'develop' },
     ])
-    expect('repoPath' in body).toBe(false)
     expect('repoUrl' in body).toBe(false)
-    expect('baseBranch' in body).toBe(false)
-  })
-
-  test('F8b mixed path + url entries — each row carries its own keys', () => {
-    const repos: RepoSource[] = [
-      { kind: 'path', repoPath: '/tmp/a', baseBranch: 'main' },
-      { kind: 'url', repoUrl: 'git@github.com:foo/bar.git', ref: 'develop' },
-    ]
-    const body = buildLaunchBodyMultiRepo(repos, {
-      workflowId: 'wf-1',
-      name: 't',
-      inputs: {},
-    })
-    expect(body.repos).toEqual([
-      { repoPath: '/tmp/a', baseBranch: 'main' },
-      { repoUrl: 'git@github.com:foo/bar.git', ref: 'develop' },
-    ])
+    expect('ref' in body).toBe(false)
   })
 
   test('F8c url row with empty ref drops the `ref` key (mirrors single-repo helper)', () => {
@@ -84,25 +68,12 @@ describe('buildLaunchBodyMultiRepo (RFC-066)', () => {
     expect('ref' in out[1]!).toBe(false)
   })
 
-  // RFC-068 carry-through: any path-mode row opting in → top-level
-  // fetchBeforeLaunch=true. URL-only / all-off → key omitted.
-  test('F8d any path-mode row opted into fetchBeforeLaunch → top-level true', () => {
+  // RFC-165: the retired path-mode keys must never appear — neither on the
+  // top level nor inside rows.
+  test('F8d v2 body carries none of the retired path-mode keys', () => {
     const repos: RepoSource[] = [
-      { kind: 'path', repoPath: '/tmp/a', baseBranch: 'main' },
-      { kind: 'path', repoPath: '/tmp/b', baseBranch: 'main', fetchBeforeLaunch: true },
-    ]
-    const body = buildLaunchBodyMultiRepo(repos, {
-      workflowId: 'wf-1',
-      name: 't',
-      inputs: {},
-    })
-    expect(body.fetchBeforeLaunch).toBe(true)
-  })
-
-  test('F8e no row opted in → fetchBeforeLaunch key omitted', () => {
-    const repos: RepoSource[] = [
-      { kind: 'path', repoPath: '/tmp/a', baseBranch: 'main' },
-      { kind: 'path', repoPath: '/tmp/b', baseBranch: 'main', fetchBeforeLaunch: false },
+      { kind: 'url', repoUrl: 'git@h:o/a.git', ref: '' },
+      { kind: 'url', repoUrl: 'git@h:o/b.git', ref: 'main' },
     ]
     const body = buildLaunchBodyMultiRepo(repos, {
       workflowId: 'wf-1',
@@ -110,13 +81,20 @@ describe('buildLaunchBodyMultiRepo (RFC-066)', () => {
       inputs: {},
     })
     expect('fetchBeforeLaunch' in body).toBe(false)
+    expect('repoPath' in body).toBe(false)
+    expect('baseBranch' in body).toBe(false)
+    for (const row of body.repos as Array<Record<string, unknown>>) {
+      expect('repoPath' in row).toBe(false)
+      expect('baseBranch' in row).toBe(false)
+      expect('fetchBeforeLaunch' in row).toBe(false)
+    }
   })
 
   // RFC-067: identity pair-check echoes single-repo helper.
   test('F8f both git identity fields set → carried through verbatim', () => {
     const repos: RepoSource[] = [
-      { kind: 'path', repoPath: '/tmp/a', baseBranch: 'main' },
-      { kind: 'path', repoPath: '/tmp/b', baseBranch: 'main' },
+      { kind: 'url', repoUrl: 'git@h:o/a.git', ref: '' },
+      { kind: 'url', repoUrl: 'git@h:o/b.git', ref: '' },
     ]
     const body = buildLaunchBodyMultiRepo(repos, {
       workflowId: 'wf-1',
@@ -131,8 +109,8 @@ describe('buildLaunchBodyMultiRepo (RFC-066)', () => {
 
   test('F8g half-set git identity → both keys dropped (defense in depth)', () => {
     const repos: RepoSource[] = [
-      { kind: 'path', repoPath: '/tmp/a', baseBranch: 'main' },
-      { kind: 'path', repoPath: '/tmp/b', baseBranch: 'main' },
+      { kind: 'url', repoUrl: 'git@h:o/a.git', ref: '' },
+      { kind: 'url', repoUrl: 'git@h:o/b.git', ref: '' },
     ]
     const body = buildLaunchBodyMultiRepo(repos, {
       workflowId: 'wf-1',
@@ -147,22 +125,6 @@ describe('buildLaunchBodyMultiRepo (RFC-066)', () => {
 })
 
 describe('buildLaunchBody RFC-066 single-repo byte-baseline (regression lock)', () => {
-  // F13-style guard: pre-RFC-066 callers still get the same wire shape.
-  test('legacy path body unchanged', () => {
-    const body = buildLaunchBody(
-      { kind: 'path', repoPath: '/tmp/r', baseBranch: 'main' },
-      { workflowId: 'wf-1', name: 't', inputs: { k: 'v' } },
-    )
-    expect(body).toEqual({
-      workflowId: 'wf-1',
-      name: 't',
-      repoPath: '/tmp/r',
-      baseBranch: 'main',
-      inputs: { k: 'v' },
-    })
-    expect('repos' in body).toBe(false)
-  })
-
   test('legacy url body unchanged', () => {
     const body = buildLaunchBody(
       { kind: 'url', repoUrl: 'git@h:o/r.git', ref: 'feature/x' },
@@ -181,18 +143,18 @@ describe('buildLaunchBody RFC-066 single-repo byte-baseline (regression lock)', 
 
 describe('computePreviewDirNames (RFC-066)', () => {
   // F6: basename collision resolution mirrors backend resolveMultiRepoDirName.
-  test('F6 same basename in path mode → -2 / -3 suffix', () => {
+  test('F6 same basename → -2 / -3 suffix', () => {
     const names = computePreviewDirNames([
-      { kind: 'path', repoPath: '/a/utils', baseBranch: 'main' },
-      { kind: 'path', repoPath: '/b/utils', baseBranch: 'main' },
-      { kind: 'path', repoPath: '/c/utils', baseBranch: 'main' },
+      { kind: 'url', repoUrl: 'git@github.com:a/utils.git', ref: '' },
+      { kind: 'url', repoUrl: 'git@github.com:b/utils.git', ref: '' },
+      { kind: 'url', repoUrl: 'https://github.com/c/utils', ref: '' },
     ])
     expect(names).toEqual(['utils', 'utils-2', 'utils-3'])
   })
 
   test('F6b length 1 always returns [""] (no preview in single-repo mode)', () => {
     const names = computePreviewDirNames([
-      { kind: 'path', repoPath: '/a/utils', baseBranch: 'main' },
+      { kind: 'url', repoUrl: 'git@github.com:a/utils.git', ref: '' },
     ])
     expect(names).toEqual([''])
   })
@@ -207,7 +169,7 @@ describe('computePreviewDirNames (RFC-066)', () => {
 
   test('F6d empty row → empty preview slot (UI suppresses chip)', () => {
     const names = computePreviewDirNames([
-      { kind: 'path', repoPath: '/a/utils', baseBranch: 'main' },
+      { kind: 'url', repoUrl: 'git@github.com:a/utils.git', ref: '' },
       defaultRepoSource(),
     ])
     expect(names).toEqual(['utils', ''])

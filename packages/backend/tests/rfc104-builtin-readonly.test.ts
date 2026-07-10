@@ -223,8 +223,8 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
       body: JSON.stringify({
         name: 'manual-launch-attempt',
         workflowId: id,
-        repoPath: '/tmp/whatever',
-        baseBranch: 'main',
+        repoUrl: 'file:///tmp/whatever',
+        ref: 'main',
         inputs: {},
       }),
     })
@@ -275,8 +275,8 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
       JSON.stringify({
         name: 'mp',
         workflowId: id,
-        repoPath: '/tmp/x',
-        baseBranch: 'main',
+        repoUrl: 'file:///tmp/x',
+        ref: 'main',
         inputs: {},
       }),
     )

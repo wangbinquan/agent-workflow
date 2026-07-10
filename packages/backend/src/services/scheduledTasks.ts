@@ -13,12 +13,15 @@ import type {
 } from '@agent-workflow/shared'
 import {
   computeNextRunAt,
+  rejectRetiredStartTaskKeys,
   ScheduledTaskSchema,
   ScheduleSpecSchema,
   StartTaskSchema,
   wallClockAt,
 } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
+import { existsSync, realpathSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 import { ulid } from 'ulid'
 
 import { buildActor, type Actor } from '@/auth/actor'
@@ -35,13 +38,58 @@ export type BuildScheduleLaunch = (ownerUserId: string, scheduledTaskId: string)
 type Row = typeof scheduledTasks.$inferSelect
 type LaunchableWorkflow = Awaited<ReturnType<typeof assertWorkflowLaunchable>>
 
+/**
+ * RFC-165 (F18/N3): per-field tolerant JSON parsing. One legacy / corrupt row
+ * must never take down the whole list (the old mapper threw
+ * `scheduled-task-row-corrupt` for ANY parse failure). Three states per field:
+ * ok(value) / legacy(null + migrationNeeded — retired path-mode keys the user
+ * can repair by re-saving) / degraded(null + migrationError). Auth, delete,
+ * disable and name-only edits read only the plain columns, so they keep
+ * working on broken rows.
+ */
+function parseJsonField<T>(
+  raw: string,
+  schema: {
+    safeParse: (
+      v: unknown,
+    ) =>
+      | { success: true; data: T }
+      | { success: false; error: { issues: Array<{ message: string }> } }
+  },
+  isLegacyShape?: (json: unknown) => boolean,
+): { value: T | null; legacy: boolean; error: string | null } {
+  let json: unknown
+  try {
+    json = JSON.parse(raw)
+  } catch (err) {
+    return { value: null, legacy: false, error: `invalid-json: ${(err as Error).message}` }
+  }
+  const parsed = schema.safeParse(json)
+  if (parsed.success) return { value: parsed.data, legacy: false, error: null }
+  if (isLegacyShape?.(json) === true) return { value: null, legacy: true, error: null }
+  return {
+    value: null,
+    legacy: false,
+    error: `invalid-shape: ${parsed.error.issues[0]?.message ?? 'unknown'}`,
+  }
+}
+
 function rowToScheduledTask(row: Row): ScheduledTask {
+  const payload = parseJsonField(
+    row.launchPayload,
+    StartTaskSchema,
+    (json) => rejectRetiredStartTaskKeys(json) !== null,
+  )
+  const spec = parseJsonField(row.scheduleSpec, ScheduleSpecSchema)
+  const hasError = payload.error !== null || spec.error !== null
   const parsed = ScheduledTaskSchema.safeParse({
     id: row.id,
     name: row.name,
     ownerUserId: row.ownerUserId,
-    launchPayload: JSON.parse(row.launchPayload),
-    scheduleSpec: JSON.parse(row.scheduleSpec),
+    launchPayload: payload.value,
+    scheduleSpec: spec.value,
+    migrationNeeded: payload.legacy,
+    migrationError: hasError ? { launchPayload: payload.error, scheduleSpec: spec.error } : null,
     enabled: row.enabled,
     nextRunAt: row.nextRunAt,
     lastRunAt: row.lastRunAt,
@@ -53,6 +101,8 @@ function rowToScheduledTask(row: Row): ScheduledTask {
     updatedAt: row.updatedAt,
   })
   if (!parsed.success) {
+    // Only non-JSON column corruption lands here now (e.g. a hand-edited enum)
+    // — genuinely exceptional, keep the loud failure.
     throw new ValidationError(
       'scheduled-task-row-corrupt',
       `scheduled task '${row.id}' row is corrupt`,
@@ -136,14 +186,32 @@ export async function updateScheduledTask(
   if (existing === null) {
     throw new NotFoundError('scheduled-task-not-found', `scheduled task '${id}' not found`)
   }
-  const body: StartTask =
+  // RFC-165 (N3): a legacy/degraded row has null JSON fields — a partial PUT
+  // that keeps such a field would persist garbage. Repair requires supplying
+  // the field in full (raw-row full repair; auth/name-only/disable/delete
+  // never reach here with a null need).
+  const patchedPayload =
     patch.launchPayload !== undefined
       ? StartTaskSchema.parse(patch.launchPayload)
       : existing.launchPayload
-  const spec: ScheduleSpec =
+  if (patchedPayload === null) {
+    throw new ValidationError(
+      'scheduled-task-needs-repair',
+      `scheduled task '${id}' has an unreadable launchPayload — supply a full launchPayload to repair it`,
+    )
+  }
+  const body: StartTask = patchedPayload
+  const patchedSpec =
     patch.scheduleSpec !== undefined
       ? ScheduleSpecSchema.parse(patch.scheduleSpec)
       : existing.scheduleSpec
+  if (patchedSpec === null) {
+    throw new ValidationError(
+      'scheduled-task-needs-repair',
+      `scheduled task '${id}' has an unreadable scheduleSpec — supply a full scheduleSpec to repair it`,
+    )
+  }
+  const spec: ScheduleSpec = patchedSpec
   const enabled = patch.enabled !== undefined ? patch.enabled : existing.enabled
 
   // R3-1: re-gate whenever the RESULT is enabled (spec-only / re-enable / payload
@@ -157,7 +225,12 @@ export async function updateScheduledTask(
   const now = Date.now()
   const set: Partial<typeof scheduledTasks.$inferInsert> = { updatedAt: now }
   if (patch.name !== undefined) set.name = patch.name
-  if (patch.launchPayload !== undefined) set.launchPayload = JSON.stringify(body)
+  if (patch.launchPayload !== undefined) {
+    set.launchPayload = JSON.stringify(body)
+    // A successful full repair also clears the RFC-165 migration lastError
+    // breadcrumb (best-effort UX; harmless when it was never set).
+    if (existing.launchPayload === null || existing.migrationNeeded) set.lastError = null
+  }
   if (patch.scheduleSpec !== undefined) set.scheduleSpec = JSON.stringify(spec)
   if (patch.enabled !== undefined) set.enabled = enabled
   if (!enabled) {
@@ -246,6 +319,119 @@ export async function fireSchedule(
  * (shows in run history); a `scheduled.fired` broadcast refreshes history for all
  * viewers. Throws (→ HTTP error) on any launch failure, exactly like `fireSchedule`.
  */
+/**
+ * RFC-165 (§9): one-shot boot healer — rewrite stored path-mode launch
+ * payloads to their faithful `file://` form. Runs after migrations and BEFORE
+ * the HTTP server starts serving (and before the scheduler ticker), so both
+ * read paths and fires only ever see healed rows.
+ *
+ * Strategy (F19): `pathToFileURL(realpath(dir))` preserves the LOCAL repo
+ * exactly (unpushed branches included — the cached mirror clones from the
+ * path itself), unlike an origin-URL rewrite which drops anything unpushed.
+ *   * dir exists and is a git repo → rewrite `{repoPath, baseBranch}` →
+ *     `{repoUrl: file://…, ref: baseBranch}` (top level and each repos[] row);
+ *     drop `fetchBeforeLaunch` (false/absent only).
+ *   * `fetchBeforeLaunch: true`     → DISABLE + lastError
+ *     'rfc165-fetch-semantic-review' — the old semantics ("refresh the local
+ *     repo's origin/* before launch") have no file:// equivalent; the user
+ *     must confirm a URL choice and re-save. Never silently converted.
+ *   * dir missing / not a git repo → DISABLE + lastError
+ *     'rfc165-local-path-retired'.
+ * Idempotent: healed payloads carry no `repoPath`; already-disabled rfc165-*
+ * rows are skipped.
+ */
+export async function healScheduledLaunchPayloads(
+  db: DbClient,
+): Promise<{ scanned: number; converted: number; disabled: number }> {
+  const rows = await db.select().from(scheduledTasks)
+  let converted = 0
+  let disabled = 0
+  const now = Date.now()
+
+  const disable = async (row: Row, error: string): Promise<void> => {
+    await db
+      .update(scheduledTasks)
+      .set({ enabled: false, nextRunAt: null, lastError: error, updatedAt: now })
+      .where(eq(scheduledTasks.id, row.id))
+    disabled += 1
+  }
+  const isGitDir = (p: string): boolean => existsSync(p) && existsSync(`${p}/.git`)
+  const toFileUrl = (p: string): string => pathToFileURL(realpathSync(p)).href
+
+  for (const row of rows) {
+    if (!row.enabled && (row.lastError ?? '').startsWith('rfc165-')) continue
+    let payload: unknown
+    try {
+      payload = JSON.parse(row.launchPayload)
+    } catch {
+      continue // corrupt JSON → tolerant read surfaces it; not a path-heal target
+    }
+    if (typeof payload !== 'object' || payload === null) continue
+    if (rejectRetiredStartTaskKeys(payload) === null) continue // already v2-clean
+    const body = payload as Record<string, unknown>
+
+    if (body['fetchBeforeLaunch'] === true) {
+      await disable(
+        row,
+        'rfc165-fetch-semantic-review: fetchBeforeLaunch has no file:// equivalent — pick a repo source and re-save',
+      )
+      continue
+    }
+
+    const paths: string[] = []
+    if (typeof body['repoPath'] === 'string') paths.push(body['repoPath'] as string)
+    const repos = Array.isArray(body['repos'])
+      ? (body['repos'] as Array<Record<string, unknown>>)
+      : []
+    for (const r of repos) {
+      if (r !== null && typeof r === 'object' && typeof r['repoPath'] === 'string') {
+        paths.push(r['repoPath'] as string)
+      }
+    }
+    if (paths.length === 0) {
+      // Retired keys present but no path value (e.g. stray baseBranch) — just
+      // strip them so the payload becomes v2-clean.
+      delete body['baseBranch']
+      delete body['fetchBeforeLaunch']
+      await db
+        .update(scheduledTasks)
+        .set({ launchPayload: JSON.stringify(body), updatedAt: now })
+        .where(eq(scheduledTasks.id, row.id))
+      converted += 1
+      continue
+    }
+    const missing = paths.find((p) => !isGitDir(p))
+    if (missing !== undefined) {
+      await disable(row, `rfc165-local-path-retired: ${missing}`)
+      continue
+    }
+
+    if (typeof body['repoPath'] === 'string') {
+      body['repoUrl'] = toFileUrl(body['repoPath'] as string)
+      if (typeof body['baseBranch'] === 'string') body['ref'] = body['baseBranch']
+      delete body['repoPath']
+      delete body['baseBranch']
+    }
+    for (const r of repos) {
+      if (r === null || typeof r !== 'object') continue
+      if (typeof r['repoPath'] === 'string') {
+        r['repoUrl'] = toFileUrl(r['repoPath'] as string)
+        if (typeof r['baseBranch'] === 'string') r['ref'] = r['baseBranch']
+        delete r['repoPath']
+        delete r['baseBranch']
+      }
+    }
+    delete body['fetchBeforeLaunch']
+
+    await db
+      .update(scheduledTasks)
+      .set({ launchPayload: JSON.stringify(body), updatedAt: now })
+      .where(eq(scheduledTasks.id, row.id))
+    converted += 1
+  }
+  return { scanned: rows.length, converted, disabled }
+}
+
 export async function runScheduleNow(
   db: DbClient,
   id: string,

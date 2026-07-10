@@ -248,8 +248,6 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'PUT', path: '/api/workgroup-tasks/:taskId/config' },
 
   // ---- repos (path / refs / file system) ----
-  { method: 'GET', path: '/api/repos/recent' },
-  { method: 'POST', path: '/api/repos/recent' },
   { method: 'GET', path: '/api/repos/files' },
   { method: 'GET', path: '/api/repos/refs' },
 

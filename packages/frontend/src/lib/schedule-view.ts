@@ -23,7 +23,10 @@ const DOW_LABELS_ZH = ['周日', '周一', '周二', '周三', '周四', '周五
  * A compact human summary of a schedule. `lang` picks the label set; the numeric
  * pieces (interval N, HH:MM, day-of-month) are language-neutral.
  */
-export function scheduleSummary(spec: ScheduleSpec, lang: 'en' | 'zh'): string {
+export function scheduleSummary(spec: ScheduleSpec | null, lang: 'en' | 'zh'): string {
+  // RFC-165: degraded/legacy rows carry a null spec — render a neutral dash;
+  // the detail page surfaces the repair affordance.
+  if (spec === null) return '—'
   const zh = lang === 'zh'
   if (spec.kind === 'interval') {
     const unit = zh

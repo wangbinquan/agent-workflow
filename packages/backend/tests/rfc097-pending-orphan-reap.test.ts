@@ -24,7 +24,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { reapOrphanRuns } from '../src/services/orphans'
-import { resumeTask, startTask } from '../src/services/task'
+import { resumeTask, startTaskWithLocalRepo } from '../src/services/task'
 import { runGit } from '../src/util/git'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -191,7 +191,7 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
     const boot = await reapOrphanRuns(h.db)
     expect(boot).toEqual({ tasks: 0, runs: 0 })
 
-    const task = await startTask(
+    const task = await startTaskWithLocalRepo(
       {
         workflowId: h.workflowId,
         name: 'rfc097-normal-launch',

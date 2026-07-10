@@ -89,8 +89,8 @@ describe('RepoSourceList — RFC-066 PR-C UI contract', () => {
 
   test('F3 click `−` on a row removes it; back to 1 row, `−` hidden again', () => {
     let repos: RepoSource[] = [
-      { kind: 'path', repoPath: '/a', baseBranch: 'main' },
-      { kind: 'path', repoPath: '/b', baseBranch: 'main' },
+      { kind: 'url', repoUrl: 'git@h:o/a.git', ref: '' },
+      { kind: 'url', repoUrl: 'git@h:o/b.git', ref: '' },
     ]
     const onChange = (next: RepoSource[]) => {
       repos = next
@@ -98,7 +98,7 @@ describe('RepoSourceList — RFC-066 PR-C UI contract', () => {
     const { getByTestId, rerender, queryByTestId } = renderList({ repos, onChange })
     fireEvent.click(getByTestId('repo-source-remove-1'))
     expect(repos).toHaveLength(1)
-    expect(repos[0]!.kind === 'path' && repos[0]!.repoPath).toBe('/a')
+    expect(repos[0]!.repoUrl).toBe('git@h:o/a.git')
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     rerender(
       <QueryClientProvider client={qc}>
@@ -111,9 +111,9 @@ describe('RepoSourceList — RFC-066 PR-C UI contract', () => {
 
   test('F4 reach MULTI_REPO_MAX → `+` button disabled + max-reached hint visible', () => {
     const repos: RepoSource[] = Array.from({ length: MULTI_REPO_MAX }, (_, i) => ({
-      kind: 'path' as const,
-      repoPath: `/r${i}`,
-      baseBranch: 'main',
+      kind: 'url' as const,
+      repoUrl: `git@h:o/r${i}.git`,
+      ref: '',
     }))
     const { getByTestId } = renderList({ repos })
     const addBtn = getByTestId('repo-source-add') as HTMLButtonElement
@@ -124,8 +124,8 @@ describe('RepoSourceList — RFC-066 PR-C UI contract', () => {
 
   test('F5 multi-repo + wrapper-git → banner visible', () => {
     const repos: RepoSource[] = [
-      { kind: 'path', repoPath: '/a', baseBranch: 'main' },
-      { kind: 'path', repoPath: '/b', baseBranch: 'main' },
+      { kind: 'url', repoUrl: 'git@h:o/a.git', ref: '' },
+      { kind: 'url', repoUrl: 'git@h:o/b.git', ref: '' },
     ]
     const { getByTestId } = renderList({ repos, multiRepoBlockedReason: 'wrapper-git' })
     const banner = getByTestId('repo-source-multi-banner')
@@ -138,8 +138,8 @@ describe('RepoSourceList — RFC-066 PR-C UI contract', () => {
 
   test('F5b multi-repo + upload → banner visible (separate code path)', () => {
     const repos: RepoSource[] = [
-      { kind: 'path', repoPath: '/a', baseBranch: 'main' },
-      { kind: 'path', repoPath: '/b', baseBranch: 'main' },
+      { kind: 'url', repoUrl: 'git@h:o/a.git', ref: '' },
+      { kind: 'url', repoUrl: 'git@h:o/b.git', ref: '' },
     ]
     const { getByTestId } = renderList({ repos, multiRepoBlockedReason: 'upload' })
     const banner = getByTestId('repo-source-multi-banner')
@@ -149,7 +149,7 @@ describe('RepoSourceList — RFC-066 PR-C UI contract', () => {
 
   test('F5c single-repo never renders the banner even if a reason is passed', () => {
     const { queryByTestId } = renderList({
-      repos: [{ kind: 'path', repoPath: '/a', baseBranch: 'main' }],
+      repos: [{ kind: 'url', repoUrl: 'git@h:o/a.git', ref: '' }],
       multiRepoBlockedReason: 'wrapper-git',
     })
     expect(queryByTestId('repo-source-multi-banner')).toBeNull()
@@ -157,8 +157,8 @@ describe('RepoSourceList — RFC-066 PR-C UI contract', () => {
 
   test('F6 basename collision: row 2 preview chip shows `-2` suffix', () => {
     const repos: RepoSource[] = [
-      { kind: 'path', repoPath: '/a/utils', baseBranch: 'main' },
-      { kind: 'path', repoPath: '/b/utils', baseBranch: 'main' },
+      { kind: 'url', repoUrl: 'git@github.com:a/utils.git', ref: '' },
+      { kind: 'url', repoUrl: 'git@github.com:b/utils.git', ref: '' },
     ]
     const { getByTestId } = renderList({ repos })
     const preview1 = getByTestId('repo-source-preview-1')

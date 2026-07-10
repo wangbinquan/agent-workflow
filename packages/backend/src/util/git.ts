@@ -7,7 +7,7 @@
 import type { GitRef } from '@agent-workflow/shared'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { rm, stat, unlink } from 'node:fs/promises'
+import { mkdir, rm, stat, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
@@ -59,6 +59,63 @@ export const AW_INTERNAL_GIT_IDENTITY: Record<string, string> = {
   GIT_AUTHOR_EMAIL: 'agent-workflow@localhost',
   GIT_COMMITTER_NAME: 'agent-workflow',
   GIT_COMMITTER_EMAIL: 'agent-workflow@localhost',
+}
+
+/**
+ * RFC-165: materialize a temporary-space ("scratch") workspace — a brand-new
+ * git repo whose empty root commit is the diff base. The workspace IS the
+ * repo (`tasks.repo_path === tasks.worktree_path`); iso worktrees branch off
+ * its shared ODB exactly like any canonical worktree. The empty root commit
+ * is REQUIRED: the snapshot machinery resolves `HEAD` (snapshotFullState),
+ * and the task's produced-files diff is computed against it.
+ *
+ * Identity (design N2): the per-task git identity when the launch supplied
+ * one, else the fixed platform identity — NEVER the ambient git config
+ * (URL-cloned hosts and CI runners may have none; see
+ * AW_INTERNAL_GIT_IDENTITY above for the incident write-up).
+ *
+ * Never throws — mirrors createWorktree's `{ earlyError }` discipline via a
+ * tagged result so the caller can mint a failed task row exactly once.
+ */
+export async function initScratchRepo(opts: {
+  dir: string
+  gitUserName?: string | null
+  gitUserEmail?: string | null
+}): Promise<{ ok: true; rootCommit: string } | { ok: false; error: string }> {
+  try {
+    await mkdir(opts.dir, { recursive: true })
+  } catch (err) {
+    return { ok: false, error: `scratch-mkdir-failed: ${(err as Error).message}` }
+  }
+  const identity =
+    opts.gitUserName != null &&
+    opts.gitUserName !== '' &&
+    opts.gitUserEmail != null &&
+    opts.gitUserEmail !== ''
+      ? {
+          GIT_AUTHOR_NAME: opts.gitUserName,
+          GIT_AUTHOR_EMAIL: opts.gitUserEmail,
+          GIT_COMMITTER_NAME: opts.gitUserName,
+          GIT_COMMITTER_EMAIL: opts.gitUserEmail,
+        }
+      : AW_INTERNAL_GIT_IDENTITY
+  const init = await runGit(opts.dir, ['init', '-b', 'main'])
+  if (init.exitCode !== 0) {
+    return { ok: false, error: `scratch-init-failed: ${init.stderr.trim()}` }
+  }
+  const commit = await runGit(
+    opts.dir,
+    ['commit', '--allow-empty', '-m', 'agent-workflow scratch root'],
+    { env: identity },
+  )
+  if (commit.exitCode !== 0) {
+    return { ok: false, error: `scratch-root-commit-failed: ${commit.stderr.trim()}` }
+  }
+  const head = await runGit(opts.dir, ['rev-parse', 'HEAD'])
+  if (head.exitCode !== 0) {
+    return { ok: false, error: `scratch-head-failed: ${head.stderr.trim()}` }
+  }
+  return { ok: true, rootCommit: head.stdout.trim() }
 }
 
 /**

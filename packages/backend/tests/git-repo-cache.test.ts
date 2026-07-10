@@ -268,10 +268,17 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
     }
   })
 
-  test('BC-01 cold clone returns empty ffOutcomes (no FF on first launch)', async () => {
+  test('BC-01 cold clone RESOLVES requested branches too (RFC-165 F19-r3 closed the cold-FF gap)', async () => {
+    // Pre-RFC-165 the cold path skipped syncBranches entirely — a non-default
+    // branch that only exists as origin/<branch> in the fresh clone made the
+    // first launch's `rev-parse <branch>` fail. Cold now runs the same FF
+    // loop as warm (syncBranchToRemote CREATES the missing local ref).
     const r = await resolveCachedRepo({ db, appHome, syncBranches: ['main'] }, { url: remoteUrl })
     expect(r.cold).toBe(true)
-    expect(r.ffOutcomes).toEqual([])
+    expect(r.ffOutcomes.length).toBe(1)
+    expect(r.ffOutcomes[0]!.warning).toBe(null)
+    const head = await runGit(r.cached.localPath, ['rev-parse', '--verify', 'refs/heads/main'])
+    expect(head.exitCode).toBe(0)
   })
 
   test('BC-02 warm reuse + origin advanced → FF moves local branch and surfaces toSha', async () => {
@@ -334,37 +341,32 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
     expect(r.ffOutcomes).toEqual([])
   })
 
-  test('BC-07 fetch failed (mock by yanking remote) → ffOutcomes stays empty, fetchOk=false', async () => {
-    const first = await resolveCachedRepo(
-      { db, appHome, syncBranches: ['main'] },
-      { url: remoteUrl },
-    )
+  test('BC-07 yanked file:// source → HARD FAIL, never a stale-mirror launch (RFC-165 F19)', async () => {
+    // Pre-RFC-165 a failed fetch was a warning and the task launched off the
+    // stale mirror. For file:// that silently diverges from the retired
+    // path-mode fidelity contract ("read the source's live state") — the
+    // source dir being gone must fail the launch. Non-file schemes keep the
+    // warning-and-stale behavior (network blips are expected there).
+    await resolveCachedRepo({ db, appHome, syncBranches: ['main'] }, { url: remoteUrl })
     // Nuke the bare remote so subsequent fetch fails.
     rmSync(remoteDir, { recursive: true, force: true })
-    const r = await resolveCachedRepo({ db, appHome, syncBranches: ['main'] }, { url: remoteUrl })
-    expect(r.fetchOk).toBe(false)
-    // FF must be skipped entirely when fetch failed (no new origin commits).
-    expect(r.ffOutcomes).toEqual([])
-    // Cache row still returned, baseCommit-style queries still work against
-    // the stale clone — proves the task can still launch.
-    const head = await runGit(first.cached.localPath, ['rev-parse', 'main'])
-    expect(head.exitCode).toBe(0)
+    await expect(
+      resolveCachedRepo({ db, appHome, syncBranches: ['main'] }, { url: remoteUrl }),
+    ).rejects.toThrow(/missing or unreadable/)
   })
 
-  test('BC-10 mirror has no origin/<branch> → warning=origin-ref-missing, no advance', async () => {
+  test('BC-10 requested branch missing in a file:// source → HARD FAIL (RFC-165 F19)', async () => {
+    // Pre-RFC-165 this was warning=origin-ref-missing and the launch kept the
+    // stale local branch. A file:// source's deleted branch must fail loudly.
     const first = await resolveCachedRepo(
       { db, appHome, syncBranches: ['main'] },
       { url: remoteUrl },
     )
     // Create a local-only branch (no origin/feature in the remote).
     await runGit(first.cached.localPath, ['branch', 'feature/local-only', 'main'])
-    const r = await resolveCachedRepo(
-      { db, appHome, syncBranches: ['feature/local-only'] },
-      { url: remoteUrl },
-    )
-    expect(r.ffOutcomes.length).toBe(1)
-    expect(r.ffOutcomes[0]!.advanced).toBe(false)
-    expect(r.ffOutcomes[0]!.warning).toBe('origin-ref-missing')
+    await expect(
+      resolveCachedRepo({ db, appHome, syncBranches: ['feature/local-only'] }, { url: remoteUrl }),
+    ).rejects.toThrow(/ref 'feature\/local-only' not found in/)
   })
 
   test('BC-06 branch name containing slash works', async () => {

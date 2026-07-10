@@ -188,7 +188,14 @@ function canonicalForHash(parsed: GitUrl): string {
     return r.toLowerCase()
   }
   if (parsed.kind === 'file') {
-    return `file:///${stripPath(parsed.path)}`
+    // RFC-165 (F19-r4): file paths preserve CASE and the `.git` suffix — on a
+    // case-sensitive filesystem `/Foo` vs `/foo` and `repo` vs `repo.git` are
+    // DIFFERENT repos, so folding them (the pre-165 behavior) collides cache
+    // rows. The lossy legacy form survives only as the dual-read fallback
+    // (`gitUrlLegacyFileCacheKeyWith`) so existing cache rows re-key lazily.
+    let r = normalizePath(parsed.path)
+    if (r.endsWith('/')) r = r.slice(0, -1)
+    return `file:///${r}`
   }
   const host = parsed.host.toLowerCase()
   if (parsed.kind === 'http' || parsed.kind === 'https') {
@@ -285,4 +292,24 @@ export function gitUrlCacheKeyWith(
   const hash = sha1Hex(canonical).slice(0, 8)
   const slug = lastPathSegment(parsed.path)
   return { hash, slug, canonical }
+}
+
+/**
+ * RFC-165 (F19-r4): the PRE-165 lossy file:// cache key (lowercase + `.git`
+ * strip) — DUAL-READ FALLBACK ONLY. Because the legacy fold is lossy, two
+ * different new keys can collide onto one legacy key; a caller adopting a row
+ * found by this key MUST verify the row's own url re-canonicalizes (via
+ * `gitUrlCacheKeyWith`) to the key it was actually looking for before
+ * re-keying it. Non-file URLs → null (their canonicalization is unchanged).
+ */
+export function gitUrlLegacyFileCacheKeyWith(
+  parsed: GitUrl,
+  sha1Hex: (s: string) => string,
+): { hash: string; canonical: string } | null {
+  if (parsed.kind !== 'file') return null
+  let r = normalizePath(parsed.path)
+  if (r.endsWith('/')) r = r.slice(0, -1)
+  if (r.endsWith('.git')) r = r.slice(0, -4)
+  const canonical = `file:///${r.toLowerCase()}`
+  return { hash: sha1Hex(canonical).slice(0, 8), canonical }
 }

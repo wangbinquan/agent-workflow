@@ -137,7 +137,7 @@ describe('RFC-099 — POST /api/tasks gates', () => {
       body: JSON.stringify({ visibility: 'private' }),
     })
     const launchBody = (workflowId: string) =>
-      JSON.stringify({ name: 't', workflowId, repoPath: '/tmp/x', baseBranch: 'main', inputs: {} })
+      JSON.stringify({ name: 't', workflowId, repoUrl: 'file:///tmp/x', ref: 'main', inputs: {} })
     const invisible = await req(h.app, h.dave.token, '/api/tasks', {
       method: 'POST',
       body: launchBody(wf.id),

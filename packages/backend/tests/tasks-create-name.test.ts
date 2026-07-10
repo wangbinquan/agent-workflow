@@ -8,6 +8,7 @@ import type { Hono } from 'hono'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { ulid } from 'ulid'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -106,8 +107,8 @@ describe('RFC-037 — POST /api/tasks name validation', () => {
   test('JSON: missing name → 422', async () => {
     const res = await postJson(h.app, {
       workflowId: h.wfId,
-      repoPath: h.repoPath,
-      baseBranch: 'main',
+      repoUrl: pathToFileURL(h.repoPath).href,
+      ref: 'main',
       inputs: {},
     })
     expect(res.status).toBe(422)
@@ -117,8 +118,8 @@ describe('RFC-037 — POST /api/tasks name validation', () => {
     const res = await postJson(h.app, {
       workflowId: h.wfId,
       name: '',
-      repoPath: h.repoPath,
-      baseBranch: 'main',
+      repoUrl: pathToFileURL(h.repoPath).href,
+      ref: 'main',
       inputs: {},
     })
     expect(res.status).toBe(422)
@@ -128,8 +129,8 @@ describe('RFC-037 — POST /api/tasks name validation', () => {
     const res = await postJson(h.app, {
       workflowId: h.wfId,
       name: '   ',
-      repoPath: h.repoPath,
-      baseBranch: 'main',
+      repoUrl: pathToFileURL(h.repoPath).href,
+      ref: 'main',
       inputs: {},
     })
     expect(res.status).toBe(422)
@@ -139,8 +140,8 @@ describe('RFC-037 — POST /api/tasks name validation', () => {
     const res = await postJson(h.app, {
       workflowId: h.wfId,
       name: 'x'.repeat(256),
-      repoPath: h.repoPath,
-      baseBranch: 'main',
+      repoUrl: pathToFileURL(h.repoPath).href,
+      ref: 'main',
       inputs: {},
     })
     expect(res.status).toBe(422)
@@ -151,8 +152,8 @@ describe('RFC-037 — POST /api/tasks name validation', () => {
     const res = await postJson(h.app, {
       workflowId: h.wfId,
       name,
-      repoPath: h.repoPath,
-      baseBranch: 'main',
+      repoUrl: pathToFileURL(h.repoPath).href,
+      ref: 'main',
       inputs: {},
     })
     expect(res.status).toBe(201)
@@ -166,8 +167,8 @@ describe('RFC-037 — POST /api/tasks name validation', () => {
     const res = await postJson(h.app, {
       workflowId: h.wfId,
       name: '  PR-1234 fix  ',
-      repoPath: h.repoPath,
-      baseBranch: 'main',
+      repoUrl: pathToFileURL(h.repoPath).href,
+      ref: 'main',
       inputs: {},
     })
     expect(res.status).toBe(201)
@@ -180,8 +181,8 @@ describe('RFC-037 — POST /api/tasks name validation', () => {
   test('multipart: missing name in payload → 422', async () => {
     const res = await postMultipart(h.app, {
       workflowId: h.wfId,
-      repoPath: h.repoPath,
-      baseBranch: 'main',
+      repoUrl: pathToFileURL(h.repoPath).href,
+      ref: 'main',
       inputs: {},
     })
     expect(res.status).toBe(422)
@@ -191,8 +192,8 @@ describe('RFC-037 — POST /api/tasks name validation', () => {
     const res = await postMultipart(h.app, {
       workflowId: h.wfId,
       name: '  multipart task  ',
-      repoPath: h.repoPath,
-      baseBranch: 'main',
+      repoUrl: pathToFileURL(h.repoPath).href,
+      ref: 'main',
       inputs: {},
     })
     expect(res.status).toBe(201)

@@ -17,8 +17,8 @@ describe('workflows.launch.tsx (RFC-020 wiring)', () => {
     expect(SRC).toMatch(/from '@\/components\/launch\/UploadPicker'/)
   })
 
-  test('imports buildLaunchFormData', () => {
-    expect(SRC).toContain('buildLaunchFormData')
+  test('imports buildLaunchFormDataV2 (RFC-165: the path-mode builder is retired)', () => {
+    expect(SRC).toContain('buildLaunchFormDataV2')
   })
 
   test("branches on def.kind === 'upload' in the field render path", () => {

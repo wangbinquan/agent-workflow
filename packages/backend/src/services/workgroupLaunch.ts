@@ -19,9 +19,11 @@
 // which is exactly the point — route-level launches cannot target it.
 
 import {
+  applySpaceFields,
   StartTaskSchema,
   workgroupLaunchReadiness,
   WorkgroupRuntimeConfigSchema,
+  type LaunchSpaceFields,
   type StartWorkgroupTask,
   type Task,
   type Workgroup,
@@ -175,25 +177,26 @@ export async function startWorkgroupTask(
 
   // Compose the full StartTask candidate and validate through StartTaskSchema
   // so repo-source cross-field rules stay single-sourced (schemas/task.ts).
-  // Space fields are the modern set (RFC-165: path-mode retired): repoUrl+ref
-  // / repos[] / scratch. Each is spread only when present so the schema's
-  // "exactly one source" superRefine fires on a missing/ambiguous body.
-  const candidate = {
-    workflowId: WORKGROUP_HOST_WORKFLOW_ID,
-    name: input.name,
-    inputs: {},
-    ...(input.repoUrl !== undefined ? { repoUrl: input.repoUrl } : {}),
-    ...(input.ref !== undefined ? { ref: input.ref } : {}),
-    ...(input.repos !== undefined ? { repos: input.repos } : {}),
-    ...(input.scratch !== undefined ? { scratch: input.scratch } : {}),
-    ...(collaboratorUserIds.length > 0 ? { collaboratorUserIds } : {}),
-    ...(input.gitUserName !== undefined ? { gitUserName: input.gitUserName } : {}),
-    ...(input.gitUserEmail !== undefined ? { gitUserEmail: input.gitUserEmail } : {}),
-    ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
-    ...(input.autoCommitPush !== undefined ? { autoCommitPush: input.autoCommitPush } : {}),
-    ...(input.maxDurationMs !== undefined ? { maxDurationMs: input.maxDurationMs } : {}),
-    ...(input.maxTotalTokens !== undefined ? { maxTotalTokens: input.maxTotalTokens } : {}),
-  }
+  // Space fields (RFC-165 modern set: repoUrl+ref / repos[] / scratch) go
+  // through applySpaceFields — the ONE assembly point every launch face
+  // shares, so adding a space field can't silently skip this endpoint. The
+  // cast is safe: StartWorkgroupTaskSchema keeps repos[] shape-lenient and
+  // the composed candidate is deep-validated by StartTaskSchema right below.
+  const candidate = applySpaceFields(
+    {
+      workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+      name: input.name,
+      inputs: {},
+      ...(collaboratorUserIds.length > 0 ? { collaboratorUserIds } : {}),
+      ...(input.gitUserName !== undefined ? { gitUserName: input.gitUserName } : {}),
+      ...(input.gitUserEmail !== undefined ? { gitUserEmail: input.gitUserEmail } : {}),
+      ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
+      ...(input.autoCommitPush !== undefined ? { autoCommitPush: input.autoCommitPush } : {}),
+      ...(input.maxDurationMs !== undefined ? { maxDurationMs: input.maxDurationMs } : {}),
+      ...(input.maxTotalTokens !== undefined ? { maxTotalTokens: input.maxTotalTokens } : {}),
+    },
+    input as LaunchSpaceFields,
+  )
   const parsed = StartTaskSchema.safeParse(candidate)
   if (!parsed.success) {
     throw new ValidationError('workgroup-launch-invalid', 'invalid workgroup launch payload', {

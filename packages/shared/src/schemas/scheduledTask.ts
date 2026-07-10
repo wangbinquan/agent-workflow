@@ -59,13 +59,32 @@ export type ScheduleSpec = z.infer<typeof ScheduleSpecSchema>
 /** 定时任务名（管理用显示名，≠ 启动 body.name）；trim 后 1..255，拒纯空白。 */
 export const ScheduledTaskNameSchema = z.string().trim().min(1).max(255)
 
-/** GET 返回 / 行视图。`lastStatus` = 循环上次尝试触发结果；`lastTaskId` = 最近一次成功启动的 task。 */
+/**
+ * GET 返回 / 行视图。`lastStatus` = 循环上次尝试触发结果；`lastTaskId` = 最近一次成功启动的 task。
+ *
+ * RFC-165 (F18/N3)：两个 JSON 列改为逐字段容错三态——一行 legacy/坏 JSON/坏 shape
+ * 数据不再让整表 GET/list 崩（旧 row parser 一行坏就抛 `scheduled-task-row-corrupt`）：
+ *   * 健康        → 字段有值，`migrationNeeded=false`、`migrationError=null`；
+ *   * legacy      → 字段为 null + `migrationNeeded=true`（可修：编辑页重选后保存）；
+ *   * degraded    → 字段为 null + `migrationError.<field>` 说明（坏 JSON / 未知 shape）。
+ * 创建 / 更新 / 触发（fire、run-now）仍是 STRICT v2 校验——容错只在读取面。
+ */
 export const ScheduledTaskSchema = z.object({
   id: z.string(),
   name: ScheduledTaskNameSchema,
   ownerUserId: z.string(),
-  launchPayload: StartTaskSchema,
-  scheduleSpec: ScheduleSpecSchema,
+  launchPayload: StartTaskSchema.nullable(),
+  scheduleSpec: ScheduleSpecSchema.nullable(),
+  /** RFC-165：payload 是可识别的退役旧形（如 path 模式），需要用户重存。 */
+  migrationNeeded: z.boolean().default(false),
+  /** RFC-165：逐字段解析失败说明（null = 两列都健康或仅 legacy）。 */
+  migrationError: z
+    .object({
+      launchPayload: z.string().nullable(),
+      scheduleSpec: z.string().nullable(),
+    })
+    .nullable()
+    .default(null),
   enabled: z.boolean(),
   nextRunAt: z.number().int().nullable(),
   lastRunAt: z.number().int().nullable(),

@@ -8,7 +8,11 @@
 // Member-based-private like tasks (owner_user_id + tasks:read:all admin bypass),
 // NOT the RFC-099 five-type ACL. Run history for a schedule = its launched tasks
 // via GET /api/tasks?scheduledTaskId= (see routes/tasks.ts).
-import { CreateScheduledTaskSchema, UpdateScheduledTaskSchema } from '@agent-workflow/shared'
+import {
+  CreateScheduledTaskSchema,
+  rejectRetiredStartTaskKeys,
+  UpdateScheduledTaskSchema,
+} from '@agent-workflow/shared'
 import type { ScheduledTask } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 
@@ -69,7 +73,22 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
   })
 
   app.post('/api/scheduled-tasks', async (c) => {
-    const parsed = CreateScheduledTaskSchema.safeParse(await safeJson(c.req.raw))
+    const rawBody = await safeJson(c.req.raw)
+    // RFC-165 (F1): reject retired path-mode keys inside the stored payload
+    // BEFORE parsing (non-strict zod would silently strip them and persist a
+    // silently-degraded schedule).
+    {
+      const retired = rejectRetiredStartTaskKeys(
+        (rawBody as { launchPayload?: unknown } | null)?.launchPayload ?? null,
+      )
+      if (retired !== null) {
+        throw new ValidationError(
+          'start-task-path-retired',
+          `RFC-165 retired path-mode launches; remove '${retired}' from launchPayload (use a file:// repoUrl for local repos)`,
+        )
+      }
+    }
+    const parsed = CreateScheduledTaskSchema.safeParse(rawBody)
     if (!parsed.success) {
       throw new ValidationError('scheduled-task-invalid', 'invalid scheduled task', {
         issues: parsed.error.issues,
@@ -83,7 +102,19 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     const existing = await loadVisible(deps, actor, c.req.param('id'))
     requireWriteAccess(actor, existing)
-    const parsed = UpdateScheduledTaskSchema.safeParse(await safeJson(c.req.raw))
+    const rawPatch = await safeJson(c.req.raw)
+    {
+      const retired = rejectRetiredStartTaskKeys(
+        (rawPatch as { launchPayload?: unknown } | null)?.launchPayload ?? null,
+      )
+      if (retired !== null) {
+        throw new ValidationError(
+          'start-task-path-retired',
+          `RFC-165 retired path-mode launches; remove '${retired}' from launchPayload (use a file:// repoUrl for local repos)`,
+        )
+      }
+    }
+    const parsed = UpdateScheduledTaskSchema.safeParse(rawPatch)
     if (!parsed.success) {
       throw new ValidationError('scheduled-task-invalid', 'invalid scheduled task patch', {
         issues: parsed.error.issues,

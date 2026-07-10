@@ -599,15 +599,6 @@ export const workgroupMemberCursors = sqliteTable(
 )
 
 // -----------------------------------------------------------------------------
-// recent_repos — cache of recently used repo paths for the launcher dropdown.
-// -----------------------------------------------------------------------------
-export const recentRepos = sqliteTable('recent_repos', {
-  path: text('path').primaryKey(), // absolute repo path
-  lastUsedAt: integer('last_used_at').notNull(),
-  defaultBranch: text('default_branch'), // detected on last use
-})
-
-// -----------------------------------------------------------------------------
 // RFC-024: cached_repos — persistent mirror of remote Git URLs the user has
 // launched tasks against. Lives at `~/.agent-workflow/repos/{slug}` on disk;
 // this table tracks provenance + lookup index. Distinct from `recent_repos`,
@@ -734,6 +725,28 @@ export const tasks = sqliteTable(
     /** RFC-164: launch snapshot + mid-run-editable copy of the group config
      *  (WorkgroupRuntimeConfig JSON). The engine reads THIS, never the resource row. */
     workgroupConfigJson: text('workgroup_config_json'),
+    /**
+     * RFC-165: execution-space kind. 'local' = legacy path-mode rows only
+     * (backfilled by migration 0085, never written for new launches);
+     * 'remote' = URL mode; 'scratch' = temporary space (workspace IS a fresh
+     * git repo); 'internal' = framework-internal launches (fusion, via
+     * `internalSource` — unreachable from the public wire).
+     */
+    spaceKind: text('space_kind', { enum: ['local', 'remote', 'scratch', 'internal'] })
+      .notNull()
+      .default('remote'),
+    /** RFC-165: source agent for single-agent tasks (soft link to agents.name; NULL otherwise). */
+    sourceAgentName: text('source_agent_name'),
+    /**
+     * RFC-165: two-phase workspace-GC tombstone. `workspace_pruning_at` is the
+     * atomic CLAIM stamp (conditional UPDATE wins the right to delete; a stale
+     * claim past the lease window may be re-claimed by GC). `workspace_pruned_at`
+     * is written only AFTER the directory delete succeeded. Every revive path
+     * (resume / retry / sync-workflow / lifecycle repair) CAS-es with
+     * `pruning IS NULL AND pruned IS NULL` — pruned ⇒ 410, pruning ⇒ 409.
+     */
+    workspacePruningAt: integer('workspace_pruning_at'),
+    workspacePrunedAt: integer('workspace_pruned_at'),
     // （RFC-120 的 deferred_question_dispatch 列已由 RFC-132 T8 + migration 0073 物理删除——
     // universal deferred model 下所有任务同路径，无 per-task 开关。）
   },

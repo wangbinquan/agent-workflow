@@ -32,6 +32,8 @@ function fakeTask(id: string, status: TaskStatus): TaskSummary {
     errorSummary: null,
     // RFC-066: TaskSummarySchema now exposes repoCount.
     repoCount: 1,
+    spaceKind: 'remote', // RFC-165
+    sourceAgentName: null,
   }
 }
 

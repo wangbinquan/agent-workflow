@@ -33,6 +33,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos, tasks as tasksTable } from '../src/db/schema'
 import { createApp } from '../src/server'
@@ -356,14 +357,16 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     rmSync(h.tmp, { recursive: true, force: true })
   })
 
-  test('F2 (path regression): path + upload + workingBranch also checks out the branch', async () => {
+  test('F2 (file:// variant): file URL + upload + workingBranch also checks out the branch', async () => {
+    // RFC-165: the path-mode multipart form is retired; a local repo enters
+    // as a file:// URL through the same cache pipeline.
     const h = await buildHarness()
     const fd = buildFormData(
       {
         workflowId: h.validWorkflowId,
         name: 'path-upload-wb',
-        repoPath: h.localRepo,
-        baseBranch: 'main',
+        repoUrl: pathToFileURL(h.localRepo).href,
+        ref: 'main',
         workingBranch: 'feature/path-wb',
         inputs: { topic: 'x', refs: '' },
       },
@@ -655,14 +658,22 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
 
 // ---------------------------------------------------------------------------
 // Source anchor — the lift must not silently regress: the old path-mode-only
-// throw is gone, and BOTH startTask handoffs thread the pre-resolved source.
+// throw is gone, and BOTH startTask handoffs consume the SAME materialized
+// space. RFC-165 (F3) superseded the preResolvedSource/preCreatedWorktree
+// pair with `materializedSpace` — resolve-exactly-once now lives inside
+// services/task.ts `materializeSpace`, and the route hands its tagged result
+// (success OR earlyError) to startTask verbatim, so neither handoff can
+// re-resolve or re-materialize.
 // ---------------------------------------------------------------------------
 describe('RFC-107 — source anchors', () => {
-  test('route no longer hard-refuses url uploads, and threads preResolvedSource on both handoffs', () => {
+  test('route no longer hard-refuses url uploads, and hands the materialized space to both handoffs', () => {
     const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'routes', 'tasks.ts'), 'utf8')
     expect(src).not.toContain('multipart uploads currently require launching with a local repoPath')
     expect(src).not.toContain('if (startInput.repoUrl) {')
-    // success + earlyError handoffs both pass the pre-resolved source.
-    expect(src.split('preResolvedSource: resolvedSource').length - 1).toBe(2)
+    // success + earlyError handoffs both consume the one materialized space —
+    // and the route must NOT re-resolve on its own anymore.
+    expect(src.split('materializedSpace: space').length - 1).toBe(2)
+    expect(src).not.toContain('preResolvedSource: resolvedSource')
+    expect(src).not.toContain('resolveRepoSourceSingle(')
   })
 })

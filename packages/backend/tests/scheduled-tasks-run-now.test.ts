@@ -73,7 +73,7 @@ describe('RFC-159 T7 — run-now service (pure-launch semantics)', () => {
   })
 
   function launchBody(id = wfId) {
-    return { workflowId: id, name: 'nightly', repoPath: '/repo', baseBranch: 'main', inputs: {} }
+    return { workflowId: id, name: 'nightly', repoUrl: 'file:///repo', ref: 'main', inputs: {} }
   }
 
   async function makeSchedule(enabled: boolean): Promise<string> {
@@ -185,8 +185,9 @@ describe('RFC-159 T7 — run-now route gate', () => {
         launchPayload: {
           workflowId: wf.id,
           name: 'nightly',
-          repoPath: '/repo',
-          baseBranch: 'main',
+          // RFC-165: wire is URL-only; run-now injects a launch stub so the
+          // URL is never resolved — any parseable file:// form works.
+          repoUrl: 'file:///repo',
           inputs: {},
         },
         scheduleSpec: SPEC,

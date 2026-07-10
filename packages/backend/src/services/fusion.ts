@@ -460,6 +460,11 @@ export async function createFusion(
     appHome,
     actorUserId: actor.user.id,
     preCreatedWorktree: { taskId, worktreePath: workDir, branch: 'fusion', baseCommit },
+    // RFC-165 (F4): fusion is the framework-internal launch face — the local
+    // ephemeral repo travels via internalSource (space_kind='internal', GC
+    // excluded so the approval flow keeps its dirs), not via the retired
+    // public repoPath wire field.
+    internalSource: { kind: 'local-path', repoPath: workDir, baseBranch: 'fusion' },
     ...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {}),
     ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),
     // RFC-108 T4 + RFC-115: thread per-node timeout / retry budget / default runtime.
@@ -475,8 +480,6 @@ export async function createFusion(
     {
       workflowId: await fusionWorkflowId(db),
       name: `fuse → ${input.skillName}`,
-      repoPath: workDir,
-      baseBranch: 'fusion',
       inputs: { intent: input.intent, memories: serializeMemoriesForPrompt(loaded) },
       ...(input.collaboratorUserIds ? { collaboratorUserIds: input.collaboratorUserIds } : {}),
     },
@@ -856,6 +859,11 @@ export async function rejectFusion(
     appHome,
     actorUserId: actor.user.id,
     preCreatedWorktree: { taskId, worktreePath: workDir, branch: 'fusion', baseCommit },
+    // RFC-165 (F4): fusion is the framework-internal launch face — the local
+    // ephemeral repo travels via internalSource (space_kind='internal', GC
+    // excluded so the approval flow keeps its dirs), not via the retired
+    // public repoPath wire field.
+    internalSource: { kind: 'local-path', repoPath: workDir, baseBranch: 'fusion' },
     ...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {}),
     ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),
     // RFC-108 T4 + RFC-115: thread per-node timeout / retry budget / default runtime.
@@ -872,8 +880,6 @@ export async function rejectFusion(
     {
       workflowId: await fusionWorkflowId(db),
       name: `fuse → ${row.skillName} (iter ${nextIter})`,
-      repoPath: workDir,
-      baseBranch: 'fusion',
       inputs: { intent: intentWithFeedback, memories: serializeMemoriesForPrompt(loaded) },
     },
     startDeps,

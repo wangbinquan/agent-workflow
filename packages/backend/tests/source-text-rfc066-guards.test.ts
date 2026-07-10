@@ -42,11 +42,11 @@ describe('RFC-066 PR-A — source guards', () => {
     // is the only legitimate consumer of the override (verified by the
     // companion behavior tests in start-task-multi-repo-materialize.test.ts).
 
-    // Find every materializeWorktree({ ... }) call site in routes/tasks.ts.
-    // The multipart route is single-repo only (multi-repo + upload is gated
-    // to 422 at T5), so every call there must omit overrideWorktreePath.
+    // RFC-165 (F3): the multipart route no longer calls materializeWorktree
+    // directly — it goes through services/task.ts `materializeSpace`, whose
+    // single-path branch is pinned below. Any call that DOES reappear in the
+    // route must still omit overrideWorktreePath.
     const routesCalls = ROUTES_TASKS_SRC.match(/materializeWorktree\(\{[^}]*\}\)/gms) ?? []
-    expect(routesCalls.length).toBeGreaterThanOrEqual(1)
     for (const call of routesCalls) {
       expect(call.includes('overrideWorktreePath')).toBe(false)
     }

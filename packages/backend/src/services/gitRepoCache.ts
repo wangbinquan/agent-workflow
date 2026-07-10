@@ -19,10 +19,11 @@
 import {
   type CachedRepo,
   gitUrlCacheKeyWith,
+  gitUrlLegacyFileCacheKeyWith,
   parseGitUrl,
   redactGitUrl,
 } from '@agent-workflow/shared'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { rename } from 'node:fs/promises'
@@ -329,7 +330,46 @@ export async function resolveCachedRepo(
       .where(eq(cachedRepos.urlHash, hash))
       .limit(1)
       .all()
-    const row = existing[0]
+    let row = existing[0]
+
+    // RFC-165 (F19-r4): file:// dual-read + verified lazy re-key. The pre-165
+    // cache key folded case and the `.git` suffix, so file mirrors cached
+    // before this ship live under a LOSSY legacy hash. On a new-key miss,
+    // look the legacy key up — but because the fold is lossy, two different
+    // new keys can collide onto one legacy key, so only adopt the row when
+    // ITS OWN url re-canonicalizes to OUR new key; then re-key in place
+    // (url_hash CAS under both locks; local_path/dir untouched — the hash is
+    // just an index, no second clone).
+    if (row === undefined && parsed.kind === 'file') {
+      const legacy = gitUrlLegacyFileCacheKeyWith(parsed, sha1Hex)
+      if (legacy !== null && legacy.hash !== hash) {
+        row = await withUrlLock(legacy.hash, async () => {
+          const candidates = deps.db
+            .select()
+            .from(cachedRepos)
+            .where(eq(cachedRepos.urlHash, legacy.hash))
+            .limit(1)
+            .all()
+          const cand = candidates[0]
+          if (cand === undefined) return undefined
+          const candParsed = parseGitUrl(cand.url)
+          const candNewHash =
+            candParsed !== null ? gitUrlCacheKeyWith(candParsed, sha1Hex).hash : null
+          if (candNewHash !== hash) return undefined // lossy collision — NOT our repo
+          deps.db
+            .update(cachedRepos)
+            .set({ urlHash: hash })
+            .where(and(eq(cachedRepos.id, cand.id), eq(cachedRepos.urlHash, legacy.hash)))
+            .run()
+          log.info('re-keyed legacy file:// cache row', {
+            url: redacted,
+            from: legacy.hash,
+            to: hash,
+          })
+          return { ...cand, urlHash: hash }
+        })
+      }
+    }
 
     if (row && (await isValidGitDir(row.localPath))) {
       // Warm path.
@@ -341,6 +381,20 @@ export async function resolveCachedRepo(
           fetchOk = false
           fetchError = redactGitUrl(r.stderr.trim())
           log.warn('git fetch on reuse failed', { url: redacted, stderr: fetchError })
+          // RFC-165 (F19): a file:// source that can't be fetched means the
+          // SOURCE DIRECTORY is gone/unreadable — running off the stale
+          // mirror would silently diverge from the retired path-mode
+          // semantics ("read the local repo's live state"). Hard fail; other
+          // schemes keep the warning-and-stale-mirror behavior (network
+          // blips are expected there).
+          if (parsed.kind === 'file') {
+            throw new DomainError(
+              'repo-file-source-unreachable',
+              `file:// source for ${redacted} is missing or unreadable: ${fetchError}`,
+              400,
+              { url: redacted, stderr: fetchError },
+            )
+          }
         }
       }
       // RFC-068: fast-forward each requested base branch to its origin
@@ -366,6 +420,20 @@ export async function resolveCachedRepo(
               branch: candidate,
               warning: outcome.warning,
             })
+            // RFC-165 (F19): a requested branch that no longer resolves in a
+            // file:// source (deleted in the source repo) must hard-fail —
+            // silently keeping the stale local branch breaks the "read the
+            // source's live state" fidelity contract.
+            if (parsed.kind === 'file' && outcome.warning === 'origin-ref-missing') {
+              // Keep the legacy repo-ref-not-found shape (availableRefs UX).
+              const available = await listAvailableRefs(row.localPath, 10)
+              throw new DomainError(
+                'repo-ref-not-found',
+                `ref '${candidate}' not found in ${redacted}`,
+                400,
+                { url: redacted, ref: candidate, availableRefs: available },
+              )
+            }
           } else if (outcome.advanced) {
             log.info('rfc068/ff-advanced', {
               url: redacted,
@@ -506,6 +574,43 @@ export async function resolveCachedRepo(
       })
       .run()
     log.info('cloned new cached repo', { url: redacted, hash, localPath: cacheDir })
+    // RFC-165 (F19-r3): the COLD path must resolve requested refs to their
+    // remote-tracking state too — the source may carry a non-default local
+    // branch (unpushed work in a file:// repo) that a fresh clone only has as
+    // origin/<branch>; without this FF the first launch's `rev-parse <branch>`
+    // fails. Mirrors the warm-path RFC-068 loop (syncBranchToRemote CREATES
+    // the missing local ref); file:// sources hard-fail on a missing ref.
+    const coldFfOutcomes: FastForwardOutcome[] = []
+    {
+      const seen = new Set<string>()
+      for (const candidate of deps.syncBranches ?? []) {
+        if (seen.has(candidate)) continue
+        seen.add(candidate)
+        const kind = await classifyBaseRef(cacheDir, candidate)
+        if (kind !== 'branch' && kind !== 'unknown') continue
+        const outcome = await syncBranchToRemote(cacheDir, candidate)
+        coldFfOutcomes.push(outcome)
+        if (outcome.warning !== null) {
+          log.warn('rfc068/cold-ff-failed', {
+            url: redacted,
+            branch: candidate,
+            warning: outcome.warning,
+          })
+          if (parsed.kind === 'file' && outcome.warning === 'origin-ref-missing') {
+            // Keep the legacy repo-ref-not-found shape (availableRefs UX) —
+            // the pre-165 flow surfaced this from createWorktree's failed
+            // rev-parse; we now catch it one step earlier, same contract.
+            const available = await listAvailableRefs(cacheDir, 10)
+            throw new DomainError(
+              'repo-ref-not-found',
+              `ref '${candidate}' not found in ${redacted}`,
+              400,
+              { url: redacted, ref: candidate, availableRefs: available },
+            )
+          }
+        }
+      }
+    }
     return {
       cached: rowToCached(
         {
@@ -528,7 +633,7 @@ export async function resolveCachedRepo(
       submoduleSyncOk: true,
       submoduleSyncError: null,
       hasSubmodules: hasGitmodules,
-      ffOutcomes: [],
+      ffOutcomes: coldFfOutcomes,
     }
   })
 

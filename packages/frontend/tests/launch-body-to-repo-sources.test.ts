@@ -6,6 +6,9 @@
 // The round-trip cases (forward via buildLaunchBody* then inverse) are the load
 // bearing guard: a schedule's payload was ORIGINALLY built by those helpers, so
 // inverse(forward(x)) must equal x for the repo shape.
+//
+// RFC-165: sources are URL-only. A legacy path-mode payload (only reachable on
+// a schedule the boot healer disabled) degrades to a blank URL row for repair.
 
 import { describe, expect, test } from 'vitest'
 import {
@@ -17,18 +20,6 @@ import {
 } from '@/lib/launch-repo-source'
 
 describe('bodyToRepoSources — legacy single-repo bodies', () => {
-  test('path body → one path source', () => {
-    expect(bodyToRepoSources({ repoPath: '/r', baseBranch: 'main' })).toEqual([
-      { kind: 'path', repoPath: '/r', baseBranch: 'main' },
-    ])
-  })
-
-  test('path body missing baseBranch → empty baseBranch (never undefined)', () => {
-    expect(bodyToRepoSources({ repoPath: '/r' })).toEqual([
-      { kind: 'path', repoPath: '/r', baseBranch: '' },
-    ])
-  })
-
   test('url body → one url source, ref defaults to empty', () => {
     expect(bodyToRepoSources({ repoUrl: 'git@h:o/r.git' })).toEqual([
       { kind: 'url', repoUrl: 'git@h:o/r.git', ref: '' },
@@ -40,61 +31,40 @@ describe('bodyToRepoSources — legacy single-repo bodies', () => {
       { kind: 'url', repoUrl: 'git@h:o/r.git', ref: 'v1.2' },
     ])
   })
+
+  test('RFC-165: retired path body → blank URL row for repair', () => {
+    expect(bodyToRepoSources({ repoPath: '/r', baseBranch: 'main' })).toEqual([defaultRepoSource()])
+  })
 })
 
 describe('bodyToRepoSources — multi-repo bodies', () => {
-  test('repos[] → one source per entry, url wins the per-entry mutex', () => {
+  test('repos[] → one source per entry', () => {
     expect(
       bodyToRepoSources({
-        repos: [
-          { repoPath: '/a', baseBranch: 'main' },
-          { repoUrl: 'git@h:o/b.git', ref: 'dev' },
-          { repoUrl: 'git@h:o/c.git' },
-        ],
+        repos: [{ repoUrl: 'git@h:o/b.git', ref: 'dev' }, { repoUrl: 'git@h:o/c.git' }],
       }),
     ).toEqual([
-      { kind: 'path', repoPath: '/a', baseBranch: 'main' },
       { kind: 'url', repoUrl: 'git@h:o/b.git', ref: 'dev' },
       { kind: 'url', repoUrl: 'git@h:o/c.git', ref: '' },
     ])
   })
-})
 
-describe('bodyToRepoSources — fetchBeforeLaunch top-level flag', () => {
-  test('single path re-applies the flag', () => {
+  test('RFC-165: retired path entry degrades to a blank URL row (position kept)', () => {
     expect(
-      bodyToRepoSources({ repoPath: '/r', baseBranch: 'main', fetchBeforeLaunch: true }),
-    ).toEqual([{ kind: 'path', repoPath: '/r', baseBranch: 'main', fetchBeforeLaunch: true }])
-  })
-
-  test('multi-repo re-applies the flag to path rows only, never url rows', () => {
-    const out = bodyToRepoSources({
-      fetchBeforeLaunch: true,
-      repos: [{ repoPath: '/a', baseBranch: 'main' }, { repoUrl: 'git@h:o/b.git' }],
-    })
-    expect(out[0]).toEqual({
-      kind: 'path',
-      repoPath: '/a',
-      baseBranch: 'main',
-      fetchBeforeLaunch: true,
-    })
-    expect(out[1]).toEqual({ kind: 'url', repoUrl: 'git@h:o/b.git', ref: '' })
+      bodyToRepoSources({
+        repos: [{ repoPath: '/a', baseBranch: 'main' }, { repoUrl: 'git@h:o/b.git' }],
+      }),
+    ).toEqual([defaultRepoSource(), { kind: 'url', repoUrl: 'git@h:o/b.git', ref: '' }])
   })
 })
 
 describe('bodyToRepoSources — fallback', () => {
-  test('empty / unrecognized body → one default empty path row (fresh form)', () => {
+  test('empty / unrecognized body → one default empty URL row (fresh form)', () => {
     expect(bodyToRepoSources({})).toEqual([defaultRepoSource()])
   })
 })
 
 describe('bodyToRepoSources — round-trips through the forward builders', () => {
-  test('single path: inverse(buildLaunchBody(src)) === [src]', () => {
-    const src: RepoSource = { kind: 'path', repoPath: '/r', baseBranch: 'main' }
-    const body = buildLaunchBody(src, { workflowId: 'wf', name: 'n', inputs: {} })
-    expect(bodyToRepoSources(body)).toEqual([src])
-  })
-
   test('single url: inverse(buildLaunchBody(src)) === [src]', () => {
     const src: RepoSource = { kind: 'url', repoUrl: 'git@h:o/r.git', ref: 'main' }
     const body = buildLaunchBody(src, { workflowId: 'wf', name: 'n', inputs: {} })
@@ -103,21 +73,10 @@ describe('bodyToRepoSources — round-trips through the forward builders', () =>
 
   test('multi-repo: inverse(buildLaunchBodyMultiRepo(repos)) === repos', () => {
     const repos: RepoSource[] = [
-      { kind: 'path', repoPath: '/a', baseBranch: 'main' },
+      { kind: 'url', repoUrl: 'git@h:o/a.git', ref: 'main' },
       { kind: 'url', repoUrl: 'git@h:o/b.git', ref: 'dev' },
     ]
     const body = buildLaunchBodyMultiRepo(repos, { workflowId: 'wf', name: 'n', inputs: {} })
     expect(bodyToRepoSources(body)).toEqual(repos)
-  })
-
-  test('path + fetchBeforeLaunch round-trips the flag', () => {
-    const src: RepoSource = {
-      kind: 'path',
-      repoPath: '/r',
-      baseBranch: 'main',
-      fetchBeforeLaunch: true,
-    }
-    const body = buildLaunchBody(src, { workflowId: 'wf', name: 'n', inputs: {} })
-    expect(bodyToRepoSources(body)).toEqual([src])
   })
 })

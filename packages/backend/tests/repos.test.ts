@@ -8,7 +8,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
-import { listRecentRepos, upsertRecentRepo } from '../src/services/repo'
 import { runGit } from '../src/util/git'
 
 const TOKEN = 'a'.repeat(64)
@@ -63,85 +62,16 @@ async function req(path: string, init: RequestInit = {}): Promise<Response> {
 // service layer
 // =============================================================================
 
-describe('recent_repos service', () => {
-  test('list/empty -> []', async () => {
-    expect(await listRecentRepos(db)).toEqual([])
-  })
-
-  test('upsert inserts + detects default branch', async () => {
-    const r = await upsertRecentRepo(db, repoPath)
-    expect(r.path).toBe(repoPath)
-    expect(r.defaultBranch).toBe('main')
-    expect(typeof r.lastUsedAt).toBe('number')
-
-    const list = await listRecentRepos(db)
-    expect(list.length).toBe(1)
-    expect(list[0]?.path).toBe(repoPath)
-  })
-
-  test('upsert refreshes lastUsedAt on second call', async () => {
-    const first = await upsertRecentRepo(db, repoPath)
-    await Bun.sleep(5)
-    const second = await upsertRecentRepo(db, repoPath)
-    expect(second.lastUsedAt).toBeGreaterThanOrEqual(first.lastUsedAt)
-    expect((await listRecentRepos(db)).length).toBe(1)
-  })
-
-  test('upsert rejects non-git path with ValidationError', async () => {
-    const notRepo = mkdtempSync(join(baseTmp, 'notrepo-'))
-    try {
-      await expect(upsertRecentRepo(db, notRepo)).rejects.toThrow()
-    } finally {
-      rmSync(notRepo, { recursive: true, force: true })
-    }
-  })
-})
+// RFC-165: the recent_repos service/table retired with path-mode launches
+// (migration 0085 drops the table); refs/files coverage below is unchanged.
 
 // =============================================================================
 // HTTP layer
 // =============================================================================
 
 describe('repo HTTP routes', () => {
-  test('POST /api/repos/recent + GET roundtrip', async () => {
-    const post = await req('/api/repos/recent', {
-      method: 'POST',
-      body: JSON.stringify({ path: repoPath }),
-    })
-    expect(post.status).toBe(200)
-    const created = (await post.json()) as { path: string; defaultBranch?: string }
-    expect(created.path).toBe(repoPath)
-    expect(created.defaultBranch).toBe('main')
-
-    const get = await req('/api/repos/recent')
-    expect(get.status).toBe(200)
-    const list = (await get.json()) as Array<{ path: string }>
-    expect(list[0]?.path).toBe(repoPath)
-  })
-
-  test('POST /api/repos/recent rejects non-git path', async () => {
-    const notRepo = mkdtempSync(join(baseTmp, 'notrepo-'))
-    try {
-      const res = await req('/api/repos/recent', {
-        method: 'POST',
-        body: JSON.stringify({ path: notRepo }),
-      })
-      expect(res.status).toBe(422)
-      const body = (await res.json()) as { code: string }
-      expect(body.code).toBe('repo-not-git')
-    } finally {
-      rmSync(notRepo, { recursive: true, force: true })
-    }
-  })
-
-  test('POST /api/repos/recent rejects missing path', async () => {
-    const res = await req('/api/repos/recent', {
-      method: 'POST',
-      body: JSON.stringify({ path: '/no/such/path/agent-workflow-test-xyz' }),
-    })
-    expect(res.status).toBe(404)
-    const body = (await res.json()) as { code: string }
-    expect(body.code).toBe('repo-path-missing')
-  })
+  // RFC-165: the /api/repos/recent endpoints are gone with path-mode
+  // launches; only refs/files (RFC-110 dependents) remain below.
 
   test('GET /api/repos/refs returns branches/tags/commits/currentBranch', async () => {
     const res = await req(`/api/repos/refs?path=${encodeURIComponent(repoPath)}`)
@@ -217,7 +147,6 @@ describe('repo HTTP routes', () => {
   })
 
   test('all /api/repos/* require token', async () => {
-    expect((await app.request('/api/repos/recent')).status).toBe(401)
     expect((await app.request(`/api/repos/refs?path=${encodeURIComponent(repoPath)}`)).status).toBe(
       401,
     )

@@ -1,8 +1,8 @@
 // /workflows/$id/launch — minimal task starter.
 //
-// Stage 1 scope (P-2-10): recent-repo dropdown + base-branch dropdown
-// (via /api/repos/refs) + auto-generated text inputs for each workflow.inputs
-// entry. Multi-file / git-object / enum pickers ship later.
+// RFC-165: URL-only repo sources (remote workspace / `file://` escape hatch).
+// The recent-repos picker, refs lookup and the local-path launch mode they
+// served are retired.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, createRoute, useNavigate } from '@tanstack/react-router'
@@ -12,8 +12,6 @@ import type { TFunction } from 'i18next'
 import type {
   CachedRepo,
   UserPublic,
-  RecentRepo,
-  RepoRefsResponse,
   ScheduledTask,
   Task,
   Workflow,
@@ -28,7 +26,6 @@ import { EnumPicker } from '@/components/launch/EnumPicker'
 import { FilesPicker } from '@/components/launch/FilesPicker'
 import { GitPicker } from '@/components/launch/GitPicker'
 import { UploadPicker } from '@/components/launch/UploadPicker'
-import { buildLaunchFormData } from '@/components/launch/buildLaunchFormData'
 import { RepoSourceList, type MultiRepoBlockedReason } from '@/components/launch/RepoSourceList'
 import { Field, Switch, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
@@ -78,10 +75,6 @@ function LaunchPage() {
     queryKey: ['workflows', id],
     queryFn: ({ signal }) => api.get(`/api/workflows/${encodeURIComponent(id)}`, undefined, signal),
   })
-  const recent = useQuery<RecentRepo[]>({
-    queryKey: ['repos', 'recent'],
-    queryFn: ({ signal }) => api.get('/api/repos/recent', undefined, signal),
-  })
   // RFC-159 (edit-config): load the schedule being edited so we can seed the form
   // from its stored launchPayload. Shares the detail page's queryKey.
   const scheduleQ = useQuery<ScheduledTask>({
@@ -92,7 +85,7 @@ function LaunchPage() {
   })
   // RFC-159 (edit-config): resolve the stored collaborator ids back to UserPublic
   // rows so they seed the UserPicker as chips (deleted users just drop out).
-  const collabLookup = useUserLookup(scheduleQ.data?.launchPayload.collaboratorUserIds ?? [])
+  const collabLookup = useUserLookup(scheduleQ.data?.launchPayload?.collaboratorUserIds ?? [])
 
   // RFC-037: user-supplied display name for this task. Required for submit.
   const [taskName, setTaskName] = useState('')
@@ -110,10 +103,9 @@ function LaunchPage() {
   // remembered in localStorage; the branch name is task-specific so it isn't.
   const [workingBranch, setWorkingBranch] = useState('')
   const [autoCommitPush, setAutoCommitPush] = useState(loadAutoCommitPushPref())
-  // RFC-024 + RFC-066: 1..N repo sources. Single-row state is byte-baseline
-  // against pre-RFC-066 (default = one empty path-mode row, recents
-  // auto-fills the first row); the `+ Add` button in `<RepoSourceList>`
-  // grows the array, the `−` button shrinks it.
+  // RFC-024 + RFC-066: 1..N repo sources (default = one empty url-mode row);
+  // the `+ Add` button in `<RepoSourceList>` grows the array, the `−` button
+  // shrinks it.
   const [repos, setRepos] = useState<RepoSource[]>([defaultRepoSource()])
   const primarySource: RepoSource = repos[0] ?? defaultRepoSource()
   const [inputs, setInputs] = useState<Record<string, string>>({})
@@ -133,28 +125,8 @@ function LaunchPage() {
       seeded[i.key] = inputs[i.key] ?? ''
     }
     setInputs(seeded)
-    // Auto-pick the most recent repo as default for the FIRST row only —
-    // multi-repo mode (length > 1) leaves any added blank rows alone so
-    // the user isn't surprised by recent-repo prefill. RFC-159: skipped in
-    // edit mode, where the repo rows are seeded from the schedule's payload.
-    if (
-      editScheduled === undefined &&
-      repos.length === 1 &&
-      repos[0]!.kind === 'path' &&
-      repos[0]!.repoPath === '' &&
-      recent.data !== undefined &&
-      recent.data[0] !== undefined
-    ) {
-      setRepos([
-        {
-          kind: 'path',
-          repoPath: recent.data[0].path,
-          baseBranch: recent.data[0].defaultBranch ?? '',
-        },
-      ])
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workflow.data, recent.data])
+  }, [workflow.data])
 
   // RFC-159 (edit-config): seed every non-collaborator field from the stored
   // launchPayload, once, when BOTH the workflow (for the declared input keys) and
@@ -166,6 +138,7 @@ function LaunchPage() {
     if (seededRef.current) return
     seededRef.current = true
     const p = scheduleQ.data.launchPayload
+    if (p === null) return // RFC-165: degraded row — leave the form blank for repair
     setTaskName(p.name)
     setRepos(bodyToRepoSources(p))
     setWorkingBranch(p.workingBranch ?? '')
@@ -187,7 +160,7 @@ function LaunchPage() {
     if (!isEdit) return
     if (scheduleQ.data === undefined) return
     if (collabSeededRef.current) return
-    const ids = scheduleQ.data.launchPayload.collaboratorUserIds ?? []
+    const ids = scheduleQ.data.launchPayload?.collaboratorUserIds ?? []
     if (ids.length === 0) {
       collabSeededRef.current = true
       return
@@ -200,29 +173,16 @@ function LaunchPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEdit, scheduleQ.data, collabLookup.isLoading])
 
-  const refs = useQuery<RepoRefsResponse>({
-    queryKey: ['repos', 'refs', primarySource.kind === 'path' ? primarySource.repoPath : ''],
-    queryFn: ({ signal }) =>
-      api.get(
-        '/api/repos/refs',
-        { path: primarySource.kind === 'path' ? primarySource.repoPath : '' },
-        signal,
-      ),
-    enabled: primarySource.kind === 'path' && primarySource.repoPath !== '',
-  })
-
   // RFC-110: cached-repo list (shared queryKey with RepoSourceRow → React Query
-  // dedups to one request) so url-mode file/git pickers can resolve the typed
-  // URL to an already-cached clone's localPath and enumerate it. A query failure
+  // dedups to one request) so the file/git pickers can resolve the typed URL to
+  // an already-cached clone's localPath and enumerate it. A query failure
   // simply yields no matches → pickers fall back to a text input, never blocking.
   const cachedRepos = useQuery<{ items: CachedRepo[] }>({
     queryKey: ['cached-repos'],
     queryFn: ({ signal }) => api.get('/api/cached-repos', undefined, signal),
-    enabled: primarySource.kind === 'url',
   })
-  // The local repoPath the file/git pickers enumerate against: the chosen local
-  // path in path mode, or the matched cached clone in url mode ('' when uncached
-  // → picker shows a text fallback).
+  // The local repoPath the file/git pickers enumerate against: the matched
+  // cached clone ('' when uncached → picker shows a text fallback).
   const effectiveRepoPath = resolveUrlRepoPath(primarySource, cachedRepos.data?.items ?? [])
 
   const hasUploads = Object.values(uploads).some((arr) => arr.length > 0)
@@ -282,24 +242,15 @@ function LaunchPage() {
       // RFC-066: multi-repo (length > 1) → always JSON post via the v2 body
       // helper. Multi-repo + uploads is gated by T6's `canSubmit` predicate
       // BEFORE reaching this branch; this path is unreachable when uploads
-      // and multi-repo coexist. Single-repo (length === 1) keeps the
-      // legacy byte-baseline branching against `primarySource`.
+      // and multi-repo coexist.
       if (repos.length > 1) {
         return api.post<Task>('/api/tasks', buildLaunchBodyMultiRepo(repos, launchCommon))
       }
       const onlySource = primarySource
-      if (onlySource.kind === 'path' && (hasUploadKind || hasUploads)) {
-        const payload = {
-          ...launchCommon,
-          repoPath: onlySource.repoPath,
-          baseBranch: onlySource.baseBranch,
-        }
-        return api.postMultipart<Task>('/api/tasks', buildLaunchFormData(payload, uploads))
-      }
-      if (onlySource.kind === 'url' && (hasUploadKind || hasUploads)) {
-        // RFC-107: URL + uploads is now supported. The multipart route resolves
-        // the URL into the repo cache before materializing the worktree, then
-        // lands the files; buildLaunchFormDataV2 carries repoUrl + ref.
+      if (hasUploadKind || hasUploads) {
+        // RFC-107: URL + uploads. The multipart route resolves the URL into the
+        // repo cache before materializing the workspace, then lands the files;
+        // buildLaunchFormDataV2 carries repoUrl + ref.
         return api.postMultipart<Task>(
           '/api/tasks',
           buildLaunchFormDataV2(onlySource, launchCommon, uploads),
@@ -355,15 +306,9 @@ function LaunchPage() {
     }
     return def.required === true && (inputs[def.key] ?? '').trim() === ''
   })
-  const repoIssue = primarySource.kind === 'path' ? repoLaunchIssue(refs.data ?? null) : null
-  // RFC-066: every row must be filled (path mode requires repoPath +
-  // baseBranch; url mode requires a parseable URL). The Start button stays
+  // RFC-066: every row must carry a parseable URL. The Start button stays
   // disabled until all rows pass their per-row gate.
-  const sourceReady = repos.every((r) =>
-    r.kind === 'path'
-      ? r.repoPath !== '' && r.baseBranch !== ''
-      : validateRepoUrl(r.repoUrl) === null,
-  )
+  const sourceReady = repos.every((r) => validateRepoUrl(r.repoUrl) === null)
   // RFC-066: multi-repo + wrapper-git / upload combos are explicitly gated
   // BEFORE the Start button. Surface the reason in a banner so the user
   // knows what to fix; canSubmit folds the gate in.
@@ -399,13 +344,12 @@ function LaunchPage() {
   // while the lookup is still pending (or after it failed) would rebuild the body
   // with an empty collaborator set and silently drop every collaborator. No ids →
   // nothing to wait for.
-  const collabIds = scheduleQ.data?.launchPayload.collaboratorUserIds ?? []
+  const collabIds = scheduleQ.data?.launchPayload?.collaboratorUserIds ?? []
   const collabReady = !isEdit || collabIds.length === 0 || collabLookup.isSuccess
   const canSubmit =
     nameReady &&
     sourceReady &&
     !missingRequired &&
-    repoIssue === null &&
     gitIdentityOk &&
     workingBranchOk &&
     // RFC-066: multi-repo + wrapper-git / upload → Start disabled.
@@ -438,8 +382,6 @@ function LaunchPage() {
           </Link>
         )}
       </header>
-
-      {repoIssue === 'no-commits' && <div className="error-box">{t('launch.repoNoCommits')}</div>}
 
       <div className="form-grid">
         {/* RFC-037: task name is required at launch time — required input first. */}
@@ -505,7 +447,7 @@ function LaunchPage() {
           multiRepoBlockedReason={multiRepoBlockedReason}
         />
 
-        {primarySource.kind === 'url' && start.isPending && (
+        {start.isPending && (
           <div className="muted" data-testid="launch-cloning-hint">
             {t('launch.repoSource.cloningHint')}
           </div>
@@ -708,27 +650,6 @@ export function launcherFieldDefs(
     | undefined,
 ): WorkflowInput[] {
   return def?.inputs ?? []
-}
-
-/**
- * Pre-launch validation of the chosen repo. Returns a stable issue code
- * the UI uses to render an inline banner AND disable Start.
- *
- * Today the only blocking case is `no-commits`: `git init -b main` alone
- * leaves the unborn `main` ref unresolvable, so `git worktree add` later
- * fails with `cannot resolve base ref 'main'`. We want to refuse the
- * launch up front rather than queue a doomed task.
- *
- * Returns `null` when refs haven't loaded yet OR the repo is launchable —
- * the caller folds the `null` case into its other gating predicates
- * (e.g. missingRequired, repoPath !== '').
- *
- * Exported for unit tests.
- */
-export function repoLaunchIssue(refs: { hasCommits: boolean } | null): 'no-commits' | null {
-  if (refs === null) return null
-  if (refs.hasCommits === false) return 'no-commits'
-  return null
 }
 
 function describeError(e: unknown): string {

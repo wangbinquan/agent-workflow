@@ -13,7 +13,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb } from '../src/db/client'
-import { cachedRepos, recentRepos } from '../src/db/schema'
+import { cachedRepos } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { startTask } from '../src/services/task'
@@ -114,9 +114,8 @@ describe('startTask URL mode (RFC-024)', () => {
     expect(task.repoPath.startsWith(join(appHome, 'repos'))).toBe(true)
     // Worktree is under appHome/worktrees and was created from the cache.
     expect(task.worktreePath.startsWith(join(appHome, 'worktrees'))).toBe(true)
-    // cached_repos got exactly one row; recent_repos got nothing.
+    // cached_repos got exactly one row (recent_repos retired by RFC-165).
     expect(db.select().from(cachedRepos).all().length).toBe(1)
-    expect(db.select().from(recentRepos).all().length).toBe(0)
     rmSync(tmp, { recursive: true, force: true })
   })
 

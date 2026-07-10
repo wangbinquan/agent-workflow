@@ -1,4 +1,7 @@
 // RFC-089 P3 — getTaskStructuralDiff node scope must work for multi-repo tasks.
+// RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
+// now (the wire is URL-only) — bodies are cast through the internal
+// RepoSourceSpec widening; runtime behavior is byte-identical to pre-165.
 // It threw `structural-node-scope-multi-repo-unsupported` before; it now resolves
 // + computes per repo (reusing resolveNodeScope over each repo's
 // `pre_snapshot_repos_json` column via perRepoNodeRuns) and merges. This locks:
@@ -10,6 +13,7 @@
 // structural-diff-refselect.test.ts and structural-diff-multi-repo-merge.test.ts.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import type { StartTask } from '@agent-workflow/shared'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -71,7 +75,7 @@ async function twoRepoTask(h: Harness) {
         { repoPath: h.repos[1]!, baseBranch: 'main' },
       ],
       inputs: {},
-    },
+    } as unknown as StartTask,
     { db: h.db, appHome: h.appHome },
   )
 }

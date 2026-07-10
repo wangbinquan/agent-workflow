@@ -50,7 +50,7 @@ describe('RFC-159 scheduled-task CRUD', () => {
   })
 
   function launchBody(id = wfId) {
-    return { workflowId: id, name: 'nightly', repoPath: '/repo', baseBranch: 'main', inputs: {} }
+    return { workflowId: id, name: 'nightly', repoUrl: 'file:///repo', ref: 'main', inputs: {} }
   }
 
   test('create: validates body, gates workflow, computes next_run_at, owner=actor', async () => {
@@ -63,7 +63,8 @@ describe('RFC-159 scheduled-task CRUD', () => {
     expect(created.enabled).toBe(true)
     expect(created.nextRunAt).toBeGreaterThan(Date.now())
     expect(created.consecutiveFailures).toBe(0)
-    expect(created.launchPayload.workflowId).toBe(wfId)
+    expect(created.launchPayload).not.toBe(null)
+    expect(created.launchPayload!.workflowId).toBe(wfId)
   })
 
   test('create: disabled schedule has null next_run_at', async () => {
@@ -179,7 +180,10 @@ describe('RFC-159 scheduled-task CRUD', () => {
     expect((await listScheduledTasks(db)).length).toBe(0)
   })
 
-  test('rowToScheduledTask throws on corrupt JSON', async () => {
+  test('corrupt JSON degrades the field instead of throwing (RFC-165 F18/N3)', async () => {
+    // Pre-RFC-165 this threw `scheduled-task-row-corrupt` and ONE bad row took
+    // down the whole list. Now the bad column degrades to null + a per-field
+    // migrationError while the row stays readable / repairable / deletable.
     const created = await createScheduledTask(
       db,
       { name: 'x', launchPayload: launchBody(), scheduleSpec: SPEC, enabled: true },
@@ -189,6 +193,13 @@ describe('RFC-159 scheduled-task CRUD', () => {
       .update(scheduledTasks)
       .set({ scheduleSpec: '{bad json' })
       .where(eq(scheduledTasks.id, created.id))
-    await expect(getScheduledTask(db, created.id)).rejects.toThrow()
+    const got = await getScheduledTask(db, created.id)
+    expect(got).not.toBe(null)
+    expect(got!.scheduleSpec).toBe(null)
+    expect(got!.launchPayload).not.toBe(null) // healthy column untouched
+    expect(got!.migrationError?.scheduleSpec ?? '').toContain('invalid-json')
+    // …and it does not take down the LIST either.
+    const all = await listScheduledTasks(db)
+    expect(all.some((s) => s.id === created.id)).toBe(true)
   })
 })

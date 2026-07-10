@@ -1,8 +1,7 @@
 // RFC-125 follow-up bug fix — `buildLaunchBody` / `buildLaunchBodyMultiRepo`
 // whitelist the POST /api/tasks body and previously DROPPED `workingBranch` /
 // `autoCommitPush` (RFC-075) + `collaboratorUserIds` (RFC-036) on the no-upload
-// single-repo + multi-repo + url+upload(V2) paths; only the path+uploads path's
-// verbatim `buildLaunchFormData` spread carried them — so those shipped features
+// single-repo + multi-repo + url+upload(V2) paths — so those shipped features
 // were silently disabled on the most common launch. The prior launch-field tests
 // only asserted the `launchCommon` SOURCE spread, never that the field reached the
 // wire, which is exactly why the drop went unnoticed. These are the wire-level
@@ -15,7 +14,6 @@ import {
   type LaunchCommonPayload,
 } from '../src/lib/launch-repo-source'
 
-const pathSource = { kind: 'path' as const, repoPath: '/r', baseBranch: 'main' }
 const urlSource = { kind: 'url' as const, repoUrl: 'https://x/r.git', ref: '' }
 const full: LaunchCommonPayload = {
   workflowId: 'wf',
@@ -33,27 +31,23 @@ function expectExtras(body: Record<string, unknown>) {
 }
 
 describe('launch body helpers stamp all launchCommon extras onto the wire', () => {
-  test('buildLaunchBody (path) carries workingBranch/autoCommitPush/collaborators/deferred', () => {
-    expectExtras(buildLaunchBody(pathSource, full))
-  })
-
-  test('buildLaunchBody (url) carries them too', () => {
+  test('buildLaunchBody carries workingBranch/autoCommitPush/collaborators', () => {
     expectExtras(buildLaunchBody(urlSource, full))
   })
 
   test('buildLaunchBodyMultiRepo carries them too', () => {
-    expectExtras(buildLaunchBodyMultiRepo([pathSource], full))
+    expectExtras(buildLaunchBodyMultiRepo([urlSource], full))
   })
 
   test('omits extras when blank / false / empty (byte-identical legacy wire)', () => {
     const bare: LaunchCommonPayload = { workflowId: 'wf', name: 't', inputs: {} }
-    const b = buildLaunchBody(pathSource, bare)
+    const b = buildLaunchBody(urlSource, bare)
     expect(b.workingBranch).toBeUndefined()
     expect(b.autoCommitPush).toBeUndefined()
     expect(b.collaboratorUserIds).toBeUndefined()
     // empty collaborator array is also omitted (mirrors launchCommon's length>0 spread)
     expect(
-      buildLaunchBody(pathSource, {
+      buildLaunchBody(urlSource, {
         workflowId: 'wf',
         name: 't',
         inputs: {},

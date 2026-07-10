@@ -17,12 +17,14 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 import { eq, asc } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
+import type { StartTask } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { startTask } from '../src/services/task'
+import { materializeSpace, startTask, startTaskWithLocalRepo } from '../src/services/task'
 import { taskRepos, tasks, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 
@@ -31,6 +33,8 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 interface RepoHarness {
   repoPath: string
   basename: string
+  /** RFC-165: the wire form — path mode retired, multi-repo rows are URL-only. */
+  url: string
 }
 
 interface Harness {
@@ -50,7 +54,7 @@ async function seedRepo(parent: string, name: string): Promise<RepoHarness> {
   await runGit(repoPath, ['commit', '-q', '-m', 'init'])
   // Find the actual basename we got (mkdtempSync adds random suffix).
   const parts = repoPath.split('/')
-  return { repoPath, basename: parts[parts.length - 1] ?? '' }
+  return { repoPath, basename: parts[parts.length - 1] ?? '', url: pathToFileURL(repoPath).href }
 }
 
 async function buildHarness(repoCount: number, sharedBasenameRoot?: string): Promise<Harness> {
@@ -71,7 +75,7 @@ async function buildHarness(repoCount: number, sharedBasenameRoot?: string): Pro
       writeFileSync(join(repoPath, 'README.md'), `# repo-${i}\n`)
       await runGit(repoPath, ['add', '.'])
       await runGit(repoPath, ['commit', '-q', '-m', 'init'])
-      repos.push({ repoPath, basename: sharedBasenameRoot })
+      repos.push({ repoPath, basename: sharedBasenameRoot, url: pathToFileURL(repoPath).href })
     }
   } else {
     repos = []
@@ -107,16 +111,17 @@ describe('RFC-066 PR-A T3 — multi-repo materialize', () => {
     h?.cleanup()
   })
 
-  test('B7 two path-mode repos → parent dir + two worktrees + two task_repos rows', async () => {
+  test('B7 two url-mode repos → parent dir + two sibling worktrees + two task_repos rows', async () => {
+    // RFC-165: path mode retired from the wire — rows are file:// URLs; each
+    // source clones a mirror and the sibling dir is named after the MIRROR
+    // (hash-slug), so the layout assertions are structural rather than
+    // source-basename based.
     h = await buildHarness(2)
     const task = await startTask(
       {
         workflowId: 'wf-multi',
         name: 'multi-task',
-        repos: [
-          { repoPath: h.repos[0]!.repoPath, baseBranch: 'main' },
-          { repoPath: h.repos[1]!.repoPath, baseBranch: 'main' },
-        ],
+        repos: [{ repoUrl: h.repos[0]!.url }, { repoUrl: h.repos[1]!.url }],
         inputs: {},
       },
       { db: h.db, appHome: h.appHome },
@@ -125,24 +130,22 @@ describe('RFC-066 PR-A T3 — multi-repo materialize', () => {
     // Parent worktree dir exists at multi/{taskId}/.
     expect(task.worktreePath).toBe(join(h.appHome, 'worktrees', 'multi', task.id))
     expect(existsSync(task.worktreePath)).toBe(true)
-    // Each repo materializes a child worktree at multi/{taskId}/<basename>/.
-    const r0Path = join(task.worktreePath, h.repos[0]!.basename)
-    const r1Path = join(task.worktreePath, h.repos[1]!.basename)
-    expect(existsSync(r0Path)).toBe(true)
-    expect(existsSync(r1Path)).toBe(true)
-    // task_repos has two rows sorted by repo_index ascending.
+    // task_repos has two rows sorted by repo_index ascending, each a live
+    // sibling worktree directly under the parent container.
     const rows = await h.db
       .select()
       .from(taskRepos)
       .where(eq(taskRepos.taskId, task.id))
       .orderBy(asc(taskRepos.repoIndex))
     expect(rows).toHaveLength(2)
-    expect(rows[0]!.repoIndex).toBe(0)
-    expect(rows[1]!.repoIndex).toBe(1)
-    expect(rows[0]!.worktreeDirName).toBe(h.repos[0]!.basename)
-    expect(rows[1]!.worktreeDirName).toBe(h.repos[1]!.basename)
-    expect(rows[0]!.worktreePath).toBe(r0Path)
-    expect(rows[1]!.worktreePath).toBe(r1Path)
+    for (const [i, r] of rows.entries()) {
+      expect(r.repoIndex).toBe(i)
+      expect(r.worktreePath.startsWith(task.worktreePath + '/')).toBe(true)
+      expect(r.worktreeDirName).toBe(r.worktreePath.split('/').pop() ?? '')
+      expect(existsSync(r.worktreePath)).toBe(true)
+      expect(r.repoUrl).toBe(h.repos[i]!.url)
+    }
+    expect(rows[0]!.worktreeDirName).not.toBe(rows[1]!.worktreeDirName)
   })
 
   test('B8 per-repo branch is agent-workflow/{taskId} for every entry', async () => {
@@ -151,10 +154,7 @@ describe('RFC-066 PR-A T3 — multi-repo materialize', () => {
       {
         workflowId: 'wf-multi',
         name: 't',
-        repos: [
-          { repoPath: h.repos[0]!.repoPath, baseBranch: 'main' },
-          { repoPath: h.repos[1]!.repoPath, baseBranch: 'main' },
-        ],
+        repos: [{ repoUrl: h.repos[0]!.url }, { repoUrl: h.repos[1]!.url }],
         inputs: {},
       },
       { db: h.db, appHome: h.appHome },
@@ -174,33 +174,49 @@ describe('RFC-066 PR-A T3 — multi-repo materialize', () => {
       {
         workflowId: 'wf-multi',
         name: 't',
-        repos: [
-          { repoPath: h.repos[0]!.repoPath, baseBranch: 'main' },
-          { repoPath: h.repos[1]!.repoPath, baseBranch: 'main' },
-        ],
+        repos: [{ repoUrl: h.repos[0]!.url }, { repoUrl: h.repos[1]!.url }],
         inputs: {},
       },
       { db: h.db, appHome: h.appHome },
     )
     const rows = await h.db.select().from(tasks).where(eq(tasks.id, task.id))
-    expect(rows[0]!.repoPath).toBe(h.repos[0]!.repoPath)
+    const repoRows = await h.db
+      .select()
+      .from(taskRepos)
+      .where(eq(taskRepos.taskId, task.id))
+      .orderBy(asc(taskRepos.repoIndex))
+    // Mirror columns reflect task_repos[0] (URL mode: the cached mirror path).
+    expect(rows[0]!.repoPath).toBe(repoRows[0]!.repoPath)
+    expect(rows[0]!.repoUrl).toBe(h.repos[0]!.url)
     expect(rows[0]!.repoCount).toBe(2)
     expect(rows[0]!.branch).toBe(`agent-workflow/${task.id}`)
   })
 
-  test('B10 two repos with same basename → second gets `-2` suffix', async () => {
+  test('B10 dirname collision → second gets `-2` suffix (internal face)', async () => {
+    // RFC-165: URL-only wire rows derive sibling dirnames from the MIRROR
+    // basename (hash-slug) — two different sources can no longer collide, and
+    // the same URL twice fails at the second worktree add (branch name
+    // collision inside one repo). The `-2` suffix logic
+    // (resolveMultiRepoDirName) stays reachable through the framework's
+    // internal path-spec face, so it is locked there.
     h = await buildHarness(2, 'utils')
-    const task = await startTask(
+    const space = await materializeSpace(
       {
         workflowId: 'wf-multi',
         name: 't',
+        inputs: {},
         repos: [
           { repoPath: h.repos[0]!.repoPath, baseBranch: 'main' },
           { repoPath: h.repos[1]!.repoPath, baseBranch: 'main' },
         ],
-        inputs: {},
-      },
+      } as unknown as StartTask,
       { db: h.db, appHome: h.appHome },
+      h.appHome,
+    )
+    expect(space.earlyError).toBe(null)
+    const task = await startTask(
+      { workflowId: 'wf-multi', name: 't', inputs: {} } as unknown as StartTask,
+      { db: h.db, appHome: h.appHome, materializedSpace: space },
     )
     const rows = await h.db
       .select()
@@ -213,25 +229,38 @@ describe('RFC-066 PR-A T3 — multi-repo materialize', () => {
     expect(existsSync(rows[1]!.worktreePath)).toBe(true)
   })
 
-  test('B11 second repo fails worktree add → task lands as failed, first repo row still persists', async () => {
+  test('B11 second repo fails worktree add → failed task, partial first-repo row persists', async () => {
+    // RFC-165: a bad URL fails at CLONE time (422, no row), so the partial
+    // materialize-failure arm is locked via the internal RepoSourceSpec face
+    // (materializeSpace failure arm → startTask mints ONE failed row carrying
+    // the partial repos — design F3).
     h = await buildHarness(1)
-    // Second "repo" path is a non-git directory → createWorktree fails.
     const notARepo = mkdtempSync(join(tmpdir(), 'aw-rfc066-not-repo-'))
     try {
-      const task = await startTask(
+      // INTERNAL face: path rows are unrepresentable on the wire (the schema
+      // is url-only) but normalizeStartTaskRepos' widened RepoSourceSpec keeps
+      // them for the framework — cast to drive the multi partial-failure arm.
+      const failing = await materializeSpace(
         {
           workflowId: 'wf-multi',
           name: 't',
+          inputs: {},
           repos: [
             { repoPath: h.repos[0]!.repoPath, baseBranch: 'main' },
             { repoPath: notARepo, baseBranch: 'main' },
           ],
-          inputs: {},
-        },
+        } as unknown as StartTask,
         { db: h.db, appHome: h.appHome },
+        h.appHome,
+      )
+      expect(failing.earlyError).toContain('repo[1]')
+      expect(failing.repos).toHaveLength(1)
+
+      const task = await startTask(
+        { workflowId: 'wf-multi', name: 't', inputs: {} } as unknown as StartTask,
+        { db: h.db, appHome: h.appHome, materializedSpace: failing },
       )
       expect(task.status).toBe('failed')
-      // First repo materialized fine; its task_repos row is recorded.
       const rows = await h.db
         .select()
         .from(taskRepos)
@@ -240,7 +269,6 @@ describe('RFC-066 PR-A T3 — multi-repo materialize', () => {
       expect(rows).toHaveLength(1)
       expect(rows[0]!.repoIndex).toBe(0)
       expect(rows[0]!.repoPath).toBe(h.repos[0]!.repoPath)
-      // tasks.error_summary surfaces the failing repo index.
       expect(task.errorSummary).toContain('repo[1]')
     } finally {
       rmSync(notARepo, { recursive: true, force: true })
@@ -253,7 +281,7 @@ describe('RFC-066 PR-A T3 — multi-repo materialize', () => {
       {
         workflowId: 'wf-multi',
         name: 't',
-        repos: [{ repoPath: h.repos[0]!.repoPath, baseBranch: 'main' }],
+        repos: [{ repoUrl: h.repos[0]!.url }],
         inputs: {},
       },
       { db: h.db, appHome: h.appHome },
@@ -277,7 +305,7 @@ describe('RFC-066 PR-A T3 — multi-repo materialize', () => {
 
   test('B12b legacy single-repo body (top-level repoPath, no repos[]) byte-baseline matches v2 single-repo', async () => {
     h = await buildHarness(1)
-    const task = await startTask(
+    const task = await startTaskWithLocalRepo(
       {
         workflowId: 'wf-multi',
         name: 't-legacy',

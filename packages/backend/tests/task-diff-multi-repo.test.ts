@@ -1,4 +1,7 @@
 // LOCKS: RFC-066 PR-B T12 — getTaskDiff multi-repo concatenation.
+// RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
+// now (the wire is URL-only) — bodies are cast through the internal
+// RepoSourceSpec widening; runtime behavior is byte-identical to pre-165.
 //
 // Cases covered:
 //   B16 single-repo task: diff response shape byte-baseline against
@@ -11,13 +14,14 @@
 //       is silently dropped; only the changed repo appears in output.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import type { StartTask } from '@agent-workflow/shared'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { getTaskDiff, startTask } from '../src/services/task'
+import { getTaskDiff, startTask, startTaskWithLocalRepo } from '../src/services/task'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 
@@ -69,7 +73,7 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
 
   test('B16 single-repo task: baseline diff shape (baseCommit non-null, no `# === Repo:` header)', async () => {
     h = await buildHarness(1)
-    const task = await startTask(
+    const task = await startTaskWithLocalRepo(
       {
         workflowId: 'wf-diff',
         name: 't',
@@ -99,7 +103,7 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
           { repoPath: h.repos[1]!, baseBranch: 'main' },
         ],
         inputs: {},
-      },
+      } as unknown as StartTask,
       { db: h.db, appHome: h.appHome },
     )
     // Each sub-worktree gets a tracked-file mutation so the per-repo diff
@@ -133,7 +137,7 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
           { repoPath: h.repos[1]!, baseBranch: 'main' },
         ],
         inputs: {},
-      },
+      } as unknown as StartTask,
       { db: h.db, appHome: h.appHome },
     )
     // Only repo A mutated; B stays clean.

@@ -44,6 +44,20 @@ export const TaskNameSchema = z
 export const MULTI_REPO_MAX = 8
 
 /**
+ * RFC-165: task execution-space kind.
+ * - 'local'    — legacy path-mode tasks only (mode retired by RFC-165; kept for
+ *                historical rows, never written for new launches).
+ * - 'remote'   — URL mode: cached mirror clone + per-task worktree.
+ * - 'scratch'  — RFC-165 temporary space: the workspace IS a fresh git repo
+ *                (empty root commit); no source repo, no remote.
+ * - 'internal' — framework-internal launches (fusion) via the service-level
+ *                `internalSource` dep; unreachable from the public wire.
+ */
+export const SPACE_KINDS = ['local', 'remote', 'scratch', 'internal'] as const
+export const SpaceKindSchema = z.enum(SPACE_KINDS)
+export type SpaceKind = z.infer<typeof SpaceKindSchema>
+
+/**
  * RFC-075: optional working branch name captured at launch. Applies to every
  * repo in a multi-repo task. Loose validation here only catches the obvious
  * illegal shapes early so the launcher can show a field error; the
@@ -63,43 +77,16 @@ export function isLooseValidBranchName(name: string): boolean {
 }
 
 /**
- * RFC-066: single repo entry inside `StartTask.repos[]`. Same path/url mutex
- * + baseBranch-required-in-path-mode rules as the legacy `StartTask` top
- * level — kept identical so legacy single-repo bodies stay byte-for-byte
- * equivalent to a length-1 `repos` array.
+ * RFC-066/165: single repo entry inside `StartTask.repos[]` — URL-only since
+ * RFC-165 retired path mode from the public wire (`file://` URLs are the
+ * local-repo escape hatch; framework-internal local launches ride
+ * `deps.internalSource` instead). `ref` optional → the cached repo's default
+ * branch.
  */
-export const StartTaskRepoSchema = z
-  .object({
-    repoPath: z.string().min(1).optional(),
-    baseBranch: z.string().min(1).optional(),
-    repoUrl: z.string().min(1).optional(),
-    ref: z.string().min(1).optional(),
-  })
-  .superRefine((value, ctx) => {
-    const hasPath = typeof value.repoPath === 'string' && value.repoPath.length > 0
-    const hasUrl = typeof value.repoUrl === 'string' && value.repoUrl.length > 0
-    if (hasPath && hasUrl) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'repoPath and repoUrl are mutually exclusive',
-        path: ['repoUrl'],
-      })
-    }
-    if (!hasPath && !hasUrl) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'one of repoPath or repoUrl is required',
-        path: ['repoPath'],
-      })
-    }
-    if (hasPath && (!value.baseBranch || value.baseBranch.length === 0)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'baseBranch is required in path mode',
-        path: ['baseBranch'],
-      })
-    }
-  })
+export const StartTaskRepoSchema = z.object({
+  repoUrl: z.string().min(1),
+  ref: z.string().min(1).optional(),
+})
 export type StartTaskRepo = z.infer<typeof StartTaskRepoSchema>
 
 /**
@@ -230,6 +217,17 @@ export const TaskSchema = z.object({
   scheduledTaskId: z.string().nullable().optional(),
   /** RFC-164: owning workgroup id (durable soft link; NULL = not a workgroup task). */
   workgroupId: z.string().nullable().optional(),
+  /**
+   * RFC-165: execution-space kind. Defaulted to 'remote' so fixtures predating
+   * migration 0085 keep parsing; the backend mapper always populates it.
+   */
+  spaceKind: SpaceKindSchema.default('remote'),
+  /**
+   * RFC-165: source agent name for single-agent tasks (durable soft link to
+   * `agents.name`, same philosophy as `workgroupId`). NULL for workflow /
+   * workgroup tasks.
+   */
+  sourceAgentName: z.string().nullable().optional(),
 })
 export type Task = z.infer<typeof TaskSchema>
 
@@ -265,8 +263,27 @@ export const TaskSummarySchema = z.object({
   scheduledTaskId: z.string().nullable().optional(),
   /** RFC-164: owning workgroup id (durable soft link; NULL = not a workgroup task). */
   workgroupId: z.string().nullable().optional(),
+  /** RFC-165: execution-space kind (see TaskSchema.spaceKind). */
+  spaceKind: SpaceKindSchema.default('remote'),
+  /** RFC-165: source agent name for single-agent tasks (null otherwise). */
+  sourceAgentName: z.string().nullable().optional(),
 })
 export type TaskSummary = z.infer<typeof TaskSummarySchema>
+
+/**
+ * RFC-165: single derivation point for a task's execution subject. Route
+ * guards, list badges, "launch again" deep links and the sync-workflow guard
+ * all call this — do NOT scatter `workgroupId !== null` / `sourceAgentName`
+ * checks elsewhere (flag-audit "kind scatter" lesson).
+ */
+export function taskExecutionKind(t: {
+  workgroupId?: string | null
+  sourceAgentName?: string | null
+}): 'workgroup' | 'agent' | 'workflow' {
+  if (t.workgroupId != null && t.workgroupId !== '') return 'workgroup'
+  if (t.sourceAgentName != null && t.sourceAgentName !== '') return 'agent'
+  return 'workflow'
+}
 
 /**
  * POST /api/tasks body.
@@ -284,9 +301,15 @@ export const StartTaskSchema = z
      * Empty / whitespace-only / overlong → 422. No server fallback.
      */
     name: TaskNameSchema,
-    repoPath: z.string().min(1).optional(),
-    baseBranch: z.string().min(1).optional(),
-    /** RFC-024: remote Git URL (SSH or HTTP/HTTPS). Triggers clone-or-reuse. */
+    /**
+     * RFC-165: temporary-space launch. When true the task gets a fresh
+     * `git init` scratch repo (empty root commit) as its workspace — no
+     * source repo. Mutually exclusive with every repo-source field AND with
+     * `workingBranch` / `autoCommitPush` (no remote to push to); enforced in
+     * superRefine.
+     */
+    scratch: z.boolean().optional(),
+    /** RFC-024: remote Git URL (SSH / HTTP(S) / file://). Triggers clone-or-reuse. */
     repoUrl: z.string().min(1).optional(),
     /** RFC-024: branch / tag / commit to check out from the cached repo. Optional. */
     ref: z.string().min(1).optional(),
@@ -301,15 +324,6 @@ export const StartTaskSchema = z
      * still carrying it with 422 `assignments-removed`.
      */
     collaboratorUserIds: z.array(z.string().min(1)).optional(),
-    /**
-     * RFC-068 — path mode opt-in: when true, the daemon runs
-     * `git fetch --all --prune --tags` against the user-supplied `repoPath`
-     * before materializing the worktree. Never `pull` / `merge` / `checkout`
-     * the user's current branch — this only refreshes remote-tracking refs
-     * so the launcher can pick `origin/<branch>` as a base. Ignored in URL
-     * mode (cached mirrors always auto-fetch + fast-forward).
-     */
-    fetchBeforeLaunch: z.boolean().optional(),
     /**
      * RFC-067 — optional per-task Git commit identity. Both must be set
      * together or both omitted (XOR enforced in superRefine). When both set,
@@ -347,10 +361,32 @@ export const StartTaskSchema = z
     autoCommitPush: z.boolean().optional(),
   })
   .superRefine((value, ctx) => {
-    const hasLegacyPath = typeof value.repoPath === 'string' && value.repoPath.length > 0
     const hasLegacyUrl = typeof value.repoUrl === 'string' && value.repoUrl.length > 0
-    const hasLegacy = hasLegacyPath || hasLegacyUrl
+    const hasLegacy = hasLegacyUrl
     const hasRepos = Array.isArray(value.repos) && value.repos.length > 0
+
+    // RFC-165: scratch ⊕ every repo source. A scratch task has no source repo,
+    // no ref, no remote — so workingBranch / autoCommitPush are meaningless
+    // and rejected too (schema layer of the two-layer ban; UI hides them).
+    if (value.scratch === true) {
+      if (hasLegacy || hasRepos || (typeof value.ref === 'string' && value.ref.length > 0)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'scratch-source-conflict',
+          path: ['scratch'],
+        })
+        return
+      }
+      if (value.workingBranch !== undefined || value.autoCommitPush !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'scratch-remote-only-option',
+          path: [value.workingBranch !== undefined ? 'workingBranch' : 'autoCommitPush'],
+        })
+        return
+      }
+      return // scratch body is complete — repo-source rules below don't apply.
+    }
 
     // RFC-066: legacy ↔ v2 mutex. Mixed body → reject (caller must pick one).
     if (hasLegacy && hasRepos) {
@@ -362,33 +398,16 @@ export const StartTaskSchema = z
       return
     }
 
-    // RFC-066: at least one of legacy fields or repos[] must be provided.
+    // RFC-066/165: at least one source (or scratch) must be provided.
     if (!hasLegacy && !hasRepos) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'one of repoPath, repoUrl, or repos[] is required',
+        message: 'start-task-source-required',
         path: ['repos'],
       })
       return
     }
 
-    // Legacy-only validation (single repo via top-level fields).
-    // Skipped when hasRepos === true; per-entry validation lives in
-    // StartTaskRepoSchema's own superRefine.
-    if (hasLegacyPath && hasLegacyUrl) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'repoPath and repoUrl are mutually exclusive',
-        path: ['repoUrl'],
-      })
-    }
-    if (hasLegacyPath && (!value.baseBranch || value.baseBranch.length === 0)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'baseBranch is required in path mode',
-        path: ['baseBranch'],
-      })
-    }
     // RFC-067: Git identity XOR + format check. Trim before testing so the
     // user can't sneak through with whitespace-only strings. Loose email
     // check: must contain `@`, no whitespace on either side. We intentionally
@@ -428,6 +447,65 @@ export const StartTaskSchema = z
     }
   })
 export type StartTask = z.infer<typeof StartTaskSchema>
+
+/**
+ * RFC-165: the space-field subset of a launch body. `applySpaceFields` is the
+ * single assembly point for every service-level candidate builder
+ * (startWorkgroupTask / startAgentTask) — a schema-only change cannot silently
+ * drop a space field again (RFC-125 lesson, workgroup candidate incident F2).
+ */
+export interface LaunchSpaceFields {
+  scratch?: boolean
+  repoUrl?: string
+  ref?: string
+  repos?: StartTaskRepo[]
+}
+
+export function applySpaceFields<T extends Record<string, unknown>>(
+  candidate: T,
+  body: LaunchSpaceFields,
+): T & LaunchSpaceFields {
+  return {
+    ...candidate,
+    ...(body.scratch !== undefined ? { scratch: body.scratch } : {}),
+    ...(body.repoUrl !== undefined ? { repoUrl: body.repoUrl } : {}),
+    ...(body.ref !== undefined ? { ref: body.ref } : {}),
+    ...(body.repos !== undefined ? { repos: body.repos } : {}),
+  }
+}
+
+/**
+ * RFC-165: raw-key rejection for retired path-mode fields. StartTaskSchema is
+ * a non-strict zod object — unknown keys are silently stripped, so a mixed
+ * old/new body like `{scratch:true, repoPath:"…"}` would silently degrade to
+ * a scratch launch instead of failing. Every public entrance (JSON, multipart,
+ * agent/workgroup launch, scheduled create/update/fire/run-now) MUST call this
+ * on the RAW body before zod parsing and 422 on a non-null result. Precedent:
+ * the `assignments` raw-key reject in routes/tasks.ts (RFC-099).
+ *
+ * Returns the offending key path (e.g. `repoPath`, `repos[2].baseBranch`) or
+ * null when the body is clean.
+ */
+export const RETIRED_START_TASK_KEYS = ['repoPath', 'baseBranch', 'fetchBeforeLaunch'] as const
+
+export function rejectRetiredStartTaskKeys(raw: unknown): string | null {
+  if (raw === null || typeof raw !== 'object') return null
+  const body = raw as Record<string, unknown>
+  for (const key of RETIRED_START_TASK_KEYS) {
+    if (key in body) return key
+  }
+  const repos = body['repos']
+  if (Array.isArray(repos)) {
+    for (let i = 0; i < repos.length; i++) {
+      const row = repos[i]
+      if (row === null || typeof row !== 'object') continue
+      for (const key of RETIRED_START_TASK_KEYS) {
+        if (key in (row as Record<string, unknown>)) return `repos[${i}].${key}`
+      }
+    }
+  }
+  return null
+}
 
 /** Filters for GET /api/tasks. */
 export const ListTasksQuerySchema = z.object({

@@ -1,9 +1,8 @@
-// RFC-037 T6 — locks the three launcher submit paths (JSON / path-multipart /
-// url-multipart) stamping the task `name` into the outgoing body. Pure-function
-// helpers; no React or HTTP harness needed.
+// RFC-037 T6 — locks the launcher submit paths (JSON / url-multipart) stamping
+// the task `name` into the outgoing body. Pure-function helpers; no React or
+// HTTP harness needed. (RFC-165: the path-multipart submit path is retired.)
 
 import { describe, expect, test } from 'vitest'
-import { buildLaunchFormData } from '@/components/launch/buildLaunchFormData'
 import { buildLaunchBody, buildLaunchFormDataV2, type RepoSource } from '@/lib/launch-repo-source'
 
 function readPayload(fd: FormData): Record<string, unknown> {
@@ -23,42 +22,12 @@ async function readPayloadAsync(fd: FormData): Promise<Record<string, unknown>> 
 }
 
 describe('RFC-037 — buildLaunchBody passes name into JSON body', () => {
-  test('path mode includes name', () => {
-    const src: RepoSource = { kind: 'path', repoPath: '/tmp/r', baseBranch: 'main' }
-    const body = buildLaunchBody(src, {
-      workflowId: 'wf-1',
-      name: 'PR-1234 fix',
-      inputs: { topic: 'x' },
-    })
-    expect(body.name).toBe('PR-1234 fix')
-    expect(body.workflowId).toBe('wf-1')
-    expect(body.repoPath).toBe('/tmp/r')
-  })
-
-  test('url mode includes name', () => {
+  test('body includes name', () => {
     const src: RepoSource = { kind: 'url', repoUrl: 'git@github.com:o/r.git', ref: '' }
     const body = buildLaunchBody(src, { workflowId: 'wf-1', name: 'url task', inputs: {} })
     expect(body.name).toBe('url task')
+    expect(body.workflowId).toBe('wf-1')
     expect(body.repoUrl).toBe('git@github.com:o/r.git')
-  })
-})
-
-describe('RFC-037 — buildLaunchFormData (path-multipart) emits name in payload', () => {
-  test('payload JSON carries name field', async () => {
-    const fd = buildLaunchFormData(
-      {
-        workflowId: 'wf-1',
-        name: 'multipart name',
-        repoPath: '/tmp/r',
-        baseBranch: 'main',
-        inputs: { up: '' },
-      },
-      { up: [new File([new Uint8Array([1, 2])], 'a.bin')] },
-    )
-    const json = await readPayloadAsync(fd)
-    expect(json.name).toBe('multipart name')
-    expect(json.workflowId).toBe('wf-1')
-    expect(fd.getAll('files[up][]').length).toBe(1)
   })
 })
 

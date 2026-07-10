@@ -25,7 +25,7 @@ import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { runTask } from '../src/services/scheduler'
-import { startTask } from '../src/services/task'
+import { startTaskWithLocalRepo } from '../src/services/task'
 import {
   getNodeClarifyDirective,
   listNodeClarifyDirectives,
@@ -204,7 +204,7 @@ describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', 
   test('golden-lock: no override ⇒ first dispatch carries MANDATORY ASK-BACK', async () => {
     writePlan(c.appHome, { designer: [{ clarify: { questions: [Q] } }] })
     const wf = await designerSelfClarifyWorkflow(c, 'gl')
-    const task = await startTask(
+    const task = await startTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 'gl',
@@ -227,7 +227,7 @@ describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', 
       designer: [{ clarify: { questions: [Q] } }, { output: { design: 'D1' } }],
     })
     const wf = await designerSelfClarifyWorkflow(c, 'ov')
-    const task = await startTask(
+    const task = await startTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 'ov',
@@ -285,7 +285,7 @@ describe('RFC-122 H1 — process retry reads the LATEST directive per attempt', 
       designer: [{ waitFile: 'go', crash: true }, { output: { design: 'D1' } }],
     })
     const wf = await designerSelfClarifyWorkflow(c, 'h1')
-    const task = await startTask(
+    const task = await startTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 'h1',
@@ -355,7 +355,7 @@ describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full out
       ],
     })
     const wf = await designerSelfClarifyWorkflow(c, 'fu')
-    const task = await startTask(
+    const task = await startTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 'fu',
@@ -405,7 +405,7 @@ describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full out
       designer: [{ output: { design: 'x' }, sessionId: 'ses_gl' }, { clarify: { questions: [Q] } }],
     })
     const wf = await designerSelfClarifyWorkflow(c, 'fugl')
-    const task = await startTask(
+    const task = await startTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 'fugl',

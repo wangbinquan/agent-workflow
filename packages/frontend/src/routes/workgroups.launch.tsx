@@ -10,15 +10,9 @@
 
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, createRoute, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type {
-  RecentRepo,
-  RepoRefsResponse,
-  Task,
-  UserPublic,
-  Workgroup,
-} from '@agent-workflow/shared'
+import type { Task, UserPublic, Workgroup } from '@agent-workflow/shared'
 import { isLooseValidBranchName, workgroupLaunchReadiness } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Field, NumberInput, TextArea, TextInput, Switch } from '@/components/Form'
@@ -29,11 +23,7 @@ import { useActor } from '@/hooks/useActor'
 import { describeApiError } from '@/i18n'
 import { defaultRepoSource, validateRepoUrl, type RepoSource } from '@/lib/launch-repo-source'
 import { buildWorkgroupLaunchBody, workgroupLaunchErrorMessage } from '@/lib/workgroup-launch'
-import {
-  loadAutoCommitPushPref,
-  repoLaunchIssue,
-  saveAutoCommitPushPref,
-} from '@/routes/workflows.launch'
+import { loadAutoCommitPushPref, saveAutoCommitPushPref } from '@/routes/workflows.launch'
 import { Route as RootRoute } from './__root'
 
 interface WorkgroupLaunchSearch {
@@ -61,17 +51,11 @@ function WorkgroupLaunchPage() {
       api.get(`/api/workgroups/${encodeURIComponent(name)}`, undefined, signal),
     enabled: name !== '',
   })
-  const recent = useQuery<RecentRepo[]>({
-    queryKey: ['repos', 'recent'],
-    queryFn: ({ signal }) => api.get('/api/repos/recent', undefined, signal),
-  })
-
   const [taskName, setTaskName] = useState('')
   const [goal, setGoal] = useState('')
   const [collaborators, setCollaborators] = useState<UserPublic[]>([])
   const actor = useActor()
   const [repos, setRepos] = useState<RepoSource[]>([defaultRepoSource()])
-  const primarySource: RepoSource = repos[0] ?? defaultRepoSource()
   // Advanced fold — same semantics as the workflow launcher.
   const [workingBranch, setWorkingBranch] = useState('')
   const [autoCommitPush, setAutoCommitPush] = useState(loadAutoCommitPushPref())
@@ -80,38 +64,6 @@ function WorkgroupLaunchPage() {
   // Limits (RFC-164 launch body): minutes in the UI → ms on the wire.
   const [maxDurationMin, setMaxDurationMin] = useState<number | undefined>(undefined)
   const [maxTotalTokens, setMaxTotalTokens] = useState<number | undefined>(undefined)
-
-  // Prefill the first (still empty) path row with the most recent repo —
-  // same convenience as the workflow launcher.
-  useEffect(() => {
-    if (
-      repos.length === 1 &&
-      repos[0]!.kind === 'path' &&
-      repos[0]!.repoPath === '' &&
-      recent.data !== undefined &&
-      recent.data[0] !== undefined
-    ) {
-      setRepos([
-        {
-          kind: 'path',
-          repoPath: recent.data[0].path,
-          baseBranch: recent.data[0].defaultBranch ?? '',
-        },
-      ])
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recent.data])
-
-  const refs = useQuery<RepoRefsResponse>({
-    queryKey: ['repos', 'refs', primarySource.kind === 'path' ? primarySource.repoPath : ''],
-    queryFn: ({ signal }) =>
-      api.get(
-        '/api/repos/refs',
-        { path: primarySource.kind === 'path' ? primarySource.repoPath : '' },
-        signal,
-      ),
-    enabled: primarySource.kind === 'path' && primarySource.repoPath !== '',
-  })
 
   const start = useMutation({
     mutationFn: () => {
@@ -158,12 +110,7 @@ function WorkgroupLaunchPage() {
 
   const nameReady = taskName.trim().length > 0
   const goalReady = goal.trim().length > 0
-  const sourceReady = repos.every((r) =>
-    r.kind === 'path'
-      ? r.repoPath !== '' && r.baseBranch !== ''
-      : validateRepoUrl(r.repoUrl) === null,
-  )
-  const repoIssue = primarySource.kind === 'path' ? repoLaunchIssue(refs.data ?? null) : null
+  const sourceReady = repos.every((r) => validateRepoUrl(r.repoUrl) === null)
   const gitNameTrim = gitUserName.trim()
   const gitEmailTrim = gitUserEmail.trim()
   const gitBoth = gitNameTrim !== '' && gitEmailTrim !== ''
@@ -178,7 +125,6 @@ function WorkgroupLaunchPage() {
     nameReady &&
     goalReady &&
     sourceReady &&
-    repoIssue === null &&
     gitIdentityOk &&
     !workingBranchError &&
     !start.isPending
@@ -214,8 +160,6 @@ function WorkgroupLaunchPage() {
           ))}
         </div>
       )}
-      {repoIssue === 'no-commits' && <div className="error-box">{t('launch.repoNoCommits')}</div>}
-
       <div className="form-grid">
         <Field label={t('launch.fieldTaskName')} required hint={t('launch.fieldTaskNameHint')}>
           <TextInput

@@ -1,16 +1,20 @@
 // LOCKS: RFC-066 PR-A T4 — getTask hydrates Task.repos[] from task_repos
+// RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
+// now (the wire is URL-only) — bodies are cast through the internal
+// RepoSourceSpec widening; runtime behavior is byte-identical to pre-165.
 // rows sorted by repo_index ascending. Single-repo tasks (the legacy default
 // today) return a length-1 array mirroring the tasks.* columns; multi-repo
 // tasks return N entries in launch order.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import type { StartTask } from '@agent-workflow/shared'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { startTask, getTask } from '../src/services/task'
+import { startTask, startTaskWithLocalRepo, getTask } from '../src/services/task'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 
@@ -64,7 +68,7 @@ describe('RFC-066 PR-A T4 — getTask hydrates repos[]', () => {
 
   test('B26 single-repo task → repos.length === 1, repoCount === 1, mirror values match', async () => {
     h = await buildHarness(1)
-    const launched = await startTask(
+    const launched = await startTaskWithLocalRepo(
       {
         workflowId: 'wf-gt',
         name: 't',
@@ -97,7 +101,7 @@ describe('RFC-066 PR-A T4 — getTask hydrates repos[]', () => {
           { repoPath: h.repos[2]!, baseBranch: 'main' },
         ],
         inputs: {},
-      },
+      } as unknown as StartTask,
       { db: h.db, appHome: h.appHome },
     )
     const task = await getTask(h.db, launched.id)

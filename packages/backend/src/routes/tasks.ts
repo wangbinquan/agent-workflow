@@ -11,13 +11,13 @@
 
 import {
   RepairRequestSchema,
+  rejectRetiredStartTaskKeys,
   StartTaskSchema,
   TaskStatusSchema,
   UploadInputSchema,
   type WorkflowInput,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
-import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
 import type { Context } from 'hono'
 import { actorOf } from '@/auth/actor'
@@ -46,15 +46,14 @@ import {
   getTaskDiff,
   getTaskNodeRuns,
   listTasks,
-  materializeWorktree,
-  normalizeStartTaskRepos,
-  resolveRepoSourceSingle,
-  type ResolvedRepoSource,
+  materializeSpace,
   resumeTask,
   retryNode,
   startTask,
   syncTaskWorkflow,
 } from '@/services/task'
+import { materializingSpaces } from '@/services/gc'
+import { rmSync } from 'node:fs'
 import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
 import { getCallTargets } from '@/services/structuralDiff/callGraph/expandService'
 import type { ResolvedDeepConfig } from '@/services/structuralDiff/deep/service'
@@ -214,6 +213,19 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         'assignments-removed',
         'RFC-099 removed per-node assignments; task members answer reviews/clarifications now',
       )
+    }
+    // RFC-165 (F1): non-strict zod SILENTLY STRIPS retired path-mode keys, so
+    // a mixed body like {scratch:true, repoPath} would silently degrade to a
+    // scratch launch. Reject the raw keys before parsing (assignments-removed
+    // precedent above).
+    {
+      const retired = rejectRetiredStartTaskKeys(bodyJson)
+      if (retired !== null) {
+        throw new ValidationError(
+          'start-task-path-retired',
+          `RFC-165 retired path-mode launches; remove '${retired}' (use a file:// repoUrl for local repos)`,
+        )
+      }
     }
     const parsed = StartTaskSchema.safeParse(bodyJson)
     if (!parsed.success) {
@@ -754,6 +766,17 @@ async function handleMultipartTaskStart(
       'RFC-099 removed per-node assignments; task members answer reviews/clarifications now',
     )
   }
+  // RFC-165 (F1): same raw-key gate as the JSON route (multipart payloads
+  // are just as spoofable).
+  {
+    const retired = rejectRetiredStartTaskKeys(payloadJson)
+    if (retired !== null) {
+      throw new ValidationError(
+        'start-task-path-retired',
+        `RFC-165 retired path-mode launches; remove '${retired}' (use a file:// repoUrl for local repos)`,
+      )
+    }
+  }
   const parsed = StartTaskSchema.safeParse(payloadJson)
   if (!parsed.success) {
     throw new ValidationError('task-invalid', 'invalid task payload', {
@@ -807,9 +830,8 @@ async function handleMultipartTaskStart(
     })
   }
 
-  // 4. Materialize the worktree first so we have a real path to write into.
+  // 4. Materialize the space first so we have a real path to write into.
   const appHome = Paths.root
-  const taskId = ulid()
   // RFC-066: multi-repo + multipart uploads is not supported in v1. The
   // upload pipeline writes files into a single worktree; with N sibling
   // worktrees there's no obvious target. Gate at the route so the caller
@@ -853,46 +875,21 @@ async function handleMultipartTaskStart(
   // these checks; limits are resolved once and reused at step 5.
   const limits = resolveUploadLimits(deps.configPath)
   validateUploadPlan({ defs: uploadDefs, files: uploadFiles, limits })
-  // RFC-107: resolve the (single) repo source BEFORE materializing the worktree.
-  // resolveRepoSourceSingle handles BOTH path mode (repoPath passes through) and
-  // URL mode (clones into the gitRepoCache and returns the local cache path) —
-  // so URL + upload now works. A URL clone/resolve failure throws the SAME
-  // structured error a JSON URL-mode launch would (parity); it propagates as a
-  // 4xx and no task row is created. The resolved source is threaded into
-  // startTask via `preResolvedSource` so the URL is resolved EXACTLY ONCE
-  // (RFC-107 D1-B) on both the success and the materialize-failure handoff.
-  // `normalizeStartTaskRepos` reuses startTask's own legacy/v2 body normalization
-  // (the multi-repo>1 case was rejected above, so [0] is the single repo).
-  const multipartSpec = normalizeStartTaskRepos(startInput)[0]!
-  const resolvedSource: ResolvedRepoSource = await resolveRepoSourceSingle(
-    multipartSpec,
-    startInput,
-    {
-      db: deps.db,
-      appHome,
-    },
-  )
-  // RFC-107 (Codex design-gate F2 / D5): thread the working branch + git identity
-  // into materializeWorktree exactly like the JSON single-repo path
-  // (services/task.ts) so an upload launch with a working branch actually checks
-  // it out instead of silently persisting workingBranch while running on the
-  // default `agent-workflow/{taskId}` isolation branch.
-  const wt = await materializeWorktree({
-    repoPath: resolvedSource.repoPath,
-    baseBranch: resolvedSource.baseBranch,
-    taskId,
-    appHome,
-    // Normalize null → undefined to match materializeWorktree's `workingBranch?:
-    // string` contract (null/unset → default isolation branch; a string → check
-    // it out). Same observable behavior as the JSON single-repo path.
-    workingBranch: startInput.workingBranch ?? undefined,
-    gitUserName: startInput.gitUserName ?? null,
-    gitUserEmail: startInput.gitUserEmail ?? null,
-  })
+  // RFC-165 (F3): resolve + materialize via the single tagged entry —
+  // `materializeSpace` handles URL mode (clone into gitRepoCache), path mode
+  // and scratch alike, resolving each source EXACTLY ONCE (RFC-107 D1-B is
+  // internal to it) and carrying materialize failure in its `earlyError` arm
+  // instead of throwing — so the failure handoff below mints ONE failed row
+  // without re-resolving or re-materializing. Working branch + git identity
+  // thread through exactly like the JSON path (RFC-107 F2/D5). A URL
+  // clone/resolve failure still throws the same structured 4xx a JSON launch
+  // would (no task row). scratch + uploads is a legal combination: the files
+  // land in the fresh scratch repo.
+  const space = await materializeSpace(startInput, { db: deps.db }, appHome)
   const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
-  if (wt.earlyError !== null) {
-    // Fall back to the original behavior: create a failed task row so the
-    // user sees the error. No files were written (worktree never existed).
+  if (space.earlyError !== null) {
+    // Create a failed task row so the user sees the error. No files were
+    // written (the workspace never fully existed; scratch already cleaned).
     const task = await startTask(startInput, {
       db: deps.db,
       actorUserId: actor.user.id,
@@ -900,9 +897,7 @@ async function handleMultipartTaskStart(
       ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
       // RFC-103 T2: multipart (upload) start must thread runtime config too.
       ...resolveLaunchRuntimeConfig(deps.configPath),
-      // RFC-107 (D1-B): reuse the route's already-resolved source so the
-      // materialize-failure path does NOT re-resolve (no second clone/fetch).
-      preResolvedSource: resolvedSource,
+      materializedSpace: space,
     })
     return task
   }
@@ -910,7 +905,7 @@ async function handleMultipartTaskStart(
   // 5. Write uploads + pack paths back into inputs[] (limits resolved at step 4).
   try {
     const result = await applyUploadsToWorktree({
-      worktreePath: wt.worktreePath,
+      worktreePath: space.worktreePath,
       defs: uploadDefs,
       files: uploadFiles,
       limits,
@@ -919,7 +914,7 @@ async function handleMultipartTaskStart(
     for (const [key, paths] of result.packedByKey.entries()) {
       inputsOut[key] = paths.join('\n')
     }
-    // 6. Hand off to startTask with the pre-created worktree.
+    // 6. Hand off to startTask with the materialized space (consumed verbatim).
     return await startTask(
       { ...startInput, inputs: inputsOut },
       {
@@ -929,21 +924,19 @@ async function handleMultipartTaskStart(
         ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
         // RFC-103 T2: multipart (upload) start must thread runtime config too.
         ...resolveLaunchRuntimeConfig(deps.configPath),
-        // RFC-107 (D1-B): reuse the route's already-resolved source so startTask
-        // does not resolve the URL a second time (resolve exactly once).
-        preResolvedSource: resolvedSource,
-        preCreatedWorktree: {
-          taskId,
-          worktreePath: wt.worktreePath,
-          branch: wt.branch,
-          baseCommit: wt.baseCommit,
-        },
+        materializedSpace: space,
       },
     )
   } catch (err) {
     // Upload write failed (limits, accept, or fs error). Throw a structured
-    // error; the worktree directory stays on disk but no task row is
-    // created, matching the "createWorktree failed" semantics.
+    // error; no task row is created. RFC-165 (F9): a scratch workspace has no
+    // anchor without a row — the launch flow owns its cleanup and releases
+    // the materialize lease. A repo worktree stays on disk (pre-existing
+    // "createWorktree failed" semantics; the orphan belongs to worktree GC).
+    if (space.kind === 'scratch' && space.worktreePath !== '') {
+      rmSync(space.worktreePath, { recursive: true, force: true })
+    }
+    materializingSpaces.delete(space.taskId)
     if (err instanceof ValidationError) throw err
     throw new ValidationError(
       'task-upload-failed',

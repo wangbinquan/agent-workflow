@@ -20,6 +20,12 @@
 //
 // 修复归属：报告 ⑥-3 未划入既有 WP（多仓部分与 S-2/WP-1 的多仓回滚共享语境）。
 // 修复时本文件应翻红，按各断言旁注释翻转期望值。
+//
+// RFC-165 落地记录（2026-07-10）：多仓盲区已按上述"正确语义"修复——gc.ts 现按
+// task_repos 逐子仓 removeWorktree + 删容器目录 + 两阶段墓碑（workspace_pruning_at
+// 认领 / workspace_pruned_at 完成）；对应用例已翻转为锁修复后行为。"GC 删掉可恢复
+// worktree"的另一半由 setTaskStatus 的 revival 门保护（pruned→410 / pruning→409 /
+// 目录缺失→补墓碑+410，services/lifecycle.ts），专项锁见 rfc165-workspace-gc.test.ts。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -166,10 +172,14 @@ describe('gap3 — worktree GC candidate set vs resume semantics (current-behavi
     }
   })
 
-  test('multi-repo container dir: `git worktree remove` always fails → worktree leaks forever (skipped every pass)', async () => {
+  test('multi-repo container dir: per-repo teardown then container rm (RFC-165 R3-1 closed the gap-3 leak)', async () => {
     // Multi-repo tasks set worktreePath to a PLAIN mkdir container directory
-    // (task.ts RFC-066 path), not a git worktree. GC treats every task row
-    // uniformly (gc.ts never reads repoCount).
+    // (task.ts RFC-066 path), not a git worktree. The pre-RFC-165 defect this
+    // case used to lock: GC treated every row uniformly, `git worktree remove
+    // <plain dir>` always failed, and the container (plus every per-repo
+    // worktree inside) leaked permanently — re-scanned and re-skipped hourly.
+    // RFC-165 tears down per task_repos row first, then removes the container
+    // itself and finalizes the workspace tombstone.
     const container = join(h.appHome, 'multi-container')
     mkdirSync(join(container, 'repo-a'), { recursive: true })
     await seedTask(h, {
@@ -181,17 +191,10 @@ describe('gap3 — worktree GC candidate set vs resume semantics (current-behavi
 
     const r = await runWorktreeGc(h.db, { worktreeAutoGc: { enabled: true, olderThanDays: 1 } })
 
-    // DEFECT LOCK: `git worktree remove --force <plain dir>` exits non-zero
-    // (util/git.ts:813-820 throws worktree-remove-failed), gc catches and
-    // counts it skipped — the container dir (and any per-repo worktrees
-    // inside it) leak permanently, re-scanned and re-skipped every hour.
-    // After a multi-repo-aware fix: expect removed to contain the task and
-    // the container dir to be gone.
     expect(r.scanned).toBe(1)
-    expect(r.removed).toEqual([])
-    expect(r.skipped).toBe(1)
-    expect(existsSync(container)).toBe(true)
-    // The inner per-repo worktree dir leaks along with the container.
-    expect(existsSync(join(container, 'repo-a'))).toBe(true)
+    expect(r.removed.length).toBe(1)
+    expect(r.skipped).toBe(0)
+    expect(existsSync(container)).toBe(false)
+    expect(existsSync(join(container, 'repo-a'))).toBe(false)
   })
 })

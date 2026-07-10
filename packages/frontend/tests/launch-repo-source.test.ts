@@ -1,6 +1,10 @@
-// RFC-024 T6 — pure-function tests for the launcher's two-mode Repo source
-// helpers. Locks `buildLaunchBody` body shape, `validateRepoUrl` outcomes,
-// and the source-level wiring in workflows.launch.tsx + RepoSourceTabs.
+// RFC-024 T6 — pure-function tests for the launcher's repo-source helpers.
+// Locks `buildLaunchBody` body shape, `validateRepoUrl` outcomes, and the
+// source-level wiring in workflows.launch.tsx + RepoSourceRow.
+//
+// RFC-165: the local-path mode is retired — RepoSource is URL-only and the
+// path-mode fixtures were deleted with it. The "RFC-165 retirement" describe
+// below locks the absence of the old path plumbing in RepoSourceRow.
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -15,25 +19,7 @@ import {
 } from '@/lib/launch-repo-source'
 
 describe('buildLaunchBody (RFC-024)', () => {
-  test('path mode emits workflowId/repoPath/baseBranch/inputs', () => {
-    const src: RepoSource = { kind: 'path', repoPath: '/tmp/repo', baseBranch: 'main' }
-    const body = buildLaunchBody(src, {
-      workflowId: 'wf-1',
-      name: 'fixture-task',
-      inputs: { topic: 'orders' },
-    })
-    expect(body).toEqual({
-      workflowId: 'wf-1',
-      name: 'fixture-task',
-      repoPath: '/tmp/repo',
-      baseBranch: 'main',
-      inputs: { topic: 'orders' },
-    })
-    expect('repoUrl' in body).toBe(false)
-    expect('ref' in body).toBe(false)
-  })
-
-  test('url mode emits workflowId/repoUrl/inputs (no baseBranch)', () => {
+  test('emits workflowId/repoUrl/inputs (no baseBranch, no ref when blank)', () => {
     const src: RepoSource = { kind: 'url', repoUrl: 'git@github.com:foo/bar.git', ref: '' }
     const body = buildLaunchBody(src, { workflowId: 'wf-1', name: 'fixture-task', inputs: {} })
     expect(body).toEqual({
@@ -46,10 +32,17 @@ describe('buildLaunchBody (RFC-024)', () => {
     expect('ref' in body).toBe(false)
   })
 
-  test('url mode keeps non-empty ref (trimmed)', () => {
+  test('keeps non-empty ref (trimmed)', () => {
     const src: RepoSource = { kind: 'url', repoUrl: 'git@h:o/r.git', ref: '  feature/x  ' }
     const body = buildLaunchBody(src, { workflowId: 'wf-1', name: 'fixture-task', inputs: {} })
     expect(body.ref).toBe('feature/x')
+  })
+
+  test('RFC-165: body never carries the retired path-mode keys', () => {
+    const src: RepoSource = { kind: 'url', repoUrl: 'git@h:o/r.git', ref: 'main' }
+    const body = buildLaunchBody(src, { workflowId: 'wf-1', name: 't', inputs: {} })
+    expect('repoPath' in body).toBe(false)
+    expect('fetchBeforeLaunch' in body).toBe(false)
   })
 })
 
@@ -100,11 +93,7 @@ describe('workflows.launch.tsx wiring (RFC-024 source-level)', () => {
     'utf-8',
   )
 
-  test('imports RepoSourceList (RFC-066: multi-repo container; back-compat shim RepoSourceTabs still exists)', () => {
-    // The launch route now renders the multi-repo container directly.
-    // The old `RepoSourceTabs` is a thin back-compat shim around
-    // `RepoSourceRow` (see launch-repo-source-list.test.tsx + repo-source-
-    // tabs-field-parity.test.ts for the full coverage of both surfaces).
+  test('imports RepoSourceList (RFC-066: multi-repo container)', () => {
     expect(SRC).toContain('RepoSourceList')
   })
 
@@ -114,92 +103,47 @@ describe('workflows.launch.tsx wiring (RFC-024 source-level)', () => {
     expect(SRC).not.toMatch(/payload = \{ workflowId: id, repoPath, baseBranch, inputs \}/)
   })
 
-  test('canSubmit gate considers both source modes via validateRepoUrl', () => {
+  test('canSubmit gate validates every row via validateRepoUrl', () => {
     expect(SRC).toContain('validateRepoUrl')
   })
 
-  test('renders the cloning hint while POST is pending in URL mode', () => {
+  test('renders the cloning hint while POST is pending', () => {
     expect(SRC).toContain('launch.repoSource.cloningHint')
   })
 })
 
 // -----------------------------------------------------------------------------
-// RFC-068 — fetchBeforeLaunch wiring + path-mode opt-in switch
+// RFC-165 — path-mode retirement locks for the row component. The RFC-068
+// fetch-before-launch switch, the localStorage pref and the recent-repos
+// picker all left with the path tab; only the URL auto-sync hint survives.
 // -----------------------------------------------------------------------------
 
-describe('buildLaunchBody fetchBeforeLaunch (RFC-068)', () => {
-  test('path mode + fetchBeforeLaunch=true → body includes fetchBeforeLaunch=true', () => {
-    const src: RepoSource = {
-      kind: 'path',
-      repoPath: '/tmp/r',
-      baseBranch: 'main',
-      fetchBeforeLaunch: true,
-    }
-    const body = buildLaunchBody(src, { workflowId: 'wf-1', name: 't', inputs: {} })
-    expect(body.fetchBeforeLaunch).toBe(true)
-  })
-
-  test('path mode + fetchBeforeLaunch=false → body omits fetchBeforeLaunch (legacy bytes)', () => {
-    const src: RepoSource = {
-      kind: 'path',
-      repoPath: '/tmp/r',
-      baseBranch: 'main',
-      fetchBeforeLaunch: false,
-    }
-    const body = buildLaunchBody(src, { workflowId: 'wf-1', name: 't', inputs: {} })
-    expect('fetchBeforeLaunch' in body).toBe(false)
-  })
-
-  test('path mode + fetchBeforeLaunch undefined → body omits fetchBeforeLaunch', () => {
-    const src: RepoSource = { kind: 'path', repoPath: '/tmp/r', baseBranch: 'main' }
-    const body = buildLaunchBody(src, { workflowId: 'wf-1', name: 't', inputs: {} })
-    expect('fetchBeforeLaunch' in body).toBe(false)
-  })
-
-  test('url mode → body never carries fetchBeforeLaunch (auto FF is server-side)', () => {
-    const src: RepoSource = { kind: 'url', repoUrl: 'git@h:o/r.git', ref: 'main' }
-    const body = buildLaunchBody(src, { workflowId: 'wf-1', name: 't', inputs: {} })
-    expect('fetchBeforeLaunch' in body).toBe(false)
-  })
-})
-
-describe('RepoSourceTabs RFC-068 source-level wiring', () => {
-  // RFC-066 PR-C: the path/url switching body moved into RepoSourceRow.tsx
-  // when the multi-repo container was carved out. RepoSourceTabs.tsx is
-  // now a thin back-compat wrapper that delegates to RepoSourceRow; the
-  // RFC-068 wiring (Switch import, localStorage key, switch labels,
-  // url-auto-sync hint, fetchBeforeLaunch default) lives in the row file.
+describe('RepoSourceRow RFC-165 retirement (source-level)', () => {
   const SRC = readFileSync(
     resolve(import.meta.dirname, '..', 'src', 'components', 'launch', 'RepoSourceRow.tsx'),
     'utf-8',
   )
 
-  test('imports Switch (path-mode opt-in toggle uses it)', () => {
-    expect(SRC).toMatch(/import\s*\{[^}]*\bSwitch\b[^}]*\}\s*from\s*['"]@\/components\/Form['"]/)
-  })
-
-  test('persists fetchBeforeLaunch to localStorage', () => {
-    expect(SRC).toContain('agent-workflow.launcher.pathFetch')
-    expect(SRC).toContain('localStorage')
-  })
-
-  test('renders path-mode switch label key from i18n', () => {
-    expect(SRC).toContain('launch.pathFetch.switchLabel')
-    expect(SRC).toContain('launch.pathFetch.switchHint')
-  })
-
   test('renders URL-mode auto-sync hint', () => {
     expect(SRC).toContain('launch.repoSource.urlAutoSync')
   })
 
-  test('source switch defaults path mode fetchBeforeLaunch from loaded pref', () => {
-    expect(SRC).toContain('loadFetchBeforeLaunchPref')
+  test('the RFC-068 path-fetch switch + pref are gone', () => {
+    expect(SRC).not.toContain('launch.pathFetch')
+    expect(SRC).not.toContain('agent-workflow.launcher.pathFetch')
+    expect(SRC).not.toContain('fetchBeforeLaunch')
+  })
+
+  test('the recent-repos picker + path/url TabBar are gone', () => {
+    expect(SRC).not.toContain('repos/recent')
+    expect(SRC).not.toContain('<TabBar')
+    expect(SRC).not.toContain('repoPath')
   })
 })
 
 // -----------------------------------------------------------------------------
-// RFC-110 — resolveUrlRepoPath: url-mode pickers enumerate the matched cached
-// clone; cross-protocol / miss / unparseable → '' (text fallback upstream).
+// RFC-110 — resolveUrlRepoPath: pickers enumerate the matched cached clone;
+// cross-protocol / miss / unparseable → '' (text fallback upstream).
 // -----------------------------------------------------------------------------
 
 function cachedRepo(url: string, localPath: string): CachedRepo {
@@ -219,14 +163,7 @@ function cachedRepo(url: string, localPath: string): CachedRepo {
 }
 
 describe('resolveUrlRepoPath (RFC-110)', () => {
-  test('path mode → source.repoPath verbatim (incl. empty)', () => {
-    expect(resolveUrlRepoPath({ kind: 'path', repoPath: '/local/x', baseBranch: 'main' }, [])).toBe(
-      '/local/x',
-    )
-    expect(resolveUrlRepoPath({ kind: 'path', repoPath: '', baseBranch: '' }, [])).toBe('')
-  })
-
-  test('url mode hit → cached localPath, robust to .git / trailing slash', () => {
+  test('hit → cached localPath, robust to .git / trailing slash', () => {
     const list = [cachedRepo('https://github.com/foo/bar.git', '/cache/bar')]
     expect(
       resolveUrlRepoPath({ kind: 'url', repoUrl: 'https://github.com/foo/bar', ref: '' }, list),
@@ -242,14 +179,14 @@ describe('resolveUrlRepoPath (RFC-110)', () => {
     ).toBe('/cache/bar')
   })
 
-  test('url mode cross-protocol → no match (SSH cache, HTTPS typed)', () => {
+  test('cross-protocol → no match (SSH cache, HTTPS typed)', () => {
     const list = [cachedRepo('git@github.com:foo/bar.git', '/cache/ssh')]
     expect(
       resolveUrlRepoPath({ kind: 'url', repoUrl: 'https://github.com/foo/bar', ref: '' }, list),
     ).toBe('')
   })
 
-  test('url mode miss / unparseable / empty cache → ""', () => {
+  test('miss / unparseable / empty cache → ""', () => {
     const list = [cachedRepo('https://github.com/foo/bar', '/cache/bar')]
     expect(
       resolveUrlRepoPath({ kind: 'url', repoUrl: 'https://github.com/foo/other', ref: '' }, list),
@@ -280,7 +217,7 @@ describe('workflows.launch.tsx wiring (RFC-110 source-level)', () => {
     expect(SRC).toContain('sourceKind={primarySource.kind}')
   })
 
-  test('queries cached-repos so url-mode pickers can resolve a localPath', () => {
+  test('queries cached-repos so pickers can resolve a localPath', () => {
     expect(SRC).toContain("queryKey: ['cached-repos']")
   })
 })

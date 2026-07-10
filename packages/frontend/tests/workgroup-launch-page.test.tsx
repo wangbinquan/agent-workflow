@@ -80,18 +80,9 @@ function installFetch(state: { workgroups: Workgroup[] } & Recorded): void {
           ? state.launchResponse()
           : json({ id: 'task_new', status: 'pending' }, 201)
       }
-      if (url.includes('/api/repos/recent')) {
-        return json([{ path: '/repo/a', lastUsedAt: 1, defaultBranch: 'main' }])
-      }
-      if (url.includes('/api/repos/refs')) {
-        return json({
-          branches: ['main'],
-          tags: [],
-          recentCommits: [],
-          currentBranch: 'main',
-          defaultBranch: 'main',
-          hasCommits: true,
-        })
+      // RFC-165: the URL-only repo row lists cached mirrors for its dropdown.
+      if (url.includes('/api/cached-repos')) {
+        return json({ items: [] })
       }
       if (url.includes('/api/auth/me')) {
         return json({
@@ -179,12 +170,12 @@ describe('/workgroups/$name — launch entry gating', () => {
 })
 
 describe('/workgroups/launch', () => {
-  test('submit stays disabled until BOTH task name and goal are filled', async () => {
+  test('submit stays disabled until task name, goal AND repo URL are filled', async () => {
     installFetch({ workgroups: [wg('review-squad')], calls: [] })
     await renderPage('/workgroups/launch?name=review-squad')
     const submit = (await screen.findByTestId('workgroup-launch-submit')) as HTMLButtonElement
-    // The repo row prefill (from /api/repos/recent) happens in the
-    // background; name+goal are the outstanding gates.
+    // RFC-165: no recent-repo prefill anymore — the URL row starts blank, so
+    // name + goal + repo URL are the three outstanding gates.
     expect(submit.disabled).toBe(true)
     fireEvent.change(screen.getByTestId('workgroup-launch-task-name'), {
       target: { value: 'audit run' },
@@ -192,6 +183,10 @@ describe('/workgroups/launch', () => {
     expect((screen.getByTestId('workgroup-launch-submit') as HTMLButtonElement).disabled).toBe(true) // goal still empty
     fireEvent.change(screen.getByTestId('workgroup-launch-goal'), {
       target: { value: 'find the bugs' },
+    })
+    expect((screen.getByTestId('workgroup-launch-submit') as HTMLButtonElement).disabled).toBe(true) // repo URL still empty
+    fireEvent.change(screen.getByTestId('repo-source-url-0'), {
+      target: { value: 'git@github.com:o/r.git' },
     })
     await waitFor(() => {
       expect((screen.getByTestId('workgroup-launch-submit') as HTMLButtonElement).disabled).toBe(
@@ -211,6 +206,9 @@ describe('/workgroups/launch', () => {
     fireEvent.change(screen.getByTestId('workgroup-launch-goal'), {
       target: { value: 'find the bugs' },
     })
+    fireEvent.change(screen.getByTestId('repo-source-url-0'), {
+      target: { value: 'git@github.com:o/r.git' },
+    })
     await waitFor(() => {
       expect((screen.getByTestId('workgroup-launch-submit') as HTMLButtonElement).disabled).toBe(
         false,
@@ -227,8 +225,10 @@ describe('/workgroups/launch', () => {
       // Field-by-field (防静默丢字段): goal is the workgroup-specific one.
       expect(body.name).toBe('audit run')
       expect(body.goal).toBe('find the bugs')
-      expect(body.repoPath).toBe('/repo/a')
-      expect(body.baseBranch).toBe('main')
+      expect(body.repoUrl).toBe('git@github.com:o/r.git')
+      // RFC-165: the retired path keys must never ride the wire.
+      expect(body.repoPath).toBeUndefined()
+      expect(body.baseBranch).toBeUndefined()
       expect(body.workflowId).toBeUndefined()
       expect(body.inputs).toBeUndefined()
     })
@@ -260,6 +260,9 @@ describe('/workgroups/launch', () => {
     })
     fireEvent.change(screen.getByTestId('workgroup-launch-goal'), {
       target: { value: 'find the bugs' },
+    })
+    fireEvent.change(screen.getByTestId('repo-source-url-0'), {
+      target: { value: 'git@github.com:o/r.git' },
     })
     await waitFor(() => {
       expect((screen.getByTestId('workgroup-launch-submit') as HTMLButtonElement).disabled).toBe(

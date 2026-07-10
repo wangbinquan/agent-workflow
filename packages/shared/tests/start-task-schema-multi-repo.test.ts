@@ -175,11 +175,9 @@ describe('StartTaskSchema multi-repo (RFC-066)', () => {
     })
     expect(r.success).toBe(false)
     if (!r.success) {
-      expect(
-        r.error.issues.some((i) =>
-          /one of repoPath, repoUrl, or repos\[\] is required/.test(i.message),
-        ),
-      ).toBe(true)
+      // RFC-165: message unified to the machine code `start-task-source-required`
+      // (scratch joined the source union; prose message retired with path mode).
+      expect(r.error.issues.some((i) => i.message === 'start-task-source-required')).toBe(true)
     }
   })
 })

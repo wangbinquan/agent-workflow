@@ -19,7 +19,9 @@
 import type { TaskStatus } from '@agent-workflow/shared'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
@@ -48,6 +50,12 @@ async function buildHarness(): Promise<Harness> {
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),
   })
+  // RFC-165: terminal→non-terminal transitions (retry/resume revivals) now
+  // pass a workspace-liveness gate — a missing worktree dir tombstones the
+  // row and 410s. These tests exercise the CAS matrix itself, so the fixture
+  // workspace must EXIST (the gate's own behavior is locked in
+  // rfc165-workspace-gc.test.ts).
+  const worktreePath = mkdtempSync(join(tmpdir(), 'aw-rfc097-wt-'))
   return {
     db,
     seedTask: async (status, extra = {}) => {
@@ -58,7 +66,7 @@ async function buildHarness(): Promise<Harness> {
         workflowId,
         workflowSnapshot: '{}',
         repoPath: '/nonexistent/rfc097/repo',
-        worktreePath: '/nonexistent/rfc097/wt',
+        worktreePath,
         baseBranch: 'main',
         branch: `agent-workflow/${taskId}`,
         status,
