@@ -954,7 +954,10 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
     expect(wgRuns.length).toBe(1)
     expect(wgRuns[0]?.status).toBe('done')
     expect(wgRuns[0]?.iteration).toBe(0)
-  })
+    // RFC-W001: nested wrapper-git inside wrapper-loop runs a git worktree diff
+    // per iteration + mock-opencode spawn, >5s on Windows CI; raise per-test
+    // timeout past bun's 5s default so it doesn't fire mid-run.
+  }, 60_000)
 })
 
 async function seedReadonlyAgent(db: DbClient, name: string, outputs: string[]): Promise<string> {

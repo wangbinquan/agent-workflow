@@ -117,7 +117,10 @@ describe('startTask URL mode (RFC-024)', () => {
     expect(t1.repoPath).toBe(t2.repoPath)
     expect(db.select().from(cachedRepos).all().length).toBe(1)
     rimrafDir(tmp)
-  })
+    // RFC-W001: two startTask launches (cold + warm) each clone/cache + spawn
+    // mock-opencode, >5s on Windows CI; raise per-test timeout past bun's 5s
+    // default so it doesn't fire mid-run and clobber the next test's state.
+  }, 60_000)
 
   test('unknown ref → ValidationError repo-ref-not-found with available refs', async () => {
     const { tmp, appHome, db, stubOpencode, wf, remoteUrl } = await setup()

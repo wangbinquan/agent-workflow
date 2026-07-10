@@ -314,5 +314,8 @@ describe('startTask RFC-068 URL-mode FF', () => {
       rimrafDir(tmp)
       throw e
     }
-  })
+    // RFC-W001: builds a bare remote + two startTask launches (origin advances
+    // between them) + mock-opencode spawn, >5s on Windows CI; raise per-test
+    // timeout past bun's 5s default so it doesn't fire mid-run.
+  }, 60_000)
 })

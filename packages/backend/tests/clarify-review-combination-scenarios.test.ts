@@ -1169,7 +1169,9 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
     expect(await taskStatus(c.db, task.id)).toBe('done')
-  })
+    // RFC-W001: re-enters the scheduler + spawns mock-opencode runs, >5s on
+    // Windows CI; raise the per-test timeout (see S-RFC074 note below).
+  }, 60_000)
 
   // ---------------------------------------------------------------------------
   // S-RFC074 §4.3 / D9 — the RFC's self-declared #1 risk. After deleting the
@@ -1618,7 +1620,9 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       status: await taskStatus(c.db, task.id),
       spurious: (await awaitingReviewRun(c.db, task.id, 'rev'))?.id ?? null,
     }).toEqual({ status: 'done', spurious: null })
-  })
+    // RFC-W001: loop wrapper + inner clarify + post-loop agent + review ->
+    // multiple mock-opencode spawns, >5s on Windows CI; raise per-test timeout.
+  }, 60_000)
 
   // ---------------------------------------------------------------------------
   // S15 — cross-clarify + review (Layer A cascade mechanism, distinct from the
@@ -1908,7 +1912,9 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       s1: spurious1?.id ?? null,
       s2: spurious2?.id ?? null,
     }).toEqual({ status: 'done', s1: null, s2: null })
-  })
+    // RFC-W001: multi-review pipeline (iterate rev1 -> builder -> rev2) spawns
+    // several mock-opencode runs, >5s on Windows CI; raise per-test timeout.
+  }, 60_000)
 
   // ---------------------------------------------------------------------------
   // S17 — process crash then retry (RFC-042, same row) → review. A crashed-then-
