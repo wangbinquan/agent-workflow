@@ -34,6 +34,8 @@
 
 ## PR-3 `feat(frontend): RFC-165 四步创建向导 + 入口全集 + 旧 launcher 下线`（吸收/取代 RFC-164 T22）
 
+> **已落地（2026-07-11，CI run 29123585449）**：主体 `170eabde`（Stepper 原语+样式+单测、`lib/task-wizard.ts` 三 builder/scratch 剥离/定时封套/`payloadToWizardSeed` 反填、`routes/tasks.new.tsx` 四步向导〔三分支/gating/确认页回跳/深链落 Step 2/`?schedule=1` 主次互换/editScheduled 三 kind 反填+degraded 修复横幅〕、ScheduleDialog +launchKind、入口全集〔首页 hero//tasks 主按钮//scheduled 新建定时/agents 行+详情/workgroups 详情/编辑器/任务详情/定时详情〕、旧双 launcher 整页删除+router redirect〔editScheduled 透传〕、DynamicInput/prefs 迁公共位、测试迁移+§11.26 退役锁、e2e task-wizard.spec 三链+main/multi-repo 适配〔任务 URL regex 收紧 26 位 ULID 修 /tasks/new 误配〕、RFC-164 T22 Superseded+定时排除条代改标注）+ 修复徽标 `0335d25a`（/scheduled 列表 degraded/healer 禁用行「需修复」）+ 实现门 8 findings 修复 `6d196061` + 跨包源码锁随迁 `7c3b9919`（builder 迁移后 backend rfc165-banned-locks 改锚 lib/task-wizard.ts——首个 CI run 两 OS 因此红，教训：改符号前全量盘**跨包**测试锁）（Codex：工作流内容门要求 detail 加载成功〔P1〕/editScheduled 只锁 kind 对象可换——degraded 修复不死锁〔P1〕/uploads 随工作流切换过滤/定时编辑时长精确 ms 往返/上限校验+文案/协作者 lookup 失败提示/任务详情终态通用「再次启动」/确认页逐项 inputs 摘要）。T11–T17 全完成。**后续项（Codex P2 部分采纳）**：Step 1 全量 launchability 投影需新后端端点，当前=builtin 过滤+workgroup 就绪度 disabled+提交时 422 冒泡展示。
+
 | #   | 任务                       | 说明 / 验收                                                                                                                                                                                                                                           |
 | --- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | T11 | Stepper 公共原语           | `components/Stepper.tsx` + 样式 + a11y + 单测 §11.21。                                                                                                                                                                                                |
@@ -48,11 +50,11 @@
 
 ## 验收清单（对 proposal §6 逐条回验）
 
-- [ ] 首页 / `/tasks` / `/scheduled` + 三资源页深链（含 agents 列表行）可进向导；三方式建任务到**终态**（e2e ×3）。
-- [ ] 单 Agent：`{{description}}` 注入；optional 反问四向 + directive 全链透传（纠错轮双 envelope）+ `clarifyMode` 缺省兼容；关反问=无 clarify；builtin agent 403；`tasks:launch` PAT 矩阵；`dbTxSync` 单事务重检。
-- [ ] 临时空间：三方式可建；diff 契约（UTF-16 截断口径）；禁用面双层；tagged result（多仓部分失败）+外层 lease+两阶段墓碑+revive 全路径 CAS+internal 排除，竞态测试绿。
-- [ ] path 公开面无残留（raw-key 混合体 422、三键 allowlist banned 锁、源码文本锁）；`file://`（dual-read/rekey、未推送分支冷启动、源失效硬 fail）；fusion internalSource 回归绿。
-- [ ] 存量定时任务：path→`file://` 保真迁移；`fetchBeforeLaunch:true` 行禁用+提示；目录缺失禁用；legacy/坏 JSON/坏 shape 行逐字段 degraded 可读可修可删。
-- [ ] 定时三主体：三分支可存定时；fire 阈值禁用 vs run-now 分离；kind 不可变；`tasks:launch` 逐操作矩阵（含 enabled 态 spec 变更）；编辑按 kind 反填。
-- [ ] 宿主任务：agent resume/node retry 放行；**workgroup resume/node retry 均 403 锁**；sync 422；旧路由 redirect + `editScheduled` 等价。
-- [ ] 每 PR 合入后 main 可部署（PR-1 出口冒烟）；门禁四件套 + build smoke + CI 两 OS + Codex 增量审查。
+- [x] 首页 / `/tasks` / `/scheduled` + 三资源页深链（含 agents 列表行）可进向导；三方式建任务到**终态**（e2e ×3：agent scratch→done+diff / workgroup→终态 / 定时 run-now→done；workflow 链由 main.spec 经向导覆盖）。
+- [x] 单 Agent：`{{description}}` 注入；optional 反问四向 + directive 全链透传（纠错轮双 envelope）+ `clarifyMode` 缺省兼容；关反问=无 clarify；builtin agent 403；`tasks:launch` PAT 矩阵；`dbTxSync` 单事务重检（PR-2）。
+- [x] 临时空间：三方式可建；diff 契约（UTF-16 截断口径）；禁用面双层（schema+向导 UI 隐藏+builder 剥离三层）；tagged result（多仓部分失败）+外层 lease+两阶段墓碑+revive 全路径 CAS+internal 排除，竞态测试绿（PR-1）。
+- [x] path 公开面无残留（raw-key 混合体 422、三键 allowlist banned 锁、源码文本锁 §11.26 双期）；`file://`（dual-read/rekey、未推送分支冷启动、源失效硬 fail）；fusion internalSource 回归绿。
+- [x] 存量定时任务：path→`file://` 保真迁移；`fetchBeforeLaunch:true` 行禁用+提示；目录缺失禁用；legacy/坏 JSON/坏 shape 行逐字段 degraded 可读可修可删（列表「需修复」徽标+向导 editScheduled 修复路径）。
+- [x] 定时三主体：三分支可存定时；fire 阈值禁用 vs run-now 分离；kind 不可变；`tasks:launch` 逐操作矩阵（含 enabled 态 spec 变更）；编辑按 kind 锁定反填（对象可同类型内更换）。
+- [x] 宿主任务：agent resume/node retry 放行；**workgroup resume/node retry 均 403 锁**；sync 422；旧路由 redirect + `editScheduled` 等价。
+- [x] 每 PR 合入后 main 可部署（PR-1 出口冒烟）；门禁四件套 + build smoke + CI 两 OS + Codex 增量审查（PR-1×8/PR-2×7/PR-3×8 findings 全折）。
