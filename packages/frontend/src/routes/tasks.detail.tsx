@@ -15,7 +15,7 @@ import type {
   TaskNodeRuns,
   WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { COMMIT_PUSH_NODE_PREFIX, redactGitUrl } from '@agent-workflow/shared'
+import { COMMIT_PUSH_NODE_PREFIX, redactGitUrl, taskExecutionKind } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { LoadingState } from '@/components/LoadingState'
 import { WorkflowCanvas, type WorkflowCanvasHandle } from '@/components/canvas/WorkflowCanvas'
@@ -299,7 +299,17 @@ function TaskDetailPage() {
       {resumability === 'worktree-missing' && (
         <div className="info-box info-box--muted">
           <span>{t('tasks.resumeUnavailableNoWorktree')}</span>{' '}
-          <Link to="/workflows/$id/launch" params={{ id: tk.workflowId }} className="btn btn--sm">
+          <Link
+            to="/tasks/new"
+            search={
+              taskExecutionKind(tk) === 'agent'
+                ? { kind: 'agent', agent: tk.sourceAgentName ?? '' }
+                : taskExecutionKind(tk) === 'workgroup'
+                  ? { kind: 'workgroup' }
+                  : { kind: 'workflow', workflow: tk.workflowId }
+            }
+            className="btn btn--sm"
+          >
             {t('tasks.resumeLaunchLink')}
           </Link>
         </div>

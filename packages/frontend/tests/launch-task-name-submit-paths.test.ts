@@ -3,7 +3,8 @@
 // HTTP harness needed. (RFC-165: the path-multipart submit path is retired.)
 
 import { describe, expect, test } from 'vitest'
-import { buildLaunchBody, buildLaunchFormDataV2, type RepoSource } from '@/lib/launch-repo-source'
+import { buildLaunchBody, type RepoSource } from '@/lib/launch-repo-source'
+import { buildWorkflowStartFormData } from '@/lib/task-wizard'
 
 function readPayload(fd: FormData): Record<string, unknown> {
   const payload = fd.get('payload')
@@ -31,14 +32,14 @@ describe('RFC-037 — buildLaunchBody passes name into JSON body', () => {
   })
 })
 
-describe('RFC-037 / RFC-107 — buildLaunchFormDataV2 (url-multipart) carries name + repoUrl + ref', () => {
+describe('RFC-037 / RFC-107 — buildWorkflowStartFormData (url-multipart) carries name + repoUrl + ref', () => {
   // RFC-107 lifted the URL + uploads limit: the backend now resolves the URL
   // into the repo cache before materializing the worktree. The multipart
   // payload must therefore carry repoUrl AND ref so the right branch is cloned.
   test('payload JSON carries name, repoUrl and ref', async () => {
     const src: RepoSource = { kind: 'url', repoUrl: 'git@h:o/r.git', ref: 'release/1.2' }
-    const fd = buildLaunchFormDataV2(
-      src,
+    const fd = buildWorkflowStartFormData(
+      { kind: 'remote', repos: [src] },
       { workflowId: 'wf-1', name: 'url multipart', inputs: {} },
       { up: [new File([new Uint8Array([3])], 'b.bin')] },
     )

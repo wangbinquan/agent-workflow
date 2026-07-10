@@ -187,28 +187,29 @@ test('happy path: agents → workflow → launch → task done → outputs visib
   // workflow validator on click and only navigates when ok — see
   // src/routes/workflows.edit.tsx). The role-based lookup must follow.
   await page.getByRole('button', { name: /launch task/i }).click()
-  await expect(
-    page.getByRole('heading', { name: `Launch: ${fixtures.workflowName}` }),
-  ).toBeVisible()
+  // RFC-165: the editor deep-links into the /tasks/new wizard with the
+  // workflow pre-picked, landing on Step 2 (workspace).
+  await expect(page.getByTestId('task-wizard')).toBeVisible()
 
+  // Step 2 — the repo row is URL-only; feed the fixture repo as a file:// URL.
+  await page.fill('[data-testid="repo-source-url-0"]', pathToFileURL(fixtures.repoPath).href)
+  await page.fill('[data-testid="repo-source-ref-0"]', 'main')
+  await page.getByTestId('stepper-next').click()
+
+  // Step 3 — task name + declared inputs.
+  await page.fill('[data-testid="wizard-task-name"]', 'e2e-launch-task')
   const topicInput = page
     .locator('label.form-field', { hasText: 'Topic (topic)' })
     .locator('input.form-input')
   await expect(topicInput).toBeVisible({ timeout: 10_000 })
   await topicInput.fill('e2e-test')
+  await page.getByTestId('stepper-next').click()
 
-  // RFC-037: task name is now a required field — fill it before submit.
-  await page.fill('[data-testid="launch-task-name"]', 'e2e-launch-task')
-
-  // RFC-165: the repo row is URL-only — feed the fixture repo as a file://
-  // URL (the retired recent-repo auto-pick / branch Select are gone).
-  await page.fill('[data-testid="repo-source-url-0"]', pathToFileURL(fixtures.repoPath).href)
-  await page.fill('[data-testid="repo-source-ref-0"]', 'main')
-
+  // Step 4 — confirm + launch.
   await page.getByRole('button', { name: 'Start task', exact: true }).click()
 
   // 4. Task detail page — URL changes to /tasks/<id>.
-  await page.waitForURL(/\/tasks\/[A-Z0-9]+/i, { timeout: 15_000 })
+  await page.waitForURL(/\/tasks\/[A-Z0-9]{26}/i, { timeout: 15_000 })
 
   // 5. Wait for the task to terminate. Poll the API rather than scraping
   // the DOM so transient states aren't mistaken for the final one.
@@ -485,26 +486,26 @@ test('RFC-024: launch task from git URL clones into cache and renders redacted U
   const wf = (await workflowRes.json()) as { id: string }
 
   await primeAuthLocalStorage(page, daemon)
+  // RFC-165: legacy launcher URL redirects into the wizard (Step 2).
   await page.goto(`${daemon.baseUrl}/workflows/${wf.id}/launch`)
 
-  // RFC-165: the row is URL-only — no tab to switch; fill the URL field.
-  const urlInput = page
-    .locator('label.form-field', { hasText: /Git URL/i })
-    .locator('input.form-input')
-  await urlInput.fill(remoteUrl)
+  // Step 2 — the row is URL-only; fill the URL field.
+  await page.fill('[data-testid="repo-source-url-0"]', remoteUrl)
+  await page.getByTestId('stepper-next').click()
 
-  const topicInput = page
+  // Step 3 — name + topic.
+  await page.fill('[data-testid="wizard-task-name"]', 'e2e-url-task')
+  await page
     .locator('label.form-field', { hasText: 'Topic (topic)' })
     .locator('input.form-input')
-  await topicInput.fill('rfc-024-test')
+    .fill('rfc-024-test')
+  await page.getByTestId('stepper-next').click()
 
-  // RFC-037: task name is now required.
-  await page.fill('[data-testid="launch-task-name"]', 'e2e-url-task')
-
+  // Step 4 — launch.
   await page.getByRole('button', { name: /Start task/ }).click()
-  await page.waitForURL(/\/tasks\/[A-Z0-9]+/i, { timeout: 30_000 })
+  await page.waitForURL(/\/tasks\/[A-Z0-9]{26}/i, { timeout: 30_000 })
 
-  const taskId = page.url().match(/\/tasks\/([A-Z0-9]+)/i)![1]
+  const taskId = page.url().match(/\/tasks\/([A-Z0-9]{26})/i)![1]
   const final = await pollUntilTerminal(daemon, taskId, 60_000)
   expect(final.status).toBe('done')
 

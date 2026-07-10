@@ -163,8 +163,8 @@ function WorkgroupDetailPage() {
                 oracle says the group can actually start a task. */}
             {readiness !== null && readiness.ready && (
               <Link
-                to="/workgroups/launch"
-                search={{ name }}
+                to="/tasks/new"
+                search={{ kind: 'workgroup', workgroup: name }}
                 className="btn btn--primary"
                 data-testid="workgroup-launch-button"
               >

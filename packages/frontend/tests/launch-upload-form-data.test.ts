@@ -1,22 +1,23 @@
-// RFC-020 T6: buildLaunchFormDataV2 turns the launch form snapshot into a
-// multipart body matching the backend's handleMultipartTaskStart contract.
-// Pure-function tests so they stay fast and tied to the exact field shape.
-// (RFC-165: the path-mode buildLaunchFormData helper is retired; the V2
-// URL-mode builder carries the same payload/files[<key>][] envelope.)
+// RFC-020 T6 → RFC-165: buildWorkflowStartFormData turns the wizard's form
+// snapshot into a multipart body matching the backend's
+// handleMultipartTaskStart contract. Pure-function tests so they stay fast
+// and tied to the exact field shape (payload / files[<key>][] envelope).
 
 import { describe, expect, test } from 'vitest'
-import { buildLaunchFormDataV2, type RepoSource } from '../src/lib/launch-repo-source'
+import type { RepoSource } from '../src/lib/launch-repo-source'
+import { buildWorkflowStartFormData, type WizardSpace } from '../src/lib/task-wizard'
 
-const SRC: RepoSource = { kind: 'url', repoUrl: 'git@h:o/r.git', ref: 'main' }
+const REPO: RepoSource = { kind: 'url', repoUrl: 'git@h:o/r.git', ref: 'main' }
+const SRC: WizardSpace = { kind: 'remote', repos: [REPO] }
 const COMMON = { workflowId: 'wf1', name: 'fixture-task' }
 
 function makeFile(name: string, body = 'x'): File {
   return new File([body], name, { type: 'text/plain' })
 }
 
-describe('buildLaunchFormDataV2 (RFC-020 envelope)', () => {
+describe('buildWorkflowStartFormData (RFC-020 envelope)', () => {
   test('writes payload JSON into the payload field', async () => {
-    const fd = buildLaunchFormDataV2(SRC, { ...COMMON, inputs: { topic: 't' } }, {})
+    const fd = buildWorkflowStartFormData(SRC, { ...COMMON, inputs: { topic: 't' } }, {})
     const blob = fd.get('payload') as Blob
     expect(blob).toBeInstanceOf(Blob)
     expect(blob.type).toContain('application/json')
@@ -31,7 +32,7 @@ describe('buildLaunchFormDataV2 (RFC-020 envelope)', () => {
   })
 
   test('appends one files[<key>][] entry per File in order', () => {
-    const fd = buildLaunchFormDataV2(
+    const fd = buildWorkflowStartFormData(
       SRC,
       { ...COMMON, inputs: { refs: '' } },
       { refs: [makeFile('a.txt'), makeFile('b.txt')] },
@@ -43,7 +44,7 @@ describe('buildLaunchFormDataV2 (RFC-020 envelope)', () => {
   })
 
   test('back-fills inputs[uploadKey]="" when missing', async () => {
-    const fd = buildLaunchFormDataV2(
+    const fd = buildWorkflowStartFormData(
       SRC,
       { ...COMMON, inputs: { topic: 't' } },
       { refs: [makeFile('x.txt')] },
@@ -53,7 +54,7 @@ describe('buildLaunchFormDataV2 (RFC-020 envelope)', () => {
   })
 
   test('uploads with two different keys produce two field names', () => {
-    const fd = buildLaunchFormDataV2(
+    const fd = buildWorkflowStartFormData(
       SRC,
       { ...COMMON, inputs: {} },
       { refs: [makeFile('a.txt')], pics: [makeFile('p.png'), makeFile('q.png')] },
@@ -63,7 +64,7 @@ describe('buildLaunchFormDataV2 (RFC-020 envelope)', () => {
   })
 
   test('empty uploads still emits the payload field', () => {
-    const fd = buildLaunchFormDataV2(SRC, { ...COMMON, inputs: {} }, {})
+    const fd = buildWorkflowStartFormData(SRC, { ...COMMON, inputs: {} }, {})
     expect(fd.get('payload')).not.toBeNull()
     expect(fd.getAll('files[anything][]')).toHaveLength(0)
   })

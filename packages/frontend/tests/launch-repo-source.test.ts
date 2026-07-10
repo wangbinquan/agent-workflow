@@ -1,6 +1,6 @@
 // RFC-024 T6 — pure-function tests for the launcher's repo-source helpers.
 // Locks `buildLaunchBody` body shape, `validateRepoUrl` outcomes, and the
-// source-level wiring in workflows.launch.tsx + RepoSourceRow.
+// source-level wiring in tasks.new.tsx (the wizard) + RepoSourceRow.
 //
 // RFC-165: the local-path mode is retired — RepoSource is URL-only and the
 // path-mode fixtures were deleted with it. The "RFC-165 retirement" describe
@@ -12,11 +12,11 @@ import { describe, expect, test } from 'vitest'
 import type { CachedRepo } from '@agent-workflow/shared'
 import {
   buildLaunchBody,
-  buildLaunchFormDataV2,
   resolveUrlRepoPath,
   validateRepoUrl,
   type RepoSource,
 } from '@/lib/launch-repo-source'
+import { buildWorkflowStartFormData } from '@/lib/task-wizard'
 
 describe('buildLaunchBody (RFC-024)', () => {
   test('emits workflowId/repoUrl/inputs (no baseBranch, no ref when blank)', () => {
@@ -64,13 +64,13 @@ describe('validateRepoUrl (RFC-024)', () => {
   })
 })
 
-describe('buildLaunchFormDataV2 (RFC-024)', () => {
+describe('buildWorkflowStartFormData (RFC-024 → RFC-165)', () => {
   test('embeds JSON payload for URL mode + files for each upload key', async () => {
     const src: RepoSource = { kind: 'url', repoUrl: 'git@h:o/r.git', ref: '' }
     const f1 = new File(['hello'], 'a.txt', { type: 'text/plain' })
     const f2 = new File(['world'], 'b.txt', { type: 'text/plain' })
-    const fd = buildLaunchFormDataV2(
-      src,
+    const fd = buildWorkflowStartFormData(
+      { kind: 'remote', repos: [src] },
       { workflowId: 'wf-1', name: 'fixture-task', inputs: { topic: 'orders' } },
       { docs: [f1, f2] },
     )
@@ -87,9 +87,9 @@ describe('buildLaunchFormDataV2 (RFC-024)', () => {
   })
 })
 
-describe('workflows.launch.tsx wiring (RFC-024 source-level)', () => {
+describe('tasks.new.tsx wiring (RFC-024 source-level)', () => {
   const SRC = readFileSync(
-    resolve(import.meta.dirname, '..', 'src', 'routes', 'workflows.launch.tsx'),
+    resolve(import.meta.dirname, '..', 'src', 'routes', 'tasks.new.tsx'),
     'utf-8',
   )
 
@@ -97,8 +97,8 @@ describe('workflows.launch.tsx wiring (RFC-024 source-level)', () => {
     expect(SRC).toContain('RepoSourceList')
   })
 
-  test('uses buildLaunchBody (not the old inline payload)', () => {
-    expect(SRC).toContain('buildLaunchBody')
+  test('uses the wizard body builders (not an inline payload)', () => {
+    expect(SRC).toContain('buildWorkflowStartBody')
     // The legacy inline `payload = { workflowId: id, repoPath, baseBranch, inputs }` block is gone.
     expect(SRC).not.toMatch(/payload = \{ workflowId: id, repoPath, baseBranch, inputs \}/)
   })
@@ -109,6 +109,7 @@ describe('workflows.launch.tsx wiring (RFC-024 source-level)', () => {
 
   test('renders the cloning hint while POST is pending', () => {
     expect(SRC).toContain('launch.repoSource.cloningHint')
+    expect(SRC).toContain('data-testid="wizard-cloning-hint"')
   })
 })
 
@@ -198,23 +199,18 @@ describe('resolveUrlRepoPath (RFC-110)', () => {
   })
 })
 
-describe('workflows.launch.tsx wiring (RFC-110 source-level)', () => {
+describe('tasks.new.tsx wiring (RFC-110 source-level)', () => {
   const SRC = readFileSync(
-    resolve(import.meta.dirname, '..', 'src', 'routes', 'workflows.launch.tsx'),
+    resolve(import.meta.dirname, '..', 'src', 'routes', 'tasks.new.tsx'),
     'utf-8',
   )
 
-  test('resolves the picker repoPath via resolveUrlRepoPath (not the old url-clearing hardcode)', () => {
+  test('resolves the picker repoPath via resolveUrlRepoPath (not a hardcode)', () => {
     expect(SRC).toContain('resolveUrlRepoPath')
-    // The old `primarySource.kind === 'path' ? primarySource.repoPath : ''`
-    // hardcode that broke file/git pickers in url mode must be gone.
-    expect(SRC).not.toMatch(
-      /repoPath=\{primarySource\.kind === 'path' \? primarySource\.repoPath : ''\}/,
-    )
   })
 
   test('threads sourceKind into the dynamic input so pickers can fall back', () => {
-    expect(SRC).toContain('sourceKind={primarySource.kind}')
+    expect(SRC).toContain('sourceKind="url"')
   })
 
   test('queries cached-repos so pickers can resolve a localPath', () => {

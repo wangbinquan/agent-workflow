@@ -221,14 +221,13 @@ test.describe('RFC-066 PR-C — multi-repo launch', () => {
     const wfId = await seedLinearWorkflow(d)
 
     await primeAuthLocalStorage(page, d)
+    // RFC-165: the legacy launcher URL redirects into the /tasks/new wizard
+    // with the workflow pre-picked (lands on Step 2 — workspace).
     await page.goto(`${d.baseUrl}/workflows/${wfId}/launch`)
 
     // Default: 1 row, no `−` button.
     await expect(page.getByTestId('repo-source-row-0')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByTestId('repo-source-remove-0')).toHaveCount(0)
-
-    // Fill task name.
-    await page.fill('[data-testid="launch-task-name"]', 'rfc066-e2e-task')
 
     // Click `+ Add` → row 1 appears, both rows show `−`.
     await page.getByTestId('repo-source-add').click()
@@ -242,16 +241,19 @@ test.describe('RFC-066 PR-C — multi-repo launch', () => {
     await page.fill('[data-testid="repo-source-url-1"]', pathToFileURL(repoB.repoDir).href)
     await page.fill('[data-testid="repo-source-ref-1"]', 'main')
 
-    // Topic input.
+    // Step 3 — task name + inputs.
+    await page.getByTestId('stepper-next').click()
+    await page.fill('[data-testid="wizard-task-name"]', 'rfc066-e2e-task')
     await page
       .locator('label.form-field', { hasText: 'Topic (topic)' })
       .locator('input.form-input')
       .fill('multi-repo-e2e')
 
-    // Submit.
+    // Step 4 — confirm + submit.
+    await page.getByTestId('stepper-next').click()
     await page.getByRole('button', { name: 'Start task', exact: true }).click()
-    await page.waitForURL(/\/tasks\/[A-Z0-9]+/i, { timeout: 15_000 })
-    const taskId = page.url().match(/\/tasks\/([A-Z0-9]+)/i)![1]!
+    await page.waitForURL(/\/tasks\/[A-Z0-9]{26}/i, { timeout: 15_000 })
+    const taskId = page.url().match(/\/tasks\/([A-Z0-9]{26})/i)![1]!
 
     // Backend verifies the multi-repo shape.
     const taskRes = await fetch(`${d.baseUrl}/api/tasks/${taskId}`, {
@@ -276,12 +278,12 @@ test.describe('RFC-066 PR-C — multi-repo launch', () => {
     const wfId = await seedWrapperGitWorkflow(d)
 
     await primeAuthLocalStorage(page, d)
+    // RFC-165: redirects into the wizard, landing on Step 2 (workspace).
     await page.goto(`${d.baseUrl}/workflows/${wfId}/launch`)
 
     await expect(page.getByTestId('repo-source-row-0')).toBeVisible({ timeout: 10_000 })
-    await page.fill('[data-testid="launch-task-name"]', 'rfc066-gate-task')
 
-    // Add a second repo → banner should fire + Start disabled.
+    // Add a second repo → banner should fire on the workspace step.
     await page.getByTestId('repo-source-add').click()
     await expect(page.getByTestId('repo-source-row-1')).toBeVisible()
     await page.fill('[data-testid="repo-source-url-0"]', pathToFileURL(repoA.repoDir).href)
@@ -292,7 +294,14 @@ test.describe('RFC-066 PR-C — multi-repo launch', () => {
     await expect(banner).toBeVisible({ timeout: 5_000 })
     expect((await banner.textContent()) ?? '').toMatch(/wrapper-git/i)
 
-    // Start button disabled.
+    // Walk to the confirm step — the launch button must be disabled there.
+    await page.getByTestId('stepper-next').click()
+    await page.fill('[data-testid="wizard-task-name"]', 'rfc066-gate-task')
+    await page
+      .locator('label.form-field', { hasText: 'Topic (topic)' })
+      .locator('input.form-input')
+      .fill('gate-check')
+    await page.getByTestId('stepper-next').click()
     const startBtn = page.getByRole('button', { name: 'Start task', exact: true })
     await expect(startBtn).toBeDisabled()
   })

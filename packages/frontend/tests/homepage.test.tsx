@@ -188,7 +188,7 @@ describe('RFC-032 Homepage dashboard', () => {
     expect(screen.getByTestId('homepage-section-inbox')).toBeTruthy()
     expect(screen.getByTestId('homepage-section-recent')).toBeTruthy()
     const startBtn = screen.getByTestId('homepage-start-task')
-    expect(startBtn.getAttribute('href')).toBe('/workflows')
+    expect(startBtn.getAttribute('href')).toBe('/tasks/new')
   })
 
   // Locks the section order: Inbox ("等你处理") sits above Running, so the

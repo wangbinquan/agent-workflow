@@ -72,9 +72,10 @@
   输入框 @ 补全/右侧成员状态栏；`useWorkgroupRoomWs` invalidation。公共组件复用自查
   （Dialog/Form/StatusChip/EmptyState/.btn）。测试：渲染/卡状态/@ 补全/发送/WS 失效规则。
 - **T22** 接线：`TaskDetailTab` 加 `chatroom`、`availableTabs({isWorkgroup})` 组任务默认
-  chatroom+隐藏 workflow-status；`/workgroups/launch` 启动页（goal + repo picker 复用，
-  **独立 body builder，goal 字段显式断言**）；tasks 列表徽标 + `TaskSummarySchema.workgroupId`。
-  测试：组/非组 tab 集对照锁、启动页 body 组装、徽标。
+  chatroom+隐藏 workflow-status；~~`/workgroups/launch` 启动页~~（**Superseded by RFC-165**：
+  独立启动页已下线，工作组启动并入 `/tasks/new` 统一向导；body builder 迁至
+  `lib/task-wizard.ts` 的 `buildWorkgroupStartBody`，goal 字段显式断言保留）；tasks 列表
+  徽标 + `TaskSummarySchema.workgroupId`。测试：组/非组 tab 集对照锁、启动 body 组装、徽标。
 - **T23** PR-4 门禁 + i18n/CSS 收敛（`.workgroup-` 命名空间）+ 视觉对齐自查截图。
 
 ## PR-5 人类成员 + 确认门 + 中途介入

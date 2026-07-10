@@ -4,7 +4,7 @@
 // dedicated file keeps imports lean and matches the file layout in plan.md.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createRoute, useNavigate } from '@tanstack/react-router'
+import { Link, createRoute, useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { Agent, CreateAgent } from '@agent-workflow/shared'
 import { api } from '@/api/client'
@@ -84,6 +84,18 @@ function AgentDetailPage() {
           disabled: del.isPending,
         }}
         errors={[save.error, del.error]}
+        extra={
+          query.data?.builtin !== true && (
+            <Link
+              to="/tasks/new"
+              search={{ kind: 'agent', agent: name }}
+              className="btn btn--primary"
+              data-testid="agent-launch-button"
+            >
+              {t('taskWizard.launchEntry')}
+            </Link>
+          )
+        }
       >
         <div>
           <h1>{name}</h1>

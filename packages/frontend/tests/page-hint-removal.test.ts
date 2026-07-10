@@ -72,7 +72,7 @@ const DEHINTED_ROUTES: Record<string, string[]> = {
   'routes/skills.tsx': ['skills.hintBefore', 'skills.hintAfter'],
   'routes/skills.new.tsx': ['skills.newHintBefore', 'skills.newHintAfter'],
   'routes/workflows.edit.tsx': ['editor.newHint'],
-  'routes/workflows.launch.tsx': ['launch.hintBefore', 'launch.hintCode', 'launch.hintAfter'],
+  // RFC-165: routes/workflows.launch.tsx was deleted outright (wizard replaced it).
 }
 
 /**

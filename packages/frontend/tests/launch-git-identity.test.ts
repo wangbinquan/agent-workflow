@@ -11,23 +11,22 @@ import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 
 const LAUNCH_SRC = readFileSync(
-  resolve(import.meta.dirname, '..', 'src', 'routes', 'workflows.launch.tsx'),
+  resolve(import.meta.dirname, '..', 'src', 'routes', 'tasks.new.tsx'),
   'utf-8',
 )
 const ZH = readFileSync(resolve(import.meta.dirname, '..', 'src', 'i18n', 'zh-CN.ts'), 'utf-8')
 const EN = readFileSync(resolve(import.meta.dirname, '..', 'src', 'i18n', 'en-US.ts'), 'utf-8')
 
-describe('workflows.launch.tsx — RFC-067 git identity wiring', () => {
+describe('tasks.new.tsx — RFC-067 git identity wiring', () => {
   test('declares gitUserName + gitUserEmail useState', () => {
     expect(LAUNCH_SRC).toMatch(/const \[gitUserName, setGitUserName\] = useState\(['"]['"]\)/)
     expect(LAUNCH_SRC).toMatch(/const \[gitUserEmail, setGitUserEmail\] = useState\(['"]['"]\)/)
   })
 
-  test('renders the collapsible details with both inputs', () => {
-    expect(LAUNCH_SRC).toContain('data-testid="launch-git-identity"')
-    expect(LAUNCH_SRC).toContain('data-testid="launch-git-user-name"')
-    expect(LAUNCH_SRC).toContain('data-testid="launch-git-user-email"')
-    expect(LAUNCH_SRC).toContain("t('launch.gitIdentity.toggle')")
+  test('renders both inputs inside the advanced fold', () => {
+    expect(LAUNCH_SRC).toContain('data-testid="wizard-advanced"')
+    expect(LAUNCH_SRC).toContain('data-testid="wizard-git-user-name"')
+    expect(LAUNCH_SRC).toContain('data-testid="wizard-git-user-email"')
     expect(LAUNCH_SRC).toContain("t('launch.gitIdentity.name')")
     expect(LAUNCH_SRC).toContain("t('launch.gitIdentity.email')")
   })
@@ -38,8 +37,9 @@ describe('workflows.launch.tsx — RFC-067 git identity wiring', () => {
     expect(LAUNCH_SRC).toMatch(/const gitIdentityOk\s*=/)
   })
 
-  test('canSubmit consults gitIdentityOk', () => {
-    expect(LAUNCH_SRC).toMatch(/canSubmit\s*=[\s\S]*?gitIdentityOk/)
+  test('canSubmit consults gitIdentityOk (via the content-step gate)', () => {
+    expect(LAUNCH_SRC).toMatch(/stepContentReady\s*=[\s\S]*?gitIdentityOk/)
+    expect(LAUNCH_SRC).toMatch(/canSubmit\s*=[\s\S]*?stepContentReady/)
   })
 
   test('email regex matches the StartTaskSchema regex (loose [^\\s@]+@[^\\s@]+)', () => {
@@ -51,13 +51,16 @@ describe('workflows.launch.tsx — RFC-067 git identity wiring', () => {
 
   test('submit payload spreads trimmed identity only when both non-empty', () => {
     // Locks the half-identity-not-on-wire invariant at the call site,
-    // matching buildLaunchBody's defensive drop.
-    expect(LAUNCH_SRC).toMatch(/trimGitName !== ['"]['"]\s*&&\s*trimGitEmail !== ['"]['"]/)
+    // matching buildLaunchBody's defensive drop (gitBoth = both trimmed
+    // non-empty; collectAdvanced spreads the pair only when gitBoth).
+    expect(LAUNCH_SRC).toMatch(
+      /gitBoth\s*\?\s*\{ gitUserName: gitNameTrim, gitUserEmail: gitEmailTrim \}/,
+    )
   })
 
   test('pairing-error node carries role="alert" + data-testid', () => {
     expect(LAUNCH_SRC).toContain('role="alert"')
-    expect(LAUNCH_SRC).toContain('data-testid="launch-git-pair-error"')
+    expect(LAUNCH_SRC).toContain('data-testid="wizard-git-pair-error"')
   })
 })
 

@@ -91,26 +91,18 @@ function ScheduledDetailPage() {
           >
             {t('scheduled.edit')}
           </button>
-          {/* RFC-159 (edit-config): edit the FULL task config (repo/branch/inputs/
-              collaborators/git-identity/…) by reusing the launch form in edit mode.
-              RFC-165: a degraded payload keeps this entry as the REPAIR path via
-              the best-effort workflowId hint (edit form seeds blank; saving PUTs
-              a full replacement payload). Only a payload whose workflowId is
-              unrecoverable (corrupt JSON) loses the entry. */}
-          {(s.launchKind ?? 'workflow') === 'workflow' &&
-            (workflowPayloadId(s.launchPayload) ?? s.launchPayloadWorkflowId ?? null) !== null && (
-              <Link
-                to="/workflows/$id/launch"
-                params={{
-                  id: workflowPayloadId(s.launchPayload) ?? s.launchPayloadWorkflowId ?? '',
-                }}
-                search={{ editScheduled: s.id }}
-                className="btn"
-                data-testid="scheduled-edit-config"
-              >
-                {t('scheduled.editConfig')}
-              </Link>
-            )}
+          {/* RFC-159 → RFC-165: edit the FULL task config (any launch kind) in
+              the /tasks/new wizard's editScheduled mode. A degraded payload
+              still gets the entry — the wizard renders blank for repair and
+              saving PUTs a full replacement payload. */}
+          <Link
+            to="/tasks/new"
+            search={{ editScheduled: s.id }}
+            className="btn"
+            data-testid="scheduled-edit-config"
+          >
+            {t('scheduled.editConfig')}
+          </Link>
           <button
             type="button"
             className="btn"
@@ -248,17 +240,4 @@ function ScheduledDetailPage() {
       )}
     </div>
   )
-}
-
-/**
- * RFC-165 §9b: launchPayload is a three-kind union — the edit-config deep
- * link (and its repair fallback) only applies to workflow schedules until
- * the PR-3 wizard takes over kind-aware editing.
- */
-function workflowPayloadId(p: unknown): string | null {
-  if (typeof p === 'object' && p !== null && 'workflowId' in p) {
-    const id = (p as { workflowId?: unknown }).workflowId
-    return typeof id === 'string' && id.length > 0 ? id : null
-  }
-  return null
 }

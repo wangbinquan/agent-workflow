@@ -41,7 +41,7 @@ function ScheduledPage() {
           <button
             type="button"
             className="btn btn--primary"
-            onClick={() => void navigate({ to: '/workflows' })}
+            onClick={() => void navigate({ to: '/tasks/new', search: { schedule: true } })}
             data-testid="scheduled-new"
           >
             {t('scheduled.new')}

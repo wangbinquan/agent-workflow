@@ -501,6 +501,7 @@ mode/leader/repo）。写 `workgroup_config_json` 副本 + 系统消息。语义
   + 索引；多语句 `--> statement-breakpoint` 分隔（手写迁移既有教训）。
 - 受迫更新的既有锁：upgrade-rolling journal 计数、tasks 全字段锁、rfc152 bijection 计数、
   resource_grants 类型枚举锁（若有）。
-- 定时任务（RFC-159）v1 **不支持**定时启动组任务（scheduled_tasks 整存 `StartTaskSchema`，
-  与组启动 body 不同形）；后续如需，扩 `scheduled_tasks` 判别列另立小 RFC。
+- ~~定时任务（RFC-159）v1 **不支持**定时启动组任务~~（**已被 RFC-165 D11 取代**：
+  `scheduled_tasks.launch_kind` 判别列 + 三主体 payload 封套已落地，组任务可定时启动，
+  触发时按组资源当次配置冻结）。
 - 现有工作流/任务/反问/评审路径零改动（分流点唯一：runTask 入口 + tabs 扩参 + 收件箱加源）。

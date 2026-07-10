@@ -202,7 +202,7 @@ function WorkflowEditPage() {
               .then((result) => {
                 const hasBlocking = result.issues.some((i) => (i.severity ?? 'error') === 'error')
                 if (hasBlocking) return
-                navigate({ to: '/workflows/$id/launch', params: { id } })
+                navigate({ to: '/tasks/new', search: { kind: 'workflow', workflow: id } })
               })
               .catch(() => {
                 /* network/server error already surfaced via validate.error */

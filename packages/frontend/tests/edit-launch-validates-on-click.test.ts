@@ -36,7 +36,7 @@ describe('workflows.edit launch button validates first (source layer)', () => {
     // up in the same button onClick block.
     const block = extractLaunchButtonBlock(src)
     expect(block).toMatch(/validate\s*\.\s*mutateAsync\s*\(\s*\)/)
-    expect(block).toMatch(/navigate\s*\(\s*\{\s*to:\s*'\/workflows\/\$id\/launch'/)
+    expect(block).toMatch(/navigate\s*\(\s*\{\s*to:\s*'\/tasks\/new'/)
     expect(block).toMatch(/t\('editor\.launch'\)/)
   })
 

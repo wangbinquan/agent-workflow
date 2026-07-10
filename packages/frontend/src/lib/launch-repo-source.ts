@@ -100,34 +100,6 @@ export function buildLaunchBody(
 }
 
 /**
- * Same shape as `buildLaunchBody`, but stamps it into the existing multipart
- * envelope used by RFC-020 uploads. Wrapping in this helper keeps the
- * launcher's "uploads + url" combo encoded consistently. RFC-107: the backend
- * now accepts the url + uploads combo (the multipart route resolves the URL
- * into the repo cache before materializing the worktree), so this is a fully
- * supported launch path. The url body carries `repoUrl` + optional `ref`.
- */
-export function buildLaunchFormDataV2(
-  source: RepoSource,
-  common: LaunchCommonPayload,
-  uploads: Record<string, File[]>,
-): FormData {
-  const inputsOut: Record<string, string> = { ...common.inputs }
-  for (const key of Object.keys(uploads)) {
-    if (!(key in inputsOut)) inputsOut[key] = ''
-  }
-  const body = buildLaunchBody(source, { ...common, inputs: inputsOut })
-  const fd = new FormData()
-  fd.set('payload', new Blob([JSON.stringify(body)], { type: 'application/json' }))
-  for (const [key, list] of Object.entries(uploads)) {
-    for (const f of list) {
-      fd.append(`files[${key}][]`, f, f.name)
-    }
-  }
-  return fd
-}
-
-/**
  * Inline validation for the URL field. Returns:
  *   - 'empty'    — URL hasn't been typed yet (Start stays disabled).
  *   - 'invalid'  — URL doesn't parse via `parseGitUrl`. UI renders red copy.

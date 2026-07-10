@@ -1,7 +1,7 @@
 // RFC-159 — "Save as scheduled task" dialog. Reuses the launch form's already-built
 // StartTask body (passed as `buildLaunchPayload`) and only collects the schedule:
 // a name + one of interval / daily / weekly / monthly, in the creator's timezone.
-import type { ScheduleSpec } from '@agent-workflow/shared'
+import type { ScheduledLaunchKind, ScheduleSpec } from '@agent-workflow/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
@@ -28,6 +28,12 @@ interface ScheduleDialogProps {
    * backend validates). Ignored (and unnecessary) in edit mode.
    */
   buildLaunchPayload?: () => unknown
+  /**
+   * RFC-165 §9b — which execution kind `buildLaunchPayload` composes. Stamped
+   * as `launchKind` on the created schedule (immutable afterwards). Create
+   * mode only; defaults to the workflow arm.
+   */
+  launchKind?: ScheduledLaunchKind
   defaultName?: string
   /**
    * Edit mode — pre-fill from an existing schedule and PUT { name, scheduleSpec }
@@ -92,6 +98,7 @@ export function ScheduleDialog({
   open,
   onClose,
   buildLaunchPayload,
+  launchKind,
   defaultName,
   edit,
 }: ScheduleDialogProps) {
@@ -138,6 +145,7 @@ export function ScheduleDialog({
           })
         : api.post('/api/scheduled-tasks', {
             name: name.trim(),
+            launchKind: launchKind ?? 'workflow',
             launchPayload: buildLaunchPayload?.(),
             scheduleSpec: spec,
             enabled: true,

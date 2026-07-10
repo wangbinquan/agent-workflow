@@ -108,6 +108,16 @@ function AgentsPage() {
                   )}
                 </td>
                 <td className="data-table__actions">
+                  {a.builtin !== true && (
+                    <Link
+                      to="/tasks/new"
+                      search={{ kind: 'agent', agent: a.name }}
+                      className="btn btn--sm"
+                      data-testid={`agent-row-launch-${a.name}`}
+                    >
+                      {t('taskWizard.launchEntry')}
+                    </Link>
+                  )}
                   <Link to="/agents/$name" params={{ name: a.name }} className="btn btn--sm">
                     {t('common.open')}
                   </Link>

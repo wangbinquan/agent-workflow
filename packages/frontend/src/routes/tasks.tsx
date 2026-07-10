@@ -51,6 +51,11 @@ function TasksPage() {
         <div>
           <h1>{t('tasks.title')}</h1>
         </div>
+        <div className="page__actions">
+          <Link to="/tasks/new" className="btn btn--primary" data-testid="tasks-new-button">
+            {t('taskWizard.title')}
+          </Link>
+        </div>
       </header>
 
       <div className="status-filter">

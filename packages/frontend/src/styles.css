@@ -12246,3 +12246,112 @@ mark.comment-anchor[data-active='true'] {
   min-width: 0;
   flex: 1;
 }
+
+/* =============================================================================
+   RFC-165 (T11) — Stepper primitive (.stepper namespace)
+   ============================================================================= */
+
+.stepper__header {
+  display: flex;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.25rem;
+  flex-wrap: wrap;
+}
+
+.stepper__step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 0.3rem 0.85rem 0.3rem 0.4rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.stepper__step:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.stepper__item--current .stepper__step {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.stepper__item--done .stepper__step {
+  color: var(--text);
+}
+
+.stepper__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 0.75rem;
+}
+
+.stepper__item--current .stepper__index {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.stepper__item--done .stepper__index {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.stepper__body {
+  min-height: 12rem;
+}
+
+.stepper__actions {
+  margin-top: 1.25rem;
+}
+
+/* RFC-165 (T12) — /tasks/new confirm-step summary list */
+.wizard-summary {
+  margin: 0;
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.wizard-summary__row {
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.wizard-summary__row:last-child {
+  border-bottom: none;
+}
+
+.wizard-summary__row dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding-top: 0.1rem;
+}
+
+.wizard-summary__row dd {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  word-break: break-word;
+}

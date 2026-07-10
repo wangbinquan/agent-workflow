@@ -13,10 +13,10 @@ import {
   AUTO_COMMIT_PUSH_LS_KEY,
   loadAutoCommitPushPref,
   saveAutoCommitPushPref,
-} from '../src/routes/workflows.launch'
+} from '../src/lib/task-wizard'
 
 const LAUNCH_SRC = readFileSync(
-  resolve(import.meta.dirname, '..', 'src', 'routes', 'workflows.launch.tsx'),
+  resolve(import.meta.dirname, '..', 'src', 'routes', 'tasks.new.tsx'),
   'utf-8',
 )
 const DETAIL_SRC = readFileSync(
@@ -26,7 +26,7 @@ const DETAIL_SRC = readFileSync(
 const ZH = readFileSync(resolve(import.meta.dirname, '..', 'src', 'i18n', 'zh-CN.ts'), 'utf-8')
 const EN = readFileSync(resolve(import.meta.dirname, '..', 'src', 'i18n', 'en-US.ts'), 'utf-8')
 
-describe('workflows.launch.tsx — RFC-075 working branch + auto commit&push wiring', () => {
+describe('tasks.new.tsx — RFC-075 working branch + auto commit&push wiring', () => {
   test('declares workingBranch + autoCommitPush state (toggle seeded from pref)', () => {
     expect(LAUNCH_SRC).toMatch(/const \[workingBranch, setWorkingBranch\] = useState\(['"]['"]\)/)
     expect(LAUNCH_SRC).toMatch(
@@ -35,7 +35,7 @@ describe('workflows.launch.tsx — RFC-075 working branch + auto commit&push wir
   })
 
   test('renders the working-branch input + auto commit&push switch', () => {
-    expect(LAUNCH_SRC).toContain('data-testid="launch-working-branch"')
+    expect(LAUNCH_SRC).toContain('data-testid="wizard-working-branch"')
     expect(LAUNCH_SRC).toContain("t('launch.workingBranch.label')")
     expect(LAUNCH_SRC).toContain("t('launch.autoCommitPush.label')")
     // Uses the shared Switch primitive, not a hand-rolled checkbox.
@@ -45,29 +45,28 @@ describe('workflows.launch.tsx — RFC-075 working branch + auto commit&push wir
   test('validates the branch name with the shared loose validator', () => {
     expect(LAUNCH_SRC).toContain('isLooseValidBranchName')
     expect(LAUNCH_SRC).toMatch(/const workingBranchError\s*=/)
-    expect(LAUNCH_SRC).toMatch(/const workingBranchOk\s*=/)
   })
 
-  test('canSubmit consults workingBranchOk', () => {
-    expect(LAUNCH_SRC).toMatch(/canSubmit\s*=[\s\S]*?workingBranchOk/)
+  test('canSubmit consults the branch validity gate', () => {
+    expect(LAUNCH_SRC).toMatch(/stepContentReady\s*=[\s\S]*?!workingBranchError/)
+    expect(LAUNCH_SRC).toMatch(/canSubmit\s*=[\s\S]*?stepContentReady/)
   })
 
   test('submit payload spreads workingBranch only when non-empty + autoCommitPush only when true', () => {
-    expect(LAUNCH_SRC).toMatch(/trimWorkingBranch !== ['"]['"]\s*\?\s*\{ workingBranch:/)
+    expect(LAUNCH_SRC).toMatch(/workingBranchTrim !== ['"]['"]\s*\?\s*\{ workingBranch:/)
     expect(LAUNCH_SRC).toMatch(/autoCommitPush\s*\?\s*\{ autoCommitPush: true \}/)
   })
 
   test('invalid-branch node carries role="alert" + data-testid', () => {
-    expect(LAUNCH_SRC).toContain('data-testid="launch-working-branch-error"')
+    expect(LAUNCH_SRC).toContain('data-testid="wizard-branch-error"')
     expect(LAUNCH_SRC).toMatch(
-      /role="alert"[\s\S]*launch-working-branch-error|launch-working-branch-error[\s\S]*role="alert"/,
+      /role="alert"[\s\S]*wizard-branch-error|wizard-branch-error[\s\S]*role="alert"/,
     )
   })
 
   test('toggle persists to localStorage via saveAutoCommitPushPref', () => {
     expect(LAUNCH_SRC).toContain('saveAutoCommitPushPref')
     expect(LAUNCH_SRC).toContain('loadAutoCommitPushPref')
-    expect(LAUNCH_SRC).toContain('AUTO_COMMIT_PUSH_LS_KEY')
   })
 })
 

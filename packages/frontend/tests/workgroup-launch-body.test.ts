@@ -1,5 +1,5 @@
-// RFC-164 PR-4 — buildWorkgroupLaunchBody field-by-field contract + the
-// launch endpoint's 422-code → copy mapping.
+// RFC-164 PR-4 → RFC-165 — buildWorkgroupStartBody field-by-field contract +
+// the launch endpoint's 422-code → copy mapping.
 //
 // The explicit name/goal/repo assertions exist because of the RFC-125 lesson
 // (launch body helpers whitelist fields — anything not asserted on the wire
@@ -10,17 +10,17 @@
 import { describe, expect, test } from 'vitest'
 import { ApiError } from '../src/api/client'
 import {
-  buildWorkgroupLaunchBody,
   classifyWorkgroupLaunchError,
   workgroupLaunchErrorMessage,
 } from '../src/lib/workgroup-launch'
+import { buildWorkgroupStartBody, type WizardSpace } from '../src/lib/task-wizard'
 import { enUS } from '../src/i18n/en-US'
 import { zhCN } from '../src/i18n/zh-CN'
 
-describe('buildWorkgroupLaunchBody', () => {
+describe('buildWorkgroupStartBody', () => {
   test('single url repo: exact minimal wire shape (name/goal/repoUrl)', () => {
-    const body = buildWorkgroupLaunchBody(
-      [{ kind: 'url', repoUrl: 'https://github.com/o/r.git', ref: '' }],
+    const body = buildWorkgroupStartBody(
+      { kind: 'remote', repos: [{ kind: 'url', repoUrl: 'https://github.com/o/r.git', ref: '' }] },
       {
         name: 'audit run',
         goal: 'find the bugs',
@@ -41,25 +41,31 @@ describe('buildWorkgroupLaunchBody', () => {
   })
 
   test('url repo: repoUrl + trimmed ref (empty ref omitted)', () => {
-    const withRef = buildWorkgroupLaunchBody(
-      [{ kind: 'url', repoUrl: 'https://github.com/o/r.git', ref: ' main ' }],
+    const withRef = buildWorkgroupStartBody(
+      {
+        kind: 'remote',
+        repos: [{ kind: 'url', repoUrl: 'https://github.com/o/r.git', ref: ' main ' }],
+      },
       { name: 't', goal: 'g' },
     )
     expect(withRef.repoUrl).toBe('https://github.com/o/r.git')
     expect(withRef.ref).toBe('main')
-    const noRef = buildWorkgroupLaunchBody(
-      [{ kind: 'url', repoUrl: 'https://github.com/o/r.git', ref: '' }],
+    const noRef = buildWorkgroupStartBody(
+      { kind: 'remote', repos: [{ kind: 'url', repoUrl: 'https://github.com/o/r.git', ref: '' }] },
       { name: 't', goal: 'g' },
     )
     expect(noRef.ref).toBeUndefined()
   })
 
   test('multi-repo: repos[] entries (RFC-165: url-only, no retired path keys)', () => {
-    const body = buildWorkgroupLaunchBody(
-      [
-        { kind: 'url', repoUrl: 'https://github.com/o/a.git', ref: '' },
-        { kind: 'url', repoUrl: 'https://github.com/o/r.git', ref: 'dev' },
-      ],
+    const body = buildWorkgroupStartBody(
+      {
+        kind: 'remote',
+        repos: [
+          { kind: 'url', repoUrl: 'https://github.com/o/a.git', ref: '' },
+          { kind: 'url', repoUrl: 'https://github.com/o/r.git', ref: 'dev' },
+        ],
+      },
       { name: 't', goal: 'g' },
     )
     expect(body.repos).toEqual([
@@ -74,7 +80,11 @@ describe('buildWorkgroupLaunchBody', () => {
   })
 
   test('optional extras ride the wire: collaborators / git identity / branch / push / limits', () => {
-    const body = buildWorkgroupLaunchBody([{ kind: 'url', repoUrl: 'https://x/r.git', ref: '' }], {
+    const space: WizardSpace = {
+      kind: 'remote',
+      repos: [{ kind: 'url', repoUrl: 'https://x/r.git', ref: '' }],
+    }
+    const body = buildWorkgroupStartBody(space, {
       name: 't',
       goal: 'g',
       collaboratorUserIds: ['u1', 'u2'],
@@ -95,12 +105,15 @@ describe('buildWorkgroupLaunchBody', () => {
   })
 
   test('omitted extras keep the wire minimal (no half-identity, no false flags)', () => {
-    const body = buildWorkgroupLaunchBody([{ kind: 'url', repoUrl: 'https://x/r.git', ref: '' }], {
-      name: 't',
-      goal: 'g',
-      autoCommitPush: false,
-      collaboratorUserIds: [],
-    })
+    const body = buildWorkgroupStartBody(
+      { kind: 'remote', repos: [{ kind: 'url', repoUrl: 'https://x/r.git', ref: '' }] },
+      {
+        name: 't',
+        goal: 'g',
+        autoCommitPush: false,
+        collaboratorUserIds: [],
+      },
+    )
     expect(body.autoCommitPush).toBeUndefined()
     expect(body.collaboratorUserIds).toBeUndefined()
     expect(body.gitUserName).toBeUndefined()

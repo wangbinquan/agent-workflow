@@ -11,7 +11,7 @@
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { describe, expect, test } from 'vitest'
-import { launcherFieldDefs } from '../src/routes/workflows.launch'
+import { launcherFieldDefs } from '../src/components/launch/DynamicInput'
 
 describe('launcherFieldDefs (RFC-004)', () => {
   test('returns the declared inputs entries, in order', () => {

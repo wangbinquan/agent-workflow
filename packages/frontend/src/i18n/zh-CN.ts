@@ -1560,6 +1560,56 @@ export interface Resources {
     nodeTitleUnsetAgent: string
     nodeTitleUnsetKey: string
   }
+  taskWizard: {
+    launchEntry: string
+    title: string
+    titleScheduled: string
+    titleEdit: string
+    stepMode: string
+    stepSpace: string
+    stepContent: string
+    stepConfirm: string
+    kindLabel: string
+    kindWorkflow: string
+    kindAgent: string
+    kindWorkgroup: string
+    kindHintWorkflow: string
+    kindHintAgent: string
+    kindHintWorkgroup: string
+    objectWorkflow: string
+    objectAgent: string
+    objectWorkgroup: string
+    objectPlaceholder: string
+    objectEmpty: string
+    workgroupNotReady: string
+    spaceLabel: string
+    spaceRemote: string
+    spaceScratch: string
+    spaceScratchHint: string
+    contentDescription: string
+    contentDescriptionHint: string
+    advanced: string
+    allowClarify: string
+    allowClarifyHint: string
+    maxDurationMin: string
+    maxDurationMinHint: string
+    maxTotalTokens: string
+    maxTotalTokensHint: string
+    edit: string
+    launch: string
+    saveScheduled: string
+    saveConfig: string
+    summaryInputs: string
+    summaryCollaborators: string
+    clarifyOff: string
+    kindLocked: string
+    degradedBanner: string
+  }
+  stepper: {
+    progress: string
+    back: string
+    next: string
+  }
   launch: {
     title: string
     backToEditor: string
@@ -4322,6 +4372,57 @@ export const zhCN: Resources = {
     menuSelectedCount: '已选 {{n}} 个',
     nodeTitleUnsetAgent: '(未设置代理)',
     nodeTitleUnsetKey: '(未设置 key)',
+  },
+  taskWizard: {
+    launchEntry: '启动任务',
+    title: '新建任务',
+    titleScheduled: '新建定时任务',
+    titleEdit: '编辑定时任务配置',
+    stepMode: '执行方式',
+    stepSpace: '执行空间',
+    stepContent: '任务内容',
+    stepConfirm: '确认',
+    kindLabel: '执行方式',
+    kindWorkflow: '工作流',
+    kindAgent: '单个 Agent',
+    kindWorkgroup: '工作组',
+    kindHintWorkflow: '按工作流定义的输入启动一次编排任务。',
+    kindHintAgent: '把任务描述直接交给一个 Agent 执行，支持反问。',
+    kindHintWorkgroup: '把使命交给一个工作组协同完成。',
+    objectWorkflow: '选择工作流',
+    objectAgent: '选择 Agent',
+    objectWorkgroup: '选择工作组',
+    objectPlaceholder: '请选择…',
+    objectEmpty: '暂无可选对象',
+    workgroupNotReady: '未就绪（缺可用 Agent 成员或负责人）',
+    spaceLabel: '执行空间',
+    spaceRemote: '远端仓库',
+    spaceScratch: '临时空间',
+    spaceScratchHint:
+      '平台会创建一个空 Git 仓库作为工作目录；产出以对空仓的 diff 形式交付，目录保留可手动取用。',
+    contentDescription: '任务描述',
+    contentDescriptionHint: '将作为提示词直接交给 Agent。',
+    advanced: '高级设置',
+    allowClarify: '允许反问',
+    allowClarifyHint: 'Agent 可在需要时向你提问（也可以不问直接产出）。',
+    maxDurationMin: '时长上限（分钟）',
+    maxDurationMinHint: '超时后任务自动取消；留空不限制。',
+    maxTotalTokens: 'Token 上限',
+    maxTotalTokensHint: '超出后任务自动取消；留空不限制。',
+    edit: '修改',
+    launch: '启动任务',
+    saveScheduled: '存为定时任务',
+    saveConfig: '保存配置',
+    summaryInputs: '{{count}} 个输入',
+    summaryCollaborators: '{{count}} 位协作者',
+    clarifyOff: '反问已关闭',
+    kindLocked: '编辑定时任务时执行方式与对象不可更改。',
+    degradedBanner: '该定时任务存储的配置无法解析（旧格式或已损坏）；请重新填写并保存以修复。',
+  },
+  stepper: {
+    progress: '创建步骤',
+    back: '上一步',
+    next: '下一步',
   },
   launch: {
     title: '启动：{{name}}',

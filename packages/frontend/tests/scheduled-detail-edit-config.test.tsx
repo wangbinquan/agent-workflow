@@ -1,7 +1,7 @@
 // RFC-159 (edit-config) — the scheduled-task detail page exposes an
-// "编辑任务配置 / Edit task config" entry that opens the launch form in edit
+// "编辑任务配置 / Edit task config" entry that opens the wizard in edit
 // mode (?editScheduled=<id>) targeting the schedule's workflow. Locks: the link
-// renders and points at /workflows/<workflowId>/launch?editScheduled=<id>.
+// renders and points at /tasks/new?editScheduled=<id> (RFC-165 wizard).
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
@@ -66,10 +66,10 @@ async function renderDetail() {
     path: '/scheduled/$id',
     component: mod.Route.options.component,
   })
-  // Register the launch route so the edit-config <Link> resolves a full href.
+  // Register the wizard route so the edit-config <Link> resolves a full href.
   const launch = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/workflows/$id/launch',
+    path: '/tasks/new',
     component: () => <div data-testid="launch-page" />,
     validateSearch: (raw: Record<string, unknown>) =>
       typeof raw.editScheduled === 'string' ? { editScheduled: raw.editScheduled } : {},
@@ -92,14 +92,14 @@ async function renderDetail() {
 }
 
 describe('RFC-159 — scheduled detail: edit task config entry', () => {
-  test('renders and links to the launch form in edit mode for this schedule', async () => {
+  test('renders and links to the wizard in edit mode for this schedule', async () => {
     installFetch()
     await renderDetail()
 
     const link = await screen.findByTestId('scheduled-edit-config')
     expect(link.textContent).toBe('Edit task config')
     const href = link.getAttribute('href') ?? ''
-    expect(href).toContain('/workflows/wf-42/launch')
+    expect(href).toContain('/tasks/new')
     expect(href).toContain('editScheduled=sched-1')
   })
 
@@ -117,7 +117,7 @@ describe('RFC-159 — scheduled detail: edit task config entry', () => {
 })
 
 describe('RFC-165 — degraded schedule repair affordance (implementation-gate P2)', () => {
-  test('degraded payload with a workflowId hint keeps the edit-config REPAIR entry + banner', async () => {
+  test('degraded payload keeps the edit-config REPAIR entry + banner', async () => {
     installFetch({
       ...SCHEDULE,
       launchPayload: null,
@@ -132,11 +132,11 @@ describe('RFC-165 — degraded schedule repair affordance (implementation-gate P
 
     const link = screen.getByTestId('scheduled-edit-config')
     const href = link.getAttribute('href') ?? ''
-    expect(href).toContain('/workflows/wf-42/launch')
+    expect(href).toContain('/tasks/new')
     expect(href).toContain('editScheduled=sched-1')
   })
 
-  test('corrupt payload with NO recoverable workflowId: banner only, no dead link', async () => {
+  test('corrupt payload with NO recoverable workflowId still gets the repair entry (RFC-165: the wizard repairs via raw PUT, no workflowId needed)', async () => {
     installFetch({
       ...SCHEDULE,
       launchPayload: null,
@@ -146,6 +146,7 @@ describe('RFC-165 — degraded schedule repair affordance (implementation-gate P
     await renderDetail()
 
     await screen.findByTestId('scheduled-degraded-banner')
-    expect(screen.queryByTestId('scheduled-edit-config')).toBeNull()
+    const link = screen.getByTestId('scheduled-edit-config')
+    expect(link.getAttribute('href') ?? '').toContain('editScheduled=sched-1')
   })
 })

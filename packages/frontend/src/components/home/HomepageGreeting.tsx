@@ -90,7 +90,7 @@ export function HomepageGreeting() {
         </p>
       </div>
       <Link
-        to="/workflows"
+        to="/tasks/new"
         className="btn btn--primary homepage__start-task"
         data-testid="homepage-start-task"
       >
