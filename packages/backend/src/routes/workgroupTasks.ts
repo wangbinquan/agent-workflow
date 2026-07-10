@@ -35,6 +35,10 @@ import { createLogger } from '@/util/log'
 
 const log = createLogger('workgroup-room')
 
+/** RFC-054 W1-7: zod-parse instead of `as Record` for reading our own
+ * task-owned config JSON (routes/*.ts may not `as`-cast). */
+const JsonObjectSchema = z.record(z.string(), z.unknown())
+
 const PostMessageSchema = z.object({
   body: z.string().trim().min(1).max(65536),
 })
@@ -144,7 +148,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     }
     let raw: Record<string, unknown>
     try {
-      raw = JSON.parse(row.workgroupConfigJson) as Record<string, unknown>
+      raw = JsonObjectSchema.parse(JSON.parse(row.workgroupConfigJson))
     } catch {
       throw new NotFoundError('workgroup-task-not-found', `workgroup task '${taskId}' not found`)
     }
@@ -180,13 +184,13 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       if (!(await canViewTask(deps.db, actor, row))) continue
       let raw: Record<string, unknown>
       try {
-        raw = JSON.parse(row.workgroupConfigJson) as Record<string, unknown>
+        raw = JsonObjectSchema.parse(JSON.parse(row.workgroupConfigJson))
       } catch {
         continue
       }
       const parsed = WorkgroupRuntimeConfigSchema.safeParse(raw)
       if (!parsed.success) continue
-      const gateRaw = (raw.gate ?? {}) as Record<string, unknown>
+      const gateRaw = JsonObjectSchema.parse(raw.gate ?? {})
       if (gateRaw.awaitingConfirmation === true && row.status === 'awaiting_review') gates++
       const myMemberIds = new Set(
         parsed.data.members
@@ -225,7 +229,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         .where(eq(workgroupAssignments.taskId, taskId))
         .orderBy(asc(workgroupAssignments.id)),
     ])
-    const gateRaw = (raw.gate ?? {}) as Record<string, unknown>
+    const gateRaw = JsonObjectSchema.parse(raw.gate ?? {})
     return c.json({
       taskId,
       taskStatus: task.status,
@@ -414,7 +418,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         issues: parsed.error.issues,
       })
     }
-    const gateRaw = (raw.gate ?? {}) as Record<string, unknown>
+    const gateRaw = JsonObjectSchema.parse(raw.gate ?? {})
     if (gateRaw.awaitingConfirmation !== true || task.status !== 'awaiting_review') {
       throw new ConflictError(
         'workgroup-gate-not-open',
