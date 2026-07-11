@@ -136,6 +136,18 @@ export function Select<V extends string>(props: Props<V>) {
   useEffect(() => {
     if (open) {
       setQuery('')
+      // Re-align the active row with the CURRENT selection: after a filtered
+      // session, activeIndex still indexes the old filtered array — reopening
+      // over the full list would highlight an unrelated option and an
+      // immediate Enter would adopt it (Codex P2).
+      if (props.searchable === true) {
+        setActiveIndex(
+          Math.max(
+            0,
+            props.options.findIndex((o) => o.value === props.value),
+          ),
+        )
+      }
       const t = window.setTimeout(() => {
         if (props.searchable === true) searchRef.current?.focus()
         else listRef.current?.focus()
@@ -154,6 +166,9 @@ export function Select<V extends string>(props: Props<V>) {
   }
 
   function onListKey(e: React.KeyboardEvent<HTMLElement>) {
+    // CJK IME: Enter/arrows while composing commit the composition — they
+    // must never select an option or move the active row (Codex P1).
+    if (e.nativeEvent.isComposing) return
     const last = visible.length - 1
     if (e.key === 'ArrowDown') {
       e.preventDefault()
@@ -248,6 +263,9 @@ export function Select<V extends string>(props: Props<V>) {
                   className="select__search-input"
                   value={query}
                   placeholder={t('common.searchEllipsis')}
+                  aria-label={props.ariaLabel ?? t('common.searchEllipsis')}
+                  aria-controls={popoverId}
+                  aria-activedescendant={`${popoverId}-opt-${activeIndex}`}
                   data-testid={
                     props['data-testid'] !== undefined
                       ? `${props['data-testid']}-search`
@@ -257,7 +275,13 @@ export function Select<V extends string>(props: Props<V>) {
                     setQuery(e.target.value)
                     setActiveIndex(0)
                   }}
-                  onKeyDown={onListKey}
+                  onKeyDown={(e) => {
+                    // Handle once here — without stopPropagation the same
+                    // event bubbles to the <ul onKeyDown> and every arrow
+                    // moves two rows / Enter fires twice (Codex P1).
+                    e.stopPropagation()
+                    onListKey(e)
+                  }}
                 />
               </li>
             )}

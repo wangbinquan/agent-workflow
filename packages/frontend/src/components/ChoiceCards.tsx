@@ -42,6 +42,11 @@ export function ChoiceCards<V extends string>(props: ChoiceCardsProps<V>) {
   const rootRef = useRef<HTMLDivElement | null>(null)
 
   const enabled = props.options.filter((o) => !(props.disabled === true || o.disabled === true))
+  // Roving tab stop: the checked card when usable, else the first enabled
+  // card — a native disabled button is skipped by Tab, which would make the
+  // whole group keyboard-unreachable (Codex P2).
+  const checkedEnabled = enabled.some((o) => o.value === props.value)
+  const tabStopValue = checkedEnabled ? props.value : enabled[0]?.value
   const move = (from: V, dir: 1 | -1) => {
     if (enabled.length === 0) return
     const idx = enabled.findIndex((o) => o.value === from)
@@ -80,7 +85,7 @@ export function ChoiceCards<V extends string>(props: ChoiceCardsProps<V>) {
             type="button"
             role="radio"
             aria-checked={active}
-            tabIndex={active ? 0 : -1}
+            tabIndex={opt.value === tabStopValue ? 0 : -1}
             data-choice-value={opt.value}
             className={'choice-card' + (active ? ' choice-card--active' : '')}
             disabled={props.disabled === true || opt.disabled === true}

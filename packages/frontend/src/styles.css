@@ -12478,6 +12478,7 @@ mark.comment-anchor[data-active='true'] {
    full-bleed stretched controls the user flagged as "prototype-ish") */
 .task-wizard {
   max-width: 47.5rem;
+  margin-inline: auto;
 }
 
 .task-wizard .stepper__body {

@@ -55,6 +55,19 @@ describe('ChoiceCards (RFC-165 UI 精修)', () => {
     expect((getByTestId('cc-c') as HTMLButtonElement).disabled).toBe(true)
   })
 
+  test('C5 tab stop falls back to the first ENABLED card when the checked one is disabled (Codex P2)', () => {
+    const opts = [
+      { value: 'a', label: 'Alpha' },
+      { value: 'b', label: 'Beta', disabled: true },
+    ] as const
+    const { getByTestId } = render(
+      <ChoiceCards value="b" options={opts} onChange={() => {}} testidPrefix="cc" />,
+    )
+    // 'b' is checked but disabled — Tab must land on 'a', not a skipped button.
+    expect(getByTestId('cc-a').getAttribute('tabindex')).toBe('0')
+    expect(getByTestId('cc-b').getAttribute('tabindex')).toBe('-1')
+  })
+
   test('C4 arrow keys move between ENABLED cards (disabled skipped, wraps)', () => {
     const onChange = vi.fn()
     const { getByTestId } = render(

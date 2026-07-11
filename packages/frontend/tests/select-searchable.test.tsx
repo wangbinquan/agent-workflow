@@ -47,6 +47,53 @@ describe('Select searchable (RFC-165 UI 精修)', () => {
     expect(onChange).toHaveBeenCalledWith('builder')
   })
 
+  test('S4 arrows from the search input move ONE row; Enter fires once (Codex P1)', () => {
+    const onChange = vi.fn()
+    const { getByTestId } = render(
+      <Select value="auditor" options={OPTIONS} onChange={onChange} searchable data-testid="sel" />,
+    )
+    fireEvent.click(getByTestId('sel'))
+    const input = screen.getByTestId('sel-search')
+    // auditor(0) → one ArrowDown lands on builder(1), not reviewer(2).
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledWith('builder')
+  })
+
+  test('S5 keys during IME composition are ignored (Codex P1)', () => {
+    const onChange = vi.fn()
+    const { getByTestId } = render(
+      <Select value="auditor" options={OPTIONS} onChange={onChange} searchable data-testid="sel" />,
+    )
+    fireEvent.click(getByTestId('sel'))
+    const input = screen.getByTestId('sel-search')
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true })
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  test('S6 reopening after a filtered session re-aligns the active row to the selection (Codex P2)', () => {
+    const onChange = vi.fn()
+    const { getByTestId } = render(
+      <Select
+        value="reviewer"
+        options={OPTIONS}
+        onChange={onChange}
+        searchable
+        data-testid="sel"
+      />,
+    )
+    fireEvent.click(getByTestId('sel'))
+    // Filter down to one row (index 0 in the FILTERED array), then close.
+    fireEvent.change(screen.getByTestId('sel-search'), { target: { value: 'audit' } })
+    fireEvent.keyDown(screen.getByTestId('sel-search'), { key: 'Escape' })
+    // Reopen over the full list: Enter must adopt the CURRENT selection
+    // (reviewer, index 2), not whatever index 0 now points at.
+    fireEvent.click(getByTestId('sel'))
+    fireEvent.keyDown(screen.getByTestId('sel-search'), { key: 'Enter' })
+    expect(onChange).toHaveBeenCalledWith('reviewer')
+  })
+
   test('S3 filter resets on reopen', () => {
     const { getByTestId } = render(
       <Select value="auditor" options={OPTIONS} onChange={() => {}} searchable data-testid="sel" />,
