@@ -438,7 +438,20 @@ function WorkgroupDetailPage() {
 
       {group !== undefined && (
         <div className="workgroup-studio">
-          <div className="workgroup-studio__main">
+          {/* Blank-area click deselects (desktop selection grammar, user
+              2026-07-11). member state only: the add panel holds an
+              in-progress form a stray click must not discard. Card clicks
+              are swallowed by the stretched title-button hit-area; keyboard
+              users have the equivalent panel Esc, so this stays mouse-only. */}
+          <div
+            className="workgroup-studio__main"
+            onClick={(e) => {
+              if (effectivePanel.kind !== 'member') return
+              const target = e.target as HTMLElement
+              if (target.closest('.workgroup-card, button, a, input') !== null) return
+              closePanel()
+            }}
+          >
             <div className="workgroup-studio__main-head">
               <h2 className="workgroup-studio__main-title">{t('workgroups.sectionMembers')}</h2>
               <span className="workgroup-studio__count">{group.members.length}</span>

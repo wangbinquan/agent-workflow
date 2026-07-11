@@ -281,6 +281,13 @@ describe('panel three-state switching (§9.1)', () => {
     const again = await within(panelEl()).findByTestId('workgroup-member-displayname-input')
     fireEvent.keyDown(again, { key: 'Escape' })
     expect(within(panelEl()).getByTestId('workgroup-field-description')).toBeTruthy()
+
+    // Clicking BLANK gallery space deselects too (desktop selection grammar);
+    // clicks landing on a card never do (stretched hit-area swallows them).
+    fireEvent.click(screen.getByTestId('workgroup-card-open-Auditor'))
+    await within(panelEl()).findByTestId('workgroup-member-displayname-input')
+    fireEvent.click(document.querySelector('.workgroup-studio__main')!)
+    expect(within(panelEl()).getByTestId('workgroup-field-description')).toBeTruthy()
   })
 
   test('rename-dialog Esc closes ONLY the dialog — the panel selection survives (§9.11, F9)', async () => {
