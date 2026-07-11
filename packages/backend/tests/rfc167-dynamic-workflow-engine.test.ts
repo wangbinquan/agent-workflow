@@ -418,6 +418,46 @@ describe('RFC-167 engine — generation pass', () => {
     expect(after[0]?.status).toBe('awaiting_review')
   })
 
+  test('a mid-generation config edit survives the dw persist (json_set slot write, Codex P2)', async () => {
+    const { taskId } = await seedDynamicTask(db, { dw: initialDwState() })
+    const requests: WorkgroupHostRunRequest[] = []
+    const hooks: WorkgroupEngineHooks = {
+      runHostNode: async (r) => {
+        requests.push(r)
+        // simulate a PUT config landing WHILE the orchestrator runs: a new
+        // top-level key must survive the engine's dw persist.
+        const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+        const cfg = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
+        await db
+          .update(tasks)
+          .set({ workgroupConfigJson: JSON.stringify({ ...cfg, probe: 'keep-me' }) })
+          .where(eq(tasks.id, taskId))
+        return goodResult()
+      },
+    }
+    const result = await runDynamicWorkflowGenerate({ db, taskId, log, hooks })
+    expect(result.kind).toBe('awaiting_review')
+    const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const cfg = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
+    expect(cfg.probe).toBe('keep-me') // the concurrent edit was NOT stomped
+    expect(parseDwState(cfg.dw)?.phase).toBe('awaiting_confirm') // dw still landed
+    expect(requests).toHaveLength(1)
+  })
+
+  test('a manual resume of a generate-exhausted task grants a fresh attempt budget (Codex P2)', async () => {
+    const { taskId } = await seedDynamicTask(db, {
+      dw: { ...initialDwState(), generateAttempts: DW_MAX_GENERATE_ATTEMPTS },
+    })
+    const { hooks, requests } = scriptedHooks([goodResult()])
+    const result = await runDynamicWorkflowGenerate({ db, taskId, log, hooks })
+    // without the reset the loop would run ZERO times and instantly re-fail
+    expect(result.kind).toBe('awaiting_review')
+    expect(requests).toHaveLength(1)
+    const dw = await readDw(db, taskId)
+    expect(dw?.phase).toBe('awaiting_confirm')
+    expect(dw?.generateAttempts).toBe(0)
+  })
+
   test("phase='executing' is refused (dw-phase-invariant — dispatch must never send it here)", async () => {
     const { taskId } = await seedDynamicTask(db, {
       dw: { ...initialDwState(), phase: 'executing' },
@@ -709,6 +749,56 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
       (r) => r.rerunCause === DW_GATE_CAUSE,
     )
     expect(holders[0]?.status).toBe('awaiting_review')
+  })
+
+  test('approve composes against the FRESH config: a concurrent edit is neither overwritten nor bypassed (Codex P1)', async () => {
+    const wt = mkdtempSync(join(tmpdir(), 'aw-rfc167-fw-'))
+    try {
+      const { taskId } = await seedConfirmable({ worktreePath: wt, generatedDef: POOL_DEF })
+      // A "concurrent" config edit lands after the handler's entry snapshot
+      // would have been taken: adds a top-level key. The approve must keep it.
+      const row0 = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      const cfg0 = JSON.parse(row0?.workgroupConfigJson ?? '{}') as Record<string, unknown>
+      await db
+        .update(tasks)
+        .set({ workgroupConfigJson: JSON.stringify({ ...cfg0, probe: 'keep-me' }) })
+        .where(eq(tasks.id, taskId))
+
+      const res = await req(`/api/workgroup-tasks/${taskId}/dw-confirm`, {
+        method: 'POST',
+        body: JSON.stringify({ decision: 'approve' }),
+      })
+      expect(res.status).toBe(200)
+      const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      const cfg = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
+      expect(cfg.probe).toBe('keep-me') // fresh compose kept the edit
+      expect(parseDwState(cfg.dw)?.phase).toBe('executing')
+      await settleTask(taskId)
+    } finally {
+      rmSync(wt, { recursive: true, force: true })
+    }
+  })
+
+  test('approve validates against the FRESH pool: removing the referenced member concurrently → 409 stale', async () => {
+    const { taskId } = await seedConfirmable({ generatedDef: POOL_DEF })
+    // Concurrently shrink the pool so POOL_DEF's wg-planner is no longer a
+    // member — the fresh-view revalidation must catch it (dw-agent-outside-pool).
+    const row0 = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const cfg0 = JSON.parse(row0?.workgroupConfigJson ?? '{}') as Record<string, unknown>
+    const members = (cfg0.members as Array<{ agentName: string | null }>).filter(
+      (m) => m.agentName !== 'wg-planner',
+    )
+    await db
+      .update(tasks)
+      .set({ workgroupConfigJson: JSON.stringify({ ...cfg0, members }) })
+      .where(eq(tasks.id, taskId))
+
+    const res = await req(`/api/workgroup-tasks/${taskId}/dw-confirm`, {
+      method: 'POST',
+      body: JSON.stringify({ decision: 'approve' }),
+    })
+    expect(res.status).toBe(409)
+    expect(((await res.json()) as { code: string }).code).toBe('dw-generated-def-stale')
   })
 
   test('reject: comment required; the phase reset rides the resume CAS; holder closes; generatedDef dropped', async () => {

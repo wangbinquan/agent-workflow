@@ -529,6 +529,34 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       )
     }
 
+    // Codex impl-gate P1 (re-review): the entry snapshot above only serves the
+    // fast gate check — every decision below re-loads the config row and
+    // re-verifies the gate RIGHT BEFORE composing durable state, so a
+    // concurrent PUT config (member/switch edit) landing mid-handler is
+    // neither validated against nor overwritten. The residual fresh-read→CAS
+    // microsecond window is a documented v1 residual (same posture as
+    // consumeTasksAdd's same-instant insert race).
+    async function freshGateView(): Promise<{
+      raw: Record<string, unknown>
+      config: WorkgroupRuntimeConfig
+      dw: DwState
+    }> {
+      const fresh = await loadVisibleWorkgroupTask(actor, taskId)
+      const freshDw = parseDwState(fresh.raw.dw)
+      if (
+        fresh.config.mode !== 'dynamic_workflow' ||
+        freshDw === null ||
+        freshDw.phase !== 'awaiting_confirm' ||
+        fresh.task.status !== 'awaiting_review'
+      ) {
+        throw new ConflictError(
+          'workgroup-dw-gate-not-open',
+          'the dynamic workflow confirm gate is not awaiting confirmation',
+        )
+      }
+      return { raw: fresh.raw, config: fresh.config, dw: freshDw }
+    }
+
     // Close the gate holder run(s) first (wg-confirm ordering precedent): the
     // decision is durable human input; a subsequently lost resume race leaves
     // the task re-parkable (the generate engine re-mints a holder on re-entry).
@@ -540,26 +568,26 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     ).filter((r) => r.status === 'awaiting_review')
 
     if (parsed.data.decision === 'approve') {
-      const generated = WorkflowDefinitionSchema.safeParse(dw.generatedDef)
+      // Codex impl-gate P2: members / agents may have changed between
+      // generation and this approval (mid-run config edits, agent deletion) —
+      // re-run BOTH validation layers against the CURRENT context so a stale
+      // proposal is refused here instead of failing (or silently escaping the
+      // pool) at execution time. Reject-with-feedback regenerates against the
+      // current pool. The long context load runs first; the fresh view comes
+      // after it so the validated pool is the composed pool.
+      const layer1Ctx = await buildWorkflowValidationContext(deps.db)
+      const fresh = await freshGateView()
+      const generated = WorkflowDefinitionSchema.safeParse(fresh.dw.generatedDef)
       if (!generated.success) {
         throw new ConflictError(
           'dw-generated-def-invalid',
           'the stored generated workflow is unreadable — reject with feedback to regenerate',
         )
       }
-      // Codex impl-gate P2: members / agents may have changed between
-      // generation and this approval (mid-run config edits, agent deletion) —
-      // re-run BOTH validation layers against the CURRENT context so a stale
-      // proposal is refused here instead of failing (or silently escaping the
-      // pool) at execution time. Reject-with-feedback regenerates against the
-      // current pool.
-      const poolNames = config.members.flatMap((m) =>
+      const poolNames = fresh.config.members.flatMap((m) =>
         m.memberType === 'agent' && m.agentName !== null ? [m.agentName] : [],
       )
-      const layer1 = validateWorkflowDef(
-        generated.data,
-        await buildWorkflowValidationContext(deps.db),
-      )
+      const layer1 = validateWorkflowDef(generated.data, layer1Ctx)
       const layer2 = validateDynamicWorkflowDef(generated.data, poolNames)
       const staleIssues = [...layer1.issues, ...layer2.issues].filter(
         (i) => (i.severity ?? 'error') === 'error',
@@ -580,17 +608,18 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
           reason: 'dw-gate-approved',
         })
       }
-      const { rejectionComment: _consumed, ...dwRest } = dw
+      const { rejectionComment: _consumed, ...dwRest } = fresh.dw
       const nextDw: DwState = { ...dwRest, phase: 'executing' }
       await resumeDynamicWorkflowExecution(deps.db, taskId, buildResumeDeps(), {
         workflowSnapshot: JSON.stringify(generated.data),
-        workgroupConfigJson: JSON.stringify({ ...raw, dw: nextDw }),
+        workgroupConfigJson: JSON.stringify({ ...fresh.raw, dw: nextDw }),
       })
       return c.json({ decision: 'approve' })
     }
 
     // reject — ConfirmSchema guarantees a non-empty comment.
     const comment = parsed.data.comment ?? ''
+    const fresh = await freshGateView()
     for (const h of holders) {
       await setNodeRunStatus({
         db: deps.db,
@@ -600,13 +629,18 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         reason: 'dw-gate-rejected',
       })
     }
-    const rejectRounds = dw.rejectRounds + 1
+    const rejectRounds = fresh.dw.rejectRounds + 1
     if (rejectRounds >= DW_MAX_REJECT_ROUNDS) {
       // Hard cap (design §8): repeated rejection is a signal the orchestrator
       // cannot satisfy the human — fail the task instead of looping forever.
       // The dw slot rides the SAME status CAS (extra whitelist) so a lost
       // race can't leave rounds counted on a task that never flipped.
-      const nextDw: DwState = { ...dw, phase: 'rejected', rejectRounds, rejectionComment: comment }
+      const nextDw: DwState = {
+        ...fresh.dw,
+        phase: 'rejected',
+        rejectRounds,
+        rejectionComment: comment,
+      }
       await setTaskStatus({
         db: deps.db,
         taskId,
@@ -616,7 +650,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
           finishedAt: Date.now(),
           errorSummary: 'dw-reject-exhausted',
           errorMessage: `dynamic workflow rejected ${rejectRounds} time(s) — DW_MAX_REJECT_ROUNDS reached`,
-          workgroupConfigJson: JSON.stringify({ ...raw, dw: nextDw }),
+          workgroupConfigJson: JSON.stringify({ ...fresh.raw, dw: nextDw }),
         },
         reason: 'dw-reject-exhausted',
       })
@@ -624,7 +658,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       if (failed !== null) emitTaskStatus(failed)
       return c.json({ decision: 'reject', exhausted: true })
     }
-    const { generatedDef: _dropped, ...dwRest } = dw
+    const { generatedDef: _dropped, ...dwRest } = fresh.dw
     const nextDw: DwState = {
       ...dwRest,
       phase: 'generating',
@@ -641,7 +675,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     // holder is benign: the gate check reads (phase, status), and the
     // generate engine re-mints a holder on its awaiting_confirm branch.
     await resumeDynamicWorkflowExecution(deps.db, taskId, buildResumeDeps(), {
-      workgroupConfigJson: JSON.stringify({ ...raw, dw: nextDw }),
+      workgroupConfigJson: JSON.stringify({ ...fresh.raw, dw: nextDw }),
     })
     return c.json({ decision: 'reject' })
   })

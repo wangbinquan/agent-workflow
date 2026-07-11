@@ -31,7 +31,7 @@ import {
   type WorkflowDefinition,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNotNull, sql } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { nodeRuns, tasks } from '@/db/schema'
 import { getAgent } from '@/services/agent'
@@ -69,7 +69,6 @@ export interface DynamicWorkflowEngineArgs {
 interface DwDbState {
   config: WorkgroupRuntimeConfig
   dw: DwState
-  rawConfig: Record<string, unknown>
 }
 
 async function loadDwDbState(db: DbClient, taskId: string): Promise<DwDbState | null> {
@@ -85,47 +84,27 @@ async function loadDwDbState(db: DbClient, taskId: string): Promise<DwDbState | 
   if (!config.success) return null
   const dw = parseDwState(rawConfig.dw)
   if (dw === null) return null
-  return { config: config.data, dw, rawConfig }
+  return { config: config.data, dw }
 }
 
 /**
- * Persist the dw slot over the FRESHEST config row (Codex impl-gate P2): a
- * generation run can take minutes, and the mid-run config endpoint (PUT
- * /api/workgroup-tasks/:id/config) may have legitimately edited members /
- * switches since this pass loaded its snapshot — a stale full-column spread
- * would silently roll those edits back. Only the `dw` key is ours to write;
- * everything else is re-read at write time. The dw slot itself has a single
- * writer while the task runs (the engine — dw-confirm only writes while the
- * task is parked awaiting_review), so dw-level last-write-wins is safe.
+ * Persist the dw slot WITHOUT touching the rest of the config (Codex
+ * impl-gate P2, re-review): a generation run can take minutes, and the
+ * mid-run config endpoint (PUT /api/workgroup-tasks/:id/config) may have
+ * legitimately edited members / switches since this pass loaded its snapshot
+ * — a stale full-column spread would silently roll those edits back. A
+ * single-statement `json_set` keeps the write atomic at the SQLite level (no
+ * read→write window at all, unlike a fresh-read + full-column update). The
+ * dw slot itself has a single writer while the task runs (the engine —
+ * dw-confirm only writes while the task is parked awaiting_review).
  */
-async function persistDwState(
-  db: DbClient,
-  taskId: string,
-  fallbackRawConfig: Record<string, unknown>,
-  dw: DwState,
-): Promise<void> {
-  let base = fallbackRawConfig
-  const row = (
-    await db
-      .select({ workgroupConfigJson: tasks.workgroupConfigJson })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1)
-  )[0]
-  if (row?.workgroupConfigJson != null) {
-    try {
-      const fresh = JSON.parse(row.workgroupConfigJson) as unknown
-      if (typeof fresh === 'object' && fresh !== null) {
-        base = fresh as Record<string, unknown>
-      }
-    } catch {
-      // unreadable fresh row — fall back to the pass-start snapshot
-    }
-  }
+async function persistDwState(db: DbClient, taskId: string, dw: DwState): Promise<void> {
   await db
     .update(tasks)
-    .set({ workgroupConfigJson: JSON.stringify({ ...base, dw }) })
-    .where(eq(tasks.id, taskId))
+    .set({
+      workgroupConfigJson: sql`json_set(${tasks.workgroupConfigJson}, '$.dw', json(${JSON.stringify(dw)}))`,
+    })
+    .where(and(eq(tasks.id, taskId), isNotNull(tasks.workgroupConfigJson)))
 }
 
 /**
@@ -231,7 +210,7 @@ export async function runDynamicWorkflowGenerate(
       },
     }
   }
-  const { config, rawConfig } = state
+  const { config } = state
   let dw = state.dw
 
   // Defensive: the dispatch oracle never routes 'executing' here; if a future
@@ -274,6 +253,22 @@ export async function runDynamicWorkflowGenerate(
   const poolNames = pool.map((a) => a.name)
   const layer1Ctx = await buildWorkflowValidationContext(db)
   const orchestrator = buildOrchestratorAgent()
+
+  // Codex impl-gate P2 (re-review): a task that failed 'dw-generate-exhausted'
+  // persists generateAttempts === MAX. Reaching this point again means a HUMAN
+  // resumed the failed task — that is an explicit "try again" and grants a
+  // fresh attempt budget; without the reset the loop below would run zero
+  // times and instantly re-fail with no new information. This never
+  // self-loops: exhaustion fails the task, and only a manual resume (boot
+  // auto-resume targets interrupted-only) re-enters with attempts at MAX.
+  if (dw.generateAttempts >= DW_MAX_GENERATE_ATTEMPTS) {
+    log.info('dynamic workflow resume grants a fresh generation budget', {
+      taskId,
+      priorAttempts: dw.generateAttempts,
+    })
+    dw = { ...dw, generateAttempts: 0 }
+    await persistDwState(db, taskId, dw)
+  }
 
   let errorNotice: string | null = null
   while (dw.generateAttempts < DW_MAX_GENERATE_ATTEMPTS) {
@@ -332,7 +327,7 @@ export async function runDynamicWorkflowGenerate(
     if (evaluated !== null && evaluated.ok) {
       const { rejectionComment: _consumed, ...rest } = dw
       dw = { ...rest, phase: 'awaiting_confirm', generatedDef: evaluated.def }
-      await persistDwState(db, taskId, rawConfig, dw)
+      await persistDwState(db, taskId, dw)
       await openDwGate(db, taskId)
       log.info('dynamic workflow generated — awaiting confirmation', {
         taskId,
@@ -345,7 +340,7 @@ export async function runDynamicWorkflowGenerate(
     const errors = failure ?? (evaluated as { ok: false; errors: string[] }).errors
     errorNotice = errors.map((e) => `- ${e}`).join('\n')
     dw = { ...dw, generateAttempts: dw.generateAttempts + 1 }
-    await persistDwState(db, taskId, rawConfig, dw)
+    await persistDwState(db, taskId, dw)
     log.warn('dynamic workflow generation attempt failed', {
       taskId,
       attempt: dw.generateAttempts,
