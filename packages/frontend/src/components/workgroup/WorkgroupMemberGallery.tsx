@@ -26,10 +26,6 @@ export interface WorkgroupMemberGalleryProps {
   selectedKey: string | null
   /** Card activation; the page owns toggle semantics (same key ⇒ close). */
   onSelectCard: (key: string) => void
-  /** A member PUT is in flight — the add buttons disable while true. */
-  applying: boolean
-  onAddAgent: () => void
-  onAddHuman: () => void
 }
 
 /** Port-name summary line: up to 3 names then `+n` (full list lives in the
@@ -160,32 +156,6 @@ export function WorkgroupMemberGallery(props: WorkgroupMemberGalleryProps) {
           })}
         </ul>
       )}
-
-      <div className="workgroup-cards__actions">
-        <button
-          type="button"
-          className="btn btn--sm"
-          disabled={props.applying}
-          onClick={props.onAddAgent}
-          data-testid="workgroup-add-agent-member"
-        >
-          {t('workgroups.addAgentMember')}
-        </button>
-        {/* RFC-167: dynamic_workflow members are the agent-only orchestratable
-            pool — human members are rejected at save, so hide the add-human
-            button in that mode (leader_worker / free_collab keep it). */}
-        {props.group.mode !== 'dynamic_workflow' && (
-          <button
-            type="button"
-            className="btn btn--sm"
-            disabled={props.applying}
-            onClick={props.onAddHuman}
-            data-testid="workgroup-add-human-member"
-          >
-            {t('workgroups.addHumanMember')}
-          </button>
-        )}
-      </div>
     </div>
   )
 }

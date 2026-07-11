@@ -442,14 +442,39 @@ function WorkgroupDetailPage() {
             <div className="workgroup-studio__main-head">
               <h2 className="workgroup-studio__main-title">{t('workgroups.sectionMembers')}</h2>
               <span className="workgroup-studio__count">{group.members.length}</span>
+              {/* Add entries live UP HERE next to the section title (user
+                  2026-07-11) — a fixed spot that never drifts down as the
+                  gallery grows, mirroring the list pages' header+New shape. */}
+              <div className="workgroup-studio__main-actions">
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  disabled={membersMut.isPending}
+                  onClick={() => changePanel({ kind: 'add', memberType: 'agent' })}
+                  data-testid="workgroup-add-agent-member"
+                >
+                  {t('workgroups.addAgentMember')}
+                </button>
+                {/* RFC-167: dynamic_workflow members are the agent-only
+                    orchestratable pool — human members are rejected at save,
+                    so hide the entry in that mode. */}
+                {group.mode !== 'dynamic_workflow' && (
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    disabled={membersMut.isPending}
+                    onClick={() => changePanel({ kind: 'add', memberType: 'human' })}
+                    data-testid="workgroup-add-human-member"
+                  >
+                    {t('workgroups.addHumanMember')}
+                  </button>
+                )}
+              </div>
             </div>
             <WorkgroupMemberGallery
               group={group}
               selectedKey={effectivePanel.kind === 'member' ? effectivePanel.key : null}
               onSelectCard={onSelectCard}
-              applying={membersMut.isPending}
-              onAddAgent={() => changePanel({ kind: 'add', memberType: 'agent' })}
-              onAddHuman={() => changePanel({ kind: 'add', memberType: 'human' })}
             />
           </div>
           <WorkgroupContextPanel

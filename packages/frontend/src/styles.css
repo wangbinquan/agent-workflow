@@ -11881,7 +11881,7 @@ mark.comment-anchor[data-active='true'] {
 
 .workgroup-studio__main-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
@@ -11894,6 +11894,12 @@ mark.comment-anchor[data-active='true'] {
 .workgroup-studio__count {
   font-size: var(--font-sm);
   color: var(--muted);
+}
+
+.workgroup-studio__main-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
 }
 
 /* Context panel — a card-grade container filling its studio column and
