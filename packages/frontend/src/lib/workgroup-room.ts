@@ -10,6 +10,7 @@
 // schemas rather than hand-copied field lists.
 
 import type {
+  DwState,
   TaskStatus,
   WorkgroupAssignment,
   WorkgroupAssignmentStatus,
@@ -45,6 +46,9 @@ export interface WorkgroupRoomResponse {
   taskStatus: TaskStatus
   config: WorkgroupRuntimeConfig
   gate: WorkgroupRoomGate
+  /** RFC-167 — dynamic-workflow state slot (phase / generatedDef / rejection
+   *  bookkeeping); null for turn-engine tasks. Drives the orchestration tab. */
+  dw: DwState | null
   messages: WorkgroupRoomMessage[]
   assignments: WorkgroupRoomAssignment[]
 }

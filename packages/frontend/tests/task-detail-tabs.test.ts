@@ -7,7 +7,13 @@
 
 import { describe, expect, test } from 'vitest'
 import type { NodeRun } from '@agent-workflow/shared'
-import { TAB_ORDER, availableTabs, nextTabForFailedJump } from '../src/lib/task-detail-tabs'
+import {
+  DYNAMIC_WORKGROUP_TAB_ORDER,
+  TAB_ORDER,
+  availableTabs,
+  defaultDynamicTab,
+  nextTabForFailedJump,
+} from '../src/lib/task-detail-tabs'
 
 function makeRun(over: Partial<NodeRun>): NodeRun {
   return {
@@ -103,6 +109,42 @@ describe('availableTabs', () => {
     // browsing, even when no output ports are declared.
     expect(tabs).toContain('worktree-files')
     expect(tabs).toContain('feedback')
+  })
+
+  // RFC-167 PR-3 — dynamic_workflow tasks: full workflow-tab family + the
+  // orchestration panel first; no chatroom (dynamic mode has no turns).
+  test('isDynamicWorkgroup wins over isWorkgroup and keeps the outputs filter', () => {
+    const tabs = availableTabs({ hasOutputs: true, isWorkgroup: true, isDynamicWorkgroup: true })
+    expect(tabs).toEqual([...DYNAMIC_WORKGROUP_TAB_ORDER])
+    expect(tabs[0]).toBe('dw-orchestration')
+    expect(tabs).not.toContain('chatroom')
+    const noOutputs = availableTabs({
+      hasOutputs: false,
+      isWorkgroup: true,
+      isDynamicWorkgroup: true,
+    })
+    expect(noOutputs).not.toContain('outputs')
+    expect(noOutputs).toContain('workflow-status')
+  })
+
+  test('turn-engine workgroup set is untouched by the dynamic flag default', () => {
+    expect(availableTabs({ hasOutputs: true, isWorkgroup: true })).toEqual([
+      'chatroom',
+      'task-questions',
+      'worktree-structure',
+      'details',
+    ])
+  })
+})
+
+describe('defaultDynamicTab — phase-driven default (RFC-167)', () => {
+  test('pre-confirm phases land on the orchestration panel; executing lands on the canvas', () => {
+    expect(defaultDynamicTab('generating')).toBe('dw-orchestration')
+    expect(defaultDynamicTab('awaiting_confirm')).toBe('dw-orchestration')
+    expect(defaultDynamicTab('rejected')).toBe('dw-orchestration')
+    expect(defaultDynamicTab('executing')).toBe('workflow-status')
+    expect(defaultDynamicTab(null)).toBe('dw-orchestration')
+    expect(defaultDynamicTab(undefined)).toBe('dw-orchestration')
   })
 })
 

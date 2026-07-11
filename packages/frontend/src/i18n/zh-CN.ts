@@ -1073,6 +1073,32 @@ export interface Resources {
       humanMembersUnsupported: string
       invalidPayload: string
     }
+    // RFC-167 PR-3 — dynamic-workflow orchestration panel (tasks.detail).
+    dw: {
+      title: string
+      generating: string
+      rejectionFeedback: string
+      awaiting: string
+      attemptsUsed: string
+      gateTitle: string
+      approve: string
+      reject: string
+      rejectTitle: string
+      rejectCommentLabel: string
+      rejectCommentHint: string
+      rejectSubmit: string
+      saveAs: string
+      saveAsTitle: string
+      saveAsNameLabel: string
+      saveAsDescLabel: string
+      saveAsSubmit: string
+      saved: string
+      executing: string
+      confirmedChip: string
+      exhausted: string
+      previewEmpty: string
+      canvasPending: string
+    }
     // RFC-164 PR-4 — workgroup task chat room (tasks.detail default tab).
     room: {
       empty: string
@@ -1472,6 +1498,8 @@ export interface Resources {
     tabQuestions: string
     // RFC-164 PR-4: workgroup chat room tab + tasks-list workgroup badge.
     tabChatroom: string
+    // RFC-167 PR-3: dynamic-workflow orchestration tab.
+    tabDwOrchestration: string
     workgroupBadge: string
     worktreeFilesEmpty: string
     worktreeFilesNoWorktree: string
@@ -3904,6 +3932,31 @@ export const zhCN: Resources = {
       humanMembersUnsupported: '当前版本暂不支持含人类成员的工作组启动任务，后续版本将开放。',
       invalidPayload: '启动参数无效，请检查表单后重试。',
     },
+    dw: {
+      title: '动态编排',
+      generating: '编排 agent 正在生成 workflow…（第 {{n}} 次尝试）',
+      rejectionFeedback: '上轮驳回意见（本轮生成将参照修正）：',
+      awaiting: '生成完成，请审阅下方 workflow。确认后将按图执行；驳回可附意见重新生成。',
+      attemptsUsed: '本轮经 {{n}} 次自动重试后通过校验。',
+      gateTitle: '编排确认门',
+      approve: '确认执行',
+      reject: '驳回重生成',
+      rejectTitle: '驳回并要求重新编排',
+      rejectCommentLabel: '驳回意见',
+      rejectCommentHint: '意见会注入下一轮生成提示，帮助编排 agent 修正方案。',
+      rejectSubmit: '确认驳回',
+      saveAs: '另存为 Workflow',
+      saveAsTitle: '把生成的 workflow 另存为可复用定义',
+      saveAsNameLabel: '名称',
+      saveAsDescLabel: '描述（可选）',
+      saveAsSubmit: '保存',
+      saved: '已另存为 {{name}}。',
+      executing: '已确认，DAG 正在执行——进度见「运行状态」页签。',
+      confirmedChip: '已确认',
+      exhausted: 'workflow 生成失败（重试已耗尽）。可在详情页查看错误后重试任务。',
+      previewEmpty: '暂无可预览的生成结果。',
+      canvasPending: '等待编排确认后展示真实 DAG。',
+    },
     room: {
       empty: '还没有消息。发一条话启动讨论；@成员名 即直接派单。',
       roundDivider: '第 {{n}} 回合',
@@ -4297,6 +4350,7 @@ export const zhCN: Resources = {
     tabFeedback: '留言',
     tabQuestions: '问题',
     tabChatroom: '聊天室',
+    tabDwOrchestration: '动态编排',
     workgroupBadge: '工作组',
     worktreeFilesEmpty: '从左侧选择一个文件以预览。',
     worktreeFilesNoWorktree: '该任务没有可用的工作目录。',

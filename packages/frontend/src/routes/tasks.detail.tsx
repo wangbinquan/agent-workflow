@@ -17,6 +17,7 @@ import type {
 } from '@agent-workflow/shared'
 import { COMMIT_PUSH_NODE_PREFIX, redactGitUrl, taskExecutionKind } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
+import { EmptyState } from '@/components/EmptyState'
 import { LoadingState } from '@/components/LoadingState'
 import { WorkflowCanvas, type WorkflowCanvasHandle } from '@/components/canvas/WorkflowCanvas'
 import type { CanvasNodeData } from '@/components/canvas/nodes/types'
@@ -28,6 +29,7 @@ import { TaskFeedbackList } from '@/components/tasks/TaskFeedbackList'
 import { TaskQuestionList, type TaskQuestionEntry } from '@/components/tasks/TaskQuestionList'
 import { TaskMembersDialogButton } from '@/components/tasks/TaskMembersPanel'
 import { WorkgroupRoom } from '@/components/workgroup/WorkgroupRoom'
+import { DynamicWorkflowPanel } from '@/components/workgroup/DynamicWorkflowPanel'
 import { NodeDetailDrawer } from '@/components/NodeDetailDrawer'
 import { Dialog } from '@/components/Dialog'
 import { SessionTab } from '@/components/node-session/SessionTab'
@@ -51,10 +53,12 @@ import { deriveClarifyNodeNav, type ClarifyNodeNavKind } from '@/lib/clarify-nod
 import { reviewRunDisplay } from '@/lib/reviewRunDisplay'
 import {
   availableTabs,
+  defaultDynamicTab,
   isTerminal,
   nextTabForFailedJump,
   type TaskDetailTab,
 } from '@/lib/task-detail-tabs'
+import { workgroupRoomKey, type WorkgroupRoomResponse } from '@/lib/workgroup-room'
 import { useTaskSync } from '@/hooks/useTaskSync'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Route as RootRoute } from './__root'
@@ -204,7 +208,29 @@ function TaskDetailPage() {
   // RFC-164 PR-4: workgroup tasks swap the tab set (chat room first, canvas +
   // outputs hidden — the builtin host graph is not an observation surface).
   const isWorkgroup = task.data?.workgroupId != null
-  const tabs = availableTabs({ hasOutputs, isWorkgroup })
+  // RFC-167 PR-3: dynamic_workflow groups are the exception — no chatroom;
+  // the orchestration panel + (post-confirm) the REAL DAG canvas. The mode
+  // lives in the room aggregate (same cache entry the panels use); until it
+  // arrives the task renders as a turn-engine group and self-corrects one
+  // query later.
+  const room = useQuery<WorkgroupRoomResponse>({
+    queryKey: workgroupRoomKey(id),
+    queryFn: ({ signal }) =>
+      api.get(`/api/workgroup-tasks/${encodeURIComponent(id)}/room`, undefined, signal),
+    enabled: isWorkgroup,
+  })
+  const isDynamicWorkgroup = isWorkgroup && room.data?.config.mode === 'dynamic_workflow'
+  const dwPhase = room.data?.dw?.phase ?? null
+  const tabs = availableTabs({ hasOutputs, isWorkgroup, isDynamicWorkgroup })
+  // Apply the phase-driven default tab ONCE when a dynamic task's room config
+  // first arrives (awaiting_confirm → orchestration panel; executing → the
+  // real canvas). Manual tab choices afterwards are never overridden.
+  const dwDefaultApplied = useRef(false)
+  useEffect(() => {
+    if (!isDynamicWorkgroup || dwDefaultApplied.current) return
+    dwDefaultApplied.current = true
+    setTab(defaultDynamicTab(dwPhase))
+  }, [isDynamicWorkgroup, dwPhase])
   // RFC-120: agent nodes of the frozen snapshot — reassign candidates for the
   // task question board (only agent nodes are valid handlers). Labels resolve to
   // the node's display name (title → agentName → id fallback, same oracle as the
@@ -392,17 +418,39 @@ function TaskDetailPage() {
 
       <div className="task-detail__panes">
         {/* RFC-164 PR-4: workgroup chat room — the group task's primary view.
-            Content mounts only for workgroup tasks (the pane div always exists
-            so the hidden-pane structure stays uniform). */}
+            Content mounts only for TURN-ENGINE workgroup tasks (RFC-167:
+            dynamic_workflow groups have no turns/chatroom — they get the
+            orchestration pane below instead). The pane div always exists so
+            the hidden-pane structure stays uniform. */}
         <div className="task-detail__pane" hidden={tab !== 'chatroom'}>
-          {isWorkgroup && <WorkgroupRoom taskId={id} taskStatus={tk.status} />}
+          {isWorkgroup && !isDynamicWorkgroup && (
+            <WorkgroupRoom taskId={id} taskStatus={tk.status} />
+          )}
+        </div>
+
+        {/* RFC-167 PR-3: dynamic-workflow orchestration panel — generation
+            progress, the confirm gate (read-only DAG preview) and save-as. */}
+        <div className="task-detail__pane" hidden={tab !== 'dw-orchestration'}>
+          {isDynamicWorkgroup && (
+            <DynamicWorkflowPanel
+              taskId={id}
+              taskStatus={tk.status}
+              errorSummary={tk.errorSummary ?? null}
+            />
+          )}
         </div>
 
         {/* workflow-status: always mounted so xyflow viewport survives tab switches.
-            RFC-164 PR-4: except for workgroup tasks — their tab set never reaches
-            this pane and the builtin host graph must not render at all. */}
+            RFC-164 PR-4: except for turn-engine workgroup tasks — their tab set
+            never reaches this pane and the builtin host graph must not render.
+            RFC-167 PR-3: a dynamic task's canvas is REAL once the confirmed DAG
+            is swapped in (phase executing); before that the snapshot is still
+            the generation host graph — show a waiting hint instead. */}
         <div className="task-detail__pane" hidden={tab !== 'workflow-status'}>
-          {!isWorkgroup && (
+          {isDynamicWorkgroup && dwPhase !== 'executing' && (
+            <EmptyState size="comfortable" title={t('workgroups.dw.canvasPending')} />
+          )}
+          {(!isWorkgroup || (isDynamicWorkgroup && dwPhase === 'executing')) && (
             <div className={taskCanvasLayoutClass(selectedNodeRunId)}>
               <TaskStatusCanvas
                 canvasRef={canvasRef}
@@ -677,6 +725,9 @@ function tabLabel(t: (key: string) => string, k: TaskDetailTab): string {
     // RFC-164 PR-4: workgroup chat room.
     case 'chatroom':
       return t('tasks.tabChatroom')
+    // RFC-167 PR-3: dynamic-workflow orchestration panel.
+    case 'dw-orchestration':
+      return t('tasks.tabDwOrchestration')
   }
 }
 

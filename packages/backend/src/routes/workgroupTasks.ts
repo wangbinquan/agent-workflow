@@ -263,6 +263,10 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         rejected: gateRaw.rejected === true,
         summary: typeof gateRaw.summary === 'string' ? gateRaw.summary : null,
       },
+      // RFC-167 PR-3 — the dynamic-workflow state slot (phase / generatedDef /
+      // rejection bookkeeping). null for turn-engine tasks (and for a corrupt
+      // slot); the confirm-gate UI and the phase-driven tab default read it.
+      dw: parseDwState(raw.dw),
       messages: messages.map((m) => ({
         id: m.id,
         round: m.round,

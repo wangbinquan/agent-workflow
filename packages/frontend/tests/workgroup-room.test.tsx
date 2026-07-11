@@ -102,6 +102,7 @@ function makeRoom(over: Partial<WorkgroupRoomResponse> = {}): WorkgroupRoomRespo
       ],
     },
     gate: { declaredDone: false, awaitingConfirmation: false, rejected: false, summary: null },
+    dw: null,
     messages: [
       {
         id: '01A',

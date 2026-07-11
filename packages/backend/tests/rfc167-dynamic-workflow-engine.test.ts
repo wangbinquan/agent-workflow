@@ -964,6 +964,35 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     expect(lwRes.status).toBe(409)
   })
 
+  test('GET room exposes the dw slot for dynamic tasks (PR-3 frontend data source)', async () => {
+    const { taskId } = await seedConfirmable({ generatedDef: POOL_DEF })
+    const res = await req(`/api/workgroup-tasks/${taskId}/room`)
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { dw: DwState | null }
+    expect(body.dw?.phase).toBe('awaiting_confirm')
+    expect(WorkflowDefinitionSchema.safeParse(body.dw?.generatedDef).success).toBe(true)
+
+    // turn-engine tasks expose dw: null
+    const lw = dynamicConfig({ mode: 'leader_worker', leaderMemberId: 'm-planner' })
+    const { taskId: lwTask } = await seedDynamicTask(db, {
+      dw: initialDwState(),
+      config: { ...lw },
+      status: 'running',
+      ownerUserId: ownerId,
+    })
+    // strip the dw slot the seed helper stamps — lw tasks never carry one
+    const row = (await db.select().from(tasks).where(eq(tasks.id, lwTask)))[0]
+    const cfg = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
+    delete cfg.dw
+    await db
+      .update(tasks)
+      .set({ workgroupConfigJson: JSON.stringify(cfg) })
+      .where(eq(tasks.id, lwTask))
+    const lwRes = await req(`/api/workgroup-tasks/${lwTask}/room`)
+    expect(lwRes.status).toBe(200)
+    expect(((await lwRes.json()) as { dw: DwState | null }).dw).toBeNull()
+  })
+
   test('save-as-workflow persists the generated DAG; missing def → 409', async () => {
     const goodDef = {
       $schema_version: 4,

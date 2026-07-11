@@ -23,6 +23,11 @@ export function useTaskSync(taskId: string | null): void {
     ['tasks', taskId],
     ['tasks', taskId, 'diff'],
     ['tasks', taskId, 'node-runs'],
+    // RFC-167 PR-3: dynamic-workflow phase transitions (generating →
+    // awaiting_confirm → executing) always ride a task-status flip, and the
+    // dw slot lives in the room aggregate — refresh it alongside the task
+    // row. Harmless for non-workgroup tasks (no active query under the key).
+    workgroupRoomKey(taskId),
   ]
   // RFC-005: review.* events invalidate the per-review detail (if any tab
   // has that page open) + the list + pending-count so the sidebar badge

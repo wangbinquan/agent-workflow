@@ -74,26 +74,33 @@ describe('availableTabs — non-workgroup tasks stay item-by-item unchanged', ()
 })
 
 describe('tasks.detail.tsx — workgroup wiring (source locks)', () => {
-  test('derives isWorkgroup from task.workgroupId and feeds it to availableTabs', () => {
+  test('derives isWorkgroup from task.workgroupId and feeds it (plus the RFC-167 dynamic flag) to availableTabs', () => {
     expect(SRC).toMatch(/const isWorkgroup = task\.data\?\.workgroupId != null/)
-    expect(SRC).toMatch(/availableTabs\(\{ hasOutputs, isWorkgroup \}\)/)
+    expect(SRC).toMatch(/availableTabs\(\{ hasOutputs, isWorkgroup, isDynamicWorkgroup \}\)/)
   })
 
   test('default-tab fallback commits tabs[0] — how a group task lands on chatroom', () => {
     expect(SRC).toMatch(/setTab\(tabs\[0\] \?\? 'workflow-status'\)/)
   })
 
-  test('renders a chatroom pane mounting WorkgroupRoom for group tasks', () => {
+  test('renders a chatroom pane mounting WorkgroupRoom for TURN-ENGINE group tasks only (RFC-167: dynamic groups have no chatroom)', () => {
     expect(SRC).toMatch(/hidden=\{tab !== 'chatroom'\}/)
+    expect(SRC).toMatch(/\{isWorkgroup && !isDynamicWorkgroup && \(\s*<WorkgroupRoom/)
+  })
+
+  test('the host-graph canvas never mounts for turn-engine group tasks; a dynamic task unlocks it only in the executing phase', () => {
+    // The workflow-status pane's content is gated: the builtin host snapshot
+    // is an implementation detail, not an observation surface (design §10.2).
+    // RFC-167: a dynamic task's snapshot becomes a REAL DAG after the confirm
+    // swap — the gate widens to (not a workgroup) OR (dynamic AND executing).
     expect(SRC).toMatch(
-      /\{isWorkgroup && <WorkgroupRoom taskId=\{id\} taskStatus=\{tk\.status\} \/>\}/,
+      /\{\(!isWorkgroup \|\| \(isDynamicWorkgroup && dwPhase === 'executing'\)\) && \(/,
     )
   })
 
-  test('the host-graph canvas never mounts for group tasks', () => {
-    // The workflow-status pane's content is gated: the builtin host snapshot
-    // is an implementation detail, not an observation surface (design §10.2).
-    expect(SRC).toMatch(/hidden=\{tab !== 'workflow-status'\}>\s*\{!isWorkgroup && \(/)
+  test('RFC-167: the orchestration pane mounts DynamicWorkflowPanel for dynamic tasks', () => {
+    expect(SRC).toMatch(/hidden=\{tab !== 'dw-orchestration'\}/)
+    expect(SRC).toMatch(/\{isDynamicWorkgroup && \(\s*<DynamicWorkflowPanel/)
   })
 
   test('tabLabel maps the chatroom tab through tasks.tabChatroom', () => {

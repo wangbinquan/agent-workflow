@@ -90,8 +90,10 @@ describe('TaskDetailPage tab structure', () => {
     // RFC-120 added the task-questions pane (board) after feedback.
     // RFC-164 PR-4 added the workgroup chatroom pane (first; content gated on
     // isWorkgroup — see rfc164-workgroup-tabs.test.ts for its wiring locks).
+    // RFC-167 PR-3 added the dw-orchestration pane (dynamic-workflow confirm
+    // gate; content gated on isDynamicWorkgroup).
     const paneCount = (SRC.match(/className="task-detail__pane"/g) ?? []).length
-    expect(paneCount).toBe(10)
+    expect(paneCount).toBe(11)
     expect(SRC.match(/className="task-detail__panes"/g)?.length).toBe(1)
   })
 })
