@@ -103,7 +103,11 @@ describe('Windows GUI-launch PATH-casing spawn behavior', () => {
       // directly -> uv_spawn ENOENT. This is the user-reported error verbatim.
       const red = await spawnWith({ Path: dir })
       expect(red.threw).toBe(true)
-      expect(red.msg).toMatch(/uv_spawn|ENOENT/)
+      // Bun's missing-binary error differs by OS: Windows surfaces the raw
+      // libuv "ENOENT: ... uv_spawn '<name>'"; POSIX normalizes to
+      // "Executable not found in $PATH: ...". Match both so the lock is
+      // portable (the throw itself is the bug signal; the exact wording isn't).
+      expect(red.msg).toMatch(/ENOENT|uv_spawn|not found/i)
 
       // GREEN: the same env after normalizePathKey promotes `Path` -> `PATH`.
       const greenEnv: Record<string, string> = { Path: dir }
