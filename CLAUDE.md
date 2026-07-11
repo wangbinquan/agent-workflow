@@ -34,6 +34,17 @@ When a batch of issues completes, commit + push and update `STATE.md` so the nex
 
 新 session 接手 RFC 时也按 `proposal → design → plan` 顺序读，规则与 `design/*.md` 一致。
 
+## Branch & PR workflow（所有改动走新分支 + PR，禁止直推 main）
+
+**任何**改动--新需求、bug 修复、重构、文档 / 测试 / CI 改动，无论是否需要走 RFC--都按「从最新 `origin/main` 切新分支 -> 推到远程 -> 开 PR 合并回 `main`」落地。**严禁直接在 `main` 上 commit 或向 `main` push。**
+
+- **切分支**：开工前先 `git fetch origin`，再 `git checkout -b <branch> origin/main`，保证基线最新；不要从过期的本地 `main` 切。
+- **分支命名**：含义清晰、带前缀：`feat/...` / `fix/...` / `chore/...` / `docs/...` / `test/...` / `rfc-NNN-...`。
+- **PR 目标**：`main`。commit 与 PR 标题按改动类型写；RFC 改动按上文要求带 `feat(scope): RFC-NNN ...` 前缀。
+- **合并后清理**：head 分支尽量让 GitHub 合并时自动删（仓库开启 "Automatically delete head branches"）；本地残留用 `git branch -d <branch>`，过期 remote-tracking ref 用 `git branch -r -d origin/<branch>` 或 `git fetch --prune`。
+- **与 RFC 工作流的关系**：RFC 流程决定「要不要先写设计文档」，本规则决定「怎么落地」。上文 RFC 例外（拼写 / 单行 bug 修复 / 纯重命名 / 依赖升级 / 文档增删 / 测试补充 / CI 微调）只是免 RFC，**不免分支 + PR**--「可以直接改 + 提交」指免写 RFC 文档，不等于可以直推 `main`。
+- **例外**：仅在用户明确同意时才可直推 `main`（如紧急 hotfix）；默认一切改动走 PR。
+
 ## Multi-person collaboration（并发改动保留原则）
 
 本仓常有多人并发开发——session 启动时 working tree 里可能已经有他人未提的修改 / 未追踪文件（典型场景：另一个 RFC 正在并行落地）。提交本人工作时必须遵守：
