@@ -11,10 +11,10 @@ import { Route as indexRoute } from '@/routes/index'
 import { Route as usersRoute } from '@/routes/users'
 import { Route as rootRoute } from '@/routes/__root'
 import { Route as settingsRoute } from '@/routes/settings'
-import { Route as mcpsRoute } from '@/routes/mcps'
+import { IndexRoute as mcpsIndexRoute, Route as mcpsRoute } from '@/routes/mcps'
 import { Route as mcpDetailRoute } from '@/routes/mcps.detail'
 import { Route as mcpNewRoute } from '@/routes/mcps.new'
-import { Route as pluginsRoute } from '@/routes/plugins'
+import { IndexRoute as pluginsIndexRoute, Route as pluginsRoute } from '@/routes/plugins'
 import { Route as pluginDetailRoute } from '@/routes/plugins.detail'
 import { Route as pluginNewRoute } from '@/routes/plugins.new'
 import { IndexRoute as skillsIndexRoute, Route as skillsRoute } from '@/routes/skills'
@@ -79,14 +79,10 @@ const routeTree = rootRoute.addChildren([
   agentsRoute.addChildren([agentNewRoute, agentDetailRoute, agentsIndexRoute]),
   // RFC-169: /skills split (master-detail) layout route with nested children.
   skillsRoute.addChildren([skillNewRoute, skillDetailRoute, skillsIndexRoute]),
-  // '/mcps/new' literal must precede '/mcps/$name' so the literal wins.
-  mcpNewRoute,
-  mcpDetailRoute,
-  mcpsRoute,
-  // RFC-031: '/plugins/new' literal must precede '/plugins/$id' so the literal wins.
-  pluginNewRoute,
-  pluginDetailRoute,
-  pluginsRoute,
+  // RFC-169: /mcps split (master-detail) layout route with nested children.
+  mcpsRoute.addChildren([mcpNewRoute, mcpDetailRoute, mcpsIndexRoute]),
+  // RFC-169: /plugins split (master-detail) layout route with nested children.
+  pluginsRoute.addChildren([pluginNewRoute, pluginDetailRoute, pluginsIndexRoute]),
   // Workflow creation is a quick-create dialog on the list page; the retired
   // '/workflows/new' literal only redirects there, and must precede
   // '/workflows/$id' so "new" never resolves as a workflow id.

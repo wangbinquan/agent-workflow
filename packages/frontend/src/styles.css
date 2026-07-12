@@ -12954,3 +12954,23 @@ mark.comment-anchor[data-active='true'] {
   min-height: 0;
   overflow: auto;
 }
+
+/* RFC-169 — plugins detail Updates tab + card version text. */
+.plugin-updates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+.plugin-updates__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.plugin-updates__available {
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+.split-card__version {
+  font-size: var(--font-xs);
+}

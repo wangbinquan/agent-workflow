@@ -39,6 +39,7 @@ import { Route as McpNewRoute } from '../src/routes/mcps.new'
 import { Route as McpDetailRoute } from '../src/routes/mcps.detail'
 import { Route as PluginNewRoute } from '../src/routes/plugins.new'
 import { Route as PluginDetailRoute } from '../src/routes/plugins.detail'
+import { SplitDirtyContext } from '../src/components/split/splitDirty'
 
 interface FetchCall {
   url: string
@@ -99,9 +100,13 @@ const PLUGIN = {
 function renderRoute(route: unknown) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const Comp = (route as { component: ComponentType }).component
+  // RFC-169: the mcps/plugins new+detail routes are now children of the split
+  // page — provide the SplitDirty context so useReportSplitDirty resolves.
   return render(
     <QueryClientProvider client={qc}>
-      <Comp />
+      <SplitDirtyContext.Provider value={{ dirtyKey: null, report: () => {} }}>
+        <Comp />
+      </SplitDirtyContext.Provider>
     </QueryClientProvider>,
   )
 }

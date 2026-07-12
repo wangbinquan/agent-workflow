@@ -34,11 +34,12 @@ describe('/mcps/$name mounts the RFC-030 inventory panel', () => {
     expect(text).toMatch(/<McpInventoryPanel\s+mcpName=\{name\}\s*\/>/)
   })
 
-  test('mounts InventoryPanel BEFORE McpFields (primary-view ordering)', () => {
-    const panelIdx = text.indexOf('<McpInventoryPanel')
-    const fieldsIdx = text.indexOf('<McpFields')
-    expect(panelIdx).toBeGreaterThan(0)
-    expect(fieldsIdx).toBeGreaterThan(0)
-    expect(panelIdx).toBeLessThan(fieldsIdx)
+  // RFC-169: the inventory panel moved from "stacked above the form" into the
+  // detail's "Tools & probe" tab. Both McpFields and McpInventoryPanel are still
+  // mounted (keep-mounted tab panels); ordering is now config-tab-first.
+  test('mounts both McpFields and the InventoryPanel (keep-mounted tabs)', () => {
+    expect(text.indexOf('<McpInventoryPanel')).toBeGreaterThan(0)
+    expect(text.indexOf('<McpFields')).toBeGreaterThan(0)
+    expect(text).toContain("key: 'probe'")
   })
 })

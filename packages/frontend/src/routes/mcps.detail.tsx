@@ -1,61 +1,82 @@
-// RFC-028 — /mcps/$name. Matches /agents/$name shape: title row with Save +
-// Delete buttons, McpFields body. Name + type are locked once persisted —
-// MCP type cannot change in place (backend rejects with mcp-type-immutable).
+// MCP detail / edit page — the right rail of the /mcps split page.
+//
+// RFC-169 (T15): child route under the /mcps layout (path '/$name'), two tabs
+// (Config / Tools & probe). Save stays in place and invalidates the probe cache
+// (a config change makes the persisted probe stale). The inventory panel + its
+// re-probe move from "stacked above the form" into the Tools & probe tab.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { CreateMcp, Mcp } from '@agent-workflow/shared'
+import type { Mcp } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { useDraftFromQuery } from '@/hooks/useDraftFromQuery'
-import { describeApiError } from '@/i18n'
+import { useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { McpFields } from '@/components/McpFields'
 import { McpInventoryPanel } from '@/components/mcps/McpInventoryPanel'
-import { buildCreatePayload, EMPTY_LOCAL_FORM, mcpToForm } from '@/lib/mcp-form'
-import { Route as RootRoute } from './__root'
+import { TabBar, type TabDef } from '@/components/TabBar'
+import { TabPanels } from '@/components/split/TabPanels'
+import { MCP_PROBES_KEY } from '@/lib/mcp-probe-query'
+import { buildCreatePayload, EMPTY_LOCAL_FORM, mcpToForm, type McpFormState } from '@/lib/mcp-form'
+import { Route as mcpsRoute } from './mcps'
 
 export const Route = createRoute({
-  getParentRoute: () => RootRoute,
-  path: '/mcps/$name',
+  getParentRoute: () => mcpsRoute,
+  path: '/$name',
   component: McpDetailPage,
+  remountDeps: ({ params }) => params,
 })
+
+type McpTab = 'config' | 'probe'
 
 function McpDetailPage() {
   const { t } = useTranslation()
   const { name } = Route.useParams()
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const { report } = useSplitDirty()
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [tab, setTab] = useState<McpTab>('config')
 
   const query = useQuery<Mcp>({
     queryKey: ['mcps', name],
     queryFn: ({ signal }) => api.get(`/api/mcps/${encodeURIComponent(name)}`, undefined, signal),
   })
 
-  // RFC-151 PR-4 — hydrate-once draft (see useDraftFromQuery's stale-race
-  // contract: save.onSuccess below eagerly setQueryData's the fresh row).
-  const { draft: form, setDraft: setForm, loaded } = useDraftFromQuery(query.data, mcpToForm)
+  const {
+    draft: form,
+    setDraft: setForm,
+    loaded,
+    dirty,
+    commitSaved,
+  } = useDraftFromQuery(query.data, mcpToForm, { followWhenClean: true })
+  useReportSplitDirty(name, dirty)
 
   const save = useMutation({
-    mutationFn: (payload: CreateMcp): Promise<Mcp> => {
-      // Strip `name` — PUT cannot change it; rename has its own endpoint.
-      const { name: _drop, ...patch } = payload
+    mutationFn: (snapshot: McpFormState): Promise<Mcp> => {
+      const built = buildCreatePayload(snapshot)
+      if (!built.ok) return Promise.reject(new Error('invalid form'))
+      const { name: _drop, ...patch } = built.payload
       return api.put<Mcp>(`/api/mcps/${encodeURIComponent(name)}`, patch)
     },
-    onSuccess: (m) => {
-      void qc.invalidateQueries({ queryKey: ['mcps'] })
+    onSuccess: async (m, snapshot) => {
+      await qc.cancelQueries({ queryKey: ['mcps', name], exact: true })
       qc.setQueryData(['mcps', name], m)
-      navigate({ to: '/mcps' })
+      await qc.cancelQueries({ queryKey: ['mcps'], exact: true })
+      qc.setQueryData<Mcp[]>(['mcps'], (rows) =>
+        rows === undefined ? rows : rows.map((r) => (r.name === name ? m : r)),
+      )
+      void qc.invalidateQueries({ queryKey: ['mcps'], exact: true })
+      // A config change makes the persisted probe stale.
+      void qc.invalidateQueries({ queryKey: MCP_PROBES_KEY })
+      commitSaved(snapshot, mcpToForm(m))
     },
   })
 
-  // RFC-151 PR-1 — validate before mutate; an invalid form sets inline field
-  // errors only (previously a thrown validation sentinel leaked into the
-  // form-actions banner as a raw untranslated string). The save button is
-  // disabled until `loaded`, so the draft is always seeded here.
   function submitSave() {
     if (form === undefined) return
     const built = buildCreatePayload(form)
@@ -65,28 +86,36 @@ function McpDetailPage() {
       return
     }
     setErrors({})
-    save.mutate(built.payload)
+    save.mutate(form)
   }
 
   const del = useMutation({
     mutationFn: () => api.delete(`/api/mcps/${encodeURIComponent(name)}`),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['mcps'] })
+    onSuccess: async () => {
+      report(name, false)
+      await qc.cancelQueries({ queryKey: ['mcps'], exact: true })
+      qc.setQueryData<Mcp[]>(['mcps'], (rows) =>
+        rows === undefined ? rows : rows.filter((r) => r.name !== name),
+      )
+      void qc.invalidateQueries({ queryKey: ['mcps'], exact: true })
       navigate({ to: '/mcps' })
     },
   })
 
-  if (query.isLoading)
-    return (
-      <div className="page">
-        <LoadingState />
-      </div>
-    )
-  if (query.error !== null && query.error !== undefined)
-    return <div className="page error-box">{describeApiError(query.error)}</div>
+  if (form === undefined) {
+    if (query.isLoading) return <LoadingState data-testid="mcp-detail-loading" />
+    if (query.error !== null && query.error !== undefined)
+      return <ErrorBanner error={query.error} />
+    return null
+  }
+
+  const tabs: Array<TabDef<McpTab>> = [
+    { key: 'config', label: t('mcps.detailTabConfig'), testid: 'mcp-tab-config' },
+    { key: 'probe', label: t('mcps.detailTabProbe'), testid: 'mcp-tab-probe' },
+  ]
 
   return (
-    <div className="page">
+    <fieldset className="detail-freeze" disabled={del.isPending}>
       <DetailHeaderActions
         acl={{
           resourceBaseUrl: `/api/mcps/${encodeURIComponent(name)}`,
@@ -106,17 +135,36 @@ function McpDetailPage() {
         errors={[save.error, del.error]}
       >
         <div>
-          <h1>{name}</h1>
+          <h2>{name}</h2>
         </div>
       </DetailHeaderActions>
 
-      {/* RFC-030 — primary view: interface inventory (tools + inputSchema +
-        resources + prompts + capabilities). Sits ABOVE the edit form because
-        the most common visit reason from /mcps "查看完整接口" is "what does
-        this MCP expose?", not "let me edit the config." */}
-      <McpInventoryPanel mcpName={name} />
-
-      <McpFields value={form ?? EMPTY_LOCAL_FORM} onChange={setForm} nameLocked errors={errors} />
-    </div>
+      <div className="agent-form">
+        <TabBar tabs={tabs} active={tab} onSelect={setTab} ariaLabel={t('mcps.title')} />
+        <TabPanels
+          active={tab}
+          className="split__detail-body agent-form__panel"
+          panels={[
+            {
+              key: 'config',
+              testid: 'mcp-panel-config',
+              content: (
+                <McpFields
+                  value={form ?? EMPTY_LOCAL_FORM}
+                  onChange={setForm}
+                  nameLocked
+                  errors={errors}
+                />
+              ),
+            },
+            {
+              key: 'probe',
+              testid: 'mcp-panel-probe',
+              content: <McpInventoryPanel mcpName={name} />,
+            },
+          ]}
+        />
+      </div>
+    </fieldset>
   )
 }

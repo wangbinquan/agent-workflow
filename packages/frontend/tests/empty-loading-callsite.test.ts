@@ -11,11 +11,9 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const SRC = path.resolve(here, '../src')
 
 const RETROFITTED_ROUTES = [
-  // RFC-169: /agents + /skills moved their list loading/empty states into the
-  // shared ResourceSplitPage (asserted separately below); the empty pane still
-  // renders <EmptyState>. mcps/plugins follow in RFC-169 batch D.
-  'routes/mcps.tsx',
-  'routes/plugins.tsx',
+  // RFC-169: the four resource pages (agents / skills / mcps / plugins) moved
+  // their list loading/empty states into the shared ResourceSplitPage (asserted
+  // separately below); their empty panes still render <EmptyState>.
   'routes/workflows.tsx',
   'routes/tasks.tsx',
   'routes/reviews.tsx',

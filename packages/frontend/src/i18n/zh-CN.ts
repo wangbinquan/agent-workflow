@@ -115,6 +115,9 @@ export interface Resources {
     colEnabled: string
     typeLocal: string
     typeRemote: string
+    disabledChip: string
+    detailTabConfig: string
+    detailTabProbe: string
     deleteButton: string
     deleteConfirm: string
     deleteReferenced: string
@@ -216,6 +219,10 @@ export interface Resources {
     colSource: string
     colVersion: string
     colEnabled: string
+    disabledChip: string
+    updateAvailableChip: string
+    detailTabConfig: string
+    detailTabUpdates: string
     formTitleNew: string
     formTitleEdit: string
     newTitle: string
@@ -3734,6 +3741,9 @@ export const zhCN: Resources = {
     colEnabled: '启用',
     typeLocal: '本地 (stdio)',
     typeRemote: '远端 (http / sse)',
+    disabledChip: '已禁用',
+    detailTabConfig: '配置',
+    detailTabProbe: '工具与探测',
     deleteButton: '删除',
     deleteConfirm: '删除该 MCP？',
     deleteReferenced: '无法删除：以下 agent 仍在引用，请先解除引用：',
@@ -3838,6 +3848,10 @@ export const zhCN: Resources = {
     colSource: '来源',
     colVersion: '版本',
     colEnabled: '启用',
+    disabledChip: '已禁用',
+    updateAvailableChip: '有可用更新',
+    detailTabConfig: '配置',
+    detailTabUpdates: '更新',
     formTitleNew: '新建插件',
     formTitleEdit: '编辑插件',
     newTitle: '新建插件',

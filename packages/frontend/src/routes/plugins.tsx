@@ -1,176 +1,118 @@
-// RFC-031 — /plugins list. Mirrors /agents, /skills, /mcps exactly: header
-// row with title + primary "New plugin" Link, table of rows linking to
-// /plugins/$id detail page. No inline editor — create / edit live on their
-// own routes for parity with the other resources.
+// Plugins page — RFC-169 split (master-detail) layout route.
 //
-// Inline actions kept on each row:
-//   - "Check for update" → POST /api/plugins/:id/check-update (no cache write)
-//   - "Upgrade"          → POST /api/plugins/:id/upgrade (re-install + swap)
-// Both stay here because they're per-row operations that don't require
-// opening the detail page.
+// Cards key on plugin id, carry sourceKind + version + enabled + "update
+// available" chips. The update state is a shared query cache (['plugins',
+// 'updates']) written by the detail "Updates" tab's check-update and read here,
+// gated on a spec + resolvedVersion fingerprint so a re-installed plugin can't
+// keep a stale chip. Per-row check-update / upgrade buttons moved into the
+// detail "Updates" tab.
 
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link, createRoute } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Link, Outlet, createRoute, useMatchRoute, useParams } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { Plugin } from '@agent-workflow/shared'
-import { api } from '@/api/client'
 import { useResourceList } from '@/hooks/useResourceList'
-import { ConfirmButton } from '@/components/ConfirmButton'
 import { EmptyState } from '@/components/EmptyState'
-import { ErrorBanner } from '@/components/ErrorBanner'
-import { LoadingState } from '@/components/LoadingState'
-import { ResourceNameCell } from '@/components/ResourceNameCell'
+import { ResourceBadges } from '@/components/ResourceBadges'
+import { ResourceSplitPage, type ResourceCardItem } from '@/components/split/ResourceSplitPage'
+import {
+  PLUGIN_UPDATES_KEY,
+  pluginUpdateAvailable,
+  type PluginUpdatesCache,
+} from '@/lib/plugin-updates'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/plugins',
-  component: PluginsPage,
+  component: PluginsSplitLayout,
 })
 
-function PluginsPage() {
+export const IndexRoute = createRoute({
+  getParentRoute: () => Route,
+  path: '/',
+  component: PluginsEmptyPane,
+})
+
+function PluginsSplitLayout() {
   const { t } = useTranslation()
-  const qc = useQueryClient()
-  // RFC-151 PR-3 — shared list shell: query + delete mutation + owner lookup.
-  // The per-row check-update / upgrade mutations below stay page-specific.
-  const { data, isLoading, error, del, owners } = useResourceList<Plugin>({
+  const { data, isLoading, error, owners } = useResourceList<Plugin>({
     queryKey: ['plugins'],
     endpoint: '/api/plugins',
     deleteBy: 'id',
   })
-
-  const [updateInfo, setUpdateInfo] = useState<Record<string, { latest: string | null }>>({})
-
-  const checkUpdate = useMutation({
-    mutationFn: async (
-      id: string,
-    ): Promise<{ available: boolean; current: string | null; latest: string | null }> =>
-      api.post(`/api/plugins/${encodeURIComponent(id)}/check-update`),
-    onSuccess: (result, id) => setUpdateInfo((s) => ({ ...s, [id]: { latest: result.latest } })),
+  // Pure cache carrier — no fetcher; the detail Updates tab writes it.
+  const updates = useQuery<PluginUpdatesCache>({
+    queryKey: PLUGIN_UPDATES_KEY,
+    enabled: false,
+    gcTime: Infinity,
+    staleTime: Infinity,
   })
+  const updateCache = updates.data ?? {}
 
-  const upgrade = useMutation({
-    mutationFn: async (id: string): Promise<Plugin> =>
-      api.post<Plugin>(`/api/plugins/${encodeURIComponent(id)}/upgrade`),
-    onSuccess: (_p, id) => {
-      void qc.invalidateQueries({ queryKey: ['plugins'] })
-      setUpdateInfo((s) => {
-        const next = { ...s }
-        delete next[id]
-        return next
-      })
-    },
-  })
+  const params = useParams({ strict: false }) as { id?: string }
+  const matchRoute = useMatchRoute()
+  const isNew = matchRoute({ to: '/plugins/new' }) !== false
+
+  const items: ResourceCardItem[] | undefined =
+    data === undefined
+      ? undefined
+      : data.map((p) => ({
+          key: p.id,
+          title: p.name,
+          subtitle: p.spec,
+          to: '/plugins/$id',
+          params: { id: p.id },
+          badges: (
+            <>
+              <span className="chip chip--tight">{t(`plugins.sourceKind.${p.sourceKind}`)}</span>
+              {p.resolvedVersion != null && (
+                <span className="muted split-card__version">{p.resolvedVersion}</span>
+              )}
+              {!p.enabled && <span className="chip chip--tight">{t('plugins.disabledChip')}</span>}
+              {pluginUpdateAvailable(updateCache[p.id], p) && (
+                <span className="chip chip--tight" data-testid={`plugin-update-${p.name}`}>
+                  {t('plugins.updateAvailableChip')}
+                </span>
+              )}
+              <ResourceBadges
+                visibility={p.visibility}
+                ownerUserId={p.ownerUserId}
+                owners={owners}
+              />
+            </>
+          ),
+        }))
 
   return (
-    <div className="page">
-      <header className="page__header page__header--row">
-        <div>
-          <h1>{t('plugins.title')}</h1>
-        </div>
+    <ResourceSplitPage
+      title={t('plugins.title')}
+      items={items}
+      isLoading={isLoading}
+      error={error}
+      selectedKey={isNew ? null : (params.id ?? null)}
+      newActive={isNew}
+      newLabel={t('plugins.newButton')}
+      newTo="/plugins/new"
+      searchPlaceholder={t('common.searchEllipsis')}
+      emptyListText={t('plugins.emptyList')}
+    >
+      <Outlet />
+    </ResourceSplitPage>
+  )
+}
+
+function PluginsEmptyPane() {
+  const { t } = useTranslation()
+  return (
+    <EmptyState
+      title={t('splitPage.emptyPaneTitle')}
+      description={t('splitPage.emptyPaneHint')}
+      action={
         <Link to="/plugins/new" className="btn btn--primary">
           {t('plugins.newButton')}
         </Link>
-      </header>
-
-      {isLoading && <LoadingState data-testid="plugins-loading" />}
-      {error !== null && error !== undefined && <ErrorBanner error={error} />}
-      {del.error !== null && del.error !== undefined && <ErrorBanner error={del.error} />}
-      {checkUpdate.error !== null && checkUpdate.error !== undefined && (
-        <ErrorBanner error={checkUpdate.error} />
-      )}
-      {upgrade.error !== null && upgrade.error !== undefined && (
-        <ErrorBanner error={upgrade.error} />
-      )}
-
-      {!isLoading && data !== undefined && data.length === 0 && (
-        <EmptyState title={t('plugins.emptyList')} data-testid="plugins-empty" />
-      )}
-
-      {data !== undefined && data.length > 0 && (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>{t('plugins.colName')}</th>
-              <th>{t('plugins.colSpec')}</th>
-              <th>{t('plugins.colSource')}</th>
-              <th>{t('plugins.colVersion')}</th>
-              <th>{t('plugins.colEnabled')}</th>
-              <th aria-label={t('common.ariaActions')} />
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((p) => {
-              const upd = updateInfo[p.id]
-              const isCheckingThis = checkUpdate.isPending && checkUpdate.variables === p.id
-              const isUpgradingThis = upgrade.isPending && upgrade.variables === p.id
-              const updateAvailable =
-                upd !== undefined && upd.latest !== null && upd.latest !== p.resolvedVersion
-              return (
-                <tr key={p.id} data-testid={`plugin-row-${p.name}`}>
-                  <ResourceNameCell
-                    to="/plugins/$id"
-                    params={{ id: p.id }}
-                    name={p.name}
-                    visibility={p.visibility}
-                    ownerUserId={p.ownerUserId}
-                    owners={owners}
-                  />
-                  <td className="data-table__truncate" title={p.spec}>
-                    <code className="muted">{p.spec}</code>
-                  </td>
-                  <td className="data-table__nowrap">
-                    <span className="chip chip--tight">
-                      {t(`plugins.sourceKind.${p.sourceKind}`)}
-                    </span>
-                  </td>
-                  <td className="data-table__nowrap">
-                    {p.resolvedVersion ?? t('common.emDash')}
-                    {updateAvailable && (
-                      <span className="chip chip--tight" data-testid={`plugin-update-${p.name}`}>
-                        {' → '}
-                        {upd.latest}
-                      </span>
-                    )}
-                  </td>
-                  <td>{p.enabled ? t('common.yes') : t('common.no')}</td>
-                  <td className="data-table__actions">
-                    <button
-                      type="button"
-                      className="btn btn--sm"
-                      onClick={() => checkUpdate.mutate(p.id)}
-                      disabled={isCheckingThis}
-                      data-testid={`plugin-check-update-${p.name}`}
-                    >
-                      {isCheckingThis ? t('plugins.checking') : t('plugins.checkUpdateButton')}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--sm"
-                      onClick={() => upgrade.mutate(p.id)}
-                      disabled={isUpgradingThis || !updateAvailable}
-                      data-testid={`plugin-upgrade-${p.name}`}
-                    >
-                      {isUpgradingThis ? t('plugins.upgrading') : t('plugins.upgradeButton')}
-                    </button>
-                    <Link to="/plugins/$id" params={{ id: p.id }} className="btn btn--sm">
-                      {t('common.open')}
-                    </Link>
-                    <ConfirmButton
-                      label={t('common.delete')}
-                      onConfirm={() => del.mutateAsync(p)}
-                      variant="danger"
-                      disabled={del.isPending}
-                      size="sm"
-                    />
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      )}
-    </div>
+      }
+    />
   )
 }

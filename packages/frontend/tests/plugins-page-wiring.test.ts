@@ -33,8 +33,10 @@ describe('RFC-031 /plugins wiring', () => {
   })
 
   test('router registers list + new + detail routes (literal before $param)', () => {
+    // RFC-169: /plugins is a split layout route; new / detail / index are nested
+    // children via addChildren (the import now also pulls in IndexRoute).
     const router = read('router.tsx')
-    expect(router).toContain("import { Route as pluginsRoute } from '@/routes/plugins'")
+    expect(router).toContain("Route as pluginsRoute } from '@/routes/plugins'")
     expect(router).toContain("import { Route as pluginDetailRoute } from '@/routes/plugins.detail'")
     expect(router).toContain("import { Route as pluginNewRoute } from '@/routes/plugins.new'")
     // pluginNewRoute must precede pluginDetailRoute so /plugins/new is not
@@ -48,7 +50,7 @@ describe('RFC-031 /plugins wiring', () => {
   test('list page links to /plugins/new and /plugins/$id (no inline editor)', () => {
     const src = read('routes/plugins.tsx')
     expect(src).toContain('"/plugins/new"')
-    expect(src).toContain('"/plugins/$id"')
+    expect(src).toContain("to: '/plugins/$id'")
     // Regression guard: the first RFC-031 cut had an inline editor with
     // these form ids. The migrated list page should NOT contain them; they
     // now live on the dedicated routes via <PluginFields>.
@@ -103,10 +105,17 @@ describe('RFC-031 /plugins wiring', () => {
     expect(src).toMatch(/errors=\{\[save\.error, del\.error\]\}/)
   })
 
-  test('list page still keeps check-update + upgrade row actions', () => {
-    const src = read('routes/plugins.tsx')
-    expect(src).toContain('plugin-check-update-')
-    expect(src).toContain('plugin-upgrade-')
+  // RFC-169: check-update + upgrade moved off the list row into the detail
+  // "Updates" tab; the list card lights up an "update available" chip read from
+  // the shared ['plugins','updates'] cache.
+  test('detail Updates tab hosts check-update + upgrade; list card shows the update chip', () => {
+    const detail = read('routes/plugins.detail.tsx')
+    expect(detail).toContain('plugin-check-update')
+    expect(detail).toContain('plugin-upgrade')
+    expect(detail).toContain("key: 'updates'")
+    const list = read('routes/plugins.tsx')
+    expect(list).toContain('plugin-update-')
+    expect(list).toContain('PLUGIN_UPDATES_KEY')
   })
 
   test('i18n bundles agree on plugin keys (incl. new / detail page text)', () => {

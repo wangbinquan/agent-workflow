@@ -31,22 +31,25 @@ describe('RFC-028 /mcps wiring', () => {
   })
 
   test('router registers list + new + detail routes (literal before $param)', () => {
+    // RFC-169: /mcps is a split layout route; new / detail / index are nested
+    // children via addChildren (the import now also pulls in IndexRoute).
     const router = read('router.tsx')
-    expect(router).toContain("import { Route as mcpsRoute } from '@/routes/mcps'")
+    expect(router).toContain("Route as mcpsRoute } from '@/routes/mcps'")
     expect(router).toContain("import { Route as mcpDetailRoute } from '@/routes/mcps.detail'")
     expect(router).toContain("import { Route as mcpNewRoute } from '@/routes/mcps.new'")
-    // mcpNewRoute must come before mcpDetailRoute in the tree, otherwise
-    // /mcps/new gets eaten by the $name catch-all.
+    // mcpNewRoute must come before mcpDetailRoute in the addChildren array,
+    // otherwise /mcps/new gets eaten by the $name catch-all.
     const newIdx = router.indexOf('mcpNewRoute,')
     const detailIdx = router.indexOf('mcpDetailRoute,')
     expect(newIdx).toBeGreaterThan(0)
     expect(detailIdx).toBeGreaterThan(newIdx)
   })
 
-  test('list page links to /mcps/new and /mcps/$name (no inline editor box)', () => {
+  test('list page links to /mcps/new and /mcps/$name (split cards, no inline editor box)', () => {
     const page = read('routes/mcps.tsx')
+    // "+ new" Link (empty pane) + card destinations passed to ResourceSplitPage.
     expect(page).toContain('to="/mcps/new"')
-    expect(page).toContain('to="/mcps/$name"')
+    expect(page).toContain("to: '/mcps/$name'")
     // Old inline editor box is gone — page no longer renders McpEditor /
     // mcp-editor class names.
     expect(page).not.toContain('mcp-editor')

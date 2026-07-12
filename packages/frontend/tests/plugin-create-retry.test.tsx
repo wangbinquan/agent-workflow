@@ -33,6 +33,7 @@ vi.mock('../src/routes/__root', () => ({ Route: {} }))
 
 // Imported AFTER the mocks so createRoute/useNavigate resolve to the stubs.
 import { Route as PluginNewRoute } from '../src/routes/plugins.new'
+import { SplitDirtyContext } from '../src/components/split/splitDirty'
 
 interface FetchCall {
   url: string
@@ -84,7 +85,9 @@ function renderCreatePage() {
   const Comp = (PluginNewRoute as unknown as { component: ComponentType }).component
   return render(
     <QueryClientProvider client={qc}>
-      <Comp />
+      <SplitDirtyContext.Provider value={{ dirtyKey: null, report: () => {} }}>
+        <Comp />
+      </SplitDirtyContext.Provider>
     </QueryClientProvider>,
   )
 }
