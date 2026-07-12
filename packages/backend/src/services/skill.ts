@@ -18,18 +18,20 @@ import type {
   UpdateSkill,
   UpdateSkillContent,
 } from '@agent-workflow/shared'
+import { isProtectedSkillMainFile } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import {
   existsSync,
   mkdirSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { dirname, join, sep } from 'node:path'
+import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { agents, skills } from '@/db/schema'
@@ -389,6 +391,10 @@ export async function writeSkillFile(
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
   ensureSkillIsWritable(skill)
+  // RFC-169: SKILL.md is edited exclusively through PUT /content — the file tree
+  // must never write it via an arbitrary path (before RFC-169 there was NO
+  // check, so adding a file named `SKILL.md` / `./SKILL.md` truncated it).
+  assertNotSkillMainFile(skillRoot(skill, opts), relPath)
   // RFC-101: support-file writes version the whole files/ tree too.
   commitSkillVersion(
     db,
@@ -413,14 +419,11 @@ export async function deleteSkillFile(
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
   ensureSkillIsWritable(skill)
-  // SKILL.md is special — refuse to delete it; users edit via /content endpoint.
-  if (normalizeSlash(relPath) === 'SKILL.md') {
-    throw new ConflictError(
-      'skill-md-protected',
-      'cannot delete SKILL.md; edit content via PUT /api/skills/:name/content',
-    )
-  }
   const root = skillRoot(skill, opts)
+  // RFC-169: SKILL.md is special — refuse to delete it (users edit via /content).
+  // The pre-RFC-169 raw `=== 'SKILL.md'` compare was bypassable via `./SKILL.md`,
+  // a trailing separator, or a case variant on a case-insensitive filesystem.
+  assertNotSkillMainFile(root, relPath)
   if (!existsSync(safeJoin(root, relPath))) {
     throw new NotFoundError(
       'skill-file-not-found',
@@ -464,8 +467,50 @@ function rowToSkill(row: SkillRow): Skill {
   return out
 }
 
-function normalizeSlash(p: string): string {
-  return p.split(sep).join('/')
+/**
+ * RFC-169 — reject any file-tree write/delete that targets the skill's main
+ * `SKILL.md`. Two layers (design §5.2):
+ *   1. lexical (`isProtectedSkillMainFile`, shared front+back) — catches pure
+ *      aliases: `SKILL.md`, `./SKILL.md`, `SKILL.md/`, `skill.md`, dot-segments;
+ *   2. filesystem identity — catches names the lexical layer can't see because
+ *      they only collide on the actual filesystem: APFS folding `ſKILL.md`
+ *      (U+017F) onto SKILL.md's inode, or a symlink already pointing at it. We
+ *      compare realpath, then dev+inode, of the resolved target vs root
+ *      SKILL.md. On a case-sensitive filesystem these are genuinely different
+ *      files and correctly fall through.
+ * Symlink edge cases that need a pre-planted link to reproduce are RFC-170.
+ */
+function assertNotSkillMainFile(root: string, relPath: string): void {
+  if (isProtectedSkillMainFile(relPath) || resolvesToSkillMainFile(root, relPath)) {
+    throw new ConflictError(
+      'skill-md-protected',
+      'cannot write or delete SKILL.md; edit content via PUT /api/skills/:name/content',
+    )
+  }
+}
+
+function resolvesToSkillMainFile(root: string, relPath: string): boolean {
+  const mainFile = join(root, 'SKILL.md')
+  let target: string
+  try {
+    target = safeJoin(root, relPath)
+  } catch {
+    // Traversal / absolute / backslash — handled (and rejected) elsewhere.
+    return false
+  }
+  try {
+    if (realpathSync(target) === realpathSync(mainFile)) return true
+  } catch {
+    // target or main not present yet — fall through to the inode check.
+  }
+  try {
+    const st = statSync(target)
+    const sm = statSync(mainFile)
+    if (st.dev === sm.dev && st.ino === sm.ino) return true
+  } catch {
+    // not present on disk — nothing to collide with.
+  }
+  return false
 }
 
 /**
