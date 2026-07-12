@@ -141,17 +141,17 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     await expectNoCriticalOrSeriousAxeViolations(page, '/agents')
   })
 
-  test('/agents/new (RFC-155 FormSection form) passes a11y', async ({ page }) => {
-    // RFC-155 — the agent form is the first consumer of the FormSection
-    // primitive (details/summary > h2 collapsible sections); scan it so the
-    // new DOM shape stays inside the axe gate. The two collapsed sections are
-    // also expanded so their inner fields are scanned, not skipped as hidden.
+  test('/agents/new (RFC-169 five-tab form) passes a11y', async ({ page }) => {
+    // RFC-169 — the agent form is a five-tab right rail (Basics / Prompt / Ports
+    // / Resources & deps / Advanced). Scan the default (Basics) panel + the tab
+    // strip, then visit the Advanced tab so its JSON fields are also scanned
+    // (keep-mounted panels are hidden until active, so axe skips them otherwise).
     await primeAuth(page, daemon)
     await page.goto(`${daemon.baseUrl}/agents/new`)
-    await expect(page.getByRole('heading', { name: 'Basics', exact: true })).toBeVisible()
-    await page.getByRole('heading', { name: 'Resources & references', exact: true }).click()
-    await page.getByRole('heading', { name: 'Advanced', exact: true }).click()
+    await expect(page.getByRole('tab', { name: 'Basics', exact: true })).toBeVisible()
     await expectNoCriticalOrSeriousAxeViolations(page, '/agents/new')
+    await page.getByRole('tab', { name: 'Advanced', exact: true }).click()
+    await expectNoCriticalOrSeriousAxeViolations(page, '/agents/new (Advanced tab)')
   })
 
   test('/workflows list passes a11y', async ({ page }) => {

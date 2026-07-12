@@ -675,6 +675,10 @@ test('RFC-022: agent form Dependency tree (preview) renders the full closure', a
   )
   await page.goto(`${daemon.baseUrl}/agents/rfc022-a`)
 
+  // RFC-169: the dependency-tree preview lives in the "Resources & deps" tab
+  // (hidden until activated) — open it before asserting the tree.
+  await page.getByRole('tab', { name: /Resources/ }).click()
+
   // 200ms debounce → wait for the closure preview to populate. The tree
   // renders a treeitem per closure member (root + dependents recursively).
   await expect(page.getByRole('treeitem', { name: 'rfc022-b' })).toBeVisible({ timeout: 5_000 })

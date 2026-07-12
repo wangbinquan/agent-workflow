@@ -67,9 +67,11 @@ describe('RFC-115 i18n — new key added, dead inspector keys removed, mcps kept
 // ---------------------------------------------------------------------------
 
 describe('RFC-115 PR-B — /agents runtime column', () => {
-  test('agents list renders a runtime column header reading each agent runtime', () => {
-    expect(AGENTS).toContain("t('agents.colRuntime')")
+  // RFC-169: the runtime column became a card badge (the table is retired); the
+  // effective runtime is still read from each agent and rendered via StatusChip.
+  test('agent cards render each agent runtime as a badge', () => {
     expect(AGENTS).toMatch(/a\.runtime/)
+    expect(AGENTS).toContain('StatusChip')
   })
   test('unspecified runtime falls back to the global isDefault runtime + a default tag', () => {
     // Reuse the shared ['runtimes'] query key + public StatusChip primitive (no fork).

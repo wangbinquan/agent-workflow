@@ -9,11 +9,14 @@ export interface TabPanelDef<K extends string> {
   key: K
   content: ReactNode
   testid?: string
+  /** Per-panel extra class (e.g. the prompt panel that fills instead of scrolls). */
+  className?: string
 }
 
 export function TabPanels<K extends string>(props: {
   active: K
   panels: ReadonlyArray<TabPanelDef<K>>
+  /** Class applied to every panel (the shared scroll body). */
   className?: string
 }) {
   return (
@@ -24,7 +27,7 @@ export function TabPanels<K extends string>(props: {
           role="tabpanel"
           hidden={p.key !== props.active}
           data-testid={p.testid}
-          className={props.className}
+          className={[props.className, p.className].filter(Boolean).join(' ') || undefined}
         >
           {p.content}
         </div>

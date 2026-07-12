@@ -11,7 +11,9 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const SRC = path.resolve(here, '../src')
 
 const RETROFITTED_ROUTES = [
-  'routes/agents.tsx',
+  // RFC-169: /agents moved its list loading/empty states into the shared
+  // ResourceSplitPage (asserted separately below); the empty pane still renders
+  // <EmptyState>. skills/mcps/plugins follow in RFC-169 batches C/D.
   'routes/skills.tsx',
   'routes/mcps.tsx',
   'routes/plugins.tsx',
@@ -29,6 +31,14 @@ describe('RFC-035 EmptyState / LoadingState rollout', () => {
       expect(/<EmptyState[\s/>]/.test(body), `${rel} <EmptyState>`).toBe(true)
     })
   }
+
+  // RFC-169: the split shell is where the four resource pages' list
+  // loading/empty states now live.
+  test('components/split/ResourceSplitPage.tsx renders <LoadingState> + <EmptyState>', () => {
+    const body = readFileSync(path.resolve(SRC, 'components/split/ResourceSplitPage.tsx'), 'utf8')
+    expect(/<LoadingState[\s/>]/.test(body)).toBe(true)
+    expect(/<EmptyState[\s/>]/.test(body)).toBe(true)
+  })
 
   test('home/InboxPreviewList.tsx renders the compact <EmptyState>', () => {
     const body = readFileSync(path.resolve(SRC, 'components/home/InboxPreviewList.tsx'), 'utf8')

@@ -16,11 +16,15 @@ function mount(initial: CreateAgent, onChange: (next: CreateAgent) => void) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } },
   })
-  return render(
+  const utils = render(
     <QueryClientProvider client={qc}>
       <AgentForm value={initial} onChange={onChange} />
     </QueryClientProvider>,
   )
+  // RFC-169: the InputsEditor lives in the Ports tab; open it so the port
+  // controls are accessible (hidden panels are excluded from getByRole).
+  fireEvent.click(screen.getByRole('tab', { name: /Ports/ }))
+  return utils
 }
 
 beforeEach(() => {

@@ -1,7 +1,12 @@
-// Agent detail / edit page. Loads, mutates, deletes.
+// Agent detail / edit page — the right rail of the /agents split page.
 //
-// Note: TanStack code-based routes use `agents/$name`. Splitting into a
-// dedicated file keeps imports lean and matches the file layout in plan.md.
+// RFC-169 (T6/T8): child route under the /agents layout (path '/$name'), with
+// `remountDeps: ({params}) => params` so switching agents (a card click that
+// only changes the param) remounts this component — otherwise the hydrate-once
+// draft would carry agent A's edits into agent B (a pre-existing latent bug the
+// split page turns into a main path). Save stays in place (no navigate); the
+// cache transaction keeps the list card fresh without turning the editor into
+// an error page on a background refetch failure (§4).
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, createRoute, useNavigate } from '@tanstack/react-router'
@@ -9,15 +14,19 @@ import { useTranslation } from 'react-i18next'
 import type { Agent, CreateAgent } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { useDraftFromQuery } from '@/hooks/useDraftFromQuery'
+import { useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
 import { AgentForm, emptyAgent } from '@/components/AgentForm'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
-import { describeApiError } from '@/i18n'
-import { Route as RootRoute } from './__root'
+import { ErrorBanner } from '@/components/ErrorBanner'
+import { LoadingState } from '@/components/LoadingState'
+import { Route as agentsRoute } from './agents'
 
 export const Route = createRoute({
-  getParentRoute: () => RootRoute,
-  path: '/agents/$name',
+  getParentRoute: () => agentsRoute,
+  path: '/$name',
   component: AgentDetailPage,
+  // RFC-169 T-D11: param change ⇒ remount ⇒ fresh hydrate-once seed.
+  remountDeps: ({ params }) => params,
 })
 
 function AgentDetailPage() {
@@ -25,49 +34,75 @@ function AgentDetailPage() {
   const { name } = Route.useParams()
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const { report } = useSplitDirty()
 
   const query = useQuery<Agent>({
     queryKey: ['agents', name],
     queryFn: ({ signal }) => api.get(`/api/agents/${encodeURIComponent(name)}`, undefined, signal),
   })
 
-  // RFC-151 PR-4 — hydrate-once draft (see useDraftFromQuery's stale-race
-  // contract: save.onSuccess below eagerly setQueryData's the fresh row).
-  const { draft, setDraft, loaded } = useDraftFromQuery(query.data, agentToDraft)
+  // RFC-169: dirty-tracked hydrate-once draft with clean-follow (rebases a clean
+  // draft to background refetches; freezes a dirty one). Save reseeds via
+  // commitSaved rather than navigating away.
+  const { draft, setDraft, loaded, dirty, commitSaved } = useDraftFromQuery(
+    query.data,
+    agentToDraft,
+    { followWhenClean: true },
+  )
+  useReportSplitDirty(name, dirty)
 
   const save = useMutation({
-    mutationFn: () => {
-      // Save is disabled until `loaded`, so the draft is always seeded here.
-      if (draft === undefined) return Promise.reject(new Error('draft not loaded'))
-      const { name: _drop, ...rest } = draft
-      // RFC-115: send an explicit `runtime: null` when the agent inherits, so a PUT
-      // can CLEAR a previously-pinned runtime. A bare `undefined` is dropped by
-      // JSON.stringify, which updateAgent reads as "leave untouched" → the old pin
-      // would survive and the selector would keep lying about it.
-      const patch = { ...rest, runtime: draft.runtime ?? null }
+    mutationFn: (submitted: CreateAgent) => {
+      const { name: _drop, ...rest } = submitted
+      // RFC-115: send explicit `runtime: null` when inheriting so a PUT can
+      // CLEAR a previously-pinned runtime (a bare undefined is dropped by
+      // JSON.stringify → updateAgent reads it as "leave untouched").
+      const patch = { ...rest, runtime: submitted.runtime ?? null }
       return api.put<Agent>(`/api/agents/${encodeURIComponent(name)}`, patch)
     },
-    onSuccess: (a) => {
-      void qc.invalidateQueries({ queryKey: ['agents'] })
-      qc.setQueryData(['agents', name], a)
-      navigate({ to: '/agents' })
+    onSuccess: async (saved, submitted) => {
+      // Detail fence (R3-P1-2): cancel any in-flight detail GET before writing
+      // saved, else a stale GET could land after and clobber it.
+      await qc.cancelQueries({ queryKey: ['agents', name], exact: true })
+      qc.setQueryData(['agents', name], saved)
+      // Collection eager patch (null-safe) then EXACT invalidate — never the
+      // non-exact invalidate that would also refetch the active detail query
+      // and flip the editor to an error page on a transient failure (§4).
+      await qc.cancelQueries({ queryKey: ['agents'], exact: true })
+      qc.setQueryData<Agent[]>(['agents'], (rows) =>
+        rows === undefined ? rows : rows.map((r) => (r.name === name ? saved : r)),
+      )
+      void qc.invalidateQueries({ queryKey: ['agents'], exact: true })
+      commitSaved(submitted, agentToDraft(saved))
+      // stay in place — no navigate (RFC-169 D2).
     },
   })
 
   const del = useMutation({
     mutationFn: () => api.delete(`/api/agents/${encodeURIComponent(name)}`),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['agents'] })
+    onSuccess: async () => {
+      // Sync-clear the dirty ref so the guard doesn't block THIS navigation
+      // (the resource no longer exists — nothing to save).
+      report(name, false)
+      await qc.cancelQueries({ queryKey: ['agents'], exact: true })
+      qc.setQueryData<Agent[]>(['agents'], (rows) =>
+        rows === undefined ? rows : rows.filter((r) => r.name !== name),
+      )
+      void qc.invalidateQueries({ queryKey: ['agents'], exact: true })
       navigate({ to: '/agents' })
     },
   })
 
-  if (query.isLoading) return <div className="page muted">{t('agents.loadingAgent')}</div>
-  if (query.error !== null && query.error !== undefined)
-    return <div className="page error-box">{describeApiError(query.error)}</div>
+  // §6 error-state narrowing: only a missing draft shows the full error/loading;
+  // once seeded, a background failure keeps the editor and shows a top banner.
+  if (draft === undefined) {
+    if (query.isLoading) return <LoadingState data-testid="agent-detail-loading" />
+    if (query.error !== null && query.error !== undefined)
+      return <ErrorBanner error={query.error} />
+  }
 
   return (
-    <div className="page">
+    <fieldset className="detail-freeze" disabled={del.isPending}>
       <DetailHeaderActions
         acl={{
           resourceBaseUrl: `/api/agents/${encodeURIComponent(name)}`,
@@ -75,8 +110,11 @@ function AgentDetailPage() {
         }}
         save={{
           label: save.isPending ? t('common.saving') : t('common.save'),
-          onClick: () => save.mutate(),
+          onClick: () => {
+            if (draft !== undefined) save.mutate(draft)
+          },
           disabled: save.isPending || !loaded,
+          testid: 'agent-save-button',
         }}
         del={{
           label: t('common.delete'),
@@ -98,11 +136,14 @@ function AgentDetailPage() {
         }
       >
         <div>
-          <h1>{name}</h1>
+          <h2>{name}</h2>
         </div>
       </DetailHeaderActions>
+      {draft !== undefined && query.error !== null && query.error !== undefined && (
+        <ErrorBanner error={query.error} />
+      )}
       <AgentForm value={draft ?? emptyAgent()} onChange={setDraft} nameLocked />
-    </div>
+    </fieldset>
   )
 }
 

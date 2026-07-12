@@ -20,10 +20,14 @@ const agentDetailPath = resolve(__dirname, '../src/routes/agents.detail.tsx')
 const skillDetailPath = resolve(__dirname, '../src/routes/skills.detail.tsx')
 
 describe('edit routes navigate to list on save (source layer)', () => {
-  test('agents.detail save.onSuccess navigates to /agents', () => {
+  // RFC-169 D2 — INTENTIONAL FLIP: the split (master-detail) page saves in
+  // place. agents.detail save.onSuccess must NOT navigate; it reseeds the draft
+  // via commitSaved so the editor stays put and the list card refreshes.
+  test('agents.detail save.onSuccess stays in place (no navigate) and reseeds', () => {
     const src = readFileSync(agentDetailPath, 'utf-8')
     const block = extractMutationBlock(src, 'save')
-    expect(block).toMatch(/navigate\(\s*\{\s*to:\s*'\/agents'\s*\}\s*\)/)
+    expect(block).not.toMatch(/navigate\(/)
+    expect(block).toContain('commitSaved(')
   })
 
   test('skills.detail coordinated save navigates to /skills only after ALL channels fulfil', () => {

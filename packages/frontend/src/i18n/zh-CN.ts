@@ -813,6 +813,7 @@ export interface Resources {
     colOutputs: string
     colRuntime: string
     runtimeDefaultTag: string
+    builtin: string
     loadingAgent: string
     saveButton: string
     newTitle: string
@@ -1917,6 +1918,13 @@ export interface Resources {
     noneDeclared: string
   }
   agentForm: {
+    /** RFC-169 — right-rail tab labels (replaced the RFC-155 collapsible sections). */
+    tabsAria: string
+    tabBasics: string
+    tabPrompt: string
+    tabPorts: string
+    tabResources: string
+    tabAdvanced: string
     /** RFC-155 — form-section titles (visible + collapsible groups). */
     sectionBasics: string
     sectionPrompt: string
@@ -3546,6 +3554,7 @@ export const zhCN: Resources = {
     colOutputs: '输出端口',
     colRuntime: '运行时',
     runtimeDefaultTag: '默认',
+    builtin: '内置',
     loadingAgent: '加载代理中…',
     saveButton: '保存修改',
     newTitle: '新建代理',
@@ -4782,6 +4791,12 @@ export const zhCN: Resources = {
     noneDeclared: '（未声明）',
   },
   agentForm: {
+    tabsAria: '代理配置分组',
+    tabBasics: '基础',
+    tabPrompt: '提示词',
+    tabPorts: '端口',
+    tabResources: '资源与依赖',
+    tabAdvanced: '高级',
     sectionBasics: '基本信息',
     sectionPrompt: '提示词（正文）',
     sectionOutputs: '输入与输出',

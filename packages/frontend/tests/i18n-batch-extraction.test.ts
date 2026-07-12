@@ -138,8 +138,11 @@ describe('i18n batch-extraction — call sites rewired', () => {
     expect(s).toMatch(/t\(`reviews\.decision\.\$\{[^}]+\}`\)/)
   })
 
-  test('agents.detail surfaces API errors via describeApiError', () => {
+  test('agents.detail surfaces API errors via the shared ErrorBanner (describeApiError inside)', () => {
+    // RFC-169: the split detail renders <ErrorBanner> (which runs describeApiError
+    // internally) instead of a bare describeApiError call; mutation-channel errors
+    // still flow through DetailHeaderActions.errors → describeApiError.
     const s = src('routes/agents.detail.tsx')
-    expect(s).toContain('describeApiError')
+    expect(s).toContain('ErrorBanner')
   })
 })

@@ -1,10 +1,13 @@
-// Agent create page. POST /api/agents → redirect to detail.
+// Agent create page — the inline "new" view of the /agents split page.
 //
-// RFC-002: on mount, snapshot the current Runtime defaults from /api/config
-// into the draft *once*. Subsequent Settings changes (in another tab, via WS,
-// etc.) do not overwrite the in-progress draft — once the snapshot has fired,
-// applyDefaults never runs again, and even within the snapshot it only fills
-// fields that the user hasn't touched.
+// RFC-169 (T6/T8): child route under the /agents layout (path '/new'); the left
+// rail stays mounted. Light header (title + import + create — no ACL/delete).
+//
+// RFC-002: on mount, snapshot the current Runtime defaults from /api/config into
+// the draft *once*. RFC-169 (P2-4): the same config snapshot ALSO resets the
+// dirty baseline, computed separately so an untouched page stays clean while a
+// page the user already typed into stays dirty (the baseline absorbs defaults on
+// the empty shape; the draft folds defaults into whatever the user has).
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
@@ -14,13 +17,15 @@ import type { Agent, Config, CreateAgent } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { AgentForm, emptyAgent } from '@/components/AgentForm'
 import { AgentImportDialog } from '@/components/AgentImportDialog'
-import { describeApiError } from '@/i18n'
+import { ErrorBanner } from '@/components/ErrorBanner'
+import { NEW_CARD_KEY, useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
+import { useDirtyBaseline } from '@/hooks/useDraftFromQuery'
 import { mergeAgentImport } from '@/lib/agent-import-merge'
-import { Route as RootRoute } from './__root'
+import { Route as agentsRoute } from './agents'
 
 export const Route = createRoute({
-  getParentRoute: () => RootRoute,
-  path: '/agents/new',
+  getParentRoute: () => agentsRoute,
+  path: '/new',
   component: AgentCreatePage,
 })
 
@@ -40,8 +45,11 @@ function AgentCreatePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const { report } = useSplitDirty()
   const [draft, setDraft] = useState(emptyAgent)
   const [importOpen, setImportOpen] = useState(false)
+  const { dirty, resetBaseline } = useDirtyBaseline(draft, draft)
+  useReportSplitDirty(NEW_CARD_KEY, dirty)
 
   const config = useQuery<Config>({
     queryKey: ['config'],
@@ -55,32 +63,55 @@ function AgentCreatePage() {
     if (snapshottedRef.current) return
     if (!config.data) return
     snapshottedRef.current = true
-    setDraft((prev) => applyDefaults(prev, config.data as Config))
-  }, [config.data])
+    const cfg = config.data
+    // Baseline absorbs defaults on the EMPTY shape (so a never-touched page is
+    // clean); the draft folds defaults into whatever the user already has.
+    resetBaseline(applyDefaults(emptyAgent(), cfg))
+    setDraft((prev) => applyDefaults(prev, cfg))
+  }, [config.data, resetBaseline])
 
   const create = useMutation({
     mutationFn: () => api.post<Agent>('/api/agents', draft),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['agents'] })
-      navigate({ to: '/agents' })
+    onSuccess: async (created) => {
+      // Sync-clear before navigating so the guard doesn't block THIS navigation.
+      report(NEW_CARD_KEY, false)
+      await qc.cancelQueries({ queryKey: ['agents'], exact: true })
+      qc.setQueryData<Agent[]>(['agents'], (rows) =>
+        rows === undefined ? rows : [...rows, created],
+      )
+      void qc.invalidateQueries({ queryKey: ['agents'], exact: true })
+      qc.setQueryData(['agents', created.name], created)
+      navigate({ to: '/agents/$name', params: { name: created.name } })
     },
   })
 
   return (
-    <div className="page">
-      <header className="page__header">
-        <h1>{t('agents.newTitle')}</h1>
+    <div className="agent-new">
+      <header className="page__header page__header--row">
+        <div>
+          <h2>{t('agents.newTitle')}</h2>
+        </div>
+        <div className="page__actions">
+          <button
+            type="button"
+            className="btn btn--sm"
+            data-testid="agent-import-open"
+            onClick={() => setImportOpen(true)}
+          >
+            {t('agentForm.importButton')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={create.isPending || draft.name === ''}
+            onClick={() => create.mutate()}
+            data-testid="agent-create-button"
+          >
+            {create.isPending ? t('common.creating') : t('agents.createButton')}
+          </button>
+        </div>
       </header>
-      <div className="agent-new-toolbar">
-        <button
-          type="button"
-          className="btn btn--sm"
-          data-testid="agent-import-open"
-          onClick={() => setImportOpen(true)}
-        >
-          {t('agentForm.importButton')}
-        </button>
-      </div>
+      {create.error !== null && create.error !== undefined && <ErrorBanner error={create.error} />}
       <AgentForm value={draft} onChange={setDraft} />
       <AgentImportDialog
         open={importOpen}
@@ -88,19 +119,6 @@ function AgentCreatePage() {
         currentValue={draft}
         onApply={(res) => setDraft((prev) => mergeAgentImport(prev, res))}
       />
-      <div className="form-actions">
-        <button
-          type="button"
-          className="btn btn--primary"
-          disabled={create.isPending || draft.name === ''}
-          onClick={() => create.mutate()}
-        >
-          {create.isPending ? t('common.creating') : t('agents.createButton')}
-        </button>
-        {create.error !== null && create.error !== undefined && (
-          <span className="form-actions__error">{describeApiError(create.error)}</span>
-        )}
-      </div>
     </div>
   )
 }

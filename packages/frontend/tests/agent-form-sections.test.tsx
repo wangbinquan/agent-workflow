@@ -1,19 +1,15 @@
-// RFC-155 — AgentForm section layout locks.
-//
-// The flat form-grid became six FormSections; these tests lock the section
-// contract the redesign promised:
-//   1. visible sections (Basics / Prompt / Inputs & outputs / Dependency tree) render
-//      as static headings; Resources & Advanced render as details, closed on
-//      an empty draft;
-//   2. a draft that already holds section content opens that section from the
-//      first render (async /agents/$name loads land as a later value — see 3);
-//   3. rising edge only: content arriving later (detail load, import merge)
-//      auto-opens the section, but a same-value render never fights a manual
-//      collapse;
-//   4. the raw-body fallback <details> is gone (MarkdownEditor's edit pane IS
-//      the raw textarea) — DOM level and source level;
-//   5. agentToDraft carries role/outputWrapperPortNames so a persisted
-//      aggregator opens Advanced (the RFC-155 companion bug fix).
+// RFC-169 (T7/T9) — AgentForm five-tab layout locks (replaced the RFC-155 six
+// stacked FormSections). Contract:
+//   1. five tabs render as a tablist: Basics / Prompt / Ports / Resources & deps
+//      / Advanced; Basics is active on first render;
+//   2. panels are keep-mounted (hidden, not unmounted) so a half-typed field
+//      survives a tab switch; only the active panel's fields are accessible;
+//   3. clicking a tab switches the active panel and reveals its fields;
+//   4. the Ports / Resources tabs carry a count badge only when non-empty (the
+//      RFC-155 "there's content here" affordance, now a badge not an auto-open);
+//   5. agentToDraft still carries role / outputWrapperPortNames (RFC-155
+//      companion bug fix — a persisted aggregator round-trips);
+//   6. the raw-body fallback <details> is gone (source backstop).
 
 import { fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -21,12 +17,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { Agent, CreateAgent } from '@agent-workflow/shared'
-import {
-  AgentForm,
-  emptyAgent,
-  hasAdvancedContent,
-  hasResourceContent,
-} from '../src/components/AgentForm'
+import { AgentForm, emptyAgent } from '../src/components/AgentForm'
 import { agentToDraft } from '../src/routes/agents.detail'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
@@ -43,9 +34,7 @@ function mount(initial: CreateAgent, onChange: (next: CreateAgent) => void = () 
   return { ...utils, ui }
 }
 
-function sectionEl(testid: string): HTMLDetailsElement {
-  return screen.getByTestId(testid) as HTMLDetailsElement
-}
+const TAB_NAMES = ['Basics', 'Prompt', 'Ports', 'Resources & deps', 'Advanced']
 
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
@@ -56,88 +45,58 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  document.body.innerHTML = ''
   vi.restoreAllMocks()
 })
 
-describe('RFC-155 — section layout on an empty draft', () => {
-  test('visible sections render; Resources & Advanced are closed details', () => {
+describe('RFC-169 — five-tab layout', () => {
+  test('renders five tabs; Basics is active first', () => {
     mount(emptyAgent())
-    for (const title of [
-      'Basics',
-      'Prompt (body)',
-      'Inputs & outputs',
-      'Dependency tree (preview)',
-    ]) {
-      expect(screen.getByRole('heading', { level: 2, name: title })).toBeTruthy()
+    for (const name of TAB_NAMES) {
+      expect(screen.getByRole('tab', { name: new RegExp(name) })).toBeTruthy()
     }
-    expect(sectionEl('agent-form-section-resources').open).toBe(false)
-    expect(sectionEl('agent-form-section-advanced').open).toBe(false)
+    expect(screen.getByRole('tab', { name: 'Basics' }).getAttribute('aria-selected')).toBe('true')
+    // Basics field is accessible; a Ports field (hidden panel) is not.
+    expect(screen.getByRole('textbox', { name: /Name/ })).toBeTruthy()
+    expect(screen.getByTestId('agent-panel-ports').hasAttribute('hidden')).toBe(true)
   })
 
-  test('raw-body fallback details is gone', () => {
+  test('clicking a tab switches the active panel and reveals its fields', () => {
     mount(emptyAgent())
-    expect(screen.queryByText('Raw body (no preview)')).toBeNull()
-  })
-})
-
-describe('RFC-155 — auto-open on initial content', () => {
-  test('skills content opens Resources from the first render', () => {
-    mount({ ...emptyAgent(), skills: ['linting'] })
-    expect(sectionEl('agent-form-section-resources').open).toBe(true)
-    expect(sectionEl('agent-form-section-advanced').open).toBe(false)
+    expect(screen.getByTestId('agent-panel-advanced').hasAttribute('hidden')).toBe(true)
+    fireEvent.click(screen.getByRole('tab', { name: 'Advanced' }))
+    expect(screen.getByTestId('agent-panel-advanced').hasAttribute('hidden')).toBe(false)
+    expect(screen.getByTestId('agent-panel-basics').hasAttribute('hidden')).toBe(true)
+    // The role selector (Advanced) is now accessible.
+    expect(screen.getByRole('combobox', { name: /Role/ })).toBeTruthy()
   })
 
-  test('permission / role / sync-off each open Advanced from the first render', () => {
-    for (const patch of [
-      { permission: { edit: 'deny' } },
-      { role: 'aggregator' as const },
-      { syncOutputsOnIterate: false },
-    ]) {
-      const { unmount } = mount({ ...emptyAgent(), ...patch })
-      expect(sectionEl('agent-form-section-advanced').open).toBe(true)
-      unmount()
+  test('keep-mounted: all five panels stay in the DOM regardless of active tab', () => {
+    mount(emptyAgent())
+    for (const key of ['basics', 'prompt', 'ports', 'resources', 'advanced']) {
+      expect(screen.getByTestId(`agent-panel-${key}`)).toBeTruthy()
     }
   })
 })
 
-describe('RFC-155 — rising-edge auto-open', () => {
-  test('content arriving later opens the section; a manual collapse is not fought', () => {
-    const { rerender, ui } = mount(emptyAgent())
-    expect(sectionEl('agent-form-section-resources').open).toBe(false)
+describe('RFC-169 — tab count badges', () => {
+  test('Ports badge counts inputs+outputs; absent when empty', () => {
+    const { unmount } = mount(emptyAgent())
+    expect(screen.queryByTestId('agent-tab-ports-badge')).toBeNull()
+    unmount()
+    mount({ ...emptyAgent(), inputs: [{ name: 'a', kind: 'string' }], outputs: ['x', 'y'] })
+    expect(screen.getByTestId('agent-tab-ports-badge').textContent).toBe('3')
+  })
 
-    // Async detail load / import merge lands as a new value → rising edge opens.
-    const withMcp = { ...emptyAgent(), mcp: ['browser'] }
-    rerender(ui(withMcp))
-    expect(sectionEl('agent-form-section-resources').open).toBe(true)
-
-    // Manual collapse…
-    fireEvent.click(screen.getByRole('heading', { level: 2, name: 'Resources & references' }))
-    expect(sectionEl('agent-form-section-resources').open).toBe(false)
-
-    // …must survive a same-content render (no rising edge → no forced open).
-    rerender(ui({ ...withMcp }))
-    expect(sectionEl('agent-form-section-resources').open).toBe(false)
+  test('Resources badge counts skills+mcp+plugins+dependsOn; absent when empty', () => {
+    const { unmount } = mount(emptyAgent())
+    expect(screen.queryByTestId('agent-tab-resources-badge')).toBeNull()
+    unmount()
+    mount({ ...emptyAgent(), skills: ['s'], mcp: ['m'], dependsOn: ['d'] })
+    expect(screen.getByTestId('agent-tab-resources-badge').textContent).toBe('3')
   })
 })
 
-describe('RFC-155 — hasResourceContent / hasAdvancedContent oracles', () => {
-  test('resource oracle: any of skills/mcp/plugins/dependsOn', () => {
-    expect(hasResourceContent(emptyAgent())).toBe(false)
-    expect(hasResourceContent({ ...emptyAgent(), plugins: ['p'] })).toBe(true)
-    expect(hasResourceContent({ ...emptyAgent(), dependsOn: ['a'] })).toBe(true)
-  })
-
-  test('advanced oracle: non-default advanced values only', () => {
-    expect(hasAdvancedContent(emptyAgent())).toBe(false)
-    expect(hasAdvancedContent({ ...emptyAgent(), outputWrapperPortNames: { r: 'f' } })).toBe(true)
-    expect(hasAdvancedContent({ ...emptyAgent(), frontmatterExtra: { x: 1 } })).toBe(true)
-    // role 'normal' and sync=true are the defaults — no content.
-    expect(hasAdvancedContent({ ...emptyAgent(), role: 'normal' })).toBe(false)
-  })
-})
-
-describe('RFC-155 — agentToDraft carries aggregator fields (companion bug fix)', () => {
+describe('RFC-155 companion — agentToDraft carries aggregator fields', () => {
   const aggregator: Agent = {
     name: 'agg',
     description: '',
@@ -158,10 +117,6 @@ describe('RFC-155 — agentToDraft carries aggregator fields (companion bug fix)
     const draft = agentToDraft(aggregator)
     expect(draft.role).toBe('aggregator')
     expect(draft.outputWrapperPortNames).toEqual({ report: 'final' })
-  })
-
-  test('the loaded draft opens Advanced (the full oracle chain)', () => {
-    expect(hasAdvancedContent(agentToDraft(aggregator))).toBe(true)
   })
 })
 

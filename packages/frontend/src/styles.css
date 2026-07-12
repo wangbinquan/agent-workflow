@@ -12881,3 +12881,62 @@ mark.comment-anchor[data-active='true'] {
     max-height: 15rem;
   }
 }
+
+/* ── RFC-169 · agent form tabs (right-rail five-tab layout) ─────────────────
+   AgentForm fills the split detail column: fixed TabBar on top, then one
+   keep-mounted panel visible at a time. Most panels scroll (they inherit
+   .split__detail-body); the Prompt panel fills so the Markdown editor grows to
+   the whole content area instead of a fixed rows box. */
+.agent-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.agent-form > .tabs {
+  flex-shrink: 0;
+}
+.agent-form__panel {
+  padding-top: var(--space-3);
+}
+.agent-form__panel--prompt {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.md-editor--fill {
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+.md-editor--fill .md-editor__pane {
+  min-height: 0;
+}
+.md-editor--fill .md-editor__pane--edit textarea {
+  flex: 1;
+  height: 100%;
+  resize: none;
+}
+.md-editor--fill .md-editor__preview {
+  overflow: auto;
+}
+
+/* RFC-169 — agent detail/new right-rail column: fill the split detail so the
+   AgentForm tabs get the full height. The detail uses a chrome-less <fieldset>
+   so an in-flight delete freezes editing (fieldset[disabled] cascades). */
+.detail-freeze,
+.agent-new {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+.detail-freeze > .page__header,
+.agent-new > .page__header {
+  flex-shrink: 0;
+}

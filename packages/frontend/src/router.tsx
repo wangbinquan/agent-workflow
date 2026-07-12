@@ -3,7 +3,7 @@
 
 import { createRoute, createRouter, redirect } from '@tanstack/react-router'
 import { Route as accountRoute } from '@/routes/account'
-import { Route as agentsRoute } from '@/routes/agents'
+import { IndexRoute as agentsIndexRoute, Route as agentsRoute } from '@/routes/agents'
 import { Route as agentDetailRoute } from '@/routes/agents.detail'
 import { Route as agentNewRoute } from '@/routes/agents.new'
 import { Route as authRoute } from '@/routes/auth'
@@ -73,10 +73,10 @@ const workgroupLaunchRedirect = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   authRoute,
-  // '/agents/new' must come before '/agents/$name' so the literal wins.
-  agentNewRoute,
-  agentDetailRoute,
-  agentsRoute,
+  // RFC-169: /agents is now a split (master-detail) layout route; new / detail /
+  // index are its children. '/agents/new' literal still precedes '/agents/$name'
+  // (belt-and-suspenders — TanStack scores the literal higher anyway).
+  agentsRoute.addChildren([agentNewRoute, agentDetailRoute, agentsIndexRoute]),
   skillNewRoute,
   skillDetailRoute,
   skillsRoute,

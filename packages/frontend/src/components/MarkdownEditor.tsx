@@ -15,13 +15,22 @@ interface MarkdownEditorProps {
   onChange: (v: string) => void
   rows?: number
   placeholder?: string
+  /** RFC-169: fill the parent's height (the agent Prompt tab) instead of a
+   *  fixed `rows` height — the editor grows to the tab content area. */
+  fill?: boolean
 }
 
-export function MarkdownEditor({ value, onChange, rows = 18, placeholder }: MarkdownEditorProps) {
+export function MarkdownEditor({
+  value,
+  onChange,
+  rows = 18,
+  placeholder,
+  fill,
+}: MarkdownEditorProps) {
   const { t } = useTranslation()
   const deferred = useDeferredValue(value)
   return (
-    <div className="md-editor">
+    <div className={fill === true ? 'md-editor md-editor--fill' : 'md-editor'}>
       <div className="md-editor__pane md-editor__pane--edit">
         <div className="md-editor__label">{t('agentForm.markdownEditLabel')}</div>
         <TextArea
