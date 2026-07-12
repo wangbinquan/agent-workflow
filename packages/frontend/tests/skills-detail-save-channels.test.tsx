@@ -40,6 +40,7 @@ vi.mock('../src/routes/__root', () => ({ Route: {} }))
 
 // Imported AFTER the mocks so createRoute/useNavigate resolve to the stubs.
 import { Route as SkillDetailRoute } from '../src/routes/skills.detail'
+import { SplitDirtyContext } from '../src/components/split/splitDirty'
 
 interface FetchCall {
   url: string
@@ -102,9 +103,13 @@ function installFetch(opts: {
 function renderDetail() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const Comp = (SkillDetailRoute as unknown as { component: ComponentType }).component
+  // RFC-169: skills.detail is now a child of the split page — provide the
+  // SplitDirty context so useReportSplitDirty resolves.
   return render(
     <QueryClientProvider client={qc}>
-      <Comp />
+      <SplitDirtyContext.Provider value={{ dirtyKey: null, report: () => {} }}>
+        <Comp />
+      </SplitDirtyContext.Provider>
     </QueryClientProvider>,
   )
 }
@@ -202,22 +207,24 @@ describe('skills.detail save channels (DetailHeaderActions errors array)', () =>
       expect(puts).toHaveLength(1)
       expect(puts[0]!.url.endsWith('/api/skills/sk1')).toBe(true)
     })
-    // Successful meta save navigates back to the list; no error spans.
-    await waitFor(() => expect(h.navigate).toHaveBeenCalledTimes(1))
-    expect(errorSpans()).toHaveLength(0)
+    // RFC-169 D2: save STAYS IN PLACE — no navigate, no error spans; content
+    // channel skipped for an external skill.
+    await waitFor(() => expect(errorSpans()).toHaveLength(0))
+    expect(h.navigate).not.toHaveBeenCalled()
     expect(calls.some((c) => c.method === 'PUT' && c.url.endsWith('/content'))).toBe(false)
   })
 
-  test('managed, both channels succeed: navigate fires exactly once (coordinated, not per-channel)', async () => {
-    installFetch({
+  test('managed, both channels succeed: save stays in place (no navigate), commitSaved reseeds', async () => {
+    const calls = installFetch({
       sourceKind: 'managed',
       putMeta: () => json(skillRow('managed')),
       putContent: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 2 }),
     })
     renderDetail()
     await clickSave()
-    // Pre-fix shape navigated once per fulfilled channel (twice here).
-    await waitFor(() => expect(h.navigate).toHaveBeenCalledTimes(1))
-    expect(errorSpans()).toHaveLength(0)
+    // Both PUTs go out, then we reseed in place — never navigate (D2 flip).
+    await waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(2))
+    await waitFor(() => expect(errorSpans()).toHaveLength(0))
+    expect(h.navigate).not.toHaveBeenCalled()
   })
 })

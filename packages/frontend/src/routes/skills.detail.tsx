@@ -1,4 +1,12 @@
-// Skill detail page: metadata (description) + SKILL.md content + file tree.
+// Skill detail / edit page — the right rail of the /skills split page.
+//
+// RFC-169 (T12): child route under the /skills layout (path '/$name'), with
+// remountDeps so switching skills reseeds cleanly. Four tabs — Overview /
+// Content / Files / History. Save stays in place (double-PUT LWW as today, but
+// reseeds the draft via commitSaved and best-effort refetches content+versions
+// instead of navigating away). The deeper version-consistency work (combined
+// save / composite-token CAS / snapshot authority) is RFC-170; 169 keeps the
+// current double-PUT and adds only stay-in-place + simple mutual exclusion.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
@@ -7,28 +15,40 @@ import { useTranslation } from 'react-i18next'
 import type { Skill, SkillContent } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { useDraftFromQuery } from '@/hooks/useDraftFromQuery'
+import { useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, TextInput } from '@/components/Form'
 import { FuseDialog } from '@/components/fusion/FuseDialog'
 import { LoadingState } from '@/components/LoadingState'
 import { MarkdownEditor } from '@/components/MarkdownEditor'
 import { SkillFileTree } from '@/components/SkillFileTree'
 import { SkillVersionHistory } from '@/components/skill/SkillVersionHistory'
-import { describeApiError } from '@/i18n'
+import { TabBar, type TabDef } from '@/components/TabBar'
+import { TabPanels } from '@/components/split/TabPanels'
 import { skillCapabilities } from '@/lib/skill-capabilities'
-import { Route as RootRoute } from './__root'
+import { Route as skillsRoute } from './skills'
 
 export const Route = createRoute({
-  getParentRoute: () => RootRoute,
-  path: '/skills/$name',
+  getParentRoute: () => skillsRoute,
+  path: '/$name',
   component: SkillDetailPage,
+  remountDeps: ({ params }) => params,
 })
+
+type SkillTab = 'overview' | 'content' | 'files' | 'history'
+
+interface SkillDraft {
+  description: string
+  bodyMd: string
+}
 
 function SkillDetailPage() {
   const { t } = useTranslation()
   const { name } = Route.useParams()
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const { report } = useSplitDirty()
 
   const meta = useQuery<Skill>({
     queryKey: ['skills', name],
@@ -40,95 +60,135 @@ function SkillDetailPage() {
       api.get(`/api/skills/${encodeURIComponent(name)}/content`, undefined, signal),
   })
 
+  const [tab, setTab] = useState<SkillTab>('overview')
   const [fuseOpen, setFuseOpen] = useState(false)
+  const [restorePending, setRestorePending] = useState(false)
 
-  // RFC-151 PR-4 — hydrate-once draft over TWO sources: seed only when the
-  // content query has also settled (`ready`), with `map` closing over it.
-  // Stale-race contract: both save mutations below eagerly setQueryData
-  // their fresh responses (see useDraftFromQuery docstring).
-  const { draft, setDraft, loaded } = useDraftFromQuery(
+  // Hydrate-once draft over TWO sources (meta + content), with clean-follow so a
+  // restore (which invalidates content) rebases the clean draft to the restored
+  // body. Save reseeds via commitSaved rather than navigating away.
+  const { draft, setDraft, loaded, dirty, commitSaved } = useDraftFromQuery<Skill, SkillDraft>(
     meta.data,
     (m) => ({ description: m.description, bodyMd: content.data?.bodyMd ?? '' }),
-    { ready: content.data !== undefined },
+    { ready: content.data !== undefined, followWhenClean: true },
   )
+  useReportSplitDirty(name, dirty)
   const description = draft?.description ?? ''
   const bodyMd = draft?.bodyMd ?? ''
   const setDescription = (v: string) =>
     setDraft((d) => (d === undefined ? d : { ...d, description: v }))
   const setBodyMd = (v: string) => setDraft((d) => (d === undefined ? d : { ...d, bodyMd: v }))
 
-  // RFC-151 PR-1 — read named capability bits instead of re-deriving
-  // `sourceKind === 'managed'` at every consumption site. While the query is
-  // still loading the page renders the (all-false) external capability set;
-  // the early returns below keep that state invisible.
   const caps = skillCapabilities(meta.data?.sourceKind ?? 'external')
 
   const saveMeta = useMutation({
-    mutationFn: () => api.put<Skill>(`/api/skills/${encodeURIComponent(name)}`, { description }),
+    mutationFn: (payload: { description: string }) =>
+      api.put<Skill>(`/api/skills/${encodeURIComponent(name)}`, payload),
     onSuccess: (s) => {
-      void qc.invalidateQueries({ queryKey: ['skills'] })
       qc.setQueryData(['skills', name], s)
     },
   })
   const saveContent = useMutation({
-    mutationFn: () =>
-      api.put<SkillContent>(`/api/skills/${encodeURIComponent(name)}/content`, { bodyMd }),
+    mutationFn: (payload: { bodyMd: string }) =>
+      api.put<SkillContent>(`/api/skills/${encodeURIComponent(name)}/content`, payload),
     onSuccess: (next) => {
-      void qc.invalidateQueries({ queryKey: ['skills'] })
       qc.setQueryData(['skills', name, 'content'], next)
     },
   })
-  // Navigation is a whole-save outcome, NOT a per-channel one: when each
-  // mutation navigated on its own success, the first fulfilled PUT unmounted
-  // the page and the sibling's later failure had nowhere to render — the user
-  // returned to the list as if Save succeeded while one channel was never
-  // persisted. Leave the page only when ALL required channels fulfil; any
-  // failure keeps the page mounted with its per-channel error visible.
+
+  const saving = saveMeta.isPending || saveContent.isPending
+  const operationBusy = saving || restorePending
+
+  // RFC-169 §5.2 (skills special, F1/F2): keep the current double-PUT LWW but
+  // reseed in place. Only when ALL required channels fulfil do we commitSaved
+  // ONCE and best-effort refetch content+versions so the history panel shows the
+  // authoritative latest version (the two PUTs aren't a single snapshot, so we
+  // don't apply the generic "don't refetch after write" rule).
   const handleSave = async () => {
-    const channels: Promise<unknown>[] = [saveMeta.mutateAsync()]
-    if (caps.canEditContent) channels.push(saveContent.mutateAsync())
+    if (draft === undefined) return
+    const submitted: SkillDraft = { description, bodyMd }
+    const channels: Promise<unknown>[] = [saveMeta.mutateAsync({ description })]
+    if (caps.canEditContent) channels.push(saveContent.mutateAsync({ bodyMd }))
     const results = await Promise.allSettled(channels)
-    if (results.every((r) => r.status === 'fulfilled')) navigate({ to: '/skills' })
+    if (results.every((r) => r.status === 'fulfilled')) {
+      commitSaved(submitted, submitted)
+      // best-effort refresh (authoritative version history / content version)
+      void qc.invalidateQueries({ queryKey: ['skills', name] })
+      void qc.invalidateQueries({ queryKey: ['skills', name, 'content'] })
+      void qc.invalidateQueries({ queryKey: ['skills', name, 'versions'] })
+      void qc.invalidateQueries({ queryKey: ['skills'], exact: true })
+    }
+    // partial failure → stays dirty, per-channel errors surface below.
   }
+
   const del = useMutation({
     mutationFn: () => api.delete(`/api/skills/${encodeURIComponent(name)}`),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['skills'] })
+    onSuccess: async () => {
+      report(name, false) // sync-clear so the guard doesn't block this navigation
+      await qc.cancelQueries({ queryKey: ['skills'], exact: true })
+      qc.setQueryData<Skill[]>(['skills'], (rows) =>
+        rows === undefined ? rows : rows.filter((r) => r.name !== name),
+      )
+      void qc.invalidateQueries({ queryKey: ['skills'], exact: true })
       navigate({ to: '/skills' })
     },
   })
 
-  if (meta.isLoading || content.isLoading)
-    return (
-      <div className="page">
-        <LoadingState />
+  if (draft === undefined) {
+    if (meta.isLoading || content.isLoading)
+      return <LoadingState data-testid="skill-detail-loading" />
+    if (meta.error !== null && meta.error !== undefined) return <ErrorBanner error={meta.error} />
+    if (content.error !== null && content.error !== undefined)
+      return <ErrorBanner error={content.error} />
+    if (meta.data === undefined) return null
+  }
+
+  const overview = (
+    <>
+      <div className="skill-detail__meta">
+        <span className={`chip chip--tight chip--${meta.data?.sourceKind ?? 'external'}`}>
+          {t(meta.data?.sourceKind === 'managed' ? 'skills.tabManaged' : 'skills.tabExternal')}
+        </span>{' '}
+        <code>{meta.data?.managedPath ?? meta.data?.externalPath ?? ''}</code>
       </div>
-    )
-  // RFC-151 PR-4: aligned to the shared describeApiError (the other detail
-  // pages already used it). Delta vs the old local describeError: ApiErrors
-  // with an untranslated code now render "<errors.fallback>: <message>"
-  // instead of "<code>: <message>" — localized codes gain a proper message.
-  if (meta.error !== null && meta.error !== undefined)
-    return <div className="page error-box">{describeApiError(meta.error)}</div>
-  if (content.error !== null && content.error !== undefined)
-    return <div className="page error-box">{describeApiError(content.error)}</div>
-  if (meta.data === undefined) return null
+      <Field
+        label={t('skills.fieldDescription')}
+        hint={caps.showManagedHint ? t('skills.descHintManaged') : t('skills.descHintExternal')}
+      >
+        <TextInput value={description} onChange={setDescription} />
+      </Field>
+    </>
+  )
+
+  const contentPanel = caps.canEditContent ? (
+    <MarkdownEditor value={bodyMd} onChange={setBodyMd} fill />
+  ) : (
+    <pre className="readonly-pre">{bodyMd || t('skills.emptyBody')}</pre>
+  )
+
+  const tabs: Array<TabDef<SkillTab>> = [
+    { key: 'overview', label: t('skills.detailTabOverview'), testid: 'skill-tab-overview' },
+    { key: 'content', label: t('skills.detailTabContent'), testid: 'skill-tab-content' },
+    { key: 'files', label: t('skills.detailTabFiles'), testid: 'skill-tab-files' },
+  ]
+  if (caps.showVersionHistory) {
+    tabs.push({ key: 'history', label: t('skills.detailTabHistory'), testid: 'skill-tab-history' })
+  }
 
   return (
-    <div className="page page--wide">
+    <fieldset className="detail-freeze skill-detail" disabled={del.isPending}>
       <DetailHeaderActions
         acl={{
           resourceBaseUrl: `/api/skills/${encodeURIComponent(name)}`,
           invalidateKey: ['skills'],
         }}
         save={{
-          // Dual-mutation pending/label composition stays caller-owned.
-          label:
-            saveMeta.isPending || saveContent.isPending ? t('common.saving') : t('common.save'),
+          label: saving ? t('common.saving') : t('common.save'),
           onClick: () => {
             void handleSave()
           },
-          disabled: saveMeta.isPending || saveContent.isPending || !loaded,
+          disabled: operationBusy || !loaded,
+          testid: 'skill-save-button',
         }}
         del={{
           label: t('common.delete'),
@@ -142,53 +202,62 @@ function SkillDetailPage() {
             </button>
           )
         }
-        // Three independent channels — a failed meta save must not mask a
-        // failed content save (and vice versa); del failures now surface too.
         errors={[saveMeta.error, saveContent.error, del.error]}
       >
         <div>
-          <h1>{name}</h1>
-          <p className="page__hint">
-            <span className={`chip chip--tight chip--${meta.data.sourceKind}`}>
-              {t(meta.data.sourceKind === 'managed' ? 'skills.tabManaged' : 'skills.tabExternal')}
-            </span>{' '}
-            <code>{meta.data.managedPath ?? meta.data.externalPath ?? ''}</code>
-          </p>
+          <h2>{name}</h2>
         </div>
       </DetailHeaderActions>
 
-      <section className="form-grid">
-        <Field
-          label={t('skills.fieldDescription')}
-          hint={caps.showManagedHint ? t('skills.descHintManaged') : t('skills.descHintExternal')}
-        >
-          <TextInput value={description} onChange={setDescription} />
-        </Field>
-      </section>
-
-      <section className="page__section">
-        <h2>{t('skills.bodySection')}</h2>
-        {caps.canEditContent ? (
-          <MarkdownEditor value={bodyMd} onChange={setBodyMd} rows={16} />
-        ) : (
-          <pre className="readonly-pre">{bodyMd || t('skills.emptyBody')}</pre>
-        )}
-      </section>
-
-      <section className="page__section">
-        <h2>{t('skills.filesSection')}</h2>
-        <SkillFileTree skillName={name} readonly={!caps.canBrowseFilesWritable} />
-      </section>
-
-      {caps.showVersionHistory && (
-        <SkillVersionHistory skillName={name} currentVersion={meta.data.contentVersion} />
-      )}
+      <div className="agent-form">
+        <TabBar tabs={tabs} active={tab} onSelect={setTab} ariaLabel={t('skills.title')} />
+        <TabPanels
+          active={tab}
+          className="split__detail-body agent-form__panel"
+          panels={[
+            { key: 'overview', testid: 'skill-panel-overview', content: overview },
+            {
+              key: 'content',
+              testid: 'skill-panel-content',
+              className: 'agent-form__panel--prompt',
+              content: contentPanel,
+            },
+            {
+              key: 'files',
+              testid: 'skill-panel-files',
+              content: (
+                <SkillFileTree
+                  skillName={name}
+                  readonly={!caps.canBrowseFilesWritable}
+                  readonlyPaths={['SKILL.md']}
+                />
+              ),
+            },
+            ...(caps.showVersionHistory
+              ? [
+                  {
+                    key: 'history' as const,
+                    testid: 'skill-panel-history',
+                    content: (
+                      <SkillVersionHistory
+                        skillName={name}
+                        currentVersion={meta.data?.contentVersion ?? 0}
+                        busy={operationBusy || dirty}
+                        onPendingChange={setRestorePending}
+                      />
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
+      </div>
 
       <FuseDialog
         open={fuseOpen}
         onClose={() => setFuseOpen(false)}
         entry={{ kind: 'from-skill', skillName: name }}
       />
-    </div>
+    </fieldset>
   )
 }

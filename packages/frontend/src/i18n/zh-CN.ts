@@ -830,6 +830,10 @@ export interface Resources {
     newTitle: string
     tabManaged: string
     tabExternal: string
+    detailTabOverview: string
+    detailTabContent: string
+    detailTabFiles: string
+    detailTabHistory: string
     fieldName: string
     fieldNameHint: string
     fieldDescription: string
@@ -897,6 +901,7 @@ export interface Resources {
     fileDiscardConfirm: string
     fileErrPathRequired: string
     fileErrRelativeOnly: string
+    fileErrMainFileProtected: string
     fileTreeHeader: string
     fileTreeEmpty: string
     fileNewPathPlaceholder: string
@@ -3571,6 +3576,10 @@ export const zhCN: Resources = {
     newTitle: '新建技能',
     tabManaged: '托管',
     tabExternal: '外部',
+    detailTabOverview: '概览',
+    detailTabContent: '内容',
+    detailTabFiles: '文件',
+    detailTabHistory: '历史',
     fieldName: '名称',
     fieldNameHint: 'kebab-case；用于 /skills/:name URL。',
     fieldDescription: '描述',
@@ -3638,6 +3647,7 @@ export const zhCN: Resources = {
     fileDiscardConfirm: '放弃未保存的修改？',
     fileErrPathRequired: '路径必填',
     fileErrRelativeOnly: '仅允许相对路径；不能包含 ".."',
+    fileErrMainFileProtected: 'SKILL.md 请在「内容」页签编辑，不能在文件树中操作',
     fileTreeHeader: '文件',
     fileTreeEmpty: '暂无文件。',
     fileNewPathPlaceholder: 'path/to/new-file.md',

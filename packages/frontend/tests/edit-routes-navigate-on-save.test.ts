@@ -30,7 +30,10 @@ describe('edit routes navigate to list on save (source layer)', () => {
     expect(block).toContain('commitSaved(')
   })
 
-  test('skills.detail coordinated save navigates to /skills only after ALL channels fulfil', () => {
+  // RFC-169 D2 — INTENTIONAL FLIP: skills.detail also saves in place. The
+  // coordinated all-channels-fulfilled handler reseeds via commitSaved and
+  // best-effort refetches, but must NOT navigate.
+  test('skills.detail coordinated save stays in place (commitSaved, no navigate) after ALL channels fulfil', () => {
     const src = readFileSync(skillDetailPath, 'utf-8')
     const start = src.indexOf('const handleSave = async')
     expect(start).toBeGreaterThan(-1)
@@ -38,9 +41,9 @@ describe('edit routes navigate to list on save (source layer)', () => {
     expect(end).toBeGreaterThan(start)
     const block = src.slice(start, end)
     expect(block).toContain('Promise.allSettled')
-    expect(block).toMatch(
-      /every\(\(r\) => r\.status === 'fulfilled'\)\)\s*navigate\(\s*\{\s*to:\s*'\/skills'\s*\}\s*\)/,
-    )
+    expect(block).toMatch(/every\(\(r\) => r\.status === 'fulfilled'\)\)/)
+    expect(block).toContain('commitSaved(')
+    expect(block).not.toMatch(/navigate\(/)
   })
 
   test('skills.detail save mutations must NOT navigate per-channel (failure-mask regression)', () => {

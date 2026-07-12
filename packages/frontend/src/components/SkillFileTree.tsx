@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { FileNode } from '@agent-workflow/shared'
+import { isProtectedSkillMainFile } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { describeApiError } from '@/i18n'
 import { ConfirmButton } from './ConfirmButton'
@@ -17,9 +18,13 @@ import { LoadingState } from './LoadingState'
 interface Props {
   skillName: string
   readonly?: boolean
+  /** RFC-169: paths shown read-only (no save/delete) — the SKILL.md main file
+   *  is edited through the Content tab, not the file tree. Any path matching
+   *  isProtectedSkillMainFile is treated as read-only regardless. */
+  readonlyPaths?: string[]
 }
 
-export function SkillFileTree({ skillName, readonly = false }: Props) {
+export function SkillFileTree({ skillName, readonly = false, readonlyPaths = [] }: Props) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const treeKey = ['skill-files', skillName]
@@ -47,6 +52,9 @@ export function SkillFileTree({ skillName, readonly = false }: Props) {
 
   const [draft, setDraft] = useState('')
   const [dirty, setDirty] = useState(false)
+
+  const isPathReadonly = (path: string | null): boolean =>
+    path !== null && (readonlyPaths.includes(path) || isProtectedSkillMainFile(path))
 
   // Sync draft from server only when the file changes or initial load lands.
   if (
@@ -102,6 +110,12 @@ export function SkillFileTree({ skillName, readonly = false }: Props) {
     }
     if (p.startsWith('/') || p.includes('..')) {
       setNewError(t('skills.fileErrRelativeOnly'))
+      return
+    }
+    // RFC-169: never create/overwrite the main SKILL.md via the file tree —
+    // it's edited through the Content tab (the backend also fail-closes).
+    if (isProtectedSkillMainFile(p)) {
+      setNewError(t('skills.fileErrMainFileProtected'))
       return
     }
     setNewError(null)
@@ -180,12 +194,12 @@ export function SkillFileTree({ skillName, readonly = false }: Props) {
                 <button
                   type="button"
                   className="btn btn--sm btn--primary"
-                  disabled={!dirty || save.isPending || readonly}
+                  disabled={!dirty || save.isPending || readonly || isPathReadonly(selected)}
                   onClick={() => save.mutate({ path: selected, content: draft })}
                 >
                   {save.isPending ? t('common.saving') : t('common.save')}
                 </button>
-                {!readonly && (
+                {!readonly && !isPathReadonly(selected) && (
                   <ConfirmButton
                     label={t('skills.fileDeleteButton')}
                     onConfirm={() => del.mutateAsync(selected)}

@@ -17,7 +17,7 @@ import { Route as mcpNewRoute } from '@/routes/mcps.new'
 import { Route as pluginsRoute } from '@/routes/plugins'
 import { Route as pluginDetailRoute } from '@/routes/plugins.detail'
 import { Route as pluginNewRoute } from '@/routes/plugins.new'
-import { Route as skillsRoute } from '@/routes/skills'
+import { IndexRoute as skillsIndexRoute, Route as skillsRoute } from '@/routes/skills'
 import { Route as skillDetailRoute } from '@/routes/skills.detail'
 import { Route as skillNewRoute } from '@/routes/skills.new'
 import { Route as tasksRoute } from '@/routes/tasks'
@@ -77,9 +77,8 @@ const routeTree = rootRoute.addChildren([
   // index are its children. '/agents/new' literal still precedes '/agents/$name'
   // (belt-and-suspenders — TanStack scores the literal higher anyway).
   agentsRoute.addChildren([agentNewRoute, agentDetailRoute, agentsIndexRoute]),
-  skillNewRoute,
-  skillDetailRoute,
-  skillsRoute,
+  // RFC-169: /skills split (master-detail) layout route with nested children.
+  skillsRoute.addChildren([skillNewRoute, skillDetailRoute, skillsIndexRoute]),
   // '/mcps/new' literal must precede '/mcps/$name' so the literal wins.
   mcpNewRoute,
   mcpDetailRoute,

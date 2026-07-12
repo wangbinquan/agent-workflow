@@ -12940,3 +12940,17 @@ mark.comment-anchor[data-active='true'] {
 .agent-new > .page__header {
   flex-shrink: 0;
 }
+
+/* RFC-169 — skills detail overview meta line + empty-pane sources card host. */
+.skill-detail__meta {
+  margin-bottom: var(--space-3);
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+.skills-empty-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+  overflow: auto;
+}

@@ -3,7 +3,7 @@
 // DiffViewer / Dialog / ConfirmButton / Empty+Loading primitives.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SkillVersion, SkillVersionDiff, SkillVersionSource } from '@agent-workflow/shared'
 import { api } from '@/api/client'
@@ -23,9 +23,20 @@ const SOURCE_KEY: Record<SkillVersionSource, string> = {
 export function SkillVersionHistory({
   skillName,
   currentVersion,
+  onRestored,
+  busy = false,
+  onPendingChange,
 }: {
   skillName: string
   currentVersion: number
+  /** RFC-169: called after a successful restore so the detail page can rebase
+   *  the content editor onto the restored version (restoreEpoch remount). */
+  onRestored?: () => void
+  /** RFC-169: another version operation (save / file write) is in flight —
+   *  disable restore for simple mutual exclusion. */
+  busy?: boolean
+  /** RFC-169: report restore-in-flight so the detail can disable Save too. */
+  onPendingChange?: (pending: boolean) => void
 }) {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -52,9 +63,17 @@ export function SkillVersionHistory({
     mutationFn: (v: number) => api.post(`/api/skills/${enc}/versions/${v}/restore`, {}),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['skills', skillName] })
+      void qc.invalidateQueries({ queryKey: ['skills', skillName, 'content'] })
+      void qc.invalidateQueries({ queryKey: ['skills', skillName, 'versions'] })
+      void qc.invalidateQueries({ queryKey: ['skill-files', skillName] })
       void qc.invalidateQueries({ queryKey: ['skills'] })
+      onRestored?.()
     },
   })
+
+  useEffect(() => {
+    onPendingChange?.(restore.isPending)
+  }, [restore.isPending, onPendingChange])
 
   return (
     <section className="page__section">
@@ -105,7 +124,7 @@ export function SkillVersionHistory({
                           label={t('skills.versionRestore')}
                           confirmLabel={t('skills.versionRestoreConfirm', { n: v.versionIndex })}
                           onConfirm={() => restore.mutateAsync(v.versionIndex)}
-                          disabled={restore.isPending}
+                          disabled={restore.isPending || busy}
                         />
                       </>
                     )}
