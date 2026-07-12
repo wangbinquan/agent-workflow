@@ -12,14 +12,13 @@
 // bloat the shared cell for one page.
 
 import { Link } from '@tanstack/react-router'
-import { useTranslation } from 'react-i18next'
-import type { ResourceVisibility, UserPublic } from '@agent-workflow/shared'
-
-/** Structural slice of `useUserLookup`'s return — the page-level batch
- *  lookup is created once per page and threaded into every row's cell. */
-export interface OwnerLookup {
-  get: (id: string | null | undefined) => UserPublic | undefined
-}
+import type { ResourceVisibility } from '@agent-workflow/shared'
+import { ResourceBadges } from '@/components/ResourceBadges'
+// RFC-169 (T4): OwnerLookup now lives with ResourceBadges (the extracted
+// visibility/owner fragment); re-exported here so existing importers
+// (mcps.tsx, resource-list-shell.test.tsx) keep working unchanged.
+export type { OwnerLookup } from '@/components/ResourceBadges'
+import type { OwnerLookup } from '@/components/ResourceBadges'
 
 export interface ResourceNameCellProps {
   /** Detail route of the resource kind (constrained to the resource list pages). */
@@ -40,20 +39,16 @@ export interface ResourceNameCellProps {
 }
 
 export function ResourceNameCell(props: ResourceNameCellProps) {
-  const { t } = useTranslation()
   return (
     <td className="data-table__nowrap">
       <Link to={props.to} params={props.params} className="data-table__link" title={props.title}>
         {props.name}
       </Link>
-      {props.visibility === 'private' && (
-        <span className="chip chip--tight">{t('acl.privateChip')}</span>
-      )}
-      {props.ownerUserId != null && props.owners.get(props.ownerUserId) !== undefined && (
-        <span className="muted data-table__owner" title={t('acl.ownerBadge')}>
-          {props.owners.get(props.ownerUserId)?.displayName}
-        </span>
-      )}
+      <ResourceBadges
+        visibility={props.visibility}
+        ownerUserId={props.ownerUserId}
+        owners={props.owners}
+      />
     </td>
   )
 }

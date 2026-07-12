@@ -639,6 +639,16 @@ export const enUS: Resources = {
     startedAt: 'Started',
     finishedAt: 'Finished',
   },
+  // RFC-169: resource split-page skeleton (dirty dot + unsaved guard + empty pane).
+  splitPage: {
+    dirtyDot: 'Unsaved changes',
+    unsavedTitle: 'Unsaved changes',
+    unsavedBody: 'You have unsaved changes. Leaving this page will discard them.',
+    unsavedStay: 'Stay on page',
+    unsavedDiscard: 'Discard changes',
+    emptyPaneTitle: 'Nothing selected',
+    emptyPaneHint: 'Select one from the left, or create a new one.',
+  },
   // RFC-112: runtime registry (Settings → Runtime list + add/edit dialog).
   runtimes: {
     title: 'Runtimes',

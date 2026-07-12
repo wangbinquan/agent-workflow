@@ -743,6 +743,15 @@ export interface Resources {
     startedAt: string
     finishedAt: string
   }
+  splitPage: {
+    dirtyDot: string
+    unsavedTitle: string
+    unsavedBody: string
+    unsavedStay: string
+    unsavedDiscard: string
+    emptyPaneTitle: string
+    emptyPaneHint: string
+  }
   runtimes: {
     title: string
     subtitle: string
@@ -3463,6 +3472,16 @@ export const zhCN: Resources = {
     emptyResource: '暂无{{title}}。',
     startedAt: '开始时间',
     finishedAt: '完成时间',
+  },
+  // RFC-169：资源页双栏骨架（脏标记 + 未保存守卫 + 空态引导）。
+  splitPage: {
+    dirtyDot: '有未保存修改',
+    unsavedTitle: '有未保存的修改',
+    unsavedBody: '当前有未保存的修改，离开本页将丢弃它们。',
+    unsavedStay: '留在本页',
+    unsavedDiscard: '放弃修改',
+    emptyPaneTitle: '未选择任何项',
+    emptyPaneHint: '从左侧选择一个，或新建一个。',
   },
   // RFC-112：运行时注册表（设置 → 运行时列表 + 增改对话框）。
   runtimes: {

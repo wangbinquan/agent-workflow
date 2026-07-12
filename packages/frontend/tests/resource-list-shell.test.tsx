@@ -27,6 +27,7 @@ import { setBaseUrl, setToken } from '../src/stores/auth'
 import { Route as RootRoute } from '../src/routes/__root'
 import { useResourceList } from '../src/hooks/useResourceList'
 import { ResourceNameCell, type OwnerLookup } from '../src/components/ResourceNameCell'
+import { ResourceBadges } from '../src/components/ResourceBadges'
 import '../src/i18n'
 
 interface Row {
@@ -264,5 +265,41 @@ describe('ResourceNameCell', () => {
     // as the historical page cells.
     expect(publicRow.querySelector('.data-table__owner')).toBeNull()
     expect(publicRow.querySelector('a')?.getAttribute('title')).toBeNull()
+  })
+})
+
+// RFC-169 (T4) — the visibility/owner fragment was extracted so the split-page
+// cards render the identical badges as the surviving table cells. Lock that it
+// renders as a bare fragment (host-agnostic — no <td> of its own) and keeps the
+// chip-only-when-private / badge-only-when-resolved semantics.
+describe('ResourceBadges (T4 extraction)', () => {
+  const owners: OwnerLookup = {
+    get: (id) =>
+      id === 'u1'
+        ? { id: 'u1', username: 'alice', displayName: 'Alice', role: 'user', status: 'active' }
+        : undefined,
+  }
+
+  test('private + resolved owner → chip + badge, no wrapper element', () => {
+    render(
+      <div data-testid="host">
+        <ResourceBadges visibility="private" ownerUserId="u1" owners={owners} />
+      </div>,
+    )
+    const host = screen.getByTestId('host')
+    expect(host.querySelector('td')).toBeNull() // not tied to a table cell
+    expect(host.querySelector('.chip.chip--tight')).not.toBeNull()
+    expect(host.querySelector('.data-table__owner')?.textContent).toBe('Alice')
+  })
+
+  test('public + unresolved owner → renders nothing', () => {
+    render(
+      <div data-testid="host2">
+        <ResourceBadges visibility="public" ownerUserId="ghost" owners={owners} />
+      </div>,
+    )
+    const host = screen.getByTestId('host2')
+    expect(host.querySelector('.chip')).toBeNull()
+    expect(host.querySelector('.data-table__owner')).toBeNull()
   })
 })

@@ -12138,6 +12138,20 @@ mark.comment-anchor[data-active='true'] {
 .task-detail__pane > .workgroup-room {
   height: 100%;
   min-height: 0;
+  /* .task-detail__pane is an overflow:auto scroll box with NO padding of its
+     own, and the composer <textarea class="form-input"> sits flush against the
+     pane's left and bottom edges (left column of the grid + last child of
+     .workgroup-room__main). A .form-input's :focus outline is 2px with
+     outline-offset:0 (styles.css ~3090), i.e. painted right on the border edge,
+     so the scroll box clips it on exactly those two sides — the "选中时左框线 +
+     下框线被切" bug. Same class as .dialog__body (see
+     dialog-body-focus-outline-clip.test.ts), but the dialog's negative-margin
+     trick needs the parent to carry padding for the margin to eat into; the
+     pane has none, so we plainly inset the whole room a few px instead —
+     box-sizing:border-box keeps it flush to the pane, and the composer's outline
+     now paints inside the clip box. Locked by
+     workgroup-room-composer-outline-clip.test.ts. */
+  padding: 4px;
 }
 
 .workgroup-room__main {
@@ -12707,4 +12721,163 @@ mark.comment-anchor[data-active='true'] {
 
 .task-wizard .stepper__body {
   min-height: 14rem;
+}
+
+/* ── RFC-169 · resource split page (master-detail) ──────────────────────────
+   Two-column skeleton shared by the four resource pages. The `.content`
+   viewport is already a pinned scroll container with `:has()` page variants
+   (see `.content:has(.page--editor)`); the split page owns its own scrolling so
+   only the card rail and the active tab-panel body scroll — never the page.
+   Every flexible track is `minmax(0, 1fr)` + `min-width: 0` so an
+   `overflow: hidden` ancestor shrinks instead of silently clipping (P2-8). */
+.content:has(.page--split) {
+  overflow: hidden;
+}
+
+.page--split {
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.split__list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+  padding-right: var(--space-3);
+}
+
+.split__title {
+  font-size: var(--font-lg);
+  margin: 0 0 var(--space-3);
+}
+
+.split__search {
+  margin-bottom: var(--space-3);
+  flex-shrink: 0;
+}
+
+.split__cards {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.split__new {
+  margin-top: var(--space-3);
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.split__new.is-active {
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.split-card {
+  display: block;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+}
+
+.split-card:hover {
+  background: var(--bg);
+}
+
+.split-card.is-selected {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.split-card__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.split-card__name {
+  font-size: var(--font-sm);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.split-card__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.split-card__subtitle {
+  font-size: var(--font-xs);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.split-card__badges {
+  margin-top: 4px;
+}
+
+.split__detail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* The single scroll point on the right — pages render header + TabBar fixed,
+   then their tab content inside this body. */
+.split__detail-body {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Narrow-viewport degrade:桌面优先 but must not break-layout. Stack the two
+   columns; the card rail is capped and scrolls internally, the detail fills the
+   rest. Both sides stay horizontal-overflow free (P2-8's 901px break gone). */
+@media (max-width: 1080px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .split__list {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding-right: 0;
+    padding-bottom: var(--space-3);
+    min-height: 0;
+  }
+  .split__cards {
+    /* 15rem (=240px) rather than a literal 240px so the RFC-072 source guard,
+       which globally asserts the old task-output card rule string is gone,
+       stays meaningful. */
+    max-height: 15rem;
+  }
 }
