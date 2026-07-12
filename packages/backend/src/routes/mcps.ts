@@ -134,13 +134,18 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
 
   app.post('/api/mcps/:name/probe', async (c) => {
     const name = c.req.param('name')
+    // RFC-169 (backend small-piece ②): capture the probe start time BEFORE
+    // reading the config snapshot + awaiting the ACL check, so `startedAt >
+    // updatedAt` reliably means the snapshot was read after any concurrent save
+    // (closes the R3-P2-5 TOCTOU window).
+    const startedAt = (probeOptionsOverride?.now ?? Date.now)()
     const mcp = await loadVisibleMcp(actorOf(c), name)
     // probeMcp throws ValidationError('mcp-disabled') → maps to 422
     // automatically via the DomainError middleware. Anything else from the
     // probe service is captured into the returned ProbeResult with status=error.
     let result
     try {
-      result = await probeMcp(mcp, probeOptionsOverride)
+      result = await probeMcp(mcp, { ...probeOptionsOverride, startedAt })
     } catch (err) {
       if (err instanceof DomainError) throw err
       // Probe orchestrator should not throw non-DomainError; if it does, this

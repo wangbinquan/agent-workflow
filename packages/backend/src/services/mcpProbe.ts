@@ -103,6 +103,17 @@ export interface ProbeOptions {
   now?: () => number
   /** Override the total hard timeout (ms). Defaults to 60_000. */
   totalTimeoutMs?: number
+  /**
+   * RFC-169 (backend small-piece ②): the probe's start timestamp, captured by
+   * the CALLER *before* it reads the MCP config snapshot. `probe.startedAt`
+   * later gates freshness (`startedAt > mcp.updatedAt` ⇒ the result reflects the
+   * current config). If startedAt were captured here — after the route already
+   * read the snapshot and awaited the ACL check — a config save landing in that
+   * window would leave `startedAt > updatedAt` while the probe used the OLD
+   * config (a multi-ms TOCTOU, R3-P2-5). Capturing it before the snapshot read
+   * makes `startedAt > updatedAt` imply the snapshot was read after the save.
+   */
+  startedAt?: number
 }
 
 // Module-level dedup map. Key = mcp.name; value = the in-flight probe Promise.
@@ -148,7 +159,9 @@ async function runProbe(mcp: Mcp, opts: ProbeOptions): Promise<ProbeResult> {
   const totalTimeoutMs = opts.totalTimeoutMs ?? HARD_TOTAL_TIMEOUT_MS
   const listTimeoutMs = mcp.config.timeoutMs ?? DEFAULT_LIST_TIMEOUT_MS
 
-  const startedAt = now()
+  // RFC-169: prefer the caller-captured startedAt (taken before the config
+  // snapshot read) so freshness (`startedAt > updatedAt`) is trustworthy.
+  const startedAt = opts.startedAt ?? now()
   const ac = new AbortController()
   const hardTimer = setTimeout(() => ac.abort(new Error('probe-total-timeout')), totalTimeoutMs)
   // Don't keep the process alive just for the abort timer.

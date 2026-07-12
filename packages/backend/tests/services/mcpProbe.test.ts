@@ -410,3 +410,31 @@ describe('buildStdioEnv', () => {
     expect(out).toEqual({ PATH: '/a', HOME: '/b', LANG: 'C' })
   })
 })
+
+// RFC-169 (backend small-piece ②, matrix ㉑) — the probe honors a
+// caller-captured `startedAt`. The route captures it BEFORE reading the config
+// snapshot so `startedAt > updatedAt` reliably means "read after any concurrent
+// save". If the probe stamped its own start time (after the snapshot read +
+// ACL await), a save in that window would leave startedAt > updatedAt while the
+// probe used the OLD config — a multi-ms TOCTOU (R3-P2-5).
+describe('startedAt is caller-provided (freshness TOCTOU fix)', () => {
+  test('uses opts.startedAt verbatim, not now()', async () => {
+    const client = makeFakeClient({})
+    const r = await probeMcp(makeLocalMcp({ name: 'started-a' }), {
+      openClient: fakeOpener(client),
+      now: () => 9999, // finish clock — must NOT become startedAt
+      startedAt: 100, // caller-captured (before the config snapshot read)
+    })
+    expect(r.startedAt).toBe(100)
+    expect(r.finishedAt).toBe(9999)
+  })
+
+  test('falls back to now() when the caller does not provide startedAt', async () => {
+    const client = makeFakeClient({})
+    const r = await probeMcp(makeLocalMcp({ name: 'started-b' }), {
+      openClient: fakeOpener(client),
+      now: () => 5000,
+    })
+    expect(r.startedAt).toBe(5000)
+  })
+})
