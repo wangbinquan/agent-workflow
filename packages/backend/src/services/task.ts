@@ -52,6 +52,7 @@ import {
   tasks,
   users,
   workflows,
+  workgroups,
 } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { buildLaunchCollabRows } from '@/services/taskCollab'
@@ -2471,9 +2472,14 @@ export async function listTasks(
         ? conditions[0]
         : and(...conditions)
   const rows = await db
-    .select({ task: tasks, workflowName: workflows.name })
+    .select({ task: tasks, workflowName: workflows.name, workgroupName: workgroups.name })
     .from(tasks)
     .leftJoin(workflows, eq(workflows.id, tasks.workflowId))
+    // RFC-164 follow-up: live-join the owning group's CURRENT name (tracks
+    // renames) so the list can link to /workgroups/$name and never surface the
+    // internal `__workgroup_host__` host anchor. NULL for non-workgroup tasks
+    // (workgroup_id is NULL → no match) and for deleted groups.
+    .leftJoin(workgroups, eq(workgroups.id, tasks.workgroupId))
     .where(where)
     .orderBy(desc(tasks.startedAt))
     .limit(filters.limit ?? 100)
@@ -2490,7 +2496,7 @@ export async function listTasks(
           .groupBy(lifecycleAlerts.taskId)
   const openByTask = new Map(alertCounts.map((a) => [a.taskId, Number(a.n)]))
   return rows.map((r) => ({
-    ...rowToSummary(r.task, r.workflowName),
+    ...rowToSummary(r.task, r.workflowName, r.workgroupName),
     openAlertCount: openByTask.get(r.task.id) ?? 0,
   }))
 }
@@ -2998,7 +3004,13 @@ function rowToTask(
   }
 }
 
-function rowToSummary(row: typeof tasks.$inferSelect, workflowName: string | null): TaskSummary {
+function rowToSummary(
+  row: typeof tasks.$inferSelect,
+  workflowName: string | null,
+  // RFC-164 follow-up: live-joined group name (see listTasks). Defaults to null
+  // so non-list callers (which don't join workgroups) stay correct.
+  workgroupName: string | null = null,
+): TaskSummary {
   return {
     id: row.id,
     name: row.name, // RFC-037
@@ -3016,6 +3028,7 @@ function rowToSummary(row: typeof tasks.$inferSelect, workflowName: string | nul
     // RFC-159: link back to the scheduled_tasks row that launched this (NULL = manual).
     scheduledTaskId: row.scheduledTaskId ?? null,
     workgroupId: row.workgroupId ?? null,
+    workgroupName,
     // RFC-165: execution-space kind + single-agent soft link.
     spaceKind: row.spaceKind,
     sourceAgentName: row.sourceAgentName ?? null,

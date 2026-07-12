@@ -263,6 +263,14 @@ export const TaskSummarySchema = z.object({
   scheduledTaskId: z.string().nullable().optional(),
   /** RFC-164: owning workgroup id (durable soft link; NULL = not a workgroup task). */
   workgroupId: z.string().nullable().optional(),
+  /**
+   * RFC-164 follow-up: the owning workgroup's CURRENT display name, live-joined
+   * by `workgroup_id` so it tracks renames. NULL when the task is not a
+   * workgroup task, or when the group row was deleted. The list uses this to
+   * link to `/workgroups/$name` and show the group name instead of leaking the
+   * internal `__workgroup_host__` anchor workflow (whose name is `workflowName`).
+   */
+  workgroupName: z.string().nullable().optional(),
   /** RFC-165: execution-space kind (see TaskSchema.spaceKind). */
   spaceKind: SpaceKindSchema.default('remote'),
   /** RFC-165: source agent name for single-agent tasks (null otherwise). */

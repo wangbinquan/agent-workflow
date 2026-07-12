@@ -121,18 +121,26 @@ function TasksPage() {
                   </div>
                 </td>
                 <td>
-                  <Link
-                    to="/workflows/$id"
-                    params={{ id: row.workflowId }}
-                    className="data-table__link"
-                  >
-                    {row.workflowName ?? row.workflowId}
-                  </Link>
-                  {/* RFC-164 PR-4: workgroup tasks carry a badge next to the
-                      workflow cell (their workflowId is the builtin host). */}
-                  {row.workgroupId != null && (
+                  {/* RFC-164 follow-up: a workgroup task is FK-anchored to the
+                      builtin `__workgroup_host__` workflow, so linking/naming by
+                      workflowId/workflowName would send the user into that
+                      internal host and print `__workgroup_host__`. Surface the
+                      GROUP instead — its name + /workgroups/$name link + badge.
+                      Non-workgroup tasks keep the plain workflow link. */}
+                  {row.workgroupId != null ? (
                     <>
-                      {' '}
+                      {row.workgroupName != null ? (
+                        <Link
+                          to="/workgroups/$name"
+                          params={{ name: row.workgroupName }}
+                          className="data-table__link"
+                        >
+                          {row.workgroupName}
+                        </Link>
+                      ) : (
+                        // Group row deleted — keep the badge, drop the dead link.
+                        <span className="data-table__muted">{t('common.emDash')}</span>
+                      )}{' '}
                       <StatusChip
                         kind="info"
                         size="sm"
@@ -141,6 +149,14 @@ function TasksPage() {
                         {t('tasks.workgroupBadge')}
                       </StatusChip>
                     </>
+                  ) : (
+                    <Link
+                      to="/workflows/$id"
+                      params={{ id: row.workflowId }}
+                      className="data-table__link"
+                    >
+                      {row.workflowName ?? row.workflowId}
+                    </Link>
                   )}
                 </td>
                 <td>
