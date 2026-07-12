@@ -125,8 +125,9 @@ function TasksPage() {
                       builtin `__workgroup_host__` workflow, so linking/naming by
                       workflowId/workflowName would send the user into that
                       internal host and print `__workgroup_host__`. Surface the
-                      GROUP instead — its name + /workgroups/$name link + badge.
-                      Non-workgroup tasks keep the plain workflow link. */}
+                      GROUP instead — its (frozen, task-scoped) name + a
+                      /workgroups/$name link + badge. Non-workgroup tasks keep the
+                      plain workflow link. */}
                   {row.workgroupId != null ? (
                     <>
                       {row.workgroupName != null ? (

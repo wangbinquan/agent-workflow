@@ -5,9 +5,17 @@
 //
 // Before the fix the list showed `workflowName` (=== "__workgroup_host__") and
 // linked to /workflows/$hostId. This locks the data half of the fix: listTasks
-// live-joins the owning group's CURRENT name into TaskSummary.workgroupName so
-// the UI can render /workgroups/$name. The frontend wiring is locked by
-// tasks-workgroup-badge.test.ts.
+// projects TaskSummary.workgroupName from the task's OWN frozen
+// `workgroup_config_json` — the same task-scoped source the room serves — so
+// the UI can render /workgroups/$name.
+//
+// Why frozen config and NOT a live join on the `workgroups` resource: the room
+// (loadVisibleWorkgroupTask) already serves this name to any task member gated
+// only by canViewTask, so the frozen name stays inside the task's membership
+// ACL (RFC-099). A live join would additionally leak live resource state (a
+// post-launch rename) to a collaborator without workgroup visibility — the
+// "live-name" divergence assertions below fail if anyone reintroduces it.
+// Frontend wiring is locked by tasks-workgroup-badge.test.ts.
 
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -41,7 +49,7 @@ function seedWorkflow(db: ReturnType<typeof createInMemoryDb>, id: string, name:
 
 function seedTask(
   db: ReturnType<typeof createInMemoryDb>,
-  opts: { name: string; workflowId: string; workgroupId?: string },
+  opts: { name: string; workflowId: string; workgroupId?: string; workgroupConfigJson?: string },
 ): string {
   const tId = ulid()
   const now = Date.now()
@@ -59,45 +67,52 @@ function seedTask(
       inputs: '{}',
       startedAt: now,
       ...(opts.workgroupId !== undefined ? { workgroupId: opts.workgroupId } : {}),
+      ...(opts.workgroupConfigJson !== undefined
+        ? { workgroupConfigJson: opts.workgroupConfigJson }
+        : {}),
     })
     .run()
   return tId
 }
 
-describe('RFC-164 follow-up — listTasks joins the owning workgroup name', () => {
-  test('a workgroup task carries workgroupName while workflowName stays the host anchor', async () => {
+describe('RFC-164 follow-up — listTasks projects the frozen workgroup name', () => {
+  test('workgroupName comes from the frozen config, NOT the live workgroups resource', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
+    const groupId = ulid()
+    // Live resource name deliberately DIVERGES from the frozen config name — the
+    // summary must read the frozen one (a live join would surface 'live-name').
+    db.insert(workgroups).values({ id: groupId, name: 'live-name' }).run()
+    const tId = seedTask(db, {
+      name: 'ship it',
+      workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+      workgroupId: groupId,
+      workgroupConfigJson: JSON.stringify({ workgroupName: 'design-crew', mode: 'leader_worker' }),
+    })
+
+    const row = (await listTasks(db, { limit: 100 })).find((r) => r.id === tId)!
+    expect(row.workgroupId).toBe(groupId)
+    expect(row.workgroupName).toBe('design-crew') // frozen config, not 'live-name'
+    // The workflow join still resolves the builtin host — proving the UI reads
+    // the GROUP name (not this anchor) for the label + link.
+    expect(row.workflowName).toBe(WORKGROUP_HOST_WORKFLOW_NAME)
+  })
+
+  test('renaming the live workgroup does NOT change the frozen name (freeze-at-launch)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
     const groupId = ulid()
     db.insert(workgroups).values({ id: groupId, name: 'design-crew' }).run()
     const tId = seedTask(db, {
-      name: 'ship it',
-      workflowId: WORKGROUP_HOST_WORKFLOW_ID,
-      workgroupId: groupId,
-    })
-
-    const row = (await listTasks(db, { limit: 100 })).find((r) => r.id === tId)!
-    expect(row.workgroupId).toBe(groupId)
-    expect(row.workgroupName).toBe('design-crew')
-    // The workflow join still resolves the builtin host — proving the UI must
-    // read the GROUP name (not this anchor) for the label + link.
-    expect(row.workflowName).toBe(WORKGROUP_HOST_WORKFLOW_NAME)
-  })
-
-  test('workgroupName tracks a rename (live join, not launch-frozen)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
-    const groupId = ulid()
-    db.insert(workgroups).values({ id: groupId, name: 'old-name' }).run()
-    const tId = seedTask(db, {
       name: 't',
       workflowId: WORKGROUP_HOST_WORKFLOW_ID,
       workgroupId: groupId,
+      workgroupConfigJson: JSON.stringify({ workgroupName: 'design-crew' }),
     })
-    db.update(workgroups).set({ name: 'new-name' }).where(eq(workgroups.id, groupId)).run()
+    db.update(workgroups).set({ name: 'renamed-live' }).where(eq(workgroups.id, groupId)).run()
 
     const row = (await listTasks(db, { limit: 100 })).find((r) => r.id === tId)!
-    expect(row.workgroupName).toBe('new-name')
+    expect(row.workgroupName).toBe('design-crew') // still frozen, not 'renamed-live'
   })
 
   test('workgroupName is null for a non-workgroup task', async () => {
@@ -111,20 +126,19 @@ describe('RFC-164 follow-up — listTasks joins the owning workgroup name', () =
     expect(row.workgroupName).toBeNull()
   })
 
-  test('workgroupName is null when the group row was deleted (durable soft link stays)', async () => {
+  test('a corrupt frozen config degrades workgroupName to null (never 5xx the list)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
     const groupId = ulid()
-    db.insert(workgroups).values({ id: groupId, name: 'gone' }).run()
     const tId = seedTask(db, {
       name: 't',
       workflowId: WORKGROUP_HOST_WORKFLOW_ID,
       workgroupId: groupId,
+      workgroupConfigJson: '{ not valid json',
     })
-    db.delete(workgroups).where(eq(workgroups.id, groupId)).run()
 
     const row = (await listTasks(db, { limit: 100 })).find((r) => r.id === tId)!
-    expect(row.workgroupId).toBe(groupId) // soft link stays on the task row
-    expect(row.workgroupName).toBeNull() // but the join yields no name
+    expect(row.workgroupId).toBe(groupId) // soft link still surfaces (badge)
+    expect(row.workgroupName).toBeNull() // but the name degrades safely
   })
 })

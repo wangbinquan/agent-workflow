@@ -52,7 +52,6 @@ import {
   tasks,
   users,
   workflows,
-  workgroups,
 } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { buildLaunchCollabRows } from '@/services/taskCollab'
@@ -2472,14 +2471,9 @@ export async function listTasks(
         ? conditions[0]
         : and(...conditions)
   const rows = await db
-    .select({ task: tasks, workflowName: workflows.name, workgroupName: workgroups.name })
+    .select({ task: tasks, workflowName: workflows.name })
     .from(tasks)
     .leftJoin(workflows, eq(workflows.id, tasks.workflowId))
-    // RFC-164 follow-up: live-join the owning group's CURRENT name (tracks
-    // renames) so the list can link to /workgroups/$name and never surface the
-    // internal `__workgroup_host__` host anchor. NULL for non-workgroup tasks
-    // (workgroup_id is NULL → no match) and for deleted groups.
-    .leftJoin(workgroups, eq(workgroups.id, tasks.workgroupId))
     .where(where)
     .orderBy(desc(tasks.startedAt))
     .limit(filters.limit ?? 100)
@@ -2496,7 +2490,7 @@ export async function listTasks(
           .groupBy(lifecycleAlerts.taskId)
   const openByTask = new Map(alertCounts.map((a) => [a.taskId, Number(a.n)]))
   return rows.map((r) => ({
-    ...rowToSummary(r.task, r.workflowName, r.workgroupName),
+    ...rowToSummary(r.task, r.workflowName),
     openAlertCount: openByTask.get(r.task.id) ?? 0,
   }))
 }
@@ -3004,13 +2998,34 @@ function rowToTask(
   }
 }
 
-function rowToSummary(
-  row: typeof tasks.$inferSelect,
-  workflowName: string | null,
-  // RFC-164 follow-up: live-joined group name (see listTasks). Defaults to null
-  // so non-list callers (which don't join workgroups) stay correct.
-  workgroupName: string | null = null,
-): TaskSummary {
+/**
+ * RFC-164 follow-up: the owning group's display name for the /tasks list, read
+ * from the task's OWN frozen `workgroup_config_json` — the SAME task-scoped
+ * source the room serves (routes/workgroupTasks.ts `loadVisibleWorkgroupTask`),
+ * NOT a live join on the `workgroups` resource. This keeps the name inside the
+ * task's membership ACL (RFC-099): a task member already sees it in the room,
+ * and we never surface live resource state (e.g. a post-launch rename) to a
+ * collaborator without workgroup visibility. NULL for non-workgroup tasks and
+ * for a corrupt/absent config (the list cell degrades to badge-only). Frozen
+ * ⇒ after a group rename the /workgroups/$name link can 404 — acceptable: the
+ * task's primary view is its room, and for an unauthorized viewer 404 is the
+ * intended not-found shape anyway.
+ */
+function frozenWorkgroupName(configJson: string | null): string | null {
+  if (configJson === null || configJson === '') return null
+  try {
+    const parsed: unknown = JSON.parse(configJson)
+    if (parsed !== null && typeof parsed === 'object' && 'workgroupName' in parsed) {
+      const n = (parsed as { workgroupName?: unknown }).workgroupName
+      return typeof n === 'string' && n.length > 0 ? n : null
+    }
+  } catch {
+    // Corrupt frozen config must never 5xx the whole list; degrade to null.
+  }
+  return null
+}
+
+function rowToSummary(row: typeof tasks.$inferSelect, workflowName: string | null): TaskSummary {
   return {
     id: row.id,
     name: row.name, // RFC-037
@@ -3028,7 +3043,7 @@ function rowToSummary(
     // RFC-159: link back to the scheduled_tasks row that launched this (NULL = manual).
     scheduledTaskId: row.scheduledTaskId ?? null,
     workgroupId: row.workgroupId ?? null,
-    workgroupName,
+    workgroupName: frozenWorkgroupName(row.workgroupConfigJson),
     // RFC-165: execution-space kind + single-agent soft link.
     spaceKind: row.spaceKind,
     sourceAgentName: row.sourceAgentName ?? null,

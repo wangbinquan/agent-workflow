@@ -264,11 +264,13 @@ export const TaskSummarySchema = z.object({
   /** RFC-164: owning workgroup id (durable soft link; NULL = not a workgroup task). */
   workgroupId: z.string().nullable().optional(),
   /**
-   * RFC-164 follow-up: the owning workgroup's CURRENT display name, live-joined
-   * by `workgroup_id` so it tracks renames. NULL when the task is not a
-   * workgroup task, or when the group row was deleted. The list uses this to
-   * link to `/workgroups/$name` and show the group name instead of leaking the
-   * internal `__workgroup_host__` anchor workflow (whose name is `workflowName`).
+   * RFC-164 follow-up: the owning workgroup's display name, read from the task's
+   * OWN frozen `workgroup_config_json` (the same task-scoped source the room
+   * serves), NOT a live join on the workgroups resource — so it stays inside the
+   * task's membership ACL and never leaks live resource state (RFC-099). NULL for
+   * non-workgroup tasks / corrupt config. The list shows this + links to
+   * `/workgroups/$name` instead of leaking the internal `__workgroup_host__`
+   * anchor workflow (whose name is `workflowName`).
    */
   workgroupName: z.string().nullable().optional(),
   /** RFC-165: execution-space kind (see TaskSchema.spaceKind). */
