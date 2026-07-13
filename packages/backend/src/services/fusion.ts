@@ -14,7 +14,7 @@
 // runtime imports imports fusion.ts back (only routes + the boot tick do), so
 // importing task/skill/skillVersion/memory here is acyclic.
 
-import { and, asc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq, isNull } from 'drizzle-orm'
 import {
   cpSync,
   existsSync,
@@ -32,7 +32,7 @@ import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { agents, fusions, skills, workflows } from '@/db/schema'
+import { agents, fusions, skills, skillVersions, workflows } from '@/db/schema'
 import { createAgent } from '@/services/agent'
 import { canManageMemory, fuseMemoriesTx, getMemoryById } from '@/services/memory'
 import { canViewResource, isAdminActor, isResourceOwner } from '@/services/resourceAcl'
@@ -650,6 +650,79 @@ export async function reconcileRunningFusions(deps: FusionDeps): Promise<void> {
       // best-effort per fusion
     }
   }
+}
+
+/**
+ * RFC-170 T6 (Codex re-review F9) — recover fusion DECISION half-states left by a
+ * daemon crash mid-approve / mid-reject (a decision spans several txs). Run ONCE
+ * at boot, before HTTP. DB-only + all writes are CAS (casFusionStatus), so a
+ * concurrent live decision always wins.
+ *   - `applying` (approve claimed, but the version-bump / done write didn't land):
+ *       roll FORWARD to `done` iff a skill_versions row already carries this
+ *       fusionId — the version bump + memory fuse commit in ONE tx, so its
+ *       presence proves the apply succeeded durably; otherwise roll BACK to
+ *       `failed` (nothing applied — re-runnable).
+ *   - `running` with `currentTaskId=null` (reject claimed the intermediate but the
+ *       new task was never attached): `failed` (re-initiate). Any speculative task
+ *       is unreachable from the fusion — a separate GC concern, never left linked.
+ */
+export function recoverFusionDecisions(db: DbClient): {
+  rolledForward: number
+  rolledBack: number
+  rejectFailed: number
+} {
+  const now = Date.now()
+  let rolledForward = 0
+  let rolledBack = 0
+  let rejectFailed = 0
+
+  const applying = db
+    .select({ id: fusions.id })
+    .from(fusions)
+    .where(eq(fusions.status, 'applying'))
+    .all() as Array<{ id: string }>
+  for (const f of applying) {
+    const v = db
+      .select({ versionIndex: skillVersions.versionIndex })
+      .from(skillVersions)
+      .where(eq(skillVersions.fusionId, f.id))
+      .orderBy(desc(skillVersions.versionIndex))
+      .limit(1)
+      .all() as Array<{ versionIndex: number }>
+    if (v.length > 0) {
+      if (
+        casFusionStatus(db, f.id, ['applying'], 'done', {
+          extra: { appliedSkillVersion: v[0]!.versionIndex, decidedAt: now },
+        })
+      )
+        rolledForward++
+    } else if (
+      casFusionStatus(db, f.id, ['applying'], 'failed', {
+        extra: {
+          error: 'daemon restarted mid-apply; re-run on the latest version',
+          decidedAt: now,
+        },
+      })
+    ) {
+      rolledBack++
+    }
+  }
+
+  const rejectStuck = db
+    .select({ id: fusions.id })
+    .from(fusions)
+    .where(and(eq(fusions.status, 'running'), isNull(fusions.currentTaskId)))
+    .all() as Array<{ id: string }>
+  for (const f of rejectStuck) {
+    if (
+      casFusionStatus(db, f.id, ['running'], 'failed', {
+        expectCurrentTaskId: null,
+        extra: { error: 'daemon restarted mid-rerun; re-initiate the fusion', decidedAt: now },
+      })
+    )
+      rejectFailed++
+  }
+  return { rolledForward, rolledBack, rejectFailed }
 }
 
 /**

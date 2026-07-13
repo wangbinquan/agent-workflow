@@ -275,6 +275,22 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
   }
 
+  // 5b5. RFC-170 T6 (Codex re-review F9): recover fusion DECISION half-states left
+  // by a crash mid-approve/mid-reject (multi-tx decisions). Roll forward an
+  // 'applying' whose version already committed, roll back the rest, and fail a
+  // 'running'+currentTaskId=null (reject that never attached its task). Best-effort.
+  try {
+    const { recoverFusionDecisions } = await import('@/services/fusion')
+    const r = recoverFusionDecisions(db)
+    if (r.rolledForward + r.rolledBack + r.rejectFailed > 0) {
+      log.info('fusion decision recovery on boot', r)
+    }
+  } catch (err) {
+    log.warn('fusion decision recovery on boot failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
   // 5c. RFC-017: reconcile registered skill_sources up-front so the first
   // /api/skills hit (likely the SPA's skills query) sees the current set of
   // child skills. Per-source failures are already swallowed into

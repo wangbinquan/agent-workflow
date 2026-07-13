@@ -18,7 +18,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { fusions, memories, tasks } from '../src/db/schema'
+import { fusions, memories, skillVersions, tasks } from '../src/db/schema'
 import {
   approveFusion,
   cancelFusion,
@@ -26,6 +26,7 @@ import {
   getFusion,
   isValidFusionTransition,
   reconcileFusion,
+  recoverFusionDecisions,
   rejectFusion,
   type FusionDeps,
 } from '../src/services/fusion'
@@ -538,5 +539,98 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     expect(casCalls.length).toBeGreaterThanOrEqual(5) // reconcile(×3) + reject(×2) + cancel + approve
     expect(src).toMatch(/expectCurrentTaskId: taskId/) // reconcile keys on the task it read
     expect(src).toMatch(/expectCurrentTaskId: null/) // reject attach keys on the null intermediate
+  })
+})
+
+// RFC-170 T6 (Codex re-review F9) — boot recovery for fusion decision half-states
+// left by a daemon crash mid-approve / mid-reject.
+describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
+  let h: H
+  beforeEach(() => (h = build()))
+  afterEach(() => h.cleanup())
+
+  beforeEach(async () => {
+    // A real 'lint' skill so skill_versions FK inserts succeed.
+    await createManagedSkill(h.db, { appHome: h.appHome } as SkillFsOptions, {
+      name: 'lint',
+      description: 'd',
+      bodyMd: 'orig',
+      frontmatterExtra: {},
+    })
+  })
+
+  function seedFusion(id: string, patch: Partial<typeof fusions.$inferInsert>): void {
+    h.db
+      .insert(fusions)
+      .values({
+        id,
+        skillName: 'lint',
+        baseSkillVersion: 1,
+        memoryIdsJson: '[]',
+        intent: '',
+        status: 'running',
+        iteration: 1,
+        currentTaskId: 'task-x',
+        ownerUserId: '__system__',
+        createdAt: Date.now(),
+        ...patch,
+      })
+      .run()
+  }
+
+  // Read status DIRECTLY (getFusion lazily reconciles a running fusion whose task
+  // is missing, which would mask what recoverFusionDecisions actually did).
+  function rawStatus(id: string): string | undefined {
+    return (
+      h.db
+        .select({ status: fusions.status })
+        .from(fusions)
+        .where(eq(fusions.id, id))
+        .all() as Array<{
+        status: string
+      }>
+    )[0]?.status
+  }
+
+  test("'applying' whose version already committed rolls FORWARD to done", () => {
+    seedFusion('fz-fwd', { status: 'applying', currentTaskId: null })
+    // A committed version carries this fusionId (proof the apply landed durably).
+    h.db
+      .insert(skillVersions)
+      .values({
+        id: ulid(),
+        skillName: 'lint',
+        versionIndex: 7,
+        filesPath: 'skills/lint/versions/v7/files',
+        source: 'fusion',
+        fusionId: 'fz-fwd',
+        authorUserId: '__system__',
+        createdAt: Date.now(),
+      })
+      .run()
+    const r = recoverFusionDecisions(h.db)
+    expect(r.rolledForward).toBe(1)
+    expect(rawStatus('fz-fwd')).toBe('done')
+  })
+
+  test("'applying' with NO committed version rolls BACK to failed", () => {
+    seedFusion('fz-back', { status: 'applying', currentTaskId: null })
+    const r = recoverFusionDecisions(h.db)
+    expect(r.rolledBack).toBe(1)
+    expect(rawStatus('fz-back')).toBe('failed')
+  })
+
+  test("'running' with currentTaskId=null (reject that never attached) → failed", () => {
+    seedFusion('fz-rej', { status: 'running', currentTaskId: null })
+    const r = recoverFusionDecisions(h.db)
+    expect(r.rejectFailed).toBe(1)
+    expect(rawStatus('fz-rej')).toBe('failed')
+  })
+
+  test('a normal running fusion (task in flight) is NOT touched', () => {
+    seedFusion('fz-live', { status: 'running', currentTaskId: 'task-live' })
+    const r = recoverFusionDecisions(h.db)
+    expect(r.rolledForward + r.rolledBack + r.rejectFailed).toBe(0)
+    expect(rawStatus('fz-live')).toBe('running')
   })
 })
