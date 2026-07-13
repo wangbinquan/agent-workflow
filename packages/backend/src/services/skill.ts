@@ -45,7 +45,7 @@ import {
 } from '@/services/skillOperations'
 import { parseFrontmatter, stringifyFrontmatter } from '@/util/frontmatter'
 import { realpathInside, safeJoin } from '@/util/safePath'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 
 type SkillRow = typeof skills.$inferSelect
 
@@ -242,6 +242,17 @@ export async function importExternalSkill(
 export async function updateSkill(db: DbClient, name: string, patch: UpdateSkill): Promise<Skill> {
   const existing = await getSkill(db, name)
   if (existing === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
+  // RFC-170 §8 (G3-2): a source-external skill's metadata is owned by its
+  // registered source directory (the SKILL.md there is authoritative). A direct
+  // metadata write would be silently clobbered on the next source reconcile, so
+  // the platform rejects it — matching the read-only description field in the
+  // UI. hand-external (DB metadata authority) and managed skills are unaffected.
+  if (existing.authorityKind === 'source-external' && patch.description !== undefined) {
+    throw new ForbiddenError(
+      'skill-source-external-metadata-readonly',
+      "a source-external skill's description is owned by its source directory; edit it there",
+    )
+  }
   const set: Partial<typeof skills.$inferInsert> = { updatedAt: Date.now() }
   if (patch.description !== undefined) set.description = patch.description
   await db.update(skills).set(set).where(eq(skills.name, name))

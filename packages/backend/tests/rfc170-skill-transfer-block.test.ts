@@ -16,6 +16,7 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skills, users } from '../src/db/schema'
 import { getResourceAcl, updateResourceAcl, type AclRow } from '../src/services/resourceAcl'
+import { getSkill, updateSkill } from '../src/services/skill'
 import { ForbiddenError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -124,5 +125,70 @@ describe('RFC-170 §8 (G3-2) — external skill owner-transfer block', () => {
     })
     expect(res.ownerUserId).toBe(OWNER)
     expect(res.visibility).toBe('private')
+  })
+})
+
+// RFC-170 §8 (G3-2, §2) — a source-external skill's DB metadata is owned by its
+// registered source directory; a direct PUT would be clobbered on the next
+// reconcile, so `updateSkill` rejects a description write. hand-external (DB
+// metadata authority) + managed accept it. This is the backend enforcement
+// behind the read-only description field in the detail UI.
+describe('RFC-170 §8 (G3-2) — source-external metadata write is read-only', () => {
+  let db: DbClient
+
+  beforeEach(async () => {
+    db = createInMemoryDb(MIGRATIONS)
+  })
+
+  async function seedSkill(authorityKind: Authority): Promise<string> {
+    const id = ulid()
+    const name = `sk-${id.slice(-6).toLowerCase()}`
+    await db.insert(skills).values({
+      id,
+      name,
+      description: 'orig',
+      sourceKind: authorityKind === 'managed' ? 'managed' : 'external',
+      authorityKind,
+      managedPath: authorityKind === 'managed' ? `skills/${name}/files` : null,
+      externalPath: authorityKind === 'managed' ? null : '/ext/x',
+    })
+    return name
+  }
+
+  test('source-external: a description write is 403 ForbiddenError (unchanged)', async () => {
+    const name = await seedSkill('source-external')
+    await expect(updateSkill(db, name, { description: 'hacked' })).rejects.toBeInstanceOf(
+      ForbiddenError,
+    )
+    expect((await getSkill(db, name))!.description).toBe('orig') // nothing written
+  })
+
+  test('source-external: the block carries the stable diagnostic code', async () => {
+    const name = await seedSkill('source-external')
+    let code: string | undefined
+    try {
+      await updateSkill(db, name, { description: 'x' })
+    } catch (e) {
+      code = (e as { code?: string }).code
+    }
+    expect(code).toBe('skill-source-external-metadata-readonly')
+  })
+
+  test('source-external: an EMPTY patch (no description) is a no-op, not rejected', async () => {
+    const name = await seedSkill('source-external')
+    const res = await updateSkill(db, name, {})
+    expect(res.description).toBe('orig')
+  })
+
+  test('hand-external: description IS writable (DB metadata authority)', async () => {
+    const name = await seedSkill('hand-external')
+    const res = await updateSkill(db, name, { description: 'edited' })
+    expect(res.description).toBe('edited')
+  })
+
+  test('managed: description IS writable', async () => {
+    const name = await seedSkill('managed')
+    const res = await updateSkill(db, name, { description: 'edited' })
+    expect(res.description).toBe('edited')
   })
 })
