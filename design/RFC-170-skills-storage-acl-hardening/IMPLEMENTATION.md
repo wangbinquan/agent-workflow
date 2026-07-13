@@ -222,20 +222,40 @@ immutable-id CAS / 同步 claim / commitSkillVersion 事务内复合 fence / 前
 live SKILL.md 后 readSkillContent 仍返回 v1 快照 body。**完整 G1-1（签 token/注入前 live
 identity hash 校验 → drift 隔离）随 T-BOOT bootVerifiedSet/quarantine 落地**。
 
-## 7. 其余（依赖顺序，批次 B 收尾 + 批次 C）
+## 6h. T-BOOT 核心机制（已落，㉖㉗㉘）——用户 #2 主体
 
-**T-BOOT 完整机制（用户 #2 剩余，大型 + 跨切、触 scheduler〔协作者 WIP〕）**：
-`isSkillAvailableThisBoot(skill)` predicate + `bootVerifiedSet`（后台逐 managed skill 重验
-content_version 行/目录 + hash + 无 symlink + SKILL.md 合法 → 入集或 CAS quarantined）+
-统一 gate detail/list/runtime/token-writer/scheduler（G8-2 按 authority_kind 分流）+ 无全量
-barrier · readSkillFile/tree/fusion-base/runtime-stage 也走 skillReadRoot · 签 token/注入前
-live identity hash 校验 → drift → pending/quarantine ·
+`services/skillBootVerify.ts` 三增量落地：
 
-T9 quarantine 注入门（stageSkills 前查 version_state，**注意 scheduler 协作者 WIP**）·
+- **增量①（b9938652）地基**：`bootVerifiedSet`（内存、boot-epoch、仅 managed）+
+  `isSkillAvailableThisBoot`（§invariant④/G8-2 单谓词，**未激活返 true→测试/pre-boot 零
+  破坏**）+ `verifyManagedSnapshot`（re-hash 对 content_hash + SKILL.md 存在→通过入集/不符
+  CAS quarantined）+ `runBootSnapshotReverify`（逐 managed 重验、snapshot-unverified 首采纳
+  升 authoritative、无全量 barrier）。破环：hashDir/collectFiles/NUL 抽 leaf `skillHash.ts`。
+  commitSkillVersion 置 version_state='snapshot-authoritative' + publish 后 markSkillBootVerified
+  （刚写即本 boot 已验、post-boot create/edit 即时可用）。
+- **增量②（3c4fcf98）gate + boot 接线**：getSkill/listSkills 过滤加谓词（未验/quarantined
+  managed 隐藏）；start.ts 7b 开 HTTP 后后台跑 runBootSnapshotReverify（deferred、best-effort、
+  无 barrier）。
+- **增量③（e5af9466）T9 注入门**：`isSkillInjectableThisBoot({id,sourceKind})`（leaf 可调）+
+  `SkillQuarantinedError`（409、不可吞）；scheduler `resolveSkills` managed 分支拒未验/
+  quarantined（**pre-spawn 解析层终检**）——绕过 getSkill 直查表的注入路径补齐。
+
+测试：skill-boot-verify（新建即 authoritative+verified · gate 默认 inactive · 激活后
+getSkill/list 隐藏 quarantined · 篡改 hash→quarantined · reverify 验好隔坏 · isSkillInjectable
+分流 + resolver source lock）。binary smoke 无模块环。
+
+## 7. 其余（依赖顺序，T-BOOT 收尾 + 批次 B/C）
+
+**T-BOOT 收尾（核心已落 §6h）**：token-writer gate（getSkillPreconditionTokenById 也查
+injectable，quarantined 不签 fusion token）· readSkillFile/tree/fusion-base 也走 skillReadRoot
+（现仅 readSkillContent）· 签 token/注入前 live identity hash 校验 → drift → pending（快照重验
+是 boot 级、每 sign/inject 级 drift 校验为增强）· 大树验证公平调度（小 skill 先、软 wall）·
+
 T9b external descriptor-relative 捕获（需 openat/O_NOFOLLOW，Bun/Node 不足则 native helper 或
 fail-closed）· 旧 PUT/:name+PUT/content →410（T-BSAFE③，**与 external combined-save 后端
-支持耦合**）· migrate（T10）·
-adopt-managed（T10b，两阶段 capture→confirm）· 批次 C（source lifecycle reconcile 拆
-user/system、migration 决策 UI、adoption UI）。**注**：external file/tree GET realpath
-containment 已由 `realpathInside`（readSkillContent/readSkillFile）落地（T-BSAFE④）；
-T6 fusion 审批 token 已落（§6c）。
+支持耦合**）· migrate（T10）· adopt-managed（T10b，两阶段 capture→confirm）· 批次 C（source
+lifecycle reconcile 拆 user/system、migration 决策 UI、adoption UI）· F12 统一 task-cancel 原语
+
+- clarify 子状态清理（task 层、部分既存）。**注**：external file/tree GET realpath containment
+  已由 `realpathInside` 落地（T-BSAFE④）；T6 fusion 审批 token + F7–F12 加固已落（§6c/§6e）；
+  快照权威读 readSkillContent 已落（§6f）。
