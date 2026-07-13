@@ -1,0 +1,84 @@
+# RFC-170 批次 B 实现指引（IMPLEMENTATION）
+
+> 本文把「设计门收敛的 design.md/plan.md」翻译成**可执行的接线计划**：已落地的四层
+> 底座 API、每个具体 op 改写哪个现有函数 / 与谁纠缠 / recovery 形态、以及推荐执行
+> 顺序。承接 2026-07-13 会话（设计门 10 轮收敛 + 用户批准实现 + 底座四层 CI 绿）。
+
+## 0. 已落地的底座四层（32 测试、CI 绿 `97428109`）
+
+| 模块 | 关键导出 | 用途 |
+|---|---|---|
+| `db/migrations/0090` + `db/schema.ts` | skills 8 列 / skill_sources 3 列 / fusions token / 六表 acl_revision / `skill_operations` / `skill_operation_locks` | schema 地基（dormant） |
+| `services/skillOperations.ts` | `beginOperation(tx,spec)→opId` · `advancePhase(tx,opId,phase,patch?)` · `finishOperation(tx,opId)` · `abandonOperation(tx,opId)` · `acquireOpLocks/releaseOpLocks` · `getActiveOp/listActiveOps` · `gcOrphanLocks` · types `SkillOpKind`/`SkillOpPhase`/`BeginOperationSpec` | §6a 状态机 primitive（全部接 `DbTxSync` 组合） |
+| `services/skillFsPublish.ts` | `opStagedDir/opBackupDir/opCandidateDir/opScopedDir` · `swapInStaged(filesDir,opId)→{hadPrevious}` · `restoreFromBackup(filesDir,opId)` · `cleanupOpDirs(filesDir,opId)` | §6a/§13 op-scoped 原子 publish（纯 FS leaf） |
+| `services/skillOpRecovery.ts` | `SKILL_OP_PHASE_SEQUENCES` · `recoveryDirection(kind,phase)→'noop'\|'rollback'\|'rollforward'\|'quarantine'` | §6a 恢复完备性纯 oracle |
+
+**标准 op 生命周期**（每个具体 op 都是这个骨架）：
+
+```
+dbTxSync: beginOperation(intent + 取锁 [+ 前置 DB 行如 reserving])   // §6a ①
+  <FS 步 1>; dbTxSync: advancePhase('fs-staged'/'fs-captured'/...)     // §6a ②
+  <FS 步 2>; dbTxSync: advancePhase('fs-versioned'/...)
+dbTxSync: { 权威 DB 写(swap/delete/bump+INSERT); advancePhase('db-committed') }  // §6a ③ 同事务
+  <FS publish 步(swapInStaged)>                                        // 仅 db-committed 之后的 kind
+dbTxSync: finishOperation(done + 释放锁); cleanupOpDirs                // §6a ⑤
+// throw 处理：phase<db-committed → dbTxSync(abandonOperation)+restoreFromBackup+cleanupOpDirs
+//            phase≥db-committed → 不回滚，前滚补完（同 recovery 的 rollForward）
+```
+
+## 1. 每个具体 op 的接线映射
+
+| kind | 改写/新增 | 现有入口 | 纠缠 | rollback | rollForward |
+|---|---|---|---|---|---|
+| **version-write**（T7 核心） | 重写 `commitSkillVersion`（`skillVersion.ts:273`，现「先删后拷」非原子） | file PUT/DELETE·restore·ZIP·fusion·combined-save 六 writer 全走它 | **reserve 依赖它建 v1**；先做 | 删 staged + `versions/.op-<id>.staged`/已现的 `versions/v<target>`（DB 未 bump 故无引用）；撤 lease+锁 | 从 `versions/v<target>` 或 staged 重建 `files`（swapInStaged）；置 done | 
+| **reserve**（T6b） | 改 `createManagedSkill`（`skill.ts:86`）+ ZIP create（`skill-zip.ts`） | POST /skills、ZIP import | 依赖 version-write 建 v1 | 删 reserving skills 行 + staged + 撤锁 | 补 `reservation_state='ready'` + done | 
+| **delete**（T-BSAFE①） | 改资源 DELETE（`skill.ts` deleteSkill） | DELETE /skills/:name | backup=`.trash/<skillId>-<opId>`（非 op-scoped-adjacent，recovery 用 `op.backupPath`） | rename trash→skills root、撤锁 | 清 trash、done | 
+| **replace**（T-BSAFE②） | 改 `replaceSourceConflict`（`skill-source.ts:335`） | 冲突 replace 决策 | 三子机（managed/source-ext/hand-ext occupier）；managed occupier 备份**整个 root** | rename backup→root（含 versions/）、撤双锁 | 清 backup、done | 
+| **migrate**（T10） | 新增（legacy 分叉首采纳，现无此路径） | 迁移决策 UI | backup=`K`（inode-bearing，**不删**，登记为下代 generation，G7-1） | rename K→files 复原原始 live | 确保 C、登记 K 为候选、清 D、done | 
+| **adopt-managed**（T10b） | 新增两阶段 capture→confirm→commit（现无 adoption） | degraded external adoption | 阶段 A capture 用 §7b descriptor-relative no-follow；INSERT skill_versions(v1) | 删 candidate/versions/v1、撤锁（external 仍 degraded） | 确保 v1/canonical、done | 
+
+## 2. Recovery driver（T-BOOT）= 依赖注入 dispatcher
+
+每个 op 模块导出自己的 `{ recoverFs(op,fsOpts): void; recoverDb(tx,op): void }` **按 direction 分**
+（rollback / rollForward 各一），注册进 registry `Record<SkillOpKind, RecoveryHandlers>`。driver：
+
+```
+recoverSkillOperations(db, fsOpts):
+  for op of listActiveOps(db):
+    dir = recoveryDirection(op.kind, op.phase)
+    if dir=='quarantine': dbTxSync(mark skill version_state='quarantined'〔managed〕 + abandonOperation)  // 通用、现可实现
+    elif dir=='rollback':  registry[op.kind].rollback.recoverFs(op,fsOpts); dbTxSync{ registry[..].recoverDb(tx,op); abandonOperation(tx,op.opId) }
+    elif dir=='rollforward': registry[op.kind].rollForward.recoverFs(op,fsOpts); dbTxSync{ registry[..].recoverDb(tx,op); finishOperation(tx,op.opId) }
+  dbTxSync(gcOrphanLocks)   // 必须在所有 active op 恢复之后（§6a 次序）
+  // 挂 start.ts：ops-recovery 在 DB@170 之后、开 HTTP@341 之前（§invariant④）
+```
+
+**关键**：driver 自身逻辑（dispatch + quarantine + gcOrphanLocks 次序）可先用**合成 handler**
+（spy）完整测试；per-kind handler 随各 op 落地填充（与 forward 同模块，保证 forward↔recovery 一致）。
+
+## 3. 推荐执行顺序（依赖驱动）
+
+1. **version-write（T7）**——最核心 + reserve 依赖它；重写 commitSkillVersion 为「op-scoped
+   staged→versions/v<target> 原子物化→db-committed bump+INSERT→swapInStaged publish→done」，
+   六 writer funnel 取 lease。**务必保持现有六 writer 调用方语义**（大量集成测试锁）。
+2. **reserve（T6b）**——接 createManagedSkill + ZIP create，复用 1 的 v1 建立。
+3. **delete + replace（T-BSAFE）**——DELETE tombstone + 冲突 replace 三子机 + 旧端点 410 + symlink reject。
+4. **recovery driver（T-BOOT）**——registry + driver + 挂 start.ts + 合成/真实 handler 测试。
+5. **migrate（T10）+ adopt-managed（T10b）**——新增路径（additive，低回归）；adopt 需 §7b 捕获。
+6. **读路径复合 token（T3）+ combined-save（T4）**——detail 单 fenced read + token CAS。
+7. **quarantine 双检查点（T9）+ external 安全捕获（T9b）**——运行时注入 gate + descriptor-relative。
+8. **ACL aclRevision CAS 全链（T13）**——共享 resourceAcl + 前端 AclPanel revision 管线 + user-active 事务化。
+9. **前端**——skills detail token 单持有 + authorityKind 三态 capability + adoption UI。
+
+每步：**先写红测试→实现→绿**，`bun run typecheck && lint && test && format:check`，触及现有六 writer /
+create / delete 后跑全后端 5200+ 回归；触及 shared export 跑 `build:binary` smoke（[reference_binary_build_module_cycle]）。
+多人树按精确 pathspec 提交、勿碰他人 `scheduler.ts`（RFC-172）WIP。
+
+## 4. 不变量速查（实现时勿违反）
+
+- `dbTxSync` 内**禁 await**、用 `.all/.get/.run`；CAS 靠 read-then-check 或 WHERE 前态（drizzle `.run()` 无 changes）。
+- 锁**活到 phase='done'**（非 db-committed）——backup 清理与 new-id 互斥须持续（G6-2）。
+- 纯 DB op（source-ext/hand-ext replace、rebind）**单事务直接 done**、不留可观察 db-committed active 态（P2-1）。
+- adopt-managed **提交对象是已捕获 candidate**（非源再读）；migrate **绝不删 K**（旧 fd 仍写，G7-1）。
+- external runtime **不 symlink mutable root**、每运行 descriptor-relative no-follow 捕获私有副本（G10-2）；实现不了 **fail-closed**。
+- boot：managed 走 `bootVerifiedSet`（每 boot 重 hash）、external 走 `source_state` 合法（不入 set）、degraded 只元信息（G8-2 `isSkillAvailableThisBoot`）。
