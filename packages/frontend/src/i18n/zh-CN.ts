@@ -4014,7 +4014,8 @@ export const zhCN: Resources = {
       backToGroup: '← 返回工作组',
       missingGroup: '缺少工作组名称——请从工作组详情页进入启动页。',
       fieldGoal: '任务目标',
-      fieldGoalHint: '工作组这次要完成什么。每一轮都会注入给每个成员。',
+      fieldGoalHint:
+        '工作组这次要完成的目标。作为开工指令下发给负责拆解它的成员——leader_worker 只给 leader，free_collab 给全体成员。',
       advanced: '高级选项',
       maxDurationMin: '最长运行时长（分钟）',
       maxDurationMinHint: '可选。超时后任务被平台取消。',

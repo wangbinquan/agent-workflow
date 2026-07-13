@@ -1174,7 +1174,8 @@ export const enUS: Resources = {
       backToGroup: '← Back to workgroup',
       missingGroup: 'Missing workgroup name — open the launcher from a workgroup detail page.',
       fieldGoal: 'Goal',
-      fieldGoalHint: 'What the group should accomplish. Injected for every member on every turn.',
+      fieldGoalHint:
+        'The goal for this run — delivered as the kickoff directive to whoever decomposes it: the leader in leader_worker, every member in free_collab.',
       advanced: 'Advanced options',
       maxDurationMin: 'Max duration (minutes)',
       maxDurationMinHint: 'Optional. The platform cancels the task once exceeded.',
