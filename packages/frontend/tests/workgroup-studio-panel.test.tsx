@@ -260,9 +260,11 @@ describe('panel three-state switching (§9.1)', () => {
     expect(within(panelEl()).getByTestId('workgroup-field-instructions')).toBeTruthy()
     const cfgEntry = screen.getByTestId('workgroup-config-entry')
     expect(cfgEntry.classList.contains('is-selected')).toBe(true)
-    // 2026-07-13 用户「组配置按钮改成按钮样式」— the config entry uses the shared
-    // .btn chrome now (a recognizable button), NOT the card-like .split-card.
+    // 2026-07-13 用户「组配置改成蓝色按钮风格」— the config entry uses the shared
+    // blue .btn--primary chrome now (a recognizable button), NOT the card-like
+    // .split-card (and no longer full card width — auto width via CSS).
     expect(cfgEntry.classList.contains('btn')).toBe(true)
+    expect(cfgEntry.classList.contains('btn--primary')).toBe(true)
     expect(cfgEntry.classList.contains('split-card')).toBe(false)
 
     // select a member → member editor with the alias prefilled and focused.

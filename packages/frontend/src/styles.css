@@ -11885,23 +11885,20 @@ mark.comment-anchor[data-active='true'] {
    ABOVE `.split__cards` so it never scrolls away with the member cards
    (design-gate Codex#1). */
 .workgroup-config-entry {
-  width: 100%;
-  /* `.btn` centers its content; the rail entry reads as a left-aligned nav
-     button (2026-07-13 用户「组配置按钮改成按钮样式」——base swapped
-     .split-card → .btn for a recognizable button chrome, was too card-like). */
-  justify-content: flex-start;
+  /* A compact blue .btn--primary button at the rail's top-left — auto width,
+     it must NOT stretch to the member-card width (用户 2026-07-13「组配置改成
+     蓝色按钮风格，并且不要和卡片同宽」; align-self:flex-start opts out of the
+     flex column's default stretch). */
+  align-self: flex-start;
   cursor: pointer;
   margin-bottom: var(--space-2);
   flex-shrink: 0;
 }
 
-/* Active view: accent-tinted button (mirrors the member cards' .is-selected
-   grammar; the `.split-card.is-selected` rule no longer applies now the base
-   is `.btn`). */
+/* Active view (config panel showing) — a soft accent ring over the blue button
+   (is-selected class kept for the rail selection tests). */
 .workgroup-config-entry.is-selected {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong));
-  color: var(--text);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 /* Member cards — a vertical list inside the scrolling `.split__cards`. The
