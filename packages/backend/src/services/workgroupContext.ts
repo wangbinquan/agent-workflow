@@ -16,7 +16,11 @@ import type {
   WorkgroupRuntimeConfig,
   WorkgroupRuntimeMember,
 } from '@agent-workflow/shared'
-import { resolveWorkgroupSwitches } from '@agent-workflow/shared'
+import {
+  CLARIFY_FORMAT_EXAMPLE,
+  CLARIFY_STRUCTURAL_RULES,
+  resolveWorkgroupSwitches,
+} from '@agent-workflow/shared'
 
 // Character budgets for injected slices (clip keeps the TAIL — newest wins).
 export const WG_BLACKBOARD_CHAR_BUDGET = 8000
@@ -248,6 +252,27 @@ const ENVELOPE_RULES = [
   'If you need a human decision first, emit a <workflow-clarify> envelope INSTEAD (never both).',
 ].join('\n')
 
+// 2026-07-12 incident (task 01KXBATKFJ73MDYNM6YN2DMA29): ENVELOPE_RULES INVITES
+// a <workflow-clarify> envelope, but a workgroup host node runs with clarify
+// directive 'suppressed' (scheduler.ts runHostNode), so the normal
+// mandatory/optional clarify FORMAT block (shared/prompt.ts
+// buildClarifyProtocolBlock) is NEVER injected. A leader that accepted the
+// invitation wrote natural-language questions; the body failed JSON.parse
+// ('clarify-questions-malformed') and the leader turn fatally killed the whole
+// task at round 0. The invitation and its schema MUST travel together — reuse
+// the SHARED clarify constants so this rendering can never drift from the
+// normal-node one.
+const WG_CLARIFY_FORMAT = [
+  '',
+  'That <workflow-clarify> envelope has a REQUIRED JSON body — a natural-language',
+  'list of questions is rejected as malformed and wastes a turn. If (and only if)',
+  'you ask, use exactly this format:',
+  '',
+  CLARIFY_FORMAT_EXAMPLE,
+  '',
+  CLARIFY_STRUCTURAL_RULES,
+].join('\n')
+
 export function renderWgProtocolBlock(
   role: WorkgroupProtocolRole,
   config: WorkgroupRuntimeConfig,
@@ -303,7 +328,7 @@ export function renderWgProtocolBlock(
       )
     }
   }
-  lines.push('', ENVELOPE_RULES)
+  lines.push('', ENVELOPE_RULES, WG_CLARIFY_FORMAT)
   return lines.join('\n')
 }
 

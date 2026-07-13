@@ -12,6 +12,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows, workgroupAssignments, workgroupMemberCursors } from '../src/db/schema'
 import { advanceMemberCursor, casAssignmentStatus } from '../src/services/workgroupLifecycle'
 import {
+  CLARIFY_FORMAT_EXAMPLE,
   normalizeWgTaskTitle,
   parseWgAssignmentsPort,
   parseWgDecisionPort,
@@ -365,6 +366,27 @@ describe('RFC-164 core — rendered blocks', () => {
     expect(ledger).toContain('result: done well')
     expect(ledger).not.toContain('u-pm')
   })
+
+  // Regression: task 01KXBATKFJ73MDYNM6YN2DMA29 (2026-07-12) failed at round 0
+  // with `clarify-questions-malformed: JSON.parse failed ... "The"`. Root cause:
+  // the protocol block INVITED a <workflow-clarify> envelope but a workgroup
+  // host node runs with clarify directive 'suppressed', so the normal clarify
+  // FORMAT block was never injected — the leader wrote prose questions and the
+  // body failed JSON.parse. The invitation and its JSON schema must ship
+  // together, reusing the SHARED CLARIFY_FORMAT_EXAMPLE (no drift). Every role
+  // gets ENVELOPE_RULES, so every role must also get the format.
+  for (const role of ['leader', 'worker', 'fc_member'] as const) {
+    test(`${role} protocol block ships the <workflow-clarify> JSON schema it invites`, () => {
+      const block = renderWgProtocolBlock(role, cfg())
+      // it still invites clarify …
+      expect(block).toContain('<workflow-clarify>')
+      // … AND now carries the exact shared format example + structural rules,
+      // so an agent that asks emits parseable JSON instead of prose.
+      expect(block).toContain(CLARIFY_FORMAT_EXAMPLE)
+      expect(block).toContain('"questions"')
+      expect(block).toContain('at most 5 questions')
+    })
+  }
 })
 
 // ---------------------------------------------------------------------------

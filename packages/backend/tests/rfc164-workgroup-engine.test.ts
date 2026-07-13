@@ -491,6 +491,53 @@ describe('RFC-164 engine — lw round orchestration', () => {
     expect(result.detail?.summary).toContain('leader')
   })
 
+  // Regression: task 01KXBATKFJ73MDYNM6YN2DMA29 (2026-07-12). The leader CHOSE
+  // to ask a human but mis-formatted the <workflow-clarify> body (prose, not
+  // JSON), so runHostNode returned a `clarify-questions-malformed` failure.
+  // Pre-fix, driveLeaderTurn threw on ANY failed status → reportFatal → the
+  // WHOLE task died at round 0 with ZERO retries. Post-fix, a clarify-questions-*
+  // failure folds into the WG_PROTOCOL_RETRIES re-prompt loop (symmetric to the
+  // malformed-output-port path), so a single formatting slip is recoverable.
+  test('leader malformed <workflow-clarify> retries with a notice instead of fatally failing the task', async () => {
+    const config = cfg()
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks, requests } = scriptedHooks({
+      leader: [
+        {
+          status: 'failed',
+          outputs: {},
+          errorMessage:
+            'clarify-questions-malformed: JSON.parse failed: JSON Parse error: Unexpected identifier "The"',
+        },
+        doneLeader({ decision: { action: 'done', summary: 'ok' } }),
+      ],
+      member: [],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('ok')
+    expect(requests).toHaveLength(2)
+    expect(requests[1]?.promptTemplate).toContain('Protocol errors in your previous reply')
+    expect(requests[1]?.promptTemplate).toContain('<workflow-clarify> reply was malformed')
+  })
+
+  // The retry budget is bounded: a leader that keeps mis-formatting its clarify
+  // still hard-fails once WG_PROTOCOL_RETRIES is exhausted (no infinite re-prompt
+  // hot loop) — the fatal path stays reachable, just no longer on the FIRST slip.
+  test('persistent malformed <workflow-clarify> hard-fails after the retry budget', async () => {
+    const config = cfg()
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks } = scriptedHooks({
+      leader: [
+        { status: 'failed', outputs: {}, errorMessage: 'clarify-questions-malformed: prose again' },
+        { status: 'failed', outputs: {}, errorMessage: 'clarify-questions-malformed: prose again' },
+      ],
+      member: [],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('failed')
+    expect(result.detail?.summary).toContain('leader')
+  })
+
   test('member clarify park → assignment awaiting_human + engine parks awaiting_human', async () => {
     const config = cfg()
     const { taskId } = await seedEngineTask(db, config)

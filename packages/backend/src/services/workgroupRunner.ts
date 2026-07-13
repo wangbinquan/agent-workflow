@@ -917,7 +917,24 @@ async function driveLeaderTurn(
     if (result.status === 'canceled') return
     if (result.status === 'awaiting') return // leader asked the human — task parks via outcome pass
     if (result.status === 'failed') {
-      throw new Error(result.errorMessage ?? 'leader run failed')
+      const msg = result.errorMessage ?? 'leader run failed'
+      // A malformed <workflow-clarify> reply (the leader CHOSE to ask a human
+      // but mis-formatted the questions JSON) is a RETRYABLE protocol
+      // violation — symmetric to the malformed-output-port path below and to
+      // the normal node's follow-up-able `clarify-questions-*` contract
+      // (runner.ts:1209). Re-prompt within WG_PROTOCOL_RETRIES instead of
+      // fatally killing the WHOLE task on the first slip (2026-07-12 incident
+      // 01KXBATKFJ73MDYNM6YN2DMA29). Genuinely fatal failures (iso-setup,
+      // injection, subprocess crash, merge-back conflict) do not carry this
+      // prefix and fall through to the throw → reportFatal.
+      if (msg.startsWith('clarify-questions-') && attempt < WG_PROTOCOL_RETRIES) {
+        errorNotice =
+          `- Your <workflow-clarify> reply was malformed: ${msg}\n` +
+          '  Re-emit a VALID <workflow-clarify> envelope (see the clarify format in the\n' +
+          '  protocol above) OR, if nothing actually needs a human, proceed with <workflow-output>.'
+        continue
+      }
+      throw new Error(msg)
     }
 
     const roster = rosterDisplayNames(config)
