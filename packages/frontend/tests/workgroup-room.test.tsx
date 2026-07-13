@@ -434,6 +434,158 @@ describe('WorkgroupRoom — composer', () => {
   })
 })
 
+// RFC-174 — composer keyboard UX: @-mention keyboard nav + Cmd/Ctrl+Enter send.
+// The key→action matrix is locked purely in workgroup-room-lib.test.ts
+// (resolveComposerKey); these assert the component actually wires it.
+describe('WorkgroupRoom — composer keyboard (RFC-174)', () => {
+  test('Cmd/Ctrl+Enter sends and clears the draft; plain Enter does not (newline)', async () => {
+    const calls = installFetch(makeRoom())
+    renderRoom(makeRoom())
+    const input = (await screen.findByTestId('workgroup-room-input')) as HTMLTextAreaElement
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'ship it' } })
+    // plain Enter → newline: the handler does NOT cancel the event.
+    expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(true)
+    // Ctrl+Enter → send: the handler cancels the event and POSTs.
+    expect(fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true })).toBe(false)
+    await waitFor(() => {
+      const post = calls.find(
+        (c) => c.method === 'POST' && c.url.endsWith('/api/workgroup-tasks/t1/messages'),
+      )
+      expect(post?.body).toEqual({ body: 'ship it' })
+    })
+    await waitFor(() => {
+      expect((screen.getByTestId('workgroup-room-input') as HTMLTextAreaElement).value).toBe('')
+    })
+  })
+
+  test('IME: Ctrl+Enter while composing neither sends nor commits', async () => {
+    const calls = installFetch(makeRoom())
+    renderRoom(makeRoom())
+    const input = (await screen.findByTestId('workgroup-room-input')) as HTMLTextAreaElement
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '发送消息' } })
+    fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true, isComposing: true })
+    // Let any (erroneous) mutation flush, then assert nothing was posted.
+    await Promise.resolve()
+    expect(
+      calls.find((c) => c.method === 'POST' && c.url.endsWith('/api/workgroup-tasks/t1/messages')),
+    ).toBeUndefined()
+    expect(input.value).toBe('发送消息')
+  })
+
+  test('empty / whitespace draft: Ctrl+Enter does not send', async () => {
+    const calls = installFetch(makeRoom())
+    renderRoom(makeRoom())
+    const input = (await screen.findByTestId('workgroup-room-input')) as HTMLTextAreaElement
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '   ' } })
+    fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true })
+    await Promise.resolve()
+    expect(
+      calls.find((c) => c.method === 'POST' && c.url.endsWith('/api/workgroup-tasks/t1/messages')),
+    ).toBeUndefined()
+  })
+
+  test('@-mention: ArrowDown moves the highlight and Enter commits; aria wiring', async () => {
+    installFetch(makeRoom())
+    renderRoom(makeRoom())
+    const input = (await screen.findByTestId('workgroup-room-input')) as HTMLTextAreaElement
+    fireEvent.focus(input)
+    // '@' offers the whole roster in order: Lead, Worker, Alice.
+    fireEvent.change(input, { target: { value: '@' } })
+    fireEvent.select(input, { target: { selectionStart: 1, selectionEnd: 1 } })
+    const listbox = await screen.findByTestId('workgroup-room-mentions')
+    expect(input.getAttribute('aria-controls')).toBe(listbox.id)
+    expect(input.getAttribute('aria-activedescendant')).toBe(`${listbox.id}-opt-0`)
+    expect(within(listbox).getByTestId('wg-mention-Lead').getAttribute('aria-selected')).toBe(
+      'true',
+    )
+    // ArrowDown → 2nd option (Worker) highlighted; activedescendant follows.
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    expect(input.getAttribute('aria-activedescendant')).toBe(`${listbox.id}-opt-1`)
+    expect(within(listbox).getByTestId('wg-mention-Worker').getAttribute('aria-selected')).toBe(
+      'true',
+    )
+    // Enter commits the highlighted candidate, closes the list.
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect((screen.getByTestId('workgroup-room-input') as HTMLTextAreaElement).value).toBe(
+      '@Worker ',
+    )
+    expect(screen.queryByTestId('workgroup-room-mentions')).toBeNull()
+  })
+
+  test('@-mention: Tab commits the active candidate', async () => {
+    installFetch(makeRoom())
+    renderRoom(makeRoom())
+    const input = (await screen.findByTestId('workgroup-room-input')) as HTMLTextAreaElement
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '@Wo' } })
+    fireEvent.select(input, { target: { selectionStart: 3, selectionEnd: 3 } })
+    await screen.findByTestId('workgroup-room-mentions')
+    fireEvent.keyDown(input, { key: 'Tab' })
+    expect((screen.getByTestId('workgroup-room-input') as HTMLTextAreaElement).value).toBe(
+      '@Worker ',
+    )
+  })
+
+  test('@-mention: Escape closes, keeps text, and typing reopens', async () => {
+    installFetch(makeRoom())
+    renderRoom(makeRoom())
+    const input = (await screen.findByTestId('workgroup-room-input')) as HTMLTextAreaElement
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '@Wo' } })
+    fireEvent.select(input, { target: { selectionStart: 3, selectionEnd: 3 } })
+    await screen.findByTestId('workgroup-room-mentions')
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(screen.queryByTestId('workgroup-room-mentions')).toBeNull()
+    expect(input.value).toBe('@Wo')
+    // Typing more in the same token reopens (dismissal is {start,query}-scoped).
+    fireEvent.change(input, { target: { value: '@Wor' } })
+    fireEvent.select(input, { target: { selectionStart: 4, selectionEnd: 4 } })
+    expect(await screen.findByTestId('workgroup-room-mentions')).toBeTruthy()
+  })
+
+  test('mention dropdown is focus-gated: blur closes it', async () => {
+    installFetch(makeRoom())
+    renderRoom(makeRoom())
+    const input = (await screen.findByTestId('workgroup-room-input')) as HTMLTextAreaElement
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '@Wo' } })
+    fireEvent.select(input, { target: { selectionStart: 3, selectionEnd: 3 } })
+    await screen.findByTestId('workgroup-room-mentions')
+    fireEvent.blur(input)
+    await waitFor(() => expect(screen.queryByTestId('workgroup-room-mentions')).toBeNull())
+  })
+
+  test('visible shortcut hint shows the send chord + newline (platform mod)', async () => {
+    installFetch(makeRoom())
+    renderRoom(makeRoom())
+    const hint = await screen.findByTestId('workgroup-room-shortcut-hint')
+    const text = hint.textContent ?? ''
+    expect(text).toContain('Ctrl+Enter') // happy-dom is non-mac → Ctrl
+    // Both "send" (Ctrl+Enter) and "newline" (Enter) are shown → Enter twice.
+    expect((text.match(/Enter/g) ?? []).length).toBeGreaterThanOrEqual(2)
+  })
+
+  test('quick reply: Cmd/Ctrl+Enter delivers the {body} shape', async () => {
+    const calls = installFetch(deliveryRoom())
+    renderRoom(deliveryRoom())
+    fireEvent.click(await screen.findByTestId('wg-card-deliver-quick-a3'))
+    const input = (await screen.findByTestId('wg-card-quick-input-a3')) as HTMLTextAreaElement
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'done and dusted' } })
+    fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true })
+    await waitFor(() => {
+      const post = calls.find(
+        (c) =>
+          c.method === 'POST' && c.url.endsWith('/api/workgroup-tasks/t1/assignments/a3/deliver'),
+      )
+      expect(post?.body).toEqual({ body: 'done and dusted' })
+    })
+  })
+})
+
 describe('WorkgroupRoom — side rail', () => {
   test('roster shows working/idle from live cards (running|dispatched = working)', async () => {
     installFetch(makeRoom())

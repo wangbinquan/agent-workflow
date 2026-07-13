@@ -259,6 +259,90 @@ export function applyMention(
 }
 
 // ---------------------------------------------------------------------------
+// RFC-174 — composer keyboard oracle
+// ---------------------------------------------------------------------------
+
+/**
+ * The action the composer's onKeyDown should take for a key event. Pure — the
+ * component maps it to preventDefault + state/mutation calls. Precedent:
+ * lib/review/multiDocHotkeys.ts (key→action as a unit-testable pure fn).
+ */
+export type ComposerKeyAction =
+  | { type: 'send' }
+  | { type: 'mention-move'; index: number }
+  | { type: 'mention-commit'; index: number }
+  | { type: 'mention-close' }
+  | { type: 'default' }
+
+export interface ComposerKeyState {
+  key: string
+  metaKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  shiftKey: boolean
+  /** e.nativeEvent.isComposing || keyCode === 229 — IME still composing. */
+  isComposing: boolean
+  /** Whether the @-mention dropdown is currently open (component-derived). */
+  mentionOpen: boolean
+  candidateCount: number
+  /** Already clamped to [0, candidateCount) by the caller. */
+  activeIndex: number
+}
+
+/**
+ * Map a composer keydown to its action. Precedence (first match wins):
+ *   1. IME composing → default: the input method owns every key, so a
+ *      Chinese/Japanese candidate-confirm Enter can never send or commit.
+ *   2. Dropdown open → the mention UI owns its keys. Arrows move (no modifiers),
+ *      Enter/Tab commit, Escape closes. Cmd/Ctrl+Enter here COMMITS the
+ *      highlighted candidate rather than sending, so a half-typed "@query" is
+ *      never fired off (AC4).
+ *   3. Dropdown closed → the send chord: Enter + exactly Cmd/Ctrl (no Shift/Alt).
+ *   4. Everything else → default (plain Enter = newline).
+ *
+ * Modifier discipline mirrors multiDocHotkeyAction: navigation / Tab / Escape
+ * only fire with NO modifiers, so Shift+Arrow (selection), Ctrl+Tab (tab
+ * switch), Shift+Tab (focus-back) and Cmd+Arrow (line ends) stay native.
+ */
+export function resolveComposerKey(s: ComposerKeyState): ComposerKeyAction {
+  if (s.isComposing) return { type: 'default' }
+  const noMods = !s.metaKey && !s.ctrlKey && !s.altKey && !s.shiftKey
+  if (s.mentionOpen && s.candidateCount > 0) {
+    if (s.key === 'ArrowDown' && noMods) {
+      return { type: 'mention-move', index: (s.activeIndex + 1) % s.candidateCount }
+    }
+    if (s.key === 'ArrowUp' && noMods) {
+      return {
+        type: 'mention-move',
+        index: (s.activeIndex - 1 + s.candidateCount) % s.candidateCount,
+      }
+    }
+    if (s.key === 'Escape' && noMods) return { type: 'mention-close' }
+    if (s.key === 'Tab' && noMods) return { type: 'mention-commit', index: s.activeIndex }
+    // plain Enter or the send chord (Cmd/Ctrl+Enter) commit; Shift/Alt+Enter → newline.
+    if (s.key === 'Enter' && !s.shiftKey && !s.altKey) {
+      return { type: 'mention-commit', index: s.activeIndex }
+    }
+    return { type: 'default' }
+  }
+  if (s.key === 'Enter' && (s.metaKey || s.ctrlKey) && !s.shiftKey && !s.altKey) {
+    return { type: 'send' }
+  }
+  return { type: 'default' }
+}
+
+/**
+ * Label for the send chord's modifier key, platform-aware: mac → '⌘', else
+ * (incl. SSR / test env / non-mac) → 'Ctrl'. Interpolated into the visible
+ * composer shortcut hint.
+ */
+export function sendChordModLabel(): '⌘' | 'Ctrl' {
+  if (typeof navigator === 'undefined') return 'Ctrl'
+  const probe = `${navigator.platform ?? ''} ${navigator.userAgent ?? ''}`
+  return /Mac|iPhone|iPad/.test(probe) ? '⌘' : 'Ctrl'
+}
+
+// ---------------------------------------------------------------------------
 // PR-5/6 — human delivery, completion gate, fc task list, mid-run config
 // ---------------------------------------------------------------------------
 

@@ -1146,6 +1146,8 @@ export interface Resources {
       sending: string
       terminalNotice: string
       mentionsAria: string
+      composerShortcutHint: string
+      deliverShortcutHint: string
       membersTitle: string
       working: string
       idle: string
@@ -4047,6 +4049,8 @@ export const zhCN: Resources = {
       sending: '发送中…',
       terminalNotice: '任务已结束，聊天室只读。',
       mentionsAria: '成员补全',
+      composerShortcutHint: '{{mod}}+Enter 发送 · Enter 换行 · @ 提及成员',
+      deliverShortcutHint: '{{mod}}+Enter 提交 · Enter 换行',
       membersTitle: '成员',
       working: '忙碌',
       idle: '空闲',

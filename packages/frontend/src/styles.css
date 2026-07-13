@@ -12314,21 +12314,28 @@ mark.comment-anchor[data-active='true'] {
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
 }
 
-.workgroup-room__mentions button {
+.workgroup-room__mentions li {
   display: block;
   width: 100%;
   text-align: left;
   padding: 6px 8px;
-  background: none;
-  border: none;
   border-radius: 6px;
   color: var(--text);
   font-size: 13px;
   cursor: pointer;
 }
 
-.workgroup-room__mentions button:hover {
-  background: var(--bg);
+/* Keyboard-highlighted (aria-selected) and hover share the accent wash — same
+   vocabulary as .select__option--active. */
+.workgroup-room__mentions li.is-active,
+.workgroup-room__mentions li:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* Shortcut hint under the composer / quick-reply — colour + size from the
+   reused .form-field__hint; this only adds the top gap. */
+.workgroup-room__composer-hint {
+  margin-top: 4px;
 }
 
 .workgroup-room__side {

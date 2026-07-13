@@ -20,8 +20,11 @@ import {
   memberIsWorking,
   mentionCandidates,
   mentionQueryAt,
+  resolveComposerKey,
   resultBodyFor,
+  sendChordModLabel,
   workgroupRoomKey,
+  type ComposerKeyState,
   type WorkgroupRoomAssignment,
   type WorkgroupRoomMessage,
 } from '../src/lib/workgroup-room'
@@ -348,5 +351,148 @@ describe('groupFcAssignments', () => {
     expect(groups.open.map((a) => a.id)).toEqual(['o'])
     expect(groups.active.map((a) => a.id)).toEqual(['d', 'r', 'ah'])
     expect(groups.done.map((a) => a.id)).toEqual(['dn'])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-174 — composer keyboard oracle (modifier discipline is the focus)
+// ---------------------------------------------------------------------------
+
+describe('resolveComposerKey', () => {
+  // A key event with everything cleared; each test overrides only what it needs.
+  function key(over: Partial<ComposerKeyState> & Pick<ComposerKeyState, 'key'>): ComposerKeyState {
+    return {
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      isComposing: false,
+      mentionOpen: false,
+      candidateCount: 0,
+      activeIndex: 0,
+      ...over,
+    }
+  }
+  const open = { mentionOpen: true, candidateCount: 3, activeIndex: 1 }
+
+  test('IME composing → default for every key (send chord and mention keys included)', () => {
+    expect(resolveComposerKey(key({ key: 'Enter', ctrlKey: true, isComposing: true }))).toEqual({
+      type: 'default',
+    })
+    expect(resolveComposerKey(key({ key: 'Enter', metaKey: true, isComposing: true }))).toEqual({
+      type: 'default',
+    })
+    expect(resolveComposerKey(key({ key: 'ArrowDown', isComposing: true, ...open }))).toEqual({
+      type: 'default',
+    })
+  })
+
+  test('send chord (dropdown closed): Enter + Cmd OR Ctrl, no Shift/Alt', () => {
+    expect(resolveComposerKey(key({ key: 'Enter', metaKey: true }))).toEqual({ type: 'send' })
+    expect(resolveComposerKey(key({ key: 'Enter', ctrlKey: true }))).toEqual({ type: 'send' })
+    // Shift/Alt on the chord → not a send (falls through to newline).
+    expect(resolveComposerKey(key({ key: 'Enter', ctrlKey: true, shiftKey: true }))).toEqual({
+      type: 'default',
+    })
+    expect(resolveComposerKey(key({ key: 'Enter', metaKey: true, altKey: true }))).toEqual({
+      type: 'default',
+    })
+  })
+
+  test('plain Enter (dropdown closed) → default (newline, never send)', () => {
+    expect(resolveComposerKey(key({ key: 'Enter' }))).toEqual({ type: 'default' })
+    expect(resolveComposerKey(key({ key: 'Enter', shiftKey: true }))).toEqual({ type: 'default' })
+    expect(resolveComposerKey(key({ key: 'a' }))).toEqual({ type: 'default' })
+  })
+
+  test('dropdown open: Cmd/Ctrl+Enter COMMITS the candidate, does not send', () => {
+    expect(resolveComposerKey(key({ key: 'Enter', ctrlKey: true, ...open }))).toEqual({
+      type: 'mention-commit',
+      index: 1,
+    })
+    expect(resolveComposerKey(key({ key: 'Enter', metaKey: true, ...open }))).toEqual({
+      type: 'mention-commit',
+      index: 1,
+    })
+  })
+
+  test('dropdown open: Arrow navigation wraps, only with no modifiers', () => {
+    // activeIndex 1 of 3: down → 2, up → 0.
+    expect(resolveComposerKey(key({ key: 'ArrowDown', ...open }))).toEqual({
+      type: 'mention-move',
+      index: 2,
+    })
+    expect(resolveComposerKey(key({ key: 'ArrowUp', ...open }))).toEqual({
+      type: 'mention-move',
+      index: 0,
+    })
+    // wrap: last → first, first → last.
+    expect(
+      resolveComposerKey(
+        key({ key: 'ArrowDown', mentionOpen: true, candidateCount: 3, activeIndex: 2 }),
+      ),
+    ).toEqual({ type: 'mention-move', index: 0 })
+    expect(
+      resolveComposerKey(
+        key({ key: 'ArrowUp', mentionOpen: true, candidateCount: 3, activeIndex: 0 }),
+      ),
+    ).toEqual({ type: 'mention-move', index: 2 })
+    // modifiers → not hijacked (Shift+Arrow selection, Cmd+Arrow line-end).
+    expect(resolveComposerKey(key({ key: 'ArrowDown', shiftKey: true, ...open }))).toEqual({
+      type: 'default',
+    })
+    expect(resolveComposerKey(key({ key: 'ArrowUp', metaKey: true, ...open }))).toEqual({
+      type: 'default',
+    })
+  })
+
+  test('dropdown open: Enter/Tab commit the active index; Shift+Enter, Ctrl+Tab, Shift+Tab do not', () => {
+    expect(resolveComposerKey(key({ key: 'Enter', ...open }))).toEqual({
+      type: 'mention-commit',
+      index: 1,
+    })
+    expect(resolveComposerKey(key({ key: 'Tab', ...open }))).toEqual({
+      type: 'mention-commit',
+      index: 1,
+    })
+    expect(resolveComposerKey(key({ key: 'Enter', shiftKey: true, ...open }))).toEqual({
+      type: 'default',
+    })
+    expect(resolveComposerKey(key({ key: 'Enter', altKey: true, ...open }))).toEqual({
+      type: 'default',
+    })
+    expect(resolveComposerKey(key({ key: 'Tab', ctrlKey: true, ...open }))).toEqual({
+      type: 'default',
+    })
+    expect(resolveComposerKey(key({ key: 'Tab', shiftKey: true, ...open }))).toEqual({
+      type: 'default',
+    })
+  })
+
+  test('dropdown open: Escape closes (no modifiers)', () => {
+    expect(resolveComposerKey(key({ key: 'Escape', ...open }))).toEqual({ type: 'mention-close' })
+    expect(resolveComposerKey(key({ key: 'Escape', ctrlKey: true, ...open }))).toEqual({
+      type: 'default',
+    })
+  })
+
+  test('mentionOpen with zero candidates falls through to send/default (guards deref)', () => {
+    expect(
+      resolveComposerKey(
+        key({ key: 'Enter', ctrlKey: true, mentionOpen: true, candidateCount: 0 }),
+      ),
+    ).toEqual({ type: 'send' })
+    expect(
+      resolveComposerKey(key({ key: 'ArrowDown', mentionOpen: true, candidateCount: 0 })),
+    ).toEqual({ type: 'default' })
+  })
+})
+
+describe('sendChordModLabel', () => {
+  test('returns ⌘ on mac, Ctrl otherwise', () => {
+    const label = sendChordModLabel()
+    expect(label === '⌘' || label === 'Ctrl').toBe(true)
+    // happy-dom's navigator is non-mac by default → Ctrl.
+    expect(label).toBe('Ctrl')
   })
 })

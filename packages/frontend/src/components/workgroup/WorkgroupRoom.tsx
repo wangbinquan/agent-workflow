@@ -14,7 +14,7 @@
 // lib/workgroup-room so tests hit it without rendering.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TaskNodeRuns, TaskStatus, WorkgroupRuntimeMember } from '@agent-workflow/shared'
 import { resolveWorkgroupSwitches } from '@agent-workflow/shared'
@@ -44,8 +44,11 @@ import {
   memberIsWorking,
   mentionCandidates,
   mentionQueryAt,
+  resolveComposerKey,
   resultBodyFor,
+  sendChordModLabel,
   workgroupRoomKey,
+  type MentionContext,
   type WorkgroupDeliverInput,
   type WorkgroupRoomAssignment,
   type WorkgroupRoomMessage,
@@ -91,6 +94,13 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
   const [drawerRunId, setDrawerRunId] = useState<string | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const logRef = useRef<HTMLDivElement | null>(null)
+  // RFC-174 — @-mention keyboard nav + send-chord state.
+  const [activeIndexRaw, setActiveIndexRaw] = useState(0)
+  const [dismissed, setDismissed] = useState<MentionContext | null>(null)
+  const [composerFocused, setComposerFocused] = useState(false)
+  const sendFromKbdRef = useRef(false)
+  const pendingCaretRef = useRef<number | null>(null)
+  const listboxId = useId()
 
   const send = useMutation({
     mutationFn: (body: string) =>
@@ -102,6 +112,14 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
       setDraft('')
       setCaret(0)
       void qc.invalidateQueries({ queryKey: workgroupRoomKey(taskId) })
+    },
+    onSettled: () => {
+      // Keyboard send (Cmd/Ctrl+Enter) disables the textarea while pending,
+      // dropping focus — restore it once the mutation settles (P2-2).
+      if (sendFromKbdRef.current) {
+        sendFromKbdRef.current = false
+        inputRef.current?.focus()
+      }
     },
   })
 
@@ -161,25 +179,54 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
 
   // @-mention completion over the roster (design: 输入 @ 时按花名册补全).
   const mentionCtx = mentionQueryAt(draft, caret)
-  const suggestions =
+  const rawSuggestions =
     mentionCtx === null || room.data === undefined
       ? []
       : mentionCandidates(room.data.config, mentionCtx.query)
+  // Token-session dismissal (Esc): keyed on {start,query} so typing more in the
+  // same token reopens it, while moving to another @token is unaffected.
+  const isDismissed =
+    mentionCtx !== null &&
+    dismissed !== null &&
+    dismissed.start === mentionCtx.start &&
+    dismissed.query === mentionCtx.query
+  // Also gate on focus + postability + no send in flight (RFC-174 P1-3).
+  const mentionOpen =
+    rawSuggestions.length > 0 && !isDismissed && composerFocused && canPost && !send.isPending
+  const suggestions = mentionOpen ? rawSuggestions : []
+  // Derived clamp: a stale raw index can never deref out of range.
+  const activeIndex =
+    suggestions.length === 0 ? 0 : Math.min(Math.max(activeIndexRaw, 0), suggestions.length - 1)
+
+  // Re-highlight the top match whenever the mention query changes.
+  useEffect(() => {
+    setActiveIndexRaw(0)
+  }, [mentionCtx?.query])
+
+  // Apply a post-commit caret AFTER the controlled value lands in the DOM —
+  // setting selectionRange synchronously (before re-render) mis-places it.
+  useLayoutEffect(() => {
+    if (pendingCaretRef.current === null) return
+    const pos = pendingCaretRef.current
+    pendingCaretRef.current = null
+    const el = inputRef.current
+    if (el !== null) {
+      el.focus()
+      try {
+        el.setSelectionRange(pos, pos)
+      } catch {
+        /* jsdom/happy-dom quirk tolerance */
+      }
+    }
+  }, [draft])
 
   function commitMention(displayName: string): void {
     if (mentionCtx === null) return
     const next = applyMention(draft, caret, mentionCtx, displayName)
     setDraft(next.text)
     setCaret(next.caret)
-    const el = inputRef.current
-    if (el !== null) {
-      el.focus()
-      try {
-        el.setSelectionRange(next.caret, next.caret)
-      } catch {
-        /* jsdom/happy-dom quirk tolerance */
-      }
-    }
+    pendingCaretRef.current = next.caret // applied by the layout effect above
+    setActiveIndexRaw(0)
   }
 
   if (room.isLoading) return <LoadingState data-testid="workgroup-room-loading" />
@@ -248,22 +295,29 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
           {suggestions.length > 0 && (
             <ul
               className="workgroup-room__mentions"
+              id={listboxId}
               role="listbox"
               aria-label={t('workgroups.room.mentionsAria')}
               data-testid="workgroup-room-mentions"
             >
-              {suggestions.map((m) => (
-                <li key={m.id}>
-                  <button
-                    type="button"
-                    // preventDefault keeps the textarea focused through the click.
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => commitMention(m.displayName)}
-                    data-testid={`wg-mention-${m.displayName}`}
-                  >
-                    @{m.displayName}
-                    {m.roleDesc !== '' && <span className="muted"> · {m.roleDesc}</span>}
-                  </button>
+              {suggestions.map((m, i) => (
+                // The <li> IS the option (mirrors Select.tsx) — no inner button,
+                // so nothing in the popup enters the Tab sequence under the
+                // active-descendant model.
+                <li
+                  key={m.id}
+                  id={`${listboxId}-opt-${i}`}
+                  role="option"
+                  aria-selected={i === activeIndex}
+                  className={i === activeIndex ? 'is-active' : undefined}
+                  onMouseEnter={() => setActiveIndexRaw(i)}
+                  // preventDefault keeps the textarea focused through the click.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => commitMention(m.displayName)}
+                  data-testid={`wg-mention-${m.displayName}`}
+                >
+                  @{m.displayName}
+                  {m.roleDesc !== '' && <span className="muted"> · {m.roleDesc}</span>}
                 </li>
               ))}
             </ul>
@@ -284,11 +338,56 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
                   : t('workgroups.room.terminalNotice')
               }
               disabled={!canPost || send.isPending}
+              // Editable textbox with an associated listbox via active-descendant
+              // (a multiline field can't be a combobox, so NO aria-expanded).
+              aria-autocomplete="list"
+              aria-controls={listboxId}
+              aria-activedescendant={mentionOpen ? `${listboxId}-opt-${activeIndex}` : undefined}
               onChange={(e) => {
                 setDraft(e.target.value)
                 setCaret(e.target.selectionStart ?? e.target.value.length)
               }}
               onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
+              onFocus={() => setComposerFocused(true)}
+              onBlur={() => setComposerFocused(false)}
+              onKeyDown={(e) => {
+                const action = resolveComposerKey({
+                  key: e.key,
+                  metaKey: e.metaKey,
+                  ctrlKey: e.ctrlKey,
+                  altKey: e.altKey,
+                  shiftKey: e.shiftKey,
+                  isComposing: e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229,
+                  mentionOpen,
+                  candidateCount: suggestions.length,
+                  activeIndex,
+                })
+                switch (action.type) {
+                  case 'send':
+                    e.preventDefault() // unconditional — never leak a newline
+                    if (canPost && !send.isPending && draft.trim().length > 0) {
+                      sendFromKbdRef.current = true
+                      send.mutate(draft.trim())
+                    }
+                    break
+                  case 'mention-move':
+                    e.preventDefault()
+                    setActiveIndexRaw(action.index)
+                    break
+                  case 'mention-commit': {
+                    e.preventDefault()
+                    const target = suggestions[action.index] ?? suggestions[0]
+                    if (target !== undefined) commitMention(target.displayName)
+                    break
+                  }
+                  case 'mention-close':
+                    e.preventDefault()
+                    setDismissed(mentionCtx)
+                    break
+                  case 'default':
+                    break
+                }
+              }}
               data-testid="workgroup-room-input"
             />
             <button
@@ -301,6 +400,14 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
               {send.isPending ? t('workgroups.room.sending') : t('workgroups.room.send')}
             </button>
           </div>
+          {canPost && (
+            <div
+              className="form-field__hint workgroup-room__composer-hint"
+              data-testid="workgroup-room-shortcut-hint"
+            >
+              {t('workgroups.room.composerShortcutHint', { mod: sendChordModLabel() })}
+            </div>
+          )}
           {!canPost && (
             <div className="form-field__hint" data-testid="workgroup-room-terminal-notice">
               {t('workgroups.room.terminalNotice')}
@@ -633,6 +740,17 @@ function DispatchCard({
   const [quickOpen, setQuickOpen] = useState(false)
   const [quickText, setQuickText] = useState('')
   const [formOpen, setFormOpen] = useState(false)
+  const quickToggleRef = useRef<HTMLButtonElement | null>(null)
+
+  // Quick-reply submit, shared by the button and the Cmd/Ctrl+Enter chord.
+  function submitQuick(): void {
+    if (delivering || quickText.trim().length === 0) return
+    void onDeliver(assignment.id, { kind: 'quick', body: quickText }).then(() => {
+      setQuickOpen(false)
+      setQuickText('')
+      quickToggleRef.current?.focus() // textarea unmounts — focus returns to toggle
+    })
+  }
 
   return (
     <div
@@ -675,6 +793,7 @@ function DispatchCard({
           {isTodo && (
             <>
               <button
+                ref={quickToggleRef}
                 type="button"
                 className="btn btn--xs btn--primary"
                 onClick={() => setQuickOpen((v) => !v)}
@@ -723,20 +842,35 @@ function DispatchCard({
             rows={3}
             value={quickText}
             onChange={(e) => setQuickText(e.target.value)}
+            onKeyDown={(e) => {
+              const action = resolveComposerKey({
+                key: e.key,
+                metaKey: e.metaKey,
+                ctrlKey: e.ctrlKey,
+                altKey: e.altKey,
+                shiftKey: e.shiftKey,
+                isComposing: e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229,
+                mentionOpen: false, // no @-completion in the delivery box
+                candidateCount: 0,
+                activeIndex: 0,
+              })
+              if (action.type === 'send') {
+                e.preventDefault() // unconditional (never leak a newline)
+                submitQuick()
+              }
+            }}
             placeholder={t('workgroups.room.deliverQuickPlaceholder')}
             disabled={delivering}
             data-testid={`wg-card-quick-input-${assignment.id}`}
           />
+          <div className="form-field__hint workgroup-room__composer-hint">
+            {t('workgroups.room.deliverShortcutHint', { mod: sendChordModLabel() })}
+          </div>
           <button
             type="button"
             className="btn btn--sm btn--primary"
             disabled={delivering || quickText.trim().length === 0}
-            onClick={() =>
-              void onDeliver(assignment.id, { kind: 'quick', body: quickText }).then(() => {
-                setQuickOpen(false)
-                setQuickText('')
-              })
-            }
+            onClick={submitQuick}
             data-testid={`wg-card-quick-submit-${assignment.id}`}
           >
             {t('workgroups.room.deliverSubmit')}

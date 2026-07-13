@@ -1226,6 +1226,8 @@ export const enUS: Resources = {
       sending: 'Sending…',
       terminalNotice: 'Task finished — the room is read-only.',
       mentionsAria: 'Member suggestions',
+      composerShortcutHint: '{{mod}}+Enter to send · Enter for newline · @ to mention',
+      deliverShortcutHint: '{{mod}}+Enter to submit · Enter for newline',
       membersTitle: 'Members',
       working: 'Working',
       idle: 'Idle',
