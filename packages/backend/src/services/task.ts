@@ -2995,9 +2995,14 @@ function rowToTask(
     // source as rowToSummary), so the detail page can link to /workgroups/$name
     // instead of leaking the `__workgroup_host__` anchor. NULL for non-groups.
     workgroupName: frozenWorkgroupName(row.workgroupConfigJson),
+    // RFC-175 (§2): frozen goal from the task's own config (same task-scoped,
+    // RFC-099-safe source as workgroupName). NULL for non-groups. Powers relaunch.
+    goal: frozenWorkgroupGoal(row.workgroupConfigJson),
     // RFC-165: execution-space kind + single-agent soft link.
     spaceKind: row.spaceKind,
     sourceAgentName: row.sourceAgentName ?? null,
+    // RFC-175 (§2e): stable agent id (NULL for non-agent + pre-0091 tasks).
+    sourceAgentId: row.sourceAgentId ?? null,
     repos,
   }
 }
@@ -3025,6 +3030,26 @@ function frozenWorkgroupName(configJson: string | null): string | null {
     }
   } catch {
     // Corrupt frozen config must never 5xx the whole list; degrade to null.
+  }
+  return null
+}
+
+/**
+ * RFC-175 (§2): the workgroup task's frozen `goal`, read from the task's OWN
+ * `workgroup_config_json` — the SAME task-scoped, RFC-099-safe source as
+ * `frozenWorkgroupName` (never a live join). NULL for non-workgroup tasks and
+ * corrupt/absent config. Powers relaunch pre-filling the workgroup prompt.
+ */
+function frozenWorkgroupGoal(configJson: string | null): string | null {
+  if (configJson === null || configJson === '') return null
+  try {
+    const parsed: unknown = JSON.parse(configJson)
+    if (parsed !== null && typeof parsed === 'object' && 'goal' in parsed) {
+      const g = (parsed as { goal?: unknown }).goal
+      return typeof g === 'string' && g.length > 0 ? g : null
+    }
+  } catch {
+    // Corrupt frozen config must never 5xx; degrade to null.
   }
   return null
 }
