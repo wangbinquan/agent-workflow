@@ -20,6 +20,8 @@ import {
 } from '../src/services/taskQuestionDispatch'
 import { buildWorkgroupHostSnapshot, WG_MEMBER_NODE_ID } from '../src/services/workgroupLaunch'
 import { createManualTaskQuestion, reassignTaskQuestion } from '../src/services/taskQuestions'
+import { hasOpenDispatchedEntryOnHome } from '../src/services/clarifyRerunLedger'
+import type { nodeRuns as nodeRunsTable } from '../src/db/schema'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MIN_DEF = {
@@ -95,7 +97,14 @@ async function seedRound(
 async function seedEntry(
   db: DbClient,
   taskId: string,
-  e: { originNodeRunId: string; sourceKind: 'self' | 'manual'; sealed?: boolean },
+  e: {
+    originNodeRunId: string
+    sourceKind: 'self' | 'manual'
+    sealed?: boolean
+    /** in-flight seed: an already-dispatched entry (dispatched_at + trigger_run_id → its rerun). */
+    dispatchedAt?: number
+    triggerRunId?: string
+  },
 ) {
   const id = ulid()
   await db.insert(taskQuestions).values({
@@ -111,6 +120,8 @@ async function seedEntry(
     defaultTargetNodeId: WG_MEMBER_NODE_ID,
     // dispatch readiness gate (§5.2.11): a clarify-derived entry must be sealed before dispatch.
     sealedAt: e.sealed ? Date.now() : null,
+    ...(e.dispatchedAt !== undefined ? { dispatchedAt: e.dispatchedAt, dispatchedBy: 'u1' } : {}),
+    ...(e.triggerRunId !== undefined ? { triggerRunId: e.triggerRunId } : {}),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
@@ -481,5 +492,148 @@ describe('RFC-172 R2-T5 — manual question cannot target the shared __wg_member
     expect(DISP).toContain("effectiveTarget(e) === '__wg_member__'")
     expect(DISP).toContain('workgroup-member-shardless-dispatch')
     expect(DISP).toContain('isTurnEngineWorkgroupTask(taskRow)')
+  })
+})
+
+// T5 — the in-flight dispatch gate (assertNoInFlightDispatch / findOpenDispatchTarget) keys on the
+// (target, SHARD) a batch mints, not the target node alone. Two workgroup members share the ONE
+// __wg_member__ host node; member A's in-flight clarify rerun (shard A) must NOT block member B's
+// clarify-answer dispatch (shard B). Same shard still serializes. Golden-lock: non-workgroup batches
+// resolve every shard to null → {target → {null}} → the gate is byte-identical to today.
+describe('RFC-172b T5 — in-flight gate is per-(target, shard); sibling members do not block', () => {
+  const actor = { userId: 'u1', role: 'owner' as const }
+
+  /** member `shard` DISPATCHED with an in-flight (pending) rerun — the obligation the gate reads. */
+  async function seedInFlight(db: DbClient, taskId: string, shard: string): Promise<void> {
+    const clarify = await seedNodeRun(db, taskId, '__wg_clarify__')
+    await seedRound(db, taskId, clarify, shard)
+    const rerun = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, {
+      shardKey: shard,
+      status: 'pending',
+    })
+    await seedEntry(db, taskId, {
+      originNodeRunId: clarify,
+      sourceKind: 'self',
+      sealed: true,
+      dispatchedAt: Date.now(),
+      triggerRunId: rerun,
+    })
+  }
+
+  /** a fresh, sealed, UNDISPATCHED member answer on `shard`. */
+  async function seedFresh(db: DbClient, taskId: string, shard: string) {
+    const clarify = await seedNodeRun(db, taskId, '__wg_clarify__')
+    await seedRound(db, taskId, clarify, shard)
+    return seedEntry(db, taskId, { originNodeRunId: clarify, sourceKind: 'self', sealed: true })
+  }
+
+  test('member A in-flight (shard A) does NOT block member B dispatch (shard B) → mints B rerun', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedWorkgroupTask(db, taskId)
+    // member B's prior run first (lower id → clean shard-B inheritance), then member A in-flight.
+    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B' })
+    await seedInFlight(db, taskId, 'assign-A')
+    const entryB = await seedFresh(db, taskId, 'assign-B')
+
+    // the (target, shard) SKIP excludes member A (shard A ∉ mint {B}) — deterministic, independent
+    // of run topology — so B dispatches through the sibling's in-flight rerun.
+    const res = await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
+    expect(res.reruns.length).toBe(1)
+    const run = (
+      await db.select().from(nodeRuns).where(eq(nodeRuns.id, res.reruns[0]!.nodeRunId))
+    )[0]
+    expect(run?.shardKey).toBe('assign-B')
+  })
+
+  test('SAME shard still serializes — member A in-flight (shard A) blocks another shard-A dispatch', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedWorkgroupTask(db, taskId)
+    // in-flight rerun (shard A) is ALSO the frontier-safe prior run; NO extra shard-A done run
+    // (a higher-id shard-A done would mask the anchor and wrongly release the block).
+    await seedInFlight(db, taskId, 'assign-A')
+    const entryA2 = await seedFresh(db, taskId, 'assign-A')
+
+    let threw: unknown = null
+    try {
+      await dispatchTaskQuestions(db, taskId, [entryA2.id], actor)
+    } catch (e) {
+      threw = e
+    }
+    expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
+  })
+})
+
+// T6 (S4) — the self-rollback open-ledger preflight (selfHomeHasOpenLedger → hasOpenDispatchedEntryOnHome)
+// keys on the rolling-back member's shard: a SIBLING member's open ledger on the shared __wg_member__
+// must NOT block this member's rollback. Golden-lock: shard-blind (undefined) blocks on any open
+// ledger on the home, exactly as pre-172b.
+describe('RFC-172b T6 — hasOpenDispatchedEntryOnHome shard scoping (S4)', () => {
+  type Run = typeof nodeRunsTable.$inferSelect
+  const mkRun = (over: Partial<Run>): Run =>
+    ({
+      id: 'r',
+      taskId: 't',
+      nodeId: WG_MEMBER_NODE_ID,
+      status: 'pending',
+      retryIndex: 0,
+      iteration: 0,
+      parentNodeRunId: null,
+      rerunCause: null,
+      startedAt: null,
+      shardKey: null,
+      ...over,
+    }) as Run
+  // member B has an in-flight (pending) rerun on shard B — an OPEN ledger on the shared home.
+  const memberBEntry = {
+    originNodeRunId: 'oB',
+    triggerRunId: 'rerunB',
+    defaultTargetNodeId: WG_MEMBER_NODE_ID,
+    overrideTargetNodeId: null,
+    roleKind: 'self' as const,
+    sourceKind: 'self' as const,
+  }
+  const runs = [mkRun({ id: 'rerunB', status: 'pending', shardKey: 'B' })]
+  const shardOf = (e: { originNodeRunId: string }) => (e.originNodeRunId === 'oB' ? 'B' : null)
+
+  test("member A (shard A) rollback is NOT blocked by member B's open ledger (shard B)", () => {
+    expect(
+      hasOpenDispatchedEntryOnHome(
+        WG_MEMBER_NODE_ID,
+        [memberBEntry],
+        runs,
+        new Set(),
+        'clarify-answer',
+        'assign-A', // member A's shard — B's ledger is a different shard → not MY open ledger
+        shardOf,
+      ),
+    ).toBe(false)
+  })
+
+  test('golden-lock: shard-blind (undefined) IS blocked by any open ledger on the home (今日行为)', () => {
+    expect(
+      hasOpenDispatchedEntryOnHome(
+        WG_MEMBER_NODE_ID,
+        [memberBEntry],
+        runs,
+        new Set(),
+        'clarify-answer',
+      ),
+    ).toBe(true)
+  })
+
+  test('same member (shard B) rollback IS blocked by its OWN open ledger', () => {
+    expect(
+      hasOpenDispatchedEntryOnHome(
+        WG_MEMBER_NODE_ID,
+        [memberBEntry],
+        runs,
+        new Set(),
+        'clarify-answer',
+        'B', // rolling back member B — its own in-flight rerun blocks (no self-clobber)
+        shardOf,
+      ),
+    ).toBe(true)
   })
 })

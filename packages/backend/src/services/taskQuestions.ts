@@ -252,6 +252,10 @@ function resolveDispatchedEntryHandler(
         shardKey: r.shardKey ?? null, // RFC-172b T1
       }),
     ),
+    // RFC-172b (T4): render a workgroup member's dispatched-entry phase from ITS shard's lineage —
+    // a sibling member's run must not decide this member's phase. null (non-member) → undefined
+    // (shard-blind, golden-lock).
+    shardKey: anchorRow.shardKey === null ? undefined : anchorRow.shardKey,
   })
   return { handlerRun, dispatchedInFlight: handlerRun === null }
 }
@@ -577,6 +581,10 @@ function partitionUndispatchedParkTargets(
       loopIter: 0,
       triggerRunId: e.triggerRunId,
       runs: lineageViews,
+      // RFC-172b (T4): scope the park in-flight check to the anchor's shard — a workgroup member's
+      // park must not be released/held by a SIBLING member's run. null (non-member) → undefined =
+      // shard-blind (golden-lock).
+      shardKey: anchorRow.shardKey === null ? undefined : anchorRow.shardKey,
     })
     // in-flight consume bar (RFC-128 2026-07-01 deadlock fix — mirrors isDispatchedEntryConsumed
     // 'in-flight'): a done handler, INCLUDING done-no-output (a clarify-ask follow-up round;

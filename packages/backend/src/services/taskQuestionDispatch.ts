@@ -35,7 +35,7 @@ import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
 import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import {
   type CauseClass,
@@ -210,13 +210,34 @@ async function assertRequestedEntriesSealed(
  *
  * Returns entry.id → shardKey|null.
  */
+/** Non-manual entries' distinct clarify-round origins (the join key → asking_shard_key). */
+function entryOriginIds(entries: TaskQuestionRow[]): string[] {
+  return Array.from(
+    new Set(entries.filter((e) => e.sourceKind !== 'manual').map((e) => e.originNodeRunId)),
+  )
+}
+
+/** Pure: entry → shard, given the per-origin shard map. Manual entries carry no clarify round →
+ *  null (RFC-172 §15). Shared by the async + sync resolvers so both define shard identically. */
+function mapEntryShards(
+  entries: TaskQuestionRow[],
+  shardByOrigin: ReadonlyMap<string, string | null>,
+): Map<string, string | null> {
+  const byEntry = new Map<string, string | null>()
+  for (const e of entries) {
+    byEntry.set(
+      e.id,
+      e.sourceKind === 'manual' ? null : (shardByOrigin.get(e.originNodeRunId) ?? null),
+    )
+  }
+  return byEntry
+}
+
 export async function resolveEntryShardKeys(
   db: DbClient,
   entries: TaskQuestionRow[],
 ): Promise<Map<string, string | null>> {
-  const originIds = Array.from(
-    new Set(entries.filter((e) => e.sourceKind !== 'manual').map((e) => e.originNodeRunId)),
-  )
+  const originIds = entryOriginIds(entries)
   const shardByOrigin = new Map<string, string | null>()
   if (originIds.length > 0) {
     const rounds = await db
@@ -228,14 +249,32 @@ export async function resolveEntryShardKeys(
       .where(inArray(clarifyRounds.intermediaryNodeRunId, originIds))
     for (const r of rounds) shardByOrigin.set(r.origin, r.askingShardKey)
   }
-  const byEntry = new Map<string, string | null>()
-  for (const e of entries) {
-    byEntry.set(
-      e.id,
-      e.sourceKind === 'manual' ? null : (shardByOrigin.get(e.originNodeRunId) ?? null),
-    )
+  return mapEntryShards(entries, shardByOrigin)
+}
+
+/** RFC-172b (T5): the SYNC mirror of {@link resolveEntryShardKeys} for the in-tx recheck (dbTxSync
+ *  is synchronous — no await inside). Same asking_shard_key join, same manual→null contract, so the
+ *  in-tx (target, shard) gate is byte-consistent with the async pre-check. Only entries that
+ *  APPEARED between the pre-check and the tx need this (an entry's shard is immutable once its round
+ *  exists), but resolving the whole set is cheap and keeps the two paths identical. */
+function resolveEntryShardKeysSync(
+  tx: DbTxSync,
+  entries: TaskQuestionRow[],
+): Map<string, string | null> {
+  const originIds = entryOriginIds(entries)
+  const shardByOrigin = new Map<string, string | null>()
+  if (originIds.length > 0) {
+    const rounds = tx
+      .select({
+        origin: clarifyRounds.intermediaryNodeRunId,
+        askingShardKey: clarifyRounds.askingShardKey,
+      })
+      .from(clarifyRounds)
+      .where(inArray(clarifyRounds.intermediaryNodeRunId, originIds))
+      .all()
+    for (const r of rounds) shardByOrigin.set(r.origin, r.askingShardKey)
   }
-  return byEntry
+  return mapEntryShards(entries, shardByOrigin)
 }
 
 // RFC-147: the private fourth variant was byte-equivalent to the shared
@@ -614,17 +653,26 @@ async function dispatchTaskQuestionsLocked(
   const mintCauseByTarget: ReadonlyMap<string, CauseClass> = new Map(
     [...frontier].map((n) => [n, causeClassForEntry(byTarget.get(n)![0]!)]),
   )
-  await assertNoInFlightDispatch(db, taskId, affected, mintCauseByTarget)
-  // (RFC-132 ③: the 5d immediate-ledger precheck is gone with the immediate quick channel.)
-
-  // 6. Pre-compute each frontier mint's inherited values (async reads) BEFORE the tx so the
-  //    tx body is purely synchronous (atomic with the dispatched_at stamp).
   // RFC-172 (route 2, S2a): resolve each dispatched entry's fan-out shard (null for every
   // non-workgroup path — one group per node, byte-equivalent to today). A workgroup member node
   // (__wg_member__) fans out to one mint per assignment shard so each rerun carries the CORRECT
   // shard_key (P1-1), instead of one node-wide rerun inheriting the globally-freshest member's shard.
+  // RFC-172b (T5): this now also feeds the in-flight gate, so it is resolved BEFORE it.
   const entryShardById = await resolveEntryShardKeys(db, dispatchEntries)
   const shardOf = (e: TaskQuestionRow): string | null => entryShardById.get(e.id) ?? null
+  // RFC-172b (T5): the (target → shards this batch mints) map. Keyed by byTarget (== `affected`), so
+  // every target the gate reaches is present. Non-workgroup: {home → {null}} → shard-blind
+  // (golden-lock). Workgroup member: {__wg_member__ → {the dispatched member's shard}} → a SIBLING
+  // member's in-flight rerun (a different shard) no longer blocks this dispatch.
+  const mintShardsByTarget = new Map<string, Set<string | null>>()
+  for (const [home, homeEntries] of byTarget) {
+    mintShardsByTarget.set(home, new Set(homeEntries.map(shardOf)))
+  }
+  await assertNoInFlightDispatch(db, taskId, affected, mintCauseByTarget, mintShardsByTarget)
+  // (RFC-132 ③: the 5d immediate-ledger precheck is gone with the immediate quick channel.)
+
+  // 6. Pre-compute each frontier mint's inherited values (async reads) BEFORE the tx so the
+  //    tx body is purely synchronous (atomic with the dispatched_at stamp).
   const mintPlans = await Promise.all(
     // RFC-131 T4 去借壳: NO borrow — the rerun is minted ON the effective target, which runs its OWN
     // agent (pass null, never an agent_override_name). RFC-128 P5-BC: one ROLE-derived cause per
@@ -771,6 +819,11 @@ async function dispatchTaskQuestionsLocked(
           )
           .all()
         if (txDispatched.length > 0) {
+          // RFC-172b (T5): the in-tx recheck must be shard-aware too — else a concurrent sibling
+          // member dispatch that committed between the pre-check and here would re-block THIS member
+          // node-wide. Sync-resolve the (possibly newly-appeared) in-flight entries' shards; reuse
+          // the pre-tx `mintShardsByTarget` (built from dispatchEntries, which don't change).
+          const txInflightShards = resolveEntryShardKeysSync(tx, txDispatched)
           const blocker = findOpenDispatchTarget(
             affected,
             {
@@ -779,6 +832,8 @@ async function dispatchTaskQuestionsLocked(
               outputRunIds: txOutputIds,
             },
             mintCauseByTarget,
+            mintShardsByTarget,
+            (e) => txInflightShards.get(e.id) ?? null,
           )
           if (blocker !== null) throw new NodeDispatchInFlight(blocker)
         }
@@ -909,7 +964,14 @@ interface OpenDispatchInputs {
   entries: ReadonlyArray<
     Pick<
       TaskQuestionRow,
-      'triggerRunId' | 'defaultTargetNodeId' | 'overrideTargetNodeId' | 'roleKind' | 'sourceKind'
+      // RFC-172b (T5): `id` lets the gate look up each in-flight entry's shard (resolved outside,
+      // keyed by id) so a sibling member's entry can be shard-excluded.
+      | 'id'
+      | 'triggerRunId'
+      | 'defaultTargetNodeId'
+      | 'overrideTargetNodeId'
+      | 'roleKind'
+      | 'sourceKind'
     >
   >
   /** Every node_run of the task. */
@@ -941,6 +1003,16 @@ function findOpenDispatchTarget(
   inputs: OpenDispatchInputs,
   /** cause this batch will mint per FRONTIER node; absent key = no mint on that node. */
   mintCauseByTarget: ReadonlyMap<string, CauseClass>,
+  /** RFC-172b (T5): the (target, shard) combos this batch WILL mint. An in-flight entry conflicts
+   *  only when its own (target, shard) is one this batch mints — so a sibling workgroup member's
+   *  in-flight rerun (they share `__wg_member__`, keyed by shard) does not block THIS member's
+   *  dispatch. `undefined` (legacy) = shard-blind: every affected target blocks regardless of shard
+   *  (pre-172b). Null shards collapse: a non-workgroup batch is `{target → {null}}` and every entry
+   *  resolves to null → `null ∈ {null}` → identical to today. */
+  mintShardsByTarget?: ReadonlyMap<string, ReadonlySet<string | null>>,
+  /** in-flight entry → its shard (asking_shard_key; manual → null). Required with mintShardsByTarget.
+   *  Keyed by entry id (shard resolved by the caller from full rows). */
+  shardOfEntry?: (e: { id: string }) => string | null,
 ): OpenDispatchBlocker | null {
   const lineageViews: RunLineageView[] = inputs.runs.map((r) => ({
     id: r.id,
@@ -959,6 +1031,14 @@ function findOpenDispatchTarget(
     // node where the rerun is minted (a reassign moves the run to the target, not the origin home).
     const target = e.overrideTargetNodeId ?? e.defaultTargetNodeId
     if (target === null || target === '' || !affected.has(target)) continue
+    // RFC-172b (T5): a sibling shard's in-flight entry does not conflict with this batch's mint.
+    const eShard = shardOfEntry !== undefined ? shardOfEntry(e) : null
+    if (
+      mintShardsByTarget !== undefined &&
+      !(mintShardsByTarget.get(target)?.has(eShard) ?? false)
+    ) {
+      continue
+    }
     if (
       !isDispatchedEntryConsumed(
         e,
@@ -966,6 +1046,9 @@ function findOpenDispatchTarget(
         lineageViews,
         'in-flight',
         mintCauseByTarget.get(target),
+        // null collapses to shard-blind (undefined) → non-workgroup consumption is byte-identical to
+        // today; a real member shard scopes the anchor lineage + run-obligation scan to that member.
+        eShard === null ? undefined : eShard,
       )
     ) {
       // Best-effort blocker run: the open (non-done top-level) run on the target — present for
@@ -993,6 +1076,9 @@ async function assertNoInFlightDispatch(
   taskId: string,
   affected: ReadonlySet<string>,
   mintCauseByTarget: ReadonlyMap<string, CauseClass>,
+  /** RFC-172b (T5): the (target, shard) combos this batch mints — a sibling shard's in-flight entry
+   *  does not block. `undefined` = shard-blind (pre-172b). See findOpenDispatchTarget. */
+  mintShardsByTarget?: ReadonlyMap<string, ReadonlySet<string | null>>,
 ): Promise<void> {
   // RFC-128 P5-BC (R2-2, §5.2.12 contract 3): span ANY deferred role (self/questioner/designer),
   // not designer-only — a home with an in-flight self/questioner dispatch must block a later
@@ -1016,10 +1102,16 @@ async function assertNoInFlightDispatch(
     db,
     runs.map((r) => r.id),
   )
+  // RFC-172b (T5): resolve the IN-FLIGHT entries' shards so a sibling member does not block. Only
+  // when the batch is shard-aware (mintShardsByTarget provided) — else stay node-wide (golden-lock).
+  const inflightShards =
+    mintShardsByTarget !== undefined ? await resolveEntryShardKeys(db, entries) : undefined
   const blocker = findOpenDispatchTarget(
     affected,
     { entries, runs, outputRunIds },
     mintCauseByTarget,
+    mintShardsByTarget,
+    inflightShards !== undefined ? (e) => inflightShards.get(e.id) ?? null : undefined,
   )
   if (blocker !== null) {
     throw new ConflictError(

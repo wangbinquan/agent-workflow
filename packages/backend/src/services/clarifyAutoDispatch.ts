@@ -125,6 +125,28 @@ async function resolveSelfRollbackRun(
   return askingRun
 }
 
+/** RFC-172b (T6): entry → shard resolver for a SHARDED (workgroup member) self home. Manual → null;
+ *  clarify-derived → its round's asking_shard_key. Mirrors taskQuestionDispatch.resolveEntryShardKeys
+ *  (inlined to avoid a module-init import cycle — clarifyAutoDispatch is a leaf consumer). Only built
+ *  for a member self run; a null-shard home skips it (see selfHomeHasOpenLedger). */
+async function buildDispatchedEntryShardResolver(
+  db: DbClient,
+  entries: ReadonlyArray<Pick<typeof taskQuestions.$inferSelect, 'originNodeRunId' | 'sourceKind'>>,
+): Promise<(e: { originNodeRunId: string; sourceKind: string }) => string | null> {
+  const origins = Array.from(
+    new Set(entries.filter((e) => e.sourceKind !== 'manual').map((e) => e.originNodeRunId)),
+  )
+  const shardByOrigin = new Map<string, string | null>()
+  if (origins.length > 0) {
+    const rounds = await db
+      .select({ origin: clarifyRounds.intermediaryNodeRunId, shard: clarifyRounds.askingShardKey })
+      .from(clarifyRounds)
+      .where(inArray(clarifyRounds.intermediaryNodeRunId, origins))
+    for (const r of rounds) shardByOrigin.set(r.origin, r.shard)
+  }
+  return (e) => (e.sourceKind === 'manual' ? null : (shardByOrigin.get(e.originNodeRunId) ?? null))
+}
+
 /**
  * Codex round-8/9 — does `homeNodeId` already hold an OPEN (unconsumed) rerun ledger that the
  * destructive self rollback must NOT clobber? Mirrors the dispatch gate
@@ -138,6 +160,10 @@ async function selfHomeHasOpenLedger(
   db: DbClient,
   taskId: string,
   homeNodeId: string,
+  /** RFC-172b (T6, S4): the shard of the self run being rolled back (workgroup member = assignment
+   *  id; leader / ordinary self = null). A SIBLING member's open ledger on the shared `__wg_member__`
+   *  no longer blocks THIS member's rollback. null = ordinary home (shard-blind, golden-lock). */
+  selfShardKey: string | null,
 ): Promise<boolean> {
   const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
   const outputRunIds = new Set(
@@ -158,6 +184,7 @@ async function selfHomeHasOpenLedger(
   // (a) dispatched ledger on the home (any deferred role).
   const dispatchedEntries = await db
     .select({
+      originNodeRunId: taskQuestions.originNodeRunId,
       triggerRunId: taskQuestions.triggerRunId,
       defaultTargetNodeId: taskQuestions.defaultTargetNodeId,
       overrideTargetNodeId: taskQuestions.overrideTargetNodeId,
@@ -173,6 +200,14 @@ async function selfHomeHasOpenLedger(
         isNotNull(taskQuestions.dispatchedAt),
       ),
     )
+  // RFC-172b (T6): only a SHARDED (workgroup member) self run needs shard scoping — a sibling
+  // member's ledger on the shared `__wg_member__` must not block this member's rollback. A null-shard
+  // self home (leader / ordinary node) stays fully node-wide (pass undefined) → byte-identical to
+  // today, and skips the clarify_rounds join entirely.
+  const shardOfEntry =
+    selfShardKey === null
+      ? undefined
+      : await buildDispatchedEntryShardResolver(db, dispatchedEntries)
   if (
     dispatchedEntries.length > 0 &&
     // RFC-133: this preflight guards the SELF rollback+dispatch — its mint is 'clarify-answer'.
@@ -182,6 +217,8 @@ async function selfHomeHasOpenLedger(
       runs,
       outputRunIds,
       'clarify-answer',
+      selfShardKey === null ? undefined : selfShardKey,
+      shardOfEntry,
     )
   ) {
     return true
@@ -531,7 +568,11 @@ export async function autoDispatchClarifyRound(
           .select({ id: taskQuestions.id })
           .from(taskQuestions)
           .where(and(inArray(taskQuestions.id, entryIds), isNotNull(taskQuestions.dispatchedAt)))
-        if (claimed.length > 0 || (await selfHomeHasOpenLedger(db, round.taskId, selfRun.nodeId))) {
+        if (
+          claimed.length > 0 ||
+          // RFC-172b (T6): scope the open-ledger preflight to this member's shard.
+          (await selfHomeHasOpenLedger(db, round.taskId, selfRun.nodeId, selfRun.shardKey ?? null))
+        ) {
           return false // an open same-home ledger owns the home → defer WITHOUT rolling back
         }
         const target = await loadRollbackTarget(db, round.taskId)

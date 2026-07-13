@@ -202,7 +202,12 @@ export function hasOpenDispatchedEntryOnHome(
   dispatchedEntries: ReadonlyArray<
     Pick<
       TaskQuestionRow,
-      'triggerRunId' | 'defaultTargetNodeId' | 'overrideTargetNodeId' | 'roleKind' | 'sourceKind'
+      | 'originNodeRunId'
+      | 'triggerRunId'
+      | 'defaultTargetNodeId'
+      | 'overrideTargetNodeId'
+      | 'roleKind'
+      | 'sourceKind'
     >
   >,
   runs: ReadonlyArray<NodeRunRow>,
@@ -212,14 +217,36 @@ export function hasOpenDispatchedEntryOnHome(
    *  A queued entry of a DIFFERENT cause must still block the mint (it would otherwise be
    *  bound into the alien-cause continuation — Codex design-gate P2). */
   mintCause: CauseClass,
+  /** RFC-172b (T6, S4): the shard of the home run this guards (workgroup member = assignment id).
+   *  A SIBLING member's open ledger (a different shard on the shared `__wg_member__`) must NOT block
+   *  THIS member's self rollback + re-dispatch. `undefined` (every non-self caller) = shard-blind
+   *  (pre-172b). `null` (leader / ordinary self home) filters to null-shard entries — a byte-identical
+   *  no-op since every entry on such a home is null-shard. Needs `shardOfEntry` when set. */
+  shardKey?: string | null,
+  shardOfEntry?: (e: Pick<TaskQuestionRow, 'originNodeRunId' | 'sourceKind'>) => string | null,
 ): boolean {
-  const onHome = dispatchedEntries.filter(
-    (e) => (e.overrideTargetNodeId ?? e.defaultTargetNodeId) === homeNodeId,
-  )
+  const onHome = dispatchedEntries.filter((e) => {
+    if ((e.overrideTargetNodeId ?? e.defaultTargetNodeId) !== homeNodeId) return false
+    // RFC-172b (T6): scope to the SAME shard — a sibling member's ledger is not MY open ledger.
+    if (shardKey !== undefined && shardOfEntry !== undefined && shardOfEntry(e) !== shardKey) {
+      return false
+    }
+    return true
+  })
   if (onHome.length === 0) return false
   const lineageViews = toLineageViews(runs, outputRunIds)
   return onHome.some(
-    (e) => !isDispatchedEntryConsumed(e, runs, lineageViews, 'in-flight', mintCause),
+    // null collapses to shard-blind (undefined) → ordinary/leader homes are byte-identical; a real
+    // member shard scopes the anchor lineage + run-obligation scan to that member (RFC-172b T6).
+    (e) =>
+      !isDispatchedEntryConsumed(
+        e,
+        runs,
+        lineageViews,
+        'in-flight',
+        mintCause,
+        shardKey === null || shardKey === undefined ? undefined : shardKey,
+      ),
   )
 }
 
