@@ -18,13 +18,14 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { memories, tasks } from '../src/db/schema'
+import { fusions, memories, tasks } from '../src/db/schema'
 import {
   approveFusion,
   createFusion,
   getFusion,
   isValidFusionTransition,
   reconcileFusion,
+  rejectFusion,
   type FusionDeps,
 } from '../src/services/fusion'
 import { getTask } from '../src/services/task'
@@ -270,10 +271,17 @@ describe('launch → reconcile → approve', () => {
     const { writeSkillContent } = await import('../src/services/skill')
     await writeSkillContent(h.db, fsOpts, 'lint', { bodyMd: 'edited elsewhere' }, 'someone')
 
-    await expect(approveFusion(h.deps, fusion.id, adminActor)).rejects.toThrow()
-    const failed = await getFusion(h.deps, fusion.id)
-    expect(failed!.status).toBe('failed')
-    expect(statusOf(h.db, mem)).toBe('approved') // not fused — apply rolled back
+    // RFC-170 T6: the composite precondition token drifted (contentVersion 1→2),
+    // so approve is rejected EARLY — before any state change (zero side effect) —
+    // instead of transitioning to 'applying' then failing inside commitSkillVersion.
+    // The fusion is PRESERVED as awaiting_approval; the user re-initiates against
+    // the current skill (both approve and re-run reject a drifted fusion).
+    await expect(approveFusion(h.deps, fusion.id, adminActor)).rejects.toThrow(
+      /precondition|changed/i,
+    )
+    const stale = await getFusion(h.deps, fusion.id)
+    expect(stale!.status).toBe('awaiting_approval') // preserved, not 'failed'
+    expect(statusOf(h.db, mem)).toBe('approved') // not fused
   })
 
   test('reconcile fails when the manifest omits a selected memory (Codex P2 #5)', async () => {
@@ -309,5 +317,127 @@ describe('launch → reconcile → approve', () => {
     const f = await getFusion(h.deps, fusion.id)
     expect(f!.status).toBe('failed')
     expect(f!.error).toContain(memB)
+  })
+})
+
+// RFC-170 T6 — the fusion captures the target skill's composite precondition
+// token at create time; approve AND re-run CAS it against the live token. A
+// delete→recreate ABA (new skillId under the same name — baseSkillVersion alone
+// can't see it), a concurrent edit, or a legacy (pre-upgrade, null-token) fusion
+// are all rejected with ZERO side effects, forcing the user to re-initiate.
+describe('RFC-170 T6 — fusion precondition token', () => {
+  let h: H
+  beforeEach(() => (h = build()))
+  afterEach(() => h.cleanup())
+
+  /** Drive a fresh fusion to awaiting_approval (agent worktree edit simulated). */
+  async function toAwaitingApproval(skillName: string, memId: string) {
+    const fusion = await createFusion(
+      { skillName, memoryIds: [memId], intent: '' },
+      h.deps,
+      adminActor,
+    )
+    const task = await getTask(h.db, fusion.currentTaskId!)
+    const wt = task!.worktreePath
+    writeFileSync(pjoin(wt, 'SKILL.md'), `---\nname: ${skillName}\ndescription: d\n---\nproposed`)
+    mkdirSync(pjoin(wt, '__fusion__'), { recursive: true })
+    writeFileSync(
+      pjoin(wt, '__fusion__', 'result.json'),
+      JSON.stringify({ incorporatedMemoryIds: [memId], skipped: [], changelog: 'x' }),
+    )
+    h.db
+      .update(tasks)
+      .set({ status: 'done', finishedAt: Date.now() })
+      .where(eq(tasks.id, task!.id))
+      .run()
+    await reconcileFusion(h.deps, fusion.id)
+    return fusion
+  }
+
+  function tokenOf(fusionId: string): string | null {
+    return (
+      h.db.select().from(fusions).where(eq(fusions.id, fusionId)).all() as Array<{
+        preconditionToken: string | null
+      }>
+    )[0]!.preconditionToken
+  }
+
+  test('createFusion persists a non-null composite token', async () => {
+    const fsOpts: SkillFsOptions = { appHome: h.appHome }
+    await createManagedSkill(h.db, fsOpts, {
+      name: 'lint',
+      description: 'd',
+      bodyMd: 'orig',
+      frontmatterExtra: {},
+    })
+    const mem = approvedGlobalMemory(h.db, 'm')
+    const fusion = await createFusion(
+      { skillName: 'lint', memoryIds: [mem], intent: '' },
+      h.deps,
+      adminActor,
+    )
+    expect(tokenOf(fusion.id)).not.toBeNull()
+  })
+
+  test('approve on a LEGACY (null-token) fusion is fail-closed (409), status preserved', async () => {
+    const fsOpts: SkillFsOptions = { appHome: h.appHome }
+    await createManagedSkill(h.db, fsOpts, {
+      name: 'lint',
+      description: 'd',
+      bodyMd: 'orig',
+      frontmatterExtra: {},
+    })
+    const mem = approvedGlobalMemory(h.db, 'm')
+    const fusion = await toAwaitingApproval('lint', mem)
+    // Simulate a pre-upgrade fusion: no captured token.
+    h.db.update(fusions).set({ preconditionToken: null }).where(eq(fusions.id, fusion.id)).run()
+
+    await expect(approveFusion(h.deps, fusion.id, adminActor)).rejects.toThrow(
+      /predates|precondition/i,
+    )
+    expect((await getFusion(h.deps, fusion.id))!.status).toBe('awaiting_approval')
+    expect(statusOf(h.db, mem)).toBe('approved') // not fused
+  })
+
+  test('re-run (reject) on a drifted skill is a zero-side-effect 409 (no new task)', async () => {
+    const fsOpts: SkillFsOptions = { appHome: h.appHome }
+    await createManagedSkill(h.db, fsOpts, {
+      name: 'lint',
+      description: 'd',
+      bodyMd: 'orig',
+      frontmatterExtra: {},
+    })
+    const mem = approvedGlobalMemory(h.db, 'm')
+    const fusion = await toAwaitingApproval('lint', mem)
+    const taskBefore = fusion.currentTaskId
+
+    // A concurrent editor bumps the skill (token drifts).
+    const { writeSkillContent } = await import('../src/services/skill')
+    await writeSkillContent(h.db, fsOpts, 'lint', { bodyMd: 'edited elsewhere' }, 'someone')
+
+    await expect(rejectFusion(h.deps, fusion.id, 'try again', adminActor)).rejects.toThrow(
+      /precondition|changed/i,
+    )
+    const after = await getFusion(h.deps, fusion.id)
+    // Zero side effects: still awaiting_approval, same iteration, same task, not re-run.
+    expect(after!.status).toBe('awaiting_approval')
+    expect(after!.iteration).toBe(1)
+    expect(after!.currentTaskId).toBe(taskBefore)
+  })
+
+  test('happy path: an unchanged skill still approves (token matches)', async () => {
+    const fsOpts: SkillFsOptions = { appHome: h.appHome }
+    await createManagedSkill(h.db, fsOpts, {
+      name: 'lint',
+      description: 'd',
+      bodyMd: 'orig',
+      frontmatterExtra: {},
+    })
+    const mem = approvedGlobalMemory(h.db, 'm')
+    const fusion = await toAwaitingApproval('lint', mem)
+    // No skill drift → token matches → approve succeeds + fuses the memory.
+    const done = await approveFusion(h.deps, fusion.id, adminActor)
+    expect(done.status).toBe('done')
+    expect(statusOf(h.db, mem)).toBe('fused')
   })
 })

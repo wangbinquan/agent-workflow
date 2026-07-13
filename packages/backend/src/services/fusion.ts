@@ -35,7 +35,7 @@ import { agents, fusions, workflows } from '@/db/schema'
 import { createAgent } from '@/services/agent'
 import { canManageMemory, fuseMemoriesTx, getMemoryById } from '@/services/memory'
 import { canViewResource, isAdminActor, isResourceOwner } from '@/services/resourceAcl'
-import { getSkill } from '@/services/skill'
+import { getSkill, getSkillPreconditionToken } from '@/services/skill'
 import { commitSkillVersion, type SkillVersionFsOptions } from '@/services/skillVersion'
 import { trySetTaskStatus } from '@/services/lifecycle'
 import { cancelTask, getTask, startTask, type StartTaskDeps } from '@/services/task'
@@ -487,13 +487,19 @@ export async function createFusion(
     startDeps,
   )
 
-  // 5. Persist the fusion record.
+  // 5. Persist the fusion record. RFC-170 T6: capture the target skill's composite
+  //    precondition token NOW; approve / re-run CAS it against the live token so a
+  //    delete→recreate rebuild (same name, new skillId — baseSkillVersion alone
+  //    can't see it) or a concurrent skill edit is 409-rejected, not silently
+  //    applied onto the wrong content.
+  const preconditionToken = await getSkillPreconditionToken(db, input.skillName)
   const now = Date.now()
   db.insert(fusions)
     .values({
       id: fusionId,
       skillName: input.skillName,
       baseSkillVersion: skill.contentVersion,
+      preconditionToken,
       memoryIdsJson: JSON.stringify(input.memoryIds),
       intent: input.intent,
       status: 'running',
@@ -724,6 +730,31 @@ function failFusion(db: DbClient, id: string, error: string): void {
 // Approve (atomic apply)
 // ---------------------------------------------------------------------------
 
+/**
+ * RFC-170 T6 — CAS the fusion's captured precondition token against the target
+ * skill's CURRENT composite token. Throws (zero side effects for the caller) when:
+ *   - the fusion predates snapshot protection (null token) → fail-closed, must
+ *     re-initiate; a legacy fusion can't prove which skill generation it targeted.
+ *   - the skill drifted: deleted→recreated (new skillId — `baseSkillVersion` alone
+ *     can't see it), or its files/meta were edited concurrently.
+ * Encoded tokens are canonical, so string equality IS token equality.
+ */
+async function assertFusionSkillUnchanged(db: DbClient, row: FusionRow): Promise<void> {
+  if (row.preconditionToken === null) {
+    throw new ConflictError(
+      'fusion-precondition-legacy',
+      'this fusion predates snapshot protection; re-initiate it against the current skill',
+    )
+  }
+  const current = await getSkillPreconditionToken(db, row.skillName)
+  if (current === null || current !== row.preconditionToken) {
+    throw new ConflictError(
+      'fusion-precondition-stale',
+      'the target skill changed since this fusion started; re-initiate the fusion',
+    )
+  }
+}
+
 export async function approveFusion(deps: FusionDeps, id: string, actor: Actor): Promise<Fusion> {
   const { db, appHome } = deps
   await reconcileFusion(deps, id)
@@ -741,6 +772,10 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
   if (row.proposedWorktreePath === null || !existsSync(row.proposedWorktreePath)) {
     throw new ConflictError('fusion-proposal-missing', 'the proposed change is no longer on disk')
   }
+  // RFC-170 T6: reject BEFORE any state change if the skill drifted (ABA-safe;
+  // the commitSkillVersion `expectedVersion` OCC below is a second, version-only
+  // layer that the composite token strengthens with skillId + metaRevision).
+  await assertFusionSkillUnchanged(db, row)
 
   setFusionStatus(db, id, 'applying')
   const incorporated = jsonArray(row.incorporatedMemoryIdsJson)
@@ -818,6 +853,11 @@ export async function rejectFusion(
       `fusion is '${row.status}', not awaiting_approval`,
     )
   }
+  // RFC-170 T6 (G5-P4): a re-run seeds its baseline from the CURRENT skill files
+  // (below). If the skill drifted since this fusion started, re-running would
+  // silently rebase the proposal onto the wrong content — so reject here, BEFORE
+  // creating any workDir / task (zero side effects), and make the user re-initiate.
+  await assertFusionSkillUnchanged(db, row)
 
   const memIds = jsonArray(row.memoryIdsJson)
   const loaded: Array<{ id: string; title: string; bodyMd: string; scopeType: string }> = []
