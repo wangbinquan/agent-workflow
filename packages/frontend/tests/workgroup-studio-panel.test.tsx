@@ -258,9 +258,12 @@ describe('panel three-state switching (§9.1)', () => {
     // config form renders inside the panel.
     await screen.findByTestId('workgroup-card-Coder')
     expect(within(panelEl()).getByTestId('workgroup-field-instructions')).toBeTruthy()
-    expect(screen.getByTestId('workgroup-config-entry').classList.contains('is-selected')).toBe(
-      true,
-    )
+    const cfgEntry = screen.getByTestId('workgroup-config-entry')
+    expect(cfgEntry.classList.contains('is-selected')).toBe(true)
+    // 2026-07-13 用户「组配置按钮改成按钮样式」— the config entry uses the shared
+    // .btn chrome now (a recognizable button), NOT the card-like .split-card.
+    expect(cfgEntry.classList.contains('btn')).toBe(true)
+    expect(cfgEntry.classList.contains('split-card')).toBe(false)
 
     // select a member → member editor with the alias prefilled and focused.
     fireEvent.click(screen.getByTestId('workgroup-card-open-Auditor'))

@@ -458,7 +458,7 @@ function WorkgroupDetailPage() {
             <button
               type="button"
               className={
-                'split-card workgroup-config-entry' +
+                'btn workgroup-config-entry' +
                 (effectivePanel.kind === 'config' ? ' is-selected' : '')
               }
               aria-expanded={effectivePanel.kind === 'config'}

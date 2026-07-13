@@ -11886,11 +11886,22 @@ mark.comment-anchor[data-active='true'] {
    (design-gate Codex#1). */
 .workgroup-config-entry {
   width: 100%;
-  text-align: left;
-  font: inherit;
+  /* `.btn` centers its content; the rail entry reads as a left-aligned nav
+     button (2026-07-13 用户「组配置按钮改成按钮样式」——base swapped
+     .split-card → .btn for a recognizable button chrome, was too card-like). */
+  justify-content: flex-start;
   cursor: pointer;
   margin-bottom: var(--space-2);
   flex-shrink: 0;
+}
+
+/* Active view: accent-tinted button (mirrors the member cards' .is-selected
+   grammar; the `.split-card.is-selected` rule no longer applies now the base
+   is `.btn`). */
+.workgroup-config-entry.is-selected {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong));
+  color: var(--text);
 }
 
 /* Member cards — a vertical list inside the scrolling `.split__cards`. The
