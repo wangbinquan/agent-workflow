@@ -36,6 +36,7 @@ import type { DbClient } from '@/db/client'
 import { agents, skills } from '@/db/schema'
 import { commitSkillVersion, skillVersionRelPath } from '@/services/skillVersion'
 import { isSkillAvailableThisBoot } from '@/services/skillBootVerify'
+import { tokenToVersionFence } from '@/services/skillToken'
 import { dbTxSync } from '@/db/txSync'
 import {
   abandonOperation,
@@ -576,6 +577,9 @@ export async function writeSkillFile(
   // RFC-170 (4th-review [high]): the owner the route authorized against — the
   // funnel 409s if it drifts before the version commits (owner-transfer race).
   expectedOwnerUserId?: string | null,
+  // RFC-170 F3: composite precondition token (from the client's canonical token
+  // store) — OCC-fenced in the version-bump tx. Malformed → 400, stale → 409.
+  expectedToken?: string,
 ): Promise<void> {
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
@@ -583,6 +587,13 @@ export async function writeSkillFile(
   // must never write it via an arbitrary path (before RFC-169 there was NO
   // check, so adding a file named `SKILL.md` / `./SKILL.md` truncated it).
   assertNotSkillMainFile(skillRoot(skill, opts), relPath)
+  const fence = tokenToVersionFence(expectedToken)
+  if (fence === null) {
+    throw new ValidationError(
+      'skill-token-invalid',
+      'malformed precondition token; reload and retry',
+    )
+  }
   // RFC-101: support-file writes version the whole files/ tree too.
   commitSkillVersion(
     db,
@@ -597,6 +608,7 @@ export async function writeSkillFile(
       source: 'editor',
       authorUserId: authorUserId ?? null,
       ...(expectedOwnerUserId !== undefined ? { expectedOwnerUserId } : {}),
+      ...(fence ?? {}),
     },
   )
 }
@@ -609,6 +621,8 @@ export async function deleteSkillFile(
   authorUserId?: string | null,
   // RFC-170 (4th-review [high]): owner the route authorized against; funnel 409s on drift.
   expectedOwnerUserId?: string | null,
+  // RFC-170 F3: composite precondition token — OCC-fenced in the version-bump tx.
+  expectedToken?: string,
 ): Promise<void> {
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
@@ -621,6 +635,13 @@ export async function deleteSkillFile(
     throw new NotFoundError(
       'skill-file-not-found',
       `file '${relPath}' not found in skill '${name}'`,
+    )
+  }
+  const fence = tokenToVersionFence(expectedToken)
+  if (fence === null) {
+    throw new ValidationError(
+      'skill-token-invalid',
+      'malformed precondition token; reload and retry',
     )
   }
   // RFC-101: deletion versions the tree (the removal IS the change).
@@ -638,6 +659,7 @@ export async function deleteSkillFile(
       source: 'editor',
       authorUserId: authorUserId ?? null,
       ...(expectedOwnerUserId !== undefined ? { expectedOwnerUserId } : {}),
+      ...(fence ?? {}),
     },
   )
 }

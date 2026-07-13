@@ -45,5 +45,9 @@ export type SkillVersionDiff = z.infer<typeof SkillVersionDiffSchema>
 export const RestoreSkillVersionSchema = z.object({
   /** Optional human note recorded on the new (restore) version row. */
   reason: z.string().max(2000).optional(),
+  // RFC-170 F3: composite precondition token — OCC-fences the restore in the
+  // version-bump tx; the response returns the fresh token. Optional for
+  // backward compatibility.
+  expectedToken: z.string().min(1).optional(),
 })
 export type RestoreSkillVersion = z.infer<typeof RestoreSkillVersionSchema>

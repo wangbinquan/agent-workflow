@@ -97,6 +97,11 @@ export type FileNode = z.infer<typeof FileNodeSchema>
 /** PUT /api/skills/:name/file?path=... body. Text-only in v1. */
 export const WriteSkillFileSchema = z.object({
   content: z.string(),
+  // RFC-170 F3: the composite precondition token from the detail read. When
+  // present the write is OCC-fenced in the version-bump tx (same fence as
+  // combined-save); the response returns the fresh token so the client's single
+  // canonical token store advances. Optional for backward compatibility.
+  expectedToken: z.string().min(1).optional(),
 })
 export type WriteSkillFile = z.infer<typeof WriteSkillFileSchema>
 

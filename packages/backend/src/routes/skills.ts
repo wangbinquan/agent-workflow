@@ -33,6 +33,7 @@ import {
   deleteSkill,
   deleteSkillFile,
   getSkill,
+  getSkillPreconditionToken,
   listSkillFiles,
   listSkills,
   readSkillContent,
@@ -224,8 +225,15 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       actor.user.id,
       // RFC-170 (4th-review [high]): the owner we just authorized against.
       existing.ownerUserId,
+      // RFC-170 F3: OCC token from the client's canonical token store.
+      parsed.data.expectedToken,
     )
-    return c.json({ ok: true, path })
+    // RFC-170 F3: return the FRESH token so the client's canonical store advances.
+    return c.json({
+      ok: true,
+      path,
+      token: await getSkillPreconditionToken(deps.db, c.req.param('name')),
+    })
   })
 
   app.delete('/api/skills/:name/file', async (c) => {
@@ -240,8 +248,11 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       path,
       actor.user.id,
       existing.ownerUserId,
+      // RFC-170 F3: OCC token (query param, since DELETE has no body).
+      c.req.query('expectedToken'),
     )
-    return c.body(null, 204)
+    // RFC-170 F3: was 204; now returns the fresh token for the canonical store.
+    return c.json({ token: await getSkillPreconditionToken(deps.db, c.req.param('name')) })
   })
 
   // RFC-101 — skill content version history.
@@ -283,8 +294,14 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       parsed.data.reason,
       // RFC-170 (4th-review [high]): the owner we just authorized against.
       existing.ownerUserId,
+      // RFC-170 F3: OCC token from the client's canonical token store.
+      parsed.data.expectedToken,
     )
-    return c.json(result)
+    // RFC-170 F3: return the fresh token alongside the restore result.
+    return c.json({
+      ...result,
+      token: await getSkillPreconditionToken(deps.db, c.req.param('name')),
+    })
   })
 
   // RFC-099 — GET/PUT /api/skills/:name/acl

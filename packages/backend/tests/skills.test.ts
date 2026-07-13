@@ -362,8 +362,10 @@ describe('skill HTTP routes', () => {
     expect(get.status).toBe(200)
     expect(((await get.json()) as { content: string }).content).toBe('aaa')
 
+    // RFC-170 F3: DELETE /file now returns 200 + the fresh canonical token (was 204).
     const del = await req(h.app, '/api/skills/foo/file?path=templates/a.txt', { method: 'DELETE' })
-    expect(del.status).toBe(204)
+    expect(del.status).toBe(200)
+    expect(((await del.json()) as { token?: string }).token).toBeTruthy()
 
     const miss = await req(h.app, '/api/skills/foo/file?path=templates/a.txt')
     expect(miss.status).toBe(404)

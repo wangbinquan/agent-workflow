@@ -38,7 +38,8 @@ import {
   finishOperation,
 } from '@/services/skillOperations'
 import { unfuseMemoriesTx } from '@/services/memory'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { tokenToVersionFence } from '@/services/skillToken'
 import { parseFrontmatter } from '@/util/frontmatter'
 
 export interface SkillVersionFsOptions {
@@ -630,9 +631,18 @@ export function restoreSkillVersion(
   reason?: string,
   // RFC-170 (4th-review [high]): owner the route authorized against; funnel 409s on drift.
   expectedOwnerUserId?: string | null,
+  // RFC-170 F3: composite precondition token — OCC-fenced in the version-bump tx.
+  expectedToken?: string,
 ): RestoreResult {
   ensureInitialSkillVersion(db, opts, name)
   requireVersionRow(db, name, target)
+  const fence = tokenToVersionFence(expectedToken)
+  if (fence === null) {
+    throw new ValidationError(
+      'skill-token-invalid',
+      'malformed precondition token; reload and retry',
+    )
+  }
   const targetDir = skillVersionDirAbs(opts.appHome, name, target)
   let unfusedMemoryIds: string[] = []
   const version = commitSkillVersion(
@@ -650,6 +660,7 @@ export function restoreSkillVersion(
       restoredFromVersion: target,
       authorUserId,
       ...(expectedOwnerUserId !== undefined ? { expectedOwnerUserId } : {}),
+      ...(fence ?? {}),
       summary: reason && reason.length > 0 ? reason : `Restored from v${target}`,
       txExtra: (tx) => {
         // Un-fuse in the SAME tx as the version bump so the fused⟺in-current

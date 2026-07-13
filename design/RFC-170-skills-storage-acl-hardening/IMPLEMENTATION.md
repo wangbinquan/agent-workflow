@@ -358,9 +358,11 @@ listFiles + T4a legacy backfill + reverify + T9 注入门）**，余为增强：
 
 **批次 B/C 剩余（大/耦合/需 UI 的独立单元）**：**canonical token store + 全六写 OCC**（§2/G2-7
 
-- ㉙-fix F3/F2b：file `PUT/DELETE /:name/file` / restore / ZIP overwrite 加复合 token OCC + 前端
-  每 skill 单一 canonical token store〔SkillFileTree/restore/save 共享、逐次原子更新〕+ 409 冲突显式
-  reload 流程）· **version-write in-tx ACL 重校**（㉙-fix-4 [high]：设计 §318——**funnel 侧 owner-drift
+- ㉙-fix F3/F2b：**后端 file `PUT/DELETE /:name/file` + restore 复合 token OCC + 回带新 token 已落
+  ㉝**〔schema 加可选 expectedToken、`tokenToVersionFence` 喂 commitSkillVersion in-tx fence、DELETE
+  204→200 回 token；ZIP overwrite 因不走 commitSkillVersion（FS-先-DB 直写）留待「ZIP→版本 funnel」
+  重构〕；**余前端每 skill 单一 canonical token store〔SkillFileTree/restore/save 共享 QueryClient
+  token、逐次成功写原子替换、409 冲突显式 reload〕待接**）· **version-write in-tx ACL 重校**（㉙-fix-4 [high]：设计 §318——**funnel 侧 owner-drift
   机制已落 ㉚ + combined-save 主路径接线已落 ㉛ + file PUT/DELETE·restore 接线已落 ㉜〔各 route 传
   existing.ownerUserId〕。**fusion approve 已由 `claimFusionDecision` 原子 owner CAS 自保护（F8），无需
   commitSkillVersion owner-fence**；`createManagedSkill`=create 无 owner-transfer 竞态；**仅 ZIP overwrite

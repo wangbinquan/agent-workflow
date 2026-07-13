@@ -48,6 +48,30 @@ export function decodeSkillToken(s: string): SkillPreconditionToken | null {
   return { skillId, contentVersion, metaRevision }
 }
 
+/**
+ * RFC-170 F3 — decode a token into `commitSkillVersion`'s expected-fence fields so
+ * the version-write funnel OCC-checks it in the bump tx. `undefined` in →
+ * `undefined` out (no fence requested, backward compat); a malformed token →
+ * `null` (the caller maps that to a 400 fail-closed); a valid token → the fields.
+ * Pure — keeps this codec module IO/error-free; both skill.ts and skillVersion.ts
+ * (which cannot import each other) share it without a module cycle.
+ */
+export function tokenToVersionFence(
+  expectedToken: string | undefined,
+):
+  | { expectedSkillId: string; expectedVersion: number; expectedMetaRevision: number }
+  | null
+  | undefined {
+  if (expectedToken === undefined) return undefined
+  const decoded = decodeSkillToken(expectedToken)
+  if (decoded === null) return null
+  return {
+    expectedSkillId: decoded.skillId,
+    expectedVersion: decoded.contentVersion,
+    expectedMetaRevision: decoded.metaRevision,
+  }
+}
+
 /** Exact-match CAS predicate: does the caller-supplied token still describe the
  *  current authoritative row? All three components must match. */
 export function skillTokenMatches(
