@@ -16,18 +16,32 @@
 
 ## 验收清单
 
-- [ ] AC1 工作组 relaunch 预填组名（id 一致时）/goal/space/limits，非空表单；**不预填协作者**
-- [ ] AC2 agent relaunch 预填 description + allowClarify（三态）+ space + advanced（含协作者）
-- [ ] AC3 workflow relaunch 预填非 upload inputs + space + advanced；upload 清空+必填重选
-- [ ] AC4 历史任务：remote/scratch/local best-effort 预填；internal/中途失败多仓/upload 安全降级，无静默错误值
-- [ ] AC5 落地全新任务、kind 未锁、未污染 editScheduled
-- [ ] AC6 主体/ACL 安全：workgroup seed-id 守卫 + 服务端 `expectedWorkgroupId` 409（关 TOCTOU）；协作者=当前成员可编辑默认、workgroup 不预填、kind 切换清协作者；`relaunchPhase`（loading 冻结/applied 拒晚到）；404/403/网络报错禁提交；多仓失败确认门
-- [ ] AC7 重建零 migration + 1 枚 targeted `source_agent_id` migration（用户拍板 B）；TaskSchema +3 optional + 三启动 schema 各 +1 守卫参；唯 `startAgentTask` 落库 `sourceAgentId` 一处写路径改动；三守卫即时 overlay 不进定时
-- [ ] AC-agent post-migration agent 任务 delete+同名重建 relaunch→`agent-id-mismatch` 409；历史任务（sourceAgentId NULL）best-effort 按名
-- [ ] AC8 全测试 + 门禁 + CI + Codex 实现门 绿
+- [x] AC1 工作组 relaunch 预填组名（id 一致时）/goal/space/limits，非空表单；**不预填协作者**
+- [x] AC2 agent relaunch 预填 description + allowClarify（三态）+ space + advanced（含协作者）
+- [x] AC3 workflow relaunch 预填非 upload inputs + space + advanced；upload 清空+必填重选
+- [x] AC4 历史任务：remote/scratch/local best-effort 预填；internal/中途失败多仓/upload 安全降级，无静默错误值
+- [x] AC5 落地全新任务、kind 未锁、未污染 editScheduled
+- [x] AC6 主体/ACL 安全：workgroup seed-id 守卫 + 服务端 `expectedWorkgroupId` 409（关 TOCTOU）；协作者=当前成员可编辑默认、workgroup 不预填、kind 切换清协作者；`relaunchPhase`（loading 冻结/applied 拒晚到）；404/403/网络报错禁提交；多仓失败确认门
+- [x] AC7 重建零 migration + 1 枚 targeted `source_agent_id` migration（用户拍板 B）；TaskSchema +3 optional + 三启动 schema 各 +1 守卫参；唯 `startAgentTask` 落库 `sourceAgentId` 一处写路径改动；三守卫即时 overlay 不进定时
+- [x] AC-agent post-migration agent 任务 delete+同名重建 relaunch→`agent-id-mismatch` 409；历史任务（sourceAgentId NULL）best-effort 按名
+- [x] AC8 全测试 + 门禁 + CI + Codex 实现门 绿
 
 ## 备注
 
 - **1 枚 migration（§2e `source_agent_id`，用户拍板）** ⇒ **必须** bump `upgrade-rolling.test.ts` journal-count N（[[reference_migration_bumps_journal_count_test]]）、**取实现期最新空号**与 RFC-170 协调（勿硬编码 0091）；单条 ALTER 免 statement-breakpoint。其余重建路径仍零 migration。
 - 改符号前全量盘测试源码锁（[[feedback_grep_locks_before_push]]）：`taskToLaunchPayload`/`snapshotClarifyState`/`applyWizardSeed`/`relaunchFrom`/`workgroupName`/`goal`/`sourceAgentId`/`expectedAgentId`/`expectedWorkgroupId`/`expectedWorkflowVersion`/`startAgentTask` 命中集。
 - 多人树精确 pathspec 提交，勿碰他人 WIP（scheduler.ts / skills\*）。
+
+## 交付状态（Done，2026-07-13）
+
+设计门 12 轮 APPROVE + 用户批准 B-full → 实现 T0–T6 全落地（migration 0091 取实现期空号）。**Codex 实现门 4 轮收敛 4→3→1→1→APPROVE，findings 全折**（每条见对应 commit message）：
+
+- **F1** stale-members ACL 回授 → `staleTime:0`+`refetchOnMount:'always'`+ barrier 判 `isSuccess`（不止 `isFetchedAfterMount`——errored refetch 留 stale data；组件探针实测 TanStack v5 语义）。
+- **F2** 失败多仓静默子集 → 正向 `worktree creation failed:` marker（**非** `failedNodeId===null`——scheduler 失败〔snapshot-invalid/cycle/scheduler-error〕同 null 但空间完整；前后端 marker 源码锁耦合）。
+- **F3** enum drift 静默非法提交 → `normalizeSeededInput` multiSelect-first（allowOther 也强制 JSON 数组线格式）+ `missingRequired` 空数组按缺失。
+- **F4** multipart 漏 `expectedWorkflowVersion` OCC → `buildWorkflowStartFormData` 加 `extra` 参在 whitelist **之后**并入 payload（scheduledEnvelope 仍干净）。
+- **F1-followup** barrier 按**源任务 kind** 判成员（workgroup 不阻塞于其不消费的 members；错误横幅指真失败查询，不再渲染 "null"）。
+- **F1-followup-2** submit 门改反应式 `relaunchApplied`（仅 seed effect 越过完整 barrier 后置 true，与种子 setState 同批渲染）——堵缓存 refetch 期「种子未应用但 submit 已开」窗。
+- **W13** 端到端行为回归（`?relaunchFrom` seed→导航→launch，断言 POST body 恰为重建值）补实现门 low 覆盖。
+
+提交：`7498e626`〔T0+T1〕`cb052b39`〔T2 投影〕`3df6896b`〔T2 守卫+reservation〕`79b65929`〔T3〕`010afc44`〔T4+T5〕`2a7de26c`〔RFC-165 lock 键盖形〕`d432ccfd`〔impl-gate F1-4〕`524dd3d8`〔re-gate〕`ef6e30b8`〔F1-followup〕`eed47fb5`〔F1-followup-2〕`d48e42c7`〔W13〕`f9a95c19`〔STATE/plan Done〕。全 origin/main、CI 绿。
