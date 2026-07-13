@@ -702,6 +702,44 @@ describe('RFC-164 engine — source locks', () => {
     expect(out).toContain('## WG PROTOCOL SENTINEL')
     expect(out).not.toContain('legacy_port')
   })
+
+  // Round-trip (Codex review P1): a workgroup host run is dispatched with clarify
+  // directive 'suppressed'. When it is a clarify-answer rerun, runHostNode passes
+  // the answered `## Clarify Q&A` as clarifyContext. This locks that renderUserPrompt
+  // emits that block (in `sections`) ALONGSIDE the workgroup protocol (which still
+  // owns `trailing`) — the 'suppressed' directive is neither mandatory nor optional,
+  // so it never flips the run into clarify-only mode that would steal `trailing`.
+  test('renderUserPrompt: suppressed workgroup run renders answered Clarify Q&A ALONGSIDE the wg protocol', () => {
+    const out = renderUserPrompt({
+      promptTemplate: 'hello',
+      inputs: {},
+      meta: { repoPath: '/r', baseBranch: 'main', taskId: 't' },
+      agentOutputs: ['legacy_port'],
+      workgroupProtocolBlock: '## WG PROTOCOL SENTINEL',
+      clarifyChannel: { kind: 'self', directive: 'suppressed', injectStopNotice: false },
+      clarifyContext: { flatBlock: '## Clarify Q&A\n- board size? → 20x20' },
+    })
+    // the human's answers reach the agent …
+    expect(out).toContain('## Clarify Q&A')
+    expect(out).toContain('20x20')
+    // … and the workgroup protocol still owns the trailing block …
+    expect(out).toContain('## WG PROTOCOL SENTINEL')
+    // … and the run did NOT flip into mandatory clarify-only ask-back mode.
+    expect(out).not.toContain('MANDATORY ASK-BACK')
+  })
+
+  // Source lock for the runHostNode wiring that the fake-hook engine tests can't
+  // exercise (real runHostNode spawns a subprocess). Locks that a host run fetches
+  // the answered clarify queue and threads it as clarifyContext into runNode —
+  // remove either and the workgroup clarify answer silently stops round-tripping.
+  test('runHostNode round-trips a human clarify answer into the workgroup rerun prompt', () => {
+    // host path selects by req.nodeId/req.nodeRunId (the adopted clarify-answer
+    // rerun row) — unique to runHostNode; the normal scheduler path uses node.id.
+    expect(SCHEDULER_SRC).toContain('consumerNodeId: req.nodeId')
+    expect(SCHEDULER_SRC).toContain('dispatchedRunId: req.nodeRunId')
+    // …and threads the answered queue into the host node's runNode call.
+    expect(SCHEDULER_SRC).toContain('clarifyContext: { flatBlock: clarifyQueue.block }')
+  })
 })
 
 // ---------------------------------------------------------------------------

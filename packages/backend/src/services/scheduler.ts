@@ -688,6 +688,29 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         req.agent.runtime,
         opts.defaultRuntime,
       )
+      // Round-trip a human's answered clarify back to the workgroup agent.
+      // When this host run is a `clarify-answer` rerun — the leader/member asked
+      // a human via <workflow-clarify>, the human answered, and the STANDARD
+      // dispatch minted this pending row (nodeId=WG_LEADER/MEMBER,
+      // cause='clarify-answer') which workgroupRunner adopts as req.nodeRunId —
+      // buildClarifyQueueContext returns the flat `## Clarify Q&A` block for
+      // req.nodeId. It is workgroup-agnostic (selects purely by taskId +
+      // consumerNodeId + dispatchedRunId; `definition`/`iteration` are reserved,
+      // unread) and returns undefined for a fresh turn with no answered queue,
+      // so the call is unconditional. Without this the agent NEVER sees the
+      // answers it asked for and re-asks or proceeds on wrong assumptions (the
+      // workgroup half of the RFC-023 clarify round-trip was unwired; Codex
+      // review P1). renderUserPrompt emits the block in `sections`, independent
+      // of the workgroup protocol block that owns `trailing`, and the
+      // 'suppressed' directive keeps the run out of mandatory clarify-only mode.
+      const clarifyQueue = await buildClarifyQueueContext({
+        db,
+        definition,
+        taskId,
+        consumerNodeId: req.nodeId,
+        dispatchedRunId: req.nodeRunId,
+        iteration: 0,
+      })
       const result = await runNode({
         taskId,
         nodeRunId: req.nodeRunId,
@@ -724,6 +747,9 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         // mandatory — workgroup members produce wg_result unless they choose
         // to ask a human (design §5 / RFC-148 'suppressed').
         clarifyChannel: { kind: 'self', directive: 'suppressed', injectStopNotice: false },
+        ...(clarifyQueue !== undefined
+          ? { clarifyContext: { flatBlock: clarifyQueue.block } }
+          : {}),
         skills: injection.resolvedSkills,
         dependents: injection.dependents,
         mcps: injection.mcps,

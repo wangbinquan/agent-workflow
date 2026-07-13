@@ -385,6 +385,10 @@ describe('RFC-164 core — rendered blocks', () => {
       expect(block).toContain(CLARIFY_FORMAT_EXAMPLE)
       expect(block).toContain('"questions"')
       expect(block).toContain('at most 5 questions')
+      // … and disambiguates the schema's `"a" | "b"` alternation notation so an
+      // agent does not copy `"single" | "multi"` literally and re-break JSON.parse
+      // (Codex review P2 — CLARIFY_FORMAT_EXAMPLE is an illustration, not literal JSON).
+      expect(block).toContain('ONE concrete literal')
     })
   }
 })
