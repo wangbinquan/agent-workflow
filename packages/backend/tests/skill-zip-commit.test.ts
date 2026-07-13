@@ -132,6 +132,37 @@ describe('commitSkillZipBuffer', () => {
     expect(md).toContain('name: skill-o')
   })
 
+  // RFC-170 (ZIP→version funnel): an overwrite now routes through commitSkillVersion
+  // instead of a direct FS+DB write — so it bumps content_version, archives the new
+  // tree as an immutable version snapshot, and (via the funnel) picks up the in-tx
+  // composite/owner fence + op-scoped crash rollback.
+  test('overwrite goes through the version funnel — bumps content_version + snapshots the tree', async () => {
+    const before = await createManagedSkill(h.db, h.fsOpts, {
+      name: 'skill-v',
+      description: 'd',
+      bodyMd: 'b',
+      frontmatterExtra: {},
+    })
+    expect(before.contentVersion).toBe(1)
+    const buf = buildZip({
+      'skill-v/SKILL.md': skillMd('skill-v', 'd2'),
+      'skill-v/x.md': '# x',
+    })
+    await commitSkillZipBuffer(
+      h.db,
+      h.fsOpts,
+      buf,
+      { 'skill-v': { action: 'overwrite' } },
+      { actor: ADMIN },
+    )
+    const after = await getSkill(h.db, 'skill-v')
+    expect(after!.contentVersion).toBe(2) // versioned via commitSkillVersion, not a raw write
+    // The immutable v2 snapshot exists (the funnel archived the overwritten tree).
+    const snap = join(h.fsOpts.appHome, 'skills', 'skill-v', 'versions', 'v2', 'files', 'SKILL.md')
+    expect(existsSync(snap)).toBe(true)
+    expect(readFileSync(snap, 'utf-8')).toContain('description: d2')
+  })
+
   test('rename re-targets to new name; original skill name stays free', async () => {
     const buf = buildZip({ 'skill-orig/SKILL.md': skillMd('skill-orig', 'desc') })
     const r = await commitSkillZipBuffer(

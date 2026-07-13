@@ -6,7 +6,7 @@
 // commitSkillZip:  applies a decision map and writes accepted candidates to
 //                  ~/.agent-workflow/skills/{name}/files/.
 
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { unzipSync } from 'fflate'
 import {
@@ -28,8 +28,8 @@ import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { skills } from '@/db/schema'
-import { eq } from 'drizzle-orm'
 import { getSkill, listSkills } from '@/services/skill'
+import { commitSkillVersion } from '@/services/skillVersion'
 import { isResourceOwner } from '@/services/resourceAcl'
 import { ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -282,8 +282,9 @@ export async function commitSkillZipBuffer(
     }
 
     try {
-      const result = writeCandidate(opts, candidate, targetName, existing)
       if (existing === null) {
+        // CREATE: direct live write + DB insert (create is owner-transfer-race-free).
+        writeCandidate(opts, candidate, targetName)
         const created = await insertManagedRow(
           db,
           targetName,
@@ -292,11 +293,34 @@ export async function commitSkillZipBuffer(
         )
         outcome.created.push(created)
       } else {
-        const updated = await updateManagedRow(db, existing.id, candidate.description)
-        outcome.updated.push(updated)
+        // OVERWRITE: route through the version funnel (RFC-170 §2 "ZIP overwrite" as
+        // a version writer) — op-scoped staging + atomic publish + crash rollback +
+        // the in-tx composite/owner fence (expectedOwnerUserId = the owner we
+        // authorized against above, so a transfer in the await window → 409, not a
+        // silent clobber). Replaces the old direct writeCandidate + updateManagedRow;
+        // commitSkillVersion's setDescription keeps skills.description in sync + bumps
+        // the version, and it archives the tree as an immutable snapshot.
+        commitSkillVersion(
+          db,
+          opts,
+          targetName,
+          (staging) => {
+            // Full replace: drop the funnel's live-seeded staging, lay down the ZIP tree.
+            for (const e of readdirSync(staging))
+              rmSync(join(staging, e), { recursive: true, force: true })
+            writeCandidateFiles(staging, candidate, targetName)
+          },
+          {
+            source: 'editor',
+            authorUserId: aclOpts.actor.user.id,
+            expectedOwnerUserId: existing.ownerUserId,
+            setDescription: candidate.description,
+          },
+        )
+        const updated = await getSkill(db, targetName)
+        if (updated !== null) outcome.updated.push(updated)
       }
       claimedNames.add(targetName)
-      void result
     } catch (err) {
       log.error('zip-commit: skill write failed', {
         candidate: candidate.name,
@@ -333,24 +357,22 @@ export async function commitSkillZipBuffer(
   return outcome
 }
 
-function writeCandidate(
-  opts: SkillZipFsOptions,
+/**
+ * Lay a ZIP candidate's tree (support files + the generated SKILL.md) into an
+ * arbitrary target dir — a live `files/` for a fresh create, OR an op-scoped
+ * staging dir for the RFC-170 version-funnel overwrite. Path-traversal-safe.
+ */
+function writeCandidateFiles(
+  targetDir: string,
   candidate: SkillCandidate,
   targetName: string,
-  existing: Skill | null,
 ): void {
-  const filesDir = join(opts.appHome, 'skills', targetName, 'files')
-  const safeRoot = resolve(filesDir) + sep
-
-  if (existing !== null) {
-    // Overwrite: wipe old files dir, then re-create.
-    rmSync(filesDir, { recursive: true, force: true })
-  }
-  mkdirSync(filesDir, { recursive: true })
+  const safeRoot = resolve(targetDir) + sep
+  mkdirSync(targetDir, { recursive: true })
 
   for (const file of candidate.files) {
     if (file.relPath === 'SKILL.md') continue // we re-write this below
-    const dst = resolve(join(filesDir, file.relPath))
+    const dst = resolve(join(targetDir, file.relPath))
     if (!(dst + (file.relPath.endsWith('/') ? sep : '')).startsWith(safeRoot)) {
       throw new Error(`unsafe path resolved outside skill dir: ${file.relPath}`)
     }
@@ -366,12 +388,26 @@ function writeCandidate(
     },
     body: candidate.bodyMd,
   })
-  writeFileSync(join(filesDir, 'SKILL.md'), skillMd, 'utf-8')
+  writeFileSync(join(targetDir, 'SKILL.md'), skillMd, 'utf-8')
 
   // Sanity: directory must actually exist after write.
-  if (!existsSync(join(filesDir, 'SKILL.md'))) {
+  if (!existsSync(join(targetDir, 'SKILL.md'))) {
     throw new Error('SKILL.md was not written')
   }
+}
+
+/**
+ * CREATE only: write a fresh skill's live `files/` directly. A create is
+ * owner-transfer-race-free (the importer becomes the owner) and the lazy v1
+ * backfill snapshots it on first version-funnel access. Overwrites go through
+ * commitSkillVersion (see the commit loop) — the version funnel — instead.
+ */
+function writeCandidate(
+  opts: SkillZipFsOptions,
+  candidate: SkillCandidate,
+  targetName: string,
+): void {
+  writeCandidateFiles(join(opts.appHome, 'skills', targetName, 'files'), candidate, targetName)
 }
 
 async function insertManagedRow(
@@ -399,14 +435,6 @@ async function insertManagedRow(
   return created
 }
 
-async function updateManagedRow(db: DbClient, id: string, description: string): Promise<Skill> {
-  const now = Date.now()
-  await db.update(skills).set({ description, updatedAt: now }).where(eq(skills.id, id))
-  const rows = await db.select().from(skills).where(eq(skills.id, id)).limit(1)
-  const row = rows[0]
-  if (!row) throw new Error('skill row disappeared after update')
-  // Re-fetch via getSkill so we get the same shape the parse path would.
-  const refetched = await getSkill(db, row.name)
-  if (refetched === null) throw new Error('refetch returned null')
-  return refetched
-}
+// RFC-170 (ZIP→version funnel): the old updateManagedRow (direct description UPDATE
+// for an overwrite) is gone — overwrites now go through commitSkillVersion, whose
+// setDescription syncs skills.description inside the version-bump tx.

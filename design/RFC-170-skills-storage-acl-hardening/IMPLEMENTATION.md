@@ -360,11 +360,13 @@ listFiles + T4a legacy backfill + reverify + T9 注入门）**，余为增强：
 
 - ㉙-fix F3/F2b：**后端 file `PUT/DELETE /:name/file` + restore 复合 token OCC + 回带新 token 已落
   ㉝**〔schema 加可选 expectedToken、`tokenToVersionFence` 喂 commitSkillVersion in-tx fence、DELETE
-  204→200 回 token；ZIP overwrite 因不走 commitSkillVersion（FS-先-DB 直写）留待「ZIP→版本 funnel」
-  重构〕；**前端 canonical token store 已落 ㉞**〔`SkillFileTree` 从 content query cache 取唯一
-  token、file PUT/DELETE echo + 成功原子 `setQueryData` 推进、409 invalidate content 重载；
-  `SkillVersionHistory` restore 同法 echo token + 409 重载〕。**F3 后端+前端全链闭合**；仅 ZIP→funnel
-  重构留待）· **version-write in-tx ACL 重校**（㉙-fix-4 [high]：设计 §318——**funnel 侧 owner-drift
+  204→200 回 token〕；**前端 canonical token store 已落 ㉞**〔`SkillFileTree` 从 content query cache
+  取唯一 token、file PUT/DELETE echo + 成功原子 `setQueryData` 推进、409 invalidate content 重载；
+  `SkillVersionHistory` restore 同法 echo token + 409 重载〕；**ZIP→版本 funnel 重构已落 ㉟**〔ZIP
+  overwrite 改走 commitSkillVersion（op-scoped staging + 原子 publish + 崩溃回滚 + in-tx 复合/owner
+  fence + 版本快照）替代旧 writeCandidate+updateManagedRow 直写；create 仍直写〔race-free + lazy v1
+  backfill〕；抽 writeCandidateFiles 供 staging/live 复用、删 updateManagedRow〕。**F3 全链 + 全六写
+  OCC 闭合**）· **version-write in-tx ACL 重校**（㉙-fix-4 [high]：设计 §318——**funnel 侧 owner-drift
   机制已落 ㉚ + combined-save 主路径接线已落 ㉛ + file PUT/DELETE·restore 接线已落 ㉜〔各 route 传
   existing.ownerUserId〕。**fusion approve 已由 `claimFusionDecision` 原子 owner CAS 自保护（F8），无需
   commitSkillVersion owner-fence**；`createManagedSkill`=create 无 owner-transfer 竞态；**仅 ZIP overwrite
