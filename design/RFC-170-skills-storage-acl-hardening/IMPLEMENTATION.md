@@ -82,3 +82,44 @@ create / delete 后跑全后端 5200+ 回归；触及 shared export 跑 `build:b
 - adopt-managed **提交对象是已捕获 candidate**（非源再读）；migrate **绝不删 K**（旧 fd 仍写，G7-1）。
 - external runtime **不 symlink mutable root**、每运行 descriptor-relative no-follow 捕获私有副本（G10-2）；实现不了 **fail-closed**。
 - boot：managed 走 `bootVerifiedSet`（每 boot 重 hash）、external 走 `source_state` 合法（不入 set）、degraded 只元信息（G8-2 `isSkillAvailableThisBoot`）。
+
+## 5. 已落地进度（2026-07-13 session，全部 CI/full-suite 验证）
+
+批次 B 12 commit：① migration 0090 · ② skillOperations · ③ skillFsPublish · ④
+skillOpRecovery · ⑤ **T7 增量①**（commitSkillVersion 原子发布）· ⑥ **T13 后端**
+ACL aclRevision CAS · ⑦ skillOpRecoveryDriver + boot 接线 · ⑧ **delete op** ·
+⑨ **T13 前端** · ⑩ **reserve op** · ⑪ **T3** 读 token · ⑫ **T4** combined-save。
+两具体 op（delete/reserve）+ 完整恢复机制 + T13 全链 + T3/T4 保存协议已落。
+
+## 6. T7 增量②（下一个专注单元）——已知纠缠 + 精确计划
+
+**目标**：commitSkillVersion 包 version-write op 生命周期（lease/lock + 崩溃恢复）。
+
+**关键纠缠（本 session 发现，务必处理）**：reserve（createManagedSkill）现**持
+skillId 锁**调 commitSkillVersion；beginOperation 必取锁 → 同 skillId 自冲突
+ConflictError。**必须给 commitSkillVersion 加 `skipOp?: boolean` 旁路参数**：
+- reserve/createManagedSkill 调用传 `skipOp=true`——不建自己的 version-write op
+  （reserve 的 op 已覆盖，reserve recovery 会整体回滚 reserving skill）。
+- 独立 6 writer（file PUT/DELETE·restore·ZIP·fusion·外部 content PUT）传默认
+  `skipOp=false`——建 version-write op（取锁+崩溃恢复）。
+
+**phase 映射**（§6a version-write spine intent→fs-staged→fs-versioned→db-committed
+→fs-published→done）：beginOperation（intent+锁）→ 建 staging 后 advancePhase
+(fs-staged)→ 物化 versionDir 后 (fs-versioned)→ DB bump tx 内 (db-committed)→
+swapInStaged 后 (fs-published)→ finishOperation(done)。skipOp=true 时全跳过 op 调用。
+
+**version-write recovery handler**（注册进 registry）：rollbackFs=删 op-scoped
+staged + `versions/.op-<id>.staged`/已现的 `versions/v<target>`（DB 未 bump 故无
+引用）；rollForwardFs=从 `versions/v<target>` swapInStaged 重建 live；recoverDb
+rollforward 幂等确保 skill_versions 行在。
+
+**并发语义变更**：同 skill 并发 commitSkillVersion → 一个 busy 409。现无并发-save
+测试，但路由须把 ConflictError 映射 409（全局 handler 已做）。落后跑全后端回归。
+
+## 7. 其余（依赖顺序）
+replace（最难，reconcile 二步纠缠）· migrate · adopt-managed（两阶段捕获）·
+snapshot 权威读（readSkillContent 从 versions/v<cur> 非 live）· T9 quarantine 注入
+门（stageSkills 前查 version_state，注意 scheduler 协作者 WIP）· T9b external
+descriptor-relative 捕获（需 openat/O_NOFOLLOW，Bun/Node 不足则 native helper 或
+fail-closed）· 批次 C（source lifecycle reconcile 拆 user/system、migration 决策
+UI）· 前端（token 单持有、adoption UI、authorityKind 三态 capability）。
