@@ -1,9 +1,31 @@
 # RFC-172 任务分解 — 工作组成员人类反问答案回流（shardKey 隔离）
 
-状态：**Draft**。依赖：无硬依赖；不得回归普通节点 clarify 与 leader 反问。
-承接实现前置：本 RFC 需先走**设计门（Codex）→ 用户批准**，再进实现（遵 CLAUDE.md RFC 流程）。
+状态：**Draft（设计门已跑，发现欠范围——待用户在路线 1/2 间拍板）**。依赖：无硬依赖；不得回归普通节点 clarify 与 leader 反问。
 
-## 子任务
+## ⚠️ 设计门后重排（对抗评审证伪初版方案，见 design §5）
+
+对抗式设计评审证伪了「只改 selectAgentQueue、零 migration、单 PR」——member 回流是**「问 → 铸续跑 → 选取 → 路由」四段链**，初版（下方 T1–T5）只覆盖第三段。**mint 段（P1-1，续跑 run 的 shardKey 靠 `pickFreshestRun` shard 盲继承）与 dispatch 键段（P1-2，`assertNoInFlightDispatch`/frontier 按 home 单键）会先断**，且 `taskQuestionDispatch.ts` 全文零 shard 感知，补它的代价接近方案 B。两条路待用户拍板：
+
+### 路线 1 — 收窄本 RFC（低风险、已验证可行）
+- **R1-T1**：leader 回流健壮化——修 P1-3 的 `shardKey=null` → `eq(col,null)` 空窗坑（leader 传 `undefined` 保 golden 路径，或 `isNull` 三值分叉）+ 新增 leader=null 回流测试。
+- **R1-T2**：`selectAgentQueue` 加**通用可选 shardKey**（选取/老化/绑定，`undefined` 零回归）——为将来铺路，本身不启用 member。
+- **R1-T3**：member 人类反问**继续不支持**（保留现 `clarify-not-supported` 临时拒绝 + leader-only 邀请），在代码注释指向「member 完整回流 = 独立更大 RFC」。
+- **产物**：单 PR、零 migration、零回归。member 回流升格为后续独立 RFC（四段链）。
+
+### 路线 2 — 做全 member 四段链（大范围、风险高）
+- **R2-T1**（mint，P1-1）：`buildFrontierMintPlan` 从 `task_questions.origin_node_run_id → clarify_rounds.asking_shard_key` 取回 shard，`overrides.shardKey` 显式覆写续跑 run 的 shardKey。
+- **R2-T2**（dispatch 键，P1-2）：`assertNoInFlightDispatch` + `byTarget`/frontier mint 改按 `(home, shardKey)` 双键，解并发 member 串行化 / 批量坍缩。
+- **R2-T3**（选取，初版 T2）：`selectAgentQueue` 通用可选 shardKey 隔离（选取按 asking_shard_key、老化按 node_runs.shard_key 且含 `isNull` 分叉、绑定随选取）。
+- **R2-T4**（路由）：确认 `driveAdoptedRun` 在 mint shardKey 正确后把续跑正确路由回对应 member。
+- **R2-T5**（manual，P2-1）：manual-to-member 定为**全广播**（选取+老化都不逐 shard）或方案 B 加列；禁 hybrid。
+- **R2-T6**（多轮，P2-2）：host clarify iterationIndex 递增（scheduler.ts:819），或明确单轮 only + 断言。
+- **R2-T7**（撤守卫 + 恢复 member 邀请）：`runHostNode` 撤 `clarify-not-supported`、`renderWgProtocolBlock` 恢复 worker/fc_member 邀请（与 R2-T1..T4 同 PR，避免中间窗口）。
+- **R2-T8**（测试，补初版空洞）：mint shardKey 正确性、并发两 member 经共享 home、leader null 路径、manual 广播+老化、多轮 member clarify、golden-lock 回归。
+- **产物**：多 PR（mint+dispatch 一批、隔离+路由一批、撤守卫+邀请一批）、可能需 migration（若 manual 走方案 B）、风险显著。
+
+**下方 T1–T5 = 初版方案，仅在路线 2 的 R2-T3 部分复用，其余被 §5 findings 取代——保留作演进留痕。**
+
+## 子任务（初版——⚠️ 已被设计门证伪为不充分，见上「设计门后重排」）
 
 ### RFC-172-T1 — shardKey 归属查证 ✅ 已查证定案（进设计门前完成）
 - **方案 A（零 migration）确定**：`task_questions.origin_node_run_id → clarify_rounds.asking_shard_key` 的 join 与 shard **1:1、无损**（createClarifySession 每 shard 铸独立 clarify node_run，`findClarifyNodeRunForShard` clarify.ts:460-472），且 `selectAgentQueue` 现在就已取该 round 行（clarifyQueue.ts:150-157）→ 加过滤零新增查询。shardKey 做成**通用可选参数**（非 workgroup 专用）。

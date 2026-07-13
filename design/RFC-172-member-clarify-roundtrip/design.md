@@ -9,7 +9,7 @@
 - 注释 schema.ts:1342-1343 明述设计意图：**「agent-multi：每个 reaching shard 铸自己的 clarify_node_run + 自己的 clarify_session，按 `(clarify_node_id, source_shard_key)` 键」**。
 - `createClarifySession`（services/clarify.ts）已把 `sourceShardKey` 落进 `clarify_sessions.source_shard_key`（:237）与 `clarify_rounds.asking_shard_key`（:214）；`runHostNode`（scheduler.ts）建 session 时传的 `sourceShardKey = currentRunRow?.shardKey`（member = assignment id）。
 
-**结论：反问「问」的一侧已按 shardKey 分账。缺口只在「答案回流选取」一侧。**
+**结论（⚠️ 已被设计门对抗评审修正，见 §5）**：「问」侧确已按 shardKey 分账，**但这个结论把范围判小了**。「问」与「选取」之间还夹着一整段 **shard 盲的 dispatch/mint 阶段**（`autoDispatchClarifyRound → dispatchTaskQuestions → buildFrontierMintPlan` + `assertNoInFlightDispatch`，taskQuestionDispatch.ts 全文零 shard 感知）。member 回流其实是**「问 → 铸续跑 run → 选取 → 路由」四段链**，缺口不止「选取」一段——续跑 run 的 shardKey（第二段）和 `driveAdoptedRun` 路由（第四段）会**先于**选取断裂。只改 `selectAgentQueue` 必要但**远不充分**。
 
 ### 1.2 缺口：`selectAgentQueue` 不看 shardKey
 `services/clarifyQueue.ts` `selectAgentQueue`（:87-214）：
@@ -25,9 +25,11 @@
 
 ## 2. 方案：给队列机制补 shardKey 维度
 
-核心是让 `selectAgentQueue` 的**选取 + 老化 + 绑定**三者都能按「本次续跑 run 的 shardKey」收窄。task_questions 本身
+> ⚠️ **本节（§2.1–§2.4）是设计门前的初版方案，只覆盖「选取」一段，已被 §5 对抗评审证伪为不充分。真正要做的四段链方案见 §5，本节保留作演进留痕。**
+
+核心（初版认知）是让 `selectAgentQueue` 的**选取 + 老化 + 绑定**三者都能按「本次续跑 run 的 shardKey」收窄。task_questions 本身
 是否需要新增 shardKey 列，取决于能否经现有关联（`origin_node_run_id` → `clarify_rounds.asking_shard_key`，
-或 `node_runs.shard_key`）无损推导。**T1 已查证定案：方案 A（零 migration）可行**（详见下）。
+或 `node_runs.shard_key`）无损推导。**T1 查证：该 join 对单轮 member self-clarify 1:1 无损（方案 A 前提成立），但这只是第三段——续跑 run 的 shardKey 是否正确是前置（见 §5）。**
 
 ### 2.1 selectAgentQueue 增 shardKey 隔离 —— 方案 A（T1 定案，零 migration）
 
@@ -59,7 +61,43 @@
 - **引擎级**：并发两 member 各问各答，续跑 prompt 各自只含己方 `## Clarify Q&A`（可用 fake-hook 引擎 harness + 源码锁兜底）。
 - **撤守卫回归**：`renderWgProtocolBlock('worker')` 恢复含 `<workflow-clarify>`；`runHostNode` 不再含 `clarify-not-supported`。
 
-## 附注 — 正交既有缺陷（本 RFC 不修，另评估）
-host clarify 的 `createClarifySession` 传 `iterationIndex: 0` 硬编码：同一 host + 同 shardKey 的**第二轮** clarify 会
-复用/覆写首轮 clarify_node_run 的 questions（`findClarifyNodeRunForShard` 按 `(clarifyNodeId, shardKey, iterationIndex)`
-幂等）。与本次 shardKey 回流正交，多代 host clarify 才触发，单代不受影响；若本 RFC 实现时顺手可解则一并，否则单列。
+## 附注 — 既有缺陷（⚠️ 已升级为 §5 P2-2，非正交）
+host clarify 的 `createClarifySession` 传 `iterationIndex: 0` 硬编码：同一 host + 同 shardKey 的**第二轮** clarify
+复用/覆写首轮 clarify_node_run（`findClarifyNodeRunForShard` 按 `(clarifyNodeId, shardKey, iterationIndex)` 幂等）。
+**设计门推翻了「正交」判断**：见 §5 P2-2——它直接落在 member 多轮回流的选取路径上。
+
+---
+
+## 5. 设计门（对抗评审）——re-scope 到「四段链」【本节为权威，覆盖 §1.1/§2 的初版认知】
+
+一轮对抗式设计评审（对照真实代码）证伪了本 RFC 的中心诊断。**member 人类反问回流是「问 → 铸续跑 run → 选取 → 路由」四段链；初版只补了第三段（选取），第二段（续跑 run 的 shardKey）与第四段（`driveAdoptedRun` 路由）会先断。** 逐条 findings 与修正：
+
+### P1（阻断）
+
+**P1-1 · 续跑 run 的 shardKey 继承是 shard 盲的——mint 侧根本没修（最重）。**
+member self-clarify 答复走 `autoDispatchClarifyRound → dispatchTaskQuestions → buildFrontierMintPlan`（taskQuestionDispatch.ts）。`buildFrontierMintPlan` 的继承源 `last = pickFreshestRun(所有 __wg_member__ 节点 run)`（:1373-1377）——`pickFreshestRun` 明确「deliberately does not group」，纯按 ULID 取**全局最新**（freshness.ts:282,290-304）；mint 时 `inheritFrom: last` **不覆写 shardKey**（:1393-1402），`buildMintNodeRunValues` 的 shardKey = `overrides ≻ inheritFrom ≻ null`（nodeRunMint.ts:151）。→ member A 的续跑 run 可能继承 B 的 assignment id、或某条 `msg:` 消息轮 key。`buildClarifyQueueContext` 读的正是这个 run 的 `shard_key` 再透传，故**过滤键本身就错**；`driveAdoptedRun` 也按它误路由（把 A 的答复跑成消息轮 / 跑到 B）。
+**修**：`buildFrontierMintPlan` 必须从「本条目所属 shard」（`task_questions.origin_node_run_id → clarify_rounds.asking_shard_key`）取回 shard 并 `overrides.shardKey` 显式落。**这要求 dispatch 阶段引入 shard 维度，远超「只改 selectAgentQueue」。不修则验收 1/2 不可达。**
+
+**P1-2 · 并发 member clarify 经共享 home 节点被串行化 / 批量坍缩。**
+`assertNoInFlightDispatch`（taskQuestionDispatch.ts:548）与 `byTarget`/frontier（:472,507）均以 **home 节点 id** 键，而 member 全部 = 一个 `__wg_member__`。→ A 的续跑在飞时 B 答复 → 命中 `__wg_member__` 的 open 条目 → `task-question-node-dispatch-in-flight` → autoDispatch DEFER，B 要等 A 的 rerun done 才铸（clarifyAutoDispatch.ts）；更糟：批量下发同选 A、B → `byTarget[__wg_member__]=[A,B]` → **一个 rerun 服务两成员、答案搭错车**。破坏「并发指派并行零串扰」。
+**修**：in-flight 门 + frontier mint 按 `(home, shardKey)` 双键，而非 home 单键。
+
+**P1-3 · leader 的 `shardKey=null` 路径会 `eq(col,null)` 打空，回归 RFC-164 刚修好的 leader 回流。**
+初版 §2.2/T3 让 leader「走 null shard」（透传 run 的 `shard_key=null`）。而 drizzle `eq(nodeRuns.shardKey, null)` 生成 `= NULL`（**恒假**，非 `IS NULL`）——本仓已知教训，三处显式分叉：`memoryInject.ts:427`（`shardKey===null ? isNull(...) : eq(...)`，与初版老化窗口写法逐字同形）、clarify.ts:468、lifecycle.ts:506。若照初版散文「`node_runs.shard_key = shardKey`」直接 eq，**leader 老化窗恒空 → leader 回流回归**；且初版测试只列 `undefined`、抓不到 leader 实走的 `null` 路径。
+**修**：二选一并写死——(a) leader 传 `undefined`（保持 golden 路径，**首选**），或 (b) 传 null 但强制 `shardKey===null ? isNull(...) : eq(...)` 三值分叉 + **新增 leader=null 回流测试**。
+
+### P2（应改）
+
+**P2-1 · manual-to-member「广播选取 + 逐 shard 老化」不自洽（是回归）。** `trigger_run_id` 单列单锚，广播使 A、B 两 run 互相重绑；老化 `isTargetNodeConsumed` 用 `r.id >= sinceRunId` 跨 shard 比较无意义 → manual 条目对某些 shard 永不老化（prompt 无限膨胀）或误老化。而**改前**是「广播选取 + 广播老化」本自洽——初版把老化改逐 shard 却把选取留广播，亲手制造错配。**修**：manual-to-member 要么**全广播**（选取+老化都不逐 shard），要么上方案 B 真逐成员定向；**禁止 hybrid**。
+
+**P2-2 · 「1:1 无损」keystone 实为「单轮」。** iterationIndex 钉 0 → 同 member 同 assignment 第二轮 clarify 与首轮**共享 origin**；`selectAgentQueue` 取 round 用 `where(intermediaryNodeRunId==origin).limit(1)` **无 orderBy**（clarifyQueue.ts:150-157）→ 非确定，第二轮答案可能选不到对应 round 被丢弃。**修**：要么本 RFC 一并让 host clarify 的 iterationIndex 递增（scheduler.ts:819 传真实代数）、要么 design 明确把范围限为「单轮 member clarify」+ 加断言防止悄悄依赖多轮。
+
+### 修正的失败模式（推翻初版 §3「安全空降级」）
+初版称「shardKey 不匹配 → 空队列 → 安全降级」。**只在 mint shardKey 正确时成立**；叠加 P1-1 后，错 shardKey 会让 `driveAdoptedRun` **主动误路由**（A 的答复跑成消息轮 → A 永卡 awaiting_human 答案丢；或跑到 B → B 被污染、A 卡死）——是「主动串扰 + 悬挂」，不是安全降级。
+
+### 可行性重估（推翻「零 migration 单 PR」）
+真正做对 member 回流要覆盖 mint（P1-1）+ dispatch 键（P1-2）两段，`taskQuestionDispatch.ts` 全文零 shard 感知 → 需引入 `(home, shardKey)` 维度。**其代价与复杂度接近方案 B**，「零 migration、单 PR」不再成立。两条路重估：
+- **路线 1（收窄 RFC）**：本 RFC 只做**已验证可行**的部分——leader 回流健壮化（P1-3 修 null 路径）+ selectAgentQueue 通用可选 shardKey（为将来铺路）+ 明确 member 人类反问**继续不支持**（保留现临时拒绝）。member 完整回流因四段链复杂度**升格为独立更大 RFC**。
+- **路线 2（做全）**：本 RFC 扩为四段链完整方案——mint shardKey 覆写 + dispatch `(home,shardKey)` 键 + selectAgentQueue 隔离 + driveAdoptedRun 路由 + manual 收口 + 多轮 iterationIndex + 全套测试（含 mint shardKey 正确性、并发两 member、leader null、manual、多轮）。范围与风险显著上升，可能需 migration。
+
+**待用户拍板走路线 1 还是路线 2**（§见 plan.md 对应重排）。
