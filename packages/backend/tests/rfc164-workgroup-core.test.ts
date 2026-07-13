@@ -369,26 +369,36 @@ describe('RFC-164 core — rendered blocks', () => {
 
   // Regression: task 01KXBATKFJ73MDYNM6YN2DMA29 (2026-07-12) failed at round 0
   // with `clarify-questions-malformed: JSON.parse failed ... "The"`. Root cause:
-  // the protocol block INVITED a <workflow-clarify> envelope but a workgroup
-  // host node runs with clarify directive 'suppressed', so the normal clarify
-  // FORMAT block was never injected — the leader wrote prose questions and the
-  // body failed JSON.parse. The invitation and its JSON schema must ship
-  // together, reusing the SHARED CLARIFY_FORMAT_EXAMPLE (no drift). Every role
-  // gets ENVELOPE_RULES, so every role must also get the format.
-  for (const role of ['leader', 'worker', 'fc_member'] as const) {
-    test(`${role} protocol block ships the <workflow-clarify> JSON schema it invites`, () => {
+  // the protocol INVITED a <workflow-clarify> envelope but a workgroup host node
+  // runs with clarify directive 'suppressed', so the normal clarify FORMAT block
+  // was never injected — the leader wrote prose questions and JSON.parse failed.
+  // The invite and its JSON schema must ship together, reusing the SHARED
+  // CLARIFY_FORMAT_EXAMPLE (no drift).
+  test('LEADER protocol block ships the <workflow-clarify> JSON schema it invites', () => {
+    const block = renderWgProtocolBlock('leader', cfg())
+    expect(block).toContain('<workflow-clarify>')
+    // carries the exact shared format example + structural rules, so an agent
+    // that asks emits parseable JSON instead of prose.
+    expect(block).toContain(CLARIFY_FORMAT_EXAMPLE)
+    expect(block).toContain('"questions"')
+    expect(block).toContain('at most 5 questions')
+    // disambiguates the schema's `"a" | "b"` alternation so an agent does not copy
+    // `"single" | "multi"` literally and re-break JSON.parse (Codex review 1 P2 —
+    // CLARIFY_FORMAT_EXAMPLE is an illustration, not literal JSON).
+    expect(block).toContain('ONE concrete literal')
+  })
+
+  // Human ask-back is LEADER-ONLY: members run on the shared __wg_member__ node
+  // with NO shardKey scoping in the clarify queue (selectAgentQueue), so a member
+  // clarify can neither round-trip its answer nor bind its task_questions without
+  // cross-contaminating sibling assignments / leaving a permanently `processing`
+  // entry (Codex reviews 2-3). Members must NOT be invited to ask a human — they
+  // escalate blockers to the leader via wg_messages.
+  for (const role of ['worker', 'fc_member'] as const) {
+    test(`${role} protocol block does NOT invite human clarify`, () => {
       const block = renderWgProtocolBlock(role, cfg())
-      // it still invites clarify …
-      expect(block).toContain('<workflow-clarify>')
-      // … AND now carries the exact shared format example + structural rules,
-      // so an agent that asks emits parseable JSON instead of prose.
-      expect(block).toContain(CLARIFY_FORMAT_EXAMPLE)
-      expect(block).toContain('"questions"')
-      expect(block).toContain('at most 5 questions')
-      // … and disambiguates the schema's `"a" | "b"` alternation notation so an
-      // agent does not copy `"single" | "multi"` literally and re-break JSON.parse
-      // (Codex review P2 — CLARIFY_FORMAT_EXAMPLE is an illustration, not literal JSON).
-      expect(block).toContain('ONE concrete literal')
+      expect(block).not.toContain('<workflow-clarify>')
+      expect(block).not.toContain(CLARIFY_FORMAT_EXAMPLE)
     })
   }
 })
@@ -786,10 +796,15 @@ describe('RFC-164 core — renderWgProtocolBlock (三版文案锚点)', () => {
     expect(closed).toContain('DISABLED in this group')
   })
 
-  test('envelope rules footer present in every role', () => {
+  test('envelope rules footer present in every role; clarify invite is LEADER-only', () => {
     for (const role of ['leader', 'worker', 'fc_member'] as const) {
       expect(renderWgProtocolBlock(role, cfg())).toContain('EXACTLY ONE <workflow-output>')
-      expect(renderWgProtocolBlock(role, cfg())).toContain('<workflow-clarify>')
     }
+    // Human ask-back (<workflow-clarify>) is leader-only: members run on the shared
+    // __wg_member__ node (no shardKey scoping in the clarify queue) so they cannot
+    // round-trip an answer — they escalate to the leader via wg_messages (Codex 2-3).
+    expect(renderWgProtocolBlock('leader', cfg())).toContain('<workflow-clarify>')
+    expect(renderWgProtocolBlock('worker', cfg())).not.toContain('<workflow-clarify>')
+    expect(renderWgProtocolBlock('fc_member', cfg())).not.toContain('<workflow-clarify>')
   })
 })

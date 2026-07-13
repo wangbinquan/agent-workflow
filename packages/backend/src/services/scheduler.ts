@@ -783,6 +783,25 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         }
       }
       if (result.clarify !== undefined) {
+        // Human ask-back is LEADER-ONLY in workgroups (renderWgProtocolBlock
+        // invites <workflow-clarify> for the leader alone). A member runs on the
+        // shared __wg_member__ node with no shardKey scoping in the clarify queue
+        // machinery (selectAgentQueue), so a member clarify session could neither
+        // round-trip its answer nor bind its task_questions without cross-
+        // contaminating sibling assignments / leaving a permanently `processing`
+        // (unbound) entry (Codex reviews 2-3). Members are not invited to ask, but
+        // if one emits <workflow-clarify> anyway, REJECT it BEFORE createClarifySession
+        // — no session ⇒ no dangling task_questions. The member turn then fails for
+        // output (driveAssignmentTurn) instead of parking on an answer that would
+        // never return; genuine blockers escalate to the leader via wg_messages.
+        if (req.nodeId !== WG_LEADER_NODE_ID) {
+          return {
+            status: 'failed',
+            outputs: {},
+            errorMessage:
+              'clarify-not-supported: only the workgroup leader may ask a human; members escalate blockers to the leader via wg_messages',
+          }
+        }
         const clarifyNodeId = findClarifyNodeForAgent(definition, req.nodeId)
         if (clarifyNodeId === undefined) {
           return { status: 'failed', outputs: {}, errorMessage: 'clarify-no-channel' }

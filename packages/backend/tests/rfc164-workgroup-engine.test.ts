@@ -744,6 +744,15 @@ describe('RFC-164 engine — source locks', () => {
     // contaminate answers between assignments — only the singleton leader is safe.
     expect(SCHEDULER_SRC).toContain('req.nodeId === WG_LEADER_NODE_ID')
   })
+
+  test('runHostNode REJECTS a non-leader <workflow-clarify> before creating a session', () => {
+    // A member is never invited to ask a human (renderWgProtocolBlock leader-only),
+    // but if it emits <workflow-clarify> anyway it must be rejected BEFORE
+    // createClarifySession — otherwise the answer can never round-trip/bind and the
+    // question is stuck `processing` forever (Codex reviews 2-3).
+    expect(SCHEDULER_SRC).toContain('req.nodeId !== WG_LEADER_NODE_ID')
+    expect(SCHEDULER_SRC).toContain('clarify-not-supported')
+  })
 })
 
 // ---------------------------------------------------------------------------

@@ -249,26 +249,37 @@ export type WorkgroupProtocolRole = 'leader' | 'worker' | 'fc_member'
 const ENVELOPE_RULES = [
   'Respond with EXACTLY ONE <workflow-output> envelope at the very end of your reply.',
   'Every port body is a JSON document — no markdown fences inside ports.',
-  'If you need a human decision first, emit a <workflow-clarify> envelope INSTEAD (never both).',
 ].join('\n')
 
-// 2026-07-12 incident (task 01KXBATKFJ73MDYNM6YN2DMA29): ENVELOPE_RULES INVITES
-// a <workflow-clarify> envelope, but a workgroup host node runs with clarify
-// directive 'suppressed' (scheduler.ts runHostNode), so the normal
-// mandatory/optional clarify FORMAT block (shared/prompt.ts
-// buildClarifyProtocolBlock) is NEVER injected. A leader that accepted the
-// invitation wrote natural-language questions; the body failed JSON.parse
-// ('clarify-questions-malformed') and the leader turn fatally killed the whole
-// task at round 0. The invitation and its schema MUST travel together — reuse
-// the SHARED clarify constants so this rendering can never drift from the
-// normal-node one.
-const WG_CLARIFY_FORMAT = [
+// Human ask-back (<workflow-clarify>) is a LEADER-ONLY capability in workgroups —
+// renderWgProtocolBlock appends this block for the 'leader' role alone. Two
+// incidents forced BOTH the shape and the scoping:
+//
+//   1. 2026-07-12 (task 01KXBATKFJ73MDYNM6YN2DMA29): the protocol INVITED a
+//      <workflow-clarify> envelope, but a host node runs with clarify directive
+//      'suppressed' (scheduler.ts runHostNode), so the normal clarify FORMAT
+//      block (shared/prompt.ts buildClarifyProtocolBlock) was NEVER injected. The
+//      leader wrote natural-language questions; the body failed JSON.parse
+//      ('clarify-questions-malformed') and the turn fatally killed the task at
+//      round 0. So the invite and its schema MUST travel together — reuse the
+//      SHARED clarify constants so this can never drift from the normal-node one.
+//
+//   2. Codex review: members run on the SHARED __wg_member__ node, separated only
+//      by node_runs.shard_key, but the clarify queue machinery (selectAgentQueue)
+//      selects/ages purely by consumerNodeId with NO shardKey scoping. A member
+//      clarify therefore cannot round-trip its answer nor bind its task_questions
+//      without cross-contaminating other assignments / leaving a permanently
+//      `processing` (unbound) entry. So only the singleton leader (shardKey=null)
+//      may ask a human; members escalate blockers to the leader via wg_messages,
+//      and runHostNode rejects any non-leader <workflow-clarify>.
+const LEADER_CLARIFY_BLOCK = [
   '',
-  'That <workflow-clarify> envelope has a REQUIRED JSON body — a natural-language',
-  'list of questions is rejected as malformed and wastes a turn. If (and only if)',
-  'you ask, its body must be a valid JSON document in this shape. Where a field is',
-  'shown as `"a" | "b"` (or `true | false`) that denotes the ALLOWED values — emit',
-  'ONE concrete literal (e.g. "single"), never the `|` itself:',
+  'If you need a human decision first, emit a <workflow-clarify> envelope INSTEAD',
+  'of <workflow-output> (never both). Its body is a REQUIRED JSON document in the',
+  'shape below — a natural-language list of questions is rejected as malformed and',
+  'wastes a turn. Where a field is shown as `"a" | "b"` (or `true | false`) that',
+  'denotes the ALLOWED values — emit ONE concrete literal (e.g. "single"), never',
+  'the `|` itself:',
   '',
   CLARIFY_FORMAT_EXAMPLE,
   '',
@@ -330,7 +341,12 @@ export function renderWgProtocolBlock(
       )
     }
   }
-  lines.push('', ENVELOPE_RULES, WG_CLARIFY_FORMAT)
+  lines.push('', ENVELOPE_RULES)
+  // Human ask-back is leader-only (see LEADER_CLARIFY_BLOCK): members / fc_members
+  // run on the shared __wg_member__ node and cannot round-trip a clarify answer,
+  // so they are never invited to ask a human — they escalate to the leader via
+  // wg_messages. free_collab has no leader, so nobody asks a human there.
+  if (role === 'leader') lines.push(LEADER_CLARIFY_BLOCK)
   return lines.join('\n')
 }
 
