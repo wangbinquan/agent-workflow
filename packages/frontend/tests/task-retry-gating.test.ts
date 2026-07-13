@@ -5,9 +5,22 @@
 // already; here we just make sure the UI doesn't offer the user a
 // button that the API will 409 on.
 
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import { canOfferResume, resumeStatus } from '../src/routes/tasks.detail'
 import { canRetryNodeRun } from '../src/components/NodeDetailDrawer'
+import { enUS } from '../src/i18n/en-US'
+import { zhCN } from '../src/i18n/zh-CN'
+
+// The task-detail route is a giant runtime component; per this repo's idiom
+// (rfc164-workgroup-tabs.test.ts) we pin the JSX wiring with source-level text
+// assertions rather than mounting it. The pure-function tests above lock the
+// DECISION; these lock that the button/hint are actually WIRED to it.
+const DETAIL_SRC = readFileSync(
+  resolve(import.meta.dirname, '..', 'src/routes/tasks.detail.tsx'),
+  'utf8',
+)
 
 describe('resumeStatus', () => {
   test('failed task with a worktree → ready', () => {
@@ -107,6 +120,39 @@ describe('canOfferResume', () => {
         isDynamicWorkgroup: false,
       }),
     ).toBe(false)
+  })
+})
+
+// Source-level wiring lock for the RFC-164/167 fix. canOfferResume above locks
+// the decision; these lock that tasks.detail.tsx actually gates the Resume
+// button on it (not the bare resumeStatus) and wires the turn-engine relaunch
+// hint. A revert to `{resumability === 'ready' && (<button…resume/>)}` — the
+// original bug that showed Resume on a turn-engine group whose /resume 403s —
+// reds here even though the pure tests stay green.
+describe('tasks.detail.tsx — resume button/hint wiring (source locks)', () => {
+  test('the Resume button is gated on showResume := canOfferResume(...) with the workgroup flags', () => {
+    expect(DETAIL_SRC).toMatch(/const showResume = canOfferResume\(\{/)
+    expect(DETAIL_SRC).toMatch(/isWorkgroup,\s*\n\s*isDynamicWorkgroup,/)
+    expect(DETAIL_SRC).toMatch(/\{showResume && \(/)
+  })
+
+  test('the Resume button is NOT gated directly on resumability alone (the original bug)', () => {
+    // The buggy gate rendered the button whenever resumability was 'ready',
+    // ignoring workgroup mode. `resumability === 'ready'` still legitimately
+    // appears in the hint gate — what must be gone is it directly fronting the
+    // <button> that fires resume.mutate().
+    expect(DETAIL_SRC).not.toMatch(/\{resumability === 'ready' && \([\s\n]*<button/)
+  })
+
+  test('the turn-engine workgroup relaunch hint is wired (showWorkgroupResumeHint → resumeUnavailableWorkgroup)', () => {
+    expect(DETAIL_SRC).toMatch(/const showWorkgroupResumeHint =[\s\S]*?!isDynamicWorkgroup/)
+    expect(DETAIL_SRC).toMatch(/\{showWorkgroupResumeHint && \(/)
+    expect(DETAIL_SRC).toMatch(/tasks\.resumeUnavailableWorkgroup/)
+  })
+
+  test('resumeUnavailableWorkgroup copy exists in both i18n bundles', () => {
+    expect(enUS.tasks.resumeUnavailableWorkgroup.length).toBeGreaterThan(0)
+    expect(zhCN.tasks.resumeUnavailableWorkgroup.length).toBeGreaterThan(0)
   })
 })
 
