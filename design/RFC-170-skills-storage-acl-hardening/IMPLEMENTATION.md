@@ -195,38 +195,46 @@ immutable-id CAS / 同步 claim / commitSkillVersion 事务内复合 fence / 前
 - **F10-null（已修）**：createFusion 捕获 token 后、任何副作用前，`preconditionToken===null`
   → NotFoundError（技能已消失/未发布，永远无法判定的 fusion 不建 workDir/task）。source lock。
 
-**延后到「fusion 决策协议加固」follow-up RFC（多为 T6 之前既存 fusion-engine 债、
-非本次引入）**：
+**F7/F9/F10-full——用户批准 inline 实现（㉒㉓㉔，全落）**：
 
-- **F7 reconcile/cancel/attach 非 generation-CAS**：reject 的最终 attach、reconcile 回写、
-  cancel 均无条件 `WHERE id`——并发 cancel 与 reject/reconcile 交错可留孤儿 task 或状态回滚。
-  **既存**：T6 前 reject 也无条件覆盖 canceled。需给所有 writer 加 expected status+
-  currentTaskId+iteration/decisionGeneration 条件更新 + affected-rows 检查。
-- **F9 决策 half-state 无崩溃恢复**：approve 'applying'→(独立 skill/memory 事务)→'done'、
-  reject 'running'+currentTaskId=null→side effects，中途崩溃留 reconcile 永久跳过或
-  「已应用但仍 applying」。**既存**：fusion 从无 approve/reject 崩溃恢复。需 durable
-  decision operation + boot recovery（类比 skill_operations 机制）。
-- **F10-full 种子非绑定快照**：seed 仍从 `skills/<name>/files` live 目录、与授权读按名分离，
-  delete-recreate 可让 task 从另一代 live seed（后续 409 只挡审批不撤已起 task）。**既存**：
-  fusion 一贯从 live seed。需从 token 指向的不可变 version snapshot seed + 捕获期持 per-skill
-  operation lock（依赖 snapshot 权威读，与 §7 首项耦合）。
+- **F7（已修，㉒ a9a73980）reconcile/cancel/attach 全 writer generation-CAS**：新增
+  `casFusionStatus(db,id,fromStatuses,to,{expectCurrentTaskId,extra})`——按 (status,
+  currentTaskId) 条件更新（dbTxSync 原子）。reconcile 所有终态写键在读到的 taskId、cancel
+  CAS from ['running','awaiting_approval']（排除 applying）、reject attach CAS on (running,
+  currentTaskId=null) 输了回滚投机 task、approve done/fail CAS from ['applying']；删旧无条件
+  setFusionStatus/failFusion。
+- **F9（已修，㉓ 606d096b）决策 half-state 崩溃恢复**：`recoverFusionDecisions(db)`——
+  'applying' 若有携本 fusionId 的 skill_versions 行则 roll forward done、否则 roll back
+  failed；'running'+currentTaskId=null → failed。挂 start.ts 5b5（skill-op recovery 后、
+  HTTP 前）。
+- **F10-full（已修，㉔ 28011121）种子绑定不可变快照**：`fusionSeedDir(appHome,name,token)`——
+  seed 取 token 指向的 `versions/v<contentVersion>/files`（不可变、无需锁）、legacy 回退 live；
+  createFusion + reject 均用。测试：篡改 live 后 worktree 仍含快照 body。
 
-**结论**：§8 三态 + T6 token 保护均**净正向**（T6 前 fusion 无 token 保护且已有 F7/F9/F10
-同款窗口）；完整 fusion 决策协议 CAS+recovery 是 RFC 级、按项目 RFC workflow 应独立立项，
-不在本 session 尾仓促重构。
+**结论**：fusion 决策协议加固全落（F4/F5/F7/F8/F9/F10 + F10-null，用户批准 inline），
+第三轮 re-review 待验。§8 三态 + T6 token 保护均净正向。
+
+## 6f. 快照权威读地基（㉕ 10544aed）——用户 #2 首件
+
+`skillReadRoot(skill, opts)`：managed 读当前版本不可变快照 `versions/v<contentVersion>/files`
+（存在则）、legacy 无快照回退 live、external 读 externalPath 不变。`readSkillContent` 改走它
+——torn/half-published live 不再污染读、body 恒与 token 的 contentVersion 一致。测试：篡改
+live SKILL.md 后 readSkillContent 仍返回 v1 快照 body。**完整 G1-1（签 token/注入前 live
+identity hash 校验 → drift 隔离）随 T-BOOT bootVerifiedSet/quarantine 落地**。
 
 ## 7. 其余（依赖顺序，批次 B 收尾 + 批次 C）
 
-**fusion 决策协议加固（新 RFC）**：F7 全 writer generation-CAS + F9 durable decision
-operation & boot recovery + F10-full snapshot-bound seed + per-skill lock（见 §6e，多为既存
-fusion 债）·
+**T-BOOT 完整机制（用户 #2 剩余，大型 + 跨切、触 scheduler〔协作者 WIP〕）**：
+`isSkillAvailableThisBoot(skill)` predicate + `bootVerifiedSet`（后台逐 managed skill 重验
+content_version 行/目录 + hash + 无 symlink + SKILL.md 合法 → 入集或 CAS quarantined）+
+统一 gate detail/list/runtime/token-writer/scheduler（G8-2 按 authority_kind 分流）+ 无全量
+barrier · readSkillFile/tree/fusion-base/runtime-stage 也走 skillReadRoot · 签 token/注入前
+live identity hash 校验 → drift → pending/quarantine ·
 
-snapshot 权威读（readSkillContent 从 versions/v<cur> 非 live——**与 T-BOOT quarantine/
-drift-check 耦合**，非独立单元）· T9 quarantine 注入门（stageSkills 前查 version_state，
-**注意 scheduler 协作者 WIP**）· T9b external descriptor-relative 捕获（需 openat/
-O_NOFOLLOW，Bun/Node 不足则 native helper 或 fail-closed）· 旧 PUT/:name+PUT/content
-→410（T-BSAFE③，**与 external combined-save 后端支持耦合**）· T-BOOT
-`isSkillAvailableThisBoot` predicate + bootVerifiedSet + 后台重验 · migrate（T10）·
+T9 quarantine 注入门（stageSkills 前查 version_state，**注意 scheduler 协作者 WIP**）·
+T9b external descriptor-relative 捕获（需 openat/O_NOFOLLOW，Bun/Node 不足则 native helper 或
+fail-closed）· 旧 PUT/:name+PUT/content →410（T-BSAFE③，**与 external combined-save 后端
+支持耦合**）· migrate（T10）·
 adopt-managed（T10b，两阶段 capture→confirm）· 批次 C（source lifecycle reconcile 拆
 user/system、migration 决策 UI、adoption UI）。**注**：external file/tree GET realpath
 containment 已由 `realpathInside`（readSkillContent/readSkillFile）落地（T-BSAFE④）；
