@@ -1066,10 +1066,20 @@ function findOpenDispatchTarget(
       eShard === null &&
       mintShards !== undefined &&
       [...mintShards].some((s) => s !== null)
-    // The node-wide open run obligation (non-done top-level run) — also the surfaced blocker below.
-    const openRun = inputs.runs.find(
-      (r) => r.nodeId === target && r.parentNodeRunId === null && r.status !== 'done',
-    )
+    // The node-wide open run obligation — the FRESHEST top-level run of each shard that is still
+    // non-done. Codex round-5: a historical failed/canceled attempt SUPERSEDED by a newer done retry
+    // (same shard, higher id) is NOT a live obligation — keying on "any non-done row" would let that
+    // stale failed row block the legacy ledger forever even after the retry succeeded. So reduce to
+    // each shard's freshest generation first, then look for a non-done one. (Also the surfaced
+    // blocker below.)
+    const freshestOpenByShard = new Map<string | null, (typeof inputs.runs)[number]>()
+    for (const r of inputs.runs) {
+      if (r.nodeId !== target || r.parentNodeRunId !== null) continue
+      const k = r.shardKey ?? null
+      const cur = freshestOpenByShard.get(k)
+      if (cur === undefined || r.id > cur.id) freshestOpenByShard.set(k, r)
+    }
+    const openRun = [...freshestOpenByShard.values()].find((r) => r.status !== 'done')
     if (
       (nullOnMultiShardHost && openRun !== undefined) ||
       !isDispatchedEntryConsumed(

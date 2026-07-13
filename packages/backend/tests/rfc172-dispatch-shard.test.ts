@@ -830,4 +830,42 @@ describe('RFC-172b Codex P2 — a shard-less legacy in-flight ledger blocks a me
     )[0]
     expect(run?.shardKey).toBe('assign-B')
   })
+
+  test('round-5: a superseded failed attempt (done retry exists) does not keep the ledger blocked', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedWorkgroupTask(db, taskId)
+    // Legacy manual dispatched to __wg_member__, its handler DONE.
+    const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
+    const legacyDone = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { status: 'done' })
+    await seedEntry(db, taskId, {
+      originNodeRunId: legacyOrigin,
+      sourceKind: 'manual',
+      sealed: true,
+      dispatchedAt: Date.now(),
+      triggerRunId: legacyDone,
+    })
+    // member B had a process retry: a FAILED attempt superseded by a newer DONE run (same shard).
+    // The stale `failed` row must NOT count as a live obligation (Codex round-5).
+    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B', status: 'failed' })
+    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B', status: 'done' })
+    // member C's fresh answer (shard C) + a prior done shard-C run.
+    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-C' })
+    const clarifyC = await seedNodeRun(db, taskId, '__wg_clarify__')
+    await seedRound(db, taskId, clarifyC, 'assign-C')
+    const entryC = await seedEntry(db, taskId, {
+      originNodeRunId: clarifyC,
+      sourceKind: 'self',
+      sealed: true,
+    })
+
+    // every shard's FRESHEST generation is done → no live obligation → the done legacy ledger is
+    // consumed → member C dispatches (a superseded failed row cannot deadlock the upgraded task).
+    const res = await dispatchTaskQuestions(db, taskId, [entryC.id], actor)
+    expect(res.reruns.length).toBe(1)
+    const run = (
+      await db.select().from(nodeRuns).where(eq(nodeRuns.id, res.reruns[0]!.nodeRunId))
+    )[0]
+    expect(run?.shardKey).toBe('assign-C')
+  })
 })
