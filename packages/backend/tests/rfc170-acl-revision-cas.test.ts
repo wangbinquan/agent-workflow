@@ -19,7 +19,10 @@ import { ConflictError, ValidationError } from '../src/util/errors'
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function actorOfUser(id: string, role: 'admin' | 'user'): Actor {
-  return buildActor({ kind: 'user', user: { id, role } })
+  return buildActor({
+    user: { id, username: `u-${id.slice(-4)}`, displayName: 'U', role, status: 'active' },
+    source: 'session',
+  })
 }
 async function seedUser(
   db: DbClient,
