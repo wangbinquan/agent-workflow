@@ -131,7 +131,7 @@ export function WorkgroupForm({ value, onChange, errors }: WorkgroupFormProps) {
               min={1}
               max={WORKGROUP_MAX_ROUNDS_LIMIT}
               step={1}
-              placeholder="20"
+              placeholder="1000"
               data-testid="workgroup-field-max-rounds"
             />
           </Field>

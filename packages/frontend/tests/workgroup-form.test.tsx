@@ -177,7 +177,8 @@ describe('buildConfigUpdatePayload', () => {
     expect(ok.ok).toBe(true)
   })
 
-  test.each([[0], [501], [2.5]])('maxRounds=%p is rejected', (maxRounds) => {
+  // Cap raised 500 → 1000 (2026-07-13): 1000 is accepted, 1001 rejected.
+  test.each([[0], [1001], [2.5]])('maxRounds=%p is rejected', (maxRounds) => {
     const draft = workgroupToConfigDraft(STORED)
     draft.maxRounds = maxRounds
     const built = buildConfigUpdatePayload(draft, STORED)
@@ -185,12 +186,18 @@ describe('buildConfigUpdatePayload', () => {
     if (!built.ok) expect(built.errors.maxRounds).toBe('workgroups.errors.maxRoundsInvalid')
   })
 
-  test('cleared maxRounds falls back to the default 20', () => {
+  test('maxRounds=1000 (the new cap) is accepted', () => {
+    const draft = workgroupToConfigDraft(STORED)
+    draft.maxRounds = 1000
+    expect(buildConfigUpdatePayload(draft, STORED).ok).toBe(true)
+  })
+
+  test('cleared maxRounds falls back to the default 1000', () => {
     const draft = workgroupToConfigDraft(STORED)
     draft.maxRounds = undefined
     const built = buildConfigUpdatePayload(draft, STORED)
     expect(built.ok).toBe(true)
-    if (built.ok) expect(built.payload.maxRounds).toBe(20)
+    if (built.ok) expect(built.payload.maxRounds).toBe(1000)
   })
 })
 

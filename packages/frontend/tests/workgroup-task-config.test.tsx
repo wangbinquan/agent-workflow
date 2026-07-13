@@ -105,12 +105,12 @@ describe('buildWorkgroupConfigPatch — only-changed-fields matrix', () => {
     expect(buildWorkgroupConfigPatch(config, rm)).toEqual({ removeMemberIds: ['mem_work'] })
   })
 
-  test('isValidTaskMaxRounds mirrors the 1..500 int rule (undefined = fine)', () => {
+  test('isValidTaskMaxRounds mirrors the 1..1000 int rule (undefined = fine)', () => {
     expect(isValidTaskMaxRounds(undefined)).toBe(true)
     expect(isValidTaskMaxRounds(1)).toBe(true)
-    expect(isValidTaskMaxRounds(500)).toBe(true)
+    expect(isValidTaskMaxRounds(1000)).toBe(true)
     expect(isValidTaskMaxRounds(0)).toBe(false)
-    expect(isValidTaskMaxRounds(501)).toBe(false)
+    expect(isValidTaskMaxRounds(1001)).toBe(false)
     expect(isValidTaskMaxRounds(2.5)).toBe(false)
   })
 })

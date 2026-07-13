@@ -68,6 +68,21 @@ describe('RFC-164 — CreateWorkgroupSchema shape', () => {
     }
   })
 
+  // 用户拍板 2026-07-13: raise the default round cap and open the completion
+  // gate by default. Locks WORKGROUP_MAX_ROUNDS_DEFAULT/LIMIT (20→1000, 500→1000)
+  // and the completionGate default (false→true) against silent regression.
+  test('new-group defaults: maxRounds=1000, completionGate ON, cap raised to 1000', () => {
+    const r = CreateWorkgroupSchema.safeParse({ name: 'g1' })
+    expect(r.success).toBe(true)
+    if (r.success) {
+      expect(r.data.maxRounds).toBe(1000)
+      expect(r.data.completionGate).toBe(true)
+    }
+    // Cap raised 500 → 1000: exactly 1000 is accepted, 1001 is rejected.
+    expect(CreateWorkgroupSchema.safeParse({ name: 'g2', maxRounds: 1000 }).success).toBe(true)
+    expect(CreateWorkgroupSchema.safeParse({ name: 'g3', maxRounds: 1001 }).success).toBe(false)
+  })
+
   test('leader_worker WITHOUT leader is save-valid (readiness is launch-time)', () => {
     const r = CreateWorkgroupSchema.safeParse({
       name: 'g1',

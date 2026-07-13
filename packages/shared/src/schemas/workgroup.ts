@@ -103,8 +103,8 @@ export const WorkgroupSwitchesSchema = z.object({
 })
 export type WorkgroupSwitches = z.infer<typeof WorkgroupSwitchesSchema>
 
-export const WORKGROUP_MAX_ROUNDS_DEFAULT = 20
-export const WORKGROUP_MAX_ROUNDS_LIMIT = 500
+export const WORKGROUP_MAX_ROUNDS_DEFAULT = 1000
+export const WORKGROUP_MAX_ROUNDS_LIMIT = 1000
 
 /** Workgroup resource as stored / returned by the API. */
 export const WorkgroupSchema = z.object({
@@ -148,7 +148,9 @@ const workgroupConfigFields = {
     .positive()
     .max(WORKGROUP_MAX_ROUNDS_LIMIT)
     .default(WORKGROUP_MAX_ROUNDS_DEFAULT),
-  completionGate: z.boolean().default(false),
+  // Default ON (2026-07-13 用户拍板): a new group's tasks park for human
+  // confirmation when the leader declares done, instead of auto-finishing.
+  completionGate: z.boolean().default(true),
   /**
    * 快速创建（用户 2026-07-10 拍板 #21）：members MAY be empty at save time —
    * groups are created light and members are managed card-by-card on the

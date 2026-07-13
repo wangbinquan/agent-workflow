@@ -1164,7 +1164,7 @@ export const enUS: Resources = {
     fcSwitchesNotice:
       'Free collaboration forces all three switches on; switching back to Leader-Worker restores your settings.',
     fieldMaxRounds: 'Max rounds',
-    fieldMaxRoundsHint: '1–500, default 20.',
+    fieldMaxRoundsHint: '1–1000, default 1000.',
     fieldCompletionGate: 'Completion gate (human confirm)',
     fieldCompletionGateHint:
       'When the leader declares done, the task parks for human confirmation instead of finishing.',
@@ -1299,7 +1299,7 @@ export const enUS: Resources = {
       displayNameTooLong: 'Display name is at most 64 characters.',
       displayNameDuplicate: 'Display names must be unique within the group.',
       leaderMustBeAgent: 'The leader must be an agent member.',
-      maxRoundsInvalid: 'Max rounds must be an integer between 1 and 500.',
+      maxRoundsInvalid: 'Max rounds must be an integer between 1 and 1000.',
       dynamicNoHumanMembers:
         'Dynamic-workflow groups allow agent members only — remove the human members before saving.',
     },
@@ -1432,6 +1432,8 @@ export const enUS: Resources = {
     },
     resumeUnavailableNoWorktree:
       'Resume cannot recover from a worktree-creation failure (no worktree was ever created). Launch a fresh task instead.',
+    resumeUnavailableWorkgroup:
+      "Workgroup tasks can't resume in place after failing — the group's orchestration is engine-driven, so recovery is a relaunch, not an in-place continue. Relaunch the workgroup instead.",
     resumeLaunchLink: 'Launch a new task →',
     failedBanner: 'Task failed.',
     jumpToFailed: 'Jump to failed node ({{nodeId}})',

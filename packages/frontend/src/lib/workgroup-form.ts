@@ -82,7 +82,7 @@ export interface WorkgroupConfigDraft {
    *  (mirrors shared resolveWorkgroupSwitches: fc reads all-on regardless of
    *  storage). */
   switches: WorkgroupSwitches
-  /** undefined = field cleared → default (backend stores 20). */
+  /** undefined = field cleared → default (WORKGROUP_MAX_ROUNDS_DEFAULT = 1000). */
   maxRounds: number | undefined
   completionGate: boolean
 }

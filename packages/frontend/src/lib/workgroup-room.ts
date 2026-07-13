@@ -19,6 +19,7 @@ import type {
   WorkgroupRuntimeMember,
   WorkgroupSwitches,
 } from '@agent-workflow/shared'
+import { WORKGROUP_MAX_ROUNDS_LIMIT } from '@agent-workflow/shared'
 import type { StatusChipKind } from '@/components/StatusChip'
 
 // ---------------------------------------------------------------------------
@@ -490,7 +491,7 @@ export function buildWorkgroupConfigPatch(
   return Object.keys(out).length > 0 ? out : null
 }
 
-/** Valid maxRounds for the mid-run patch (mirrors ConfigPatchSchema: 1..500 int). */
+/** Valid maxRounds for the mid-run patch (mirrors ConfigPatchSchema: 1..LIMIT int). */
 export function isValidTaskMaxRounds(n: number | undefined): boolean {
-  return n === undefined || (Number.isInteger(n) && n >= 1 && n <= 500)
+  return n === undefined || (Number.isInteger(n) && n >= 1 && n <= WORKGROUP_MAX_ROUNDS_LIMIT)
 }

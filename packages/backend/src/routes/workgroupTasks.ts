@@ -16,6 +16,7 @@
 import type { DwState, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import {
   parseDwState,
+  WORKGROUP_MAX_ROUNDS_LIMIT,
   WorkflowDefinitionSchema,
   WorkflowNameSchema,
   WorkgroupRuntimeConfigSchema,
@@ -93,7 +94,7 @@ const ConfigPatchSchema = z.object({
       blackboard: z.boolean(),
     })
     .optional(),
-  maxRounds: z.number().int().positive().max(500).optional(),
+  maxRounds: z.number().int().positive().max(WORKGROUP_MAX_ROUNDS_LIMIT).optional(),
   completionGate: z.boolean().optional(),
   addMembers: z
     .array(

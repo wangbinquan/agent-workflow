@@ -1348,6 +1348,8 @@ export interface Resources {
       }
     }
     resumeUnavailableNoWorktree: string
+    /** RFC-164/167: turn-engine group tasks (lw / fc) can't resume in place — relaunch instead. */
+    resumeUnavailableWorkgroup: string
     resumeLaunchLink: string
     failedBanner: string
     jumpToFailed: string
@@ -4002,7 +4004,7 @@ export const zhCN: Resources = {
     fieldBlackboardHint: '把公共聊天流（按预算截尾）注入给每个成员。',
     fcSwitchesNotice: '自由协作模式下三个协作开关强制视为全开；切回 Leader-Worker 后恢复原设置。',
     fieldMaxRounds: '最大轮数',
-    fieldMaxRoundsHint: '1–500，默认 20。',
+    fieldMaxRoundsHint: '1–1000，默认 1000。',
     fieldCompletionGate: '完成门（人工确认）',
     fieldCompletionGateHint: 'Leader 宣布完成后任务停在待人工确认，而不是直接结束。',
     launchButton: '启动任务',
@@ -4128,7 +4130,7 @@ export const zhCN: Resources = {
       displayNameTooLong: '显示名最长 64 个字符。',
       displayNameDuplicate: '显示名在组内必须唯一。',
       leaderMustBeAgent: 'Leader 只能是 agent 成员。',
-      maxRoundsInvalid: '最大轮数须为 1–500 的整数。',
+      maxRoundsInvalid: '最大轮数须为 1–1000 的整数。',
       dynamicNoHumanMembers: '动态工作流模式仅允许 agent 成员——请先移除人类成员再保存。',
     },
   },
@@ -4258,6 +4260,8 @@ export const zhCN: Resources = {
     },
     resumeUnavailableNoWorktree:
       'worktree 创建阶段就失败了（根本没建出 worktree），resume 救不了。请新建一个任务。',
+    resumeUnavailableWorkgroup:
+      '组任务失败后不支持原地继续（组的编排由引擎驱动，恢复靠重启而非续跑）。请重新启动该工作组。',
     resumeLaunchLink: '启动新任务 →',
     failedBanner: '任务失败。',
     jumpToFailed: '跳到失败节点 ({{nodeId}})',
