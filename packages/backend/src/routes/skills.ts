@@ -184,6 +184,9 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
         patch,
         expectedToken,
         actor.user.id,
+        // RFC-170 (4th-review [high]): the owner we just authorized against — the
+        // funnel 409s if it drifts before the version commits (owner-transfer race).
+        existing.ownerUserId,
       ),
     )
   })

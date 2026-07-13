@@ -7,10 +7,11 @@
 // a post-revocation version. `commitSkillVersion` now honors an `expectedOwnerUserId`
 // (the owner the caller authorized against) and 409s on owner drift.
 //
-// SCOPE: this locks the FUNNEL-side machinery + its owner-drift semantics. Wiring
-// the six writers (combined-save / file / restore / ZIP / fusion / create) to pass
-// `expectedOwnerUserId` is tracked in IMPLEMENTATION §7 (deferred while a parallel
-// RFC-178 refactor holds skill.ts). commitSkillVersion is exercised directly here.
+// SCOPE: the funnel-side machinery + the COMBINED-SAVE primary path are wired (the
+// POST /save route → saveSkillWithToken → writeSkillContent forward the authorized
+// owner). The remaining writers (file / restore / ZIP / fusion) still pass no
+// `expectedOwnerUserId` — tracked in IMPLEMENTATION §7. Below: the funnel guard is
+// exercised directly, then the combined-save wiring at the service boundary.
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -19,7 +20,7 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skills } from '../src/db/schema'
-import { createManagedSkill } from '../src/services/skill'
+import { createManagedSkill, readSkillContent, saveSkillWithToken } from '../src/services/skill'
 import { commitSkillVersion } from '../src/services/skillVersion'
 import { ConflictError } from '../src/util/errors'
 
@@ -90,5 +91,54 @@ describe('RFC-170 (4th-review [high]) — version-write in-tx owner-drift fence'
       authorUserId: 'A',
     })
     expect(v.versionIndex).toBeGreaterThan(1)
+  })
+})
+
+// The combined-save PRIMARY path is now wired: the POST /save route passes the
+// owner it authorized against (existing.ownerUserId) into saveSkillWithToken →
+// writeSkillContent → commitSkillVersion's owner fence. These lock that wiring at
+// the service boundary (the route just forwards existing.ownerUserId).
+describe('RFC-170 (4th-review [high]) — combined-save owner-fence wiring', () => {
+  let db: DbClient
+  let appHome: string
+  let fsOpts: { appHome: string }
+
+  beforeEach(async () => {
+    appHome = mkdtempSync(join(tmpdir(), 'aw-owner-wire-'))
+    fsOpts = { appHome }
+    db = createInMemoryDb(MIGRATIONS)
+    await createManagedSkill(
+      db,
+      fsOpts,
+      { name: 'foo', description: 'd', bodyMd: 'b0', frontmatterExtra: {} },
+      { ownerUserId: 'A' },
+    )
+  })
+  afterEach(() => rmSync(appHome, { recursive: true, force: true }))
+
+  test('owner transferred after authorization → combined-save 409s (demoted ex-owner cannot write)', async () => {
+    const read = await readSkillContent(db, fsOpts, 'foo')
+    // The route authorized actor A against owner A; owner then transfers A → B in
+    // the save's await window (token is unaffected — owner is orthogonal to it).
+    await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
+    await expect(
+      saveSkillWithToken(db, fsOpts, 'foo', { bodyMd: 'x' }, read.token!, 'A', 'A'),
+    ).rejects.toBeInstanceOf(ConflictError)
+    // The stale write did NOT apply.
+    expect((await readSkillContent(db, fsOpts, 'foo')).bodyMd.trim()).toBe('b0')
+  })
+
+  test('owner unchanged → combined-save succeeds under the owner fence', async () => {
+    const read = await readSkillContent(db, fsOpts, 'foo')
+    const saved = await saveSkillWithToken(
+      db,
+      fsOpts,
+      'foo',
+      { bodyMd: 'x' },
+      read.token!,
+      'A',
+      'A',
+    )
+    expect(saved.bodyMd.trim()).toBe('x')
   })
 })

@@ -374,7 +374,15 @@ export async function writeSkillContent(
   // saveSkillWithToken is a pre-check that is TOCTOU vs this write — without the
   // in-tx fence a concurrent save / delete-recreate ABA between them silently
   // LWW-clobbers. Omitted by non-OCC internal callers (tests, fusion base).
-  expected?: { skillId: string; contentVersion: number; metaRevision: number },
+  // `ownerUserId` (4th-review [high]) is the owner the ROUTE authorized against
+  // (requireResourceOwner); the funnel 409s if it drifted — closing the
+  // owner-transfer-during-save race so a demoted ex-owner can't commit.
+  expected?: {
+    skillId: string
+    contentVersion: number
+    metaRevision: number
+    ownerUserId?: string | null
+  },
 ): Promise<SkillContent> {
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
@@ -411,12 +419,15 @@ export async function writeSkillContent(
       source: 'editor',
       authorUserId: authorUserId ?? null,
       setDescription: patch.description !== undefined ? patch.description : undefined,
-      // Fence the composite precondition atomically with the version bump.
+      // Fence the composite precondition + owner atomically with the version bump.
       ...(expected !== undefined
         ? {
             expectedSkillId: expected.skillId,
             expectedVersion: expected.contentVersion,
             expectedMetaRevision: expected.metaRevision,
+            ...(expected.ownerUserId !== undefined
+              ? { expectedOwnerUserId: expected.ownerUserId }
+              : {}),
           }
         : {}),
     },
@@ -441,6 +452,10 @@ export async function saveSkillWithToken(
   patch: UpdateSkillContent,
   expectedToken: string,
   authorUserId?: string | null,
+  // RFC-170 (4th-review [high]): the owner the route authorized this actor against
+  // (requireResourceOwner). Threaded into the version-bump tx so an owner transfer
+  // in this call's await window 409s instead of committing a post-revocation version.
+  expectedOwnerUserId?: string | null,
 ): Promise<SkillContent> {
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
@@ -476,6 +491,7 @@ export async function saveSkillWithToken(
     skillId: decoded.skillId,
     contentVersion: decoded.contentVersion,
     metaRevision: decoded.metaRevision,
+    ...(expectedOwnerUserId !== undefined ? { ownerUserId: expectedOwnerUserId } : {}),
   })
   // Re-read so the response carries the FRESH token (writeSkillContent's return
   // omits it) — the client reuses it for the next save without a reload.

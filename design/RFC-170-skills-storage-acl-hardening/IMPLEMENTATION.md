@@ -361,7 +361,8 @@ listFiles + T4a legacy backfill + reverify + T9 注入门）**，余为增强：
 - ㉙-fix F3/F2b：file `PUT/DELETE /:name/file` / restore / ZIP overwrite 加复合 token OCC + 前端
   每 skill 单一 canonical token store〔SkillFileTree/restore/save 共享、逐次原子更新〕+ 409 冲突显式
   reload 流程）· **version-write in-tx ACL 重校**（㉙-fix-4 [high]：设计 §318——**funnel 侧 owner-drift
-  机制已落 ㉚，余六写入口喂 `expectedOwnerUserId` 接线待 RFC-178 后**）· T9b external descriptor-relative 捕获（需
+  机制已落 ㉚ + combined-save 主路径接线已落 ㉛〔POST /save→saveSkillWithToken→writeSkillContent 传授权
+  owner〕，余 file/restore/ZIP/fusion 接线待续**）· T9b external descriptor-relative 捕获（需
   openat/O_NOFOLLOW，Bun/Node 不足则 native helper 或 fail-closed）· migrate（T10）· adopt-managed
   （T10b，两阶段 capture→confirm）· 批次 C（source lifecycle reconcile 拆 user/system、migration
   决策 UI、adoption UI）· F12 统一 task-cancel 原语 + clarify 子状态清理（task 层、部分既存）。
