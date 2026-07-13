@@ -1,4 +1,6 @@
-// RFC-002 tests for SkillsPicker.
+// RFC-002 → RFC-173 T3 — SkillsPicker over <MultiSelect>. Selected skills are
+// shown CHECKED in the dropdown (not filtered out); load failure keeps the
+// combobox usable (free-text). Locks the wrapper's wiring to /api/skills.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -43,66 +45,67 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  // Unmount via testing-library first — the Select listbox is portaled to
-  // document.body, so wiping innerHTML before cleanup() races React's
-  // removeChild and crashes happy-dom.
   cleanup()
   vi.restoreAllMocks()
 })
 
-// The picker dropdown is the shared <Select> (RFC-036): role=combobox trigger
-// + portaled role=listbox. `openPicker` waits for the list query to settle so
-// the trigger is enabled, then opens it and returns the listbox.
+// MultiSelect: role=combobox <input> + portaled role=listbox. Focus opens it;
+// wait for option rows so we don't assert against the loading placeholder.
 async function openPicker() {
-  const trigger = (await waitFor(() => screen.getByRole('combobox'))) as HTMLButtonElement
-  await waitFor(() => expect(trigger.disabled).toBe(false))
-  fireEvent.click(trigger)
-  return screen.getByRole('listbox')
+  const input = (await waitFor(() => screen.getByRole('combobox'))) as HTMLInputElement
+  fireEvent.focus(input)
+  const list = screen.getByRole('listbox')
+  await waitFor(() => within(list).getAllByRole('option'))
+  return list
 }
 
-function optionLabels(list: HTMLElement): string[] {
+// A checked row's textContent carries a trailing '✓' from the check indicator;
+// strip it so name comparisons stay exact.
+function optionTexts(list: HTMLElement): string[] {
   return within(list)
     .getAllByRole('option')
-    .map((o) => o.textContent ?? '')
+    .map((o) => (o.textContent ?? '').replace(/✓/g, ''))
 }
 
 describe('SkillsPicker', () => {
-  test('renders dropdown with skills not yet in value', async () => {
+  test('lists all skills; none selected → none checked', async () => {
     mockSkills([fakeSkill('a'), fakeSkill('b'), fakeSkill('c')])
     wrap(<SkillsPicker value={[]} onChange={() => {}} />)
     const list = await openPicker()
-    // Placeholder no longer lives in the option list (it's the trigger text).
-    expect(optionLabels(list)).toEqual(['a', 'b', 'c'])
+    expect(optionTexts(list)).toEqual(expect.arrayContaining(['a', 'b', 'c']))
+    for (const o of within(list).getAllByRole('option')) {
+      expect(o.getAttribute('aria-selected')).toBe('false')
+    }
   })
 
-  test('selecting an option calls onChange with the skill appended', async () => {
+  test('toggling an option appends it via onChange', async () => {
     mockSkills([fakeSkill('a'), fakeSkill('b')])
     const onChange = vi.fn()
     wrap(<SkillsPicker value={['existing']} onChange={onChange} />)
     const list = await openPicker()
-    // Select rows commit on mousedown (keeps focus before closing).
     fireEvent.mouseDown(within(list).getByText('b'))
     expect(onChange).toHaveBeenCalledWith(['existing', 'b'])
   })
 
-  test('already-selected skills are filtered out of the dropdown', async () => {
+  test('already-selected skills stay in the dropdown, CHECKED (not filtered out)', async () => {
     mockSkills([fakeSkill('a'), fakeSkill('b'), fakeSkill('c')])
     wrap(<SkillsPicker value={['b']} onChange={() => {}} />)
     const list = await openPicker()
-    expect(optionLabels(list)).toEqual(['a', 'c'])
+    expect(optionTexts(list)).toEqual(expect.arrayContaining(['a', 'b', 'c']))
+    const b = within(list)
+      .getAllByRole('option')
+      .find((o) => (o.textContent ?? '').replace(/✓/g, '') === 'b')!
+    expect(b.getAttribute('aria-selected')).toBe('true')
   })
 
-  test('empty skill list disables the dropdown', async () => {
+  test('empty skill list shows the empty row', async () => {
     mockSkills([])
     wrap(<SkillsPicker value={[]} onChange={() => {}} />)
-    const trigger = (await waitFor(() => screen.getByRole('combobox'))) as HTMLButtonElement
-    // wait until loading resolves
-    await waitFor(() => expect(trigger.disabled).toBe(true))
-    // Disabled trigger never opens, so there is no listbox.
-    expect(screen.queryByRole('listbox')).toBeNull()
+    fireEvent.focus(await waitFor(() => screen.getByRole('combobox')))
+    await waitFor(() => expect(screen.getByText(/No skills available/i)).toBeTruthy())
   })
 
-  test('load failure hides dropdown and shows muted error', async () => {
+  test('load failure keeps the combobox and shows the muted error', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ ok: false, code: 'boom' }), {
         status: 502,
@@ -111,6 +114,7 @@ describe('SkillsPicker', () => {
     )
     wrap(<SkillsPicker value={[]} onChange={() => {}} />)
     await waitFor(() => screen.getByText(/Failed to load skill list/i))
-    expect(screen.queryByRole('combobox')).toBeNull()
+    // MultiSelect stays usable (free-text) even when the list can't load.
+    expect(screen.queryByRole('combobox')).toBeTruthy()
   })
 })

@@ -1,14 +1,14 @@
-// RFC-151 PR-2 — ResourcePicker<T> configuration contract.
-//
-// The four resource pickers (Skills/Mcps/Plugins/AgentDepends) are thin
-// config shells over this one component; their behavior tests keep running
-// unchanged against the wrappers. This file locks the config surface itself:
-//   1. labelFn drives dropdown row labels; nameOf defaults to `item.name`.
-//   2. default filter excludes already-selected names; a custom filter
-//      receives (item, existing) and fully replaces the default.
-//   3. trigger label three-state: labels.loading while the query is in
-//      flight, labels.empty when nothing survives the filter, labels.pick
-//      otherwise; labels.loadFailed shows (and the dropdown hides) on error.
+// RFC-151 PR-2 → RFC-173 T3 — ResourcePicker<T> config surface, re-locked for
+// the <MultiSelect> rewrite. New contract (design §3):
+//   1. labelFn drives row titles; value identity is always item.name (the old
+//      `nameOf` generalization is gone).
+//   2. candidates = eligible ∪ already-selected: a selected row stays in the
+//      dropdown CHECKED (not filtered out), so it can be un-checked — including
+//      one that has since lost eligibility.
+//   3. eligibility `filter` narrows which UN-selected rows may be added.
+//   4. loading / empty show as dropdown rows; load failure shows labels.loadFailed
+//      and (allowCustom) still lets you type a name.
+//   5. testid lands on the combobox input; getByRole('combobox') is it.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -25,7 +25,6 @@ interface Row {
 const LABELS: ResourcePickerLabels = {
   loading: 'picker loading…',
   empty: 'picker empty',
-  pick: 'pick a row',
   loadFailed: 'row list failed to load',
 }
 
@@ -55,172 +54,167 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  // Unmount via testing-library first — the Select listbox is portaled to
-  // document.body, so wiping innerHTML before cleanup() races React's
-  // removeChild and crashes happy-dom.
   cleanup()
   vi.restoreAllMocks()
 })
 
+const combo = () => screen.getByRole('combobox') as HTMLInputElement
 async function openPicker() {
-  const trigger = (await waitFor(() => screen.getByRole('combobox'))) as HTMLButtonElement
-  await waitFor(() => expect(trigger.disabled).toBe(false))
-  fireEvent.click(trigger)
-  return screen.getByRole('listbox')
+  const input = (await waitFor(() => screen.getByRole('combobox'))) as HTMLInputElement
+  fireEvent.focus(input)
+  const list = screen.getByRole('listbox')
+  // The query may still be resolving when we open — wait for the option rows to
+  // render (until then the listbox only holds the loading/empty presentation row).
+  await waitFor(() => within(list).getAllByRole('option'))
+  return list
+}
+function optionRows(list: HTMLElement) {
+  return within(list).getAllByRole('option')
 }
 
-function optionLabels(list: HTMLElement): string[] {
-  return within(list)
-    .getAllByRole('option')
-    .map((o) => o.textContent ?? '')
-}
+const baseProps = {
+  ariaLabel: 'Rows',
+  labelFn: (r: Row) => r.name,
+  labels: LABELS,
+} as const
 
-describe('ResourcePicker — config surface', () => {
-  test('labelFn drives option labels; default nameOf commits item.name', async () => {
+describe('ResourcePicker — config surface (MultiSelect)', () => {
+  test('labelFn drives row titles; toggling commits item.name', async () => {
     mockRows([row('alpha', 'first'), row('beta')])
     const onChange = vi.fn()
     wrap(
       <ResourcePicker<Row>
+        {...baseProps}
         value={[]}
         onChange={onChange}
         queryKey={['rp-test', 'labelfn']}
         endpoint="/api/rows"
-        labelFn={(r) => (r.description ? `${r.name} :: ${r.description}` : r.name)}
-        labels={LABELS}
+        descriptionFn={(r) => r.description || undefined}
       />,
     )
     const list = await openPicker()
-    expect(optionLabels(list)).toEqual(['alpha :: first', 'beta'])
-    // Picking commits nameOf(item) (default: .name), not the display label.
-    fireEvent.mouseDown(within(list).getByText('alpha :: first'))
+    expect(optionRows(list).map((o) => o.textContent)).toEqual(
+      expect.arrayContaining([expect.stringContaining('alpha'), expect.stringContaining('beta')]),
+    )
+    fireEvent.mouseDown(optionRows(list).find((o) => o.textContent?.includes('alpha'))!)
     expect(onChange).toHaveBeenCalledWith(['alpha'])
   })
 
-  test('default filter drops names already in value', async () => {
+  test('selected rows stay in the dropdown, CHECKED (not filtered out)', async () => {
     mockRows([row('a'), row('b'), row('c')])
     wrap(
       <ResourcePicker<Row>
+        {...baseProps}
         value={['b']}
         onChange={() => {}}
-        queryKey={['rp-test', 'default-filter']}
+        queryKey={['rp-test', 'selected-checked']}
         endpoint="/api/rows"
-        labelFn={(r) => r.name}
-        labels={LABELS}
       />,
     )
     const list = await openPicker()
-    expect(optionLabels(list)).toEqual(['a', 'c'])
+    const rows = optionRows(list)
+    expect(rows.map((o) => o.textContent)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('a'),
+        expect.stringContaining('b'),
+        expect.stringContaining('c'),
+      ]),
+    )
+    const b = rows.find((o) => o.textContent?.includes('b'))!
+    expect(b.getAttribute('aria-selected')).toBe('true')
   })
 
-  test('custom filter replaces the default and receives the existing set', async () => {
-    mockRows([row('on', '', true), row('off', '', false), row('picked', '', true)])
+  test('eligibility filter narrows UN-selected rows; a selected-ineligible row still shows checked', async () => {
+    mockRows([row('on', '', true), row('off', '', false), row('picked-off', '', false)])
     wrap(
       <ResourcePicker<Row>
-        value={['picked']}
+        {...baseProps}
+        value={['picked-off']}
         onChange={() => {}}
-        queryKey={['rp-test', 'custom-filter']}
+        queryKey={['rp-test', 'eligibility']}
         endpoint="/api/rows"
-        labelFn={(r) => r.name}
-        filter={(r, existing) => r.enabled && !existing.has(r.name)}
-        labels={LABELS}
+        filter={(r) => r.enabled}
       />,
     )
     const list = await openPicker()
-    // 'off' fails the enabled predicate, 'picked' fails the existing set.
-    expect(optionLabels(list)).toEqual(['on'])
+    const texts = optionRows(list).map((o) => o.textContent ?? '')
+    // 'on' is eligible → offered; 'off' is ineligible + unselected → excluded;
+    // 'picked-off' is ineligible but selected → still shown (checked).
+    expect(texts.some((t) => t.includes('on'))).toBe(true)
+    expect(texts.some((t) => t === 'off' || t.startsWith('off'))).toBe(false)
+    const picked = optionRows(list).find((o) => o.textContent?.includes('picked-off'))!
+    expect(picked.getAttribute('aria-selected')).toBe('true')
   })
 
-  test('custom nameOf switches the committed identity', async () => {
-    mockRows([row('display-a', 'ID_A'), row('display-b', 'ID_B')])
-    const onChange = vi.fn()
-    wrap(
-      <ResourcePicker<Row>
-        value={['ID_B']}
-        onChange={onChange}
-        queryKey={['rp-test', 'nameof']}
-        endpoint="/api/rows"
-        labelFn={(r) => r.name}
-        nameOf={(r) => r.description}
-        labels={LABELS}
-      />,
-    )
-    const list = await openPicker()
-    // Default filter keys off nameOf → 'display-b' (ID_B) is excluded.
-    expect(optionLabels(list)).toEqual(['display-a'])
-    fireEvent.mouseDown(within(list).getByText('display-a'))
-    expect(onChange).toHaveBeenCalledWith(['ID_B', 'ID_A'])
-  })
-
-  test('loading state pins labels.loading on the disabled trigger', async () => {
-    // Never-resolving fetch keeps the query in flight for the whole test.
+  test('loading shows labels.loading as a dropdown row', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise<Response>(() => {}))
     wrap(
       <ResourcePicker<Row>
+        {...baseProps}
         value={[]}
         onChange={() => {}}
         queryKey={['rp-test', 'loading']}
         endpoint="/api/rows"
-        labelFn={(r) => r.name}
-        labels={LABELS}
       />,
     )
-    const trigger = (await waitFor(() => screen.getByRole('combobox'))) as HTMLButtonElement
-    expect(trigger.disabled).toBe(true)
-    expect(trigger.textContent).toContain(LABELS.loading)
+    fireEvent.focus(combo())
+    await waitFor(() => expect(screen.getByText(LABELS.loading)).toBeTruthy())
   })
 
-  test('settled-but-empty state pins labels.empty on the disabled trigger', async () => {
-    mockRows([row('only')])
+  test('settled-but-empty shows labels.empty', async () => {
+    mockRows([])
     wrap(
       <ResourcePicker<Row>
-        value={['only']}
+        {...baseProps}
+        value={[]}
         onChange={() => {}}
         queryKey={['rp-test', 'empty']}
         endpoint="/api/rows"
-        labelFn={(r) => r.name}
-        labels={LABELS}
       />,
     )
-    const trigger = (await waitFor(() => screen.getByRole('combobox'))) as HTMLButtonElement
-    await waitFor(() => expect(trigger.textContent).toContain(LABELS.empty))
-    expect(trigger.disabled).toBe(true)
+    fireEvent.focus(await waitFor(() => screen.getByRole('combobox')))
+    await waitFor(() => expect(screen.getByText(LABELS.empty)).toBeTruthy())
   })
 
-  test('load failure hides the dropdown and shows labels.loadFailed', async () => {
+  test('load failure shows labels.loadFailed and still allows free-text add', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ ok: false, code: 'boom' }), {
+      new Response(JSON.stringify({ ok: false }), {
         status: 502,
         headers: { 'content-type': 'application/json' },
       }),
     )
+    const onChange = vi.fn()
     wrap(
       <ResourcePicker<Row>
+        {...baseProps}
         value={[]}
-        onChange={() => {}}
+        onChange={onChange}
         queryKey={['rp-test', 'failed']}
         endpoint="/api/rows"
-        labelFn={(r) => r.name}
-        labels={LABELS}
       />,
     )
     await waitFor(() => screen.getByText(LABELS.loadFailed))
-    expect(screen.queryByRole('combobox')).toBeNull()
+    // The combobox still works: type a name and commit it (allowCustom).
+    const input = combo()
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'typed' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onChange).toHaveBeenCalledWith(['typed'])
   })
 
-  test('testid lands on the Select trigger', async () => {
+  test('testid lands on the combobox input', async () => {
     mockRows([row('a')])
     wrap(
       <ResourcePicker<Row>
+        {...baseProps}
         value={[]}
         onChange={() => {}}
         queryKey={['rp-test', 'testid']}
         endpoint="/api/rows"
-        labelFn={(r) => r.name}
         testid="rp-under-test"
-        labels={LABELS}
       />,
     )
-    const trigger = await waitFor(() => screen.getByTestId('rp-under-test'))
-    expect(trigger).toBe(screen.getByRole('combobox'))
+    const el = await waitFor(() => screen.getByTestId('rp-under-test'))
+    expect(el).toBe(screen.getByRole('combobox'))
   })
 })

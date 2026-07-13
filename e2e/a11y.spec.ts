@@ -152,6 +152,20 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     await expectNoCriticalOrSeriousAxeViolations(page, '/agents/new')
     await page.getByRole('tab', { name: 'Advanced', exact: true }).click()
     await expectNoCriticalOrSeriousAxeViolations(page, '/agents/new (Advanced tab)')
+
+    // RFC-173 — the Resources & deps tab now hosts the <MultiSelect> tag
+    // comboboxes. Scan the two-group panel, then open a picker (with a selected
+    // tag) so axe also covers the portaled listbox + chip remove buttons — the
+    // nested-button risk lives exactly here.
+    await page.getByRole('tab', { name: /Resources/ }).click()
+    await expectNoCriticalOrSeriousAxeViolations(page, '/agents/new (Resources tab)')
+    const skills = page.getByRole('combobox', { name: 'Skills' })
+    await skills.click()
+    await skills.fill('demo-skill')
+    await skills.press('Enter') // free-text add → a removable tag
+    await skills.click() // reopen the listbox
+    await expect(page.getByRole('listbox')).toBeVisible()
+    await expectNoCriticalOrSeriousAxeViolations(page, '/agents/new (Resources picker open)')
   })
 
   test('/workflows list passes a11y', async ({ page }) => {

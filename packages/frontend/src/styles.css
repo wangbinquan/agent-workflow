@@ -12993,3 +12993,71 @@ mark.comment-anchor[data-active='true'] {
 .split-card__version {
   font-size: var(--font-xs);
 }
+
+/* =============================================================================
+   RFC-173 — resource <MultiSelect> + two-group "resources & deps" layout
+   ============================================================================= */
+
+/* Field icon slot (<Field icon={…}>) — leading inline icon before the label. */
+.form-field__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.form-field__icon {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+/* Two labelled groups: Capabilities (skills/MCP/plugins) · Dependencies (agents). */
+.resource-group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.resource-group + .resource-group {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.resource-group__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.resource-group__icon {
+  display: inline-flex;
+  color: var(--accent);
+}
+.resource-group__title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+}
+.resource-group__hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* MultiSelect: the field reuses .chips-input__row chrome; the portaled listbox
+   and its option rows reuse the .select__* base classes (the elements carry
+   both class names), so only the trigger/token bits are new here. */
+.multi-select {
+  position: relative;
+}
+.multi-select__field {
+  cursor: text;
+}
+.multi-select__field:focus-within {
+  border-color: var(--accent);
+}
+.multi-select__field .select__chevron {
+  margin-left: auto;
+}
+.multi-select[data-open='true'] .select__chevron {
+  transform: rotate(180deg);
+}
+.multi-select__add-custom {
+  color: var(--accent);
+}

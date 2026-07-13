@@ -8,9 +8,10 @@
 // Accessibility: role=combobox + aria-controls/expanded + role=listbox /
 // option + arrow-key + Home/End + Enter/Space + Esc.
 
-import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+import { usePopoverPosition } from '@/hooks/usePopoverPosition'
 
 export interface SelectOption<V extends string> {
   value: V
@@ -86,31 +87,9 @@ export function Select<V extends string>(props: Props<V>) {
   const listRef = useRef<HTMLUListElement>(null)
   const popoverId = useId()
   const labelId = useId()
-  const [popPos, setPopPos] = useState<{ left: number; top: number; width: number } | null>(null)
-
-  // Recompute popover position relative to the viewport each time the
-  // dropdown opens, and on every scroll/resize while open. Uses
-  // window-scroll coords so we don't have to chase ancestor offsets.
-  useLayoutEffect(() => {
-    if (!open) return
-    function recompute() {
-      const t = triggerRef.current
-      if (!t) return
-      const r = t.getBoundingClientRect()
-      setPopPos({
-        left: r.left + window.scrollX,
-        top: r.bottom + window.scrollY + 4,
-        width: r.width,
-      })
-    }
-    recompute()
-    window.addEventListener('scroll', recompute, true)
-    window.addEventListener('resize', recompute)
-    return () => {
-      window.removeEventListener('scroll', recompute, true)
-      window.removeEventListener('resize', recompute)
-    }
-  }, [open])
+  // RFC-173 (T1): portal positioning extracted to the shared hook (was a
+  // byte-identical copy here and in UserPicker).
+  const popPos = usePopoverPosition(triggerRef, open)
 
   const current = useMemo(
     () => props.options.find((o) => o.value === props.value),

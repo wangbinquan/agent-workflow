@@ -33,6 +33,14 @@ import { Select } from './Select'
 import { SkillsPicker } from './SkillsPicker'
 import { TabBar, type TabDef } from './TabBar'
 import { TabPanels } from './split/TabPanels'
+import {
+  AGENT_ICON,
+  CAP_ICON,
+  DEP_ICON,
+  MCP_ICON,
+  PLUGIN_ICON,
+  SKILL_ICON,
+} from './icons/resourceIcons'
 
 export interface AgentFormProps {
   value: CreateAgent
@@ -218,54 +226,103 @@ export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
 
   const resources = (
     <>
-      <Field label={t('agentForm.fieldSkills')} hint={t('agentForm.fieldSkillsHint')}>
-        <SkillsPicker
-          value={value.skills ?? []}
-          onChange={(v) => patch('skills', v)}
-          placeholder={t('agentForm.fieldSkillsPlaceholder')}
-        />
-      </Field>
+      {/* RFC-173: two labelled groups so the two kinds of relationship read
+          clearly — "capabilities" (skills/MCP/plugins injected into the agent's
+          process) vs "dependencies" (other agents it can delegate to). Each
+          Field passes `group` so it renders a <div>, not a <label> (the pickers
+          contain buttons — a <label> would bind to the first one). */}
+      <section className="resource-group" aria-labelledby="agent-rg-capabilities">
+        <header className="resource-group__header">
+          <span className="resource-group__icon" aria-hidden="true">
+            {CAP_ICON}
+          </span>
+          <span id="agent-rg-capabilities" className="resource-group__title">
+            {t('agentForm.groupCapabilities')}
+          </span>
+          <span className="resource-group__hint">{t('agentForm.groupCapabilitiesHint')}</span>
+        </header>
 
-      <Field label={t('agentForm.fieldMcps')} hint={t('agentForm.fieldMcpsHint')}>
-        <McpsPicker
-          value={value.mcp ?? []}
-          onChange={(v) => patch('mcp', v)}
-          placeholder={t('agentForm.fieldMcpsPlaceholder')}
-        />
-      </Field>
+        <Field
+          group
+          icon={SKILL_ICON}
+          label={t('agentForm.fieldSkills')}
+          hint={t('agentForm.fieldSkillsHint')}
+        >
+          <SkillsPicker
+            value={value.skills ?? []}
+            onChange={(v) => patch('skills', v)}
+            placeholder={t('agentForm.fieldSkillsPlaceholder')}
+          />
+        </Field>
 
-      <Field label={t('agentForm.fieldPlugins')} hint={t('agentForm.fieldPluginsHint')}>
-        <PluginsPicker
-          value={value.plugins ?? []}
-          onChange={(v) => patch('plugins', v)}
-          placeholder={t('agentForm.fieldPluginsPlaceholder')}
-        />
-      </Field>
+        <Field
+          group
+          icon={MCP_ICON}
+          label={t('agentForm.fieldMcps')}
+          hint={t('agentForm.fieldMcpsHint')}
+        >
+          <McpsPicker
+            value={value.mcp ?? []}
+            onChange={(v) => patch('mcp', v)}
+            placeholder={t('agentForm.fieldMcpsPlaceholder')}
+          />
+        </Field>
 
-      <Field label={t('agentForm.fieldDependsOn')} hint={t('agentForm.fieldDependsOnHint')}>
-        <AgentDependsPicker
-          value={value.dependsOn ?? []}
-          onChange={(v) => patch('dependsOn', v)}
+        <Field
+          group
+          icon={PLUGIN_ICON}
+          label={t('agentForm.fieldPlugins')}
+          hint={t('agentForm.fieldPluginsHint')}
+        >
+          <PluginsPicker
+            value={value.plugins ?? []}
+            onChange={(v) => patch('plugins', v)}
+            placeholder={t('agentForm.fieldPluginsPlaceholder')}
+          />
+        </Field>
+      </section>
+
+      <section className="resource-group" aria-labelledby="agent-rg-dependencies">
+        <header className="resource-group__header">
+          <span className="resource-group__icon" aria-hidden="true">
+            {DEP_ICON}
+          </span>
+          <span id="agent-rg-dependencies" className="resource-group__title">
+            {t('agentForm.groupDependencies')}
+          </span>
+          <span className="resource-group__hint">{t('agentForm.groupDependenciesHint')}</span>
+        </header>
+
+        <Field
+          group
+          icon={AGENT_ICON}
+          label={t('agentForm.fieldDependsOn')}
+          hint={t('agentForm.fieldDependsOnHint')}
+        >
+          <AgentDependsPicker
+            value={value.dependsOn ?? []}
+            onChange={(v) => patch('dependsOn', v)}
+            selfName={value.name}
+            placeholder={t('agentForm.fieldDependsOnPlaceholder')}
+          />
+        </Field>
+
+        <DependencyAutodetectButton
+          bodyMd={value.bodyMd ?? ''}
+          value={value}
           selfName={value.name}
-          placeholder={t('agentForm.fieldDependsOnPlaceholder')}
+          onApply={(selection) => onChange(mergeAgentDeps(value, selection))}
         />
-      </Field>
 
-      <DependencyAutodetectButton
-        bodyMd={value.bodyMd ?? ''}
-        value={value}
-        selfName={value.name}
-        onApply={(selection) => onChange(mergeAgentDeps(value, selection))}
-      />
-
-      {/* RFC-169: the dependency-tree preview joins the resources tab (its own
-          RFC-155 section is retired). Clicking a node navigates to that agent —
-          the split page's unsaved guard intercepts a dirty draft, as intended. */}
-      <DependencyTreePreview
-        name={value.name}
-        dependsOn={value.dependsOn ?? []}
-        onNodeClick={(n) => navigate({ to: '/agents/$name', params: { name: n } })}
-      />
+        {/* RFC-169: the dependency-tree preview joins the resources tab (its own
+            RFC-155 section is retired). Clicking a node navigates to that agent —
+            the split page's unsaved guard intercepts a dirty draft, as intended. */}
+        <DependencyTreePreview
+          name={value.name}
+          dependsOn={value.dependsOn ?? []}
+          onNodeClick={(n) => navigate({ to: '/agents/$name', params: { name: n } })}
+        />
+      </section>
     </>
   )
 

@@ -1,8 +1,9 @@
-// RFC-022 — AgentDependsPicker. Locks the dropdown's contract:
-//   1. lists every existing agent in /api/agents minus the ones already chosen
-//   2. filters out `selfName` (save-time guard rejects self-references; we
-//      shouldn't even offer it as an option)
-//   3. selecting an option calls onChange with the picked name appended
+// RFC-022 → RFC-173 T3 — AgentDependsPicker over <MultiSelect>. Contract:
+//   1. lists every existing agent in /api/agents (selected shown CHECKED, not
+//      filtered out — RFC-173 §3.2)
+//   2. still excludes `selfName` from the offer (self-ref save-time rejection)
+//   3. toggling an option appends the picked name via onChange
+//   4. load failure keeps the combobox usable (free-text)
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -53,51 +54,55 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  // Unmount via testing-library first — the Select listbox is portaled to
-  // document.body, so wiping innerHTML before cleanup() races React's
-  // removeChild and crashes happy-dom.
   cleanup()
   vi.restoreAllMocks()
 })
 
-// The picker dropdown is the shared <Select> (RFC-036): role=combobox trigger
-// + portaled role=listbox. Open it once the list query settles.
 async function openPicker() {
-  const trigger = (await waitFor(() => screen.getByRole('combobox'))) as HTMLButtonElement
-  await waitFor(() => expect(trigger.disabled).toBe(false))
-  fireEvent.click(trigger)
-  return screen.getByRole('listbox')
+  const input = (await waitFor(() => screen.getByRole('combobox'))) as HTMLInputElement
+  fireEvent.focus(input)
+  const list = screen.getByRole('listbox')
+  await waitFor(() => within(list).getAllByRole('option'))
+  return list
 }
 
-function optionLabels(list: HTMLElement): string[] {
+// A checked row's textContent carries a trailing '✓' from the check indicator;
+// strip it so name comparisons stay exact.
+function optionTexts(list: HTMLElement): string[] {
   return within(list)
     .getAllByRole('option')
-    .map((o) => o.textContent ?? '')
+    .map((o) => (o.textContent ?? '').replace(/✓/g, ''))
 }
 
 describe('AgentDependsPicker', () => {
-  test('lists every agent not yet selected', async () => {
+  test('lists every agent', async () => {
     mockAgents([fakeAgent('alpha'), fakeAgent('beta'), fakeAgent('gamma')])
     wrap(<AgentDependsPicker value={[]} onChange={() => {}} />)
     const list = await openPicker()
-    expect(optionLabels(list)).toEqual(['alpha', 'beta', 'gamma'])
+    expect(optionTexts(list)).toEqual(expect.arrayContaining(['alpha', 'beta', 'gamma']))
   })
 
-  test('selfName is filtered out of the dropdown (self-ref save-time rejection)', async () => {
+  test('selfName is excluded from the offer (self-ref save-time rejection)', async () => {
     mockAgents([fakeAgent('orchestrator'), fakeAgent('auditor'), fakeAgent('runner')])
     wrap(<AgentDependsPicker value={[]} onChange={() => {}} selfName="orchestrator" />)
     const list = await openPicker()
-    expect(optionLabels(list)).toEqual(['auditor', 'runner'])
+    const texts = optionTexts(list)
+    expect(texts).toEqual(expect.arrayContaining(['auditor', 'runner']))
+    expect(texts).not.toContain('orchestrator')
   })
 
-  test('already-selected names are filtered out (no duplicates offered)', async () => {
+  test('already-selected names stay in the dropdown, CHECKED', async () => {
     mockAgents([fakeAgent('a'), fakeAgent('b'), fakeAgent('c')])
     wrap(<AgentDependsPicker value={['b']} onChange={() => {}} />)
     const list = await openPicker()
-    expect(optionLabels(list)).toEqual(['a', 'c'])
+    expect(optionTexts(list)).toEqual(expect.arrayContaining(['a', 'b', 'c']))
+    const b = within(list)
+      .getAllByRole('option')
+      .find((o) => (o.textContent ?? '').replace(/✓/g, '') === 'b')!
+    expect(b.getAttribute('aria-selected')).toBe('true')
   })
 
-  test('selecting an option appends it via onChange', async () => {
+  test('toggling an option appends it via onChange', async () => {
     mockAgents([fakeAgent('a'), fakeAgent('b')])
     const onChange = vi.fn()
     wrap(<AgentDependsPicker value={['existing']} onChange={onChange} />)
@@ -106,7 +111,7 @@ describe('AgentDependsPicker', () => {
     expect(onChange).toHaveBeenCalledWith(['existing', 'b'])
   })
 
-  test('load failure hides dropdown and surfaces muted error message', async () => {
+  test('load failure keeps the combobox and surfaces the muted error', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ ok: false, code: 'boom' }), {
         status: 502,
@@ -115,6 +120,6 @@ describe('AgentDependsPicker', () => {
     )
     wrap(<AgentDependsPicker value={[]} onChange={() => {}} />)
     await waitFor(() => screen.getByText(/Failed to load agent list/i))
-    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(screen.queryByRole('combobox')).toBeTruthy()
   })
 })

@@ -26,13 +26,14 @@ export function McpsPicker({ value, onChange, placeholder }: Props) {
       onChange={onChange}
       queryKey={MCPS_QUERY_KEY}
       endpoint="/api/mcps"
-      labelFn={(m) => (m.description ? `${m.name} — ${m.description}` : m.name)}
+      labelFn={(m) => m.name}
+      descriptionFn={(m) => m.description ?? undefined}
+      ariaLabel={t('agentForm.fieldMcps')}
       placeholder={placeholder}
       testid="mcps-picker-select"
       labels={{
         loading: t('agentForm.mcpsPickerLoading'),
         empty: t('agentForm.mcpsPickerEmpty'),
-        pick: t('agentForm.mcpsPickerLabel'),
         loadFailed: t('agentForm.mcpsPickerLoadFailed'),
       }}
     />

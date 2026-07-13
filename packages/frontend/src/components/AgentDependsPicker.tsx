@@ -28,13 +28,14 @@ export function AgentDependsPicker({ value, onChange, selfName, placeholder }: P
       onChange={onChange}
       queryKey={AGENTS_QUERY_KEY}
       endpoint="/api/agents"
-      filter={(a, existing) => !existing.has(a.name) && a.name !== selfName}
-      labelFn={(a) => (a.description ? `${a.name} — ${a.description}` : a.name)}
+      filter={(a) => a.name !== selfName}
+      labelFn={(a) => a.name}
+      descriptionFn={(a) => a.description ?? undefined}
+      ariaLabel={t('agentForm.fieldDependsOn')}
       placeholder={placeholder}
       labels={{
         loading: t('agentForm.dependsPickerLoading'),
         empty: t('agentForm.dependsPickerEmpty'),
-        pick: t('agentForm.dependsPickerLabel'),
         loadFailed: t('agentForm.dependsPickerLoadFailed'),
       }}
     />

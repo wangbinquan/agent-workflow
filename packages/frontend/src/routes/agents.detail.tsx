@@ -52,14 +52,8 @@ function AgentDetailPage() {
   useReportSplitDirty(name, dirty)
 
   const save = useMutation({
-    mutationFn: (submitted: CreateAgent) => {
-      const { name: _drop, ...rest } = submitted
-      // RFC-115: send explicit `runtime: null` when inheriting so a PUT can
-      // CLEAR a previously-pinned runtime (a bare undefined is dropped by
-      // JSON.stringify → updateAgent reads it as "leave untouched").
-      const patch = { ...rest, runtime: submitted.runtime ?? null }
-      return api.put<Agent>(`/api/agents/${encodeURIComponent(name)}`, patch)
-    },
+    mutationFn: (submitted: CreateAgent) =>
+      api.put<Agent>(`/api/agents/${encodeURIComponent(name)}`, agentToPutBody(submitted)),
     onSuccess: async (saved, submitted) => {
       // Detail fence (R3-P1-2): cancel any in-flight detail GET before writing
       // saved, else a stale GET could land after and clobber it.
@@ -185,4 +179,19 @@ export function agentToDraft(a: Agent): CreateAgent {
   // value); the guard keeps hand-built agents without the field lossless too.
   if (a.inputs !== undefined) out.inputs = a.inputs
   return out
+}
+
+/**
+ * RFC-173 (T5) — the PUT body sent by the save mutation, extracted as a pure
+ * function so the wire shape is unit-testable (AC-7: skills/mcp/plugins/
+ * dependsOn must survive the resource-picker rewrite untouched). Drops `name`
+ * (it's in the URL) and sends explicit `runtime: null` when inheriting so a PUT
+ * can CLEAR a previously-pinned runtime (RFC-115; a bare undefined is dropped by
+ * JSON.stringify → updateAgent would read it as "leave untouched").
+ */
+export function agentToPutBody(submitted: CreateAgent): Omit<CreateAgent, 'name' | 'runtime'> & {
+  runtime: string | null
+} {
+  const { name: _drop, ...rest } = submitted
+  return { ...rest, runtime: submitted.runtime ?? null }
 }

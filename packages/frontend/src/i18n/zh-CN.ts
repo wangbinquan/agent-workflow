@@ -750,6 +750,11 @@ export interface Resources {
     startedAt: string
     finishedAt: string
   }
+  // RFC-173: shared <MultiSelect> tag combobox (resource pickers).
+  multiSelect: {
+    empty: string
+    addCustom: string
+  }
   splitPage: {
     dirtyDot: string
     unsavedTitle: string
@@ -1970,31 +1975,31 @@ export interface Resources {
     outputKind_string: string
     outputKind_markdown: string
     outputKind_markdown_file: string
+    groupCapabilities: string
+    groupCapabilitiesHint: string
+    groupDependencies: string
+    groupDependenciesHint: string
     fieldSkills: string
     fieldSkillsHint: string
     fieldSkillsPlaceholder: string
-    skillsPickerLabel: string
     skillsPickerLoading: string
     skillsPickerEmpty: string
     skillsPickerLoadFailed: string
     fieldDependsOn: string
     fieldDependsOnHint: string
     fieldDependsOnPlaceholder: string
-    dependsPickerLabel: string
     dependsPickerLoading: string
     dependsPickerEmpty: string
     dependsPickerLoadFailed: string
     fieldMcps: string
     fieldMcpsHint: string
     fieldMcpsPlaceholder: string
-    mcpsPickerLabel: string
     mcpsPickerLoading: string
     mcpsPickerEmpty: string
     mcpsPickerLoadFailed: string
     fieldPlugins: string
     fieldPluginsHint: string
     fieldPluginsPlaceholder: string
-    pluginsPickerLabel: string
     pluginsPickerLoading: string
     pluginsPickerEmpty: string
     pluginsPickerLoadFailed: string
@@ -3499,6 +3504,11 @@ export const zhCN: Resources = {
     startedAt: '开始时间',
     finishedAt: '完成时间',
   },
+  // RFC-173：共享 <MultiSelect> 标签多选框（资源选择器）。
+  multiSelect: {
+    empty: '无可选项',
+    addCustom: '添加「{{token}}」',
+  },
   // RFC-169：资源页双栏骨架（脏标记 + 未保存守卫 + 空态引导）。
   splitPage: {
     dirtyDot: '有未保存修改',
@@ -4861,36 +4871,36 @@ export const zhCN: Resources = {
     outputKind_string: '字符串',
     outputKind_markdown: 'Markdown 正文',
     outputKind_markdown_file: 'Markdown 文件路径',
+    groupCapabilities: '能力',
+    groupCapabilitiesHint: '注入到该代理进程内、供其调用',
+    groupDependencies: '依赖',
+    groupDependenciesHint: '该代理可委派调用的其他代理',
     fieldSkills: '技能',
     fieldSkillsHint: '框架运行时注入的技能名。',
     fieldSkillsPlaceholder: '输入技能名后按 Enter',
-    skillsPickerLabel: '从已有技能中选择…',
     skillsPickerLoading: '加载中…',
-    skillsPickerEmpty: '暂无可选技能（已全部添加 / 仓库为空）',
-    skillsPickerLoadFailed: '加载技能列表失败；仍可在下方手动输入。',
+    skillsPickerEmpty: '暂无可选技能（尚无可用项）',
+    skillsPickerLoadFailed: '加载技能列表失败；仍可直接输入。',
     fieldDependsOn: '依赖的其他代理',
     fieldDependsOnHint:
       '运行时会把这些代理（递归含它们的依赖）以及它们的技能一并加载进同一个 opencode 子进程，主代理可以通过 task / subagent 工具调用它们。',
     fieldDependsOnPlaceholder: '输入代理名后按 Enter',
-    dependsPickerLabel: '从已有代理中选择…',
     dependsPickerLoading: '加载中…',
-    dependsPickerEmpty: '暂无可选代理（已全部添加 / 仓库为空）',
-    dependsPickerLoadFailed: '加载代理列表失败；仍可在下方手动输入。',
-    fieldMcps: 'MCP 依赖',
+    dependsPickerEmpty: '暂无可选代理（尚无可用项）',
+    dependsPickerLoadFailed: '加载代理列表失败；仍可直接输入。',
+    fieldMcps: 'MCP 服务',
     fieldMcpsHint: '该 agent 启动时按 dependsOn 闭包合并注入。详细规则见 OPENCODE_CONFIG.md §3.3。',
     fieldMcpsPlaceholder: '输入 MCP 名后按 Enter',
-    mcpsPickerLabel: '从已登记的 MCP 中选择…',
     mcpsPickerLoading: '加载中…',
-    mcpsPickerEmpty: '暂无可选 MCP（已全部添加 / 仓库为空）',
-    mcpsPickerLoadFailed: '加载 MCP 列表失败；仍可在下方手动输入。',
-    fieldPlugins: 'Plugin 依赖',
+    mcpsPickerEmpty: '暂无可选 MCP（尚无可用项）',
+    mcpsPickerLoadFailed: '加载 MCP 列表失败；仍可直接输入。',
+    fieldPlugins: '插件',
     fieldPluginsHint:
       '名称需对应 /plugins 中已登记的插件。runner 在闭包合并后以 file://<cachedPath> 注入到 OPENCODE_CONFIG_CONTENT.plugin，spawn 阶段零联网。',
     fieldPluginsPlaceholder: '输入插件名后按 Enter',
-    pluginsPickerLabel: '从已登记的插件中选择…',
     pluginsPickerLoading: '加载中…',
-    pluginsPickerEmpty: '暂无可选插件（已全部添加 / 仓库为空）',
-    pluginsPickerLoadFailed: '加载插件列表失败；仍可在下方手动输入。',
+    pluginsPickerEmpty: '暂无可选插件（尚无可用项）',
+    pluginsPickerLoadFailed: '加载插件列表失败；仍可直接输入。',
     fieldSyncOutputsOnIterate: '文档迭代期间是否同步刷新本代理生成的其他文档',
     fieldSyncOutputsOnIterateHint:
       '仅当本代理 outputs 含 ≥ 2 个 markdown / markdown_file 时实际生效；关闭则在用户点"返回修改"时只重生被评审的那一份，其他文档沿用上一版本。',

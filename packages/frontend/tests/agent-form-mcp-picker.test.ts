@@ -76,7 +76,8 @@ describe('RFC-028 T10 — AgentForm i18n parity', () => {
       'fieldMcps:',
       'fieldMcpsHint:',
       'fieldMcpsPlaceholder:',
-      'mcpsPickerLabel:',
+      // RFC-173 D6: mcpsPickerLabel (the old "pick from existing…" dropdown
+      // label) was deleted — MultiSelect has no separate pick-trigger text.
       'mcpsPickerLoading:',
       'mcpsPickerEmpty:',
       'mcpsPickerLoadFailed:',

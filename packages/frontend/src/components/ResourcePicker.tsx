@@ -1,67 +1,61 @@
-// RFC-151 PR-2 — configurable "pick an existing resource" widget.
+// RFC-151 PR-2 → RFC-173 T3 — configurable "pick existing resources" widget.
 //
 // One shared implementation behind SkillsPicker / McpsPicker / PluginsPicker /
-// AgentDependsPicker (previously four byte-similar copies of the same
-// Select-above-ChipsInput form). The wrappers stay as thin config shells so
-// their call sites and behavior tests keep working unchanged.
+// AgentDependsPicker. RFC-173 replaced the old "single Select above a
+// ChipsInput" two-zone form with a single <MultiSelect> tag combobox (selected
+// items are inline removable tags; a searchable checkbox dropdown toggles
+// more). The wrappers stay thin config shells.
 //
-// Shape (identical to the historical pickers):
-//   - one-shot "add to list" dropdown: value stays "" so the trigger always
-//     shows the picker label; picking a row appends it to the chips.
-//   - falls back to a plain ChipsInput when the list query fails, so the
-//     hosting form stays usable even if the daemon endpoint is broken.
-//
-// NOT for UserPicker — that is an async-search combobox, a different form
-// (RFC-151 D2).
+// filter semantics (RFC-173 §3.2): `filter` is now an ELIGIBILITY predicate —
+// which rows may be ADDED. Already-selected values are always kept in the
+// dropdown (checked, uncheckable) so an item that later loses eligibility
+// (a disabled plugin, a self-referencing agent) can still be un-checked. The
+// old "exclude already selected" clause is gone (selection is shown, not
+// hidden). Value identity is always `item.name` (the former `nameOf`
+// generalization is removed — no caller used it, and it risked showing a
+// machine id as a tag when value ≠ label).
 
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { api } from '@/api/client'
-import { ChipsInput } from './ChipsInput'
-import { Select } from './Select'
+import { MultiSelect, type MultiSelectOption } from './MultiSelect'
 
-/** Per-resource label strings (already resolved through i18n by the wrapper —
- *  the shared picker itself is i18n-agnostic). */
+/** Per-resource label strings (already resolved through i18n by the wrapper). */
 export interface ResourcePickerLabels {
-  /** Trigger text while the list query is in flight. */
+  /** Dropdown row shown while the list query is in flight. */
   loading: string
-  /** Trigger text when no options remain after filtering. */
+  /** Dropdown row shown when no options are available. */
   empty: string
-  /** Trigger text when there is something to pick. */
-  pick: string
-  /** Muted message shown under the chips when the list query failed. */
+  /** Muted message under the field when the list query failed. */
   loadFailed: string
 }
 
-export interface ResourcePickerProps<T> {
+export interface ResourcePickerProps<T extends { name: string }> {
   value: string[]
   onChange: (next: string[]) => void
   /** React Query cache key for the resource list (share it with the list page). */
   queryKey: readonly unknown[]
   /** GET endpoint returning `T[]` (e.g. '/api/skills'). */
   endpoint: string
-  /** Renders one dropdown row's label. */
+  /** Renders one row's short title (→ tag text + dropdown title). */
   labelFn: (item: T) => string
-  /** Which rows are offered. Defaults to `!existing.has(nameOf(item))`. */
-  filter?: (item: T, existing: ReadonlySet<string>) => boolean
-  /** Extracts the committed identity of a row. Defaults to `item.name`. */
-  nameOf?: (item: T) => string
-  /** Passed through to the ChipsInput free-text entry. */
+  /** Renders one row's muted second line (optional). */
+  descriptionFn?: (item: T) => string | undefined
+  /** Eligibility predicate — which rows may be ADDED (default: all). Selected
+   *  rows are always shown checked regardless of this. */
+  filter?: (item: T) => boolean
+  /** Accessible name for the combobox input (the hosting Field uses `group`,
+   *  so it renders a <div>, not a <label> — the input needs its own name). */
+  ariaLabel: string
+  /** ChipsInput-style free-text placeholder when nothing is selected. */
   placeholder?: string
-  /** data-testid for the dropdown trigger (Select passthrough). */
+  /** data-testid forwarded to the combobox input. */
   testid?: string
   labels: ResourcePickerLabels
 }
 
-function defaultNameOf<T>(item: T): string {
-  // Every current resource row (skill / mcp / plugin / agent) carries `name`;
-  // callers with a different identity field must pass `nameOf` explicitly.
-  return (item as { name: string }).name
-}
-
-export function ResourcePicker<T>(props: ResourcePickerProps<T>) {
+export function ResourcePicker<T extends { name: string }>(props: ResourcePickerProps<T>) {
   const { value, onChange, labels } = props
-  const nameOf = props.nameOf ?? defaultNameOf<T>
   const list = useQuery<T[]>({
     queryKey: props.queryKey,
     queryFn: ({ signal }) => api.get(props.endpoint, undefined, signal),
@@ -69,47 +63,41 @@ export function ResourcePicker<T>(props: ResourcePickerProps<T>) {
     retry: false,
   })
 
-  const filter = props.filter
-  const available = useMemo(() => {
-    const existing: ReadonlySet<string> = new Set(value)
-    const pass =
-      filter ?? ((item: T, exist: ReadonlySet<string>): boolean => !exist.has(nameOf(item)))
-    return (list.data ?? []).filter((item) => pass(item, existing))
-  }, [list.data, value, filter, nameOf])
+  const eligible = props.filter
+  const options = useMemo<MultiSelectOption[]>(() => {
+    const selected = new Set(value)
+    const pass = eligible ?? (() => true)
+    return (list.data ?? [])
+      .filter((item) => pass(item) || selected.has(item.name))
+      .map((item) => ({
+        value: item.name,
+        label: props.labelFn(item),
+        description: props.descriptionFn?.(item),
+      }))
+    // labelFn/descriptionFn are stable module fns in practice; keying on the
+    // data + value is enough to recompute options.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list.data, value, eligible])
 
   const failed = list.error !== null && list.error !== undefined
 
-  // The dropdown is a one-shot "add to list" action: value stays "" so the
-  // trigger always shows the picker label; picking a row appends it and the
-  // controlled value="" pins the trigger back to the label on re-render.
-  const pickerLabel = list.isLoading
-    ? labels.loading
-    : available.length === 0
-      ? labels.empty
-      : labels.pick
-
   return (
     <div>
-      {!failed && (
-        <div style={{ marginBottom: 6 }}>
-          <Select<string>
-            value=""
-            placeholder={pickerLabel}
-            ariaLabel={pickerLabel}
-            disabled={list.isLoading || available.length === 0}
-            data-testid={props.testid}
-            options={available.map((item) => ({
-              value: nameOf(item),
-              label: props.labelFn(item),
-            }))}
-            onChange={(name) => {
-              if (name === '' || value.includes(name)) return
-              onChange([...value, name])
-            }}
-          />
-        </div>
-      )}
-      <ChipsInput value={value} onChange={onChange} placeholder={props.placeholder} />
+      <MultiSelect
+        value={value}
+        onChange={onChange}
+        options={options}
+        ariaLabel={props.ariaLabel}
+        placeholder={props.placeholder}
+        searchable
+        // Keep the historical free-text ability: type a name not in the list
+        // (forward-reference) or add one when the list endpoint is down.
+        allowCustom
+        loading={list.isLoading}
+        loadingLabel={labels.loading}
+        emptyLabel={labels.empty}
+        data-testid={props.testid}
+      />
       {failed && (
         <p style={{ marginTop: 4, marginBottom: 0, fontSize: 12 }} className="muted">
           {labels.loadFailed}

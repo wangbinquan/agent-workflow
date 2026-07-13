@@ -16,11 +16,12 @@
 // "inside the dialog" (Dialog.tsx isFocusInsideDialog).
 
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { UserPublic } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { usePopoverPosition } from '@/hooks/usePopoverPosition'
 
 interface UserPickerProps {
   value: UserPublic[]
@@ -51,35 +52,16 @@ export function UserPicker({
   const listRef = useRef<HTMLUListElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const listId = useId()
-  const [popPos, setPopPos] = useState<{ left: number; top: number; width: number } | null>(null)
 
   useEffect(() => {
     const handle = setTimeout(() => setDebounced(input.trim()), 200)
     return () => clearTimeout(handle)
   }, [input])
 
-  // Position the portaled list under the field; track scroll/resize while
-  // open (mirror of Select.tsx — window-scroll coords, no ancestor chasing).
-  useLayoutEffect(() => {
-    if (!open) return
-    function recompute() {
-      const el = rootRef.current
-      if (el === null) return
-      const r = el.getBoundingClientRect()
-      setPopPos({
-        left: r.left + window.scrollX,
-        top: r.bottom + window.scrollY + 4,
-        width: r.width,
-      })
-    }
-    recompute()
-    window.addEventListener('scroll', recompute, true)
-    window.addEventListener('resize', recompute)
-    return () => {
-      window.removeEventListener('scroll', recompute, true)
-      window.removeEventListener('resize', recompute)
-    }
-  }, [open])
+  // RFC-173 (T1): portal positioning extracted to the shared hook (was a
+  // byte-identical copy here and in Select). Anchors from the whole field
+  // (rootRef) so the list tracks the chip row's bottom edge.
+  const popPos = usePopoverPosition(rootRef, open)
 
   // Close on outside click — outside means outside BOTH the field and the
   // portaled list (the list lives on document.body, not under rootRef).

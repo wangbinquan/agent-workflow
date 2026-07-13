@@ -26,18 +26,23 @@ export function PluginsPicker({ value, onChange, placeholder }: Props) {
       queryKey={PLUGINS_QUERY_KEY}
       endpoint="/api/plugins"
       // Only offer enabled plugins; the save-time guard rejects references to
-      // disabled rows so suggesting them would mislead the operator.
-      filter={(p, existing) => p.enabled && !existing.has(p.name)}
-      labelFn={(p) =>
-        (p.description ? `${p.name} — ${p.description}` : p.name) +
-        (p.resolvedVersion !== null ? ` (${p.resolvedVersion})` : '')
-      }
+      // disabled rows so suggesting them would mislead the operator. (A plugin
+      // that was selected and later disabled still shows — checked — via the
+      // ResourcePicker union, so it can be un-checked.)
+      filter={(p) => p.enabled}
+      labelFn={(p) => p.name}
+      descriptionFn={(p) => {
+        const parts: string[] = []
+        if (p.description) parts.push(p.description)
+        if (p.resolvedVersion !== null) parts.push(`v${p.resolvedVersion}`)
+        return parts.length > 0 ? parts.join(' · ') : undefined
+      }}
+      ariaLabel={t('agentForm.fieldPlugins')}
       placeholder={placeholder}
       testid="plugins-picker-select"
       labels={{
         loading: t('agentForm.pluginsPickerLoading'),
         empty: t('agentForm.pluginsPickerEmpty'),
-        pick: t('agentForm.pluginsPickerLabel'),
         loadFailed: t('agentForm.pluginsPickerLoadFailed'),
       }}
     />

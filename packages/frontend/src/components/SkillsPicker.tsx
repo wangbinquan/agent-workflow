@@ -25,12 +25,13 @@ export function SkillsPicker({ value, onChange, placeholder }: Props) {
       onChange={onChange}
       queryKey={SKILLS_QUERY_KEY}
       endpoint="/api/skills"
-      labelFn={(s) => (s.description ? `${s.name} — ${s.description}` : s.name)}
+      labelFn={(s) => s.name}
+      descriptionFn={(s) => s.description ?? undefined}
+      ariaLabel={t('agentForm.fieldSkills')}
       placeholder={placeholder}
       labels={{
         loading: t('agentForm.skillsPickerLoading'),
         empty: t('agentForm.skillsPickerEmpty'),
-        pick: t('agentForm.skillsPickerLabel'),
         loadFailed: t('agentForm.skillsPickerLoadFailed'),
       }}
     />

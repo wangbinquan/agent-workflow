@@ -24,6 +24,10 @@ const ALLOWLIST = new Set<string>([
   // Popover listbox empty-state: inline text ternary with `noResults` inside
   // the async-search combobox; a block spinner would blow up the popover.
   'components/UserPicker.tsx',
+  // RFC-173 — same shape as UserPicker: the loading row is a single <li> inside
+  // the portaled multi-select listbox (fallback when the caller passes no
+  // loadingLabel); a block <LoadingState> can't live inside a role=listbox.
+  'components/MultiSelect.tsx',
   // Row-title fallback chain (`title → loading → id`): inline text inside a
   // list row label, not a three-state shell.
   'components/fusion/MemoryReviewItem.tsx',
