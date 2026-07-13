@@ -20,7 +20,7 @@ import type { CanvasSelection } from '@/components/canvas/nodes/types'
 import { workflowRenameError } from '@/lib/workflow-form'
 import { AclDialogButton } from '@/components/AclPanel'
 import { ConfirmButton } from '@/components/ConfirmButton'
-import { Field, TextInput } from '@/components/Form'
+import { RenameDialog } from '@/components/RenameDialog'
 import { useWorkflowSync } from '@/hooks/useWorkflowSync'
 import { Route as RootRoute } from './__root'
 
@@ -128,20 +128,48 @@ function WorkflowEditPage() {
     }
   }, [query.data])
 
+  // Name + description are edited ONLY through the rename dialog now (用户
+  // 2026-07-13「把名称和描述修改收到重命名按钮内」); the canvas still
+  // auto-saves the definition. Both channels PUT the same shape and settle the
+  // same way (applySaved), so the header <h1> and the rename baseline stay in
+  // sync no matter which one wrote.
+  function putWorkflow(meta: { name: string; description: string }): Promise<Workflow> {
+    if (draft === null) throw new Error('nothing to save')
+    return api.put<Workflow>(`/api/workflows/${encodeURIComponent(id)}`, {
+      name: meta.name,
+      description: meta.description,
+      definition: draft,
+    })
+  }
+  function applySaved(wf: Workflow): void {
+    qc.setQueryData(['workflows', id], wf)
+    void qc.invalidateQueries({ queryKey: ['workflows'] })
+    // Point the header + rename baseline at server truth. For an auto-save
+    // these equal the current values (no-op); for a rename they adopt the new
+    // name/description.
+    setName(wf.name)
+    setDescription(wf.description)
+    lastSaved.current = { name: wf.name, description: wf.description, definition: wf.definition }
+    setDirty(false)
+  }
+
+  // Auto-save channel — carries the CURRENT (last-saved) name/description
+  // through unchanged alongside the edited definition.
   const save = useMutation({
-    mutationFn: () => {
-      if (draft === null) throw new Error('nothing to save')
-      return api.put<Workflow>(`/api/workflows/${encodeURIComponent(id)}`, {
-        name,
-        description,
-        definition: draft,
-      })
-    },
+    mutationFn: () => putWorkflow({ name, description }),
+    onSuccess: applySaved,
+  })
+
+  // Rename dialog channel — the explicit name/description edit.
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [renameName, setRenameName] = useState('')
+  const [renameDescription, setRenameDescription] = useState('')
+  const renameTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const renameSave = useMutation({
+    mutationFn: (meta: { name: string; description: string }) => putWorkflow(meta),
     onSuccess: (wf) => {
-      qc.setQueryData(['workflows', id], wf)
-      void qc.invalidateQueries({ queryKey: ['workflows'] })
-      lastSaved.current = { name: wf.name, description: wf.description, definition: wf.definition }
-      setDirty(false)
+      applySaved(wf)
+      setRenameOpen(false)
     },
   })
 
@@ -162,17 +190,24 @@ function WorkflowEditPage() {
 
   // 2026-07-10 naming unification: renames follow the workgroup slug rules.
   // An UNCHANGED (possibly legacy free-form) name never blocks — only an
-  // actual rename to an invalid value parks auto-save with a field error.
-  const renameError = workflowRenameError(name, lastSaved.current?.name ?? name)
+  // actual rename to an invalid value gates the dialog Save. `name` /
+  // `description` are the last-saved baseline (they only change via a save), so
+  // the dialog diffs against them directly; the same verdict drives BOTH the
+  // inline name error and the Save button (grandfather preserved).
+  const renameFieldError = workflowRenameError(renameName, name)
+  const renameCanSave =
+    renameFieldError === null && (renameName !== name || renameDescription !== description)
 
-  // Auto-save when the user pauses for >1s after a change (design.md §4.1).
+  // Auto-save when the user pauses for >1s after a canvas change (design.md
+  // §4.1). name/description no longer change outside the rename dialog, so the
+  // definition draft is the only auto-saved surface (the dialog owns name
+  // validation, so the old rename guard here is gone).
   useEffect(() => {
     if (!dirty || draft === null) return
-    if (workflowRenameError(name, lastSaved.current?.name ?? name) !== null) return
     const tt = setTimeout(() => save.mutate(), 1000)
     return () => clearTimeout(tt)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty, name, description, draft])
+  }, [dirty, draft])
 
   // Toast banner state for remote workflow deletion. Remote *update*
   // notifications used to surface a toast here too, but they fired on
@@ -229,6 +264,25 @@ function WorkflowEditPage() {
         >
           {t('editor.exportYaml')}
         </a>
+        {/* Name + description live behind this button (工作组同款重命名入口).
+            Seed from lastSaved (a stable ref) so this memoized action never
+            captures a stale name/description. */}
+        <button
+          type="button"
+          className="btn btn--sm"
+          ref={renameTriggerRef}
+          onClick={() => {
+            const cur = lastSaved.current
+            if (cur !== null) {
+              setRenameName(cur.name)
+              setRenameDescription(cur.description)
+            }
+            setRenameOpen(true)
+          }}
+          data-testid="workflow-rename-button"
+        >
+          {t('editor.renameButton')}
+        </button>
         <AclDialogButton
           resourceBaseUrl={`/api/workflows/${encodeURIComponent(id)}`}
           invalidateKey={['workflows']}
@@ -270,32 +324,6 @@ function WorkflowEditPage() {
         </div>
         {headerActions}
       </header>
-
-      <div className="form-grid form-grid--cols-2">
-        <Field
-          label={t('editor.fieldName')}
-          required
-          error={renameError !== null ? t(renameError) : undefined}
-        >
-          <TextInput
-            value={name}
-            onChange={(v) => {
-              setName(v)
-              setDirty(true)
-            }}
-            required
-          />
-        </Field>
-        <Field label={t('editor.fieldDescription')}>
-          <TextInput
-            value={description}
-            onChange={(v) => {
-              setDescription(v)
-              setDirty(true)
-            }}
-          />
-        </Field>
-      </div>
 
       {save.error !== null && save.error !== undefined && (
         <div className="error-box">{describeError(save.error)}</div>
@@ -359,6 +387,30 @@ function WorkflowEditPage() {
           />
         )}
       </div>
+
+      <RenameDialog
+        open={renameOpen}
+        onClose={() => setRenameOpen(false)}
+        title={t('editor.renameTitle')}
+        testidPrefix="workflow"
+        nameLabel={t('editor.fieldName')}
+        nameHint={t('workflows.fieldNameHint')}
+        name={renameName}
+        onNameChange={setRenameName}
+        nameError={renameFieldError !== null ? t(renameFieldError) : undefined}
+        descriptionLabel={t('editor.fieldDescription')}
+        description={renameDescription}
+        onDescriptionChange={setRenameDescription}
+        canSave={renameCanSave}
+        pending={renameSave.isPending}
+        submitError={
+          renameSave.error !== null && renameSave.error !== undefined
+            ? describeError(renameSave.error)
+            : undefined
+        }
+        onSave={() => renameSave.mutate({ name: renameName, description: renameDescription })}
+        triggerRef={renameTriggerRef}
+      />
     </div>
   )
 }

@@ -1,19 +1,21 @@
-// RFC-168 T2 — member card gallery, the detail page's MAIN zone. Cards render
-// from the SERVER row (`group`) only — config edits stay pending in the panel
-// draft, member changes commit immediately (RFC-164 invariant kept).
+// RFC-168 T2 → RFC-171 — member card rail, the detail page's LEFT column.
+// Cards render from the SERVER row (`group`) only — config edits stay pending
+// in the panel draft, member changes commit immediately (RFC-164 invariant).
 //
-// Selection: the card title is the button (stretched hit-area via CSS ::after
-// — design §5 rejected wrapping the whole Card in a <button>: h3/div/p inside
-// a native button violates the content model and bloats the accessible name).
-// All member ACTIONS live in the context panel; the card face carries only
-// identity + capability summary (ports from the RFC-166 capabilityCardModel
-// projection — the single structured projection, never a hand-rolled one).
+// RFC-171: the RFC-168 wide gallery became the narrow left rail of the `.split`
+// skin (aligns with /agents). Cards adopt the `.split-card` look (+ the
+// `.workgroup-mcard--{type}` accent) but KEEP the RFC-168 stretched hit-area:
+// the title is a `.workgroup-card__open` button whose `::after` (absolute
+// inset:0) covers the card — this needs a `position:relative` ancestor, now
+// `.workgroup-mcard` (F10: never wrap the whole card in a native <button>).
+// Per-port name chips (RFC-168, too wide for the narrow rail) collapse to an
+// "N ports" count badge; the full port list lives in the panel's capability
+// card. roleDesc, type, leader badge and the dangling-agent warning are kept.
 
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Agent, Workgroup } from '@agent-workflow/shared'
 import { capabilityCardModel } from '@agent-workflow/shared'
-import { Card } from '@/components/Card'
 import { EmptyState } from '@/components/EmptyState'
 import { StatusChip } from '@/components/StatusChip'
 import { useAgentsList } from '@/hooks/useAgentsList'
@@ -28,49 +30,19 @@ export interface WorkgroupMemberGalleryProps {
   onSelectCard: (key: string) => void
 }
 
-/** Port-name summary line: up to 3 names then `+n` (full list lives in the
- *  panel's capability card). Renders nothing when the agent declares none. */
-function PortsRow({ label, names }: { label: string; names: string[] }) {
-  if (names.length === 0) return null
-  const shown = names.slice(0, 3)
-  const more = names.length - shown.length
-  return (
-    <div className="workgroup-card__ports">
-      <span className="workgroup-card__ports-label">{label}</span>
-      {shown.map((n) => (
-        <span key={n} className="capability-card__port">
-          <span className="capability-card__port-name">{n}</span>
-        </span>
-      ))}
-      {more > 0 && <span className="workgroup-card__ports-more">+{more}</span>}
-    </div>
-  )
-}
-
-function AgentCardSummary({
-  agent,
-  agentsLoaded,
-}: {
-  agent: Agent | undefined
-  agentsLoaded: boolean
-}) {
+/** RFC-171 — declared-port COUNT badge (inputs + outputs). Renders nothing
+ *  when the agent is unresolved or declares none; the full list is in the
+ *  panel's capability card. Uses the single `capabilityCardModel` projection. */
+function AgentPortsBadge({ agent }: { agent: Agent | undefined }) {
   const { t } = useTranslation()
-  if (agent === undefined) {
-    // Dangling references are save-legal (launch-time validation owns
-    // existence) — warn only once the list actually loaded (F6: while the
-    // agents query is loading/failed the summary degrades to nothing).
-    return agentsLoaded ? (
-      <StatusChip kind="warn" size="sm" data-testid="workgroup-card-agent-missing">
-        {t('workgroups.agentMissing')}
-      </StatusChip>
-    ) : null
-  }
+  if (agent === undefined) return null
   const model = capabilityCardModel(agent, { promptBudget: 0 })
+  const count = model.inputs.length + model.outputs.length
+  if (count === 0) return null
   return (
-    <>
-      <PortsRow label={t('workgroups.portsIn')} names={model.inputs.map((p) => p.name)} />
-      <PortsRow label={t('workgroups.portsOut')} names={model.outputs.map((p) => p.name)} />
-    </>
+    <span className="chip chip--tight" data-testid="workgroup-card-ports-count">
+      {t('workgroups.portsCountBadge', { count })}
+    </span>
   )
 }
 
@@ -87,75 +59,75 @@ export function WorkgroupMemberGallery(props: WorkgroupMemberGalleryProps) {
     [agentsList.agents],
   )
 
-  return (
-    <div className="workgroup-gallery">
-      {state.members.length === 0 && (
-        <EmptyState
-          size="compact"
-          title={t('workgroups.membersEmpty')}
-          data-testid="workgroup-members-empty"
-        />
-      )}
+  if (state.members.length === 0) {
+    return (
+      <EmptyState
+        size="compact"
+        title={t('workgroups.membersEmpty')}
+        data-testid="workgroup-members-empty"
+      />
+    )
+  }
 
-      {state.members.length > 0 && (
-        <ul className="workgroup-cards">
-          {state.members.map((m) => {
-            const isLeader = state.leaderKey === m.key
-            const selected = props.selectedKey === m.key
-            const reference =
-              m.memberType === 'agent'
-                ? m.agentName
-                : (users.get(m.userId)?.displayName ?? m.userId)
-            return (
-              <li key={m.key} data-member-key={m.key}>
-                <Card
-                  className={`workgroup-card workgroup-card--${m.memberType}`}
-                  interactive
-                  highlighted={selected}
-                  data-testid={`workgroup-card-${m.displayName}`}
-                  header={
-                    <div className="workgroup-card__head">
-                      <h3 className="workgroup-card__title">
-                        <button
-                          type="button"
-                          className="workgroup-card__open"
-                          aria-expanded={selected}
-                          aria-controls="workgroup-context-panel"
-                          onClick={() => props.onSelectCard(m.key)}
-                          data-testid={`workgroup-card-open-${m.displayName}`}
-                        >
-                          {m.displayName}
-                        </button>
-                      </h3>
-                      <span className="chip chip--tight">
-                        {m.memberType === 'agent'
-                          ? t('workgroups.memberTypeAgent')
-                          : t('workgroups.memberTypeHuman')}
-                      </span>
-                      {showLeaderBadge && isLeader && (
-                        <StatusChip kind="info" size="sm" data-testid="workgroup-leader-badge">
-                          {t('workgroups.leaderBadge')}
-                        </StatusChip>
-                      )}
-                    </div>
-                  }
-                >
-                  <div className="workgroup-card__ref" title={reference}>
-                    {reference}
-                  </div>
-                  {m.roleDesc !== '' && <p className="workgroup-card__role">{m.roleDesc}</p>}
-                  {m.memberType === 'agent' && (
-                    <AgentCardSummary
-                      agent={agentByName.get(m.agentName)}
-                      agentsLoaded={agentsList.loaded}
-                    />
-                  )}
-                </Card>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </div>
+  return (
+    <ul className="workgroup-mrail">
+      {state.members.map((m) => {
+        const isLeader = state.leaderKey === m.key
+        const selected = props.selectedKey === m.key
+        const reference =
+          m.memberType === 'agent' ? m.agentName : (users.get(m.userId)?.displayName ?? m.userId)
+        const agent = m.memberType === 'agent' ? agentByName.get(m.agentName) : undefined
+        return (
+          <li key={m.key} data-member-key={m.key}>
+            <div
+              className={
+                `split-card workgroup-mcard workgroup-mcard--${m.memberType}` +
+                (selected ? ' is-selected' : '')
+              }
+              data-testid={`workgroup-card-${m.displayName}`}
+            >
+              <div className="split-card__title">
+                <h3 className="workgroup-mcard__title">
+                  <button
+                    type="button"
+                    className="workgroup-card__open"
+                    aria-expanded={selected}
+                    aria-controls="workgroup-context-panel"
+                    onClick={() => props.onSelectCard(m.key)}
+                    data-testid={`workgroup-card-open-${m.displayName}`}
+                  >
+                    {m.displayName}
+                  </button>
+                </h3>
+              </div>
+              <div className="split-card__subtitle" title={reference}>
+                {reference}
+              </div>
+              {m.roleDesc !== '' && <div className="workgroup-mcard__role">{m.roleDesc}</div>}
+              <div className="split-card__badges chip-row">
+                <span className="chip chip--tight">
+                  {m.memberType === 'agent'
+                    ? t('workgroups.memberTypeAgent')
+                    : t('workgroups.memberTypeHuman')}
+                </span>
+                {showLeaderBadge && isLeader && (
+                  <StatusChip kind="info" size="sm" data-testid="workgroup-leader-badge">
+                    {t('workgroups.leaderBadge')}
+                  </StatusChip>
+                )}
+                {m.memberType === 'agent' &&
+                  (agent !== undefined ? (
+                    <AgentPortsBadge agent={agent} />
+                  ) : agentsList.loaded ? (
+                    <StatusChip kind="warn" size="sm" data-testid="workgroup-card-agent-missing">
+                      {t('workgroups.agentMissing')}
+                    </StatusChip>
+                  ) : null)}
+              </div>
+            </div>
+          </li>
+        )
+      })}
+    </ul>
   )
 }

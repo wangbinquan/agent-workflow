@@ -208,37 +208,58 @@ export async function deleteWorkgroup(db: DbClient, name: string): Promise<void>
   await db.delete(workgroups).where(eq(workgroups.name, name))
 }
 
+/**
+ * Rename a group and/or edit its description atomically (2026-07-13, 用户拍板
+ * 「后端原子端点」). Both are the group's metadata fields, edited together in
+ * the detail-page rename dialog:
+ *   - `newName === oldName` ⇒ description-only edit: the name-collision and
+ *     scheduled-reference guards DON'T apply (nothing about the name changes),
+ *     so a description edit is never blocked by a scheduled task.
+ *   - `description === undefined` ⇒ pure rename: the stored description is left
+ *     untouched (the config PUT no longer carries it).
+ * A no-op (name unchanged AND description unchanged/omitted) returns early.
+ */
 export async function renameWorkgroup(
   db: DbClient,
   oldName: string,
   newName: string,
+  description?: string,
 ): Promise<Workgroup> {
   const existing = await getWorkgroup(db, oldName)
   if (existing === null) {
     throw new NotFoundError('workgroup-not-found', `workgroup '${oldName}' not found`)
   }
-  if (newName === oldName) return existing
-  if ((await getWorkgroup(db, newName)) !== null) {
-    throw new ConflictError(
-      'workgroup-name-in-use',
-      `workgroup '${newName}' already exists; pick a different name`,
-    )
-  }
-  // Tasks link by id; scheduled rows reference the mutable NAME (RFC-165 §9b)
-  // — refuse the rename while any point at this group.
-  const schedRefs = await scheduledRowsReferencingWorkgroup(db, oldName)
-  if (schedRefs.length > 0) {
-    throw new ConflictError(
-      'workgroup-scheduled-referenced',
-      `workgroup '${oldName}' is the target of ${schedRefs.length} scheduled task(s); repoint them before renaming`,
-      { scheduledTaskIds: schedRefs },
-    )
+  const nameChanged = newName !== oldName
+  const descChanged = description !== undefined && description !== existing.description
+  if (!nameChanged && !descChanged) return existing
+  if (nameChanged) {
+    if ((await getWorkgroup(db, newName)) !== null) {
+      throw new ConflictError(
+        'workgroup-name-in-use',
+        `workgroup '${newName}' already exists; pick a different name`,
+      )
+    }
+    // Tasks link by id; scheduled rows reference the mutable NAME (RFC-165 §9b)
+    // — refuse the rename while any point at this group. (A description-only
+    // edit keeps the name, so this guard is skipped for it.)
+    const schedRefs = await scheduledRowsReferencingWorkgroup(db, oldName)
+    if (schedRefs.length > 0) {
+      throw new ConflictError(
+        'workgroup-scheduled-referenced',
+        `workgroup '${oldName}' is the target of ${schedRefs.length} scheduled task(s); repoint them before renaming`,
+        { scheduledTaskIds: schedRefs },
+      )
+    }
   }
   await db
     .update(workgroups)
-    .set({ name: newName, updatedAt: Date.now() })
+    .set({
+      ...(nameChanged ? { name: newName } : {}),
+      ...(descChanged ? { description } : {}),
+      updatedAt: Date.now(),
+    })
     .where(eq(workgroups.name, oldName))
-  const renamed = await getWorkgroup(db, newName)
+  const renamed = await getWorkgroup(db, nameChanged ? newName : oldName)
   if (renamed === null) throw new Error('workgroup disappeared after rename')
   return renamed
 }

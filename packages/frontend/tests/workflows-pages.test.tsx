@@ -492,11 +492,28 @@ describe('/workflows/new removal wiring', () => {
     expect(enUS.workgroups.fieldNameHint).not.toMatch(/URL/i)
     expect(zhCN.errors['workflow-name-invalid']?.length ?? 0).toBeGreaterThan(0)
     expect(enUS.errors['workflow-name-invalid']?.length ?? 0).toBeGreaterThan(0)
-    // Editor: rename gate wired into BOTH the field error and the auto-save
-    // guard (unchanged legacy names must keep saving — see workflowRenameError).
+    // Editor: the rename gate now lives in the rename DIALOG (2026-07-13) — one
+    // workflowRenameError verdict drives BOTH the inline name error and the Save
+    // button (unchanged legacy names must keep saving — grandfather).
     const edit = readSrc('routes/workflows.edit.tsx')
     const hits = edit.match(/workflowRenameError\(/g) ?? []
-    expect(hits.length).toBeGreaterThanOrEqual(2)
+    expect(hits.length).toBeGreaterThanOrEqual(1)
     expect(edit).toContain("import { workflowRenameError } from '@/lib/workflow-form'")
+  })
+
+  test('editor edits name/description via a RenameDialog, not inline fields (用户 2026-07-13)', () => {
+    const edit = readSrc('routes/workflows.edit.tsx')
+    // The rename button + shared RenameDialog replace the old inline field grid,
+    // matching the workgroup rename entry (and the create dialog's elements).
+    expect(edit).toContain("import { RenameDialog } from '@/components/RenameDialog'")
+    expect(edit).toContain('data-testid="workflow-rename-button"')
+    expect(edit).toContain('<RenameDialog')
+    // The inline name/description grid is gone — they live in the dialog now.
+    expect(edit).not.toContain('form-grid form-grid--cols-2')
+    // Editor rename copy exists in both bundles.
+    expect(zhCN.editor.renameButton.length).toBeGreaterThan(0)
+    expect(enUS.editor.renameButton.length).toBeGreaterThan(0)
+    expect(zhCN.editor.renameTitle.length).toBeGreaterThan(0)
+    expect(enUS.editor.renameTitle.length).toBeGreaterThan(0)
   })
 })

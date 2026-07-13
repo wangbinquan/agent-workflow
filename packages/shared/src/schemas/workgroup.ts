@@ -208,9 +208,18 @@ export type CreateWorkgroup = z.infer<typeof CreateWorkgroupSchema>
 export const UpdateWorkgroupSchema = z.object(workgroupConfigFields).superRefine(validateGroupShape)
 export type UpdateWorkgroup = z.infer<typeof UpdateWorkgroupSchema>
 
-/** POST /api/workgroups/:name/rename body. */
+/**
+ * POST /api/workgroups/:name/rename body. Name + description are the group's
+ * "metadata" fields; the detail-page rename dialog edits both and saves them
+ * ATOMICALLY here (2026-07-13, 用户拍板「后端原子端点」). `description` is
+ * optional — a pure rename omits it and the stored description is untouched;
+ * a description-only edit sends the current name as `newName` (a no-op rename)
+ * plus the new `description`. Description therefore no longer travels on the
+ * config PUT (buildConfigUpdatePayload passes the server's value through).
+ */
 export const RenameWorkgroupSchema = z.object({
   newName: WorkgroupNameSchema,
+  description: z.string().max(4096).optional(),
 })
 export type RenameWorkgroup = z.infer<typeof RenameWorkgroupSchema>
 

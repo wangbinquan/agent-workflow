@@ -1064,6 +1064,8 @@ export interface Resources {
     agentMissing: string
     portsIn: string
     portsOut: string
+    portsCountBadge_one: string
+    portsCountBadge_other: string
     configSaved: string
     memberFieldAgent: string
     memberFieldUser: string
@@ -1575,6 +1577,8 @@ export interface Resources {
     newTitle: string
     fieldName: string
     fieldDescription: string
+    renameButton: string
+    renameTitle: string
     loadingWorkflow: string
     statusSaving: string
     statusUnsaved: string
@@ -3964,6 +3968,8 @@ export const zhCN: Resources = {
     agentMissing: 'agent 不存在',
     portsIn: '输入',
     portsOut: '输出',
+    portsCountBadge_one: '{{count}} 端口',
+    portsCountBadge_other: '{{count}} 端口',
     configSaved: '已保存',
     memberFieldAgent: '代理名',
     memberFieldUser: '平台用户',
@@ -4466,6 +4472,8 @@ export const zhCN: Resources = {
     newTitle: '新建工作流',
     fieldName: '名称',
     fieldDescription: '描述',
+    renameButton: '重命名',
+    renameTitle: '重命名工作流',
     loadingWorkflow: '加载工作流中…',
     statusSaving: '保存中…',
     statusUnsaved: '未保存',

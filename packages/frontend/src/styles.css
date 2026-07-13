@@ -11853,53 +11853,106 @@ mark.comment-anchor[data-active='true'] {
 /* Studio page frame — the page becomes a viewport-high flex column so the
    two-column studio below the header can give the gallery and the panel
    INDEPENDENT scrollbars (user 2026-07-11). */
-.page--studio {
+/* RFC-171: the workgroup detail page reuses the `.split` skin (see the
+   `.split*` block). The workgroup-level header + readiness banner sit ABOVE
+   `.split` inside `.page--split`; keep them from shrinking so `.split`
+   (flex:1) owns the scroll region (design-gate Codex#4). */
+.page--split > *:not(.split) {
+  flex-shrink: 0;
+}
+
+/* Left rail (aside.split__list) is a flex column: fixed head + config entry,
+   then the scrolling `.split__cards`, then the fixed add-buttons foot. */
+.workgroup-rail__head {
   display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-/* Two-column studio: gallery (fluid) + context panel (fixed). Both columns
-   stretch to the remaining page height and scroll independently. Collapses
-   to a single column under 960px — panel stacks after the gallery and the
-   page falls back to normal document flow. */
-.workgroup-studio {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
-  grid-template-rows: minmax(0, 1fr);
-  gap: var(--space-5);
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.workgroup-studio__main {
-  min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.workgroup-studio__main-head {
-  display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--space-2);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
+  flex-shrink: 0;
 }
 
-.workgroup-studio__main-title {
-  margin: 0;
-  font-size: var(--font-lg);
+.workgroup-rail__title {
+  font-size: var(--font-sm);
+  font-weight: 600;
 }
 
-.workgroup-studio__count {
+.workgroup-rail__count {
   font-size: var(--font-sm);
   color: var(--muted);
 }
 
-.workgroup-studio__main-actions {
+/* Pinned "⚙ config" entry — a `.split-card` rendered as a <button>. Lives
+   ABOVE `.split__cards` so it never scrolls away with the member cards
+   (design-gate Codex#1). */
+.workgroup-config-entry {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  margin-bottom: var(--space-2);
+  flex-shrink: 0;
+}
+
+/* Member cards — a vertical list inside the scrolling `.split__cards`. The
+   `.split__cards` gap only reaches direct children, so this nested <ul>
+   carries its own gap + list reset (design-gate Codex#3). */
+.workgroup-mrail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Each card layers the workgroup type accent + the RFC-168 stretched hit-area
+   (needs position:relative for `.workgroup-card__open::after`) over the shared
+   `.split-card` chrome. Accents carry the `.split-card` prefix so they beat
+   `.split-card` / `.split-card.is-selected` regardless of source order; the
+   selection accent (`.split-card.is-selected`) stays authoritative for agents,
+   while a selected human keeps its amber TYPE body (RFC-168 grammar). */
+.workgroup-mcard {
+  position: relative;
+}
+
+.split-card.workgroup-mcard--agent:not(.is-selected) {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+
+.split-card.workgroup-mcard--human:not(.is-selected) {
+  background: color-mix(in srgb, #d97706 10%, var(--panel));
+  border-color: color-mix(in srgb, #d97706 45%, var(--border));
+}
+
+.split-card.workgroup-mcard--human.is-selected {
+  background: color-mix(in srgb, #d97706 10%, var(--panel));
+}
+
+.workgroup-mcard__title {
+  margin: 0;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workgroup-mcard__role {
+  margin: 4px 0 0;
+  font-size: var(--font-xs);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Add-member buttons pinned at the rail foot (mirrors `.split__new`). */
+.workgroup-rail__add {
   display: flex;
   gap: var(--space-2);
-  margin-left: auto;
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+  flex-shrink: 0;
 }
 
 /* Context panel — a card-grade container filling its studio column and
@@ -11908,6 +11961,8 @@ mark.comment-anchor[data-active='true'] {
    clamped against the viewport and got clipped at its natural offset
    whenever the page had no scroll range (user report 2026-07-11). */
 .workgroup-panel {
+  /* RFC-171: fills the wide `.split__detail` column (was a fixed 380px pane). */
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
   background: var(--panel);
@@ -11971,46 +12026,12 @@ mark.comment-anchor[data-active='true'] {
   font-size: var(--font-sm);
 }
 
-/* Member cards zone — responsive grid of shared <Card>s. */
-.workgroup-cards {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-3);
-}
-
-/* The whole card is clickable through the title button's stretched hit-area
-   (::after covers the card) — RFC-168 F10: never wrap the Card in a native
-   <button> (content-model violation, runaway accessible name). */
-.workgroup-card {
-  position: relative;
-}
-
-/* Member-type tinting mirrors the workflow canvas palette so the two
-   surfaces read as one system: agent cards carry the `.canvas-node--agent`
-   accent border, human cards the review/clarify amber family (humans ARE
-   the human-in-the-loop kind). The shared `.card--highlighted` selection
-   look stays authoritative while a card is selected. */
-.workgroup-card--agent:not(.card--highlighted) {
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
-}
-
-.workgroup-card--human:not(.card--highlighted) {
-  background: color-mix(in srgb, #d97706 10%, var(--panel));
-  border-color: color-mix(in srgb, #d97706 45%, var(--border));
-}
-
-/* Selected human card keeps its amber TYPE background — only the border
-   flips to the accent selection color (same grammar as a selected review
-   node on the canvas: blue ring over amber body). Without this override the
-   shared .card--highlighted washed the freshly-added, auto-selected human
-   member in the accent tint and the type reading was lost (user report). */
-.workgroup-card--human.card--highlighted {
-  background: color-mix(in srgb, #d97706 10%, var(--panel));
-}
-
+/* RFC-171: member cards now render as `.split-card .workgroup-mcard` in the
+   left rail (see the rail block near `.page--split`); the old responsive grid
+   + `.workgroup-card` base/type accents moved to `.workgroup-mcard*`. The
+   stretched hit-area below is kept and reused — the title stays a
+   `.workgroup-card__open` button whose ::after covers `.workgroup-mcard`
+   (RFC-168 F10: never wrap the whole card in a native <button>). */
 .workgroup-card__open {
   background: none;
   border: 0;
@@ -12038,23 +12059,6 @@ mark.comment-anchor[data-active='true'] {
   outline-offset: 2px;
 }
 
-.workgroup-card__head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.workgroup-card__title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .workgroup-card__ref {
   font-family: var(--font-mono, monospace);
   font-size: 12px;
@@ -12064,55 +12068,15 @@ mark.comment-anchor[data-active='true'] {
   white-space: nowrap;
 }
 
-.workgroup-card__role {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-/* Port summary line on agent cards — reuses the capability-card port chip. */
-.workgroup-card__ports {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  flex-wrap: wrap;
-  margin-top: var(--space-1);
-}
-
-.workgroup-card__ports-label {
-  font-size: var(--font-xs);
-  color: var(--muted);
-}
-
-.workgroup-card__ports-more {
-  font-size: var(--font-xs);
-  color: var(--muted);
-}
-
 .workgroup-cards__actions {
   display: flex;
   gap: 8px;
   margin-top: 10px;
 }
 
-@media (max-width: 960px) {
-  /* Single column: back to normal document flow (one page scrollbar). */
-  .page--studio {
-    display: block;
-    height: auto;
-  }
-
-  .workgroup-studio {
-    grid-template-columns: 1fr;
-    grid-template-rows: none;
-  }
-
-  .workgroup-studio__main,
-  .workgroup-panel {
-    overflow-y: visible;
-    min-height: auto;
-  }
-}
+/* RFC-171: narrow-viewport degrade is now inherited from the shared `.split`
+   skin (its @media(max-width:1080px) stacks the rail + detail); the old
+   `.page--studio` 960px single-column block is retired with the studio. */
 
 /* ============================================================
    RFC-164 PR-4 — workgroup task chat room (.workgroup-room

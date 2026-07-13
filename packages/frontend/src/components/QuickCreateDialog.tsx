@@ -12,7 +12,7 @@
 import type { RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Dialog } from '@/components/Dialog'
-import { Field, TextInput } from '@/components/Form'
+import { NameDescriptionFields } from '@/components/NameDescriptionFields'
 
 export interface QuickCreateDialogProps {
   open: boolean
@@ -91,25 +91,21 @@ export function QuickCreateDialog({
         </>
       }
     >
-      {/* Required-ness is conveyed by the disabled confirm button; only a
-          malformed (non-empty) name earns the inline error. */}
-      <Field label={nameLabel} required hint={nameHint} error={nameError}>
-        <TextInput
-          value={name}
-          onChange={onNameChange}
-          maxLength={128}
-          required
-          data-testid={`${testidPrefix}-create-name`}
-        />
-      </Field>
-      <Field label={descriptionLabel}>
-        <TextInput
-          value={description}
-          onChange={onDescriptionChange}
-          maxLength={descriptionMaxLength}
-          data-testid={`${testidPrefix}-create-description`}
-        />
-      </Field>
+      {/* Shared field pair — identical elements to RenameDialog (用户
+          2026-07-13「新建与重命名弹窗显示元素一致」). Prefix yields the
+          existing `${testidPrefix}-create-name` / `-description` testids. */}
+      <NameDescriptionFields
+        testidPrefix={`${testidPrefix}-create`}
+        nameLabel={nameLabel}
+        nameHint={nameHint}
+        name={name}
+        onNameChange={onNameChange}
+        nameError={nameError}
+        descriptionLabel={descriptionLabel}
+        description={description}
+        onDescriptionChange={onDescriptionChange}
+        descriptionMaxLength={descriptionMaxLength}
+      />
     </Dialog>
   )
 }

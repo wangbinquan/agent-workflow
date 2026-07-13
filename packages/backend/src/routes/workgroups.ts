@@ -4,7 +4,7 @@
 // POST   /api/workgroups                — create (creator becomes owner)
 // PUT    /api/workgroups/:name          — full-document update (members full-replace)
 // DELETE /api/workgroups/:name          — delete (tasks keep their config snapshot)
-// POST   /api/workgroups/:name/rename   — rename (nothing references by name)
+// POST   /api/workgroups/:name/rename   — rename + edit description atomically
 // GET/PUT /api/workgroups/:name/acl     — RFC-099 ACL management
 //
 // RFC-099 D15: creating/updating checks that NEW agent-member references are
@@ -114,7 +114,12 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
     const actor = actorOf(c)
     const existing = await loadVisibleWorkgroup(actor, name)
     await requireResourceOwner(deps.db, actor, 'workgroup', existing)
-    const renamed = await renameWorkgroup(deps.db, name, parsed.data.newName)
+    const renamed = await renameWorkgroup(
+      deps.db,
+      name,
+      parsed.data.newName,
+      parsed.data.description,
+    )
     return c.json(renamed)
   })
 

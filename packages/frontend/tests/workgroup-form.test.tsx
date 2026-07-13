@@ -105,13 +105,14 @@ describe('buildQuickCreatePayload', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildConfigUpdatePayload', () => {
-  test('carries the draft config and passes the stored members through', () => {
-    const draft = workgroupToConfigDraft(STORED)
-    draft.description = 'updated'
-    const built = buildConfigUpdatePayload(draft, STORED)
+  test('carries the draft config, passes stored members + server description through', () => {
+    // 2026-07-13: description left the config draft (it's edited in the rename
+    // dialog). buildConfigUpdatePayload passes the SERVER's description through
+    // unchanged, so a config save can never revert a dialog description edit.
+    const built = buildConfigUpdatePayload(workgroupToConfigDraft(STORED), STORED)
     expect(built.ok).toBe(true)
     if (!built.ok) return
-    expect(built.payload.description).toBe('updated')
+    expect(built.payload.description).toBe(STORED.description)
     expect(built.payload.leaderDisplayName).toBe('Coder')
     expect(built.payload.maxRounds).toBe(33)
     // Members pass through sorted by sortOrder — no name key on updates.
@@ -120,6 +121,19 @@ describe('buildConfigUpdatePayload', () => {
       { memberType: 'agent', agentName: 'coder', displayName: 'Coder', roleDesc: 'writes code' },
       { memberType: 'human', userId: 'u1', displayName: 'Alice', roleDesc: 'reviews' },
     ])
+  })
+
+  test('description is sourced from the server row, never the draft (2026-07-13 decouple)', () => {
+    // Editing an unrelated config field still carries the server description
+    // through verbatim — the rename dialog is its only editor now, so the
+    // config PUT can never clobber it.
+    const group: Workgroup = { ...STORED, description: 'server-owned copy' }
+    const draft = { ...workgroupToConfigDraft(group), instructions: 'edited charter' }
+    const built = buildConfigUpdatePayload(draft, group)
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+    expect(built.payload.description).toBe('server-owned copy')
+    expect(built.payload.instructions).toBe('edited charter')
   })
 
   test('a leaderless leader_worker group SAVES (决策 #21 — launch is the strict gate)', () => {
@@ -401,7 +415,6 @@ afterEach(() => {
 
 function baseDraft(): WorkgroupConfigDraft {
   return {
-    description: '',
     instructions: '',
     mode: 'leader_worker',
     switches: { shareOutputs: true, directMessages: false, blackboard: false },

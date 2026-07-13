@@ -9,10 +9,11 @@
 //      EXACTLY {name, description} (backend defaults the rest), then
 //      navigates to the detail page.
 //   3. Detail page: launch-readiness banner renders per reason
-//      ('no-agent-member' / 'leader-missing') and hides when ready; the
-//      config save PUTs the draft with the CURRENT members passed through;
-//      leaderless lw groups still save (决策 #21); rename dialog POSTs
-//      /rename.
+//      ('no-agent-member' / 'leader-missing') and hides when ready; the config
+//      save PUTs the draft with the CURRENT members AND server description
+//      passed through (description left the config form 2026-07-13);
+//      leaderless lw groups still save (决策 #21); the rename dialog edits
+//      name + description together and POSTs {newName, description} to /rename.
 //   4. Member gallery + context panel (RFC-168): one card per member, leader
 //      badge; selecting a card opens the member editor in the PANEL (no
 //      dialogs) — set-leader / remove / member-save / add-agent flows each
@@ -146,8 +147,18 @@ function installFetch(state: { workgroups: Workgroup[] } & Recorded): void {
       const rename = url.match(/\/api\/workgroups\/([^/]+)\/rename$/)
       if (rename !== null && method === 'POST') {
         const from = decodeURIComponent(rename[1]!)
-        const row = state.workgroups.find((w) => w.name === from)
-        return json({ ...(row ?? wg(from)), name: (body as { newName: string }).newName })
+        const idx = state.workgroups.findIndex((w) => w.name === from)
+        // Atomic rename + description edit (2026-07-13): echo the new name and,
+        // when provided, the new description; persist so a follow-up GET agrees.
+        const b = body as { newName: string; description?: string }
+        const base = idx >= 0 ? state.workgroups[idx]! : wg(from)
+        const next = {
+          ...base,
+          name: b.newName,
+          ...(b.description !== undefined ? { description: b.description } : {}),
+        }
+        if (idx >= 0) state.workgroups[idx] = next
+        return json(next)
       }
       const one = url.match(/\/api\/workgroups\/([^/]+)$/)
       if (one !== null) {
@@ -334,19 +345,15 @@ describe('/workgroups/$name — readiness banner', () => {
 })
 
 describe('/workgroups/$name — config editing', () => {
-  test('config save PUTs the draft with the current members passed through (no name)', async () => {
+  test('config save PUTs the draft with members + server description passed through (no name)', async () => {
     const state = { workgroups: [wg('review-squad')], calls: [] as Recorded['calls'] }
     installFetch(state)
     await renderPage('/workgroups/review-squad')
 
-    await waitFor(() => {
-      expect((screen.getByTestId('workgroup-field-description') as HTMLInputElement).value).toBe(
-        'audits PRs',
-      )
-    })
-    fireEvent.change(screen.getByTestId('workgroup-field-description'), {
-      target: { value: 'updated desc' },
-    })
+    // Description moved to the rename dialog (2026-07-13); edit the config
+    // instructions. The PUT carries the SERVER description through unchanged.
+    const instr = (await screen.findByTestId('workgroup-field-instructions')) as HTMLTextAreaElement
+    fireEvent.change(instr, { target: { value: 'be thorough' } })
     fireEvent.click(screen.getByTestId('workgroup-save-button'))
     await waitFor(() => {
       const put = state.calls.find(
@@ -354,7 +361,8 @@ describe('/workgroups/$name — config editing', () => {
       )
       expect(put).toBeTruthy()
       const body = put?.body as Record<string, unknown>
-      expect(body.description).toBe('updated desc')
+      expect(body.description).toBe('audits PRs') // server value passed through, not edited here
+      expect(body.instructions).toBe('be thorough')
       expect(body.name).toBeUndefined()
       expect(body.leaderDisplayName).toBe('Coder')
       expect(body.members).toEqual([
@@ -371,26 +379,27 @@ describe('/workgroups/$name — config editing', () => {
       calls: [],
     })
     await renderPage('/workgroups/review-squad')
-    await waitFor(() => {
-      expect((screen.getByTestId('workgroup-field-description') as HTMLInputElement).value).toBe(
-        'audits PRs',
-      )
-    })
+    await screen.findByTestId('workgroup-field-instructions')
     expect((screen.getByTestId('workgroup-save-button') as HTMLButtonElement).disabled).toBe(false)
   })
 
-  test('rename button opens a Dialog and POSTs /rename with the new name', async () => {
+  test('rename dialog seeds name + description and POSTs /rename with both', async () => {
     const state = { workgroups: [wg('review-squad')], calls: [] as Recorded['calls'] }
     installFetch(state)
     await renderPage('/workgroups/review-squad')
 
     fireEvent.click(await screen.findByTestId('workgroup-rename-button'))
-    const input = (await screen.findByTestId('workgroup-rename-input')) as HTMLInputElement
-    expect(input.value).toBe('review-squad')
+    const nameInput = (await screen.findByTestId('workgroup-rename-name')) as HTMLInputElement
+    const descInput = screen.getByTestId('workgroup-rename-description') as HTMLInputElement
+    expect(nameInput.value).toBe('review-squad')
+    expect(descInput.value).toBe('audits PRs') // seeded from the group
+    // Nothing changed yet → confirm disabled.
     expect((screen.getByTestId('workgroup-rename-confirm') as HTMLButtonElement).disabled).toBe(
       true,
     )
-    fireEvent.change(input, { target: { value: 'audit-squad' } })
+
+    fireEvent.change(nameInput, { target: { value: 'audit-squad' } })
+    fireEvent.change(descInput, { target: { value: 'audits merged PRs' } })
     fireEvent.click(screen.getByTestId('workgroup-rename-confirm'))
 
     await waitFor(() => {
@@ -398,7 +407,30 @@ describe('/workgroups/$name — config editing', () => {
         (c) => c.method === 'POST' && c.url.endsWith('/api/workgroups/review-squad/rename'),
       )
       expect(post).toBeTruthy()
-      expect(post?.body).toEqual({ newName: 'audit-squad' })
+      expect(post?.body).toEqual({ newName: 'audit-squad', description: 'audits merged PRs' })
+    })
+  })
+
+  test('a description-only edit still saves (newName echoes the current name)', async () => {
+    const state = { workgroups: [wg('review-squad')], calls: [] as Recorded['calls'] }
+    installFetch(state)
+    await renderPage('/workgroups/review-squad')
+
+    fireEvent.click(await screen.findByTestId('workgroup-rename-button'))
+    const descInput = (await screen.findByTestId(
+      'workgroup-rename-description',
+    )) as HTMLInputElement
+    fireEvent.change(descInput, { target: { value: 'new blurb' } })
+    // Name untouched but description changed → confirm enabled.
+    expect((screen.getByTestId('workgroup-rename-confirm') as HTMLButtonElement).disabled).toBe(
+      false,
+    )
+    fireEvent.click(screen.getByTestId('workgroup-rename-confirm'))
+    await waitFor(() => {
+      const post = state.calls.find(
+        (c) => c.method === 'POST' && c.url.endsWith('/api/workgroups/review-squad/rename'),
+      )
+      expect(post?.body).toEqual({ newName: 'review-squad', description: 'new blurb' })
     })
   })
 })

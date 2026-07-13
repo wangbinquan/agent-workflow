@@ -70,7 +70,11 @@ export function buildQuickCreatePayload(
 // ---------------------------------------------------------------------------
 
 export interface WorkgroupConfigDraft {
-  description: string
+  // NOTE: `description` is NOT part of the config draft. Since 2026-07-13 it is
+  // metadata edited in the rename dialog (POST /rename, atomic with the name),
+  // so the config PUT passes the SERVER's current description through unchanged
+  // (buildConfigUpdatePayload) — exactly like it passes members through. This
+  // is what keeps a config save from reverting a dialog description edit.
   instructions: string
   mode: WorkgroupMode
   /** Stored switch values. free_collab renders them as forced-on but never
@@ -85,7 +89,6 @@ export interface WorkgroupConfigDraft {
 
 export function workgroupToConfigDraft(w: Workgroup): WorkgroupConfigDraft {
   return {
-    description: w.description,
     instructions: w.instructions,
     mode: w.mode,
     switches: { ...w.switches },
@@ -112,7 +115,9 @@ export function buildConfigUpdatePayload(
   if (Object.keys(errors).length > 0) return { ok: false, errors }
   const leader = storedLeaderDisplayName(group)
   const payload = {
-    description: draft.description,
+    // Pass the server's current description through unchanged — it is owned by
+    // the rename dialog now (POST /rename), never edited on this config form.
+    description: group.description,
     instructions: draft.instructions,
     mode: draft.mode,
     // Backend nulls the leader outside leader_worker regardless; only carry

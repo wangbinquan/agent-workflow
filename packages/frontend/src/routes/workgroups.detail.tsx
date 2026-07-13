@@ -12,7 +12,9 @@
 //     (lib/workgroup-form ops) → PUT, single-flight (design F5); the fresh
 //     row is written back eagerly so the gallery re-renders from server truth.
 // Header keeps the /mcps/$name action shape: ACL + Save + Delete, plus the
-// Rename button + <Dialog> (POST …/rename — PUT cannot change the name).
+// Rename button + <RenameDialog> (name + description edited together, POST
+// …/rename saves both atomically — PUT cannot change the name, and description
+// now rides along here rather than on the config form, 2026-07-13).
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, createRoute } from '@tanstack/react-router'
@@ -25,8 +27,7 @@ import { api } from '@/api/client'
 import { useDraftFromQuery } from '@/hooks/useDraftFromQuery'
 import { describeApiError } from '@/i18n'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
-import { Dialog } from '@/components/Dialog'
-import { Field, TextInput } from '@/components/Form'
+import { RenameDialog } from '@/components/RenameDialog'
 import { LoadingState } from '@/components/LoadingState'
 import {
   WorkgroupContextPanel,
@@ -324,21 +325,28 @@ function WorkgroupDetailPage() {
     },
   })
 
-  // Rename dialog state. POST …/rename, then move to the new detail URL.
+  // Rename dialog state — name + description edited together (2026-07-13, atomic
+  // POST …/rename), then move to the new detail URL only if the name changed.
   const [renameOpen, setRenameOpen] = useState(false)
   const [newName, setNewName] = useState('')
+  const [newDescription, setNewDescription] = useState('')
   const renameTriggerRef = useRef<HTMLButtonElement | null>(null)
   const rename = useMutation({
-    mutationFn: (nn: string): Promise<Workgroup> =>
-      api.post<Workgroup>(`/api/workgroups/${encodeURIComponent(name)}/rename`, { newName: nn }),
+    mutationFn: (vars: { newName: string; description: string }): Promise<Workgroup> =>
+      api.post<Workgroup>(`/api/workgroups/${encodeURIComponent(name)}/rename`, vars),
     onSuccess: (w) => {
       void qc.invalidateQueries({ queryKey: ['workgroups'] })
       qc.setQueryData(['workgroups', w.name], w)
       setRenameOpen(false)
-      navigate({ to: '/workgroups/$name', params: { name: w.name } })
+      // Description lives on the server row; the config draft passes it through
+      // (buildConfigUpdatePayload), so there's nothing to re-sync locally.
+      if (w.name !== name) navigate({ to: '/workgroups/$name', params: { name: w.name } })
     },
   })
-  const renameValid = newName.length > 0 && newName.length <= 128 && WORKGROUP_NAME_RE.test(newName)
+  const renameNameValid =
+    newName.length > 0 && newName.length <= 128 && WORKGROUP_NAME_RE.test(newName)
+  const renameCanSave =
+    renameNameValid && (newName !== name || newDescription !== (group?.description ?? ''))
 
   // Live pre-validation — the config draft blocks Save only on real field
   // errors (决策 #21: no leader / no members are launch problems, not save
@@ -358,7 +366,7 @@ function WorkgroupDetailPage() {
     return <div className="page error-box">{describeApiError(query.error)}</div>
 
   return (
-    <div className="page page--wide page--studio">
+    <div className="page page--split">
       <DetailHeaderActions
         acl={{
           resourceBaseUrl: `/api/workgroups/${encodeURIComponent(name)}`,
@@ -405,6 +413,7 @@ function WorkgroupDetailPage() {
               ref={renameTriggerRef}
               onClick={() => {
                 setNewName(name)
+                setNewDescription(group?.description ?? '')
                 setRenameOpen(true)
               }}
               data-testid="workgroup-rename-button"
@@ -413,7 +422,7 @@ function WorkgroupDetailPage() {
             </button>
           </>
         }
-        errors={[save.error, del.error, rename.error, membersMut.error]}
+        errors={[save.error, del.error, membersMut.error]}
       >
         <div>
           <h1>{name}</h1>
@@ -437,114 +446,123 @@ function WorkgroupDetailPage() {
       )}
 
       {group !== undefined && (
-        <div className="workgroup-studio">
-          {/* Blank-area click deselects (desktop selection grammar, user
-              2026-07-11). member state only: the add panel holds an
-              in-progress form a stray click must not discard. Card clicks
-              are swallowed by the stretched title-button hit-area; keyboard
-              users have the equivalent panel Esc, so this stays mouse-only. */}
-          <div
-            className="workgroup-studio__main"
-            onClick={(e) => {
-              if (effectivePanel.kind !== 'member') return
-              const target = e.target as HTMLElement
-              if (target.closest('.workgroup-card, button, a, input') !== null) return
-              closePanel()
-            }}
-          >
-            <div className="workgroup-studio__main-head">
-              <h2 className="workgroup-studio__main-title">{t('workgroups.sectionMembers')}</h2>
-              <span className="workgroup-studio__count">{group.members.length}</span>
-              {/* Add entries live UP HERE next to the section title (user
-                  2026-07-11) — a fixed spot that never drifts down as the
-                  gallery grows, mirroring the list pages' header+New shape. */}
-              <div className="workgroup-studio__main-actions">
+        <div className="split">
+          <aside className="split__list">
+            {/* RFC-171: rail head + config entry live ABOVE the scroll area
+                (fixed) so the config entry never scrolls away with the cards
+                (design-gate Codex#1). */}
+            <div className="workgroup-rail__head">
+              <span className="workgroup-rail__title">{t('workgroups.sectionMembers')}</span>
+              <span className="workgroup-rail__count">{group.members.length}</span>
+            </div>
+            <button
+              type="button"
+              className={
+                'split-card workgroup-config-entry' +
+                (effectivePanel.kind === 'config' ? ' is-selected' : '')
+              }
+              aria-expanded={effectivePanel.kind === 'config'}
+              aria-controls="workgroup-context-panel"
+              onClick={() => changePanel({ kind: 'config' })}
+              data-testid="workgroup-config-entry"
+            >
+              <span className="split-card__name">
+                <span aria-hidden="true">⚙ </span>
+                {t('workgroups.panelConfigTitle')}
+              </span>
+            </button>
+            {/* Member cards scroll here. Blank-area click deselects (desktop
+                selection grammar, RFC-168 user 2026-07-11); clicks landing on
+                a card ([data-member-key]) or a control are swallowed by the
+                closest() guard. Keyboard users have the panel Esc. */}
+            <div
+              className="split__cards"
+              data-testid="workgroup-member-scroll"
+              onClick={(e) => {
+                if (effectivePanel.kind !== 'member') return
+                const target = e.target as HTMLElement
+                if (target.closest('[data-member-key], button, a, input') !== null) return
+                closePanel()
+              }}
+            >
+              <WorkgroupMemberGallery
+                group={group}
+                selectedKey={effectivePanel.kind === 'member' ? effectivePanel.key : null}
+                onSelectCard={onSelectCard}
+              />
+            </div>
+            {/* Add entries pinned at the rail foot (mirrors the /agents
+                "+ new" position; RFC-167 hides add-human in dynamic mode). */}
+            <div className="workgroup-rail__add">
+              <button
+                type="button"
+                className="btn btn--sm"
+                disabled={membersMut.isPending}
+                onClick={() => changePanel({ kind: 'add', memberType: 'agent' })}
+                data-testid="workgroup-add-agent-member"
+              >
+                {t('workgroups.addAgentMember')}
+              </button>
+              {group.mode !== 'dynamic_workflow' && (
                 <button
                   type="button"
                   className="btn btn--sm"
                   disabled={membersMut.isPending}
-                  onClick={() => changePanel({ kind: 'add', memberType: 'agent' })}
-                  data-testid="workgroup-add-agent-member"
+                  onClick={() => changePanel({ kind: 'add', memberType: 'human' })}
+                  data-testid="workgroup-add-human-member"
                 >
-                  {t('workgroups.addAgentMember')}
+                  {t('workgroups.addHumanMember')}
                 </button>
-                {/* RFC-167: dynamic_workflow members are the agent-only
-                    orchestratable pool — human members are rejected at save,
-                    so hide the entry in that mode. */}
-                {group.mode !== 'dynamic_workflow' && (
-                  <button
-                    type="button"
-                    className="btn btn--sm"
-                    disabled={membersMut.isPending}
-                    onClick={() => changePanel({ kind: 'add', memberType: 'human' })}
-                    data-testid="workgroup-add-human-member"
-                  >
-                    {t('workgroups.addHumanMember')}
-                  </button>
-                )}
-              </div>
+              )}
             </div>
-            <WorkgroupMemberGallery
+          </aside>
+          <section className="split__detail" data-testid="split-detail">
+            <WorkgroupContextPanel
               group={group}
-              selectedKey={effectivePanel.kind === 'member' ? effectivePanel.key : null}
-              onSelectCard={onSelectCard}
+              panel={effectivePanel}
+              focusOn={focusOn}
+              applying={membersMut.isPending}
+              applyError={membersMut.error}
+              onClose={closePanel}
+              configDraft={form}
+              configErrors={configErrors}
+              onConfigChange={(next) => {
+                if (savedFlash) clearSavedFlash()
+                setForm(next)
+              }}
+              onSaveMember={onSaveMember}
+              onSetLeader={onSetLeader}
+              onRemoveMember={onRemoveMember}
+              onAddMember={onAddMember}
             />
-          </div>
-          <WorkgroupContextPanel
-            group={group}
-            panel={effectivePanel}
-            focusOn={focusOn}
-            applying={membersMut.isPending}
-            applyError={membersMut.error}
-            onClose={closePanel}
-            configDraft={form}
-            configErrors={configErrors}
-            onConfigChange={(next) => {
-              if (savedFlash) clearSavedFlash()
-              setForm(next)
-            }}
-            onSaveMember={onSaveMember}
-            onSetLeader={onSetLeader}
-            onRemoveMember={onRemoveMember}
-            onAddMember={onAddMember}
-          />
+          </section>
         </div>
       )}
 
-      <Dialog
+      <RenameDialog
         open={renameOpen}
         onClose={() => setRenameOpen(false)}
         title={t('workgroups.renameTitle')}
-        size="sm"
-        triggerRef={renameTriggerRef}
-        data-testid="workgroup-rename-dialog"
-        footer={
-          <>
-            <button type="button" className="btn" onClick={() => setRenameOpen(false)}>
-              {t('common.cancel')}
-            </button>
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={rename.isPending || !renameValid || newName === name}
-              onClick={() => rename.mutate(newName)}
-              data-testid="workgroup-rename-confirm"
-            >
-              {rename.isPending ? t('common.saving') : t('common.save')}
-            </button>
-          </>
+        testidPrefix="workgroup"
+        nameLabel={t('workgroups.renameField')}
+        nameHint={t('workgroups.fieldNameHint')}
+        namePattern={WORKGROUP_NAME_RE.source}
+        name={newName}
+        onNameChange={setNewName}
+        descriptionLabel={t('workgroups.fieldDescription')}
+        description={newDescription}
+        onDescriptionChange={setNewDescription}
+        descriptionMaxLength={4096}
+        canSave={renameCanSave}
+        pending={rename.isPending}
+        submitError={
+          rename.error !== null && rename.error !== undefined
+            ? describeApiError(rename.error)
+            : undefined
         }
-      >
-        <Field label={t('workgroups.renameField')} required hint={t('workgroups.fieldNameHint')}>
-          <TextInput
-            value={newName}
-            onChange={setNewName}
-            pattern={WORKGROUP_NAME_RE.source}
-            maxLength={128}
-            data-testid="workgroup-rename-input"
-          />
-        </Field>
-      </Dialog>
+        onSave={() => rename.mutate({ newName, description: newDescription })}
+        triggerRef={renameTriggerRef}
+      />
     </div>
   )
 }

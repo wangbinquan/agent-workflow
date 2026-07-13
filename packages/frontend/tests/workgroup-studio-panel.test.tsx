@@ -28,9 +28,14 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router'
+import { readFileSync } from 'node:fs'
+import path, { resolve } from 'node:path'
 import type { Workgroup } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import '../src/i18n'
+
+const FRONTEND_SRC = resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'src')
+const readSrc = (rel: string): string => readFileSync(resolve(FRONTEND_SRC, rel), 'utf-8')
 
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
@@ -249,9 +254,13 @@ describe('panel three-state switching (§9.1)', () => {
     installFetch({ workgroups: [wg('squad')], calls: [] })
     await renderPage('/workgroups/squad')
 
-    // config state: the config form renders inside the panel.
+    // config state: the config entry is selected by default (RFC-171) and the
+    // config form renders inside the panel.
     await screen.findByTestId('workgroup-card-Coder')
-    expect(within(panelEl()).getByTestId('workgroup-field-description')).toBeTruthy()
+    expect(within(panelEl()).getByTestId('workgroup-field-instructions')).toBeTruthy()
+    expect(screen.getByTestId('workgroup-config-entry').classList.contains('is-selected')).toBe(
+      true,
+    )
 
     // select a member → member editor with the alias prefilled and focused.
     fireEvent.click(screen.getByTestId('workgroup-card-open-Auditor'))
@@ -267,27 +276,28 @@ describe('panel three-state switching (§9.1)', () => {
 
     // close button → back to config, focus returns to the trigger card (F8).
     fireEvent.click(screen.getByTestId('workgroup-panel-close'))
-    expect(within(panelEl()).getByTestId('workgroup-field-description')).toBeTruthy()
+    expect(within(panelEl()).getByTestId('workgroup-field-instructions')).toBeTruthy()
     expect(document.activeElement).toBe(screen.getByTestId('workgroup-card-open-Auditor'))
 
     // same-card toggle: select then click the same card again.
     fireEvent.click(screen.getByTestId('workgroup-card-open-Auditor'))
     await within(panelEl()).findByTestId('workgroup-member-displayname-input')
     fireEvent.click(screen.getByTestId('workgroup-card-open-Auditor'))
-    expect(within(panelEl()).getByTestId('workgroup-field-description')).toBeTruthy()
+    expect(within(panelEl()).getByTestId('workgroup-field-instructions')).toBeTruthy()
 
     // Esc inside the panel closes it.
     fireEvent.click(screen.getByTestId('workgroup-card-open-Auditor'))
     const again = await within(panelEl()).findByTestId('workgroup-member-displayname-input')
     fireEvent.keyDown(again, { key: 'Escape' })
-    expect(within(panelEl()).getByTestId('workgroup-field-description')).toBeTruthy()
+    expect(within(panelEl()).getByTestId('workgroup-field-instructions')).toBeTruthy()
 
-    // Clicking BLANK gallery space deselects too (desktop selection grammar);
-    // clicks landing on a card never do (stretched hit-area swallows them).
+    // RFC-171: clicking BLANK space in the member scroll rail deselects too
+    // (desktop selection grammar, kept from RFC-168); clicks landing on a card
+    // ([data-member-key]) never do (the closest() guard swallows them).
     fireEvent.click(screen.getByTestId('workgroup-card-open-Auditor'))
     await within(panelEl()).findByTestId('workgroup-member-displayname-input')
-    fireEvent.click(document.querySelector('.workgroup-studio__main')!)
-    expect(within(panelEl()).getByTestId('workgroup-field-description')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('workgroup-member-scroll'))
+    expect(within(panelEl()).getByTestId('workgroup-field-instructions')).toBeTruthy()
   })
 
   test('rename-dialog Esc closes ONLY the dialog — the panel selection survives (§9.11, F9)', async () => {
@@ -426,26 +436,33 @@ describe('human add flow (§9.5)', () => {
 })
 
 describe('capability summary (§9.6, F6)', () => {
-  test('agent cards render port chips with +n truncation; humans get none; the panel shows the full card + edit link', async () => {
+  test('agent cards render an N-ports count badge + roleDesc; humans get no ports badge; the panel shows the full card + edit link', async () => {
     installFetch({ workgroups: [wg('squad')], calls: [] })
     await renderPage('/workgroups/squad')
     const coder = await screen.findByTestId('workgroup-card-Coder')
-    await waitFor(() => {
-      expect(within(coder).getByText('spec')).toBeTruthy()
-      expect(within(coder).getByText('code')).toBeTruthy()
-    })
-    // auditor declares 5 inputs → 3 shown + "+2"
+    // RFC-171: the narrow rail card shows an "N ports" COUNT badge (the full
+    // per-port list lives in the panel's capability card). coder = 1 input +
+    // 2 outputs = 3 ports.
+    await waitFor(() =>
+      expect(within(coder).getByTestId('workgroup-card-ports-count').textContent).toContain(
+        '3 ports',
+      ),
+    )
+    // roleDesc is kept on the card (RFC-171 only collapsed the per-port chips).
+    expect(within(coder).getByText('writes code')).toBeTruthy()
+    // auditor = 5 inputs + 1 output = 6 ports
     const auditor = screen.getByTestId('workgroup-card-Auditor')
-    expect(within(auditor).getByText('+2')).toBeTruthy()
-    // human card carries no ports row
+    expect(within(auditor).getByTestId('workgroup-card-ports-count').textContent).toContain(
+      '6 ports',
+    )
+    // human card carries no ports badge
     const alice = screen.getByTestId('workgroup-card-Alice')
-    expect(within(alice).queryByText('spec')).toBeNull()
-    expect(alice.querySelector('.workgroup-card__ports')).toBeNull()
+    expect(within(alice).queryByTestId('workgroup-card-ports-count')).toBeNull()
     // member-type tinting mirrors the canvas palette (user 2026-07-11):
     // agent cards ↔ canvas-node--agent accent, human cards ↔ the amber
-    // human-in-the-loop family.
-    expect(coder.classList.contains('workgroup-card--agent')).toBe(true)
-    expect(alice.classList.contains('workgroup-card--human')).toBe(true)
+    // human-in-the-loop family (RFC-171: `.workgroup-mcard--{type}`).
+    expect(coder.classList.contains('workgroup-mcard--agent')).toBe(true)
+    expect(alice.classList.contains('workgroup-mcard--human')).toBe(true)
 
     // panel: full capability card + the edit-agent-definition jump link
     fireEvent.click(screen.getByTestId('workgroup-card-open-Coder'))
@@ -487,7 +504,7 @@ describe('capability summary (§9.6, F6)', () => {
     const coder = await screen.findByTestId('workgroup-card-Coder')
     // degraded: no warn chip, no ports — but the member editor still works
     expect(within(coder).queryByTestId('workgroup-card-agent-missing')).toBeNull()
-    expect(coder.querySelector('.workgroup-card__ports')).toBeNull()
+    expect(within(coder).queryByTestId('workgroup-card-ports-count')).toBeNull()
     fireEvent.click(screen.getByTestId('workgroup-card-open-Coder'))
     await within(panelEl()).findByTestId('workgroup-member-displayname-input')
   })
@@ -505,7 +522,158 @@ describe('capability summary (§9.6, F6)', () => {
     // no dangling-agent warning (the list never "loaded" as an array).
     const coder = await screen.findByTestId('workgroup-card-Coder')
     expect(within(coder).queryByTestId('workgroup-card-agent-missing')).toBeNull()
-    expect(coder.querySelector('.workgroup-card__ports')).toBeNull()
+    expect(within(coder).queryByTestId('workgroup-card-ports-count')).toBeNull()
+  })
+})
+
+describe('RFC-171 split skin — pinned config entry / mutual exclusion / plural / freeze', () => {
+  test('the config entry is pinned ABOVE the member scroll area (never scrolls with cards)', async () => {
+    installFetch({ workgroups: [wg('squad')], calls: [] })
+    await renderPage('/workgroups/squad')
+    const entry = await screen.findByTestId('workgroup-config-entry')
+    const scroll = screen.getByTestId('workgroup-member-scroll')
+    // the config entry is a SIBLING that precedes the scroll container — it is
+    // not a descendant of it, so it can never scroll away with the cards.
+    expect(scroll.contains(entry)).toBe(false)
+    expect(entry.compareDocumentPosition(scroll) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  test('config ↔ member selection is mutually exclusive', async () => {
+    installFetch({ workgroups: [wg('squad')], calls: [] })
+    await renderPage('/workgroups/squad')
+    const entry = await screen.findByTestId('workgroup-config-entry')
+    expect(entry.classList.contains('is-selected')).toBe(true)
+
+    // select a member → the config entry deselects, the card selects
+    fireEvent.click(screen.getByTestId('workgroup-card-open-Auditor'))
+    await within(panelEl()).findByTestId('workgroup-member-displayname-input')
+    expect(screen.getByTestId('workgroup-config-entry').classList.contains('is-selected')).toBe(
+      false,
+    )
+    expect(screen.getByTestId('workgroup-card-Auditor').classList.contains('is-selected')).toBe(
+      true,
+    )
+
+    // click the config entry → back to config, the member deselects
+    fireEvent.click(screen.getByTestId('workgroup-config-entry'))
+    expect(within(panelEl()).getByTestId('workgroup-field-instructions')).toBeTruthy()
+    expect(screen.getByTestId('workgroup-config-entry').classList.contains('is-selected')).toBe(
+      true,
+    )
+    expect(screen.getByTestId('workgroup-card-Auditor').classList.contains('is-selected')).toBe(
+      false,
+    )
+  })
+
+  test('a 1-port agent uses the SINGULAR badge; a 0-port agent renders none', async () => {
+    installFetch(
+      {
+        workgroups: [
+          wg('squad', {
+            leaderMemberId: null,
+            members: [
+              {
+                id: 'm1',
+                memberType: 'agent',
+                agentName: 'solo',
+                userId: null,
+                displayName: 'Solo',
+                roleDesc: '',
+                sortOrder: 0,
+              },
+              {
+                id: 'm2',
+                memberType: 'agent',
+                agentName: 'bare',
+                userId: null,
+                displayName: 'Bare',
+                roleDesc: '',
+                sortOrder: 1,
+              },
+            ],
+          }),
+        ],
+        calls: [],
+      },
+      {
+        agents: [
+          {
+            name: 'solo',
+            description: '',
+            role: 'normal',
+            inputs: [{ name: 'x', kind: 'string' }],
+            outputs: [],
+            outputKinds: {},
+          },
+          {
+            name: 'bare',
+            description: '',
+            role: 'normal',
+            inputs: [],
+            outputs: [],
+            outputKinds: {},
+          },
+        ],
+      },
+    )
+    await renderPage('/workgroups/squad')
+    const solo = await screen.findByTestId('workgroup-card-Solo')
+    await waitFor(() =>
+      expect(within(solo).getByTestId('workgroup-card-ports-count').textContent).toContain(
+        '1 port',
+      ),
+    )
+    // singular: "1 port", never "1 ports"
+    expect(within(solo).getByTestId('workgroup-card-ports-count').textContent).not.toContain(
+      'ports',
+    )
+    const bare = screen.getByTestId('workgroup-card-Bare')
+    expect(within(bare).queryByTestId('workgroup-card-ports-count')).toBeNull()
+  })
+
+  test('F-171-5: clicking the config entry while a member PUT is IN FLIGHT is frozen (stays on the member; no lost-update)', async () => {
+    const state = { workgroups: [wg('squad')], calls: [] as Recorded['calls'] }
+    let releasePut: ((r: Response) => void) | null = null
+    installFetch(state, {
+      putImpl: () =>
+        new Promise<Response>((resolve) => {
+          releasePut = resolve
+        }),
+    })
+    await renderPage('/workgroups/squad')
+    // open a member, edit the alias, save → the PUT hangs (isPending stays true)
+    fireEvent.click(await screen.findByTestId('workgroup-card-open-Auditor'))
+    const input = (await within(panelEl()).findByTestId(
+      'workgroup-member-displayname-input',
+    )) as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'Auditor2' } })
+    fireEvent.click(within(panelEl()).getByTestId('workgroup-member-save'))
+    await waitFor(() => expect(releasePut).not.toBeNull())
+
+    // mid-flight: clicking the config entry is a NO-OP (changePanel freeze) —
+    // still on the member, the unsaved draft survives, config NOT selected.
+    fireEvent.click(screen.getByTestId('workgroup-config-entry'))
+    expect(
+      (within(panelEl()).getByTestId('workgroup-member-displayname-input') as HTMLInputElement)
+        .value,
+    ).toBe('Auditor2')
+    expect(screen.getByTestId('workgroup-config-entry').classList.contains('is-selected')).toBe(
+      false,
+    )
+
+    // settle → switching to config is allowed again
+    const lastPut = state.calls.filter((c) => c.method === 'PUT').at(-1)
+    const freshRow = synthesizePutRow(wg('squad'), lastPut!.body as Record<string, unknown>)
+    state.workgroups[0] = freshRow
+    releasePut!(
+      new Response(JSON.stringify(freshRow), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    await waitFor(() => expect(screen.getByTestId('workgroup-card-open-Auditor2')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('workgroup-config-entry'))
+    expect(within(panelEl()).getByTestId('workgroup-field-instructions')).toBeTruthy()
   })
 })
 
@@ -514,21 +682,17 @@ describe('config save stays on the page; the saved flash never lies (§9.7/9.8, 
     const state = { workgroups: [wg('squad')], calls: [] as Recorded['calls'] }
     installFetch(state)
     const router = await renderPage('/workgroups/squad')
-    await waitFor(() => {
-      expect((screen.getByTestId('workgroup-field-description') as HTMLInputElement).value).toBe(
-        'audits PRs',
-      )
-    })
-    fireEvent.change(screen.getByTestId('workgroup-field-description'), {
-      target: { value: 'v2' },
-    })
+    // Description moved to the rename dialog (2026-07-13); edit the config
+    // instructions instead to exercise the save/flash flow.
+    const instr = (await screen.findByTestId('workgroup-field-instructions')) as HTMLTextAreaElement
+    fireEvent.change(instr, { target: { value: 'v2' } })
     fireEvent.click(screen.getByTestId('workgroup-save-button'))
     await waitFor(() => {
       expect(screen.getByTestId('workgroup-save-button').textContent).toBe('Saved')
     })
     expect(router.state.location.pathname).toBe('/workgroups/squad') // §9.7 — no navigate-away
     // any edit clears the flash immediately
-    fireEvent.change(screen.getByTestId('workgroup-field-description'), {
+    fireEvent.change(screen.getByTestId('workgroup-field-instructions'), {
       target: { value: 'v3' },
     })
     expect(screen.getByTestId('workgroup-save-button').textContent).toBe('Save')
@@ -546,22 +710,16 @@ describe('config save stays on the page; the saved flash never lies (§9.7/9.8, 
     })
 
     await renderPage('/workgroups/squad')
-    await waitFor(() => {
-      expect((screen.getByTestId('workgroup-field-description') as HTMLInputElement).value).toBe(
-        'audits PRs',
-      )
-    })
-    fireEvent.change(screen.getByTestId('workgroup-field-description'), {
-      target: { value: 'v2' },
-    })
+    const instr = (await screen.findByTestId('workgroup-field-instructions')) as HTMLTextAreaElement
+    fireEvent.change(instr, { target: { value: 'v2' } })
     fireEvent.click(screen.getByTestId('workgroup-save-button'))
     await waitFor(() => expect(releasePut).not.toBeNull())
     // edit WHILE the PUT is pending
-    fireEvent.change(screen.getByTestId('workgroup-field-description'), {
+    fireEvent.change(screen.getByTestId('workgroup-field-instructions'), {
       target: { value: 'v3-during-flight' },
     })
     releasePut!(
-      new Response(JSON.stringify(wg('squad', { description: 'v2' })), {
+      new Response(JSON.stringify(wg('squad', { instructions: 'v2' })), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
@@ -626,11 +784,7 @@ describe('mode-transition error (§9.12, F3)', () => {
   test('switching the draft to dynamic_workflow with human members surfaces the mode error and disables Save', async () => {
     installFetch({ workgroups: [wg('squad')], calls: [] })
     await renderPage('/workgroups/squad')
-    await waitFor(() => {
-      expect((screen.getByTestId('workgroup-field-description') as HTMLInputElement).value).toBe(
-        'audits PRs',
-      )
-    })
+    await screen.findByTestId('workgroup-mode-dynamic_workflow')
     fireEvent.click(screen.getByTestId('workgroup-mode-dynamic_workflow'))
     expect(
       screen.getByText(
@@ -704,14 +858,8 @@ describe('Codex impl-gate P1/P2 — lost-update and draft-loss guards', () => {
     await renderPage('/workgroups/squad')
     // edit the config draft FIRST (the config form yields the panel to the
     // member editor on selection, but the pending draft keeps its edits)…
-    await waitFor(() => {
-      expect((screen.getByTestId('workgroup-field-description') as HTMLInputElement).value).toBe(
-        'audits PRs',
-      )
-    })
-    fireEvent.change(screen.getByTestId('workgroup-field-description'), {
-      target: { value: 'v2' },
-    })
+    const instr = (await screen.findByTestId('workgroup-field-instructions')) as HTMLTextAreaElement
+    fireEvent.change(instr, { target: { value: 'v2' } })
     // …then open a member editor and edit WITHOUT saving
     fireEvent.click(screen.getByTestId('workgroup-card-open-Auditor'))
     const input = (await within(panelEl()).findByTestId(
@@ -773,11 +921,36 @@ describe('remove hands focus to the neighbor card (§9.3, F8)', () => {
     fireEvent.click(remove)
     fireEvent.click(within(panel).getByRole('button', { name: 'Confirm?' }))
     await waitFor(() => {
-      expect(within(panelEl()).getByTestId('workgroup-field-description')).toBeTruthy()
+      expect(within(panelEl()).getByTestId('workgroup-field-instructions')).toBeTruthy()
     })
     // Alice was index 1 → the (new) index-1 member is Auditor.
     await waitFor(() => {
       expect(document.activeElement).toBe(screen.getByTestId('workgroup-card-open-Auditor'))
     })
+  })
+})
+
+describe('RFC-171 split skin — source locks (design-gate Codex#1/#3 · R2 Nit A/B)', () => {
+  test('the detail page uses the `.split` skin, not the retired `.workgroup-studio` layout', () => {
+    const src = readSrc('routes/workgroups.detail.tsx')
+    expect(src).toContain('page page--split')
+    expect(src).toContain('split__list')
+    expect(src).toContain('split__detail')
+    // the studio layout is gone (prevents a silent regression back to it)
+    expect(src).not.toContain('workgroup-studio')
+    expect(src).not.toContain('page--studio')
+    // blank-area deselect uses the robust [data-member-key] selector, not the
+    // old `.workgroup-card` class it renamed away from (R2 Nit A)
+    expect(src).toContain("closest('[data-member-key], button, a, input')")
+  })
+
+  test('the stretched hit-area mechanism is intact (position:relative + ::after inset:0)', () => {
+    // happy-dom (css:false) cannot hit-test `::after`, so lock the MECHANISM at
+    // the source (design-gate R2 Nit B): the card root is positioned and the
+    // title button's ::after covers it.
+    const css = readSrc('styles.css')
+    expect(css).toMatch(/\.workgroup-mcard\s*\{[^}]*position:\s*relative/)
+    expect(css).toMatch(/\.workgroup-card__open::after\s*\{[^}]*position:\s*absolute/)
+    expect(css).toMatch(/\.workgroup-card__open::after\s*\{[^}]*inset:\s*0/)
   })
 })

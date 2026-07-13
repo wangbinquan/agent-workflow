@@ -303,6 +303,30 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
     expect(updateWorkgroup(db, 'pay-squad', groupInput())).rejects.toThrow(NotFoundError)
   })
 
+  test('rename + description edit atomically (2026-07-13 后端原子端点)', async () => {
+    await createWorkgroup(db, groupInput())
+    // name + description together
+    const both = await renameWorkgroup(db, 'payment-squad', 'pay-squad', 'new blurb')
+    expect(both.name).toBe('pay-squad')
+    expect(both.description).toBe('new blurb')
+
+    // description-only: name unchanged, the conflict/scheduled guards don't run,
+    // the description is updated in place.
+    const descOnly = await renameWorkgroup(db, 'pay-squad', 'pay-squad', 'blurb v2')
+    expect(descOnly.name).toBe('pay-squad')
+    expect(descOnly.description).toBe('blurb v2')
+
+    // pure rename (description omitted) leaves the stored description untouched.
+    const pure = await renameWorkgroup(db, 'pay-squad', 'pay-team')
+    expect(pure.name).toBe('pay-team')
+    expect(pure.description).toBe('blurb v2')
+
+    // no-op (same name, description omitted) returns the row unchanged.
+    const noop = await renameWorkgroup(db, 'pay-team', 'pay-team')
+    expect(noop.name).toBe('pay-team')
+    expect(noop.description).toBe('blurb v2')
+  })
+
   test('diffNewAgentMemberNames — only new agent refs, humans ignored, dedup', () => {
     const prev = {
       members: [
@@ -505,5 +529,31 @@ describe('RFC-164 — workgroups route ACL (RFC-099 D1/D4/D15/D18)', () => {
     const aclBody = (await acl.json()) as { resourceType: string; canManage: boolean }
     expect(aclBody.resourceType).toBe('workgroup')
     expect(aclBody.canManage).toBe(true)
+  })
+
+  test('rename route saves name + description atomically; description-only keeps the name', async () => {
+    await req(alice.token, '/api/workgroups', {
+      method: 'POST',
+      body: JSON.stringify(groupInput()),
+    })
+    const both = await req(alice.token, '/api/workgroups/payment-squad/rename', {
+      method: 'POST',
+      body: JSON.stringify({ newName: 'pay-squad', description: 'atomic blurb' }),
+    })
+    expect(both.status).toBe(200)
+    expect((await both.json()) as { name: string; description: string }).toMatchObject({
+      name: 'pay-squad',
+      description: 'atomic blurb',
+    })
+    // description-only edit — newName echoes the current name, no rename occurs.
+    const descOnly = await req(alice.token, '/api/workgroups/pay-squad/rename', {
+      method: 'POST',
+      body: JSON.stringify({ newName: 'pay-squad', description: 'blurb only' }),
+    })
+    expect(descOnly.status).toBe(200)
+    expect((await descOnly.json()) as { name: string; description: string }).toMatchObject({
+      name: 'pay-squad',
+      description: 'blurb only',
+    })
   })
 })

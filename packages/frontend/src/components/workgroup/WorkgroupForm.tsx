@@ -12,7 +12,7 @@
 import { useTranslation } from 'react-i18next'
 import type { WorkgroupMode } from '@agent-workflow/shared'
 import { WORKGROUP_MAX_ROUNDS_LIMIT } from '@agent-workflow/shared'
-import { Field, NumberInput, Switch, TextArea, TextInput } from '@/components/Form'
+import { Field, NumberInput, Switch, TextArea } from '@/components/Form'
 import { FormSection } from '@/components/FormSection'
 import { Segmented } from '@/components/Segmented'
 import type { WorkgroupConfigDraft } from '@/lib/workgroup-form'
@@ -44,16 +44,9 @@ export function WorkgroupForm({ value, onChange, errors }: WorkgroupFormProps) {
 
   return (
     <div className="workgroup-form">
+      {/* Description moved to the header rename dialog (2026-07-13) — this
+          section now carries only the charter/instructions. */}
       <FormSection title={t('workgroups.sectionBasics')}>
-        <Field label={t('workgroups.fieldDescription')}>
-          <TextInput
-            value={value.description}
-            onChange={(v) => set('description', v)}
-            maxLength={4096}
-            data-testid="workgroup-field-description"
-          />
-        </Field>
-
         <Field
           label={t('workgroups.fieldInstructions')}
           hint={t('workgroups.fieldInstructionsHint')}
