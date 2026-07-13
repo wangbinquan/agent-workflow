@@ -90,6 +90,7 @@ async function seedRun(
     hasOutput?: boolean
     errorMessage?: string
     supersededByReview?: 'iterated' | 'rejected'
+    shardKey?: string // RFC-172: fan-out shard identity (workgroup __wg_member__ = assignment id)
   } = {},
 ): Promise<string> {
   const id = ulid()
@@ -102,6 +103,7 @@ async function seedRun(
     iteration: over.iteration ?? 0,
     ...(over.errorMessage ? { errorMessage: over.errorMessage } : {}),
     ...(over.supersededByReview ? { supersededByReview: over.supersededByReview } : {}),
+    ...(over.shardKey !== undefined ? { shardKey: over.shardKey } : {}),
   })
   if (over.hasOutput) {
     await db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'out', content: 'x' })
@@ -120,14 +122,17 @@ async function seedAnsweredRound(
     status?: 'answered' | 'awaiting_human' | 'canceled' | 'abandoned'
     iteration?: number
     noAnswers?: boolean
+    askingShardKey?: string // RFC-172: the shard this round was asked on (workgroup member)
   },
 ): Promise<string> {
   const askingRunId = await seedRun(db, taskId, opts.askingNodeId, {
     status: 'awaiting_human',
     iteration: opts.iteration ?? 0,
+    ...(opts.askingShardKey !== undefined ? { shardKey: opts.askingShardKey } : {}),
   })
   const intRunId = await seedRun(db, taskId, opts.kind === 'self' ? CL : CC, {
     status: 'awaiting_human',
+    ...(opts.askingShardKey !== undefined ? { shardKey: opts.askingShardKey } : {}),
   })
   await db.insert(clarifyRounds).values({
     id: ulid(),
@@ -144,6 +149,7 @@ async function seedAnsweredRound(
     directive: 'continue',
     status: opts.status ?? 'answered',
     answeredAt: Date.now(),
+    ...(opts.askingShardKey !== undefined ? { askingShardKey: opts.askingShardKey } : {}),
   })
   return intRunId
 }
@@ -224,6 +230,104 @@ describe('RFC-132 T2 — selectAgentQueue selection', () => {
     const render = q[0]!.render
     expect('question' in render && render.question.title).toBe('DB choice')
     expect('question' in render && render.answer?.selectedOptionLabels).toEqual(['A'])
+  })
+
+  // RFC-172 (route 2): shard SELECTION isolation. Two members share the one __wg_member__ home
+  // node P, separated only by node_runs.shard_key. selectAgentQueue({shardKey}) must return ONLY
+  // the entries whose origin round was asked on that shard; `undefined` = today's node-only
+  // (golden-lock). Without this, member B's rerun would inject member A's answered Q&A.
+  test('shardKey scopes SELECTION to the asking shard; undefined = all (golden-lock)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    const originA = await seedAnsweredRound(db, taskId, {
+      kind: 'self',
+      askingNodeId: P,
+      questions: [mkQ('qa', 'A question')],
+      askingShardKey: 'shard-A',
+    })
+    const originB = await seedAnsweredRound(db, taskId, {
+      kind: 'self',
+      askingNodeId: P,
+      questions: [mkQ('qb', 'B question')],
+      askingShardKey: 'shard-B',
+    })
+    const rerunA = await seedRun(db, taskId, P, { status: 'running', shardKey: 'shard-A' })
+    for (const [origin, qid] of [
+      [originA, 'qa'],
+      [originB, 'qb'],
+    ] as const) {
+      await insertEntry(db, taskId, {
+        originNodeRunId: origin,
+        questionId: qid,
+        roleKind: 'self',
+        defaultTargetNodeId: P,
+        sealed: true,
+        dispatchedAt: Date.now(),
+      })
+    }
+    const onlyA = await selectAgentQueue({
+      db,
+      taskId,
+      consumerNodeId: P,
+      dispatchedRunId: rerunA,
+      shardKey: 'shard-A',
+    })
+    expect(onlyA.map((e) => e.questionId)).toEqual(['qa'])
+    const onlyB = await selectAgentQueue({
+      db,
+      taskId,
+      consumerNodeId: P,
+      dispatchedRunId: rerunA,
+      shardKey: 'shard-B',
+    })
+    expect(onlyB.map((e) => e.questionId)).toEqual(['qb'])
+    // golden-lock: no shardKey → both (today's node-only behavior,普通节点/leader 零回归)
+    const both = await selectAgentQueue({ db, taskId, consumerNodeId: P, dispatchedRunId: rerunA })
+    expect(both.map((e) => e.questionId).sort()).toEqual(['qa', 'qb'])
+  })
+
+  // RFC-172 (route 2): shard AGING isolation. A sibling shard's done+output run must NOT age this
+  // shard's entry when shardKey-scoped — the aging window is narrowed to node_runs.shard_key.
+  test('shardKey scopes the AGING window — a sibling shard output does not age this shard', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    const originA = await seedAnsweredRound(db, taskId, {
+      kind: 'self',
+      askingNodeId: P,
+      questions: [mkQ('qa', 'A question')],
+      askingShardKey: 'shard-A',
+    })
+    const rerunA = await seedRun(db, taskId, P, { status: 'running', shardKey: 'shard-A' })
+    await insertEntry(db, taskId, {
+      originNodeRunId: originA,
+      questionId: 'qa',
+      roleKind: 'self',
+      defaultTargetNodeId: P,
+      sealed: true,
+      dispatchedAt: Date.now(),
+      triggerRunId: rerunA,
+    })
+    // A LATER sibling shard-B done+output run (ULID > rerunA) on the same node P.
+    await seedRun(db, taskId, P, { status: 'done', hasOutput: true, shardKey: 'shard-B' })
+    // Unscoped (golden-lock): the sibling output is in the node-wide window → A's entry ages out.
+    const unscoped = await selectAgentQueue({
+      db,
+      taskId,
+      consumerNodeId: P,
+      dispatchedRunId: rerunA,
+    })
+    expect(unscoped).toHaveLength(0)
+    // Shard-scoped: the sibling B output is excluded from A's window → A's entry survives.
+    const scopedA = await selectAgentQueue({
+      db,
+      taskId,
+      consumerNodeId: P,
+      dispatchedRunId: rerunA,
+      shardKey: 'shard-A',
+    })
+    expect(scopedA.map((e) => e.questionId)).toEqual(['qa'])
   })
 
   test('unified query: self + designer entries on the SAME node come back in ONE queue (consumerKind 消失)', async () => {

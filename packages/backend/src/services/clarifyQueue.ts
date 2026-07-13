@@ -42,6 +42,18 @@ export interface SelectAgentQueueArgs {
   /** This run's node_run id. Frames the (node, iteration) lineage window the derived-aging oracle
    *  scans, and is the trigger_run_id bindTriggerRun stamps. */
   dispatchedRunId: string
+  /**
+   * RFC-172 (route 2) — optional SHARD scoping for nodes whose runs fan out per shard (the
+   * workgroup `__wg_member__` host node: one node, many concurrent member assignments keyed by
+   * `node_runs.shard_key`). When provided (including `null`):
+   *   - clarify entries are kept only if their origin round's `asking_shard_key === shardKey`;
+   *   - the derived-aging window is scoped to `node_runs.shard_key === shardKey`
+   *     (`null` → `IS NULL`, per the eq(col,null) hazard — memoryInject.ts:427 / clarify.ts:468).
+   * `undefined` (the default, every existing caller) = today's node-only behavior —普通 agent-single
+   * 节点 / leader 的单一 shard 身份零回归、golden-lock 不动。
+   * Manual §15 entries are shard-AGNOSTIC (broadcast, never shard-filtered) — design §5 P2-1.
+   */
+  shardKey?: string | null
 }
 
 /** One un-aged entry of a node's agent queue, resolved for the flat renderer (T1). */
@@ -85,7 +97,7 @@ export interface AgentQueueEntry {
  * its manual_body).
  */
 export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<AgentQueueEntry[]> {
-  const { db, taskId, consumerNodeId, dispatchedRunId } = args
+  const { db, taskId, consumerNodeId, dispatchedRunId, shardKey } = args
 
   // 1. All DISPATCHED entries whose EFFECTIVE TARGET (override ?? default) is this node — every role
   //    in one query. RFC-131 T4 去借壳: select by the target the rerun is minted on (a reassign
@@ -126,6 +138,14 @@ export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<Agen
             eq(nodeRuns.taskId, taskId),
             eq(nodeRuns.nodeId, consumerNodeId),
             eq(nodeRuns.iteration, iteration),
+            // RFC-172 (route 2): scope the derived-aging window to this shard when the caller is
+            // shard-fanned (workgroup member). Without it a sibling shard's output would age this
+            // shard's entries. `null` MUST use IS NULL — `eq(col, null)` renders `= NULL` (always
+            // false), the eq(col,null) hazard forked at memoryInject.ts:427 / clarify.ts:468.
+            // `undefined` (普通节点/leader today) adds nothing → node-only window, golden-lock.
+            ...(shardKey !== undefined
+              ? [shardKey === null ? isNull(nodeRuns.shardKey) : eq(nodeRuns.shardKey, shardKey)]
+              : []),
           ),
         )
     : []
@@ -145,7 +165,11 @@ export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<Agen
   ]
   const roundByOrigin = new Map<
     string,
-    { questions: Map<string, ClarifyQuestion>; answers: Map<string, ClarifyAnswer> }
+    {
+      questions: Map<string, ClarifyQuestion>
+      answers: Map<string, ClarifyAnswer>
+      askingShardKey: string | null
+    }
   >()
   for (const originId of clarifyOriginIds) {
     const round = (
@@ -177,6 +201,7 @@ export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<Agen
     roundByOrigin.set(originId, {
       questions: new Map(questions.map((q) => [q.id, q])),
       answers: new Map(answers.map((a) => [a.questionId, a])),
+      askingShardKey: round.askingShardKey,
     })
   }
 
@@ -189,8 +214,14 @@ export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<Agen
       if (hasContent) render = { manualTitle: e.manualTitle, manualBody: e.manualBody }
     } else {
       const round = roundByOrigin.get(e.originNodeRunId)
-      const question = round?.questions.get(e.questionId)
-      if (question !== undefined) render = { question, answer: round!.answers.get(e.questionId) }
+      // RFC-172 (route 2): when the caller is shard-scoped (workgroup member), keep a clarify
+      // entry only if its origin round was asked ON this shard — sibling shards on the shared
+      // __wg_member__ node otherwise leak each other's Q&A. `shardKey === undefined` (普通节点/
+      // leader today) = no shard filter, golden-lock. Manual §15 entries never reach this branch.
+      if (round !== undefined && (shardKey === undefined || round.askingShardKey === shardKey)) {
+        const question = round.questions.get(e.questionId)
+        if (question !== undefined) render = { question, answer: round.answers.get(e.questionId) }
+      }
     }
     if (render === undefined) continue
     result.push({
@@ -279,6 +310,9 @@ export interface BuildClarifyQueueContextArgs {
   /** This rerun's OWN node_run id — bound as the entries' trigger_run_id (承接 marker) + frames the
    *  derived-aging lineage window. */
   dispatchedRunId: string
+  /** RFC-172 (route 2) — optional shard scoping, forwarded verbatim to {@link selectAgentQueue}.
+   *  `undefined` (every existing caller) = node-only behavior. See SelectAgentQueueArgs.shardKey. */
+  shardKey?: string | null
   /** Wrapper loopIter (design §2 — workflow loop, NOT a clarify round). Reserved; the flat queue is
    *  round-agnostic. */
   iteration: number
@@ -296,8 +330,8 @@ export interface BuildClarifyQueueContextArgs {
 export async function buildClarifyQueueContext(
   args: BuildClarifyQueueContextArgs,
 ): Promise<ClarifyQueueContext | undefined> {
-  const { db, taskId, consumerNodeId, dispatchedRunId } = args
-  const entries = await selectAgentQueue({ db, taskId, consumerNodeId, dispatchedRunId })
+  const { db, taskId, consumerNodeId, dispatchedRunId, shardKey } = args
+  const entries = await selectAgentQueue({ db, taskId, consumerNodeId, dispatchedRunId, shardKey })
   if (entries.length === 0) return undefined
   // RFC-134 D9 — 同题同目标渲染去重（角色无关）：同一 (origin round, question) 的多行有效指向
   // 同一节点时（现状可构造：designer 条目被改派到 questioner 节点；RFC-134 新增：回执与后到的
