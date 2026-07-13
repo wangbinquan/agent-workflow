@@ -12899,7 +12899,11 @@ mark.comment-anchor[data-active='true'] {
 .agent-form__panel {
   padding-top: var(--space-3);
 }
-.agent-form__panel--prompt {
+/* Scoped to :not([hidden]) — a bare `display: flex` would override the keep-
+   mounted panel's `hidden` attribute (UA `[hidden] { display: none }` is lower
+   precedence than an author rule), leaving the Markdown edit/preview panes
+   visible on EVERY tab. The guard lets `hidden` win when the panel is inactive. */
+.agent-form__panel--prompt:not([hidden]) {
   overflow: hidden;
   display: flex;
   flex-direction: column;
