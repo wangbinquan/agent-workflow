@@ -3,6 +3,9 @@
 // seed mapping. Every wire field is asserted EXPLICITLY (RFC-125 lesson:
 // whitelist builders silently drop what nobody asserts).
 
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 import type { Task } from '@agent-workflow/shared'
 import {
@@ -414,6 +417,16 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
     expect(
       taskToLaunchPayload(task({ spaceKind: 'local', repos: [repo('file:///r')] })).spaceResolvable,
     ).toBe(true)
+  })
+
+  // RFC-175 §5/§6.10 — regression lock: the workgroup relaunch must NOT deep-link
+  // a bare { kind: 'workgroup' } (which lands on an empty form). All three relaunch
+  // entry links carry ?relaunchFrom=<taskId> for full-parameter pre-fill.
+  test('tasks.detail relaunch links carry relaunchFrom, not bare kind:workgroup', () => {
+    const here = dirname(fileURLToPath(import.meta.url))
+    const src = readFileSync(join(here, '../src/routes/tasks.detail.tsx'), 'utf-8')
+    expect(src).not.toMatch(/search=\{\{\s*kind:\s*'workgroup'\s*\}\}/)
+    expect(src).toContain('relaunchFrom: tk.id')
   })
 
   test('round-trip: taskToLaunchPayload → payloadToWizardSeed reconstructs wizard state', () => {

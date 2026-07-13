@@ -319,19 +319,15 @@ function TaskDetailPage() {
         </div>
         <div className="page__actions">
           <TaskMembersDialogButton taskId={id} />
-          {/* RFC-165: subject-aware relaunch — terminal tasks deep-link into
-              the /tasks/new wizard with the execution subject pre-picked
-              (v1 pre-fills the subject only). */}
-          {isTerminal(tk.status) && (
+          {/* RFC-175: full-parameter relaunch — terminal tasks deep-link into the
+              /tasks/new wizard with ALL launch params pre-filled from THIS task
+              (?relaunchFrom=). Suppressed for internal/fusion tasks: their subject
+              is a builtin workflow (assertNotBuiltin would 403) — not user
+              relaunchable (§5, R4-F1). */}
+          {isTerminal(tk.status) && tk.spaceKind !== 'internal' && (
             <Link
               to="/tasks/new"
-              search={
-                subjectKind === 'agent'
-                  ? { kind: 'agent', agent: tk.sourceAgentName ?? '' }
-                  : subjectKind === 'workgroup'
-                    ? { kind: 'workgroup' }
-                    : { kind: 'workflow', workflow: tk.workflowId }
-              }
+              search={{ relaunchFrom: tk.id }}
               className="btn"
               data-testid="task-detail-relaunch"
             >
@@ -369,17 +365,7 @@ function TaskDetailPage() {
       {resumability === 'worktree-missing' && (
         <div className="info-box info-box--muted">
           <span>{t('tasks.resumeUnavailableNoWorktree')}</span>{' '}
-          <Link
-            to="/tasks/new"
-            search={
-              subjectKind === 'agent'
-                ? { kind: 'agent', agent: tk.sourceAgentName ?? '' }
-                : subjectKind === 'workgroup'
-                  ? { kind: 'workgroup' }
-                  : { kind: 'workflow', workflow: tk.workflowId }
-            }
-            className="btn btn--sm"
-          >
+          <Link to="/tasks/new" search={{ relaunchFrom: tk.id }} className="btn btn--sm">
             {t('tasks.resumeLaunchLink')}
           </Link>
         </div>
@@ -387,7 +373,7 @@ function TaskDetailPage() {
       {showWorkgroupResumeHint && (
         <div className="info-box info-box--muted">
           <span>{t('tasks.resumeUnavailableWorkgroup')}</span>{' '}
-          <Link to="/tasks/new" search={{ kind: 'workgroup' }} className="btn btn--sm">
+          <Link to="/tasks/new" search={{ relaunchFrom: tk.id }} className="btn btn--sm">
             {t('tasks.resumeLaunchLink')}
           </Link>
         </div>

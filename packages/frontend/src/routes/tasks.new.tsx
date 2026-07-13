@@ -23,11 +23,16 @@ import type {
   CachedRepo,
   ScheduledTask,
   Task,
+  TaskMembers,
   UserPublic,
   Workflow,
   Workgroup,
 } from '@agent-workflow/shared'
-import { isLooseValidBranchName, workgroupLaunchReadiness } from '@agent-workflow/shared'
+import {
+  isLooseValidBranchName,
+  taskExecutionKind,
+  workgroupLaunchReadiness,
+} from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Field, NumberInput, Switch, TextArea, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
@@ -46,6 +51,8 @@ import { resolveUrlRepoPath, validateRepoUrl } from '@/lib/launch-repo-source'
 import {
   buildAgentStartBody,
   buildScheduledEnvelope,
+  taskToLaunchPayload,
+  type WizardSeed,
   buildWorkflowStartBody,
   buildWorkflowStartFormData,
   buildWorkgroupStartBody,
@@ -70,6 +77,8 @@ interface TaskWizardSearch {
   schedule?: boolean
   /** RFC-159 absorbed — edit an existing schedule's launch config. */
   editScheduled?: string
+  /** RFC-175 — "relaunch": pre-fill from a terminal task's persisted params. */
+  relaunchFrom?: string
 }
 
 export const TaskWizardRoute = createRoute({
@@ -80,7 +89,7 @@ export const TaskWizardRoute = createRoute({
     const out: TaskWizardSearch = {}
     if (raw.kind === 'workflow' || raw.kind === 'agent' || raw.kind === 'workgroup')
       out.kind = raw.kind
-    for (const k of ['workflow', 'agent', 'workgroup', 'editScheduled'] as const) {
+    for (const k of ['workflow', 'agent', 'workgroup', 'editScheduled', 'relaunchFrom'] as const) {
       const v = raw[k]
       if (typeof v === 'string' && v.length > 0) out[k] = v
     }
@@ -101,6 +110,8 @@ function TaskWizardPage() {
   const qc = useQueryClient()
   const actor = useActor()
   const isEdit = search.editScheduled !== undefined
+  // RFC-175: "relaunch" pre-fills from a terminal task (editScheduled wins if both).
+  const isRelaunch = search.relaunchFrom !== undefined && !isEdit
 
   // --- Step 1 state: execution kind + object -------------------------------
   const deepObject =
@@ -118,6 +129,20 @@ function TaskWizardPage() {
   const [agentName, setAgentName] = useState(search.kind === 'agent' ? (search.agent ?? '') : '')
   const [workgroupName, setWorkgroupName] = useState(
     search.kind === 'workgroup' ? (search.workgroup ?? '') : '',
+  )
+  // RFC-175 (§2b/§2e, R4-F2/R8-F3): the CAPTURED subject id for the relaunch OCC
+  // guard — set at seed-after-verify or explicit re-pick, NOT re-derived from the
+  // live inventory each render (a background refresh must not silently adopt a
+  // same-name replacement's id). undefined ⇒ no guard sent (fresh pick, or a
+  // historical task with no stored id → best-effort by name).
+  const [selectedWorkgroupId, setSelectedWorkgroupId] = useState<string | undefined>(undefined)
+  const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>(undefined)
+  // RFC-175 (§2c/§4.8): for a relaunched WORKFLOW task, the `workflows.version`
+  // the inputs were normalized against — sent as `expectedWorkflowVersion` so a
+  // concurrent PUT to a newer version is rejected rather than silently storing
+  // stale inputs. Captured once when the workflow detail first loads.
+  const [normalizedWorkflowVersion, setNormalizedWorkflowVersion] = useState<number | undefined>(
+    undefined,
   )
 
   // --- Step 2 state: execution space (D9: default remote, remember last) ---
@@ -160,6 +185,24 @@ function TaskWizardPage() {
     queryFn: ({ signal }) => api.get('/api/workgroups', undefined, signal),
   })
 
+  // RFC-175: the source task + its members, for relaunch pre-fill.
+  const relaunchTaskQ = useQuery<Task>({
+    queryKey: ['tasks', search.relaunchFrom],
+    queryFn: ({ signal }) =>
+      api.get(`/api/tasks/${encodeURIComponent(search.relaunchFrom ?? '')}`, undefined, signal),
+    enabled: isRelaunch,
+  })
+  const relaunchMembersQ = useQuery<TaskMembers>({
+    queryKey: ['tasks', search.relaunchFrom, 'members'],
+    queryFn: ({ signal }) =>
+      api.get(
+        `/api/tasks/${encodeURIComponent(search.relaunchFrom ?? '')}/members`,
+        undefined,
+        signal,
+      ),
+    enabled: isRelaunch,
+  })
+
   // Selected workflow detail — the wizard needs `definition.inputs` for Step 3.
   const workflowQ = useQuery<Workflow>({
     queryKey: ['workflows', workflowId],
@@ -173,6 +216,30 @@ function TaskWizardPage() {
     queryKey: ['cached-repos'],
     queryFn: ({ signal }) => api.get('/api/cached-repos', undefined, signal),
   })
+
+  // RFC-175: apply a reconstructed WizardSeed to the field state — shared by the
+  // ?editScheduled= and ?relaunchFrom= seed paths (does NOT touch kind / subject
+  // id capture / collaborators / step — those stay path-specific).
+  const applyWizardSeed = (seed: WizardSeed): void => {
+    setWorkflowId(seed.workflowId ?? '')
+    setAgentName(seed.agentName ?? '')
+    setWorkgroupName(seed.workgroupName ?? '')
+    setSpace(seed.space)
+    setTaskName(seed.taskName)
+    setInputs(seed.inputs)
+    setDescription(seed.description)
+    setGoal(seed.goal)
+    setAllowClarify(seed.allowClarify)
+    setGitUserName(seed.gitUserName)
+    setGitUserEmail(seed.gitUserEmail)
+    setWorkingBranch(seed.workingBranch)
+    setAutoCommitPush(seed.autoCommitPush)
+    // Keep the exact stored value: fractional minutes round-trip back to the
+    // original ms via Math.round(min * 60_000) — a no-op save must not mutate a
+    // limit like 123456ms into 120000ms (Codex P2).
+    setMaxDurationMin(seed.maxDurationMs !== undefined ? seed.maxDurationMs / 60_000 : undefined)
+    setMaxTotalTokens(seed.maxTotalTokens)
+  }
 
   // --- editScheduled: load + seed (kind-aware, one-shot) ---------------------
   const scheduleQ = useQuery<ScheduledTask>({
@@ -203,24 +270,7 @@ function TaskWizardPage() {
       setMaxVisited(STEP_CONFIRM)
       return
     }
-    setWorkflowId(seed.workflowId ?? '')
-    setAgentName(seed.agentName ?? '')
-    setWorkgroupName(seed.workgroupName ?? '')
-    setSpace(seed.space)
-    setTaskName(seed.taskName)
-    setInputs(seed.inputs)
-    setDescription(seed.description)
-    setGoal(seed.goal)
-    setAllowClarify(seed.allowClarify)
-    setGitUserName(seed.gitUserName)
-    setGitUserEmail(seed.gitUserEmail)
-    setWorkingBranch(seed.workingBranch)
-    setAutoCommitPush(seed.autoCommitPush)
-    // Keep the exact stored value: fractional minutes round-trip back to the
-    // original ms via Math.round(min * 60_000) — a no-op save must not mutate
-    // a limit like 123456ms into 120000ms (Codex P2).
-    setMaxDurationMin(seed.maxDurationMs !== undefined ? seed.maxDurationMs / 60_000 : undefined)
-    setMaxTotalTokens(seed.maxTotalTokens)
+    applyWizardSeed(seed)
     seedCollabIds.current = seed.collaboratorUserIds
     // Everything is pre-filled — open every step so the user can jump straight
     // to what they want to change (or to Confirm to just re-save).
@@ -246,6 +296,85 @@ function TaskWizardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEdit, scheduleQ.data, collabLookup.isLoading])
 
+  // --- RFC-175 relaunch: load task + members → seed (one-shot, kind-aware) ----
+  const relaunchSeededRef = useRef(false)
+  useEffect(() => {
+    if (!isRelaunch || relaunchSeededRef.current) return
+    // Barrier (R4-F4): wait for the source task, its members, the actor identity
+    // (to exclude the launcher from seeded collaborators) AND the kind-relevant
+    // inventory (the subject-id guard needs it — a slow inventory must not make a
+    // valid subject look missing). The task error surfaces via the banner + a
+    // submit gate; don't seed on it.
+    if (relaunchTaskQ.data === undefined || relaunchMembersQ.data === undefined) return
+    if (actor.isPending) return
+    const task = relaunchTaskQ.data
+    const kind = taskExecutionKind(task)
+    if (kind === 'workgroup' && workgroupsQ.data === undefined) return
+    if (kind === 'agent' && agentsQ.data === undefined) return
+    relaunchSeededRef.current = true
+
+    const members = relaunchMembersQ.data
+    const { payload } = taskToLaunchPayload(task)
+    const seed = payloadToWizardSeed(kind, payload)
+    if (seed === null) {
+      setSeedFailed(true)
+      setStep(STEP_MODE)
+      setMaxVisited(STEP_CONFIRM)
+      return
+    }
+    setKind(kind)
+    applyWizardSeed(seed)
+
+    // Subject-identity guard + CAPTURED id (§4.7). Pre-select ONLY when the
+    // current same-named resource is the SAME one the task ran (id match); else
+    // clear + force an explicit re-pick — never target a same-name replacement.
+    if (kind === 'workgroup') {
+      const cur = (workgroupsQ.data ?? []).find((g) => g.name === seed.workgroupName)
+      if (cur !== undefined && cur.id === task.workgroupId) {
+        setSelectedWorkgroupId(cur.id)
+      } else {
+        setWorkgroupName('')
+        setSelectedWorkgroupId(undefined)
+      }
+    } else if (kind === 'agent') {
+      const cur = (agentsQ.data ?? []).find((a) => a.name === seed.agentName)
+      if (task.sourceAgentId == null) {
+        setSelectedAgentId(undefined) // historical task: no id to verify → by name
+      } else if (cur !== undefined && cur.id === task.sourceAgentId) {
+        setSelectedAgentId(cur.id)
+      } else {
+        setAgentName('')
+        setSelectedAgentId(undefined)
+      }
+    }
+
+    // Collaborators (§4.5, R3-F4): agent/workflow pre-fill the task's CURRENT
+    // members (owner + collaborators) minus the launcher; workgroup does NOT
+    // (its stored set unions auto-added human members — the launch re-derives
+    // those, and replaying would over-grant to members since removed).
+    if (kind !== 'workgroup') {
+      const launcherId = actor.data?.source !== 'daemon' ? actor.data?.user.id : undefined
+      const seen = new Set<string>()
+      setCollaborators(
+        [members.owner, ...members.users].filter(
+          (u): u is UserPublic =>
+            u != null && u.id !== launcherId && (seen.has(u.id) ? false : (seen.add(u.id), true)),
+        ),
+      )
+    }
+
+    setStep(STEP_MODE)
+    setMaxVisited(STEP_CONFIRM)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isRelaunch,
+    relaunchTaskQ.data,
+    relaunchMembersQ.data,
+    workgroupsQ.data,
+    agentsQ.data,
+    actor.isPending,
+  ])
+
   // Seed the inputs map from the selected workflow's declared keys (merge:
   // stale keys drop, new keys start blank, user-typed values survive). The
   // uploads map is filtered in lockstep — leaving files picked for a PREVIOUS
@@ -256,7 +385,13 @@ function TaskWizardPage() {
     setInputs((prev) => {
       const seeded: Record<string, string> = {}
       for (const i of defs) {
-        seeded[i.key] = prev[i.key] ?? ''
+        // RFC-175 (§4.8, R4-F3): normalize against the CURRENT def. An upload-kind
+        // value is a stale worktree path on a relaunch (the backend stored a path,
+        // not user text) that the browser can't rebuild into a File and that would
+        // submit as a bogus string — clear it (the missingRequired gate then forces
+        // a re-pick for required uploads). Upload values are always File-driven, so
+        // clearing is a no-op for a normal launch.
+        seeded[i.key] = i.kind === 'upload' ? '' : (prev[i.key] ?? '')
       }
       return seeded
     })
@@ -265,7 +400,10 @@ function TaskWizardPage() {
       const kept = Object.entries(prev).filter(([k]) => uploadKeys.has(k))
       return kept.length === Object.keys(prev).length ? prev : Object.fromEntries(kept)
     })
-  }, [kind, workflowQ.data])
+    // RFC-175 (§2c): capture the version the inputs were normalized against, sent
+    // as expectedWorkflowVersion on the immediate relaunch submit.
+    if (isRelaunch) setNormalizedWorkflowVersion(workflowQ.data.version)
+  }, [kind, workflowQ.data, isRelaunch])
 
   // --- Step 1 filtering (launchability projection) ---------------------------
   const workflowOptions = (workflowsQ.data ?? [])
@@ -358,6 +496,13 @@ function TaskWizardPage() {
   // RFC-159 P2: editing a schedule with collaborators must wait for the id →
   // UserPublic lookup, else Save rebuilds the body with an empty set.
   const collabReady = !isEdit || seedCollabIds.current.length === 0 || collabLookup.isSuccess
+  // RFC-175 (R3-F3): a relaunch must not submit until the source task AND (for
+  // agent/workflow) its members have loaded — else the launch would fire with
+  // empty/wrong collaborators or a half-applied seed. A task-fetch failure
+  // (404/403/network) blocks the submit and surfaces a banner.
+  const relaunchError = isRelaunch && relaunchTaskQ.isError
+  const relaunchReady =
+    !isRelaunch || (relaunchTaskQ.isSuccess && (kind === 'workgroup' || relaunchMembersQ.isSuccess))
 
   const nextEnabled =
     step === STEP_MODE ? stepModeReady : step === STEP_SPACE ? sourceReady : stepContentReady
@@ -403,19 +548,32 @@ function TaskWizardPage() {
     })
   }
 
+  // RFC-175 (§2d): immediate-submit OCC guards — spread onto the immediate POST
+  // body ONLY, never into buildImmediateBody (scheduledEnvelope reuses that; a
+  // persisted schedule must not carry a point-in-time guard — R6/R7-F1).
+  const immediateGuards = (): Record<string, unknown> => {
+    if (kind === 'agent')
+      return selectedAgentId !== undefined ? { expectedAgentId: selectedAgentId } : {}
+    if (kind === 'workgroup')
+      return selectedWorkgroupId !== undefined ? { expectedWorkgroupId: selectedWorkgroupId } : {}
+    return normalizedWorkflowVersion !== undefined
+      ? { expectedWorkflowVersion: normalizedWorkflowVersion }
+      : {}
+  }
+
   const start = useMutation({
     mutationFn: () => {
       if (kind === 'agent') {
-        return api.post<Task>(
-          `/api/agents/${encodeURIComponent(agentName)}/tasks`,
-          buildImmediateBody(),
-        )
+        return api.post<Task>(`/api/agents/${encodeURIComponent(agentName)}/tasks`, {
+          ...buildImmediateBody(),
+          ...immediateGuards(),
+        })
       }
       if (kind === 'workgroup') {
-        return api.post<Task>(
-          `/api/workgroups/${encodeURIComponent(workgroupName)}/tasks`,
-          buildImmediateBody(),
-        )
+        return api.post<Task>(`/api/workgroups/${encodeURIComponent(workgroupName)}/tasks`, {
+          ...buildImmediateBody(),
+          ...immediateGuards(),
+        })
       }
       // RFC-020: any upload-kind input drives a multipart submit even with
       // zero picked files, so the backend's central min/max gate runs.
@@ -429,7 +587,7 @@ function TaskWizardPage() {
           ),
         )
       }
-      return api.post<Task>('/api/tasks', buildImmediateBody())
+      return api.post<Task>('/api/tasks', { ...buildImmediateBody(), ...immediateGuards() })
     },
     onSuccess: (created) => navigate({ to: '/tasks/$id', params: { id: created.id } }),
   })
@@ -455,6 +613,8 @@ function TaskWizardPage() {
     stepContentReady &&
     multiRepoBlockedReason === null &&
     collabReady &&
+    relaunchReady &&
+    !relaunchError &&
     !submitPending
   // RFC-159: upload files can't be persisted into a schedule's JSON payload.
   const scheduleUnsupported = kind === 'workflow' && (hasUploadInput || hasUploads)
@@ -501,6 +661,12 @@ function TaskWizardPage() {
       {seedFailed && (
         <div className="info-box info-box--muted" role="alert" data-testid="wizard-seed-degraded">
           {t('taskWizard.degradedBanner')}
+        </div>
+      )}
+
+      {relaunchError && (
+        <div className="error-box" role="alert" data-testid="wizard-relaunch-error">
+          {describeApiError(relaunchTaskQ.error)}
         </div>
       )}
 
@@ -603,6 +769,15 @@ function TaskWizardPage() {
                   setWorkflowId('')
                   setAgentName('')
                   setWorkgroupName('')
+                  // RFC-175 (§4.5, R2-F2): clear seeded collaborators + captured
+                  // subject ids on a kind switch — else a relaunch-seeded agent/
+                  // workflow collaborator set would ride into a workgroup launch
+                  // (which must NOT pre-fill collaborators), and a stale captured
+                  // id would target the wrong subject.
+                  setCollaborators([])
+                  setSelectedWorkgroupId(undefined)
+                  setSelectedAgentId(undefined)
+                  setNormalizedWorkflowVersion(undefined)
                 }}
                 disabled={isEdit}
                 ariaLabel={t('taskWizard.kindLabel')}
@@ -659,7 +834,13 @@ function TaskWizardPage() {
               ) : kind === 'agent' ? (
                 <Select
                   value={agentName}
-                  onChange={setAgentName}
+                  onChange={(name) => {
+                    setAgentName(name)
+                    // RFC-175 (R8-F3): capture the picked agent's CURRENT id so an
+                    // explicit re-pick sends the guard for the chosen agent (not a
+                    // stale seeded id → no false 409).
+                    setSelectedAgentId((agentsQ.data ?? []).find((a) => a.name === name)?.id)
+                  }}
                   options={agentOptions}
                   searchable
                   placeholder={t('taskWizard.objectPlaceholder')}
@@ -668,7 +849,12 @@ function TaskWizardPage() {
               ) : (
                 <Select
                   value={workgroupName}
-                  onChange={setWorkgroupName}
+                  onChange={(name) => {
+                    setWorkgroupName(name)
+                    setSelectedWorkgroupId(
+                      (workgroupsQ.data ?? []).find((g) => g.name === name)?.id,
+                    )
+                  }}
                   options={workgroupOptions}
                   searchable
                   placeholder={t('taskWizard.objectPlaceholder')}
