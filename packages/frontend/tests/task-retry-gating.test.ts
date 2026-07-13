@@ -6,7 +6,7 @@
 // button that the API will 409 on.
 
 import { describe, expect, test } from 'vitest'
-import { resumeStatus } from '../src/routes/tasks.detail'
+import { canOfferResume, resumeStatus } from '../src/routes/tasks.detail'
 import { canRetryNodeRun } from '../src/components/NodeDetailDrawer'
 
 describe('resumeStatus', () => {
@@ -45,6 +45,68 @@ describe('resumeStatus', () => {
 
   test('canceled task → not-resumable (no resume API endpoint for canceled)', () => {
     expect(resumeStatus('canceled', '/tmp/wt')).toBe('not-resumable')
+  })
+})
+
+// Regression: a failed TURN-ENGINE workgroup task (leader_worker / free_collab)
+// used to show the Resume button, but POST /api/tasks/:id/resume 403s them —
+// the builtin __workgroup_host__ anchor is read-only (assertTaskWorkflowNotBuiltin,
+// locked by backend rfc167-dynamic-workflow-engine.test.ts). Clicking Resume
+// surfaced "workflow is a built-in read-only resource". canOfferResume must gate
+// the button on the workgroup dispatch mode so the UI never offers what the API
+// refuses (this file's whole purpose per the header comment). Recovery for
+// turn-engine groups is relaunch (RFC-164 §4.3/§12).
+describe('canOfferResume', () => {
+  const base = { status: 'failed' as const, worktreePath: '/tmp/wt' }
+
+  test('failed plain-workflow task (not a workgroup) → offer resume', () => {
+    expect(canOfferResume({ ...base, isWorkgroup: false, isDynamicWorkgroup: false })).toBe(true)
+  })
+
+  test('failed dynamic_workflow workgroup → offer resume (RFC-167 executing recovery)', () => {
+    expect(canOfferResume({ ...base, isWorkgroup: true, isDynamicWorkgroup: true })).toBe(true)
+  })
+
+  test('failed turn-engine workgroup → NO resume (endpoint 403s builtin-readonly)', () => {
+    expect(canOfferResume({ ...base, isWorkgroup: true, isDynamicWorkgroup: false })).toBe(false)
+  })
+
+  test('interrupted turn-engine workgroup → NO resume', () => {
+    expect(
+      canOfferResume({
+        status: 'interrupted',
+        worktreePath: '/tmp/wt',
+        isWorkgroup: true,
+        isDynamicWorkgroup: false,
+      }),
+    ).toBe(false)
+  })
+
+  test('workgroup with mode still loading (isDynamicWorkgroup=false) → NO resume (fail-safe)', () => {
+    // Until the room config arrives a workgroup reads as turn-engine; hide the
+    // button rather than flash one the API might refuse. A dynamic group
+    // self-corrects to `true` one query later.
+    expect(canOfferResume({ ...base, isWorkgroup: true, isDynamicWorkgroup: false })).toBe(false)
+  })
+
+  test('non-ready status never offers resume, workgroup mode notwithstanding', () => {
+    expect(
+      canOfferResume({ ...base, status: 'done', isWorkgroup: false, isDynamicWorkgroup: false }),
+    ).toBe(false)
+    expect(
+      canOfferResume({ ...base, status: 'running', isWorkgroup: true, isDynamicWorkgroup: true }),
+    ).toBe(false)
+  })
+
+  test('worktree-missing failed task never offers the resume button (hint handles it)', () => {
+    expect(
+      canOfferResume({
+        status: 'failed',
+        worktreePath: '',
+        isWorkgroup: false,
+        isDynamicWorkgroup: false,
+      }),
+    ).toBe(false)
   })
 })
 

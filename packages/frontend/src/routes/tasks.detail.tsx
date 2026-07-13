@@ -269,6 +269,20 @@ function TaskDetailPage() {
   // one derivation reused by the header subject link, the meta row and the
   // relaunch/resume deep-links (taskExecutionKind's single-source contract).
   const subjectKind = taskExecutionKind(tk)
+  // RFC-164/167: gate the Resume button on the workgroup dispatch mode too — a
+  // turn-engine group (lw / fc) 403s `/resume` (builtin __workgroup_host__ anchor),
+  // so its recovery is relaunch, not resume. See canOfferResume.
+  const showResume = canOfferResume({
+    status: tk.status,
+    worktreePath: tk.worktreePath,
+    isWorkgroup,
+    isDynamicWorkgroup,
+  })
+  // Once the room config confirms turn-engine (mode loaded, not dynamic), surface
+  // a relaunch hint in place of the hidden Resume button — gated on room.data so a
+  // dynamic group mid-load never flashes the wrong message.
+  const showWorkgroupResumeHint =
+    resumability === 'ready' && isWorkgroup && room.data !== undefined && !isDynamicWorkgroup
 
   return (
     <div className="page page--task-detail">
@@ -324,7 +338,7 @@ function TaskDetailPage() {
               {t('tasks.relaunchButton')}
             </Link>
           )}
-          {resumability === 'ready' && (
+          {showResume && (
             <button
               type="button"
               className="btn btn--primary"
@@ -366,6 +380,14 @@ function TaskDetailPage() {
             }
             className="btn btn--sm"
           >
+            {t('tasks.resumeLaunchLink')}
+          </Link>
+        </div>
+      )}
+      {showWorkgroupResumeHint && (
+        <div className="info-box info-box--muted">
+          <span>{t('tasks.resumeUnavailableWorkgroup')}</span>{' '}
+          <Link to="/tasks/new" search={{ kind: 'workgroup' }} className="btn btn--sm">
             {t('tasks.resumeLaunchLink')}
           </Link>
         </div>
@@ -1262,6 +1284,34 @@ export function resumeStatus(
   if (status !== 'failed' && status !== 'interrupted') return 'not-resumable'
   if (worktreePath === '') return 'worktree-missing'
   return 'ready'
+}
+
+/**
+ * Whether to render the generic Resume button. Composes `resumeStatus` with the
+ * workgroup-dispatch gate that mirrors the backend `/api/tasks/:id/resume` guard
+ * (`assertTaskWorkflowNotBuiltin`, routes/tasks.ts): a TURN-ENGINE workgroup task
+ * (leader_worker / free_collab) is anchored on the builtin `__workgroup_host__`
+ * workflow, so the endpoint 403s `builtin-readonly` — its recovery is relaunch /
+ * engine re-entry (RFC-164 §4.3/§12), never generic resume. dynamic_workflow
+ * groups (RFC-167) and agent / plain-workflow tasks stay resumable.
+ *
+ * Fail-safe while the room mode is still loading: a workgroup reads as
+ * turn-engine (`isDynamicWorkgroup=false`) until the room config arrives, so the
+ * button stays hidden until we KNOW it's dynamic — the UI never flashes a button
+ * the API would refuse (the exact bug: a failed group showed Resume, click →
+ * "workflow is a built-in read-only resource").
+ *
+ * Exported for unit tests.
+ */
+export function canOfferResume(input: {
+  status: Task['status']
+  worktreePath: string
+  isWorkgroup: boolean
+  isDynamicWorkgroup: boolean
+}): boolean {
+  if (resumeStatus(input.status, input.worktreePath) !== 'ready') return false
+  if (input.isWorkgroup && !input.isDynamicWorkgroup) return false
+  return true
 }
 
 function describeError(e: unknown): string {
