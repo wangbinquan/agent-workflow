@@ -2931,6 +2931,33 @@ code {
   align-self: flex-start;
 }
 
+/* Workgroup task's "Workflow" column: the group-name link + 「工作组」 badge.
+   Without this wrapper the link and the inline-flex chip flow inline in the
+   auto-width cell, and because the chip is `white-space: nowrap` it drops whole
+   to a second line under the name whenever name+badge is wider than the column.
+   Same cap+ellipsis trick as .task-name-cell: cap the box, let the name
+   ellipsize, pin the badge with `flex:0 0 auto` so it always stays on one line
+   beside the name. */
+.task-workflow-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 320px;
+  min-width: 0;
+}
+
+.task-workflow-cell__name {
+  display: block;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-workflow-cell__badge {
+  flex: 0 0 auto;
+}
+
 /* ---- Diff viewer ---- */
 
 .diff {

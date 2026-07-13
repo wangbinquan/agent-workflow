@@ -129,27 +129,34 @@ function TasksPage() {
                       /workgroups/$name link + badge. Non-workgroup tasks keep the
                       plain workflow link. */}
                   {row.workgroupId != null ? (
-                    <>
+                    // Group name + 「工作组」badge share one auto-width cell. Wrap
+                    // them in a single-line flex box (mirrors .task-name-cell):
+                    // without it the link + inline-flex chip flow inline and the
+                    // chip drops to a second line whenever name+badge is wider than
+                    // the column. Name ellipsizes; badge is pinned beside it.
+                    <span className="task-workflow-cell">
                       {row.workgroupName != null ? (
                         <Link
                           to="/workgroups/$name"
                           params={{ name: row.workgroupName }}
-                          className="data-table__link"
+                          className="data-table__link task-workflow-cell__name"
+                          title={row.workgroupName}
                         >
                           {row.workgroupName}
                         </Link>
                       ) : (
                         // Group row deleted — keep the badge, drop the dead link.
                         <span className="data-table__muted">{t('common.emDash')}</span>
-                      )}{' '}
+                      )}
                       <StatusChip
                         kind="info"
                         size="sm"
+                        className="task-workflow-cell__badge"
                         data-testid={`task-workgroup-badge-${row.id}`}
                       >
                         {t('tasks.workgroupBadge')}
                       </StatusChip>
-                    </>
+                    </span>
                   ) : (
                     <Link
                       to="/workflows/$id"
