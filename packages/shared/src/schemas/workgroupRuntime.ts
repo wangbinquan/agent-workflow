@@ -127,6 +127,32 @@ export const WorkgroupMessageSchema = z.object({
 export type WorkgroupMessage = z.infer<typeof WorkgroupMessageSchema>
 
 // ---------------------------------------------------------------------------
+// Per-member current run (RFC-179) — room runtime visibility. Derived + read-only:
+// maps a member to its current / most-recent host node_run so the room can make
+// each member clickable (→ Session drawer) and show an executing indicator.
+// Never enters a prompt (design §11 prompt-isolation) — UI/room rendering only.
+// ---------------------------------------------------------------------------
+
+/** Which turn kind a host run represents (rerun_cause classification). */
+export const WORKGROUP_RUN_KINDS = ['leader-round', 'assignment', 'message-turn'] as const
+export const WorkgroupRunKindSchema = z.enum(WORKGROUP_RUN_KINDS)
+export type WorkgroupRunKind = z.infer<typeof WorkgroupRunKindSchema>
+
+/**
+ * A member's current session run (RFC-179 §2.1). `running` wins; else the most
+ * recent terminal run; else the member has none (`memberRuns[id]` is null).
+ * `triggerMessageId` is the @-mention that woke a message-turn (null otherwise),
+ * driving the room's per-message「执行中」pill (design §5).
+ */
+export const WorkgroupMemberCurrentRunSchema = z.object({
+  nodeRunId: z.string(),
+  status: z.string(),
+  kind: WorkgroupRunKindSchema,
+  triggerMessageId: z.string().nullable(),
+})
+export type WorkgroupMemberCurrentRun = z.infer<typeof WorkgroupMemberCurrentRunSchema>
+
+// ---------------------------------------------------------------------------
 // Envelope ports (design §5) — generated protocol replaces agent outputs
 // ---------------------------------------------------------------------------
 

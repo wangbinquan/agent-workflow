@@ -43,6 +43,8 @@ import { canViewTask } from '@/services/taskCollab'
 import { createWorkflow } from '@/services/workflow'
 import { advanceMemberCursor, casAssignmentStatus } from '@/services/workgroupLifecycle'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
+import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroupLaunch'
+import { deriveMemberCurrentRuns } from '@/services/workgroupRoom'
 import { Paths } from '@/util/paths'
 import { resolveOpencodeCmd } from '@/util/opencode'
 import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
@@ -241,7 +243,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
   app.get('/api/workgroup-tasks/:taskId/room', async (c) => {
     const taskId = c.req.param('taskId')
     const { task, config, raw } = await loadVisibleWorkgroupTask(actorOf(c), taskId)
-    const [messages, assignments] = await Promise.all([
+    const [messages, assignments, hostRuns] = await Promise.all([
       deps.db
         .select()
         .from(workgroupMessages)
@@ -252,7 +254,34 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         .from(workgroupAssignments)
         .where(eq(workgroupAssignments.taskId, taskId))
         .orderBy(asc(workgroupAssignments.id)),
+      // RFC-179 — host runs (leader-round / assignment / message-turn) for the
+      // per-member currentRun derivation; read-only, never enters a prompt.
+      deps.db
+        .select({
+          id: nodeRuns.id,
+          nodeId: nodeRuns.nodeId,
+          shardKey: nodeRuns.shardKey,
+          status: nodeRuns.status,
+          rerunCause: nodeRuns.rerunCause,
+        })
+        .from(nodeRuns)
+        .where(
+          and(
+            eq(nodeRuns.taskId, taskId),
+            inArray(nodeRuns.nodeId, [WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID]),
+          ),
+        ),
     ])
+    // RFC-179 §2.1 — map each member to its current session run (running wins,
+    // else newest terminal, else null). Single source; the room makes members
+    // clickable and shows the executing indicator off this map.
+    const memberRuns = deriveMemberCurrentRuns(
+      config.members,
+      config.leaderMemberId,
+      hostRuns,
+      assignments.map((a) => ({ id: a.id, assigneeMemberId: a.assigneeMemberId })),
+      messages.map((m) => ({ id: m.id, mentionMemberIds: safeMentions(m.mentionsJson) })),
+    )
     const gateRaw = JsonObjectSchema.parse(raw.gate ?? {})
     return c.json({
       taskId,
@@ -294,6 +323,8 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         createdAt: a.createdAt,
         updatedAt: a.updatedAt,
       })),
+      // RFC-179 — { [memberId]: currentRun | null }; drives 点成员看 session + 执行中指示.
+      memberRuns,
     })
   })
 

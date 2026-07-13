@@ -144,9 +144,13 @@ describe('RFC-164 room — endpoints', () => {
       gate: { awaitingConfirmation: boolean }
       messages: unknown[]
       assignments: unknown[]
+      memberRuns: Record<string, unknown>
     }
     expect(body.config.members).toHaveLength(2)
     expect(body.gate.awaitingConfirmation).toBe(false)
+    // RFC-179 — room exposes a per-member currentRun map; no runs seeded → all null.
+    expect(body.memberRuns['m-lead']).toBeNull()
+    expect(body.memberRuns['m-coder']).toBeNull()
 
     const invisible = await req(stranger.token, `/api/workgroup-tasks/${taskId}/room`)
     const missing = await req(stranger.token, `/api/workgroup-tasks/${ulid()}/room`)
@@ -155,6 +159,46 @@ describe('RFC-164 room — endpoints', () => {
     expect(((await invisible.json()) as { code: string }).code).toBe(
       ((await missing.json()) as { code: string }).code,
     )
+  })
+
+  test('RFC-179: room memberRuns maps a running assignment run to its member', async () => {
+    // Seed a dispatched→running assignment for @coder + the host run keyed by it.
+    const assignmentId = ulid()
+    await db.insert(workgroupAssignments).values({
+      id: assignmentId,
+      taskId,
+      source: 'leader',
+      assigneeMemberId: 'm-coder',
+      title: 'do the thing',
+      status: 'running',
+    })
+    const runId = ulid()
+    await db.insert(nodeRuns).values({
+      id: runId,
+      taskId,
+      nodeId: '__wg_member__',
+      shardKey: assignmentId,
+      status: 'running',
+      rerunCause: 'wg-assignment',
+      retryIndex: 0,
+      iteration: 0,
+      reviewIteration: 0,
+      startedAt: Date.now(),
+    })
+    const body = (await (await req(owner.token, `/api/workgroup-tasks/${taskId}/room`)).json()) as {
+      memberRuns: Record<
+        string,
+        { nodeRunId: string; status: string; kind: string; triggerMessageId: string | null } | null
+      >
+    }
+    expect(body.memberRuns['m-coder']).toEqual({
+      nodeRunId: runId,
+      status: 'running',
+      kind: 'assignment',
+      triggerMessageId: null,
+    })
+    // The leader has no run of its own → still null (assignment run is @coder's).
+    expect(body.memberRuns['m-lead']).toBeNull()
   })
 
   test('non-workgroup task → 404 (room endpoints only exist for group tasks)', async () => {
