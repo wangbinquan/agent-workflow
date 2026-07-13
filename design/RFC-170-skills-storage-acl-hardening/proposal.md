@@ -53,13 +53,13 @@ RFC-169 把 agents/skills/mcps/plugins 四页改成双栏 master-detail，带来
 ## 5. 验收标准
 
 1. 复合 token 全链：ABA（删除重建同名）、仅元数据变更、缺失 token 三反例全被 409/400 拒；连续保存 token 逐次推进不误 409。
-2. 六条版本写 + 六类身份/生命周期写构成封闭 inventory；每条「预检通过→owner transfer→提交」屏障测试证明最终事务内 ACL 重读拒绝旧 owner。
+2. 六条版本写 + 六类身份/生命周期写 + 第 13 类 lazy backfill + 第 14/15 类 adoption（`adopt-managed`/`rebind`）构成封闭 inventory；每条「预检通过→owner transfer→提交」屏障测试证明最终事务内 ACL 重读拒绝旧 owner。
 3. 快照权威：注入崩溃点（DB 提交后 rename 前 / 复制中 / cpSync 抛错）+ 各 phase kill/restart，重启从快照重建、旧 token 写 409；快照亦损→degraded 隔离。
 4. quarantine 全链：重建失败后分别启动 opencode/claude 任务被拒；resolve→quarantine→stage 交错必拒。
 5. 存量升级：旧 ZIP overwrite 后升级不丢内容；候选捕获后手工改 live→L1 成下代候选可最终采纳；采纳内容与预览逐字节一致；恢复候选留档。
 6. source 生命周期：owner transfer 后 remove/disable/enable/rescan/replace 对无权限 child 跳过标 orphaned；system reconcile 仅目录客观消失且 owner=registrar 才删。
 7. ACL：同 owner 的 grant/visibility 迟到写、transfer、删除重建 ABA、workgroup 路径全被 aclRevision CAS 拒；六类资源共享服务同断言。
 8. 创建 reservation：create×create / create×ZIP / create×system-reconcile 并发只有 reservation owner 发布、输家只清自己 staging。
-9. migration ×1（**精确清单以 design.md §10 为准**：17 ALTER + 2 CREATE TABLE〔`skill_operations` 五-kind 状态机 + `skill_operation_locks` 双锁〕 + partial-unique index + 3 backfill UPDATE——六表 `acl_revision` + `fusions.precondition_token` + `skills` 八新列〔含 `reservation_state` DEFAULT 'ready'、`version_state` **存量有快照者回填 `'snapshot-unverified'`——非 `'snapshot-authoritative'`，须待 boot 逐 skill 验 hash/symlink 通过才 CAS 权威**〕 + `skill_sources` 两列）落地、`upgrade-rolling` journal 89→90 计数锁 bump；全门禁绿。token/snapshot/reservation 仅 managed（G2-1 三类权威模型）。
+9. migration ×1（**精确清单以 design.md §10 为准**：17 ALTER + 2 CREATE TABLE〔`skill_operations` **六-kind** 状态机〔reserve/replace/migrate/delete/version-write/**adopt-managed**〕 + `skill_operation_locks` 双锁〕 + partial-unique index + 3 backfill UPDATE——六表 `acl_revision` + `fusions.precondition_token` + `skills` 八新列〔含 `reservation_state` DEFAULT 'ready'、`version_state` **存量有快照者回填 `'snapshot-unverified'`——非 `'snapshot-authoritative'`，须待 boot 逐 skill 验 hash/symlink 通过才 CAS 权威**〕 + `skill_sources` 两列）落地、`upgrade-rolling` journal 89→90 计数锁 bump；全门禁绿。token/snapshot/reservation 仅 managed（G2-1 三类权威模型）。
 
 （详细协议与 24 findings 折法见 design.md；RFC-169 设计门 R5–R16 记录整体承接为本 RFC §9 设计门记录。）
