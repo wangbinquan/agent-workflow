@@ -257,6 +257,17 @@ export interface SkillVersionCommitOpts {
    */
   expectedSkillId?: string
   expectedMetaRevision?: number
+  /**
+   * RFC-170 (Codex 4th-review [high]) — the skill's `owner_user_id` at the moment
+   * the caller authorized the actor (route `requireResourceOwner`). Re-checked in
+   * the version-bump tx: an owner transfer during the operation's await window
+   * makes that route-level authorization stale, so the write is rejected (409),
+   * closing the owner-transfer-during-save race that would otherwise let a demoted
+   * ex-owner commit a post-revocation version. `undefined` = no owner fence
+   * (system / `initial` / not-yet-wired callers — threading the six writers to
+   * pass it is tracked in IMPLEMENTATION §7; this is the funnel-side machinery).
+   */
+  expectedOwnerUserId?: string | null
   /** Fold a description change into the same tx (keeps DB ↔ SKILL.md in sync). */
   setDescription?: string
   /**
@@ -296,7 +307,8 @@ function assertCompositePrecondition(
   if (
     commit.expectedSkillId === undefined &&
     commit.expectedMetaRevision === undefined &&
-    commit.expectedVersion === undefined
+    commit.expectedVersion === undefined &&
+    commit.expectedOwnerUserId === undefined
   ) {
     return
   }
@@ -305,6 +317,7 @@ function assertCompositePrecondition(
       id: skills.id,
       contentVersion: skills.contentVersion,
       metaRevision: skills.metaRevision,
+      ownerUserId: skills.ownerUserId,
     })
     .from(skills)
     .where(eq(skills.name, name))
@@ -314,7 +327,13 @@ function assertCompositePrecondition(
     (commit.expectedSkillId !== undefined && live.id !== commit.expectedSkillId) ||
     (commit.expectedMetaRevision !== undefined &&
       live.metaRevision !== commit.expectedMetaRevision) ||
-    (commit.expectedVersion !== undefined && live.contentVersion !== commit.expectedVersion)
+    (commit.expectedVersion !== undefined && live.contentVersion !== commit.expectedVersion) ||
+    // RFC-170 (4th-review [high]): owner-drift — the actor was authorized (route
+    // requireResourceOwner) against the owner at request time; if it transferred
+    // during the operation's await window that authorization is stale → reject, so
+    // a demoted ex-owner cannot commit a post-revocation version. Conservative for
+    // admins (an owner change during their write also 409s → reload), which is safe.
+    (commit.expectedOwnerUserId !== undefined && live.ownerUserId !== commit.expectedOwnerUserId)
   ) {
     throw new ConflictError(
       'skill-version-conflict',

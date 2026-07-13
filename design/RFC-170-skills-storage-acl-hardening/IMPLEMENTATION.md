@@ -321,8 +321,14 @@ combined-save funnel）边界内**，均未在本增量修：
   预检后、写事务内只重读 id/contentVersion/metaRevision，不重读 owner——请求等待期 owner transfer
   后旧 owner 恢复仍过 fence、成撤权后写。**属跨全六写入口（file/restore/ZIP/fusion/combined-save）
   的 in-tx ACL 原子性**（设计 §318「所有 mutation 最终事务加检」已列），且**非本增量引入**（T4
-  combined-save 与所有 writer 都沿用路由级 ACL）→ 立为独立「version-write in-tx ACL 重校」单元，
-  与 F3/F2b-UX 的 canonical-token-store 单元并列。
+  combined-save 与所有 writer 都沿用路由级 ACL）。**funnel 侧机制已落（㉚，`skillVersion.ts` 独立
+  commit）**：`SkillVersionCommitOpts` 加 `expectedOwnerUserId`（授权时的 owner），`assertCompositePrecondition`
+  于版本 bump 同事务重读 `skills.ownerUserId`、drift（transfer）即 409（no-op 短路也走同一 helper 故一并
+  fenced）；owner-drift 语义对 admin 保守（owner 变即 409 reload，安全）。因 `skillVersion.ts` 不在
+  RFC-178 触及面、且此改仅动该文件 + 新测试文件，**与协作者 RFC-178 零冲突**。**六写入口喂
+  `expectedOwnerUserId` 的接线仍延后**（saveSkillWithToken/file/ZIP 在被 RFC-178 重写的 `skill.ts`，
+  restore/fusion 在 clean 文件但先随 funnel 机制落）→ 待 RFC-178 落地后接线，机制先就位（同 F4 fence
+  先落后喂的模式）。
 - **[medium] external combined-save 静默丢 frontmatterExtra（skill.ts external 分支）**：external 分支只
   拒 bodyMd、忽略 frontmatterExtra，hand-external 的 extra-only 请求 200 却零落盘。**真实但落在并行
   RFC-178（移除外部/父目录 skill，当前 Draft + 协作者未提代码）的删除路径**——修「external 拒 extra」
@@ -354,8 +360,8 @@ listFiles + T4a legacy backfill + reverify + T9 注入门）**，余为增强：
 
 - ㉙-fix F3/F2b：file `PUT/DELETE /:name/file` / restore / ZIP overwrite 加复合 token OCC + 前端
   每 skill 单一 canonical token store〔SkillFileTree/restore/save 共享、逐次原子更新〕+ 409 冲突显式
-  reload 流程）· **version-write in-tx ACL 重校**（㉙-fix-4 [high]：全六写入口最终事务内按 immutable
-  skillId 重读 owner/admin、拒撤权 actor；设计 §318）· T9b external descriptor-relative 捕获（需
+  reload 流程）· **version-write in-tx ACL 重校**（㉙-fix-4 [high]：设计 §318——**funnel 侧 owner-drift
+  机制已落 ㉚，余六写入口喂 `expectedOwnerUserId` 接线待 RFC-178 后**）· T9b external descriptor-relative 捕获（需
   openat/O_NOFOLLOW，Bun/Node 不足则 native helper 或 fail-closed）· migrate（T10）· adopt-managed
   （T10b，两阶段 capture→confirm）· 批次 C（source lifecycle reconcile 拆 user/system、migration
   决策 UI、adoption UI）· F12 统一 task-cancel 原语 + clarify 子状态清理（task 层、部分既存）。
