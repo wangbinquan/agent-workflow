@@ -1066,20 +1066,32 @@ function findOpenDispatchTarget(
       eShard === null &&
       mintShards !== undefined &&
       [...mintShards].some((s) => s !== null)
-    // The node-wide open run obligation — the FRESHEST top-level run of each shard that is still
-    // non-done. Codex round-5: a historical failed/canceled attempt SUPERSEDED by a newer done retry
-    // (same shard, higher id) is NOT a live obligation — keying on "any non-done row" would let that
-    // stale failed row block the legacy ledger forever even after the retry succeeded. So reduce to
-    // each shard's freshest generation first, then look for a non-done one. (Also the surfaced
-    // blocker below.)
-    const freshestOpenByShard = new Map<string | null, (typeof inputs.runs)[number]>()
+    // The node-wide open run obligation — a top-level run that still owes work. Codex rounds 5-6:
+    //   • ACTIVE runs (pending/running/awaiting_*) are executable and adopted by the scheduler /
+    //     workgroup engine even when a NEWER done row exists in the same shard (recovery/legacy) →
+    //     ALWAYS a live obligation.
+    //   • A REVIVABLE-TERMINAL run (failed/canceled/interrupted) owes a retry ONLY while it has NOT
+    //     been superseded — i.e. it is still the freshest (max-id) row of its shard. A failed attempt
+    //     followed by a newer done retry is dead (else the stale failed row deadlocks the legacy
+    //     ledger forever, round-4/5).
+    //   • done/skipped/exhausted → finished, no obligation.
+    // (openRun is also the surfaced blocker below.)
+    const freshestByShard = new Map<string | null, (typeof inputs.runs)[number]>()
     for (const r of inputs.runs) {
       if (r.nodeId !== target || r.parentNodeRunId !== null) continue
       const k = r.shardKey ?? null
-      const cur = freshestOpenByShard.get(k)
-      if (cur === undefined || r.id > cur.id) freshestOpenByShard.set(k, r)
+      const cur = freshestByShard.get(k)
+      if (cur === undefined || r.id > cur.id) freshestByShard.set(k, r)
     }
-    const openRun = [...freshestOpenByShard.values()].find((r) => r.status !== 'done')
+    const openRun = inputs.runs.find((r) => {
+      if (r.nodeId !== target || r.parentNodeRunId !== null) return false
+      if (r.status === 'pending' || r.status === 'running') return true
+      if (r.status === 'awaiting_review' || r.status === 'awaiting_human') return true
+      if (r.status === 'failed' || r.status === 'canceled' || r.status === 'interrupted') {
+        return freshestByShard.get(r.shardKey ?? null)?.id === r.id // revivable only while not superseded
+      }
+      return false // done / skipped / exhausted → finished
+    })
     if (
       (nullOnMultiShardHost && openRun !== undefined) ||
       !isDispatchedEntryConsumed(

@@ -868,4 +868,42 @@ describe('RFC-172b Codex P2 — a shard-less legacy in-flight ledger blocks a me
     )[0]
     expect(run?.shardKey).toBe('assign-C')
   })
+
+  test('round-6: an older ACTIVE (pending) run is still an obligation despite a newer done row', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedWorkgroupTask(db, taskId)
+    // Legacy null-shard ledger dispatched to __wg_member__.
+    const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
+    const legacyRerun = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { status: 'pending' })
+    await seedEntry(db, taskId, {
+      originNodeRunId: legacyOrigin,
+      sourceKind: 'manual',
+      sealed: true,
+      dispatchedAt: Date.now(),
+      triggerRunId: legacyRerun,
+    })
+    // A recovery/legacy state on shard B: an OLDER pending run + a NEWER done row (same shard). The
+    // pending row is still executable (scheduler reuses pendingExisting / the engine adopts it), so a
+    // max-id reducer that kept only the newer done would wrongly release the gate (Codex round-6).
+    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B', status: 'pending' })
+    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B', status: 'done' })
+    // member C dispatch.
+    const clarifyC = await seedNodeRun(db, taskId, '__wg_clarify__')
+    await seedRound(db, taskId, clarifyC, 'assign-C')
+    const entryC = await seedEntry(db, taskId, {
+      originNodeRunId: clarifyC,
+      sourceKind: 'self',
+      sealed: true,
+    })
+
+    let threw: unknown = null
+    try {
+      await dispatchTaskQuestions(db, taskId, [entryC.id], actor)
+    } catch (e) {
+      threw = e
+    }
+    // the older pending run is a live obligation → the conservative block holds (no duplicate mint).
+    expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
+  })
 })
