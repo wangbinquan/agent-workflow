@@ -95,8 +95,22 @@ function SkillDetailPage() {
       qc.setQueryData(['skills', name, 'content'], next)
     },
   })
+  // RFC-170 T4 — combined description+body save under composite-token OCC (managed
+  // skills). The response carries a FRESH token the QueryClient becomes the sole
+  // owner of (setQueryData); a 409 conflict refetches so the next save uses the
+  // current token instead of silently overwriting a concurrent change.
+  const combinedSave = useMutation({
+    mutationFn: (payload: { description: string; bodyMd: string; expectedToken: string }) =>
+      api.post<SkillContent>(`/api/skills/${encodeURIComponent(name)}/save`, payload),
+    onSuccess: (next) => {
+      qc.setQueryData(['skills', name, 'content'], next)
+    },
+    onError: () => {
+      void qc.invalidateQueries({ queryKey: ['skills', name, 'content'] })
+    },
+  })
 
-  const saving = saveMeta.isPending || saveContent.isPending
+  const saving = saveMeta.isPending || saveContent.isPending || combinedSave.isPending
   const operationBusy = saving || restorePending
 
   // RFC-169 §5.2 (skills special, F1/F2): keep the current double-PUT LWW but
@@ -107,6 +121,25 @@ function SkillDetailPage() {
   const handleSave = async () => {
     if (draft === undefined) return
     const submitted: SkillDraft = { description, bodyMd }
+    const token = content.data?.token
+
+    // RFC-170 T4: managed skill + a precondition token → ONE atomic combined-save
+    // under token OCC (no more double-PUT LWW; a concurrent change / delete-recreate
+    // ABA is 409-rejected, not silently clobbered).
+    if (caps.canEditContent && token !== undefined) {
+      try {
+        await combinedSave.mutateAsync({ description, bodyMd, expectedToken: token })
+      } catch {
+        return // stays dirty; onError refetched a fresh token, error surfaces below
+      }
+      commitSaved(submitted, submitted)
+      void qc.invalidateQueries({ queryKey: ['skills', name] })
+      void qc.invalidateQueries({ queryKey: ['skills', name, 'versions'] })
+      void qc.invalidateQueries({ queryKey: ['skills'], exact: true })
+      return
+    }
+
+    // External / legacy (no token): keep the RFC-169 double-PUT LWW + reseed.
     const channels: Promise<unknown>[] = [saveMeta.mutateAsync({ description })]
     if (caps.canEditContent) channels.push(saveContent.mutateAsync({ bodyMd }))
     const results = await Promise.allSettled(channels)
@@ -202,7 +235,7 @@ function SkillDetailPage() {
             </button>
           )
         }
-        errors={[saveMeta.error, saveContent.error, del.error]}
+        errors={[combinedSave.error, saveMeta.error, saveContent.error, del.error]}
       >
         <div>
           <h2>{name}</h2>

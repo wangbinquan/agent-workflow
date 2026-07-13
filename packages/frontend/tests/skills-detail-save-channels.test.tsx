@@ -45,6 +45,7 @@ import { SplitDirtyContext } from '../src/components/split/splitDirty'
 interface FetchCall {
   url: string
   method: string
+  body?: string
 }
 
 function json(payload: unknown, status = 200): Response {
@@ -75,13 +76,24 @@ function installFetch(opts: {
   sourceKind: 'managed' | 'external'
   putMeta: Response | (() => Response)
   putContent: Response | (() => Response)
+  // RFC-170 T4: when a `token` is present on the content GET, a managed skill's
+  // Save routes through POST /save (combined). `postSave` drives its response;
+  // omit both to exercise the legacy token-less double-PUT path.
+  token?: string
+  postSave?: Response | (() => Response)
 }): FetchCall[] {
   const calls: FetchCall[] = []
+  let contentGets = 0
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
-      calls.push({ url, method })
+      calls.push({ url, method, body: typeof init?.body === 'string' ? init.body : undefined })
+      if (method === 'POST' && url.endsWith('/api/skills/sk1/save')) {
+        return typeof opts.postSave === 'function'
+          ? opts.postSave()
+          : (opts.postSave ?? json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 2 })).clone()
+      }
       if (method === 'PUT' && url.endsWith('/api/skills/sk1/content')) {
         return typeof opts.putContent === 'function' ? opts.putContent() : opts.putContent.clone()
       }
@@ -90,8 +102,12 @@ function installFetch(opts: {
       }
       if (method === 'GET' && url.endsWith('/api/skills/sk1'))
         return json(skillRow(opts.sourceKind))
-      if (method === 'GET' && url.endsWith('/api/skills/sk1/content'))
-        return json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 1 })
+      if (method === 'GET' && url.endsWith('/api/skills/sk1/content')) {
+        contentGets += 1
+        // A refetch after a 409 hands back a bumped token so the next save is fresh.
+        const token = opts.token === undefined ? undefined : `${opts.token}#${contentGets}`
+        return json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 1, token })
+      }
       if (method === 'GET' && url.endsWith('/api/skills/sk1/files')) return json([])
       if (method === 'GET' && url.endsWith('/api/skills/sk1/versions')) return json([])
       return new Response('not found', { status: 404 })
@@ -225,6 +241,64 @@ describe('skills.detail save channels (DetailHeaderActions errors array)', () =>
     // Both PUTs go out, then we reseed in place — never navigate (D2 flip).
     await waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(2))
     await waitFor(() => expect(errorSpans()).toHaveLength(0))
+    expect(h.navigate).not.toHaveBeenCalled()
+  })
+})
+
+// RFC-170 T4 — a managed skill whose content GET carries a composite precondition
+// token routes Save through ONE atomic POST /save (token OCC), NOT the double-PUT.
+describe('skills.detail T4 combined-save (managed + token)', () => {
+  test('managed + token: Save is a single POST /save carrying expectedToken; no double-PUT', async () => {
+    const calls = installFetch({
+      sourceKind: 'managed',
+      token: 'TOK1',
+      putMeta: () => json({ code: 'unexpected', message: 'PUT must not fire' }, 500),
+      putContent: () => json({ code: 'unexpected', message: 'PUT must not fire' }, 500),
+      postSave: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 2, token: 'TOK2' }),
+    })
+    renderDetail()
+    await clickSave()
+    // Exactly one POST /save, zero PUTs — the legacy channels are bypassed.
+    await waitFor(() => {
+      const posts = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/save'))
+      expect(posts).toHaveLength(1)
+      expect(posts[0]!.body ?? '').toContain('TOK1#1') // the token from the content GET
+    })
+    expect(calls.some((c) => c.method === 'PUT')).toBe(false)
+    // Stays in place, reseeds, no error.
+    await waitFor(() => expect(errorSpans()).toHaveLength(0))
+    expect(h.navigate).not.toHaveBeenCalled()
+  })
+
+  test('managed + token: a 409 token conflict surfaces the error and refetches a fresh token', async () => {
+    const calls = installFetch({
+      sourceKind: 'managed',
+      token: 'STALE',
+      putMeta: () => json(skillRow('managed')),
+      putContent: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 2 }),
+      postSave: () =>
+        json({ code: 'skill-precondition-failed', message: 'token stale — reload' }, 409),
+    })
+    renderDetail()
+    // First content GET (seed) uses token STALE#1.
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith('/content'))).toBe(true))
+    const contentGetsBefore = calls.filter(
+      (c) => c.method === 'GET' && c.url.endsWith('/content'),
+    ).length
+    await clickSave()
+    // The 409 surfaces via the combinedSave error slot...
+    await waitFor(() => {
+      const spans = errorSpans()
+      expect(spans).toHaveLength(1)
+      expect(spans[0]).toContain('token stale — reload')
+    })
+    // ...and onError invalidated the content query → a fresh GET (new token) fired.
+    await waitFor(() => {
+      const contentGetsAfter = calls.filter(
+        (c) => c.method === 'GET' && c.url.endsWith('/content'),
+      ).length
+      expect(contentGetsAfter).toBeGreaterThan(contentGetsBefore)
+    })
     expect(h.navigate).not.toHaveBeenCalled()
   })
 })
