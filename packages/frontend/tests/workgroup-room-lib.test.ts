@@ -489,10 +489,18 @@ describe('resolveComposerKey', () => {
 })
 
 describe('sendChordModLabel', () => {
-  test('returns ⌘ on mac, Ctrl otherwise', () => {
-    const label = sendChordModLabel()
-    expect(label === '⌘' || label === 'Ctrl').toBe(true)
-    // happy-dom's navigator is non-mac by default → Ctrl.
-    expect(label).toBe('Ctrl')
+  test('non-mac (happy-dom default) → Ctrl', () => {
+    expect(sendChordModLabel()).toBe('Ctrl')
+  })
+
+  test('mac platform → ⌘', () => {
+    const orig = Object.getOwnPropertyDescriptor(navigator, 'platform')
+    Object.defineProperty(navigator, 'platform', { value: 'MacIntel', configurable: true })
+    try {
+      expect(sendChordModLabel()).toBe('⌘')
+    } finally {
+      if (orig !== undefined) Object.defineProperty(navigator, 'platform', orig)
+      else Object.defineProperty(navigator, 'platform', { value: '', configurable: true })
+    }
   })
 })

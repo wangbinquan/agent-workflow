@@ -444,8 +444,12 @@ describe('WorkgroupRoom — composer keyboard (RFC-174)', () => {
     const input = (await screen.findByTestId('workgroup-room-input')) as HTMLTextAreaElement
     fireEvent.focus(input)
     fireEvent.change(input, { target: { value: 'ship it' } })
-    // plain Enter → newline: the handler does NOT cancel the event.
+    // plain Enter → newline: the handler does NOT cancel the event...
     expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(true)
+    // ...and crucially posts NOTHING (a newline must never be a send).
+    expect(
+      calls.find((c) => c.method === 'POST' && c.url.endsWith('/api/workgroup-tasks/t1/messages')),
+    ).toBeUndefined()
     // Ctrl+Enter → send: the handler cancels the event and POSTs.
     expect(fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true })).toBe(false)
     await waitFor(() => {
@@ -497,13 +501,20 @@ describe('WorkgroupRoom — composer keyboard (RFC-174)', () => {
     fireEvent.select(input, { target: { selectionStart: 1, selectionEnd: 1 } })
     const listbox = await screen.findByTestId('workgroup-room-mentions')
     expect(input.getAttribute('aria-controls')).toBe(listbox.id)
-    expect(input.getAttribute('aria-activedescendant')).toBe(`${listbox.id}-opt-0`)
+    // The active-descendant id must resolve to the REAL highlighted option.
+    const activeId0 = input.getAttribute('aria-activedescendant')
+    expect(activeId0).toBe(`${listbox.id}-opt-0`)
+    expect(document.getElementById(activeId0!)).toBe(within(listbox).getByTestId('wg-mention-Lead'))
     expect(within(listbox).getByTestId('wg-mention-Lead').getAttribute('aria-selected')).toBe(
       'true',
     )
     // ArrowDown → 2nd option (Worker) highlighted; activedescendant follows.
     fireEvent.keyDown(input, { key: 'ArrowDown' })
-    expect(input.getAttribute('aria-activedescendant')).toBe(`${listbox.id}-opt-1`)
+    const activeId1 = input.getAttribute('aria-activedescendant')
+    expect(activeId1).toBe(`${listbox.id}-opt-1`)
+    expect(document.getElementById(activeId1!)).toBe(
+      within(listbox).getByTestId('wg-mention-Worker'),
+    )
     expect(within(listbox).getByTestId('wg-mention-Worker').getAttribute('aria-selected')).toBe(
       'true',
     )
@@ -583,6 +594,67 @@ describe('WorkgroupRoom — composer keyboard (RFC-174)', () => {
       )
       expect(post?.body).toEqual({ body: 'done and dusted' })
     })
+  })
+
+  test('quick reply: plain Enter is a newline and IME Ctrl+Enter is ignored (no deliver)', async () => {
+    const calls = installFetch(deliveryRoom())
+    renderRoom(deliveryRoom())
+    fireEvent.click(await screen.findByTestId('wg-card-deliver-quick-a3'))
+    const input = (await screen.findByTestId('wg-card-quick-input-a3')) as HTMLTextAreaElement
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'hold on' } })
+    expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(true) // newline, not cancelled
+    fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true, isComposing: true }) // IME
+    await Promise.resolve()
+    expect(calls.find((c) => c.method === 'POST' && c.url.includes('/deliver'))).toBeUndefined()
+  })
+
+  test('IME while the mention dropdown is open: Enter does not commit', async () => {
+    installFetch(makeRoom())
+    renderRoom(makeRoom())
+    const input = (await screen.findByTestId('workgroup-room-input')) as HTMLTextAreaElement
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '@Wo' } })
+    fireEvent.select(input, { target: { selectionStart: 3, selectionEnd: 3 } })
+    await screen.findByTestId('workgroup-room-mentions')
+    // Enter during IME composition is owned by the input method, not a commit.
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true })
+    expect(input.value).toBe('@Wo') // NOT committed to '@Worker '
+    expect(screen.queryByTestId('workgroup-room-mentions')).toBeTruthy() // still open
+  })
+
+  test('Esc dismissal is cleared on edit: re-typing the same @token reopens (impl-gate P1)', async () => {
+    installFetch(makeRoom())
+    renderRoom(makeRoom())
+    const input = (await screen.findByTestId('workgroup-room-input')) as HTMLTextAreaElement
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '@Wo' } })
+    fireEvent.select(input, { target: { selectionStart: 3, selectionEnd: 3 } })
+    await screen.findByTestId('workgroup-room-mentions')
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(screen.queryByTestId('workgroup-room-mentions')).toBeNull()
+    // Clear the draft, then reconstruct the IDENTICAL '@Wo' token at the same
+    // position — the stale {start:0,query:'Wo'} dismissal must not suppress it.
+    fireEvent.change(input, { target: { value: '' } })
+    fireEvent.change(input, { target: { value: '@Wo' } })
+    fireEvent.select(input, { target: { selectionStart: 3, selectionEnd: 3 } })
+    expect(await screen.findByTestId('workgroup-room-mentions')).toBeTruthy()
+  })
+
+  test('closing the dropdown clears aria-controls + aria-activedescendant (impl-gate P2)', async () => {
+    installFetch(makeRoom())
+    renderRoom(makeRoom())
+    const input = (await screen.findByTestId('workgroup-room-input')) as HTMLTextAreaElement
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '@Wo' } })
+    fireEvent.select(input, { target: { selectionStart: 3, selectionEnd: 3 } })
+    await screen.findByTestId('workgroup-room-mentions')
+    expect(input.getAttribute('aria-controls')).toBeTruthy()
+    fireEvent.keyDown(input, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByTestId('workgroup-room-mentions')).toBeNull())
+    // No dangling references to the now-unmounted listbox.
+    expect(input.getAttribute('aria-controls')).toBeNull()
+    expect(input.getAttribute('aria-activedescendant')).toBeNull()
   })
 })
 

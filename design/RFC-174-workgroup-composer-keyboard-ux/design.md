@@ -1,6 +1,8 @@
 # RFC-174 — 技术设计
 
 > Codex 设计门（对抗评审）一轮：4 P1 + 3 P2 + 1 P3 全部折入本文（§2 修饰键守卫 / 优先级、§3 状态机与 a11y、§6 测试契约）。仓内 `Select.tsx` 早前经同一评审修好等价问题（其 `select-searchable.test.tsx` 的 `S5`/`S6` 用例即标注「Codex P1/P2」），本设计镜像其成熟解法。
+>
+> **Codex 实现门（对 commit `1f7feb17`）1 P1 + 4 P2 全部修入 follow-up commit**：① **P1** Esc `dismissed` 只写不清 → onChange / send onSuccess / commitMention 三处 `setDismissed(null)`（清空/发送后重打同 `@token` 正确重开；`workgroup-room.test.tsx` 加回归锁）；② **P2** 键盘发送后焦点：`onSettled` 在 re-render 前跑（textarea 仍 disabled，`focus()` no-op）→ 改用监听 `send.isPending` true→false 的 `useEffect` 恢复；③ **P2** 快速回复交付后 toggle 随卡片转 `delivered` 卸载 → 撤销焦点交接（无稳定目标）；④ **P2** 下拉关闭后 `aria-controls` 悬空 → 改 `aria-controls={mentionOpen ? listboxId : undefined}`；⑤ **P2** 测试补硬断言（plain-Enter 无 POST、active id 解析到真实元素、IME+下拉开不提交、Mac stub ⌘、快速回复 plain-Enter/IME 不交付）。下文示例为最终形态。
 
 ## 1. 改动面总览
 
@@ -107,7 +109,7 @@ useEffect(() => {
 }, [mentionCtx?.query])
 ```
 
-`onChange` 无需再手动清 dismiss——`isDismissed` 按 `{start,query}` 派生，query 一变即自然失配重开。
+`onChange` **额外 `setDismissed(null)`**（实现门 P1）：纯 `{start,query}` 派生不足——清空/发送草稿后在同位置重打相同 `@token` 会与陈旧 dismissal 重新等值而被误关；任何编辑都作废先前 Esc dismissal。同理 send `onSuccess` 与 `commitMention` 也清 dismiss。
 
 ### 3.2 textarea `onKeyDown` / `onFocus` / `onBlur`
 
@@ -141,14 +143,14 @@ onKeyDown={(e) => {
 }}
 ```
 
-- 发送后焦点：`send` mutation 的 `onSettled` 里 `if (sendFromKbdRef.current) { sendFromKbdRef.current = false; inputRef.current?.focus() }`（textarea pending 时 disabled 会丢焦点，P2-2）。
+- 发送后焦点（实现门 P2）：**不用 `onSettled`**（它在 re-render 前跑，textarea 仍 disabled，`focus()` no-op）——改用 `useEffect` 监听 `send.isPending` 由 true→false（`wasSendPendingRef` 记录上一态），此时 textarea 已重新 enabled，再 `inputRef.current?.focus()`（仅当 `sendFromKbdRef`）。
 - `commitMention` 改用 pending-caret：`applyMention` 算出的新 caret 存入 `pendingCaretRef`，用 `useLayoutEffect(() => { if (pendingCaretRef.current!=null && inputRef.current){ inputRef.current.setSelectionRange(pendingCaretRef.current, pendingCaretRef.current); pendingCaretRef.current=null } }, [draft])`——在 controlled value 落 DOM 后再设 selection（P2-2，取代当前同步 setSelectionRange 的时序隐患）。提交后 `setActiveIndexRaw(0)`。
 
 ### 3.3 a11y（textbox + active-descendant，非 combobox）
 
 多行 `<textarea>` 不能是 combobox（combobox 仅单行），故**保持隐式 `textbox` 角色、不加 `aria-expanded`**（P1-4：`aria-expanded` 非 textbox 合法状态）。用 active-descendant 关系把弹层挂上去：
 
-- textarea：`aria-autocomplete="list"`、`aria-controls={listboxId}`、`aria-activedescendant={mentionOpen ? optionId(activeIndex) : undefined}`（关闭时不指向 stale id，F8）。
+- textarea：`aria-autocomplete="list"`、`aria-controls={mentionOpen ? listboxId : undefined}`、`aria-activedescendant={mentionOpen ? optionId(activeIndex) : undefined}`（**两个引用都只在 listbox 挂载时指向它**——关闭后 listbox 卸载，悬空 id 会误导屏幕阅读器，实现门 P2，F8）。
 - `<ul role="listbox" id={listboxId} aria-label={t('workgroups.room.mentionsAria')}>`（已有 role/label，补 `id`）。
 - 每个候选**改为 `<li>` 直接承担 option**（镜像 `Select.tsx:243`，去掉内层 `<button>`——active-descendant 模型下弹层子项不应进 Tab 序列，P1-4）：
   ```tsx
@@ -208,7 +210,8 @@ onKeyDown={(e) => {
     if (!delivering && quickText.trim().length > 0) {
       void onDeliver(assignment.id, { kind: 'quick', body: quickText }).then(() => {
         setQuickOpen(false); setQuickText('')
-        quickToggleRef.current?.focus() // 交付后 textarea 卸载，焦点回 toggle 按钮（P2-2）
+        // 无焦点交接（实现门 P2）：交付成功后卡片转 delivered、整块 to-do 卸载，
+        // toggle 亦随之消失，无稳定目标——焦点自然回落。
       })
     }
   }
@@ -246,18 +249,18 @@ onKeyDown={(e) => {
 
 ## 5. 失败模式 / 边界
 
-| #   | 场景                                      | 处理                                                                                                                                                                                    |
-| --- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F1  | 中文输入法组字中按 Enter 误发 / 误选      | oracle 第 1 条 `isComposing` 守卫；组件读 `e.nativeEvent.isComposing \|\| keyCode===229`（旧浏览器 229 语义）。已由 `select-searchable.test.tsx:64` 证明 happy-dom 透传 `isComposing`。 |
-| F2  | Enter 三义冲突（选中 / 换行 / 发送）      | oracle 优先级：下拉开=提交（含 Cmd/Ctrl+Enter）＞下拉关+Cmd/Ctrl=发送＞plain=换行。plain Enter 永不发送。                                                                               |
-| F3  | 修饰键吞掉编辑 / 系统快捷键               | 导航 / Tab / Esc 仅 `noMods`；发送仅 `Enter+(Cmd\|Ctrl)` 且无 Shift/Alt；`Shift+Arrow`/`Ctrl+Tab`/`Shift+Tab`/`Cmd+Arrow` 一律放行（P1-1）。                                            |
-| F4  | 候选变少后 activeIndex 越界               | 派生 clamp `Math.min(activeIndexRaw, count-1)`；query 变复位 0；commit 前 `?? suggestions[0]` 判空（P1-3）。                                                                            |
-| F5  | Esc 关闭后想重新补全 / 跨 token           | dismiss 绑 `{start,query}`：同 token 继续打字 query 变即重开（AC3）；移到别 token（start 变）不受影响（P1-3）。                                                                         |
-| F6  | 弹层未随焦点 / 可用态关闭                 | `mentionOpen` 且 `composerFocused && canPost && !send.isPending`；blur 关闭（P1-3）。                                                                                                   |
-| F7  | 发送 pending 后焦点丢失 / 提交 caret 时序 | `sendFromKbdRef` settle 后恢复焦点；`pendingCaretRef` + `useLayoutEffect` 在 value 落 DOM 后设 selection（P2-2）。                                                                      |
-| F8  | 屏幕阅读器指向 stale option               | `aria-activedescendant` 仅 `mentionOpen` 时设置；无 `aria-expanded`（textbox 合法性，P1-4）。                                                                                           |
-| F9  | 鼠标点选路径回归                          | `<li>` 保留 `onMouseDown preventDefault` + `onClick commit` + `data-testid`；`onMouseEnter` 只更新高亮（AC9）。                                                                         |
-| F10 | 平台修饰键显示错误                        | `sendChordModLabel` mac→⌘ 其余→Ctrl；`navigator` 不可用默认 Ctrl。                                                                                                                      |
+| #   | 场景                                      | 处理                                                                                                                                                                                                   |
+| --- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| F1  | 中文输入法组字中按 Enter 误发 / 误选      | oracle 第 1 条 `isComposing` 守卫；组件读 `e.nativeEvent.isComposing \|\| keyCode===229`（旧浏览器 229 语义）。已由 `select-searchable.test.tsx:64` 证明 happy-dom 透传 `isComposing`。                |
+| F2  | Enter 三义冲突（选中 / 换行 / 发送）      | oracle 优先级：下拉开=提交（含 Cmd/Ctrl+Enter）＞下拉关+Cmd/Ctrl=发送＞plain=换行。plain Enter 永不发送。                                                                                              |
+| F3  | 修饰键吞掉编辑 / 系统快捷键               | 导航 / Tab / Esc 仅 `noMods`；发送仅 `Enter+(Cmd\|Ctrl)` 且无 Shift/Alt；`Shift+Arrow`/`Ctrl+Tab`/`Shift+Tab`/`Cmd+Arrow` 一律放行（P1-1）。                                                           |
+| F4  | 候选变少后 activeIndex 越界               | 派生 clamp `Math.min(activeIndexRaw, count-1)`；query 变复位 0；commit 前 `?? suggestions[0]` 判空（P1-3）。                                                                                           |
+| F5  | Esc 关闭后想重新补全 / 跨 token           | dismiss 绑 `{start,query}`：同 token 继续打字 query 变即重开（AC3）；移到别 token（start 变）不受影响（P1-3）。                                                                                        |
+| F6  | 弹层未随焦点 / 可用态关闭                 | `mentionOpen` 且 `composerFocused && canPost && !send.isPending`；blur 关闭（P1-3）。                                                                                                                  |
+| F7  | 发送 pending 后焦点丢失 / 提交 caret 时序 | `sendFromKbdRef` + 监听 `send.isPending` true→false 的 effect 在 textarea 重新 enabled 后恢复焦点（非 `onSettled`，实现门 P2）；`pendingCaretRef` + `useLayoutEffect` 在 value 落 DOM 后设 selection。 |
+| F8  | 屏幕阅读器指向 stale option               | `aria-activedescendant` 仅 `mentionOpen` 时设置；无 `aria-expanded`（textbox 合法性，P1-4）。                                                                                                          |
+| F9  | 鼠标点选路径回归                          | `<li>` 保留 `onMouseDown preventDefault` + `onClick commit` + `data-testid`；`onMouseEnter` 只更新高亮（AC9）。                                                                                        |
+| F10 | 平台修饰键显示错误                        | `sendChordModLabel` mac→⌘ 其余→Ctrl；`navigator` 不可用默认 Ctrl。                                                                                                                                     |
 
 ## 6. 测试策略
 

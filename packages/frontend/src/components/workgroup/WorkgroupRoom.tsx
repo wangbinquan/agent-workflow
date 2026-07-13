@@ -99,6 +99,7 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
   const [dismissed, setDismissed] = useState<MentionContext | null>(null)
   const [composerFocused, setComposerFocused] = useState(false)
   const sendFromKbdRef = useRef(false)
+  const wasSendPendingRef = useRef(false)
   const pendingCaretRef = useRef<number | null>(null)
   const listboxId = useId()
 
@@ -111,16 +112,12 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
     onSuccess: () => {
       setDraft('')
       setCaret(0)
+      setDismissed(null) // fresh draft: never inherit a stale Esc dismissal
       void qc.invalidateQueries({ queryKey: workgroupRoomKey(taskId) })
     },
-    onSettled: () => {
-      // Keyboard send (Cmd/Ctrl+Enter) disables the textarea while pending,
-      // dropping focus — restore it once the mutation settles (P2-2).
-      if (sendFromKbdRef.current) {
-        sendFromKbdRef.current = false
-        inputRef.current?.focus()
-      }
-    },
+    // Focus restoration after a keyboard send happens in an effect that watches
+    // send.isPending true→false — onSettled fires before the re-render that
+    // re-enables the (disabled-while-pending) textarea, so .focus() would no-op.
   })
 
   const cancelCard = useMutation({
@@ -220,6 +217,17 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
     }
   }, [draft])
 
+  // Restore focus after a keyboard send: watch send.isPending fall true→false so
+  // we re-focus AFTER the re-render that re-enables the textarea (focusing a
+  // still-disabled element in onSettled is a no-op).
+  useEffect(() => {
+    if (wasSendPendingRef.current && !send.isPending && sendFromKbdRef.current) {
+      sendFromKbdRef.current = false
+      inputRef.current?.focus()
+    }
+    wasSendPendingRef.current = send.isPending
+  }, [send.isPending])
+
   function commitMention(displayName: string): void {
     if (mentionCtx === null) return
     const next = applyMention(draft, caret, mentionCtx, displayName)
@@ -227,6 +235,7 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
     setCaret(next.caret)
     pendingCaretRef.current = next.caret // applied by the layout effect above
     setActiveIndexRaw(0)
+    setDismissed(null) // committed token is gone; don't leave a stale dismissal
   }
 
   if (room.isLoading) return <LoadingState data-testid="workgroup-room-loading" />
@@ -341,11 +350,16 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
               // Editable textbox with an associated listbox via active-descendant
               // (a multiline field can't be a combobox, so NO aria-expanded).
               aria-autocomplete="list"
-              aria-controls={listboxId}
+              // Both references only point at the listbox while it is mounted —
+              // a dangling aria-controls/activedescendant confuses screen readers.
+              aria-controls={mentionOpen ? listboxId : undefined}
               aria-activedescendant={mentionOpen ? `${listboxId}-opt-${activeIndex}` : undefined}
               onChange={(e) => {
                 setDraft(e.target.value)
                 setCaret(e.target.selectionStart ?? e.target.value.length)
+                // Any edit invalidates a prior Esc dismissal (so re-typing the
+                // same @token after clearing/sending reopens the dropdown).
+                setDismissed(null)
               }}
               onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
               onFocus={() => setComposerFocused(true)}
@@ -740,15 +754,15 @@ function DispatchCard({
   const [quickOpen, setQuickOpen] = useState(false)
   const [quickText, setQuickText] = useState('')
   const [formOpen, setFormOpen] = useState(false)
-  const quickToggleRef = useRef<HTMLButtonElement | null>(null)
-
   // Quick-reply submit, shared by the button and the Cmd/Ctrl+Enter chord.
+  // (No focus hand-off after delivery: a successful deliver flips the card to
+  // 'delivered', which unmounts the whole to-do affordance — there is no stable
+  // element to focus, so we let focus fall naturally.)
   function submitQuick(): void {
     if (delivering || quickText.trim().length === 0) return
     void onDeliver(assignment.id, { kind: 'quick', body: quickText }).then(() => {
       setQuickOpen(false)
       setQuickText('')
-      quickToggleRef.current?.focus() // textarea unmounts — focus returns to toggle
     })
   }
 
@@ -793,7 +807,6 @@ function DispatchCard({
           {isTodo && (
             <>
               <button
-                ref={quickToggleRef}
                 type="button"
                 className="btn btn--xs btn--primary"
                 onClick={() => setQuickOpen((v) => !v)}

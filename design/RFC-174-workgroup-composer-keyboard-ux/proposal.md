@@ -50,7 +50,7 @@
 - **AC5**（IME 安全）：输入法组字中（`isComposing` / `keyCode===229`）按 `Enter`（含 `Cmd/Ctrl+Enter`）——既不发送也不提交 mention（交给输入法处理）。
 - **AC6**（禁用态，主输入框）：终态任务 / 发送中 / 空草稿——主输入框 `Cmd/Ctrl+Enter` 不发送（沿用发送按钮既有的 `!canPost || send.isPending || draft.trim()===''` 门）。快速回复框归属见 AC8。
 - **AC7**（可见提示）：输入框下方有可见快捷键提示，随平台显示 `⌘` 或 `Ctrl`（`navigator` 不可用时回退 `Ctrl`）；可发帖时展示发送 / 换行约定（终态任务仍显示既有 `terminalNotice`）。
-- **AC8**（快速回复一致）：卡片「快速回复」内联框——`Cmd/Ctrl+Enter` 交付、`Enter` 换行、IME 安全，并有同款提示；快捷键与其既有交付按钮**同一判据**（`!delivering && 非空`，不新增终态逻辑），交付成功后焦点回到其触发按钮。
+- **AC8**（快速回复一致）：卡片「快速回复」内联框——`Cmd/Ctrl+Enter` 交付、`Enter` 换行、IME 安全，并有同款提示；快捷键与其既有交付按钮**同一判据**（`!delivering && 非空`，不新增终态逻辑）。（交付成功后卡片转 `delivered`、整块 to-do 卸载，无稳定焦点目标——不做焦点交接，焦点自然回落。）
 - **AC9**（回归防护）：既有鼠标点选补全路径（`onClick` commit + `data-testid`）、发送按钮、终态禁用、outline-clip CSS（`workgroup-room-composer-outline-clip.test.ts`）全部不变绿。
 
 ## 影响面 / 交付
