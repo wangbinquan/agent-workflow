@@ -3,7 +3,7 @@
 // metaRevision). The client echoes it on the eventual combined-save (T4) for OCC.
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -48,5 +48,19 @@ describe('RFC-170 T3 — read-path composite token', () => {
     // Re-encoding the decoded parts reproduces the same opaque string.
     expect(encodeSkillToken(decoded)).toBe(content.token!)
     expect(decoded.skillId).toBe(skill!.id)
+  })
+
+  // RFC-170 (G1-1): readSkillContent reads from the AUTHORITATIVE version snapshot
+  // (versions/v<contentVersion>/files), not live — so a torn/tampered live dir
+  // can't corrupt the read and the body always matches the token's contentVersion.
+  test('readSkillContent returns the snapshot body, ignoring tampered live files', async () => {
+    // Tamper the LIVE SKILL.md directly (no version bump → still v1).
+    writeFileSync(
+      join(appHome, 'skills', 'foo', 'files', 'SKILL.md'),
+      '---\nname: foo\ndescription: d\n---\nLIVE-TAMPERED',
+    )
+    const content = await readSkillContent(db, fsOpts, 'foo')
+    expect(content.bodyMd).toContain('body') // from the immutable v1 snapshot
+    expect(content.bodyMd).not.toContain('LIVE-TAMPERED') // NOT from mutated live
   })
 })

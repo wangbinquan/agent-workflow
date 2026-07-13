@@ -35,7 +35,7 @@ import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { agents, skills } from '@/db/schema'
-import { commitSkillVersion } from '@/services/skillVersion'
+import { commitSkillVersion, skillVersionRelPath } from '@/services/skillVersion'
 import { dbTxSync } from '@/db/txSync'
 import {
   abandonOperation,
@@ -93,6 +93,22 @@ export function skillRoot(skill: Skill, opts: SkillFsOptions): string {
     throw new Error(`external skill '${skill.name}' has no externalPath`)
   }
   return skill.externalPath
+}
+
+/**
+ * RFC-170 (G1-1) — the AUTHORITATIVE dir to READ a managed skill's content from:
+ * the current version's IMMUTABLE snapshot (`versions/v<contentVersion>/files`),
+ * not live `files/`. After every commit the two are identical (swapInStaged), but
+ * the snapshot is the source of truth — a torn/half-published live dir (crash
+ * mid-swap) can't corrupt a read, and the content always matches the signed
+ * precondition token's `contentVersion`. Falls back to live for a legacy managed
+ * skill with no snapshot yet, and for external skills (which read externalPath).
+ */
+export function skillReadRoot(skill: Skill, opts: SkillFsOptions): string {
+  const live = skillRoot(skill, opts)
+  if (skill.sourceKind !== 'managed') return live
+  const snapshot = join(opts.appHome, skillVersionRelPath(skill.name, skill.contentVersion))
+  return existsSync(snapshot) ? snapshot : live
 }
 
 // --- create / import ---
@@ -363,7 +379,10 @@ export async function readSkillContent(
 ): Promise<SkillContent> {
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
-  const root = skillRoot(skill, opts)
+  // RFC-170 (G1-1): read the SKILL.md body + sign the token from the AUTHORITATIVE
+  // version snapshot (managed), not live — so the returned content always matches
+  // the token's contentVersion and a torn live dir can't corrupt the read.
+  const root = skillReadRoot(skill, opts)
   const skillMdPath = join(root, 'SKILL.md')
   if (!existsSync(skillMdPath)) {
     throw new NotFoundError('skill-md-missing', `SKILL.md not found at ${skillMdPath}`)
