@@ -100,4 +100,46 @@ member self-clarify 答复走 `autoDispatchClarifyRound → dispatchTaskQuestion
 - **路线 1（收窄 RFC）**：本 RFC 只做**已验证可行**的部分——leader 回流健壮化（P1-3 修 null 路径）+ selectAgentQueue 通用可选 shardKey（为将来铺路）+ 明确 member 人类反问**继续不支持**（保留现临时拒绝）。member 完整回流因四段链复杂度**升格为独立更大 RFC**。
 - **路线 2（做全）**：本 RFC 扩为四段链完整方案——mint shardKey 覆写 + dispatch `(home,shardKey)` 键 + selectAgentQueue 隔离 + driveAdoptedRun 路由 + manual 收口 + 多轮 iterationIndex + 全套测试（含 mint shardKey 正确性、并发两 member、leader null、manual、多轮）。范围与风险显著上升，可能需 migration。
 
-**待用户拍板走路线 1 还是路线 2**（§见 plan.md 对应重排）。
+**用户 2026-07-13 拍板走路线 2（做全四段链）。** 实现设计见 §6；进度：R2-T3（选取）已落地 commit `0afd1709`。
+
+---
+
+## 6. 路线 2 实现设计 — mint(R2-T1) + dispatch 键(R2-T2)【`(home, shardKey)` 复合键】
+
+第二段（铸续跑 run 的 shardKey）+ dispatch 键的完整改造。核心表示法：**按 `(home, shardKey)` 分组、按 node 算拓扑**。
+
+### 6.1 golden-lock 不回归的根：null-shard 坍缩等价
+所有既有路径的派生 shardKey **恒为 `null`**：普通 agent-single self round `asking_shard_key` 为 NULL（schema.ts:1475）、cross round 恒 NULL、manual 无 round → null、leader singleton null。故 `(home, null)` 单组 **逐字节 ≡** 今天的 `home` 单键。只有 workgroup member（`__wg_member__` + `asking_shard_key = assignment id`）产生非 null shard 分裂。
+
+### 6.2 shardKey 无损可取（零 migration，已确认）
+`task_questions` **无** shard 列；每条 entry 的 shard 经 `origin_node_run_id → clarify_rounds.intermediary_node_run_id → asking_shard_key` 无损取回（member self round 每 shard 一条独立 clarify node_run；manual 无 round → null）。批量一次 join。
+
+### 6.3 逐改造点（file:line + 做法）
+- **分组**（taskQuestionDispatch.ts:433-497）：`byHomeCause` → `byHomeShardCause`，复合键 `home + '\x1f' + (shard ?? '\x00')`，侧存 `{home, shardKey}`；auto-split 下沉进复合组。
+- **拓扑桥接**（:507-508）：`affectedNodes = 各组的 home 去 shard 维`；`computeUpstreamFrontier(def, affectedNodes)` **签名零改**（frontier 是节点拓扑，shard 只在 mint 分裂）。
+- **mint**（:545-547 / 1361-1404）：`mintCauseByTarget` 升复合键；`buildFrontierMintPlan` **加 `shardKey` 参**，继承源 `pickFreshestRun(该 node 且 shard_key===shard 的 run)`（in-memory 过滤，避 `eq(col,null)` SQL 坑），`overrides.shardKey` 覆写；`FrontierMintPlan` 加 shardKey 字段。**关键抉择**：null 组传 **`undefined`**（不是 `null`）→ 不过滤/不覆写 → 保住 manual-to-member 不抛 `unsafe-dispatch-target`（传 null 会 `filter(===null)` 打空 → 回归）。
+- **in-flight 门**（:548 assertNoInFlightDispatch / :851-893 findOpenDispatchTarget / clarifyRerunLedger.ts:84-113 `isDispatchedEntryConsumed`）：按 `(home, shardKey)` 收窄，shard A 在飞不挡 shard B。`isDispatchedEntryConsumed` 的 trigger-NULL run-obligation 扫描加 **可选** `shardKey`（**必须缺省 undefined**，否则 rfc133 两套件双红——最高风险点）。bound 分支不改（按 triggerRunId 锚天然 shard 正确）。
+- **tx 插入**（:739-757 / reruns 映射 :801-805）：一 home 可插多个 rerun（每 shard 一个），`for...of mintPlans` 循环天然支持、仍原子；`reruns[].entryIds` **必须** 追加 `&& entryShard===p.shardKey`（否则 B 的 entryId 污染 A 的 rerun）。
+- **上游 self 回滚守卫**（clarifyAutoDispatch.ts:534 `selfHomeHasOpenLedger` / clarifyRerunLedger.ts:183-207 `hasOpenDispatchedEntryOnHome`）：加可选 shardKey，透传本 self run 的 `shard_key`，否则 A 的 rollback 被 B 的 open 条目挡（隐蔽）。seal（clarifySeal.ts）已 per-origin 安全、无需改。
+
+### 6.4 风险排序（最可能打红/破特性）
+1. 【最高】`isDispatchedEntryConsumed` 的 shardKey 必须**可选缺省**（rfc133 纯 oracle 单测）。
+2. 【高】mint null 组传 `undefined` 而非 `null`（否则回归 manual-to-member）。
+3. 【高】`reruns[].entryIds` 按 shard 过滤（否则跨 shard 污染 caller resume/审计）。
+4. 【中】`selfHomeHasOpenLedger`/`hasOpenDispatchedEntryOnHome` 漏改 → member 反问偶发不回流不报错。
+5. 【中】复合键编码用 `\x1f` + `\x00` 哨兵（ULID 无控制字符，安全）。
+6. 【低】`abandonSupersededMergeStates` 按 (node,iteration) 键跨 shard——经核 member run `merge_state` 恒 NULL、非 ABANDONABLE，当前安全；加断言锁防漂移。
+
+### 6.5 逐特性字节不变（不回归清单）
+普通 agent-single self / cross questioner+designer / 借壳 reassign（override 改 node 不改 shard）/ manual→任意节点（null 传 undefined 继承全局最新=今天）/ wrapper-fanout（不进本管线）/ leader（null 传 undefined）—— 派生 shard 全 null、复合键坍缩为今天。被锁测试 rfc120-deferred-dispatch / rfc128-p5-bc / rfc133（两套件，**唯一高危红点=可选参**）/ rfc139 / rfc140（含 `dispatchTaskQuestionsLocked(` 文本锁勿新增调用点）/ node-run-mint 全应绿。
+
+### 6.6 实现子步骤（同一 PR，强耦合）
+- **S0** 抽 `resolveEntryShardKeys(db, entries)`（批量 join asking_shard_key，manual→null）+ 纯数据测试。
+- **S1** `isDispatchedEntryConsumed` 加可选 shardKey（in-flight trigger-NULL 分支）+ 扩 rfc133 测试（缺省=旧全绿）。
+- **S2** dispatch 分组升复合键 + affectedNodes/frontier 桥接 + in-flight 门 + in-tx recheck + 集成测试（两 shard 各铸 rerun、并发不 429）。
+- **S3** `buildFrontierMintPlan` 加 shardKey（继承过滤 + 覆写 + per-shard retry_index）+ reruns entryIds 过滤 + 断言 rerun.shard_key/继承源/entryIds。
+- **S4** self 回滚守卫 shard 透传 + 测试。
+- **S5** golden-lock 全回归 + member merge_state=NULL 断言锁。
+- **S6**（交接 R2-T4）验 `driveAdoptedRun` 按正确 shardKey 命中 assignment。
+
+**注**：P2-2（iterationIndex 钉 0 多轮）与 T1/T2 正交（shard 取 asking_shard_key、同 assignment 恒同 shard）；T1/T2 只保证**单轮** member shard 正确，多轮属 R2-T6，加断言防悄悄依赖。
