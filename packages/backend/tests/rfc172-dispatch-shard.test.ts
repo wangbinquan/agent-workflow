@@ -9,11 +9,14 @@ import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
+import { readFileSync } from 'node:fs'
+import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
-import { resolveEntryShardKeys } from '../src/services/taskQuestionDispatch'
+import { buildFrontierMintPlan, resolveEntryShardKeys } from '../src/services/taskQuestionDispatch'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIN_DEF = { $schema_version: 1, inputs: [], nodes: [], edges: [] } as unknown as WorkflowDefinition
 
 async function seedTask(db: DbClient, taskId: string): Promise<void> {
   await db.insert(workflows).values({ id: `wf_${taskId}`, name: 'stub', definition: '{}' })
@@ -32,11 +35,22 @@ async function seedTask(db: DbClient, taskId: string): Promise<void> {
   })
 }
 
-async function seedNodeRun(db: DbClient, taskId: string, nodeId: string): Promise<string> {
+async function seedNodeRun(
+  db: DbClient,
+  taskId: string,
+  nodeId: string,
+  over: { retryIndex?: number; shardKey?: string; status?: string } = {},
+): Promise<string> {
   const id = ulid()
-  await db
-    .insert(nodeRuns)
-    .values({ id, taskId, nodeId, status: 'done', retryIndex: 0, iteration: 0 })
+  await db.insert(nodeRuns).values({
+    id,
+    taskId,
+    nodeId,
+    status: (over.status ?? 'done') as 'done',
+    retryIndex: over.retryIndex ?? 0,
+    iteration: 0,
+    ...(over.shardKey !== undefined ? { shardKey: over.shardKey } : {}),
+  })
   return id
 }
 
@@ -125,5 +139,69 @@ describe('RFC-172 S0 — resolveEntryShardKeys', () => {
   test('empty input → empty map (no query)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     expect((await resolveEntryShardKeys(db, [])).size).toBe(0)
+  })
+})
+
+describe('RFC-172 S3 — buildFrontierMintPlan shard scoping', () => {
+  test('shardKey scopes the inheritance source + retry lineage AND overwrites the rerun shard_key', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    // Member A ran once (retry 0); member B ran 6 times (retry 5) and is the GLOBAL freshest run.
+    await seedNodeRun(db, taskId, '__wg_member__', { shardKey: 'shard-A', retryIndex: 0 })
+    await seedNodeRun(db, taskId, '__wg_member__', { shardKey: 'shard-B', retryIndex: 5 })
+
+    // Scoped to shard-A: inherit ONLY shard-A's lineage → retry_index = A's max(0)+1 = 1 (NOT the
+    // global max 5+1=6), and the rerun's shard_key is OVERWRITTEN to shard-A (P1-1: A never
+    // inherits B's shard).
+    const planA = await buildFrontierMintPlan(
+      db,
+      taskId,
+      '__wg_member__',
+      null,
+      'clarify-answer',
+      MIN_DEF,
+      'shard-A',
+    )
+    expect(planA.shardKey).toBe('shard-A')
+    expect(planA.values.shardKey).toBe('shard-A')
+    expect(planA.values.retryIndex).toBe(1)
+
+    // Golden-lock: undefined = shard-blind → inherit the GLOBAL freshest across ALL shards, retry =
+    // max(0,5)+1 = 6 (both are top-level, deterministic), shard_key INHERITED (never overwritten),
+    // plan.shardKey collapses to null. Which run is "freshest" is the existing pickFreshestRun
+    // tiebreak (id order — non-deterministic for same-ms ULIDs), so assert only that the shard was
+    // inherited from a real run, not overwritten/nulled.
+    const planGlobal = await buildFrontierMintPlan(
+      db,
+      taskId,
+      '__wg_member__',
+      null,
+      'clarify-answer',
+      MIN_DEF,
+      undefined,
+    )
+    expect(planGlobal.shardKey).toBeNull()
+    expect(['shard-A', 'shard-B']).toContain(planGlobal.values.shardKey) // inherited, not overwritten
+    expect(planGlobal.values.retryIndex).toBe(6)
+  })
+})
+
+// S2a wires the shard split into dispatchTaskQuestions' mint loop + reruns mapping. The full
+// two-shards → two-reruns integration (workgroup host snapshot end-to-end) lands in S5; this
+// source-lock guards the wiring from a silent refactor drop in the meantime.
+describe('RFC-172 S2a — dispatch mint-loop shard wiring (source lock)', () => {
+  const SRC = readFileSync(
+    resolve(import.meta.dir, '..', 'src', 'services', 'taskQuestionDispatch.ts'),
+    'utf8',
+  )
+  test('mint loop resolves + splits by shard; reruns map filters entryIds by shard', () => {
+    // each frontier node fans out one mint per distinct dispatched-entry shard …
+    expect(SRC).toContain('const entryShardById = await resolveEntryShardKeys(db, dispatchEntries)')
+    expect(SRC).toContain('[...frontier].flatMap((nodeId) => {')
+    // … null shard passed as undefined (never null — else manual-to-member regresses) …
+    expect(SRC).toContain('sk === null ? undefined : sk')
+    // … and each entry maps to ITS shard's rerun.
+    expect(SRC).toContain('shardOf(e) === p.shardKey')
   })
 })

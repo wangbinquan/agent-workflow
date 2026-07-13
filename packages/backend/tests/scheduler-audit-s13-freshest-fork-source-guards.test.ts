@@ -192,7 +192,10 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     //   - the clarify-rerun mint anchor (RFC-132: taskQuestionDispatch.ts
     //     buildFrontierMintPlan) → {topLevelOnly:false} (child rows stay
     //     selectable ON PURPOSE: a designer inside a wrapper-fanout reruns on
-    //     shard child rows and must inherit shardKey/parentNodeRunId)
+    //     shard child rows and must inherit shardKey/parentNodeRunId). RFC-172
+    //     (route 2) filters that run set to the dispatch shard first (`scoped`;
+    //     === targetRuns when shardKey undefined) — still pickFreshestRun, not
+    //     a startedAt fork.
     //   - scheduler.ts maybeRunCommitPush attribution → {topLevelOnly:true}
     //     over a done-only SQL row set.
     // Empty whitelist (design §4 ①) — verified empty at flip time.
@@ -201,7 +204,10 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // behavior is locked by rfc096-designer-rerun-pick.test.ts and the
     // cross-clarify suite).
     const dispatchSrc = readFileSync(join(SRC_ROOT, 'services', 'taskQuestionDispatch.ts'), 'utf-8')
-    expect(dispatchSrc.includes('pickFreshestRun(targetRuns, { topLevelOnly: false })')).toBe(true)
+    // RFC-172 (route 2, S3): the inheritance source is now `scoped` (targetRuns filtered to the
+    // dispatch shard for workgroup members; === targetRuns when shardKey is undefined). Still
+    // pickFreshestRun + {topLevelOnly:false} — the freshness comparator, NOT a startedAt fork.
+    expect(dispatchSrc.includes('pickFreshestRun(scoped, { topLevelOnly: false })')).toBe(true)
     expect(SCHEDULER_SRC.includes('pickFreshestRun(parentRows, { topLevelOnly: true })')).toBe(true)
   })
 

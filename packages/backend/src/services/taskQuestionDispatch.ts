@@ -592,20 +592,25 @@ async function dispatchTaskQuestionsLocked(
 
   // 6. Pre-compute each frontier mint's inherited values (async reads) BEFORE the tx so the
   //    tx body is purely synchronous (atomic with the dispatched_at stamp).
+  // RFC-172 (route 2, S2a): resolve each dispatched entry's fan-out shard (null for every
+  // non-workgroup path — one group per node, byte-equivalent to today). A workgroup member node
+  // (__wg_member__) fans out to one mint per assignment shard so each rerun carries the CORRECT
+  // shard_key (P1-1), instead of one node-wide rerun inheriting the globally-freshest member's shard.
+  const entryShardById = await resolveEntryShardKeys(db, dispatchEntries)
+  const shardOf = (e: TaskQuestionRow): string | null => entryShardById.get(e.id) ?? null
   const mintPlans = await Promise.all(
     // RFC-131 T4 去借壳: NO borrow — the rerun is minted ON the effective target, which runs its OWN
-    // agent (pass null, never an agent_override_name). RFC-128 P5-BC: pass the target's ROLE-derived
-    // rerun cause (auto-split guarantees one cause per target this batch) + the parsed definition.
-    [...frontier].map(async (nodeId) =>
-      buildFrontierMintPlan(
-        db,
-        taskId,
-        nodeId,
-        null,
-        causeClassForEntry(byTarget.get(nodeId)![0]!),
-        definition,
-      ),
-    ),
+    // agent (pass null, never an agent_override_name). RFC-128 P5-BC: one ROLE-derived cause per
+    // target (auto-split). RFC-172: split by shard — `null` (every non-workgroup group) is passed as
+    // `undefined` to keep the shard-blind inheritance/mint byte-identical to today.
+    [...frontier].flatMap((nodeId) => {
+      const nodeEntries = dispatchEntries.filter((e) => effectiveTarget(e) === nodeId)
+      const cause = causeClassForEntry(nodeEntries[0]!)
+      const shards = [...new Set(nodeEntries.map(shardOf))]
+      return shards.map((sk) =>
+        buildFrontierMintPlan(db, taskId, nodeId, null, cause, definition, sk === null ? undefined : sk),
+      )
+    }),
   )
 
   // 7. ONE dbTxSync: CAS-stamp dispatched_at on the requested entries + insert the frontier
@@ -843,7 +848,13 @@ async function dispatchTaskQuestionsLocked(
   const reruns: DispatchedRerun[] = mintPlans.map((p) => ({
     targetNodeId: p.nodeId,
     nodeRunId: p.preId,
-    entryIds: dispatchEntries.filter((e) => effectiveTarget(e) === p.nodeId).map((e) => e.id),
+    // RFC-172 (route 2, S2a): a node may now have MULTIPLE reruns (one per shard) — map each
+    // entry to its OWN shard's rerun, else member B's entryId rides member A's rerun. `p.shardKey`
+    // is null for every non-workgroup plan and `shardOf` is null for every non-member entry, so
+    // this collapses to today's `effectiveTarget === p.nodeId` filter (golden-lock).
+    entryIds: dispatchEntries
+      .filter((e) => effectiveTarget(e) === p.nodeId && shardOf(e) === p.shardKey)
+      .map((e) => e.id),
   }))
   log.info('task questions dispatched', {
     taskId,
@@ -1391,6 +1402,9 @@ interface FrontierMintPlan {
   nodeId: string
   preId: string
   iteration: number
+  /** RFC-172 (route 2, S3): the fan-out shard this rerun serves (null for every non-workgroup
+   *  path). Used to filter which dispatched entries map to this rerun (reruns[].entryIds). */
+  shardKey: string | null
   values: typeof nodeRuns.$inferInsert
 }
 
@@ -1400,7 +1414,7 @@ interface FrontierMintPlan {
  * NULL) with a PREALLOCATED id, so the insert can run synchronously inside the dispatch tx.
  * Field-identical to triggerDesignerRerun's mint (both go through buildMintNodeRunValues).
  */
-async function buildFrontierMintPlan(
+export async function buildFrontierMintPlan(
   db: DbClient,
   taskId: string,
   targetNodeId: string,
@@ -1411,21 +1425,29 @@ async function buildFrontierMintPlan(
   // is one cause (auto-split). Replaces the old hardcoded 'cross-clarify-answer'.
   cause: CauseClass,
   definition: WorkflowDefinition,
+  // RFC-172 (route 2, S3): the fan-out SHARD this rerun serves. `undefined` = today's shard-blind
+  // behavior (every non-workgroup path — one mint per node, inherit the node's global freshest
+  // run). A workgroup member passes its assignment id: the inheritance source is filtered to the
+  // SAME shard (in-memory, no eq(col,null) SQL hazard) and the rerun's shard_key is OVERWRITTEN,
+  // so member A's rerun can never inherit member B's shard (P1-1). NOTE: pass `undefined` (never
+  // `null`) for null-shard groups — filtering `r.shardKey === null` would empty the manual-to-
+  // member inheritance set and regress it to `unsafe-dispatch-target`.
+  shardKey: string | null | undefined,
 ): Promise<FrontierMintPlan> {
   const targetRuns = await db
     .select()
     .from(nodeRuns)
     .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, targetNodeId)))
-  const last = pickFreshestRun(targetRuns, { topLevelOnly: false })
+  // Scope the inheritance source + retry-index lineage to this shard (member); undefined = all.
+  const scoped = shardKey === undefined ? targetRuns : targetRuns.filter((r) => r.shardKey === shardKey)
+  const last = pickFreshestRun(scoped, { topLevelOnly: false })
   if (last === undefined) {
     throw new ConflictError(
       'task-question-unsafe-dispatch-target',
-      `cannot dispatch to frontier '${targetNodeId}': no prior node_run to inherit`,
+      `cannot dispatch to frontier '${targetNodeId}'${shardKey !== undefined ? ` (shard '${shardKey}')` : ''}: no prior node_run to inherit`,
     )
   }
-  const topLevel = targetRuns.filter(
-    (r) => r.parentNodeRunId === null && r.iteration === last.iteration,
-  )
+  const topLevel = scoped.filter((r) => r.parentNodeRunId === null && r.iteration === last.iteration)
   const retryIndex = topLevel.length === 0 ? 0 : Math.max(...topLevel.map((r) => r.retryIndex)) + 1
   const preId = ulid()
   // RFC-127 借壳: resolve the borrowed node's agentName from the frozen snapshot (the SAME
@@ -1441,7 +1463,12 @@ async function buildFrontierMintPlan(
     retryIndex,
     iteration: last.iteration,
     inheritFrom: last,
-    overrides: { startedAt: null, agentOverrideName },
+    // RFC-172: overwrite shard_key only for a shard-scoped (member) mint; undefined inherits `last`.
+    overrides: {
+      startedAt: null,
+      agentOverrideName,
+      ...(shardKey !== undefined ? { shardKey } : {}),
+    },
   })
-  return { nodeId: targetNodeId, preId, iteration: last.iteration, values }
+  return { nodeId: targetNodeId, preId, iteration: last.iteration, shardKey: shardKey ?? null, values }
 }
