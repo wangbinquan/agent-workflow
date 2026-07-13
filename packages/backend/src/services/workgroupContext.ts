@@ -175,17 +175,23 @@ export function selectMemberSlices(
 // platform's protocol-block conventions (shared/src/prompt.ts).
 // ---------------------------------------------------------------------------
 
+// Charter block — group identity + standing charter (instructions). Injected to
+// EVERY member every turn. RFC-176: the objective (goal) is NO LONGER here — it
+// is a mode-routed directive (renderGoalBlock), not shared context.
 export function renderCharterBlock(config: WorkgroupRuntimeConfig): string {
-  const lines = [
-    '## Workgroup mission',
-    '',
-    `Group: ${config.workgroupName}`,
-    `Goal: ${config.goal.trim() || '(not stated)'}`,
-  ]
+  const lines = ['## Workgroup', '', `Group: ${config.workgroupName}`]
   if (config.instructions.trim().length > 0) {
     lines.push('', 'Group charter:', config.instructions.trim())
   }
   return lines.join('\n')
+}
+
+// Goal block — the task objective (RFC-176). Injected ONLY to the members who
+// own the decomposition: the leader (leader_worker) or every member
+// (free_collab). A leader_worker worker never sees it — it acts on the leader's
+// assignment brief ('## Your assignment', composeMemberPrompt).
+export function renderGoalBlock(config: WorkgroupRuntimeConfig): string {
+  return ['## Group goal', '', config.goal.trim() || '(not stated)'].join('\n')
 }
 
 export function renderRosterBlock(

@@ -29,6 +29,7 @@ import {
   selectMemberSlices,
   sliceMessagesAfter,
   renderCharterBlock,
+  renderGoalBlock,
   renderWgProtocolBlock,
   renderLeaderLedger,
   renderRosterBlock,
@@ -356,9 +357,14 @@ describe('RFC-164 core — rendered blocks', () => {
     expect(block).not.toContain('u-pm')
   })
 
-  test('charter carries goal + instructions; ledger renders status lines', () => {
-    expect(renderCharterBlock(cfg())).toContain('fix payments')
+  // RFC-176: goal is a mode-routed directive (renderGoalBlock), no longer part
+  // of the all-members charter block. Locks the injection-scope split: charter
+  // (全员) keeps instructions but drops the goal; the goal lives in its own block.
+  test('charter carries instructions but NOT goal (RFC-176); goal block carries goal; ledger renders status lines', () => {
     expect(renderCharterBlock(cfg())).toContain('be kind')
+    expect(renderCharterBlock(cfg())).not.toContain('fix payments')
+    expect(renderGoalBlock(cfg())).toContain('fix payments')
+    expect(renderGoalBlock(cfg({ goal: '   ' }))).toContain('(not stated)')
     const ledger = renderLeaderLedger(cfg(), [
       { assignment: asg({ status: 'done', title: 'do x' }), resultSummary: 'done well' },
     ])

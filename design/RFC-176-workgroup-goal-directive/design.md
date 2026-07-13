@@ -173,3 +173,16 @@ blocks.push(renderRosterBlock(config, { excludeMemberId: memberId, agentCards: s
 - `packages/backend/tests/rfc164-workgroup-core.test.ts` —— 注入器断言。
 - `packages/backend/tests/rfc164-workgroup-engine.test.ts` —— kickoff + 隔离 + 回归锁。
 - （可选）`packages/frontend/tests/workgroup-room.test.tsx` —— system goal 消息渲染。
+
+## 10. 设计门记录（Codex wedge + 对抗自审）
+
+**Codex 设计门未能干净跑成**：本机 Codex companion 处于 `shared` runtime（broker socket 钉在主 workspace `/Users/.../agent-workflow`），`adversarial-review` 忽略 `--scope branch`、恒审「working tree diff」；而主工作树此刻混着并发 session 的 WIP（`packages/backend/routes/workgroupTasks.ts`、`WorkgroupForm.tsx`、`schemas/workgroup.ts` 等，疑 RFC-175/174 并行落地）。即便在钉 `bd9ea0bd` 的 detached worktree 里发起，评审仍落到主 workspace、grep 的是 `taskQuestions`/`cli/user` 等**他人未完成代码**——无法只审 RFC-176、也不该对他人 WIP 提 findings。属 [[reference_codex_review_plugin]] 记录的同类 CLI/共享树 wedge（RFC-173 亦遇）。已 cancel 该 job、清理 worktree。**改以严格对抗自审替代**，待工作树干净后可补跑 Codex 门。
+
+**对抗自审 findings（均已核对源码）**：
+
+- **SF1 测试审计广度**：全库仅 `rfc164-workgroup-core.test.ts:360-361` 锁「`renderCharterBlock` 含 goal」旧行为（plan T3 已覆盖）；grep 确认**无**任何测试断言 member/worker prompt 含 goal（`promptTemplate).toContain(goal)` 零命中），`## Workgroup mission` 头串仅存于源码（`workgroupContext.ts:180`）、无测试锁定 ⇒ 头改名安全。`engine.test.ts:780` 断言 `config.goal` 值、与注入无关，不受影响。
+- **SF2 leader cursor 时序**：`driveLeaderTurn` 先 `composeLeaderPrompt(state)` 后 `advanceMemberCursor`（`workgroupRunner.ts:903-908`）；compose 用**旧** cursor 计 `fresh` ⇒ leader 首轮「新活动」块**确含** kickoff，消费后游标前移、后续轮不再重注入。持久 goal 块接手跨轮记忆。已验证正确。
+- **SF3 kickoff 幂等/竞态**：runTask CAS 单实例（`scheduler.ts:375-389`）+ `messages.length===0` 钥匙 ⇒ 崩溃重启 / kickResume 重入 / 二次 `runWorkgroupEngine` 均不重播（重入时 roundsUsed≥1 或 messages≥1，双守卫任一即挡）。
+- **SF4 隔离三路封死**（lw worker 拿不到 goal）：kickoff 是 `chat`+mention[leader] ⇒ 非 `isPublicRoomMessage`（不进 blackboard 切片）、非 worker 的 mention（不进 mentions 切片）、非 result/delivery（不进 peerResults 切片）；叠加 worker 持久块无 goal ⇒ 双重不泄漏。`renderMessagesBlock` 按 displayName 渲染作者、无 id 入 prompt。
+- **SF5 fc 首轮 goal 双重曝光**（持久块 + 公共 kickoff 黑板切片）：刻意保留——房间可见性是 G5 目的，块保证跨轮记忆；非 bug。
+- **SF6 残留**：leader 首轮仍可能 `continue` 空派单，但房间此时**已非空**（有目标消息），比现状实质改善；「首轮零派单强制重问」兜底列为非目标（§7），设计门若判定必要可加。

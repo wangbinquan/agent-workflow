@@ -60,6 +60,7 @@ import {
   memberById,
   memberDisplayName,
   renderCharterBlock,
+  renderGoalBlock,
   renderLeaderLedger,
   renderMessagesBlock,
   renderRosterBlock,
@@ -383,6 +384,8 @@ function composeLeaderPrompt(state: EngineDbState): string {
   const fresh = state.messages.filter((m) => m.id > cursor)
   const blocks = [
     renderCharterBlock(config),
+    // RFC-176: the leader owns goal decomposition — carry it every turn.
+    renderGoalBlock(config),
     renderRosterBlock(config, {
       excludeMemberId: config.leaderMemberId ?? undefined,
       agentCards: state.agentCards,
@@ -414,10 +417,14 @@ function composeMemberPrompt(
     messages: state.messages,
     cursorMessageId: state.cursors.get(memberId) ?? '',
   })
-  const blocks = [
-    renderCharterBlock(config),
+  const blocks = [renderCharterBlock(config)]
+  // RFC-176: free_collab has no leader to decompose the goal — every member
+  // owns it, so all members see it. A leader_worker worker never does: it acts
+  // on the leader's assignment brief ('## Your assignment') below.
+  if (config.mode === 'free_collab') blocks.push(renderGoalBlock(config))
+  blocks.push(
     renderRosterBlock(config, { excludeMemberId: memberId, agentCards: state.agentCards }),
-  ]
+  )
   if (assignment !== null) {
     blocks.push(
       ['## Your assignment', '', `Title: ${assignment.title}`, '', assignment.briefMd].join('\n'),
@@ -472,6 +479,34 @@ export async function runWorkgroupEngine(
     leaderRunning: false,
     runningAssignmentIds: new Set<string>(),
     messageTurnMemberIds: new Set<string>(),
+  }
+
+  // RFC-176: seed the goal into the room as an opening directive, ONCE, before
+  // the first turn — so the leader's initial turn has actionable "new activity"
+  // (not just a passive header) and the goal is visible in the room. Idempotent:
+  // runTask CAS ⇒ single engine instance, and the empty-room guard means a
+  // daemon restart (message already persisted) never re-seeds. leader_worker →
+  // directed to the leader (chat + mention ⇒ non-public ⇒ workers never see it);
+  // free_collab → public blackboard (every member decomposes it).
+  {
+    const seed = await loadDbState(db, taskId)
+    if (
+      seed !== null &&
+      seed.config.mode !== 'dynamic_workflow' &&
+      countRoundsUsed(seed) === 0 &&
+      seed.messages.length === 0 &&
+      seed.config.goal.trim().length > 0
+    ) {
+      const leaderId = seed.config.leaderMemberId
+      const directed = seed.config.mode === 'leader_worker' && leaderId !== null
+      await postMessage(db, taskId, {
+        round: 0,
+        authorKind: 'system',
+        kind: 'chat',
+        bodyMd: seed.config.goal.trim(),
+        mentionMemberIds: directed ? [leaderId] : [],
+      })
+    }
   }
 
   for (;;) {

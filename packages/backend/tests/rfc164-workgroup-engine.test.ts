@@ -935,3 +935,142 @@ describe('RFC-164 engine — free_collab orchestration', () => {
     expect(result.kind).toBe('ok')
   })
 })
+
+// RFC-176: goal is a mode-routed directive, not all-members charter context.
+// Locks the two fixes: (1) injection scope — leader_worker routes the goal to
+// the leader ONLY (workers act on the assignment brief), free_collab to every
+// member; (2) launch kickoff — the engine seeds the goal into the room ONCE as
+// an opening directive (leader-DIRECTED in lw so workers never see it; PUBLIC in
+// fc), so the leader's first turn has actionable content and the room is not
+// empty. Root cause it closes: goal rode the all-members charter block AND a
+// `continue` leader turn posts nothing, so a fresh room looked empty until a
+// human typed (workgroupRunner.ts:1013-1033 / workgroupWake.ts:229).
+describe('RFC-176 — goal directive injection & launch kickoff', () => {
+  let db: DbClient
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+  })
+
+  const kickoffs = async (taskId: string) =>
+    (await db.select().from(workgroupMessages).where(eq(workgroupMessages.taskId, taskId))).filter(
+      (m) => m.authorKind === 'system' && m.kind === 'chat' && m.bodyMd === 'fix payments',
+    )
+
+  test('leader_worker: leader-directed kickoff + goal block; worker never sees the goal', async () => {
+    const { taskId } = await seedEngineTask(db, cfg())
+    const { hooks, requests } = scriptedHooks({
+      leader: [
+        doneLeader({
+          assignments: [{ member: 'coder', title: 'task-1', brief: 'do the work' }],
+          decision: { action: 'continue' },
+        }),
+        doneLeader({ decision: { action: 'done', summary: 'shipped' } }),
+      ],
+      member: [doneMember('work done')],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('ok')
+
+    // Leader turn 1 carries the goal (persistent block + kickoff in new-activity)
+    // so it dispatches immediately — no human nudge needed.
+    expect(requests[0]?.nodeId).toBe(WG_LEADER_NODE_ID)
+    expect(requests[0]?.promptTemplate).toContain('## Group goal')
+    expect(requests[0]?.promptTemplate).toContain('fix payments')
+
+    // The worker's assignment turn never sees the goal — only the leader's brief.
+    const memberReq = requests.find((r) => r.nodeId === WG_MEMBER_NODE_ID)
+    expect(memberReq).toBeDefined()
+    expect(memberReq?.promptTemplate).not.toContain('## Group goal')
+    expect(memberReq?.promptTemplate).not.toContain('fix payments')
+
+    // Exactly one kickoff: system chat directed to the leader (non-public).
+    const seeds = await kickoffs(taskId)
+    expect(seeds).toHaveLength(1)
+    expect(JSON.parse(seeds[0]?.mentionsJson ?? '[]')).toEqual(['m-lead'])
+
+    // P1 regression: a FRESH launch room is NOT empty (the exact symptom) — the
+    // goal is visible AND the leader dispatched, with zero human messages.
+    const all = await db
+      .select()
+      .from(workgroupMessages)
+      .where(eq(workgroupMessages.taskId, taskId))
+    expect(all.some((m) => m.kind === 'chat' && m.bodyMd === 'fix payments')).toBe(true)
+    expect(all.some((m) => m.kind === 'dispatch')).toBe(true)
+    expect(all.every((m) => m.authorKind !== 'human')).toBe(true)
+  })
+
+  test('kickoff is seeded exactly once — a re-entered engine does not double-post', async () => {
+    const { taskId } = await seedEngineTask(db, cfg())
+    await runWorkgroupEngine({
+      db,
+      taskId,
+      log,
+      hooks: scriptedHooks({
+        leader: [doneLeader({ decision: { action: 'done', summary: 'done' } })],
+        member: [],
+      }).hooks,
+    })
+    // Second entry (crash-recovery / resume): the empty-room guard is now false.
+    await runWorkgroupEngine({
+      db,
+      taskId,
+      log,
+      hooks: scriptedHooks({ leader: [], member: [] }).hooks,
+    })
+    expect(await kickoffs(taskId)).toHaveLength(1)
+  })
+
+  test('free_collab: public kickoff; every member turn carries the goal block', async () => {
+    const fcCfg: WorkgroupRuntimeConfig = cfg({
+      mode: 'free_collab',
+      leaderMemberId: null,
+      switches: { shareOutputs: false, directMessages: false, blackboard: false },
+      members: [
+        {
+          id: 'm-a',
+          memberType: 'agent',
+          agentName: 'wg-planner',
+          userId: null,
+          displayName: 'alpha',
+          roleDesc: '',
+        },
+        {
+          id: 'm-b',
+          memberType: 'agent',
+          agentName: 'wg-coder',
+          userId: null,
+          displayName: 'beta',
+          roleDesc: '',
+        },
+      ],
+    })
+    const { taskId } = await seedEngineTask(db, fcCfg)
+    const { hooks, requests } = scriptedHooks({
+      leader: [],
+      member: [
+        {
+          status: 'done',
+          outputs: { wg_tasks_add: JSON.stringify([{ title: 't-a', brief: 'do a' }]) },
+        },
+        {
+          status: 'done',
+          outputs: { wg_tasks_add: JSON.stringify([{ title: 't-b', brief: 'do b' }]) },
+        },
+        doneMember('a done'),
+        doneMember('b done'),
+      ],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('ok')
+
+    // No leader — every member owns the goal, so all member turns carry the block.
+    expect(requests.length).toBeGreaterThan(0)
+    expect(requests.every((r) => r.promptTemplate.includes('## Group goal'))).toBe(true)
+    expect(requests[0]?.promptTemplate).toContain('fix payments')
+
+    // Kickoff is public (no mention) ⇒ reaches all members via the blackboard.
+    const seeds = await kickoffs(taskId)
+    expect(seeds).toHaveLength(1)
+    expect(JSON.parse(seeds[0]?.mentionsJson ?? '[]')).toEqual([])
+  })
+})
