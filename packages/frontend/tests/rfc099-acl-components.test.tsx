@@ -146,6 +146,7 @@ describe('AclPanel', () => {
           visibility: 'public',
           users: [user('u2', 'bob')],
           canManage: opts.canManage,
+          aclRevision: 3, // RFC-170 §8
         })
       }
       return Promise.resolve([])
@@ -162,6 +163,7 @@ describe('AclPanel', () => {
       visibility: 'private',
       users: [],
       canManage: true,
+      aclRevision: 4,
     })
     wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)
     await waitFor(() => expect(screen.queryByTestId('acl-panel')).toBeTruthy())
@@ -175,6 +177,9 @@ describe('AclPanel', () => {
     expect(mockedPut).toHaveBeenCalledWith('/api/agents/x/acl', {
       visibility: 'private',
       userIds: ['u2'],
+      // RFC-170 §8: the panel echoes its held composite OCC precondition.
+      expectedResourceId: 'a1',
+      expectedAclRevision: 3,
     })
   })
 

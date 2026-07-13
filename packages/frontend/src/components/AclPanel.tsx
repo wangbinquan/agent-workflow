@@ -103,7 +103,17 @@ export function AclPanel({ resourceBaseUrl, invalidateKey, onSaved, onCancel }: 
       visibility?: ResourceVisibility
       userIds?: string[]
       ownerUserId?: string
-    }) => api.put<ResourceAcl>(aclUrl, body),
+    }) => {
+      // RFC-170 §8: echo the composite OCC precondition the panel currently holds
+      // so the server CAS-rejects (409) a write racing another writer's change.
+      const current = qc.getQueryData<ResourceAcl>(['acl', aclUrl])
+      return api.put<ResourceAcl>(aclUrl, {
+        ...body,
+        ...(current !== undefined
+          ? { expectedResourceId: current.resourceId, expectedAclRevision: current.aclRevision }
+          : {}),
+      })
+    },
     onSuccess: (next, body) => {
       qc.setQueryData(['acl', aclUrl], next)
       setDirty(false)
@@ -113,6 +123,13 @@ export function AclPanel({ resourceBaseUrl, invalidateKey, onSaved, onCancel }: 
       // Owner transfer keeps the main dialog open (the panel just changed
       // under you and is worth a glance); a plain save closes it.
       if (body.ownerUserId === undefined) onSaved?.()
+    },
+    onError: () => {
+      // RFC-170 §8: a failed save (esp. a 409 revision conflict) means the panel's
+      // held revision is stale — refetch so it shows the current owner/grants/
+      // revision (and a retry uses the fresh revision). The draft stays dirty so
+      // the user can review + re-apply; the error text shows via describeApiError.
+      void qc.invalidateQueries({ queryKey: ['acl', aclUrl] })
     },
   })
 
