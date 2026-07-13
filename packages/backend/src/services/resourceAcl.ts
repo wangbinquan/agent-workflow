@@ -42,7 +42,7 @@ import {
   workflows,
   workgroups,
 } from '@/db/schema'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 
 /**
  * Minimal row shape every ACL check accepts; full resource rows AND mapped
@@ -215,6 +215,13 @@ export async function getResourceAcl(
   type: AclResourceType,
   row: AclRow,
 ): Promise<ResourceAcl> {
+  const table = ACL_TABLES[type]
+  const revRows = await db
+    .select({ aclRevision: table.aclRevision })
+    .from(table)
+    .where(eq(table.id, row.id))
+    .limit(1)
+  const aclRevision = revRows[0]?.aclRevision ?? 0
   const grantRows = await db
     .select()
     .from(resourceGrants)
@@ -240,6 +247,7 @@ export async function getResourceAcl(
     visibility: row.visibility ?? 'public',
     users: grantUsers,
     canManage: isResourceOwner(actor, row),
+    aclRevision,
   }
 }
 
@@ -258,55 +266,92 @@ export async function updateResourceAcl(
 ): Promise<ResourceAcl> {
   await requireResourceOwner(db, actor, type, row)
 
-  // Validate every referenced user is a real, active, non-system account.
   const referenced = new Set<string>(body.userIds ?? [])
   if (body.ownerUserId !== undefined) referenced.add(body.ownerUserId)
-  if (referenced.size > 0) {
-    const rows = await db
-      .select({ id: users.id, status: users.status })
-      .from(users)
-      .where(inArray(users.id, [...referenced]))
-    const active = new Set(rows.filter((r) => r.status === 'active').map((r) => r.id))
-    const bad = [...referenced].filter((id) => id === SYSTEM_USER_ID || !active.has(id))
-    if (bad.length > 0) {
-      throw new ValidationError('acl-user-invalid', 'referenced user(s) not active', {
-        userIds: bad,
-      })
-    }
-  }
-
-  const prevOwner = row.ownerUserId ?? null
-  const nextOwner = body.ownerUserId !== undefined ? body.ownerUserId : prevOwner
-  const nextVisibility: ResourceVisibility =
-    body.visibility !== undefined ? body.visibility : (row.visibility ?? 'public')
-
-  let nextGrantIds: string[]
-  if (body.userIds !== undefined) {
-    nextGrantIds = [...new Set(body.userIds)]
-  } else {
-    const current = await db
-      .select({ userId: resourceGrants.userId })
-      .from(resourceGrants)
-      .where(and(eq(resourceGrants.resourceType, type), eq(resourceGrants.resourceId, row.id)))
-    nextGrantIds = current.map((g) => g.userId)
-  }
-  // Owner transfer keeps the previous human owner visible (server-side rule).
-  if (
-    nextOwner !== prevOwner &&
-    prevOwner !== null &&
-    prevOwner !== SYSTEM_USER_ID &&
-    !nextGrantIds.includes(prevOwner)
-  ) {
-    nextGrantIds.push(prevOwner)
-  }
-  // The owner is never a grant row.
-  nextGrantIds = nextGrantIds.filter((id) => id !== nextOwner)
 
   const table = ACL_TABLES[type]
   const now = Date.now()
-  dbTxSync(db, (tx) => {
+
+  // RFC-170 §8 (G3-9/G5-P5): the OCC CAS, referenced-user active check, and the
+  // prevOwner/grant assembly all run inside ONE write tx off an in-tx row
+  // snapshot — so a stale `expectedAclRevision`, a concurrently-disabled user,
+  // or a late owner transfer cannot slip a revoked grant / re-take ownership
+  // through a check-then-write gap. Uses the synchronous drizzle surface (no
+  // await inside dbTxSync).
+  const updatedRow = dbTxSync<AclRow>(db, (tx) => {
+    const cur = tx
+      .select({
+        aclRevision: table.aclRevision,
+        ownerUserId: table.ownerUserId,
+        visibility: table.visibility,
+      })
+      .from(table)
+      .where(eq(table.id, row.id))
+      .get()
+    if (!cur) throw new NotFoundError('not-found', `${type} not found`)
+
+    // Optional OCC preconditions (absent → legacy last-write-wins).
+    if (body.expectedResourceId !== undefined && body.expectedResourceId !== row.id) {
+      throw new ConflictError('acl-resource-mismatch', 'resource id changed; reload')
+    }
+    if (body.expectedAclRevision !== undefined && cur.aclRevision !== body.expectedAclRevision) {
+      throw new ConflictError(
+        'acl-revision-conflict',
+        `acl revision is ${cur.aclRevision}, expected ${body.expectedAclRevision}; reload and retry`,
+      )
+    }
+
+    // Referenced-user active check IN-tx (G5-P5).
+    if (referenced.size > 0) {
+      const urows = tx
+        .select({ id: users.id, status: users.status })
+        .from(users)
+        .where(inArray(users.id, [...referenced]))
+        .all()
+      const activeSet = new Set(urows.filter((r) => r.status === 'active').map((r) => r.id))
+      const bad = [...referenced].filter((id) => id === SYSTEM_USER_ID || !activeSet.has(id))
+      if (bad.length > 0) {
+        throw new ValidationError('acl-user-invalid', 'referenced user(s) not active', {
+          userIds: bad,
+        })
+      }
+    }
+
+    const prevOwner = cur.ownerUserId ?? null
+    const nextOwner = body.ownerUserId !== undefined ? body.ownerUserId : prevOwner
+    const nextVisibility: ResourceVisibility =
+      body.visibility !== undefined ? body.visibility : (cur.visibility ?? 'public')
+
+    let nextGrantIds: string[]
+    if (body.userIds !== undefined) {
+      nextGrantIds = [...new Set(body.userIds)]
+    } else {
+      const current = tx
+        .select({ userId: resourceGrants.userId })
+        .from(resourceGrants)
+        .where(and(eq(resourceGrants.resourceType, type), eq(resourceGrants.resourceId, row.id)))
+        .all()
+      nextGrantIds = current.map((g) => g.userId)
+    }
+    // Owner transfer keeps the previous human owner visible (server-side rule).
+    if (
+      nextOwner !== prevOwner &&
+      prevOwner !== null &&
+      prevOwner !== SYSTEM_USER_ID &&
+      !nextGrantIds.includes(prevOwner)
+    ) {
+      nextGrantIds.push(prevOwner)
+    }
+    // The owner is never a grant row.
+    nextGrantIds = nextGrantIds.filter((id) => id !== nextOwner)
+
     tx.update(table)
-      .set({ ownerUserId: nextOwner, visibility: nextVisibility, updatedAt: now })
+      .set({
+        ownerUserId: nextOwner,
+        visibility: nextVisibility,
+        aclRevision: cur.aclRevision + 1, // monotonic bump on every successful PUT
+        updatedAt: now,
+      })
       .where(eq(table.id, row.id))
       .run()
     tx.delete(resourceGrants)
@@ -325,8 +370,8 @@ export async function updateResourceAcl(
         )
         .run()
     }
+    return { id: row.id, ownerUserId: nextOwner, visibility: nextVisibility }
   })
 
-  const updatedRow: AclRow = { id: row.id, ownerUserId: nextOwner, visibility: nextVisibility }
   return getResourceAcl(db, actor, type, updatedRow)
 }

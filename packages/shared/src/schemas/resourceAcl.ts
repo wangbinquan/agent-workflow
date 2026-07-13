@@ -45,6 +45,14 @@ export const ResourceAclSchema = z.object({
   users: z.array(UserPublicSchema),
   /** True when the current actor may PUT this ACL (owner or admin). */
   canManage: z.boolean(),
+  /**
+   * RFC-170 §8 — monotonic ACL revision. The client holds this from GET and
+   * echoes it as `expectedAclRevision` on PUT; the server CAS-rejects (409) a
+   * write whose expected revision no longer matches, so a stale request (e.g.
+   * paused mid-edit while an admin transferred the owner) cannot silently
+   * reinstate a revoked grant or re-take ownership.
+   */
+  aclRevision: z.number().int().nonnegative(),
 })
 export type ResourceAcl = z.infer<typeof ResourceAclSchema>
 
@@ -58,6 +66,13 @@ export const UpdateResourceAclBodySchema = z
     ownerUserId: z.string().min(1).optional(),
     visibility: ResourceVisibilitySchema.optional(),
     userIds: z.array(z.string().min(1)).max(256).optional(),
+    /**
+     * RFC-170 §8 — optional OCC preconditions (backward-compatible: absent →
+     * legacy last-write-wins). When present, the PUT CAS-checks the target id +
+     * monotonic revision inside the write tx and 409s on mismatch.
+     */
+    expectedResourceId: z.string().min(1).optional(),
+    expectedAclRevision: z.number().int().nonnegative().optional(),
   })
   .refine(
     (b) => b.ownerUserId !== undefined || b.visibility !== undefined || b.userIds !== undefined,
