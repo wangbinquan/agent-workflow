@@ -326,15 +326,21 @@ export function taskToLaunchPayload(task: Task): {
     payload.scratch = true
   } else if (task.spaceKind === 'internal') {
     spaceResolvable = false
-  } else if (task.status === 'failed' && task.failedNodeId === null) {
-    // RFC-175 impl-gate F2: a task that ended `failed` before ANY node ran
-    // (failedNodeId===null) failed during launch/materialization. A multi-repo
-    // materialize aborts on the first bad repo and persists only the successful
-    // PREFIX, with repo_count collapsed to that prefix length (services/task.ts
-    // `repoCount: Math.max(1, materializedRepos.length)`) — so the dropped repos
-    // are unrecoverable from the DTO and a naive replay would silently launch a
-    // SUBSET. Refuse to reconstruct the space; the wizard blanks it and forces
-    // the user to rebuild the full repo list explicitly.
+  } else if (
+    task.status === 'failed' &&
+    (task.errorSummary ?? '').startsWith('worktree creation failed:')
+  ) {
+    // RFC-175 impl-gate F2 (re-review): ONLY a materialize/worktree-creation
+    // failure risks a truncated repo prefix. A multi-repo materialize aborts on
+    // the first bad repo and persists only the successful PREFIX, with repo_count
+    // collapsed to that length (services/task.ts persists
+    // `errorSummary: 'worktree creation failed: …'` + `repoCount:
+    // Math.max(1, materializedRepos.length)`) — the dropped repos are
+    // unrecoverable from the DTO, so refuse to reconstruct a SUBSET. Match the
+    // POSITIVE worktree-creation marker, NOT `failedNodeId === null`: scheduler
+    // failures (snapshot-invalid / cycle / scheduler-error) also have a null
+    // failedNodeId but a COMPLETE materialized space and must stay resolvable.
+    // (Locked to the backend marker by a source test.)
     spaceResolvable = false
   } else {
     const repos = task.repos
@@ -396,10 +402,16 @@ export function normalizeSeededInput(def: WorkflowInput, value: string): string 
   if (def.kind === 'upload') return ''
   if (def.kind === 'enum') {
     const loose = def as Record<string, unknown>
-    if (loose.allowOther === true) return value
+    const allowOther = loose.allowOther === true
     const choices = Array.isArray(loose.choices)
       ? loose.choices.filter((c): c is string => typeof c === 'string')
       : []
+    // multiSelect FIRST (re-review F3): the wire format is a JSON string array,
+    // so enforce it even when allowOther is on — a stale single-select scalar
+    // (definition drift single→multi) must not slip through as a raw string that
+    // EnumPicker fails to parse. allowOther keeps arbitrary members; otherwise
+    // filter to live choices. Empty selection normalizes to '' (same as a fresh
+    // untouched field), which the required gate treats as missing.
     if (loose.multiSelect === true) {
       let parsed: unknown
       try {
@@ -408,9 +420,12 @@ export function normalizeSeededInput(def: WorkflowInput, value: string): string 
         return ''
       }
       if (!Array.isArray(parsed)) return ''
-      const kept = parsed.filter((x): x is string => typeof x === 'string' && choices.includes(x))
+      const members = parsed.filter((x): x is string => typeof x === 'string')
+      const kept = allowOther ? members : members.filter((m) => choices.includes(m))
       return kept.length > 0 ? JSON.stringify(kept) : ''
     }
+    // single-select: allowOther keeps any value; else require a live choice.
+    if (allowOther) return value
     return choices.includes(value) ? value : ''
   }
   return value

@@ -317,12 +317,22 @@ function TaskWizardPage() {
     // Barrier (R4-F4): wait for the source task, its members, the actor identity
     // (to exclude the launcher from seeded collaborators) AND the kind-relevant
     // inventory (the subject-id guard needs it — a slow inventory must not make a
-    // valid subject look missing). The task error surfaces via the banner + a
-    // submit gate; don't seed on it.
-    // Fresh-fetch barrier (impl-gate F1): require THIS mount's fetch to have
-    // settled before seeding — never lock on a stale shared-cache hit (which
-    // would re-grant a since-removed collaborator).
-    if (!relaunchTaskQ.isFetchedAfterMount || !relaunchMembersQ.isFetchedAfterMount) return
+    // valid subject look missing).
+    //
+    // Fresh-fetch barrier (impl-gate F1 + re-review): require this mount's fetch
+    // to have SUCCEEDED before seeding. isFetchedAfterMount alone is insufficient
+    // — an errored refetch keeps the STALE cached `data` and still flips that
+    // flag, which would re-grant a since-removed collaborator. Gate on isSuccess
+    // too, and on error do NOT set the one-shot ref (return early) so a later
+    // successful retry re-enters and seeds fresh; the error surfaces via
+    // relaunchError (task OR members) + the submit gate.
+    if (
+      !relaunchTaskQ.isFetchedAfterMount ||
+      !relaunchMembersQ.isFetchedAfterMount ||
+      !relaunchTaskQ.isSuccess ||
+      !relaunchMembersQ.isSuccess
+    )
+      return
     if (relaunchTaskQ.data === undefined || relaunchMembersQ.data === undefined) return
     if (actor.isPending) return
     const task = relaunchTaskQ.data
@@ -396,6 +406,8 @@ function TaskWizardPage() {
     relaunchMembersQ.data,
     relaunchTaskQ.isFetchedAfterMount,
     relaunchMembersQ.isFetchedAfterMount,
+    relaunchTaskQ.isSuccess,
+    relaunchMembersQ.isSuccess,
     workgroupsQ.data,
     agentsQ.data,
     actor.isPending,
@@ -468,7 +480,21 @@ function TaskWizardPage() {
       if (def.required === true && list.length === 0) return true
       return list.length < minCount
     }
-    return def.required === true && (inputs[def.key] ?? '').trim() === ''
+    if (def.required !== true) return false
+    const raw = (inputs[def.key] ?? '').trim()
+    if (raw === '') return true
+    // Re-review F3: a required multi-select whose value is an empty array ('[]')
+    // — or an unparseable non-selection — is "nothing picked" and must count as
+    // missing, even though the raw string is non-empty.
+    if (def.kind === 'enum' && (def as Record<string, unknown>).multiSelect === true) {
+      try {
+        const parsed: unknown = JSON.parse(raw)
+        return Array.isArray(parsed) && parsed.length === 0
+      } catch {
+        return true
+      }
+    }
+    return false
   })
   const hasUploads = Object.values(uploads).some((arr) => arr.length > 0)
   const hasUploadInput = inputDefs.some((d) => d.kind === 'upload')
@@ -530,7 +556,11 @@ function TaskWizardPage() {
   // agent/workflow) its members have loaded — else the launch would fire with
   // empty/wrong collaborators or a half-applied seed. A task-fetch failure
   // (404/403/network) blocks the submit and surfaces a banner.
-  const relaunchError = isRelaunch && relaunchTaskQ.isError
+  // Re-review F1: surface a members-query error too (non-workgroup needs members
+  // to seed collaborators) so a failed fetch shows the banner instead of a
+  // silently-blocked submit; mirrors relaunchReady's members requirement.
+  const relaunchError =
+    isRelaunch && (relaunchTaskQ.isError || (kind !== 'workgroup' && relaunchMembersQ.isError))
   const relaunchReady =
     !isRelaunch || (relaunchTaskQ.isSuccess && (kind === 'workgroup' || relaunchMembersQ.isSuccess))
 

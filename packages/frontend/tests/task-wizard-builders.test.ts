@@ -476,8 +476,20 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
     expect(seed!.maxDurationMs).toBe(1000)
   })
 
-  test('impl-gate F2: materialize-failed source (failed + no failedNodeId) → space unresolvable', () => {
-    // Failed BEFORE any node ran → repo list may be a truncated prefix; refuse replay.
+  test('impl-gate F2 (re-review): only a worktree-creation failure → space unresolvable; scheduler failures stay resolvable', () => {
+    const wtFail = 'worktree creation failed: repo[1] (b) failed: repo-clone-failed'
+    // Materialize/worktree failure → repo list may be a truncated prefix; refuse replay.
+    expect(
+      taskToLaunchPayload(
+        task({
+          spaceKind: 'remote',
+          repos: [repo('https://x/a.git')],
+          status: 'failed',
+          errorSummary: wtFail,
+        }),
+      ).spaceResolvable,
+    ).toBe(false)
+    // Scheduler failure (snapshot-invalid): failedNodeId null but COMPLETE space → resolvable.
     expect(
       taskToLaunchPayload(
         task({
@@ -485,10 +497,11 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
           repos: [repo('https://x/a.git')],
           status: 'failed',
           failedNodeId: null,
+          errorSummary: 'snapshot-invalid',
         }),
       ).spaceResolvable,
-    ).toBe(false)
-    // Failed AT a node (failedNodeId set) → space fully materialized → resolvable.
+    ).toBe(true)
+    // Node failure (complete space) → resolvable.
     expect(
       taskToLaunchPayload(
         task({
@@ -496,23 +509,24 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
           repos: [repo('https://x/a.git')],
           status: 'failed',
           failedNodeId: 'node-7',
+          errorSummary: 'boom',
         }),
       ).spaceResolvable,
     ).toBe(true)
-    // A non-failed terminal (canceled) with no failedNodeId still materialized → resolvable.
+    // Non-failed terminal (canceled) even with the marker → resolvable (it ran).
     expect(
       taskToLaunchPayload(
         task({
           spaceKind: 'remote',
           repos: [repo('https://x/a.git')],
           status: 'canceled',
-          failedNodeId: null,
+          errorSummary: wtFail,
         }),
       ).spaceResolvable,
     ).toBe(true)
-    // Scratch that failed early has no repos to drop → still trivially resolvable.
+    // Scratch worktree failure has no repos to drop → still trivially resolvable.
     expect(
-      taskToLaunchPayload(task({ spaceKind: 'scratch', status: 'failed', failedNodeId: null }))
+      taskToLaunchPayload(task({ spaceKind: 'scratch', status: 'failed', errorSummary: wtFail }))
         .spaceResolvable,
     ).toBe(true)
   })
@@ -534,6 +548,17 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
     // multiSelect all-removed → cleared; unparseable → cleared
     expect(normalizeSeededInput(en({ choices: ['a'], multiSelect: true }), '["x","y"]')).toBe('')
     expect(normalizeSeededInput(en({ choices: ['a'], multiSelect: true }), 'not-json')).toBe('')
+    // re-review F3: multi + allowOther keeps arbitrary array members BUT still
+    // enforces the array wire-format — a stale single-select scalar is cleared.
+    expect(
+      normalizeSeededInput(
+        en({ multiSelect: true, allowOther: true, choices: ['a'] }),
+        '["a","x"]',
+      ),
+    ).toBe('["a","x"]')
+    expect(
+      normalizeSeededInput(en({ multiSelect: true, allowOther: true, choices: ['a'] }), 'stale'),
+    ).toBe('')
     // upload: always cleared (stale worktree path); text: passthrough
     expect(
       normalizeSeededInput({ key: 'k', kind: 'upload' } as unknown as WorkflowInput, '/wt/f.pdf'),
@@ -548,15 +573,29 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
   test('impl-gate F1/F2/F4 wiring locked in tasks.new.tsx', () => {
     const here = dirname(fileURLToPath(import.meta.url))
     const src = readFileSync(join(here, '../src/routes/tasks.new.tsx'), 'utf-8')
-    // F1: relaunch queries fetch fresh + barrier gates on this-mount fetch
+    // F1: relaunch queries fetch fresh + barrier gates on this-mount SUCCESS
+    // (re-review: isFetchedAfterMount alone accepts an errored refetch's stale data)
     expect(src).toContain("refetchOnMount: 'always'")
     expect(src).toContain('relaunchTaskQ.isFetchedAfterMount')
     expect(src).toContain('relaunchMembersQ.isFetchedAfterMount')
+    expect(src).toContain('relaunchTaskQ.isSuccess')
+    expect(src).toContain('relaunchMembersQ.isSuccess')
     // F2: sourceReady requires a non-empty repo list (no vacuous `[].every()`)
     expect(src).toMatch(/space\.repos\.length > 0 &&[\s\S]*?space\.repos\.every/)
     // F2: the seed effect consumes spaceResolvable (does not discard it)
     expect(src).toContain('const { payload, spaceResolvable } = taskToLaunchPayload')
     // F4: the multipart submit threads immediateGuards() as the 4th arg
     expect(src).toMatch(/buildWorkflowStartFormData\([\s\S]*?immediateGuards\(\),/)
+  })
+
+  // Re-review F2: the space-unresolvable heuristic keys off the EXACT backend
+  // errorSummary marker, so lock the two together — a change to the backend
+  // emitter must red this test, not silently break the discriminator.
+  test('impl-gate F2 marker is coupled to the backend worktree-creation errorSummary', () => {
+    const here = dirname(fileURLToPath(import.meta.url))
+    const backend = readFileSync(join(here, '../../backend/src/services/task.ts'), 'utf-8')
+    expect(backend).toContain('worktree creation failed:')
+    const wiz = readFileSync(join(here, '../src/lib/task-wizard.ts'), 'utf-8')
+    expect(wiz).toContain("startsWith('worktree creation failed:')")
   })
 })
