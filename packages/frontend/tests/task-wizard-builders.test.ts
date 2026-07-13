@@ -584,6 +584,11 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
     // relaunch (which never consumes members) must not block on a members fetch.
     expect(src).toContain('relaunchNeedsMembers')
     expect(src).toContain('taskExecutionKind(relaunchTaskQ.data)')
+    // F1-followup-2: the SUBMIT gate keys off the reactive relaunchApplied flag
+    // (set only after the seed effect passes its barrier), NOT relaunchTaskQ.isSuccess
+    // — else a cached success opens a pre-seed submit window.
+    expect(src).toContain('const relaunchReady = !isRelaunch || relaunchApplied')
+    expect(src).toMatch(/relaunchSeededRef\.current = true[\s\S]{0,220}setRelaunchApplied\(true\)/)
     // F2: sourceReady requires a non-empty repo list (no vacuous `[].every()`)
     expect(src).toMatch(/space\.repos\.length > 0 &&[\s\S]*?space\.repos\.every/)
     // F2: the seed effect consumes spaceResolvable (does not discard it)

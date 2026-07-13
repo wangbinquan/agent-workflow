@@ -312,6 +312,13 @@ function TaskWizardPage() {
 
   // --- RFC-175 relaunch: load task + members → seed (one-shot, kind-aware) ----
   const relaunchSeededRef = useRef(false)
+  // Reactive twin of the one-shot ref (final-gate F1-followup-2): the SUBMIT gate
+  // must not open until this effect has actually run PAST its fresh-fetch barrier
+  // and applied the seed. A cached shared-key hit keeps relaunchTaskQ.isSuccess
+  // true during the forced background refetch (isFetchedAfterMount still false),
+  // so gating relaunchReady on isSuccess would let a user submit the DEFAULT form
+  // pre-seed. This flag flips true only inside the effect, after the barrier.
+  const [relaunchApplied, setRelaunchApplied] = useState(false)
   useEffect(() => {
     if (!isRelaunch || relaunchSeededRef.current) return
     // Barrier: the SOURCE TASK gates everything — it drives the kind, the
@@ -344,6 +351,9 @@ function TaskWizardPage() {
     )
       return
     relaunchSeededRef.current = true
+    // Past the barrier — open the submit gate (batched with the seed setState
+    // below, so no render sees relaunchApplied=true before the seed is applied).
+    setRelaunchApplied(true)
 
     const { payload, spaceResolvable } = taskToLaunchPayload(task)
     const seed = payloadToWizardSeed(kind, payload)
@@ -579,9 +589,12 @@ function TaskWizardPage() {
       ? relaunchMembersQ
       : null
   const relaunchError = isRelaunch && relaunchErrorQ !== null
-  const relaunchReady =
-    !isRelaunch ||
-    (relaunchTaskQ.isSuccess && (!relaunchNeedsMembers || relaunchMembersQ.isSuccess))
+  // Final-gate F1-followup-2: gate the submit on the reactive relaunchApplied
+  // flag (set only after the seed effect passes its full fresh-fetch barrier),
+  // NOT on relaunchTaskQ.isSuccess — a cached success can precede the applied
+  // seed, opening a pre-seed submit window. relaunchApplied ⇒ task fresh-success
+  // + (non-workgroup) members fresh-success + actor/inventory ready + seed applied.
+  const relaunchReady = !isRelaunch || relaunchApplied
 
   const nextEnabled =
     step === STEP_MODE ? stepModeReady : step === STEP_SPACE ? sourceReady : stepContentReady
