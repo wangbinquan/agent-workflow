@@ -26,7 +26,13 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import type { Fusion, FusionSkipped, FusionStatus, LaunchFusion } from '@agent-workflow/shared'
+import type {
+  Fusion,
+  FusionSkipped,
+  FusionStatus,
+  LaunchFusion,
+  Skill,
+} from '@agent-workflow/shared'
 import { FusionResultManifestSchema, TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/actor'
@@ -465,9 +471,14 @@ export async function createFusion(
   const fusionId = ulid()
   const workDir = fusionWorkDir(appHome, fusionId, 1)
   mkdirSync(workDir, { recursive: true })
-  // RFC-170 T6 (Codex F10): seed from the token's immutable version snapshot.
-  const skillFilesDir = fusionSeedDir(appHome, input.skillName, preconditionToken)
-  if (existsSync(skillFilesDir)) copyWorktreeContent(skillFilesDir, workDir)
+  // RFC-170 T6 (Codex F10/F11): seed from the token's immutable snapshot with a
+  // generation (skillId) check; discard the worktree if it can't be seeded safely.
+  try {
+    await seedFusionFromSnapshot(db, appHome, input.skillName, preconditionToken, workDir)
+  } catch (err) {
+    rmSync(workDir, { recursive: true, force: true })
+    throw err
+  }
   const baseCommit = await seedWorktree(workDir)
 
   // 4. Launch the engine task (preCreatedWorktree bypasses worktree creation;
@@ -970,20 +981,48 @@ function fusionTokenExpectations(token: string | null): {
 }
 
 /**
- * RFC-170 T6 (Codex re-review F10) — the directory to SEED a fusion worktree from:
- * the IMMUTABLE version snapshot the precondition token points at
- * (`versions/v<contentVersion>/files`), NOT the mutable live `files/`. A
- * delete→recreate or a concurrent version-write during seeding can swap live
- * out from under the copy; the versioned snapshot never changes, so the seed is
- * always the exact generation the token authorises against. Falls back to live
- * for a legacy skill with no snapshot dir (its token check still gates the apply).
+ * RFC-170 T6 (Codex re-review F10/F11) — seed `workDir` from the token's IMMUTABLE
+ * version snapshot (`versions/v<contentVersion>/files`), then verify the skill at
+ * this name is STILL the token's exact generation. The snapshot PATH is keyed by
+ * (name, version), so a same-name delete→recreate makes it resolve to a DIFFERENT
+ * skill's content; the skillId in the token is the discriminator. Verifying the
+ * live identity BOTH before and after the copy (the task hasn't started yet) means
+ * no wrong-generation bytes ever reach a running fusion task. FAIL-CLOSED: a
+ * missing snapshot or a generation mismatch throws (no live fallback, no empty
+ * seed). The caller discards `workDir` on throw.
  */
-function fusionSeedDir(appHome: string, skillName: string, token: string | null): string {
-  const live = join(appHome, 'skills', skillName, 'files')
+async function seedFusionFromSnapshot(
+  db: DbClient,
+  appHome: string,
+  skillName: string,
+  token: string | null,
+  workDir: string,
+): Promise<void> {
   const t = token === null ? null : decodeSkillToken(token)
-  if (t === null) return live
-  const snapshot = join(appHome, 'skills', skillName, 'versions', `v${t.contentVersion}`, 'files')
-  return existsSync(snapshot) ? snapshot : live
+  if (t === null) {
+    throw new ConflictError('fusion-precondition-stale', 'invalid precondition token; re-initiate')
+  }
+  const matches = (s: Skill | null): boolean =>
+    s !== null && s.id === t.skillId && s.contentVersion === t.contentVersion
+  const seedDir = join(appHome, 'skills', skillName, 'versions', `v${t.contentVersion}`, 'files')
+  if (!existsSync(seedDir)) {
+    throw new ConflictError(
+      'fusion-skill-unversioned',
+      `the target skill has no v${t.contentVersion} snapshot to fuse from; re-save it first`,
+    )
+  }
+  // Pre-copy: catch a delete→recreate that already repointed this name+version.
+  if (!matches(await getSkill(db, skillName))) {
+    throw new ConflictError('fusion-precondition-stale', 'the target skill changed; re-initiate')
+  }
+  copyWorktreeContent(seedDir, workDir)
+  // Post-copy: catch a recreate that raced the copy (no task has started).
+  if (!matches(await getSkill(db, skillName))) {
+    throw new ConflictError(
+      'fusion-precondition-stale',
+      'the target skill changed during setup; re-initiate',
+    )
+  }
 }
 
 export async function approveFusion(deps: FusionDeps, id: string, actor: Actor): Promise<Fusion> {
@@ -1138,10 +1177,10 @@ export async function rejectFusion(
     // under OCC, so the displayed diff must be measured from the skill — NOT the
     // per-iteration prior proposal (Codex P2: otherwise a re-run hides the
     // earlier iteration's changes from the diff the merger approves).
-    // RFC-170 T6 (Codex F10): re-run baseline = the token's immutable snapshot
-    // (the drift check above guarantees it's still the current generation).
-    const skillFilesDir = fusionSeedDir(appHome, row.skillName, row.preconditionToken)
-    if (existsSync(skillFilesDir)) copyWorktreeContent(skillFilesDir, workDir)
+    // RFC-170 T6 (Codex F10/F11): re-run baseline = the token's immutable snapshot,
+    // with a generation (skillId) check (the claim above verified the token, but
+    // re-verify around the copy for a same-name recreate). A throw is caught below.
+    await seedFusionFromSnapshot(db, appHome, row.skillName, row.preconditionToken, workDir)
     const baseCommit = await seedWorktree(workDir)
     // Then overlay the PRIOR proposal as uncommitted working changes, so the
     // agent refines its last attempt while the diff vs baseline stays full.
@@ -1206,7 +1245,10 @@ export async function rejectFusion(
       },
     })
     if (!attached) {
-      await cancelTask(db, taskId).catch(() => undefined)
+      // RFC-170 T6 (Codex re-review F12): the speculative task may already be
+      // parked in its mandatory clarify round — cancelFusionEngineTask covers
+      // that (plain cancelTask would refuse it and orphan the worker/workspace).
+      await cancelFusionEngineTask(db, taskId)
       throw new ConflictError(
         'fusion-not-awaiting',
         'the fusion was canceled during the re-run; the speculative task was rolled back',
@@ -1229,6 +1271,30 @@ export async function rejectFusion(
 // Cancel
 // ---------------------------------------------------------------------------
 
+/**
+ * RFC-170 T6 (Codex re-review F12) — cancel a fusion's engine task, covering EVERY
+ * state it can be in: pending/running via cancelTask, and PARKED
+ * awaiting_human/awaiting_review (its mandatory clarify round — cancelTask refuses
+ * those) via a direct CAS terminalize so the RFC-053 reconciler abandons the
+ * orphaned clarify session instead of leaking a worker/workspace forever.
+ */
+async function cancelFusionEngineTask(db: DbClient, taskId: string): Promise<void> {
+  const task = await getTask(db, taskId)
+  if (task === null) return
+  if (task.status === 'pending' || task.status === 'running') {
+    await cancelTask(db, taskId).catch(() => undefined)
+  } else if (task.status === 'awaiting_human' || task.status === 'awaiting_review') {
+    await trySetTaskStatus({
+      db,
+      taskId,
+      to: 'canceled',
+      allowedFrom: ['awaiting_human', 'awaiting_review'],
+      extra: { finishedAt: Date.now(), errorSummary: 'fusion canceled' },
+      reason: 'fusion: terminalize parked engine task',
+    }).catch(() => false)
+  }
+}
+
 export async function cancelFusion(deps: FusionDeps, id: string, actor: Actor): Promise<Fusion> {
   const { db } = deps
   const row = loadFusionRow(db, id)
@@ -1239,40 +1305,33 @@ export async function cancelFusion(deps: FusionDeps, id: string, actor: Actor): 
   if (FUSION_TERMINAL_STATUSES.has(row.status)) {
     throw new ConflictError('fusion-terminal', `fusion is already '${row.status}'`)
   }
-  if (row.currentTaskId !== null) {
-    const task = await getTask(db, row.currentTaskId)
-    if (task !== null && (task.status === 'pending' || task.status === 'running')) {
-      await cancelTask(db, row.currentTaskId).catch(() => undefined)
-    } else if (
-      task !== null &&
-      (task.status === 'awaiting_human' || task.status === 'awaiting_review')
-    ) {
-      // A fusion task spends its mandatory-clarify round in awaiting_human;
-      // cancelTask refuses those, so terminalize directly (CAS) — this lets the
-      // RFC-053 reconciler abandon the now-orphaned clarify session instead of
-      // leaving it open in the clarify inbox forever.
-      await trySetTaskStatus({
-        db,
-        taskId: row.currentTaskId,
-        to: 'canceled',
-        allowedFrom: ['awaiting_human', 'awaiting_review'],
-        extra: { finishedAt: Date.now(), errorSummary: 'fusion canceled' },
-        reason: 'cancelFusion: terminalize parked engine task',
-      }).catch(() => false)
+  // RFC-170 T6 (Codex re-review F12): atomically CLAIM the cancellation and capture
+  // the task that is current AT COMMIT TIME — not a stale pre-loaded one. Otherwise
+  // a concurrent reject that attached a new task B between our load and this CAS
+  // would leave B running while we canceled A. Only from a cancelable state (NOT
+  // 'applying' — a mid-approve commit must not be canceled from under the winner).
+  const claim = dbTxSync(db, (tx) => {
+    const cur = tx
+      .select({ status: fusions.status, currentTaskId: fusions.currentTaskId })
+      .from(fusions)
+      .where(eq(fusions.id, id))
+      .get()
+    if (!cur || (cur.status !== 'running' && cur.status !== 'awaiting_approval')) {
+      return { ok: false as const }
     }
-  }
-  // RFC-170 T6 (Codex F7): CAS the terminal transition — only from a cancelable
-  // state (running / awaiting_approval), NOT 'applying' (a mid-approve commit must
-  // not be canceled out from under the winner). If it lost the race (a decision
-  // moved it since the pre-check), report it instead of clobbering.
-  const canceled = casFusionStatus(db, id, ['running', 'awaiting_approval'], 'canceled', {
-    extra: { decidedByUserId: actor.user.id, decidedAt: Date.now() },
+    tx.update(fusions)
+      .set({ status: 'canceled', decidedByUserId: actor.user.id, decidedAt: Date.now() })
+      .where(eq(fusions.id, id))
+      .run()
+    return { ok: true as const, taskId: cur.currentTaskId }
   })
-  if (!canceled) {
+  if (!claim.ok) {
     throw new ConflictError(
       'fusion-terminal',
       `fusion '${id}' is no longer cancelable (a decision is in progress or it already settled)`,
     )
   }
+  // Cancel the EXACT task current at cancel-commit time (covers parked states).
+  if (claim.taskId !== null) await cancelFusionEngineTask(db, claim.taskId)
   return rowToFusion(loadFusionRow(db, id)!)
 }

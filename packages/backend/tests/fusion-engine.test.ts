@@ -668,4 +668,71 @@ describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', 
     expect(seeded).toContain('SNAPSHOT-BODY') // from the immutable v1 snapshot
     expect(seeded).not.toContain('LIVE-TAMPERED') // NOT from the mutated live dir
   })
+
+  // RFC-170 T6 (Codex re-review F11): the seed is keyed to the token's skillId
+  // (not just name+version), and fails closed with no live fallback.
+  test('createFusion fails closed when the target has no version snapshot (F11)', async () => {
+    const fsOpts: SkillFsOptions = { appHome: h.appHome }
+    await createManagedSkill(h.db, fsOpts, {
+      name: 'lint',
+      description: 'd',
+      bodyMd: 'b',
+      frontmatterExtra: {},
+    })
+    // Remove the snapshot dir (legacy/corrupted skill) → no safe seed source.
+    rmSync(pjoin(h.appHome, 'skills', 'lint', 'versions'), { recursive: true, force: true })
+    const mem = approvedGlobalMemory(h.db, 'm')
+    let code: string | undefined
+    try {
+      await createFusion({ skillName: 'lint', memoryIds: [mem], intent: '' }, h.deps, adminActor)
+    } catch (err) {
+      code = (err as { code?: string }).code
+    }
+    expect(code).toBe('fusion-skill-unversioned') // fail-closed, NOT empty/live seed
+  })
+
+  test('seedFusionFromSnapshot verifies the token skillId around the copy (source lock)', () => {
+    const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
+    // Generation check keys on the token's skillId, not just (name, version).
+    expect(src).toMatch(/s\.id === t\.skillId && s\.contentVersion === t\.contentVersion/)
+    // No live fallback remains.
+    expect(src).not.toMatch(/return existsSync\(snapshot\) \? snapshot : live/)
+  })
+})
+
+// RFC-170 T6 (Codex re-review F12) — cancel captures the CURRENT task in its CAS
+// and terminalizes parked (awaiting_human) engine tasks so nothing is orphaned.
+describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', () => {
+  let h: H
+  beforeEach(() => (h = build()))
+  afterEach(() => h.cleanup())
+
+  test('cancelFusion terminalizes the parked engine task (F12 parked handling)', async () => {
+    const fsOpts: SkillFsOptions = { appHome: h.appHome }
+    await createManagedSkill(h.db, fsOpts, {
+      name: 'lint',
+      description: 'd',
+      bodyMd: 'b',
+      frontmatterExtra: {},
+    })
+    const mem = approvedGlobalMemory(h.db, 'm')
+    const fusion = await createFusion(
+      { skillName: 'lint', memoryIds: [mem], intent: '' },
+      h.deps,
+      adminActor,
+    )
+    const taskId = fusion.currentTaskId! // parked in its mandatory clarify round
+    const res = await cancelFusion(h.deps, fusion.id, adminActor)
+    expect(res.status).toBe('canceled')
+    // The parked engine task was terminalized (not orphaned in the clarify inbox).
+    const task = await getTask(h.db, taskId)
+    expect(task!.status).toBe('canceled')
+  })
+
+  test('cancel claim captures currentTaskId in the CAS (source lock)', () => {
+    const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
+    // The cancel claim reads + returns currentTaskId, then cancels THAT exact task.
+    expect(src).toMatch(/return \{ ok: true as const, taskId: cur\.currentTaskId \}/)
+    expect(src).toMatch(/if \(claim\.taskId !== null\) await cancelFusionEngineTask/)
+  })
 })
