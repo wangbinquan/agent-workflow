@@ -37,7 +37,7 @@ import type { DbClient } from '@/db/client'
 import { agents, skills } from '@/db/schema'
 import { commitSkillVersion } from '@/services/skillVersion'
 import { parseFrontmatter, stringifyFrontmatter } from '@/util/frontmatter'
-import { safeJoin } from '@/util/safePath'
+import { realpathInside, safeJoin } from '@/util/safePath'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
 type SkillRow = typeof skills.$inferSelect
@@ -374,10 +374,16 @@ export async function readSkillFile(
       `file '${relPath}' not found in skill '${name}'`,
     )
   }
-  if (statSync(abs).isDirectory()) {
+  // RFC-170 G3-1 (security): safeJoin does NOT resolve symlinks, but readFileSync
+  // follows them — an external skill dir can hold a symlink pointing outside root
+  // (e.g. `secret -> ~/.ssh/id_rsa`), so a SHARED skill would leak host files to
+  // any authorized/public reader. realpathInside resolves + verifies containment,
+  // throwing path-traversal on an escaping link (internal symlinks still resolve).
+  const real = realpathInside(root, abs)
+  if (statSync(real).isDirectory()) {
     throw new ValidationError('skill-file-is-dir', `'${relPath}' is a directory`)
   }
-  return readFileSync(abs, 'utf-8')
+  return readFileSync(real, 'utf-8')
 }
 
 export async function writeSkillFile(
