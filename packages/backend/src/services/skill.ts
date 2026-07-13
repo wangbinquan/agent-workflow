@@ -163,9 +163,12 @@ export async function createManagedSkill(
     dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged'))
 
     // ③ fs-published: archive the tree as v1 + atomically publish (RFC-101/170).
+    // skipOp: reserve already holds this skill's op lock — commitSkillVersion must
+    // NOT open its own version-write op (it would self-conflict on the same lock).
     commitSkillVersion(db, opts, input.name, () => {}, {
       source: 'initial',
       authorUserId: aclOpts?.ownerUserId ?? null,
+      skipOp: true,
     })
     dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-published'))
 

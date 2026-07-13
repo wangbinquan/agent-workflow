@@ -178,6 +178,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'DELETE', path: '/api/skills/:name' },
   { method: 'GET', path: '/api/skills/:name/content' },
   { method: 'PUT', path: '/api/skills/:name/content' },
+  { method: 'POST', path: '/api/skills/:name/save' }, // RFC-170 T4 combined-save (token OCC)
   { method: 'GET', path: '/api/skills/:name/files' },
   { method: 'GET', path: '/api/skills/:name/file' },
   { method: 'PUT', path: '/api/skills/:name/file' },

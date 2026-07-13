@@ -31,6 +31,12 @@ import { skills, skillVersions } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { realpathInside } from '@/util/safePath'
 import { cleanupOpDirs, opStagedDir, swapInStaged } from '@/services/skillFsPublish'
+import {
+  abandonOperation,
+  advancePhase,
+  beginOperation,
+  finishOperation,
+} from '@/services/skillOperations'
 import { unfuseMemoriesTx } from '@/services/memory'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { parseFrontmatter } from '@/util/frontmatter'
@@ -263,6 +269,13 @@ export interface SkillVersionCommitOpts {
    * transaction as the version bump, given the new version number.
    */
   txExtra?: (tx: Parameters<Parameters<DbClient['transaction']>[0]>[0], newVersion: number) => void
+  /**
+   * RFC-170 §6a/T7② — skip opening a version-write op (lock+recovery). Set by a
+   * caller that ALREADY holds the skill's op lock (e.g. reserve/createManagedSkill,
+   * whose reserve op owns the skill for the whole create). Without this, opening a
+   * version-write op on a skill the caller already locked would self-conflict.
+   */
+  skipOp?: boolean
 }
 
 /**
@@ -301,74 +314,123 @@ export function commitSkillVersion(
 
   const newVersion = maxIndex === 0 ? 1 : maxIndex + 1
   const filesDir = skillFilesDir(opts.appHome, name)
-  // RFC-170 §6a/§13: build into an op-scoped staged dir so the live publish can be
-  // an ATOMIC rename-swap (swapInStaged) instead of the old rmSync+cpSync (which
-  // left a window where files/ was missing/partial on crash). publishId scopes the
-  // staged/backup sibling names collision-free.
+  const versionDir = skillVersionDirAbs(opts.appHome, name, newVersion)
+  // RFC-170 §6a/§13: build into an op-scoped staged dir so the live publish is an
+  // ATOMIC rename-swap (swapInStaged). publishId scopes the sibling names.
   const publishId = ulid()
   const staging = opStagedDir(filesDir, publishId)
-  rmSync(staging, { recursive: true, force: true })
-  mkdirSync(staging, { recursive: true })
-  if (existsSync(filesDir)) cpSync(filesDir, staging, { recursive: true })
-  produce(staging)
 
-  const newHash = hashDir(staging)
-  // Empty-write short-circuit: an editor Save with no real change must not
-  // inflate the history. (Initial / fusion / restore always commit.)
-  if (commit.source === 'editor' && maxIndex > 0 && newHash === hashDir(filesDir)) {
+  // RFC-170 §6a/T7②: open a version-write op (serialising lease + crash recovery)
+  // UNLESS the caller already holds the skill's op lock (skipOp — reserve/create).
+  // A concurrent same-skill write is rejected 409-busy; a crash is recovered at
+  // boot by versionWriteRecoveryHandler. Its paths ride in the op columns.
+  const opId = commit.skipOp
+    ? null
+    : dbTxSync(db, (tx) =>
+        beginOperation(tx, {
+          skillId: cur.id,
+          kind: 'version-write',
+          targetVersion: newVersion,
+          stagingPath: staging,
+          candidatePath: versionDir,
+          preconditionJson: JSON.stringify({ name }),
+        }),
+      )
+
+  let committed = false
+  try {
     rmSync(staging, { recursive: true, force: true })
-    const latest = existing.find((r) => r.versionIndex === maxIndex)
-    if (latest) return rowToSkillVersion(latest)
-  }
+    mkdirSync(staging, { recursive: true })
+    if (existsSync(filesDir)) cpSync(filesDir, staging, { recursive: true })
+    produce(staging)
 
-  const versionDir = skillVersionDirAbs(opts.appHome, name, newVersion)
-  rmSync(versionDir, { recursive: true, force: true })
-  mkdirSync(dirname(versionDir), { recursive: true })
-  cpSync(staging, versionDir, { recursive: true })
-
-  const id = ulid()
-  const now = Date.now()
-  const created = dbTxSync(db, (tx) => {
-    const skillSet: Partial<typeof skills.$inferInsert> = {
-      contentVersion: newVersion,
-      updatedAt: now,
+    const newHash = hashDir(staging)
+    // Empty-write short-circuit: an editor Save with no real change must not
+    // inflate the history. (Initial / fusion / restore always commit.)
+    if (commit.source === 'editor' && maxIndex > 0 && newHash === hashDir(filesDir)) {
+      rmSync(staging, { recursive: true, force: true })
+      const latest = existing.find((r) => r.versionIndex === maxIndex)
+      if (latest) {
+        if (opId) dbTxSync(db, (tx) => abandonOperation(tx, opId)) // nothing committed
+        return rowToSkillVersion(latest)
+      }
     }
-    if (commit.setDescription !== undefined) skillSet.description = commit.setDescription
-    tx.update(skills).set(skillSet).where(eq(skills.name, name)).run()
-    tx.insert(skillVersions)
-      .values({
-        id,
-        skillName: name,
-        versionIndex: newVersion,
-        filesPath: skillVersionRelPath(name, newVersion),
-        source: commit.source,
-        summary: commit.summary ?? null,
-        fusionId: commit.fusionId ?? null,
-        restoredFromVersion: commit.restoredFromVersion ?? null,
-        authorUserId: commit.authorUserId,
-        contentHash: newHash,
-        createdAt: now,
-      })
-      .run()
-    commit.txExtra?.(tx, newVersion)
-    return (
-      tx.select().from(skillVersions).where(eq(skillVersions.id, id)).all() as SkillVersionRow[]
-    )[0]
-  })
+    if (opId) dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged'))
 
-  // Publish live files/ from the staged snapshot LAST, ATOMICALLY (RFC-170
-  // §6a/§13): swapInStaged moves the current live aside to an op-scoped backup
-  // then renames staged → files (two same-parent renames, each atomic), so files/
-  // is never observed missing/partial — the old rmSync+cpSync window is gone.
-  // A crash between the two renames still leaves a complete tree (old or new);
-  // reconcileSkillLiveFiles() (startup) remains the backstop that re-syncs from
-  // versions/v{cur} if needed.
-  mkdirSync(dirname(filesDir), { recursive: true })
-  swapInStaged(filesDir, publishId)
-  cleanupOpDirs(filesDir, publishId)
+    rmSync(versionDir, { recursive: true, force: true })
+    mkdirSync(dirname(versionDir), { recursive: true })
+    cpSync(staging, versionDir, { recursive: true })
+    if (opId) dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-versioned'))
 
-  if (!created) throw new Error('skill_versions row disappeared after insert')
-  return rowToSkillVersion(created)
+    const id = ulid()
+    const now = Date.now()
+    const created = dbTxSync(db, (tx) => {
+      const skillSet: Partial<typeof skills.$inferInsert> = {
+        contentVersion: newVersion,
+        updatedAt: now,
+      }
+      if (commit.setDescription !== undefined) skillSet.description = commit.setDescription
+      tx.update(skills).set(skillSet).where(eq(skills.name, name)).run()
+      tx.insert(skillVersions)
+        .values({
+          id,
+          skillName: name,
+          versionIndex: newVersion,
+          filesPath: skillVersionRelPath(name, newVersion),
+          source: commit.source,
+          summary: commit.summary ?? null,
+          fusionId: commit.fusionId ?? null,
+          restoredFromVersion: commit.restoredFromVersion ?? null,
+          authorUserId: commit.authorUserId,
+          contentHash: newHash,
+          createdAt: now,
+        })
+        .run()
+      commit.txExtra?.(tx, newVersion)
+      if (opId) advancePhase(tx, opId, 'db-committed')
+      return (
+        tx.select().from(skillVersions).where(eq(skillVersions.id, id)).all() as SkillVersionRow[]
+      )[0]
+    })
+    committed = true
+
+    // Publish live files/ from the staged snapshot LAST, ATOMICALLY (swapInStaged
+    // — two same-parent renames). A crash between them leaves a complete tree;
+    // reconcileSkillLiveFiles() (startup) re-syncs live from versions/v{cur}.
+    mkdirSync(dirname(filesDir), { recursive: true })
+    swapInStaged(filesDir, publishId)
+    cleanupOpDirs(filesDir, publishId)
+    if (opId) {
+      dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-published'))
+      dbTxSync(db, (tx) => finishOperation(tx, opId))
+    }
+
+    if (!created) throw new Error('skill_versions row disappeared after insert')
+    return rowToSkillVersion(created)
+  } catch (err) {
+    if (opId) {
+      if (committed) {
+        // Post-db-committed: the version is durable — free the lock (finish); if the
+        // publish didn't complete, reconcileSkillLiveFiles republishes live at boot.
+        try {
+          dbTxSync(db, (tx) => finishOperation(tx, opId))
+        } catch {
+          /* boot recovery will finish it */
+        }
+      } else {
+        // Pre-db-committed rollback: nothing is referenced — discard staged + the
+        // orphan version dir + free the lock.
+        try {
+          cleanupOpDirs(filesDir, publishId)
+          rmSync(versionDir, { recursive: true, force: true })
+        } catch {
+          /* boot recovery cleans up */
+        }
+        dbTxSync(db, (tx) => abandonOperation(tx, opId))
+      }
+    }
+    throw err
+  }
 }
 
 // --- read / history --------------------------------------------------------
