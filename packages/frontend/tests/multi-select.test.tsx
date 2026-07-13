@@ -57,12 +57,16 @@ afterEach(() => {
 })
 
 describe('MultiSelect — tags + dropdown', () => {
-  test('renders selected values as tags; empty shows placeholder', () => {
-    render(<Harness initial={['alpha']} placeholder="pick skills" />)
-    expect(screen.getByText('Alpha')).toBeTruthy() // tag uses the option label
-    expect(input().getAttribute('placeholder')).toBe('') // non-empty selection → no placeholder
+  test('empty field shows the caller placeholder', () => {
     render(<Harness placeholder="pick skills" />)
     expect(screen.getAllByPlaceholderText('pick skills').length).toBeGreaterThan(0)
+  })
+
+  test('search affordance persists: with tags present, the input keeps a "type to search" hint', () => {
+    render(<Harness initial={['alpha']} placeholder="pick skills" />)
+    expect(screen.getByText('Alpha')).toBeTruthy() // tag uses the option label
+    // Even with a selection, the input still invites filtering (discoverability).
+    expect(input().getAttribute('placeholder')).toBe('Type to search…')
   })
 
   test('value not in options → readable tag (name, not id) + synthesized checked row', () => {

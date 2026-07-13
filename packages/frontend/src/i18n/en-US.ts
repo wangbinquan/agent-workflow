@@ -643,6 +643,7 @@ export const enUS: Resources = {
   multiSelect: {
     empty: 'No options',
     addCustom: 'Add "{{token}}"',
+    searchHint: 'Type to search…',
   },
   // RFC-169: resource split-page skeleton (dirty dot + unsaved guard + empty pane).
   splitPage: {

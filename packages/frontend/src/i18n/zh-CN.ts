@@ -754,6 +754,7 @@ export interface Resources {
   multiSelect: {
     empty: string
     addCustom: string
+    searchHint: string
   }
   splitPage: {
     dirtyDot: string
@@ -3508,6 +3509,7 @@ export const zhCN: Resources = {
   multiSelect: {
     empty: '无可选项',
     addCustom: '添加「{{token}}」',
+    searchHint: '输入以搜索…',
   },
   // RFC-169：资源页双栏骨架（脏标记 + 未保存守卫 + 空态引导）。
   splitPage: {

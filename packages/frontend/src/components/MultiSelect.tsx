@@ -269,7 +269,14 @@ export function MultiSelect(props: MultiSelectProps) {
           aria-activedescendant={activeId}
           aria-label={ariaLabel}
           value={query}
-          placeholder={value.length === 0 ? props.placeholder : ''}
+          // Keep a search affordance visible even when tags fill the field —
+          // the empty-state field placeholder when nothing is selected, else a
+          // generic "type to search" so it's obvious you can keep filtering.
+          placeholder={
+            value.length === 0
+              ? (props.placeholder ?? t('multiSelect.searchHint'))
+              : t('multiSelect.searchHint')
+          }
           disabled={props.disabled}
           data-testid={props['data-testid']}
           onFocus={() => setOpen(true)}
