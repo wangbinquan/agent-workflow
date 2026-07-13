@@ -115,6 +115,26 @@ describe('RFC-133 queued run-obligation matrix — isDispatchedEntryConsumed (in
     expect(isDispatchedEntryConsumed(queued(), runs, NO_LINEAGE, 'in-flight')).toBe(true)
   })
 
+  // RFC-172 (route 2, S1): the optional shardKey scopes the run-obligation scan. Concurrent
+  // workgroup members share the one __wg_member__ node (TARGET), separated only by
+  // node_runs.shard_key — a SIBLING shard's in-flight run must not keep THIS shard's queued entry
+  // open (P1-2). The param MUST default to undefined = node-wide (golden-lock; cases 1–5b above
+  // call without it and stay green).
+  test('RFC-172 case 6: shardKey scopes run-obligation — sibling shard does not obligate, same shard does', () => {
+    const siblingRunning = [mkRun({ id: 'r-b', status: 'running', shardKey: 'shard-B' })]
+    // node-wide (no shardKey arg): the running run obligates → open (today's behavior)
+    expect(isDispatchedEntryConsumed(queued(), siblingRunning, NO_LINEAGE, 'in-flight')).toBe(false)
+    // scoped to shard-A: the sibling shard-B run is filtered out → no obligation → consumed
+    expect(
+      isDispatchedEntryConsumed(queued(), siblingRunning, NO_LINEAGE, 'in-flight', undefined, 'shard-A'),
+    ).toBe(true)
+    // scoped to shard-A: a SAME-shard running run still obligates → open
+    const sameRunning = [mkRun({ id: 'r-a', status: 'running', shardKey: 'shard-A' })]
+    expect(
+      isDispatchedEntryConsumed(queued(), sameRunning, NO_LINEAGE, 'in-flight', undefined, 'shard-A'),
+    ).toBe(false)
+  })
+
   test('case 6: effective target NULL (data anomaly) → conservative open', () => {
     const e = queued({ defaultTargetNodeId: null, overrideTargetNodeId: null })
     expect(isDispatchedEntryConsumed(e, [], NO_LINEAGE, 'in-flight')).toBe(false)

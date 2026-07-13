@@ -93,6 +93,13 @@ export function isDispatchedEntryConsumed(
    *  operation (dispatch frontier mint / quick-finalize continuation). undefined = no mint there
    *  (the entry just queues — pure run-obligation check). Ignored in 'revivable' mode. */
   mintCause?: CauseClass,
+  /** RFC-172 (route 2, S1) — in-flight only: scope the run-obligation scan to this fan-out SHARD
+   *  when the target node fans out per shard (the workgroup `__wg_member__` host: ONE node, many
+   *  concurrent member assignments keyed by node_runs.shard_key). A sibling shard's in-flight run
+   *  must NOT keep THIS shard's queued entry open (P1-2). `undefined` (every existing caller) =
+   *  node-wide scan, golden-lock. In-memory `r.shardKey === shardKey` — null-safe, no SQL
+   *  eq(col,null) hazard. */
+  shardKey?: string | null,
 ): boolean {
   if (entry.triggerRunId === null) {
     if (mode === 'revivable') return false // queued → open, unconditionally (borrow unchanged)
@@ -104,6 +111,10 @@ export function isDispatchedEntryConsumed(
         r.nodeId === target &&
         r.parentNodeRunId === null &&
         r.status !== 'done' &&
+        // RFC-172 (route 2, S1): a SIBLING shard's in-flight run does not obligate THIS shard —
+        // concurrent workgroup members share __wg_member__ (P1-2). `undefined` = node-wide
+        // (golden-lock); in-memory compare is null-safe (no SQL eq(col,null) hazard).
+        (shardKey === undefined || r.shardKey === shardKey) &&
         // RFC-132 ②a 缺口②:review supersede 把 done handler 翻 canceled(marker),该行已终结、
         // 不可 revival(RFC-095),不构成 run 义务——否则 review-iterate 后的下一次答复永久卡
         // in-flight(与 isTargetNodeConsumed 的 supersede 例外同判据)。
