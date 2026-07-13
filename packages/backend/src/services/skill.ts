@@ -19,7 +19,7 @@ import type {
   UpdateSkillContent,
 } from '@agent-workflow/shared'
 import { isProtectedSkillMainFile } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import {
   existsSync,
   mkdirSync,
@@ -36,6 +36,13 @@ import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { agents, skills } from '@/db/schema'
 import { commitSkillVersion } from '@/services/skillVersion'
+import { dbTxSync } from '@/db/txSync'
+import {
+  abandonOperation,
+  advancePhase,
+  beginOperation,
+  finishOperation,
+} from '@/services/skillOperations'
 import { parseFrontmatter, stringifyFrontmatter } from '@/util/frontmatter'
 import { realpathInside, safeJoin } from '@/util/safePath'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
@@ -56,12 +63,19 @@ export async function listSkills(db: DbClient): Promise<Skill[]> {
   // parent dir is temporarily missing.
   const { reconcileAllSources } = await import('@/services/skill-source')
   await reconcileAllSources(db)
-  const rows = await db.select().from(skills)
+  // RFC-170 §9: skills mid-creation (reservation_state='reserving') are not yet
+  // published and must stay invisible until their reserve op reaches 'ready'.
+  const rows = await db.select().from(skills).where(eq(skills.reservationState, 'ready'))
   return rows.map(rowToSkill)
 }
 
 export async function getSkill(db: DbClient, name: string): Promise<Skill | null> {
-  const rows = await db.select().from(skills).where(eq(skills.name, name)).limit(1)
+  // RFC-170 §9: only surface a fully-reserved (published) skill.
+  const rows = await db
+    .select()
+    .from(skills)
+    .where(and(eq(skills.name, name), eq(skills.reservationState, 'ready')))
+    .limit(1)
   const row = rows[0]
   return row ? rowToSkill(row) : null
 }
@@ -89,53 +103,92 @@ export async function createManagedSkill(
   input: CreateManagedSkill,
   aclOpts?: { ownerUserId?: string },
 ): Promise<Skill> {
+  // Fast-path name check (already-ready skills). The real guard against a racing
+  // same-name create is the reserve INSERT's unique(name) below — it rejects the
+  // loser BEFORE any files are written (RFC-170 §9: no more "both see name free →
+  // loser clobbers winner's live").
   if ((await getSkill(db, input.name)) !== null) {
     throw new ConflictError('skill-name-in-use', `skill '${input.name}' already exists`)
   }
 
-  // Write SKILL.md to disk first; if anything fails we don't leave a DB row.
-  const filesDir = join(opts.appHome, 'skills', input.name, 'files')
-  mkdirSync(filesDir, { recursive: true })
-
-  const skillMd = stringifyFrontmatter({
-    data: { name: input.name, description: input.description, ...input.frontmatterExtra },
-    body: input.bodyMd,
-  })
-  writeFileSync(join(filesDir, 'SKILL.md'), skillMd, 'utf-8')
-
   const id = ulid()
   const now = Date.now()
-  await db.insert(skills).values({
-    id,
-    name: input.name,
-    description: input.description,
-    sourceKind: 'managed',
-    managedPath: `skills/${input.name}/files`,
-    externalPath: null,
-    // RFC-099: creator becomes owner; new resources default to 'public' (D18).
-    ownerUserId: aclOpts?.ownerUserId ?? null,
-    visibility: 'public',
-    createdAt: now,
-    updatedAt: now,
-  })
 
-  // RFC-101: archive the freshly-written files/ as v1. produce is a no-op —
-  // SKILL.md is already on disk; commitSkillVersion snapshots it + records the
-  // skill_versions(v1) row. On failure, unwind the half-created skill so we
-  // never leave a row without a v1 (mirrors the original fail-safe intent).
+  // ① reserve intent: insert the row at reservation_state='reserving' (invisible
+  //    to getSkill/list) + open the reserve op + lock, one tx. A unique(name)
+  //    violation here means a concurrent create won the slot → 409, nothing written.
+  let opId: string
   try {
+    opId = dbTxSync(db, (tx) => {
+      tx.insert(skills)
+        .values({
+          id,
+          name: input.name,
+          description: input.description,
+          sourceKind: 'managed',
+          managedPath: `skills/${input.name}/files`,
+          externalPath: null,
+          // RFC-099: creator becomes owner; new resources default to 'public' (D18).
+          ownerUserId: aclOpts?.ownerUserId ?? null,
+          visibility: 'public',
+          reservationState: 'reserving',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+      return beginOperation(tx, {
+        skillId: id,
+        kind: 'reserve',
+        ownerUserId: aclOpts?.ownerUserId ?? undefined,
+        preconditionJson: JSON.stringify({ name: input.name }),
+      })
+    })
+  } catch (err) {
+    if (/UNIQUE constraint failed:? *skills\.name/i.test(err instanceof Error ? err.message : '')) {
+      throw new ConflictError('skill-name-in-use', `skill '${input.name}' already exists`)
+    }
+    throw err
+  }
+
+  const skillDir = join(opts.appHome, 'skills', input.name)
+  try {
+    // ② fs-staged: write SKILL.md into the (still-invisible) files dir.
+    const filesDir = join(skillDir, 'files')
+    mkdirSync(filesDir, { recursive: true })
+    const skillMd = stringifyFrontmatter({
+      data: { name: input.name, description: input.description, ...input.frontmatterExtra },
+      body: input.bodyMd,
+    })
+    writeFileSync(join(filesDir, 'SKILL.md'), skillMd, 'utf-8')
+    dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged'))
+
+    // ③ fs-published: archive the tree as v1 + atomically publish (RFC-101/170).
     commitSkillVersion(db, opts, input.name, () => {}, {
       source: 'initial',
       authorUserId: aclOpts?.ownerUserId ?? null,
     })
+    dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-published'))
+
+    // ④ db-committed: flip to 'ready' — the skill becomes visible now, atomically.
+    dbTxSync(db, (tx) => {
+      tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, id)).run()
+      advancePhase(tx, opId, 'db-committed')
+    })
+    dbTxSync(db, (tx) => finishOperation(tx, opId))
   } catch (err) {
-    await db.delete(skills).where(eq(skills.name, input.name))
-    rmSync(join(opts.appHome, 'skills', input.name), { recursive: true, force: true })
+    // Roll back (in-process): discard the reserving row + files + retire the op.
+    // (A crash — not an in-process throw — is recovered at boot by the reserve
+    // recovery handler, which does the same.)
+    rmSync(skillDir, { recursive: true, force: true })
+    dbTxSync(db, (tx) => {
+      tx.delete(skills).where(eq(skills.id, id)).run()
+      abandonOperation(tx, opId)
+    })
     throw err
   }
 
   const created = await getSkill(db, input.name)
-  if (created === null) throw new Error('skill disappeared right after insert')
+  if (created === null) throw new Error('skill disappeared right after reserve')
   return created
 }
 

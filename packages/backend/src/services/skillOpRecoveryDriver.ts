@@ -107,9 +107,11 @@ export function recoverSkillOperations(
       continue
     }
 
-    if (!handler || (dir === 'rollback' ? !handler.rollbackFs : !handler.rollForwardFs)) {
-      // No FS recovery registered — still release the lock so the skill isn't
-      // stuck, but make the gap loud.
+    const fsFn = dir === 'rollback' ? handler?.rollbackFs : handler?.rollForwardFs
+    // A handler "covers" this op if it has either the direction's FS recovery OR a
+    // recoverDb (a pure-DB recovery — e.g. reserve rollforward has no FS work, only
+    // the 'ready' fixup). Only a genuinely absent handler is a loud gap.
+    if (fsFn === undefined && handler?.recoverDb === undefined) {
       report.noHandler++
       log.warn('no recovery handler; releasing lock only', {
         opId: op.opId,
@@ -117,10 +119,8 @@ export function recoverSkillOperations(
         phase: op.phase,
         dir,
       })
-    } else if (dir === 'rollback') {
-      handler.rollbackFs!(fsOpts, op)
-    } else {
-      handler.rollForwardFs!(fsOpts, op)
+    } else if (fsFn !== undefined) {
+      fsFn(fsOpts, op)
     }
 
     dbTxSync(db, (tx) => {

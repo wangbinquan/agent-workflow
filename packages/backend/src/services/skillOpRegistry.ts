@@ -7,9 +7,11 @@
 
 import type { OpRecoveryRegistry } from '@/services/skillOpRecoveryDriver'
 import { deleteRecoveryHandler } from '@/services/skillDeleteOp'
+import { reserveRecoveryHandler } from '@/services/skillReserveOp'
 
 export const SKILL_OP_RECOVERY_REGISTRY: OpRecoveryRegistry = {
   delete: deleteRecoveryHandler,
-  // reserve / replace / migrate / version-write / adopt-managed handlers land
-  // here as those ops are implemented.
+  reserve: reserveRecoveryHandler,
+  // replace / migrate / version-write / adopt-managed handlers land here as
+  // those ops are implemented.
 }
