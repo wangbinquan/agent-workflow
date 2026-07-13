@@ -362,11 +362,13 @@ listFiles + T4a legacy backfill + reverify + T9 注入门）**，余为增强：
   每 skill 单一 canonical token store〔SkillFileTree/restore/save 共享、逐次原子更新〕+ 409 冲突显式
   reload 流程）· **version-write in-tx ACL 重校**（㉙-fix-4 [high]：设计 §318——**funnel 侧 owner-drift
   机制已落 ㉚ + combined-save 主路径接线已落 ㉛ + file PUT/DELETE·restore 接线已落 ㉜〔各 route 传
-  existing.ownerUserId〕，余 ZIP overwrite·fusion approve 两写入口接线待续**）· T9b external descriptor-relative 捕获（需
+  existing.ownerUserId〕。**fusion approve 已由 `claimFusionDecision` 原子 owner CAS 自保护（F8），无需
+  commitSkillVersion owner-fence**；`createManagedSkill`=create 无 owner-transfer 竞态；**仅 ZIP overwrite
+  一路待接（罕见、skill-zip.ts 不直调 commitSkillVersion，待其写路径明确后补）**）· T9b external descriptor-relative 捕获（需
   openat/O_NOFOLLOW，Bun/Node 不足则 native helper 或 fail-closed）· migrate（T10）· adopt-managed
   （T10b，两阶段 capture→confirm）· 批次 C（source lifecycle reconcile 拆 user/system、migration
   决策 UI、adoption UI）· F12 统一 task-cancel 原语 + clarify 子状态清理（task 层、部分既存）。
-  **注**：旧 PUT/:name+PUT/content→410 + external combined-save 已落（T-BSAFE③，§6i）；external
+  **注\*\*：旧 PUT/:name+PUT/content→410 + external combined-save 已落（T-BSAFE③，§6i）；external
   file/tree GET realpath containment 已由 `realpathInside` 落地（T-BSAFE④）；T6 fusion 审批 token
 
 * F7–F12 加固已落（§6c/§6e）；快照权威读全读路径已落（§6f/§6h）。
