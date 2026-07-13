@@ -10,10 +10,16 @@ import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { readFileSync } from 'node:fs'
-import type { WorkflowDefinition } from '@agent-workflow/shared'
+import type { WorkflowDefinition, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
-import { buildFrontierMintPlan, resolveEntryShardKeys } from '../src/services/taskQuestionDispatch'
+import {
+  buildFrontierMintPlan,
+  dispatchTaskQuestions,
+  resolveEntryShardKeys,
+} from '../src/services/taskQuestionDispatch'
+import { buildWorkgroupHostSnapshot, WG_MEMBER_NODE_ID } from '../src/services/workgroupLaunch'
+import { createManualTaskQuestion } from '../src/services/taskQuestions'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MIN_DEF = {
@@ -89,7 +95,7 @@ async function seedRound(
 async function seedEntry(
   db: DbClient,
   taskId: string,
-  e: { originNodeRunId: string; sourceKind: 'self' | 'manual' },
+  e: { originNodeRunId: string; sourceKind: 'self' | 'manual'; sealed?: boolean },
 ) {
   const id = ulid()
   await db.insert(taskQuestions).values({
@@ -102,11 +108,64 @@ async function seedEntry(
     roleKind: 'self',
     iteration: 0,
     loopIter: 0,
-    defaultTargetNodeId: '__wg_member__',
+    defaultTargetNodeId: WG_MEMBER_NODE_ID,
+    // dispatch readiness gate (§5.2.11): a clarify-derived entry must be sealed before dispatch.
+    sealedAt: e.sealed ? Date.now() : null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
   return (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]!
+}
+
+/** A minimal 2-agent workgroup config; buildWorkgroupHostSnapshot turns it into the 3-node host
+ *  snapshot (__wg_leader__ / __wg_member__ / __wg_clarify__) all members share. */
+const WG_CONFIG: WorkgroupRuntimeConfig = {
+  workgroupId: 'wg1',
+  workgroupName: 'squad',
+  mode: 'leader_worker',
+  leaderMemberId: 'm-lead',
+  switches: { shareOutputs: true, directMessages: false, blackboard: false },
+  maxRounds: 10,
+  completionGate: false,
+  instructions: '',
+  goal: 'g',
+  members: [
+    {
+      id: 'm-lead',
+      memberType: 'agent',
+      agentName: 'wg-lead',
+      userId: null,
+      displayName: 'lead',
+      roleDesc: '',
+    },
+    {
+      id: 'm-coder',
+      memberType: 'agent',
+      agentName: 'wg-coder',
+      userId: null,
+      displayName: 'coder',
+      roleDesc: '',
+    },
+  ],
+}
+
+/** Seed a task whose workflow snapshot IS the workgroup host snapshot, so __wg_member__ is a real
+ *  (clarify-channel-only → upstream-free) frontier node dispatchTaskQuestions can mint against. */
+async function seedWorkgroupTask(db: DbClient, taskId: string): Promise<void> {
+  await db.insert(workflows).values({ id: `wf_${taskId}`, name: 'stub', definition: '{}' })
+  await db.insert(tasks).values({
+    id: taskId,
+    name: 'wg-fixture',
+    workflowId: `wf_${taskId}`,
+    workflowSnapshot: JSON.stringify(buildWorkgroupHostSnapshot(WG_CONFIG)),
+    repoPath: '/tmp/aw-rfc172-wg',
+    worktreePath: '',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status: 'running',
+    inputs: '{}',
+    startedAt: Date.now(),
+  })
 }
 
 describe('RFC-172 S0 — resolveEntryShardKeys', () => {
@@ -214,5 +273,104 @@ describe('RFC-172 S2a — dispatch mint-loop shard wiring (source lock)', () => 
     expect(SRC).toContain('sk === null ? undefined : sk')
     // … and each entry maps to ITS shard's rerun.
     expect(SRC).toContain('shardOf(e) === p.shardKey')
+  })
+})
+
+// S5 — the end-to-end proof S2a's source-lock stands in for: drive TWO member self-clarify answers
+// (asking_shard_key A / B on the ONE __wg_member__ host node) through the real dispatchTaskQuestions
+// pipeline and assert each answer round-trips to ITS OWN member assignment — the bug this whole RFC
+// exists to kill (member B's answer must NOT ride member A's rerun). The null-shard golden lock (a
+// non-workgroup self dispatch still mints exactly one rerun) is covered by the entire rfc128-p5-bc
+// suite — every one of its self dispatches carries shardOf → null and still expects one rerun.
+describe('RFC-172 S5 — two member shards dispatch to two shard-correct reruns (end-to-end)', () => {
+  const actor = { userId: 'u1', role: 'owner' as const }
+
+  test('each member self-answer mints a rerun on ITS OWN shard; entryIds never cross members', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedWorkgroupTask(db, taskId)
+    // Two assignments share __wg_member__, separated only by shard_key. Each has a PRIOR run
+    // (assertSafeFrontierTarget's runnable proof + the scoped inheritance source) …
+    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-A' })
+    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B' })
+    // … and a sealed, answered self clarify round whose intermediary clarify run is the entry origin
+    // resolveEntryShardKeys joins back to (→ asking_shard_key).
+    const originA = await seedNodeRun(db, taskId, '__wg_clarify__')
+    const originB = await seedNodeRun(db, taskId, '__wg_clarify__')
+    await seedRound(db, taskId, originA, 'assign-A')
+    await seedRound(db, taskId, originB, 'assign-B')
+    const entryA = await seedEntry(db, taskId, {
+      originNodeRunId: originA,
+      sourceKind: 'self',
+      sealed: true,
+    })
+    const entryB = await seedEntry(db, taskId, {
+      originNodeRunId: originB,
+      sourceKind: 'self',
+      sealed: true,
+    })
+
+    const res = await dispatchTaskQuestions(db, taskId, [entryA.id, entryB.id], actor)
+
+    // TWO reruns minted — one per shard, NOT one collapsed rerun for the shared node.
+    expect(res.reruns.length).toBe(2)
+    const byShard = new Map<string | null, { entryIds: string[]; nodeId: string }>()
+    for (const r of res.reruns) {
+      const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, r.nodeRunId)))[0]
+      byShard.set(run?.shardKey ?? null, { entryIds: r.entryIds, nodeId: r.targetNodeId })
+    }
+    // Each assignment got its OWN rerun on __wg_member__ …
+    expect(byShard.get('assign-A')?.nodeId).toBe(WG_MEMBER_NODE_ID)
+    expect(byShard.get('assign-B')?.nodeId).toBe(WG_MEMBER_NODE_ID)
+    // … carrying ONLY its own member's entry (the core anti-crosstalk invariant).
+    expect(byShard.get('assign-A')?.entryIds).toEqual([entryA.id])
+    expect(byShard.get('assign-B')?.entryIds).toEqual([entryB.id])
+    // Both entries stamped dispatched, neither deferred.
+    expect([...res.dispatchedEntryIds].sort()).toEqual([entryA.id, entryB.id].sort())
+    expect(res.deferred).toEqual([])
+  })
+})
+
+// R2-T5 — a manual question (§15) has no clarify round, so resolveEntryShardKeys maps it to null;
+// dispatched at __wg_member__ it would inherit the global-freshest member's shard and hijack that
+// assignment. createManualTaskQuestion must REJECT __wg_member__ as a target (leader/plain agents
+// stay allowed — they are not multi-shard). The guard is a literal in taskQuestions.ts (importing
+// WG_MEMBER_NODE_ID there risks a module-init cycle); this test source-locks the two to match.
+describe('RFC-172 R2-T5 — manual question cannot target the shared __wg_member__ host node', () => {
+  const actor = { userId: 'u1', role: 'owner' as const }
+
+  test('createManualTaskQuestion(target=__wg_member__) → rejected, nothing inserted', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedWorkgroupTask(db, taskId)
+    // __wg_member__ HAS a prior run, so this is NOT the never-run rejection — it is the R2-T5 guard.
+    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-A' })
+    let threw: unknown = null
+    try {
+      await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 't', body: 'b', targetNodeId: WG_MEMBER_NODE_ID },
+        actor,
+      )
+    } catch (e) {
+      threw = e
+    }
+    expect((threw as { code?: string }).code).toBe('manual-question-workgroup-member-target')
+    // nothing inserted (fail-fast before the insert tx).
+    const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
+    expect(rows.length).toBe(0)
+  })
+
+  test('source lock: the guard literal in taskQuestions.ts equals WG_MEMBER_NODE_ID', () => {
+    // WG_MEMBER_NODE_ID is the source of truth; the guard hard-codes its value to dodge the import
+    // cycle. If the constant is ever renamed, this catches the drift.
+    expect(WG_MEMBER_NODE_ID).toBe('__wg_member__')
+    const SRC = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'taskQuestions.ts'),
+      'utf8',
+    )
+    expect(SRC).toContain("if (target === '__wg_member__') {")
+    expect(SRC).toContain('manual-question-workgroup-member-target')
   })
 })

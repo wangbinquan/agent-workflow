@@ -1264,6 +1264,20 @@ export async function createManualTaskQuestion(
       `target node '${target}' is not an agent node in this task's workflow`,
     )
   }
+  // RFC-172 R2-T5: '__wg_member__' is the ONE host node ALL workgroup member assignments share,
+  // separated only by node_runs.shard_key. A manual question carries NO shard binding
+  // (resolveEntryShardKeys → null for source_kind='manual'), so dispatching one would inherit an
+  // ARBITRARY member's shard (the global-freshest run) and hijack that assignment — there is no way
+  // to express "which member". A SELF clarify answer round-trips correctly only because its round
+  // carries asking_shard_key; a manual question has no such round. Reject it. (Literal, not the
+  // WG_MEMBER_NODE_ID import — workgroupLaunch pulls in task/workgroups/orchestrator services and
+  // importing it here would risk a module-init cycle; rfc172 test source-locks the two to match.)
+  if (target === '__wg_member__') {
+    throw new ValidationError(
+      'manual-question-workgroup-member-target',
+      `cannot target '${target}': it is the shared workgroup member host node (every member assignment shares it, separated by shard_key). A manual question has no shard binding to select a member.`,
+    )
+  }
   // (Codex re-gate H1): the handler must have RUN — a manual question reruns its handler, and
   // dispatch's assertSafeFrontierTarget rejects a never-run frontier. A manual has no graph
   // default to fall back to, so without this the row would park on a node dispatch can never

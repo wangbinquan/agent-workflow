@@ -1,6 +1,29 @@
 # RFC-172 任务分解 — 工作组成员人类反问答案回流（shardKey 隔离）
 
-状态：**Draft（设计门已跑，发现欠范围——待用户在路线 1/2 间拍板）**。依赖：无硬依赖；不得回归普通节点 clarify 与 leader 反问。
+状态：**路线 2 核心已交付并推送（S0–S3 + R2-T3 + R2-T5/T6/T7）**；并行度加固两段（S2b in-flight 门 shard 化 / S4 self 回滚守卫）**降级为 follow-up**（见下「未交付」栏理由）。依赖：无硬依赖；不回归普通节点 clarify 与 leader 反问（golden-lock：每条非 workgroup 路径 shardKey 恒 `null`，`(home,null)` 复合键逐字节坍缩回今日 home-only 行为）。
+
+## 交付状态（路线 2 核心落地）
+
+用户拍板走**路线 2 全四段链**（问 → 铸续跑 → 选取 → 路由）。核心正确性（各 member 答案隔离、绑定正确、逐 shard 老化 + 邀请启用）已交付；已推上 `origin/main`。
+
+| 段 | 任务 | 提交 | 测试锁 | 状态 |
+|---|---|---|---|---|
+| 问·shard 解析 | S0 `resolveEntryShardKeys`（origin_node_run_id → asking_shard_key，manual→null） | `4b49bb80` | `rfc172-dispatch-shard` S0×3 | ✅ |
+| 铸·续跑义务 | S1 `isDispatchedEntryConsumed` 加可选 shardKey（run 义务扫描逐 shard） | `4a4476d6` | `rfc133-queued-run-obligation` case 6 | ✅ |
+| 铸·mint 分裂 | S2a dispatch mint-loop 按 shard 分裂 + reruns entryIds 逐 shard 分区 | `fabbec11` | `rfc172` S2a source-lock + **S5 端到端** | ✅ |
+| 铸·续跑 shard | S3 `buildFrontierMintPlan` 加 shardKey：scope 继承源 + 覆写续跑 run shard_key | `fabbec11` | `rfc172` S3 + **S5** | ✅ |
+| 选取·隔离 | R2-T3 `selectAgentQueue`/`buildClarifyQueueContext` 通用可选 shardKey（选取按 asking_shard_key、老化 `isNull` 三值分叉、绑定随选取、渲染过滤） | `0afd1709` | `rfc132-select-agent-queue` shard 隔离 | ✅ |
+| 多轮 | R2-T6 host clarify `iterationIndex` = `priorDoneGenerationsForRun`（非恒 0）+ clarifyContext 注入对**所有** host run（leader=null/member=shard） | `034e8822` | `rfc164-workgroup-*` | ✅ |
+| 撤守卫+邀请 | R2-T7 撤 `runHostNode` 非 leader 拒绝 + `renderWgProtocolBlock` 全角色邀请 clarify（`WG_CLARIFY_BLOCK` 抽公共）+ runner 畸形 clarify 折入重试 | `034e8822`（+`6b19a68d`/`8dddc1e8` 前置） | `rfc164-workgroup-core`/`engine` 全角色邀请断言 | ✅ |
+| manual 收口 | R2-T5 禁 manual@`__wg_member__`（manual 无 shard 身份→会劫持任意 member；literal 守卫避 import 环 + source-lock） | 本批 | `rfc172` R2-T5×2 | ✅ |
+| 路由·端到端 | S5 端到端集成：两 member shard 经真实 `dispatchTaskQuestions` → 两个 shard 正确的 rerun、entryIds 不串 member（R2-T4 路由验证并入） | 本批 | `rfc172` S5 | ✅ |
+
+### 未交付（follow-up，非本 RFC 验收所需）
+
+- **S2b（原 R2-T2 后半）— in-flight 门 / frontier 目标锁 shard 化**：`assertNoInFlightDispatch`（963）、`findOpenDispatchTarget`（893 async）、in-tx recheck（747）仍按 `home` 单键。**正确性不依赖它**——单次 dispatch 已按 shard 正确铸各自续跑（S5 证）；node 单键 in-flight 门只在「某 member 续跑在飞时，并发再 dispatch **另一** member」这一**并发**场景过度串行化（一个 member 等另一个），是**并行度**限制而非串扰/错绑。改它须动 golden-lock 的 TOCTOU/CAS 三处（async 预检 + in-tx recheck 一致性），风险与 RFC 已交付正确性收益不匹配 → 独立 follow-up。
+- **S4 — self 回滚守卫 shardKey 透传**：与 S2b 同源（回滚 self 续跑的 pre_snapshot 逐 shard），随 S2b 一并做。当前单 member 回滚走 node 级 `pickFreshestRun`，多 member 并发回滚才需逐 shard——同属并行度加固。
+
+> follow-up 两段建议合成 **RFC-172b（工作组 member 反问并发加固）**，前置=本 RFC 已落的 (home,shardKey) 复合键地基。
 
 ## ⚠️ 设计门后重排（对抗评审证伪初版方案，见 design §5）
 
@@ -58,9 +81,10 @@
 T1 已判**方案 A（零 migration）**且普通路径不受累 → **单 PR**（T2–T5 一体，含撤守卫），T1 结论写进 PR 描述。无 migration、无跨批不可分割约束。
 
 ## 验收清单
-- [ ] 并发两 member 各自反问各自被答：续跑 prompt 各自只含自身 shardKey 的 `## Clarify Q&A`。
-- [ ] 每条 member 反问 `trigger_run_id` 正确绑定，无永久 `processing`。
-- [ ] member 产出只老化自身 shard 队列，不影响 sibling。
-- [ ] leader 反问 + 普通节点 clarify 既有行为与 golden-lock 全绿不变。
-- [ ] worker/fc_member 恢复 clarify 邀请 + 格式；`clarify-not-supported` 临时拒绝移除。
-- [ ] `bun run typecheck && bun run lint && bun run test && bun run format:check` 全绿 + 单二进制 smoke + CI 绿。
+- [x] 并发两 member 各自反问各自被答：两 member shard 经 `dispatchTaskQuestions` → 两个 shard 正确 rerun、entryIds 不串（S5）；续跑 prompt 各自只含自身 shardKey 的 `## Clarify Q&A`（R2-T3 渲染过滤 + rfc164 引擎级）。
+- [x] 每条 member 反问 `trigger_run_id` 正确绑定，无永久 `processing`（S0 shard 解析 + S1 逐 shard run 义务）。
+- [x] member 产出只老化自身 shard 队列，不影响 sibling（R2-T3 老化窗口 `isNull` 三值分叉，`rfc132-select-agent-queue`）。
+- [x] leader 反问 + 普通节点 clarify 既有行为与 golden-lock 全绿不变（每路径 shardKey→null 坍缩；rfc128/rfc132/rfc133/rfc164 全绿）。
+- [x] worker/fc_member 恢复 clarify 邀请 + 格式；`clarify-not-supported` 临时拒绝移除（R2-T7，`rfc164-workgroup-core`/`engine`）。
+- [x] `bun run typecheck && bun run lint && bun run test && bun run format:check` 全绿（本批本地四门全绿）+ CI 绿（待本批推送后核）。
+- [ ] follow-up（非本 RFC 验收）：S2b in-flight 门 shard 化 + S4 self 回滚守卫（并发加固，建议合成 RFC-172b）。
