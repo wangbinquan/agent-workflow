@@ -413,6 +413,25 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const baseUrl = `http://${server.hostname}:${server.port}/`
   log.info('listening', { url: baseUrl })
 
+  // 7b. RFC-170 §invariant④ (T-BOOT): AFTER HTTP opens, re-verify every managed
+  //     snapshot's integrity in the background (re-hash vs content_hash). A durable
+  //     'snapshot-authoritative' flag can't prove the snapshot didn't corrupt
+  //     offline (G6-4), so this pass gates availability THIS boot: passing skills
+  //     enter the in-memory bootVerifiedSet (injectable/visible), corrupt ones are
+  //     quarantined. Runs after serving starts (no boot barrier — a big legit tree
+  //     is just "available later"); best-effort, never crashes the daemon.
+  void (async () => {
+    try {
+      const { runBootSnapshotReverify } = await import('@/services/skillBootVerify')
+      const r = runBootSnapshotReverify(db, { appHome: Paths.root })
+      log.info('boot snapshot reverify', r)
+    } catch (err) {
+      log.warn('boot snapshot reverify failed', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })()
+
   // 8. Background tickers (P-4-04 limits + P-4-09 worktree GC + P-5-01 events archival
   //    + RFC-033 batch-import retention GC).
   const limitsTicker = startLimitsTicker(db)

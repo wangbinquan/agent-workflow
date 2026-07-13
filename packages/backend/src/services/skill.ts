@@ -36,6 +36,7 @@ import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { agents, skills } from '@/db/schema'
 import { commitSkillVersion, skillVersionRelPath } from '@/services/skillVersion'
+import { isSkillAvailableThisBoot } from '@/services/skillBootVerify'
 import { dbTxSync } from '@/db/txSync'
 import {
   abandonOperation,
@@ -66,7 +67,10 @@ export async function listSkills(db: DbClient): Promise<Skill[]> {
   // RFC-170 §9: skills mid-creation (reservation_state='reserving') are not yet
   // published and must stay invisible until their reserve op reaches 'ready'.
   const rows = await db.select().from(skills).where(eq(skills.reservationState, 'ready'))
-  return rows.map(rowToSkill)
+  // RFC-170 §invariant④ (G8-2): also hide anything not available THIS boot — a
+  // managed skill whose snapshot hasn't (yet) re-verified, or a quarantined one.
+  // Inactive before the boot reverify runs (tests / pre-HTTP), so no filtering then.
+  return rows.filter((r) => isSkillAvailableThisBoot(r)).map(rowToSkill)
 }
 
 export async function getSkill(db: DbClient, name: string): Promise<Skill | null> {
@@ -77,7 +81,9 @@ export async function getSkill(db: DbClient, name: string): Promise<Skill | null
     .where(and(eq(skills.name, name), eq(skills.reservationState, 'ready')))
     .limit(1)
   const row = rows[0]
-  return row ? rowToSkill(row) : null
+  // RFC-170 §invariant④: gate on the unified availability predicate (see listSkills).
+  if (!row || !isSkillAvailableThisBoot(row)) return null
+  return rowToSkill(row)
 }
 
 /**

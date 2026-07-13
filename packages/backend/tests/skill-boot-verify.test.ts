@@ -10,7 +10,12 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skills } from '../src/db/schema'
-import { createManagedSkill, getSkill, type SkillFsOptions } from '../src/services/skill'
+import {
+  createManagedSkill,
+  getSkill,
+  listSkills,
+  type SkillFsOptions,
+} from '../src/services/skill'
 import {
   activateBootReverifyForTest,
   isSkillAvailableThisBoot,
@@ -129,5 +134,23 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
         versionState: 'snapshot-authoritative',
       }),
     ).toBe(true)
+  })
+
+  test('when ACTIVE, getSkill + listSkills hide a quarantined managed skill', async () => {
+    await createManagedSkill(db, fsOpts, {
+      name: 'bar',
+      description: 'd',
+      bodyMd: 'b',
+      frontmatterExtra: {},
+    })
+    resetSkillBootVerifyForTest()
+    writeFileSync(snapshotSkillMd(appHome, 'bar', 1), '---\nname: bar\n---\nCORRUPT', 'utf-8')
+    runBootSnapshotReverify(db, fsOpts) // foo → verified, bar → quarantined, gate ON
+    // foo (verified) is visible; bar (quarantined) is hidden by the gate.
+    expect(await getSkill(db, 'foo')).not.toBeNull()
+    expect(await getSkill(db, 'bar')).toBeNull()
+    const names = (await listSkills(db)).map((s) => s.name)
+    expect(names).toContain('foo')
+    expect(names).not.toContain('bar')
   })
 })
