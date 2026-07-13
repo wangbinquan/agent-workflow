@@ -1159,6 +1159,7 @@ export interface Resources {
       membersTitle: string
       working: string
       idle: string
+      openMemberSession: string
       gateTitle: string
       gateAwaiting: string
       gateConfirm: string
@@ -4074,6 +4075,7 @@ export const zhCN: Resources = {
       membersTitle: '成员',
       working: '忙碌',
       idle: '空闲',
+      openMemberSession: '查看 @{{name}} 的执行会话',
       gateTitle: '完成门',
       gateAwaiting: 'Leader 已宣布完成，等待人工确认。',
       gateConfirm: '确认完成',

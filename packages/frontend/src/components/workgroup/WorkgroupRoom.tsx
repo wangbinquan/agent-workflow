@@ -445,9 +445,26 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
           <ul className="workgroup-room__members">
             {data.config.members.map((m) => {
               const working = memberIsWorking(m.id, data.assignments)
+              // RFC-179 — click a member (leader included, as a peer) to open its
+              // current session run in the right-hand drawer; null → not clickable.
+              const currentRun = data.memberRuns[m.id] ?? null
               return (
                 <li key={m.id} data-testid={`wg-member-${m.displayName}`}>
-                  <span className="workgroup-room__member-name">@{m.displayName}</span>
+                  {currentRun !== null ? (
+                    <button
+                      type="button"
+                      className="workgroup-room__member-name workgroup-room__member-open"
+                      onClick={() => setDrawerRunId(currentRun.nodeRunId)}
+                      aria-label={t('workgroups.room.openMemberSession', {
+                        name: m.displayName,
+                      })}
+                      data-testid={`wg-member-open-session-${m.displayName}`}
+                    >
+                      @{m.displayName}
+                    </button>
+                  ) : (
+                    <span className="workgroup-room__member-name">@{m.displayName}</span>
+                  )}
                   {m.id === data.config.leaderMemberId && (
                     <StatusChip kind="info" size="sm">
                       {t('workgroups.leaderBadge')}

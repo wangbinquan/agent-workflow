@@ -12373,6 +12373,26 @@ mark.comment-anchor[data-active='true'] {
   font-weight: 600;
 }
 
+/* RFC-179 — clickable member name (opens its current session in the drawer).
+   Resets button chrome; keeps the name typography + adds a hover affordance. */
+.workgroup-room__member-open {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+}
+.workgroup-room__member-open:hover {
+  text-decoration: underline;
+}
+.workgroup-room__member-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
 .workgroup-room__gate-state {
   margin: 0;
   font-size: 13px;

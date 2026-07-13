@@ -195,6 +195,8 @@ function makeRoom(over: Partial<WorkgroupRoomResponse> = {}): WorkgroupRoomRespo
         updatedAt: 4000,
       },
     ],
+    // RFC-179 — per-member currentRun map; default empty (no member clickable).
+    memberRuns: {},
     ...over,
   }
 }
@@ -362,6 +364,49 @@ describe('WorkgroupRoom — dispatch cards', () => {
       expect(document.querySelector('.inspector')).toBeTruthy()
     })
     expect(screen.getByText('__wg_member__')).toBeTruthy()
+  })
+
+  // RFC-179 — click a member (leader included, as a peer) to open its current
+  // session in the same reused drawer; members with no currentRun are inert.
+  test('RFC-179: a member with a currentRun is clickable and opens its session drawer', async () => {
+    installFetch(
+      makeRoom({
+        memberRuns: {
+          mem_work: {
+            nodeRunId: 'nr1',
+            status: 'running',
+            kind: 'assignment',
+            triggerMessageId: null,
+          },
+        },
+      }),
+    )
+    renderRoom(makeRoom())
+    const btn = await screen.findByTestId('wg-member-open-session-Worker')
+    // Lead + human Alice have no run → not clickable (plain name span).
+    expect(screen.queryByTestId('wg-member-open-session-Lead')).toBeNull()
+    expect(screen.queryByTestId('wg-member-open-session-Alice')).toBeNull()
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(document.querySelector('.inspector')).toBeTruthy()
+    })
+  })
+
+  test('RFC-179: leader is a peer — clickable when it has a currentRun', async () => {
+    installFetch(
+      makeRoom({
+        memberRuns: {
+          mem_lead: {
+            nodeRunId: 'nr1',
+            status: 'running',
+            kind: 'leader-round',
+            triggerMessageId: null,
+          },
+        },
+      }),
+    )
+    renderRoom(makeRoom())
+    expect(await screen.findByTestId('wg-member-open-session-Lead')).toBeTruthy()
   })
 
   test('cancel is a two-click ConfirmButton that POSTs the cancel endpoint (dispatched card only)', async () => {

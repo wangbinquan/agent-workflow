@@ -14,6 +14,7 @@ import type {
   TaskStatus,
   WorkgroupAssignment,
   WorkgroupAssignmentStatus,
+  WorkgroupMemberCurrentRun,
   WorkgroupMessage,
   WorkgroupRuntimeConfig,
   WorkgroupRuntimeMember,
@@ -52,6 +53,9 @@ export interface WorkgroupRoomResponse {
   dw: DwState | null
   messages: WorkgroupRoomMessage[]
   assignments: WorkgroupRoomAssignment[]
+  /** RFC-179 — { [memberId]: current session run | null }. Drives 点成员看 session
+   *  + 被 @ 执行中指示. Read-only runtime view; never enters a prompt (design §11). */
+  memberRuns: Record<string, WorkgroupMemberCurrentRun | null>
 }
 
 /**

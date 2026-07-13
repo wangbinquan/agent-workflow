@@ -1239,6 +1239,7 @@ export const enUS: Resources = {
       membersTitle: 'Members',
       working: 'Working',
       idle: 'Idle',
+      openMemberSession: "View @{{name}}'s session",
       gateTitle: 'Completion gate',
       gateAwaiting: 'The leader declared done; awaiting human confirmation.',
       gateConfirm: 'Confirm',
