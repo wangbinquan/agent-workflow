@@ -22,9 +22,7 @@ import {
   ImportExternalSkillSchema,
   RestoreSkillVersionSchema,
   SkillZipDecisionMapSchema,
-  UpdateSkillContentSchema,
   CombinedSaveSkillSchema,
-  UpdateSkillSchema,
   WriteSkillFileSchema,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
@@ -42,8 +40,6 @@ import {
   listSkills,
   readSkillContent,
   readSkillFile,
-  updateSkill,
-  writeSkillContent,
   saveSkillWithToken,
   writeSkillFile,
   type SkillFsOptions,
@@ -55,7 +51,7 @@ import {
   listSkillVersions,
   restoreSkillVersion,
 } from '@/services/skillVersion'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { GoneError, NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
 
 export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
@@ -151,17 +147,15 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     return c.json(await loadVisibleSkill(actorOf(c), c.req.param('name')))
   })
 
-  app.put('/api/skills/:name', async (c) => {
-    const parsed = UpdateSkillSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('skill-invalid', 'invalid skill patch', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    const existing = await loadVisibleSkill(actor, c.req.param('name'))
-    await requireResourceOwner(deps.db, actor, 'skill', existing)
-    return c.json(await updateSkill(deps.db, c.req.param('name'), parsed.data))
+  // RFC-170 T-BSAFE③ (§2/G3-3): the old metadata + content PUTs bypassed the
+  // composite-token OCC / snapshot version funnel — both are 410 Gone. Every save
+  // (managed body+description, external description) now goes through the single
+  // POST /api/skills/:name/save combined-save below.
+  app.put('/api/skills/:name', () => {
+    throw new GoneError(
+      'skill-endpoint-gone',
+      'PUT /api/skills/:name is retired; use POST /api/skills/:name/save (combined-save with precondition token)',
+    )
   })
 
   app.delete('/api/skills/:name', async (c) => {
@@ -178,18 +172,10 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     return c.json(await readSkillContent(deps.db, fsOpts, c.req.param('name')))
   })
 
-  app.put('/api/skills/:name/content', async (c) => {
-    const parsed = UpdateSkillContentSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('skill-content-invalid', 'invalid SKILL.md patch', {
-        issues: parsed.error.issues,
-      })
-    }
-    const actor = actorOf(c)
-    const existing = await loadVisibleSkill(actor, c.req.param('name'))
-    await requireResourceOwner(deps.db, actor, 'skill', existing)
-    return c.json(
-      await writeSkillContent(deps.db, fsOpts, c.req.param('name'), parsed.data, actor.user.id),
+  app.put('/api/skills/:name/content', () => {
+    throw new GoneError(
+      'skill-endpoint-gone',
+      'PUT /api/skills/:name/content is retired; use POST /api/skills/:name/save (combined-save with precondition token)',
     )
   })
 

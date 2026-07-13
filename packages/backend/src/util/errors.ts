@@ -96,6 +96,21 @@ export class SkillQuarantinedError extends DomainError {
   }
 }
 
+/**
+ * RFC-170 T-BSAFE③ (§2/G3-3) — a permanently retired HTTP endpoint. The old
+ * managed writers `PUT /api/skills/:name` (metadata) and
+ * `PUT /api/skills/:name/content` bypassed the composite-token OCC / snapshot
+ * version funnel; they are 410 Gone and every save now goes through the single
+ * `POST /api/skills/:name/save` combined-save. 410 (not 404) so a stale client
+ * gets an actionable "this endpoint moved" instead of a generic not-found.
+ */
+export class GoneError extends DomainError {
+  constructor(code: string, message: string, details?: unknown) {
+    super(code, message, 410, details)
+    this.name = 'GoneError'
+  }
+}
+
 /** Hono error handler. Mounted via `app.onError(errorHandler)`. */
 export const errorHandler: ErrorHandler = (err, c) => {
   if (err instanceof DomainError) {

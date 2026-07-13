@@ -321,7 +321,10 @@ describe('skill HTTP routes', () => {
     expect(body.code).toBe('skill-invalid')
   })
 
-  test('GET /content parses; PUT /content writes back', async () => {
+  // RFC-170 T-BSAFE③: GET /content still parses + emits the composite token, but
+  // the old content PUT is retired (410 Gone) — writes go through the single
+  // combined-save (POST /save) funnel under token OCC.
+  test('GET /content parses; combined-save writes back under token OCC; PUT /content is 410', async () => {
     await req(h.app, '/api/skills', {
       method: 'POST',
       body: JSON.stringify({
@@ -339,22 +342,48 @@ describe('skill HTTP routes', () => {
       description: string
       bodyMd: string
       frontmatterExtra: Record<string, unknown>
+      token?: string
     }
     expect(content.description).toBe('d1')
     expect(content.bodyMd.trim()).toBe('b1')
     expect(content.frontmatterExtra).toEqual({ v: 1 })
+    expect(content.token).toBeTruthy()
 
-    const put = await req(h.app, '/api/skills/foo/content', {
+    // The old content PUT bypassed the token OCC / version funnel → 410 Gone.
+    const putGone = await req(h.app, '/api/skills/foo/content', {
       method: 'PUT',
       body: JSON.stringify({ description: 'd2', bodyMd: 'b2' }),
     })
-    expect(put.status).toBe(200)
+    expect(putGone.status).toBe(410)
+    expect(((await putGone.json()) as { code: string }).code).toBe('skill-endpoint-gone')
+
+    // Writes go through the single combined-save funnel (token OCC).
+    const save = await req(h.app, '/api/skills/foo/save', {
+      method: 'POST',
+      body: JSON.stringify({ description: 'd2', bodyMd: 'b2', expectedToken: content.token }),
+    })
+    expect(save.status).toBe(200)
     const reread = (await (await req(h.app, '/api/skills/foo/content')).json()) as {
       description: string
       bodyMd: string
     }
     expect(reread.description).toBe('d2')
     expect(reread.bodyMd).toBe('b2')
+  })
+
+  // RFC-170 T-BSAFE③: the old metadata PUT is retired (410 Gone) — it bumped no
+  // meta_revision and bypassed the composite-token OCC.
+  test('PUT /api/skills/:name (metadata) is 410 Gone', async () => {
+    await req(h.app, '/api/skills', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'foo', description: 'd1' }),
+    })
+    const put = await req(h.app, '/api/skills/foo', {
+      method: 'PUT',
+      body: JSON.stringify({ description: 'd2' }),
+    })
+    expect(put.status).toBe(410)
+    expect(((await put.json()) as { code: string }).code).toBe('skill-endpoint-gone')
   })
 
   test('file CRUD via query path', async () => {
@@ -413,7 +442,11 @@ describe('skill HTTP routes', () => {
     }
   })
 
-  test('external skill content edit returns 409', async () => {
+  // RFC-170 T-BSAFE③: an external skill's body is authored on disk (read-only). The
+  // old content PUT is 410 Gone; a combined-save that carries a bodyMd patch is
+  // rejected (409 skill-external-readonly); a description-only combined-save
+  // succeeds for a hand-imported external (its sole writable surface).
+  test('external skill: PUT /content is 410; combined-save rejects a body write but accepts a description', async () => {
     const ext = mkdtempSync(join(tmpdir(), 'aw-ext-'))
     try {
       writeFileSync(join(ext, 'SKILL.md'), '---\nname: e\ndescription: x\n---\nbody')
@@ -421,12 +454,35 @@ describe('skill HTTP routes', () => {
         method: 'POST',
         body: JSON.stringify({ name: 'e', externalPath: ext, description: '' }),
       })
-      const res = await req(h.app, '/api/skills/e/content', {
+
+      // Old content PUT retired.
+      const putGone = await req(h.app, '/api/skills/e/content', {
         method: 'PUT',
         body: JSON.stringify({ bodyMd: 'changed' }),
       })
-      expect(res.status).toBe(409)
-      expect(((await res.json()) as { code: string }).code).toBe('skill-external-readonly')
+      expect(putGone.status).toBe(410)
+
+      const content = (await (await req(h.app, '/api/skills/e/content')).json()) as {
+        token?: string
+      }
+      expect(content.token).toBeTruthy()
+
+      // Body write via combined-save is rejected — external body is read-only.
+      const bodyWrite = await req(h.app, '/api/skills/e/save', {
+        method: 'POST',
+        body: JSON.stringify({ bodyMd: 'changed', expectedToken: content.token }),
+      })
+      expect(bodyWrite.status).toBe(409)
+      expect(((await bodyWrite.json()) as { code: string }).code).toBe('skill-external-readonly')
+
+      // Description-only combined-save succeeds for a hand-imported external.
+      const descWrite = await req(h.app, '/api/skills/e/save', {
+        method: 'POST',
+        body: JSON.stringify({ description: 'edited', expectedToken: content.token }),
+      })
+      expect(descWrite.status).toBe(200)
+      const meta = (await (await req(h.app, '/api/skills/e')).json()) as { description: string }
+      expect(meta.description).toBe('edited')
     } finally {
       rmSync(ext, { recursive: true, force: true })
     }

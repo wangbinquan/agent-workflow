@@ -64,14 +64,22 @@ function SkillDetailPage() {
   const [fuseOpen, setFuseOpen] = useState(false)
   const [restorePending, setRestorePending] = useState(false)
 
-  // Hydrate-once draft over TWO sources (meta + content), with clean-follow so a
-  // restore (which invalidates content) rebases the clean draft to the restored
-  // body. Save reseeds via commitSaved rather than navigating away.
-  const { draft, setDraft, loaded, dirty, commitSaved } = useDraftFromQuery<Skill, SkillDraft>(
-    meta.data,
-    (m) => ({ description: m.description, bodyMd: content.data?.bodyMd ?? '' }),
-    { ready: content.data !== undefined, followWhenClean: true },
-  )
+  // RFC-170 T-BSAFE③ (Codex F2-review / §2 "双查询播种退役"): seed BOTH editable
+  // fields from the ONE fenced content read. SKILL.md's frontmatter description is
+  // the authority (design §267) and it rides the SAME response as the body + the
+  // precondition token, so description + body + token are a single consistent
+  // snapshot. Seeding description from the separate metadata query let a stale
+  // description ride a fresh token and silently roll back a concurrent edit on
+  // save. `ready` waits for meta (caps/header) so the page still hydrates whole;
+  // clean-follow rebases the draft (description AND body) when a restore/save
+  // refetches content.
+  const { draft, setDraft, loaded, dirty, commitSaved } = useDraftFromQuery<
+    SkillContent,
+    SkillDraft
+  >(content.data, (c) => ({ description: c.description, bodyMd: c.bodyMd }), {
+    ready: meta.data !== undefined,
+    followWhenClean: true,
+  })
   useReportSplitDirty(name, dirty)
   const description = draft?.description ?? ''
   const bodyMd = draft?.bodyMd ?? ''
@@ -84,26 +92,15 @@ function SkillDetailPage() {
   // source-external fallback here is inert — the least-privileged safe default.
   const caps = meta.data ? skillCapabilitiesOf(meta.data) : skillCapabilities('source-external')
 
-  const saveMeta = useMutation({
-    mutationFn: (payload: { description: string }) =>
-      api.put<Skill>(`/api/skills/${encodeURIComponent(name)}`, payload),
-    onSuccess: (s) => {
-      qc.setQueryData(['skills', name], s)
-    },
-  })
-  const saveContent = useMutation({
-    mutationFn: (payload: { bodyMd: string }) =>
-      api.put<SkillContent>(`/api/skills/${encodeURIComponent(name)}/content`, payload),
-    onSuccess: (next) => {
-      qc.setQueryData(['skills', name, 'content'], next)
-    },
-  })
-  // RFC-170 T4 — combined description+body save under composite-token OCC (managed
-  // skills). The response carries a FRESH token the QueryClient becomes the sole
-  // owner of (setQueryData); a 409 conflict refetches so the next save uses the
-  // current token instead of silently overwriting a concurrent change.
+  // RFC-170 T4/T-BSAFE③ — combined description+body save under composite-token OCC
+  // is the SINGLE save funnel for every skill (the old double-PUT metadata/content
+  // writers are retired → 410). Managed sends {description, bodyMd}; hand-external
+  // sends {description} only (body authored on disk); source-external nothing. The
+  // response carries a FRESH token the QueryClient becomes the sole owner of
+  // (setQueryData); a 409 conflict refetches so the next save uses the current
+  // token instead of silently overwriting a concurrent change.
   const combinedSave = useMutation({
-    mutationFn: (payload: { description: string; bodyMd: string; expectedToken: string }) =>
+    mutationFn: (payload: { description?: string; bodyMd?: string; expectedToken: string }) =>
       api.post<SkillContent>(`/api/skills/${encodeURIComponent(name)}/save`, payload),
     onSuccess: (next) => {
       qc.setQueryData(['skills', name, 'content'], next)
@@ -113,53 +110,36 @@ function SkillDetailPage() {
     },
   })
 
-  const saving = saveMeta.isPending || saveContent.isPending || combinedSave.isPending
+  const saving = combinedSave.isPending
   const operationBusy = saving || restorePending
 
-  // RFC-169 §5.2 (skills special, F1/F2): keep the current double-PUT LWW but
-  // reseed in place. Only when ALL required channels fulfil do we commitSaved
-  // ONCE and best-effort refetch content+versions so the history panel shows the
-  // authoritative latest version (the two PUTs aren't a single snapshot, so we
-  // don't apply the generic "don't refetch after write" rule).
+  // RFC-170 T-BSAFE③: combined-save is the SINGLE save funnel. Managed writes
+  // {description, bodyMd} atomically under token OCC; hand-external writes
+  // {description} only (its body is authored on disk); source-external has nothing
+  // editable (Save is a no-op). A 409 (concurrent change / delete-recreate ABA) is
+  // surfaced, not silently clobbered; a success reseeds the draft ONCE and
+  // best-effort refetches so the history panel shows the authoritative version.
   const handleSave = async () => {
     if (draft === undefined) return
-    const submitted: SkillDraft = { description, bodyMd }
     const token = content.data?.token
-
-    // RFC-170 T4: managed skill + a precondition token → ONE atomic combined-save
-    // under token OCC (no more double-PUT LWW; a concurrent change / delete-recreate
-    // ABA is 409-rejected, not silently clobbered).
-    if (caps.canEditContent && token !== undefined) {
-      try {
-        await combinedSave.mutateAsync({ description, bodyMd, expectedToken: token })
-      } catch {
-        return // stays dirty; onError refetched a fresh token, error surfaces below
-      }
-      commitSaved(submitted, submitted)
-      void qc.invalidateQueries({ queryKey: ['skills', name] })
-      void qc.invalidateQueries({ queryKey: ['skills', name, 'versions'] })
-      void qc.invalidateQueries({ queryKey: ['skills'], exact: true })
-      return
+    if (token === undefined) return // content still loading — no token to fence on
+    const payload: { description?: string; bodyMd?: string; expectedToken: string } = {
+      expectedToken: token,
     }
-
-    // External / legacy (no token): keep the RFC-169 double-PUT LWW + reseed.
-    // RFC-170 §8 (Codex F6): only enqueue the channels this authority can actually
-    // write — a source-external skill's description is read-only, so firing
-    // saveMeta would just 403. If nothing is editable, Save is a no-op.
-    const channels: Promise<unknown>[] = []
-    if (caps.canEditDescription) channels.push(saveMeta.mutateAsync({ description }))
-    if (caps.canEditContent) channels.push(saveContent.mutateAsync({ bodyMd }))
-    if (channels.length === 0) return
-    const results = await Promise.allSettled(channels)
-    if (results.every((r) => r.status === 'fulfilled')) {
-      commitSaved(submitted, submitted)
-      // best-effort refresh (authoritative version history / content version)
-      void qc.invalidateQueries({ queryKey: ['skills', name] })
-      void qc.invalidateQueries({ queryKey: ['skills', name, 'content'] })
-      void qc.invalidateQueries({ queryKey: ['skills', name, 'versions'] })
-      void qc.invalidateQueries({ queryKey: ['skills'], exact: true })
+    if (caps.canEditDescription) payload.description = description
+    if (caps.canEditContent) payload.bodyMd = bodyMd
+    // Nothing this authority can write (source-external) → Save is a no-op.
+    if (payload.description === undefined && payload.bodyMd === undefined) return
+    const submitted: SkillDraft = { description, bodyMd }
+    try {
+      await combinedSave.mutateAsync(payload)
+    } catch {
+      return // stays dirty; onError refetched a fresh token, error surfaces below
     }
-    // partial failure → stays dirty, per-channel errors surface below.
+    commitSaved(submitted, submitted)
+    void qc.invalidateQueries({ queryKey: ['skills', name] })
+    void qc.invalidateQueries({ queryKey: ['skills', name, 'versions'] })
+    void qc.invalidateQueries({ queryKey: ['skills'], exact: true })
   }
 
   const del = useMutation({
@@ -254,7 +234,7 @@ function SkillDetailPage() {
             </button>
           )
         }
-        errors={[combinedSave.error, saveMeta.error, saveContent.error, del.error]}
+        errors={[combinedSave.error, del.error]}
       >
         <div>
           <h2>{name}</h2>

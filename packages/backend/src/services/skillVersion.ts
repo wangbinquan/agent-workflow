@@ -279,6 +279,50 @@ export interface SkillVersionCommitOpts {
  * mutates it in place (editor delta) or fully replaces it (fusion / restore).
  * Returns the new (or, on an empty editor write, the unchanged latest) version.
  */
+/**
+ * RFC-170 (Codex F4 + re-review): the composite-token OCC. Re-reads the CURRENT
+ * (id, contentVersion, metaRevision) by name INSIDE the given tx and throws
+ * skill-version-conflict if any expected field drifted (delete→recreate ABA /
+ * metadata edit / version bump). No-op when the caller passed no expected fields.
+ * Called from BOTH the version-bump tx (atomic with the UPDATE) AND before the
+ * editor no-op short-circuit — otherwise an identical-content delete→recreate in
+ * the caller's await window slips through unfenced and returns the substitute's row.
+ */
+function assertCompositePrecondition(
+  tx: Parameters<Parameters<DbClient['transaction']>[0]>[0],
+  name: string,
+  commit: SkillVersionCommitOpts,
+): void {
+  if (
+    commit.expectedSkillId === undefined &&
+    commit.expectedMetaRevision === undefined &&
+    commit.expectedVersion === undefined
+  ) {
+    return
+  }
+  const live = tx
+    .select({
+      id: skills.id,
+      contentVersion: skills.contentVersion,
+      metaRevision: skills.metaRevision,
+    })
+    .from(skills)
+    .where(eq(skills.name, name))
+    .get()
+  if (
+    !live ||
+    (commit.expectedSkillId !== undefined && live.id !== commit.expectedSkillId) ||
+    (commit.expectedMetaRevision !== undefined &&
+      live.metaRevision !== commit.expectedMetaRevision) ||
+    (commit.expectedVersion !== undefined && live.contentVersion !== commit.expectedVersion)
+  ) {
+    throw new ConflictError(
+      'skill-version-conflict',
+      `skill '${name}' changed since this operation started; reload and retry`,
+    )
+  }
+}
+
 export function commitSkillVersion(
   db: DbClient,
   opts: SkillVersionFsOptions,
@@ -346,6 +390,11 @@ export function commitSkillVersion(
       rmSync(staging, { recursive: true, force: true })
       const latest = existing.find((r) => r.versionIndex === maxIndex)
       if (latest) {
+        // RFC-170 (Codex re-review): a no-op editor Save must STILL honor the
+        // composite token. Without this, an identical-content delete→recreate in
+        // the caller's await window returns the substitute skill's row/token to a
+        // request that was authorized against (and holds the token of) the old one.
+        dbTxSync(db, (tx) => assertCompositePrecondition(tx, name, commit))
         if (opId) dbTxSync(db, (tx) => abandonOperation(tx, opId)) // nothing committed
         return rowToSkillVersion(latest)
       }
@@ -361,37 +410,10 @@ export function commitSkillVersion(
     const now = Date.now()
     const created = dbTxSync(db, (tx) => {
       // RFC-170 (Codex F4): fence the composite precondition IN the version-bump
-      // tx. The pre-check `expectedVersion` above is TOCTOU vs this write; re-read
-      // by name here and verify id (delete→recreate ABA) + metaRevision (metadata
-      // edit) + version atomically with the UPDATE, so a drift that slipped past
-      // the caller's earlier read cannot be applied to the wrong generation.
-      if (
-        commit.expectedSkillId !== undefined ||
-        commit.expectedMetaRevision !== undefined ||
-        commit.expectedVersion !== undefined
-      ) {
-        const live = tx
-          .select({
-            id: skills.id,
-            contentVersion: skills.contentVersion,
-            metaRevision: skills.metaRevision,
-          })
-          .from(skills)
-          .where(eq(skills.name, name))
-          .get()
-        if (
-          !live ||
-          (commit.expectedSkillId !== undefined && live.id !== commit.expectedSkillId) ||
-          (commit.expectedMetaRevision !== undefined &&
-            live.metaRevision !== commit.expectedMetaRevision) ||
-          (commit.expectedVersion !== undefined && live.contentVersion !== commit.expectedVersion)
-        ) {
-          throw new ConflictError(
-            'skill-version-conflict',
-            `skill '${name}' changed since this operation started; reload and retry`,
-          )
-        }
-      }
+      // tx (atomic with the UPDATE), so a drift that slipped past the caller's
+      // earlier pre-check cannot be applied to the wrong generation. Same check as
+      // the no-op short-circuit above — one helper, two call sites.
+      assertCompositePrecondition(tx, name, commit)
       const skillSet: Partial<typeof skills.$inferInsert> = {
         contentVersion: newVersion,
         updatedAt: now,

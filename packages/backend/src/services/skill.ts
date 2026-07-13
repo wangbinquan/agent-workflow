@@ -269,11 +269,24 @@ export async function importExternalSkill(
 
 // --- update / delete ---
 
-export async function updateSkill(db: DbClient, name: string, patch: UpdateSkill): Promise<Skill> {
+export async function updateSkill(
+  db: DbClient,
+  name: string,
+  patch: UpdateSkill,
+  opts?: { expectedSkillId?: string; expectedMetaRevision?: number },
+): Promise<Skill> {
   const existing = await getSkill(db, name)
   if (existing === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
   // A patch with no description is a no-op — nothing to write or fence.
   if (patch.description === undefined) return existing
+  // RFC-170 T-BSAFE③ (Codex F1-review): bind to the token's IMMUTABLE skillId. This
+  // function resolves by name, so without this a same-name delete→recreate between
+  // the caller's token check and here would redirect the write to a different
+  // skill (ABA). The tx below keys on existing.id, so once this guard passes the
+  // write can only land on the intended row (or 409 if that row vanished).
+  if (opts?.expectedSkillId !== undefined && existing.id !== opts.expectedSkillId) {
+    throw new ConflictError('skill-changed', `skill '${name}' changed; reload and retry`)
+  }
 
   // RFC-170 §8 (Codex F2): the guard + write must be ONE transaction keyed on the
   // IMMUTABLE skill id, not a name-based read-then-write. Otherwise a same-name
@@ -284,9 +297,9 @@ export async function updateSkill(db: DbClient, name: string, patch: UpdateSkill
   // token OCC is blind to metadata edits).
   const description = patch.description
   dbTxSync(db, (tx) => {
-    // Re-read the authority by immutable id INSIDE the tx.
+    // Re-read the authority + current metaRevision by immutable id INSIDE the tx.
     const cur = tx
-      .select({ authorityKind: skills.authorityKind })
+      .select({ authorityKind: skills.authorityKind, metaRevision: skills.metaRevision })
       .from(skills)
       .where(eq(skills.id, existing.id))
       .get()
@@ -298,6 +311,20 @@ export async function updateSkill(db: DbClient, name: string, patch: UpdateSkill
       throw new ForbiddenError(
         'skill-source-external-metadata-readonly',
         "a source-external skill's description is owned by its source directory; edit it there",
+      )
+    }
+    // RFC-170 T-BSAFE③: when the caller carries a precondition token (external
+    // combined-save), the metaRevision CAS must be ATOMIC with the write — the
+    // token check in saveSkillWithToken happens outside this tx, so a concurrent
+    // description edit could slip between them and both would LWW-clobber. Re-check
+    // the expected revision here, inside the same tx as the UPDATE.
+    if (
+      opts?.expectedMetaRevision !== undefined &&
+      cur.metaRevision !== opts.expectedMetaRevision
+    ) {
+      throw new ConflictError(
+        'skill-version-conflict',
+        `skill '${name}' changed since you loaded it; reload and retry`,
       )
     }
     tx.update(skills)
@@ -413,9 +440,24 @@ export async function readSkillContent(
     contentVersion: skill.contentVersion,
     metaRevision: metaRow[0]?.metaRevision ?? 0,
   })
+  // RFC-170 (Codex re-review F2-followup): the description AUTHORITY is
+  // authority-kind specific, and the frontend seeds its draft from THIS response.
+  // managed / source-external → the SKILL.md frontmatter is authoritative
+  // (skills.description is its synced projection). hand-external → the DB
+  // skills.description is the ONLY writable surface (the disk SKILL.md is external,
+  // not ours to write), so return THAT — else a hand-external edit (DB-only) would
+  // read back the stale disk frontmatter and Save could roll the DB edit back.
+  const isHandExternal =
+    skill.authorityKind === 'hand-external' ||
+    (skill.authorityKind == null && skill.sourceKind === 'external' && skill.sourceId == null)
+  const description = isHandExternal
+    ? skill.description
+    : typeof descRaw === 'string'
+      ? descRaw
+      : skill.description
   return {
     name: skill.name,
-    description: typeof descRaw === 'string' ? descRaw : skill.description,
+    description,
     bodyMd: parsed.body,
     frontmatterExtra: rest,
     token,
@@ -490,6 +532,13 @@ export async function writeSkillContent(
   name: string,
   patch: UpdateSkillContent,
   authorUserId?: string | null,
+  // RFC-170 T-BSAFE③ (Codex F1-review): when the caller holds a precondition token
+  // (combined-save), thread the full expected {skillId, contentVersion, metaRevision}
+  // into commitSkillVersion's IN-TX composite fence (F4). The token check in
+  // saveSkillWithToken is a pre-check that is TOCTOU vs this write — without the
+  // in-tx fence a concurrent save / delete-recreate ABA between them silently
+  // LWW-clobbers. Omitted by non-OCC internal callers (tests, fusion base).
+  expected?: { skillId: string; contentVersion: number; metaRevision: number },
 ): Promise<SkillContent> {
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
@@ -527,6 +576,14 @@ export async function writeSkillContent(
       source: 'editor',
       authorUserId: authorUserId ?? null,
       setDescription: patch.description !== undefined ? patch.description : undefined,
+      // Fence the composite precondition atomically with the version bump.
+      ...(expected !== undefined
+        ? {
+            expectedSkillId: expected.skillId,
+            expectedVersion: expected.contentVersion,
+            expectedMetaRevision: expected.metaRevision,
+          }
+        : {}),
     },
   )
 
@@ -552,7 +609,6 @@ export async function saveSkillWithToken(
 ): Promise<SkillContent> {
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
-  ensureSkillIsWritable(skill)
   const metaRow = await db
     .select({ metaRevision: skills.metaRevision })
     .from(skills)
@@ -577,7 +633,40 @@ export async function saveSkillWithToken(
       `skill '${name}' changed since you loaded it; reload and retry`,
     )
   }
-  await writeSkillContent(db, opts, name, patch, authorUserId)
+
+  // RFC-170 T-BSAFE③ (§2 "external metadata-only"): combined-save is the single
+  // save funnel for external skills too. Their body is authored on disk
+  // (externalPath is authoritative), so a bodyMd patch is rejected here; only the
+  // DB description is writable, and only for hand-external — updateSkill's in-tx
+  // authority CAS rejects source-external (its description is owned by the source
+  // dir). The expectedMetaRevision fence keeps the token OCC atomic with the write.
+  if (skill.sourceKind === 'external') {
+    if (patch.bodyMd !== undefined) {
+      throw new ConflictError(
+        'skill-external-readonly',
+        `skill '${name}' is external; its body is authored on disk, not through the editor`,
+      )
+    }
+    if (patch.description !== undefined) {
+      await updateSkill(
+        db,
+        name,
+        { description: patch.description },
+        { expectedSkillId: decoded.skillId, expectedMetaRevision: current.metaRevision },
+      )
+    }
+    return readSkillContent(db, opts, name)
+  }
+
+  // managed: the six-writer version funnel. Feed the decoded token into
+  // commitSkillVersion's IN-TX composite fence (F4) so the OCC is atomic with the
+  // version bump — the outer skillTokenMatches above is only a pre-check.
+  ensureSkillIsWritable(skill)
+  await writeSkillContent(db, opts, name, patch, authorUserId, {
+    skillId: decoded.skillId,
+    contentVersion: decoded.contentVersion,
+    metaRevision: decoded.metaRevision,
+  })
   // Re-read so the response carries the FRESH token (writeSkillContent's return
   // omits it) — the client reuses it for the next save without a reload.
   return readSkillContent(db, opts, name)
@@ -758,7 +847,7 @@ function assertNotSkillMainFile(root: string, relPath: string): void {
   if (isProtectedSkillMainFile(relPath) || resolvesToSkillMainFile(root, relPath)) {
     throw new ConflictError(
       'skill-md-protected',
-      'cannot write or delete SKILL.md; edit content via PUT /api/skills/:name/content',
+      'cannot write or delete SKILL.md; edit content via POST /api/skills/:name/save',
     )
   }
 }

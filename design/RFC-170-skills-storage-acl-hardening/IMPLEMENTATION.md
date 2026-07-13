@@ -249,6 +249,71 @@ getSkill/list 隐藏 quarantined · 篡改 hash→quarantined · reverify 验好
 lazy v1 除写快照外置 version_state='snapshot-authoritative'+markVerified；start.ts 7b 在
 reverify 前逐 legacy-unbackfilled managed 跑之——防升级后 legacy skill 被 gate 隐藏。
 
+## 6i. T-BSAFE③ 保存协议单漏斗收口（已落，㉙）——旧 PUT→410 + external combined-save
+
+设计 §2/G3-3/G3-2 定案：**combined-save（`POST /skills/:name/save`）是全部 skill 的唯一保存
+漏斗**，旧 metadata `PUT /skills/:name` 与旧 content `PUT /skills/:name/content`（无 token、绕
+版本 funnel/OCC）**双双 410 Gone**。
+
+- **后端**：`GoneError`（`util/errors.ts`、410、复用 `errorHandler` 的 `DomainError.status`）；
+  两路由改 `throw new GoneError('skill-endpoint-gone', ...)`（仍注册→410 非 404，契约 registry
+  不变）；`routes/skills.ts` 移除 now-unused `updateSkill`/`writeSkillContent`/`UpdateSkillSchema`/
+  `UpdateSkillContentSchema` import（max-warnings 0）。
+- **saveSkillWithToken external 分支**：token 校验（skillId+contentVersion+metaRevision、ABA
+  防御）后按 `sourceKind==='external'` 分流——**bodyMd patch → 409 `skill-external-readonly`**
+  （external 正文盘上权威、只读）；**description → `updateSkill`**（hand-external 写 DB / source-external
+  经 in-tx authority CAS 403）。`ensureSkillIsWritable` 前移进 managed 分支。
+- **updateSkill 原子 fence**：新增可选 `expectedSkillId`+`expectedMetaRevision`，在**同事务**内
+  re-check `cur.metaRevision` + 绑定不可变 skillId——补上 saveSkillWithToken 外层 token 校验与
+  updateSkill 写之间的 TOCTOU 窗（并发 description 编辑不再 LWW 覆盖；delete→recreate 同名不再
+  改到新 skill）。
+
+**Codex 对抗审计修复轮（㉙-fix，NO-SHIP→3 findings）**：
+
+- **F1（high，已修）最终写未在事务内复核完整 token**：`saveSkillWithToken` 外层 `skillTokenMatches`
+  只是**预检**，与最终写之间隔 `await`（Bun 单线程仍在 await 点让出）——并发保存/delete-recreate
+  可在窗口内漂移、被 LWW 覆盖或 ABA 改到别的 skill。**关键**：`commitSkillVersion` 早已具备 in-tx
+  复合 fence（F4：expectedSkillId+expectedVersion+expectedMetaRevision，与版本 bump 同事务），只是
+  combined-save 路径**没喂值**。修：`writeSkillContent` 加可选 `expected` 参数透传三字段；managed
+  分支喂 `decoded` token；external 分支给 `updateSkill` 传 `expectedSkillId`。锁：skill-combined-save
+  新增 managed 陈旧 contentVersion→409 / delete-recreate 陈旧 skillId→409 / external expectedSkillId
+  失配→409 三条（直接命中 in-tx fence）。
+- **F2（high，已修）前端 token 未绑定同一草稿快照**：description 来自独立 metadata GET、token 来自
+  content GET，拼接保存可让陈旧 description 骑新 token 静默回滚并发编辑。修（设计 §2「双查询播种
+  退役」+ §267 SKILL.md description 权威）：`useDraftFromQuery` base 从 `meta.data` 改 `content.data`，
+  description+body 双双 seed 自**同一 fenced content 读**（`SkillContent.description` 即 SKILL.md
+  frontmatter 权威、与 token 同响应）。锁：save-channels 新增「meta 陈旧 description 不随 token 上
+  wire、保存送 content 权威 description」回归。
+- **F3（medium，未修，转下方大单元）+ F2b（409 dirty-draft 冲突重载 UX）**：file `PUT/DELETE
+/:name/file` / restore / ZIP overwrite 仍是无 token 的版本写入口（`SkillFileTree` 直调）——属设计
+  §2「OCC 扩到全部六条版本写」+ G2-7「前端每 skill canonical token store」，与 F2b 的冲突显式
+  reload 流程**耦合成一个更大的前端+多写面单元**，独立立项。
+
+**Codex 再审复核（㉙-fix-2，NO-SHIP→F1/F2 各留一深层，已修；未重报 F3/F2b）**：
+
+- **F1b（high，已修）no-op 旁路**：`commitSkillVersion` 的「同内容 editor Save 不进历史」短路在
+  复合 fence **之前**返回（`skillVersion.ts:345-352`）——await 窗口内 delete-recreate 且新资源正文
+  字节相同时命中 no-op，完全不比 stale skillId，把替代资源 row/token 回给旧请求。修：抽 `assertCompositePrecondition(tx,name,commit)` 单一 helper，**no-op 返回前**与 db-committed tx **两处**都调。锁：
+  skill-combined-save 新增「同内容 + 陈旧 skillId → 409（no-op 也被 fence）」（前一条 ABA 测试写变更
+  内容、跳过 no-op，故漏检）。
+- **F2b-desc（high，已修）hand-external DB description 被回滚**：F2 统一从 `content.description` 播种，
+  但 hand-external 权威是 **DB `skills.description`**（磁盘 SKILL.md 是外部、非我方可写），而
+  `readSkillContent` 一直回磁盘 frontmatter——DB-only 改 description 后读回磁盘旧值、Save 携新 token
+  写回 DB 即静默丢失。修：`readSkillContent` 按 authority 取 description——managed/source-external 用
+  frontmatter，hand-external（`authorityKind==='hand-external'`，legacy 由 external+无 sourceId 派生）
+  用 `skill.description`（DB）。锁：hand-external「磁盘≠DB 时读回 DB」+「description save 不被后续读
+  回滚」两条。
+- **前端**：`skills.detail.tsx` 删 saveMeta/saveContent 双 PUT mutation，handleSave 统一走
+  combinedSave（managed 送 {description,bodyMd}；hand-external 送 {description}；source-external
+  无可写→no-op）；ErrorBanner 收敛到 `[combinedSave.error, del.error]`；`skill-md-protected`
+  文案改指 `POST /save`。
+- **测试锁迁移**（设计 §2「测试锁同步退役」）：skills.test.ts（PUT /content→410 + combined-save
+  写回 + PUT /:name→410 + external body 拒/desc 收）；skill-combined-save.test.ts（+external：
+  desc-only 成功推进 token · bodyMd 拒 · stale token 409 OCC）；前端 skills-detail-save-channels
+  （双 PUT 契约整体迁到单漏斗，保留 DetailHeaderActions errors 数组 + navigate-once 意图）·
+  edit-routes-navigate-on-save（源级锁迁到 combinedSave 单 mutation）· skills-split-page（mock
+  加 token + POST /save handler）。全绿：typecheck/lint/format/binary-smoke/前端全套 + 后端定向。
+
 ## 7. 其余（依赖顺序）
 
 **T-BOOT 收尾（核心 §6h 已落，含 detail/list/runtime gate + 快照读 readSkillContent/File/
@@ -258,10 +323,15 @@ listFiles + T4a legacy backfill + reverify + T9 注入门）**，余为增强：
 （boot 级重验已落，per-op 为增强，且 readSkillContent 已读快照使 live drift 基本不适用）·
 大树验证公平调度（小 skill 先、软 wall）·
 
-**批次 B/C 剩余（大/耦合/需 UI 的独立单元）**：T9b external descriptor-relative 捕获（需
-openat/O_NOFOLLOW，Bun/Node 不足则 native helper 或 fail-closed）· 旧 PUT/:name+PUT/content
-→410（T-BSAFE③，**与 external combined-save 后端支持耦合**）· migrate（T10）· adopt-managed
-（T10b，两阶段 capture→confirm）· 批次 C（source lifecycle reconcile 拆 user/system、migration
-决策 UI、adoption UI）· F12 统一 task-cancel 原语 + clarify 子状态清理（task 层、部分既存）。
-**注**：external file/tree GET realpath containment 已由 `realpathInside` 落地（T-BSAFE④）；
-T6 fusion 审批 token + F7–F12 加固已落（§6c/§6e）；快照权威读全读路径已落（§6f/§6h）。
+**批次 B/C 剩余（大/耦合/需 UI 的独立单元）**：**canonical token store + 全六写 OCC**（§2/G2-7
+
+- ㉙-fix F3/F2b：file `PUT/DELETE /:name/file` / restore / ZIP overwrite 加复合 token OCC + 前端
+  每 skill 单一 canonical token store〔SkillFileTree/restore/save 共享、逐次原子更新〕+ 409 冲突显式
+  reload 流程）· T9b external descriptor-relative 捕获（需 openat/O_NOFOLLOW，Bun/Node 不足则 native
+  helper 或 fail-closed）· migrate（T10）· adopt-managed（T10b，两阶段 capture→confirm）· 批次 C
+  （source lifecycle reconcile 拆 user/system、migration 决策 UI、adoption UI）· F12 统一 task-cancel
+  原语 + clarify 子状态清理（task 层、部分既存）。
+  **注**：旧 PUT/:name+PUT/content→410 + external combined-save 已落（T-BSAFE③，§6i）；external
+  file/tree GET realpath containment 已由 `realpathInside` 落地（T-BSAFE④）；T6 fusion 审批 token
+
+* F7–F12 加固已落（§6c/§6e）；快照权威读全读路径已落（§6f/§6h）。

@@ -82,12 +82,34 @@ function installFetch() {
       const contentMatch = path.match(/^\/api\/skills\/([^/]+)\/content$/)
       if (contentMatch) {
         const name = decodeURIComponent(contentMatch[1]!)
+        // RFC-170 T-BSAFE③: the content read is the single fenced snapshot — it
+        // carries the authoritative description + body + composite token, and Save
+        // routes through the combined-save funnel below.
         if (method === 'GET')
-          return json({ name, bodyMd: bodyByName[name] ?? '', contentVersion: 1 })
-        if (method === 'PUT') {
-          bodyByName[name] = (body as { bodyMd: string }).bodyMd
-          return json({ name, bodyMd: bodyByName[name], contentVersion: 2 })
-        }
+          return json({
+            name,
+            description: skills.find((x) => x.name === name)?.description ?? '',
+            bodyMd: bodyByName[name] ?? '',
+            contentVersion: 1,
+            token: `t-${name}`,
+          })
+      }
+      // RFC-170 T-BSAFE③: combined-save is the single save funnel (the old
+      // metadata/content PUTs are 410 Gone). Apply the description + body patch.
+      const saveMatch = path.match(/^\/api\/skills\/([^/]+)\/save$/)
+      if (saveMatch && method === 'POST') {
+        const name = decodeURIComponent(saveMatch[1]!)
+        const i = skills.findIndex((x) => x.name === name)
+        const patch = (body ?? {}) as { description?: string; bodyMd?: string }
+        if (i >= 0 && patch.description !== undefined)
+          skills[i] = { ...skills[i]!, description: patch.description }
+        if (patch.bodyMd !== undefined) bodyByName[name] = patch.bodyMd
+        return json({
+          name,
+          bodyMd: bodyByName[name] ?? '',
+          contentVersion: 2,
+          token: `t-${name}-2`,
+        })
       }
       if (/\/api\/skills\/[^/]+\/files$/.test(path))
         return json([{ path: 'SKILL.md', type: 'file' }])

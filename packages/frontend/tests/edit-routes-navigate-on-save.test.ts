@@ -5,12 +5,12 @@
 // non-trivial to JSDOM-render (TanStack Router + React Query + many child
 // components), so we assert at the source level.
 //
-// skills.detail re-anchor (RFC-151 impl gate): navigation moved OUT of the two
-// save mutations into a coordinated handler — per-channel navigate was itself
-// a bug (the first fulfilled PUT unmounted the page and masked the sibling
-// channel's failure). The lock now asserts the corrected shape: navigate fires
-// behind an all-channels-fulfilled check, and NEVER inside saveMeta /
-// saveContent. Behavior coverage: skills-detail-save-channels.test.tsx.
+// skills.detail re-anchor (RFC-151 impl gate → RFC-170 T-BSAFE③): navigation was
+// first moved OUT of the two save mutations into a coordinated handler (per-channel
+// navigate masked a sibling failure), and then the double-PUT itself was retired
+// (410 Gone) in favour of a SINGLE combined-save funnel. The lock now asserts the
+// current shape: one combinedSave mutation, staying in place (commitSaved, no
+// navigate). Behavior coverage: skills-detail-save-channels.test.tsx.
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -30,28 +30,31 @@ describe('edit routes navigate to list on save (source layer)', () => {
     expect(block).toContain('commitSaved(')
   })
 
-  // RFC-169 D2 — INTENTIONAL FLIP: skills.detail also saves in place. The
-  // coordinated all-channels-fulfilled handler reseeds via commitSaved and
+  // RFC-169 D2 / RFC-170 T-BSAFE③ — skills.detail saves in place through the
+  // single combined-save funnel. The handler reseeds via commitSaved and
   // best-effort refetches, but must NOT navigate.
-  test('skills.detail coordinated save stays in place (commitSaved, no navigate) after ALL channels fulfil', () => {
+  test('skills.detail combined-save stays in place (commitSaved, no navigate)', () => {
     const src = readFileSync(skillDetailPath, 'utf-8')
     const start = src.indexOf('const handleSave = async')
     expect(start).toBeGreaterThan(-1)
     const end = src.indexOf('const del = useMutation', start)
     expect(end).toBeGreaterThan(start)
     const block = src.slice(start, end)
-    expect(block).toContain('Promise.allSettled')
-    expect(block).toMatch(/every\(\(r\) => r\.status === 'fulfilled'\)\)/)
+    expect(block).toContain('combinedSave.mutateAsync')
     expect(block).toContain('commitSaved(')
     expect(block).not.toMatch(/navigate\(/)
   })
 
-  test('skills.detail save mutations must NOT navigate per-channel (failure-mask regression)', () => {
+  // RFC-170 T-BSAFE③: the per-channel double-PUT (saveMeta/saveContent) is retired
+  // — there is now ONE save mutation (combinedSave), which must not navigate
+  // (navigation belongs to delete, not save). The failure-mask regression that
+  // motivated moving navigate out of the channels can no longer recur.
+  test('skills.detail combinedSave mutation must NOT navigate; the double-PUT channels are gone', () => {
     const src = readFileSync(skillDetailPath, 'utf-8')
-    for (const varName of ['saveMeta', 'saveContent']) {
-      const block = extractMutationBlock(src, varName)
-      expect(block).not.toMatch(/navigate\(/)
-    }
+    const block = extractMutationBlock(src, 'combinedSave')
+    expect(block).not.toMatch(/navigate\(/)
+    expect(src).not.toContain('const saveMeta = useMutation')
+    expect(src).not.toContain('const saveContent = useMutation')
   })
 })
 

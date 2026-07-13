@@ -1,22 +1,20 @@
-// RFC-151 PR-4 — /skills/$name dual-mutation save channels through the
-// shared <DetailHeaderActions> shell (design-gate mandated scenarios).
+// RFC-170 T-BSAFE③ — /skills/$name saves through the SINGLE combined-save funnel
+// (POST /api/skills/:name/save under composite-token OCC). The old double-PUT
+// metadata/content writers (`PUT /api/skills/:name` + `.../content`) are retired
+// → 410 Gone. This file — originally RFC-151 PR-4's dual-channel lock — now locks
+// the single-funnel contract while preserving the <DetailHeaderActions> shell's
+// `errors: ReadonlyArray<unknown>` intent (the array still carries combinedSave.error
+// + del.error; save never navigates — it reseeds in place, the RFC-169 D2 flip):
+//   1. managed + token       → ONE POST /save {description, bodyMd, expectedToken}, zero PUTs.
+//   2. managed + token       → a save failure surfaces via the errors array, no navigate.
+//   3. managed + token       → a 409 conflict surfaces AND refetches a fresh token.
+//   4. hand-external + token → ONE POST /save {description} ONLY (body authored on disk), zero PUTs.
+//   5. managed, save succeeds → stays in place (no navigate), commitSaved reseeds.
+//   6. source-external        → Save disabled, ZERO writes (nothing editable).
+//   7. description field editability follows the three-state authority.
 //
-// skills.detail is the hard boundary that shaped the shell's `errors:
-// ReadonlyArray<unknown>` contract: Save fans out to TWO mutations (meta
-// PUT + content PUT) whose failures must surface independently — a single
-// save.error slot could not represent both channels. Scenarios locked:
-//   1. meta save fails (content succeeds)   → meta error span renders.
-//   2. content save fails (meta succeeds)   → content error span renders.
-//   3. BOTH fail                            → two spans render side by side.
-//   4. external skill                        → Save skips the content PUT
-//      entirely (capability gate), only meta goes out on the wire.
-//   5. managed, both succeed                 → navigate fires exactly ONCE.
-//
-// Impl-gate regression (scenarios 1-3 + 5): navigation must be a whole-save
-// outcome. Per-channel navigate-on-success let the first fulfilled PUT unmount
-// the page and mask the sibling's failure (the mocked navigate hid the unmount
-// here, so these tests also assert `h.navigate` is NEVER called while any
-// channel failed — the JSDOM-faithful proxy for "the page stays mounted").
+// The FE must NEVER call the retired PUTs; installFetch answers them with the real
+// 410 and every save scenario asserts `calls` contains zero such PUTs.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -70,20 +68,20 @@ function skillRow(sourceKind: 'managed' | 'external') {
   }
 }
 
-/** Routes the skill detail page's whole fetch surface; `putMeta` / `putContent`
- *  control the two save channels' responses. */
+/** Routes the skill detail page's whole fetch surface. `postSave` drives the
+ *  single combined-save channel's response; `token` (when set) is echoed on the
+ *  content GET so the page routes Save through POST /save under token OCC. The
+ *  retired PUT writers answer 410 — no scenario should ever hit them. */
 function installFetch(opts: {
   sourceKind: 'managed' | 'external'
   // RFC-170 (G5-P2): the three-state authority discriminator drives the FE
   // capability table; absent ⇒ derived from sourceKind (external→hand-external).
   authorityKind?: 'managed' | 'source-external' | 'hand-external'
-  putMeta: Response | (() => Response)
-  putContent: Response | (() => Response)
-  // RFC-170 T4: when a `token` is present on the content GET, a managed skill's
-  // Save routes through POST /save (combined). `postSave` drives its response;
-  // omit both to exercise the legacy token-less double-PUT path.
   token?: string
   postSave?: Response | (() => Response)
+  // RFC-170 T-BSAFE③: lets a test make the fenced content read's description differ
+  // from the metadata query's, to prove the draft seeds from content (authority).
+  contentDescription?: string
 }): FetchCall[] {
   const calls: FetchCall[] = []
   let contentGets = 0
@@ -95,13 +93,23 @@ function installFetch(opts: {
       if (method === 'POST' && url.endsWith('/api/skills/sk1/save')) {
         return typeof opts.postSave === 'function'
           ? opts.postSave()
-          : (opts.postSave ?? json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 2 })).clone()
+          : (
+              opts.postSave ??
+              json({
+                name: 'sk1',
+                bodyMd: 'orig body',
+                contentVersion: 2,
+                token: opts.token === undefined ? undefined : `${opts.token}#saved`,
+              })
+            ).clone()
       }
-      if (method === 'PUT' && url.endsWith('/api/skills/sk1/content')) {
-        return typeof opts.putContent === 'function' ? opts.putContent() : opts.putContent.clone()
-      }
-      if (method === 'PUT' && url.endsWith('/api/skills/sk1')) {
-        return typeof opts.putMeta === 'function' ? opts.putMeta() : opts.putMeta.clone()
+      // RFC-170 T-BSAFE③: the old metadata/content PUTs are 410 Gone. The FE must
+      // never call them; this realistic 410 + each test's "zero PUT" assertion catch it.
+      if (
+        method === 'PUT' &&
+        (url.endsWith('/api/skills/sk1') || url.endsWith('/api/skills/sk1/content'))
+      ) {
+        return json({ code: 'skill-endpoint-gone', message: 'retired; use POST /save' }, 410)
       }
       if (method === 'GET' && url.endsWith('/api/skills/sk1'))
         return json({ ...skillRow(opts.sourceKind), authorityKind: opts.authorityKind })
@@ -109,7 +117,15 @@ function installFetch(opts: {
         contentGets += 1
         // A refetch after a 409 hands back a bumped token so the next save is fresh.
         const token = opts.token === undefined ? undefined : `${opts.token}#${contentGets}`
-        return json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 1, token })
+        // RFC-170 T-BSAFE③: the draft seeds description from THIS fenced read
+        // (SKILL.md authority), so the content response carries it alongside body+token.
+        return json({
+          name: 'sk1',
+          description: opts.contentDescription ?? 'orig desc',
+          bodyMd: 'orig body',
+          contentVersion: 1,
+          token,
+        })
       }
       if (method === 'GET' && url.endsWith('/api/skills/sk1/files')) return json([])
       if (method === 'GET' && url.endsWith('/api/skills/sk1/versions')) return json([])
@@ -148,6 +164,14 @@ function errorSpans(): string[] {
   return [...document.querySelectorAll('.form-actions__error')].map((s) => s.textContent ?? '')
 }
 
+function noRetiredPuts(calls: FetchCall[]): boolean {
+  return !calls.some(
+    (c) =>
+      c.method === 'PUT' &&
+      (c.url.endsWith('/api/skills/sk1') || c.url.endsWith('/api/skills/sk1/content')),
+  )
+}
+
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
   setToken('tok')
@@ -160,116 +184,46 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('skills.detail save channels (DetailHeaderActions errors array)', () => {
-  test('meta save failure surfaces its own form-actions error', async () => {
-    installFetch({
-      sourceKind: 'managed',
-      putMeta: () => json({ code: 'skill-meta-boom', message: 'meta went boom' }, 422),
-      putContent: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 2 }),
-    })
-    renderDetail()
-    await clickSave()
-    await waitFor(() => {
-      const spans = errorSpans()
-      expect(spans).toHaveLength(1)
-      expect(spans[0]).toContain('meta went boom')
-    })
-    // The succeeding content channel must NOT navigate away from the failure.
-    expect(h.navigate).not.toHaveBeenCalled()
-  })
-
-  test('content save failure surfaces its own form-actions error', async () => {
-    installFetch({
-      sourceKind: 'managed',
-      putMeta: () => json(skillRow('managed')),
-      putContent: () => json({ code: 'skill-content-boom', message: 'content went boom' }, 422),
-    })
-    renderDetail()
-    await clickSave()
-    await waitFor(() => {
-      const spans = errorSpans()
-      expect(spans).toHaveLength(1)
-      expect(spans[0]).toContain('content went boom')
-    })
-    // The succeeding meta channel must NOT navigate away from the failure.
-    expect(h.navigate).not.toHaveBeenCalled()
-  })
-
-  test('double failure renders BOTH channel errors side by side', async () => {
-    // The reason `errors` is an array: one slot per channel, none masked.
-    installFetch({
-      sourceKind: 'managed',
-      putMeta: () => json({ code: 'skill-meta-boom', message: 'meta went boom' }, 422),
-      putContent: () => json({ code: 'skill-content-boom', message: 'content went boom' }, 422),
-    })
-    renderDetail()
-    await clickSave()
-    await waitFor(() => {
-      const spans = errorSpans()
-      expect(spans).toHaveLength(2)
-      expect(spans[0]).toContain('meta went boom')
-      expect(spans[1]).toContain('content went boom')
-    })
-    expect(h.navigate).not.toHaveBeenCalled()
-  })
-
-  test('external skill: Save PUTs meta only — the content channel is skipped', async () => {
-    const calls = installFetch({
-      sourceKind: 'external',
-      putMeta: () => json(skillRow('external')),
-      putContent: () => json({ code: 'unexpected', message: 'must not be called' }, 500),
-    })
-    renderDetail()
-    await clickSave()
-    await waitFor(() => {
-      const puts = calls.filter((c) => c.method === 'PUT')
-      expect(puts).toHaveLength(1)
-      expect(puts[0]!.url.endsWith('/api/skills/sk1')).toBe(true)
-    })
-    // RFC-169 D2: save STAYS IN PLACE — no navigate, no error spans; content
-    // channel skipped for an external skill.
-    await waitFor(() => expect(errorSpans()).toHaveLength(0))
-    expect(h.navigate).not.toHaveBeenCalled()
-    expect(calls.some((c) => c.method === 'PUT' && c.url.endsWith('/content'))).toBe(false)
-  })
-
-  test('managed, both channels succeed: save stays in place (no navigate), commitSaved reseeds', async () => {
-    const calls = installFetch({
-      sourceKind: 'managed',
-      putMeta: () => json(skillRow('managed')),
-      putContent: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 2 }),
-    })
-    renderDetail()
-    await clickSave()
-    // Both PUTs go out, then we reseed in place — never navigate (D2 flip).
-    await waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(2))
-    await waitFor(() => expect(errorSpans()).toHaveLength(0))
-    expect(h.navigate).not.toHaveBeenCalled()
-  })
-})
-
-// RFC-170 T4 — a managed skill whose content GET carries a composite precondition
-// token routes Save through ONE atomic POST /save (token OCC), NOT the double-PUT.
-describe('skills.detail T4 combined-save (managed + token)', () => {
-  test('managed + token: Save is a single POST /save carrying expectedToken; no double-PUT', async () => {
+// RFC-170 T4/T-BSAFE③ — a managed skill's content GET carries a composite
+// precondition token; Save is ONE atomic POST /save (token OCC), never a PUT.
+describe('skills.detail combined-save (managed + token)', () => {
+  test('managed + token: Save is a single POST /save carrying {description, bodyMd, token}; zero PUTs', async () => {
     const calls = installFetch({
       sourceKind: 'managed',
       token: 'TOK1',
-      putMeta: () => json({ code: 'unexpected', message: 'PUT must not fire' }, 500),
-      putContent: () => json({ code: 'unexpected', message: 'PUT must not fire' }, 500),
       postSave: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 2, token: 'TOK2' }),
     })
     renderDetail()
     await clickSave()
-    // Exactly one POST /save, zero PUTs — the legacy channels are bypassed.
+    // Exactly one POST /save carrying the token + BOTH fields; zero retired PUTs.
     await waitFor(() => {
       const posts = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/save'))
       expect(posts).toHaveLength(1)
-      expect(posts[0]!.body ?? '').toContain('TOK1#1') // the token from the content GET
+      const sent = JSON.parse(posts[0]!.body ?? '{}') as Record<string, unknown>
+      expect(sent.expectedToken).toBe('TOK1#1') // the token from the content GET
+      expect(sent).toHaveProperty('description')
+      expect(sent).toHaveProperty('bodyMd')
     })
-    expect(calls.some((c) => c.method === 'PUT')).toBe(false)
+    expect(noRetiredPuts(calls)).toBe(true)
     // Stays in place, reseeds, no error.
     await waitFor(() => expect(errorSpans()).toHaveLength(0))
+    expect(h.navigate).not.toHaveBeenCalled()
+  })
+
+  test('managed + token: a save failure surfaces via the errors array; no navigate', async () => {
+    installFetch({
+      sourceKind: 'managed',
+      token: 'TOK1',
+      postSave: () => json({ code: 'skill-save-boom', message: 'save went boom' }, 422),
+    })
+    renderDetail()
+    await clickSave()
+    await waitFor(() => {
+      const spans = errorSpans()
+      expect(spans).toHaveLength(1)
+      expect(spans[0]).toContain('save went boom')
+    })
+    // A failed save must NOT navigate away — the page stays mounted (D2 flip).
     expect(h.navigate).not.toHaveBeenCalled()
   })
 
@@ -277,10 +231,8 @@ describe('skills.detail T4 combined-save (managed + token)', () => {
     const calls = installFetch({
       sourceKind: 'managed',
       token: 'STALE',
-      putMeta: () => json(skillRow('managed')),
-      putContent: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 2 }),
       postSave: () =>
-        json({ code: 'skill-precondition-failed', message: 'token stale — reload' }, 409),
+        json({ code: 'skill-version-conflict', message: 'token stale — reload' }, 409),
     })
     renderDetail()
     // First content GET (seed) uses token STALE#1.
@@ -304,6 +256,75 @@ describe('skills.detail T4 combined-save (managed + token)', () => {
     })
     expect(h.navigate).not.toHaveBeenCalled()
   })
+
+  // RFC-170 T-BSAFE③ (Codex F2-review): the metadata query and the fenced content
+  // read can disagree (a concurrent edit advanced SKILL.md). The draft must seed
+  // description from CONTENT (authority + same token), so a save can never ship the
+  // stale metadata description under a fresh token and silently roll back the edit.
+  test('managed + token: Save ships the description from the fenced content read, not the stale metadata query', async () => {
+    const calls = installFetch({
+      sourceKind: 'managed',
+      token: 'TOK1',
+      contentDescription: 'CONTENT-FRESH', // metadata GET still returns skillRow "orig desc"
+      postSave: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 2, token: 'TOK2' }),
+    })
+    renderDetail()
+    await clickSave()
+    await waitFor(() => {
+      const posts = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/save'))
+      expect(posts).toHaveLength(1)
+      const sent = JSON.parse(posts[0]!.body ?? '{}') as Record<string, unknown>
+      expect(sent.description).toBe('CONTENT-FRESH')
+      expect(sent.description).not.toBe('orig desc')
+    })
+    expect(noRetiredPuts(calls)).toBe(true)
+    expect(h.navigate).not.toHaveBeenCalled()
+  })
+
+  test('managed: save succeeds → stays in place (no navigate), commitSaved reseeds', async () => {
+    const calls = installFetch({
+      sourceKind: 'managed',
+      token: 'TOK1',
+      postSave: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 2, token: 'TOK2' }),
+    })
+    renderDetail()
+    await clickSave()
+    await waitFor(() =>
+      expect(calls.filter((c) => c.method === 'POST' && c.url.endsWith('/save'))).toHaveLength(1),
+    )
+    await waitFor(() => expect(errorSpans()).toHaveLength(0))
+    expect(noRetiredPuts(calls)).toBe(true)
+    expect(h.navigate).not.toHaveBeenCalled()
+  })
+})
+
+// RFC-170 T-BSAFE③ (§2 "external metadata-only") — an external skill's body is
+// authored on disk (externalPath is authoritative). A hand-external Save is the
+// SAME single POST /save funnel, carrying ONLY the description; bodyMd is never
+// sent (the content channel is capability-gated off), and no PUT ever fires.
+describe('skills.detail external combined-save (metadata-only)', () => {
+  test('hand-external + token: Save is a single POST /save carrying description ONLY; no bodyMd, zero PUTs', async () => {
+    const calls = installFetch({
+      sourceKind: 'external',
+      authorityKind: 'hand-external',
+      token: 'EXT',
+      postSave: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 1, token: 'EXT2' }),
+    })
+    renderDetail()
+    await clickSave()
+    await waitFor(() => {
+      const posts = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/save'))
+      expect(posts).toHaveLength(1)
+      const sent = JSON.parse(posts[0]!.body ?? '{}') as Record<string, unknown>
+      expect(sent.expectedToken).toBe('EXT#1')
+      expect(sent).toHaveProperty('description')
+      // The external body is read-only — the FE must NOT try to write it.
+      expect(sent).not.toHaveProperty('bodyMd')
+    })
+    expect(noRetiredPuts(calls)).toBe(true)
+    await waitFor(() => expect(errorSpans()).toHaveLength(0))
+    expect(h.navigate).not.toHaveBeenCalled()
+  })
 })
 
 // RFC-170 §8 (G5-P2) — the description field's editability follows the
@@ -318,8 +339,6 @@ describe('skills.detail description gate (authorityKind)', () => {
     installFetch({
       sourceKind: 'external',
       authorityKind: 'source-external',
-      putMeta: () => json(skillRow('external')),
-      putContent: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 1 }),
     })
     renderDetail()
     await waitFor(() => expect(descInput()).not.toBeNull())
@@ -330,8 +349,6 @@ describe('skills.detail description gate (authorityKind)', () => {
     installFetch({
       sourceKind: 'external',
       authorityKind: 'hand-external',
-      putMeta: () => json(skillRow('external')),
-      putContent: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 1 }),
     })
     renderDetail()
     await waitFor(() => expect(descInput()).not.toBeNull())
@@ -342,8 +359,6 @@ describe('skills.detail description gate (authorityKind)', () => {
     installFetch({
       sourceKind: 'managed',
       authorityKind: 'managed',
-      putMeta: () => json(skillRow('managed')),
-      putContent: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 1 }),
     })
     renderDetail()
     await waitFor(() => expect(descInput()).not.toBeNull())
@@ -351,13 +366,12 @@ describe('skills.detail description gate (authorityKind)', () => {
   })
 
   // RFC-170 §8 (Codex F6): a source-external skill has NO editable channel, so
-  // Save must be disabled and must never send the (403-bound) metadata PUT.
+  // Save must be disabled and must never send the (403-bound) save request.
   test('source-external → Save is disabled and fires ZERO write requests', async () => {
     const calls = installFetch({
       sourceKind: 'external',
       authorityKind: 'source-external',
-      putMeta: () => json({ code: 'unexpected', message: 'must not fire' }, 500),
-      putContent: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 1 }),
+      token: 'RO',
     })
     renderDetail()
     // Wait for the description input (hydration complete).
@@ -365,7 +379,7 @@ describe('skills.detail description gate (authorityKind)', () => {
     const save = document.querySelector<HTMLButtonElement>('.page__actions .btn--primary')
     expect(save).not.toBeNull()
     expect(save!.disabled).toBe(true) // no editable channel → inert
-    // Even a forced click must produce no writes.
+    // Even a forced click must produce no writes (no POST /save, no retired PUT).
     fireEvent.click(save!)
     await new Promise((r) => setTimeout(r, 20))
     expect(calls.some((c) => c.method === 'PUT' || c.method === 'POST')).toBe(false)
