@@ -3023,7 +3023,16 @@ code {
 .chip-row {
   display: inline-flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
+}
+
+/* `.data-table__owner` carries a `margin-left: 8px` for its <td> host (spacing it
+   off the resource name). Inside a chip-row that stacks on top of the row's own
+   `gap: 4px`, giving the owner label a 12px, asymmetric lead vs the 4px between
+   every other chip. Neutralize it so the row spaces uniformly by the flex gap. */
+.chip-row .data-table__owner {
+  margin-left: 0;
 }
 
 /* ---- Forms ---- */
