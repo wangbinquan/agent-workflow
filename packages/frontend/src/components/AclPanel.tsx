@@ -32,6 +32,13 @@ interface AclPanelProps {
   onSaved?: () => void
   /** Called by the 取消/关闭 footer button. */
   onCancel?: () => void
+  /**
+   * RFC-170 §8 (G3-2) — when false, the owner-transfer control is hidden
+   * (external skills: the backend 403-rejects the transfer since the on-disk
+   * content controller ≠ the ACL owner). Grant / visibility edits stay
+   * available. Defaults to true (unrestricted — every other resource type).
+   */
+  canTransferOwner?: boolean
 }
 
 /**
@@ -42,8 +49,11 @@ interface AclPanelProps {
 export function AclDialogButton({
   resourceBaseUrl,
   invalidateKey,
+  canTransferOwner,
   size,
-}: Pick<AclPanelProps, 'resourceBaseUrl' | 'invalidateKey'> & { size?: 'sm' | 'md' }) {
+}: Pick<AclPanelProps, 'resourceBaseUrl' | 'invalidateKey' | 'canTransferOwner'> & {
+  size?: 'sm' | 'md'
+}) {
   const { t } = useTranslation()
   const actor = useActor()
   const [open, setOpen] = useState(false)
@@ -64,6 +74,7 @@ export function AclDialogButton({
         <AclPanel
           resourceBaseUrl={resourceBaseUrl}
           invalidateKey={invalidateKey}
+          canTransferOwner={canTransferOwner}
           onSaved={() => setOpen(false)}
           onCancel={() => setOpen(false)}
         />
@@ -72,7 +83,13 @@ export function AclDialogButton({
   )
 }
 
-export function AclPanel({ resourceBaseUrl, invalidateKey, onSaved, onCancel }: AclPanelProps) {
+export function AclPanel({
+  resourceBaseUrl,
+  invalidateKey,
+  onSaved,
+  onCancel,
+  canTransferOwner = true,
+}: AclPanelProps) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const actor = useActor()
@@ -156,7 +173,7 @@ export function AclPanel({ resourceBaseUrl, invalidateKey, onSaved, onCancel }: 
           ) : (
             <span className="muted">{t('acl.systemOwner')}</span>
           )}
-          {canManage && (
+          {canManage && canTransferOwner && (
             <button
               type="button"
               className="btn btn--sm"

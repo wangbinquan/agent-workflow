@@ -191,7 +191,14 @@ function SkillDetailPage() {
         label={t('skills.fieldDescription')}
         hint={caps.showManagedHint ? t('skills.descHintManaged') : t('skills.descHintExternal')}
       >
-        <TextInput value={description} onChange={setDescription} />
+        {/* RFC-170 §8: a source-external skill's metadata is owned by its source
+            dir — the description is read-only (managed + hand-external edit it). */}
+        <TextInput
+          value={description}
+          onChange={setDescription}
+          disabled={!caps.canEditDescription}
+          data-testid="skill-description-input"
+        />
       </Field>
     </>
   )
@@ -217,6 +224,8 @@ function SkillDetailPage() {
         acl={{
           resourceBaseUrl: `/api/skills/${encodeURIComponent(name)}`,
           invalidateKey: ['skills'],
+          // RFC-170 §8 (G3-2): external skills can't transfer ownership.
+          canTransferOwner: caps.canTransferOwner,
         }}
         save={{
           label: saving ? t('common.saving') : t('common.save'),

@@ -111,6 +111,9 @@ describe('skills.detail consumes capability bits, not a scattered isManaged flag
       'caps.canBrowseFilesWritable',
       'caps.showManagedHint',
       'caps.showVersionHistory',
+      // RFC-170 three-state additions consumed by the page:
+      'caps.canEditDescription', // description field disabled gate
+      'caps.canTransferOwner', // AclDialogButton transfer control gate
     ]) {
       expect(src.includes(bit), `skills.detail.tsx must read ${bit}`).toBe(true)
     }

@@ -74,6 +74,9 @@ function skillRow(sourceKind: 'managed' | 'external') {
  *  control the two save channels' responses. */
 function installFetch(opts: {
   sourceKind: 'managed' | 'external'
+  // RFC-170 (G5-P2): the three-state authority discriminator drives the FE
+  // capability table; absent ⇒ derived from sourceKind (external→hand-external).
+  authorityKind?: 'managed' | 'source-external' | 'hand-external'
   putMeta: Response | (() => Response)
   putContent: Response | (() => Response)
   // RFC-170 T4: when a `token` is present on the content GET, a managed skill's
@@ -101,7 +104,7 @@ function installFetch(opts: {
         return typeof opts.putMeta === 'function' ? opts.putMeta() : opts.putMeta.clone()
       }
       if (method === 'GET' && url.endsWith('/api/skills/sk1'))
-        return json(skillRow(opts.sourceKind))
+        return json({ ...skillRow(opts.sourceKind), authorityKind: opts.authorityKind })
       if (method === 'GET' && url.endsWith('/api/skills/sk1/content')) {
         contentGets += 1
         // A refetch after a 409 hands back a bumped token so the next save is fresh.
@@ -300,5 +303,50 @@ describe('skills.detail T4 combined-save (managed + token)', () => {
       expect(contentGetsAfter).toBeGreaterThan(contentGetsBefore)
     })
     expect(h.navigate).not.toHaveBeenCalled()
+  })
+})
+
+// RFC-170 §8 (G5-P2) — the description field's editability follows the
+// three-state authority: managed + hand-external edit it, source-external can't
+// (its metadata is owned by the registered source dir).
+describe('skills.detail description gate (authorityKind)', () => {
+  function descInput(): HTMLInputElement {
+    return document.querySelector('[data-testid="skill-description-input"]') as HTMLInputElement
+  }
+
+  test('source-external → description input is disabled (read-only metadata)', async () => {
+    installFetch({
+      sourceKind: 'external',
+      authorityKind: 'source-external',
+      putMeta: () => json(skillRow('external')),
+      putContent: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 1 }),
+    })
+    renderDetail()
+    await waitFor(() => expect(descInput()).not.toBeNull())
+    expect(descInput().disabled).toBe(true)
+  })
+
+  test('hand-external → description input stays editable (DB metadata authority)', async () => {
+    installFetch({
+      sourceKind: 'external',
+      authorityKind: 'hand-external',
+      putMeta: () => json(skillRow('external')),
+      putContent: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 1 }),
+    })
+    renderDetail()
+    await waitFor(() => expect(descInput()).not.toBeNull())
+    expect(descInput().disabled).toBe(false)
+  })
+
+  test('managed → description input is editable', async () => {
+    installFetch({
+      sourceKind: 'managed',
+      authorityKind: 'managed',
+      putMeta: () => json(skillRow('managed')),
+      putContent: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 1 }),
+    })
+    renderDetail()
+    await waitFor(() => expect(descInput()).not.toBeNull())
+    expect(descInput().disabled).toBe(false)
   })
 })

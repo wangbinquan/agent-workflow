@@ -30,6 +30,8 @@ export interface DetailHeaderActionsProps {
     /** e.g. '/api/agents/my-agent' — AclDialogButton appends '/acl'. */
     resourceBaseUrl: string
     invalidateKey: readonly unknown[]
+    /** RFC-170 §8 — false hides the owner-transfer control (external skills). */
+    canTransferOwner?: boolean
   }
   save: {
     /** Button text — caller switches pending/idle labels itself.
@@ -69,6 +71,7 @@ export function DetailHeaderActions(props: DetailHeaderActionsProps) {
           <AclDialogButton
             resourceBaseUrl={props.acl.resourceBaseUrl}
             invalidateKey={props.acl.invalidateKey}
+            canTransferOwner={props.acl.canTransferOwner}
           />
           <button
             type="button"
