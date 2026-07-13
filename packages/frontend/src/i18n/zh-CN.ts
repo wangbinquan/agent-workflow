@@ -732,6 +732,8 @@ export interface Resources {
     no: string
     details: string
     emDash: string
+    /** RFC-177: by-id subject redirect landed on a missing/invisible resource. */
+    resourceUnavailable: string
     copy: string
     copied: string
     empty: string
@@ -3491,6 +3493,7 @@ export const zhCN: Resources = {
     no: '否',
     details: '详情',
     emDash: '—',
+    resourceUnavailable: '该资源不可用或已被删除。',
     copy: '复制',
     copied: '已复制！',
     empty: '（空）',
@@ -3997,12 +4000,12 @@ export const zhCN: Resources = {
     memberUserPlaceholder: '搜索并选择平台用户',
     memberDisplayNamePlaceholder: '组内唯一，禁止 @、逗号、空白。',
     memberRolePlaceholder: '组内职责说明（选人依据），可选。',
-    fieldShareOutputs: '产出互见',
-    fieldShareOutputsHint: '把同伴已完成任务的结果摘要注入给每个成员。',
-    fieldDirectMessages: '定向消息',
+    fieldShareOutputs: '成果共享',
+    fieldShareOutputsHint: '把同伴已完成任务的成果摘要注入给每个成员。',
+    fieldDirectMessages: '点对点消息',
     fieldDirectMessagesHint: '成员可以互相 @；@ 会注入给对方并可唤醒对方。',
-    fieldBlackboard: '公共黑板',
-    fieldBlackboardHint: '把公共聊天流（按预算截尾）注入给每个成员。',
+    fieldBlackboard: '广播消息',
+    fieldBlackboardHint: '把组内公共消息流（无 @ 的广播，按预算截尾）注入给每个成员。',
     fcSwitchesNotice: '自由协作模式下三个协作开关强制视为全开；切回 Leader-Worker 后恢复原设置。',
     fieldMaxRounds: '最大轮数',
     fieldMaxRoundsHint: '1–1000，默认 1000。',
@@ -4015,7 +4018,7 @@ export const zhCN: Resources = {
       missingGroup: '缺少工作组名称——请从工作组详情页进入启动页。',
       fieldGoal: '任务目标',
       fieldGoalHint:
-        '工作组这次要完成的目标。作为开工指令下发给负责拆解它的成员——leader_worker 只给 leader，free_collab 给全体成员。',
+        '工作组这次要完成的目标。作为开工指令下发给负责拆解它的成员——Leader-Worker 模式只给 leader，自由协作模式给全体成员。',
       advanced: '高级选项',
       maxDurationMin: '最长运行时长（分钟）',
       maxDurationMinHint: '可选。超时后任务被平台取消。',

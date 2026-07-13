@@ -621,6 +621,7 @@ export const enUS: Resources = {
     no: 'no',
     details: 'Details',
     emDash: '—',
+    resourceUnavailable: 'This resource is unavailable or was deleted.',
     copy: 'Copy',
     copied: 'Copied!',
     empty: '(empty)',
@@ -1159,7 +1160,7 @@ export const enUS: Resources = {
     fieldDirectMessages: 'Direct messages',
     fieldDirectMessagesHint:
       'Members may @ each other; mentions are injected and can wake the target.',
-    fieldBlackboard: 'Public blackboard',
+    fieldBlackboard: 'Broadcast messages',
     fieldBlackboardHint: 'Inject the public room stream (budget-clipped tail) into each member.',
     fcSwitchesNotice:
       'Free collaboration forces all three switches on; switching back to Leader-Worker restores your settings.',
@@ -1175,7 +1176,7 @@ export const enUS: Resources = {
       missingGroup: 'Missing workgroup name — open the launcher from a workgroup detail page.',
       fieldGoal: 'Goal',
       fieldGoalHint:
-        'The goal for this run — delivered as the kickoff directive to whoever decomposes it: the leader in leader_worker, every member in free_collab.',
+        'The goal for this run — delivered as the kickoff directive to whoever decomposes it: the leader in Leader-Worker mode, every member in Free collaboration mode.',
       advanced: 'Advanced options',
       maxDurationMin: 'Max duration (minutes)',
       maxDurationMinHint: 'Optional. The platform cancels the task once exceeded.',

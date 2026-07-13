@@ -448,11 +448,11 @@ describe('WorkgroupForm — free_collab switch gating', () => {
     expect(switchInput(/Direct messages/).disabled).toBe(false)
 
     // Flip blackboard on so switch-back has a non-default value to restore.
-    fireEvent.click(switchInput(/Public blackboard/))
-    expect(switchInput(/Public blackboard/).checked).toBe(true)
+    fireEvent.click(switchInput(/Broadcast messages/))
+    expect(switchInput(/Broadcast messages/).checked).toBe(true)
 
     fireEvent.click(screen.getByRole('radio', { name: 'Free collaboration' }))
-    for (const label of [/Share outputs/, /Direct messages/, /Public blackboard/]) {
+    for (const label of [/Share outputs/, /Direct messages/, /Broadcast messages/]) {
       expect(switchInput(label).checked).toBe(true)
       expect(switchInput(label).disabled).toBe(true)
     }
@@ -461,7 +461,7 @@ describe('WorkgroupForm — free_collab switch gating', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Leader-Worker' }))
     expect(switchInput(/Share outputs/).checked).toBe(true)
     expect(switchInput(/Direct messages/).checked).toBe(false)
-    expect(switchInput(/Public blackboard/).checked).toBe(true)
+    expect(switchInput(/Broadcast messages/).checked).toBe(true)
     expect(switchInput(/Direct messages/).disabled).toBe(false)
     expect(screen.queryByTestId('workgroup-fc-switches-notice')).toBeNull()
   })
