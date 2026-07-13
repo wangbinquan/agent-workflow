@@ -129,6 +129,11 @@ test.describe('RFC-165 — /tasks/new wizard', () => {
         instructions: '',
         mode: 'free_collab',
         maxRounds: 1,
+        // The platform default for completionGate is now ON (a leader-done group
+        // parks at awaiting_review for human confirmation). This test only locks
+        // the wizard → engine wiring "task terminates", not the gate, so keep the
+        // group ungated — otherwise the task parks and never reaches terminal.
+        completionGate: false,
         members: [{ memberType: 'agent', agentName: 'wizard-wg-member', displayName: 'Member' }],
       }),
     })
