@@ -195,6 +195,48 @@ async function assertRequestedEntriesSealed(
   }
 }
 
+/**
+ * RFC-172 (route 2, S0) — resolve each entry's fan-out SHARD.
+ *
+ * A clarify entry's shard is its origin round's `asking_shard_key`
+ * (`origin_node_run_id → clarify_rounds.intermediary_node_run_id → asking_shard_key`). The
+ * workgroup member self-round records `asking_shard_key = assignment id` per shard (one independent
+ * clarify node_run per shard), so this losslessly separates concurrent members on the shared
+ * `__wg_member__` node. Every OTHER path resolves to `null` — 普通 agent-single self
+ * (`asking_shard_key` NULL), cross-clarify (always NULL), manual §15 (no round) — so a `(home,
+ * null)` composite key collapses BYTE-FOR-BYTE to today's home-only keying (golden-lock). One
+ * batched `IN(...)` query for all clarify origins.
+ *
+ * Returns entry.id → shardKey|null.
+ */
+export async function resolveEntryShardKeys(
+  db: DbClient,
+  entries: TaskQuestionRow[],
+): Promise<Map<string, string | null>> {
+  const originIds = Array.from(
+    new Set(entries.filter((e) => e.sourceKind !== 'manual').map((e) => e.originNodeRunId)),
+  )
+  const shardByOrigin = new Map<string, string | null>()
+  if (originIds.length > 0) {
+    const rounds = await db
+      .select({
+        origin: clarifyRounds.intermediaryNodeRunId,
+        askingShardKey: clarifyRounds.askingShardKey,
+      })
+      .from(clarifyRounds)
+      .where(inArray(clarifyRounds.intermediaryNodeRunId, originIds))
+    for (const r of rounds) shardByOrigin.set(r.origin, r.askingShardKey)
+  }
+  const byEntry = new Map<string, string | null>()
+  for (const e of entries) {
+    byEntry.set(
+      e.id,
+      e.sourceKind === 'manual' ? null : (shardByOrigin.get(e.originNodeRunId) ?? null),
+    )
+  }
+  return byEntry
+}
+
 // RFC-147: the private fourth variant was byte-equivalent to the shared
 // side-respecting classifier `isClarifyChannelEdge` — replaced. Semantics
 // note kept: dropping channel edges UNIFORMLY (no target-kind nuance) is
