@@ -138,8 +138,19 @@ describe('RFC-165 — frontend launch builders emit no retired keys', () => {
     // RFC-165 PR-3: the body builders moved from lib/workgroup-launch.ts into
     // lib/task-wizard.ts (the /tasks/new wizard's builder module); the old
     // module keeps only the 422→copy mapping.
+    //
+    // RFC-175: taskToLaunchPayload REVERSE-builds a launch payload FROM a
+    // persisted Task DTO, so it legitimately READS the DTO's `baseBranch`
+    // column (an allowlisted persisted field — see header) and maps it to the
+    // v2 `ref` key; it never STAMPS a retired key onto the wire. Mirror the
+    // launch-repo-source.ts assertion above: the silent-degrade hole re-opens
+    // only if a builder STAMPS `repoPath:` / `baseBranch:` (or mentions
+    // `fetchBeforeLaunch` at all), not from a `.baseBranch` read. Key-stamp
+    // form only.
     const wiz = read('packages/frontend/src/lib/task-wizard.ts')
-    for (const k of KEYS) expect(wiz.includes(k)).toBe(false)
+    expect(wiz.includes('fetchBeforeLaunch')).toBe(false)
+    expect(/\brepoPath\s*:/.test(wiz)).toBe(false)
+    expect(/\bbaseBranch\s*:/.test(wiz)).toBe(false)
     expect(wiz.includes("from './launch-repo-source'")).toBe(true)
     const wg = read('packages/frontend/src/lib/workgroup-launch.ts')
     for (const k of KEYS) expect(wg.includes(k)).toBe(false)
