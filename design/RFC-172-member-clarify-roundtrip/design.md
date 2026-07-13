@@ -27,15 +27,17 @@
 
 核心是让 `selectAgentQueue` 的**选取 + 老化 + 绑定**三者都能按「本次续跑 run 的 shardKey」收窄。task_questions 本身
 是否需要新增 shardKey 列，取决于能否经现有关联（`origin_node_run_id` → `clarify_rounds.asking_shard_key`，
-或 `node_runs.shard_key`）无损推导 —— 这是 T1 的首要裁决点。
+或 `node_runs.shard_key`）无损推导。**T1 已查证定案：方案 A（零 migration）可行**（详见下）。
 
-### 2.1 selectAgentQueue 增 shardKey 隔离
-- 入口新增**可选** `shardKey?: string | null`（`undefined` = 保持现状，普通节点零改动、golden-lock 不动）。`buildClarifyQueueContext` 从 `dispatchedRunId` 行读出 `shard_key` 后透传（leader 读到 `null`、member 读到 assignment id）。
-- **选取过滤**：候选 `task_questions` 追加「该条目所属 shard == 目标 shardKey」。优先经关联无损推导：
-  - 方案 A（首选，零 migration）：join `clarify_rounds` on `origin_node_run_id`，按 `asking_shard_key == shardKey` 过滤（manual 条目 §15 无 round，另议其 shard 归属）。
-  - 方案 B（若 A 有语义空洞）：给 `task_questions` 增 `shard_key` 列 + 一支 migration，dispatch 铸行时从 clarify 会话带出。
-- **老化窗口**：`sameNode` 追加 `AND node_runs.shard_key IS <shardKey>`（含 `null` 情形用 IS NULL）。
-- **绑定**：`bindTriggerRun` 仍绑选取后的条目——选取一旦按 shardKey 收窄，绑定自然只落本 shard。
+### 2.1 selectAgentQueue 增 shardKey 隔离 —— 方案 A（T1 定案，零 migration）
+
+**join 链无损定位 shard（T1a 查证）**：member run 的 `node_runs.shard_key = assignment.id`（workgroupRunner.ts:1067-1074；消息轮为 `msg:${memberId}:...`）。`createClarifySession` 按 `(clarify_node_id, source_shard_key, iterationIndex)` **每 shard 铸独立 clarify node_run**（`findClarifyNodeRunForShard` clarify.ts:460-472），并双写 `clarify_rounds.asking_shard_key = sourceShardKey`（clarify.ts:214）+ `intermediary_node_run_id`（:216）；`task_questions.origin_node_run_id = round.intermediary_node_run_id`（taskQuestions.ts:141-146）。故 `task_questions.origin_node_run_id → clarify_rounds.asking_shard_key` 与 shard **1:1、无损**，且 `selectAgentQueue` **现在就已取该 round 行**（clarifyQueue.ts:150-157，`askingShardKey` 已在手）→ 加 shard 过滤**零新增查询**。
+
+- **入口新增可选 `shardKey?: string | null`**（`undefined` = 保持现状：普通 agent-single 节点/leader 的单一 null 身份零影响、golden-lock 不改一行）。`buildClarifyQueueContext` 从 `dispatchedRunId` 行读出 `shard_key` 后透传（leader→`null`，member→assignment id）。**做成通用参数、非 workgroup 专用**（见 §3 T1b：让延期的 wrapper-fanout per-shard clarify 将来免费继承同一隔离）。
+- **选取过滤（clarify 条目）**：`shardKey` 传值时，候选 `task_questions` 追加「其 round 的 `asking_shard_key == shardKey`」（复用 clarifyQueue.ts:150-157 已 join 的 round 行）。
+- **老化窗口**：`shardKey` 传值时 `sameNode` 追加 `AND node_runs.shard_key = shardKey`（member run 恒非 null，`__wg_member__` 内部无 `IS NULL` 特判坑；不传值则保持今天按 nodeId+iteration 的全窗）。
+- **绑定**：`bindTriggerRun` 仍绑选取后的条目——选取按 shardKey 收窄后，绑定自然只落本 shard。
+- **manual 条目（§15）收口**：manual 无 round → 无 `asking_shard_key`，且 manual **可**指派 `__wg_member__`（taskQuestions.ts:1260-1266 只校验 target 是本任务 agent 节点）。但 manual **不产生逐成员 clarify 答案**，故无答案串扰。定案：**manual 免 clarify shard 过滤**（无逐成员身份，广播全成员是唯一自洽语义）；**但老化窗仍逐 shard**（否则一 manual 条目会被兄弟 shard 的 output 误老化）。逐成员定向 manual 非 RFC-172 需求；若将来需要，才上方案 B（`task_questions` 加 `shard_key` 列 + migration + reconcile/create 落戳）。
 
 ### 2.2 撤临时收敛、恢复 member 反问
 - `renderWgProtocolBlock`：worker / fc_member 恢复 `<workflow-clarify>` 邀请 + 格式（复用现 `LEADER_CLARIFY_BLOCK`，改为「非 leader 也 push」或抽通用块）。free_collab 无 leader，成员即 fc_member，同样开放。
@@ -43,10 +45,10 @@
 
 ## 3. 与现有模块耦合点 / 失败模式
 
-- **`selectAgentQueue` 是共享 golden-lock 函数**（普通节点 + cross-clarify + designer 全走它）。改动必须以 `shardKey===undefined` 完全复现现行为（golden-lock 不改一行断言），仅 member 显式传值时启用新过滤。
-- **潜在更广的既有 bug**：schema 注释称 agent-multi 也按 shard 分 session，但 `selectAgentQueue` 选取无 shardKey——**普通 agent-multi 节点的分片 clarify 是否也串扰？** T1 需查证；若是，本 RFC 顺带修一个先于工作组的既有缺陷（提升优先级）。
+- **`selectAgentQueue` 是共享 golden-lock 函数**（普通节点 + cross-clarify + designer 全走它）。改动必须以 `shardKey===undefined` 完全复现现行为（golden-lock 不改一行断言），仅传值时启用新过滤。
+- **普通 agent-multi 不受累（T1b 查证）**：`agent-multi` NodeKind 已被 RFC-060 PR-E 删除（shared/src/index.ts:50-51、clarify.ts:371）；现存分片路径是 **wrapper-fanout**，其 shard 走 `dispatchFanoutShard`（scheduler.ts:4761）**不传 `clarifyChannel`**（`{kind:'none'}`），头注释显式声明「v1 无 clarify 通道，per-shard clarify 是 PR-D2/D.T5 延期项」（scheduler.ts:4486-4490）。故分片节点当前**根本不能吐 `<workflow-clarify>`**，普通路径不存在可复现的跨-shard 串扰。`schema.ts:1342-1343` 那条「agent-multi 每 shard 分 session」是删除后遗留的休眠注释。**结论：RFC-172 不顺带修普通路径 bug；但把 shardKey 隔离做成通用可选参数后，延期的 fanout per-shard clarify（PR-D2/D.T5）可免费继承——RFC-172 是逐-shard clarify 的首个真实消费者。**
 - **失败模式**：shardKey 不匹配 → 空队列 → member 续跑无答案（退化为「未回流」，不串扰、不悬挂）——安全降级。
-- **manual 条目（§15）**的 shard 归属：无 clarify round，需明确其 target/shard 语义（可能维持 node 级、不参与 shard 过滤）。
+- **manual 条目 §15**：shard 归属与老化收口见 §2.1（免 clarify shard 过滤 + 老化仍逐 shard）。
 
 ## 4. 测试策略（design.md §测试策略，实现 PR 必跑绿）
 
