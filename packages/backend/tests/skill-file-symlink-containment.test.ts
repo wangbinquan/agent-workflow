@@ -18,6 +18,7 @@ import {
   writeSkillFile,
   type SkillFsOptions,
 } from '../src/services/skill'
+import { getSkillVersionContent } from '../src/services/skillVersion'
 import { ValidationError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -78,5 +79,13 @@ describe('readSkillFile symlink containment', () => {
     rmSync(join(root, 'SKILL.md'))
     symlinkSync(join(outsideDir, 'host-secret.txt'), join(root, 'SKILL.md'))
     await expect(readSkillContent(db, fsOpts, 'foo')).rejects.toBeInstanceOf(ValidationError)
+  })
+
+  test('getSkillVersionContent refuses a historical SKILL.md symlinked out (G3-1 history GET)', () => {
+    // createManagedSkill committed v1; its files dir is versions/v1/files.
+    const v1SkillMd = join(appHome, 'skills', 'foo', 'versions', 'v1', 'files', 'SKILL.md')
+    rmSync(v1SkillMd)
+    symlinkSync(join(outsideDir, 'host-secret.txt'), v1SkillMd)
+    expect(() => getSkillVersionContent(db, fsOpts, 'foo', 1)).toThrow(ValidationError)
   })
 })
