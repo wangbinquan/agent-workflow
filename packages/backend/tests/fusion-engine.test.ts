@@ -634,3 +634,38 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
     expect(rawStatus('fz-live')).toBe('running')
   })
 })
+
+// RFC-170 T6 (Codex re-review F10) — a fusion worktree is seeded from the token's
+// IMMUTABLE version snapshot, not the mutable live dir, so tampering with live (or
+// a delete→recreate) between authorization and the copy can't feed the agent a
+// different generation's content.
+describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', () => {
+  let h: H
+  beforeEach(() => (h = build()))
+  afterEach(() => h.cleanup())
+
+  test('createFusion seeds from versions/v1, ignoring tampered live files', async () => {
+    const fsOpts: SkillFsOptions = { appHome: h.appHome }
+    await createManagedSkill(h.db, fsOpts, {
+      name: 'lint',
+      description: 'd',
+      bodyMd: 'SNAPSHOT-BODY',
+      frontmatterExtra: {},
+    })
+    // Tamper the LIVE files directly (no version bump → token still points at v1).
+    writeFileSync(
+      pjoin(h.appHome, 'skills', 'lint', 'files', 'SKILL.md'),
+      '---\nname: lint\ndescription: d\n---\nLIVE-TAMPERED',
+    )
+    const mem = approvedGlobalMemory(h.db, 'm')
+    const fusion = await createFusion(
+      { skillName: 'lint', memoryIds: [mem], intent: '' },
+      h.deps,
+      adminActor,
+    )
+    const task = await getTask(h.db, fusion.currentTaskId!)
+    const seeded = readFileSync(pjoin(task!.worktreePath, 'SKILL.md'), 'utf8')
+    expect(seeded).toContain('SNAPSHOT-BODY') // from the immutable v1 snapshot
+    expect(seeded).not.toContain('LIVE-TAMPERED') // NOT from the mutated live dir
+  })
+})

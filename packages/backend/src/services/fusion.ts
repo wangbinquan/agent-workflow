@@ -465,7 +465,8 @@ export async function createFusion(
   const fusionId = ulid()
   const workDir = fusionWorkDir(appHome, fusionId, 1)
   mkdirSync(workDir, { recursive: true })
-  const skillFilesDir = join(appHome, 'skills', input.skillName, 'files')
+  // RFC-170 T6 (Codex F10): seed from the token's immutable version snapshot.
+  const skillFilesDir = fusionSeedDir(appHome, input.skillName, preconditionToken)
   if (existsSync(skillFilesDir)) copyWorktreeContent(skillFilesDir, workDir)
   const baseCommit = await seedWorktree(workDir)
 
@@ -968,6 +969,23 @@ function fusionTokenExpectations(token: string | null): {
   }
 }
 
+/**
+ * RFC-170 T6 (Codex re-review F10) — the directory to SEED a fusion worktree from:
+ * the IMMUTABLE version snapshot the precondition token points at
+ * (`versions/v<contentVersion>/files`), NOT the mutable live `files/`. A
+ * delete→recreate or a concurrent version-write during seeding can swap live
+ * out from under the copy; the versioned snapshot never changes, so the seed is
+ * always the exact generation the token authorises against. Falls back to live
+ * for a legacy skill with no snapshot dir (its token check still gates the apply).
+ */
+function fusionSeedDir(appHome: string, skillName: string, token: string | null): string {
+  const live = join(appHome, 'skills', skillName, 'files')
+  const t = token === null ? null : decodeSkillToken(token)
+  if (t === null) return live
+  const snapshot = join(appHome, 'skills', skillName, 'versions', `v${t.contentVersion}`, 'files')
+  return existsSync(snapshot) ? snapshot : live
+}
+
 export async function approveFusion(deps: FusionDeps, id: string, actor: Actor): Promise<Fusion> {
   const { db, appHome } = deps
   await reconcileFusion(deps, id)
@@ -1120,7 +1138,9 @@ export async function rejectFusion(
     // under OCC, so the displayed diff must be measured from the skill — NOT the
     // per-iteration prior proposal (Codex P2: otherwise a re-run hides the
     // earlier iteration's changes from the diff the merger approves).
-    const skillFilesDir = join(appHome, 'skills', row.skillName, 'files')
+    // RFC-170 T6 (Codex F10): re-run baseline = the token's immutable snapshot
+    // (the drift check above guarantees it's still the current generation).
+    const skillFilesDir = fusionSeedDir(appHome, row.skillName, row.preconditionToken)
     if (existsSync(skillFilesDir)) copyWorktreeContent(skillFilesDir, workDir)
     const baseCommit = await seedWorktree(workDir)
     // Then overlay the PRIOR proposal as uncommitted working changes, so the
