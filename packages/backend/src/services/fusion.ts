@@ -31,11 +31,13 @@ import { FusionResultManifestSchema, TERMINAL_TASK_STATUSES } from '@agent-workf
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { agents, fusions, workflows } from '@/db/schema'
+import { dbTxSync } from '@/db/txSync'
+import { agents, fusions, skills, workflows } from '@/db/schema'
 import { createAgent } from '@/services/agent'
 import { canManageMemory, fuseMemoriesTx, getMemoryById } from '@/services/memory'
 import { canViewResource, isAdminActor, isResourceOwner } from '@/services/resourceAcl'
 import { getSkill, getSkillPreconditionToken } from '@/services/skill'
+import { decodeSkillToken, encodeSkillToken } from '@/services/skillToken'
 import { commitSkillVersion, type SkillVersionFsOptions } from '@/services/skillVersion'
 import { trySetTaskStatus } from '@/services/lifecycle'
 import { cancelTask, getTask, startTask, type StartTaskDeps } from '@/services/task'
@@ -419,6 +421,13 @@ export async function createFusion(
     throw new ConflictError('fusion-skill-forbidden', 'you cannot write this skill')
   }
 
+  // RFC-170 T6 (Codex F3): capture the target skill's composite precondition token
+  // BEFORE any side effect (worktree seed + startTask). If a delete→recreate races
+  // during seeding/launch, this token reflects the generation we SEED FROM and
+  // AUTHORIZE against — so a later approve/reject sees the mismatch and 409s,
+  // instead of pairing an old-generation proposal with the replacement's token.
+  const preconditionToken = await getSkillPreconditionToken(db, input.skillName)
+
   // 2. Every selected memory must be approved AND manageable by the actor (D14).
   const loaded: Array<{ id: string; title: string; bodyMd: string; scopeType: string }> = []
   for (const id of input.memoryIds) {
@@ -487,12 +496,11 @@ export async function createFusion(
     startDeps,
   )
 
-  // 5. Persist the fusion record. RFC-170 T6: capture the target skill's composite
-  //    precondition token NOW; approve / re-run CAS it against the live token so a
-  //    delete→recreate rebuild (same name, new skillId — baseSkillVersion alone
-  //    can't see it) or a concurrent skill edit is 409-rejected, not silently
-  //    applied onto the wrong content.
-  const preconditionToken = await getSkillPreconditionToken(db, input.skillName)
+  // 5. Persist the fusion record with the token captured BEFORE seeding (above).
+  //    approve / re-run CAS it against the live token so a delete→recreate rebuild
+  //    (same name, new skillId — baseSkillVersion alone can't see it) or a
+  //    concurrent skill edit is 409-rejected, not silently applied onto the wrong
+  //    content.
   const now = Date.now()
   db.insert(fusions)
     .values({
@@ -731,27 +739,109 @@ function failFusion(db: DbClient, id: string, error: string): void {
 // ---------------------------------------------------------------------------
 
 /**
- * RFC-170 T6 — CAS the fusion's captured precondition token against the target
- * skill's CURRENT composite token. Throws (zero side effects for the caller) when:
- *   - the fusion predates snapshot protection (null token) → fail-closed, must
- *     re-initiate; a legacy fusion can't prove which skill generation it targeted.
- *   - the skill drifted: deleted→recreated (new skillId — `baseSkillVersion` alone
- *     can't see it), or its files/meta were edited concurrently.
- * Encoded tokens are canonical, so string equality IS token equality.
+ * RFC-170 T6 (Codex F4/F5) — atomically claim a fusion for a decision. In ONE tx:
+ *   (1) the fusion must still be `from` — serialises concurrent approve/reject, so
+ *       the loser's claim returns false and it does NO side effects (no duplicate
+ *       tasks, no failFusion overwriting a winner's terminal state);
+ *   (2) the target skill's LIVE composite token must still equal what the fusion
+ *       captured — a delete→recreate (new skillId), version bump, or metadata edit
+ *       (metaRevision) throws Conflict, atomically with the claim;
+ * then it transitions to `to` (+ optional extra fields). Encoded tokens are
+ * canonical, so string equality IS token equality.
  */
-async function assertFusionSkillUnchanged(db: DbClient, row: FusionRow): Promise<void> {
-  if (row.preconditionToken === null) {
-    throw new ConflictError(
-      'fusion-precondition-legacy',
-      'this fusion predates snapshot protection; re-initiate it against the current skill',
-    )
-  }
-  const current = await getSkillPreconditionToken(db, row.skillName)
-  if (current === null || current !== row.preconditionToken) {
+/**
+ * RFC-170 T6 (Codex F4/F5) — the actor must STILL own (or be admin on) the target
+ * skill at DECISION time. A managed ACL transfer does not drift the composite
+ * token, so ownership is rechecked independently before applying / re-running —
+ * otherwise the fusion owner could write into a skill they transferred away.
+ */
+async function requireCurrentSkillWritable(
+  db: DbClient,
+  actor: Actor,
+  skillName: string,
+): Promise<void> {
+  const skill = await getSkill(db, skillName)
+  if (skill === null) {
     throw new ConflictError(
       'fusion-precondition-stale',
-      'the target skill changed since this fusion started; re-initiate the fusion',
+      'the target skill no longer exists; re-initiate the fusion',
     )
+  }
+  if (!isAdminActor(actor) && !isResourceOwner(actor, skill)) {
+    throw new ConflictError(
+      'fusion-skill-forbidden',
+      'you no longer have write access to the target skill',
+    )
+  }
+}
+
+function claimFusionDecision(
+  db: DbClient,
+  id: string,
+  from: FusionStatus,
+  to: FusionStatus,
+  extra: Partial<FusionRow> = {},
+): boolean {
+  return dbTxSync(db, (tx) => {
+    const cur = tx
+      .select({
+        status: fusions.status,
+        skillName: fusions.skillName,
+        preconditionToken: fusions.preconditionToken,
+      })
+      .from(fusions)
+      .where(eq(fusions.id, id))
+      .get()
+    if (!cur || cur.status !== from) return false // lost the decision race
+    if (cur.preconditionToken === null) {
+      throw new ConflictError(
+        'fusion-precondition-legacy',
+        'this fusion predates snapshot protection; re-initiate it against the current skill',
+      )
+    }
+    const live = tx
+      .select({
+        id: skills.id,
+        contentVersion: skills.contentVersion,
+        metaRevision: skills.metaRevision,
+      })
+      .from(skills)
+      .where(and(eq(skills.name, cur.skillName), eq(skills.reservationState, 'ready')))
+      .get()
+    const liveToken =
+      live === undefined
+        ? null
+        : encodeSkillToken({
+            skillId: live.id,
+            contentVersion: live.contentVersion,
+            metaRevision: live.metaRevision,
+          })
+    if (liveToken === null || liveToken !== cur.preconditionToken) {
+      throw new ConflictError(
+        'fusion-precondition-stale',
+        'the target skill changed since this fusion started; re-initiate the fusion',
+      )
+    }
+    tx.update(fusions)
+      .set({ status: to, ...extra })
+      .where(eq(fusions.id, id))
+      .run()
+    return true
+  })
+}
+
+/** Decode a fusion's captured token into the OCC components for commitSkillVersion. */
+function fusionTokenExpectations(token: string | null): {
+  expectedSkillId?: string
+  expectedVersion?: number
+  expectedMetaRevision?: number
+} {
+  const t = token === null ? null : decodeSkillToken(token)
+  if (t === null) return {}
+  return {
+    expectedSkillId: t.skillId,
+    expectedVersion: t.contentVersion,
+    expectedMetaRevision: t.metaRevision,
   }
 }
 
@@ -772,12 +862,18 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
   if (row.proposedWorktreePath === null || !existsSync(row.proposedWorktreePath)) {
     throw new ConflictError('fusion-proposal-missing', 'the proposed change is no longer on disk')
   }
-  // RFC-170 T6: reject BEFORE any state change if the skill drifted (ABA-safe;
-  // the commitSkillVersion `expectedVersion` OCC below is a second, version-only
-  // layer that the composite token strengthens with skillId + metaRevision).
-  await assertFusionSkillUnchanged(db, row)
-
-  setFusionStatus(db, id, 'applying')
+  // RFC-170 T6 (Codex F4): re-check write access to the CURRENT skill. A managed
+  // ACL transfer does not change the token, so without this the fusion owner could
+  // approve a write into a skill they no longer own after transferring it away.
+  await requireCurrentSkillWritable(db, actor, row.skillName)
+  // RFC-170 T6 (Codex F4): atomically CLAIM awaiting_approval → applying with the
+  // skill-token check in the SAME tx. Only the winner proceeds; a lost race or a
+  // drifted skill aborts here with zero side effects (replaces the old
+  // unconditional setFusionStatus('applying') that let a loser fail over a
+  // winner's committed 'done').
+  if (!claimFusionDecision(db, id, 'awaiting_approval', 'applying')) {
+    throw new ConflictError('fusion-not-awaiting', 'fusion is no longer awaiting approval')
+  }
   const incorporated = jsonArray(row.incorporatedMemoryIdsJson)
   const proposedDir = row.proposedWorktreePath
   const now = Date.now()
@@ -797,7 +893,10 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
         authorUserId: actor.user.id,
         summary: row.changelog ?? `Fused ${incorporated.length} memories`,
         fusionId: row.id,
-        expectedVersion: row.baseSkillVersion, // OCC: fail if the skill drifted
+        // RFC-170 (Codex F4): fence the FULL composite token IN the version-bump
+        // tx — skillId (delete→recreate ABA), contentVersion, and metaRevision —
+        // not just the version. Catches a drift between the claim and this write.
+        ...fusionTokenExpectations(row.preconditionToken),
         txExtra: (tx, newVersion) => {
           fuseMemoriesTx(tx, {
             memoryIds: incorporated,
@@ -853,97 +952,112 @@ export async function rejectFusion(
       `fusion is '${row.status}', not awaiting_approval`,
     )
   }
-  // RFC-170 T6 (G5-P4): a re-run seeds its baseline from the CURRENT skill files
-  // (below). If the skill drifted since this fusion started, re-running would
-  // silently rebase the proposal onto the wrong content — so reject here, BEFORE
-  // creating any workDir / task (zero side effects), and make the user re-initiate.
-  await assertFusionSkillUnchanged(db, row)
+  // RFC-170 T6 (Codex F5): re-check write access to the CURRENT skill before a
+  // re-run (a managed ACL transfer doesn't drift the token).
+  await requireCurrentSkillWritable(db, actor, row.skillName)
+  // RFC-170 T6 (Codex F5): atomically CLAIM awaiting_approval → running (with the
+  // skill-token check in the SAME tx) BEFORE any side effect. `currentTaskId` is
+  // nulled so a concurrent reconcile skips this fusion until the new task is set.
+  // A lost decision race or a drifted/legacy skill aborts here with zero worktree
+  // or task creation — the "zero side effect on stale" guarantee now actually
+  // holds (the old pre-check was TOCTOU vs the worktree/task creation below).
+  if (!claimFusionDecision(db, id, 'awaiting_approval', 'running', { currentTaskId: null })) {
+    throw new ConflictError('fusion-not-awaiting', 'fusion is no longer awaiting approval')
+  }
 
-  const memIds = jsonArray(row.memoryIdsJson)
-  const loaded: Array<{ id: string; title: string; bodyMd: string; scopeType: string }> = []
-  for (const mid of memIds) {
-    const got = await getMemoryById(db, mid)
-    if (got !== null && got.memory.status === 'approved') {
-      loaded.push({
-        id: got.memory.id,
-        title: got.memory.title,
-        bodyMd: got.memory.bodyMd,
-        scopeType: got.memory.scopeType,
+  try {
+    const memIds = jsonArray(row.memoryIdsJson)
+    const loaded: Array<{ id: string; title: string; bodyMd: string; scopeType: string }> = []
+    for (const mid of memIds) {
+      const got = await getMemoryById(db, mid)
+      if (got !== null && got.memory.status === 'approved') {
+        loaded.push({
+          id: got.memory.id,
+          title: got.memory.title,
+          bodyMd: got.memory.bodyMd,
+          scopeType: got.memory.scopeType,
+        })
+      }
+    }
+
+    const nextIter = row.iteration + 1
+    const workDir = fusionWorkDir(appHome, row.id, nextIter)
+    mkdirSync(workDir, { recursive: true })
+    // Baseline commit = the CURRENT skill files, so the approval diff is always
+    // current-skill → proposed. apply() copies the whole worktree over the skill
+    // under OCC, so the displayed diff must be measured from the skill — NOT the
+    // per-iteration prior proposal (Codex P2: otherwise a re-run hides the
+    // earlier iteration's changes from the diff the merger approves).
+    const skillFilesDir = join(appHome, 'skills', row.skillName, 'files')
+    if (existsSync(skillFilesDir)) copyWorktreeContent(skillFilesDir, workDir)
+    const baseCommit = await seedWorktree(workDir)
+    // Then overlay the PRIOR proposal as uncommitted working changes, so the
+    // agent refines its last attempt while the diff vs baseline stays full.
+    if (row.proposedWorktreePath !== null && existsSync(row.proposedWorktreePath)) {
+      for (const e of readdirSync(workDir)) {
+        if (e === '.git') continue
+        rmSync(join(workDir, e), { recursive: true, force: true })
+      }
+      copyWorktreeContent(row.proposedWorktreePath, workDir)
+    }
+
+    const taskId = ulid()
+    const startDeps: StartTaskDeps = {
+      db,
+      appHome,
+      actorUserId: actor.user.id,
+      preCreatedWorktree: { taskId, worktreePath: workDir, branch: 'fusion', baseCommit },
+      // RFC-165 (F4): fusion is the framework-internal launch face — the local
+      // ephemeral repo travels via internalSource (space_kind='internal', GC
+      // excluded so the approval flow keeps its dirs), not via the retired
+      // public repoPath wire field.
+      internalSource: { kind: 'local-path', repoPath: workDir, baseBranch: 'fusion' },
+      ...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {}),
+      ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),
+      // RFC-108 T4 + RFC-115: thread per-node timeout / retry budget / default runtime.
+      ...(deps.defaultPerNodeTimeoutMs !== undefined
+        ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
+        : {}),
+      ...(deps.defaultNodeRetries !== undefined
+        ? { defaultNodeRetries: deps.defaultNodeRetries }
+        : {}),
+      ...(deps.defaultRuntime !== undefined ? { defaultRuntime: deps.defaultRuntime } : {}),
+    }
+    const intentWithFeedback = `${row.intent}\n\n## Merger feedback on the previous attempt (revise accordingly)\n${feedback}`
+    await startTask(
+      {
+        workflowId: await fusionWorkflowId(db),
+        name: `fuse → ${row.skillName} (iter ${nextIter})`,
+        inputs: { intent: intentWithFeedback, memories: serializeMemoriesForPrompt(loaded) },
+      },
+      startDeps,
+    )
+
+    // Status is already 'running' (claimed above); attach the new task + reset the
+    // proposal fields. Safe by-id — we hold the claim, no concurrent decision can.
+    db.update(fusions)
+      .set({
+        iteration: nextIter,
+        currentTaskId: taskId,
+        proposedWorktreePath: null,
+        proposedDiff: null,
+        incorporatedMemoryIdsJson: null,
+        skippedJson: null,
+        changelog: null,
+        decisionReason: feedback,
+        decidedByUserId: actor.user.id,
+        decidedAt: Date.now(),
       })
-    }
+      .where(eq(fusions.id, id))
+      .run()
+
+    return rowToFusion(loadFusionRow(db, id)!)
+  } catch (err) {
+    // We own the 'running' claim; a post-claim failure must not leave the fusion
+    // stuck running with no task — fail it so the user can re-initiate.
+    failFusion(db, id, err instanceof Error ? err.message : String(err))
+    throw err instanceof Error ? err : new Error(String(err))
   }
-
-  const nextIter = row.iteration + 1
-  const workDir = fusionWorkDir(appHome, row.id, nextIter)
-  mkdirSync(workDir, { recursive: true })
-  // Baseline commit = the CURRENT skill files, so the approval diff is always
-  // current-skill → proposed. apply() copies the whole worktree over the skill
-  // under OCC, so the displayed diff must be measured from the skill — NOT the
-  // per-iteration prior proposal (Codex P2: otherwise a re-run hides the
-  // earlier iteration's changes from the diff the merger approves).
-  const skillFilesDir = join(appHome, 'skills', row.skillName, 'files')
-  if (existsSync(skillFilesDir)) copyWorktreeContent(skillFilesDir, workDir)
-  const baseCommit = await seedWorktree(workDir)
-  // Then overlay the PRIOR proposal as uncommitted working changes, so the
-  // agent refines its last attempt while the diff vs baseline stays full.
-  if (row.proposedWorktreePath !== null && existsSync(row.proposedWorktreePath)) {
-    for (const e of readdirSync(workDir)) {
-      if (e === '.git') continue
-      rmSync(join(workDir, e), { recursive: true, force: true })
-    }
-    copyWorktreeContent(row.proposedWorktreePath, workDir)
-  }
-
-  const taskId = ulid()
-  const startDeps: StartTaskDeps = {
-    db,
-    appHome,
-    actorUserId: actor.user.id,
-    preCreatedWorktree: { taskId, worktreePath: workDir, branch: 'fusion', baseCommit },
-    // RFC-165 (F4): fusion is the framework-internal launch face — the local
-    // ephemeral repo travels via internalSource (space_kind='internal', GC
-    // excluded so the approval flow keeps its dirs), not via the retired
-    // public repoPath wire field.
-    internalSource: { kind: 'local-path', repoPath: workDir, baseBranch: 'fusion' },
-    ...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {}),
-    ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),
-    // RFC-108 T4 + RFC-115: thread per-node timeout / retry budget / default runtime.
-    ...(deps.defaultPerNodeTimeoutMs !== undefined
-      ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
-      : {}),
-    ...(deps.defaultNodeRetries !== undefined
-      ? { defaultNodeRetries: deps.defaultNodeRetries }
-      : {}),
-    ...(deps.defaultRuntime !== undefined ? { defaultRuntime: deps.defaultRuntime } : {}),
-  }
-  const intentWithFeedback = `${row.intent}\n\n## Merger feedback on the previous attempt (revise accordingly)\n${feedback}`
-  await startTask(
-    {
-      workflowId: await fusionWorkflowId(db),
-      name: `fuse → ${row.skillName} (iter ${nextIter})`,
-      inputs: { intent: intentWithFeedback, memories: serializeMemoriesForPrompt(loaded) },
-    },
-    startDeps,
-  )
-
-  db.update(fusions)
-    .set({
-      status: 'running',
-      iteration: nextIter,
-      currentTaskId: taskId,
-      proposedWorktreePath: null,
-      proposedDiff: null,
-      incorporatedMemoryIdsJson: null,
-      skippedJson: null,
-      changelog: null,
-      decisionReason: feedback,
-      decidedByUserId: actor.user.id,
-      decidedAt: Date.now(),
-    })
-    .where(eq(fusions.id, id))
-    .run()
-
-  return rowToFusion(loadFusionRow(db, id)!)
 }
 
 // ---------------------------------------------------------------------------

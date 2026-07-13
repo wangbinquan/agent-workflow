@@ -262,6 +262,14 @@ export interface SkillVersionCommitOpts {
   restoredFromVersion?: number | null
   /** OCC: throw skill-version-conflict if current content_version != this. */
   expectedVersion?: number
+  /**
+   * RFC-170 (Codex F4) — composite-token OCC fenced INSIDE the db-committed tx
+   * (atomic with the version bump), so a delete→recreate (skillId drift) or a
+   * metadata edit (metaRevision drift) that slipped past a caller's pre-check is
+   * still caught. Fusion approve passes the decoded precondition token here.
+   */
+  expectedSkillId?: string
+  expectedMetaRevision?: number
   /** Fold a description change into the same tx (keeps DB ↔ SKILL.md in sync). */
   setDescription?: string
   /**
@@ -365,6 +373,38 @@ export function commitSkillVersion(
     const id = ulid()
     const now = Date.now()
     const created = dbTxSync(db, (tx) => {
+      // RFC-170 (Codex F4): fence the composite precondition IN the version-bump
+      // tx. The pre-check `expectedVersion` above is TOCTOU vs this write; re-read
+      // by name here and verify id (delete→recreate ABA) + metaRevision (metadata
+      // edit) + version atomically with the UPDATE, so a drift that slipped past
+      // the caller's earlier read cannot be applied to the wrong generation.
+      if (
+        commit.expectedSkillId !== undefined ||
+        commit.expectedMetaRevision !== undefined ||
+        commit.expectedVersion !== undefined
+      ) {
+        const live = tx
+          .select({
+            id: skills.id,
+            contentVersion: skills.contentVersion,
+            metaRevision: skills.metaRevision,
+          })
+          .from(skills)
+          .where(eq(skills.name, name))
+          .get()
+        if (
+          !live ||
+          (commit.expectedSkillId !== undefined && live.id !== commit.expectedSkillId) ||
+          (commit.expectedMetaRevision !== undefined &&
+            live.metaRevision !== commit.expectedMetaRevision) ||
+          (commit.expectedVersion !== undefined && live.contentVersion !== commit.expectedVersion)
+        ) {
+          throw new ConflictError(
+            'skill-version-conflict',
+            `skill '${name}' changed since this operation started; reload and retry`,
+          )
+        }
+      }
       const skillSet: Partial<typeof skills.$inferInsert> = {
         contentVersion: newVersion,
         updatedAt: now,

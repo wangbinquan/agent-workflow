@@ -6,12 +6,12 @@
 
 ## 0. 已落地的底座四层（32 测试、CI 绿 `97428109`）
 
-| 模块 | 关键导出 | 用途 |
-|---|---|---|
-| `db/migrations/0090` + `db/schema.ts` | skills 8 列 / skill_sources 3 列 / fusions token / 六表 acl_revision / `skill_operations` / `skill_operation_locks` | schema 地基（dormant） |
-| `services/skillOperations.ts` | `beginOperation(tx,spec)→opId` · `advancePhase(tx,opId,phase,patch?)` · `finishOperation(tx,opId)` · `abandonOperation(tx,opId)` · `acquireOpLocks/releaseOpLocks` · `getActiveOp/listActiveOps` · `gcOrphanLocks` · types `SkillOpKind`/`SkillOpPhase`/`BeginOperationSpec` | §6a 状态机 primitive（全部接 `DbTxSync` 组合） |
-| `services/skillFsPublish.ts` | `opStagedDir/opBackupDir/opCandidateDir/opScopedDir` · `swapInStaged(filesDir,opId)→{hadPrevious}` · `restoreFromBackup(filesDir,opId)` · `cleanupOpDirs(filesDir,opId)` | §6a/§13 op-scoped 原子 publish（纯 FS leaf） |
-| `services/skillOpRecovery.ts` | `SKILL_OP_PHASE_SEQUENCES` · `recoveryDirection(kind,phase)→'noop'\|'rollback'\|'rollforward'\|'quarantine'` | §6a 恢复完备性纯 oracle |
+| 模块                                  | 关键导出                                                                                                                                                                                                                                                                     | 用途                                           |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `db/migrations/0090` + `db/schema.ts` | skills 8 列 / skill_sources 3 列 / fusions token / 六表 acl_revision / `skill_operations` / `skill_operation_locks`                                                                                                                                                          | schema 地基（dormant）                         |
+| `services/skillOperations.ts`         | `beginOperation(tx,spec)→opId` · `advancePhase(tx,opId,phase,patch?)` · `finishOperation(tx,opId)` · `abandonOperation(tx,opId)` · `acquireOpLocks/releaseOpLocks` · `getActiveOp/listActiveOps` · `gcOrphanLocks` · types `SkillOpKind`/`SkillOpPhase`/`BeginOperationSpec` | §6a 状态机 primitive（全部接 `DbTxSync` 组合） |
+| `services/skillFsPublish.ts`          | `opStagedDir/opBackupDir/opCandidateDir/opScopedDir` · `swapInStaged(filesDir,opId)→{hadPrevious}` · `restoreFromBackup(filesDir,opId)` · `cleanupOpDirs(filesDir,opId)`                                                                                                     | §6a/§13 op-scoped 原子 publish（纯 FS leaf）   |
+| `services/skillOpRecovery.ts`         | `SKILL_OP_PHASE_SEQUENCES` · `recoveryDirection(kind,phase)→'noop'\|'rollback'\|'rollforward'\|'quarantine'`                                                                                                                                                                 | §6a 恢复完备性纯 oracle                        |
 
 **标准 op 生命周期**（每个具体 op 都是这个骨架）：
 
@@ -28,14 +28,14 @@ dbTxSync: finishOperation(done + 释放锁); cleanupOpDirs                // §6
 
 ## 1. 每个具体 op 的接线映射
 
-| kind | 改写/新增 | 现有入口 | 纠缠 | rollback | rollForward |
-|---|---|---|---|---|---|
-| **version-write**（T7 核心） | 重写 `commitSkillVersion`（`skillVersion.ts:273`，现「先删后拷」非原子） | file PUT/DELETE·restore·ZIP·fusion·combined-save 六 writer 全走它 | **reserve 依赖它建 v1**；先做 | 删 staged + `versions/.op-<id>.staged`/已现的 `versions/v<target>`（DB 未 bump 故无引用）；撤 lease+锁 | 从 `versions/v<target>` 或 staged 重建 `files`（swapInStaged）；置 done | 
-| **reserve**（T6b） | 改 `createManagedSkill`（`skill.ts:86`）+ ZIP create（`skill-zip.ts`） | POST /skills、ZIP import | 依赖 version-write 建 v1 | 删 reserving skills 行 + staged + 撤锁 | 补 `reservation_state='ready'` + done | 
-| **delete**（T-BSAFE①） | 改资源 DELETE（`skill.ts` deleteSkill） | DELETE /skills/:name | backup=`.trash/<skillId>-<opId>`（非 op-scoped-adjacent，recovery 用 `op.backupPath`） | rename trash→skills root、撤锁 | 清 trash、done | 
-| **replace**（T-BSAFE②） | 改 `replaceSourceConflict`（`skill-source.ts:335`） | 冲突 replace 决策 | 三子机（managed/source-ext/hand-ext occupier）；managed occupier 备份**整个 root** | rename backup→root（含 versions/）、撤双锁 | 清 backup、done | 
-| **migrate**（T10） | 新增（legacy 分叉首采纳，现无此路径） | 迁移决策 UI | backup=`K`（inode-bearing，**不删**，登记为下代 generation，G7-1） | rename K→files 复原原始 live | 确保 C、登记 K 为候选、清 D、done | 
-| **adopt-managed**（T10b） | 新增两阶段 capture→confirm→commit（现无 adoption） | degraded external adoption | 阶段 A capture 用 §7b descriptor-relative no-follow；INSERT skill_versions(v1) | 删 candidate/versions/v1、撤锁（external 仍 degraded） | 确保 v1/canonical、done | 
+| kind                         | 改写/新增                                                                | 现有入口                                                          | 纠缠                                                                                   | rollback                                                                                               | rollForward                                                             |
+| ---------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| **version-write**（T7 核心） | 重写 `commitSkillVersion`（`skillVersion.ts:273`，现「先删后拷」非原子） | file PUT/DELETE·restore·ZIP·fusion·combined-save 六 writer 全走它 | **reserve 依赖它建 v1**；先做                                                          | 删 staged + `versions/.op-<id>.staged`/已现的 `versions/v<target>`（DB 未 bump 故无引用）；撤 lease+锁 | 从 `versions/v<target>` 或 staged 重建 `files`（swapInStaged）；置 done |
+| **reserve**（T6b）           | 改 `createManagedSkill`（`skill.ts:86`）+ ZIP create（`skill-zip.ts`）   | POST /skills、ZIP import                                          | 依赖 version-write 建 v1                                                               | 删 reserving skills 行 + staged + 撤锁                                                                 | 补 `reservation_state='ready'` + done                                   |
+| **delete**（T-BSAFE①）       | 改资源 DELETE（`skill.ts` deleteSkill）                                  | DELETE /skills/:name                                              | backup=`.trash/<skillId>-<opId>`（非 op-scoped-adjacent，recovery 用 `op.backupPath`） | rename trash→skills root、撤锁                                                                         | 清 trash、done                                                          |
+| **replace**（T-BSAFE②）      | 改 `replaceSourceConflict`（`skill-source.ts:335`）                      | 冲突 replace 决策                                                 | 三子机（managed/source-ext/hand-ext occupier）；managed occupier 备份**整个 root**     | rename backup→root（含 versions/）、撤双锁                                                             | 清 backup、done                                                         |
+| **migrate**（T10）           | 新增（legacy 分叉首采纳，现无此路径）                                    | 迁移决策 UI                                                       | backup=`K`（inode-bearing，**不删**，登记为下代 generation，G7-1）                     | rename K→files 复原原始 live                                                                           | 确保 C、登记 K 为候选、清 D、done                                       |
+| **adopt-managed**（T10b）    | 新增两阶段 capture→confirm→commit（现无 adoption）                       | degraded external adoption                                        | 阶段 A capture 用 §7b descriptor-relative no-follow；INSERT skill_versions(v1)         | 删 candidate/versions/v1、撤锁（external 仍 degraded）                                                 | 确保 v1/canonical、done                                                 |
 
 ## 2. Recovery driver（T-BOOT）= 依赖注入 dispatcher
 
@@ -155,7 +155,35 @@ delete-recreate ABA / 并发编辑，approve+reject 双零副作用、legacy fai
 - **锁定测试**：fusion-engine 新增 T6 describe（持久 token · legacy null approve
   fail-closed · drifted reject 零副作用 · happy path 仍 approve+fuse）+ 更新旧 OCC 测试。
 
+## 6d. Codex 对抗式审计修复轮（⑳，6 findings）——§8+T6 的真实漏洞修复
+
+Codex adversarial-review 在已推送的 §8+T6 上抓到 6 个真漏洞（5 high + 1 med），全部修复：
+
+- **F1（high）新 external import 落 authorityKind='managed'**（列默认）→ transfer 阻断/
+  元数据只读/capability 全被绕过。修：`importExternalSkill` 写 `hand-external` +
+  `authorityOwnerUserId=importer`；source reconcile insert 写 `source-external` +
+  `authorityOwnerUserId=source.createdBy` + `originSourceId`。**真构造器**回归测试。
+- **F2（high）updateSkill 名义 TOCTOU + 从不 bump metaRevision**→ 元数据 token OCC 失效。
+  修：改 `dbTxSync` 内按 immutable id 复核 authority + `metaRevision+1` 同事务；空 patch
+  no-op。测：元数据写后 token 漂移。
+- **F3（high）createFusion 在 seed+startTask 之后才取 token**→ delete-recreate 窗口把旧
+  提案配新 token。修：token 捕获前移到副作用之前。
+- **F4（high）approve 非原子**（token/status/owner 分离校验 + 无条件 applying + 仅
+  baseSkillVersion fence + 并发 failFusion 覆盖 done）。修：`claimFusionDecision` 原子
+  CAS（status + token 同事务）+ commitSkillVersion 加 `expectedSkillId/expectedMetaRevision`
+  **事务内**复合 fence + approve/reject **decision 时复核当前 skill 属主**（managed transfer
+  不漂移 token）。
+- **F5（high）reject 在 stale 检查后仍建 workDir/task**。修：原子 claim（status+token）
+  前移到所有副作用之前、`currentTaskId=null` 让 reconcile 跳过、失败 failFusion。
+- **F6（med）source-external Save 仍发 saveMeta（403）**。修：只 enqueue 可写通道、
+  无可写通道时 Save disabled。测：source-external 零写请求 + Save 禁用。
+
+**锁定测试**：rfc170-skill-transfer-block（真 importExternalSkill hand-external + transfer
+403 + metaRevision 漂移）· fusion-engine（并发 approve/reject 序列化不双写/不覆盖 done +
+属主复核 source lock）· skills-detail-save-channels（source-external 零写 + Save 禁用）。
+
 ## 7. 其余（依赖顺序，批次 B 收尾 + 批次 C）
+
 snapshot 权威读（readSkillContent 从 versions/v<cur> 非 live——**与 T-BOOT quarantine/
 drift-check 耦合**，非独立单元）· T9 quarantine 注入门（stageSkills 前查 version_state，
 **注意 scheduler 协作者 WIP**）· T9b external descriptor-relative 捕获（需 openat/

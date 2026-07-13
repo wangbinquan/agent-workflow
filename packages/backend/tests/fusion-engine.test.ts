@@ -440,4 +440,53 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     expect(done.status).toBe('done')
     expect(statusOf(h.db, mem)).toBe('fused')
   })
+
+  // RFC-170 T6 (Codex F4/F5) — the atomic status claim serialises decisions: once
+  // a fusion leaves awaiting_approval, no second decision can proceed (the loser's
+  // claim fails), so a completed fusion can't be double-applied or overwritten.
+  test('a second approve after one succeeds is rejected (no double-apply)', async () => {
+    const fsOpts: SkillFsOptions = { appHome: h.appHome }
+    await createManagedSkill(h.db, fsOpts, {
+      name: 'lint',
+      description: 'd',
+      bodyMd: 'orig',
+      frontmatterExtra: {},
+    })
+    const mem = approvedGlobalMemory(h.db, 'm')
+    const fusion = await toAwaitingApproval('lint', mem)
+    await approveFusion(h.deps, fusion.id, adminActor) // wins the claim → done
+    // The fusion is no longer awaiting_approval → the second claim fails.
+    await expect(approveFusion(h.deps, fusion.id, adminActor)).rejects.toThrow(/awaiting/i)
+    expect((await getFusion(h.deps, fusion.id))!.status).toBe('done') // not overwritten
+    expect(statusOf(h.db, mem)).toBe('fused') // fused exactly once
+  })
+
+  test('reject after a decision already moved the fusion is rejected (atomic claim)', async () => {
+    const fsOpts: SkillFsOptions = { appHome: h.appHome }
+    await createManagedSkill(h.db, fsOpts, {
+      name: 'lint',
+      description: 'd',
+      bodyMd: 'orig',
+      frontmatterExtra: {},
+    })
+    const mem = approvedGlobalMemory(h.db, 'm')
+    const fusion = await toAwaitingApproval('lint', mem)
+    await rejectFusion(h.deps, fusion.id, 'redo', adminActor) // claims → running (iter 2)
+    // No longer awaiting_approval → a second reject can't create a duplicate task.
+    await expect(rejectFusion(h.deps, fusion.id, 'again', adminActor)).rejects.toThrow(/awaiting/i)
+    expect((await getFusion(h.deps, fusion.id))!.iteration).toBe(2) // only one re-run
+  })
+
+  // RFC-170 T6 (Codex F4/F5) — a managed ACL transfer does NOT drift the token, so
+  // both decision paths must independently re-check CURRENT skill write access
+  // (else the fusion owner writes into a skill they transferred away). The full
+  // behavioral path needs a non-admin owner + manageable memory; this source lock
+  // guarantees a refactor can't silently drop the recheck from either path.
+  test('approve + reject both re-check current skill ownership (source lock)', () => {
+    const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
+    // Both decision entry points call the recheck helper before claiming.
+    const calls = src.match(/requireCurrentSkillWritable\(db, actor, row\.skillName\)/g) ?? []
+    expect(calls.length).toBeGreaterThanOrEqual(2) // approve + reject
+    expect(src).toMatch(/!isResourceOwner\(actor, skill\)/) // helper gates on current owner
+  })
 })

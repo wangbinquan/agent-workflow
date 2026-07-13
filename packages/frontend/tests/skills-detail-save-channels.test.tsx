@@ -349,4 +349,25 @@ describe('skills.detail description gate (authorityKind)', () => {
     await waitFor(() => expect(descInput()).not.toBeNull())
     expect(descInput().disabled).toBe(false)
   })
+
+  // RFC-170 §8 (Codex F6): a source-external skill has NO editable channel, so
+  // Save must be disabled and must never send the (403-bound) metadata PUT.
+  test('source-external → Save is disabled and fires ZERO write requests', async () => {
+    const calls = installFetch({
+      sourceKind: 'external',
+      authorityKind: 'source-external',
+      putMeta: () => json({ code: 'unexpected', message: 'must not fire' }, 500),
+      putContent: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 1 }),
+    })
+    renderDetail()
+    // Wait for the description input (hydration complete).
+    await waitFor(() => expect(descInput()).not.toBeNull())
+    const save = document.querySelector<HTMLButtonElement>('.page__actions .btn--primary')
+    expect(save).not.toBeNull()
+    expect(save!.disabled).toBe(true) // no editable channel → inert
+    // Even a forced click must produce no writes.
+    fireEvent.click(save!)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(calls.some((c) => c.method === 'PUT' || c.method === 'POST')).toBe(false)
+  })
 })

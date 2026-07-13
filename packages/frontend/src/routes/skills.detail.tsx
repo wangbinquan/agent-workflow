@@ -143,8 +143,13 @@ function SkillDetailPage() {
     }
 
     // External / legacy (no token): keep the RFC-169 double-PUT LWW + reseed.
-    const channels: Promise<unknown>[] = [saveMeta.mutateAsync({ description })]
+    // RFC-170 §8 (Codex F6): only enqueue the channels this authority can actually
+    // write — a source-external skill's description is read-only, so firing
+    // saveMeta would just 403. If nothing is editable, Save is a no-op.
+    const channels: Promise<unknown>[] = []
+    if (caps.canEditDescription) channels.push(saveMeta.mutateAsync({ description }))
     if (caps.canEditContent) channels.push(saveContent.mutateAsync({ bodyMd }))
+    if (channels.length === 0) return
     const results = await Promise.allSettled(channels)
     if (results.every((r) => r.status === 'fulfilled')) {
       commitSaved(submitted, submitted)
@@ -232,7 +237,9 @@ function SkillDetailPage() {
           onClick: () => {
             void handleSave()
           },
-          disabled: operationBusy || !loaded,
+          // RFC-170 §8 (Codex F6): a source-external skill has no editable channel
+          // (description read-only, content not editable) — Save is inert, disable it.
+          disabled: operationBusy || !loaded || !(caps.canEditDescription || caps.canEditContent),
           testid: 'skill-save-button',
         }}
         del={{

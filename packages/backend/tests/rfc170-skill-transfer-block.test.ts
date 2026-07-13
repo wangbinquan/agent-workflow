@@ -9,14 +9,21 @@
 // This is the load-bearing enforcement behind the frontend `canTransferOwner`
 // capability gate (skill-capabilities.ts) — the UI merely reflects it.
 
-import { describe, expect, test, beforeEach } from 'bun:test'
-import { resolve } from 'node:path'
+import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skills, users } from '../src/db/schema'
 import { getResourceAcl, updateResourceAcl, type AclRow } from '../src/services/resourceAcl'
-import { getSkill, updateSkill } from '../src/services/skill'
+import {
+  getSkill,
+  getSkillPreconditionToken,
+  importExternalSkill,
+  updateSkill,
+} from '../src/services/skill'
 import { ForbiddenError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -190,5 +197,71 @@ describe('RFC-170 §8 (G3-2) — source-external metadata write is read-only', (
     const name = await seedSkill('managed')
     const res = await updateSkill(db, name, { description: 'edited' })
     expect(res.description).toBe('edited')
+  })
+})
+
+// RFC-170 §8 (Codex F1/F2) — regression via the REAL constructors (not seeded
+// authority values): a fresh import must land as external authority (NOT the
+// 'managed' column default, which would bypass every §8 guard), and a metadata
+// write must advance the token so the OCC actually sees description drift.
+describe('RFC-170 §8 (Codex F1/F2) — real constructor authority + token drift', () => {
+  let db: DbClient
+  let owner: Actor
+  const OWNER = 'user-owner'
+  const TARGET = 'user-target'
+  let extDir: string
+
+  beforeEach(async () => {
+    db = createInMemoryDb(MIGRATIONS)
+    await seedUser(db, OWNER, 'user')
+    await seedUser(db, TARGET, 'user')
+    owner = actorOfUser(OWNER, 'user')
+    extDir = mkdtempSync(join(tmpdir(), 'aw-ext-skill-'))
+    writeFileSync(join(extDir, 'SKILL.md'), '---\nname: ext\ndescription: d\n---\nbody')
+  })
+  afterEach(() => rmSync(extDir, { recursive: true, force: true }))
+
+  test('importExternalSkill lands as hand-external (NOT managed) + records the content controller', async () => {
+    const created = await importExternalSkill(
+      db,
+      { name: 'ext', externalPath: extDir, description: 'd' },
+      { ownerUserId: OWNER },
+    )
+    // Was the bug: authorityKind defaulted to 'managed' → all §8 guards bypassed.
+    expect(created.authorityKind).toBe('hand-external')
+  })
+
+  test('a freshly-imported external skill BLOCKS owner transfer (403) — the real bug', async () => {
+    await importExternalSkill(
+      db,
+      { name: 'ext', externalPath: extDir, description: 'd' },
+      { ownerUserId: OWNER },
+    )
+    const row: AclRow = {
+      id: (await getSkill(db, 'ext'))!.id,
+      ownerUserId: OWNER,
+      visibility: 'public',
+    }
+    await expect(
+      updateResourceAcl(db, owner, 'skill', row, { ownerUserId: TARGET }),
+    ).rejects.toBeInstanceOf(ForbiddenError)
+  })
+
+  test('a managed metadata write advances the precondition token (F2 — token was inert)', async () => {
+    // Seed a managed skill directly (description is writable for managed).
+    const id = ulid()
+    await db.insert(skills).values({
+      id,
+      name: 'm',
+      description: 'orig',
+      sourceKind: 'managed',
+      authorityKind: 'managed',
+      managedPath: 'skills/m/files',
+    })
+    const before = await getSkillPreconditionToken(db, 'm')
+    await updateSkill(db, 'm', { description: 'changed' })
+    const after = await getSkillPreconditionToken(db, 'm')
+    expect(before).not.toBeNull()
+    expect(after).not.toBe(before) // token drifted on the metadata change
   })
 })

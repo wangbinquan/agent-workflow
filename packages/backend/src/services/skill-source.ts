@@ -534,6 +534,15 @@ export async function reconcileSource(
         name: c.name,
         description: c.description,
         sourceKind: 'external',
+        // RFC-170 (G3-7/G5-5, Codex F1): a source-backed external skill is
+        // `source-external` authority — WITHOUT this it defaults to 'managed' and
+        // the §8 owner-transfer block + metadata read-only guard + FE capability
+        // gating are bypassed. The registered source dir owns the content, so the
+        // content controller is the source registrar (`source.createdBy`), and
+        // `originSourceId` retains provenance even if the FK is later detached.
+        authorityKind: 'source-external',
+        authorityOwnerUserId: source.createdBy ?? null,
+        originSourceId: source.id,
         managedPath: null,
         externalPath: c.absPath,
         sourceId: source.id,

@@ -19,7 +19,7 @@ import type {
   UpdateSkillContent,
 } from '@agent-workflow/shared'
 import { isProtectedSkillMainFile } from '@agent-workflow/shared'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import {
   existsSync,
   mkdirSync,
@@ -223,6 +223,14 @@ export async function importExternalSkill(
     name: input.name,
     description: input.description,
     sourceKind: 'external',
+    // RFC-170 (G3-7/G5-5, Codex F1): a hand-imported external skill is
+    // `hand-external` authority — WITHOUT this it defaults to 'managed' and the
+    // §8 owner-transfer block, metadata read-only guard, and FE capability gating
+    // are all bypassed. The importer is the content controller (`externalPath` is
+    // theirs), so record it in `authorityOwnerUserId` (design §10: only a NEW
+    // import can reliably prove the content controller = the actor).
+    authorityKind: 'hand-external',
+    authorityOwnerUserId: aclOpts?.ownerUserId ?? null,
     managedPath: null,
     externalPath: input.externalPath,
     // RFC-099: creator becomes owner; new resources default to 'public' (D18).
@@ -242,20 +250,43 @@ export async function importExternalSkill(
 export async function updateSkill(db: DbClient, name: string, patch: UpdateSkill): Promise<Skill> {
   const existing = await getSkill(db, name)
   if (existing === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
-  // RFC-170 §8 (G3-2): a source-external skill's metadata is owned by its
-  // registered source directory (the SKILL.md there is authoritative). A direct
-  // metadata write would be silently clobbered on the next source reconcile, so
-  // the platform rejects it — matching the read-only description field in the
-  // UI. hand-external (DB metadata authority) and managed skills are unaffected.
-  if (existing.authorityKind === 'source-external' && patch.description !== undefined) {
-    throw new ForbiddenError(
-      'skill-source-external-metadata-readonly',
-      "a source-external skill's description is owned by its source directory; edit it there",
-    )
-  }
-  const set: Partial<typeof skills.$inferInsert> = { updatedAt: Date.now() }
-  if (patch.description !== undefined) set.description = patch.description
-  await db.update(skills).set(set).where(eq(skills.name, name))
+  // A patch with no description is a no-op — nothing to write or fence.
+  if (patch.description === undefined) return existing
+
+  // RFC-170 §8 (Codex F2): the guard + write must be ONE transaction keyed on the
+  // IMMUTABLE skill id, not a name-based read-then-write. Otherwise a same-name
+  // delete→recreate between the check and the UPDATE lets a request authorized
+  // against a managed/hand-external row modify a freshly-created source-external
+  // row. And every metadata write MUST advance `meta_revision` so the composite
+  // precondition token actually drifts on a description change (else the T3/T4/T6
+  // token OCC is blind to metadata edits).
+  const description = patch.description
+  dbTxSync(db, (tx) => {
+    // Re-read the authority by immutable id INSIDE the tx.
+    const cur = tx
+      .select({ authorityKind: skills.authorityKind })
+      .from(skills)
+      .where(eq(skills.id, existing.id))
+      .get()
+    if (!cur) throw new ConflictError('skill-changed', `skill '${name}' changed; reload and retry`)
+    // §8 (G3-2): a source-external skill's metadata is owned by its registered
+    // source dir (SKILL.md is authoritative) — a direct write would be clobbered
+    // on the next reconcile, so reject it. hand-external + managed are writable.
+    if (cur.authorityKind === 'source-external') {
+      throw new ForbiddenError(
+        'skill-source-external-metadata-readonly',
+        "a source-external skill's description is owned by its source directory; edit it there",
+      )
+    }
+    tx.update(skills)
+      .set({
+        description,
+        metaRevision: sql`${skills.metaRevision} + 1`, // fence the token on every meta write
+        updatedAt: Date.now(),
+      })
+      .where(eq(skills.id, existing.id))
+      .run()
+  })
   const updated = await getSkill(db, name)
   if (updated === null) throw new Error('skill disappeared after update')
   return updated
