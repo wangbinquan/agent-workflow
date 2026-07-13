@@ -33,11 +33,11 @@ export type RecoveryDirection = 'noop' | 'rollback' | 'rollforward' | 'quarantin
  */
 export const SKILL_OP_PHASE_SEQUENCES: Record<SkillOpKind, readonly SkillOpPhase[]> = {
   reserve: ['intent', 'fs-staged', 'fs-published', 'db-committed', 'done'],
-  replace: ['intent', 'fs-staged', 'db-committed', 'done'],
   migrate: ['intent', 'fs-staged', 'db-committed', 'done'],
   delete: ['intent', 'fs-staged', 'db-committed', 'done'],
   'version-write': ['intent', 'fs-staged', 'fs-versioned', 'db-committed', 'fs-published', 'done'],
-  'adopt-managed': ['intent', 'fs-captured', 'fs-versioned', 'db-committed', 'done'],
+  // RFC-178 removed `replace` (source-conflict) + `adopt-managed` (external
+  // adoption). Neither was ever produced, so no persisted op row carries them.
 }
 
 /**
@@ -46,6 +46,9 @@ export const SKILL_OP_PHASE_SEQUENCES: Record<SkillOpKind, readonly SkillOpPhase
  */
 export function recoveryDirection(kind: SkillOpKind, phase: SkillOpPhase): RecoveryDirection {
   const spine = SKILL_OP_PHASE_SEQUENCES[kind]
+  // Defensive: a persisted op with an unknown/removed kind (the DB CHECK still
+  // admits the RFC-178-removed superset) has no spine → quarantine, never crash.
+  if (spine === undefined) return 'quarantine'
   const idx = spine.indexOf(phase)
   if (idx === -1) return 'quarantine'
   if (phase === 'done') return 'noop'

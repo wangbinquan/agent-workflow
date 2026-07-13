@@ -14,5 +14,5 @@ export const SKILL_OP_RECOVERY_REGISTRY: OpRecoveryRegistry = {
   delete: deleteRecoveryHandler,
   reserve: reserveRecoveryHandler,
   'version-write': versionWriteRecoveryHandler,
-  // replace / migrate / adopt-managed handlers land here as those ops are implemented.
+  // migrate's handler lands here when that managed op is implemented (RFC-170).
 }

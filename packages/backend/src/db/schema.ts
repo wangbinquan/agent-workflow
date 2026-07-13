@@ -355,11 +355,14 @@ export const skillVersions = sqliteTable(
 
 // -----------------------------------------------------------------------------
 // skill_operations — RFC-170 §6a two-phase-commit crash-recovery state machine.
-// One active row per in-flight structural op (reserve / replace / migrate /
-// delete / version-write / adopt-managed). `phase` records the last COMMITted
-// step; recovery is a pure function of (phase, op-scoped FS probe). No `skills`
-// FK cascade — recovery is by op_id ownership, not row lifetime. Existing
-// resources get NO backfill row (dormant table until batch-B wiring).
+// One active row per in-flight structural op (reserve / migrate / delete /
+// version-write). `phase` records the last COMMITted step; recovery is a pure
+// function of (phase, op-scoped FS probe). No `skills` FK cascade — recovery is
+// by op_id ownership, not row lifetime.
+// RFC-178: the TS `kind` enum dropped `replace` (source-conflict) + `adopt-managed`
+// (external adoption); the DB CHECK from migration 0090 keeps the wider superset
+// (no table rebuild — no row ever carries the removed kinds). `next_skill_id` +
+// `precondition_json` are retained but dormant (they served those removed ops).
 // -----------------------------------------------------------------------------
 export const skillOperations = sqliteTable(
   'skill_operations',
@@ -367,20 +370,20 @@ export const skillOperations = sqliteTable(
     opId: text('op_id').primaryKey(),
     skillId: text('skill_id').notNull(),
     kind: text('kind', {
-      enum: ['reserve', 'replace', 'migrate', 'delete', 'version-write', 'adopt-managed'],
+      enum: ['reserve', 'migrate', 'delete', 'version-write'],
     }).notNull(),
     phase: text('phase').notNull(), // 'intent'|'fs-staged'|'fs-captured'|'fs-versioned'|'db-committed'|'done'
     active: integer('active').notNull().default(1), // 0|1 (CHECK in DDL)
     stagingPath: text('staging_path'),
     backupPath: text('backup_path'),
     candidatePath: text('candidate_path'),
-    nextSkillId: text('next_skill_id'), // replace: the second (new) skillId
+    nextSkillId: text('next_skill_id'), // RFC-178: dormant (was replace's 2nd skillId)
     candidateFingerprint: text('candidate_fingerprint'),
     backupFingerprint: text('backup_fingerprint'),
     targetVersion: integer('target_version'),
     generation: integer('generation'),
     ownerUserId: text('owner_user_id'),
-    preconditionJson: text('precondition_json'), // §7a adopt-managed full precondition
+    preconditionJson: text('precondition_json'), // RFC-178: dormant (was adopt-managed precond)
     createdAt: integer('created_at')
       .notNull()
       .default(sql`(unixepoch() * 1000)`),

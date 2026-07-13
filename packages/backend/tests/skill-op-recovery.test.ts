@@ -45,9 +45,9 @@ describe('recoveryDirection — §6a completeness theorem', () => {
     // reserve never captures; version-write never captures either.
     expect(recoveryDirection('reserve', 'fs-captured')).toBe('quarantine')
     expect(recoveryDirection('delete', 'fs-versioned')).toBe('quarantine')
-    // adopt-managed uses fs-captured, not fs-staged.
-    expect(recoveryDirection('adopt-managed', 'fs-staged')).toBe('quarantine')
-    expect(recoveryDirection('adopt-managed', 'fs-captured')).toBe('rollback')
+    // RFC-178: a removed/unknown kind (the DB CHECK still admits the wider
+    // superset) has no spine → quarantine, never crash.
+    expect(recoveryDirection('adopt-managed' as SkillOpKind, 'fs-captured')).toBe('quarantine')
   })
 
   test('exhaustive: every (kind, phase) verdict matches the boundary derived from its own spine', () => {

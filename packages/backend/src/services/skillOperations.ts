@@ -1,7 +1,7 @@
 // RFC-170 §6a — skill_operations two-phase-commit state machine primitives.
 //
-// The composable DB layer every structural skill op (reserve / replace / migrate
-// / delete / version-write / adopt-managed) is built on. Pure DB (no FS): the
+// The composable DB layer every structural skill op (reserve / migrate / delete /
+// version-write) is built on. Pure DB (no FS): the
 // caller interleaves FS side effects between phase commits per §6a invariants:
 //   ① before ANY FS side effect, the phase='intent' row is COMMITted (locks
 //      acquired in the SAME tx);
@@ -10,9 +10,10 @@
 //   ⑤ finishOperation sets phase='done' + active=0 and releases locks same-tx.
 //
 // skill_operation_locks is the UNIVERSAL exclusion primitive (G6-2): EVERY op
-// inserts one lock row per affected skillId (single-id ops lock 1, replace locks
-// old+new). PK conflict on any target → ConflictError (409 busy). This locks the
-// SECOND id (replace's next_skill_id) that the ops-table partial-unique cannot.
+// inserts one lock row per affected skillId (single-id ops lock 1; the two-id
+// lock capability via next_skill_id is retained but dormant since RFC-178 removed
+// the `replace` op that used it). PK conflict on any target → ConflictError (409
+// busy). The second-id lock guards what the ops-table partial-unique cannot.
 // Locks are held until phase='done' (released in finishOperation's tx), so a
 // swap-committed-but-backup-not-cleaned window still excludes a new-id op.
 //
@@ -26,14 +27,14 @@ import type { DbTxSync } from '@/db/txSync'
 import { skillOperations, skillOperationLocks } from '@/db/schema'
 import { ConflictError, ValidationError } from '@/util/errors'
 
-/** The six structural op kinds (mirrors the migration-0090 CHECK). */
-export type SkillOpKind =
-  | 'reserve'
-  | 'replace'
-  | 'migrate'
-  | 'delete'
-  | 'version-write'
-  | 'adopt-managed'
+/**
+ * The managed structural op kinds. RFC-178 removed `replace` (source-conflict —
+ * source skills gone) and `adopt-managed` (external adoption — external skills
+ * gone); neither was ever produced (no beginOperation emitted them). The DB CHECK
+ * from migration 0090 keeps the wider superset (harmless — no row ever carries the
+ * removed kinds), so no table rebuild is needed.
+ */
+export type SkillOpKind = 'reserve' | 'migrate' | 'delete' | 'version-write'
 
 /** Ordered lifecycle phases. Not every kind uses every phase (see §6a per-kind
  *  tables); the set is the union. `intent` < ... < `db-committed` is the rollback

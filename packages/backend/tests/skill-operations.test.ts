@@ -65,15 +65,16 @@ describe('skillOperations primitives', () => {
     expect(locksFor(skillId)).toBe(1)
   })
 
-  test('G6-2: replace locks old+new; a single-id op on the NEW id is excluded', () => {
+  test('G6-2: a two-id op (nextSkillId) locks both ids; a single-id op on the NEW id is excluded', () => {
     const oldId = ulid()
     const newId = ulid()
-    begin({ skillId: oldId, kind: 'replace', nextSkillId: newId })
+    // RFC-178: the two-id lock capability is retained (dormant — the `replace` op
+    // that used it was removed); exercise it here with a valid kind + nextSkillId.
+    begin({ skillId: oldId, kind: 'reserve', nextSkillId: newId })
     expect(locksFor(oldId)).toBe(1)
     expect(locksFor(newId)).toBe(1)
     // A delete whose OWN skill_id is newId — the ops partial-unique (keyed on the
-    // op row's skill_id = oldId for replace) would NOT catch this; only the lock
-    // on newId does.
+    // op row's skill_id = oldId) would NOT catch this; only the lock on newId does.
     expect(() => begin({ skillId: newId, kind: 'delete' })).toThrow(ConflictError)
   })
 
@@ -110,7 +111,7 @@ describe('skillOperations primitives', () => {
 
   test('abandonOperation (rollback) → inactive + locks released', () => {
     const skillId = ulid()
-    const opId = begin({ skillId, kind: 'adopt-managed' })
+    const opId = begin({ skillId, kind: 'delete' })
     dbTxSync(db, (tx) => abandonOperation(tx, opId))
     expect(getActiveOp(db, skillId)).toBeNull()
     expect(locksFor(skillId)).toBe(0)
