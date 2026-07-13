@@ -575,8 +575,15 @@ export function abandonSupersededMergeStates(args: {
   iteration: number
   /** ULID of the freshly-minted superseding row; only strictly-older rows flip. */
   supersededByRunId: string
+  /** RFC-172b (Codex impl-gate P1): when the minting node fans out per shard (the workgroup
+   *  `__wg_member__` host: ONE node, many concurrent member assignments keyed by node_runs.shard_key),
+   *  retire ONLY the SAME shard's prior generations. Otherwise minting member B's rerun would abandon
+   *  member A's STILL-RUNNING run (its `isolating`→`pending-merge` never completes → A's writes are
+   *  lost). `undefined` (every non-member mint) = node-wide, byte-identical to today (golden-lock).
+   *  Callers pass `null → undefined` so only a real member shard scopes. */
+  shardKey?: string | null
 }): number {
-  // (a) prior top-level generations of the same (task, node, iteration).
+  // (a) prior top-level generations of the same (task, node, iteration[, shard]).
   const priorTopLevel = args.db
     .select({ id: nodeRuns.id })
     .from(nodeRuns)
@@ -587,6 +594,13 @@ export function abandonSupersededMergeStates(args: {
         eq(nodeRuns.iteration, args.iteration),
         isNull(nodeRuns.parentNodeRunId),
         lt(nodeRuns.id, args.supersededByRunId),
+        ...(args.shardKey === undefined
+          ? []
+          : [
+              args.shardKey === null
+                ? isNull(nodeRuns.shardKey)
+                : eq(nodeRuns.shardKey, args.shardKey),
+            ]),
       ),
     )
     .all()

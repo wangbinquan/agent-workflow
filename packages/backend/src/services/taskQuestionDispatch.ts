@@ -883,6 +883,10 @@ async function dispatchTaskQuestionsLocked(
             nodeId: p.values.nodeId,
             iteration: p.values.iteration ?? 0,
             supersededByRunId: p.values.id,
+            // RFC-172b (Codex impl-gate P1): scope supersede retirement to THIS mint's shard so a
+            // sibling member's still-running run is not abandoned. null (non-member) → undefined =
+            // node-wide (golden-lock).
+            shardKey: p.values.shardKey === null ? undefined : p.values.shardKey,
           })
           // RFC-098 WP-10 forbids direct node_runs inserts outside the mint factory. This
           // site is SAFE: (1) the row's fields come from buildMintNodeRunValues — the SAME
@@ -1032,9 +1036,15 @@ function findOpenDispatchTarget(
     const target = e.overrideTargetNodeId ?? e.defaultTargetNodeId
     if (target === null || target === '' || !affected.has(target)) continue
     // RFC-172b (T5): a sibling shard's in-flight entry does not conflict with this batch's mint.
+    // Codex impl-gate P2: only a RESOLVABLE (non-null) sibling shard is safe to skip. A null-shard
+    // ledger on the shared host is a pre-RFC-172 legacy row whose member we cannot tell — it may
+    // actually belong to THIS mint's shard, so treat it as a node-wide blocker (never skip). This
+    // also keeps golden-lock: every non-workgroup entry is null-shard → never skipped → checked,
+    // exactly as pre-172b.
     const eShard = shardOfEntry !== undefined ? shardOfEntry(e) : null
     if (
       mintShardsByTarget !== undefined &&
+      eShard !== null &&
       !(mintShardsByTarget.get(target)?.has(eShard) ?? false)
     ) {
       continue

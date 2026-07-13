@@ -204,6 +204,11 @@ export async function mintNodeRun(db: DbClient, args: MintNodeRunArgs): Promise<
       nodeId: values.nodeId,
       iteration: values.iteration ?? 0,
       supersededByRunId: values.id,
+      // RFC-172b (Codex impl-gate P1): the factory is the PRIMARY member-rerun path (scheduler
+      // borrow-mint). Scope supersede retirement to THIS mint's shard so minting member B's next
+      // turn does not abandon member A's still-running run. null (non-member) → undefined =
+      // node-wide, byte-identical to today (golden-lock).
+      shardKey: values.shardKey === null ? undefined : values.shardKey,
     })
     tx.insert(nodeRuns).values(values).run()
   })

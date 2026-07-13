@@ -8,7 +8,7 @@
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
-import { ulid } from 'ulid'
+import { monotonicFactory } from 'ulid'
 import { readFileSync } from 'node:fs'
 import type { WorkflowDefinition, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -21,7 +21,12 @@ import {
 import { buildWorkgroupHostSnapshot, WG_MEMBER_NODE_ID } from '../src/services/workgroupLaunch'
 import { createManualTaskQuestion, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { hasOpenDispatchedEntryOnHome } from '../src/services/clarifyRerunLedger'
+import { abandonSupersededMergeStates } from '../src/services/lifecycle'
 import type { nodeRuns as nodeRunsTable } from '../src/db/schema'
+
+// Monotonic so seed ORDER == id ORDER — several shard tests depend on "the run seeded last is the
+// freshest" (the shard-blind lineage window picks by ULID id; a same-ms random ULID would break it).
+const ulid = monotonicFactory()
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MIN_DEF = {
@@ -52,7 +57,7 @@ async function seedNodeRun(
   db: DbClient,
   taskId: string,
   nodeId: string,
-  over: { retryIndex?: number; shardKey?: string; status?: string } = {},
+  over: { retryIndex?: number; shardKey?: string; status?: string; mergeState?: string } = {},
 ): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({
@@ -63,6 +68,7 @@ async function seedNodeRun(
     retryIndex: over.retryIndex ?? 0,
     iteration: 0,
     ...(over.shardKey !== undefined ? { shardKey: over.shardKey } : {}),
+    ...(over.mergeState !== undefined ? { mergeState: over.mergeState as 'isolating' } : {}),
   })
   return id
 }
@@ -635,5 +641,114 @@ describe('RFC-172b T6 — hasOpenDispatchedEntryOnHome shard scoping (S4)', () =
         shardOf,
       ),
     ).toBe(true)
+  })
+})
+
+// Codex impl-gate P1 — the (target,shard) dispatch SKIP lets member B mint while member A runs, but
+// the same-tx supersede retirement (abandonSupersededMergeStates) is node-wide → it would abandon
+// member A's still-running merge_state. The fix shard-scopes the abandon so a sibling member's run
+// survives. Golden-lock: undefined = node-wide (today).
+describe('RFC-172b Codex P1 — abandonSupersededMergeStates is shard-scoped', () => {
+  async function seedRun(
+    db: DbClient,
+    taskId: string,
+    shard: string,
+    id?: string,
+  ): Promise<string> {
+    return seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, {
+      shardKey: shard,
+      status: 'running',
+      mergeState: 'isolating',
+      ...(id ? {} : {}),
+    })
+  }
+
+  test('shardKey=B retires only shard-B priors; a running sibling (shard A) survives', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedWorkgroupTask(db, taskId)
+    const runA = await seedRun(db, taskId, 'assign-A') // member A: running + isolating
+    const runB = await seedRun(db, taskId, 'assign-B') // member B: prior generation
+    const superseding = ulid() // a higher-id new member-B run supersedes
+
+    const n = abandonSupersededMergeStates({
+      db,
+      taskId,
+      nodeId: WG_MEMBER_NODE_ID,
+      iteration: 0,
+      supersededByRunId: superseding,
+      shardKey: 'assign-B',
+    })
+    expect(n).toBe(1) // only runB (shard B) retired
+    const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const byId = new Map(rows.map((r) => [r.id, r.mergeState]))
+    expect(byId.get(runA)).toBe('isolating') // sibling member A UNTOUCHED (the fix)
+    expect(byId.get(runB)).toBe('abandoned')
+  })
+
+  test('golden-lock: undefined shardKey retires ALL priors node-wide (今日行为)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedWorkgroupTask(db, taskId)
+    const runA = await seedRun(db, taskId, 'assign-A')
+    const runB = await seedRun(db, taskId, 'assign-B')
+    const n = abandonSupersededMergeStates({
+      db,
+      taskId,
+      nodeId: WG_MEMBER_NODE_ID,
+      iteration: 0,
+      supersededByRunId: ulid(),
+      // no shardKey → node-wide
+    })
+    expect(n).toBe(2)
+    const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const byId = new Map(rows.map((r) => [r.id, r.mergeState]))
+    expect(byId.get(runA)).toBe('abandoned')
+    expect(byId.get(runB)).toBe('abandoned')
+  })
+})
+
+// Codex impl-gate P2 — a pre-RFC-172 legacy DISPATCHED ledger on __wg_member__ resolves to a null
+// shard; the (target,shard) SKIP must NOT skip it for a legitimate member batch (its trigger might
+// be THIS member's), else same-shard serialization breaks. A null-shard in-flight ledger is a
+// conservative node-wide blocker.
+describe('RFC-172b Codex P2 — a shard-less legacy in-flight ledger blocks a member dispatch', () => {
+  const actor = { userId: 'u1', role: 'owner' as const }
+
+  test('a dispatched manual (null shard) in-flight on __wg_member__ blocks member B dispatch', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedWorkgroupTask(db, taskId)
+    // member B's fresh answer (shard B) + a prior shard-B run — seeded FIRST so its runs have lower
+    // ids than the legacy rerun below (a real legacy in-flight ledger is the LATEST run on the node;
+    // a higher-id sibling done run would otherwise mask it in the shard-blind lineage window).
+    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B' })
+    const clarifyB = await seedNodeRun(db, taskId, '__wg_clarify__')
+    await seedRound(db, taskId, clarifyB, 'assign-B')
+    const entryB = await seedEntry(db, taskId, {
+      originNodeRunId: clarifyB,
+      sourceKind: 'self',
+      sealed: true,
+    })
+    // Legacy manual, dispatched, with an in-flight (pending) rerun → null shard (no clarify round).
+    // Seeded LAST → highest id → the freshest run in its own lineage window → genuinely unconsumed.
+    const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
+    const legacyRerun = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { status: 'pending' })
+    await seedEntry(db, taskId, {
+      originNodeRunId: legacyOrigin,
+      sourceKind: 'manual', // → resolveEntryShardKeys returns null
+      sealed: true,
+      dispatchedAt: Date.now(),
+      triggerRunId: legacyRerun,
+    })
+
+    let threw: unknown = null
+    try {
+      await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
+    } catch (e) {
+      threw = e
+    }
+    // the null-shard legacy ledger is NOT skipped → it blocks (conservative, no double-mint).
+    expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
   })
 })
