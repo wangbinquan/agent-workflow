@@ -28,6 +28,7 @@ import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   canReassign,
   deriveQuestionPhase,
+  isTurnEngineWorkgroupTask,
   reconcileDesiredEntries,
   resolveHandlerRun,
   type ClarifyAnswer,
@@ -815,6 +816,42 @@ async function agentNodeIdsForTask(db: DbClient, taskId: string): Promise<Set<st
   }
 }
 
+// RFC-172 R2-T5 (Codex impl-gate P2): '__wg_member__' is a SHARED multi-shard host node ONLY on a
+// turn-engine workgroup task (leader_worker / free_collab) — there ALL member assignments share the
+// one node, separated by node_runs.shard_key. On an ORDINARY workflow (workgroupId null) or a
+// dynamic_workflow task, an agent node coincidentally named '__wg_member__' is a plain single node
+// with no shard ambiguity, so the manual-target ban below must NOT apply. `isTurnEngineWorkgroupTask`
+// is the exact predicate (workgroupId set AND mode != dynamic_workflow).
+async function taskIsTurnEngineWorkgroup(db: DbClient, taskId: string): Promise<boolean> {
+  const [t] = await db
+    .select({ workgroupId: tasks.workgroupId, workgroupConfigJson: tasks.workgroupConfigJson })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1)
+  return t !== undefined && isTurnEngineWorkgroupTask(t)
+}
+
+// RFC-172 R2-T5 (Codex impl-gate P1): a manual question carries NO shard binding
+// (resolveEntryShardKeys → null for source_kind='manual'); dispatched at the shared '__wg_member__'
+// host node it would inherit an ARBITRARY member's shard (the global-freshest run) and hijack that
+// assignment. Enforce the ban at EVERY point a manual target is set or moved (create + reassign) and
+// again at dispatch (taskQuestionDispatch.ts, for pre-upgrade rows) — a single choke point is not
+// enough because reassign can move a leader-targeted manual onto the member node. (Literal, not the
+// WG_MEMBER_NODE_ID import — workgroupLaunch pulls in task/workgroups/orchestrator services and
+// importing it here risks a module-init cycle; the rfc172 test source-locks the two to match.)
+async function assertManualTargetNotSharedMemberHost(
+  db: DbClient,
+  taskId: string,
+  target: string,
+): Promise<void> {
+  if (target !== '__wg_member__') return
+  if (!(await taskIsTurnEngineWorkgroup(db, taskId))) return
+  throw new ValidationError(
+    'manual-question-workgroup-member-target',
+    `cannot target '${target}': it is the shared workgroup member host node (every member assignment shares it, separated by shard_key). A manual question has no shard binding to select a member.`,
+  )
+}
+
 /** Confirm (已处理待确认 → 完成). Only from awaiting_confirm; pure closure (D5). */
 export async function confirmTaskQuestion(
   db: DbClient,
@@ -893,6 +930,9 @@ export async function reassignTaskQuestion(
         `cannot assign a manual question to '${targetNodeId}': it has no prior node_run (a manual question reruns its handler, so the handler must have run at least once)`,
       )
     }
+    // RFC-172 R2-T5 (Codex impl-gate P1): close the reassign bypass — a manual created for
+    // '__wg_leader__' (singleton, shard null) must not be MOVED onto the shared '__wg_member__'.
+    await assertManualTargetNotSharedMemberHost(db, entry.taskId, targetNodeId)
     // Once dispatched the entry is committed for execution — CAS on `dispatched_at IS NULL` so a
     // concurrent dispatch that won leaves this a 0-row no-op → reject (reopen's job post-dispatch).
     let updated = false
@@ -1264,20 +1304,10 @@ export async function createManualTaskQuestion(
       `target node '${target}' is not an agent node in this task's workflow`,
     )
   }
-  // RFC-172 R2-T5: '__wg_member__' is the ONE host node ALL workgroup member assignments share,
-  // separated only by node_runs.shard_key. A manual question carries NO shard binding
-  // (resolveEntryShardKeys → null for source_kind='manual'), so dispatching one would inherit an
-  // ARBITRARY member's shard (the global-freshest run) and hijack that assignment — there is no way
-  // to express "which member". A SELF clarify answer round-trips correctly only because its round
-  // carries asking_shard_key; a manual question has no such round. Reject it. (Literal, not the
-  // WG_MEMBER_NODE_ID import — workgroupLaunch pulls in task/workgroups/orchestrator services and
-  // importing it here would risk a module-init cycle; rfc172 test source-locks the two to match.)
-  if (target === '__wg_member__') {
-    throw new ValidationError(
-      'manual-question-workgroup-member-target',
-      `cannot target '${target}': it is the shared workgroup member host node (every member assignment shares it, separated by shard_key). A manual question has no shard binding to select a member.`,
-    )
-  }
+  // RFC-172 R2-T5: a manual question cannot target the shared '__wg_member__' host node (see the
+  // helper). Gated on the task actually being a turn-engine workgroup — an ordinary workflow with a
+  // node coincidentally named '__wg_member__' is unaffected (Codex impl-gate P2).
+  await assertManualTargetNotSharedMemberHost(db, taskId, target)
   // (Codex re-gate H1): the handler must have RUN — a manual question reruns its handler, and
   // dispatch's assertSafeFrontierTarget rejects a never-run frontier. A manual has no graph
   // default to fall back to, so without this the row would park on a node dispatch can never

@@ -19,7 +19,7 @@ import {
   resolveEntryShardKeys,
 } from '../src/services/taskQuestionDispatch'
 import { buildWorkgroupHostSnapshot, WG_MEMBER_NODE_ID } from '../src/services/workgroupLaunch'
-import { createManualTaskQuestion } from '../src/services/taskQuestions'
+import { createManualTaskQuestion, reassignTaskQuestion } from '../src/services/taskQuestions'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MIN_DEF = {
@@ -150,7 +150,9 @@ const WG_CONFIG: WorkgroupRuntimeConfig = {
 }
 
 /** Seed a task whose workflow snapshot IS the workgroup host snapshot, so __wg_member__ is a real
- *  (clarify-channel-only → upstream-free) frontier node dispatchTaskQuestions can mint against. */
+ *  (clarify-channel-only → upstream-free) frontier node dispatchTaskQuestions can mint against.
+ *  workgroupId + config are set so `isTurnEngineWorkgroupTask` is true — the R2-T5 ban is gated on
+ *  it (an ordinary workflow with a coincidentally-named node must NOT trip the ban). */
 async function seedWorkgroupTask(db: DbClient, taskId: string): Promise<void> {
   await db.insert(workflows).values({ id: `wf_${taskId}`, name: 'stub', definition: '{}' })
   await db.insert(tasks).values({
@@ -165,6 +167,34 @@ async function seedWorkgroupTask(db: DbClient, taskId: string): Promise<void> {
     status: 'running',
     inputs: '{}',
     startedAt: Date.now(),
+    workgroupId: WG_CONFIG.workgroupId,
+    workgroupConfigJson: JSON.stringify(WG_CONFIG),
+  })
+}
+
+/** Seed an ORDINARY (non-workgroup) task whose snapshot has an agent node literally named
+ *  '__wg_member__' — the P2 case: the R2-T5 ban must NOT fire here (no shard ambiguity). */
+async function seedOrdinaryTaskWithMemberNamedNode(db: DbClient, taskId: string): Promise<void> {
+  const def = {
+    $schema_version: 1,
+    inputs: [],
+    nodes: [{ id: '__wg_member__', kind: 'agent-single', agentName: 'a' }],
+    edges: [],
+  }
+  await db.insert(workflows).values({ id: `wf_${taskId}`, name: 'stub', definition: '{}' })
+  await db.insert(tasks).values({
+    id: taskId,
+    name: 'ordinary-fixture',
+    workflowId: `wf_${taskId}`,
+    workflowSnapshot: JSON.stringify(def),
+    repoPath: '/tmp/aw-rfc172-ord',
+    worktreePath: '',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status: 'running',
+    inputs: '{}',
+    startedAt: Date.now(),
+    // NO workgroupId → isTurnEngineWorkgroupTask=false → ban skipped.
   })
 }
 
@@ -333,13 +363,14 @@ describe('RFC-172 S5 — two member shards dispatch to two shard-correct reruns 
 
 // R2-T5 — a manual question (§15) has no clarify round, so resolveEntryShardKeys maps it to null;
 // dispatched at __wg_member__ it would inherit the global-freshest member's shard and hijack that
-// assignment. createManualTaskQuestion must REJECT __wg_member__ as a target (leader/plain agents
-// stay allowed — they are not multi-shard). The guard is a literal in taskQuestions.ts (importing
-// WG_MEMBER_NODE_ID there risks a module-init cycle); this test source-locks the two to match.
+// assignment. The ban is enforced at EVERY point a manual target is set/moved/used: create +
+// reassign (taskQuestions.ts) + dispatch backstop (taskQuestionDispatch.ts, for pre-upgrade rows).
+// It is GATED on the task actually being a turn-engine workgroup — an ordinary workflow with a node
+// coincidentally named __wg_member__ has no shard ambiguity and stays allowed (Codex impl-gate P2).
 describe('RFC-172 R2-T5 — manual question cannot target the shared __wg_member__ host node', () => {
   const actor = { userId: 'u1', role: 'owner' as const }
 
-  test('createManualTaskQuestion(target=__wg_member__) → rejected, nothing inserted', async () => {
+  test('create(target=__wg_member__) on a workgroup task → rejected, nothing inserted', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedWorkgroupTask(db, taskId)
@@ -357,20 +388,98 @@ describe('RFC-172 R2-T5 — manual question cannot target the shared __wg_member
       threw = e
     }
     expect((threw as { code?: string }).code).toBe('manual-question-workgroup-member-target')
-    // nothing inserted (fail-fast before the insert tx).
     const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
     expect(rows.length).toBe(0)
   })
 
-  test('source lock: the guard literal in taskQuestions.ts equals WG_MEMBER_NODE_ID', () => {
-    // WG_MEMBER_NODE_ID is the source of truth; the guard hard-codes its value to dodge the import
-    // cycle. If the constant is ever renamed, this catches the drift.
+  test('P2: create(target=__wg_member__) on an ORDINARY workflow → ALLOWED (no shard ambiguity)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedOrdinaryTaskWithMemberNamedNode(db, taskId)
+    // The node has a prior run (manual reruns its handler); NOT a workgroup task → ban skipped.
+    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
+    const { id } = await createManualTaskQuestion(
+      db,
+      taskId,
+      { title: 't', body: 'b', targetNodeId: WG_MEMBER_NODE_ID },
+      actor,
+    )
+    const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
+    expect(row?.overrideTargetNodeId).toBe(WG_MEMBER_NODE_ID) // created, not rejected
+  })
+
+  test('P1: reassign a leader-targeted manual onto __wg_member__ → rejected (bypass closed)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedWorkgroupTask(db, taskId)
+    // Both host nodes have prior runs so neither hits the never-run gate.
+    await seedNodeRun(db, taskId, '__wg_leader__')
+    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-A' })
+    // Manual created for the leader (singleton, shard null) — allowed.
+    const { id } = await createManualTaskQuestion(
+      db,
+      taskId,
+      { title: 't', body: 'b', targetNodeId: '__wg_leader__' },
+      actor,
+    )
+    // …then MOVED onto the shared member node → the R2-T5 reassign guard rejects.
+    let threw: unknown = null
+    try {
+      await reassignTaskQuestion(db, id, WG_MEMBER_NODE_ID, actor)
+    } catch (e) {
+      threw = e
+    }
+    expect((threw as { code?: string }).code).toBe('manual-question-workgroup-member-target')
+    // target unchanged (reassign failed before the update tx).
+    const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
+    expect(row?.overrideTargetNodeId).toBe('__wg_leader__')
+  })
+
+  test('P1: dispatch backstop — a pre-upgrade manual@__wg_member__ row is refused, not hijacked', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedWorkgroupTask(db, taskId)
+    // Two member runs (a global-freshest exists to be hijacked); a manual row already targeting the
+    // shared node — hand-seeded to simulate a row created BEFORE the create/reassign guards existed.
+    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-A' })
+    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B', retryIndex: 3 })
+    const origin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
+    const manual = await seedEntry(db, taskId, {
+      originNodeRunId: origin,
+      sourceKind: 'manual',
+      sealed: true,
+    })
+    let threw: unknown = null
+    try {
+      await dispatchTaskQuestions(db, taskId, [manual.id], actor)
+    } catch (e) {
+      threw = e
+    }
+    // the backstop rejects ANY shard-less entry at __wg_member__ (manual is always null-shard).
+    expect((threw as { code?: string }).code).toBe('workgroup-member-shardless-dispatch')
+    // NOT dispatched — no rerun minted (would-be hijack prevented).
+    const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, manual.id)))[0]
+    expect(row?.dispatchedAt).toBeNull()
+  })
+
+  test('source lock: guards gate on isTurnEngineWorkgroupTask + literal matches WG_MEMBER_NODE_ID', () => {
+    // WG_MEMBER_NODE_ID is the source of truth; the guards hard-code its value to dodge the import
+    // cycle (workgroupLaunch pulls in heavy services). If the constant is renamed, this catches it.
     expect(WG_MEMBER_NODE_ID).toBe('__wg_member__')
-    const SRC = readFileSync(
+    const SVC = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'taskQuestions.ts'),
       'utf8',
     )
-    expect(SRC).toContain("if (target === '__wg_member__') {")
-    expect(SRC).toContain('manual-question-workgroup-member-target')
+    expect(SVC).toContain("if (target !== '__wg_member__') return")
+    expect(SVC).toContain('isTurnEngineWorkgroupTask(t)') // P2 gating
+    expect(SVC).toContain('manual-question-workgroup-member-target')
+    const DISP = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'taskQuestionDispatch.ts'),
+      'utf8',
+    )
+    // dispatch backstop: any shard-less entry at __wg_member__ on a turn-engine workgroup → reject.
+    expect(DISP).toContain("effectiveTarget(e) === '__wg_member__'")
+    expect(DISP).toContain('workgroup-member-shardless-dispatch')
+    expect(DISP).toContain('isTurnEngineWorkgroupTask(taskRow)')
   })
 })

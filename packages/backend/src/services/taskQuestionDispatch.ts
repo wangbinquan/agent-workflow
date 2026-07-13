@@ -51,10 +51,11 @@ import {
   taskNodeHasRun,
   QUESTION_DISPATCH_CLOSED_TASK_STATUSES,
 } from '@/services/taskQuestions'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import {
   isClarifyChannelEdge,
+  isTurnEngineWorkgroupTask,
   type RunLineageView,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
@@ -372,6 +373,8 @@ async function dispatchTaskQuestionsLocked(
       .select({
         snapshot: tasks.workflowSnapshot,
         status: tasks.status,
+        workgroupId: tasks.workgroupId,
+        workgroupConfigJson: tasks.workgroupConfigJson,
       })
       .from(tasks)
       .where(eq(tasks.id, taskId))
@@ -415,6 +418,30 @@ async function dispatchTaskQuestionsLocked(
   //     per-entry sealed_at on designer rows) — NOT answerSummary (unreliable on a partial round,
   //     Codex F3). Manual entries are always sealed (no clarify round). Fail-fast (precondition).
   await assertRequestedEntriesSealed(db, requested)
+
+  // 1b. RFC-172 R2-T5 (Codex impl-gate P1) — DISPATCH backstop for the shared-member ban. The create
+  //     + reassign guards (taskQuestions.ts) stop NEW manual rows from targeting '__wg_member__', but
+  //     a row created BEFORE this fix could already target it. The invariant this enforces is the
+  //     fundamental one: NO shard-less entry may dispatch to the shared '__wg_member__' host node —
+  //     minting there inherits the global-freshest member's shard and hijacks that assignment. A
+  //     legit member entry ALWAYS carries a non-null shard (its per-member clarify round), so this
+  //     never over-rejects; it catches manual entries (always null) AND any exotic null-shard entry
+  //     (e.g. a leader-round question borrow-reassigned onto the member node). Gated on the task
+  //     actually being a turn-engine workgroup so an ordinary workflow with a coincidentally-named
+  //     node is unaffected (P2). Fail-fast (reject the batch) rather than silently hijack.
+  if (isTurnEngineWorkgroupTask(taskRow)) {
+    const toSharedMember = requested.filter((e) => effectiveTarget(e) === '__wg_member__')
+    if (toSharedMember.length > 0) {
+      const shardByEntry = await resolveEntryShardKeys(db, toSharedMember)
+      const shardless = toSharedMember.find((e) => shardByEntry.get(e.id) == null)
+      if (shardless !== undefined) {
+        throw new ValidationError(
+          'workgroup-member-shardless-dispatch',
+          `cannot dispatch '${shardless.sourceKind}' entry ${shardless.id} to the shared workgroup member host node '__wg_member__': it has no shard binding to select a member (manual questions and non-member-round entries resolve to a null shard). Reassign or withdraw it.`,
+        )
+      }
+    }
+  }
 
   // 2. Per-origin single-target validation — a cross round must not be split across
   //    handlers in v1 (its session is shared). Checked against ALL still-open (un-
