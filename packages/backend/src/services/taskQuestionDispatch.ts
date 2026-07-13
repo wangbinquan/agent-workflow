@@ -1042,24 +1042,28 @@ function findOpenDispatchTarget(
     // also keeps golden-lock: every non-workgroup entry is null-shard → never skipped → checked,
     // exactly as pre-172b.
     const eShard = shardOfEntry !== undefined ? shardOfEntry(e) : null
+    const mintShards = mintShardsByTarget?.get(target)
     if (
       mintShardsByTarget !== undefined &&
       eShard !== null &&
-      !(mintShardsByTarget.get(target)?.has(eShard) ?? false)
+      !(mintShards?.has(eShard) ?? false)
     ) {
       continue
     }
-    // Codex impl-gate P2 (round 2): a BOUND legacy ledger whose round-derived shard is null may have
-    // a TRIGGER run that actually lives on a real member shard. Consuming it shard-blind lets a newer
-    // sibling shard's done run mask its still-pending trigger (falsely consumed → duplicate same-shard
-    // rerun). Recover the shard from the trigger run so the lineage/consumption is scoped to it. Only
-    // in shard-aware mode (shardOfEntry set); a null trigger-shard (non-workgroup / truly shardless)
-    // collapses to undefined → byte-identical to today (golden-lock).
-    let consumeShard = eShard
-    if (consumeShard === null && shardOfEntry !== undefined && e.triggerRunId !== null) {
-      consumeShard = inputs.runs.find((r) => r.id === e.triggerRunId)?.shardKey ?? null
-    }
+    // Codex impl-gate P2/P1 (rounds 2-3): a null-shard ledger on a MULTI-SHARD host is a pre-RFC-172
+    // BROADCAST/legacy row (manual is shard-exempt in selectAgentQueue; its trigger_run_id is REBOUND
+    // per render, so it is NOT a stable shard identity — narrowing to it can hide an active sibling
+    // and permit a duplicate mint). We cannot safely determine its consumption per-shard, so treat it
+    // as an UNCONSUMED blocker across ALL shards (conservative — no double-mint). Golden-lock: a null
+    // entry on a null-shard-only host (leader / non-workgroup) is NOT multi-shard → normal consumption
+    // check (shard-blind), byte-identical to today.
+    const nullOnMultiShardHost =
+      mintShardsByTarget !== undefined &&
+      eShard === null &&
+      mintShards !== undefined &&
+      [...mintShards].some((s) => s !== null)
     if (
+      nullOnMultiShardHost ||
       !isDispatchedEntryConsumed(
         e,
         inputs.runs,
@@ -1068,7 +1072,7 @@ function findOpenDispatchTarget(
         mintCauseByTarget.get(target),
         // null collapses to shard-blind (undefined) → non-workgroup consumption is byte-identical to
         // today; a real member shard scopes the anchor lineage + run-obligation scan to that member.
-        consumeShard === null ? undefined : consumeShard,
+        eShard === null ? undefined : eShard,
       )
     ) {
       // Best-effort blocker run: the open (non-done top-level) run on the target — present for

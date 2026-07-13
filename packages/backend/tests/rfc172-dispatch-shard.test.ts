@@ -752,12 +752,15 @@ describe('RFC-172b Codex P2 — a shard-less legacy in-flight ledger blocks a me
     expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
   })
 
-  test('round-2: a legacy ledger BOUND to shard B is not masked by a newer sibling done run', async () => {
+  test('a legacy broadcast ledger is NOT released by a newer sibling done run (conservative)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedWorkgroupTask(db, taskId)
-    // A legacy manual whose round-derived shard is null BUT whose trigger run lives on shard B
-    // (pending). Seeded FIRST so a later sibling has a higher id.
+    // A legacy manual whose round-derived shard is null; its trigger run lives on shard B (pending).
+    // A shard-blind consumption check would let the newer sibling done run below mask it → falsely
+    // consumed. The conservative block (a null-shard ledger on a multi-shard host is unconsumed across
+    // ALL shards) prevents that WITHOUT narrowing to the trigger's shard (which is unstable — manual
+    // rows are shard-exempt and their trigger_run_id is rebound per render, Codex round-3).
     const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
     const legacyRerun = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, {
       shardKey: 'assign-B',
@@ -788,8 +791,8 @@ describe('RFC-172b Codex P2 — a shard-less legacy in-flight ledger blocks a me
     } catch (e) {
       threw = e
     }
-    // shard recovered from the trigger run (B) → the sibling A done run is EXCLUDED from the lineage
-    // → the pending B ledger reads UNCONSUMED → it blocks (no duplicate same-shard rerun).
+    // the null-shard broadcast ledger on the multi-shard host blocks unconditionally (conservative) —
+    // the sibling A done run does NOT release it → no duplicate same-shard rerun.
     expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
   })
 })
