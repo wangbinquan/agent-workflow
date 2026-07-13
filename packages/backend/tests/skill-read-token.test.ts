@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createManagedSkill, getSkill, readSkillContent } from '../src/services/skill'
-import { decodeSkillToken } from '../src/services/skillToken'
+import { decodeSkillToken, encodeSkillToken } from '../src/services/skillToken'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -46,8 +46,7 @@ describe('RFC-170 T3 — read-path composite token', () => {
     const skill = await getSkill(db, 'foo')
     const decoded = decodeSkillToken(content.token!)!
     // Re-encoding the decoded parts reproduces the same opaque string.
-    const { encodeSkillToken } = await import('../src/services/skillToken')
-    expect(encodeSkillToken(decoded)).toBe(content.token)
+    expect(encodeSkillToken(decoded)).toBe(content.token!)
     expect(decoded.skillId).toBe(skill!.id)
   })
 })

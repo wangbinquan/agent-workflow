@@ -23,6 +23,7 @@ import {
   RestoreSkillVersionSchema,
   SkillZipDecisionMapSchema,
   UpdateSkillContentSchema,
+  CombinedSaveSkillSchema,
   UpdateSkillSchema,
   WriteSkillFileSchema,
 } from '@agent-workflow/shared'
@@ -43,6 +44,7 @@ import {
   readSkillFile,
   updateSkill,
   writeSkillContent,
+  saveSkillWithToken,
   writeSkillFile,
   type SkillFsOptions,
 } from '@/services/skill'
@@ -188,6 +190,31 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     await requireResourceOwner(deps.db, actor, 'skill', existing)
     return c.json(
       await writeSkillContent(deps.db, fsOpts, c.req.param('name'), parsed.data, actor.user.id),
+    )
+  })
+
+  // RFC-170 §2/T4 — combined description+body save gated by the composite
+  // precondition token from the detail read. Stale token → 409, malformed → 400.
+  app.post('/api/skills/:name/save', async (c) => {
+    const parsed = CombinedSaveSkillSchema.safeParse(await safeJson(c.req.raw))
+    if (!parsed.success) {
+      throw new ValidationError('skill-content-invalid', 'invalid combined save', {
+        issues: parsed.error.issues,
+      })
+    }
+    const actor = actorOf(c)
+    const existing = await loadVisibleSkill(actor, c.req.param('name'))
+    await requireResourceOwner(deps.db, actor, 'skill', existing)
+    const { expectedToken, ...patch } = parsed.data
+    return c.json(
+      await saveSkillWithToken(
+        deps.db,
+        fsOpts,
+        c.req.param('name'),
+        patch,
+        expectedToken,
+        actor.user.id,
+      ),
     )
   })
 

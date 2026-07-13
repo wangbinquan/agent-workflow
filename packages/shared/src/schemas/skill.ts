@@ -92,6 +92,16 @@ export const UpdateSkillContentSchema = z.object({
 })
 export type UpdateSkillContent = z.infer<typeof UpdateSkillContentSchema>
 
+/**
+ * RFC-170 §2/T4 — POST /api/skills/:name/save. Combined description+body save
+ * gated by the composite precondition token from the detail read (T3). A stale
+ * token → 409 (skill-version-conflict); malformed → 400 (skill-token-invalid).
+ */
+export const CombinedSaveSkillSchema = UpdateSkillContentSchema.extend({
+  expectedToken: z.string().min(1),
+})
+export type CombinedSaveSkill = z.infer<typeof CombinedSaveSkillSchema>
+
 /** One node in the file-tree response. */
 export const FileNodeSchema = z.object({
   /** Path relative to the skill's files/ root, with forward slashes. */

@@ -401,6 +401,56 @@ export async function writeSkillContent(
   return next
 }
 
+/**
+ * RFC-170 §2/T4 — combined save with composite-token OCC. One request carries the
+ * description + body + the precondition token the client got from the detail read
+ * (T3). The token is verified against the CURRENT (skillId, contentVersion,
+ * metaRevision) inside the same load; a stale token (another writer advanced the
+ * version, or a delete-recreate reused the name = ABA) → 409, no write. A
+ * malformed token → 400 (fail-closed). On match, the write goes through
+ * writeSkillContent (which bumps content_version) and returns the fresh token.
+ */
+export async function saveSkillWithToken(
+  db: DbClient,
+  opts: SkillFsOptions,
+  name: string,
+  patch: UpdateSkillContent,
+  expectedToken: string,
+  authorUserId?: string | null,
+): Promise<SkillContent> {
+  const skill = await getSkill(db, name)
+  if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
+  ensureSkillIsWritable(skill)
+  const metaRow = await db
+    .select({ metaRevision: skills.metaRevision })
+    .from(skills)
+    .where(eq(skills.id, skill.id))
+    .limit(1)
+  const current = {
+    skillId: skill.id,
+    contentVersion: skill.contentVersion,
+    metaRevision: metaRow[0]?.metaRevision ?? 0,
+  }
+  const { decodeSkillToken, skillTokenMatches } = await import('@/services/skillToken')
+  const decoded = decodeSkillToken(expectedToken)
+  if (decoded === null) {
+    throw new ValidationError(
+      'skill-token-invalid',
+      'malformed precondition token; reload and retry',
+    )
+  }
+  if (!skillTokenMatches(decoded, current)) {
+    throw new ConflictError(
+      'skill-version-conflict',
+      `skill '${name}' changed since you loaded it; reload and retry`,
+    )
+  }
+  await writeSkillContent(db, opts, name, patch, authorUserId)
+  // Re-read so the response carries the FRESH token (writeSkillContent's return
+  // omits it) — the client reuses it for the next save without a reload.
+  return readSkillContent(db, opts, name)
+}
+
 // --- file tree ---
 
 export async function listSkillFiles(
