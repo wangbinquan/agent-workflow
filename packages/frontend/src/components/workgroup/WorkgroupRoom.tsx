@@ -42,11 +42,13 @@ import {
   isHumanDeliveryCard,
   memberIndex,
   memberIsWorking,
+  mentionExecutingPills,
   mentionCandidates,
   mentionQueryAt,
   resolveComposerKey,
   resultBodyFor,
   sendChordModLabel,
+  streamActiveExecutions,
   workgroupRoomKey,
   type MentionContext,
   type WorkgroupDeliverInput,
@@ -162,6 +164,17 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
   const [configOpen, setConfigOpen] = useState(false)
 
   const timeline = useMemo(() => buildRoomTimeline(room.data?.messages ?? []), [room.data])
+  // RFC-179 §2.3 — executing indicators (Q5): per-message「执行中」pill on the
+  // @-mention that woke a member (render①) + synthetic active rows for members
+  // running without a visible card (render②). Both off the room's memberRuns.
+  const executingPills = useMemo(
+    () => mentionExecutingPills(room.data?.config.members ?? [], room.data?.memberRuns ?? {}),
+    [room.data],
+  )
+  const activeExecutions = useMemo(
+    () => streamActiveExecutions(room.data?.config.members ?? [], room.data?.memberRuns ?? {}),
+    [room.data],
+  )
   const members = useMemo(
     () => memberIndex(room.data?.config ?? { members: [] }),
     [room.data?.config],
@@ -278,6 +291,7 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
               <RoomMessage
                 key={entry.message.id}
                 message={entry.message}
+                executingPill={executingPills.get(entry.message.id)}
                 data={data}
                 members={members}
                 resolveUser={users.get}
@@ -288,6 +302,21 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
                 onDeliver={(assignmentId, input) => deliver.mutateAsync({ assignmentId, input })}
               />
             ),
+          )}
+          {activeExecutions.length > 0 && (
+            <div className="workgroup-room__active" data-testid="wg-active-executions">
+              {activeExecutions.map((e) => (
+                <StatusChip
+                  key={e.memberId}
+                  kind="info"
+                  size="sm"
+                  withDot
+                  data-testid={`wg-active-${e.displayName}`}
+                >
+                  {t('workgroups.room.memberExecuting', { name: e.displayName })}
+                </StatusChip>
+              ))}
+            </div>
           )}
         </div>
 
@@ -656,6 +685,8 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
 
 interface RoomMessageProps {
   message: WorkgroupRoomMessage
+  /** RFC-179 — displayNames of members whose live message-turn this message woke. */
+  executingPill?: readonly string[]
   data: WorkgroupRoomResponse
   members: Map<string, WorkgroupRuntimeMember>
   resolveUser: (
@@ -670,6 +701,7 @@ interface RoomMessageProps {
 
 function RoomMessage({
   message,
+  executingPill,
   data,
   members,
   resolveUser,
@@ -708,6 +740,11 @@ function RoomMessage({
     <div className={`workgroup-room__msg${modifier}`} data-testid={`wg-msg-${message.id}`}>
       <div className="workgroup-room__msg-head">
         <span className="workgroup-room__author">{authorLabel}</span>
+        {executingPill !== undefined && executingPill.length > 0 && (
+          <StatusChip kind="info" size="sm" withDot data-testid={`wg-msg-executing-${message.id}`}>
+            {t('workgroups.room.executing')}
+          </StatusChip>
+        )}
         {isLeader && (
           <StatusChip kind="info" size="sm" data-testid={`wg-msg-leader-${message.id}`}>
             {t('workgroups.leaderBadge')}

@@ -6,6 +6,7 @@
 // without a DOM.
 
 import { describe, expect, test } from 'vitest'
+import type { WorkgroupMemberCurrentRun } from '@agent-workflow/shared'
 import {
   WORKGROUP_ASSIGNMENT_STATUS_KIND,
   applyMention,
@@ -17,7 +18,10 @@ import {
   groupFcAssignments,
   isAssignmentCancelable,
   isHumanDeliveryCard,
+  memberExecuting,
   memberIsWorking,
+  mentionExecutingPills,
+  streamActiveExecutions,
   mentionCandidates,
   mentionQueryAt,
   resolveComposerKey,
@@ -502,5 +506,60 @@ describe('sendChordModLabel', () => {
       if (orig !== undefined) Object.defineProperty(navigator, 'platform', orig)
       else Object.defineProperty(navigator, 'platform', { value: '', configurable: true })
     }
+  })
+})
+
+describe('RFC-179 executing indicators', () => {
+  const members = [
+    { id: 'lead', displayName: 'Lead' },
+    { id: 'a1', displayName: 'Coder' },
+    { id: 'a2', displayName: 'Rev' },
+  ]
+  const run = (over: Partial<WorkgroupMemberCurrentRun>): WorkgroupMemberCurrentRun => ({
+    nodeRunId: 'r',
+    status: 'running',
+    kind: 'message-turn',
+    triggerMessageId: null,
+    ...over,
+  })
+
+  test('memberExecuting: running only', () => {
+    expect(memberExecuting(run({ status: 'running' }))).toBe(true)
+    expect(memberExecuting(run({ status: 'done' }))).toBe(false)
+    expect(memberExecuting(null)).toBe(false)
+  })
+
+  test('streamActiveExecutions: message-turn + leader-round, NOT assignment (has a card)', () => {
+    const memberRuns = {
+      lead: run({ kind: 'leader-round', status: 'running' }),
+      a1: run({ kind: 'assignment', status: 'running' }), // card in stream → excluded
+      a2: run({ kind: 'message-turn', status: 'running' }),
+    }
+    expect(streamActiveExecutions(members, memberRuns).map((e) => e.displayName)).toEqual([
+      'Lead',
+      'Rev',
+    ])
+  })
+
+  test('streamActiveExecutions: excludes terminal + null', () => {
+    const memberRuns = { lead: run({ kind: 'leader-round', status: 'done' }), a1: null }
+    expect(streamActiveExecutions(members, memberRuns)).toEqual([])
+  })
+
+  test('mentionExecutingPills: triggerMessageId → running message-turn members', () => {
+    const memberRuns = {
+      a1: run({ kind: 'message-turn', status: 'running', triggerMessageId: 'MSG4' }),
+      a2: run({ kind: 'message-turn', status: 'running', triggerMessageId: 'MSG4' }),
+      lead: run({ kind: 'message-turn', status: 'done', triggerMessageId: 'MSG4' }), // terminal → out
+    }
+    expect(mentionExecutingPills(members, memberRuns).get('MSG4')).toEqual(['Coder', 'Rev'])
+  })
+
+  test('mentionExecutingPills: assignment / no-trigger runs produce no pill', () => {
+    const memberRuns = {
+      a1: run({ kind: 'assignment', status: 'running', triggerMessageId: 'MSG1' }),
+      a2: run({ kind: 'message-turn', status: 'running', triggerMessageId: null }),
+    }
+    expect(mentionExecutingPills(members, memberRuns).size).toBe(0)
   })
 })

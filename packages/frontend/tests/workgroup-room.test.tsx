@@ -409,6 +409,48 @@ describe('WorkgroupRoom — dispatch cards', () => {
     expect(await screen.findByTestId('wg-member-open-session-Lead')).toBeTruthy()
   })
 
+  // RFC-179 §2.3 (Q5) — a message-turn wake (@-mention) surfaces a「执行中」pill on
+  // its trigger message + a synthetic stream active row (it has no dispatch card).
+  test('RFC-179: a message-turn wake shows a pill on its trigger message + a stream active row', async () => {
+    installFetch(
+      makeRoom({
+        memberRuns: {
+          mem_work: {
+            nodeRunId: 'nr9',
+            status: 'running',
+            kind: 'message-turn',
+            triggerMessageId: '01E',
+          },
+        },
+      }),
+    )
+    renderRoom(makeRoom())
+    // Pill on the triggering @-mention message (01E); not on an unrelated message.
+    expect(await screen.findByTestId('wg-msg-executing-01E')).toBeTruthy()
+    expect(screen.queryByTestId('wg-msg-executing-01A')).toBeNull()
+    // Synthetic stream active row for the running message-turn member.
+    expect(screen.getByTestId('wg-active-Worker')).toBeTruthy()
+  })
+
+  test('RFC-179: an assignment run surfaces as its card — no synthetic active row / pill', async () => {
+    installFetch(
+      makeRoom({
+        memberRuns: {
+          mem_work: {
+            nodeRunId: 'nr1',
+            status: 'running',
+            kind: 'assignment',
+            triggerMessageId: null,
+          },
+        },
+      }),
+    )
+    renderRoom(makeRoom())
+    await screen.findByTestId('workgroup-room-log')
+    expect(screen.queryByTestId('wg-active-executions')).toBeNull()
+    expect(screen.queryByTestId('wg-active-Worker')).toBeNull()
+  })
+
   test('cancel is a two-click ConfirmButton that POSTs the cancel endpoint (dispatched card only)', async () => {
     const calls = installFetch(makeRoom())
     renderRoom(makeRoom())

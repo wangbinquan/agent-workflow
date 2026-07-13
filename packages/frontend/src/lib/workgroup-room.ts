@@ -122,6 +122,64 @@ export function memberIsWorking(
 }
 
 // ---------------------------------------------------------------------------
+// RFC-179 §2.3 — executing indicators in the stream (Q5). memberRuns comes
+// from the room aggregate (backend deriveMemberCurrentRuns). Pure + table-tested.
+// ---------------------------------------------------------------------------
+
+type RoomMemberLite = Pick<WorkgroupRuntimeMember, 'id' | 'displayName'>
+
+/** A member is executing iff its current session run is live. */
+export function memberExecuting(currentRun: WorkgroupMemberCurrentRun | null | undefined): boolean {
+  return currentRun?.status === 'running'
+}
+
+/**
+ * Render② — members executing WITHOUT a visible dispatch card in the stream
+ * (message-turn = @-mention wake, or leader-round = leader thinking). Assignment
+ * runs already surface as a running card, so they are excluded to avoid a
+ * duplicate indicator. Order follows the roster.
+ */
+export function streamActiveExecutions(
+  members: readonly RoomMemberLite[],
+  memberRuns: Record<string, WorkgroupMemberCurrentRun | null>,
+): { memberId: string; displayName: string }[] {
+  const out: { memberId: string; displayName: string }[] = []
+  for (const m of members) {
+    const run = memberRuns[m.id] ?? null
+    if (run !== null && run.status === 'running' && run.kind !== 'assignment') {
+      out.push({ memberId: m.id, displayName: m.displayName })
+    }
+  }
+  return out
+}
+
+/**
+ * Render① — message id → displayNames of members whose live message-turn was
+ * woken by that @-mention (currentRun.triggerMessageId). Drives the per-message
+ *「执行中」pill on the triggering message.
+ */
+export function mentionExecutingPills(
+  members: readonly RoomMemberLite[],
+  memberRuns: Record<string, WorkgroupMemberCurrentRun | null>,
+): Map<string, string[]> {
+  const map = new Map<string, string[]>()
+  for (const m of members) {
+    const run = memberRuns[m.id] ?? null
+    if (
+      run !== null &&
+      run.status === 'running' &&
+      run.kind === 'message-turn' &&
+      run.triggerMessageId !== null
+    ) {
+      const arr = map.get(run.triggerMessageId) ?? []
+      arr.push(m.displayName)
+      map.set(run.triggerMessageId, arr)
+    }
+  }
+  return map
+}
+
+// ---------------------------------------------------------------------------
 // Dispatch cards
 // ---------------------------------------------------------------------------
 

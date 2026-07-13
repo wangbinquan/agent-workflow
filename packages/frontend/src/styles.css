@@ -12393,6 +12393,15 @@ mark.comment-anchor[data-active='true'] {
   border-radius: 3px;
 }
 
+/* RFC-179 — synthetic「执行中」rows at the bottom of the stream (message-turn /
+   leader-round runs that have no dispatch card of their own). */
+.workgroup-room__active {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 2px 2px;
+}
+
 .workgroup-room__gate-state {
   margin: 0;
   font-size: 13px;
