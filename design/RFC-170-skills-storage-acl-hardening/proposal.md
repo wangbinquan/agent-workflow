@@ -32,23 +32,23 @@ RFC-169 把 agents/skills/mcps/plugins 四页改成双栏 master-detail，带来
 ## 3. 非目标
 
 - 不改任何前端 UI（RFC-169 已落）；本 RFC 是后端存储/服务层加固，前端仅需在收到新 token/409/待迁移态时按既有横幅/对话框呈现（少量适配）。
-- 不改产品功能语义（技能仍是技能、版本历史仍是版本历史）；改的是并发正确性。
+- 不改产品功能语义（技能仍是技能、版本历史仍是版本历史）；改的是并发正确性。**唯一有意的语义收敛（设计门 G1-1）**：读路径的真值源从 live `files/` 收敛到 version snapshot（live 降为可重建投影）——用户可见差异仅在「绕过平台带外直接编辑 live 文件」这一非受支持路径（此前被读到/注入，现进「待迁移决策」或 quarantine）。
 - 不扩大到 skills 以外的资源存储（agents/mcps/plugins DB-为源，无文件树一致性问题）；唯一横向扩散是 ACL PUT 的 `aclRevision`——那是共享服务，六类资源自然一起受益。
 
 ## 4. 现存漏洞清单（逐条，均先于本 RFC）
 
-| # | 漏洞 | 现状代码 | 根治手段 |
-| --- | --- | --- | --- |
-| V1 | 同名删除重建 ABA / 仅元数据绕过 | contentVersion 非世代标识 | 复合 token skillId+contentVersion+metaRevision |
-| V2 | 文件写删/ZIP/fusion 无版本栅栏 | `commitSkillVersion` 调用点多不带 expectedVersion | 六条版本写统一 OCC |
-| V3 | 发布无原子性、崩溃留半棵树 | `rmSync→cpSync`（skillVersion.ts:324-357） | 快照权威 + rename 原子换入 + 崩溃从快照重建 |
-| V4 | quarantine 漏运行时注入 | resolveSkills 直读 managedPath | pre-spawn + stageSkills 双检查点 |
-| V5 | 升级静默回滚 legacy live | 恢复器不覆盖 existing-but-different | 待迁移决策 + 多代候选 |
-| V6 | conflict-replace 先删后导丢数据 | 先删 occupier 再 reconcile | replace journal + 可回滚交换 + replacing 世代互斥 |
-| V7 | source 生命周期越权删 | 按 registrar 身份删 skill 行 | reconcileSource user/system 拆分 + 逐 child ACL |
-| V8 | ACL PUT 过期写回夺权 | 无版本 CAS（resourceAcl.ts） | expectedResourceId + 单调 aclRevision（六资源） |
-| V9 | 并发创建互相覆盖 live | 先写共享目录再插行 | name+skillId reservation + 专属 staging |
-| V10 | SKILL.md 符号链接/inode 身份 | 基础 case-fold 已在 169 | realpath/inode 兜底 |
+| #   | 漏洞                            | 现状代码                                          | 根治手段                                          |
+| --- | ------------------------------- | ------------------------------------------------- | ------------------------------------------------- |
+| V1  | 同名删除重建 ABA / 仅元数据绕过 | contentVersion 非世代标识                         | 复合 token skillId+contentVersion+metaRevision    |
+| V2  | 文件写删/ZIP/fusion 无版本栅栏  | `commitSkillVersion` 调用点多不带 expectedVersion | 六条版本写统一 OCC                                |
+| V3  | 发布无原子性、崩溃留半棵树      | `rmSync→cpSync`（skillVersion.ts:324-357）        | 快照权威 + rename 原子换入 + 崩溃从快照重建       |
+| V4  | quarantine 漏运行时注入         | resolveSkills 直读 managedPath                    | pre-spawn + stageSkills 双检查点                  |
+| V5  | 升级静默回滚 legacy live        | 恢复器不覆盖 existing-but-different               | 待迁移决策 + 多代候选                             |
+| V6  | conflict-replace 先删后导丢数据 | 先删 occupier 再 reconcile                        | replace journal + 可回滚交换 + replacing 世代互斥 |
+| V7  | source 生命周期越权删           | 按 registrar 身份删 skill 行                      | reconcileSource user/system 拆分 + 逐 child ACL   |
+| V8  | ACL PUT 过期写回夺权            | 无版本 CAS（resourceAcl.ts）                      | expectedResourceId + 单调 aclRevision（六资源）   |
+| V9  | 并发创建互相覆盖 live           | 先写共享目录再插行                                | name+skillId reservation + 专属 staging           |
+| V10 | SKILL.md 符号链接/inode 身份    | 基础 case-fold 已在 169                           | realpath/inode 兜底                               |
 
 ## 5. 验收标准
 
@@ -60,6 +60,6 @@ RFC-169 把 agents/skills/mcps/plugins 四页改成双栏 master-detail，带来
 6. source 生命周期：owner transfer 后 remove/disable/enable/rescan/replace 对无权限 child 跳过标 orphaned；system reconcile 仅目录客观消失且 owner=registrar 才删。
 7. ACL：同 owner 的 grant/visibility 迟到写、transfer、删除重建 ABA、workgroup 路径全被 aclRevision CAS 拒；六类资源共享服务同断言。
 8. 创建 reservation：create×create / create×ZIP / create×system-reconcile 并发只有 reservation owner 发布、输家只清自己 staging。
-9. migration ×1（fusions token 列 + per-skill 迁移标记）落地、`upgrade-rolling` journal 计数锁 bump；全门禁绿。
+9. migration ×1（9 ALTER：六表 `acl_revision` + `fusions.precondition_token` + `skills` 的 `meta_revision`/`migration_marker`/`reservation_state`（DEFAULT 'ready'）/`version_state`（存量有快照者 UPDATE 'snapshot-authoritative'）+ CREATE `skill_operations` 状态机表）落地、`upgrade-rolling` journal 89→90 计数锁 bump；全门禁绿。token/snapshot/reservation 仅 managed（G2-1 三类权威模型）。
 
 （详细协议与 24 findings 折法见 design.md；RFC-169 设计门 R5–R16 记录整体承接为本 RFC §9 设计门记录。）
