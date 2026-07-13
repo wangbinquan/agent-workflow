@@ -580,6 +580,10 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
     expect(src).toContain('relaunchMembersQ.isFetchedAfterMount')
     expect(src).toContain('relaunchTaskQ.isSuccess')
     expect(src).toContain('relaunchMembersQ.isSuccess')
+    // F1-followup: the members requirement is SOURCE-KIND-aware — a workgroup
+    // relaunch (which never consumes members) must not block on a members fetch.
+    expect(src).toContain('relaunchNeedsMembers')
+    expect(src).toContain('taskExecutionKind(relaunchTaskQ.data)')
     // F2: sourceReady requires a non-empty repo list (no vacuous `[].every()`)
     expect(src).toMatch(/space\.repos\.length > 0 &&[\s\S]*?space\.repos\.every/)
     // F2: the seed effect consumes spaceResolvable (does not discard it)

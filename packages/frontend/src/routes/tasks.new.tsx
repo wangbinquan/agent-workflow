@@ -314,10 +314,8 @@ function TaskWizardPage() {
   const relaunchSeededRef = useRef(false)
   useEffect(() => {
     if (!isRelaunch || relaunchSeededRef.current) return
-    // Barrier (R4-F4): wait for the source task, its members, the actor identity
-    // (to exclude the launcher from seeded collaborators) AND the kind-relevant
-    // inventory (the subject-id guard needs it — a slow inventory must not make a
-    // valid subject look missing).
+    // Barrier: the SOURCE TASK gates everything — it drives the kind, the
+    // subject-id guard, and (for agent/workflow only) the seeded collaborators.
     //
     // Fresh-fetch barrier (impl-gate F1 + re-review): require this mount's fetch
     // to have SUCCEEDED before seeding. isFetchedAfterMount alone is insufficient
@@ -325,23 +323,28 @@ function TaskWizardPage() {
     // flag, which would re-grant a since-removed collaborator. Gate on isSuccess
     // too, and on error do NOT set the one-shot ref (return early) so a later
     // successful retry re-enters and seeds fresh; the error surfaces via
-    // relaunchError (task OR members) + the submit gate.
-    if (
-      !relaunchTaskQ.isFetchedAfterMount ||
-      !relaunchMembersQ.isFetchedAfterMount ||
-      !relaunchTaskQ.isSuccess ||
-      !relaunchMembersQ.isSuccess
-    )
-      return
-    if (relaunchTaskQ.data === undefined || relaunchMembersQ.data === undefined) return
+    // relaunchError + the submit gate.
+    if (!relaunchTaskQ.isFetchedAfterMount || !relaunchTaskQ.isSuccess) return
+    if (relaunchTaskQ.data === undefined) return
     if (actor.isPending) return
     const task = relaunchTaskQ.data
     const kind = taskExecutionKind(task)
     if (kind === 'workgroup' && workgroupsQ.data === undefined) return
     if (kind === 'agent' && agentsQ.data === undefined) return
+    // Members feed ONLY the agent/workflow collaborator seed — a WORKGROUP
+    // relaunch never consumes them, so it must NOT be blocked by a members fetch
+    // it does not use (re-review F1-followup). Require the fresh successful
+    // members fetch only for non-workgroup kinds (derived from the task, not the
+    // wizard's default kind state).
+    if (
+      kind !== 'workgroup' &&
+      (!relaunchMembersQ.isFetchedAfterMount ||
+        !relaunchMembersQ.isSuccess ||
+        relaunchMembersQ.data === undefined)
+    )
+      return
     relaunchSeededRef.current = true
 
-    const members = relaunchMembersQ.data
     const { payload, spaceResolvable } = taskToLaunchPayload(task)
     const seed = payloadToWizardSeed(kind, payload)
     if (seed === null) {
@@ -385,8 +388,10 @@ function TaskWizardPage() {
     // Collaborators (§4.5, R3-F4): agent/workflow pre-fill the task's CURRENT
     // members (owner + collaborators) minus the launcher; workgroup does NOT
     // (its stored set unions auto-added human members — the launch re-derives
-    // those, and replaying would over-grant to members since removed).
-    if (kind !== 'workgroup') {
+    // those, and replaying would over-grant to members since removed). The
+    // barrier above guarantees a fresh successful members fetch for non-workgroup.
+    const members = relaunchMembersQ.data
+    if (kind !== 'workgroup' && members !== undefined) {
       const launcherId = actor.data?.source !== 'daemon' ? actor.data?.user.id : undefined
       const seen = new Set<string>()
       setCollaborators(
@@ -554,15 +559,29 @@ function TaskWizardPage() {
   const collabReady = !isEdit || seedCollabIds.current.length === 0 || collabLookup.isSuccess
   // RFC-175 (R3-F3): a relaunch must not submit until the source task AND (for
   // agent/workflow) its members have loaded — else the launch would fire with
-  // empty/wrong collaborators or a half-applied seed. A task-fetch failure
-  // (404/403/network) blocks the submit and surfaces a banner.
-  // Re-review F1: surface a members-query error too (non-workgroup needs members
-  // to seed collaborators) so a failed fetch shows the banner instead of a
-  // silently-blocked submit; mirrors relaunchReady's members requirement.
-  const relaunchError =
-    isRelaunch && (relaunchTaskQ.isError || (kind !== 'workgroup' && relaunchMembersQ.isError))
+  // empty/wrong collaborators or a half-applied seed. Derive the members
+  // requirement from the SOURCE task's kind, NOT the wizard's default `kind`
+  // state — for a workgroup source `kind` is still 'agent'/'workflow' until the
+  // seed effect runs, and keying off it wrongly blocked a workgroup relaunch on
+  // an unrelated members fetch (re-review F1-followup).
+  const relaunchSourceKind =
+    isRelaunch && relaunchTaskQ.data !== undefined
+      ? taskExecutionKind(relaunchTaskQ.data)
+      : undefined
+  const relaunchNeedsMembers =
+    relaunchSourceKind !== undefined && relaunchSourceKind !== 'workgroup'
+  // Point the banner at whichever query actually failed (task, or members for a
+  // non-workgroup source) so it never renders a null task error while members is
+  // the real failure.
+  const relaunchErrorQ = relaunchTaskQ.isError
+    ? relaunchTaskQ
+    : relaunchNeedsMembers && relaunchMembersQ.isError
+      ? relaunchMembersQ
+      : null
+  const relaunchError = isRelaunch && relaunchErrorQ !== null
   const relaunchReady =
-    !isRelaunch || (relaunchTaskQ.isSuccess && (kind === 'workgroup' || relaunchMembersQ.isSuccess))
+    !isRelaunch ||
+    (relaunchTaskQ.isSuccess && (!relaunchNeedsMembers || relaunchMembersQ.isSuccess))
 
   const nextEnabled =
     step === STEP_MODE ? stepModeReady : step === STEP_SPACE ? sourceReady : stepContentReady
@@ -731,7 +750,7 @@ function TaskWizardPage() {
 
       {relaunchError && (
         <div className="error-box" role="alert" data-testid="wizard-relaunch-error">
-          {describeApiError(relaunchTaskQ.error)}
+          {describeApiError(relaunchErrorQ?.error)}
         </div>
       )}
 
