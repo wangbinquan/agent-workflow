@@ -16,11 +16,13 @@ import {
   buildWorkflowStartFormData,
   buildWorkgroupStartBody,
   defaultWizardSpace,
+  normalizeSeededInput,
   payloadToWizardSeed,
   snapshotClarifyState,
   taskToLaunchPayload,
   type WizardSpace,
 } from '../src/lib/task-wizard'
+import type { WorkflowInput } from '@agent-workflow/shared'
 
 const REMOTE: WizardSpace = {
   kind: 'remote',
@@ -125,6 +127,28 @@ describe('buildWorkflowStartFormData', () => {
     expect(body.repoUrl).toBeUndefined()
     expect(body.inputs).toEqual({ report: '' })
     expect(fd.getAll('files[report][]')).toHaveLength(1)
+  })
+
+  // RFC-175 impl-gate F4: an upload-bearing workflow relaunch routes through the
+  // multipart submit, which must still carry the expectedWorkflowVersion OCC
+  // guard (the JSON path spreads it separately). The `extra` arg is merged into
+  // the payload JSON AFTER the whitelisting builder, so it survives to the wire.
+  test('extra guards are merged into the payload blob (survive the field whitelist)', async () => {
+    const fd = buildWorkflowStartFormData(
+      SCRATCH,
+      { workflowId: 'wf1', name: 'T', inputs: {} },
+      {},
+      { expectedWorkflowVersion: 7 },
+    )
+    const body = JSON.parse(await (fd.get('payload') as Blob).text()) as Record<string, unknown>
+    expect(body.expectedWorkflowVersion).toBe(7)
+    expect(body.workflowId).toBe('wf1')
+  })
+
+  test('no extra arg → payload carries no guard key (JSON path / normal launch)', async () => {
+    const fd = buildWorkflowStartFormData(SCRATCH, { workflowId: 'wf1', name: 'T', inputs: {} }, {})
+    const body = JSON.parse(await (fd.get('payload') as Blob).text()) as Record<string, unknown>
+    expect('expectedWorkflowVersion' in body).toBe(false)
   })
 })
 
@@ -450,5 +474,89 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
       repos: [{ kind: 'url', repoUrl: 'https://x/r.git', ref: 'dev' }],
     })
     expect(seed!.maxDurationMs).toBe(1000)
+  })
+
+  test('impl-gate F2: materialize-failed source (failed + no failedNodeId) → space unresolvable', () => {
+    // Failed BEFORE any node ran → repo list may be a truncated prefix; refuse replay.
+    expect(
+      taskToLaunchPayload(
+        task({
+          spaceKind: 'remote',
+          repos: [repo('https://x/a.git')],
+          status: 'failed',
+          failedNodeId: null,
+        }),
+      ).spaceResolvable,
+    ).toBe(false)
+    // Failed AT a node (failedNodeId set) → space fully materialized → resolvable.
+    expect(
+      taskToLaunchPayload(
+        task({
+          spaceKind: 'remote',
+          repos: [repo('https://x/a.git')],
+          status: 'failed',
+          failedNodeId: 'node-7',
+        }),
+      ).spaceResolvable,
+    ).toBe(true)
+    // A non-failed terminal (canceled) with no failedNodeId still materialized → resolvable.
+    expect(
+      taskToLaunchPayload(
+        task({
+          spaceKind: 'remote',
+          repos: [repo('https://x/a.git')],
+          status: 'canceled',
+          failedNodeId: null,
+        }),
+      ).spaceResolvable,
+    ).toBe(true)
+    // Scratch that failed early has no repos to drop → still trivially resolvable.
+    expect(
+      taskToLaunchPayload(task({ spaceKind: 'scratch', status: 'failed', failedNodeId: null }))
+        .spaceResolvable,
+    ).toBe(true)
+  })
+
+  test('impl-gate F3: normalizeSeededInput validates enum values against current choices', () => {
+    const en = (o: Record<string, unknown>): WorkflowInput =>
+      ({ key: 'k', kind: 'enum', ...o }) as unknown as WorkflowInput
+    // single-select: keep a live choice, drop a since-removed one
+    expect(normalizeSeededInput(en({ choices: ['a', 'b'] }), 'a')).toBe('a')
+    expect(normalizeSeededInput(en({ choices: ['a', 'b'] }), 'gone')).toBe('')
+    // allowOther: any value survives
+    expect(normalizeSeededInput(en({ choices: ['a'], allowOther: true }), 'freeform')).toBe(
+      'freeform',
+    )
+    // multiSelect: keep live members, drop removed, re-serialize
+    expect(
+      normalizeSeededInput(en({ choices: ['a', 'b', 'c'], multiSelect: true }), '["a","x","c"]'),
+    ).toBe('["a","c"]')
+    // multiSelect all-removed → cleared; unparseable → cleared
+    expect(normalizeSeededInput(en({ choices: ['a'], multiSelect: true }), '["x","y"]')).toBe('')
+    expect(normalizeSeededInput(en({ choices: ['a'], multiSelect: true }), 'not-json')).toBe('')
+    // upload: always cleared (stale worktree path); text: passthrough
+    expect(
+      normalizeSeededInput({ key: 'k', kind: 'upload' } as unknown as WorkflowInput, '/wt/f.pdf'),
+    ).toBe('')
+    expect(normalizeSeededInput({ key: 'k', kind: 'text' } as unknown as WorkflowInput, 'hi')).toBe(
+      'hi',
+    )
+  })
+
+  // Source lock for the component-level impl-gate fixes (F1 fresh-fetch barrier,
+  // F2 sourceReady non-empty gate + spaceResolvable consumption, F4 multipart guard).
+  test('impl-gate F1/F2/F4 wiring locked in tasks.new.tsx', () => {
+    const here = dirname(fileURLToPath(import.meta.url))
+    const src = readFileSync(join(here, '../src/routes/tasks.new.tsx'), 'utf-8')
+    // F1: relaunch queries fetch fresh + barrier gates on this-mount fetch
+    expect(src).toContain("refetchOnMount: 'always'")
+    expect(src).toContain('relaunchTaskQ.isFetchedAfterMount')
+    expect(src).toContain('relaunchMembersQ.isFetchedAfterMount')
+    // F2: sourceReady requires a non-empty repo list (no vacuous `[].every()`)
+    expect(src).toMatch(/space\.repos\.length > 0 &&[\s\S]*?space\.repos\.every/)
+    // F2: the seed effect consumes spaceResolvable (does not discard it)
+    expect(src).toContain('const { payload, spaceResolvable } = taskToLaunchPayload')
+    // F4: the multipart submit threads immediateGuards() as the 4th arg
+    expect(src).toMatch(/buildWorkflowStartFormData\([\s\S]*?immediateGuards\(\),/)
   })
 })

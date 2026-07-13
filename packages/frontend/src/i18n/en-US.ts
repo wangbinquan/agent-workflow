@@ -1778,6 +1778,8 @@ export const enUS: Resources = {
       'The execution mode cannot change while editing a schedule (the object can be swapped within the same kind).',
     degradedBanner:
       'This schedule\u2019s stored config cannot be parsed (legacy or corrupted); re-fill the form and save to repair it.',
+    spaceUnresolvedNotice:
+      'The source task\u2019s workspace could not be fully rebuilt (internal space, legacy local path, or a setup-stage failure that may have kept only part of the repo list) \u2014 it was cleared; re-confirm and complete the repository list before launching.',
   },
   stepper: {
     progress: 'Steps',

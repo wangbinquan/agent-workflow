@@ -8,7 +8,12 @@
 // whitelist builders silently drop what they don't stamp — tests assert every
 // field explicitly).
 
-import { taskExecutionKind, type ScheduledLaunchKind, type Task } from '@agent-workflow/shared'
+import {
+  taskExecutionKind,
+  type ScheduledLaunchKind,
+  type Task,
+  type WorkflowInput,
+} from '@agent-workflow/shared'
 import {
   bodyToRepoSources,
   buildLaunchBody,
@@ -93,12 +98,25 @@ export function buildWorkflowStartFormData(
   space: WizardSpace,
   common: WorkflowWizardCommon,
   uploads: Record<string, File[]>,
+  /**
+   * RFC-175 impl-gate F4: immediate-submit OCC guards (e.g. `expectedWorkflowVersion`)
+   * merged into the payload JSON AFTER `buildWorkflowStartBody`'s field whitelist —
+   * exactly like the JSON POST path spreads `immediateGuards()` after
+   * `buildImmediateBody()`. `buildWorkflowStartBody` (buildSpaceBody + stampLimits)
+   * drops unknown keys, so a guard spread into `common` would silently vanish; the
+   * merge must happen here. Kept OUT of the shared builder so the scheduled-task
+   * envelope (which reuses it) never persists a point-in-time guard.
+   */
+  extra?: Record<string, unknown>,
 ): FormData {
   const inputsOut: Record<string, string> = { ...common.inputs }
   for (const key of Object.keys(uploads)) {
     if (!(key in inputsOut)) inputsOut[key] = ''
   }
-  const body = buildWorkflowStartBody(space, { ...common, inputs: inputsOut })
+  const body = {
+    ...buildWorkflowStartBody(space, { ...common, inputs: inputsOut }),
+    ...(extra ?? {}),
+  }
   const fd = new FormData()
   fd.set('payload', new Blob([JSON.stringify(body)], { type: 'application/json' }))
   for (const [key, list] of Object.entries(uploads)) {
@@ -308,6 +326,16 @@ export function taskToLaunchPayload(task: Task): {
     payload.scratch = true
   } else if (task.spaceKind === 'internal') {
     spaceResolvable = false
+  } else if (task.status === 'failed' && task.failedNodeId === null) {
+    // RFC-175 impl-gate F2: a task that ended `failed` before ANY node ran
+    // (failedNodeId===null) failed during launch/materialization. A multi-repo
+    // materialize aborts on the first bad repo and persists only the successful
+    // PREFIX, with repo_count collapsed to that prefix length (services/task.ts
+    // `repoCount: Math.max(1, materializedRepos.length)`) — so the dropped repos
+    // are unrecoverable from the DTO and a naive replay would silently launch a
+    // SUBSET. Refuse to reconstruct the space; the wizard blanks it and forces
+    // the user to rebuild the full repo list explicitly.
+    spaceResolvable = false
   } else {
     const repos = task.repos
       .filter((r) => (r.repoUrl ?? '') !== '')
@@ -345,6 +373,47 @@ export function taskToLaunchPayload(task: Task): {
   }
 
   return { payload, spaceResolvable }
+}
+
+/**
+ * RFC-175 impl-gate F3: normalize ONE seeded input value against the CURRENT
+ * workflow input definition. A relaunch (and the ?editScheduled= edit path)
+ * replays the source task's stored input strings, which may be stale against a
+ * since-edited workflow. Returns the value to seed:
+ *   - `upload`: always '' — the stored value is a worktree path the browser
+ *     cannot rebuild into a File (it would submit as a bogus string; §4.8).
+ *   - `enum` single (no allowOther): keep only if still a declared choice, else ''.
+ *   - `enum` multiSelect: keep the JSON-array members that are still choices;
+ *     drop unknown/removed ones; '' if none survive or the JSON is unparseable.
+ *   - `enum` with allowOther: any value is legal — keep as-is.
+ *   - everything else (text / git / files): keep as-is.
+ * An invalid enum value would otherwise render as "nothing selected" in
+ * EnumPicker yet still submit (missingRequired only checks non-empty), silently
+ * launching with a value the user cannot see; clearing it makes the required
+ * gate force a visible re-pick.
+ */
+export function normalizeSeededInput(def: WorkflowInput, value: string): string {
+  if (def.kind === 'upload') return ''
+  if (def.kind === 'enum') {
+    const loose = def as Record<string, unknown>
+    if (loose.allowOther === true) return value
+    const choices = Array.isArray(loose.choices)
+      ? loose.choices.filter((c): c is string => typeof c === 'string')
+      : []
+    if (loose.multiSelect === true) {
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(value)
+      } catch {
+        return ''
+      }
+      if (!Array.isArray(parsed)) return ''
+      const kept = parsed.filter((x): x is string => typeof x === 'string' && choices.includes(x))
+      return kept.length > 0 ? JSON.stringify(kept) : ''
+    }
+    return choices.includes(value) ? value : ''
+  }
+  return value
 }
 
 // ---------------------------------------------------------------------------

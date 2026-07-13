@@ -59,6 +59,7 @@ import {
   defaultWizardSpace,
   loadAutoCommitPushPref,
   loadSpaceKindPref,
+  normalizeSeededInput,
   payloadToWizardSeed,
   saveAutoCommitPushPref,
   saveSpaceKindPref,
@@ -186,11 +187,18 @@ function TaskWizardPage() {
   })
 
   // RFC-175: the source task + its members, for relaunch pre-fill.
+  // RFC-175 impl-gate F1: both queries SHARE their keys with the task detail
+  // page's task/members queries (global staleTime 5s), so React Query would
+  // serve a stale cache hit immediately and the seed barrier below would lock
+  // on it — re-granting a since-removed collaborator (ACL regression). Force a
+  // fresh fetch this mount and gate seeding on `isFetchedAfterMount`.
   const relaunchTaskQ = useQuery<Task>({
     queryKey: ['tasks', search.relaunchFrom],
     queryFn: ({ signal }) =>
       api.get(`/api/tasks/${encodeURIComponent(search.relaunchFrom ?? '')}`, undefined, signal),
     enabled: isRelaunch,
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
   const relaunchMembersQ = useQuery<TaskMembers>({
     queryKey: ['tasks', search.relaunchFrom, 'members'],
@@ -201,6 +209,8 @@ function TaskWizardPage() {
         signal,
       ),
     enabled: isRelaunch,
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 
   // Selected workflow detail — the wizard needs `definition.inputs` for Step 3.
@@ -255,6 +265,10 @@ function TaskWizardPage() {
   const seededRef = useRef(false)
   const seedCollabIds = useRef<string[]>([])
   const [seedFailed, setSeedFailed] = useState(false)
+  // RFC-175 impl-gate F2: set when a relaunch source's space could not be
+  // faithfully rebuilt (internal/fusion, legacy path-mode, or materialize-failed
+  // with a possibly-truncated repo prefix) — drives a notice on the space step.
+  const [spaceUnresolved, setSpaceUnresolved] = useState(false)
   useEffect(() => {
     if (!isEdit || scheduleQ.data === undefined || seededRef.current) return
     seededRef.current = true
@@ -305,6 +319,10 @@ function TaskWizardPage() {
     // inventory (the subject-id guard needs it — a slow inventory must not make a
     // valid subject look missing). The task error surfaces via the banner + a
     // submit gate; don't seed on it.
+    // Fresh-fetch barrier (impl-gate F1): require THIS mount's fetch to have
+    // settled before seeding — never lock on a stale shared-cache hit (which
+    // would re-grant a since-removed collaborator).
+    if (!relaunchTaskQ.isFetchedAfterMount || !relaunchMembersQ.isFetchedAfterMount) return
     if (relaunchTaskQ.data === undefined || relaunchMembersQ.data === undefined) return
     if (actor.isPending) return
     const task = relaunchTaskQ.data
@@ -314,7 +332,7 @@ function TaskWizardPage() {
     relaunchSeededRef.current = true
 
     const members = relaunchMembersQ.data
-    const { payload } = taskToLaunchPayload(task)
+    const { payload, spaceResolvable } = taskToLaunchPayload(task)
     const seed = payloadToWizardSeed(kind, payload)
     if (seed === null) {
       setSeedFailed(true)
@@ -323,7 +341,13 @@ function TaskWizardPage() {
       return
     }
     setKind(kind)
-    applyWizardSeed(seed)
+    // Impl-gate F2: an unresolvable space (internal/fusion, legacy path-mode with
+    // no URL, or a task that failed during materialize and may hold only a repo
+    // PREFIX) must NOT seed a partial/wrong space. Blank it to a single empty
+    // remote row and flag a notice so the user rebuilds it explicitly; sourceReady
+    // (which now requires a non-empty repo list) blocks the launch until they do.
+    applyWizardSeed(spaceResolvable ? seed : { ...seed, space: defaultWizardSpace('remote') })
+    setSpaceUnresolved(!spaceResolvable)
 
     // Subject-identity guard + CAPTURED id (§4.7). Pre-select ONLY when the
     // current same-named resource is the SAME one the task ran (id match); else
@@ -370,6 +394,8 @@ function TaskWizardPage() {
     isRelaunch,
     relaunchTaskQ.data,
     relaunchMembersQ.data,
+    relaunchTaskQ.isFetchedAfterMount,
+    relaunchMembersQ.isFetchedAfterMount,
     workgroupsQ.data,
     agentsQ.data,
     actor.isPending,
@@ -385,13 +411,13 @@ function TaskWizardPage() {
     setInputs((prev) => {
       const seeded: Record<string, string> = {}
       for (const i of defs) {
-        // RFC-175 (§4.8, R4-F3): normalize against the CURRENT def. An upload-kind
-        // value is a stale worktree path on a relaunch (the backend stored a path,
-        // not user text) that the browser can't rebuild into a File and that would
-        // submit as a bogus string — clear it (the missingRequired gate then forces
-        // a re-pick for required uploads). Upload values are always File-driven, so
-        // clearing is a no-op for a normal launch.
-        seeded[i.key] = i.kind === 'upload' ? '' : (prev[i.key] ?? '')
+        // RFC-175 (§4.8, R4-F3 + impl-gate F3): normalize each seeded value
+        // against the CURRENT def. Clears stale upload paths (browser can't
+        // rebuild a File) AND enum values no longer among the declared choices
+        // (they render blank in EnumPicker but would still submit) — the
+        // missingRequired gate then forces a visible re-pick. Valid values and
+        // free-form text/git survive untouched, so a normal launch is unaffected.
+        seeded[i.key] = normalizeSeededInput(i, prev[i.key] ?? '')
       }
       return seeded
     })
@@ -459,8 +485,12 @@ function TaskWizardPage() {
       : null
 
   const stepModeReady = selectedObject !== ''
+  // Impl-gate F2: `[].every()` is vacuously true, so a zero-repo remote space
+  // (produced by seeding an unresolvable source) would wrongly read "ready".
+  // A remote launch needs at least one valid repo.
   const sourceReady =
-    space.kind === 'scratch' || space.repos.every((r) => validateRepoUrl(r.repoUrl) === null)
+    space.kind === 'scratch' ||
+    (space.repos.length > 0 && space.repos.every((r) => validateRepoUrl(r.repoUrl) === null))
   const nameReady = taskName.trim().length > 0
   // Codex P1: while the workflow detail is loading (or failed), inputDefs is
   // empty and missingRequired reads false — the wizard must NOT treat that as
@@ -584,6 +614,11 @@ function TaskWizardPage() {
             space,
             { workflowId, name: taskName.trim(), inputs, ...collectAdvanced() },
             uploads,
+            // Impl-gate F4: the JSON path spreads immediateGuards() but any
+            // upload-bearing workflow routes HERE — thread the same OCC guard
+            // (expectedWorkflowVersion) into the multipart payload so a concurrent
+            // workflow PUT still 409s instead of launching new-snapshot/old-params.
+            immediateGuards(),
           ),
         )
       }
@@ -867,12 +902,22 @@ function TaskWizardPage() {
 
         {step === STEP_SPACE && (
           <div className="form-grid">
+            {spaceUnresolved && (
+              <div
+                className="info-box info-box--muted"
+                role="alert"
+                data-testid="wizard-space-unresolved"
+              >
+                {t('taskWizard.spaceUnresolvedNotice')}
+              </div>
+            )}
             <Field label={t('taskWizard.spaceLabel')} group>
               <ChoiceCards<'remote' | 'scratch'>
                 value={space.kind}
                 onChange={(next) => {
                   if (next === space.kind) return
                   setSpace(defaultWizardSpace(next))
+                  setSpaceUnresolved(false)
                   if (!isEdit) saveSpaceKindPref(next)
                 }}
                 ariaLabel={t('taskWizard.spaceLabel')}

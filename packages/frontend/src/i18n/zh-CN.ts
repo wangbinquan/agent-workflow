@@ -1689,6 +1689,7 @@ export interface Resources {
     clarifyOff: string
     kindLocked: string
     degradedBanner: string
+    spaceUnresolvedNotice: string
   }
   stepper: {
     progress: string
@@ -4594,6 +4595,8 @@ export const zhCN: Resources = {
     clarifyOff: '反问已关闭',
     kindLocked: '编辑定时任务时执行方式不可更改（对象可在同类型内更换）。',
     degradedBanner: '该定时任务存储的配置无法解析（旧格式或已损坏）；请重新填写并保存以修复。',
+    spaceUnresolvedNotice:
+      '无法完整重建源任务的执行空间（内部空间、旧版本地路径，或在准备阶段就失败、仓库列表可能不完整）——已清空，请重新确认并填写完整的仓库列表后再启动。',
   },
   stepper: {
     progress: '创建步骤',
