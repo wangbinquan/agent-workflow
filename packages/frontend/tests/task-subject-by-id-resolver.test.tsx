@@ -71,6 +71,19 @@ describe('useResolveResourceName', () => {
     // retry: false → exactly one fetch (no spin on a legitimate 404).
     expect(n).toBe(1)
   })
+
+  test('freshness guards (Codex P1): re-resolve every mount, never navigate on stale cache', () => {
+    // Source-lock the P1 fix: the mapping is identity-sensitive, so the query must
+    // not retain/reuse a cached name across mounts and must revalidate every mount.
+    const src = readFileSync(
+      resolve(import.meta.dirname, '..', 'src', 'hooks', 'useResolveResourceName.ts'),
+      'utf-8',
+    )
+    expect(src).toContain('gcTime: 0')
+    expect(src).toContain("refetchOnMount: 'always'")
+    // name only surfaces from a settled fresh fetch (never mid-revalidation).
+    expect(src).toContain('!q.isFetching && q.isSuccess')
+  })
 })
 
 describe('by-id redirect routes wire the resolver to a typed Navigate', () => {

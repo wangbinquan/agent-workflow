@@ -4,6 +4,16 @@
 // two-segment path never collides with /workgroups/$name (arity-distinct: a
 // group literally named "by-id" still resolves at /workgroups/by-id). Rendering
 // does no lookup — resolution happens here, on navigation, ACL-gated server-side.
+//
+// Known residuals (Codex impl-gate P2, accepted for RFC-177):
+//   - the resolve→redirect→detail-load is two sequential requests; a rename+reuse
+//     landing in that sub-second same-client window could still ABA. Negligible vs
+//     the original permanent-after-rename bug; fully closing needs id-addressable
+//     detail pages (out of scope).
+//   - a group named after a literal route ("launch") redirects into that literal
+//     (the task wizard), not the group — a PRE-EXISTING name-vs-literal shadow that
+//     affects every /workgroups/$name link, not just this resolver; a reserved-name
+//     guard is a separate change.
 
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
