@@ -45,6 +45,12 @@ import { createPat } from '../src/auth/patStore'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, tasks, workflows } from '../src/db/schema'
+import {
+  acquireAgentLaunch,
+  isAgentLaunching,
+  releaseAgentLaunch,
+} from '../src/services/agentLaunchReservation'
+import { getAgent } from '../src/services/agent'
 import { createApp } from '../src/server'
 import { createAgent, deleteAgent, renameAgent } from '../src/services/agent'
 import {
@@ -275,7 +281,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
           inputs: { description: 'x' },
           scratch: true,
         } as never,
-        { db, appHome, agentLaunch: { agentName: 'solo', snapshotJson: '{}' } },
+        { db, appHome, agentLaunch: { agentName: 'solo', agentId: 'solo-id', snapshotJson: '{}' } },
       ),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
     // Transaction rolled back — no ghost task row.
@@ -643,5 +649,78 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
         deps,
       }),
     ).rejects.toMatchObject({ code: 'workgroup-repair-unsupported' })
+  })
+})
+
+// LOCKS: RFC-175 §2e — the agent-identity closure for "relaunch". A post-migration
+// agent task stamps `sourceAgentId`; a relaunch carries `expectedAgentId` as an
+// immediate-submit OCC guard; and an in-process reference-counted reservation
+// blocks deleteAgent/renameAgent for the whole launch so a delete+recreate-
+// same-name replacement can't run a different agent than the task recorded.
+describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', () => {
+  let db: DbClient
+  let appHome: string
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+    appHome = mkdtempSync(join(tmpdir(), 'aw-rfc175-agent-'))
+  })
+  afterEach(() => rmSync(appHome, { recursive: true, force: true }))
+
+  const BODY = (extra: Record<string, unknown> = {}) =>
+    StartAgentTaskSchema.parse({ name: 'solo run', description: 'do it', scratch: true, ...extra })
+
+  test('sourceAgentId persisted; expectedAgentId match launches, stale id → 409', async () => {
+    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
+    const agentId = (await getAgent(db, 'solo'))!.id
+
+    // Baseline launch stamps the stable id onto the task.
+    const t1 = await startAgentTask(db, daemonActor(), 'solo', BODY(), { db, appHome })
+    expect(t1.sourceAgentId).toBe(agentId)
+
+    // Relaunch carrying the CORRECT expected id succeeds.
+    const t2 = await startAgentTask(db, daemonActor(), 'solo', BODY({ expectedAgentId: agentId }), {
+      db,
+      appHome,
+    })
+    expect(t2.sourceAgentId).toBe(agentId)
+
+    // Relaunch carrying a STALE id (the delete+recreate-same-name ABA the guard
+    // exists to close) → 409, and no ghost task row is minted.
+    await expect(
+      startAgentTask(db, daemonActor(), 'solo', BODY({ expectedAgentId: 'stale-other-id' }), {
+        db,
+        appHome,
+      }),
+    ).rejects.toMatchObject({ code: 'agent-id-mismatch' })
+    expect((await db.select().from(tasks)).length).toBe(2)
+  })
+
+  test('reservation (ref-counted) blocks delete/rename until ALL holders release', async () => {
+    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
+    const agentId = (await getAgent(db, 'solo'))!.id
+
+    expect(isAgentLaunching(agentId)).toBe(false)
+    // Two concurrent same-agent launches hold the shared id.
+    acquireAgentLaunch(agentId)
+    acquireAgentLaunch(agentId)
+    expect(isAgentLaunching(agentId)).toBe(true)
+
+    // deleteAgent + renameAgent refuse while a launch is in flight.
+    await expect(deleteAgent(db, 'solo')).rejects.toMatchObject({ code: 'agent-launching' })
+    await expect(renameAgent(db, 'solo', { newName: 'solo2' })).rejects.toMatchObject({
+      code: 'agent-launching',
+    })
+
+    // R11-F1: the FIRST holder releasing must NOT free the shared key while the
+    // OTHER launch is still materializing — delete stays blocked.
+    releaseAgentLaunch(agentId)
+    expect(isAgentLaunching(agentId)).toBe(true)
+    await expect(deleteAgent(db, 'solo')).rejects.toMatchObject({ code: 'agent-launching' })
+
+    // Only after the LAST holder releases does delete proceed.
+    releaseAgentLaunch(agentId)
+    expect(isAgentLaunching(agentId)).toBe(false)
+    await deleteAgent(db, 'solo')
+    expect(await getAgent(db, 'solo')).toBeNull()
   })
 })

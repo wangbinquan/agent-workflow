@@ -252,8 +252,14 @@ export interface StartTaskDeps {
    * The launch transaction re-checks the agent still exists (F17) — a
    * concurrent delete between the service-level 404 gate and the INSERT
    * must fail the launch, not mint a task for a ghost agent.
+   *
+   * RFC-175 (§2e): `agentId` is the resolved stable id threaded from
+   * `startAgentTask`. The in-tx re-check asserts the same-name agent still has
+   * THIS id (belt-and-suspenders behind the launch reservation) and
+   * `tasks.source_agent_id` is written from it — so a post-migration relaunch
+   * can verify the subject on re-launch.
    */
-  agentLaunch?: { agentName: string; snapshotJson: string }
+  agentLaunch?: { agentName: string; agentId: string; snapshotJson: string }
 }
 
 /**
@@ -924,6 +930,24 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
     throw new NotFoundError('workflow-not-found', `workflow '${input.workflowId}' not found`)
   }
 
+  // RFC-175 (§2c): immediate-submit OCC guard for relaunch. When present, reject
+  // if the workflow we're about to snapshot has a different `version` than the
+  // one the relaunch normalized its inputs against — so inputs validated against
+  // vN can't be silently stored into a concurrently-PUT vN+1 (reopening the
+  // stale-input path §4.8 closes). Compared against the SAME workflow object we
+  // snapshot below. Immediate-launch only (never persisted into a scheduled
+  // payload — §2d; a schedule intentionally re-snapshots the latest def at fire).
+  if (
+    input.expectedWorkflowVersion !== undefined &&
+    workflow.version !== input.expectedWorkflowVersion
+  ) {
+    throw new ConflictError(
+      'workflow-version-mismatch',
+      `workflow '${input.workflowId}' changed since the form was prepared ` +
+        `(expected v${input.expectedWorkflowVersion}, now v${workflow.version})`,
+    )
+  }
+
   // RFC-165: scratch tasks have no repo source at all — skip spec
   // normalization/resolution and materialize a fresh scratch repo instead.
   const isScratch = input.scratch === true
@@ -1110,7 +1134,7 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
       // this insert must fail the launch — never mint a task for a ghost.
       if (deps.agentLaunch !== undefined) {
         const live = tx
-          .select({ name: agents.name })
+          .select({ id: agents.id })
           .from(agents)
           .where(eq(agents.name, deps.agentLaunch.agentName))
           .get()
@@ -1118,6 +1142,17 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
           throw new NotFoundError(
             'agent-not-found',
             `agent '${deps.agentLaunch.agentName}' was deleted during launch`,
+          )
+        }
+        // RFC-175 (§2e): belt-and-suspenders invariant behind the launch
+        // reservation (which already blocks delete/rename mid-launch) — assert
+        // the same-name agent still has the resolved id, so `source_agent_id`
+        // (written below) matches the agent the runtime resolves by name.
+        // Should never fire once the reservation holds.
+        if (live.id !== deps.agentLaunch.agentId) {
+          throw new ConflictError(
+            'agent-id-mismatch',
+            `agent '${deps.agentLaunch.agentName}' was replaced during launch`,
           )
         }
       }
@@ -1175,6 +1210,9 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
           workgroupConfigJson: deps.workgroupLaunch?.configJson ?? null,
           // RFC-165 §4: single-agent soft link (taskExecutionKind 'agent' discriminator).
           sourceAgentName: deps.agentLaunch?.agentName ?? null,
+          // RFC-175 (§2e): the resolved stable agent id (re-verified above), so a
+          // post-migration relaunch can carry an `expectedAgentId` OCC guard.
+          sourceAgentId: deps.agentLaunch?.agentId ?? null,
           // RFC-165: execution-space kind. 'local' is transitional (path mode, until
           // its public retirement lands within this PR); 'internal' is stamped via
           // the internalSource dep (fusion) once that migration lands.

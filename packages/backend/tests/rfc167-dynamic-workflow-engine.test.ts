@@ -501,6 +501,43 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
     db = createInMemoryDb(MIGRATIONS)
   })
 
+  // RFC-175 §2b: the immediate-submit workgroup-identity OCC guard for relaunch.
+  test('expectedWorkgroupId mismatch → 409 (after the ACL-404 gate)', async () => {
+    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc175-wg-'))
+    try {
+      await createWorkgroup(db, {
+        name: 'wg',
+        description: '',
+        instructions: '章程',
+        mode: 'dynamic_workflow',
+        switches: { shareOutputs: true, directMessages: false, blackboard: false },
+        maxRounds: 5,
+        completionGate: false,
+        members: [
+          { memberType: 'agent', agentName: 'ghost-agent', displayName: 'g', roleDesc: '' },
+        ],
+      })
+      const actor = buildActor({
+        user: { id: 'u', username: 'u', displayName: 'u', role: 'admin', status: 'active' },
+        source: 'daemon',
+      })
+      // A relaunch whose seeded group was deleted+recreated under the same name
+      // carries the OLD id → rejected AFTER the ACL gate (never a 409-vs-404
+      // existence probe for a private group name), before readiness/materialize.
+      await expect(
+        startWorkgroupTask(
+          db,
+          actor,
+          'wg',
+          { name: 't', goal: 'g', scratch: true, expectedWorkgroupId: 'stale-other-id' },
+          { db, appHome },
+        ),
+      ).rejects.toMatchObject({ code: 'workgroup-id-mismatch' })
+    } finally {
+      rmSync(appHome, { recursive: true, force: true })
+    }
+  })
+
   test('dynamic launch synthesizes the generation snapshot + dw slot and enters the GENERATE engine', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc167-launch-'))
     try {

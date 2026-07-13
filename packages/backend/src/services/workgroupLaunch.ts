@@ -38,7 +38,7 @@ import { workflows } from '@/db/schema'
 import { canViewResource } from '@/services/resourceAcl'
 import { getWorkgroup } from '@/services/workgroups'
 import { startTask, type StartTaskDeps } from '@/services/task'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
 /** Fixed ULID-shaped id of the builtin host workflow (lazy seed, ensureWorkgroupHostWorkflow). */
 export const WORKGROUP_HOST_WORKFLOW_ID = '00000000000000WORKGROUP00'
@@ -158,6 +158,19 @@ export async function startWorkgroupTask(
   const group = await getWorkgroup(db, workgroupName)
   if (group === null || !(await canViewResource(db, actor, 'workgroup', group))) {
     throw new NotFoundError('workgroup-not-found', `workgroup '${workgroupName}' not found`)
+  }
+
+  // RFC-175 (§2b/§2d-1): immediate-submit OCC guard for relaunch. When the
+  // relaunch carries `expectedWorkgroupId`, reject if the current same-named
+  // group is a DIFFERENT resource (a delete+recreate-same-name replacement).
+  // Compared AFTER the ACL-404 gate above so a mismatch never leaks a private
+  // group name's existence as a 409-vs-404 probe (R3-F5). Immediate-launch only
+  // (never persisted into a scheduled payload — §2d).
+  if (input.expectedWorkgroupId !== undefined && group.id !== input.expectedWorkgroupId) {
+    throw new ConflictError(
+      'workgroup-id-mismatch',
+      `workgroup '${workgroupName}' is not the expected resource (it may have been replaced)`,
+    )
   }
 
   const readiness = workgroupLaunchReadiness(group)

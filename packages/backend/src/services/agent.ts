@@ -20,6 +20,7 @@ import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { agentsDependingOnIn, validateDependsOn } from './agentDeps'
 import { getRuntime } from './runtimeRegistry'
+import { isAgentLaunching } from './agentLaunchReservation'
 
 type AgentRow = typeof agents.$inferSelect
 
@@ -241,6 +242,18 @@ export async function deleteAgent(db: DbClient, name: string): Promise<void> {
   // check-then-await-then-write shape let a reference land between the check
   // and the delete. All reads below use the synchronous tx surface.
   dbTxSync(db, (tx) => {
+    // RFC-175 (§2e): refuse while a single-agent launch holds this agent's id.
+    // The launch resolves the agent by NAME from a frozen snapshot, so deleting
+    // (then recreating same-name) mid-launch would run a DIFFERENT agent than
+    // the task recorded (ABA). Synchronous in-process reservation (single-process
+    // daemon), checked here in the same tx as the delete; the launch's
+    // post-acquire re-verify covers the reverse check→acquire race.
+    if (isAgentLaunching(existing.id)) {
+      throw new ConflictError(
+        'agent-launching',
+        `agent '${name}' has a task launch in progress; retry after it completes`,
+      )
+    }
     const wfRows = tx
       .select({ id: workflows.id, name: workflows.name, definition: workflows.definition })
       .from(workflows)
@@ -321,6 +334,17 @@ export async function renameAgent(
   // RFC-165 (F17-r3): guards + the rename run in ONE dbTxSync (mirror of
   // deleteAgent; the old await gaps let references land mid-flight).
   dbTxSync(db, (tx) => {
+    // RFC-175 (§2e): refuse while a single-agent launch holds this agent's id.
+    // A rename changes the name the launch's frozen snapshot resolves by, so the
+    // runtime could resolve a different agent than the task recorded. Same
+    // in-process reservation as deleteAgent (id survives rename, so the launch's
+    // id stays reserved throughout).
+    if (isAgentLaunching(existing.id)) {
+      throw new ConflictError(
+        'agent-launching',
+        `agent '${oldName}' has a task launch in progress; retry after it completes`,
+      )
+    }
     const wfRows = tx
       .select({ id: workflows.id, name: workflows.name, definition: workflows.definition })
       .from(workflows)

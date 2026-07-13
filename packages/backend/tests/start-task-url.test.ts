@@ -119,6 +119,29 @@ describe('startTask URL mode (RFC-024)', () => {
     rmSync(tmp, { recursive: true, force: true })
   })
 
+  // RFC-175 §2c: the immediate-submit workflow-version OCC guard for relaunch.
+  test('expectedWorkflowVersion mismatch → 409 before any materialization', async () => {
+    const { tmp, appHome, db, wf, remoteUrl } = await setup()
+    // Fires right after getWorkflow (pre-materialize / pre-input-validation), so
+    // a relaunch that normalized inputs against version N cannot silently store
+    // them into a concurrently-PUT N+1 snapshot. No repo/scheduler is reached.
+    await expect(
+      startTask(
+        {
+          workflowId: wf.id,
+          name: 'stale-relaunch',
+          repoUrl: remoteUrl,
+          inputs: { topic: 'x' },
+          expectedWorkflowVersion: wf.version + 999,
+        },
+        { db, appHome },
+      ),
+    ).rejects.toMatchObject({ code: 'workflow-version-mismatch' })
+    // No task row, no cached clone (guard short-circuited before repo work).
+    expect((await db.select().from(cachedRepos)).length).toBe(0)
+    rmSync(tmp, { recursive: true, force: true })
+  })
+
   test('warm launch (second task same URL) reuses cache', async () => {
     const { tmp, appHome, db, stubOpencode, wf, remoteUrl } = await setup()
     const t1 = await startTask(

@@ -29,7 +29,8 @@ import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { workflows } from '@/db/schema'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { acquireAgentLaunch, releaseAgentLaunch } from '@/services/agentLaunchReservation'
 
 export const AGENT_HOST_WORKFLOW_ID = '00000000000000AGENTHOST00'
 export const AGENT_HOST_WORKFLOW_NAME = '__agent_host__'
@@ -140,64 +141,96 @@ export async function startAgentTask(
   }
   assertNotBuiltin('agent', agent)
 
-  await ensureAgentHostWorkflow(db)
-
-  // Synthesize + validate up front (F14): parse through the SAME schema the
-  // engine consumes, then run the launch-gate validator with the full
-  // production context (agents + skills + plugins, R3-3).
-  const snapshot = buildAgentHostSnapshot(agentName, input.allowClarify)
-  let def: WorkflowDefinition
-  try {
-    def = WorkflowDefinitionSchema.parse(snapshot)
-  } catch (err) {
-    throw new ValidationError('workflow-invalid', 'synthesized agent host snapshot is invalid', {
-      issues: err instanceof Error ? [{ message: err.message }] : [],
-    })
+  // RFC-175 (§2e): early identity check — reject BEFORE any side effect if the
+  // relaunch's expected agent id doesn't match the current same-named agent (a
+  // delete+recreate-same-name replacement that completed before launch begins).
+  // After the ACL-404 gate; immediate-launch only (never persisted — §2d).
+  if (input.expectedAgentId !== undefined && agent.id !== input.expectedAgentId) {
+    throw new ConflictError(
+      'agent-id-mismatch',
+      `agent '${agentName}' is not the expected agent (it may have been replaced)`,
+    )
   }
-  const validation = validateWorkflowDef(def, await buildWorkflowValidationContext(db))
-  if (!validation.ok) {
-    const errors = validation.issues.filter((i) => (i.severity ?? 'error') === 'error')
-    if (errors.length > 0) {
-      throw new ValidationError(
-        'workflow-invalid',
-        `agent '${agentName}' cannot launch (${errors.length} error${errors.length === 1 ? '' : 's'} in its host snapshot)`,
-        { issues: validation.issues },
+
+  // RFC-175 (§2e): hold an in-process launch reservation on the agent id for the
+  // WHOLE launch (materialize + INSERT) so deleteAgent/renameAgent refuse
+  // (agent-launching 409) and the agent cannot be replaced mid-launch. Released
+  // in finally on every path (validation / materialize / INSERT throw included).
+  acquireAgentLaunch(agent.id)
+  try {
+    // Post-acquire re-verify: catch a replacement that completed in the tiny
+    // resolve→acquire window (before the reservation was held), in the
+    // zero-filesystem-side-effect phase.
+    const recheck = await getAgent(db, agentName)
+    if (recheck === null || recheck.id !== agent.id) {
+      throw new ConflictError(
+        'agent-id-mismatch',
+        `agent '${agentName}' was replaced during launch`,
       )
     }
-  }
 
-  // Compose the full StartTask candidate; space fields via applySpaceFields
-  // (the ONE assembly point) and deep-validate through StartTaskSchema so the
-  // repo-source cross-field rules stay single-sourced (workgroup precedent).
-  const candidate = applySpaceFields(
-    {
-      workflowId: AGENT_HOST_WORKFLOW_ID,
-      name: input.name,
-      inputs: { [AGENT_HOST_INPUT_KEY]: input.description },
-      ...(input.collaboratorUserIds !== undefined && input.collaboratorUserIds.length > 0
-        ? { collaboratorUserIds: input.collaboratorUserIds }
-        : {}),
-      ...(input.gitUserName !== undefined ? { gitUserName: input.gitUserName } : {}),
-      ...(input.gitUserEmail !== undefined ? { gitUserEmail: input.gitUserEmail } : {}),
-      ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
-      ...(input.autoCommitPush !== undefined ? { autoCommitPush: input.autoCommitPush } : {}),
-      ...(input.maxDurationMs !== undefined ? { maxDurationMs: input.maxDurationMs } : {}),
-      ...(input.maxTotalTokens !== undefined ? { maxTotalTokens: input.maxTotalTokens } : {}),
-    },
-    input as LaunchSpaceFields,
-  )
-  const parsed = StartTaskSchema.safeParse(candidate)
-  if (!parsed.success) {
-    throw new ValidationError('agent-launch-invalid', 'invalid agent launch payload', {
-      issues: parsed.error.issues,
+    await ensureAgentHostWorkflow(db)
+
+    // Synthesize + validate up front (F14): parse through the SAME schema the
+    // engine consumes, then run the launch-gate validator with the full
+    // production context (agents + skills + plugins, R3-3).
+    const snapshot = buildAgentHostSnapshot(agentName, input.allowClarify)
+    let def: WorkflowDefinition
+    try {
+      def = WorkflowDefinitionSchema.parse(snapshot)
+    } catch (err) {
+      throw new ValidationError('workflow-invalid', 'synthesized agent host snapshot is invalid', {
+        issues: err instanceof Error ? [{ message: err.message }] : [],
+      })
+    }
+    const validation = validateWorkflowDef(def, await buildWorkflowValidationContext(db))
+    if (!validation.ok) {
+      const errors = validation.issues.filter((i) => (i.severity ?? 'error') === 'error')
+      if (errors.length > 0) {
+        throw new ValidationError(
+          'workflow-invalid',
+          `agent '${agentName}' cannot launch (${errors.length} error${errors.length === 1 ? '' : 's'} in its host snapshot)`,
+          { issues: validation.issues },
+        )
+      }
+    }
+
+    // Compose the full StartTask candidate; space fields via applySpaceFields
+    // (the ONE assembly point) and deep-validate through StartTaskSchema so the
+    // repo-source cross-field rules stay single-sourced (workgroup precedent).
+    const candidate = applySpaceFields(
+      {
+        workflowId: AGENT_HOST_WORKFLOW_ID,
+        name: input.name,
+        inputs: { [AGENT_HOST_INPUT_KEY]: input.description },
+        ...(input.collaboratorUserIds !== undefined && input.collaboratorUserIds.length > 0
+          ? { collaboratorUserIds: input.collaboratorUserIds }
+          : {}),
+        ...(input.gitUserName !== undefined ? { gitUserName: input.gitUserName } : {}),
+        ...(input.gitUserEmail !== undefined ? { gitUserEmail: input.gitUserEmail } : {}),
+        ...(input.workingBranch !== undefined ? { workingBranch: input.workingBranch } : {}),
+        ...(input.autoCommitPush !== undefined ? { autoCommitPush: input.autoCommitPush } : {}),
+        ...(input.maxDurationMs !== undefined ? { maxDurationMs: input.maxDurationMs } : {}),
+        ...(input.maxTotalTokens !== undefined ? { maxTotalTokens: input.maxTotalTokens } : {}),
+      },
+      input as LaunchSpaceFields,
+    )
+    const parsed = StartTaskSchema.safeParse(candidate)
+    if (!parsed.success) {
+      throw new ValidationError('agent-launch-invalid', 'invalid agent launch payload', {
+        issues: parsed.error.issues,
+      })
+    }
+
+    return await startTask(parsed.data, {
+      ...deps,
+      agentLaunch: {
+        agentName,
+        agentId: agent.id,
+        snapshotJson: JSON.stringify(def),
+      },
     })
+  } finally {
+    releaseAgentLaunch(agent.id)
   }
-
-  return startTask(parsed.data, {
-    ...deps,
-    agentLaunch: {
-      agentName,
-      snapshotJson: JSON.stringify(def),
-    },
-  })
 }
