@@ -489,4 +489,21 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     expect(calls.length).toBeGreaterThanOrEqual(2) // approve + reject
     expect(src).toMatch(/!isResourceOwner\(actor, skill\)/) // helper gates on current owner
   })
+
+  // RFC-170 T6 (Codex re-review F8): the owner recheck is ALSO folded into the
+  // claim tx (a managed transfer doesn't drift the token, so an out-of-tx check is
+  // TOCTOU). Locks that claimFusionDecision authorises against the CURRENT owner
+  // atomically with the status transition.
+  test('claimFusionDecision re-checks the current owner in-tx (source lock)', () => {
+    const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
+    expect(src).toMatch(/live!\.ownerUserId !== actor\.user\.id/)
+  })
+
+  // RFC-170 T6 (Codex re-review F10): a null precondition token at create time
+  // (skill vanished / unpublished) is rejected BEFORE any worktree/task is made.
+  test('createFusion rejects a null precondition token before side effects (source lock)', () => {
+    const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
+    // The null check sits between the token capture and the memory/seed/startTask.
+    expect(src).toMatch(/if \(preconditionToken === null\)/)
+  })
 })

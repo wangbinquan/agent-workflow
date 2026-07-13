@@ -427,6 +427,13 @@ export async function createFusion(
   // AUTHORIZE against — so a later approve/reject sees the mismatch and 409s,
   // instead of pairing an old-generation proposal with the replacement's token.
   const preconditionToken = await getSkillPreconditionToken(db, input.skillName)
+  // RFC-170 T6 (Codex re-review F10): a null token means the skill vanished / is
+  // not published between the visibility check and here — refuse to create a
+  // fusion (and any worktree/task) that could never be decided (legacy-null is
+  // fail-closed at decision time anyway; reject it up front, before side effects).
+  if (preconditionToken === null) {
+    throw new NotFoundError('skill-not-found', `skill '${input.skillName}' not found`)
+  }
 
   // 2. Every selected memory must be approved AND manageable by the actor (D14).
   const loaded: Array<{ id: string; title: string; bodyMd: string; scopeType: string }> = []
@@ -778,6 +785,7 @@ async function requireCurrentSkillWritable(
 function claimFusionDecision(
   db: DbClient,
   id: string,
+  actor: Actor,
   from: FusionStatus,
   to: FusionStatus,
   extra: Partial<FusionRow> = {},
@@ -804,6 +812,7 @@ function claimFusionDecision(
         id: skills.id,
         contentVersion: skills.contentVersion,
         metaRevision: skills.metaRevision,
+        ownerUserId: skills.ownerUserId,
       })
       .from(skills)
       .where(and(eq(skills.name, cur.skillName), eq(skills.reservationState, 'ready')))
@@ -820,6 +829,16 @@ function claimFusionDecision(
       throw new ConflictError(
         'fusion-precondition-stale',
         'the target skill changed since this fusion started; re-initiate the fusion',
+      )
+    }
+    // RFC-170 T6 (Codex re-review F8): re-check the CURRENT owner IN this tx (a
+    // managed ACL transfer doesn't drift the token, so an owner check outside the
+    // claim is TOCTOU). The pre-claim `requireCurrentSkillWritable` is a fast-fail;
+    // this is the authoritative gate atomic with the status transition.
+    if (!isAdminActor(actor) && live!.ownerUserId !== actor.user.id) {
+      throw new ConflictError(
+        'fusion-skill-forbidden',
+        'you no longer have write access to the target skill',
       )
     }
     tx.update(fusions)
@@ -871,7 +890,7 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
   // drifted skill aborts here with zero side effects (replaces the old
   // unconditional setFusionStatus('applying') that let a loser fail over a
   // winner's committed 'done').
-  if (!claimFusionDecision(db, id, 'awaiting_approval', 'applying')) {
+  if (!claimFusionDecision(db, id, actor, 'awaiting_approval', 'applying')) {
     throw new ConflictError('fusion-not-awaiting', 'fusion is no longer awaiting approval')
   }
   const incorporated = jsonArray(row.incorporatedMemoryIdsJson)
@@ -961,7 +980,9 @@ export async function rejectFusion(
   // A lost decision race or a drifted/legacy skill aborts here with zero worktree
   // or task creation — the "zero side effect on stale" guarantee now actually
   // holds (the old pre-check was TOCTOU vs the worktree/task creation below).
-  if (!claimFusionDecision(db, id, 'awaiting_approval', 'running', { currentTaskId: null })) {
+  if (
+    !claimFusionDecision(db, id, actor, 'awaiting_approval', 'running', { currentTaskId: null })
+  ) {
     throw new ConflictError('fusion-not-awaiting', 'fusion is no longer awaiting approval')
   }
 

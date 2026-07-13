@@ -182,7 +182,44 @@ Codex adversarial-review 在已推送的 §8+T6 上抓到 6 个真漏洞（5 hig
 403 + metaRevision 漂移）· fusion-engine（并发 approve/reject 序列化不双写/不覆盖 done +
 属主复核 source lock）· skills-detail-save-channels（source-external 零写 + Save 禁用）。
 
+## 6e. Codex 再审复核（㉑，fix 的 fix）——§8 判定「局部正确」，fusion 4 深层窗口
+
+对 fix 提交（816db980）再跑一轮 adversarial-review：§8 authority 写入 / updateSkill
+immutable-id CAS / 同步 claim / commitSkillVersion 事务内复合 fence / 前端通道 gate 均
+判**局部正确**。fusion 决策协议另发现 4 个 high 窗口——**已修 2 个明确属本次改动的**：
+
+- **F8（已修）属主复核与写入分离**：`claimFusionDecision` 加 `actor` 参、事务内读
+  `skills.ownerUserId` 复核 `isAdminActor || ownerUserId===actor.id`——managed transfer 不
+  漂移 token，故属主授权与状态转移**同事务**（pre-claim `requireCurrentSkillWritable` 保留
+  为 fast-fail）。source lock。
+- **F10-null（已修）**：createFusion 捕获 token 后、任何副作用前，`preconditionToken===null`
+  → NotFoundError（技能已消失/未发布，永远无法判定的 fusion 不建 workDir/task）。source lock。
+
+**延后到「fusion 决策协议加固」follow-up RFC（多为 T6 之前既存 fusion-engine 债、
+非本次引入）**：
+
+- **F7 reconcile/cancel/attach 非 generation-CAS**：reject 的最终 attach、reconcile 回写、
+  cancel 均无条件 `WHERE id`——并发 cancel 与 reject/reconcile 交错可留孤儿 task 或状态回滚。
+  **既存**：T6 前 reject 也无条件覆盖 canceled。需给所有 writer 加 expected status+
+  currentTaskId+iteration/decisionGeneration 条件更新 + affected-rows 检查。
+- **F9 决策 half-state 无崩溃恢复**：approve 'applying'→(独立 skill/memory 事务)→'done'、
+  reject 'running'+currentTaskId=null→side effects，中途崩溃留 reconcile 永久跳过或
+  「已应用但仍 applying」。**既存**：fusion 从无 approve/reject 崩溃恢复。需 durable
+  decision operation + boot recovery（类比 skill_operations 机制）。
+- **F10-full 种子非绑定快照**：seed 仍从 `skills/<name>/files` live 目录、与授权读按名分离，
+  delete-recreate 可让 task 从另一代 live seed（后续 409 只挡审批不撤已起 task）。**既存**：
+  fusion 一贯从 live seed。需从 token 指向的不可变 version snapshot seed + 捕获期持 per-skill
+  operation lock（依赖 snapshot 权威读，与 §7 首项耦合）。
+
+**结论**：§8 三态 + T6 token 保护均**净正向**（T6 前 fusion 无 token 保护且已有 F7/F9/F10
+同款窗口）；完整 fusion 决策协议 CAS+recovery 是 RFC 级、按项目 RFC workflow 应独立立项，
+不在本 session 尾仓促重构。
+
 ## 7. 其余（依赖顺序，批次 B 收尾 + 批次 C）
+
+**fusion 决策协议加固（新 RFC）**：F7 全 writer generation-CAS + F9 durable decision
+operation & boot recovery + F10-full snapshot-bound seed + per-skill lock（见 §6e，多为既存
+fusion 债）·
 
 snapshot 权威读（readSkillContent 从 versions/v<cur> 非 live——**与 T-BOOT quarantine/
 drift-check 耦合**，非独立单元）· T9 quarantine 注入门（stageSkills 前查 version_state，
