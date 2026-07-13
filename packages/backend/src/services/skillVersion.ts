@@ -208,7 +208,17 @@ export function ensureInitialSkillVersion(
   const hash = hashDir(versionDir)
   const now = Date.now()
   dbTxSync(db, (tx) => {
-    tx.update(skills).set({ contentVersion: 1, updatedAt: now }).where(eq(skills.name, name)).run()
+    tx.update(skills)
+      .set({
+        contentVersion: 1,
+        // RFC-170 §invariant④ / T4a: the lazily-materialised v1 IS the authority —
+        // promote out of 'legacy-unbackfilled' so the availability gate stops
+        // hiding it (and mark it boot-verified below, having just written it).
+        versionState: 'snapshot-authoritative',
+        updatedAt: now,
+      })
+      .where(eq(skills.name, name))
+      .run()
     tx.insert(skillVersions)
       .values({
         id: ulid(),
@@ -226,6 +236,7 @@ export function ensureInitialSkillVersion(
       .run()
     return null
   })
+  markSkillBootVerified(skill.id)
 }
 
 // --- the funnel ------------------------------------------------------------

@@ -422,9 +422,37 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   //     is just "available later"); best-effort, never crashes the daemon.
   void (async () => {
     try {
+      // RFC-170 T4a: first, lazily backfill a v1 snapshot for any legacy managed
+      // skill created before version tracking (version_state='legacy-unbackfilled',
+      // no skill_versions row) — else the availability gate would hide it after an
+      // upgrade. ensureInitialSkillVersion → commitSkillVersion(initial) makes it
+      // 'snapshot-authoritative' + boot-verified. Per-skill best-effort.
+      const { ensureInitialSkillVersion } = await import('@/services/skillVersion')
+      const { skills: skillsTable } = await import('@/db/schema')
+      const { and, eq } = await import('drizzle-orm')
+      const legacy = db
+        .select({ name: skillsTable.name })
+        .from(skillsTable)
+        .where(
+          and(
+            eq(skillsTable.sourceKind, 'managed'),
+            eq(skillsTable.versionState, 'legacy-unbackfilled'),
+          ),
+        )
+        .all() as Array<{ name: string }>
+      for (const s of legacy) {
+        try {
+          ensureInitialSkillVersion(db, { appHome: Paths.root }, s.name)
+        } catch (e) {
+          log.warn('legacy skill v1 backfill failed on boot', {
+            name: s.name,
+            error: e instanceof Error ? e.message : String(e),
+          })
+        }
+      }
       const { runBootSnapshotReverify } = await import('@/services/skillBootVerify')
       const r = runBootSnapshotReverify(db, { appHome: Paths.root })
-      log.info('boot snapshot reverify', r)
+      log.info('boot snapshot reverify', { ...r, legacyBackfilled: legacy.length })
     } catch (err) {
       log.warn('boot snapshot reverify failed', {
         error: err instanceof Error ? err.message : String(err),

@@ -4,12 +4,14 @@
 // quarantined, never signed/injected.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
+import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skills } from '../src/db/schema'
+import { ensureInitialSkillVersion } from '../src/services/skillVersion'
 import {
   createManagedSkill,
   getSkill,
@@ -181,5 +183,48 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     // throws the non-swallowable SkillQuarantinedError (fail-closed).
     expect(src).toMatch(/isSkillInjectableThisBoot\(\{ id: row\.id, sourceKind: 'managed' \}\)/)
     expect(src).toMatch(/throw new SkillQuarantinedError\(name\)/)
+  })
+
+  // RFC-170 T4a — a legacy managed skill (pre-version-tracking, no snapshot,
+  // version_state='legacy-unbackfilled') would be hidden by the gate after an
+  // upgrade; the boot pass backfills its v1 snapshot → authoritative + verified →
+  // available. Here we exercise the backfill the boot pass runs.
+  test('legacy-unbackfilled managed skill becomes available after v1 backfill', async () => {
+    const id = ulid()
+    // A pre-RFC-101 skill: managed, live files, NO version row, legacy state.
+    mkdirSync(join(appHome, 'skills', 'legacy', 'files'), { recursive: true })
+    writeFileSync(
+      join(appHome, 'skills', 'legacy', 'files', 'SKILL.md'),
+      '---\nname: legacy\ndescription: d\n---\nold body',
+      'utf-8',
+    )
+    await db.insert(skills).values({
+      id,
+      name: 'legacy',
+      description: 'd',
+      sourceKind: 'managed',
+      managedPath: 'skills/legacy/files',
+      versionState: 'legacy-unbackfilled',
+      contentVersion: 0,
+    })
+    resetSkillBootVerifyForTest()
+    activateBootReverifyForTest()
+    // Before backfill (gate active): legacy state is not authoritative → hidden.
+    expect(await getSkill(db, 'legacy')).toBeNull()
+    // The boot pass backfills v1 (ensureInitialSkillVersion → commitSkillVersion).
+    ensureInitialSkillVersion(db, fsOpts, 'legacy')
+    // Now authoritative + boot-verified → visible + injectable.
+    expect(await getSkill(db, 'legacy')).not.toBeNull()
+    expect(isSkillBootVerified(id)).toBe(true)
+  })
+
+  test('boot pass backfills legacy skills BEFORE the reverify (source lock)', () => {
+    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
+    // The legacy v1 backfill loop must precede runBootSnapshotReverify (so a
+    // backfilled skill is authoritative+verified when the gate activates).
+    const backfillIdx = src.indexOf('ensureInitialSkillVersion(db')
+    const reverifyIdx = src.indexOf('runBootSnapshotReverify(db')
+    expect(backfillIdx).toBeGreaterThan(0)
+    expect(backfillIdx).toBeLessThan(reverifyIdx)
   })
 })
