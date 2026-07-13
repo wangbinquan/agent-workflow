@@ -4,6 +4,7 @@
 // whitelist builders silently drop what nobody asserts).
 
 import { describe, expect, test } from 'vitest'
+import type { Task } from '@agent-workflow/shared'
 import {
   SPACE_KIND_LS_KEY,
   buildAgentStartBody,
@@ -13,6 +14,8 @@ import {
   buildWorkgroupStartBody,
   defaultWizardSpace,
   payloadToWizardSeed,
+  snapshotClarifyState,
+  taskToLaunchPayload,
   type WizardSpace,
 } from '../src/lib/task-wizard'
 
@@ -283,5 +286,156 @@ describe('loadSpaceKindPref — default SCRATCH with sticky remote opt-in (用�
     expect(loadSpaceKindPref()).toBe('remote')
     saveSpaceKindPref('scratch')
     expect(loadSpaceKindPref()).toBe('scratch')
+  })
+})
+
+// LOCKS: RFC-175 §3 — the relaunch reconstruction: a terminal task's persisted
+// fields → a payloadToWizardSeed-compatible launch payload, and the 3-state
+// clarify inference. Every field asserted explicitly (RFC-125 lesson).
+describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
+  const task = (o: Partial<Task>): Task =>
+    ({
+      name: 'my task',
+      workflowId: 'wf-1',
+      spaceKind: 'remote',
+      repos: [],
+      inputs: {},
+      gitUserName: null,
+      gitUserEmail: null,
+      workingBranch: null,
+      autoCommitPush: false,
+      maxDurationMs: null,
+      maxTotalTokens: null,
+      sourceAgentName: null,
+      sourceAgentId: null,
+      workgroupId: null,
+      workgroupName: null,
+      goal: null,
+      workflowSnapshot: null,
+      ...o,
+    }) as unknown as Task
+
+  const repo = (repoUrl: string | null, baseBranch = 'main') =>
+    ({ repoUrl, baseBranch, repoIndex: 0 }) as never
+
+  test('snapshotClarifyState: true / false / unknown', () => {
+    expect(snapshotClarifyState({ nodes: [{ kind: 'clarify' }] })).toBe(true)
+    expect(snapshotClarifyState({ nodes: [{ kind: 'agent-single' }] })).toBe(false)
+    expect(snapshotClarifyState({ nodes: [] })).toBe(false)
+    expect(snapshotClarifyState(null)).toBe('unknown')
+    expect(snapshotClarifyState({})).toBe('unknown') // no nodes array
+    expect(snapshotClarifyState({ nodes: 'x' })).toBe('unknown')
+    expect(snapshotClarifyState('not-an-object')).toBe('unknown')
+  })
+
+  test('workflow task → workflowId + inputs + remote repos', () => {
+    const { payload, spaceResolvable } = taskToLaunchPayload(
+      task({
+        workflowId: 'wf-9',
+        inputs: { topic: 'orders' },
+        repos: [repo('https://x/r.git', 'dev')],
+      }),
+    )
+    expect(spaceResolvable).toBe(true)
+    expect(payload.workflowId).toBe('wf-9')
+    expect(payload.name).toBe('my task')
+    expect(payload.inputs).toEqual({ topic: 'orders' })
+    expect(payload.repos).toEqual([{ repoUrl: 'https://x/r.git', ref: 'dev' }])
+    expect(payload.agentName).toBeUndefined()
+    expect(payload.workgroupName).toBeUndefined()
+  })
+
+  test('agent task → agentName + description(inputs.description) + 3-state allowClarify', () => {
+    const withClarify = taskToLaunchPayload(
+      task({
+        sourceAgentName: 'auditor',
+        inputs: { description: 'fix it' },
+        spaceKind: 'scratch',
+        workflowSnapshot: { nodes: [{ kind: 'clarify' }] },
+      }),
+    ).payload
+    expect(withClarify.agentName).toBe('auditor')
+    expect(withClarify.description).toBe('fix it')
+    expect(withClarify.scratch).toBe(true)
+    expect(withClarify.allowClarify).toBeUndefined() // present ⇒ omit (defaults true)
+
+    const noClarify = taskToLaunchPayload(
+      task({
+        sourceAgentName: 'auditor',
+        inputs: { description: 'x' },
+        workflowSnapshot: { nodes: [{ kind: 'agent-single' }] },
+      }),
+    ).payload
+    expect(noClarify.allowClarify).toBe(false) // provably absent ⇒ false
+
+    const unknownClarify = taskToLaunchPayload(
+      task({ sourceAgentName: 'a', inputs: { description: 'x' }, workflowSnapshot: null }),
+    ).payload
+    expect(unknownClarify.allowClarify).toBeUndefined() // broken ⇒ omit, not false
+  })
+
+  test('workgroup task → workgroupName + goal', () => {
+    const { payload } = taskToLaunchPayload(
+      task({ workgroupId: 'g-1', workgroupName: 'squad', goal: 'ship it' }),
+    )
+    expect(payload.workgroupName).toBe('squad')
+    expect(payload.goal).toBe('ship it')
+    expect(payload.workflowId).toBeUndefined()
+  })
+
+  test('advanced fields: git identity pair-gated, workingBranch, autoCommitPush, limits', () => {
+    const { payload } = taskToLaunchPayload(
+      task({
+        gitUserName: 'A',
+        gitUserEmail: 'a@b.c',
+        workingBranch: 'feat/x',
+        autoCommitPush: true,
+        maxDurationMs: 60000,
+        maxTotalTokens: 5000,
+        repos: [repo('https://x/r.git')],
+      }),
+    )
+    expect(payload.gitUserName).toBe('A')
+    expect(payload.gitUserEmail).toBe('a@b.c')
+    expect(payload.workingBranch).toBe('feat/x')
+    expect(payload.autoCommitPush).toBe(true)
+    expect(payload.maxDurationMs).toBe(60000)
+    expect(payload.maxTotalTokens).toBe(5000)
+    // Half-set git identity → neither field on the wire.
+    expect(taskToLaunchPayload(task({ gitUserName: 'A' })).payload.gitUserName).toBeUndefined()
+  })
+
+  test('spaceResolvable: internal / empty-local false; scratch / url-local true', () => {
+    expect(taskToLaunchPayload(task({ spaceKind: 'internal' })).spaceResolvable).toBe(false)
+    expect(
+      taskToLaunchPayload(task({ spaceKind: 'local', repos: [repo(null)] })).spaceResolvable,
+    ).toBe(false)
+    expect(taskToLaunchPayload(task({ spaceKind: 'scratch' })).spaceResolvable).toBe(true)
+    expect(
+      taskToLaunchPayload(task({ spaceKind: 'local', repos: [repo('file:///r')] })).spaceResolvable,
+    ).toBe(true)
+  })
+
+  test('round-trip: taskToLaunchPayload → payloadToWizardSeed reconstructs wizard state', () => {
+    const { payload } = taskToLaunchPayload(
+      task({
+        sourceAgentName: 'auditor',
+        inputs: { description: 'do the thing' },
+        spaceKind: 'remote',
+        repos: [repo('https://x/r.git', 'dev')],
+        workflowSnapshot: { nodes: [{ kind: 'agent-single' }] },
+        maxDurationMs: 1000,
+      }),
+    )
+    const seed = payloadToWizardSeed('agent', payload)
+    expect(seed).not.toBeNull()
+    expect(seed!.agentName).toBe('auditor')
+    expect(seed!.description).toBe('do the thing')
+    expect(seed!.allowClarify).toBe(false)
+    expect(seed!.space).toEqual({
+      kind: 'remote',
+      repos: [{ kind: 'url', repoUrl: 'https://x/r.git', ref: 'dev' }],
+    })
+    expect(seed!.maxDurationMs).toBe(1000)
   })
 })

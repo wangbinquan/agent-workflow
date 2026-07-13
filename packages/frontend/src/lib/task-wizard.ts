@@ -8,7 +8,7 @@
 // whitelist builders silently drop what they don't stamp — tests assert every
 // field explicitly).
 
-import type { ScheduledLaunchKind } from '@agent-workflow/shared'
+import { taskExecutionKind, type ScheduledLaunchKind, type Task } from '@agent-workflow/shared'
 import {
   bodyToRepoSources,
   buildLaunchBody,
@@ -259,6 +259,92 @@ export function payloadToWizardSeed(
   if (typeof payload.maxDurationMs === 'number') seed.maxDurationMs = payload.maxDurationMs
   if (typeof payload.maxTotalTokens === 'number') seed.maxTotalTokens = payload.maxTotalTokens
   return seed
+}
+
+// ---------------------------------------------------------------------------
+// RFC-175 — "relaunch": reconstruct a launch payload from a terminal task.
+
+/**
+ * RFC-175 (§3): 3-state clarify inference for an agent task's relaunch. The
+ * agent host snapshot wires a `kind:'clarify'` node IFF the launch set
+ * allowClarify=true (backend services/agentLaunch.ts). Presence ⟺ `true`;
+ * a structurally-valid snapshot with no clarify node ⟺ `false`; anything
+ * unparseable ⟺ `'unknown'`. Callers send `allowClarify:false` ONLY on `false`
+ * — `true`/`'unknown'` omit the field so `payloadToWizardSeed` defaults it true
+ * (never conflate "snapshot broken" with "clarify was off").
+ */
+export function snapshotClarifyState(snapshot: unknown): boolean | 'unknown' {
+  if (snapshot === null || typeof snapshot !== 'object') return 'unknown'
+  const nodes = (snapshot as { nodes?: unknown }).nodes
+  if (!Array.isArray(nodes)) return 'unknown'
+  return nodes.some(
+    (n) => typeof n === 'object' && n !== null && (n as { kind?: unknown }).kind === 'clarify',
+  )
+}
+
+/**
+ * RFC-175 (§3): reconstruct a `payloadToWizardSeed`-compatible launch payload
+ * from a terminal task's already-persisted fields (relaunch pre-fill). Pure and
+ * field-by-field unit-testable. `spaceResolvable=false` signals the space could
+ * NOT be faithfully rebuilt (internal/fusion space, or a legacy path-mode local
+ * task with no URL to replay) — the wizard then leaves the space at its default
+ * rather than a wrong value. Collaborators are NOT included here (fetched
+ * separately from the members endpoint — §4). Subject validity (does the current
+ * same-named agent/workgroup match) is a wizard concern (needs the inventory
+ * queries), NOT decidable from the Task alone (§4.7).
+ */
+export function taskToLaunchPayload(task: Task): {
+  payload: Record<string, unknown>
+  spaceResolvable: boolean
+} {
+  const kind = taskExecutionKind(task)
+  const payload: Record<string, unknown> = { name: task.name }
+
+  // Space (§3): four spaceKind values. scratch/remote reconstruct faithfully;
+  // legacy `local` with a redacted URL is best-effort; `local` without a URL
+  // (pure path mode) and `internal` (fusion) are unresolvable.
+  let spaceResolvable = true
+  if (task.spaceKind === 'scratch') {
+    payload.scratch = true
+  } else if (task.spaceKind === 'internal') {
+    spaceResolvable = false
+  } else {
+    const repos = task.repos
+      .filter((r) => (r.repoUrl ?? '') !== '')
+      .map((r) => ({
+        repoUrl: r.repoUrl ?? '',
+        ...(r.baseBranch ? { ref: r.baseBranch } : {}),
+      }))
+    if (repos.length > 0) payload.repos = repos
+    else spaceResolvable = false
+  }
+
+  // Common advanced fields (git identity is pair-gated; only send set ones).
+  if (task.gitUserName && task.gitUserEmail) {
+    payload.gitUserName = task.gitUserName
+    payload.gitUserEmail = task.gitUserEmail
+  }
+  if (task.workingBranch) payload.workingBranch = task.workingBranch
+  if (task.autoCommitPush) payload.autoCommitPush = true
+  if (task.maxDurationMs != null) payload.maxDurationMs = task.maxDurationMs
+  if (task.maxTotalTokens != null) payload.maxTotalTokens = task.maxTotalTokens
+
+  // Per-kind discriminant + kind-specific fields.
+  if (kind === 'workflow') {
+    payload.workflowId = task.workflowId
+    // Upload-kind input values are stale worktree paths — the wizard clears them
+    // against the current inputDefs (§4.8); carried verbatim here.
+    payload.inputs = task.inputs
+  } else if (kind === 'agent') {
+    payload.agentName = task.sourceAgentName ?? ''
+    payload.description = task.inputs.description ?? ''
+    if (snapshotClarifyState(task.workflowSnapshot) === false) payload.allowClarify = false
+  } else {
+    payload.workgroupName = task.workgroupName ?? ''
+    payload.goal = task.goal ?? ''
+  }
+
+  return { payload, spaceResolvable }
 }
 
 // ---------------------------------------------------------------------------
