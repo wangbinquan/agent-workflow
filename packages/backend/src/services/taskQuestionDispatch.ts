@@ -1050,20 +1050,28 @@ function findOpenDispatchTarget(
     ) {
       continue
     }
-    // Codex impl-gate P2/P1 (rounds 2-3): a null-shard ledger on a MULTI-SHARD host is a pre-RFC-172
+    // Codex impl-gate P2/P1 (rounds 2-4): a null-shard ledger on a MULTI-SHARD host is a pre-RFC-172
     // BROADCAST/legacy row (manual is shard-exempt in selectAgentQueue; its trigger_run_id is REBOUND
     // per render, so it is NOT a stable shard identity — narrowing to it can hide an active sibling
-    // and permit a duplicate mint). We cannot safely determine its consumption per-shard, so treat it
-    // as an UNCONSUMED blocker across ALL shards (conservative — no double-mint). Golden-lock: a null
-    // entry on a null-shard-only host (leader / non-workgroup) is NOT multi-shard → normal consumption
-    // check (shard-blind), byte-identical to today.
+    // and permit a duplicate mint). We cannot safely determine its consumption per-shard, so block it
+    // CONSERVATIVELY across all shards — but ONLY WHILE A NODE-WIDE RUN OBLIGATION REMAINS (a non-done
+    // top-level run). Once the host is idle (every generation done) the legacy ledger's work is
+    // provably finished, so it must RELEASE — else every later member answer on an upgraded task
+    // deadlocks forever (round-4). When there is an obligation the maskable per-shard consumption
+    // check is skipped (block); when there is none there is nothing to mask (all done → consumed →
+    // released via the normal check below). Golden-lock: a null entry on a null-shard-only host
+    // (leader / non-workgroup) is NOT multi-shard → normal consumption check, byte-identical to today.
     const nullOnMultiShardHost =
       mintShardsByTarget !== undefined &&
       eShard === null &&
       mintShards !== undefined &&
       [...mintShards].some((s) => s !== null)
+    // The node-wide open run obligation (non-done top-level run) — also the surfaced blocker below.
+    const openRun = inputs.runs.find(
+      (r) => r.nodeId === target && r.parentNodeRunId === null && r.status !== 'done',
+    )
     if (
-      nullOnMultiShardHost ||
+      (nullOnMultiShardHost && openRun !== undefined) ||
       !isDispatchedEntryConsumed(
         e,
         inputs.runs,
@@ -1077,9 +1085,7 @@ function findOpenDispatchTarget(
     ) {
       // Best-effort blocker run: the open (non-done top-level) run on the target — present for
       // the run-obligation & bound-handler cases, absent for a pure cause-serialization block.
-      const blockerRun = inputs.runs.find(
-        (r) => r.nodeId === target && r.parentNodeRunId === null && r.status !== 'done',
-      )
+      const blockerRun = openRun
       return blockerRun !== undefined
         ? { nodeId: target, runId: blockerRun.id, runStatus: blockerRun.status }
         : { nodeId: target }

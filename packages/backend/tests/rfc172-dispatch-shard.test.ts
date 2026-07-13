@@ -791,8 +791,43 @@ describe('RFC-172b Codex P2 — a shard-less legacy in-flight ledger blocks a me
     } catch (e) {
       threw = e
     }
-    // the null-shard broadcast ledger on the multi-shard host blocks unconditionally (conservative) —
-    // the sibling A done run does NOT release it → no duplicate same-shard rerun.
+    // the legacy rerun is PENDING (a run obligation remains) → the conservative block holds and the
+    // sibling A done run does NOT release it → no duplicate same-shard rerun.
     expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
+  })
+
+  test('round-4: a legacy ledger whose runs are ALL done RELEASES (no permanent deadlock)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedWorkgroupTask(db, taskId)
+    // A legacy manual dispatched to __wg_member__, but its handler run is DONE — the host is idle
+    // (no non-done run). The conservative block must NOT fire (else every later member answer on an
+    // upgraded task deadlocks forever, Codex round-4).
+    const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
+    const legacyDone = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { status: 'done' })
+    await seedEntry(db, taskId, {
+      originNodeRunId: legacyOrigin,
+      sourceKind: 'manual',
+      sealed: true,
+      dispatchedAt: Date.now(),
+      triggerRunId: legacyDone,
+    })
+    // member B's fresh answer (shard B) + a prior (done) shard-B run.
+    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-B' })
+    const clarifyB = await seedNodeRun(db, taskId, '__wg_clarify__')
+    await seedRound(db, taskId, clarifyB, 'assign-B')
+    const entryB = await seedEntry(db, taskId, {
+      originNodeRunId: clarifyB,
+      sourceKind: 'self',
+      sealed: true,
+    })
+
+    // no run obligation on the host → the done legacy ledger is consumed → B dispatches (releases).
+    const res = await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
+    expect(res.reruns.length).toBe(1)
+    const run = (
+      await db.select().from(nodeRuns).where(eq(nodeRuns.id, res.reruns[0]!.nodeRunId))
+    )[0]
+    expect(run?.shardKey).toBe('assign-B')
   })
 })
