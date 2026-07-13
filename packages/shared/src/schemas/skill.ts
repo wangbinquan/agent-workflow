@@ -15,6 +15,20 @@ export const SkillNameSchema = z
 export const SkillSourceKindSchema = z.enum(['managed', 'external'])
 export type SkillSourceKind = z.infer<typeof SkillSourceKindSchema>
 
+/**
+ * RFC-170 (G3-7/G5-P2) — stable content-authority discriminator, distinct from
+ * the coarse `sourceKind`. Drives the three-state capability table (who may edit
+ * description / delete / transfer ownership):
+ *   - `managed`         — platform snapshot is authoritative; fully editable.
+ *   - `source-external` — a registered source dir owns the SKILL.md; metadata
+ *     write AND owner transfer are blocked (the registrar controls content).
+ *   - `hand-external`   — a hand-imported dir; DB metadata is editable, but owner
+ *     transfer is still blocked (the original importer controls content).
+ * NOT derivable from `sourceId != null` (FK ON DELETE would misclassify orphans).
+ */
+export const SkillAuthorityKindSchema = z.enum(['managed', 'source-external', 'hand-external'])
+export type SkillAuthorityKind = z.infer<typeof SkillAuthorityKindSchema>
+
 /** Skill row response. `managedPath` set iff `managed`, `externalPath` set iff `external`. */
 export const SkillSchema = z.object({
   id: z.string(),
@@ -25,6 +39,13 @@ export const SkillSchema = z.object({
   /** RFC-099 ACL — 'public' = every user; 'private' = owner + grants. Absent ⇒ 'public'. */
   visibility: ResourceVisibilitySchema.optional(),
   sourceKind: SkillSourceKindSchema,
+  /**
+   * RFC-170 (G5-P2) — stable content-authority discriminator; drives the
+   * frontend three-state capability table. Optional on the wire for fixture
+   * back-compat; the backend always populates it. Absent ⇒ derive from
+   * `sourceKind` (managed → 'managed', external → 'hand-external').
+   */
+  authorityKind: SkillAuthorityKindSchema.optional(),
   managedPath: z.string().optional(),
   externalPath: z.string().optional(),
   /**

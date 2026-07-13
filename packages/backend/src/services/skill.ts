@@ -595,6 +595,9 @@ function rowToSkill(row: SkillRow): Skill {
     ownerUserId: row.ownerUserId,
     visibility: row.visibility,
     sourceKind: row.sourceKind as 'managed' | 'external',
+    // RFC-170 (G5-P2) — stable authority discriminator drives the FE capability
+    // table (edit-description / delete / transfer-owner). Backfilled for all rows.
+    authorityKind: row.authorityKind,
     schemaVersion: row.schemaVersion,
     contentVersion: row.contentVersion,
     createdAt: row.createdAt,

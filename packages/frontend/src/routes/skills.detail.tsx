@@ -26,7 +26,7 @@ import { SkillFileTree } from '@/components/SkillFileTree'
 import { SkillVersionHistory } from '@/components/skill/SkillVersionHistory'
 import { TabBar, type TabDef } from '@/components/TabBar'
 import { TabPanels } from '@/components/split/TabPanels'
-import { skillCapabilities } from '@/lib/skill-capabilities'
+import { skillCapabilities, skillCapabilitiesOf } from '@/lib/skill-capabilities'
 import { Route as skillsRoute } from './skills'
 
 export const Route = createRoute({
@@ -79,7 +79,10 @@ function SkillDetailPage() {
     setDraft((d) => (d === undefined ? d : { ...d, description: v }))
   const setBodyMd = (v: string) => setDraft((d) => (d === undefined ? d : { ...d, bodyMd: v }))
 
-  const caps = skillCapabilities(meta.data?.sourceKind ?? 'external')
+  // RFC-170 (G5-P2): capabilities key off `authorityKind` (three-state). Before
+  // meta loads, the page renders LoadingState (draft is undefined), so the
+  // source-external fallback here is inert — the least-privileged safe default.
+  const caps = meta.data ? skillCapabilitiesOf(meta.data) : skillCapabilities('source-external')
 
   const saveMeta = useMutation({
     mutationFn: (payload: { description: string }) =>
