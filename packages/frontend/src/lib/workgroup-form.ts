@@ -85,6 +85,8 @@ export interface WorkgroupConfigDraft {
   /** undefined = field cleared → default (WORKGROUP_MAX_ROUNDS_DEFAULT = 1000). */
   maxRounds: number | undefined
   completionGate: boolean
+  /** RFC-180「全自动」— no clarify invite + gate treated off + leader-idle auto-nudge. */
+  autonomous: boolean
 }
 
 export function workgroupToConfigDraft(w: Workgroup): WorkgroupConfigDraft {
@@ -94,6 +96,7 @@ export function workgroupToConfigDraft(w: Workgroup): WorkgroupConfigDraft {
     switches: { ...w.switches },
     maxRounds: w.maxRounds,
     completionGate: w.completionGate,
+    autonomous: w.autonomous ?? false,
   }
 }
 
@@ -126,6 +129,7 @@ export function buildConfigUpdatePayload(
     switches: { ...draft.switches },
     maxRounds: draft.maxRounds ?? WORKGROUP_MAX_ROUNDS_DEFAULT,
     completionGate: draft.completionGate,
+    autonomous: draft.autonomous,
     members: membersToInputs(group.members),
   }
   const parsed = UpdateWorkgroupSchema.safeParse(payload)
@@ -309,6 +313,7 @@ export function buildMembersUpdatePayload(
     switches: { ...group.switches },
     maxRounds: group.maxRounds,
     completionGate: group.completionGate,
+    autonomous: group.autonomous ?? false,
     members: state.members.map(rowToInput),
   }
   const parsed = UpdateWorkgroupSchema.safeParse(payload)

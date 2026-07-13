@@ -120,6 +120,16 @@ export const WorkgroupSchema = z.object({
   maxRounds: z.number().int().positive(),
   /** Completion gate: leader-done parks the task for human confirmation. */
   completionGate: z.boolean(),
+  /**
+   * RFC-180「全自动」— when true the group tries NOT to interrupt the launcher:
+   * the clarify ask-back invite is not injected, the completion gate is treated
+   * as off (leader-done finishes directly), and a leader-idle round auto-nudges
+   * instead of parking (until WG_AUTONOMOUS_NUDGE_LIMIT consecutive no-progress
+   * rounds). Effective view via resolveCompletionGate / resolveClarifyEnabled.
+   * Optional (DB row always supplies a real boolean; absent ⇒ OFF) so callers /
+   * fixtures may omit it — consumers coalesce `?? false`.
+   */
+  autonomous: z.boolean().optional(),
   members: z.array(WorkgroupMemberSchema),
   /** RFC-099 ACL — owner (users.id or '__system__'); null until first owner write. */
   ownerUserId: z.string().nullable().optional(),
@@ -151,6 +161,12 @@ const workgroupConfigFields = {
   // Default ON (2026-07-13 用户拍板): a new group's tasks park for human
   // confirmation when the leader declares done, instead of auto-finishing.
   completionGate: z.boolean().default(true),
+  // RFC-180「全自动」— optional (absent ⇒ OFF): existing groups keep asking /
+  // gating / parking exactly as before. When ON: no clarify invite + gate treated
+  // off + leader-idle auto-nudge (see resolveCompletionGate / resolveClarifyEnabled).
+  // Optional (not .default) so callers/fixtures may omit it; the create/update
+  // handlers coalesce `?? false` at the DB write.
+  autonomous: z.boolean().optional(),
   /**
    * 快速创建（用户 2026-07-10 拍板 #21）：members MAY be empty at save time —
    * groups are created light and members are managed card-by-card on the
@@ -263,6 +279,27 @@ export function resolveWorkgroupSwitches(
   }
   return stored
 }
+
+/**
+ * RFC-180 §2.1 — effective completion-gate view. `autonomous` overrides the
+ * stored gate to OFF (leader-done finishes directly); otherwise the stored value
+ * stands (so turning autonomous back off restores the group's original gate).
+ * Single source — the engine reads this, never `config.completionGate` raw.
+ */
+export function resolveCompletionGate(autonomous: boolean, storedGate: boolean): boolean {
+  return autonomous ? false : storedGate
+}
+
+/**
+ * RFC-180 §2.1 — whether the clarify ask-back invite is injected. Autonomous
+ * groups omit it so agents don't interrupt the launcher with questions.
+ */
+export function resolveClarifyEnabled(autonomous: boolean): boolean {
+  return !autonomous
+}
+
+/** RFC-180 §2.4 — consecutive no-progress leader-idle nudges before parking. */
+export const WG_AUTONOMOUS_NUDGE_LIMIT = 3
 
 // ---------------------------------------------------------------------------
 // Launch body (POST /api/workgroups/:name/tasks, design §3)

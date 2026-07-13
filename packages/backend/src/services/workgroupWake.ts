@@ -9,7 +9,11 @@ import type {
   WorkgroupMessage,
   WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { resolveWorkgroupSwitches } from '@agent-workflow/shared'
+import {
+  resolveCompletionGate,
+  resolveWorkgroupSwitches,
+  WG_AUTONOMOUS_NUDGE_LIMIT,
+} from '@agent-workflow/shared'
 import { sliceMessagesAfter } from './workgroupContext'
 
 export interface WakeInput {
@@ -54,7 +58,27 @@ export type WorkgroupOutcome =
   | { kind: 'done' }
   | { kind: 'awaiting_gate' } // completion gate parked for human confirmation
   | { kind: 'awaiting_human'; reason: 'clarify-or-delivery' | 'leader-idle' }
+  | { kind: 'leader-nudge'; nudgeCount: number } // RFC-180 autonomous: auto-remind an idle leader
   | { kind: 'failed'; reason: 'max-rounds' | 'fc-deadlock' }
+
+/**
+ * RFC-180 — the auto-nudge an「全自动」leader gets on an idle round (posted as a
+ * system chat directed at the leader). Identifying nudges by this exact body is
+ * the single source both the poster (runner) and the counter (below) share.
+ */
+export const WG_NUDGE_BODY =
+  'Autonomous mode: you ended a round without dispatching work or declaring done. If the goal is complete, emit wg_decision done; otherwise dispatch the next assignment(s) or say what is blocking.'
+
+/** Consecutive trailing system-nudge messages = consecutive no-progress rounds. */
+function countTrailingNudges(messages: readonly WorkgroupMessage[]): number {
+  let n = 0
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i] as WorkgroupMessage
+    if (m.authorKind === 'system' && m.bodyMd === WG_NUDGE_BODY) n++
+    else break
+  }
+  return n
+}
 
 function agentMemberIds(config: WorkgroupRuntimeConfig): string[] {
   return config.members.filter((m) => m.memberType === 'agent').map((m) => m.id)
@@ -221,11 +245,20 @@ export function decideWorkgroupOutcome(input: WakeInput, wake: WakeSet): Workgro
 
   if (input.config.mode === 'leader_worker') {
     if (input.gate.declaredDone) {
-      return input.config.completionGate ? { kind: 'awaiting_gate' } : { kind: 'done' }
+      // RFC-180: autonomous treats the gate as off (leader-done finishes directly).
+      return resolveCompletionGate(input.config.autonomous ?? false, input.config.completionGate)
+        ? { kind: 'awaiting_gate' }
+        : { kind: 'done' }
     }
     if (humanPending) return { kind: 'awaiting_human', reason: 'clarify-or-delivery' }
-    // Leader consumed everything, dispatched nothing, declared nothing: park
-    // for a human nudge (a room message re-wakes the leader) — design §4.2.
+    // Leader consumed everything, dispatched nothing, declared nothing.
+    // RFC-180: an autonomous group auto-nudges the leader (up to N consecutive
+    // no-progress rounds) before parking; a non-autonomous group parks for a
+    // human nudge right away (a room message re-wakes the leader) — design §4.2.
+    if (input.config.autonomous ?? false) {
+      const nudges = countTrailingNudges(input.messages)
+      if (nudges < WG_AUTONOMOUS_NUDGE_LIMIT) return { kind: 'leader-nudge', nudgeCount: nudges }
+    }
     return { kind: 'awaiting_human', reason: 'leader-idle' }
   }
 

@@ -116,6 +116,7 @@ export async function createWorkgroup(
         blackboard: input.switches.blackboard,
         maxRounds: input.maxRounds,
         completionGate: input.completionGate,
+        autonomous: input.autonomous ?? false,
         // RFC-099: creator becomes owner; new resources default to 'public' (D18).
         ownerUserId: aclOpts?.ownerUserId ?? null,
         visibility: 'public',
@@ -163,6 +164,7 @@ export async function updateWorkgroup(
         blackboard: input.switches.blackboard,
         maxRounds: input.maxRounds,
         completionGate: input.completionGate,
+        autonomous: input.autonomous ?? false,
         updatedAt: now,
       })
       .where(eq(workgroups.id, existing.id))
@@ -394,6 +396,7 @@ function rowToWorkgroup(row: WorkgroupRow, memberRows: MemberRow[]): Workgroup {
     },
     maxRounds: row.maxRounds,
     completionGate: row.completionGate,
+    autonomous: row.autonomous,
     members,
     ownerUserId: row.ownerUserId,
     visibility: row.visibility,

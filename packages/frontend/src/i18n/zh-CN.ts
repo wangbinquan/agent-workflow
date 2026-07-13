@@ -1093,6 +1093,9 @@ export interface Resources {
     fieldMaxRoundsHint: string
     fieldCompletionGate: string
     fieldCompletionGateHint: string
+    fieldCompletionGateAutonomousHint: string
+    fieldAutonomous: string
+    fieldAutonomousHint: string
     // RFC-164 PR-4 — detail-page launch entry + /workgroups/launch page.
     launchButton: string
     launch: {
@@ -4011,6 +4014,10 @@ export const zhCN: Resources = {
     fieldMaxRoundsHint: '1–1000，默认 1000。',
     fieldCompletionGate: '完成门（人工确认）',
     fieldCompletionGateHint: 'Leader 宣布完成后任务停在待人工确认，而不是直接结束。',
+    fieldCompletionGateAutonomousHint: '全自动模式下不适用——leader 宣布完成即直接结束。',
+    fieldAutonomous: '全自动（别打扰我）',
+    fieldAutonomousHint:
+      '不向你反问、完成门视为关闭、leader 空转时自动催办若干轮再泊人。适合纯 agent 工作组。',
     launchButton: '启动任务',
     launch: {
       title: '启动工作组任务：{{name}}',

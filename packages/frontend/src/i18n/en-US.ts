@@ -1167,6 +1167,11 @@ export const enUS: Resources = {
     fieldCompletionGate: 'Completion gate (human confirm)',
     fieldCompletionGateHint:
       'When the leader declares done, the task parks for human confirmation instead of finishing.',
+    fieldCompletionGateAutonomousHint:
+      'Autonomous mode: not applicable — the leader declaring done finishes the task directly.',
+    fieldAutonomous: "Autonomous (don't interrupt me)",
+    fieldAutonomousHint:
+      'No clarify questions to you, the completion gate is treated as off, and an idle leader is auto-nudged (a few rounds) before parking. Best for fully-agent groups.',
     launchButton: 'Launch task',
     launch: {
       title: 'Launch workgroup task: {{name}}',

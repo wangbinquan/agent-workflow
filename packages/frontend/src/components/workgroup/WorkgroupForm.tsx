@@ -139,7 +139,21 @@ export function WorkgroupForm({ value, onChange, errors }: WorkgroupFormProps) {
             checked={value.completionGate}
             onChange={(v) => set('completionGate', v)}
             label={t('workgroups.fieldCompletionGate')}
-            hint={t('workgroups.fieldCompletionGateHint')}
+            hint={
+              value.autonomous
+                ? t('workgroups.fieldCompletionGateAutonomousHint')
+                : t('workgroups.fieldCompletionGateHint')
+            }
+            disabled={value.autonomous}
+          />
+
+          {/* RFC-180「全自动」— master switch: no clarify invite + gate treated off
+              + leader-idle auto-nudge. Grays out the gate above when on. */}
+          <Switch
+            checked={value.autonomous}
+            onChange={(v) => set('autonomous', v)}
+            label={t('workgroups.fieldAutonomous')}
+            hint={t('workgroups.fieldAutonomousHint')}
           />
         </FormSection>
       )}

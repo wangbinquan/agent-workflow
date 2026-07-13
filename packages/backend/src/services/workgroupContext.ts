@@ -19,6 +19,7 @@ import type {
 import {
   CLARIFY_FORMAT_EXAMPLE,
   CLARIFY_STRUCTURAL_RULES,
+  resolveClarifyEnabled,
   resolveWorkgroupSwitches,
 } from '@agent-workflow/shared'
 
@@ -350,7 +351,9 @@ export function renderWgProtocolBlock(
   // selectAgentQueue shard scoping (S0–S3, R2-T3) round-trips a member's answer to its OWN
   // assignment shard, so members / fc_members may ask a human too — their answer returns to their
   // run, isolated from concurrent members (free_collab members likewise).
-  lines.push(WG_CLARIFY_BLOCK)
+  // RFC-180: …unless the group is「全自动」— then the clarify invite is omitted so
+  // agents proceed on their own judgment instead of interrupting the launcher.
+  if (resolveClarifyEnabled(config.autonomous ?? false)) lines.push(WG_CLARIFY_BLOCK)
   return lines.join('\n')
 }
 

@@ -28,6 +28,7 @@ import {
   parseWgResultPort,
   parseWgTasksAddPort,
   renderAgentCapabilityCard,
+  resolveCompletionGate,
   resolveWorkgroupSwitches,
   WG_PORT_ASSIGNMENTS,
   WG_PORT_DECISION,
@@ -71,6 +72,7 @@ import {
 import {
   decideWorkgroupOutcome,
   deriveWakeSet,
+  WG_NUDGE_BODY,
   type WakeInput,
   type WakeItem,
 } from '@/services/workgroupWake'
@@ -634,7 +636,7 @@ export async function runWorkgroupEngine(
             log.warn('workgroup engine: lw done without declaration', { taskId })
           }
           if (
-            state.config.completionGate &&
+            resolveCompletionGate(state.config.autonomous ?? false, state.config.completionGate) &&
             !state.gate.approved &&
             !state.gate.awaitingConfirmation
           ) {
@@ -655,6 +657,21 @@ export async function runWorkgroupEngine(
             kind: 'awaiting_review',
             detail: { summary: 'workgroup completion gate', message: 'wg-gate' },
           }
+        }
+        case 'leader-nudge': {
+          // RFC-180: an autonomous idle leader — drop a directed system nudge and
+          // loop; the leader wakes on it as new content. countTrailingNudges caps
+          // consecutive no-progress nudges (WG_AUTONOMOUS_NUDGE_LIMIT), and the
+          // leader must actually run between nudges, so this can't hot-loop.
+          const leaderId = state.config.leaderMemberId
+          await postMessage(db, taskId, {
+            round: currentRound(state),
+            authorKind: 'system',
+            kind: 'chat',
+            bodyMd: WG_NUDGE_BODY,
+            mentionMemberIds: leaderId !== null ? [leaderId] : [],
+          })
+          continue
         }
         case 'awaiting_human':
           return {

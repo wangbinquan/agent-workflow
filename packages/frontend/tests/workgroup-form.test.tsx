@@ -123,6 +123,16 @@ describe('buildConfigUpdatePayload', () => {
     ])
   })
 
+  test('RFC-180: autonomous round-trips draft ↔ payload (default off; on when set)', () => {
+    // STORED has no autonomous → draft defaults false → payload false.
+    const asDraft = workgroupToConfigDraft(STORED)
+    expect(asDraft.autonomous).toBe(false)
+    const on = buildConfigUpdatePayload({ ...asDraft, autonomous: true }, STORED)
+    expect(on.ok && on.payload.autonomous).toBe(true)
+    const off = buildConfigUpdatePayload({ ...asDraft, autonomous: false }, STORED)
+    expect(off.ok && off.payload.autonomous).toBe(false)
+  })
+
   test('description is sourced from the server row, never the draft (2026-07-13 decouple)', () => {
     // Editing an unrelated config field still carries the server description
     // through verbatim — the rename dialog is its only editor now, so the
@@ -427,6 +437,7 @@ function baseDraft(): WorkgroupConfigDraft {
     switches: { shareOutputs: true, directMessages: false, blackboard: false },
     maxRounds: 20,
     completionGate: false,
+    autonomous: false,
   }
 }
 
@@ -491,5 +502,17 @@ describe('WorkgroupForm — free_collab switch gating', () => {
     expect(gate.disabled).toBe(false)
     fireEvent.click(gate)
     expect(switchInput(/Completion gate/).checked).toBe(true)
+  })
+
+  test('RFC-180: turning on Autonomous grays out the completion gate switch', () => {
+    render(<Harness />)
+    expect(switchInput(/Completion gate/).disabled).toBe(false)
+    // `/Autonomous \(/` matches the label only — the gate's autonomous hint
+    // ("Autonomous mode: …") must NOT be mistaken for a second Autonomous switch.
+    const auto = switchInput(/Autonomous \(/)
+    expect(auto.checked).toBe(false)
+    fireEvent.click(auto)
+    expect(switchInput(/Autonomous \(/).checked).toBe(true)
+    expect(switchInput(/Completion gate/).disabled).toBe(true)
   })
 })

@@ -93,6 +93,7 @@ export function buildWorkgroupRuntimeConfig(
     switches: group.switches,
     maxRounds: group.maxRounds,
     completionGate: group.completionGate,
+    autonomous: group.autonomous,
     instructions: group.instructions,
     goal,
     members: group.members.map((m) => ({

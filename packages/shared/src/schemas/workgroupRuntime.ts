@@ -46,6 +46,10 @@ export const WorkgroupRuntimeConfigSchema = z.object({
   switches: WorkgroupSwitchesSchema,
   maxRounds: z.number().int().positive(),
   completionGate: z.boolean(),
+  // RFC-180「全自动」— optional so pre-RFC-180 task snapshots (no field) parse as
+  // non-autonomous (engine read sites coalesce `?? false`; zero regression). See
+  // resolveCompletionGate / resolveClarifyEnabled in schemas/workgroup.ts.
+  autonomous: z.boolean().optional(),
   instructions: z.string(),
   /** Launch goal text — the group's mission statement, injected every turn. */
   goal: z.string(),
