@@ -222,6 +222,8 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       path,
       parsed.data.content,
       actor.user.id,
+      // RFC-170 (4th-review [high]): the owner we just authorized against.
+      existing.ownerUserId,
     )
     return c.json({ ok: true, path })
   })
@@ -231,7 +233,14 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     const existing = await loadVisibleSkill(actor, c.req.param('name'))
     await requireResourceOwner(deps.db, actor, 'skill', existing)
     const path = requirePath(c.req.query('path'))
-    await deleteSkillFile(deps.db, fsOpts, c.req.param('name'), path, actor.user.id)
+    await deleteSkillFile(
+      deps.db,
+      fsOpts,
+      c.req.param('name'),
+      path,
+      actor.user.id,
+      existing.ownerUserId,
+    )
     return c.body(null, 204)
   })
 
@@ -272,6 +281,8 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       v,
       actor.user.id,
       parsed.data.reason,
+      // RFC-170 (4th-review [high]): the owner we just authorized against.
+      existing.ownerUserId,
     )
     return c.json(result)
   })

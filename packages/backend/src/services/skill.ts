@@ -573,6 +573,9 @@ export async function writeSkillFile(
   relPath: string,
   content: string,
   authorUserId?: string | null,
+  // RFC-170 (4th-review [high]): the owner the route authorized against — the
+  // funnel 409s if it drifts before the version commits (owner-transfer race).
+  expectedOwnerUserId?: string | null,
 ): Promise<void> {
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
@@ -590,7 +593,11 @@ export async function writeSkillFile(
       mkdirSync(dirname(abs), { recursive: true })
       writeFileSync(abs, content, 'utf-8')
     },
-    { source: 'editor', authorUserId: authorUserId ?? null },
+    {
+      source: 'editor',
+      authorUserId: authorUserId ?? null,
+      ...(expectedOwnerUserId !== undefined ? { expectedOwnerUserId } : {}),
+    },
   )
 }
 
@@ -600,6 +607,8 @@ export async function deleteSkillFile(
   name: string,
   relPath: string,
   authorUserId?: string | null,
+  // RFC-170 (4th-review [high]): owner the route authorized against; funnel 409s on drift.
+  expectedOwnerUserId?: string | null,
 ): Promise<void> {
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
@@ -625,7 +634,11 @@ export async function deleteSkillFile(
       if (statSync(abs).isDirectory()) rmSync(abs, { recursive: true })
       else unlinkSync(abs)
     },
-    { source: 'editor', authorUserId: authorUserId ?? null },
+    {
+      source: 'editor',
+      authorUserId: authorUserId ?? null,
+      ...(expectedOwnerUserId !== undefined ? { expectedOwnerUserId } : {}),
+    },
   )
 }
 

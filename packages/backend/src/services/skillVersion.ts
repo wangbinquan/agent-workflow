@@ -628,6 +628,8 @@ export function restoreSkillVersion(
   target: number,
   authorUserId: string | null,
   reason?: string,
+  // RFC-170 (4th-review [high]): owner the route authorized against; funnel 409s on drift.
+  expectedOwnerUserId?: string | null,
 ): RestoreResult {
   ensureInitialSkillVersion(db, opts, name)
   requireVersionRow(db, name, target)
@@ -647,6 +649,7 @@ export function restoreSkillVersion(
       source: 'restore',
       restoredFromVersion: target,
       authorUserId,
+      ...(expectedOwnerUserId !== undefined ? { expectedOwnerUserId } : {}),
       summary: reason && reason.length > 0 ? reason : `Restored from v${target}`,
       txExtra: (tx) => {
         // Un-fuse in the SAME tx as the version bump so the fused⟺in-current

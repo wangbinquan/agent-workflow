@@ -20,8 +20,14 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skills } from '../src/db/schema'
-import { createManagedSkill, readSkillContent, saveSkillWithToken } from '../src/services/skill'
-import { commitSkillVersion } from '../src/services/skillVersion'
+import {
+  createManagedSkill,
+  deleteSkillFile,
+  readSkillContent,
+  saveSkillWithToken,
+  writeSkillFile,
+} from '../src/services/skill'
+import { commitSkillVersion, restoreSkillVersion } from '../src/services/skillVersion'
 import { ConflictError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -140,5 +146,56 @@ describe('RFC-170 (4th-review [high]) — combined-save owner-fence wiring', () 
       'A',
     )
     expect(saved.bodyMd.trim()).toBe('x')
+  })
+})
+
+// The other common managed writers now forward the authorized owner too: file
+// PUT/DELETE (writeSkillFile/deleteSkillFile) and version restore
+// (restoreSkillVersion). ZIP overwrite + fusion approve remain (IMPLEMENTATION §7).
+describe('RFC-170 (4th-review [high]) — secondary-writer owner-fence wiring (file / restore)', () => {
+  let db: DbClient
+  let appHome: string
+  let fsOpts: { appHome: string }
+
+  beforeEach(async () => {
+    appHome = mkdtempSync(join(tmpdir(), 'aw-owner-sec-'))
+    fsOpts = { appHome }
+    db = createInMemoryDb(MIGRATIONS)
+    await createManagedSkill(
+      db,
+      fsOpts,
+      { name: 'foo', description: 'd', bodyMd: 'b0', frontmatterExtra: {} },
+      { ownerUserId: 'A' },
+    )
+    // v2 (a support file) while the owner is still A — establishes a prior version.
+    await writeSkillFile(db, fsOpts, 'foo', 'templates/a.txt', 'aaa', 'A', 'A')
+  })
+  afterEach(() => rmSync(appHome, { recursive: true, force: true }))
+
+  test('writeSkillFile: owner transferred after authorization → 409', async () => {
+    await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
+    await expect(
+      writeSkillFile(db, fsOpts, 'foo', 'templates/b.txt', 'bbb', 'A', 'A'),
+    ).rejects.toBeInstanceOf(ConflictError)
+  })
+
+  test('deleteSkillFile: owner transferred after authorization → 409', async () => {
+    await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
+    await expect(
+      deleteSkillFile(db, fsOpts, 'foo', 'templates/a.txt', 'A', 'A'),
+    ).rejects.toBeInstanceOf(ConflictError)
+  })
+
+  test('restoreSkillVersion: owner transferred after authorization → 409', async () => {
+    await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
+    expect(() => restoreSkillVersion(db, fsOpts, 'foo', 1, 'A', undefined, 'A')).toThrow(
+      ConflictError,
+    )
+  })
+
+  test('owner unchanged → file write + restore succeed under the fence', async () => {
+    await writeSkillFile(db, fsOpts, 'foo', 'templates/c.txt', 'ccc', 'A', 'A')
+    const restored = restoreSkillVersion(db, fsOpts, 'foo', 1, 'A', undefined, 'A')
+    expect(restored.version.versionIndex).toBeGreaterThan(1)
   })
 })
