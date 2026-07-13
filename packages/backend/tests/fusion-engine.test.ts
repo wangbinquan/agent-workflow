@@ -698,6 +698,15 @@ describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', 
     // No live fallback remains.
     expect(src).not.toMatch(/return existsSync\(snapshot\) \? snapshot : live/)
   })
+
+  // RFC-170 T6 (Codex re-review F11-deeper): the token is bound to the AUTHORIZED
+  // skill row's immutable id, not a by-name re-read that a same-name recreate could
+  // repoint to a different (private) skill B.
+  test('createFusion binds the token to the authorized skill id (source lock)', () => {
+    const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
+    expect(src).toMatch(/getSkillPreconditionTokenById\(db, skill\.id\)/)
+    expect(src).not.toMatch(/getSkillPreconditionToken\(db, input\.skillName\)/) // no by-name re-read
+  })
 })
 
 // RFC-170 T6 (Codex re-review F12) — cancel captures the CURRENT task in its CAS
@@ -734,5 +743,15 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
     // The cancel claim reads + returns currentTaskId, then cancels THAT exact task.
     expect(src).toMatch(/return \{ ok: true as const, taskId: cur\.currentTaskId \}/)
     expect(src).toMatch(/if \(claim\.taskId !== null\) await cancelFusionEngineTask/)
+  })
+
+  // RFC-170 T6 (Codex re-review F12-deeper): cancelFusionEngineTask RE-READS and
+  // retries until the task is terminal — a state flip between read and cancel no
+  // longer silently drops the cancel.
+  test('cancelFusionEngineTask retries until terminal, not read-once (source lock)', () => {
+    const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
+    // A bounded retry loop that returns only on a gone/terminal task.
+    expect(src).toMatch(/for \(let attempt = 0; attempt < 8; attempt\+\+\)/)
+    expect(src).toMatch(/if \(task === null \|\| TERMINAL_TASK\.has\(task\.status\)\) return/)
   })
 })

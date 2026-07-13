@@ -447,6 +447,37 @@ export async function getSkillPreconditionToken(
   })
 }
 
+/**
+ * RFC-170 T6 (Codex re-review F11) — the composite precondition token for a skill
+ * BY IMMUTABLE ID (not name), or null if that exact skill row is gone / not ready.
+ * The fusion flow authorizes a skill row, then must bind its token to THAT row's
+ * id: a by-NAME token re-read can silently pick up a same-name delete→recreate
+ * replacement (a different, possibly private, skill). Binding by id makes an
+ * A→B recreate resolve to null → the fusion is refused before any side effect.
+ */
+export async function getSkillPreconditionTokenById(
+  db: DbClient,
+  skillId: string,
+): Promise<string | null> {
+  const row = await db
+    .select({
+      id: skills.id,
+      contentVersion: skills.contentVersion,
+      metaRevision: skills.metaRevision,
+    })
+    .from(skills)
+    .where(and(eq(skills.id, skillId), eq(skills.reservationState, 'ready')))
+    .limit(1)
+  const r = row[0]
+  if (r === undefined) return null
+  const { encodeSkillToken } = await import('@/services/skillToken')
+  return encodeSkillToken({
+    skillId: r.id,
+    contentVersion: r.contentVersion,
+    metaRevision: r.metaRevision,
+  })
+}
+
 export async function writeSkillContent(
   db: DbClient,
   opts: SkillFsOptions,

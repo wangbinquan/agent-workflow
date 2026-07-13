@@ -7,7 +7,12 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createManagedSkill, getSkill, readSkillContent } from '../src/services/skill'
+import {
+  createManagedSkill,
+  getSkill,
+  getSkillPreconditionTokenById,
+  readSkillContent,
+} from '../src/services/skill'
 import { decodeSkillToken, encodeSkillToken } from '../src/services/skillToken'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -62,5 +67,17 @@ describe('RFC-170 T3 — read-path composite token', () => {
     const content = await readSkillContent(db, fsOpts, 'foo')
     expect(content.bodyMd).toContain('body') // from the immutable v1 snapshot
     expect(content.bodyMd).not.toContain('LIVE-TAMPERED') // NOT from mutated live
+  })
+
+  // RFC-170 T6 (Codex re-review F11): a fusion binds its token to the AUTHORIZED
+  // skill's immutable id (getSkillPreconditionTokenById), not a by-name re-read —
+  // so a same-name delete→recreate (new id) resolves to null and is refused.
+  test('getSkillPreconditionTokenById binds to the immutable id (null for a gone id)', async () => {
+    const skill = await getSkill(db, 'foo')
+    const tok = await getSkillPreconditionTokenById(db, skill!.id)
+    expect(tok).not.toBeNull()
+    expect(decodeSkillToken(tok!)!.skillId).toBe(skill!.id)
+    // A recreated skill mints a NEW id → the old id is gone → null (fail-closed).
+    expect(await getSkillPreconditionTokenById(db, '01OLDGONEID0000000000000000')).toBeNull()
   })
 })

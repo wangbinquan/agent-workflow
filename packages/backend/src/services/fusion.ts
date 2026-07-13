@@ -42,7 +42,7 @@ import { agents, fusions, skills, skillVersions, workflows } from '@/db/schema'
 import { createAgent } from '@/services/agent'
 import { canManageMemory, fuseMemoriesTx, getMemoryById } from '@/services/memory'
 import { canViewResource, isAdminActor, isResourceOwner } from '@/services/resourceAcl'
-import { getSkill, getSkillPreconditionToken } from '@/services/skill'
+import { getSkill, getSkillPreconditionTokenById } from '@/services/skill'
 import { decodeSkillToken, encodeSkillToken } from '@/services/skillToken'
 import { commitSkillVersion, type SkillVersionFsOptions } from '@/services/skillVersion'
 import { trySetTaskStatus } from '@/services/lifecycle'
@@ -427,12 +427,13 @@ export async function createFusion(
     throw new ConflictError('fusion-skill-forbidden', 'you cannot write this skill')
   }
 
-  // RFC-170 T6 (Codex F3): capture the target skill's composite precondition token
-  // BEFORE any side effect (worktree seed + startTask). If a delete→recreate races
-  // during seeding/launch, this token reflects the generation we SEED FROM and
-  // AUTHORIZE against — so a later approve/reject sees the mismatch and 409s,
-  // instead of pairing an old-generation proposal with the replacement's token.
-  const preconditionToken = await getSkillPreconditionToken(db, input.skillName)
+  // RFC-170 T6 (Codex F3 + re-review F11): capture the precondition token BEFORE any
+  // side effect, bound to the IMMUTABLE id of the skill we just AUTHORIZED (`skill`)
+  // — NOT a by-name re-read, which a same-name delete→recreate could repoint to a
+  // different (possibly private) skill B. If A was deleted/recreated since the auth
+  // check, the by-id read returns null → the fusion is refused (F10-null) before any
+  // worktree/task, so B's content never enters a task the original caller owns.
+  const preconditionToken = await getSkillPreconditionTokenById(db, skill.id)
   // RFC-170 T6 (Codex re-review F10): a null token means the skill vanished / is
   // not published between the visibility check and here — refuse to create a
   // fusion (and any worktree/task) that could never be decided (legacy-null is
@@ -1279,19 +1280,32 @@ export async function rejectFusion(
  * orphaned clarify session instead of leaking a worker/workspace forever.
  */
 async function cancelFusionEngineTask(db: DbClient, taskId: string): Promise<void> {
-  const task = await getTask(db, taskId)
-  if (task === null) return
-  if (task.status === 'pending' || task.status === 'running') {
-    await cancelTask(db, taskId).catch(() => undefined)
-  } else if (task.status === 'awaiting_human' || task.status === 'awaiting_review') {
-    await trySetTaskStatus({
-      db,
-      taskId,
-      to: 'canceled',
-      allowedFrom: ['awaiting_human', 'awaiting_review'],
-      extra: { finishedAt: Date.now(), errorSummary: 'fusion canceled' },
-      reason: 'fusion: terminalize parked engine task',
-    }).catch(() => false)
+  // RFC-170 T6 (Codex re-review F12): a task can FLIP between the read and the
+  // cancel (running→awaiting_human makes cancelTask refuse; parked→pending makes
+  // the narrow trySetTaskStatus miss). Reading once + swallowing the miss leaves
+  // the engine task alive under a canceled fusion. Instead RE-READ and retry the
+  // state-appropriate cancel until the task is terminal (bounded — the fusion is
+  // already canceled, so it must settle; the bound guards a pathological oscillation).
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const task = await getTask(db, taskId)
+    if (task === null || TERMINAL_TASK.has(task.status)) return // gone or terminal → done
+    if (task.status === 'pending' || task.status === 'running') {
+      await cancelTask(db, taskId).catch(() => undefined)
+    } else if (task.status === 'awaiting_human' || task.status === 'awaiting_review') {
+      // Parked in its mandatory clarify round; cancelTask refuses those, so
+      // terminalize directly. The RFC-053 reconciler then abandons the orphaned
+      // clarify session. (A full clarify node_run/round/session teardown is a
+      // task-layer concern tracked as a follow-up — see §6g.)
+      await trySetTaskStatus({
+        db,
+        taskId,
+        to: 'canceled',
+        allowedFrom: ['awaiting_human', 'awaiting_review'],
+        extra: { finishedAt: Date.now(), errorSummary: 'fusion canceled' },
+        reason: 'fusion: terminalize parked engine task',
+      }).catch(() => false)
+    }
+    // Loop: re-read next iteration; if the cancel landed we return at the top.
   }
 }
 
