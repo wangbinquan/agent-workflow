@@ -23,6 +23,8 @@
 - **RFC-170-T5** ZIP overwrite 纳为版本写（依赖 T7）。
 - **RFC-170-T6** fusion 审批：发起持久化 token、批准同事务 CAS + legacy row fail-closed（依赖 T7）。
 - **RFC-170-T9**（同批）quarantine 双检查点：pre-spawn 解析层 + skillId/generation 随 ResolvedSkill 传 stageSkills 终检（含 Claude 路径）；两 runtime 拒注入测试——**运行时隔离必须与写协议同批，否则 quarantined skill 仍被注入**。
+- **RFC-170-T-BSAFE**（G2-6/G3-6 修正——批次 B 安全部署单元实际闭合）：以下四项从批次 C **上移入批次 B**（否则 B 单独部署仍有确定破口）：① DELETE tombstone 操作锁（原 T12）；② conflict-replace 可回滚交换+journal（原 T11）；③ 旧 metadata `PUT /skills/:name` **与旧 content `PUT /skills/:name/content` 同时 410**（原 T13，G3-3 补 content）；④ snapshot ingestion symlink reject + **external file/tree GET realpath containment（G3-1 安全）**（原 T13）。批次 C 只留完整迁移决策 UI + source 生命周期 + ACL 前端管线。
+- **RFC-170-T-BOOT**（G3-5）boot 在开放 HTTP/runtime 前逐 managed skill 验证快照（content_version 行/目录 + hash 匹配 + 无 symlink + SKILL.md 合法）→ CAS `'snapshot-authoritative'` 否则 quarantine；存量一律先 `'snapshot-unverified'`。
 
 ## 批次 C —— 存量迁移决策 UI + source 生命周期 + ACL（reservation 已移批次 B）
 
