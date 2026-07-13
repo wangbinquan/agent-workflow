@@ -126,12 +126,26 @@ describe('RFC-133 queued run-obligation matrix — isDispatchedEntryConsumed (in
     expect(isDispatchedEntryConsumed(queued(), siblingRunning, NO_LINEAGE, 'in-flight')).toBe(false)
     // scoped to shard-A: the sibling shard-B run is filtered out → no obligation → consumed
     expect(
-      isDispatchedEntryConsumed(queued(), siblingRunning, NO_LINEAGE, 'in-flight', undefined, 'shard-A'),
+      isDispatchedEntryConsumed(
+        queued(),
+        siblingRunning,
+        NO_LINEAGE,
+        'in-flight',
+        undefined,
+        'shard-A',
+      ),
     ).toBe(true)
     // scoped to shard-A: a SAME-shard running run still obligates → open
     const sameRunning = [mkRun({ id: 'r-a', status: 'running', shardKey: 'shard-A' })]
     expect(
-      isDispatchedEntryConsumed(queued(), sameRunning, NO_LINEAGE, 'in-flight', undefined, 'shard-A'),
+      isDispatchedEntryConsumed(
+        queued(),
+        sameRunning,
+        NO_LINEAGE,
+        'in-flight',
+        undefined,
+        'shard-A',
+      ),
     ).toBe(false)
   })
 

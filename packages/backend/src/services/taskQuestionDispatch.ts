@@ -608,7 +608,15 @@ async function dispatchTaskQuestionsLocked(
       const cause = causeClassForEntry(nodeEntries[0]!)
       const shards = [...new Set(nodeEntries.map(shardOf))]
       return shards.map((sk) =>
-        buildFrontierMintPlan(db, taskId, nodeId, null, cause, definition, sk === null ? undefined : sk),
+        buildFrontierMintPlan(
+          db,
+          taskId,
+          nodeId,
+          null,
+          cause,
+          definition,
+          sk === null ? undefined : sk,
+        ),
       )
     }),
   )
@@ -1439,7 +1447,8 @@ export async function buildFrontierMintPlan(
     .from(nodeRuns)
     .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, targetNodeId)))
   // Scope the inheritance source + retry-index lineage to this shard (member); undefined = all.
-  const scoped = shardKey === undefined ? targetRuns : targetRuns.filter((r) => r.shardKey === shardKey)
+  const scoped =
+    shardKey === undefined ? targetRuns : targetRuns.filter((r) => r.shardKey === shardKey)
   const last = pickFreshestRun(scoped, { topLevelOnly: false })
   if (last === undefined) {
     throw new ConflictError(
@@ -1447,7 +1456,9 @@ export async function buildFrontierMintPlan(
       `cannot dispatch to frontier '${targetNodeId}'${shardKey !== undefined ? ` (shard '${shardKey}')` : ''}: no prior node_run to inherit`,
     )
   }
-  const topLevel = scoped.filter((r) => r.parentNodeRunId === null && r.iteration === last.iteration)
+  const topLevel = scoped.filter(
+    (r) => r.parentNodeRunId === null && r.iteration === last.iteration,
+  )
   const retryIndex = topLevel.length === 0 ? 0 : Math.max(...topLevel.map((r) => r.retryIndex)) + 1
   const preId = ulid()
   // RFC-127 借壳: resolve the borrowed node's agentName from the frozen snapshot (the SAME
@@ -1470,5 +1481,11 @@ export async function buildFrontierMintPlan(
       ...(shardKey !== undefined ? { shardKey } : {}),
     },
   })
-  return { nodeId: targetNodeId, preId, iteration: last.iteration, shardKey: shardKey ?? null, values }
+  return {
+    nodeId: targetNodeId,
+    preId,
+    iteration: last.iteration,
+    shardKey: shardKey ?? null,
+    values,
+  }
 }

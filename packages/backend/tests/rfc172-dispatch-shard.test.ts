@@ -16,7 +16,12 @@ import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src
 import { buildFrontierMintPlan, resolveEntryShardKeys } from '../src/services/taskQuestionDispatch'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const MIN_DEF = { $schema_version: 1, inputs: [], nodes: [], edges: [] } as unknown as WorkflowDefinition
+const MIN_DEF = {
+  $schema_version: 1,
+  inputs: [],
+  nodes: [],
+  edges: [],
+} as unknown as WorkflowDefinition
 
 async function seedTask(db: DbClient, taskId: string): Promise<void> {
   await db.insert(workflows).values({ id: `wf_${taskId}`, name: 'stub', definition: '{}' })
@@ -117,7 +122,10 @@ describe('RFC-172 S0 — resolveEntryShardKeys', () => {
     const entryB = await seedEntry(db, taskId, { originNodeRunId: originB, sourceKind: 'self' })
     // manual §15: synthetic origin (a real node_run to satisfy FK), NO clarify round → null
     const manualOrigin = await seedNodeRun(db, taskId, '__wg_member__')
-    const entryM = await seedEntry(db, taskId, { originNodeRunId: manualOrigin, sourceKind: 'manual' })
+    const entryM = await seedEntry(db, taskId, {
+      originNodeRunId: manualOrigin,
+      sourceKind: 'manual',
+    })
 
     const byId = await resolveEntryShardKeys(db, [entryA, entryB, entryM])
     expect(byId.get(entryA.id)).toBe('assign-A')
@@ -182,7 +190,10 @@ describe('RFC-172 S3 — buildFrontierMintPlan shard scoping', () => {
       undefined,
     )
     expect(planGlobal.shardKey).toBeNull()
-    expect(['shard-A', 'shard-B']).toContain(planGlobal.values.shardKey) // inherited, not overwritten
+    // inherited from a real run, not overwritten/nulled (values.shardKey is string|null|undefined,
+    // so a boolean === check keeps this type-safe under tsc — no toContain(string|null) overload).
+    const inheritedShard = planGlobal.values.shardKey
+    expect(inheritedShard === 'shard-A' || inheritedShard === 'shard-B').toBe(true)
     expect(planGlobal.values.retryIndex).toBe(6)
   })
 })
