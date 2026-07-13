@@ -28,6 +28,7 @@ import {
   deleteWorkgroup,
   diffNewAgentMemberNames,
   getWorkgroup,
+  getWorkgroupById,
   listWorkgroups,
   renameWorkgroup,
   updateWorkgroup,
@@ -55,6 +56,19 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
 
   app.get('/api/workgroups/:name', async (c) => {
     return c.json(await loadVisibleWorkgroup(actorOf(c), c.req.param('name')))
+  })
+
+  // RFC-177: resolve a workgroup by its stable id → current name, so a task's
+  // frozen `workgroupId` subject link survives a rename (never opens a same-named
+  // replacement). Two-segment path never collides with :name (arity-distinct).
+  // Invisible/missing → identical 404 (D1); returns ONLY {name} (no live state).
+  app.get('/api/workgroups/by-id/:id', async (c) => {
+    const actor = actorOf(c)
+    const group = await getWorkgroupById(deps.db, c.req.param('id'))
+    if (group === null || !(await canViewResource(deps.db, actor, 'workgroup', group))) {
+      throw new NotFoundError('workgroup-not-found', 'workgroup not found')
+    }
+    return c.json({ name: group.name })
   })
 
   app.post('/api/workgroups', async (c) => {

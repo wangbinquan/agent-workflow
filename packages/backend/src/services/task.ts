@@ -3114,6 +3114,9 @@ function rowToSummary(row: typeof tasks.$inferSelect, workflowName: string | nul
     // RFC-165: execution-space kind + single-agent soft link.
     spaceKind: row.spaceKind,
     sourceAgentName: row.sourceAgentName ?? null,
+    // RFC-177: frozen stable agent id so the list subject link resolves by id
+    // (rename/reuse-safe); NULL for non-agent / pre-RFC-175 rows (by-name fallback).
+    sourceAgentId: row.sourceAgentId ?? null,
   }
 }
 

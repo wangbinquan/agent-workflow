@@ -4,15 +4,21 @@
 // `__agent_host__` anchors (services/workgroupLaunch.ts + agentLaunch.ts). So
 // naive `workflowName` / `/workflows/$id` rendering leaks those internal anchor
 // names and links to a dead workflow page. This component resolves the REAL
-// subject via `taskExecutionKind` and links to the owning resource instead:
-//   - workgroup → /workgroups/$name  (+ 「工作组」badge)
-//   - agent     → /agents/$name      (+ 「代理」badge)
-//   - workflow  → /workflows/$id      (plain link, no badge — unchanged)
-// Used by the /tasks list cell and the /tasks/:id detail header + meta row so
-// all three surfaces stay consistent. Do NOT re-scatter workgroupId /
+// subject via `taskExecutionKind` and links to the owning resource — by its
+// FROZEN STABLE ID (RFC-177), so a rename (or rare name-reuse) never opens a
+// same-named replacement:
+//   - workgroup → /workgroups/by-id/$id  → current group page  (+ 「工作组」badge)
+//   - agent     → /agents/by-id/$id      → current agent page  (+ 「代理」badge)
+//                 (historical agent w/o frozen id → /agents/$name, RFC-177 D3a)
+//   - workflow  → /workflows/$id          (plain link, no badge — unchanged)
+// The link TEXT stays the frozen name (ACL-safe, same as the task's room); the
+// current name is disclosed only server-side, ACL-gated, by the by-id route after
+// the click. Used by the /tasks list cell and the /tasks/:id detail header + meta
+// row so all three surfaces stay consistent. Do NOT re-scatter workgroupId /
 // sourceAgentName checks at callsites — that is exactly what taskExecutionKind's
 // contract (schemas/task.ts) exists to prevent.
 
+import type { ReactElement } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { taskExecutionKind } from '@agent-workflow/shared'
@@ -25,6 +31,8 @@ export interface TaskSubjectFields {
   workgroupId?: string | null
   workgroupName?: string | null
   sourceAgentName?: string | null
+  /** RFC-177: frozen stable agent id for id-resolved links (NULL → by-name D3a). */
+  sourceAgentId?: string | null
 }
 
 export interface TaskSubjectLinkProps {
@@ -54,38 +62,62 @@ export function TaskSubjectLink({ task, taskId, badge = false }: TaskSubjectLink
   }
 
   const isWorkgroup = kind === 'workgroup'
-  // workgroupName may be null (group row deleted → frozen name unavailable);
-  // sourceAgentName is stored on the task row so it is present whenever
-  // kind === 'agent'.
-  //
-  // These names are FROZEN at launch (task-scoped, ACL-safe per RFC-099 — never a
-  // live resource lookup; see services/task.ts `frozenWorkgroupName`). Accepted
-  // trade-off of that freeze: after the owning resource is renamed/deleted the
-  // link 404s, and in the rare case its OLD name is later reused by a DIFFERENT
-  // resource the link opens that replacement — a wrong-but-same-named subject, not
-  // the original (Codex review 2026-07-13, P2). We keep it anyway because (a) it is
-  // the SAME frozen name the task's room already shows and the list cell already
-  // links, (b) a live identity check would regress the RFC-099 ACL isolation the
-  // freeze exists to protect, (c) agents have no stable id (name IS identity), and
-  // (d) it still strictly beats the prior behavior of leaking the internal
-  // __workgroup_host__ / __agent_host__ anchor + a dead /workflows link.
+  // Link by the FROZEN STABLE ID, resolved on click by the /…/by-id/$id route to
+  // the resource's CURRENT canonical page (RFC-177 — fixes the Codex 2026-07-13
+  // P2 where a renamed+reused name misidentified the subject). Rendering does no
+  // lookup: the id is already frozen on the task, so the ACL-frozen-name invariant
+  // (RFC-099) is untouched — the current name is disclosed only server-side,
+  // ACL-gated, by the by-id route.
+  //   - workgroupId is ALWAYS frozen for a workgroup task (taskExecutionKind).
+  //   - sourceAgentId is frozen for agent tasks launched since RFC-175; NULL for
+  //     older rows → D3(a) by-name fallback (no regression vs the prior by-name link).
+  //   - workgroupName may be null (group row deleted → frozen name gone) → em-dash.
   const name = isWorkgroup ? (task.workgroupName ?? null) : (task.sourceAgentName ?? null)
   const linkClass = badge ? 'data-table__link task-workflow-cell__name' : 'data-table__link'
 
-  const subject =
-    name === null ? (
-      // Deleted resource: keep the badge (the kind is still known) but drop the
-      // dead link, mirroring the list cell's group-deleted fallback.
-      <span className="data-table__muted">{t('common.emDash')}</span>
-    ) : isWorkgroup ? (
-      <Link to="/workgroups/$name" params={{ name }} className={linkClass} title={name}>
+  let subject: ReactElement
+  if (name === null) {
+    // Deleted group (frozen name unavailable): keep the badge, drop the dead link.
+    subject = <span className="data-table__muted">{t('common.emDash')}</span>
+  } else if (isWorkgroup && task.workgroupId != null) {
+    subject = (
+      <Link
+        to="/workgroups/by-id/$id"
+        params={{ id: task.workgroupId }}
+        className={linkClass}
+        title={name}
+      >
         {name}
       </Link>
-    ) : (
+    )
+  } else if (!isWorkgroup && task.sourceAgentId != null) {
+    subject = (
+      <Link
+        to="/agents/by-id/$id"
+        params={{ id: task.sourceAgentId }}
+        className={linkClass}
+        title={name}
+      >
+        {name}
+      </Link>
+    )
+  } else if (!isWorkgroup) {
+    // RFC-177 D3(a): historical agent task (no frozen id) → by-name link. Only
+    // legacy rows keep the rare reuse caveat; new tasks are id-resolved above.
+    subject = (
       <Link to="/agents/$name" params={{ name }} className={linkClass} title={name}>
         {name}
       </Link>
     )
+  } else {
+    // Unreachable: a workgroup task always freezes workgroupId. Degrade to a
+    // by-name link rather than crash if that invariant is ever violated.
+    subject = (
+      <Link to="/workgroups/$name" params={{ name }} className={linkClass} title={name}>
+        {name}
+      </Link>
+    )
+  }
 
   if (!badge) return subject
 

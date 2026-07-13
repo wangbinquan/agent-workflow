@@ -125,6 +125,8 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'PUT', path: '/api/agents/:name' },
   { method: 'DELETE', path: '/api/agents/:name' },
   { method: 'POST', path: '/api/agents/:name/rename' },
+  // RFC-177: id→name resolver for the /tasks subject link (rename-safe). Auth-required.
+  { method: 'GET', path: '/api/agents/by-id/:id' },
   // RFC-165 §4: single-agent launch (service-level entry; tasks:launch gate).
   { method: 'POST', path: '/api/agents/:name/tasks' },
   {
@@ -237,6 +239,8 @@ export const ENDPOINTS: EndpointSpec[] = [
     happy: { schema: z.array(z.any()) },
   },
   { method: 'GET', path: '/api/workgroups/:name' },
+  // RFC-177: id→name resolver for the /tasks subject link (rename-safe). Auth-required.
+  { method: 'GET', path: '/api/workgroups/by-id/:id' },
   { method: 'POST', path: '/api/workgroups' },
   { method: 'PUT', path: '/api/workgroups/:name' },
   { method: 'DELETE', path: '/api/workgroups/:name' },

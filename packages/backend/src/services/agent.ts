@@ -35,6 +35,17 @@ export async function getAgent(db: DbClient, name: string): Promise<Agent | null
   return row ? rowToAgent(row) : null
 }
 
+/**
+ * RFC-177: fetch an agent by its stable id (ULID). Powers the by-id subject
+ * resolver (`GET /api/agents/by-id/:id`) so a task's frozen `sourceAgentId`
+ * link survives a rename/reuse of the agent name. Same shape as `getAgent`.
+ */
+export async function getAgentById(db: DbClient, id: string): Promise<Agent | null> {
+  const rows = await db.select().from(agents).where(eq(agents.id, id)).limit(1)
+  const row = rows[0]
+  return row ? rowToAgent(row) : null
+}
+
 export async function createAgent(
   db: DbClient,
   input: CreateAgent,

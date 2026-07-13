@@ -21,6 +21,7 @@ import {
   createAgent,
   deleteAgent,
   getAgent,
+  getAgentById,
   listAgents,
   renameAgent,
   updateAgent,
@@ -73,6 +74,19 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
   app.get('/api/agents/:name', async (c) => {
     const agent = await loadVisibleAgent(actorOf(c), c.req.param('name'))
     return c.json(agent)
+  })
+
+  // RFC-177: resolve an agent by its stable id → current name, so a task's frozen
+  // `sourceAgentId` subject link survives a rename/reuse of the name (never opens a
+  // same-named replacement). Two-segment path never collides with :name
+  // (arity-distinct). Invisible/missing → identical 404; returns ONLY {name}.
+  app.get('/api/agents/by-id/:id', async (c) => {
+    const actor = actorOf(c)
+    const agent = await getAgentById(deps.db, c.req.param('id'))
+    if (agent === null || !(await canViewResource(deps.db, actor, 'agent', agent))) {
+      throw new NotFoundError('agent-not-found', 'agent not found')
+    }
+    return c.json({ name: agent.name })
   })
 
   app.post('/api/agents', async (c) => {

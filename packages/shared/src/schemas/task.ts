@@ -300,6 +300,13 @@ export const TaskSummarySchema = z.object({
   spaceKind: SpaceKindSchema.default('remote'),
   /** RFC-165: source agent name for single-agent tasks (null otherwise). */
   sourceAgentName: z.string().nullable().optional(),
+  /**
+   * RFC-177: frozen stable agent id (`tasks.source_agent_id`, RFC-175) so the
+   * list subject link can resolve the agent by id — surviving a rename/reuse of
+   * the name. NULL for non-agent tasks and for agent tasks launched before the
+   * RFC-175 migration (not backfilled → those fall back to a by-name link).
+   */
+  sourceAgentId: z.string().nullable().optional(),
 })
 export type TaskSummary = z.infer<typeof TaskSummarySchema>
 

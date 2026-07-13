@@ -49,7 +49,14 @@ function seedWorkflow(db: ReturnType<typeof createInMemoryDb>, id: string, name:
 
 function seedTask(
   db: ReturnType<typeof createInMemoryDb>,
-  opts: { name: string; workflowId: string; workgroupId?: string; workgroupConfigJson?: string },
+  opts: {
+    name: string
+    workflowId: string
+    workgroupId?: string
+    workgroupConfigJson?: string
+    sourceAgentName?: string
+    sourceAgentId?: string
+  },
 ): string {
   const tId = ulid()
   const now = Date.now()
@@ -70,6 +77,8 @@ function seedTask(
       ...(opts.workgroupConfigJson !== undefined
         ? { workgroupConfigJson: opts.workgroupConfigJson }
         : {}),
+      ...(opts.sourceAgentName !== undefined ? { sourceAgentName: opts.sourceAgentName } : {}),
+      ...(opts.sourceAgentId !== undefined ? { sourceAgentId: opts.sourceAgentId } : {}),
     })
     .run()
   return tId
@@ -195,5 +204,36 @@ describe('RFC-164 follow-up — getTask projects the frozen workgroup name (deta
     const task = (await getTask(db, tId))!
     expect(task.workgroupId).toBe(groupId)
     expect(task.workgroupName).toBeNull()
+  })
+})
+
+// RFC-177: the list subject link resolves an agent task by its frozen stable id,
+// so `TaskSummary` must carry `sourceAgentId` (the detail `Task` already did via
+// RFC-175). Locks the rowToSummary projection.
+describe('RFC-177 — sourceAgentId projected into the list summary', () => {
+  test('listTasks + getTask carry the frozen sourceAgentId for an agent task', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const wfId = ulid()
+    seedWorkflow(db, wfId, 'agent-host')
+    const tId = seedTask(db, {
+      name: 'agent-task',
+      workflowId: wfId,
+      sourceAgentName: 'coder',
+      sourceAgentId: 'ag-stable-1',
+    })
+    const row = (await listTasks(db, { limit: 100 })).find((r) => r.id === tId)!
+    expect(row.sourceAgentName).toBe('coder')
+    expect(row.sourceAgentId).toBe('ag-stable-1')
+    const detail = (await getTask(db, tId))!
+    expect(detail.sourceAgentId).toBe('ag-stable-1')
+  })
+
+  test('sourceAgentId is null for a non-agent task', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const wfId = ulid()
+    seedWorkflow(db, wfId, 'plain')
+    const tId = seedTask(db, { name: 'wf', workflowId: wfId })
+    const row = (await listTasks(db, { limit: 100 })).find((r) => r.id === tId)!
+    expect(row.sourceAgentId ?? null).toBeNull()
   })
 })

@@ -5,6 +5,7 @@ import { createRoute, createRouter, redirect } from '@tanstack/react-router'
 import { Route as accountRoute } from '@/routes/account'
 import { IndexRoute as agentsIndexRoute, Route as agentsRoute } from '@/routes/agents'
 import { Route as agentDetailRoute } from '@/routes/agents.detail'
+import { Route as agentByIdRoute } from '@/routes/agents.by-id'
 import { Route as agentNewRoute } from '@/routes/agents.new'
 import { Route as authRoute } from '@/routes/auth'
 import { Route as indexRoute } from '@/routes/index'
@@ -36,6 +37,7 @@ import {
 } from '@/routes/workflows'
 import { Route as workgroupsRoute } from '@/routes/workgroups'
 import { Route as workgroupDetailRoute } from '@/routes/workgroups.detail'
+import { Route as workgroupByIdRoute } from '@/routes/workgroups.by-id'
 import { EditRoute as workflowEditRoute } from '@/routes/workflows.edit'
 import { ReposRoute as reposRoute } from '@/routes/repos'
 import { Route as memoryRoute } from '@/routes/memory'
@@ -73,6 +75,10 @@ const workgroupLaunchRedirect = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   authRoute,
+  // RFC-177: /agents/by-id/$id — id→name resolver + redirect (root child, so it
+  // bypasses the split layout). Two-segment path is arity-distinct from
+  // /agents/$name, so a "by-id"-named agent still resolves normally.
+  agentByIdRoute,
   // RFC-169: /agents is now a split (master-detail) layout route; new / detail /
   // index are its children. '/agents/new' literal still precedes '/agents/$name'
   // (belt-and-suspenders — TanStack scores the literal higher anyway).
@@ -94,6 +100,9 @@ const routeTree = rootRoute.addChildren([
   // '/workgroups/launch' literal must precede '/workgroups/$name' so "launch"
   // never resolves as a workgroup name.
   workgroupLaunchRedirect,
+  // RFC-177: /workgroups/by-id/$id — id→name resolver + redirect (arity-distinct
+  // from /workgroups/$name).
+  workgroupByIdRoute,
   workgroupDetailRoute,
   workgroupsRoute,
   // RFC-105: '/tasks/$id/preview' (longer literal) before '/tasks/$id'.

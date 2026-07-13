@@ -71,6 +71,22 @@ export async function getWorkgroup(db: DbClient, name: string): Promise<Workgrou
   return rowToWorkgroup(row, memberRows)
 }
 
+/**
+ * RFC-177: fetch a workgroup by its stable id (ULID). Powers the by-id subject
+ * resolver (`GET /api/workgroups/by-id/:id`) so a task's frozen `workgroupId`
+ * link survives a rename of the group. Same shape as `getWorkgroup`.
+ */
+export async function getWorkgroupById(db: DbClient, id: string): Promise<Workgroup | null> {
+  const rows = await db.select().from(workgroups).where(eq(workgroups.id, id)).limit(1)
+  const row = rows[0]
+  if (row === undefined) return null
+  const memberRows = await db
+    .select()
+    .from(workgroupMembers)
+    .where(eq(workgroupMembers.workgroupId, row.id))
+  return rowToWorkgroup(row, memberRows)
+}
+
 export async function createWorkgroup(
   db: DbClient,
   input: CreateWorkgroup,
