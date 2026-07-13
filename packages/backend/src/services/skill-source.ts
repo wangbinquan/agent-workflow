@@ -383,7 +383,18 @@ export async function replaceSourceConflict(
     // occupier (invisible private skills 404 here — can't replace what you
     // can't see, and we never leak the owner).
     await requireResourceOwner(db, actor, 'skill', occupying)
-    await removeSkillRowAndFiles(db, fsOpts, occupying)
+    // RFC-170 §6a: remove a MANAGED occupier through the crash-safe delete op
+    // (root→.trash→DELETE row→clean, recoverable) instead of the old non-atomic
+    // rmSync+DELETE. A crash between removing the occupier and reconcileSource
+    // re-importing the source candidate is recovered at boot: ops-recovery settles
+    // the delete, then reconcileAllSources (idempotent) re-inserts the external.
+    if (occupying.sourceKind === 'managed') {
+      const { deleteManagedSkillOp } = await import('@/services/skillDeleteOp')
+      deleteManagedSkillOp(db, { appHome: fsOpts.appHome }, { id: occupying.id, name })
+    } else {
+      // External occupier: no managed directory — a single DB row drop is atomic.
+      await removeSkillRowAndFiles(db, fsOpts, occupying)
+    }
   }
 
   await reconcileSource(db, sourceRow)
