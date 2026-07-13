@@ -140,6 +140,11 @@ export function isDispatchedEntryConsumed(
     loopIter: 0,
     triggerRunId: entry.triggerRunId,
     runs: projected,
+    // RFC-172b (T4): thread the caller's shardKey into the anchor-branch lineage resolution — a
+    // workgroup member's consumption must not be satisfied by a SIBLING shard's done run (假消费).
+    // `undefined` (every current caller) = shard-blind, golden-lock. PR-2 (the dispatch gate) is the
+    // first caller to pass a real shard; until then this is a no-op capability wire.
+    shardKey,
   })
   if (hr === null || hr.status !== 'done') return false
   // RFC-139: done = consumed in BOTH modes (output presence is irrelevant — a done-no-output
@@ -170,6 +175,7 @@ function toLineageViews(
     startedAt: r.startedAt,
     hasOutput: outputRunIds.has(r.id),
     parentNodeRunId: r.parentNodeRunId,
+    shardKey: r.shardKey ?? null, // RFC-172b T1
   }))
 }
 

@@ -51,6 +51,7 @@ function mkLineage(over: Partial<RunLineageView>): RunLineageView {
     hasOutput: false,
     startedAt: 1,
     parentNodeRunId: null,
+    shardKey: null, // RFC-172b T1
     ...over,
   }
 }

@@ -228,6 +228,9 @@ export interface RunLineageView {
   startedAt: number | null
   hasOutput: boolean
   parentNodeRunId: string | null // 非 null = fanout 子 run
+  // RFC-172b（T1）：fan-out shard（workgroup member = assignment id；其余 = null）。承载 shardKey
+  // 感知的 lineage 解析——sibling shard 的 run 不再落进同 (node, iteration) 的 lineage 窗口。
+  shardKey: string | null
 }
 
 export interface ResolveHandlerInput {
@@ -239,6 +242,11 @@ export interface ResolveHandlerInput {
   triggerRunId: string | null
   /** 候选 node_runs（service 传该任务相关 runs；本函数自行按节点+迭代过滤）。 */
   runs: RunLineageView[]
+  /** RFC-172b（T2）：当承接节点按 shard fan-out（workgroup `__wg_member__`：一个节点、多个
+   *  并发 member 指派，靠 node_runs.shard_key 区分）时，把 lineage 窗口收窄到本 shard，否则一个
+   *  id 更大的 sibling shard done run 会被误当本条目的承接 run（假消费）。`undefined`（每个既有
+   *  调用方）= shard 盲，`sameNode` 逐字节等价今日（golden-lock）。内存比较，无 SQL eq(col,null) 坑。 */
+  shardKey?: string | null
 }
 
 /** RFC-120 Codex F1：按**精确 lineage**取本条目的承接 run（非裸 freshest≥anchor）。
@@ -259,7 +267,10 @@ export function resolveHandlerRun(input: ResolveHandlerInput): HandlerRunView | 
     (r) =>
       r.nodeId === input.effectiveTargetNodeId &&
       r.iteration === input.iteration &&
-      r.loopIter === input.loopIter,
+      r.loopIter === input.loopIter &&
+      // RFC-172b（T2）：shardKey===undefined → 恒真 → 与今日逐字节一致（golden-lock）。传值时
+      // 只保留本 shard 的 run（sibling 的 done 不进 lineage 窗口 → 不误判承接/消费）。
+      (input.shardKey === undefined || r.shardKey === input.shardKey),
   )
   // 上界 = 下一条「新反问触发」rerun 的 id（id 严格大于 anchor），否则 +∞。
   let upperBound: string | null = null

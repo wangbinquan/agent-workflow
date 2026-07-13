@@ -952,6 +952,7 @@ function findOpenDispatchTarget(
     startedAt: r.startedAt,
     hasOutput: inputs.outputRunIds.has(r.id),
     parentNodeRunId: r.parentNodeRunId,
+    shardKey: r.shardKey ?? null, // RFC-172b T1
   }))
   for (const e of inputs.entries) {
     // RFC-131 T4 去借壳: in-flight is tracked on the EFFECTIVE TARGET (override ?? default) — the
@@ -1246,6 +1247,7 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
     startedAt: r.startedAt,
     hasOutput: outputRunIds.has(r.id),
     parentNodeRunId: r.parentNodeRunId,
+    shardKey: r.shardKey ?? null, // RFC-172b T1
   }))
   // OPEN (unconsumed) home entries at THIS loop iteration, matched via the asking run (P2-3),
   // consumed via the dispatched-entry lineage (isDispatchedEntryConsumed, same oracle the
@@ -1337,6 +1339,7 @@ async function resolveDesignerBorrowForNode(
     startedAt: r.startedAt,
     hasOutput: outputRunIds.has(r.id),
     parentNodeRunId: r.parentNodeRunId,
+    shardKey: r.shardKey ?? null, // RFC-172b T1
   }))
   const openCandidates = candidates
     .slice()

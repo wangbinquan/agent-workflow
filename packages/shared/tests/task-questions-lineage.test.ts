@@ -29,6 +29,7 @@ const R = (id: string, over: Partial<RunLineageView> = {}): RunLineageView => ({
   startedAt: 1,
   hasOutput: true,
   parentNodeRunId: null,
+  shardKey: null,
   ...over,
 })
 
@@ -162,5 +163,52 @@ describe('multi-round clarify strand (incident 01KWDKBS9K…): done-no-output ha
       handlerRun: handler,
     })
     expect(phase).toBe('awaiting_confirm')
+  })
+})
+
+// RFC-172b (T2) — the optional shardKey scopes the lineage window to one fan-out shard, so a
+// workgroup member's handler is NOT resolved from a SIBLING shard's run (假消费). undefined =
+// shard-blind (golden-lock, byte-identical to pre-172b). Nulls collapse: a non-workgroup node's
+// runs are all shardKey=null, so shardKey===null filters to exactly today's set.
+describe('resolveHandlerRun — RFC-172b shardKey scoping', () => {
+  // member A's anchor (pending, shard A) + a sibling member B run (done, shard B, HIGHER id). The
+  // sibling has a NON-trigger cause (null) so it sits INSIDE the lineage window (a clarify-cause
+  // sibling would be the window UPPER BOUND and excluded regardless — the masking bug needs an
+  // in-window sibling).
+  const memberA = R('r1', { status: 'pending', startedAt: null, hasOutput: false, shardKey: 'A' })
+  const siblingB = R('r2', { rerunCause: null, status: 'done', hasOutput: true, shardKey: 'B' })
+
+  test("shardKey='A' excludes the sibling B run → A's own (pending) is the handler", () => {
+    const out = resolveHandlerRun({
+      ...base,
+      triggerRunId: 'r1',
+      runs: [memberA, siblingB],
+      shardKey: 'A',
+    })
+    expect(out).toEqual({ status: 'pending', startedAt: null, hasOutput: false })
+  })
+
+  test('golden-lock: undefined is shard-blind → the higher-id sibling B (done) masks A (今日行为)', () => {
+    const out = resolveHandlerRun({ ...base, triggerRunId: 'r1', runs: [memberA, siblingB] })
+    // sibling B (id r2 > anchor r1, top-level, in window) is freshest → its done view wins.
+    expect(out).toEqual({ status: 'done', startedAt: 1, hasOutput: true })
+  })
+
+  test('shardKey=null scopes to null-shard runs (non-workgroup collapse)', () => {
+    const nullRun = R('r1', { status: 'done', hasOutput: true, shardKey: null })
+    const memberRun = R('r2', {
+      status: 'pending',
+      startedAt: null,
+      hasOutput: false,
+      shardKey: 'A',
+    })
+    // null-shard resolution ignores the member run entirely → the null-shard done is the handler.
+    const out = resolveHandlerRun({
+      ...base,
+      triggerRunId: 'r1',
+      runs: [nullRun, memberRun],
+      shardKey: null,
+    })
+    expect(out).toEqual({ status: 'done', startedAt: 1, hasOutput: true })
   })
 })

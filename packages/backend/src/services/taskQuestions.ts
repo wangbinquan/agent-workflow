@@ -249,6 +249,7 @@ function resolveDispatchedEntryHandler(
         startedAt: r.startedAt,
         hasOutput: outputRunIds.has(r.id),
         parentNodeRunId: r.parentNodeRunId,
+        shardKey: r.shardKey ?? null, // RFC-172b T1
       }),
     ),
   })
@@ -548,6 +549,7 @@ function partitionUndispatchedParkTargets(
       startedAt: r.startedAt,
       hasOutput: outputRunIds.has(r.id),
       parentNodeRunId: r.parentNodeRunId,
+      shardKey: r.shardKey ?? null, // RFC-172b T1
     }),
   )
   const hasUndispatched = new Set<string>()
