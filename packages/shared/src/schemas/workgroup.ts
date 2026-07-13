@@ -290,5 +290,13 @@ export const StartWorkgroupTaskSchema = z.object({
   autoCommitPush: z.boolean().optional(),
   maxDurationMs: z.number().int().positive().optional(),
   maxTotalTokens: z.number().int().positive().optional(),
+  /**
+   * RFC-175 (§2b): immediate-submit-only OCC guard for relaunch. When present,
+   * `startWorkgroupTask` rejects (409 `workgroup-id-mismatch`, after the ACL-404
+   * gate) if the resolved workgroup's stable id differs — closing the seed→submit
+   * delete+recreate-same-name TOCTOU. NEVER persisted into a scheduled task
+   * (§2d overlay-only; scheduled payload schema rejects it).
+   */
+  expectedWorkgroupId: z.string().optional(),
 })
 export type StartWorkgroupTask = z.infer<typeof StartWorkgroupTaskSchema>

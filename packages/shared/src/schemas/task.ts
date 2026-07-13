@@ -227,6 +227,20 @@ export const TaskSchema = z.object({
    */
   workgroupName: z.string().nullable().optional(),
   /**
+   * RFC-175 (§2): the workgroup task's frozen `goal`, read from the task's OWN
+   * `workgroup_config_json` (same task-scoped, RFC-099-safe source as
+   * `workgroupName` — NOT a live join). NULL for non-workgroup tasks. Powers
+   * "relaunch" pre-filling the workgroup prompt; never enters any agent prompt.
+   */
+  goal: z.string().nullable().optional(),
+  /**
+   * RFC-175 (§2e): the launching agent's stable `agents.id` (see
+   * `tasks.source_agent_id`). NULL for non-agent tasks and for agent tasks
+   * launched before migration 0091 (not backfilled). Lets "relaunch" carry an
+   * `expectedAgentId` OCC guard for post-migration agent tasks.
+   */
+  sourceAgentId: z.string().nullable().optional(),
+  /**
    * RFC-165: execution-space kind. Defaulted to 'remote' so fixtures predating
    * migration 0085 keep parsing; the backend mapper always populates it.
    */
@@ -336,6 +350,15 @@ export const StartTaskSchema = z
     /** Per-task overrides (settings defaults apply when omitted). */
     maxDurationMs: z.number().int().nonnegative().optional(),
     maxTotalTokens: z.number().int().nonnegative().optional(),
+    /**
+     * RFC-175 (§2c): immediate-submit-only OCC guard. When present, `startTask`
+     * rejects (409 `workflow-version-mismatch`) if the workflow it snapshots has
+     * a different `workflows.version` — so a relaunch that normalized inputs
+     * against version N can't silently store them into a concurrently-PUT N+1.
+     * NEVER persisted into a scheduled task (§2d: added as an immediate-POST
+     * overlay, not via buildLaunchBody; the scheduled payload schema rejects it).
+     */
+    expectedWorkflowVersion: z.number().int().optional(),
     /**
      * RFC-036 / RFC-099 — initial task users besides the launcher (the
      * launcher is recorded as owner automatically). RFC-099 removed the
@@ -979,5 +1002,13 @@ export const StartAgentTaskSchema = z.object({
   autoCommitPush: z.boolean().optional(),
   maxDurationMs: z.number().int().positive().optional(),
   maxTotalTokens: z.number().int().positive().optional(),
+  /**
+   * RFC-175 (§2e): immediate-submit-only OCC guard for relaunch. When present,
+   * `startAgentTask` rejects (409 `agent-id-mismatch`, after the ACL-404 gate)
+   * if the resolved agent's stable id differs — closing the delete+recreate-
+   * same-name ABA for post-migration agent tasks. NEVER persisted into a
+   * scheduled task (§2d overlay-only; scheduled payload schema rejects it).
+   */
+  expectedAgentId: z.string().optional(),
 })
 export type StartAgentTask = z.infer<typeof StartAgentTaskSchema>

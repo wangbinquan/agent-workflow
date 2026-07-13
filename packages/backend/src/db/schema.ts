@@ -842,6 +842,15 @@ export const tasks = sqliteTable(
     /** RFC-165: source agent for single-agent tasks (soft link to agents.name; NULL otherwise). */
     sourceAgentName: text('source_agent_name'),
     /**
+     * RFC-175 (§2e): the launching agent's STABLE `agents.id` at launch time
+     * (alongside the name soft-link). Lets "relaunch" faithfully verify the
+     * subject on a post-migration task (an `expectedAgentId` OCC guard rejects
+     * a delete+recreate-same-name replacement). NULL for non-agent tasks AND for
+     * agent tasks launched before this migration (NOT backfilled — a name→id
+     * lookup would itself hit the ABA; those relaunch best-effort by name).
+     */
+    sourceAgentId: text('source_agent_id'),
+    /**
      * RFC-165: two-phase workspace-GC tombstone. `workspace_pruning_at` is the
      * atomic CLAIM stamp (conditional UPDATE wins the right to delete; a stale
      * claim past the lease window may be re-claimed by GC). `workspace_pruned_at`

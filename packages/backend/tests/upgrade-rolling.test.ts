@@ -290,7 +290,8 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-167 T2 bumped to 88 with 0088_rfc167_dynamic_workflow_spaces.
     // RFC-167 pivot dropped that table with 0089_rfc167_drop_dynamic_workflow_spaces → 89.
     // RFC-170 T1 bumped to 90 with 0090_rfc170_skills_storage_acl.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(90)
+    // RFC-175 T0 bumped to 91 with 0091_rfc175_task_source_agent_id.
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(91)
   })
 
   for (const target of FREEZE_TARGETS) {
