@@ -97,6 +97,38 @@ const SCHEDULE_AGENT = {
   updatedAt: 1,
 }
 
+// RFC-175 relaunch source: a completed agent/scratch task whose params the
+// wizard reconstructs from persisted columns (no schedule row involved).
+const RELAUNCH_TASK = {
+  id: 'relaunch-task',
+  name: 'prior audit',
+  status: 'done',
+  spaceKind: 'scratch',
+  repos: [],
+  repoCount: 1,
+  inputs: { description: 'audit the auth module' },
+  sourceAgentName: 'auditor',
+  sourceAgentId: null,
+  workgroupId: null,
+  workgroupName: null,
+  goal: null,
+  workflowId: null,
+  workflowSnapshot: { nodes: [{ kind: 'agent-single' }] },
+  errorSummary: null,
+  errorMessage: null,
+  failedNodeId: null,
+  gitUserName: null,
+  gitUserEmail: null,
+  workingBranch: null,
+  autoCommitPush: false,
+  maxDurationMs: null,
+  maxTotalTokens: null,
+}
+const RELAUNCH_MEMBERS = {
+  owner: { id: 'me', username: 'me', displayName: 'Me', role: 'user', status: 'active' },
+  users: [],
+}
+
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
   setToken('tok')
@@ -132,6 +164,8 @@ function installFetch(): FetchCall[] {
       if (url.includes('/api/scheduled-tasks/sched-a')) return json(SCHEDULE_AGENT)
       if (url.includes('/api/scheduled-tasks') && method === 'POST')
         return json({ id: 'sched-new' }, 201)
+      if (url.includes('/api/tasks/relaunch-task/members')) return json(RELAUNCH_MEMBERS)
+      if (url.includes('/api/tasks/relaunch-task')) return json(RELAUNCH_TASK)
       if (url.includes('/api/users/lookup')) return json([])
       if (url.includes('/api/cached-repos')) return json({ items: [] })
       if (url.includes('/api/workflows/wf-1')) return json(WF_DETAIL)
@@ -280,6 +314,40 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
       name: 'TA',
       description: 'fix the flaky test',
       scratch: true,
+    })
+  })
+
+  // RFC-175 (impl-gate F1-followup-2): a relaunch (?relaunchFrom=) reconstructs
+  // the full launch params from the SOURCE TASK's persisted columns and can
+  // re-fire. The submit gate opens only after the seed effect applies
+  // (relaunchApplied) — so a successful launch here proves the seed reached the
+  // wire, not the empty default form.
+  test('W13: relaunch (?relaunchFrom) reconstructs the source task and re-launches with the seeded body', async () => {
+    const calls = installFetch()
+    await renderWizard('/tasks/new?relaunchFrom=relaunch-task')
+
+    // Seed lands the wizard on Step 1 with agent + scratch + description
+    // pre-filled; Next only enables once the object seeds in (relaunchApplied).
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+    next() // mode → space (scratch seeded)
+    next() // space → content (name + description seeded)
+    next() // content → confirm
+    fireEvent.click(await screen.findByTestId('wizard-launch'))
+    await waitFor(() => expect(screen.queryByTestId('task-page')).toBeTruthy())
+
+    const post = calls.find(
+      (c) => c.method === 'POST' && c.url.includes('/api/agents/auditor/tasks'),
+    )!
+    // Reconstructed from the task: name + description + scratch, and allowClarify
+    // false (the agent-single snapshot proves clarify was off). No expectedAgentId
+    // — a historical task (sourceAgentId null) launches by name.
+    expect(post.body).toEqual({
+      name: 'prior audit',
+      description: 'audit the auth module',
+      scratch: true,
+      allowClarify: false,
     })
   })
 
