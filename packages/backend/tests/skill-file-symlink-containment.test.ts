@@ -72,13 +72,28 @@ describe('readSkillFile symlink containment', () => {
   })
 
   test('readSkillContent refuses a SKILL.md symlinked to a host file (G3-1 content GET)', async () => {
+    // RFC-170 G1-1: readSkillContent reads the AUTHORITATIVE version snapshot
+    // (versions/v1/files), so plant the escaping symlink THERE — the containment
+    // (realpathInside on the read root) must still refuse it (defense-in-depth
+    // against a tampered/corrupted snapshot; snapshots are normally symlink-free).
+    const v1SkillMd = join(appHome, 'skills', 'foo', 'versions', 'v1', 'files', 'SKILL.md')
+    rmSync(v1SkillMd)
+    symlinkSync(join(outsideDir, 'host-secret.txt'), v1SkillMd)
+    await expect(readSkillContent(db, fsOpts, 'foo')).rejects.toBeInstanceOf(ValidationError)
+  })
+
+  test('readSkillContent IGNORES a tampered LIVE symlink (reads the clean snapshot, G1-1)', async () => {
     const skill = await getSkill(db, 'foo')
     if (skill === null) throw new Error('skill missing')
-    const root = skillRoot(skill, fsOpts)
-    // Replace the real SKILL.md with an escaping symlink.
+    const root = skillRoot(skill, fsOpts) // LIVE files dir
+    // Tamper live SKILL.md with a host-file symlink — readSkillContent must NOT
+    // read it (it reads the snapshot), so no leak AND no error: the live tamper
+    // is simply not the read source anymore.
     rmSync(join(root, 'SKILL.md'))
     symlinkSync(join(outsideDir, 'host-secret.txt'), join(root, 'SKILL.md'))
-    await expect(readSkillContent(db, fsOpts, 'foo')).rejects.toBeInstanceOf(ValidationError)
+    const content = await readSkillContent(db, fsOpts, 'foo')
+    expect(content.bodyMd).toContain('body') // clean snapshot body
+    expect(content.bodyMd).not.toContain('TOP SECRET') // no host-file leak
   })
 
   test('getSkillVersionContent refuses a historical SKILL.md symlinked out (G3-1 history GET)', () => {
