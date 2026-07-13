@@ -388,17 +388,15 @@ describe('RFC-164 core — rendered blocks', () => {
     expect(block).toContain('ONE concrete literal')
   })
 
-  // Human ask-back is LEADER-ONLY: members run on the shared __wg_member__ node
-  // with NO shardKey scoping in the clarify queue (selectAgentQueue), so a member
-  // clarify can neither round-trip its answer nor bind its task_questions without
-  // cross-contaminating sibling assignments / leaving a permanently `processing`
-  // entry (Codex reviews 2-3). Members must NOT be invited to ask a human — they
-  // escalate blockers to the leader via wg_messages.
+  // RFC-172 (route 2, R2-T7): human ask-back is available to EVERY role now. The dispatch/mint +
+  // selectAgentQueue shard scoping (S0–S3, R2-T3) round-trips a member's answer to its OWN
+  // assignment shard (no cross-contamination between concurrent members), so worker / fc_member get
+  // the invite + JSON schema too — reversing the interim leader-only window (Codex reviews 2-3).
   for (const role of ['worker', 'fc_member'] as const) {
-    test(`${role} protocol block does NOT invite human clarify`, () => {
+    test(`${role} protocol block DOES invite human clarify (route 2)`, () => {
       const block = renderWgProtocolBlock(role, cfg())
-      expect(block).not.toContain('<workflow-clarify>')
-      expect(block).not.toContain(CLARIFY_FORMAT_EXAMPLE)
+      expect(block).toContain('<workflow-clarify>')
+      expect(block).toContain(CLARIFY_FORMAT_EXAMPLE)
     })
   }
 })
@@ -796,15 +794,15 @@ describe('RFC-164 core — renderWgProtocolBlock (三版文案锚点)', () => {
     expect(closed).toContain('DISABLED in this group')
   })
 
-  test('envelope rules footer present in every role; clarify invite is LEADER-only', () => {
+  test('envelope rules footer + clarify invite present in every role (route 2)', () => {
     for (const role of ['leader', 'worker', 'fc_member'] as const) {
       expect(renderWgProtocolBlock(role, cfg())).toContain('EXACTLY ONE <workflow-output>')
     }
-    // Human ask-back (<workflow-clarify>) is leader-only: members run on the shared
-    // __wg_member__ node (no shardKey scoping in the clarify queue) so they cannot
-    // round-trip an answer — they escalate to the leader via wg_messages (Codex 2-3).
-    expect(renderWgProtocolBlock('leader', cfg())).toContain('<workflow-clarify>')
-    expect(renderWgProtocolBlock('worker', cfg())).not.toContain('<workflow-clarify>')
-    expect(renderWgProtocolBlock('fc_member', cfg())).not.toContain('<workflow-clarify>')
+    // RFC-172 (route 2, R2-T7): human ask-back (<workflow-clarify>) is now available to EVERY role
+    // — the shard-scoped clarify queue (S0–S3, R2-T3) round-trips each member's answer to its own
+    // assignment. (Was leader-only during the interim shard-blind window.)
+    for (const role of ['leader', 'worker', 'fc_member'] as const) {
+      expect(renderWgProtocolBlock(role, cfg())).toContain('<workflow-clarify>')
+    }
   })
 })

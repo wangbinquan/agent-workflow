@@ -88,7 +88,6 @@ import {
   shouldInjectStopNotice,
 } from '@/services/clarifyRounds'
 import { buildClarifyQueueContext } from '@/services/clarifyQueue'
-import { WG_LEADER_NODE_ID } from '@/services/workgroupLaunch'
 import { getNodeClarifyDirectiveRow } from '@/services/taskClarifyDirective'
 import {
   decideResumeSessionId,
@@ -711,17 +710,30 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
       // shardKey-scoped queue selection (a change to the shared clarify
       // machinery) and stays deferred; a member's answers simply don't return
       // yet (no corruption, unlike the unscoped inject).
-      const clarifyQueue =
-        req.nodeId === WG_LEADER_NODE_ID
-          ? await buildClarifyQueueContext({
-              db,
-              definition,
-              taskId,
-              consumerNodeId: req.nodeId,
-              dispatchedRunId: req.nodeRunId,
-              iteration: 0,
-            })
-          : undefined
+      // RFC-172 (route 2, R2-T7): round-trip the human's answered clarify back to ANY host node
+      // (leader or member), SCOPED to this run's shard. On a clarify-answer rerun the dispatch minted
+      // this pending row on the asking run's own shard (S0–S3); passing that shard to
+      // buildClarifyQueueContext makes selectAgentQueue (R2-T3) isolate the queue per assignment.
+      // A leader run is shardKey=null → pass `undefined` (node-scoped = exact pre-route-2 leader
+      // behavior); a member run passes its assignment shard so concurrent members never inject each
+      // other's Q&A. Fresh (non-answer) turns get an empty queue → no injection.
+      const runShardKey =
+        (
+          await db
+            .select({ shardKey: nodeRuns.shardKey })
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, req.nodeRunId))
+            .limit(1)
+        )[0]?.shardKey ?? null
+      const clarifyQueue = await buildClarifyQueueContext({
+        db,
+        definition,
+        taskId,
+        consumerNodeId: req.nodeId,
+        dispatchedRunId: req.nodeRunId,
+        shardKey: runShardKey === null ? undefined : runShardKey,
+        iteration: 0,
+      })
       const result = await runNode({
         taskId,
         nodeRunId: req.nodeRunId,
@@ -783,25 +795,13 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         }
       }
       if (result.clarify !== undefined) {
-        // Human ask-back is LEADER-ONLY in workgroups (renderWgProtocolBlock
-        // invites <workflow-clarify> for the leader alone). A member runs on the
-        // shared __wg_member__ node with no shardKey scoping in the clarify queue
-        // machinery (selectAgentQueue), so a member clarify session could neither
-        // round-trip its answer nor bind its task_questions without cross-
-        // contaminating sibling assignments / leaving a permanently `processing`
-        // (unbound) entry (Codex reviews 2-3). Members are not invited to ask, but
-        // if one emits <workflow-clarify> anyway, REJECT it BEFORE createClarifySession
-        // — no session ⇒ no dangling task_questions. The member turn then fails for
-        // output (driveAssignmentTurn) instead of parking on an answer that would
-        // never return; genuine blockers escalate to the leader via wg_messages.
-        if (req.nodeId !== WG_LEADER_NODE_ID) {
-          return {
-            status: 'failed',
-            outputs: {},
-            errorMessage:
-              'clarify-not-supported: only the workgroup leader may ask a human; members escalate blockers to the leader via wg_messages',
-          }
-        }
+        // RFC-172 (route 2, R2-T7): human ask-back is now enabled for EVERY workgroup host node
+        // (leader AND members), no longer leader-only. The dispatch/mint pipeline (S0–S3) mints each
+        // member's clarify-answer rerun on ITS OWN shard, and selectAgentQueue (R2-T3) + the run's
+        // shardKey passed to buildClarifyQueueContext below scope the queue per assignment — so a
+        // member's answer round-trips to its own run with no cross-contamination between concurrent
+        // members and no dangling `processing` entry. (The interim reject that guarded the unwired
+        // member path — a failed result with a not-supported error — is removed.)
         const clarifyNodeId = findClarifyNodeForAgent(definition, req.nodeId)
         if (clarifyNodeId === undefined) {
           return { status: 'failed', outputs: {}, errorMessage: 'clarify-no-channel' }
@@ -809,6 +809,24 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         const currentRunRow = (
           await db.select().from(nodeRuns).where(eq(nodeRuns.id, req.nodeRunId)).limit(1)
         )[0]
+        // RFC-172 (route 2, R2-T6): host clarify GENERATION — count this (node, iteration, shard)'s
+        // prior DONE clarify generations (shardKey-aware; mirrors the normal-node path ~scheduler.ts
+        // 3540) instead of the old hardcoded 0. A host run (leader OR member) asking a SECOND round
+        // otherwise shares the first round's clarify node_run (findClarifyNodeRunForShard is
+        // idempotent on iterationIndex → its questions overwrite the first's and selectAgentQueue's
+        // per-origin resolve turns ambiguous). shardKey-scoped so concurrent members count only
+        // their OWN prior generations.
+        const askingGeneration = currentRunRow
+          ? (
+              await priorDoneGenerationsForRun(db, {
+                taskId,
+                nodeId: req.nodeId,
+                iteration: currentRunRow.iteration,
+                shardKey: currentRunRow.shardKey ?? null,
+                id: currentRunRow.id,
+              })
+            ).length
+          : 0
         await createClarifySession({
           db,
           taskId,
@@ -816,7 +834,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
           sourceAgentNodeRunId: req.nodeRunId,
           sourceShardKey: currentRunRow?.shardKey ?? null,
           clarifyNodeId,
-          iterationIndex: 0,
+          iterationIndex: askingGeneration,
           questions: result.clarify.questions,
           ...(result.clarify.truncationWarnings.length > 0
             ? { truncationWarnings: result.clarify.truncationWarnings }

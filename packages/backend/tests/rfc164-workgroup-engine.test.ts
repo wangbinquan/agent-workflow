@@ -732,26 +732,26 @@ describe('RFC-164 engine — source locks', () => {
   // exercise (real runHostNode spawns a subprocess). Locks that a host run fetches
   // the answered clarify queue and threads it as clarifyContext into runNode —
   // remove either and the workgroup clarify answer silently stops round-tripping.
-  test('runHostNode round-trips a human clarify answer into the workgroup LEADER rerun prompt', () => {
+  test('runHostNode round-trips a human clarify answer into a host rerun prompt, shard-scoped', () => {
     // host path selects by req.nodeId/req.nodeRunId (the adopted clarify-answer
     // rerun row) — unique to runHostNode; the normal scheduler path uses node.id.
     expect(SCHEDULER_SRC).toContain('consumerNodeId: req.nodeId')
     expect(SCHEDULER_SRC).toContain('dispatchedRunId: req.nodeRunId')
     // …and threads the answered queue into the host node's runNode call.
     expect(SCHEDULER_SRC).toContain('clarifyContext: { flatBlock: clarifyQueue.block }')
-    // LEADER-ONLY: selectAgentQueue has no shardKey scoping, so injecting into a
-    // member (shared __wg_member__ node, per-assignment shardKey) would cross-
-    // contaminate answers between assignments — only the singleton leader is safe.
-    expect(SCHEDULER_SRC).toContain('req.nodeId === WG_LEADER_NODE_ID')
+    // RFC-172 (route 2, R2-T7): injection is now for EVERY host node, SCOPED to the run's shard —
+    // leader (shardKey=null) passes undefined (node-scoped = pre-route-2 behavior); a member passes
+    // its assignment shard so concurrent members never cross-contaminate (selectAgentQueue / R2-T3).
+    expect(SCHEDULER_SRC).toContain('shardKey: runShardKey === null ? undefined : runShardKey')
   })
 
-  test('runHostNode REJECTS a non-leader <workflow-clarify> before creating a session', () => {
-    // A member is never invited to ask a human (renderWgProtocolBlock leader-only),
-    // but if it emits <workflow-clarify> anyway it must be rejected BEFORE
-    // createClarifySession — otherwise the answer can never round-trip/bind and the
-    // question is stuck `processing` forever (Codex reviews 2-3).
-    expect(SCHEDULER_SRC).toContain('req.nodeId !== WG_LEADER_NODE_ID')
-    expect(SCHEDULER_SRC).toContain('clarify-not-supported')
+  test('runHostNode ENABLES member clarify — no leader-only reject; shardKey-aware generation (R2-T6/T7)', () => {
+    // The interim `clarify-not-supported` reject that guarded the unwired member path is REMOVED —
+    // member human ask-back is now a first-class, shard-isolated round-trip (S0–S3, R2-T3, R2-T7).
+    expect(SCHEDULER_SRC).not.toContain('clarify-not-supported')
+    // …and the host clarify GENERATION is now shardKey-aware (R2-T6: a member's/leader's 2nd round
+    // no longer shares the 1st's clarify node_run), not the old hardcoded iterationIndex: 0.
+    expect(SCHEDULER_SRC).toContain('iterationIndex: askingGeneration')
   })
 })
 

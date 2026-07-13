@@ -251,9 +251,8 @@ const ENVELOPE_RULES = [
   'Every port body is a JSON document — no markdown fences inside ports.',
 ].join('\n')
 
-// Human ask-back (<workflow-clarify>) is a LEADER-ONLY capability in workgroups —
-// renderWgProtocolBlock appends this block for the 'leader' role alone. Two
-// incidents forced BOTH the shape and the scoping:
+// Human ask-back (<workflow-clarify>) block, appended by renderWgProtocolBlock for EVERY role
+// (RFC-172 route 2 — see point 2). Two incidents forced BOTH the shape and the (former) scoping:
 //
 //   1. 2026-07-12 (task 01KXBATKFJ73MDYNM6YN2DMA29): the protocol INVITED a
 //      <workflow-clarify> envelope, but a host node runs with clarify directive
@@ -264,15 +263,14 @@ const ENVELOPE_RULES = [
 //      round 0. So the invite and its schema MUST travel together — reuse the
 //      SHARED clarify constants so this can never drift from the normal-node one.
 //
-//   2. Codex review: members run on the SHARED __wg_member__ node, separated only
-//      by node_runs.shard_key, but the clarify queue machinery (selectAgentQueue)
-//      selects/ages purely by consumerNodeId with NO shardKey scoping. A member
-//      clarify therefore cannot round-trip its answer nor bind its task_questions
-//      without cross-contaminating other assignments / leaving a permanently
-//      `processing` (unbound) entry. So only the singleton leader (shardKey=null)
-//      may ask a human; members escalate blockers to the leader via wg_messages,
-//      and runHostNode rejects any non-leader <workflow-clarify>.
-const LEADER_CLARIFY_BLOCK = [
+//   2. Codex review found members share the SHARED __wg_member__ node (separated
+//      only by node_runs.shard_key), which the clarify queue machinery originally
+//      ignored — so an early member clarify would cross-contaminate siblings. RFC-172
+//      route 2 made the whole dispatch/mint + selectAgentQueue pipeline shardKey-aware
+//      (S0–S3, R2-T3), so a member clarify NOW round-trips to its OWN assignment shard
+//      with no cross-contamination. Ask-back is therefore available to EVERY role;
+//      runHostNode passes each run's shard to buildClarifyQueueContext.
+const WG_CLARIFY_BLOCK = [
   '',
   'If you need a human decision first, emit a <workflow-clarify> envelope INSTEAD',
   'of <workflow-output> (never both). Its body is a REQUIRED JSON document in the',
@@ -342,11 +340,11 @@ export function renderWgProtocolBlock(
     }
   }
   lines.push('', ENVELOPE_RULES)
-  // Human ask-back is leader-only (see LEADER_CLARIFY_BLOCK): members / fc_members
-  // run on the shared __wg_member__ node and cannot round-trip a clarify answer,
-  // so they are never invited to ask a human — they escalate to the leader via
-  // wg_messages. free_collab has no leader, so nobody asks a human there.
-  if (role === 'leader') lines.push(LEADER_CLARIFY_BLOCK)
+  // RFC-172 (route 2, R2-T7): human ask-back is available to EVERY role. The dispatch/mint +
+  // selectAgentQueue shard scoping (S0–S3, R2-T3) round-trips a member's answer to its OWN
+  // assignment shard, so members / fc_members may ask a human too — their answer returns to their
+  // run, isolated from concurrent members (free_collab members likewise).
+  lines.push(WG_CLARIFY_BLOCK)
   return lines.join('\n')
 }
 
