@@ -260,6 +260,21 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
   }
 
+  // 5b4. RFC-170 §6a / §invariant④: recover in-flight skill_operations left by a
+  // crash BEFORE source reconcile + HTTP — roll back pre-db-committed ops, roll
+  // forward committed-but-unpublished ones, quarantine impossible states, and GC
+  // orphan locks (so a crashed op never leaves a permanently-stuck lock).
+  // Best-effort: never abort daemon start.
+  try {
+    const { recoverSkillOperations } = await import('@/services/skillOpRecoveryDriver')
+    const { SKILL_OP_RECOVERY_REGISTRY } = await import('@/services/skillOpRegistry')
+    recoverSkillOperations(db, { appHome: Paths.root }, SKILL_OP_RECOVERY_REGISTRY)
+  } catch (err) {
+    log.warn('skill operations recovery on boot failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
   // 5c. RFC-017: reconcile registered skill_sources up-front so the first
   // /api/skills hit (likely the SPA's skills query) sees the current set of
   // child skills. Per-source failures are already swallowed into

@@ -205,7 +205,16 @@ export async function deleteSkill(db: DbClient, opts: SkillFsOptions, name: stri
     })
   }
 
-  await removeSkillRowAndFiles(db, opts, existing)
+  if (existing.sourceKind === 'managed') {
+    // RFC-170 §6a: crash-safe op-based delete — rename the whole root to trash,
+    // DELETE the row in the same tx as the phase advance, then drop the trash.
+    // A crash between steps is recovered by the boot driver (deleteRecoveryHandler).
+    const { deleteManagedSkillOp } = await import('@/services/skillDeleteOp')
+    deleteManagedSkillOp(db, { appHome: opts.appHome }, { id: existing.id, name: existing.name })
+  } else {
+    // External: no managed directory — a single DB row drop is already atomic.
+    await removeSkillRowAndFiles(db, opts, existing)
+  }
 }
 
 /**
