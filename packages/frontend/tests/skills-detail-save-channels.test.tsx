@@ -4,14 +4,13 @@
 // → 410 Gone. This file — originally RFC-151 PR-4's dual-channel lock — now locks
 // the single-funnel contract while preserving the <DetailHeaderActions> shell's
 // `errors: ReadonlyArray<unknown>` intent (the array still carries combinedSave.error
-// + del.error; save never navigates — it reseeds in place, the RFC-169 D2 flip):
+// + del.error; save never navigates — it reseeds in place, the RFC-169 D2 flip).
+// RFC-178: skills are managed-only, so every skill rides the same funnel:
 //   1. managed + token       → ONE POST /save {description, bodyMd, expectedToken}, zero PUTs.
 //   2. managed + token       → a save failure surfaces via the errors array, no navigate.
 //   3. managed + token       → a 409 conflict surfaces AND refetches a fresh token.
-//   4. hand-external + token → ONE POST /save {description} ONLY (body authored on disk), zero PUTs.
-//   5. managed, save succeeds → stays in place (no navigate), commitSaved reseeds.
-//   6. source-external        → Save disabled, ZERO writes (nothing editable).
-//   7. description field editability follows the three-state authority.
+//   4. managed, save succeeds → stays in place (no navigate), commitSaved reseeds.
+//   5. description field stays editable (managed metadata authority).
 //
 // The FE must NEVER call the retired PUTs; installFetch answers them with the real
 // 410 and every save scenario asserts `calls` contains zero such PUTs.
@@ -53,14 +52,13 @@ function json(payload: unknown, status = 200): Response {
   })
 }
 
-function skillRow(sourceKind: 'managed' | 'external') {
+function skillRow() {
   return {
     id: 'sk1',
     name: 'sk1',
     description: 'orig desc',
-    sourceKind,
-    managedPath: sourceKind === 'managed' ? '/managed/sk1' : null,
-    externalPath: sourceKind === 'external' ? '/ext/sk1' : null,
+    sourceKind: 'managed',
+    managedPath: '/managed/sk1',
     schemaVersion: 1,
     contentVersion: 1,
     createdAt: 0,
@@ -73,10 +71,6 @@ function skillRow(sourceKind: 'managed' | 'external') {
  *  content GET so the page routes Save through POST /save under token OCC. The
  *  retired PUT writers answer 410 — no scenario should ever hit them. */
 function installFetch(opts: {
-  sourceKind: 'managed' | 'external'
-  // RFC-170 (G5-P2): the three-state authority discriminator drives the FE
-  // capability table; absent ⇒ derived from sourceKind (external→hand-external).
-  authorityKind?: 'managed' | 'source-external' | 'hand-external'
   token?: string
   postSave?: Response | (() => Response)
   // RFC-170 T-BSAFE③: lets a test make the fenced content read's description differ
@@ -111,8 +105,7 @@ function installFetch(opts: {
       ) {
         return json({ code: 'skill-endpoint-gone', message: 'retired; use POST /save' }, 410)
       }
-      if (method === 'GET' && url.endsWith('/api/skills/sk1'))
-        return json({ ...skillRow(opts.sourceKind), authorityKind: opts.authorityKind })
+      if (method === 'GET' && url.endsWith('/api/skills/sk1')) return json(skillRow())
       if (method === 'GET' && url.endsWith('/api/skills/sk1/content')) {
         contentGets += 1
         // A refetch after a 409 hands back a bumped token so the next save is fresh.
@@ -189,7 +182,6 @@ afterEach(() => {
 describe('skills.detail combined-save (managed + token)', () => {
   test('managed + token: Save is a single POST /save carrying {description, bodyMd, token}; zero PUTs', async () => {
     const calls = installFetch({
-      sourceKind: 'managed',
       token: 'TOK1',
       postSave: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 2, token: 'TOK2' }),
     })
@@ -212,7 +204,6 @@ describe('skills.detail combined-save (managed + token)', () => {
 
   test('managed + token: a save failure surfaces via the errors array; no navigate', async () => {
     installFetch({
-      sourceKind: 'managed',
       token: 'TOK1',
       postSave: () => json({ code: 'skill-save-boom', message: 'save went boom' }, 422),
     })
@@ -229,7 +220,6 @@ describe('skills.detail combined-save (managed + token)', () => {
 
   test('managed + token: a 409 token conflict surfaces the error and refetches a fresh token', async () => {
     const calls = installFetch({
-      sourceKind: 'managed',
       token: 'STALE',
       postSave: () =>
         json({ code: 'skill-version-conflict', message: 'token stale — reload' }, 409),
@@ -263,7 +253,6 @@ describe('skills.detail combined-save (managed + token)', () => {
   // stale metadata description under a fresh token and silently roll back the edit.
   test('managed + token: Save ships the description from the fenced content read, not the stale metadata query', async () => {
     const calls = installFetch({
-      sourceKind: 'managed',
       token: 'TOK1',
       contentDescription: 'CONTENT-FRESH', // metadata GET still returns skillRow "orig desc"
       postSave: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 2, token: 'TOK2' }),
@@ -283,7 +272,6 @@ describe('skills.detail combined-save (managed + token)', () => {
 
   test('managed: save succeeds → stays in place (no navigate), commitSaved reseeds', async () => {
     const calls = installFetch({
-      sourceKind: 'managed',
       token: 'TOK1',
       postSave: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 2, token: 'TOK2' }),
     })
@@ -298,90 +286,17 @@ describe('skills.detail combined-save (managed + token)', () => {
   })
 })
 
-// RFC-170 T-BSAFE③ (§2 "external metadata-only") — an external skill's body is
-// authored on disk (externalPath is authoritative). A hand-external Save is the
-// SAME single POST /save funnel, carrying ONLY the description; bodyMd is never
-// sent (the content channel is capability-gated off), and no PUT ever fires.
-describe('skills.detail external combined-save (metadata-only)', () => {
-  test('hand-external + token: Save is a single POST /save carrying description ONLY; no bodyMd, zero PUTs', async () => {
-    const calls = installFetch({
-      sourceKind: 'external',
-      authorityKind: 'hand-external',
-      token: 'EXT',
-      postSave: () => json({ name: 'sk1', bodyMd: 'orig body', contentVersion: 1, token: 'EXT2' }),
-    })
-    renderDetail()
-    await clickSave()
-    await waitFor(() => {
-      const posts = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/save'))
-      expect(posts).toHaveLength(1)
-      const sent = JSON.parse(posts[0]!.body ?? '{}') as Record<string, unknown>
-      expect(sent.expectedToken).toBe('EXT#1')
-      expect(sent).toHaveProperty('description')
-      // The external body is read-only — the FE must NOT try to write it.
-      expect(sent).not.toHaveProperty('bodyMd')
-    })
-    expect(noRetiredPuts(calls)).toBe(true)
-    await waitFor(() => expect(errorSpans()).toHaveLength(0))
-    expect(h.navigate).not.toHaveBeenCalled()
-  })
-})
-
-// RFC-170 §8 (G5-P2) — the description field's editability follows the
-// three-state authority: managed + hand-external edit it, source-external can't
-// (its metadata is owned by the registered source dir).
-describe('skills.detail description gate (authorityKind)', () => {
+// RFC-178 — skills are managed-only, so the description field always follows the
+// managed metadata authority (editable).
+describe('skills.detail description gate', () => {
   function descInput(): HTMLInputElement {
     return document.querySelector('[data-testid="skill-description-input"]') as HTMLInputElement
   }
 
-  test('source-external → description input is disabled (read-only metadata)', async () => {
-    installFetch({
-      sourceKind: 'external',
-      authorityKind: 'source-external',
-    })
-    renderDetail()
-    await waitFor(() => expect(descInput()).not.toBeNull())
-    expect(descInput().disabled).toBe(true)
-  })
-
-  test('hand-external → description input stays editable (DB metadata authority)', async () => {
-    installFetch({
-      sourceKind: 'external',
-      authorityKind: 'hand-external',
-    })
-    renderDetail()
-    await waitFor(() => expect(descInput()).not.toBeNull())
-    expect(descInput().disabled).toBe(false)
-  })
-
   test('managed → description input is editable', async () => {
-    installFetch({
-      sourceKind: 'managed',
-      authorityKind: 'managed',
-    })
+    installFetch({})
     renderDetail()
     await waitFor(() => expect(descInput()).not.toBeNull())
     expect(descInput().disabled).toBe(false)
-  })
-
-  // RFC-170 §8 (Codex F6): a source-external skill has NO editable channel, so
-  // Save must be disabled and must never send the (403-bound) save request.
-  test('source-external → Save is disabled and fires ZERO write requests', async () => {
-    const calls = installFetch({
-      sourceKind: 'external',
-      authorityKind: 'source-external',
-      token: 'RO',
-    })
-    renderDetail()
-    // Wait for the description input (hydration complete).
-    await waitFor(() => expect(descInput()).not.toBeNull())
-    const save = document.querySelector<HTMLButtonElement>('.page__actions .btn--primary')
-    expect(save).not.toBeNull()
-    expect(save!.disabled).toBe(true) // no editable channel → inert
-    // Even a forced click must produce no writes (no POST /save, no retired PUT).
-    fireEvent.click(save!)
-    await new Promise((r) => setTimeout(r, 20))
-    expect(calls.some((c) => c.method === 'PUT' || c.method === 'POST')).toBe(false)
   })
 })

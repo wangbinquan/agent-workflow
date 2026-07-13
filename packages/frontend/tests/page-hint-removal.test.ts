@@ -134,9 +134,9 @@ describe('RFC-155 — keep-list anchors (over-deletion guard)', () => {
     // reviews detail iteration/decision hint — also locked by
     // reviews-detail-title-description.test.ts.
     expect(read('routes/reviews.detail.tsx')).toMatch(/t\('reviews\.detailHint'/)
-    // skills detail source-chip + path line (RFC-169: now in the Overview tab,
-    // optional-chained since meta.data is typed possibly-undefined there).
-    expect(read('routes/skills.detail.tsx')).toMatch(/managedPath \?\? meta\.data\??\.externalPath/)
+    // skills detail path line (RFC-169: now in the Overview tab, optional-chained
+    // since meta.data is typed possibly-undefined there; RFC-178: managed-only).
+    expect(read('routes/skills.detail.tsx')).toMatch(/meta\.data\?\.managedPath \?\? ''/)
     // auth landing subtitle is out of scope (not an in-app page header).
     expect(read('routes/auth.tsx')).toMatch(/auth-page__hint/)
   })

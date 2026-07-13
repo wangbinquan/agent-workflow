@@ -2,11 +2,10 @@
 //
 // RFC-169 (T12): child route under the /skills layout (path '/$name'), with
 // remountDeps so switching skills reseeds cleanly. Four tabs — Overview /
-// Content / Files / History. Save stays in place (double-PUT LWW as today, but
-// reseeds the draft via commitSaved and best-effort refetches content+versions
-// instead of navigating away). The deeper version-consistency work (combined
-// save / composite-token CAS / snapshot authority) is RFC-170; 169 keeps the
-// current double-PUT and adds only stay-in-place + simple mutual exclusion.
+// Content / Files / History. RFC-178: skills are managed-only, so every skill is
+// fully editable (description + body + files + version history + fusion); the
+// three-state authority capability gating was removed. Save goes through the
+// RFC-170 combined-save funnel (composite-token OCC) and stays in place.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
@@ -26,7 +25,6 @@ import { SkillFileTree } from '@/components/SkillFileTree'
 import { SkillVersionHistory } from '@/components/skill/SkillVersionHistory'
 import { TabBar, type TabDef } from '@/components/TabBar'
 import { TabPanels } from '@/components/split/TabPanels'
-import { skillCapabilities, skillCapabilitiesOf } from '@/lib/skill-capabilities'
 import { Route as skillsRoute } from './skills'
 
 export const Route = createRoute({
@@ -70,7 +68,7 @@ function SkillDetailPage() {
   // precondition token, so description + body + token are a single consistent
   // snapshot. Seeding description from the separate metadata query let a stale
   // description ride a fresh token and silently roll back a concurrent edit on
-  // save. `ready` waits for meta (caps/header) so the page still hydrates whole;
+  // save. `ready` waits for meta (header) so the page still hydrates whole;
   // clean-follow rebases the draft (description AND body) when a restore/save
   // refetches content.
   const { draft, setDraft, loaded, dirty, commitSaved } = useDraftFromQuery<
@@ -87,18 +85,11 @@ function SkillDetailPage() {
     setDraft((d) => (d === undefined ? d : { ...d, description: v }))
   const setBodyMd = (v: string) => setDraft((d) => (d === undefined ? d : { ...d, bodyMd: v }))
 
-  // RFC-170 (G5-P2): capabilities key off `authorityKind` (three-state). Before
-  // meta loads, the page renders LoadingState (draft is undefined), so the
-  // source-external fallback here is inert — the least-privileged safe default.
-  const caps = meta.data ? skillCapabilitiesOf(meta.data) : skillCapabilities('source-external')
-
   // RFC-170 T4/T-BSAFE③ — combined description+body save under composite-token OCC
-  // is the SINGLE save funnel for every skill (the old double-PUT metadata/content
-  // writers are retired → 410). Managed sends {description, bodyMd}; hand-external
-  // sends {description} only (body authored on disk); source-external nothing. The
-  // response carries a FRESH token the QueryClient becomes the sole owner of
-  // (setQueryData); a 409 conflict refetches so the next save uses the current
-  // token instead of silently overwriting a concurrent change.
+  // is the SINGLE save funnel (the old double-PUT metadata/content writers are
+  // retired → 410). The response carries a FRESH token the QueryClient becomes the
+  // sole owner of (setQueryData); a 409 conflict refetches so the next save uses
+  // the current token instead of silently overwriting a concurrent change.
   const combinedSave = useMutation({
     mutationFn: (payload: { description?: string; bodyMd?: string; expectedToken: string }) =>
       api.post<SkillContent>(`/api/skills/${encodeURIComponent(name)}/save`, payload),
@@ -113,26 +104,17 @@ function SkillDetailPage() {
   const saving = combinedSave.isPending
   const operationBusy = saving || restorePending
 
-  // RFC-170 T-BSAFE③: combined-save is the SINGLE save funnel. Managed writes
-  // {description, bodyMd} atomically under token OCC; hand-external writes
-  // {description} only (its body is authored on disk); source-external has nothing
-  // editable (Save is a no-op). A 409 (concurrent change / delete-recreate ABA) is
+  // RFC-178: managed-only, so description + body are always editable and written
+  // atomically under token OCC. A 409 (concurrent change / delete-recreate ABA) is
   // surfaced, not silently clobbered; a success reseeds the draft ONCE and
   // best-effort refetches so the history panel shows the authoritative version.
   const handleSave = async () => {
     if (draft === undefined) return
     const token = content.data?.token
     if (token === undefined) return // content still loading — no token to fence on
-    const payload: { description?: string; bodyMd?: string; expectedToken: string } = {
-      expectedToken: token,
-    }
-    if (caps.canEditDescription) payload.description = description
-    if (caps.canEditContent) payload.bodyMd = bodyMd
-    // Nothing this authority can write (source-external) → Save is a no-op.
-    if (payload.description === undefined && payload.bodyMd === undefined) return
     const submitted: SkillDraft = { description, bodyMd }
     try {
-      await combinedSave.mutateAsync(payload)
+      await combinedSave.mutateAsync({ description, bodyMd, expectedToken: token })
     } catch {
       return // stays dirty; onError refetched a fresh token, error surfaces below
     }
@@ -167,41 +149,26 @@ function SkillDetailPage() {
   const overview = (
     <>
       <div className="skill-detail__meta">
-        <span className={`chip chip--tight chip--${meta.data?.sourceKind ?? 'external'}`}>
-          {t(meta.data?.sourceKind === 'managed' ? 'skills.tabManaged' : 'skills.tabExternal')}
-        </span>{' '}
-        <code>{meta.data?.managedPath ?? meta.data?.externalPath ?? ''}</code>
+        <code>{meta.data?.managedPath ?? ''}</code>
       </div>
-      <Field
-        label={t('skills.fieldDescription')}
-        hint={caps.showManagedHint ? t('skills.descHintManaged') : t('skills.descHintExternal')}
-      >
-        {/* RFC-170 §8: a source-external skill's metadata is owned by its source
-            dir — the description is read-only (managed + hand-external edit it). */}
+      <Field label={t('skills.fieldDescription')} hint={t('skills.descHintManaged')}>
         <TextInput
           value={description}
           onChange={setDescription}
-          disabled={!caps.canEditDescription}
           data-testid="skill-description-input"
         />
       </Field>
     </>
   )
 
-  const contentPanel = caps.canEditContent ? (
-    <MarkdownEditor value={bodyMd} onChange={setBodyMd} fill />
-  ) : (
-    <pre className="readonly-pre">{bodyMd || t('skills.emptyBody')}</pre>
-  )
+  const contentPanel = <MarkdownEditor value={bodyMd} onChange={setBodyMd} fill />
 
   const tabs: Array<TabDef<SkillTab>> = [
     { key: 'overview', label: t('skills.detailTabOverview'), testid: 'skill-tab-overview' },
     { key: 'content', label: t('skills.detailTabContent'), testid: 'skill-tab-content' },
     { key: 'files', label: t('skills.detailTabFiles'), testid: 'skill-tab-files' },
+    { key: 'history', label: t('skills.detailTabHistory'), testid: 'skill-tab-history' },
   ]
-  if (caps.showVersionHistory) {
-    tabs.push({ key: 'history', label: t('skills.detailTabHistory'), testid: 'skill-tab-history' })
-  }
 
   return (
     <fieldset className="detail-freeze skill-detail" disabled={del.isPending}>
@@ -209,17 +176,14 @@ function SkillDetailPage() {
         acl={{
           resourceBaseUrl: `/api/skills/${encodeURIComponent(name)}`,
           invalidateKey: ['skills'],
-          // RFC-170 §8 (G3-2): external skills can't transfer ownership.
-          canTransferOwner: caps.canTransferOwner,
+          canTransferOwner: true,
         }}
         save={{
           label: saving ? t('common.saving') : t('common.save'),
           onClick: () => {
             void handleSave()
           },
-          // RFC-170 §8 (Codex F6): a source-external skill has no editable channel
-          // (description read-only, content not editable) — Save is inert, disable it.
-          disabled: operationBusy || !loaded || !(caps.canEditDescription || caps.canEditContent),
+          disabled: operationBusy || !loaded,
           testid: 'skill-save-button',
         }}
         del={{
@@ -228,11 +192,9 @@ function SkillDetailPage() {
           disabled: del.isPending,
         }}
         extra={
-          caps.canFuse && (
-            <button type="button" className="btn" onClick={() => setFuseOpen(true)}>
-              {t('fusion.launchFromSkillButton')}
-            </button>
-          )
+          <button type="button" className="btn" onClick={() => setFuseOpen(true)}>
+            {t('fusion.launchFromSkillButton')}
+          </button>
         }
         errors={[combinedSave.error, del.error]}
       >
@@ -258,29 +220,21 @@ function SkillDetailPage() {
               key: 'files',
               testid: 'skill-panel-files',
               content: (
-                <SkillFileTree
+                <SkillFileTree skillName={name} readonly={false} readonlyPaths={['SKILL.md']} />
+              ),
+            },
+            {
+              key: 'history',
+              testid: 'skill-panel-history',
+              content: (
+                <SkillVersionHistory
                   skillName={name}
-                  readonly={!caps.canBrowseFilesWritable}
-                  readonlyPaths={['SKILL.md']}
+                  currentVersion={meta.data?.contentVersion ?? 0}
+                  busy={operationBusy || dirty}
+                  onPendingChange={setRestorePending}
                 />
               ),
             },
-            ...(caps.showVersionHistory
-              ? [
-                  {
-                    key: 'history' as const,
-                    testid: 'skill-panel-history',
-                    content: (
-                      <SkillVersionHistory
-                        skillName={name}
-                        currentVersion={meta.data?.contentVersion ?? 0}
-                        busy={operationBusy || dirty}
-                        onPendingChange={setRestorePending}
-                      />
-                    ),
-                  },
-                ]
-              : []),
           ]}
         />
       </div>

@@ -6092,9 +6092,9 @@ async function resolveSkills(
       }
       const skillPath = `${appHome}/${row.managedPath ?? `skills/${name}/files`}`
       out.push({ name, sourceKind: 'managed', sourcePath: skillPath })
-    } else if (row.sourceKind === 'external' && row.externalPath !== null) {
-      out.push({ name, sourceKind: 'external', sourcePath: row.externalPath })
     }
+    // RFC-178: skills are managed-only; a DB row is always managed here. A name
+    // with no DB row was already emitted as `project` above (repo-local skill).
   }
   return out
 }

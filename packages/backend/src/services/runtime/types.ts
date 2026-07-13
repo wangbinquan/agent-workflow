@@ -35,13 +35,14 @@ export type RuntimeKind = 'opencode' | 'claude-code'
 
 /** Where an injected skill comes from (RFC-004; moved here from runner.ts so
  *  drivers can type their skill inputs without a runner import — RFC-143 PR-4;
- *  runner re-exports both for existing import sites). */
-export type SkillSource = 'managed' | 'external' | 'project'
+ *  runner re-exports both for existing import sites). RFC-178: skills are
+ *  managed-only; `project` = a repo-local skill the CLI self-discovers. */
+export type SkillSource = 'managed' | 'project'
 
 export interface ResolvedSkill {
   name: string
   sourceKind: SkillSource
-  /** Absolute path for managed/external. Unused for project. */
+  /** Absolute path for managed. Unused for project (self-discovered). */
   sourcePath?: string
 }
 

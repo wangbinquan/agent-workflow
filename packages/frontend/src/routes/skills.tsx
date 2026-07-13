@@ -1,9 +1,8 @@
 // Skills page — RFC-169 split (master-detail) layout route.
 //
 // Left rail = search + skill cards + "+ new"; right rail = the routed
-// <Outlet/>. The empty pane (nothing selected) hosts the SkillSourcesCard: the
-// source-folder rescan/remove panel is a global operation, semantically "not
-// focused on any one skill" (T-D3).
+// <Outlet/>. RFC-178: skills are managed-only, so the empty pane just prompts
+// to create one.
 
 import { Link, Outlet, createRoute, useMatchRoute, useParams } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -11,7 +10,6 @@ import type { Skill } from '@agent-workflow/shared'
 import { useResourceList } from '@/hooks/useResourceList'
 import { EmptyState } from '@/components/EmptyState'
 import { ResourceBadges } from '@/components/ResourceBadges'
-import { SkillSourcesCard } from '@/components/SkillSourcesCard'
 import { ResourceSplitPage, type ResourceCardItem } from '@/components/split/ResourceSplitPage'
 import { Route as RootRoute } from './__root'
 
@@ -49,16 +47,7 @@ function SkillsSplitLayout() {
           to: '/skills/$name',
           params: { name: s.name },
           badges: (
-            <>
-              <span className={`chip chip--tight chip--${s.sourceKind}`}>
-                {t(s.sourceKind === 'managed' ? 'skills.tabManaged' : 'skills.tabExternal')}
-              </span>
-              <ResourceBadges
-                visibility={s.visibility}
-                ownerUserId={s.ownerUserId}
-                owners={owners}
-              />
-            </>
+            <ResourceBadges visibility={s.visibility} ownerUserId={s.ownerUserId} owners={owners} />
           ),
         }))
 
@@ -93,7 +82,6 @@ function SkillsEmptyPane() {
           </Link>
         }
       />
-      <SkillSourcesCard />
     </div>
   )
 }

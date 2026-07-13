@@ -18,7 +18,7 @@ import {
   parseSkillZipBuffer,
   type SkillZipFsOptions,
 } from '../src/services/skill-zip'
-import { getSkill, importExternalSkill, createManagedSkill } from '../src/services/skill'
+import { getSkill, createManagedSkill } from '../src/services/skill'
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { SkillZipDecisionMap } from '@agent-workflow/shared'
 
@@ -130,35 +130,6 @@ describe('commitSkillZipBuffer', () => {
     const md = readFileSync(join(skillRoot, 'SKILL.md'), 'utf-8')
     expect(md).toContain('description: new desc')
     expect(md).toContain('name: skill-o')
-  })
-
-  test('overwrite refused when DB record is external', async () => {
-    const externalDir = mkdtempSync(join(tmpdir(), 'aw-ext-skill-'))
-    try {
-      // Need a SKILL.md so importExternalSkill succeeds.
-      writeFileSync(join(externalDir, 'SKILL.md'), '---\n---\n')
-      await importExternalSkill(h.db, {
-        name: 'skill-ext',
-        externalPath: externalDir,
-        description: '',
-      })
-
-      const buf = buildZip({ 'skill-ext/SKILL.md': skillMd('skill-ext') })
-      const r = await commitSkillZipBuffer(
-        h.db,
-        h.fsOpts,
-        buf,
-        { 'skill-ext': { action: 'overwrite' } },
-        { actor: ADMIN },
-      )
-      expect(r.created).toEqual([])
-      expect(r.updated).toEqual([])
-      expect(r.failed.map((f) => f.code)).toEqual(['skill-external-cannot-overwrite'])
-      // External skill files must remain untouched.
-      expect(existsSync(join(externalDir, 'SKILL.md'))).toBe(true)
-    } finally {
-      rmSync(externalDir, { recursive: true, force: true })
-    }
   })
 
   test('rename re-targets to new name; original skill name stays free', async () => {
@@ -395,24 +366,5 @@ describe('RFC-102 overwrite permission', () => {
 
     const asAdmin = await parseSkillZipBuffer(h.db, ADMIN, buf)
     expect(asAdmin.response.skills[0]!.canOverwrite).toBe(true)
-  })
-
-  test('parse reports external conflict as never-overwritable', async () => {
-    const externalDir = mkdtempSync(join(tmpdir(), 'aw-ext-'))
-    try {
-      writeFileSync(join(externalDir, 'SKILL.md'), '---\n---\n')
-      await importExternalSkill(
-        h.db,
-        { name: 'ext', externalPath: externalDir, description: '' },
-        { ownerUserId: ALICE.user.id },
-      )
-      const buf = buildZip({ 'ext/SKILL.md': skillMd('ext') })
-      // Even the owner cannot zip-overwrite an external skill.
-      const asAlice = await parseSkillZipBuffer(h.db, ALICE, buf)
-      expect(asAlice.response.skills[0]!.conflict).toBe('external')
-      expect(asAlice.response.skills[0]!.canOverwrite).toBe(false)
-    } finally {
-      rmSync(externalDir, { recursive: true, force: true })
-    }
   })
 })

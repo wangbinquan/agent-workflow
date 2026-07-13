@@ -145,8 +145,6 @@ export function decodeZip(buffer: Uint8Array): ZipEntryRef[] {
 /**
  * RFC-102: derive the per-candidate conflict view fields from the actor and the
  * same-named existing skill (if any). Pure — directly unit-testable.
- *   external ⇒ conflict='external', canOverwrite=false (the skill's source of
- *              truth lives on disk; a zip must not overwrite it)
  *   managed  ⇒ conflict='managed',  canOverwrite=isResourceOwner(actor, existing)
  *   none     ⇒ {}
  * Never leaks owner identity: a private same-named skill the actor cannot see
@@ -157,7 +155,6 @@ export function computeConflictView(
   existing: Skill | undefined,
 ): { conflict?: SkillZipCandidateConflict; canOverwrite?: boolean } {
   if (existing === undefined) return {}
-  if (existing.sourceKind === 'external') return { conflict: 'external', canOverwrite: false }
   return { conflict: 'managed', canOverwrite: isResourceOwner(actor, existing) }
 }
 
@@ -251,15 +248,6 @@ export async function commitSkillZipBuffer(
     const existing = await getSkill(db, targetName)
     const isOverwrite = decision.action === 'overwrite'
     const isRename = decision.action === 'rename'
-
-    if (existing !== null && existing.sourceKind === 'external') {
-      outcome.failed.push({
-        name: candidate.name,
-        code: 'skill-external-cannot-overwrite',
-        message: `skill '${targetName}' is external (managed by user); cannot overwrite via ZIP import`,
-      })
-      continue
-    }
 
     // RFC-102: overwriting a managed skill requires write permission (owner or
     // admin) — the same gate PUT /api/skills/:name enforces. The front-end
@@ -400,7 +388,6 @@ async function insertManagedRow(
     description,
     sourceKind: 'managed',
     managedPath: `skills/${name}/files`,
-    externalPath: null,
     // RFC-099: the zip importer becomes owner; default 'public' (D18).
     ownerUserId: ownerUserId ?? null,
     visibility: 'public',

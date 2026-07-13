@@ -5,7 +5,7 @@
 // silently overwriting a concurrent change / a delete-recreate ABA.
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -13,14 +13,11 @@ import {
   createManagedSkill,
   deleteSkill,
   getSkill,
-  importExternalSkill,
   readSkillContent,
   saveSkillWithToken,
-  updateSkill,
   writeSkillContent,
 } from '../src/services/skill'
 import { ConflictError, ValidationError } from '../src/util/errors'
-import { decodeSkillToken } from '../src/services/skillToken'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -144,109 +141,5 @@ describe('RFC-170 T4 — combined save with token OCC', () => {
         metaRevision: 0,
       }),
     ).rejects.toBeInstanceOf(ConflictError)
-  })
-})
-
-// RFC-170 T-BSAFE③ (§2 "external metadata-only") — combined-save is the SINGLE
-// save funnel for external skills too. Their body is authored on disk
-// (externalPath is authoritative), so a bodyMd patch is rejected; only the DB
-// description is writable (hand-external), and the same composite-token OCC holds.
-describe('RFC-170 T-BSAFE③ — external combined-save (metadata-only)', () => {
-  let db: DbClient
-  let appHome: string
-  let fsOpts: { appHome: string }
-  let extDir: string
-
-  beforeEach(async () => {
-    appHome = mkdtempSync(join(tmpdir(), 'aw-combined-save-ext-'))
-    fsOpts = { appHome }
-    db = createInMemoryDb(MIGRATIONS)
-    extDir = mkdtempSync(join(tmpdir(), 'aw-ext-src-'))
-    writeFileSync(join(extDir, 'SKILL.md'), '---\nname: e\ndescription: x\n---\nexternal body')
-    await importExternalSkill(db, { name: 'e', externalPath: extDir, description: 'x' })
-  })
-  afterEach(() => {
-    rmSync(appHome, { recursive: true, force: true })
-    rmSync(extDir, { recursive: true, force: true })
-  })
-
-  test('hand-external: a description-only save succeeds and advances the token', async () => {
-    const read = await readSkillContent(db, fsOpts, 'e')
-    const saved = await saveSkillWithToken(
-      db,
-      fsOpts,
-      'e',
-      { description: 'edited' },
-      read.token!,
-      'u',
-    )
-    expect(saved.token).toBeDefined()
-    expect(saved.token).not.toBe(read.token) // meta_revision bumped → token drifted
-    expect((await getSkill(db, 'e'))!.description).toBe('edited')
-  })
-
-  test('hand-external: a bodyMd patch is rejected (409) — the body is authored on disk', async () => {
-    const read = await readSkillContent(db, fsOpts, 'e')
-    await expect(
-      saveSkillWithToken(db, fsOpts, 'e', { bodyMd: 'hijack' }, read.token!, 'u'),
-    ).rejects.toBeInstanceOf(ConflictError)
-    // The on-disk body is untouched.
-    expect((await readSkillContent(db, fsOpts, 'e')).bodyMd.trim()).toBe('external body')
-  })
-
-  test('hand-external: a STALE token → 409 and NO description write is applied (OCC honored)', async () => {
-    const read = await readSkillContent(db, fsOpts, 'e')
-    // Another writer advances meta_revision out-of-band.
-    await updateSkill(db, 'e', { description: 'other-writer' })
-    await expect(
-      saveSkillWithToken(db, fsOpts, 'e', { description: 'mine' }, read.token!, 'u'),
-    ).rejects.toBeInstanceOf(ConflictError)
-    // The other writer's description stands; our stale write did NOT apply.
-    expect((await getSkill(db, 'e'))!.description).toBe('other-writer')
-  })
-
-  // RFC-170 T-BSAFE③ (Codex F1-review): updateSkill resolves by name, so the
-  // combined-save external branch binds it to the token's immutable skillId — a
-  // same-name delete→recreate can't redirect a description write to a new skill.
-  test('hand-external: updateSkill with a mismatched expectedSkillId → 409 (ABA guard)', async () => {
-    await expect(
-      updateSkill(db, 'e', { description: 'hijack' }, { expectedSkillId: 'NOT-THE-ID' }),
-    ).rejects.toBeInstanceOf(ConflictError)
-    // Description untouched.
-    expect((await getSkill(db, 'e'))!.description).toBe('x')
-  })
-
-  // RFC-170 (Codex re-review F2-followup): a hand-external's description authority
-  // is the DB (skills.description), NOT the disk SKILL.md frontmatter. The fenced
-  // content read (which the frontend seeds its draft from) must return the DB value
-  // — else a DB-only edit reads back the stale disk value and Save rolls it back.
-  test('hand-external: readSkillContent returns the DB description, not the stale disk frontmatter', async () => {
-    // Diverge DB from disk: the disk SKILL.md still says 'x'; a DB-only edit moves
-    // skills.description to 'db-edited'.
-    await updateSkill(db, 'e', { description: 'db-edited' })
-    const content = await readSkillContent(db, fsOpts, 'e')
-    expect(content.description).toBe('db-edited')
-  })
-
-  test('hand-external: a description save is not rolled back by a subsequent read (DB authority end-to-end)', async () => {
-    const read1 = await readSkillContent(db, fsOpts, 'e')
-    await saveSkillWithToken(db, fsOpts, 'e', { description: 'saved-desc' }, read1.token!, 'u')
-    const read2 = await readSkillContent(db, fsOpts, 'e')
-    expect(read2.description).toBe('saved-desc') // NOT rolled back to disk 'x'
-    expect((await getSkill(db, 'e'))!.description).toBe('saved-desc')
-  })
-
-  // RFC-170 (Codex re-review-3): readSkillContent must read the hand-external
-  // description and the token's metaRevision from ONE row snapshot — else a
-  // concurrent save between two reads pairs an old description with a new token
-  // (silent rollback). This locks that they advance TOGETHER (same generation).
-  test('hand-external: readSkillContent couples description + token metaRevision to one generation', async () => {
-    const before = await readSkillContent(db, fsOpts, 'e')
-    const beforeTok = decodeSkillToken(before.token!)!
-    await updateSkill(db, 'e', { description: 'gen2' }) // bumps description + metaRevision atomically
-    const after = await readSkillContent(db, fsOpts, 'e')
-    const afterTok = decodeSkillToken(after.token!)!
-    expect(after.description).toBe('gen2')
-    expect(afterTok.metaRevision).toBe(beforeTok.metaRevision + 1)
   })
 })

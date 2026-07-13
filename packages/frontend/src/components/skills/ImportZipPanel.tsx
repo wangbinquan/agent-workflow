@@ -114,7 +114,6 @@ export function ImportZipPanel() {
       const out = (await res.json()) as CommitSkillZipResponse
       setSummary(out)
       await qc.invalidateQueries({ queryKey: ['skills'] })
-      await qc.invalidateQueries({ queryKey: ['skill-sources'] })
       // If everything succeeded jump back to the list; otherwise stay so the
       // user can read the failure list.
       if (out.failed.length === 0) {
@@ -284,7 +283,6 @@ interface CandidateRowProps {
 
 function CandidateRow({ row, idx, allRows, existingNames, onUpdate }: CandidateRowProps) {
   const { t } = useTranslation()
-  const isExternalConflict = row.candidate.conflict === 'external'
   const isManagedConflict = row.candidate.conflict === 'managed'
 
   const renameStatus =
@@ -316,11 +314,7 @@ function CandidateRow({ row, idx, allRows, existingNames, onUpdate }: CandidateR
       </td>
       <td>{row.candidate.fileCount}</td>
       <td>
-        {isExternalConflict ? (
-          <span className="zip-import__conflict zip-import__conflict--external">
-            {t('skills.zipConflictExternal')}
-          </span>
-        ) : isManagedConflict ? (
+        {isManagedConflict ? (
           <span className="zip-import__conflict zip-import__conflict--managed">
             {row.candidate.canOverwrite === true
               ? t('skills.zipConflictManaged')

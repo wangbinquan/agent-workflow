@@ -137,17 +137,6 @@ describe('ImportZipPanel', () => {
           updatedAt: 0,
           managedPath: 'p',
         },
-        {
-          id: 'y',
-          name: 'existing-external',
-          description: '',
-          sourceKind: 'external',
-          schemaVersion: 1,
-          contentVersion: 1,
-          createdAt: 0,
-          updatedAt: 0,
-          externalPath: '/x',
-        },
       ],
       parse: {
         skills: [
@@ -166,14 +155,6 @@ describe('ImportZipPanel', () => {
             warnings: [],
             conflict: 'managed',
             canOverwrite: true,
-          },
-          {
-            name: 'existing-external',
-            description: 'collides external',
-            fileCount: 1,
-            totalBytes: 50,
-            warnings: [],
-            conflict: 'external',
           },
         ],
         errors: [],
@@ -208,15 +189,6 @@ describe('ImportZipPanel', () => {
     )
     expect(actionOptionLabels('zip-action-existing-managed').sort()).toEqual(
       [actionLabel.overwrite(), actionLabel.rename(), actionLabel.skip()].sort(),
-    )
-
-    // RFC-102: external row can't overwrite the on-disk truth, but may
-    // rename-import a copy — so the select is enabled with skip + rename.
-    expect((screen.getByTestId('zip-action-existing-external') as HTMLButtonElement).disabled).toBe(
-      false,
-    )
-    expect(actionOptionLabels('zip-action-existing-external').sort()).toEqual(
-      [actionLabel.rename(), actionLabel.skip()].sort(),
     )
   })
 

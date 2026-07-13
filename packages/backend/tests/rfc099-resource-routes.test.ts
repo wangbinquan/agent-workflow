@@ -410,34 +410,3 @@ describe('RFC-099 — workflows list filter + private workflow lifecycle', () =>
     expect((await req(h.app, h.alice.token, `/api/workflows/${wf.id}`)).status).toBe(200)
   })
 })
-
-describe('RFC-099 — skill-sources registrar gate (D11)', () => {
-  test('non-registrar cannot PATCH/DELETE; registrar + admin can', async () => {
-    const h = await buildHarness()
-    const { mkdtempSync } = await import('node:fs')
-    const { tmpdir } = await import('node:os')
-    const { join } = await import('node:path')
-    const dir = mkdtempSync(join(tmpdir(), 'aw-rfc099-src-'))
-    const created = await req(h.app, h.alice.token, '/api/skill-sources', {
-      method: 'POST',
-      body: JSON.stringify({ path: dir }),
-    })
-    expect(created.status).toBe(201)
-    const src = (await created.json()) as { source: { id: string; createdBy: string | null } }
-    expect(src.source.createdBy).toBe(h.alice.id)
-    const bobPatch = await req(h.app, h.bob.token, `/api/skill-sources/${src.source.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ label: 'bob-takeover' }),
-    })
-    expect(bobPatch.status).toBe(403)
-    const alicePatch = await req(h.app, h.alice.token, `/api/skill-sources/${src.source.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ label: 'mine' }),
-    })
-    expect(alicePatch.status).toBe(200)
-    const adminDelete = await req(h.app, h.admin.token, `/api/skill-sources/${src.source.id}`, {
-      method: 'DELETE',
-    })
-    expect(adminDelete.status).toBe(204)
-  })
-})

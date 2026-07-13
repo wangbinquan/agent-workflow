@@ -31,7 +31,7 @@ import {
   type FusionDeps,
 } from '../src/services/fusion'
 import { getTask } from '../src/services/task'
-import { createManagedSkill, importExternalSkill, type SkillFsOptions } from '../src/services/skill'
+import { createManagedSkill, type SkillFsOptions } from '../src/services/skill'
 import { getSkillVersionContent } from '../src/services/skillVersion'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -132,21 +132,6 @@ describe('createFusion preconditions', () => {
   let h: H
   beforeEach(() => (h = build()))
   afterEach(() => h.cleanup())
-
-  test('rejects an external (non-managed) skill', async () => {
-    const ext = mkdtempSync(pjoin(tmpdir(), 'aw-ext-'))
-    writeFileSync(pjoin(ext, 'SKILL.md'), '---\nname: ext\ndescription: d\n---\nbody')
-    await importExternalSkill(h.db, { name: 'ext', externalPath: ext, description: 'd' })
-    const mem = approvedGlobalMemory(h.db, 'm')
-    let code: string | undefined
-    try {
-      await createFusion({ skillName: 'ext', memoryIds: [mem], intent: '' }, h.deps, adminActor)
-    } catch (err) {
-      code = (err as { code?: string }).code
-    }
-    expect(code).toBe('fusion-skill-not-managed')
-    rmSync(ext, { recursive: true, force: true })
-  })
 
   test('rejects a non-approved memory', async () => {
     await createManagedSkill(h.db, { appHome: h.appHome } as SkillFsOptions, {

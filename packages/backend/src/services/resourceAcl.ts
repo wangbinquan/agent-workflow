@@ -322,28 +322,6 @@ export async function updateResourceAcl(
     const nextVisibility: ResourceVisibility =
       body.visibility !== undefined ? body.visibility : (cur.visibility ?? 'public')
 
-    // RFC-170 §8 (G3-2): an external skill's injected body comes from a mutable
-    // externalPath the original registrar/importer still controls. A generic
-    // owner transfer would make "only the owner may change the resource" a false
-    // promise (the new owner can't actually change the content). So an external
-    // skill (`authority_kind != 'managed'`) REJECTS owner transfer here — inside
-    // the CAS tx so a concurrent authority flip can't slip past — while grant /
-    // visibility edits still go through. managed skills + the other five
-    // resource types are unrestricted (they carry no `skill`-table authority).
-    if (type === 'skill' && nextOwner !== prevOwner) {
-      const auth = tx
-        .select({ authorityKind: skills.authorityKind })
-        .from(skills)
-        .where(eq(skills.id, row.id))
-        .get()
-      if (auth && auth.authorityKind !== 'managed') {
-        throw new ForbiddenError(
-          'skill-external-transfer-blocked',
-          'external skills cannot transfer ownership (the importer/registrar controls the content); grants and visibility can still change',
-        )
-      }
-    }
-
     let nextGrantIds: string[]
     if (body.userIds !== undefined) {
       nextGrantIds = [...new Set(body.userIds)]

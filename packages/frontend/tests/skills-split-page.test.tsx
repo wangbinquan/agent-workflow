@@ -1,5 +1,5 @@
 // RFC-169 (T14) — the /skills split page end-to-end (real routes + mocked API):
-//   - /skills empty pane hosts the guidance + SkillSourcesCard;
+//   - /skills empty pane hosts the guidance (RFC-178: managed-only);
 //   - selecting a managed skill opens the four-tab detail;
 //   - editing marks it dirty; Save stays in place (D2) and clears the dot;
 //   - the file tree refuses to add the protected SKILL.md main file (guard).
@@ -26,9 +26,8 @@ interface SkillRow {
   id: string
   name: string
   description: string
-  sourceKind: 'managed' | 'external'
+  sourceKind: 'managed'
   managedPath: string | null
-  externalPath: string | null
   schemaVersion: number
   contentVersion: number
   createdAt: number
@@ -47,7 +46,6 @@ function makeSkill(name: string, description = ''): SkillRow {
     description,
     sourceKind: 'managed',
     managedPath: `/managed/${name}`,
-    externalPath: null,
     schemaVersion: 1,
     contentVersion: 1,
     createdAt: 0,
@@ -66,7 +64,6 @@ function installFetch() {
       const path = url.replace(/^https?:\/\/[^/]+/, '').split('?')[0]!
 
       if (method === 'GET' && path === '/api/skills') return json(skills)
-      if (method === 'GET' && path === '/api/skill-sources') return json({ sources: [] })
       if (method === 'POST' && path === '/api/users/lookup') return json([])
       const detailMatch = path.match(/^\/api\/skills\/([^/]+)$/)
       if (detailMatch) {
@@ -149,11 +146,11 @@ afterEach(() => {
 })
 
 describe('/skills split page', () => {
-  test('empty pane hosts the guidance + SkillSourcesCard', async () => {
+  test('empty pane hosts the guidance', async () => {
     renderSkills('/skills')
     await waitFor(() => screen.getByTestId('split-card-sk1'))
     expect(screen.getByText('Nothing selected')).toBeTruthy()
-    // SkillSourcesCard renders its own heading/testids; assert it mounted.
+    // The empty pane renders the guidance EmptyState in the detail column.
     await waitFor(() => expect(screen.getByTestId('split-detail').textContent).not.toBe(''))
   })
 
@@ -189,12 +186,10 @@ describe('/skills split page', () => {
     )
   })
 
-  test('the new view offers the four creation-mode tabs', async () => {
+  test('the new view offers the managed + ZIP creation modes', async () => {
     renderSkills('/skills/new')
     await waitFor(() => screen.getByRole('heading', { level: 2, name: /New skill/ }))
-    for (const tab of ['Managed', 'External']) {
-      expect(screen.getByRole('tab', { name: tab })).toBeTruthy()
-    }
+    expect(screen.getByRole('tab', { name: 'Managed' })).toBeTruthy()
     expect(screen.getByTestId('skills-tab-zip')).toBeTruthy()
   })
 })

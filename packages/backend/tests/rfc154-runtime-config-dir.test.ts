@@ -16,22 +16,14 @@
 //   (6) stageSkills: empty list still creates `<configDir>/skills` (opencode
 //       1.17+ writes a .gitignore into the config dir on startup and exits 1
 //       when it is missing — see runtime-smoke.test.ts), managed→copy,
-//       external→symlink, project→skip, strict vs bestEffort failure modes;
+//       project→skip, strict vs bestEffort failure modes (RFC-178: managed-only);
 //   (7) source guard: the config-dir literals stay confined to the shared
 //       DEFAULT_CONFIG_DIR_PROFILE single source (+ the two homedir fallbacks
 //       that reference the REAL ~/.claude, not our per-run dir).
 
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -407,27 +399,23 @@ describe('RFC-154 stageSkills', () => {
     }
   })
 
-  test('managed → copy, external → symlink, project → skip, missing sourcePath → skip+warn', () => {
+  test('managed → copy, project → skip, missing sourcePath → skip+warn', () => {
     const dir = mkdtempSync(join(tmpdir(), 'aw-rfc154-st2-'))
     try {
       const managedSrc = join(dir, 'managed-src')
       mkdirSync(managedSrc, { recursive: true })
       writeFileSync(join(managedSrc, 'SKILL.md'), 'managed')
-      const externalSrc = join(dir, 'external-src')
-      mkdirSync(externalSrc, { recursive: true })
       const cfg = join(dir, 'cfg')
       stageSkills(
         cfg,
         [
           { name: 'm', sourceKind: 'managed', sourcePath: managedSrc },
-          { name: 'e', sourceKind: 'external', sourcePath: externalSrc },
           { name: 'p', sourceKind: 'project', sourcePath: '/never' },
           { name: 'x', sourceKind: 'managed' }, // missing sourcePath
         ],
         log,
       )
       expect(readFileSync(join(cfg, 'skills', 'm', 'SKILL.md'), 'utf8')).toBe('managed')
-      expect(lstatSync(join(cfg, 'skills', 'e')).isSymbolicLink()).toBe(true)
       expect(existsSync(join(cfg, 'skills', 'p'))).toBe(false)
       expect(existsSync(join(cfg, 'skills', 'x'))).toBe(false)
     } finally {

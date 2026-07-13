@@ -185,7 +185,6 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/skills/:name/file' },
   { method: 'PUT', path: '/api/skills/:name/file' },
   { method: 'DELETE', path: '/api/skills/:name/file' },
-  { method: 'POST', path: '/api/skills/import-external' },
   { method: 'POST', path: '/api/skills/import-zip/parse' },
   { method: 'POST', path: '/api/skills/import-zip/commit' },
   // RFC-101: skill content version history.
@@ -202,14 +201,6 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/fusions/:id/approve' },
   { method: 'POST', path: '/api/fusions/:id/reject' },
   { method: 'POST', path: '/api/fusions/:id/cancel' },
-
-  // ---- skill-sources (RFC-017) ----
-  { method: 'GET', path: '/api/skill-sources' },
-  { method: 'POST', path: '/api/skill-sources' },
-  { method: 'PATCH', path: '/api/skill-sources/:id' },
-  { method: 'DELETE', path: '/api/skill-sources/:id' },
-  { method: 'POST', path: '/api/skill-sources/:id/rescan' },
-  { method: 'POST', path: '/api/skill-sources/:id/conflicts/replace' }, // RFC-102
 
   // ---- workflows ----
   {

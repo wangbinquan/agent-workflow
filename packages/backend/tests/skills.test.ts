@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -16,7 +16,6 @@ import {
   deleteSkill,
   deleteSkillFile,
   getSkill,
-  importExternalSkill,
   listSkillFiles,
   listSkills,
   readSkillContent,
@@ -123,37 +122,6 @@ describe('skill service', () => {
     ).rejects.toBeInstanceOf(ConflictError)
   })
 
-  test('importExternalSkill validates path existence + dir-ness', async () => {
-    const ext = mkdtempSync(join(tmpdir(), 'aw-ext-'))
-    try {
-      writeFileSync(join(ext, 'SKILL.md'), '---\nname: ext\ndescription: e\n---\nbody')
-      const skill = await importExternalSkill(h.db, {
-        name: 'ext',
-        externalPath: ext,
-        description: 'ext desc',
-      })
-      expect(skill.sourceKind).toBe('external')
-      expect(skill.externalPath).toBe(ext)
-
-      // Missing path
-      await expect(
-        importExternalSkill(h.db, {
-          name: 'missing',
-          externalPath: '/no/such/dir/agent-workflow-test',
-          description: '',
-        }),
-      ).rejects.toBeInstanceOf(ValidationError)
-
-      // Path is a file
-      const f = join(ext, 'SKILL.md')
-      await expect(
-        importExternalSkill(h.db, { name: 'isfile', externalPath: f, description: '' }),
-      ).rejects.toBeInstanceOf(ValidationError)
-    } finally {
-      rmSync(ext, { recursive: true, force: true })
-    }
-  })
-
   test('readSkillContent parses SKILL.md frontmatter + body', async () => {
     await createManagedSkill(h.db, fsOpts, {
       name: 'foo',
@@ -183,19 +151,6 @@ describe('skill service', () => {
     expect(updated.bodyMd).toBe('new body')
     const reread = await getSkill(h.db, 'foo')
     expect(reread?.description).toBe('new')
-  })
-
-  test('external skill content write rejected', async () => {
-    const ext = mkdtempSync(join(tmpdir(), 'aw-ext-'))
-    try {
-      writeFileSync(join(ext, 'SKILL.md'), '---\nname: e\ndescription: x\n---\nbody')
-      await importExternalSkill(h.db, { name: 'e', externalPath: ext, description: '' })
-      await expect(
-        writeSkillContent(h.db, fsOpts, 'e', { bodyMd: 'changed' }),
-      ).rejects.toBeInstanceOf(ConflictError)
-    } finally {
-      rmSync(ext, { recursive: true, force: true })
-    }
   })
 
   test('file tree CRUD on managed skill', async () => {
@@ -422,70 +377,6 @@ describe('skill HTTP routes', () => {
     const res = await req(h.app, '/api/skills/foo/file')
     expect(res.status).toBe(422)
     expect(((await res.json()) as { code: string }).code).toBe('path-required')
-  })
-
-  test('POST /import-external accepts existing dir', async () => {
-    const ext = mkdtempSync(join(tmpdir(), 'aw-ext-'))
-    try {
-      mkdirSync(ext, { recursive: true })
-      writeFileSync(join(ext, 'SKILL.md'), '---\nname: e\ndescription: x\n---\nbody')
-      const res = await req(h.app, '/api/skills/import-external', {
-        method: 'POST',
-        body: JSON.stringify({ name: 'e', externalPath: ext, description: 'd' }),
-      })
-      expect(res.status).toBe(201)
-      const skill = (await res.json()) as { sourceKind: string; externalPath?: string }
-      expect(skill.sourceKind).toBe('external')
-      expect(skill.externalPath).toBe(ext)
-    } finally {
-      rmSync(ext, { recursive: true, force: true })
-    }
-  })
-
-  // RFC-170 T-BSAFE③: an external skill's body is authored on disk (read-only). The
-  // old content PUT is 410 Gone; a combined-save that carries a bodyMd patch is
-  // rejected (409 skill-external-readonly); a description-only combined-save
-  // succeeds for a hand-imported external (its sole writable surface).
-  test('external skill: PUT /content is 410; combined-save rejects a body write but accepts a description', async () => {
-    const ext = mkdtempSync(join(tmpdir(), 'aw-ext-'))
-    try {
-      writeFileSync(join(ext, 'SKILL.md'), '---\nname: e\ndescription: x\n---\nbody')
-      await req(h.app, '/api/skills/import-external', {
-        method: 'POST',
-        body: JSON.stringify({ name: 'e', externalPath: ext, description: '' }),
-      })
-
-      // Old content PUT retired.
-      const putGone = await req(h.app, '/api/skills/e/content', {
-        method: 'PUT',
-        body: JSON.stringify({ bodyMd: 'changed' }),
-      })
-      expect(putGone.status).toBe(410)
-
-      const content = (await (await req(h.app, '/api/skills/e/content')).json()) as {
-        token?: string
-      }
-      expect(content.token).toBeTruthy()
-
-      // Body write via combined-save is rejected — external body is read-only.
-      const bodyWrite = await req(h.app, '/api/skills/e/save', {
-        method: 'POST',
-        body: JSON.stringify({ bodyMd: 'changed', expectedToken: content.token }),
-      })
-      expect(bodyWrite.status).toBe(409)
-      expect(((await bodyWrite.json()) as { code: string }).code).toBe('skill-external-readonly')
-
-      // Description-only combined-save succeeds for a hand-imported external.
-      const descWrite = await req(h.app, '/api/skills/e/save', {
-        method: 'POST',
-        body: JSON.stringify({ description: 'edited', expectedToken: content.token }),
-      })
-      expect(descWrite.status).toBe(200)
-      const meta = (await (await req(h.app, '/api/skills/e')).json()) as { description: string }
-      expect(meta.description).toBe('edited')
-    } finally {
-      rmSync(ext, { recursive: true, force: true })
-    }
   })
 
   test('DELETE refuses when an agent references the skill', async () => {

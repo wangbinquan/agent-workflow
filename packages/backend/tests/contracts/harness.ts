@@ -113,7 +113,6 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     description: 'contract-suite seed',
     sourceKind: 'managed',
     managedPath: 'skills/contract-skill/files/',
-    externalPath: null,
   })
   await db.insert(mcps).values({
     id: ulid(),

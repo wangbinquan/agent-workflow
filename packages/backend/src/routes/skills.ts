@@ -2,7 +2,6 @@
 //
 //   GET    /api/skills                              list
 //   POST   /api/skills                              create managed
-//   POST   /api/skills/import-external              register external path
 //   POST   /api/skills/import-zip/parse             RFC-019 dry-run parse
 //   POST   /api/skills/import-zip/commit            RFC-019 apply decisions
 //   GET    /api/skills/:name                        skill metadata
@@ -19,7 +18,6 @@
 
 import {
   CreateManagedSkillSchema,
-  ImportExternalSkillSchema,
   RestoreSkillVersionSchema,
   SkillZipDecisionMapSchema,
   CombinedSaveSkillSchema,
@@ -35,7 +33,6 @@ import {
   deleteSkill,
   deleteSkillFile,
   getSkill,
-  importExternalSkill,
   listSkillFiles,
   listSkills,
   readSkillContent,
@@ -78,19 +75,6 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       })
     }
     const created = await createManagedSkill(deps.db, fsOpts, parsed.data, {
-      ownerUserId: actorOf(c).user.id,
-    })
-    return c.json(created, 201)
-  })
-
-  app.post('/api/skills/import-external', async (c) => {
-    const parsed = ImportExternalSkillSchema.safeParse(await safeJson(c.req.raw))
-    if (!parsed.success) {
-      throw new ValidationError('skill-invalid', 'invalid external skill payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    const created = await importExternalSkill(deps.db, parsed.data, {
       ownerUserId: actorOf(c).user.id,
     })
     return c.json(created, 201)

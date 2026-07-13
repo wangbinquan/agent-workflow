@@ -32,7 +32,6 @@ import { mountRepoRoutes } from '@/routes/repos'
 import { mountRuntimeRoutes } from '@/routes/runtime'
 import { mountRuntimesRoutes } from '@/routes/runtimes'
 import { mountSkillRoutes } from '@/routes/skills'
-import { mountSkillSourceRoutes } from '@/routes/skill-sources'
 import { mountClarifyRoutes } from '@/routes/clarify'
 import { mountTaskQuestionRoutes } from '@/routes/taskQuestions'
 import { mountTaskClarifyDirectiveRoutes } from '@/routes/taskClarifyDirective'
@@ -140,8 +139,6 @@ export function createApp(deps: AppDeps): Hono {
   )
   app.use('/api/skills', resourcePermissionGate('skills'))
   app.use('/api/skills/*', resourcePermissionGate('skills'))
-  app.use('/api/skill-sources', resourcePermissionGate('skills'))
-  app.use('/api/skill-sources/*', resourcePermissionGate('skills'))
   app.use('/api/mcps', resourcePermissionGate('mcps'))
   app.use('/api/mcps/*', resourcePermissionGate('mcps'))
   app.use('/api/plugins', resourcePermissionGate('plugins'))
@@ -191,7 +188,6 @@ export function createApp(deps: AppDeps): Hono {
   mountMcpRoutes(app, deps)
   mountPluginRoutes(app, deps)
   mountSkillRoutes(app, deps)
-  mountSkillSourceRoutes(app, deps)
   mountRepoRoutes(app, deps)
   mountCachedRepoRoutes(app, deps)
   mountWorkflowRoutes(app, deps)

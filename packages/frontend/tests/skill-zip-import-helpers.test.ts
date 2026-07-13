@@ -18,7 +18,7 @@ import {
 
 function candidate(
   name: string,
-  conflict?: 'managed' | 'external',
+  conflict?: 'managed',
   canOverwrite?: boolean,
 ): SkillZipCandidateView {
   return {
@@ -39,9 +39,6 @@ describe('initialDecisionFor', () => {
   test('managed conflict → skip (safer than overwrite)', () => {
     expect(initialDecisionFor(candidate('a', 'managed')).action).toBe('skip')
   })
-  test('external conflict → skip', () => {
-    expect(initialDecisionFor(candidate('a', 'external')).action).toBe('skip')
-  })
 })
 
 describe('availableActionsFor (RFC-102)', () => {
@@ -60,9 +57,6 @@ describe('availableActionsFor (RFC-102)', () => {
   })
   test('managed with canOverwrite absent → skip / rename (default deny)', () => {
     expect(availableActionsFor(candidate('a', 'managed'))).toEqual(['skip', 'rename'])
-  })
-  test('external → skip / rename (zip never overwrites on-disk truth)', () => {
-    expect(availableActionsFor(candidate('a', 'external', false))).toEqual(['skip', 'rename'])
   })
 })
 
@@ -166,7 +160,7 @@ describe('buildDecisionMap', () => {
         decision: { action: 'rename', newName: 'c-new' },
       },
       {
-        candidate: candidate('d', 'external'),
+        candidate: candidate('d', 'managed'),
         decision: { action: 'skip', newName: '' },
       },
     ]
@@ -212,7 +206,7 @@ describe('summarizeRows', () => {
 describe('rowsFromParseResponse', () => {
   test('hydrates each candidate with its initial decision', () => {
     const rows = rowsFromParseResponse({
-      skills: [candidate('a'), candidate('b', 'managed'), candidate('c', 'external')],
+      skills: [candidate('a'), candidate('b', 'managed'), candidate('c', 'managed')],
       errors: [],
     })
     expect(rows.map((r) => r.decision.action)).toEqual(['import', 'skip', 'skip'])

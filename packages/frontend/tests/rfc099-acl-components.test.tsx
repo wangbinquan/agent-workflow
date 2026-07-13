@@ -192,25 +192,6 @@ describe('AclPanel', () => {
     expect(screen.getByText('DN bob')).toBeTruthy()
   })
 
-  // RFC-170 §8 (G3-2): an external skill 403-rejects owner transfer, so the
-  // panel hides the transfer control — while grant / visibility edits stay.
-  test('canTransferOwner=false hides the transfer control but keeps save + visibility', async () => {
-    setupGet({ canManage: true })
-    wrap(
-      <AclPanel
-        resourceBaseUrl="/api/skills/x"
-        invalidateKey={['skills']}
-        canTransferOwner={false}
-      />,
-    )
-    await waitFor(() => expect(screen.queryByTestId('acl-panel')).toBeTruthy())
-    // Manager surface intact...
-    expect(screen.getByTestId('acl-save')).toBeTruthy()
-    expect(screen.getByTestId('acl-visibility-private')).toBeTruthy()
-    // ...transfer control gone.
-    expect(screen.queryByTestId('acl-transfer-owner')).toBeNull()
-  })
-
   test('canTransferOwner defaults to true — a manager sees the transfer control', async () => {
     setupGet({ canManage: true })
     wrap(<AclPanel resourceBaseUrl="/api/agents/x" invalidateKey={['agents']} />)

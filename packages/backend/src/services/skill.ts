@@ -3,8 +3,9 @@
 // Storage model (design.md §2):
 //   ~/.agent-workflow/skills/{name}/files/SKILL.md      (+ support files)
 //
-// DB row holds only the index. For external skills, `externalPath` points at
-// a user-managed directory; the platform reads from there but never writes.
+// DB row holds only the index. RFC-178: skills are managed-only — the external
+// (hand-imported) and parent-directory (skill_sources / RFC-017) source kinds
+// were removed, so the platform owns every skill's files.
 //
 // Reference check: an agent's frontmatter.skills[] referencing this skill
 // makes it un-deletable; same as agents <-> workflows in P-1-08.
@@ -12,14 +13,12 @@
 import type {
   CreateManagedSkill,
   FileNode,
-  ImportExternalSkill,
   Skill,
   SkillContent,
-  UpdateSkill,
   UpdateSkillContent,
 } from '@agent-workflow/shared'
 import { isProtectedSkillMainFile } from '@agent-workflow/shared'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import {
   existsSync,
   mkdirSync,
@@ -46,7 +45,7 @@ import {
 } from '@/services/skillOperations'
 import { parseFrontmatter, stringifyFrontmatter } from '@/util/frontmatter'
 import { realpathInside, safeJoin } from '@/util/safePath'
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
 type SkillRow = typeof skills.$inferSelect
 
@@ -58,12 +57,6 @@ export interface SkillFsOptions {
 // --- query helpers ---
 
 export async function listSkills(db: DbClient): Promise<Skill[]> {
-  // RFC-017: lazy reconcile every enabled skill_source before returning, so
-  // child skills mirror the filesystem without a manual rescan. The helper
-  // swallows per-source errors into lastScanError; listing never fails when a
-  // parent dir is temporarily missing.
-  const { reconcileAllSources } = await import('@/services/skill-source')
-  await reconcileAllSources(db)
   // RFC-170 §9: skills mid-creation (reservation_state='reserving') are not yet
   // published and must stay invisible until their reserve op reaches 'ready'.
   const rows = await db.select().from(skills).where(eq(skills.reservationState, 'ready'))
@@ -87,37 +80,29 @@ export async function getSkill(db: DbClient, name: string): Promise<Skill | null
 }
 
 /**
- * Resolve the absolute root directory holding files/ for a skill.
- * Managed -> `${appHome}/skills/{name}/files`.
- * External -> the registered absolute path itself.
+ * Resolve the absolute root directory holding files/ for a (managed) skill:
+ * `${appHome}/skills/{name}/files`. RFC-178: skills are managed-only.
  */
 export function skillRoot(skill: Skill, opts: SkillFsOptions): string {
-  if (skill.sourceKind === 'managed') {
-    return join(opts.appHome, 'skills', skill.name, 'files')
-  }
-  if (skill.externalPath === undefined) {
-    throw new Error(`external skill '${skill.name}' has no externalPath`)
-  }
-  return skill.externalPath
+  return join(opts.appHome, 'skills', skill.name, 'files')
 }
 
 /**
- * RFC-170 (G1-1) — the AUTHORITATIVE dir to READ a managed skill's content from:
- * the current version's IMMUTABLE snapshot (`versions/v<contentVersion>/files`),
- * not live `files/`. After every commit the two are identical (swapInStaged), but
- * the snapshot is the source of truth — a torn/half-published live dir (crash
+ * RFC-170 (G1-1) — the AUTHORITATIVE dir to READ a skill's content from: the
+ * current version's IMMUTABLE snapshot (`versions/v<contentVersion>/files`), not
+ * live `files/`. After every commit the two are identical (swapInStaged), but the
+ * snapshot is the source of truth — a torn/half-published live dir (crash
  * mid-swap) can't corrupt a read, and the content always matches the signed
- * precondition token's `contentVersion`. Falls back to live for a legacy managed
- * skill with no snapshot yet, and for external skills (which read externalPath).
+ * precondition token's `contentVersion`. Falls back to live for a legacy skill
+ * with no snapshot yet.
  */
 export function skillReadRoot(skill: Skill, opts: SkillFsOptions): string {
   const live = skillRoot(skill, opts)
-  if (skill.sourceKind !== 'managed') return live
   const snapshot = join(opts.appHome, skillVersionRelPath(skill.name, skill.contentVersion))
   return existsSync(snapshot) ? snapshot : live
 }
 
-// --- create / import ---
+// --- create ---
 
 export async function createManagedSkill(
   db: DbClient,
@@ -149,7 +134,6 @@ export async function createManagedSkill(
           description: input.description,
           sourceKind: 'managed',
           managedPath: `skills/${input.name}/files`,
-          externalPath: null,
           // RFC-099: creator becomes owner; new resources default to 'public' (D18).
           ownerUserId: aclOpts?.ownerUserId ?? null,
           visibility: 'public',
@@ -217,129 +201,7 @@ export async function createManagedSkill(
   return created
 }
 
-export async function importExternalSkill(
-  db: DbClient,
-  input: ImportExternalSkill,
-  aclOpts?: { ownerUserId?: string },
-): Promise<Skill> {
-  if (!existsSync(input.externalPath)) {
-    throw new ValidationError(
-      'skill-external-path-missing',
-      `external path does not exist: ${input.externalPath}`,
-    )
-  }
-  if (!statSync(input.externalPath).isDirectory()) {
-    throw new ValidationError(
-      'skill-external-path-not-dir',
-      `external path is not a directory: ${input.externalPath}`,
-    )
-  }
-  if ((await getSkill(db, input.name)) !== null) {
-    throw new ConflictError('skill-name-in-use', `skill '${input.name}' already exists`)
-  }
-
-  const id = ulid()
-  const now = Date.now()
-  await db.insert(skills).values({
-    id,
-    name: input.name,
-    description: input.description,
-    sourceKind: 'external',
-    // RFC-170 (G3-7/G5-5, Codex F1): a hand-imported external skill is
-    // `hand-external` authority — WITHOUT this it defaults to 'managed' and the
-    // §8 owner-transfer block, metadata read-only guard, and FE capability gating
-    // are all bypassed. The importer is the content controller (`externalPath` is
-    // theirs), so record it in `authorityOwnerUserId` (design §10: only a NEW
-    // import can reliably prove the content controller = the actor).
-    authorityKind: 'hand-external',
-    authorityOwnerUserId: aclOpts?.ownerUserId ?? null,
-    managedPath: null,
-    externalPath: input.externalPath,
-    // RFC-099: creator becomes owner; new resources default to 'public' (D18).
-    ownerUserId: aclOpts?.ownerUserId ?? null,
-    visibility: 'public',
-    createdAt: now,
-    updatedAt: now,
-  })
-
-  const created = await getSkill(db, input.name)
-  if (created === null) throw new Error('skill disappeared right after insert')
-  return created
-}
-
-// --- update / delete ---
-
-export async function updateSkill(
-  db: DbClient,
-  name: string,
-  patch: UpdateSkill,
-  opts?: { expectedSkillId?: string; expectedMetaRevision?: number },
-): Promise<Skill> {
-  const existing = await getSkill(db, name)
-  if (existing === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
-  // A patch with no description is a no-op — nothing to write or fence.
-  if (patch.description === undefined) return existing
-  // RFC-170 T-BSAFE③ (Codex F1-review): bind to the token's IMMUTABLE skillId. This
-  // function resolves by name, so without this a same-name delete→recreate between
-  // the caller's token check and here would redirect the write to a different
-  // skill (ABA). The tx below keys on existing.id, so once this guard passes the
-  // write can only land on the intended row (or 409 if that row vanished).
-  if (opts?.expectedSkillId !== undefined && existing.id !== opts.expectedSkillId) {
-    throw new ConflictError('skill-changed', `skill '${name}' changed; reload and retry`)
-  }
-
-  // RFC-170 §8 (Codex F2): the guard + write must be ONE transaction keyed on the
-  // IMMUTABLE skill id, not a name-based read-then-write. Otherwise a same-name
-  // delete→recreate between the check and the UPDATE lets a request authorized
-  // against a managed/hand-external row modify a freshly-created source-external
-  // row. And every metadata write MUST advance `meta_revision` so the composite
-  // precondition token actually drifts on a description change (else the T3/T4/T6
-  // token OCC is blind to metadata edits).
-  const description = patch.description
-  dbTxSync(db, (tx) => {
-    // Re-read the authority + current metaRevision by immutable id INSIDE the tx.
-    const cur = tx
-      .select({ authorityKind: skills.authorityKind, metaRevision: skills.metaRevision })
-      .from(skills)
-      .where(eq(skills.id, existing.id))
-      .get()
-    if (!cur) throw new ConflictError('skill-changed', `skill '${name}' changed; reload and retry`)
-    // §8 (G3-2): a source-external skill's metadata is owned by its registered
-    // source dir (SKILL.md is authoritative) — a direct write would be clobbered
-    // on the next reconcile, so reject it. hand-external + managed are writable.
-    if (cur.authorityKind === 'source-external') {
-      throw new ForbiddenError(
-        'skill-source-external-metadata-readonly',
-        "a source-external skill's description is owned by its source directory; edit it there",
-      )
-    }
-    // RFC-170 T-BSAFE③: when the caller carries a precondition token (external
-    // combined-save), the metaRevision CAS must be ATOMIC with the write — the
-    // token check in saveSkillWithToken happens outside this tx, so a concurrent
-    // description edit could slip between them and both would LWW-clobber. Re-check
-    // the expected revision here, inside the same tx as the UPDATE.
-    if (
-      opts?.expectedMetaRevision !== undefined &&
-      cur.metaRevision !== opts.expectedMetaRevision
-    ) {
-      throw new ConflictError(
-        'skill-version-conflict',
-        `skill '${name}' changed since you loaded it; reload and retry`,
-      )
-    }
-    tx.update(skills)
-      .set({
-        description,
-        metaRevision: sql`${skills.metaRevision} + 1`, // fence the token on every meta write
-        updatedAt: Date.now(),
-      })
-      .where(eq(skills.id, existing.id))
-      .run()
-  })
-  const updated = await getSkill(db, name)
-  if (updated === null) throw new Error('skill disappeared after update')
-  return updated
-}
+// --- delete ---
 
 export async function deleteSkill(db: DbClient, opts: SkillFsOptions, name: string): Promise<void> {
   const existing = await getSkill(db, name)
@@ -352,36 +214,11 @@ export async function deleteSkill(db: DbClient, opts: SkillFsOptions, name: stri
     })
   }
 
-  if (existing.sourceKind === 'managed') {
-    // RFC-170 §6a: crash-safe op-based delete — rename the whole root to trash,
-    // DELETE the row in the same tx as the phase advance, then drop the trash.
-    // A crash between steps is recovered by the boot driver (deleteRecoveryHandler).
-    const { deleteManagedSkillOp } = await import('@/services/skillDeleteOp')
-    deleteManagedSkillOp(db, { appHome: opts.appHome }, { id: existing.id, name: existing.name })
-  } else {
-    // External: no managed directory — a single DB row drop is already atomic.
-    await removeSkillRowAndFiles(db, opts, existing)
-  }
-}
-
-/**
- * RFC-102: drop a skill's DB row plus (for managed skills) its files directory.
- * NO agent-reference check — callers that must preserve referential integrity
- * (deleteSkill) check first; the source-conflict replace path intentionally
- * skips it because the skill name is preserved across the replace, so agent
- * references stay valid.
- */
-export async function removeSkillRowAndFiles(
-  db: DbClient,
-  opts: SkillFsOptions,
-  skill: Skill,
-): Promise<void> {
-  // Managed: delete the directory. External: just drop the DB row.
-  if (skill.sourceKind === 'managed') {
-    const dir = join(opts.appHome, 'skills', skill.name)
-    rmSync(dir, { recursive: true, force: true })
-  }
-  await db.delete(skills).where(eq(skills.name, skill.name))
+  // RFC-170 §6a: crash-safe op-based delete — rename the whole root to trash,
+  // DELETE the row in the same tx as the phase advance, then drop the trash.
+  // A crash between steps is recovered by the boot driver (deleteRecoveryHandler).
+  const { deleteManagedSkillOp } = await import('@/services/skillDeleteOp')
+  deleteManagedSkillOp(db, { appHome: opts.appHome }, { id: existing.id, name: existing.name })
 }
 
 async function findAgentsUsingSkill(
@@ -413,27 +250,27 @@ export async function readSkillContent(
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
   // RFC-170 (G1-1): read the SKILL.md body + sign the token from the AUTHORITATIVE
-  // version snapshot (managed), not live — so the returned content always matches
-  // the token's contentVersion and a torn live dir can't corrupt the read.
+  // version snapshot, not live — so the returned content always matches the token's
+  // contentVersion and a torn live dir can't corrupt the read.
   const root = skillReadRoot(skill, opts)
   const skillMdPath = join(root, 'SKILL.md')
   if (!existsSync(skillMdPath)) {
     throw new NotFoundError('skill-md-missing', `SKILL.md not found at ${skillMdPath}`)
   }
-  // RFC-170 G3-1 (security): SKILL.md may be a symlink in an external skill dir;
-  // contain it so a `SKILL.md -> ~/.ssh/id_rsa` link can't leak host files to a
-  // shared skill's readers (same fix as readSkillFile).
+  // RFC-170 G3-1 (security): SKILL.md may be a symlink; contain it so a
+  // `SKILL.md -> ~/.ssh/id_rsa` link can't leak host files to a shared skill's
+  // readers (same fix as readSkillFile).
   const raw = readFileSync(realpathInside(root, skillMdPath), 'utf-8')
   const parsed = parseFrontmatter(raw)
   const { name: _ignoredName, description: descRaw, ...rest } = parsed.data
-  // RFC-170 §2/T3 + re-review-3: emit the composite precondition token AND (for
-  // hand-external) the DB description from ONE atomic row snapshot, keyed on the
-  // immutable id. Reading skills.description (via getSkill) and metaRevision in two
-  // separate queries let a concurrent description save land between them → the
-  // response would pair an OLD description with the NEW token, and the client's
-  // next save would pass OCC and silently roll the concurrent edit back. If the row
-  // vanished (concurrent delete), that is a 409 — NOT a fabricated metaRevision-0
-  // token pointing at a gone generation.
+  // RFC-170 §2/T3 + re-review-3: emit the composite precondition token AND the DB
+  // description-fallback from ONE atomic row snapshot, keyed on the immutable id.
+  // Reading skills.description and metaRevision in two separate queries let a
+  // concurrent description save land between them → the response would pair an OLD
+  // description with the NEW token, and the client's next save would pass OCC and
+  // silently roll the concurrent edit back. If the row vanished (concurrent
+  // delete), that is a 409 — NOT a fabricated metaRevision-0 token pointing at a
+  // gone generation.
   const gen = (
     await db
       .select({ description: skills.description, metaRevision: skills.metaRevision })
@@ -450,23 +287,10 @@ export async function readSkillContent(
     contentVersion: skill.contentVersion,
     metaRevision: gen.metaRevision,
   })
-  // RFC-170 (Codex re-review F2-followup): the description AUTHORITY is
-  // authority-kind specific, and the frontend seeds its draft from THIS response.
-  // managed / source-external → the SKILL.md frontmatter is authoritative
-  // (contentVersion-tied — the token's contentVersion pins it to the same
-  // generation). hand-external → the DB skills.description is the ONLY writable
-  // surface (the disk SKILL.md is external, not ours to write), so return THAT,
-  // read from the SAME snapshot as the token's metaRevision (above) — else a
-  // hand-external edit (DB-only) would read back the stale disk frontmatter (or a
-  // torn generation) and Save could roll the DB edit back.
-  const isHandExternal =
-    skill.authorityKind === 'hand-external' ||
-    (skill.authorityKind == null && skill.sourceKind === 'external' && skill.sourceId == null)
-  const description = isHandExternal
-    ? gen.description
-    : typeof descRaw === 'string'
-      ? descRaw
-      : gen.description
+  // The SKILL.md frontmatter description is authoritative (contentVersion-tied via
+  // the token); fall back to the DB row's description (read from the SAME snapshot
+  // as the token's metaRevision above) when the frontmatter has none.
+  const description = typeof descRaw === 'string' ? descRaw : gen.description
   return {
     name: skill.name,
     description,
@@ -554,7 +378,6 @@ export async function writeSkillContent(
 ): Promise<SkillContent> {
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
-  ensureSkillIsWritable(skill)
   const current = await readSkillContent(db, opts, name).catch(() => ({
     name: skill.name,
     description: skill.description,
@@ -646,34 +469,9 @@ export async function saveSkillWithToken(
     )
   }
 
-  // RFC-170 T-BSAFE③ (§2 "external metadata-only"): combined-save is the single
-  // save funnel for external skills too. Their body is authored on disk
-  // (externalPath is authoritative), so a bodyMd patch is rejected here; only the
-  // DB description is writable, and only for hand-external — updateSkill's in-tx
-  // authority CAS rejects source-external (its description is owned by the source
-  // dir). The expectedMetaRevision fence keeps the token OCC atomic with the write.
-  if (skill.sourceKind === 'external') {
-    if (patch.bodyMd !== undefined) {
-      throw new ConflictError(
-        'skill-external-readonly',
-        `skill '${name}' is external; its body is authored on disk, not through the editor`,
-      )
-    }
-    if (patch.description !== undefined) {
-      await updateSkill(
-        db,
-        name,
-        { description: patch.description },
-        { expectedSkillId: decoded.skillId, expectedMetaRevision: current.metaRevision },
-      )
-    }
-    return readSkillContent(db, opts, name)
-  }
-
   // managed: the six-writer version funnel. Feed the decoded token into
   // commitSkillVersion's IN-TX composite fence (F4) so the OCC is atomic with the
   // version bump — the outer skillTokenMatches above is only a pre-check.
-  ensureSkillIsWritable(skill)
   await writeSkillContent(db, opts, name, patch, authorUserId, {
     skillId: decoded.skillId,
     contentVersion: decoded.contentVersion,
@@ -693,8 +491,8 @@ export async function listSkillFiles(
 ): Promise<FileNode[]> {
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
-  // RFC-170 (G1-1): the file tree reflects the AUTHORITATIVE snapshot (managed),
-  // not live — consistent with readSkillContent/readSkillFile.
+  // RFC-170 (G1-1): the file tree reflects the AUTHORITATIVE snapshot, not live —
+  // consistent with readSkillContent/readSkillFile.
   const root = skillReadRoot(skill, opts)
   if (!existsSync(root)) return []
   return walkDir(root, '')
@@ -731,7 +529,7 @@ export async function readSkillFile(
 ): Promise<string> {
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
-  // RFC-170 (G1-1): read from the AUTHORITATIVE snapshot (managed), not live.
+  // RFC-170 (G1-1): read from the AUTHORITATIVE snapshot, not live.
   const root = skillReadRoot(skill, opts)
   const abs = safeJoin(root, relPath)
   if (!existsSync(abs)) {
@@ -741,9 +539,9 @@ export async function readSkillFile(
     )
   }
   // RFC-170 G3-1 (security): safeJoin does NOT resolve symlinks, but readFileSync
-  // follows them — an external skill dir can hold a symlink pointing outside root
-  // (e.g. `secret -> ~/.ssh/id_rsa`), so a SHARED skill would leak host files to
-  // any authorized/public reader. realpathInside resolves + verifies containment,
+  // follows them — a skill dir can hold a symlink pointing outside root (e.g.
+  // `secret -> ~/.ssh/id_rsa`), so a SHARED skill would leak host files to any
+  // authorized/public reader. realpathInside resolves + verifies containment,
   // throwing path-traversal on an escaping link (internal symlinks still resolve).
   const real = realpathInside(root, abs)
   if (statSync(real).isDirectory()) {
@@ -762,8 +560,7 @@ export async function writeSkillFile(
 ): Promise<void> {
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
-  ensureSkillIsWritable(skill)
-  // RFC-169: SKILL.md is edited exclusively through PUT /content — the file tree
+  // RFC-169: SKILL.md is edited exclusively through POST /save — the file tree
   // must never write it via an arbitrary path (before RFC-169 there was NO
   // check, so adding a file named `SKILL.md` / `./SKILL.md` truncated it).
   assertNotSkillMainFile(skillRoot(skill, opts), relPath)
@@ -790,9 +587,8 @@ export async function deleteSkillFile(
 ): Promise<void> {
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
-  ensureSkillIsWritable(skill)
   const root = skillRoot(skill, opts)
-  // RFC-169: SKILL.md is special — refuse to delete it (users edit via /content).
+  // RFC-169: SKILL.md is special — refuse to delete it (users edit via /save).
   // The pre-RFC-169 raw `=== 'SKILL.md'` compare was bypassable via `./SKILL.md`,
   // a trailing separator, or a case variant on a case-insensitive filesystem.
   assertNotSkillMainFile(root, relPath)
@@ -827,18 +623,14 @@ function rowToSkill(row: SkillRow): Skill {
     // RFC-099 ACL projection — routes filter on these.
     ownerUserId: row.ownerUserId,
     visibility: row.visibility,
-    sourceKind: row.sourceKind as 'managed' | 'external',
-    // RFC-170 (G5-P2) — stable authority discriminator drives the FE capability
-    // table (edit-description / delete / transfer-owner). Backfilled for all rows.
-    authorityKind: row.authorityKind,
+    // RFC-178: skills are managed-only.
+    sourceKind: 'managed',
     schemaVersion: row.schemaVersion,
     contentVersion: row.contentVersion,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
   if (row.managedPath !== null) out.managedPath = row.managedPath
-  if (row.externalPath !== null) out.externalPath = row.externalPath
-  if (row.sourceId !== null) out.sourceId = row.sourceId
   return out
 }
 
@@ -853,7 +645,6 @@ function rowToSkill(row: SkillRow): Skill {
  *      compare realpath, then dev+inode, of the resolved target vs root
  *      SKILL.md. On a case-sensitive filesystem these are genuinely different
  *      files and correctly fall through.
- * Symlink edge cases that need a pre-planted link to reproduce are RFC-170.
  */
 function assertNotSkillMainFile(root: string, relPath: string): void {
   if (isProtectedSkillMainFile(relPath) || resolvesToSkillMainFile(root, relPath)) {
@@ -886,26 +677,4 @@ function resolvesToSkillMainFile(root: string, relPath: string): boolean {
     // not present on disk — nothing to collide with.
   }
   return false
-}
-
-/**
- * RFC-017: enforce "external folders are read-only from the platform"
- * uniformly. Hand-imported `sourceKind='external'` rows keep the original
- * `skill-external-readonly` code; rows imported by a registered
- * skill_sources row carry `sourceId != null` and surface
- * `skill-source-readonly` so the UI can render a precise "edit in the source
- * directory" hint.
- */
-function ensureSkillIsWritable(skill: Skill): void {
-  if (skill.sourceKind !== 'external') return
-  if (skill.sourceId !== undefined) {
-    throw new ConflictError(
-      'skill-source-readonly',
-      `skill '${skill.name}' is managed by a folder source; edit files in the source directory`,
-    )
-  }
-  throw new ConflictError(
-    'skill-external-readonly',
-    `skill '${skill.name}' is external; edit on disk instead`,
-  )
 }

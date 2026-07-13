@@ -75,7 +75,7 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     const skill = await getSkill(db, 'foo')
     resetSkillBootVerifyForTest() // clear the set + deactivate
     // Even with an empty set, an inactive gate does not restrict.
-    expect(isSkillAvailableThisBoot({ id: skill!.id, sourceKind: 'managed' })).toBe(true)
+    expect(isSkillAvailableThisBoot({ id: skill!.id })).toBe(true)
   })
 
   test('once ACTIVE, a managed skill needs authoritative + boot-verified', async () => {
@@ -84,7 +84,6 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     activateBootReverifyForTest() // gate ON, set empty
     const row = {
       id: skill!.id,
-      sourceKind: 'managed' as const,
       versionState: 'snapshot-authoritative',
     }
     expect(isSkillAvailableThisBoot(row)).toBe(false) // authoritative but NOT in set
@@ -92,16 +91,6 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
       verifyManagedSnapshot(db, fsOpts, { id: skill!.id, name: 'foo', contentVersion: 1 }),
     ).toBe('verified')
     expect(isSkillAvailableThisBoot(row)).toBe(true) // now verified → available
-  })
-
-  test('a non-degraded external skill is available when active (not gated on the set)', () => {
-    activateBootReverifyForTest()
-    expect(isSkillAvailableThisBoot({ id: 'x', sourceKind: 'external', sourceState: null })).toBe(
-      true,
-    )
-    expect(
-      isSkillAvailableThisBoot({ id: 'x', sourceKind: 'external', sourceState: 'degraded' }),
-    ).toBe(false) // degraded external → unavailable
   })
 
   test('verifyManagedSnapshot QUARANTINES a tampered snapshot (hash mismatch)', async () => {
@@ -135,7 +124,6 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     expect(
       isSkillAvailableThisBoot({
         id: foo!.id,
-        sourceKind: 'managed',
         versionState: 'snapshot-authoritative',
       }),
     ).toBe(true)
@@ -169,8 +157,7 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     expect(isSkillInjectableThisBoot({ id: skill!.id, sourceKind: 'managed' })).toBe(false) // unverified
     markSkillBootVerified(skill!.id)
     expect(isSkillInjectableThisBoot({ id: skill!.id, sourceKind: 'managed' })).toBe(true) // verified
-    // External / project are not snapshot-gated here.
-    expect(isSkillInjectableThisBoot({ id: 'e', sourceKind: 'external' })).toBe(true)
+    // Project (repo-local self-discovered) skills are not snapshot-gated here.
     expect(isSkillInjectableThisBoot({ id: 'p', sourceKind: 'project' })).toBe(true)
   })
 

@@ -12,24 +12,13 @@ export const SkillNameSchema = z
   .max(128, 'name too long')
   .regex(SKILL_NAME_RE, 'name must start with [a-z0-9] and contain only [a-z0-9_-]')
 
-export const SkillSourceKindSchema = z.enum(['managed', 'external'])
+// RFC-178: skills are managed-only (external / parent-directory sources removed).
+// The single-member enum is retained (rather than dropping the field) so the DTO
+// stays stable and existing `sourceKind` reads keep compiling.
+export const SkillSourceKindSchema = z.enum(['managed'])
 export type SkillSourceKind = z.infer<typeof SkillSourceKindSchema>
 
-/**
- * RFC-170 (G3-7/G5-P2) — stable content-authority discriminator, distinct from
- * the coarse `sourceKind`. Drives the three-state capability table (who may edit
- * description / delete / transfer ownership):
- *   - `managed`         — platform snapshot is authoritative; fully editable.
- *   - `source-external` — a registered source dir owns the SKILL.md; metadata
- *     write AND owner transfer are blocked (the registrar controls content).
- *   - `hand-external`   — a hand-imported dir; DB metadata is editable, but owner
- *     transfer is still blocked (the original importer controls content).
- * NOT derivable from `sourceId != null` (FK ON DELETE would misclassify orphans).
- */
-export const SkillAuthorityKindSchema = z.enum(['managed', 'source-external', 'hand-external'])
-export type SkillAuthorityKind = z.infer<typeof SkillAuthorityKindSchema>
-
-/** Skill row response. `managedPath` set iff `managed`, `externalPath` set iff `external`. */
+/** Skill row response. RFC-178: managed-only; `managedPath` is the files/ root. */
 export const SkillSchema = z.object({
   id: z.string(),
   name: SkillNameSchema,
@@ -39,21 +28,7 @@ export const SkillSchema = z.object({
   /** RFC-099 ACL — 'public' = every user; 'private' = owner + grants. Absent ⇒ 'public'. */
   visibility: ResourceVisibilitySchema.optional(),
   sourceKind: SkillSourceKindSchema,
-  /**
-   * RFC-170 (G5-P2) — stable content-authority discriminator; drives the
-   * frontend three-state capability table. Optional on the wire for fixture
-   * back-compat; the backend always populates it. Absent ⇒ derive from
-   * `sourceKind` (managed → 'managed', external → 'hand-external').
-   */
-  authorityKind: SkillAuthorityKindSchema.optional(),
   managedPath: z.string().optional(),
-  externalPath: z.string().optional(),
-  /**
-   * RFC-017: when this skill was discovered by reconciling a registered
-   * `skill_sources` parent directory, the source row's id is carried here.
-   * Hand-imported managed/external skills leave this unset.
-   */
-  sourceId: z.string().optional(),
   schemaVersion: z.number().int(),
   /** RFC-101: monotonic content version; equals the latest skill_versions row. */
   contentVersion: z.number().int(),
@@ -70,20 +45,6 @@ export const CreateManagedSkillSchema = z.object({
   frontmatterExtra: z.record(z.string(), z.unknown()).default({}),
 })
 export type CreateManagedSkill = z.infer<typeof CreateManagedSkillSchema>
-
-/** POST /api/skills/import-external — register an existing on-disk skill dir. */
-export const ImportExternalSkillSchema = z.object({
-  name: SkillNameSchema,
-  externalPath: z.string().min(1),
-  description: z.string().default(''),
-})
-export type ImportExternalSkill = z.infer<typeof ImportExternalSkillSchema>
-
-/** PUT /api/skills/:name — update DB-only metadata. */
-export const UpdateSkillSchema = z.object({
-  description: z.string().optional(),
-})
-export type UpdateSkill = z.infer<typeof UpdateSkillSchema>
 
 /**
  * Parsed SKILL.md content. `frontmatterExtra` holds frontmatter keys other
@@ -140,98 +101,6 @@ export const WriteSkillFileSchema = z.object({
 export type WriteSkillFile = z.infer<typeof WriteSkillFileSchema>
 
 // ---------------------------------------------------------------------------
-// RFC-017: Skill sources (parent directories whose direct children are
-// auto-imported as external skills, reconciled lazily on each list request).
-// ---------------------------------------------------------------------------
-
-/** Persisted skill_sources row exposed via API. */
-export const SkillSourceSchema = z.object({
-  id: z.string(),
-  /** Absolute, canonicalized (`realpath`) parent directory path. */
-  path: z.string(),
-  /** Display label; defaults to basename(path) when not supplied. */
-  label: z.string(),
-  enabled: z.boolean(),
-  lastScannedAt: z.number().int().nullable(),
-  lastScanError: z.string().nullable(),
-  /** RFC-099 (D11) — who registered this source; its imported skills inherit this owner. */
-  createdBy: z.string().nullable().optional(),
-  createdAt: z.number().int(),
-  updatedAt: z.number().int(),
-})
-export type SkillSource = z.infer<typeof SkillSourceSchema>
-
-export const SkillSkipReasonSchema = z.enum([
-  'no-skill-md',
-  'invalid-name',
-  'name-conflict-manual',
-  'name-conflict-source',
-  'frontmatter-parse-failed',
-  'still-referenced',
-])
-export type SkillSkipReason = z.infer<typeof SkillSkipReasonSchema>
-
-export const SkillSkipReportSchema = z.object({
-  childPath: z.string(),
-  proposedName: z.string().optional(),
-  reason: SkillSkipReasonSchema,
-  detail: z.string().optional(),
-})
-export type SkillSkipReport = z.infer<typeof SkillSkipReportSchema>
-
-export const SkillSourceWithStatsSchema = SkillSourceSchema.extend({
-  childCount: z.number().int().nonnegative(),
-  skipped: z.array(SkillSkipReportSchema),
-})
-export type SkillSourceWithStats = z.infer<typeof SkillSourceWithStatsSchema>
-
-/** POST /api/skill-sources body. */
-export const CreateSkillSourceSchema = z.object({
-  path: z.string().min(1),
-  label: z.string().optional(),
-})
-export type CreateSkillSource = z.infer<typeof CreateSkillSourceSchema>
-
-/** PATCH /api/skill-sources/:id body. */
-export const UpdateSkillSourceSchema = z.object({
-  label: z.string().min(1).optional(),
-  enabled: z.boolean().optional(),
-})
-export type UpdateSkillSource = z.infer<typeof UpdateSkillSourceSchema>
-
-/** POST /api/skill-sources response shape. */
-export const RegisterSkillSourceResponseSchema = z.object({
-  source: SkillSourceWithStatsSchema,
-  imported: z.array(SkillSchema),
-  skipped: z.array(SkillSkipReportSchema),
-})
-export type RegisterSkillSourceResponse = z.infer<typeof RegisterSkillSourceResponseSchema>
-
-/** POST /api/skill-sources/:id/rescan response shape. */
-export const RescanSkillSourceResponseSchema = z.object({
-  source: SkillSourceWithStatsSchema,
-  imported: z.array(SkillSchema),
-  deleted: z.array(z.string()),
-  skipped: z.array(SkillSkipReportSchema),
-})
-export type RescanSkillSourceResponse = z.infer<typeof RescanSkillSourceResponseSchema>
-
-/**
- * RFC-102: POST /api/skill-sources/:id/conflicts/replace body. Resolve a
- * `name-conflict-*` by replacing the occupying skill with this source's version
- * of `name` (requires write permission on the occupying skill).
- */
-export const ReplaceSourceConflictSchema = z.object({ name: SkillNameSchema })
-export type ReplaceSourceConflict = z.infer<typeof ReplaceSourceConflictSchema>
-
-export const ReplaceSourceConflictResponseSchema = z.object({
-  source: SkillSourceWithStatsSchema,
-  replaced: z.string(),
-  imported: SkillSchema,
-})
-export type ReplaceSourceConflictResponse = z.infer<typeof ReplaceSourceConflictResponseSchema>
-
-// ---------------------------------------------------------------------------
 // RFC-019: ZIP batch import. parse end-point returns the candidate list +
 // per-candidate errors; commit end-point takes a decision map keyed by
 // candidate name and replays the same zip against the user's selections.
@@ -255,7 +124,8 @@ export const SkillZipErrorSchema = z.object({
 })
 export type SkillZipError = z.infer<typeof SkillZipErrorSchema>
 
-export const SkillZipCandidateConflictSchema = z.enum(['managed', 'external'])
+// RFC-178: skills are managed-only, so a same-name conflict is always managed.
+export const SkillZipCandidateConflictSchema = z.enum(['managed'])
 export type SkillZipCandidateConflict = z.infer<typeof SkillZipCandidateConflictSchema>
 
 /** One row in the parse response: a skill the zip could become. */
@@ -267,11 +137,10 @@ export const SkillZipCandidateViewSchema = z.object({
   warnings: z.array(z.string()),
   conflict: SkillZipCandidateConflictSchema.optional(),
   /**
-   * RFC-102: whether the current actor may replace this same-named skill.
-   * Only meaningful when `conflict` is set. `external` ⇒ always false (the
-   * skill's source of truth lives on disk; a zip cannot overwrite it).
-   * `managed` ⇒ isResourceOwner(actor, existing). Never leaks owner identity:
-   * a private same-named skill the actor cannot see naturally yields false.
+   * RFC-102: whether the current actor may replace this same-named managed skill.
+   * Only meaningful when `conflict` is set. `managed` ⇒ isResourceOwner(actor,
+   * existing). Never leaks owner identity: a private same-named skill the actor
+   * cannot see naturally yields false.
    */
   canOverwrite: z.boolean().optional(),
 })
@@ -297,7 +166,6 @@ export const SkillZipDecisionMapSchema = z.record(z.string(), SkillZipDecisionSc
 export type SkillZipDecisionMap = z.infer<typeof SkillZipDecisionMapSchema>
 
 export const SkillZipCommitFailureCodeSchema = z.enum([
-  'skill-external-cannot-overwrite',
   'skill-rename-conflict',
   'skill-write-failed',
   'skill-md-missing',

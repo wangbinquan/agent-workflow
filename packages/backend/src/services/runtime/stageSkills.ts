@@ -2,8 +2,7 @@
 // near-identical copies: runner.ts prepareSkills for opencode + the loop inside
 // claudeCode/config.ts prepareClaudeConfigDir). Stages framework skills into
 // `<configDir>/skills/<name>`:
-//   managed  → cpSync (whole dir copy)
-//   external → symlinkSync (IO economy)
+//   managed  → cpSync (whole dir copy)      (RFC-178: skills are managed-only)
 //   project  → skipped (the CLI self-discovers repo-local skills from cwd)
 //
 // The skills dir is created even for an EMPTY list — creating the config dir
@@ -19,14 +18,14 @@
 //
 // Leaf module: imports nothing from runner.ts / drivers → no module-init cycle.
 
-import { cpSync, mkdirSync, symlinkSync } from 'node:fs'
+import { cpSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { Logger } from '@/util/log'
 
 /** Minimal skill shape (structurally matches runner.ts ResolvedSkill). */
 export interface StagedSkill {
   name: string
-  sourceKind: 'managed' | 'external' | 'project'
+  sourceKind: 'managed' | 'project'
   sourcePath?: string
 }
 
@@ -49,12 +48,8 @@ export function stageSkills(
     // Ensure parent exists (skillsDir already does, but defensive).
     mkdirSync(dirname(dst), { recursive: true })
     try {
-      if (skill.sourceKind === 'managed') {
-        cpSync(skill.sourcePath, dst, { recursive: true })
-      } else {
-        // external -> symlink for IO economy
-        symlinkSync(skill.sourcePath, dst, 'dir')
-      }
+      // RFC-178: managed-only — copy the whole snapshot dir.
+      cpSync(skill.sourcePath, dst, { recursive: true })
     } catch (err) {
       if (opts?.bestEffort !== true) throw err
       log.warn('skill injection failed', {

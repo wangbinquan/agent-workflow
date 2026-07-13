@@ -58,33 +58,24 @@ export function activateBootReverifyForTest(): void {
 /** The minimal row shape the availability predicate needs. */
 export interface SkillAvailabilityRow {
   id: string
-  sourceKind: 'managed' | 'external'
   reservationState?: string | null
   versionState?: string | null
-  sourceState?: string | null
 }
 
 /**
  * RFC-170 §invariant④ (G8-2) — the ONE availability predicate shared by every
  * skill entry point. Returns true (no gating) until the boot reverify activates
- * it. Once active:
- *   - managed: reservation 'ready' + version_state 'snapshot-authoritative' + this
- *     boot's `bootVerifiedSet` (content re-hash passed) — a durable authoritative
- *     flag alone is NOT enough (G6-4);
- *   - external (source-/hand-external): NOT gated on bootVerifiedSet (its dir is
- *     not a platform snapshot — safety is the §7b per-run capture); requires a
- *     normal `source_state` (a degraded/orphaned external is unavailable).
+ * it. Once active (RFC-178: skills are managed-only): reservation 'ready' +
+ * version_state 'snapshot-authoritative' + this boot's `bootVerifiedSet` (content
+ * re-hash passed) — a durable authoritative flag alone is NOT enough (G6-4).
  */
 export function isSkillAvailableThisBoot(skill: SkillAvailabilityRow): boolean {
   if (!bootReverifyActivated) return true
-  if (skill.sourceKind === 'managed') {
-    return (
-      (skill.reservationState ?? 'ready') === 'ready' &&
-      skill.versionState === 'snapshot-authoritative' &&
-      bootVerifiedSet.has(skill.id)
-    )
-  }
-  return skill.sourceState === null || skill.sourceState === undefined
+  return (
+    (skill.reservationState ?? 'ready') === 'ready' &&
+    skill.versionState === 'snapshot-authoritative' &&
+    bootVerifiedSet.has(skill.id)
+  )
 }
 
 /**
@@ -92,12 +83,13 @@ export function isSkillAvailableThisBoot(skill: SkillAvailabilityRow): boolean {
  * keyed only on (id, sourceKind) so the leaf resolver / stageSkills can call it
  * without the full row. A managed skill must be boot-verified THIS boot to be
  * staged into a spawn (else fail-closed — never inject unverified/quarantined
- * content). External is not snapshot-gated here (its per-run §7b capture is the
- * safety boundary). Inactive (returns true) until the boot reverify runs.
+ * content). A `project` (repo-local self-discovered) skill is not a platform
+ * snapshot, so it is not gated. Inactive (returns true) until the boot reverify
+ * runs.
  */
 export function isSkillInjectableThisBoot(skill: {
   id: string
-  sourceKind: 'managed' | 'external' | 'project'
+  sourceKind: 'managed' | 'project'
 }): boolean {
   if (!bootReverifyActivated) return true
   if (skill.sourceKind === 'managed') return bootVerifiedSet.has(skill.id)
