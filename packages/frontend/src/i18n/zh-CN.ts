@@ -1046,7 +1046,6 @@ export interface Resources {
     modeHintLeaderWorker: string
     modeHintFreeCollab: string
     modeHintDynamicWorkflow: string
-    dynamicModeNotice: string
     // Launch-readiness banner (shared workgroupLaunchReadiness reasons).
     readiness: {
       noAgentMember: string
@@ -1160,6 +1159,8 @@ export interface Resources {
       working: string
       idle: string
       openMemberSession: string
+      executing: string
+      memberExecuting: string
       gateTitle: string
       gateAwaiting: string
       gateConfirm: string
@@ -3965,8 +3966,6 @@ export const zhCN: Resources = {
     modeHintFreeCollab: '无 leader 的自由协作，三个协作开关强制全开。',
     modeHintDynamicWorkflow:
       '内置 agent 根据你的目标把成员编排成一条 workflow，你确认后顺序执行。无聊天室——成员即可编排的 agent 池。',
-    dynamicModeNotice:
-      '动态工作流没有回合制聊天室，故三个协作开关、最大回合、完成确认门均不适用。下方成员即可编排的 agent 池。',
     readiness: {
       noAgentMember: '还没有 agent 成员，无法启动。',
       leaderMissing: 'Leader-Worker 模式需要指定一名 agent 成员为 leader。',
@@ -4076,6 +4075,8 @@ export const zhCN: Resources = {
       working: '忙碌',
       idle: '空闲',
       openMemberSession: '查看 @{{name}} 的执行会话',
+      executing: '执行中',
+      memberExecuting: '@{{name}} 执行中…',
       gateTitle: '完成门',
       gateAwaiting: 'Leader 已宣布完成，等待人工确认。',
       gateConfirm: '确认完成',

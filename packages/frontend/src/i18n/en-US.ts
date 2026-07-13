@@ -1119,8 +1119,6 @@ export const enUS: Resources = {
       'Leaderless free collaboration; the three collaboration switches are forced on.',
     modeHintDynamicWorkflow:
       'A built-in agent orchestrates the members into a workflow from your goal; you confirm it, then it runs. No chatroom — members are the orchestratable pool.',
-    dynamicModeNotice:
-      'Dynamic workflow has no turn-based chatroom, so the collaboration switches, max rounds and completion gate do not apply. The members below are the orchestratable agent pool.',
     readiness: {
       noAgentMember: 'No agent members yet — the group cannot launch.',
       leaderMissing: 'Leader-Worker mode needs one agent member designated as leader.',
@@ -1240,6 +1238,8 @@ export const enUS: Resources = {
       working: 'Working',
       idle: 'Idle',
       openMemberSession: "View @{{name}}'s session",
+      executing: 'Working',
+      memberExecuting: '@{{name}} is working…',
       gateTitle: 'Completion gate',
       gateAwaiting: 'The leader declared done; awaiting human confirmation.',
       gateConfirm: 'Confirm',

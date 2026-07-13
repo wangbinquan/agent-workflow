@@ -466,15 +466,21 @@ describe('WorkgroupForm — free_collab switch gating', () => {
     expect(screen.queryByTestId('workgroup-fc-switches-notice')).toBeNull()
   })
 
-  // RFC-167: dynamic_workflow has no chatroom — the switches / maxRounds /
-  // completion gate section is replaced by a notice; members are the pool.
-  test('dynamic_workflow hides the switches section and shows the notice', () => {
+  // RFC-167 / 2026-07-14: dynamic_workflow has no chatroom — none of the
+  // switches / maxRounds / completion gate apply, so the whole "Collaboration
+  // switches" section is OMITTED. Regression guard: an empty section header
+  // carrying only a "does-not-apply" notice was noise (user 2026-07-14 —
+  // 「没有协作开关就不要显示协作开关，还写个备注干什么」); the mode hint
+  // already says members are the orchestratable pool.
+  test('dynamic_workflow omits the whole switches section (no header, no notice)', () => {
     render(<Harness />)
     expect(switchInput(/Share outputs/)).toBeTruthy() // present in leader_worker
     fireEvent.click(screen.getByRole('radio', { name: 'Dynamic workflow' }))
     expect(screen.queryByRole('checkbox', { name: /Share outputs/ })).toBeNull()
     expect(screen.queryByRole('checkbox', { name: /Completion gate/ })).toBeNull()
-    expect(screen.getByTestId('workgroup-dynamic-notice')).toBeTruthy()
+    // The section header AND the old notice are both gone.
+    expect(screen.queryByRole('heading', { name: 'Collaboration switches' })).toBeNull()
+    expect(screen.queryByTestId('workgroup-dynamic-notice')).toBeNull()
   })
 
   test('completion gate switch stays editable in fc mode', () => {

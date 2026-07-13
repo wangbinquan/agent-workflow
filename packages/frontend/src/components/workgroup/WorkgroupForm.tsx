@@ -33,7 +33,9 @@ export function WorkgroupForm({ value, onChange, errors }: WorkgroupFormProps) {
   const fc = value.mode === 'free_collab'
   // RFC-167: dynamic_workflow has no chatroom/turns — the three switches,
   // maxRounds and the completion gate don't apply (the confirm gate is built
-  // into the generate→confirm→execute flow). Members are the orchestratable pool.
+  // into the generate→confirm→execute flow), so the whole switches section is
+  // omitted rather than rendered as an empty header + "does-not-apply" notice.
+  // The mode hint already says members are the orchestratable pool.
   const dyn = value.mode === 'dynamic_workflow'
 
   const modeHint = dyn
@@ -85,13 +87,10 @@ export function WorkgroupForm({ value, onChange, errors }: WorkgroupFormProps) {
         </Field>
       </FormSection>
 
-      {dyn ? (
-        <FormSection title={t('workgroups.sectionSwitches')}>
-          <p className="form-field__hint" data-testid="workgroup-dynamic-notice">
-            {t('workgroups.dynamicModeNotice')}
-          </p>
-        </FormSection>
-      ) : (
+      {/* dynamic_workflow: no switches / maxRounds / completion gate apply, so
+          the section is omitted entirely (see the `dyn` note above). Only
+          leader_worker / free_collab render it. */}
+      {!dyn && (
         <FormSection title={t('workgroups.sectionSwitches')}>
           {fc && (
             <p className="form-field__hint" data-testid="workgroup-fc-switches-notice">
