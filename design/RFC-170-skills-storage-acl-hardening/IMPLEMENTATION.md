@@ -85,18 +85,25 @@ create / delete 后跑全后端 5200+ 回归；触及 shared export 跑 `build:b
 
 ## 5. 已落地进度（2026-07-12/13 session，全部 CI/full-suite 验证）
 
-批次 B 15 实现 commit：① migration 0090 · ② skillOperations · ③ skillFsPublish ·
+批次 B 18 实现 commit：① migration 0090 · ② skillOperations · ③ skillFsPublish ·
 ④ skillOpRecovery oracle · ⑤ **T7 增量①**（commitSkillVersion 原子发布）· ⑥ **T13
 后端** ACL aclRevision CAS · ⑦ skillOpRecoveryDriver + boot 接线 · ⑧ **delete op** ·
 ⑨ **T13 前端**（AclPanel revision 管线）· ⑩ **reserve op** · ⑪ **T3** 读路径复合
 token · ⑫ **T4 后端** combined-save 端点 · ⑬ **T7 增量②**（commitSkillVersion 包
 version-write op，lease + 崩溃恢复）· ⑭ **replace op**（conflict-replace managed
 占位者改走崩溃安全 delete op）· ⑮ **T4 前端**（受管技能保存改单次原子 POST /save，
-token OCC；external/legacy 保留双 PUT）。
+token OCC；external/legacy 保留双 PUT）· ⑯ **T3 authorityKind wire + §8 G3-2 transfer
+阻断**（三态权威上 wire + updateResourceAcl 事务内拒 external owner transfer）· ⑰
+**三态 capability 落 UI**（source-external 描述只读 + external 隐藏 owner 转移，
+AclPanel 加 canTransferOwner 可选 prop）· ⑱ **§8 G3-2 source-external 元数据写只读后端
+enforcement**（updateSkill 拒 source-external description 写，闭环前端只读）。
 
 **已完备**：三具体 op（delete/reserve/version-write）+ replace 占位者路径 + 完整崩溃
 恢复机制（driver + registry + boot）+ T13 ACL CAS 全链（后端+前端）+ T3/T4 保存协议
-**端到端**（读回带 token → 前端单持有 → combined-save token OCC → 409 refetch）。
+**端到端**（读回带 token → 前端单持有 → combined-save token OCC → 409 refetch）+
+**§8 external authority 三态全链**（authorityKind wire → 前端 capability 三态 →
+owner-transfer 阻断〔后端 403 + 前端隐藏〕→ source-external 元数据只读〔后端 403 +
+前端 disabled〕）。
 
 ## 6. T4 保存协议端到端（已落，⑪⑫⑮）——契约锁定
 
@@ -110,10 +117,33 @@ token OCC；external/legacy 保留双 PUT）。
 - **锁定测试**：skill-read-token · skill-combined-save（后端）· skills-detail-save-
   channels 新增 T4 describe（单 POST 带 expectedToken/零 PUT · 409 浮现+refetch）。
 
+## 6b. §8 external authority 三态全链（已落，⑯⑰⑱）——契约锁定
+
+- **wire**（a60b2b0d）：shared SkillSchema 加可选 `authorityKind`；backend
+  `rowToSkill` 从存量 `authority_kind` 列上 wire（migration 0090 已回填全行）。
+- **capability 三态**（a60b2b0d/1d24bc45）：`skill-capabilities.ts` signature 从
+  sourceKind 改 authorityKind；`authorityKindOf` 兼容 pre-RFC-170 仅带 sourceKind 载荷；
+  表 = managed{全可} / source-external{content✗ desc✗ del✓ transfer✗} / hand-external
+  {content✗ desc✓ del✓ transfer✗}。
+- **owner transfer 阻断 G3-2**（a60b2b0d 后端 + 1d24bc45 前端）：updateResourceAcl 对
+  skill 且 nextOwner≠prevOwner 且 authority_kind≠managed → 事务内 ForbiddenError(403,
+  skill-external-transfer-blocked)；前端 AclPanel 加可选 canTransferOwner 经
+  DetailHeaderActions.acl 透传，external 隐藏转移控件。
+- **source-external 元数据只读 G3-2**（871fc74a）：updateSkill 拒 source-external
+  description 写（403, skill-source-external-metadata-readonly；reconcile 走 db.update
+  直写不经此路径）；前端描述 input disabled。
+- **锁定测试**：rfc170-skill-transfer-block（transfer 403+metadata 403，11 测试）·
+  skill-capabilities（三态表 + authorityKindOf 兜底）· rfc099-acl-components
+  （canTransferOwner=false 隐藏/默认显示）· skills-detail-save-channels（三态描述 gate）。
+
 ## 7. 其余（依赖顺序，批次 B 收尾 + 批次 C）
-migrate（T10）· adopt-managed（T10b，两阶段 capture→confirm 用 §7b descriptor-
-relative no-follow）· snapshot 权威读（readSkillContent 从 versions/v<cur> 非 live）·
-T9 quarantine 注入门（stageSkills 前查 version_state，注意 scheduler 协作者 WIP）·
-T9b external descriptor-relative 捕获（需 openat/O_NOFOLLOW，Bun/Node 不足则 native
-helper 或 fail-closed）· 批次 C（source lifecycle reconcile 拆 user/system、migration
-决策 UI）· 前端（adoption UI、authorityKind 三态 capability——external 转移阻断）。
+snapshot 权威读（readSkillContent 从 versions/v<cur> 非 live——**与 T-BOOT quarantine/
+drift-check 耦合**，非独立单元）· T9 quarantine 注入门（stageSkills 前查 version_state，
+**注意 scheduler 协作者 WIP**）· T9b external descriptor-relative 捕获（需 openat/
+O_NOFOLLOW，Bun/Node 不足则 native helper 或 fail-closed）· 旧 PUT/:name+PUT/content
+→410（T-BSAFE③，**与 external combined-save 后端支持耦合**）· T-BOOT
+`isSkillAvailableThisBoot` predicate + bootVerifiedSet + 后台重验 · T6 fusion 审批
+token + reject/re-run stale-token · migrate（T10）· adopt-managed（T10b，两阶段
+capture→confirm）· 批次 C（source lifecycle reconcile 拆 user/system、migration 决策
+UI、adoption UI）。**注**：external file/tree GET realpath containment 已由
+`realpathInside`（readSkillContent/readSkillFile）落地（T-BSAFE④）。
