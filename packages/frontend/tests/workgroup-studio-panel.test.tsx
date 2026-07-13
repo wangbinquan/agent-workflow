@@ -219,6 +219,15 @@ function installFetch(state: { workgroups: Workgroup[] } & Recorded, opts: Fetch
   )
 }
 
+/** Drive the shared agent <Select> (RFC-168): open the combobox and pick an
+ *  existing agent by its option label. The former datalist free-text box is
+ *  gone, so tests select from /api/agents rather than typing a raw name. */
+async function pickAgent(name: string): Promise<void> {
+  fireEvent.click(screen.getByTestId('workgroup-agent-name-input'))
+  const listbox = await screen.findByRole('listbox')
+  fireEvent.mouseDown(within(listbox).getByRole('option', { name }))
+}
+
 async function renderPage(initialEntry: string) {
   const list = await import('../src/routes/workgroups')
   const detail = await import('../src/routes/workgroups.detail')
@@ -387,9 +396,7 @@ describe('selection survives id-regenerating PUTs (§9.4, F4)', () => {
     await renderPage('/workgroups/squad')
     fireEvent.click(await screen.findByTestId('workgroup-add-agent-member'))
     await screen.findByTestId('workgroup-panel-add')
-    fireEvent.change(screen.getByTestId('workgroup-agent-name-input'), {
-      target: { value: 'reviewer' },
-    })
+    await pickAgent('coder')
     // hand-edit the alias to a PADDED value — trim()s pass validation and the
     // wire sends the trimmed form (F4).
     fireEvent.change(screen.getByTestId('workgroup-member-displayname-input'), {

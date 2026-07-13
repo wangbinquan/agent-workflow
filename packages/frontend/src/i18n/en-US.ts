@@ -1144,7 +1144,7 @@ export const enUS: Resources = {
     memberFieldUser: 'Platform user',
     memberFieldDisplayName: 'Display name',
     memberFieldRole: 'Role',
-    memberAgentPlaceholder: 'May reference an agent that does not exist yet (launch-validated).',
+    memberAgentPlaceholder: 'Select an agent…',
     memberUserPlaceholder: 'Search and pick a platform user',
     memberDisplayNamePlaceholder: 'Unique in the group; no @, comma or whitespace.',
     memberRolePlaceholder: 'Role inside the group (dispatch hint), optional.',

@@ -158,6 +158,15 @@ function installFetch(
   return calls
 }
 
+/** Drive the shared agent <Select> (RFC-168): open the combobox and pick an
+ *  existing agent by its option label. The former datalist free-text box is
+ *  gone, so tests select from /api/agents rather than typing a raw name. */
+async function pickAgent(name: string): Promise<void> {
+  fireEvent.click(screen.getByTestId('workgroup-agent-name-input'))
+  const listbox = await screen.findByRole('listbox')
+  fireEvent.mouseDown(within(listbox).getByRole('option', { name }))
+}
+
 function renderDialog(config: WorkgroupRuntimeConfig, onClose: () => void = () => {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
@@ -235,9 +244,7 @@ describe('WorkgroupTaskConfigDialog', () => {
     fireEvent.click(await screen.findByTestId('wg-config-add-agent'))
     // The reused AgentMemberDialog from WorkgroupMemberCards.
     await screen.findByTestId('workgroup-add-agent-dialog')
-    fireEvent.change(screen.getByTestId('workgroup-agent-name-input'), {
-      target: { value: 'reviewer' },
-    })
+    await pickAgent('reviewer')
     fireEvent.click(screen.getByTestId('workgroup-add-agent-confirm'))
     // Staged row appears with the New chip.
     const staged = await screen.findByTestId('wg-config-add-reviewer')
@@ -329,9 +336,7 @@ describe('RFC-168 §8.1 — member dialog shell contract (mid-run)', () => {
     renderDialog(makeConfig())
     fireEvent.click(await screen.findByTestId('wg-config-add-agent'))
     await screen.findByTestId('workgroup-add-agent-dialog')
-    fireEvent.change(screen.getByTestId('workgroup-agent-name-input'), {
-      target: { value: 'reviewer' },
-    })
+    await pickAgent('reviewer')
     fireEvent.change(screen.getByTestId('workgroup-member-displayname-input'), {
       target: { value: 'Worker' }, // clashes with the kept roster row
     })
@@ -356,14 +361,17 @@ describe('RFC-168 §8.1 — member dialog shell contract (mid-run)', () => {
     renderDialog(makeConfig())
     fireEvent.click(await screen.findByTestId('wg-config-add-agent'))
     await screen.findByTestId('workgroup-add-agent-dialog')
-    fireEvent.change(screen.getByTestId('workgroup-agent-name-input'), {
-      target: { value: 'reviewer' },
-    })
+    await pickAgent('reviewer')
     // cancel via the footer button, then re-open
     fireEvent.click(within(screen.getByTestId('workgroup-add-agent-dialog')).getByText('Cancel'))
     await waitFor(() => expect(screen.queryByTestId('workgroup-add-agent-dialog')).toBeNull())
     fireEvent.click(screen.getByTestId('wg-config-add-agent'))
     await screen.findByTestId('workgroup-add-agent-dialog')
-    expect((screen.getByTestId('workgroup-agent-name-input') as HTMLInputElement).value).toBe('')
+    // Fresh mount cleared the picked agent — the Select trigger shows its
+    // placeholder again and the confirm stays disabled (empty draft).
+    expect(screen.getByTestId('workgroup-agent-name-input').textContent).not.toContain('reviewer')
+    expect((screen.getByTestId('workgroup-add-agent-confirm') as HTMLButtonElement).disabled).toBe(
+      true,
+    )
   })
 })

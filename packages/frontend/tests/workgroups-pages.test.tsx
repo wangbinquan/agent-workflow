@@ -131,7 +131,8 @@ function installFetch(state: { workgroups: Workgroup[] } & Recorded): void {
           headers: { 'content-type': 'application/json' },
         })
 
-      if (url.includes('/api/agents')) return json([{ name: 'coder' }, { name: 'auditor' }])
+      if (url.includes('/api/agents'))
+        return json([{ name: 'coder' }, { name: 'auditor' }, { name: 'reviewer' }])
       if (url.includes('/api/users/search')) return json([])
       if (url.includes('/api/users/lookup')) {
         return json([
@@ -180,6 +181,15 @@ function installFetch(state: { workgroups: Workgroup[] } & Recorded): void {
       return json({})
     },
   )
+}
+
+/** Drive the shared agent <Select> (RFC-168): open the combobox and pick an
+ *  existing agent by its option label. The former datalist free-text box is
+ *  gone, so tests select from /api/agents rather than typing a raw name. */
+async function pickAgent(name: string): Promise<void> {
+  fireEvent.click(screen.getByTestId('workgroup-agent-name-input'))
+  const listbox = await screen.findByRole('listbox')
+  fireEvent.mouseDown(within(listbox).getByRole('option', { name }))
 }
 
 async function renderPage(initialEntry: string) {
@@ -536,9 +546,7 @@ describe('/workgroups/$name — member gallery + context panel (RFC-168)', () =>
     const confirm = screen.getByTestId('workgroup-add-agent-confirm') as HTMLButtonElement
     expect(confirm.disabled).toBe(true) // empty draft
 
-    fireEvent.change(screen.getByTestId('workgroup-agent-name-input'), {
-      target: { value: 'reviewer' },
-    })
+    await pickAgent('reviewer')
     // Alias followed the agent name (editable default).
     expect(
       (screen.getByTestId('workgroup-member-displayname-input') as HTMLInputElement).value,
@@ -567,9 +575,7 @@ describe('/workgroups/$name — member gallery + context panel (RFC-168)', () =>
     await renderPage('/workgroups/review-squad')
     fireEvent.click(await screen.findByTestId('workgroup-add-agent-member'))
     await screen.findByTestId('workgroup-panel-add')
-    fireEvent.change(screen.getByTestId('workgroup-agent-name-input'), {
-      target: { value: 'coder' },
-    })
+    await pickAgent('coder')
     fireEvent.change(screen.getByTestId('workgroup-member-displayname-input'), {
       target: { value: 'Coder' },
     })
@@ -577,6 +583,31 @@ describe('/workgroups/$name — member gallery + context panel (RFC-168)', () =>
     expect((screen.getByTestId('workgroup-add-agent-confirm') as HTMLButtonElement).disabled).toBe(
       true,
     )
+  })
+
+  // RFC-168 UI 一致性回归锁 — the agent picker must be the shared Select
+  // combobox (searchable, existing-agents-only), never the former native
+  // <datalist> free-text box (previously the ONLY datalist in the frontend,
+  // which clashed with every other dropdown). Locks both the source (no
+  // datalist reintroduced) and the runtime affordance (combobox + option list
+  // sourced from /api/agents).
+  test('add-agent picker is the shared Select combobox, not a datalist text box', async () => {
+    // The concrete datalist wiring (its shared id) is gone from the source;
+    // the runtime combobox assertions below lock out any reintroduction.
+    expect(readSrc('components/workgroup/MemberFields.tsx')).not.toContain('workgroup-agent-names')
+    installFetch({ workgroups: [wg('review-squad')], calls: [] })
+    await renderPage('/workgroups/review-squad')
+    fireEvent.click(await screen.findByTestId('workgroup-add-agent-member'))
+    await screen.findByTestId('workgroup-panel-add')
+    const trigger = screen.getByTestId('workgroup-agent-name-input')
+    expect(trigger.tagName).toBe('BUTTON')
+    expect(trigger.getAttribute('role')).toBe('combobox')
+    // Opening reveals exactly the agents from /api/agents — no free typing.
+    fireEvent.click(trigger)
+    const listbox = await screen.findByRole('listbox')
+    expect(within(listbox).getByRole('option', { name: 'coder' })).toBeTruthy()
+    expect(within(listbox).getByRole('option', { name: 'auditor' })).toBeTruthy()
+    expect(within(listbox).getByRole('option', { name: 'reviewer' })).toBeTruthy()
   })
 })
 

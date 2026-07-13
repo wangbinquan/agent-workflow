@@ -51,10 +51,6 @@ interface TextInputProps {
   required?: boolean
   pattern?: string
   maxLength?: number
-  /** id of a <datalist> owned by the caller — native suggestions layered on
-   *  the styled input (RFC-164: agent-name references allow dangling names,
-   *  so a closed <Select> cannot host them). */
-  list?: string
   'data-testid'?: string
 }
 
@@ -67,7 +63,6 @@ export function TextInput({
   required,
   pattern,
   maxLength,
-  list,
   'data-testid': testid,
 }: TextInputProps) {
   return (
@@ -81,7 +76,6 @@ export function TextInput({
       required={required}
       pattern={pattern}
       maxLength={maxLength}
-      list={list}
       data-testid={testid}
     />
   )

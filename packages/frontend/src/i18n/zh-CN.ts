@@ -3975,7 +3975,7 @@ export const zhCN: Resources = {
     memberFieldUser: '平台用户',
     memberFieldDisplayName: '显示名',
     memberFieldRole: '职责',
-    memberAgentPlaceholder: '可填入尚不存在的代理名（启动时才校验）。',
+    memberAgentPlaceholder: '选择代理…',
     memberUserPlaceholder: '搜索并选择平台用户',
     memberDisplayNamePlaceholder: '组内唯一，禁止 @、逗号、空白。',
     memberRolePlaceholder: '组内职责说明（选人依据），可选。',

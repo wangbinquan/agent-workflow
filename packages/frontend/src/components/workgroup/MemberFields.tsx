@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next'
 import type { UserPublic } from '@agent-workflow/shared'
 import { AgentCapabilityCard } from '@/components/agent/AgentCapabilityCard'
 import { Field, TextInput } from '@/components/Form'
+import { Select } from '@/components/Select'
 import { UserPicker } from '@/components/UserPicker'
 import { useAgentsList } from '@/hooks/useAgentsList'
 import {
@@ -81,26 +82,25 @@ export function AgentMemberFields({ draft }: { draft: AgentMemberDraft }) {
   const { agents } = useAgentsList()
   return (
     <>
-      <datalist id="workgroup-agent-names">
-        {agents.map((a) => (
-          <option key={a.name} value={a.name} />
-        ))}
-      </datalist>
-      <Field
-        label={t('workgroups.memberFieldAgent')}
-        required
-        hint={t('workgroups.memberAgentPlaceholder')}
-        error={draft.agentName !== '' ? fieldError(t, draft.errors.agentName) : undefined}
-      >
-        <TextInput
+      {/* RFC-168 UI 一致性 — pick an existing agent through the shared Select
+          (RFC-036 popover, searchable), matching the single-agent launch
+          wizard and the canvas agent-single inspector. The former native
+          <datalist>+<TextInput> was the only such widget in the frontend and
+          clashed with every other dropdown; agent references are launch-time
+          validated, so restricting the picker to real agents loses nothing. */}
+      <Field label={t('workgroups.memberFieldAgent')} required>
+        <Select<string>
           value={draft.agentName}
           onChange={draft.setAgentName}
-          list="workgroup-agent-names"
+          options={agents.map((a) => ({ value: a.name, label: a.name }))}
+          searchable
+          placeholder={t('workgroups.memberAgentPlaceholder')}
+          ariaLabel={t('workgroups.memberFieldAgent')}
           data-testid="workgroup-agent-name-input"
         />
       </Field>
       {/* RFC-166 §4.2 — preview the picked agent's real capability (what the
-          leader will see in the roster) as the name is typed/selected. */}
+          leader will see in the roster) as the name is selected. */}
       {(() => {
         const picked = agents.find((a) => a.name === draft.agentName)
         return picked !== undefined ? (
