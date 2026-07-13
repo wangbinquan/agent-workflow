@@ -751,4 +751,45 @@ describe('RFC-172b Codex P2 — a shard-less legacy in-flight ledger blocks a me
     // the null-shard legacy ledger is NOT skipped → it blocks (conservative, no double-mint).
     expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
   })
+
+  test('round-2: a legacy ledger BOUND to shard B is not masked by a newer sibling done run', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedWorkgroupTask(db, taskId)
+    // A legacy manual whose round-derived shard is null BUT whose trigger run lives on shard B
+    // (pending). Seeded FIRST so a later sibling has a higher id.
+    const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
+    const legacyRerun = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, {
+      shardKey: 'assign-B',
+      status: 'pending',
+    })
+    await seedEntry(db, taskId, {
+      originNodeRunId: legacyOrigin,
+      sourceKind: 'manual', // resolveEntryShardKeys → null (round-derived shard is null)
+      sealed: true,
+      dispatchedAt: Date.now(),
+      triggerRunId: legacyRerun,
+    })
+    // A NEWER sibling run on a DIFFERENT shard (A) reaches done — higher id, so shard-blind lineage
+    // would pick IT as the freshest handler and falsely mark the pending shard-B ledger consumed.
+    await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { shardKey: 'assign-A', status: 'done' })
+    // member A dispatches a fresh answer (shard A).
+    const clarifyA = await seedNodeRun(db, taskId, '__wg_clarify__')
+    await seedRound(db, taskId, clarifyA, 'assign-A')
+    const entryA = await seedEntry(db, taskId, {
+      originNodeRunId: clarifyA,
+      sourceKind: 'self',
+      sealed: true,
+    })
+
+    let threw: unknown = null
+    try {
+      await dispatchTaskQuestions(db, taskId, [entryA.id], actor)
+    } catch (e) {
+      threw = e
+    }
+    // shard recovered from the trigger run (B) → the sibling A done run is EXCLUDED from the lineage
+    // → the pending B ledger reads UNCONSUMED → it blocks (no duplicate same-shard rerun).
+    expect((threw as { code?: string }).code).toBe('task-question-node-dispatch-in-flight')
+  })
 })

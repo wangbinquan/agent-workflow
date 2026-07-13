@@ -1049,6 +1049,16 @@ function findOpenDispatchTarget(
     ) {
       continue
     }
+    // Codex impl-gate P2 (round 2): a BOUND legacy ledger whose round-derived shard is null may have
+    // a TRIGGER run that actually lives on a real member shard. Consuming it shard-blind lets a newer
+    // sibling shard's done run mask its still-pending trigger (falsely consumed → duplicate same-shard
+    // rerun). Recover the shard from the trigger run so the lineage/consumption is scoped to it. Only
+    // in shard-aware mode (shardOfEntry set); a null trigger-shard (non-workgroup / truly shardless)
+    // collapses to undefined → byte-identical to today (golden-lock).
+    let consumeShard = eShard
+    if (consumeShard === null && shardOfEntry !== undefined && e.triggerRunId !== null) {
+      consumeShard = inputs.runs.find((r) => r.id === e.triggerRunId)?.shardKey ?? null
+    }
     if (
       !isDispatchedEntryConsumed(
         e,
@@ -1058,7 +1068,7 @@ function findOpenDispatchTarget(
         mintCauseByTarget.get(target),
         // null collapses to shard-blind (undefined) → non-workgroup consumption is byte-identical to
         // today; a real member shard scopes the anchor lineage + run-obligation scan to that member.
-        eShard === null ? undefined : eShard,
+        consumeShard === null ? undefined : consumeShard,
       )
     ) {
       // Best-effort blocker run: the open (non-done top-level) run on the target — present for
