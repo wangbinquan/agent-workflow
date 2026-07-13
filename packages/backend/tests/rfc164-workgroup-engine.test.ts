@@ -732,13 +732,17 @@ describe('RFC-164 engine — source locks', () => {
   // exercise (real runHostNode spawns a subprocess). Locks that a host run fetches
   // the answered clarify queue and threads it as clarifyContext into runNode —
   // remove either and the workgroup clarify answer silently stops round-tripping.
-  test('runHostNode round-trips a human clarify answer into the workgroup rerun prompt', () => {
+  test('runHostNode round-trips a human clarify answer into the workgroup LEADER rerun prompt', () => {
     // host path selects by req.nodeId/req.nodeRunId (the adopted clarify-answer
     // rerun row) — unique to runHostNode; the normal scheduler path uses node.id.
     expect(SCHEDULER_SRC).toContain('consumerNodeId: req.nodeId')
     expect(SCHEDULER_SRC).toContain('dispatchedRunId: req.nodeRunId')
     // …and threads the answered queue into the host node's runNode call.
     expect(SCHEDULER_SRC).toContain('clarifyContext: { flatBlock: clarifyQueue.block }')
+    // LEADER-ONLY: selectAgentQueue has no shardKey scoping, so injecting into a
+    // member (shared __wg_member__ node, per-assignment shardKey) would cross-
+    // contaminate answers between assignments — only the singleton leader is safe.
+    expect(SCHEDULER_SRC).toContain('req.nodeId === WG_LEADER_NODE_ID')
   })
 })
 

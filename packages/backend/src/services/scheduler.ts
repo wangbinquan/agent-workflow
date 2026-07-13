@@ -88,6 +88,7 @@ import {
   shouldInjectStopNotice,
 } from '@/services/clarifyRounds'
 import { buildClarifyQueueContext } from '@/services/clarifyQueue'
+import { WG_LEADER_NODE_ID } from '@/services/workgroupLaunch'
 import { getNodeClarifyDirectiveRow } from '@/services/taskClarifyDirective'
 import {
   decideResumeSessionId,
@@ -688,29 +689,39 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         req.agent.runtime,
         opts.defaultRuntime,
       )
-      // Round-trip a human's answered clarify back to the workgroup agent.
-      // When this host run is a `clarify-answer` rerun — the leader/member asked
-      // a human via <workflow-clarify>, the human answered, and the STANDARD
-      // dispatch minted this pending row (nodeId=WG_LEADER/MEMBER,
-      // cause='clarify-answer') which workgroupRunner adopts as req.nodeRunId —
-      // buildClarifyQueueContext returns the flat `## Clarify Q&A` block for
-      // req.nodeId. It is workgroup-agnostic (selects purely by taskId +
-      // consumerNodeId + dispatchedRunId; `definition`/`iteration` are reserved,
-      // unread) and returns undefined for a fresh turn with no answered queue,
-      // so the call is unconditional. Without this the agent NEVER sees the
-      // answers it asked for and re-asks or proceeds on wrong assumptions (the
-      // workgroup half of the RFC-023 clarify round-trip was unwired; Codex
-      // review P1). renderUserPrompt emits the block in `sections`, independent
-      // of the workgroup protocol block that owns `trailing`, and the
-      // 'suppressed' directive keeps the run out of mandatory clarify-only mode.
-      const clarifyQueue = await buildClarifyQueueContext({
-        db,
-        definition,
-        taskId,
-        consumerNodeId: req.nodeId,
-        dispatchedRunId: req.nodeRunId,
-        iteration: 0,
-      })
+      // Round-trip a human's answered clarify back to the workgroup LEADER.
+      // When the leader host run is a `clarify-answer` rerun — it asked a human
+      // via <workflow-clarify>, the human answered, and the STANDARD dispatch
+      // minted this pending row (nodeId=__wg_leader__, cause='clarify-answer')
+      // which workgroupRunner adopts as req.nodeRunId — buildClarifyQueueContext
+      // returns the flat `## Clarify Q&A` block. renderUserPrompt emits it in
+      // `sections`, independent of the workgroup protocol block that owns
+      // `trailing`, and the 'suppressed' directive keeps the run out of
+      // mandatory clarify-only mode. Without it the leader never sees the answers
+      // it asked for and re-asks / proceeds on wrong assumptions (Codex review 1
+      // P1 — the workgroup half of the RFC-023 round-trip was unwired).
+      //
+      // LEADER-ONLY (Codex review 2 P1): selectAgentQueue selects AND ages purely
+      // by consumerNodeId with NO shardKey scoping (clarifyQueue.ts). The leader
+      // is a singleton host node (shardKey=null), so its queue is unambiguous.
+      // But EVERY member assignment shares the one __wg_member__ node (separated
+      // only by node_runs.shard_key), so injecting there would cross-contaminate
+      // — member B's run would receive member A's answered Q&A and B's output
+      // would age A's queue. Member human-clarify round-trip therefore needs
+      // shardKey-scoped queue selection (a change to the shared clarify
+      // machinery) and stays deferred; a member's answers simply don't return
+      // yet (no corruption, unlike the unscoped inject).
+      const clarifyQueue =
+        req.nodeId === WG_LEADER_NODE_ID
+          ? await buildClarifyQueueContext({
+              db,
+              definition,
+              taskId,
+              consumerNodeId: req.nodeId,
+              dispatchedRunId: req.nodeRunId,
+              iteration: 0,
+            })
+          : undefined
       const result = await runNode({
         taskId,
         nodeRunId: req.nodeRunId,
