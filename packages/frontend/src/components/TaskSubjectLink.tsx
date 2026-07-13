@@ -56,8 +56,19 @@ export function TaskSubjectLink({ task, taskId, badge = false }: TaskSubjectLink
   const isWorkgroup = kind === 'workgroup'
   // workgroupName may be null (group row deleted → frozen name unavailable);
   // sourceAgentName is stored on the task row so it is present whenever
-  // kind === 'agent' (the agent RESOURCE may since be gone, so the link can
-  // 404 — acceptable, same contract as a renamed group's frozen link).
+  // kind === 'agent'.
+  //
+  // These names are FROZEN at launch (task-scoped, ACL-safe per RFC-099 — never a
+  // live resource lookup; see services/task.ts `frozenWorkgroupName`). Accepted
+  // trade-off of that freeze: after the owning resource is renamed/deleted the
+  // link 404s, and in the rare case its OLD name is later reused by a DIFFERENT
+  // resource the link opens that replacement — a wrong-but-same-named subject, not
+  // the original (Codex review 2026-07-13, P2). We keep it anyway because (a) it is
+  // the SAME frozen name the task's room already shows and the list cell already
+  // links, (b) a live identity check would regress the RFC-099 ACL isolation the
+  // freeze exists to protect, (c) agents have no stable id (name IS identity), and
+  // (d) it still strictly beats the prior behavior of leaking the internal
+  // __workgroup_host__ / __agent_host__ anchor + a dead /workflows link.
   const name = isWorkgroup ? (task.workgroupName ?? null) : (task.sourceAgentName ?? null)
   const linkClass = badge ? 'data-table__link task-workflow-cell__name' : 'data-table__link'
 
