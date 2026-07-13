@@ -46,16 +46,23 @@
 
 ## 验收清单
 
-- [ ] `import-external` / `skill-sources/*` 端点 404。
-- [ ] `skill-source.ts` / `skill-sources.ts` / `SkillSourcesCard.tsx` / `skill-capabilities.ts` + external/source-only 测试从树中消失。
-- [ ] managed skill 新建/列表/详情/编辑/文件/版本/fusion/运行时注入行为不变（回归绿）。
-- [ ] ZIP 导入不变（无 external-conflict 分支）。
-- [ ] 迁移 0092：存量 external 行删空、`skill_sources` drop、6 列 drop；引用清理正确（external 剔除 / managed+project 保留 / 全 external→`[]`）；新库无残留。
-- [ ] `resolveSkills` / `stageSkills` managed+project 正常、无 external 分支。
-- [ ] 五门 + build:binary smoke + e2e 全绿；CI 绿。
-- [ ] `upgrade-rolling` 计数锁 91→92。
-- [ ] RFC-170 索引标注 superseded；plan.md 索引 + STATE.md 登记完成。
-- [ ] Codex 设计门（批准前）+ 实现门（declare done 前）跑过、findings 全折。
+- [x] `import-external` / `skill-sources/*` 端点 404（路由删除）。
+- [x] `skill-source.ts` / `skill-sources.ts` / `SkillSourcesCard.tsx` / `skill-capabilities.ts` + external/source-only 测试从树中消失。
+- [x] managed skill 新建/列表/详情/编辑/文件/版本/fusion/运行时注入行为不变（回归绿）。
+- [x] ZIP 导入不变（无 external-conflict 分支）。
+- [x] 迁移 0092：存量 external 行删空、`skill_sources` drop、6 列 drop；引用清理正确（external 剔除 / managed+project 保留 / 全 external→`[]`）；新库无残留（migration-0092 test 穷举）。
+- [x] `resolveSkills` / `stageSkills` managed+project 正常、无 external 分支。
+- [x] 五门 + build:binary smoke 全绿（detached worktree 干净 typecheck + build smoke）；CI 待查。
+- [x] `upgrade-rolling` 计数锁 91→92。
+- [ ] RFC-170 索引标注 superseded；plan.md 索引 + STATE.md 登记（本批 docs）。
+- [x] 设计门独立对抗评审（migration SQL 实测）0 P0 全折（Codex `exec` 实现门 wedge，同设计门回退）。
+
+## 交付状态（2026-07-14）
+
+- **批次 A**（去 external 读者，DB 不动）：`bd9e76ce`——48 文件、+181/−4179；后端整删 skill-source/skill-sources + skill.ts 四死函数 + external 分支，前端整删 SkillSourcesCard/skill-capabilities + tab 收窄，shared schema 收窄，11 后端 + 3 前端测试删 + mixed 编辑。
+- **批次 B**（migration 0092 + schema.ts drop）：`d1f24aaf`（rebase 后 `dc5bc189`）——json_group_array 引用清理 + DELETE + DROP INDEX/COLUMN×6 + DROP TABLE + resource_grants 清理（FK-ON 安全序）；schema.ts 去 6 列 + narrow enum；migration-0092 test + migration-0090 RESTRUCTURE + 计数锁。
+- **批次 C**（op-kind）：`b613aa63`——SkillOpKind/schema enum 去 replace/adopt-managed + phase-seq + 防御守卫；双-id 锁/precondition 列 dormant 保留。
+- 已推 origin/main（`dc5bc189`；批次 C 待推）。**取代 RFC-170 §7/§7a/§8 external/source**（已落地删 + 待建取消；managed 主干独立保留）。多人共享树：全程精确 pathspec，未含并发 RFC-179/180 workgroup/i18n/styles 未提交改动；批次 A/B 被并发 push 连带上远端。
 
 ## 不做（转其它/明确排除）
 

@@ -1,6 +1,6 @@
 # RFC-178 — 移除「外部 skill」与「父目录 skill」，skills 收敛为 managed-only
 
-- 状态：Draft（待 Codex 设计门 + 用户批准）
+- 状态：Done（设计门独立对抗评审 0 P0 全折 + 用户批准 → 批次 A/B/C 全落地推送 origin/main）
 - 作者：本 session
 - 日期：2026-07-14
 - 相关：取代 [RFC-170](../RFC-170-skills-storage-acl-hardening/proposal.md) 的 external/source 部分（managed 主干独立保留）；承接 RFC-017（skill sources）、RFC-102/RFC-103（source 冲突替换 / source ACL）——两者随本 RFC 一并退场。
