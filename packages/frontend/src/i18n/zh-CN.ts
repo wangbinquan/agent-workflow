@@ -2029,7 +2029,6 @@ export interface Resources {
     importButton: string
     autodetect: {
       button: string
-      disabledHint: string
       dialogTitle: string
       dialogHint: string
       emptyText: string
@@ -4930,7 +4929,6 @@ export const zhCN: Resources = {
     importButton: '从 agent.md 导入',
     autodetect: {
       button: '自动识别依赖',
-      disabledHint: '请先填写 agent 正文',
       dialogTitle: '识别到的潜在依赖',
       dialogHint: '按子串匹配，请人工确认每一项',
       emptyText: '未识别到新依赖',

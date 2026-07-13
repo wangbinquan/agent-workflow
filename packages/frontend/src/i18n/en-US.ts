@@ -2140,7 +2140,6 @@ export const enUS: Resources = {
     importButton: 'Import from agent.md',
     autodetect: {
       button: 'Auto-detect dependencies',
-      disabledHint: 'Fill in the agent body first',
       dialogTitle: 'Detected potential dependencies',
       dialogHint: 'Matched by plain substring — review each item before importing.',
       emptyText: 'No new dependencies detected',

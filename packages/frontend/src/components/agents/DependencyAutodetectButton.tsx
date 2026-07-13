@@ -70,11 +70,10 @@ export function DependencyAutodetectButton(props: DependencyAutodetectButtonProp
   const [snapshot, setSnapshot] = useState<DetectionResult>(EMPTY_RESULT)
   const [failures, setFailures] = useState<readonly DetectionGroupKey[]>([])
 
-  const bodyEmpty = (props.bodyMd ?? '').trim() === ''
-  // Query pending state intentionally NOT blocking: pending → that group
-  // contributes [] to detect (no candidates), failed → group surfaces in
-  // loadFailures footer. Only the empty-body case actually disables.
-  const disabled = bodyEmpty
+  // RFC-173 follow-up (user request): the button is ALWAYS clickable. Neither
+  // an empty body nor pending/failed inventory queries block it — clicking with
+  // an empty body just opens the dialog's "nothing detected" empty state, which
+  // is clearer than a greyed-out button whose reason is only a hover tooltip.
 
   const failureList = useMemo<DetectionGroupKey[]>(() => {
     const out: DetectionGroupKey[] = []
@@ -117,8 +116,6 @@ export function DependencyAutodetectButton(props: DependencyAutodetectButtonProp
       <button
         type="button"
         className="btn btn--primary btn--sm"
-        disabled={disabled}
-        title={bodyEmpty ? t('agentForm.autodetect.disabledHint') : undefined}
         onClick={handleOpen}
         data-testid="agent-dep-autodetect-button"
       >

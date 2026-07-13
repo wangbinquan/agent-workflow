@@ -9,7 +9,7 @@ import { zhCN as zh } from '@/i18n/zh-CN'
 
 const KEYS_TO_CHECK = [
   'agentForm.autodetect.button',
-  'agentForm.autodetect.disabledHint',
+  // RFC-173 follow-up: disabledHint deleted — the button is always clickable now.
   'agentForm.autodetect.dialogTitle',
   'agentForm.autodetect.dialogHint',
   'agentForm.autodetect.emptyText',

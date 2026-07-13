@@ -1,5 +1,7 @@
-// RFC-038 T3 — locks DependencyAutodetectButton behavior:
-//   (1) disabled when bodyMd is empty/whitespace
+// RFC-038 T3 (+ RFC-173 follow-up) — locks DependencyAutodetectButton behavior:
+//   (1) ALWAYS clickable (RFC-173 follow-up, user request): an empty/whitespace
+//       body no longer disables it — clicking just opens the "nothing detected"
+//       empty-state dialog, clearer than a greyed button.
 //   (2) clicking with a body that contains an inventory name opens the
 //       dialog with one section pre-populated; Import flow calls onApply
 //       with the detected selection
@@ -61,9 +63,9 @@ afterEach(() => {
 })
 
 describe('DependencyAutodetectButton', () => {
-  test('disabled when bodyMd is whitespace-only', async () => {
+  test('whitespace-only body → still clickable; opens the empty-state dialog', async () => {
     fakeFetchAll()
-    wrap(
+    const { qc } = wrap(
       <DependencyAutodetectButton
         bodyMd={'   \n\t'}
         value={emptyAgent()}
@@ -74,7 +76,15 @@ describe('DependencyAutodetectButton', () => {
     const btn = (await waitFor(() =>
       screen.getByTestId('agent-dep-autodetect-button'),
     )) as HTMLButtonElement
-    expect(btn.disabled).toBe(true)
+    // RFC-173 follow-up: always clickable — no longer disabled on empty body.
+    expect(btn.disabled).toBe(false)
+    await waitForInventoryLoaded(qc)
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-dep-autodetect-dialog')).toBeTruthy()
+      expect(screen.getByTestId('empty-state')).toBeTruthy()
+    })
+    expect(screen.getByTestId('autodetect-close')).toBeTruthy()
   })
 
   test('click → dialog opens with detected candidates, apply forwards selection', async () => {
