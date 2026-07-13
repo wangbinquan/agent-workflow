@@ -873,15 +873,18 @@ describe('RFC-172b Codex P2 — a shard-less legacy in-flight ledger blocks a me
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = `t_${ulid()}`
     await seedWorkgroupTask(db, taskId)
-    // Legacy null-shard ledger dispatched to __wg_member__.
+    // Legacy null-shard ledger dispatched to __wg_member__ — its trigger run is DONE (consumed), so
+    // the ONLY possible blocker is the assign-B pending row below. (Codex round-6 test-quality fix: a
+    // pending null-shard legacy run would independently satisfy openRun and mask whether the intended
+    // assign-B pending row is preserved; a null-shard member run is also unroutable by driveAdoptedRun.)
     const legacyOrigin = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID)
-    const legacyRerun = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { status: 'pending' })
+    const legacyDone = await seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, { status: 'done' })
     await seedEntry(db, taskId, {
       originNodeRunId: legacyOrigin,
       sourceKind: 'manual',
       sealed: true,
       dispatchedAt: Date.now(),
-      triggerRunId: legacyRerun,
+      triggerRunId: legacyDone,
     })
     // A recovery/legacy state on shard B: an OLDER pending run + a NEWER done row (same shard). The
     // pending row is still executable (scheduler reuses pendingExisting / the engine adopts it), so a
