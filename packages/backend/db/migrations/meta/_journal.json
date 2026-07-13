@@ -638,6 +638,20 @@
       "when": 1785520000000,
       "tag": "0091_rfc175_task_source_agent_id",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "6",
+      "when": 1785530000000,
+      "tag": "0092_rfc178_remove_external_source_skills",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "6",
+      "when": 1785540000000,
+      "tag": "0093_rfc180_workgroup_autonomous",
+      "breakpoints": true
     }
   ]
 }

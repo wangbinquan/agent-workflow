@@ -56,7 +56,6 @@ async function seedManagedSkill(db: DbClient, name: string): Promise<void> {
     description: '',
     sourceKind: 'managed',
     managedPath: `skills/${name}/files`,
-    externalPath: null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })

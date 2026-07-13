@@ -146,42 +146,6 @@ export const runtimes = sqliteTable('runtimes', {
 })
 
 // -----------------------------------------------------------------------------
-// skill_sources — RFC-017. Parent directory whose direct child subdirectories
-// (each containing a SKILL.md) get auto-imported into `skills` with
-// sourceKind='external' + sourceId = this row's id. Reconciled lazily on
-// daemon boot + each GET /api/skills.
-// -----------------------------------------------------------------------------
-export const skillSources = sqliteTable('skill_sources', {
-  id: text('id').primaryKey(), // ULID
-  path: text('path').notNull().unique(), // canonicalized absolute path (realpath)
-  label: text('label').notNull(), // defaults to basename(path) at create time
-  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
-  lastScannedAt: integer('last_scanned_at'), // unix ms; null = never scanned
-  lastScanError: text('last_scan_error'), // short error code OR summary of skipped reports
-  // RFC-099: who registered this source. Skills imported from it inherit this
-  // user as their owner (D11).
-  createdBy: text('created_by'),
-  schemaVersion: integer('schema_version').notNull().default(1),
-  // RFC-170 §7/§7a (migration 0090). Additive; dormant until batch-B/C wiring.
-  // lifecycle_state: source DELETE with transferred children → 'tombstoned'
-  // (row kept to block same-path re-register; list/reconcile filter non-active).
-  lifecycleState: text('lifecycle_state', { enum: ['active', 'deleting', 'tombstoned'] })
-    .notNull()
-    .default('active'),
-  deletedAt: integer('deleted_at'),
-  // source_revision: monotonic CAS revision (§7a G10-1). reconcile write-back
-  // bumps it in-tx; adoption/rebind CAS on the pre-read value fences a late
-  // reconcile from overwriting an adoption result.
-  sourceRevision: integer('source_revision').notNull().default(0),
-  createdAt: integer('created_at')
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  updatedAt: integer('updated_at')
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-})
-
-// -----------------------------------------------------------------------------
 // mcps — RFC-028. DB is source of truth. Agents reference these by name via
 // agents.mcp (JSON string[]); runner unions the dependsOn closure's mcp names,
 // loads the rows here, and injects them into `OPENCODE_CONFIG_CONTENT.mcp` for
@@ -312,64 +276,47 @@ export const mcpProbes = sqliteTable('mcp_probes', {
 // skills — fs is source of truth (~/.agent-workflow/skills/{name}/files/).
 // DB stores only the index.
 // -----------------------------------------------------------------------------
-export const skills = sqliteTable(
-  'skills',
-  {
-    id: text('id').primaryKey(),
-    name: text('name').notNull().unique(),
-    description: text('description').notNull().default(''),
-    sourceKind: text('source_kind', { enum: ['managed', 'external'] }).notNull(),
-    managedPath: text('managed_path'), // e.g. 'skills/{name}/files/' relative to app dir
-    externalPath: text('external_path'), // absolute path
-    // RFC-017: source-folder-derived rows tag the originating skill_sources row.
-    // RFC-170 (G9-1 calibration): the actual migration-0005 FK is NO ACTION, not
-    // SET NULL — declaration corrected to match. SET NULL would misclassify a
-    // transferred child as hand-external on source delete (§7/§10); the service
-    // layer + skill_sources.lifecycle_state tombstone provide restrict semantics.
-    sourceId: text('source_id').references(() => skillSources.id, { onDelete: 'no action' }),
-    // RFC-099 ACL (see agents table comment). External skills inherit their
-    // source's created_by as owner at import time.
-    ownerUserId: text('owner_user_id'),
-    visibility: text('visibility', { enum: ['private', 'public'] })
-      .notNull()
-      .default('public'),
-    schemaVersion: integer('schema_version').notNull().default(1),
-    // RFC-101: monotonic CONTENT version (distinct from schema_version, the
-    // DB-migration version). Bumps on every write through commitSkillVersion;
-    // always equals the latest skill_versions.version_index for this skill.
-    contentVersion: integer('content_version').notNull().default(1),
-    // RFC-170 — skills storage/ACL hardening (migration 0090). All additive;
-    // dormant until batch-B code wires them. See design.md §1/§3/§4/§7a/§8/§10.
-    aclRevision: integer('acl_revision').notNull().default(0), // §8 aclRevision CAS
-    metaRevision: integer('meta_revision').notNull().default(0), // §1 metaRevision monotonic
-    migrationMarker: text('migration_marker'), // §4: NULL|'migrated'|'pending-decision'
-    reservationState: text('reservation_state', { enum: ['reserving', 'ready'] })
-      .notNull()
-      .default('ready'), // §9 creation reservation; non-ready is invisible
-    versionState: text('version_state', {
-      enum: ['legacy-unbackfilled', 'snapshot-unverified', 'snapshot-authoritative', 'quarantined'],
-    })
-      .notNull()
-      .default('legacy-unbackfilled'), // §3 snapshot authority lifecycle (managed only)
-    authorityKind: text('authority_kind', {
-      enum: ['managed', 'source-external', 'hand-external'],
-    })
-      .notNull()
-      .default('managed'), // §G2-1 three-type authority discriminator
-    sourceState: text('source_state', { enum: ['orphaned', 'degraded'] }), // §7/§7a; NULL=normal
-    originSourceId: text('origin_source_id'), // §7: retained provenance even after detach
-    authorityOwnerUserId: text('authority_owner_user_id'), // §7a: content controller ≠ ACL owner
-    createdAt: integer('created_at')
-      .notNull()
-      .default(sql`(unixepoch() * 1000)`),
-    updatedAt: integer('updated_at')
-      .notNull()
-      .default(sql`(unixepoch() * 1000)`),
-  },
-  (t) => ({
-    sourceIdx: index('skills_source_id_idx').on(t.sourceId),
-  }),
-)
+export const skills = sqliteTable('skills', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  description: text('description').notNull().default(''),
+  // RFC-178: skills are managed-only (external / parent-directory sources
+  // removed in migration 0092). external_path / source_id + the skill_sources
+  // table were dropped there.
+  sourceKind: text('source_kind', { enum: ['managed'] }).notNull(),
+  managedPath: text('managed_path'), // e.g. 'skills/{name}/files/' relative to app dir
+  // RFC-099 ACL (see agents table comment).
+  ownerUserId: text('owner_user_id'),
+  visibility: text('visibility', { enum: ['private', 'public'] })
+    .notNull()
+    .default('public'),
+  schemaVersion: integer('schema_version').notNull().default(1),
+  // RFC-101: monotonic CONTENT version (distinct from schema_version, the
+  // DB-migration version). Bumps on every write through commitSkillVersion;
+  // always equals the latest skill_versions.version_index for this skill.
+  contentVersion: integer('content_version').notNull().default(1),
+  // RFC-170 — skills storage/ACL hardening (migration 0090). All additive;
+  // dormant until batch-B code wires them. See design.md §1/§3/§4/§7a/§8/§10.
+  aclRevision: integer('acl_revision').notNull().default(0), // §8 aclRevision CAS
+  metaRevision: integer('meta_revision').notNull().default(0), // §1 metaRevision monotonic
+  migrationMarker: text('migration_marker'), // §4: NULL|'migrated'|'pending-decision'
+  reservationState: text('reservation_state', { enum: ['reserving', 'ready'] })
+    .notNull()
+    .default('ready'), // §9 creation reservation; non-ready is invisible
+  versionState: text('version_state', {
+    enum: ['legacy-unbackfilled', 'snapshot-unverified', 'snapshot-authoritative', 'quarantined'],
+  })
+    .notNull()
+    .default('legacy-unbackfilled'), // §3 snapshot authority lifecycle
+  // RFC-178: authority_kind / source_state / origin_source_id /
+  // authority_owner_user_id were dropped in migration 0092 (external/source-only).
+  createdAt: integer('created_at')
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+  updatedAt: integer('updated_at')
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+})
 
 // -----------------------------------------------------------------------------
 // skill_versions — RFC-101 skill content history.
@@ -542,6 +489,8 @@ export const workgroups = sqliteTable('workgroups', {
   maxRounds: integer('max_rounds').notNull().default(20),
   /** Completion gate: leader-done parks the task awaiting human confirmation. */
   completionGate: integer('completion_gate', { mode: 'boolean' }).notNull().default(false),
+  /** RFC-180「全自动」: no clarify invite + gate treated off + leader-idle auto-nudge. */
+  autonomous: integer('autonomous', { mode: 'boolean' }).notNull().default(false),
   // RFC-099 ACL (see agents table comment).
   ownerUserId: text('owner_user_id'),
   visibility: text('visibility', { enum: ['private', 'public'] })

@@ -52,27 +52,21 @@ describe('migration 0090 (RFC-170 skills storage/ACL) — schema + constraints',
     }
   })
 
-  test('skills gained the 8 identity/lifecycle columns', () => {
+  // RFC-178 (migration 0092) dropped authority_kind / source_state /
+  // origin_source_id / authority_owner_user_id (external/source-only). 0090's
+  // creation + backfill of those is still exercised in the "backfill derivation"
+  // block below (frozen at 0090, so it never sees 0092). Here we lock only the
+  // 0090 columns that SURVIVE at HEAD.
+  test('skills gained the surviving identity/lifecycle columns', () => {
     const c = cols(db, 'skills')
-    for (const col of [
-      'meta_revision',
-      'migration_marker',
-      'reservation_state',
-      'version_state',
-      'authority_kind',
-      'source_state',
-      'origin_source_id',
-      'authority_owner_user_id',
-    ]) {
+    for (const col of ['meta_revision', 'migration_marker', 'reservation_state', 'version_state']) {
       expect(c).toContain(col)
     }
   })
 
-  test('skill_sources gained lifecycle_state / deleted_at / source_revision; fusions gained precondition_token', () => {
-    const s = cols(db, 'skill_sources')
-    expect(s).toContain('lifecycle_state')
-    expect(s).toContain('deleted_at')
-    expect(s).toContain('source_revision')
+  // RFC-178 (0092) dropped the skill_sources table entirely, so its 0090 columns
+  // are no longer lockable at HEAD. fusions.precondition_token survives.
+  test('fusions gained precondition_token', () => {
     expect(cols(db, 'fusions')).toContain('precondition_token')
   })
 
