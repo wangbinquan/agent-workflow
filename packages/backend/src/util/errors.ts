@@ -77,6 +77,25 @@ export class ForbiddenError extends DomainError {
   }
 }
 
+/**
+ * RFC-170 T9 (§invariant④) — a managed skill whose snapshot did not verify this
+ * boot (unverified or quarantined) must NOT be injected into a runtime spawn.
+ * Thrown by the pre-spawn resolver / stageSkills terminal check; deliberately a
+ * distinct, NON-swallowable type so the claude best-effort staging path re-raises
+ * it (fail-closed) instead of silently continuing with a corrupt/missing skill.
+ */
+export class SkillQuarantinedError extends DomainError {
+  constructor(skillName: string, details?: unknown) {
+    super(
+      'skill-quarantined',
+      `skill '${skillName}' is not available this boot (snapshot unverified or quarantined); it cannot be injected`,
+      409,
+      details,
+    )
+    this.name = 'SkillQuarantinedError'
+  }
+}
+
 /** Hono error handler. Mounted via `app.onError(errorHandler)`. */
 export const errorHandler: ErrorHandler = (err, c) => {
   if (err instanceof DomainError) {

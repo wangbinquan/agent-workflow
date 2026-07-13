@@ -20,10 +20,13 @@ import {
   activateBootReverifyForTest,
   isSkillAvailableThisBoot,
   isSkillBootVerified,
+  isSkillInjectableThisBoot,
+  markSkillBootVerified,
   resetSkillBootVerifyForTest,
   runBootSnapshotReverify,
   verifyManagedSnapshot,
 } from '../src/services/skillBootVerify'
+import { readFileSync } from 'node:fs'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -152,5 +155,31 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     const names = (await listSkills(db)).map((s) => s.name)
     expect(names).toContain('foo')
     expect(names).not.toContain('bar')
+  })
+
+  // RFC-170 T9 — the runtime injection predicate + resolver gate.
+  test('isSkillInjectableThisBoot: managed needs verified when active; external/inactive pass', async () => {
+    const skill = await getSkill(db, 'foo')
+    // Inactive → always injectable.
+    expect(isSkillInjectableThisBoot({ id: skill!.id, sourceKind: 'managed' })).toBe(true)
+    resetSkillBootVerifyForTest()
+    activateBootReverifyForTest()
+    expect(isSkillInjectableThisBoot({ id: skill!.id, sourceKind: 'managed' })).toBe(false) // unverified
+    markSkillBootVerified(skill!.id)
+    expect(isSkillInjectableThisBoot({ id: skill!.id, sourceKind: 'managed' })).toBe(true) // verified
+    // External / project are not snapshot-gated here.
+    expect(isSkillInjectableThisBoot({ id: 'e', sourceKind: 'external' })).toBe(true)
+    expect(isSkillInjectableThisBoot({ id: 'p', sourceKind: 'project' })).toBe(true)
+  })
+
+  test('scheduler resolveSkills fails closed on a non-injectable managed skill (source lock)', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      'utf8',
+    )
+    // The pre-spawn resolver gates managed skills on the injection predicate and
+    // throws the non-swallowable SkillQuarantinedError (fail-closed).
+    expect(src).toMatch(/isSkillInjectableThisBoot\(\{ id: row\.id, sourceKind: 'managed' \}\)/)
+    expect(src).toMatch(/throw new SkillQuarantinedError\(name\)/)
   })
 })

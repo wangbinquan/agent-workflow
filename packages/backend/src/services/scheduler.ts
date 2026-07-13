@@ -154,7 +154,8 @@ import {
   type WrapperProgress,
 } from '@/services/wrapperProgress'
 import { emitTaskStatus, getTask } from '@/services/task'
-import { ConflictError } from '@/util/errors'
+import { ConflictError, SkillQuarantinedError } from '@/util/errors'
+import { isSkillInjectableThisBoot } from '@/services/skillBootVerify'
 import { createLogger, type Logger } from '@/util/log'
 // RFC-060 PR-E: splitDiff* imports removed — they were used only by the
 // agent-multi fan-out path (now deleted). wrapper-fanout consumes a `list<T>`
@@ -6083,6 +6084,12 @@ async function resolveSkills(
       continue
     }
     if (row.sourceKind === 'managed') {
+      // RFC-170 T9 (§invariant④): fail-closed if this managed skill did not verify
+      // this boot (snapshot unverified/quarantined) — never stage corrupt/missing
+      // content into a spawn. Inactive before the boot reverify (tests/pre-HTTP).
+      if (!isSkillInjectableThisBoot({ id: row.id, sourceKind: 'managed' })) {
+        throw new SkillQuarantinedError(name)
+      }
       const skillPath = `${appHome}/${row.managedPath ?? `skills/${name}/files`}`
       out.push({ name, sourceKind: 'managed', sourcePath: skillPath })
     } else if (row.sourceKind === 'external' && row.externalPath !== null) {

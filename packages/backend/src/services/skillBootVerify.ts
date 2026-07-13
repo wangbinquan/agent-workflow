@@ -87,6 +87,23 @@ export function isSkillAvailableThisBoot(skill: SkillAvailabilityRow): boolean {
   return skill.sourceState === null || skill.sourceState === undefined
 }
 
+/**
+ * RFC-170 T9 (§invariant④) — the RUNTIME injection variant of the predicate,
+ * keyed only on (id, sourceKind) so the leaf resolver / stageSkills can call it
+ * without the full row. A managed skill must be boot-verified THIS boot to be
+ * staged into a spawn (else fail-closed — never inject unverified/quarantined
+ * content). External is not snapshot-gated here (its per-run §7b capture is the
+ * safety boundary). Inactive (returns true) until the boot reverify runs.
+ */
+export function isSkillInjectableThisBoot(skill: {
+  id: string
+  sourceKind: 'managed' | 'external' | 'project'
+}): boolean {
+  if (!bootReverifyActivated) return true
+  if (skill.sourceKind === 'managed') return bootVerifiedSet.has(skill.id)
+  return true
+}
+
 interface ReverifySkill {
   id: string
   name: string
