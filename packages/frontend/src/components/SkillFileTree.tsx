@@ -7,7 +7,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { FileNode } from '@agent-workflow/shared'
+import type { FileNode, SkillContent } from '@agent-workflow/shared'
 import { isProtectedSkillMainFile } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { describeApiError } from '@/i18n'
@@ -28,6 +28,18 @@ export function SkillFileTree({ skillName, readonly = false, readonlyPaths = [] 
   const { t } = useTranslation()
   const qc = useQueryClient()
   const treeKey = ['skill-files', skillName]
+  // RFC-170 F3 (G2-7): the skill's detail content query is the SINGLE canonical
+  // holder of the composite precondition token. File writes echo it (OCC) and
+  // atomically advance it from the response, so a save landing between a file
+  // edit and its write is not silently clobbered; a 409 refetches a fresh token.
+  const contentKey = ['skills', skillName, 'content']
+  const currentToken = (): string | undefined => qc.getQueryData<SkillContent>(contentKey)?.token
+  const advanceToken = (token: string | null | undefined): void => {
+    if (token == null) return
+    qc.setQueryData<SkillContent>(contentKey, (prev) =>
+      prev === undefined ? prev : { ...prev, token },
+    )
+  }
   const [selected, setSelected] = useState<string | null>(null)
   const [newPath, setNewPath] = useState('')
   const [newError, setNewError] = useState<string | null>(null)
@@ -69,29 +81,39 @@ export function SkillFileTree({ skillName, readonly = false, readonlyPaths = [] 
 
   const save = useMutation({
     mutationFn: ({ path, content }: { path: string; content: string }) =>
-      api.put(
+      api.put<{ ok: boolean; path: string; token?: string }>(
         `/api/skills/${encodeURIComponent(skillName)}/file?path=${encodeURIComponent(path)}`,
-        {
-          content,
-        },
+        { content, expectedToken: currentToken() },
       ),
-    onSuccess: (_, vars) => {
+    onSuccess: (res, vars) => {
+      advanceToken(res.token)
       void qc.invalidateQueries({ queryKey: treeKey })
       void qc.invalidateQueries({ queryKey: fileKey(vars.path) })
       setDirty(false)
     },
+    onError: () => {
+      // A 409 (stale token) refetches the canonical token so a retry is fresh.
+      void qc.invalidateQueries({ queryKey: contentKey })
+    },
   })
 
   const del = useMutation({
-    mutationFn: (path: string) =>
-      api.delete(
-        `/api/skills/${encodeURIComponent(skillName)}/file?path=${encodeURIComponent(path)}`,
-      ),
-    onSuccess: () => {
+    mutationFn: (path: string) => {
+      const tok = currentToken()
+      const q = tok !== undefined ? `&expectedToken=${encodeURIComponent(tok)}` : ''
+      return api.delete<{ token?: string }>(
+        `/api/skills/${encodeURIComponent(skillName)}/file?path=${encodeURIComponent(path)}${q}`,
+      )
+    },
+    onSuccess: (res) => {
+      advanceToken(res.token)
       void qc.invalidateQueries({ queryKey: treeKey })
       setSelected(null)
       setDraft('')
       setDirty(false)
+    },
+    onError: () => {
+      void qc.invalidateQueries({ queryKey: contentKey })
     },
   })
 

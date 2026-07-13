@@ -5,7 +5,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { SkillVersion, SkillVersionDiff, SkillVersionSource } from '@agent-workflow/shared'
+import type {
+  SkillContent,
+  SkillVersion,
+  SkillVersionDiff,
+  SkillVersionSource,
+} from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { ConfirmButton } from '@/components/ConfirmButton'
 import { Dialog } from '@/components/Dialog'
@@ -60,14 +65,27 @@ export function SkillVersionHistory({
   })
 
   const restore = useMutation({
-    mutationFn: (v: number) => api.post(`/api/skills/${enc}/versions/${v}/restore`, {}),
+    mutationFn: (v: number) => {
+      // RFC-170 F3 (G2-7): echo the canonical token so a save/file-write landing
+      // since the history loaded → 409 (not a silent overwrite of a newer edit).
+      const tok = qc.getQueryData<SkillContent>(['skills', skillName, 'content'])?.token
+      return api.post(
+        `/api/skills/${enc}/versions/${v}/restore`,
+        tok !== undefined ? { expectedToken: tok } : {},
+      )
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['skills', skillName] })
+      // Reloads content → the canonical token advances to the restored generation.
       void qc.invalidateQueries({ queryKey: ['skills', skillName, 'content'] })
       void qc.invalidateQueries({ queryKey: ['skills', skillName, 'versions'] })
       void qc.invalidateQueries({ queryKey: ['skill-files', skillName] })
       void qc.invalidateQueries({ queryKey: ['skills'] })
       onRestored?.()
+    },
+    onError: () => {
+      // A 409 (stale token) refetches the canonical token so a retry is fresh.
+      void qc.invalidateQueries({ queryKey: ['skills', skillName, 'content'] })
     },
   })
 
