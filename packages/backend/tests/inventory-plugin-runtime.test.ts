@@ -92,6 +92,27 @@ function readSnapshot(): Snapshot {
   return JSON.parse(readFileSync(outPath, 'utf-8')) as Snapshot
 }
 
+/**
+ * Like readSnapshot(), but polls until the file at `path` is present and
+ * parseable (or a real timeout elapses). The plugin dumps fire-and-forget
+ * inside a queueMicrotask, and Bun.write's mkdir-p + flush can outlast the
+ * fixed flushMicrotasks() delay on macOS APFS — a single immediate read then
+ * races a truncated file (JSON "Unexpected EOF"), which flaked CI on the
+ * no-such-dir case. Polling returns the instant the write lands and fails
+ * loudly only after the timeout.
+ */
+async function readSnapshotAt(path: string, timeoutMs = 2000): Promise<Snapshot> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    try {
+      return JSON.parse(readFileSync(path, 'utf-8')) as Snapshot
+    } catch (err) {
+      if (Date.now() >= deadline) throw err
+      await new Promise((r) => setTimeout(r, 5))
+    }
+  }
+}
+
 // -------------------------------------------------------------------------
 // Fixture builders — each shape mirrors a real opencode SDK state.
 // -------------------------------------------------------------------------
@@ -528,8 +549,11 @@ describe('aw-inventory-dump runtime: dump-plugin-internal-error path', () => {
     process.env.OPENCODE_AW_INVENTORY_OUT = nested
     const plugin = await loadPlugin()
     await plugin.server(makeV2Client())
-    await flushMicrotasks()
-    const snap = JSON.parse(readFileSync(nested, 'utf-8')) as Snapshot
+    // The plugin dumps fire-and-forget; on macOS APFS the mkdir-p + write can
+    // outlast a fixed flushMicrotasks() delay, so a single immediate read
+    // raced a truncated file → JSON "Unexpected EOF" (macOS-only CI flake).
+    // Poll until the write lands instead of guessing a delay.
+    const snap = await readSnapshotAt(nested)
     expect(snap.captured).toBe(true)
   })
 
