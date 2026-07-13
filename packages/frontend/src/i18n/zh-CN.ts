@@ -1543,6 +1543,8 @@ export interface Resources {
     // RFC-167 PR-3: dynamic-workflow orchestration tab.
     tabDwOrchestration: string
     workgroupBadge: string
+    /** RFC-165: single-agent task subject badge (mirror of workgroupBadge). */
+    agentBadge: string
     worktreeFilesEmpty: string
     worktreeFilesNoWorktree: string
     worktreeFilesOversized: string
@@ -4445,6 +4447,7 @@ export const zhCN: Resources = {
     tabChatroom: '聊天室',
     tabDwOrchestration: '动态编排',
     workgroupBadge: '工作组',
+    agentBadge: '代理',
     worktreeFilesEmpty: '从左侧选择一个文件以预览。',
     worktreeFilesNoWorktree: '该任务没有可用的工作目录。',
     worktreeFilesOversized: '文件过大（{{size}}），超过 {{limit}} 阈值，未预览。',

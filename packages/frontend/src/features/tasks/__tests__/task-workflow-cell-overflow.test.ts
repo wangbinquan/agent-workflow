@@ -15,6 +15,11 @@
  *
  * CSS 布局无法在 jsdom 断言（vitest css:false、jsdom 不做布局），故以源码层文本断言兜底
  * 锁定 CSS 规则与 TSX 接线——改回裸行内排布 / 去掉任一 CSS 规则本测试即转红。
+ *
+ * 更新（RFC-164 follow-up）：组名/agent 名 + badge 的接线抽进了公共组件
+ * components/TaskSubjectLink.tsx（列表 cell + 详情页共用同一份），tasks.tsx 现在
+ * 只委托 <TaskSubjectLink>。故 wrapper class 的文本断言改读组件文件；行为覆盖见
+ * tests/task-subject-link.test.tsx。CSS 规则断言不变。
  */
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -24,6 +29,10 @@ import { describe, expect, it } from 'vitest'
 // `fileURLToPath(new URL(..., import.meta.url))`, which throws under vitest.
 const css = readFileSync(resolve(__dirname, '..', '..', '..', 'styles.css'), 'utf8')
 const tasksRoute = readFileSync(resolve(__dirname, '..', '..', '..', 'routes', 'tasks.tsx'), 'utf8')
+const subjectLink = readFileSync(
+  resolve(__dirname, '..', '..', '..', 'components', 'TaskSubjectLink.tsx'),
+  'utf8',
+)
 
 function ruleBody(selector: string): string {
   const idx = css.indexOf(`${selector} {`)
@@ -47,9 +56,16 @@ describe('tasks list workflow-column workgroup badge one-line guard', () => {
     expect(ruleBody('.task-workflow-cell__badge')).toMatch(/flex\s*:\s*0\s+0\s+auto/)
   })
 
-  it('routes/tasks.tsx wires the group name + badge through the wrapper', () => {
-    expect(tasksRoute).toContain('className="task-workflow-cell"')
-    expect(tasksRoute).toContain('task-workflow-cell__name')
-    expect(tasksRoute).toContain('task-workflow-cell__badge')
+  it('TaskSubjectLink wires the group/agent name + badge through the wrapper', () => {
+    expect(subjectLink).toContain('className="task-workflow-cell"')
+    expect(subjectLink).toContain('task-workflow-cell__name')
+    expect(subjectLink).toContain('task-workflow-cell__badge')
+  })
+
+  it('routes/tasks.tsx delegates the subject cell to <TaskSubjectLink>', () => {
+    // The inline cell is gone — the list <td> renders the shared component,
+    // so the wrapper classes above must live in TaskSubjectLink, not here.
+    expect(tasksRoute).toContain('<TaskSubjectLink')
+    expect(tasksRoute).not.toContain('task-workflow-cell__badge')
   })
 })

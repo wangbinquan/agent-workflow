@@ -2991,6 +2991,10 @@ function rowToTask(
     // RFC-159: link back to the scheduled_tasks row that launched this (NULL = manual).
     scheduledTaskId: row.scheduledTaskId ?? null,
     workgroupId: row.workgroupId ?? null,
+    // RFC-164 follow-up: frozen group name from the task's own config (same
+    // source as rowToSummary), so the detail page can link to /workgroups/$name
+    // instead of leaking the `__workgroup_host__` anchor. NULL for non-groups.
+    workgroupName: frozenWorkgroupName(row.workgroupConfigJson),
     // RFC-165: execution-space kind + single-agent soft link.
     spaceKind: row.spaceKind,
     sourceAgentName: row.sourceAgentName ?? null,

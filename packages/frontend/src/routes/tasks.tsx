@@ -12,6 +12,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { StatusChip } from '@/components/StatusChip'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
+import { TaskSubjectLink } from '@/components/TaskSubjectLink'
 import { useTasksSync } from '@/hooks/useTasksSync'
 import { Route as RootRoute } from './__root'
 
@@ -121,51 +122,13 @@ function TasksPage() {
                   </div>
                 </td>
                 <td>
-                  {/* RFC-164 follow-up: a workgroup task is FK-anchored to the
-                      builtin `__workgroup_host__` workflow, so linking/naming by
-                      workflowId/workflowName would send the user into that
-                      internal host and print `__workgroup_host__`. Surface the
-                      GROUP instead — its (frozen, task-scoped) name + a
-                      /workgroups/$name link + badge. Non-workgroup tasks keep the
-                      plain workflow link. */}
-                  {row.workgroupId != null ? (
-                    // Group name + 「工作组」badge share one auto-width cell. Wrap
-                    // them in a single-line flex box (mirrors .task-name-cell):
-                    // without it the link + inline-flex chip flow inline and the
-                    // chip drops to a second line whenever name+badge is wider than
-                    // the column. Name ellipsizes; badge is pinned beside it.
-                    <span className="task-workflow-cell">
-                      {row.workgroupName != null ? (
-                        <Link
-                          to="/workgroups/$name"
-                          params={{ name: row.workgroupName }}
-                          className="data-table__link task-workflow-cell__name"
-                          title={row.workgroupName}
-                        >
-                          {row.workgroupName}
-                        </Link>
-                      ) : (
-                        // Group row deleted — keep the badge, drop the dead link.
-                        <span className="data-table__muted">{t('common.emDash')}</span>
-                      )}
-                      <StatusChip
-                        kind="info"
-                        size="sm"
-                        className="task-workflow-cell__badge"
-                        data-testid={`task-workgroup-badge-${row.id}`}
-                      >
-                        {t('tasks.workgroupBadge')}
-                      </StatusChip>
-                    </span>
-                  ) : (
-                    <Link
-                      to="/workflows/$id"
-                      params={{ id: row.workflowId }}
-                      className="data-table__link"
-                    >
-                      {row.workflowName ?? row.workflowId}
-                    </Link>
-                  )}
+                  {/* The task's execution subject. A workgroup / single-agent
+                      task is FK-anchored to a builtin `__workgroup_host__` /
+                      `__agent_host__` workflow, so a naive workflow link would
+                      leak that internal anchor + a dead /workflows link.
+                      TaskSubjectLink resolves the real subject (group / agent /
+                      workflow) and links to the owning resource + kind badge. */}
+                  <TaskSubjectLink task={row} taskId={row.id} badge />
                 </td>
                 <td>
                   <TaskStatusChip status={row.status} />

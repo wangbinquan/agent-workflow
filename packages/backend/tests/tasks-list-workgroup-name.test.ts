@@ -23,7 +23,7 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb } from '../src/db/client'
 import { tasks, workflows, workgroups } from '../src/db/schema'
-import { listTasks } from '../src/services/task'
+import { getTask, listTasks } from '../src/services/task'
 import {
   WORKGROUP_HOST_WORKFLOW_ID,
   WORKGROUP_HOST_WORKFLOW_NAME,
@@ -140,5 +140,60 @@ describe('RFC-164 follow-up — listTasks projects the frozen workgroup name', (
     const row = (await listTasks(db, { limit: 100 })).find((r) => r.id === tId)!
     expect(row.workgroupId).toBe(groupId) // soft link still surfaces (badge)
     expect(row.workgroupName).toBeNull() // but the name degrades safely
+  })
+})
+
+// Detail parity: GET /api/tasks/:id (getTask → rowToTask) must project the SAME
+// frozen workgroup name as the list, so the task-detail page can link to
+// /workgroups/$name instead of leaking the `__workgroup_host__` anchor in its
+// header + meta row. Frontend wiring is locked by task-subject-link.test.tsx +
+// task-detail-header-workflow-link.test.ts.
+describe('RFC-164 follow-up — getTask projects the frozen workgroup name (detail parity)', () => {
+  test('the detail payload carries workgroupName from the frozen config, not the host anchor', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
+    const groupId = ulid()
+    // Live resource name diverges — the detail must read the frozen one (ACL
+    // parity with the list; a live join would leak a post-launch rename).
+    db.insert(workgroups).values({ id: groupId, name: 'live-name' }).run()
+    const tId = seedTask(db, {
+      name: 'ship it',
+      workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+      workgroupId: groupId,
+      workgroupConfigJson: JSON.stringify({ workgroupName: 'design-crew', mode: 'leader_worker' }),
+    })
+
+    const task = (await getTask(db, tId))!
+    expect(task.workgroupId).toBe(groupId)
+    expect(task.workgroupName).toBe('design-crew') // frozen, not 'live-name'
+    // The FK anchor still resolves — proving the UI reads the GROUP, not this.
+    expect(task.workflowName).toBe(WORKGROUP_HOST_WORKFLOW_NAME)
+  })
+
+  test('workgroupName is null in the detail payload for a non-workgroup task', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const wfId = ulid()
+    seedWorkflow(db, wfId, 'plain-wf')
+    const tId = seedTask(db, { name: 'solo', workflowId: wfId })
+
+    const task = (await getTask(db, tId))!
+    expect(task.workgroupId).toBeNull()
+    expect(task.workgroupName).toBeNull()
+  })
+
+  test('a corrupt frozen config degrades detail workgroupName to null (never 5xx)', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
+    const groupId = ulid()
+    const tId = seedTask(db, {
+      name: 't',
+      workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+      workgroupId: groupId,
+      workgroupConfigJson: '{ not valid json',
+    })
+
+    const task = (await getTask(db, tId))!
+    expect(task.workgroupId).toBe(groupId)
+    expect(task.workgroupName).toBeNull()
   })
 })

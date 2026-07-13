@@ -218,6 +218,15 @@ export const TaskSchema = z.object({
   /** RFC-164: owning workgroup id (durable soft link; NULL = not a workgroup task). */
   workgroupId: z.string().nullable().optional(),
   /**
+   * RFC-164 follow-up: the owning workgroup's display name, read from the task's
+   * OWN frozen `workgroup_config_json` (same task-scoped source the list uses —
+   * see `TaskSummary.workgroupName`), NOT a live join on the workgroups resource.
+   * NULL for non-workgroup tasks / corrupt config. The detail page shows this +
+   * links to `/workgroups/$name` instead of leaking the internal `__workgroup_host__`
+   * anchor workflow (whose name is `workflowName`), mirroring the list view.
+   */
+  workgroupName: z.string().nullable().optional(),
+  /**
    * RFC-165: execution-space kind. Defaulted to 'remote' so fixtures predating
    * migration 0085 keep parsing; the backend mapper always populates it.
    */

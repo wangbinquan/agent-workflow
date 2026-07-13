@@ -1626,6 +1626,7 @@ export const enUS: Resources = {
     tabChatroom: 'Chat room',
     tabDwOrchestration: 'Orchestration',
     workgroupBadge: 'Workgroup',
+    agentBadge: 'Agent',
     worktreeFilesEmpty: 'Select a file from the left to preview.',
     worktreeFilesNoWorktree: 'This task has no worktree.',
     worktreeFilesOversized: 'File too large ({{size}}); exceeds {{limit}}. Preview skipped.',

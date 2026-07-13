@@ -19,6 +19,7 @@ import { COMMIT_PUSH_NODE_PREFIX, redactGitUrl, taskExecutionKind } from '@agent
 import { api, ApiError } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import { LoadingState } from '@/components/LoadingState'
+import { TaskSubjectLink } from '@/components/TaskSubjectLink'
 import { WorkflowCanvas, type WorkflowCanvasHandle } from '@/components/canvas/WorkflowCanvas'
 import type { CanvasNodeData } from '@/components/canvas/nodes/types'
 import { ConfirmButton } from '@/components/ConfirmButton'
@@ -264,6 +265,10 @@ function TaskDetailPage() {
   const tk = task.data
   const cancelable = tk.status === 'pending' || tk.status === 'running'
   const resumability = resumeStatus(tk.status, tk.worktreePath)
+  // RFC-164/165: the task's execution subject (workgroup / agent / workflow) —
+  // one derivation reused by the header subject link, the meta row and the
+  // relaunch/resume deep-links (taskExecutionKind's single-source contract).
+  const subjectKind = taskExecutionKind(tk)
 
   return (
     <div className="page page--task-detail">
@@ -280,22 +285,22 @@ function TaskDetailPage() {
             <span className="task-detail__id-label">{t('tasks.detailTitleIdLabel')}</span>{' '}
             <code>{tk.id}</code>
           </div>
-          {/* Jump link to the owning workflow, surfaced in the always-visible
-              page header. The full meta row (with parenthesised ULID) still
-              lives in the "details" tab, but that tab isn't the default — so
-              without this a user landing on a task can't reach its workflow
-              without first switching tabs. Reuses the same data-table__link
-              style the details-tab + tasks-list workflow links use. */}
+          {/* Jump link to the task's execution SUBJECT, surfaced in the
+              always-visible page header (the full meta row lives in the
+              non-default "details" tab, so without this a user landing on a task
+              can't reach its subject without switching tabs). TaskSubjectLink
+              resolves workgroup / agent / workflow, so a group or single-agent
+              task links to its owning resource (+ kind badge) instead of leaking
+              the internal `__workgroup_host__` / `__agent_host__` anchor. The
+              「工作流」label is kept for plain workflow tasks; group/agent tasks
+              are marked by the badge instead. */}
           <div className="task-detail__workflow">
-            <span className="task-detail__id-label">{t('tasks.metaWorkflow')}</span>{' '}
-            <Link
-              to="/workflows/$id"
-              params={{ id: tk.workflowId }}
-              className="data-table__link"
-              data-testid="task-detail-header-workflow-link"
-            >
-              {tk.workflowName ?? tk.workflowId}
-            </Link>
+            {subjectKind === 'workflow' && (
+              <>
+                <span className="task-detail__id-label">{t('tasks.metaWorkflow')}</span>{' '}
+              </>
+            )}
+            <TaskSubjectLink task={tk} taskId={tk.id} badge />
           </div>
         </div>
         <div className="page__actions">
@@ -307,9 +312,9 @@ function TaskDetailPage() {
             <Link
               to="/tasks/new"
               search={
-                taskExecutionKind(tk) === 'agent'
+                subjectKind === 'agent'
                   ? { kind: 'agent', agent: tk.sourceAgentName ?? '' }
-                  : taskExecutionKind(tk) === 'workgroup'
+                  : subjectKind === 'workgroup'
                     ? { kind: 'workgroup' }
                     : { kind: 'workflow', workflow: tk.workflowId }
               }
@@ -353,9 +358,9 @@ function TaskDetailPage() {
           <Link
             to="/tasks/new"
             search={
-              taskExecutionKind(tk) === 'agent'
+              subjectKind === 'agent'
                 ? { kind: 'agent', agent: tk.sourceAgentName ?? '' }
-                : taskExecutionKind(tk) === 'workgroup'
+                : subjectKind === 'workgroup'
                   ? { kind: 'workgroup' }
                   : { kind: 'workflow', workflow: tk.workflowId }
             }
@@ -522,12 +527,21 @@ function TaskDetailPage() {
             </details>
           )}
           <dl className="task-meta">
-            <dt>{t('tasks.metaWorkflow')}</dt>
+            {/* The task's execution subject. Subject-aware <dt> label (工作流 /
+                工作组 / 代理) + TaskSubjectLink, so a group / single-agent task
+                links to its owning resource instead of the internal
+                `__workgroup_host__` / `__agent_host__` anchor. The parenthesised
+                workflow ULID is kept for plain workflow tasks only. */}
+            <dt>
+              {subjectKind === 'workgroup'
+                ? t('tasks.workgroupBadge')
+                : subjectKind === 'agent'
+                  ? t('tasks.agentBadge')
+                  : t('tasks.metaWorkflow')}
+            </dt>
             <dd>
-              <Link to="/workflows/$id" params={{ id: tk.workflowId }} className="data-table__link">
-                {tk.workflowName ?? tk.workflowId}
-              </Link>
-              {tk.workflowName !== null && (
+              <TaskSubjectLink task={tk} taskId={tk.id} />
+              {subjectKind === 'workflow' && tk.workflowName !== null && (
                 <>
                   {' '}
                   <span className="data-table__muted">
