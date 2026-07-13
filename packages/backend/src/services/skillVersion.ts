@@ -30,6 +30,7 @@ import type { DbClient } from '@/db/client'
 import { skills, skillVersions } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { realpathInside } from '@/util/safePath'
+import { cleanupOpDirs, opStagedDir, swapInStaged } from '@/services/skillFsPublish'
 import { unfuseMemoriesTx } from '@/services/memory'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { parseFrontmatter } from '@/util/frontmatter'
@@ -300,7 +301,12 @@ export function commitSkillVersion(
 
   const newVersion = maxIndex === 0 ? 1 : maxIndex + 1
   const filesDir = skillFilesDir(opts.appHome, name)
-  const staging = join(opts.appHome, 'skills', name, `.staging-${ulid()}`)
+  // RFC-170 §6a/§13: build into an op-scoped staged dir so the live publish can be
+  // an ATOMIC rename-swap (swapInStaged) instead of the old rmSync+cpSync (which
+  // left a window where files/ was missing/partial on crash). publishId scopes the
+  // staged/backup sibling names collision-free.
+  const publishId = ulid()
+  const staging = opStagedDir(filesDir, publishId)
   rmSync(staging, { recursive: true, force: true })
   mkdirSync(staging, { recursive: true })
   if (existsSync(filesDir)) cpSync(filesDir, staging, { recursive: true })
@@ -350,12 +356,16 @@ export function commitSkillVersion(
     )[0]
   })
 
-  // Sync live files/ from the snapshot LAST. A crash here leaves files/ stale
-  // vs DB; reconcileSkillLiveFiles() (startup) re-syncs from versions/v{cur}.
-  rmSync(filesDir, { recursive: true, force: true })
+  // Publish live files/ from the staged snapshot LAST, ATOMICALLY (RFC-170
+  // §6a/§13): swapInStaged moves the current live aside to an op-scoped backup
+  // then renames staged → files (two same-parent renames, each atomic), so files/
+  // is never observed missing/partial — the old rmSync+cpSync window is gone.
+  // A crash between the two renames still leaves a complete tree (old or new);
+  // reconcileSkillLiveFiles() (startup) remains the backstop that re-syncs from
+  // versions/v{cur} if needed.
   mkdirSync(dirname(filesDir), { recursive: true })
-  cpSync(staging, filesDir, { recursive: true })
-  rmSync(staging, { recursive: true, force: true })
+  swapInStaged(filesDir, publishId)
+  cleanupOpDirs(filesDir, publishId)
 
   if (!created) throw new Error('skill_versions row disappeared after insert')
   return rowToSkillVersion(created)
