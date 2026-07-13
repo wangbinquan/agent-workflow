@@ -12,6 +12,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   createManagedSkill,
   getSkill,
+  readSkillContent,
   readSkillFile,
   skillRoot,
   writeSkillFile,
@@ -67,5 +68,15 @@ describe('readSkillFile symlink containment', () => {
     writeFileSync(join(root, 'real.txt'), 'inside target', 'utf-8')
     symlinkSync(join(root, 'real.txt'), join(root, 'link.txt'))
     expect(await readSkillFile(db, fsOpts, 'foo', 'link.txt')).toBe('inside target')
+  })
+
+  test('readSkillContent refuses a SKILL.md symlinked to a host file (G3-1 content GET)', async () => {
+    const skill = await getSkill(db, 'foo')
+    if (skill === null) throw new Error('skill missing')
+    const root = skillRoot(skill, fsOpts)
+    // Replace the real SKILL.md with an escaping symlink.
+    rmSync(join(root, 'SKILL.md'))
+    symlinkSync(join(outsideDir, 'host-secret.txt'), join(root, 'SKILL.md'))
+    await expect(readSkillContent(db, fsOpts, 'foo')).rejects.toBeInstanceOf(ValidationError)
   })
 })

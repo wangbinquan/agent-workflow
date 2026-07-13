@@ -29,6 +29,7 @@ import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { skills, skillVersions } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
+import { realpathInside } from '@/util/safePath'
 import { unfuseMemoriesTx } from '@/services/memory'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { parseFrontmatter } from '@/util/frontmatter'
@@ -423,7 +424,9 @@ export function getSkillVersionContent(
   const skillMdPath = join(versionDir, 'SKILL.md')
   let content: SkillContent
   if (existsSync(skillMdPath)) {
-    const parsed = parseFrontmatter(readFileSync(skillMdPath, 'utf-8'))
+    // RFC-170 G3-1 (security): a historical SKILL.md may be a symlink escaping the
+    // version dir; contain it so `/versions/:v/content` can't leak host files.
+    const parsed = parseFrontmatter(readFileSync(realpathInside(versionDir, skillMdPath), 'utf-8'))
     const { name: _n, description: descRaw, ...rest } = parsed.data
     content = {
       name,

@@ -261,7 +261,10 @@ export async function readSkillContent(
   if (!existsSync(skillMdPath)) {
     throw new NotFoundError('skill-md-missing', `SKILL.md not found at ${skillMdPath}`)
   }
-  const raw = readFileSync(skillMdPath, 'utf-8')
+  // RFC-170 G3-1 (security): SKILL.md may be a symlink in an external skill dir;
+  // contain it so a `SKILL.md -> ~/.ssh/id_rsa` link can't leak host files to a
+  // shared skill's readers (same fix as readSkillFile).
+  const raw = readFileSync(realpathInside(root, skillMdPath), 'utf-8')
   const parsed = parseFrontmatter(raw)
   const { name: _ignoredName, description: descRaw, ...rest } = parsed.data
   return {
