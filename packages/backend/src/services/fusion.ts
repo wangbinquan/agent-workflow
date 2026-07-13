@@ -545,16 +545,28 @@ export async function reconcileFusion(deps: FusionDeps, id: string): Promise<voi
   const { db } = deps
   const row = loadFusionRow(db, id)
   if (!row || row.status !== 'running' || row.currentTaskId === null) return
-  const task = await getTask(db, row.currentTaskId)
+  // RFC-170 T6 (Codex F7): reconcile reads the task, then does async git/manifest
+  // work, then writes back. A decision (approve/reject/cancel) can race in that
+  // window and change status / currentTaskId. So EVERY reconcile write is a CAS on
+  // (status='running', currentTaskId=taskId) — if it lost the race it no-ops.
+  const taskId = row.currentTaskId
+  const reconcileFail = (error: string): void => {
+    casFusionStatus(db, id, ['running'], 'failed', {
+      expectCurrentTaskId: taskId,
+      extra: { error, decidedAt: Date.now() },
+    })
+  }
+  const task = await getTask(db, taskId)
   if (task === null) {
-    failFusion(db, id, 'engine task vanished')
+    reconcileFail('engine task vanished')
     return
   }
   if (!TERMINAL_TASK.has(task.status)) return // still running / awaiting clarify
 
   if (task.status !== 'done') {
-    setFusionStatus(db, id, task.status === 'canceled' ? 'canceled' : 'failed', {
-      error: task.errorSummary ?? `engine task ${task.status}`,
+    casFusionStatus(db, id, ['running'], task.status === 'canceled' ? 'canceled' : 'failed', {
+      expectCurrentTaskId: taskId,
+      extra: { error: task.errorSummary ?? `engine task ${task.status}` },
     })
     return
   }
@@ -566,14 +578,14 @@ export async function reconcileFusion(deps: FusionDeps, id: string): Promise<voi
     const diff = await gitDiffSnapshot(workDir, rootSha)
     const manifestPath = join(workDir, MANIFEST_REL)
     if (!existsSync(manifestPath)) {
-      failFusion(db, id, 'agent did not write the fusion result manifest')
+      reconcileFail('agent did not write the fusion result manifest')
       return
     }
     const parsed = FusionResultManifestSchema.safeParse(
       JSON.parse(readFileSync(manifestPath, 'utf-8')),
     )
     if (!parsed.success) {
-      failFusion(db, id, 'fusion result manifest is invalid')
+      reconcileFail('fusion result manifest is invalid')
       return
     }
     const selected = new Set(jsonArray(row.memoryIdsJson))
@@ -589,26 +601,23 @@ export async function reconcileFusion(deps: FusionDeps, id: string): Promise<voi
     const accounted = new Set([...incSet, ...skipped.map((s) => s.memoryId)])
     const unaccounted = [...selected].filter((m) => !accounted.has(m))
     if (unaccounted.length > 0) {
-      failFusion(
-        db,
-        id,
+      reconcileFail(
         `agent manifest omitted ${unaccounted.length} selected memory id(s): ${unaccounted.join(', ')}`,
       )
       return
     }
-    db.update(fusions)
-      .set({
-        status: 'awaiting_approval',
+    casFusionStatus(db, id, ['running'], 'awaiting_approval', {
+      expectCurrentTaskId: taskId,
+      extra: {
         proposedWorktreePath: workDir,
         proposedDiff: diff,
         incorporatedMemoryIdsJson: JSON.stringify(incorporated),
         skippedJson: JSON.stringify(skipped),
         changelog: parsed.data.changelog,
-      })
-      .where(eq(fusions.id, id))
-      .run()
+      },
+    })
   } catch (err) {
-    failFusion(db, id, err instanceof Error ? err.message : String(err))
+    reconcileFail(err instanceof Error ? err.message : String(err))
   }
 }
 
@@ -725,21 +734,10 @@ export async function listFusionSummaries(
 // Status writes
 // ---------------------------------------------------------------------------
 
-function setFusionStatus(
-  db: DbClient,
-  id: string,
-  to: FusionStatus,
-  extra: Partial<FusionRow> = {},
-): void {
-  db.update(fusions)
-    .set({ status: to, ...extra })
-    .where(eq(fusions.id, id))
-    .run()
-}
-
-function failFusion(db: DbClient, id: string, error: string): void {
-  setFusionStatus(db, id, 'failed', { error, decidedAt: Date.now() })
-}
+// RFC-170 T6 (Codex F7): the old unconditional setFusionStatus/failFusion were
+// removed — every fusion status write now goes through the generation-CAS
+// `casFusionStatus` (or the atomic `claimFusionDecision`) so no writer can clobber
+// a concurrent decision. See reconcileFusion / approveFusion / rejectFusion / cancelFusion.
 
 // ---------------------------------------------------------------------------
 // Approve (atomic apply)
@@ -849,6 +847,39 @@ function claimFusionDecision(
   })
 }
 
+/**
+ * RFC-170 T6 (Codex re-review F7) — a conditional status write: apply only if the
+ * fusion is STILL in one of `fromStatuses` and (when given) still points at
+ * `currentTaskId`. This makes every non-claim writer (reconcile write-back / fail,
+ * cancel, reject's task attach) a generation-CAS keyed on (status, currentTaskId),
+ * so a writer that raced a concurrent decision does NOT clobber it. Returns whether
+ * it applied. dbTxSync + bun:sqlite single-writer make the read+update atomic.
+ */
+function casFusionStatus(
+  db: DbClient,
+  id: string,
+  fromStatuses: readonly FusionStatus[],
+  to: FusionStatus,
+  opts: { expectCurrentTaskId?: string | null; extra?: Partial<FusionRow> } = {},
+): boolean {
+  return dbTxSync(db, (tx) => {
+    const cur = tx
+      .select({ status: fusions.status, currentTaskId: fusions.currentTaskId })
+      .from(fusions)
+      .where(eq(fusions.id, id))
+      .get()
+    if (!cur || !fromStatuses.includes(cur.status as FusionStatus)) return false
+    if (opts.expectCurrentTaskId !== undefined && cur.currentTaskId !== opts.expectCurrentTaskId) {
+      return false
+    }
+    tx.update(fusions)
+      .set({ status: to, ...(opts.extra ?? {}) })
+      .where(eq(fusions.id, id))
+      .run()
+    return true
+  })
+}
+
 /** Decode a fusion's captured token into the OCC components for commitSkillVersion. */
 function fusionTokenExpectations(token: string | null): {
   expectedSkillId?: string
@@ -928,10 +959,13 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
         },
       },
     )
-    setFusionStatus(db, id, 'done', {
-      appliedSkillVersion: version.versionIndex,
-      decidedByUserId: actor.user.id,
-      decidedAt: now,
+    // RFC-170 T6 (Codex F7): CAS from the 'applying' state we exclusively hold.
+    casFusionStatus(db, id, ['applying'], 'done', {
+      extra: {
+        appliedSkillVersion: version.versionIndex,
+        decidedByUserId: actor.user.id,
+        decidedAt: now,
+      },
     })
   } catch (err) {
     const code = (err as { code?: string }).code
@@ -941,7 +975,11 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
         : err instanceof Error
           ? err.message
           : String(err)
-    failFusion(db, id, msg)
+    // The version write already committed durably iff it threw AFTER the DB tx;
+    // fail only from 'applying' (we own it) so we never overwrite a done/canceled.
+    casFusionStatus(db, id, ['applying'], 'failed', {
+      extra: { error: msg, decidedAt: Date.now() },
+    })
     throw err instanceof Error ? err : new Error(msg)
   }
   const fresh = loadFusionRow(db, id)
@@ -1054,10 +1092,14 @@ export async function rejectFusion(
       startDeps,
     )
 
-    // Status is already 'running' (claimed above); attach the new task + reset the
-    // proposal fields. Safe by-id — we hold the claim, no concurrent decision can.
-    db.update(fusions)
-      .set({
+    // RFC-170 T6 (Codex F7): attach the new task via CAS on (status='running',
+    // currentTaskId=null) — the intermediate state this reject claimed. A cancel
+    // that raced during seeding/startTask flips status to 'canceled', so this CAS
+    // fails; we then cancel the speculative task we just started rather than
+    // orphaning it on a canceled fusion.
+    const attached = casFusionStatus(db, id, ['running'], 'running', {
+      expectCurrentTaskId: null,
+      extra: {
         iteration: nextIter,
         currentTaskId: taskId,
         proposedWorktreePath: null,
@@ -1068,15 +1110,24 @@ export async function rejectFusion(
         decisionReason: feedback,
         decidedByUserId: actor.user.id,
         decidedAt: Date.now(),
-      })
-      .where(eq(fusions.id, id))
-      .run()
+      },
+    })
+    if (!attached) {
+      await cancelTask(db, taskId).catch(() => undefined)
+      throw new ConflictError(
+        'fusion-not-awaiting',
+        'the fusion was canceled during the re-run; the speculative task was rolled back',
+      )
+    }
 
     return rowToFusion(loadFusionRow(db, id)!)
   } catch (err) {
     // We own the 'running' claim; a post-claim failure must not leave the fusion
-    // stuck running with no task — fail it so the user can re-initiate.
-    failFusion(db, id, err instanceof Error ? err.message : String(err))
+    // stuck running with no task — fail it (CAS from 'running', so we don't
+    // clobber a concurrent cancel that already terminalized it).
+    casFusionStatus(db, id, ['running'], 'failed', {
+      extra: { error: err instanceof Error ? err.message : String(err), decidedAt: Date.now() },
+    })
     throw err instanceof Error ? err : new Error(String(err))
   }
 }
@@ -1117,6 +1168,18 @@ export async function cancelFusion(deps: FusionDeps, id: string, actor: Actor): 
       }).catch(() => false)
     }
   }
-  setFusionStatus(db, id, 'canceled', { decidedByUserId: actor.user.id, decidedAt: Date.now() })
+  // RFC-170 T6 (Codex F7): CAS the terminal transition — only from a cancelable
+  // state (running / awaiting_approval), NOT 'applying' (a mid-approve commit must
+  // not be canceled out from under the winner). If it lost the race (a decision
+  // moved it since the pre-check), report it instead of clobbering.
+  const canceled = casFusionStatus(db, id, ['running', 'awaiting_approval'], 'canceled', {
+    extra: { decidedByUserId: actor.user.id, decidedAt: Date.now() },
+  })
+  if (!canceled) {
+    throw new ConflictError(
+      'fusion-terminal',
+      `fusion '${id}' is no longer cancelable (a decision is in progress or it already settled)`,
+    )
+  }
   return rowToFusion(loadFusionRow(db, id)!)
 }

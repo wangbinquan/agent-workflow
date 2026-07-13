@@ -21,6 +21,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { fusions, memories, tasks } from '../src/db/schema'
 import {
   approveFusion,
+  cancelFusion,
   createFusion,
   getFusion,
   isValidFusionTransition,
@@ -505,5 +506,37 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
     // The null check sits between the token capture and the memory/seed/startTask.
     expect(src).toMatch(/if \(preconditionToken === null\)/)
+  })
+
+  // RFC-170 T6 (Codex re-review F7): every fusion status writer is a generation-CAS
+  // on (status, currentTaskId) — no writer clobbers a concurrent decision.
+  test('cancel is rejected once a fusion is applying (F7 CAS — no cancel mid-approve)', async () => {
+    const fsOpts: SkillFsOptions = { appHome: h.appHome }
+    await createManagedSkill(h.db, fsOpts, {
+      name: 'lint',
+      description: 'd',
+      bodyMd: 'orig',
+      frontmatterExtra: {},
+    })
+    const mem = approvedGlobalMemory(h.db, 'm')
+    const fusion = await toAwaitingApproval('lint', mem)
+    // Simulate an in-flight approve that has claimed 'applying'.
+    h.db.update(fusions).set({ status: 'applying' }).where(eq(fusions.id, fusion.id)).run()
+    await expect(cancelFusion(h.deps, fusion.id, adminActor)).rejects.toThrow(
+      /cancelable|terminal/i,
+    )
+    expect((await getFusion(h.deps, fusion.id))!.status).toBe('applying') // not canceled
+  })
+
+  test('reconcile + reject-attach + cancel all write via casFusionStatus (source lock)', () => {
+    const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
+    // The old unconditional setFusionStatus/failFusion are gone.
+    expect(src).not.toMatch(/^function setFusionStatus\(/m)
+    expect(src).not.toMatch(/^function failFusion\(/m)
+    // reconcile write-back + reject attach both CAS on currentTaskId.
+    const casCalls = src.match(/casFusionStatus\(/g) ?? []
+    expect(casCalls.length).toBeGreaterThanOrEqual(5) // reconcile(×3) + reject(×2) + cancel + approve
+    expect(src).toMatch(/expectCurrentTaskId: taskId/) // reconcile keys on the task it read
+    expect(src).toMatch(/expectCurrentTaskId: null/) // reject attach keys on the null intermediate
   })
 })
