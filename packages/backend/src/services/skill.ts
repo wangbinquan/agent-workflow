@@ -329,11 +329,26 @@ export async function readSkillContent(
   const raw = readFileSync(realpathInside(root, skillMdPath), 'utf-8')
   const parsed = parseFrontmatter(raw)
   const { name: _ignoredName, description: descRaw, ...rest } = parsed.data
+  // RFC-170 §2/T3: emit the opaque composite precondition token so the client can
+  // echo it on the eventual combined-save (T4) for OCC. metaRevision is read from
+  // the row (not on the Skill DTO); defaults to 0 for legacy rows.
+  const metaRow = await db
+    .select({ metaRevision: skills.metaRevision })
+    .from(skills)
+    .where(eq(skills.id, skill.id))
+    .limit(1)
+  const { encodeSkillToken } = await import('@/services/skillToken')
+  const token = encodeSkillToken({
+    skillId: skill.id,
+    contentVersion: skill.contentVersion,
+    metaRevision: metaRow[0]?.metaRevision ?? 0,
+  })
   return {
     name: skill.name,
     description: typeof descRaw === 'string' ? descRaw : skill.description,
     bodyMd: parsed.body,
     frontmatterExtra: rest,
+    token,
   }
 }
 

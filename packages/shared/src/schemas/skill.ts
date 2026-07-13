@@ -73,6 +73,14 @@ export const SkillContentSchema = z.object({
   description: z.string(),
   bodyMd: z.string(),
   frontmatterExtra: z.record(z.string(), z.unknown()),
+  /**
+   * RFC-170 §2/T3 — opaque composite precondition token
+   * (base64url of [skillId, contentVersion, metaRevision]). The client holds it
+   * from this read and echoes it on the eventual combined-save (T4) so the server
+   * can OCC-reject a write racing another writer / a delete-recreate ABA. Optional
+   * for backward compatibility: readers that predate T4 simply ignore it.
+   */
+  token: z.string().optional(),
 })
 export type SkillContent = z.infer<typeof SkillContentSchema>
 
