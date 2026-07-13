@@ -73,6 +73,7 @@ export const agents = sqliteTable('agents', {
   visibility: text('visibility', { enum: ['private', 'public'] })
     .notNull()
     .default('public'),
+  aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
   // RFC-104: framework-seeded built-in marker. Set ONLY by seedFusionResources
   // (the RFC-101 rows); never writable via any HTTP path (absent from
   // Create*/Update* schemas). isBuiltinRow reads it for the read-only lock
@@ -161,6 +162,17 @@ export const skillSources = sqliteTable('skill_sources', {
   // user as their owner (D11).
   createdBy: text('created_by'),
   schemaVersion: integer('schema_version').notNull().default(1),
+  // RFC-170 §7/§7a (migration 0090). Additive; dormant until batch-B/C wiring.
+  // lifecycle_state: source DELETE with transferred children → 'tombstoned'
+  // (row kept to block same-path re-register; list/reconcile filter non-active).
+  lifecycleState: text('lifecycle_state', { enum: ['active', 'deleting', 'tombstoned'] })
+    .notNull()
+    .default('active'),
+  deletedAt: integer('deleted_at'),
+  // source_revision: monotonic CAS revision (§7a G10-1). reconcile write-back
+  // bumps it in-tx; adoption/rebind CAS on the pre-read value fences a late
+  // reconcile from overwriting an adoption result.
+  sourceRevision: integer('source_revision').notNull().default(0),
   createdAt: integer('created_at')
     .notNull()
     .default(sql`(unixepoch() * 1000)`),
@@ -197,6 +209,7 @@ export const mcps = sqliteTable('mcps', {
   visibility: text('visibility', { enum: ['private', 'public'] })
     .notNull()
     .default('public'),
+  aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
   schemaVersion: integer('schema_version').notNull().default(1),
   createdAt: integer('created_at')
     .notNull()
@@ -236,6 +249,7 @@ export const plugins = sqliteTable('plugins', {
   visibility: text('visibility', { enum: ['private', 'public'] })
     .notNull()
     .default('public'),
+  aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
   schemaVersion: integer('schema_version').notNull().default(1),
   createdAt: integer('created_at')
     .notNull()
@@ -308,8 +322,11 @@ export const skills = sqliteTable(
     managedPath: text('managed_path'), // e.g. 'skills/{name}/files/' relative to app dir
     externalPath: text('external_path'), // absolute path
     // RFC-017: source-folder-derived rows tag the originating skill_sources row.
-    // ON DELETE SET NULL is defensive; service layer deletes child skills first.
-    sourceId: text('source_id').references(() => skillSources.id, { onDelete: 'set null' }),
+    // RFC-170 (G9-1 calibration): the actual migration-0005 FK is NO ACTION, not
+    // SET NULL — declaration corrected to match. SET NULL would misclassify a
+    // transferred child as hand-external on source delete (§7/§10); the service
+    // layer + skill_sources.lifecycle_state tombstone provide restrict semantics.
+    sourceId: text('source_id').references(() => skillSources.id, { onDelete: 'no action' }),
     // RFC-099 ACL (see agents table comment). External skills inherit their
     // source's created_by as owner at import time.
     ownerUserId: text('owner_user_id'),
@@ -321,6 +338,27 @@ export const skills = sqliteTable(
     // DB-migration version). Bumps on every write through commitSkillVersion;
     // always equals the latest skill_versions.version_index for this skill.
     contentVersion: integer('content_version').notNull().default(1),
+    // RFC-170 — skills storage/ACL hardening (migration 0090). All additive;
+    // dormant until batch-B code wires them. See design.md §1/§3/§4/§7a/§8/§10.
+    aclRevision: integer('acl_revision').notNull().default(0), // §8 aclRevision CAS
+    metaRevision: integer('meta_revision').notNull().default(0), // §1 metaRevision monotonic
+    migrationMarker: text('migration_marker'), // §4: NULL|'migrated'|'pending-decision'
+    reservationState: text('reservation_state', { enum: ['reserving', 'ready'] })
+      .notNull()
+      .default('ready'), // §9 creation reservation; non-ready is invisible
+    versionState: text('version_state', {
+      enum: ['legacy-unbackfilled', 'snapshot-unverified', 'snapshot-authoritative', 'quarantined'],
+    })
+      .notNull()
+      .default('legacy-unbackfilled'), // §3 snapshot authority lifecycle (managed only)
+    authorityKind: text('authority_kind', {
+      enum: ['managed', 'source-external', 'hand-external'],
+    })
+      .notNull()
+      .default('managed'), // §G2-1 three-type authority discriminator
+    sourceState: text('source_state', { enum: ['orphaned', 'degraded'] }), // §7/§7a; NULL=normal
+    originSourceId: text('origin_source_id'), // §7: retained provenance even after detach
+    authorityOwnerUserId: text('authority_owner_user_id'), // §7a: content controller ≠ ACL owner
     createdAt: integer('created_at')
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
@@ -369,6 +407,62 @@ export const skillVersions = sqliteTable(
 )
 
 // -----------------------------------------------------------------------------
+// skill_operations — RFC-170 §6a two-phase-commit crash-recovery state machine.
+// One active row per in-flight structural op (reserve / replace / migrate /
+// delete / version-write / adopt-managed). `phase` records the last COMMITted
+// step; recovery is a pure function of (phase, op-scoped FS probe). No `skills`
+// FK cascade — recovery is by op_id ownership, not row lifetime. Existing
+// resources get NO backfill row (dormant table until batch-B wiring).
+// -----------------------------------------------------------------------------
+export const skillOperations = sqliteTable(
+  'skill_operations',
+  {
+    opId: text('op_id').primaryKey(),
+    skillId: text('skill_id').notNull(),
+    kind: text('kind', {
+      enum: ['reserve', 'replace', 'migrate', 'delete', 'version-write', 'adopt-managed'],
+    }).notNull(),
+    phase: text('phase').notNull(), // 'intent'|'fs-staged'|'fs-captured'|'fs-versioned'|'db-committed'|'done'
+    active: integer('active').notNull().default(1), // 0|1 (CHECK in DDL)
+    stagingPath: text('staging_path'),
+    backupPath: text('backup_path'),
+    candidatePath: text('candidate_path'),
+    nextSkillId: text('next_skill_id'), // replace: the second (new) skillId
+    candidateFingerprint: text('candidate_fingerprint'),
+    backupFingerprint: text('backup_fingerprint'),
+    targetVersion: integer('target_version'),
+    generation: integer('generation'),
+    ownerUserId: text('owner_user_id'),
+    preconditionJson: text('precondition_json'), // §7a adopt-managed full precondition
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => ({
+    // At most one active op per skill_id — per-skill recovery index + secondary
+    // guard. The universal cross-op exclusion is skill_operation_locks.
+    activeUq: uniqueIndex('uq_skill_operations_active')
+      .on(t.skillId)
+      .where(sql`${t.active} = 1`),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// skill_operation_locks — RFC-170 §6a/G6-2 universal mutual-exclusion primitive.
+// Every op INSERTs a row per affected skillId in its intent tx; PK conflict on
+// any target = 409 busy. Held until phase='done' (released same tx). This is
+// what locks the SECOND id (replace's next_skill_id) that the ops-table
+// partial-unique cannot. Boot recovers active ops (locks held) then GCs orphans.
+// -----------------------------------------------------------------------------
+export const skillOperationLocks = sqliteTable('skill_operation_locks', {
+  lockedSkillId: text('locked_skill_id').primaryKey(),
+  opId: text('op_id').notNull(),
+  createdAt: integer('created_at')
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+})
+
+// -----------------------------------------------------------------------------
 // workflows — DB is source of truth; YAML import/export is a transport, not source.
 // -----------------------------------------------------------------------------
 export const workflows = sqliteTable('workflows', {
@@ -382,6 +476,7 @@ export const workflows = sqliteTable('workflows', {
   visibility: text('visibility', { enum: ['private', 'public'] })
     .notNull()
     .default('public'),
+  aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
   builtin: integer('builtin', { mode: 'boolean' }).notNull().default(false), // RFC-104 (see agents)
   schemaVersion: integer('schema_version').notNull().default(1),
   createdAt: integer('created_at')
@@ -452,6 +547,7 @@ export const workgroups = sqliteTable('workgroups', {
   visibility: text('visibility', { enum: ['private', 'public'] })
     .notNull()
     .default('public'),
+  aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
   schemaVersion: integer('schema_version').notNull().default(1),
   createdAt: integer('created_at')
     .notNull()
@@ -1807,6 +1903,10 @@ export const fusions = sqliteTable(
     id: text('id').primaryKey(), // ULID
     skillName: text('skill_name').notNull(),
     baseSkillVersion: integer('base_skill_version').notNull(), // OCC baseline
+    // RFC-170 §2 (migration 0090): full composite precondition token captured at
+    // initiate; approve does an in-tx CAS on it. NULL on legacy awaiting-approval
+    // rows → approve fails closed and prompts a re-initiate. Dormant until T6.
+    preconditionToken: text('precondition_token'),
     memoryIdsJson: text('memory_ids_json').notNull(), // string[] selected memory ids
     intent: text('intent').notNull().default(''),
     status: text('status', {
