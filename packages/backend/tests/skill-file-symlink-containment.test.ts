@@ -47,12 +47,15 @@ describe('readSkillFile symlink containment', () => {
     rmSync(outsideDir, { recursive: true, force: true })
   })
 
+  // RFC-170 G1-1: readSkillFile/listSkillFiles read the AUTHORITATIVE snapshot
+  // (versions/v1/files) for managed skills, so plant test fixtures THERE.
+  function snapshotRoot(): string {
+    return join(appHome, 'skills', 'foo', 'versions', 'v1', 'files')
+  }
+
   test('a symlink escaping the skill root is refused (no host-file leak)', async () => {
-    const skill = await getSkill(db, 'foo')
-    if (skill === null) throw new Error('skill missing')
-    const root = skillRoot(skill, fsOpts)
-    // Plant an escaping symlink directly in the skill files dir.
-    symlinkSync(join(outsideDir, 'host-secret.txt'), join(root, 'escape'))
+    // Plant an escaping symlink in the snapshot the read path actually reads.
+    symlinkSync(join(outsideDir, 'host-secret.txt'), join(snapshotRoot(), 'escape'))
     await expect(readSkillFile(db, fsOpts, 'foo', 'escape')).rejects.toBeInstanceOf(ValidationError)
   })
 
@@ -63,9 +66,7 @@ describe('readSkillFile symlink containment', () => {
   })
 
   test('a symlink that stays INSIDE the root still resolves and reads', async () => {
-    const skill = await getSkill(db, 'foo')
-    if (skill === null) throw new Error('skill missing')
-    const root = skillRoot(skill, fsOpts)
+    const root = snapshotRoot()
     writeFileSync(join(root, 'real.txt'), 'inside target', 'utf-8')
     symlinkSync(join(root, 'real.txt'), join(root, 'link.txt'))
     expect(await readSkillFile(db, fsOpts, 'foo', 'link.txt')).toBe('inside target')

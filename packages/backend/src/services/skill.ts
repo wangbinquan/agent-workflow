@@ -592,7 +592,9 @@ export async function listSkillFiles(
 ): Promise<FileNode[]> {
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
-  const root = skillRoot(skill, opts)
+  // RFC-170 (G1-1): the file tree reflects the AUTHORITATIVE snapshot (managed),
+  // not live — consistent with readSkillContent/readSkillFile.
+  const root = skillReadRoot(skill, opts)
   if (!existsSync(root)) return []
   return walkDir(root, '')
 }
@@ -628,7 +630,8 @@ export async function readSkillFile(
 ): Promise<string> {
   const skill = await getSkill(db, name)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${name}' not found`)
-  const root = skillRoot(skill, opts)
+  // RFC-170 (G1-1): read from the AUTHORITATIVE snapshot (managed), not live.
+  const root = skillReadRoot(skill, opts)
   const abs = safeJoin(root, relPath)
   if (!existsSync(abs)) {
     throw new NotFoundError(
