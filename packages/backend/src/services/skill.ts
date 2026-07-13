@@ -426,35 +426,47 @@ export async function readSkillContent(
   const raw = readFileSync(realpathInside(root, skillMdPath), 'utf-8')
   const parsed = parseFrontmatter(raw)
   const { name: _ignoredName, description: descRaw, ...rest } = parsed.data
-  // RFC-170 §2/T3: emit the opaque composite precondition token so the client can
-  // echo it on the eventual combined-save (T4) for OCC. metaRevision is read from
-  // the row (not on the Skill DTO); defaults to 0 for legacy rows.
-  const metaRow = await db
-    .select({ metaRevision: skills.metaRevision })
-    .from(skills)
-    .where(eq(skills.id, skill.id))
-    .limit(1)
+  // RFC-170 §2/T3 + re-review-3: emit the composite precondition token AND (for
+  // hand-external) the DB description from ONE atomic row snapshot, keyed on the
+  // immutable id. Reading skills.description (via getSkill) and metaRevision in two
+  // separate queries let a concurrent description save land between them → the
+  // response would pair an OLD description with the NEW token, and the client's
+  // next save would pass OCC and silently roll the concurrent edit back. If the row
+  // vanished (concurrent delete), that is a 409 — NOT a fabricated metaRevision-0
+  // token pointing at a gone generation.
+  const gen = (
+    await db
+      .select({ description: skills.description, metaRevision: skills.metaRevision })
+      .from(skills)
+      .where(eq(skills.id, skill.id))
+      .limit(1)
+  )[0]
+  if (gen === undefined) {
+    throw new ConflictError('skill-changed', `skill '${name}' changed; reload and retry`)
+  }
   const { encodeSkillToken } = await import('@/services/skillToken')
   const token = encodeSkillToken({
     skillId: skill.id,
     contentVersion: skill.contentVersion,
-    metaRevision: metaRow[0]?.metaRevision ?? 0,
+    metaRevision: gen.metaRevision,
   })
   // RFC-170 (Codex re-review F2-followup): the description AUTHORITY is
   // authority-kind specific, and the frontend seeds its draft from THIS response.
   // managed / source-external → the SKILL.md frontmatter is authoritative
-  // (skills.description is its synced projection). hand-external → the DB
-  // skills.description is the ONLY writable surface (the disk SKILL.md is external,
-  // not ours to write), so return THAT — else a hand-external edit (DB-only) would
-  // read back the stale disk frontmatter and Save could roll the DB edit back.
+  // (contentVersion-tied — the token's contentVersion pins it to the same
+  // generation). hand-external → the DB skills.description is the ONLY writable
+  // surface (the disk SKILL.md is external, not ours to write), so return THAT,
+  // read from the SAME snapshot as the token's metaRevision (above) — else a
+  // hand-external edit (DB-only) would read back the stale disk frontmatter (or a
+  // torn generation) and Save could roll the DB edit back.
   const isHandExternal =
     skill.authorityKind === 'hand-external' ||
     (skill.authorityKind == null && skill.sourceKind === 'external' && skill.sourceId == null)
   const description = isHandExternal
-    ? skill.description
+    ? gen.description
     : typeof descRaw === 'string'
       ? descRaw
-      : skill.description
+      : gen.description
   return {
     name: skill.name,
     description,

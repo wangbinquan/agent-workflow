@@ -303,6 +303,15 @@ reverify 前逐 legacy-unbackfilled managed 跑之——防升级后 legacy skil
   frontmatter，hand-external（`authorityKind==='hand-external'`，legacy 由 external+无 sourceId 派生）
   用 `skill.description`（DB）。锁：hand-external「磁盘≠DB 时读回 DB」+「description save 不被后续读
   回滚」两条。
+
+**Codex 三审（㉙-fix-3，APPROVE F1b + F2b 分流正确 → 再抓一条 read 内非原子）**：
+
+- **F2b-read（high，已修）readSkillContent description 与 token metaRevision 非同代**：`skill.description`
+  经 `getSkill` 取、`metaRevision` 另一次可让出的查询取——中间并发 description 保存提交则响应＝旧
+  description + 新 token，客户端下次保存过 OCC 静默覆盖回旧值（F2 同类、落在后端读）。且 `metaRow`
+  缺失回退 `?? 0` 会造一个指向已消失代的假 token。修：description+metaRevision **同一行快照一次查**
+  （按不可变 id）、行消失即 409（不回退 0）；hand-external description 取自该同一快照。锁：hand-external
+  「description 与 token metaRevision 同代推进」（解 token 断言 metaRevision +1 与 description 同步）。
 - **前端**：`skills.detail.tsx` 删 saveMeta/saveContent 双 PUT mutation，handleSave 统一走
   combinedSave（managed 送 {description,bodyMd}；hand-external 送 {description}；source-external
   无可写→no-op）；ErrorBanner 收敛到 `[combinedSave.error, del.error]`；`skill-md-protected`

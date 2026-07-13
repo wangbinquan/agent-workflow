@@ -20,6 +20,7 @@ import {
   writeSkillContent,
 } from '../src/services/skill'
 import { ConflictError, ValidationError } from '../src/util/errors'
+import { decodeSkillToken } from '../src/services/skillToken'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -233,5 +234,19 @@ describe('RFC-170 T-BSAFE③ — external combined-save (metadata-only)', () => 
     const read2 = await readSkillContent(db, fsOpts, 'e')
     expect(read2.description).toBe('saved-desc') // NOT rolled back to disk 'x'
     expect((await getSkill(db, 'e'))!.description).toBe('saved-desc')
+  })
+
+  // RFC-170 (Codex re-review-3): readSkillContent must read the hand-external
+  // description and the token's metaRevision from ONE row snapshot — else a
+  // concurrent save between two reads pairs an old description with a new token
+  // (silent rollback). This locks that they advance TOGETHER (same generation).
+  test('hand-external: readSkillContent couples description + token metaRevision to one generation', async () => {
+    const before = await readSkillContent(db, fsOpts, 'e')
+    const beforeTok = decodeSkillToken(before.token!)!
+    await updateSkill(db, 'e', { description: 'gen2' }) // bumps description + metaRevision atomically
+    const after = await readSkillContent(db, fsOpts, 'e')
+    const afterTok = decodeSkillToken(after.token!)!
+    expect(after.description).toBe('gen2')
+    expect(afterTok.metaRevision).toBe(beforeTok.metaRevision + 1)
   })
 })
