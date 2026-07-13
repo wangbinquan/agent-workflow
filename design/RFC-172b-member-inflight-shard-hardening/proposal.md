@@ -12,18 +12,20 @@ RFC-172 的 plan.md 把两段**并行度加固**显式降级为 follow-up（原 
 
 in-flight 分发门（`assertNoInFlightDispatch` / `findOpenDispatchTarget`，taskQuestionDispatch.ts）按 `target = override ?? default` **单节点键**判断「该节点有没有未消费的在飞续跑」。两个 member 共享 `__wg_member__`，理论上 member A 的在飞续跑会挡住 member B 的分发。
 
-但调研发现真正的根因**在更底层**：门的「消费」判据最终落到 `resolveHandlerRun`（`packages/shared/src/task-questions.ts:254`），它按 `(nodeId, iteration, loopIter)` 取 lineage 窗口、**完全 shard 盲**（`task-questions.ts` 全文零 shard 引用）。同族的派生老化判据 `isTargetNodeConsumed`（`clarifyRerunLedger.ts:249`）同样 shard 盲。这带来**双向**错误：
+但调研发现真正的根因**在更底层**：门的「消费」判据最终落到 `resolveHandlerRun`（`packages/shared/src/task-questions.ts:254`），它按 `(nodeId, iteration, loopIter)` 取 lineage 窗口、**完全 shard 盲**（`task-questions.ts` 全文零 shard 引用）。self-rollback 门 `hasOpenDispatchedEntryOnHome`（`clarifyRerunLedger.ts:194`，经 `selfHomeHasOpenLedger`）同样 node 键、shard 盲。这带来**双向**错误：
 
 - **假消费（sibling 掩盖）**：member A 的在飞续跑（shard A，pending），被一个 id 更大的 sibling done run（shard B）落进同一 lineage 窗口 → `resolveHandlerRun` 判 member A「已消费」→ 门放行 member B（甚至放行 member A 自己的第二次，串行保护也失效）。
 - **假在飞（obligation 误判）**：反过来，member B 的 queued 条目做 run-obligation 扫描时，会把 member A 的在飞 run（异 shard）算成 member B 的义务 → member B 的答案被误判「还在飞」而不老化 / 悬挂。
 
-即：**在飞门、消费判据、老化判据、渲染、park 分区**——整个 run-resolution 家族对 workgroup member 都是 shard 盲的。RFC-172 的 R2-T3 只把**老化窗口的 node_runs 扫描**加了 shard 过滤，`resolveHandlerRun` / `isTargetNodeConsumed` 家族仍 shard 盲。所以 S2b 不能只改分发门（会造成「门 shard 感知、老化/消费 shard 盲」的不一致读侧）。
+即：**在飞门、消费判据、渲染、park 分区、self-rollback 门**——`resolveHandlerRun` 家族 + `hasOpenDispatchedEntryOnHome` 对 workgroup member 都 shard 盲。所以 S2b 不能只改分发门（会造成「门 shard 感知、消费判据 shard 盲」的不一致读侧）。
+
+> Codex 设计门澄清：**老化路径已闭合**——`isTargetNodeConsumed`（`clarifyRerunLedger.ts:249`）本身 node 键，但其唯一生产调用方 `clarifyQueue`（R2-T3）传入的 `runs` 已在 SQL 层按 shard 过滤（`:146-147`），sibling 到不了该判据。故本 RFC **不碰** `isTargetNodeConsumed`（碰它只扩 API + 回归面、零收益）。
 
 ## 目标
 
-1. 让 run-resolution 家族（`resolveHandlerRun` + `isTargetNodeConsumed` + 全部调用方）对 workgroup member **shard 感知**：一个 shard 的 run 只解析/消费/老化本 shard 的义务，sibling shard 互不干扰。
+1. 让 run-resolution 家族（`resolveHandlerRun` + self-rollback 门 `hasOpenDispatchedEntryOnHome` + 全部调用方）对 workgroup member **shard 感知**：一个 shard 的 run 只解析/消费本 shard 的义务，sibling shard 互不干扰。（老化 `isTargetNodeConsumed` 已由 R2-T3 SQL 闭合，不在本 RFC 范围。）
 2. **并发正确性**：并发两 member 各自反问各自被答，续跑绑定、老化、渲染各自只见本 shard；member A 在飞不挡 member B（异 shard），但同 member 的第二次仍串行（不双铸）。
-3. **S4 顺带收口**：self 回滚守卫（retry 回滚 pre_snapshot）随家族 shard 化一并透传 shardKey（当前 `pickFreshestRun` node 级，多 member 并发回滚才需逐 shard）。
+3. **S4 顺带收口**：self 回滚 open-ledger 门 `hasOpenDispatchedEntryOnHome`（经 `selfHomeHasOpenLedger`）随家族 shard 化透传 shardKey（当前 node 级，member B 的 open ledger 会挡 member A 回滚）。
 
 ## 非目标
 
@@ -41,13 +43,13 @@ in-flight 分发门（`assertNoInFlightDispatch` / `findOpenDispatchTarget`，ta
 - [ ] 并发两 member（shard A/B）在飞：A 的在飞续跑**不**挡 B 的分发；B 铸 shard-B 续跑。
 - [ ] 同一 member（shard A）在飞时，该 member 第二条答案分发**仍被串行挡**（不双铸）。
 - [ ] member B 的 queued 条目 run-obligation 判据只数 shard-B 的 run，不被 sibling 在飞 run 误判为在飞。
-- [ ] member 答案老化 / 渲染 / park 分区各自 shard 隔离（`resolveHandlerRun` / `isTargetNodeConsumed` 传 shardKey）。
+- [ ] member 答案消费 / 渲染 / park 分区 / self-rollback 门各自 shard 隔离（`resolveHandlerRun` / `hasOpenDispatchedEntryOnHome` 传 shardKey）。
 - [ ] **golden-lock**：`shardKey===undefined` 路径全绿（rfc128 / rfc131 / rfc132 / rfc133 / rfc164 既有断言逐字节不变）。
 - [ ] S4：并发两 member retry 回滚各自 `pre_snapshot`，不互相回滚 sibling worktree 状态。
 - [ ] `typecheck && lint && test && format:check` + 单二进制 smoke + CI 全绿。
 
 ## 决策点（设计门 / 用户拍板）
 
-- **D1 范围：宽 vs 窄**。窄=只 shard 化分发门（`findOpenDispatchTarget`）；宽=shard 化整个 `resolveHandlerRun` + `isTargetNodeConsumed` 家族。调研结论**推荐宽**（窄会造成门与老化/消费的读侧不一致）。见 design §决策。
+- **D1 范围：宽 vs 窄**。窄=只 shard 化分发门（`findOpenDispatchTarget`）；宽=shard 化整个 `resolveHandlerRun` + `hasOpenDispatchedEntryOnHome` 家族。调研结论**推荐宽**（窄会造成门与消费判据的读侧不一致）。见 design §决策。
 - **D2 shardKey 传导形态**：`resolveHandlerRun` 加**可选** `shardKey?: string | null`（`undefined`=shard 盲 golden-lock），还是新开 shard 感知的孪生函数？推荐可选参数（复用、零 fork）。
 - **D3 S4 是否并入本 RFC**：self 回滚守卫与家族 shard 化同源，推荐并入（同一 PR 批）。
