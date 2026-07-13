@@ -6,6 +6,8 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
+import { zhCN } from '@/i18n/zh-CN'
+import { enUS } from '@/i18n/en-US'
 
 const REPOS_SRC = readFileSync(
   resolve(import.meta.dirname, '..', 'src', 'routes', 'repos.tsx'),
@@ -54,5 +56,21 @@ describe('/repos page wiring (RFC-024)', () => {
       expect(src).toContain('confirmDelete')
       expect(src).toContain('deleteConfirmTitle')
     }
+  })
+
+  // Regression: the /repos actions-column buttons (刷新 / 删除) shipped in the
+  // zh-CN bundle as the raw English words 'Refresh' / 'Delete' — i.e. never
+  // localized — so the Chinese UI rendered English button labels while every
+  // other repos.* string was translated. repos.tsx wires them via
+  // t('repos.refresh') / t('repos.delete'), so the leak lived purely in the
+  // bundle value. Lock both action buttons to actual Chinese text so a future
+  // edit can't silently re-introduce the English leak.
+  test('zh-CN repos action buttons are localized, not left in English', () => {
+    const CJK = /[一-鿿]/
+    expect(zhCN.repos.refresh).toMatch(CJK)
+    expect(zhCN.repos.delete).toMatch(CJK)
+    // And they must differ from the English bundle's labels.
+    expect(zhCN.repos.refresh).not.toBe(enUS.repos.refresh)
+    expect(zhCN.repos.delete).not.toBe(enUS.repos.delete)
   })
 })
