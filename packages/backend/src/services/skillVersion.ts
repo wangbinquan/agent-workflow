@@ -83,36 +83,12 @@ export function memoriesToUnfuseOnRestore(
     .map((m) => m.id)
 }
 
-const NUL = '\x00'
-
-/**
- * Deterministic sha256 of a files/ tree: sorted relpath + bytes. Binary-safe
- * (hashes raw Buffer). Missing dir hashes to the empty digest.
- */
-export function hashDir(dir: string): string {
-  const h = createHash('sha256')
-  if (!existsSync(dir)) return h.digest('hex')
-  const rels: string[] = []
-  collectFiles(dir, '', rels)
-  rels.sort()
-  for (const rel of rels) {
-    h.update(rel)
-    h.update(NUL)
-    h.update(readFileSync(join(dir, rel)))
-    h.update(NUL)
-  }
-  return h.digest('hex')
-}
-
-function collectFiles(absRoot: string, relRoot: string, out: string[]): void {
-  const entries = readdirSync(join(absRoot, relRoot), { withFileTypes: true })
-  for (const entry of entries) {
-    const childRel = relRoot ? `${relRoot}/${entry.name}` : entry.name
-    if (entry.isDirectory()) collectFiles(absRoot, childRel, out)
-    else if (entry.isFile()) out.push(childRel)
-    // symlinks intentionally skipped (parity with skill.ts walkDir)
-  }
-}
+// RFC-170: hashing primitives moved to the leaf `skillHash` module so
+// skillBootVerify can share them without a skillVersion↔skillBootVerify cycle.
+// Re-exported here for existing importers of `hashDir` from this module.
+export { hashDir, collectFiles, NUL } from '@/services/skillHash'
+import { hashDir, collectFiles } from '@/services/skillHash'
+import { markSkillBootVerified } from '@/services/skillBootVerify'
 
 /** A file in a version snapshot: utf-8 text, or a binary file keyed by hash. */
 export type TreeEntry = { kind: 'text'; content: string } | { kind: 'binary'; hash: string }
@@ -408,6 +384,11 @@ export function commitSkillVersion(
       const skillSet: Partial<typeof skills.$inferInsert> = {
         contentVersion: newVersion,
         updatedAt: now,
+        // RFC-170 §invariant④: a freshly-written snapshot IS the authority. Mark
+        // the durable state authoritative (and boot-verified in-memory after the
+        // publish) so a post-boot create/edit is immediately available under the
+        // isSkillAvailableThisBoot gate (a just-written tree is the hashed tree).
+        versionState: 'snapshot-authoritative',
       }
       if (commit.setDescription !== undefined) skillSet.description = commit.setDescription
       tx.update(skills).set(skillSet).where(eq(skills.name, name)).run()
@@ -444,6 +425,10 @@ export function commitSkillVersion(
       dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-published'))
       dbTxSync(db, (tx) => finishOperation(tx, opId))
     }
+
+    // RFC-170 §invariant④: the snapshot we just published IS verified this boot —
+    // mark it so a post-boot create/edit is immediately available under the gate.
+    markSkillBootVerified(cur.id)
 
     if (!created) throw new Error('skill_versions row disappeared after insert')
     return rowToSkillVersion(created)
