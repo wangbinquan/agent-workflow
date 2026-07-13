@@ -312,6 +312,24 @@ reverify 前逐 legacy-unbackfilled managed 跑之——防升级后 legacy skil
   缺失回退 `?? 0` 会造一个指向已消失代的假 token。修：description+metaRevision **同一行快照一次查**
   （按不可变 id）、行消失即 409（不回退 0）；hand-external description 取自该同一快照。锁：hand-external
   「description 与 token metaRevision 同代推进」（解 token 断言 metaRevision +1 与 description 同步）。
+
+**Codex 四审（㉙-fix-4，F2b-read APPROVE-closed → 两条转独立单元/被 RFC-178 覆盖）**：本轮确认
+F2b-read 闭合（description+metaRevision 同一 id-快照、行消失 409）。余两条**不在 T-BSAFE③（410+
+combined-save funnel）边界内**，均未在本增量修：
+
+- **[high] 最终 OCC 事务未重校 owner（skillVersion.ts commitSkillVersion）**：路由层 `requireResourceOwner`
+  预检后、写事务内只重读 id/contentVersion/metaRevision，不重读 owner——请求等待期 owner transfer
+  后旧 owner 恢复仍过 fence、成撤权后写。**属跨全六写入口（file/restore/ZIP/fusion/combined-save）
+  的 in-tx ACL 原子性**（设计 §318「所有 mutation 最终事务加检」已列），且**非本增量引入**（T4
+  combined-save 与所有 writer 都沿用路由级 ACL）→ 立为独立「version-write in-tx ACL 重校」单元，
+  与 F3/F2b-UX 的 canonical-token-store 单元并列。
+- **[medium] external combined-save 静默丢 frontmatterExtra（skill.ts external 分支）**：external 分支只
+  拒 bodyMd、忽略 frontmatterExtra，hand-external 的 extra-only 请求 200 却零落盘。**真实但落在并行
+  RFC-178（移除外部/父目录 skill，当前 Draft + 协作者未提代码）的删除路径**——修「external 拒 extra」
+  与 RFC-178「删 external」同函数同段直接冲突，按多人协作「冲突优先调和」**不单方面改**；随 RFC-178
+  落地时 external 分支整体移除即自然消解（若 RFC-178 撤销保留 external，则补「external 拒 extra 或
+  独立 description-only 契约」）。
+
 - **前端**：`skills.detail.tsx` 删 saveMeta/saveContent 双 PUT mutation，handleSave 统一走
   combinedSave（managed 送 {description,bodyMd}；hand-external 送 {description}；source-external
   无可写→no-op）；ErrorBanner 收敛到 `[combinedSave.error, del.error]`；`skill-md-protected`
@@ -336,10 +354,11 @@ listFiles + T4a legacy backfill + reverify + T9 注入门）**，余为增强：
 
 - ㉙-fix F3/F2b：file `PUT/DELETE /:name/file` / restore / ZIP overwrite 加复合 token OCC + 前端
   每 skill 单一 canonical token store〔SkillFileTree/restore/save 共享、逐次原子更新〕+ 409 冲突显式
-  reload 流程）· T9b external descriptor-relative 捕获（需 openat/O_NOFOLLOW，Bun/Node 不足则 native
-  helper 或 fail-closed）· migrate（T10）· adopt-managed（T10b，两阶段 capture→confirm）· 批次 C
-  （source lifecycle reconcile 拆 user/system、migration 决策 UI、adoption UI）· F12 统一 task-cancel
-  原语 + clarify 子状态清理（task 层、部分既存）。
+  reload 流程）· **version-write in-tx ACL 重校**（㉙-fix-4 [high]：全六写入口最终事务内按 immutable
+  skillId 重读 owner/admin、拒撤权 actor；设计 §318）· T9b external descriptor-relative 捕获（需
+  openat/O_NOFOLLOW，Bun/Node 不足则 native helper 或 fail-closed）· migrate（T10）· adopt-managed
+  （T10b，两阶段 capture→confirm）· 批次 C（source lifecycle reconcile 拆 user/system、migration
+  决策 UI、adoption UI）· F12 统一 task-cancel 原语 + clarify 子状态清理（task 层、部分既存）。
   **注**：旧 PUT/:name+PUT/content→410 + external combined-save 已落（T-BSAFE③，§6i）；external
   file/tree GET realpath containment 已由 `realpathInside` 落地（T-BSAFE④）；T6 fusion 审批 token
 
