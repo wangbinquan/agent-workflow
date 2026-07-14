@@ -50,6 +50,7 @@ import {
   formatRoomTimestamp,
   formatTurnDuration,
   groupFcAssignments,
+  indexRunHistory,
   isAssignmentCancelable,
   isHumanDeliveryCard,
   memberIndex,
@@ -196,6 +197,10 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
     () => memberIndex(room.data?.config ?? { members: [] }),
     [room.data?.config],
   )
+  // Codex impl-gate finding (450601b7): index once per refetch so the 1s
+  // ticker's per-DispatchCard duration lookup is O(1), not an Array.find
+  // over the full runHistory on every tick.
+  const runEntryById = useMemo(() => indexRunHistory(runHistory), [runHistory])
 
   // RFC-182 — ONE room-level 1s ticker drives every live duration (turn cards
   // + run log); it only runs while something is actually pending/running.
@@ -365,6 +370,7 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
                 message={entry.message}
                 executingPill={executingPills.get(entry.message.id)}
                 runHistory={runHistory}
+                runIndex={runEntryById}
                 runs={nodeRuns.data?.runs ?? []}
                 now={roomNow}
                 data={data}
@@ -849,6 +855,8 @@ interface RoomMessageProps {
   /** RFC-182 — full room history; message-turn cards attach under their
    *  trigger message (turnCardsForMessage). */
   runHistory: readonly WorkgroupRunEntry[]
+  /** Memoized nodeRunId→entry index over runHistory (DispatchCard timer). */
+  runIndex: ReadonlyMap<string, WorkgroupRunEntry>
   /** Live node-run rows (status truth for card chips) + room ticker. */
   runs: readonly NodeRun[]
   now: number
@@ -868,6 +876,7 @@ function RoomMessage({
   message,
   executingPill,
   runHistory,
+  runIndex,
   runs,
   now,
   data,
@@ -952,7 +961,7 @@ function RoomMessage({
               assignment={a}
               data={data}
               members={members}
-              runHistory={runHistory}
+              runIndex={runIndex}
               now={now}
               canceling={canceling}
               onCancel={onCancel}
@@ -1050,7 +1059,7 @@ function DispatchCard({
   assignment,
   data,
   members,
-  runHistory,
+  runIndex,
   now,
   canceling,
   onCancel,
@@ -1061,9 +1070,10 @@ function DispatchCard({
   assignment: WorkgroupRoomAssignment
   data: WorkgroupRoomResponse
   members: Map<string, WorkgroupRuntimeMember>
-  /** Room history + ticker — the card's agent-run timer (same live/settled
-   *  semantics as TurnCard; human to-do cards have no run, hence no timer). */
-  runHistory: readonly WorkgroupRunEntry[]
+  /** Memoized run index + ticker — the card's agent-run timer (same
+   *  live/settled semantics as TurnCard; human to-do cards have no run,
+   *  hence no timer). */
+  runIndex: ReadonlyMap<string, WorkgroupRunEntry>
   now: number
   canceling: boolean
   onCancel: (assignmentId: string) => Promise<unknown>
@@ -1074,7 +1084,7 @@ function DispatchCard({
   const { t } = useTranslation()
   const assignee =
     assignment.assigneeMemberId === null ? undefined : members.get(assignment.assigneeMemberId)
-  const dur = assignmentDurationMs(runHistory, assignment.nodeRunId, now)
+  const dur = assignmentDurationMs(runIndex, assignment.nodeRunId, now)
   const resultBody = resultBodyFor(assignment, data.messages)
   // PR-5 (拍板 #16): a dispatched card assigned to a HUMAN member renders in
   // the to-do form — highlighted + the two delivery entries.

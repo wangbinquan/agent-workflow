@@ -18,6 +18,7 @@ import {
   canPostRoomMessage,
   countMemberActiveRuns,
   groupFcAssignments,
+  indexRunHistory,
   isAssignmentCancelable,
   isHumanDeliveryCard,
   deriveMemberPresence,
@@ -735,18 +736,24 @@ describe('RFC-182 timeline interleave + time helpers', () => {
   })
 
   // 2026-07-14 用户拍板「给所有正在执行的 agent 加计时」——DispatchCard 计时
-  // 走 assignment.nodeRunId → runHistory 关联，语义与 turnDurationMs 一致。
-  test('assignmentDurationMs：关联 run 计时；无 nodeRunId / runHistory 缺条目 → null', () => {
-    const history = [
+  // 走 assignment.nodeRunId → runHistory 索引关联（Map 一次构建、每 tick O(1)
+  // 查找——Codex 实现门 finding），语义与 turnDurationMs 一致。
+  test('assignmentDurationMs：关联 run 计时；无 nodeRunId / 索引缺条目 → null', () => {
+    const index = indexRunHistory([
       turn({ nodeRunId: 'nrA', kind: 'assignment', startedAt: 1_000, finishedAt: null }),
       turn({ nodeRunId: 'nrB', kind: 'assignment', startedAt: 1_000, finishedAt: 31_000 }),
-    ]
-    expect(assignmentDurationMs(history, 'nrA', 66_000)).toBe(65_000) // running 走 now
-    expect(assignmentDurationMs(history, 'nrB', 999_999)).toBe(30_000) // 终态定格
-    expect(assignmentDurationMs(history, null, 66_000)).toBeNull() // human to-do 卡无 run
-    expect(assignmentDurationMs(history, 'nrGone', 66_000)).toBeNull() // refetch gap
+    ])
+    expect(index.size).toBe(2)
+    expect(assignmentDurationMs(index, 'nrA', 66_000)).toBe(65_000) // running 走 now
+    expect(assignmentDurationMs(index, 'nrB', 999_999)).toBe(30_000) // 终态定格
+    expect(assignmentDurationMs(index, null, 66_000)).toBeNull() // human to-do 卡无 run
+    expect(assignmentDurationMs(index, 'nrGone', 66_000)).toBeNull() // refetch gap
     expect(
-      assignmentDurationMs([turn({ nodeRunId: 'nrC', startedAt: null })], 'nrC', 66_000),
+      assignmentDurationMs(
+        indexRunHistory([turn({ nodeRunId: 'nrC', startedAt: null })]),
+        'nrC',
+        66_000,
+      ),
     ).toBeNull() // pending（未起跑）→ em-dash
   })
 })

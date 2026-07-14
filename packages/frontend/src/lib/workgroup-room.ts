@@ -728,6 +728,17 @@ export function turnDurationMs(entry: WorkgroupRunEntry, now: number): number | 
 }
 
 /**
+ * nodeRunId → entry index over runHistory. Built ONCE per refetch (useMemo in
+ * WorkgroupRoom) so the 1s ticker's per-card duration lookups stay O(1) —
+ * a per-card Array.find would make every tick O(assignments × runs).
+ */
+export function indexRunHistory(
+  runHistory: readonly WorkgroupRunEntry[],
+): Map<string, WorkgroupRunEntry> {
+  return new Map(runHistory.map((e) => [e.nodeRunId, e]))
+}
+
+/**
  * DispatchCard timer（2026-07-14 用户拍板：所有正在执行的 agent 都要计时）——
  * duration of the assignment's linked agent run, same live/settled semantics
  * as turnDurationMs. null when the assignment has no linked run (human to-do
@@ -735,12 +746,12 @@ export function turnDurationMs(entry: WorkgroupRunEntry, now: number): number | 
  * (refetch gap — the card renders an em-dash only when a run id exists).
  */
 export function assignmentDurationMs(
-  runHistory: readonly WorkgroupRunEntry[],
+  runIndex: ReadonlyMap<string, WorkgroupRunEntry>,
   nodeRunId: string | null,
   now: number,
 ): number | null {
   if (nodeRunId === null) return null
-  const entry = runHistory.find((e) => e.nodeRunId === nodeRunId)
+  const entry = runIndex.get(nodeRunId)
   if (entry === undefined) return null
   return turnDurationMs(entry, now)
 }
