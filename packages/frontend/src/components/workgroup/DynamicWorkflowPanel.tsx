@@ -151,7 +151,7 @@ export function DynamicWorkflowPanel({
     ) : undefined
 
   return (
-    <div className="task-canvas-layout" data-testid="dw-orchestration-panel">
+    <div className="task-canvas-layout task-canvas-layout--dw" data-testid="dw-orchestration-panel">
       {/* ── canceled: the orchestration flow ended (dw.phase froze at its
           last substate) — but a generated def may still exist (cancel after
           approval) and save-as stays available on terminal tasks. ── */}

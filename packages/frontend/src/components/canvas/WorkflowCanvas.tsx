@@ -389,6 +389,56 @@ function CanvasInner({
     nodesRef.current = nodes
   }, [nodes])
 
+  // A canvas mounted inside a hidden tab pane (`.task-detail__pane[hidden]`
+  // → display:none) measures 0×0, so xyflow resolves its queued init fitView
+  // against that degenerate viewport — zoom clamps to minZoom and the nodes
+  // land off-screen — and v12 never re-queues the fit when the pane unhides
+  // (observed on the dw confirm-gate preview: transform `scale(0.2)`, node
+  // clipped above the frame). Detect the hidden mount by measuring
+  // SYNCHRONOUSLY on the FIRST effect run — the unhide often happens later in
+  // the same React cascade (the task page's default-tab effect), so a
+  // ResizeObserver's first async delivery is already post-unhide and can
+  // never see the hidden state. The armed flag lives in a ref because the
+  // effect re-runs (StrictMode double-invoke; `rf` identity changes) — a
+  // re-run must inherit the pending arm, not re-decide it from the now
+  // visible wrapper. Only a degenerate first measure arms the observer; the
+  // first real size then redoes fitView once. A canvas that mounts visible
+  // never arms this, so user pan/zoom is never clobbered.
+  const hiddenMountArmRef = useRef<boolean | null>(null)
+  useEffect(() => {
+    const el = wrapperRef.current
+    if (el === null) return
+    if (hiddenMountArmRef.current === null) {
+      const rect = el.getBoundingClientRect()
+      hiddenMountArmRef.current = resolveHiddenMountRefit(null, rect.width, rect.height).armed
+    }
+    if (hiddenMountArmRef.current !== true) return
+    let raf = 0
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[entries.length - 1]
+      if (entry === undefined) return
+      const next = resolveHiddenMountRefit(
+        hiddenMountArmRef.current,
+        entry.contentRect.width,
+        entry.contentRect.height,
+      )
+      hiddenMountArmRef.current = next.armed
+      if (!next.refit) return
+      ro.disconnect()
+      // Next frame: xyflow's own ResizeObservers (same delivery batch) must
+      // ingest the new pane dimensions + re-measured node sizes before the
+      // fit computes its viewport.
+      raf = requestAnimationFrame(() => {
+        void rf.fitView()
+      })
+    })
+    ro.observe(el)
+    return () => {
+      ro.disconnect()
+      cancelAnimationFrame(raf)
+    }
+  }, [rf])
+
   useEffect(() => {
     const defChanged = definition !== externalDefRef.current
     const statusChanged = nodeStatuses !== externalStatusesRef.current
@@ -1523,6 +1573,28 @@ function CanvasInner({
 
 const FALLBACK_X = (idx: number) => 80 + (idx % 4) * 280
 const FALLBACK_Y = (idx: number) => 80 + Math.floor(idx / 4) * 200
+
+/**
+ * Decision oracle for the hidden-mount refit (pure — see the ResizeObserver
+ * effect in CanvasInner). `armed` starts as `null` (nothing observed yet):
+ * - first observation decides arming: a degenerate (zero) size means the
+ *   canvas mounted inside a hidden pane and the init fitView was garbage;
+ * - while armed, the first real size flips `refit` (caller fits + stops
+ *   observing); further zero sizes keep waiting;
+ * - a canvas whose first observation is already real never arms — its init
+ *   fitView was computed against true dimensions and any later resize must
+ *   NOT clobber the user's pan/zoom.
+ */
+export function resolveHiddenMountRefit(
+  armed: boolean | null,
+  width: number,
+  height: number,
+): { armed: boolean; refit: boolean } {
+  const degenerate = width <= 0 || height <= 0
+  if (armed === null) return { armed: degenerate, refit: false }
+  if (armed && !degenerate) return { armed: false, refit: true }
+  return { armed, refit: false }
+}
 
 interface PortInventory {
   inputs: string[]

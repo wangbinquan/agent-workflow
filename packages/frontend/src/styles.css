@@ -4052,6 +4052,20 @@ details.form-section[open] > summary {
   grid-template-columns: minmax(280px, 1fr) minmax(320px, 480px);
 }
 
+/* RFC-167 dw orchestration pane (stacked gate/progress card + DAG preview):
+ * the card row hugs its content and the preview absorbs the remaining pane
+ * height. Without an explicit template the pane-filling grid (height 100%
+ * via `.task-detail__pane > .task-canvas-layout`) STRETCHES both auto rows
+ * equally, inflating the two-line「编排确认门」card to half the pane. */
+.task-canvas-layout--dw {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+/* Keep the preview legible on short windows; the pane scrolls if needed. */
+.task-canvas-layout--dw > .canvas-frame--task {
+  min-height: 280px;
+}
+
 /* ---- Launcher pickers ---- */
 
 .files-picker {

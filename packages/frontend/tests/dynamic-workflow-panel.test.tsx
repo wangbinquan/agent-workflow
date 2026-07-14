@@ -183,6 +183,12 @@ describe('DynamicWorkflowPanel — confirm gate', () => {
     // the real canvas renders the generated node
     expect(await screen.findByTestId('dw-preview-canvas')).toBeTruthy()
     await waitFor(() => expect(screen.getByText('wg-planner')).toBeTruthy())
+    // Layout contract (2026-07-14「编排确认门太大」): the stacked card+preview
+    // grid must carry the --dw row-sizing modifier — without it the
+    // pane-filling grid stretches the two-line gate card to half the pane.
+    expect(screen.getByTestId('dw-orchestration-panel').className).toBe(
+      'task-canvas-layout task-canvas-layout--dw',
+    )
 
     fireEvent.click(await screen.findByTestId('dw-gate-approve'))
     await waitFor(() => {
