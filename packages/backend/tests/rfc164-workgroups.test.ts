@@ -156,12 +156,14 @@ describe('RFC-164 — CreateWorkgroupSchema shape', () => {
   test('workgroupLaunchReadiness: no-agent-member / leader-missing / ready', () => {
     const human = { id: 'h1', memberType: 'human' as const }
     const agentA = { id: 'a1', memberType: 'agent' as const }
+    // RFC-187 TRAP-1 加了 advisory `warnings` 层（不阻启动）；这里的 blocking
+    // golden 全部零 warning——warning 三态见 rfc187-launch-readiness.test.ts。
     expect(
       workgroupLaunchReadiness({ mode: 'leader_worker', leaderMemberId: null, members: [human] }),
-    ).toEqual({ ready: false, reasons: ['no-agent-member', 'leader-missing'] })
+    ).toEqual({ ready: false, reasons: ['no-agent-member', 'leader-missing'], warnings: [] })
     expect(
       workgroupLaunchReadiness({ mode: 'leader_worker', leaderMemberId: null, members: [agentA] }),
-    ).toEqual({ ready: false, reasons: ['leader-missing'] })
+    ).toEqual({ ready: false, reasons: ['leader-missing'], warnings: [] })
     // leader id pointing at a non-agent member is NOT ready
     expect(
       workgroupLaunchReadiness({
@@ -169,18 +171,18 @@ describe('RFC-164 — CreateWorkgroupSchema shape', () => {
         leaderMemberId: 'h1',
         members: [human, agentA],
       }),
-    ).toEqual({ ready: false, reasons: ['leader-missing'] })
+    ).toEqual({ ready: false, reasons: ['leader-missing'], warnings: [] })
     expect(
       workgroupLaunchReadiness({
         mode: 'leader_worker',
         leaderMemberId: 'a1',
         members: [human, agentA],
       }),
-    ).toEqual({ ready: true, reasons: [] })
+    ).toEqual({ ready: true, reasons: [], warnings: [] })
     // free_collab only needs an agent member
     expect(
       workgroupLaunchReadiness({ mode: 'free_collab', leaderMemberId: null, members: [agentA] }),
-    ).toEqual({ ready: true, reasons: [] })
+    ).toEqual({ ready: true, reasons: [], warnings: [] })
   })
 
   test('free_collab needs no leader and resolves switches as all-on', () => {

@@ -132,7 +132,7 @@ export async function initScratchRepo(opts: {
 export async function runGit(
   cwd: string,
   args: string[],
-  opts?: { env?: Record<string, string | undefined> },
+  opts?: { env?: Record<string, string | undefined>; stdin?: string },
 ): Promise<GitRunResult> {
   const proc = Bun.spawn({
     cmd: ['git', '-C', cwd, ...args],
@@ -144,7 +144,10 @@ export async function runGit(
       opts?.env === undefined ? nonInteractiveGitEnv() : { ...nonInteractiveGitEnv(), ...opts.env },
     stdout: 'pipe',
     stderr: 'pipe',
-    stdin: 'ignore',
+    // RFC-187 §4-2: `update-index --index-info` reads entries from stdin — the
+    // ONLY plumbing shape git offers for surgical index edits. Callers that
+    // don't pass `stdin` keep the historical ignore (no behavior change).
+    stdin: opts?.stdin === undefined ? 'ignore' : new TextEncoder().encode(opts.stdin),
   })
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -1330,6 +1333,92 @@ export async function mergeTreeInMemory(
     if (tab >= 0) paths.add(line.slice(tab + 1))
   }
   return { mergedTree, conflicts: [...paths], rawConflictOutput: r.stdout }
+}
+
+/**
+ * RFC-187 §4-2 — the SALVAGE tree of a conflicted 3-way merge: start from the
+ * conflicted `mergedTree` and revert every conflicted path to its `ours` entry
+ * (ours blob/gitlink restored; path deleted when ours lacks it). Materializing
+ * the result lands every cleanly-merged path NOW while each conflicted path
+ * stays exactly as canonical has it — the conflict remains for the merge agent
+ * / human, but clean sibling work is no longer held hostage by whole-repo
+ * all-or-nothing merge-back (workgroup-e2e-audit §4-2: N-way fan-out used to
+ * drop the loser's ENTIRE delta).
+ *
+ * FAIL-CLOSED: returns null (caller keeps today's withhold-everything path)
+ * whenever a conflicted path involves a DIRECTORY entry on either side
+ * (file↔dir / rename family — index surgery there is not a plain entry swap).
+ * Plain content / modify-delete / binary / gitlink conflicts all salvage.
+ *
+ * Returns the salvage tree + the paths it actually lands relative to `oursTree`
+ * (empty ⇒ nothing clean to land — the caller can skip materialize entirely).
+ */
+export async function buildSalvageTree(
+  repoPath: string,
+  opts: {
+    /** Conflicted merge tree from `mergeTreeInMemory`. */
+    mergedTree: string
+    /** `ours` commit (canonical snapshot the merge ran against). */
+    ours: string
+    /** Conflicted paths reported by `mergeTreeInMemory`. */
+    conflicts: string[]
+  },
+): Promise<{ tree: string; landedPaths: string[] } | null> {
+  if (opts.conflicts.length === 0) return null
+  const infoLines: string[] = []
+  for (const p of opts.conflicts) {
+    const inOurs = await runGit(repoPath, ['ls-tree', opts.ours, '--', p])
+    if (inOurs.exitCode !== 0) {
+      throw new DomainError('salvage-tree-failed', `ls-tree ours: ${inOurs.stderr.trim()}`, 500)
+    }
+    const inMerged = await runGit(repoPath, ['ls-tree', opts.mergedTree, '--', p])
+    if (inMerged.exitCode !== 0) {
+      throw new DomainError('salvage-tree-failed', `ls-tree merged: ${inMerged.stderr.trim()}`, 500)
+    }
+    // Directory entry on either side ⇒ exotic conflict class — fail closed.
+    if (/^\d+ tree /m.test(inOurs.stdout) || /^\d+ tree /m.test(inMerged.stdout)) return null
+    const oursLine = inOurs.stdout.trimEnd()
+    if (oursLine === '') {
+      // Absent in ours → revert = delete from the merged tree (mode 0 removes).
+      infoLines.push(`0 ${'0'.repeat(40)}\t${p}`)
+    } else {
+      // `ls-tree` line format is accepted verbatim by `update-index --index-info`.
+      infoLines.push(oursLine)
+    }
+  }
+  const tmpIndex = join(tmpdir(), `aw-salvage-index-${process.pid}-${isoTmpIndexCounter++}`)
+  const env = { GIT_INDEX_FILE: tmpIndex }
+  try {
+    const seed = await runGit(repoPath, ['read-tree', opts.mergedTree], { env })
+    if (seed.exitCode !== 0) {
+      throw new DomainError('salvage-tree-failed', `read-tree: ${seed.stderr.trim()}`, 500)
+    }
+    const surgery = await runGit(repoPath, ['update-index', '--index-info'], {
+      env,
+      stdin: infoLines.join('\n') + '\n',
+    })
+    if (surgery.exitCode !== 0) {
+      throw new DomainError('salvage-tree-failed', `index-info: ${surgery.stderr.trim()}`, 500)
+    }
+    const writeTree = await runGit(repoPath, ['write-tree'], { env })
+    if (writeTree.exitCode !== 0) {
+      throw new DomainError('salvage-tree-failed', `write-tree: ${writeTree.stderr.trim()}`, 500)
+    }
+    const tree = writeTree.stdout.trim()
+    const oursTree = (await runGit(repoPath, ['rev-parse', `${opts.ours}^{tree}`])).stdout.trim()
+    const landed =
+      tree === oursTree
+        ? []
+        : (await runGit(repoPath, ['diff', '--name-only', oursTree, tree])).stdout
+            .split('\n')
+            .map((l) => l.trim())
+            .filter((l) => l !== '')
+    return { tree, landedPaths: landed }
+  } finally {
+    await unlink(tmpIndex).catch(() => {
+      /* best-effort */
+    })
+  }
 }
 
 /** RFC-130 P2-2: wrap a tree OID in a commit so `git worktree add` (which needs a

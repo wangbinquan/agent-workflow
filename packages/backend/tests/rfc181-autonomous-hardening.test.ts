@@ -368,13 +368,19 @@ describe('RFC-181 C — 源级契约锁', () => {
     // 晚到压制修正必须持久化（allowTerminal 逃生门——行已 done）+ 结构化列。
     expect(scheduler).toContain('allowTerminal: true')
     expect(scheduler).toContain("reason: 'wg-clarify-suppressed-late'")
-    expect(scheduler).toContain("failureCode: 'clarify-forbidden'")
+    // ≥2：DB 列（setNodeRunStatus extra）+ hook 返回体（引擎结构化路由的输入
+    // ——缺后者曾迫使引擎按 errorMessage 前缀匹配，调度架构审视 2026-07-14）。
+    expect(scheduler.split("failureCode: 'clarify-forbidden'").length - 1).toBeGreaterThanOrEqual(2)
   })
 
-  test('workgroupRunner：leader/worker 均有 CLARIFY_FORBIDDEN_PREFIX 重试分支 + 三调用点传 clarifyEnabled', () => {
+  test('workgroupRunner：leader/worker 均有 clarify-forbidden 重试分支（结构化路由）+ 三调用点传 clarifyEnabled', () => {
     const runner = SRC('services/workgroupRunner.ts')
-    const hits = runner.split('CLARIFY_FORBIDDEN_PREFIX').length - 1
-    expect(hits).toBeGreaterThanOrEqual(3) // import + leader 分支 + worker 分支
+    // 调度架构审视 2026-07-14：软拒分支改按结构化 failureCode 路由（leader +
+    // worker 各一处）。RFC-145 棘轮：errorMessage 是人读面包屑，绝不再当机器键
+    // —— startsWith(CLARIFY_FORBIDDEN_PREFIX) 回潮即红。
+    const hits = runner.split("result.failureCode === 'clarify-forbidden'").length - 1
+    expect(hits).toBeGreaterThanOrEqual(2) // leader 分支 + worker 分支
+    expect(runner).not.toContain('startsWith(CLARIFY_FORBIDDEN_PREFIX)')
     expect(runner).toContain('Ask-back is OFF in this autonomous group')
     expect(
       runner.split('clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false)').length - 1,

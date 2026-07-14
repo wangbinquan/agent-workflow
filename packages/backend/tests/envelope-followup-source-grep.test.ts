@@ -12,17 +12,22 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 
 describe('RFC-042 source-code-text guards', () => {
-  test('scheduler.ts retries default is `?? 3`, not `?? 0`', () => {
+  test('scheduler.ts retries default rides DEFAULT_PROTOCOL_RETRY_BUDGET (=3), not `?? 0`', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
       'utf8',
     )
     // RFC-115: the per-node `retries` override was removed; the budget is now
     // the global `opts.defaultNodeRetries`. The RFC-042 §A4 invariant (default
-    // 3, never the legacy `?? 0`) lives on that fallback now.
-    expect(src).toMatch(/opts\.defaultNodeRetries\s*\?\?\s*3\b/)
+    // 3, never the legacy `?? 0`) lives on that fallback. 调度架构审视
+    // 2026-07-14: the literal `?? 3` became the shared cross-engine constant
+    // (retry-budget-single-source.test.ts locks all four consumer sites); the
+    // §A4 VALUE invariant is asserted on the constant itself here.
+    expect(src).toMatch(/opts\.defaultNodeRetries\s*\?\?\s*DEFAULT_PROTOCOL_RETRY_BUDGET\b/)
+    expect(DEFAULT_PROTOCOL_RETRY_BUDGET).toBe(3)
     expect(src).not.toMatch(/opts\.defaultNodeRetries\s*\?\?\s*0\b/)
     // The per-node retries lookup is gone entirely (RFC-115 D2 — node no longer overrides).
     expect(src).not.toMatch(/pickNumber\(\s*node\s*,\s*['"]retries['"]/)

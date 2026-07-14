@@ -62,6 +62,11 @@ if (!agentName) fail('missing --agent <name>')
 interface WaitMixin {
   waitFile?: string
   sessionId?: string
+  /** RFC-187 §4-2 e2e: relative paths written into the process CWD (the run's
+   *  iso worktree) BEFORE the step's normal behavior — lets a scripted member
+   *  actually produce worktree deltas so merge-back / salvage paths run for
+   *  real. Absent ⇒ no writes (every existing plan unaffected). */
+  writeFiles?: Record<string, string>
 }
 interface OutputStep extends WaitMixin {
   output: Record<string, string>
@@ -143,6 +148,17 @@ if (typeof waitFile === 'string' && waitFile.length > 0) {
   while (!existsSync(target)) {
     if (Date.now() > deadline) fail(`waitFile '${waitFile}' never appeared`, 3)
     Bun.sleepSync(20)
+  }
+}
+
+// RFC-187 §4-2: write scripted worktree deltas (relative to cwd = the run's iso
+// worktree) before the envelope/crash behavior — the real merge-back then runs.
+const writeFiles = (step as { writeFiles?: unknown }).writeFiles
+if (writeFiles !== undefined && writeFiles !== null && typeof writeFiles === 'object') {
+  for (const [rel, content] of Object.entries(writeFiles as Record<string, string>)) {
+    const abs = join(process.cwd(), rel)
+    mkdirSync(join(abs, '..'), { recursive: true })
+    writeFileSync(abs, content)
   }
 }
 

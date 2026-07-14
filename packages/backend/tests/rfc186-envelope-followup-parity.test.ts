@@ -124,8 +124,12 @@ describe('RFC-186 — source locks (workgroupRunner)', () => {
     expect(count).toBeGreaterThanOrEqual(2)
   })
 
-  test('retry budget raised to normal-node parity (3)', () => {
-    expect(src).toContain('const WG_PROTOCOL_RETRIES = 3')
+  test('retry budget rides the shared normal-node budget (parity by construction)', () => {
+    // 调度架构审视 2026-07-14：字面量 `= 3` 收敛为跨引擎共享常量——parity 从
+    // 「注释对齐」升级为「同一符号」；常量取值 3 由
+    // retry-budget-single-source.test.ts / envelope-followup-source-grep 锁定。
+    expect(src).toContain('const WG_PROTOCOL_RETRIES = DEFAULT_PROTOCOL_RETRY_BUDGET')
+    expect(src).not.toContain('const WG_PROTOCOL_RETRIES = 3')
   })
 
   test('failed message turn is surfaced to the room, not silently swallowed', () => {

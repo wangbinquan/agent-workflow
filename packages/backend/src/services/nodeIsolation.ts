@@ -14,6 +14,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  buildSalvageTree,
   commitTree,
   createIsolatedWorktree,
   deleteIsoRefs,
@@ -267,6 +268,13 @@ export interface MergeBackConflict {
   canonWorktreePath: string
   /** Canonical HEAD when the iso was created — materializeTree's taskBaseHead (§5.3). */
   taskBaseHead: string
+  /**
+   * RFC-187 §4-2 — cleanly-merged paths ALREADY materialized into canonical
+   * despite this repo's conflict (per-path salvage; empty when the salvage
+   * failed closed on an exotic conflict class or nothing clean differed).
+   * The conflicted paths above remain withheld for the merge agent / human.
+   */
+  salvagedPaths: string[]
 }
 
 export interface MergeBackResult {
@@ -302,6 +310,37 @@ export async function mergeBackNodeIso(
       theirs,
     })
     if (merge.conflicts.length > 0) {
+      // RFC-187 §4-2 — per-path salvage: land the cleanly-merged paths NOW
+      // (mergedTree with each conflicted path reverted to `ours`), withholding
+      // ONLY the conflicted ones. Idempotent on replay: a re-run's `ours`
+      // already contains the salvage, so the re-merge is clean on those paths
+      // and the salvage tree equals ours (landedPaths=[] → materialize
+      // skipped). buildSalvageTree fails closed (null) on directory-entry
+      // conflict classes — that repo keeps today's withhold-everything shape.
+      let salvagedPaths: string[] = []
+      try {
+        const salvage = await buildSalvageTree(r.canonWorktreePath, {
+          mergedTree: merge.mergedTree,
+          ours,
+          conflicts: merge.conflicts,
+        })
+        if (salvage !== null && salvage.landedPaths.length > 0) {
+          const canonCurrentTree = await treeOf(r.canonWorktreePath, ours)
+          await materializeTree(r.canonWorktreePath, {
+            mergedTree: salvage.tree,
+            canonCurrentTree,
+            taskBaseHead: r.taskBaseHead,
+          })
+          salvagedPaths = salvage.landedPaths
+        }
+      } catch (err) {
+        // Salvage is strictly best-effort — a failure here must never turn a
+        // resolvable conflict into a hard error; fall back to withhold-all.
+        log?.warn('merge-back per-path salvage failed (falling back to withhold-all)', {
+          worktreeDirName: r.worktreeDirName,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
       conflicts.push({
         worktreeDirName: r.worktreeDirName,
         paths: merge.conflicts,
@@ -310,6 +349,7 @@ export async function mergeBackNodeIso(
         base: r.baseSnapshot,
         canonWorktreePath: r.canonWorktreePath,
         taskBaseHead: r.taskBaseHead,
+        salvagedPaths,
       })
       continue
     }
@@ -583,10 +623,35 @@ export async function completeHumanResolvedConflict(
     const nodeTree = nodeTrees[r.worktreeDirName]
     const suffix = r.worktreeDirName === '' ? 'repo' : r.worktreeDirName
     const resolveIso = join(handle.containerPath, `resolve-${suffix}`)
-    // No recorded delta for this repo, or the human's resolve-iso is gone / not a
-    // worktree (GC'd, never created) → cannot complete; keep it parked.
-    if (nodeTree === undefined || !existsSync(resolveIso) || !(await isGitWorkTree(resolveIso))) {
-      unresolved.push(r.worktreeDirName)
+    // No recorded delta for this repo → nothing to merge; it cannot be the
+    // reason the run parked. Skip instead of blocking the whole resolution.
+    if (nodeTree === undefined) continue
+    // RFC-187 (design-gate P1-9 precondition) — a repo WITHOUT a resolve-iso is
+    // NOT automatically unresolved: in a multi-repo conflict, the repos that
+    // merged clean at conflict time materialized immediately and never got a
+    // resolve-iso — the old unconditional `unresolved.push` here wedged such a
+    // task parked FOREVER even after the human resolved the one真正 conflicted
+    // repo. Re-probe against CURRENT canonical: clean ⇒ (re-)materialize — a
+    // byte-identical no-op when the delta already landed — and count it
+    // resolved; a genuine conflict (resolve-iso GC'd / deleted by hand) stays
+    // parked, exactly the old behavior for the truly-conflicted repo.
+    if (!existsSync(resolveIso) || !(await isGitWorkTree(resolveIso))) {
+      const ours = await snapshotFullState(r.canonWorktreePath, { log })
+      const probe = await mergeTreeInMemory(r.canonWorktreePath, {
+        base: r.baseSnapshot,
+        ours,
+        theirs: nodeTree,
+      })
+      if (probe.conflicts.length > 0) {
+        unresolved.push(r.worktreeDirName)
+        continue
+      }
+      const canonCurrentTree = await treeOf(r.canonWorktreePath, ours)
+      await materializeTree(r.canonWorktreePath, {
+        mergedTree: probe.mergedTree,
+        canonCurrentTree,
+        taskBaseHead: r.taskBaseHead,
+      })
       continue
     }
     // ours-at-conflict = the resolve-iso commit's PARENT — pinned in §6.2① exactly

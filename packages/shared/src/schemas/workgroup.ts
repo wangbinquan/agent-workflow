@@ -261,10 +261,25 @@ export type RenameWorkgroup = z.infer<typeof RenameWorkgroupSchema>
 /**
  * Launch-readiness oracle (决策 #21 — save is lenient, launch is strict).
  * The launch gate (PR-3) and the detail-page banner both consume this.
+ *
+ * RFC-187 TRAP-1 (AC-6): `warnings` is the ADVISORY tier — structurally
+ * suspect rosters that still launch (the user may mean it), surfaced by the
+ * same single oracle everywhere a readiness read happens. Per the design-gate
+ * correction (§8 P1-5尾) only structurally checkable codes exist: the agent
+ * `readonly` field is gone (RFC-130), so a "no-producer" heuristic has no
+ * data source and was dropped.
  */
 export interface WorkgroupLaunchReadiness {
   ready: boolean
   reasons: Array<'no-agent-member' | 'leader-missing'>
+  /**
+   * Advisory (never blocks launch): `no-non-leader-worker` — a leader_worker
+   * roster whose ONLY member is the leader itself; there is nobody (agent or
+   * human) to dispatch to, so the leader can only spin idle / declare done
+   * with zero delegated work (workgroup-e2e-audit TRAP-1: such a group used
+   * to sail through readiness and die as an opaque protocol failure).
+   */
+  warnings: Array<'no-non-leader-worker'>
 }
 
 export function workgroupLaunchReadiness(group: {
@@ -273,14 +288,20 @@ export function workgroupLaunchReadiness(group: {
   members: ReadonlyArray<{ id: string; memberType: WorkgroupMemberType }>
 }): WorkgroupLaunchReadiness {
   const reasons: WorkgroupLaunchReadiness['reasons'] = []
+  const warnings: WorkgroupLaunchReadiness['warnings'] = []
   const agentMembers = group.members.filter((m) => m.memberType === 'agent')
   if (agentMembers.length === 0) reasons.push('no-agent-member')
   if (group.mode === 'leader_worker') {
     const leaderOk =
       group.leaderMemberId !== null && agentMembers.some((m) => m.id === group.leaderMemberId)
     if (!leaderOk) reasons.push('leader-missing')
+    // Only meaningful once a leader resolves — a leaderless roster already
+    // carries the blocking `leader-missing` and needs no second banner line.
+    if (leaderOk && group.members.every((m) => m.id === group.leaderMemberId)) {
+      warnings.push('no-non-leader-worker')
+    }
   }
-  return { ready: reasons.length === 0, reasons }
+  return { ready: reasons.length === 0, reasons, warnings }
 }
 
 /**

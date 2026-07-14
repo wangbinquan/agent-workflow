@@ -21,6 +21,7 @@
 // pass instead of re-minted.
 
 import {
+  DEFAULT_PROTOCOL_RETRY_BUDGET,
   FOLLOWUP_POLICY,
   normalizeWgTaskTitle,
   parseWgAssignmentsPort,
@@ -59,7 +60,6 @@ import {
   workgroupMessages,
 } from '@/db/schema'
 import { getAgent } from '@/services/agent'
-import { CLARIFY_FORBIDDEN_PREFIX } from '@/services/envelope'
 import { mintNodeRun } from '@/services/nodeRunMint'
 import { setNodeRunStatus } from '@/services/lifecycle'
 import { advanceMemberCursor, casAssignmentStatus } from '@/services/workgroupLifecycle'
@@ -173,10 +173,11 @@ export interface WorkgroupEngineResult {
   detail?: { summary: string; message: string; nodeId?: string }
 }
 
-/** Per-turn protocol-violation retries before the turn is failed. RFC-186 §2.4:
- *  raised 1→3 to match the normal-node default (scheduler defaultNodeRetries ?? 3)
- *  — a probabilistic model format slip deserves the same budget everywhere. */
-const WG_PROTOCOL_RETRIES = 3
+/** Per-turn protocol-violation retries before the turn is failed. RFC-186 §2.4
+ *  raised 1→3 to match the normal-node default; now structurally the SAME
+ *  shared budget (a probabilistic model format slip deserves the same budget
+ *  everywhere — the comment-only alignment is gone). */
+const WG_PROTOCOL_RETRIES = DEFAULT_PROTOCOL_RETRY_BUDGET
 
 /**
  * RFC-186 §2.2 — unify the workgroup turn's retry-vs-fatal decision on the SAME
@@ -1307,7 +1308,10 @@ async function driveLeaderTurn(
       // the leader slides into idle and the autonomous nudge / round caps
       // take over (design §2.2). Distinct from the malformed
       // `clarify-questions-` family below, whose exhaustion is fatal.
-      if (msg.startsWith(CLARIFY_FORBIDDEN_PREFIX)) {
+      // Routed on the structured failureCode (RFC-145 ratchet) — both producer
+      // paths (runNode envelope-time reject AND the hook's late-suppress
+      // correction) carry it; errorMessage stays human-only.
+      if (result.failureCode === 'clarify-forbidden') {
         if (attempt < WG_PROTOCOL_RETRIES) {
           errorNotice =
             '- Ask-back is OFF in this autonomous group. Do NOT emit <workflow-clarify>.\n' +
@@ -1567,9 +1571,8 @@ async function driveAssignmentTurn(
       // RFC-181 C — suppressed ask-back is a RETRYABLE protocol nudge for the
       // member too: re-prompt it to proceed on its own; exhaustion falls
       // through to the normal failed handling (assignment failed floats up on
-      // the card — never a park).
-      const failMsg = result.errorMessage ?? 'run failed'
-      if (failMsg.startsWith(CLARIFY_FORBIDDEN_PREFIX) && attempt < WG_PROTOCOL_RETRIES) {
+      // the card — never a park). Structured failureCode routing (RFC-145).
+      if (result.failureCode === 'clarify-forbidden' && attempt < WG_PROTOCOL_RETRIES) {
         errorNotice =
           '- Ask-back is OFF in this autonomous group. Do NOT emit <workflow-clarify>.\n' +
           '  Proceed with your best judgment and emit wg_result as usual.'
@@ -1595,14 +1598,15 @@ async function driveAssignmentTurn(
       if (config.mode === 'free_collab') {
         // bounded re-open (retry budget) — count LIVE, not the turn-start
         // snapshot, or every failure sees a stale low count and reopens
-        // past the cap.
+        // past the cap. Budget = shared DEFAULT_PROTOCOL_RETRY_BUDGET, read
+        // here as TOTAL runs for the assignment (not retries-after-first).
         const priorRuns = (
           await db
             .select({ id: nodeRuns.id })
             .from(nodeRuns)
             .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.shardKey, assignment.id)))
         ).length
-        if (priorRuns < 3) {
+        if (priorRuns < DEFAULT_PROTOCOL_RETRY_BUDGET) {
           await casAssignmentStatus(db, assignment.id, 'failed', 'open', {
             assigneeMemberId: null,
             nodeRunId: null,

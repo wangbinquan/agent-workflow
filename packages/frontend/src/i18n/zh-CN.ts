@@ -1050,6 +1050,7 @@ export interface Resources {
     readiness: {
       noAgentMember: string
       leaderMissing: string
+      noNonLeaderWorker: string
     }
     // Member gallery + context panel (detail page, RFC-168).
     membersEmpty: string
@@ -3988,6 +3989,8 @@ export const zhCN: Resources = {
     readiness: {
       noAgentMember: '还没有 agent 成员，无法启动。',
       leaderMissing: 'Leader-Worker 模式需要指定一名 agent 成员为 leader。',
+      noNonLeaderWorker:
+        '花名册里只有 leader 自己——没有可派活的成员，启动后 leader 只能空转（仍可启动）。',
     },
     membersEmpty: '还没有成员。用下方按钮添加 agent 或人类成员。',
     memberTypeAgent: '代理',

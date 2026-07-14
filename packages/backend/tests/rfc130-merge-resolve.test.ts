@@ -67,6 +67,7 @@ async function makeConflict(): Promise<{
     base,
     canonWorktreePath: canon,
     taskBaseHead,
+    salvagedPaths: [], // RFC-187 §4-2: this fixture's conflict has no clean paths to salvage
   }
   return { canon, conflict, theirs }
 }

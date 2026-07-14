@@ -32,6 +32,7 @@ import type {
 } from '@agent-workflow/shared'
 import {
   FANOUT_DONE_PORT_NAME,
+  DEFAULT_PROTOCOL_RETRY_BUDGET,
   FOLLOWUP_POLICY,
   channelEdgeDataflowSkip,
   NODE_KIND,
@@ -862,7 +863,15 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
             },
           })
           broadcastNodeStatus(taskId, req.nodeRunId, req.nodeId, 'failed')
-          return { status: 'failed', outputs: {}, errorMessage: suppressedMsg }
+          // failureCode mirrors the DB column so the engine's soft-reject branch
+          // routes structurally (RFC-145: errorMessage is human breadcrumbs, never
+          // a machine key) — without it this late path forced a startsWith match.
+          return {
+            status: 'failed',
+            outputs: {},
+            errorMessage: suppressedMsg,
+            failureCode: 'clarify-forbidden',
+          }
         }
         if (req.clarifyEnabled !== undefined && (await isTaskAutonomous(db, taskId))) {
           return await lateSuppress()
@@ -2389,8 +2398,15 @@ async function resolveMergeConflicts(
     })
     if (!outcome.resolved) {
       allResolved = false
+      // RFC-187 §4-2 — say what DID land: per-path salvage already
+      // materialized the clean paths, so the park note must not read as
+      // "the whole delta was dropped" (workgroup room note rides this).
+      const salvageNote =
+        conflict.salvagedPaths.length > 0
+          ? ` (${conflict.salvagedPaths.length} clean path(s) already landed)`
+          : ''
       parts.push(
-        `${conflict.worktreeDirName || '(repo)'}: ${outcome.unresolved.map((e) => e.path).join(', ')}`,
+        `${conflict.worktreeDirName || '(repo)'}: ${outcome.unresolved.map((e) => e.path).join(', ')}${salvageNote}`,
       )
     }
   }
@@ -2671,8 +2687,8 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   // envelope after a long tool-using session) get a chance to recover via
   // same-session follow-up before the task is failed. RFC-115: the per-node
   // `retries` override is removed — the budget is the global
-  // config.defaultNodeRetries (`?? 3` only for mock/unwired callers).
-  const maxRetries = opts.defaultNodeRetries ?? 3
+  // config.defaultNodeRetries (shared default only for mock/unwired callers).
+  const maxRetries = opts.defaultNodeRetries ?? DEFAULT_PROTOCOL_RETRY_BUDGET
 
   // RFC-005: when this node is being re-run because a downstream review node
   // was rejected/iterated, surface the rendered comments / rejection reason

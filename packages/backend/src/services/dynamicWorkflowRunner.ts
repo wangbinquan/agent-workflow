@@ -22,6 +22,7 @@
 // scheduler.ts (module-cycle ban) and tests drive it with fake hooks.
 
 import {
+  DEFAULT_PROTOCOL_RETRY_BUDGET,
   DwGeneratedWorkflowSchema,
   dwGeneratedToWorkflowDef,
   parseDwState,
@@ -48,8 +49,10 @@ import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/
 import type { WorkgroupEngineHooks, WorkgroupEngineResult } from '@/services/workgroupRunner'
 import type { Logger } from '@/util/log'
 
-/** Total generation attempts per pass (bad JSON / schema / validation all count). */
-export const DW_MAX_GENERATE_ATTEMPTS = 3
+/** Total generation attempts per pass (bad JSON / schema / validation all count).
+ *  Rides the cross-engine DEFAULT_PROTOCOL_RETRY_BUDGET (here read as TOTAL
+ *  attempts, not retries-after-first). */
+export const DW_MAX_GENERATE_ATTEMPTS = DEFAULT_PROTOCOL_RETRY_BUDGET
 /** Hard cap on human reject→regenerate rounds (design §8 — no infinite loop). */
 export const DW_MAX_REJECT_ROUNDS = 10
 /** node_runs.rerun_cause of orchestrator generation runs. */

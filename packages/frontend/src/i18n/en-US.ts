@@ -1122,6 +1122,8 @@ export const enUS: Resources = {
     readiness: {
       noAgentMember: 'No agent members yet — the group cannot launch.',
       leaderMissing: 'Leader-Worker mode needs one agent member designated as leader.',
+      noNonLeaderWorker:
+        'The roster only contains the leader — nobody to dispatch to; the leader can only idle (launch still allowed).',
     },
     membersEmpty: 'No members yet. Add agent or human members with the buttons below.',
     memberTypeAgent: 'Agent',

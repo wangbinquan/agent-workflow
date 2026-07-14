@@ -955,6 +955,19 @@ export const FOLLOWUP_POLICY: Record<FailureCode, { reason: EnvelopeFollowupReas
   'port-validation-failed': { reason: 'port-validation' },
 }
 
+/**
+ * The ONE default budget for "how many times may a probabilistic model slip
+ * be retried" across every engine (scheduling-architecture review 2026-07-14:
+ * this `3` used to be hand-copied at four sites — scheduler
+ * `defaultNodeRetries ?? 3`, workgroup `WG_PROTOCOL_RETRIES = 3`, dynamic
+ * workflow `DW_MAX_GENERATE_ATTEMPTS = 3`, free_collab reopen `< 3` — kept in
+ * sync by comments only). Semantics stay per-site (retries-after-first vs
+ * total attempts; each site documents its own reading); the shared constant
+ * only guarantees the sites can't silently diverge. Runtime overrides
+ * (`defaultNodeRetries`) still win where offered.
+ */
+export const DEFAULT_PROTOCOL_RETRY_BUDGET = 3
+
 export interface EnvelopeFollowupInput {
   /**
    * Whether the agent node has a clarify channel wired (RFC-023). Drives the

@@ -352,6 +352,37 @@ describe('/workgroups/$name — readiness banner', () => {
     await screen.findByRole('heading', { name: 'review-squad' })
     expect(screen.queryByTestId('workgroup-readiness-banner')).toBeNull()
   })
+
+  // RFC-187 TRAP-1 — the ADVISORY tier: a leader-only roster is launchable
+  // (ready) yet renders the warning line from the same shared oracle. Before
+  // this, such a group sailed through readiness and died as an opaque
+  // protocol failure (workgroup-e2e-audit TRAP-1).
+  test('a leader-only leader_worker roster shows the advisory warning (still launchable)', async () => {
+    installFetch({
+      workgroups: [
+        wg('solo-squad', {
+          members: [
+            {
+              id: 'mem_1',
+              memberType: 'agent',
+              agentName: 'coder',
+              userId: null,
+              displayName: 'Coder',
+              roleDesc: 'writes code',
+              sortOrder: 0,
+            },
+          ],
+        }),
+      ],
+      calls: [],
+    })
+    await renderPage('/workgroups/solo-squad')
+    const banner = await screen.findByTestId('workgroup-readiness-banner')
+    expect(banner.textContent).toContain('The roster only contains the leader')
+    // Advisory ≠ blocking: neither blocking reason is present.
+    expect(banner.textContent).not.toContain('No agent members yet')
+    expect(banner.textContent).not.toContain('Leader-Worker mode needs')
+  })
 })
 
 describe('/workgroups/$name — config editing', () => {

@@ -429,7 +429,7 @@ function WorkgroupDetailPage() {
         </div>
       </DetailHeaderActions>
 
-      {readiness !== null && !readiness.ready && (
+      {readiness !== null && (!readiness.ready || readiness.warnings.length > 0) && (
         <div
           className="info-box info-box--muted workgroup-readiness"
           role="status"
@@ -441,6 +441,11 @@ function WorkgroupDetailPage() {
                 ? t('workgroups.readiness.noAgentMember')
                 : t('workgroups.readiness.leaderMissing')}
             </span>
+          ))}
+          {/* RFC-187 TRAP-1 — advisory tier: launchable but structurally suspect
+              (same shared oracle; never blocks the launch button). */}
+          {readiness.warnings.map((w) => (
+            <span key={w}>{t('workgroups.readiness.noNonLeaderWorker')}</span>
           ))}
         </div>
       )}
