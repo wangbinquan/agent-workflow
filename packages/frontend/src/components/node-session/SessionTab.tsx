@@ -7,7 +7,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import type { TFunction } from 'i18next'
 import type { NodeRun, SessionViewResponse } from '@agent-workflow/shared'
 import { isAgentNodeKind } from '@agent-workflow/shared'
 import { api } from '@/api/client'
@@ -17,7 +16,7 @@ import { InjectedMemoriesCard } from './InjectedMemoriesCard'
 import { LoadingState } from '@/components/LoadingState'
 import { RuntimeInventorySection } from '@/components/inventory/RuntimeInventorySection'
 import { Select, type SelectOption } from '@/components/Select'
-import { clarifyRoundForRun } from '@/lib/node-history'
+import { clarifyRoundForRun, displayRetryForRun, formatIterationLabel } from '@/lib/node-history'
 import { nodeRunStatusToKind } from '@/lib/noderun-status'
 
 interface Props {
@@ -143,7 +142,12 @@ function AttemptPicker({
               n: g.attempts.length,
               defaultValue: 'inline · {{n}} rounds',
             })
-          : iterLabel(latest, t, clarifyRoundForRun(latest, attempts))
+          : formatIterationLabel(
+              latest,
+              { t },
+              clarifyRoundForRun(latest, attempts),
+              displayRetryForRun(latest, attempts),
+            )
         return { value: latest.id, label }
       }),
     [groups, attempts, t],
@@ -258,17 +262,6 @@ export function groupStartTime(group: AttemptGroup): number {
     if (a.startedAt !== null && a.startedAt < min) min = a.startedAt
   }
   return min
-}
-
-function iterLabel(a: NodeRun, t: TFunction, clarifyRound = 0): string {
-  // RFC-074 PR-C: the clarify round is derived from id-order (clarifyRoundForRun)
-  // — the retired clarifyIteration counter is gone. The label covers both self-
-  // and cross-clarify reruns.
-  if (clarifyRound > 0) return t('nodeDrawer.iterClarify', { n: clarifyRound })
-  if (a.reviewIteration > 0) return t('nodeDrawer.iterReview', { n: a.reviewIteration })
-  if (a.iteration > 0) return t('nodeDrawer.iterLoop', { n: a.iteration })
-  if (a.retryIndex > 0) return t('nodeDrawer.iterRetry', { n: a.retryIndex })
-  return t('nodeDrawer.iterInitial')
 }
 
 function SessionBody({ taskId, nodeRunId }: { taskId: string; nodeRunId: string }) {

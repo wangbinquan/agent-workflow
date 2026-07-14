@@ -37,9 +37,13 @@ export function nodeRunHistory(current: NodeRun, runs: readonly NodeRun[]): Node
  * RFC-074 PR-C: derive a run's clarify round (the value the retired
  * `clarifyIteration` counter held) from id-order. The round = the number of
  * prior COMPLETED generations: top-level `done` rows for the same node at the
- * same (iteration, reviewIteration) whose id is < this run's id. This mirrors
- * the backend's canonical `priorDoneGenerationsForRun` so the chip, the
- * scheduler's `clarifyGeneration`, and `memoryInject`'s anchor all agree.
+ * same (iteration, reviewIteration, shardKey) whose id is < this run's id.
+ * This mirrors the backend's canonical `priorDoneGenerationsForRun` (which
+ * scopes on shardKey too) so the chip, the scheduler's `clarifyGeneration`,
+ * and `memoryInject`'s anchor all agree. Without the shardKey scope, workgroup
+ * member runs — all top-level on the shared `__wg_member__` node, distinguished
+ * ONLY by shardKey (assignment id / `msg:*`) — counted each other's parallel
+ * assignments as prior "generations" and rendered as spurious 反问#N.
  *
  * It is deliberately retry-AGNOSTIC. A clarify-driven rerun follows the prior
  * generation's `done` row (counted); a process / envelope-followup retry only
@@ -49,17 +53,55 @@ export function nodeRunHistory(current: NodeRun, runs: readonly NodeRun[]): Node
  * scheduler's self-clarify `isClarifyRerun` gate false — so a designer rerun is
  * structurally indistinguishable from a process retry by retryIndex alone.
  * 0 = first generation.
+ *
+ * Workgroup leader host runs are excluded outright: their successive `done`
+ * rows at the same (iteration, shardKey=null) tuple are LEADER ROUNDS minted
+ * by the turn machinery (`wg-leader-round`), not clarify generations, and
+ * id-order cannot tell the two apart within the null-shard lineage.
  */
 export function clarifyRoundForRun(run: NodeRun, runs: readonly NodeRun[]): number {
+  if (run.nodeId === '__wg_leader__') return 0
   return runs.filter(
     (r) =>
       r.nodeId === run.nodeId &&
       r.parentNodeRunId === null &&
       r.iteration === run.iteration &&
       r.reviewIteration === run.reviewIteration &&
+      (r.shardKey ?? null) === (run.shardKey ?? null) &&
       r.status === 'done' &&
       r.id < run.id,
   ).length
+}
+
+/**
+ * Derive the RETRY ordinal to display for a run. For regular nodes this is
+ * simply `retryIndex` (the scheduler mints process retries with a real
+ * per-generation counter). For workgroup HOST runs `retryIndex` is an
+ * ordinal, not a retry count — `driveLeaderTurn` mints it as the count of
+ * ALL prior leader runs, and message turns count all prior member runs
+ * (workgroupRunner.ts) — so a normal second leader turn carries
+ * retryIndex=1 with zero retries. For those, derive the real retry count
+ * from the lineage instead: prior FAILED top-level runs in the same
+ * (nodeId, iteration, reviewIteration, shardKey) tuple minted AFTER the
+ * last prior `done` row (a failure belongs to the generation it crashed
+ * in; a clarify-answer resume follows a `done` row and is NOT a retry).
+ */
+export function displayRetryForRun(run: NodeRun, runs: readonly NodeRun[]): number {
+  if (run.nodeId !== '__wg_leader__' && run.nodeId !== '__wg_member__') return run.retryIndex
+  const lineage = runs.filter(
+    (r) =>
+      r.nodeId === run.nodeId &&
+      r.parentNodeRunId === null &&
+      r.iteration === run.iteration &&
+      r.reviewIteration === run.reviewIteration &&
+      (r.shardKey ?? null) === (run.shardKey ?? null) &&
+      r.id < run.id,
+  )
+  let lastDoneId = ''
+  for (const r of lineage) {
+    if (r.status === 'done' && r.id > lastDoneId) lastDoneId = r.id
+  }
+  return lineage.filter((r) => r.status === 'failed' && r.id > lastDoneId).length
 }
 
 interface IterationLabelOpts {
@@ -75,12 +117,21 @@ interface IterationLabelOpts {
  * RFC-074 PR-C: the clarify round is no longer read off the row; the caller
  * passes the derived `clarifyRound` (see `clarifyRoundForRun`). The label
  * `iterClarify` covers both self- and cross-clarify flows.
+ *
+ * `retryOrdinal` overrides the retry suffix; callers with the sibling list
+ * pass `displayRetryForRun(run, runs)`. When omitted, workgroup host runs
+ * suppress the suffix entirely — their raw `retryIndex` is a turn ordinal
+ * (see `displayRetryForRun`), and "领导轮 · 重试#1" on a normal second
+ * leader round is a lie. Regular nodes keep the raw `retryIndex`.
  */
 export function formatIterationLabel(
   run: NodeRun,
   opts: IterationLabelOpts,
   clarifyRound = 0,
+  retryOrdinal?: number,
 ): string {
+  const isWgHost = run.nodeId === '__wg_leader__' || run.nodeId === '__wg_member__'
+  const retry = retryOrdinal ?? (isWgHost ? 0 : run.retryIndex)
   const parts: string[] = []
   // RFC-182 P1-3 — workgroup host runs lead with their turn kind (领导轮 /
   // 派发轮 / 被 @ 轮) so the drawer's member-scoped history reads as rounds
@@ -102,6 +153,6 @@ export function formatIterationLabel(
     parts.push(opts.t('nodeDrawer.iterReview', { n: run.reviewIteration }))
   if (clarifyRound > 0) parts.push(opts.t('nodeDrawer.iterClarify', { n: clarifyRound }))
   if (parts.length === 0) parts.push(opts.t('nodeDrawer.iterInitial'))
-  if (run.retryIndex > 0) parts.push(opts.t('nodeDrawer.iterRetry', { n: run.retryIndex }))
+  if (retry > 0) parts.push(opts.t('nodeDrawer.iterRetry', { n: retry }))
   return parts.join(' · ')
 }

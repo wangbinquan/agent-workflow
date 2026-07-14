@@ -328,6 +328,46 @@ describe('Session attempts dropdown picker', () => {
     expect(options[2]!.textContent ?? '').toMatch(/retry#2/i)
   })
 
+  // Workgroup regression (task 01KXFYSZ7GQW8GW191VM1GWAWY): three PARALLEL
+  // assignments fanned out to one member all live on the shared
+  // `__wg_member__` node as top-level runs, distinguished only by shardKey.
+  // Pre-fix, clarifyRoundForRun ignored shardKey so the picker labelled them
+  // initial / clarify#1 / clarify#2 — as if the member had been re-asked
+  // twice. Post-fix they read as assignment turns with no clarify chunk.
+  test('parallel workgroup assignments are NOT labelled as clarify rounds', () => {
+    const alpha = run({ id: '01a', nodeId: '__wg_member__', shardKey: 'asg1', startedAt: 100 })
+    const gamma = run({ id: '02g', nodeId: '__wg_member__', shardKey: 'asg3', startedAt: 100 })
+    const betaFail = run({
+      id: '03b',
+      nodeId: '__wg_member__',
+      shardKey: 'asg2',
+      startedAt: 100,
+      status: 'failed',
+    })
+    const betaRetry = run({
+      id: '04br',
+      nodeId: '__wg_member__',
+      shardKey: 'asg2',
+      retryIndex: 1,
+      startedAt: 200,
+    })
+    renderDrawer({
+      nodeRunId: alpha.id,
+      nodeId: '__wg_member__',
+      workflowNodeKind: 'agent-single',
+      runs: [alpha, gamma, betaFail, betaRetry],
+    })
+    openCombobox()
+    const options = screen.getAllByRole('option')
+    expect(options).toHaveLength(4)
+    const html = document.body.innerHTML
+    expect(html).not.toMatch(/clarify#/i)
+    // RFC-182 turn-kind prefix (en-US: "Assignment turn") replaces "initial".
+    expect(html).toMatch(/assignment turn/i)
+    // The same-shard process retry keeps its retry suffix.
+    expect(html).toMatch(/retry#1/i)
+  })
+
   test('mixed: an inline group + a follow-on isolated retry render as 2 options', () => {
     const r0 = run({
       id: 'r0',

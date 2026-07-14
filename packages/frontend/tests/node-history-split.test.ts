@@ -19,7 +19,12 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import type { NodeRun } from '@agent-workflow/shared'
-import { clarifyRoundForRun, formatIterationLabel, nodeRunHistory } from '../src/lib/node-history'
+import {
+  clarifyRoundForRun,
+  displayRetryForRun,
+  formatIterationLabel,
+  nodeRunHistory,
+} from '../src/lib/node-history'
 
 function makeRun(partial: Partial<NodeRun> & { id: string }): NodeRun {
   return {
@@ -200,6 +205,58 @@ describe('clarifyRoundForRun (RFC-074 PR-C — id-order generation derivation)',
     const r1 = makeRun({ id: '02r1', retryIndex: 0, status: 'done' })
     expect(clarifyRoundForRun(r1, [r0, r1])).toBe(1)
   })
+
+  // Workgroup regression (task 01KXFYSZ7GQW8GW191VM1GWAWY): all member runs
+  // share the `__wg_member__` node and are top-level, distinguished ONLY by
+  // shardKey (assignment id / `msg:*`). The pre-fix derivation ignored
+  // shardKey, so three PARALLEL assignments counted each other as prior
+  // clarify generations and rendered 初次 / 反问#1 / 反问#2. The fix mirrors
+  // the backend's canonical `priorDoneGenerationsForRun` shardKey scope.
+  describe('workgroup host runs (shard-scoped lineages)', () => {
+    test('parallel member assignments are independent lineages — all round 0', () => {
+      const alpha = makeRun({ id: '01a', nodeId: '__wg_member__', shardKey: 'asg1' })
+      const gamma = makeRun({ id: '02g', nodeId: '__wg_member__', shardKey: 'asg3' })
+      const beta = makeRun({
+        id: '03b',
+        nodeId: '__wg_member__',
+        shardKey: 'asg2',
+        status: 'failed',
+      })
+      const betaRetry = makeRun({
+        id: '04br',
+        nodeId: '__wg_member__',
+        shardKey: 'asg2',
+        retryIndex: 1,
+      })
+      const runs = [alpha, gamma, beta, betaRetry]
+      expect(clarifyRoundForRun(alpha, runs)).toBe(0)
+      expect(clarifyRoundForRun(gamma, runs)).toBe(0)
+      expect(clarifyRoundForRun(beta, runs)).toBe(0)
+      expect(clarifyRoundForRun(betaRetry, runs)).toBe(0)
+    })
+
+    test('clarify-answer rerun of the SAME assignment (same shardKey) is round 1', () => {
+      // RFC-182 design-gate P1: a clarify-answer host rerun keeps its shard
+      // lineage — the prior done row of the SAME shardKey is a real prior
+      // generation and must still count.
+      const asked = makeRun({ id: '01q', nodeId: '__wg_member__', shardKey: 'asg1' })
+      const other = makeRun({ id: '02o', nodeId: '__wg_member__', shardKey: 'asg2' })
+      const resumed = makeRun({ id: '03r', nodeId: '__wg_member__', shardKey: 'asg1' })
+      expect(clarifyRoundForRun(resumed, [asked, other, resumed])).toBe(1)
+    })
+
+    test('leader rounds never derive a clarify round', () => {
+      // Successive `__wg_leader__` done rows are LEADER ROUNDS minted by the
+      // turn machinery (wg-leader-round), all on the same null-shard lineage
+      // — id-order cannot separate them from clarify generations, so the
+      // derivation is suppressed outright for the leader host node.
+      const round1 = makeRun({ id: '01l1', nodeId: '__wg_leader__' })
+      const round2 = makeRun({ id: '02l2', nodeId: '__wg_leader__', retryIndex: 1 })
+      const runs = [round1, round2]
+      expect(clarifyRoundForRun(round1, runs)).toBe(0)
+      expect(clarifyRoundForRun(round2, runs)).toBe(0)
+    })
+  })
 })
 
 describe('formatIterationLabel', () => {
@@ -242,6 +299,80 @@ describe('formatIterationLabel', () => {
   // with its tests. The "clarify counter > 0 wins over initial" semantics
   // is now covered uniformly by the existing clarifyIteration cases above
   // — equally valid for both self and cross flows.
+
+  // RFC-182 P1-3 turn-kind prefixes for workgroup host runs. Paired with the
+  // shard-scoped clarifyRoundForRun above, a parallel assignment run renders
+  // as a bare "派发轮" — never "派发轮 · 反问#N".
+  test('workgroup member assignment run leads with the assignment turn kind, no initial chunk', () => {
+    const run = makeRun({ id: 'x', nodeId: '__wg_member__', shardKey: '01ASG' })
+    expect(formatIterationLabel(run, { t })).toBe('workgroups.room.turnKindAssignment')
+  })
+
+  test('workgroup member msg:* run leads with the mention turn kind', () => {
+    const run = makeRun({ id: 'x', nodeId: '__wg_member__', shardKey: 'msg:m1:5' })
+    expect(formatIterationLabel(run, { t })).toBe('workgroups.room.turnKindMessage')
+  })
+
+  test('workgroup leader run leads with the leader turn kind; the ordinal retryIndex is NOT a retry', () => {
+    // driveLeaderTurn mints retryIndex = prior-leader-run-count, so a normal
+    // second round carries retryIndex=1 with zero retries. Without an
+    // explicit retryOrdinal the label must suppress the suffix rather than
+    // render a lying "重试#1" (Codex impl-gate P2 on this fix).
+    const run = makeRun({ id: 'x', nodeId: '__wg_leader__', retryIndex: 1 })
+    expect(formatIterationLabel(run, { t })).toBe('workgroups.room.turnKindLeader')
+  })
+
+  test('workgroup run with a derived retryOrdinal appends the real retry suffix', () => {
+    const run = makeRun({ id: 'x', nodeId: '__wg_member__', shardKey: '01ASG', retryIndex: 3 })
+    expect(formatIterationLabel(run, { t }, 0, 1)).toBe(
+      'workgroups.room.turnKindAssignment · nodeDrawer.iterRetry=1',
+    )
+  })
+
+  test('regular node keeps raw retryIndex when no retryOrdinal is passed', () => {
+    const run = makeRun({ id: 'x', retryIndex: 2 })
+    expect(formatIterationLabel(run, { t })).toBe('nodeDrawer.iterInitial · nodeDrawer.iterRetry=2')
+  })
+})
+
+describe('displayRetryForRun (workgroup retryIndex is a turn ordinal, not a retry count)', () => {
+  test('regular node: passthrough of retryIndex', () => {
+    const run = makeRun({ id: '01x', retryIndex: 2 })
+    expect(displayRetryForRun(run, [run])).toBe(2)
+  })
+
+  test('leader round 2 (retryIndex=1, prior round done) → 0 retries', () => {
+    const round1 = makeRun({ id: '01l1', nodeId: '__wg_leader__' })
+    const round2 = makeRun({ id: '02l2', nodeId: '__wg_leader__', retryIndex: 1 })
+    expect(displayRetryForRun(round2, [round1, round2])).toBe(0)
+  })
+
+  test('assignment failed → rerun counts as retry#1', () => {
+    const fail = makeRun({ id: '01f', nodeId: '__wg_member__', shardKey: 'asg1', status: 'failed' })
+    const retry = makeRun({ id: '02r', nodeId: '__wg_member__', shardKey: 'asg1', retryIndex: 1 })
+    expect(displayRetryForRun(retry, [fail, retry])).toBe(1)
+  })
+
+  test('clarify-answer resume after a done row is NOT a retry', () => {
+    // Lineage: [failed, done(retry that asked), clarify-resume]. The failure
+    // belongs to the generation it crashed in — the resume after the done row
+    // starts fresh at 0 retries.
+    const fail = makeRun({ id: '01f', nodeId: '__wg_member__', shardKey: 'asg1', status: 'failed' })
+    const asked = makeRun({ id: '02d', nodeId: '__wg_member__', shardKey: 'asg1', retryIndex: 1 })
+    const resume = makeRun({ id: '03c', nodeId: '__wg_member__', shardKey: 'asg1', retryIndex: 2 })
+    expect(displayRetryForRun(resume, [fail, asked, resume])).toBe(0)
+  })
+
+  test('other assignments (different shardKey) never bleed into the count', () => {
+    const otherFail = makeRun({
+      id: '01of',
+      nodeId: '__wg_member__',
+      shardKey: 'asg9',
+      status: 'failed',
+    })
+    const mine = makeRun({ id: '02m', nodeId: '__wg_member__', shardKey: 'asg1', retryIndex: 4 })
+    expect(displayRetryForRun(mine, [otherFail, mine])).toBe(0)
+  })
 })
 
 describe('NodeDetailDrawer run-history list', () => {

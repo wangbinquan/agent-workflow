@@ -20,7 +20,12 @@ import { SessionTab } from './node-session/SessionTab'
 import { StatusChip } from './StatusChip'
 import { TabBar, type TabDef } from './TabBar'
 import { api, ApiError } from '@/api/client'
-import { clarifyRoundForRun, formatIterationLabel, nodeRunHistory } from '@/lib/node-history'
+import {
+  clarifyRoundForRun,
+  displayRetryForRun,
+  formatIterationLabel,
+  nodeRunHistory,
+} from '@/lib/node-history'
 import {
   classifyCanceled,
   displayNoderunStatusKey,
@@ -302,7 +307,11 @@ function StatsTab({
       <dt>{t('nodeDrawer.statIteration')}</dt>
       <dd>{run.iteration}</dd>
       <dt>{t('nodeDrawer.statRetry')}</dt>
-      <dd>{run.retryIndex}</dd>
+      {/* displayRetryForRun: workgroup host runs store a turn ordinal in
+          retryIndex (workgroupRunner mints leader/message turns at
+          prior-run-count), so the raw column would read "retried N times"
+          on a turn that never failed. */}
+      <dd>{displayRetryForRun(run, history)}</dd>
       {run.opencodeSessionId !== null && run.opencodeSessionId.length > 0 && (
         <>
           <dt>{t('nodeDrawer.statSession')}</dt>
@@ -375,7 +384,14 @@ function StatsTab({
                       disabled={isActive}
                       onClick={() => onPickRetry?.(r.id)}
                     >
-                      <code>{formatIterationLabel(r, { t }, clarifyRoundForRun(r, history))}</code>{' '}
+                      <code>
+                        {formatIterationLabel(
+                          r,
+                          { t },
+                          clarifyRoundForRun(r, history),
+                          displayRetryForRun(r, history),
+                        )}
+                      </code>{' '}
                       <StatusChip kind={nodeRunStatusToKind(r.status)}>
                         {t(displayNoderunStatusKey(r))}
                       </StatusChip>
