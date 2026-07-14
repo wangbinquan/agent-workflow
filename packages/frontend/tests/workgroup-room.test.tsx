@@ -5,10 +5,11 @@
 //      platform display name via /api/users/lookup), system (muted style +
 //      localized "System" label).
 //   2. Round separators at round transitions (none for the round-0 prelude).
-//   3. Dispatch cards: title + assignee + source badge + live status chip;
-//      done cards expose the collapsible result block (body from the message
-//      the card's resultMessageId points at); "view run" only with nodeRunId
-//      and it opens the reused NodeDetailDrawer.
+//   3. Dispatch cards: title + assignee + source badge + live status chip +
+//      run duration (nodeRunId→runHistory join, TurnCard semantics; absent on
+//      run-less human cards); done cards expose the collapsible result block
+//      (body from the message the card's resultMessageId points at); "view
+//      run" only with nodeRunId and it opens the reused NodeDetailDrawer.
 //   4. Cancel: two-click ConfirmButton on open/dispatched cards POSTs the
 //      cancel endpoint; terminal cards render no cancel.
 //   5. Composer: send POSTs {body}; the roster @-completion appears while
@@ -363,6 +364,43 @@ describe('WorkgroupRoom — dispatch cards', () => {
     expect(within(result).getByText('found 3 issues in the diff')).toBeTruthy()
     // The dispatched (no result yet) card has no result block.
     expect(screen.queryByTestId('wg-card-result-a2')).toBeNull()
+  })
+
+  // 2026-07-14 用户拍板「给所有正在执行的 agent 加计时」——DispatchCard 与
+  // TurnCard 同款计时：agent 派活卡经 nodeRunId→runHistory 关联出耗时（终态
+  // 定格 / running 实时），无 run 的 human to-do 卡不出计时。
+  test('agent dispatch card shows the run duration; human card without a run shows none', async () => {
+    const room = makeRoom({
+      runHistory: [
+        {
+          nodeRunId: 'nr1',
+          memberId: 'mem_work',
+          displayName: 'Worker',
+          kind: 'assignment',
+          status: 'done',
+          round: null,
+          startedAt: 1_000,
+          finishedAt: 66_000,
+          triggerMessageId: null,
+          assignmentId: 'a1',
+          note: null,
+        },
+      ],
+    })
+    installFetch(room)
+    renderRoom(room)
+    const agentCard = await screen.findByTestId('wg-card-a1')
+    expect(within(agentCard).getByTestId('wg-card-duration-a1').textContent).toBe('01:05')
+    // nodeRunId null（human 派发未接 run）→ 根本不渲染计时占位。
+    const humanCard = screen.getByTestId('wg-card-a2')
+    expect(within(humanCard).queryByTestId('wg-card-duration-a2')).toBeNull()
+  })
+
+  test('dispatch card with a run id but no runHistory entry yet renders the em-dash gap', async () => {
+    installFetch(makeRoom()) // default fixture: a1 has nodeRunId nr1, runHistory []
+    renderRoom(makeRoom())
+    const agentCard = await screen.findByTestId('wg-card-a1')
+    expect(within(agentCard).getByTestId('wg-card-duration-a1').textContent).toBe('—')
   })
 
   test('view-run opens the reused NodeDetailDrawer; cards without a run have no entry', async () => {

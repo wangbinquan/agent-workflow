@@ -39,6 +39,7 @@ import { describeApiError } from '@/i18n'
 import { displayNoderunStatusKey, nodeRunStatusToKind } from '@/lib/noderun-status'
 import {
   applyMention,
+  assignmentDurationMs,
   assignmentStatusToKind,
   assignmentsForMessage,
   buildDeliverBody,
@@ -951,6 +952,8 @@ function RoomMessage({
               assignment={a}
               data={data}
               members={members}
+              runHistory={runHistory}
+              now={now}
               canceling={canceling}
               onCancel={onCancel}
               onViewRun={onViewRun}
@@ -1047,6 +1050,8 @@ function DispatchCard({
   assignment,
   data,
   members,
+  runHistory,
+  now,
   canceling,
   onCancel,
   onViewRun,
@@ -1056,6 +1061,10 @@ function DispatchCard({
   assignment: WorkgroupRoomAssignment
   data: WorkgroupRoomResponse
   members: Map<string, WorkgroupRuntimeMember>
+  /** Room history + ticker — the card's agent-run timer (same live/settled
+   *  semantics as TurnCard; human to-do cards have no run, hence no timer). */
+  runHistory: readonly WorkgroupRunEntry[]
+  now: number
   canceling: boolean
   onCancel: (assignmentId: string) => Promise<unknown>
   onViewRun: (nodeRunId: string) => void
@@ -1065,6 +1074,7 @@ function DispatchCard({
   const { t } = useTranslation()
   const assignee =
     assignment.assigneeMemberId === null ? undefined : members.get(assignment.assigneeMemberId)
+  const dur = assignmentDurationMs(runHistory, assignment.nodeRunId, now)
   const resultBody = resultBodyFor(assignment, data.messages)
   // PR-5 (拍板 #16): a dispatched card assigned to a HUMAN member renders in
   // the to-do form — highlighted + the two delivery entries.
@@ -1103,6 +1113,11 @@ function DispatchCard({
           <StatusChip kind="warn" size="sm" data-testid={`wg-card-todo-${assignment.id}`}>
             {t('workgroups.room.deliverTodo')}
           </StatusChip>
+        )}
+        {assignment.nodeRunId !== null && (
+          <span className="workgroup-room__time" data-testid={`wg-card-duration-${assignment.id}`}>
+            {dur === null ? '—' : formatTurnDuration(dur)}
+          </span>
         )}
       </div>
       <div className="workgroup-room__card-assignee">

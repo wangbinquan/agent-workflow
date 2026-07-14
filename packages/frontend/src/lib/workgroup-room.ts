@@ -727,6 +727,24 @@ export function turnDurationMs(entry: WorkgroupRunEntry, now: number): number | 
   return Math.max(0, end - entry.startedAt)
 }
 
+/**
+ * DispatchCard timer（2026-07-14 用户拍板：所有正在执行的 agent 都要计时）——
+ * duration of the assignment's linked agent run, same live/settled semantics
+ * as turnDurationMs. null when the assignment has no linked run (human to-do
+ * card / not yet dispatched) or the entry hasn't landed in runHistory yet
+ * (refetch gap — the card renders an em-dash only when a run id exists).
+ */
+export function assignmentDurationMs(
+  runHistory: readonly WorkgroupRunEntry[],
+  nodeRunId: string | null,
+  now: number,
+): number | null {
+  if (nodeRunId === null) return null
+  const entry = runHistory.find((e) => e.nodeRunId === nodeRunId)
+  if (entry === undefined) return null
+  return turnDurationMs(entry, now)
+}
+
 /** Compact `mm:ss` / `h:mm:ss` duration label for turn cards / run log rows. */
 export function formatTurnDuration(ms: number): string {
   const totalSec = Math.floor(ms / 1000)
