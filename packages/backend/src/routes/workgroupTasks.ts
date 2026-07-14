@@ -139,6 +139,17 @@ interface WorkgroupTaskRow {
   workgroupConfigJson: string | null
 }
 
+/**
+ * RFC-187 F2 (audit §5 F2) — states a room message / delivery / config-patch may
+ * re-drive. `awaiting_human` (parked) was already covered; `interrupted` is the gap: a
+ * task reaped mid-run by orphan-reaping (WITHOUT a daemon restart) had its just-inserted
+ * dispatched assignment left as a black hole. resumeTask drives both (RFC-186 P0-B added
+ * interrupted); running/terminal states are deliberately left alone (no double-drive).
+ */
+export function isWorkgroupKickResumable(status: string | undefined): boolean {
+  return status === 'awaiting_human' || status === 'interrupted'
+}
+
 export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
   function buildResumeDeps(): Parameters<typeof resumeTask>[2] {
     const opencodeCmd = resolveOpencodeCmd(deps.configPath)
@@ -157,6 +168,11 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         error: err instanceof Error ? err.message : String(err),
       })
     })
+  }
+  // RFC-187 F2 — kick a message/delivery/patch-woken task iff it's in a resumable state
+  // (parked or live-interrupted); running/terminal states no-op. See isWorkgroupKickResumable.
+  function kickResumeIfResumable(taskId: string, status: string | undefined): void {
+    if (isWorkgroupKickResumable(status)) kickResume(taskId)
   }
 
   // Task-membership gate; missing / invisible / non-workgroup all 404 the
@@ -449,7 +465,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
 
     // 3. a parked task re-wakes (leader-idle / clarify-or-delivery parking —
     //    the engine re-derives; leader sees the message as new-content).
-    if (task.status === 'awaiting_human') kickResume(taskId)
+    kickResumeIfResumable(taskId, task.status)
     return c.json({ messageId, assignmentIds }, 201)
   })
 
@@ -515,7 +531,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       )
     }
     broadcastWg(taskId, { type: 'wg.message.created', messageId: deliveryId, kind: 'delivery' })
-    if (task.status === 'awaiting_human') kickResume(taskId)
+    kickResumeIfResumable(taskId, task.status)
     return c.json({ messageId: deliveryId }, 201)
   })
 
@@ -985,7 +1001,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
               .where(eq(tasks.id, taskId))
               .limit(1)
           )[0]
-          if (fresh?.status === 'awaiting_human') kickResume(taskId)
+          kickResumeIfResumable(taskId, fresh?.status)
         }
         await kickIfParked()
         const lateKick = setTimeout(() => void kickIfParked(), 2500)
@@ -1005,7 +1021,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       createdAt: Date.now(),
     })
     broadcastWg(taskId, { type: 'wg.message.created', messageId: msgId, kind: 'system' })
-    if (task.status === 'awaiting_human') kickResume(taskId)
+    kickResumeIfResumable(taskId, task.status)
     return c.json({ changes })
   })
 
