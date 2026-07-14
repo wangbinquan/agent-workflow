@@ -62,7 +62,7 @@ RFC-179 的文档/索引仍标 Draft，但其代码已**全部落库**（PR-2 `c
 由设计推导、随本 RFC 定稿的从属决策（设计门可挑战）：
 
 - **D4 assignment 轮不出回合卡**：`DispatchCard` 已覆盖派发轮（实时状态 + 查看执行现场），再出回合卡＝双卡噪音；对齐既有「assignment 轮不重复出 active row / pill」的测试原则。两卡族做视觉统一。
-- **D5 presence 四态判据**：`working`（currentRun running 或有 running assignment）＞ `awaiting`（currentRun `awaiting_human` 或有 awaiting_human assignment——clarify park / 待人工，显示「等待回答」）＞ `queued`（currentRun pending 或有 dispatched assignment，显示「排队中」）＞ `idle`。单一纯函数 `deriveMemberPresence`（优先级表测锁死），取代花名册直用 `memberIsWorking`。
+- **D5 presence 四态判据（设计门修订：currentRun 状态优先）**：`currentRun` 存在时以其生命周期为准（running→执行中 / awaiting_human→等待回答 / pending→排队中），assignment 只在 currentRun 为空或终态时兜底（running→执行中、awaiting_human→等待回答、dispatched→排队中）；否则空闲。原因：派发轮在 run 等信号量前 assignment 已被 CAS 成 running——"排队中"场景恰是 run=pending+assignment=running，assignment 优先会误报执行中。单一纯函数 `deriveMemberPresence`（分层优先级表测锁死），取代花名册直用 `memberIsWorking`。
 - **D6 pending 可见性＝mint 后补发 `node.status{pending}`**：复用 `runner.ts:706-712` 同款帧形；`f55ede4b` 已让 node.status 失效房间 key，无需新 WS 机制。
 - **D7 drawer 成员历轮＝房间侧传成员作用域 runs**：复用 drawer 既有 history 归并 + `onSelectRun`（已接线，`WorkgroupRoom.tsx:675`），零 drawer 结构改动；顺带修掉现状跨成员串台。
 - **D8 supersede RFC-179 D1 / render②**：用户本次拍板推翻；`streamActiveExecutions` 及其渲染块 / 测试由回合卡取代（测试注释注明 supersession 链路）；提及 pill（render①）保留并升级为可点。
@@ -98,11 +98,11 @@ RFC-179 的文档/索引仍标 Draft，但其代码已**全部落库**（PR-2 `c
 
 ## 7. 验收标准
 
-- 房间聚合返回 `runHistory`（升序全量回合：nodeRunId / memberId / kind / status / startedAt / finishedAt / triggerMessageId / assignmentId / note），`memberRuns` 与其同源（投影），三类回合 + wg-gate 排除 + 排序 + note 派生纯函数 table 测试全绿。
+- 房间聚合返回 `runHistory`（升序全量回合：nodeRunId / memberId / displayName / kind / status / round / startedAt / finishedAt / triggerMessageId / assignmentId / note），`memberRuns` 与其同源（投影）；kind 按 nodeId+shardKey 形状判定（**clarify-answer 续跑 run 归类入历史与 memberRuns**——修复现存"答完反问续跑仍显示空闲"的 latent 缺口）；三类回合 + wg-gate 排除 + 排序 + note 派生纯函数 table 测试全绿。
 - 被 @ 轮 / leader 轮各自出现回合卡：pending「排队中」→ running 脉冲 + 实时耗时 → 终态定格且**刷新 / 重进房间后仍在**；assignment 轮不出回合卡（防双卡断言）。
 - 回合卡「查看会话」、提及 pill、花名册 presence 芯片点击均打开对应 run 的 `NodeDetailDrawer`（集成断言）。
 - 花名册芯片：leader 轮 / 被 @ 轮 running 时显示「执行中」（修复同屏矛盾的回归断言）、`awaiting_human` 显示「等待回答」、pending / dispatched 显示「排队中」、否则「空闲」；`deriveMemberPresence` table 测试覆盖四态 × 优先级全分支。
-- mint 后广播 `node.status{pending}`（后端断言三处 mint 点均发帧）；前端无需新 WS 规则（`task-sync-rules` 既有规则不变）。
+- mint 后广播 `node.status{pending}`（后端断言 workgroupRunner 三处 + clarify-answer 续跑 mint 点均发帧、adopted 分支不重发）；前端无需新 WS 规则（`task-sync-rules` 既有规则不变）。
 - 「执行记录」卡：倒序全量、逐行可点回放、空态 EmptyState；点成员打开 drawer 后历轮列表仅含该成员回合（跨成员串台回归断言）。
 - 滚动锚定：贴底时新消息自动跟随、上翻时不跳动且出现「回到最新」浮标（P1-1 集成断言）。
 - StatusChip 扩展后：无 onClick 调用方渲染保持 `<span>`（源级 / 快照断言），有 onClick 渲染 button 且可键盘触达。

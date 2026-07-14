@@ -61,49 +61,53 @@ autonomous: z.boolean().optional(),
 
 ```
 PATCH autonomous false→true  且  该任务存在 open clarify park：
-  1. 遣散该任务所有 open clarify session（复用既有 clarify 取消/supersede 机制 →
-     标记 canceled，杜绝陈旧答案回流 round-trip）。
-  2. 解 park 被卡的 host run + assignment：
-       worker/member：assignment awaiting_human → dispatched（原成员重派）/ open（fc 回收）；
-                      parked host run 收终态（canceled）。
-       leader：parked leader host run（awaiting_human）→ canceled → leaderParked 清零。
-  3. resume 引擎（PATCH 现有 resume + system 消息重新唤醒）→ 重派的 agent 以
-     clarifyEnabled=false 重跑 → 必产 wg_result/wg_decision → 任务推进，不再 park。
+  单一加锁事务（与答案提交串行化）：
+  1. 遣散该任务所有 open clarify session：clarify_sessions + clarify_rounds 双表
+     同事务标记 canceled（CAS on session status——并发答案提交撞 canceled →
+     409/幂等拒绝，杜绝陈旧答案回流 round-trip / 遣散半途 mint 重跑）。
+  2. 终态化 park 载体 run（设计门勘误：合法 clarify 的「asking host run」已落
+     done，park 在**中介 clarify run**〔createClarifySession 产生的
+     clarifyNodeRunId〕上）：该 awaiting_human run 经 lifecycle 合法 CAS →
+     canceled。实现期核对 leaderParked（`workgroupRunner.ts:570`）实际检测的
+     run 载体，遣散后断言 leaderParked/humanPending 清零。
+  3. 重排队 assignment：awaiting_human → dispatched（lw 原成员重派）/ open
+     （fc 回收）。此二边在 WORKGROUP_ASSIGNMENT_TRANSITIONS
+     （workgroupLifecycle.ts:21-34）中**现不合法**（awaiting_human 仅可 →
+     running/failed/canceled）——本 RFC 显式扩表新增 A2 requeue 两边 + oracle
+     表测（设计门 P1，不得绕 casAssignmentStatus 直写）。
+  4. 事务提交后 resume 引擎（PATCH 现有 resume + system 消息重新唤醒）→ 重派
+     agent 以 clarify 压制态重跑 → 必产 wg_result/wg_decision → 不再 park。
 ```
 
 - 仅 false→true 触发（true→true / 无 open park 均 no-op）。off→on 之外的 patch 不动 clarify。
-- **复用既有遣散路径**（勿新造 cancel）：与 task-cancel / RFC-058 round 被 supersede 时取消 clarify session 同源——实现时定位可复用的 abandon 调用（`clarifyRerunLedger`/`clarifyRounds` 的 review-superseded canceled 语义、或 task-cancel 的 clarify 清理）。
+- **复用既有遣散原语但不复用其编排**：session 置 canceled 的语义与 task-cancel / RFC-058 supersede 同源（`clarifyRerunLedger`/`clarifyRounds`/`clarifySeal` 既有 canceled 通路）；A2 的新贡献是把「session 双表 + 中介 run + assignment 重排队」收进**一个**事务并与答案提交串行化（设计门 P1：防 crash 半态 / 防陈旧答案竞态 mint）。
 - 语义 = A2 是"对在途 park 的追溯式 C"（C 压新反问，A2 遣散旧反问 park），二者同一"别打扰我"意图。
-- 时序：route 侧先遣散 + 解 park **再** resume（parked 态下引擎循环已退出，无并发 pass，route 变更安全，同现有 config-patch resume 模式）。
+- 时序：route 侧先事务遣散 **再** resume（parked 态下引擎循环已退出，无并发 pass，route 变更安全，同现有 config-patch resume 模式）。
 
 **前端**：`WorkgroupRoom` 配置区（已有的 per-task patch 通道，同 completionGate/maxRounds/switches）加一个「全自动」`<Switch>`（复用公共 `Switch`），拨动 → PATCH `{autonomous}`。i18n zh/en。
 
 ### 2.2 C —— clarify 硬压制（`workgroupRunner.ts` + `scheduler.ts`）
 
-**请求契约**：`WorkgroupHostRunRequest` 加 `clarifyEnabled?: boolean`（缺省 = 现状 = 允许）。runner 三处调用点传 `resolveClarifyEnabled(config.autonomous ?? false)`：
+**请求契约（设计门修订）**：`WorkgroupHostRunRequest` 加 `clarifySuppressed?: () => Promise<boolean>`——runner 三处调用点（`:962/:1149/:1290`）注入"**即时判定器**"（重读任务当前 `workgroupConfigJson.autonomous` 再 `resolveClarifyEnabled`），**不传启动期快照布尔**。
+
+> 设计门 P1-①（在途竞态）：run 在 autonomous=false 下起跑、用户中途翻 on 时，快照布尔仍是 true——A2 此刻无 park 可遣散（session 尚未建），随后该 run 发 clarify 仍会建 session 把任务泊住。判定必须发生在 **envelope 到达时**、以最新 config 为准；与 A2（遣散已建的 park）合围，才把"翻 on 即静音"关成硬保证。
+
+**持久化语义（设计门 P1-②，本修订关键）**：合法 clarify 的现状收尾是 asking run 落 `done`、park 落在中介 clarify run 上——若只在 hook 层"内存改判 failed"，DB 里 asking run 仍是 done、无 errorMessage：RFC-182 的 note 派生无据、回合卡显示「完成」误导、广播的也是 done。因此压制分类**前移到 `runNode` 收尾期**（终态持久化之前）：
 
 ```ts
-// workgroupRunner.ts:962 / :1149 / :1290
-clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false),
-```
-
-**hook 短路**（`scheduler.ts:798`，`createClarifySession` 之前）：
-
-```ts
-if (result.clarify !== undefined) {
-  if (req.clarifyEnabled === false) {                      // NEW —— C 软驳回
-    return {
-      status: 'failed',
-      outputs: {},
-      errorMessage: `clarify-suppressed:${result.clarify.questions.length}`,
-    }
-  }
-  const clarifyNodeId = findClarifyNodeForAgent(definition, req.nodeId)
-  ...                                                       // 现状不变
+// runNode（runner.ts 收尾分类处，clarify envelope 分支；opts 新增可选判定器）：
+if (result.clarify !== undefined && (await opts.clarifySuppressed?.()) === true) {
+  status = 'failed'                                        // running→failed 合法转移
+  errorMessage = `clarify-suppressed:${result.clarify.questions.length}`
+  // 正常终态持久化 + 既有终态广播 lane；不建 session、不 mint 中介 clarify run、不 park
 }
 ```
 
-> 用**独立前缀 `clarify-suppressed`**（不复用 `clarify-questions-`）—— 后者在 leader 耗尽时 `throw`（致命），而 C 要 drop-and-continue，二者收场不同，必须区分。dynamic（不传 `clarifyEnabled`）→ undefined → 现状 `clarify-no-channel` 不受影响。
+- `clarifySuppressed` 缺省（非 wg / dynamic）→ 不调用 → 现状不变（dynamic 仍走 `clarify-no-channel`）。
+- hook（`scheduler.ts:798-848`）clarify 分支只在「未压制」时可达，`createClarifySession` 前**无需再加短路**——压制在 runNode 内已收掉，hook 拿到的就是 failed 结果，顺流进 leader/worker 失败分支。
+- 宿主 run 行 = `failed` + `clarify-suppressed:*` 持久落库并广播——**这即 RFC-182 runHistory `note` 的派生依据**（前缀契约共享锁）。
+
+> 用**独立前缀 `clarify-suppressed`**（不复用 `clarify-questions-`）—— 后者在 leader 耗尽时 `throw`（致命），而 C 要 drop-and-continue，二者收场不同，必须区分。
 
 **leader runner**（`workgroupRunner.ts:971-990`，失败分支加 `clarify-suppressed` 前置分支）：
 
@@ -140,12 +144,13 @@ if (result.status === 'failed') {
 
 **message-turn**（`workgroupRunner.ts:1297`）：**无需改动**——hook 短路返回 `failed` → `if (result.status !== 'done') return` 天然 drop（fc DM 回复 best-effort，成员会被下一条相关内容重新唤醒）。
 
-**净效果**：`clarifyEnabled=false` 时 clarify **绝不 park**；leader 滑入 idle→nudge→（到限）`awaiting_human` 安全阀；worker 该轮 assignment failed 浮出（fc 有界重开 `:1176-1191`）。`clarifyEnabled` 缺省 / true → 全路径现状不变（RFC-172/RFC-023 round-trip 不回归）。
+**净效果**：压制判定为真时 clarify **绝不 park**；leader 滑入 idle→nudge→（到限）`awaiting_human` 安全阀；worker 该轮 assignment failed 浮出（fc 有界重开 `:1176-1191`）。判定器缺省 / 判定为假 → 全路径现状不变（RFC-172/RFC-023 round-trip 不回归）。每次被压制尝试的宿主 run 都已以 failed 持久落库——RFC-182 回合卡对每次尝试都可见可回放。
 
 ### 2.3 D —— 新建默认全自动（`shared/schemas/workgroup.ts` + 表单）
 
-`workgroupConfigFields.autonomous` 默认 `false → true`。
+`autonomous` 新建缺省 `false → true`，但**默认只作用于 create 路径**（设计门 P1）：
 
+- `workgroupConfigFields` 同时被 `CreateWorkgroupSchema` 与 full-replace `UpdateWorkgroupSchema` 复用——若在共享字段上直接 `.default(true)`，一个**省略 autonomous 的老 PUT** 会把已有 false 组静默翻成 true，违背"已有组零回归"。因此：create schema 层 `.default(true)`；update 路径**省略＝保留现值**（服务层 merge 现存行值；顺带修掉现状 `.default(false)` 下"省略 PUT 把 true 组翻回 false"的同类潜在翻转，双向都加回归锁）。
 - 新建（form/API 缺省字段）→ autonomous=true。
 - 前端新建表单「全自动」`Switch` 初值 ON（若表单 draft 默认派生自 schema 缺省则自动跟随；否则显式把 create-draft 初值置 true——实现时核对 `lib/workgroup-form.ts` 的 draft 初始化来源）。
 - 编辑已有组：表单显示该组**存储值**（老组仍 false）。
@@ -172,13 +177,15 @@ if (result.status === 'failed') {
 
 | 模块                                            | 改动                                                                         |
 | ----------------------------------------------- | ---------------------------------------------------------------------------- |
-| `routes/workgroupTasks.ts`                      | `ConfigPatchSchema` +`autonomous` + `nextConfig` 透传 + changes 文案（A）；false→true 时遣散 open clarify park + 解 park + resume（A2）|
-| clarify 遣散复用（`clarifyRerunLedger`/`clarifyRounds`/task-cancel 清理）| A2 复用既有 clarify session 取消 + host run/assignment 解 park，不新造 cancel |
+| `routes/workgroupTasks.ts`                      | `ConfigPatchSchema` +`autonomous` + `nextConfig` 透传 + changes 文案（A）；false→true 单事务遣散 open clarify park（双表 canceled + 中介 run canceled + assignment requeue）再 resume（A2）|
+| clarify 遣散原语（`clarifyRerunLedger`/`clarifyRounds`/`clarifySeal` canceled 通路）| A2 复用其 canceled 语义，但编排收进一个加锁事务并与答案提交串行化（陈旧答案 409） |
+| `services/workgroupLifecycle.ts`                | `WORKGROUP_ASSIGNMENT_TRANSITIONS` 显式新增 A2 requeue 两边：`awaiting_human→dispatched`、`awaiting_human→open` + oracle 表测（设计门 P1） |
 | `shared/schemas/workgroupRuntime.ts` 无需改      | `autonomous` 已在 runtime config（RFC-180）——A 只是让它可被 patch 覆盖       |
-| `services/workgroupRunner.ts`                   | 3 调用点传 `clarifyEnabled` + leader/worker 失败分支加 `clarify-suppressed`（C）|
-| `WorkgroupHostRunRequest` 类型                  | +`clarifyEnabled?: boolean`（C，缺省=允许）                                   |
-| `services/scheduler.ts`                         | `runHostNode` `:798` 短路（C）                                                |
-| `shared/schemas/workgroup.ts`                   | `workgroupConfigFields.autonomous` 默认 true（D）                            |
+| `services/workgroupRunner.ts`                   | 3 调用点注入 `clarifySuppressed` 即时判定器 + leader/worker 失败分支加 `clarify-suppressed`（C）|
+| `WorkgroupHostRunRequest` 类型                  | +`clarifySuppressed?: () => Promise<boolean>`（C，缺省=允许；判定器内重读最新 config）|
+| `services/runner.ts`                            | `runNode` 收尾分类：clarify envelope + 判定为真 → 持久 `failed:clarify-suppressed:*` + 终态广播（设计门 P1，182 note 派生依据）|
+| `services/scheduler.ts`                         | `runHostNode` clarify 分支仅未压制可达（无新短路）；透传判定器（C）           |
+| `shared/schemas/workgroup.ts`                   | `autonomous` 缺省 true **仅 create 路径**；update 省略＝保留现值（D，设计门 P1）|
 | `components/workgroup/WorkgroupRoom.tsx`（配置区）| +「全自动」`Switch`（A）                                                      |
 | `lib/workgroup-form.ts` / `WorkgroupForm.tsx`   | 新建 draft autonomous 初值 true（D，核对 draft 初始化来源）                   |
 | i18n（zh/en）                                    | 房间全自动开关 label/hint + patch 变更文案                                    |
@@ -187,8 +194,8 @@ if (result.status === 'failed') {
 
 - **中途 on 但任务已卡在 clarify park（A2 覆盖，设计门 P0）**：见 §2.1a——false→true 必遣散 open clarify session + 解 park + resume，否则翻 on 对"正在反问的任务"无效（重新 park）。测试锁"翻 on 遣散在途 park、任务解卡推进、无陈旧答案回流"。
 - **中途 on 但 leader 已 declaredDone 泊在 awaiting_review**：A 翻 on 后 `resolveCompletionGate` 变 false，但任务已 `awaiting_review`（gate holder run 已 mint）。设计取舍：**A 不追溯已开的 gate**（翻 on 只影响后续判定）；用户仍可用 gate 确认端点放行（现状），或翻 on 前先确认。测试锁"翻 on 不误改已 park 的 gate 状态"。gate park 与 clarify park 区分处理（A2 只遣散 clarify，不碰 gate）。
-- **C 短路丢失同轮 wg_result**：协议一个 envelope 非 clarify 即 output，agent 不会同时产 clarify + wg_result；短路返回 `outputs:{}` 无损（测试锁"纯 clarify envelope"）。
-- **C leader 耗尽 drop 后 leader run 行状态**：leader host run 行已 mint（`:944`），drop-and-continue 前**必须**把该 run 收成**终态 `failed`**（非 fatal——不 `throw`、不 reportFatal；带 clarify-suppressed 说明），否则残留 `pending`/`running`/`awaiting_human` 会让下一 pass 误判 leaderRunning/leaderParked 卡死。终态 failed 仍被 `countRoundsUsed` 计入（非 canceled、非 wg-gate）→ 该轮照常计入 `max_rounds`，随后 outcome pass 走 leader-idle→nudge。**这是 C 实现的关键守卫**，专测：耗尽后 leader run=failed、引擎继续到 idle→nudge，不 hot-loop、不僵死、不 park。
+- **C 压制丢失同轮 wg_result**：协议一个 envelope 非 clarify 即 output，agent 不会同时产 clarify + wg_result；收尾分类为 failed、`outputs:{}` 无损（测试锁"纯 clarify envelope"）。
+- **C leader 耗尽 drop 后 leader run 行状态**：设计门修订后由 `runNode` 收尾持久化**天然满足**——每次被压制尝试的宿主 run 都已以 `failed:clarify-suppressed:*` 落库（running→failed 合法转移），不存在残留 `pending`/`running`/`awaiting_human` 误判 leaderRunning/leaderParked 的窗口。终态 failed 仍被 `countRoundsUsed` 计入（非 canceled、非 wg-gate）→ 该轮照常计入 `max_rounds`，随后 outcome pass 走 leader-idle→nudge。守卫测试保留：耗尽后全部尝试 run=failed、引擎继续到 idle→nudge，不 hot-loop、不僵死、不 park。
 - **D re-import 老组 YAML（无 autonomous 字段）**：按新缺省 true 落地（视为"现在新建一个组"，符合 D 意图）；文档记明。
 - **dynamic_workflow**：不传 `clarifyEnabled`（undefined）→ hook 现状 `clarify-no-channel` 不变；D 的 autonomous 缺省对 dynamic 无副作用。
 - **prompt 隔离**：`clarifyEnabled` / autonomous 只入控流 / hook / UI，绝不进 `compose*Prompt` 归属信息。
@@ -205,13 +212,15 @@ if (result.status === 'failed') {
 
 1. **A schema/patch**：`ConfigPatchSchema` 接受 `autonomous`；PATCH 后 `workgroupConfigJson.autonomous` 更新 + 落 system 变更消息 + changes 文案；对称 on/off。
 2. **A 引擎即时生效**：任务运行中 patch autonomous on → 下一 pass `renderWgProtocolBlock` 无 `WG_CLARIFY_BLOCK` + gate resolve=off + `clarifyEnabled=false`；patch off → 全恢复。
-2a. **A2 遣散在途 park（设计门 P0）**：任务卡在 clarify park（leader 与 worker 两态各一例）时 patch autonomous false→true → open clarify session 被 canceled + parked host run/assignment 解 park + resume → agent 以 clarifyEnabled=false 重跑推进、任务不再 `awaiting_human`；陈旧 clarify 答案回流被拒（session 已 canceled）；无 open park 时 A2 no-op；true→true no-op；gate park 不被 A2 误遣散。
-3. **C hook 短路**：`clarifyEnabled=false` + host run 产 clarify → `runHostNode` 返回 `failed:clarify-suppressed:*`、**不** `createClarifySession`；`clarifyEnabled` 缺省/true → 现状 `awaiting` + 建 session（不回归）。
+2a. **A2 遣散在途 park（设计门 P0）**：任务卡在 clarify park（leader 与 worker 两态各一例）时 patch autonomous false→true → **单事务**：clarify_sessions+clarify_rounds 双表 canceled + 中介 park run canceled + assignment `awaiting_human→dispatched/open`（新合法边） + resume → agent 以压制态重跑推进、任务不再 `awaiting_human`；**陈旧答案提交与遣散并发 → 409/幂等拒绝、不 mint 重跑**；无 open park 时 A2 no-op；true→true no-op；gate park 不被 A2 误遣散。
+2b. **assignment 转移表 oracle**：`WORKGROUP_ASSIGNMENT_TRANSITIONS` 新增 `awaiting_human→dispatched` / `awaiting_human→open` 两边表测（其余非法边维持非法——全表穷举锁不回归）。
+3. **C 收尾持久化**：压制判定为真 + host run 产 clarify → 宿主 run 行持久 `failed` + `errorMessage='clarify-suppressed:*'` + 终态广播、**不** `createClarifySession`、不 mint 中介 clarify run（DB 断言，非仅内存 result——RFC-182 note 派生依据）；判定器缺省/为假 → 现状 asking done + 建 session + park（不回归）。
+3b. **C 在途竞态（设计门 P1）**：run 以 autonomous=false 起跑 → 运行中 PATCH 翻 on → 该 run 随后发 clarify → 判定器重读最新 config → 被压制（不建 session、不 park）；反向（true 起跑、中途翻 off）→ clarify 正常建 session。
 4. **C leader 收场**：suppressed → 重提示重发；耗尽 → drop-and-continue（run 收终态、不 `throw`、不 park）→ 下一 pass idle→nudge；malformed `clarify-questions-` 仍 `throw`（不误伤）。
 5. **C worker 收场**：suppressed → 重提示重发；耗尽 → assignment failed（不 park）；fc 有界重开仍生效。
 6. **C message-turn**：suppressed → turn 被 drop（`!==done→return`），不建 session、不 park。
 7. **C 三 role 覆盖 + 非全自动不回归**：leader/worker/fc_member 全路径；`clarifyEnabled=true` 下 RFC-172 member-clarify round-trip 正常。
-8. **D 默认**：`workgroupConfigFields` parse 缺省 autonomous=true；新建组 autonomous=true；**已有组（显式 false）行为不变**（回归锁）；前端新建表单 Switch 默认 ON、编辑老组显存储值。
+8. **D 默认（create 作用域，设计门 P1）**：create schema parse 缺省 autonomous=true、新建组 autonomous=true；**update/PUT 省略 autonomous ＝ 保留现值**（false 组不被翻 on、true 组不被翻 off——双向回归锁）；前端新建表单 Switch 默认 ON、编辑老组显存储值。
 9. **D 无 migration**：`upgrade-rolling` journal 计数不变（不新增迁移）。
 10. **前端**：房间「全自动」`Switch` patch 往返 + i18n 对称；新建表单默认 ON。
 

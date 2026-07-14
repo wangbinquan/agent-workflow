@@ -8,12 +8,12 @@ RFC-181（全自动硬化 A/A2/C/D）**先以单 PR 落地**（见其 plan.md T1
 
 ### RFC-182-T1 —— 后端 runHistory 单源 + pending 广播 + wire 补列
 
-- `shared/schemas/workgroupRuntime.ts`：`WorkgroupRunEntry` + room 响应 `runHistory`。
-- `services/workgroupRoom.ts`：`deriveWorkgroupRunHistory`（含 note 派生）；`deriveMemberCurrentRuns` 改投影（选取规则逐字节不变）。
+- `shared/schemas/workgroupRuntime.ts`：`WorkgroupRunEntry`（含 displayName / round / note）+ room 响应 `runHistory`。
+- `services/workgroupRoom.ts`：`deriveWorkgroupRunHistory`——kind 按 nodeId+shardKey 形状判定（clarify-answer 续跑 run 归类入历史与 memberRuns，设计门 P1）、rerunCause 仅排除 wg-gate、note / round / displayName 派生；`deriveMemberCurrentRuns` 改投影（选取规则逐字节不变）。
 - `routes/workgroupTasks.ts`：host-runs 查询补 `startedAt/finishedAt/errorMessage` 三列 + 响应字段。
-- `services/workgroupRunner.ts`：三 mint 点后补 `node.status{pending}` 广播（adopted 分支不发）。
-- P1-3：`shared/schemas/task.ts` `NodeRun`+`rerunCause`、`routes/tasks.ts` select 加列。
-- 测试：design §6.1/§6.2/§6.8（后端 table + 广播断言 + 投影等价对拍 + 前缀契约互链注释）。
+- `services/workgroupRunner.ts` 三 mint 点 + `taskQuestionDispatch` wg 续跑 mint 点：`node.status{pending}` 广播（adopted 分支不重发，一 run 一帧）。
+- P1-3：`shared/schemas/task.ts` `NodeRun`+`rerunCause`、`services/task.ts` `getTaskNodeRuns` 响应 mapper 补字段（设计门 P2 勘误缝位）+ 响应契约测试。
+- 测试：design §6.1/§6.2/§6.8（后端 table + 广播断言 + 投影等价对拍 + 前缀契约互链注释 + clarify-answer 归类回归锁）。
 - **依赖**：无。**验收**：后端全绿；`rfc179-member-current-run.test.ts` 不改选取语义仅扩展；零 migration（journal 计数不变）；`build:binary` smoke（workgroupRunner 新 import broadcaster 防 cycle）。
 
 ### RFC-182-T2 —— 前端 lib oracle + StatusChip 扩展
