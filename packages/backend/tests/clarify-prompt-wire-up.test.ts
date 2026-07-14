@@ -74,8 +74,11 @@ describe('scheduler ↔ runner clarify prompt wire-up (RFC-023 T12)', () => {
     // (RFC-148 — was `hasClarifyChannel === true`). The bi-modal
     // `buildProtocolBlock(input.agentOutputs, true, ...)` call was removed —
     // while clarify is active the agent is given NO `<workflow-output>` format.
+    // RFC-183: the projection routes through the shared clarifyDispositionFor
+    // classifier (the runner consumes the SAME one — invite⟺accept 同源).
     expect(src).toContain('buildMandatoryClarifyPreamble()')
-    expect(src).toMatch(/channel\.directive === 'mandatory'/)
+    expect(src).toContain("disposition === 'invite-mandatory'")
+    expect(src).toContain('clarifyDispositionFor(channel.directive)')
   })
 
   test('runner.ts wires detectEnvelopeKind + extractClarifyEnvelopeBody for the envelope kind branch', () => {

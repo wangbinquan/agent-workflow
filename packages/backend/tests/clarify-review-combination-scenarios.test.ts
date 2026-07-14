@@ -374,9 +374,13 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
   // shared tree green; flips to live `test` + green under RFC-074 provenance.
   test('S3 [KNOWN-INCIDENT]: approve after iterate+clarify reruns must not re-open review on the same content', async () => {
     await makeDesigner(c)
-    // RFC-100: the designer has a clarify channel, so it is in mandatory ask-back
-    // mode and MUST ask before it can produce any <workflow-output>. The plan
-    // therefore opens with a clarify (round 0, answered with stop → v1), then the
+    // RFC-183 migration: the clarify node runs in RFC-165 `optional` mode. The
+    // original scenario relied on the designer VOLUNTARILY clarifying on the
+    // iterate re-production round (directive 'suppressed' accepted it); RFC-183
+    // rejects suppressed-round clarify outright, so the legal mid-review clarify
+    // entry is the optional invite — which keeps this scenario's actual target
+    // (freshness: approve after clarify reruns must not re-open review) intact.
+    // The plan opens with a clarify (round 0, answered with stop → v1), then the
     // iterate path drives two more clarify rounds before v2.
     // plan: call0 clarify; call1 output v1; call2 clarify; call3 clarify; call4 output v2
     writePlan(c, {
@@ -394,7 +398,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'topic' },
         { id: 'designer', kind: 'agent-single', agentName: 'designer' },
-        { id: 'clr', kind: 'clarify', title: 'c' },
+        { id: 'clr', kind: 'clarify', title: 'c', clarifyMode: 'optional' },
         {
           id: 'rev',
           kind: 'review',
@@ -499,18 +503,19 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, opencodeCmd: opencodeCmd() })
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human') // clarify #2
 
-    // RFC-100 (Codex review #1) regression: the `continue` answer ABOVE happened
-    // DURING a review-iterate cycle (reviewContext is populated). Mandatory
-    // ask-back must still apply — the designer's rerun prompt here must carry the
-    // MANDATORY ask-back preamble and NOT the <workflow-output> format. Without
-    // the `|| isClarifyRerun` arm on effectiveHasClarifyChannel, the review
-    // exemption would hand a real agent (unlike this scripted stub) the output
-    // format and let it finalize before the user clicks Stop, silently bypassing
-    // "Keep clarifying".
+    // RFC-100 (Codex review #1) → RFC-183 migration: the `continue` answer ABOVE
+    // happened DURING a review-iterate cycle (reviewContext is populated). Under
+    // the optional-mode migration the rerun prompt must still carry the clarify
+    // invite (the OPTIONAL dual-envelope preamble) — reviewActive must not strip
+    // it (scheduler precedence: optional wins before the mandatory/suppressed
+    // split). The mandatory-arm equivalent (`|| isClarifyRerun`, now the RFC-183
+    // lineage verdict) is unit-locked in rfc183-clarify-invite-accept-symmetry.
+    // The output head is the Option-B swap, so the mandatory "You MUST end your
+    // reply with a" head must still be absent.
     const continueRerun = (await topLevel(c.db, task.id, 'designer')).sort((a, b) =>
       a.id < b.id ? 1 : -1,
     )[0]
-    expect(continueRerun?.promptText ?? '').toContain('MANDATORY ASK-BACK (clarify) mode')
+    expect(continueRerun?.promptText ?? '').toContain('OPTIONAL clarify channel')
     expect(continueRerun?.promptText ?? '').not.toContain('You MUST end your reply with a')
 
     // answer clarify #2 → designer reruns, emits output v2 → review awaiting v2
@@ -737,9 +742,10 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
   // RED on current code [NEW FINDING: bug class extends to the reject path].
   test('S6 probe: reject + clarify reruns then approve must not re-open review on the same content', async () => {
     await makeDesigner(c)
-    // RFC-100: clarify channel ⇒ mandatory ask-back; the designer asks (round 0,
-    // answered with stop → v1) before it can output. plan: clarify; output v1;
-    // clarify (after reject); output v2.
+    // RFC-183 migration（同 S3）：clarify 节点走 RFC-165 optional 模式——reject
+    // 重产出轮（suppressed）的自愿反问已被 RFC-183 拒绝，评审中反问的合法通道是
+    // optional 邀请；场景的回归目标（答完反问后 approve 不得重开评审）不变。
+    // plan: clarify; output v1; clarify (after reject); output v2.
     writePlan(c, {
       designer: [
         { clarify: CLARIFY_BODY },
@@ -754,7 +760,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'topic' },
         { id: 'designer', kind: 'agent-single', agentName: 'designer' },
-        { id: 'clr', kind: 'clarify', title: 'c' },
+        { id: 'clr', kind: 'clarify', title: 'c', clarifyMode: 'optional' },
         {
           id: 'rev',
           kind: 'review',

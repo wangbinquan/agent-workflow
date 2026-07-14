@@ -106,6 +106,7 @@ import {
   tryTransitionMergeState,
 } from '@/services/lifecycle'
 import {
+  continuesClarifyLineage,
   frozenRuntimeOfSession,
   isClarifyRerunCause,
   mintNodeRun,
@@ -700,8 +701,8 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
       // which workgroupRunner adopts as req.nodeRunId — buildClarifyQueueContext
       // returns the flat `## Clarify Q&A` block. renderUserPrompt emits it in
       // `sections`, independent of the workgroup protocol block that owns
-      // `trailing`, and the 'suppressed' directive keeps the run out of
-      // mandatory clarify-only mode. Without it the leader never sees the answers
+      // `trailing`, and the 'delegated' directive (RFC-183) keeps the run out
+      // of mandatory clarify-only mode. Without it the leader never sees the answers
       // it asked for and re-asks / proceeds on wrong assumptions (Codex review 1
       // P1 — the workgroup half of the RFC-023 round-trip was unwired).
       //
@@ -787,13 +788,17 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
           : {}),
         // Voluntary ask-back: the channel is wired (host snapshot) but never
         // mandatory — workgroup members produce wg_result unless they choose
-        // to ask a human (design §5 / RFC-148 'suppressed').
+        // to ask a human (design §5). RFC-183: directive 'delegated' — BOTH
+        // the invite (WG_CLARIFY_BLOCK inside the workgroup protocol block,
+        // only when the group is not autonomous) and the acceptance verdict
+        // live OUTSIDE the ADT, so the runner's directive-driven reject
+        // (which now fires on 'suppressed') must not apply here.
         // RFC-181 C (impl-gate P1/P2): suppression is NOT a dispatch-frozen
         // directive — the per-task PATCH can flip `autonomous` mid-run in
         // EITHER direction, so runNode resolves the oracle below at ENVELOPE
         // time (live both ways) and closes a suppressed run as
         // failed:clarify-forbidden BEFORE terminal persistence.
-        clarifyChannel: { kind: 'self', directive: 'suppressed', injectStopNotice: false },
+        clarifyChannel: { kind: 'self', directive: 'delegated', injectStopNotice: false },
         ...(req.clarifyEnabled !== undefined
           ? { clarifySuppressed: () => isTaskAutonomous(db, taskId) }
           : {}),
@@ -3163,14 +3168,37 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         //     must honor its directive — so isClarifyRerun re-enables the gate
         //     there. Otherwise a "Keep clarifying" answer mid-review would be
         //     bypassed and the agent could finalize before the user clicks Stop.
-        //     The agent may still CHOOSE to emit <workflow-clarify> on a pure
-        //     iterate (the runner accepts it); it just isn't forced to.
+        //     RFC-183: on a pure iterate/reject re-production the runner now
+        //     REJECTS a voluntary <workflow-clarify> (directive 'suppressed'
+        //     ⇒ disposition 'reject') — output is the only accepted reply.
         //
         // RFC-122: extracted to the pure `resolveEffectiveClarifyChannel` oracle
         // and extended with the per-(task, asking-node) `nodeStopOverride` term —
         // the on-canvas "停止反问" toggle forces ask-back off here for BOTH self and
         // cross. `nodeStopOverride=false` reproduces the exact pre-RFC-122 boolean
         // (golden-lock).
+        //
+        // RFC-183 (Codex design-gate P2#1/P2#4): the oracle's isClarifyRerun
+        // input is LINEAGE-aware, not current-cause-only. A clarify-answer /
+        // cross-questioner round that dies technically continues as
+        // cause='process-retry' (attempt loop) or — across a daemon restart —
+        // cause='revival'; both sit outside isClarifyRerunCause BY DESIGN
+        // (RFC-098 修订 #11: that gate owns inline-resume / Q&A derivation).
+        // Feeding the raw cause here made those continuation rounds degrade
+        // to 'suppressed' — zero clarify bytes, and post-RFC-183 a hard
+        // reject — against the user's "Keep clarifying". The persisted cause
+        // chain decides instead; the inline-resume gate above deliberately
+        // keeps the raw `isClarifyRerun` (technical retries never resume).
+        const lineageCauses = currentRunRow
+          ? await lineageCausesNewestFirst(db, {
+              taskId,
+              nodeId: node.id,
+              iteration: currentRunRow.iteration,
+              shardKey: currentShardKey,
+              id: currentRunRow.id,
+            })
+          : []
+        const clarifyLineageContinues = continuesClarifyLineage(lineageCauses)
         const effectiveHasClarifyChannel = resolveEffectiveClarifyChannel({
           hasClarifyChannel,
           // RFC-132 (PR-C): the standing directive is the node clarify state (design §7); the flat
@@ -3179,7 +3207,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           contextDirective: nodeDirective,
           nodeStopOverride,
           reviewActive: reviewContext !== undefined,
-          isClarifyRerun,
+          isClarifyRerun: clarifyLineageContinues,
         })
         // RFC-123 follow-up (user「强制停止」): is the node EXPLICITLY stopped? RFC-132 (PR-C): a
         // 'stop' answer already writes the per-node clarify state (clarifySeal.setNodeClarifyDirective),
@@ -6492,6 +6520,41 @@ export async function freshestPriorRunWithOutput(
     if (has.length > 0) return c
   }
   return undefined
+}
+
+/**
+ * RFC-183 (Codex design-gate P2#1/P2#4): the cause chain of this run's
+ * lineage, newest-first, INCLUDING the current row — the input to
+ * `continuesClarifyLineage` (nodeRunMint.ts). Top-level rows only, same
+ * (taskId, nodeId, iteration, shardKey), id <= current. Persisted-row
+ * derivation on purpose: the verdict must survive the attempt loop
+ * (process-retry mints), daemon restarts (interrupted → 'revival' mints) and
+ * resumes alike — an in-memory boolean carried across attempts cannot
+ * (RFC-183 design §2.5).
+ */
+async function lineageCausesNewestFirst(
+  db: DbClient,
+  run: { taskId: string; nodeId: string; iteration: number; shardKey: string | null; id: string },
+): Promise<Array<string | null>> {
+  const rows = await db
+    .select()
+    .from(nodeRuns)
+    .where(
+      and(
+        eq(nodeRuns.taskId, run.taskId),
+        eq(nodeRuns.nodeId, run.nodeId),
+        eq(nodeRuns.iteration, run.iteration),
+      ),
+    )
+  return rows
+    .filter(
+      (r) =>
+        (r.shardKey ?? null) === (run.shardKey ?? null) &&
+        r.parentNodeRunId === null &&
+        r.id <= run.id,
+    )
+    .sort((a, b) => (a.id > b.id ? -1 : a.id < b.id ? 1 : 0))
+    .map((r) => r.rerunCause)
 }
 
 /**

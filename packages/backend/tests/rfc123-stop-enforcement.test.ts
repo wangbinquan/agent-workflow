@@ -14,11 +14,12 @@
 //      clarifyStopped=true + hasClarifyChannel=false 对) + agent 发 clarify →
 //      status='failed'、errorMessage 以 'clarify-forbidden' 开头、无 clarify
 //      结果（不建会话）。
-//   C. scope golden-lock：directive='suppressed'（review 重跑 / 非显式停止——历史
-//      clarifyStopped 缺省）+ 发 clarify → 仍**接受**（status='done'、clarify 有值）
-//      ——review 重跑不被误伤。
+//   C.（RFC-183 反转）directive='suppressed'（review 重跑）+ 发 clarify → 同样
+//      **拒绝**（重产出措辞）。历史上这档"接受但不邀请"是注入⟺接受唯一不对称的
+//      活路径——prompt 零反问字节却收自愿反问；RFC-183 用户拍板改拒绝（工作组
+//      host 轮的接受路径改挂 'delegated'，见 rfc183-clarify-invite-accept-symmetry）。
 //   D. 源码 wiring 守卫：scheduler 算 clarifyStopped（仅显式 stop）+ 折进
-//      clarifyChannel.directive；runner 拒。
+//      clarifyChannel.directive；runner 经 RFC-183 clarifyDispositionFor 分类器拒。
 
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -199,12 +200,13 @@ describe('RFC-123 B/C: runner rejects disobedient clarify only when explicitly s
     expect(result.clarify).toBeUndefined()
   })
 
-  test("C (scope golden-lock): directive='suppressed' + agent emits clarify → still accepted (review-rerun not harmed)", async () => {
+  test("C (RFC-183 反转): directive='suppressed' + agent emits clarify → rejected too (re-production wording)", async () => {
     const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
     const result = await runStoppedNode(h, nodeRunId, {})
-    expect(result.status).toBe('done')
-    expect(result.clarify).toBeDefined()
-    expect(result.clarify?.questions).toHaveLength(1)
+    expect(result.status).toBe('failed')
+    expect(result.errorMessage ?? '').toMatch(/^clarify-forbidden/)
+    expect(result.errorMessage ?? '').toContain('re-production round does not accept ask-back')
+    expect(result.clarify).toBeUndefined()
   })
 })
 
@@ -250,13 +252,19 @@ describe('RFC-123 D: stop-enforcement wiring guards', () => {
   })
 
   test('runner rejects clarify when explicitly stopped（且置 clarify-forbidden 码）', () => {
-    // RFC-148: the guard reads the single clarifyStoppedDirective projection
-    // of the ClarifyChannel ADT (directive === 'stopped'), not a scattered
-    // opts.clarifyStopped boolean.
+    // RFC-183: the stopped guard folded into the unified reject branch driven
+    // by the shared clarifyDispositionFor classifier ('stopped' and
+    // 'suppressed' both map to disposition 'reject'); the RFC-123 stop-round
+    // wording is preserved byte-exact and picked by channel.directive.
     expect(norm(runnerSrc)).toContain(
-      "const clarifyStoppedDirective = clarifyWired && channel.directive === 'stopped'",
+      "const clarifyRejectDirective = clarifyDisposition === 'reject'",
     )
-    expect(norm(runnerSrc)).toContain("clarifyStoppedDirective && kind === 'clarify'")
+    expect(norm(runnerSrc)).toContain(
+      "kind === 'clarify' && channel.kind !== 'none' && clarifyRejectDirective",
+    )
+    expect(norm(runnerSrc)).toContain(
+      'node is in STOP CLARIFYING mode; emit <workflow-output>, not <workflow-clarify>',
+    )
     expect(norm(runnerSrc)).toContain('CLARIFY_FORBIDDEN_PREFIX')
     expect(norm(runnerSrc)).toContain("failureCode = 'clarify-forbidden'")
   })

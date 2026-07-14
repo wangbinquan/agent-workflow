@@ -308,8 +308,10 @@ describe('RFC-165 O4 — followup keeps clarify alive for optional (source lock)
       'utf8',
     )
     const norm = (x: string) => x.replace(/\s+/g, ' ')
+    // RFC-183: the projection derives from the shared clarifyDispositionFor
+    // classifier (invite⟺accept single source) instead of a directive literal.
     expect(norm(runnerSrc)).toContain(
-      "const clarifyOptional = clarifyWired && channel.directive === 'optional'",
+      "const clarifyOptional = clarifyDisposition === 'invite-optional'",
     )
     expect(norm(runnerSrc)).toContain('hasClarifyChannel: clarifyMandatory || clarifyOptional')
   })

@@ -706,19 +706,21 @@ describe('RFC-164 engine — source locks', () => {
   })
 
   // Round-trip (Codex review P1): a workgroup host run is dispatched with clarify
-  // directive 'suppressed'. When it is a clarify-answer rerun, runHostNode passes
-  // the answered `## Clarify Q&A` as clarifyContext. This locks that renderUserPrompt
-  // emits that block (in `sections`) ALONGSIDE the workgroup protocol (which still
-  // owns `trailing`) — the 'suppressed' directive is neither mandatory nor optional,
-  // so it never flips the run into clarify-only mode that would steal `trailing`.
-  test('renderUserPrompt: suppressed workgroup run renders answered Clarify Q&A ALONGSIDE the wg protocol', () => {
+  // directive 'delegated' (RFC-183; was 'suppressed' before the reject fold —
+  // both render byte-identically). When it is a clarify-answer rerun, runHostNode
+  // passes the answered `## Clarify Q&A` as clarifyContext. This locks that
+  // renderUserPrompt emits that block (in `sections`) ALONGSIDE the workgroup
+  // protocol (which still owns `trailing`) — the 'delegated' directive is neither
+  // mandatory nor optional, so it never flips the run into clarify-only mode that
+  // would steal `trailing`.
+  test('renderUserPrompt: delegated workgroup run renders answered Clarify Q&A ALONGSIDE the wg protocol', () => {
     const out = renderUserPrompt({
       promptTemplate: 'hello',
       inputs: {},
       meta: { repoPath: '/r', baseBranch: 'main', taskId: 't' },
       agentOutputs: ['legacy_port'],
       workgroupProtocolBlock: '## WG PROTOCOL SENTINEL',
-      clarifyChannel: { kind: 'self', directive: 'suppressed', injectStopNotice: false },
+      clarifyChannel: { kind: 'self', directive: 'delegated', injectStopNotice: false },
       clarifyContext: { flatBlock: '## Clarify Q&A\n- board size? → 20x20' },
     })
     // the human's answers reach the agent …

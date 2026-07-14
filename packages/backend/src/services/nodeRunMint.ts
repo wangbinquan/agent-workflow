@@ -267,6 +267,43 @@ export function isClarifyRerunCause(cause: string | null | undefined): boolean {
   return cause === 'clarify-answer' || cause === 'cross-clarify-questioner-rerun'
 }
 
+/**
+ * RFC-183 (Codex design-gate P2#1 + P2#4) — does the CURRENT dispatch
+ * continue a clarify-answer lineage?
+ *
+ * The RFC-122 oracle (`resolveEffectiveClarifyChannel`) keeps mandatory
+ * ask-back alive on a review-active round only when the run "is itself a
+ * clarify-answer rerun". Feeding it `isClarifyRerunCause(currentCause)`
+ * alone is wrong for TECHNICAL continuations of such a round:
+ *   - an in-attempt crash mints `cause:'process-retry'` (scheduler attempt
+ *     loop), and
+ *   - a daemon restart reaps the row to `interrupted`, whose redispatch
+ *     mints `cause:'revival'` (schedulerMintCause),
+ * both of which are deliberately OUTSIDE `isClarifyRerunCause` (RFC-098
+ * 对抗检视修订 #11 — that gate owns inline-resume / Q&A derivation, which
+ * must stay generation-derived on technical retries). Without lineage
+ * awareness those rounds degrade to directive 'suppressed' — zero clarify
+ * bytes in the prompt, and (post-RFC-183) a hard reject — while the user may
+ * have just clicked "Keep clarifying".
+ *
+ * So: walk the cause chain newest-first, SKIP consecutive technical
+ * continuations ('process-retry' / 'revival'), and let the first substantive
+ * cause decide via {@link isClarifyRerunCause}. Substantive causes ARE
+ * terminal on purpose: 'retry-node' (user chose to redo) and
+ * 'stale-redispatch' (a new logical round) do NOT inherit a clarify lineage.
+ * Derived from persisted rows, so the verdict survives attempt loops, daemon
+ * restarts and resumes alike.
+ */
+export function continuesClarifyLineage(
+  causesNewestFirst: ReadonlyArray<string | null | undefined>,
+): boolean {
+  for (const cause of causesNewestFirst) {
+    if (cause === 'process-retry' || cause === 'revival') continue
+    return isClarifyRerunCause(cause)
+  }
+  return false
+}
+
 /** RFC-112/113: the frozen runtime snapshot a node_run dispatches/resumes on. */
 export interface FrozenRuntime {
   /** RuntimeDriver kind — decides the driver + session-id format. */

@@ -4,15 +4,18 @@
 // 布尔）收敛为两个判别联合后，本文件锁三层契约：
 //   1. 非法状态类型不可表示（followup 无 session / stopped 无接线）——
 //      编译期 @ts-expect-error 断言；
-//   2. 渲染投影格：directive 三态 × 渲染面（mandatory=ask-back preamble、
-//      suppressed/none=输出协议、stopped+notice=STOP trailer）——特别是
-//      设计门 high 要求的 suppressed-cross 回归（review 重跑抑制下 prompt
-//      不得带 mandatory preamble）；
+//   2. 渲染投影格：directive × 渲染面（mandatory=ask-back preamble、
+//      suppressed/delegated/none=输出协议、stopped+notice=STOP trailer）——
+//      特别是设计门 high 要求的 suppressed-cross 回归（review 重跑抑制下
+//      prompt 不得带 mandatory preamble）。RFC-183 起投影统一走
+//      clarifyDispositionFor 分类器（渲染与 runner 同源），并新增 'delegated'
+//      （host 轮）与 'suppressed' 逐字节同支的等式锁；
 //   3. runner 源码形态锁：解析 cap 只随接线族（kind==='cross'）不随
-//      directive——suppressed cross 自愿 clarify 仍享无上限 cap。
+//      directive——RFC-183 后 suppressed cross 在解析前即被拒，cap 锚对
+//      仍会进入解析的邀请态（mandatory/optional cross）成立。
 
-import type { ClarifyChannel, PromptMode } from '@agent-workflow/shared'
-import { renderUserPrompt } from '@agent-workflow/shared'
+import type { ClarifyChannel, ClarifyChannelDirective, PromptMode } from '@agent-workflow/shared'
+import { clarifyDispositionFor, renderUserPrompt } from '@agent-workflow/shared'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
@@ -54,7 +57,7 @@ describe('RFC-148 — clarifyChannel 渲染投影格', () => {
     expect(out).not.toContain('You MUST end your reply with a `<workflow-output>` block')
   })
 
-  test('suppressed-cross（设计门回归）：review 重跑抑制下 prompt 是纯输出协议——cap 语义留给 runner', () => {
+  test('suppressed-cross（设计门回归）：review 重跑抑制下 prompt 是纯输出协议——拒绝语义在 runner（RFC-183）', () => {
     const out = render({ kind: 'cross', directive: 'suppressed', injectStopNotice: false })
     expect(out).not.toContain('MANDATORY ASK-BACK')
     expect(out).toContain('You MUST end your reply with a `<workflow-output>` block')
@@ -68,12 +71,48 @@ describe('RFC-148 — clarifyChannel 渲染投影格', () => {
     expect(out).not.toContain('MANDATORY ASK-BACK')
   })
 
-  test('stopped 不带 notice / none / 缺省：三者字节相同（纯输出协议）', () => {
+  test('stopped 不带 notice / suppressed / delegated / none / 缺省：五者字节相同（纯输出协议，RFC-183 AC6）', () => {
     const stopped = render({ kind: 'self', directive: 'stopped', injectStopNotice: false })
+    const suppressed = render({ kind: 'self', directive: 'suppressed', injectStopNotice: false })
+    const delegated = render({ kind: 'self', directive: 'delegated', injectStopNotice: false })
     const none = render({ kind: 'none' })
     const absent = render(undefined)
     expect(stopped).toBe(none)
+    expect(suppressed).toBe(none)
+    expect(delegated).toBe(none)
     expect(none).toBe(absent)
+  })
+
+  test('RFC-183：渲染投影按分类器全枚举（新 directive 不入表即编译红）', () => {
+    // satisfies 完备性锚：ClarifyChannelDirective 每个成员必须声明期望投影。
+    const RENDER_CLASS = {
+      mandatory: 'ask-back',
+      optional: 'dual',
+      suppressed: 'output-only',
+      stopped: 'output-only',
+      delegated: 'output-only',
+    } satisfies Record<ClarifyChannelDirective, 'ask-back' | 'dual' | 'output-only'>
+    const baseline = render({ kind: 'none' })
+    for (const [directive, cls] of Object.entries(RENDER_CLASS)) {
+      const out = render({
+        kind: 'self',
+        directive: directive as ClarifyChannelDirective,
+        injectStopNotice: false,
+      })
+      if (cls === 'ask-back') {
+        expect(out).toContain('MANDATORY ASK-BACK')
+        expect(clarifyDispositionFor(directive as ClarifyChannelDirective)).toBe('invite-mandatory')
+      } else if (cls === 'dual') {
+        expect(out).toContain('OPTIONAL clarify channel')
+        expect(out).toContain('<workflow-clarify>')
+        expect(clarifyDispositionFor(directive as ClarifyChannelDirective)).toBe('invite-optional')
+      } else {
+        expect(out).toBe(baseline)
+        expect(['reject', 'external']).toContain(
+          clarifyDispositionFor(directive as ClarifyChannelDirective),
+        )
+      }
+    }
   })
 })
 
@@ -145,15 +184,21 @@ describe('RFC-148 — runner 源码形态锁（cap 随接线族、门随 directi
     'utf8',
   )
 
-  test('解析 cap 判定锚 kind===cross（不看 directive——suppressed cross 仍无上限）', () => {
+  test('解析 cap 判定锚 kind===cross（不看 directive——RFC-183 后进入解析的是邀请态 cross）', () => {
     expect(runnerSrc).toMatch(
       /channel\.kind === 'cross' \? \{ maxQuestions: Number\.POSITIVE_INFINITY \}/,
     )
   })
 
-  test('clarify-required 门锚 mandatory、clarify-forbidden 门锚 stopped', () => {
-    expect(runnerSrc).toContain("clarifyWired && channel.directive === 'mandatory'")
-    expect(runnerSrc).toContain("clarifyWired && channel.directive === 'stopped'")
+  test('RFC-183：门的派生统一走 clarifyDispositionFor（注入⟺接受同源）', () => {
+    expect(runnerSrc).toContain(
+      'const clarifyDisposition = clarifyWired ? clarifyDispositionFor(channel.directive) : undefined',
+    )
+    expect(runnerSrc).toContain(
+      "const clarifyMandatory = clarifyDisposition === 'invite-mandatory'",
+    )
+    expect(runnerSrc).toContain("const clarifyOptional = clarifyDisposition === 'invite-optional'")
+    expect(runnerSrc).toContain("const clarifyRejectDirective = clarifyDisposition === 'reject'")
   })
 
   test('followup 判别单点派生（散装 !== true 守卫不得回潮）', () => {

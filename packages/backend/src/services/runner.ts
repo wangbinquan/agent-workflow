@@ -31,6 +31,7 @@ import type {
 } from '@agent-workflow/shared'
 import {
   isAgentNodeKind,
+  clarifyDispositionFor,
   composePerParsedKindRepairBlocks,
   normalizeKindString,
   parseClarifyEnvelopeBody,
@@ -465,16 +466,22 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   const inventoryNodeKind = opts.nodeKind ?? 'agent-single'
   // RFC-148 canonical projections of the two dispatch ADTs (single
   // derivation; every historical scattered-boolean guard reads these).
+  // RFC-183: the clarify projections come from the SAME exhaustive
+  // disposition classifier the prompt renderer consumes, so what the prompt
+  // invites and what this parse layer accepts can never drift apart.
   const followupMode = opts.promptMode?.kind === 'followup' ? opts.promptMode : undefined
   const channel = opts.clarifyChannel ?? { kind: 'none' as const }
   const clarifyWired = channel.kind !== 'none'
-  const clarifyMandatory = clarifyWired && channel.directive === 'mandatory'
+  const clarifyDisposition = clarifyWired ? clarifyDispositionFor(channel.directive) : undefined
+  const clarifyMandatory = clarifyDisposition === 'invite-mandatory'
   // RFC-165 (F12): optional trips NEITHER enforcement gate below; it only
   // keeps the clarify option alive in envelope-followup (error-correction)
   // rounds so the agent can still pick either envelope after a malformed
   // reply.
-  const clarifyOptional = clarifyWired && channel.directive === 'optional'
-  const clarifyStoppedDirective = clarifyWired && channel.directive === 'stopped'
+  const clarifyOptional = clarifyDisposition === 'invite-optional'
+  // RFC-123 (stopped) + RFC-183 (suppressed re-production rounds): both
+  // reject a disobedient <workflow-clarify>; only the message flavor differs.
+  const clarifyRejectDirective = clarifyDisposition === 'reject'
   const wantsInventory = isAgentNodeKind(inventoryNodeKind) && followupMode === undefined
 
   // RFC-041 PR3: silent inject of approved memories into the primary agent's
@@ -1180,7 +1187,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // the clarify envelope (and the node hard-fails after retries — there is no
     // output escape hatch). On the stop / suppressed rounds this guard is
     // skipped and the agent finalizes through the normal `<workflow-output>`
-    // path below.
+    // path below (RFC-183: on those rounds a disobedient <workflow-clarify>
+    // is rejected further down — output is the only accepted reply).
     const clarifyActive = clarifyMandatory
     if (clarifyActive && kind !== 'clarify') {
       status = 'failed'
@@ -1191,19 +1199,39 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           : kind === 'both'
             ? `${CLARIFY_REQUIRED_PREFIX}-both-present: node is in mandatory ask-back mode; emit only <workflow-clarify>, no <workflow-output>`
             : `${CLARIFY_REQUIRED_PREFIX}-missing: node is in mandatory ask-back mode; reply must be a <workflow-clarify> envelope`
-    } else if (clarifyStoppedDirective && kind === 'clarify') {
-      // RFC-123 follow-up (user「强制停止」): the node is EXPLICITLY stopped (canvas
-      // toggle='stop' OR a latest answered 'stop' directive — NOT review-rerun ask-back
-      // suppression) so it was told STOP CLARIFYING. The agent disobeyed and emitted a
-      // <workflow-clarify> anyway. REJECT it — symmetric to the clarify-required output
-      // rejection above — so a stopped node can NEVER re-open a clarify session despite
-      // agent disobedience. No clarifyResult is set (no session); decideEnvelopeFollowup
-      // matches this prefix → same-session follow-up re-demands <workflow-output> (the
-      // renderer coerces the reason to 'envelope-missing' while hasClarify=false). Hard
-      // fails after retries (the stop is enforced; the agent must produce output).
+    } else if (kind === 'clarify' && !clarifyWired) {
+      // RFC-183 (Codex design-gate P2#3): a voluntary <workflow-clarify> on a
+      // run with NO clarify channel used to parse into a clarifyResult with
+      // status='done' and EMPTY outputs. The main dispatch path caught that
+      // afterwards in the scheduler (clarify-no-channel), but direct callers
+      // that only check result.status — fanout shard children
+      // (scheduler.ts dispatchFanoutShard) and aggregators — treated the
+      // empty envelope as success and merged worktrees. Front-stop it here.
+      // No failureCode on purpose: parity with the scheduler-level rejection
+      // (not a followup-able failure); the attempt loop retries, then the
+      // node hard-fails.
+      status = 'failed'
+      errorMessage =
+        'clarify-no-channel: agent emitted <workflow-clarify> but this run has no clarify channel; emit <workflow-output>'
+    } else if (kind === 'clarify' && channel.kind !== 'none' && clarifyRejectDirective) {
+      // RFC-123 (directive 'stopped' — user「强制停止」: canvas toggle='stop' OR a
+      // latest answered 'stop' directive) + RFC-183 (directive 'suppressed' —
+      // a review reject / iterate re-production round that never invited
+      // ask-back): the disposition classifier says this dispatch injected
+      // ZERO clarify bytes into the prompt, so a <workflow-clarify> reply is
+      // REJECTED — symmetric to the clarify-required output rejection above,
+      // and the invite⟺accept symmetry the classifier exists to enforce. No
+      // clarifyResult is set (no session), so a stopped/suppressed node can
+      // NEVER (re-)open a clarify round through agent disobedience.
+      // decideEnvelopeFollowup matches this prefix → same-session follow-up
+      // re-demands <workflow-output> (the renderer coerces the reason to
+      // 'envelope-missing' while hasClarify=false). Hard fails after retries.
       status = 'failed'
       failureCode = 'clarify-forbidden'
-      errorMessage = `${CLARIFY_FORBIDDEN_PREFIX}: node is in STOP CLARIFYING mode; emit <workflow-output>, not <workflow-clarify>`
+      errorMessage =
+        channel.directive === 'stopped'
+          ? `${CLARIFY_FORBIDDEN_PREFIX}: node is in STOP CLARIFYING mode; emit <workflow-output>, not <workflow-clarify>`
+          : `${CLARIFY_FORBIDDEN_PREFIX}: this re-production round does not accept ask-back; apply the review feedback and emit <workflow-output>, not <workflow-clarify>`
     } else if (kind === 'clarify' && (await opts.clarifySuppressed?.()) === true) {
       // RFC-181 C — workgroup autonomous hard suppression, resolved at
       // ENVELOPE time against the LATEST task config (the per-task PATCH can
@@ -1225,9 +1253,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     } else if (kind === 'clarify') {
       const body = extractClarifyEnvelopeBody(accumulatedText)
       // RFC-056: cross-clarify path disables the RFC-023 5-question cap.
-      // RFC-148 (设计门 high 采纳): the cap follows the WIRING family alone —
-      // a suppressed cross rerun (review reject/iterate) that voluntarily
-      // emits <workflow-clarify> still parses with the lifted cap.
+      // RFC-148: the cap follows the WIRING family alone. RFC-183 narrows the
+      // rounds that reach this parse to the invited dispositions (mandatory /
+      // optional) — a suppressed cross rerun is now rejected above before
+      // parsing — but the anchor stays the kind: an optional cross round
+      // still parses with the lifted cap.
       const parseOpts = channel.kind === 'cross' ? { maxQuestions: Number.POSITIVE_INFINITY } : {}
       const parsed = body !== null ? parseClarifyEnvelopeBody(body, parseOpts) : null
       if (parsed === null || parsed.body === null) {

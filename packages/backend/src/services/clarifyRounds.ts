@@ -53,7 +53,10 @@ export function resolveEffectiveClarifyChannel(args: {
   nodeStopOverride: boolean
   /** `reviewContext !== undefined`. */
   reviewActive: boolean
-  /** This run continues a clarify round (clarify-answer rerun). */
+  /** This run continues a clarify round. RFC-183: the scheduler feeds the
+   *  LINEAGE verdict (`continuesClarifyLineage` over the persisted cause
+   *  chain), so a clarify-answer round's technical continuations
+   *  (process-retry / revival) count too — not just the answer rerun itself. */
   isClarifyRerun: boolean
 }): boolean {
   return (

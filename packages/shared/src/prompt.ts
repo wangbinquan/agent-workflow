@@ -133,10 +133,21 @@ export interface PriorOutputUpdateContext {
  *   - `directive` is this run's enforcement:
  *       'mandatory'  — genuine clarify round; the ONLY valid reply is
  *                      `<workflow-clarify>` (RFC-100 gate);
- *       'suppressed' — channel wired but not enforced (review reject /
- *                      iterate re-production; voluntary clarify accepted);
+ *       'suppressed' — channel wired but this run is a review reject /
+ *                      iterate re-production: NOT invited, and (RFC-183) a
+ *                      disobedient `<workflow-clarify>` is rejected — the
+ *                      prompt carries zero clarify bytes, so acceptance
+ *                      would be an invite/accept asymmetry;
  *       'stopped'    — user ended clarification; a disobedient
- *                      `<workflow-clarify>` is rejected (RFC-123).
+ *                      `<workflow-clarify>` is rejected (RFC-123);
+ *       'delegated'  — (RFC-183) host runs (workgroup / dynamic-workflow):
+ *                      BOTH the invite and the acceptance verdict live
+ *                      OUTSIDE this ADT — the invite in the caller's
+ *                      workgroupProtocolBlock (WG_CLARIFY_BLOCK, only when
+ *                      not autonomous), the verdict in the RFC-181
+ *                      envelope-time callback + the scheduler's
+ *                      clarify-no-channel check. Renders byte-identically
+ *                      to 'suppressed' (pure output protocol).
  *   - `injectStopNotice` — inject the standalone `### User directive:
  *     STOP CLARIFYING` trailer (RFC-122; stop rounds with no prior clarify
  *     content to carry it).
@@ -156,9 +167,57 @@ export type ClarifyChannel =
        * when the scheduler composes the value: stopped > optional >
        * mandatory/suppressed.
        */
-      directive: 'mandatory' | 'suppressed' | 'stopped' | 'optional'
+      directive: ClarifyChannelDirective
       injectStopNotice: boolean
     }
+
+/** The directive axis of {@link ClarifyChannel}, named so the RFC-183
+ *  disposition classifier and its tests can enumerate it exhaustively. */
+export type ClarifyChannelDirective =
+  | 'mandatory'
+  | 'suppressed'
+  | 'stopped'
+  | 'optional'
+  | 'delegated'
+
+/**
+ * RFC-183 — the single exhaustive invite/accept policy for a clarify-channel
+ * directive. Renderer, runner and the golden-matrix tests all consume THIS
+ * function instead of testing directive literals independently, so "sample
+ * injected ⟺ clarify accepted" is a structural guarantee:
+ *
+ *   'invite-mandatory' — inject the clarify-only protocol; runner demands
+ *                        `<workflow-clarify>` (RFC-100);
+ *   'invite-optional'  — inject the dual-envelope protocol; runner accepts
+ *                        either envelope (RFC-165);
+ *   'reject'           — inject NOTHING clarify-flavored; runner rejects a
+ *                        `<workflow-clarify>` (stopped → RFC-123 wording,
+ *                        suppressed → RFC-183 re-production wording);
+ *   'external'         — ADT abstains: invite + verdict are the host
+ *                        caller's contract (see 'delegated' above).
+ *
+ * Adding a directive without picking a disposition here is a compile error
+ * (never check) — the drift this RFC exists to prevent.
+ */
+export type ClarifyDisposition = 'invite-mandatory' | 'invite-optional' | 'reject' | 'external'
+
+export function clarifyDispositionFor(directive: ClarifyChannelDirective): ClarifyDisposition {
+  switch (directive) {
+    case 'mandatory':
+      return 'invite-mandatory'
+    case 'optional':
+      return 'invite-optional'
+    case 'stopped':
+    case 'suppressed':
+      return 'reject'
+    case 'delegated':
+      return 'external'
+    default: {
+      const exhausted: never = directive
+      throw new Error(`unreachable clarify directive: ${String(exhausted)}`)
+    }
+  }
+}
 
 /** RFC-049 structured port-validation failure (followup payload item). */
 export interface PortValidationFailure {
@@ -238,8 +297,10 @@ export interface RenderPromptInput {
    * workgroup-generated block (leader/worker/fc variants) — the agent's own
    * `outputs` declaration does not apply inside a workgroup task (design §5).
    * Never concatenated with buildProtocolBlock; mandatory ask-back still wins
-   * (a workgroup member run is dispatched with directive 'suppressed', so in
-   * practice the mandatory branch never fires for workgroup runs).
+   * (RFC-183: a workgroup member run is dispatched with directive
+   * 'delegated', so in practice the mandatory branch never fires for
+   * workgroup runs — the clarify invite, when the group is not autonomous,
+   * travels INSIDE this block as WG_CLARIFY_BLOCK).
    */
   workgroupProtocolBlock?: string
   /** RFC-005 review-driven re-run context. Absent for normal first-time runs. */
@@ -249,15 +310,17 @@ export interface RenderPromptInput {
   clarifyContext?: ClarifyPromptContext
   /**
    * RFC-148: the clarify-channel state for this dispatch (one discriminated
-   * value; see `ClarifyChannel`). The renderer consumes two projections:
-   *   - `directive === 'mandatory'` ⟺ the historical
+   * value; see `ClarifyChannel`). The renderer consumes two projections
+   * (RFC-183: both routed through `clarifyDispositionFor`):
+   *   - disposition 'invite-mandatory' ⟺ the historical
    *     effectiveHasClarifyChannel — emits the RFC-100 mandatory ask-back
    *     preamble + clarify-only format (no `<workflow-output>` format) and
    *     selects the RFC-141 ask-back prior-output wording;
    *   - `injectStopNotice` — the RFC-122 standalone STOP CLARIFYING trailer.
-   * Absent / kind:'none' / 'suppressed' / 'stopped' all render the single-
-   * envelope output protocol unchanged (the enforcement differences live in
-   * the runner's parse layer, not in prompt bytes).
+   * Absent / kind:'none' / 'suppressed' / 'stopped' / 'delegated' all render
+   * the single-envelope output protocol unchanged (their enforcement
+   * differences live in the runner's parse layer — which consumes the SAME
+   * classifier — not in prompt bytes).
    */
   clarifyChannel?: ClarifyChannel
   /**
@@ -360,17 +423,21 @@ export const DEPRECATED_PROMPT_TOKENS: ReadonlySet<string> = new Set([
  *      its `<workflow-output>` reply.
  */
 export function renderUserPrompt(input: RenderPromptInput): string {
-  // RFC-148 projections of the clarify-channel ADT (see ClarifyChannel):
-  // mandatory ask-back drives preamble/trailing/prior-output wording; the
-  // stop notice is the standalone RFC-122 trailer. Every other directive
-  // renders identically to "no channel" — enforcement lives in the runner.
+  // RFC-148 projections of the clarify-channel ADT (see ClarifyChannel),
+  // routed through the RFC-183 disposition classifier so injection can never
+  // drift from the runner's acceptance verdict: 'invite-mandatory' drives
+  // preamble/trailing/prior-output wording, 'invite-optional' the dual
+  // protocol; 'reject'/'external' render identically to "no channel" — their
+  // enforcement lives in the runner (and, for 'external', the host caller).
   const channel = input.clarifyChannel
-  const mandatoryAskBack =
-    channel !== undefined && channel.kind !== 'none' && channel.directive === 'mandatory'
+  const disposition =
+    channel !== undefined && channel.kind !== 'none'
+      ? clarifyDispositionFor(channel.directive)
+      : undefined
+  const mandatoryAskBack = disposition === 'invite-mandatory'
   // RFC-165 (F12): optional ask-back renders the DUAL-envelope protocol —
   // both formats, agent's choice; enforcement stays off in the runner.
-  const optionalAskBack =
-    channel !== undefined && channel.kind !== 'none' && channel.directive === 'optional'
+  const optionalAskBack = disposition === 'invite-optional'
   const stopNotice =
     channel !== undefined && channel.kind !== 'none' && channel.injectStopNotice === true
   const tpl = input.promptTemplate ?? ''
