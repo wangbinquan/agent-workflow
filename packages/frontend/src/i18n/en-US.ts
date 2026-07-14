@@ -1247,6 +1247,7 @@ export const enUS: Resources = {
       memberExecuting: '@{{name}} is working…',
       presenceQueued: 'Queued',
       presenceAwaiting: 'Awaiting answer',
+      activeRunsBadge: '×{{count}} active',
       turnKindLeader: 'Leader round',
       turnKindMessage: 'Mention turn',
       turnKindAssignment: 'Assignment turn',
@@ -1791,7 +1792,7 @@ export const enUS: Resources = {
     saveConfig: 'Save config',
     limitInvalid: 'Limits must be positive (the token cap must be an integer).',
     summaryCollaborators: '{{count}} collaborator(s)',
-    clarifyOff: 'Follow-up questions off',
+    clarifyOn: 'Follow-up questions on',
     kindLocked:
       'The execution mode cannot change while editing a schedule (the object can be swapped within the same kind).',
     degradedBanner:

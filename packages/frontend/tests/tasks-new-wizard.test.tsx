@@ -310,10 +310,14 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     const post = calls.find(
       (c) => c.method === 'POST' && c.url.includes('/api/agents/auditor/tasks'),
     )!
+    // 单 agent 全新启动默认「不允许反问」（用户 2026-07-14, tasks.new.tsx allowClarify=false）：
+    // the fresh clarify switch is OFF, so buildAgentStartBody stamps allowClarify:false on the
+    // wire (the switch was never touched here). Locks the flipped default at the wire level.
     expect(post.body).toEqual({
       name: 'TA',
       description: 'fix the flaky test',
       scratch: true,
+      allowClarify: false,
     })
   })
 
@@ -504,6 +508,47 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     // advanced <details> fold.
     const clarify = await screen.findByText(/允许反问|Allow follow-up questions/)
     expect(clarify.closest('details')).toBeNull()
+
+    // 单 agent 全新启动默认「不允许反问」（用户 2026-07-14）——开关默认未勾选，用户可按需打开。
+    const clarifySwitch = screen.getByRole('checkbox', {
+      name: /允许反问|Allow follow-up questions/,
+    })
+    expect((clarifySwitch as HTMLInputElement).checked).toBe(false)
+  })
+
+  // 单 agent 反问默认关（用户 2026-07-14）后，确认页「高级」摘要改为「偏离默认才提示」：
+  // 默认关 → 不显示（W2 断言 scratch+默认无高级行）；用户「打开」反问才显示「Follow-up
+  // questions on」。同时验证 ON ⇒ buildAgentStartBody 省略 allowClarify（omit-on-true 契约，
+  // 后端 default(true) 承接），与 W2 的 OFF ⇒ 显式 false 互为镜像。
+  test('W14: opting INTO clarify surfaces in the confirm summary + omits allowClarify on the wire', async () => {
+    const calls = installFetch()
+    await renderWizard('/tasks/new?kind=agent&agent=auditor')
+
+    fireEvent.click(await screen.findByTestId('wizard-space-scratch'))
+    next()
+
+    fireEvent.change(await screen.findByTestId('wizard-task-name'), { target: { value: 'TC' } })
+    fireEvent.change(screen.getByTestId('wizard-description'), { target: { value: 'ask me' } })
+    // Turn the (now-off-by-default) clarify switch ON.
+    const clarifySwitch = screen.getByRole('checkbox', {
+      name: /允许反问|Allow follow-up questions/,
+    })
+    fireEvent.click(clarifySwitch)
+    expect((clarifySwitch as HTMLInputElement).checked).toBe(true)
+    next()
+
+    // The advanced summary row now renders BECAUSE clarify was opted into.
+    const advanced = await screen.findByTestId('wizard-summary-advanced')
+    expect(advanced.textContent).toMatch(/反问已开启|Follow-up questions on/)
+
+    fireEvent.click(await screen.findByTestId('wizard-launch'))
+    await waitFor(() => expect(screen.queryByTestId('task-page')).toBeTruthy())
+    const post = calls.find(
+      (c) => c.method === 'POST' && c.url.includes('/api/agents/auditor/tasks'),
+    )!
+    // ON ⇒ omitted (RFC-175 wire anchor: absent ⟺ true; backend default(true) applies).
+    expect(post.body).toEqual({ name: 'TC', description: 'ask me', scratch: true })
+    expect('allowClarify' in (post.body as object)).toBe(false)
   })
 
   test('W10: a 422 workgroup-not-ready launch renders the friendly reason copy', async () => {

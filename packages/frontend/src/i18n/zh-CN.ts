@@ -1166,6 +1166,7 @@ export interface Resources {
       memberExecuting: string
       presenceQueued: string
       presenceAwaiting: string
+      activeRunsBadge: string
       turnKindLeader: string
       turnKindMessage: string
       turnKindAssignment: string
@@ -1703,7 +1704,7 @@ export interface Resources {
     saveConfig: string
     limitInvalid: string
     summaryCollaborators: string
-    clarifyOff: string
+    clarifyOn: string
     kindLocked: string
     degradedBanner: string
     spaceUnresolvedNotice: string
@@ -4096,6 +4097,7 @@ export const zhCN: Resources = {
       memberExecuting: '@{{name}} 执行中…',
       presenceQueued: '排队中',
       presenceAwaiting: '等待回答',
+      activeRunsBadge: '×{{count}} 在途',
       turnKindLeader: '领导轮',
       turnKindMessage: '被 @ 轮',
       turnKindAssignment: '派发轮',
@@ -4626,7 +4628,7 @@ export const zhCN: Resources = {
     saveConfig: '保存配置',
     limitInvalid: '上限必须为正数（Token 上限须为整数）。',
     summaryCollaborators: '{{count}} 位协作者',
-    clarifyOff: '反问已关闭',
+    clarifyOn: '反问已开启',
     kindLocked: '编辑定时任务时执行方式不可更改（对象可在同类型内更换）。',
     degradedBanner: '该定时任务存储的配置无法解析（旧格式或已损坏）；请重新填写并保存以修复。',
     spaceUnresolvedNotice:

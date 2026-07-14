@@ -157,7 +157,11 @@ function TaskWizardPage() {
   const [uploads, setUploads] = useState<Record<string, File[]>>({})
   const [description, setDescription] = useState('')
   const [goal, setGoal] = useState('')
-  const [allowClarify, setAllowClarify] = useState(true)
+  // 单 agent 全新启动默认「不允许反问」（用户 2026-07-14）——保留开关，用户可按需勾选。
+  // 后端 StartAgentTaskSchema.allowClarify 仍 default(true)：那是 RFC-175 relaunch/edit
+  // 的「wire 省略 ⟺ 原值 true」重建锚点，翻它会误读旧持久化 launchPayload；产品默认在此处。
+  // relaunch/edit 会经 applyWizardSeed → setAllowClarify(seed.allowClarify) 覆盖此默认。
+  const [allowClarify, setAllowClarify] = useState(false)
   const [collaborators, setCollaborators] = useState<UserPublic[]>([])
   const [gitUserName, setGitUserName] = useState('')
   const [gitUserEmail, setGitUserEmail] = useState('')
@@ -1276,7 +1280,7 @@ function TaskWizardPage() {
               (space.kind === 'remote' && autoCommitPush) ||
               maxDurationMin !== undefined ||
               maxTotalTokens !== undefined ||
-              (kind === 'agent' && !allowClarify)) && (
+              (kind === 'agent' && allowClarify)) && (
               <div className="wizard-summary__row">
                 <dt>{t('taskWizard.advanced')}</dt>
                 <dd data-testid="wizard-summary-advanced">
@@ -1295,7 +1299,7 @@ function TaskWizardPage() {
                     maxTotalTokens !== undefined
                       ? `${t('taskWizard.maxTotalTokens')}: ${maxTotalTokens}`
                       : null,
-                    kind === 'agent' && !allowClarify ? t('taskWizard.clarifyOff') : null,
+                    kind === 'agent' && allowClarify ? t('taskWizard.clarifyOn') : null,
                   ]
                     .filter((s): s is string => s !== null)
                     .join(' · ')}
