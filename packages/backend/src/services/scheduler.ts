@@ -136,7 +136,10 @@ import {
 } from '@/services/dispatchFrontier'
 import { runNode, type ResolvedSkill, type RunResult } from '@/services/runner'
 import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
-import { isTaskAutonomous } from '@/services/workgroupLifecycle'
+import {
+  dismissOpenClarifyParksForAutonomous,
+  isTaskAutonomous,
+} from '@/services/workgroupLifecycle'
 import { runCommitPush } from '@/services/commitPushRunner'
 import {
   buildCommitAgent,
@@ -771,15 +774,15 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         // Voluntary ask-back: the channel is wired (host snapshot) but never
         // mandatory — workgroup members produce wg_result unless they choose
         // to ask a human (design §5 / RFC-148 'suppressed').
-        // RFC-181 C: with autonomous ON (clarifyEnabled === false) the channel
-        // flips to 'stopped' — runNode then REJECTS a voluntary
-        // <workflow-clarify> in its finalization (persisted failed +
-        // clarify-forbidden, no session, no park) and the workgroup runner's
-        // retry branches re-prompt / drop-and-continue.
-        clarifyChannel:
-          req.clarifyEnabled === false
-            ? { kind: 'self', directive: 'stopped', injectStopNotice: false }
-            : { kind: 'self', directive: 'suppressed', injectStopNotice: false },
+        // RFC-181 C (impl-gate P1/P2): suppression is NOT a dispatch-frozen
+        // directive — the per-task PATCH can flip `autonomous` mid-run in
+        // EITHER direction, so runNode resolves the oracle below at ENVELOPE
+        // time (live both ways) and closes a suppressed run as
+        // failed:clarify-forbidden BEFORE terminal persistence.
+        clarifyChannel: { kind: 'self', directive: 'suppressed', injectStopNotice: false },
+        ...(req.clarifyEnabled !== undefined
+          ? { clarifySuppressed: () => isTaskAutonomous(db, taskId) }
+          : {}),
         ...(clarifyQueue !== undefined
           ? { clarifyContext: { flatBlock: clarifyQueue.block } }
           : {}),
@@ -805,23 +808,24 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         }
       }
       if (result.clarify !== undefined) {
-        // RFC-181 C (design-gate P1-①) — envelope-time suppression re-check
-        // against the LATEST task config: a run dispatched with ask-back
-        // allowed ('suppressed' directive) may cross a mid-run autonomous
-        // toggle. A2 only dismisses parks that already exist, so without this
-        // re-read the stale run would still open a session and park the task
-        // AFTER the launcher flipped the switch. runNode already persisted
-        // this run as done (valid clarify keeps status=done, runner.ts) — the
-        // correction below re-closes it as failed:clarify-forbidden so the DB
-        // row, the broadcast and the RFC-182 room card all tell the truth.
-        if (req.clarifyEnabled !== undefined && (await isTaskAutonomous(db, taskId))) {
-          const dropped = result.clarify.questions.length
+        // RFC-181 C — a clarify envelope survived runNode's envelope-time
+        // oracle (resolver said "allowed" when it fired). The toggle can still
+        // land BETWEEN that read and the session insert below (impl-gate
+        // P1-③), so: (a) one fresh pre-create check narrows the window; (b)
+        // the post-create compensation after the insert closes it — both
+        // return the same suppressed failure the workgroup runner re-prompts
+        // on. The row is already terminal `done` here (valid clarify keeps
+        // status=done), hence the allowTerminal correction so the DB row, the
+        // broadcast and the RFC-182 room card all tell the truth.
+        const lateSuppress = async (): Promise<WorkgroupHostRunResult> => {
+          const dropped = result.clarify?.questions.length ?? 0
           const suppressedMsg = `${CLARIFY_FORBIDDEN_PREFIX}: ask-back disabled mid-run (autonomous); dropped ${dropped} question(s)`
           await setNodeRunStatus({
             db,
             nodeRunId: req.nodeRunId,
             to: 'failed',
             allowedFrom: ['done'],
+            allowTerminal: true,
             reason: 'wg-clarify-suppressed-late',
             extra: {
               finishedAt: Date.now(),
@@ -831,6 +835,9 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
           })
           broadcastNodeStatus(taskId, req.nodeRunId, req.nodeId, 'failed')
           return { status: 'failed', outputs: {}, errorMessage: suppressedMsg }
+        }
+        if (req.clarifyEnabled !== undefined && (await isTaskAutonomous(db, taskId))) {
+          return await lateSuppress()
         }
         // RFC-172 (route 2, R2-T7): human ask-back is now enabled for EVERY workgroup host node
         // (leader AND members), no longer leader-only. The dispatch/mint pipeline (S0–S3) mints each
@@ -877,6 +884,16 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
             ? { truncationWarnings: result.clarify.truncationWarnings }
             : {}),
         })
+        // RFC-181 C impl-gate P1-③ — close the check→insert TOCTOU: a toggle
+        // that landed between the pre-create read and the insert above left a
+        // session A2 never saw (the PATCH-side dismissal ran against an empty
+        // set). Re-check AFTER the insert and compensate through the same A2
+        // primitive — idempotent against a concurrent PATCH-side dismissal
+        // (both CAS on awaiting_human, the loser no-ops).
+        if (req.clarifyEnabled !== undefined && (await isTaskAutonomous(db, taskId))) {
+          await dismissOpenClarifyParksForAutonomous(db, taskId)
+          return await lateSuppress()
+        }
         return {
           status: 'awaiting',
           outputs: {},

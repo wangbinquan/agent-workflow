@@ -19,6 +19,7 @@ function makeRun(partial: Partial<NodeRun> & { id: string }): NodeRun {
     iteration: partial.iteration ?? 0,
     shardKey: partial.shardKey ?? null,
     retryIndex: partial.retryIndex ?? 0,
+    rerunCause: null,
     reviewIteration: partial.reviewIteration ?? 0,
     status: partial.status ?? 'done',
     startedAt: partial.startedAt ?? null,

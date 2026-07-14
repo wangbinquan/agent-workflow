@@ -169,6 +169,15 @@ export interface RunNodeOptions {
    * projections. Absent ⇒ { kind: 'none' } semantics.
    */
   clarifyChannel?: ClarifyChannel
+  /**
+   * RFC-181 C — envelope-time hard-suppression oracle for workgroup host
+   * runs. When present and it resolves true at the moment a voluntary
+   * `<workflow-clarify>` is parsed, the run closes as
+   * failed:clarify-forbidden (no session, no park) BEFORE terminal
+   * persistence. Injected only by the workgroup hook; absent everywhere else
+   * (ordinary nodes keep their RFC-123 'stopped' directive semantics).
+   */
+  clarifySuppressed?: () => Promise<boolean>
   /** RFC-164: workgroup protocol block replacing the agent-outputs protocol
    *  (threaded to renderUserPrompt.workgroupProtocolBlock; design §5). */
   workgroupProtocolBlock?: string
@@ -1187,6 +1196,19 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       status = 'failed'
       failureCode = 'clarify-forbidden'
       errorMessage = `${CLARIFY_FORBIDDEN_PREFIX}: node is in STOP CLARIFYING mode; emit <workflow-output>, not <workflow-clarify>`
+    } else if (kind === 'clarify' && (await opts.clarifySuppressed?.()) === true) {
+      // RFC-181 C — workgroup autonomous hard suppression, resolved at
+      // ENVELOPE time against the LATEST task config (the per-task PATCH can
+      // flip `autonomous` mid-run in EITHER direction, so a dispatch-frozen
+      // directive would race the toggle both ways — impl-gate P1/P2).
+      // Classified HERE, before terminal persistence, so the row closes as
+      // failed + failure_code='clarify-forbidden' (the RFC-182 note source)
+      // without any illegal done→failed correction. No clarifyResult ⇒ no
+      // session ⇒ no park; the workgroup runner re-prompts and then
+      // drop-and-continues on this prefix.
+      status = 'failed'
+      failureCode = 'clarify-forbidden'
+      errorMessage = `${CLARIFY_FORBIDDEN_PREFIX}: ask-back is OFF in this autonomous group; proceed with your best judgment and emit <workflow-output>`
     } else if (kind === 'both') {
       status = 'failed'
       failureCode = 'clarify-and-output-both'

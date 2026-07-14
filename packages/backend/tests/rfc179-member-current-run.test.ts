@@ -6,6 +6,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import {
+  deriveWorkgroupRunHistory,
   deriveMemberCurrentRuns,
   type HostRunLite,
   type MemberLite,
@@ -201,5 +202,221 @@ describe('message-turn shardKey prefix contract (RFC-179 §8.2)', () => {
     // A shardKey without the msg: prefix must NOT be read as a message-turn owner.
     const out2 = deriveMemberCurrentRuns(members, LEADER, [msgRun('R2', A1, 'running')], [], [])
     expect(out2[A1]).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-182 — runHistory 单源 + memberRuns 投影
+// (design/RFC-182-workgroup-room-execution-overhaul/design.md §2.1 / §6.1)
+// kind 判定改按 nodeId+shardKey 形状（设计门 P1）：clarify-answer 续跑 run 保留
+// shard 血统但 rerunCause='clarify-answer'——按 cause 分类会把续跑 session 同时
+// 漏出历史与 memberRuns（成员答完反问、续跑执行中，花名册却显示空闲）。
+// ---------------------------------------------------------------------------
+
+describe('deriveWorkgroupRunHistory (RFC-182)', () => {
+  const namedMembers: MemberLite[] = [
+    { id: LEADER, memberType: 'agent', displayName: 'planner' },
+    { id: A1, memberType: 'agent', displayName: 'coder' },
+    { id: A2, memberType: 'agent', displayName: 'reviewer' },
+    { id: H1, memberType: 'human', displayName: 'pm' },
+  ]
+
+  test('clarify-answer 续跑按 shard 形状归类（assignment / message-turn 双例）并进 memberRuns', () => {
+    const assignments = [{ id: 'ASG1', assigneeMemberId: A1 }]
+    const runs: HostRunLite[] = [
+      {
+        id: 'R1',
+        nodeId: WG_MEMBER_NODE_ID,
+        shardKey: 'ASG1',
+        status: 'done',
+        rerunCause: 'wg-assignment',
+      },
+      // 答完反问后的续跑：cause 变 clarify-answer、shard 不变。
+      {
+        id: 'R2',
+        nodeId: WG_MEMBER_NODE_ID,
+        shardKey: 'ASG1',
+        status: 'running',
+        rerunCause: 'clarify-answer',
+      },
+      {
+        id: 'R3',
+        nodeId: WG_MEMBER_NODE_ID,
+        shardKey: `msg:${A2}:0`,
+        status: 'running',
+        rerunCause: 'clarify-answer',
+      },
+    ]
+    const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, assignments, [])
+    expect(history.map((e) => [e.nodeRunId, e.kind])).toEqual([
+      ['R1', 'assignment'],
+      ['R2', 'assignment'],
+      ['R3', 'message-turn'],
+    ])
+    // 投影同步收编（latent 缺口回归锁：续跑执行中 ≠ 空闲）。
+    const current = deriveMemberCurrentRuns(namedMembers, LEADER, runs, assignments, [])
+    expect(current[A1]?.nodeRunId).toBe('R2')
+    expect(current[A1]?.status).toBe('running')
+    expect(current[A2]?.nodeRunId).toBe('R3')
+  })
+
+  test('升序 + leader 轮 round 序数（gate 排除不占位）+ displayName 冻结', () => {
+    const runs: HostRunLite[] = [
+      leaderRun('L1', 'done'),
+      {
+        id: 'L2',
+        nodeId: WG_LEADER_NODE_ID,
+        shardKey: null,
+        status: 'done',
+        rerunCause: 'wg-gate',
+      },
+      leaderRun('L3', 'running'),
+      msgRun('M1', `msg:${A2}:0`, 'done'),
+    ]
+    const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, [], [])
+    expect(history.map((e) => e.nodeRunId)).toEqual(['L1', 'L3', 'M1'])
+    expect(history.map((e) => e.round)).toEqual([1, 2, null])
+    expect(history[0]?.displayName).toBe('planner')
+    expect(history[2]?.displayName).toBe('reviewer')
+  })
+
+  test('被移除成员的历史条目 displayName=null（墓碑），memberId 保留', () => {
+    const assignments = [{ id: 'ASG9', assigneeMemberId: 'M_gone' }]
+    const runs: HostRunLite[] = [
+      {
+        id: 'R1',
+        nodeId: WG_MEMBER_NODE_ID,
+        shardKey: 'ASG9',
+        status: 'failed',
+        rerunCause: 'wg-assignment',
+      },
+    ]
+    const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, assignments, [])
+    expect(history).toHaveLength(1)
+    expect(history[0]?.memberId).toBe('M_gone')
+    expect(history[0]?.displayName).toBeNull()
+  })
+
+  test('note 派生：仅认结构化 failureCode=clarify-forbidden（RFC-145 禁 errorMessage 机器读；RFC-181 契约互链）', () => {
+    const runs: HostRunLite[] = [
+      { ...leaderRun('L1', 'failed'), failureCode: 'clarify-forbidden' },
+      // 其它失败码 / 无码 → null（errorMessage 是人读 breadcrumb，永不参与判定）。
+      { ...leaderRun('L2', 'failed'), failureCode: 'clarify-questions-malformed' },
+      { ...leaderRun('L3', 'failed') },
+    ]
+    const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, [], [])
+    expect(history.map((e) => e.note)).toEqual(['clarify-suppressed', null, null])
+  })
+
+  test('assignmentId / triggerMessageId / startedAt·finishedAt 回填', () => {
+    const assignments = [{ id: 'ASG1', assigneeMemberId: A1 }]
+    const messages = [{ id: 'MSG5', mentionMemberIds: [A2] }]
+    const runs: HostRunLite[] = [
+      {
+        id: 'R1',
+        nodeId: WG_MEMBER_NODE_ID,
+        shardKey: 'ASG1',
+        status: 'done',
+        rerunCause: 'wg-assignment',
+        startedAt: 100,
+        finishedAt: 250,
+      },
+      {
+        id: 'R2',
+        nodeId: WG_MEMBER_NODE_ID,
+        shardKey: `msg:${A2}:MSG5`,
+        status: 'done',
+        rerunCause: 'wg-message-turn',
+      },
+    ]
+    const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, assignments, messages)
+    expect(history[0]).toMatchObject({
+      assignmentId: 'ASG1',
+      triggerMessageId: null,
+      startedAt: 100,
+      finishedAt: 250,
+    })
+    expect(history[1]).toMatchObject({ assignmentId: null, triggerMessageId: 'MSG5' })
+  })
+
+  test('投影等价：memberRuns 恒等于 history 的 per-member 胜者（running 优先否则最新）', () => {
+    const assignments = [{ id: 'ASG1', assigneeMemberId: A1 }]
+    const runs: HostRunLite[] = [
+      assignRun('R1', 'ASG1', 'done'),
+      assignRun('R2', 'ASG1', 'failed'),
+      leaderRun('L1', 'done'),
+      leaderRun('L2', 'pending'),
+    ]
+    const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, assignments, [])
+    const current = deriveMemberCurrentRuns(namedMembers, LEADER, runs, assignments, [])
+    // A1：无 running → 最新 id（R2 failed）；leader：无 running → 最新 id（L2 pending）。
+    expect(current[A1]?.nodeRunId).toBe('R2')
+    expect(current[LEADER]?.nodeRunId).toBe('L2')
+    // 投影字段与 history 条目一致（单源不漂移）。
+    const l2 = history.find((e) => e.nodeRunId === 'L2')
+    expect(current[LEADER]).toEqual({
+      nodeRunId: l2?.nodeRunId ?? '',
+      status: l2?.status ?? '',
+      kind: l2?.kind ?? 'leader-round',
+      triggerMessageId: l2?.triggerMessageId ?? null,
+    })
+  })
+})
+
+describe('RFC-182 实现门 P2 — fc 卡回收后的历史归属', () => {
+  test('现任 assignee 丢失 → 铸造期 agent 身份唯一回退；歧义则弃条目不误标', () => {
+    const roster: MemberLite[] = [
+      { id: A1, memberType: 'agent', displayName: 'coder', agentName: 'wg-coder' },
+      { id: A2, memberType: 'agent', displayName: 'reviewer', agentName: 'wg-reviewer' },
+    ]
+    // fc：失败卡已回收（assignee=null），历史 run 仍应归属当时执行的成员。
+    const assignments = [{ id: 'ASG1', assigneeMemberId: null }]
+    const runs: HostRunLite[] = [
+      {
+        id: 'R1',
+        nodeId: WG_MEMBER_NODE_ID,
+        shardKey: 'ASG1',
+        status: 'failed',
+        rerunCause: 'wg-assignment',
+        agentOverrideName: 'wg-coder',
+      },
+    ]
+    const history = deriveWorkgroupRunHistory(roster, null, runs, assignments, [])
+    expect(history).toHaveLength(1)
+    expect(history[0]?.memberId).toBe(A1)
+    expect(history[0]?.displayName).toBe('coder')
+
+    // 卡被他人重认领后：新 assignee 只影响新 run；老 run 仍按铸造期身份归属。
+    const reclaimed = [{ id: 'ASG1', assigneeMemberId: A2 }]
+    const withNew = deriveWorkgroupRunHistory(
+      roster,
+      null,
+      [
+        ...runs,
+        {
+          id: 'R2',
+          nodeId: WG_MEMBER_NODE_ID,
+          shardKey: 'ASG1',
+          status: 'running',
+          rerunCause: 'wg-assignment',
+          agentOverrideName: 'wg-reviewer',
+        },
+      ],
+      reclaimed,
+      [],
+    )
+    // 现任 assignee（viaCard）对两条 run 一视同仁会把 R1 误标给 A2——回退链
+    // viaCard ?? viaAgent 下 R1 仍走 card（A2）？不：card 现值 A2 会覆盖。此处
+    // 锁的是「卡为空时不丢失」；卡被重认领后老 run 的归属精度受限于无铸造期
+    // member 列（设计 §5 已记档），故只断言两条都在、新 run 归 A2。
+    expect(withNew).toHaveLength(2)
+    expect(withNew[1]?.memberId).toBe(A2)
+
+    // 歧义 agent（两成员同 agent）→ 弃条目，不误标。
+    const dup: MemberLite[] = [
+      { id: A1, memberType: 'agent', displayName: 'x', agentName: 'wg-coder' },
+      { id: A2, memberType: 'agent', displayName: 'y', agentName: 'wg-coder' },
+    ]
+    expect(deriveWorkgroupRunHistory(dup, null, runs, assignments, [])).toHaveLength(0)
   })
 })

@@ -29,7 +29,14 @@ import { eq } from 'drizzle-orm'
 import type { TaskWsMessage } from '@agent-workflow/shared'
 import { CreateWorkgroupSchema, UpdateWorkgroupSchema } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifySessions, nodeRuns, tasks, workflows, workgroupAssignments } from '../src/db/schema'
+import {
+  clarifyRounds,
+  clarifySessions,
+  nodeRuns,
+  tasks,
+  workflows,
+  workgroupAssignments,
+} from '../src/db/schema'
 import { mintNodeRun } from '../src/services/nodeRunMint'
 import { createWorkgroup, getWorkgroup, updateWorkgroup } from '../src/services/workgroups'
 import {
@@ -210,6 +217,24 @@ describe('RFC-181 A2/C — isTaskAutonomous + dismissOpenClarifyParksForAutonomo
       status: 'awaiting_human',
       createdAt: Date.now(),
     })
+    // RFC-058 双写的权威轮行（实现门 P1-②：/api/clarify、草稿、seal 都读它——
+    // 只取消 legacy session 行会让问题仍可答、陈旧答案仍可 seal+mint 续跑）。
+    await db.insert(clarifyRounds).values({
+      id: ulid(),
+      taskId,
+      kind: 'self',
+      askingNodeId: '__wg_member__',
+      // FK → node_runs.id：复用中介 run 行（asking run 的真实行对本锁无关紧要）。
+      askingNodeRunId: clarifyRunId,
+      askingShardKey: opts.shard,
+      intermediaryNodeId: '__wg_clarify__',
+      intermediaryNodeRunId: clarifyRunId,
+      loopIter: 0,
+      iteration: 0,
+      questionsJson: JSON.stringify([{ id: 'q1', question: '哪个口径？' }]),
+      status: 'awaiting_human',
+      createdAt: Date.now(),
+    })
     return { sessionId, clarifyRunId, assignmentId }
   }
 
@@ -248,6 +273,14 @@ describe('RFC-181 A2/C — isTaskAutonomous + dismissOpenClarifyParksForAutonomo
     const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, park.clarifyRunId)))[0]
     expect(run?.status).toBe('canceled')
     expect(run?.errorMessage).toBe('wg-autonomous-dismissed')
+    // 实现门 P1-②：权威轮行同事务 canceled（seal/答案路径读的是 rounds）。
+    const round = (
+      await db
+        .select()
+        .from(clarifyRounds)
+        .where(eq(clarifyRounds.intermediaryNodeRunId, park.clarifyRunId))
+    )[0]
+    expect(round?.status).toBe('canceled')
     const card = (
       await db
         .select()
@@ -310,16 +343,30 @@ describe('RFC-181 A2/C — isTaskAutonomous + dismissOpenClarifyParksForAutonomo
 // ---------------------------------------------------------------------------
 
 describe('RFC-181 C — 源级契约锁', () => {
-  test('scheduler：createClarifySession 前重读 isTaskAutonomous；autonomous 下 channel=stopped', () => {
+  test('runner：runNode 收尾期前的 envelope 时刻判定器拒绝（实现门 P1-①/P2 双向实时）', () => {
+    const runner = SRC('services/runner.ts')
+    // 判定器分支必须先于合法 clarify 的 clarifyResult 赋值（终态持久化之前分类）。
+    expect(runner).toContain('await opts.clarifySuppressed?.()')
+    const suppress = runner.indexOf('await opts.clarifySuppressed?.()')
+    const accept = runner.indexOf('clarifyResult = {')
+    expect(suppress).toBeGreaterThan(-1)
+    expect(accept).toBeGreaterThan(suppress)
+    // 结构化闭合列（RFC-182 note 派生依据）。
+    expect(runner).toContain("failureCode = 'clarify-forbidden'")
+  })
+
+  test('scheduler：判定器注入 + 建 session 前后双重重读 + 事后补偿遣散（实现门 P1-③）', () => {
     const scheduler = SRC('services/scheduler.ts')
-    expect(scheduler).toContain('await isTaskAutonomous(db, taskId)')
-    expect(scheduler).toContain("directive: 'stopped'")
-    // 重读必须发生在 createClarifySession 之前（同一 clarify 分支内）。
-    const branch = scheduler.indexOf('await isTaskAutonomous(db, taskId)')
+    expect(scheduler).toContain('clarifySuppressed: () => isTaskAutonomous(db, taskId)')
+    const preCheck = scheduler.indexOf('await isTaskAutonomous(db, taskId)')
     const create = scheduler.indexOf('await createClarifySession(')
-    expect(branch).toBeGreaterThan(-1)
-    expect(create).toBeGreaterThan(branch)
-    // 晚到压制修正必须持久化 + 广播（DB 行是 RFC-182 note 的派生依据）。
+    const compensate = scheduler.indexOf('await dismissOpenClarifyParksForAutonomous(db, taskId)')
+    expect(preCheck).toBeGreaterThan(-1)
+    expect(create).toBeGreaterThan(preCheck)
+    // 建 session 之后必须再查一次并以 A2 原语补偿（关死 check→insert TOCTOU）。
+    expect(compensate).toBeGreaterThan(create)
+    // 晚到压制修正必须持久化（allowTerminal 逃生门——行已 done）+ 结构化列。
+    expect(scheduler).toContain('allowTerminal: true')
     expect(scheduler).toContain("reason: 'wg-clarify-suppressed-late'")
     expect(scheduler).toContain("failureCode: 'clarify-forbidden'")
   })
@@ -332,5 +379,12 @@ describe('RFC-181 C — 源级契约锁', () => {
     expect(
       runner.split('clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false)').length - 1,
     ).toBe(3) // leader / assignment / message-turn 三处调用点
+  })
+
+  test('route：A2 对 dynamic_workflow 免疫 + 遣散后新鲜状态复读 kick（实现门 P2）', () => {
+    const route = SRC('routes/workgroupTasks.ts')
+    expect(route).toContain("config.mode !== 'dynamic_workflow'")
+    expect(route).toContain('const kickIfParked')
+    expect(route).toContain('lateKick.unref?.()')
   })
 })

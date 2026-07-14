@@ -46,6 +46,8 @@ import { evaluateDesignerRerunReadiness } from '@/services/crossClarify'
 import { pickFreshestRun } from '@/services/freshness'
 import { abandonSupersededMergeStates } from '@/services/lifecycle'
 import { buildMintNodeRunValues } from '@/services/nodeRunMint'
+import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroupLaunch'
+import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
 import {
   assertTaskAcceptsQuestions,
   taskNodeHasRun,
@@ -938,6 +940,24 @@ async function dispatchTaskQuestionsLocked(
     throw e
   }
   if (!committed) return EMPTY_RESULT
+
+  // RFC-182 D6 (design-gate P2) — a clarify-answer HOST rerun is minted here
+  // (outside the engine) and later ADOPTED via adoptedRunId, so the engine's
+  // own mint-time pending frame never fires for it; `clarify.answered` also
+  // does not invalidate the room key. Without this post-commit frame the
+  // resumed member looks idle in the room until the run actually starts.
+  // Same frame shape as the engine's broadcastPendingMint (workgroupRunner).
+  for (const p of mintPlans) {
+    if (p.values.nodeId === WG_LEADER_NODE_ID || p.values.nodeId === WG_MEMBER_NODE_ID) {
+      taskBroadcaster.broadcast(TASK_CHANNEL(taskId), {
+        id: -1,
+        type: 'node.status',
+        nodeRunId: p.values.id,
+        nodeId: p.values.nodeId,
+        status: 'pending',
+      })
+    }
+  }
 
   const reruns: DispatchedRerun[] = mintPlans.map((p) => ({
     targetNodeId: p.nodeId,

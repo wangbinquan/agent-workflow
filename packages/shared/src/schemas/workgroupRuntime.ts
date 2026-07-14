@@ -156,6 +156,35 @@ export const WorkgroupMemberCurrentRunSchema = z.object({
 })
 export type WorkgroupMemberCurrentRun = z.infer<typeof WorkgroupMemberCurrentRunSchema>
 
+/**
+ * RFC-182 — one host turn in the room's full execution history (`runHistory`
+ * on the room aggregate, ascending by nodeRunId = mint order). Derived +
+ * read-only; NEVER enters a prompt. `memberRuns` is a projection of this list
+ * (running wins, else newest), so the two can never drift.
+ */
+export const WorkgroupRunEntrySchema = z.object({
+  nodeRunId: z.string(),
+  memberId: z.string(),
+  /** Frozen at derivation; null when the member was removed mid-run
+   *  (design-gate P2 — the UI renders a tombstone label, never a blank). */
+  displayName: z.string().nullable(),
+  kind: WorkgroupRunKindSchema,
+  status: z.string(),
+  /** Leader rounds carry their 1-based ordinal (countRoundsUsed semantics) so
+   *  the room timeline can place the card under its round divider; others null. */
+  round: z.number().int().nullable(),
+  startedAt: z.number().int().nullable(),
+  finishedAt: z.number().int().nullable(),
+  triggerMessageId: z.string().nullable(),
+  /** kind==='assignment' → the assignment id (= shardKey); else null. */
+  assignmentId: z.string().nullable(),
+  /** RFC-181 C — a clarify-forbidden closure surfaced as a display note
+   *  (backend derives it from the run's failure columns; the protocol string
+   *  never crosses the wire). */
+  note: z.enum(['clarify-suppressed']).nullable(),
+})
+export type WorkgroupRunEntry = z.infer<typeof WorkgroupRunEntrySchema>
+
 // ---------------------------------------------------------------------------
 // Envelope ports (design §5) — generated protocol replaces agent outputs
 // ---------------------------------------------------------------------------

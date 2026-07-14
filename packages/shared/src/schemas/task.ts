@@ -769,6 +769,10 @@ export const NodeRunSchema = z.object({
   iteration: z.number().int().nonnegative(),
   shardKey: z.string().nullable(),
   retryIndex: z.number().int().nonnegative(),
+  /** RFC-182 P1-3: mint cause (rerun_cause column) — lets the drawer label a
+   *  workgroup host run's history rows as 领导轮/派发轮/被@轮 instead of leaking
+   *  raw shardKey strings. Nullable + defaulted for older cached payloads. */
+  rerunCause: z.string().nullable().default(null),
   /**
    * RFC-005: bumped each time a review decision (reject/iterate) triggers a
    * regeneration of this node's upstream — decoupled from retryIndex (which

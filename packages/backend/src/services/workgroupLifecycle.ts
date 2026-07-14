@@ -19,6 +19,7 @@ import { and, eq, sql } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import {
+  clarifyRounds,
   clarifySessions,
   nodeRuns,
   tasks,
@@ -184,13 +185,35 @@ export interface AutonomousDismissalResult {
 export async function dismissOpenClarifyParksForAutonomous(
   db: DbClient,
   taskId: string,
-  mode: string,
+  mode?: string,
 ): Promise<AutonomousDismissalResult> {
   const result: AutonomousDismissalResult = {
     dismissedSessions: 0,
     canceledParkRuns: [],
     requeuedAssignments: [],
   }
+  // Callers that hold the parsed config pass mode; the workgroup hook's
+  // post-create compensation path (impl-gate P1-③) omits it — resolve from
+  // the task's frozen config (requeue target only matters for worker parks,
+  // which cannot exist in that window, so a fallback default is safe).
+  const resolvedMode =
+    mode ??
+    (await (async () => {
+      const row = (
+        await db
+          .select({ cfg: tasks.workgroupConfigJson })
+          .from(tasks)
+          .where(eq(tasks.id, taskId))
+          .limit(1)
+      )[0]
+      if (row === undefined || row.cfg === null) return 'leader_worker'
+      try {
+        const parsed = JSON.parse(row.cfg) as { mode?: unknown }
+        return typeof parsed.mode === 'string' ? parsed.mode : 'leader_worker'
+      } catch {
+        return 'leader_worker'
+      }
+    })())
   dbTxSync(db, (tx) => {
     const open = tx
       .select()
@@ -221,16 +244,31 @@ export async function dismissOpenClarifyParksForAutonomous(
       if (parked.length > 0) {
         result.canceledParkRuns.push({ nodeRunId: s.clarifyNodeRunId, nodeId: s.clarifyNodeId })
       }
+      // Impl-gate P1-② — the AUTHORITATIVE clarify round row (RFC-058 dual
+      // write): /api/clarify, drafts and sealRoundQuestions all read
+      // clarify_rounds, so canceling only the legacy session row would leave
+      // the question answerable — a stale answer could still seal the round
+      // and mint a continuation. Same tx, same awaiting_human-only guard.
+      tx.update(clarifyRounds)
+        .set({ status: 'canceled' })
+        .where(
+          and(
+            eq(clarifyRounds.taskId, taskId),
+            eq(clarifyRounds.intermediaryNodeRunId, s.clarifyNodeRunId),
+            eq(clarifyRounds.status, 'awaiting_human'),
+          ),
+        )
+        .run()
       const shard = s.sourceShardKey
       if (shard !== null && !shard.startsWith('msg:')) {
-        const to: WorkgroupAssignmentStatus = mode === 'free_collab' ? 'open' : 'dispatched'
+        const to: WorkgroupAssignmentStatus = resolvedMode === 'free_collab' ? 'open' : 'dispatched'
         assertAssignmentTransition('awaiting_human', to)
         const requeued = tx
           .update(workgroupAssignments)
           .set({
             status: to,
             nodeRunId: null,
-            ...(mode === 'free_collab' ? { assigneeMemberId: null } : {}),
+            ...(resolvedMode === 'free_collab' ? { assigneeMemberId: null } : {}),
             updatedAt: Date.now(),
           })
           .where(

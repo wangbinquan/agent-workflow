@@ -48,7 +48,7 @@ import {
 } from '@/services/workgroupLifecycle'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroupLaunch'
-import { deriveMemberCurrentRuns } from '@/services/workgroupRoom'
+import { deriveMemberCurrentRuns, deriveWorkgroupRunHistory } from '@/services/workgroupRoom'
 import { Paths } from '@/util/paths'
 import { resolveOpencodeCmd } from '@/util/opencode'
 import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
@@ -261,8 +261,12 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         .from(workgroupAssignments)
         .where(eq(workgroupAssignments.taskId, taskId))
         .orderBy(asc(workgroupAssignments.id)),
-      // RFC-179 — host runs (leader-round / assignment / message-turn) for the
-      // per-member currentRun derivation; read-only, never enters a prompt.
+      // RFC-179/182 — host runs (leader-round / assignment / message-turn) for
+      // the runHistory + per-member currentRun derivation; read-only, never
+      // enters a prompt. startedAt/finishedAt feed the turn cards' durations;
+      // failureCode ONLY feeds the server-side `note` derivation (structured
+      // column — RFC-145 forbids errorMessage machine reads; the protocol
+      // strings never cross the wire — RFC-182 D11).
       deps.db
         .select({
           id: nodeRuns.id,
@@ -270,6 +274,10 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
           shardKey: nodeRuns.shardKey,
           status: nodeRuns.status,
           rerunCause: nodeRuns.rerunCause,
+          startedAt: nodeRuns.startedAt,
+          finishedAt: nodeRuns.finishedAt,
+          failureCode: nodeRuns.failureCode,
+          agentOverrideName: nodeRuns.agentOverrideName,
         })
         .from(nodeRuns)
         .where(
@@ -279,15 +287,30 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
           ),
         ),
     ])
-    // RFC-179 §2.1 — map each member to its current session run (running wins,
-    // else newest terminal, else null). Single source; the room makes members
-    // clickable and shows the executing indicator off this map.
+    const assignmentsLite = assignments.map((a) => ({
+      id: a.id,
+      assigneeMemberId: a.assigneeMemberId,
+    }))
+    const messagesLite = messages.map((m) => ({
+      id: m.id,
+      mentionMemberIds: safeMentions(m.mentionsJson),
+    }))
+    // RFC-182 G5 — the room's full execution history (ascending, single
+    // source); RFC-179's memberRuns is its projection (running wins, else
+    // newest) so the two can never drift.
+    const runHistory = deriveWorkgroupRunHistory(
+      config.members,
+      config.leaderMemberId,
+      hostRuns,
+      assignmentsLite,
+      messagesLite,
+    )
     const memberRuns = deriveMemberCurrentRuns(
       config.members,
       config.leaderMemberId,
       hostRuns,
-      assignments.map((a) => ({ id: a.id, assigneeMemberId: a.assigneeMemberId })),
-      messages.map((m) => ({ id: m.id, mentionMemberIds: safeMentions(m.mentionsJson) })),
+      assignmentsLite,
+      messagesLite,
     )
     const gateRaw = JsonObjectSchema.parse(raw.gate ?? {})
     return c.json({
@@ -332,6 +355,8 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       })),
       // RFC-179 — { [memberId]: currentRun | null }; drives 点成员看 session + 执行中指示.
       memberRuns,
+      // RFC-182 — 全量回合历史（升序）；回合卡 / 执行记录 / drawer 成员历轮的单一数据源。
+      runHistory,
     })
   })
 
@@ -886,14 +911,40 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       .where(eq(tasks.id, taskId))
     // RFC-181 A2 (design-gate P0) — false→true dismisses in-flight clarify
     // parks so the toggle works on a task that is ALREADY parked on questions
-    // (session+park-run canceled, worker cards requeued, stale answers 409 via
-    // the canceled session). true→true / no-park are natural no-ops inside.
-    if (patch.autonomous === true && config.autonomous !== true) {
+    // (session+round+park-run canceled, worker cards requeued, stale answers
+    // rejected via the canceled round). true→true / no-park are natural
+    // no-ops inside. dynamic_workflow is excluded (impl-gate P2): it has no
+    // turn engine, autonomous is mode-inert there (RFC-180), and A2 must not
+    // sweep a generated node's ordinary clarify park.
+    if (
+      patch.autonomous === true &&
+      config.autonomous !== true &&
+      config.mode !== 'dynamic_workflow'
+    ) {
       const dismissed = await dismissOpenClarifyParksForAutonomous(deps.db, taskId, config.mode)
       if (dismissed.dismissedSessions > 0) {
         changes.push(
           `dismissed ${dismissed.dismissedSessions} open clarify session(s) (autonomous)`,
         )
+        // Impl-gate P2 — the `task.status === 'awaiting_human'` gate further
+        // down reads the row loaded BEFORE this dismissal, and the engine may
+        // commit running→awaiting_human from its pre-dismissal snapshot a
+        // beat later. Re-read fresh now and once more shortly after, so a
+        // park landing right behind the dismissal still gets resumed
+        // (kickResume no-ops on non-resumable states).
+        const kickIfParked = async (): Promise<void> => {
+          const fresh = (
+            await deps.db
+              .select({ status: tasks.status })
+              .from(tasks)
+              .where(eq(tasks.id, taskId))
+              .limit(1)
+          )[0]
+          if (fresh?.status === 'awaiting_human') kickResume(taskId)
+        }
+        await kickIfParked()
+        const lateKick = setTimeout(() => void kickIfParked(), 2500)
+        lateKick.unref?.()
       }
     }
     const msgId = ulid()

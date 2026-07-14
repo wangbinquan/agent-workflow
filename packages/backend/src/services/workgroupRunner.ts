@@ -153,6 +153,22 @@ export interface WorkgroupEngineResult {
 /** Per-turn protocol-violation retries before the turn is failed. */
 const WG_PROTOCOL_RETRIES = 1
 
+/** RFC-182 D6 — pending visibility: a mint alone broadcasts nothing (the first
+ *  frame used to be runNode's `running`), so a turn queued behind the global
+ *  semaphore was invisible to the room — presence said "idle" while work was
+ *  already committed. One frame per FRESH mint (adopted rows were announced at
+ *  their own mint site — taskQuestionDispatch); `node.status` already
+ *  invalidates the room key client-side (f55ede4b), zero new WS rules. */
+function broadcastPendingMint(taskId: string, nodeRunId: string, nodeId: string): void {
+  taskBroadcaster.broadcast(TASK_CHANNEL(taskId), {
+    id: -1,
+    type: 'node.status',
+    nodeRunId,
+    nodeId,
+    status: 'pending',
+  })
+}
+
 // ---------------------------------------------------------------------------
 // durable state I/O
 // ---------------------------------------------------------------------------
@@ -960,6 +976,7 @@ async function driveLeaderTurn(
         retryIndex: state.hostRuns.filter((r) => r.nodeId === WG_LEADER_NODE_ID).length + attempt,
       })
       args.registerMint?.(runId)
+      broadcastPendingMint(taskId, runId, WG_LEADER_NODE_ID)
     }
     adoptedRunId = undefined
 
@@ -1154,6 +1171,7 @@ async function driveAssignmentTurn(
         overrides: { shardKey: assignment.id, agentOverrideName: agent.name },
       })
       args.registerMint?.(runId)
+      broadcastPendingMint(taskId, runId, WG_MEMBER_NODE_ID)
     }
     adoptedRunId = undefined
 
@@ -1310,6 +1328,7 @@ async function driveMessageTurn(
       },
     })
     args.registerMint?.(runId)
+    broadcastPendingMint(taskId, runId, WG_MEMBER_NODE_ID)
   }
 
   const fcAddendum = isFcInitial

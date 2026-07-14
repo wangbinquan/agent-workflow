@@ -200,6 +200,30 @@ describe('RFC-164 room — endpoints', () => {
     })
     // The leader has no run of its own → still null (assignment run is @coder's).
     expect(body.memberRuns['m-lead']).toBeNull()
+
+    // RFC-182 — the aggregate also carries the FULL run history (ascending),
+    // with the member's displayName frozen on and the assignment id resolved.
+    const withHistory = (await (
+      await req(owner.token, `/api/workgroup-tasks/${taskId}/room`)
+    ).json()) as {
+      runHistory: Array<{
+        nodeRunId: string
+        memberId: string
+        displayName: string | null
+        kind: string
+        assignmentId: string | null
+        note: string | null
+      }>
+    }
+    expect(withHistory.runHistory).toHaveLength(1)
+    expect(withHistory.runHistory[0]).toMatchObject({
+      nodeRunId: runId,
+      memberId: 'm-coder',
+      displayName: 'coder',
+      kind: 'assignment',
+      assignmentId,
+      note: null,
+    })
   })
 
   test('non-workgroup task → 404 (room endpoints only exist for group tasks)', async () => {

@@ -20,6 +20,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import type { TaskWsMessage } from '@agent-workflow/shared'
+import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import {
   agentHasClarifyChannel,
   renderUserPrompt,
@@ -1154,5 +1156,42 @@ describe('RFC-181 C — clarify 压制收场（fake hooks）', () => {
     const result = await runWorkgroupEngine({ db, taskId, log, hooks })
     expect(result.kind).toBe('ok')
     expect(requests[0]?.clarifyEnabled).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-182 D6 — mint 即 pending 帧（排队可见性：花名册/回合卡的「排队中」态）
+// ---------------------------------------------------------------------------
+
+describe('RFC-182 — mint 即广播 node.status{pending}', () => {
+  let db: DbClient
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+  })
+
+  test('leader / assignment 每次真 mint 各一帧 pending（happy path 共 3 mint）', async () => {
+    const config = cfg({ completionGate: false })
+    const { taskId } = await seedEngineTask(db, config)
+    const frames: TaskWsMessage[] = []
+    const unsub = taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => frames.push(m))
+    const { hooks } = scriptedHooks({
+      leader: [
+        doneLeader({
+          assignments: [{ member: 'coder', title: 't', brief: 'b' }],
+          decision: { action: 'continue' },
+        }),
+        doneLeader({ decision: { action: 'done', summary: 's' } }),
+      ],
+      member: [doneMember('done x')],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    unsub()
+    expect(result.kind).toBe('ok')
+    const pendings = frames.filter((f) => f.type === 'node.status' && f.status === 'pending')
+    // 3 真 mint：leader 轮1、member 派发轮、leader 轮2 → 恒一 mint 一帧。
+    expect(pendings).toHaveLength(3)
+    expect(pendings.every((f) => f.type === 'node.status' && typeof f.nodeRunId === 'string')).toBe(
+      true,
+    )
   })
 })

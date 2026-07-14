@@ -24,6 +24,7 @@ function makeRun(over: Partial<NodeRun>): NodeRun {
     iteration: 0,
     shardKey: null,
     retryIndex: 0,
+    rerunCause: null,
     reviewIteration: 0,
     status: 'done',
     startedAt: null,
