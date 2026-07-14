@@ -14,12 +14,21 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
+import { ulid } from 'ulid'
+import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workgroupAssignments } from '../src/db/schema'
 import { buildActor } from '../src/auth/actor'
 import { createAgent } from '../src/services/agent'
+import { autoResumeInterruptedTasks } from '../src/services/autoResume'
+import { resumeTask } from '../src/services/task'
 import { createWorkgroup } from '../src/services/workgroups'
-import { startWorkgroupTask } from '../src/services/workgroupLaunch'
+import {
+  buildWorkgroupHostSnapshot,
+  ensureWorkgroupHostWorkflow,
+  startWorkgroupTask,
+  WORKGROUP_HOST_WORKFLOW_ID,
+} from '../src/services/workgroupLaunch'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
@@ -189,6 +198,104 @@ describe('RFC-186 — leader_worker real end-to-end (scenario-opencode)', () => 
       expect(leaderFailed.length).toBeGreaterThanOrEqual(1)
       expect(leaderFailed.some((r) => (r.errorMessage ?? '').includes('envelope'))).toBe(true)
     } finally {
+      h.cleanup()
+    }
+  })
+})
+
+// RFC-186 PR-2 (P0-B) — a daemon restart mid-run used to WEDGE a workgroup task
+// forever: `interrupted` turn-engine workgroups had no resume path (audit
+// design/workgroup-e2e-audit.md §5 F1 — three committed refusals + a test that
+// LOCKED the exclusion). 3/10 production tasks died exactly this way. This drives
+// the real recovery: an interrupted leader_worker task auto-resumes and completes.
+describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done', () => {
+  test('daemon-restart recovery: interrupted → autoResume → engine re-enters → done', async () => {
+    const h = harness()
+    const repo = mkdtempSync(join(tmpdir(), 'aw-wg-e2e-repo-'))
+    try {
+      execSync(
+        'git init -b main -q && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init',
+        { cwd: repo },
+      )
+      await seedAgent(h.db, 'wg-lead')
+      await seedAgent(h.db, 'wg-writer')
+      await ensureWorkgroupHostWorkflow(h.db)
+
+      const config = {
+        workgroupId: 'wg-rec',
+        workgroupName: 'rec',
+        mode: 'leader_worker' as const,
+        leaderMemberId: 'm-lead',
+        switches: { shareOutputs: true, directMessages: false, blackboard: false },
+        maxRounds: 8,
+        completionGate: false,
+        autonomous: true,
+        instructions: '',
+        goal: '产出 alpha',
+        members: [
+          {
+            id: 'm-lead',
+            memberType: 'agent' as const,
+            agentName: 'wg-lead',
+            userId: null,
+            displayName: 'lead',
+            roleDesc: '',
+          },
+          {
+            id: 'm-writer',
+            memberType: 'agent' as const,
+            agentName: 'wg-writer',
+            userId: null,
+            displayName: 'writer',
+            roleDesc: '',
+          },
+        ],
+      }
+      const taskId = ulid()
+      // The task was interrupted by a daemon restart BEFORE the leader's first
+      // turn completed (the common case): status=interrupted, no host node_runs.
+      await h.db.insert(tasks).values({
+        id: taskId,
+        name: 'rec',
+        workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+        workflowSnapshot: JSON.stringify(buildWorkgroupHostSnapshot(config)),
+        repoPath: repo,
+        worktreePath: repo,
+        baseBranch: 'main',
+        branch: `agent-workflow/${taskId}`,
+        status: 'interrupted',
+        errorSummary: DAEMON_RESTART_ERROR_SUMMARY,
+        inputs: '{}',
+        startedAt: Date.now(),
+        workgroupId: 'wg-rec',
+        workgroupConfigJson: JSON.stringify(config),
+        spaceKind: 'scratch',
+      })
+
+      writePlan(h, { 'wg-lead': [DISPATCH, DONE], 'wg-writer': [WORKER_RESULT] })
+      const res = await autoResumeInterruptedTasks({
+        db: h.db,
+        breaker: { maxPerWindow: 3, windowMs: 3_600_000 },
+        resume: (id) =>
+          resumeTask(h.db, id, {
+            db: h.db,
+            appHome: h.appHome,
+            opencodeCmd: opencodeCmd(),
+            awaitScheduler: true,
+          }).then(() => undefined),
+      })
+
+      // Before RFC-186 PR-2 this was `[]` (turn-engine workgroups filtered out) and
+      // the task stayed `interrupted` forever.
+      expect(res.resumed).toEqual([taskId])
+      const final = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      expect(final?.status).toBe('done')
+      const memberDone = (
+        await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      ).filter((r) => r.nodeId === '__wg_member__' && r.status === 'done')
+      expect(memberDone.length).toBeGreaterThanOrEqual(1)
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
       h.cleanup()
     }
   })

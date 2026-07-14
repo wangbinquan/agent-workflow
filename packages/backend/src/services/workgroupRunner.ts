@@ -239,6 +239,50 @@ export function wgFollowupNotice(reason: EnvelopeFollowupReason): string {
   }
 }
 
+/**
+ * RFC-186 PR-2 (audit §4 F1 / §5 F1) — the reconcile action for a `running`
+ * assignment found on engine (re)entry, from its LATEST worker host-run status.
+ * A daemon restart reaps a mid-run worker `node_run` to `interrupted` but leaves
+ * the assignment `running`; adoption only re-drives `pending` rows, so the
+ * assignment is never re-driven AND blocks the leader barrier (a `running`
+ * assignment counts as in-flight) → the task wedges `awaiting_human` forever.
+ */
+export function decideAssignmentReconcile(
+  latestWorkerRunStatus: string | undefined,
+): 'done' | 'redispatch' | 'none' {
+  // Interrupted before the worker run was even minted → re-dispatch.
+  if (latestWorkerRunStatus === undefined) return 'redispatch'
+  // Finished + merged before the crash → the work is durable; just close the card.
+  if (latestWorkerRunStatus === 'done') return 'done'
+  // A live driver still owns it (fresh engine shouldn't see this) → leave it.
+  if (latestWorkerRunStatus === 'pending' || latestWorkerRunStatus === 'running') return 'none'
+  // interrupted / failed / canceled mid-run → re-dispatch for a clean re-run.
+  return 'redispatch'
+}
+
+/** Apply {@link decideAssignmentReconcile} to every `running` assignment ONCE at
+ *  engine (re)entry so a resumed task makes progress instead of re-parking. */
+async function reconcileRunningAssignments(
+  db: DbClient,
+  taskId: string,
+  state: EngineDbState,
+  log: Logger,
+): Promise<void> {
+  let count = 0
+  for (const a of state.assignments) {
+    if (a.status !== 'running') continue
+    const runs = state.hostRuns.filter((r) => r.nodeId === WG_MEMBER_NODE_ID && r.shardKey === a.id)
+    const latest = runs[runs.length - 1]
+    const action = decideAssignmentReconcile(latest?.status)
+    if (action === 'done') {
+      if (await casAssignmentStatus(db, a.id, 'running', 'done')) count++
+    } else if (action === 'redispatch') {
+      if (await casAssignmentStatus(db, a.id, 'running', 'dispatched')) count++
+    }
+  }
+  if (count > 0) log.info('workgroup reconciled running assignments on resume', { taskId, count })
+}
+
 /** RFC-182 D6 — pending visibility: a mint alone broadcasts nothing (the first
  *  frame used to be runNode's `running`), so a turn queued behind the global
  *  semaphore was invisible to the room — presence said "idle" while work was
@@ -643,6 +687,15 @@ export async function runWorkgroupEngine(
         mentionMemberIds: directed ? [leaderId] : [],
       })
     }
+  }
+
+  // RFC-186 PR-2 — ONCE at engine (re)entry, unwedge any `running` assignment
+  // whose worker node_run is already terminal (daemon-restart mid-worker-run):
+  // adoption is pending-only, so without this the assignment blocks the leader
+  // barrier forever and the resumed task just re-parks (audit §4/§5 F1).
+  {
+    const rec = await loadDbState(db, taskId)
+    if (rec !== null) await reconcileRunningAssignments(db, taskId, rec, log)
   }
 
   for (;;) {

@@ -17,7 +17,7 @@
 // launch machinery; start.ts passes a thunk that calls resumeTask with real deps.
 
 import { and, eq } from 'drizzle-orm'
-import { DAEMON_RESTART_ERROR_SUMMARY, isTurnEngineWorkgroupTask } from '@agent-workflow/shared'
+import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
 import { tasks } from '@/db/schema'
@@ -67,14 +67,14 @@ export async function autoResumeInterruptedTasks(
     .where(
       and(eq(tasks.status, 'interrupted'), eq(tasks.errorSummary, DAEMON_RESTART_ERROR_SUMMARY)),
     )
-  // RFC-165 (F13-r5): generic resumeTask does not apply to TURN-ENGINE
-  // workgroup host tasks (the engine adopts only pending rows; recovery is
-  // RFC-164 engine re-entry territory) — until that lands, those tasks stay
-  // `interrupted` after a daemon restart (known limitation, design §12).
-  // Single-agent host tasks are REAL DAGs → included. RFC-167 (Codex
-  // impl-gate P1): dynamic_workflow tasks are ALSO real state machines behind
-  // generic resume (generate pass re-entry / re-park / runScope) → included.
-  const candidates = rows.filter((t) => !isTurnEngineWorkgroupTask(t))
+  // RFC-186 PR-2 (audit §5 F1): turn-engine workgroups (leader_worker /
+  // free_collab) are NOW resumable — `resumeTask`→`runTask`→`runWorkgroupEngine`
+  // re-derives everything from durable rows, adopts pending host runs, and (PR-2)
+  // reconciles a `running` assignment whose node_run is terminal. The old RFC-165
+  // exclusion (`!isTurnEngineWorkgroupTask`) that left them `interrupted` forever
+  // — the direct cause of 3/10 production tasks wedged permanently — is removed.
+  // Single-agent host + dynamic_workflow were already included.
+  const candidates = rows
 
   const resumed: string[] = []
   const skipped: string[] = []

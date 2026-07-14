@@ -83,13 +83,13 @@ describe('RFC-108 T18 — boot auto-resume', () => {
     )
   })
 
-  test('RFC-167: turn-engine workgroup tasks stay interrupted; dynamic_workflow tasks auto-resume', async () => {
+  test('RFC-186 PR-2: turn-engine workgroup tasks ALSO auto-resume (were previously excluded)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await seedTask(db, 'interrupted', 'daemon-restart', {
+    const lw = await seedTask(db, 'interrupted', 'daemon-restart', {
       workgroupId: 'wg-lw',
       mode: 'leader_worker',
     })
-    await seedTask(db, 'interrupted', 'daemon-restart', {
+    const fc = await seedTask(db, 'interrupted', 'daemon-restart', {
       workgroupId: 'wg-fc',
       mode: 'free_collab',
     })
@@ -102,9 +102,11 @@ describe('RFC-108 T18 — boot auto-resume', () => {
       breaker: BREAKER,
       resume: async () => {},
     })
-    // dynamic tasks are runScope-backed state machines behind generic resume
-    // (Codex impl-gate P1); turn-engine modes remain engine-re-entry territory.
-    expect(res.resumed).toEqual([dyn])
+    // RFC-186 PR-2 (audit §5 F1): leader_worker / free_collab are no longer left
+    // `interrupted` forever — resumeTask → runWorkgroupEngine re-enters. All three
+    // turn/DAG modes now resume. (The prior lock asserted ONLY dynamic_workflow;
+    // that exclusion was the direct cause of permanently-wedged production tasks.)
+    expect(res.resumed.sort()).toEqual([lw, fc, dyn].sort())
   })
 
   test('skips a quarantined task', async () => {

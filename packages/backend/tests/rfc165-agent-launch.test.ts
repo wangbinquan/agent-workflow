@@ -515,7 +515,7 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
     db = createInMemoryDb(MIGRATIONS)
   })
 
-  test('A7a boot auto-resume skips workgroup tasks (known limitation: stays interrupted)', async () => {
+  test('A7a boot auto-resume NOW resumes workgroup tasks too (RFC-186 PR-2 lifted the limitation)', async () => {
     const wf = ulid()
     await db.insert(workflows).values({
       id: wf,
@@ -554,9 +554,12 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
         resumedIds.push(id)
       },
     } as never)
+    // RFC-186 PR-2 (audit §5 F1): turn-engine workgroups are no longer excluded
+    // from boot auto-resume — the permanent-death limitation is lifted.
     expect(resumedIds).toContain(plain)
-    expect(resumedIds).not.toContain(wg)
+    expect(resumedIds).toContain(wg)
     expect(result.resumed).toContain(plain)
+    expect(result.resumed).toContain(wg)
   })
 
   test('A7c EXHAUSTIVE: every execution-reviving repair option carries revivesExecution', () => {
