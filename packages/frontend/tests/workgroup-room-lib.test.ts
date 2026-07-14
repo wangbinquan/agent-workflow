@@ -6,7 +6,7 @@
 // without a DOM.
 
 import { describe, expect, test } from 'vitest'
-import type { WorkgroupMemberCurrentRun } from '@agent-workflow/shared'
+import type { WorkgroupMemberCurrentRun, WorkgroupRunEntry } from '@agent-workflow/shared'
 import {
   WORKGROUP_ASSIGNMENT_STATUS_KIND,
   applyMention,
@@ -18,10 +18,14 @@ import {
   groupFcAssignments,
   isAssignmentCancelable,
   isHumanDeliveryCard,
+  deriveMemberPresence,
+  formatRoomTimestamp,
+  formatTurnDuration,
   memberExecuting,
-  memberIsWorking,
   mentionExecutingPills,
-  streamActiveExecutions,
+  standaloneTurnEntries,
+  turnCardsForMessage,
+  turnDurationMs,
   mentionCandidates,
   mentionQueryAt,
   resolveComposerKey,
@@ -84,14 +88,15 @@ describe('buildRoomTimeline', () => {
       msg({ id: '01C', round: 1 }),
       msg({ id: '01D', round: 2 }),
     ])
-    expect(timeline.map((e) => (e.type === 'round' ? `round:${e.round}` : e.message.id))).toEqual([
-      '01A',
-      'round:1',
-      '01B',
-      '01C',
-      'round:2',
-      '01D',
-    ])
+    expect(
+      timeline.map((e) =>
+        e.type === 'round'
+          ? `round:${e.round}`
+          : e.type === 'turn'
+            ? e.entry.nodeRunId
+            : e.message.id,
+      ),
+    ).toEqual(['01A', 'round:1', '01B', '01C', 'round:2', '01D'])
   })
 
   test('a stream that starts at round 1 gets a leading separator', () => {
@@ -203,14 +208,32 @@ describe('assignment status oracles', () => {
     expect(assignmentStatusToKind('canceled')).toBe('neutral')
   })
 
-  test('memberIsWorking: running|dispatched cards mark the assignee busy', () => {
+  // RFC-182 D5 —— 取代 memberIsWorking（RFC-164 只读 assignments 的忙/闲：
+  // leader 轮/被@轮执行时恒「空闲」，与执行中 pill 同屏矛盾——用户抱怨 #2 根因）。
+  test('deriveMemberPresence: currentRun 状态优先，assignment 只兜底', () => {
     const cards = [
       card({ id: 'a1', assigneeMemberId: 'mem_2', status: 'running' }),
       card({ id: 'a2', assigneeMemberId: 'mem_3', status: 'done' }),
+      card({ id: 'a3', assigneeMemberId: 'mem_5', status: 'dispatched' }),
+      card({ id: 'a4', assigneeMemberId: 'mem_6', status: 'awaiting_human' }),
     ]
-    expect(memberIsWorking('mem_2', cards)).toBe(true)
-    expect(memberIsWorking('mem_3', cards)).toBe(false)
-    expect(memberIsWorking('mem_4', cards)).toBe(false)
+    const cur = (status: string) => ({
+      nodeRunId: 'r1',
+      status,
+      kind: 'assignment' as const,
+      triggerMessageId: null,
+    })
+    // 设计门 P1 关键例：run=pending + assignment=running → 排队中（非执行中）。
+    expect(deriveMemberPresence('mem_2', cards, cur('pending'))).toBe('queued')
+    expect(deriveMemberPresence('mem_2', cards, cur('running'))).toBe('working')
+    expect(deriveMemberPresence('mem_2', cards, cur('awaiting_human'))).toBe('awaiting')
+    // currentRun 终态 → 落 assignment 兜底（running 卡）。
+    expect(deriveMemberPresence('mem_2', cards, cur('done'))).toBe('working')
+    // 无 run：dispatched → queued；awaiting_human 卡 → awaiting；无卡 → idle。
+    expect(deriveMemberPresence('mem_5', cards, null)).toBe('queued')
+    expect(deriveMemberPresence('mem_6', cards, null)).toBe('awaiting')
+    expect(deriveMemberPresence('mem_3', cards, null)).toBe('idle')
+    expect(deriveMemberPresence('mem_4', cards, null)).toBe('idle')
   })
 })
 
@@ -529,21 +552,32 @@ describe('RFC-179 executing indicators', () => {
     expect(memberExecuting(null)).toBe(false)
   })
 
-  test('streamActiveExecutions: message-turn + leader-round, NOT assignment (has a card)', () => {
-    const memberRuns = {
-      lead: run({ kind: 'leader-round', status: 'running' }),
-      a1: run({ kind: 'assignment', status: 'running' }), // card in stream → excluded
-      a2: run({ kind: 'message-turn', status: 'running' }),
-    }
-    expect(streamActiveExecutions(members, memberRuns).map((e) => e.displayName)).toEqual([
-      'Lead',
-      'Rev',
-    ])
-  })
-
-  test('streamActiveExecutions: excludes terminal + null', () => {
-    const memberRuns = { lead: run({ kind: 'leader-round', status: 'done' }), a1: null }
-    expect(streamActiveExecutions(members, memberRuns)).toEqual([])
+  // RFC-182 D8 —— streamActiveExecutions（跑完即消失的合成活跃行）被持久回合卡
+  // 取代：leader 轮/降级被@轮成为 standalone timeline 条目，永不消失。
+  test('standaloneTurnEntries: leader 轮全收 + 无 trigger 的被@轮降级收，assignment 不收', () => {
+    const entry = (over: Partial<WorkgroupRunEntry>): WorkgroupRunEntry => ({
+      nodeRunId: 'R1',
+      memberId: 'a1',
+      displayName: 'Coder',
+      kind: 'message-turn',
+      status: 'done',
+      round: null,
+      startedAt: null,
+      finishedAt: null,
+      triggerMessageId: null,
+      assignmentId: null,
+      note: null,
+      ...over,
+    })
+    const history = [
+      entry({ nodeRunId: 'L1', kind: 'leader-round', round: 1 }),
+      entry({ nodeRunId: 'M1', kind: 'message-turn', triggerMessageId: 'MSG1' }),
+      entry({ nodeRunId: 'M2', kind: 'message-turn', triggerMessageId: null }),
+      entry({ nodeRunId: 'A1', kind: 'assignment', assignmentId: 'ASG1' }),
+    ]
+    expect(standaloneTurnEntries(history).map((e) => e.nodeRunId)).toEqual(['L1', 'M2'])
+    expect(turnCardsForMessage(history, 'MSG1').map((e) => e.nodeRunId)).toEqual(['M1'])
+    expect(turnCardsForMessage(history, 'MSG9')).toEqual([])
   })
 
   test('mentionExecutingPills: triggerMessageId → running message-turn members', () => {
@@ -552,7 +586,10 @@ describe('RFC-179 executing indicators', () => {
       a2: run({ kind: 'message-turn', status: 'running', triggerMessageId: 'MSG4' }),
       lead: run({ kind: 'message-turn', status: 'done', triggerMessageId: 'MSG4' }), // terminal → out
     }
-    expect(mentionExecutingPills(members, memberRuns).get('MSG4')).toEqual(['Coder', 'Rev'])
+    expect(mentionExecutingPills(members, memberRuns).get('MSG4')).toEqual([
+      { displayName: 'Coder', nodeRunId: 'r' },
+      { displayName: 'Rev', nodeRunId: 'r' },
+    ])
   })
 
   test('mentionExecutingPills: assignment / no-trigger runs produce no pill', () => {
@@ -561,5 +598,77 @@ describe('RFC-179 executing indicators', () => {
       a2: run({ kind: 'message-turn', status: 'running', triggerMessageId: null }),
     }
     expect(mentionExecutingPills(members, memberRuns).size).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-182 —— timeline interleave（round-aware leader 卡 + ULID 降级 + tail）
+// 与时间/耗时纯函数。
+// ---------------------------------------------------------------------------
+
+describe('RFC-182 timeline interleave + time helpers', () => {
+  const turn = (over: Partial<WorkgroupRunEntry>): WorkgroupRunEntry => ({
+    nodeRunId: '01Z',
+    memberId: 'lead',
+    displayName: 'Lead',
+    kind: 'leader-round',
+    status: 'done',
+    round: 1,
+    startedAt: null,
+    finishedAt: null,
+    triggerMessageId: null,
+    assignmentId: null,
+    note: null,
+    ...over,
+  })
+  const flat = (entries: ReturnType<typeof buildRoomTimeline>): string[] =>
+    entries.map((e) =>
+      e.type === 'round'
+        ? `round:${e.round}`
+        : e.type === 'turn'
+          ? `turn:${e.entry.nodeRunId}`
+          : e.message.id,
+    )
+
+  test('leader 卡 round-aware：落在本轮分隔之后（leader run 先于本轮产出 mint，纯 ULID 会插错轮）', () => {
+    const timeline = buildRoomTimeline(
+      [msg({ id: '01B', round: 1 }), msg({ id: '01D', round: 2 })],
+      // L1 的 ULID 小于 01B（先 mint），但属于 round 1 → 必须在 round:1 分隔后。
+      [turn({ nodeRunId: '01A', round: 1 }), turn({ nodeRunId: '01C', round: 2 })],
+    )
+    expect(flat(timeline)).toEqual(['round:1', 'turn:01A', '01B', 'round:2', 'turn:01C', '01D'])
+  })
+
+  test('分隔未出现的轮（leader 正在思考）→ 卡落尾部', () => {
+    const timeline = buildRoomTimeline(
+      [msg({ id: '01B', round: 1 })],
+      [turn({ nodeRunId: '01C', round: 2 })],
+    )
+    expect(flat(timeline)).toEqual(['round:1', '01B', 'turn:01C'])
+  })
+
+  test('round=null 的降级被@卡按 ULID 插入', () => {
+    const timeline = buildRoomTimeline(
+      [msg({ id: '01B', round: 0 }), msg({ id: '01F', round: 0 })],
+      [turn({ nodeRunId: '01D', kind: 'message-turn', round: null })],
+    )
+    expect(flat(timeline)).toEqual(['01B', 'turn:01D', '01F'])
+  })
+
+  test('formatRoomTimestamp：同日 HH:mm:ss，跨日带 M/D', () => {
+    const now = new Date(2026, 6, 14, 10, 0, 0).getTime()
+    const sameDay = new Date(2026, 6, 14, 9, 5, 7).getTime()
+    const otherDay = new Date(2026, 6, 13, 22, 30, 0).getTime()
+    expect(formatRoomTimestamp(sameDay, now)).toBe('09:05:07')
+    expect(formatRoomTimestamp(otherDay, now)).toBe('7/13 22:30')
+  })
+
+  test('turnDurationMs / formatTurnDuration：running 走 now，终态定格，缺 startedAt → null', () => {
+    const e = turn({ startedAt: 1_000, finishedAt: null, status: 'running' })
+    expect(turnDurationMs(e, 66_000)).toBe(65_000)
+    expect(turnDurationMs(turn({ startedAt: 1_000, finishedAt: 31_000 }), 999_999)).toBe(30_000)
+    expect(turnDurationMs(turn({ startedAt: null }), 5_000)).toBeNull()
+    expect(formatTurnDuration(65_000)).toBe('01:05')
+    expect(formatTurnDuration(3_725_000)).toBe('1:02:05')
   })
 })

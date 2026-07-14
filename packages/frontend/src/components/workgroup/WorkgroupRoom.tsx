@@ -16,7 +16,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { TaskNodeRuns, TaskStatus, WorkgroupRuntimeMember } from '@agent-workflow/shared'
+import type {
+  NodeRun,
+  TaskNodeRuns,
+  TaskStatus,
+  WorkgroupRunEntry,
+  WorkgroupRuntimeMember,
+} from '@agent-workflow/shared'
 import { resolveWorkgroupSwitches } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Card } from '@/components/Card'
@@ -30,6 +36,7 @@ import { StatusChip } from '@/components/StatusChip'
 import { WorkgroupTaskConfigDialog } from '@/components/workgroup/WorkgroupTaskConfigDialog'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { describeApiError } from '@/i18n'
+import { displayNoderunStatusKey, nodeRunStatusToKind } from '@/lib/noderun-status'
 import {
   applyMention,
   assignmentStatusToKind,
@@ -37,21 +44,26 @@ import {
   buildDeliverBody,
   buildRoomTimeline,
   canPostRoomMessage,
+  deriveMemberPresence,
+  formatRoomTimestamp,
+  formatTurnDuration,
   groupFcAssignments,
   isAssignmentCancelable,
   isHumanDeliveryCard,
   memberIndex,
-  memberIsWorking,
   mentionExecutingPills,
   mentionCandidates,
   mentionQueryAt,
   resolveComposerKey,
   resultBodyFor,
   sendChordModLabel,
-  streamActiveExecutions,
+  standaloneTurnEntries,
+  turnCardsForMessage,
+  turnDurationMs,
   workgroupRoomKey,
   type MentionContext,
   type WorkgroupDeliverInput,
+  type WorkgroupMemberPresence,
   type WorkgroupRoomAssignment,
   type WorkgroupRoomMessage,
   type WorkgroupRoomResponse,
@@ -163,16 +175,19 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
   // PR-5 (design §8.4) — mid-run config dialog toggle.
   const [configOpen, setConfigOpen] = useState(false)
 
-  const timeline = useMemo(() => buildRoomTimeline(room.data?.messages ?? []), [room.data])
-  // RFC-179 §2.3 — executing indicators (Q5): per-message「执行中」pill on the
-  // @-mention that woke a member (render①) + synthetic active rows for members
-  // running without a visible card (render②). Both off the room's memberRuns.
+  // RFC-182 D1 — the timeline weaves persistent turn cards (leader rounds +
+  // degraded message-turns) between the messages; @-mention message-turns
+  // attach under their trigger message inside RoomMessage instead.
+  const runHistory = useMemo(() => room.data?.runHistory ?? [], [room.data])
+  const timeline = useMemo(
+    () => buildRoomTimeline(room.data?.messages ?? [], standaloneTurnEntries(runHistory)),
+    [room.data, runHistory],
+  )
+  // RFC-179 §2.3 — per-message「执行中」pill on the @-mention that woke a
+  // member (render①); RFC-182 D8 replaced the vanish-on-done synthetic active
+  // rows (render②) with the persistent turn cards above.
   const executingPills = useMemo(
     () => mentionExecutingPills(room.data?.config.members ?? [], room.data?.memberRuns ?? {}),
-    [room.data],
-  )
-  const activeExecutions = useMemo(
-    () => streamActiveExecutions(room.data?.config.members ?? [], room.data?.memberRuns ?? {}),
     [room.data],
   )
   const members = useMemo(
@@ -180,12 +195,35 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
     [room.data?.config],
   )
 
-  // Pin the log to the newest message whenever one lands.
-  const messageCount = room.data?.messages.length ?? 0
+  // RFC-182 — ONE room-level 1s ticker drives every live duration (turn cards
+  // + run log); it only runs while something is actually pending/running.
+  const hasLiveTurn = useMemo(
+    () => runHistory.some((e) => e.status === 'running' || e.status === 'pending'),
+    [runHistory],
+  )
+  const [roomNow, setRoomNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!hasLiveTurn) return
+    const tick = setInterval(() => setRoomNow(Date.now()), 1000)
+    return () => clearInterval(tick)
+  }, [hasLiveTurn])
+
+  // RFC-182 P1-1 — scroll anchoring: follow the tail only while the user IS at
+  // the tail; scrolling up to read history must never be yanked back down
+  // (the old effect pinned unconditionally). Keyed on timeline + runHistory
+  // length (impl-gate P2: an attached turn card grows the log without
+  // changing the timeline length).
+  const [atBottom, setAtBottom] = useState(true)
+  const followLen = timeline.length + runHistory.length
   useEffect(() => {
     const el = logRef.current
-    if (el !== null) el.scrollTop = el.scrollHeight
-  }, [messageCount])
+    if (el !== null && atBottom) el.scrollTop = el.scrollHeight
+  }, [followLen, atBottom])
+  function onLogScroll(): void {
+    const el = logRef.current
+    if (el === null) return
+    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 48)
+  }
 
   // @-mention completion over the roster (design: 输入 @ 时按花名册补全).
   const mentionCtx = mentionQueryAt(draft, caret)
@@ -260,6 +298,20 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
   const data = room.data
   const drawerRun =
     drawerRunId === null ? undefined : nodeRuns.data?.runs.find((r) => r.id === drawerRunId)
+  // RFC-182 G4-②/D7 — member-scoped drawer runs: the drawer's own history
+  // merges by nodeId, and every member turn shares __wg_member__ — unscoped it
+  // mixes EVERY member's rounds (cross-member bleed). Scope to the selected
+  // run's member via runHistory (selected run always included; unclassified
+  // run → full list, never a blank drawer).
+  const drawerRuns = (() => {
+    const all = nodeRuns.data?.runs ?? []
+    if (drawerRunId === null) return all
+    const owner = runHistory.find((e) => e.nodeRunId === drawerRunId)?.memberId
+    if (owner === undefined) return all
+    const ids = new Set(runHistory.filter((e) => e.memberId === owner).map((e) => e.nodeRunId))
+    ids.add(drawerRunId)
+    return all.filter((r) => ids.has(r.id))
+  })()
 
   return (
     <div
@@ -269,7 +321,12 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
       data-testid="workgroup-room"
     >
       <section className="workgroup-room__main">
-        <div className="workgroup-room__log" ref={logRef} data-testid="workgroup-room-log">
+        <div
+          className="workgroup-room__log"
+          ref={logRef}
+          onScroll={onLogScroll}
+          data-testid="workgroup-room-log"
+        >
           {timeline.length === 0 && (
             <EmptyState
               size="compact"
@@ -287,11 +344,22 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
               >
                 <span>{t('workgroups.room.roundDivider', { n: entry.round })}</span>
               </div>
+            ) : entry.type === 'turn' ? (
+              <TurnCard
+                key={`turn-${entry.entry.nodeRunId}`}
+                entry={entry.entry}
+                runs={nodeRuns.data?.runs ?? []}
+                now={roomNow}
+                onViewRun={setDrawerRunId}
+              />
             ) : (
               <RoomMessage
                 key={entry.message.id}
                 message={entry.message}
                 executingPill={executingPills.get(entry.message.id)}
+                runHistory={runHistory}
+                runs={nodeRuns.data?.runs ?? []}
+                now={roomNow}
                 data={data}
                 members={members}
                 resolveUser={users.get}
@@ -303,22 +371,21 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
               />
             ),
           )}
-          {activeExecutions.length > 0 && (
-            <div className="workgroup-room__active" data-testid="wg-active-executions">
-              {activeExecutions.map((e) => (
-                <StatusChip
-                  key={e.memberId}
-                  kind="info"
-                  size="sm"
-                  withDot
-                  data-testid={`wg-active-${e.displayName}`}
-                >
-                  {t('workgroups.room.memberExecuting', { name: e.displayName })}
-                </StatusChip>
-              ))}
-            </div>
-          )}
         </div>
+        {!atBottom && (
+          <button
+            type="button"
+            className="btn btn--sm workgroup-room__jump"
+            onClick={() => {
+              const el = logRef.current
+              if (el !== null) el.scrollTop = el.scrollHeight
+              setAtBottom(true)
+            }}
+            data-testid="workgroup-room-jump-latest"
+          >
+            {t('workgroups.room.backToLatest')}
+          </button>
+        )}
 
         {cancelCard.error !== null && cancelCard.error !== undefined && (
           <div className="error-box">{describeApiError(cancelCard.error)}</div>
@@ -473,10 +540,25 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
         >
           <ul className="workgroup-room__members">
             {data.config.members.map((m) => {
-              const working = memberIsWorking(m.id, data.assignments)
               // RFC-179 — click a member (leader included, as a peer) to open its
               // current session run in the right-hand drawer; null → not clickable.
               const currentRun = data.memberRuns[m.id] ?? null
+              // RFC-182 D5 — four-state presence off the SAME data the pills
+              // read (currentRun first, assignments as fallback) — the old
+              // assignments-only chip said「空闲」while a message-turn /
+              // leader round was visibly executing on screen (user complaint
+              // #2). The chip itself is clickable into the session (D9).
+              const presence = deriveMemberPresence(m.id, data.assignments, currentRun)
+              const presenceKind: Record<
+                WorkgroupMemberPresence,
+                'success' | 'warn' | 'info' | 'neutral'
+              > = { working: 'success', awaiting: 'warn', queued: 'info', idle: 'neutral' }
+              const presenceLabel: Record<WorkgroupMemberPresence, string> = {
+                working: t('workgroups.room.working'),
+                awaiting: t('workgroups.room.presenceAwaiting'),
+                queued: t('workgroups.room.presenceQueued'),
+                idle: t('workgroups.room.idle'),
+              }
               return (
                 <li key={m.id} data-testid={`wg-member-${m.displayName}`}>
                   {currentRun !== null ? (
@@ -505,17 +587,72 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
                       : t('workgroups.memberTypeHuman')}
                   </span>
                   <StatusChip
-                    kind={working ? 'success' : 'neutral'}
+                    kind={presenceKind[presence]}
                     size="sm"
-                    withDot={working}
+                    withDot={presence === 'working'}
                     data-testid={`wg-member-state-${m.displayName}`}
+                    {...(currentRun !== null
+                      ? { onClick: () => setDrawerRunId(currentRun.nodeRunId) }
+                      : {})}
                   >
-                    {working ? t('workgroups.room.working') : t('workgroups.room.idle')}
+                    {presenceLabel[presence]}
                   </StatusChip>
                 </li>
               )
             })}
           </ul>
+        </Card>
+
+        <Card
+          header={
+            <h3 className="workgroup-room__side-title">
+              {t('workgroups.room.runLogTitle', { count: data.runHistory.length })}
+            </h3>
+          }
+          data-testid="workgroup-room-runlog"
+        >
+          {data.runHistory.length === 0 ? (
+            <EmptyState
+              size="compact"
+              title={t('workgroups.room.runLogEmpty')}
+              data-testid="wg-runlog-empty"
+            />
+          ) : (
+            <ul className="workgroup-room__runlog">
+              {[...data.runHistory].reverse().map((e) => {
+                const live = nodeRuns.data?.runs.find((r) => r.id === e.nodeRunId)
+                const status = live?.status ?? e.status
+                const dur = turnDurationMs(e, roomNow)
+                return (
+                  <li key={e.nodeRunId}>
+                    <button
+                      type="button"
+                      className="workgroup-room__runlog-row"
+                      onClick={() => setDrawerRunId(e.nodeRunId)}
+                      data-testid={`wg-runlog-${e.nodeRunId}`}
+                    >
+                      <span className="workgroup-room__member-name">
+                        {e.displayName !== null
+                          ? `@${e.displayName}`
+                          : t('workgroups.room.removedMember')}
+                      </span>
+                      <span className="chip chip--tight">{turnKindLabel(t, e.kind)}</span>
+                      <StatusChip
+                        kind={live !== undefined ? nodeRunStatusToKind(live.status) : 'neutral'}
+                        size="sm"
+                        withDot={status === 'running'}
+                      >
+                        {live !== undefined ? t(displayNoderunStatusKey(live)) : status}
+                      </StatusChip>
+                      <span className="workgroup-room__time">
+                        {dur === null ? '—' : formatTurnDuration(dur)}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </Card>
 
         {data.gate.awaitingConfirmation && (
@@ -669,7 +806,7 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
           // so the Session tab renders the run's opencode conversation.
           workflowNodeKind="agent-single"
           agentName={null}
-          runs={nodeRuns.data.runs}
+          runs={drawerRuns}
           outputs={nodeRuns.data.outputs}
           onClose={() => setDrawerRunId(null)}
           onSelectRun={setDrawerRunId}
@@ -685,8 +822,15 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
 
 interface RoomMessageProps {
   message: WorkgroupRoomMessage
-  /** RFC-179 — displayNames of members whose live message-turn this message woke. */
-  executingPill?: readonly string[]
+  /** RFC-179/182 — live message-turns this message woke (pill per member,
+   *  clickable into the run's session — D9/G2). */
+  executingPill?: readonly { displayName: string; nodeRunId: string }[]
+  /** RFC-182 — full room history; message-turn cards attach under their
+   *  trigger message (turnCardsForMessage). */
+  runHistory: readonly WorkgroupRunEntry[]
+  /** Live node-run rows (status truth for card chips) + room ticker. */
+  runs: readonly NodeRun[]
+  now: number
   data: WorkgroupRoomResponse
   members: Map<string, WorkgroupRuntimeMember>
   resolveUser: (
@@ -702,6 +846,9 @@ interface RoomMessageProps {
 function RoomMessage({
   message,
   executingPill,
+  runHistory,
+  runs,
+  now,
   data,
   members,
   resolveUser,
@@ -713,6 +860,9 @@ function RoomMessage({
 }: RoomMessageProps) {
   const { t } = useTranslation()
   const cards = assignmentsForMessage(message, data.assignments)
+  // RFC-182 D1/D4 — persistent turn cards for the message-turns THIS message
+  // woke (assignment turns keep their DispatchCard below; no double card).
+  const turnCards = turnCardsForMessage(runHistory, message.id)
   const isSystem = message.authorKind === 'system'
   const member = message.authorMemberId === null ? undefined : members.get(message.authorMemberId)
   const isLeader =
@@ -740,11 +890,20 @@ function RoomMessage({
     <div className={`workgroup-room__msg${modifier}`} data-testid={`wg-msg-${message.id}`}>
       <div className="workgroup-room__msg-head">
         <span className="workgroup-room__author">{authorLabel}</span>
-        {executingPill !== undefined && executingPill.length > 0 && (
-          <StatusChip kind="info" size="sm" withDot data-testid={`wg-msg-executing-${message.id}`}>
-            {t('workgroups.room.executing')}
-          </StatusChip>
-        )}
+        {executingPill !== undefined &&
+          executingPill.map((p) => (
+            <StatusChip
+              key={p.nodeRunId}
+              kind="info"
+              size="sm"
+              withDot
+              data-testid={`wg-msg-executing-${message.id}`}
+              aria-label={t('workgroups.room.openMemberSession', { name: p.displayName })}
+              onClick={() => onViewRun(p.nodeRunId)}
+            >
+              {t('workgroups.room.executing')}
+            </StatusChip>
+          ))}
         {isLeader && (
           <StatusChip kind="info" size="sm" data-testid={`wg-msg-leader-${message.id}`}>
             {t('workgroups.leaderBadge')}
@@ -753,9 +912,7 @@ function RoomMessage({
         {message.authorKind === 'human' && (
           <span className="chip chip--tight">{t('workgroups.memberTypeHuman')}</span>
         )}
-        <span className="workgroup-room__time">
-          {new Date(message.createdAt).toLocaleTimeString()}
-        </span>
+        <span className="workgroup-room__time">{formatRoomTimestamp(message.createdAt, now)}</span>
       </div>
       <div className="workgroup-room__body">{message.bodyMd}</div>
       {cards.length > 0 && (
@@ -775,6 +932,85 @@ function RoomMessage({
           ))}
         </div>
       )}
+      {turnCards.length > 0 && (
+        <div className="workgroup-room__cards">
+          {turnCards.map((e) => (
+            <TurnCard key={e.nodeRunId} entry={e} runs={runs} now={now} onViewRun={onViewRun} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// RFC-182 D1 — persistent turn card (message-turn / leader-round): live while
+// running (pulse + ticking duration), settles IN PLACE at a terminal state
+// (status + total duration + view-session) — it never vanishes from the
+// stream. Assignment turns keep their DispatchCard (D4, no double card).
+// ---------------------------------------------------------------------------
+
+function turnKindLabel(
+  t: ReturnType<typeof useTranslation>['t'],
+  kind: WorkgroupRunEntry['kind'],
+): string {
+  if (kind === 'leader-round') return t('workgroups.room.turnKindLeader')
+  if (kind === 'assignment') return t('workgroups.room.turnKindAssignment')
+  return t('workgroups.room.turnKindMessage')
+}
+
+interface TurnCardProps {
+  entry: WorkgroupRunEntry
+  runs: readonly NodeRun[]
+  now: number
+  onViewRun: (nodeRunId: string) => void
+}
+
+function TurnCard({ entry, runs, now, onViewRun }: TurnCardProps) {
+  const { t } = useTranslation()
+  // Status truth prefers the live node-run row (same source the drawer uses,
+  // 10-state display via the shared noderun-status mapping); the history
+  // entry's snapshot is the fallback for the refetch gap.
+  const live = runs.find((r) => r.id === entry.nodeRunId)
+  const status = live?.status ?? entry.status
+  const dur = turnDurationMs(entry, now)
+  return (
+    <div
+      className="workgroup-room__card workgroup-room__card--turn"
+      data-testid={`wg-turn-${entry.nodeRunId}`}
+    >
+      <div className="workgroup-room__card-head">
+        <strong>
+          {entry.displayName !== null
+            ? `@${entry.displayName}`
+            : t('workgroups.room.removedMember')}
+        </strong>
+        <span className="chip chip--tight">{turnKindLabel(t, entry.kind)}</span>
+        <StatusChip
+          kind={live !== undefined ? nodeRunStatusToKind(live.status) : 'neutral'}
+          size="sm"
+          withDot={status === 'running'}
+          data-testid={`wg-turn-status-${entry.nodeRunId}`}
+        >
+          {live !== undefined ? t(displayNoderunStatusKey(live)) : status}
+        </StatusChip>
+        {entry.note === 'clarify-suppressed' && (
+          <StatusChip kind="warn" size="sm" data-testid={`wg-turn-note-${entry.nodeRunId}`}>
+            {t('workgroups.room.clarifySuppressedNote')}
+          </StatusChip>
+        )}
+        <span className="workgroup-room__time">{dur === null ? '—' : formatTurnDuration(dur)}</span>
+      </div>
+      <div className="workgroup-room__card-actions">
+        <button
+          type="button"
+          className="btn btn--xs"
+          onClick={() => onViewRun(entry.nodeRunId)}
+          data-testid={`wg-turn-view-${entry.nodeRunId}`}
+        >
+          {t('workgroups.room.viewRun')}
+        </button>
+      </div>
     </div>
   )
 }

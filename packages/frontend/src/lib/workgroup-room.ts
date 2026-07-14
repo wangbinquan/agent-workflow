@@ -16,6 +16,7 @@ import type {
   WorkgroupAssignmentStatus,
   WorkgroupMemberCurrentRun,
   WorkgroupMessage,
+  WorkgroupRunEntry,
   WorkgroupRuntimeConfig,
   WorkgroupRuntimeMember,
   WorkgroupSwitches,
@@ -56,6 +57,10 @@ export interface WorkgroupRoomResponse {
   /** RFC-179 — { [memberId]: current session run | null }. Drives 点成员看 session
    *  + 被 @ 执行中指示. Read-only runtime view; never enters a prompt (design §11). */
   memberRuns: Record<string, WorkgroupMemberCurrentRun | null>
+  /** RFC-182 — the room's FULL execution history (ascending by nodeRunId =
+   *  mint order); `memberRuns` is its projection. Feeds the turn cards, the
+   *  执行记录 rail and the drawer's member-scoped run list. */
+  runHistory: WorkgroupRunEntry[]
 }
 
 /**
@@ -74,6 +79,7 @@ export function workgroupRoomKey(taskId: string | null): readonly [string, strin
 export type RoomTimelineEntry =
   | { type: 'round'; round: number }
   | { type: 'message'; message: WorkgroupRoomMessage }
+  | { type: 'turn'; entry: WorkgroupRunEntry }
 
 /**
  * Interleave round separators into the ascending message stream: a separator
@@ -82,17 +88,70 @@ export type RoomTimelineEntry =
  * get no leading separator; the first round-N (N>0) message earns one.
  * Message ids are ULIDs, so ascending id == ascending time (the endpoint
  * already orders by id; sort defensively anyway).
+ *
+ * RFC-182 — `standaloneTurns` (leader rounds + degraded message-turns, see
+ * `standaloneTurnEntries`) are woven in as `{type:'turn'}` rows:
+ *   - leader entries are ROUND-AWARE (design-gate P2): a leader run is minted
+ *     BEFORE its own round-N output lands, so pure ULID interleaving would put
+ *     the round-1 card above the round-1 divider / under the previous round.
+ *     They land right AFTER their round's divider (or at the tail when the
+ *     divider hasn't materialized yet — the "leader thinking right now" case).
+ *   - round-null entries interleave by ULID (nodeRunId vs message id).
  */
-export function buildRoomTimeline(messages: readonly WorkgroupRoomMessage[]): RoomTimelineEntry[] {
+export function buildRoomTimeline(
+  messages: readonly WorkgroupRoomMessage[],
+  standaloneTurns: readonly WorkgroupRunEntry[] = [],
+): RoomTimelineEntry[] {
   const sorted = [...messages].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-  const out: RoomTimelineEntry[] = []
+  const base: RoomTimelineEntry[] = []
   let prevRound: number | null = null
   for (const m of sorted) {
     const isTransition = prevRound === null ? m.round > 0 : m.round !== prevRound
-    if (isTransition) out.push({ type: 'round', round: m.round })
-    out.push({ type: 'message', message: m })
+    if (isTransition) base.push({ type: 'round', round: m.round })
+    base.push({ type: 'message', message: m })
     prevRound = m.round
   }
+  if (standaloneTurns.length === 0) return base
+
+  const turns = [...standaloneTurns].sort((a, b) =>
+    a.nodeRunId < b.nodeRunId ? -1 : a.nodeRunId > b.nodeRunId ? 1 : 0,
+  )
+  const out: RoomTimelineEntry[] = []
+  const tail: WorkgroupRunEntry[] = []
+  const byUlid = turns.filter((t) => t.round === null)
+  const byRound = new Map<number, WorkgroupRunEntry[]>()
+  for (const t of turns) {
+    if (t.round === null) continue
+    const arr = byRound.get(t.round) ?? []
+    arr.push(t)
+    byRound.set(t.round, arr)
+  }
+  let ulidIdx = 0
+  for (const e of base) {
+    if (e.type === 'message') {
+      while (ulidIdx < byUlid.length && (byUlid[ulidIdx]?.nodeRunId ?? '') < e.message.id) {
+        const t = byUlid[ulidIdx]
+        if (t !== undefined) out.push({ type: 'turn', entry: t })
+        ulidIdx++
+      }
+    }
+    out.push(e)
+    if (e.type === 'round') {
+      for (const t of byRound.get(e.round) ?? []) out.push({ type: 'turn', entry: t })
+      byRound.delete(e.round)
+    }
+  }
+  while (ulidIdx < byUlid.length) {
+    const t = byUlid[ulidIdx]
+    if (t !== undefined) out.push({ type: 'turn', entry: t })
+    ulidIdx++
+  }
+  // Rounds whose divider hasn't materialized yet (live leader thinking) — tail,
+  // ascending by round then mint order.
+  for (const round of [...byRound.keys()].sort((a, b) => a - b)) {
+    for (const t of byRound.get(round) ?? []) tail.push(t)
+  }
+  for (const t of tail) out.push({ type: 'turn', entry: t })
   return out
 }
 
@@ -107,23 +166,47 @@ export function memberIndex(
   return new Map(config.members.map((m) => [m.id, m]))
 }
 
+// ---------------------------------------------------------------------------
+// RFC-182 D5 — roster presence（四态单源）。取代 RFC-164 的 memberIsWorking
+// （只读 assignments——leader 轮 / 被 @ 轮执行时永远「空闲」，与同屏的执行中
+// pill 自相矛盾，用户抱怨 #2 的根因；f55ede4b 只修了刷新时延没修数据源）。
+// ---------------------------------------------------------------------------
+
+export type WorkgroupMemberPresence = 'working' | 'awaiting' | 'queued' | 'idle'
+
 /**
- * "Working" = the member currently owns at least one live card
- * (running / dispatched — 用户拍板: dispatched counts as busy, the run is
- * about to start or the human owes a delivery). Everything else is idle.
+ * currentRun 状态优先（RFC-182 设计门 P1）：派发轮在 run 等信号量前 assignment
+ * 已被 CAS 成 running——「排队中」场景恰是 run=pending + assignment=running，
+ * assignment 优先会把 queued 误报成 working。assignment 只在 currentRun 为空
+ * 或终态时兜底（dispatched=已派发未 mint 窗口 / awaiting_human=人工交付等待）。
  */
-export function memberIsWorking(
+export function deriveMemberPresence(
   memberId: string,
   assignments: readonly Pick<WorkgroupRoomAssignment, 'assigneeMemberId' | 'status'>[],
-): boolean {
-  return assignments.some(
-    (a) => a.assigneeMemberId === memberId && (a.status === 'running' || a.status === 'dispatched'),
-  )
+  currentRun: WorkgroupMemberCurrentRun | null | undefined,
+): WorkgroupMemberPresence {
+  const run = currentRun ?? null
+  if (run !== null) {
+    if (run.status === 'running') return 'working'
+    if (run.status === 'awaiting_human') return 'awaiting'
+    if (run.status === 'pending') return 'queued'
+  }
+  let queued = false
+  let awaiting = false
+  for (const a of assignments) {
+    if (a.assigneeMemberId !== memberId) continue
+    if (a.status === 'running') return 'working'
+    if (a.status === 'awaiting_human') awaiting = true
+    else if (a.status === 'dispatched') queued = true
+  }
+  if (awaiting) return 'awaiting'
+  if (queued) return 'queued'
+  return 'idle'
 }
 
 // ---------------------------------------------------------------------------
-// RFC-179 §2.3 — executing indicators in the stream (Q5). memberRuns comes
-// from the room aggregate (backend deriveMemberCurrentRuns). Pure + table-tested.
+// RFC-179 §2.3 / RFC-182 — executing indicators + turn cards. memberRuns /
+// runHistory come from the room aggregate. Pure + table-tested.
 // ---------------------------------------------------------------------------
 
 type RoomMemberLite = Pick<WorkgroupRuntimeMember, 'id' | 'displayName'>
@@ -134,23 +217,29 @@ export function memberExecuting(currentRun: WorkgroupMemberCurrentRun | null | u
 }
 
 /**
- * Render② — members executing WITHOUT a visible dispatch card in the stream
- * (message-turn = @-mention wake, or leader-round = leader thinking). Assignment
- * runs already surface as a running card, so they are excluded to avoid a
- * duplicate indicator. Order follows the roster.
+ * RFC-182 D1/D4 — turn cards attached under their triggering @-mention
+ * message (message-turn entries only; assignment runs keep their
+ * DispatchCard — a second card would be duplicate noise).
  */
-export function streamActiveExecutions(
-  members: readonly RoomMemberLite[],
-  memberRuns: Record<string, WorkgroupMemberCurrentRun | null>,
-): { memberId: string; displayName: string }[] {
-  const out: { memberId: string; displayName: string }[] = []
-  for (const m of members) {
-    const run = memberRuns[m.id] ?? null
-    if (run !== null && run.status === 'running' && run.kind !== 'assignment') {
-      out.push({ memberId: m.id, displayName: m.displayName })
-    }
-  }
-  return out
+export function turnCardsForMessage(
+  runHistory: readonly WorkgroupRunEntry[],
+  messageId: string,
+): WorkgroupRunEntry[] {
+  return runHistory.filter((e) => e.kind === 'message-turn' && e.triggerMessageId === messageId)
+}
+
+/**
+ * RFC-182 — standalone timeline turn entries: every leader round (they have
+ * no triggering message; anchored round-aware by buildRoomTimeline) plus
+ * message-turns whose trigger derivation failed (degraded → ULID order, the
+ * card is never lost). Assignment runs are excluded (DispatchCard owns them).
+ */
+export function standaloneTurnEntries(
+  runHistory: readonly WorkgroupRunEntry[],
+): WorkgroupRunEntry[] {
+  return runHistory.filter(
+    (e) => e.kind === 'leader-round' || (e.kind === 'message-turn' && e.triggerMessageId === null),
+  )
 }
 
 /**
@@ -161,8 +250,8 @@ export function streamActiveExecutions(
 export function mentionExecutingPills(
   members: readonly RoomMemberLite[],
   memberRuns: Record<string, WorkgroupMemberCurrentRun | null>,
-): Map<string, string[]> {
-  const map = new Map<string, string[]>()
+): Map<string, { displayName: string; nodeRunId: string }[]> {
+  const map = new Map<string, { displayName: string; nodeRunId: string }[]>()
   for (const m of members) {
     const run = memberRuns[m.id] ?? null
     if (
@@ -172,7 +261,8 @@ export function mentionExecutingPills(
       run.triggerMessageId !== null
     ) {
       const arr = map.get(run.triggerMessageId) ?? []
-      arr.push(m.displayName)
+      // RFC-182 D9/G2 — carry the run id so the pill itself opens the session.
+      arr.push({ displayName: m.displayName, nodeRunId: run.nodeRunId })
       map.set(run.triggerMessageId, arr)
     }
   }
@@ -561,4 +651,45 @@ export function buildWorkgroupConfigPatch(
 /** Valid maxRounds for the mid-run patch (mirrors ConfigPatchSchema: 1..LIMIT int). */
 export function isValidTaskMaxRounds(n: number | undefined): boolean {
   return n === undefined || (Number.isInteger(n) && n >= 1 && n <= WORKGROUP_MAX_ROUNDS_LIMIT)
+}
+
+// ---------------------------------------------------------------------------
+// RFC-182 P1-2 — room timestamp formatting（跨天房间不丢日期）
+// ---------------------------------------------------------------------------
+
+/**
+ * Same-day → `HH:mm:ss`; different day (vs `now`) → `M/D HH:mm`. Pure so the
+ * vitest matrix pins both branches (the component passes `Date.now()`).
+ */
+export function formatRoomTimestamp(ts: number, now: number): string {
+  const d = new Date(ts)
+  const n = new Date(now)
+  const sameDay =
+    d.getFullYear() === n.getFullYear() &&
+    d.getMonth() === n.getMonth() &&
+    d.getDate() === n.getDate()
+  const two = (x: number): string => String(x).padStart(2, '0')
+  if (sameDay) return `${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`
+  return `${d.getMonth() + 1}/${d.getDate()} ${two(d.getHours())}:${two(d.getMinutes())}`
+}
+
+/**
+ * RFC-182 — live/settled turn-card duration: running cards tick against
+ * `now`; settled cards freeze at finishedAt−startedAt; missing startedAt → null
+ * (the card renders an em-dash).
+ */
+export function turnDurationMs(entry: WorkgroupRunEntry, now: number): number | null {
+  if (entry.startedAt === null) return null
+  const end = entry.finishedAt ?? now
+  return Math.max(0, end - entry.startedAt)
+}
+
+/** Compact `mm:ss` / `h:mm:ss` duration label for turn cards / run log rows. */
+export function formatTurnDuration(ms: number): string {
+  const totalSec = Math.floor(ms / 1000)
+  const h = Math.floor(totalSec / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  const two = (x: number): string => String(x).padStart(2, '0')
+  return h > 0 ? `${h}:${two(m)}:${two(s)}` : `${two(m)}:${two(s)}`
 }

@@ -1164,6 +1164,16 @@ export interface Resources {
       openMemberSession: string
       executing: string
       memberExecuting: string
+      presenceQueued: string
+      presenceAwaiting: string
+      turnKindLeader: string
+      turnKindMessage: string
+      turnKindAssignment: string
+      removedMember: string
+      clarifySuppressedNote: string
+      runLogTitle: string
+      runLogEmpty: string
+      backToLatest: string
       gateTitle: string
       gateAwaiting: string
       gateConfirm: string
@@ -4084,6 +4094,16 @@ export const zhCN: Resources = {
       openMemberSession: '查看 @{{name}} 的执行会话',
       executing: '执行中',
       memberExecuting: '@{{name}} 执行中…',
+      presenceQueued: '排队中',
+      presenceAwaiting: '等待回答',
+      turnKindLeader: '领导轮',
+      turnKindMessage: '被 @ 轮',
+      turnKindAssignment: '派发轮',
+      removedMember: '已移除成员',
+      clarifySuppressedNote: '反问已压制',
+      runLogTitle: '执行记录 · {{count}}',
+      runLogEmpty: '还没有任何执行',
+      backToLatest: '回到最新',
       gateTitle: '完成门',
       gateAwaiting: 'Leader 已宣布完成，等待人工确认。',
       gateConfirm: '确认完成',

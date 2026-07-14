@@ -198,6 +198,7 @@ function makeRoom(over: Partial<WorkgroupRoomResponse> = {}): WorkgroupRoomRespo
     ],
     // RFC-179 — per-member currentRun map; default empty (no member clickable).
     memberRuns: {},
+    runHistory: [],
     ...over,
   }
 }
@@ -210,7 +211,7 @@ interface FetchCall {
 
 function installFetch(
   room: WorkgroupRoomResponse,
-  overrides: { confirm?: () => Response; deliver?: () => Response } = {},
+  overrides: { confirm?: () => Response; deliver?: () => Response; runs?: NodeRun[] } = {},
 ): FetchCall[] {
   const calls: FetchCall[] = []
   vi.spyOn(globalThis, 'fetch').mockImplementation(
@@ -245,7 +246,7 @@ function installFetch(
         return overrides.confirm !== undefined ? overrides.confirm() : json({ decision: 'approve' })
       }
       if (url.includes('/node-runs')) {
-        return json({ runs: [makeRun({ id: 'nr1' })], outputs: [] })
+        return json({ runs: overrides.runs ?? [makeRun({ id: 'nr1' })], outputs: [] })
       }
       if (url.includes('/api/users/lookup')) {
         return json([
@@ -412,7 +413,9 @@ describe('WorkgroupRoom — dispatch cards', () => {
 
   // RFC-179 §2.3 (Q5) — a message-turn wake (@-mention) surfaces a「执行中」pill on
   // its trigger message + a synthetic stream active row (it has no dispatch card).
-  test('RFC-179: a message-turn wake shows a pill on its trigger message + a stream active row', async () => {
+  // RFC-182 D1/D8 —— 取代 RFC-179 render②：合成活跃行（跑完即消失）升级为
+  // 持久回合卡（执行中实时、终态原地定格、永不消失，可点进 session）。
+  test('RFC-182: 被@轮在触发消息下出持久回合卡（终态仍在）+ pill 可点开 drawer', async () => {
     installFetch(
       makeRoom({
         memberRuns: {
@@ -423,14 +426,47 @@ describe('WorkgroupRoom — dispatch cards', () => {
             triggerMessageId: '01E',
           },
         },
+        runHistory: [
+          {
+            nodeRunId: 'nr9',
+            memberId: 'mem_work',
+            displayName: 'Worker',
+            kind: 'message-turn',
+            status: 'running',
+            round: null,
+            startedAt: Date.now() - 5_000,
+            finishedAt: null,
+            triggerMessageId: '01E',
+            assignmentId: null,
+            note: null,
+          },
+          // 早前一轮已终态——回合卡必须仍在流里（「跑完不消失」回归锁）。
+          {
+            nodeRunId: 'nr8',
+            memberId: 'mem_work',
+            displayName: 'Worker',
+            kind: 'message-turn',
+            status: 'done',
+            round: null,
+            startedAt: Date.now() - 60_000,
+            finishedAt: Date.now() - 50_000,
+            triggerMessageId: '01E',
+            assignmentId: null,
+            note: null,
+          },
+        ],
       }),
     )
     renderRoom(makeRoom())
-    // Pill on the triggering @-mention message (01E); not on an unrelated message.
-    expect(await screen.findByTestId('wg-msg-executing-01E')).toBeTruthy()
+    // Pill on the triggering @-mention message (01E)，且是可点 button（D9）。
+    const pill = await screen.findByTestId('wg-msg-executing-01E')
+    expect(pill.tagName).toBe('BUTTON')
     expect(screen.queryByTestId('wg-msg-executing-01A')).toBeNull()
-    // Synthetic stream active row for the running message-turn member.
-    expect(screen.getByTestId('wg-active-Worker')).toBeTruthy()
+    // 触发消息下出两张回合卡：running 实时 + done 定格（永不消失）。
+    expect(screen.getByTestId('wg-turn-nr9')).toBeTruthy()
+    expect(screen.getByTestId('wg-turn-nr8')).toBeTruthy()
+    // 「查看会话」按钮可点。
+    expect(screen.getByTestId('wg-turn-view-nr9')).toBeTruthy()
   })
 
   test('RFC-179: an assignment run surfaces as its card — no synthetic active row / pill', async () => {
@@ -448,8 +484,9 @@ describe('WorkgroupRoom — dispatch cards', () => {
     )
     renderRoom(makeRoom())
     await screen.findByTestId('workgroup-room-log')
-    expect(screen.queryByTestId('wg-active-executions')).toBeNull()
-    expect(screen.queryByTestId('wg-active-Worker')).toBeNull()
+    // RFC-182 D4：assignment 轮由 DispatchCard 承载——不出回合卡（防双卡）。
+    expect(screen.queryByTestId('wg-turn-nr1')).toBeNull()
+    expect(screen.queryByTestId('wg-msg-executing-01E')).toBeNull()
   })
 
   test('cancel is a two-click ConfirmButton that POSTs the cancel endpoint (dispatched card only)', async () => {
@@ -747,13 +784,30 @@ describe('WorkgroupRoom — composer keyboard (RFC-174)', () => {
 })
 
 describe('WorkgroupRoom — side rail', () => {
-  test('roster shows working/idle from live cards (running|dispatched = working)', async () => {
-    installFetch(makeRoom())
+  // RFC-182 D5 —— 四态 presence 取代 working/idle 二元（数据源错配修复：
+  // memberIsWorking 只读 assignments，leader 轮/被@轮执行时恒「空闲」）。
+  test('roster presence: dispatched 卡=排队中；currentRun running=执行中（chip 可点开 drawer）', async () => {
+    installFetch(
+      makeRoom({
+        memberRuns: {
+          mem_lead: {
+            nodeRunId: 'nrL',
+            status: 'running',
+            kind: 'leader-round',
+            triggerMessageId: null,
+          },
+        },
+      }),
+    )
     renderRoom(makeRoom())
-    // Worker owns the dispatched a2 card → working; Lead/Alice idle.
+    // Worker owns the dispatched a2 card（无 run）→ 排队中（Queued）。
     const worker = await screen.findByTestId('wg-member-state-Worker')
-    expect(worker.textContent).toBe('Working')
-    expect(screen.getByTestId('wg-member-state-Lead').textContent).toBe('Idle')
+    expect(worker.textContent).toBe('Queued')
+    // Leader 轮执行中 → Working（旧实现此处显示 Idle——同屏矛盾回归锁），
+    // 且 chip 本身是可点 button，点开该 run 的 drawer。
+    const lead = screen.getByTestId('wg-member-state-Lead')
+    expect(lead.textContent).toBe('Working')
+    expect(lead.tagName).toBe('BUTTON')
     expect(screen.getByTestId('wg-member-state-Alice').textContent).toBe('Idle')
     // Leader badge on the roster row too.
     const leadRow = screen.getByTestId('wg-member-Lead')
@@ -1085,5 +1139,76 @@ describe('WorkgroupRoom — mid-run config entry + decision highlight (PR-5/6)',
     renderRoom(room)
     const msg = await screen.findByTestId('wg-msg-01Z')
     expect(msg.className).toContain('workgroup-room__msg--decision')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-182 —— 执行记录卡（G4-①）：全成员历次执行倒序、整行可点开 drawer。
+// ---------------------------------------------------------------------------
+
+describe('WorkgroupRoom — RFC-182 执行记录', () => {
+  const entry = (over: Partial<WorkgroupRoomResponse['runHistory'][number]>) => ({
+    nodeRunId: 'nr1',
+    memberId: 'mem_work',
+    displayName: 'Worker',
+    kind: 'assignment' as const,
+    status: 'done',
+    round: null,
+    startedAt: 1_000,
+    finishedAt: 61_000,
+    triggerMessageId: null,
+    assignmentId: 'a1',
+    note: null,
+    ...over,
+  })
+
+  test('倒序列出全部回合；行可点 → 打开 drawer；空态走 EmptyState', async () => {
+    const room = makeRoom({
+      runHistory: [
+        entry({ nodeRunId: 'nr1' }),
+        entry({
+          nodeRunId: 'nr2',
+          kind: 'leader-round',
+          memberId: 'mem_lead',
+          displayName: 'Lead',
+          round: 1,
+        }),
+      ],
+    })
+    installFetch(room, { runs: [makeRun({ id: 'nr1' }), makeRun({ id: 'nr2' })] })
+    renderRoom(room)
+    const rail = await screen.findByTestId('workgroup-room-runlog')
+    const rows = within(rail).getAllByRole('button')
+    // 倒序：最新的 nr2 在前。
+    expect(rows[0]?.getAttribute('data-testid')).toBe('wg-runlog-nr2')
+    expect(rows[1]?.getAttribute('data-testid')).toBe('wg-runlog-nr1')
+    fireEvent.click(rows[1] as HTMLElement)
+    await waitFor(() => {
+      expect(document.querySelector('.inspector')).toBeTruthy()
+    })
+  })
+
+  test('无历史 → 空态', async () => {
+    installFetch(makeRoom())
+    renderRoom(makeRoom())
+    expect(await screen.findByTestId('wg-runlog-empty')).toBeTruthy()
+  })
+
+  test('「反问已压制」辅注（RFC-181 协同 D11）随 note 渲染在回合卡上', async () => {
+    const room = makeRoom({
+      runHistory: [
+        entry({
+          nodeRunId: 'nrS',
+          kind: 'message-turn',
+          status: 'failed',
+          triggerMessageId: null,
+          assignmentId: null,
+          note: 'clarify-suppressed',
+        }),
+      ],
+    })
+    installFetch(room, { runs: [makeRun({ id: 'nrS', status: 'failed' })] })
+    renderRoom(room)
+    expect(await screen.findByTestId('wg-turn-note-nrS')).toBeTruthy()
   })
 })

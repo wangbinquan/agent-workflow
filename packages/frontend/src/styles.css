@@ -12393,13 +12393,71 @@ mark.comment-anchor[data-active='true'] {
   border-radius: 3px;
 }
 
-/* RFC-179 — synthetic「执行中」rows at the bottom of the stream (message-turn /
-   leader-round runs that have no dispatch card of their own). */
-.workgroup-room__active {
+/* RFC-182 — persistent turn cards (message-turn / leader-round): same card
+   family as the dispatch cards, an accent tint to read as "execution", and a
+   live pulse only through the shared status-chip dot. */
+.workgroup-room__card--turn {
+  border-left: 3px solid var(--accent, #3b82f6);
+}
+
+/* RFC-182 — clickable StatusChip variant (D9): the chip becomes a real
+   button; keep the chip look, add affordance on hover/focus only. */
+button.status-chip {
+  cursor: pointer;
+  font: inherit;
+}
+.status-chip--clickable:hover {
+  filter: brightness(1.08);
+}
+.status-chip--clickable:focus-visible {
+  outline: 2px solid var(--accent, #3b82f6);
+  outline-offset: 2px;
+}
+
+/* RFC-182 — 执行记录 rail: whole-row buttons, bounded height, own scroll. */
+.workgroup-room__runlog {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 4px;
+}
+.workgroup-room__runlog-row {
+  display: flex;
+  align-items: center;
   gap: 6px;
-  padding: 6px 2px 2px;
+  width: 100%;
+  padding: 4px 6px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.workgroup-room__runlog-row:hover {
+  background: var(--surface-2, rgba(127, 127, 127, 0.08));
+}
+.workgroup-room__runlog-row:focus-visible {
+  outline: 2px solid var(--accent, #3b82f6);
+  outline-offset: 1px;
+}
+
+/* RFC-182 P1-1 — back-to-latest float over the log (shown only when the user
+   scrolled up; clicking re-pins the tail). */
+.workgroup-room__main {
+  position: relative;
+}
+.workgroup-room__jump {
+  position: absolute;
+  right: 16px;
+  bottom: 96px;
+  z-index: 2;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
 .workgroup-room__gate-state {

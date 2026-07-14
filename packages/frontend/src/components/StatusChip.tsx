@@ -24,6 +24,13 @@ export interface StatusChipProps {
   'data-testid'?: string
   /** Extra class names appended to the standard `status-chip` chain. */
   className?: string
+  /**
+   * RFC-182 D9 — optional click affordance: present ⇒ the chip renders as a
+   * real `<button type="button">` (keyboard-focusable, Enter/Space fire) with
+   * a `--clickable` modifier for focus/hover styling; absent ⇒ the historical
+   * `<span>` markup byte-for-byte (every existing caller unchanged).
+   */
+  onClick?: () => void
 }
 
 export function StatusChip(props: StatusChipProps): ReactElement {
@@ -31,7 +38,28 @@ export function StatusChip(props: StatusChipProps): ReactElement {
   const ariaLabel = props['aria-label']
   const classes = ['status-chip', `status-chip--${props.kind}`, `status-chip--${size}`]
   if (props.withDot === true) classes.push('status-chip--with-dot')
+  if (props.onClick !== undefined) classes.push('status-chip--clickable')
   if (props.className !== undefined && props.className !== '') classes.push(props.className)
+  const inner = (
+    <>
+      {props.withDot === true && <span className="status-chip__dot" aria-hidden="true" />}
+      {props.children}
+    </>
+  )
+  if (props.onClick !== undefined) {
+    return (
+      <button
+        type="button"
+        className={classes.join(' ')}
+        title={props.title}
+        aria-label={ariaLabel}
+        data-testid={props['data-testid']}
+        onClick={props.onClick}
+      >
+        {inner}
+      </button>
+    )
+  }
   // `role=status` is only added when the consumer gives us a label, so
   // decorative chips don't pollute the accessibility tree.
   const role = ariaLabel !== undefined || props.title !== undefined ? 'status' : undefined
@@ -43,8 +71,7 @@ export function StatusChip(props: StatusChipProps): ReactElement {
       aria-label={ariaLabel}
       data-testid={props['data-testid']}
     >
-      {props.withDot === true && <span className="status-chip__dot" aria-hidden="true" />}
-      {props.children}
+      {inner}
     </span>
   )
 }

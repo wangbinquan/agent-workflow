@@ -62,6 +62,7 @@ function makeRoom(dw: DwState | null, taskStatus: TaskStatus = 'running'): Workg
     messages: [],
     assignments: [],
     memberRuns: {},
+    runHistory: [],
   }
 }
 
