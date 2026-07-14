@@ -218,9 +218,10 @@ describe('RFC-187 §3-7 — maxRounds with completed work wraps up (does not har
       const task = await launch(h, 'wg187-mr')
 
       const final = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+      expect(final).toBeDefined()
       // PROBE C LOCK: NOT failed — the deliverable-in-hand task wrapped up.
       expect(final?.status).not.toBe('failed')
-      expect(['done', 'awaiting_human']).toContain(final?.status)
+      expect(['done', 'awaiting_human']).toContain(final!.status)
       // exactly ONE grace round past the cap: 2 leader runs (dispatch + wrap-up).
       expect(await leaderRunCount(h.db, task.id)).toBe(2)
     } finally {

@@ -7,6 +7,8 @@
 // awaiting_human (deliverable visible) instead of a bare `failed`.
 
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type {
   WorkgroupAssignment,
   WorkgroupMessage,
@@ -188,5 +190,24 @@ describe('RFC-187 §3-7 — decideWorkgroupOutcome preserves the deliverable', (
       { items: [], capExceeded: false },
     )
     expect(out).toEqual({ kind: 'done' })
+  })
+})
+
+describe('RFC-187 §3-7 — wrap-up round dispatch-ban + directive (Codex P0-3)', () => {
+  const RUNNER = readFileSync(
+    resolve(import.meta.dir, '..', 'src', 'services', 'workgroupRunner.ts'),
+    'utf8',
+  )
+
+  test('the wrap-up round injects a forced "declare done, do not dispatch" directive', () => {
+    expect(RUNNER).toContain('FINAL round — the round cap has been reached')
+    // threaded from the wake item, not the adopted (clarify-answer) path.
+    expect(RUNNER).toContain("item.reason === 'wrap-up'")
+  })
+
+  test('new dispatch on a wrap-up round is DROPPED (not dispatched, not errored)', () => {
+    // dropping (vs erroring) keeps a `done` decision landing — graceful, no hard fail.
+    expect(RUNNER).toMatch(/wrapUp && dispatches\.ok && dispatches\.value\.length > 0/)
+    expect(RUNNER).toContain('wrapUpDroppedDispatch = true')
   })
 })

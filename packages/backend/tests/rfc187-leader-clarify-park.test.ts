@@ -5,7 +5,8 @@
 // runs go `done`) AND loadDbState never even loaded __wg_clarify__ rows. So the engine
 // re-drove the leader every round, orphaned N clarify sessions, and the human was never
 // asked (probe B: 10 leader rounds → failed "hit max_rounds (10)"). Fix: derive the park
-// from the clarify rows and surface awaiting_human reason `leader-clarify`.
+// from the open clarify SESSION (sourceAgentNodeId=leader — answerable, crash-safe;
+// Codex P0-1) and surface awaiting_human reason `leader-clarify`.
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -69,39 +70,39 @@ function wakeInput(overrides: Partial<WakeInput> = {}): WakeInput {
   }
 }
 
-type ClarifyRow = { status: string; shardKey: string | null }
+type Sess = { sourceAgentNodeId: string; status: string }
+const LEADER = '__wg_leader__'
+const MEMBER = '__wg_member__'
 
-describe('RFC-187 F3 — deriveLeaderClarifyPark', () => {
-  test('an awaiting_human clarify run with null shardKey = leader park', () => {
-    const runs: ClarifyRow[] = [{ status: 'awaiting_human', shardKey: null }]
-    expect(deriveLeaderClarifyPark(runs)).toBe(true)
+describe('RFC-187 F3 — deriveLeaderClarifyPark (session-keyed, Codex P0-1)', () => {
+  test('an open (awaiting_human) session sourced from the leader host node = leader park', () => {
+    const sessions: Sess[] = [{ sourceAgentNodeId: LEADER, status: 'awaiting_human' }]
+    expect(deriveLeaderClarifyPark(sessions)).toBe(true)
   })
 
-  test('a member clarify (non-null shardKey) is NOT a leader park', () => {
-    // member clarifies carry the assignment shardKey; they park their assignment
-    // awaiting_human (caught by humanPending), never this signal.
-    expect(deriveLeaderClarifyPark([{ status: 'awaiting_human', shardKey: 'asg-1' }])).toBe(false)
-    expect(
-      deriveLeaderClarifyPark([{ status: 'awaiting_human', shardKey: 'msg:m-coder:01' }]),
-    ).toBe(false)
+  test('a member clarify session is NOT a leader park', () => {
+    // member clarifies park their assignment awaiting_human (caught by humanPending).
+    expect(deriveLeaderClarifyPark([{ sourceAgentNodeId: MEMBER, status: 'awaiting_human' }])).toBe(
+      false,
+    )
   })
 
-  test('a done/answered clarify run does not park', () => {
-    expect(deriveLeaderClarifyPark([{ status: 'done', shardKey: null }])).toBe(false)
-    expect(deriveLeaderClarifyPark([{ status: 'canceled', shardKey: null }])).toBe(false)
+  test('an answered/closed leader session does not park', () => {
+    expect(deriveLeaderClarifyPark([{ sourceAgentNodeId: LEADER, status: 'answered' }])).toBe(false)
+    expect(deriveLeaderClarifyPark([{ sourceAgentNodeId: LEADER, status: 'canceled' }])).toBe(false)
   })
 
-  test('empty clarify set = not parked', () => {
+  test('empty set = not parked (also self-heals a crash-orphan run with no session)', () => {
     expect(deriveLeaderClarifyPark([])).toBe(false)
   })
 
-  test('mixed: a leader park among member parks is still detected', () => {
-    const runs: ClarifyRow[] = [
-      { status: 'awaiting_human', shardKey: 'asg-1' },
-      { status: 'done', shardKey: null },
-      { status: 'awaiting_human', shardKey: null },
+  test('mixed: an open leader session among member sessions is still detected', () => {
+    const sessions: Sess[] = [
+      { sourceAgentNodeId: MEMBER, status: 'awaiting_human' },
+      { sourceAgentNodeId: LEADER, status: 'answered' },
+      { sourceAgentNodeId: LEADER, status: 'awaiting_human' },
     ]
-    expect(deriveLeaderClarifyPark(runs)).toBe(true)
+    expect(deriveLeaderClarifyPark(sessions)).toBe(true)
   })
 })
 
@@ -164,17 +165,15 @@ describe('RFC-187 F3 — source locks (engine wiring)', () => {
     'utf8',
   )
 
-  test('loadDbState loads __wg_clarify__ runs (partitioned out of hostRuns)', () => {
-    expect(RUNNER).toMatch(
-      /inArray\(nodeRuns\.nodeId, \[WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID, WG_CLARIFY_NODE_ID\]\)/,
-    )
-    expect(RUNNER).toContain(
-      'clarifyRuns: allHostNodeRuns.filter((r) => r.nodeId === WG_CLARIFY_NODE_ID)',
-    )
+  test('loadDbState loads clarify SESSIONS (Codex P0-1: the answerable park signal)', () => {
+    expect(RUNNER).toContain('.from(clarifySessions)')
+    expect(RUNNER).toContain('clarifySessions: clarifySessionRows')
+    // hostRuns is back to leader/member only (clarify park no longer keyed on the run).
+    expect(RUNNER).toMatch(/inArray\(nodeRuns\.nodeId, \[WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID\]\)/)
   })
 
-  test('leaderParked is derived from clarifyRuns, not the dead hostRuns check', () => {
-    expect(RUNNER).toContain('deriveLeaderClarifyPark(state.clarifyRuns)')
+  test('leaderParked is derived from clarify SESSIONS, not the dead hostRuns check', () => {
+    expect(RUNNER).toContain('deriveLeaderClarifyPark(state.clarifySessions)')
     // the old dead predicate (leader host run at awaiting_human) must be gone.
     expect(RUNNER).not.toMatch(/r\.nodeId === WG_LEADER_NODE_ID && r\.status === 'awaiting_human'/)
     // and it must NOT be folded back into leaderRunning (that yields a generic

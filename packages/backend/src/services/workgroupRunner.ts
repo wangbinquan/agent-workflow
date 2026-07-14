@@ -51,6 +51,7 @@ import { monotonicFactory, ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import {
+  clarifySessions,
   nodeRuns,
   tasks,
   workgroupAssignments,
@@ -83,11 +84,7 @@ import {
   type WakeInput,
   type WakeItem,
 } from '@/services/workgroupWake'
-import {
-  WG_CLARIFY_NODE_ID,
-  WG_LEADER_NODE_ID,
-  WG_MEMBER_NODE_ID,
-} from '@/services/workgroupLaunch'
+import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroupLaunch'
 import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
 import type { Logger } from '@/util/log'
 
@@ -329,10 +326,10 @@ interface EngineDbState {
   messages: WorkgroupMessage[]
   cursors: Map<string, string>
   hostRuns: Array<typeof nodeRuns.$inferSelect>
-  /** RFC-187 F3 — `__wg_clarify__` runs, kept separate from `hostRuns` so
-   *  round/retry accounting (which filters `hostRuns` by leader/member nodeId)
-   *  never sees them. Feeds `deriveLeaderClarifyPark`. */
-  clarifyRuns: Array<typeof nodeRuns.$inferSelect>
+  /** RFC-187 F3 — open/closed clarify sessions for the task (source node + status).
+   *  Feeds `deriveLeaderClarifyPark`; the SESSION (not the __wg_clarify__ run) is the
+   *  authoritative, answerable park signal (Codex P0-1). */
+  clarifySessions: Array<{ sourceAgentNodeId: string; status: string }>
   /** RFC-166 — pre-rendered capability card per AGENT member (memberId → card).
    *  Injected into the roster block so the leader / peers coordinate against
    *  each member's real declared capability. human members are absent (prompt
@@ -439,31 +436,44 @@ async function loadDbState(db: DbClient, taskId: string): Promise<EngineDbState 
       : {}),
     ...(typeof gateRaw.summary === 'string' ? { summary: gateRaw.summary } : {}),
   }
-  const [assignmentRows, messageRows, cursorRows, allHostNodeRuns] = await Promise.all([
-    db
-      .select()
-      .from(workgroupAssignments)
-      .where(eq(workgroupAssignments.taskId, taskId))
-      .orderBy(asc(workgroupAssignments.id)),
-    db
-      .select()
-      .from(workgroupMessages)
-      .where(eq(workgroupMessages.taskId, taskId))
-      .orderBy(asc(workgroupMessages.id)),
-    db.select().from(workgroupMemberCursors).where(eq(workgroupMemberCursors.taskId, taskId)),
-    db
-      .select()
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.taskId, taskId),
-          // RFC-187 F3 — include __wg_clarify__ so the engine can see a leader
-          // clarify park (partitioned out of hostRuns below).
-          inArray(nodeRuns.nodeId, [WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID, WG_CLARIFY_NODE_ID]),
-        ),
-      )
-      .orderBy(asc(nodeRuns.id)),
-  ])
+  const [assignmentRows, messageRows, cursorRows, hostRuns, clarifySessionRows] = await Promise.all(
+    [
+      db
+        .select()
+        .from(workgroupAssignments)
+        .where(eq(workgroupAssignments.taskId, taskId))
+        .orderBy(asc(workgroupAssignments.id)),
+      db
+        .select()
+        .from(workgroupMessages)
+        .where(eq(workgroupMessages.taskId, taskId))
+        .orderBy(asc(workgroupMessages.id)),
+      db.select().from(workgroupMemberCursors).where(eq(workgroupMemberCursors.taskId, taskId)),
+      db
+        .select()
+        .from(nodeRuns)
+        .where(
+          and(
+            eq(nodeRuns.taskId, taskId),
+            inArray(nodeRuns.nodeId, [WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID]),
+          ),
+        )
+        .orderBy(asc(nodeRuns.id)),
+      // RFC-187 F3 (Codex design-gate P0-1) — key the leader-clarify park on the
+      // clarify SESSION, not the __wg_clarify__ run's shardKey: the run is minted
+      // BEFORE the session/round in a non-atomic sequence, so a crash between them
+      // leaves an orphan awaiting_human run with nothing to answer — a run-only signal
+      // would park that forever. An open session proves the park is both a LEADER
+      // clarify (sourceAgentNodeId) AND answerable.
+      db
+        .select({
+          sourceAgentNodeId: clarifySessions.sourceAgentNodeId,
+          status: clarifySessions.status,
+        })
+        .from(clarifySessions)
+        .where(eq(clarifySessions.taskId, taskId)),
+    ],
+  )
   return {
     config: parsed.data,
     gate,
@@ -471,8 +481,8 @@ async function loadDbState(db: DbClient, taskId: string): Promise<EngineDbState 
     assignments: assignmentRows.map(rowToAssignment),
     messages: messageRows.map(rowToMessage),
     cursors: new Map(cursorRows.map((c) => [c.memberId, c.lastConsumedMessageId])),
-    hostRuns: allHostNodeRuns.filter((r) => r.nodeId !== WG_CLARIFY_NODE_ID),
-    clarifyRuns: allHostNodeRuns.filter((r) => r.nodeId === WG_CLARIFY_NODE_ID),
+    hostRuns,
+    clarifySessions: clarifySessionRows,
     agentCards: await buildRosterAgentCards(db, parsed.data),
   }
 }
@@ -569,19 +579,23 @@ function countRoundsUsed(state: EngineDbState): number {
 }
 
 /**
- * RFC-187 F3 — is the LEADER parked on a clarify? A `__wg_clarify__` run at
- * `awaiting_human` with a null shardKey is a leader clarify: leader host runs are
- * unsharded (`createClarifySession` passes `sourceShardKey = currentRunRow.shardKey`,
- * null for the leader), while member runs always carry a shardKey (assignment id or
- * `msg:*`), and a member clarify parks its assignment `awaiting_human` — caught by the
- * wake's `humanPending`, not here. Without this the engine re-drives a clarify-parked
- * leader every round → it re-asks, orphans N clarify sessions, and hits max_rounds
- * (probe B). The `clarifyRuns` set already excludes leader/member host runs.
+ * RFC-187 F3 — is the LEADER parked on a clarify? Keyed on an OPEN clarify SESSION whose
+ * source is the leader host node (`sourceAgentNodeId === __wg_leader__`). A member clarify
+ * has `sourceAgentNodeId === __wg_member__` and parks its assignment `awaiting_human`
+ * (caught by the wake's `humanPending`, not here). The SESSION — not the `__wg_clarify__`
+ * run — is authoritative (Codex P0-1): the run is minted before the session in a
+ * non-atomic sequence, so a crash between them leaves an unanswerable orphan run that a
+ * run-only signal would park forever; an open session proves the park is answerable and
+ * self-heals a crash-orphan (no session ⇒ the leader is re-driven and re-asks). Without
+ * this the engine re-drives a clarify-parked leader every round → orphans N sessions and
+ * hits max_rounds (probe B).
  */
 export function deriveLeaderClarifyPark(
-  clarifyRuns: ReadonlyArray<{ status: string; shardKey: string | null }>,
+  clarifySessions: ReadonlyArray<{ sourceAgentNodeId: string; status: string }>,
 ): boolean {
-  return clarifyRuns.some((r) => r.status === 'awaiting_human' && r.shardKey === null)
+  return clarifySessions.some(
+    (s) => s.status === 'awaiting_human' && s.sourceAgentNodeId === WG_LEADER_NODE_ID,
+  )
 }
 
 /**
@@ -842,7 +856,7 @@ export async function runWorkgroupEngine(
     // leader runs go `done` and clarify parks land on `__wg_clarify__`, which
     // `hostRuns` didn't even load). Kept OUT of `leaderRunning` so the outcome is a
     // proper `leader-clarify` park, not a generic `running`.
-    const leaderClarifyParked = deriveLeaderClarifyPark(state.clarifyRuns)
+    const leaderClarifyParked = deriveLeaderClarifyPark(state.clarifySessions)
     const wakeInput: WakeInput = {
       config: state.config,
       assignments: state.assignments,
@@ -1107,7 +1121,7 @@ async function driveWakeItem(
   try {
     switch (item.kind) {
       case 'leader':
-        await driveLeaderTurn(args, state)
+        await driveLeaderTurn(args, state, undefined, item.reason === 'wrap-up')
         return
       case 'assignment': {
         const assignment = state.assignments.find((a) => a.id === item.assignmentId)
@@ -1216,6 +1230,10 @@ async function driveLeaderTurn(
   args: WorkgroupEngineArgs,
   state: EngineDbState,
   adoptedRunId?: string,
+  // RFC-187 §3-7 (Codex P0-3) — the single grace wrap-up round past the round cap:
+  // inject a directive to aggregate + declare done, and drop any new dispatch (no
+  // rounds remain to run it).
+  wrapUp = false,
 ): Promise<void> {
   const { db, taskId, hooks } = args
   const config = state.config
@@ -1250,6 +1268,10 @@ async function driveLeaderTurn(
 
     const prompt =
       composeLeaderPrompt(state) +
+      (wrapUp
+        ? '\n\n## FINAL round — the round cap has been reached\n\nThis is your LAST turn. Do NOT dispatch new work (there are no rounds left to run it). ' +
+          'Aggregate the completed results and emit `wg_decision` with action `done`. Any `wg_assignments` you emit now will be ignored.'
+        : '') +
       (errorNotice !== null
         ? `\n\n## Protocol errors in your previous reply\n\n${errorNotice}\n\nRe-emit a CORRECT envelope.`
         : '')
@@ -1310,7 +1332,7 @@ async function driveLeaderTurn(
     const decision = decisionRaw !== undefined ? parseWgDecisionPort(decisionRaw) : null
     if (decision === null) errors.push('missing required port wg_decision')
     else if (!decision.ok) errors.push(...decision.errors.map((e) => `wg_decision: ${e}`))
-    const dispatches =
+    let dispatches =
       assignmentsRaw !== undefined
         ? parseWgAssignmentsPort(assignmentsRaw, roster, {
             // RFC-185 D4 (Codex T6 P1) — OFF is enforced here, not just in the
@@ -1320,6 +1342,15 @@ async function driveLeaderTurn(
           })
         : { ok: true as const, value: [] }
     if (!dispatches.ok) errors.push(...dispatches.errors.map((e) => `wg_assignments: ${e}`))
+    // RFC-187 §3-7 (Codex P0-3): the grace wrap-up round cannot dispatch new work —
+    // there are no rounds left to aggregate it. DROP any new assignments (don't error,
+    // so the leader's wg_decision — ideally `done` — still lands and the deliverable-
+    // in-hand task finishes) and note it in the room.
+    let wrapUpDroppedDispatch = false
+    if (wrapUp && dispatches.ok && dispatches.value.length > 0) {
+      wrapUpDroppedDispatch = true
+      dispatches = { ok: true as const, value: [] }
+    }
     const outMessages =
       messagesRaw !== undefined
         ? parseWgMessagesPort(messagesRaw, roster)
@@ -1388,6 +1419,17 @@ async function driveLeaderTurn(
           assignmentId: id,
         })
       }
+    }
+    // RFC-187 §3-7 — surface the dropped wrap-up dispatch (see the drop above).
+    if (wrapUpDroppedDispatch) {
+      await postMessage(db, taskId, {
+        round,
+        authorKind: 'system',
+        kind: 'system',
+        bodyMd:
+          'Round cap reached — new assignments in this final wrap-up round were ignored. ' +
+          'Aggregating the completed work.',
+      })
     }
     // 3. deliveries the leader just consumed flip delivered→done (design
     //    §1.4: delivered = 交付已落, done = 下一回合已消费).
