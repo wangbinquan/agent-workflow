@@ -21,6 +21,7 @@
 // pass instead of re-minted.
 
 import {
+  FOLLOWUP_POLICY,
   normalizeWgTaskTitle,
   parseWgAssignmentsPort,
   parseWgDecisionPort,
@@ -38,6 +39,7 @@ import {
   WG_PORT_TASKS_ADD,
   WorkgroupRuntimeConfigSchema,
   type Agent,
+  type EnvelopeFollowupReason,
   type FailureCode,
   type WgMessageItem,
   type WorkgroupAssignment,
@@ -166,8 +168,76 @@ export interface WorkgroupEngineResult {
   detail?: { summary: string; message: string; nodeId?: string }
 }
 
-/** Per-turn protocol-violation retries before the turn is failed. */
-const WG_PROTOCOL_RETRIES = 1
+/** Per-turn protocol-violation retries before the turn is failed. RFC-186 §2.4:
+ *  raised 1→3 to match the normal-node default (scheduler defaultNodeRetries ?? 3)
+ *  — a probabilistic model format slip deserves the same budget everywhere. */
+const WG_PROTOCOL_RETRIES = 3
+
+/**
+ * RFC-186 §2.2 — unify the workgroup turn's retry-vs-fatal decision on the SAME
+ * `FOLLOWUP_POLICY` table normal nodes use (`decideEnvelopeFollowup`), replacing
+ * the order-sensitive `errorMessage.startsWith(...)` chain + the per-code
+ * `failureCode === 'envelope-missing'` special-case (audit §2 P1-5). A failure
+ * with a structured `FailureCode` in the table is retryable; an unstructured
+ * failure (`failureCode` undefined — iso-setup / injection / subprocess crash /
+ * merge-back conflict) is genuinely fatal. `clarify-forbidden` is handled by its
+ * OWN branch BEFORE this (workgroup autonomous soft-reject semantics, RFC-181/183)
+ * — never routed here as a normal envelope-missing retry.
+ */
+export function followupForFailure(
+  failureCode: FailureCode | undefined,
+): { retry: true; reason: EnvelopeFollowupReason } | { retry: false } {
+  if (failureCode === undefined) return { retry: false }
+  const policy = FOLLOWUP_POLICY[failureCode] as { reason: EnvelopeFollowupReason } | undefined
+  return policy ? { retry: true, reason: policy.reason } : { retry: false }
+}
+
+/**
+ * RFC-186 §2.3 — reason-tailored re-prompt for a workgroup turn. Unlike the
+ * normal node, we do NOT reuse `renderEnvelopeFollowupPrompt` verbatim: that
+ * renderer REPLACES the whole prompt, which would drop the `workgroupProtocolBlock`
+ * (where the wg_* port contract lives) on the fresh retry subprocess. Instead we
+ * return a concise `errorNotice` appended to the FULL turn prompt (which still
+ * carries the wg protocol block via runHostNode), reason-mapped from the same
+ * 6-value `EnvelopeFollowupReason` domain.
+ */
+export function wgFollowupNotice(reason: EnvelopeFollowupReason): string {
+  switch (reason) {
+    case 'envelope-missing':
+      return (
+        '- Your previous reply had NO <workflow-output> envelope. Re-read the\n' +
+        '  Workgroup output protocol above and re-emit your FULL reply as ONE\n' +
+        '  <workflow-output> envelope with <port name="..."> children (literal\n' +
+        '  tag names — never invent your own tags).'
+      )
+    case 'both-present':
+      return (
+        '- You emitted BOTH <workflow-output> and <workflow-clarify>. Emit exactly\n' +
+        '  ONE — the <workflow-output> envelope with your wg_* ports.'
+      )
+    case 'clarify-malformed':
+      return (
+        '- Your <workflow-clarify> reply was malformed. Re-emit a VALID\n' +
+        '  <workflow-clarify> envelope (see the clarify format above) OR, if nothing\n' +
+        '  needs a human, proceed with a <workflow-output> envelope.'
+      )
+    case 'envelope-port-malformed':
+      return (
+        '- A <port> tag in your envelope was unclosed or corrupted. Re-emit ONE\n' +
+        '  clean <workflow-output> with each port properly closed by </port>.'
+      )
+    case 'port-validation':
+      return (
+        '- A port in your envelope failed validation. Re-emit a <workflow-output>\n' +
+        '  whose port bodies are valid JSON matching the protocol above.'
+      )
+    case 'clarify-required':
+      return (
+        '- This turn requires a <workflow-clarify> envelope. Re-emit your reply as\n' +
+        '  a single valid <workflow-clarify> envelope.'
+      )
+  }
+}
 
 /** RFC-182 D6 — pending visibility: a mint alone broadcasts nothing (the first
  *  frame used to be runNode's `running`), so a turn queued behind the global
@@ -1053,35 +1123,20 @@ async function driveLeaderTurn(
         }
         return
       }
-      // A malformed <workflow-clarify> reply (the leader CHOSE to ask a human
-      // but mis-formatted the questions JSON) is a RETRYABLE protocol
-      // violation — symmetric to the malformed-output-port path below and to
-      // the normal node's follow-up-able `clarify-questions-*` contract
-      // (runner.ts:1209). Re-prompt within WG_PROTOCOL_RETRIES instead of
-      // fatally killing the WHOLE task on the first slip (2026-07-12 incident
-      // 01KXBATKFJ73MDYNM6YN2DMA29). Genuinely fatal failures (iso-setup,
-      // injection, subprocess crash, merge-back conflict) do not carry this
-      // prefix and fall through to the throw → reportFatal.
-      if (msg.startsWith('clarify-questions-') && attempt < WG_PROTOCOL_RETRIES) {
-        errorNotice =
-          `- Your <workflow-clarify> reply was malformed: ${msg}\n` +
-          '  Re-emit a VALID <workflow-clarify> envelope (see the clarify format in the\n' +
-          '  protocol above) OR, if nothing actually needs a human, proceed with <workflow-output>.'
-        continue
-      }
-      // RFC-185 e2e hardening (live task 01KXFYD5…) — a missing
-      // <workflow-output> envelope is a RETRYABLE protocol slip: weak models
-      // drop or reinvent the envelope shape (e.g. a bare <wg_output> tag).
-      // runNode already burned its in-session follow-ups; one FRESH turn with
-      // an explicit notice beats fataling the whole task on model noise.
-      // Routed on the structured failureCode (RFC-145 ratchet), never on
-      // errorMessage text.
-      if (result.failureCode === 'envelope-missing' && attempt < WG_PROTOCOL_RETRIES) {
-        errorNotice =
-          '- Your previous reply had NO <workflow-output> envelope. Re-read the\n' +
-          '  Workgroup output protocol above and re-emit your FULL reply as ONE\n' +
-          '  <workflow-output> envelope with <port name="..."> children (literal\n' +
-          '  tag names — never invent your own tags).'
+      // RFC-186 §2.2 — every OTHER failure routes through the SAME
+      // `FOLLOWUP_POLICY` table normal nodes use. This collapses the old
+      // order-sensitive `startsWith('clarify-questions-')` string chain AND the
+      // per-code `failureCode === 'envelope-missing'` special-case into one
+      // structured decision: a code in the table (envelope-missing /
+      // clarify-questions-malformed / envelope-port-malformed / port-validation
+      // / both-present / clarify-required) is a RETRYABLE model slip — one FRESH
+      // turn with a reason-tailored notice (keeping the wg protocol block) beats
+      // fataling the whole multi-agent task on model noise. An unstructured
+      // failure (undefined failureCode: iso-setup, injection, subprocess crash,
+      // merge-back conflict) is genuinely fatal → throw → reportFatal.
+      const fu = followupForFailure(result.failureCode)
+      if (fu.retry && attempt < WG_PROTOCOL_RETRIES) {
+        errorNotice = wgFollowupNotice(fu.reason)
         continue
       }
       throw new Error(msg)
@@ -1282,14 +1337,13 @@ async function driveAssignmentTurn(
           '  Proceed with your best judgment and emit wg_result as usual.'
         continue
       }
-      // RFC-185 e2e hardening — same retryable envelope-missing arm as the
-      // leader turn (structured failureCode routing, RFC-145 ratchet).
-      if (result.failureCode === 'envelope-missing' && attempt < WG_PROTOCOL_RETRIES) {
-        errorNotice =
-          '- Your previous reply had NO <workflow-output> envelope. Re-read the\n' +
-          '  Workgroup output protocol above and re-emit your FULL reply as ONE\n' +
-          '  <workflow-output> envelope with <port name="..."> children (literal\n' +
-          '  tag names — never invent your own tags).'
+      // RFC-186 §2.2 — same unified FOLLOWUP_POLICY routing as the leader turn:
+      // a structured (retryable) failureCode → one fresh reason-tailored retry;
+      // unstructured (fatal) or exhausted → assignment failed (floats up on the
+      // card, never a park). Collapses the old envelope-missing special-case.
+      const fu = followupForFailure(result.failureCode)
+      if (fu.retry && attempt < WG_PROTOCOL_RETRIES) {
+        errorNotice = wgFollowupNotice(fu.reason)
         continue
       }
       await casAssignmentStatus(db, assignment.id, 'running', 'failed')
@@ -1424,7 +1478,23 @@ async function driveMessageTurn(
     hostOutputPorts: wgHostRolePorts(role),
     clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false),
   })
-  if (result.status !== 'done') return
+  // RFC-186 §2.2 (audit §2 P1-7) — a failed message turn used to `return`
+  // silently: the @-mentioned member appeared to ignore the message, the room
+  // showed nothing, and debugging was blind. Surface the failure as a system
+  // note so the black hole is visible. (A bounded RETRY loop for message turns
+  // — mirroring leader/assignment — is deferred: this path is off the
+  // dispatch-to-done critical line; the visibility fix addresses the real harm.)
+  if (result.status !== 'done') {
+    if (result.status === 'failed') {
+      await postMessage(db, taskId, {
+        round: currentRound(state),
+        authorKind: 'system',
+        kind: 'system',
+        bodyMd: `message turn for ${memberDisplayName(config, memberId)} failed: ${result.errorMessage ?? 'run failed'}`,
+      })
+    }
+    return
+  }
 
   const roster = rosterDisplayNames(config)
   const switches = resolveWorkgroupSwitches(config.mode, config.switches)

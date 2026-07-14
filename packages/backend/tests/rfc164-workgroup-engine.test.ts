@@ -508,6 +508,10 @@ describe('RFC-164 engine — lw round orchestration', () => {
         {
           status: 'failed',
           outputs: {},
+          // RFC-186: retry-vs-fatal now routes on the structured failureCode
+          // (FOLLOWUP_POLICY), not an errorMessage prefix — the real runHostNode
+          // always stamps it, so the mock must too.
+          failureCode: 'clarify-questions-malformed',
           errorMessage:
             'clarify-questions-malformed: JSON.parse failed: JSON Parse error: Unexpected identifier "The"',
         },
@@ -528,11 +532,18 @@ describe('RFC-164 engine — lw round orchestration', () => {
   test('persistent malformed <workflow-clarify> hard-fails after the retry budget', async () => {
     const config = cfg()
     const { taskId } = await seedEngineTask(db, config)
+    // RFC-186: budget is WG_PROTOCOL_RETRIES (3) → attempts 0..3 (4 host runs),
+    // the last of which exhausts the budget and throws. Script 4 malformed
+    // failures (with structured failureCode) so the BUDGET, not the script, is
+    // what finally fatals it.
+    const malformed = {
+      status: 'failed' as const,
+      outputs: {},
+      failureCode: 'clarify-questions-malformed' as const,
+      errorMessage: 'clarify-questions-malformed: prose again',
+    }
     const { hooks } = scriptedHooks({
-      leader: [
-        { status: 'failed', outputs: {}, errorMessage: 'clarify-questions-malformed: prose again' },
-        { status: 'failed', outputs: {}, errorMessage: 'clarify-questions-malformed: prose again' },
-      ],
+      leader: [malformed, malformed, malformed, malformed],
       member: [],
     })
     const result = await runWorkgroupEngine({ db, taskId, log, hooks })
@@ -1138,7 +1149,10 @@ describe('RFC-181 C — clarify 压制收场（fake hooks）', () => {
     const result = await runWorkgroupEngine({ db, taskId, log, hooks })
     expect(result.kind).toBe('ok')
     const memberReqs = requests.filter((r) => r.nodeId === WG_MEMBER_NODE_ID)
-    expect(memberReqs).toHaveLength(2)
+    // RFC-186: WG_PROTOCOL_RETRIES raised 1→3, so the two scripted suppressions
+    // re-prompt (reqs 0,1) then the script-exhausted 3rd attempt fatals the
+    // assignment (req 2) — 3 member host runs total (was 2 at budget 1).
+    expect(memberReqs).toHaveLength(3)
     expect(memberReqs[1]?.promptTemplate).toContain('Ask-back is OFF')
     const cards = await db
       .select()
