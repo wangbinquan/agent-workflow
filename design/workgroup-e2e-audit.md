@@ -6,7 +6,9 @@
 
 ## §1 实证记录（live DB，截至 2026-07-14 09:xx）
 
-**10 个工作组任务，0 done，0 assignment 由 leader 成功派发，0 worker 执行。**
+> **更新（同日稍晚）**：并发 session commit `9874fffd`（RFC-185 端到端实测）修了 P0-A 的基础部分（`envelope-missing` 重试 + `<workflow-output>` 字面示例 + `@` 宽容），任务 `01K…1GWAWY`（fanout-demo 组）**首次跑到 `done`**——本审计的「0 done」自此被打破。但 **P0-B（§4-1/§5-F1 重启永久死）未动、真实自动 e2e（§6 meta 根因）仍缺、P0-A 仅最小补丁未全量对齐**。后续由 [RFC-186](./RFC-186-workgroup-first-green-and-resume/proposal.md) 承接这三个真空。以下记录为修复前快照，findings 除已标注外仍有效。
+
+**10 个工作组任务，0 done（快照时点），0 assignment 由 leader 成功派发，0 worker 执行。**
 
 | 任务(尾6) | 组 | 状态 | 死因 |
 |---|---|---|---|
