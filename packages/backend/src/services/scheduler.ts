@@ -165,7 +165,7 @@ import { createLogger, type Logger } from '@/util/log'
 // RFC-060 PR-E: splitDiff* imports removed — they were used only by the
 // agent-multi fan-out path (now deleted). wrapper-fanout consumes a `list<T>`
 // shardSource instead of slicing a string diff.
-import { gitBlobHashes, gitChangedFiles, runGit } from '@/util/git'
+import { gitBlobHashes, gitChangedFiles, runGit, worktreeFilesChanged } from '@/util/git'
 import {
   completeHumanResolvedConflict,
   createNodeIso,
@@ -1015,6 +1015,14 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
     runHostNode,
     broadcastNodeStatus: (nodeRunId, nodeId, status) =>
       broadcastNodeStatus(taskId, nodeRunId, nodeId, status as NodeStatus),
+    // RFC-187 §4 — canonical delta for the zero-delta-done warn. Throws (engine
+    // swallows) when there's no base commit to diff against.
+    getCanonicalFilesChanged: async () => {
+      if (task.baseCommit === null) {
+        throw new Error('no base commit — cannot compute canonical delta')
+      }
+      return worktreeFilesChanged(task.worktreePath, task.baseCommit)
+    },
   }
 }
 

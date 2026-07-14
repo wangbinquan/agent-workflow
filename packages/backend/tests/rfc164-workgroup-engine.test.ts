@@ -571,25 +571,35 @@ describe('RFC-164 engine — lw round orchestration', () => {
     expect(a?.status).toBe('awaiting_human')
   })
 
-  test('max_rounds cap: leader cannot re-wake → failed + system message', async () => {
+  // RFC-187 §3-7 — updated from the old "cap → hard failed" lock. Hitting the cap WITH
+  // completed work no longer hard-fails: the leader gets exactly ONE grace wrap-up round
+  // to aggregate/declare done (probe C produced hello.txt then the task `failed` maxRounds:1
+  // with that file in canonical). A genuine no-work spin still fails (unit-covered in
+  // rfc187-maxrounds-wrapup.test.ts: decideWorkgroupOutcome capExceeded + no work → failed).
+  test('§3-7 max_rounds grace wrap-up: completed work at the cap → ONE wrap-up round → done', async () => {
     const config = cfg({ maxRounds: 1 })
     const { taskId } = await seedEngineTask(db, config)
-    const { hooks } = scriptedHooks({
+    const { hooks, requests } = scriptedHooks({
       leader: [
+        // round 1 (the only budgeted round): dispatch, don't declare done yet.
         doneLeader({
           assignments: [{ member: 'coder', title: 'do-x', brief: 'b' }],
           decision: { action: 'continue' },
         }),
+        // the grace wrap-up round the cap now grants: aggregate + declare done.
+        doneLeader({ decision: { action: 'done', summary: 'wrapped up at the cap' } }),
       ],
-      member: [doneMember('done but nobody will read this')],
+      member: [doneMember('did the work')],
     })
     const result = await runWorkgroupEngine({ db, taskId, log, hooks })
-    expect(result.kind).toBe('failed')
-    expect(result.detail?.message).toBe('max-rounds')
+    // NOT failed — the deliverable-in-hand task wrapped up.
+    expect(result.kind).toBe('ok')
+    // exactly ONE grace round: 2 leader runs (dispatch + wrap-up), never a 3rd.
+    expect(requests.filter((r) => r.nodeId === WG_LEADER_NODE_ID)).toHaveLength(2)
     const sys = (
       await db.select().from(workgroupMessages).where(eq(workgroupMessages.taskId, taskId))
     ).filter((m) => m.kind === 'system')
-    expect(sys.some((m) => m.bodyMd.includes('max_rounds'))).toBe(true)
+    expect(sys.some((m) => m.bodyMd.includes('max_rounds'))).toBe(false)
   })
 
   test('completion gate: decision done → awaiting_review + gate holder run (invariant)', async () => {

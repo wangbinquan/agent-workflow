@@ -32,6 +32,18 @@ export interface WakeInput {
   }
   /** lw: completed-or-started leader turns; fc: total member runs (incl. message turns). */
   roundsUsed: number
+  /**
+   * RFC-187 F3 — the leader host run asked a human via `<workflow-clarify>` and is
+   * parked awaiting the answer (an open `__wg_clarify__` run with a null shardKey —
+   * leader host runs are unsharded, members always sharded). Derived by
+   * `deriveLeaderClarifyPark`. Unlike a member clarify (which parks its assignment
+   * `awaiting_human`, caught by `humanPending`), a leader clarify has no assignment,
+   * so without this the engine re-drives the leader every round → it re-asks, orphans
+   * N clarify sessions, and hits max_rounds (probe B). Suppresses the leader wake and
+   * surfaces `awaiting_human` reason `leader-clarify` so a human can actually answer.
+   * Optional so existing WakeInput literals default to not-parked.
+   */
+  leaderClarifyParked?: boolean
   gate: {
     declaredDone: boolean
     awaitingConfirmation: boolean
@@ -41,7 +53,11 @@ export interface WakeInput {
 }
 
 export type WakeItem =
-  | { kind: 'leader'; reason: 'initial' | 'new-content' | 'gate-rejected' }
+  // RFC-187 §3-7 — `wrap-up` is a single grace leader round past max_rounds, granted
+  // only when there is completed work to aggregate, so a deliverable-in-hand task can
+  // reach `done` instead of hard-failing. It is a normal (counted) leader run, so the
+  // next pass has roundsUsed > maxRounds and no second grace round is possible.
+  | { kind: 'leader'; reason: 'initial' | 'new-content' | 'gate-rejected' | 'wrap-up' }
   | { kind: 'assignment'; assignmentId: string }
   | { kind: 'message_turn'; memberId: string }
   | { kind: 'fc_initial'; memberId: string }
@@ -62,9 +78,24 @@ export type WorkgroupOutcome =
   | { kind: 'running' } // something is (or will be) in flight
   | { kind: 'done' }
   | { kind: 'awaiting_gate' } // completion gate parked for human confirmation
-  | { kind: 'awaiting_human'; reason: 'clarify-or-delivery' | 'leader-idle' }
+  | {
+      kind: 'awaiting_human'
+      // RFC-187 §3-7 — `max-rounds-wrapup`: hit the cap WITH completed work the leader
+      // never aggregated; park (deliverable visible via diff) instead of hard-failing.
+      reason: 'clarify-or-delivery' | 'leader-idle' | 'leader-clarify' | 'max-rounds-wrapup'
+    }
   | { kind: 'leader-nudge'; nudgeCount: number } // RFC-180 autonomous: auto-remind an idle leader
   | { kind: 'failed'; reason: 'max-rounds' | 'fc-deadlock' }
+
+/**
+ * RFC-187 §3-7 — completed work that would be lost if the task hard-failed at the round
+ * cap. `done` (leader_worker: aggregated-pending) or `delivered` (human handoff consumed
+ * next leader turn) assignments mean a deliverable exists in the worktree; probe C
+ * produced hello.txt then the task `failed` on maxRounds:1 with that file in canonical.
+ */
+function hasSalvageableWork(input: WakeInput): boolean {
+  return input.assignments.some((a) => a.status === 'done' || a.status === 'delivered')
+}
 
 /**
  * RFC-180 — the auto-nudge an「全自动」leader gets on an idle round (posted as a
@@ -164,7 +195,9 @@ export function deriveWakeSet(input: WakeInput): WakeSet {
     // 3lw. Leader batch-wake: no agent assignment still dispatched/running and
     // (initial | new content since the leader's cursor | gate rejection).
     const leaderId = config.leaderMemberId
-    if (leaderId !== null && !input.inFlight.leaderRunning) {
+    // RFC-187 F3 — a leader parked on a clarify must NOT be re-driven; it resumes
+    // via the human's answer (clarify-answer rerun), not a fresh wake.
+    if (leaderId !== null && !input.inFlight.leaderRunning && input.leaderClarifyParked !== true) {
       const blocking = input.assignments.some(
         (a) => isAgentAssignee(config, a) && (a.status === 'dispatched' || a.status === 'running'),
       )
@@ -180,7 +213,15 @@ export function deriveWakeSet(input: WakeInput): WakeSet {
               : null
         if (reason !== null) {
           if (input.roundsUsed >= config.maxRounds) {
-            capExceeded = true
+            // RFC-187 §3-7 — grant ONE grace wrap-up round exactly AT the cap when
+            // there's completed work to aggregate, so the leader can declare done
+            // rather than the task hard-failing with a deliverable in hand. Counted,
+            // so roundsUsed > maxRounds next pass ⇒ no second grace round.
+            if (input.roundsUsed === config.maxRounds && hasSalvageableWork(input)) {
+              items.push({ kind: 'leader', reason: 'wrap-up' })
+            } else {
+              capExceeded = true
+            }
           } else {
             items.push({ kind: 'leader', reason })
           }
@@ -239,8 +280,22 @@ export function decideWorkgroupOutcome(input: WakeInput, wake: WakeSet): Workgro
   ) {
     return { kind: 'running' }
   }
+  // RFC-187 F3 — leader parked on a clarify: surface awaiting_human so a human can
+  // answer (takes precedence over max_rounds — a blocked leader isn't a failure).
+  if (input.leaderClarifyParked === true) {
+    return { kind: 'awaiting_human', reason: 'leader-clarify' }
+  }
   if (input.gate.awaitingConfirmation) return { kind: 'awaiting_gate' }
-  if (wake.capExceeded) return { kind: 'failed', reason: 'max-rounds' }
+  if (wake.capExceeded) {
+    // RFC-187 §3-7 — hit the cap. If completed work exists (a grace wrap-up round
+    // already ran or the leader dispatched instead of declaring done), park for a
+    // human with the deliverable intact rather than a bare `failed` that reads as
+    // "nothing produced" (probe C). Only a genuine no-output spin hard-fails.
+    if (hasSalvageableWork(input)) {
+      return { kind: 'awaiting_human', reason: 'max-rounds-wrapup' }
+    }
+    return { kind: 'failed', reason: 'max-rounds' }
+  }
 
   const humanPending = input.assignments.some(
     (a) =>

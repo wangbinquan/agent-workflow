@@ -902,6 +902,51 @@ export async function worktreeDiff(
 }
 
 /**
+ * RFC-187 §4 — count files changed in the worktree vs its base commit, INCLUDING
+ * untracked (mirrors `gitDiffSnapshot`'s tracked+untracked union). Cheap boolean-ish
+ * signal for "did this task produce anything": a workgroup that reaches `done` with 0
+ * here yet has completed producer work leaked its outputs (probe A: fan-out writers
+ * wrote outside their iso → merge-back merged nothing → canonical empty but task done).
+ */
+export async function worktreeFilesChanged(
+  worktreePath: string,
+  fromCommit: string,
+): Promise<number> {
+  const tracked = await runGit(worktreePath, [
+    '-c',
+    'core.quotepath=false',
+    'diff',
+    '--name-only',
+    fromCommit,
+    '--',
+  ])
+  if (tracked.exitCode !== 0) {
+    throw new DomainError(
+      'worktree-diff-failed',
+      diffFailureMessage(worktreePath, tracked.stderr),
+      500,
+    )
+  }
+  const untracked = await runGit(worktreePath, [
+    '-c',
+    'core.quotepath=false',
+    'ls-files',
+    '--others',
+    '--exclude-standard',
+  ])
+  const names = new Set<string>()
+  for (const line of tracked.stdout.split('\n')) {
+    const s = line.trim()
+    if (s !== '') names.add(s)
+  }
+  for (const line of untracked.stdout.split('\n')) {
+    const s = line.trim()
+    if (s !== '') names.add(s)
+  }
+  return names.size
+}
+
+/**
  * RFC-098 WP-9 (audit S-11): canonical ref name pinning a node_run's
  * pre-snapshot stash commit in the (shared) source-repo object database.
  * The `{taskId}` path segment exists so the worktree GC can batch-delete

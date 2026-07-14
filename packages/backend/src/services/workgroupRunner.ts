@@ -83,7 +83,11 @@ import {
   type WakeInput,
   type WakeItem,
 } from '@/services/workgroupWake'
-import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroupLaunch'
+import {
+  WG_CLARIFY_NODE_ID,
+  WG_LEADER_NODE_ID,
+  WG_MEMBER_NODE_ID,
+} from '@/services/workgroupLaunch'
 import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
 import type { Logger } from '@/util/log'
 
@@ -150,6 +154,10 @@ export interface WorkgroupEngineHooks {
   runHostNode: (req: WorkgroupHostRunRequest) => Promise<WorkgroupHostRunResult>
   /** node.status WS broadcast (optional in tests). */
   broadcastNodeStatus?: (nodeRunId: string, nodeId: string, status: string) => void
+  /** RFC-187 §4 — files changed in the canonical worktree vs its base commit
+   *  (incl. untracked). Provided by scheduler (git); absent in pure-engine tests
+   *  (the zero-delta warn is then skipped). */
+  getCanonicalFilesChanged?: () => Promise<number>
 }
 
 export interface WorkgroupEngineArgs {
@@ -321,6 +329,10 @@ interface EngineDbState {
   messages: WorkgroupMessage[]
   cursors: Map<string, string>
   hostRuns: Array<typeof nodeRuns.$inferSelect>
+  /** RFC-187 F3 — `__wg_clarify__` runs, kept separate from `hostRuns` so
+   *  round/retry accounting (which filters `hostRuns` by leader/member nodeId)
+   *  never sees them. Feeds `deriveLeaderClarifyPark`. */
+  clarifyRuns: Array<typeof nodeRuns.$inferSelect>
   /** RFC-166 — pre-rendered capability card per AGENT member (memberId → card).
    *  Injected into the roster block so the leader / peers coordinate against
    *  each member's real declared capability. human members are absent (prompt
@@ -427,7 +439,7 @@ async function loadDbState(db: DbClient, taskId: string): Promise<EngineDbState 
       : {}),
     ...(typeof gateRaw.summary === 'string' ? { summary: gateRaw.summary } : {}),
   }
-  const [assignmentRows, messageRows, cursorRows, hostRuns] = await Promise.all([
+  const [assignmentRows, messageRows, cursorRows, allHostNodeRuns] = await Promise.all([
     db
       .select()
       .from(workgroupAssignments)
@@ -445,7 +457,9 @@ async function loadDbState(db: DbClient, taskId: string): Promise<EngineDbState 
       .where(
         and(
           eq(nodeRuns.taskId, taskId),
-          inArray(nodeRuns.nodeId, [WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID]),
+          // RFC-187 F3 — include __wg_clarify__ so the engine can see a leader
+          // clarify park (partitioned out of hostRuns below).
+          inArray(nodeRuns.nodeId, [WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID, WG_CLARIFY_NODE_ID]),
         ),
       )
       .orderBy(asc(nodeRuns.id)),
@@ -457,7 +471,8 @@ async function loadDbState(db: DbClient, taskId: string): Promise<EngineDbState 
     assignments: assignmentRows.map(rowToAssignment),
     messages: messageRows.map(rowToMessage),
     cursors: new Map(cursorRows.map((c) => [c.memberId, c.lastConsumedMessageId])),
-    hostRuns,
+    hostRuns: allHostNodeRuns.filter((r) => r.nodeId !== WG_CLARIFY_NODE_ID),
+    clarifyRuns: allHostNodeRuns.filter((r) => r.nodeId === WG_CLARIFY_NODE_ID),
     agentCards: await buildRosterAgentCards(db, parsed.data),
   }
 }
@@ -551,6 +566,67 @@ function countRoundsUsed(state: EngineDbState): number {
   }
   return state.hostRuns.filter((r) => r.nodeId === WG_MEMBER_NODE_ID && r.status !== 'canceled')
     .length
+}
+
+/**
+ * RFC-187 F3 — is the LEADER parked on a clarify? A `__wg_clarify__` run at
+ * `awaiting_human` with a null shardKey is a leader clarify: leader host runs are
+ * unsharded (`createClarifySession` passes `sourceShardKey = currentRunRow.shardKey`,
+ * null for the leader), while member runs always carry a shardKey (assignment id or
+ * `msg:*`), and a member clarify parks its assignment `awaiting_human` — caught by the
+ * wake's `humanPending`, not here. Without this the engine re-drives a clarify-parked
+ * leader every round → it re-asks, orphans N clarify sessions, and hits max_rounds
+ * (probe B). The `clarifyRuns` set already excludes leader/member host runs.
+ */
+export function deriveLeaderClarifyPark(
+  clarifyRuns: ReadonlyArray<{ status: string; shardKey: string | null }>,
+): boolean {
+  return clarifyRuns.some((r) => r.status === 'awaiting_human' && r.shardKey === null)
+}
+
+/**
+ * RFC-187 §4 — a workgroup that reached `done` with ZERO canonical delta yet had
+ * completed assignments is suspect: the outputs were produced but never merged into
+ * canonical (probe A: fan-out writers wrote outside their iso → merge-back merged
+ * nothing). `doneAssignmentCount` gates on completed work existing at all (RFC-130
+ * removed the agent `readonly` field — per-node iso replaced write serialization — so
+ * a "producer vs reader" distinction no longer exists; the rare pure-coordination group
+ * that finishes with no files just gets a soft, non-blocking advisory).
+ */
+export function detectZeroDeltaDone(filesChanged: number, doneAssignmentCount: number): boolean {
+  return filesChanged === 0 && doneAssignmentCount > 0
+}
+
+/**
+ * RFC-187 §4 — on `done`, warn (don't block) if completed work left the canonical
+ * worktree unchanged: the outputs were produced but never merged. Best-effort — any git
+ * failure is swallowed so it can never wedge the done finalization.
+ */
+async function warnIfZeroDeltaDone(args: WorkgroupEngineArgs, state: EngineDbState): Promise<void> {
+  const getFiles = args.hooks.getCanonicalFilesChanged
+  if (getFiles === undefined) return
+  const doneAssignmentCount = state.assignments.filter((a) => a.status === 'done').length
+  if (doneAssignmentCount === 0) return
+  let filesChanged: number
+  try {
+    filesChanged = await getFiles()
+  } catch {
+    return
+  }
+  if (!detectZeroDeltaDone(filesChanged, doneAssignmentCount)) return
+  await postMessage(args.db, args.taskId, {
+    round: currentRound(state),
+    authorKind: 'system',
+    kind: 'decision',
+    bodyMd:
+      `⚠️ ${doneAssignmentCount} assignment(s) completed but the canonical worktree has no changes — ` +
+      'outputs may not have merged. Check that each worker wrote inside its own working copy ' +
+      '(relative paths), not an absolute path outside it.',
+  })
+  args.log.warn('workgroup done with zero canonical delta despite completed work', {
+    taskId: args.taskId,
+    doneAssignmentCount,
+  })
 }
 
 function currentRound(state: EngineDbState): number {
@@ -760,21 +836,24 @@ export async function runWorkgroupEngine(
       }
     }
 
-    // A leader-host run parked on a clarify round occupies the leader slot:
-    // it resumes via an adopted clarify-answer rerun, never via a fresh wake.
-    const leaderParked = state.hostRuns.some(
-      (r) => r.nodeId === WG_LEADER_NODE_ID && r.status === 'awaiting_human',
-    )
+    // RFC-187 F3 — a leader-host run parked on a clarify resumes via an adopted
+    // clarify-answer rerun, never a fresh wake. Derived from the `__wg_clarify__`
+    // rows (the old check on `hostRuns` for `__wg_leader__`+awaiting_human was dead:
+    // leader runs go `done` and clarify parks land on `__wg_clarify__`, which
+    // `hostRuns` didn't even load). Kept OUT of `leaderRunning` so the outcome is a
+    // proper `leader-clarify` park, not a generic `running`.
+    const leaderClarifyParked = deriveLeaderClarifyPark(state.clarifyRuns)
     const wakeInput: WakeInput = {
       config: state.config,
       assignments: state.assignments,
       messages: state.messages,
       cursors: state.cursors,
       inFlight: {
-        leaderRunning: inflightMeta.leaderRunning || leaderParked,
+        leaderRunning: inflightMeta.leaderRunning,
         runningAssignmentIds: inflightMeta.runningAssignmentIds,
         messageTurnMemberIds: inflightMeta.messageTurnMemberIds,
       },
+      leaderClarifyParked,
       roundsUsed: countRoundsUsed(state),
       gate: {
         declaredDone: state.gate.declaredDone,
@@ -841,10 +920,17 @@ export async function runWorkgroupEngine(
               detail: { summary: 'workgroup completion gate', message: 'wg-gate' },
             }
           }
+          // RFC-187 §4 — the task is truly completing (done, no gate): flag a
+          // zero-canonical-delta done so a silent empty deliverable isn't mistaken
+          // for success.
+          await warnIfZeroDeltaDone(args, state)
           return { kind: 'ok' }
         }
         case 'awaiting_gate': {
-          if (state.gate.approved) return { kind: 'ok' } // PR-5 confirm approved
+          if (state.gate.approved) {
+            await warnIfZeroDeltaDone(args, state)
+            return { kind: 'ok' } // PR-5 confirm approved
+          }
           if (!state.gate.awaitingConfirmation) {
             await openCompletionGate(args, state)
           }
@@ -872,10 +958,16 @@ export async function runWorkgroupEngine(
           return {
             kind: 'awaiting_human',
             detail: {
+              // RFC-187 F8 — distinct summary per reason so telemetry/room don't
+              // mislabel a leader blocked on a clarify as an idle leader.
               summary:
                 outcome.reason === 'leader-idle'
                   ? 'workgroup idle — waiting for human input'
-                  : 'workgroup waiting on clarify answers / human delivery',
+                  : outcome.reason === 'leader-clarify'
+                    ? 'workgroup leader is waiting on a human answer to its clarify'
+                    : outcome.reason === 'max-rounds-wrapup'
+                      ? 'workgroup hit max_rounds with completed work — review the deliverable'
+                      : 'workgroup waiting on clarify answers / human delivery',
               message: outcome.reason,
             },
           }

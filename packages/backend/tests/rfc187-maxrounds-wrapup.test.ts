@@ -1,0 +1,192 @@
+// RFC-187 §3-7 (audit design/workgroup-e2e-audit.md §3-7) — maxRounds used to hard-fail
+// even when the workers had produced a deliverable. Probe C: maxRounds:1, leader
+// dispatches (round 1), worker writes hello.txt, the leader needs round 2 to aggregate
+// but can't → task `failed` "hit max_rounds (1)" with hello.txt sitting in canonical.
+// Fix: grant ONE grace wrap-up round at the cap when there's completed work (so the
+// leader can declare done), and if the cap is still exceeded with work done, park
+// awaiting_human (deliverable visible) instead of a bare `failed`.
+
+import { describe, expect, test } from 'bun:test'
+import type {
+  WorkgroupAssignment,
+  WorkgroupMessage,
+  WorkgroupRuntimeConfig,
+} from '@agent-workflow/shared'
+import {
+  decideWorkgroupOutcome,
+  deriveWakeSet,
+  type WakeInput,
+} from '../src/services/workgroupWake'
+
+function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
+  return {
+    workgroupId: 'wg1',
+    workgroupName: 'squad',
+    mode: 'leader_worker',
+    leaderMemberId: 'm-lead',
+    switches: { shareOutputs: true, directMessages: false, blackboard: false },
+    maxRounds: 1,
+    completionGate: false,
+    instructions: 'go',
+    goal: 'make hello.txt',
+    autonomous: true,
+    members: [
+      {
+        id: 'm-lead',
+        memberType: 'agent',
+        agentName: 'planner',
+        userId: null,
+        displayName: 'planner',
+        roleDesc: '协调',
+      },
+      {
+        id: 'm-coder',
+        memberType: 'agent',
+        agentName: 'coder-a',
+        userId: null,
+        displayName: 'coder',
+        roleDesc: '实现',
+      },
+    ],
+    ...overrides,
+  }
+}
+
+let seq = 0
+function doneAsg(): WorkgroupAssignment {
+  seq += 1
+  return {
+    id: `asg-${seq}`,
+    taskId: 't1',
+    round: 1,
+    createdByRunId: null,
+    createdByUserId: null,
+    assigneeMemberId: 'm-coder',
+    source: 'leader',
+    title: 'write hello.txt',
+    briefMd: 'write a line',
+    status: 'done',
+    nodeRunId: null,
+    resultMessageId: null,
+    dedupKey: null,
+    createdAt: seq,
+    updatedAt: seq,
+  }
+}
+
+function resultMsg(): WorkgroupMessage {
+  seq += 1
+  return {
+    id: `01M${String(seq).padStart(6, '0')}`,
+    taskId: 't1',
+    round: 1,
+    authorKind: 'member',
+    authorMemberId: 'm-coder',
+    authorUserId: null,
+    kind: 'result',
+    bodyMd: 'wrote hello.txt',
+    mentionMemberIds: [],
+    assignmentId: null,
+    createdAt: seq,
+  }
+}
+
+function wakeInput(overrides: Partial<WakeInput> = {}): WakeInput {
+  return {
+    config: cfg(),
+    assignments: [],
+    messages: [],
+    cursors: new Map(),
+    inFlight: {
+      leaderRunning: false,
+      runningAssignmentIds: new Set(),
+      messageTurnMemberIds: new Set(),
+    },
+    roundsUsed: 0,
+    gate: { declaredDone: false, awaitingConfirmation: false, rejected: false },
+    ...overrides,
+  }
+}
+
+describe('RFC-187 §3-7 — grace wrap-up round at the cap', () => {
+  test('probe C shape: at the cap WITH a done assignment → one grace wrap-up leader round', () => {
+    // maxRounds:1, one leader round used, worker done, its result unconsumed by the
+    // leader (new-content). Without the grace round this was capExceeded → failed.
+    const wake = deriveWakeSet(
+      wakeInput({
+        assignments: [doneAsg()],
+        messages: [resultMsg()], // leader cursor empty ⇒ unconsumed ⇒ would wake
+        roundsUsed: 1,
+      }),
+    )
+    const leaderItems = wake.items.filter((i) => i.kind === 'leader')
+    expect(leaderItems).toHaveLength(1)
+    expect((leaderItems[0] as { reason: string }).reason).toBe('wrap-up')
+    expect(wake.capExceeded).toBe(false)
+  })
+
+  test('at the cap with NO completed work → capExceeded, no grace round', () => {
+    const wake = deriveWakeSet(
+      wakeInput({
+        assignments: [], // nothing produced
+        messages: [resultMsg()],
+        roundsUsed: 1,
+      }),
+    )
+    expect(wake.items.filter((i) => i.kind === 'leader')).toHaveLength(0)
+    expect(wake.capExceeded).toBe(true)
+  })
+
+  test('PAST the cap (roundsUsed = maxRounds+1) → no second grace round even with work', () => {
+    // the grace round already ran and was counted; only one is ever granted.
+    const wake = deriveWakeSet(
+      wakeInput({
+        assignments: [doneAsg()],
+        messages: [resultMsg()],
+        roundsUsed: 2, // maxRounds=1, grace already consumed
+      }),
+    )
+    expect(wake.items.filter((i) => i.kind === 'leader')).toHaveLength(0)
+    expect(wake.capExceeded).toBe(true)
+  })
+})
+
+describe('RFC-187 §3-7 — decideWorkgroupOutcome preserves the deliverable', () => {
+  test('capExceeded WITH completed work → awaiting_human max-rounds-wrapup (not failed)', () => {
+    const out = decideWorkgroupOutcome(wakeInput({ assignments: [doneAsg()], roundsUsed: 2 }), {
+      items: [],
+      capExceeded: true,
+    })
+    expect(out).toEqual({ kind: 'awaiting_human', reason: 'max-rounds-wrapup' })
+  })
+
+  test('capExceeded with NO completed work → failed max-rounds (genuine spin)', () => {
+    const out = decideWorkgroupOutcome(wakeInput({ assignments: [], roundsUsed: 2 }), {
+      items: [],
+      capExceeded: true,
+    })
+    expect(out).toEqual({ kind: 'failed', reason: 'max-rounds' })
+  })
+
+  test('a delivered (human-handoff) assignment also counts as salvageable', () => {
+    const delivered = { ...doneAsg(), status: 'delivered' as const }
+    const out = decideWorkgroupOutcome(wakeInput({ assignments: [delivered], roundsUsed: 2 }), {
+      items: [],
+      capExceeded: true,
+    })
+    expect(out).toEqual({ kind: 'awaiting_human', reason: 'max-rounds-wrapup' })
+  })
+
+  test('a leader that already declaredDone finishes normally (autonomous → done)', () => {
+    // the wrap-up path only matters when the leader NEVER declared done.
+    const out = decideWorkgroupOutcome(
+      wakeInput({
+        assignments: [doneAsg()],
+        roundsUsed: 2,
+        gate: { declaredDone: true, awaitingConfirmation: false, rejected: false },
+      }),
+      { items: [], capExceeded: false },
+    )
+    expect(out).toEqual({ kind: 'done' })
+  })
+})
