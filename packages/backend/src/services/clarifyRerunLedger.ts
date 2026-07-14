@@ -297,7 +297,15 @@ export function isTargetNodeConsumed(
       // ——验收4 bug）。failed / 非-review canceled / interrupted / pending / running+output 仍不老化（revivable / 在飞）。
       (r.status === 'done' ||
         (r.status === 'canceled' && (r.supersededByReview ?? null) !== null)) &&
-      outputRunIds.has(r.id) &&
+      // RFC-186 (audit §5 F4): workgroup host runs (__wg_leader__ / __wg_member__)
+      // write ZERO node_run_outputs by the RFC-184 invariant, so outputRunIds
+      // never contains them — an answered HOST clarify would then never age and
+      // re-inject into every future host round (context bloat + re-ask of a
+      // resolved question). For host nodes a DONE top-level run at id ≥ trigger
+      // IS the produced/consumed signal (they consumed the answer and continued).
+      // Literal ids (not the WG_*_NODE_ID consts) keep this leaf module free of a
+      // workgroupLaunch import; rfc186-clarify-aging.test.ts locks the equality.
+      (outputRunIds.has(r.id) || r.nodeId === '__wg_leader__' || r.nodeId === '__wg_member__') &&
       r.id >= sinceRunId,
   )
 }
