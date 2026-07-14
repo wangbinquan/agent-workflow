@@ -12204,6 +12204,45 @@ mark.comment-anchor[data-active='true'] {
   gap: 4px;
 }
 
+/* Speaker-role chat bubbles — the conversation must read at a glance: every
+   non-system message is a shrink-to-fit bubble whose color identifies the
+   speaker — leader = accent, agent member = neutral, human = success and
+   right-aligned (classic IM "my side"). System rows stay muted full-width
+   meta lines (rule below). The squared speaker-side top corner is the bubble
+   tail cue. Locked by workgroup-room-bubbles.test.ts. */
+.workgroup-room__msg--leader,
+.workgroup-room__msg--agent,
+.workgroup-room__msg--human {
+  align-self: flex-start;
+  max-width: min(88%, 760px);
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  border-top-left-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--text) 5%, var(--panel));
+}
+
+.workgroup-room__msg--leader {
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.workgroup-room__msg--leader .workgroup-room__author {
+  color: color-mix(in srgb, var(--accent) 75%, var(--text));
+}
+
+.workgroup-room__msg--human {
+  align-self: flex-end;
+  border-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--success) 12%, var(--panel));
+  border-color: color-mix(in srgb, var(--success) 40%, var(--border));
+}
+
+.workgroup-room__msg--human .workgroup-room__author {
+  color: color-mix(in srgb, var(--success) 70%, var(--text));
+}
+
 .workgroup-room__msg-head {
   display: flex;
   align-items: center;
@@ -12510,14 +12549,12 @@ button.status-chip {
   align-self: flex-end;
 }
 
-/* Leader convergence summary (kind='decision') stands out from plain chat. */
+/* Leader convergence summary (kind='decision') stands out from plain chat —
+   layered ON TOP of the leader role bubble: thicker accent flank + stronger
+   tint (this rule sits after the bubble variants, so its background wins). */
 .workgroup-room__msg--decision {
   border-left: 3px solid var(--accent);
-  padding-left: 10px;
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
-  border-radius: 6px;
-  padding-top: 6px;
-  padding-bottom: 6px;
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
 }
 
 /* Mid-run config dialog: member staging rows. */

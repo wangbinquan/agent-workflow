@@ -310,6 +310,16 @@ describe('WorkgroupRoom — message stream', () => {
     const systemMsg = screen.getByTestId('wg-msg-01C')
     expect(systemMsg.className).toContain('workgroup-room__msg--system')
     expect(within(systemMsg).getByText('System')).toBeTruthy()
+
+    // Speaker-role bubbles (user ask 2026-07-14): leader / agent / human get
+    // distinct bubble modifier classes; system stays a meta line, never a
+    // bubble. Colors themselves are locked by workgroup-room-bubbles.test.ts.
+    expect(leaderMsg.className).toContain('workgroup-room__msg--leader')
+    expect(workerMsg.className).toContain('workgroup-room__msg--agent')
+    expect(humanMsg.className).toContain('workgroup-room__msg--human')
+    for (const bubble of ['leader', 'agent', 'human']) {
+      expect(systemMsg.className).not.toContain(`workgroup-room__msg--${bubble}`)
+    }
   })
 
   test('round separators land at transitions only (no round-0 prelude divider)', async () => {
@@ -1225,6 +1235,9 @@ describe('WorkgroupRoom — mid-run config entry + decision highlight (PR-5/6)',
     renderRoom(room)
     const msg = await screen.findByTestId('wg-msg-01Z')
     expect(msg.className).toContain('workgroup-room__msg--decision')
+    // The decision accent layers ON TOP of the leader role bubble — losing
+    // the role class would silently drop the bubble chrome under it.
+    expect(msg.className).toContain('workgroup-room__msg--leader')
   })
 })
 

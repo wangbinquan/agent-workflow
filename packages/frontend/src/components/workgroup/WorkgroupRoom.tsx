@@ -898,13 +898,21 @@ function RoomMessage({
     authorLabel = u?.displayName ?? u?.username ?? message.authorUserId ?? '?'
   }
 
-  // PR-6 观测面: the leader's convergence summary (kind='decision') stands
-  // out from plain chat — accent border via the modifier class.
-  const modifier = isSystem
-    ? ' workgroup-room__msg--system'
-    : message.kind === 'decision'
-      ? ' workgroup-room__msg--decision'
-      : ''
+  // Speaker-role chat bubble — every non-system message renders as a bubble
+  // whose color identifies who is talking: leader (accent) / agent member
+  // (neutral) / human (success, right-aligned). System rows keep the muted
+  // full-width meta-line look. The PR-6 decision accent layers ON TOP of the
+  // role bubble (leader's convergence summary must still stand out).
+  const role = isSystem
+    ? 'system'
+    : message.authorKind === 'human'
+      ? 'human'
+      : isLeader
+        ? 'leader'
+        : 'agent'
+  const modifier =
+    ` workgroup-room__msg--${role}` +
+    (!isSystem && message.kind === 'decision' ? ' workgroup-room__msg--decision' : '')
 
   return (
     <div className={`workgroup-room__msg${modifier}`} data-testid={`wg-msg-${message.id}`}>
