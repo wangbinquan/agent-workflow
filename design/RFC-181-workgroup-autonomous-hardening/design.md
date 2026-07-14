@@ -80,6 +80,7 @@ PATCH autonomous false→true  且  该任务存在 open clarify park：
 ```
 
 - 仅 false→true 触发（true→true / 无 open park 均 no-op）。off→on 之外的 patch 不动 clarify。
+- **实现门增补（d8092c4a 折入）**：① `dynamic_workflow` 免疫——dw 无回合引擎、autonomous 对其 mode-inert（RFC-180），A2 不得扫掉生成图普通节点的 clarify park；② 遣散后**新鲜状态复读 kick + 2.5s 延迟二次 kick**——路由的 `task.status` 闸读的是遣散前快照，引擎可能随后才从其旧快照提交 `running→awaiting_human`，双 kick 防搁浅；③ 权威轮行 `clarify_rounds` 与 session 双表同事务 canceled（见 1.）。
 - **复用既有遣散原语但不复用其编排**：session 置 canceled 的语义与 task-cancel / RFC-058 supersede 同源（`clarifyRerunLedger`/`clarifyRounds`/`clarifySeal` 既有 canceled 通路）；A2 的新贡献是把「session 双表 + 中介 run + assignment 重排队」收进**一个**事务并与答案提交串行化（设计门 P1：防 crash 半态 / 防陈旧答案竞态 mint）。
 - 语义 = A2 是"对在途 park 的追溯式 C"（C 压新反问，A2 遣散旧反问 park），二者同一"别打扰我"意图。
 - 时序：route 侧先事务遣散 **再** resume（parked 态下引擎循环已退出，无并发 pass，route 变更安全，同现有 config-patch resume 模式）。
