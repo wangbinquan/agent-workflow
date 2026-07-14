@@ -46,6 +46,7 @@ import {
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
+import { dbTxSync } from '@/db/txSync'
 import {
   nodeRuns,
   tasks,
@@ -348,11 +349,32 @@ async function persistGate(
   rawConfig: Record<string, unknown>,
   gate: GateState,
 ): Promise<void> {
-  const next = { ...rawConfig, gate }
-  await db
-    .update(tasks)
-    .set({ workgroupConfigJson: JSON.stringify(next) })
-    .where(eq(tasks.id, taskId))
+  // Codex T6 impl-gate P2 — reload-and-merge inside ONE sync transaction
+  // instead of overwriting with the engine's pass-start snapshot: a whole-
+  // JSON write from a stale rawConfig would silently drop a concurrent
+  // per-task config PATCH (autonomous / fanOut mid-run toggles — RFC-181 A /
+  // RFC-185 D4; the race predates fanOut and could lose autonomous too).
+  // rawConfig stays as the fallback when the row's JSON is missing or
+  // unreadable mid-flight (legacy behavior for that edge).
+  dbTxSync(db, (tx) => {
+    const row = tx
+      .select({ workgroupConfigJson: tasks.workgroupConfigJson })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .get()
+    let base = rawConfig
+    if (row?.workgroupConfigJson != null) {
+      try {
+        base = JSON.parse(row.workgroupConfigJson) as Record<string, unknown>
+      } catch {
+        // fall back to the engine snapshot
+      }
+    }
+    tx.update(tasks)
+      .set({ workgroupConfigJson: JSON.stringify({ ...base, gate }) })
+      .where(eq(tasks.id, taskId))
+      .run()
+  })
 }
 
 interface PostMessageArgs {
@@ -1055,7 +1077,12 @@ async function driveLeaderTurn(
     else if (!decision.ok) errors.push(...decision.errors.map((e) => `wg_decision: ${e}`))
     const dispatches =
       assignmentsRaw !== undefined
-        ? parseWgAssignmentsPort(assignmentsRaw, roster)
+        ? parseWgAssignmentsPort(assignmentsRaw, roster, {
+            // RFC-185 D4 (Codex T6 P1) — OFF is enforced here, not just in the
+            // prompt: same-member duplicates reject the port whole and re-
+            // prompt via the malformed-retry channel.
+            allowSameMemberFanOut: config.fanOut === true,
+          })
         : { ok: true as const, value: [] }
     if (!dispatches.ok) errors.push(...dispatches.errors.map((e) => `wg_assignments: ${e}`))
     const outMessages =

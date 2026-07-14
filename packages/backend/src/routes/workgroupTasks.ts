@@ -34,6 +34,7 @@ import {
   workgroupAssignments,
   workgroupMessages,
 } from '@/db/schema'
+import { dbTxSync } from '@/db/txSync'
 import { DW_GATE_CAUSE, DW_MAX_REJECT_ROUNDS } from '@/services/dynamicWorkflowRunner'
 import { setNodeRunStatus, setTaskStatus } from '@/services/lifecycle'
 import { validateDynamicWorkflowDef } from '@/services/orchestratorAgent'
@@ -912,15 +913,6 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       }
     }
 
-    const nextConfig = {
-      ...raw,
-      members,
-      ...(patch.switches !== undefined ? { switches: patch.switches } : {}),
-      ...(patch.maxRounds !== undefined ? { maxRounds: patch.maxRounds } : {}),
-      ...(patch.completionGate !== undefined ? { completionGate: patch.completionGate } : {}),
-      ...(patch.autonomous !== undefined ? { autonomous: patch.autonomous } : {}),
-      ...(patch.fanOut !== undefined ? { fanOut: patch.fanOut } : {}),
-    }
     if (patch.switches !== undefined) changes.push('switches updated')
     if (patch.maxRounds !== undefined) changes.push(`maxRounds → ${patch.maxRounds}`)
     if (patch.completionGate !== undefined) changes.push(`completionGate → ${patch.completionGate}`)
@@ -929,10 +921,39 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     if (changes.length === 0) {
       throw new ValidationError('workgroup-config-empty', 'nothing to change')
     }
-    await deps.db
-      .update(tasks)
-      .set({ workgroupConfigJson: JSON.stringify(nextConfig) })
-      .where(eq(tasks.id, taskId))
+    // Codex T6 impl-gate P2 — merge into a FRESH row inside one sync
+    // transaction: `raw` was read before the addMembers awaits above, so a
+    // whole-JSON write from it could clobber a concurrent writer (the engine's
+    // persistGate — now also reload-and-merge — or another PATCH). Only this
+    // handler's own keys ride on top of the fresh base.
+    dbTxSync(deps.db, (tx) => {
+      const fresh = tx
+        .select({ workgroupConfigJson: tasks.workgroupConfigJson })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .get()
+      let base: Record<string, unknown> = raw
+      if (fresh?.workgroupConfigJson != null) {
+        try {
+          base = JsonObjectSchema.parse(JSON.parse(fresh.workgroupConfigJson))
+        } catch {
+          // unreadable fresh JSON — fall back to the handler's earlier read
+        }
+      }
+      const nextConfig = {
+        ...base,
+        members,
+        ...(patch.switches !== undefined ? { switches: patch.switches } : {}),
+        ...(patch.maxRounds !== undefined ? { maxRounds: patch.maxRounds } : {}),
+        ...(patch.completionGate !== undefined ? { completionGate: patch.completionGate } : {}),
+        ...(patch.autonomous !== undefined ? { autonomous: patch.autonomous } : {}),
+        ...(patch.fanOut !== undefined ? { fanOut: patch.fanOut } : {}),
+      }
+      tx.update(tasks)
+        .set({ workgroupConfigJson: JSON.stringify(nextConfig) })
+        .where(eq(tasks.id, taskId))
+        .run()
+    })
     // RFC-181 A2 (design-gate P0) — false→true dismisses in-flight clarify
     // parks so the toggle works on a task that is ALREADY parked on questions
     // (session+round+park-run canceled, worker cards requeued, stale answers

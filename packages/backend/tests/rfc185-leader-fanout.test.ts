@@ -223,18 +223,39 @@ describe('RFC-185 D4 — fan-out opt-in gating', () => {
 describe('RFC-185 — parseWgAssignmentsPort keeps same-member fan-out entries', () => {
   const roster = new Set(['planner', 'coder'])
 
-  test('three entries for the SAME member pass through in order (no dedup)', () => {
+  test('three entries for the SAME member pass through in order (no dedup) when opted in', () => {
     const raw = JSON.stringify([
       { member: 'coder', title: 'shard 1', brief: 'audit file A' },
       { member: 'coder', title: 'shard 2', brief: 'audit file B' },
       { member: 'coder', title: 'shard 3', brief: 'audit file C' },
     ])
-    const r = parseWgAssignmentsPort(raw, roster)
+    const r = parseWgAssignmentsPort(raw, roster, { allowSameMemberFanOut: true })
     expect(r.ok).toBe(true)
     if (r.ok) {
       expect(r.value.map((a) => a.title)).toEqual(['shard 1', 'shard 2', 'shard 3'])
       expect(new Set(r.value.map((a) => a.member))).toEqual(new Set(['coder']))
     }
+  })
+
+  // Codex T6 impl-gate P1 — OFF is a hard guarantee at the VALIDATOR, not a
+  // prompt suggestion: without the opt-in flag, same-member duplicates reject
+  // the port whole (deny-by-default so a future call site fails closed).
+  test('same-member duplicates are REJECTED when fan-out is not opted in (default deny)', () => {
+    const raw = JSON.stringify([
+      { member: 'coder', title: 'shard 1', brief: 'audit file A' },
+      { member: 'coder', title: 'shard 2', brief: 'audit file B' },
+    ])
+    const r = parseWgAssignmentsPort(raw, roster)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.errors.join(' ')).toContain('fan-out is disabled')
+  })
+
+  test('distinct-member multi-dispatch stays allowed with fan-out off (no false positive)', () => {
+    const raw = JSON.stringify([
+      { member: 'coder', title: 'a', brief: 'b' },
+      { member: 'planner', title: 'c', brief: 'd' },
+    ])
+    expect(parseWgAssignmentsPort(raw, roster).ok).toBe(true)
   })
 
   test('a turn above WG_MAX_ASSIGNMENTS_PER_TURN is rejected whole', () => {
@@ -506,6 +527,107 @@ describe('RFC-185 — engine fan-out integration (fake hooks)', () => {
     const leaderTurns = requests.filter((r) => r.nodeId === WG_LEADER_NODE_ID)
     expect(leaderTurns).toHaveLength(2)
     expect(leaderTurns[1]?.promptTemplate).toContain('[failed]')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 4b. Codex T6 impl-gate P1/P2 — engine-level hard guarantees:
+//     P1: a fanOut-OFF group's leader emitting same-member duplicates gets a
+//         malformed-retry (error notice injected), never concurrent inserts;
+//     P2: persistGate merges the gate into the FRESH config row, so a mid-run
+//         config PATCH landing during the leader turn is not silently dropped.
+// ---------------------------------------------------------------------------
+
+describe('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', () => {
+  let db: DbClient
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+  })
+
+  test('P1: fanOut-off leader dispatching the same member twice is re-prompted, not fanned out', async () => {
+    const config = cfg({ fanOut: false })
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks, requests } = scriptedHooks({
+      leader: [
+        doneLeader({
+          assignments: [
+            { member: 'coder', title: 'shard-A', brief: 'audit a' },
+            { member: 'coder', title: 'shard-B', brief: 'audit b' },
+          ],
+          decision: { action: 'continue' },
+        }),
+        doneLeader({
+          assignments: [{ member: 'coder', title: 'one task', brief: 'do it all' }],
+          decision: { action: 'continue' },
+        }),
+        doneLeader({ decision: { action: 'done', summary: 'wrapped' } }),
+      ],
+      member: [doneMember('done in one go')],
+    })
+
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('ok')
+
+    // retry prompt carried the duplicate-member protocol error
+    expect(requests[1]?.nodeId).toBe(WG_LEADER_NODE_ID)
+    expect(requests[1]?.promptTemplate).toContain('Protocol errors')
+    expect(requests[1]?.promptTemplate).toContain("duplicate member 'coder'")
+
+    // only the retried SINGLE dispatch landed — never two concurrent instances
+    const assignments = await db
+      .select()
+      .from(workgroupAssignments)
+      .where(eq(workgroupAssignments.taskId, taskId))
+    expect(assignments).toHaveLength(1)
+    expect(assignments[0]?.title).toBe('one task')
+  })
+
+  test('P2: a config PATCH landing mid-leader-turn survives persistGate (reload-and-merge)', async () => {
+    const config = cfg({ fanOut: false })
+    const { taskId } = await seedEngineTask(db, config)
+    // Custom hooks: while the leader turn is IN FLIGHT (the engine already
+    // captured its pass-start rawConfig with fanOut:false), a per-task PATCH
+    // flips fanOut on. The leader then declares done → persistGate writes the
+    // gate. A snapshot-overwrite would silently revert fanOut to false.
+    const requests: WorkgroupHostRunRequest[] = []
+    const hooks: WorkgroupEngineHooks = {
+      runHostNode: async (req) => {
+        requests.push(req)
+        const row = (
+          await db
+            .select({ workgroupConfigJson: tasks.workgroupConfigJson })
+            .from(tasks)
+            .where(eq(tasks.id, taskId))
+        )[0]
+        const current = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
+        await db
+          .update(tasks)
+          .set({ workgroupConfigJson: JSON.stringify({ ...current, fanOut: true }) })
+          .where(eq(tasks.id, taskId))
+        return {
+          status: 'done',
+          outputs: { wg_decision: JSON.stringify({ action: 'done', summary: 'nothing to do' }) },
+        }
+      },
+    }
+
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('ok')
+    expect(requests).toHaveLength(1)
+
+    const row = (
+      await db
+        .select({ workgroupConfigJson: tasks.workgroupConfigJson })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+    )[0]
+    const final = JSON.parse(row?.workgroupConfigJson ?? '{}') as {
+      fanOut?: boolean
+      gate?: { declaredDone?: boolean }
+    }
+    // the gate landed AND the concurrent toggle survived
+    expect(final.gate?.declaredDone).toBe(true)
+    expect(final.fanOut).toBe(true)
   })
 })
 

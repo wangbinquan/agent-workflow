@@ -297,6 +297,7 @@ function unknownMembers(
 export function parseWgAssignmentsPort(
   raw: string,
   rosterDisplayNames: ReadonlySet<string>,
+  opts: { allowSameMemberFanOut?: boolean } = {},
 ): WgPortParseResult<WgAssignmentItem[]> {
   const r = parseJsonPort(WgAssignmentsPortSchema, raw)
   if (!r.ok) return r
@@ -306,6 +307,30 @@ export function parseWgAssignmentsPort(
   )
   if (missing.length > 0) {
     return { ok: false, errors: missing.map((m) => `unknown member '${m}'`) }
+  }
+  // RFC-185 D4 (Codex T6 impl-gate P1) — fan-out OFF is a HARD guarantee, not
+  // a prompt suggestion: unless the group opted in (the engine passes
+  // allowSameMemberFanOut from the frozen config's fanOut), a leader emitting
+  // the SAME member twice is a protocol violation rejected whole — the same
+  // malformed-retry channel as unknown members — so the fixed one-entry-per-
+  // member mode can never be broken by model self-restraint failing. Deny is
+  // the DEFAULT so a future call site that forgets the flag fails closed.
+  if (opts.allowSameMemberFanOut !== true) {
+    const seen = new Set<string>()
+    const dup = new Set<string>()
+    for (const a of r.value) {
+      if (seen.has(a.member)) dup.add(a.member)
+      seen.add(a.member)
+    }
+    if (dup.size > 0) {
+      return {
+        ok: false,
+        errors: [...dup].map(
+          (m) =>
+            `duplicate member '${m}' — fan-out is disabled in this group; dispatch at most ONE assignment per member per turn`,
+        ),
+      }
+    }
   }
   return r
 }
