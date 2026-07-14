@@ -101,6 +101,9 @@ export interface MintNodeRunOverrides {
    * no agent — borrowing is a new dimension).
    */
   agentOverrideName?: string | null
+  /** RFC-189 — leader_worker workgroup round ordinal（1-based）. Workgroup
+   *  turn mints stamp it; everything else leaves NULL. */
+  wgRound?: number | null
 }
 
 export interface MintNodeRunArgs {
@@ -187,6 +190,7 @@ export function buildMintNodeRunValues(
     startedAt: o.startedAt !== undefined ? o.startedAt : now,
     finishedAt: o.finishedAt !== undefined ? o.finishedAt : args.status === 'done' ? now : null,
     agentOverrideName: o.agentOverrideName ?? null,
+    wgRound: o.wgRound ?? null,
   }
 }
 

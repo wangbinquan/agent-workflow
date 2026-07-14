@@ -306,11 +306,19 @@ function StatsTab({
       <dd>{run.exitCode === null ? t('common.emDash') : run.exitCode}</dd>
       <dt>{t('nodeDrawer.statIteration')}</dt>
       <dd>{run.iteration}</dd>
+      {/* RFC-189 — the authoritative lw workgroup round ordinal (wg_round);
+          absent on non-workgroup / free_collab rows. */}
+      {run.wgRound !== null && (
+        <>
+          <dt>{t('nodeDrawer.statWgRound')}</dt>
+          <dd data-testid="rfc189-wg-round">{run.wgRound}</dd>
+        </>
+      )}
       <dt>{t('nodeDrawer.statRetry')}</dt>
-      {/* displayRetryForRun: workgroup host runs store a turn ordinal in
-          retryIndex (workgroupRunner mints leader/message turns at
-          prior-run-count), so the raw column would read "retried N times"
-          on a turn that never failed. */}
+      {/* displayRetryForRun: workgroup host runs HISTORICALLY stored a turn
+          ordinal in retryIndex (pre-0095 rows still do), so the raw column
+          would read "retried N times" on a turn that never failed — the
+          lineage derivation holds under both the old and RFC-189 semantics. */}
       <dd>{displayRetryForRun(run, history)}</dd>
       {run.opencodeSessionId !== null && run.opencodeSessionId.length > 0 && (
         <>

@@ -88,6 +88,12 @@ export function clarifyRoundForRun(run: NodeRun, runs: readonly NodeRun[]): numb
  */
 export function displayRetryForRun(run: NodeRun, runs: readonly NodeRun[]): number {
   if (run.nodeId !== '__wg_leader__' && run.nodeId !== '__wg_member__') return run.retryIndex
+  // RFC-189 note — deliberately NOT shortcut via `retryIndex` even though new
+  // mints carry a plain attempt there: BACKFILLED pre-0095 rows also have
+  // wg_round stamped while their retryIndex still holds the old count+attempt
+  // mix, and the two eras are not separable on the row. This lineage
+  // derivation is retryIndex-independent and correct under BOTH semantics;
+  // wg_round's frontend value is the ROUND label (additive), not this.
   const lineage = runs.filter(
     (r) =>
       r.nodeId === run.nodeId &&

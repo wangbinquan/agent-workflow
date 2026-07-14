@@ -2257,6 +2257,7 @@ export const enUS: Resources = {
     statExitCode: 'Exit code',
     statIteration: 'Iteration',
     statRetry: 'Retry',
+    statWgRound: 'Workgroup round',
     statTokensIn: 'Tokens in',
     statTokensOut: 'Tokens out',
     statTokensTotal: 'Tokens total',

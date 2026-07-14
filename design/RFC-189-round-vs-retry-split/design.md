@@ -1,5 +1,23 @@
 # RFC-189 · 技术设计
 
+> **实施勘误（2026-07-15，以此节为准）**：
+> 1. **fc 免疫**——fc 的 initial burst / 并发 message turn 在同一 tick 内并发
+>    mint，「mint 时打序数」必然产生重复序数（max 口径会漏计）。fc 的轮预算
+>    本质是「行计数」而非序数（每 run 消耗一行预算），保持计数制不变；
+>    `wg_round` 仅 lw 行打戳，fc 行恒 NULL。原稿 §2 的 fc 回填分支删除。
+> 2. **countRoundsUsed(lw) = 混合口径**——`max(wg_round | 非 canceled)` +
+>    「NULL 戳 qualifying 行数」尾巴：引擎外 mint 的行（clarify-answer 续跑、
+>    崩溃残留）在 mint→领养打戳之间无戳，每行恰是一个已启动的轮（与旧行计数
+>    逐值相等）；领养时 `stampWgRound` 就地补戳（`WHERE wg_round IS NULL`
+>    幂等）。原稿 §4 的「max ?? 0 + canceled 边角」并入此口径。
+> 3. **前端 displayRetryForRun 保留**——回填的旧行 wg_round 非空但 retryIndex
+>    仍是旧混合值，两个时代在行上不可分辨；谱系推导与 retryIndex 无关、对新旧
+>    语义皆正确，保留为重试口径。wg_round 的前端价值是**轮标签**（抽屉新增
+>    `statWgRound` 展示），非替换重试推导。原稿 §4「displayRetryForRun 退役」
+>    撤回。
+> 4. 回填窗口冻结的是 0095 时点的旧派生口径；lw member assignment 行以
+>    `workgroup_assignments.round` 权威覆盖（msg 行保留窗口号）。
+
 ## 1. 方案选型：新列 `wg_round`，而非复用 `iteration`
 
 两个候选：

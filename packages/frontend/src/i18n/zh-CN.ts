@@ -2150,6 +2150,7 @@ export interface Resources {
     statExitCode: string
     statIteration: string
     statRetry: string
+    statWgRound: string
     statTokensIn: string
     statTokensOut: string
     statTokensTotal: string
@@ -5074,6 +5075,7 @@ export const zhCN: Resources = {
     statExitCode: '退出码',
     statIteration: '轮次',
     statRetry: '重试',
+    statWgRound: '工作组轮次',
     statTokensIn: '输入 tokens',
     statTokensOut: '输出 tokens',
     statTokensTotal: '总 tokens',

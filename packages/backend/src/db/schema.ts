@@ -932,6 +932,15 @@ export const nodeRuns = sqliteTable(
     shardKey: text('shard_key'), // multi-process shard identifier (e.g. file path)
     retryIndex: integer('retry_index').notNull().default(0), // 0 = first attempt
     /**
+     * RFC-189 — the leader_worker workgroup ROUND this host run belongs to
+     * (1-based; migration 0095 backfills). Splits the round ordinal OUT of
+     * retryIndex, which workgroup mints historically overloaded as
+     * "prior-row count + attempt"（前端误标事故 d1248df4）. NULL on every
+     * non-workgroup row, on `__wg_clarify__` rows, and on free_collab rows —
+     * fc 的轮预算本质是「行计数」而非序数，保持计数制（design §1 修订）.
+     */
+    wgRound: integer('wg_round'),
+    /**
      * RFC-005: counts review-decision-triggered regenerations (reject/iterate);
      * orthogonal to retryIndex (technical retries from process crash / timeout).
      */

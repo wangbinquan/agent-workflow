@@ -774,6 +774,11 @@ export const NodeRunSchema = z.object({
   iteration: z.number().int().nonnegative(),
   shardKey: z.string().nullable(),
   retryIndex: z.number().int().nonnegative(),
+  /** RFC-189 — leader_worker workgroup round ordinal (1-based; wg_round
+   *  column). NULL on non-workgroup / free_collab rows and on payloads from
+   *  older daemons (defaulted, backward-safe). The AUTHORITATIVE round label —
+   *  it replaces inferring the round from the overloaded retryIndex. */
+  wgRound: z.number().int().positive().nullable().default(null),
   /** RFC-182 P1-3: mint cause (rerun_cause column) — lets the drawer label a
    *  workgroup host run's history rows as 领导轮/派发轮/被@轮 instead of leaking
    *  raw shardKey strings. Nullable + defaulted for older cached payloads. */

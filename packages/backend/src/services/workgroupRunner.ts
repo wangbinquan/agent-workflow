@@ -47,7 +47,7 @@ import {
   type WorkgroupMessage,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { and, asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
 import { monotonicFactory, ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
@@ -572,20 +572,48 @@ function countRoundsUsed(state: EngineDbState): number {
   // RFC-187 §3-3 — protocol-retry rows (attempt>0 of ONE logical round) are excluded
   // so a fumbled turn doesn't burn multiple max_rounds (RFC-186 raised retries 1→3).
   if (state.config.mode === 'leader_worker') {
-    return state.hostRuns.filter(
-      (r) =>
-        r.nodeId === WG_LEADER_NODE_ID &&
-        r.status !== 'canceled' &&
-        r.rerunCause !== 'wg-gate' &&
-        r.rerunCause !== 'wg-protocol-retry',
-    ).length
+    // RFC-189 — the lw round ledger reads the STAMPED ordinal: max(wg_round)
+    // over non-canceled leader rows. New row categories can never silently
+    // inflate the count again (the pre-189 derivation accreted three exclusion
+    // patches: wg-gate / clarify-row partition / wg-protocol-retry — gate and
+    // retry stamps are ≤ their round's base by construction, so the max is
+    // exclusion-free). The NULL-stamp tail keeps the ledger exact for rows
+    // minted OUTSIDE the engine (clarify-answer reruns, crash leftovers)
+    // between their mint and the drive-time stamp — each such qualifying row
+    // is one started round, exactly what the pre-189 row count said.
+    let max = 0
+    let nullQualifying = 0
+    for (const r of state.hostRuns) {
+      if (r.nodeId !== WG_LEADER_NODE_ID || r.status === 'canceled') continue
+      if (r.wgRound !== null) {
+        if (r.wgRound > max) max = r.wgRound
+      } else if (r.rerunCause !== 'wg-gate' && r.rerunCause !== 'wg-protocol-retry') {
+        nullQualifying++
+      }
+    }
+    return max + nullQualifying
   }
+  // free_collab stays COUNT-based by design (RFC-189 §1 修订): every member
+  // run consumes one budget row; there is no ordinal to read.
   return state.hostRuns.filter(
     (r) =>
       r.nodeId === WG_MEMBER_NODE_ID &&
       r.status !== 'canceled' &&
       r.rerunCause !== 'wg-protocol-retry',
   ).length
+}
+
+/**
+ * RFC-189 — stamp an ADOPTED host row's round in place (rows minted outside the
+ * engine — clarify-answer reruns / crash leftovers — carry no ordinal). Plain
+ * column update: wg_round is accounting metadata, not a lifecycle column (no
+ * CAS surface); `WHERE wg_round IS NULL` keeps re-drives idempotent.
+ */
+async function stampWgRound(db: DbClient, nodeRunId: string, wgRound: number): Promise<void> {
+  await db
+    .update(nodeRuns)
+    .set({ wgRound })
+    .where(and(eq(nodeRuns.id, nodeRunId), isNull(nodeRuns.wgRound)))
 }
 
 /**
@@ -1080,6 +1108,9 @@ async function openCompletionGate(args: WorkgroupEngineArgs, state: EngineDbStat
     nodeId: WG_LEADER_NODE_ID,
     status: 'pending',
     cause: 'wg-gate',
+    // RFC-189 — the gate holder belongs to the CURRENT round (display only;
+    // wg-gate rows never advance the round budget, ≤ max by construction).
+    overrides: { wgRound: currentRound(state) },
   })
   await setNodeRunStatus({
     db,
@@ -1260,6 +1291,21 @@ async function driveLeaderTurn(
     throw new Error('workgroup leader agent unresolvable')
   }
 
+  // RFC-189 — this turn's ROUND ordinal, shared by every attempt row (protocol
+  // retries are the same logical round). A fresh turn is round N+1; an ADOPTED
+  // row (clarify-answer rerun / crash recovery, minted outside without a stamp)
+  // is already inside countRoundsUsed's NULL-qualifying tail, so its round is
+  // the CURRENT count — stamped in place before driving.
+  const adoptedRow =
+    adoptedRunId !== undefined ? state.hostRuns.find((r) => r.id === adoptedRunId) : undefined
+  const wgRound =
+    adoptedRow !== undefined
+      ? (adoptedRow.wgRound ?? countRoundsUsed(state))
+      : countRoundsUsed(state) + 1
+  if (adoptedRow !== undefined && adoptedRow.wgRound === null) {
+    await stampWgRound(db, adoptedRow.id, wgRound)
+  }
+
   let errorNotice: string | null = null
   for (let attempt = 0; attempt <= WG_PROTOCOL_RETRIES; attempt++) {
     let runId = adoptedRunId
@@ -1269,9 +1315,12 @@ async function driveLeaderTurn(
         nodeId: WG_LEADER_NODE_ID,
         status: 'pending',
         // RFC-187 §3-3 — a protocol retry (attempt>0) is the SAME logical round;
-        // tag it so `countRoundsUsed` excludes it and it doesn't inflate max_rounds.
+        // tag it so round accounting excludes it and it doesn't inflate max_rounds.
+        // RFC-189 — retryIndex is the plain ATTEMPT ordinal now (the round lives
+        // in wg_round); the old "prior-row count + attempt" overload is gone.
         cause: attempt > 0 ? 'wg-protocol-retry' : 'wg-leader-round',
-        retryIndex: state.hostRuns.filter((r) => r.nodeId === WG_LEADER_NODE_ID).length + attempt,
+        retryIndex: attempt,
+        overrides: { wgRound },
       })
       args.registerMint?.(runId)
       broadcastPendingMint(taskId, runId, WG_LEADER_NODE_ID)
@@ -1509,6 +1558,20 @@ async function driveAssignmentTurn(
     return
   }
 
+  // RFC-189 — a member run belongs to the round that DISPATCHED its assignment
+  // (lw display grouping; never budget). fc rows stay NULL — the fc round
+  // budget is a row COUNT by design (design.md §1 修订), not an ordinal.
+  const memberWgRound = config.mode === 'leader_worker' ? assignment.round : null
+  const adoptedMemberRow =
+    adoptedRunId !== undefined ? state.hostRuns.find((r) => r.id === adoptedRunId) : undefined
+  if (
+    adoptedMemberRow !== undefined &&
+    adoptedMemberRow.wgRound === null &&
+    memberWgRound !== null
+  ) {
+    await stampWgRound(db, adoptedMemberRow.id, memberWgRound)
+  }
+
   let errorNotice: string | null = null
   for (let attempt = 0; attempt <= WG_PROTOCOL_RETRIES; attempt++) {
     let runId = adoptedRunId
@@ -1518,13 +1581,15 @@ async function driveAssignmentTurn(
         nodeId: WG_MEMBER_NODE_ID,
         status: 'pending',
         // RFC-187 §3-3 — protocol retry (attempt>0) = same logical round; excluded
-        // from `countRoundsUsed` (matters for fc, which counts member runs as rounds).
+        // from round accounting (matters for fc, which counts member runs as rounds).
+        // RFC-189 — retryIndex = plain attempt ordinal (round lives in wg_round).
         cause: attempt > 0 ? 'wg-protocol-retry' : 'wg-assignment',
-        retryIndex:
-          state.hostRuns.filter(
-            (r) => r.nodeId === WG_MEMBER_NODE_ID && r.shardKey === assignment.id,
-          ).length + attempt,
-        overrides: { shardKey: assignment.id, agentOverrideName: agent.name },
+        retryIndex: attempt,
+        overrides: {
+          shardKey: assignment.id,
+          agentOverrideName: agent.name,
+          wgRound: memberWgRound,
+        },
       })
       args.registerMint?.(runId)
       broadcastPendingMint(taskId, runId, WG_MEMBER_NODE_ID)
@@ -1690,10 +1755,14 @@ async function driveMessageTurn(
       nodeId: WG_MEMBER_NODE_ID,
       status: 'pending',
       cause: 'wg-message-turn',
-      retryIndex: state.hostRuns.filter((r) => r.nodeId === WG_MEMBER_NODE_ID).length,
+      // RFC-189 — single-shot turn (no attempt loop) ⇒ plain attempt 0; the
+      // lw round it belongs to rides wg_round (fc: NULL — count-based budget,
+      // where each message turn IS one budget row and needs no ordinal).
+      retryIndex: 0,
       overrides: {
         shardKey: `msg:${memberId}:${maxMessageId(state.messages) || '0'}`,
         agentOverrideName: agent.name,
+        wgRound: config.mode === 'leader_worker' ? currentRound(state) : null,
       },
     })
     args.registerMint?.(runId)

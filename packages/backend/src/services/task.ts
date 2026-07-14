@@ -2667,6 +2667,8 @@ export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<Tas
       iteration: r.iteration,
       shardKey: r.shardKey,
       retryIndex: r.retryIndex,
+      // RFC-189 — the authoritative lw workgroup round ordinal (NULL elsewhere).
+      wgRound: r.wgRound ?? null,
       // RFC-182 P1-3 — wire the mint cause for wg-aware history labels.
       rerunCause: r.rerunCause ?? null,
       reviewIteration: r.reviewIteration,
