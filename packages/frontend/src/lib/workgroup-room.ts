@@ -205,6 +205,28 @@ export function deriveMemberPresence(
 }
 
 // ---------------------------------------------------------------------------
+// RFC-185 — fan-out 并发规模徽标的数据预言。presence chip 读的是每成员单值
+// currentRun 投影（running wins, else newest），leader 对同一成员并发派 N 单时
+// 规模不可见。这里直接数 runHistory（memberRuns 的同一单源）里该成员的非终态
+// host run 数，徽标与 presence 永不因数据源分叉而矛盾。非终态 = pending |
+// running | awaiting_human —— open-clarify park 的 run（DB 行假 done）已在
+// 后端投影层改写为 awaiting_human（RFC-182 impl-gate P1），此处按投影后
+// status 计数即正确覆盖 park 中的实例。
+// ---------------------------------------------------------------------------
+
+export function countMemberActiveRuns(
+  runHistory: readonly WorkgroupRunEntry[],
+  memberId: string,
+): number {
+  let n = 0
+  for (const e of runHistory) {
+    if (e.memberId !== memberId) continue
+    if (e.status === 'pending' || e.status === 'running' || e.status === 'awaiting_human') n++
+  }
+  return n
+}
+
+// ---------------------------------------------------------------------------
 // RFC-179 §2.3 / RFC-182 — executing indicators + turn cards. memberRuns /
 // runHistory come from the room aggregate. Pure + table-tested.
 // ---------------------------------------------------------------------------

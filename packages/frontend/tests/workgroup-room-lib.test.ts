@@ -15,6 +15,7 @@ import {
   buildDeliverBody,
   buildRoomTimeline,
   canPostRoomMessage,
+  countMemberActiveRuns,
   groupFcAssignments,
   isAssignmentCancelable,
   isHumanDeliveryCard,
@@ -598,6 +599,46 @@ describe('RFC-179 executing indicators', () => {
       a2: run({ kind: 'message-turn', status: 'running', triggerMessageId: null }),
     }
     expect(mentionExecutingPills(members, memberRuns).size).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-185 —— fan-out 并发规模数据预言（countMemberActiveRuns）：leader 对同一
+// 成员并发派 N 单时，presence 单值投影不反映规模；徽标按 runHistory 数该成员
+// 非终态 run。锁：pending/running/awaiting_human 计入（awaiting_human 覆盖
+// clarify-park——后端投影层已把假 done 改写）、终态不计、他人 run 不计。
+// ---------------------------------------------------------------------------
+
+describe('RFC-185 countMemberActiveRuns', () => {
+  const entry = (over: Partial<WorkgroupRunEntry>): WorkgroupRunEntry => ({
+    nodeRunId: '01R',
+    memberId: 'a1',
+    displayName: 'Coder',
+    kind: 'assignment',
+    status: 'running',
+    round: null,
+    startedAt: null,
+    finishedAt: null,
+    triggerMessageId: null,
+    assignmentId: 'ASG',
+    note: null,
+    ...over,
+  })
+
+  test('counts only the given member’s non-terminal runs', () => {
+    const history = [
+      entry({ nodeRunId: 'R1', status: 'running' }),
+      entry({ nodeRunId: 'R2', status: 'pending' }),
+      entry({ nodeRunId: 'R3', status: 'awaiting_human' }), // clarify park —— 计入
+      entry({ nodeRunId: 'R4', status: 'done' }),
+      entry({ nodeRunId: 'R5', status: 'failed' }),
+      entry({ nodeRunId: 'R6', status: 'canceled' }),
+      entry({ nodeRunId: 'R7', memberId: 'a2', status: 'running' }), // 他人 run 不计
+    ]
+    expect(countMemberActiveRuns(history, 'a1')).toBe(3)
+    expect(countMemberActiveRuns(history, 'a2')).toBe(1)
+    expect(countMemberActiveRuns(history, 'lead')).toBe(0)
+    expect(countMemberActiveRuns([], 'a1')).toBe(0)
   })
 })
 

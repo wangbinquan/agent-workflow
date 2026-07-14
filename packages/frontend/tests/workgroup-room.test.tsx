@@ -814,6 +814,59 @@ describe('WorkgroupRoom — side rail', () => {
     expect(within(leadRow).getByText('Leader')).toBeTruthy()
   })
 
+  // RFC-185 —— fan-out 并发规模徽标：≥2 路在途才显示 ×N（单路/空闲不显示，
+  // 常态花名册零噪音）；数据源 = runHistory（与 presence/回合卡同一单源），
+  // awaiting_human（clarify park 投影）计入、终态不计。
+  test('roster fan-out badge: ×N when a member has ≥2 active runs, absent on single-run members', async () => {
+    const entry = (
+      over: Partial<WorkgroupRoomResponse['runHistory'][number]>,
+    ): WorkgroupRoomResponse['runHistory'][number] => ({
+      nodeRunId: '01R1',
+      memberId: 'mem_work',
+      displayName: 'Worker',
+      kind: 'assignment',
+      status: 'running',
+      round: null,
+      startedAt: 1000,
+      finishedAt: null,
+      triggerMessageId: null,
+      assignmentId: 'a1',
+      note: null,
+      ...over,
+    })
+    installFetch(
+      makeRoom({
+        memberRuns: {
+          mem_lead: {
+            nodeRunId: '01RL',
+            status: 'running',
+            kind: 'leader-round',
+            triggerMessageId: null,
+          },
+        },
+        runHistory: [
+          entry({ nodeRunId: '01R1', assignmentId: 'a1', status: 'running' }),
+          entry({ nodeRunId: '01R2', assignmentId: 'a2', status: 'pending' }),
+          entry({ nodeRunId: '01R3', assignmentId: 'a3', status: 'awaiting_human' }),
+          entry({ nodeRunId: '01R4', assignmentId: 'a4', status: 'done' }), // terminal — not counted
+          entry({
+            nodeRunId: '01RL',
+            memberId: 'mem_lead',
+            displayName: 'Lead',
+            kind: 'leader-round',
+            assignmentId: null,
+            status: 'running',
+          }),
+        ],
+      }),
+    )
+    renderRoom(makeRoom())
+    const badge = await screen.findByTestId('wg-member-active-runs-Worker')
+    expect(badge.textContent).toBe('×3 active')
+    // exactly one live run → no badge (presence chip alone carries that state)
+    expect(screen.queryByTestId('wg-member-active-runs-Lead')).toBeNull()
+  })
+
   test('gate card: approve POSTs {decision:approve} directly (PR-5 live gate)', async () => {
     const room = makeRoom({
       taskStatus: 'awaiting_review',

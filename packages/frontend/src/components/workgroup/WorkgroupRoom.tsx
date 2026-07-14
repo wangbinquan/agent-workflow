@@ -44,6 +44,7 @@ import {
   buildDeliverBody,
   buildRoomTimeline,
   canPostRoomMessage,
+  countMemberActiveRuns,
   deriveMemberPresence,
   formatRoomTimestamp,
   formatTurnDuration,
@@ -554,6 +555,10 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
               // leader round was visibly executing on screen (user complaint
               // #2). The chip itself is clickable into the session (D9).
               const presence = deriveMemberPresence(m.id, data.assignments, currentRun)
+              // RFC-185 — fan-out scale: single-value presence hides N
+              // concurrent instances; show ×N off the same runHistory source
+              // (≥2 only, so the everyday single-run roster stays noise-free).
+              const activeRuns = countMemberActiveRuns(data.runHistory, m.id)
               const presenceKind: Record<
                 WorkgroupMemberPresence,
                 'success' | 'warn' | 'info' | 'neutral'
@@ -602,6 +607,14 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
                   >
                     {presenceLabel[presence]}
                   </StatusChip>
+                  {activeRuns >= 2 && (
+                    <span
+                      className="chip chip--tight"
+                      data-testid={`wg-member-active-runs-${m.displayName}`}
+                    >
+                      {t('workgroups.room.activeRunsBadge', { count: activeRuns })}
+                    </span>
+                  )}
                 </li>
               )
             })}

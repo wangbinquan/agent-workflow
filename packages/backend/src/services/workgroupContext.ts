@@ -21,6 +21,7 @@ import {
   CLARIFY_STRUCTURAL_RULES,
   resolveClarifyEnabled,
   resolveWorkgroupSwitches,
+  WG_MAX_ASSIGNMENTS_PER_TURN,
 } from '@agent-workflow/shared'
 
 // Character budgets for injected slices (clip keeps the TAIL — newest wins).
@@ -311,8 +312,23 @@ export function renderWgProtocolBlock(
       'output, and clear boundaries.',
       '',
       'Ports:',
+      // RFC-185 — the FAN-OUT block is what makes same-member concurrency
+      // REACHABLE: the engine has always run same-member entries as
+      // independent concurrent assignment runs (deriveWakeSet has no
+      // per-member busy gate), but without this invitation the model
+      // self-limits to one entry per member. Cap interpolated from
+      // WG_MAX_ASSIGNMENTS_PER_TURN so copy and validator can never drift.
       '- <port name="wg_assignments">JSON array of {"member","title","brief"}.',
-      '  member = an AGENT displayName from the roster. Empty array = no new work.</port>',
+      '  member = an AGENT displayName from the roster. Empty array = no new work.',
+      '  FAN-OUT: the SAME member may appear in MULTIPLE entries — each entry runs',
+      '  as an independent CONCURRENT INSTANCE of that agent in its own isolated',
+      '  worktree. Use this to parallelize divisible work (per-file / per-module',
+      '  shards, alternative approaches to compare). Instances share NOTHING at',
+      "  runtime and cannot see each other's work-in-progress, so make every",
+      '  brief fully self-contained and keep shards non-overlapping to avoid',
+      '  merge conflicts. You are woken to verify and aggregate only after ALL',
+      `  dispatched assignments reach a terminal state. At most ${WG_MAX_ASSIGNMENTS_PER_TURN} entries per`,
+      '  turn; dispatch further waves in later turns if needed.</port>',
       `- <port name="wg_messages">JSON array of {"to","body"}; to = ${msgTargets}.</port>`,
       '- <port name="wg_decision">JSON {"action":"continue"} while work remains,',
       '  or {"action":"done","summary":"..."} to close the group task. REQUIRED every turn.</port>',
