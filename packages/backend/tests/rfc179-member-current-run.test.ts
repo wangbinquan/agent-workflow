@@ -260,24 +260,41 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
     expect(current[A2]?.nodeRunId).toBe('R3')
   })
 
-  test('升序 + leader 轮 round 序数（gate 排除不占位）+ displayName 冻结', () => {
+  test('升序 + leader 轮号按消息轮锚定（实现门 P2：重试共享轮号、gate 排除）+ displayName 冻结', () => {
     const runs: HostRunLite[] = [
-      leaderRun('L1', 'done'),
+      leaderRun('A1-run', 'failed'), // 协议重试第一次尝试
+      leaderRun('A2-run', 'done'), // 同一逻辑轮的重试成功——共享 round 1
       {
-        id: 'L2',
+        id: 'A3-run',
         nodeId: WG_LEADER_NODE_ID,
         shardKey: null,
         status: 'done',
         rerunCause: 'wg-gate',
       },
-      leaderRun('L3', 'running'),
-      msgRun('M1', `msg:${A2}:0`, 'done'),
+      leaderRun('C1-run', 'running'), // round-1 消息之后 mint → round 2
+      msgRun('C2-run', `msg:${A2}:0`, 'done'),
     ]
-    const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, [], [])
-    expect(history.map((e) => e.nodeRunId)).toEqual(['L1', 'L3', 'M1'])
-    expect(history.map((e) => e.round)).toEqual([1, 2, null])
+    // B1-msg（round=1，leader 轮 1 的产出）位于 A* 之后、C* 之前（ULID 序）。
+    const messages = [{ id: 'B1-msg', mentionMemberIds: [], round: 1 }]
+    const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, [], messages)
+    expect(history.map((e) => e.nodeRunId)).toEqual(['A1-run', 'A2-run', 'C1-run', 'C2-run'])
+    // 计数序数会给重试成功的 A2-run 标 2（卡落错误分隔下）；消息锚定共享轮号。
+    expect(history.map((e) => e.round)).toEqual([1, 1, 2, null])
     expect(history[0]?.displayName).toBe('planner')
-    expect(history[2]?.displayName).toBe('reviewer')
+    expect(history[3]?.displayName).toBe('reviewer')
+  })
+
+  test('实现门 P1：open clarify session 的 asking run 投影 awaiting_human（DB 行仍 done）', () => {
+    const runs: HostRunLite[] = [leaderRun('L1', 'done'), leaderRun('L2', 'done')]
+    const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, [], [], {
+      openClarifySourceRunIds: new Set(['L2']),
+    })
+    expect(history.map((e) => e.status)).toEqual(['done', 'awaiting_human'])
+    // 投影同样进 memberRuns → presence 显示「等待回答」。
+    const current = deriveMemberCurrentRuns(namedMembers, LEADER, runs, [], [], {
+      openClarifySourceRunIds: new Set(['L2']),
+    })
+    expect(current[LEADER]?.status).toBe('awaiting_human')
   })
 
   test('被移除成员的历史条目 displayName=null（墓碑），memberId 保留', () => {
@@ -405,11 +422,10 @@ describe('RFC-182 实现门 P2 — fc 卡回收后的历史归属', () => {
       reclaimed,
       [],
     )
-    // 现任 assignee（viaCard）对两条 run 一视同仁会把 R1 误标给 A2——回退链
-    // viaCard ?? viaAgent 下 R1 仍走 card（A2）？不：card 现值 A2 会覆盖。此处
-    // 锁的是「卡为空时不丢失」；卡被重认领后老 run 的归属精度受限于无铸造期
-    // member 列（设计 §5 已记档），故只断言两条都在、新 run 归 A2。
+    // 实现门 P2 二审：铸造期身份（viaAgent 唯一解析）优先于卡的现任 assignee——
+    // 重认领后老 run 仍归 A、不被误标给 B。
     expect(withNew).toHaveLength(2)
+    expect(withNew[0]?.memberId).toBe(A1)
     expect(withNew[1]?.memberId).toBe(A2)
 
     // 歧义 agent（两成员同 agent）→ 弃条目，不误标。

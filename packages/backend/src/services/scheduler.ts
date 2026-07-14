@@ -891,8 +891,14 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         // primitive — idempotent against a concurrent PATCH-side dismissal
         // (both CAS on awaiting_human, the loser no-ops).
         if (req.clarifyEnabled !== undefined && (await isTaskAutonomous(db, taskId))) {
-          await dismissOpenClarifyParksForAutonomous(db, taskId)
-          return await lateSuppress()
+          const dismissed = await dismissOpenClarifyParksForAutonomous(db, taskId)
+          // 182 impl-gate P1 — only rewrite the asking run when the dismissal
+          // actually took the session down. Zero dismissals means an answer
+          // beat this re-check (session already answered / continuation
+          // minted): flipping done→failed then would show「已回答并续跑」and
+          //「反问已压制」on the SAME turn. The answer won — keep the normal
+          // awaiting result (status quo ante for that race).
+          if (dismissed.dismissedSessions > 0) return await lateSuppress()
         }
         return {
           status: 'awaiting',

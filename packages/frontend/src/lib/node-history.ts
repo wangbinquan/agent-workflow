@@ -84,15 +84,18 @@ export function formatIterationLabel(
   const parts: string[] = []
   // RFC-182 P1-3 — workgroup host runs lead with their turn kind (领导轮 /
   // 派发轮 / 被 @ 轮) so the drawer's member-scoped history reads as rounds
-  // instead of generic "initial"; the raw shardKey never surfaces.
+  // instead of generic "initial"; the raw shardKey never SURFACES (a prefix
+  // check mirrors the backend's shape classifier — impl-gate P2: keying off
+  // rerunCause missed clarify-answer reruns, which keep the shard lineage
+  // but carry cause='clarify-answer').
   if (run.nodeId === '__wg_leader__') {
     parts.push(opts.t('workgroups.room.turnKindLeader'))
-  } else if (run.nodeId === '__wg_member__') {
-    if (run.rerunCause === 'wg-message-turn') {
-      parts.push(opts.t('workgroups.room.turnKindMessage'))
-    } else if (run.rerunCause === 'wg-assignment') {
-      parts.push(opts.t('workgroups.room.turnKindAssignment'))
-    }
+  } else if (run.nodeId === '__wg_member__' && run.shardKey !== null) {
+    parts.push(
+      run.shardKey.startsWith('msg:')
+        ? opts.t('workgroups.room.turnKindMessage')
+        : opts.t('workgroups.room.turnKindAssignment'),
+    )
   }
   if (run.iteration > 0) parts.push(opts.t('nodeDrawer.iterLoop', { n: run.iteration }))
   if (run.reviewIteration > 0)

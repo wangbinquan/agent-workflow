@@ -214,11 +214,16 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
   // length (impl-gate P2: an attached turn card grows the log without
   // changing the timeline length).
   const [atBottom, setAtBottom] = useState(true)
-  const followLen = timeline.length + runHistory.length
+  // Impl-gate P2 — the follow signature must also cover IN-PLACE card growth
+  // (a turn flipping running→failed gains a note chip without changing any
+  // length), so statuses+notes join the lengths.
+  const followSig = `${timeline.length}:${runHistory
+    .map((e) => `${e.status}${e.note ?? ''}`)
+    .join(',')}`
   useEffect(() => {
     const el = logRef.current
     if (el !== null && atBottom) el.scrollTop = el.scrollHeight
-  }, [followLen, atBottom])
+  }, [followSig, atBottom])
   function onLogScroll(): void {
     const el = logRef.current
     if (el === null) return

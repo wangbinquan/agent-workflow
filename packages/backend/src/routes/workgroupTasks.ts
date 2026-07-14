@@ -27,7 +27,13 @@ import { ulid } from 'ulid'
 import { z } from 'zod'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
-import { nodeRuns, tasks, workgroupAssignments, workgroupMessages } from '@/db/schema'
+import {
+  clarifySessions,
+  nodeRuns,
+  tasks,
+  workgroupAssignments,
+  workgroupMessages,
+} from '@/db/schema'
 import { DW_GATE_CAUSE, DW_MAX_REJECT_ROUNDS } from '@/services/dynamicWorkflowRunner'
 import { setNodeRunStatus, setTaskStatus } from '@/services/lifecycle'
 import { validateDynamicWorkflowDef } from '@/services/orchestratorAgent'
@@ -294,7 +300,17 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     const messagesLite = messages.map((m) => ({
       id: m.id,
       mentionMemberIds: safeMentions(m.mentionsJson),
+      round: m.round,
     }))
+    // RFC-182 impl-gate P1 — open clarify parks: the asking host run's DB row
+    // is `done` while the park lives on the intermediary clarify run, so the
+    // derivation projects `awaiting_human` onto entries whose run has an OPEN
+    // session (turn card / presence read「等待回答」instead of「完成/空闲」).
+    const openClarify = await deps.db
+      .select({ sourceRunId: clarifySessions.sourceAgentNodeRunId })
+      .from(clarifySessions)
+      .where(and(eq(clarifySessions.taskId, taskId), eq(clarifySessions.status, 'awaiting_human')))
+    const openClarifySourceRunIds = new Set(openClarify.map((r) => r.sourceRunId))
     // RFC-182 G5 — the room's full execution history (ascending, single
     // source); RFC-179's memberRuns is its projection (running wins, else
     // newest) so the two can never drift.
@@ -304,6 +320,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       hostRuns,
       assignmentsLite,
       messagesLite,
+      { openClarifySourceRunIds },
     )
     const memberRuns = deriveMemberCurrentRuns(
       config.members,
@@ -311,6 +328,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       hostRuns,
       assignmentsLite,
       messagesLite,
+      { openClarifySourceRunIds },
     )
     const gateRaw = JsonObjectSchema.parse(raw.gate ?? {})
     return c.json({

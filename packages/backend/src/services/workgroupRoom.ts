@@ -53,6 +53,11 @@ export interface AssignmentLite {
 export interface MessageLite {
   id: string
   mentionMemberIds: readonly string[]
+  /** RFC-182 impl-gate P2 — leader ordinals anchor to MESSAGE rounds (a
+   *  protocol retry mints extra leader runs inside ONE logical round; a
+   *  run-count ordinal drifts ahead and misplaces the card). Optional for
+   *  RFC-179-era fixtures (absent ⇒ round anchoring degrades to 1). */
+  round?: number
 }
 export interface MemberLite {
   id: string
@@ -101,16 +106,16 @@ function classify(
     return { run, kind, memberId: leaderMemberId, maxMsgId: null }
   }
   if (kind === 'assignment') {
-    // Impl-gate P2 — the card's assignee is MUTABLE in free-collab (a failed
-    // card recycles with assignee=null and may be re-claimed by someone
-    // else), so a historical attempt attributes through the card only while
-    // that is intact, then falls back to the run's IMMUTABLE mint-time agent
-    // identity — resolvable when exactly one member runs that agent
-    // (ambiguous rosters drop the entry rather than mislabel it).
-    const viaCard = run.shardKey ? (assignmentToMember.get(run.shardKey) ?? null) : null
+    // Impl-gate P2（二审收紧）— the card's assignee is MUTABLE in free-collab
+    // (a failed card recycles to open and may be RE-CLAIMED by someone else,
+    // which would relabel A's old attempts as B's). The run's mint-time agent
+    // identity is immutable, so it WINS whenever it resolves to exactly one
+    // member; the card's current assignee is only the fallback (shared-agent
+    // rosters / legacy runs without an override name).
     const viaAgent =
       run.agentOverrideName != null ? (uniqueAgentMember.get(run.agentOverrideName) ?? null) : null
-    const memberId = viaCard ?? viaAgent
+    const viaCard = run.shardKey ? (assignmentToMember.get(run.shardKey) ?? null) : null
+    const memberId = viaAgent ?? viaCard
     if (memberId === null) return null
     return { run, kind, memberId, maxMsgId: null }
   }
@@ -164,6 +169,14 @@ export function deriveWorkgroupRunHistory(
   hostRuns: readonly HostRunLite[],
   assignments: readonly AssignmentLite[],
   messages: readonly MessageLite[],
+  opts: {
+    /** RFC-182 impl-gate P1 — asking host runs with an OPEN clarify session:
+     *  the DB row closes as `done` while the real park lives on the separate
+     *  intermediary run, so without this projection the turn card / presence
+     *  would say「完成/空闲」while the room waits for an answer. Projected as
+     *  status `awaiting_human` (display-only; the DB row is untouched). */
+    openClarifySourceRunIds?: ReadonlySet<string>
+  } = {},
 ): WorkgroupRunEntry[] {
   const assignmentToMember = new Map<string, string | null>(
     assignments.map((a) => [a.id, a.assigneeMemberId]),
@@ -185,15 +198,28 @@ export function deriveWorkgroupRunHistory(
   }
   classified.sort((a, b) => (a.run.id < b.run.id ? -1 : a.run.id > b.run.id ? 1 : 0))
 
-  let leaderOrdinal = 0
+  // Impl-gate P2 — leader round = MESSAGE-anchored (1 + the max round of any
+  // message that landed before this run was minted), NOT a run-count ordinal:
+  // a protocol retry mints extra leader runs inside ONE logical round, and a
+  // count-based ordinal drifts ahead of the divider its card must sit under
+  // (retries share the round; the next real round starts only after the
+  // previous round's messages exist).
+  const leaderRoundOf = (runId: string): number => {
+    let maxRound = 0
+    for (const m of messages) {
+      if (m.id < runId && (m.round ?? 0) > maxRound) maxRound = m.round ?? 0
+    }
+    return maxRound + 1
+  }
+  const open = opts.openClarifySourceRunIds
   return classified.map((cr) => {
-    const round = cr.kind === 'leader-round' ? ++leaderOrdinal : null
+    const round = cr.kind === 'leader-round' ? leaderRoundOf(cr.run.id) : null
     return {
       nodeRunId: cr.run.id,
       memberId: cr.memberId,
       displayName: nameOf.get(cr.memberId) ?? null,
       kind: cr.kind,
-      status: cr.run.status,
+      status: open?.has(cr.run.id) === true ? 'awaiting_human' : cr.run.status,
       round,
       startedAt: cr.run.startedAt ?? null,
       finishedAt: cr.run.finishedAt ?? null,
@@ -219,6 +245,7 @@ export function deriveMemberCurrentRuns(
   hostRuns: readonly HostRunLite[],
   assignments: readonly AssignmentLite[],
   messages: readonly MessageLite[],
+  opts: { openClarifySourceRunIds?: ReadonlySet<string> } = {},
 ): Record<string, WorkgroupMemberCurrentRun | null> {
   const history = deriveWorkgroupRunHistory(
     members,
@@ -226,6 +253,7 @@ export function deriveMemberCurrentRuns(
     hostRuns,
     assignments,
     messages,
+    opts,
   )
   const winners = new Map<string, WorkgroupRunEntry>()
   for (const entry of history) {
