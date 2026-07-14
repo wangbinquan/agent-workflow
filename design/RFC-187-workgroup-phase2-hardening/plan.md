@@ -28,19 +28,20 @@
 ## PR-2 — P1 硬化
 
 ### RFC-187-T4｜§3-3 协议重试不膨胀 maxRounds（AC-4）
-- **T4a**：`rerunCause` 枚举增 `'wg-protocol-retry'`；过 RFC-183 `clarifyDispositionFor` never 锁（归「非 clarify 技术延续」）。
-- **T4b**：leader 重试铸 run（`:1146-1152`）`attempt>0` 打 `wg-protocol-retry`；`countRoundsUsed`（`:545-553`）排除集加它。member 侧同理（`:1364-1375`）。
-- **依赖**：无（但 T2 复用其豁免）。**风险**：R6。
-- **验收**：`countRoundsUsed` 锁（1base+3retry=1轮）+ 枚举分类器 golden。
+- **T4a**（Codex P1-8 修正）：`rerunCause` 枚举增 `'wg-protocol-retry'`；过的是 **`isClarifyRerunCause` + `RerunCause` enum 真值表**（**不是** `clarifyDispositionFor`——那管 `ClarifyChannelDirective`），显式归「非 clarify 技术延续」。
+- **T4b**：leader 重试铸 run（`attempt>0`）打 `wg-protocol-retry`；`countRoundsUsed` 排除集加它。**member/fc 侧同理必须一起改**（fc 计 member 轮，不能只改 leader 分支）。
+- **T4c**（Codex P1-8 深层）：clarify-answer host 首返「envelope 合法但 wg JSON 畸形」经 `clarifyRerunLedger:300` 老化掉 Q&A → 后续 protocol retry 拿不到答案。专用 cause 不够——须让 retry 显式携带回答上下文（或阻止该 done host run 老化 clarify）。
+- **依赖**：无（T2 已用 counted 方式，**不**依赖 T4）。**验收**：`countRoundsUsed` 锁（1base+3retry=1轮，leader+fc 两路）+ enum 真值表 golden + answered-clarify-retry 上下文保留测试。
 
-### RFC-187-T5｜§4-2/3 fan-out 合并硬化（AC-5）
-- **T5a（§4-2）**：`mergeBackNodeIso` 返回 `{merged, conflicted}`；干净路径落地、仅冲突路径 park + 结构化「丢 N 文件」note（`nodeIsolation.ts:295-322`）。
-- **T5b（§4-3）**：merge agent 移出 `writeSem`——锁外算解、仅 materialize 夺锁 + 乐观 re-check（`scheduler.ts:963-976`）。
-- **依赖**：无。**风险**：R7（**最高**——合并核心 + 锁语义）。**设计门重点对抗**；风险过高则 T5b 降级 PR-3、PR-2 只做 T5a。
-- **验收**：`mergeBackNodeIso` 返回结构单测 + 两成员同文件冲突 e2e（各写自己 iso）+ writeSem 不长持锁。
+### RFC-187-T5｜§4-2 fan-out 逐路径 salvage（AC-5，仅 T5a）
+- **T5a（§4-2）**（Codex P1-9 加强）：`mergeBackNodeIso` 逐路径 salvage——不只改返回类型，须定义安全 partial tree 构造 + partial materialize 前后崩溃的**幂等重放** + 单一 `merge_state` 表达剩余冲突；**先修** human-replay 把「无 resolve-iso 的已干净 repo」误判 unresolved 的恢复契约。
+- **merge agent 保持在 `writeSem` 内**（不做出锁）。
+- **依赖**：无。**验收**：`mergeBackNodeIso` 返回结构单测 + 两成员同文件冲突 e2e（各写自己 iso）+ 崩溃重放幂等测试。
+- **~~T5b（§4-3 merge agent 出 writeSem）已从本 RFC 拆出~~**（Codex P0-4）：锁外方案沿用「重 snapshot 后 materialize」会覆盖锁外落地的兄弟改动；正解＝两阶段 pin（钉 `oursAtConflict`、重夺锁 `merge(base=oursAtConflict, ours=currentCanonical, theirs=resolvedTree)`，human-resume 已有此算法）+ 冲突重现/重试上限/多 repo 原子边界 + 并发/重启测试。**另立独立 RFC**。
 
-### RFC-187-T6｜TRAP-1 启动护栏（AC-6）
-- `workgroupLaunchReadiness`（`shared/schemas/workgroup.ts:270-284`）增 `no-producer`/`no-non-leader-worker`/`fc-insufficient-writers`（warning 级）；create/launch/房间 banner 三处同源。
+### RFC-187-T6｜TRAP-1 启动护栏（AC-6，Codex P1-5 修正）
+- `workgroupLaunchReadiness` 增 **`no-non-leader-worker`** / `fc-insufficient-writers`（结构性可查，warning 级）；create/launch/房间 banner 三处同源。
+- **去掉 `no-producer`**——`readonly` 已被 RFC-130 删、assignment 无 `claimsFileOutput`，无数据源判「producer」；若确需，另议持久 assignment 级 `expectsWorktreeChanges` 契约。
 - **依赖**：无。**验收**：readiness 三态 golden + 前端 banner 渲染断言。
 
 ### RFC-187-T7｜F8 park 原因标注（AC-7）
@@ -64,13 +65,21 @@
 ### RFC-187-T12｜§3-2 continue-no-dispatch 收口（AC-12）
 非自治 continue 须带阻塞说明/park + autonomous nudge 不回归源码锁。低优先。
 
+### RFC-187-T13｜F3 恢复缝对账（Codex P1-7，随 T10）
+两个崩溃窗须 boot/engine-entry reconciliation（非仅 assert impossible）：① answer 事务提交后、`resumeTask` 接管前 daemon 退出 → pending clarify-answer run 被 reap 成 interrupted、任务仍 `awaiting_human`（auto-resume 不扫、adoption 只认 pending）→ wedge；② autonomous 提交（事务内）与 open-session dismissal（事务外）之间崩 → 留「autonomous+open clarify」。**验收**：两条 crash→recover e2e。
+
+## 状态
+
+- **PR-1（T1/T2/T3/T7）已实现**（`c0957f7f` + Codex 折入 `0b6c502b`）：F3 session-keyed 反问收口 + §3-7 counted grace wrap-up（含禁派活/强制收尾）+ §4 zero-delta 房间告警 + F8 标注；三探针各一条真实子进程 e2e。全后端 5478 pass 0 fail。
+- **PR-2（T4/T5a/T6）· PR-3（T8-T13）** 待做，按 §9 Codex 修正范围。
+
 ## 依赖图
 
 ```
-PR-1: T1(F3) ──┬─ T7(F8, 同类型并入)
-               └─ 独立: T2(§3-7, 软依赖 T4 豁免) · T3(§4零delta)
-PR-2: T4(§3-3) · T5(fan-out, R7 高危可拆) · T6(TRAP-1)
-PR-3: T8 · T9 · T10 · T11 · T12
+PR-1 ✅: T1(F3, session-keyed) + T7(F8) + T2(§3-7 counted, 不依赖 T4) + T3(§4零delta)
+PR-2   : T4(§3-3, isClarifyRerunCause+fc+answered-ctx) · T5a(fan-out 逐路径+崩溃重放) · T6(TRAP-1 去 no-producer)
+PR-3   : T8 · T9 · T10 · T11 · T12 · T13(F3 恢复缝)
+拆出   : T5b(merge agent 出锁) → 独立 RFC
 ```
 
 ## 验收清单（交付前逐项勾）

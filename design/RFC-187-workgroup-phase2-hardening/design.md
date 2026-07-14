@@ -185,3 +185,27 @@ leader emit `continue` 不带 assignments：autonomous 已走 nudge（`workgroup
 - **PR-3**（AC-8/9/10/11/12）：§4-4 iso 保留 + §4-6 共享 base + F2 残留 + TRAP-3 + §3-2。
 
 每 PR 独立可交付、独立过五门 + CI。PR 间无强依赖（F8 随 PR-1 的 WakeOutcome 改动落，故与 F3 同 PR-1 更省）。
+
+## §9 Codex 设计门（2026-07-14，NOT APPROVE→折入）
+
+Codex 对本 RFC 出 4 P0 + 6 P1/P2。核对源码后分三档处理：
+
+**已符合（本实现从 RFC 文本正确偏离，Codex 确认）**：
+- P0-2：F3 park bit 独立于 `leaderRunning`（非折入）——否则 `decideWorkgroupOutcome` 首判 running 令 `leader-clarify` 不可达。本实现即独立 `leaderClarifyParked`，Codex 判「正确形状」。
+- P1-6（口径）：canonical diff 用「worktree 对 base」含 uncommitted+untracked（`worktreeFilesChanged`），非 RFC 文本误写的 `base..HEAD`。
+- P2-11：done 告警走**房间 system message**（非 `errorSummary`，避免混入失败诊断面）。
+- P1-5/P1-10：`agent.readonly` 已被 RFC-130 删 → zero-delta 改 gate 在 done-assignment 数（承认启发式）；counted wrap-up 使 T2 **不**依赖 T4。
+
+**PR-1 已折入**：
+- **P0-1**：F3 关联键从 `__wg_clarify__` run 的 `shardKey===null` 改为 **clarify SESSION**（`sourceAgentNodeId===__wg_leader__` 且 open）——run 在 session 之前非事务铸出，崩在其间的孤儿 run 会被 run-only 判据永久 park；session 判据证明「可回答」且崩溃自愈。
+- **P0-3**：grace wrap-up 轮补**禁派活**（新 assignment 被 DROP 非报错，好让 done 决策仍落地）+ **强制收尾 prompt**（wrapUp 经 wake item.reason 透传进 `driveLeaderTurn`）。counted one-shot 本已 durable（`roundsUsed` 由 DB 派生）。
+
+**改 PR-2/3 范围**：
+- **P0-4 / T5b（R7 高危）**：merge agent 出 `writeSem` 若沿用「重 snapshot 后直接 materialize」会覆盖锁外落地的兄弟改动。正解＝两阶段 pin（首冲突钉 `oursAtConflict`、重夺锁后 `merge(base=oursAtConflict, ours=currentCanonical, theirs=resolvedTree)`，human-resume 已有此算法）+ 冲突重现/重试上限/多 repo 原子边界 + 并发/重启测试。**T5b 从 PR-2/3 拆出，另立独立 RFC；PR-2 保 merge agent 在 `writeSem` 内**，只做 T5a。
+- **P1-9 / T5a**：逐路径 salvage 不能只改返回类型——需定义安全 partial tree 构造、partial materialize 前后崩溃的幂等重放、单一 `merge_state` 表达剩余冲突；且先修 human-replay 把「无 resolve-iso 的已干净 repo」误判 unresolved 的恢复契约。
+- **P1-8 / T4（§3-3）**：① 耦合对象写错——不是 `clarifyDispositionFor`（管 `ClarifyChannelDirective`），而是 `isClarifyRerunCause` + `RerunCause` enum 真值表；② fc 的 member retry 也须排除（不能只改 leader 分支）；③ 更深：clarify-answer host 首返「envelope 合法但 wg JSON 畸形」会经 `clarifyRerunLedger` 老化掉 Q&A，后续 protocol retry 拿不到答案——专用 cause 不够，须显式携带回答上下文。
+- **P1-7（F3 恢复缝，归 PR-3 对账）**：稳态 answer→adoption 已通，但两个崩溃窗：① answer 事务提交后、`resumeTask` 接管前 daemon 退出 → pending clarify-answer run 被 reap 成 interrupted，但任务仍 `awaiting_human`（auto-resume 不扫、adoption 只认 pending）→ wedge；② autonomous 配置事务内提交、open-session dismissal 事务外 → 崩在其间留「autonomous+open clarify」。R2 不能只 assert impossible，须 engine-entry/boot reconciliation + crash test。
+- **P1-5 尾 / T6（TRAP-1）**：`no-producer` 同样无数据源（readonly 已删、assignment 无 `claimsFileOutput`）——**去掉 `no-producer`**，只保结构性可查的 `no-non-leader-worker` / `leader-missing`；或显式加持久 assignment 级 `expectsWorktreeChanges` 契约（更大改动，另议）。
+- **P1-6 尾（zero-delta 多 repo）**：现 hook 仅查 `task.worktreePath`（repo 0）——多 repo 应逐 `state.repos` 的 baseCommit 计数去重。
+
+**PR 排序修正**：T7（F8）已归 PR-1（随 F3 的 WakeOutcome 落）；T5b 独立延期；余 PR-2/3 按上述范围调整。
