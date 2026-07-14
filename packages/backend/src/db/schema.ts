@@ -494,6 +494,9 @@ export const workgroups = sqliteTable('workgroups', {
   completionGate: integer('completion_gate', { mode: 'boolean' }).notNull().default(false),
   /** RFC-180「全自动」: no clarify invite + gate treated off + leader-idle auto-nudge. */
   autonomous: integer('autonomous', { mode: 'boolean' }).notNull().default(false),
+  /** RFC-185 D4: opt-in leader fan-out (same-member concurrent instances).
+   *  OFF (default) keeps the original one-entity-per-agent protocol untouched. */
+  fanOut: integer('fan_out', { mode: 'boolean' }).notNull().default(false),
   // RFC-099 ACL (see agents table comment).
   ownerUserId: text('owner_user_id'),
   visibility: text('visibility', { enum: ['private', 'public'] })

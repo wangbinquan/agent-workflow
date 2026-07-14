@@ -37,9 +37,11 @@ import { createAgent } from '../src/services/agent'
 import { renderWgProtocolBlock } from '../src/services/workgroupContext'
 import {
   buildWorkgroupHostSnapshot,
+  buildWorkgroupRuntimeConfig,
   WG_LEADER_NODE_ID,
   WG_MEMBER_NODE_ID,
 } from '../src/services/workgroupLaunch'
+import { createWorkgroup, getWorkgroup, updateWorkgroup } from '../src/services/workgroups'
 import {
   runWorkgroupEngine,
   type WorkgroupEngineHooks,
@@ -66,6 +68,9 @@ function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeC
     switches: { shareOutputs: true, directMessages: false, blackboard: false },
     maxRounds: 10,
     completionGate: false,
+    // RFC-185 D4 — fan-out is OPT-IN; this fixture models an enabled group
+    // (the opt-in gating itself is locked in its own describe below).
+    fanOut: true,
     instructions: 'be kind',
     goal: 'audit the services',
     members: [
@@ -183,6 +188,31 @@ describe('RFC-185 — leader protocol FAN-OUT block', () => {
       cfg({ mode: role === 'fc_member' ? 'free_collab' : 'leader_worker' }),
     )
     expect(block).not.toContain('FAN-OUT')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 1b. D4 — fan-out is OPT-IN (user acceptance revision): OFF (default) keeps
+//     the ORIGINAL fixed one-entity-per-agent protocol byte-for-byte; only an
+//     explicitly enabled group's leader gets the invitation.
+// ---------------------------------------------------------------------------
+
+describe('RFC-185 D4 — fan-out opt-in gating', () => {
+  test('fanOut:false leader block has NO fan-out invitation and keeps the original port copy', () => {
+    const block = renderWgProtocolBlock('leader', cfg({ fanOut: false }))
+    expect(block).not.toContain('FAN-OUT')
+    // the pre-RFC-185 single-line port closure, byte-for-byte
+    expect(block).toContain('Empty array = no new work.</port>')
+  })
+
+  test('a config with NO fanOut field (pre-RFC-185 task snapshot) reads as off', () => {
+    const { fanOut: _drop, ...legacy } = cfg()
+    const block = renderWgProtocolBlock('leader', legacy)
+    expect(block).not.toContain('FAN-OUT')
+  })
+
+  test('fanOut:true is what injects the invitation (the §1 locks above run on it)', () => {
+    expect(renderWgProtocolBlock('leader', cfg())).toContain('FAN-OUT:')
   })
 })
 
@@ -476,5 +506,54 @@ describe('RFC-185 — engine fan-out integration (fake hooks)', () => {
     const leaderTurns = requests.filter((r) => r.nodeId === WG_LEADER_NODE_ID)
     expect(leaderTurns).toHaveLength(2)
     expect(leaderTurns[1]?.promptTemplate).toContain('[failed]')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 5. D4 — resource CRUD roundtrip + launch freeze: create defaults OFF (the
+//    original fixed mode is never changed implicitly), update preserves an
+//    omitted field, launch freezes the flag into the task runtime config.
+// ---------------------------------------------------------------------------
+
+describe('RFC-185 D4 — fanOut CRUD roundtrip + launch freeze', () => {
+  let db: DbClient
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+  })
+
+  const groupInput = (over: Record<string, unknown> = {}) => ({
+    name: 'squad',
+    description: '',
+    instructions: '',
+    mode: 'leader_worker' as const,
+    switches: { shareOutputs: true, directMessages: false, blackboard: false },
+    maxRounds: 5,
+    completionGate: false,
+    members: [{ memberType: 'agent' as const, agentName: 'a1', displayName: 'a1', roleDesc: '' }],
+    ...over,
+  })
+
+  test('create defaults fanOut to FALSE (opt-in — never an implicit behavior change)', async () => {
+    await createWorkgroup(db, groupInput())
+    expect((await getWorkgroup(db, 'squad'))?.fanOut).toBe(false)
+  })
+
+  test('explicit create ON + an update omitting fanOut preserves the stored value', async () => {
+    await createWorkgroup(db, groupInput({ fanOut: true }))
+    expect((await getWorkgroup(db, 'squad'))?.fanOut).toBe(true)
+    // full-replace PUT that omits fanOut must NOT flip it (same omitted-⇒-
+    // preserve contract as autonomous, RFC-181 design-gate P1).
+    await updateWorkgroup(db, 'squad', groupInput())
+    expect((await getWorkgroup(db, 'squad'))?.fanOut).toBe(true)
+  })
+
+  test('launch freezes fanOut into the task runtime config', async () => {
+    await createWorkgroup(db, groupInput({ fanOut: true }))
+    const g = await getWorkgroup(db, 'squad')
+    expect(g).not.toBeNull()
+    if (g === null) return
+    const rc = buildWorkgroupRuntimeConfig(g, 'goal text')
+    expect(rc.fanOut).toBe(true)
+    expect(renderWgProtocolBlock('leader', rc)).toContain('FAN-OUT:')
   })
 })

@@ -317,26 +317,40 @@ export function renderWgProtocolBlock(
       'output, and clear boundaries.',
       '',
       'Ports:',
-      // RFC-185 — the FAN-OUT block is what makes same-member concurrency
-      // REACHABLE: the engine has always run same-member entries as
-      // independent concurrent assignment runs (deriveWakeSet has no
-      // per-member busy gate), but without this invitation the model
-      // self-limits to one entry per member. Cap interpolated from
-      // WG_MAX_ASSIGNMENTS_PER_TURN so copy and validator can never drift.
-      '- <port name="wg_assignments">JSON array of {"member","title","brief"}.',
-      '  member = an AGENT displayName from the roster. Empty array = no new work.',
-      '  FAN-OUT: the SAME member may appear in MULTIPLE entries — each entry runs',
-      '  as an independent CONCURRENT INSTANCE of that agent in its own isolated',
-      '  worktree. Use this to parallelize divisible work (per-file / per-module',
-      '  shards, alternative approaches to compare). Instances share NOTHING at',
-      "  runtime and cannot see each other's work-in-progress, so make every",
-      '  brief fully self-contained and keep shards non-overlapping to avoid',
-      '  merge conflicts. You are woken to verify and aggregate once no dispatched',
-      '  assignment is still executing. CAUTION: an instance parked on a human',
-      '  ask-back may still appear as awaiting_human in your ledger at that point',
-      '  — treat it as IN PROGRESS (message, dispatch other work, or wait), never',
-      `  as done. At most ${WG_MAX_ASSIGNMENTS_PER_TURN} entries per turn; dispatch further waves in`,
-      '  later turns if needed.</port>',
+    )
+    // RFC-185 D4 — fan-out is OPT-IN: only an explicitly enabled group's
+    // leader is invited to dispatch same-member concurrent instances (the
+    // engine has always been able to run them — deriveWakeSet has no
+    // per-member busy gate — but without the invitation the model self-limits
+    // to one entry per member). OFF (the default) keeps the original
+    // one-entity-per-agent port copy byte-for-byte, so fan-out is a NEW
+    // capability, never a behavior change to existing groups. Cap
+    // interpolated from WG_MAX_ASSIGNMENTS_PER_TURN so copy and validator can
+    // never drift.
+    if (config.fanOut === true) {
+      lines.push(
+        '- <port name="wg_assignments">JSON array of {"member","title","brief"}.',
+        '  member = an AGENT displayName from the roster. Empty array = no new work.',
+        '  FAN-OUT: the SAME member may appear in MULTIPLE entries — each entry runs',
+        '  as an independent CONCURRENT INSTANCE of that agent in its own isolated',
+        '  worktree. Use this to parallelize divisible work (per-file / per-module',
+        '  shards, alternative approaches to compare). Instances share NOTHING at',
+        "  runtime and cannot see each other's work-in-progress, so make every",
+        '  brief fully self-contained and keep shards non-overlapping to avoid',
+        '  merge conflicts. You are woken to verify and aggregate once no dispatched',
+        '  assignment is still executing. CAUTION: an instance parked on a human',
+        '  ask-back may still appear as awaiting_human in your ledger at that point',
+        '  — treat it as IN PROGRESS (message, dispatch other work, or wait), never',
+        `  as done. At most ${WG_MAX_ASSIGNMENTS_PER_TURN} entries per turn; dispatch further waves in`,
+        '  later turns if needed.</port>',
+      )
+    } else {
+      lines.push(
+        '- <port name="wg_assignments">JSON array of {"member","title","brief"}.',
+        '  member = an AGENT displayName from the roster. Empty array = no new work.</port>',
+      )
+    }
+    lines.push(
       `- <port name="wg_messages">JSON array of {"to","body"}; to = ${msgTargets}.</port>`,
       '- <port name="wg_decision">JSON {"action":"continue"} while work remains,',
       '  or {"action":"done","summary":"..."} to close the group task. REQUIRED every turn.</port>',

@@ -155,6 +155,18 @@ export function WorkgroupForm({ value, onChange, errors }: WorkgroupFormProps) {
             label={t('workgroups.fieldAutonomous')}
             hint={t('workgroups.fieldAutonomousHint')}
           />
+
+          {/* RFC-185 D4 — opt-in leader fan-out (leader_worker only: it is a
+              leader dispatch capability). OFF keeps the original protocol. */}
+          {value.mode === 'leader_worker' && (
+            <Switch
+              checked={value.fanOut}
+              onChange={(v) => set('fanOut', v)}
+              label={t('workgroups.fieldFanOut')}
+              hint={t('workgroups.fieldFanOutHint')}
+              data-testid="workgroup-field-fanout"
+            />
+          )}
         </FormSection>
       )}
     </div>

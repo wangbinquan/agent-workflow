@@ -227,7 +227,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   })
   afterEach(() => h?.cleanup())
 
-  test('HEAD journal has 93 entries (sanity — locks the freeze target indices)', () => {
+  test('HEAD journal has 94 entries (sanity — locks the freeze target indices)', () => {
     // If a future migration is added, raise FREEZE_TARGETS' upper index
     // accordingly or this assertion will block the cascade. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -293,7 +293,8 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-175 T0 bumped to 91 with 0091_rfc175_task_source_agent_id.
     // RFC-178 bumped to 92 with 0092_rfc178_remove_external_source_skills.
     // RFC-180 T0 bumped to 93 with 0093_rfc180_workgroup_autonomous.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(93)
+    // RFC-185 D4 bumped to 94 with 0094_rfc185_workgroup_fan_out.
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(94)
   })
 
   for (const target of FREEZE_TARGETS) {

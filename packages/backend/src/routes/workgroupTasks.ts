@@ -111,6 +111,10 @@ const ConfigPatchSchema = z.object({
   // RFC-181 A — mid-run autonomous toggle, symmetric on/off (the engine reads
   // the task config every pass, so the next loadDbState picks it up live).
   autonomous: z.boolean().optional(),
+  // RFC-185 D4 — mid-run fan-out toggle, same live-pickup channel. No flip
+  // compensation needed: turning OFF lets in-flight instances finish; the
+  // leader simply stops being invited to fan out from its next turn.
+  fanOut: z.boolean().optional(),
   addMembers: z
     .array(
       z.object({
@@ -915,11 +919,13 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       ...(patch.maxRounds !== undefined ? { maxRounds: patch.maxRounds } : {}),
       ...(patch.completionGate !== undefined ? { completionGate: patch.completionGate } : {}),
       ...(patch.autonomous !== undefined ? { autonomous: patch.autonomous } : {}),
+      ...(patch.fanOut !== undefined ? { fanOut: patch.fanOut } : {}),
     }
     if (patch.switches !== undefined) changes.push('switches updated')
     if (patch.maxRounds !== undefined) changes.push(`maxRounds → ${patch.maxRounds}`)
     if (patch.completionGate !== undefined) changes.push(`completionGate → ${patch.completionGate}`)
     if (patch.autonomous !== undefined) changes.push(`autonomous → ${patch.autonomous}`)
+    if (patch.fanOut !== undefined) changes.push(`fanOut → ${patch.fanOut}`)
     if (changes.length === 0) {
       throw new ValidationError('workgroup-config-empty', 'nothing to change')
     }

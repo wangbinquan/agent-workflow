@@ -133,6 +133,17 @@ describe('buildConfigUpdatePayload', () => {
     expect(off.ok && off.payload.autonomous).toBe(false)
   })
 
+  test('RFC-185 D4: fanOut round-trips draft ↔ payload (opt-in — default off)', () => {
+    // STORED has no fanOut → draft defaults false → payload false: the
+    // original fixed one-per-agent mode is never enabled implicitly.
+    const asDraft = workgroupToConfigDraft(STORED)
+    expect(asDraft.fanOut).toBe(false)
+    const on = buildConfigUpdatePayload({ ...asDraft, fanOut: true }, STORED)
+    expect(on.ok && on.payload.fanOut).toBe(true)
+    const off = buildConfigUpdatePayload({ ...asDraft, fanOut: false }, STORED)
+    expect(off.ok && off.payload.fanOut).toBe(false)
+  })
+
   test('description is sourced from the server row, never the draft (2026-07-13 decouple)', () => {
     // Editing an unrelated config field still carries the server description
     // through verbatim — the rename dialog is its only editor now, so the
@@ -438,6 +449,7 @@ function baseDraft(): WorkgroupConfigDraft {
     maxRounds: 20,
     completionGate: false,
     autonomous: false,
+    fanOut: false,
   }
 }
 

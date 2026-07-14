@@ -202,6 +202,19 @@ export function WorkgroupTaskConfigDialog({
         data-testid="wg-config-autonomous"
       />
 
+      {/* RFC-185 D4 — mid-run opt-in fan-out toggle (leader_worker only; same
+          per-task patch channel). No flip compensation: turning OFF lets
+          in-flight instances finish, the leader just stops being invited. */}
+      {config.mode === 'leader_worker' && (
+        <Switch
+          checked={draft.fanOut}
+          onChange={(v) => setDraft((d) => ({ ...d, fanOut: v }))}
+          label={t('workgroups.fieldFanOut')}
+          hint={t('workgroups.fieldFanOutHint')}
+          data-testid="wg-config-fanout"
+        />
+      )}
+
       <div className="workgroup-room__config-members-title">
         {t('workgroups.room.configMembersTitle')}
       </div>

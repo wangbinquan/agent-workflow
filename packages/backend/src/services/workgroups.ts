@@ -119,6 +119,9 @@ export async function createWorkgroup(
         // RFC-181 D: new groups default to autonomous (don't-interrupt-me) —
         // create-scoped only; update below preserves the stored value instead.
         autonomous: input.autonomous ?? true,
+        // RFC-185 D4: fan-out is opt-in — default OFF so the original fixed
+        // one-entity-per-agent mode is never changed implicitly.
+        fanOut: input.fanOut ?? false,
         // RFC-099: creator becomes owner; new resources default to 'public' (D18).
         ownerUserId: aclOpts?.ownerUserId ?? null,
         visibility: 'public',
@@ -171,6 +174,8 @@ export async function updateWorkgroup(
         // shared between Create/Update schemas, so the create default must not
         // leak into full-replace updates. Omitted ⇒ keep the existing row.
         autonomous: input.autonomous ?? existing.autonomous,
+        // RFC-185 D4: same omitted-⇒-preserve contract as autonomous above.
+        fanOut: input.fanOut ?? existing.fanOut,
         updatedAt: now,
       })
       .where(eq(workgroups.id, existing.id))
@@ -403,6 +408,7 @@ function rowToWorkgroup(row: WorkgroupRow, memberRows: MemberRow[]): Workgroup {
     maxRounds: row.maxRounds,
     completionGate: row.completionGate,
     autonomous: row.autonomous,
+    fanOut: row.fanOut,
     members,
     ownerUserId: row.ownerUserId,
     visibility: row.visibility,

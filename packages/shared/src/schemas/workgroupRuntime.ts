@@ -50,6 +50,9 @@ export const WorkgroupRuntimeConfigSchema = z.object({
   // non-autonomous (engine read sites coalesce `?? false`; zero regression). See
   // resolveCompletionGate / resolveClarifyEnabled in schemas/workgroup.ts.
   autonomous: z.boolean().optional(),
+  // RFC-185 D4 — opt-in leader fan-out; optional so pre-RFC-185 task snapshots
+  // parse as fan-out-off (protocol render site coalesces `=== true`).
+  fanOut: z.boolean().optional(),
   instructions: z.string(),
   /** Launch goal text — the group's mission statement, injected every turn. */
   goal: z.string(),

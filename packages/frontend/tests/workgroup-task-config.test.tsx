@@ -231,6 +231,32 @@ describe('WorkgroupTaskConfigDialog', () => {
     })
   })
 
+  // RFC-185 D4 — fanOut rides the same only-changed diffing + mid-run dialog
+  // channel (opt-in: absent stored value ≡ false, so an untouched draft emits
+  // no fanOut key at all).
+  test('fanOut: only-when-changed patch + dialog switch PUTs {fanOut:true}', async () => {
+    const on = workgroupTaskConfigDraftFrom(makeConfig())
+    expect(on.fanOut).toBe(false)
+    on.fanOut = true
+    expect(buildWorkgroupConfigPatch(makeConfig(), on)).toEqual({ fanOut: true })
+
+    const calls = installFetch()
+    renderDialog(makeConfig())
+    await screen.findByTestId('wg-config-submit')
+    fireEvent.click(screen.getByLabelText(/Dynamic fan-out/))
+    await waitFor(() => {
+      expect((screen.getByTestId('wg-config-submit') as HTMLButtonElement).disabled).toBe(false)
+    })
+    fireEvent.click(screen.getByTestId('wg-config-submit'))
+    await waitFor(() => {
+      const put = calls.find(
+        (c) => c.method === 'PUT' && c.url.endsWith('/api/workgroup-tasks/t1/config'),
+      )
+      expect(put).toBeTruthy()
+      expect(put?.body).toEqual({ fanOut: true })
+    })
+  })
+
   // RFC-181 A —「全自动」进 mid-run 配置弹窗：拨动即 PUT {autonomous}，开启时
   // completionGate 开关置灰（与 WorkgroupForm 同款联动）。
   test('autonomous switch PUTs {autonomous:true} and grays the completion gate', async () => {

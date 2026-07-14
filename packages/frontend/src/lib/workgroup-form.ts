@@ -87,6 +87,8 @@ export interface WorkgroupConfigDraft {
   completionGate: boolean
   /** RFC-180「全自动」— no clarify invite + gate treated off + leader-idle auto-nudge. */
   autonomous: boolean
+  /** RFC-185 D4 — opt-in leader fan-out; OFF keeps the fixed one-per-agent mode. */
+  fanOut: boolean
 }
 
 export function workgroupToConfigDraft(w: Workgroup): WorkgroupConfigDraft {
@@ -97,6 +99,7 @@ export function workgroupToConfigDraft(w: Workgroup): WorkgroupConfigDraft {
     maxRounds: w.maxRounds,
     completionGate: w.completionGate,
     autonomous: w.autonomous ?? false,
+    fanOut: w.fanOut ?? false,
   }
 }
 
@@ -130,6 +133,7 @@ export function buildConfigUpdatePayload(
     maxRounds: draft.maxRounds ?? WORKGROUP_MAX_ROUNDS_DEFAULT,
     completionGate: draft.completionGate,
     autonomous: draft.autonomous,
+    fanOut: draft.fanOut,
     members: membersToInputs(group.members),
   }
   const parsed = UpdateWorkgroupSchema.safeParse(payload)
@@ -314,6 +318,7 @@ export function buildMembersUpdatePayload(
     maxRounds: group.maxRounds,
     completionGate: group.completionGate,
     autonomous: group.autonomous ?? false,
+    fanOut: group.fanOut ?? false,
     members: state.members.map(rowToInput),
   }
   const parsed = UpdateWorkgroupSchema.safeParse(payload)

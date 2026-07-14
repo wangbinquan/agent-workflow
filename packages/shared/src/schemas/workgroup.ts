@@ -130,6 +130,14 @@ export const WorkgroupSchema = z.object({
    * fixtures may omit it — consumers coalesce `?? false`.
    */
   autonomous: z.boolean().optional(),
+  /**
+   * RFC-185 D4 — opt-in leader fan-out: when true the leader protocol invites
+   * same-member MULTIPLE wg_assignments entries (each = a concurrent instance).
+   * OFF (default) keeps the original one-entity-per-agent protocol untouched —
+   * fan-out is a NEW capability, never a behavior change to existing groups.
+   * Absent ⇒ OFF; consumers coalesce `?? false`.
+   */
+  fanOut: z.boolean().optional(),
   members: z.array(WorkgroupMemberSchema),
   /** RFC-099 ACL — owner (users.id or '__system__'); null until first owner write. */
   ownerUserId: z.string().nullable().optional(),
@@ -171,6 +179,11 @@ const workgroupConfigFields = {
   // (RFC-181 D: new groups are autonomous), update coalesces `?? existing`
   // (omitted ⇒ preserve).
   autonomous: z.boolean().optional(),
+  // RFC-185 D4 — opt-in leader fan-out. Same optional-not-default rationale as
+  // autonomous above; handler defaults: create `?? false` (fan-out must never
+  // change the original fixed mode unless explicitly enabled), update
+  // `?? existing` (omitted ⇒ preserve).
+  fanOut: z.boolean().optional(),
   /**
    * 快速创建（用户 2026-07-10 拍板 #21）：members MAY be empty at save time —
    * groups are created light and members are managed card-by-card on the

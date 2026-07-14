@@ -94,6 +94,7 @@ export function buildWorkgroupRuntimeConfig(
     maxRounds: group.maxRounds,
     completionGate: group.completionGate,
     autonomous: group.autonomous,
+    fanOut: group.fanOut,
     instructions: group.instructions,
     goal,
     members: group.members.map((m) => ({

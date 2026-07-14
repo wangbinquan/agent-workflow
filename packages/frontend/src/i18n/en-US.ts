@@ -1172,6 +1172,9 @@ export const enUS: Resources = {
     fieldAutonomous: "Autonomous (don't interrupt me)",
     fieldAutonomousHint:
       'No clarify questions to you, the completion gate is treated as off, and an idle leader is auto-nudged (a few rounds) before parking. Best for fully-agent groups.',
+    fieldFanOut: 'Dynamic fan-out (multi-instance dispatch)',
+    fieldFanOutHint:
+      'Let the leader dispatch multiple concurrent instances of the same agent member in one turn (each runs independently, verified together). Off keeps the fixed one-at-a-time mode.',
     launchButton: 'Launch task',
     launch: {
       title: 'Launch workgroup task: {{name}}',

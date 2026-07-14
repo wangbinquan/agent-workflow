@@ -1096,6 +1096,8 @@ export interface Resources {
     fieldCompletionGateAutonomousHint: string
     fieldAutonomous: string
     fieldAutonomousHint: string
+    fieldFanOut: string
+    fieldFanOutHint: string
     // RFC-164 PR-4 — detail-page launch entry + /workgroups/launch page.
     launchButton: string
     launch: {
@@ -4029,6 +4031,9 @@ export const zhCN: Resources = {
     fieldAutonomous: '全自动（别打扰我）',
     fieldAutonomousHint:
       '不向你反问、完成门视为关闭、leader 空转时自动催办若干轮再泊人。适合纯 agent 工作组。',
+    fieldFanOut: '动态多实例派单（fan-out）',
+    fieldFanOutHint:
+      '允许 leader 对同一 agent 成员在一轮内并发派发多个任务实例（各自独立执行后统一验收）。关闭时保持「每个成员一次一单」的固定模式。',
     launchButton: '启动任务',
     launch: {
       title: '启动工作组任务：{{name}}',

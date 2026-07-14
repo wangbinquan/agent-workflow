@@ -114,6 +114,21 @@ export function countMemberActiveRuns(
 4. **写合并顺序**：并发实例 merge-back 按完成顺序串行合并；重叠写产生冲突时走 merge agent，仍失败则该 run 以 merge-back-conflict fail（§1-4/6）。协议文案已要求 leader 分片不重叠（D1）。
 5. **上限**：单轮 fan-out ≤16（`WG_MAX_ASSIGNMENTS_PER_TURN`）；进程并发受调度器 `globalSem` 全局约束（超出即排队，不失败）。**不新增** per-member 上限。
 
+### D4 fan-out 开关（修订，2026-07-14 用户验收反馈）——opt-in，默认关，原有固定模式零改动
+
+首版把 FAN-OUT 指引**无条件**注入所有 leader_worker 组，等于改变了存量工作组「每个 agent 一个实体、一人一单」的固定模式默认行为。用户明确要求：**fan-out 是新增功能，必须不影响原有模式**。修订为 opt-in 开关，全链对齐 `autonomous` 的成熟先例（RFC-180/181）：
+
+| 层 | 改动（与 autonomous 同款接线） |
+|---|---|
+| DB | migration `0094_rfc185_workgroup_fan_out.sql`：`ALTER TABLE workgroups ADD COLUMN fan_out integer DEFAULT false NOT NULL`（纯增量，存量行为 at rest 逐字节不变）；journal 登记 idx 93；`upgrade-rolling` 计数锁 93→94 |
+| schema.ts | `fanOut: integer('fan_out',{mode:'boolean'}).notNull().default(false)`（对齐 `:496` autonomous） |
+| shared | `workgroup.ts` create/update 输入 `fanOut: z.boolean().optional()`；`workgroupRuntime.ts` 运行时 config `fanOut: z.boolean().optional()`（读点 `?? false`，旧 `workgroupConfigJson` 快照零回归） |
+| backend | `workgroups.ts` create 默认 **`?? false`**（与 autonomous 的 `?? true` 不同——用户要求默认关）/ update coalesce `?? existing` / rowTo 投影；`workgroupLaunch.ts` 冻结进任务 config；`renderWgProtocolBlock` **仅当 `config.fanOut === true` 才推 FAN-OUT 段**（关=首版之前的协议逐字节还原）；`workgroupTasks.ts` `ConfigPatchSchema` + patch 落库 + 审计 changes（运行期可中途切换，下一引擎 pass 生效；翻转无需补偿动作——关闭后在途实例照常跑完，只是 leader 下一轮不再被邀请） |
+| frontend | `workgroup-form.ts` draft/serialize/prefill；`WorkgroupForm` Switch（autonomous Switch 同款同区）；`WorkgroupTaskConfigDialog` Switch（RFC-181 A 同通道）；i18n zh/en |
+| 前端徽标 | **不 gate**——×N 徽标是纯呈现（human 手动多派单也会产生并发），照常保留 |
+
+**测试增补**：默认/显式关 → 协议块不含 `FAN-OUT`（原模式回归锁）；开 → 含；CRUD roundtrip（create 默认 false / update 保持 / 显式开）；launch 冻结；per-task PATCH 切换；journal 计数锁 bump。既有 rfc185 协议/引擎用例的 cfg fixture 补 `fanOut: true`。
+
 ## 4. 失败模式
 
 | 场景 | 行为（全部为现状机制，测试锁定） |
