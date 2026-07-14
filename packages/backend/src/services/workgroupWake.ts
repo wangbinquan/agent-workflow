@@ -48,7 +48,12 @@ export type WakeItem =
   | { kind: 'fc_claim'; memberId: string; assignmentId: string }
 
 export interface WakeSet {
-  items: WakeItem[]
+  // RFC-170 CI unblock (user-authorized 2026-07-14): `readonly` so a caller can pass
+  // an immutable literal (e.g. the rfc180 test's `EMPTY_WAKE = {...} as const`)
+  // without a TS2345. Consumers only READ `items` (verified: no `.items` mutation
+  // across the backend), and a builder's mutable local array is still assignable
+  // to a readonly field, so this is a safe non-behavioral type refinement.
+  items: readonly WakeItem[]
   /** True when a needed wake was suppressed ONLY by the max_rounds cap. */
   capExceeded: boolean
 }
