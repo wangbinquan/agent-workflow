@@ -1,5 +1,34 @@
 # RFC-188 · 技术设计
 
+> **T1 修订（2026-07-15，实现期勘误——以此节为准）**：逐行核实四站点后，
+> §1 原稿的 monolithic `runIsolatedAgent`（一次调用 = iso→runNode→merge）
+> 被证伪——**主线的 iso 跨整个重试环共用一个**（`isoKeyRunId` 锚定原始行，
+> D17：same-session follow-up 保留 iso，fresh-session 重试 discard+同 key
+> 重建，`scheduler.ts:2806/2905-2915`），per-attempt iso 只是 shard/hook 的
+> 形状。另两处目录勘误：② shard/aggregator 持 **globalSem+subprocessSem 双**
+> 信号量（`:4862-4863/:5264-5265`，原表只记 subprocessSem）；③ merge 抛错
+> 处置三态——主线/shard/agg 打 `mark-merge-failed`（D15 声明门），hook
+> **不打**、留 pending-merge 走下次入口重放（`:1001-1004` catch-all；这带来
+> 「assignment 已判 failed 但 delta 事后被 replay 落地」的潜伏语义，记档移交
+> RFC-187 T8 属主决策，本 RFC 行为保持不改）。
+>
+> **收敛后的原语集**（G2 行为保持下 T1 证明安全的最大公约数）：
+> 1. `mergeBackAndSettle` —— snapshot-final→persist-tree→writeSem 内
+>    merge+冲突决议→merged/conflict-human 转移；replay 传持久树跳过快照；
+>    git 错误**裸抛**（merge-failed 停留在站点 catch，见勘误③）。杀五份拷贝
+>    （主线 §段③/shard/aggregator/runHostNode/replayPendingMerges）。
+> 2. `createIsoUnderLock` —— writeSem 括起的 createNodeIso 窗口（5 处，含
+>    主线重试重建）。
+> 3. `persistIsoBase`/`persistIsoNodeTree` 自 scheduler 私有函数搬家为模块
+>    导出（全站点+replay 共用）。
+> 4. `markMergeFailed` —— 三站点 catch 里的 tryTransitionMergeState 四行。
+>
+> 原稿 §1 的 iso 生命周期括号（withIsolatedRun/keepIso/信号量注入）**本 PR
+> 显式不做**：四站点在信号量集合、keepIso 有无、失败返回形态上差异过大，
+> 强行参数化的回调 API 复杂度超过 ~25 行/站点的去重收益，且 finally 纪律
+> 不是历次 bug 的来源（merge 块才是）。列入 plan 附录候选。原稿 §1/§2 保留
+> 作历史（差异目录仍有效，按上面三处勘误订正）。
+
 ## 1. 原语契约
 
 新模块 `packages/backend/src/services/isolatedAgentRun.ts`（不 import

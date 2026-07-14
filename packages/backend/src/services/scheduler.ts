@@ -169,6 +169,10 @@ import { createLogger, type Logger } from '@/util/log'
 import { gitBlobHashes, gitChangedFiles, runGit, worktreeFilesChanged } from '@/util/git'
 import {
   completeHumanResolvedConflict,
+  // createNodeIso / snapshotNodeIsoFinal / mergeBackNodeIso remain imported for
+  // the WRAPPER iso path only (createOrRebuildWrapperIso / mergeBackWrapperIso —
+  // outside RFC-188's agent-site scope); every AGENT site goes through
+  // isolatedAgentRun.ts (source-lock: rfc188-assembly-single-source.test.ts).
   createNodeIso,
   discardNodeIso,
   type IsoHandle,
@@ -179,6 +183,16 @@ import {
   snapshotNodeIsoFinal,
   undoPriorShardDeltaInIso,
 } from '@/services/nodeIsolation'
+// RFC-188: the shared assembly for isolated agent runs — iso lock-window,
+// iso-column persistence and the merge-back/settle block (formerly five
+// hand-copies in this file).
+import {
+  createIsoUnderLock,
+  markMergeFailed,
+  mergeBackAndSettle,
+  persistIsoBase,
+  persistIsoNodeTree,
+} from '@/services/isolatedAgentRun'
 import { buildMergeAgent, mergeResolveNodeId } from '@/services/mergeAgent'
 import {
   runWorkgroupEngine,
@@ -672,15 +686,14 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
     const releaseGlobal = await state.globalSem.acquire()
     let iso: IsoHandle
     try {
-      iso = await state.writeSem.run(() =>
-        createNodeIso({
-          appHome: opts.appHome,
-          taskId,
-          nodeRunId: req.nodeRunId,
-          canonRepos: state.repos,
-          log,
-        }),
-      )
+      iso = await createIsoUnderLock({
+        writeSem: state.writeSem,
+        appHome: opts.appHome,
+        taskId,
+        isoKeyRunId: req.nodeRunId,
+        canonRepos: state.repos,
+        log,
+      })
       if (!iso.passthrough) await persistIsoBase(db, req.nodeRunId, task.repoCount, iso)
     } catch (err) {
       releaseGlobal()
@@ -971,34 +984,29 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         return { status: 'done', outputs: projectOutputs(result.outputs) }
       }
       if (!iso.passthrough) {
-        const nodeTrees = await snapshotNodeIsoFinal(iso, log)
-        await persistIsoNodeTree(db, req.nodeRunId, task.repoCount, nodeTrees)
-        const merge = await state.writeSem.run(async () => {
-          const mergeRes = await mergeBackNodeIso(iso, nodeTrees, log)
-          if (mergeRes.clean) return { kind: 'merged' as const }
-          const res = await resolveMergeConflicts(state, {
-            conflicts: mergeRes.conflicts,
-            containerPath: iso.containerPath,
-            conflictNodeRunId: req.nodeRunId,
-            nodeId: req.nodeId,
-            iteration: 0,
-          })
-          return res.allResolved
-            ? { kind: 'merged' as const }
-            : { kind: 'conflict-human' as const, detail: res.detail }
+        // RFC-188: the ONE merge-back assembly. NOTE the deliberate per-site
+        // difference: a merge THROW here is caught by this hook's outer
+        // catch-all (returns failed) and merge_state stays 'pending-merge'
+        // for entry replay — unlike the DAG sites' markMergeFailed stamp
+        // (isolatedAgentRun.ts header documents the tri-state disposition).
+        const merge = await mergeBackAndSettle({
+          db,
+          writeSem: state.writeSem,
+          handle: iso,
+          nodeRunId: req.nodeRunId,
+          repoCount: task.repoCount,
+          via: 'live',
+          conflictResolver: (conflicts, containerPath) =>
+            resolveMergeConflicts(state, {
+              conflicts,
+              containerPath,
+              conflictNodeRunId: req.nodeRunId,
+              nodeId: req.nodeId,
+              iteration: 0,
+            }),
+          log,
         })
-        if (merge.kind === 'merged') {
-          await transitionMergeState({
-            db,
-            nodeRunId: req.nodeRunId,
-            event: { kind: 'mark-merged', via: 'live' },
-          })
-        } else {
-          await transitionMergeState({
-            db,
-            nodeRunId: req.nodeRunId,
-            event: { kind: 'park-conflict-human', via: 'live' },
-          })
+        if (merge.kind === 'conflict-human') {
           return {
             status: 'failed',
             outputs: {},
@@ -2078,67 +2086,8 @@ interface OneNodeArgs {
   log: Logger
 }
 
-/**
- * RFC-130: persist the iso base columns after createNodeIso (single vs multi-repo,
- * design.md §3.2). merge_state='isolating' marks the row as an isolated run whose
- * agent has not yet finished — deriveFrontier treats it as not-yet-complete.
- * RFC-144: the write goes through the merge_state CAS (NULL → isolating); the
- * iso base columns ride along atomically as transition extras.
- */
-async function persistIsoBase(
-  db: DbClient,
-  nodeRunId: string,
-  repoCount: number,
-  handle: IsoHandle,
-): Promise<void> {
-  if (handle.passthrough) return // in-place run — leave iso columns NULL (golden-lock)
-  if (repoCount === 1) {
-    await transitionMergeState({
-      db,
-      nodeRunId,
-      event: { kind: 'begin-isolation' },
-      extra: {
-        isoWorktreePath: handle.containerPath,
-        isoBaseSnapshot: handle.repos[0]?.baseSnapshot ?? null,
-        isoBaseSnapshotReposJson: null,
-      },
-    })
-    return
-  }
-  const map: Record<string, string> = {}
-  for (const r of handle.repos) map[r.worktreeDirName] = r.baseSnapshot
-  await transitionMergeState({
-    db,
-    nodeRunId,
-    event: { kind: 'begin-isolation' },
-    extra: {
-      isoWorktreePath: handle.containerPath,
-      isoBaseSnapshot: null,
-      isoBaseSnapshotReposJson: JSON.stringify(map),
-    },
-  })
-}
-
-/** RFC-130: persist the iso node_tree columns + merge_state on agent success (D15).
- *  RFC-144: isolating → pending-merge via the merge_state CAS; the former
- *  `mergeState: string` parameter was a dead knob (all 4 callers passed the
- *  literal 'pending-merge') — the event now fixes the target. */
-async function persistIsoNodeTree(
-  db: DbClient,
-  nodeRunId: string,
-  repoCount: number,
-  nodeTrees: Record<string, string>,
-): Promise<void> {
-  await transitionMergeState({
-    db,
-    nodeRunId,
-    event: { kind: 'mark-pending-merge' },
-    extra:
-      repoCount === 1
-        ? { isoNodeTree: nodeTrees[''] ?? null, isoNodeTreeReposJson: null }
-        : { isoNodeTree: null, isoNodeTreeReposJson: JSON.stringify(nodeTrees) },
-  })
-}
+// RFC-188: persistIsoBase / persistIsoNodeTree moved to isolatedAgentRun.ts
+// (shared by all five assembly sites + replay) — imported above.
 
 function parseIsoJsonMap(s: string | null): Record<string, string> {
   if (s === null || s === '') return {}
@@ -2199,37 +2148,32 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
       baseSnapshots,
       taskBaseHeads,
     })
-    const merge = await state.writeSem.run(async () => {
-      const mergeRes = await mergeBackNodeIso(handle, nodeTrees, log)
-      if (mergeRes.clean) return { kind: 'merged' as const }
-      // RFC-130 §6.2 — a crash-recovered pending-merge that now conflicts (canonical
-      // advanced while the daemon was down) goes through the SAME merge agent as a
-      // live dispatch; unresolved → conflict-human (resume replay #2 completes the
-      // human fix). Resolve within the writeSem hold so canon stays stable.
-      const res = await resolveMergeConflicts(state, {
-        conflicts: mergeRes.conflicts,
-        containerPath: handle.containerPath,
-        conflictNodeRunId: r.id,
-        nodeId: r.nodeId,
-        iteration: r.iteration,
-      })
-      return res.allResolved
-        ? { kind: 'merged' as const }
-        : { kind: 'conflict-human' as const, detail: res.detail }
+    // RFC-188: the ONE merge-back assembly — replay passes the PERSISTED node
+    // trees (the iso worktree may be gone; the agent is never re-run) so the
+    // snapshot phase is skipped. RFC-130 §6.2: a crash-recovered pending-merge
+    // that now conflicts goes through the SAME merge agent as a live dispatch;
+    // unresolved → conflict-human (resume replay #2 completes the human fix).
+    const merge = await mergeBackAndSettle({
+      db,
+      writeSem: state.writeSem,
+      handle,
+      nodeRunId: r.id,
+      repoCount: task.repoCount,
+      nodeTrees,
+      via: 'replay',
+      conflictResolver: (conflicts, containerPath) =>
+        resolveMergeConflicts(state, {
+          conflicts,
+          containerPath,
+          conflictNodeRunId: r.id,
+          nodeId: r.nodeId,
+          iteration: r.iteration,
+        }),
+      log,
     })
     if (merge.kind === 'merged') {
-      await transitionMergeState({
-        db,
-        nodeRunId: r.id,
-        event: { kind: 'mark-merged', via: 'replay' },
-      })
       log.info('pending-merge replay merged', { nodeRunId: r.id })
     } else {
-      await transitionMergeState({
-        db,
-        nodeRunId: r.id,
-        event: { kind: 'park-conflict-human', via: 'replay' },
-      })
       log.warn('pending-merge replay conflict → conflict-human (merge agent could not resolve)', {
         nodeRunId: r.id,
         detail: merge.detail,
@@ -2806,15 +2750,14 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
   const isoKeyRunId = nodeRunId
   let isoHandle: IsoHandle
   try {
-    isoHandle = await writeSem.run(() =>
-      createNodeIso({
-        appHome: opts.appHome,
-        taskId,
-        nodeRunId: isoKeyRunId,
-        canonRepos: state.repos,
-        log,
-      }),
-    )
+    isoHandle = await createIsoUnderLock({
+      writeSem,
+      appHome: opts.appHome,
+      taskId,
+      isoKeyRunId,
+      canonRepos: state.repos,
+      log,
+    })
   } catch (err) {
     releaseGlobal()
     log.warn('iso worktree setup failed', {
@@ -2904,15 +2847,14 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           // does NOT enter this block — it keeps the same iso worktree (D17).
           await discardNodeIso(isoHandle, log)
           try {
-            isoHandle = await writeSem.run(() =>
-              createNodeIso({
-                appHome: opts.appHome,
-                taskId,
-                nodeRunId: isoKeyRunId,
-                canonRepos: state.repos,
-                log,
-              }),
-            )
+            isoHandle = await createIsoUnderLock({
+              writeSem,
+              appHome: opts.appHome,
+              taskId,
+              isoKeyRunId,
+              canonRepos: state.repos,
+              log,
+            })
           } catch (err) {
             log.warn('retry iso recreate failed', {
               nodeId: node.id,
@@ -3540,40 +3482,32 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       keepIso = true
     } else if (!isoHandle.passthrough && lastResult !== null && lastResult.status === 'done') {
       try {
-        const nodeTrees = await snapshotNodeIsoFinal(isoHandle, log)
-        await persistIsoNodeTree(db, nodeRunId, task.repoCount, nodeTrees)
-        const merge = await writeSem.run(async () => {
-          const mergeRes = await mergeBackNodeIso(isoHandle, nodeTrees, log)
-          if (mergeRes.clean) return { kind: 'merged' as const }
-          // RFC-130 §6.2 — resolve the conflict(s) with the built-in merge agent
-          // WITHIN the same writeSem hold so a sibling merge-back can't advance the
-          // canonical worktree under us (which would invalidate the merged tree).
-          // Canon for the conflicted repo(s) was NOT touched (D27); the agent works
-          // inside a resolve-iso and materializes back only on success. Holding
-          // writeSem across the (rare) agent run is the §6.2/D5 tradeoff; the agent's
-          // runNode bypasses globalSem (§7 — no writeSem↔globalSem cycle).
-          const res = await resolveMergeConflicts(state, {
-            conflicts: mergeRes.conflicts,
-            containerPath: isoHandle.containerPath,
-            conflictNodeRunId: nodeRunId,
-            nodeId: node.id,
-            iteration,
-          })
-          return res.allResolved
-            ? { kind: 'merged' as const }
-            : { kind: 'conflict-human' as const, detail: res.detail }
+        // RFC-188: the ONE merge-back assembly (mergeBackAndSettle) — the §6.2
+        // writeSem hold, conflict resolution and merge_state settling now live
+        // in isolatedAgentRun.ts; this site keeps only its own dispositions
+        // (keepIso + awaiting_human on conflict-human; merge-failed stamp on
+        // throw — RFC-130 D15 keeps downstream gated, RFC-144 §5 try-variant).
+        const merge = await mergeBackAndSettle({
+          db,
+          writeSem,
+          handle: isoHandle,
+          nodeRunId,
+          repoCount: task.repoCount,
+          via: 'live',
+          conflictResolver: (conflicts, containerPath) =>
+            resolveMergeConflicts(state, {
+              conflicts,
+              containerPath,
+              conflictNodeRunId: nodeRunId,
+              nodeId: node.id,
+              iteration,
+            }),
+          log,
         })
-        if (merge.kind === 'merged') {
-          await transitionMergeState({ db, nodeRunId, event: { kind: 'mark-merged', via: 'live' } })
-        } else {
+        if (merge.kind === 'conflict-human') {
           // §6.3 — merge agent could not resolve → park human. Conflict is NEVER
           // silently lost; canonical stays clean for siblings; the resolve-iso(s)
           // are kept (keepIso) so the human finishes there and resume re-merges (#4).
-          await transitionMergeState({
-            db,
-            nodeRunId,
-            event: { kind: 'park-conflict-human', via: 'live' },
-          })
           log.warn('merge-back conflict unresolved by merge agent → awaiting_human', {
             nodeId: node.id,
             detail: merge.detail,
@@ -3588,18 +3522,10 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       } catch (err) {
         // RFC-130 robustness: a merge-back that THROWS (iso corrupted, .git gone,
         // a git op error) must fail the node loudly — never leave a 'done' row
-        // whose delta never reached canonical. merge_state='merge-failed' keeps
-        // downstream gated (D15); the failed result fails the task.
+        // whose delta never reached canonical.
         const msg = err instanceof Error ? err.message : String(err)
         log.warn('merge-back failed', { nodeId: node.id, error: msg })
-        // try-variant: this catch must surface the ORIGINAL merge error via the
-        // failed result — a CAS/illegal throw here would mask it (RFC-144 §5).
-        const flipped = await tryTransitionMergeState({
-          db,
-          nodeRunId,
-          event: { kind: 'mark-merge-failed', reason: msg },
-        })
-        if (!flipped) log.warn('merge_state flip to merge-failed lost/illegal', { nodeRunId })
+        await markMergeFailed(db, nodeRunId, msg, log)
         lastResult = { ...lastResult, status: 'failed', errorMessage: `merge-back-failed: ${msg}` }
       }
     }
@@ -4863,15 +4789,14 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
   const releaseSub = await state.subprocessSem.acquire()
   let shardIso: IsoHandle
   try {
-    shardIso = await state.writeSem.run(() =>
-      createNodeIso({
-        appHome: opts.appHome,
-        taskId,
-        nodeRunId: shardRunId,
-        canonRepos: state.repos,
-        log,
-      }),
-    )
+    shardIso = await createIsoUnderLock({
+      writeSem: state.writeSem,
+      appHome: opts.appHome,
+      taskId,
+      isoKeyRunId: shardRunId,
+      canonRepos: state.repos,
+      log,
+    })
     if (!shardIso.passthrough) await persistIsoBase(db, shardRunId, task.repoCount, shardIso)
     // RFC-130 §8.3 D9 (T14): undo the prior merged delta INSIDE this fresh iso BEFORE
     // the agent runs, so the rerun's output REPLACES (not superimposes on) the prior
@@ -4980,42 +4905,30 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
     // so the iso final is the clean replacement — merge-back is the normal path.
     if (!shardIso.passthrough) {
       try {
-        const nodeTrees = await snapshotNodeIsoFinal(shardIso, log)
-        await persistIsoNodeTree(db, shardRunId, task.repoCount, nodeTrees)
-        const merge = await state.writeSem.run(async () => {
-          const mergeRes = await mergeBackNodeIso(shardIso, nodeTrees, log)
-          if (mergeRes.clean) return { kind: 'merged' as const }
-          // RFC-130 §6.2 — resolve shard conflict(s) with the merge agent within the
-          // writeSem hold (canon stays stable). The resolve-iso lives under the
-          // shard's container; the shard's own iso is discarded in `finally`, while
-          // a kept resolve-iso (on failure) survives for GC / a human.
-          const res = await resolveMergeConflicts(state, {
-            conflicts: mergeRes.conflicts,
-            containerPath: shardIso.containerPath,
-            conflictNodeRunId: shardRunId,
-            nodeId: innerNode.id,
-            iteration,
-          })
-          return res.allResolved
-            ? { kind: 'merged' as const }
-            : { kind: 'conflict-human' as const, detail: res.detail }
+        // RFC-188: the ONE merge-back assembly. §6.3 disposition here: an
+        // unresolved shard conflict parks conflict-human + FAILS the shard
+        // loudly (per-shard awaiting_human bubbling through the fanout
+        // aggregation is a follow-up, #4/PR-E); the shard's own iso is
+        // discarded in `finally` while a kept resolve-iso survives for GC/a
+        // human (RFC-187 T8 owns un-orphaning it).
+        const merge = await mergeBackAndSettle({
+          db,
+          writeSem: state.writeSem,
+          handle: shardIso,
+          nodeRunId: shardRunId,
+          repoCount: task.repoCount,
+          via: 'live',
+          conflictResolver: (conflicts, containerPath) =>
+            resolveMergeConflicts(state, {
+              conflicts,
+              containerPath,
+              conflictNodeRunId: shardRunId,
+              nodeId: innerNode.id,
+              iteration,
+            }),
+          log,
         })
-        if (merge.kind === 'merged') {
-          await transitionMergeState({
-            db,
-            nodeRunId: shardRunId,
-            event: { kind: 'mark-merged', via: 'live' },
-          })
-        } else {
-          // §6.3 — unresolved shard conflict: mark conflict-human + fail loudly so the
-          // conflict is surfaced (never silently lost) and canonical stays clean.
-          // Per-shard awaiting_human bubbling through the fanout aggregation is a
-          // follow-up (#4/PR-E); today an unresolvable shard conflict fails the task.
-          await transitionMergeState({
-            db,
-            nodeRunId: shardRunId,
-            event: { kind: 'park-conflict-human', via: 'live' },
-          })
+        if (merge.kind === 'conflict-human') {
           return {
             kind: 'failed',
             shardKey,
@@ -5025,14 +4938,7 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        const flipped = await tryTransitionMergeState({
-          db,
-          nodeRunId: shardRunId,
-          event: { kind: 'mark-merge-failed', reason: msg },
-        })
-        if (!flipped) {
-          log.warn('merge_state flip to merge-failed lost/illegal', { nodeRunId: shardRunId })
-        }
+        await markMergeFailed(db, shardRunId, msg, log)
         return { kind: 'failed', shardKey, outputs: {}, message: `merge-back-failed: ${msg}` }
       }
     }
@@ -5265,15 +5171,14 @@ async function dispatchFanoutAggregator(
   const releaseSub = await state.subprocessSem.acquire()
   let aggIso: IsoHandle
   try {
-    aggIso = await state.writeSem.run(() =>
-      createNodeIso({
-        appHome: opts.appHome,
-        taskId,
-        nodeRunId: aggRunId,
-        canonRepos: state.repos,
-        log,
-      }),
-    )
+    aggIso = await createIsoUnderLock({
+      writeSem: state.writeSem,
+      appHome: opts.appHome,
+      taskId,
+      isoKeyRunId: aggRunId,
+      canonRepos: state.repos,
+      log,
+    })
     if (!aggIso.passthrough) await persistIsoBase(db, aggRunId, task.repoCount, aggIso)
   } catch {
     releaseSub()
@@ -5351,38 +5256,27 @@ async function dispatchFanoutAggregator(
     // RFC-130 §段③: merge the aggregator's iso delta back into canonical.
     if (!aggIso.passthrough) {
       try {
-        const nodeTrees = await snapshotNodeIsoFinal(aggIso, log)
-        await persistIsoNodeTree(db, aggRunId, task.repoCount, nodeTrees)
-        const merge = await state.writeSem.run(async () => {
-          const mergeRes = await mergeBackNodeIso(aggIso, nodeTrees, log)
-          if (mergeRes.clean) return { kind: 'merged' as const }
-          // RFC-130 §6.2 — resolve the aggregator's conflict(s) with the merge agent
-          // inside the writeSem hold (canon stays stable).
-          const res = await resolveMergeConflicts(state, {
-            conflicts: mergeRes.conflicts,
-            containerPath: aggIso.containerPath,
-            conflictNodeRunId: aggRunId,
-            nodeId: aggNode.id,
-            iteration,
-          })
-          return res.allResolved
-            ? { kind: 'merged' as const }
-            : { kind: 'conflict-human' as const, detail: res.detail }
+        // RFC-188: the ONE merge-back assembly. §6.3 disposition: unresolved →
+        // conflict-human + fail loudly (per-node awaiting_human bubbling for
+        // fanout is a follow-up, #4/PR-E); conflict never lost.
+        const merge = await mergeBackAndSettle({
+          db,
+          writeSem: state.writeSem,
+          handle: aggIso,
+          nodeRunId: aggRunId,
+          repoCount: task.repoCount,
+          via: 'live',
+          conflictResolver: (conflicts, containerPath) =>
+            resolveMergeConflicts(state, {
+              conflicts,
+              containerPath,
+              conflictNodeRunId: aggRunId,
+              nodeId: aggNode.id,
+              iteration,
+            }),
+          log,
         })
-        if (merge.kind === 'merged') {
-          await transitionMergeState({
-            db,
-            nodeRunId: aggRunId,
-            event: { kind: 'mark-merged', via: 'live' },
-          })
-        } else {
-          // §6.3 — unresolved: conflict-human + fail loudly (per-node awaiting_human
-          // bubbling for fanout is a follow-up, #4/PR-E); conflict never lost.
-          await transitionMergeState({
-            db,
-            nodeRunId: aggRunId,
-            event: { kind: 'park-conflict-human', via: 'live' },
-          })
+        if (merge.kind === 'conflict-human') {
           return {
             kind: 'failed',
             summary: 'aggregator merge conflict',
@@ -5392,14 +5286,7 @@ async function dispatchFanoutAggregator(
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        const flipped = await tryTransitionMergeState({
-          db,
-          nodeRunId: aggRunId,
-          event: { kind: 'mark-merge-failed', reason: msg },
-        })
-        if (!flipped) {
-          log.warn('merge_state flip to merge-failed lost/illegal', { nodeRunId: aggRunId })
-        }
+        await markMergeFailed(db, aggRunId, msg, log)
         return {
           kind: 'failed',
           summary: 'aggregator merge failed',
