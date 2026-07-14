@@ -47,7 +47,7 @@ import {
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
 import { and, asc, eq, inArray } from 'drizzle-orm'
-import { ulid } from 'ulid'
+import { monotonicFactory, ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import {
@@ -506,8 +506,16 @@ interface PostMessageArgs {
   assignmentId?: string | null
 }
 
+// RFC-186 Phase 3 (audit §3-4): room slicing / cursor advance assume message ids
+// order lexically (workgroupContext.ts), but plain `ulid()` has a random suffix,
+// so two posts in the SAME millisecond can order out of insertion order — and at
+// a cursor boundary a later-inserted lower-ULID row can be treated as consumed
+// and skip a re-wake. A monotonic factory guarantees strictly increasing ids
+// within this engine instance (one instance per task, runTask CAS).
+const nextMessageId = monotonicFactory()
+
 async function postMessage(db: DbClient, taskId: string, m: PostMessageArgs): Promise<string> {
-  const id = ulid()
+  const id = nextMessageId()
   await db.insert(workgroupMessages).values({
     id,
     taskId,
@@ -1096,12 +1104,20 @@ async function driveAdoptedRun(
     return
   }
   // clarify-answer rerun: assignment parked awaiting_human → back to running.
+  let drivenStatus = assignment.status
   if (assignment.status === 'awaiting_human') {
     await casAssignmentStatus(db, assignment.id, 'awaiting_human', 'running', {
       nodeRunId: row.id,
     })
+    drivenStatus = 'running'
   }
-  await driveAssignmentTurn(args, state, { ...assignment, status: 'running' }, row.id)
+  // RFC-186 Phase 3 (audit §3-5 / F5): pass the assignment's TRUE status rather
+  // than force 'running'. A crash between mintNodeRun and the dispatched→running
+  // CAS leaves the row `dispatched`; forcing 'running' here made driveAssignmentTurn
+  // skip its own dispatched→running CAS, so the DB stayed `dispatched`, the closing
+  // running→done CAS matched 0 rows, and the assignment re-ran (duplicate). With the
+  // real status, driveAssignmentTurn CASes dispatched→running itself.
+  await driveAssignmentTurn(args, state, { ...assignment, status: drivenStatus }, row.id)
 }
 
 async function driveLeaderTurn(
@@ -1217,6 +1233,22 @@ async function driveLeaderTurn(
         ? parseWgMessagesPort(messagesRaw, roster)
         : { ok: true as const, value: [] }
     if (!outMessages.ok) errors.push(...outMessages.errors.map((e) => `wg_messages: ${e}`))
+    // RFC-186 Phase 3 (audit §3-6): `done` co-emitted with NEW assignments is
+    // contradictory — the freshly dispatched work would run but its results would
+    // never be aggregated (the leader is suppressed once declaredDone), and the
+    // task reports done with that work silently discarded. Reject as a protocol
+    // violation so the leader re-decides: dispatch OR declare done, not both.
+    if (
+      decision !== null &&
+      decision.ok &&
+      decision.value.action === 'done' &&
+      dispatches.ok &&
+      dispatches.value.length > 0
+    ) {
+      errors.push(
+        'wg_decision: action "done" cannot be emitted together with new wg_assignments — dispatch OR declare done, not both',
+      )
+    }
 
     if (errors.length > 0) {
       errorNotice = errors.map((e) => `- ${e}`).join('\n')

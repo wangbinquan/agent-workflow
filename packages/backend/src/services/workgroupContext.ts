@@ -339,8 +339,8 @@ export function renderWgProtocolBlock(
     if (config.fanOut === true) {
       lines.push(
         '- <port name="wg_assignments">JSON array of {"member","title","brief"}.',
-        '  member = an AGENT displayName from the roster (bare name, e.g. "writer",',
-        '  not "@writer"). Empty array = no new work.',
+        '  member = an AGENT displayName from the roster — the leading @ shown in the',
+        '  roster is optional (both "writer" and "@writer" resolve). Empty array = no new work.',
         '  FAN-OUT: the SAME member may appear in MULTIPLE entries — each entry runs',
         '  as an independent CONCURRENT INSTANCE of that agent in its own isolated',
         '  worktree. Use this to parallelize divisible work (per-file / per-module',
@@ -357,8 +357,8 @@ export function renderWgProtocolBlock(
     } else {
       lines.push(
         '- <port name="wg_assignments">JSON array of {"member","title","brief"}.',
-        '  member = an AGENT displayName from the roster (bare name, e.g. "writer",',
-        '  not "@writer"). Empty array = no new work.</port>',
+        '  member = an AGENT displayName from the roster — the leading @ shown in the',
+        '  roster is optional (both "writer" and "@writer" resolve). Empty array = no new work.</port>',
       )
     }
     lines.push(
