@@ -671,6 +671,11 @@ export const RERUN_CAUSES = [
   'wg-message-turn',
   /** RFC-164 free_collab completion-gate holder run (design §8.2). */
   'wg-gate',
+  /** RFC-187 §3-3 — a workgroup host-turn PROTOCOL retry (envelope/wg-json slip,
+   *  attempt>0 of the WG_PROTOCOL_RETRIES loop). A distinct cause so the retry rows
+   *  of ONE logical round are excluded from `countRoundsUsed` and don't inflate
+   *  max_rounds (the RFC-186 retries 1→3 bump made a fumbled round cost up to 4). */
+  'wg-protocol-retry',
   /** RFC-167 dynamic-workflow orchestrator generation run (dynamicWorkflowRunner). */
   'dw-generate',
   /** RFC-167 dynamic-workflow confirm-gate holder run (design §3.1). */

@@ -602,6 +602,38 @@ describe('RFC-164 engine — lw round orchestration', () => {
     expect(sys.some((m) => m.bodyMd.includes('max_rounds'))).toBe(false)
   })
 
+  // RFC-187 §3-3 — an in-place protocol retry mints a fresh leader run, but it's the
+  // SAME logical round: tagged wg-protocol-retry and excluded from the round count so a
+  // fumbled turn doesn't burn multiple max_rounds (RFC-186 raised retries 1→3).
+  test('§3-3 protocol retries mint wg-protocol-retry rows that do not count as rounds', async () => {
+    const config = cfg({ maxRounds: 8 })
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks } = scriptedHooks({
+      leader: [
+        // round 1 fumbles the envelope ONCE (retryable), then dispatches on the retry.
+        {
+          status: 'failed',
+          outputs: {},
+          errorMessage: 'no <workflow-output> envelope',
+          failureCode: 'envelope-missing',
+        },
+        doneLeader({
+          assignments: [{ member: 'coder', title: 'x', brief: 'b' }],
+          decision: { action: 'continue' },
+        }),
+        doneLeader({ decision: { action: 'done', summary: 'done' } }),
+      ],
+      member: [doneMember('did it')],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('ok')
+    const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    // the in-place retry row is tagged wg-protocol-retry (excluded from the count)...
+    expect(runs.filter((r) => r.rerunCause === 'wg-protocol-retry')).toHaveLength(1)
+    // ...and the two LOGICAL leader rounds keep the wg-leader-round cause.
+    expect(runs.filter((r) => r.rerunCause === 'wg-leader-round')).toHaveLength(2)
+  })
+
   test('completion gate: decision done → awaiting_review + gate holder run (invariant)', async () => {
     const config = cfg({ completionGate: true })
     const { taskId } = await seedEngineTask(db, config)
@@ -1104,7 +1136,9 @@ describe('RFC-176 — goal directive injection & launch kickoff', () => {
 // RFC-181 C — 反问硬压制的引擎收场（drop-and-continue，绝不 park）
 // (design/RFC-181-workgroup-autonomous-hardening/design.md §2.2)
 // runNode 层的 clarify-forbidden 持久拒绝由 RFC-123 既有测试覆盖；此处锁
-// workgroupRunner 对该前缀的重试/收场 + clarifyEnabled 透传。
+// workgroupRunner 对该失败的重试/收场 + clarifyEnabled 透传。调度架构审视
+// 2026-07-14：引擎改按结构化 failureCode 路由（RFC-145 棘轮），夹具随真实
+// 生产路径（runNode 拒绝 + hook lateSuppress 均带 failureCode）同步携码。
 // ---------------------------------------------------------------------------
 
 describe('RFC-181 C — clarify 压制收场（fake hooks）', () => {
@@ -1118,6 +1152,7 @@ describe('RFC-181 C — clarify 压制收场（fake hooks）', () => {
     outputs: {},
     errorMessage:
       'clarify-forbidden: node is in STOP CLARIFYING mode; emit <workflow-output>, not <workflow-clarify>',
+    failureCode: 'clarify-forbidden',
   }
 
   test('leader：压制重提示 → 耗尽 drop-and-continue（不 throw、不 park）→ nudge 后收敛 done', async () => {

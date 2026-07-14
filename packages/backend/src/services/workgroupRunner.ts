@@ -568,14 +568,23 @@ async function postMessage(db: DbClient, taskId: string, m: PostMessageArgs): Pr
 // ---------------------------------------------------------------------------
 
 function countRoundsUsed(state: EngineDbState): number {
+  // RFC-187 §3-3 — protocol-retry rows (attempt>0 of ONE logical round) are excluded
+  // so a fumbled turn doesn't burn multiple max_rounds (RFC-186 raised retries 1→3).
   if (state.config.mode === 'leader_worker') {
     return state.hostRuns.filter(
       (r) =>
-        r.nodeId === WG_LEADER_NODE_ID && r.status !== 'canceled' && r.rerunCause !== 'wg-gate',
+        r.nodeId === WG_LEADER_NODE_ID &&
+        r.status !== 'canceled' &&
+        r.rerunCause !== 'wg-gate' &&
+        r.rerunCause !== 'wg-protocol-retry',
     ).length
   }
-  return state.hostRuns.filter((r) => r.nodeId === WG_MEMBER_NODE_ID && r.status !== 'canceled')
-    .length
+  return state.hostRuns.filter(
+    (r) =>
+      r.nodeId === WG_MEMBER_NODE_ID &&
+      r.status !== 'canceled' &&
+      r.rerunCause !== 'wg-protocol-retry',
+  ).length
 }
 
 /**
@@ -1258,7 +1267,9 @@ async function driveLeaderTurn(
         taskId,
         nodeId: WG_LEADER_NODE_ID,
         status: 'pending',
-        cause: 'wg-leader-round',
+        // RFC-187 §3-3 — a protocol retry (attempt>0) is the SAME logical round;
+        // tag it so `countRoundsUsed` excludes it and it doesn't inflate max_rounds.
+        cause: attempt > 0 ? 'wg-protocol-retry' : 'wg-leader-round',
         retryIndex: state.hostRuns.filter((r) => r.nodeId === WG_LEADER_NODE_ID).length + attempt,
       })
       args.registerMint?.(runId)
@@ -1502,7 +1513,9 @@ async function driveAssignmentTurn(
         taskId,
         nodeId: WG_MEMBER_NODE_ID,
         status: 'pending',
-        cause: 'wg-assignment',
+        // RFC-187 §3-3 — protocol retry (attempt>0) = same logical round; excluded
+        // from `countRoundsUsed` (matters for fc, which counts member runs as rounds).
+        cause: attempt > 0 ? 'wg-protocol-retry' : 'wg-assignment',
         retryIndex:
           state.hostRuns.filter(
             (r) => r.nodeId === WG_MEMBER_NODE_ID && r.shardKey === assignment.id,

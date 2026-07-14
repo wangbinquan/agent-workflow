@@ -75,6 +75,7 @@ const GATE2_EXPECTED: Record<RerunCause, boolean> = {
   'wg-assignment': false,
   'wg-message-turn': false,
   'wg-gate': false,
+  'wg-protocol-retry': false, // RFC-187 §3-3 — a workgroup envelope/wg-json retry, not a clarify rerun
   'dw-generate': false, // RFC-167 orchestrator retries re-inject errors in a fresh prompt, not a clarify rerun
   'dw-gate': false,
 }
