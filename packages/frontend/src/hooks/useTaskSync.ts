@@ -6,6 +6,10 @@
 // RFC-152 — thin wrapper over the useWsInvalidation rules table; the socket
 // is shared per path (D5), so mounting this next to useClarifyWs on the
 // same task keeps a single physical connection.
+//
+// The per-frame → query-key mapping lives in the pure `buildTaskSyncRules`
+// so it is unit-testable without a socket or a render
+// (tests/task-sync-rules.test.ts); the hook is a thin binding over it.
 
 import type { QueryKey } from '@tanstack/react-query'
 import type { TaskWsMessage } from '@agent-workflow/shared'
@@ -13,7 +17,13 @@ import { WS_PATHS } from '@agent-workflow/shared'
 import { workgroupRoomKey } from '@/lib/workgroup-room'
 import { useWsInvalidation, type WsInvalidationRules } from './useWsInvalidation'
 
-export function useTaskSync(taskId: string | null): void {
+/**
+ * The task-detail WS → react-query invalidation table, as a pure function of
+ * the task id. Exported so the frame→key contract is asserted directly
+ * (tests/task-sync-rules.test.ts) — the hook below is just `useWsInvalidation`
+ * wired to this table on the per-task socket path.
+ */
+export function buildTaskSyncRules(taskId: string | null): WsInvalidationRules<TaskWsMessage> {
   // task.status / task.done also re-fetch node-runs/outputs on terminal
   // transitions: the per-node status/output events may interleave with
   // task.done in either order (or drop on slower runners), so without this
@@ -68,10 +78,19 @@ export function useTaskSync(taskId: string | null): void {
     // RFC-122: reconcile the per-node clarify directive toggles on any node
     // activity (another tab's flip lands here; the acting tab is already
     // optimistic + invalidated).
+    // RFC-179: the workgroup room aggregate's memberRuns view (执行中 pills /
+    // active-execution rows / 点成员看当前 session) derives from node_run
+    // STATUS, which only moves via node.status — NOT the wg.* frames. Without
+    // this key the room looks frozen the whole time a leader/member opencode
+    // session is thinking (no message posted yet) and only catches up on F5 /
+    // the 15s poll. node.event (high-frequency streaming) is deliberately NOT
+    // wired here — it would refetch the room on every token. Harmless for
+    // non-workgroup tasks (no active query under the key).
     'node.status': () => [
       ['tasks', taskId, 'node-runs'],
       ['task-questions', taskId],
       ['task-clarify-directives', taskId],
+      workgroupRoomKey(taskId),
     ],
     // Future: render directly on a node-events feed instead of going
     // through react-query. For now we just keep the node-runs row's
@@ -125,6 +144,12 @@ export function useTaskSync(taskId: string | null): void {
       ['task-clarify-directives', taskId],
     ],
   }
+  return rules
+}
 
-  useWsInvalidation<TaskWsMessage>(taskId === null ? null : WS_PATHS.task(taskId), rules)
+export function useTaskSync(taskId: string | null): void {
+  useWsInvalidation<TaskWsMessage>(
+    taskId === null ? null : WS_PATHS.task(taskId),
+    buildTaskSyncRules(taskId),
+  )
 }

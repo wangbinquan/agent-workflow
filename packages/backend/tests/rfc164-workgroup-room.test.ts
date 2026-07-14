@@ -18,8 +18,9 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
+import type { TaskWsMessage, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { createSession } from '../src/auth/sessionStore'
+import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   nodeRuns,
@@ -301,11 +302,18 @@ describe('RFC-164 room — endpoints', () => {
     )
     expect(strangerCancel.status).toBe(404)
 
+    // RFC-179 follow-up: a concurrent viewer's room only learns of the
+    // cancellation through the WS frames, so the endpoint must BROADCAST the
+    // assignment flip + the system note (not merely write them to the DB) —
+    // else the other viewer stays stale until the 15s poll / F5.
+    const frames: TaskWsMessage[] = []
+    const unsub = taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => frames.push(m))
     const ok = await req(
       owner.token,
       `/api/workgroup-tasks/${taskId}/assignments/${a?.id ?? ''}/cancel`,
       { method: 'POST' },
     )
+    unsub()
     expect(ok.status).toBe(204)
     const after = (
       await db
@@ -318,6 +326,10 @@ describe('RFC-164 room — endpoints', () => {
       await db.select().from(workgroupMessages).where(eq(workgroupMessages.taskId, taskId))
     ).filter((m) => m.kind === 'system')
     expect(sys.length).toBeGreaterThan(0)
+    expect(frames.some((f) => f.type === 'wg.assignment.updated' && f.status === 'canceled')).toBe(
+      true,
+    )
+    expect(frames.some((f) => f.type === 'wg.message.created' && f.kind === 'system')).toBe(true)
 
     // running card refuses
     const b = ulid()

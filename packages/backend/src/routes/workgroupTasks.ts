@@ -920,8 +920,9 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         `assignment is '${row.status}' — only open/dispatched cards can be canceled`,
       )
     }
+    const cancelMsgId = ulid()
     await deps.db.insert(workgroupMessages).values({
-      id: ulid(),
+      id: cancelMsgId,
       taskId,
       round: row.round,
       authorKind: 'system',
@@ -931,6 +932,13 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       assignmentId,
       createdAt: Date.now(),
     })
+    // Keep concurrent viewers' rooms live: the acting client refreshes via its
+    // own mutation onSuccess, but another task member watching only learns of
+    // the cancellation (card → 'canceled' + the system note) through these
+    // frames — otherwise their room stays stale until the 15s poll / F5.
+    // Mirrors the dual broadcast the human @-dispatch path fires.
+    broadcastWg(taskId, { type: 'wg.assignment.updated', assignmentId, status: 'canceled' })
+    broadcastWg(taskId, { type: 'wg.message.created', messageId: cancelMsgId, kind: 'system' })
     void config
     return c.body(null, 204)
   })
