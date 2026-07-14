@@ -63,6 +63,15 @@ describe('TaskDetailPage tab structure', () => {
     expect(SRC).toMatch(/setTab\(next\)/)
   })
 
+  test('jumpToFailed button render is gated on canOfferFailedJump(tabs)', () => {
+    // Scheduling-architecture review 2026-07-14: the jump targets the
+    // workflow-status canvas, which turn-engine workgroup tasks don't have —
+    // without this gate the button bounced back to the chatroom with a
+    // dangling node-run selection. The pure branch cases live in
+    // task-detail-tabs.test.ts (canOfferFailedJump); this locks the wiring.
+    expect(SRC).toMatch(/canOfferFailedJump\(tabs\) && \(/)
+  })
+
   test('uses WorktreeDiffPanel (not the legacy DiffViewer) on the diff pane', () => {
     expect(SRC).toMatch(/<WorktreeDiffPanel\b/)
     expect(SRC).not.toMatch(/<DiffViewer\b/)

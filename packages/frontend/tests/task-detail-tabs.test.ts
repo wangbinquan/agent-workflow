@@ -10,7 +10,9 @@ import type { NodeRun } from '@agent-workflow/shared'
 import {
   DYNAMIC_WORKGROUP_TAB_ORDER,
   TAB_ORDER,
+  WORKGROUP_TAB_ORDER,
   availableTabs,
+  canOfferFailedJump,
   defaultDynamicTab,
   nextTabForFailedJump,
 } from '../src/lib/task-detail-tabs'
@@ -146,6 +148,32 @@ describe('defaultDynamicTab — phase-driven default (RFC-167)', () => {
     expect(defaultDynamicTab('executing')).toBe('workflow-status')
     expect(defaultDynamicTab(null)).toBe('dw-orchestration')
     expect(defaultDynamicTab(undefined)).toBe('dw-orchestration')
+  })
+})
+
+// Scheduling-architecture review 2026-07-14: the failed-banner jump button
+// hardcodes tab 'workflow-status' (nextTabForFailedJump), but the turn-engine
+// workgroup tab set has no such tab — clicking bounced straight back to
+// 'chatroom' via the invalid-tab fallback effect, with a dangling node-run
+// selection nothing consumes. canOfferFailedJump is the pure gate the button
+// render must consult; these cases lock which tab sets offer the jump.
+describe('canOfferFailedJump', () => {
+  test('plain workflow set offers the jump (with or without outputs)', () => {
+    expect(canOfferFailedJump(availableTabs({ hasOutputs: true }))).toBe(true)
+    expect(canOfferFailedJump(availableTabs({ hasOutputs: false }))).toBe(true)
+  })
+
+  test('turn-engine workgroup set has no canvas → jump suppressed', () => {
+    expect(canOfferFailedJump(availableTabs({ hasOutputs: true, isWorkgroup: true }))).toBe(false)
+    expect(canOfferFailedJump([...WORKGROUP_TAB_ORDER])).toBe(false)
+  })
+
+  test('dynamic-workgroup set keeps the real DAG canvas → jump stays offered', () => {
+    expect(
+      canOfferFailedJump(
+        availableTabs({ hasOutputs: false, isWorkgroup: true, isDynamicWorkgroup: true }),
+      ),
+    ).toBe(true)
   })
 })
 

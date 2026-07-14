@@ -54,6 +54,7 @@ import { deriveClarifyNodeNav, type ClarifyNodeNavKind } from '@/lib/clarify-nod
 import { reviewRunDisplay } from '@/lib/reviewRunDisplay'
 import {
   availableTabs,
+  canOfferFailedJump,
   defaultDynamicTab,
   isTerminal,
   nextTabForFailedJump,
@@ -388,7 +389,11 @@ function TaskDetailPage() {
               </details>
             )}
           </div>
-          {tk.failedNodeId !== null && nodeRuns.data !== undefined && (
+          {/* The jump targets the workflow-status canvas; a turn-engine
+              workgroup task has no such tab (WORKGROUP_TAB_ORDER), so the
+              button used to bounce straight back to the chatroom with a
+              dangling selection — hide it there (canOfferFailedJump). */}
+          {tk.failedNodeId !== null && nodeRuns.data !== undefined && canOfferFailedJump(tabs) && (
             <button
               type="button"
               className="btn btn--sm btn--danger"

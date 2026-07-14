@@ -123,6 +123,20 @@ export function defaultDynamicTab(phase: DynamicWorkflowPhase | null | undefined
 }
 
 /**
+ * Whether the "Jump to failed node" button is offerable at all: the jump
+ * lands on the workflow-status canvas (`nextTabForFailedJump` hardcodes it —
+ * node selection is only meaningful there), so a tab set WITHOUT that tab
+ * must not render the button. Concretely: a turn-engine workgroup task
+ * (WORKGROUP_TAB_ORDER) has no canvas — clicking used to setTab a tab the
+ * invalid-tab fallback effect immediately bounced back to 'chatroom', with a
+ * dangling node-run selection nothing consumes (scheduling-architecture
+ * review 2026-07-14). Dynamic-workgroup and plain workflow sets keep it.
+ */
+export function canOfferFailedJump(tabs: readonly TaskDetailTab[]): boolean {
+  return tabs.includes('workflow-status')
+}
+
+/**
  * Resolve the `(selected node-run id, target tab)` pair the "Jump to
  * failed node" button should commit.
  *
