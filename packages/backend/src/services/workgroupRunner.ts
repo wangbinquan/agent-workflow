@@ -1145,7 +1145,6 @@ async function driveLeaderTurn(
       (errorNotice !== null
         ? `\n\n## Protocol errors in your previous reply\n\n${errorNotice}\n\nRe-emit a CORRECT envelope.`
         : '')
-    await advanceMemberCursor(db, taskId, leaderId, maxMessageId(state.messages))
 
     const result = await hooks.runHostNode({
       nodeRunId: runId,
@@ -1294,6 +1293,14 @@ async function driveLeaderTurn(
         await persistGate(db, taskId, state.rawConfig, { ...state.gate, rejected: false })
       }
     }
+    // RFC-186 T5 (audit §5 F6): advance the leader cursor to the turn-start max
+    // ONLY here, AFTER this turn's effects (messages / assignments / deliveries /
+    // decision / gate) are durably persisted. If a daemon restart kills the turn
+    // mid-flight (before this point), the cursor stays put so the resumed engine
+    // re-derives the turn instead of silently skipping it (was: advanced BEFORE
+    // runHostNode). `maxMessageId(state.messages)` is the turn-start snapshot, so
+    // the value is identical to the old pre-turn advance — only the timing moved.
+    await advanceMemberCursor(db, taskId, leaderId, maxMessageId(state.messages))
     return
   }
 }
@@ -1356,7 +1363,6 @@ async function driveAssignmentTurn(
       (errorNotice !== null
         ? `\n\n## Protocol errors in your previous reply\n\n${errorNotice}\n\nRe-emit a CORRECT envelope.`
         : '')
-    await advanceMemberCursor(db, taskId, memberId, maxMessageId(state.messages))
 
     const result = await hooks.runHostNode({
       nodeRunId: runId,
@@ -1474,6 +1480,10 @@ async function driveAssignmentTurn(
       assignmentId: assignment.id,
     })
     await casAssignmentStatus(db, assignment.id, 'running', 'done', { resultMessageId })
+    // RFC-186 T5 (audit §5 F6): advance the worker cursor AFTER the assignment's
+    // effects (result message / done / tasks_add) persist — a mid-turn crash
+    // leaves it un-advanced so the resumed engine doesn't skip consumed content.
+    await advanceMemberCursor(db, taskId, memberId, maxMessageId(state.messages))
     return
   }
 }
@@ -1519,7 +1529,6 @@ async function driveMessageTurn(
     : null
   const prompt =
     composeMemberPrompt(state, memberId, null) + (fcAddendum !== null ? `\n\n${fcAddendum}` : '')
-  await advanceMemberCursor(db, taskId, memberId, maxMessageId(state.messages))
 
   const role = config.mode === 'free_collab' ? ('fc_member' as const) : ('worker' as const)
   const result = await hooks.runHostNode({
@@ -1531,6 +1540,13 @@ async function driveMessageTurn(
     hostOutputPorts: wgHostRolePorts(role),
     clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false),
   })
+  // RFC-186 T5 (audit §5 F6): advance the member cursor AFTER the hook RETURNS
+  // (done OR failed — both consume the @-mention so it can't re-loop), but never
+  // BEFORE the hook. A mid-turn daemon crash (hook never returns) leaves it
+  // un-advanced so the resumed engine re-derives the turn instead of skipping it.
+  // (Message turns are cursor-driven, unlike the status-driven leader/assignment
+  // turns whose advance sits after their durable effects.)
+  await advanceMemberCursor(db, taskId, memberId, maxMessageId(state.messages))
   // RFC-186 §2.2 (audit §2 P1-7) — a failed message turn used to `return`
   // silently: the @-mentioned member appeared to ignore the message, the room
   // showed nothing, and debugging was blind. Surface the failure as a system

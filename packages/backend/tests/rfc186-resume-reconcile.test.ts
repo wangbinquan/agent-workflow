@@ -52,4 +52,18 @@ describe('RFC-186 PR-2 — source wiring locks', () => {
     const src = read('workgroupRunner.ts')
     expect(src).toContain('reconcileRunningAssignments(db, taskId')
   })
+
+  // RFC-186 T5 (audit §5 F6): the 3 cursor advances no longer sit immediately
+  // BEFORE runHostNode — they moved to after the turn's effects (leader /
+  // assignment) or after the hook returns (message), so a mid-turn daemon crash
+  // leaves the cursor un-advanced and the resumed engine re-derives the turn.
+  test('T5: no advanceMemberCursor immediately precedes runHostNode (F6 pattern removed)', () => {
+    const src = read('workgroupRunner.ts')
+    expect(src).not.toMatch(
+      /advanceMemberCursor\([^)]*\)\s*\n\s*\n\s*const result = await hooks\.runHostNode/,
+    )
+    // still exactly 3 advances (leader / assignment / message), just repositioned.
+    expect((src.match(/advanceMemberCursor\(db, taskId/g) ?? []).length).toBe(3)
+    expect((src.match(/RFC-186 T5/g) ?? []).length).toBeGreaterThanOrEqual(3)
+  })
 })

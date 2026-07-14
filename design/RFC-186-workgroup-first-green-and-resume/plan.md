@@ -66,7 +66,7 @@
 - **PR-2（P0-B 恢复）本次落地 T7+T6**：
   - **T7 接通 interrupted 恢复**：去 `autoResume.ts` turn-engine 排除 + 更 `rfc108-auto-resume.test.ts` 锁（改断言 lw/fc 也 resume）；真实 e2e「interrupted→autoResume→engine 再入→done」验证。
   - **T6 重启对账**：`decideAssignmentReconcile` 纯函数（undefined/interrupted/failed/canceled→redispatch、done→done、pending/running→none）+ `reconcileRunningAssignments` 引擎再入一次性对账 running-assignment×终态 node_run；纯函数单测 + 源码锁（`rfc186-resume-reconcile.test.ts`）。
-- **T5（cursor 改 turn 后推进，audit §5 F6）延后**：这是对并发 owner 活跃函数的精细外科手术，只覆盖「中途 *leader* 轮崩溃→resume 跳过该轮」这一最窄子例，失败模式（跳过一轮→可恢复 re-park）远轻于 T7/T6 修的永久死/wedge，且**不损坏状态**（未持久化效果、无可丢）。为避免 session 尾部仓促改坏，作为 RFC-186 窄follow-up 留档：中途 leader 轮崩溃恢复仍可能丢该轮意图（非永久死、非损坏）。**T8（crash→resume e2e 的 running-assignment wedge 版）**同延后，其对账逻辑已由 T6 纯函数单测覆盖。
+- **T5（cursor 改 turn 后推进，audit §5 F6）已落地**：三处 cursor 推进从「runHostNode 之前」移到——leader/assignment 轮**效果全部持久化之后**（成功路径 return 前）、message 轮**hook 返回之后**（done+failed 都推进以消费 @-mention 防重循环，唯独中途崩溃 hook 不返回→不推进）。中途 daemon 崩溃→cursor 未推进→resume 重导该轮而非静默跳过（残余窗口收窄到「末个 effect↔advance」一条语句，非「整轮」）。leader/assignment 为状态驱动（失败即 fatal/assignment-failed 不经 cursor 重循环），message 为 cursor 驱动（故 done+failed 都推进）。源码结构锁 + AC1 e2e（正向多轮要求推进正确）+ resume e2e（未推进→重导）behaviorally 覆盖。**T8（running-assignment wedge 版 crash e2e）**其对账逻辑已由 T6 纯函数单测覆盖，未单独构造复杂中途态 e2e。
 
 ## 收尾
 - `design/plan.md` RFC 索引 Draft→Done；`STATE.md` 进行中行移除/已完成表加行。
