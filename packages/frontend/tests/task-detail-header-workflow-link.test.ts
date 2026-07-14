@@ -11,8 +11,9 @@
 // components/TaskSubjectLink.tsx, which resolves workgroup / agent / workflow and
 // links to the owning resource. Link-target + badge behavior is covered by
 // tests/task-subject-link.test.tsx; this file locks the header/details-tab WIRING
-// (that both spots render the component, and the 工作流 label + parenthesised
-// ULID stay for plain workflow tasks).
+// (that both spots render the component, that the header labels the kind exactly
+// once — via the badge, 2026-07-14 — and that the details-tab meta row keeps its
+// <dt> label + parenthesised ULID for plain workflow tasks).
 //
 // Source-level scan because the routed component registers against TanStack
 // Router at runtime and is awkward to mount in happy-dom. We split the source at
@@ -54,10 +55,16 @@ describe('task detail header — subject jump link', () => {
     expect(block).not.toContain('tk.workflowName ?? tk.workflowId')
   })
 
-  test('the 工作流 label is kept, but only for plain workflow-kind tasks', () => {
+  test('the header prints the kind ONCE — badge only, no 「工作流」text label', () => {
+    // 2026-07-14: TaskSubjectLink's badge now covers all three kinds (workflow
+    // rows used to render bare, so the header prepended a 「工作流」text label to
+    // compensate). Keeping both would print the kind twice ("工作流 My Flow
+    // [工作流]"), so the header label is gone and the badge is the single source.
+    // The details-tab meta row still labels via its <dt> — see the test below —
+    // because it passes badge={false}.
     const block = HEADER.slice(HEADER.indexOf('task-detail__workflow'))
-    expect(block).toContain("subjectKind === 'workflow'")
-    expect(block).toContain("t('tasks.metaWorkflow')")
+    expect(block).not.toContain("t('tasks.metaWorkflow')")
+    expect(block).not.toContain("subjectKind === 'workflow'")
   })
 
   test('the details-tab subject meta row also delegates to TaskSubjectLink', () => {

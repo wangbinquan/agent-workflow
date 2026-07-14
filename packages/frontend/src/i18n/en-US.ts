@@ -1651,6 +1651,7 @@ export const enUS: Resources = {
     tabDwOrchestration: 'Orchestration',
     workgroupBadge: 'Workgroup',
     agentBadge: 'Agent',
+    workflowBadge: 'Workflow',
     worktreeFilesEmpty: 'Select a file from the left to preview.',
     worktreeFilesNoWorktree: 'This task has no worktree.',
     worktreeFilesOversized: 'File too large ({{size}}); exceeds {{limit}}. Preview skipped.',

@@ -36,10 +36,15 @@ describe('routes/tasks.tsx — subject cell delegates to TaskSubjectLink (no hos
     expect(SRC).not.toContain('to="/workgroups/$name"')
   })
 
-  test('both bundles label the workgroup + agent subject badges', () => {
+  test('both bundles label ALL THREE subject badges (workgroup / agent / workflow)', () => {
     expect(zhCN.tasks.workgroupBadge).toBe('工作组')
     expect(enUS.tasks.workgroupBadge.length).toBeGreaterThan(0)
     expect(zhCN.tasks.agentBadge).toBe('代理')
     expect(enUS.tasks.agentBadge.length).toBeGreaterThan(0)
+    // 2026-07-14: the workflow kind was the one left unlabeled — the column read
+    // asymmetrically (group/agent chipped, workflow bare). Table-level assert so
+    // a new kind can't be added without a label.
+    expect(zhCN.tasks.workflowBadge).toBe('工作流')
+    expect(enUS.tasks.workflowBadge.length).toBeGreaterThan(0)
   })
 })

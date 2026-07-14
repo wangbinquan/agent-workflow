@@ -10,7 +10,12 @@
 //   - workgroup → /workgroups/by-id/$id  → current group page  (+ 「工作组」badge)
 //   - agent     → /agents/by-id/$id      → current agent page  (+ 「代理」badge)
 //                 (historical agent w/o frozen id → /agents/$name, RFC-177 D3a)
-//   - workflow  → /workflows/$id          (plain link, no badge — unchanged)
+//   - workflow  → /workflows/$id          → workflow editor     (+ 「工作流」badge)
+// All three kinds are badged: the badge previously doubled as the "this row is
+// NOT a plain workflow" signal, which made the /tasks 工作流 column read
+// asymmetrically — group/agent rows labeled, workflow rows bare (i.e. the kind
+// was encoded in the ABSENCE of a chip). Labeling every kind makes the subject
+// self-describing. Callers that already label the kind pass `badge={false}`.
 // The link TEXT stays the frozen name (ACL-safe, same as the task's room); the
 // current name is disclosed only server-side, ACL-gated, by the by-id route after
 // the click. Used by the /tasks list cell and the /tasks/:id detail header + meta
@@ -40,83 +45,96 @@ export interface TaskSubjectLinkProps {
   /** Task id — used to build the per-instance badge testid. */
   taskId: string
   /**
-   * Render the kind badge (workgroup/agent) beside the name, wrapped in the
-   * single-line `.task-workflow-cell` flex. The /tasks list cell and the detail
-   * header pass this; the detail meta row omits it (its subject-aware <dt>
-   * already labels the kind). Workflow tasks never carry a badge.
+   * Render the kind badge (workgroup/agent/workflow) beside the name, wrapped in
+   * the single-line `.task-workflow-cell` flex. The /tasks list cell and the
+   * detail header pass this; the detail meta row omits it (its subject-aware <dt>
+   * already labels the kind).
    */
   badge?: boolean
 }
 
+const BADGE_KEY = {
+  workgroup: 'tasks.workgroupBadge',
+  agent: 'tasks.agentBadge',
+  workflow: 'tasks.workflowBadge',
+} as const
+
 export function TaskSubjectLink({ task, taskId, badge = false }: TaskSubjectLinkProps) {
   const { t } = useTranslation()
   const kind = taskExecutionKind(task)
-
-  // Workflow task: the plain anchor link, unchanged from the historical cell.
-  if (kind === 'workflow') {
-    return (
-      <Link to="/workflows/$id" params={{ id: task.workflowId }} className="data-table__link">
-        {task.workflowName ?? task.workflowId}
-      </Link>
-    )
-  }
-
   const isWorkgroup = kind === 'workgroup'
-  // Link by the FROZEN STABLE ID, resolved on click by the /…/by-id/$id route to
-  // the resource's CURRENT canonical page (RFC-177 — fixes the Codex 2026-07-13
-  // P2 where a renamed+reused name misidentified the subject). Rendering does no
-  // lookup: the id is already frozen on the task, so the ACL-frozen-name invariant
-  // (RFC-099) is untouched — the current name is disclosed only server-side,
-  // ACL-gated, by the by-id route.
-  //   - workgroupId is ALWAYS frozen for a workgroup task (taskExecutionKind).
-  //   - sourceAgentId is frozen for agent tasks launched since RFC-175; NULL for
-  //     older rows → D3(a) by-name fallback (no regression vs the prior by-name link).
-  //   - workgroupName may be null (group row deleted → frozen name gone) → em-dash.
-  const name = isWorkgroup ? (task.workgroupName ?? null) : (task.sourceAgentName ?? null)
   const linkClass = badge ? 'data-table__link task-workflow-cell__name' : 'data-table__link'
 
   let subject: ReactElement
-  if (name === null) {
-    // Deleted group (frozen name unavailable): keep the badge, drop the dead link.
-    subject = <span className="data-table__muted">{t('common.emDash')}</span>
-  } else if (isWorkgroup && task.workgroupId != null) {
+  if (kind === 'workflow') {
+    // Plain workflow task: the FK anchor IS the real subject, so the historical
+    // /workflows/$id link stands. No frozen-id indirection to do — workflowId is
+    // the resource's own id. Deleted workflow row → fall back to the raw ULID.
+    const workflowName = task.workflowName ?? task.workflowId
     subject = (
       <Link
-        to="/workgroups/by-id/$id"
-        params={{ id: task.workgroupId }}
+        to="/workflows/$id"
+        params={{ id: task.workflowId }}
         className={linkClass}
-        title={name}
+        title={workflowName}
       >
-        {name}
-      </Link>
-    )
-  } else if (!isWorkgroup && task.sourceAgentId != null) {
-    subject = (
-      <Link
-        to="/agents/by-id/$id"
-        params={{ id: task.sourceAgentId }}
-        className={linkClass}
-        title={name}
-      >
-        {name}
-      </Link>
-    )
-  } else if (!isWorkgroup) {
-    // RFC-177 D3(a): historical agent task (no frozen id) → by-name link. Only
-    // legacy rows keep the rare reuse caveat; new tasks are id-resolved above.
-    subject = (
-      <Link to="/agents/$name" params={{ name }} className={linkClass} title={name}>
-        {name}
+        {workflowName}
       </Link>
     )
   } else {
-    // Unreachable: a workgroup task always freezes workgroupId. Degrade to a
-    // by-name link rather than crash if that invariant is ever violated.
-    subject = (
-      <Link to="/workgroups/$name" params={{ name }} className={linkClass} title={name}>
-        {name}
-      </Link>
-    )
+    // Link by the FROZEN STABLE ID, resolved on click by the /…/by-id/$id route to
+    // the resource's CURRENT canonical page (RFC-177 — fixes the Codex 2026-07-13
+    // P2 where a renamed+reused name misidentified the subject). Rendering does no
+    // lookup: the id is already frozen on the task, so the ACL-frozen-name invariant
+    // (RFC-099) is untouched — the current name is disclosed only server-side,
+    // ACL-gated, by the by-id route.
+    //   - workgroupId is ALWAYS frozen for a workgroup task (taskExecutionKind).
+    //   - sourceAgentId is frozen for agent tasks launched since RFC-175; NULL for
+    //     older rows → D3(a) by-name fallback (no regression vs the prior by-name link).
+    //   - workgroupName may be null (group row deleted → frozen name gone) → em-dash.
+    const name = isWorkgroup ? (task.workgroupName ?? null) : (task.sourceAgentName ?? null)
+    if (name === null) {
+      // Deleted group (frozen name unavailable): keep the badge, drop the dead link.
+      subject = <span className="data-table__muted">{t('common.emDash')}</span>
+    } else if (isWorkgroup && task.workgroupId != null) {
+      subject = (
+        <Link
+          to="/workgroups/by-id/$id"
+          params={{ id: task.workgroupId }}
+          className={linkClass}
+          title={name}
+        >
+          {name}
+        </Link>
+      )
+    } else if (!isWorkgroup && task.sourceAgentId != null) {
+      subject = (
+        <Link
+          to="/agents/by-id/$id"
+          params={{ id: task.sourceAgentId }}
+          className={linkClass}
+          title={name}
+        >
+          {name}
+        </Link>
+      )
+    } else if (!isWorkgroup) {
+      // RFC-177 D3(a): historical agent task (no frozen id) → by-name link. Only
+      // legacy rows keep the rare reuse caveat; new tasks are id-resolved above.
+      subject = (
+        <Link to="/agents/$name" params={{ name }} className={linkClass} title={name}>
+          {name}
+        </Link>
+      )
+    } else {
+      // Unreachable: a workgroup task always freezes workgroupId. Degrade to a
+      // by-name link rather than crash if that invariant is ever violated.
+      subject = (
+        <Link to="/workgroups/$name" params={{ name }} className={linkClass} title={name}>
+          {name}
+        </Link>
+      )
+    }
   }
 
   if (!badge) return subject
@@ -130,7 +148,7 @@ export function TaskSubjectLink({ task, taskId, badge = false }: TaskSubjectLink
         className="task-workflow-cell__badge"
         data-testid={`task-${kind}-badge-${taskId}`}
       >
-        {isWorkgroup ? t('tasks.workgroupBadge') : t('tasks.agentBadge')}
+        {t(BADGE_KEY[kind])}
       </StatusChip>
     </span>
   )

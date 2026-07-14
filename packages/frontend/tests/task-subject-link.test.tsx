@@ -67,12 +67,20 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-describe('TaskSubjectLink — workflow tasks (unchanged)', () => {
-  test('links to /workflows/$id by name, no kind badge', async () => {
+describe('TaskSubjectLink — workflow tasks', () => {
+  test('links to /workflows/$id by name, carrying the 「工作流」kind badge', async () => {
     const task: TaskSubjectFields = { workflowId: 'wf1', workflowName: 'My Flow' }
     mountSubject(<TaskSubjectLink task={task} taskId="t1" badge />)
     const link = await screen.findByRole('link', { name: 'My Flow' })
     expect(link.getAttribute('href')).toBe('/workflows/wf1')
+
+    // 2026-07-14: workflow rows used to render BARE — the /tasks 工作流 column
+    // labeled workgroup/agent rows only, so "plain workflow" was encoded in the
+    // ABSENCE of a chip. All three kinds are labeled now; a regression that
+    // restores the early-return (no badge) turns this red.
+    const badgeEl = screen.getByTestId('task-workflow-badge-t1')
+    expect(badgeEl.textContent).toBe(i18n.t('tasks.workflowBadge'))
+    // The badge must be the workflow one, not a mislabeled group/agent chip.
     expect(screen.queryByTestId('task-workgroup-badge-t1')).toBeNull()
     expect(screen.queryByTestId('task-agent-badge-t1')).toBeNull()
   })
@@ -82,6 +90,17 @@ describe('TaskSubjectLink — workflow tasks (unchanged)', () => {
     mountSubject(<TaskSubjectLink task={task} taskId="t2" badge />)
     const link = await screen.findByRole('link', { name: 'wf2' })
     expect(link.getAttribute('href')).toBe('/workflows/wf2')
+    expect(screen.getByTestId('task-workflow-badge-t2').textContent).toBe(
+      i18n.t('tasks.workflowBadge'),
+    )
+  })
+
+  test('badge omitted (detail meta row) → bare workflow link, no chip', async () => {
+    const task: TaskSubjectFields = { workflowId: 'wf3', workflowName: 'Flow 3' }
+    mountSubject(<TaskSubjectLink task={task} taskId="t8" />)
+    const link = await screen.findByRole('link', { name: 'Flow 3' })
+    expect(link.getAttribute('href')).toBe('/workflows/wf3')
+    expect(screen.queryByTestId('task-workflow-badge-t8')).toBeNull()
   })
 })
 

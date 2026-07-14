@@ -304,16 +304,12 @@ function TaskDetailPage() {
               non-default "details" tab, so without this a user landing on a task
               can't reach its subject without switching tabs). TaskSubjectLink
               resolves workgroup / agent / workflow, so a group or single-agent
-              task links to its owning resource (+ kind badge) instead of leaking
-              the internal `__workgroup_host__` / `__agent_host__` anchor. The
-              「工作流」label is kept for plain workflow tasks; group/agent tasks
-              are marked by the badge instead. */}
+              task links to its owning resource instead of leaking the internal
+              `__workgroup_host__` / `__agent_host__` anchor. Its badge labels ALL
+              three kinds, so the header carries no separate 「工作流」text label —
+              that label existed only because workflow tasks used to render bare,
+              and keeping it would now print the kind twice. */}
           <div className="task-detail__workflow">
-            {subjectKind === 'workflow' && (
-              <>
-                <span className="task-detail__id-label">{t('tasks.metaWorkflow')}</span>{' '}
-              </>
-            )}
             <TaskSubjectLink task={tk} taskId={tk.id} badge />
           </div>
         </div>
