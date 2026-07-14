@@ -70,6 +70,7 @@ import {
   renderWgProtocolBlock,
   rosterDisplayNames,
   selectMemberSlices,
+  wgHostRolePorts,
 } from '@/services/workgroupContext'
 import {
   decideWorkgroupOutcome,
@@ -111,6 +112,15 @@ export interface WorkgroupHostRunRequest {
    *  task's CURRENT autonomous right before opening a session (mid-run toggle
    *  race — design-gate P1-①). */
   clarifyEnabled?: boolean
+  /** RFC-184: the wg protocol output ports this host role may emit
+   *  ({@link wgHostRolePorts}). When set, the hook projects the member agent's
+   *  `outputs` to this list and clears `outputKinds` before runNode, so the
+   *  runner parses/returns the wg_* ports and NEVER validates the member's own
+   *  business output kinds (root cause of the F42SE port-validation-path-empty
+   *  failure). Also gates `persistDeclaredOutputs:false` so host runs keep the
+   *  "zero node_run_outputs rows" invariant (design.md §2.4). Undefined
+   *  (dynamic orchestrator) ⇒ no projection, agent's declared outputs apply. */
+  hostOutputPorts?: string[]
 }
 
 export interface WorkgroupHostRunResult {
@@ -993,6 +1003,7 @@ async function driveLeaderTurn(
       agent: leaderAgent,
       promptTemplate: prompt,
       workgroupProtocolBlock: renderWgProtocolBlock('leader', config),
+      hostOutputPorts: wgHostRolePorts('leader'),
       clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false),
     })
     if (result.status === 'canceled') return
@@ -1201,6 +1212,7 @@ async function driveAssignmentTurn(
         config.mode === 'free_collab' ? 'fc_member' : 'worker',
         config,
       ),
+      hostOutputPorts: wgHostRolePorts(config.mode === 'free_collab' ? 'fc_member' : 'worker'),
       clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false),
     })
     if (result.status === 'canceled') {
@@ -1352,6 +1364,7 @@ async function driveMessageTurn(
     agent,
     promptTemplate: prompt,
     workgroupProtocolBlock: renderWgProtocolBlock(role, config),
+    hostOutputPorts: wgHostRolePorts(role),
     clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false),
   })
   if (result.status !== 'done') return

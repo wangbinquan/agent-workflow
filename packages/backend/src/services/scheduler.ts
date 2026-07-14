@@ -739,11 +739,25 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         shardKey: runShardKey === null ? undefined : runShardKey,
         iteration: 0,
       })
+      // RFC-184: workgroup host runs project the member agent's outputs to the
+      // role's wg_* protocol ports and clear outputKinds, so runNode parses/
+      // returns the wg ports and never validates the member's own business
+      // output kinds (F42SE root cause). prepareNodeRunInjection above already
+      // ran on the ORIGINAL req.agent (skills/mcp/deps are unaffected by this
+      // projection). Dynamic orchestrator runs leave hostOutputPorts unset →
+      // no projection (design.md §2.2/§2.4).
+      const hostAgent =
+        req.hostOutputPorts !== undefined
+          ? { ...req.agent, outputs: req.hostOutputPorts, outputKinds: undefined }
+          : req.agent
       const result = await runNode({
         taskId,
         nodeRunId: req.nodeRunId,
         nodeId: req.nodeId,
-        agent: req.agent,
+        agent: hostAgent,
+        // RFC-184 §2.4: host runs never persist their protocol ports into
+        // node_run_outputs (they'd trip clarify-aging runIdsWithOutput).
+        ...(req.hostOutputPorts !== undefined ? { persistDeclaredOutputs: false } : {}),
         runtime: frozen.protocol,
         runtimeBinary: frozen.binary,
         runtimeParams: frozen.params,
@@ -800,6 +814,15 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
           : {}),
       })
       broadcastNodeStatus(taskId, req.nodeRunId, req.nodeId, result.status)
+      // RFC-184 §2.3: a projected host run's declared-but-omitted wg_* ports come
+      // back as '' (parseEnvelope materializes them). Drop those so the workgroup
+      // runner's `outputs[port] !== undefined` required/optional checks see
+      // "omitted" (undefined), not an empty string that would fail JSON.parse and
+      // be mis-flagged a protocol violation. No-op when not a host run.
+      const projectOutputs = (outputs: Record<string, string>): Record<string, string> =>
+        req.hostOutputPorts !== undefined
+          ? Object.fromEntries(Object.entries(outputs).filter(([, v]) => v !== ''))
+          : outputs
       if (result.status === 'canceled') {
         return {
           status: 'canceled',
@@ -927,7 +950,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
           nodeRunId: req.nodeRunId,
           event: { kind: 'abandon', reason: 'discard-writes' },
         })
-        return { status: 'done', outputs: result.outputs }
+        return { status: 'done', outputs: projectOutputs(result.outputs) }
       }
       if (!iso.passthrough) {
         const nodeTrees = await snapshotNodeIsoFinal(iso, log)
@@ -965,7 +988,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
           }
         }
       }
-      return { status: 'done', outputs: result.outputs }
+      return { status: 'done', outputs: projectOutputs(result.outputs) }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       log.error('workgroup host-node run threw', { nodeRunId: req.nodeRunId, message })

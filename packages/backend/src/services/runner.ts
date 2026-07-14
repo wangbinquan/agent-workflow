@@ -181,6 +181,14 @@ export interface RunNodeOptions {
   /** RFC-164: workgroup protocol block replacing the agent-outputs protocol
    *  (threaded to renderUserPrompt.workgroupProtocolBlock; design §5). */
   workgroupProtocolBlock?: string
+  /** RFC-184: when `false`, skip persisting parsed ports into node_run_outputs
+   *  (default/undefined ⇒ persist as before). Workgroup host runs pass `false`
+   *  so their projected wg_* protocol ports — consumed live from result.outputs
+   *  and re-materialized into workgroup_assignments/messages, never read back
+   *  from node_run_outputs — do NOT leave rows that would trip the clarify-aging
+   *  `runIdsWithOutput` signal (design.md §2.4). Preserves the pre-RFC-184
+   *  invariant that host runs write zero node_run_outputs rows. */
+  persistDeclaredOutputs?: boolean
   /** Skills used by this agent. */
   skills: ResolvedSkill[]
   /**
@@ -1349,7 +1357,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         // above bails on the first invalid port without setting status back
         // to 'done', so this branch runs iff every declared port passed
         // (status still 'done').
-        if (status === 'done') {
+        // RFC-184: workgroup host runs pass persistDeclaredOutputs=false so their
+        // projected wg_* protocol ports never land in node_run_outputs (design.md
+        // §2.4) — result.outputs below still carries them for live consumption.
+        if (status === 'done' && opts.persistDeclaredOutputs !== false) {
           for (const [name, content] of parsed.ports) {
             // RFC-072: persist the resolved output kind so the Outputs tab can
             // tell file-path ports from text. NULL when the agent declared no
