@@ -815,9 +815,10 @@ describe('WorkgroupRoom — side rail', () => {
   })
 
   // RFC-185 —— fan-out 并发规模徽标：≥2 路在途才显示 ×N（单路/空闲不显示，
-  // 常态花名册零噪音）；数据源 = runHistory（与 presence/回合卡同一单源），
-  // awaiting_human（clarify park 投影）计入、终态不计。
-  test('roster fan-out badge: ×N when a member has ≥2 active runs, absent on single-run members', async () => {
+  // 常态花名册零噪音）。双源计数（Codex 实现门 P2 折入）：assignment 实例按
+  // assignment 行（dispatched/running/awaiting_human——覆盖 merge-back 窗口：
+  // run 行已 done 而 assignment 仍 running）；leader 轮/被 @ 轮按非终态 run。
+  test('roster fan-out badge: ×N when a member has ≥2 active instances, absent on single-run members', async () => {
     const entry = (
       over: Partial<WorkgroupRoomResponse['runHistory'][number]>,
     ): WorkgroupRoomResponse['runHistory'][number] => ({
@@ -834,8 +835,40 @@ describe('WorkgroupRoom — side rail', () => {
       note: null,
       ...over,
     })
+    const base = makeRoom()
     installFetch(
       makeRoom({
+        assignments: [
+          ...base.assignments, // a1 done（不计）+ a2 dispatched（排队，计入）
+          {
+            id: 'a3',
+            round: 2,
+            source: 'leader',
+            createdByUserId: null,
+            assigneeMemberId: 'mem_work',
+            title: 'shard B',
+            briefMd: 'audit b',
+            status: 'running', // merge-back 窗口：下方 run 行已 done，仍计入
+            nodeRunId: '01R3',
+            resultMessageId: null,
+            createdAt: 5000,
+            updatedAt: 5000,
+          },
+          {
+            id: 'a4',
+            round: 2,
+            source: 'leader',
+            createdByUserId: null,
+            assigneeMemberId: 'mem_work',
+            title: 'shard C',
+            briefMd: 'audit c',
+            status: 'awaiting_human', // clarify park，计入
+            nodeRunId: '01R4',
+            resultMessageId: null,
+            createdAt: 5000,
+            updatedAt: 5000,
+          },
+        ],
         memberRuns: {
           mem_lead: {
             nodeRunId: '01RL',
@@ -845,10 +878,9 @@ describe('WorkgroupRoom — side rail', () => {
           },
         },
         runHistory: [
-          entry({ nodeRunId: '01R1', assignmentId: 'a1', status: 'running' }),
-          entry({ nodeRunId: '01R2', assignmentId: 'a2', status: 'pending' }),
-          entry({ nodeRunId: '01R3', assignmentId: 'a3', status: 'awaiting_human' }),
-          entry({ nodeRunId: '01R4', assignmentId: 'a4', status: 'done' }), // terminal — not counted
+          // merge-back pending：run 行 done，其 assignment a3 仍 running——
+          // assignment 行是计数权威，这条 run 被跳过（不双计也不漏计）。
+          entry({ nodeRunId: '01R3', assignmentId: 'a3', status: 'done' }),
           entry({
             nodeRunId: '01RL',
             memberId: 'mem_lead',
@@ -861,9 +893,10 @@ describe('WorkgroupRoom — side rail', () => {
       }),
     )
     renderRoom(makeRoom())
+    // Worker = a2(dispatched) + a3(running, merge-back) + a4(awaiting_human) = ×3
     const badge = await screen.findByTestId('wg-member-active-runs-Worker')
     expect(badge.textContent).toBe('×3 active')
-    // exactly one live run → no badge (presence chip alone carries that state)
+    // exactly one live turn → no badge (presence chip alone carries that state)
     expect(screen.queryByTestId('wg-member-active-runs-Lead')).toBeNull()
   })
 

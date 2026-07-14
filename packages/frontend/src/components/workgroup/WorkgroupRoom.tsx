@@ -556,9 +556,11 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
               // #2). The chip itself is clickable into the session (D9).
               const presence = deriveMemberPresence(m.id, data.assignments, currentRun)
               // RFC-185 — fan-out scale: single-value presence hides N
-              // concurrent instances; show ×N off the same runHistory source
-              // (≥2 only, so the everyday single-run roster stays noise-free).
-              const activeRuns = countMemberActiveRuns(data.runHistory, m.id)
+              // concurrent instances; show ×N (≥2 only, so the everyday
+              // single-run roster stays noise-free). Assignments join the
+              // count so merge-back-pending instances (run row already done,
+              // assignment still running) stay visible.
+              const activeRuns = countMemberActiveRuns(data.runHistory, data.assignments, m.id)
               const presenceKind: Record<
                 WorkgroupMemberPresence,
                 'success' | 'warn' | 'info' | 'neutral'

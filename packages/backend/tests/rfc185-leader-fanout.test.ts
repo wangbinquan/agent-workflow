@@ -163,7 +163,13 @@ describe('RFC-185 — leader protocol FAN-OUT block', () => {
     expect(block).toContain('SAME member may appear in MULTIPLE entries')
     expect(block).toContain('CONCURRENT INSTANCE')
     expect(block).toContain('self-contained')
-    expect(block).toContain('aggregate only after ALL')
+    // Codex impl-gate P2 — the barrier copy must NOT claim every assignment is
+    // terminal at wake time: a clarify-parked instance (awaiting_human) does
+    // not block the leader wake (locked below), so the copy has to teach the
+    // leader to treat a parked ledger row as in-progress, not done.
+    expect(block).toContain('aggregate once no dispatched')
+    expect(block).toContain('awaiting_human in your ledger')
+    expect(block).toContain('IN PROGRESS')
   })
 
   test('the per-turn cap in the copy can never drift from the validator constant', () => {

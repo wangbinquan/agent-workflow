@@ -604,9 +604,11 @@ describe('RFC-179 executing indicators', () => {
 
 // ---------------------------------------------------------------------------
 // RFC-185 —— fan-out 并发规模数据预言（countMemberActiveRuns）：leader 对同一
-// 成员并发派 N 单时，presence 单值投影不反映规模；徽标按 runHistory 数该成员
-// 非终态 run。锁：pending/running/awaiting_human 计入（awaiting_human 覆盖
-// clarify-park——后端投影层已把假 done 改写）、终态不计、他人 run 不计。
+// 成员并发派 N 单时，presence 单值投影不反映规模。双源计数（Codex 实现门 P2
+// 折入）：assignment 实例按 assignment 行（dispatched/running/awaiting_human）
+// —— 覆盖 merge-back 窗口（run 行先落 done、assignment 等 merge 归来才 done）
+// 与未 mint 的 dispatched 排队窗口；leader 轮/被 @ 轮按非终态 run；assignment
+// 类 run 跳过防双计。
 // ---------------------------------------------------------------------------
 
 describe('RFC-185 countMemberActiveRuns', () => {
@@ -625,20 +627,38 @@ describe('RFC-185 countMemberActiveRuns', () => {
     ...over,
   })
 
-  test('counts only the given member’s non-terminal runs', () => {
+  test('assignment instances count by ASSIGNMENT status — merge-back window stays visible', () => {
     const history = [
-      entry({ nodeRunId: 'R1', status: 'running' }),
-      entry({ nodeRunId: 'R2', status: 'pending' }),
-      entry({ nodeRunId: 'R3', status: 'awaiting_human' }), // clarify park —— 计入
-      entry({ nodeRunId: 'R4', status: 'done' }),
-      entry({ nodeRunId: 'R5', status: 'failed' }),
-      entry({ nodeRunId: 'R6', status: 'canceled' }),
-      entry({ nodeRunId: 'R7', memberId: 'a2', status: 'running' }), // 他人 run 不计
+      // merge-back pending: the run row is already done while its assignment
+      // is still running — must NOT drop out of the badge (Codex P2).
+      entry({ nodeRunId: 'R1', status: 'done', assignmentId: 'A1' }),
+      // a live assignment run — skipped here, counted via its assignment row.
+      entry({ nodeRunId: 'R2', status: 'running', assignmentId: 'A2' }),
     ]
-    expect(countMemberActiveRuns(history, 'a1')).toBe(3)
-    expect(countMemberActiveRuns(history, 'a2')).toBe(1)
-    expect(countMemberActiveRuns(history, 'lead')).toBe(0)
-    expect(countMemberActiveRuns([], 'a1')).toBe(0)
+    const assignments = [
+      { assigneeMemberId: 'a1', status: 'running' as const }, // R1's — merging
+      { assigneeMemberId: 'a1', status: 'dispatched' as const }, // queued, no run yet
+      { assigneeMemberId: 'a1', status: 'awaiting_human' as const }, // clarify park
+      { assigneeMemberId: 'a1', status: 'done' as const }, // terminal — out
+      { assigneeMemberId: 'a2', status: 'running' as const }, // someone else
+    ]
+    expect(countMemberActiveRuns(history, assignments, 'a1')).toBe(3)
+    expect(countMemberActiveRuns(history, assignments, 'a2')).toBe(1)
+    expect(countMemberActiveRuns(history, assignments, 'lead')).toBe(0)
+  })
+
+  test('non-assignment turns count by run; assignment-kind runs never double-count', () => {
+    const history = [
+      entry({ nodeRunId: 'L1', kind: 'leader-round', memberId: 'lead', status: 'running' }),
+      entry({ nodeRunId: 'M1', kind: 'message-turn', memberId: 'lead', status: 'pending' }),
+      entry({ nodeRunId: 'M2', kind: 'message-turn', memberId: 'lead', status: 'done' }), // terminal — out
+      entry({ nodeRunId: 'A1', kind: 'assignment', memberId: 'a1', status: 'running' }),
+    ]
+    expect(countMemberActiveRuns(history, [], 'lead')).toBe(2)
+    // an assignment-kind run with no assignment row contributes nothing —
+    // the assignment row is the single counting authority for instances.
+    expect(countMemberActiveRuns(history, [], 'a1')).toBe(0)
+    expect(countMemberActiveRuns([], [], 'a1')).toBe(0)
   })
 })
 

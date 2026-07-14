@@ -22,6 +22,11 @@ import {
   resolveClarifyEnabled,
   resolveWorkgroupSwitches,
   WG_MAX_ASSIGNMENTS_PER_TURN,
+  WG_PORT_ASSIGNMENTS,
+  WG_PORT_DECISION,
+  WG_PORT_MESSAGES,
+  WG_PORT_RESULT,
+  WG_PORT_TASKS_ADD,
 } from '@agent-workflow/shared'
 
 // Character budgets for injected slices (clip keeps the TAIL — newest wins).
@@ -326,9 +331,12 @@ export function renderWgProtocolBlock(
       '  shards, alternative approaches to compare). Instances share NOTHING at',
       "  runtime and cannot see each other's work-in-progress, so make every",
       '  brief fully self-contained and keep shards non-overlapping to avoid',
-      '  merge conflicts. You are woken to verify and aggregate only after ALL',
-      `  dispatched assignments reach a terminal state. At most ${WG_MAX_ASSIGNMENTS_PER_TURN} entries per`,
-      '  turn; dispatch further waves in later turns if needed.</port>',
+      '  merge conflicts. You are woken to verify and aggregate once no dispatched',
+      '  assignment is still executing. CAUTION: an instance parked on a human',
+      '  ask-back may still appear as awaiting_human in your ledger at that point',
+      '  — treat it as IN PROGRESS (message, dispatch other work, or wait), never',
+      `  as done. At most ${WG_MAX_ASSIGNMENTS_PER_TURN} entries per turn; dispatch further waves in`,
+      '  later turns if needed.</port>',
       `- <port name="wg_messages">JSON array of {"to","body"}; to = ${msgTargets}.</port>`,
       '- <port name="wg_decision">JSON {"action":"continue"} while work remains,',
       '  or {"action":"done","summary":"..."} to close the group task. REQUIRED every turn.</port>',
@@ -371,6 +379,22 @@ export function renderWgProtocolBlock(
   // agents proceed on their own judgment instead of interrupting the launcher.
   if (resolveClarifyEnabled(config.autonomous ?? false)) lines.push(WG_CLARIFY_BLOCK)
   return lines.join('\n')
+}
+
+/**
+ * RFC-184: the wg protocol output ports a host run of `role` is allowed to
+ * emit — the machine-readable MIRROR of the `<port name="…">` lines that
+ * {@link renderWgProtocolBlock} prints for the same role. A workgroup host run
+ * projects the member agent's `outputs` to this list (and clears outputKinds)
+ * so `runNode` parses/returns the wg_* ports and never validates the member's
+ * own business output kinds (design.md §2.1). MUST stay in lockstep with
+ * renderWgProtocolBlock above — the mirror-lock test asserts equality against
+ * the ports grepped out of that function's text.
+ */
+export function wgHostRolePorts(role: WorkgroupProtocolRole): string[] {
+  if (role === 'leader') return [WG_PORT_ASSIGNMENTS, WG_PORT_MESSAGES, WG_PORT_DECISION]
+  if (role === 'fc_member') return [WG_PORT_RESULT, WG_PORT_MESSAGES, WG_PORT_TASKS_ADD]
+  return [WG_PORT_RESULT, WG_PORT_MESSAGES] // worker
 }
 
 export function renderMessagesBlock(

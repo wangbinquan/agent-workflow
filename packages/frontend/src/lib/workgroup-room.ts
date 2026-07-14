@@ -207,20 +207,31 @@ export function deriveMemberPresence(
 // ---------------------------------------------------------------------------
 // RFC-185 — fan-out 并发规模徽标的数据预言。presence chip 读的是每成员单值
 // currentRun 投影（running wins, else newest），leader 对同一成员并发派 N 单时
-// 规模不可见。这里直接数 runHistory（memberRuns 的同一单源）里该成员的非终态
-// host run 数，徽标与 presence 永不因数据源分叉而矛盾。非终态 = pending |
-// running | awaiting_human —— open-clarify park 的 run（DB 行假 done）已在
-// 后端投影层改写为 awaiting_human（RFC-182 impl-gate P1），此处按投影后
-// status 计数即正确覆盖 park 中的实例。
+// 规模不可见。计数取双源（Codex 实现门 P2 折入）：
+//   - assignment 实例按 ASSIGNMENT 行计（dispatched|running|awaiting_human）
+//     —— assignment 是实例生命周期的权威：runNode 在 merge-back 之前就把
+//     node_runs 行落 done（writeSem 串行排队 + merge agent 冲突期可能很长），
+//     而 driveAssignmentTurn 要等 merge-back 归来才 CAS assignment→done；
+//     只看 run 会在该窗口漏计。dispatched（排队未 mint）也天然覆盖。
+//   - 非 assignment 轮（leader-round / message-turn）无 assignment 行，按
+//     runHistory 的非终态 run 计（pending|running|awaiting_human —— open-
+//     clarify park 的假 done 已在后端投影层改写，RFC-182 impl-gate P1）。
+//   - assignment 类 run 跳过，防同一实例双计。
 // ---------------------------------------------------------------------------
 
 export function countMemberActiveRuns(
   runHistory: readonly WorkgroupRunEntry[],
+  assignments: readonly Pick<WorkgroupRoomAssignment, 'assigneeMemberId' | 'status'>[],
   memberId: string,
 ): number {
   let n = 0
+  for (const a of assignments) {
+    if (a.assigneeMemberId !== memberId) continue
+    if (a.status === 'dispatched' || a.status === 'running' || a.status === 'awaiting_human') n++
+  }
   for (const e of runHistory) {
     if (e.memberId !== memberId) continue
+    if (e.kind === 'assignment') continue
     if (e.status === 'pending' || e.status === 'running' || e.status === 'awaiting_human') n++
   }
   return n
