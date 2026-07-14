@@ -1305,6 +1305,12 @@ async function driveLeaderTurn(
   if (adoptedRow !== undefined && adoptedRow.wgRound === null) {
     await stampWgRound(db, adoptedRow.id, wgRound)
   }
+  // Codex 实现门 P2-1 — retries of an ADOPTED turn continue from the adopted
+  // row's stored index (a clarify-answer continuation carries the standard
+  // dispatch's lineage max+1; a crash-adopted protocol retry carries its own
+  // attempt) so a follow-up retry can never re-mint a duplicate
+  // (node, shard, retry_index). Fresh turns start at 0 — plain attempt.
+  const retryBase = adoptedRow?.retryIndex ?? 0
 
   let errorNotice: string | null = null
   for (let attempt = 0; attempt <= WG_PROTOCOL_RETRIES; attempt++) {
@@ -1319,7 +1325,7 @@ async function driveLeaderTurn(
         // RFC-189 — retryIndex is the plain ATTEMPT ordinal now (the round lives
         // in wg_round); the old "prior-row count + attempt" overload is gone.
         cause: attempt > 0 ? 'wg-protocol-retry' : 'wg-leader-round',
-        retryIndex: attempt,
+        retryIndex: retryBase + attempt,
         overrides: { wgRound },
       })
       args.registerMint?.(runId)
@@ -1445,7 +1451,13 @@ async function driveLeaderTurn(
       continue
     }
 
-    const round = currentRound(state) + 1
+    // Codex 实现门 P2-2 — the turn's EFFECTS (messages / dispatched assignments,
+    // whose round workers inherit) share the SAME authoritative round as the
+    // run row's stamp. Fresh turn: wgRound == currentRound+1 (byte-identical to
+    // the old expression); ADOPTED turn: wgRound == currentRound (the adopted
+    // row already sits in the ledger) — the old +1 split one turn across two
+    // round labels (run stamped N, effects N+1).
+    const round = wgRound
     // 1. persist leader messages (targets validated; leader may always DM).
     if (outMessages.ok) {
       await persistWgMessages(db, taskId, config, round, leaderId, outMessages.value, {
@@ -1571,6 +1583,9 @@ async function driveAssignmentTurn(
   ) {
     await stampWgRound(db, adoptedMemberRow.id, memberWgRound)
   }
+  // Codex 实现门 P2-1（member 侧同形）— adopted 续跑的重试从其存量 index 续排，
+  // 防 (node, shard, retry_index) 重复铸行。
+  const retryBase = adoptedMemberRow?.retryIndex ?? 0
 
   let errorNotice: string | null = null
   for (let attempt = 0; attempt <= WG_PROTOCOL_RETRIES; attempt++) {
@@ -1584,7 +1599,7 @@ async function driveAssignmentTurn(
         // from round accounting (matters for fc, which counts member runs as rounds).
         // RFC-189 — retryIndex = plain attempt ordinal (round lives in wg_round).
         cause: attempt > 0 ? 'wg-protocol-retry' : 'wg-assignment',
-        retryIndex: attempt,
+        retryIndex: retryBase + attempt,
         overrides: {
           shardKey: assignment.id,
           agentOverrideName: agent.name,
@@ -1767,6 +1782,12 @@ async function driveMessageTurn(
     })
     args.registerMint?.(runId)
     broadcastPendingMint(taskId, runId, WG_MEMBER_NODE_ID)
+  } else if (config.mode === 'leader_worker') {
+    // Codex 实现门 P2-4 — an ADOPTED msg continuation (clarify-answer rerun on
+    // a msg:* shard, minted outside without a stamp) gets its round in place;
+    // display-only in lw (message turns never advance the ledger), idempotent
+    // via the IS NULL guard.
+    await stampWgRound(db, runId, currentRound(state))
   }
 
   const fcAddendum = isFcInitial

@@ -370,9 +370,17 @@ describe('RFC-189 引擎打戳（lw）', () => {
       nodeId: '__wg_leader__',
       status: 'pending',
       rerunCause: 'wg-leader-round',
+      // Codex 实现门 P2-1 场景：领养行带存量 index（clarify-answer 续跑经标准
+      // dispatch mint 的 max+1 形态）——后续协议重试必须从它续排，不得回 0 重复。
+      retryIndex: 4,
       startedAt: Date.now(),
     })
-    const { hooks } = scriptedHooks({ leader: [leaderDone()], member: [] })
+    const { hooks } = scriptedHooks({
+      // 领养轮先滑一次信封（触发协议重试）再 done + 派单（P2-2：effects 轮号
+      // 必须与领养行的 stamp 同轮），worker 一单完成后 leader 第二轮收 done。
+      leader: [skipEnvelope(), leaderDispatch(), leaderDone()],
+      member: [memberDone()],
+    })
     // 真实 runHostNode 会把行推进到终态；fake hook 不落库 → 手动补一层状态翻转，
     // 否则 orphan 永远 pending 被引擎二次领养（脚本耗尽 → 假失败）。
     const flipping: WorkgroupEngineHooks = {
@@ -389,6 +397,21 @@ describe('RFC-189 引擎打戳（lw）', () => {
     expect(res.kind).toBe('ok')
     const adopted = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, orphanId)))[0]
     expect(adopted?.wgRound).toBe(1) // NULL-qualifying 尾巴计入后就地 stamp 为当前轮
+    const leaders = (await hostRows(db, taskId)).filter((r) => r.nodeId === '__wg_leader__')
+    // P2-1：领养轮的协议重试 retryIndex = 存量 4 续排为 5（同轮 wgRound=1），
+    // 不回 0 造成 (node, shard, retry_index) 重复。
+    const retryRow = leaders.find((r) => r.rerunCause === 'wg-protocol-retry')
+    expect(retryRow?.retryIndex).toBe(5)
+    expect(retryRow?.wgRound).toBe(1)
+    // P2-2：领养轮派出的 assignment 与其 stamp 同轮（旧代码劈成 run=1 / 效果=2）。
+    const cards = await db
+      .select()
+      .from(workgroupAssignments)
+      .where(eq(workgroupAssignments.taskId, taskId))
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.round).toBe(1)
+    const worker = (await hostRows(db, taskId)).find((r) => r.nodeId === '__wg_member__')
+    expect(worker?.wgRound).toBe(1)
   })
 })
 

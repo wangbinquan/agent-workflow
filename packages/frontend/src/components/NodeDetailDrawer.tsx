@@ -307,8 +307,10 @@ function StatsTab({
       <dt>{t('nodeDrawer.statIteration')}</dt>
       <dd>{run.iteration}</dd>
       {/* RFC-189 — the authoritative lw workgroup round ordinal (wg_round);
-          absent on non-workgroup / free_collab rows. */}
-      {run.wgRound !== null && (
+          absent on non-workgroup / free_collab rows. Codex 实现门 P3: api.get
+          only CASTS the JSON — a pre-0095 remote daemon omits the field
+          entirely (undefined, zod default never runs), so guard both. */}
+      {run.wgRound !== null && run.wgRound !== undefined && (
         <>
           <dt>{t('nodeDrawer.statWgRound')}</dt>
           <dd data-testid="rfc189-wg-round">{run.wgRound}</dd>
