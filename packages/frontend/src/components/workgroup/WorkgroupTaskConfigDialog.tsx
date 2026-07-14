@@ -182,7 +182,24 @@ export function WorkgroupTaskConfigDialog({
         checked={draft.completionGate}
         onChange={(v) => setDraft((d) => ({ ...d, completionGate: v }))}
         label={t('workgroups.fieldCompletionGate')}
-        hint={t('workgroups.fieldCompletionGateHint')}
+        hint={
+          draft.autonomous
+            ? t('workgroups.fieldCompletionGateAutonomousHint')
+            : t('workgroups.fieldCompletionGateHint')
+        }
+        disabled={draft.autonomous}
+      />
+
+      {/* RFC-181 A — mid-run autonomous toggle (same per-task patch channel as
+          completionGate). Flipping it ON also dismisses in-flight clarify
+          parks server-side (A2), so an already-ping-ponging task goes quiet
+          without a cancel+relaunch. */}
+      <Switch
+        checked={draft.autonomous}
+        onChange={(v) => setDraft((d) => ({ ...d, autonomous: v }))}
+        label={t('workgroups.fieldAutonomous')}
+        hint={t('workgroups.fieldAutonomousHint')}
+        data-testid="wg-config-autonomous"
       />
 
       <div className="workgroup-room__config-members-title">

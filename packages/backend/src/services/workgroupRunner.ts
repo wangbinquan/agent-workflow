@@ -28,6 +28,7 @@ import {
   parseWgResultPort,
   parseWgTasksAddPort,
   renderAgentCapabilityCard,
+  resolveClarifyEnabled,
   resolveCompletionGate,
   resolveWorkgroupSwitches,
   WG_PORT_ASSIGNMENTS,
@@ -53,6 +54,7 @@ import {
   workgroupMessages,
 } from '@/db/schema'
 import { getAgent } from '@/services/agent'
+import { CLARIFY_FORBIDDEN_PREFIX } from '@/services/envelope'
 import { mintNodeRun } from '@/services/nodeRunMint'
 import { setNodeRunStatus } from '@/services/lifecycle'
 import { advanceMemberCursor, casAssignmentStatus } from '@/services/workgroupLifecycle'
@@ -100,6 +102,15 @@ export interface WorkgroupHostRunRequest {
    *  the human confirm gate happen after the run). Workgroup turns leave this
    *  unset (their writes are the work product). */
   discardWrites?: boolean
+  /** RFC-181 C — resolveClarifyEnabled(config.autonomous) at dispatch time.
+   *  false ⇒ the hook runs the node with the 'stopped' clarify directive, so a
+   *  voluntary <workflow-clarify> is REJECTED inside runNode (persisted
+   *  failed + clarify-forbidden, no session, no park) and the runner branches
+   *  below re-prompt / drop-and-continue. Undefined (dynamic orchestrator)
+   *  keeps the legacy no-channel behavior. The hook additionally re-reads the
+   *  task's CURRENT autonomous right before opening a session (mid-run toggle
+   *  race — design-gate P1-①). */
+  clarifyEnabled?: boolean
 }
 
 export interface WorkgroupHostRunResult {
@@ -965,11 +976,28 @@ async function driveLeaderTurn(
       agent: leaderAgent,
       promptTemplate: prompt,
       workgroupProtocolBlock: renderWgProtocolBlock('leader', config),
+      clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false),
     })
     if (result.status === 'canceled') return
     if (result.status === 'awaiting') return // leader asked the human — task parks via outcome pass
     if (result.status === 'failed') {
       const msg = result.errorMessage ?? 'leader run failed'
+      // RFC-181 C — the run's <workflow-clarify> was hard-suppressed
+      // (autonomous; persisted failed:clarify-forbidden by runNode / the
+      // hook's mid-run-toggle correction). Re-prompt the leader to decide by
+      // itself; when retries run dry, DROP-AND-CONTINUE (no throw, no park) —
+      // the leader slides into idle and the autonomous nudge / round caps
+      // take over (design §2.2). Distinct from the malformed
+      // `clarify-questions-` family below, whose exhaustion is fatal.
+      if (msg.startsWith(CLARIFY_FORBIDDEN_PREFIX)) {
+        if (attempt < WG_PROTOCOL_RETRIES) {
+          errorNotice =
+            '- Ask-back is OFF in this autonomous group. Do NOT emit <workflow-clarify>.\n' +
+            '  Proceed with your best judgment and emit wg_decision / wg_assignments as usual.'
+          continue
+        }
+        return
+      }
       // A malformed <workflow-clarify> reply (the leader CHOSE to ask a human
       // but mis-formatted the questions JSON) is a RETRYABLE protocol
       // violation — symmetric to the malformed-output-port path below and to
@@ -1155,6 +1183,7 @@ async function driveAssignmentTurn(
         config.mode === 'free_collab' ? 'fc_member' : 'worker',
         config,
       ),
+      clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false),
     })
     if (result.status === 'canceled') {
       await casAssignmentStatus(db, assignment.id, 'running', 'canceled').catch(() => false)
@@ -1165,6 +1194,17 @@ async function driveAssignmentTurn(
       return
     }
     if (result.status === 'failed') {
+      // RFC-181 C — suppressed ask-back is a RETRYABLE protocol nudge for the
+      // member too: re-prompt it to proceed on its own; exhaustion falls
+      // through to the normal failed handling (assignment failed floats up on
+      // the card — never a park).
+      const failMsg = result.errorMessage ?? 'run failed'
+      if (failMsg.startsWith(CLARIFY_FORBIDDEN_PREFIX) && attempt < WG_PROTOCOL_RETRIES) {
+        errorNotice =
+          '- Ask-back is OFF in this autonomous group. Do NOT emit <workflow-clarify>.\n' +
+          '  Proceed with your best judgment and emit wg_result as usual.'
+        continue
+      }
       await casAssignmentStatus(db, assignment.id, 'running', 'failed')
       await postMessage(db, taskId, {
         round: assignment.round,
@@ -1293,6 +1333,7 @@ async function driveMessageTurn(
     agent,
     promptTemplate: prompt,
     workgroupProtocolBlock: renderWgProtocolBlock(role, config),
+    clarifyEnabled: resolveClarifyEnabled(config.autonomous ?? false),
   })
   if (result.status !== 'done') return
 

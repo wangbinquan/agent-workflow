@@ -491,18 +491,22 @@ export interface WorkgroupTaskConfigDraft {
   /** undefined = field cleared → treated as "unchanged". */
   maxRounds: number | undefined
   completionGate: boolean
+  /** RFC-181 A — mid-run autonomous toggle (symmetric on/off; false→true also
+   *  dismisses in-flight clarify parks server-side, A2). */
+  autonomous: boolean
   addMembers: WorkgroupConfigMemberAdd[]
   removeMemberIds: string[]
 }
 
 /** Dialog seed — mirrors the CURRENT task copy so diffing starts clean. */
 export function workgroupTaskConfigDraftFrom(
-  config: Pick<WorkgroupRuntimeConfig, 'switches' | 'maxRounds' | 'completionGate'>,
+  config: Pick<WorkgroupRuntimeConfig, 'switches' | 'maxRounds' | 'completionGate' | 'autonomous'>,
 ): WorkgroupTaskConfigDraft {
   return {
     switches: { ...config.switches },
     maxRounds: config.maxRounds,
     completionGate: config.completionGate,
+    autonomous: config.autonomous ?? false,
     addMembers: [],
     removeMemberIds: [],
   }
@@ -516,7 +520,7 @@ export function workgroupTaskConfigDraftFrom(
  * triple), included iff any one of the three flipped.
  */
 export function buildWorkgroupConfigPatch(
-  config: Pick<WorkgroupRuntimeConfig, 'switches' | 'maxRounds' | 'completionGate'>,
+  config: Pick<WorkgroupRuntimeConfig, 'switches' | 'maxRounds' | 'completionGate' | 'autonomous'>,
   draft: WorkgroupTaskConfigDraft,
 ): Record<string, unknown> | null {
   const out: Record<string, unknown> = {}
@@ -532,6 +536,7 @@ export function buildWorkgroupConfigPatch(
     out.maxRounds = draft.maxRounds
   }
   if (draft.completionGate !== config.completionGate) out.completionGate = draft.completionGate
+  if (draft.autonomous !== (config.autonomous ?? false)) out.autonomous = draft.autonomous
   if (draft.addMembers.length > 0) {
     out.addMembers = draft.addMembers.map((m) =>
       m.memberType === 'agent'

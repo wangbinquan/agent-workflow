@@ -1074,3 +1074,85 @@ describe('RFC-176 — goal directive injection & launch kickoff', () => {
     expect(JSON.parse(seeds[0]?.mentionsJson ?? '[]')).toEqual([])
   })
 })
+
+// ---------------------------------------------------------------------------
+// RFC-181 C — 反问硬压制的引擎收场（drop-and-continue，绝不 park）
+// (design/RFC-181-workgroup-autonomous-hardening/design.md §2.2)
+// runNode 层的 clarify-forbidden 持久拒绝由 RFC-123 既有测试覆盖；此处锁
+// workgroupRunner 对该前缀的重试/收场 + clarifyEnabled 透传。
+// ---------------------------------------------------------------------------
+
+describe('RFC-181 C — clarify 压制收场（fake hooks）', () => {
+  let db: DbClient
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+  })
+
+  const cfSuppressed: WorkgroupHostRunResult = {
+    status: 'failed',
+    outputs: {},
+    errorMessage:
+      'clarify-forbidden: node is in STOP CLARIFYING mode; emit <workflow-output>, not <workflow-clarify>',
+  }
+
+  test('leader：压制重提示 → 耗尽 drop-and-continue（不 throw、不 park）→ nudge 后收敛 done', async () => {
+    const config = cfg({ autonomous: true, completionGate: false })
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks, requests } = scriptedHooks({
+      // WG_PROTOCOL_RETRIES=1 → 2 次压制尝试后 drop；autonomous 空转 nudge
+      // 重新唤醒 leader，第三个脚本收敛 done。
+      leader: [
+        cfSuppressed,
+        cfSuppressed,
+        doneLeader({ decision: { action: 'done', summary: 'decided alone' } }),
+      ],
+      member: [],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('ok')
+    const leaderReqs = requests.filter((r) => r.nodeId === WG_LEADER_NODE_ID)
+    expect(leaderReqs).toHaveLength(3)
+    // RFC-181：三处调用点都以最新 config 透传 clarifyEnabled=false。
+    expect(leaderReqs.every((r) => r.clarifyEnabled === false)).toBe(true)
+    // 第二次尝试的 re-prompt 带压制提示。
+    expect(leaderReqs[1]?.promptTemplate).toContain('Ask-back is OFF')
+  })
+
+  test('worker：压制重提示 → 耗尽 assignment failed 浮出（不 park），任务照常收敛', async () => {
+    const config = cfg({ autonomous: true, completionGate: false })
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks, requests } = scriptedHooks({
+      leader: [
+        doneLeader({
+          assignments: [{ member: 'coder', title: 'do-x', brief: 'do x' }],
+          decision: { action: 'continue' },
+        }),
+        doneLeader({ decision: { action: 'done', summary: 'wrap' } }),
+      ],
+      member: [cfSuppressed, cfSuppressed],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('ok')
+    const memberReqs = requests.filter((r) => r.nodeId === WG_MEMBER_NODE_ID)
+    expect(memberReqs).toHaveLength(2)
+    expect(memberReqs[1]?.promptTemplate).toContain('Ask-back is OFF')
+    const cards = await db
+      .select()
+      .from(workgroupAssignments)
+      .where(eq(workgroupAssignments.taskId, taskId))
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.status).toBe('failed')
+  })
+
+  test('非全自动回归：clarifyEnabled=true 透传，压制分支不可达', async () => {
+    const config = cfg({ completionGate: false })
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks, requests } = scriptedHooks({
+      leader: [doneLeader({ decision: { action: 'done', summary: 'fine' } })],
+      member: [],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('ok')
+    expect(requests[0]?.clarifyEnabled).toBe(true)
+  })
+})

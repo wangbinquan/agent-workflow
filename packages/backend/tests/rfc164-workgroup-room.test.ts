@@ -648,6 +648,95 @@ describe('RFC-164 room — PR-5 surfaces', () => {
     ).toBe('canceled')
   })
 
+  // RFC-181 A/A2 — autonomous 进 per-task PATCH（对称 on/off + system 消息），
+  // false→true 单事务遣散在途 clarify park 并 requeue 卡（design §2.1/§2.1a）。
+  test('RFC-181：PATCH autonomous 往返 + false→true 遣散在途 clarify park', async () => {
+    const { clarifySessions } = await import('../src/db/schema')
+    const { mintNodeRun } = await import('../src/services/nodeRunMint')
+
+    // A：接受 autonomous、写 config、changes 文案。
+    const on = await req(owner.token, `/api/workgroup-tasks/${taskId}/config`, {
+      method: 'PUT',
+      body: JSON.stringify({ autonomous: true }),
+    })
+    expect(on.status).toBe(200)
+    const changes = ((await on.json()) as { changes: string[] }).changes
+    expect(changes.some((c) => c.includes('autonomous → true'))).toBe(true)
+    const readCfg = async (): Promise<{ autonomous?: boolean }> =>
+      JSON.parse(
+        (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workgroupConfigJson ?? '{}',
+      ) as { autonomous?: boolean }
+    expect((await readCfg()).autonomous).toBe(true)
+
+    // 对称 off（true→false 不触发遣散路径）。
+    const off = await req(owner.token, `/api/workgroup-tasks/${taskId}/config`, {
+      method: 'PUT',
+      body: JSON.stringify({ autonomous: false }),
+    })
+    expect(off.status).toBe(200)
+    expect((await readCfg()).autonomous).toBe(false)
+
+    // A2：seed 一个 worker clarify park（awaiting_human 卡 + 中介 park run +
+    // open session），翻 on → 遣散 + requeue + changes 附遣散计数。
+    const cardId = ulid()
+    await db.insert(workgroupAssignments).values({
+      id: cardId,
+      taskId,
+      round: 1,
+      source: 'leader',
+      assigneeMemberId: 'm-coder',
+      title: 'blocked-on-question',
+      briefMd: 'ask first',
+      status: 'awaiting_human',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    const clarifyRunId = await mintNodeRun(db, {
+      taskId,
+      nodeId: '__wg_clarify__',
+      status: 'awaiting_human',
+      cause: 'clarify-park',
+      overrides: { shardKey: cardId, startedAt: Date.now() },
+    })
+    const sessionId = ulid()
+    await db.insert(clarifySessions).values({
+      id: sessionId,
+      taskId,
+      sourceAgentNodeId: '__wg_member__',
+      sourceAgentNodeRunId: ulid(),
+      sourceShardKey: cardId,
+      clarifyNodeId: '__wg_clarify__',
+      clarifyNodeRunId: clarifyRunId,
+      iterationIndex: 0,
+      questionsJson: JSON.stringify([{ id: 'q1', question: '哪个口径？' }]),
+      status: 'awaiting_human',
+      createdAt: Date.now(),
+    })
+    const on2 = await req(owner.token, `/api/workgroup-tasks/${taskId}/config`, {
+      method: 'PUT',
+      body: JSON.stringify({ autonomous: true }),
+    })
+    expect(on2.status).toBe(200)
+    const changes2 = ((await on2.json()) as { changes: string[] }).changes
+    expect(changes2.some((c) => c.includes('dismissed 1 open clarify session'))).toBe(true)
+    expect(
+      (await db.select().from(clarifySessions).where(eq(clarifySessions.id, sessionId)))[0]?.status,
+    ).toBe('canceled')
+    expect(
+      (await db.select().from(workgroupAssignments).where(eq(workgroupAssignments.id, cardId)))[0]
+        ?.status,
+    ).toBe('dispatched')
+
+    // true→true：no-op（无遣散计数，仍是合法 patch——附带 completionGate 改动）。
+    const on3 = await req(owner.token, `/api/workgroup-tasks/${taskId}/config`, {
+      method: 'PUT',
+      body: JSON.stringify({ autonomous: true, completionGate: false }),
+    })
+    expect(on3.status).toBe(200)
+    const changes3 = ((await on3.json()) as { changes: string[] }).changes
+    expect(changes3.some((c) => c.includes('dismissed'))).toBe(false)
+  })
+
   test('pending-count：我的人类待办 + 待确认门', async () => {
     await seedHumanCard()
     const before = (await (

@@ -161,11 +161,15 @@ const workgroupConfigFields = {
   // Default ON (2026-07-13 用户拍板): a new group's tasks park for human
   // confirmation when the leader declares done, instead of auto-finishing.
   completionGate: z.boolean().default(true),
-  // RFC-180「全自动」— optional (absent ⇒ OFF): existing groups keep asking /
-  // gating / parking exactly as before. When ON: no clarify invite + gate treated
-  // off + leader-idle auto-nudge (see resolveCompletionGate / resolveClarifyEnabled).
-  // Optional (not .default) so callers/fixtures may omit it; the create/update
-  // handlers coalesce `?? false` at the DB write.
+  // RFC-180「全自动」/ RFC-181 D — when ON: no clarify invite + gate treated
+  // off + leader-idle auto-nudge + hard clarify suppression (RFC-181 C); see
+  // resolveCompletionGate / resolveClarifyEnabled.
+  // Optional (not .default) BY DESIGN (RFC-181 design-gate P1): this field
+  // object is shared by Create AND full-replace Update schemas, so a schema
+  // default would let an omitting PUT silently flip an existing group. The
+  // defaults live in the handlers instead: create coalesces `?? true`
+  // (RFC-181 D: new groups are autonomous), update coalesces `?? existing`
+  // (omitted ⇒ preserve).
   autonomous: z.boolean().optional(),
   /**
    * 快速创建（用户 2026-07-10 拍板 #21）：members MAY be empty at save time —

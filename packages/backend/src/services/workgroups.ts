@@ -116,7 +116,9 @@ export async function createWorkgroup(
         blackboard: input.switches.blackboard,
         maxRounds: input.maxRounds,
         completionGate: input.completionGate,
-        autonomous: input.autonomous ?? false,
+        // RFC-181 D: new groups default to autonomous (don't-interrupt-me) —
+        // create-scoped only; update below preserves the stored value instead.
+        autonomous: input.autonomous ?? true,
         // RFC-099: creator becomes owner; new resources default to 'public' (D18).
         ownerUserId: aclOpts?.ownerUserId ?? null,
         visibility: 'public',
@@ -164,7 +166,11 @@ export async function updateWorkgroup(
         blackboard: input.switches.blackboard,
         maxRounds: input.maxRounds,
         completionGate: input.completionGate,
-        autonomous: input.autonomous ?? false,
+        // RFC-181 D (design-gate P1): a PUT that omits `autonomous` must NOT
+        // silently flip the stored value in either direction — the field is
+        // shared between Create/Update schemas, so the create default must not
+        // leak into full-replace updates. Omitted ⇒ keep the existing row.
+        autonomous: input.autonomous ?? existing.autonomous,
         updatedAt: now,
       })
       .where(eq(workgroups.id, existing.id))

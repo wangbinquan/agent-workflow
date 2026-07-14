@@ -83,6 +83,26 @@ describe('buildWorkgroupConfigPatch — only-changed-fields matrix', () => {
     expect(buildWorkgroupConfigPatch(config, same)).toBeNull()
   })
 
+  // RFC-181 A — autonomous rides the same only-changed diffing; the `?? false`
+  // coalesce means an absent stored value and a false draft are "unchanged".
+  test('autonomous: only-when-changed（含存储缺省≡false 的等价）', () => {
+    const on = workgroupTaskConfigDraftFrom(config)
+    on.autonomous = true
+    expect(buildWorkgroupConfigPatch(config, on)).toEqual({ autonomous: true })
+
+    const offOnStoredTrue = workgroupTaskConfigDraftFrom(makeConfig({ autonomous: true }))
+    expect(offOnStoredTrue.autonomous).toBe(true)
+    offOnStoredTrue.autonomous = false
+    expect(buildWorkgroupConfigPatch(makeConfig({ autonomous: true }), offOnStoredTrue)).toEqual({
+      autonomous: false,
+    })
+
+    // 存储无字段（老任务 config）+ draft false → 无变化。
+    const untouched = workgroupTaskConfigDraftFrom(config)
+    expect(untouched.autonomous).toBe(false)
+    expect(buildWorkgroupConfigPatch(config, untouched)).toBeNull()
+  })
+
   test('completionGate flip / member add / member remove each ride alone', () => {
     const gate = workgroupTaskConfigDraftFrom(config)
     gate.completionGate = true
@@ -208,6 +228,32 @@ describe('WorkgroupTaskConfigDialog', () => {
       )
       expect(put).toBeTruthy()
       expect(put?.body).toEqual({ completionGate: true })
+    })
+  })
+
+  // RFC-181 A —「全自动」进 mid-run 配置弹窗：拨动即 PUT {autonomous}，开启时
+  // completionGate 开关置灰（与 WorkgroupForm 同款联动）。
+  test('autonomous switch PUTs {autonomous:true} and grays the completion gate', async () => {
+    const calls = installFetch()
+    renderDialog(makeConfig())
+    await screen.findByTestId('wg-config-submit')
+
+    const gateSwitch = screen.getByLabelText(/Completion gate/) as HTMLInputElement
+    expect(gateSwitch.disabled).toBe(false)
+
+    fireEvent.click(screen.getByLabelText(/Autonomous \(don't interrupt me\)/))
+    await waitFor(() => {
+      expect((screen.getByTestId('wg-config-submit') as HTMLButtonElement).disabled).toBe(false)
+    })
+    expect((screen.getByLabelText(/Completion gate/) as HTMLInputElement).disabled).toBe(true)
+
+    fireEvent.click(screen.getByTestId('wg-config-submit'))
+    await waitFor(() => {
+      const put = calls.find(
+        (c) => c.method === 'PUT' && c.url.endsWith('/api/workgroup-tasks/t1/config'),
+      )
+      expect(put).toBeTruthy()
+      expect(put?.body).toEqual({ autonomous: true })
     })
   })
 

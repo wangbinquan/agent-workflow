@@ -41,7 +41,11 @@ import {
 } from '@/services/task'
 import { canViewTask } from '@/services/taskCollab'
 import { createWorkflow } from '@/services/workflow'
-import { advanceMemberCursor, casAssignmentStatus } from '@/services/workgroupLifecycle'
+import {
+  advanceMemberCursor,
+  casAssignmentStatus,
+  dismissOpenClarifyParksForAutonomous,
+} from '@/services/workgroupLifecycle'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroupLaunch'
 import { deriveMemberCurrentRuns } from '@/services/workgroupRoom'
@@ -98,6 +102,9 @@ const ConfigPatchSchema = z.object({
     .optional(),
   maxRounds: z.number().int().positive().max(WORKGROUP_MAX_ROUNDS_LIMIT).optional(),
   completionGate: z.boolean().optional(),
+  // RFC-181 A — mid-run autonomous toggle, symmetric on/off (the engine reads
+  // the task config every pass, so the next loadDbState picks it up live).
+  autonomous: z.boolean().optional(),
   addMembers: z
     .array(
       z.object({
@@ -864,10 +871,12 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       ...(patch.switches !== undefined ? { switches: patch.switches } : {}),
       ...(patch.maxRounds !== undefined ? { maxRounds: patch.maxRounds } : {}),
       ...(patch.completionGate !== undefined ? { completionGate: patch.completionGate } : {}),
+      ...(patch.autonomous !== undefined ? { autonomous: patch.autonomous } : {}),
     }
     if (patch.switches !== undefined) changes.push('switches updated')
     if (patch.maxRounds !== undefined) changes.push(`maxRounds → ${patch.maxRounds}`)
     if (patch.completionGate !== undefined) changes.push(`completionGate → ${patch.completionGate}`)
+    if (patch.autonomous !== undefined) changes.push(`autonomous → ${patch.autonomous}`)
     if (changes.length === 0) {
       throw new ValidationError('workgroup-config-empty', 'nothing to change')
     }
@@ -875,6 +884,18 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
       .update(tasks)
       .set({ workgroupConfigJson: JSON.stringify(nextConfig) })
       .where(eq(tasks.id, taskId))
+    // RFC-181 A2 (design-gate P0) — false→true dismisses in-flight clarify
+    // parks so the toggle works on a task that is ALREADY parked on questions
+    // (session+park-run canceled, worker cards requeued, stale answers 409 via
+    // the canceled session). true→true / no-park are natural no-ops inside.
+    if (patch.autonomous === true && config.autonomous !== true) {
+      const dismissed = await dismissOpenClarifyParksForAutonomous(deps.db, taskId, config.mode)
+      if (dismissed.dismissedSessions > 0) {
+        changes.push(
+          `dismissed ${dismissed.dismissedSessions} open clarify session(s) (autonomous)`,
+        )
+      }
+    }
     const msgId = ulid()
     await deps.db.insert(workgroupMessages).values({
       id: msgId,
