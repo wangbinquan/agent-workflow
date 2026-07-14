@@ -939,6 +939,10 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
           status: 'failed',
           outputs: {},
           errorMessage: result.errorMessage ?? `run-${result.status}`,
+          // RFC-185 e2e hardening — carry the structured code so the workgroup
+          // engine can route envelope-missing into its protocol-retry channel
+          // (RFC-145 ratchet: never route on errorMessage text).
+          ...(result.failureCode !== undefined ? { failureCode: result.failureCode } : {}),
         }
       }
       if (!iso.passthrough && req.discardWrites === true) {

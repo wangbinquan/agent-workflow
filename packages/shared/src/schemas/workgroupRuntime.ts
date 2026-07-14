@@ -203,9 +203,22 @@ export const WG_MAX_ASSIGNMENTS_PER_TURN = 16
 export const WG_MAX_MESSAGES_PER_TURN = 16
 export const WG_MAX_TASKS_ADD_PER_TURN = 32
 
+/**
+ * RFC-185 端到端实测暴露的普适摩擦（task 01KXFXVEBDS8SRGRPGFCDP7BXB）：roster
+ * 块把成员渲染成 `- @writer (…)`、dispatch 消息也是 @member 风格，模型照抄时
+ * 给 member/to 带上 `@` 前缀，而 displayName schema 禁 @ → 整 port 被拒、白烧
+ * 一次协议重试（实测中重试轮输出进一步崩坏直接 fatal）。展示格式诱导的前缀在
+ * schema 管道里剥除后再走原校验（displayName 自身不允许含 @，无歧义）；
+ * roster / fan-out-dup 校验因此都在规范化后的裸名上进行。
+ */
+const WgMemberRefSchema = z
+  .string()
+  .transform((s) => s.replace(/^@/, ''))
+  .pipe(WorkgroupMemberDisplayNameSchema)
+
 export const WgAssignmentItemSchema = z.object({
-  /** Target member displayName (roster token). */
-  member: WorkgroupMemberDisplayNameSchema,
+  /** Target member displayName (roster token; a copied leading @ is stripped). */
+  member: WgMemberRefSchema,
   title: z.string().trim().min(1).max(200),
   /** Task brief — objective / expected output / boundaries (design §5). */
   brief: z.string().min(1).max(16384),
@@ -217,7 +230,7 @@ export const WgAssignmentsPortSchema = z
 
 export const WgMessageItemSchema = z.object({
   /** Target member displayName, or null = blackboard broadcast. */
-  to: WorkgroupMemberDisplayNameSchema.nullable(),
+  to: WgMemberRefSchema.nullable(),
   body: z.string().trim().min(1).max(8192),
 })
 export type WgMessageItem = z.infer<typeof WgMessageItemSchema>
@@ -299,6 +312,8 @@ export function parseWgAssignmentsPort(
   rosterDisplayNames: ReadonlySet<string>,
   opts: { allowSameMemberFanOut?: boolean } = {},
 ): WgPortParseResult<WgAssignmentItem[]> {
+  // @-prefix tolerance lives in WgMemberRefSchema — `r.value` is already
+  // normalized to bare roster names here.
   const r = parseJsonPort(WgAssignmentsPortSchema, raw)
   if (!r.ok) return r
   const missing = unknownMembers(
@@ -339,6 +354,7 @@ export function parseWgMessagesPort(
   raw: string,
   rosterDisplayNames: ReadonlySet<string>,
 ): WgPortParseResult<WgMessageItem[]> {
+  // @-prefix tolerance lives in WgMemberRefSchema (null = blackboard).
   const r = parseJsonPort(WgMessagesPortSchema, raw)
   if (!r.ok) return r
   const missing = unknownMembers(

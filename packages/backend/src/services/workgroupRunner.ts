@@ -38,6 +38,7 @@ import {
   WG_PORT_TASKS_ADD,
   WorkgroupRuntimeConfigSchema,
   type Agent,
+  type FailureCode,
   type WgMessageItem,
   type WorkgroupAssignment,
   type WorkgroupMessage,
@@ -131,6 +132,10 @@ export interface WorkgroupHostRunResult {
   /** Set when the agent voluntarily asked back (status='awaiting'). */
   clarifyQuestionCount?: number
   errorMessage?: string
+  /** RFC-185 e2e hardening — runNode's structured failure code (RFC-145: the
+   *  ONLY machine routing key; errorMessage is human breadcrumbs). Lets the
+   *  turn drivers treat envelope-missing as a retryable protocol slip. */
+  failureCode?: FailureCode
 }
 
 export interface WorkgroupEngineHooks {
@@ -1064,6 +1069,21 @@ async function driveLeaderTurn(
           '  protocol above) OR, if nothing actually needs a human, proceed with <workflow-output>.'
         continue
       }
+      // RFC-185 e2e hardening (live task 01KXFYD5…) — a missing
+      // <workflow-output> envelope is a RETRYABLE protocol slip: weak models
+      // drop or reinvent the envelope shape (e.g. a bare <wg_output> tag).
+      // runNode already burned its in-session follow-ups; one FRESH turn with
+      // an explicit notice beats fataling the whole task on model noise.
+      // Routed on the structured failureCode (RFC-145 ratchet), never on
+      // errorMessage text.
+      if (result.failureCode === 'envelope-missing' && attempt < WG_PROTOCOL_RETRIES) {
+        errorNotice =
+          '- Your previous reply had NO <workflow-output> envelope. Re-read the\n' +
+          '  Workgroup output protocol above and re-emit your FULL reply as ONE\n' +
+          '  <workflow-output> envelope with <port name="..."> children (literal\n' +
+          '  tag names — never invent your own tags).'
+        continue
+      }
       throw new Error(msg)
     }
 
@@ -1260,6 +1280,16 @@ async function driveAssignmentTurn(
         errorNotice =
           '- Ask-back is OFF in this autonomous group. Do NOT emit <workflow-clarify>.\n' +
           '  Proceed with your best judgment and emit wg_result as usual.'
+        continue
+      }
+      // RFC-185 e2e hardening — same retryable envelope-missing arm as the
+      // leader turn (structured failureCode routing, RFC-145 ratchet).
+      if (result.failureCode === 'envelope-missing' && attempt < WG_PROTOCOL_RETRIES) {
+        errorNotice =
+          '- Your previous reply had NO <workflow-output> envelope. Re-read the\n' +
+          '  Workgroup output protocol above and re-emit your FULL reply as ONE\n' +
+          '  <workflow-output> envelope with <port name="..."> children (literal\n' +
+          '  tag names — never invent your own tags).'
         continue
       }
       await casAssignmentStatus(db, assignment.id, 'running', 'failed')

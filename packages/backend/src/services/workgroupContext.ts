@@ -259,9 +259,18 @@ export function renderLeaderLedger(
 
 export type WorkgroupProtocolRole = 'leader' | 'worker' | 'fc_member'
 
+// RFC-185 e2e hardening — the literal envelope shape example matters: without
+// it, weaker models reinvent the tags (a live glm-5.2 leader emitted a bare
+// <wg_output><wg_assignments> structure → envelope-missing → wasted retries).
 const ENVELOPE_RULES = [
   'Respond with EXACTLY ONE <workflow-output> envelope at the very end of your reply.',
   'Every port body is a JSON document — no markdown fences inside ports.',
+  'The envelope shape is LITERAL — <workflow-output> and <port> are fixed tag',
+  'names; never invent your own (e.g. a bare <wg_output> tag is WRONG). Port',
+  'names go in the name attribute. Shape:',
+  '<workflow-output>',
+  '<port name="port_name">{ …json… }</port>',
+  '</workflow-output>',
 ].join('\n')
 
 // Human ask-back (<workflow-clarify>) block, appended by renderWgProtocolBlock for EVERY role
@@ -330,7 +339,8 @@ export function renderWgProtocolBlock(
     if (config.fanOut === true) {
       lines.push(
         '- <port name="wg_assignments">JSON array of {"member","title","brief"}.',
-        '  member = an AGENT displayName from the roster. Empty array = no new work.',
+        '  member = an AGENT displayName from the roster (bare name, e.g. "writer",',
+        '  not "@writer"). Empty array = no new work.',
         '  FAN-OUT: the SAME member may appear in MULTIPLE entries — each entry runs',
         '  as an independent CONCURRENT INSTANCE of that agent in its own isolated',
         '  worktree. Use this to parallelize divisible work (per-file / per-module',
@@ -347,7 +357,8 @@ export function renderWgProtocolBlock(
     } else {
       lines.push(
         '- <port name="wg_assignments">JSON array of {"member","title","brief"}.',
-        '  member = an AGENT displayName from the roster. Empty array = no new work.</port>',
+        '  member = an AGENT displayName from the roster (bare name, e.g. "writer",',
+        '  not "@writer"). Empty array = no new work.</port>',
       )
     }
     lines.push(

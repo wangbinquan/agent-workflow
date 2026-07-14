@@ -21,6 +21,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
   parseWgAssignmentsPort,
+  parseWgMessagesPort,
   WG_MAX_ASSIGNMENTS_PER_TURN,
   type WorkgroupAssignment,
   type WorkgroupRuntimeConfig,
@@ -182,6 +183,19 @@ describe('RFC-185 — leader protocol FAN-OUT block', () => {
     expect(block).toContain(`At most ${WG_MAX_ASSIGNMENTS_PER_TURN} entries per`)
   })
 
+  // E2E 实测（task 01KXFYD5…）：无字面示例时弱模型自创 <wg_output> 标签结构
+  // → envelope-missing。协议必须携带字面信封形状。
+  test('every role ships the LITERAL envelope shape example', () => {
+    for (const role of ['leader', 'worker', 'fc_member'] as const) {
+      const block = renderWgProtocolBlock(
+        role,
+        cfg({ mode: role === 'fc_member' ? 'free_collab' : 'leader_worker' }),
+      )
+      expect(block).toContain('<port name="port_name">')
+      expect(block).toContain('never invent your own')
+    }
+  })
+
   test.each(['worker', 'fc_member'] as const)('%s block carries NO fan-out invitation', (role) => {
     const block = renderWgProtocolBlock(
       role,
@@ -256,6 +270,45 @@ describe('RFC-185 — parseWgAssignmentsPort keeps same-member fan-out entries',
       { member: 'planner', title: 'c', brief: 'd' },
     ])
     expect(parseWgAssignmentsPort(raw, roster).ok).toBe(true)
+  })
+
+  // E2E 实测暴露（task 01KXFXVEBDS8SRGRPGFCDP7BXB）：roster 块渲染成员为
+  // `- @writer (…)`，模型照抄给 member 带上 @ 前缀 → 整 port 被拒白烧重试。
+  // 解析端宽容剥前缀；normalize 后再做 roster / fan-out-dup 校验。
+  test('a leading @ on member is tolerated (models copy the roster display form)', () => {
+    const r = parseWgAssignmentsPort(
+      JSON.stringify([{ member: '@coder', title: 'a', brief: 'b' }]),
+      roster,
+    )
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.value[0]?.member).toBe('coder')
+  })
+
+  test('@coder and coder are the SAME member for the fan-out-off duplicate guard', () => {
+    const r = parseWgAssignmentsPort(
+      JSON.stringify([
+        { member: '@coder', title: 'a', brief: 'b' },
+        { member: 'coder', title: 'c', brief: 'd' },
+      ]),
+      roster,
+    )
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.errors.join(' ')).toContain('fan-out is disabled')
+  })
+
+  test('wg_messages `to` gets the same @-prefix tolerance (null blackboard untouched)', () => {
+    const r = parseWgMessagesPort(
+      JSON.stringify([
+        { to: '@coder', body: 'hi' },
+        { to: null, body: 'board' },
+      ]),
+      roster,
+    )
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.value[0]?.to).toBe('coder')
+      expect(r.value[1]?.to).toBeNull()
+    }
   })
 
   test('a turn above WG_MAX_ASSIGNMENTS_PER_TURN is rejected whole', () => {
@@ -580,6 +633,61 @@ describe('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', () => {
       .where(eq(workgroupAssignments.taskId, taskId))
     expect(assignments).toHaveLength(1)
     expect(assignments[0]?.title).toBe('one task')
+  })
+
+  // E2E 实测（task 01KXFYD5…）：runNode 耗尽自身 follow-up 后以
+  // envelope-missing 失败——旧行为直接 reportFatal 杀任务。现在按结构化
+  // failureCode 进入协议重试通道：一次全新 turn + 显式错误提示。
+  test('envelope-missing is a retryable protocol slip for the LEADER turn, not a fatal', async () => {
+    const config = cfg()
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks, requests } = scriptedHooks({
+      leader: [
+        {
+          status: 'failed',
+          outputs: {},
+          errorMessage: 'no <workflow-output> envelope found in stdout',
+          failureCode: 'envelope-missing',
+        },
+        doneLeader({ decision: { action: 'done', summary: 'recovered on retry' } }),
+      ],
+      member: [],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('ok')
+    expect(requests).toHaveLength(2)
+    expect(requests[1]?.promptTemplate).toContain('NO <workflow-output> envelope')
+  })
+
+  test('envelope-missing is retryable for an ASSIGNMENT turn too (instance recovers)', async () => {
+    const config = cfg()
+    const { taskId } = await seedEngineTask(db, config)
+    const { hooks } = scriptedHooks({
+      leader: [
+        doneLeader({
+          assignments: [{ member: 'coder', title: 'one', brief: 'do one thing' }],
+          decision: { action: 'continue' },
+        }),
+        doneLeader({ decision: { action: 'done', summary: 'wrapped' } }),
+      ],
+      member: [
+        {
+          status: 'failed',
+          outputs: {},
+          errorMessage: 'no <workflow-output> envelope found in stdout',
+          failureCode: 'envelope-missing',
+        },
+        doneMember('done after the nudge'),
+      ],
+    })
+    const result = await runWorkgroupEngine({ db, taskId, log, hooks })
+    expect(result.kind).toBe('ok')
+    const assignments = await db
+      .select()
+      .from(workgroupAssignments)
+      .where(eq(workgroupAssignments.taskId, taskId))
+    expect(assignments).toHaveLength(1)
+    expect(assignments[0]?.status).toBe('done')
   })
 
   test('P2: a config PATCH landing mid-leader-turn survives persistGate (reload-and-merge)', async () => {
