@@ -1689,6 +1689,7 @@ export interface Resources {
     objectPlaceholder: string
     objectEmpty: string
     workgroupNotReady: string
+    workgroupLeaderOnlyWarning: string
     spaceLabel: string
     spaceRemote: string
     spaceScratch: string
@@ -4618,6 +4619,7 @@ export const zhCN: Resources = {
     objectPlaceholder: '请选择…',
     objectEmpty: '暂无可选对象',
     workgroupNotReady: '未就绪（缺可用 Agent 成员或负责人）',
+    workgroupLeaderOnlyWarning: '花名册仅 leader 一人——可启动，但 leader 无人可派、只能空转',
     spaceLabel: '执行空间',
     spaceRemote: '远端仓库',
     spaceScratch: '临时空间',

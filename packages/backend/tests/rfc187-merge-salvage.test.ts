@@ -15,7 +15,7 @@
 import { describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import {
   buildSalvageTree,
   commitTree,
@@ -176,6 +176,19 @@ describe('RFC-187 §4-2 mergeBackNodeIso 逐路径救回', () => {
   })
 })
 
+describe('RFC-187 §4-2 salvage 失败语义（Codex 实现门 P1 源级锁）', () => {
+  test('只有纯树构造 fail-open；materialize 失败必须向上抛（canonical 无回滚）', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'nodeIsolation.ts'),
+      'utf8',
+    )
+    // 新形状：catch 只包 buildSalvageTree（fail-open 日志文案锁定），
+    // materializeTree 调用在 catch 之外——吞掉中途变更失败的旧文案必须绝迹。
+    expect(src).toContain('salvage tree construction failed (falling back to withhold-all)')
+    expect(src).not.toContain('merge-back per-path salvage failed')
+  })
+})
+
 describe('RFC-187 human-replay 契约（设计门 P1-9 前置）', () => {
   test('多 repo：干净已落地且无 resolve-iso 的 repo 不再卡死 allResolved（红→绿）', async () => {
     // repo A：真冲突，human 已在 resolve-iso 里解完。
@@ -221,6 +234,40 @@ describe('RFC-187 human-replay 契约（设计门 P1-9 前置）', () => {
     expect(readFileSync(join(repoA, 'conflict.txt'), 'utf8')).toBe('resolved\n')
     expect(readFileSync(join(repoB, 'newb.txt'), 'utf8')).toBe('from-b-node\n')
     expect(existsSync(resolveIso)).toBe(false) // 解完即回收
+    rmSync(repoA, { recursive: true, force: true })
+    rmSync(repoB, { recursive: true, force: true })
+    rmSync(container, { recursive: true, force: true })
+  })
+
+  test('iso_node_tree 缺失 → fail-closed 维持 unresolved（Codex 实现门 P2：缺快照=恢复数据丢失，绝不静默放行）', async () => {
+    const repoA = await initRepo({ 'conflict.txt': 'base\n' })
+    const baseHeadA = await head(repoA)
+    const baseA = await snapshotFullState(repoA)
+    const theirsA = await captureTheirs(repoA, () => {
+      writeFileSync(join(repoA, 'conflict.txt'), 'theirs\n')
+    })
+    writeFileSync(join(repoA, 'conflict.txt'), 'ours\n')
+    const mergeA = await mergeTreeInMemory(repoA, {
+      base: baseA,
+      ours: await snapshotFullState(repoA),
+      theirs: theirsA,
+    })
+    const container = mkdtempSync(join(tmpdir(), 'aw-rfc187-hr3-'))
+    const oursAtConflict = await snapshotFullState(repoA)
+    const cmt = await commitTree(repoA, mergeA.mergedTree, oursAtConflict, 'aw-conflict')
+    const resolveIso = join(container, 'resolve-a')
+    await runGit(repoA, ['worktree', 'add', '--detach', resolveIso, cmt])
+    writeFileSync(join(resolveIso, 'conflict.txt'), 'resolved\n')
+
+    const repoB = await initRepo({ 'b.txt': 'base-b\n' })
+    const handle = handleFor(container, [
+      repoEntry(repoA, 'a', baseA, baseHeadA),
+      repoEntry(repoB, 'b', await snapshotFullState(repoB), await head(repoB)),
+    ])
+    // repo B 的 nodeTree 条目缺失（模拟持久化列丢失）→ 整体必须维持 parked。
+    const outcome = await completeHumanResolvedConflict(handle, { a: theirsA })
+    expect(outcome.allResolved).toBe(false)
+    expect(outcome.unresolvedRepos).toContain('b')
     rmSync(repoA, { recursive: true, force: true })
     rmSync(repoB, { recursive: true, force: true })
     rmSync(container, { recursive: true, force: true })

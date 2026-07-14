@@ -471,11 +471,17 @@ function TaskWizardPage() {
     .map((a) => ({ value: a.name, label: a.name }))
   const workgroupOptions = (workgroupsQ.data ?? []).map((g) => {
     const readiness = workgroupLaunchReadiness(g)
+    // RFC-187 TRAP-1 (Codex impl-gate P2): the ADVISORY tier must reach the
+    // launch wizard too — a leader-only roster stays selectable (warning
+    // never blocks) but says so, instead of silently launching a group that
+    // can only idle. Blocking reasons keep the disabled treatment.
     return {
       value: g.name,
       label: g.name,
       ...(readiness.ready
-        ? {}
+        ? readiness.warnings.length > 0
+          ? { description: t('taskWizard.workgroupLeaderOnlyWarning') }
+          : {}
         : { disabled: true, description: t('taskWizard.workgroupNotReady') }),
     }
   })

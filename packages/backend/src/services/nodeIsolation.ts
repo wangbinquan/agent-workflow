@@ -317,29 +317,35 @@ export async function mergeBackNodeIso(
       // and the salvage tree equals ours (landedPaths=[] → materialize
       // skipped). buildSalvageTree fails closed (null) on directory-entry
       // conflict classes — that repo keeps today's withhold-everything shape.
-      let salvagedPaths: string[] = []
+      //
+      // Codex impl-gate P1: ONLY the pure tree CONSTRUCTION is fail-open —
+      // it has not touched canonical, so falling back to withhold-all is
+      // truthful. materializeTree failures PROPAGATE (same as the clean-path
+      // materialize below): it mutates canonical with no rollback, so a
+      // swallowed mid-mutation error would leave canonical partially changed
+      // while claiming the delta was withheld.
+      let salvage: { tree: string; landedPaths: string[] } | null = null
       try {
-        const salvage = await buildSalvageTree(r.canonWorktreePath, {
+        salvage = await buildSalvageTree(r.canonWorktreePath, {
           mergedTree: merge.mergedTree,
           ours,
           conflicts: merge.conflicts,
         })
-        if (salvage !== null && salvage.landedPaths.length > 0) {
-          const canonCurrentTree = await treeOf(r.canonWorktreePath, ours)
-          await materializeTree(r.canonWorktreePath, {
-            mergedTree: salvage.tree,
-            canonCurrentTree,
-            taskBaseHead: r.taskBaseHead,
-          })
-          salvagedPaths = salvage.landedPaths
-        }
       } catch (err) {
-        // Salvage is strictly best-effort — a failure here must never turn a
-        // resolvable conflict into a hard error; fall back to withhold-all.
-        log?.warn('merge-back per-path salvage failed (falling back to withhold-all)', {
+        log?.warn('salvage tree construction failed (falling back to withhold-all)', {
           worktreeDirName: r.worktreeDirName,
           error: err instanceof Error ? err.message : String(err),
         })
+      }
+      let salvagedPaths: string[] = []
+      if (salvage !== null && salvage.landedPaths.length > 0) {
+        const canonCurrentTree = await treeOf(r.canonWorktreePath, ours)
+        await materializeTree(r.canonWorktreePath, {
+          mergedTree: salvage.tree,
+          canonCurrentTree,
+          taskBaseHead: r.taskBaseHead,
+        })
+        salvagedPaths = salvage.landedPaths
       }
       conflicts.push({
         worktreeDirName: r.worktreeDirName,
@@ -623,9 +629,16 @@ export async function completeHumanResolvedConflict(
     const nodeTree = nodeTrees[r.worktreeDirName]
     const suffix = r.worktreeDirName === '' ? 'repo' : r.worktreeDirName
     const resolveIso = join(handle.containerPath, `resolve-${suffix}`)
-    // No recorded delta for this repo → nothing to merge; it cannot be the
-    // reason the run parked. Skip instead of blocking the whole resolution.
-    if (nodeTree === undefined) continue
+    // No recorded delta for this repo — FAIL CLOSED (Codex impl-gate P2):
+    // every repo of a real run gets a snapshot commit (even a no-op delta),
+    // so a missing iso_node_tree entry at conflict-human resume means the
+    // recovery data was lost, not that the repo had nothing to merge.
+    // Treating it as resolved would advance merge_state without ever merging
+    // a final tree.
+    if (nodeTree === undefined) {
+      unresolved.push(r.worktreeDirName)
+      continue
+    }
     // RFC-187 (design-gate P1-9 precondition) — a repo WITHOUT a resolve-iso is
     // NOT automatically unresolved: in a multi-repo conflict, the repos that
     // merged clean at conflict time materialized immediately and never got a

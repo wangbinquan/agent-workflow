@@ -304,7 +304,22 @@ export function Select<V extends string>(props: Props<V>) {
                     }}
                   >
                     <span className="select__option-label">
-                      {props.renderOption ? props.renderOption(opt) : opt.label}
+                      {/* RFC-187 TRAP-1 (Codex impl-gate P2): `description` existed on
+                          SelectOption but was never rendered — a dead prop. Render it
+                          via the existing stack/title/sub vocabulary (zero new CSS) so
+                          advisory / not-ready copy actually reaches the user; callers
+                          already setting it benefit together. renderOption keeps full
+                          control when provided. */}
+                      {props.renderOption ? (
+                        props.renderOption(opt)
+                      ) : opt.description !== undefined && opt.description !== '' ? (
+                        <span className="select__option-stack">
+                          <span className="select__option-title">{opt.label}</span>
+                          <span className="select__option-sub">{opt.description}</span>
+                        </span>
+                      ) : (
+                        opt.label
+                      )}
                     </span>
                     {selected && (
                       <span className="select__option-check" aria-hidden>

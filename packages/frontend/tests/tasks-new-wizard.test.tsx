@@ -68,6 +68,14 @@ const WORKGROUPS = [
     members: [{ id: 'm1', memberType: 'agent' }],
   },
   { name: 'hollow', mode: 'free_collab', leaderMemberId: null, members: [] },
+  // RFC-187 TRAP-1 advisory tier — launchable but leader-only (Codex P2:
+  // the wizard must surface the warning, not just the detail-page banner).
+  {
+    name: 'solo',
+    mode: 'leader_worker',
+    leaderMemberId: 'm1',
+    members: [{ id: 'm1', memberType: 'agent' }],
+  },
 ]
 
 const SCHEDULE_AGENT = {
@@ -364,6 +372,12 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     const listbox = await screen.findByRole('listbox')
     const hollow = within(listbox).getByRole('option', { name: /hollow/ })
     expect(hollow.getAttribute('aria-disabled')).toBe('true')
+    // RFC-187 TRAP-1 (Codex P2): leader-only roster stays SELECTABLE but the
+    // option carries the advisory copy — the wizard shares the same readiness
+    // oracle as the detail-page banner.
+    const solo = within(listbox).getByRole('option', { name: /solo/ })
+    expect(solo.getAttribute('aria-disabled')).not.toBe('true')
+    expect(solo.textContent).toContain('Roster is leader-only')
     fireEvent.mouseDown(within(listbox).getByRole('option', { name: /core/ }))
     next()
 

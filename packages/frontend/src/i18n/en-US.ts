@@ -1775,6 +1775,8 @@ export const enUS: Resources = {
     objectPlaceholder: 'Select\u2026',
     objectEmpty: 'Nothing available to select',
     workgroupNotReady: 'Not ready (no usable agent member or leader)',
+    workgroupLeaderOnlyWarning:
+      'Roster is leader-only — launchable, but the leader has nobody to dispatch to',
     spaceLabel: 'Workspace',
     spaceRemote: 'Remote repository',
     spaceScratch: 'Scratch space',
