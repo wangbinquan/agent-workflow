@@ -1219,6 +1219,13 @@ export const nodeRunOutputs = sqliteTable(
     // written before RFC-072. Lets the Outputs tab distinguish file-path ports
     // (path<ext> / markdown_file) from text ports.
     kind: text('kind'),
+    // RFC-193: archive-at-emit reference for path-shaped ports. JSON
+    // `{ v:1, items:[{ path, file, size, truncated }] }` — `path` is the
+    // container-relative source path, `file` the appHome-relative archived
+    // copy (null when an oversized binary was metadata-only archived). NULL
+    // for pre-RFC-193 rows (readers fall back to the worktree) and for
+    // non-path kinds (content is the body itself).
+    archiveJson: text('archive_json'),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.nodeRunId, t.portName] }),

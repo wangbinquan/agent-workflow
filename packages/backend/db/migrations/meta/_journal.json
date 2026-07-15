@@ -666,6 +666,13 @@
       "when": 1785600000000,
       "tag": "0095_rfc189_wg_round",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "6",
+      "when": 1785686400000,
+      "tag": "0096_rfc193_port_artifact",
+      "breakpoints": true
     }
   ]
 }
