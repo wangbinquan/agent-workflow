@@ -1008,6 +1008,20 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
           log,
         })
         if (merge.kind === 'conflict-human') {
+          // RFC-187 T8 (audit §4-4) — `park-conflict-human` promises a human will finish
+          // the merge in the PRESERVED resolve-iso and that a later resume re-merges it
+          // (the DAG keeps its iso for exactly that, `keepIso`). A workgroup host run keeps
+          // no such promise: it FAILS the turn here and its `finally` discards the iso
+          // unconditionally. Leaving merge_state='conflict-human' behind therefore stranded
+          // a row whose iso is gone — and `replayConflictHumanResolutions` runs for EVERY
+          // task at runTask entry (before the workgroup branch), so the next resume hunted
+          // the GC'd base/node commits, threw, and failTask'd the WHOLE task. Abandon the
+          // state instead: this delta is genuinely dropped, so say so.
+          await tryTransitionMergeState({
+            db,
+            nodeRunId: req.nodeRunId,
+            event: { kind: 'abandon', reason: 'wg-merge-conflict-unresolved' },
+          })
           return {
             status: 'failed',
             outputs: {},

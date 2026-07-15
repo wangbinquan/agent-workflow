@@ -53,8 +53,14 @@
 ### RFC-187-T8｜§4-4 conflict-human iso 不孤儿（AC-8）
 工作组 conflict-human 保 iso/refs（比照 DAG keepIso）或显式 abandon + 状态对齐；评估是否需一列。**风险**：触 restart replay。
 
-### RFC-187-T9｜§4-6 同波共享 base（AC-9）
-同 leader 派单波成员共享单次 base 快照（派发时刻 pin canonical commit）。
+### ~~RFC-187-T9｜§4-6 同波共享 base（AC-9）~~ —— **WON'T DO（2026-07-15 用户拍板）**
+原计划：同 leader 派单波成员共享单次 base 快照（派发时刻 pin canonical commit）。
+**不做的理由**（实现前复核推翻）：
+- **反效果**：现行每个成员在 `createNodeIso` 时从**当下 canonical** 分叉；改成共享 base 会让每个成员对着**陈旧** base 算 delta → **冲突显著变多**（同波重叠写全部撞车），而现行「后创建的成员看得见先落地的兄弟产出」反而让工作自然叠加、冲突更少。
+- **买不到确定性**：§4-6 的诉求是「同 fan-out 跑两次结果一致」，但 agent 本身的模型非确定性远盖过 base 时序，pin base 换不来可复现。
+- **可追溯性已有**：每个 iso 的 `baseSnapshot` 已逐仓记录（`nodeIsolation` createNodeIso），「这个成员基于哪个 canonical 构建」可查，非黑盒。
+- **风险不对称**：要改的是并发 session 刚重构过的 iso 核心（RFC-188 `isolatedAgentRun` + T5a 逐路径 salvage），为一个 P2 的存疑收益动它不划算。
+若未来确需确定性（例如要做 fan-out 结果 A/B 复现），应作为独立 RFC 连同「pin base 后冲突增多」的补偿设计（T5a salvage + 冲突预算）一起论证。
 
 ### RFC-187-T10｜F2 残留 kickResume（AC-10）
 消息/deliver/patch 的 kickResume 放宽到任何可恢复态（走 `resumeTask` 绕 builtin-403）。
@@ -75,7 +81,14 @@
 - **PR-3 F2 ✅**（`3d3ae152`）：`isWorkgroupKickResumable`=awaiting_human‖interrupted。
 - **T5a（fan-out 逐路径 salvage）+ T6（TRAP-1 启动护栏）✅ 并发 session 完成**（`51aee3ba` + Codex 实现门 `7eefaa81`）。
 - **实测复验（2026-07-15，生产 daemon + glm）**：三探针逐条确认修复——Probe C→`done`（`hello.txt` 在 canonical，含一次 `wg-protocol-retry` 手滑仍到 done）· Probe B→`awaiting_human`（leader 1 轮 + 1 clarify-park，`clarify_sessions.source=__wg_leader__`）· Probe A→`done`（`shared.txt` 两行都在，跑了 `__merge_resolve__` T5a 合并）。CI 两 OS + 全测 + build + Playwright 全绿；全后端 5504 pass。
-- **剩余（deferred）**：T5b（merge agent 出 writeSem，Codex P0-4）→ 独立 RFC；T13（F3 answer-handoff 崩溃窗，Codex P1-7）待并发 RFC-188/189 recovery/round-retry 重构落定再做（避返工）；TRAP-3 低值；§3-2 大部分被 RFC-180 nudge 覆盖。
+- **PR-3 全部收口（2026-07-15）**：
+  - **T13 ✅**（`395618af`）＝① answer-handoff 崩溃窗（`isKilledClarifyContinuation` + 引擎入口 `reviveKilledClarifyContinuations` 重铸 pending + autoResume 增扫该 wedge 形态；`CLARIFY_RERUN_CAUSES` 单源）· ② autonomous-toggle 崩溃窗（引擎入口重申不变式、复用 RFC-181 A2 遣散）。
+  - **T12 ✅**（`395618af`）＝nudge 有界/非自治泊人双向加锁 + 协议块新增「continue 不派活必须说明阻塞点」。
+  - **T11 ✅**（`395618af`）＝**实测发现原用例完全空转**（fc 收敛只看卡片，成员轮失败不建卡 → 停掉 stub 的 wg 分支用例照样绿）；改 stub 为 workgroup-aware（按 `<port name>` 声明识别角色，非 wg 路径逐字节不变）+ 用例改 leader_worker + 断言 `toBe('done')`；本地正负双向验证（wg-aware→passed / 停 wg 分支→**failed**）。
+  - **T8 ✅**＝工作组 merge conflict-human 不再搁浅：hook 失败并弃 iso，却留 `merge_state='conflict-human'` 这个「人会在保留的 resolve-iso 里收尾」的承诺 → `replayConflictHumanResolutions`（对**每个**任务在 runTask 入口跑）下次 resume 去找已 GC 的 commit → throw → failTask 整任务。改为显式 `abandon`（合法：conflict-human → abandoned），与「delta 确实被丢弃」的事实对齐。
+  - **T9 ❌ WON'T DO**（用户拍板，理由见上）。
+  - **T10 ✅**（`3d3ae152`，F2）。
+- **仍 deferred（不属本 RFC）**：T5b（merge agent 出 writeSem，Codex P0-4）→ 独立 RFC。Codex 实现门另记的既有 TOCTOU（F2 stale-status 写终态 task / 并发 delivery ghost）与 T4c（clarify-answer 重试丢 Q&A 的 aging 边角）见 design.md §10，均非本 RFC 任务表内容。
 
 ## 依赖图
 
