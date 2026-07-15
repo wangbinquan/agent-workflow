@@ -4,7 +4,7 @@
 //   - Local has NO `cwd` field. opencode `McpLocalConfig` does not accept cwd;
 //     stdio child cwd is taken from the opencode process directory. If a
 //     future edit adds `cwd` here, the regression below catches it. See
-//     OPENCODE_CONFIG.md §3.3.
+//     docs/OPENCODE_CONFIG.md §3.3.
 //   - Local uses `env` / `timeoutMs` (the runner translates to opencode's
 //     `environment` / `timeout` at inject time; that translation is locked by
 //     runner tests in T7).

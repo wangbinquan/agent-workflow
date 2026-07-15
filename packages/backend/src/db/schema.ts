@@ -149,7 +149,7 @@ export const runtimes = sqliteTable('runtimes', {
 // mcps — RFC-028. DB is source of truth. Agents reference these by name via
 // agents.mcp (JSON string[]); runner unions the dependsOn closure's mcp names,
 // loads the rows here, and injects them into `OPENCODE_CONFIG_CONTENT.mcp` for
-// the spawned opencode process. See OPENCODE_CONFIG.md §1 and §3.3 for the
+// the spawned opencode process. See docs/OPENCODE_CONFIG.md §1 and §3.3 for the
 // field-name translation (env→environment, timeoutMs→timeout) and §3.3 for
 // why `config.command[0]` is the executable (no `cwd` field — opencode uses
 // the process directory = worktree).

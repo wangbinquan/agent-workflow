@@ -942,7 +942,7 @@ export const enUS: Resources = {
     saveButton: 'Save changes',
     createButton: 'Create MCP',
     toolNamingHint:
-      "To reference a specific MCP tool in an agent's permission field, use `{name}_{tool_name}` (opencode joins them automatically — see OPENCODE_CONFIG.md §3.3).",
+      "To reference a specific MCP tool in an agent's permission field, use `{name}_{tool_name}` (opencode joins them automatically — see docs/OPENCODE_CONFIG.md §3.3).",
     cwdHint:
       "The stdio subprocess runs from the task's worktree directory (opencode has no cwd field, so this form does not expose one).",
     oauthCliHint:
@@ -2133,7 +2133,7 @@ export const enUS: Resources = {
     dependsPickerLoadFailed: 'Failed to load agent list; you can still type names directly.',
     fieldMcps: 'MCP servers',
     fieldMcpsHint:
-      'Injected when this agent (or any of its dependsOn closure) runs. See OPENCODE_CONFIG.md §3.3 for the runtime field-name translation.',
+      'Injected when this agent (or any of its dependsOn closure) runs. See docs/OPENCODE_CONFIG.md §3.3 for the runtime field-name translation.',
     fieldMcpsPlaceholder: 'Type an MCP name and press Enter',
     mcpsPickerLoading: 'Loading…',
     mcpsPickerEmpty: 'No MCPs available (none registered)',

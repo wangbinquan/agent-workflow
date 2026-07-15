@@ -173,7 +173,7 @@ export const AgentSchema = z.object({
    * spawns the listed servers and exposes their tools to the spawned process.
    * Default `[]` leaves the agent free of framework-managed MCPs (the user's
    * repo `.opencode/config.json` and `~/.config/opencode/` MCPs still load
-   * naturally — see OPENCODE_CONFIG.md §4).
+   * naturally — see docs/OPENCODE_CONFIG.md §4).
    */
   mcp: z.array(McpNameSchema),
   /**

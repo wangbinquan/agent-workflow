@@ -154,7 +154,7 @@ export function buildInlineConfig(
   // RFC-028: emit the mcp record only when at least one ENABLED entry exists.
   // Disabled entries are skipped entirely to keep the env-var compact AND to
   // avoid masking a same-name inherited entry from repo .opencode/config.json
-  // — leaving inherited config alone is the v1 stance (OPENCODE_CONFIG.md §6).
+  // — leaving inherited config alone is the v1 stance (docs/OPENCODE_CONFIG.md §6).
   const mcpMap: Record<string, Record<string, unknown>> = {}
   for (const m of mcps) {
     if (m.enabled === false) continue
@@ -186,7 +186,7 @@ export function buildInlineConfig(
  *   - Local : `command` array kept verbatim; `env` → `environment`;
  *             `timeoutMs` → `timeout`. **No `cwd` field** (opencode lacks it
  *             — stdio child cwd is taken from the opencode process directory
- *             = our worktree). See OPENCODE_CONFIG.md §3.3.
+ *             = our worktree). See docs/OPENCODE_CONFIG.md §3.3.
  *   - Remote: `url` / `headers` / `oauth` kept verbatim; `timeoutMs` → `timeout`.
  *
  * Undefined fields are stripped so the resulting JSON does not include `null`

@@ -34,7 +34,7 @@ export const McpLocalConfigSchema = z
     timeoutMs: z.number().int().positive().optional(),
     // INTENTIONALLY NO `cwd`: opencode McpLocalConfig has no cwd field; stdio
     // child cwd is taken from the opencode process directory = our worktree.
-    // See OPENCODE_CONFIG.md §3.3 and design/RFC-028.../design.md §0.3.
+    // See docs/OPENCODE_CONFIG.md §3.3 and design/RFC-028.../design.md §0.3.
   })
   .strict()
 export type McpLocalConfig = z.infer<typeof McpLocalConfigSchema>

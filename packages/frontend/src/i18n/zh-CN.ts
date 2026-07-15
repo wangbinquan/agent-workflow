@@ -3819,7 +3819,7 @@ export const zhCN: Resources = {
     saveButton: '保存修改',
     createButton: '创建 MCP',
     toolNamingHint:
-      '在 agent 的 permission 字段里点名某 MCP 工具时，使用 `{name}_{tool_name}`（opencode 自动按 mcp 名 + 工具名拼接，详见 OPENCODE_CONFIG.md §3.3）。',
+      '在 agent 的 permission 字段里点名某 MCP 工具时，使用 `{name}_{tool_name}`（opencode 自动按 mcp 名 + 工具名拼接，详见 docs/OPENCODE_CONFIG.md §3.3）。',
     cwdHint:
       'stdio 子进程会在该 task 的 worktree 目录下启动（opencode 端没有 cwd 字段，所以这里也不提供）。',
     oauthCliHint:
@@ -4951,7 +4951,8 @@ export const zhCN: Resources = {
     dependsPickerEmpty: '暂无可选代理（尚无可用项）',
     dependsPickerLoadFailed: '加载代理列表失败；仍可直接输入。',
     fieldMcps: 'MCP 服务',
-    fieldMcpsHint: '该 agent 启动时按 dependsOn 闭包合并注入。详细规则见 OPENCODE_CONFIG.md §3.3。',
+    fieldMcpsHint:
+      '该 agent 启动时按 dependsOn 闭包合并注入。详细规则见 docs/OPENCODE_CONFIG.md §3.3。',
     fieldMcpsPlaceholder: '输入 MCP 名后按 Enter',
     mcpsPickerLoading: '加载中…',
     mcpsPickerEmpty: '暂无可选 MCP（尚无可用项）',

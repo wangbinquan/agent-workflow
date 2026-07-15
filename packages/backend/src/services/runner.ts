@@ -210,7 +210,7 @@ export interface RunNodeOptions {
    * `collectMcpNamesFromClosure` + `loadMcpsByNames` (see services/mcpClosure)
    * over the dependsOn closure. Empty / undefined → omit the `mcp` key
    * entirely; the user's repo `.opencode/config.json` + `~/.config/opencode/`
-   * MCPs still load naturally (deep-merge baseline). See OPENCODE_CONFIG.md
+   * MCPs still load naturally (deep-merge baseline). See docs/OPENCODE_CONFIG.md
    * §1 and §3.3 for the field-name translation rules.
    */
   mcps?: readonly Mcp[]
@@ -802,7 +802,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // operators tell "scheduler dropped the override on the floor" apart from
   // "the runtime received it but ignored it" without dumping the full config.
   // Names/counts only — never config bodies (env / headers may contain user
-  // tokens; OPENCODE_CONFIG.md §6).
+  // tokens; docs/OPENCODE_CONFIG.md §6).
   log.info('spawning agent runtime', {
     runtime,
     bin: cmd[0],

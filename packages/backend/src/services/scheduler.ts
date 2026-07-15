@@ -6054,7 +6054,7 @@ export async function prepareNodeRunInjection(
        * agent.mcp[] names. Empty when nothing in the closure declares an
        * mcp (most workflows pre-RFC-028). Names that no longer resolve
        * in the DB (deleted out from under the running task) are silently
-       * dropped — see loadMcpsByNames + OPENCODE_CONFIG.md §6.
+       * dropped — see loadMcpsByNames + docs/OPENCODE_CONFIG.md §6.
        */
       mcps: Mcp[]
       /**
