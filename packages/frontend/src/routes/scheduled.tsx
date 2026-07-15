@@ -110,6 +110,9 @@ function ScheduledPage() {
               <th>{t('scheduled.colNext')}</th>
               <th>{t('scheduled.colStatus')}</th>
               <th aria-label={t('common.ariaActions')} />
+              {/* Chevron column is purely decorative (all its cells are
+                  aria-hidden), so the header hides from AT too. */}
+              <th aria-hidden="true" />
             </tr>
           </thead>
           <tbody>
@@ -234,6 +237,10 @@ function ScheduledPage() {
                     size="sm"
                     disabled={runNowBlocked(row) || runNow.isPending}
                   />
+                </td>
+                {/* Row-click affordance — same mute chevron as /tasks rows. */}
+                <td className="data-table__chevron" aria-hidden="true">
+                  ›
                 </td>
               </tr>
             ))}

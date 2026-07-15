@@ -12,6 +12,9 @@
 //      consecutiveFailures > 1.
 //   5. Next-run: relative main line + short absolute subtitle; disabled → —.
 //   6. Row click navigates; Switch clicks don't (shouldRowNavigate guard).
+//   7. Every row ends with the shared `.data-table__chevron` affordance cell
+//      (parity with /tasks rows — a clickable row must LOOK clickable), and
+//      the thead column count matches the row cell count.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -222,5 +225,20 @@ describe('/scheduled — inline operations (RFC-192)', () => {
     const router = await renderPage()
     fireEvent.click(await screen.findByTestId('scheduled-row-s9'))
     await waitFor(() => expect(router.state.location.pathname).toBe('/scheduled/s9'))
+  })
+
+  test('rows end with the shared chevron affordance cell (parity with /tasks)', async () => {
+    installFetch([sched('s1')])
+    await renderPage()
+    const row = await screen.findByTestId('scheduled-row-s1')
+    const cells = row.querySelectorAll('td')
+    const last = cells[cells.length - 1]
+    expect(last?.classList.contains('data-table__chevron')).toBe(true)
+    expect(last?.textContent?.trim()).toBe('›')
+    expect(last?.getAttribute('aria-hidden')).toBe('true')
+    // Column-count lock: a td without its matching th (or vice versa) skews
+    // every header over the wrong column.
+    const table = row.closest('table')
+    expect(table?.querySelectorAll('thead th')).toHaveLength(cells.length)
   })
 })
