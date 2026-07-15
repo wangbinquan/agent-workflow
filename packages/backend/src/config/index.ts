@@ -10,7 +10,7 @@ import {
   type Config,
   type ConfigPatch,
 } from '@agent-workflow/shared'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -22,6 +22,7 @@ const log = createLogger('config')
  * Returns a fully-typed Config. Throws on invalid JSON or schema mismatch.
  */
 export function loadConfig(path: string): Config {
+  assertConfigPath(path)
   if (!existsSync(path)) {
     log.info('no config found, writing defaults', { path })
     saveConfigRaw(path, DEFAULT_CONFIG)
@@ -70,12 +71,33 @@ export function applyConfigPatch(path: string, patch: unknown): Config {
   return revalidated.data
 }
 
-/** Atomic write: tempfile + rename. */
-function saveConfigRaw(path: string, cfg: Config): void {
+/**
+ * An empty/blank path would resolve dirname() to the process cwd and can never
+ * be a valid rename target — refuse it before any filesystem side effect.
+ */
+function assertConfigPath(path: string): void {
+  if (path.trim() === '') {
+    throw new Error('config: empty config path')
+  }
+}
+
+/** Atomic write: tempfile + rename. Exported for tests only. */
+export function saveConfigRaw(path: string, cfg: Config): void {
+  assertConfigPath(path)
   mkdirSync(dirname(path), { recursive: true })
   const tmp = join(dirname(path), `.config.json.tmp-${process.pid}-${Date.now()}`)
   writeFileSync(tmp, JSON.stringify(cfg, null, 2) + '\n', 'utf-8')
-  renameSync(tmp, path)
+  try {
+    renameSync(tmp, path)
+  } catch (err) {
+    // A failed rename must never orphan the tempfile in dirname(path).
+    try {
+      unlinkSync(tmp)
+    } catch {
+      // best-effort — the rename error below is the failure that matters
+    }
+    throw err
+  }
 }
 
 /** Merge defaults under unknown raw input (shallow + nested for known objects). */

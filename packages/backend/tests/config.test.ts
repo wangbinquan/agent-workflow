@@ -1,8 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { applyConfigPatch, loadConfig } from '../src/config'
+import { applyConfigPatch, loadConfig, saveConfigRaw } from '../src/config'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { ValidationError } from '../src/util/errors'
 
@@ -145,5 +153,61 @@ describe('config load/save', () => {
   test('RFC-115 legacy config (missing defaultNodeRetries) backfills to 3', () => {
     writeFileSync(path, JSON.stringify({ $schema_version: 1, maxConcurrentNodes: 6 }))
     expect(loadConfig(path).defaultNodeRetries).toBe(3)
+  })
+})
+
+// 2026-07-15 repo-root tempfile leak regression. Many route tests pass
+// `configPath: ''` into server deps; loadConfig('') used to take the
+// "write defaults" branch, drop `.config.json.tmp-<pid>-<ts>` into
+// dirname('') === '.' (the repo root under `bun test`), then fail
+// renameSync(tmp, '') with ENOENT — orphaning the tempfile. ~11,500 files
+// (45MB) accumulated in the repo root between 2026-05-23 and 2026-07-15.
+// Locks two invariants: (a) an empty/blank path fails fast before any
+// filesystem write; (b) a failed rename never leaves its tempfile behind.
+describe('config atomic write hygiene (repo-root tmp leak regression)', () => {
+  const cwdTmpLeaks = () =>
+    readdirSync(process.cwd()).filter((f) => f.startsWith('.config.json.tmp-'))
+
+  test("loadConfig('') fails fast and writes nothing into cwd", () => {
+    const before = cwdTmpLeaks()
+    expect(() => loadConfig('')).toThrow(/empty config path/)
+    expect(cwdTmpLeaks()).toEqual(before)
+  })
+
+  test("applyConfigPatch('') fails fast and writes nothing into cwd", () => {
+    const before = cwdTmpLeaks()
+    expect(() => applyConfigPatch('', { theme: 'dark' })).toThrow(/empty config path/)
+    expect(cwdTmpLeaks()).toEqual(before)
+  })
+
+  test('whitespace-only path is rejected too', () => {
+    expect(() => loadConfig('   ')).toThrow(/empty config path/)
+  })
+
+  test('failed rename cleans up its tempfile (target is a directory)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aw-config-rename-fail-'))
+    try {
+      const target = join(dir, 'config.json')
+      // rename(regular file -> existing directory) throws EISDIR on both
+      // macOS and Linux, exercising the cleanup path deterministically.
+      mkdirSync(target)
+      expect(() => saveConfigRaw(target, DEFAULT_CONFIG)).toThrow()
+      expect(readdirSync(dir).filter((f) => f.startsWith('.config.json.tmp-'))).toEqual([])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('successful save leaves no tempfile behind', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aw-config-clean-'))
+    try {
+      const p = join(dir, 'config.json')
+      loadConfig(p)
+      applyConfigPatch(p, { theme: 'dark' })
+      expect(existsSync(p)).toBe(true)
+      expect(readdirSync(dir).filter((f) => f.startsWith('.config.json.tmp-'))).toEqual([])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
