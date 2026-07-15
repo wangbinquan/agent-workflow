@@ -4,6 +4,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zipSync, type Zippable } from 'fflate'
+import { SKILL_ZIP_LIMITS } from '@agent-workflow/shared'
 import { decodeZip, ZIP_LIMITS } from '../src/services/skill-zip'
 import { ValidationError } from '../src/util/errors'
 
@@ -16,6 +17,10 @@ function makeZip(files: Record<string, Uint8Array | string>): Uint8Array {
 }
 
 describe('decodeZip', () => {
+  test('uses the shared RFC-196 limits object without a backend copy', () => {
+    expect(ZIP_LIMITS).toBe(SKILL_ZIP_LIMITS)
+  })
+
   test('happy path: two files yields two entries', () => {
     const buf = makeZip({
       'skill-a/SKILL.md': '---\nname: skill-a\n---\nbody\n',

@@ -7796,115 +7796,584 @@ mark.comment-anchor[data-active='true'] {
   margin-bottom: 8px;
 }
 
-/* RFC-019: Upload ZIP tab body */
-.zip-import {
+/* RFC-196: shared single-file dropzone + Skill ZIP import task flow */
+.file-dropzone {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-}
-.zip-import__file {
-  display: flex;
-  gap: 12px;
   align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: clamp(20px, 5vw, 36px) clamp(14px, 4vw, 28px);
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--accent) 3%, var(--panel));
+  text-align: center;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
 }
-.zip-import__hint {
+
+.file-dropzone--active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.file-dropzone--invalid {
+  border-color: var(--danger);
+}
+
+.file-dropzone[aria-disabled='true'] {
+  opacity: 0.72;
+}
+
+.file-dropzone__icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--accent) 11%, var(--panel));
+  color: var(--accent);
+}
+
+.file-dropzone__icon svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.file-dropzone__copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 46ch;
+}
+
+.file-dropzone__title {
+  font-size: var(--font-lg);
+  line-height: 1.35;
+}
+
+.file-dropzone__description,
+.file-dropzone__file-size {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-sm);
 }
-.zip-import__error {
-  background: var(--err-bg, #fee);
-  border: 1px solid var(--err, #c33);
-  padding: 8px 12px;
-  border-radius: 4px;
-  color: var(--err, #c33);
+
+.file-dropzone__selection {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: min(100%, 560px);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  text-align: left;
 }
-.zip-import__errors-banner {
-  background: var(--warn-bg, #fff8e6);
-  border: 1px solid var(--warn, #c93);
-  padding: 8px 12px;
-  border-radius: 4px;
+
+.file-dropzone__file {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
 }
-.zip-import__errors-banner ul {
-  margin: 6px 0 0;
-  padding-left: 20px;
+
+.file-dropzone__file-name {
+  min-width: 0;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.zip-import__table {
-  border-collapse: collapse;
+
+.file-dropzone__file-size {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.file-dropzone__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-2);
+}
+
+.file-dropzone__error {
+  color: var(--danger);
+  font-size: var(--font-sm);
+  overflow-wrap: anywhere;
+}
+
+.skill-import,
+.skill-import__phase,
+.skill-import__candidates,
+.skill-import__result,
+.skill-import__result-groups {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.skill-import__mobile-back {
+  display: none;
+}
+
+/* The compact 11px chips in this workflow need stronger foregrounds than the
+   app-wide semantic palette to retain AA contrast against their tinted fills. */
+.skill-import {
+  --success: #1b6d34;
+  --warn: #844700;
+  --info: #1d5d9f;
+}
+
+:root[data-theme='dark'] .skill-import {
+  --success: #66d17a;
+  --warn: #ffc25c;
+  --info: #8eb8ff;
+}
+
+:root[data-theme='dark'] .skill-import .btn--primary {
+  background: #2759a5;
+  border-color: #2759a5;
+}
+
+:root[data-theme='dark'] .skill-import .btn--primary:hover {
+  background: #204a8b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .skill-import {
+    --success: #66d17a;
+    --warn: #ffc25c;
+    --info: #8eb8ff;
+  }
+
+  :root:not([data-theme]) .skill-import .btn--primary {
+    background: #2759a5;
+    border-color: #2759a5;
+  }
+
+  :root:not([data-theme]) .skill-import .btn--primary:hover {
+    background: #204a8b;
+  }
+}
+
+.skill-import,
+.skill-import__phase,
+.skill-import__result {
+  gap: var(--space-4);
+}
+
+.skill-import__structure .card__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, auto);
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.skill-import__structure-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.skill-import__structure-copy span {
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+
+.skill-import__structure pre {
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3);
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--font-sm);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.skill-import__select-action,
+.skill-import__archive,
+.skill-import__review-summary,
+.skill-import__action-buttons,
+.skill-import__result-counts,
+.skill-import__result-actions,
+.zip-candidate__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.skill-import__select-action {
+  justify-content: flex-end;
+}
+
+.skill-import__pending {
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+
+.skill-import__archive {
+  justify-content: space-between;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.skill-import__archive-copy,
+.skill-import__action-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.skill-import__archive-copy strong {
+  min-width: 0;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--font-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-import__archive-copy span,
+.skill-import__action-copy span {
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+
+.skill-import__review-summary,
+.skill-import__result-counts {
+  flex-wrap: wrap;
+}
+
+.skill-import__review-summary .status-chip,
+.skill-import__result-counts .status-chip,
+.zip-candidate .status-chip {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.skill-import__archive-errors {
+  border-color: color-mix(in srgb, var(--warn) 55%, var(--border));
+  background: color-mix(in srgb, var(--warn) 5%, var(--panel));
+}
+
+.skill-import__archive-errors ul,
+.skill-import__result-group ul,
+.zip-candidate__warnings {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.skill-import__archive-errors ul,
+.skill-import__result-group ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.skill-import__archive-errors li,
+.skill-import__result-group li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--font-sm);
+}
+
+.skill-import__archive-errors code,
+.skill-import__archive-errors span,
+.skill-import__result-group code,
+.skill-import__result-group span,
+.skill-import__result-group a {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.skill-import__candidates {
+  gap: var(--space-3);
+}
+
+.zip-candidate {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.zip-candidate__header {
+  width: 100%;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.zip-candidate__header code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zip-candidate__description {
+  display: -webkit-box;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.zip-candidate__facts {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+
+.zip-candidate__warnings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--warn);
+  font-size: var(--font-sm);
+}
+
+.zip-candidate__warnings li {
+  overflow-wrap: anywhere;
+}
+
+.zip-candidate .card__footer {
+  display: block;
+  min-width: 0;
+}
+
+.zip-candidate__decision {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  width: 100%;
+  min-width: 0;
+}
+
+.zip-candidate__decision .form-field,
+.zip-candidate__decision .select,
+.zip-candidate__decision .select__trigger {
+  min-width: 0;
   width: 100%;
 }
-.zip-import__table th,
-.zip-import__table td {
-  border-bottom: 1px solid var(--border);
-  padding: 8px 10px;
-  text-align: left;
-  vertical-align: top;
-}
-.zip-import__table th {
-  font-weight: 600;
-  color: var(--muted);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.zip-import__desc {
-  max-width: 360px;
-}
-.zip-import__muted {
-  color: var(--muted);
-}
-.zip-import__warnings {
-  margin: 4px 0 0;
-  padding-left: 18px;
-  font-size: 12px;
-  color: var(--warn, #c93);
-}
-.zip-import__conflict {
-  font-size: 12px;
-  padding: 2px 6px;
-  border-radius: 999px;
-}
-.zip-import__conflict--managed {
-  background: rgba(204, 153, 0, 0.12);
-  color: var(--warn, #c93);
-}
-.zip-import__conflict--external {
-  background: rgba(204, 51, 51, 0.12);
-  color: var(--err, #c33);
-}
-.zip-import__rename {
-  display: inline-flex;
-  flex-direction: column;
-  margin-left: 8px;
-}
-.zip-import__rename input {
-  border: 1px solid var(--border);
-  padding: 4px 6px;
-  border-radius: 3px;
-  font-family: inherit;
-}
-.zip-import__rename-error {
-  color: var(--err, #c33);
-  font-size: 11px;
-  margin-top: 2px;
-}
-.zip-import__actions {
-  display: flex;
-  gap: 12px;
+
+.skill-import__actions {
+  position: sticky;
+  z-index: 3;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  box-shadow: 0 -6px 16px color-mix(in srgb, var(--text) 8%, transparent);
+  backdrop-filter: blur(10px);
 }
-.zip-import__commit-error {
-  color: var(--err, #c33);
+
+.skill-import__action-buttons {
+  justify-content: flex-end;
 }
-.zip-import__summary {
-  padding: 10px 12px;
-  background: var(--bg-elev, #f6f6f6);
-  border-radius: 4px;
+
+.skill-import__result {
+  padding: clamp(16px, 4vw, 28px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
 }
-.zip-import__failures {
-  margin: 6px 0 0;
-  padding-left: 20px;
-  font-size: 12px;
-  color: var(--err, #c33);
+
+.skill-import__result--success {
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+}
+
+.skill-import__result--partial {
+  border-color: color-mix(in srgb, var(--warn) 55%, var(--border));
+}
+
+.skill-import__result--no-write {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+
+.skill-import__result-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.skill-import__result-heading h3,
+.skill-import__result-heading p,
+.skill-import__result-group h4 {
+  margin: 0;
+}
+
+.skill-import__result-heading p {
+  margin-top: var(--space-1);
+  color: var(--muted);
+  font-size: var(--font-sm);
+  overflow-wrap: anywhere;
+}
+
+.skill-import__result-icon {
+  display: grid;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--success-bg);
+  color: var(--success);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.skill-import__result--partial .skill-import__result-icon {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.skill-import__result--no-write .skill-import__result-icon {
+  background: color-mix(in srgb, var(--danger) 13%, transparent);
+  color: var(--danger);
+}
+
+.skill-import__result-groups {
+  gap: var(--space-3);
+}
+
+.skill-import__result-group {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+
+.skill-import__result-group h4 {
+  margin-bottom: var(--space-2);
+  font-size: var(--font-md);
+}
+
+.skill-import__result-group a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.skill-import__result-group a:hover {
+  text-decoration: underline;
+}
+
+.skill-import__result-group--failed {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+}
+
+.skill-import__result-actions {
+  justify-content: flex-end;
+  padding-top: var(--space-2);
+}
+
+@media (max-width: 720px) {
+  /* /skills/new is a focused task on phones: remove the two desktop rails and
+     give the form/import workflow the viewport. The inline back link keeps the
+     Skills list reachable without restoring either rail. */
+  .app-shell:has(.skill-import) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-shell:has(.skill-import) > .sidebar,
+  .page--split:has(.skill-import) .split__list {
+    display: none;
+  }
+
+  .page--split:has(.skill-import) .split {
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .skill-import__mobile-back {
+    display: inline-flex;
+    margin-bottom: var(--space-2);
+    color: var(--accent);
+    font-size: var(--font-sm);
+    font-weight: 600;
+  }
+
+  .file-dropzone__selection,
+  .file-dropzone__file,
+  .file-dropzone__actions,
+  .skill-import__structure .card__body,
+  .skill-import__archive,
+  .zip-candidate__decision,
+  .skill-import__actions,
+  .skill-import__action-buttons,
+  .skill-import__result-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .file-dropzone__selection,
+  .file-dropzone__file,
+  .skill-import__archive {
+    align-items: stretch;
+  }
+
+  .skill-import__archive-errors li,
+  .skill-import__result-group li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .file-dropzone__file-name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .file-dropzone__actions .btn,
+  .skill-import__select-action .btn,
+  .skill-import__archive > .btn,
+  .skill-import__action-buttons .btn,
+  .skill-import__result-actions .btn {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .skill-import__select-action,
+  .skill-import__result-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .file-dropzone {
+    transition: none;
+  }
 }
 
 /* ---- RFC-021: task detail page tab layout ---- */

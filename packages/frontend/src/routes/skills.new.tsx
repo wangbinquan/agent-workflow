@@ -6,7 +6,7 @@
 // selection survives a tab switch.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createRoute, useNavigate } from '@tanstack/react-router'
+import { createRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Skill } from '@agent-workflow/shared'
@@ -69,7 +69,11 @@ function SkillCreatePage() {
     <div className="agent-new">
       <header className="page__header page__header--row">
         <div>
-          <h2>{t('skills.newTitle')}</h2>
+          <Link to="/skills" className="skill-import__mobile-back">
+            ← {t('skills.zipReturnList')}
+          </Link>
+          <h2>{tab === 'zip' ? t('skills.importTitle') : t('skills.newTitle')}</h2>
+          {tab === 'zip' && <p className="page__hint">{t('skills.importSubtitle')}</p>}
         </div>
         {tab !== 'zip' && (
           <div className="page__actions">

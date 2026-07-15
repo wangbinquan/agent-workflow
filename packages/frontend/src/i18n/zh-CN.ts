@@ -974,19 +974,35 @@ export interface Resources {
     sourceFromPill: string
     sourceReadonlyHint: string
     tabZip: string
-    zipEmptyHint: string
-    zipParse: string
-    zipParsing: string
+    importTitle: string
+    importSubtitle: string
+    zipDropTitle: string
+    zipDropHint: string
+    zipChoose: string
+    zipReplace: string
+    zipRemove: string
+    zipStructureTitle: string
+    zipManagedHint: string
+    zipWrongType: string
+    zipTooLarge: string
+    zipCheck: string
+    zipChecking: string
+    zipCheckingStatus: string
+    zipRetry: string
     zipImportButton: string
     zipImporting: string
-    zipImportSummary: string
+    zipReviewSummary: string
+    zipCandidatesCount: string
+    zipConflictsCount: string
+    zipArchiveErrorsCount: string
+    zipArchiveErrorsTitle: string
+    zipNoCandidatesTitle: string
     zipNoCandidates: string
-    zipErrorBanner: string
-    zipColCandidate: string
-    zipColDescription: string
-    zipColFiles: string
-    zipColConflict: string
-    zipColAction: string
+    zipStatusReady: string
+    zipDescriptionEmpty: string
+    zipCandidateFacts: string
+    zipActionFor: string
+    zipRenameFor: string
     zipActionImport: string
     zipActionSkip: string
     zipActionOverwrite: string
@@ -998,7 +1014,30 @@ export interface Resources {
     zipRenameConflict: string
     zipConflictManaged: string
     zipConflictManagedReadonly: string
-    zipConflictExternal: string
+    zipNamesLoading: string
+    zipNamesUnavailable: string
+    zipNamesStale: string
+    zipActionSummary: string
+    zipOverwriteWarning: string
+    zipBack: string
+    zipResultSuccess: string
+    zipResultPartial: string
+    zipResultNoWrite: string
+    zipResultFile: string
+    zipResultCreatedCount: string
+    zipResultUpdatedCount: string
+    zipResultSkippedCount: string
+    zipResultFailedCount: string
+    zipResultFailures: string
+    zipResultCreated: string
+    zipResultUpdated: string
+    zipResultSkipped: string
+    zipResultFailed: string
+    zipResultCreatedChip: string
+    zipResultUpdatedChip: string
+    zipContinue: string
+    zipReturnList: string
+    zipOpenSkill: string
     fileDiscardConfirm: string
     fileErrPathRequired: string
     fileErrRelativeOnly: string
@@ -3989,20 +4028,36 @@ export const zhCN: Resources = {
     sourceSkippedDetails: '展开详情',
     sourceFromPill: '来自 {{label}}',
     sourceReadonlyHint: '此技能由父目录纳管，请在外部目录里编辑文件。',
-    tabZip: '上传 ZIP',
-    zipEmptyHint: '选择一个 .zip，顶层是一个目录，里面每个子目录是一个 skill（含 SKILL.md）。',
-    zipParse: '解析',
-    zipParsing: '解析中…',
+    tabZip: 'ZIP 导入',
+    importTitle: '导入技能',
+    importSubtitle: '一次导入一个或多个托管 Skill；写入前会先检查目录结构和同名冲突。',
+    zipDropTitle: '拖放 ZIP 到这里，或选择文件',
+    zipDropHint: '单个 .zip · 最大 {{limit}}',
+    zipChoose: '选择 ZIP',
+    zipReplace: '更换 ZIP',
+    zipRemove: '移除',
+    zipStructureTitle: '正确目录结构',
+    zipManagedHint: '导入后的 Skill 均由本平台托管。',
+    zipWrongType: '请选择名称以 .zip 结尾的文件。',
+    zipTooLarge: '这个压缩包超过 {{limit}}。',
+    zipCheck: '检查 ZIP 内容',
+    zipChecking: '检查中…',
+    zipCheckingStatus: '正在检查压缩包结构和同名冲突…',
+    zipRetry: '重试',
     zipImportButton: '导入 {{n}} 个技能',
     zipImporting: '导入中…',
-    zipImportSummary: '新建 {{c}} · 覆盖 {{u}} · 跳过 {{s}} · 失败 {{f}}',
+    zipReviewSummary: '导入检查摘要',
+    zipCandidatesCount: '{{count}} 个候选',
+    zipConflictsCount: '{{count}} 个同名冲突',
+    zipArchiveErrorsCount: '{{count}} 项未通过',
+    zipArchiveErrorsTitle: '有 {{count}} 项未通过检查',
+    zipNoCandidatesTitle: '没有可导入的 Skill',
     zipNoCandidates: 'zip 中未找到任何技能候选。',
-    zipErrorBanner: '以下条目无法导入：',
-    zipColCandidate: '技能',
-    zipColDescription: '描述',
-    zipColFiles: '文件数',
-    zipColConflict: '冲突',
-    zipColAction: '动作',
+    zipStatusReady: '可导入',
+    zipDescriptionEmpty: '未填写描述',
+    zipCandidateFacts: '{{files}} 个文件 · {{size}}',
+    zipActionFor: '{{name}} 的导入动作',
+    zipRenameFor: '{{name}} 的新名称',
     zipActionImport: '作为新技能导入',
     zipActionSkip: '跳过',
     zipActionOverwrite: '覆盖',
@@ -4012,9 +4067,32 @@ export const zhCN: Resources = {
     zipRenameInvalid: '需为 kebab-case',
     zipRenameDup: '与本批次其他重名',
     zipRenameConflict: '名称已被占用',
-    zipConflictManaged: '已存在 managed 技能',
-    zipConflictManagedReadonly: '已存在 managed 技能 — 无权限替换',
-    zipConflictExternal: 'external 技能 — 不支持 ZIP 覆盖',
+    zipConflictManaged: '同名 Skill',
+    zipConflictManagedReadonly: '同名且无权覆盖',
+    zipNamesLoading: '正在加载已有 Skill 名称…',
+    zipNamesUnavailable: '暂时无法验证重命名目标；重试成功后才能导入。',
+    zipNamesStale: '已有名称刷新失败；当前使用缓存校验，服务端仍会在写入前最终确认。',
+    zipActionSummary: '将新建 {{creating}} · 覆盖 {{updating}} · 跳过 {{skipping}}',
+    zipOverwriteWarning: '将替换 {{count}} 个已有 Skill。',
+    zipBack: '返回',
+    zipResultSuccess: '导入完成',
+    zipResultPartial: '部分导入完成',
+    zipResultNoWrite: '本次没有写入 Skill',
+    zipResultFile: '来源：{{name}}',
+    zipResultCreatedCount: '新建 {{count}}',
+    zipResultUpdatedCount: '更新 {{count}}',
+    zipResultSkippedCount: '跳过 {{count}}',
+    zipResultFailedCount: '失败 {{count}}',
+    zipResultFailures: '有 {{count}} 个 Skill 导入失败，请查看下方原因。',
+    zipResultCreated: '新建',
+    zipResultUpdated: '更新',
+    zipResultSkipped: '跳过',
+    zipResultFailed: '失败',
+    zipResultCreatedChip: '新建',
+    zipResultUpdatedChip: '更新',
+    zipContinue: '继续导入',
+    zipReturnList: '返回技能列表',
+    zipOpenSkill: '打开已导入的 Skill {{name}}',
     fileDiscardConfirm: '放弃未保存的修改？',
     fileErrPathRequired: '路径必填',
     fileErrRelativeOnly: '仅允许相对路径；不能包含 ".."',

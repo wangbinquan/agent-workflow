@@ -2,7 +2,7 @@
 // collection, dirname-as-name policy, and duplicate / invalid-name errors.
 
 import { describe, expect, test } from 'bun:test'
-import { parseSkillZipEntries, type ZipEntryRef } from '../src/skill-zip'
+import { parseSkillZipEntries, SKILL_ZIP_LIMITS, type ZipEntryRef } from '../src/skill-zip'
 
 function utf8(s: string): Uint8Array {
   return new TextEncoder().encode(s)
@@ -19,6 +19,17 @@ function dirEntry(path: string): ZipEntryRef {
 
 const skillMd = (name: string, desc = 'desc') =>
   `---\nname: ${name}\ndescription: ${desc}\n---\nBody.\n`
+
+describe('SKILL_ZIP_LIMITS (RFC-196)', () => {
+  test('keeps the public safety limits stable', () => {
+    expect(SKILL_ZIP_LIMITS).toEqual({
+      totalBytes: 64 * 1024 * 1024,
+      perFileBytes: 10 * 1024 * 1024,
+      entries: 2000,
+      depth: 12,
+    })
+  })
+})
 
 describe('parseSkillZipEntries', () => {
   test('shape A: top-level is skill dirs, two skills', () => {

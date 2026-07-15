@@ -16,6 +16,17 @@ declare const TextDecoder: {
   new (label?: string, opts?: { fatal?: boolean }): { decode(buf: Uint8Array): string }
 }
 
+/**
+ * RFC-196: one source of truth for every ZIP safety limit. The backend owns
+ * enforcement; the frontend only reads `totalBytes` for early file feedback.
+ */
+export const SKILL_ZIP_LIMITS = {
+  totalBytes: 64 * 1024 * 1024,
+  perFileBytes: 10 * 1024 * 1024,
+  entries: 2000,
+  depth: 12,
+} as const
+
 /** A normalised file entry from inside the uploaded ZIP. */
 export interface ZipEntryRef {
   /** posix path inside the zip; never starts with '/', never contains '..'. */

@@ -8,6 +8,14 @@ import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 
 const ROUTE_PATH = resolve(import.meta.dirname, '..', 'src', 'routes', 'skills.new.tsx')
+const PANEL_PATH = resolve(
+  import.meta.dirname,
+  '..',
+  'src',
+  'components',
+  'skills',
+  'ImportZipPanel.tsx',
+)
 
 describe('/skills/new — Upload ZIP tab wiring', () => {
   test('imports ImportZipPanel component', () => {
@@ -28,5 +36,24 @@ describe('/skills/new — Upload ZIP tab wiring', () => {
     // data-testid="skills-tab-zip" attribute on the tab button).
     const src = readFileSync(ROUTE_PATH, 'utf-8')
     expect(src).toContain("testid: 'skills-tab-zip'")
+  })
+
+  test('ZIP mode owns a dynamic import heading and no create action', () => {
+    const src = readFileSync(ROUTE_PATH, 'utf-8')
+    expect(src).toContain("tab === 'zip' ? t('skills.importTitle')")
+    expect(src).toContain("t('skills.importSubtitle')")
+    expect(src).toContain("tab !== 'zip'")
+  })
+
+  test('panel uses shared primitives and no longer renders the RFC-019 table/raw rename input', () => {
+    const src = readFileSync(PANEL_PATH, 'utf-8')
+    expect(src).toContain("from '@/components/FileDropzone'")
+    expect(src).toContain("from '@/components/Card'")
+    expect(src).toContain("from '@/components/StatusChip'")
+    expect(src).toContain("from '@/components/ErrorBanner'")
+    expect(src).toContain("from '@/components/Form'")
+    expect(src).not.toContain('<table')
+    expect(src).not.toContain('type="text"')
+    expect(src).not.toContain('zip-import__')
   })
 })

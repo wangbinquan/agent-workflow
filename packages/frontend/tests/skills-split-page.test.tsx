@@ -195,6 +195,16 @@ describe('/skills split page', () => {
     renderSkills('/skills/new')
     await waitFor(() => screen.getByRole('heading', { level: 2, name: /New skill/ }))
     expect(screen.getByRole('tab', { name: 'Managed' })).toBeTruthy()
-    expect(screen.getByTestId('skills-tab-zip')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('skills-tab-zip'))
+    expect(screen.getByRole('heading', { level: 2, name: 'Import skills' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /Back to skills/ }).getAttribute('href')).toBe(
+      '/skills',
+    )
+    expect(screen.getByText(/Structure and name conflicts/)).toBeTruthy()
+    expect(screen.queryByTestId('skill-create-button')).toBeNull()
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Managed' }))
+    expect(screen.getByRole('heading', { level: 2, name: 'New skill' })).toBeTruthy()
+    expect(screen.getByTestId('skill-create-button')).toBeTruthy()
   })
 })

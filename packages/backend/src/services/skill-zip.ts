@@ -11,6 +11,7 @@ import { dirname, join, resolve, sep } from 'node:path'
 import { unzipSync } from 'fflate'
 import {
   parseSkillZipEntries,
+  SKILL_ZIP_LIMITS,
   SKILL_NAME_RE,
   type CommitSkillZipResponse,
   type ParseSkillZipResponse,
@@ -40,18 +41,10 @@ import { stringifyFrontmatter } from '@/util/frontmatter'
 
 const log = createLogger('skill-zip')
 
-// Safety limits — tuned for "a community skill pack with a handful of
-// skills, each with a few KB of markdown + occasional small images".
-export const ZIP_LIMITS = {
-  /** Total uncompressed bytes across all entries. */
-  totalBytes: 64 * 1024 * 1024,
-  /** Single-entry uncompressed bytes. */
-  perFileBytes: 10 * 1024 * 1024,
-  /** Total entries (files + dirs). */
-  entries: 2000,
-  /** Maximum path depth (segments). */
-  depth: 12,
-} as const
+// Compatibility name retained for existing backend callers/tests. Safety
+// enforcement remains here; RFC-196 only moves the values to shared so the
+// frontend cannot drift from them.
+export const ZIP_LIMITS = SKILL_ZIP_LIMITS
 
 export interface SkillZipFsOptions {
   /** App home dir; managed skills live under `${appHome}/skills/{name}/files/`. */

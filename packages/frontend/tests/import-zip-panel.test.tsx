@@ -1,43 +1,70 @@
-// RFC-019: ImportZipPanel integration — mocks `fetch` for /api/skills (list),
-// the parse endpoint, and the commit endpoint, then drives the full flow.
+// RFC-196: ImportZipPanel integration locks the select → review → result
+// state machine while preserving RFC-019/102 parse, decision, and ACL wire.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type * as TanStackRouter from '@tanstack/react-router'
-import type { CommitSkillZipResponse, ParseSkillZipResponse, Skill } from '@agent-workflow/shared'
+import {
+  SKILL_ZIP_LIMITS,
+  type CommitSkillZipResponse,
+  type ParseSkillZipResponse,
+  type Skill,
+} from '@agent-workflow/shared'
 import { ImportZipPanel } from '../src/components/skills/ImportZipPanel'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import i18n from '../src/i18n'
 
-// The per-row action dropdown is the shared <Select> (RFC-036): the trigger
-// carries the data-testid; options live in a portaled listbox (resolved via
-// aria-controls). Action option labels are the i18n strings, so we compare
-// against i18n.t(...) rather than the raw DecisionAction values.
+const navigateSpy = vi.fn()
+vi.mock('@tanstack/react-router', async () => {
+  const actual = await vi.importActual<typeof TanStackRouter>('@tanstack/react-router')
+  return {
+    ...actual,
+    useNavigate: () => navigateSpy,
+    Link: ({
+      children,
+      to,
+      params,
+      'aria-label': ariaLabel,
+    }: {
+      children: React.ReactNode
+      to: string
+      params?: Record<string, string>
+      'aria-label'?: string
+    }) => (
+      <a href={to.replace('$name', encodeURIComponent(params?.name ?? ''))} aria-label={ariaLabel}>
+        {children}
+      </a>
+    ),
+  }
+})
+
 const actionLabel = {
   import: () => i18n.t('skills.zipActionImport'),
   skip: () => i18n.t('skills.zipActionSkip'),
   overwrite: () => i18n.t('skills.zipActionOverwrite'),
   rename: () => i18n.t('skills.zipActionRename'),
 }
+
 function actionOptionLabels(testid: string): string[] {
   const trigger = screen.getByTestId(testid)
   fireEvent.click(trigger)
   const list = document.getElementById(trigger.getAttribute('aria-controls')!)!
-  return Array.from(list.querySelectorAll('[role="option"]')).map(
-    (o) => o.querySelector('.select__option-label')?.textContent ?? '',
+  const labels = Array.from(list.querySelectorAll('[role="option"]')).map(
+    (option) => option.querySelector('.select__option-label')?.textContent ?? '',
   )
+  fireEvent.keyDown(list, { key: 'Escape' })
+  return labels
+}
+
+function chooseAction(testid: string, label: string): void {
+  const trigger = screen.getByTestId(testid)
+  fireEvent.click(trigger)
+  const list = document.getElementById(trigger.getAttribute('aria-controls')!)!
+  fireEvent.mouseDown(within(list).getByText(label))
 }
 
 const realFetch = globalThis.fetch
-
-// TanStack Router emits warnings if real navigation runs; stub `useNavigate`
-// at the module level so navigate() is a no-op spy we can assert against.
-const navigateSpy = vi.fn()
-vi.mock('@tanstack/react-router', async () => {
-  const actual = await vi.importActual<typeof TanStackRouter>('@tanstack/react-router')
-  return { ...actual, useNavigate: () => navigateSpy }
-})
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -53,339 +80,437 @@ function makeWrapper() {
   }
 }
 
-function fakeZipFile(): File {
-  // Content doesn't matter — server response is mocked.
-  return new File([new Uint8Array([0x50, 0x4b, 0x05, 0x06])], 'pack.zip', {
+function renderPanel() {
+  const Wrapper = makeWrapper()
+  return render(
+    <Wrapper>
+      <ImportZipPanel />
+    </Wrapper>,
+  )
+}
+
+function fakeZipFile(name = 'pack.zip'): File {
+  return new File([new Uint8Array([0x50, 0x4b, 0x05, 0x06])], name, {
     type: 'application/zip',
   })
 }
 
+function makeSkill(name: string): Skill {
+  return {
+    id: `id-${name}`,
+    name,
+    description: `${name} description`,
+    sourceKind: 'managed',
+    schemaVersion: 1,
+    contentVersion: 1,
+    createdAt: 0,
+    updatedAt: 0,
+    managedPath: `skills/${name}/files`,
+  }
+}
+
+interface EndpointSpec {
+  body?: unknown
+  status?: number
+  reject?: unknown
+}
+
+type Endpoint = EndpointSpec | (() => Promise<Response>)
+
 interface FetchRouter {
-  list?: Skill[]
-  parse?: ParseSkillZipResponse | { status: number; body: unknown }
-  commit?: CommitSkillZipResponse | { status: number; body: unknown }
+  list?: Endpoint
+  parse?: Endpoint
+  commit?: Endpoint
+}
+
+async function responseFor(endpoint: Endpoint | undefined, fallback: unknown): Promise<Response> {
+  if (typeof endpoint === 'function') return endpoint()
+  if (endpoint?.reject !== undefined) throw endpoint.reject
+  return jsonResponse(endpoint?.body ?? fallback, { status: endpoint?.status ?? 200 })
 }
 
 function mockFetch(router: FetchRouter): ReturnType<typeof vi.fn> {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (url.endsWith('/api/skills') && (init?.method ?? 'GET') === 'GET') {
-      return jsonResponse(router.list ?? [])
+      return responseFor(router.list, [])
     }
     if (url.endsWith('/api/skills/import-zip/parse')) {
-      if (router.parse && 'status' in router.parse) {
-        return jsonResponse(router.parse.body, { status: router.parse.status })
-      }
-      return jsonResponse(router.parse ?? { skills: [], errors: [] })
+      return responseFor(router.parse, { skills: [], errors: [] })
     }
     if (url.endsWith('/api/skills/import-zip/commit')) {
-      if (router.commit && 'status' in router.commit) {
-        return jsonResponse(router.commit.body, { status: router.commit.status })
-      }
-      return jsonResponse(router.commit ?? { created: [], updated: [], skipped: [], failed: [] })
+      return responseFor(router.commit, { created: [], updated: [], skipped: [], failed: [] })
     }
     return new Response('not mocked: ' + url, { status: 404 })
   })
 }
 
-describe('ImportZipPanel', () => {
+function installRouter(router: FetchRouter): ReturnType<typeof vi.fn> {
+  const fetchMock = mockFetch(router)
+  globalThis.fetch = fetchMock as unknown as typeof fetch
+  return fetchMock
+}
+
+function chooseFile(file: File = fakeZipFile()): void {
+  fireEvent.change(screen.getByTestId('zip-file-input'), { target: { files: [file] } })
+}
+
+async function parseSelectedFile(): Promise<void> {
+  fireEvent.click(screen.getByTestId('zip-parse-button'))
+  await waitFor(() => expect(screen.queryByTestId('zip-review-phase')).not.toBeNull())
+}
+
+function parseResponse(skills: ParseSkillZipResponse['skills']): ParseSkillZipResponse {
+  return { skills, errors: [] }
+}
+
+function candidate(
+  name: string,
+  opts: Partial<ParseSkillZipResponse['skills'][number]> = {},
+): ParseSkillZipResponse['skills'][number] {
+  return {
+    name,
+    description: `${name} description`,
+    fileCount: 2,
+    totalBytes: 1536,
+    warnings: [],
+    ...opts,
+  }
+}
+
+describe('ImportZipPanel (RFC-196)', () => {
   beforeEach(() => {
     window.localStorage.clear()
     setBaseUrl('http://daemon.test')
     setToken('tok')
     navigateSpy.mockReset()
   })
+
   afterEach(() => {
     globalThis.fetch = realFetch
   })
 
-  test('parse error path renders the code + message', async () => {
-    const fetchMock = mockFetch({
-      parse: { status: 422, body: { code: 'zip-traversal', message: 'bad path' } },
-    })
-    globalThis.fetch = fetchMock as unknown as typeof fetch
+  test('select phase rejects wrong type and oversize before any parse request', async () => {
+    const fetchMock = installRouter({})
+    renderPanel()
 
-    const Wrapper = makeWrapper()
-    render(
-      <Wrapper>
-        <ImportZipPanel />
-      </Wrapper>,
+    expect((screen.getByTestId('zip-parse-button') as HTMLButtonElement).disabled).toBe(true)
+    chooseFile(new File(['x'], 'pack.tar.gz'))
+    expect(screen.getByRole('alert').textContent).toContain('.zip')
+
+    chooseFile({ name: 'huge.zip', size: SKILL_ZIP_LIMITS.totalBytes + 1 } as File)
+    expect(screen.getByRole('alert').textContent).toContain('64 MiB')
+
+    const parseCalls = fetchMock.mock.calls.filter((call) =>
+      String(call[0]).endsWith('/api/skills/import-zip/parse'),
     )
-
-    const input = screen.getByTestId('zip-file-input') as HTMLInputElement
-    fireEvent.change(input, { target: { files: [fakeZipFile()] } })
-    fireEvent.click(screen.getByTestId('zip-parse-button'))
-
-    await waitFor(() => {
-      expect(screen.getByTestId('zip-parse-error')).toBeTruthy()
-    })
-    expect(screen.getByTestId('zip-parse-error').textContent).toContain('zip-traversal')
-    expect(screen.getByTestId('zip-parse-error').textContent).toContain('bad path')
+    expect(parseCalls).toHaveLength(0)
   })
 
-  test('candidate table renders with conflict pills + per-row action selects', async () => {
-    const fetchMock = mockFetch({
-      list: [
-        {
-          id: 'x',
-          name: 'existing-managed',
-          description: '',
-          sourceKind: 'managed',
-          schemaVersion: 1,
-          contentVersion: 1,
-          createdAt: 0,
-          updatedAt: 0,
-          managedPath: 'p',
-        },
-      ],
-      parse: {
-        skills: [
-          {
-            name: 'fresh',
-            description: 'a fresh skill',
-            fileCount: 3,
-            totalBytes: 100,
-            warnings: [],
-          },
-          {
-            name: 'existing-managed',
-            description: 'collides managed',
-            fileCount: 1,
-            totalBytes: 50,
-            warnings: [],
-            conflict: 'managed',
-            canOverwrite: true,
-          },
-        ],
-        errors: [],
+  test('parse network error preserves the file and can retry successfully', async () => {
+    let attempts = 0
+    const router: FetchRouter = {
+      parse: async () => {
+        attempts++
+        if (attempts === 1) throw new Error('network offline')
+        return jsonResponse(parseResponse([candidate('fresh')]))
       },
-    })
-    globalThis.fetch = fetchMock as unknown as typeof fetch
-
-    const Wrapper = makeWrapper()
-    render(
-      <Wrapper>
-        <ImportZipPanel />
-      </Wrapper>,
-    )
-
-    const input = screen.getByTestId('zip-file-input') as HTMLInputElement
-    fireEvent.change(input, { target: { files: [fakeZipFile()] } })
+    }
+    installRouter(router)
+    renderPanel()
+    chooseFile()
     fireEvent.click(screen.getByTestId('zip-parse-button'))
 
-    await waitFor(() => {
-      expect(screen.getByTestId('zip-candidate-table')).toBeTruthy()
-    })
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('network offline'))
+    expect(screen.getByText('pack.zip')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('skills.zipRetry') }))
+    await waitFor(() => expect(screen.queryByTestId('zip-row-fresh')).not.toBeNull())
+    expect(attempts).toBe(2)
+  })
 
-    // fresh row: no conflict, action select shows import + skip.
-    expect((screen.getByTestId('zip-action-fresh') as HTMLButtonElement).disabled).toBe(false)
+  test('review uses candidate cards and keeps archive errors beside valid rows', async () => {
+    installRouter({
+      parse: {
+        body: {
+          skills: [candidate('fresh', { warnings: ['name will be normalised'] })],
+          errors: [{ path: 'bad', code: 'skill-md-missing', message: 'SKILL.md is missing' }],
+        } satisfies ParseSkillZipResponse,
+      },
+    })
+    renderPanel()
+    chooseFile()
+    await parseSelectedFile()
+
+    expect(screen.getByTestId('zip-candidate-list')).toBeTruthy()
+    expect(screen.getByTestId('zip-row-fresh').tagName).toBe('DIV')
+    expect(screen.queryByTestId('zip-candidate-table')).toBeNull()
+    expect(screen.getByText('skill-md-missing')).toBeTruthy()
+    expect(screen.getByText('name will be normalised')).toBeTruthy()
+  })
+
+  test('zero valid candidates renders an actionable empty state', async () => {
+    installRouter({
+      parse: {
+        body: {
+          skills: [],
+          errors: [{ path: '', code: 'no-skill-found', message: 'nothing found' }],
+        } satisfies ParseSkillZipResponse,
+      },
+    })
+    renderPanel()
+    chooseFile()
+    await parseSelectedFile()
+
+    expect(screen.getByText(i18n.t('skills.zipNoCandidatesTitle'))).toBeTruthy()
+    expect(screen.queryByTestId('zip-commit-button')).toBeNull()
+    fireEvent.click(screen.getAllByRole('button', { name: i18n.t('skills.zipReplace') })[0]!)
+    expect(screen.getByTestId('zip-select-phase')).toBeTruthy()
+  })
+
+  test('owner and non-owner conflicts preserve action matrix and unique accessible names', async () => {
+    installRouter({
+      parse: {
+        body: parseResponse([
+          candidate('fresh'),
+          candidate('owner', { conflict: 'managed', canOverwrite: true }),
+          candidate('locked', { conflict: 'managed', canOverwrite: false }),
+        ]),
+      },
+    })
+    renderPanel()
+    chooseFile()
+    await parseSelectedFile()
+
     expect(actionOptionLabels('zip-action-fresh').sort()).toEqual(
       [actionLabel.import(), actionLabel.skip()].sort(),
     )
-
-    // managed row: skip, overwrite, rename — defaults to skip.
-    expect(screen.getByTestId('zip-action-existing-managed').textContent).toContain(
-      actionLabel.skip(),
+    expect(actionOptionLabels('zip-action-owner').sort()).toEqual(
+      [actionLabel.skip(), actionLabel.overwrite(), actionLabel.rename()].sort(),
     )
-    expect(actionOptionLabels('zip-action-existing-managed').sort()).toEqual(
-      [actionLabel.overwrite(), actionLabel.rename(), actionLabel.skip()].sort(),
-    )
-  })
-
-  test('managed conflict without write permission omits overwrite (RFC-102)', async () => {
-    const fetchMock = mockFetch({
-      parse: {
-        skills: [
-          {
-            name: 'locked',
-            description: 'owned by someone else',
-            fileCount: 1,
-            totalBytes: 50,
-            warnings: [],
-            conflict: 'managed',
-            canOverwrite: false,
-          },
-        ],
-        errors: [],
-      },
-    })
-    globalThis.fetch = fetchMock as unknown as typeof fetch
-
-    const Wrapper = makeWrapper()
-    render(
-      <Wrapper>
-        <ImportZipPanel />
-      </Wrapper>,
-    )
-    fireEvent.change(screen.getByTestId('zip-file-input'), {
-      target: { files: [fakeZipFile()] },
-    })
-    fireEvent.click(screen.getByTestId('zip-parse-button'))
-    await waitFor(() => screen.getByTestId('zip-candidate-table'))
-
-    // No overwrite option — only skip + rename.
     expect(actionOptionLabels('zip-action-locked').sort()).toEqual(
-      [actionLabel.rename(), actionLabel.skip()].sort(),
+      [actionLabel.skip(), actionLabel.rename()].sort(),
     )
-    // Conflict pill shows the "no permission to replace" copy.
-    expect(screen.getByText(i18n.t('skills.zipConflictManagedReadonly'))).toBeTruthy()
+    expect(screen.getByTestId('zip-action-owner').textContent).toContain(actionLabel.skip())
+    expect(
+      screen.getByRole('combobox', { name: i18n.t('skills.zipActionFor', { name: 'locked' }) }),
+    ).toBeTruthy()
   })
 
-  test('rename inline error appears when target name collides with another candidate', async () => {
-    const fetchMock = mockFetch({
+  test('rename validation connects the named field error and disables import', async () => {
+    installRouter({
+      list: { body: [] },
       parse: {
-        skills: [
-          {
-            name: 'a',
-            description: '',
-            fileCount: 1,
-            totalBytes: 1,
-            warnings: [],
-            conflict: 'managed',
-          },
-          { name: 'taken', description: '', fileCount: 1, totalBytes: 1, warnings: [] },
-        ],
-        errors: [],
+        body: parseResponse([candidate('a', { conflict: 'managed' }), candidate('taken')]),
       },
     })
-    globalThis.fetch = fetchMock as unknown as typeof fetch
+    renderPanel()
+    chooseFile()
+    await parseSelectedFile()
+    chooseAction('zip-action-a', actionLabel.rename())
 
-    const Wrapper = makeWrapper()
-    render(
-      <Wrapper>
-        <ImportZipPanel />
-      </Wrapper>,
-    )
-    fireEvent.change(screen.getByTestId('zip-file-input'), {
-      target: { files: [fakeZipFile()] },
-    })
-    fireEvent.click(screen.getByTestId('zip-parse-button'))
-    await waitFor(() => screen.getByTestId('zip-candidate-table'))
-
-    // Switch a → rename, type 'taken' (which is candidate b's import name)
-    const aTrigger = screen.getByTestId('zip-action-a')
-    fireEvent.click(aTrigger)
-    fireEvent.mouseDown(
-      within(document.getElementById(aTrigger.getAttribute('aria-controls')!)!).getByText(
-        actionLabel.rename(),
-      ),
-    )
-    const renameInput = screen.getByTestId('zip-rename-a') as HTMLInputElement
-    fireEvent.change(renameInput, { target: { value: 'taken' } })
-
-    expect(screen.getByTestId('zip-rename-error-a')).toBeTruthy()
+    const input = screen.getByRole('textbox', {
+      name: i18n.t('skills.zipRenameFor', { name: 'a' }),
+    }) as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'taken' } })
+    const error = document.getElementById('zip-rename-error-a')!
+    expect(input.getAttribute('aria-describedby')).toBe(error.id)
+    expect(input.getAttribute('aria-invalid')).toBe('true')
     expect((screen.getByTestId('zip-commit-button') as HTMLButtonElement).disabled).toBe(true)
   })
 
-  test('commit happy path posts decisions + navigates back on zero failures', async () => {
-    const fetchMock = mockFetch({
-      parse: {
-        skills: [{ name: 'a', description: 'aa', fileCount: 1, totalBytes: 1, warnings: [] }],
-        errors: [],
+  test('rename fails closed when existing names cannot be loaded and offers retry', async () => {
+    let listAttempts = 0
+    const router: FetchRouter = {
+      list: async () => {
+        listAttempts++
+        if (listAttempts === 1) return jsonResponse({ message: 'unavailable' }, { status: 503 })
+        return jsonResponse([])
       },
-      commit: {
-        created: [
-          {
-            id: 'id1',
-            name: 'a',
-            description: 'aa',
-            sourceKind: 'managed',
-            schemaVersion: 1,
-            contentVersion: 1,
-            createdAt: 0,
-            updatedAt: 0,
-            managedPath: 'skills/a/files',
-          },
-        ],
-        updated: [],
-        skipped: [],
-        failed: [],
+      parse: { body: parseResponse([candidate('a', { conflict: 'managed' })]) },
+    }
+    installRouter(router)
+    renderPanel()
+    chooseFile()
+    await parseSelectedFile()
+    chooseAction('zip-action-a', actionLabel.rename())
+    fireEvent.change(screen.getByTestId('zip-rename-a'), { target: { value: 'a-new' } })
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(i18n.t('skills.zipNamesUnavailable')),
+    )
+    expect((screen.getByTestId('zip-commit-button') as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('skills.zipRetry') }))
+    await waitFor(() =>
+      expect((screen.getByTestId('zip-commit-button') as HTMLButtonElement).disabled).toBe(false),
+    )
+    expect(listAttempts).toBe(2)
+  })
+
+  test('commit posts exact FormData once, then full success stays on a focused result page', async () => {
+    let resolveCommit!: (response: Response) => void
+    const commitPromise = new Promise<Response>((resolve) => {
+      resolveCommit = resolve
+    })
+    let commitCalls = 0
+    const summary: CommitSkillZipResponse = {
+      created: [makeSkill('fresh')],
+      updated: [],
+      skipped: [],
+      failed: [],
+    }
+    const fetchMock = installRouter({
+      parse: { body: parseResponse([candidate('fresh')]) },
+      commit: async () => {
+        commitCalls++
+        return commitPromise
       },
     })
-    globalThis.fetch = fetchMock as unknown as typeof fetch
+    renderPanel()
+    chooseFile()
+    await parseSelectedFile()
 
-    const Wrapper = makeWrapper()
-    render(
-      <Wrapper>
-        <ImportZipPanel />
-      </Wrapper>,
+    const commitButton = screen.getByTestId('zip-commit-button') as HTMLButtonElement
+    fireEvent.click(commitButton)
+    fireEvent.click(commitButton)
+    expect(commitCalls).toBe(1)
+    expect(commitButton.disabled).toBe(true)
+    resolveCommit(jsonResponse(summary))
+
+    const result = await screen.findByTestId('zip-import-summary')
+    expect(result.textContent).toContain(i18n.t('skills.zipResultSuccess'))
+    expect(navigateSpy).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: /Import complete/ }))
+    expect(screen.getByRole('link', { name: /fresh/ }).getAttribute('href')).toBe('/skills/fresh')
+
+    const commitCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).endsWith('/api/skills/import-zip/commit'),
     )
-    fireEvent.change(screen.getByTestId('zip-file-input'), {
-      target: { files: [fakeZipFile()] },
-    })
-    fireEvent.click(screen.getByTestId('zip-parse-button'))
-    await waitFor(() => screen.getByTestId('zip-candidate-table'))
-
-    fireEvent.click(screen.getByTestId('zip-commit-button'))
-
-    await waitFor(() => expect(navigateSpy).toHaveBeenCalled())
-    expect(navigateSpy.mock.calls[0]![0]).toEqual({ to: '/skills' })
-
-    // Verify the commit call was made with decisions in its FormData.
-    const commitCall = fetchMock.mock.calls.find((c) =>
-      String(c[0]).endsWith('/api/skills/import-zip/commit'),
-    )
-    expect(commitCall).toBeDefined()
     const body = commitCall![1]!.body as FormData
-    expect(body.get('decisions')).toBe(JSON.stringify({ a: { action: 'import' } }))
+    expect(body.get('decisions')).toBe(JSON.stringify({ fresh: { action: 'import' } }))
     expect(body.get('file')).toBeInstanceOf(File)
   })
 
-  test('commit with failures stays on page and shows summary', async () => {
-    const fetchMock = mockFetch({
+  test('commit HTTP errors preserve review decisions and malformed bodies use the fallback', async () => {
+    let attempts = 0
+    const router: FetchRouter = {
+      parse: { body: parseResponse([candidate('fresh')]) },
+      commit: async () => {
+        attempts++
+        if (attempts === 1) return jsonResponse({ message: 'disk unavailable' }, { status: 503 })
+        if (attempts === 2) return jsonResponse(null, { status: 503 })
+        return jsonResponse({ created: [makeSkill('fresh')], updated: [], skipped: [], failed: [] })
+      },
+    }
+    installRouter(router)
+    renderPanel()
+    chooseFile()
+    await parseSelectedFile()
+    fireEvent.click(screen.getByTestId('zip-commit-button'))
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('disk unavailable'))
+    expect(screen.getByTestId('zip-row-fresh')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('zip-commit-button'))
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(
+        i18n.t('skills.zipCommitFailedFallback', { status: 503 }),
+      ),
+    )
+    expect(screen.getByTestId('zip-row-fresh')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('zip-commit-button'))
+    await screen.findByTestId('zip-import-summary')
+    expect(attempts).toBe(3)
+  })
+
+  test('partial and no-write responses render stable grouped results', async () => {
+    const router: FetchRouter = {
       parse: {
-        skills: [{ name: 'a', description: '', fileCount: 1, totalBytes: 1, warnings: [] }],
-        errors: [],
+        body: parseResponse([candidate('a'), candidate('b', { conflict: 'managed' })]),
       },
       commit: {
+        body: {
+          created: [makeSkill('a')],
+          updated: [],
+          skipped: [{ name: 'b', reason: 'skipped by user' }],
+          failed: [{ name: 'c', code: 'skill-write-failed', message: 'disk full' }],
+        } satisfies CommitSkillZipResponse,
+      },
+    }
+    installRouter(router)
+    renderPanel()
+    chooseFile()
+    await parseSelectedFile()
+    fireEvent.click(screen.getByTestId('zip-commit-button'))
+    await screen.findByText(i18n.t('skills.zipResultPartial'))
+    expect(screen.getByTestId('zip-import-summary').textContent).toContain('disk full')
+    expect(screen.getByText('skipped by user')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('skills.zipContinue') }))
+    await waitFor(() => expect(screen.getByTestId('zip-select-phase')).toBeTruthy())
+
+    router.parse = { body: parseResponse([candidate('d')]) }
+    router.commit = {
+      body: {
         created: [],
         updated: [],
         skipped: [],
-        failed: [{ name: 'a', code: 'skill-write-failed', message: 'disk full' }],
-      },
-    })
-    globalThis.fetch = fetchMock as unknown as typeof fetch
-
-    const Wrapper = makeWrapper()
-    render(
-      <Wrapper>
-        <ImportZipPanel />
-      </Wrapper>,
-    )
-    fireEvent.change(screen.getByTestId('zip-file-input'), {
-      target: { files: [fakeZipFile()] },
-    })
-    fireEvent.click(screen.getByTestId('zip-parse-button'))
-    await waitFor(() => screen.getByTestId('zip-candidate-table'))
+        failed: [{ name: 'd', code: 'skill-write-failed', message: 'still full' }],
+      } satisfies CommitSkillZipResponse,
+    }
+    chooseFile(fakeZipFile('second.zip'))
+    await parseSelectedFile()
     fireEvent.click(screen.getByTestId('zip-commit-button'))
-
-    await waitFor(() => screen.getByTestId('zip-import-summary'))
-    expect(navigateSpy).not.toHaveBeenCalled()
-    expect(screen.getByTestId('zip-import-summary').textContent).toContain('disk full')
+    await screen.findByText(i18n.t('skills.zipResultNoWrite'))
   })
 
-  test('errors banner lists per-row parse errors from the response', async () => {
-    const fetchMock = mockFetch({
-      parse: {
-        skills: [{ name: 'good', description: '', fileCount: 1, totalBytes: 1, warnings: [] }],
-        errors: [
-          { path: 'bad', code: 'skill-md-missing', message: "skill 'bad' is missing SKILL.md" },
-        ],
+  test('continue resets to a fresh select phase and returns focus; list action navigates', async () => {
+    installRouter({
+      parse: { body: parseResponse([candidate('fresh')]) },
+      commit: {
+        body: { created: [makeSkill('fresh')], updated: [], skipped: [], failed: [] },
       },
     })
-    globalThis.fetch = fetchMock as unknown as typeof fetch
+    renderPanel()
+    chooseFile()
+    await parseSelectedFile()
+    fireEvent.click(screen.getByTestId('zip-commit-button'))
+    await screen.findByTestId('zip-import-summary')
 
-    const Wrapper = makeWrapper()
-    render(
-      <Wrapper>
-        <ImportZipPanel />
-      </Wrapper>,
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('skills.zipContinue') }))
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByTestId('zip-file-input-button')),
     )
-    fireEvent.change(screen.getByTestId('zip-file-input'), {
-      target: { files: [fakeZipFile()] },
+    expect(screen.queryByText('pack.zip')).toBeNull()
+
+    chooseFile()
+    await parseSelectedFile()
+    fireEvent.click(screen.getByTestId('zip-commit-button'))
+    await screen.findByTestId('zip-import-summary')
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('skills.zipReturnList') }))
+    expect(navigateSpy).toHaveBeenCalledWith({ to: '/skills' })
+  })
+
+  test('replacing file A clears old rows before parsing file B', async () => {
+    let parseCalls = 0
+    installRouter({
+      parse: async () => {
+        parseCalls++
+        return jsonResponse(
+          parseCalls === 1
+            ? parseResponse([candidate('from-a')])
+            : parseResponse([candidate('from-b')]),
+        )
+      },
     })
-    fireEvent.click(screen.getByTestId('zip-parse-button'))
-    await waitFor(() => screen.getByTestId('zip-candidate-table'))
-    expect(screen.getByText(/skill-md-missing/)).toBeTruthy()
+    renderPanel()
+    chooseFile(fakeZipFile('a.zip'))
+    await parseSelectedFile()
+    expect(screen.getByTestId('zip-row-from-a')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('skills.zipBack') }))
+    expect(screen.queryByTestId('zip-row-from-a')).toBeNull()
+    chooseFile(fakeZipFile('b.zip'))
+    await parseSelectedFile()
+    expect(screen.getByTestId('zip-row-from-b')).toBeTruthy()
+    expect(screen.queryByTestId('zip-row-from-a')).toBeNull()
   })
 })

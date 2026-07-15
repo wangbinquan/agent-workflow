@@ -1,8 +1,12 @@
 // RFC-019: client-side pure helpers for the ZIP import flow. Kept separate
 // from the React component so they're easy to unit-test.
 
-import { SKILL_NAME_RE } from '@agent-workflow/shared'
-import type { ParseSkillZipResponse, SkillZipCandidateView } from '@agent-workflow/shared'
+import { SKILL_NAME_RE, SKILL_ZIP_LIMITS } from '@agent-workflow/shared'
+import type {
+  CommitSkillZipResponse,
+  ParseSkillZipResponse,
+  SkillZipCandidateView,
+} from '@agent-workflow/shared'
 
 export type DecisionAction = 'import' | 'skip' | 'overwrite' | 'rename'
 
@@ -141,4 +145,80 @@ export function rowsFromParseResponse(resp: ParseSkillZipResponse): RowState[] {
     candidate: c,
     decision: initialDecisionFor(c),
   }))
+}
+
+export type SkillZipFileCheck =
+  | { ok: true; file: File }
+  | { ok: false; reason: 'type' | 'too-large' }
+
+/** Cheap browser-side feedback; the backend still owns all archive safety checks. */
+export function validateSkillZipFile(file: File): SkillZipFileCheck {
+  if (!file.name.toLowerCase().endsWith('.zip')) return { ok: false, reason: 'type' }
+  if (file.size > SKILL_ZIP_LIMITS.totalBytes) return { ok: false, reason: 'too-large' }
+  return { ok: true, file }
+}
+
+export interface ReviewSummary {
+  candidates: number
+  conflicts: number
+  readonlyConflicts: number
+  archiveErrors: number
+}
+
+export function deriveReviewSummary(parse: ParseSkillZipResponse): ReviewSummary {
+  return {
+    candidates: parse.skills.length,
+    conflicts: parse.skills.filter((candidate) => candidate.conflict !== undefined).length,
+    readonlyConflicts: parse.skills.filter(
+      (candidate) => candidate.conflict !== undefined && candidate.canOverwrite !== true,
+    ).length,
+    archiveErrors: parse.errors.length,
+  }
+}
+
+export interface ExistingNamesState {
+  /** True after at least one successful names response, including cached data. */
+  available: boolean
+  names: ReadonlySet<string>
+}
+
+export interface SubmitState {
+  enabled: boolean
+  reason?: 'nothing-selected' | 'rename-invalid' | 'names-unavailable' | 'busy'
+  counts: RowsSummary
+}
+
+export function deriveSubmitState(
+  rows: RowState[],
+  existingNames: ExistingNamesState,
+  busy: boolean,
+): SubmitState {
+  const counts = summarizeRows(rows)
+  if (busy) return { enabled: false, reason: 'busy', counts }
+
+  const selected = counts.importing + counts.overwriting + counts.renaming
+  if (selected === 0) return { enabled: false, reason: 'nothing-selected', counts }
+
+  const renameRows = rows.filter((row) => row.decision.action === 'rename')
+  if (renameRows.length > 0 && !existingNames.available) {
+    return { enabled: false, reason: 'names-unavailable', counts }
+  }
+  if (
+    renameRows.some(
+      (row) =>
+        !validateRenameTarget(row.decision.newName, row.candidate.name, rows, existingNames.names)
+          .ok,
+    )
+  ) {
+    return { enabled: false, reason: 'rename-invalid', counts }
+  }
+  return { enabled: true, counts }
+}
+
+export type ResultKind = 'success' | 'partial' | 'no-write'
+
+export function resultKind(summary: CommitSkillZipResponse): ResultKind {
+  const written = summary.created.length + summary.updated.length
+  if (written === 0) return 'no-write'
+  return summary.failed.length > 0 ? 'partial' : 'success'
 }
