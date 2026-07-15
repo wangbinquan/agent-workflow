@@ -207,9 +207,10 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
 
   test('boot pass backfills legacy skills BEFORE the reverify (source lock)', () => {
     const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
-    // The legacy v1 backfill loop must precede runBootSnapshotReverify (so a
-    // backfilled skill is authoritative+verified when the gate activates).
-    const backfillIdx = src.indexOf('ensureInitialSkillVersion(db')
+    // The legacy v1 backfill (+ husk sweep — backfillLegacySkillVersions) must
+    // precede runBootSnapshotReverify (so a backfilled skill is
+    // authoritative+verified when the gate activates).
+    const backfillIdx = src.indexOf('backfillLegacySkillVersions(db')
     const reverifyIdx = src.indexOf('runBootSnapshotReverify(db')
     expect(backfillIdx).toBeGreaterThan(0)
     expect(backfillIdx).toBeLessThan(reverifyIdx)

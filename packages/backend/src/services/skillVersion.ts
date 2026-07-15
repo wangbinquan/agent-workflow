@@ -21,7 +21,7 @@ import type {
   SkillVersionSource,
 } from '@agent-workflow/shared'
 import { structuredPatch } from 'diff'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -39,6 +39,7 @@ import {
 } from '@/services/skillOperations'
 import { unfuseMemoriesTx } from '@/services/memory'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { createLogger } from '@/util/log'
 import { tokenToVersionFence } from '@/services/skillToken'
 import { parseFrontmatter } from '@/util/frontmatter'
 
@@ -238,6 +239,75 @@ export function ensureInitialSkillVersion(
     return null
   })
   markSkillBootVerified(skill.id)
+}
+
+/**
+ * Boot-time legacy backfill + husk sweep (RFC-170 T4a; extracted from cli/start
+ * so it is unit-testable). For every managed row still at
+ * versionState='legacy-unbackfilled' AND reservationState='ready' — 'reserving'
+ * rows belong to an in-flight/crashed create and are the reserve-op recovery
+ * handler's job, never this sweep's:
+ *   - live files/SKILL.md present → ensureInitialSkillVersion: archive live as
+ *     v1, promote to 'snapshot-authoritative' + boot-verified (a pre-RFC-101
+ *     legacy skill surfacing after an upgrade).
+ *   - no SKILL.md and no skill_versions rows → an orphaned HUSK: nothing to
+ *     backfill and zero recoverable content, yet the row keeps unique(name)
+ *     reserved while the availability gate keeps it invisible — a permanent
+ *     name squatter. Delete the row (+ leftover dir). Known producer: the
+ *     pre-fix ZIP-import create failure path (rm'd files/, kept the row).
+ *   - no SKILL.md but versions exist → anomalous (migration 0090 moved such
+ *     rows to 'snapshot-unverified'); leave it and let reconcile/reverify act.
+ */
+export function backfillLegacySkillVersions(
+  db: DbClient,
+  opts: SkillVersionFsOptions,
+): { backfilled: number; husksRemoved: number } {
+  const log = createLogger('skill-version-backfill')
+  const rows = db
+    .select()
+    .from(skills)
+    .where(
+      and(
+        eq(skills.sourceKind, 'managed'),
+        eq(skills.versionState, 'legacy-unbackfilled'),
+        eq(skills.reservationState, 'ready'),
+      ),
+    )
+    .all() as SkillRow[]
+  let backfilled = 0
+  let husksRemoved = 0
+  for (const row of rows) {
+    try {
+      if (existsSync(join(skillFilesDir(opts.appHome, row.name), 'SKILL.md'))) {
+        ensureInitialSkillVersion(db, opts, row.name)
+        backfilled++
+        continue
+      }
+      if (versionRows(db, row.name).length > 0) {
+        log.warn('legacy-state skill has versions but no live SKILL.md; leaving for reconcile', {
+          name: row.name,
+          id: row.id,
+        })
+        continue
+      }
+      dbTxSync(db, (tx) => {
+        tx.delete(skills).where(eq(skills.id, row.id)).run()
+        return null
+      })
+      rmSync(join(opts.appHome, 'skills', row.name), { recursive: true, force: true })
+      husksRemoved++
+      log.warn('removed orphaned skill husk (no files, no versions; was squatting the name)', {
+        name: row.name,
+        id: row.id,
+      })
+    } catch (e) {
+      log.warn('legacy skill v1 backfill failed on boot', {
+        name: row.name,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+  return { backfilled, husksRemoved }
 }
 
 // --- the funnel ------------------------------------------------------------
@@ -691,13 +761,14 @@ export function restoreSkillVersion(
  * out-of-band). Idempotent; safe to call repeatedly.
  *
  * Deliberately does NOT clobber an existing-but-differing live files/ from the
- * snapshot (Codex P1): an out-of-funnel writer — e.g. RFC-019 ZIP import /
- * overwrite, which rewrites files/ without bumping content_version — may have
- * legitimately changed live, and overwriting it with the recorded snapshot
- * would silently lose that write. The only mismatch a fully-funneled write can
- * leave is a crash between commitSkillVersion's DB tx and its live-sync; that
- * is rare and non-destructive (live keeps the prior valid content and the next
- * funnel write re-syncs), so we accept it rather than risk data loss.
+ * snapshot (Codex P1): an out-of-band writer (manual edits under ~/.agent-workflow;
+ * every platform write path — editor, fusion, restore, and both ZIP import
+ * branches — goes through the funnel now) may have legitimately changed live,
+ * and overwriting it with the recorded snapshot would silently lose that write.
+ * The only mismatch a fully-funneled write can leave is a crash between
+ * commitSkillVersion's DB tx and its live-sync; that is rare and
+ * non-destructive (live keeps the prior valid content and the next funnel
+ * write re-syncs), so we accept it rather than risk data loss.
  */
 export function reconcileSkillLiveFiles(db: DbClient, opts: SkillVersionFsOptions): void {
   const rows = db.select().from(skills).where(eq(skills.sourceKind, 'managed')).all() as SkillRow[]

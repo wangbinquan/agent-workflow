@@ -11,7 +11,9 @@
 // So: at boot, AFTER opening HTTP, a background pass re-hashes every managed
 // snapshot against its recorded `content_hash`. Passing skills enter the in-memory
 // `bootVerifiedSet` (boot-epoch scoped, NOT persisted, managed only); failing ones
-// are CAS'd to `version_state='quarantined'` (fail-closed). Every gate
+// are CAS'd to `version_state='quarantined'` (fail-closed). Quarantined rows stay
+// in the boot rescan, so a later-restored snapshot (backup/re-sync) that matches
+// the recorded hash again exits quarantine on the next boot. Every gate
 // (detail/list/runtime/token-writer/scheduler) shares `isSkillAvailableThisBoot`.
 //
 // The gate is INACTIVE until the reverify runs, so unit tests and the pre-HTTP
@@ -149,9 +151,15 @@ export function verifyManagedSnapshot(
 /**
  * RFC-170 §invariant④ — the post-HTTP background reverify. ACTIVATES the gate,
  * then re-verifies every managed snapshot (`snapshot-authoritative` recheck +
- * `snapshot-unverified` first-adoption deep verify). Passing skills join
- * `bootVerifiedSet`; a `snapshot-unverified` that passes is promoted to
- * `snapshot-authoritative`. No global barrier — a large legit tree is just
+ * `snapshot-unverified` first-adoption deep verify + `quarantined` recovery
+ * probe). Passing skills join `bootVerifiedSet`; a passing non-authoritative
+ * state is promoted to `snapshot-authoritative`. Rescanning quarantined rows
+ * is what makes quarantine RECOVERABLE: a skill whose snapshot was
+ * corrupted/lost and later restored (backup, re-sync) passes the same
+ * content_hash check that granted trust originally and comes back on the next
+ * boot — without this, quarantine was a one-way door with no UI surface and
+ * DB surgery as the only exit. A still-corrupt snapshot re-fails the hash and
+ * simply stays quarantined. No global barrier — a large legit tree is just
  * "available later", never quarantined for size.
  */
 export function runBootSnapshotReverify(
@@ -170,7 +178,11 @@ export function runBootSnapshotReverify(
     .where(
       and(
         eq(skills.sourceKind, 'managed'),
-        inArray(skills.versionState, ['snapshot-authoritative', 'snapshot-unverified']),
+        inArray(skills.versionState, [
+          'snapshot-authoritative',
+          'snapshot-unverified',
+          'quarantined',
+        ]),
       ),
     )
     .all() as Array<ReverifySkill & { versionState: string }>
@@ -179,7 +191,7 @@ export function runBootSnapshotReverify(
   for (const r of rows) {
     if (verifyManagedSnapshot(db, opts, r) === 'verified') {
       verified++
-      if (r.versionState === 'snapshot-unverified') {
+      if (r.versionState !== 'snapshot-authoritative') {
         dbTxSync(db, (tx) =>
           tx
             .update(skills)
@@ -187,6 +199,12 @@ export function runBootSnapshotReverify(
             .where(eq(skills.id, r.id))
             .run(),
         )
+        if (r.versionState === 'quarantined') {
+          log.info('quarantined skill snapshot verified again; restored', {
+            skillId: r.id,
+            name: r.name,
+          })
+        }
       }
     } else {
       quarantined++

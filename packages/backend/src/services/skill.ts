@@ -103,6 +103,17 @@ export function skillReadRoot(skill: Skill, opts: SkillFsOptions): string {
   return existsSync(snapshot) ? snapshot : live
 }
 
+/**
+ * Raw name-occupancy check: ANY skills row counts, including rows the gated
+ * getSkill hides (mid-create 'reserving', 'quarantined', boot-unverified).
+ * Callers use it to report "name taken by an unavailable skill" accurately
+ * instead of falling through to a UNIQUE-constraint error at insert time.
+ */
+export async function isSkillNameOccupied(db: DbClient, name: string): Promise<boolean> {
+  const rows = await db.select({ id: skills.id }).from(skills).where(eq(skills.name, name)).limit(1)
+  return rows.length > 0
+}
+
 // --- create ---
 
 export async function createManagedSkill(
@@ -111,12 +122,47 @@ export async function createManagedSkill(
   input: CreateManagedSkill,
   aclOpts?: { ownerUserId?: string },
 ): Promise<Skill> {
-  // Fast-path name check (already-ready skills). The real guard against a racing
-  // same-name create is the reserve INSERT's unique(name) below — it rejects the
-  // loser BEFORE any files are written (RFC-170 §9: no more "both see name free →
-  // loser clobbers winner's live").
-  if ((await getSkill(db, input.name)) !== null) {
-    throw new ConflictError('skill-name-in-use', `skill '${input.name}' already exists`)
+  return createManagedSkillWithFiles(
+    db,
+    opts,
+    { name: input.name, description: input.description, ownerUserId: aclOpts?.ownerUserId },
+    (filesDir) => {
+      const skillMd = stringifyFrontmatter({
+        data: { name: input.name, description: input.description, ...input.frontmatterExtra },
+        body: input.bodyMd,
+      })
+      writeFileSync(join(filesDir, 'SKILL.md'), skillMd, 'utf-8')
+    },
+  )
+}
+
+/**
+ * THE shared create pipeline (RFC-170 §9): reserve (invisible row + op lock) →
+ * produce the files tree into the still-invisible live files/ → archive it as
+ * v1 via commitSkillVersion(initial) (=> 'snapshot-authoritative' + boot-
+ * verified) → flip 'ready' (atomically visible). Any throw rolls the whole
+ * create back (row + files + op).
+ *
+ * Used by POST /api/skills (single-SKILL.md producer above) AND the ZIP
+ * import's create branch (whole candidate tree). The zip path used to insert a
+ * bare row with no v1 snapshot (schema-default versionState
+ * 'legacy-unbackfilled'), which the RFC-170 availability gate hides on a live
+ * daemon — its own post-insert re-read came back null and every zip create
+ * failed with "skill disappeared right after insert".
+ */
+export async function createManagedSkillWithFiles(
+  db: DbClient,
+  opts: SkillFsOptions,
+  meta: { name: string; description: string; ownerUserId?: string },
+  produceFiles: (filesDir: string) => void,
+): Promise<Skill> {
+  // Fast-path occupancy check — RAW (any row, even gate-hidden), so a squatted
+  // name 409s cleanly here. The real guard against a racing same-name create is
+  // the reserve INSERT's unique(name) below — it rejects the loser BEFORE any
+  // files are written (RFC-170 §9: no more "both see name free → loser clobbers
+  // winner's live").
+  if (await isSkillNameOccupied(db, meta.name)) {
+    throw new ConflictError('skill-name-in-use', `skill '${meta.name}' already exists`)
   }
 
   const id = ulid()
@@ -131,12 +177,12 @@ export async function createManagedSkill(
       tx.insert(skills)
         .values({
           id,
-          name: input.name,
-          description: input.description,
+          name: meta.name,
+          description: meta.description,
           sourceKind: 'managed',
-          managedPath: `skills/${input.name}/files`,
+          managedPath: `skills/${meta.name}/files`,
           // RFC-099: creator becomes owner; new resources default to 'public' (D18).
-          ownerUserId: aclOpts?.ownerUserId ?? null,
+          ownerUserId: meta.ownerUserId ?? null,
           visibility: 'public',
           reservationState: 'reserving',
           createdAt: now,
@@ -146,35 +192,31 @@ export async function createManagedSkill(
       return beginOperation(tx, {
         skillId: id,
         kind: 'reserve',
-        ownerUserId: aclOpts?.ownerUserId ?? undefined,
-        preconditionJson: JSON.stringify({ name: input.name }),
+        ownerUserId: meta.ownerUserId ?? undefined,
+        preconditionJson: JSON.stringify({ name: meta.name }),
       })
     })
   } catch (err) {
     if (/UNIQUE constraint failed:? *skills\.name/i.test(err instanceof Error ? err.message : '')) {
-      throw new ConflictError('skill-name-in-use', `skill '${input.name}' already exists`)
+      throw new ConflictError('skill-name-in-use', `skill '${meta.name}' already exists`)
     }
     throw err
   }
 
-  const skillDir = join(opts.appHome, 'skills', input.name)
+  const skillDir = join(opts.appHome, 'skills', meta.name)
   try {
-    // ② fs-staged: write SKILL.md into the (still-invisible) files dir.
+    // ② fs-staged: produce the files tree into the (still-invisible) files dir.
     const filesDir = join(skillDir, 'files')
     mkdirSync(filesDir, { recursive: true })
-    const skillMd = stringifyFrontmatter({
-      data: { name: input.name, description: input.description, ...input.frontmatterExtra },
-      body: input.bodyMd,
-    })
-    writeFileSync(join(filesDir, 'SKILL.md'), skillMd, 'utf-8')
+    produceFiles(filesDir)
     dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged'))
 
     // ③ fs-published: archive the tree as v1 + atomically publish (RFC-101/170).
     // skipOp: reserve already holds this skill's op lock — commitSkillVersion must
     // NOT open its own version-write op (it would self-conflict on the same lock).
-    commitSkillVersion(db, opts, input.name, () => {}, {
+    commitSkillVersion(db, opts, meta.name, () => {}, {
       source: 'initial',
-      authorUserId: aclOpts?.ownerUserId ?? null,
+      authorUserId: meta.ownerUserId ?? null,
       skipOp: true,
     })
     dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-published'))
@@ -197,7 +239,7 @@ export async function createManagedSkill(
     throw err
   }
 
-  const created = await getSkill(db, input.name)
+  const created = await getSkill(db, meta.name)
   if (created === null) throw new Error('skill disappeared right after reserve')
   return created
 }

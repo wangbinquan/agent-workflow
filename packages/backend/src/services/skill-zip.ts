@@ -24,14 +24,17 @@ import {
   type SkillZipError,
   type ZipEntryRef,
 } from '@agent-workflow/shared'
-import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { skills } from '@/db/schema'
-import { getSkill, listSkills } from '@/services/skill'
+import {
+  createManagedSkillWithFiles,
+  getSkill,
+  isSkillNameOccupied,
+  listSkills,
+} from '@/services/skill'
 import { commitSkillVersion } from '@/services/skillVersion'
 import { isResourceOwner } from '@/services/resourceAcl'
-import { ValidationError } from '@/util/errors'
+import { ConflictError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { stringifyFrontmatter } from '@/util/frontmatter'
 
@@ -247,7 +250,6 @@ export async function commitSkillZipBuffer(
 
     const existing = await getSkill(db, targetName)
     const isOverwrite = decision.action === 'overwrite'
-    const isRename = decision.action === 'rename'
 
     // RFC-102: overwriting a managed skill requires write permission (owner or
     // admin) — the same gate PUT /api/skills/:name enforces. The front-end
@@ -281,15 +283,37 @@ export async function commitSkillZipBuffer(
       continue
     }
 
+    // Gate-hidden occupancy: the gated getSkill above says "free", but a row can
+    // still hold the name while invisible (mid-create 'reserving', 'quarantined',
+    // or boot-unverified). A create would only hit the unique(name) constraint
+    // deep inside the reserve tx — surface an accurate conflict up front instead.
+    if (existing === null && (await isSkillNameOccupied(db, targetName))) {
+      outcome.failed.push({
+        name: candidate.name,
+        code: 'skill-rename-conflict',
+        message: `target name '${targetName}' is held by an unavailable skill (mid-create or quarantined); pick a different name`,
+      })
+      continue
+    }
+
     try {
       if (existing === null) {
-        // CREATE: direct live write + DB insert (create is owner-transfer-race-free).
-        writeCandidate(opts, candidate, targetName)
-        const created = await insertManagedRow(
+        // CREATE — route through the SAME reserve→v1-snapshot→ready pipeline as
+        // POST /api/skills. The old direct live-write + bare row insert left
+        // versionState='legacy-unbackfilled' with no snapshot, which the RFC-170
+        // availability gate hides on a live daemon: the post-insert re-read came
+        // back null and every zip create failed with "skill disappeared right
+        // after insert" (unit tests passed — the gate is inactive there).
+        const created = await createManagedSkillWithFiles(
           db,
-          targetName,
-          candidate.description,
-          aclOpts.actor.user.id,
+          opts,
+          {
+            name: targetName,
+            description: candidate.description,
+            // RFC-099: the zip importer becomes owner; default 'public' (D18).
+            ownerUserId: aclOpts.actor.user.id,
+          },
+          (filesDir) => writeCandidateFiles(filesDir, candidate, targetName),
         )
         outcome.created.push(created)
       } else {
@@ -327,21 +351,18 @@ export async function commitSkillZipBuffer(
         target: targetName,
         error: err instanceof Error ? err.message : String(err),
       })
+      // A name-in-use ConflictError here is the reserve INSERT losing a race
+      // (or a squatter slipping past the pre-check) — report it as the same
+      // conflict the pre-checks use, not as a generic write failure. No FS
+      // cleanup in either path: the create funnel rolls back its own writes
+      // (row + files + op), and the old best-effort rm of the target files dir
+      // could delete a CONCURRENT winner's just-published live files.
+      const isNameConflict = err instanceof ConflictError && err.code === 'skill-name-in-use'
       outcome.failed.push({
         name: candidate.name,
-        code: 'skill-write-failed',
+        code: isNameConflict ? 'skill-rename-conflict' : 'skill-write-failed',
         message: err instanceof Error ? err.message : String(err),
       })
-      // Best-effort cleanup of a partially written skill dir so the user
-      // doesn't see an orphaned folder in /skills filesystem.
-      if (isRename || existing === null) {
-        const filesDir = join(opts.appHome, 'skills', targetName, 'files')
-        try {
-          rmSync(filesDir, { recursive: true, force: true })
-        } catch {
-          /* ignore */
-        }
-      }
     }
   }
 
@@ -396,45 +417,11 @@ function writeCandidateFiles(
   }
 }
 
-/**
- * CREATE only: write a fresh skill's live `files/` directly. A create is
- * owner-transfer-race-free (the importer becomes the owner) and the lazy v1
- * backfill snapshots it on first version-funnel access. Overwrites go through
- * commitSkillVersion (see the commit loop) — the version funnel — instead.
- */
-function writeCandidate(
-  opts: SkillZipFsOptions,
-  candidate: SkillCandidate,
-  targetName: string,
-): void {
-  writeCandidateFiles(join(opts.appHome, 'skills', targetName, 'files'), candidate, targetName)
-}
-
-async function insertManagedRow(
-  db: DbClient,
-  name: string,
-  description: string,
-  ownerUserId?: string,
-): Promise<Skill> {
-  const id = ulid()
-  const now = Date.now()
-  await db.insert(skills).values({
-    id,
-    name,
-    description,
-    sourceKind: 'managed',
-    managedPath: `skills/${name}/files`,
-    // RFC-099: the zip importer becomes owner; default 'public' (D18).
-    ownerUserId: ownerUserId ?? null,
-    visibility: 'public',
-    createdAt: now,
-    updatedAt: now,
-  })
-  const created = await getSkill(db, name)
-  if (created === null) throw new Error('skill disappeared right after insert')
-  return created
-}
-
-// RFC-170 (ZIP→version funnel): the old updateManagedRow (direct description UPDATE
-// for an overwrite) is gone — overwrites now go through commitSkillVersion, whose
+// The old direct-write create helpers (writeCandidate → live files/ +
+// insertManagedRow → bare skills row) are gone: a bare row has no v1 snapshot
+// (versionState 'legacy-unbackfilled'), so the RFC-170 boot availability gate
+// hid it on a live daemon and the post-insert re-read failed with "skill
+// disappeared right after insert". Creates now route through
+// createManagedSkillWithFiles (reserve → v1 snapshot → ready), same as
+// POST /api/skills; overwrites through commitSkillVersion, whose
 // setDescription syncs skills.description inside the version-bump tx.

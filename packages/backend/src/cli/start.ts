@@ -412,34 +412,18 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       // RFC-170 T4a: first, lazily backfill a v1 snapshot for any legacy managed
       // skill created before version tracking (version_state='legacy-unbackfilled',
       // no skill_versions row) — else the availability gate would hide it after an
-      // upgrade. ensureInitialSkillVersion → commitSkillVersion(initial) makes it
-      // 'snapshot-authoritative' + boot-verified. Per-skill best-effort.
-      const { ensureInitialSkillVersion } = await import('@/services/skillVersion')
-      const { skills: skillsTable } = await import('@/db/schema')
-      const { and, eq } = await import('drizzle-orm')
-      const legacy = db
-        .select({ name: skillsTable.name })
-        .from(skillsTable)
-        .where(
-          and(
-            eq(skillsTable.sourceKind, 'managed'),
-            eq(skillsTable.versionState, 'legacy-unbackfilled'),
-          ),
-        )
-        .all() as Array<{ name: string }>
-      for (const s of legacy) {
-        try {
-          ensureInitialSkillVersion(db, { appHome: Paths.root }, s.name)
-        } catch (e) {
-          log.warn('legacy skill v1 backfill failed on boot', {
-            name: s.name,
-            error: e instanceof Error ? e.message : String(e),
-          })
-        }
-      }
+      // upgrade — and sweep orphaned husk rows (no files, no versions) that would
+      // otherwise squat their name invisibly forever. Per-skill best-effort; see
+      // backfillLegacySkillVersions.
+      const { backfillLegacySkillVersions } = await import('@/services/skillVersion')
+      const bf = backfillLegacySkillVersions(db, { appHome: Paths.root })
       const { runBootSnapshotReverify } = await import('@/services/skillBootVerify')
       const r = runBootSnapshotReverify(db, { appHome: Paths.root })
-      log.info('boot snapshot reverify', { ...r, legacyBackfilled: legacy.length })
+      log.info('boot snapshot reverify', {
+        ...r,
+        legacyBackfilled: bf.backfilled,
+        husksRemoved: bf.husksRemoved,
+      })
     } catch (err) {
       log.warn('boot snapshot reverify failed', {
         error: err instanceof Error ? err.message : String(err),
