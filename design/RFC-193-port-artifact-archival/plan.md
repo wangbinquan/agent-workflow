@@ -95,12 +95,19 @@
 
 ## 验收清单（对应 proposal §5）
 
-- [ ] AC-1 wrapper 内 review 单/多文档回归绿（T6）
-- [ ] AC-2 path 端口归档 + 引用落库（T3）；派生投影行同样可读（T6b，case 8b）；两阶段无
-      孤儿归档（case 3b）
-- [ ] AC-3 gitignored port 文件必达 scope canonical（T4）
-- [ ] AC-4 content 规范化（单值+list，T3）
-- [ ] AC-5 前端优先归档、404 回退（T8）
-- [ ] AC-6 截断标记 + 横幅（T3/T8）
-- [ ] AC-7 review.ts 文本锁（T9）
-- [ ] AC-8 typecheck/lint/test/format + journal bump + binary smoke + CI 绿（T1/T9）
+- [x] AC-1 wrapper 内 review 单/多文档回归绿（T6，rfc193-wrapper-review 2 例）
+- [x] AC-2 path 端口归档 + 引用落库（T3）；派生投影行同样可读（T6b，loop 提升+output 节点
+      两级 e2e）；两阶段无孤儿归档（case 3b）
+- [x] AC-3 gitignored port 文件必达 scope canonical（T4，case 4）+ 跨节点传播到下游 iso
+      （case 4b，断开清单注入的反证红→绿）
+- [x] AC-4 content 规范化（单值 ./ 清洗 + 绝对路径 realpath 同位 + list 行序不变，T3）
+- [x] AC-5 前端优先归档、404 回退（T8，vitest 46 例含既有套件演进）
+- [x] AC-6 截断标记 + 横幅（T3 注警行 / T7 响应头 / T8 i18n 横幅）
+- [x] AC-7 review.ts 文本锁（rfc193-wrapper-review source locks 3 例）
+- [x] AC-8 typecheck/lint/test/format + journal 96 bump + binary smoke 绿；CI 待 push 后核验
+      （本人 sha 精确匹配）
+
+实施后追记：双 Codex 门（设计 14 + 实现 9 findings）全折入——关键增补：merge 前 roster
+重聚合（并发 sibling 覆写洞）、fanout 聚合 child-run 直查、approve 路径 repo0 相对、存量
+多 repo 回退 dirName 前缀、symlink linkTarget 持久化、bounded digest 端口键、API
+selective read、D18 契约测试演进。
