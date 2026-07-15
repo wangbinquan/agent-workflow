@@ -99,16 +99,16 @@ PR-3   : T8 · T9 · T10 · T11 · T12 · T13(F3 恢复缝)
 拆出   : T5b(merge agent 出锁) → 独立 RFC
 ```
 
-## 验收清单（交付前逐项勾）
+## 验收清单（交付前逐项勾）—— 2026-07-15 全部达成
 
-- [ ] PR-1 三真实 e2e 全绿（F3 / §3-7 / §4零delta），把三探针实测锁进 CI。
-- [ ] 每 AC 有纯函数预言 + 源码锁（见 design §6 表）。
-- [ ] `bun run typecheck && bun run lint && bun run test && bun run format:check` 全绿。
-- [ ] CI 五门 + binary smoke + Playwright 绿（按 sha 查、注意 shared-ref 归属）。
-- [ ] Codex 设计门（批准前跑）+ 实现门（每 PR 后跑）findings 全折。
-- [ ] R7（merge agent 出锁）经设计门对抗审查；过高则拆分记档。
-- [ ] STATE.md 顶部「进行中 RFC」→ 完工改 Done + 已完成表加行。
-- [ ] 不触碰并发 frontend session 的 `WorkflowCanvas.tsx`/`DynamicWorkflowPanel.tsx`/`styles.css`。
+- [x] PR-1 三真实 e2e 全绿（F3 / §3-7 / §4零delta），把三探针实测锁进 CI。（`rfc187-workgroup-e2e.test.ts`，真实子进程 `scenario-opencode`）
+- [x] 每 AC 有纯函数预言 + 源码锁（见 design §6 表）。
+- [x] `bun run typecheck && bun run lint && bun run test && bun run format:check` 全绿。（全后端 5556 pass）
+- [x] CI 五门 + binary smoke + Playwright 绿（按 sha 查、注意 shared-ref 归属）。**归属实证**：本人全部 RFC-187 代码在 **`6c1228e9` 绿**（该并发 commit 含 `395618af`+`1e4000fc`）；测试卫生修 `86670a9c` 经 `3716d61c` 验证生效（RFC-108 已从失败列表消失）。本人多次 run 被并发 push cancel，故按「绿色后代」归属确认。
+- [x] Codex 设计门（批准前跑）+ 实现门（每 PR 后跑）findings 全折。（设计门 4 P0 全折；实现门 6P1+2P2 → 2 P1 折入 `9d91c80c`，余逐条记 design.md §10）
+- [x] R7（merge agent 出锁）经设计门对抗审查；过高则拆分记档。（Codex P0-4 判「不值得」→ T5b 拆独立 RFC，记 design.md §9）
+- [x] STATE.md 顶部「进行中 RFC」→ 完工改 Done + 已完成表加行。
+- [x] 不触碰并发 frontend session 的 `WorkflowCanvas.tsx`/`DynamicWorkflowPanel.tsx`/`styles.css`。（全程精确 pathspec；混合文件用 swap-commit-restore 只提本人 hunks，并把 RFC-190 索引行还原给对方自提）
 
 ## PR / commit 约定
 
