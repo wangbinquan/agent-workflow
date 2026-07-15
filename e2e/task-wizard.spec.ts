@@ -117,9 +117,16 @@ test.describe('RFC-165 — /tasks/new wizard', () => {
     await page.locator('.task-detail__tab-bar [role="tab"]', { hasText: /Diff/i }).click()
   })
 
-  test('workgroup + scratch: wizard chain reaches a terminal status', async ({ page }) => {
+  test('workgroup + scratch: wizard chain reaches done (real wg envelope)', async ({ page }) => {
     const d = daemon!
+    await createStubAgent(d, 'wizard-wg-lead')
     await createStubAgent(d, 'wizard-wg-member')
+    // RFC-187 T11 (audit TRAP-3) — this was a free_collab group, which made the whole
+    // test VACUOUS: fc convergence only looks at CARDS, and a member turn that fails
+    // creates none, so "no open cards ⇒ done" fired even when the agent never produced a
+    // usable envelope. It passed identically with a workgroup-blind stub. leader_worker
+    // has teeth: the leader MUST emit a parseable `wg_decision` to ever reach done, so
+    // this now genuinely locks the wizard → engine → real-wg-envelope chain.
     const wgRes = await fetch(`${d.baseUrl}/api/workgroups`, {
       method: 'POST',
       headers: authHeaders(d),
@@ -127,14 +134,18 @@ test.describe('RFC-165 — /tasks/new wizard', () => {
         name: 'wizard-squad',
         description: '',
         instructions: '',
-        mode: 'free_collab',
-        maxRounds: 1,
+        mode: 'leader_worker',
+        leaderDisplayName: 'Lead',
+        maxRounds: 4,
         // The platform default for completionGate is now ON (a leader-done group
         // parks at awaiting_review for human confirmation). This test only locks
         // the wizard → engine wiring "task terminates", not the gate, so keep the
         // group ungated — otherwise the task parks and never reaches terminal.
         completionGate: false,
-        members: [{ memberType: 'agent', agentName: 'wizard-wg-member', displayName: 'Member' }],
+        members: [
+          { memberType: 'agent', agentName: 'wizard-wg-lead', displayName: 'Lead' },
+          { memberType: 'agent', agentName: 'wizard-wg-member', displayName: 'Member' },
+        ],
       }),
     })
     expectOk(wgRes, 'create workgroup')
@@ -153,10 +164,13 @@ test.describe('RFC-165 — /tasks/new wizard', () => {
     await page.waitForURL(/\/tasks\/[A-Z0-9]{26}$/i, { timeout: 15_000 })
     const taskId = page.url().match(/\/tasks\/([A-Z0-9]{26})/i)![1]!
 
-    // Engine round semantics are locked by backend tests — here we only
-    // require the wizard-launched group task to terminate.
+    // RFC-187 T11 (audit TRAP-3): this used to accept `['done','failed']` — so a group
+    // task that FAILED counted as a pass. That is precisely how production shipped 10
+    // workgroup tasks / 0 done without a single red test. The stub is now workgroup-aware
+    // (emits a real wg envelope), so the group must actually converge: `failed` is a
+    // failure of this test, not an accepted outcome.
     const final = await pollUntilTerminal(d, taskId, 90_000)
-    expect(['done', 'failed']).toContain(final.status)
+    expect(final.status).toBe('done')
   })
 
   test('scheduled agent (?schedule=1): save-as-scheduled is primary; run-now fires a task', async ({

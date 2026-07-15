@@ -368,6 +368,13 @@ export function renderWgProtocolBlock(
       `- <port name="wg_messages">JSON array of {"to","body"}; to = ${msgTargets}.</port>`,
       '- <port name="wg_decision">JSON {"action":"continue"} while work remains,',
       '  or {"action":"done","summary":"..."} to close the group task. REQUIRED every turn.</port>',
+      // RFC-187 §3-2 (AC-12) — `continue` with no new assignments ends the round with no
+      // progress: the group has nothing running and stalls (autonomous gets a bounded
+      // auto-nudge, a supervised group parks for a human). Neither reader can tell WHY
+      // from a bare `continue`, so require the leader to say it.
+      '  If you emit "continue" WITHOUT any new wg_assignments, you MUST state in',
+      '  wg_messages what you are waiting on or what is blocking — the round ends with',
+      '  no work running and a human has to read that to unblock the group.',
     )
   } else {
     if (role === 'worker') {

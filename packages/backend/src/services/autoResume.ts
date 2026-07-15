@@ -16,11 +16,12 @@
 // The actual resume is injected so this stays unit-testable without the full
 // launch machinery; start.ts passes a thunk that calls resumeTask with real deps.
 
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
-import { tasks } from '@/db/schema'
+import { nodeRuns, tasks } from '@/db/schema'
+import { CLARIFY_RERUN_CAUSES } from '@/services/nodeRunMint'
 import { withDriverLease } from '@/services/driverLease'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
@@ -67,6 +68,30 @@ export async function autoResumeInterruptedTasks(
     .where(
       and(eq(tasks.status, 'interrupted'), eq(tasks.errorSummary, DAEMON_RESTART_ERROR_SUMMARY)),
     )
+  // RFC-187 T13 (Codex P1-7①) — a SECOND wedge shape this sweep must also catch: the
+  // human answered a clarify, the answer + its pending continuation row committed, and the
+  // daemon died before fire-and-forget `resumeTask` took over. The reaper flips that
+  // pending row to `interrupted` but leaves the TASK `awaiting_human` (it only reaps
+  // pending/running tasks), so the query above misses it and the answered continuation is
+  // wedged forever. Such a task IS resumable: the engine's entry pass revives the killed
+  // continuation and the normal adoption drives it. Only tasks with a killed continuation
+  // qualify — a task legitimately parked awaiting a human answer has no such row and MUST
+  // stay parked.
+  const wedged = await db
+    .select({
+      id: tasks.id,
+      workgroupId: tasks.workgroupId,
+      workgroupConfigJson: tasks.workgroupConfigJson,
+    })
+    .from(tasks)
+    .innerJoin(nodeRuns, eq(nodeRuns.taskId, tasks.id))
+    .where(
+      and(
+        eq(tasks.status, 'awaiting_human'),
+        eq(nodeRuns.status, 'interrupted'),
+        inArray(nodeRuns.rerunCause, CLARIFY_RERUN_CAUSES),
+      ),
+    )
   // RFC-186 PR-2 (audit §5 F1): turn-engine workgroups (leader_worker /
   // free_collab) are NOW resumable — `resumeTask`→`runTask`→`runWorkgroupEngine`
   // re-derives everything from durable rows, adopts pending host runs, and (PR-2)
@@ -74,7 +99,14 @@ export async function autoResumeInterruptedTasks(
   // exclusion (`!isTurnEngineWorkgroupTask`) that left them `interrupted` forever
   // — the direct cause of 3/10 production tasks wedged permanently — is removed.
   // Single-agent host + dynamic_workflow were already included.
-  const candidates = rows
+  //
+  // RFC-187 T13 — plus the awaiting_human-with-killed-continuation shape above. The join
+  // can repeat a task (several killed continuations), and a task could in principle appear
+  // in both sets, so merge by id.
+  const byId = new Map<string, (typeof rows)[number]>()
+  for (const r of rows) byId.set(r.id, r)
+  for (const w of wedged) if (!byId.has(w.id)) byId.set(w.id, w)
+  const candidates = [...byId.values()]
 
   const resumed: string[] = []
   const skipped: string[] = []

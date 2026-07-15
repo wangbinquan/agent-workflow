@@ -30,6 +30,34 @@ case "${1-}" in
     ;;
 esac
 
+# RFC-187 T11 (audit TRAP-3): be WORKGROUP-AWARE. A workgroup host run (leader /
+# worker / fc member) is fed the wg protocol block and is projected onto wg_* ports
+# only (RFC-184), so the fixed "answer" envelope below parses to ZERO declared ports
+# → the turn fails → the group task ends `failed`. The Playwright workgroup spec then
+# "passed" on a failed group, which is exactly why production ran 10 tasks / 0 done
+# without a single red test. Detect the role from the prompt (the protocol block names
+# the ports it demands) and emit the matching envelope. Non-workgroup runs are
+# untouched: no wg_* marker in the prompt ⇒ the original "answer" envelope, byte-identical.
+# Match the protocol block's own port DECLARATIONS (`<port name="wg_decision">`), not a
+# bare token: a leader's ledger quotes member results and could otherwise be misread.
+WG_PROMPT="${2-}"
+wg_envelope=''
+case "$WG_PROMPT" in
+  *'name="wg_decision"'*)
+    # leader: close the group immediately (empty assignments = no new work).
+    wg_envelope='<workflow-output>\n  <port name=\"wg_assignments\">[]</port>\n  <port name=\"wg_decision\">{\"action\":\"done\",\"summary\":\"stub e2e leader done\"}</port>\n</workflow-output>'
+    ;;
+  *'name="wg_result"'*)
+    # worker / fc member: report done, add no follow-up tasks (wg_tasks_add is
+    # fc-only; a worker never declares it, so the projection just drops it).
+    wg_envelope='<workflow-output>\n  <port name=\"wg_result\">{\"summary\":\"stub e2e member result\"}</port>\n  <port name=\"wg_tasks_add\">[]</port>\n</workflow-output>'
+    ;;
+esac
+if [ -n "$wg_envelope" ]; then
+  printf '{"type":"text","timestamp":0,"part":{"type":"text","text":"%s"}}\n' "$wg_envelope"
+  exit 0
+fi
+
 # JSON-encoded text event. The runner reads --format json line-by-line and
 # concatenates `part.text` from each `text` event, then extracts the last
 # <workflow-output> envelope from that buffer. One event with the whole

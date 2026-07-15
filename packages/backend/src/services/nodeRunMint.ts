@@ -267,8 +267,15 @@ export function schedulerMintCause(
  * generation-derived, not gated here) — it only loses inline-session resume
  * and latest-directive application for that one boundary dispatch.
  */
+/**
+ * The causes {@link isClarifyRerunCause} gates TRUE, as a value list. Exported so a SQL
+ * filter (RFC-187 T13's auto-resume sweep for killed clarify continuations) selects the
+ * exact same set the predicate does, instead of re-listing the literals and drifting.
+ */
+export const CLARIFY_RERUN_CAUSES = ['clarify-answer', 'cross-clarify-questioner-rerun'] as const
+
 export function isClarifyRerunCause(cause: string | null | undefined): boolean {
-  return cause === 'clarify-answer' || cause === 'cross-clarify-questioner-rerun'
+  return (CLARIFY_RERUN_CAUSES as readonly string[]).includes(cause ?? '')
 }
 
 /**

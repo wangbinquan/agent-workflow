@@ -42,6 +42,7 @@ import {
   type Agent,
   type EnvelopeFollowupReason,
   type FailureCode,
+  type RerunCause,
   type WgMessageItem,
   type WorkgroupAssignment,
   type WorkgroupMessage,
@@ -60,9 +61,13 @@ import {
   workgroupMessages,
 } from '@/db/schema'
 import { getAgent } from '@/services/agent'
-import { mintNodeRun } from '@/services/nodeRunMint'
+import { isClarifyRerunCause, mintNodeRun } from '@/services/nodeRunMint'
 import { setNodeRunStatus } from '@/services/lifecycle'
-import { advanceMemberCursor, casAssignmentStatus } from '@/services/workgroupLifecycle'
+import {
+  advanceMemberCursor,
+  casAssignmentStatus,
+  dismissOpenClarifyParksForAutonomous,
+} from '@/services/workgroupLifecycle'
 import {
   maxMessageId,
   memberById,
@@ -265,6 +270,68 @@ export function decideAssignmentReconcile(
   if (latestWorkerRunStatus === 'pending' || latestWorkerRunStatus === 'running') return 'none'
   // interrupted / failed / canceled mid-run → re-dispatch for a clean re-run.
   return 'redispatch'
+}
+
+/**
+ * RFC-187 T13 / Codex P1-7① — is this host row an answered-clarify continuation that a
+ * daemon restart killed BEFORE it ever ran? The answer commits (session→answered) and
+ * mints a PENDING continuation row, then `resumeTask` is fire-and-forget; a crash in that
+ * window has the boot reaper flip the pending row to `interrupted` while the TASK stays
+ * `awaiting_human` (the reaper only reaps pending/running TASKS). auto-resume then only
+ * scans `interrupted` tasks and adoption only takes `pending` rows — so the answered
+ * continuation was wedged forever with no path back (the human's answer silently lost).
+ * `interrupted` is terminal (no transition out), so recovery = re-mint, exactly like the
+ * DAG's revival of a terminal row.
+ */
+export function isKilledClarifyContinuation(row: {
+  status: string
+  rerunCause: string | null
+}): boolean {
+  return row.status === 'interrupted' && isClarifyRerunCause(row.rerunCause)
+}
+
+/**
+ * RFC-187 T13 — re-mint every host row {@link isKilledClarifyContinuation} identifies, so
+ * the normal pending-adoption drives it (the Q&A is re-derived from the answered session,
+ * so the fresh row carries the human's answer). Idempotent: after the re-mint the freshest
+ * row for that (nodeId, shardKey) is `pending`, not `interrupted`, so a second pass is a
+ * no-op. Only the FRESHEST row per (nodeId, shardKey) is revived — an older interrupted
+ * continuation that a later row already superseded must stay history.
+ */
+async function reviveKilledClarifyContinuations(
+  db: DbClient,
+  taskId: string,
+  state: EngineDbState,
+  log: Logger,
+): Promise<void> {
+  const groups = new Map<string, Array<typeof nodeRuns.$inferSelect>>()
+  for (const r of state.hostRuns) {
+    const key = `${r.nodeId}\x00${r.shardKey ?? ''}`
+    const g = groups.get(key)
+    if (g === undefined) groups.set(key, [r])
+    else g.push(r)
+  }
+  let revived = 0
+  for (const g of groups.values()) {
+    // hostRuns are loaded id-ascending, so the last entry is the freshest.
+    const latest = g[g.length - 1]
+    if (latest === undefined || !isKilledClarifyContinuation(latest)) continue
+    await mintNodeRun(db, {
+      taskId,
+      nodeId: latest.nodeId,
+      status: 'pending',
+      // keep the clarify lineage cause: it is what re-injects the answered Q&A.
+      cause: latest.rerunCause as RerunCause,
+      retryIndex: Math.max(...g.map((r) => r.retryIndex)) + 1,
+      iteration: latest.iteration,
+      inheritFrom: latest,
+      overrides: { startedAt: null, shardKey: latest.shardKey },
+    })
+    revived++
+  }
+  if (revived > 0) {
+    log.info('workgroup revived clarify continuations killed by a restart', { taskId, revived })
+  }
 }
 
 /** Apply {@link decideAssignmentReconcile} to every `running` assignment ONCE at
@@ -849,7 +916,32 @@ export async function runWorkgroupEngine(
   // barrier forever and the resumed task just re-parks (audit §4/§5 F1).
   {
     const rec = await loadDbState(db, taskId)
-    if (rec !== null) await reconcileRunningAssignments(db, taskId, rec, log)
+    if (rec !== null) {
+      await reconcileRunningAssignments(db, taskId, rec, log)
+      // RFC-187 T13 (Codex P1-7①) — and revive any answered-clarify continuation the
+      // restart killed while it was still pending; the loop's next loadDbState picks the
+      // fresh pending row up through the normal adoption.
+      await reviveKilledClarifyContinuations(db, taskId, rec, log)
+      // RFC-187 T13 (Codex P1-7②) — an autonomous group must never sit on an open clarify,
+      // but RFC-181 A2's dismissal runs OUTSIDE the config-PATCH transaction: a crash
+      // between "autonomous=true committed" and "dismiss" leaves exactly that combination,
+      // and (with F3) the engine would then park the task awaiting_human for an answer
+      // autonomous mode promises never to ask for. Re-assert the invariant at entry instead
+      // of assuming it impossible. No-op in the overwhelming common case (no open session).
+      if (
+        (rec.config.autonomous ?? false) &&
+        rec.config.mode !== 'dynamic_workflow' &&
+        rec.clarifySessions.some((s) => s.status === 'awaiting_human')
+      ) {
+        const dismissed = await dismissOpenClarifyParksForAutonomous(db, taskId, rec.config.mode)
+        if (dismissed.dismissedSessions > 0) {
+          log.info('workgroup dismissed open clarify parks on autonomous re-entry', {
+            taskId,
+            dismissed: dismissed.dismissedSessions,
+          })
+        }
+      }
+    }
   }
 
   for (;;) {
