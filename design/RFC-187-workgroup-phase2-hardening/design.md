@@ -209,3 +209,17 @@ Codex 对本 RFC 出 4 P0 + 6 P1/P2。核对源码后分三档处理：
 - **P1-6 尾（zero-delta 多 repo）**：现 hook 仅查 `task.worktreePath`（repo 0）——多 repo 应逐 `state.repos` 的 baseCommit 计数去重。
 
 **PR 排序修正**：T7（F8）已归 PR-1（随 F3 的 WakeOutcome 落）；T5b 独立延期；余 PR-2/3 按上述范围调整。
+
+## §10 Codex 实现门（2026-07-15，对已落地 PR-1+T4+F2；NOT-CLEAN 6P1+2P2、0 P0）
+
+**已折入（确属我方代码的真 bug，`9d91c80c`）**：
+- **P1 §3-7(b) wrap-up 续跑丢 FINAL/禁派活**：grace 轮由 wake item `reason:'wrap-up'` 驱动，但该轮若先问人，回答后走 **adopted clarify-answer 续跑（无 wake item）**→`wrapUp` 取默认 false→指令与禁派活双失效→leader 可 `continue+wg_assignments` 在 cap 后派活而无轮次能聚合。修＝新增 `isLeaderWrapUpContinuation(state)`（lw + `countRoundsUsed>=maxRounds` + 有可救回工作＝按构造必是那唯一 grace 轮）并在 `driveAdoptedRun` leader 分支透传；`hasSalvageableWork` 从 workgroupWake 导出单源复用（不 fork 谓词）。
+- **P1 §4(a) 多仓 zero-delta 告警静默失效**：hook 对 `task.worktreePath` 做 git diff，但多仓下它是**非 git 父容器**→git 抛错→`warnIfZeroDeltaDone` 全吞→多仓下告警从不触发（比「只看 repo 0」更糟）。修＝`SchedulerState.repos` 补 per-repo `baseCommit`（源 `task_repos`；wrapper-iso 内层用 `baseSnapshot`），hook 逐 repo 在各自 worktree/base diff 求和；单仓行为不变。
+
+**Codex 判定「正确」（无需改）**：F3 session key（member 永不写成 `__wg_leader__` source）· 正常 answer→adoption 重驱 · `leaderClarifyParked` 与 `leaderRunning` 不双算（running 优先返回，round 只读 hostRuns）· grace 单次性（固定 maxRounds 下不自动重复）· 直接 wrap-up 路径的 drop 顺序与 §3-6 guard 兼容 · T4 fc retry budget / dispatchFrontier / `isClarifyRerunCause` 无回归 · `driveMessageTurn` 不受 T4 影响 · F2 双 resume 被 ownership CAS 挡住。
+
+**未折入（记档，非本次最小范围）**：
+- **P1 F3(b)＝T13**：回答已提交但 `resumeTask` 接管前崩 → pending clarify-answer run 被 boot reap 成 interrupted、task 仍 `awaiting_human`（auto-resume 只扫 interrupted task、adoption 只认 pending）→ 永久卡。待并发 RFC-188/189 recovery 重构落定再做（避返工）。
+- **P1 T4c**：clarify-answer 续跑「workflow 信封合法但 wg JSON 畸形」时，前一 host row 已 `done` 使 aging oracle 判 Q&A consumed → protocol retry 收不到答案。属既有 aging 边角（RFC-184 F4 语义），需显式携带回答上下文，另议。
+- **P1 F2 stale-status 写入终态 task** + **P1 并发 delivery ghost message**：更广的既有 route TOCTOU（读状态→写→用旧状态 kick / message 先插再 CAS），非 F2 最小改动引入，另议。
+- **P2**：无文件协调任务误报 zero-delta（soft advisory，readonly 已被 RFC-130 删故无数据源）· adopted protocol retry 重复 `retryIndex`（并发 RFC-189 已在 HEAD 修）。
