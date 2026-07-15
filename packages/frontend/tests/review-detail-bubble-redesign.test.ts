@@ -75,7 +75,7 @@ describe('review-detail bubble redesign', () => {
   test('styles.css fixes the column width per design decision (280px)', () => {
     const css = readFileSync(STYLES_CSS, 'utf8')
     expect(css).toMatch(
-      /\.review-detail__layout\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*280px/,
+      /\.review-detail__layout\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*var\(--review-sidebar-width,\s*280px\)/,
     )
   })
 

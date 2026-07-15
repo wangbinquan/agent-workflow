@@ -23,6 +23,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
   type RefObject,
 } from 'react'
@@ -30,6 +31,7 @@ import { useTranslation } from 'react-i18next'
 import type { ReviewComment, ReviewCommentAnchor } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { AttributionChip } from '@/components/AttributionChip'
+import { TextArea } from '@/components/Form'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { Prose } from '@/components/prose/Prose'
 import { useResizable } from '@/hooks/useResizable'
@@ -512,9 +514,11 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
     <>
       <div
         className="review-detail__layout"
-        style={{
-          gridTemplateColumns: `minmax(0, 1fr) ${collapsed ? SIDEBAR_COLLAPSED_PX : sidebarWidth}px`,
-        }}
+        style={
+          {
+            '--review-sidebar-width': `${collapsed ? SIDEBAR_COLLAPSED_PX : sidebarWidth}px`,
+          } as CSSProperties
+        }
       >
         {bodySlot !== undefined ? (
           <div className="review-detail__body">{bodySlot}</div>
@@ -690,11 +694,11 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
                         className="comment-bubble__edit-form"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <textarea
+                        <TextArea
                           autoFocus
                           rows={3}
                           value={editDraft}
-                          onChange={(e) => setEditDraft(e.target.value)}
+                          onChange={setEditDraft}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                               e.preventDefault()
@@ -768,13 +772,12 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
           role="dialog"
         >
           <div className="muted">{popover.anchor.sectionPath}</div>
-          <textarea
-            className="form-input"
+          <TextArea
             autoFocus
             rows={3}
             value={popover.draft}
             placeholder={t('reviews.popoverPlaceholder')}
-            onChange={(e) => setPopover({ ...popover, draft: e.target.value })}
+            onChange={(draft) => setPopover({ ...popover, draft })}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault()

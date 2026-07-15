@@ -64,7 +64,7 @@ export function ConfirmDialog(props: ConfirmDialogProps): ReactElement {
     props.onClose()
   }
 
-  const confirm = async (): Promise<void> => {
+  const runConfirmation = async (): Promise<void> => {
     if (!props.open || inFlightRef.current) return
     inFlightRef.current = true
     const operation = ++operationRef.current
@@ -103,7 +103,7 @@ export function ConfirmDialog(props: ConfirmDialogProps): ReactElement {
           <button
             type="button"
             className={props.tone === 'danger' ? 'btn btn--danger' : 'btn btn--primary'}
-            onClick={() => void confirm()}
+            onClick={() => void runConfirmation()}
             disabled={pending}
             aria-busy={pending || undefined}
           >

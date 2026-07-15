@@ -29,13 +29,23 @@ vi.mock('@tanstack/react-router', async () => {
     ...actual,
     Link: ({
       to,
+      search,
+      hash,
       children,
       ...rest
     }: {
       to: string
+      search?: Record<string, unknown>
+      hash?: string
       children: React.ReactNode
     } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-      <a href={to} {...rest}>
+      <a
+        href={to}
+        data-router-link="true"
+        data-search={search === undefined ? undefined : JSON.stringify(search)}
+        data-hash={hash}
+        {...rest}
+      >
         {children}
       </a>
     ),
@@ -293,6 +303,10 @@ describe('RFC-032 Homepage dashboard', () => {
     expect(text).toContain('opencode')
     expect(text).toContain('claude-code')
     expect(text).toMatch(/2\.1\.193/)
+    const runtimeLink = screen.getByTestId('homepage-runtime').querySelector('a')
+    expect(runtimeLink?.getAttribute('href')).toBe('/settings')
+    expect(runtimeLink?.getAttribute('data-search')).toBe(JSON.stringify({ tab: 'runtime' }))
+    expect(runtimeLink?.getAttribute('data-hash')).toBeNull()
   })
 
   test('default runtime missing → per-runtime "not found" while the other stays versioned', async () => {
@@ -330,6 +344,20 @@ describe('RFC-032 Homepage dashboard', () => {
     ;(link as HTMLButtonElement).click()
     expect(inboxStore.getInboxOpen()).toBe(true)
     inboxStore.setInboxOpen(false)
+  })
+
+  test('task feed uses typed Links and preserves the running status search', async () => {
+    mockEndpoints({})
+    wrap(<Homepage />)
+    const running = await screen.findByTestId('homepage-running-tasks-link')
+    const all = screen.getByTestId('homepage-all-tasks-link')
+
+    expect(running.getAttribute('data-router-link')).toBe('true')
+    expect(running.getAttribute('href')).toBe('/tasks')
+    expect(running.getAttribute('data-search')).toBe(JSON.stringify({ status: 'running' }))
+    expect(all.getAttribute('data-router-link')).toBe('true')
+    expect(all.getAttribute('href')).toBe('/tasks')
+    expect(all.getAttribute('data-search')).toBeNull()
   })
 })
 
@@ -389,5 +417,8 @@ describe('RFC-190 capability portal on the homepage', () => {
     expect(screen.getByTestId('pipeline-hero')).toBeTruthy()
     // Secondary CTA next to start-task.
     expect(screen.getByTestId('homepage-new-workflow').getAttribute('href')).toBe('/workflows')
+    expect(screen.getByTestId('homepage-new-workflow').getAttribute('data-search')).toBe(
+      JSON.stringify({ create: true }),
+    )
   })
 })

@@ -5,13 +5,15 @@
 // directory structure. Real tree view lands in M5 polish.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { FileNode, SkillContent } from '@agent-workflow/shared'
 import { isProtectedSkillMainFile } from '@agent-workflow/shared'
 import { api } from '@/api/client'
-import { describeApiError } from '@/i18n'
 import { ConfirmButton } from './ConfirmButton'
+import { ConfirmDialog } from './ConfirmDialog'
+import { EmptyState } from './EmptyState'
+import { ErrorBanner } from './ErrorBanner'
 import { TextArea, TextInput } from './Form'
 import { LoadingState } from './LoadingState'
 
@@ -64,6 +66,9 @@ export function SkillFileTree({ skillName, readonly = false, readonlyPaths = [] 
 
   const [draft, setDraft] = useState('')
   const [dirty, setDirty] = useState(false)
+  const [pendingTargetPath, setPendingTargetPath] = useState<string | null>(null)
+  const pendingTargetRef = useRef<HTMLElement | null>(null)
+  const treeRootRef = useRef<HTMLDivElement | null>(null)
 
   const isPathReadonly = (path: string | null): boolean =>
     path !== null && (readonlyPaths.includes(path) || isProtectedSkillMainFile(path))
@@ -117,11 +122,32 @@ export function SkillFileTree({ skillName, readonly = false, readonlyPaths = [] 
     },
   })
 
-  function handleSelect(path: string) {
-    if (dirty && !confirm(t('skills.fileDiscardConfirm'))) return
+  function selectPath(path: string) {
     setSelected(path)
     setDraft('')
     setDirty(false)
+  }
+
+  function handleSelect(path: string, trigger: HTMLButtonElement) {
+    if (path === selected || pendingTargetPath !== null) return
+    if (dirty) {
+      pendingTargetRef.current = trigger
+      setPendingTargetPath(path)
+      return
+    }
+    selectPath(path)
+  }
+
+  function confirmPendingSelection() {
+    const target = pendingTargetPath
+    if (target === null) return
+    const currentTarget = qc
+      .getQueryData<FileNode[]>(treeKey)
+      ?.find((entry) => entry.path === target)
+    if (currentTarget === undefined || currentTarget.type === 'dir') {
+      throw new Error(t('skills.fileTargetUnavailable'))
+    }
+    selectPath(target)
   }
 
   function handleAdd() {
@@ -155,15 +181,22 @@ export function SkillFileTree({ skillName, readonly = false, readonlyPaths = [] 
   }
 
   return (
-    <div className="file-tree">
+    <div ref={treeRootRef} className="file-tree" tabIndex={-1}>
       <div className="file-tree__sidebar">
         <div className="file-tree__header">{t('skills.fileTreeHeader')}</div>
         {tree.isLoading && <LoadingState size="compact" />}
         {tree.error !== null && tree.error !== undefined && (
-          <div className="error-box">{describeApiError(tree.error)}</div>
+          <ErrorBanner
+            error={tree.error}
+            action={
+              <button type="button" className="btn btn--sm" onClick={() => void tree.refetch()}>
+                {t('common.retry')}
+              </button>
+            }
+          />
         )}
         {tree.data !== undefined && tree.data.length === 0 && (
-          <div className="muted">{t('skills.fileTreeEmpty')}</div>
+          <EmptyState title={t('skills.fileTreeEmpty')} size="compact" />
         )}
         <ul className="file-tree__list">
           {(tree.data ?? []).map((f) => (
@@ -171,7 +204,7 @@ export function SkillFileTree({ skillName, readonly = false, readonlyPaths = [] 
               <button
                 type="button"
                 className={`file-tree__item ${selected === f.path ? 'file-tree__item--active' : ''}`}
-                onClick={() => handleSelect(f.path)}
+                onClick={(event) => handleSelect(f.path, event.currentTarget)}
                 disabled={f.type === 'dir'}
               >
                 <span className="file-tree__icon">{f.type === 'dir' ? '▸' : '·'}</span>
@@ -205,9 +238,18 @@ export function SkillFileTree({ skillName, readonly = false, readonlyPaths = [] 
 
       <div className="file-tree__editor">
         {selected === null ? (
-          <div className="muted">{t('skills.fileEditorEmpty')}</div>
+          <EmptyState title={t('skills.fileEditorEmpty')} size="compact" />
         ) : file.isLoading ? (
-          <div className="muted">{t('skills.fileLoadingNamed', { name: selected })}</div>
+          <LoadingState label={t('skills.fileLoadingNamed', { name: selected })} size="compact" />
+        ) : file.error !== null && file.error !== undefined ? (
+          <ErrorBanner
+            error={file.error}
+            action={
+              <button type="button" className="btn btn--sm" onClick={() => void file.refetch()}>
+                {t('common.retry')}
+              </button>
+            }
+          />
         ) : (
           <>
             <div className="file-tree__path-bar">
@@ -240,12 +282,23 @@ export function SkillFileTree({ skillName, readonly = false, readonlyPaths = [] 
               rows={20}
               monospace
             />
-            {save.error !== null && save.error !== undefined && (
-              <div className="error-box">{describeApiError(save.error)}</div>
-            )}
+            {save.error !== null && save.error !== undefined && <ErrorBanner error={save.error} />}
+            {del.error !== null && del.error !== undefined && <ErrorBanner error={del.error} />}
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={pendingTargetPath !== null}
+        title={t('splitPage.unsavedTitle')}
+        description={t('skills.fileDiscardConfirm')}
+        confirmLabel={t('splitPage.unsavedDiscard')}
+        tone="danger"
+        onConfirm={confirmPendingSelection}
+        onClose={() => setPendingTargetPath(null)}
+        triggerRef={pendingTargetRef}
+        restoreFocusFallbackRef={treeRootRef}
+      />
     </div>
   )
 }

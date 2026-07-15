@@ -72,6 +72,97 @@ afterEach(() => {
 })
 
 describe('/account cached-empty query continuity', () => {
+  test('shared password and PAT fields keep labels, constraints, and request payloads', async () => {
+    const calls: Array<{ path: string; method: string; body: unknown }> = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (request: RequestInfo | URL, init?: RequestInit) => {
+        const path = new URL(request.toString()).pathname
+        const method = init?.method ?? 'GET'
+        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null
+        calls.push({ path, method, body })
+        if (method === 'POST' && path === '/api/auth/change-password') return json({})
+        if (method === 'POST' && path === '/api/auth/pats') {
+          return json({ token: 'pat-secret' })
+        }
+        if (path === '/api/auth/me') return json(actor)
+        if (
+          path === '/api/auth/pats' ||
+          path === '/api/auth/sessions' ||
+          path === '/api/auth/identities'
+        ) {
+          return json([])
+        }
+        throw new Error(`unexpected account request: ${method} ${path}`)
+      },
+    )
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
+    })
+    qc.setQueryData(['auth', 'me', 'tok'], actor)
+    qc.setQueryData(['pats'], [])
+    qc.setQueryData(['sessions'], [])
+    qc.setQueryData(['identities'], [])
+    renderAccount(qc)
+
+    const passwordSection = (
+      await screen.findByRole('heading', {
+        name: enUS.account.password,
+      })
+    ).closest('section')!
+    const currentPassword = within(passwordSection).getByLabelText(
+      /Current password/,
+    ) as HTMLInputElement
+    const newPassword = within(passwordSection).getByLabelText(/New password/) as HTMLInputElement
+    expect(currentPassword.classList.contains('form-input')).toBe(true)
+    expect(currentPassword.autocomplete).toBe('current-password')
+    expect(currentPassword.required).toBe(true)
+    expect(newPassword.classList.contains('form-input')).toBe(true)
+    expect(newPassword.autocomplete).toBe('new-password')
+    expect(newPassword.minLength).toBe(8)
+    expect(newPassword.required).toBe(true)
+
+    fireEvent.change(currentPassword, { target: { value: 'old-password' } })
+    fireEvent.change(newPassword, { target: { value: 'new-password' } })
+    fireEvent.click(within(passwordSection).getByRole('button', { name: enUS.account.update }))
+    await waitFor(() => {
+      expect(calls.some((call) => call.path === '/api/auth/change-password')).toBe(true)
+    })
+    expect(calls.find((call) => call.path === '/api/auth/change-password')?.body).toEqual({
+      oldPassword: 'old-password',
+      newPassword: 'new-password',
+    })
+    expect(await within(passwordSection).findByText(enUS.account.passwordChanged)).toBeTruthy()
+    expect(currentPassword.value).toBe('')
+    expect(newPassword.value).toBe('')
+
+    const patSection = screen.getByRole('heading', { name: enUS.account.pats }).closest('section')!
+    const patName = within(patSection).getByRole('textbox', {
+      name: /Token name/,
+    }) as HTMLInputElement
+    const scopeCheckboxes = within(patSection).getAllByRole('checkbox') as HTMLInputElement[]
+    expect(patName.classList.contains('form-input')).toBe(true)
+    expect(patName.required).toBe(true)
+    expect(scopeCheckboxes).toHaveLength(1)
+    expect(scopeCheckboxes[0]?.checked).toBe(true)
+
+    fireEvent.change(patName, { target: { value: 'ci-launcher' } })
+    fireEvent.click(within(patSection).getByRole('button', { name: enUS.account.generate }))
+    await waitFor(() => {
+      expect(calls.some((call) => call.method === 'POST' && call.path === '/api/auth/pats')).toBe(
+        true,
+      )
+    })
+    expect(
+      calls.find((call) => call.method === 'POST' && call.path === '/api/auth/pats')?.body,
+    ).toEqual({
+      name: 'ci-launcher',
+      scopes: ['account:self'],
+    })
+    expect((await within(patSection).findByTestId('new-pat-secret')).textContent).toContain(
+      'pat-secret',
+    )
+  })
+
   test('top-level actor query shows initial loading and initial error with a working retry', async () => {
     let finishFirstActorRequest: ((response: Response) => void) | undefined
     let actorRequests = 0
@@ -144,6 +235,19 @@ describe('/account cached-empty query continuity', () => {
     renderAccount(qc)
 
     expect(await screen.findByRole('heading', { name: enUS.account.profile })).toBeTruthy()
+    for (const name of [
+      enUS.account.profile,
+      enUS.account.password,
+      enUS.account.pats,
+      enUS.account.linkedIdentities,
+      enUS.account.sessions,
+    ]) {
+      const heading = screen.getByRole('heading', { level: 2, name })
+      const section = heading.closest('section.card')
+      expect(section).not.toBeNull()
+      expect(heading.id).not.toBe('')
+      expect(section?.getAttribute('aria-labelledby')).toBe(heading.id)
+    }
     await act(async () => {
       await qc.refetchQueries({ queryKey: ['auth', 'me', 'tok'], exact: true })
     })

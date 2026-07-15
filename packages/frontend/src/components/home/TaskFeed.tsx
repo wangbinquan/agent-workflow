@@ -13,6 +13,7 @@
 // includes awaiting_*, inbox counts actions not tasks — gate P2-4).
 
 import { useCallback, useState, type ReactNode } from 'react'
+import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { setInboxOpen } from '@/stores/inbox'
 import { InboxPreviewList } from './InboxPreviewList'
@@ -55,9 +56,14 @@ export function TaskFeed() {
         title={t('home.section.running')}
         count={runningCount}
         action={
-          <a className="homepage-section__link" href="/tasks?status=running">
+          <Link
+            to="/tasks"
+            search={{ status: 'running' }}
+            className="homepage-section__link"
+            data-testid="homepage-running-tasks-link"
+          >
             {t('home.section.viewAll')}
-          </a>
+          </Link>
         }
       >
         <RunningTaskList onCount={onRunningCount} />
@@ -67,9 +73,13 @@ export function TaskFeed() {
         title={t('home.section.recent')}
         count={recentCount}
         action={
-          <a className="homepage-section__link" href="/tasks">
+          <Link
+            to="/tasks"
+            className="homepage-section__link"
+            data-testid="homepage-all-tasks-link"
+          >
             {t('home.section.viewTasks')}
-          </a>
+          </Link>
         }
       >
         <RecentlyDoneList onCount={onRecentCount} />

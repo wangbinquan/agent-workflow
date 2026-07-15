@@ -1053,6 +1053,7 @@ export interface Resources {
     zipReturnList: string
     zipOpenSkill: string
     fileDiscardConfirm: string
+    fileTargetUnavailable: string
     fileErrPathRequired: string
     fileErrRelativeOnly: string
     fileErrMainFileProtected: string
@@ -1145,6 +1146,25 @@ export interface Resources {
     workflowOverwritten: string
     importCanceled: string
     conflictPrompt: string
+    importDialog: {
+      title: string
+      dropTitle: string
+      dropDescription: string
+      chooseFile: string
+      replaceFile: string
+      removeFile: string
+      import: string
+      importing: string
+      retry: string
+      another: string
+      chooseAnother: string
+      conflictTitle: string
+      conflictDescription: string
+      conflictChoiceLabel: string
+      choiceNew: string
+      choiceOverwrite: string
+      resultTitle: string
+    }
     /** RFC-191 gallery card meta —「{{count}} 节点」chip. */
     cardNodes_one: string
     cardNodes_other: string
@@ -2635,6 +2655,7 @@ export interface Resources {
     unwrap: string
     deleteWithInner: string
     confirmDeleteWithInner: string
+    deleteScopeChanged: string
   }
   /** Localized chip labels for the IO node family (input / output). The
    *  palette already carries its own `paletteInputLabel` / `paletteOutputLabel`
@@ -4152,6 +4173,7 @@ export const zhCN: Resources = {
     zipReturnList: '返回技能列表',
     zipOpenSkill: '打开已导入的 Skill {{name}}',
     fileDiscardConfirm: '放弃未保存的修改？',
+    fileTargetUnavailable: '该文件已不可用，请刷新列表后重试。',
     fileErrPathRequired: '路径必填',
     fileErrRelativeOnly: '仅允许相对路径；不能包含 ".."',
     fileErrMainFileProtected: 'SKILL.md 请在「内容」页签编辑，不能在文件树中操作',
@@ -4400,6 +4422,26 @@ export const zhCN: Resources = {
     workflowOverwritten: '工作流已覆盖。',
     importCanceled: '导入已取消。',
     conflictPrompt: 'Workflow id 冲突。输入 "overwrite" 覆盖，或 "new" 作为新工作流导入。',
+    importDialog: {
+      title: '导入工作流',
+      dropTitle: '选择工作流 YAML 文件',
+      dropDescription: '选择一个 .yaml 或 .yml 文件；系统会先检查内容，再处理可能的冲突。',
+      chooseFile: '选择 YAML',
+      replaceFile: '更换文件',
+      removeFile: '移除',
+      import: '导入',
+      importing: '正在导入…',
+      retry: '重试导入',
+      another: '继续导入',
+      chooseAnother: '选择其他文件',
+      conflictTitle: '已存在相同 id 的工作流',
+      conflictDescription:
+        '请选择如何导入 {{file}}。默认“作为新工作流导入”更安全；覆盖会替换现有工作流。',
+      conflictChoiceLabel: '冲突处理方式',
+      choiceNew: '作为新工作流导入',
+      choiceOverwrite: '覆盖现有工作流',
+      resultTitle: '导入完成',
+    },
     cardNodes_one: '{{count}} 节点',
     cardNodes_other: '{{count}} 节点',
     noDescription: '（未填写描述）',
@@ -5867,6 +5909,7 @@ export const zhCN: Resources = {
     unwrap: '解散包装器',
     deleteWithInner: '连同内部节点一起删除',
     confirmDeleteWithInner: '确定连同 {{count}} 个内部节点一起删除该包装器？此操作不可撤销。',
+    deleteScopeChanged: '确认期间包装器内容已变更。请关闭本次确认，然后从最新画布重新发起删除。',
   },
   ioNode: {
     labelInput: '输入',

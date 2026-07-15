@@ -16,7 +16,9 @@ import { ConfirmButton } from '@/components/ConfirmButton'
 import { Dialog } from '@/components/Dialog'
 import { DiffViewer } from '@/components/DiffViewer'
 import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import { TableViewport } from '@/components/TableViewport'
 
 const SOURCE_KEY: Record<SkillVersionSource, string> = {
   initial: 'skills.versionSourceInitial',
@@ -93,65 +95,92 @@ export function SkillVersionHistory({
     onPendingChange?.(restore.isPending)
   }, [restore.isPending, onPendingChange])
 
+  const versionsRetry = (
+    <button type="button" className="btn btn--sm" onClick={() => void versions.refetch()}>
+      {t('common.retry')}
+    </button>
+  )
+  const diffRetry = (
+    <button type="button" className="btn btn--sm" onClick={() => void diff.refetch()}>
+      {t('common.retry')}
+    </button>
+  )
+
   return (
     <section className="page__section">
       <h2>{t('skills.versionsSection')}</h2>
-      {versions.isLoading ? (
+      {versions.data === undefined && versions.isLoading ? (
         <LoadingState size="compact" />
-      ) : (versions.data?.length ?? 0) === 0 ? (
+      ) : versions.data === undefined ? (
+        <ErrorBanner error={versions.error} action={versionsRetry} />
+      ) : versions.data.length === 0 ? (
         <EmptyState size="compact" title={t('skills.versionsEmpty')} />
       ) : (
-        <table className="table">
-          <tbody>
-            {versions.data?.map((v) => {
-              const isCurrent = v.versionIndex === currentVersion
-              return (
-                <tr key={v.id}>
-                  <td>
-                    <strong>{t('skills.versionLabel', { n: v.versionIndex })}</strong>{' '}
-                    <span className={`chip chip--tight chip--${v.source}`}>
-                      {t(SOURCE_KEY[v.source])}
-                    </span>
-                    {isCurrent && (
-                      <span className="chip chip--tight chip--managed">
-                        {t('skills.versionCurrent')}
-                      </span>
-                    )}
-                  </td>
-                  <td className="muted">
-                    {v.source === 'restore' && v.restoredFromVersion !== null
-                      ? t('skills.versionRestoredFrom', { n: v.restoredFromVersion })
-                      : (v.summary ?? '')}
-                  </td>
-                  <td className="muted">
-                    {new Date(v.createdAt).toLocaleString()}
-                    {v.authorUserId ? ` · ${t('skills.versionBy', { who: v.authorUserId })}` : ''}
-                  </td>
-                  <td className="page__actions">
-                    {!isCurrent && (
-                      <>
-                        <button
-                          type="button"
-                          className="btn btn--sm"
-                          onClick={() => setDiffFrom(v.versionIndex)}
-                        >
-                          {t('skills.versionCompare')}
-                        </button>
-                        <ConfirmButton
-                          size="sm"
-                          label={t('skills.versionRestore')}
-                          confirmLabel={t('skills.versionRestoreConfirm', { n: v.versionIndex })}
-                          onConfirm={() => restore.mutateAsync(v.versionIndex)}
-                          disabled={restore.isPending || busy}
-                        />
-                      </>
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <>
+          {versions.error !== null && versions.error !== undefined && (
+            <ErrorBanner error={versions.error} action={versionsRetry} />
+          )}
+          {restore.error !== null && restore.error !== undefined && (
+            <ErrorBanner error={restore.error} />
+          )}
+          <TableViewport label={t('skills.versionsSection')} minWidth="lg">
+            <table className="data-table data-table--compact">
+              <tbody>
+                {versions.data.map((v) => {
+                  const isCurrent = v.versionIndex === currentVersion
+                  return (
+                    <tr key={v.id}>
+                      <td>
+                        <strong>{t('skills.versionLabel', { n: v.versionIndex })}</strong>{' '}
+                        <span className={`chip chip--tight chip--${v.source}`}>
+                          {t(SOURCE_KEY[v.source])}
+                        </span>
+                        {isCurrent && (
+                          <span className="chip chip--tight chip--managed">
+                            {t('skills.versionCurrent')}
+                          </span>
+                        )}
+                      </td>
+                      <td className="muted">
+                        {v.source === 'restore' && v.restoredFromVersion !== null
+                          ? t('skills.versionRestoredFrom', { n: v.restoredFromVersion })
+                          : (v.summary ?? '')}
+                      </td>
+                      <td className="muted">
+                        {new Date(v.createdAt).toLocaleString()}
+                        {v.authorUserId
+                          ? ` · ${t('skills.versionBy', { who: v.authorUserId })}`
+                          : ''}
+                      </td>
+                      <td className="page__actions">
+                        {!isCurrent && (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn--sm"
+                              onClick={() => setDiffFrom(v.versionIndex)}
+                            >
+                              {t('skills.versionCompare')}
+                            </button>
+                            <ConfirmButton
+                              size="sm"
+                              label={t('skills.versionRestore')}
+                              confirmLabel={t('skills.versionRestoreConfirm', {
+                                n: v.versionIndex,
+                              })}
+                              onConfirm={() => restore.mutate(v.versionIndex)}
+                              disabled={restore.isPending || busy}
+                            />
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </TableViewport>
+        </>
       )}
 
       <Dialog
@@ -160,10 +189,17 @@ export function SkillVersionHistory({
         title={t('skills.versionDiffTitle', { from: diffFrom ?? 0, to: currentVersion })}
         size="lg"
       >
-        {diff.isLoading ? (
+        {diff.data === undefined && diff.isLoading ? (
           <LoadingState size="compact" />
+        ) : diff.data === undefined ? (
+          <ErrorBanner error={diff.error} action={diffRetry} />
         ) : (
-          <DiffViewer diff={diff.data?.diff ?? ''} />
+          <>
+            {diff.error !== null && diff.error !== undefined && (
+              <ErrorBanner error={diff.error} action={diffRetry} />
+            )}
+            <DiffViewer diff={diff.data.diff} />
+          </>
         )}
       </Dialog>
     </section>

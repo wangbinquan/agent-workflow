@@ -2,7 +2,10 @@
 
 import { afterEach, describe, expect, test } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { SourceEventsList } from '../src/components/memory/distill-job-detail/SourceEventsList'
+import {
+  SourceEventsList,
+  sourceEventHref,
+} from '../src/components/memory/distill-job-detail/SourceEventsList'
 import '../src/i18n'
 
 afterEach(() => {
@@ -35,13 +38,47 @@ describe('SourceEventsList', () => {
             deletedOrMissing: false,
             taskId: 't2',
           },
+          {
+            kind: 'review',
+            id: 'rv1',
+            summary: 'reviewed proposal',
+            deepLink: '/reviews/rv1',
+            deletedOrMissing: false,
+            taskId: 't3',
+          },
         ]}
       />,
     )
     expect(screen.getByTestId('distill-source-events-feedback')).toBeTruthy()
     expect(screen.getByTestId('distill-source-events-clarify')).toBeTruthy()
+    expect(screen.getByTestId('distill-source-events-review')).toBeTruthy()
     const link = screen.getByTestId('distill-source-event-link-tf1') as HTMLAnchorElement
-    expect(link.getAttribute('href')).toBe('/tasks/t1#feedback-tf1')
+    expect(link.getAttribute('href')).toBe('/tasks/t1?tab=feedback#feedback-tf1')
+    expect(screen.getByTestId('distill-source-event-link-cs1').getAttribute('href')).toBe(
+      '/clarify/cs1',
+    )
+    expect(screen.getByTestId('distill-source-event-link-rv1').getAttribute('href')).toBe(
+      '/reviews/rv1',
+    )
+  })
+
+  test('feedback href helper encodes task/fragment and safely preserves a task-less legacy URL', () => {
+    expect(
+      sourceEventHref({
+        kind: 'feedback',
+        id: 'fb/with space',
+        taskId: 'task/with space',
+        deepLink: '/legacy',
+      }),
+    ).toBe('/tasks/task%2Fwith%20space?tab=feedback#feedback-fb%2Fwith%20space')
+    expect(
+      sourceEventHref({
+        kind: 'feedback',
+        id: 'fb-orphan',
+        taskId: null,
+        deepLink: '/tasks/#feedback-fb-orphan',
+      }),
+    ).toBe('/tasks/#feedback-fb-orphan')
   })
 
   test('deletedOrMissing row renders greyed without link', () => {

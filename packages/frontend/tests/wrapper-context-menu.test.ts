@@ -11,7 +11,12 @@ import { describe, expect, test } from 'vitest'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { clearWrapperSize, deleteWrapperWithChildren } from '../src/components/canvas/wrapperOps'
+import {
+  clearWrapperSize,
+  deleteWrapperWithChildren,
+  isWrapperDeleteSnapshotCurrent,
+  snapshotWrapperDelete,
+} from '../src/components/canvas/wrapperOps'
 
 function def(nodes: WorkflowNode[], edges: WorkflowDefinition['edges'] = []): WorkflowDefinition {
   return { $schema_version: 2, inputs: [], nodes, edges } as WorkflowDefinition
@@ -112,6 +117,39 @@ describe('deleteWrapperWithChildren', () => {
   })
 })
 
+describe('wrapper delete confirmation snapshot', () => {
+  test('uses a stable, sorted child set and tolerates nodeIds reordering', () => {
+    const snapshot = snapshotWrapperDelete(
+      def([wrap('w1', 'wrapper-git', ['a2', 'a1']), agent('a1'), agent('a2')]),
+      'w1',
+    )
+    expect(snapshot).toEqual({ wrapperId: 'w1', childIds: ['a1', 'a2'] })
+    expect(
+      snapshot !== null &&
+        isWrapperDeleteSnapshotCurrent(
+          def([wrap('w1', 'wrapper-git', ['a1', 'a2']), agent('a1'), agent('a2')]),
+          snapshot,
+        ),
+    ).toBe(true)
+  })
+
+  test('rejects a removed wrapper or a changed destructive child set', () => {
+    const original = def([wrap('w1', 'wrapper-git', ['a1']), agent('a1')])
+    const snapshot = snapshotWrapperDelete(original, 'w1')
+    expect(snapshot).not.toBeNull()
+    expect(
+      snapshot !== null &&
+        isWrapperDeleteSnapshotCurrent(
+          def([wrap('w1', 'wrapper-git', ['a1', 'a2']), agent('a1'), agent('a2')]),
+          snapshot,
+        ),
+    ).toBe(false)
+    expect(snapshot !== null && isWrapperDeleteSnapshotCurrent(def([agent('a1')]), snapshot)).toBe(
+      false,
+    )
+  })
+})
+
 // Source-level guard: the WorkflowCanvas menu items must surface these
 // three i18n strings + the two new callbacks must be referenced from the
 // menu closure. Red here means the right-click entries have regressed.
@@ -126,6 +164,8 @@ describe('WorkflowCanvas menu source-level guards', () => {
     expect(src).toMatch(/wrapperNode\.unwrap/)
     expect(src).toMatch(/wrapperNode\.deleteWithInner/)
     expect(src).toMatch(/wrapperNode\.confirmDeleteWithInner/)
+    expect(src).toMatch(/<ConfirmDialog/)
+    expect(src).not.toMatch(/window\.confirm/)
     expect(src).toMatch(/fitWrapperToChildren\(/)
     expect(src).toMatch(/deleteWrapperWithInner\(/)
   })

@@ -3,12 +3,13 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { Field, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
 import { Select } from '@/components/Select'
@@ -262,12 +263,14 @@ function CreateUserDialog(props: {
   const [displayName, setDisplayName] = useState('')
   const [role, setRole] = useState<'admin' | 'user'>('user')
   const [password, setPassword] = useState('')
+  const usernameRef = useRef<HTMLInputElement>(null)
   return (
     <Dialog
       open
       onClose={props.onCancel}
       title={t('users.create.title', { defaultValue: 'New user' })}
       size="sm"
+      initialFocusRef={usernameRef}
       footer={
         <>
           <button type="button" className="btn btn--ghost" onClick={props.onCancel}>
@@ -286,7 +289,7 @@ function CreateUserDialog(props: {
     >
       <form
         id="users-create-form"
-        className="users-create-form"
+        className="form-grid"
         onSubmit={(e) => {
           e.preventDefault()
           const body: Parameters<typeof props.onSubmit>[0] = { username, displayName, role }
@@ -294,26 +297,23 @@ function CreateUserDialog(props: {
           props.onSubmit(body)
         }}
       >
-        <label className="form-field">
-          <span className="form-field__label">
-            {t('users.username', { defaultValue: 'Username' })}
-          </span>
-          <input
+        <Field label={t('users.username', { defaultValue: 'Username' })} required>
+          <TextInput
+            inputRef={usernameRef}
             value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            onChange={setUsername}
             pattern="[a-z0-9][a-z0-9_-]{0,63}"
             required
-            autoFocus
           />
-        </label>
-        <label className="form-field">
-          <span className="form-field__label">
-            {t('users.displayName', { defaultValue: 'Display name' })}
-          </span>
-          <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
-        </label>
-        <label className="form-field">
-          <span className="form-field__label">{t('users.role', { defaultValue: 'Role' })}</span>
+        </Field>
+        <Field label={t('users.displayName', { defaultValue: 'Display name' })} required>
+          <TextInput value={displayName} onChange={setDisplayName} required />
+        </Field>
+        <Field
+          label={t('users.role', { defaultValue: 'Role' })}
+          group
+          labelId="users-create-role-label"
+        >
           <Select<'admin' | 'user'>
             value={role}
             onChange={setRole}
@@ -337,21 +337,15 @@ function CreateUserDialog(props: {
               </span>
             )}
           />
-        </label>
-        <label className="form-field">
-          <span className="form-field__label">
-            {t('users.password', {
-              defaultValue: 'Password (leave blank for invite-only)',
-            })}
-          </span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            minLength={8}
-          />
-        </label>
-        {props.error && <div className="form-field__error">{props.error}</div>}
+        </Field>
+        <Field
+          label={t('users.password', {
+            defaultValue: 'Password (leave blank for invite-only)',
+          })}
+        >
+          <TextInput type="password" value={password} onChange={setPassword} minLength={8} />
+        </Field>
+        {props.error && <ErrorBanner error={props.error} />}
       </form>
     </Dialog>
   )

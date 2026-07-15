@@ -7,6 +7,8 @@
 // 4. Empty state shown when the backend returns [].
 // 5. Distilled chip shown on rows where distilled = true.
 // 6. Submit disabled when textarea is empty (whitespace-only counts as empty).
+// 7. Async fragment targeting waits for the exact row, then scrolls + focuses it.
+// 8. Shared TextArea / NoticeBanner / ErrorBanner keep form and feedback semantics aligned.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -73,6 +75,7 @@ beforeEach(() => {
 
 afterEach(() => {
   document.body.innerHTML = ''
+  window.history.replaceState({}, '', '/')
   vi.restoreAllMocks()
 })
 
@@ -91,6 +94,44 @@ describe('TaskFeedbackList', () => {
     await waitFor(() => {
       expect(screen.getByText('first note')).toBeTruthy()
     })
+    expect(screen.getByTestId('task-feedback-row-fb_1').id).toBe('feedback-fb_1')
+    expect(screen.getByTestId('task-feedback-row-fb_1').getAttribute('tabindex')).toBe('-1')
+  })
+
+  test('async deep link scrolls and focuses only the exact feedback row after it mounts', async () => {
+    let resolveList!: (response: Response) => void
+    const pendingList = new Promise<Response>((resolve) => {
+      resolveList = resolve
+    })
+    installFetch(() => pendingList)
+    const scrolled: HTMLElement[] = []
+    vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      scrolled.push(this)
+    })
+    window.history.replaceState({}, '', '/tasks/task_a?tab=feedback#feedback-fb%2Ftarget')
+
+    wrap()
+    expect(screen.queryByTestId('task-feedback-row-fb/target')).toBeNull()
+    expect(scrolled).toEqual([])
+
+    resolveList(
+      new Response(
+        JSON.stringify({
+          items: [
+            mkRow({ id: 'fb_other', bodyMd: 'not the target' }),
+            mkRow({ id: 'fb/target', bodyMd: 'deep-linked note' }),
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+
+    const target = await screen.findByTestId('task-feedback-row-fb/target')
+    await waitFor(() => expect(document.activeElement).toBe(target))
+    expect(scrolled).toEqual([target])
+    expect(screen.getByTestId('task-feedback-row-fb_other')).not.toBe(document.activeElement)
   })
 
   test('empty list shows empty state', async () => {
@@ -125,6 +166,7 @@ describe('TaskFeedbackList', () => {
     })
     wrap()
     const textarea = (await screen.findByTestId('task-feedback-textarea')) as HTMLTextAreaElement
+    expect(textarea.className).toContain('form-input')
     fireEvent.change(textarea, { target: { value: '   hello world  ' } })
     const submit = screen.getByTestId('task-feedback-submit') as HTMLButtonElement
     expect(submit.disabled).toBe(false)
@@ -162,8 +204,48 @@ describe('TaskFeedbackList', () => {
     })
     fireEvent.click(screen.getByTestId('task-feedback-submit'))
     await waitFor(() => {
-      expect(screen.getByTestId('task-feedback-rate-limit')).toBeTruthy()
+      const notice = screen.getByTestId('task-feedback-rate-limit')
+      expect(notice.querySelector('[role="status"]')).toBeTruthy()
     })
+  })
+
+  test('load and submit failures use shared alert semantics while retaining test ids', async () => {
+    let getCount = 0
+    installFetch(({ method }) => {
+      if (method === 'GET') {
+        getCount += 1
+        return getCount === 1
+          ? new Response(JSON.stringify({ items: [] }), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            })
+          : new Response(JSON.stringify({ error: 'load-failed' }), {
+              status: 500,
+              headers: { 'content-type': 'application/json' },
+            })
+      }
+      return new Response(JSON.stringify({ error: 'submit-failed' }), {
+        status: 422,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    const view = wrap()
+    const textarea = (await screen.findByTestId('task-feedback-textarea')) as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: 'will fail' } })
+    fireEvent.click(screen.getByTestId('task-feedback-submit'))
+    const submitError = await screen.findByTestId('task-feedback-error')
+    expect(submitError.querySelector('[role="alert"]')).toBeTruthy()
+
+    view.unmount()
+    installFetch(
+      () =>
+        new Response(JSON.stringify({ error: 'load-failed' }), {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        }),
+    )
+    wrap('task_load_error')
+    expect(await screen.findByRole('alert')).toBeTruthy()
   })
 
   test('submit disabled when textarea is whitespace-only', async () => {

@@ -16,6 +16,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import { useTranslation } from 'react-i18next'
 import { api, ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
+import { ErrorBanner } from '@/components/ErrorBanner'
+import { Field, TextArea, TextInput } from '@/components/Form'
 import { TableViewport } from '@/components/TableViewport'
 import { useWebSocket } from '@/hooks/useWebSocket'
 
@@ -44,11 +46,23 @@ export function BatchImportDialog({
   const [snapshot, setSnapshot] = useState<BatchImportSnapshot | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [editingRowId, setEditingRowId] = useState<string | null>(null)
+  const [draftUrl, setDraftUrl] = useState('')
+  const [retryPending, setRetryPending] = useState(false)
+  const [retryError, setRetryError] = useState<unknown | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const overrideInputRef = useRef<HTMLInputElement | null>(null)
+  const retryInFlightRef = useRef(false)
+  const rowRefs = useRef(new Map<string, HTMLTableRowElement>())
+  const retryRefs = useRef(new Map<string, HTMLButtonElement>())
+  const editRefs = useRef(new Map<string, HTMLButtonElement>())
 
   // Initial fetch when reopening with an active batchId.
   useEffect(() => {
     if (!open) return
+    setEditingRowId(null)
+    setDraftUrl('')
+    setRetryError(null)
     if (activeBatchId === null) {
       setView('input')
       setSnapshot(null)
@@ -75,6 +89,12 @@ export function BatchImportDialog({
       textareaRef.current.focus()
     }
   }, [open, view])
+
+  useEffect(() => {
+    if (!open || editingRowId === null) return
+    const id = window.setTimeout(() => overrideInputRef.current?.focus(), 0)
+    return () => window.clearTimeout(id)
+  }, [editingRowId, open])
 
   // Live progress over WS.
   const onWsMessage = useCallback(
@@ -143,26 +163,70 @@ export function BatchImportDialog({
     }
   }
 
-  async function handleRetry(rowId: string, withOverride: boolean): Promise<void> {
-    if (activeBatchId === null) return
-    let url: string | undefined
-    if (withOverride) {
-      const input = window.prompt(t('repos.batchImport.promptOverrideUrl'))
-      if (input === null) return
-      const trimmed = input.trim()
-      url = trimmed.length > 0 ? trimmed : undefined
-    }
+  function restoreRowFocus(rowId: string, preferred: 'edit' | 'retry'): void {
+    window.setTimeout(() => {
+      const target =
+        (preferred === 'edit' ? editRefs.current.get(rowId) : retryRefs.current.get(rowId)) ??
+        rowRefs.current.get(rowId)
+      if (target?.isConnected === true) target.focus()
+    }, 0)
+  }
+
+  function beginOverride(rowId: string): void {
+    if (retryPending || (editingRowId !== null && editingRowId !== rowId)) return
+    setEditingRowId(rowId)
+    setDraftUrl('')
+    setRetryError(null)
+  }
+
+  function cancelOverride(): void {
+    if (retryPending || editingRowId === null) return
+    const rowId = editingRowId
+    setEditingRowId(null)
+    setDraftUrl('')
+    setRetryError(null)
+    restoreRowFocus(rowId, 'edit')
+  }
+
+  async function handleRetry(
+    rowId: string,
+    body: Record<string, never> | { url: string },
+    fromEditor: boolean,
+  ): Promise<void> {
+    if (activeBatchId === null || retryInFlightRef.current) return
+    retryInFlightRef.current = true
+    const batchId = activeBatchId
+    setRetryPending(true)
+    if (fromEditor) setRetryError(null)
+    else setErrorMsg(null)
     try {
       const snap = await api.post<BatchImportSnapshot>(
         `/api/cached-repos/imports/${encodeURIComponent(
-          activeBatchId,
+          batchId,
         )}/rows/${encodeURIComponent(rowId)}/retry`,
-        url !== undefined ? { url } : {},
+        body,
       )
       setSnapshot(snap)
+      if (fromEditor) {
+        setEditingRowId(null)
+        setDraftUrl('')
+        setRetryError(null)
+      }
+      restoreRowFocus(rowId, 'retry')
     } catch (err) {
-      setErrorMsg(describeError(err))
+      if (fromEditor) setRetryError(err)
+      else setErrorMsg(describeError(err))
+    } finally {
+      retryInFlightRef.current = false
+      setRetryPending(false)
     }
+  }
+
+  function submitOverride(): void {
+    if (editingRowId === null || retryPending) return
+    const rowId = editingRowId
+    const trimmed = draftUrl.trim()
+    void handleRetry(rowId, trimmed.length === 0 ? {} : { url: trimmed }, true)
   }
 
   function handleAgain(): void {
@@ -170,13 +234,20 @@ export function BatchImportDialog({
     setSnapshot(null)
     setText('')
     setErrorMsg(null)
+    setEditingRowId(null)
+    setDraftUrl('')
+    setRetryError(null)
     setView('input')
   }
 
   function handleClose(): void {
+    if (submitting || retryPending) return
     if (snapshot !== null && snapshot.state === 'completed') {
       onActiveBatchIdChange(null)
     }
+    setEditingRowId(null)
+    setDraftUrl('')
+    setRetryError(null)
     onClose()
   }
 
@@ -198,7 +269,7 @@ export function BatchImportDialog({
   const footer =
     view === 'input' ? (
       <>
-        <button type="button" className="btn btn--sm" onClick={handleClose}>
+        <button type="button" className="btn btn--sm" onClick={handleClose} disabled={submitting}>
           {t('repos.batchImport.cancel')}
         </button>
         <button
@@ -214,11 +285,21 @@ export function BatchImportDialog({
     ) : (
       <>
         {snapshot?.state === 'completed' && (
-          <button type="button" className="btn btn--sm" onClick={handleAgain}>
+          <button
+            type="button"
+            className="btn btn--sm"
+            onClick={handleAgain}
+            disabled={retryPending}
+          >
             {t('repos.batchImport.again')}
           </button>
         )}
-        <button type="button" className="btn btn--sm btn--primary" onClick={handleClose}>
+        <button
+          type="button"
+          className="btn btn--sm btn--primary"
+          onClick={handleClose}
+          disabled={retryPending}
+        >
           {t('repos.batchImport.close')}
         </button>
       </>
@@ -235,18 +316,19 @@ export function BatchImportDialog({
       footer={footer}
       initialFocusRef={textareaRef}
       triggerRef={triggerRef}
+      dismissDisabled={submitting || retryPending}
     >
       <div>
-        {errorMsg !== null && <div className="error-box">{errorMsg}</div>}
+        {errorMsg !== null && <ErrorBanner error={errorMsg} />}
 
         {view === 'input' && (
           <>
-            <textarea
-              ref={textareaRef}
+            <TextArea
+              textareaRef={textareaRef}
               className="batch-import-dialog__textarea"
               placeholder={t('repos.batchImport.placeholder')}
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={setText}
               rows={10}
               data-testid="batch-import-textarea"
             />
@@ -254,7 +336,7 @@ export function BatchImportDialog({
               <div className="muted">{t('repos.batchImport.batchEmpty')}</div>
             )}
             {parsedUrls.length > 100 && (
-              <div className="error-box">{t('repos.batchImport.batchTooLarge')}</div>
+              <ErrorBanner error={t('repos.batchImport.batchTooLarge')} />
             )}
           </>
         )}
@@ -276,6 +358,11 @@ export function BatchImportDialog({
                   {snapshot.rows.map((row, i) => (
                     <tr
                       key={row.rowId}
+                      ref={(element) => {
+                        if (element === null) rowRefs.current.delete(row.rowId)
+                        else rowRefs.current.set(row.rowId, element)
+                      }}
+                      tabIndex={-1}
                       data-row-status={row.status}
                       data-testid={`batch-import-row-${row.rowId}`}
                     >
@@ -284,25 +371,78 @@ export function BatchImportDialog({
                       <td>{describeStatus(row)}</td>
                       <td className="batch-import-table__detail">{row.message ?? ''}</td>
                       <td>
-                        {(row.status === 'failed' || row.status === 'done') && (
-                          <div className="batch-import-table__actions">
-                            <button
-                              type="button"
-                              className="btn btn--sm"
-                              onClick={() => void handleRetry(row.rowId, false)}
-                            >
-                              {t('repos.batchImport.retry')}
-                            </button>
-                            {row.status === 'failed' && (
+                        {editingRowId === row.rowId ? (
+                          <div
+                            className="stack--sm"
+                            data-testid={`batch-import-override-${row.rowId}`}
+                            aria-busy={retryPending || undefined}
+                          >
+                            <Field label={t('repos.batchImport.promptOverrideUrl')}>
+                              <TextInput
+                                value={draftUrl}
+                                onChange={setDraftUrl}
+                                type="url"
+                                disabled={retryPending}
+                                inputRef={overrideInputRef}
+                                data-testid="batch-import-override-input"
+                              />
+                            </Field>
+                            {retryError !== null && <ErrorBanner error={retryError} />}
+                            <div className="batch-import-table__actions">
                               <button
                                 type="button"
                                 className="btn btn--sm"
-                                onClick={() => void handleRetry(row.rowId, true)}
+                                disabled={retryPending}
+                                onClick={cancelOverride}
+                                data-testid="batch-import-override-cancel"
                               >
-                                {t('repos.batchImport.retryWithEdit')}
+                                {t('common.cancel')}
                               </button>
-                            )}
+                              <button
+                                type="button"
+                                className="btn btn--sm btn--primary"
+                                disabled={retryPending}
+                                aria-busy={retryPending || undefined}
+                                onClick={submitOverride}
+                                data-testid="batch-import-override-submit"
+                              >
+                                {t('repos.batchImport.retry')}
+                              </button>
+                            </div>
                           </div>
+                        ) : (
+                          (row.status === 'failed' || row.status === 'done') && (
+                            <div className="batch-import-table__actions">
+                              <button
+                                type="button"
+                                className="btn btn--sm"
+                                ref={(element) => {
+                                  if (element === null) retryRefs.current.delete(row.rowId)
+                                  else retryRefs.current.set(row.rowId, element)
+                                }}
+                                disabled={retryPending || editingRowId !== null}
+                                onClick={() => void handleRetry(row.rowId, {}, false)}
+                                data-testid={`batch-import-retry-${row.rowId}`}
+                              >
+                                {t('repos.batchImport.retry')}
+                              </button>
+                              {row.status === 'failed' && (
+                                <button
+                                  type="button"
+                                  className="btn btn--sm"
+                                  ref={(element) => {
+                                    if (element === null) editRefs.current.delete(row.rowId)
+                                    else editRefs.current.set(row.rowId, element)
+                                  }}
+                                  disabled={retryPending || editingRowId !== null}
+                                  onClick={() => beginOverride(row.rowId)}
+                                  data-testid={`batch-import-edit-${row.rowId}`}
+                                >
+                                  {t('repos.batchImport.retryWithEdit')}
+                                </button>
+                              )}
+                            </div>
+                          )
                         )}
                       </td>
                     </tr>

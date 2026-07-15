@@ -8,9 +8,10 @@ import { PALETTE_MIME, buildPalette, serialize, type PaletteItem } from './nodeP
 
 interface Props {
   agents: Agent[]
+  onAdd: (item: PaletteItem) => void
 }
 
-export function EditorSidebar({ agents }: Props) {
+export function EditorSidebar({ agents, onAdd }: Props) {
   const { t } = useTranslation()
   const [filter, setFilter] = useState('')
   const sections = useMemo(() => buildPalette(agents, t), [agents, t])
@@ -29,7 +30,7 @@ export function EditorSidebar({ agents }: Props) {
       .filter((s) => s.items.length > 0)
   }, [sections, filter])
 
-  function onDragStart(e: DragEvent<HTMLDivElement>, item: PaletteItem) {
+  function onDragStart(e: DragEvent<HTMLButtonElement>, item: PaletteItem) {
     e.dataTransfer.setData(PALETTE_MIME, serialize(item))
     e.dataTransfer.setData('text/plain', serialize(item))
     e.dataTransfer.effectAllowed = 'copy'
@@ -53,16 +54,17 @@ export function EditorSidebar({ agents }: Props) {
             <ul className="editor-sidebar__list">
               {section.items.map((entry, i) => (
                 <li key={`${section.label}-${i}`}>
-                  <div
-                    role="button"
+                  <button
+                    type="button"
                     draggable
                     onDragStart={(e) => onDragStart(e, entry.item)}
+                    onClick={() => onAdd(entry.item)}
                     className="editor-sidebar__item"
                     title={entry.description}
                   >
-                    <div className="editor-sidebar__item-label">{entry.label}</div>
-                    <div className="editor-sidebar__item-hint">{entry.description}</div>
-                  </div>
+                    <span className="editor-sidebar__item-label">{entry.label}</span>
+                    <span className="editor-sidebar__item-hint">{entry.description}</span>
+                  </button>
                 </li>
               ))}
             </ul>

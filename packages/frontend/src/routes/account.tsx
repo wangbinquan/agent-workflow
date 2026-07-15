@@ -7,8 +7,10 @@ import { createRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError } from '@/api/client'
+import { Card } from '@/components/Card'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { Field, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusChip } from '@/components/StatusChip'
@@ -62,15 +64,27 @@ function AccountPage() {
   )
 }
 
-function SectionShell(props: { title: string; description?: string; children: React.ReactNode }) {
+function SectionShell(props: {
+  headingId: string
+  title: string
+  description?: string
+  children: React.ReactNode
+}) {
   return (
-    <section className="account-card">
-      <header className="account-card__header">
-        <h2 className="account-card__title">{props.title}</h2>
-        {props.description && <p className="account-card__description">{props.description}</p>}
-      </header>
-      <div className="account-card__body">{props.children}</div>
-    </section>
+    <Card
+      as="section"
+      aria-labelledby={props.headingId}
+      header={
+        <header>
+          <h2 id={props.headingId} className="account-card__title">
+            {props.title}
+          </h2>
+          {props.description && <p className="account-card__description">{props.description}</p>}
+        </header>
+      }
+    >
+      {props.children}
+    </Card>
   )
 }
 
@@ -92,7 +106,10 @@ function ProfileSection({ me }: { me: MeResponse }) {
     [t('account.source', { defaultValue: 'Authenticated via' }), me.source],
   ]
   return (
-    <SectionShell title={t('account.profile', { defaultValue: 'Profile' })}>
+    <SectionShell
+      headingId="account-profile-heading"
+      title={t('account.profile', { defaultValue: 'Profile' })}
+    >
       <dl className="account-defs">
         {rows.map(([k, v], i) => (
           <div key={i} className="account-defs__row">
@@ -139,6 +156,7 @@ function PasswordSection() {
   })
   return (
     <SectionShell
+      headingId="account-password-heading"
       title={t('account.password', { defaultValue: 'Change password' })}
       description={t('account.passwordDesc', {
         defaultValue:
@@ -150,33 +168,27 @@ function PasswordSection() {
           e.preventDefault()
           m.mutate()
         }}
-        className="account-form"
+        className="form-grid"
       >
-        <label className="account-form__field">
-          <span className="account-form__label">
-            {t('account.oldPassword', { defaultValue: 'Current password' })}
-          </span>
-          <input
+        <Field label={t('account.oldPassword', { defaultValue: 'Current password' })} required>
+          <TextInput
             type="password"
             autoComplete="current-password"
             value={oldPw}
-            onChange={(e) => setOldPw(e.target.value)}
+            onChange={setOldPw}
             required
           />
-        </label>
-        <label className="account-form__field">
-          <span className="account-form__label">
-            {t('account.newPassword', { defaultValue: 'New password' })}
-          </span>
-          <input
+        </Field>
+        <Field label={t('account.newPassword', { defaultValue: 'New password' })} required>
+          <TextInput
             type="password"
             autoComplete="new-password"
             value={newPw}
-            onChange={(e) => setNewPw(e.target.value)}
+            onChange={setNewPw}
             required
             minLength={8}
           />
-        </label>
+        </Field>
         <div className="account-form__actions">
           <button type="submit" className="btn btn--primary" disabled={m.isPending}>
             {m.isPending ? '…' : t('account.update', { defaultValue: 'Update password' })}
@@ -407,6 +419,7 @@ function PatSection() {
   }
   return (
     <SectionShell
+      headingId="account-pats-heading"
       title={t('account.pats', { defaultValue: 'Personal Access Tokens' })}
       description={t('account.patsDesc', {
         defaultValue:
@@ -418,19 +431,16 @@ function PatSection() {
           e.preventDefault()
           create.mutate()
         }}
-        className="account-form"
+        className="form-grid"
       >
-        <label className="account-form__field">
-          <span className="account-form__label">
-            {t('account.patName', { defaultValue: 'Token name' })}
-          </span>
-          <input
+        <Field label={t('account.patName', { defaultValue: 'Token name' })} required>
+          <TextInput
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={setName}
             placeholder={t('account.patNamePlaceholder', { defaultValue: 'e.g. ci-launcher' })}
             required
           />
-        </label>
+        </Field>
         <div className="pat-scopes">
           <div className="pat-scopes__header">
             <span className="account-form__label">
@@ -649,6 +659,7 @@ function SessionsSection() {
   })
   return (
     <SectionShell
+      headingId="account-sessions-heading"
       title={t('account.sessions', { defaultValue: 'Active sessions' })}
       description={t('account.sessionsDesc', {
         defaultValue:
@@ -746,6 +757,7 @@ function IdentitiesSection() {
   })
   return (
     <SectionShell
+      headingId="account-identities-heading"
       title={t('account.linkedIdentities', { defaultValue: 'Linked identities' })}
       description={t('account.identitiesDesc', {
         defaultValue:

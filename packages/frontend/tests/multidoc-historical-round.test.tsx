@@ -5,8 +5,8 @@
 //     正文 + 冻结评论走既有 /versions/:vid 端点；
 //   - 只读横幅 + 决策信息块渲染；写入口全禁——无轮级决策按钮、无逐篇
 //     采纳/不采纳按钮、Q/W 快捷键不再触发 selection PATCH；
-//   - 未知 roundKey → alert 一次并 replace 回当前轮（对齐 RFC-013 未知
-//     version 的处理）；
+//   - 未知 roundKey → 非阻塞 warning 一次并 replace 回当前轮（对齐
+//     RFC-198 未知 version 的处理）；
 //   - ?round 指向当前轮（isCurrent）→ 等价无参，渲染交互视图。
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -290,17 +290,12 @@ describe('MultiDocReviewView — historical round (?round=)', () => {
     expect(screen.queryByText('Back to current round')).toBeNull()
   })
 
-  test('未知 roundKey → alert 一次并回落当前视图', async () => {
-    // jsdom 不带 window.alert 实现——直接挂 stub（spyOn 会因 undefined 报错）。
-    const alertStub = vi.fn()
-    const original = window.alert
-    window.alert = alertStub as unknown as typeof window.alert
-    try {
-      wrap(<MultiDocReviewView nodeRunId="run" historicalRoundKey="nope" />)
-      await waitFor(() => expect(alertStub).toHaveBeenCalledTimes(1))
-      expect(String(alertStub.mock.calls[0]![0])).toContain('nope')
-    } finally {
-      window.alert = original
-    }
+  test('未知 roundKey → one-shot NoticeBanner 并回落当前视图，可主动关闭', async () => {
+    wrap(<MultiDocReviewView nodeRunId="run" historicalRoundKey="nope" />)
+    const warning = await screen.findByTestId('review-invalid-round-warning')
+    expect(warning.textContent).toContain('nope')
+    expect(warning.querySelector('[role="status"]')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByTestId('review-invalid-round-warning')).toBeNull())
   })
 })

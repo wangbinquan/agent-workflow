@@ -58,6 +58,10 @@ describe('Form primitives', () => {
   test('TextArea preserves ref forwarding and the typed field allowlist', () => {
     const textareaRef = createRef<HTMLTextAreaElement>()
     const onChange = vi.fn()
+    const onKeyDown = vi.fn()
+    const onSelect = vi.fn()
+    const onFocus = vi.fn()
+    const onBlur = vi.fn()
     const { getByTestId } = render(
       <TextArea
         textareaRef={textareaRef}
@@ -70,7 +74,15 @@ describe('Form primitives', () => {
         minLength={2}
         maxLength={200}
         required
+        className="composer-input"
+        onKeyDown={onKeyDown}
+        onSelect={onSelect}
+        onFocus={onFocus}
+        onBlur={onBlur}
         aria-label="Notes"
+        aria-autocomplete="list"
+        aria-controls="mention-list"
+        aria-activedescendant="mention-2"
         aria-describedby="notes-hint"
         aria-invalid={false}
         data-testid="notes"
@@ -86,10 +98,23 @@ describe('Form primitives', () => {
     expect(textarea.minLength).toBe(2)
     expect(textarea.maxLength).toBe(200)
     expect(textarea.required).toBe(true)
+    expect(textarea.classList.contains('form-input')).toBe(true)
+    expect(textarea.classList.contains('composer-input')).toBe(true)
     expect(textarea.getAttribute('aria-label')).toBe('Notes')
+    expect(textarea.getAttribute('aria-autocomplete')).toBe('list')
+    expect(textarea.getAttribute('aria-controls')).toBe('mention-list')
+    expect(textarea.getAttribute('aria-activedescendant')).toBe('mention-2')
     expect(textarea.getAttribute('aria-describedby')).toBe('notes-hint')
 
     fireEvent.change(textarea, { target: { value: 'updated' } })
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    fireEvent.select(textarea)
+    fireEvent.focus(textarea)
+    fireEvent.blur(textarea)
     expect(onChange).toHaveBeenCalledWith('updated')
+    expect(onKeyDown).toHaveBeenCalledTimes(1)
+    expect(onSelect).toHaveBeenCalledTimes(1)
+    expect(onFocus).toHaveBeenCalled()
+    expect(onBlur).toHaveBeenCalledTimes(1)
   })
 })

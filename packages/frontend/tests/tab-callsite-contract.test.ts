@@ -163,6 +163,7 @@ const TRUE_TAB_CALLSITES = [
   'components/AgentImportDialog.tsx::agent-import-source',
   'components/NodeDetailDrawer.tsx::node-detail-drawer',
   'components/canvas/NodeInspector.tsx::workflow-node-inspector',
+  'routes/auth.tsx::auth-method',
   'routes/memory.tsx::memory',
   'routes/mcps.detail.tsx::mcps-detail',
   'routes/plugins.detail.tsx::plugins-detail',
@@ -293,14 +294,7 @@ describe('RFC-198 filters are not tabs', () => {
       }
     }
 
-    // TODO(RFC-198 PR5): Auth is a real page-tab surface. Delete this entry
-    // when auth.tsx migrates to TabBar + stable idPrefix + linked tabpanels.
-    const pr5AuthException = {
-      'routes/auth.tsx': { tablist: 1, tab: 1 },
-    }
-    const expected = new Map(
-      Object.entries({ ...VERTICAL_TRUE_TAB_CALLSITES, ...pr5AuthException }),
-    )
+    const expected = new Map(Object.entries(VERTICAL_TRUE_TAB_CALLSITES))
 
     expect(Object.fromEntries(actual)).toEqual(Object.fromEntries(expected))
     for (const file of Object.keys(VERTICAL_TRUE_TAB_CALLSITES)) {

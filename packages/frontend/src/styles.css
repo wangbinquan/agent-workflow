@@ -496,45 +496,6 @@ code {
 
 /* RFC-036 — create-user form body inside <Dialog>. Stack of labelled
    inputs with consistent gap; inputs span the panel width. */
-.users-create-form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.users-create-form input,
-.users-create-form select {
-  font: inherit;
-  font-size: 14px;
-  padding: 7px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  width: 100%;
-}
-
-/* RFC-036 — strip the native chevron + draw our own so the Role select
-   matches the surrounding inputs (the native UA control is visually a
-   different shape and breaks the dialog's visual rhythm). */
-.users-create-form select {
-  appearance: none;
-  -webkit-appearance: none;
-  padding-right: 32px;
-  cursor: pointer;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M2.5 4.5l3.5 3 3.5-3' fill='none' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  background-size: 12px 12px;
-}
-
-.users-create-form input:focus,
-.users-create-form select:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
-}
-
 /* RFC-036 — custom <Select> component. The native <select> popup is
    browser-chrome we cannot restyle, so callers that need the dropdown
    to match the dialog's input rhythm should use components/Select.tsx
@@ -689,17 +650,6 @@ code {
   gap: 16px;
 }
 
-.account-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 20px 24px;
-}
-
-.account-card__header {
-  margin-bottom: 14px;
-}
-
 .account-card__title {
   margin: 0 0 4px;
   font-size: 15px;
@@ -712,12 +662,6 @@ code {
   font-size: 12px;
   color: var(--muted);
   line-height: 1.5;
-}
-
-.account-card__body {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
 }
 
 /* Definition list — Profile section. Two columns at md+, stack on sm. */
@@ -751,64 +695,10 @@ code {
   word-break: break-word;
 }
 
-/* Forms inside .account-card. Inputs are width-capped so password fields
-   don't stretch across the entire 760-px card. */
-.account-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.account-form--inline {
-  flex-direction: row;
-  align-items: flex-end;
-  gap: 12px;
-}
-
-.account-form__field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-width: 360px;
-}
-
-.account-form__field--grow {
-  flex: 1 1 auto;
-  max-width: none;
-}
-
 .account-form__label {
   font-size: 12px;
   font-weight: 500;
   color: var(--muted);
-}
-
-/* Text-like inputs only — checkboxes/radios stay at their intrinsic
-   13×13 size (otherwise the .pat-scopes picker's checkboxes would each
-   grow to fill 100% of their row and obliterate the labels). */
-.account-form input[type='text'],
-.account-form input[type='password'],
-.account-form input[type='email'],
-.account-form input[type='url'],
-.account-form input:not([type]) {
-  font: inherit;
-  font-size: 13px;
-  padding: 7px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  width: 100%;
-}
-
-.account-form input[type='text']:focus,
-.account-form input[type='password']:focus,
-.account-form input[type='email']:focus,
-.account-form input[type='url']:focus,
-.account-form input:not([type]):focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .account-form__actions {
@@ -973,21 +863,10 @@ code {
   font-size: 11px;
 }
 
-.account-form__field--inline {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  max-width: none;
-}
-
 /* RFC-036 — OIDC provider create/edit dialog form. Three fieldsets
    (Provider / Credentials / Behavior), each with a small section title
-   + descriptive hint. Inputs span the full content width (no 360-px
-   cap from .account-form__field). Visual rhythm matches the rest of
-   the settings tabs. */
-.oidc-form {
-  display: flex;
-  flex-direction: column;
+   + descriptive hint. Shared Field controls span the full content width. */
+.oidc-provider-form {
   gap: 18px;
 }
 
@@ -1028,128 +907,10 @@ code {
   grid-template-columns: 1fr 1fr;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 720px) {
   .oidc-form__row--cols-2 {
     grid-template-columns: 1fr;
   }
-}
-
-.oidc-form__field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.oidc-form__label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text);
-}
-
-.oidc-form__hint {
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.4;
-}
-
-.oidc-form input[type='text'],
-.oidc-form input[type='password'],
-.oidc-form input[type='url'],
-.oidc-form input:not([type]) {
-  font: inherit;
-  font-size: 13px;
-  padding: 7px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  width: 100%;
-}
-
-.oidc-form input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
-}
-
-/* iOS-style toggle row: title + sub-hint on the left, sliding switch on
-   the right. Whole row is a click target. */
-.oidc-form__toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  cursor: pointer;
-}
-
-.oidc-form__toggle:hover {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
-}
-
-.oidc-form__toggle-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.oidc-form__toggle-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-/* The native <input type="checkbox"> renders as a sliding pill — appearance
-   stripped, sizing fixed, ::before drawn as the thumb. accent-color is
-   var(--accent) when checked. Matches the .form-switch primitive used in
-   the agent + mcp + plugin forms but lives in the OIDC namespace so I don't
-   accidentally inherit settings-form-specific margins. */
-.oidc-form__toggle input[type='checkbox'] {
-  appearance: none;
-  -webkit-appearance: none;
-  position: relative;
-  flex-shrink: 0;
-  width: 36px;
-  height: 20px;
-  margin: 0;
-  border-radius: 999px;
-  background: var(--border);
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.oidc-form__toggle input[type='checkbox']::before {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-  transition: transform 0.15s ease;
-}
-
-.oidc-form__toggle input[type='checkbox']:checked {
-  background: var(--accent-fill);
-}
-
-.oidc-form__toggle input[type='checkbox']:checked::before {
-  transform: translateX(16px);
-}
-
-.oidc-form__toggle input[type='checkbox']:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .oidc-form__test-result {
@@ -1185,15 +946,6 @@ code {
   border-radius: 3px;
   border: 1px solid var(--border);
   color: var(--text);
-}
-
-.oidc-form__error {
-  padding: 10px 12px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--danger) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
-  color: var(--danger);
-  font-size: 12px;
 }
 
 /* Role / status / source chips */
@@ -3763,6 +3515,9 @@ code {
 }
 
 .form-field__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--text);
   font-weight: 500;
   font-size: 13px;
@@ -5286,9 +5041,14 @@ details.form-section[open] > summary {
 }
 
 .editor-sidebar__item {
+  display: block;
+  width: 100%;
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 10px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: grab;
   background: var(--bg);
   transition: border-color 0.1s;
@@ -6582,40 +6342,6 @@ details.form-section[open] > summary {
   margin: 0 0 16px;
 }
 
-/* RFC-036 — three login-method tabs (Password / OIDC / Daemon token). */
-.auth-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 3px;
-  background: color-mix(in srgb, var(--border) 35%, transparent);
-  border-radius: 8px;
-  margin-bottom: 18px;
-}
-
-.auth-tabs__tab {
-  flex: 1 1 auto;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  padding: 7px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: color 0.12s ease;
-}
-
-.auth-tabs__tab:hover:not(.auth-tabs__tab--active) {
-  color: var(--text);
-}
-
-.auth-tabs__tab--active {
-  background: var(--panel);
-  color: var(--text);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-}
-
 .auth-form__hint {
   margin: 0 0 6px;
   font-size: 12px;
@@ -6686,59 +6412,6 @@ details.form-section[open] > summary {
   margin-left: auto;
   color: var(--muted);
   font-size: 16px;
-}
-
-.auth-form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.auth-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.auth-form input {
-  font: inherit;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--text);
-}
-
-.auth-form input:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 0;
-  border-color: transparent;
-}
-
-.auth-form button {
-  margin-top: 4px;
-  background: var(--accent-fill);
-  border: none;
-  border-radius: 6px;
-  padding: 10px 14px;
-  color: var(--on-accent);
-  font-weight: 500;
-}
-
-.auth-form button:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
-
-.auth-form__error {
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-  border: 1px solid var(--danger);
-  color: var(--danger);
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 13px;
 }
 
 /* ---- Onboarding (P-5-10) ---- */
@@ -7154,7 +6827,7 @@ details.form-section[open] > summary {
 
 .review-detail__layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr) var(--review-sidebar-width, 280px);
   gap: 24px;
   align-items: start;
   margin-top: 0;
@@ -7183,7 +6856,7 @@ details.form-section[open] > summary {
    inside it. Bubbles are placed at the vertical offset of their anchor
    text in the rendered markdown so they scroll along with the document.
    Width matches the grid cell (driven by the user-resizable `sidebarWidth`
-   localStorage value via the inline style on `.review-detail__layout`),
+   custom property on `.review-detail__layout`),
    not a hard-coded 280px — otherwise a non-default sidebar width would
    make the bubble column extend past its grid cell and get clipped by
    `.review-detail__layout`'s `overflow-x: hidden`. */
@@ -7730,72 +7403,8 @@ mark.comment-anchor[data-active='true'] {
 }
 
 /* ---- Decision dialog (Approve / Iterate / Reject) ----
-   Replaces window.confirm / prompt / alert on the review detail page so
-   the three decision flows use the same styled modal as the rest of the
-   app (matches `.agent-import__overlay` chrome). Reject also carries an
-   inline reason textarea + a `__error` chip the page sets when the user
-   tries to confirm with an empty reason. */
-.review-decision-dialog__overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 96px 24px 24px;
-  z-index: 1000;
-}
-.review-decision-dialog__panel {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  width: min(520px, 100%);
-  max-height: calc(100vh - 144px);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 18px 20px;
-  box-shadow:
-    0 20px 40px rgba(0, 0, 0, 0.25),
-    0 4px 10px rgba(0, 0, 0, 0.12);
-  overflow: auto;
-}
-.review-decision-dialog__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.review-decision-dialog__header h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-}
-.review-decision-dialog__close {
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  color: var(--muted);
-  font-size: 20px;
-  line-height: 1;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-.review-decision-dialog__close:hover {
-  background: var(--border);
-  color: var(--text);
-}
-.review-decision-dialog__body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text);
-}
-.review-decision-dialog__body p {
-  margin: 0;
-  line-height: 1.5;
-}
+   Shared Dialog owns overlay, panel, header, close, body and footer chrome.
+   These selectors only style decision-specific content. */
 .review-decision-dialog__warn {
   background: rgba(255, 180, 50, 0.12);
   border-left: 3px solid var(--accent, #f0a020);
@@ -7820,13 +7429,6 @@ mark.comment-anchor[data-active='true'] {
   color: var(--danger, #d04040);
   font-size: 12px;
 }
-.review-decision-dialog__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-top: 4px;
-}
-
 /* RFC-010 — Markdown 渲染态内联 diff 高亮（仅作用于 MarkdownDiffView 容器内）。 */
 .markdown-diff-view .diff-ins {
   background: #d4f8d4;
@@ -8288,29 +7890,11 @@ mark.comment-anchor[data-active='true'] {
   --info: #8eb8ff;
 }
 
-:root[data-theme='dark'] .skill-import .btn--primary {
-  background: #2759a5;
-  border-color: #2759a5;
-}
-
-:root[data-theme='dark'] .skill-import .btn--primary:hover {
-  background: #204a8b;
-}
-
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) .skill-import {
     --success: #66d17a;
     --warn: #ffc25c;
     --info: #8eb8ff;
-  }
-
-  :root:not([data-theme]) .skill-import .btn--primary {
-    background: #2759a5;
-    border-color: #2759a5;
-  }
-
-  :root:not([data-theme]) .skill-import .btn--primary:hover {
-    background: #204a8b;
   }
 }
 
@@ -14888,12 +14472,8 @@ button.status-chip {
    RFC-173 — resource <MultiSelect> + two-group "resources & deps" layout
    ============================================================================= */
 
-/* Field icon slot (<Field icon={…}>) — leading inline icon before the label. */
-.form-field__label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
+/* Field icon slot (<Field icon={…}>) — leading inline icon before the label.
+   The shared label layout lives with the base form rules above. */
 .form-field__icon {
   display: inline-flex;
   color: var(--muted);
@@ -15556,6 +15136,255 @@ button.status-chip {
   .notice-banner__action {
     grid-column: 1 / -1;
     justify-content: flex-start;
+  }
+}
+
+/* RFC-198: specialized workspaces must degrade at the same 720px boundary as
+   standard pages. These surfaces intentionally keep independent scroll regions
+   on desktop; mobile turns their fixed rails/drawers into a vertical reading
+   order so every control remains reachable without page-level horizontal
+   scrolling. */
+@media (max-width: 720px) {
+  .editor-layout,
+  .editor-layout--with-inspector,
+  .file-tree,
+  .task-canvas-layout--with-drawer,
+  .task-outputs-panel,
+  .worktree-files-panel,
+  .review-multidoc__body,
+  .workgroup-room,
+  .workgroup-room--with-drawer {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .editor-layout {
+    align-content: start;
+    overflow-y: auto;
+  }
+
+  .editor-sidebar,
+  .file-tree__sidebar,
+  .task-outputs-panel__list,
+  .worktree-files-panel__tree,
+  .review-multidoc__list,
+  .worktree-diff__files,
+  .structure__files {
+    max-height: 14rem;
+  }
+
+  .editor-layout > .canvas-frame,
+  .task-canvas-layout--with-drawer > .canvas-frame--task {
+    height: min(70dvh, 38rem);
+    min-height: 28rem;
+  }
+
+  .editor-layout > .inspector,
+  .task-canvas-layout--with-drawer > .inspector,
+  .workgroup-room > .inspector {
+    min-height: 24rem;
+    max-height: 70dvh;
+  }
+
+  .fanout-input-row,
+  .inspector__output-port-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fanout-input-row > .btn,
+  .inspector__output-port-row > .btn {
+    justify-self: end;
+  }
+
+  .task-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-1) var(--space-2);
+  }
+
+  .task-row__id,
+  .task-row__name {
+    grid-column: 1;
+    min-width: 0;
+  }
+
+  .task-row__id,
+  .task-row__time {
+    grid-row: 1;
+  }
+
+  .task-row__name,
+  .task-row__status {
+    grid-row: 2;
+  }
+
+  .task-row__time,
+  .task-row__status {
+    grid-column: 2;
+  }
+
+  .task-row__time {
+    white-space: nowrap;
+  }
+
+  .file-tree {
+    min-height: 0;
+  }
+
+  .file-tree__add,
+  .file-tree__actions,
+  .task-outputs-panel__actions {
+    flex-wrap: wrap;
+  }
+
+  .file-tree__add > .form-input,
+  .file-tree__editor,
+  .file-tree__path-bar > code,
+  .task-outputs-panel__detail-header > :first-child {
+    min-width: 0;
+  }
+
+  .file-tree__err {
+    flex: 1 1 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .file-tree__path-bar,
+  .task-outputs-panel__detail-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .file-tree__path-bar > code,
+  .task-outputs-panel__detail-bind {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .file-tree__actions > .btn,
+  .task-outputs-panel__actions > .btn {
+    flex: 1 1 auto;
+  }
+
+  .md-editor,
+  .memory-compare {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .md-editor__pane,
+  .memory-compare__col {
+    min-width: 0;
+  }
+
+  .md-editor--fill {
+    grid-template-rows: minmax(16rem, 1fr) minmax(16rem, 1fr);
+    overflow-y: auto;
+  }
+
+  .memory-compare__body {
+    overflow-wrap: anywhere;
+  }
+
+  .file-tree__editor,
+  .task-outputs-panel__detail,
+  .worktree-files-panel__preview,
+  .worktree-diff__body,
+  .structure__body {
+    min-height: 22rem;
+  }
+
+  .task-detail__pane > .task-canvas-layout {
+    height: auto;
+    min-height: 100%;
+  }
+
+  .task-outputs-panel,
+  .worktree-files-panel {
+    height: auto;
+    min-height: 36rem;
+  }
+
+  .task-outputs-panel__list,
+  .worktree-files-panel__tree {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding-right: 0;
+    padding-bottom: var(--space-2);
+  }
+
+  .worktree-diff,
+  .structure__tree {
+    flex-direction: column;
+  }
+
+  .worktree-diff__files,
+  .structure__files {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .review-multidoc__body {
+    grid-template-rows: auto minmax(28rem, 1fr);
+    overflow-y: auto;
+  }
+
+  .review-multidoc__pane {
+    min-height: 28rem;
+  }
+
+  .review-detail__page-header-actions {
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .review-detail__page-header-actions > .review-detail__download {
+    flex: 1 1 100%;
+  }
+
+  .review-detail__decision-actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .review-detail__decision-actions > .btn {
+    flex: 1 1 9rem;
+  }
+
+  .workgroup-room,
+  .workgroup-room--with-drawer {
+    align-content: start;
+    height: auto;
+    min-height: 100%;
+  }
+
+  .workgroup-room__main {
+    min-height: 32rem;
+  }
+
+  .workgroup-room__side {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .workgroup-room__runlog-row {
+    flex-wrap: wrap;
+  }
+
+  .workgroup-room__runlog-row > .workgroup-room__member-name {
+    flex: 1 1 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .workgroup-room__runlog-row > .workgroup-room__time {
+    margin-left: auto;
+  }
+
+  .wizard-summary__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
   }
 }
 

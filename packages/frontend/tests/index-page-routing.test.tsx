@@ -25,13 +25,19 @@ vi.mock('@tanstack/react-router', async () => {
     ...actual,
     Link: ({
       to,
+      search,
       children,
       ...rest
     }: {
       to: string
+      search?: Record<string, unknown>
       children: React.ReactNode
     } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-      <a href={to} {...rest}>
+      <a
+        href={to}
+        data-search={search === undefined ? undefined : JSON.stringify(search)}
+        {...rest}
+      >
         {children}
       </a>
     ),

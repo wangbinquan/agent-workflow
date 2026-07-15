@@ -148,8 +148,9 @@ describe('RFC-013/RFC-149 reviews.detail.tsx — readonly historical view', () =
 
   test('invalid mode navigates back to current with a one-shot warning', () => {
     const s = src()
-    // We use window.alert + navigate with replace: true on the invalid path.
-    expect(s).toMatch(/window\.alert\(\s*t\(\s*'reviews\.unknownVersion'/)
+    expect(s).toMatch(/setInvalidVersionWarning\(\{[\s\S]*?message:\s*t\('reviews\.unknownVersion'/)
+    expect(s).toMatch(/<NoticeBanner/)
+    expect(s).not.toMatch(/window\.alert/)
     expect(s).toMatch(/navigate\(\s*\{\s*to:\s*'\/reviews\/\$nodeRunId'[\s\S]*?replace:\s*true/)
   })
 

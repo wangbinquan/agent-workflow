@@ -441,13 +441,9 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
             </ul>
           )}
           <div className="workgroup-room__composer-row">
-            {/* Raw textarea (with the shared .form-input skin) instead of
-                <TextArea>: mention completion needs caret tracking via
-                onSelect/selectionStart, which the shared primitive does not
-                expose — same precedent as the launcher's multiline input. */}
-            <textarea
-              ref={inputRef}
-              className="form-input workgroup-room__input"
+            <TextArea
+              textareaRef={inputRef}
+              className="workgroup-room__input"
               rows={2}
               value={draft}
               placeholder={
@@ -463,9 +459,9 @@ export function WorkgroupRoom({ taskId, taskStatus }: WorkgroupRoomProps) {
               // a dangling aria-controls/activedescendant confuses screen readers.
               aria-controls={mentionOpen ? listboxId : undefined}
               aria-activedescendant={mentionOpen ? `${listboxId}-opt-${activeIndex}` : undefined}
-              onChange={(e) => {
-                setDraft(e.target.value)
-                setCaret(e.target.selectionStart ?? e.target.value.length)
+              onChange={(value) => {
+                setDraft(value)
+                setCaret(inputRef.current?.selectionStart ?? value.length)
                 // Any edit invalidates a prior Esc dismissal (so re-typing the
                 // same @token after clearing/sending reopens the dropdown).
                 setDismissed(null)
@@ -1193,11 +1189,10 @@ function DispatchCard({
       {/* Quick reply — inline textarea, POSTs the chat-body shape. */}
       {isTodo && quickOpen && (
         <div className="workgroup-room__card-quick">
-          <textarea
-            className="form-input"
+          <TextArea
             rows={3}
             value={quickText}
-            onChange={(e) => setQuickText(e.target.value)}
+            onChange={setQuickText}
             onKeyDown={(e) => {
               const action = resolveComposerKey({
                 key: e.key,

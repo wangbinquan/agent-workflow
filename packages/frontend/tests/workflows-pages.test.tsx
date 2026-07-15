@@ -42,6 +42,7 @@ import {
 } from '../src/lib/workflow-form'
 import { zhCN } from '../src/i18n/zh-CN'
 import { enUS } from '../src/i18n/en-US'
+import { HomepageGreeting } from '../src/components/home/HomepageGreeting'
 import '../src/i18n'
 
 const TEST_DIR = path.dirname(new URL(import.meta.url).pathname)
@@ -116,6 +117,24 @@ function installFetch(
           headers: { 'content-type': 'application/json' },
         })
 
+      if (url.includes('/api/runtimes/status')) return json({ runtimes: [] })
+      if (url.includes('/api/overview')) {
+        return json({
+          resources: {
+            agents: 0,
+            skills: 0,
+            mcps: 0,
+            plugins: 0,
+            workflows: state.workflows.length,
+            workgroups: 0,
+            repos: 0,
+            scheduled: 0,
+            memories: 0,
+          },
+          tasks: { running: 0, awaiting: 0, done7d: 0, failed7d: 0 },
+          generatedAt: '2026-07-16T00:00:00.000Z',
+        })
+      }
       if (url.includes('/api/users/lookup')) return json([])
       if (url.includes('/api/workflows/import') && method === 'POST') {
         const ir = opts.importResponse ?? { status: 201, body: wf('imported') }
@@ -150,13 +169,22 @@ function installFetch(
   )
 }
 
-async function renderPage(initialEntry: string) {
+async function renderPage(initialEntry: string | string[], options: { homepage?: boolean } = {}) {
   const list = await import('../src/routes/workflows')
   const rootRoute = createRootRoute({ component: () => <Outlet /> })
+  const homeRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/',
+    component:
+      options.homepage === true
+        ? HomepageGreeting
+        : () => <div data-testid="workflow-history-home" />,
+  })
   const listRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/workflows',
     component: list.Route.options.component,
+    validateSearch: list.Route.options.validateSearch,
   })
   // Reuses the REAL retired-URL redirect logic (beforeLoad) under a test
   // root. The cast stops the reused hook's inferred generics from poisoning
@@ -175,8 +203,10 @@ async function renderPage(initialEntry: string) {
     component: () => <div data-testid="editor-stub" />,
   })
   const router = createRouter({
-    routeTree: rootRoute.addChildren([newRedirectRoute, listRoute, detailRoute]),
-    history: createMemoryHistory({ initialEntries: [initialEntry] }),
+    routeTree: rootRoute.addChildren([homeRoute, newRedirectRoute, listRoute, detailRoute]),
+    history: createMemoryHistory({
+      initialEntries: Array.isArray(initialEntry) ? initialEntry : [initialEntry],
+    }),
   })
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
@@ -238,6 +268,50 @@ describe('workflow name rules (pure) — unified with workgroup naming (用户 2
 })
 
 describe('/workflows quick-create dialog', () => {
+  test('deep create consumes create=1 with replace, preserves adjacent search, and never replays', async () => {
+    const state = { workflows: [], calls: [] as Recorded['calls'] }
+    installFetch(state)
+    const router = await renderPage(['/', '/workflows?create=1&source=homepage'])
+
+    expect(await screen.findByTestId('workflow-create-dialog')).toBeTruthy()
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/workflows')
+      expect(router.state.location.search).toEqual({ source: 'homepage' })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: enUS.common.cancel }))
+    await waitFor(() => expect(screen.queryByTestId('workflow-create-dialog')).toBeNull())
+    expect(document.activeElement).toBe(screen.getByTestId('workflow-new-button'))
+
+    router.history.back()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+    router.history.forward()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/workflows'))
+    expect(router.state.location.search).toEqual({ source: 'homepage' })
+    expect(screen.queryByTestId('workflow-create-dialog')).toBeNull()
+
+    // A real refresh starts from the already-canonical URL and must stay shut.
+    cleanup()
+    await renderPage('/workflows?source=homepage')
+    await screen.findByTestId('workflows-empty')
+    expect(screen.queryByTestId('workflow-create-dialog')).toBeNull()
+  })
+
+  test('homepage CTA is a real typed Link that lands in the one-shot create flow', async () => {
+    installFetch({ workflows: [], calls: [] })
+    const router = await renderPage('/', { homepage: true })
+
+    const link = await screen.findByTestId('homepage-new-workflow')
+    expect(link.getAttribute('href')).toMatch(/^\/workflows\?create=/)
+    fireEvent.click(link)
+
+    expect(await screen.findByTestId('workflow-create-dialog')).toBeTruthy()
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/workflows')
+      expect(router.state.location.search).toEqual({})
+    })
+  })
+
   test('RFC-198 page-header-primary-ratchet counts gallery chrome independently', async () => {
     installFetch({ workflows: [wf('visible')], calls: [] })
     await renderPage('/workflows')
@@ -398,6 +472,62 @@ describe('/workflows quick-create dialog', () => {
     expect(name.value).toBe('')
     expect((screen.getByTestId('workflow-create-confirm') as HTMLButtonElement).disabled).toBe(true)
   })
+
+  test('workflow import success refreshes the gallery, shows result, and restores trigger focus', async () => {
+    const state = { workflows: [], calls: [] as Recorded['calls'] }
+    installFetch(state)
+    await renderPage('/workflows')
+    const trigger = await screen.findByTestId('workflow-import-trigger')
+    const getsBefore = state.calls.filter(
+      (call) => call.method === 'GET' && call.url.endsWith('/api/workflows'),
+    ).length
+
+    fireEvent.click(trigger)
+    const file = new File(['name: imported\n'], 'imported.yaml', { type: 'application/yaml' })
+    Object.defineProperty(file, 'text', {
+      value: vi.fn().mockResolvedValue('name: imported\n'),
+    })
+    fireEvent.change(await screen.findByTestId('workflow-import-file'), {
+      target: { files: [file] },
+    })
+    fireEvent.click(screen.getByTestId('workflow-import-submit'))
+
+    expect(await screen.findByTestId('workflow-import-result')).toBeTruthy()
+    const importCall = state.calls.find((call) => call.url.includes('/api/workflows/import'))
+    expect(importCall?.url).toContain('onConflict=fail')
+    expect(importCall?.body).toBe('name: imported\n')
+    await waitFor(() => {
+      const gets = state.calls.filter(
+        (call) => call.method === 'GET' && call.url.endsWith('/api/workflows'),
+      ).length
+      expect(gets).toBeGreaterThan(getsBefore)
+    })
+
+    const footerClose = document.querySelector<HTMLButtonElement>(
+      '[data-testid="workflow-import-dialog"] .dialog__footer .btn--primary',
+    )
+    expect(footerClose).not.toBeNull()
+    fireEvent.click(footerClose!)
+    await waitFor(() => expect(screen.queryByTestId('workflow-import-dialog')).toBeNull())
+    expect(document.activeElement).toBe(screen.getByTestId('workflow-import-trigger'))
+  })
+})
+
+describe('/workflows search validation', () => {
+  test('recognizes create boolean aliases, drops invalid create, and keeps adjacent search', async () => {
+    const { validateWorkflowsSearch, withoutWorkflowCreate } =
+      await import('../src/routes/workflows')
+    expect(validateWorkflowsSearch({ create: '1', source: 'home' })).toEqual({
+      create: true,
+      source: 'home',
+    })
+    expect(validateWorkflowsSearch({ create: true, source: 'home' })).toEqual({
+      create: true,
+      source: 'home',
+    })
+    expect(validateWorkflowsSearch({ create: 'no', source: 'home' })).toEqual({ source: 'home' })
+    expect(withoutWorkflowCreate({ create: true, source: 'home' })).toEqual({ source: 'home' })
+  })
 })
 
 describe('postYaml decodes FLAT daemon error payloads (Codex P2)', () => {
@@ -440,7 +570,8 @@ describe('postYaml decodes FLAT daemon error payloads (Codex P2)', () => {
   test('the import UI routes coded errors through the shared decoders (source lock)', () => {
     const list = readSrc('routes/workflows.tsx')
     expect(list).toContain('extractErrorBody(')
-    expect(list).toContain('setImportMsg(describeApiError(err))')
+    expect(list).toContain('<WorkflowImportDialog')
+    expect(list).not.toContain('window.prompt')
   })
 })
 

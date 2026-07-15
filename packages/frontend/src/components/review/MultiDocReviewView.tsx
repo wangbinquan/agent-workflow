@@ -34,6 +34,7 @@ import { Dialog } from '@/components/Dialog'
 import { TextArea } from '@/components/Form'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { ReviewDecisionInfo } from '@/components/review/ReviewDecisionInfo'
 import { ReviewDocPane } from '@/components/review/ReviewDocPane'
@@ -97,12 +98,38 @@ export function MultiDocReviewView({
   const view = resolveRoundView(historicalRoundKey, rounds.data)
   const historicalMode = view.mode === 'historical'
   const historicalRound = historicalMode ? view.round : undefined
-  // Unknown round key → one-shot warning + replace back to the current view,
-  // mirroring RFC-013's unknown-version handling on the single-doc page.
+  // RFC-198: snapshot the translated warning before canonicalizing. It remains
+  // visible after replace, while route-id changes and fresh canonical mounts do
+  // not replay it.
   const unknownRound = view.mode === 'invalid' ? view.requested : null
+  const [invalidRoundWarning, setInvalidRoundWarning] = useState<{
+    routeId: string
+    message: string
+  } | null>(null)
+  const handledInvalidRoundRef = useRef<string | null>(null)
+  const warningRouteIdRef = useRef(nodeRunId)
+  const invalidRoundMessage =
+    invalidRoundWarning?.routeId === nodeRunId ? invalidRoundWarning.message : null
   useEffect(() => {
-    if (unknownRound === null) return
-    window.alert(t('reviews.unknownRound', { id: unknownRound }))
+    // Skip the initial effect (including StrictMode's replay). Only a genuine
+    // route-id transition expires the previous route's one-shot warning.
+    if (warningRouteIdRef.current === nodeRunId) return
+    warningRouteIdRef.current = nodeRunId
+    handledInvalidRoundRef.current = null
+    setInvalidRoundWarning(null)
+  }, [nodeRunId])
+  useEffect(() => {
+    if (unknownRound === null) {
+      handledInvalidRoundRef.current = null
+      return
+    }
+    const invalidKey = `${nodeRunId}:${unknownRound}`
+    if (handledInvalidRoundRef.current === invalidKey) return
+    handledInvalidRoundRef.current = invalidKey
+    setInvalidRoundWarning({
+      routeId: nodeRunId,
+      message: t('reviews.unknownRound', { id: unknownRound }),
+    })
     void navigate({ to: '/reviews/$nodeRunId', params: { nodeRunId }, search: {}, replace: true })
   }, [unknownRound, navigate, nodeRunId, t])
 
@@ -408,6 +435,25 @@ export function MultiDocReviewView({
           }
         />
       </PageHeader>
+
+      {invalidRoundMessage !== null && (
+        <div data-testid="review-invalid-round-warning">
+          <NoticeBanner
+            tone="warning"
+            action={
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => setInvalidRoundWarning(null)}
+              >
+                {t('common.close')}
+              </button>
+            }
+          >
+            {invalidRoundMessage}
+          </NoticeBanner>
+        </div>
+      )}
 
       {detail.error !== null && detail.error !== undefined && (
         <ErrorBanner

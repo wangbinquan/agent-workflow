@@ -11,6 +11,21 @@ interface Props {
   items: MemoryDistillSourceEventEntry[]
 }
 
+/**
+ * Feedback lives in a URL-backed task-detail tab.  The backend keeps returning
+ * the original source URL for compatibility, but this UI owns the richer link:
+ * opening a source must select the feedback panel before the fragment is
+ * resolved.  Clarify/review URLs stay byte-for-byte as supplied by the API.
+ */
+export function sourceEventHref(
+  event: Pick<MemoryDistillSourceEventEntry, 'kind' | 'id' | 'taskId' | 'deepLink'>,
+): string {
+  if (event.kind !== 'feedback' || event.taskId === null || event.taskId.length === 0) {
+    return event.deepLink
+  }
+  return `/tasks/${encodeURIComponent(event.taskId)}?tab=feedback#${encodeURIComponent(`feedback-${event.id}`)}`
+}
+
 export function SourceEventsList({ items }: Props) {
   const { t } = useTranslation()
   if (items.length === 0) {
@@ -42,7 +57,7 @@ export function SourceEventsList({ items }: Props) {
                   ) : (
                     <>
                       <a
-                        href={e.deepLink}
+                        href={sourceEventHref(e)}
                         className="link distill-source-events__link"
                         data-testid={`distill-source-event-link-${e.id}`}
                       >

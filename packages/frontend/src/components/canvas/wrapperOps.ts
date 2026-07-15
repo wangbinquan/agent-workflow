@@ -6,6 +6,40 @@
 import { isWrapperKind } from '@agent-workflow/shared'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
+export interface WrapperDeleteSnapshot {
+  wrapperId: string
+  childIds: string[]
+}
+
+/** Snapshot the destructive scope shown in the confirmation dialog. Sorting
+ * makes the comparison below set-like: reordering nodeIds alone does not make
+ * the user's confirmation stale, while adding/removing a child does. */
+export function snapshotWrapperDelete(
+  definition: WorkflowDefinition,
+  wrapperId: string,
+): WrapperDeleteSnapshot | null {
+  const target = definition.nodes.find((node) => node.id === wrapperId)
+  if (target === undefined || !isWrapperKind(target.kind)) return null
+  const inner = (target as Record<string, unknown>).nodeIds
+  const childIds = Array.isArray(inner)
+    ? (inner as unknown[])
+        .filter((value): value is string => typeof value === 'string')
+        .sort((a, b) => a.localeCompare(b))
+    : []
+  return { wrapperId, childIds }
+}
+
+/** Reject a confirmation when its wrapper disappeared or its destructive
+ * child set changed while the dialog was open. */
+export function isWrapperDeleteSnapshotCurrent(
+  definition: WorkflowDefinition,
+  snapshot: WrapperDeleteSnapshot,
+): boolean {
+  const current = snapshotWrapperDelete(definition, snapshot.wrapperId)
+  if (current === null || current.childIds.length !== snapshot.childIds.length) return false
+  return current.childIds.every((id, index) => id === snapshot.childIds[index])
+}
+
 /** Clear `size` (and any sizeLocked flag) on a wrapper so the next render
  * recomputes its bounding rect from the current inner-node bbox. Returns
  * prevDef by reference when the target is missing or not a wrapper. */

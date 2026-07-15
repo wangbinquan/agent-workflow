@@ -18,11 +18,34 @@ interface TestOwner {
   kind: TestOwnerKind
 }
 
-interface RouteInventoryEntry {
+type HeaderPrimitive = 'PageHeader' | 'ResourceGalleryPage' | 'ResourceSplitPage'
+
+type HeaderOwnership =
+  | {
+      mode: 'direct'
+      sourceFile: string
+      primitive: 'PageHeader'
+    }
+  | {
+      mode: 'shared-layout'
+      sourceFile: string
+      primitive: 'ResourceGalleryPage' | 'ResourceSplitPage'
+    }
+
+interface RouteInventoryBase {
   surface: string
-  classification: RouteClassification
   owners: readonly TestOwner[]
 }
+
+type RouteInventoryEntry =
+  | (RouteInventoryBase & {
+      classification: 'standard'
+      header: HeaderOwnership
+    })
+  | (RouteInventoryBase & {
+      classification: Exclude<RouteClassification, 'standard'>
+      header?: never
+    })
 
 export interface RegisteredRoute {
   key: string
@@ -134,6 +157,60 @@ function localRouteKeys(
   return routes
 }
 
+const HEADER_PRIMITIVE_MODULES: Record<HeaderPrimitive, string> = {
+  PageHeader: '@/components/PageHeader',
+  ResourceGalleryPage: '@/components/gallery/ResourceGalleryPage',
+  ResourceSplitPage: '@/components/split/ResourceSplitPage',
+}
+
+function routeSourceFile(key: string): string | null {
+  const match = key.match(/^@\/routes\/([^#]+)#/)
+  return match?.[1] === undefined ? null : `routes/${match[1]}.tsx`
+}
+
+/** Resolve the declared import identity and require a real JSX render. */
+function sourceRendersHeaderPrimitive(ownership: HeaderOwnership): boolean {
+  const absolute = resolve(import.meta.dirname, '../src', ownership.sourceFile)
+  if (!existsSync(absolute)) return false
+  const sourceFile = ts.createSourceFile(
+    ownership.sourceFile,
+    readFileSync(absolute, 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  )
+  const localNames = new Set<string>()
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue
+    }
+    if (statement.moduleSpecifier.text !== HEADER_PRIMITIVE_MODULES[ownership.primitive]) continue
+    const bindings = statement.importClause?.namedBindings
+    if (bindings === undefined || !ts.isNamedImports(bindings)) continue
+    for (const element of bindings.elements) {
+      if ((element.propertyName?.text ?? element.name.text) === ownership.primitive) {
+        localNames.add(element.name.text)
+      }
+    }
+  }
+
+  let rendered = false
+  const visit = (node: ts.Node): void => {
+    if (
+      !rendered &&
+      (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+      ts.isIdentifier(node.tagName) &&
+      localNames.has(node.tagName.text)
+    ) {
+      rendered = true
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return rendered
+}
+
 /** Parse the registered route tree without importing application modules. */
 export function parseRegisteredRoutes(source: string): RegisteredRoute[] {
   const sourceFile = ts.createSourceFile(
@@ -241,7 +318,7 @@ export const ROUTE_UX_INVENTORY = {
   '@/routes/auth#Route': {
     surface: '/auth',
     classification: 'specialized',
-    owners: [source('auth-redirect-preserve.test.ts')],
+    owners: [rendered('auth-form-tabs.test.tsx')],
   },
   '@/routes/agents.by-id#Route': {
     surface: '/agents/by-id/$id',
@@ -257,16 +334,31 @@ export const ROUTE_UX_INVENTORY = {
     surface: '/agents/new',
     classification: 'standard',
     owners: [rendered('agents-split-page.test.tsx')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/agents.new.tsx',
+      primitive: 'PageHeader',
+    },
   },
   '@/routes/agents.detail#Route': {
     surface: '/agents/$name',
     classification: 'standard',
     owners: [rendered('agents-split-page.test.tsx')],
+    header: {
+      mode: 'shared-layout',
+      sourceFile: 'routes/agents.tsx',
+      primitive: 'ResourceSplitPage',
+    },
   },
   '@/routes/agents#IndexRoute': {
     surface: '/agents index',
     classification: 'standard',
     owners: [rendered('agents-split-page.test.tsx')],
+    header: {
+      mode: 'shared-layout',
+      sourceFile: 'routes/agents.tsx',
+      primitive: 'ResourceSplitPage',
+    },
   },
   '@/routes/skills#Route': {
     surface: '/skills split layout',
@@ -277,16 +369,31 @@ export const ROUTE_UX_INVENTORY = {
     surface: '/skills/new',
     classification: 'standard',
     owners: [rendered('skills-split-page.test.tsx')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/skills.new.tsx',
+      primitive: 'PageHeader',
+    },
   },
   '@/routes/skills.detail#Route': {
     surface: '/skills/$name',
     classification: 'standard',
     owners: [rendered('skills-split-page.test.tsx')],
+    header: {
+      mode: 'shared-layout',
+      sourceFile: 'routes/skills.tsx',
+      primitive: 'ResourceSplitPage',
+    },
   },
   '@/routes/skills#IndexRoute': {
     surface: '/skills index',
     classification: 'standard',
     owners: [rendered('skills-split-page.test.tsx')],
+    header: {
+      mode: 'shared-layout',
+      sourceFile: 'routes/skills.tsx',
+      primitive: 'ResourceSplitPage',
+    },
   },
   '@/routes/mcps#Route': {
     surface: '/mcps split layout',
@@ -297,16 +404,31 @@ export const ROUTE_UX_INVENTORY = {
     surface: '/mcps/new',
     classification: 'standard',
     owners: [rendered('mcps-split-page.test.tsx')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/mcps.new.tsx',
+      primitive: 'PageHeader',
+    },
   },
   '@/routes/mcps.detail#Route': {
     surface: '/mcps/$name',
     classification: 'standard',
     owners: [rendered('mcps-split-page.test.tsx')],
+    header: {
+      mode: 'shared-layout',
+      sourceFile: 'routes/mcps.tsx',
+      primitive: 'ResourceSplitPage',
+    },
   },
   '@/routes/mcps#IndexRoute': {
     surface: '/mcps index',
     classification: 'standard',
     owners: [rendered('mcps-split-page.test.tsx')],
+    header: {
+      mode: 'shared-layout',
+      sourceFile: 'routes/mcps.tsx',
+      primitive: 'ResourceSplitPage',
+    },
   },
   '@/routes/plugins#Route': {
     surface: '/plugins split layout',
@@ -317,16 +439,31 @@ export const ROUTE_UX_INVENTORY = {
     surface: '/plugins/new',
     classification: 'standard',
     owners: [rendered('plugins-split-page.test.tsx')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/plugins.new.tsx',
+      primitive: 'PageHeader',
+    },
   },
   '@/routes/plugins.detail#Route': {
     surface: '/plugins/$name',
     classification: 'standard',
     owners: [rendered('plugins-split-page.test.tsx')],
+    header: {
+      mode: 'shared-layout',
+      sourceFile: 'routes/plugins.tsx',
+      primitive: 'ResourceSplitPage',
+    },
   },
   '@/routes/plugins#IndexRoute': {
     surface: '/plugins index',
     classification: 'standard',
     owners: [rendered('plugins-split-page.test.tsx')],
+    header: {
+      mode: 'shared-layout',
+      sourceFile: 'routes/plugins.tsx',
+      primitive: 'ResourceSplitPage',
+    },
   },
   '@/routes/workflows#NewRedirectRoute': {
     surface: '/workflows/new',
@@ -347,6 +484,11 @@ export const ROUTE_UX_INVENTORY = {
     surface: '/workflows',
     classification: 'standard',
     owners: [rendered('workflows-pages.test.tsx')],
+    header: {
+      mode: 'shared-layout',
+      sourceFile: 'routes/workflows.tsx',
+      primitive: 'ResourceGalleryPage',
+    },
   },
   [`${LOCAL_ROUTE_PREFIX}/workgroups/launch`]: {
     surface: '/workgroups/launch',
@@ -367,6 +509,11 @@ export const ROUTE_UX_INVENTORY = {
     surface: '/workgroups',
     classification: 'standard',
     owners: [rendered('workgroups-pages.test.tsx')],
+    header: {
+      mode: 'shared-layout',
+      sourceFile: 'routes/workgroups.tsx',
+      primitive: 'ResourceGalleryPage',
+    },
   },
   '@/routes/tasks.preview#Route': {
     surface: '/tasks/$id/preview',
@@ -382,6 +529,7 @@ export const ROUTE_UX_INVENTORY = {
     surface: '/tasks',
     classification: 'standard',
     owners: [rendered('tasks-list-surgery.test.tsx')],
+    header: { mode: 'direct', sourceFile: 'routes/tasks.tsx', primitive: 'PageHeader' },
   },
   '@/routes/tasks.new#TaskWizardRoute': {
     surface: '/tasks/new',
@@ -392,11 +540,17 @@ export const ROUTE_UX_INVENTORY = {
     surface: '/scheduled/$id',
     classification: 'standard',
     owners: [rendered('scheduled-detail-style.test.tsx')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/scheduled.$id.tsx',
+      primitive: 'PageHeader',
+    },
   },
   '@/routes/scheduled#Route': {
     surface: '/scheduled',
     classification: 'standard',
     owners: [rendered('scheduled-list-inline.test.tsx')],
+    header: { mode: 'direct', sourceFile: 'routes/scheduled.tsx', primitive: 'PageHeader' },
   },
   '@/routes/reviews.detail#Route': {
     surface: '/reviews/$nodeRunId',
@@ -407,6 +561,7 @@ export const ROUTE_UX_INVENTORY = {
     surface: '/reviews',
     classification: 'standard',
     owners: [rendered('reviews-list-filter.test.tsx')],
+    header: { mode: 'direct', sourceFile: 'routes/reviews.tsx', primitive: 'PageHeader' },
   },
   '@/routes/clarify.detail#Route': {
     surface: '/clarify/$nodeRunId',
@@ -417,11 +572,13 @@ export const ROUTE_UX_INVENTORY = {
     surface: '/clarify',
     classification: 'standard',
     owners: [rendered('clarify-list-route.test.tsx')],
+    header: { mode: 'direct', sourceFile: 'routes/clarify.tsx', primitive: 'PageHeader' },
   },
   '@/routes/repos#ReposRoute': {
     surface: '/repos',
     classification: 'standard',
     owners: [source('repos-page.test.tsx')],
+    header: { mode: 'direct', sourceFile: 'routes/repos.tsx', primitive: 'PageHeader' },
   },
   '@/routes/memory.distill-jobs.$jobId#Route': {
     surface: '/memory/distill-jobs/$jobId',
@@ -442,16 +599,19 @@ export const ROUTE_UX_INVENTORY = {
     surface: '/settings',
     classification: 'standard',
     owners: [rendered('settings-route-history.test.tsx')],
+    header: { mode: 'direct', sourceFile: 'routes/settings.tsx', primitive: 'PageHeader' },
   },
   '@/routes/account#Route': {
     surface: '/account',
     classification: 'standard',
     owners: [rendered('account-query-continuity.test.tsx')],
+    header: { mode: 'direct', sourceFile: 'routes/account.tsx', primitive: 'PageHeader' },
   },
   '@/routes/users#Route': {
     surface: '/users',
     classification: 'standard',
     owners: [rendered('users-page-actions.test.tsx')],
+    header: { mode: 'direct', sourceFile: 'routes/users.tsx', primitive: 'PageHeader' },
   },
 } as const satisfies Record<string, RouteInventoryEntry>
 
@@ -550,5 +710,42 @@ describe('RFC-198 all-interface route UX inventory', () => {
       .map(([key]) => key)
 
     expect(missingUiOwners).toEqual([])
+  })
+
+  test('every standard route proves direct or shared-layout PageHeader ownership in production JSX', () => {
+    const registeredByKey = new Map(registered.map((route) => [route.key, route]))
+
+    for (const [key, rawEntry] of Object.entries(ROUTE_UX_INVENTORY)) {
+      const entry = rawEntry as RouteInventoryEntry
+      if (entry.classification !== 'standard') continue
+      const route = registeredByKey.get(key)
+      if (route === undefined) {
+        throw new Error(`${key} (${entry.surface}) is not registered`)
+      }
+      const header = (entry as { header?: HeaderOwnership }).header
+      if (header === undefined) {
+        throw new Error(`${key} (${entry.surface}) is standard but has no header ownership`)
+      }
+      const ownSource = routeSourceFile(key)
+      if (ownSource === null) {
+        throw new Error(`${key} (${entry.surface}) has no auditable route source file`)
+      }
+
+      const allowedSources = new Set([ownSource])
+      if (header.mode === 'shared-layout' && route.parentKey !== null) {
+        const parentSource = routeSourceFile(route.parentKey)
+        if (parentSource !== null) allowedSources.add(parentSource)
+      }
+      if (!allowedSources.has(header.sourceFile)) {
+        throw new Error(
+          `${key} (${entry.surface}) declares header owner ${header.sourceFile}; expected its route or registered parent: ${[...allowedSources].join(', ')}`,
+        )
+      }
+      if (!sourceRendersHeaderPrimitive(header)) {
+        throw new Error(
+          `${key} (${entry.surface}) header owner ${header.sourceFile} does not render imported ${header.primitive}`,
+        )
+      }
+    }
   })
 })

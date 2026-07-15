@@ -1,7 +1,15 @@
 // Small form primitives shared by Agent / Skill detail pages. Keep them
 // dependency-light: no shadcn until M2 brings in the canvas (P-2-02).
 
-import type { AriaAttributes, ChangeEvent, ReactNode, Ref } from 'react'
+import type {
+  AriaAttributes,
+  ChangeEvent,
+  FocusEventHandler,
+  KeyboardEventHandler,
+  ReactEventHandler,
+  ReactNode,
+  Ref,
+} from 'react'
 
 interface FieldProps {
   label: string
@@ -212,9 +220,18 @@ interface TextAreaProps {
   required?: boolean
   minLength?: number
   maxLength?: number
+  readOnly?: boolean
+  className?: string
+  onKeyDown?: KeyboardEventHandler<HTMLTextAreaElement>
+  onSelect?: ReactEventHandler<HTMLTextAreaElement>
+  onFocus?: FocusEventHandler<HTMLTextAreaElement>
+  onBlur?: FocusEventHandler<HTMLTextAreaElement>
   /** Optional ref forwarding for Dialog initial-focus contracts. */
   textareaRef?: Ref<HTMLTextAreaElement>
   'aria-label'?: AriaAttributes['aria-label']
+  'aria-autocomplete'?: AriaAttributes['aria-autocomplete']
+  'aria-controls'?: AriaAttributes['aria-controls']
+  'aria-activedescendant'?: AriaAttributes['aria-activedescendant']
   'aria-invalid'?: AriaAttributes['aria-invalid']
   'aria-describedby'?: AriaAttributes['aria-describedby']
   'aria-labelledby'?: AriaAttributes['aria-labelledby']
@@ -236,18 +253,31 @@ export function TextArea({
   required,
   minLength,
   maxLength,
+  readOnly,
+  className,
+  onKeyDown,
+  onSelect,
+  onFocus,
+  onBlur,
   textareaRef,
   'aria-label': ariaLabel,
+  'aria-autocomplete': ariaAutocomplete,
+  'aria-controls': ariaControls,
+  'aria-activedescendant': ariaActiveDescendant,
   'aria-invalid': ariaInvalid,
   'aria-describedby': ariaDescribedBy,
   'aria-labelledby': ariaLabelledBy,
   'aria-errormessage': ariaErrorMessage,
   'data-testid': testid,
 }: TextAreaProps) {
+  const classes = ['form-input']
+  if (monospace === true) classes.push('form-input--mono')
+  if (className !== undefined && className !== '') classes.push(className)
+
   return (
     <textarea
       ref={textareaRef}
-      className={monospace === true ? 'form-input form-input--mono' : 'form-input'}
+      className={classes.join(' ')}
       id={id}
       name={name}
       autoComplete={autoComplete}
@@ -260,7 +290,15 @@ export function TextArea({
       required={required}
       minLength={minLength}
       maxLength={maxLength}
+      readOnly={readOnly}
+      onKeyDown={onKeyDown}
+      onSelect={onSelect}
+      onFocus={onFocus}
+      onBlur={onBlur}
       aria-label={ariaLabel}
+      aria-autocomplete={ariaAutocomplete}
+      aria-controls={ariaControls}
+      aria-activedescendant={ariaActiveDescendant}
       aria-invalid={ariaInvalid}
       aria-describedby={ariaDescribedBy}
       aria-labelledby={ariaLabelledBy}

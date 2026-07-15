@@ -18,7 +18,10 @@ import type { TaskFeedback } from '@agent-workflow/shared'
 import type { ApiError } from '@/api/client'
 import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
+import { TextArea } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
+import { NoticeBanner } from '@/components/NoticeBanner'
 import { describeApiError } from '@/i18n'
 
 interface ListResponse {
@@ -36,11 +39,29 @@ export interface TaskFeedbackListProps {
 
 const RATE_LIMIT_MS = 3000
 
+export function feedbackAnchorId(feedbackId: string): string {
+  return `feedback-${feedbackId}`
+}
+
+/** Decode the browser fragment without letting malformed percent escapes throw. */
+function currentFragmentId(): string | null {
+  const encoded = window.location.hash.startsWith('#')
+    ? window.location.hash.slice(1)
+    : window.location.hash
+  if (encoded.length === 0) return null
+  try {
+    return decodeURIComponent(encoded)
+  } catch {
+    return null
+  }
+}
+
 export function TaskFeedbackList({ taskId }: TaskFeedbackListProps) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [draft, setDraft] = useState('')
   const lastSubmitAt = useRef<number>(0)
+  const lastAlignedFeedback = useRef<string | null>(null)
   const [rateLimited, setRateLimited] = useState(false)
 
   const list = useQuery<ListResponse>({
@@ -65,6 +86,42 @@ export function TaskFeedbackList({ taskId }: TaskFeedbackListProps) {
     return () => window.clearTimeout(timer)
   }, [rateLimited])
 
+  // A source-event deep link can arrive before this async query has mounted
+  // its target row. Re-resolve the exact fragment after every list result and
+  // on same-page hash navigation; then scroll and move keyboard focus to the
+  // row so the destination is both visible and announced.
+  useEffect(() => {
+    const items = list.data?.items
+    if (items === undefined) return
+
+    const focusCurrentFeedback = () => {
+      const fragmentId = currentFragmentId()
+      if (
+        fragmentId === null ||
+        fragmentId === lastAlignedFeedback.current ||
+        !items.some((item) => feedbackAnchorId(item.id) === fragmentId)
+      ) {
+        return
+      }
+      const target = document.getElementById(fragmentId)
+      if (!(target instanceof HTMLElement)) return
+      target.scrollIntoView?.({ block: 'center' })
+      target.focus({ preventScroll: true })
+      lastAlignedFeedback.current = fragmentId
+    }
+
+    const handleHashChange = () => {
+      // Returning to a fragment after visiting another one is a fresh user
+      // navigation, even when it targets the same feedback row as before.
+      lastAlignedFeedback.current = null
+      focusCurrentFeedback()
+    }
+
+    focusCurrentFeedback()
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [list.data?.items])
+
   const trimmed = draft.trim()
   const submitDisabled = trimmed.length === 0 || create.isPending || rateLimited
 
@@ -87,11 +144,11 @@ export function TaskFeedbackList({ taskId }: TaskFeedbackListProps) {
       </header>
 
       <div className="task-feedback__form">
-        <textarea
+        <TextArea
           className="task-feedback__textarea"
           placeholder={t('taskFeedback.placeholder')}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={setDraft}
           maxLength={4000}
           rows={3}
           data-testid="task-feedback-textarea"
@@ -109,13 +166,18 @@ export function TaskFeedbackList({ taskId }: TaskFeedbackListProps) {
           </button>
         </div>
         {rateLimited && (
-          <div className="info-box info-box--muted" data-testid="task-feedback-rate-limit">
-            {t('taskFeedback.rateLimit')}
+          <div data-testid="task-feedback-rate-limit">
+            <NoticeBanner tone="warning" size="compact">
+              {t('taskFeedback.rateLimit')}
+            </NoticeBanner>
           </div>
         )}
         {create.error !== null && create.error !== undefined && (
-          <div className="error-box" data-testid="task-feedback-error">
-            {t('taskFeedback.submitError')}: {describeApiError(create.error)}
+          <div data-testid="task-feedback-error">
+            <ErrorBanner
+              error={create.error}
+              message={`${t('taskFeedback.submitError')}: ${describeApiError(create.error)}`}
+            />
           </div>
         )}
       </div>
@@ -123,9 +185,10 @@ export function TaskFeedbackList({ taskId }: TaskFeedbackListProps) {
       {list.isLoading ? (
         <LoadingState size="compact" />
       ) : list.error !== null && list.error !== undefined ? (
-        <div className="error-box">
-          {t('taskFeedback.loadError')}: {describeApiError(list.error)}
-        </div>
+        <ErrorBanner
+          error={list.error}
+          message={`${t('taskFeedback.loadError')}: ${describeApiError(list.error)}`}
+        />
       ) : (list.data?.items ?? []).length === 0 ? (
         <EmptyState
           size="compact"
@@ -146,7 +209,12 @@ export function TaskFeedbackList({ taskId }: TaskFeedbackListProps) {
 function FeedbackItem({ row }: { row: TaskFeedback }) {
   const { t } = useTranslation()
   return (
-    <li className="task-feedback__item" data-testid={`task-feedback-row-${row.id}`}>
+    <li
+      id={feedbackAnchorId(row.id)}
+      className="task-feedback__item"
+      tabIndex={-1}
+      data-testid={`task-feedback-row-${row.id}`}
+    >
       <div className="task-feedback__meta muted">
         <code>{row.id}</code>
         <time dateTime={new Date(row.createdAt).toISOString()}>

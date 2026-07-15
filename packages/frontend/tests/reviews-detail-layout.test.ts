@@ -36,7 +36,15 @@ describe('review detail layout — sidebar position + top-right action cluster +
   test('styles.css declares the .review-detail__layout grid with a fixed right column', () => {
     const css = readFileSync(STYLES_CSS, 'utf8')
     expect(css).toMatch(/\.review-detail__layout\s*\{[^}]*display:\s*grid/)
-    expect(css).toMatch(/\.review-detail__layout\s*\{[^}]*grid-template-columns:[^}]*1fr[^}]*\d+px/)
+    expect(css).toMatch(
+      /\.review-detail__layout\s*\{[^}]*grid-template-columns:[^}]*1fr[^}]*var\(--review-sidebar-width,\s*280px\)/,
+    )
+  })
+
+  test('resizable width uses a custom property so the mobile media query can override the grid', () => {
+    const pane = readFileSync(PANE_TSX, 'utf8')
+    expect(pane).toContain("'--review-sidebar-width'")
+    expect(pane).not.toMatch(/style=\{[^}]*gridTemplateColumns/s)
   })
 
   test('styles.css declares the right comment column as a relative positioning context', () => {
@@ -92,15 +100,11 @@ describe('review detail layout — sidebar position + top-right action cluster +
 
 describe('review detail decision dialog — replaces window.confirm / prompt / alert', () => {
   test('reviews.detail.tsx no longer uses native confirm / prompt / alert for the three decisions', () => {
-    // window.alert *is* still allowed in the unknownVersion code path; we
-    // only want to lock out native dialogs from the approve / iterate /
-    // reject buttons. Easiest assertion: the three i18n strings that used
-    // to feed the native dialogs are now consumed by the new DecisionDialog
-    // component rather than `window.confirm(...)` / `window.prompt(...)`.
     const tsx = readFileSync(REVIEWS_DETAIL_TSX, 'utf8')
     expect(tsx).not.toMatch(/window\.confirm\([^)]*reviews\.approveDraft/)
     expect(tsx).not.toMatch(/window\.confirm\([^)]*reviews\.iterate/)
     expect(tsx).not.toMatch(/window\.prompt\([^)]*reviews\.rejectPrompt/)
+    expect(tsx).not.toMatch(/window\.alert/)
   })
 
   test('reviews.detail.tsx mounts the DecisionDialog component', () => {
@@ -109,10 +113,15 @@ describe('review detail decision dialog — replaces window.confirm / prompt / a
     expect(tsx).toMatch(/<DecisionDialog/)
   })
 
-  test('styles.css ships chrome for the in-app decision dialog', () => {
+  test('DecisionDialog uses shared Dialog chrome and legacy bespoke chrome cannot return', () => {
+    const tsx = readFileSync(REVIEWS_DETAIL_TSX, 'utf8')
     const css = readFileSync(STYLES_CSS, 'utf8')
-    expect(css).toMatch(/\.review-decision-dialog__overlay\s*\{/)
-    expect(css).toMatch(/\.review-decision-dialog__panel\s*\{/)
+    const decisionDialog = tsx.slice(tsx.indexOf('function DecisionDialog('))
+    expect(decisionDialog).toMatch(/<Dialog/)
+    expect(decisionDialog).not.toMatch(/panelClassName="review-decision-dialog__panel"/)
+    for (const legacyPart of ['overlay', 'panel', 'header', 'close', 'body', 'actions']) {
+      expect(css).not.toMatch(new RegExp(`\\.review-decision-dialog__${legacyPart}\\s*\\{`))
+    }
   })
 })
 

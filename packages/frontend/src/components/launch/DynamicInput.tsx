@@ -7,7 +7,7 @@
 
 import { useTranslation } from 'react-i18next'
 import type { WorkflowInput } from '@agent-workflow/shared'
-import { TextInput } from '@/components/Form'
+import { TextArea, TextInput } from '@/components/Form'
 import { EnumPicker } from '@/components/launch/EnumPicker'
 import { FilesPicker } from '@/components/launch/FilesPicker'
 import { GitPicker } from '@/components/launch/GitPicker'
@@ -31,13 +31,7 @@ export function DynamicInput({
     const multiline = (def as Record<string, unknown>).multiline === true
     if (multiline) {
       return (
-        <textarea
-          className="form-input"
-          rows={6}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          required={def.required === true}
-        />
+        <TextArea rows={6} value={value} onChange={onChange} required={def.required === true} />
       )
     }
     return <TextInput value={value} onChange={onChange} required={def.required === true} />

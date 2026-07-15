@@ -79,7 +79,7 @@ export function HomepageGreeting() {
       <div className="homepage__greet-text">
         <h1 className="homepage__greet-title">{t(greetingKey)}</h1>
         <p className="homepage__greet-runtime" data-testid="homepage-runtime">
-          <Link to="/settings" hash="runtime" className="homepage__runtime-link">
+          <Link to="/settings" search={{ tab: 'runtime' }} className="homepage__runtime-link">
             {view.kind === 'single' ? (
               <>
                 <Dot severity={view.severity} /> {view.text}
@@ -112,7 +112,12 @@ export function HomepageGreeting() {
           >
             {t('home.startTask')}
           </Link>
-          <Link to="/workflows" className="btn" data-testid="homepage-new-workflow">
+          <Link
+            to="/workflows"
+            search={{ create: true }}
+            className="btn"
+            data-testid="homepage-new-workflow"
+          >
             {t('home.newWorkflow')}
           </Link>
         </div>

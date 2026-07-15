@@ -9,6 +9,7 @@
 import { renderUserPrompt, type AgentOutputKindsMap } from '@agent-workflow/shared'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { TextArea } from '@/components/Form'
 
 interface Props {
   /** Prompt template currently bound to the node. */
@@ -69,11 +70,11 @@ export function PromptPreview({ template, inputPorts, outputs, outputKinds }: Pr
           inputPorts.map((p) => (
             <label key={p} className="prompt-preview__field">
               <span className="prompt-preview__port-name">{p}</span>
-              <textarea
+              <TextArea
                 value={inputs[p] ?? ''}
-                onChange={(e) => setInputs((prev) => ({ ...prev, [p]: e.target.value }))}
+                onChange={(value) => setInputs((prev) => ({ ...prev, [p]: value }))}
                 rows={2}
-                className="form-input form-input--mono"
+                monospace
               />
             </label>
           ))

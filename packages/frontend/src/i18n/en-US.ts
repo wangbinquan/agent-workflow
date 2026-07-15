@@ -970,6 +970,7 @@ export const enUS: Resources = {
     zipReturnList: 'Back to skills',
     zipOpenSkill: 'Open imported skill {{name}}',
     fileDiscardConfirm: 'Discard unsaved changes?',
+    fileTargetUnavailable: 'That file is no longer available. Refresh the list and try again.',
     fileErrPathRequired: 'path required',
     fileErrRelativeOnly: 'relative paths only; no ".."',
     fileErrMainFileProtected: 'SKILL.md is edited in the Content tab, not the file tree',
@@ -1229,6 +1230,27 @@ export const enUS: Resources = {
     importCanceled: 'Import canceled.',
     conflictPrompt:
       'Workflow id collides. Type "overwrite" to replace, or "new" to import as a new workflow.',
+    importDialog: {
+      title: 'Import workflow',
+      dropTitle: 'Choose a workflow YAML file',
+      dropDescription:
+        'Select one .yaml or .yml file. It will be checked before any conflict choice is applied.',
+      chooseFile: 'Choose YAML',
+      replaceFile: 'Replace file',
+      removeFile: 'Remove',
+      import: 'Import',
+      importing: 'Importing…',
+      retry: 'Retry import',
+      another: 'Import another',
+      chooseAnother: 'Choose another file',
+      conflictTitle: 'A workflow with this id already exists',
+      conflictDescription:
+        'Choose how to import {{file}}. Importing as new is the safer default; overwrite replaces the existing workflow.',
+      conflictChoiceLabel: 'Conflict handling',
+      choiceNew: 'Import as new',
+      choiceOverwrite: 'Overwrite existing',
+      resultTitle: 'Import complete',
+    },
     cardNodes_one: '{{count}} node',
     cardNodes_other: '{{count}} nodes',
     noDescription: '(no description)',
@@ -2772,6 +2794,8 @@ export const enUS: Resources = {
     deleteWithInner: 'Delete wrapper and inner nodes',
     confirmDeleteWithInner:
       'Delete this wrapper and all {{count}} inner node(s)? This cannot be undone.',
+    deleteScopeChanged:
+      'The wrapper contents changed while this confirmation was open. Close this confirmation, then start deletion again from the latest canvas.',
   },
   ioNode: {
     labelInput: 'Input',

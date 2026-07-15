@@ -8,9 +8,13 @@
 // still override BASE_URL_KEY via localStorage for now.
 
 import { createRoute, useRouter, useSearch } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError } from '@/api/client'
+import { ErrorBanner } from '@/components/ErrorBanner'
+import { Field, TextInput } from '@/components/Form'
+import { TabBar, type TabDef } from '@/components/TabBar'
+import { TabPanels, type TabPanelDef } from '@/components/split/TabPanels'
 import { describeApiError } from '@/i18n'
 import { setToken } from '@/stores/auth'
 import { Route as RootRoute } from './__root'
@@ -62,6 +66,17 @@ function AuthPage() {
   const [tokenInput, setTokenInput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const usernameRef = useRef<HTMLInputElement>(null)
+  const initialFocusDoneRef = useRef(false)
+
+  // Focus the first password-method field exactly once for this Auth-page
+  // landing. Panels stay mounted below, so keyboard tab activation never
+  // remounts an autoFocus input and steals focus from the active tab.
+  useEffect(() => {
+    if (initialFocusDoneRef.current) return
+    initialFocusDoneRef.current = true
+    usernameRef.current?.focus()
+  }, [])
 
   // Fetch enabled providers once on mount; show the OIDC tab only when the
   // list is non-empty.
@@ -143,7 +158,7 @@ function AuthPage() {
     }
   }
 
-  const tabs: Array<{ key: AuthTab; label: string }> = [
+  const tabs: Array<TabDef<AuthTab>> = [
     { key: 'password', label: t('auth.tabPassword', { defaultValue: 'Password' }) },
   ]
   if (providers.length > 0) {
@@ -151,62 +166,50 @@ function AuthPage() {
   }
   tabs.push({ key: 'token', label: t('auth.tabToken', { defaultValue: 'Daemon token' }) })
 
-  return (
-    <div className="auth-page">
-      <h1>{t('auth.title')}</h1>
-      <p className="auth-page__hint">{t('auth.subtitle', { defaultValue: t('auth.hint') })}</p>
-      <div className="auth-tabs" role="tablist" aria-label={t('auth.title')}>
-        {tabs.map((it) => (
-          <button
-            key={it.key}
-            type="button"
-            role="tab"
-            aria-selected={tab === it.key}
-            className={`auth-tabs__tab ${tab === it.key ? 'auth-tabs__tab--active' : ''}`}
-            onClick={() => switchTab(it.key)}
-          >
-            {it.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'password' && (
-        <form
-          onSubmit={handlePasswordSubmit}
-          className="auth-form"
-          role="tabpanel"
-          data-testid="auth-tabpanel-password"
-        >
-          <label>
-            {t('auth.username', { defaultValue: 'Username' })}
-            <input
+  const panels: Array<TabPanelDef<AuthTab>> = [
+    {
+      key: 'password',
+      testid: 'auth-tabpanel-password',
+      content: (
+        <form onSubmit={handlePasswordSubmit} className="form-grid">
+          <Field label={t('auth.username', { defaultValue: 'Username' })}>
+            <TextInput
+              inputRef={usernameRef}
               type="text"
               autoComplete="username"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={setUsername}
               placeholder={t('auth.usernamePlaceholder', { defaultValue: 'alice' })}
-              autoFocus
             />
-          </label>
-          <label>
-            {t('auth.password', { defaultValue: 'Password' })}
-            <input
+          </Field>
+          <Field label={t('auth.password', { defaultValue: 'Password' })}>
+            <TextInput
               type="password"
               autoComplete="current-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={setPassword}
               placeholder={t('auth.passwordPlaceholder', { defaultValue: '••••••••' })}
             />
-          </label>
-          {error !== null && <div className="auth-form__error">{error}</div>}
-          <button type="submit" disabled={busy || !username || !password}>
+          </Field>
+          {error !== null && <ErrorBanner error={error} />}
+          <button
+            type="submit"
+            className="btn btn--primary"
+            disabled={busy || !username || !password}
+            aria-busy={busy}
+          >
             {busy ? t('auth.verifying') : t('auth.signIn', { defaultValue: t('auth.connect') })}
           </button>
         </form>
-      )}
-
-      {tab === 'oidc' && (
-        <div className="auth-page__providers" data-testid="auth-tabpanel-oidc" role="tabpanel">
+      ),
+    },
+  ]
+  if (providers.length > 0) {
+    panels.push({
+      key: 'oidc',
+      testid: 'auth-tabpanel-oidc',
+      content: (
+        <div className="auth-page__providers">
           <p className="auth-page__provider-hint">
             {t('auth.oidcHint', { defaultValue: 'Sign in with an external identity provider.' })}
           </p>
@@ -223,39 +226,56 @@ function AuthPage() {
               })}
             </button>
           ))}
-          {error !== null && <div className="auth-form__error">{error}</div>}
+          {error !== null && <ErrorBanner error={error} />}
         </div>
-      )}
-
-      {tab === 'token' && (
-        <form
-          onSubmit={handleTokenSubmit}
-          className="auth-form"
-          role="tabpanel"
-          data-testid="auth-tabpanel-token"
+      ),
+    })
+  }
+  panels.push({
+    key: 'token',
+    testid: 'auth-tabpanel-token',
+    content: (
+      <form onSubmit={handleTokenSubmit} className="form-grid">
+        <p className="auth-form__hint">
+          {t('auth.tokenHint', {
+            defaultValue:
+              'Use the 64-char hex token printed when the daemon started. Admin / break-glass only.',
+          })}
+        </p>
+        <Field label={t('auth.token')}>
+          <TextInput
+            type="password"
+            value={tokenInput}
+            onChange={setTokenInput}
+            placeholder={t('auth.tokenPlaceholder')}
+          />
+        </Field>
+        {error !== null && <ErrorBanner error={error} />}
+        <button
+          type="submit"
+          className="btn btn--primary"
+          disabled={busy || !tokenInput}
+          aria-busy={busy}
         >
-          <p className="auth-form__hint">
-            {t('auth.tokenHint', {
-              defaultValue:
-                'Use the 64-char hex token printed when the daemon started. Admin / break-glass only.',
-            })}
-          </p>
-          <label>
-            {t('auth.token')}
-            <input
-              type="password"
-              value={tokenInput}
-              onChange={(e) => setTokenInput(e.target.value)}
-              placeholder={t('auth.tokenPlaceholder')}
-              autoFocus
-            />
-          </label>
-          {error !== null && <div className="auth-form__error">{error}</div>}
-          <button type="submit" disabled={busy || !tokenInput}>
-            {busy ? t('auth.verifying') : t('auth.connect')}
-          </button>
-        </form>
-      )}
+          {busy ? t('auth.verifying') : t('auth.connect')}
+        </button>
+      </form>
+    ),
+  })
+
+  return (
+    <div className="auth-page">
+      <h1>{t('auth.title')}</h1>
+      <p className="auth-page__hint">{t('auth.subtitle', { defaultValue: t('auth.hint') })}</p>
+      <TabBar<AuthTab>
+        tabs={tabs}
+        active={tab}
+        onSelect={switchTab}
+        variant="segment"
+        ariaLabel={t('auth.title')}
+        idPrefix="auth-method"
+      />
+      <TabPanels<AuthTab> active={tab} panels={panels} idPrefix="auth-method" />
     </div>
   )
 }

@@ -22,11 +22,13 @@ import { useTranslation } from 'react-i18next'
 import type { Agent, Config, ConfigPatch } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { Card } from '@/components/Card'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, NumberInput, Switch, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
+import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { RuntimeSelect } from '@/components/RuntimeSelect'
 import { Select } from '@/components/Select'
@@ -529,8 +531,11 @@ function BackupCard() {
     }
   }
   return (
-    <div className="info-box-muted stack-top--md">
-      <strong>{t('settings.backupTitle')}</strong>
+    <Card
+      as="section"
+      className="stack-top--md"
+      header={<strong>{t('settings.backupTitle')}</strong>}
+    >
       <p className="settings-hint">{t('settings.backupHint')}</p>
       <button type="button" className="btn" onClick={runBackup} disabled={busy}>
         {busy ? t('settings.backupRunning') : t('settings.backupCreate')}
@@ -541,10 +546,8 @@ function BackupCard() {
           <code>{result.path}</code> ({(result.sizeBytes / 1024 / 1024).toFixed(2)} MB)
         </p>
       )}
-      {error !== null && (
-        <p className="error-box settings-hint settings-hint--tight stack-top--sm">{error}</p>
-      )}
-    </div>
+      {error !== null && <ErrorBanner error={error} />}
+    </Card>
   )
 }
 
@@ -1017,15 +1020,11 @@ function RenderingTab({ config }: TabProps) {
             : t('settings.renderingTestButton')}
         </button>
         {testState.kind === 'success' && (
-          <div className="muted" role="status" aria-live="polite">
+          <NoticeBanner tone="success" size="compact">
             {testState.msg}
-          </div>
+          </NoticeBanner>
         )}
-        {testState.kind === 'failure' && (
-          <div className="error-box" role="alert">
-            {testState.msg}
-          </div>
-        )}
+        {testState.kind === 'failure' && <ErrorBanner error={testState.msg} />}
       </div>
     </SectionForm>
   )
@@ -1040,6 +1039,15 @@ function AuthenticationTab() {
   const qc = useQueryClient()
   const [editing, setEditing] = useState<OidcProviderRow | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string
+    name: string
+    index: number
+  } | null>(null)
+  const addProviderRef = useRef<HTMLButtonElement | null>(null)
+  const deleteTriggerRef = useRef<HTMLElement | null>(null)
+  const deleteFallbackRef = useRef<HTMLElement | null>(null)
+  const rowEditRefs = useRef(new Map<string, HTMLButtonElement>())
 
   const list = useQuery<OidcProviderRow[]>({
     queryKey: ['oidc-providers'],
@@ -1049,8 +1057,61 @@ function AuthenticationTab() {
   const remove = useMutation({
     mutationFn: ({ id, force }: { id: string; force: boolean }) =>
       api.delete(`/api/oidc/providers/${id}${force ? '?force=true' : ''}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['oidc-providers'] }),
+    onSuccess: async (_result, variables) => {
+      // Remove synchronously so ConfirmDialog sees the trigger as disconnected
+      // and hands focus to the latest adjacent-row/Add fallback. Await the
+      // server refresh before the dialog closes: a neighbour may already have
+      // been deleted by another administrator while this confirmation was
+      // open, even though it still exists in our cache.
+      qc.setQueryData<OidcProviderRow[]>(['oidc-providers'], (rows) =>
+        rows?.filter((row) => row.id !== variables.id),
+      )
+      try {
+        await qc.invalidateQueries({ queryKey: ['oidc-providers'], exact: true })
+      } catch {
+        // The delete itself succeeded. If the refresh failed, prefer the
+        // stable Add action over an adjacent row whose server state is now
+        // unknown; the list query continues to expose its normal retry path.
+        deleteFallbackRef.current = addProviderRef.current
+      }
+    },
   })
+
+  const openDelete = (
+    provider: OidcProviderRow,
+    index: number,
+    trigger: HTMLButtonElement,
+  ): void => {
+    const rows = list.data ?? []
+    deleteTriggerRef.current = trigger
+    refreshDeleteFallback({ id: provider.id, index }, rows)
+    setDeleteTarget({ id: provider.id, name: provider.displayName, index })
+  }
+
+  // Resolve the fallback from the CURRENT rows immediately before a close.
+  // A provider beside the target can disappear while the confirmation is open
+  // (another administrator, a refetch, or a concurrent cache update). Keeping
+  // only the open-time element would then hand Dialog a disconnected node.
+  function refreshDeleteFallback(
+    target: { id: string; index: number },
+    rows: OidcProviderRow[],
+  ): void {
+    const remaining = rows.filter((row) => row.id !== target.id)
+    const adjacent = remaining[Math.min(target.index, remaining.length - 1)]
+    deleteFallbackRef.current =
+      (adjacent === undefined ? undefined : rowEditRefs.current.get(adjacent.id)) ??
+      addProviderRef.current
+  }
+
+  const closeDelete = (): void => {
+    if (deleteTarget !== null) {
+      refreshDeleteFallback(
+        deleteTarget,
+        qc.getQueryData<OidcProviderRow[]>(['oidc-providers']) ?? [],
+      )
+    }
+    setDeleteTarget(null)
+  }
   const retryAction = (
     <button type="button" className="btn btn--sm" onClick={() => void list.refetch()}>
       {t('common.retry')}
@@ -1071,7 +1132,12 @@ function AuthenticationTab() {
             })}
           </p>
         </div>
-        <button className="btn btn--primary" onClick={() => setShowCreate(true)}>
+        <button
+          ref={addProviderRef}
+          className="btn btn--primary"
+          onClick={() => setShowCreate(true)}
+          data-testid="oidc-add-provider"
+        >
           {t('settings.auth.add', { defaultValue: 'Add provider' })}
         </button>
       </header>
@@ -1105,7 +1171,7 @@ function AuthenticationTab() {
               </tr>
             </thead>
             <tbody>
-              {list.data.map((p) => (
+              {list.data.map((p, index) => (
                 <tr key={p.id}>
                   <td>
                     <code>{p.slug}</code>
@@ -1121,23 +1187,21 @@ function AuthenticationTab() {
                     </StatusChip>
                   </td>
                   <td>
-                    <button className="btn btn--ghost btn--xs" onClick={() => setEditing(p)}>
+                    <button
+                      ref={(element) => {
+                        if (element === null) rowEditRefs.current.delete(p.id)
+                        else rowEditRefs.current.set(p.id, element)
+                      }}
+                      className="btn btn--ghost btn--xs"
+                      onClick={() => setEditing(p)}
+                      data-testid={`oidc-edit-${p.id}`}
+                    >
                       {t('settings.auth.edit', { defaultValue: 'Edit' })}
                     </button>
                     <button
                       className="btn btn--ghost btn--xs btn--danger"
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            t('settings.auth.deleteConfirm', {
-                              defaultValue: `Delete provider "${p.displayName}"?`,
-                              name: p.displayName,
-                            }),
-                          )
-                        ) {
-                          remove.mutate({ id: p.id, force: false })
-                        }
-                      }}
+                      onClick={(event) => openDelete(p, index, event.currentTarget)}
+                      data-testid={`oidc-delete-${p.id}`}
                     >
                       {t('settings.auth.delete', { defaultValue: 'Delete' })}
                     </button>
@@ -1170,6 +1234,28 @@ function AuthenticationTab() {
           }}
         />
       )}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={t('common.confirmDelete')}
+        description={t('settings.auth.deleteConfirm', {
+          defaultValue: `Delete provider "${deleteTarget?.name ?? ''}"?`,
+          name: deleteTarget?.name ?? '',
+        })}
+        confirmLabel={t('settings.auth.delete', { defaultValue: 'Delete' })}
+        tone="danger"
+        onConfirm={async () => {
+          if (deleteTarget === null) return
+          const target = deleteTarget
+          await remove.mutateAsync({ id: target.id, force: false })
+          refreshDeleteFallback(
+            target,
+            qc.getQueryData<OidcProviderRow[]>(['oidc-providers']) ?? [],
+          )
+        }}
+        onClose={closeDelete}
+        triggerRef={deleteTriggerRef}
+        restoreFocusFallbackRef={deleteFallbackRef}
+      />
     </div>
   )
 }
@@ -1325,7 +1411,7 @@ function OidcProviderDialog(props: {
     >
       <form
         id="oidc-provider-form"
-        className="oidc-form"
+        className="form-grid oidc-provider-form"
         onSubmit={(e) => {
           e.preventDefault()
           setError(null)
@@ -1343,57 +1429,51 @@ function OidcProviderDialog(props: {
             })}
           </p>
           <div className="oidc-form__row oidc-form__row--cols-2">
-            <label className="oidc-form__field">
-              <span className="oidc-form__label">
-                {t('settings.auth.slug', { defaultValue: 'Slug' })}
-              </span>
-              <input
+            <Field
+              label={t('settings.auth.slug', { defaultValue: 'Slug' })}
+              required
+              hint={t('settings.auth.slugHint', {
+                defaultValue: 'Used in /api/auth/oidc/<slug>/callback',
+              })}
+            >
+              <TextInput
                 value={slug}
-                onChange={(e) => setSlug(e.target.value)}
+                onChange={setSlug}
                 pattern="[a-z0-9][a-z0-9-]{0,63}"
                 required
                 placeholder="github-enterprise"
               />
-              <span className="oidc-form__hint">
-                {t('settings.auth.slugHint', {
-                  defaultValue: 'Used in /api/auth/oidc/<slug>/callback',
-                })}
-              </span>
-            </label>
-            <label className="oidc-form__field">
-              <span className="oidc-form__label">
-                {t('settings.auth.displayName', { defaultValue: 'Display name' })}
-              </span>
-              <input
+            </Field>
+            <Field
+              label={t('settings.auth.displayName', { defaultValue: 'Display name' })}
+              required
+              hint={t('settings.auth.displayNameHint', {
+                defaultValue: 'Shown on the login page button.',
+              })}
+            >
+              <TextInput
                 value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                onChange={setDisplayName}
                 required
                 placeholder="GitHub Enterprise"
               />
-              <span className="oidc-form__hint">
-                {t('settings.auth.displayNameHint', {
-                  defaultValue: 'Shown on the login page button.',
-                })}
-              </span>
-            </label>
+            </Field>
           </div>
-          <label className="oidc-form__field">
-            <span className="oidc-form__label">
-              {t('settings.auth.issuerUrl', { defaultValue: 'Issuer URL' })}
-            </span>
-            <input
+          <Field
+            label={t('settings.auth.issuerUrl', { defaultValue: 'Issuer URL' })}
+            required
+            hint={t('settings.auth.issuerUrlHint', {
+              defaultValue: 'Daemon fetches <issuer>/.well-known/openid-configuration.',
+            })}
+          >
+            <TextInput
               type="url"
               value={issuerUrl}
-              onChange={(e) => setIssuerUrl(e.target.value)}
+              onChange={setIssuerUrl}
               required
               placeholder="https://github.corp.com"
             />
-            <span className="oidc-form__hint">
-              {t('settings.auth.issuerUrlHint', {
-                defaultValue: 'Daemon fetches <issuer>/.well-known/openid-configuration.',
-              })}
-            </span>
-          </label>
+          </Field>
         </fieldset>
 
         <fieldset className="oidc-form__group">
@@ -1407,46 +1487,38 @@ function OidcProviderDialog(props: {
             })}
           </p>
           <div className="oidc-form__row oidc-form__row--cols-2">
-            <label className="oidc-form__field">
-              <span className="oidc-form__label">
-                {t('settings.auth.clientId', { defaultValue: 'Client ID' })}
-              </span>
-              <input value={clientId} onChange={(e) => setClientId(e.target.value)} required />
-            </label>
-            <label className="oidc-form__field">
-              <span className="oidc-form__label">
-                {t('settings.auth.clientSecret', { defaultValue: 'Client secret' })}
-              </span>
-              <input
+            <Field label={t('settings.auth.clientId', { defaultValue: 'Client ID' })} required>
+              <TextInput value={clientId} onChange={setClientId} required />
+            </Field>
+            <Field
+              label={t('settings.auth.clientSecret', { defaultValue: 'Client secret' })}
+              required={strategy.clientSecretRequired}
+            >
+              <TextInput
                 type="password"
                 value={clientSecret}
-                onChange={(e) => setClientSecret(e.target.value)}
+                onChange={setClientSecret}
                 required={strategy.clientSecretRequired}
                 placeholder={strategy.clientSecretPlaceholder}
               />
-            </label>
+            </Field>
           </div>
-          <label className="oidc-form__field">
-            <span className="oidc-form__label">
-              {t('settings.auth.scopes', { defaultValue: 'Scopes' })}
-            </span>
-            <input value={scopes} onChange={(e) => setScopes(e.target.value)} required />
-            <span className="oidc-form__hint">
-              {t('settings.auth.scopesHint', {
-                defaultValue: 'Space-separated. openid is required; profile + email recommended.',
-              })}
-            </span>
-          </label>
+          <Field
+            label={t('settings.auth.scopes', { defaultValue: 'Scopes' })}
+            required
+            hint={t('settings.auth.scopesHint', {
+              defaultValue: 'Space-separated. openid is required; profile + email recommended.',
+            })}
+          >
+            <TextInput value={scopes} onChange={setScopes} required />
+          </Field>
         </fieldset>
 
         <fieldset className="oidc-form__group">
           <legend className="oidc-form__group-title">
             {t('settings.auth.groupBehavior', { defaultValue: 'Behavior' })}
           </legend>
-          <label className="oidc-form__field">
-            <span className="oidc-form__label">
-              {t('settings.auth.provisioning', { defaultValue: 'Provisioning policy' })}
-            </span>
+          <Field label={t('settings.auth.provisioning', { defaultValue: 'Provisioning policy' })}>
             <Select<'auto' | 'allowlist' | 'invite'>
               value={provisioning}
               onChange={setProvisioning}
@@ -1484,43 +1556,32 @@ function OidcProviderDialog(props: {
                 </span>
               )}
             />
-          </label>
+          </Field>
           {provisioning === 'allowlist' && (
-            <label className="oidc-form__field">
-              <span className="oidc-form__label">
-                {t('settings.auth.allowedDomains', { defaultValue: 'Allowed email domains' })}
-              </span>
-              <input
+            <Field
+              label={t('settings.auth.allowedDomains', {
+                defaultValue: 'Allowed email domains',
+              })}
+              hint={t('settings.auth.allowedDomainsHint', {
+                defaultValue:
+                  'Comma-separated, each prefixed with @. email_verified=true is also required.',
+              })}
+            >
+              <TextInput
                 value={allowedDomains}
-                onChange={(e) => setAllowedDomains(e.target.value)}
+                onChange={setAllowedDomains}
                 placeholder="@corp.com, @subsidiary.com"
               />
-              <span className="oidc-form__hint">
-                {t('settings.auth.allowedDomainsHint', {
-                  defaultValue:
-                    'Comma-separated, each prefixed with @. email_verified=true is also required.',
-                })}
-              </span>
-            </label>
+            </Field>
           )}
-          <label className="oidc-form__toggle">
-            <span className="oidc-form__toggle-body">
-              <span className="oidc-form__toggle-title">
-                {t('settings.auth.enabledLabel', { defaultValue: 'Enabled' })}
-              </span>
-              <span className="oidc-form__hint">
-                {t('settings.auth.enabledHint', {
-                  defaultValue: 'Visible on the login page when on; hidden when off.',
-                })}
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-              aria-label={t('settings.auth.enabledLabel', { defaultValue: 'Enabled' })}
-            />
-          </label>
+          <Switch
+            checked={enabled}
+            onChange={setEnabled}
+            label={t('settings.auth.enabledLabel', { defaultValue: 'Enabled' })}
+            hint={t('settings.auth.enabledHint', {
+              defaultValue: 'Visible on the login page when on; hidden when off.',
+            })}
+          />
         </fieldset>
 
         {testResult && (
@@ -1554,7 +1615,7 @@ function OidcProviderDialog(props: {
             )}
           </div>
         )}
-        {error && <div className="oidc-form__error">{error}</div>}
+        {error !== null && <ErrorBanner error={error} />}
       </form>
     </Dialog>
   )
@@ -1665,10 +1726,14 @@ function SectionForm({
         )}
       </div>
       {restartRequired === true && (
-        <div className="info-box stack-top--sm" role="status" aria-live="polite">
-          <strong>{t('settings.restartRequiredTitle')}</strong>
-          <p className="settings-hint settings-hint--tight">{t('settings.restartRequiredHint')}</p>
-        </div>
+        <NoticeBanner
+          tone="warning"
+          size="compact"
+          title={t('settings.restartRequiredTitle')}
+          className="stack-top--sm"
+        >
+          {t('settings.restartRequiredHint')}
+        </NoticeBanner>
       )}
     </div>
   )

@@ -8,7 +8,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate, useSearch, Link } from '@tanstack/react-router'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   DocVersionWithBodyAndComments,
@@ -19,7 +19,9 @@ import type {
 import type { DocVersion } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { TextArea } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
+import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { Segmented } from '@/components/Segmented'
 import { ReviewDecisionInfo } from '@/components/review/ReviewDecisionInfo'
@@ -172,16 +174,39 @@ function ReviewDetailPage() {
     return detail.data?.comments ?? []
   }, [view.mode, historicalDetail.data, detail.data])
 
-  // RFC-013: when the user types in a vid that the versions endpoint
-  // doesn't recognize (after that endpoint has resolved), bounce them back
-  // to the current-version path with a one-shot warning. Using window.alert
-  // keeps the surface tiny — there is no in-app toast system yet, and the
-  // page is interactive enough that a blocking dialog is acceptable here.
-  // The `replace: true` keeps the back button from looping into the bad URL.
+  // RFC-198: snapshot the translated warning BEFORE replacing an unknown
+  // version. The local notice survives the canonical navigation, but a route-id
+  // change/unmount clears it and the canonical URL cannot replay it on refresh
+  // or Back/Forward.
   const requestedInvalid = view.mode === 'invalid' ? view.requested : null
+  const [invalidVersionWarning, setInvalidVersionWarning] = useState<{
+    routeId: string
+    message: string
+  } | null>(null)
+  const handledInvalidVersionRef = useRef<string | null>(null)
+  const warningRouteIdRef = useRef(nodeRunId)
+  const invalidVersionMessage =
+    invalidVersionWarning?.routeId === nodeRunId ? invalidVersionWarning.message : null
   useEffect(() => {
-    if (requestedInvalid === null) return
-    window.alert(t('reviews.unknownVersion', { id: requestedInvalid }))
+    // Skip the initial effect (including StrictMode's replay). Only a genuine
+    // route-id transition expires the previous route's one-shot warning.
+    if (warningRouteIdRef.current === nodeRunId) return
+    warningRouteIdRef.current = nodeRunId
+    handledInvalidVersionRef.current = null
+    setInvalidVersionWarning(null)
+  }, [nodeRunId])
+  useEffect(() => {
+    if (requestedInvalid === null) {
+      handledInvalidVersionRef.current = null
+      return
+    }
+    const invalidKey = `${nodeRunId}:${requestedInvalid}`
+    if (handledInvalidVersionRef.current === invalidKey) return
+    handledInvalidVersionRef.current = invalidKey
+    setInvalidVersionWarning({
+      routeId: nodeRunId,
+      message: t('reviews.unknownVersion', { id: requestedInvalid }),
+    })
     void navigate({
       to: '/reviews/$nodeRunId',
       params: { nodeRunId },
@@ -599,6 +624,25 @@ function ReviewDetailPage() {
         )}
       </PageHeader>
 
+      {invalidVersionMessage !== null && (
+        <div data-testid="review-invalid-version-warning">
+          <NoticeBanner
+            tone="warning"
+            action={
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => setInvalidVersionWarning(null)}
+              >
+                {t('common.close')}
+              </button>
+            }
+          >
+            {invalidVersionMessage}
+          </NoticeBanner>
+        </div>
+      )}
+
       {detail.error !== null && detail.error !== undefined && (
         <ErrorBanner
           error={detail.error}
@@ -714,11 +758,10 @@ function ReviewDetailPage() {
   )
 }
 
-// In-app dialog for the three decision buttons. Replaces window.confirm /
-// window.prompt / window.alert with a styled, accessible modal so the
-// approve / iterate / reject flow stops looking like a native browser
-// prompt. Reject carries a controlled textarea + inline reason-required
-// hint; approve and iterate are pure confirms with kind-specific copy.
+// In-app dialog for the three decision buttons. The styled, accessible modal
+// keeps approve / iterate / reject out of native browser dialogs. Reject
+// carries a controlled textarea + inline reason-required hint; approve and
+// iterate are pure confirms with kind-specific copy.
 type DecisionDialogState =
   | { kind: 'approve'; draftCount: number; commentCount: number }
   | { kind: 'iterate'; willRerun: string; noComments: boolean }
@@ -752,7 +795,6 @@ function DecisionDialog({
       onClose={onCancel}
       title={title}
       size="sm"
-      panelClassName="review-decision-dialog__panel"
       data-testid="review-decision-dialog"
       footer={
         <>
@@ -794,12 +836,12 @@ function DecisionDialog({
           <p>{t('reviews.rejectPrompt', { willRerun: state.willRerun })}</p>
           <label className="review-decision-dialog__label">
             {t('reviews.rejectReasonLabel')}
-            <textarea
-              className="form-input review-decision-dialog__textarea"
+            <TextArea
+              className="review-decision-dialog__textarea"
               autoFocus
               rows={4}
               value={state.reason}
-              onChange={(e) => onChange({ ...state, reason: e.target.value, reasonError: false })}
+              onChange={(reason) => onChange({ ...state, reason, reasonError: false })}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                   e.preventDefault()

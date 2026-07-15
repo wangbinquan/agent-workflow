@@ -394,7 +394,10 @@ function WorkflowEditPage() {
       )}
 
       <div className={editorLayoutClass(selection?.id ?? null)}>
-        <EditorSidebar agents={agents.data ?? []} />
+        <EditorSidebar
+          agents={agents.data ?? []}
+          onAdd={(item) => canvasRef.current?.addPaletteItemAtViewportCenter(item)}
+        />
         <div className="canvas-frame">
           <WorkflowCanvas
             ref={canvasRef}

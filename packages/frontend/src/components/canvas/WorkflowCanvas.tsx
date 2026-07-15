@@ -79,8 +79,9 @@ import { ClarifyNode } from './nodes/ClarifyNode'
 import { CrossClarifyNode } from './nodes/CrossClarifyNode'
 import { applyConnectionForReviewOutput, applyDisconnectForReviewOutput } from './connectionSync'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
+import { ConfirmDialog } from '../ConfirmDialog'
 import { InputNode } from './nodes/InputNode'
-import { deserialize, makeNode, PALETTE_MIME } from './nodePalette'
+import { deserialize, makeNode, PALETTE_MIME, type PaletteItem } from './nodePalette'
 import { OutputNode } from './nodes/OutputNode'
 import { ReviewNode } from './nodes/ReviewNode'
 import { INBOUND_HANDLE_ID, type CanvasNodeData, type CanvasSelection } from './nodes/types'
@@ -97,7 +98,13 @@ import {
   type WrapperHitInput,
 } from './wrapperMembership'
 import { DEFAULT_NODE_SIZE_BY_KIND, fitWrapperToInner } from './wrapperFit'
-import { clearWrapperSize, deleteWrapperWithChildren } from './wrapperOps'
+import {
+  clearWrapperSize,
+  deleteWrapperWithChildren,
+  isWrapperDeleteSnapshotCurrent,
+  snapshotWrapperDelete,
+  type WrapperDeleteSnapshot,
+} from './wrapperOps'
 
 // RFC-146: `satisfies Record<NodeKind, …>` makes a NodeKind without a canvas
 // renderer a compile error — same registry shape as KIND_INSPECTORS
@@ -201,7 +208,21 @@ export interface WorkflowCanvasProps {
  * select change on the next click and the inspector never reopens.
  */
 export interface WorkflowCanvasHandle {
+  addPaletteItemAtViewportCenter: (item: PaletteItem) => void
   clearSelection: () => void
+}
+
+/** Screen-space center used by palette click / keyboard insertion. */
+export function viewportCenter(rect: {
+  left: number
+  top: number
+  width: number
+  height: number
+}): { x: number; y: number } {
+  return {
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2,
+  }
 }
 
 export const WorkflowCanvas = forwardRef<WorkflowCanvasHandle, WorkflowCanvasProps>(
@@ -317,6 +338,9 @@ function CanvasInner({
     y: number
     nodeId: string | null
   } | null>(null)
+  const [wrapperDeleteSnapshot, setWrapperDeleteSnapshot] = useState<WrapperDeleteSnapshot | null>(
+    null,
+  )
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   // Cached signature of the last selection emitted to the parent. Without
   // this guard we'd hand the parent a fresh `{kind, id}` object on every
@@ -1185,6 +1209,42 @@ function CanvasInner({
     [commitChange, definition, onChange, readOnly],
   )
 
+  // One construction path for both desktop HTML5 drop and the accessible
+  // palette activation path. Click / keyboard insertion additionally selects
+  // the fresh node and opens its inspector; drag-and-drop keeps its existing
+  // desktop behavior.
+  const insertPaletteItem = useCallback(
+    (item: PaletteItem, position: { x: number; y: number }, selectAfterInsert: boolean) => {
+      if (onChange === undefined || readOnly === true) return
+      const existingIds = new Set(definition.nodes.map((n) => n.id))
+      const newNode = makeNode(item, position, { agents, existingIds })
+      if (selectAfterInsert) {
+        const nextSelection = { nodes: [newNode.id], edges: [] as string[] }
+        selectionRef.current = nextSelection
+        setSelection(nextSelection)
+        if (onSelect !== undefined) {
+          lastEmittedSelectionSig.current = `node:${newNode.id}`
+          onSelect({ kind: 'node', id: newNode.id })
+        }
+      }
+      commitChange({ ...definition, nodes: [...definition.nodes, newNode] })
+    },
+    [agents, commitChange, definition, onChange, onSelect, readOnly],
+  )
+
+  const addPaletteItemAtViewportCenter = useCallback(
+    (item: PaletteItem) => {
+      const box = wrapperRef.current?.getBoundingClientRect()
+      if (box === undefined) return
+      insertPaletteItem(item, rf.screenToFlowPosition(viewportCenter(box)), true)
+    },
+    [insertPaletteItem, rf],
+  )
+  // Keep the public imperative handle stable for the existing clearSelection
+  // contract while always dispatching to the latest definition / callbacks.
+  const addPaletteItemAtViewportCenterRef = useRef(addPaletteItemAtViewportCenter)
+  addPaletteItemAtViewportCenterRef.current = addPaletteItemAtViewportCenter
+
   function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
     if (readOnly === true) return
     if (
@@ -1204,10 +1264,7 @@ function CanvasInner({
     const item = deserialize(raw)
     if (item === null) return
     e.preventDefault()
-    const pos = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY })
-    const existingIds = new Set(definition.nodes.map((n) => n.id))
-    const newNode = makeNode(item, pos, { agents, existingIds })
-    commitChange({ ...definition, nodes: [...definition.nodes, newNode] })
+    insertPaletteItem(item, rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }), false)
   }
 
   function handleNodeContextMenu(e: React.MouseEvent, node: Node) {
@@ -1296,12 +1353,8 @@ function CanvasInner({
         disabled: !isWrapperNode(definition, menu.nodeId),
         onSelect: () => {
           if (menu.nodeId === null) return
-          const w = definition.nodes.find((n) => n.id === menu.nodeId)
-          if (w === undefined) return
-          const inner = (w as Record<string, unknown>).nodeIds
-          const count = Array.isArray(inner) ? inner.length : 0
-          const ok = window.confirm(t('wrapperNode.confirmDeleteWithInner', { count }))
-          if (ok) deleteWrapperWithInner(menu.nodeId)
+          const snapshot = snapshotWrapperDelete(definition, menu.nodeId)
+          if (snapshot !== null) setWrapperDeleteSnapshot(snapshot)
         },
       },
       { label: t('common.delete'), danger: true, onSelect: deleteSelected },
@@ -1311,7 +1364,6 @@ function CanvasInner({
     decomposeWrapper,
     definition,
     deleteSelected,
-    deleteWrapperWithInner,
     duplicateNode,
     fitWrapperToChildren,
     menu,
@@ -1335,6 +1387,9 @@ function CanvasInner({
   useImperativeHandle(
     handleRef,
     () => ({
+      addPaletteItemAtViewportCenter: (item) => {
+        addPaletteItemAtViewportCenterRef.current(item)
+      },
       clearSelection: () => {
         storeApi.getState().unselectNodesAndEdges()
         setSelection((prev) =>
@@ -1557,6 +1612,25 @@ function CanvasInner({
             <span>{t('editor.menuSelectedCount', { n: selection.nodes.length })}</span>
           )
         }
+      />
+      <ConfirmDialog
+        open={wrapperDeleteSnapshot !== null}
+        title={t('wrapperNode.deleteWithInner')}
+        description={t('wrapperNode.confirmDeleteWithInner', {
+          count: wrapperDeleteSnapshot?.childIds.length ?? 0,
+        })}
+        confirmLabel={t('common.delete')}
+        tone="danger"
+        restoreFocusFallbackRef={wrapperRef}
+        onClose={() => setWrapperDeleteSnapshot(null)}
+        onConfirm={() => {
+          const snapshot = wrapperDeleteSnapshot
+          if (snapshot === null) return
+          if (!isWrapperDeleteSnapshotCurrent(definition, snapshot)) {
+            throw new Error(t('wrapperNode.deleteScopeChanged'))
+          }
+          deleteWrapperWithInner(snapshot.wrapperId)
+        }}
       />
       {readOnly !== true ? (
         <div className="workflow-canvas__hint-bottom" aria-hidden="true">

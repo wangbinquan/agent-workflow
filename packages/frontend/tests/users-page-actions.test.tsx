@@ -10,7 +10,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { UsersPage } from '../src/routes/users'
@@ -147,6 +147,57 @@ describe('/users action column', () => {
     fireEvent.click(primary as HTMLButtonElement)
     expect(await screen.findByRole('dialog')).toBeTruthy()
     expect(document.querySelector('#users-create-form')).not.toBeNull()
+  })
+
+  test('create dialog uses labelled Form controls, focuses username, and preserves the payload', async () => {
+    const calls = installFetch((call) => {
+      if (call.method === 'POST' && /\/api\/users$/.test(call.url)) {
+        return jsonResponse({
+          id: 'u-new',
+          username: 'new-user',
+          email: null,
+          displayName: 'New User',
+          role: 'user',
+          status: 'active',
+          lastLoginAt: null,
+        })
+      }
+      return route(call)
+    })
+    renderPage()
+
+    await screen.findByText('alice')
+    fireEvent.click(screen.getByRole('button', { name: 'New user' }))
+
+    const dialog = await screen.findByRole('dialog')
+    const username = within(dialog).getByRole('textbox', {
+      name: /Username/,
+    }) as HTMLInputElement
+    const displayName = within(dialog).getByRole('textbox', { name: /Display name/ })
+    const password = within(dialog).getByLabelText('Password (leave blank for invite-only)')
+    const role = within(dialog).getByRole('combobox', { name: 'Role' })
+    await waitFor(() => expect(document.activeElement).toBe(username))
+    expect(username.classList.contains('form-input')).toBe(true)
+    expect(displayName.classList.contains('form-input')).toBe(true)
+    expect(password.classList.contains('form-input')).toBe(true)
+    expect(role.closest('.form-field')).not.toBeNull()
+
+    fireEvent.change(username, { target: { value: 'new-user' } })
+    fireEvent.change(displayName, { target: { value: 'New User' } })
+    fireEvent.change(password, { target: { value: 'password-123' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+
+    await waitFor(() => {
+      expect(calls.some((call) => call.method === 'POST' && /\/api\/users$/.test(call.url))).toBe(
+        true,
+      )
+    })
+    expect(calls.find((call) => call.method === 'POST')?.body).toEqual({
+      username: 'new-user',
+      displayName: 'New User',
+      role: 'user',
+      password: 'password-123',
+    })
   })
 
   test('keeps PageHeader visible while actor permissions are loading', () => {

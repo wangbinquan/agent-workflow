@@ -744,31 +744,29 @@ export function ClarifyDetailPage() {
           const pendingPeers = crossPeers.filter((p) => pending.includes(p.intermediaryNodeId))
           if (pending.length === 0) return null
           return (
-            <section
-              className="error-box"
-              role="status"
-              data-testid="cross-clarify-multi-source-banner"
-            >
-              <div>{t('crossClarify.multiSourceBanner', { remaining: pending.length })}</div>
-              {pendingPeers.length > 0 && (
-                <ul>
-                  {pendingPeers.map((p) => (
-                    <li key={p.id}>
-                      <Link
-                        to="/clarify/$nodeRunId"
-                        params={{ nodeRunId: p.intermediaryNodeRunId }}
-                        className="link"
-                        data-testid={`cross-clarify-multi-source-link-${p.intermediaryNodeId}`}
-                      >
-                        {/* 用户 2026-07-02: 显示节点名（testid 保持原 id 以稳定测试锚点）。 */}
-                        {t('crossClarify.multiSourcePendingLinkLabel')}:{' '}
-                        {nodeName(p.intermediaryNodeId)}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+            <div data-testid="cross-clarify-multi-source-banner">
+              <NoticeBanner tone="info" size="compact">
+                <div>{t('crossClarify.multiSourceBanner', { remaining: pending.length })}</div>
+                {pendingPeers.length > 0 && (
+                  <ul>
+                    {pendingPeers.map((p) => (
+                      <li key={p.id}>
+                        <Link
+                          to="/clarify/$nodeRunId"
+                          params={{ nodeRunId: p.intermediaryNodeRunId }}
+                          className="link"
+                          data-testid={`cross-clarify-multi-source-link-${p.intermediaryNodeId}`}
+                        >
+                          {/* 用户 2026-07-02: 显示节点名（testid 保持原 id 以稳定测试锚点）。 */}
+                          {t('crossClarify.multiSourcePendingLinkLabel')}:{' '}
+                          {nodeName(p.intermediaryNodeId)}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </NoticeBanner>
+            </div>
           )
         })()}
 
@@ -908,7 +906,7 @@ export function ClarifyDetailPage() {
           </button>
         </div>
         {submitMut.error !== null && submitMut.error !== undefined && (
-          <div className="error-box">{(submitMut.error as Error).message}</div>
+          <ErrorBanner error={submitMut.error} />
         )}
       </footer>
 

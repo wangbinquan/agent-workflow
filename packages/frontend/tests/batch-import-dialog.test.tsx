@@ -7,8 +7,8 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
-import type { BatchImportSnapshot } from '@agent-workflow/shared'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { BatchImportRow, BatchImportSnapshot } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import type * as ApiClientModule from '../src/api/client'
 
@@ -79,6 +79,33 @@ function mkSnap(overrides: Partial<BatchImportSnapshot> = {}): BatchImportSnapsh
     ],
     ...overrides,
   }
+}
+
+function failedRow(rowId: string, inputUrl: string): BatchImportRow {
+  return {
+    ...mkSnap().rows[0]!,
+    rowId,
+    inputUrl,
+    inputUrlRedacted: inputUrl,
+    status: 'failed',
+    errorCode: 'clone_failed',
+    message: 'clone failed',
+    finishedAt: '2026-05-17T00:00:01.000Z',
+  }
+}
+
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
 }
 
 function renderDialog(
@@ -249,6 +276,103 @@ describe('BatchImportDialog (RFC-033)', () => {
     await new Promise((r) => setTimeout(r, 0))
     // "again" button only shows when state === completed
     expect(screen.getByText(/再来一批|Import more/)).toBeTruthy()
+  })
+
+  test('failed-row editor is in-dialog, exclusive, cancellable, and restores row focus', async () => {
+    const snap = mkSnap({
+      rows: [failedRow('r1', 'https://h/one.git'), failedRow('r2', 'https://h/two.git')],
+    })
+    ;(api.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce(snap)
+    renderDialog({ activeBatchId: 'b1' })
+
+    const editOne = await screen.findByTestId('batch-import-edit-r1')
+    fireEvent.click(editOne)
+    const input = await screen.findByTestId('batch-import-override-input')
+    await waitFor(() => expect(document.activeElement).toBe(input))
+    expect((screen.getByTestId('batch-import-edit-r2') as HTMLButtonElement).disabled).toBe(true)
+
+    fireEvent.change(input, { target: { value: 'https://h/replacement.git' } })
+    fireEvent.click(screen.getByTestId('batch-import-override-cancel'))
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('batch-import-override-r1')).toBeNull()
+      expect(document.activeElement).toBe(screen.getByTestId('batch-import-edit-r1'))
+    })
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
+  test('failed-row editor sends {} for whitespace and a trimmed {url}, then returns focus', async () => {
+    const snap = mkSnap({ rows: [failedRow('r1', 'https://h/one.git')] })
+    ;(api.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce(snap)
+    ;(api.post as ReturnType<typeof vi.fn>).mockResolvedValue(snap)
+    renderDialog({ activeBatchId: 'b1' })
+
+    fireEvent.click(await screen.findByTestId('batch-import-edit-r1'))
+    fireEvent.change(await screen.findByTestId('batch-import-override-input'), {
+      target: { value: '   ' },
+    })
+    fireEvent.click(screen.getByTestId('batch-import-override-submit'))
+    await waitFor(() => expect(screen.queryByTestId('batch-import-override-r1')).toBeNull())
+    expect(api.post).toHaveBeenNthCalledWith(1, '/api/cached-repos/imports/b1/rows/r1/retry', {})
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByTestId('batch-import-retry-r1')),
+    )
+
+    fireEvent.click(screen.getByTestId('batch-import-edit-r1'))
+    fireEvent.change(await screen.findByTestId('batch-import-override-input'), {
+      target: { value: '  https://h/replacement.git  ' },
+    })
+    fireEvent.click(screen.getByTestId('batch-import-override-submit'))
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2))
+    expect(api.post).toHaveBeenNthCalledWith(2, '/api/cached-repos/imports/b1/rows/r1/retry', {
+      url: 'https://h/replacement.git',
+    })
+  })
+
+  test('failed-row retry is single-fire; rejection keeps draft/editor and pending blocks dismiss', async () => {
+    const snap = mkSnap({ rows: [failedRow('r1', 'https://h/one.git')] })
+    const first = deferred<BatchImportSnapshot>()
+    const onClose = vi.fn()
+    ;(api.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce(snap)
+    ;(api.post as ReturnType<typeof vi.fn>).mockReturnValueOnce(first.promise)
+    renderDialog({ activeBatchId: 'b1', onClose })
+
+    fireEvent.click(await screen.findByTestId('batch-import-edit-r1'))
+    const input = await screen.findByTestId('batch-import-override-input')
+    fireEvent.change(input, { target: { value: ' https://h/keep-me.git ' } })
+    const submit = screen.getByTestId('batch-import-override-submit') as HTMLButtonElement
+    act(() => {
+      // Same-task clicks land before React can paint the disabled state; the
+      // component's synchronous in-flight ref must still dispatch only once.
+      submit.click()
+      submit.click()
+    })
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(submit.disabled).toBe(true))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+
+    await act(async () => {
+      first.reject(new Error('retry unavailable'))
+      try {
+        await first.promise
+      } catch {
+        // The component owns and renders the rejected operation.
+      }
+    })
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('retry unavailable')
+    expect(screen.getByTestId('batch-import-override-input')).toHaveProperty(
+      'value',
+      'https://h/keep-me.git',
+    )
+    expect(screen.getByTestId('batch-import-override-r1')).toBeTruthy()
+    ;(api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce(snap)
+    fireEvent.click(screen.getByTestId('batch-import-override-submit'))
+    await waitFor(() => expect(screen.queryByTestId('batch-import-override-r1')).toBeNull())
+    expect(api.post).toHaveBeenCalledTimes(2)
   })
 
   test('404 on snapshot reset clears localStorage batchId', async () => {

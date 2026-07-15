@@ -40,6 +40,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import type { ClarifyAnswer, ClarifyQuestion } from '@agent-workflow/shared'
 import { CLARIFY_MAX_CUSTOM_TEXT_LEN } from '@agent-workflow/shared'
+import { TextArea } from '@/components/Form'
 
 export interface QuestionFormProps {
   question: ClarifyQuestion
@@ -420,15 +421,15 @@ export const QuestionForm = forwardRef<QuestionFormHandle, QuestionFormProps>(fu
           ((isSingle ? singleCustomRowActive : multiCustomEnabled) ? ' is-active' : '')
         }
       >
-        <textarea
-          ref={customTextareaRef}
+        <TextArea
+          textareaRef={customTextareaRef}
           className="clarify-custom-input"
           value={value.customText}
           disabled={disabled === true || (isSingle ? !singleCustomRowActive : !multiCustomEnabled)}
           maxLength={CLARIFY_MAX_CUSTOM_TEXT_LEN}
           placeholder={t('clarify.question.multi.customPlaceholder')}
           rows={3}
-          onChange={(e) => onCustomTextChange(e.target.value)}
+          onChange={onCustomTextChange}
           data-testid="clarify-custom-textarea"
         />
         <p className="muted clarify-question__custom-hint">
