@@ -28,7 +28,10 @@ const css = readFileSync(path.resolve(here, '../src/styles.css'), 'utf8').replac
 )
 
 function rule(selector: string): string {
-  const re = new RegExp(selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{([^}]*)\\}')
+  const re = new RegExp(
+    '^' + selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{([^}]*)\\}',
+    'm',
+  )
   const m = css.match(re)
   if (m === null || m[1] === undefined) throw new Error(`rule not found: ${selector}`)
   return m[1]

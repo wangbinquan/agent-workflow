@@ -69,8 +69,9 @@ describe('.btn boundary uses the button-grade border token', () => {
   })
 
   test('.btn base rule borders with var(--border-strong)', () => {
-    const block = css.slice(css.indexOf('.btn {'))
-    const rule = block.slice(0, block.indexOf('}'))
+    const match = css.match(/^\.btn\s*\{([^}]*)\}/m)
+    expect(match, 'standalone .btn rule not found').not.toBeNull()
+    const rule = match?.[1] ?? ''
     expect(rule).toContain('border: 1px solid var(--border-strong)')
   })
 })

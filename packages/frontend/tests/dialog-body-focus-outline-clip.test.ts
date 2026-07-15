@@ -28,11 +28,11 @@ import path from 'node:path'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const css = readFileSync(path.resolve(here, '../src/styles.css'), 'utf8')
 
-// `.dialog__body {` first appears as the shared rule (before the
-// `.fuse-dialog .dialog__body {` override), so indexOf lands on the shared
-// block we care about.
+// Match the standalone shared rule at the start of a line. Scoped rules such
+// as `.inbox-dialog .dialog__body {` may appear earlier in the stylesheet.
 function ruleBody(selector: string): string {
-  const idx = css.indexOf(selector)
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const idx = css.search(new RegExp(`^${escaped}\\s*$`, 'm'))
   expect(idx, `selector ${selector} not found`).toBeGreaterThanOrEqual(0)
   const open = css.indexOf('{', idx)
   const close = css.indexOf('}', open)
