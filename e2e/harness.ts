@@ -11,10 +11,12 @@
 // Note: this file runs in Playwright's Node runtime (not Bun), so it uses
 // node:child_process rather than Bun.spawn.
 
-import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
+import { type ChildProcessByStdio, spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { type Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -92,7 +94,174 @@ function isExecutableFile(path: string): boolean {
   }
 }
 
-export async function startDaemon(opts: SpawnOptions = {}): Promise<DaemonHandle> {
+const DAEMON_START_ATTEMPTS = 3
+const STARTUP_KILL_TIMEOUT_MS = 1_000
+const CHILD_EXIT_GRACE_MS = 1_000
+const READY_TIMEOUT_MS = 30_000
+const OUTPUT_TAIL_BYTES = 32 * 1024
+
+type DaemonChild = ChildProcessByStdio<null, Readable, Readable>
+
+function appendOutputTail(current: string, chunk: string): string {
+  const next = current + chunk
+  return next.length <= OUTPUT_TAIL_BYTES ? next : next.slice(-OUTPUT_TAIL_BYTES)
+}
+
+function isPortCollisionError(error: unknown): boolean {
+  return error instanceof Error && /EADDRINUSE|address already in use/i.test(error.message)
+}
+
+async function signalChildAndWait(
+  child: DaemonChild,
+  signal: NodeJS.Signals,
+  fallbackTimeoutMs: number,
+): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return
+
+  await new Promise<void>((resolveExit) => {
+    const timers: { fallback?: NodeJS.Timeout; hardStop?: NodeJS.Timeout } = {}
+    let settled = false
+
+    const finish = (): void => {
+      if (settled) return
+      settled = true
+      if (timers.fallback !== undefined) clearTimeout(timers.fallback)
+      if (timers.hardStop !== undefined) clearTimeout(timers.hardStop)
+      child.off('exit', finish)
+      resolveExit()
+    }
+
+    child.once('exit', finish)
+    if (child.exitCode !== null || child.signalCode !== null) {
+      finish()
+      return
+    }
+
+    try {
+      child.kill(signal)
+    } catch {
+      finish()
+      return
+    }
+
+    if (settled) return
+    timers.fallback = setTimeout(() => {
+      try {
+        child.kill('SIGKILL')
+      } catch {
+        finish()
+        return
+      }
+      // SIGKILL is asynchronous on Node's ChildProcess API. Wait briefly for
+      // the exit event before allowing the caller to remove the child's home.
+      timers.hardStop = setTimeout(finish, CHILD_EXIT_GRACE_MS)
+    }, fallbackTimeoutMs)
+  })
+}
+
+function removeOwnedHome(home: string, keepHome: boolean): void {
+  if (keepHome) return
+  try {
+    rmSync(home, { recursive: true, force: true })
+  } catch {
+    // best-effort; startup/teardown must still report the original failure
+  }
+}
+
+async function waitForDaemonReady(child: DaemonChild): Promise<{ baseUrl: string; token: string }> {
+  child.stderr.setEncoding('utf-8')
+  child.stdout.setEncoding('utf-8')
+
+  let stdoutTail = ''
+  let stderrTail = ''
+  const onStderr = (chunk: string): void => {
+    stderrTail = appendOutputTail(stderrTail, chunk)
+    if (process.env.E2E_VERBOSE) process.stderr.write(`[daemon stderr] ${chunk}`)
+  }
+  child.stderr.on('data', onStderr)
+  child.stderr.on('error', () => {
+    /* ignore */
+  })
+
+  return new Promise<{ baseUrl: string; token: string }>((resolveReady, rejectReady) => {
+    const timeout = setTimeout(() => {
+      cleanup()
+      rejectReady(
+        new Error(
+          `e2e/harness: timed out after ${READY_TIMEOUT_MS / 1_000}s waiting for daemon ready line\n` +
+            `  stdout so far:\n${stdoutTail}\n  stderr so far:\n${stderrTail}`,
+        ),
+      )
+    }, READY_TIMEOUT_MS)
+
+    const onData = (chunk: string): void => {
+      if (process.env.E2E_VERBOSE) process.stdout.write(`[daemon stdout] ${chunk}`)
+      stdoutTail = appendOutputTail(stdoutTail, chunk)
+      const match = stdoutTail.match(/(https?:\/\/[^\s?]+)\?token=([A-Za-z0-9]+)/)
+      if (match === null) return
+      const baseUrl = match[1]
+      const token = match[2]
+      if (baseUrl === undefined || token === undefined) return
+      cleanup()
+      resolveReady({ baseUrl: baseUrl.replace(/\/$/, ''), token })
+    }
+    const onClose = (code: number | null, signal: NodeJS.Signals | null): void => {
+      cleanup()
+      rejectReady(
+        new Error(
+          `e2e/harness: daemon closed with code ${code ?? 'null'} signal ${signal ?? 'null'} before printing ready line\n` +
+            `  stdout: ${stdoutTail}\n  stderr: ${stderrTail}`,
+        ),
+      )
+    }
+    const onError = (error: Error): void => {
+      cleanup()
+      rejectReady(
+        new Error(`e2e/harness: failed to spawn daemon: ${error.message}`, { cause: error }),
+      )
+    }
+    const cleanup = (): void => {
+      clearTimeout(timeout)
+      child.stdout.off('data', onData)
+      child.off('close', onClose)
+      child.off('error', onError)
+    }
+
+    child.stdout.on('data', onData)
+    child.once('close', onClose)
+    child.once('error', onError)
+  })
+}
+
+/**
+ * Resolve an ephemeral loopback port in the Node parent before spawning the
+ * compiled Bun daemon. Bun 1.3.13 on macOS rejects `Bun.serve({ port: 0 })`
+ * with EADDRINUSE, so passing zero through the config/CLI makes every browser
+ * gate fail before a page opens. The socket is held until the port is known and
+ * then closed immediately before spawn; each isolated daemon still receives a
+ * fresh OS-selected port.
+ */
+async function allocateLoopbackPort(): Promise<number> {
+  const probe = createServer()
+  await new Promise<void>((resolveListen, rejectListen) => {
+    probe.once('error', rejectListen)
+    probe.listen({ host: '127.0.0.1', port: 0, exclusive: true }, resolveListen)
+  })
+  const address = probe.address()
+  const port = typeof address === 'object' && address !== null ? address.port : null
+  await new Promise<void>((resolveClose, rejectClose) => {
+    probe.close((error) => (error === undefined ? resolveClose() : rejectClose(error)))
+  })
+  if (port === null) throw new Error('e2e/harness: failed to allocate a loopback port')
+  return port
+}
+
+type PortAllocator = () => Promise<number>
+
+async function startDaemonWithPortAllocator(
+  opts: SpawnOptions,
+  portAllocator: PortAllocator,
+): Promise<DaemonHandle> {
   const binary = opts.binary ?? defaultBinaryPath()
   if (!isExecutableFile(binary)) {
     throw new Error(
@@ -101,201 +270,123 @@ export async function startDaemon(opts: SpawnOptions = {}): Promise<DaemonHandle
     )
   }
 
-  // RFC-054 W1-3 — accept an existing home so the crash-recovery spec can
-  // SIGKILL daemon A and spawn daemon B against the same SQLite + worktrees.
-  const home = opts.home ?? mkdtempSync(join(tmpdir(), 'aw-e2e-'))
-  const keepHome = opts.home !== undefined
-  mkdirSync(home, { recursive: true })
-
   const stubOpencode = opts.stubOpencode ?? resolve(here, 'fixtures', 'stub-opencode.sh')
   if (!isExecutableFile(stubOpencode)) {
     throw new Error(`e2e/harness: stub-opencode not executable: ${stubOpencode}`)
   }
 
-  // Pre-seed config.json so the daemon picks the stub binary on its
-  // version-probe path — no PATH gymnastics required.
-  const configPath = join(home, 'config.json')
-  writeFileSync(
-    configPath,
-    JSON.stringify(
-      {
-        $schema_version: 1,
-        opencodePath: stubOpencode,
-        maxConcurrentNodes: 4,
-        multiProcessSubprocessConcurrency: 4,
-        defaultPerTaskMaxDurationMs: 60 * 60 * 1000,
-        defaultPerTaskMaxTotalTokens: 0,
-        defaultPerNodeTimeoutMs: 30 * 60 * 1000,
-        worktreeAutoGc: { enabled: false },
-        eventsArchiveThresholds: { perNodeRunRows: 50_000, globalRows: 1_000_000 },
-        largeOutputThresholdBytes: 1_048_576,
-        bindHost: '127.0.0.1',
-        bindPort: 0,
-        language: 'en-US',
-        theme: 'light',
-        logLevel: 'info',
-      },
-      null,
-      2,
-    ),
-    'utf-8',
-  )
+  // RFC-054 W1-3 — accept an existing home so the crash-recovery spec can
+  // SIGKILL daemon A and spawn daemon B against the same SQLite + worktrees.
+  const home = opts.home ?? mkdtempSync(join(tmpdir(), 'aw-e2e-'))
+  const keepHome = opts.home !== undefined
+  let child: DaemonChild | undefined
 
-  const child: ChildProcessWithoutNullStreams = spawn(
-    binary,
-    ['start', '--host', '127.0.0.1', '--port', '0'],
-    {
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        AGENT_WORKFLOW_HOME: home,
-        LANG: 'en_US.UTF-8',
-        ...(opts.extraEnv ?? {}),
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  )
+  try {
+    mkdirSync(home, { recursive: true })
+    const configPath = join(home, 'config.json')
 
-  // Drain stderr indefinitely so the pipe never fills.
-  child.stderr.setEncoding('utf-8')
-  child.stderr.on('data', (chunk: string) => {
-    if (process.env.E2E_VERBOSE) process.stderr.write(`[daemon stderr] ${chunk}`)
-  })
-  child.stderr.on('error', () => {
-    /* ignore */
-  })
+    for (let attempt = 1; attempt <= DAEMON_START_ATTEMPTS; attempt += 1) {
+      const bindPort = await portAllocator()
 
-  child.stdout.setEncoding('utf-8')
-
-  // Wait for the ready line on stdout.
-  //
-  // Format:  "agent-workflow ready — open this URL in your browser:"
-  //          "  http://<host>:<port>/?token=<token>"
-  const ready = await new Promise<{ baseUrl: string; token: string }>((resolveReady, reject) => {
-    let buffer = ''
-    const timeout = setTimeout(() => {
-      cleanup()
-      reject(
-        new Error(
-          `e2e/harness: timed out after 30s waiting for daemon ready line\n` +
-            `  stdout so far:\n${buffer}`,
+      // Pre-seed config.json so the daemon picks the stub binary on its
+      // version-probe path — no PATH gymnastics required. Re-write it on each
+      // retry because a port may be claimed after the probe socket is closed.
+      writeFileSync(
+        configPath,
+        JSON.stringify(
+          {
+            $schema_version: 1,
+            opencodePath: stubOpencode,
+            maxConcurrentNodes: 4,
+            multiProcessSubprocessConcurrency: 4,
+            defaultPerTaskMaxDurationMs: 60 * 60 * 1000,
+            defaultPerTaskMaxTotalTokens: 0,
+            defaultPerNodeTimeoutMs: 30 * 60 * 1000,
+            worktreeAutoGc: { enabled: false },
+            eventsArchiveThresholds: { perNodeRunRows: 50_000, globalRows: 1_000_000 },
+            largeOutputThresholdBytes: 1_048_576,
+            bindHost: '127.0.0.1',
+            bindPort,
+            language: 'en-US',
+            theme: 'light',
+            logLevel: 'info',
+          },
+          null,
+          2,
         ),
+        'utf-8',
       )
-    }, 30_000)
 
-    const onData = (chunk: string): void => {
-      if (process.env.E2E_VERBOSE) process.stdout.write(`[daemon stdout] ${chunk}`)
-      buffer += chunk
-      const m = buffer.match(/(https?:\/\/[^\s?]+)\?token=([A-Za-z0-9]+)/)
-      if (m !== null) {
-        cleanup()
-        const baseUrl = m[1].replace(/\/$/, '')
-        resolveReady({ baseUrl, token: m[2] })
-      }
-    }
-    const onExit = (code: number | null): void => {
-      cleanup()
-      reject(
-        new Error(
-          `e2e/harness: daemon exited with code ${code ?? 'null'} before printing ready line\n` +
-            `  stdout: ${buffer}`,
-        ),
+      const attemptChild: DaemonChild = spawn(
+        binary,
+        ['start', '--host', '127.0.0.1', '--port', String(bindPort)],
+        {
+          cwd: repoRoot,
+          env: {
+            ...process.env,
+            AGENT_WORKFLOW_HOME: home,
+            LANG: 'en_US.UTF-8',
+            ...(opts.extraEnv ?? {}),
+          },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
       )
-    }
-    const cleanup = (): void => {
-      clearTimeout(timeout)
-      child.stdout.off('data', onData)
-      child.off('exit', onExit)
-    }
-    child.stdout.on('data', onData)
-    child.once('exit', onExit)
-  })
+      child = attemptChild
 
-  // Keep draining stdout so the child never blocks on a full pipe.
-  child.stdout.on('data', (chunk: string) => {
-    if (process.env.E2E_VERBOSE) process.stdout.write(`[daemon stdout] ${chunk}`)
-  })
-
-  const stop = async (): Promise<void> => {
-    if (!child.killed && child.exitCode === null) {
       try {
-        child.kill('SIGTERM')
-      } catch {
-        // already dead
-      }
-    }
-    await new Promise<void>((res) => {
-      const t = setTimeout(() => {
-        try {
-          child.kill('SIGKILL')
-        } catch {
-          // ignore
-        }
-        res()
-      }, 5_000)
-      if (child.exitCode !== null) {
-        clearTimeout(t)
-        res()
-        return
-      }
-      child.once('exit', () => {
-        clearTimeout(t)
-        res()
-      })
-    })
-    if (!keepHome) {
-      try {
-        rmSync(home, { recursive: true, force: true })
-      } catch {
-        // best-effort
-      }
-    }
-  }
+        const ready = await waitForDaemonReady(attemptChild)
 
-  // RFC-054 W1-3 — direct signal helper for crash-recovery spec. Sends
-  // `signal` (default SIGKILL) and waits for `child.exited` to land. After
-  // `fallbackTimeoutMs` of no exit, force-SIGKILLs the child so the test
-  // doesn't hang. Default 5s suits the SIGKILL case; pass ≥ 35s when
-  // sending SIGTERM so the daemon's 30s graceful-shutdown budget can run
-  // to completion without being short-circuited.
-  const killChild = async (
-    signal: NodeJS.Signals = 'SIGKILL',
-    fallbackTimeoutMs: number = 5_000,
-  ): Promise<void> => {
-    if (child.exitCode !== null || child.signalCode !== null) return
-    try {
-      child.kill(signal)
-    } catch {
-      // already dead
-    }
-    await new Promise<void>((res) => {
-      const t = setTimeout(() => {
-        try {
-          child.kill('SIGKILL')
-        } catch {
-          /* ignore */
-        }
-        res()
-      }, fallbackTimeoutMs)
-      if (child.exitCode !== null || child.signalCode !== null) {
-        clearTimeout(t)
-        res()
-        return
-      }
-      child.once('exit', () => {
-        clearTimeout(t)
-        res()
-      })
-    })
-  }
+        // Keep draining stdout so the child never blocks on a full pipe.
+        attemptChild.stdout.on('data', (chunk: string) => {
+          if (process.env.E2E_VERBOSE) process.stdout.write(`[daemon stdout] ${chunk}`)
+        })
 
-  return {
-    baseUrl: ready.baseUrl,
-    token: ready.token,
-    home,
-    stubOpencode,
-    stop,
-    killChild,
-    keepHome,
+        const startedChild = attemptChild
+        const stop = async (): Promise<void> => {
+          await signalChildAndWait(startedChild, 'SIGTERM', 5_000)
+          removeOwnedHome(home, keepHome)
+        }
+
+        // RFC-054 W1-3 — direct signal helper for crash-recovery spec. Sends
+        // `signal` (default SIGKILL) and waits for the child to exit. Pass
+        // ≥ 35s with SIGTERM when the daemon's 30s graceful budget must run.
+        const killChild = async (
+          signal: NodeJS.Signals = 'SIGKILL',
+          fallbackTimeoutMs: number = 5_000,
+        ): Promise<void> => signalChildAndWait(startedChild, signal, fallbackTimeoutMs)
+
+        return {
+          baseUrl: ready.baseUrl,
+          token: ready.token,
+          home,
+          stubOpencode,
+          stop,
+          killChild,
+          keepHome,
+        }
+      } catch (error) {
+        await signalChildAndWait(attemptChild, 'SIGKILL', STARTUP_KILL_TIMEOUT_MS)
+        child = undefined
+        if (attempt < DAEMON_START_ATTEMPTS && isPortCollisionError(error)) continue
+        throw error
+      }
+    }
+
+    throw new Error(`e2e/harness: exhausted ${DAEMON_START_ATTEMPTS} daemon start attempts`)
+  } catch (error) {
+    if (child !== undefined) {
+      await signalChildAndWait(child, 'SIGKILL', STARTUP_KILL_TIMEOUT_MS)
+    }
+    removeOwnedHome(home, keepHome)
+    throw error
   }
+}
+
+export async function startDaemon(opts: SpawnOptions = {}): Promise<DaemonHandle> {
+  return startDaemonWithPortAllocator(opts, allocateLoopbackPort)
+}
+
+/** Test-only seam: lifecycle tests inject deterministic ports without binding sockets. */
+export const harnessTestApi = {
+  startDaemonWithPortAllocator,
 }

@@ -1,7 +1,7 @@
 # RFC-054 W2-5 — visual regression nightly + path-filtered PR gate.
 #
-# Compares ubuntu-rendered snapshots of 12 key scenes against the
-# committed `*-chromium-linux.png` baselines under
+# Compares ubuntu-rendered snapshots of 17 full pages (12 desktop + 5 mobile)
+# plus 5 focused components against the committed `*-chromium-linux.png` baselines under
 # `e2e/visual-regression.spec.ts-snapshots/`. Threshold is 0.2%
 # per RFC-054 plan §risk 9.
 #
@@ -34,6 +34,7 @@ on:
       - 'e2e/visual-regression.spec.ts-snapshots/**'
       - 'e2e/harness.ts'
       - 'e2e/inbox-fixtures.ts'
+      - 'e2e/fixtures/stub-opencode.sh'
       - 'e2e/README.md'
       - 'e2e/visual-regression.README.md'
       - 'package.json'
@@ -49,6 +50,7 @@ on:
       - 'e2e/visual-regression.spec.ts-snapshots/**'
       - 'e2e/harness.ts'
       - 'e2e/inbox-fixtures.ts'
+      - 'e2e/fixtures/stub-opencode.sh'
       - 'e2e/README.md'
       - 'e2e/visual-regression.README.md'
       - 'package.json'
@@ -64,14 +66,16 @@ concurrency:
 jobs:
   visual-regression:
     name: Playwright visual regression (ubuntu)
-    runs-on: ubuntu-latest
+    # Keep the pixel environment aligned with the documented Playwright Noble
+    # container instead of letting ubuntu-latest change underneath baselines.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.3.x'
+          bun-version: '1.3.13'
 
       - name: Install opencode (daemon dependency)
         run: |

@@ -1,4 +1,4 @@
-# visual-regression — pixel baselines for 8 key pages (RFC-054 W2-5)
+# visual-regression — 17 full-page + 5 component pixel baselines (RFC-054 / RFC-198)
 
 Spec: `e2e/visual-regression.spec.ts`. Baselines: `e2e/visual-regression.spec.ts-snapshots/`.
 
@@ -16,18 +16,21 @@ skips it because:
 
 Threshold: `maxDiffPixelRatio: 0.002` (0.2%) per RFC-054 plan §risk 9.
 
-## Pages covered
+## Scenes covered
 
-| Page         | Stable anchor                                  |
-| ------------ | ---------------------------------------------- |
-| `/auth`      | "Sign in" heading                              |
-| `/agents`    | "Agents" heading                               |
-| `/workflows` | "Workflows" heading                            |
-| `/repos`     | "Repos"-ish heading (regex)                    |
-| `/memory`    | "Memory"-ish heading                           |
-| `/settings`  | "Settings"-ish heading                         |
-| `/`          | networkidle (homepage shell is data-dependent) |
-| `/tasks`     | "Tasks"-ish heading                            |
+| Viewport         | Scenes                                                                                                              |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------- |
+| 1280×800 desktop | auth, agents, workflows, repos, memory, settings, onboarding, seeded homepage, tasks, and three inbox dialog states |
+| 390×844 mobile   | seeded home + navigation, workflow gallery, agent split detail, settings network form, terminal task detail         |
+
+The 17 scenes each own a full-page baseline. Five focused locator baselines lock
+mobile navigation open, PageHeader actions, a real overflowing TableViewport
+edge, an empty state, and a Dialog footer so the full-page 0.2% threshold cannot
+hide a small but important local regression.
+
+Every scene owns an isolated daemon plus an explicit light/dark and clean/seeded
+fixture. This keeps a single `--grep` run equivalent to the full suite and
+prevents resource or theme state leaking between screenshots.
 
 ## Running locally (darwin baselines)
 
@@ -36,10 +39,10 @@ Threshold: `maxDiffPixelRatio: 0.002` (0.2%) per RFC-054 plan §risk 9.
 bun run build:binary
 
 # 2. Generate (or refresh) darwin baselines.
-RUN_VISUAL_REGRESSION=1 bun run e2e e2e/visual-regression.spec.ts --update-snapshots
+bun run test:visual -- --update-snapshots
 
 # 3. Re-run against the committed baselines.
-RUN_VISUAL_REGRESSION=1 bun run e2e e2e/visual-regression.spec.ts
+bun run test:visual
 ```
 
 Each PR that touches UI must run step 3 locally and confirm the diff
@@ -54,7 +57,7 @@ is zero (or commit refreshed baselines in the same PR).
 - **pull_request** when the diff touches `packages/frontend/**` or this
   spec / workflow itself.
 
-The CI runs on **ubuntu-latest** and compares against the committed
+The CI runs on pinned **Ubuntu 24.04 (Noble)** and compares against the committed
 `*-chromium-linux.png` baselines.
 
 ## Generating ubuntu baselines (first-time / refresh)
@@ -67,13 +70,19 @@ If you have docker / VM access to a Linux environment:
 
 ```sh
 docker run --rm -v "$PWD:/work" -w /work \
-  mcr.microsoft.com/playwright:v1.50.0-jammy \
+  mcr.microsoft.com/playwright:v1.60.0-noble \
   bash -lc '
+    curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.13" &&
+    export PATH="/root/.bun/bin:$PATH" &&
     bun install --frozen-lockfile &&
     bun run build:binary &&
-    RUN_VISUAL_REGRESSION=1 bun run e2e e2e/visual-regression.spec.ts --update-snapshots
+    bun run test:visual -- --update-snapshots
   '
 ```
+
+The container tag matches the Playwright `1.60.0` revision in `bun.lock`, and
+its Noble userspace matches the pinned CI runner. Update all three together when
+upgrading Playwright so browser binaries, fonts, and expected pixels stay aligned.
 
 Then commit the resulting `*-chromium-linux.png` files in a dedicated PR
 titled e.g. `chore(visual): refresh ubuntu baselines after <topic>`.
@@ -94,11 +103,13 @@ update must be human-triggered, NEVER automatic on CI failure.
 
 ## What this gate does NOT cover
 
-- Pages that depend on live data (e.g. a workflow editor with nodes
-  laid out — node positions are data-driven and noisy).
+- Data-dependent authoring states whose geometry is intentionally user-driven
+  (for example, an arbitrarily arranged workflow editor canvas).
 - Hover / focus states (only the at-rest state is snapshotted).
-- Dialogs / overlays (those land in a separate `keyboard-flows.spec.ts`).
-- Mobile / small viewport — the 1280×800 baseline is desktop-only.
+- Every dialog family; semantic/focus/mobile contracts live in
+  `overlay-ux-inventory.test.ts`, `ux-consistency.spec.ts`, and
+  `keyboard-flows.spec.ts`, while the inbox and mobile navigation provide
+  representative pixel locks here.
 
 Adding a new page to the spec: snapshot 5× consecutive locally to
 confirm zero pixel diff, then commit baseline. If the first run on

@@ -76,7 +76,9 @@ test('RFC-032 nav-redesign settings gear: click → /settings + --active outline
   // Not active before click.
   await expect(gear).not.toHaveClass(/settings-gear--active/)
   await gear.click()
-  await page.waitForURL(/\/settings$/)
+  // RFC-198 makes the selected settings tab URL-addressable. The legacy
+  // `/settings` target is therefore replaced with its canonical default.
+  await expect(page).toHaveURL(/\/settings\?tab=runtime$/)
   // Active after click.
   await expect(gear).toHaveClass(/settings-gear--active/)
   await expect(gear).toHaveAttribute('aria-current', 'page')

@@ -55,6 +55,18 @@ async function primeAuth(page: Page, d: DaemonHandle): Promise<void> {
   )
 }
 
+async function setDaemonTheme(theme: 'light' | 'dark'): Promise<void> {
+  const response = await fetch(`${daemon.baseUrl}/api/config`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${daemon.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ theme }),
+  })
+  expect(response.ok).toBe(true)
+}
+
 /**
  * Pre-W2-6 known violations that exist in production today. Listed here
  * with a TODO + tracking note rather than failing the suite — new PRs
@@ -211,6 +223,44 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     await page.goto(`${daemon.baseUrl}/settings`)
     await expect(page.getByRole('heading', { name: /settings/i }).first()).toBeVisible()
     await expectNoCriticalOrSeriousAxeViolations(page, '/settings')
+  })
+
+  test('/settings mobile dark table and OIDC form dialog pass a11y', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.emulateMedia({ colorScheme: 'light' })
+    await setDaemonTheme('dark')
+    await page.route(/\/api\/oidc\/providers(?:\?.*)?$/, async (route) => {
+      if (route.request().method() !== 'GET') return route.continue()
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'a11y-provider',
+            slug: 'a11y-provider',
+            displayName: 'Accessibility identity provider',
+            issuerUrl: 'https://identity.example.test',
+            clientId: 'a11y-client',
+            scopes: 'openid profile email',
+            provisioning: 'invite',
+            allowedEmailDomains: [],
+            iconUrl: null,
+            enabled: true,
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ]),
+      })
+    })
+    await primeAuth(page, daemon)
+    await page.goto(`${daemon.baseUrl}/settings?tab=authentication`)
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expect(page.locator('.table-viewport__scroller')).toBeVisible()
+    await expectNoCriticalOrSeriousAxeViolations(page, '/settings auth table (390 dark)')
+
+    await page.getByTestId('oidc-add-provider').click()
+    await expect(page.getByRole('dialog', { name: 'Add OIDC provider' })).toBeVisible()
+    await expectNoCriticalOrSeriousAxeViolations(page, '/settings OIDC dialog (390 dark)')
   })
 
   test('/ first-run (onboarding) passes a11y', async ({ page }) => {

@@ -8,7 +8,7 @@
 //   * Backspace also removes (Mac convention).
 //   * Drag-from-sidebar drops a new node onto the canvas
 //     (HTML5 native drag — Playwright's `dragTo` does NOT fire
-//     `dragstart` / `drop` on `<div draggable>`, so this test
+//     `dragstart` / `drop` on the draggable palette button, so this test
 //     synthesizes the events with `page.evaluate` + DataTransfer).
 //   * Drop into the canvas appends a new node row.
 //   * The editor accepts undo via Ctrl+Z (RFC-016 wrappers preserved
@@ -301,6 +301,46 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     // The drop handler appends a new node. Count goes up by 1.
     await page.waitForTimeout(300)
     await expect(page.locator('.react-flow__node')).toHaveCount(before + 1)
+  })
+
+  test('390px palette click and keyboard activation add one selected node without overflow', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openEditor(page)
+    const nodes = page.locator('.react-flow__node')
+    const paletteItem = page.locator('.editor-sidebar__item').first()
+    const before = await nodes.count()
+
+    // Pointer/touch-equivalent activation: the palette row is a real button,
+    // so mobile users do not depend on unsupported HTML5 touch dragging.
+    await paletteItem.click()
+    await expect(nodes).toHaveCount(before + 1)
+    await expect(page.locator('.react-flow__node.selected')).toHaveCount(1)
+    await expect(page.locator('.editor-layout--with-inspector > .inspector')).toBeVisible()
+    await page.waitForTimeout(100)
+    expect(await nodes.count()).toBe(before + 1)
+
+    // Restore the fixture count, then exercise the native keyboard activation
+    // path. Space must synthesize one click, not double-fire through a custom
+    // key handler.
+    await page.locator('.react-flow__node.selected').click()
+    await page.keyboard.press('Backspace')
+    await expect(nodes).toHaveCount(before)
+    await paletteItem.focus()
+    await page.keyboard.press('Space')
+    await expect(nodes).toHaveCount(before + 1)
+    await expect(page.locator('.react-flow__node.selected')).toHaveCount(1)
+    await expect(page.locator('.editor-layout--with-inspector > .inspector')).toBeVisible()
+    await page.waitForTimeout(100)
+    expect(await nodes.count()).toBe(before + 1)
+
+    const overflow = await page.evaluate(() => ({
+      body: document.body.scrollWidth - document.body.clientWidth,
+      root: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    }))
+    expect(overflow.body).toBeLessThanOrEqual(1)
+    expect(overflow.root).toBeLessThanOrEqual(1)
   })
 
   test('canvas pan does not break subsequent click hit-test (RFC-016 pre-fix regression)', async ({
