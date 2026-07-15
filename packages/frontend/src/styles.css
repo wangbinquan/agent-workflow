@@ -13680,9 +13680,24 @@ button.status-chip {
   text-overflow: ellipsis;
 }
 
+/* Name + origin-chip flex row: __name is display:block, so without this the
+   chip would drop to its own line (实现门 P2). min-width:0 keeps the name's
+   ellipsis truncation working inside the flex context. */
+.task-name-cell__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.task-name-cell__row .task-name-cell__name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
 /* Scheduled-origin chip next to the task name. */
 .task-name-cell__origin {
-  margin-left: 6px;
+  flex: none;
   text-decoration: none;
   color: var(--muted);
 }

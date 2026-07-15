@@ -130,7 +130,9 @@ function TasksPage() {
             when the list has rows so the empty page stays byte-identical to
             the pre-surgery baseline (tasks.png zero churn). */}
         {hasRows && (
-          <span className="tasks-toolbar">
+          // div, not span: Segmented's root is a <div> and <span><div> is
+          // invalid nesting (React 19 validateDOMNesting; 实现门 P3).
+          <div className="tasks-toolbar">
             <Segmented<TaskSubjectFilter>
               value={subject}
               onChange={setSubject}
@@ -150,7 +152,7 @@ function TasksPage() {
               className="tasks-toolbar__search"
               data-testid="tasks-search"
             />
-          </span>
+          </div>
         )}
       </div>
 
@@ -217,7 +219,10 @@ function TasksPage() {
                         row separator). See .skills__name-cell__inner for the
                         same pattern. */}
                     <div className="task-name-cell__inner">
-                      <span>
+                      {/* Flex row so the origin chip sits BESIDE the name
+                          (__name is display:block — a bare span would push
+                          the chip to its own line; 实现门 P2). */}
+                      <span className="task-name-cell__row">
                         <Link
                           to="/tasks/$id"
                           params={{ id: row.id }}

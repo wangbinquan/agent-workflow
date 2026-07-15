@@ -227,7 +227,10 @@ function ScheduledPage() {
                 <td className="data-table__actions">
                   <ConfirmButton
                     label={t('scheduled.runNow')}
-                    onConfirm={() => runNow.mutateAsync(row.id)}
+                    // mutate (not mutateAsync): the rejection is consumed by the
+                    // mutation state (→ ErrorBanner) instead of escaping the
+                    // ConfirmButton's un-handled promise (实现门 P2).
+                    onConfirm={() => runNow.mutate(row.id)}
                     size="sm"
                     disabled={runNowBlocked(row) || runNow.isPending}
                   />
