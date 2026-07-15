@@ -25,10 +25,8 @@ describe('RFC-035 <Dialog> retrofit grep guard', () => {
   test('AgentImportDialog no longer applies the legacy overlay / panel JSX className', () => {
     const body = read('components/AgentImportDialog.tsx')
     expect(/className="agent-import__overlay/.test(body)).toBe(false)
-    // The body wrapper className `agent-import__panel` is now passed
-    // through `panelClassName` for backward-compat CSS rules, so we don't
-    // assert on it; we ensure the bespoke header/footer chrome classes
-    // are gone.
+    expect(/className="agent-import__panel/.test(body)).toBe(false)
+    expect(body.includes('panelClassName=')).toBe(false)
     expect(/className="agent-import__header/.test(body)).toBe(false)
     expect(/className="agent-import__footer/.test(body)).toBe(false)
   })

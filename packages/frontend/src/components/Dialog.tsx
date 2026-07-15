@@ -26,6 +26,12 @@ export interface DialogProps {
   footer?: ReactNode
   initialFocusRef?: RefObject<HTMLElement | null>
   /**
+   * Makes the body scroll region keyboard-focusable when a phase contains no
+   * naturally tabbable body controls. Keep this opt-in so ordinary form
+   * dialogs do not gain an extra tab stop.
+   */
+  bodyTabIndex?: 0
+  /**
    * Element to focus on close. Pass the ref of the trigger element so a
    * keyboard user lands back where they started. The Dialog falls back
    * to whatever `document.activeElement` was at open time, but that's
@@ -263,7 +269,9 @@ export function Dialog(props: DialogProps): ReactElement | null {
             ×
           </button>
         </header>
-        <div className="dialog__body">{props.children}</div>
+        <div className="dialog__body" tabIndex={props.bodyTabIndex}>
+          {props.children}
+        </div>
         {props.footer !== undefined && <footer className="dialog__footer">{props.footer}</footer>}
       </div>
     </div>

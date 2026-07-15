@@ -25,6 +25,7 @@ describe('agents new-route import wiring (source layer)', () => {
   test('agents.new.tsx exposes the Import button with stable testid', () => {
     const src = readFileSync(newRoutePath, 'utf-8')
     expect(src).toContain('data-testid="agent-import-open"')
+    expect(src).toContain('ref={importTriggerRef}')
     expect(src).toContain("t('agentForm.importButton')")
   })
 
@@ -32,6 +33,8 @@ describe('agents new-route import wiring (source layer)', () => {
     const src = readFileSync(newRoutePath, 'utf-8')
     expect(src).toContain('<AgentImportDialog')
     expect(src).toContain('mergeAgentImport(prev, res)')
+    expect(src).toContain('triggerRef={importTriggerRef}')
+    expect(src).toContain('onViewForm={setActiveTab}')
   })
 
   test('agents.detail.tsx does NOT import AgentImportDialog', () => {

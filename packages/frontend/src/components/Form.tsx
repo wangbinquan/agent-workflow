@@ -185,6 +185,8 @@ interface TextAreaProps {
   monospace?: boolean
   disabled?: boolean
   maxLength?: number
+  /** Optional ref forwarding for Dialog initial-focus contracts. */
+  textareaRef?: Ref<HTMLTextAreaElement>
   'data-testid'?: string
 }
 
@@ -196,10 +198,12 @@ export function TextArea({
   monospace,
   disabled,
   maxLength,
+  textareaRef,
   'data-testid': testid,
 }: TextAreaProps) {
   return (
     <textarea
+      ref={textareaRef}
       className={monospace === true ? 'form-input form-input--mono' : 'form-input'}
       value={value}
       onChange={(e) => onChange(e.target.value)}

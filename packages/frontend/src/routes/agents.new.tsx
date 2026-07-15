@@ -51,6 +51,7 @@ function AgentCreatePage() {
   const [draft, setDraft] = useState(emptyAgent)
   const [activeTab, setActiveTab] = useState<AgentTab>('basics')
   const [importOpen, setImportOpen] = useState(false)
+  const importTriggerRef = useRef<HTMLButtonElement | null>(null)
   const { dirty, resetBaseline } = useDirtyBaseline(draft, draft)
   useReportSplitDirty(NEW_CARD_KEY, dirty)
 
@@ -98,6 +99,7 @@ function AgentCreatePage() {
         </div>
         <div className="page__actions">
           <button
+            ref={importTriggerRef}
             type="button"
             className="btn btn--sm"
             data-testid="agent-import-open"
@@ -137,6 +139,8 @@ function AgentCreatePage() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         currentValue={draft}
+        triggerRef={importTriggerRef}
+        onViewForm={setActiveTab}
         onApply={(res) => setDraft((prev) => mergeAgentImport(prev, res))}
       />
     </div>

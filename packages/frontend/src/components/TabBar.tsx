@@ -17,6 +17,8 @@ import type { ReactNode } from 'react'
 export interface TabDef<K extends string> {
   key: K
   label: ReactNode
+  /** Temporarily prevent selection while the owning task is busy. */
+  disabled?: boolean
   /**
    * Optional count/badge pill rendered as `<span class="tabs__tab-badge">`
    * (tasks.detail pending-question count). Pass undefined/null/false to
@@ -69,6 +71,7 @@ export function TabBar<K extends string>({
             aria-selected={isActive}
             className={'tabs__tab' + (isActive ? ' tabs__tab--active' : '')}
             data-testid={tab.testid}
+            disabled={tab.disabled}
             onClick={() => onSelect(tab.key)}
           >
             {tab.label}

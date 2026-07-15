@@ -49,6 +49,24 @@ describe('<TabBar> — tablist shape', () => {
     expect(onSelect).toHaveBeenCalledTimes(1)
     expect(onSelect).toHaveBeenCalledWith('preview')
   })
+
+  test('disabled tabs expose native disabled semantics and do not select', () => {
+    const onSelect = vi.fn()
+    render(
+      <TabBar
+        tabs={[
+          { key: 'edit', label: 'Edit', disabled: true },
+          { key: 'preview', label: 'Preview' },
+        ]}
+        active="edit"
+        onSelect={onSelect}
+      />,
+    )
+    const edit = screen.getByRole('tab', { name: 'Edit' }) as HTMLButtonElement
+    expect(edit.disabled).toBe(true)
+    fireEvent.click(edit)
+    expect(onSelect).not.toHaveBeenCalled()
+  })
 })
 
 describe('<TabBar> — variant / className mapping', () => {

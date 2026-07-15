@@ -6,7 +6,7 @@
 // semantics unchanged (same DOM classes render), only the anchor follows
 // the new form. CSS for the legacy classes (.inspector__tabs,
 // .agent-import__tabs, .repo-source-tabs__bar) is preserved as a visual
-// fallback during the cleanup window.
+// history only; the new import flow has no bespoke tab strip.
 
 import { describe, expect, test } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -48,9 +48,8 @@ describe('RFC-035 .tabs retrofit grep guard (RFC-150: TabBar variant form)', () 
     // behaviour.
     expect(bodies['components/NodeDetailDrawer.tsx']!.includes('inspector__tabs"')).toBe(false)
     expect(bodies['components/canvas/NodeInspector.tsx']!.includes('inspector__tabs"')).toBe(false)
-    // AgentImportDialog: only the tabs block was retrofitted; other
-    // namespaced .agent-import__* class names survive (cleanup PR will
-    // remove them once the <Dialog> retrofit lands in PR3).
+    // AgentImportDialog keeps namespaced task-flow layout classes, but no
+    // bespoke tab-strip classes or markup.
     expect(bodies['components/AgentImportDialog.tsx']!.includes('agent-import__tabs')).toBe(false)
     expect(bodies['components/AgentImportDialog.tsx']!.includes('agent-import__tab"')).toBe(false)
   })

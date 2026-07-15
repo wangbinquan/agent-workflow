@@ -25,9 +25,10 @@ describe('RFC-035 .data-table推广 grep guard', () => {
     expect(/className="[^"]*repos-table/.test(body)).toBe(false)
   })
 
-  test('components/AgentImportDialog.tsx renders .data-table.data-table--compact for its preview', () => {
+  test('components/AgentImportDialog.tsx uses grouped cards instead of a dense data table', () => {
     const body = read('components/AgentImportDialog.tsx')
-    expect(body.includes('data-table data-table--compact')).toBe(true)
+    expect(body.includes('data-table data-table--compact')).toBe(false)
+    expect(body.includes('className="agent-import__section"')).toBe(true)
   })
 
   test('routes/reviews.tsx renders .data-table for each task group', () => {

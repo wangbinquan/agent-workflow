@@ -2336,24 +2336,50 @@ export interface Resources {
       tabUpload: string
       tabPaste: string
       pastePlaceholder: string
-      selectedFile: string
-      parseButton: string
-      applyButton: string
       cancelButton: string
-      previewEmpty: string
-      willOverwrite: string
       orphanConflict: string
-      footerHint: string
-      bodySizeHint: string
-      routedTo: {
-        name: string
-        description: string
-        permission: string
-        ports: string
-        advanced: string
-        bodyMd: string
-        frontmatterExtra: string
-      }
+      invalidExtension: string
+      fileReadFailed: string
+      sourcePaste: string
+      sourceUpload: string
+      emptyValue: string
+      bodySummary: string
+      inputSummary: string
+      listSummary: string
+      mapSummary: string
+      ruleSummary: string
+      extraLabel: string
+      checkButton: string
+      checkingFile: string
+      backButton: string
+      applyDraftButton: string
+      importAnother: string
+      viewForm: string
+      selectTitle: string
+      selectDescription: string
+      uploadTitle: string
+      uploadDescription: string
+      chooseFile: string
+      replaceFile: string
+      removeFile: string
+      pasteLabel: string
+      pasteHint: string
+      draftOnlyTitle: string
+      draftOnlyHint: string
+      reviewTitle: string
+      itemCount: string
+      sectionCount: string
+      warningCount: string
+      fixPortsButton: string
+      overwriteTitle: string
+      overwriteDescription: string
+      warningTitle: string
+      previewEmptyTitle: string
+      previewEmptyDescription: string
+      resultTitle: string
+      resultDescription: string
+      resultNextStep: string
+      notCreated: string
     }
     markdownEditLabel: string
     markdownPreviewLabel: string
@@ -5520,26 +5546,52 @@ export const zhCN: Resources = {
       tabUpload: '上传文件',
       tabPaste: '粘贴文本',
       pastePlaceholder:
-        '---\ndescription: 代码评审员\nmodel: anthropic/claude-sonnet-4-6\npermission:\n  edit: ask\n---\n你是一名审计员……',
-      selectedFile: '已选：{{name}}',
-      parseButton: '解析',
-      applyButton: '应用',
+        '---\ndescription: 代码评审员\nruntime: opencode-review\npermission:\n  edit: ask\n---\n你是一名审计员……',
       cancelButton: '取消',
-      previewEmpty: '未识别到任何字段。文件可能为空或仅包含正文。',
-      willOverwrite: '应用将覆盖你已修改的 {{count}} 个字段：{{fields}}',
       orphanConflict:
         '导入会占用未关联映射 {{mappings}}；请先在端口页显式清理，或在本次导入中同时提供对应映射。',
-      footerHint: '仅填入下方表单；保存仍需点击「创建」按钮。',
-      bodySizeHint: '（{{bytes}} 字节）',
-      routedTo: {
-        name: '→ 名称',
-        description: '→ 描述',
-        permission: '→ Permission',
-        ports: '→ 端口',
-        advanced: '→ 高级',
-        bodyMd: '→ 正文（Markdown）',
-        frontmatterExtra: '→ frontmatterExtra',
-      },
+      invalidExtension: '请选择 .md 或 .markdown 文件。',
+      fileReadFailed: '无法读取文件：{{message}}',
+      sourcePaste: '粘贴内容（{{size}}）',
+      sourceUpload: '{{name}}（{{size}}）',
+      emptyValue: '空值',
+      bodySummary: '{{lines}} 行 · {{bytes}} 字节',
+      inputSummary: '{{count}} 个输入端口',
+      listSummary: '{{count}} 项',
+      mapSummary: '{{count}} 个映射',
+      ruleSummary: '{{count}} 条规则',
+      extraLabel: '保留的 {{type}} 值',
+      checkButton: '检查内容',
+      checkingFile: '正在读取…',
+      backButton: '返回修改',
+      applyDraftButton: '应用到草稿（{{count}}）',
+      importAnother: '继续导入',
+      viewForm: '查看表单',
+      selectTitle: '选择导入来源',
+      selectDescription: '上传 agent.md，或直接粘贴完整 Markdown 内容。',
+      uploadTitle: '拖放 agent.md 到这里',
+      uploadDescription: '支持 .md 和 .markdown；检查前不会修改当前草稿。',
+      chooseFile: '选择文件',
+      replaceFile: '更换文件',
+      removeFile: '移除',
+      pasteLabel: 'agent.md 内容',
+      pasteHint: 'YAML frontmatter 与正文会一起解析。',
+      draftOnlyTitle: '只更新当前草稿',
+      draftOnlyHint: '导入不会创建 Agent；检查并应用后，仍需在页面上点击「创建」。',
+      reviewTitle: '检查导入内容',
+      itemCount: '{{count}} 个字段',
+      sectionCount: '{{count}} 个表单分区',
+      warningCount: '{{count}} 条提醒',
+      fixPortsButton: '前往端口修复',
+      overwriteTitle: '将覆盖已编辑内容',
+      overwriteDescription: '以下 {{count}} 个字段已有草稿内容，应用后会被导入值替换。',
+      warningTitle: '解析提醒',
+      previewEmptyTitle: '没有可应用的内容',
+      previewEmptyDescription: '返回并补充 agent.md 字段或正文后再检查。',
+      resultTitle: '已应用到草稿',
+      resultDescription: '已从 {{source}} 应用 {{items}} 个字段，覆盖 {{sections}} 个表单分区。',
+      resultNextStep: '关闭此窗口检查表单，确认无误后点击页面右上角的「创建」。',
+      notCreated: 'Agent 尚未创建',
     },
     markdownEditLabel: '编辑',
     markdownPreviewLabel: '预览',

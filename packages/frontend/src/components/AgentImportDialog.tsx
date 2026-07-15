@@ -1,299 +1,761 @@
-// RFC-018 — Import dialog for /agents/new.
-// Two input paths: upload .md / .markdown file, or paste raw text.
-// Hands the parsed result back via onApply for merge into AgentForm draft.
-//
-// RFC-035 PR3: chrome (overlay + panel + header + close + footer + focus
-// trap + ESC + body overflow) is now owned by the shared <Dialog>; this
-// component owns just the body (tabs / upload / paste / preview).
+// RFC-197 — three-stage agent.md import task flow for /agents/new.
+// Parsing and merge semantics remain owned by RFC-018/RFC-194; this component
+// owns source selection, complete disclosure, blocking feedback, and the
+// stable "applied to draft, not created" result.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentMarkdownParseResult, CreateAgent } from '@agent-workflow/shared'
 import { parseAgentMarkdown } from '@agent-workflow/shared'
-import { emptyAgent } from './AgentForm'
+import {
+  describeAgentImport,
+  agentMarkdownFilenameStem,
+  validateAgentMarkdownFile,
+  type AgentImportPreviewItem,
+  type AgentImportPreview,
+} from '@/lib/agent-import-preview'
 import { fieldsOverwrittenByImport, importOrphanSidecarConflicts } from '@/lib/agent-import-merge'
 import { structureImportWarnings } from '@/lib/agent-import-warnings'
+import { Card } from './Card'
 import { Dialog } from './Dialog'
+import { EmptyState } from './EmptyState'
+import { ErrorBanner } from './ErrorBanner'
+import { FileDropzone, formatShortBytes } from './FileDropzone'
+import { Field, TextArea } from './Form'
+import { StatusChip } from './StatusChip'
 import { TabBar } from './TabBar'
+import { emptyAgent, type AgentTab } from './AgentForm'
 
 export interface AgentImportDialogProps {
   open: boolean
   onClose: () => void
   onApply: (result: AgentMarkdownParseResult) => void
   currentValue: CreateAgent
+  triggerRef?: RefObject<HTMLButtonElement | null>
+  onViewForm?: (tab: AgentTab) => void
 }
 
-type Tab = 'upload' | 'paste'
+type SourceTab = 'upload' | 'paste'
 
-const ROUTE_KEYS = {
-  name: 'agentForm.importDialog.routedTo.name',
-  description: 'agentForm.importDialog.routedTo.description',
-  permission: 'agentForm.importDialog.routedTo.permission',
-  ports: 'agentForm.importDialog.routedTo.ports',
-  advanced: 'agentForm.importDialog.routedTo.advanced',
-  bodyMd: 'agentForm.importDialog.routedTo.bodyMd',
-  frontmatterExtra: 'agentForm.importDialog.routedTo.frontmatterExtra',
-} as const
+interface SourceDraft {
+  active: SourceTab
+  uploadFile: File | null
+  pasteText: string
+  selectionError: string | null
+}
+
+interface SourceSnapshot {
+  kind: SourceTab
+  label: string
+  rawText: string
+  filenameStem?: string
+  fileSize?: number
+}
+
+type ImportPhase =
+  | { kind: 'select'; source: SourceDraft; busy: 'read-file' | null }
+  | {
+      kind: 'review'
+      source: SourceSnapshot
+      sourceDraft: SourceDraft
+      parse: AgentMarkdownParseResult
+      preview: AgentImportPreview
+    }
+  | {
+      kind: 'result'
+      sourceLabel: string
+      appliedItemCount: number
+      affectedSections: Array<{ tab: AgentTab; count: number }>
+      firstAffectedTab: AgentTab
+    }
+
+const EMPTY_AGENT = emptyAgent()
+
+function freshSelectPhase(): ImportPhase {
+  return {
+    kind: 'select',
+    source: {
+      active: 'upload',
+      uploadFile: null,
+      pasteText: '',
+      selectionError: null,
+    },
+    busy: null,
+  }
+}
 
 export function AgentImportDialog({
   open,
   onClose,
   onApply,
   currentValue,
+  triggerRef,
+  onViewForm,
 }: AgentImportDialogProps) {
   const { t } = useTranslation()
-  const [tab, setTab] = useState<Tab>('upload')
-  const [rawText, setRawText] = useState('')
-  const [filenameStem, setFilenameStem] = useState<string | undefined>(undefined)
-  const [parseResult, setParseResult] = useState<AgentMarkdownParseResult | null>(null)
+  const [phase, setPhase] = useState<ImportPhase>(freshSelectPhase)
+  const readGenerationRef = useRef(0)
+  const openRef = useRef(open)
+  const chooseButtonRef = useRef<HTMLButtonElement | null>(null)
+  const pasteTextAreaRef = useRef<HTMLTextAreaElement | null>(null)
+  const reviewHeadingRef = useRef<HTMLHeadingElement | null>(null)
+  const resultHeadingRef = useRef<HTMLHeadingElement | null>(null)
+  const selectBusy = phase.kind === 'select' ? phase.busy : null
+  const selectActive = phase.kind === 'select' ? phase.source.active : null
 
   useEffect(() => {
+    openRef.current = open
     if (!open) {
-      // Reset state every time dialog re-opens for a fresh import session.
-      setTab('upload')
-      setRawText('')
-      setFilenameStem(undefined)
-      setParseResult(null)
+      readGenerationRef.current += 1
+      setPhase(freshSelectPhase())
     }
   }, [open])
 
-  const willOverwrite = useMemo(() => {
-    if (parseResult === null) return [] as string[]
-    return fieldsOverwrittenByImport(currentValue, parseResult, emptyAgent())
-  }, [parseResult, currentValue])
+  useEffect(() => {
+    if (!open) return
+    const timer = window.setTimeout(() => {
+      if (phase.kind === 'review') reviewHeadingRef.current?.focus()
+      else if (phase.kind === 'result') resultHeadingRef.current?.focus()
+      else if (selectBusy === null) {
+        if (selectActive === 'upload') chooseButtonRef.current?.focus()
+        else if (selectActive === 'paste') pasteTextAreaRef.current?.focus()
+      }
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [open, phase.kind, selectActive, selectBusy])
 
-  // RFC-151 PR-1 — normalize the parser's string[] once; every consumer below
-  // reads {code, message, blocking} instead of sniffing string prefixes.
-  const warnings = useMemo(
-    () => structureImportWarnings(parseResult?.warnings ?? []),
-    [parseResult],
-  )
-  const blockingWarning = warnings.find((w) => w.blocking)
-  const hasYamlError = blockingWarning !== undefined
-  const orphanConflicts = useMemo(
-    () => (parseResult === null ? [] : importOrphanSidecarConflicts(currentValue, parseResult)),
-    [currentValue, parseResult],
-  )
-  const hasBlockingIssue = hasYamlError || orphanConflicts.length > 0
+  const reviewState = useMemo(() => {
+    if (phase.kind !== 'review') return null
+    const warnings = structureImportWarnings(phase.parse.warnings)
+    const blockingWarning = warnings.find((warning) => warning.blocking)
+    const nonBlockingWarnings = warnings.filter((warning) => !warning.blocking)
+    const orphanConflicts = importOrphanSidecarConflicts(currentValue, phase.parse)
+    const willOverwrite = fieldsOverwrittenByImport(currentValue, phase.parse, EMPTY_AGENT)
+    return {
+      blockingWarning,
+      nonBlockingWarnings,
+      orphanConflicts,
+      willOverwrite,
+      canApply:
+        phase.preview.itemCount > 0 &&
+        blockingWarning === undefined &&
+        orphanConflicts.length === 0,
+    }
+  }, [currentValue, phase])
 
   if (!open) return null
 
-  async function onFileSelected(file: File | null) {
-    if (!file) return
-    const text = await file.text()
-    setRawText(text)
-    const m = /^(.+?)(?:\.(?:md|markdown))?$/i.exec(file.name)
-    setFilenameStem(m?.[1] ?? file.name)
-    setParseResult(null)
+  function invalidateRead(): void {
+    readGenerationRef.current += 1
   }
 
-  function doParse() {
-    if (rawText === '') return
-    const r = parseAgentMarkdown(rawText, {
-      filenameStem: tab === 'upload' ? filenameStem : undefined,
-    })
-    setParseResult(r)
-  }
-
-  function doApply() {
-    if (parseResult === null || hasBlockingIssue) return
-    onApply(parseResult)
+  function closeDialog(): void {
+    invalidateRead()
     onClose()
   }
 
-  function describePreview(): Array<{
-    field: string
-    value: string
-    routeKey: string
-  }> {
-    if (parseResult === null) return []
-    const out: Array<{ field: string; value: string; routeKey: string }> = []
-    const p = parseResult.partial
-    const add = (field: keyof typeof p, routeKey: string, valueStr?: string) => {
-      const v = p[field]
-      if (v === undefined) return
-      out.push({
-        field,
-        value: valueStr ?? renderPreviewValue(v),
-        routeKey,
-      })
-    }
-    add('name', ROUTE_KEYS.name)
-    add('description', ROUTE_KEYS.description)
-    add('permission', ROUTE_KEYS.permission)
-    add('inputs', ROUTE_KEYS.ports)
-    add('outputs', ROUTE_KEYS.ports)
-    add('outputKinds', ROUTE_KEYS.ports)
-    add('outputWrapperPortNames', ROUTE_KEYS.ports)
-    add('role', ROUTE_KEYS.advanced)
-    if (p.frontmatterExtra !== undefined) {
-      for (const key of Object.keys(p.frontmatterExtra)) {
-        out.push({
-          field: key,
-          value: renderPreviewValue(p.frontmatterExtra[key]),
-          routeKey: ROUTE_KEYS.frontmatterExtra,
-        })
+  function selectSourceTab(next: SourceTab): void {
+    setPhase((current) => {
+      if (current.kind !== 'select' || current.busy !== null) return current
+      return {
+        ...current,
+        source: { ...current.source, active: next, selectionError: null },
       }
-    }
-    if (p.bodyMd !== undefined) {
-      const sz = new Blob([p.bodyMd]).size
-      out.push({
-        field: 'body',
-        value: t('agentForm.importDialog.bodySizeHint', { bytes: sz }),
-        routeKey: ROUTE_KEYS.bodyMd,
-      })
-    }
-    return out
+    })
   }
 
-  const previewRows = describePreview()
+  function selectFile(file: File | null): void {
+    invalidateRead()
+    setPhase((current) => {
+      if (current.kind !== 'select' || current.busy !== null) return current
+      if (file === null) {
+        return {
+          ...current,
+          source: { ...current.source, uploadFile: null, selectionError: null },
+        }
+      }
+      const check = validateAgentMarkdownFile(file)
+      if (!check.ok) {
+        return {
+          ...current,
+          source: {
+            ...current.source,
+            uploadFile: null,
+            selectionError: t('agentForm.importDialog.invalidExtension'),
+          },
+        }
+      }
+      return {
+        ...current,
+        source: { ...current.source, uploadFile: file, selectionError: null },
+      }
+    })
+  }
+
+  function updatePasteText(value: string): void {
+    setPhase((current) => {
+      if (current.kind !== 'select' || current.busy !== null) return current
+      return {
+        ...current,
+        source: { ...current.source, pasteText: value, selectionError: null },
+      }
+    })
+  }
+
+  function enterReview(source: SourceSnapshot, sourceDraft: SourceDraft): void {
+    const parse = parseAgentMarkdown(source.rawText, {
+      // An empty file has no import payload. Do not let the filename fallback
+      // manufacture a name-only change that turns a true no-op into Apply.
+      filenameStem:
+        source.kind === 'upload' && source.rawText.trim() !== '' ? source.filenameStem : undefined,
+    })
+    setPhase({
+      kind: 'review',
+      source,
+      sourceDraft,
+      parse,
+      preview: describeAgentImport(parse),
+    })
+  }
+
+  async function checkSource(): Promise<void> {
+    if (phase.kind !== 'select' || phase.busy !== null) return
+    const sourceDraft = phase.source
+    if (sourceDraft.active === 'paste') {
+      if (sourceDraft.pasteText.trim() === '') return
+      enterReview(
+        {
+          kind: 'paste',
+          label: t('agentForm.importDialog.sourcePaste'),
+          rawText: sourceDraft.pasteText,
+        },
+        sourceDraft,
+      )
+      return
+    }
+
+    const file = sourceDraft.uploadFile
+    if (file === null) return
+    const generation = ++readGenerationRef.current
+    setPhase({
+      kind: 'select',
+      source: { ...sourceDraft, selectionError: null },
+      busy: 'read-file',
+    })
+    try {
+      const rawText = await file.text()
+      if (generation !== readGenerationRef.current || !openRef.current) return
+      enterReview(
+        {
+          kind: 'upload',
+          label: file.name,
+          rawText,
+          filenameStem: agentMarkdownFilenameStem(file.name),
+          fileSize: file.size,
+        },
+        sourceDraft,
+      )
+    } catch (error) {
+      if (generation !== readGenerationRef.current || !openRef.current) return
+      const detail = error instanceof Error ? error.message : String(error)
+      setPhase({
+        kind: 'select',
+        source: {
+          ...sourceDraft,
+          selectionError: t('agentForm.importDialog.fileReadFailed', { message: detail }),
+        },
+        busy: null,
+      })
+    }
+  }
+
+  function backToSource(): void {
+    if (phase.kind !== 'review') return
+    setPhase({ kind: 'select', source: phase.sourceDraft, busy: null })
+  }
+
+  function applyToDraft(): void {
+    if (phase.kind !== 'review' || reviewState?.canApply !== true) return
+    const firstAffectedTab = phase.preview.firstTab
+    if (firstAffectedTab === null) return
+    const next: ImportPhase = {
+      kind: 'result',
+      sourceLabel: reviewSourceLabel(phase.source),
+      appliedItemCount: phase.preview.itemCount,
+      affectedSections: phase.preview.sections.map((section) => ({
+        tab: section.tab,
+        count: section.items.length,
+      })),
+      firstAffectedTab,
+    }
+    onApply(phase.parse)
+    setPhase(next)
+  }
+
+  function viewForm(tab: AgentTab): void {
+    onViewForm?.(tab)
+    closeDialog()
+  }
+
+  function resetImport(): void {
+    invalidateRead()
+    setPhase(freshSelectPhase())
+  }
+
+  function reviewSourceLabel(source: SourceSnapshot): string {
+    if (source.kind === 'upload') {
+      return t('agentForm.importDialog.sourceUpload', {
+        name: source.label,
+        size: formatShortBytes(source.fileSize ?? 0),
+      })
+    }
+    return t('agentForm.importDialog.sourcePaste', {
+      size: formatShortBytes(new TextEncoder().encode(source.rawText).byteLength),
+    })
+  }
+
+  function sectionLabel(tab: AgentTab): string {
+    const keys: Record<AgentTab, string> = {
+      basics: 'agentForm.tabBasics',
+      prompt: 'agentForm.tabPrompt',
+      ports: 'agentForm.tabPorts',
+      resources: 'agentForm.tabResources',
+      advanced: 'agentForm.tabAdvanced',
+    }
+    return t(keys[tab])
+  }
+
+  function renderPreviewValue(item: AgentImportPreviewItem): ReactNode {
+    switch (item.kind) {
+      case 'text':
+        return (
+          <span className="agent-import__item-text" title={item.value}>
+            {item.value === '' ? t('agentForm.importDialog.emptyValue') : item.value}
+          </span>
+        )
+      case 'body':
+        return (
+          <>
+            <span className="agent-import__item-meta">
+              {t('agentForm.importDialog.bodySummary', {
+                bytes: item.bytes,
+                lines: item.lines,
+              })}
+            </span>
+            {item.excerpt !== '' && <span className="agent-import__excerpt">{item.excerpt}</span>}
+          </>
+        )
+      case 'inputs':
+        return (
+          <>
+            <span className="agent-import__item-meta">
+              {t('agentForm.importDialog.inputSummary', { count: item.values.length })}
+            </span>
+            {renderDetailList(
+              item.values.map(
+                (port) =>
+                  `${port.name} · ${port.kind}${port.description ? ` — ${port.description}` : ''}`,
+              ),
+            )}
+          </>
+        )
+      case 'list':
+        return (
+          <>
+            <span className="agent-import__item-meta">
+              {t('agentForm.importDialog.listSummary', { count: item.values.length })}
+            </span>
+            {renderDetailList(item.values)}
+          </>
+        )
+      case 'map':
+        return (
+          <>
+            <span className="agent-import__item-meta">
+              {t('agentForm.importDialog.mapSummary', { count: item.entries.length })}
+            </span>
+            {renderDetailList(item.entries.map(([key, value]) => `${key} → ${value}`))}
+          </>
+        )
+      case 'json':
+        return (
+          <>
+            <span className="agent-import__item-meta">
+              {t('agentForm.importDialog.ruleSummary', { count: item.entries })}
+            </span>
+            <pre>{item.value}</pre>
+          </>
+        )
+      case 'extra':
+        return (
+          <>
+            <span className="agent-import__item-meta">
+              {t('agentForm.importDialog.extraLabel', { type: item.valueType })}
+            </span>
+            <pre>{item.value}</pre>
+          </>
+        )
+    }
+  }
+
+  function renderDetailList(values: string[]): ReactNode {
+    if (values.length === 0) {
+      return (
+        <span className="agent-import__empty-value">{t('agentForm.importDialog.emptyValue')}</span>
+      )
+    }
+    return (
+      <ul className="agent-import__detail-list">
+        {values.map((value, index) => (
+          <li key={`${value}-${index}`} title={value}>
+            {value}
+          </li>
+        ))}
+      </ul>
+    )
+  }
+
+  const canCheck =
+    phase.kind === 'select' &&
+    phase.busy === null &&
+    (phase.source.active === 'upload'
+      ? phase.source.uploadFile !== null
+      : phase.source.pasteText.trim() !== '')
+
+  const footer =
+    phase.kind === 'select' ? (
+      <>
+        <button type="button" className="btn" onClick={closeDialog}>
+          {t('agentForm.importDialog.cancelButton')}
+        </button>
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={!canCheck}
+          aria-busy={phase.busy !== null || undefined}
+          data-testid="agent-import-parse"
+          onClick={() => void checkSource()}
+        >
+          {phase.busy === 'read-file'
+            ? t('agentForm.importDialog.checkingFile')
+            : t('agentForm.importDialog.checkButton')}
+        </button>
+      </>
+    ) : phase.kind === 'review' ? (
+      <>
+        <button
+          type="button"
+          className="btn"
+          data-testid="agent-import-back"
+          onClick={backToSource}
+        >
+          {t('agentForm.importDialog.backButton')}
+        </button>
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={reviewState?.canApply !== true}
+          data-testid="agent-import-apply"
+          onClick={applyToDraft}
+        >
+          {t('agentForm.importDialog.applyDraftButton', { count: phase.preview.itemCount })}
+        </button>
+      </>
+    ) : (
+      <>
+        <button
+          type="button"
+          className="btn"
+          data-testid="agent-import-another"
+          onClick={resetImport}
+        >
+          {t('agentForm.importDialog.importAnother')}
+        </button>
+        <button
+          type="button"
+          className="btn btn--primary"
+          data-testid="agent-import-view-form"
+          onClick={() => viewForm(phase.firstAffectedTab)}
+        >
+          {t('agentForm.importDialog.viewForm')}
+        </button>
+      </>
+    )
 
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={closeDialog}
       title={t('agentForm.importDialog.title')}
       size="lg"
-      panelClassName="agent-import__panel"
+      // Keep this ref stable while the Dialog stays open. Phase/tab focus is
+      // handed off by the effect above; changing Dialog.initialFocusRef would
+      // run its cleanup and briefly restore focus outside the still-open modal.
+      initialFocusRef={chooseButtonRef}
+      triggerRef={triggerRef}
+      bodyTabIndex={phase.kind === 'select' ? undefined : 0}
       data-testid="agent-import-dialog"
-      footer={
-        <>
-          <button type="button" className="btn" onClick={onClose}>
-            {t('agentForm.importDialog.cancelButton')}
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={parseResult === null || hasBlockingIssue}
-            data-testid="agent-import-apply"
-            onClick={doApply}
-          >
-            {t('agentForm.importDialog.applyButton')}
-          </button>
-        </>
-      }
+      footer={footer}
     >
-      <div>
-        <TabBar<Tab>
-          variant="inline"
-          tabs={[
-            { key: 'upload', label: t('agentForm.importDialog.tabUpload') },
-            { key: 'paste', label: t('agentForm.importDialog.tabPaste') },
-          ]}
-          active={tab}
-          onSelect={setTab}
-        />
-
-        {tab === 'upload' ? (
-          <div className="agent-import__upload">
-            <input
-              type="file"
-              accept=".md,.markdown,text/markdown,text/plain"
-              data-testid="agent-import-file"
-              onChange={(e) => {
-                const f = e.target.files?.[0] ?? null
-                void onFileSelected(f)
-              }}
+      <div className="agent-import">
+        {phase.kind === 'select' && (
+          <section className="agent-import__phase" data-testid="agent-import-select">
+            <div className="agent-import__phase-heading">
+              <h3>{t('agentForm.importDialog.selectTitle')}</h3>
+              <p>{t('agentForm.importDialog.selectDescription')}</p>
+            </div>
+            <TabBar<SourceTab>
+              variant="inline"
+              tabs={[
+                {
+                  key: 'upload',
+                  label: t('agentForm.importDialog.tabUpload'),
+                  disabled: phase.busy !== null,
+                },
+                {
+                  key: 'paste',
+                  label: t('agentForm.importDialog.tabPaste'),
+                  disabled: phase.busy !== null,
+                },
+              ]}
+              active={phase.source.active}
+              onSelect={selectSourceTab}
+              ariaLabel={t('agentForm.importDialog.selectTitle')}
             />
-            {filenameStem !== undefined && (
-              <p className="agent-import__filename">
-                {t('agentForm.importDialog.selectedFile', { name: filenameStem })}
-              </p>
+
+            {phase.source.active === 'upload' ? (
+              <FileDropzone
+                file={phase.source.uploadFile}
+                onFileChange={selectFile}
+                accept=".md,.markdown,text/markdown,text/plain"
+                disabled={phase.busy !== null}
+                title={t('agentForm.importDialog.uploadTitle')}
+                description={t('agentForm.importDialog.uploadDescription')}
+                chooseLabel={t('agentForm.importDialog.chooseFile')}
+                replaceLabel={t('agentForm.importDialog.replaceFile')}
+                removeLabel={t('agentForm.importDialog.removeFile')}
+                error={phase.source.selectionError ?? undefined}
+                buttonRef={chooseButtonRef}
+                icon={
+                  <svg width="24" height="24" viewBox="0 0 24 24">
+                    <path d="M7 3h7l4 4v14H7z" />
+                    <path d="M14 3v5h5M12 17v-6m-3 3 3-3 3 3" />
+                  </svg>
+                }
+                data-testid="agent-import-file"
+              />
+            ) : (
+              <Field
+                label={t('agentForm.importDialog.pasteLabel')}
+                hint={t('agentForm.importDialog.pasteHint')}
+              >
+                <TextArea
+                  textareaRef={pasteTextAreaRef}
+                  value={phase.source.pasteText}
+                  onChange={updatePasteText}
+                  rows={10}
+                  monospace
+                  disabled={phase.busy !== null}
+                  placeholder={t('agentForm.importDialog.pastePlaceholder')}
+                  data-testid="agent-import-textarea"
+                />
+              </Field>
             )}
-          </div>
-        ) : (
-          <textarea
-            className="form-input agent-import__textarea"
-            rows={14}
-            value={rawText}
-            data-testid="agent-import-textarea"
-            placeholder={t('agentForm.importDialog.pastePlaceholder')}
-            onChange={(e) => {
-              setRawText(e.target.value)
-              setFilenameStem(undefined)
-              setParseResult(null)
-            }}
-          />
+
+            <Card className="agent-import__note">
+              <strong>{t('agentForm.importDialog.draftOnlyTitle')}</strong>
+              <span>{t('agentForm.importDialog.draftOnlyHint')}</span>
+            </Card>
+          </section>
         )}
 
-        <div className="agent-import__actions-row">
-          <button
-            type="button"
-            className="btn"
-            disabled={rawText === ''}
-            data-testid="agent-import-parse"
-            onClick={doParse}
-          >
-            {t('agentForm.importDialog.parseButton')}
-          </button>
-          <span className="agent-import__hint">{t('agentForm.importDialog.footerHint')}</span>
-        </div>
+        {phase.kind === 'review' && reviewState !== null && (
+          <section className="agent-import__phase" aria-live="polite">
+            <div className="agent-import__phase-heading">
+              <h3 ref={reviewHeadingRef} tabIndex={-1} data-testid="agent-import-review-heading">
+                {t('agentForm.importDialog.reviewTitle')}
+              </h3>
+              <p>{reviewSourceLabel(phase.source)}</p>
+            </div>
 
-        {parseResult !== null && (
-          <section className="agent-import__preview" aria-live="polite">
-            {blockingWarning !== undefined && (
-              <div className="agent-import__warning" data-testid="agent-import-warning">
-                {blockingWarning.message}
+            <div
+              className="agent-import__summary"
+              aria-label={t('agentForm.importDialog.reviewTitle')}
+            >
+              <StatusChip kind="info" size="sm">
+                {t('agentForm.importDialog.itemCount', { count: phase.preview.itemCount })}
+              </StatusChip>
+              <StatusChip kind="neutral" size="sm">
+                {t('agentForm.importDialog.sectionCount', { count: phase.preview.sectionCount })}
+              </StatusChip>
+              {reviewState.nonBlockingWarnings.length > 0 && (
+                <StatusChip kind="warn" size="sm">
+                  {t('agentForm.importDialog.warningCount', {
+                    count: reviewState.nonBlockingWarnings.length,
+                  })}
+                </StatusChip>
+              )}
+            </div>
+
+            {reviewState.blockingWarning !== undefined && (
+              <div data-testid="agent-import-warning">
+                <ErrorBanner error={null} message={reviewState.blockingWarning.message} />
               </div>
             )}
-            {!hasYamlError && orphanConflicts.length > 0 && (
-              <div className="agent-import__warning" data-testid="agent-import-port-conflict">
-                {t('agentForm.importDialog.orphanConflict', {
-                  mappings: orphanConflicts
-                    .map((conflict) => `${conflict.source}:${conflict.key}`)
-                    .join(', '),
-                })}
-              </div>
-            )}
-            {!hasYamlError && willOverwrite.length > 0 && (
-              <div className="agent-import__overwrite" data-testid="agent-import-overwrite">
-                {t('agentForm.importDialog.willOverwrite', {
-                  count: willOverwrite.length,
-                  fields: willOverwrite.join(', '),
-                })}
-              </div>
-            )}
-            {!hasYamlError && warnings.length > 0 && (
-              <ul className="agent-import__warnings">
-                {warnings
-                  .filter((w) => !w.blocking)
-                  .map((w, i) => (
-                    <li key={i}>{w.message}</li>
+            {reviewState.blockingWarning === undefined &&
+              reviewState.orphanConflicts.length > 0 && (
+                <div data-testid="agent-import-port-conflict">
+                  <ErrorBanner
+                    error={null}
+                    message={t('agentForm.importDialog.orphanConflict', {
+                      mappings: reviewState.orphanConflicts
+                        .map((conflict) => `${conflict.source}:${conflict.key}`)
+                        .join(', '),
+                    })}
+                    action={
+                      <button
+                        type="button"
+                        className="btn btn--sm"
+                        data-testid="agent-import-fix-ports"
+                        onClick={() => viewForm('ports')}
+                      >
+                        {t('agentForm.importDialog.fixPortsButton')}
+                      </button>
+                    }
+                  />
+                </div>
+              )}
+
+            {reviewState.willOverwrite.length > 0 && (
+              <Card
+                className="agent-import__notice agent-import__notice--overwrite"
+                data-testid="agent-import-overwrite"
+                header={
+                  <>
+                    <strong>{t('agentForm.importDialog.overwriteTitle')}</strong>
+                    <StatusChip kind="warn" size="sm">
+                      {reviewState.willOverwrite.length}
+                    </StatusChip>
+                  </>
+                }
+              >
+                <p>
+                  {t('agentForm.importDialog.overwriteDescription', {
+                    count: reviewState.willOverwrite.length,
+                  })}
+                </p>
+                <div className="agent-import__field-chips">
+                  {reviewState.willOverwrite.map((field) => (
+                    <code key={field}>{field}</code>
                   ))}
-              </ul>
+                </div>
+              </Card>
             )}
-            {previewRows.length === 0 ? (
-              <p className="agent-import__empty">{t('agentForm.importDialog.previewEmpty')}</p>
+
+            {reviewState.nonBlockingWarnings.length > 0 && (
+              <Card
+                className="agent-import__notice"
+                data-testid="agent-import-warnings"
+                header={
+                  <>
+                    <strong>{t('agentForm.importDialog.warningTitle')}</strong>
+                    <StatusChip kind="warn" size="sm">
+                      {reviewState.nonBlockingWarnings.length}
+                    </StatusChip>
+                  </>
+                }
+              >
+                <ul className="agent-import__warning-list">
+                  {reviewState.nonBlockingWarnings.map((warning, index) => (
+                    <li key={`${warning.code}-${index}`}>{warning.message}</li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+
+            {phase.preview.itemCount === 0 ? (
+              <EmptyState
+                title={t('agentForm.importDialog.previewEmptyTitle')}
+                description={t('agentForm.importDialog.previewEmptyDescription')}
+                icon="∅"
+                data-testid="agent-import-empty"
+              />
             ) : (
-              <table className="data-table data-table--compact agent-import__table">
-                <tbody>
-                  {previewRows.map((row, i) => (
-                    <tr key={`${row.field}-${i}`}>
-                      <td className="agent-import__field">{row.field}</td>
-                      <td className="agent-import__value">{row.value}</td>
-                      <td className="agent-import__route">{t(row.routeKey)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="agent-import__sections">
+                {phase.preview.sections.map((section) => (
+                  <Card
+                    key={section.tab}
+                    className="agent-import__section"
+                    data-testid={`agent-import-section-${section.tab}`}
+                    header={
+                      <>
+                        <h4>{sectionLabel(section.tab)}</h4>
+                        <StatusChip kind="neutral" size="sm">
+                          {section.items.length}
+                        </StatusChip>
+                      </>
+                    }
+                  >
+                    <ul className="agent-import__items">
+                      {section.items.map((item) => (
+                        <li
+                          key={item.id}
+                          className="agent-import__item"
+                          data-testid={`agent-import-item-${item.id}`}
+                        >
+                          <code className="agent-import__field">{item.field}</code>
+                          <div className="agent-import__item-value">{renderPreviewValue(item)}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  </Card>
+                ))}
+              </div>
             )}
+          </section>
+        )}
+
+        {phase.kind === 'result' && (
+          <section
+            className="agent-import__phase agent-import__result"
+            data-testid="agent-import-result"
+          >
+            <div className="agent-import__result-heading">
+              <span className="agent-import__result-icon" aria-hidden="true">
+                ✓
+              </span>
+              <div>
+                <h3 ref={resultHeadingRef} tabIndex={-1} data-testid="agent-import-result-heading">
+                  {t('agentForm.importDialog.resultTitle')}
+                </h3>
+                <p>
+                  {t('agentForm.importDialog.resultDescription', {
+                    source: phase.sourceLabel,
+                    items: phase.appliedItemCount,
+                    sections: phase.affectedSections.length,
+                  })}
+                </p>
+              </div>
+            </div>
+            <div className="agent-import__result-sections">
+              <StatusChip kind="success" size="sm">
+                {t('agentForm.importDialog.itemCount', { count: phase.appliedItemCount })}
+              </StatusChip>
+              {phase.affectedSections.map((section) => (
+                <StatusChip key={section.tab} kind="neutral" size="sm">
+                  {sectionLabel(section.tab)} · {section.count}
+                </StatusChip>
+              ))}
+            </div>
+            <Card className="agent-import__next-step">
+              <strong data-testid="agent-import-not-created">
+                {t('agentForm.importDialog.notCreated')}
+              </strong>
+              <span>{t('agentForm.importDialog.resultNextStep')}</span>
+            </Card>
           </section>
         )}
       </div>
     </Dialog>
   )
-}
-
-function renderPreviewValue(v: unknown): string {
-  if (typeof v === 'string') {
-    return v.length > 60 ? `${v.slice(0, 57)}…` : v
-  }
-  if (typeof v === 'number' || typeof v === 'boolean') return String(v)
-  if (v === null) return 'null'
-  try {
-    const json = JSON.stringify(v)
-    return json.length > 60 ? `${json.slice(0, 57)}…` : json
-  } catch {
-    return String(v)
-  }
 }

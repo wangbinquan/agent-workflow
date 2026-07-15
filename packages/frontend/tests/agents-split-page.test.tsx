@@ -406,6 +406,7 @@ describe('/agents split page', () => {
     })
     fireEvent.click(screen.getByTestId('agent-import-parse'))
     fireEvent.click(screen.getByTestId('agent-import-apply'))
+    fireEvent.click(screen.getByTestId('agent-import-view-form'))
 
     const create = screen.getByTestId('agent-create-button') as HTMLButtonElement
     expect(create.disabled).toBe(true)
@@ -446,6 +447,7 @@ describe('/agents split page', () => {
     })
     fireEvent.click(screen.getByTestId('agent-import-parse'))
     fireEvent.click(screen.getByTestId('agent-import-apply'))
+    fireEvent.click(screen.getByTestId('agent-import-view-form'))
 
     fireEvent.click(screen.getByTestId('agent-import-open'))
     fireEvent.click(screen.getByRole('tab', { name: /paste/i }))

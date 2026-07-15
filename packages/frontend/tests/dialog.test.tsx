@@ -5,7 +5,7 @@ import { fireEvent, render } from '@testing-library/react'
 import { useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import { Dialog } from '../src/components/Dialog'
-import { Field, TextInput } from '../src/components/Form'
+import { Field, TextArea, TextInput } from '../src/components/Form'
 
 afterEach(() => {
   // React 19 + happy-dom + createPortal: never manually wipe document.body
@@ -124,6 +124,15 @@ describe('<Dialog />', () => {
     }
   })
 
+  test('bodyTabIndex opt-in makes the scroll region keyboard-focusable', () => {
+    render(
+      <Dialog open onClose={() => {}} title="Scrollable review" bodyTabIndex={0}>
+        read-only content
+      </Dialog>,
+    )
+    expect(document.querySelector('.dialog__body')?.getAttribute('tabindex')).toBe('0')
+  })
+
   test('initialFocusRef gets focus after mount', async () => {
     function Probe(): ReactElement {
       const ref = useRef<HTMLButtonElement | null>(null)
@@ -177,6 +186,26 @@ describe('<Dialog />', () => {
     expect(input?.getAttribute('aria-invalid')).toBe('true')
     expect(input?.getAttribute('aria-describedby')).toBe('port-name-error')
     expect(document.getElementById('port-name-error')?.getAttribute('role')).toBe('alert')
+  })
+
+  test('TextArea textareaRef can serve as a Dialog initial focus target', async () => {
+    function Probe(): ReactElement {
+      const ref = useRef<HTMLTextAreaElement | null>(null)
+      return (
+        <Dialog open onClose={() => {}} title="t" initialFocusRef={ref}>
+          <TextArea
+            textareaRef={ref}
+            value="draft"
+            onChange={() => {}}
+            data-testid="draft-textarea"
+          />
+        </Dialog>
+      )
+    }
+
+    render(<Probe />)
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    expect(document.activeElement?.getAttribute('data-testid')).toBe('draft-textarea')
   })
 
   test('footer slot renders the dialog footer when supplied', () => {
