@@ -5,13 +5,13 @@
 ## 任务
 
 - **RFC-191-T1 `<RelativeTime>` 原语落地**
-  `lib/relative-time.ts`（`relativeTimeToken`，双向阈值表）+ `components/RelativeTime.tsx`（`<time dateTime title>`）+ `common.relTime.*` zh/en key + `lib/homepage.ts#formatRelativeTime` 改 delegate（token 形状不变，`homepage-lib.test.ts` 保持绿）。
-  测试：`relative-time.test.ts` 阈值边界 + delegate 兼容。
+  `lib/relative-time.ts`（`relativeTimeToken`，双向阈值表）+ `components/RelativeTime.tsx`（`<time dateTime title>`；`ts: number | string` 契约，NaN 兜底 em dash；模块级共享 `useNowTick(30_000)` ticker——静态页无 refetch 也持续推进）+ `common.relTime.*` zh/en key + `lib/homepage.ts#formatRelativeTime` 改 delegate（token 形状不变，`homepage-lib.test.ts` 保持绿）。
+  测试：`relative-time.test.ts` 阈值边界 + string/NaN + fake-timer ticker + delegate 兼容。
   依赖：无。**RFC-192 依赖本任务。**
 
 - **RFC-191-T2 画廊公共组件**
-  `components/gallery/ResourceGalleryPage.tsx` + `GalleryCard`（基于 `Card`，stretched-link 模式）+ styles.css `.gallery` / `.gallery-card` 命名空间段。
-  测试：`gallery-page.test.tsx`（三态 / 过滤 / 空态不渲染搜索框 / 链接与启动按钮 role 断言）。
+  `components/gallery/ResourceGalleryPage.tsx`（含 `notice` 槽）+ `GalleryCard`（基于 `Card`，stretched-link 模式；徽标不抬升、仅 ops 抬升）+ styles.css `.gallery` / `.gallery-card` 命名空间段 + `Form.tsx#TextInput` 最小扩展（`type` / `aria-label` / `className` 透传）供搜索框使用。
+  测试：`gallery-page.test.tsx`（三态 / 过滤 / 空态不渲染搜索框 / notice 槽次序 / 链接与启动按钮 role 断言）+ TextInput 兼容单测。
   依赖：T1。
 
 - **RFC-191-T3 workflows 页迁移**
@@ -20,8 +20,8 @@
   依赖：T2。
 
 - **RFC-191-T4 workgroups 页迁移**
-  `lib/workgroup-mode.ts`（`WORKGROUP_MODE_KIND` 映射）+ `routes/workgroups.tsx` 装配（模式语义色 / 成员数 / leader / 全自动 chip / 启动深链）；删除 Dialog 与行内删除退役。i18n 追加 `workgroups.cardMembers` / `workgroups.cardLeader` / `workgroups.autonomousChip` / `workgroups.noDescription`。
-  测试：`workgroups-pages.test.tsx` 重写 + 映射表单测。
+  `lib/workgroup-mode.ts`（`WORKGROUP_MODE_KIND` 映射）+ `routes/workgroups.tsx` 装配（模式语义色 / 成员数 / leader / 全自动 chip / 启动深链，启动按 shared `workgroupLaunchReadiness` 门禁——not-ready 不渲染）；删除 Dialog 与行内删除退役。i18n 追加 `workgroups.cardMembers` / `workgroups.cardLeader` / `workgroups.autonomousChip` / `workgroups.noDescription`。
+  测试：`workgroups-pages.test.tsx` 重写（含 not-ready 门禁断言）+ 映射表单测。
   依赖：T2。
 
 - **RFC-191-T5 共享件收缩与锁清扫**

@@ -33,18 +33,18 @@
 
 1. **列重排**：`状态 | 任务 | 主体 | 仓库 | 开始 | 耗时 | ›`。
    - 状态列前置（监控扫读入口）；**运行中行状态 chip 带脉冲点**（`prefers-reduced-motion` 静止）；
-   - 「任务」单元格 = 名称（Link）+ ULID 副标题（现状保留）+ **失败行第二行红色错误摘要**（单行截断、title 全文）——「错误」常驻列退役；`scheduledTaskId` 非空时名称旁「定时」chip 链回 `/scheduled/$id`；
-   - 仓库列只显示仓名（basename），全路径进 title；`repoCount > 1` 补「N 仓库」chip；
+   - 「任务」单元格 = 名称（Link）+ ULID 副标题（现状保留）+ **失败行第二行红色错误摘要**（判据 `status === 'failed' && errorSummary != null`——canceled / interrupted 行的 `errorSummary` 是「canceled by user」类说明文本，不按红色错误渲染；单行截断、title 全文）——「错误」常驻列退役；`scheduledTaskId` 非空时名称旁「定时」chip 链回 `/scheduled/$id`；
+   - 仓库列只显示仓名（路径模式 = `repoPath` basename；URL 模式 `repoPath` 是缓存目录 `{hash}-{slug}`，改从**脱敏后的 `repoUrl`** 派生仓名，避免把内部缓存名当仓名展示）、完整信息进 title；`repoCount > 1` 补「N 仓库」chip；
    - 开始列 `<RelativeTime>`；新增**耗时列**（终态 = `finishedAt - startedAt`；运行中 = 「进行中 · X」活动时长；等待态 = 「等待 X」）。
 2. **整行可点**进任务详情（定时任务页既有模式推广），行尾「打开」按钮退役、以 `›` chevron 提示可点。
-3. **过滤三维化（纯前端，决策 D2）**：状态 chips（现状 URL 驱动，保留）+ 主体 `Segmented`（全部 / 工作流 / 工作组 / 单代理，`taskExecutionKind` 共享派生点）+ 名称搜索框。数据 ≤500 行已全在客户端，零后端改动。
+3. **过滤三维化（纯前端，决策 D2）**：状态 chips（现状 URL 驱动，保留）+ 主体 `Segmented`（全部 / 工作流 / 工作组 / 单代理，`taskExecutionKind` 共享派生点）+ 名称搜索框。列表查询**显式传 `limit=500`**（`listTasks` 默认只回 100 行、路由上限 500——不传则本地过滤会静默漏掉第 101 条以后的匹配；Codex 设计门 P1）；过滤覆盖面即「最近 500 条」，超出部分需要分页/服务端过滤时另立 RFC（非目标注记）。零后端改动。
 
 ### 2.2 定时任务列表（行内操作）
 
 4. **列重构**：`启用(Switch) | 名称 | 周期 | 下次触发 | 最近触发 | 操作`。
    - 启用列换公共 `Switch` 就地 `PUT {enabled}`（行点击不受影响，Switch 点击 stopPropagation）；
    - 下次触发 = 相对时间主行（「4 小时后」）+ 短格式绝对时间副行；禁用行「—」；
-   - 最近触发三合一 = 结果 chip + `<RelativeTime ts={lastRunAt}>` + `lastTaskId` 任务链接；`consecutiveFailures > 1` 追加「连挂 ×N」danger chip；
+   - 最近触发三合一 = 结果 chip + `<RelativeTime ts={lastRunAt}>` + 任务链接（**仅 `lastStatus === 'launched'` 时渲染**——失败触发不产生任务，后端此时不更新 `lastTaskId`，无条件渲染会把失败 chip 链到一个更早的成功任务上；Codex 设计门 P1）；`consecutiveFailures > 1` 追加「连挂 ×N」danger chip；
    - 操作列 = 「立即运行」（**轻确认**：`ConfirmButton` 两击，决策 D3；成功后跳新任务，与详情页行为一致；「需修复」行禁用）。
 
 ### 2.3 一致性收尾（决策 D5）
