@@ -174,12 +174,12 @@ test('happy path: agents → workflow → launch → task done → outputs visib
   await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible()
   await expect(page.getByText(fixtures.agentName)).toBeVisible()
 
-  // 2. Workflow editor — confirm the row is there, then open it via the link.
+  // 2. Workflow editor — RFC-191 gallery-ized the list (rows → cards): the
+  // card's title is a real <Link> whose accessible name IS the workflow
+  // name (GalleryCard.tsx stretched-link pattern), so open it by name.
   await page.getByRole('link', { name: 'Workflows', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Workflows', exact: true })).toBeVisible()
-  const openLink = page
-    .getByRole('row', { name: new RegExp(fixtures.workflowName) })
-    .getByRole('link', { name: /open/i })
+  const openLink = page.getByRole('link', { name: fixtures.workflowName, exact: true })
   await openLink.click()
   await expect(page.getByRole('heading', { name: fixtures.workflowName })).toBeVisible()
 
