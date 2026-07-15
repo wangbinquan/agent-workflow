@@ -320,6 +320,10 @@ interface SchedulerState {
     worktreePath: string
     worktreeDirName: string
     baseBranch: string
+    /** RFC-187 §4 (Codex impl-gate P1) — per-repo base for the zero-delta-done check.
+     *  A multi-repo task's `tasks.worktreePath` is a NON-git parent container, so
+     *  diffing it would just throw; each repo must be diffed at its own worktree/base. */
+    baseCommit: string | null
   }>
 }
 
@@ -361,18 +365,14 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     .from(taskRepos)
     .where(eq(taskRepos.taskId, taskId))
     .orderBy(asc(taskRepos.repoIndex))
-  const repos: Array<{
-    repoPath: string
-    worktreePath: string
-    worktreeDirName: string
-    baseBranch: string
-  }> =
+  const repos: SchedulerState['repos'] =
     repoRows.length > 0
       ? repoRows.map((r) => ({
           repoPath: r.repoPath,
           worktreePath: r.worktreePath,
           worktreeDirName: r.worktreeDirName,
           baseBranch: r.baseBranch,
+          baseCommit: r.baseCommit,
         }))
       : [
           {
@@ -380,6 +380,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
             worktreePath: task.worktreePath,
             worktreeDirName: '',
             baseBranch: task.baseBranch,
+            baseCommit: task.baseCommit,
           },
         ]
 
@@ -1034,11 +1035,20 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
       broadcastNodeStatus(taskId, nodeRunId, nodeId, status as NodeStatus),
     // RFC-187 §4 — canonical delta for the zero-delta-done warn. Throws (engine
     // swallows) when there's no base commit to diff against.
+    // RFC-187 §4 (Codex impl-gate P1) — sum the delta over EVERY canonical repo at its
+    // own worktree/base. The old form diffed `task.worktreePath`, which for a multi-repo
+    // task is a NON-git parent container: git threw, `warnIfZeroDeltaDone` swallowed it,
+    // and the zero-delta warning silently never fired for multi-repo tasks at all.
+    // Single-repo is unchanged (repos[0].worktreePath === task.worktreePath).
     getCanonicalFilesChanged: async () => {
-      if (task.baseCommit === null) {
-        throw new Error('no base commit — cannot compute canonical delta')
+      const diffable = state.repos.filter((r) => r.baseCommit !== null)
+      if (diffable.length === 0) {
+        throw new Error('no base commit on any repo — cannot compute canonical delta')
       }
-      return worktreeFilesChanged(task.worktreePath, task.baseCommit)
+      const perRepo = await Promise.all(
+        diffable.map((r) => worktreeFilesChanged(r.worktreePath, r.baseCommit as string)),
+      )
+      return perRepo.reduce((sum, n) => sum + n, 0)
     },
   }
 }
@@ -3947,6 +3957,8 @@ async function runLoopWrapperNode(
           worktreePath: r.isoWorktreePath,
           worktreeDirName: r.worktreeDirName,
           baseBranch: r.baseBranch,
+          // RFC-187 §4 — a wrapper-iso repo's base is the commit it forked from.
+          baseCommit: r.baseSnapshot,
         })),
       }
 
@@ -5740,6 +5752,8 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
           worktreePath: r.isoWorktreePath,
           worktreeDirName: r.worktreeDirName,
           baseBranch: r.baseBranch,
+          // RFC-187 §4 — a wrapper-iso repo's base is the commit it forked from.
+          baseCommit: r.baseSnapshot,
         })),
       }
 

@@ -80,6 +80,7 @@ import {
 import {
   decideWorkgroupOutcome,
   deriveWakeSet,
+  hasSalvageableWork,
   WG_NUDGE_BODY,
   type WakeInput,
   type WakeItem,
@@ -601,6 +602,23 @@ function countRoundsUsed(state: EngineDbState): number {
       r.status !== 'canceled' &&
       r.rerunCause !== 'wg-protocol-retry',
   ).length
+}
+
+/**
+ * RFC-187 §3-7 (Codex impl-gate P1) — is an ADOPTED leader run the grace wrap-up round
+ * resuming from its clarify? The wake item carries `reason:'wrap-up'`, but a clarify-answer
+ * rerun is adopted (no wake item), so the flag must be re-derived or the continuation
+ * silently loses the FINAL directive AND the dispatch-ban — letting the leader answer with
+ * `continue + wg_assignments` and dispatch work past the cap that no later round can
+ * aggregate. The cap only ever grants ONE grace leader round, so a leader continuation
+ * while roundsUsed is already at/past maxRounds (with completed work) IS that round.
+ */
+export function isLeaderWrapUpContinuation(state: EngineDbState): boolean {
+  return (
+    state.config.mode === 'leader_worker' &&
+    countRoundsUsed(state) >= state.config.maxRounds &&
+    hasSalvageableWork(state.assignments)
+  )
 }
 
 /**
@@ -1235,7 +1253,13 @@ async function driveAdoptedRun(
 ): Promise<void> {
   const { db, log } = args
   if (row.nodeId === WG_LEADER_NODE_ID) {
-    await driveLeaderTurn(args, state, row.id)
+    // RFC-187 §3-7 (Codex impl-gate P1) — a wrap-up round that asked a human resumes
+    // HERE (clarify-answer rerun), and the wake item's `reason:'wrap-up'` is gone. Without
+    // re-deriving it the continuation loses the FINAL directive AND the dispatch-ban, so a
+    // leader answering with `continue + wg_assignments` dispatches work past the cap that
+    // no later round can aggregate. A leader continuation at/past the cap IS a wrap-up by
+    // construction (the cap only ever grants the one grace round), so re-derive from state.
+    await driveLeaderTurn(args, state, row.id, isLeaderWrapUpContinuation(state))
     return
   }
   const shardKey = row.shardKey

@@ -19,6 +19,7 @@ import {
   deriveWakeSet,
   type WakeInput,
 } from '../src/services/workgroupWake'
+import { isLeaderWrapUpContinuation } from '../src/services/workgroupRunner'
 
 function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
   return {
@@ -201,13 +202,69 @@ describe('RFC-187 §3-7 — wrap-up round dispatch-ban + directive (Codex P0-3)'
 
   test('the wrap-up round injects a forced "declare done, do not dispatch" directive', () => {
     expect(RUNNER).toContain('FINAL round — the round cap has been reached')
-    // threaded from the wake item, not the adopted (clarify-answer) path.
+    // threaded from the wake item...
     expect(RUNNER).toContain("item.reason === 'wrap-up'")
+    // ...AND re-derived on the adopted (clarify-answer) path — see the Codex
+    // impl-gate P1 lock below.
+    expect(RUNNER).toContain(
+      'driveLeaderTurn(args, state, row.id, isLeaderWrapUpContinuation(state))',
+    )
   })
 
   test('new dispatch on a wrap-up round is DROPPED (not dispatched, not errored)', () => {
     // dropping (vs erroring) keeps a `done` decision landing — graceful, no hard fail.
     expect(RUNNER).toMatch(/wrapUp && dispatches\.ok && dispatches\.value\.length > 0/)
     expect(RUNNER).toContain('wrapUpDroppedDispatch = true')
+  })
+})
+
+// RFC-187 §3-7 — Codex impl-gate P1: a wrap-up round that asks a human resumes via an
+// ADOPTED clarify-answer rerun, which carries no wake item — so `wrapUp` was lost and the
+// continuation could answer `continue + wg_assignments`, dispatching work past the cap
+// that no later round can aggregate. The flag is now re-derived from state.
+describe('RFC-187 §3-7 — isLeaderWrapUpContinuation (adopted clarify-answer keeps wrap-up)', () => {
+  const st = (over: {
+    mode?: 'leader_worker' | 'free_collab'
+    maxRounds?: number
+    rounds?: number
+    done?: boolean
+  }): Parameters<typeof isLeaderWrapUpContinuation>[0] => {
+    const rounds = over.rounds ?? 0
+    return {
+      config: { ...cfg({ maxRounds: over.maxRounds ?? 1 }), mode: over.mode ?? 'leader_worker' },
+      assignments: over.done === false ? [] : [doneAsg()],
+      // countRoundsUsed(lw) reads max(wgRound) over non-canceled leader rows.
+      hostRuns:
+        rounds > 0
+          ? [
+              {
+                nodeId: '__wg_leader__',
+                status: 'done',
+                wgRound: rounds,
+                rerunCause: 'wg-leader-round',
+              },
+            ]
+          : [],
+    } as unknown as Parameters<typeof isLeaderWrapUpContinuation>[0]
+  }
+
+  test('at the cap WITH completed work → continuation stays in wrap-up mode', () => {
+    expect(isLeaderWrapUpContinuation(st({ maxRounds: 1, rounds: 1 }))).toBe(true)
+    // past the cap too (the grace round itself counted).
+    expect(isLeaderWrapUpContinuation(st({ maxRounds: 1, rounds: 2 }))).toBe(true)
+  })
+
+  test('below the cap → an ordinary continuation (no FINAL directive / no dispatch-ban)', () => {
+    expect(isLeaderWrapUpContinuation(st({ maxRounds: 5, rounds: 1 }))).toBe(false)
+  })
+
+  test('at the cap with NO completed work → not a wrap-up (nothing to salvage)', () => {
+    expect(isLeaderWrapUpContinuation(st({ maxRounds: 1, rounds: 1, done: false }))).toBe(false)
+  })
+
+  test('free_collab has no leader wrap-up', () => {
+    expect(isLeaderWrapUpContinuation(st({ mode: 'free_collab', maxRounds: 1, rounds: 1 }))).toBe(
+      false,
+    )
   })
 })

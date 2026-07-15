@@ -93,8 +93,8 @@ export type WorkgroupOutcome =
  * next leader turn) assignments mean a deliverable exists in the worktree; probe C
  * produced hello.txt then the task `failed` on maxRounds:1 with that file in canonical.
  */
-function hasSalvageableWork(input: WakeInput): boolean {
-  return input.assignments.some((a) => a.status === 'done' || a.status === 'delivered')
+export function hasSalvageableWork(assignments: readonly WorkgroupAssignment[]): boolean {
+  return assignments.some((a) => a.status === 'done' || a.status === 'delivered')
 }
 
 /**
@@ -217,7 +217,7 @@ export function deriveWakeSet(input: WakeInput): WakeSet {
             // there's completed work to aggregate, so the leader can declare done
             // rather than the task hard-failing with a deliverable in hand. Counted,
             // so roundsUsed > maxRounds next pass ⇒ no second grace round.
-            if (input.roundsUsed === config.maxRounds && hasSalvageableWork(input)) {
+            if (input.roundsUsed === config.maxRounds && hasSalvageableWork(input.assignments)) {
               items.push({ kind: 'leader', reason: 'wrap-up' })
             } else {
               capExceeded = true
@@ -291,7 +291,7 @@ export function decideWorkgroupOutcome(input: WakeInput, wake: WakeSet): Workgro
     // already ran or the leader dispatched instead of declaring done), park for a
     // human with the deliverable intact rather than a bare `failed` that reads as
     // "nothing produced" (probe C). Only a genuine no-output spin hard-fails.
-    if (hasSalvageableWork(input)) {
+    if (hasSalvageableWork(input.assignments)) {
       return { kind: 'awaiting_human', reason: 'max-rounds-wrapup' }
     }
     return { kind: 'failed', reason: 'max-rounds' }

@@ -50,6 +50,22 @@ describe('RFC-187 §4 — source locks', () => {
       'utf8',
     )
     expect(scheduler).toContain('getCanonicalFilesChanged')
-    expect(scheduler).toContain('worktreeFilesChanged(task.worktreePath, task.baseCommit)')
+  })
+
+  // Codex impl-gate P1 — the hook used to diff `task.worktreePath`, which for a MULTI-REPO
+  // task is a non-git parent container: git threw, warnIfZeroDeltaDone swallowed it, and
+  // the warning silently never fired for multi-repo tasks at all. It must diff EVERY repo
+  // at its own worktree/base.
+  test('the hook sums the delta per-repo (not the non-git multi-repo parent container)', () => {
+    const scheduler = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      'utf8',
+    )
+    // per-repo worktree+base, not the task-level parent.
+    expect(scheduler).toContain('worktreeFilesChanged(r.worktreePath, r.baseCommit as string)')
+    expect(scheduler).not.toContain('worktreeFilesChanged(task.worktreePath, task.baseCommit)')
+    // and SchedulerState.repos carries the per-repo base that makes it possible.
+    expect(scheduler).toContain('baseCommit: string | null')
+    expect(scheduler).toContain('state.repos.filter((r) => r.baseCommit !== null)')
   })
 })
