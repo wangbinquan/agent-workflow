@@ -100,17 +100,26 @@ function stripComments(src: string): string {
     }
     if (escape) {
       escape = false
-      out[outIdx++] = c
+      out[outIdx++] = inString !== null && inString !== '`' ? ' ' : c
       continue
     }
     if (inString) {
       if (c === '\\') {
         escape = true
+        out[outIdx++] = inString !== '`' ? ' ' : c
+        continue
+      }
+      if (c === inString) {
+        inString = null
         out[outIdx++] = c
         continue
       }
-      if (c === inString) inString = null
-      out[outIdx++] = c
+      // Plain '…' / "…" string contents are data, not code — blank them so
+      // prose inside a message (e.g. "cannot add the system user as a
+      // member", RFC-099 bda0d4fb) is never mis-scanned as an `as` cast.
+      // Template literals keep their contents: `${…}` interpolation can
+      // carry real code this scan must still see.
+      out[outIdx++] = inString !== '`' ? (c === '\n' ? '\n' : ' ') : c
       continue
     }
     if (c === '"' || c === "'" || c === '`') {

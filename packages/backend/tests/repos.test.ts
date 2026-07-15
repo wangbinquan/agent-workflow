@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { cachedRepos } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { runGit } from '../src/util/git'
 
@@ -44,6 +45,19 @@ beforeEach(async () => {
     opencodeVersion: '1.14.25',
     dbVersion: 1,
     db,
+  })
+  // RFC-099 (bda0d4fb): refs/files reject paths outside cached_repos mirrors.
+  // Register the suite's temp root once so every per-test dir below (repo-*,
+  // emptyrepo-*, notrepo-*) passes the allowlist gate and the assertions keep
+  // exercising the endpoints' own behavior behind it.
+  await db.insert(cachedRepos).values({
+    id: 'cr-repos-suite',
+    url: 'file:///aw-repos-suite',
+    urlHash: 'aw-repos-suite-hash',
+    localPath: baseTmp,
+    defaultBranch: 'main',
+    lastFetchedAt: Date.now(),
+    createdAt: Date.now(),
   })
 })
 
