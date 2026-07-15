@@ -45,16 +45,20 @@ const log = createLogger('rfc189-test')
 function partialMigrationsDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'aw-rfc189-mig-'))
   cpSync(MIGRATIONS, dir, { recursive: true })
-  // 截断 journal：去掉 0095（最后一个条目）。
+  // 截断 journal 到 0095 之前（构造"0095 尚未应用"的部分迁移目录）。
+  // RFC-193 起 0095 不再是最后一条 —— 按 tag 定位截断点，后续新增 migration
+  // 不再反复弄红这里（原实现硬编码「尾条 == 0095」）。
   const journalPath = join(dir, 'meta', '_journal.json')
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
     entries: Array<{ tag: string }>
   }
-  const last = journal.entries[journal.entries.length - 1]
-  expect(last?.tag).toBe('0095_rfc189_wg_round')
-  journal.entries.pop()
+  const cut = journal.entries.findIndex((e) => e.tag === '0095_rfc189_wg_round')
+  expect(cut).toBeGreaterThan(0)
+  for (const dropped of journal.entries.slice(cut)) {
+    rmSync(join(dir, `${dropped.tag}.sql`))
+  }
+  journal.entries = journal.entries.slice(0, cut)
   writeFileSync(journalPath, JSON.stringify(journal, null, 2))
-  rmSync(join(dir, '0095_rfc189_wg_round.sql'))
   return dir
 }
 

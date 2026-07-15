@@ -117,6 +117,9 @@ export function mountPortArtifactRoutes(app: Hono, deps: AppDeps): void {
       'application/octet-stream'
     c.header('Content-Type', mime)
     if (item.truncated) c.header('X-AW-Artifact-Truncated', '1')
-    return c.body(item.bytes as Uint8Array<ArrayBuffer>)
+    // 拷贝为独立 ArrayBuffer：BodyInit 需要 ArrayBuffer 域的字节（Buffer 的
+    // buffer 是 ArrayBufferLike 且可能是共享大池的切片）；≤2MiB 一次拷贝可忽略，
+    // 且免去 `as` 逃逸（routes-no-cast 守卫）。
+    return c.body(new Uint8Array(item.bytes).buffer)
   })
 }
