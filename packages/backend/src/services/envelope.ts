@@ -126,7 +126,7 @@ export function parsePortValidationFailuresJson(
 const NODE_VALIDATE_IO: ValidateIO = {
   resolveWorktreePath(worktreeAbsPath, rawContent) {
     const rootAbs = resolve(worktreeAbsPath)
-    const targetAbs = isAbsolute(rawContent) ? resolve(rawContent) : resolve(rootAbs, rawContent)
+    let targetAbs = isAbsolute(rawContent) ? resolve(rawContent) : resolve(rootAbs, rawContent)
     // RFC-103 T7 (05-PORT security): lexical containment FIRST, then realpath
     // containment so a symlink INSIDE the worktree pointing OUTSIDE it cannot
     // read through (`path` / `markdown_file` ports could otherwise exfiltrate
@@ -134,6 +134,7 @@ const NODE_VALIDATE_IO: ValidateIO = {
     // non-existent target falls back to the lexical verdict — existence is
     // checked separately by the handler.
     let insideWorktree = targetAbs === rootAbs || targetAbs.startsWith(rootAbs + sep)
+    let relativePath = relative(rootAbs, targetAbs)
     if (insideWorktree) {
       try {
         const realTarget = realpathSync(targetAbs)
@@ -142,8 +143,27 @@ const NODE_VALIDATE_IO: ValidateIO = {
       } catch {
         // target (or root) not resolvable yet → keep the lexical verdict.
       }
+    } else if (isAbsolute(rawContent)) {
+      // RFC-193: an ABSOLUTE path that fails lexically may still genuinely live
+      // inside the worktree when the two spellings differ by a symlinked
+      // prefix (macOS /var → /private/var tmpdirs: the agent's cwd is the
+      // realpath form while the runner's worktreePath is the lexical form).
+      // Accepting when BOTH realpaths agree is a pure same-location proof —
+      // the read-through protection above is untouched (a real target outside
+      // the real root is still rejected). relativePath is re-derived from the
+      // real forms so the persisted content stays worktree-relative.
+      try {
+        const realTarget = realpathSync(targetAbs)
+        const realRoot = realpathSync(rootAbs)
+        if (realTarget === realRoot || realTarget.startsWith(realRoot + sep)) {
+          insideWorktree = true
+          targetAbs = realTarget
+          relativePath = relative(realRoot, realTarget)
+        }
+      } catch {
+        // unresolvable → keep the lexical (outside) verdict.
+      }
     }
-    const relativePath = relative(rootAbs, targetAbs)
     return { targetAbs, relativePath, insideWorktree }
   },
   readFileUtf8(absPath) {

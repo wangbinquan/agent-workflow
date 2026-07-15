@@ -54,10 +54,11 @@ import {
   extractLastEnvelope,
   parseEnvelope,
   PortValidationError,
-  resolvePortContent,
+  resolvePortContentDetailed,
   serializePortValidationFailures,
   type PortValidationFailure,
 } from './envelope'
+import { archivePortArtifacts, isPathishKindString } from './portArtifacts'
 import { renderUserPrompt } from './protocol'
 // RFC-111 PR-A/B + RFC-143 PR-4: agent runtime behind the driver seam. The
 // stdout pump uses `getRuntimeDriver(runtime).parseEvent` and the spawn goes
@@ -393,6 +394,13 @@ export interface RunResult {
   failureCode?: FailureCode
   /** The exact user prompt sent to opencode (also written to node_runs.promptText). */
   prompt: string
+  /**
+   * RFC-193: repo0-relative source paths of the validated path-shaped port
+   * files this run emitted. The scheduler unions these into the node's final
+   * snapshot force-include roster (gitignored port files must still reach the
+   * scope canonical — K1 必达, design §4.5). Absent when no path ports.
+   */
+  portFilePaths?: string[]
   /** opencode sessionID first seen in stdout events, if any. */
   sessionId?: string
   /**
@@ -1148,6 +1156,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // followup attempt to the right OutputKindHandler's repair block without
   // re-parsing errorMessage.
   const portValidationFailures: PortValidationFailure[] = []
+  // RFC-193: repo0-relative source paths of every validated path-shaped port
+  // file — the force-include roster the scheduler feeds into merge-back
+  // snapshots (K1 必达).
+  const portFilePaths: string[] = []
   if (childUnkillable) {
     // RFC-098 WP-8: overrides aborted/timedOut — the operator needs the pid
     // to clean up by hand, and a 'canceled' status would read as a clean stop.
@@ -1358,17 +1370,43 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         // status may already be 'failed' from the malformed-port guard above —
         // skip per-kind validation in that case (the node is failing regardless
         // and we must not overwrite the malformed errorMessage).
+        //
+        // RFC-193 D15 两阶段：阶段一纯校验（fail-fast，零磁盘写入——首端口过、
+        // 次端口挂时不得留下孤儿归档），顺带收集 path 形端口的 items（handler
+        // 校验已读过文件，sourcePath 即 worktree 相对规范路径）；全部通过后
+        // 阶段二统一归档 + content 规范化 + INSERT。
+        const pathishArchives = new Map<
+          string,
+          { items: Array<{ sourceAbs: string; sourcePath: string }> }
+        >()
         if (status === 'done' && outputKinds !== undefined) {
           for (const [name, content] of parsed.ports) {
             const kind = outputKinds[name]
             if (kind === undefined) continue
             try {
-              resolvePortContent({
+              const resolved = resolvePortContentDetailed({
                 rawContent: content,
                 kind,
                 worktreePath: opts.worktreePath,
                 port: name,
               })
+              if (isPathishKindString(kind)) {
+                // 单值 path：detailed 给 sourcePath；list<path>：items 给逐项。
+                const its =
+                  resolved.items !== undefined
+                    ? resolved.items
+                    : resolved.sourcePath !== undefined
+                      ? [{ body: resolved.body, sourcePath: resolved.sourcePath }]
+                      : []
+                pathishArchives.set(name, {
+                  items: its
+                    .filter((it) => it.sourcePath !== undefined)
+                    .map((it) => ({
+                      sourceAbs: join(opts.worktreePath, it.sourcePath!),
+                      sourcePath: it.sourcePath!,
+                    })),
+                })
+              }
             } catch (err) {
               if (err instanceof PortValidationError) {
                 portValidationFailures.push(err.failure)
@@ -1383,6 +1421,54 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           }
         }
 
+        // 阶段二（RFC-193 D1）：全部端口校验通过后归档 path 形端口（字节级
+        // copy，节点 iso 仍存活——全生命周期唯一可靠读取窗口），并把 content
+        // 规范化为 repo0 相对路径（D6：绝对路径 / './' 前缀不再泄漏下游；容器
+        // 相对形态只进 archive_json）。归档写失败 = 环境级故障，fail loud。
+        const worktreeDirName = opts.templateMeta.repos?.[0]?.worktreeDirName ?? ''
+        const normalizedContent = new Map<string, string>()
+        const archiveJsonByPort = new Map<string, string>()
+        if (
+          status === 'done' &&
+          pathishArchives.size > 0 &&
+          // D14: workgroup host runs persist no node_run_outputs rows, so an
+          // archive would have no reference mount point (orphan). Their wg_*
+          // protocol ports are text-kinded anyway — this is defensive.
+          opts.persistDeclaredOutputs !== false
+        ) {
+          try {
+            for (const [name, arch] of pathishArchives) {
+              const res = archivePortArtifacts({
+                appHome: opts.appHome,
+                taskId: opts.taskId,
+                nodeRunId: opts.nodeRunId,
+                portName: name,
+                items: arch.items,
+                worktreeDirName,
+              })
+              archiveJsonByPort.set(name, res.archiveJson)
+              normalizedContent.set(name, arch.items.map((it) => it.sourcePath).join('\n'))
+              portFilePaths.push(...res.portFilePaths)
+            }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            log.warn('port artifact archival failed', { nodeRunId: opts.nodeRunId, error: msg })
+            // Environment-level failure (appHome full / permissions), NOT an
+            // agent output defect — deliberately no failureCode, so
+            // decideEnvelopeFollowup stays out (a same-session "re-emit your
+            // envelope" would mislead the agent); the ordinary node retry
+            // re-runs validation + archival wholesale (RFC-145 "not
+            // follow-up-able" default).
+            status = 'failed'
+            errorMessage = `port-artifact-archive-failed: ${msg}`
+          }
+        }
+        // D17：RunResult.outputs 与入库 content 同步规范化——fanout/wrapper 直接
+        // 消费该 map（不读 DB），不同步会让 wrapper 继续提升原始（可能绝对）路径。
+        if (status === 'done') {
+          for (const [name, norm] of normalizedContent) outputs[name] = norm
+        }
+
         // Persist ports only on successful validation. The fail-fast loop
         // above bails on the first invalid port without setting status back
         // to 'done', so this branch runs iff every declared port passed
@@ -1390,6 +1476,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         // RFC-184: workgroup host runs pass persistDeclaredOutputs=false so their
         // projected wg_* protocol ports never land in node_run_outputs (design.md
         // §2.4) — result.outputs below still carries them for live consumption.
+        // RFC-193 D14：host run 不归档（无 node_run_outputs 行 = 归档引用无挂载
+        // 点）——上面的归档段不看 persistDeclaredOutputs 是因为 workgroup hook
+        // 的 agent 没有 path 形声明端口（wg_* 协议端口皆文本）；防御性地，此处
+        // persist=false 时归档引用同样不落库。
         if (status === 'done' && opts.persistDeclaredOutputs !== false) {
           for (const [name, content] of parsed.ports) {
             // RFC-072: persist the resolved output kind so the Outputs tab can
@@ -1399,12 +1489,20 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             // 统一存 'path<md>'（migration 0075 清洗了存量，别再倒灌）。
             const rawKind = outputKinds?.[name]
             const kind = rawKind !== undefined ? normalizeKindString(rawKind) : null
+            const persisted = normalizedContent.get(name) ?? content
+            const archiveJson = archiveJsonByPort.get(name) ?? null
             await opts.db
               .insert(nodeRunOutputs)
-              .values({ nodeRunId: opts.nodeRunId, portName: name, content, kind })
+              .values({
+                nodeRunId: opts.nodeRunId,
+                portName: name,
+                content: persisted,
+                kind,
+                archiveJson,
+              })
               .onConflictDoUpdate({
                 target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-                set: { content, kind },
+                set: { content: persisted, kind, archiveJson },
               })
           }
         }
@@ -1530,6 +1628,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   }
 
   const result: RunResult = { status, exitCode, outputs, tokenUsage, prompt }
+  if (portFilePaths.length > 0) result.portFilePaths = portFilePaths
   if (errorMessage !== undefined) result.errorMessage = errorMessage
   if (failureCode !== undefined) result.failureCode = failureCode
   if (sessionId !== undefined) result.sessionId = sessionId

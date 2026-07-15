@@ -1,0 +1,353 @@
+// RFC-193 — path 端口产物归档制（archive-at-emit）。
+//
+// 病根：path 形端口入库的只是路径字符串，能否兑现为文件内容取决于消费方
+// 自己重建「根 / 时刻 / 可见性」三个维度（RFC-130 后三者全不稳定——节点
+// iso 短命、wrapper-canonical 分层、.gitignore 挡快照、worktree 会被 GC）。
+// 每接一个新消费方就埋一个新断链（review / 前端预览 / 下游 agent / fanout）。
+//
+// 根治：runner 校验窗口（节点 iso 存活、handler 刚校验完存在性）是全生命
+// 周期唯一 100% 可读的时刻——在这里把文件内容以【原始字节】归档为不可变
+// 副本（appHome 下），node_run_outputs.archive_json 存引用。此后一切「读
+// 内容」的消费方（review / port-artifacts API / 前端）一律走
+// readPortArtifact：归档 → worktree 回退（存量行）→ missing 三级链，与
+// worktree 生命周期彻底解耦。「要文件在工作区」的语义（下游 agent 编辑）
+// 则由必达 merge-back（forcedPortPathsForTask → snapshotFullState 的
+// forceIncludePaths）另行保障——两种语义分离，见 design.md D1/D2。
+
+import {
+  copyFileSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readSync,
+  closeSync,
+  statSync,
+  writeFileSync,
+  realpathSync,
+} from 'node:fs'
+import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { WORKTREE_FILE_MAX_BYTES, tryParseKind, splitListItems } from '@agent-workflow/shared'
+import { createLogger } from '@/util/log'
+
+const log = createLogger('port-artifacts')
+
+// ---------------------------------------------------------------------------
+// 磁盘 / 路由键编码（D3）。
+// ---------------------------------------------------------------------------
+
+/**
+ * portName → 安全的单段磁盘/路由键。`AgentSchema.outputs` 仅校验为 string，
+ * 端口名可含 `/`、`..` 等——原样拼目录可写出归档根之外。percent-encode 除
+ * `[A-Za-z0-9_-]` 外的一切字符（含 `.`，否则 portName 恰为 `..` 时编码后仍
+ * 是目录上跳段）。确定性、可逆、跨平台文件名安全。
+ */
+export function encodePortSegment(portName: string): string {
+  let out = ''
+  for (const ch of portName) {
+    if (/[A-Za-z0-9_-]/.test(ch)) {
+      out += ch
+    } else {
+      for (const byte of Buffer.from(ch, 'utf8')) {
+        out += `%${byte.toString(16).toUpperCase().padStart(2, '0')}`
+      }
+    }
+  }
+  return out
+}
+
+/** 该 nodeRun 全部端口归档的根目录（appHome 相对）。 */
+export function portArchiveRootRel(taskId: string, nodeRunId: string): string {
+  return join('runs', taskId, 'ports', nodeRunId)
+}
+
+// ---------------------------------------------------------------------------
+// 容器相对化（D4/D6）。
+// ---------------------------------------------------------------------------
+
+/**
+ * repo0 相对路径 → 容器相对路径。多 repo 任务的 `tasks.worktreePath` 是父
+ * 容器、repo 挂在 `{worktreePath}/{worktreeDirName}`；归档引用与必达清单统
+ * 一用容器相对形态（与 task.worktreePath 语义同构）。单 repo `dirName=''`
+ * 时恒等。注意 content 列**不能**用这个形态——下游 agent 的 cwd 是 repo0
+ * 根而非容器根（design D6，Codex 设计门 P1）。
+ */
+export function toContainerRelative(worktreeDirName: string, repoRelPath: string): string {
+  return worktreeDirName === '' ? repoRelPath : join(worktreeDirName, repoRelPath)
+}
+
+// ---------------------------------------------------------------------------
+// archive_json 形态（D4）。
+// ---------------------------------------------------------------------------
+
+export interface PortArchiveItem {
+  /** 容器相对源路径。 */
+  path: string
+  /** appHome 相对归档副本路径；超限二进制不存副本 → null（D12）。 */
+  file: string | null
+  /** 源文件原始字节数。 */
+  size: number
+  truncated: boolean
+}
+
+export interface PortArchive {
+  v: 1
+  items: PortArchiveItem[]
+}
+
+export function parseArchiveJson(raw: string | null | undefined): PortArchive | null {
+  if (raw === null || raw === undefined || raw === '') return null
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (
+      parsed === null ||
+      typeof parsed !== 'object' ||
+      (parsed as { v?: unknown }).v !== 1 ||
+      !Array.isArray((parsed as { items?: unknown }).items)
+    ) {
+      return null
+    }
+    return parsed as PortArchive
+  } catch {
+    return null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 写入面：archive-at-emit（D1/D12/D15）。
+// ---------------------------------------------------------------------------
+
+/** git 同款二进制启发：采样前 8KB，出现 NUL 字节 ⟹ 二进制。 */
+function sniffBinary(absPath: string): boolean {
+  const fd = openSync(absPath, 'r')
+  try {
+    const buf = Buffer.alloc(8192)
+    const n = readSync(fd, buf, 0, buf.length, 0)
+    return buf.subarray(0, n).includes(0)
+  } finally {
+    closeSync(fd)
+  }
+}
+
+/** 文本截断副本尾部注入的警告行（D12——doc_version 原样归档，reviewer 必见）。 */
+export function truncationNotice(containerRelPath: string): string {
+  return `\n\n> ⚠️ [RFC-193] content truncated at ${Math.floor(WORKTREE_FILE_MAX_BYTES / (1024 * 1024))} MiB — full file in worktree: \`${containerRelPath}\`\n`
+}
+
+export interface ArchivePortArtifactsResult {
+  archiveJson: string
+  /** repo0 相对源路径清单（T4 必达 merge-back 用）。 */
+  portFilePaths: string[]
+}
+
+/**
+ * 把一个 path 形端口的全部 item 以原始字节归档（校验窗口内调用——全部端口
+ * 校验通过之后，见 D15 两阶段）。幂等覆写：envelope followup 重试同一
+ * nodeRunId 会整体重写，与 node_run_outputs 的 onConflictDoUpdate 对齐。
+ * 任何写盘失败向上抛 —— runner 把它转成 port-artifact-archive-failed。
+ */
+export function archivePortArtifacts(opts: {
+  appHome: string
+  taskId: string
+  nodeRunId: string
+  portName: string
+  /** 单值端口长度 1；list 端口按 splitListItems 行序。 */
+  items: Array<{ sourceAbs: string; sourcePath: string }>
+  /** repos[0] 的 worktreeDirName（容器相对化前缀；单 repo ''）。 */
+  worktreeDirName: string
+}): ArchivePortArtifactsResult {
+  const rootRel = portArchiveRootRel(opts.taskId, opts.nodeRunId)
+  const portRel = join(rootRel, encodePortSegment(opts.portName))
+  const portAbs = resolve(opts.appHome, portRel)
+  // D3 containment 断言：encode 后天然满足；防御未来编码器回归。
+  const rootAbs = resolve(opts.appHome, rootRel)
+  if (portAbs !== rootAbs && !portAbs.startsWith(rootAbs + sep)) {
+    throw new Error(`port-artifact containment violated: '${opts.portName}' → ${portAbs}`)
+  }
+  mkdirSync(portAbs, { recursive: true })
+
+  const items: PortArchiveItem[] = []
+  const portFilePaths: string[] = []
+  for (let i = 0; i < opts.items.length; i++) {
+    const it = opts.items[i]!
+    const containerRel = toContainerRelative(opts.worktreeDirName, it.sourcePath)
+    const size = statSync(it.sourceAbs).size
+    const ext = extname(it.sourcePath) // 保留源扩展名（可为空），MIME 推断用
+    const fileRel = join(portRel, `item_${i}${ext}`)
+    const fileAbs = resolve(opts.appHome, fileRel)
+    if (size <= WORKTREE_FILE_MAX_BYTES) {
+      // copyFileSync 跟随 symlink → 物化目标内容（D19）。
+      copyFileSync(it.sourceAbs, fileAbs)
+      items.push({ path: containerRel, file: fileRel, size, truncated: false })
+    } else if (sniffBinary(it.sourceAbs)) {
+      // 超限二进制：截断副本只会是损坏字节，不如诚实只记元数据（D12）。
+      items.push({ path: containerRel, file: null, size, truncated: true })
+    } else {
+      // 超限文本：截断存 + 尾部警告行（review 主场景保住；D12）。
+      const fd = openSync(it.sourceAbs, 'r')
+      let head: Buffer
+      try {
+        head = Buffer.alloc(WORKTREE_FILE_MAX_BYTES)
+        const n = readSync(fd, head, 0, head.length, 0)
+        head = head.subarray(0, n)
+      } finally {
+        closeSync(fd)
+      }
+      writeFileSync(fileAbs, Buffer.concat([head, Buffer.from(truncationNotice(containerRel))]))
+      items.push({ path: containerRel, file: fileRel, size, truncated: true })
+    }
+    portFilePaths.push(it.sourcePath)
+  }
+  const archive: PortArchive = { v: 1, items }
+  return { archiveJson: JSON.stringify(archive), portFilePaths }
+}
+
+// ---------------------------------------------------------------------------
+// 读取面：消费原语（D8）。
+// ---------------------------------------------------------------------------
+
+export interface PortArtifactReadItem {
+  /** 容器相对源路径；存量行 worktree 回退时 = content 行；missing 时可为 null。 */
+  path: string | null
+  /** 文本消费面（UTF-8 解码只发生在这里；二进制消费方用 bytes）。 */
+  body: string
+  /** 原始字节（API 下载面）。missing 时为空 Buffer。 */
+  bytes: Uint8Array
+  /** 源文件原始字节数（archive_json 透传；worktree 回退 = 实读字节数）。 */
+  size: number
+  truncated: boolean
+  source: 'archive' | 'worktree' | 'missing'
+}
+
+/** lexical + realpath 双重 containment（对齐 worktreeFiles.ts / RFC-103 T7）。 */
+function readInsideRoot(rootAbs: string, rel: string): Buffer | null {
+  if (isAbsolute(rel)) return null
+  const target = resolve(rootAbs, rel)
+  const root = resolve(rootAbs)
+  if (target !== root && !target.startsWith(root + sep)) return null
+  try {
+    const realTarget = realpathSync(target)
+    const realRoot = realpathSync(root)
+    if (realTarget !== realRoot && !realTarget.startsWith(realRoot + sep)) return null
+    return readFileSync(realTarget)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 统一读取原语：archive_json（归档副本）→ fallback worktree（存量行 / 超限
+ * 二进制）→ missing。所有「读端口文件内容」的消费方必须走这里——不许再
+ * 自己 join 某个根（design G5；review.ts 由源码文本锁强制）。
+ */
+export function readPortArtifact(opts: {
+  appHome: string
+  taskId: string
+  archiveJson: string | null
+  /** node_run_outputs.content（repo0 相对路径文本；回退面按行消费）。 */
+  content: string
+  kind: string | null
+  /** review 传 scopeRoot；API 传 task.worktreePath；null = 无回退根。 */
+  fallbackWorktreeRoot: string | null
+}): { items: PortArtifactReadItem[] } {
+  const archive = parseArchiveJson(opts.archiveJson)
+  if (archive !== null) {
+    // D3/§4.3 containment：归档副本必须落在本任务的 ports/ 命名空间内
+    // （防 DB 污染的 `../` 逃逸——file 字段只被信任到「相对本命名空间」）。
+    const portsRootAbs = resolve(opts.appHome, 'runs', opts.taskId, 'ports')
+    const items = archive.items.map((it): PortArtifactReadItem => {
+      if (it.file !== null) {
+        const rel = relative(portsRootAbs, resolve(opts.appHome, it.file))
+        if (rel.startsWith('..') || isAbsolute(rel)) {
+          log.warn('archive_json file outside task ports namespace — treating as missing', {
+            file: it.file,
+            taskId: opts.taskId,
+          })
+        } else {
+          const buf = readInsideRoot(portsRootAbs, rel)
+          if (buf !== null) {
+            return {
+              path: it.path,
+              body: buf.toString('utf8'),
+              bytes: buf,
+              size: it.size,
+              truncated: it.truncated,
+              source: 'archive',
+            }
+          }
+        }
+      }
+      // file null（超限二进制）或归档副本丢失 → worktree 回退（容器相对 path）。
+      if (opts.fallbackWorktreeRoot !== null) {
+        const buf = readInsideRoot(opts.fallbackWorktreeRoot, it.path)
+        if (buf !== null) {
+          return {
+            path: it.path,
+            body: buf.toString('utf8'),
+            bytes: buf,
+            size: it.size,
+            truncated: false,
+            source: 'worktree',
+          }
+        }
+      }
+      return {
+        path: it.path,
+        body: '',
+        bytes: Buffer.alloc(0),
+        size: it.size,
+        truncated: it.truncated,
+        source: 'missing',
+      }
+    })
+    return { items }
+  }
+
+  // 存量行（archive_json NULL）：content 即路径文本，行为与 RFC-193 之前的
+  // 消费方一致（join(root, line)），只是 root 现在由调用方给对（scopeRoot）。
+  const parsed = opts.kind !== null ? tryParseKind(opts.kind) : null
+  const isPathish =
+    parsed !== null &&
+    (parsed.kind === 'path' || (parsed.kind === 'list' && parsed.item.kind === 'path'))
+  if (!isPathish) {
+    // 非 path 形端口：content 本身就是 body（inline markdown / string）。
+    const buf = Buffer.from(opts.content, 'utf8')
+    return {
+      items: [
+        { path: null, body: opts.content, bytes: buf, size: buf.length, truncated: false, source: 'archive' },
+      ],
+    }
+  }
+  const lines = parsed.kind === 'list' ? splitListItems(opts.content) : [opts.content.trim()]
+  const items = lines.map((line): PortArtifactReadItem => {
+    if (opts.fallbackWorktreeRoot !== null) {
+      const buf = readInsideRoot(opts.fallbackWorktreeRoot, line)
+      if (buf !== null) {
+        return {
+          path: line,
+          body: buf.toString('utf8'),
+          bytes: buf,
+          size: buf.length,
+          truncated: false,
+          source: 'worktree',
+        }
+      }
+    }
+    return { path: line, body: '', bytes: Buffer.alloc(0), size: 0, truncated: false, source: 'missing' }
+  })
+  return { items }
+}
+
+/** path 形 kind 判定（path<…> 或单层 list<path<…>>；markdown_file 折叠为 path<md>）。 */
+export function isPathishKindString(kind: string | null | undefined): boolean {
+  if (kind === null || kind === undefined) return false
+  const parsed = tryParseKind(kind)
+  return (
+    parsed !== null &&
+    (parsed.kind === 'path' || (parsed.kind === 'list' && parsed.item.kind === 'path'))
+  )
+}
+
+/** 归档缺失时 review 的占位 body（沿用 RFC-079 文案锚，测试锁定）。 */
+export function missingArtifactPlaceholder(path: string | null): string {
+  return `> ⚠️ RFC-079: file not found in worktree: \`${path ?? '(unknown)'}\``
+}
