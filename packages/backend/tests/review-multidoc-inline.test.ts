@@ -133,7 +133,7 @@ describe('RFC-081 — multi-document review over inline list<markdown>', () => {
     const result = await dispatchReviewNode({
       db,
       taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome,
       definition,
       node: reviewNode,

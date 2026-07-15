@@ -333,7 +333,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
     const r1 = await dispatchReviewNode({
       db,
       taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome,
       definition,
       node: reviewNode,
@@ -380,7 +380,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
     const r2 = await dispatchReviewNode({
       db,
       taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome,
       definition,
       node: reviewNode,
@@ -442,7 +442,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
     const r1 = await dispatchReviewNode({
       db,
       taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome,
       definition,
       node: reviewNode,
@@ -457,7 +457,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
     const r2 = await dispatchReviewNode({
       db,
       taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome,
       definition,
       node: reviewNode,

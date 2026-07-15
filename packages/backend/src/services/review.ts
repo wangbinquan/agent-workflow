@@ -79,7 +79,7 @@ import {
   tasks,
   workflows,
 } from '@/db/schema'
-import { resolvePortContentDetailed } from '@/services/envelope'
+import { readPortArtifact } from '@/services/portArtifacts'
 import { pickFreshestRun } from '@/services/freshness'
 import { parseConsumedJson } from '@/services/freshness'
 import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
@@ -351,11 +351,20 @@ export function pickFreshestReviewRun(
 export interface DispatchReviewArgs {
   db: DbClient
   taskId: string
-  task: typeof tasks.$inferSelect
   appHome: string
   definition: WorkflowDefinition
   node: WorkflowNode // the review node
   iteration: number
+  /**
+   * RFC-193 D9 — the CONTAINING SCOPE's canonical root, used ONLY as the
+   * readPortArtifact fallback for pre-RFC-193 rows (archive_json NULL). The
+   * scheduler passes state.scopeRoot (top level: the task worktree; inside a
+   * git/loop wrapper: the wrapper-canonical container — reading the TASK
+   * worktree there was THE wrapper-review deadlock this RFC roots out). S1
+   * repair derives it from the wrapper run lineage (§4.6). This module must
+   * never join paths against a worktree it picked itself (source-locked).
+   */
+  scopeRoot: string
 }
 
 export interface DispatchReviewResult {
@@ -379,7 +388,7 @@ export interface DispatchReviewResult {
  *      file + row at versionIndex = max+1, broadcast review.created.
  */
 export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<DispatchReviewResult> {
-  const { db, taskId, task, appHome, definition, node, iteration } = args
+  const { db, taskId, appHome, definition, node, iteration, scopeRoot } = args
 
   const inputSource = readPortRef(node, 'inputSource')
   if (inputSource === null) {
@@ -450,9 +459,22 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
   let resolvedSourcePath: string | undefined
   let itemPaths: string[] = []
   let inlineBodies: string[] = []
+  // RFC-193: ONE reading primitive for every file-backed body — the emit-time
+  // archive first (immune to scope nesting / iso lifetime / gitignore /
+  // worktree GC), then the SCOPE root as the legacy fallback (pre-RFC-193
+  // rows), then missing. Never resolve against a worktree here directly —
+  // that re-creates the wrapper-review deadlock this RFC exists to kill.
+  const artifactRead = readPortArtifact({
+    appHome,
+    taskId,
+    archiveJson: portRow.archiveJson ?? null,
+    content: portRow.content,
+    kind: upstreamKind ?? null,
+    fallbackWorktreeRoot: scopeRoot,
+  })
   // RFC-081: list<markdown> items are inline document bodies framed by
   // MARKDOWN_DOC_BOUNDARY; list<path<md>> items are newline-separated worktree
-  // paths (read from disk at archive time).
+  // paths (bodies come from the artifact read above).
   const itemsInline = isMultiDoc && isInlineMarkdownListReviewInput(upstreamKind ?? '')
   if (isMultiDoc) {
     if (itemsInline) {
@@ -460,25 +482,22 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
     } else {
       // Split with the SAME shared splitter the validator / downstream
       // wrapper-fanout use so the reviewed item set matches the shard set
-      // byte-for-byte. Each item's body is read from the worktree below.
+      // byte-for-byte (item identity stays the port's own line text).
       itemPaths = splitListItems(portRow.content)
     }
   } else {
-    try {
-      const resolved = resolvePortContentDetailed({
-        rawContent: portRow.content,
-        kind: upstreamKind,
-        worktreePath: task.worktreePath,
-      })
-      resolvedBody = resolved.body
-      resolvedSourcePath = resolved.sourcePath
-    } catch (err) {
+    const item0 = artifactRead.items[0]
+    if (item0 === undefined || item0.source === 'missing') {
       return {
         kind: 'failed',
-        summary: `review node ${node.id}: ${(err as Error).message}`,
+        summary: `review node ${node.id}: source content unavailable (archive missing and '${
+          item0?.path ?? portRow.content
+        }' not readable under scope root)`,
         message: 'review-source-resolve-failed',
       }
     }
+    resolvedBody = item0.body
+    resolvedSourcePath = item0.path ?? undefined
   }
 
   // Find / create the review node_run row.
@@ -654,13 +673,15 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
           itemPath = undefined
         } else {
           itemPath = itemPaths[i]!
-          try {
-            body = readFileSync(join(task.worktreePath, itemPath), 'utf8')
-          } catch {
-            // A missing / unreadable file must not wedge the whole round — the
-            // reviewer can still reject it. Surface a visible placeholder body.
-            body = `> ⚠️ RFC-079: file not found in worktree: \`${itemPath}\``
-          }
+          // RFC-193: body from the emit-time archive (index-aligned with
+          // splitListItems — the runner archived per line). A missing item
+          // must not wedge the whole round — the reviewer can still reject
+          // it; keep the RFC-079 placeholder wording (tests anchor on it).
+          const artItem = artifactRead.items[i]
+          body =
+            artItem !== undefined && artItem.source !== 'missing'
+              ? artItem.body
+              : `> ⚠️ RFC-079: file not found in worktree: \`${itemPath}\``
         }
         // RFC-129: inherit this item's selection from the prior round
         // (path-first / index fallback), stale-flagged when its content changed.

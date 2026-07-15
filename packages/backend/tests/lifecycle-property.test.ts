@@ -292,7 +292,7 @@ async function applyEvent(h: Harness, ev: Event): Promise<boolean> {
       await dispatchReviewNode({
         db: h.db,
         taskId: h.taskId,
-        task,
+        scopeRoot: task.worktreePath,
         appHome: h.appHome,
         definition: h.definition,
         node: reviewNode,

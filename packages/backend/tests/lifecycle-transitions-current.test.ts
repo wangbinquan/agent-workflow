@@ -195,7 +195,7 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
       const res = await dispatchReviewNode({
         db: h.db,
         taskId: h.taskId,
-        task,
+        scopeRoot: task.worktreePath,
         appHome: h.appHome,
         definition: h.definition,
         node: reviewNode,
@@ -221,7 +221,7 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
       const res = await dispatchReviewNode({
         db: h.db,
         taskId: h.taskId,
-        task,
+        scopeRoot: task.worktreePath,
         appHome: h.appHome,
         definition: h.definition,
         node: reviewNode,
@@ -259,7 +259,7 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
       await dispatchReviewNode({
         db: h.db,
         taskId: h.taskId,
-        task,
+        scopeRoot: task.worktreePath,
         appHome: h.appHome,
         definition: h.definition,
         node: reviewNode,

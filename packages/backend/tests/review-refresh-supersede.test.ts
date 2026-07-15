@@ -168,7 +168,7 @@ describe('RFC-074 — review awaiting-refresh: supersede + recomment-drop + v(n+
     const result = await dispatchReviewNode({
       db,
       taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome,
       definition,
       node: reviewNode,

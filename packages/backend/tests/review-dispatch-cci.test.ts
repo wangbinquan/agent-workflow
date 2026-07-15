@@ -270,7 +270,7 @@ describe('RFC-056 patch-2026-05-26 — dispatchReviewNode cci-aware short-circui
     const result = await dispatchReviewNode({
       db,
       taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome,
       definition,
       node: reviewNode,
@@ -344,7 +344,7 @@ describe('RFC-056 patch-2026-05-26 — dispatchReviewNode cci-aware short-circui
     const result = await dispatchReviewNode({
       db,
       taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome,
       definition,
       node: reviewNode,
@@ -411,7 +411,7 @@ describe('RFC-056 patch-2026-05-26 — dispatchReviewNode cci-aware short-circui
     const result = await dispatchReviewNode({
       db,
       taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome,
       definition,
       node: reviewNode,
@@ -445,7 +445,7 @@ describe('RFC-056 patch-2026-05-26 — dispatchReviewNode cci-aware short-circui
     const result = await dispatchReviewNode({
       db,
       taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome,
       definition,
       node: reviewNode,

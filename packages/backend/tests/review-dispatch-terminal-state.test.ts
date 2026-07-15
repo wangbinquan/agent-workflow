@@ -178,7 +178,7 @@ describe('dispatchReviewNode terminal-state short-circuit (RFC-052)', () => {
     const result = await dispatchReviewNode({
       db,
       taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome,
       definition,
       node: reviewNode,
@@ -231,7 +231,7 @@ describe('dispatchReviewNode terminal-state short-circuit (RFC-052)', () => {
     const result = await dispatchReviewNode({
       db,
       taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome,
       definition,
       node: reviewNode,

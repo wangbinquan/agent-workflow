@@ -193,7 +193,7 @@ describe('RFC-129 — cross-round selection inheritance', () => {
     const r = await dispatchReviewNode({
       db,
       taskId: ctx.taskId,
-      task: ctx.task,
+      scopeRoot: ctx.task.worktreePath,
       appHome,
       definition: ctx.definition,
       node: ctx.reviewNode,

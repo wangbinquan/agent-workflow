@@ -147,7 +147,7 @@ describe('dispatchReviewNode + RFC-049 PR-B explicit outputKinds contract', () =
     const result = await dispatchReviewNode({
       db,
       taskId: task.id,
-      task,
+      scopeRoot: task.worktreePath,
       appHome,
       definition,
       node: reviewNode,
@@ -170,7 +170,7 @@ describe('dispatchReviewNode + RFC-049 PR-B explicit outputKinds contract', () =
     const result = await dispatchReviewNode({
       db,
       taskId: task.id,
-      task,
+      scopeRoot: task.worktreePath,
       appHome,
       definition,
       node: reviewNode,

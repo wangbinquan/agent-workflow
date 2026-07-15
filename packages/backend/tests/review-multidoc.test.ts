@@ -163,7 +163,7 @@ describe('RFC-079 — review multi-document mode', () => {
     const result = await dispatchReviewNode({
       db,
       taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome,
       definition,
       node: reviewNode,

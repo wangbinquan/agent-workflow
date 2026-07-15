@@ -145,7 +145,7 @@ describe('dispatchReviewNode upstream selection — clarify rerun must beat stal
     const result = await dispatchReviewNode({
       db,
       taskId: task.id,
-      task,
+      scopeRoot: task.worktreePath,
       appHome,
       definition,
       node: reviewNode,

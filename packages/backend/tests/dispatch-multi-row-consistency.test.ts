@@ -209,7 +209,7 @@ describe('RFC-053 PR-A T1b — multi-row dispatch consistency', () => {
     const res = await dispatchReviewNode({
       db: h.db,
       taskId: h.taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome: h.appHome,
       definition: h.definition,
       node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
@@ -233,7 +233,7 @@ describe('RFC-053 PR-A T1b — multi-row dispatch consistency', () => {
     const res = await dispatchReviewNode({
       db: h.db,
       taskId: h.taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome: h.appHome,
       definition: h.definition,
       node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
@@ -268,7 +268,7 @@ describe('RFC-053 PR-A T1b — multi-row dispatch consistency', () => {
     const res = await dispatchReviewNode({
       db: h.db,
       taskId: h.taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome: h.appHome,
       definition: h.definition,
       node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
@@ -306,7 +306,7 @@ describe('RFC-053 PR-A T1b — multi-row dispatch consistency', () => {
     const res = await dispatchReviewNode({
       db: h.db,
       taskId: h.taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome: h.appHome,
       definition: h.definition,
       node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
@@ -349,7 +349,7 @@ describe('RFC-053 PR-A T1b — multi-row dispatch consistency', () => {
     const res = await dispatchReviewNode({
       db: h.db,
       taskId: h.taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome: h.appHome,
       definition: h.definition,
       node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
@@ -395,7 +395,7 @@ describe('RFC-053 PR-A T1b — multi-row dispatch consistency', () => {
     const res = await dispatchReviewNode({
       db: h.db,
       taskId: h.taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome: h.appHome,
       definition: h.definition,
       node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
@@ -512,7 +512,7 @@ describe('RFC-053 PR-A T1b — multi-row dispatch consistency', () => {
     const res = await dispatchReviewNode({
       db: h.db,
       taskId: h.taskId,
-      task,
+      scopeRoot: task.worktreePath,
       appHome: h.appHome,
       definition: h.definition,
       node: h.definition.nodes.find((n) => n.id === 'rev_1')!,

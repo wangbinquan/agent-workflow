@@ -326,6 +326,17 @@ interface SchedulerState {
      *  diffing it would just throw; each repo must be diffed at its own worktree/base. */
     baseCommit: string | null
   }>
+  /**
+   * RFC-193 D9 — THIS scope's canonical container root. Top level =
+   * `task.worktreePath`; inside a git/loop wrapper the innerState carries the
+   * wrapper-canonical's containerPath (single-repo: == repos[0] iso root;
+   * multi-repo: their parent dir — same container semantics as
+   * task.worktreePath). Consumers that read files relative to "the scope the
+   * node lives in" (review fallback chain, S1 repair) use THIS, never
+   * task.worktreePath directly — the latter is wrong inside wrappers (the
+   * exact bug this RFC roots out).
+   */
+  scopeRoot: string
 }
 
 /**
@@ -498,6 +509,8 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     topLevelIds,
     // RFC-066: thread per-repo metadata through every inner dispatch.
     repos,
+    // RFC-193 D9: top-level scope canonical = the task worktree container.
+    scopeRoot: task.worktreePath,
   }
 
   // 8. Drive the top-level scope. Any thrown error must land the task in
@@ -2443,11 +2456,14 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     return dispatchReviewNode({
       db,
       taskId,
-      task,
       appHome: opts.appHome,
       definition,
       node,
       iteration,
+      // RFC-193 D9: the review's fallback read root is THIS scope's canonical
+      // (wrapper-canonical inside git/loop) — task.worktreePath was the
+      // wrapper-review deadlock.
+      scopeRoot: state.scopeRoot,
     })
   }
 
@@ -3987,6 +4003,9 @@ async function runLoopWrapperNode(
           // RFC-187 §4 — a wrapper-iso repo's base is the commit it forked from.
           baseCommit: r.baseSnapshot,
         })),
+        // RFC-193 D9: inner nodes' scope canonical is the loop-canonical
+        // container (== repos[0] iso root when single-repo, dirName='').
+        scopeRoot: wrapperIso.containerPath,
       }
 
   const innerSet = new Set(inner)
@@ -5800,6 +5819,9 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
           // RFC-187 §4 — a wrapper-iso repo's base is the commit it forked from.
           baseCommit: r.baseSnapshot,
         })),
+        // RFC-193 D9: inner nodes' scope canonical is the wrapper-canonical
+        // container (== repos[0] iso root when single-repo, dirName='').
+        scopeRoot: wrapperIso.containerPath,
       }
 
   // RFC-130 T11 / §6.4: capture baseline (+ preDirty on fresh mint) on the WRAPPER-
@@ -6753,7 +6775,10 @@ function buildScopeUpstreams(
  *     truly invalid configurations)
  *   - missing inner ids (skipped)
  */
-function buildContainerMap(def: WorkflowDefinition): Map<string, string> {
+// RFC-193: exported for lifecycleRepair S1's scopeRoot derivation (§4.6) —
+// the repair path re-invokes dispatchReviewNode OUTSIDE the scheduler, so it
+// must recover "which wrapper contains this review" the same way runTask does.
+export function buildContainerMap(def: WorkflowDefinition): Map<string, string> {
   const out = new Map<string, string>()
   const nodeById = new Map(def.nodes.map((n) => [n.id, n]))
   // Walk wrappers from innermost to outermost (innermost = wrapper whose

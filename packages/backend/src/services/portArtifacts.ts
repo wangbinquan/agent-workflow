@@ -255,16 +255,23 @@ export interface PortArtifactReadItem {
   source: 'archive' | 'worktree' | 'missing'
 }
 
-/** lexical + realpath 双重 containment（对齐 worktreeFiles.ts / RFC-103 T7）。 */
+/**
+ * lexical + realpath 双重 containment（对齐 worktreeFiles.ts / RFC-103 T7）。
+ * 绝对输入不直接拒——存量行（pre-RFC-193）的 content 可能是「worktree 内的
+ * 绝对路径」（旧 envelope 校验接受它）；containment 语义与 envelope 一致：
+ * lexical 在根内 → realpath 收紧（防 symlink 读穿）；lexical 在根外 →
+ * realpath 同位证明才放行（macOS /var→/private/var 前缀差异）。
+ */
 function readInsideRoot(rootAbs: string, rel: string): Buffer | null {
-  if (isAbsolute(rel)) return null
-  const target = resolve(rootAbs, rel)
   const root = resolve(rootAbs)
-  if (target !== root && !target.startsWith(root + sep)) return null
+  const target = isAbsolute(rel) ? resolve(rel) : resolve(root, rel)
   try {
+    const lexicalInside = target === root || target.startsWith(root + sep)
     const realTarget = realpathSync(target)
     const realRoot = realpathSync(root)
-    if (realTarget !== realRoot && !realTarget.startsWith(realRoot + sep)) return null
+    const realInside = realTarget === realRoot || realTarget.startsWith(realRoot + sep)
+    if (!realInside) return null
+    if (!lexicalInside && !isAbsolute(rel)) return null // 相对输入不许 lexical 逃逸
     return readFileSync(realTarget)
   } catch {
     return null

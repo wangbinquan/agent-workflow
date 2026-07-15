@@ -11,13 +11,16 @@
 //     scheduler walks back through dispatchReviewNode (same effect as
 //     option 1 but goes via the normal task lifecycle).
 
-import { and, eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
+import { existsSync } from 'node:fs'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import { nodeRuns, tasks } from '@/db/schema'
 import { setTaskStatus } from '@/services/lifecycle'
+import { isoWorktreePathFor } from '@/services/nodeIsolation'
 import { dispatchReviewNode } from '@/services/review'
+import { buildContainerMap } from '@/services/scheduler'
 
 import { schedulerLivenessGate } from './helpers'
 import type { ApplyResult, PreflightResult, RepairContext, RepairOptionDef } from './types'
@@ -43,6 +46,36 @@ interface PreparedDispatch {
   definition: WorkflowDefinition
   reviewNode: WorkflowNode
   iteration: number
+  /** RFC-193 §4.6：review 所在 scope 的 canonical 根（回退链用）。 */
+  scopeRoot: string
+}
+
+/**
+ * RFC-193 §4.6 — S1 是 scheduler 之外唯一的 dispatchReviewNode 生产调用方，
+ * 传 task.worktreePath 会在 wrapper 内 review 上复现本 RFC 的原始断链。归档
+ * 制下主路径读 archive_json（scopeRoot 只服务存量行回退）；这里按 wrapper
+ * run 谱系恢复：review 属某 git/loop wrapper（containerOf）且该 wrapper 的
+ * 最新 run 的 iso 容器目录仍存在 ⇒ 用它；否则退 task.worktreePath（顶层 /
+ * iso 已灭——不劣于现状）。
+ */
+async function deriveScopeRoot(
+  rc: RepairContext,
+  taskWorktreePath: string,
+  definition: WorkflowDefinition,
+  reviewNodeId: string,
+): Promise<string> {
+  const wrapperId = buildContainerMap(definition).get(reviewNodeId)
+  if (wrapperId === undefined) return taskWorktreePath
+  const rows = await rc.db
+    .select({ id: nodeRuns.id })
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, rc.task.id), eq(nodeRuns.nodeId, wrapperId)))
+    .orderBy(desc(nodeRuns.id))
+    .limit(1)
+  const wrapperRun = rows[0]
+  if (wrapperRun === undefined) return taskWorktreePath
+  const isoRoot = isoWorktreePathFor(rc.appHome, rc.task.id, wrapperRun.id, '')
+  return existsSync(isoRoot) ? isoRoot : taskWorktreePath
 }
 
 async function prepareDispatch(rc: RepairContext): Promise<PreparedDispatch | string> {
@@ -110,6 +143,7 @@ async function prepareDispatch(rc: RepairContext): Promise<PreparedDispatch | st
     definition,
     reviewNode,
     iteration: awaitingRun.iteration,
+    scopeRoot: await deriveScopeRoot(rc, taskRow.worktreePath, definition, reviewNode.id),
   }
 }
 
@@ -147,11 +181,11 @@ const S1_RECREATE_DOC: RepairOptionDef = {
     const result = await dispatchReviewNode({
       db: rc.db,
       taskId: rc.task.id,
-      task: prep.taskRow,
       appHome: rc.appHome,
       definition: prep.definition,
       node: prep.reviewNode,
       iteration: prep.iteration,
+      scopeRoot: prep.scopeRoot,
     })
     if (result.kind === 'failed') {
       throw new Error(`dispatchReviewNode failed: ${result.message} — ${result.summary}`)
