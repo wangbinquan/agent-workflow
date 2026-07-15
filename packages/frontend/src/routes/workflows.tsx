@@ -1,23 +1,22 @@
-// Workflows list. Each row links into the xyflow editor at /workflows/$id.
-// Creation is a QUICK-CREATE dialog (name + description only — the definition
-// starts empty; all canvas editing happens on the editor page). Mirrors the
-// RFC-164 workgroup list-page pattern.
+// Workflows list — RFC-191 card gallery. Each card opens the xyflow editor
+// at /workflows/$id (whole card = stretched link);「启动」deep-links the task
+// wizard with the workflow preselected. Creation stays the QUICK-CREATE
+// dialog (name + description only — the definition starts empty; all canvas
+// editing happens on the editor page), mirroring the RFC-164 pattern.
+// Delete / export live in the EDITOR header (RFC-191: no list-level delete).
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link, createRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { useRef, useState } from 'react'
+import { createRoute, redirect, useNavigate } from '@tanstack/react-router'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { CreateWorkflow, Workflow } from '@agent-workflow/shared'
 import { api, ApiError, extractErrorBody } from '@/api/client'
 import { useResourceList } from '@/hooks/useResourceList'
 import { describeApiError } from '@/i18n'
 import { getBaseUrl, getToken } from '@/stores/auth'
-import { ConfirmButton } from '@/components/ConfirmButton'
-import { EmptyState } from '@/components/EmptyState'
-import { ErrorBanner } from '@/components/ErrorBanner'
-import { LoadingState } from '@/components/LoadingState'
 import { QuickCreateDialog } from '@/components/QuickCreateDialog'
-import { ResourceNameCell } from '@/components/ResourceNameCell'
+import { ResourceBadges } from '@/components/ResourceBadges'
+import { ResourceGalleryPage, type GalleryCardItem } from '@/components/gallery/ResourceGalleryPage'
 import { buildQuickCreateWorkflowPayload } from '@/lib/workflow-form'
 import { Route as RootRoute } from './__root'
 
@@ -43,9 +42,9 @@ function WorkflowsPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
-  // RFC-151 PR-3 — shared list shell: query + delete mutation + owner lookup.
-  // The YAML import flow below stays page-specific.
-  const { data, isLoading, error, del, owners } = useResourceList<Workflow>({
+  // RFC-151 PR-3 — shared list shell: query + owner lookup. The delete
+  // mutation is unused here since RFC-191 (delete lives in the editor header).
+  const { data, isLoading, error, owners } = useResourceList<Workflow>({
     queryKey: ['workflows'],
     endpoint: '/api/workflows',
     deleteBy: 'id',
@@ -59,7 +58,7 @@ function WorkflowsPage() {
   const createTriggerRef = useRef<HTMLButtonElement | null>(null)
   // Mirrors createOpen for the mutation callback: dismissing the dialog while
   // a slow POST is in flight must NOT yank the user into the editor when the
-  // response lands later (the row still appears via the list invalidation).
+  // response lands later (the card still appears via the list invalidation).
   const createOpenRef = useRef(false)
   function setCreateOpenTracked(open: boolean): void {
     createOpenRef.current = open
@@ -67,12 +66,12 @@ function WorkflowsPage() {
   }
   const create = useMutation({
     mutationFn: (body: CreateWorkflow): Promise<Workflow> => api.post('/api/workflows', body),
-    onSuccess: (wf) => {
+    onSuccess: (created) => {
       void qc.invalidateQueries({ queryKey: ['workflows'] })
-      qc.setQueryData(['workflows', wf.id], wf)
+      qc.setQueryData(['workflows', created.id], created)
       if (!createOpenRef.current) return
       setCreateOpenTracked(false)
-      navigate({ to: '/workflows/$id', params: { id: wf.id } })
+      navigate({ to: '/workflows/$id', params: { id: created.id } })
     },
   })
   const builtCreate = buildQuickCreateWorkflowPayload({
@@ -118,13 +117,49 @@ function WorkflowsPage() {
     }
   }
 
+  // Gallery items — updatedAt desc (freshest first). Node count derives from
+  // the definition the list API already returns (schema defaults nodes: []).
+  const items = useMemo<GalleryCardItem[] | undefined>(
+    () =>
+      data === undefined
+        ? undefined
+        : data
+            .slice()
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+            .map((w) => ({
+              key: w.id,
+              title: w.name,
+              subtitle: w.description === '' ? undefined : w.description,
+              subtitleFallback: t('workflows.noDescription'),
+              badges: (
+                <ResourceBadges
+                  visibility={w.visibility}
+                  ownerUserId={w.ownerUserId}
+                  owners={owners}
+                />
+              ),
+              meta: (
+                <>
+                  <span className="chip chip--tight">v{w.version}</span>
+                  <span className="chip chip--tight">
+                    {t('workflows.cardNodes', { n: w.definition.nodes.length })}
+                  </span>
+                </>
+              ),
+              updatedAt: w.updatedAt,
+              to: '/workflows/$id' as const,
+              params: { id: w.id },
+              launch: { kind: 'workflow' as const, workflow: w.id },
+              testid: `workflow-card-${w.name}`,
+            })),
+    [data, owners, t],
+  )
+
   return (
-    <div className="page">
-      <header className="page__header page__header--row">
-        <div>
-          <h1>{t('workflows.title')}</h1>
-        </div>
-        <div className="page__actions">
+    <ResourceGalleryPage
+      title={t('workflows.title')}
+      headerActions={
+        <>
           <input
             ref={fileRef}
             type="file"
@@ -148,64 +183,17 @@ function WorkflowsPage() {
           >
             {t('workflows.newButton')}
           </button>
-        </div>
-      </header>
-      {importMsg !== null && <div className="info-box info-box--muted">{importMsg}</div>}
-
-      {isLoading && <LoadingState data-testid="workflows-loading" />}
-      {error !== null && error !== undefined && <ErrorBanner error={error} />}
-      {del.error !== null && <ErrorBanner error={del.error} />}
-
-      {!isLoading && data !== undefined && data.length === 0 && (
-        <EmptyState title={t('workflows.emptyList')} data-testid="workflows-empty" />
-      )}
-
-      {data !== undefined && data.length > 0 && (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>{t('workflows.colName')}</th>
-              <th>{t('workflows.colVersion')}</th>
-              <th>{t('workflows.colId')}</th>
-              <th aria-label={t('common.ariaActions')} />
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((w) => (
-              <tr key={w.id}>
-                {/* RFC-151 PR-3: the shared cell adds data-table__nowrap (the
-                    other resource lists already had it) — long workflow names
-                    now stay single-line like every sibling list. */}
-                <ResourceNameCell
-                  to="/workflows/$id"
-                  params={{ id: w.id }}
-                  name={w.name}
-                  visibility={w.visibility}
-                  ownerUserId={w.ownerUserId}
-                  owners={owners}
-                />
-                <td className="data-table__muted">v{w.version}</td>
-                <td className="data-table__muted">
-                  <code>{w.id}</code>
-                </td>
-                <td className="data-table__actions">
-                  <Link to="/workflows/$id" params={{ id: w.id }} className="btn btn--sm">
-                    {t('common.open')}
-                  </Link>
-                  <ConfirmButton
-                    label={t('common.delete')}
-                    onConfirm={() => del.mutateAsync(w)}
-                    variant="danger"
-                    disabled={del.isPending}
-                    size="sm"
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
+        </>
+      }
+      notice={importMsg !== null && <div className="info-box info-box--muted">{importMsg}</div>}
+      items={items}
+      isLoading={isLoading}
+      error={error}
+      searchPlaceholder={t('common.searchEllipsis')}
+      emptyListText={t('workflows.emptyList')}
+      emptyTestid="workflows-empty"
+      loadingTestid="workflows-loading"
+    >
       <QuickCreateDialog
         open={createOpen}
         onClose={() => setCreateOpenTracked(false)}
@@ -236,7 +224,7 @@ function WorkflowsPage() {
         triggerRef={createTriggerRef}
         testidPrefix="workflow"
       />
-    </div>
+    </ResourceGalleryPage>
   )
 }
 

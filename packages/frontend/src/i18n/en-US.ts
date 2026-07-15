@@ -96,6 +96,57 @@ export const enUS: Resources = {
       relativeHourAgo: '{{n}} h ago',
       relativeDayAgo: '{{n}} d ago',
     },
+    // RFC-190: capability-portal homepage.
+    pipeline: {
+      snapshot: 'Snapshot',
+      code: 'Code',
+      audit: 'Audit',
+      aggregate: 'Aggregate',
+      fix: 'Fix',
+      caption:
+        'snapshot → run → fan-out → aggregate, a deterministic engine driving multi-agent pipelines',
+      open: 'Open workflows',
+    },
+    pulse: {
+      line: '{{running}} running · {{awaiting}} waiting · {{done}} done in 7d ({{rate}}% success)',
+      lineNoRate: '{{running}} running · {{awaiting}} waiting · {{done}} done in 7d',
+    },
+    newWorkflow: 'New workflow',
+    cap: {
+      agents: {
+        title: 'Agents',
+        desc: 'Virtual agents driving opencode / claude-code processes — skills, MCPs and plugins injected per run',
+        sub: {
+          skills: '{{n}} skills',
+          mcps: '{{n}} MCPs',
+          plugins: '{{n}} plugins',
+        },
+      },
+      workflows: {
+        title: 'Workflows',
+        desc: 'Canvas-orchestrated multi-agent pipelines: git snapshots, loops, multi-process fan-out',
+      },
+      workgroups: {
+        title: 'Workgroups',
+        desc: 'Leader-driven autonomous agent teams: rounds, dispatch, review',
+      },
+      memory: {
+        title: 'Memory',
+        desc: 'Knowledge distilled across tasks: curation, approval, fusion into skills',
+      },
+      scheduled: {
+        title: 'Scheduled',
+        desc: 'Launch workflows on a schedule — make the pipeline routine',
+      },
+      repos: {
+        title: 'Repos',
+        desc: 'Cached remotes with an isolated worktree per task',
+      },
+      countUnavailable: 'count unavailable',
+    },
+    feed: {
+      title: 'Task activity',
+    },
   },
   reviews: {
     title: 'Reviews',
@@ -585,6 +636,9 @@ export const enUS: Resources = {
     title: 'Welcome to Agent Workflow',
     intro:
       "It looks like a fresh setup — there aren't any agents or workflows yet. Follow these four steps to build a minimal pipeline.",
+    heroTitle: 'Draw the multi-agent pipeline, then run it',
+    heroIntro:
+      'Every agent runs in its own process with a clean context; snapshot → run → fan-out → aggregate is orchestrated by a deterministic engine, and reviews or clarifications pull a human back into the loop at any point.',
     step1Title: '1. Create your first agent',
     step1Body:
       "Name it 'coder', set outputs to [code], and paste any short instruction into the prompt body.",
@@ -621,6 +675,16 @@ export const enUS: Resources = {
     no: 'no',
     details: 'Details',
     emDash: '—',
+    relTime: {
+      justNow: 'just now',
+      minAgo: '{{n}} min ago',
+      hourAgo: '{{n}} h ago',
+      dayAgo: '{{n}} d ago',
+      inMin: 'in {{n}} min',
+      inHour: 'in {{n}} h',
+      inDay: 'in {{n}} d',
+    },
+    launch: 'Launch',
     resourceUnavailable: 'This resource is unavailable or was deleted.',
     copy: 'Copy',
     copied: 'Copied!',
@@ -1072,9 +1136,8 @@ export const enUS: Resources = {
     importCanceled: 'Import canceled.',
     conflictPrompt:
       'Workflow id collides. Type "overwrite" to replace, or "new" to import as a new workflow.',
-    colName: 'Name',
-    colVersion: 'Version',
-    colId: 'ID',
+    cardNodes: '{{n}} nodes',
+    noDescription: '(no description)',
     errors: {
       nameRequired: 'Name is required.',
       nameInvalid:
@@ -1086,18 +1149,13 @@ export const enUS: Resources = {
     title: 'Workgroups',
     newButton: '+ New workgroup',
     emptyList: 'No workgroups yet.',
-    colName: 'Name',
-    colMode: 'Mode',
-    colMembers: 'Members',
-    colLeader: 'Leader',
-    colDescription: 'Description',
-    colUpdated: 'Updated',
     modeLeaderWorker: 'Leader-Worker',
     modeFreeCollab: 'Free collaboration',
     modeDynamicWorkflow: 'Dynamic workflow',
-    deleteTitle: 'Delete workgroup',
-    deleteBody:
-      'Delete workgroup "{{name}}"? Launched tasks keep their launch-time config snapshot and are unaffected.',
+    cardMembers: '{{n}} members',
+    cardLeader: 'leader: {{name}}',
+    autonomousChip: 'Autonomous',
+    noDescription: '(no description)',
     newTitle: 'New workgroup',
     createButton: 'Create workgroup',
     renameButton: 'Rename',

@@ -2013,6 +2013,260 @@ code {
   font-size: 11px;
 }
 
+/* RFC-190 — capability-portal homepage: hero pulse/CTA, the animated
+ * pipeline mini-canvas, the capability tile grid, and the merged task feed.
+ * Node chrome deliberately echoes `.canvas-node` (panel bg / 1px border /
+ * radius 8 / uppercase kind label) so the hero rhymes with the editor. */
+
+.homepage__greet {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  row-gap: 16px;
+}
+
+.homepage__pulse {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
+.homepage__cta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.pipeline-hero {
+  flex: 1 1 340px;
+  max-width: 560px;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--radius-lg);
+}
+
+.pipeline-hero:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pipeline-hero__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.pipeline-hero__node-box {
+  fill: var(--panel);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.pipeline-hero__node--live .pipeline-hero__node-box {
+  stroke: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
+/* Audit fan breathes gently (paused under reduced motion below). */
+.pipeline-hero__node--live {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pipeline-hero-breathe 2.6s ease-in-out infinite;
+}
+
+.pipeline-hero__kind {
+  fill: var(--muted);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: inherit;
+}
+
+.pipeline-hero__title {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+}
+
+.pipeline-hero__edge {
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-dasharray: 5 5;
+  animation: pipeline-hero-flow 1.4s linear infinite;
+  opacity: 0.9;
+}
+
+.pipeline-hero__edge--trunk {
+  stroke: var(--border-strong);
+}
+
+/* Flow dots ride the fan edges via CSS motion paths; browsers without
+ * offset-path support simply never show them (they default to hidden). */
+.pipeline-hero__dot {
+  display: none;
+}
+
+@supports (offset-path: path('M 0 0 H 1')) {
+  .pipeline-hero__dot {
+    display: block;
+    fill: var(--accent);
+    animation: pipeline-hero-dot 2.8s linear infinite;
+  }
+  .pipeline-hero__dot:nth-of-type(3n + 2) {
+    animation-delay: 0.9s;
+  }
+  .pipeline-hero__dot:nth-of-type(3n) {
+    animation-delay: 1.8s;
+  }
+}
+
+.pipeline-hero__caption {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+
+@keyframes pipeline-hero-flow {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+@keyframes pipeline-hero-dot {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes pipeline-hero-breathe {
+  50% {
+    transform: scale(1.025);
+  }
+}
+
+/* Accessibility: honor "reduce motion" — every hero animation stops; the
+ * static dashed edges + tinted audit nodes still read as a pipeline. */
+@media (prefers-reduced-motion: reduce) {
+  .pipeline-hero__edge {
+    animation: none;
+  }
+  .pipeline-hero__dot {
+    animation: none;
+    display: none;
+  }
+  .pipeline-hero__node--live {
+    animation: none;
+  }
+}
+
+/* Capability tiles — chrome comes from the shared .card/.card--interactive;
+ * .home-cap* only owns the grid + the icon/count/title/desc stack. */
+.home-cap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.home-cap__tile {
+  text-decoration: none;
+  color: inherit;
+}
+
+.home-cap__tile .card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.home-cap__icon {
+  color: var(--accent);
+  display: inline-flex;
+}
+
+.home-cap__icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.home-cap__count {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-cap__title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.home-cap__desc {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.home-cap__sub {
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  margin-top: 4px;
+}
+
+.home-cap__error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+/* Merged task feed — one .homepage-section card, three sub-groups that keep
+ * the classic count-chip / link classes (and their test contracts). */
+.task-feed__group {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+
+.task-feed__group:first-of-type {
+  border-top: none;
+  margin-top: 4px;
+}
+
+.task-feed__group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.task-feed__group-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .language-switch {
   display: flex;
   flex-direction: column;
@@ -5877,7 +6131,45 @@ details.form-section[open] > summary {
 /* ---- Onboarding (P-5-10) ---- */
 
 .onboarding {
-  max-width: 720px;
+  /* RFC-190: widened from 720px to fit the pipeline hero + intro tiles
+   * (page-fills-content-width.test.ts still requires SOME max-width). */
+  max-width: 960px;
+}
+
+/* RFC-190 — first-run hero: intro copy on the left, the shared animated
+ * pipeline mini-canvas on the right (stacks when narrow). */
+.onboarding__hero {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.onboarding__hero-text {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.onboarding__hero-text > h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.onboarding__hero-text > p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.onboarding .home-cap-grid {
+  margin-bottom: 16px;
 }
 
 .onboarding__steps {
@@ -13198,4 +13490,103 @@ button.status-chip {
 }
 .multi-select__add-custom {
   color: var(--accent);
+}
+
+/* ---- RFC-191: resource gallery (workflows / workgroups list pages) ----
+   Cards ride the shared .card primitive; this namespace only adds the grid,
+   the stretched-link overlay and the card-internal layout. */
+
+.gallery__toolbar {
+  margin-bottom: var(--space-4);
+}
+
+.gallery__search {
+  max-width: 320px;
+}
+
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-3);
+}
+
+/* Stretched-link host. The title <Link>'s ::after overlay makes the whole
+   card clickable; ONLY `__ops` is raised above it (badges/meta stay under —
+   clicking them opens the card, no dead zones; RFC-191 design §1.2). */
+.gallery-card {
+  position: relative;
+}
+
+.gallery-card .card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.gallery-card__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.gallery-card__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gallery-card__stretch::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.gallery-card__badges {
+  flex: none;
+}
+
+.gallery-card__desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  /* Two-line reservation so short/empty descriptions don't collapse the row
+     and cards in one grid row keep their footers aligned. */
+  min-height: calc(2 * 1.55em);
+}
+
+.gallery-card__desc--empty {
+  font-style: italic;
+}
+
+.gallery-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.gallery-card__when {
+  font-size: var(--font-sm);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.gallery-card__ops {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: var(--space-2);
 }

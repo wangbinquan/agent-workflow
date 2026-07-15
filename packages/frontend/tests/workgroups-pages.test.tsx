@@ -228,7 +228,10 @@ describe('/workgroups list page', () => {
     expect(screen.getByTestId('workgroup-new-button')).toBeTruthy()
   })
 
-  test('renders rows: name link, mode chip, leader (fc → em dash)', async () => {
+  // RFC-191 — the list is a card gallery: mode as a semantic StatusChip,
+  // member count / leader / autonomous folded into meta chips, whole card
+  // links into the room, and「启动」is gated on workgroupLaunchReadiness.
+  test('renders cards: name link, semantic mode chip, member/leader chips', async () => {
     installFetch({
       workgroups: [
         wg('review-squad'),
@@ -245,34 +248,53 @@ describe('/workgroups list page', () => {
     const link = await screen.findByRole('link', { name: 'review-squad' })
     expect(link.getAttribute('href')).toBe('/workgroups/review-squad')
 
-    const lwRow = screen.getByTestId('workgroup-row-review-squad')
-    expect(lwRow.textContent).toContain('Leader-Worker')
-    expect(lwRow.textContent).toContain('Coder') // leader displayName
-    expect(lwRow.textContent).toContain('3') // member count
+    const lwCard = screen.getByTestId('workgroup-card-review-squad')
+    expect(lwCard.textContent).toContain('Leader-Worker')
+    expect(lwCard.textContent).toContain('leader: Coder')
+    expect(lwCard.textContent).toContain('3 members')
+    // Semantic mode chip (WORKGROUP_MODE_KIND: leader_worker → info).
+    expect(lwCard.querySelector('.status-chip--info')).toBeTruthy()
+    expect(lwCard.textContent).toContain('audits PRs')
 
-    const fcRow = screen.getByTestId('workgroup-row-brainstorm')
-    expect(fcRow.textContent).toContain('Free collaboration')
-    expect(fcRow.textContent).toContain('—') // no leader in fc mode
+    const fcCard = screen.getByTestId('workgroup-card-brainstorm')
+    expect(fcCard.textContent).toContain('Free collaboration')
+    expect(fcCard.querySelector('.status-chip--neutral')).toBeTruthy()
+    // No leader chip in fc mode; empty description renders the placeholder.
+    expect(fcCard.textContent).not.toContain('leader:')
+    expect(fcCard.textContent).toContain(enUS.workgroups.noDescription)
   })
 
-  test('delete goes through the shared Dialog and fires DELETE on confirm', async () => {
-    const state = { workgroups: [wg('review-squad')], calls: [] as Recorded['calls'] }
-    installFetch(state)
-    await renderPage('/workgroups')
-    fireEvent.click(await screen.findByTestId('workgroup-delete-review-squad'))
-
-    const dialog = await screen.findByRole('dialog')
-    expect(dialog.textContent).toContain('review-squad')
-
-    fireEvent.click(screen.getByTestId('workgroup-delete-confirm'))
-    await waitFor(() => {
-      expect(
-        state.calls.some(
-          (c) => c.method === 'DELETE' && c.url.endsWith('/api/workgroups/review-squad'),
-        ),
-      ).toBe(true)
+  test('launch deep-link renders only for READY groups (shared readiness oracle)', async () => {
+    installFetch({
+      workgroups: [
+        wg('review-squad'), // agent members + resolvable leader → ready
+        wg('empty-room', { leaderMemberId: null, members: [] }), // no agent → not ready
+      ],
+      calls: [],
     })
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await renderPage('/workgroups')
+    const launch = await screen.findByTestId('workgroup-card-review-squad-launch')
+    const href = launch.getAttribute('href') ?? ''
+    expect(href).toContain('/tasks/new')
+    expect(href).toContain('kind=workgroup')
+    expect(href).toContain('workgroup=review-squad')
+    // Not-ready group: card renders, launch does not (same gate as the
+    // detail header — the deep link must not dead-end at workgroup-not-ready).
+    expect(screen.getByTestId('workgroup-card-empty-room')).toBeTruthy()
+    expect(screen.queryByTestId('workgroup-card-empty-room-launch')).toBeNull()
+  })
+
+  test('the list page has NO delete affordance (delete lives in the detail header)', async () => {
+    installFetch({ workgroups: [wg('review-squad')], calls: [] })
+    await renderPage('/workgroups')
+    await screen.findByTestId('workgroup-card-review-squad')
+    expect(screen.queryByTestId('workgroup-delete-review-squad')).toBeNull()
+    // Source lock: the list route composes the shared gallery and never
+    // renders a data-table or its own delete Dialog.
+    const list = readSrc('routes/workgroups.tsx')
+    expect(list).toContain('ResourceGalleryPage')
+    expect(list).not.toContain('className="data-table"')
+    expect(list).not.toContain('workgroup-delete-')
   })
 })
 
@@ -684,11 +706,14 @@ describe('RFC-164 /workgroups wiring', () => {
       'title',
       'newButton',
       'emptyList',
-      'colMode',
-      'colLeader',
+      // RFC-191 — gallery card meta keys (the col*/deleteTitle table-era keys
+      // retired with the data-table list).
+      'cardMembers',
+      'cardLeader',
+      'autonomousChip',
+      'noDescription',
       'modeLeaderWorker',
       'modeFreeCollab',
-      'deleteTitle',
       'renameTitle',
       'membersEmpty',
       'memberRemove',

@@ -104,6 +104,38 @@ export interface Resources {
       relativeHourAgo: string
       relativeDayAgo: string
     }
+    // RFC-190：能力门户首页——管线 hero / 脉搏行 / 能力卡片 / 任务动态。
+    pipeline: {
+      snapshot: string
+      code: string
+      audit: string
+      aggregate: string
+      fix: string
+      caption: string
+      open: string
+    }
+    pulse: {
+      line: string
+      lineNoRate: string
+    }
+    newWorkflow: string
+    cap: {
+      agents: {
+        title: string
+        desc: string
+        // 副行三段各自独立成键：某段计数为 null（无权限）时单独丢弃该段。
+        sub: { skills: string; mcps: string; plugins: string }
+      }
+      workflows: { title: string; desc: string }
+      workgroups: { title: string; desc: string }
+      memory: { title: string; desc: string }
+      scheduled: { title: string; desc: string }
+      repos: { title: string; desc: string }
+      countUnavailable: string
+    }
+    feed: {
+      title: string
+    }
   }
   mcps: {
     title: string
@@ -700,6 +732,9 @@ export interface Resources {
   onboarding: {
     title: string
     intro: string
+    // RFC-190：首跑 hero（管线动画 + 平台能力开场白）。
+    heroTitle: string
+    heroIntro: string
     step1Title: string
     step1Body: string
     step1Cta: string
@@ -732,6 +767,18 @@ export interface Resources {
     no: string
     details: string
     emDash: string
+    /** RFC-191: <RelativeTime> tokens（列表层相对时间口径，双向）。 */
+    relTime: {
+      justNow: string
+      minAgo: string
+      hourAgo: string
+      dayAgo: string
+      inMin: string
+      inHour: string
+      inDay: string
+    }
+    /** RFC-191: gallery card行内主动作（工作流/工作组「启动」）。 */
+    launch: string
     /** RFC-177: by-id subject redirect landed on a missing/invisible resource. */
     resourceUnavailable: string
     copy: string
@@ -1004,9 +1051,10 @@ export interface Resources {
     workflowOverwritten: string
     importCanceled: string
     conflictPrompt: string
-    colName: string
-    colVersion: string
-    colId: string
+    /** RFC-191 gallery card meta —「{{n}} 节点」chip. */
+    cardNodes: string
+    /** RFC-191 — italic placeholder when a workflow has no description. */
+    noDescription: string
     errors: {
       nameRequired: string
       nameInvalid: string
@@ -1017,17 +1065,14 @@ export interface Resources {
     title: string
     newButton: string
     emptyList: string
-    colName: string
-    colMode: string
-    colMembers: string
-    colLeader: string
-    colDescription: string
-    colUpdated: string
     modeLeaderWorker: string
     modeFreeCollab: string
     modeDynamicWorkflow: string
-    deleteTitle: string
-    deleteBody: string
+    /** RFC-191 gallery card meta —「{{n}} 成员」/「leader: {{name}}」/ 全自动。 */
+    cardMembers: string
+    cardLeader: string
+    autonomousChip: string
+    noDescription: string
     newTitle: string
     createButton: string
     renameButton: string
@@ -3018,6 +3063,56 @@ export const zhCN: Resources = {
       relativeHourAgo: '{{n}} 小时前',
       relativeDayAgo: '{{n}} 天前',
     },
+    // RFC-190：能力门户首页。
+    pipeline: {
+      snapshot: '快照',
+      code: '编码',
+      audit: '审计',
+      aggregate: '聚合',
+      fix: '修复',
+      caption: '快照 → 执行 → 扇出 → 聚合，确定性引擎驱动的多代理流水线',
+      open: '打开工作流列表',
+    },
+    pulse: {
+      line: '运行中 {{running}} · 等待处理 {{awaiting}} · 7 天完成 {{done}}（成功率 {{rate}}%）',
+      lineNoRate: '运行中 {{running}} · 等待处理 {{awaiting}} · 7 天完成 {{done}}',
+    },
+    newWorkflow: '新建工作流',
+    cap: {
+      agents: {
+        title: '代理',
+        desc: '驱动 opencode / claude-code 进程的虚拟代理，技能、MCP 与插件按需注入',
+        sub: {
+          skills: '技能 {{n}}',
+          mcps: 'MCP {{n}}',
+          plugins: '插件 {{n}}',
+        },
+      },
+      workflows: {
+        title: '工作流',
+        desc: '画布编排多代理流水线：git 快照、循环、多进程扇出',
+      },
+      workgroups: {
+        title: '工作组',
+        desc: '领导者带队的自治多代理协作：轮次、派单、评审',
+      },
+      memory: {
+        title: '记忆',
+        desc: '跨任务沉淀的可用知识：蒸馏、审批、融合进技能',
+      },
+      scheduled: {
+        title: '定时任务',
+        desc: '按计划自动启动工作流，把流水线跑成例行',
+      },
+      repos: {
+        title: '仓库',
+        desc: '远端仓缓存与每任务独立 worktree 隔离',
+      },
+      countUnavailable: '计数不可用',
+    },
+    feed: {
+      title: '任务动态',
+    },
   },
   reviews: {
     title: '评审',
@@ -3482,6 +3577,9 @@ export const zhCN: Resources = {
   onboarding: {
     title: '欢迎使用 Agent Workflow',
     intro: '看起来这是新仓 — 还没有任何 agent 或 workflow。跟着下面四步建一条最小流水线。',
+    heroTitle: '把多代理流水线画出来、跑起来',
+    heroIntro:
+      '每个代理跑在独立进程里、上下文彼此干净；快照 → 执行 → 扇出 → 聚合交给确定性引擎编排，评审与反问随时把人拉回环内。',
     step1Title: '1. 创建第一个 agent',
     step1Body: '取名为 coder，把 outputs 设为 [code]，把 prompt body 留空或粘一段简单的指令即可。',
     step1Cta: '创建 agent →',
@@ -3517,6 +3615,16 @@ export const zhCN: Resources = {
     no: '否',
     details: '详情',
     emDash: '—',
+    relTime: {
+      justNow: '刚刚',
+      minAgo: '{{n}} 分钟前',
+      hourAgo: '{{n}} 小时前',
+      dayAgo: '{{n}} 天前',
+      inMin: '{{n}} 分钟后',
+      inHour: '{{n}} 小时后',
+      inDay: '{{n}} 天后',
+    },
+    launch: '启动',
     resourceUnavailable: '该资源不可用或已被删除。',
     copy: '复制',
     copied: '已复制！',
@@ -3945,9 +4053,8 @@ export const zhCN: Resources = {
     workflowOverwritten: '工作流已覆盖。',
     importCanceled: '导入已取消。',
     conflictPrompt: 'Workflow id 冲突。输入 "overwrite" 覆盖，或 "new" 作为新工作流导入。',
-    colName: '名称',
-    colVersion: '版本',
-    colId: 'ID',
+    cardNodes: '{{n}} 节点',
+    noDescription: '（未填写描述）',
     errors: {
       nameRequired: '名称必填。',
       nameInvalid: '名称须以小写字母 / 数字开头，只允许 [a-z0-9_-]，长度 ≤ 128。',
@@ -3958,17 +4065,13 @@ export const zhCN: Resources = {
     title: '工作组',
     newButton: '+ 新建工作组',
     emptyList: '还没有工作组。',
-    colName: '名称',
-    colMode: '模式',
-    colMembers: '成员数',
-    colLeader: 'Leader',
-    colDescription: '描述',
-    colUpdated: '更新时间',
     modeLeaderWorker: 'Leader-Worker',
     modeFreeCollab: '自由协作',
     modeDynamicWorkflow: '动态工作流',
-    deleteTitle: '删除工作组',
-    deleteBody: '确认删除工作组「{{name}}」？已启动的任务保留启动时的配置快照，不受影响。',
+    cardMembers: '{{n}} 成员',
+    cardLeader: 'leader: {{name}}',
+    autonomousChip: '全自动',
+    noDescription: '（未填写描述）',
     newTitle: '新建工作组',
     createButton: '创建工作组',
     renameButton: '重命名',

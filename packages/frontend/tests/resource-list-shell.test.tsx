@@ -1,18 +1,21 @@
 // RFC-151 PR-3 — list-shell primitives contract.
 //
-// The five resource list pages (agents/skills/mcps/plugins/workflows) share
-// `useResourceList` (query + delete mutation + RFC-099 owner lookup) and —
-// /skills excepted — `<ResourceNameCell>` (nowrap name cell: detail link +
-// private chip + owner badge). Page-level render locks keep covering the
-// pages; this file locks the primitives' own behavior:
+// The resource list pages (agents/skills/mcps/plugins + the RFC-191 gallery
+// pages workflows/workgroups) share `useResourceList` (query + delete
+// mutation + RFC-099 owner lookup) and `<ResourceBadges>` (private chip +
+// owner badge). Page-level render locks keep covering the pages; this file
+// locks the primitives' own behavior:
 //   1. useResourceList fetches `GET {endpoint}` under the given key.
 //   2. del.mutateAsync(row) DELETEs by the configured field ('name' | 'id')
 //      and invalidates the list on success.
 //   3. owners resolves ownerUserId → displayName via POST /api/users/lookup.
-//   4. ResourceNameCell renders link/private-chip/owner-badge structurally
-//      like the pre-extraction page cells (chip only when private, badge only
-//      when the lookup resolves), plus the optional link title.
+//
+// RFC-191 note: <ResourceNameCell> (the table-era nowrap name cell) retired
+// with the last two data-table callers — workflows/workgroups render cards
+// now; ResourceBadges (extracted in RFC-169 T4) is the surviving primitive.
 
+import { existsSync } from 'node:fs'
+import path, { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -26,9 +29,10 @@ import type { UserPublic } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { Route as RootRoute } from '../src/routes/__root'
 import { useResourceList } from '../src/hooks/useResourceList'
-import { ResourceNameCell, type OwnerLookup } from '../src/components/ResourceNameCell'
-import { ResourceBadges } from '../src/components/ResourceBadges'
+import { ResourceBadges, type OwnerLookup } from '../src/components/ResourceBadges'
 import '../src/i18n'
+
+const FRONTEND_SRC_DIR = resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'src')
 
 interface Row {
   id: string
@@ -202,69 +206,11 @@ describe('useResourceList', () => {
   })
 })
 
-describe('ResourceNameCell', () => {
-  const owners: OwnerLookup = {
-    get: (id) =>
-      id === 'u1'
-        ? { id: 'u1', username: 'alice', displayName: 'Alice', role: 'user', status: 'active' }
-        : undefined,
-  }
-
-  function Cells() {
-    return (
-      <table>
-        <tbody>
-          <tr data-testid="row-private">
-            <ResourceNameCell
-              to="/agents/$name"
-              params={{ name: 'secret-agent' }}
-              name="secret-agent"
-              visibility="private"
-              ownerUserId="u1"
-              owners={owners}
-              title="secret-agent full name"
-            />
-          </tr>
-          <tr data-testid="row-public">
-            <ResourceNameCell
-              to="/agents/$name"
-              params={{ name: 'open-agent' }}
-              name="open-agent"
-              visibility="public"
-              ownerUserId="u-unknown"
-              owners={owners}
-            />
-          </tr>
-        </tbody>
-      </table>
-    )
-  }
-
-  test('renders nowrap cell with link, private chip and resolved owner badge', async () => {
-    installFetch('/api/agents', () => [])
-    renderAtAgents(Cells)
-    const privateRow = await waitFor(() => screen.getByTestId('row-private'))
-
-    const cell = privateRow.querySelector('td')
-    expect(cell?.className).toBe('data-table__nowrap')
-    const link = privateRow.querySelector('a.data-table__link')
-    expect(link?.textContent).toBe('secret-agent')
-    expect(link?.getAttribute('href')).toContain('/agents/secret-agent')
-    expect(link?.getAttribute('title')).toBe('secret-agent full name')
-    expect(privateRow.querySelector('.chip.chip--tight')).not.toBeNull()
-    const badge = privateRow.querySelector('.data-table__owner')
-    expect(badge?.textContent).toBe('Alice')
-  })
-
-  test('public row without resolvable owner renders neither chip nor badge', async () => {
-    installFetch('/api/agents', () => [])
-    renderAtAgents(Cells)
-    const publicRow = await waitFor(() => screen.getByTestId('row-public'))
-    expect(publicRow.querySelector('.chip')).toBeNull()
-    // ownerUserId set but unresolved (deleted user) → badge suppressed, same
-    // as the historical page cells.
-    expect(publicRow.querySelector('.data-table__owner')).toBeNull()
-    expect(publicRow.querySelector('a')?.getAttribute('title')).toBeNull()
+// RFC-191 — ResourceNameCell retired with the data-table lists; the shared
+// component must stay gone (its semantics live on in ResourceBadges below).
+describe('ResourceNameCell retirement (RFC-191)', () => {
+  test('the component file no longer exists and nothing imports it', () => {
+    expect(existsSync(resolve(FRONTEND_SRC_DIR, 'components/ResourceNameCell.tsx'))).toBe(false)
   })
 })
 

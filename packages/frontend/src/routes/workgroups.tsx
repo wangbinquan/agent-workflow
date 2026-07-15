@@ -1,24 +1,26 @@
-// RFC-164 PR-1 — /workgroups list page. Mirrors /mcps and /workflows shape:
-// header row with title + primary "New" button, data-table, no inline editor.
-// Creation is a QUICK-CREATE dialog (name + description only — everything
-// else has backend defaults); members/config are managed on the detail page.
-// Delete confirms through the shared <Dialog> (per RFC-164 proposal, instead
-// of the two-click ConfirmButton the older lists use).
+// RFC-164 → RFC-191 — /workgroups list page as a card gallery. Cards open the
+// room at /workgroups/$name (whole card = stretched link);「启动」deep-links
+// the task wizard with the group preselected — gated on the SAME shared
+// `workgroupLaunchReadiness` oracle the detail page uses (a not-ready group,
+// e.g. quick-created / leaderless, hides the launch action instead of letting
+// the deep link dead-end at `workgroup-not-ready`). Creation is the
+// QUICK-CREATE dialog (name + description only); members/config live on the
+// detail page, and delete lives in the detail header (no list-level delete).
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link, createRoute, useNavigate } from '@tanstack/react-router'
-import { useRef, useState } from 'react'
+import { createRoute, useNavigate } from '@tanstack/react-router'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Workgroup } from '@agent-workflow/shared'
+import { workgroupLaunchReadiness } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { useResourceList } from '@/hooks/useResourceList'
 import { describeApiError } from '@/i18n'
-import { Dialog } from '@/components/Dialog'
-import { EmptyState } from '@/components/EmptyState'
-import { ErrorBanner } from '@/components/ErrorBanner'
-import { LoadingState } from '@/components/LoadingState'
 import { QuickCreateDialog } from '@/components/QuickCreateDialog'
-import { ResourceNameCell } from '@/components/ResourceNameCell'
+import { ResourceBadges } from '@/components/ResourceBadges'
+import { StatusChip } from '@/components/StatusChip'
+import { ResourceGalleryPage, type GalleryCardItem } from '@/components/gallery/ResourceGalleryPage'
+import { WORKGROUP_MODE_KIND } from '@/lib/workgroup-mode'
 import {
   buildQuickCreatePayload,
   workgroupLeaderDisplayName,
@@ -36,25 +38,13 @@ function WorkgroupsPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
-  // RFC-151 PR-3 — shared list shell: query + delete mutation + owner lookup.
-  const { data, isLoading, error, del, owners } = useResourceList<Workgroup>({
+  // RFC-151 PR-3 — shared list shell: query + owner lookup. The delete
+  // mutation is unused here since RFC-191 (delete lives in the detail header).
+  const { data, isLoading, error, owners } = useResourceList<Workgroup>({
     queryKey: ['workgroups'],
     endpoint: '/api/workgroups',
     deleteBy: 'name',
   })
-
-  const [pendingDelete, setPendingDelete] = useState<Workgroup | null>(null)
-
-  async function confirmDelete(): Promise<void> {
-    if (pendingDelete === null) return
-    try {
-      await del.mutateAsync(pendingDelete)
-    } catch {
-      // Surfaced via the del.error <ErrorBanner> above the table.
-    } finally {
-      setPendingDelete(null)
-    }
-  }
 
   // Quick create — name + description only; navigate to the detail page
   // (where members and the rest of the config are managed) on success.
@@ -93,12 +83,68 @@ function WorkgroupsPage() {
     setCreateOpenTracked(true)
   }
 
+  // Gallery items — updatedAt desc. The config summary that used to spread
+  // over three table columns (mode / members / leader) folds into meta chips.
+  const items = useMemo<GalleryCardItem[] | undefined>(
+    () =>
+      data === undefined
+        ? undefined
+        : data
+            .slice()
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+            .map((w) => {
+              const leader = workgroupLeaderDisplayName(w)
+              const ready = workgroupLaunchReadiness(w).ready
+              return {
+                key: w.id,
+                title: w.name,
+                subtitle: w.description === '' ? undefined : w.description,
+                subtitleFallback: t('workgroups.noDescription'),
+                badges: (
+                  <ResourceBadges
+                    visibility={w.visibility}
+                    ownerUserId={w.ownerUserId}
+                    owners={owners}
+                  />
+                ),
+                meta: (
+                  <>
+                    <StatusChip kind={WORKGROUP_MODE_KIND[w.mode]} size="sm">
+                      {w.mode === 'leader_worker'
+                        ? t('workgroups.modeLeaderWorker')
+                        : w.mode === 'dynamic_workflow'
+                          ? t('workgroups.modeDynamicWorkflow')
+                          : t('workgroups.modeFreeCollab')}
+                    </StatusChip>
+                    <span className="chip chip--tight">
+                      {t('workgroups.cardMembers', { n: w.members.length })}
+                    </span>
+                    {leader !== null && (
+                      <span className="chip chip--tight">
+                        {t('workgroups.cardLeader', { name: leader })}
+                      </span>
+                    )}
+                    {w.autonomous === true && (
+                      <span className="chip chip--tight">{t('workgroups.autonomousChip')}</span>
+                    )}
+                  </>
+                ),
+                updatedAt: w.updatedAt,
+                to: '/workgroups/$name' as const,
+                params: { name: w.name },
+                // Not-ready groups (no agent member / missing leader) hide
+                // launch — same oracle & behavior as the detail header.
+                launch: ready ? { kind: 'workgroup' as const, workgroup: w.name } : undefined,
+                testid: `workgroup-card-${w.name}`,
+              }
+            }),
+    [data, owners, t],
+  )
+
   return (
-    <div className="page">
-      <header className="page__header page__header--row">
-        <div>
-          <h1>{t('workgroups.title')}</h1>
-        </div>
+    <ResourceGalleryPage
+      title={t('workgroups.title')}
+      headerActions={
         <button
           type="button"
           className="btn btn--primary"
@@ -108,108 +154,15 @@ function WorkgroupsPage() {
         >
           {t('workgroups.newButton')}
         </button>
-      </header>
-
-      {isLoading && <LoadingState data-testid="workgroups-loading" />}
-      {error !== null && error !== undefined && <ErrorBanner error={error} />}
-      {del.error !== null && <ErrorBanner error={del.error} />}
-
-      {!isLoading && data !== undefined && data.length === 0 && (
-        <EmptyState title={t('workgroups.emptyList')} data-testid="workgroups-empty" />
-      )}
-
-      {data !== undefined && data.length > 0 && (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>{t('workgroups.colName')}</th>
-              <th>{t('workgroups.colMode')}</th>
-              <th>{t('workgroups.colMembers')}</th>
-              <th>{t('workgroups.colLeader')}</th>
-              <th>{t('workgroups.colDescription')}</th>
-              <th>{t('workgroups.colUpdated')}</th>
-              <th aria-label={t('common.ariaActions')} />
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((w) => (
-              <tr key={w.id} data-testid={`workgroup-row-${w.name}`}>
-                <ResourceNameCell
-                  to="/workgroups/$name"
-                  params={{ name: w.name }}
-                  name={w.name}
-                  visibility={w.visibility}
-                  ownerUserId={w.ownerUserId}
-                  owners={owners}
-                />
-                <td className="data-table__nowrap">
-                  <span className="chip chip--tight">
-                    {w.mode === 'leader_worker'
-                      ? t('workgroups.modeLeaderWorker')
-                      : w.mode === 'dynamic_workflow'
-                        ? t('workgroups.modeDynamicWorkflow')
-                        : t('workgroups.modeFreeCollab')}
-                  </span>
-                </td>
-                <td className="data-table__nowrap">{w.members.length}</td>
-                <td className="data-table__nowrap">
-                  {workgroupLeaderDisplayName(w) ?? t('common.emDash')}
-                </td>
-                <td
-                  className="data-table__muted data-table__truncate"
-                  title={w.description || undefined}
-                >
-                  {w.description || t('common.emDash')}
-                </td>
-                <td className="data-table__nowrap data-table__muted">
-                  {new Date(w.updatedAt).toLocaleString()}
-                </td>
-                <td className="data-table__actions">
-                  <Link to="/workgroups/$name" params={{ name: w.name }} className="btn btn--sm">
-                    {t('common.open')}
-                  </Link>
-                  <button
-                    type="button"
-                    className="btn btn--sm btn--danger"
-                    onClick={() => setPendingDelete(w)}
-                    disabled={del.isPending}
-                    data-testid={`workgroup-delete-${w.name}`}
-                  >
-                    {t('common.delete')}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      <Dialog
-        open={pendingDelete !== null}
-        onClose={() => setPendingDelete(null)}
-        title={t('workgroups.deleteTitle')}
-        size="sm"
-        data-testid="workgroup-delete-dialog"
-        footer={
-          <>
-            <button type="button" className="btn" onClick={() => setPendingDelete(null)}>
-              {t('common.cancel')}
-            </button>
-            <button
-              type="button"
-              className="btn btn--danger"
-              onClick={() => void confirmDelete()}
-              disabled={del.isPending}
-              data-testid="workgroup-delete-confirm"
-            >
-              {t('common.delete')}
-            </button>
-          </>
-        }
-      >
-        <p>{t('workgroups.deleteBody', { name: pendingDelete?.name ?? '' })}</p>
-      </Dialog>
-
+      }
+      items={items}
+      isLoading={isLoading}
+      error={error}
+      searchPlaceholder={t('common.searchEllipsis')}
+      emptyListText={t('workgroups.emptyList')}
+      emptyTestid="workgroups-empty"
+      loadingTestid="workgroups-loading"
+    >
       <QuickCreateDialog
         open={createOpen}
         onClose={() => setCreateOpenTracked(false)}
@@ -241,6 +194,6 @@ function WorkgroupsPage() {
         testidPrefix="workgroup"
         descriptionMaxLength={4096}
       />
-    </div>
+    </ResourceGalleryPage>
   )
 }

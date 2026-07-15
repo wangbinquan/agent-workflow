@@ -1,8 +1,8 @@
-// RFC-169 (T4) — the RFC-099 private-visibility chip + owner badge fragment,
-// extracted from ResourceNameCell so the split-page cards and the surviving
-// table cells (workflows / workgroups still use ResourceNameCell) render the
-// identical badges. Renders a fragment (no wrapper element) so both a `<td>`
-// host and a flex chip-row host can drop it in.
+// RFC-169 (T4) — the RFC-099 private-visibility chip + owner badge fragment.
+// Originally extracted from ResourceNameCell (the table-era name cell, retired
+// in RFC-191 when workflows/workgroups moved to gallery cards) so every host —
+// split-page cards, gallery cards — renders the identical badges. Renders a
+// fragment (no wrapper element) so any host can drop it in.
 
 import { useTranslation } from 'react-i18next'
 import type { ResourceVisibility, UserPublic } from '@agent-workflow/shared'

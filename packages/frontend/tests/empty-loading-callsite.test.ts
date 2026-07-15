@@ -14,7 +14,8 @@ const RETROFITTED_ROUTES = [
   // RFC-169: the four resource pages (agents / skills / mcps / plugins) moved
   // their list loading/empty states into the shared ResourceSplitPage (asserted
   // separately below); their empty panes still render <EmptyState>.
-  'routes/workflows.tsx',
+  // RFC-191: workflows/workgroups likewise moved theirs into the shared
+  // ResourceGalleryPage (asserted separately below).
   'routes/tasks.tsx',
   'routes/reviews.tsx',
   'routes/repos.tsx',
@@ -33,6 +34,17 @@ describe('RFC-035 EmptyState / LoadingState rollout', () => {
   // loading/empty states now live.
   test('components/split/ResourceSplitPage.tsx renders <LoadingState> + <EmptyState>', () => {
     const body = readFileSync(path.resolve(SRC, 'components/split/ResourceSplitPage.tsx'), 'utf8')
+    expect(/<LoadingState[\s/>]/.test(body)).toBe(true)
+    expect(/<EmptyState[\s/>]/.test(body)).toBe(true)
+  })
+
+  // RFC-191: the gallery shell is where workflows/workgroups' list
+  // loading/empty states now live.
+  test('components/gallery/ResourceGalleryPage.tsx renders <LoadingState> + <EmptyState>', () => {
+    const body = readFileSync(
+      path.resolve(SRC, 'components/gallery/ResourceGalleryPage.tsx'),
+      'utf8',
+    )
     expect(/<LoadingState[\s/>]/.test(body)).toBe(true)
     expect(/<EmptyState[\s/>]/.test(body)).toBe(true)
   })

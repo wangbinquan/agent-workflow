@@ -54,11 +54,16 @@ interface TextInputProps {
   value: string
   onChange: (v: string) => void
   placeholder?: string
-  type?: 'text' | 'number' | 'url'
+  type?: 'text' | 'number' | 'url' | 'search'
   disabled?: boolean
   required?: boolean
   pattern?: string
   maxLength?: number
+  /** RFC-191: standalone inputs (gallery / toolbar search) carry their own
+   *  accessible name — inside a <Field> the label already provides it. */
+  'aria-label'?: string
+  /** RFC-191: extra classes appended after the standard `form-input`. */
+  className?: string
   'data-testid'?: string
 }
 
@@ -71,11 +76,13 @@ export function TextInput({
   required,
   pattern,
   maxLength,
+  'aria-label': ariaLabel,
+  className,
   'data-testid': testid,
 }: TextInputProps) {
   return (
     <input
-      className="form-input"
+      className={className === undefined ? 'form-input' : `form-input ${className}`}
       type={type}
       value={value}
       onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
@@ -84,6 +91,7 @@ export function TextInput({
       required={required}
       pattern={pattern}
       maxLength={maxLength}
+      aria-label={ariaLabel}
       data-testid={testid}
     />
   )
