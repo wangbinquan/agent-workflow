@@ -264,6 +264,23 @@ describe('backfillLegacySkillVersions — legacy promote + husk sweep', () => {
     expect(reserving.versionState).toBe('legacy-unbackfilled')
   })
 
+  test('a legacy row with support files but no SKILL.md is NOT deleted (Codex P1)', () => {
+    // Same DB shape as a husk, but the dir still has recoverable content —
+    // e.g. a pre-RFC-101 skill whose main file was lost. Deleting it would
+    // destroy the support files + the resource identity; the sweep must leave
+    // it for a human to repair.
+    insertBareRow(h.db, 'wounded')
+    const woundedFiles = join(h.fsOpts.appHome, 'skills', 'wounded', 'files')
+    mkdirSync(woundedFiles, { recursive: true })
+    writeFileSync(join(woundedFiles, 'reference.md'), '# still valuable', 'utf-8')
+
+    const r = backfillLegacySkillVersions(h.db, { appHome: h.fsOpts.appHome })
+    expect(r.husksRemoved).toBe(0)
+    expect(r.backfilled).toBe(0)
+    expect(mustRow(h.db, 'wounded').versionState).toBe('legacy-unbackfilled')
+    expect(readFileSync(join(woundedFiles, 'reference.md'), 'utf-8')).toBe('# still valuable')
+  })
+
   test('after the sweep the freed name can be re-imported via zip (end-to-end heal)', async () => {
     insertBareRow(h.db, 'reclaim')
     backfillLegacySkillVersions(h.db, { appHome: h.fsOpts.appHome })
@@ -309,6 +326,33 @@ describe('quarantine recovery via boot rescan', () => {
     runBootSnapshotReverify(h.db, { appHome: h.fsOpts.appHome })
     expect(mustRow(h.db, 'quar').versionState).toBe('snapshot-authoritative')
     expect(await getSkill(h.db, 'quar')).not.toBeNull()
+  })
+
+  test('an op-recovery quarantine on a never-published (reserving) row is NOT lifted (Codex P1)', async () => {
+    // Impossible-state reserve op: v1 snapshot exists and hashes clean, but the
+    // row never reached 'ready'. A content-hash match proves integrity only —
+    // not the create/reservation invariants — and resolveSkills gates injection
+    // on bootVerifiedSet alone, so lifting this quarantine could stage a
+    // never-published skill into a spawn. It must stay fail-closed.
+    await createManagedSkill(h.db, h.fsOpts, {
+      name: 'frozen',
+      description: 'd',
+      bodyMd: 'b',
+      frontmatterExtra: {},
+    })
+    const id = mustRow(h.db, 'frozen').id
+    h.db
+      .update(skills)
+      .set({ versionState: 'quarantined', reservationState: 'reserving' })
+      .where(eq(skills.id, id))
+      .run()
+    resetSkillBootVerifyForTest()
+
+    runBootSnapshotReverify(h.db, { appHome: h.fsOpts.appHome })
+    const row = mustRow(h.db, 'frozen')
+    expect(row.versionState).toBe('quarantined')
+    expect(isSkillBootVerified(id)).toBe(false) // never enters the injectable set
+    expect(await getSkill(h.db, 'frozen')).toBeNull()
   })
 
   test('a quarantined skill with a still-corrupt snapshot stays quarantined and hidden', async () => {

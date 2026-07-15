@@ -159,8 +159,17 @@ export function verifyManagedSnapshot(
  * content_hash check that granted trust originally and comes back on the next
  * boot — without this, quarantine was a one-way door with no UI surface and
  * DB surgery as the only exit. A still-corrupt snapshot re-fails the hash and
- * simply stays quarantined. No global barrier — a large legit tree is just
- * "available later", never quarantined for size.
+ * simply stays quarantined.
+ *
+ * The recovery probe is limited to reservationState='ready' rows (Codex P1):
+ * op-recovery also quarantines rows in IMPOSSIBLE op states — e.g. a broken
+ * reserve op whose row never reached 'ready' but whose v1 snapshot happens to
+ * hash clean. A snapshot match proves content integrity only, not that the
+ * create/reservation invariants hold, and `resolveSkills` gates injection on
+ * `bootVerifiedSet` alone — so lifting such a row's quarantine could stage a
+ * never-published skill into a spawn. Those rows stay fail-closed.
+ * No global barrier — a large legit tree is just "available later", never
+ * quarantined for size.
  */
 export function runBootSnapshotReverify(
   db: DbClient,
@@ -173,6 +182,7 @@ export function runBootSnapshotReverify(
       name: skills.name,
       contentVersion: skills.contentVersion,
       versionState: skills.versionState,
+      reservationState: skills.reservationState,
     })
     .from(skills)
     .where(
@@ -185,10 +195,14 @@ export function runBootSnapshotReverify(
         ]),
       ),
     )
-    .all() as Array<ReverifySkill & { versionState: string }>
+    .all() as Array<ReverifySkill & { versionState: string; reservationState: string }>
   let verified = 0
   let quarantined = 0
   for (const r of rows) {
+    if (r.versionState === 'quarantined' && r.reservationState !== 'ready') {
+      quarantined++ // op-recovery fail-closed on a never-published row — not ours to lift
+      continue
+    }
     if (verifyManagedSnapshot(db, opts, r) === 'verified') {
       verified++
       if (r.versionState !== 'snapshot-authoritative') {

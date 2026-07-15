@@ -23,7 +23,16 @@ import type {
 import { structuredPatch } from 'diff'
 import { and, eq } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  type Dirent,
+} from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
@@ -242,6 +251,29 @@ export function ensureInitialSkillVersion(
 }
 
 /**
+ * Fail-safe content probe for the husk sweep: true ONLY when the directory
+ * holds no files/symlinks at all (missing dir = no content). Any read error
+ * (e.g. EACCES) counts as "has content" so the sweep never deletes what it
+ * could not fully inspect.
+ */
+function dirHasNoContent(root: string): boolean {
+  let entries: Dirent[]
+  try {
+    entries = readdirSync(root, { withFileTypes: true })
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'ENOENT'
+  }
+  for (const d of entries) {
+    if (d.isDirectory()) {
+      if (!dirHasNoContent(join(root, d.name))) return false
+    } else {
+      return false // file / symlink / anything else counts as content
+    }
+  }
+  return true
+}
+
+/**
  * Boot-time legacy backfill + husk sweep (RFC-170 T4a; extracted from cli/start
  * so it is unit-testable). For every managed row still at
  * versionState='legacy-unbackfilled' AND reservationState='ready' — 'reserving'
@@ -250,13 +282,18 @@ export function ensureInitialSkillVersion(
  *   - live files/SKILL.md present → ensureInitialSkillVersion: archive live as
  *     v1, promote to 'snapshot-authoritative' + boot-verified (a pre-RFC-101
  *     legacy skill surfacing after an upgrade).
- *   - no SKILL.md and no skill_versions rows → an orphaned HUSK: nothing to
- *     backfill and zero recoverable content, yet the row keeps unique(name)
- *     reserved while the availability gate keeps it invisible — a permanent
- *     name squatter. Delete the row (+ leftover dir). Known producer: the
+ *   - no SKILL.md, no skill_versions rows AND the skill dir is entirely empty
+ *     (dirHasNoContent — zero files/symlinks anywhere under it) → an orphaned
+ *     HUSK: zero recoverable content, yet the row keeps unique(name) reserved
+ *     while the availability gate keeps it invisible — a permanent name
+ *     squatter. Delete the row (+ leftover empty dir). Known producer: the
  *     pre-fix ZIP-import create failure path (rm'd files/, kept the row).
- *   - no SKILL.md but versions exist → anomalous (migration 0090 moved such
- *     rows to 'snapshot-unverified'); leave it and let reconcile/reverify act.
+ *     Emptiness is REQUIRED (Codex P1): "SKILL.md missing" alone also matches
+ *     a legacy skill whose main file was lost but whose support files remain —
+ *     deleting that would destroy recoverable content, so it is left in place
+ *     (warned) for a human to repair instead.
+ *   - anything else (versions exist / dir has files) → leave it and warn;
+ *     reconcile/reverify or a human decide, never this sweep.
  */
 export function backfillLegacySkillVersions(
   db: DbClient,
@@ -290,13 +327,21 @@ export function backfillLegacySkillVersions(
         })
         continue
       }
+      const skillDir = join(opts.appHome, 'skills', row.name)
+      if (!dirHasNoContent(skillDir)) {
+        log.warn('legacy skill has no SKILL.md but its dir is not empty; leaving for repair', {
+          name: row.name,
+          id: row.id,
+        })
+        continue
+      }
       dbTxSync(db, (tx) => {
         tx.delete(skills).where(eq(skills.id, row.id)).run()
         return null
       })
-      rmSync(join(opts.appHome, 'skills', row.name), { recursive: true, force: true })
+      rmSync(skillDir, { recursive: true, force: true })
       husksRemoved++
-      log.warn('removed orphaned skill husk (no files, no versions; was squatting the name)', {
+      log.warn('removed orphaned skill husk (no content, no versions; was squatting the name)', {
         name: row.name,
         id: row.id,
       })
