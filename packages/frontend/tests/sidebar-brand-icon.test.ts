@@ -12,7 +12,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, test } from 'vitest'
 
-const ROOT = path.resolve(__dirname, '../src/routes/__root.tsx')
+const APP_SHELL = path.resolve(__dirname, '../src/components/shell/AppShell.tsx')
 const CSS = path.resolve(__dirname, '../src/styles.css')
 
 function extractRulePadding(css: string, selector: string): string | null {
@@ -29,7 +29,7 @@ function paddingX(padding: string): string {
 }
 
 describe('sidebar brand icon', () => {
-  const source = fs.readFileSync(ROOT, 'utf8')
+  const source = fs.readFileSync(APP_SHELL, 'utf8')
 
   test('renders an <svg> with the brand-icon class inside sidebar__brand', () => {
     const brandBlock = source.match(/<div className="sidebar__brand">[\s\S]*?<\/div>/)

@@ -20,6 +20,7 @@ export interface Resources {
     repos: string
     settings: string
     brand: string
+    openMenu: string
     // RFC-032 PR1: home + group headers + runtime sub-item + settings gear.
     home: string
     group: {
@@ -770,6 +771,10 @@ export interface Resources {
     searchEllipsis: string
     searchCards: string
     noMatches: string
+    retry: string
+    clearSearch: string
+    backToList: string
+    redirectingToLogin: string
     itemsCount_one: string
     itemsCount_other: string
     loading: string
@@ -3220,12 +3225,13 @@ export const zhCN: Resources = {
     repos: '远端仓',
     settings: '设置',
     brand: 'Agent Workflow',
+    openMenu: '打开导航菜单',
     home: '首页',
     group: {
-      agents: '代理',
-      workflows: '工作流',
-      tasks: '任务',
-      memory: '记忆',
+      agents: '能力资源',
+      workflows: '编排',
+      tasks: '运行与仓库',
+      memory: '知识',
     },
     settingsIcon: {
       label: '设置',
@@ -3852,6 +3858,10 @@ export const zhCN: Resources = {
     searchEllipsis: '搜索…',
     searchCards: '搜索名称、描述或配置…',
     noMatches: '无匹配项',
+    retry: '重试',
+    clearSearch: '清除搜索',
+    backToList: '返回列表',
+    redirectingToLogin: '正在前往登录页…',
     itemsCount_one: '{{count}} 项',
     itemsCount_other: '{{count}} 项',
     loading: '加载中…',

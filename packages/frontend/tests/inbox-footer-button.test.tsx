@@ -112,6 +112,19 @@ describe('RFC-032 InboxFooterButton', () => {
     )
   })
 
+  test('RFC-198 compact variant changes only the presentation anchor', async () => {
+    mockCounts(3, 3)
+    wrap(<InboxFooterButton variant="compact" open={false} onToggle={() => {}} />)
+
+    const button = screen.getByTestId('compact-inbox-button')
+    expect(screen.queryByTestId('inbox-footer-button')).toBeNull()
+    expect(button.classList.contains('inbox-footer-button--compact')).toBe(true)
+    expect(button.querySelector('.inbox-footer-button__label')?.textContent).toMatch(/Inbox|收件箱/)
+    await waitFor(() => {
+      expect(screen.getByTestId('inbox-footer-badge').textContent).toBe('6')
+    })
+  })
+
   test('reviews=0 + clarify=0 → no badge rendered (button still present)', async () => {
     mockCounts(0, 0)
     wrap(<InboxFooterButton open={false} onToggle={() => {}} />)

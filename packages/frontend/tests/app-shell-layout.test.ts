@@ -29,6 +29,8 @@ describe('app-shell viewport locking (RFC-168 clipping regression)', () => {
   test('.app-shell pins its single grid row to the viewport', () => {
     const shell = block('.app-shell')
     expect(shell).toContain('grid-template-rows: minmax(0, 1fr)')
+    expect(shell).toContain('height: 100dvh')
+    expect(shell).toContain('min-height: 100dvh')
     expect(shell).toContain('overflow: hidden')
   })
 
@@ -42,5 +44,28 @@ describe('app-shell viewport locking (RFC-168 clipping regression)', () => {
     const content = block('.content')
     expect(content).toContain('overflow: auto')
     expect(content).toContain('min-height: 0')
+    expect(content).toContain('min-width: 0')
+  })
+
+  test('900px swaps to one topbar + main grid while 720px stays the content breakpoint', () => {
+    expect(CSS).toMatch(
+      /@media \(max-width: 900px\)[\s\S]*?grid-template-columns: minmax\(0, 1fr\)[\s\S]*?grid-template-rows: auto minmax\(0, 1fr\)/,
+    )
+    expect(CSS).toMatch(/@media \(max-width: 900px\)[\s\S]*?\.mobile-topbar[\s\S]*?display: flex/)
+    expect(CSS).toMatch(
+      /@media \(max-width: 900px\)[\s\S]*?\.content[\s\S]*?padding: var\(--space-3\)/,
+    )
+    expect(CSS).toMatch(/@media \(max-width: 720px\)[\s\S]*?data-mobile-view='list'/)
+  })
+
+  test('mobile nav and tablet Inbox are viewport/safe-area bounded', () => {
+    const navPanel = block('.dialog__panel.mobile-nav-dialog')
+    expect(navPanel).toContain('width: min(88vw, 320px)')
+    expect(navPanel).toContain('height: 100dvh')
+    expect(navPanel).toContain('max-height: 100dvh')
+    expect(navPanel).toContain('env(safe-area-inset-bottom)')
+    expect(CSS).toMatch(
+      /@media \(min-width: 721px\) and \(max-width: 900px\)[\s\S]*?\.dialog--md \.dialog__panel\.inbox-dialog[\s\S]*?right\)/,
+    )
   })
 })

@@ -4,11 +4,14 @@
 // workflows / tasks). `resolveActiveNav` is a pure function so unit tests can
 // exhaustively cover every route → group mapping without spinning up a router.
 
+import type { ResourceIconKey } from '@/components/icons/resourceIcons'
+
 export type GroupKey = 'agents' | 'workflows' | 'tasks' | 'memory'
 
 export interface SubNavItem {
   to: string
   i18nKey: string
+  icon: ResourceIconKey
 }
 
 export interface NavGroupEntry {
@@ -30,29 +33,29 @@ export const NAV_GROUPS: NavGroupEntry[] = [
     key: 'agents',
     i18nKey: 'nav.group.agents',
     subnav: [
-      { to: '/agents', i18nKey: 'nav.agents' },
-      { to: '/skills', i18nKey: 'nav.skills' },
-      { to: '/mcps', i18nKey: 'nav.mcps' },
-      { to: '/plugins', i18nKey: 'nav.plugins' },
+      { to: '/agents', i18nKey: 'nav.agents', icon: 'agent' },
+      { to: '/skills', i18nKey: 'nav.skills', icon: 'skill' },
+      { to: '/mcps', i18nKey: 'nav.mcps', icon: 'mcp' },
+      { to: '/plugins', i18nKey: 'nav.plugins', icon: 'plugin' },
     ],
   },
   {
     key: 'workflows',
     i18nKey: 'nav.group.workflows',
     subnav: [
-      { to: '/workflows', i18nKey: 'nav.workflows' },
+      { to: '/workflows', i18nKey: 'nav.workflows', icon: 'workflow' },
       // RFC-164: workgroups are launched like workflows, so they live in
       // the same group.
-      { to: '/workgroups', i18nKey: 'nav.workgroups' },
+      { to: '/workgroups', i18nKey: 'nav.workgroups', icon: 'workgroup' },
     ],
   },
   {
     key: 'tasks',
     i18nKey: 'nav.group.tasks',
     subnav: [
-      { to: '/tasks', i18nKey: 'nav.tasks' },
-      { to: '/scheduled', i18nKey: 'nav.scheduled' },
-      { to: '/repos', i18nKey: 'nav.repos' },
+      { to: '/tasks', i18nKey: 'nav.tasks', icon: 'task' },
+      { to: '/scheduled', i18nKey: 'nav.scheduled', icon: 'schedule' },
+      { to: '/repos', i18nKey: 'nav.repos', icon: 'repo' },
     ],
   },
   // RFC-041 PR4 follow-up: mirror the single-item Workflows-group shape so
@@ -62,7 +65,7 @@ export const NAV_GROUPS: NavGroupEntry[] = [
   {
     key: 'memory',
     i18nKey: 'nav.group.memory',
-    subnav: [{ to: '/memory', i18nKey: 'nav.memory' }],
+    subnav: [{ to: '/memory', i18nKey: 'nav.memory', icon: 'memory' }],
   },
 ]
 

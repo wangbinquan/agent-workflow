@@ -1,12 +1,11 @@
 // RFC-032: one of the three sidebar nav groups (Agents / Workflows / Tasks).
 //
-// Each group renders an 11-px uppercase header + a chevron placeholder (no
-// collapse behaviour in v1; the chevron is a pure visual anchor so the user
-// reads the section as a folded unit) and the group's sub-items underneath.
+// Each group renders one plain section label and its icon-led route items.
 
 import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
+import { ResourceIcon } from '@/components/icons/resourceIcons'
 import type { ActiveNav, NavGroupEntry, SubNavItem } from '@/lib/nav'
 
 interface NavGroupProps {
@@ -22,9 +21,6 @@ export function NavGroup({ group, active, renderBadge }: NavGroupProps) {
     <div className="nav-group" data-group={group.key}>
       <div className="nav-group__header">
         <span>{t(group.i18nKey)}</span>
-        <span className="nav-group__chevron" aria-hidden="true">
-          ▾
-        </span>
       </div>
       <div className="nav-group__items">
         {group.subnav.map((item) => (
@@ -55,6 +51,9 @@ function NavItem({ item, isActive, badge }: NavItemProps) {
       className={className}
       activeProps={{ className: `${className} nav-item--active` }}
     >
+      <span className="nav-item__icon" aria-hidden="true">
+        <ResourceIcon name={item.icon} />
+      </span>
       <span className="nav-item__label">{t(item.i18nKey)}</span>
       {badge}
     </Link>

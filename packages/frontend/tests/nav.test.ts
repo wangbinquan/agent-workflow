@@ -9,9 +9,24 @@
 // silently breaking sidebar highlight on detail pages.
 
 import { describe, expect, test } from 'vitest'
-import { resolveActiveNav } from '@/lib/nav'
+import { NAV_GROUPS, resolveActiveNav } from '@/lib/nav'
 
 describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags', () => {
+  test('every visible route has one explicit resource icon', () => {
+    expect(NAV_GROUPS.flatMap((group) => group.subnav).map(({ to, icon }) => [to, icon])).toEqual([
+      ['/agents', 'agent'],
+      ['/skills', 'skill'],
+      ['/mcps', 'mcp'],
+      ['/plugins', 'plugin'],
+      ['/workflows', 'workflow'],
+      ['/workgroups', 'workgroup'],
+      ['/tasks', 'task'],
+      ['/scheduled', 'schedule'],
+      ['/repos', 'repo'],
+      ['/memory', 'memory'],
+    ])
+  })
+
   test('root path activates the home link, nothing else', () => {
     expect(resolveActiveNav('/')).toEqual({
       onHome: true,

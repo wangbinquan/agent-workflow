@@ -25,10 +25,11 @@ import { InboxIcon } from './InboxIcon'
 interface InboxFooterButtonProps {
   open: boolean
   onToggle: () => void
+  variant?: 'sidebar' | 'compact'
 }
 
 export const InboxFooterButton = forwardRef<HTMLButtonElement, InboxFooterButtonProps>(
-  function InboxFooterButton({ open, onToggle }, ref) {
+  function InboxFooterButton({ open, onToggle, variant = 'sidebar' }, ref) {
     const { t } = useTranslation()
     const reviews = useQuery<ReviewPendingCount>({
       queryKey: ['reviews', 'pending-count'],
@@ -59,8 +60,8 @@ export const InboxFooterButton = forwardRef<HTMLButtonElement, InboxFooterButton
       <button
         ref={ref}
         type="button"
-        className={`inbox-footer-button${open ? ' inbox-footer-button--open' : ''}`}
-        data-testid="inbox-footer-button"
+        className={`inbox-footer-button${variant === 'compact' ? ' inbox-footer-button--compact' : ''}${open ? ' inbox-footer-button--open' : ''}`}
+        data-testid={variant === 'compact' ? 'compact-inbox-button' : 'inbox-footer-button'}
         aria-label={
           showBadge ? t('nav.inbox.triggerAriaWithCount', { n: total }) : t('nav.inbox.label')
         }

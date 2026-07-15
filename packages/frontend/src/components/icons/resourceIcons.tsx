@@ -8,6 +8,19 @@
 
 import type { ReactNode } from 'react'
 
+export type ResourceIconKey =
+  | 'home'
+  | 'agent'
+  | 'skill'
+  | 'mcp'
+  | 'plugin'
+  | 'workflow'
+  | 'workgroup'
+  | 'task'
+  | 'schedule'
+  | 'repo'
+  | 'memory'
+
 function IconSvg({ name, children }: { name: string; children: ReactNode }) {
   return (
     <svg
@@ -134,3 +147,36 @@ export const REPO_ICON: ReactNode = (
     <path d="M4.6 5.3v5.4M11.4 7.7c0 2.6-2.6 2.6-5 3.4" />
   </IconSvg>
 )
+
+/** Task — a compact checklist for one execution record. */
+export const TASK_ICON: ReactNode = (
+  <IconSvg name="task">
+    <path d="m2.7 4.2.9.9 1.7-1.8M2.7 8l.9.9 1.7-1.8M2.7 11.8l.9.9 1.7-1.8" />
+    <path d="M7 4.2h6.2M7 8h6.2M7 11.8h6.2" />
+  </IconSvg>
+)
+
+/** Home — a simple roof and doorway. */
+export const HOME_ICON: ReactNode = (
+  <IconSvg name="home">
+    <path d="m2.5 7 5.5-4.5L13.5 7v6H9.8V9.5H6.2V13H2.5z" />
+  </IconSvg>
+)
+
+const RESOURCE_ICONS: Record<ResourceIconKey, ReactNode> = {
+  home: HOME_ICON,
+  agent: AGENT_ICON,
+  skill: SKILL_ICON,
+  mcp: MCP_ICON,
+  plugin: PLUGIN_ICON,
+  workflow: WORKFLOW_ICON,
+  workgroup: WORKGROUP_ICON,
+  task: TASK_ICON,
+  schedule: SCHEDULE_ICON,
+  repo: REPO_ICON,
+  memory: MEMORY_ICON,
+}
+
+export function ResourceIcon({ name }: { name: ResourceIconKey }) {
+  return RESOURCE_ICONS[name]
+}
