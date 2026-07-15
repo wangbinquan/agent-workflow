@@ -1,6 +1,6 @@
 # RFC-195 — 收件箱弹窗 UX 重构
 
-> **状态**：已批准并完成本地实现；等待 Linux 视觉基线回填与最终 CI 收口。
+> **状态**：Done（2026-07-15；实现、双平台视觉基线与 SHA CI 全部收口）。
 >
 > **触发**：2026-07-15 用户「优化下收件箱弹窗的 ux 设计」。
 >
@@ -160,7 +160,7 @@ footer 继续保留“全部评审 / 全部反问”两个入口，使用公共 
 - [x] feed 错误可单独重试，其他成功 feed 的待办仍可操作。
 - [x] memory / fusion endpoint 零请求、tab/row 零渲染的 RFC-121 锁继续通过。
 - [x] 中英文 key 对称，light / dark / desktop / 390px 本地视觉通过。
-- [ ] frontend unit、a11y/keyboard、nav e2e 与 Darwin visual baseline 已绿；待 Linux baseline + SHA CI。
+- [x] frontend unit、a11y/keyboard、nav e2e、Darwin/Linux visual baseline 与 SHA CI 全绿。
 
 ## 7. 用户批准门
 

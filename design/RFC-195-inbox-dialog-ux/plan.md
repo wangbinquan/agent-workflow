@@ -1,6 +1,6 @@
 # RFC-195 — 实施计划
 
-> 当前状态：Implementation complete。T1-T6 的本地实现与验证已完成；T7 等待 Linux baseline 与 SHA CI。
+> 当前状态：Done。T1-T7 全部完成；实现 SHA `6225130d` 的主 CI 与 Linux visual nightly 均已通过。
 
 ## 1. 任务分解
 
@@ -82,8 +82,8 @@ RUN_VISUAL_REGRESSION=1 bun run e2e -- e2e/visual-regression.spec.ts --update-sn
 - [x] T2 公共原语兼容扩展完成。
 - [x] T3/T4 弹窗、响应式、i18n 完成。
 - [x] T5 组件回归锁完成。
-- [ ] T6 e2e/a11y/Darwin visual 已完成；等待 Linux baseline Option B 回填。
+- [x] T6 e2e/a11y 与 Darwin/Linux visual baseline 完成；Linux 由 Option B CI artifact 回填。
 - [x] Codex 实现门 findings 全处置；最终复核 APPROVE。
-- [ ] typecheck / backend+shared test / frontend test / lint / format / binary smoke 全绿。
-- [ ] STATE / RFC index 标 Done，记录 commit 与验证结果。
-- [ ] 精确路径 commit + push origin/main；按最终 SHA 查 CI。
+- [x] typecheck / backend+shared test / frontend test / lint / format / binary smoke 全绿。
+- [x] STATE / RFC index 标 Done，记录 commit 与验证结果。
+- [x] 精确路径 commit + push origin/main；`6225130d` 的 SHA CI run `29407388716` 全绿。
