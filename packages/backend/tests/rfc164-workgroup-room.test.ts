@@ -672,6 +672,55 @@ describe('RFC-164 room — PR-5 surfaces', () => {
     ).toBe('canceled')
   })
 
+  // RFC-099 audit (2026-07-15): mid-run addMembers of a HUMAN must write a
+  // task_collaborators row (like the launch-time T24 union), else the joiner
+  // can't open the room / receive cards — canViewTask keys off that table.
+  test('RFC-099 audit: adding a human member writes task_collaborators so they can enter the room', async () => {
+    const { taskCollaborators } = await import('../src/db/schema')
+    const bobU = await createUser(db, {
+      username: 'bob5',
+      displayName: 'bob5',
+      role: 'user',
+      password: 'longEnoughPassword',
+    })
+    const bob = { id: bobU.id, token: (await createSession({ db, userId: bobU.id })).token }
+
+    // Before joining, bob is not a task member → the room 404s (D20).
+    const before = await req(bob.token, `/api/workgroup-tasks/${taskId}/room`)
+    expect(before.status).toBe(404)
+
+    const add = await req(owner.token, `/api/workgroup-tasks/${taskId}/config`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        addMembers: [{ memberType: 'human', userId: bob.id, displayName: 'bob', roleDesc: '把关' }],
+      }),
+    })
+    expect(add.status).toBe(200)
+
+    // The human member is now a task_collaborators row (the fix) …
+    const collab = await db
+      .select()
+      .from(taskCollaborators)
+      .where(eq(taskCollaborators.taskId, taskId))
+    expect(collab.some((r) => r.userId === bob.id && r.role === 'collaborator')).toBe(true)
+
+    // … so bob can actually open the room.
+    const after = await req(bob.token, `/api/workgroup-tasks/${taskId}/room`)
+    expect(after.status).toBe(200)
+  })
+
+  test('RFC-099 audit: adding an unknown / non-active human member is rejected 422', async () => {
+    const add = await req(owner.token, `/api/workgroup-tasks/${taskId}/config`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        addMembers: [
+          { memberType: 'human', userId: 'no_such_user', displayName: 'ghost', roleDesc: '' },
+        ],
+      }),
+    })
+    expect(add.status).toBe(422)
+  })
+
   // RFC-181 A/A2 — autonomous 进 per-task PATCH（对称 on/off + system 消息），
   // false→true 单事务遣散在途 clarify park 并 requeue 卡（design §2.1/§2.1a）。
   test('RFC-181：PATCH autonomous 往返 + false→true 遣散在途 clarify park', async () => {

@@ -25,12 +25,14 @@ import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { z } from 'zod'
-import { actorOf, type Actor } from '@/auth/actor'
+import { actorOf, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import {
   clarifySessions,
   nodeRuns,
+  taskCollaborators,
   tasks,
+  users,
   workgroupAssignments,
   workgroupMessages,
 } from '@/db/schema'
@@ -849,6 +851,11 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     const patch = parsed.data
     const changes: string[] = []
     let members = [...config.members]
+    // RFC-099 audit (2026-07-15): human members added mid-run must also become
+    // task_collaborators — canViewTask / room access key off that table, so
+    // without this a joiner is "added but can't get in" (launch does this via
+    // the T24 union in workgroupLaunch.ts; the mid-run path had missed it).
+    const newHumanUserIds: string[] = []
 
     if (patch.removeMemberIds !== undefined && patch.removeMemberIds.length > 0) {
       const removing = new Set(patch.removeMemberIds)
@@ -908,8 +915,21 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         if (m.memberType === 'agent' && !m.agentName) {
           throw new ValidationError('workgroup-config-invalid', 'agent member requires agentName')
         }
-        if (m.memberType === 'human' && !m.userId) {
-          throw new ValidationError('workgroup-config-invalid', 'human member requires userId')
+        if (m.memberType === 'human') {
+          if (!m.userId) {
+            throw new ValidationError('workgroup-config-invalid', 'human member requires userId')
+          }
+          if (m.userId === SYSTEM_USER_ID) {
+            throw new ValidationError(
+              'workgroup-config-invalid',
+              'cannot add the system user as a member',
+            )
+          }
+          // Owner is already a member via ownerUserId (no collaborator row for
+          // them); everyone else joins task_collaborators below.
+          if (m.userId !== task.ownerUserId && !newHumanUserIds.includes(m.userId)) {
+            newHumanUserIds.push(m.userId)
+          }
         }
         const id = ulid()
         members.push({
@@ -925,6 +945,24 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         // join-no-history: cursor starts AT the current room tail (msghub 语义).
         if (maxMsg !== undefined) {
           await advanceMemberCursor(deps.db, taskId, id, maxMsg)
+        }
+      }
+      // RFC-099 audit: new human members must be active users before they ride
+      // into task_collaborators below (same rule launch enforces via T24; also
+      // rejects the system user, handled per-member above).
+      if (newHumanUserIds.length > 0) {
+        const urows = await deps.db
+          .select({ id: users.id, status: users.status })
+          .from(users)
+          .where(inArray(users.id, newHumanUserIds))
+        const active = new Set(urows.filter((r) => r.status === 'active').map((r) => r.id))
+        for (const uid of newHumanUserIds) {
+          if (!active.has(uid)) {
+            throw new ValidationError(
+              'workgroup-config-invalid',
+              `human member '${uid}' is not an active user`,
+            )
+          }
         }
       }
     }
@@ -969,6 +1007,23 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
         .set({ workgroupConfigJson: JSON.stringify(nextConfig) })
         .where(eq(tasks.id, taskId))
         .run()
+      // RFC-099 audit: mirror new human members into task_collaborators in the
+      // SAME tx as the config write, so membership and room access stay atomic.
+      // onConflictDoNothing dedupes against an existing owner/collaborator row.
+      if (newHumanUserIds.length > 0) {
+        tx.insert(taskCollaborators)
+          .values(
+            newHumanUserIds.map((uid) => ({
+              taskId,
+              userId: uid,
+              role: 'collaborator' as const,
+              addedBy: actor.user.id,
+              addedAt: Date.now(),
+            })),
+          )
+          .onConflictDoNothing()
+          .run()
+      }
     })
     // RFC-181 A2 (design-gate P0) — false→true dismisses in-flight clarify
     // parks so the toggle works on a task that is ALREADY parked on questions

@@ -2165,6 +2165,21 @@ export async function retryNode(
       `task '${taskId}' is ${task.status}; cancel it first before retrying a node`,
     )
   }
+  // RFC-099 audit (2026-07-15): validate the nodeRunId belongs to THIS task
+  // BEFORE the CAS below. The CAS clears finishedAt/errorSummary/errorMessage/
+  // failedNodeId and flips the task to pending, so a bogus / cross-task
+  // nodeRunId must be rejected here — otherwise it would knock a finished task
+  // into a scheduler-less pending zombie and wipe its completion metadata
+  // before the 404 fires. This is a pure read (no side effects), so the CAS's
+  // ownership-lock semantics are unaffected: a concurrent-retry loser still
+  // loses cleanly at the CAS with zero side effects.
+  const runRow = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1))[0]
+  if (runRow === undefined || runRow.taskId !== taskId) {
+    throw new NotFoundError(
+      'node-run-not-found',
+      `node_run '${nodeRunId}' not found under task '${taskId}'`,
+    )
+  }
   // RFC-097: ownership lock — CAS the task to pending BEFORE the rollback and
   // placeholder minting so a concurrent retry/resume loses with zero side
   // effects (the old order let the loser pollute node_runs and the worktree).
@@ -2196,13 +2211,6 @@ export async function retryNode(
       )
     }
     throw err
-  }
-  const runRow = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1))[0]
-  if (runRow === undefined || runRow.taskId !== taskId) {
-    throw new NotFoundError(
-      'node-run-not-found',
-      `node_run '${nodeRunId}' not found under task '${taskId}'`,
-    )
   }
 
   // Identify downstream nodeIds from the workflow snapshot's edges.

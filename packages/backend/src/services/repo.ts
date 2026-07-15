@@ -4,6 +4,7 @@
 // (path-mode launches are gone; local repos ride file:// URLs through the
 // cached-repos mirror instead).
 
+import { resolve, sep } from 'node:path'
 import type { RepoFilesResponse, RepoRefsResponse } from '@agent-workflow/shared'
 import {
   currentBranch,
@@ -14,6 +15,22 @@ import {
   recentCommits,
   requireGitRepo,
 } from '@/util/git'
+
+/**
+ * RFC-099 audit (2026-07-15): the refs/files pickers must only introspect a
+ * repo the caller already reached through the cached-mirror model — NOT an
+ * arbitrary host path. The `path` query param is attacker-controllable, so it
+ * must resolve to a known cached_repos.localPath (or a directory under one).
+ * resolve() first so `/mirror/../../etc/secret` can't ride a lexical prefix
+ * match past the containment check.
+ */
+export function isKnownRepoPath(knownLocalPaths: readonly string[], path: string): boolean {
+  const target = resolve(path)
+  return knownLocalPaths.some((lp) => {
+    const root = resolve(lp)
+    return target === root || target.startsWith(root + sep)
+  })
+}
 
 // --- read-only views over a repo ---
 

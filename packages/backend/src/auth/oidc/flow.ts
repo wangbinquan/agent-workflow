@@ -29,6 +29,20 @@ export interface StartFlowResult extends PendingFlow {
   codeChallenge: string
 }
 
+/**
+ * Reduce a caller-supplied post-login redirect to a safe same-origin relative
+ * path, or undefined. Must start with a single '/' and not '//' or '/\'
+ * (protocol-relative / backslash open-redirect tricks). Mirrors the frontend
+ * safeInternalRedirect (routes/auth.tsx). startFlow is the ONLY entry point for
+ * postLoginRedirect, so applying it there keeps both redirect sites in
+ * routes/oidc-auth.ts structurally safe — critical because one of them appends
+ * the freshly-minted session token in the URL fragment.
+ */
+export function sanitizePostLoginRedirect(raw: string | undefined): string | undefined {
+  if (raw === undefined || !/^\/(?![/\\])/.test(raw)) return undefined
+  return raw
+}
+
 export function startFlow(
   providerId: string,
   opts: {
@@ -50,7 +64,7 @@ export function startFlow(
     nonce,
     expiresAt: now + TTL_MS,
     linkUserId: opts.linkUserId,
-    postLoginRedirect: opts.postLoginRedirect,
+    postLoginRedirect: sanitizePostLoginRedirect(opts.postLoginRedirect),
   }
   pending.set(state, flow)
   return { ...flow, state, codeChallenge }
