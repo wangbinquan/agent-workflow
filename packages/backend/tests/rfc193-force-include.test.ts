@@ -16,7 +16,15 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
@@ -335,9 +343,7 @@ describe('RFC-193 e2e — K1 必达三跳传播', () => {
     const rows = await h.db
       .select()
       .from(nodeRunOutputs)
-      .where(
-        and(eq(nodeRunOutputs.nodeRunId, bDone!.id), eq(nodeRunOutputs.portName, 'echo')),
-      )
+      .where(and(eq(nodeRunOutputs.nodeRunId, bDone!.id), eq(nodeRunOutputs.portName, 'echo')))
     expect(rows[0]?.content).toBe('CROSS-NODE CONTENT')
   })
 })

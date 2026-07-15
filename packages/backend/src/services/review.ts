@@ -367,10 +367,7 @@ async function upstreamPortArchiveJson(
     .select({ archiveJson: nodeRunOutputs.archiveJson })
     .from(nodeRunOutputs)
     .where(
-      and(
-        eq(nodeRunOutputs.nodeRunId, upstreamRunId),
-        eq(nodeRunOutputs.portName, sourcePortName),
-      ),
+      and(eq(nodeRunOutputs.nodeRunId, upstreamRunId), eq(nodeRunOutputs.portName, sourcePortName)),
     )
   return rows[0]?.archiveJson ?? null
 }

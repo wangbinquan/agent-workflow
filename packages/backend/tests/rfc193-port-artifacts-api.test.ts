@@ -67,7 +67,13 @@ async function buildHarness(): Promise<Harness> {
     finishedAt: Date.now(),
   })
 
-  const app = createApp({ token: 'tok', configPath: '', opencodeVersion: '1.14.25', dbVersion: 1, db })
+  const app = createApp({
+    token: 'tok',
+    configPath: '',
+    opencodeVersion: '1.14.25',
+    dbVersion: 1,
+    db,
+  })
   return {
     db,
     appHome,
@@ -79,7 +85,11 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function seedArchivedPort(h: Harness, portName: string, files: Record<string, string | Buffer>) {
+async function seedArchivedPort(
+  h: Harness,
+  portName: string,
+  files: Record<string, string | Buffer>,
+) {
   const items: Array<{ sourceAbs: string; sourcePath: string }> = []
   for (const [rel, content] of Object.entries(files)) {
     const abs = join(h.worktree, rel)
@@ -182,18 +192,24 @@ describe('RFC-193 GET /api/tasks/:taskId/port-artifacts (case 7)', () => {
       archiveJson: null,
     })
     const ok = await h.app.fetch(
-      new Request(`http://localhost/api/tasks/${h.taskId}/port-artifacts/${h.runId}/legacy?item=0`, {
-        headers: HEADERS,
-      }),
+      new Request(
+        `http://localhost/api/tasks/${h.taskId}/port-artifacts/${h.runId}/legacy?item=0`,
+        {
+          headers: HEADERS,
+        },
+      ),
     )
     expect(ok.status).toBe(200)
     expect(await ok.text()).toBe('FROM WORKTREE')
 
     rmSync(join(h.worktree, 'legacy.md'))
     const miss = await h.app.fetch(
-      new Request(`http://localhost/api/tasks/${h.taskId}/port-artifacts/${h.runId}/legacy?item=0`, {
-        headers: HEADERS,
-      }),
+      new Request(
+        `http://localhost/api/tasks/${h.taskId}/port-artifacts/${h.runId}/legacy?item=0`,
+        {
+          headers: HEADERS,
+        },
+      ),
     )
     expect(miss.status).toBe(404)
   })

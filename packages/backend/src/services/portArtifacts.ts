@@ -357,7 +357,14 @@ export function readPortArtifact(opts: {
     const buf = Buffer.from(opts.content, 'utf8')
     return {
       items: [
-        { path: null, body: opts.content, bytes: buf, size: buf.length, truncated: false, source: 'archive' },
+        {
+          path: null,
+          body: opts.content,
+          bytes: buf,
+          size: buf.length,
+          truncated: false,
+          source: 'archive',
+        },
       ],
     }
   }
@@ -376,7 +383,14 @@ export function readPortArtifact(opts: {
         }
       }
     }
-    return { path: line, body: '', bytes: Buffer.alloc(0), size: 0, truncated: false, source: 'missing' }
+    return {
+      path: line,
+      body: '',
+      bytes: Buffer.alloc(0),
+      size: 0,
+      truncated: false,
+      source: 'missing',
+    }
   })
   return { items }
 }
@@ -413,8 +427,7 @@ export function subsetArchiveJson(
   const items: PortArchiveItem[] = []
   for (const want of wantPaths) {
     const hit =
-      arch.items.find((i) => i.path === want) ??
-      arch.items.find((i) => i.path.endsWith('/' + want))
+      arch.items.find((i) => i.path === want) ?? arch.items.find((i) => i.path.endsWith('/' + want))
     if (hit !== undefined) items.push(hit)
   }
   return items.length > 0 ? JSON.stringify({ v: 1, items } satisfies PortArchive) : null

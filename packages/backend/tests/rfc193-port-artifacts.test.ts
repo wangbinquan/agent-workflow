@@ -269,7 +269,14 @@ describe('RFC-193 readPortArtifact (module — fallback chain, case 6 core)', ()
   test('poisoned archive file reference (../ escape) is refused → fallback/missing', () => {
     const evil = JSON.stringify({
       v: 1,
-      items: [{ path: 'a.md', file: join('runs', 't1', 'ports', '..', '..', 'secret'), size: 1, truncated: false }],
+      items: [
+        {
+          path: 'a.md',
+          file: join('runs', 't1', 'ports', '..', '..', 'secret'),
+          size: 1,
+          truncated: false,
+        },
+      ],
     })
     writeFileSync(join(home, 'secret'), 'TOP SECRET')
     const read = readPortArtifact({
@@ -588,10 +595,7 @@ describe('RFC-193 e2e — runner archive-at-emit', () => {
 // 归档 gate 的 persistDeclaredOutputs 防御以文本断言锁定）。
 describe('RFC-193 source guards', () => {
   test('runner archival gate carries the persistDeclaredOutputs defence (D14)', () => {
-    const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
-      'utf8',
-    )
+    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'), 'utf8')
     const gate = src.slice(src.indexOf('pathishArchives.size > 0'))
     expect(gate.slice(0, 400)).toContain('persistDeclaredOutputs !== false')
   })

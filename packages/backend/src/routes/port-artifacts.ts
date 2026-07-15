@@ -100,7 +100,10 @@ export function mountPortArtifactRoutes(app: Hono, deps: AppDeps): void {
     }
     const idx = Number(itemParam)
     if (!Number.isInteger(idx) || idx < 0) {
-      throw new ValidationError('port-artifact-bad-item', `item '${itemParam}' must be a non-negative integer`)
+      throw new ValidationError(
+        'port-artifact-bad-item',
+        `item '${itemParam}' must be a non-negative integer`,
+      )
     }
     const item = read.items[idx]
     if (item === undefined || item.source === 'missing') {
