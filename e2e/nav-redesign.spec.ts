@@ -176,7 +176,7 @@ test('RFC-195 inbox dialog: populated 390px panel keeps content and footer in bo
   await primeAuth(page, daemon)
   await page.goto(`${daemon.baseUrl}/agents`)
 
-  await page.getByTestId('inbox-footer-button').click()
+  await page.getByTestId('compact-inbox-button').click()
   const dialog = page.getByRole('dialog', { name: 'Inbox' })
   await expect(dialog).toBeVisible()
   await expect(page.getByTestId('inbox-row-review-visual-review-0')).toBeVisible()

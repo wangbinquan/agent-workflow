@@ -134,7 +134,7 @@ test.describe('RFC-196 Skill ZIP import UX', () => {
     expect(geometry.rootFits).toBe(true)
     expect(geometry.documentFits).toBe(true)
     expect(geometry.outside).toEqual([])
-    await expect(page.getByRole('link', { name: 'Back to skills' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Back to list' })).toBeVisible()
     await expectNoBlockingAxeViolations(page)
 
     await rename.fill('existing-skill-renamed')
