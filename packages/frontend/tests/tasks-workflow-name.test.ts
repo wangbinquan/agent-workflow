@@ -21,9 +21,9 @@ const DETAIL_SRC = path.join(HERE, '../src/routes/tasks.detail.tsx')
 const SUBJECT_SRC = path.join(HERE, '../src/components/TaskSubjectLink.tsx')
 
 describe('tasks list shows workflow name', () => {
-  test('table header includes the Workflow column', async () => {
+  test('table header includes the Subject column (RFC-192: colWorkflow → colSubject)', async () => {
     const src = await fs.readFile(LIST_SRC, 'utf8')
-    expect(src).toMatch(/<th>\{t\('tasks\.colWorkflow'\)\}<\/th>/)
+    expect(src).toMatch(/<th>\{t\('tasks\.colSubject'\)\}<\/th>/)
   })
 
   test('the subject cell delegates to TaskSubjectLink', async () => {

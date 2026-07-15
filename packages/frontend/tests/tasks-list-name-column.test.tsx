@@ -10,10 +10,10 @@ import { describe, expect, test } from 'vitest'
 const SRC = readFileSync(resolve(import.meta.dirname, '..', 'src', 'routes', 'tasks.tsx'), 'utf-8')
 
 describe('routes/tasks.tsx — RFC-037 Linear-style first column', () => {
-  test('first column header is t("tasks.colName") (no longer colId)', () => {
-    // Column order: Name → Workflow → Status → Started → Repo → Error.
-    // The ID column header (`tasks.colId`) is gone — short ID now lives
-    // inside the name cell as a subtitle.
+  test('the name column header is t("tasks.colName") (no colId header)', () => {
+    // RFC-192 column order: Status → Name → Subject → Repo → Started →
+    // Duration (status leads the monitor scan). The ID column header
+    // (`tasks.colId`) stays gone — the ULID lives in the name-cell subtitle.
     expect(SRC).toContain("t('tasks.colName')")
     expect(SRC).not.toMatch(/<th>\{t\('tasks\.colId'\)\}<\/th>/)
   })
@@ -32,12 +32,15 @@ describe('routes/tasks.tsx — RFC-037 Linear-style first column', () => {
     expect(SRC).not.toMatch(/row\.id\.slice\(-10\)/)
   })
 
-  test('Workflow / Status / Started / Repo / Error columns survive the reshuffle', () => {
-    expect(SRC).toContain("t('tasks.colWorkflow')")
+  test('Subject / Status / Started / Repo / Duration columns present (RFC-192 set)', () => {
+    expect(SRC).toContain("t('tasks.colSubject')")
     expect(SRC).toContain("t('tasks.colStatus')")
     expect(SRC).toContain("t('tasks.colStarted')")
     expect(SRC).toContain("t('tasks.colRepo')")
-    expect(SRC).toContain("t('tasks.colError')")
+    expect(SRC).toContain("t('tasks.colDuration')")
+    // The always-on Error column retired with RFC-192 — locked in
+    // tasks-list-error-column-single-line.test.ts.
+    expect(SRC).not.toContain("t('tasks.colError')")
   })
 
   test('styles.css declares the .task-name-cell layout family', () => {

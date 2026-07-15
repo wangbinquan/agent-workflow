@@ -180,14 +180,27 @@ export function TextArea({
 interface SwitchProps {
   checked: boolean
   onChange: (v: boolean) => void
-  label: string
+  /** RFC-192: optional since the /scheduled table cell renders a bare switch —
+   *  standalone (label-less) usage MUST pass `aria-label` instead. */
+  label?: string
   hint?: string
   /** RFC-164: workgroup free_collab mode renders its three collaboration
    *  switches as forced-on read-only — first caller needing a disabled state. */
   disabled?: boolean
+  /** RFC-192: accessible name for the label-less table-cell form. */
+  'aria-label'?: string
+  'data-testid'?: string
 }
 
-export function Switch({ checked, onChange, label, hint, disabled }: SwitchProps) {
+export function Switch({
+  checked,
+  onChange,
+  label,
+  hint,
+  disabled,
+  'aria-label': ariaLabel,
+  'data-testid': testid,
+}: SwitchProps) {
   return (
     <label className="form-switch">
       <input
@@ -195,8 +208,10 @@ export function Switch({ checked, onChange, label, hint, disabled }: SwitchProps
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
+        aria-label={ariaLabel}
+        data-testid={testid}
       />
-      <span>{label}</span>
+      {label !== undefined && <span>{label}</span>}
       {hint !== undefined && <span className="form-field__hint">{hint}</span>}
     </label>
   )

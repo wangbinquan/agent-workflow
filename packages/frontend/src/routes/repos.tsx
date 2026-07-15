@@ -13,6 +13,7 @@ import { api, ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
 import { LoadingState } from '@/components/LoadingState'
+import { RelativeTime } from '@/components/RelativeTime'
 import { BatchImportDialog } from '@/components/repos/BatchImportDialog'
 import { SubmoduleBadge } from '@/components/repos/SubmoduleBadge'
 import { Route as RootRoute } from './__root'
@@ -124,7 +125,9 @@ function ReposPage() {
                 </td>
                 <td className="data-table__truncate">{item.localPath}</td>
                 <td>
-                  <time dateTime={item.lastFetchedAt}>{formatTimestamp(item.lastFetchedAt)}</time>
+                  {/* RFC-192 (D4/D5): list-layer relative time; the ISO string
+                      rides <RelativeTime>'s string contract (Date.parse). */}
+                  <RelativeTime ts={item.lastFetchedAt} />
                 </td>
                 <td>{item.referencingTaskCount}</td>
                 <td>
@@ -200,15 +203,6 @@ function ReposPage() {
       </Dialog>
     </div>
   )
-}
-
-function formatTimestamp(iso: string): string {
-  try {
-    const d = new Date(iso)
-    return d.toLocaleString()
-  } catch {
-    return iso
-  }
 }
 
 function describeError(e: unknown): string {

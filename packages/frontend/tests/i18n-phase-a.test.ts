@@ -1,13 +1,15 @@
 // P-5-03 stage 2 Phase A: smoke-test the new agents / skills / workflows /
-// tasks / common bundles + the formatRelative helper.
+// tasks / common bundles.
 //
-// Goals here are narrow: catch missing keys (zh-CN / en-US drift) and
-// regressions in tasks.tsx's relative-time formatter when callers pass a
-// translated TFunction.
+// Goals here are narrow: catch missing keys (zh-CN / en-US drift).
+// RFC-192: tasks.tsx's page-private `formatRelative` (and its
+// tasks.secondsAgo/minutesAgo/hoursAgo keys) retired — the list renders the
+// shared <RelativeTime> primitive, covered by relative-time.test.ts.
 
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import i18n, { setLanguage } from '@/i18n'
-import { formatRelative } from '@/routes/tasks'
 
 describe('Phase A bundles', () => {
   test('zh-CN agents/skills/workflows/tasks core keys are populated', () => {
@@ -37,36 +39,13 @@ describe('Phase A bundles', () => {
   })
 })
 
-describe('formatRelative', () => {
-  const t = i18n.t.bind(i18n)
-  test('seconds bucket', () => {
-    setLanguage('en-US')
-    const ts = Date.now() - 5_000
-    expect(formatRelative(ts, t)).toMatch(/^\d+s ago$/)
-  })
-
-  test('minutes bucket', () => {
-    setLanguage('en-US')
-    const ts = Date.now() - 5 * 60_000
-    expect(formatRelative(ts, t)).toMatch(/^\d+m ago$/)
-  })
-
-  test('hours bucket', () => {
-    setLanguage('en-US')
-    const ts = Date.now() - 3 * 60 * 60_000
-    expect(formatRelative(ts, t)).toMatch(/^\d+h ago$/)
-  })
-
-  test('older than a day falls back to toLocaleDateString', () => {
-    setLanguage('en-US')
-    const ts = Date.now() - 3 * 24 * 60 * 60_000
-    // Just confirm it does NOT contain "ago"; the exact format depends on locale.
-    expect(formatRelative(ts, t).includes('ago')).toBe(false)
-  })
-
-  test('zh-CN seconds bucket uses Chinese suffix', () => {
-    setLanguage('zh-CN')
-    const ts = Date.now() - 5_000
-    expect(formatRelative(ts, t)).toMatch(/秒前$/)
+describe('formatRelative retirement (RFC-192)', () => {
+  test('tasks.tsx no longer exports the page-private formatter (shared <RelativeTime> instead)', () => {
+    const src = readFileSync(
+      resolve(import.meta.dirname, '..', 'src', 'routes', 'tasks.tsx'),
+      'utf-8',
+    )
+    expect(src).not.toContain('function formatRelative')
+    expect(src).toContain("import { RelativeTime } from '@/components/RelativeTime'")
   })
 })

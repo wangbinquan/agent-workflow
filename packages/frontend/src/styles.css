@@ -13590,3 +13590,80 @@ button.status-chip {
   display: flex;
   gap: var(--space-2);
 }
+
+/* ---- RFC-192: run-record list surgery (tasks / scheduled) ---- */
+
+/* Running-row live dot. `prefers-reduced-motion` freezes it. */
+@keyframes status-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.status-chip--pulse .status-chip__dot {
+  animation: status-dot-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-chip--pulse .status-chip__dot {
+    animation: none;
+  }
+}
+
+/* Subject + search cluster, right-aligned inside the status-filter row.
+   Rendered only when the list has rows (empty-state baseline parity). */
+.tasks-toolbar {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tasks-toolbar__search {
+  max-width: 220px;
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+/* Failed-row error line inside the name cell (the always-on Error column
+   retired — RFC-192). Same cap+ellipsis trick as .data-table__clip. */
+.task-name-cell__error {
+  color: var(--danger);
+  font-size: var(--font-sm);
+  max-width: 360px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Scheduled-origin chip next to the task name. */
+.task-name-cell__origin {
+  margin-left: 6px;
+  text-decoration: none;
+  color: var(--muted);
+}
+
+/* Row-click affordance: a mute chevron in the last cell (no button). */
+.data-table__chevron {
+  color: var(--muted);
+  font-size: 16px;
+  text-align: right;
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* /scheduled next-run cell: relative main line + short absolute subtitle. */
+.scheduled-next {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scheduled-next__abs {
+  font-size: var(--font-xs);
+  color: var(--muted);
+}

@@ -777,6 +777,13 @@ export interface Resources {
       inHour: string
       inDay: string
     }
+    /** RFC-192: duration tokens（任务耗时列）。 */
+    dur: {
+      sec: string
+      min: string
+      hourMin: string
+      dayHour: string
+    }
     /** RFC-191: gallery card行内主动作（工作流/工作组「启动」）。 */
     launch: string
     /** RFC-177: by-id subject redirect landed on a missing/invisible resource. */
@@ -1307,6 +1314,9 @@ export interface Resources {
     lastNever: string
     last_launched: string
     last_failed: string
+    /** RFC-192: list row —— last-run task link + consecutive-failure chip. */
+    lastTaskLink: string
+    consecutiveChip: string
     saveAsScheduled: string
     dialogTitle: string
     fieldName: string
@@ -1354,11 +1364,24 @@ export interface Resources {
     emptyList: string
     colId: string
     colName: string
-    colWorkflow: string
+    /** RFC-192: the execution-subject column (工作流/工作组/单代理). */
+    colSubject: string
     colStatus: string
     colStarted: string
     colRepo: string
     colError: string
+    /** RFC-192: duration-cell prefixes + repo-count / scheduled-origin chips. */
+    durationRunning: string
+    durationWaiting: string
+    repoCountChip: string
+    scheduledChip: string
+    /** RFC-192: subject Segmented filter labels. */
+    subjectFilter: {
+      all: string
+      workflow: string
+      workgroup: string
+      agent: string
+    }
     detailTitleIdLabel: string
     loadingTask: string
     metaWorkflow: string
@@ -1640,9 +1663,6 @@ export interface Resources {
     colIteration: string
     colRetry: string
     colDuration: string
-    secondsAgo: string
-    minutesAgo: string
-    hoursAgo: string
     status: {
       pending: string
       running: string
@@ -3624,6 +3644,12 @@ export const zhCN: Resources = {
       inHour: '{{n}} 小时后',
       inDay: '{{n}} 天后',
     },
+    dur: {
+      sec: '{{s}} 秒',
+      min: '{{m}} 分钟',
+      hourMin: '{{h}} 小时 {{m}} 分',
+      dayHour: '{{d}} 天 {{h}} 小时',
+    },
     launch: '启动',
     resourceUnavailable: '该资源不可用或已被删除。',
     copy: '复制',
@@ -4302,6 +4328,8 @@ export const zhCN: Resources = {
     lastNever: '未触发',
     last_launched: '已启动',
     last_failed: '失败',
+    lastTaskLink: '查看任务',
+    consecutiveChip: '连挂 ×{{n}}',
     saveAsScheduled: '存为定时任务',
     dialogTitle: '存为定时任务',
     fieldName: '定时任务名称',
@@ -4350,11 +4378,21 @@ export const zhCN: Resources = {
     emptyList: '没有匹配当前过滤的任务。',
     colId: 'ID',
     colName: '名称',
-    colWorkflow: '工作流',
+    colSubject: '主体',
     colStatus: '状态',
     colStarted: '开始',
     colRepo: '仓库',
     colError: '错误',
+    durationRunning: '进行中 · {{dur}}',
+    durationWaiting: '等待 {{dur}}',
+    repoCountChip: '{{n}} 仓库',
+    scheduledChip: '定时',
+    subjectFilter: {
+      all: '全部主体',
+      workflow: '工作流',
+      workgroup: '工作组',
+      agent: '单代理',
+    },
     detailTitleIdLabel: '任务 ID',
     loadingTask: '加载任务中…',
     metaWorkflow: '工作流',
@@ -4630,9 +4668,6 @@ export const zhCN: Resources = {
     colIteration: '轮次',
     colRetry: '重试',
     colDuration: '耗时',
-    secondsAgo: '{{n}} 秒前',
-    minutesAgo: '{{n}} 分钟前',
-    hoursAgo: '{{n}} 小时前',
     status: {
       pending: '待运行',
       running: '运行中',
