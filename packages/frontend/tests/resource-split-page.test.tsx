@@ -4,6 +4,8 @@
 // a real memory-history router (cards are <Link>s; the guard needs a router).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
@@ -24,13 +26,17 @@ import '../src/i18n'
 const ITEMS: ResourceCardItem[] = [
   {
     key: 'code-worker',
+    kind: 'agent',
     title: 'code-worker',
     subtitle: 'writes code',
+    searchText: 'opencode 1 in 2 out',
+    updatedAt: Date.now() - 60_000,
     to: '/agents/$name',
     params: { name: 'code-worker' },
   },
   {
     key: 'auditor',
+    kind: 'agent',
     title: 'auditor',
     subtitle: 'audits diffs',
     to: '/agents/$name',
@@ -128,6 +134,10 @@ describe('ResourceSplitPage — structure & three states', () => {
     const card = screen.getByTestId('split-card-code-worker')
     expect(within(card).getByText('code-worker')).toBeTruthy()
     expect(within(card).getByText('writes code')).toBeTruthy()
+    expect(within(card).queryByText('Agent')).toBeNull()
+    expect(card.querySelector('[data-icon="agent"]')).not.toBeNull()
+    expect(card.querySelector('.split-card__updated time')).not.toBeNull()
+    expect(screen.getByTestId('split-count').textContent).toBe('2 items')
     expect(screen.getByTestId('empty-pane')).toBeTruthy()
   })
 
@@ -135,7 +145,9 @@ describe('ResourceSplitPage — structure & three states', () => {
     renderSplit({ initial: '/agents/auditor', items: ITEMS })
     await waitFor(() => screen.getByTestId('detail-pane'))
     expect(screen.getByTestId('split-card-auditor').className).toContain('is-selected')
+    expect(screen.getByTestId('split-card-auditor').getAttribute('aria-current')).toBe('page')
     expect(screen.getByTestId('split-card-code-worker').className).not.toContain('is-selected')
+    expect(screen.getByTestId('split-card-code-worker').getAttribute('aria-current')).toBeNull()
   })
 
   test('search box filters cards (case-insensitive, title or subtitle)', async () => {
@@ -148,6 +160,50 @@ describe('ResourceSplitPage — structure & three states', () => {
     fireEvent.change(screen.getByTestId('split-search'), { target: { value: 'writes' } })
     expect(screen.getByTestId('split-card-code-worker')).toBeTruthy()
     expect(screen.queryByTestId('split-card-auditor')).toBeNull()
+    // Visible operational facts are searchable too.
+    fireEvent.change(screen.getByTestId('split-search'), { target: { value: 'opencode' } })
+    expect(screen.getByTestId('split-card-code-worker')).toBeTruthy()
+    expect(screen.queryByTestId('split-card-auditor')).toBeNull()
+    expect(screen.getByTestId('split-count').textContent).toBe('1 item')
+  })
+
+  test('missing descriptions keep an explicit, muted fallback instead of collapsing the card', async () => {
+    renderSplit({
+      initial: '/agents',
+      items: [
+        {
+          key: 'blank',
+          kind: 'agent',
+          title: 'blank',
+          to: '/agents/$name',
+          params: { name: 'blank' },
+        },
+      ],
+    })
+    const card = await screen.findByTestId('split-card-blank')
+    expect(card.querySelector('.split-card__subtitle--empty')?.textContent).toBe('(no description)')
+  })
+
+  test('long agent names wrap beside the icon instead of using ellipsis', async () => {
+    const longName = 'agent-'.padEnd(128, 'x')
+    renderSplit({
+      initial: '/agents',
+      items: [
+        {
+          key: longName,
+          kind: 'agent',
+          title: longName,
+          subtitle: 'long identifier',
+          to: '/agents/$name',
+          params: { name: longName },
+        },
+      ],
+    })
+
+    const card = await screen.findByTestId(`split-card-${longName}`)
+    const title = card.querySelector('.split-card__identity .split-card__title')
+    expect(title?.textContent).toBe(longName)
+    expect(title?.querySelector('.split-card__name')).not.toBeNull()
   })
 
   test('filtered-to-nothing shows no-matches; genuinely empty list shows emptyListText', async () => {
@@ -166,6 +222,28 @@ describe('ResourceSplitPage — structure & three states', () => {
     renderSplit({ initial: '/agents/new', items: ITEMS })
     await waitFor(() => screen.getByTestId('new-pane'))
     expect(screen.getByTestId('split-new-button').className).toContain('is-active')
+  })
+
+  test('compact cards keep keyboard focus, two-line descriptions, and semantic summary chrome', () => {
+    const css = readFileSync(
+      path.resolve(path.dirname(new URL(import.meta.url).pathname), '../src/styles.css'),
+      'utf8',
+    )
+    expect(css).toContain('.split-card:focus-visible')
+    expect(css).toContain('.split-card__icon')
+    expect(css).toContain('-webkit-line-clamp: 2')
+    expect(css).toContain('.split-card__summary')
+    expect(css).toMatch(
+      /\.content:has\(\.page--split\)\s*\{[^}]*padding-inline:\s*var\(--space-4\);/s,
+    )
+    expect(css).toMatch(/\.split__cards > \.split-card\s*\{[^}]*flex-shrink:\s*0;/s)
+    expect(css).toMatch(
+      /\.split-card--agent \.split-card__name\s*\{[^}]*white-space: normal;[^}]*overflow-wrap: anywhere;/s,
+    )
+    expect(css).toMatch(
+      /\.split-card__badges \.data-table__owner\s*\{[^}]*text-overflow: ellipsis/s,
+    )
+    expect(css).toContain('@media (forced-colors: active)')
   })
 })
 

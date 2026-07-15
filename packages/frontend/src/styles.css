@@ -1515,186 +1515,309 @@ code {
   margin-left: auto;
 }
 
-/* The drawer floats next to the sidebar, capped at 360 px, with a soft
-   shadow so it reads as overlaid rather than docked. */
-.inbox-drawer {
+/* RFC-195 — Inbox business surface. Modal lifecycle/chrome comes entirely
+   from the shared Dialog primitive; this class only places the panel beside
+   the desktop sidebar and turns it into a viewport-safe sheet on narrow UI. */
+.dialog--md .dialog__panel.inbox-dialog {
   position: fixed;
-  left: 240px;
-  top: 16px;
-  bottom: 16px;
-  width: 360px;
-  max-width: 360px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--text) 18%, transparent);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  z-index: 50;
+  left: calc(220px + var(--space-3));
+  top: 50%;
+  width: min(420px, calc(100vw - 244px));
+  height: auto;
+  max-height: min(680px, calc(100dvh - var(--space-6)));
+  transform: translateY(-50%);
 }
 
-.inbox-drawer__tabs {
-  display: inline-flex;
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  border-radius: 6px;
-  padding: 2px;
-  gap: 2px;
+.inbox-dialog .dialog__header {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
 }
 
-.inbox-drawer__tab {
-  flex: 1 1 0;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 8px;
-  border-radius: 4px;
-  cursor: pointer;
+.inbox-dialog .dialog__body {
+  gap: var(--space-3);
 }
 
-.inbox-drawer__tab:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-}
-
-.inbox-drawer__tab--active,
-.inbox-drawer__tab--active:hover {
-  background: var(--accent);
-  color: #fff;
-}
-
-.inbox-drawer__list {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.inbox-drawer__item {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  /* RFC-037: extra row for the task-name chip (row 3); the source-task
-     short-id stays last so it remains the most-muted label. */
-  grid-template-rows: auto auto auto auto;
-  column-gap: 8px;
-  row-gap: 2px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-  color: var(--text);
-}
-
-.inbox-drawer__item:hover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  border-color: var(--border);
-}
-
-.inbox-drawer__kind {
-  grid-row: 1;
-  grid-column: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 6px;
-  height: 18px;
-  font-size: 10px;
-  font-weight: 700;
-  border-radius: 4px;
-  color: #fff;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  width: fit-content;
-}
-
-.inbox-drawer__kind--review {
-  background: #2563eb;
-}
-
-.inbox-drawer__kind--clarify {
-  background: #c2410c;
-}
-
-/* RFC-164 PR-6: workgroup to-dos summary row. */
-.inbox-drawer__kind--wg {
-  background: #7c3aed;
-}
-
-.inbox-drawer__title {
-  grid-row: 1;
-  grid-column: 2;
-  font-weight: 600;
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.inbox-drawer__subtitle {
-  grid-row: 2;
-  grid-column: 2;
-  font-size: 12px;
-}
-
-.inbox-drawer__task-name {
-  grid-row: 3;
-  grid-column: 2;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.inbox-drawer__task {
-  grid-row: 4;
-  grid-column: 2;
-  font-size: 11px;
-}
-
-.inbox-drawer__empty {
-  padding: 12px;
-  font-size: 13px;
-}
-
-.inbox-drawer__error {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.inbox-drawer__footer {
-  display: flex;
-  gap: 12px;
-  padding-top: 8px;
-  margin-top: 6px;
+.inbox-dialog .dialog__footer {
+  justify-content: stretch;
+  padding-top: var(--space-3);
   border-top: 1px solid var(--border);
 }
 
-.inbox-drawer__footer-link {
-  flex: 1 1 0;
-  border: 0;
-  background: transparent;
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 6px;
-  border-radius: 4px;
-  cursor: pointer;
-  text-align: center;
+.inbox-dialog__summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
 }
 
-.inbox-drawer__footer-link:hover {
+.inbox-dialog__summary-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.inbox-dialog__subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-sm);
+  line-height: 1.45;
+}
+
+.inbox-dialog__total {
+  flex: 0 0 auto;
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  font-variant-numeric: tabular-nums;
+}
+
+.inbox-dialog__filters.segmented {
+  width: 100%;
+}
+
+.inbox-dialog__filters > [role='radio'] {
+  min-width: 0;
+}
+
+.inbox-dialog__filter-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.inbox-dialog__filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.inbox-dialog__errors {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.error-banner--with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.error-banner--with-action > span {
+  min-width: 0;
+}
+
+.inbox-dialog__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.inbox-dialog__item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    transform 120ms ease;
+}
+
+.inbox-dialog__item:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 5%, var(--panel));
+  transform: translateY(-1px);
+}
+
+.inbox-dialog__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.inbox-dialog__item-meta,
+.inbox-dialog__item-source {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: var(--space-2);
+}
+
+.inbox-dialog__item-meta {
+  padding-right: 24px;
+}
+
+.inbox-dialog__kind {
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-xs);
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.inbox-dialog__kind--review {
+  color: var(--info);
+  background: color-mix(in srgb, var(--info) 12%, transparent);
+}
+
+.inbox-dialog__kind--clarify {
+  color: color-mix(in srgb, var(--warn) 76%, var(--text));
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+}
+
+.inbox-dialog .error-box {
+  color: color-mix(in srgb, var(--danger) 80%, var(--text));
+}
+
+.inbox-dialog__kind--wg {
+  color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.inbox-dialog__time {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--font-xs);
+  white-space: nowrap;
+}
+
+.inbox-dialog__item-title {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--font-md);
+  font-weight: 650;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.inbox-dialog__item-source {
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+
+.inbox-dialog__task-name,
+.inbox-dialog__context {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-dialog__task-name {
+  flex: 0 1 auto;
+  color: var(--text);
+  font-weight: 550;
+}
+
+.inbox-dialog__context {
+  flex: 1 1 auto;
+}
+
+.inbox-dialog__context::before {
+  content: '·';
+  margin-right: var(--space-2);
+  color: var(--muted);
+}
+
+.inbox-dialog__chevron {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  color: var(--muted);
+  font-size: var(--font-lg);
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+
+.inbox-dialog__item:hover .inbox-dialog__chevron {
+  color: var(--accent);
+  transform: translateX(2px);
+}
+
+.inbox-dialog__workgroup-count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.inbox-dialog__state {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+}
+
+.inbox-dialog__state > .empty-state,
+.inbox-dialog__state > .loading-state {
+  width: 100%;
+}
+
+.inbox-dialog__empty-icon {
+  display: inline-flex;
+  color: var(--accent);
+}
+
+.inbox-dialog__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.inbox-dialog__footer .btn {
+  flex: 1 1 0;
+  justify-content: center;
+}
+
+@media (max-width: 720px) {
+  .dialog--md .dialog__panel.inbox-dialog {
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    transform: none;
+    border: 0;
+    border-radius: 0;
+    padding: var(--space-4);
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inbox-dialog__item,
+  .inbox-dialog__chevron {
+    transition: none;
+  }
+
+  .inbox-dialog__item:hover {
+    transform: none;
+  }
+
+  .inbox-dialog__item:hover .inbox-dialog__chevron {
+    transform: none;
+  }
 }
 
 /* RFC-032 PR3 — task-driven homepage. The page-level layout follows
@@ -2383,7 +2506,9 @@ code {
 .segmented__option--active,
 .segmented__option--active:hover {
   background: var(--accent);
-  color: #fff;
+  /* --panel resolves to white in light mode and near-black in dark mode,
+     keeping the active label above WCAG AA on both accent variants. */
+  color: var(--panel);
 }
 .segmented__option:disabled {
   opacity: 0.6;
@@ -9951,11 +10076,6 @@ mark.comment-anchor[data-active='true'] {
   text-align: center;
 }
 
-.inbox-drawer__kind--memory {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--accent);
-}
-
 .task-feedback {
   display: flex;
   flex-direction: column;
@@ -13217,6 +13337,7 @@ button.status-chip {
    `overflow: hidden` ancestor shrinks instead of silently clipping (P2-8). */
 .content:has(.page--split) {
   overflow: hidden;
+  padding-inline: var(--space-4);
 }
 
 .page--split {
@@ -13244,9 +13365,25 @@ button.status-chip {
   padding-right: var(--space-3);
 }
 
+.split__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
 .split__title {
+  min-width: 0;
+  margin: 0;
   font-size: var(--font-lg);
-  margin: 0 0 var(--space-3);
+}
+
+.split__count {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: var(--font-xs);
+  font-variant-numeric: tabular-nums;
 }
 
 .split__search {
@@ -13260,7 +13397,14 @@ button.status-chip {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
+}
+
+/* The list itself scrolls; cards must keep their intrinsic height. Without
+   this, the column flexbox shrinks every card until all rows fit, while each
+   card's overflow:hidden silently clips its description and summary. */
+.split__cards > .split-card {
+  flex-shrink: 0;
 }
 
 .split__new {
@@ -13275,36 +13419,149 @@ button.status-chip {
 }
 
 .split-card {
+  --split-accent: var(--accent);
+  position: relative;
   display: block;
+  overflow: hidden;
   text-decoration: none;
   color: var(--text);
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--split-accent) 6%, var(--panel)) 0,
+    var(--panel) 48%
+  );
+  border: 1px solid color-mix(in srgb, var(--split-accent) 16%, var(--border));
+  border-radius: var(--radius-lg);
+  padding: 10px;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background-color 140ms ease;
+}
+
+.split-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, var(--split-accent), transparent 76%);
+  pointer-events: none;
 }
 
 .split-card:hover {
-  background: var(--bg);
+  border-color: color-mix(in srgb, var(--split-accent) 45%, var(--border));
+  box-shadow: var(--shadow-sm);
 }
 
 .split-card.is-selected {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--split-accent) 11%, var(--panel));
+  border-color: color-mix(in srgb, var(--split-accent) 55%, var(--border));
+  box-shadow: inset 3px 0 0 var(--split-accent);
+}
+
+.split-card:focus-visible {
+  outline: 2px solid var(--split-accent);
+  outline-offset: -2px;
+}
+
+.split-card__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.split-card__icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid color-mix(in srgb, var(--split-accent) 25%, var(--border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--split-accent) 10%, var(--panel));
+  color: var(--split-accent);
+}
+
+.split-card__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.split-card__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.split-card__kind {
+  color: var(--split-accent);
+  font-size: var(--font-xs);
+  font-weight: 650;
+  line-height: 1.1;
+}
+
+.split-card__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.split-card__primary-status {
+  display: inline-flex;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.split-card__primary-status > .status-chip {
+  max-width: 104px;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .split-card__title {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  min-width: 0;
 }
 
 .split-card__name {
-  font-size: var(--font-sm);
-  font-weight: 500;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Agent identifiers are primary content. Keep them beside the icon to avoid
+   an empty header row, but wrap instead of applying the shared ellipsis. */
+.split-card--agent .split-card__head {
+  align-items: start;
+}
+
+.split-card--agent .split-card__trailing {
+  padding-top: 7px;
+}
+
+.split-card--agent .split-card__title {
+  align-items: flex-start;
+}
+
+.split-card--agent .split-card__name {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.split-card--agent .split-card__dot {
+  margin-top: 5px;
 }
 
 .split-card__dot {
@@ -13313,19 +13570,134 @@ button.status-chip {
   border-radius: 50%;
   background: var(--accent);
   flex-shrink: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.split-card__trailing {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.split-card__chevron {
+  color: var(--muted);
+  font-size: var(--font-md);
+  transition: transform 120ms ease;
+}
+
+.split-card:hover .split-card__chevron,
+.split-card.is-selected .split-card__chevron {
+  color: var(--split-accent);
+  transform: translateX(2px);
 }
 
 .split-card__subtitle {
-  font-size: var(--font-xs);
-  color: var(--muted);
+  display: -webkit-box;
+  margin-top: var(--space-2);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-top: 2px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--muted);
+  font-size: var(--font-xs);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.split-card__subtitle--empty {
+  font-style: italic;
+}
+
+.split-card__summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+  margin-top: var(--space-2);
+  padding: 5px 6px;
+  border: 1px solid color-mix(in srgb, var(--split-accent) 12%, var(--border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--split-accent) 4%, var(--bg));
 }
 
 .split-card__badges {
-  margin-top: 4px;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Agent metadata can contain user-defined runtime and owner names. Keep each
+   fact inside the narrow master rail instead of letting one long value widen
+   the card or create horizontal scrolling. The full runtime remains in its
+   title attribute. */
+.split-card__badges > .status-chip,
+.split-card__badges > .chip,
+.split-card__badges .data-table__owner {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Agent runtime, ports and ownership are supporting facts, not a second card
+   inside the card. Keep them in one quiet, wrapping footer line. */
+.split-card--agent .split-card__summary {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.agent-card__facts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
+  gap: 4px 8px;
+  color: var(--muted);
+  font-size: var(--font-xs);
+  line-height: 1.3;
+}
+
+.agent-card__runtime {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-card__ports {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.agent-card__owner {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-card__facts .chip {
+  flex: 0 0 auto;
+}
+
+.split-card__updated {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--font-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .split__detail {
@@ -13537,27 +13909,77 @@ button.status-chip {
    the stretched-link overlay and the card-internal layout. */
 
 .gallery__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
   margin-bottom: var(--space-4);
 }
 
+.gallery__count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: var(--font-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.gallery__count::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
 .gallery__search {
+  width: min(100%, 320px);
   max-width: 320px;
 }
 
 .gallery {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: var(--space-4);
 }
 
 /* Stretched-link host. The title <Link>'s ::after overlay makes the whole
-   card clickable; raised above it are `__ops` (buttons) plus `__desc` and
-   `__when` — the latter two are non-interactive but carry REQUIRED title
-   fallbacks (full description / absolute time) that the overlay would
-   otherwise swallow (RFC-191 实现门 P2). Badges/meta stay under — clicking
-   them opens the card. */
+   card clickable; only `__ops` is raised above it for the independent launch
+   action. Every informational region stays under the overlay so descriptions,
+   timestamps, badges and meta never become surprising navigation dead zones. */
 .gallery-card {
+  --gallery-accent: var(--accent);
   position: relative;
+  overflow: hidden;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--gallery-accent) 7%, var(--panel)) 0,
+    var(--panel) 46%
+  );
+  border-color: color-mix(in srgb, var(--gallery-accent) 18%, var(--border));
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.gallery-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, var(--gallery-accent), transparent 72%);
+  pointer-events: none;
+}
+
+.gallery-card.card--interactive:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--gallery-accent) 48%, var(--border));
+  box-shadow: var(--shadow-md);
 }
 
 /* Body grows so footers align across a grid row even when neighbors' meta
@@ -13565,6 +13987,47 @@ button.status-chip {
    column + min-width lock. */
 .gallery-card .card__body {
   flex: 1;
+  gap: var(--space-3);
+}
+
+.gallery-card__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.gallery-card__icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid color-mix(in srgb, var(--gallery-accent) 28%, var(--border));
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--gallery-accent) 11%, var(--panel));
+  color: var(--gallery-accent);
+}
+
+.gallery-card__icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.5;
+}
+
+.gallery-card__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.gallery-card__kind {
+  color: var(--gallery-accent);
+  font-size: var(--font-xs);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
 }
 
 .gallery-card__title {
@@ -13575,8 +14038,11 @@ button.status-chip {
 }
 
 .gallery-card__name {
-  font-size: 15px;
-  font-weight: 600;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--font-lg);
+  font-weight: 650;
+  line-height: 1.35;
   color: var(--text);
   text-decoration: none;
   overflow: hidden;
@@ -13588,6 +14054,15 @@ button.status-chip {
   content: '';
   position: absolute;
   inset: 0;
+}
+
+.gallery-card__stretch:focus-visible {
+  outline: none;
+}
+
+.gallery-card__stretch:focus-visible::after {
+  box-shadow: inset 0 0 0 2px var(--gallery-accent);
+  border-radius: var(--radius-lg);
 }
 
 /* Badges may shrink (128-char owner display names must not blow the 300px
@@ -13605,24 +14080,20 @@ button.status-chip {
 }
 
 .gallery-card__desc {
-  position: relative;
-  z-index: 1;
   margin: 0;
   font-size: 13px;
-  line-height: 1.55;
+  line-height: 1.5;
   color: var(--muted);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
-  /* Two-line reservation so short/empty descriptions don't collapse the row
-     and cards in one grid row keep their footers aligned. */
-  min-height: calc(2 * 1.55em);
 }
 
 .gallery-card__desc--empty {
   font-style: italic;
+  color: var(--muted);
 }
 
 /* Meta chips must never overflow the track: a 64-char whitespace-free leader
@@ -13630,7 +14101,15 @@ button.status-chip {
    text-only, so inline-block (which text-overflow requires — inline-flex
    cannot ellipsize its text child) renders identically to the .chip base. */
 .gallery-card__meta {
+  display: flex;
+  align-items: center;
+  align-content: center;
+  gap: 6px;
   min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--gallery-accent) 14%, var(--border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--gallery-accent) 5%, var(--bg));
 }
 
 .gallery-card__meta > .chip,
@@ -13642,6 +14121,23 @@ button.status-chip {
   white-space: nowrap;
 }
 
+/* The summary band is the grouping chrome. Flatten ordinary chips inside it
+   so workflow/workgroup facts read as one compact sentence instead of a row of
+   identical pills; StatusChip keeps its semantic mode treatment. */
+.gallery-card__meta > .chip {
+  padding: 0 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-weight: 550;
+}
+
+.gallery-card--workflow .gallery-card__meta > .chip:last-child {
+  color: var(--muted);
+  font-weight: 500;
+}
+
 /* Fill the base .card__footer flex line so space-between actually pushes
    the launch action to the card's right edge (实现门 P2). */
 .gallery-card__foot {
@@ -13649,23 +14145,151 @@ button.status-chip {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-2);
   min-width: 0;
 }
 
+.gallery-card .card__footer {
+  padding-top: var(--space-3);
+  border-top: 1px solid color-mix(in srgb, var(--gallery-accent) 14%, var(--border));
+}
+
 .gallery-card__when {
-  position: relative;
-  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-size: var(--font-sm);
-  color: var(--muted);
   white-space: nowrap;
+}
+
+.gallery-card__when-label {
+  color: var(--muted);
+  font-size: var(--font-xs);
+  line-height: 1;
+}
+
+.gallery-card__when time {
+  color: var(--text);
+  font-weight: 550;
 }
 
 .gallery-card__ops {
   position: relative;
   z-index: 1;
   display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
   gap: var(--space-2);
+  min-width: 0;
+  margin-left: auto;
+  pointer-events: none;
+}
+
+.gallery-card__ops--passive {
+  pointer-events: none;
+}
+
+.gallery-card__ops .btn {
+  gap: 6px;
+  min-width: 72px;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.gallery-card__launch-arrow {
+  transition: transform 120ms ease;
+}
+
+.gallery-card__ops .btn:hover .gallery-card__launch-arrow {
+  transform: translateX(2px);
+}
+
+.gallery-card__action-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--warn-bg);
+  max-width: 100%;
+  color: var(--text);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: right;
+  white-space: normal;
+}
+
+.gallery-card__action-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+  background: var(--warn);
+}
+
+@media (forced-colors: active) {
+  .gallery-card__stretch:focus-visible::after {
+    outline: 2px solid CanvasText;
+    outline-offset: -2px;
+  }
+
+  .split-card:focus-visible {
+    outline-color: CanvasText;
+  }
+}
+
+@media (max-width: 720px) {
+  .page--gallery .page__header--row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .page--gallery .page__actions {
+    flex-wrap: wrap;
+  }
+
+  .gallery__toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .gallery__search {
+    width: 100%;
+    max-width: none;
+  }
+
+  .gallery {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gallery-card,
+  .gallery-card__launch-arrow {
+    transition: none;
+  }
+
+  .gallery-card.card--interactive:hover {
+    transform: none;
+  }
+
+  .gallery-card__ops .btn:hover .gallery-card__launch-arrow {
+    transform: none;
+  }
+
+  .split-card,
+  .split-card__chevron {
+    transition: none;
+  }
+
+  .split-card:hover .split-card__chevron,
+  .split-card.is-selected .split-card__chevron {
+    transform: none;
+  }
 }
 
 /* ---- RFC-192: run-record list surgery (tasks / scheduled) ---- */

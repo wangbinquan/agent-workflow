@@ -34,7 +34,8 @@ import { setBaseUrl, setToken } from '../src/stores/auth'
 import { TextInput } from '../src/components/Form'
 import {
   ResourceGalleryPage,
-  type GalleryCardItem,
+  type WorkflowGalleryCardItem,
+  type WorkgroupGalleryCardItem,
 } from '../src/components/gallery/ResourceGalleryPage'
 import { enUS } from '../src/i18n/en-US'
 import '../src/i18n'
@@ -119,9 +120,10 @@ function renderWithRouter(component: () => React.ReactElement, initialEntry: str
   return router
 }
 
-function item(overrides: Partial<GalleryCardItem> = {}): GalleryCardItem {
+function item(overrides: Partial<WorkflowGalleryCardItem> = {}): WorkflowGalleryCardItem {
   return {
     key: 'k1',
+    kind: 'workflow',
     title: 'alpha-flow',
     subtitle: 'does alpha things',
     subtitleFallback: '(no description)',
@@ -130,6 +132,23 @@ function item(overrides: Partial<GalleryCardItem> = {}): GalleryCardItem {
     params: { id: 'wf_alpha' },
     launch: { kind: 'workflow', workflow: 'wf_alpha' },
     testid: 'card-alpha',
+    ...overrides,
+  }
+}
+
+function workgroupItem(
+  overrides: Partial<WorkgroupGalleryCardItem> = {},
+): WorkgroupGalleryCardItem {
+  return {
+    key: 'wg1',
+    kind: 'workgroup',
+    title: 'review-squad',
+    subtitle: 'reviews changes',
+    subtitleFallback: '(no description)',
+    updatedAt: Date.now() - 5 * 60_000,
+    to: '/workgroups/$name',
+    params: { name: 'review-squad' },
+    testid: 'card-squad',
     ...overrides,
   }
 }
@@ -157,6 +176,7 @@ describe('ResourceGalleryPage shell', () => {
     // DOM order: notice strictly precedes the grid (P2-9).
     expect(notice.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByTestId('gallery-search')).toBeTruthy()
+    expect(screen.getByTestId('gallery-count').textContent).toBe('1 item')
   })
 
   test('empty list: EmptyState with the page testid, NO search box (baseline parity)', async () => {
@@ -204,9 +224,11 @@ describe('ResourceGalleryPage shell', () => {
     fireEvent.change(screen.getByTestId('gallery-search'), { target: { value: 'audits' } })
     expect(screen.queryByTestId('card-alpha')).toBeNull()
     expect(screen.getByTestId('card-beta')).toBeTruthy()
+    expect(screen.getByTestId('gallery-count').textContent).toBe('1 item')
     // No hits → compact no-matches; the list-empty state must NOT appear.
     fireEvent.change(screen.getByTestId('gallery-search'), { target: { value: 'zzz' } })
     expect(screen.getByTestId('gallery-no-matches')).toBeTruthy()
+    expect(screen.getByTestId('gallery-count').textContent).toBe('0 items')
     expect(screen.queryByTestId('things-empty')).toBeNull()
   })
 
@@ -227,10 +249,21 @@ describe('ResourceGalleryPage shell', () => {
       '/gallery',
     )
     const card = await screen.findByTestId('card-alpha')
+    expect(card.classList.contains('gallery-card--workflow')).toBe(true)
+    expect(card.querySelector('[data-icon="workflow"]')).not.toBeNull()
+    expect(card.textContent).toContain('Workflow')
+    expect(card.textContent).toContain('Last updated')
     const cardLink = card.querySelector('a.gallery-card__stretch')
     expect(cardLink?.getAttribute('href')).toBe('/workflows/wf_alpha')
     expect(cardLink?.querySelector('a')).toBeNull() // no nested anchors
+    const describedBy = cardLink?.getAttribute('aria-describedby')?.split(' ') ?? []
+    expect(describedBy).toHaveLength(2)
+    expect(describedBy.every((id) => card.querySelector(`[id="${id}"]`) !== null)).toBe(true)
+    const absoluteTime = card.querySelector('.gallery-card__when time')?.getAttribute('title') ?? ''
+    expect(cardLink?.getAttribute('title')).toContain('(no description)')
+    expect(cardLink?.getAttribute('title')).toContain(absoluteTime)
     const launch = screen.getByTestId('card-alpha-launch')
+    expect(launch.getAttribute('aria-label')).toBe('Launch alpha-flow')
     expect(launch.getAttribute('href')).toContain('/tasks/new')
     expect(launch.getAttribute('href')).toContain('kind=workflow')
     expect(launch.getAttribute('href')).toContain('workflow=wf_alpha')
@@ -238,6 +271,53 @@ describe('ResourceGalleryPage shell', () => {
     expect(card.querySelector('.gallery-card__desc--empty')?.textContent).toBe('(no description)')
     // Relative time renders as a <time> with the absolute tooltip.
     expect(card.querySelector('.gallery-card__when time')).not.toBeNull()
+  })
+
+  test('workgroup card uses its resource identity and explains an unavailable launch action', async () => {
+    renderWithRouter(
+      () => (
+        <ResourceGalleryPage
+          title="Things"
+          headerActions={null}
+          items={[
+            workgroupItem({
+              launch: undefined,
+              actionHint: 'Add an agent to launch',
+            }),
+          ]}
+          isLoading={false}
+          error={null}
+          searchPlaceholder="Search…"
+          emptyListText="No things yet."
+          emptyTestid="things-empty"
+        />
+      ),
+      '/gallery',
+    )
+    const card = await screen.findByTestId('card-squad')
+    expect(card.classList.contains('gallery-card--workgroup')).toBe(true)
+    expect(card.querySelector('[data-icon="workgroup"]')).not.toBeNull()
+    expect(card.textContent).toContain('Workgroup')
+    expect(card.textContent).toContain('Add an agent to launch')
+    expect(screen.queryByTestId('card-squad-launch')).toBeNull()
+  })
+
+  test('card CSS keeps the full-card link continuous and keyboard/motion friendly', () => {
+    const css = readSrc('styles.css')
+    const descRule = css.match(/\.gallery-card__desc\s*\{([^}]*)\}/)?.[1] ?? ''
+    const whenRule = css.match(/\.gallery-card__when\s*\{([^}]*)\}/)?.[1] ?? ''
+    const emptyDescRule = css.match(/\.gallery-card__desc--empty\s*\{([^}]*)\}/)?.[1] ?? ''
+    const actionHintRule = css.match(/\.gallery-card__action-hint\s*\{([^}]*)\}/)?.[1] ?? ''
+    expect(descRule).not.toContain('z-index')
+    expect(whenRule).not.toContain('z-index')
+    expect(emptyDescRule).toContain('color: var(--muted)')
+    expect(actionHintRule).toContain('color: var(--text)')
+    expect(css).toContain('.gallery-card__stretch:focus-visible::after')
+    expect(css).toContain('@media (forced-colors: active)')
+    expect(css).toContain('minmax(min(100%, 320px), 1fr)')
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.gallery-card\.card--interactive:hover/,
+    )
   })
 })
 
@@ -250,7 +330,7 @@ describe('/workflows gallery assembly (T3)', () => {
         definition: {
           $schema_version: 1,
           inputs: [],
-          nodes: [{ id: 'n1' } as never, { id: 'n2' } as never],
+          nodes: [{ id: 'n1' } as never],
           edges: [],
         },
         updatedAt: Date.now() - 3_600_000,
@@ -262,7 +342,8 @@ describe('/workflows gallery assembly (T3)', () => {
 
     const audit = await screen.findByTestId('workflow-card-code-audit')
     expect(audit.textContent).toContain('v7')
-    expect(audit.textContent).toContain('2 nodes')
+    expect(audit.textContent).toContain('1 node')
+    expect(audit.textContent).not.toContain('1 nodes')
     expect(audit.textContent).toContain('audit pipeline')
     const launch = screen.getByTestId('workflow-card-code-audit-launch')
     expect(launch.getAttribute('href')).toContain('kind=workflow')
@@ -273,6 +354,10 @@ describe('/workflows gallery assembly (T3)', () => {
     expect(docs.textContent).toContain('0 nodes')
     // Freshest first (updatedAt desc): code-audit precedes docs-sync.
     expect(audit.compareDocumentPosition(docs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // Visible facts participate in search too (not just name/description).
+    fireEvent.change(screen.getByTestId('gallery-search'), { target: { value: 'v7' } })
+    expect(screen.getByTestId('workflow-card-code-audit')).toBeTruthy()
+    expect(screen.queryByTestId('workflow-card-docs-sync')).toBeNull()
   })
 
   test('no delete affordance on the list (delete lives in the editor header)', async () => {

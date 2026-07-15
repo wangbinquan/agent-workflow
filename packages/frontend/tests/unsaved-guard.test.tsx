@@ -30,8 +30,8 @@ import { useReportSplitDirty, useSplitDirty } from '../src/components/split/spli
 import '../src/i18n'
 
 const ITEMS: ResourceCardItem[] = [
-  { key: 'a', title: 'a', to: '/agents/$name', params: { name: 'a' } },
-  { key: 'b', title: 'b', to: '/agents/$name', params: { name: 'b' } },
+  { key: 'a', kind: 'agent', title: 'a', to: '/agents/$name', params: { name: 'a' } },
+  { key: 'b', kind: 'agent', title: 'b', to: '/agents/$name', params: { name: 'b' } },
 ]
 
 function AlwaysDirtyDetail() {

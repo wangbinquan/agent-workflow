@@ -34,6 +34,9 @@ interface AgentRow {
   visibility: 'public' | 'private'
   ownerUserId: string | null
   inputs: unknown[]
+  runtime?: string | null
+  role?: 'worker' | 'aggregator'
+  builtin?: boolean
 }
 
 function makeAgent(name: string, description = ''): AgentRow {
@@ -65,7 +68,7 @@ function json(body: unknown, status = 200): Response {
   })
 }
 
-function installFetch(opts: { failList?: boolean } = {}) {
+function installFetch(opts: { failList?: boolean; ownerName?: string } = {}) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
@@ -106,7 +109,20 @@ function installFetch(opts: { failList?: boolean } = {}) {
         })
       if (method === 'GET' && path.endsWith('/api/config'))
         return json({ defaultRuntime: 'opencode' })
-      if (method === 'POST' && path.endsWith('/api/users/lookup')) return json([])
+      if (method === 'POST' && path.endsWith('/api/users/lookup'))
+        return json(
+          opts.ownerName === undefined
+            ? []
+            : [
+                {
+                  id: 'owner-1',
+                  username: 'owner',
+                  displayName: opts.ownerName,
+                  role: 'user',
+                  status: 'active',
+                },
+              ],
+        )
       if (method === 'GET' && /\/api\/(skills|mcps|plugins)/.test(path)) return json([])
       return json({ error: 'unhandled' }, 404)
     },
@@ -144,12 +160,54 @@ afterEach(() => {
 describe('/agents split page', () => {
   test('empty pane at /agents; card click opens the detail form', async () => {
     const router = renderAgents('/agents')
-    await waitFor(() => screen.getByTestId('split-card-alpha'))
+    const alphaCard = await waitFor(() => screen.getByTestId('split-card-alpha'))
+    expect(alphaCard.querySelector('[data-icon="agent"]')).not.toBeNull()
+    expect(alphaCard.querySelector('.split-card__kind')).toBeNull()
+    expect(screen.getByTestId('agent-runtime-alpha').textContent).toBe('opencode · default')
+    expect(alphaCard.querySelectorAll('.agent-card__facts')).toHaveLength(1)
+    expect(alphaCard.querySelectorAll('.status-chip--neutral')).toHaveLength(0)
+    expect(alphaCard.querySelector('.split-card__updated')).toBeNull()
+    fireEvent.change(screen.getByTestId('split-search'), { target: { value: 'opencode' } })
+    expect(screen.getByTestId('split-card-alpha')).toBeTruthy()
     expect(screen.getByText('Nothing selected')).toBeTruthy()
     fireEvent.click(screen.getByTestId('split-card-alpha'))
     await waitFor(() => expect(router.state.location.pathname).toBe('/agents/alpha'))
     await waitFor(() => screen.getByRole('heading', { level: 2, name: 'alpha' }))
     expect((screen.getByRole('textbox', { name: /Name/ }) as HTMLInputElement).value).toBe('alpha')
+  })
+
+  test('dense agent metadata stays in one quiet wrapping footer with long values titled', async () => {
+    const runtimeName = `runtime-${'x'.repeat(80)}`
+    const ownerName = `Owner ${'y'.repeat(122)}`
+    agents = [
+      {
+        ...makeAgent('synthesizer', 'merges worker output'),
+        runtime: runtimeName,
+        role: 'aggregator',
+        visibility: 'private',
+        ownerUserId: 'owner-1',
+        builtin: true,
+        inputs: [{}],
+        outputs: ['answer'],
+      },
+    ]
+    vi.restoreAllMocks()
+    installFetch({ ownerName })
+
+    renderAgents('/agents')
+    const card = await screen.findByTestId('split-card-synthesizer')
+    await waitFor(() => expect(card.textContent).toContain(ownerName))
+
+    expect(card.querySelectorAll('.agent-card__facts')).toHaveLength(1)
+    expect(card.querySelector('.agent-card__capabilities')).toBeNull()
+    expect(card.querySelector('.agent-card__access')).toBeNull()
+    expect(screen.getByTestId('agent-runtime-synthesizer').getAttribute('title')).toBe(runtimeName)
+    expect(card.querySelector('.agent-card__owner')?.getAttribute('title')).toContain(ownerName)
+    expect(card.textContent).toContain('1 in · 1 out')
+    expect(card.textContent?.toLowerCase()).toContain('aggregator')
+    expect(card.textContent?.toLowerCase()).toContain('private')
+    expect(card.textContent).toContain('built-in')
+    expect(card.querySelector('.split-card__updated')).toBeNull()
   })
 
   test('edit → dirty dot; Save stays in place, clears dot, refreshes subtitle', async () => {

@@ -128,8 +128,15 @@ function WorkflowsPage() {
             .sort((a, b) => b.updatedAt - a.updatedAt)
             .map((w) => ({
               key: w.id,
+              kind: 'workflow' as const,
               title: w.name,
               subtitle: w.description === '' ? undefined : w.description,
+              searchText: [
+                `v${w.version}`,
+                t('workflows.cardNodes', { count: w.definition.nodes.length }),
+                w.visibility === 'private' ? t('acl.privateChip') : '',
+                w.ownerUserId != null ? (owners.get(w.ownerUserId)?.displayName ?? '') : '',
+              ].join(' '),
               subtitleFallback: t('workflows.noDescription'),
               badges: (
                 <ResourceBadges
@@ -140,10 +147,10 @@ function WorkflowsPage() {
               ),
               meta: (
                 <>
-                  <span className="chip chip--tight">v{w.version}</span>
                   <span className="chip chip--tight">
-                    {t('workflows.cardNodes', { n: w.definition.nodes.length })}
+                    {t('workflows.cardNodes', { count: w.definition.nodes.length })}
                   </span>
+                  <span className="chip chip--tight">v{w.version}</span>
                 </>
               ),
               updatedAt: w.updatedAt,
@@ -189,7 +196,7 @@ function WorkflowsPage() {
       items={items}
       isLoading={isLoading}
       error={error}
-      searchPlaceholder={t('common.searchEllipsis')}
+      searchPlaceholder={t('common.searchCards')}
       emptyListText={t('workflows.emptyList')}
       emptyTestid="workflows-empty"
       loadingTestid="workflows-loading"

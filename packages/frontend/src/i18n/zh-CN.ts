@@ -35,19 +35,27 @@ export interface Resources {
     }
     inbox: {
       label: string
+      subtitle: string
+      total: string
+      partial: string
+      filterAria: string
       tabAll: string
       tabReviews: string
       tabClarify: string
+      loading: string
       empty: string
+      emptyHint: string
       errorReviews: string
       errorClarify: string
       retry: string
+      retryFeed: string
       sourceTask: string
       openReviews: string
       openClarify: string
       clarifyShardOrIter: string
       clarifySubtitle: string
       badgeAria: string
+      triggerAriaWithCount: string
       shardLabel: string
       iterLabel: string
       // RFC-164 PR-6: workgroup to-dos third source.
@@ -55,6 +63,8 @@ export interface Resources {
       wgKind: string
       wgRow: string
       wgBreakdown: string
+      itemAria: string
+      workgroupItemAria: string
     }
     // RFC-041 PR4: top-level Memory route.
     memory: string
@@ -757,7 +767,10 @@ export interface Resources {
   }
   common: {
     searchEllipsis: string
+    searchCards: string
     noMatches: string
+    itemsCount_one: string
+    itemsCount_other: string
     loading: string
     open: string
     delete: string
@@ -770,6 +783,7 @@ export interface Resources {
     no: string
     details: string
     emDash: string
+    updated: string
     /** RFC-191: <RelativeTime> tokens（列表层相对时间口径，双向）。 */
     relTime: {
       justNow: string
@@ -789,6 +803,7 @@ export interface Resources {
     }
     /** RFC-191: gallery card行内主动作（工作流/工作组「启动」）。 */
     launch: string
+    launchResource: string
     /** RFC-177: by-id subject redirect landed on a missing/invisible resource. */
     resourceUnavailable: string
     copy: string
@@ -817,6 +832,15 @@ export interface Resources {
   }
   splitPage: {
     dirtyDot: string
+    noDescription: string
+    itemsCount_one: string
+    itemsCount_other: string
+    kind: {
+      agent: string
+      skill: string
+      mcp: string
+      plugin: string
+    }
     unsavedTitle: string
     unsavedBody: string
     unsavedStay: string
@@ -880,6 +904,7 @@ export interface Resources {
     title: string
     newButton: string
     emptyList: string
+    cardPorts: string
     colName: string
     colDescription: string
     colOutputs: string
@@ -895,6 +920,7 @@ export interface Resources {
     title: string
     newButton: string
     emptyList: string
+    cardVersion: string
     colName: string
     colSource: string
     colDescription: string
@@ -1052,6 +1078,7 @@ export interface Resources {
   }
   workflows: {
     title: string
+    cardKind: string
     newButton: string
     createButton: string
     fieldNameHint: string
@@ -1061,8 +1088,9 @@ export interface Resources {
     workflowOverwritten: string
     importCanceled: string
     conflictPrompt: string
-    /** RFC-191 gallery card meta —「{{n}} 节点」chip. */
-    cardNodes: string
+    /** RFC-191 gallery card meta —「{{count}} 节点」chip. */
+    cardNodes_one: string
+    cardNodes_other: string
     /** RFC-191 — italic placeholder when a workflow has no description. */
     noDescription: string
     errors: {
@@ -1073,15 +1101,20 @@ export interface Resources {
   // RFC-164 — workgroup resource pages (list + quick-create dialog / detail).
   workgroups: {
     title: string
+    cardKind: string
     newButton: string
     emptyList: string
     modeLeaderWorker: string
     modeFreeCollab: string
     modeDynamicWorkflow: string
-    /** RFC-191 gallery card meta —「{{n}} 成员」/「leader: {{name}}」/ 全自动。 */
-    cardMembers: string
+    /** RFC-191 gallery card meta —成员数 / Leader / 全自动。 */
+    cardMembers_one: string
+    cardMembers_other: string
     cardLeader: string
     autonomousChip: string
+    cardAddAgent: string
+    cardSelectLeader: string
+    cardNoWorkers: string
     noDescription: string
     newTitle: string
     createButton: string
@@ -2021,6 +2054,10 @@ export interface Resources {
     base_markdown: string
     base_signal: string
     base_path: string
+    description_string: string
+    description_markdown: string
+    description_signal: string
+    description_path: string
     extLabel: string
     ext_any: string
     ext_md: string
@@ -2164,6 +2201,8 @@ export interface Resources {
         name: string
         description: string
         permission: string
+        ports: string
+        advanced: string
         bodyMd: string
         frontmatterExtra: string
       }
@@ -3020,25 +3059,35 @@ export const zhCN: Resources = {
     },
     inbox: {
       label: '收件箱',
+      subtitle: '集中处理评审、反问与工作组待办',
+      total: '{{n}} 项待处理',
+      partial: '部分待办未加载',
+      filterAria: '按待办类型筛选',
       tabAll: '全部',
       tabReviews: '评审',
       tabClarify: '反问',
+      loading: '正在加载待办…',
       empty: '当前没有待处理事项',
+      emptyHint: '新的评审、反问和工作组待办会出现在这里。',
       errorReviews: '评审列表加载失败',
       errorClarify: '反问列表加载失败',
       retry: '重试',
+      retryFeed: '重试加载{{feed}}',
       sourceTask: '任务 {{taskId}}',
       openReviews: '查看全部评审 →',
       openClarify: '查看全部反问 →',
       clarifyShardOrIter: '分片 {{shard}} / 第 {{iter}} 轮',
       clarifySubtitle: '← {{agent}} · {{detail}}',
       badgeAria: '{{n}} 项待处理',
+      triggerAriaWithCount: '收件箱，{{n}} 项待处理',
       shardLabel: '分片 {{shard}}',
       iterLabel: '第 {{iter}} 轮',
       errorWorkgroups: '工作组待办加载失败',
       wgKind: '工作组',
       wgRow: '{{n}} 项工作组待办',
       wgBreakdown: '待交付 {{d}} · 待确认 {{g}}',
+      itemAria: '{{kind}}：{{title}}，来自 {{task}}',
+      workgroupItemAria: '打开 {{n}} 项工作组待办',
     },
     memory: '记忆',
     memoryHint: '从过往反问、评审与反馈中沉淀的长期上下文',
@@ -3626,7 +3675,10 @@ export const zhCN: Resources = {
   },
   common: {
     searchEllipsis: '搜索…',
+    searchCards: '搜索名称、描述或配置…',
     noMatches: '无匹配项',
+    itemsCount_one: '{{count}} 项',
+    itemsCount_other: '{{count}} 项',
     loading: '加载中…',
     open: '打开',
     delete: '删除',
@@ -3639,6 +3691,7 @@ export const zhCN: Resources = {
     no: '否',
     details: '详情',
     emDash: '—',
+    updated: '最近更新',
     relTime: {
       justNow: '刚刚',
       minAgo: '{{n}} 分钟前',
@@ -3655,6 +3708,7 @@ export const zhCN: Resources = {
       dayHour: '{{d}} 天 {{h}} 小时',
     },
     launch: '启动',
+    launchResource: '启动 {{name}}',
     resourceUnavailable: '该资源不可用或已被删除。',
     copy: '复制',
     copied: '已复制！',
@@ -3683,6 +3737,15 @@ export const zhCN: Resources = {
   // RFC-169：资源页双栏骨架（脏标记 + 未保存守卫 + 空态引导）。
   splitPage: {
     dirtyDot: '有未保存修改',
+    noDescription: '（未填写描述）',
+    itemsCount_one: '{{count}} 项',
+    itemsCount_other: '{{count}} 项',
+    kind: {
+      agent: '代理',
+      skill: '技能',
+      mcp: 'MCP',
+      plugin: '插件',
+    },
     unsavedTitle: '有未保存的修改',
     unsavedBody: '当前有未保存的修改，离开本页将丢弃它们。',
     unsavedStay: '留在本页',
@@ -3748,6 +3811,7 @@ export const zhCN: Resources = {
     title: '代理',
     newButton: '+ 新建代理',
     emptyList: '还没有代理。创建一个开始吧。',
+    cardPorts: '输入 {{inputs}} · 输出 {{outputs}}',
     colName: '名称',
     colDescription: '描述',
     colOutputs: '输出端口',
@@ -3763,6 +3827,7 @@ export const zhCN: Resources = {
     title: '技能',
     newButton: '+ 新建技能',
     emptyList: '还没有技能。',
+    cardVersion: '内容 v{{version}}',
     colName: '名称',
     colSource: '来源',
     colDescription: '描述',
@@ -4074,6 +4139,7 @@ export const zhCN: Resources = {
   },
   workflows: {
     title: '工作流',
+    cardKind: '工作流',
     newButton: '+ 新建工作流',
     createButton: '创建工作流',
     fieldNameHint: '小写字母 / 数字开头，只允许 [a-z0-9_-]，至多 128 字。',
@@ -4083,7 +4149,8 @@ export const zhCN: Resources = {
     workflowOverwritten: '工作流已覆盖。',
     importCanceled: '导入已取消。',
     conflictPrompt: 'Workflow id 冲突。输入 "overwrite" 覆盖，或 "new" 作为新工作流导入。',
-    cardNodes: '{{n}} 节点',
+    cardNodes_one: '{{count}} 节点',
+    cardNodes_other: '{{count}} 节点',
     noDescription: '（未填写描述）',
     errors: {
       nameRequired: '名称必填。',
@@ -4093,14 +4160,19 @@ export const zhCN: Resources = {
   // RFC-164 — 工作组资源页（列表 + 快速新建弹窗 / 详情管理页）。
   workgroups: {
     title: '工作组',
+    cardKind: '工作组',
     newButton: '+ 新建工作组',
     emptyList: '还没有工作组。',
     modeLeaderWorker: 'Leader-Worker',
     modeFreeCollab: '自由协作',
     modeDynamicWorkflow: '动态工作流',
-    cardMembers: '{{n}} 成员',
-    cardLeader: 'leader: {{name}}',
+    cardMembers_one: '{{count}} 名成员',
+    cardMembers_other: '{{count}} 名成员',
+    cardLeader: 'Leader · {{name}}',
     autonomousChip: '全自动',
+    cardAddAgent: '添加 agent 后可启动',
+    cardSelectLeader: '指定 Leader 后可启动',
+    cardNoWorkers: 'Leader 暂无可派成员',
     noDescription: '（未填写描述）',
     newTitle: '新建工作组',
     createButton: '创建工作组',
@@ -5022,6 +5094,10 @@ export const zhCN: Resources = {
     base_markdown: 'Markdown 正文',
     base_signal: 'signal（控制流）',
     base_path: '文件路径',
+    description_string: '短文本或结构化字符串',
+    description_markdown: '支持 Markdown 格式的长文本',
+    description_signal: '仅表示流程完成，不携带数据',
+    description_path: '工作区内的文件路径',
     extLabel: '文件扩展名',
     ext_any: '任意文件',
     ext_md: 'Markdown（.md）',
@@ -5171,6 +5247,8 @@ export const zhCN: Resources = {
         name: '→ 名称',
         description: '→ 描述',
         permission: '→ Permission',
+        ports: '→ 端口',
+        advanced: '→ 高级',
         bodyMd: '→ 正文（Markdown）',
         frontmatterExtra: '→ frontmatterExtra',
       },

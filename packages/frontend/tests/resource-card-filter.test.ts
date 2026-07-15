@@ -6,7 +6,7 @@ import { filterResourceCards } from '../src/lib/resource-card-filter'
 
 const items = [
   { title: 'code-worker', subtitle: 'writes code' },
-  { title: 'auditor', subtitle: 'audits diffs' },
+  { title: 'auditor', subtitle: 'audits diffs', searchText: 'Leader · Alice 3 members' },
   { title: 'fixer', subtitle: undefined },
 ]
 
@@ -25,6 +25,11 @@ describe('filterResourceCards', () => {
 
   test('matches on subtitle', () => {
     expect(filterResourceCards('audits', items).map((i) => i.title)).toEqual(['auditor'])
+  })
+
+  test('matches optional visible-facts search text', () => {
+    expect(filterResourceCards('alice', items).map((i) => i.title)).toEqual(['auditor'])
+    expect(filterResourceCards('3 MEMBERS', items).map((i) => i.title)).toEqual(['auditor'])
   })
 
   test('title OR subtitle — a title hit and a subtitle hit both surface', () => {

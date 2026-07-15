@@ -94,11 +94,26 @@ function WorkgroupsPage() {
             .sort((a, b) => b.updatedAt - a.updatedAt)
             .map((w) => {
               const leader = workgroupLeaderDisplayName(w)
-              const ready = workgroupLaunchReadiness(w).ready
+              const readiness = workgroupLaunchReadiness(w)
+              const modeLabel =
+                w.mode === 'leader_worker'
+                  ? t('workgroups.modeLeaderWorker')
+                  : w.mode === 'dynamic_workflow'
+                    ? t('workgroups.modeDynamicWorkflow')
+                    : t('workgroups.modeFreeCollab')
               return {
                 key: w.id,
+                kind: 'workgroup' as const,
                 title: w.name,
                 subtitle: w.description === '' ? undefined : w.description,
+                searchText: [
+                  modeLabel,
+                  t('workgroups.cardMembers', { count: w.members.length }),
+                  leader === null ? '' : t('workgroups.cardLeader', { name: leader }),
+                  w.autonomous === true ? t('workgroups.autonomousChip') : '',
+                  w.visibility === 'private' ? t('acl.privateChip') : '',
+                  w.ownerUserId != null ? (owners.get(w.ownerUserId)?.displayName ?? '') : '',
+                ].join(' '),
                 subtitleFallback: t('workgroups.noDescription'),
                 badges: (
                   <ResourceBadges
@@ -110,14 +125,10 @@ function WorkgroupsPage() {
                 meta: (
                   <>
                     <StatusChip kind={WORKGROUP_MODE_KIND[w.mode]} size="sm">
-                      {w.mode === 'leader_worker'
-                        ? t('workgroups.modeLeaderWorker')
-                        : w.mode === 'dynamic_workflow'
-                          ? t('workgroups.modeDynamicWorkflow')
-                          : t('workgroups.modeFreeCollab')}
+                      {modeLabel}
                     </StatusChip>
                     <span className="chip chip--tight">
-                      {t('workgroups.cardMembers', { n: w.members.length })}
+                      {t('workgroups.cardMembers', { count: w.members.length })}
                     </span>
                     {leader !== null && (
                       // title carries the full value — the chip ellipsizes
@@ -136,7 +147,16 @@ function WorkgroupsPage() {
                 params: { name: w.name },
                 // Not-ready groups (no agent member / missing leader) hide
                 // launch — same oracle & behavior as the detail header.
-                launch: ready ? { kind: 'workgroup' as const, workgroup: w.name } : undefined,
+                launch: readiness.ready
+                  ? { kind: 'workgroup' as const, workgroup: w.name }
+                  : undefined,
+                actionHint: !readiness.ready
+                  ? readiness.reasons.includes('no-agent-member')
+                    ? t('workgroups.cardAddAgent')
+                    : t('workgroups.cardSelectLeader')
+                  : readiness.warnings.includes('no-non-leader-worker')
+                    ? t('workgroups.cardNoWorkers')
+                    : undefined,
                 testid: `workgroup-card-${w.name}`,
               }
             }),
@@ -160,7 +180,7 @@ function WorkgroupsPage() {
       items={items}
       isLoading={isLoading}
       error={error}
-      searchPlaceholder={t('common.searchEllipsis')}
+      searchPlaceholder={t('common.searchCards')}
       emptyListText={t('workgroups.emptyList')}
       emptyTestid="workgroups-empty"
       loadingTestid="workgroups-loading"

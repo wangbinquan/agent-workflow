@@ -250,7 +250,7 @@ describe('/workgroups list page', () => {
 
     const lwCard = screen.getByTestId('workgroup-card-review-squad')
     expect(lwCard.textContent).toContain('Leader-Worker')
-    expect(lwCard.textContent).toContain('leader: Coder')
+    expect(lwCard.textContent).toContain('Leader · Coder')
     expect(lwCard.textContent).toContain('3 members')
     // Semantic mode chip (WORKGROUP_MODE_KIND: leader_worker → info).
     expect(lwCard.querySelector('.status-chip--info')).toBeTruthy()
@@ -260,15 +260,24 @@ describe('/workgroups list page', () => {
     expect(fcCard.textContent).toContain('Free collaboration')
     expect(fcCard.querySelector('.status-chip--neutral')).toBeTruthy()
     // No leader chip in fc mode; empty description renders the placeholder.
-    expect(fcCard.textContent).not.toContain('leader:')
+    expect(fcCard.textContent).not.toContain('Leader ·')
     expect(fcCard.textContent).toContain(enUS.workgroups.noDescription)
+
+    // The search index follows visible facts, including the leader summary.
+    fireEvent.change(screen.getByTestId('gallery-search'), { target: { value: 'Coder' } })
+    expect(screen.getByTestId('workgroup-card-review-squad')).toBeTruthy()
+    expect(screen.queryByTestId('workgroup-card-brainstorm')).toBeNull()
   })
 
   test('launch deep-link renders only for READY groups (shared readiness oracle)', async () => {
+    const solo = wg('solo-squad')
+    solo.members = solo.members.slice(0, 1)
     installFetch({
       workgroups: [
         wg('review-squad'), // agent members + resolvable leader → ready
         wg('empty-room', { leaderMemberId: null, members: [] }), // no agent → not ready
+        wg('leaderless', { leaderMemberId: null }), // agents exist, but no leader selected
+        solo, // ready, but advisory: the leader has nobody to dispatch to
       ],
       calls: [],
     })
@@ -282,6 +291,21 @@ describe('/workgroups list page', () => {
     // detail header — the deep link must not dead-end at workgroup-not-ready).
     expect(screen.getByTestId('workgroup-card-empty-room')).toBeTruthy()
     expect(screen.queryByTestId('workgroup-card-empty-room-launch')).toBeNull()
+    expect(screen.getByTestId('workgroup-card-empty-room').textContent).toContain(
+      'Add an agent to launch',
+    )
+    expect(screen.queryByTestId('workgroup-card-leaderless-launch')).toBeNull()
+    expect(screen.getByTestId('workgroup-card-leaderless').textContent).toContain(
+      'Choose a leader to launch',
+    )
+    // Advisory is visible but never blocks the launch action. This also locks
+    // the English singleton member label.
+    expect(screen.getByTestId('workgroup-card-solo-squad-launch')).toBeTruthy()
+    expect(screen.getByTestId('workgroup-card-solo-squad').textContent).toContain(
+      'Leader has no workers',
+    )
+    expect(screen.getByTestId('workgroup-card-solo-squad').textContent).toContain('1 member')
+    expect(screen.getByTestId('workgroup-card-solo-squad').textContent).not.toContain('1 members')
   })
 
   test('the list page has NO delete affordance (delete lives in the detail header)', async () => {
@@ -708,9 +732,13 @@ describe('RFC-164 /workgroups wiring', () => {
       'emptyList',
       // RFC-191 — gallery card meta keys (the col*/deleteTitle table-era keys
       // retired with the data-table list).
-      'cardMembers',
+      'cardMembers_one',
+      'cardMembers_other',
       'cardLeader',
       'autonomousChip',
+      'cardAddAgent',
+      'cardSelectLeader',
+      'cardNoWorkers',
       'noDescription',
       'modeLeaderWorker',
       'modeFreeCollab',

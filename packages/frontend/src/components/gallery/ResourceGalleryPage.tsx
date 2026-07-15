@@ -8,10 +8,9 @@
 // churn) → loading / error / empty states (shared primitives, same testids)
 // → the responsive card grid.
 //
-// Filtering reuses `filterResourceCards` (RFC-169 T2 — title OR subtitle
-// substring), which is why GalleryCardItem's text fields are named
-// title/subtitle. Sorting is NOT here — pages sort items (updatedAt desc)
-// while assembling.
+// Filtering reuses `filterResourceCards` (RFC-169 T2 — title / subtitle plus
+// an optional projection of visible card facts). Sorting is NOT here — pages
+// sort items (updatedAt desc) while assembling.
 
 import { useMemo, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
@@ -23,7 +22,12 @@ import { LoadingState } from '@/components/LoadingState'
 import { filterResourceCards } from '@/lib/resource-card-filter'
 import { GalleryCard, type GalleryCardItem } from '@/components/gallery/GalleryCard'
 
-export type { GalleryCardItem, GalleryLaunchSearch } from '@/components/gallery/GalleryCard'
+export type {
+  GalleryCardItem,
+  GalleryLaunchSearch,
+  WorkflowGalleryCardItem,
+  WorkgroupGalleryCardItem,
+} from '@/components/gallery/GalleryCard'
 
 export interface ResourceGalleryPageProps {
   title: string
@@ -54,9 +58,10 @@ export function ResourceGalleryPage(props: ResourceGalleryPageProps): ReactEleme
   )
   const hasItems = items !== undefined && items.length > 0
   const hasNotice = props.notice != null && props.notice !== false
+  const visibleCount = filtered?.length ?? 0
 
   return (
-    <div className="page">
+    <div className="page page--gallery">
       <header className="page__header page__header--row">
         <div>
           <h1>{props.title}</h1>
@@ -73,6 +78,9 @@ export function ResourceGalleryPage(props: ResourceGalleryPageProps): ReactEleme
 
       {hasItems && (
         <div className="gallery__toolbar">
+          <span className="gallery__count" data-testid="gallery-count" aria-live="polite">
+            {t('common.itemsCount', { count: visibleCount })}
+          </span>
           <TextInput
             type="search"
             value={search}

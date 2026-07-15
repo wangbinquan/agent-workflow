@@ -148,7 +148,12 @@ afterEach(() => {
 describe('/skills split page', () => {
   test('empty pane hosts the guidance', async () => {
     renderSkills('/skills')
-    await waitFor(() => screen.getByTestId('split-card-sk1'))
+    const card = await waitFor(() => screen.getByTestId('split-card-sk1'))
+    expect(card.querySelector('[data-icon="skill"]')).not.toBeNull()
+    expect(card.textContent).toContain('Skill')
+    expect(card.textContent).toContain('Content v1')
+    fireEvent.change(screen.getByTestId('split-search'), { target: { value: 'Content v1' } })
+    expect(screen.getByTestId('split-card-sk1')).toBeTruthy()
     expect(screen.getByText('Nothing selected')).toBeTruthy()
     // The empty pane renders the guidance EmptyState in the detail column.
     await waitFor(() => expect(screen.getByTestId('split-detail').textContent).not.toBe(''))

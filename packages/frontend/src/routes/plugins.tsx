@@ -15,6 +15,7 @@ import { useResourceList } from '@/hooks/useResourceList'
 import { EmptyState } from '@/components/EmptyState'
 import { ResourceBadges } from '@/components/ResourceBadges'
 import { ResourceSplitPage, type ResourceCardItem } from '@/components/split/ResourceSplitPage'
+import { StatusChip } from '@/components/StatusChip'
 import {
   PLUGIN_UPDATES_KEY,
   pluginUpdateAvailable,
@@ -59,10 +60,25 @@ function PluginsSplitLayout() {
       ? undefined
       : data.map((p) => ({
           key: p.id,
+          kind: 'plugin' as const,
           title: p.name,
           subtitle: p.spec,
+          updatedAt: p.updatedAt,
+          searchText: [
+            t(`plugins.sourceKind.${p.sourceKind}`),
+            p.resolvedVersion ?? '',
+            !p.enabled ? t('plugins.disabledChip') : '',
+            pluginUpdateAvailable(updateCache[p.id], p) ? t('plugins.updateAvailableChip') : '',
+            p.visibility === 'private' ? t('acl.privateChip') : '',
+            p.ownerUserId != null ? (owners.get(p.ownerUserId)?.displayName ?? '') : '',
+          ].join(' '),
           to: '/plugins/$id',
           params: { id: p.id },
+          primaryStatus: pluginUpdateAvailable(updateCache[p.id], p) ? (
+            <StatusChip kind="info" size="sm" withDot data-testid={`plugin-update-${p.name}`}>
+              {t('plugins.updateAvailableChip')}
+            </StatusChip>
+          ) : undefined,
           badges: (
             <>
               <span className="chip chip--tight">{t(`plugins.sourceKind.${p.sourceKind}`)}</span>
@@ -70,11 +86,6 @@ function PluginsSplitLayout() {
                 <span className="muted split-card__version">{p.resolvedVersion}</span>
               )}
               {!p.enabled && <span className="chip chip--tight">{t('plugins.disabledChip')}</span>}
-              {pluginUpdateAvailable(updateCache[p.id], p) && (
-                <span className="chip chip--tight" data-testid={`plugin-update-${p.name}`}>
-                  {t('plugins.updateAvailableChip')}
-                </span>
-              )}
               <ResourceBadges
                 visibility={p.visibility}
                 ownerUserId={p.ownerUserId}

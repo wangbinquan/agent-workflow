@@ -11,7 +11,6 @@ import type { Agent } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { useResourceList } from '@/hooks/useResourceList'
 import { EmptyState } from '@/components/EmptyState'
-import { ResourceBadges } from '@/components/ResourceBadges'
 import { ResourceSplitPage, type ResourceCardItem } from '@/components/split/ResourceSplitPage'
 import { RUNTIMES_QUERY_KEY } from '@/components/RuntimeList'
 import { StatusChip } from '@/components/StatusChip'
@@ -56,34 +55,79 @@ function AgentsSplitLayout() {
       ? undefined
       : data.map((a) => {
           const runtimeName = a.runtime ?? defaultRuntimeName
+          const inheritsDefaultRuntime = a.runtime == null && defaultRuntimeName != null
+          const runtimeSummary =
+            runtimeName == null
+              ? undefined
+              : inheritsDefaultRuntime
+                ? `${runtimeName} · ${t('agents.runtimeDefaultTag')}`
+                : runtimeName
+          const inputCount = a.inputs?.length ?? 0
+          const outputCount = a.outputs.length
+          const portSummary = t('agents.cardPorts', {
+            inputs: inputCount,
+            outputs: outputCount,
+          })
+          const ownerName =
+            a.ownerUserId != null ? (owners.get(a.ownerUserId)?.displayName ?? '') : ''
+          const hasSummary =
+            runtimeSummary != null ||
+            inputCount + outputCount > 0 ||
+            a.visibility === 'private' ||
+            ownerName !== '' ||
+            a.builtin === true
           return {
             key: a.name,
+            kind: 'agent' as const,
             title: a.name,
             subtitle: a.description || undefined,
+            primaryStatus:
+              a.role === 'aggregator' ? (
+                <StatusChip kind="info" size="sm">
+                  {t('agentForm.roleAggregator')}
+                </StatusChip>
+              ) : undefined,
+            searchText: [
+              runtimeName ?? '',
+              inputCount + outputCount > 0 ? portSummary : '',
+              inheritsDefaultRuntime ? t('agents.runtimeDefaultTag') : '',
+              a.builtin === true ? t('agents.builtin') : '',
+              a.role === 'aggregator' ? t('agentForm.roleAggregator') : '',
+              a.visibility === 'private' ? t('acl.privateChip') : '',
+              ownerName,
+            ].join(' '),
             to: '/agents/$name',
             params: { name: a.name },
-            badges: (
-              <>
-                {runtimeName != null && (
-                  <StatusChip kind="neutral" size="sm">
-                    {runtimeName}
-                  </StatusChip>
+            badges: hasSummary ? (
+              <span className="agent-card__facts">
+                {runtimeSummary != null && (
+                  <span
+                    className="agent-card__runtime"
+                    title={runtimeSummary}
+                    data-testid={`agent-runtime-${a.name}`}
+                  >
+                    {runtimeSummary}
+                  </span>
                 )}
-                {a.runtime == null && defaultRuntimeName != null && (
-                  <StatusChip kind="neutral" size="sm">
-                    {t('agents.runtimeDefaultTag')}
-                  </StatusChip>
+                {inputCount + outputCount > 0 && (
+                  <span className="agent-card__ports">{portSummary}</span>
                 )}
-                <ResourceBadges
-                  visibility={a.visibility}
-                  ownerUserId={a.ownerUserId}
-                  owners={owners}
-                />
+                {a.visibility === 'private' && (
+                  <span className="chip chip--tight">{t('acl.privateChip')}</span>
+                )}
+                {ownerName !== '' && (
+                  <span
+                    className="agent-card__owner"
+                    title={`${t('acl.ownerBadge')}: ${ownerName}`}
+                  >
+                    {ownerName}
+                  </span>
+                )}
                 {a.builtin === true && (
                   <span className="chip chip--tight">{t('agents.builtin')}</span>
                 )}
-              </>
-            ),
+              </span>
+            ) : undefined,
           }
         })
 

@@ -42,12 +42,28 @@ function SkillsSplitLayout() {
       ? undefined
       : data.map((s) => ({
           key: s.name,
+          kind: 'skill' as const,
           title: s.name,
           subtitle: s.description || undefined,
+          updatedAt: s.updatedAt,
+          searchText: [
+            t('skills.cardVersion', { version: s.contentVersion }),
+            s.visibility === 'private' ? t('acl.privateChip') : '',
+            s.ownerUserId != null ? (owners.get(s.ownerUserId)?.displayName ?? '') : '',
+          ].join(' '),
           to: '/skills/$name',
           params: { name: s.name },
           badges: (
-            <ResourceBadges visibility={s.visibility} ownerUserId={s.ownerUserId} owners={owners} />
+            <>
+              <span className="chip chip--tight">
+                {t('skills.cardVersion', { version: s.contentVersion })}
+              </span>
+              <ResourceBadges
+                visibility={s.visibility}
+                ownerUserId={s.ownerUserId}
+                owners={owners}
+              />
+            </>
           ),
         }))
 

@@ -21,26 +21,63 @@ import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import { RelativeTime } from '@/components/RelativeTime'
 import { filterResourceCards } from '@/lib/resource-card-filter'
 import { SplitDirtyContext, type SplitDirtyContextValue } from '@/components/split/splitDirty'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
+import { AGENT_ICON, MCP_ICON, PLUGIN_ICON, SKILL_ICON } from '@/components/icons/resourceIcons'
 
 /** Detail routes the cards link to (byte-equal to the existing deep links). */
 export type ResourceDetailTo = '/agents/$name' | '/skills/$name' | '/mcps/$name' | '/plugins/$id'
 /** "+ new" routes. */
 export type ResourceNewTo = '/agents/new' | '/skills/new' | '/mcps/new' | '/plugins/new'
+export type SplitResourceKind = 'agent' | 'skill' | 'mcp' | 'plugin'
 
-export interface ResourceCardItem {
+interface ResourceCardItemBase {
   /** agents/skills/mcps = name; plugins = id. */
   key: string
   title: string
   /** One-line CSS truncation; full text in the title attribute. */
   subtitle?: string
+  /** Additional visible facts that should participate in local search. */
+  searchText?: string
+  /** Optional epoch timestamp rendered as compact relative recency. */
+  updatedAt?: number
+  /** Operational state shown beside the title (probe / update available). */
+  primaryStatus?: ReactNode
   /** Per-page assembled existing chips (ResourceBadges / StatusChip / …). */
   badges?: ReactNode
-  to: ResourceDetailTo
-  params: { name: string } | { id: string }
   testid?: string
+}
+
+/** Keep glyph, destination and route params correlated at compile time. */
+export type ResourceCardItem =
+  | (ResourceCardItemBase & {
+      kind: 'agent'
+      to: '/agents/$name'
+      params: { name: string }
+    })
+  | (ResourceCardItemBase & {
+      kind: 'skill'
+      to: '/skills/$name'
+      params: { name: string }
+    })
+  | (ResourceCardItemBase & {
+      kind: 'mcp'
+      to: '/mcps/$name'
+      params: { name: string }
+    })
+  | (ResourceCardItemBase & {
+      kind: 'plugin'
+      to: '/plugins/$id'
+      params: { id: string }
+    })
+
+const RESOURCE_ICON: Record<SplitResourceKind, ReactNode> = {
+  agent: AGENT_ICON,
+  skill: SKILL_ICON,
+  mcp: MCP_ICON,
+  plugin: PLUGIN_ICON,
 }
 
 export interface ResourceSplitPageProps {
@@ -88,6 +125,7 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
   )
   const listEmpty = items !== undefined && items.length === 0
   const filteredEmpty = filtered !== undefined && filtered.length === 0
+  const visibleCount = filtered?.length ?? 0
 
   return (
     <div className="page page--split">
@@ -95,7 +133,14 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
         <UnsavedChangesGuard dirtyRef={dirtyKeyRef} />
         <div className="split">
           <aside className="split__list">
-            <h1 className="split__title">{props.title}</h1>
+            <div className="split__heading">
+              <h1 className="split__title">{props.title}</h1>
+              {items !== undefined && (
+                <span className="split__count" aria-live="polite" data-testid="split-count">
+                  {t('splitPage.itemsCount', { count: visibleCount })}
+                </span>
+              )}
+            </div>
             <input
               className="form-input split__search"
               type="search"
@@ -117,15 +162,14 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
                   data-testid="split-empty"
                 />
               )}
-              {filtered?.map((it) => (
-                <Link
-                  key={it.key}
-                  to={it.to}
-                  params={it.params}
-                  className={'split-card' + (it.key === props.selectedKey ? ' is-selected' : '')}
-                  data-testid={it.testid ?? `split-card-${it.key}`}
-                >
-                  <div className="split-card__title">
+              {filtered?.map((it) => {
+                const selected = it.key === props.selectedKey
+                const subtitle =
+                  it.subtitle !== undefined && it.subtitle !== ''
+                    ? it.subtitle
+                    : t('splitPage.noDescription')
+                const cardTitle = (
+                  <span className="split-card__title">
                     <span className="split-card__name">{it.title}</span>
                     {dirtyKey === it.key && (
                       <span
@@ -134,17 +178,65 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
                         data-testid={`split-card-dot-${it.key}`}
                       />
                     )}
-                  </div>
-                  {it.subtitle !== undefined && it.subtitle !== '' && (
-                    <div className="split-card__subtitle" title={it.subtitle}>
-                      {it.subtitle}
+                  </span>
+                )
+                return (
+                  <Link
+                    key={it.key}
+                    to={it.to}
+                    params={it.params}
+                    className={`split-card split-card--${it.kind}${selected ? ' is-selected' : ''}`}
+                    aria-current={selected ? 'page' : undefined}
+                    title={`${it.title}\n${subtitle}`}
+                    data-testid={it.testid ?? `split-card-${it.key}`}
+                  >
+                    <div className="split-card__head">
+                      <span className="split-card__icon" aria-hidden="true">
+                        {RESOURCE_ICON[it.kind]}
+                      </span>
+                      <span className="split-card__identity">
+                        {(it.kind !== 'agent' ||
+                          (it.primaryStatus != null && it.primaryStatus !== false)) && (
+                          <span className="split-card__eyebrow">
+                            {it.kind !== 'agent' && (
+                              <span className="split-card__kind">
+                                {t(`splitPage.kind.${it.kind}`)}
+                              </span>
+                            )}
+                            {it.primaryStatus != null && it.primaryStatus !== false && (
+                              <span className="split-card__primary-status">{it.primaryStatus}</span>
+                            )}
+                          </span>
+                        )}
+                        {cardTitle}
+                      </span>
+                      <span className="split-card__trailing">
+                        <span className="split-card__chevron" aria-hidden="true">
+                          →
+                        </span>
+                      </span>
                     </div>
-                  )}
-                  {it.badges !== undefined && (
-                    <div className="split-card__badges chip-row">{it.badges}</div>
-                  )}
-                </Link>
-              ))}
+                    <div
+                      className={`split-card__subtitle${it.subtitle === undefined || it.subtitle === '' ? ' split-card__subtitle--empty' : ''}`}
+                      title={it.subtitle}
+                    >
+                      {subtitle}
+                    </div>
+                    {(it.badges != null && it.badges !== false) || it.updatedAt !== undefined ? (
+                      <div className="split-card__summary">
+                        {it.badges != null && it.badges !== false && (
+                          <span className="split-card__badges chip-row">{it.badges}</span>
+                        )}
+                        {it.updatedAt !== undefined && (
+                          <span className="split-card__updated">
+                            <RelativeTime ts={it.updatedAt} />
+                          </span>
+                        )}
+                      </div>
+                    ) : null}
+                  </Link>
+                )
+              })}
             </div>
             <Link
               to={props.newTo}

@@ -58,29 +58,38 @@ function McpsSplitLayout() {
   const items: ResourceCardItem[] | undefined =
     data === undefined
       ? undefined
-      : data.map((m) => ({
-          key: m.name,
-          title: m.name,
-          subtitle: m.description || undefined,
-          to: '/mcps/$name',
-          params: { name: m.name },
-          badges: (
-            <>
-              <span className={`chip chip--tight chip--${m.type}`}>
-                {t(m.type === 'local' ? 'mcps.typeLocal' : 'mcps.typeRemote')}
-              </span>
-              {!m.enabled && <span className="chip chip--tight">{t('mcps.disabledChip')}</span>}
-              <McpProbeStatusChip
-                status={probeUiStatus(probesByName[m.name] ?? null, m.updatedAt)}
-              />
-              <ResourceBadges
-                visibility={m.visibility}
-                ownerUserId={m.ownerUserId}
-                owners={owners}
-              />
-            </>
-          ),
-        }))
+      : data.map((m) => {
+          const typeLabel = t(m.type === 'local' ? 'mcps.typeLocal' : 'mcps.typeRemote')
+          const probeStatus = probeUiStatus(probesByName[m.name] ?? null, m.updatedAt)
+          return {
+            key: m.name,
+            kind: 'mcp' as const,
+            title: m.name,
+            subtitle: m.description || undefined,
+            updatedAt: m.updatedAt,
+            searchText: [
+              typeLabel,
+              t(`mcps.probe.status.${probeStatus}`),
+              !m.enabled ? t('mcps.disabledChip') : '',
+              m.visibility === 'private' ? t('acl.privateChip') : '',
+              m.ownerUserId != null ? (owners.get(m.ownerUserId)?.displayName ?? '') : '',
+            ].join(' '),
+            to: '/mcps/$name' as const,
+            params: { name: m.name },
+            primaryStatus: <McpProbeStatusChip status={probeStatus} />,
+            badges: (
+              <>
+                <span className={`chip chip--tight chip--${m.type}`}>{typeLabel}</span>
+                {!m.enabled && <span className="chip chip--tight">{t('mcps.disabledChip')}</span>}
+                <ResourceBadges
+                  visibility={m.visibility}
+                  ownerUserId={m.ownerUserId}
+                  owners={owners}
+                />
+              </>
+            ),
+          }
+        })
 
   return (
     <ResourceSplitPage
