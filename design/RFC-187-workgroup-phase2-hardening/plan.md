@@ -68,10 +68,14 @@
 ### RFC-187-T13｜F3 恢复缝对账（Codex P1-7，随 T10）
 两个崩溃窗须 boot/engine-entry reconciliation（非仅 assert impossible）：① answer 事务提交后、`resumeTask` 接管前 daemon 退出 → pending clarify-answer run 被 reap 成 interrupted、任务仍 `awaiting_human`（auto-resume 不扫、adoption 只认 pending）→ wedge；② autonomous 提交（事务内）与 open-session dismissal（事务外）之间崩 → 留「autonomous+open clarify」。**验收**：两条 crash→recover e2e。
 
-## 状态
+## 状态（2026-07-15 更新）
 
-- **PR-1（T1/T2/T3/T7）已实现**（`c0957f7f` + Codex 折入 `0b6c502b`）：F3 session-keyed 反问收口 + §3-7 counted grace wrap-up（含禁派活/强制收尾）+ §4 zero-delta 房间告警 + F8 标注；三探针各一条真实子进程 e2e。全后端 5478 pass 0 fail。
-- **PR-2（T4/T5a/T6）· PR-3（T8-T13）** 待做，按 §9 Codex 修正范围。
+- **PR-1（T1/T2/T3/T7）✅**（`c0957f7f` + Codex 折入 `0b6c502b`，CI 绿 `b1c76d7a`）：F3 session-keyed 反问收口 + §3-7 counted grace wrap-up（含禁派活/强制收尾）+ §4 zero-delta 房间告警 + F8 标注；三探针各一条真实子进程 e2e。
+- **PR-2 T4（§3-3）✅**（`880ee15d`）：`wg-protocol-retry` cause + lw/fc 双分支排除计数（`isClarifyRerunCause` enum 真值表）。
+- **PR-3 F2 ✅**（`3d3ae152`）：`isWorkgroupKickResumable`=awaiting_human‖interrupted。
+- **T5a（fan-out 逐路径 salvage）+ T6（TRAP-1 启动护栏）✅ 并发 session 完成**（`51aee3ba` + Codex 实现门 `7eefaa81`）。
+- **实测复验（2026-07-15，生产 daemon + glm）**：三探针逐条确认修复——Probe C→`done`（`hello.txt` 在 canonical，含一次 `wg-protocol-retry` 手滑仍到 done）· Probe B→`awaiting_human`（leader 1 轮 + 1 clarify-park，`clarify_sessions.source=__wg_leader__`）· Probe A→`done`（`shared.txt` 两行都在，跑了 `__merge_resolve__` T5a 合并）。CI 两 OS + 全测 + build + Playwright 全绿；全后端 5504 pass。
+- **剩余（deferred）**：T5b（merge agent 出 writeSem，Codex P0-4）→ 独立 RFC；T13（F3 answer-handoff 崩溃窗，Codex P1-7）待并发 RFC-188/189 recovery/round-retry 重构落定再做（避返工）；TRAP-3 低值；§3-2 大部分被 RFC-180 nudge 覆盖。
 
 ## 依赖图
 
