@@ -1,6 +1,6 @@
 # RFC-198 — 全局界面 UX 一致性与响应式基础
 
-> **状态**：In Progress（2026-07-15 用户已批准）
+> **状态**：Done（2026-07-16；实现门 APPROVE，最终实现/基线 SHA CI 全绿）
 >
 > **触发**：2026-07-15 用户「整个界面做下 UX 优化，让视觉更一致、功能更直观易用」。
 >
@@ -300,26 +300,26 @@ Split list → 选择资源 → detail（显式返回列表）
 
 ## 6. 验收标准
 
-- [ ] 390×844 下所有顶层导航入口可达；无受保护页面被 220px sidebar 挤压，Skill route 无专属 shell hack。
-- [ ] desktop/mobile 导航共用一份内容与权限判断；route change、ESC、overlay、focus restore 全锁。
-- [ ] 导航无假 chevron，group label 不与首 item 重名，icon/active/badge 在 light/dark 可辨。
-- [ ] 标准页使用统一 PageHeader；split detail 保持 h2；action 可 wrap/stack，每个 shape 的 primary/empty CTA
+- [x] 390×844 下所有顶层导航入口可达；无受保护页面被 220px sidebar 挤压，Skill route 无专属 shell hack。
+- [x] desktop/mobile 导航共用一份内容与权限判断；route change、ESC、overlay、focus restore 全锁。
+- [x] 导航无假 chevron，group label 不与首 item 重名，icon/active/badge 在 light/dark 可辨。
+- [x] 标准页使用统一 PageHeader；split detail 保持 h2；action 可 wrap/stack，每个 shape 的 primary/empty CTA
       唯一且符合 D5。
-- [ ] 显式 light/dark 永远压过 OS preference；filled control 与 semantic chip/banner 达到 AA。
-- [ ] TabBar 支持 roving tabindex、箭头、Home/End、panel 关联与窄屏滚动。
-- [ ] Memory/Settings/Task detail page tabs 使用真实 wire key，可深链、刷新、Back/Forward；Task 的 plain/
+- [x] 显式 light/dark 永远压过 OS preference；filled control 与 semantic chip/banner 达到 AA。
+- [x] TabBar 支持 roving tabindex、箭头、Home/End、panel 关联与窄屏滚动。
+- [x] Memory/Settings/Task detail page tabs 使用真实 wire key，可深链、刷新、Back/Forward；Task 的 plain/
       turn-engine/dynamic + late-config/outputs fallback 不出现 URL-panel 分叉；旧 `#runtime` 兼容；editable
       resource detail tabs 保持 local，dirty 草稿内切 tab 不弹离页确认。
-- [ ] 所有核心 data table 位于可聚焦 TableViewport 内；390px 只滚 table，不滚 body。
-- [ ] 顶层初始 loading/error/empty/retry 全走共享状态；empty list 与 no-match 有不同动作。
-- [ ] Auth/Account/Users/Settings 通用字段不再复制 form chrome；Dialog/Form mobile 无裁切。
-- [ ] production frontend 中原生 alert/prompt/confirm 清零；每个替代流程有 pending/focus/error 回归。
-- [ ] Resource split 手机端 list/detail 单焦点往返；Skill 只有一个 shared back；desktop 不再出现两个同义
+- [x] 所有核心 data table 位于可聚焦 TableViewport 内；390px 只滚 table，不滚 body。
+- [x] 顶层初始 loading/error/empty/retry 全走共享状态；empty list 与 no-match 有不同动作。
+- [x] Auth/Account/Users/Settings 通用字段不再复制 form chrome；Dialog/Form mobile 无裁切。
+- [x] production frontend 中原生 alert/prompt/confirm 清零；每个替代流程有 pending/focus/error 回归。
+- [x] Resource split 手机端 list/detail 单焦点往返；Skill 只有一个 shared back；desktop 不再出现两个同义
       「新建」CTA。
-- [ ] Homepage 工作流 CTA 直达创建态且一次性 flag 不因关闭/刷新/Back 重开，内部任务链接不再整页刷新。
-- [ ] 1280×800、901/900、768×1024、721/720、390×844、light/dark/反向 OS theme、axe、keyboard、visual
+- [x] Homepage 工作流 CTA 直达创建态且一次性 flag 不因关闭/刷新/Back 重开，内部任务链接不再整页刷新。
+- [x] 1280×800、901/900、768×1024、721/720、390×844、light/dark/反向 OS theme、axe、keyboard、visual
       基线与 backend/shared/frontend/非 packages 文件门禁全绿。
-- [ ] 无 backend/API/DB/ACL/业务状态机变化；近期 RFC 的 testid、wire 与安全不变量零退化。
+- [x] 无 backend/API/DB/ACL/业务状态机变化；近期 RFC 的 testid、wire 与安全不变量零退化。
 
 ## 7. 与既有 RFC 的关系
 

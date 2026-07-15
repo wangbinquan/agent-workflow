@@ -1,6 +1,19 @@
 # RFC-198 — 全局界面 UX 一致性与响应式基础：实施计划
 
-> 当前状态：In Progress。2026-07-15 用户已回复「ok」批准实施。
+> 当前状态：Done（2026-07-16）。2026-07-15 用户已回复「ok」批准实施；全界面实现门复核 APPROVE，
+> 最终实现/基线 SHA `e48ba3e7a354073f3f995fbd5e9873b1f5904650` 的主 CI 与 Linux 视觉门均全绿。
+
+完成证据：
+
+- 提交链：`e1fbd025` → `fb2d7cd3` → `a2a64fc0` → `42d1666a` → `3bfe476c` → `a1bfac98` →
+  `75b825fb` → `fa2cee3e` → `4de8074b` → `e21bec78` → `e48ba3e7`。
+- 全界面清单：45 个注册 route AST 双向盘点；40 个 Dialog 调用文件 / 46 个 render point；原生 dialog、裸输入、
+  未包 TableViewport 的 table 与旧 shell hack 均由 source ratchet 锁定。
+- 本地门禁：frontend 555 files / 4296 tests、shared 118 files / 1269 tests、定向 12 files / 94 tests；
+  Chromium 全量 108 passed / 22 skipped、命名 UX 65/65、Agent import 1/1、WebKit UX/keyboard 21/21；
+  workspace typecheck、lint、format、binary smoke 全绿，Darwin visual 17/17 并逐张人工检查。
+- SHA 门禁：主 CI run `29456210494`（双平台 test + binary、8/8 Playwright shards、static/perf/link 全绿）；
+  Linux visual run `29456210555`（17/17，18 张变更/新增基线逐张人工检查）。
 
 ## 1. 任务分解
 
@@ -159,7 +172,7 @@ fix(frontend): RFC-198 折入实现门反馈
 所有 Codex 创建的 commit 使用当前会话真实 model slug：
 
 ```text
-Assisted-By: OpenAI Codex (<active-model-slug>)
+Co-Authored-By: OpenAI Codex GPT-5 <noreply@openai.com>
 ```
 
 ## 3. 关键路径与测试文件
@@ -484,12 +497,12 @@ repo-ui fixed list；RFC-198 不得在例外未闭合时标 Done。
 ## 7. Gate 与完成条件
 
 - [x] 用户明确批准 RFC-198（2026-07-15「ok」）。
-- [ ] T1–T9 分批完成，每批定向测试先绿。
-- [ ] native dialog 与旧 shell hack 清零，source ratchet 有明确例外。
-- [ ] light/dark/explicit-vs-system contrast 通过。
-- [ ] 901/900 shell、768 tablet、721/720 content、390 mobile 的 table/tabs/split/dialog 浏览器证据闭环。
-- [ ] 视觉 diff 经人工检查，darwin/linux baseline 与 README 同步。
-- [ ] Codex 实现 gate 对 live diff 审查，所有 P1/P2 处置后复核 APPROVE。
-- [ ] typecheck/backend+shared/frontend/lint/format/binary/e2e/visual 全绿。
-- [ ] `STATE.md` 与 RFC index 标 Done，记录 commits、测试、CI SHA。
-- [ ] 精确路径 commit + push origin/main；按最终 SHA 查 CI。
+- [x] T1–T9 分批完成，每批定向测试先绿。
+- [x] native dialog 与旧 shell hack 清零，source ratchet 有明确例外。
+- [x] light/dark/explicit-vs-system contrast 通过。
+- [x] 901/900 shell、768 tablet、721/720 content、390 mobile 的 table/tabs/split/dialog 浏览器证据闭环。
+- [x] 视觉 diff 经人工检查，darwin/linux baseline 与 README 同步。
+- [x] Codex 实现 gate 对 live diff 审查，所有 P1/P2 处置后复核 APPROVE。
+- [x] typecheck/backend+shared/frontend/lint/format/binary/e2e/visual 全绿。
+- [x] `STATE.md` 与 RFC index 标 Done，记录 commits、测试、CI SHA。
+- [x] 精确路径 commit + push origin/main；按最终实现/基线 SHA 查 CI。
