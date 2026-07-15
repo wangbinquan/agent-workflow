@@ -24,8 +24,11 @@ import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Switch } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
+import { PageHeader } from '@/components/PageHeader'
 import { RelativeTime } from '@/components/RelativeTime'
 import { StatusChip } from '@/components/StatusChip'
+import { TableViewport } from '@/components/TableViewport'
+import { SCHEDULE_ICON } from '@/components/icons/resourceIcons'
 import { useScheduledTaskWs } from '@/hooks/useScheduledTaskWs'
 import { shouldRowNavigate } from '@/lib/row-nav'
 import { scheduleSummary } from '@/lib/schedule-view'
@@ -52,7 +55,7 @@ function ScheduledPage() {
   const lang = i18n.language.startsWith('zh') ? 'zh' : 'en'
   useScheduledTaskWs()
 
-  const { data, isLoading, error } = useQuery<ScheduledTask[]>({
+  const { data, isLoading, error, refetch } = useQuery<ScheduledTask[]>({
     queryKey: ['scheduled-tasks', 'list'],
     queryFn: ({ signal }) => api.get('/api/scheduled-tasks', undefined, signal),
     refetchInterval: 30_000,
@@ -74,178 +77,195 @@ function ScheduledPage() {
       void navigate({ to: '/tasks/$id', params: { id: taskId } })
     },
   })
+  const isInitialEmpty = !isLoading && data !== undefined && data.length === 0
+  const newScheduledAction = (
+    <button
+      type="button"
+      className="btn btn--primary"
+      onClick={() => void navigate({ to: '/tasks/new', search: { schedule: true } })}
+      data-testid="scheduled-new"
+    >
+      {t('scheduled.new')}
+    </button>
+  )
+  const retryAction = (
+    <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
+      {t('common.retry')}
+    </button>
+  )
 
   return (
     <div className="page">
-      <header className="page__header page__header--row">
-        <div>
-          <h1>{t('scheduled.title')}</h1>
-        </div>
-        <div className="page__actions">
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={() => void navigate({ to: '/tasks/new', search: { schedule: true } })}
-            data-testid="scheduled-new"
-          >
-            {t('scheduled.new')}
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        title={t('scheduled.title')}
+        actions={isInitialEmpty ? undefined : newScheduledAction}
+      />
 
       {isLoading && <LoadingState data-testid="scheduled-loading" />}
-      {error !== null && error !== undefined && <ErrorBanner error={error} />}
+      {error !== null && error !== undefined && <ErrorBanner error={error} action={retryAction} />}
       {toggle.error != null && <ErrorBanner error={toggle.error} />}
       {runNow.error != null && <ErrorBanner error={runNow.error} />}
-      {!isLoading && data !== undefined && data.length === 0 && (
-        <EmptyState title={t('scheduled.empty')} data-testid="scheduled-empty" />
+      {isInitialEmpty && (
+        <EmptyState
+          title={t('scheduled.empty')}
+          description={t('scheduled.emptyDescription')}
+          icon={SCHEDULE_ICON}
+          action={newScheduledAction}
+          data-testid="scheduled-empty"
+        />
       )}
       {data !== undefined && data.length > 0 && (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>{t('scheduled.colEnabled')}</th>
-              <th>{t('scheduled.colName')}</th>
-              <th>{t('scheduled.colSchedule')}</th>
-              <th>{t('scheduled.colNext')}</th>
-              <th>{t('scheduled.colStatus')}</th>
-              <th aria-label={t('common.ariaActions')} />
-              {/* Chevron column is purely decorative (all its cells are
-                  aria-hidden), so the header hides from AT too. */}
-              <th aria-hidden="true" />
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((row) => (
-              <tr
-                key={row.id}
-                className="data-table__row"
-                onClick={(e) => {
-                  if (shouldRowNavigate(e)) {
-                    void navigate({ to: '/scheduled/$id', params: { id: row.id } })
-                  }
-                }}
-                data-testid={`scheduled-row-${row.id}`}
-              >
-                <td>
-                  {/* Inline enable/disable — same PUT the detail toggle fires.
+        <TableViewport label={t('scheduled.title')} minWidth="lg">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>{t('scheduled.colEnabled')}</th>
+                <th>{t('scheduled.colName')}</th>
+                <th>{t('scheduled.colSchedule')}</th>
+                <th>{t('scheduled.colNext')}</th>
+                <th>{t('scheduled.colStatus')}</th>
+                <th aria-label={t('common.ariaActions')} />
+                {/* Chevron column is purely decorative (all its cells are
+                    aria-hidden), so the header hides from AT too. */}
+                <th aria-hidden="true" />
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row) => (
+                <tr
+                  key={row.id}
+                  className="data-table__row"
+                  onClick={(e) => {
+                    if (shouldRowNavigate(e)) {
+                      void navigate({ to: '/scheduled/$id', params: { id: row.id } })
+                    }
+                  }}
+                  data-testid={`scheduled-row-${row.id}`}
+                >
+                  <td>
+                    {/* Inline enable/disable — same PUT the detail toggle fires.
                       The <label>-based Switch is exempt from row navigation
                       via the shared guard's closest() whitelist. */}
-                  <Switch
-                    checked={row.enabled}
-                    disabled={toggle.isPending}
-                    onChange={(enabled) => toggle.mutate({ id: row.id, enabled })}
-                    aria-label={t('scheduled.colEnabled')}
-                    data-testid={`scheduled-enable-${row.id}`}
-                  />
-                </td>
-                <td className="data-table__nowrap">
-                  <Link
-                    to="/scheduled/$id"
-                    params={{ id: row.id }}
-                    className="data-table__link"
-                    title={row.name}
-                  >
-                    {row.name}
-                  </Link>
-                  {/* RFC-165 T14: legacy/degraded rows carry a repair badge —
+                    <Switch
+                      checked={row.enabled}
+                      disabled={toggle.isPending}
+                      onChange={(enabled) => toggle.mutate({ id: row.id, enabled })}
+                      aria-label={t('scheduled.colEnabled')}
+                      data-testid={`scheduled-enable-${row.id}`}
+                    />
+                  </td>
+                  <td className="data-table__nowrap">
+                    <Link
+                      to="/scheduled/$id"
+                      params={{ id: row.id }}
+                      className="data-table__link"
+                      title={row.name}
+                    >
+                      {row.name}
+                    </Link>
+                    {/* RFC-165 T14: legacy/degraded rows carry a repair badge —
                       the wizard's editScheduled mode is the repair path. */}
-                  {(row.migrationNeeded ||
-                    row.lastError != null ||
-                    row.launchPayload === null ||
-                    row.scheduleSpec === null) && (
-                    <>
-                      {' '}
-                      <StatusChip kind="warn" size="sm" data-testid={`scheduled-repair-${row.id}`}>
-                        {t('scheduled.repairBadge')}
-                      </StatusChip>
-                    </>
-                  )}
-                </td>
-                <td className="data-table__muted">{scheduleSummary(row.scheduleSpec, lang)}</td>
-                <td className="data-table__nowrap">
-                  {row.enabled && row.nextRunAt != null ? (
-                    <div className="scheduled-next">
-                      <RelativeTime ts={row.nextRunAt} />
-                      <span className="scheduled-next__abs">
-                        {new Date(row.nextRunAt).toLocaleString(undefined, {
-                          dateStyle: 'short',
-                          timeStyle: 'short',
-                        })}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="data-table__muted">{t('common.emDash')}</span>
-                  )}
-                </td>
-                <td className="data-table__nowrap">
-                  {row.lastStatus == null ? (
-                    <span className="muted">{t('scheduled.lastNever')}</span>
-                  ) : (
-                    <>
-                      <StatusChip kind={row.lastStatus === 'failed' ? 'danger' : 'success'}>
-                        {t(`scheduled.last_${row.lastStatus}`)}
-                      </StatusChip>
-                      {/* 连挂告警 — only when failures streak (>1); a single
+                    {(row.migrationNeeded ||
+                      row.lastError != null ||
+                      row.launchPayload === null ||
+                      row.scheduleSpec === null) && (
+                      <>
+                        {' '}
+                        <StatusChip
+                          kind="warn"
+                          size="sm"
+                          data-testid={`scheduled-repair-${row.id}`}
+                        >
+                          {t('scheduled.repairBadge')}
+                        </StatusChip>
+                      </>
+                    )}
+                  </td>
+                  <td className="data-table__muted">{scheduleSummary(row.scheduleSpec, lang)}</td>
+                  <td className="data-table__nowrap">
+                    {row.enabled && row.nextRunAt != null ? (
+                      <div className="scheduled-next">
+                        <RelativeTime ts={row.nextRunAt} />
+                        <span className="scheduled-next__abs">
+                          {new Date(row.nextRunAt).toLocaleString(undefined, {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
+                          })}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="data-table__muted">{t('common.emDash')}</span>
+                    )}
+                  </td>
+                  <td className="data-table__nowrap">
+                    {row.lastStatus == null ? (
+                      <span className="muted">{t('scheduled.lastNever')}</span>
+                    ) : (
+                      <>
+                        <StatusChip kind={row.lastStatus === 'failed' ? 'danger' : 'success'}>
+                          {t(`scheduled.last_${row.lastStatus}`)}
+                        </StatusChip>
+                        {/* 连挂告警 — only when failures streak (>1); a single
                           failure is already the chip above. */}
-                      {row.consecutiveFailures > 1 && (
-                        <>
-                          {' '}
-                          <StatusChip
-                            kind="danger"
-                            size="sm"
-                            data-testid={`scheduled-streak-${row.id}`}
-                          >
-                            {t('scheduled.consecutiveChip', { n: row.consecutiveFailures })}
-                          </StatusChip>
-                        </>
-                      )}
-                      {row.lastRunAt != null && (
-                        <>
-                          {' '}
-                          <span className="data-table__muted">
-                            <RelativeTime ts={row.lastRunAt} />
-                          </span>
-                        </>
-                      )}
-                      {/* Task link ONLY for launched — recordFailure leaves
+                        {row.consecutiveFailures > 1 && (
+                          <>
+                            {' '}
+                            <StatusChip
+                              kind="danger"
+                              size="sm"
+                              data-testid={`scheduled-streak-${row.id}`}
+                            >
+                              {t('scheduled.consecutiveChip', { n: row.consecutiveFailures })}
+                            </StatusChip>
+                          </>
+                        )}
+                        {row.lastRunAt != null && (
+                          <>
+                            {' '}
+                            <span className="data-table__muted">
+                              <RelativeTime ts={row.lastRunAt} />
+                            </span>
+                          </>
+                        )}
+                        {/* Task link ONLY for launched — recordFailure leaves
                           lastTaskId pointing at the previous SUCCESSFUL task
                           (Codex 设计门 P1: never link a failure chip there). */}
-                      {row.lastStatus === 'launched' && row.lastTaskId != null && (
-                        <>
-                          {' '}
-                          <Link
-                            to="/tasks/$id"
-                            params={{ id: row.lastTaskId }}
-                            className="data-table__link"
-                            data-testid={`scheduled-last-task-${row.id}`}
-                          >
-                            {t('scheduled.lastTaskLink')}
-                          </Link>
-                        </>
-                      )}
-                    </>
-                  )}
-                </td>
-                <td className="data-table__actions">
-                  <ConfirmButton
-                    label={t('scheduled.runNow')}
-                    // mutate (not mutateAsync): the rejection is consumed by the
-                    // mutation state (→ ErrorBanner) instead of escaping the
-                    // ConfirmButton's un-handled promise (实现门 P2).
-                    onConfirm={() => runNow.mutate(row.id)}
-                    size="sm"
-                    disabled={runNowBlocked(row) || runNow.isPending}
-                  />
-                </td>
-                {/* Row-click affordance — same mute chevron as /tasks rows. */}
-                <td className="data-table__chevron" aria-hidden="true">
-                  ›
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                        {row.lastStatus === 'launched' && row.lastTaskId != null && (
+                          <>
+                            {' '}
+                            <Link
+                              to="/tasks/$id"
+                              params={{ id: row.lastTaskId }}
+                              className="data-table__link"
+                              data-testid={`scheduled-last-task-${row.id}`}
+                            >
+                              {t('scheduled.lastTaskLink')}
+                            </Link>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </td>
+                  <td className="data-table__actions">
+                    <ConfirmButton
+                      label={t('scheduled.runNow')}
+                      // mutate (not mutateAsync): the rejection is consumed by the
+                      // mutation state (→ ErrorBanner) instead of escaping the
+                      // ConfirmButton's un-handled promise (实现门 P2).
+                      onConfirm={() => runNow.mutate(row.id)}
+                      size="sm"
+                      disabled={runNowBlocked(row) || runNow.isPending}
+                    />
+                  </td>
+                  {/* Row-click affordance — same mute chevron as /tasks rows. */}
+                  <td className="data-table__chevron" aria-hidden="true">
+                    ›
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableViewport>
       )}
     </div>
   )

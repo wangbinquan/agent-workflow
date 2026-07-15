@@ -13,10 +13,15 @@
 //   W7 ?editScheduled seeds a kind-locked, fully pre-filled wizard and PUTs
 //      the rebuilt payload back.
 //   W8 Step-1 filtering: builtin workflows/agents never appear as options.
+//
+// RFC-198 (D8) regression lock: initial schedule/inventory failures must be
+// recoverable, while background failures preserve an already seeded draft or
+// stale inventory rows. Relaunch task/member failures retry through the same
+// one-shot freshness barrier instead of stranding the wizard.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -162,11 +167,7 @@ function installFetch(): FetchCall[] {
         }
       }
       calls.push({ url, method, body })
-      const json = (payload: unknown, status = 200) =>
-        new Response(JSON.stringify(payload), {
-          status,
-          headers: { 'content-type': 'application/json' },
-        })
+      const json = jsonResponse
       if (url.includes('/api/scheduled-tasks/sched-a') && method === 'PUT')
         return json({ ...SCHEDULE_AGENT, updatedAt: 2 })
       if (url.includes('/api/scheduled-tasks/sched-a')) return json(SCHEDULE_AGENT)
@@ -191,7 +192,14 @@ function installFetch(): FetchCall[] {
   return calls
 }
 
-async function renderWizard(initialUrl: string) {
+function jsonResponse(payload: unknown, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+async function renderWizard(initialUrl: string, options: { waitForWizard?: boolean } = {}) {
   const mod = await import('../src/routes/tasks.new')
   const rootRoute = createRootRoute({ component: () => <Outlet /> })
   const wizard = createRoute({
@@ -226,7 +234,8 @@ async function renderWizard(initialUrl: string) {
     </QueryClientProvider>,
   )
   // Router mount is async — wait for the wizard shell before interacting.
-  await screen.findByTestId('task-wizard')
+  if (options.waitForWizard !== false) await screen.findByTestId('task-wizard')
+  return { qc, router }
 }
 
 const next = () => fireEvent.click(screen.getByTestId('stepper-next'))
@@ -235,6 +244,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
   test('W1+W4+W5: workflow arm — gating, backlink, launch POST /api/tasks', async () => {
     const calls = installFetch()
     await renderWizard('/tasks/new')
+    expect(screen.getByRole('heading', { level: 1 }).className).toContain('page__title')
 
     // Step 1 — the default kind is now AGENT (用户 2026-07-11); switch to
     // workflow first. Next gated until an object is picked; builtin
@@ -600,4 +610,190 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     expect(errorEl.textContent).not.toContain('workgroup-not-ready')
     expect(errorEl.textContent?.length ?? 0).toBeGreaterThan(0)
   })
+
+  test('RFC-198: editScheduled initial loading/error retries into a seeded wizard', async () => {
+    installFetch()
+    const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+    let resolveInitial: ((response: Response) => void) | undefined
+    let scheduleAttempts = 0
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => {
+      const url = input.toString()
+      const method = init?.method ?? 'GET'
+      if (url.includes('/api/scheduled-tasks/sched-a') && method === 'GET') {
+        scheduleAttempts += 1
+        if (scheduleAttempts === 1) {
+          return new Promise<Response>((resolve) => {
+            resolveInitial = resolve
+          })
+        }
+      }
+      return base(input, init)
+    })
+
+    await renderWizard('/tasks/new?editScheduled=sched-a', { waitForWizard: false })
+    expect(await screen.findByTestId('loading-state')).toBeTruthy()
+    expect(screen.queryByTestId('task-wizard')).toBeNull()
+
+    await act(async () => {
+      resolveInitial?.(jsonResponse({ message: 'schedule unavailable' }, 503))
+    })
+    const alert = await screen.findByRole('alert')
+    expect(screen.queryByTestId('task-wizard')).toBeNull()
+    fireEvent.click(within(alert).getByRole('button', { name: /重试|Retry/i }))
+
+    expect(await screen.findByTestId('task-wizard')).toBeTruthy()
+    fireEvent.click(await screen.findByTestId('stepper-step-content'))
+    expect(((await screen.findByTestId('wizard-task-name')) as HTMLInputElement).value).toBe(
+      'nightly',
+    )
+  })
+
+  test('RFC-198: editScheduled stale refetch failure preserves the edited draft and retries inline', async () => {
+    installFetch()
+    const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+    let scheduleShouldFail = false
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => {
+      const url = input.toString()
+      const method = init?.method ?? 'GET'
+      if (scheduleShouldFail && url.includes('/api/scheduled-tasks/sched-a') && method === 'GET')
+        return Promise.resolve(jsonResponse({ message: 'stale schedule refresh failed' }, 503))
+      return base(input, init)
+    })
+
+    const { qc } = await renderWizard('/tasks/new?editScheduled=sched-a')
+    fireEvent.click(await screen.findByTestId('stepper-step-content'))
+    const name = (await screen.findByTestId('wizard-task-name')) as HTMLInputElement
+    fireEvent.change(name, { target: { value: 'keep my local edit' } })
+
+    scheduleShouldFail = true
+    await act(async () => {
+      await qc.invalidateQueries({ queryKey: ['scheduled-tasks', 'detail', 'sched-a'] })
+    })
+    const staleError = await screen.findByTestId('wizard-schedule-stale-error')
+    expect(screen.getByTestId('task-wizard')).toBeTruthy()
+    expect((screen.getByTestId('wizard-task-name') as HTMLInputElement).value).toBe(
+      'keep my local edit',
+    )
+
+    scheduleShouldFail = false
+    fireEvent.click(within(staleError).getByRole('button', { name: /重试|Retry/i }))
+    await waitFor(() => expect(screen.queryByTestId('wizard-schedule-stale-error')).toBeNull())
+    expect((screen.getByTestId('wizard-task-name') as HTMLInputElement).value).toBe(
+      'keep my local edit',
+    )
+  })
+
+  test.each([
+    {
+      label: 'source task',
+      matches: (url: string) =>
+        url.includes('/api/tasks/relaunch-task') && !url.includes('/members'),
+    },
+    {
+      label: 'source members',
+      matches: (url: string) => url.includes('/api/tasks/relaunch-task/members'),
+    },
+  ])('RFC-198: relaunch $label error retries and resumes seeding', async ({ matches }) => {
+    installFetch()
+    const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+    let shouldFail = true
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => {
+      const url = input.toString()
+      if (shouldFail && (init?.method ?? 'GET') === 'GET' && matches(url)) {
+        shouldFail = false
+        return Promise.resolve(jsonResponse({ message: 'relaunch source unavailable' }, 503))
+      }
+      return base(input, init)
+    })
+
+    await renderWizard('/tasks/new?relaunchFrom=relaunch-task')
+    const relaunchError = await screen.findByTestId('wizard-relaunch-error')
+    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(within(relaunchError).getByRole('button', { name: /重试|Retry/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('wizard-relaunch-error')).toBeNull()
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false)
+    })
+    next()
+    next()
+    expect(((await screen.findByTestId('wizard-task-name')) as HTMLInputElement).value).toBe(
+      'prior audit',
+    )
+    expect((screen.getByTestId('wizard-description') as HTMLTextAreaElement).value).toBe(
+      'audit the auth module',
+    )
+  })
+
+  test.each([
+    {
+      kind: 'workflow',
+      endpoint: '/api/workflows',
+      queryKey: ['workflows'],
+      selectorTestId: 'wizard-object-workflow',
+    },
+    {
+      kind: 'agent',
+      endpoint: '/api/agents',
+      queryKey: ['agents'],
+      selectorTestId: 'wizard-object-agent',
+    },
+    {
+      kind: 'workgroup',
+      endpoint: '/api/workgroups',
+      queryKey: ['workgroups'],
+      selectorTestId: 'wizard-object-workgroup',
+    },
+  ] as const)(
+    'RFC-198: $kind inventory distinguishes loading/error/empty and preserves stale rows',
+    async ({ kind, endpoint, queryKey, selectorTestId }) => {
+      installFetch()
+      const base = vi.mocked(globalThis.fetch).getMockImplementation()!
+      let mode: 'pending' | 'error' | 'success' = 'pending'
+      let resolveInitial: ((response: Response) => void) | undefined
+      vi.mocked(globalThis.fetch).mockImplementation((input, init) => {
+        const url = input.toString()
+        const method = init?.method ?? 'GET'
+        if (method === 'GET' && new URL(url).pathname === endpoint) {
+          if (mode === 'pending') {
+            return new Promise<Response>((resolve) => {
+              resolveInitial = resolve
+            })
+          }
+          if (mode === 'error')
+            return Promise.resolve(jsonResponse({ message: `${kind} inventory unavailable` }, 503))
+        }
+        return base(input, init)
+      })
+
+      const { qc } = await renderWizard(`/tasks/new?kind=${kind}`)
+      expect(await screen.findByTestId('wizard-object-loading')).toBeTruthy()
+      expect(screen.queryByTestId('wizard-object-empty')).toBeNull()
+
+      mode = 'error'
+      await act(async () => {
+        resolveInitial?.(jsonResponse({ message: `${kind} inventory unavailable` }, 503))
+      })
+      let inventoryError = await screen.findByTestId('wizard-object-load-error')
+      expect(screen.queryByTestId('wizard-object-empty')).toBeNull()
+
+      mode = 'success'
+      fireEvent.click(within(inventoryError).getByRole('button', { name: /重试|Retry/i }))
+      expect(await screen.findByTestId(selectorTestId)).toBeTruthy()
+      await waitFor(() => expect(screen.queryByTestId('wizard-object-load-error')).toBeNull())
+
+      mode = 'error'
+      await act(async () => {
+        await qc.invalidateQueries({ queryKey: [...queryKey] })
+      })
+      inventoryError = await screen.findByTestId('wizard-object-load-error')
+      expect(screen.getByTestId(selectorTestId)).toBeTruthy()
+      expect(screen.queryByTestId('wizard-object-empty')).toBeNull()
+
+      mode = 'success'
+      fireEvent.click(within(inventoryError).getByRole('button', { name: /重试|Retry/i }))
+      await waitFor(() => expect(screen.queryByTestId('wizard-object-load-error')).toBeNull())
+      expect(screen.getByTestId(selectorTestId)).toBeTruthy()
+    },
+  )
 })

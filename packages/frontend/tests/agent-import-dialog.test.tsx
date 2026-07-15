@@ -40,6 +40,30 @@ describe('AgentImportDialog', () => {
     })
   })
 
+  test('source tabs keep stable two-way DOM associations for their conditional panels', () => {
+    setup()
+    const uploadTab = screen.getByRole('tab', { name: /upload/i })
+    const uploadPanel = screen.getByRole('tabpanel')
+    expect(uploadTab.id).toBe('agent-import-source-tab-upload')
+    expect(uploadTab.getAttribute('aria-controls')).toBe(uploadPanel.id)
+    expect(uploadPanel.id).toBe('agent-import-source-panel-upload')
+    expect(uploadPanel.getAttribute('aria-labelledby')).toBe(uploadTab.id)
+    const hiddenPastePanel = document.getElementById('agent-import-source-panel-paste')
+    expect(hiddenPastePanel?.hasAttribute('hidden')).toBe(true)
+    expect(hiddenPastePanel?.getAttribute('aria-labelledby')).toBe('agent-import-source-tab-paste')
+
+    fireEvent.click(screen.getByRole('tab', { name: /paste/i }))
+    const pasteTab = screen.getByRole('tab', { name: /paste/i })
+    const pastePanel = screen.getByRole('tabpanel')
+    expect(pasteTab.id).toBe('agent-import-source-tab-paste')
+    expect(pasteTab.getAttribute('aria-controls')).toBe(pastePanel.id)
+    expect(pastePanel.id).toBe('agent-import-source-panel-paste')
+    expect(pastePanel.getAttribute('aria-labelledby')).toBe(pasteTab.id)
+    expect(
+      document.getElementById('agent-import-source-panel-upload')?.hasAttribute('hidden'),
+    ).toBe(true)
+  })
+
   test('full paste review exposes all five form sections, including formerly hidden resources', async () => {
     setup()
     pasteAndCheck(

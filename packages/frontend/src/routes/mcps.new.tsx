@@ -11,6 +11,7 @@ import type { CreateMcp, Mcp } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { McpFields } from '@/components/McpFields'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { PageHeader } from '@/components/PageHeader'
 import { NEW_CARD_KEY, useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
 import { useDirtyBaseline } from '@/hooks/useDraftFromQuery'
 import { buildCreatePayload, EMPTY_LOCAL_FORM, type McpFormState } from '@/lib/mcp-form'
@@ -54,11 +55,10 @@ function McpCreatePage() {
 
   return (
     <div className="agent-new">
-      <header className="page__header page__header--row">
-        <div>
-          <h2>{t('mcps.newTitle')}</h2>
-        </div>
-        <div className="page__actions">
+      <PageHeader
+        title={t('mcps.newTitle')}
+        headingLevel={2}
+        actions={
           <button
             type="button"
             className="btn btn--primary"
@@ -68,8 +68,8 @@ function McpCreatePage() {
           >
             {create.isPending ? t('common.creating') : t('mcps.createButton')}
           </button>
-        </div>
-      </header>
+        }
+      />
       {create.error !== null && create.error !== undefined && <ErrorBanner error={create.error} />}
       <div className="split__detail-body">
         <McpFields value={form} onChange={setForm} errors={errors} />

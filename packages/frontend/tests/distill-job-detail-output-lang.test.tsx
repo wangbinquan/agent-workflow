@@ -18,6 +18,7 @@ import {
 import type { MemoryDistillJob } from '@agent-workflow/shared'
 import { DetailHeader } from '../src/components/memory/distill-job-detail/DetailHeader'
 import i18n from '../src/i18n'
+import { enUS } from '../src/i18n/en-US'
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -78,6 +79,10 @@ describe('RFC-050 DetailHeader — output language chip', () => {
     const chip = screen.getByTestId('distill-job-detail-output-lang')
     expect(chip.textContent).toContain('Output language')
     expect(chip.textContent).toContain('简体中文')
+    expect(screen.getByRole('heading', { level: 1, name: 'job-1' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: enUS.memory.title }).getAttribute('href')).toBe(
+      '/memory?tab=distill-jobs',
+    )
   })
 
   test('en-US job renders English', async () => {

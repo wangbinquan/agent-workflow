@@ -24,6 +24,28 @@ describe('TaskDetailPage tab structure', () => {
     expect(SRC).not.toMatch(/className="page page--wide"/)
   })
 
+  test('uses shared page, feedback and table primitives for the task shell', () => {
+    expect(SRC).toMatch(/<PageHeader\b/)
+    expect(SRC).not.toMatch(/<header className="page__header/)
+    expect(SRC).toMatch(/<NoticeBanner\b/)
+    expect(SRC).toMatch(/<ErrorBanner\b/)
+    expect(SRC).toMatch(/<TableViewport label=\{t\('tasks\.tabNodeRuns'\)\} minWidth="lg">/)
+  })
+
+  test('primary query and tab data errors expose retry actions', () => {
+    expect(SRC).toContain(
+      'task.data === undefined && task.error !== null && task.error !== undefined',
+    )
+    expect(SRC).toMatch(/onClick=\{\(\) => void task\.refetch\(\)\}/)
+    expect(SRC).toMatch(/onClick=\{\(\) => void nodeRuns\.refetch\(\)\}/)
+    expect(SRC).toMatch(/onClick=\{\(\) => void diff\.refetch\(\)\}/)
+    expect(SRC).toMatch(/onClick=\{\(\) => void structuralDiff\.refetch\(\)\}/)
+    expect(SRC).toContain("tab === 'workflow-status' || tab === 'node-runs' || tab === 'outputs'")
+    expect(SRC).toContain(
+      'nodeRunsConsumerActive && nodeRuns.data === undefined && nodeRuns.isLoading',
+    )
+  })
+
   test('renders the shared <TabBar> carrying .task-detail__tab-bar', () => {
     // RFC-150 PR-3: the hand-rolled `<nav role="tablist" class="task-detail__tab-bar
     // tabs">` became the shared <TabBar className="task-detail__tab-bar"> —
@@ -54,13 +76,13 @@ describe('TaskDetailPage tab structure', () => {
     expect(SRC).toMatch(/\{hasOutputs && \(/)
   })
 
-  test('jumpToFailed uses nextTabForFailedJump and applies BOTH state mutations', () => {
+  test('jumpToFailed uses nextTabForFailedJump and applies selection + URL push', () => {
     // Catches a future refactor that only updates selectedNodeRunId
     // (then the tab stays on whatever the user was browsing) or only
-    // setTab (then the drawer never opens).
+    // URL navigation (then the drawer never opens).
     expect(SRC).toMatch(/nextTabForFailedJump\(/)
     expect(SRC).toMatch(/setSelectedNodeRunId\(runId\)/)
-    expect(SRC).toMatch(/setTab\(next\)/)
+    expect(SRC).toMatch(/navigateTaskTab\(next\)/)
   })
 
   test('jumpToFailed button render is gated on canOfferFailedJump(tabs)', () => {
@@ -104,6 +126,37 @@ describe('TaskDetailPage tab structure', () => {
     const paneCount = (SRC.match(/className="task-detail__pane"/g) ?? []).length
     expect(paneCount).toBe(11)
     expect(SRC.match(/className="task-detail__panes"/g)?.length).toBe(1)
+  })
+
+  test('URL search is the sole tab authority and canonical fallbacks replace', () => {
+    expect(SRC).toMatch(/validateSearch:\s*validateTaskDetailSearch/)
+    expect(SRC).toMatch(/const search = Route\.useSearch\(\)/)
+    expect(SRC).toMatch(/resolveTaskDetailTabs\(\{/)
+    expect(SRC).toMatch(/navigateTaskTab\(canonicalTab, true\)/)
+    expect(SRC).not.toMatch(/useState<TaskDetailTab>/)
+    expect(SRC).not.toMatch(/\bsetTab\(/)
+  })
+
+  test('all explicit tab jumps share push navigation and preserve search', () => {
+    expect(SRC).toMatch(/search: \(previous\) => withTaskDetailTab\(previous, next\)/)
+    expect(SRC).toMatch(/onSelect=\{\(next\) => navigateTaskTab\(next\)\}/)
+    expect(SRC).toMatch(/navigateTaskTab\('task-questions'\)/)
+    expect(SRC).toMatch(/navigateTaskTab\('worktree-diff'\)/)
+  })
+
+  test('TabBar and every pane share stable task-detail ids', () => {
+    expect(SRC).toMatch(/idPrefix="task-detail"/)
+    expect(SRC).toMatch(/tabDomIds\('task-detail', tab\)/)
+    expect(SRC).toMatch(/role: 'tabpanel'/)
+    expect(SRC).toMatch(/'aria-labelledby': ids\.tabId/)
+  })
+
+  test('late room classification has pending and retryable error states', () => {
+    expect(SRC).toMatch(/room\.data !== undefined/)
+    expect(SRC).toMatch(/room\.error !== null/)
+    expect(SRC).toMatch(/tabResolution\.status === 'pending'/)
+    expect(SRC).toMatch(/tabResolution\.status === 'error'/)
+    expect(SRC).toMatch(/onClick=\{\(\) => void room\.refetch\(\)\}/)
   })
 })
 

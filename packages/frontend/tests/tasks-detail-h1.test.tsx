@@ -13,8 +13,9 @@ const SRC = readFileSync(
 
 describe('routes/tasks.detail.tsx — RFC-037 H1 swap', () => {
   test('H1 renders tk.name (not tk.id as before)', () => {
-    expect(SRC).toMatch(/<h1[^>]*task-detail__title/)
+    expect(SRC).toMatch(/<PageHeader\b[\s\S]*?title=\{/)
     expect(SRC).toMatch(/task-detail__name[\s\S]*?\{tk\.name\}/)
+    expect(SRC).not.toMatch(/<h1[^>]*task-detail__title/)
   })
 
   test('ID drops into a labelled subtitle (task-detail__id) with the full ULID', () => {

@@ -164,6 +164,18 @@ describe('<StructuralDiffView />', () => {
     expect(screen.getByText('Animal')).toBeTruthy()
     expect(screen.getByText('speak')).toBeTruthy()
     expect(screen.getByText('walk')).toBeTruthy()
+    const tabs = screen.getAllByRole('tab')
+    const panel = screen.getByRole('tabpanel')
+    expect(tabs[0]?.id).toBe('structural-file-tab-0')
+    expect(tabs[0]?.getAttribute('aria-controls')).toBe(panel.id)
+    expect(panel.id).toBe('structural-file-panel-0')
+    expect(panel.getAttribute('aria-labelledby')).toBe(tabs[0]?.id)
+    for (const [index, tab] of tabs.entries()) {
+      const controlled = document.getElementById(tab.getAttribute('aria-controls') ?? '')
+      expect(controlled).not.toBeNull()
+      expect(controlled?.getAttribute('aria-labelledby')).toBe(tab.id)
+      expect((controlled as HTMLElement | null)?.hidden).toBe(index !== 0)
+    }
     // degraded banner present (a cpp file is best-effort)
     expect(screen.getByRole('status')).toBeTruthy()
   })
@@ -182,6 +194,7 @@ describe('<StructuralDiffView />', () => {
     expect(screen.queryByText('Widget')).toBeNull() // cpp not selected yet
     fireEvent.click(screen.getByText('w.cpp'))
     expect(screen.getByText('Widget')).toBeTruthy()
+    expect(screen.getByRole('tabpanel').id).toBe('structural-file-panel-1')
   })
 
   test('clicking a symbol with a hunkAnchor invokes onJumpToHunk (text↔structure)', () => {
@@ -514,7 +527,8 @@ describe('<StructuralDiffView /> keyboard file switching', () => {
         .getAllByRole('tab')
         .map((tb) => tb.querySelector('.structure__file-name')?.textContent),
     ).toEqual(['A.ts', 'C.ts', 'B.ts'])
-    const bodyText = (): string => container.querySelector('.structure__body')?.textContent ?? ''
+    const bodyText = (): string =>
+      container.querySelector('.structure__body:not([hidden])')?.textContent ?? ''
 
     // Home → first VISUAL file (A.ts), even though files[0] is B.ts
     fireEvent.keyDown(tablist, { key: 'Home' })

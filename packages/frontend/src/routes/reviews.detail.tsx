@@ -17,8 +17,11 @@ import type {
   ReviewDetail,
 } from '@agent-workflow/shared'
 import type { DocVersion } from '@agent-workflow/shared'
-import { api, type ApiError } from '@/api/client'
+import { api } from '@/api/client'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import { PageHeader } from '@/components/PageHeader'
+import { Segmented } from '@/components/Segmented'
 import { ReviewDecisionInfo } from '@/components/review/ReviewDecisionInfo'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { DiffView, type DiffGranularity } from '@/components/review/DiffView'
@@ -363,12 +366,25 @@ function ReviewDetailPage() {
   // sit above the early returns; tolerant of undefined while loading.
   const deciderLookup = useUserLookup([viewed.decidedBy])
 
-  if (detail.isLoading) return <LoadingState />
-  if (detail.error !== null && detail.error !== undefined) {
-    const err = detail.error as ApiError
-    return <div className="error-box">{err.message}</div>
+  if (detail.data === undefined) {
+    return (
+      <div className="page review-detail page--review-detail">
+        <PageHeader title={nodeRunId} />
+        {detail.error !== null && detail.error !== undefined ? (
+          <ErrorBanner
+            error={detail.error}
+            action={
+              <button type="button" className="btn btn--sm" onClick={() => void detail.refetch()}>
+                {t('common.retry')}
+              </button>
+            }
+          />
+        ) : (
+          <LoadingState />
+        )}
+      </div>
+    )
   }
-  if (detail.data === undefined) return null
 
   const data = detail.data
   // RFC-013: in the historical mode, decision buttons are not in the DOM,
@@ -409,15 +425,75 @@ function ReviewDetailPage() {
     URL.revokeObjectURL(url)
   }
 
+  const queryError = (error: unknown, refetch: () => unknown, testId: string) => (
+    <div data-testid={testId}>
+      <ErrorBanner
+        error={error}
+        action={
+          <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
+            {t('common.retry')}
+          </button>
+        }
+      />
+    </div>
+  )
+
+  // Auxiliary version queries own the body slot while their requested view is
+  // unresolved. This prevents a selected diff / historical view from silently
+  // falling back to the current document and looking successful. Once cached
+  // auxiliary data exists, the normal pane stays mounted and a stale error is
+  // surfaced separately below.
+  const auxiliaryBodySlot = (() => {
+    if (mode === 'historical') {
+      if (historicalDetail.data !== undefined) return undefined
+      if (historicalDetail.error !== null && historicalDetail.error !== undefined) {
+        return queryError(
+          historicalDetail.error,
+          historicalDetail.refetch,
+          'review-historical-body-error',
+        )
+      }
+      return <LoadingState size="compact" />
+    }
+
+    if (!diffMode) return undefined
+    if (versions.data === undefined) {
+      if (versions.error !== null && versions.error !== undefined) {
+        return queryError(versions.error, versions.refetch, 'review-diff-versions-error')
+      }
+      return <LoadingState size="compact" />
+    }
+    if (priorVersion === null) return undefined
+    if (priorBody.data === undefined) {
+      if (priorBody.error !== null && priorBody.error !== undefined) {
+        return queryError(priorBody.error, priorBody.refetch, 'review-diff-body-error')
+      }
+      return <LoadingState size="compact" />
+    }
+    return (
+      <DiffView
+        left={priorBody.data.body}
+        right={data.currentBody}
+        granularity={diffGranularity}
+        leftLabel={t('reviews.diffLeftLabel', {
+          version: priorVersion.versionIndex,
+          decision: priorVersion.decision ?? t('reviews.decision.pending'),
+        })}
+        rightLabel={t('reviews.diffRightLabel', {
+          version: data.currentVersion.versionIndex,
+        })}
+      />
+    )
+  })()
+
   return (
     <div className="page review-detail page--review-detail">
-      <header className="page__header review-detail__page-header">
-        <div className="review-detail__page-header-text">
-          <h1>
-            {/* RFC-037: lead with the user-supplied task name, linked to the
-                owning task detail page; workflow name + review node title stay
-                as muted breadcrumbs. The link is inline in the H1 (no extra
-                row) so the header stays compact. */}
+      <PageHeader
+        className="review-detail__page-header"
+        title={
+          <>
+            {/* RFC-037: lead with the user-supplied task name, linked to the owning task
+                detail page; workflow name + review node title stay as muted metadata. */}
             <Link
               to="/tasks/$id"
               params={{ id: data.summary.taskId }}
@@ -432,8 +508,10 @@ function ReviewDetailPage() {
               {' '}
               · v{viewed.versionIndex ?? data.currentVersion.versionIndex}
             </span>
-          </h1>
-          <div className="muted review-detail__breadcrumbs">
+          </>
+        }
+        meta={
+          <div className="review-detail__breadcrumbs">
             <span>{data.summary.workflowName}</span>
             {hasTitle && (
               <>
@@ -442,81 +520,117 @@ function ReviewDetailPage() {
               </>
             )}
           </div>
-          {data.summary.description !== '' && data.summary.description !== data.summary.title && (
-            <p className="page__hint review-detail__description">{data.summary.description}</p>
-          )}
-          {/* RFC-142: 决策信息块——决策 chip + 决策人 + 时间 + 退回原因/系统作废
+        }
+        actions={
+          <div className="review-detail__page-header-actions">
+            <button
+              type="button"
+              className="btn btn--sm review-detail__download"
+              disabled={downloadDisabled}
+              onClick={handleDownloadMarkdown}
+              title={t('reviews.downloadMarkdownTitle', { filename: downloadFileName })}
+            >
+              <span aria-hidden="true" className="review-detail__download-icon">
+                ↓
+              </span>
+              {t('reviews.downloadMarkdown')}
+            </button>
+            {mode !== 'historical' && (
+              <div
+                className="review-detail__decision-actions"
+                role="group"
+                aria-label={t('reviews.decisionActionsAria')}
+              >
+                <button
+                  type="button"
+                  className="btn btn--sm btn--primary"
+                  disabled={mode !== 'awaiting' || submitDecision.isPending}
+                  onClick={() => void onApprove()}
+                >
+                  {t('reviews.approveButton')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  disabled={mode !== 'awaiting' || submitDecision.isPending}
+                  onClick={() => onIterate()}
+                >
+                  {t('reviews.iterateButton')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--sm btn--danger"
+                  disabled={mode !== 'awaiting' || submitDecision.isPending}
+                  onClick={() => onReject()}
+                >
+                  {t('reviews.rejectButton')}
+                </button>
+              </div>
+            )}
+          </div>
+        }
+      >
+        {data.summary.description !== '' && data.summary.description !== data.summary.title && (
+          <p className="page__hint review-detail__description">{data.summary.description}</p>
+        )}
+        {/* RFC-142: 决策信息块——决策 chip + 决策人 + 时间 + 退回原因/系统作废
               说明（替换 RFC-099 只有决策人 chip 的旧行；superseded 的系统行
               不再整体隐藏）。 */}
-          <ReviewDecisionInfo
-            decision={viewed.decision}
-            decisionReason={viewed.decisionReason}
-            decidedAt={viewed.decidedAt}
-            decidedBy={viewed.decidedBy}
-            decidedByRole={viewed.decidedByRole ?? null}
-            user={
-              viewed.decidedBy !== null && viewed.decidedBy !== undefined
-                ? deciderLookup.get(viewed.decidedBy)
-                : undefined
-            }
-            data-testid="review-decider"
-          />
-          {mode !== 'historical' && (
-            <p className="page__hint">
-              {t('reviews.detailHint', {
-                iteration: data.summary.reviewIteration,
-                decision: data.currentVersion.decision,
-              })}
-            </p>
-          )}
-        </div>
-        <div className="review-detail__page-header-actions">
-          <button
-            type="button"
-            className="btn btn--sm review-detail__download"
-            disabled={downloadDisabled}
-            onClick={handleDownloadMarkdown}
-            title={t('reviews.downloadMarkdownTitle', { filename: downloadFileName })}
-          >
-            <span aria-hidden="true" className="review-detail__download-icon">
-              ↓
-            </span>
-            {t('reviews.downloadMarkdown')}
-          </button>
-          {mode !== 'historical' && (
-            <div
-              className="review-detail__decision-actions"
-              role="group"
-              aria-label={t('reviews.decisionActionsAria')}
-            >
-              <button
-                type="button"
-                className="btn btn--sm btn--primary"
-                disabled={mode !== 'awaiting' || submitDecision.isPending}
-                onClick={() => void onApprove()}
-              >
-                {t('reviews.approveButton')}
-              </button>
-              <button
-                type="button"
-                className="btn btn--sm"
-                disabled={mode !== 'awaiting' || submitDecision.isPending}
-                onClick={() => onIterate()}
-              >
-                {t('reviews.iterateButton')}
-              </button>
-              <button
-                type="button"
-                className="btn btn--sm btn--danger"
-                disabled={mode !== 'awaiting' || submitDecision.isPending}
-                onClick={() => onReject()}
-              >
-                {t('reviews.rejectButton')}
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+        <ReviewDecisionInfo
+          decision={viewed.decision}
+          decisionReason={viewed.decisionReason}
+          decidedAt={viewed.decidedAt}
+          decidedBy={viewed.decidedBy}
+          decidedByRole={viewed.decidedByRole ?? null}
+          user={
+            viewed.decidedBy !== null && viewed.decidedBy !== undefined
+              ? deciderLookup.get(viewed.decidedBy)
+              : undefined
+          }
+          data-testid="review-decider"
+        />
+        {mode !== 'historical' && (
+          <p className="page__hint">
+            {t('reviews.detailHint', {
+              iteration: data.summary.reviewIteration,
+              decision: data.currentVersion.decision,
+            })}
+          </p>
+        )}
+      </PageHeader>
+
+      {detail.error !== null && detail.error !== undefined && (
+        <ErrorBanner
+          error={detail.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void detail.refetch()}>
+              {t('common.retry')}
+            </button>
+          }
+        />
+      )}
+
+      {/* Historical bodies can still be usable while version-list validation
+          refreshes fail. Keep that cached body visible and expose the failed
+          list refresh independently. In diff mode an initial list error lives
+          inside auxiliaryBodySlot so the current prose cannot masquerade as a
+          successful diff. */}
+      {versions.error !== null &&
+        versions.error !== undefined &&
+        (versions.data !== undefined || mode === 'historical') &&
+        queryError(versions.error, versions.refetch, 'review-versions-error')}
+      {historicalDetail.data !== undefined &&
+        historicalDetail.error !== null &&
+        historicalDetail.error !== undefined &&
+        queryError(
+          historicalDetail.error,
+          historicalDetail.refetch,
+          'review-historical-body-stale-error',
+        )}
+      {priorBody.data !== undefined &&
+        priorBody.error !== null &&
+        priorBody.error !== undefined &&
+        queryError(priorBody.error, priorBody.refetch, 'review-diff-body-stale-error')}
 
       {mode === 'historical' && (
         <div className="readonly-banner" role="status">
@@ -543,36 +657,26 @@ function ReviewDetailPage() {
               segmented control。选 "原文" 等价于关闭 diff 模式；其它三段
               等价于开启 diff + 设置 granularity。视觉更紧凑、状态更明确，
               用户少一次"先勾选才出现按钮"的两步操作。 */}
-          <div className="diff-mode-segmented" role="tablist" aria-label={t('reviews.diffToggle')}>
-            {(['off', 'word', 'line', 'block'] as const).map((m) => {
-              const active = m === 'off' ? !diffMode : diffMode && diffGranularity === m
-              const label =
+          <Segmented<'off' | DiffGranularity>
+            className="diff-mode-segmented"
+            options={(['off', 'word', 'line', 'block'] as const).map((m) => ({
+              value: m,
+              label:
                 m === 'off'
                   ? t('reviews.diffOff')
-                  : t(`reviews.diffGranularity${m.charAt(0).toUpperCase()}${m.slice(1)}` as const)
-              return (
-                <button
-                  key={m}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  className={
-                    'diff-mode-segmented__btn' + (active ? ' diff-mode-segmented__btn--active' : '')
-                  }
-                  onClick={() => {
-                    if (m === 'off') {
-                      setDiffMode(false)
-                    } else {
-                      setDiffMode(true)
-                      setDiffGranularity(m)
-                    }
-                  }}
-                >
-                  {label}
-                </button>
-              )
-            })}
-          </div>
+                  : t(`reviews.diffGranularity${m.charAt(0).toUpperCase()}${m.slice(1)}` as const),
+            }))}
+            value={diffMode ? diffGranularity : 'off'}
+            onChange={(mode) => {
+              if (mode === 'off') {
+                setDiffMode(false)
+              } else {
+                setDiffMode(true)
+                setDiffGranularity(mode)
+              }
+            }}
+            ariaLabel={t('reviews.diffToggle')}
+          />
         </div>
       )}
 
@@ -586,31 +690,14 @@ function ReviewDetailPage() {
         onInvalidate={invalidateDetail}
         onShortcutCaptureChange={setPaneCapturing}
         diffMode={diffMode}
-        bodySlot={
-          mode !== 'historical' && diffMode && priorBody.data !== undefined ? (
-            <DiffView
-              left={priorBody.data.body}
-              right={data.currentBody}
-              granularity={diffGranularity}
-              leftLabel={t('reviews.diffLeftLabel', {
-                version: priorVersion?.versionIndex ?? '?',
-                decision: priorVersion?.decision ?? t('reviews.decision.pending'),
-              })}
-              rightLabel={t('reviews.diffRightLabel', {
-                version: data.currentVersion.versionIndex,
-              })}
-            />
-          ) : mode === 'historical' && historicalDetail.isLoading ? (
-            <span className="muted">{t('common.loading')}</span>
-          ) : undefined
-        }
+        bodySlot={auxiliaryBodySlot}
       />
 
       {mode !== 'historical' &&
         submitDecision.error !== null &&
         submitDecision.error !== undefined && (
-          <div className="review-detail__error error-box">
-            {(submitDecision.error as Error).message}
+          <div className="review-detail__error">
+            <ErrorBanner error={submitDecision.error} />
           </div>
         )}
 

@@ -1,9 +1,8 @@
 // RFC-151 PR-4 — detail-page header frame, single-sourced.
 //
-// The four resource detail pages (agents / mcps / plugins / skills) shared a
-// byte-identical skeleton: `page__header--row` header whose right side is a
-// `page__actions` cluster (page-specific extras → AclDialogButton → Save →
-// delete ConfirmButton), followed — OUTSIDE the flex header, so long errors
+// The editable resource detail pages share the PageHeader skeleton whose
+// `page__actions` cluster keeps page-specific extras → AclDialogButton → Save →
+// delete ConfirmButton, followed — OUTSIDE the flex header, so long errors
 // never get squeezed into the top-right corner (plugins-page-wiring lock) —
 // by a `.form-actions` row rendering one `form-actions__error` span per
 // failed mutation channel.
@@ -15,17 +14,22 @@
 //   - `errors` is an array so multi-channel pages (skills: saveMeta /
 //     saveContent / del) surface every failure independently — a single
 //     `save.error` slot could not represent two failed channels at once.
-//   - The page title block is the `children` slot; the component owns the
-//     header element so the error row can render as its sibling (one flex
-//     row for title + actions, errors on their own row below).
+//   - `title` / `headingLevel` delegate the semantic outline to PageHeader;
+//     the error row remains its sibling (one flex row for title + actions,
+//     errors on their own row below).
 
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AclDialogButton } from '@/components/AclPanel'
 import { ConfirmButton } from '@/components/ConfirmButton'
+import { PageHeader } from '@/components/PageHeader'
 import { describeApiError } from '@/i18n'
 
 export interface DetailHeaderActionsProps {
+  /** Resource name rendered by the shared PageHeader heading. */
+  title: ReactNode
+  /** Split-detail routes use h2 because their mounted rail already owns h1. */
+  headingLevel?: 1 | 2
   acl: {
     /** e.g. '/api/agents/my-agent' — AclDialogButton appends '/acl'. */
     resourceBaseUrl: string
@@ -55,8 +59,6 @@ export interface DetailHeaderActionsProps {
   /** Mutation error channels; each non-nullish entry renders its own
    *  form-actions__error span through describeApiError. */
   errors: ReadonlyArray<unknown>
-  /** The header's title block (`<div><h1>…</h1><p className="page__hint">…</p></div>`). */
-  children: ReactNode
 }
 
 export function DetailHeaderActions(props: DetailHeaderActionsProps) {
@@ -64,33 +66,36 @@ export function DetailHeaderActions(props: DetailHeaderActionsProps) {
   const present = props.errors.filter((e) => e !== null && e !== undefined)
   return (
     <>
-      <header className="page__header page__header--row">
-        {props.children}
-        <div className="page__actions">
-          {props.extra}
-          <AclDialogButton
-            resourceBaseUrl={props.acl.resourceBaseUrl}
-            invalidateKey={props.acl.invalidateKey}
-            canTransferOwner={props.acl.canTransferOwner}
-          />
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={props.save.disabled}
-            onClick={props.save.onClick}
-            title={props.save.title}
-            data-testid={props.save.testid}
-          >
-            {props.save.label ?? t('common.save')}
-          </button>
-          <ConfirmButton
-            label={props.del.label}
-            onConfirm={props.del.onConfirm}
-            variant="danger"
-            disabled={props.del.disabled}
-          />
-        </div>
-      </header>
+      <PageHeader
+        title={props.title}
+        headingLevel={props.headingLevel}
+        actions={
+          <>
+            {props.extra}
+            <AclDialogButton
+              resourceBaseUrl={props.acl.resourceBaseUrl}
+              invalidateKey={props.acl.invalidateKey}
+              canTransferOwner={props.acl.canTransferOwner}
+            />
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={props.save.disabled}
+              onClick={props.save.onClick}
+              title={props.save.title}
+              data-testid={props.save.testid}
+            >
+              {props.save.label ?? t('common.save')}
+            </button>
+            <ConfirmButton
+              label={props.del.label}
+              onConfirm={props.del.onConfirm}
+              variant="danger"
+              disabled={props.del.disabled}
+            />
+          </>
+        }
+      />
       {present.length > 0 && (
         <div className="form-actions">
           {present.map((e, i) => (

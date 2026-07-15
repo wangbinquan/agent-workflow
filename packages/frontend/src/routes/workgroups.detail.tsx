@@ -27,8 +27,10 @@ import { api } from '@/api/client'
 import { useDraftFromQuery } from '@/hooks/useDraftFromQuery'
 import { describeApiError } from '@/i18n'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { RenameDialog } from '@/components/RenameDialog'
 import { LoadingState } from '@/components/LoadingState'
+import { PageHeader } from '@/components/PageHeader'
 import {
   WorkgroupContextPanel,
   type WorkgroupPanelState,
@@ -53,6 +55,9 @@ export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/workgroups/$name',
   component: WorkgroupDetailPage,
+  // The same route instance serves every workgroup. Remount on a param change
+  // so a local config/member draft can never leak into the next workgroup.
+  remountDeps: ({ params }) => params,
 })
 
 /** Focus a member card's open-button (title). Cards live in the gallery and
@@ -103,7 +108,7 @@ function WorkgroupDetailPage() {
     draft: form,
     setDraft: setForm,
     loaded,
-  } = useDraftFromQuery(group, workgroupToConfigDraft)
+  } = useDraftFromQuery(group, workgroupToConfigDraft, { followWhenClean: true })
 
   // ---------------------------------------------------------------------
   // Panel selection (RFC-168 §1.3). `focusOn` steers the panel's mount focus:
@@ -355,19 +360,32 @@ function WorkgroupDetailPage() {
     form !== undefined && group !== undefined ? buildConfigUpdatePayload(form, group) : undefined
   const configErrors = built !== undefined && !built.ok ? built.errors : {}
   const readiness = group !== undefined ? workgroupLaunchReadiness(group) : null
+  const retryDetailAction = (
+    <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
+      {t('common.retry')}
+    </button>
+  )
 
-  if (query.isLoading)
+  if (group === undefined) {
+    if (query.error !== null && query.error !== undefined)
+      return (
+        <div className="page">
+          <PageHeader title={name} />
+          <ErrorBanner error={query.error} action={retryDetailAction} />
+        </div>
+      )
     return (
       <div className="page">
+        <PageHeader title={name} />
         <LoadingState />
       </div>
     )
-  if (query.error !== null && query.error !== undefined)
-    return <div className="page error-box">{describeApiError(query.error)}</div>
+  }
 
   return (
     <div className="page page--split">
       <DetailHeaderActions
+        title={name}
         acl={{
           resourceBaseUrl: `/api/workgroups/${encodeURIComponent(name)}`,
           invalidateKey: ['workgroups'],
@@ -401,7 +419,7 @@ function WorkgroupDetailPage() {
               <Link
                 to="/tasks/new"
                 search={{ kind: 'workgroup', workgroup: name }}
-                className="btn btn--primary"
+                className="btn"
                 data-testid="workgroup-launch-button"
               >
                 {t('workgroups.launchButton')}
@@ -423,11 +441,11 @@ function WorkgroupDetailPage() {
           </>
         }
         errors={[save.error, del.error, membersMut.error]}
-      >
-        <div>
-          <h1>{name}</h1>
-        </div>
-      </DetailHeaderActions>
+      />
+
+      {query.error !== null && query.error !== undefined && (
+        <ErrorBanner error={query.error} action={retryDetailAction} />
+      )}
 
       {readiness !== null && (!readiness.ready || readiness.warnings.length > 0) && (
         <div

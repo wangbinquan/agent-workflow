@@ -237,30 +237,35 @@ describe('AclPanel', () => {
   })
 })
 
-// --- Header-button size uniformity (user report ×2: "权限按钮和同页面其他
-// 按钮大小不一致"). The workflows editor toolbar renders 启动/校验/导出/权限
-// as `btn--sm`; the delete ConfirmButton shipped WITHOUT size="sm", so its
-// 16px label sat next to the 13px 权限 button. Rendering the whole editor
-// route needs router + xyflow scaffolding, so this is a source-level
-// assertion (sanctioned fallback): every action in the editor's
-// headerActions block must opt into the sm size. ---
+// --- Header-button sizing. RFC-198 promotes the editor's sole primary action
+// (Launch) to the default page-primary target size; the secondary/ACL/delete
+// actions remain uniformly compact. Rendering the whole editor route needs
+// router + xyflow scaffolding, so this source-level assertion locks that one
+// intentional exception without reopening the old ACL/delete mismatch. ---
 
-describe('workflows editor header — uniform btn--sm sizing', () => {
-  test('every headerActions button in workflows.edit.tsx is sm-sized', async () => {
+describe('workflows editor header — one full-size primary plus compact secondary actions', () => {
+  test('Launch is full-size; every other header action opts into sm', async () => {
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
     const here = path.dirname(new URL(import.meta.url).pathname)
     const src = await fs.readFile(path.join(here, '../src/routes/workflows.edit.tsx'), 'utf8')
     const start = src.indexOf('const headerActions')
     expect(start).toBeGreaterThan(-1)
-    const end = src.indexOf('</div>\n    ),', start)
+    const end = src.indexOf('</>\n    ),', start)
     expect(end).toBeGreaterThan(start)
     const block = src.slice(start, end)
-    // Raw `className="btn ..."` usages must all carry btn--sm.
+    let primaryCount = 0
     for (const m of block.matchAll(/className="([^"]*)"/g)) {
       const cls = m[1] ?? ''
-      if (cls.split(/\s+/).includes('btn')) expect(cls).toContain('btn--sm')
+      if (!cls.split(/\s+/).includes('btn')) continue
+      if (cls.split(/\s+/).includes('btn--primary')) {
+        primaryCount += 1
+        expect(cls).not.toContain('btn--sm')
+      } else {
+        expect(cls).toContain('btn--sm')
+      }
     }
+    expect(primaryCount).toBe(1)
     // Component-based buttons (AclDialogButton / ConfirmButton) opt in via
     // the size prop — one each.
     expect(block.match(/size="sm"/g)?.length).toBe(2)

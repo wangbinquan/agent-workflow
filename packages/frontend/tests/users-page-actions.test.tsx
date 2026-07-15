@@ -15,6 +15,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { UsersPage } from '../src/routes/users'
 import i18n from '../src/i18n'
+import { enUS } from '../src/i18n/en-US'
 
 interface FetchCall {
   url: string
@@ -129,12 +130,102 @@ afterEach(() => {
 })
 
 describe('/users action column', () => {
+  test('RFC-198 page-header-primary-ratchet keeps one populated-list header task', async () => {
+    installFetch(route)
+    const { container } = renderPage()
+
+    await screen.findByText('alice')
+    const page = container.querySelector('.page')
+    const header = page?.querySelector('header.page__header')
+    const primary = header?.querySelector('button.btn--primary')
+
+    expect(primary).not.toBeNull()
+    expect(Array.from(header?.querySelectorAll('.btn--primary') ?? [])).toEqual([primary])
+
+    // Prove that the sole primary is the page task rather than an arbitrary
+    // styled control: invoking it opens the real create-user form.
+    fireEvent.click(primary as HTMLButtonElement)
+    expect(await screen.findByRole('dialog')).toBeTruthy()
+    expect(document.querySelector('#users-create-form')).not.toBeNull()
+  })
+
+  test('keeps PageHeader visible while actor permissions are loading', () => {
+    installFetch((call) => {
+      if (call.url.includes('/api/auth/me')) return new Promise<Response>(() => undefined)
+      return jsonResponse({ code: 'unexpected-list-request', message: call.url }, 500)
+    })
+    renderPage()
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Users' })).toBeTruthy()
+    expect(screen.getByTestId('loading-state')).toBeTruthy()
+    expect(screen.queryByTestId('no-permission')).toBeNull()
+  })
+
+  test('renders the shared no-permission state without querying the user list', async () => {
+    const calls = installFetch((call) => {
+      if (call.url.includes('/api/auth/me')) {
+        return jsonResponse({ ...ME, permissions: [] })
+      }
+      return jsonResponse({ code: 'unexpected-list-request', message: call.url }, 500)
+    })
+    renderPage()
+
+    expect(await screen.findByTestId('no-permission')).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'Users' })).toBeTruthy()
+    expect(calls.some((call) => /\/api\/users(\?.*)?$/.test(call.url))).toBe(false)
+  })
+
   test('own row hides Disable; only the other active user is disable-able', async () => {
     installFetch(route)
     renderPage()
     await screen.findByText('alice')
+    expect(screen.getByRole('heading', { level: 1, name: 'Users' })).toBeTruthy()
+    expect(screen.getByRole('table').parentElement?.className).toContain('table-viewport__scroller')
+    expect(screen.getAllByRole('button', { name: 'New user' })).toHaveLength(1)
     // me-admin is self → hidden; dave is disabled → no Disable; only alice left.
     expect(screen.getAllByRole('button', { name: 'Disable' })).toHaveLength(1)
+  })
+
+  test('initial empty list moves the only New user action into EmptyState', async () => {
+    installFetch((call) => {
+      if (call.url.includes('/api/auth/me')) return jsonResponse(ME)
+      if (call.method === 'GET' && /\/api\/users(\?.*)?$/.test(call.url)) return jsonResponse([])
+      return jsonResponse({ code: 'not-mocked', message: call.url }, 500)
+    })
+    renderPage()
+
+    const empty = await screen.findByTestId('users-empty')
+    expect(screen.getByRole('heading', { level: 1, name: 'Users' })).toBeTruthy()
+    expect(empty.textContent).toContain(enUS.users.emptyDescription)
+    expect(empty.querySelector('[data-icon="user"]')).not.toBeNull()
+    const createActions = screen.getAllByRole('button', { name: 'New user' })
+    expect(createActions).toHaveLength(1)
+    expect(screen.queryByRole('table')).toBeNull()
+    const header = empty.closest('.page')?.querySelector('header.page__header')
+    const chromePrimaries = [header, empty].flatMap((surface) =>
+      Array.from(surface?.querySelectorAll('.btn--primary') ?? []),
+    )
+    expect(chromePrimaries).toEqual([createActions[0]])
+  })
+
+  test('initial list failure keeps PageHeader and exposes a working shared retry action', async () => {
+    let listCalls = 0
+    installFetch((call) => {
+      if (call.url.includes('/api/auth/me')) return jsonResponse(ME)
+      if (call.method === 'GET' && /\/api\/users(\?.*)?$/.test(call.url)) {
+        listCalls += 1
+        return jsonResponse({ code: 'users-unavailable', message: 'Users are unavailable' }, 503)
+      }
+      return jsonResponse({ code: 'not-mocked', message: call.url }, 500)
+    })
+    renderPage()
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Users are unavailable')
+    expect(screen.getByRole('heading', { level: 1, name: 'Users' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'New user' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(listCalls).toBe(2))
   })
 
   test('disabled user shows Enable → PATCH {status:active}', async () => {

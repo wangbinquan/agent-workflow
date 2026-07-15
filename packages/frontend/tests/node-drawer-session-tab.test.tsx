@@ -3,7 +3,7 @@
 // `node-drawer-prompt-history.test.tsx` so future refactors of the
 // drawer touch both at the same time.
 
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
@@ -117,6 +117,33 @@ describe('RFC-027 NodeDetailDrawer Session tab', () => {
     expect(trigger).toBeTruthy()
     // Picked value is shown directly on the closed trigger.
     expect(trigger.textContent ?? '').toMatch(/initial/i)
+  })
+
+  test('true tabs keep every stable panel target while mounting content only for the active tab', () => {
+    const r = run({ id: 'r1', promptText: 'hi' })
+    renderDrawer({ nodeRunId: r.id, nodeId: r.nodeId, workflowNodeKind: 'agent-single', runs: [r] })
+
+    const sessionTab = screen.getByRole('tab', { name: 'Session' })
+    const eventsTab = screen.getByRole('tab', { name: 'Events' })
+    expect(sessionTab.id).toBe('node-detail-drawer-tab-session')
+    expect(sessionTab.getAttribute('aria-controls')).toBe('node-detail-drawer-panel-session')
+    expect(eventsTab.id).toBe('node-detail-drawer-tab-events')
+    expect(eventsTab.getAttribute('aria-controls')).toBe('node-detail-drawer-panel-events')
+    expect(document.getElementById('node-detail-drawer-panel-session')?.hidden).toBe(false)
+    expect(document.getElementById('node-detail-drawer-panel-events')?.hidden).toBe(true)
+
+    let panels = screen.getAllByRole('tabpanel')
+    expect(panels).toHaveLength(1)
+    expect(panels[0]?.id).toBe('node-detail-drawer-panel-session')
+    expect(panels[0]?.getAttribute('aria-labelledby')).toBe(sessionTab.id)
+
+    fireEvent.click(eventsTab)
+    panels = screen.getAllByRole('tabpanel')
+    expect(panels).toHaveLength(1)
+    expect(panels[0]?.id).toBe('node-detail-drawer-panel-events')
+    expect(panels[0]?.getAttribute('aria-labelledby')).toBe(eventsTab.id)
+    expect(document.getElementById('node-detail-drawer-panel-session')?.hidden).toBe(true)
+    expect(document.getElementById('node-detail-drawer-panel-events')?.hidden).toBe(false)
   })
 
   test('non-agent kind (wrapper-git) shows the "not applicable" hint', () => {

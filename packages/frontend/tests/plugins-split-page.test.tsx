@@ -124,8 +124,17 @@ describe('/plugins split page', () => {
     fireEvent.click(screen.getByTestId('split-card-p1'))
     await waitFor(() => expect(router.state.location.pathname).toBe('/plugins/p1'))
     await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
-    expect(screen.getByRole('tab', { name: 'Config' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: 'Updates' })).toBeTruthy()
+    for (const [key, name] of [
+      ['config', 'Config'],
+      ['updates', 'Updates'],
+    ] as const) {
+      const tab = screen.getByRole('tab', { name })
+      const panel = screen.getByTestId(`plugin-panel-${key}`)
+      expect(tab.id).toBe(`plugins-detail-tab-${key}`)
+      expect(tab.getAttribute('aria-controls')).toBe(panel.id)
+      expect(panel.id).toBe(`plugins-detail-panel-${key}`)
+      expect(panel.getAttribute('aria-labelledby')).toBe(tab.id)
+    }
     expect(screen.getByTestId('plugins-mobile-back').getAttribute('href')).toBe('/plugins')
     expect(screen.getAllByTestId('plugins-mobile-back')).toHaveLength(1)
     expect(

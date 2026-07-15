@@ -2551,6 +2551,19 @@ code {
   padding: 2px;
   gap: 2px;
 }
+
+.page-filter {
+  max-width: 100%;
+  margin-bottom: var(--space-4);
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.page-filter .segmented {
+  min-width: max-content;
+}
+
 .segmented__option {
   flex: 1 1 auto;
   border: 0;
@@ -7067,6 +7080,7 @@ details.form-section[open] > summary {
    the header footprint drops sharply WITHOUT dropping any row. Scoped per page;
    no global heading/paragraph rules are touched. */
 .review-detail__page-header-text > *,
+.review-detail__page-header .page__heading > *,
 .review-multidoc > .page__header .page__title,
 .review-multidoc > .page__header > div > .muted,
 .page--clarify-detail > .page__header > * {
@@ -7077,6 +7091,7 @@ details.form-section[open] > summary {
   margin-top: var(--space-1);
 }
 .review-detail__page-header-text h1,
+.review-detail__page-header .page__title,
 .review-multidoc > .page__header .page__title,
 .page--clarify-detail > .page__header h1 {
   font-size: var(--font-lg);

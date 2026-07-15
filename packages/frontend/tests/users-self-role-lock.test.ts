@@ -14,7 +14,7 @@ const SRC = readFileSync(resolve(import.meta.dirname, '..', 'src', 'routes', 'us
 
 describe('routes/users.tsx — current user cannot edit own role', () => {
   test('derives isSelf from the /api/auth/me actor id', () => {
-    expect(SRC).toMatch(/const \{ data: me \} = useActor\(\)/)
+    expect(SRC).toMatch(/const \{ data: me, isLoading: isActorLoading \} = useActor\(\)/)
     expect(SRC).toMatch(/const isSelf = u\.id === me\?\.user\.id/)
   })
 

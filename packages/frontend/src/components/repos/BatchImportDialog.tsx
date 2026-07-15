@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import { useTranslation } from 'react-i18next'
 import { api, ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
+import { TableViewport } from '@/components/TableViewport'
 import { useWebSocket } from '@/hooks/useWebSocket'
 
 interface BatchImportDialogProps {
@@ -260,53 +261,55 @@ export function BatchImportDialog({
 
         {view === 'progress' && snapshot !== null && (
           <>
-            <table className="batch-import-table" data-testid="batch-import-table">
-              <thead>
-                <tr>
-                  <th>{t('repos.batchImport.colIndex')}</th>
-                  <th>{t('repos.batchImport.colUrl')}</th>
-                  <th>{t('repos.batchImport.colStatus')}</th>
-                  <th>{t('repos.batchImport.colDetail')}</th>
-                  <th>{t('repos.batchImport.colActions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {snapshot.rows.map((row, i) => (
-                  <tr
-                    key={row.rowId}
-                    data-row-status={row.status}
-                    data-testid={`batch-import-row-${row.rowId}`}
-                  >
-                    <td>{i + 1}</td>
-                    <td className="batch-import-table__url">{row.inputUrlRedacted}</td>
-                    <td>{describeStatus(row)}</td>
-                    <td className="batch-import-table__detail">{row.message ?? ''}</td>
-                    <td>
-                      {(row.status === 'failed' || row.status === 'done') && (
-                        <div className="batch-import-table__actions">
-                          <button
-                            type="button"
-                            className="btn btn--sm"
-                            onClick={() => void handleRetry(row.rowId, false)}
-                          >
-                            {t('repos.batchImport.retry')}
-                          </button>
-                          {row.status === 'failed' && (
+            <TableViewport label={t('repos.batchImport.title')} minWidth="lg">
+              <table className="batch-import-table" data-testid="batch-import-table">
+                <thead>
+                  <tr>
+                    <th>{t('repos.batchImport.colIndex')}</th>
+                    <th>{t('repos.batchImport.colUrl')}</th>
+                    <th>{t('repos.batchImport.colStatus')}</th>
+                    <th>{t('repos.batchImport.colDetail')}</th>
+                    <th>{t('repos.batchImport.colActions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {snapshot.rows.map((row, i) => (
+                    <tr
+                      key={row.rowId}
+                      data-row-status={row.status}
+                      data-testid={`batch-import-row-${row.rowId}`}
+                    >
+                      <td>{i + 1}</td>
+                      <td className="batch-import-table__url">{row.inputUrlRedacted}</td>
+                      <td>{describeStatus(row)}</td>
+                      <td className="batch-import-table__detail">{row.message ?? ''}</td>
+                      <td>
+                        {(row.status === 'failed' || row.status === 'done') && (
+                          <div className="batch-import-table__actions">
                             <button
                               type="button"
                               className="btn btn--sm"
-                              onClick={() => void handleRetry(row.rowId, true)}
+                              onClick={() => void handleRetry(row.rowId, false)}
                             >
-                              {t('repos.batchImport.retryWithEdit')}
+                              {t('repos.batchImport.retry')}
                             </button>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                            {row.status === 'failed' && (
+                              <button
+                                type="button"
+                                className="btn btn--sm"
+                                onClick={() => void handleRetry(row.rowId, true)}
+                              >
+                                {t('repos.batchImport.retryWithEdit')}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableViewport>
           </>
         )}
       </div>

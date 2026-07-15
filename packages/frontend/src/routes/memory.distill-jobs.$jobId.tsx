@@ -20,8 +20,11 @@ import { useTranslation } from 'react-i18next'
 import type { MemoryDistillJobDetail, MemoryDistillSessionView } from '@agent-workflow/shared'
 import { api, type ApiError } from '@/api/client'
 import { DetailLayout } from '@/components/DetailLayout'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
-import { usePermission } from '@/hooks/useActor'
+import { PageHeader } from '@/components/PageHeader'
+import { useActor, useIsAdmin } from '@/hooks/useActor'
 import { useMemoryDistillJobWs } from '@/hooks/useMemoryDistillJobWs'
 import { describeApiError } from '@/i18n'
 import { Route as RootRoute } from './__root'
@@ -40,7 +43,8 @@ export const Route = createRoute({
 
 function DistillJobDetailPage() {
   const { t } = useTranslation()
-  const isAdmin = usePermission('memory:approve')
+  const actor = useActor()
+  const isAdmin = useIsAdmin()
   const { jobId } = Route.useParams()
 
   // Keep WS subscription mounted so detail page invalidates when the
@@ -62,35 +66,71 @@ function DistillJobDetailPage() {
     enabled: isAdmin,
   })
 
-  if (!isAdmin) {
+  if (actor.isLoading) {
     return (
       <div className="page page--memory page--distill-job-detail">
-        <div className="admin-only" data-testid="distill-detail-admin-only">
-          {t('memory.distillJobDetail.adminOnly')}
-        </div>
-      </div>
-    )
-  }
-
-  if (detailQ.isLoading) {
-    return (
-      <div className="page page--memory page--distill-job-detail">
+        <PageHeader title={jobId} />
         <LoadingState />
       </div>
     )
   }
 
-  if (detailQ.error !== null && detailQ.error !== undefined) {
+  if (actor.error !== null && actor.error !== undefined) {
     return (
       <div className="page page--memory page--distill-job-detail">
-        <div className="error-box">
-          {t('memory.distillJobDetail.loadError')}: {describeApiError(detailQ.error)}
-        </div>
+        <PageHeader title={jobId} />
+        <ErrorBanner
+          error={actor.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void actor.refetch()}>
+              {t('common.retry')}
+            </button>
+          }
+        />
       </div>
     )
   }
+
+  if (!isAdmin) {
+    return (
+      <div className="page page--memory page--distill-job-detail">
+        <PageHeader title={jobId} />
+        <EmptyState
+          title={t('memory.distillJobDetail.adminOnly')}
+          data-testid="distill-detail-admin-only"
+        />
+      </div>
+    )
+  }
+
   const detail = detailQ.data
-  if (detail === undefined) return null
+  if (detail === undefined) {
+    if (detailQ.isLoading) {
+      return (
+        <div className="page page--memory page--distill-job-detail">
+          <PageHeader title={jobId} />
+          <LoadingState />
+        </div>
+      )
+    }
+    if (detailQ.error !== null && detailQ.error !== undefined) {
+      return (
+        <div className="page page--memory page--distill-job-detail">
+          <PageHeader title={jobId} />
+          <ErrorBanner
+            error={detailQ.error}
+            message={`${t('memory.distillJobDetail.loadError')}: ${describeApiError(detailQ.error)}`}
+            action={
+              <button type="button" className="btn btn--sm" onClick={() => void detailQ.refetch()}>
+                {t('common.retry')}
+              </button>
+            }
+          />
+        </div>
+      )
+    }
+    return null
+  }
 
   return (
     <div className="page page--memory page--distill-job-detail">
@@ -98,6 +138,21 @@ function DistillJobDetailPage() {
         main={
           <div className="distill-job-detail">
             <DetailHeader job={detail.job} />
+            {detailQ.error !== null && detailQ.error !== undefined && (
+              <ErrorBanner
+                error={detailQ.error}
+                message={`${t('memory.distillJobDetail.loadError')}: ${describeApiError(detailQ.error)}`}
+                action={
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    onClick={() => void detailQ.refetch()}
+                  >
+                    {t('common.retry')}
+                  </button>
+                }
+              />
+            )}
             <FailureDiagnostics job={detail.job} />
             <section
               className="distill-job-detail__section"
@@ -138,9 +193,20 @@ function DistillJobDetailPage() {
                 loading={sessionQ.isLoading}
                 error={
                   sessionQ.error !== null && sessionQ.error !== undefined ? (
-                    <div className="error-box" data-testid="distill-session-load-error">
-                      {t('memory.distillJobDetail.sessionLoadError')}:{' '}
-                      {describeApiError(sessionQ.error)}
+                    <div data-testid="distill-session-load-error">
+                      <ErrorBanner
+                        error={sessionQ.error}
+                        message={`${t('memory.distillJobDetail.sessionLoadError')}: ${describeApiError(sessionQ.error)}`}
+                        action={
+                          <button
+                            type="button"
+                            className="btn btn--sm"
+                            onClick={() => void sessionQ.refetch()}
+                          >
+                            {t('common.retry')}
+                          </button>
+                        }
+                      />
                     </div>
                   ) : null
                 }

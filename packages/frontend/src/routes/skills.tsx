@@ -11,6 +11,7 @@ import { useResourceList } from '@/hooks/useResourceList'
 import { EmptyState } from '@/components/EmptyState'
 import { ResourceBadges } from '@/components/ResourceBadges'
 import { ResourceSplitPage, type ResourceCardItem } from '@/components/split/ResourceSplitPage'
+import { SKILL_ICON } from '@/components/icons/resourceIcons'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -27,7 +28,7 @@ export const IndexRoute = createRoute({
 
 function SkillsSplitLayout() {
   const { t } = useTranslation()
-  const { data, isLoading, error, owners } = useResourceList<Skill>({
+  const { data, isLoading, error, refetch, owners } = useResourceList<Skill>({
     queryKey: ['skills'],
     endpoint: '/api/skills',
     deleteBy: 'name',
@@ -79,6 +80,9 @@ function SkillsSplitLayout() {
       newTo="/skills/new"
       searchPlaceholder={t('common.searchEllipsis')}
       emptyListText={t('skills.emptyList')}
+      emptyDescription={t('skills.emptyDescription')}
+      emptyIcon={SKILL_ICON}
+      onRetry={() => void refetch()}
       listTo="/skills"
       mobileBackLabel={t('common.backToList')}
       mobileBackTestId="skills-mobile-back"

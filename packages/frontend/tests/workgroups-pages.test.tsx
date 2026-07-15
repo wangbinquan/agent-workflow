@@ -118,7 +118,7 @@ interface Recorded {
   calls: Array<{ url: string; method: string; body: unknown }>
 }
 
-function installFetch(state: { workgroups: Workgroup[] } & Recorded): void {
+function installFetch(state: { workgroups: Workgroup[]; failDetail?: boolean } & Recorded): void {
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (req: RequestInfo | URL, init?: RequestInit) => {
       const url = req.toString()
@@ -165,6 +165,11 @@ function installFetch(state: { workgroups: Workgroup[] } & Recorded): void {
       if (one !== null) {
         const name = decodeURIComponent(one[1]!)
         if (method === 'GET') {
+          if (state.failDetail === true)
+            return json(
+              { code: 'workgroup-detail-failed', message: 'workgroup detail unavailable' },
+              500,
+            )
           const row = state.workgroups.find((w) => w.name === name)
           return row !== undefined ? json(row) : json({ code: 'workgroup-not-found' }, 404)
         }
@@ -192,7 +197,10 @@ async function pickAgent(name: string): Promise<void> {
   fireEvent.mouseDown(within(listbox).getByRole('option', { name }))
 }
 
-async function renderPage(initialEntry: string) {
+async function renderPage(
+  initialEntry: string,
+  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   const list = await import('../src/routes/workgroups')
   const detail = await import('../src/routes/workgroups.detail')
   const rootRoute = createRootRoute({ component: () => <Outlet /> })
@@ -205,12 +213,12 @@ async function renderPage(initialEntry: string) {
     getParentRoute: () => rootRoute,
     path: '/workgroups/$name',
     component: detail.Route.options.component,
+    remountDeps: detail.Route.options.remountDeps,
   })
   const router = createRouter({
     routeTree: rootRoute.addChildren([listRoute, detailRoute]),
     history: createMemoryHistory({ initialEntries: [initialEntry] }),
   })
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={qc}>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
@@ -224,8 +232,12 @@ describe('/workgroups list page', () => {
   test('renders the shared EmptyState when no workgroups exist', async () => {
     installFetch({ workgroups: [], calls: [] })
     await renderPage('/workgroups')
-    await screen.findByTestId('workgroups-empty')
-    expect(screen.getByTestId('workgroup-new-button')).toBeTruthy()
+    const empty = await screen.findByTestId('workgroups-empty')
+    expect(empty.textContent).toContain(enUS.workgroups.emptyDescription)
+    expect(screen.getAllByTestId('workgroup-new-button')).toHaveLength(1)
+    expect(within(empty).getByTestId('workgroup-new-button')).toBeTruthy()
+    expect(within(screen.getByRole('banner')).queryByTestId('workgroup-new-button')).toBeNull()
+    expect(empty.querySelector('[data-icon="workgroup"]')).not.toBeNull()
   })
 
   // RFC-191 — the list is a card gallery: mode as a semantic StatusChip,
@@ -267,6 +279,17 @@ describe('/workgroups list page', () => {
     fireEvent.change(screen.getByTestId('gallery-search'), { target: { value: 'Coder' } })
     expect(screen.getByTestId('workgroup-card-review-squad')).toBeTruthy()
     expect(screen.queryByTestId('workgroup-card-brainstorm')).toBeNull()
+
+    // The primary stays in the header whenever real items exist, while the
+    // filtered-empty state offers only the localized clear-search action.
+    fireEvent.change(screen.getByTestId('gallery-search'), { target: { value: 'zzz' } })
+    const noMatches = screen.getByTestId('gallery-no-matches')
+    expect(within(screen.getByRole('banner')).getByTestId('workgroup-new-button')).toBeTruthy()
+    expect(within(noMatches).queryByTestId('workgroup-new-button')).toBeNull()
+    expect(within(noMatches).getAllByRole('button')).toHaveLength(1)
+    fireEvent.click(within(noMatches).getByRole('button', { name: enUS.common.clearSearch }))
+    expect(screen.getByTestId('workgroup-card-review-squad')).toBeTruthy()
+    expect(screen.getByTestId('workgroup-card-brainstorm')).toBeTruthy()
   })
 
   test('launch deep-link renders only for READY groups (shared readiness oracle)', async () => {
@@ -432,6 +455,51 @@ describe('/workgroups/$name — readiness banner', () => {
 })
 
 describe('/workgroups/$name — config editing', () => {
+  test('initial retry recovers; stale refetch preserves the draft; param switch reseeds', async () => {
+    const state = {
+      workgroups: [wg('review-squad'), wg('second-squad', { instructions: 'second instructions' })],
+      calls: [] as Recorded['calls'],
+      failDetail: true,
+    }
+    installFetch(state)
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const router = await renderPage('/workgroups/review-squad', qc)
+
+    const retry = await screen.findByRole('button', { name: /retry/i })
+    expect(screen.queryByTestId('workgroup-field-instructions')).toBeNull()
+    state.failDetail = false
+    fireEvent.click(retry)
+    const instructions = (await screen.findByTestId(
+      'workgroup-field-instructions',
+    )) as HTMLTextAreaElement
+    fireEvent.change(instructions, { target: { value: 'local unsaved instructions' } })
+
+    state.failDetail = true
+    await qc.refetchQueries({ queryKey: ['workgroups', 'review-squad'], exact: true })
+    const staleAlert = await screen.findByRole('alert')
+    expect(staleAlert.textContent).toContain('workgroup detail unavailable')
+    expect((screen.getByTestId('workgroup-field-instructions') as HTMLTextAreaElement).value).toBe(
+      'local unsaved instructions',
+    )
+
+    state.failDetail = false
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect((screen.getByTestId('workgroup-field-instructions') as HTMLTextAreaElement).value).toBe(
+      'local unsaved instructions',
+    )
+
+    await router.navigate({
+      to: '/workgroups/$name',
+      params: { name: 'second-squad' },
+    })
+    await waitFor(() =>
+      expect(
+        (screen.getByTestId('workgroup-field-instructions') as HTMLTextAreaElement).value,
+      ).toBe('second instructions'),
+    )
+  })
+
   test('config save PUTs the draft with members + server description passed through (no name)', async () => {
     const state = { workgroups: [wg('review-squad')], calls: [] as Recorded['calls'] }
     installFetch(state)
@@ -717,6 +785,9 @@ describe('RFC-164 /workgroups wiring', () => {
     expect(edit).toContain('WorkgroupContextPanel')
     expect(edit).toContain('DetailHeaderActions')
     expect(edit).toContain('workgroupLaunchReadiness')
+    expect(edit).toContain('<PageHeader title={name} />')
+    expect(edit).toContain('error={query.error}')
+    expect(edit).toContain('onClick={() => void query.refetch()}')
     // The config form lives INSIDE the panel now, not on the page directly.
     const panel = readSrc('components/workgroup/WorkgroupContextPanel.tsx')
     expect(panel).toContain("import { WorkgroupForm } from './WorkgroupForm'")

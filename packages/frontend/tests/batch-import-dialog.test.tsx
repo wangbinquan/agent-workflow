@@ -160,6 +160,14 @@ describe('BatchImportDialog (RFC-033)', () => {
   })
 
   test('clicking Start posts urls + switches to progress view', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains('table-viewport__scroller') ? 320 : 0
+    })
+    vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockImplementation(function (this: Element) {
+      return this.classList.contains('table-viewport__scroller') ? 920 : 0
+    })
     const snap = mkSnap()
     ;(api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce(snap)
     const onActiveBatchIdChange = vi.fn()
@@ -173,7 +181,20 @@ describe('BatchImportDialog (RFC-033)', () => {
     // findByTestId so the assertion polls (default 1s timeout) rather than
     // racing against a single setTimeout(0) tick — needed under Linux
     // scheduling jitter on CI.
-    await screen.findByTestId('batch-import-table')
+    const table = await screen.findByTestId('batch-import-table')
+    const scroller = table.parentElement as HTMLDivElement
+    const viewport = scroller.parentElement as HTMLDivElement
+    const dialog = screen.getByTestId('batch-import-dialog').querySelector('[role="dialog"]')!
+    const title =
+      document.getElementById(dialog.getAttribute('aria-labelledby')!)?.textContent ?? ''
+    expect(title).not.toBe('')
+    expect(scroller.classList.contains('table-viewport__scroller')).toBe(true)
+    expect(viewport.classList.contains('table-viewport--lg')).toBe(true)
+    expect(scroller.firstElementChild).toBe(table)
+    expect(scroller.scrollWidth).toBeGreaterThan(scroller.clientWidth)
+    expect(screen.getByRole('region', { name: title })).toBe(scroller)
+    expect(scroller.getAttribute('tabindex')).toBe('0')
+    expect(viewport.getAttribute('data-overflow-end')).toBe('true')
     expect(api.post).toHaveBeenCalledWith('/api/cached-repos/batch-import', {
       urls: ['https://h/a.git'],
     })

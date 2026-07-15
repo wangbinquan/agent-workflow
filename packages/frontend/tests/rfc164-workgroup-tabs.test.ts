@@ -74,13 +74,16 @@ describe('availableTabs — non-workgroup tasks stay item-by-item unchanged', ()
 })
 
 describe('tasks.detail.tsx — workgroup wiring (source locks)', () => {
-  test('derives isWorkgroup from task.workgroupId and feeds it (plus the RFC-167 dynamic flag) to availableTabs', () => {
+  test('derives isWorkgroup from task.workgroupId and delegates async shape resolution', () => {
     expect(SRC).toMatch(/const isWorkgroup = task\.data\?\.workgroupId != null/)
-    expect(SRC).toMatch(/availableTabs\(\{ hasOutputs, isWorkgroup, isDynamicWorkgroup \}\)/)
+    expect(SRC).toMatch(/resolveTaskDetailTabs\(\{/)
+    expect(SRC).toMatch(/hasOutputs,\s*isWorkgroup,/)
+    expect(SRC).toMatch(/mode: isDynamicWorkgroup \? 'dynamic-workflow' : 'turn-engine'/)
   })
 
-  test('default-tab fallback commits tabs[0] — how a group task lands on chatroom', () => {
-    expect(SRC).toMatch(/setTab\(tabs\[0\] \?\? 'workflow-status'\)/)
+  test('resolved default is canonicalized through replace navigation', () => {
+    expect(SRC).toMatch(/tabResolution\.canonicalize/)
+    expect(SRC).toMatch(/navigateTaskTab\(canonicalTab, true\)/)
   })
 
   test('renders a chatroom pane mounting WorkgroupRoom for TURN-ENGINE group tasks only (RFC-167: dynamic groups have no chatroom)', () => {
@@ -103,16 +106,11 @@ describe('tasks.detail.tsx — workgroup wiring (source locks)', () => {
     expect(SRC).toMatch(/\{isDynamicWorkgroup && \(\s*<DynamicWorkflowPanel/)
   })
 
-  test('RFC-167 (Codex P2): the phase-default effect is declared AFTER the invalid-tab fallback and keyed per task', () => {
-    // Both effects fire in the same commit when the tab set flips to the
-    // dynamic order; the phase default must be the LATER setTab so it wins
-    // over the fallback's tabs[0]. The ref stores the task id so navigating
-    // between tasks re-applies the default.
-    const fallbackAt = SRC.indexOf("if (!tabs.includes(tab)) setTab(tabs[0] ?? 'workflow-status')")
-    const dwDefaultAt = SRC.indexOf('setTab(defaultDynamicTab(dwPhase))')
-    expect(fallbackAt).toBeGreaterThan(-1)
-    expect(dwDefaultAt).toBeGreaterThan(fallbackAt)
-    expect(SRC).toMatch(/dwDefaultAppliedFor\.current === id/)
+  test('RFC-198: room config must settle before a workgroup tab is resolved', () => {
+    expect(SRC).toMatch(/room\.data !== undefined/)
+    expect(SRC).toMatch(/room\.error !== null\s*\? \{ status: 'error' \}/)
+    expect(SRC).toMatch(/: \{ status: 'pending' \}/)
+    expect(SRC).toMatch(/tabResolution\.status === 'pending'/)
   })
 
   test('tabLabel maps the chatroom tab through tasks.tabChatroom', () => {

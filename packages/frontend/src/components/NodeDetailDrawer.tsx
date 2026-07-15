@@ -18,7 +18,7 @@ import { NodeDependencyTreeSection } from './agents/NodeDependencyTreeSection'
 import { LoadingState } from './LoadingState'
 import { SessionTab } from './node-session/SessionTab'
 import { StatusChip } from './StatusChip'
-import { TabBar, type TabDef } from './TabBar'
+import { TabBar, tabDomIds, type TabDef } from './TabBar'
 import { api, ApiError } from '@/api/client'
 import {
   clarifyRoundForRun,
@@ -72,6 +72,8 @@ interface Props {
 
 type Tab = 'session' | 'events' | 'output' | 'stats'
 
+const NODE_DETAIL_DRAWER_TAB_PREFIX = 'node-detail-drawer'
+
 export function NodeDetailDrawer({
   taskId,
   taskStatus,
@@ -123,7 +125,6 @@ export function NodeDetailDrawer({
     { key: 'output', label: t('nodeDrawer.tabOutput') },
     { key: 'stats', label: t('nodeDrawer.tabStats') },
   ]
-
   return (
     <aside className="inspector">
       <header className="inspector__header">
@@ -142,7 +143,13 @@ export function NodeDetailDrawer({
           ×
         </button>
       </header>
-      <TabBar<Tab> variant="inspector" tabs={tabs} active={tab} onSelect={setTab} />
+      <TabBar<Tab>
+        variant="inspector"
+        tabs={tabs}
+        active={tab}
+        onSelect={setTab}
+        idPrefix={NODE_DETAIL_DRAWER_TAB_PREFIX}
+      />
       {retryable && (
         <div className="inspector__action-row">
           <button
@@ -169,20 +176,39 @@ export function NodeDetailDrawer({
       )}
       {children.length > 0 && <SubProcessList shards={children} onPick={onSelectRun} />}
       <div className="inspector__body">
-        {tab === 'session' && (
-          <SessionTab
-            taskId={taskId}
-            runs={runs}
-            nodeId={nodeId}
-            selectedRunId={nodeRunId}
-            workflowNodeKind={workflowNodeKind}
-          />
-        )}
-        {tab === 'events' && <EventsTab taskId={taskId} nodeRunId={nodeRunId} />}
-        {tab === 'output' && <OutputTab outputs={nodeOutputs} />}
-        {tab === 'stats' && (
-          <StatsTab run={run} history={history} onPickRetry={onSelectRun} agentName={agentName} />
-        )}
+        {tabs.map(({ key }) => {
+          const ids = tabDomIds(NODE_DETAIL_DRAWER_TAB_PREFIX, key)
+          const active = key === tab
+          return (
+            <div
+              key={key}
+              role="tabpanel"
+              id={ids.panelId}
+              aria-labelledby={ids.tabId}
+              hidden={!active}
+            >
+              {active && key === 'session' && (
+                <SessionTab
+                  taskId={taskId}
+                  runs={runs}
+                  nodeId={nodeId}
+                  selectedRunId={nodeRunId}
+                  workflowNodeKind={workflowNodeKind}
+                />
+              )}
+              {active && key === 'events' && <EventsTab taskId={taskId} nodeRunId={nodeRunId} />}
+              {active && key === 'output' && <OutputTab outputs={nodeOutputs} />}
+              {active && key === 'stats' && (
+                <StatsTab
+                  run={run}
+                  history={history}
+                  onPickRetry={onSelectRun}
+                  agentName={agentName}
+                />
+              )}
+            </div>
+          )
+        })}
       </div>
     </aside>
   )

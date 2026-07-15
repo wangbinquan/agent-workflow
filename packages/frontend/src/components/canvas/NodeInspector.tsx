@@ -16,7 +16,7 @@ import type { Agent, NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-w
 import { useEffect, useState } from 'react'
 import type { FC } from 'react'
 import { useTranslation } from 'react-i18next'
-import { TabBar, type TabDef } from '@/components/TabBar'
+import { TabBar, tabDomIds, type TabDef } from '@/components/TabBar'
 import { computePorts } from './WorkflowCanvas'
 import { PromptPreview } from './PromptPreview'
 import { AgentSingleEdit } from './inspector/AgentSingleEdit'
@@ -42,6 +42,8 @@ interface Props {
 }
 
 type Tab = 'edit' | 'preview'
+
+const NODE_INSPECTOR_TAB_PREFIX = 'workflow-node-inspector'
 
 /**
  * Per-kind Edit form registry — same shape as the canvas NODE_TYPES
@@ -82,6 +84,10 @@ export function NodeInspector({ definition, selectedNodeId, agents, onChange, on
   // doesn't render an empty pane.
   const hasPreview = node.kind === 'agent-single'
   const activeTab: Tab = !hasPreview ? 'edit' : tab
+  const inspectorTabs: Array<TabDef<Tab>> = [
+    { key: 'edit', label: t('inspector.tabEdit') },
+    ...(hasPreview ? [{ key: 'preview', label: t('inspector.tabPreview') } as TabDef<Tab>] : []),
+  ]
 
   function patch(next: WorkflowNode) {
     const nodes = definition.nodes.map((n) => (n.id === next.id ? next : n))
@@ -108,28 +114,38 @@ export function NodeInspector({ definition, selectedNodeId, agents, onChange, on
       </header>
       <TabBar<Tab>
         variant="inspector"
-        tabs={[
-          { key: 'edit', label: t('inspector.tabEdit') },
-          // The preview tab exists only for agent kinds (see hasPreview above).
-          ...(hasPreview
-            ? [{ key: 'preview', label: t('inspector.tabPreview') } as TabDef<Tab>]
-            : []),
-        ]}
+        tabs={inspectorTabs}
         active={activeTab}
         onSelect={setTab}
+        idPrefix={NODE_INSPECTOR_TAB_PREFIX}
       />
       <div className="inspector__body">
-        {activeTab === 'edit' ? (
-          <EditForm
-            node={node}
-            agents={agents}
-            definition={definition}
-            onPatch={patch}
-            onCommitDef={onChange}
-          />
-        ) : (
-          <PreviewPane node={node} agents={agents} definition={definition} />
-        )}
+        {inspectorTabs.map(({ key }) => {
+          const ids = tabDomIds(NODE_INSPECTOR_TAB_PREFIX, key)
+          const active = key === activeTab
+          return (
+            <div
+              key={key}
+              role="tabpanel"
+              id={ids.panelId}
+              aria-labelledby={ids.tabId}
+              hidden={!active}
+            >
+              {active && key === 'edit' && (
+                <EditForm
+                  node={node}
+                  agents={agents}
+                  definition={definition}
+                  onPatch={patch}
+                  onCommitDef={onChange}
+                />
+              )}
+              {active && key === 'preview' && (
+                <PreviewPane node={node} agents={agents} definition={definition} />
+              )}
+            </div>
+          )
+        })}
       </div>
     </aside>
   )

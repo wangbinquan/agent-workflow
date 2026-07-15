@@ -156,6 +156,7 @@ export interface Resources {
     title: string
     newButton: string
     emptyList: string
+    emptyDescription: string
     colName: string
     colType: string
     colDescription: string
@@ -261,6 +262,7 @@ export interface Resources {
     title: string
     newButton: string
     emptyList: string
+    emptyDescription: string
     colName: string
     colSpec: string
     colSource: string
@@ -304,6 +306,7 @@ export interface Resources {
   reviews: {
     title: string
     emptyList: string
+    emptyDescription: string
     filterPending: string
     filterAll: string
     filterApproved: string
@@ -544,6 +547,8 @@ export interface Resources {
   users: {
     title: string
     new: string
+    empty: string
+    emptyDescription: string
     username: string
     displayName: string
     role: string
@@ -572,6 +577,7 @@ export interface Resources {
     title: string
     loading: string
     empty: string
+    emptyDescription: string
     colUrl: string
     colLocalPath: string
     colLastFetched: string
@@ -773,6 +779,7 @@ export interface Resources {
     noMatches: string
     retry: string
     clearSearch: string
+    clearFilters: string
     backToList: string
     redirectingToLogin: string
     itemsCount_one: string
@@ -912,6 +919,7 @@ export interface Resources {
     title: string
     newButton: string
     emptyList: string
+    emptyDescription: string
     cardPorts: string
     colName: string
     colDescription: string
@@ -928,6 +936,7 @@ export interface Resources {
     title: string
     newButton: string
     emptyList: string
+    emptyDescription: string
     cardVersion: string
     colName: string
     colSource: string
@@ -1131,6 +1140,7 @@ export interface Resources {
     fieldNameHint: string
     importButton: string
     emptyList: string
+    emptyDescription: string
     importedAsNew: string
     workflowOverwritten: string
     importCanceled: string
@@ -1151,6 +1161,7 @@ export interface Resources {
     cardKind: string
     newButton: string
     emptyList: string
+    emptyDescription: string
     modeLeaderWorker: string
     modeFreeCollab: string
     modeDynamicWorkflow: string
@@ -1386,6 +1397,7 @@ export interface Resources {
     repairBadge: string
     title: string
     empty: string
+    emptyDescription: string
     new: string
     colName: string
     colSchedule: string
@@ -1443,8 +1455,10 @@ export interface Resources {
   }
   tasks: {
     title: string
+    newButton: string
     filterAll: string
     emptyList: string
+    emptyDescription: string
     colId: string
     colName: string
     /** RFC-192: the execution-subject column (工作流/工作组/单代理). */
@@ -2673,6 +2687,7 @@ export interface Resources {
       title: string
       filter: { awaiting: string; answered: string; all: string }
       empty: string
+      emptyDescription: string
       colTask: string
       colAgent: string
       colNode: string
@@ -3370,7 +3385,8 @@ export const zhCN: Resources = {
   },
   reviews: {
     title: '评审',
-    emptyList: '没有评审项。',
+    emptyList: '当前没有待处理的评审',
+    emptyDescription: '任务运行到评审节点时会暂停并显示在这里，等待你检查结果并作出决定。',
     filterPending: '待评审',
     filterAll: '全部',
     filterApproved: '已通过',
@@ -3618,6 +3634,8 @@ export const zhCN: Resources = {
   users: {
     title: '用户',
     new: '新建用户',
+    empty: '还没有用户',
+    emptyDescription: '创建第一个平台账号，并按职责分配普通用户或管理员权限。',
     username: '用户名',
     displayName: '显示名',
     role: '角色',
@@ -3645,7 +3663,8 @@ export const zhCN: Resources = {
   repos: {
     title: '远端仓缓存',
     loading: '加载中…',
-    empty: '还没有任何缓存的远端仓库。在 launcher 的"远端 URL"模式启动一次任务即可建立缓存。',
+    empty: '还没有远端仓缓存',
+    emptyDescription: '批量导入常用远端仓库，提前准备可复用缓存并加快后续任务启动。',
     colUrl: '远端 URL',
     colLocalPath: '本地缓存路径',
     colLastFetched: '上次 fetch 时间',
@@ -3860,6 +3879,7 @@ export const zhCN: Resources = {
     noMatches: '无匹配项',
     retry: '重试',
     clearSearch: '清除搜索',
+    clearFilters: '清除筛选',
     backToList: '返回列表',
     redirectingToLogin: '正在前往登录页…',
     itemsCount_one: '{{count}} 项',
@@ -3938,7 +3958,7 @@ export const zhCN: Resources = {
     unsavedStay: '留在本页',
     unsavedDiscard: '放弃修改',
     emptyPaneTitle: '未选择任何项',
-    emptyPaneHint: '从左侧选择一个，或新建一个。',
+    emptyPaneHint: '从列表中选择一项以查看详情。',
   },
   // RFC-112：运行时注册表（设置 → 运行时列表 + 增改对话框）。
   runtimes: {
@@ -3998,6 +4018,7 @@ export const zhCN: Resources = {
     title: '代理',
     newButton: '+ 新建代理',
     emptyList: '还没有代理。创建一个开始吧。',
+    emptyDescription: '定义可复用的角色、提示词与端口，供工作流和工作组调度。',
     cardPorts: '输入 {{inputs}} · 输出 {{outputs}}',
     colName: '名称',
     colDescription: '描述',
@@ -4014,6 +4035,7 @@ export const zhCN: Resources = {
     title: '技能',
     newButton: '+ 新建技能',
     emptyList: '还没有技能。',
+    emptyDescription: '创建或导入可复用的专业知识，再把它分配给代理。',
     cardVersion: '内容 v{{version}}',
     colName: '名称',
     colSource: '来源',
@@ -4213,6 +4235,7 @@ export const zhCN: Resources = {
     title: 'MCP 服务器',
     newButton: '+ 新建 MCP',
     emptyList: '还没有登记的 MCP 服务器。',
+    emptyDescription: '登记本地或远程 MCP 服务，让代理可以调用其工具。',
     colName: '名称',
     colType: '类型',
     colDescription: '描述',
@@ -4321,6 +4344,7 @@ export const zhCN: Resources = {
     title: '插件',
     newButton: '+ 新建插件',
     emptyList: '尚未登记任何插件。',
+    emptyDescription: '登记 npm、本地或 Git 插件，并按需分配给代理。',
     colName: '名称',
     colSpec: 'Spec',
     colSource: '来源',
@@ -4371,6 +4395,7 @@ export const zhCN: Resources = {
     fieldNameHint: '小写字母 / 数字开头，只允许 [a-z0-9_-]，至多 128 字。',
     importButton: '导入 YAML',
     emptyList: '还没有工作流。',
+    emptyDescription: '从一个清晰的自动化流程开始，之后可继续编辑节点与连接。',
     importedAsNew: '已作为新工作流导入。',
     workflowOverwritten: '工作流已覆盖。',
     importCanceled: '导入已取消。',
@@ -4389,6 +4414,7 @@ export const zhCN: Resources = {
     cardKind: '工作组',
     newButton: '+ 新建工作组',
     emptyList: '还没有工作组。',
+    emptyDescription: '创建一个协作团队，配置成员、负责人和运行方式。',
     modeLeaderWorker: 'Leader-Worker',
     modeFreeCollab: '自由协作',
     modeDynamicWorkflow: '动态工作流',
@@ -4618,7 +4644,8 @@ export const zhCN: Resources = {
   scheduled: {
     repairBadge: '需修复',
     title: '定时任务',
-    empty: '还没有定时任务。在工作流启动页配好参数后选择「存为定时任务」。',
+    empty: '还没有定时任务',
+    emptyDescription: '配置一次工作流启动并保存周期，让重复执行按计划自动发生。',
     new: '新建',
     colName: '名称',
     colSchedule: '周期',
@@ -4676,8 +4703,10 @@ export const zhCN: Resources = {
   },
   tasks: {
     title: '任务',
+    newButton: '新建任务',
     filterAll: '全部',
-    emptyList: '没有匹配当前过滤的任务。',
+    emptyList: '还没有任务',
+    emptyDescription: '启动工作流、工作组或单个代理，并在这里持续跟踪每次执行。',
     colId: 'ID',
     colName: '名称',
     colSubject: '主体',
@@ -5910,7 +5939,8 @@ export const zhCN: Resources = {
     list: {
       title: '反问',
       filter: { awaiting: '待回答', answered: '已回答', all: '全部' },
-      empty: '没有反问项。',
+      empty: '当前没有待回答的反问',
+      emptyDescription: '代理需要人工补充信息时，问题会出现在这里并等待你的回答。',
       colTask: '任务',
       colAgent: '反问发起方',
       colNode: '节点',

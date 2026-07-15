@@ -11,6 +11,7 @@ import type { CreatePlugin, Plugin } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { PluginFields } from '@/components/PluginFields'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { PageHeader } from '@/components/PageHeader'
 import { NEW_CARD_KEY, useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
 import { useDirtyBaseline } from '@/hooks/useDraftFromQuery'
 import { buildCreatePayload, EMPTY_PLUGIN_FORM, type PluginFormState } from '@/lib/plugin-form'
@@ -55,11 +56,10 @@ function PluginCreatePage() {
 
   return (
     <div className="agent-new">
-      <header className="page__header page__header--row">
-        <div>
-          <h2>{t('plugins.newTitle')}</h2>
-        </div>
-        <div className="page__actions">
+      <PageHeader
+        title={t('plugins.newTitle')}
+        headingLevel={2}
+        actions={
           <button
             type="button"
             className="btn btn--primary"
@@ -69,8 +69,8 @@ function PluginCreatePage() {
           >
             {create.isPending ? t('plugins.creating') : t('plugins.createButton')}
           </button>
-        </div>
-      </header>
+        }
+      />
       {create.error !== null && create.error !== undefined && <ErrorBanner error={create.error} />}
       <div className="split__detail-body">
         <PluginFields value={form} onChange={setForm} errors={errors} />

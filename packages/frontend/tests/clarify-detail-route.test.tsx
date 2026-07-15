@@ -251,6 +251,49 @@ describe('/clarify/$nodeRunId detail (RFC-023 T23)', () => {
     expect(screen.getByTestId('clarify-shard-shard-B')).toBeTruthy()
   })
 
+  test('peer lookup failure stays visible and can be retried without hiding the loaded round', async () => {
+    const session = mkSession({ sourceShardKey: 'shard-A' })
+    let peerAttempts = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+      const s = typeof url === 'string' ? url : url.toString()
+      if (s.includes(`/api/clarify/${session.intermediaryNodeRunId}`) && !s.endsWith('/answers')) {
+        return new Response(JSON.stringify(session), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (s.includes('/api/clarify?')) {
+        peerAttempts += 1
+        if (peerAttempts === 1) {
+          return new Response(JSON.stringify({ error: 'peer lookup unavailable' }), {
+            status: 503,
+            headers: { 'content-type': 'application/json' },
+          })
+        }
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    renderRoute()
+
+    await waitFor(() => expect(screen.getByTestId('clarify-context-card')).toBeTruthy())
+    await waitFor(() => expect(screen.getByRole('button', { name: /retry/i })).toBeTruthy())
+    expect(screen.getByText('Pick DB')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }))
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /retry/i })).toBeNull())
+    expect(peerAttempts).toBe(2)
+    expect(screen.getByText('Pick DB')).toBeTruthy()
+  })
+
   test('source-level grep: shard_key field name survives in clarify.detail.tsx', () => {
     // RFC-058: `sourceShardKey` → `askingShardKey` (renamed on the unified
     // ClarifyRound shape). The user-facing DOM shard testids are unchanged.

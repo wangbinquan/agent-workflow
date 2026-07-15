@@ -33,7 +33,9 @@ describe('routes/tasks.detail.tsx — feedback lives in its own tab pane', () =>
     // (RFC-099 follow-up: the members panel moved to a header dialog button
     // for uniformity with the resource pages — the pane holds ONLY the
     // feedback list again, restoring the original lock.)
-    expect(SRC).toMatch(/hidden=\{tab !== 'feedback'\}>\s*\n\s*<TaskFeedbackList taskId=\{id\} \/>/)
+    expect(SRC).toMatch(
+      /hidden=\{tab !== 'feedback'\}\s*>\s*\n\s*<TaskFeedbackList taskId=\{id\} \/>/,
+    )
   })
 
   test('there is exactly one <TaskFeedbackList /> render and it sits BEFORE the closing panes div', () => {

@@ -7,8 +7,12 @@ import { createRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError } from '@/api/client'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import { PageHeader } from '@/components/PageHeader'
 import { StatusChip } from '@/components/StatusChip'
+import { TableViewport } from '@/components/TableViewport'
 import { ACTOR_QUERY_KEY, useActor, type MeResponse } from '@/hooks/useActor'
 import { Route as RootRoute } from './__root'
 
@@ -20,33 +24,40 @@ export const Route = createRoute({
 
 function AccountPage() {
   const { t } = useTranslation()
-  const { data, isLoading } = useActor()
-  if (isLoading)
-    return (
-      <div className="page account-page">
-        <LoadingState />
-      </div>
-    )
-  if (!data) {
-    return (
-      <div className="page account-page">
-        <h1>{t('account.title', { defaultValue: 'My account' })}</h1>
-        <p>{t('account.pleaseSignIn')}</p>
-      </div>
-    )
-  }
+  const { data, isLoading, error, refetch } = useActor()
+  const actorError = error !== null && error !== undefined
+  const retryAction = (
+    <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
+      {t('common.retry')}
+    </button>
+  )
   return (
     <div className="page account-page">
-      <header className="page__header">
-        <h1>{t('account.title', { defaultValue: 'My account' })}</h1>
-      </header>
-      <div className="account-page__grid">
-        <ProfileSection me={data} />
-        <PasswordSection />
-        <PatSection />
-        <IdentitiesSection />
-        <SessionsSection />
-      </div>
+      <PageHeader title={t('account.title', { defaultValue: 'My account' })} />
+      {data === undefined ? (
+        isLoading ? (
+          <LoadingState />
+        ) : actorError ? (
+          <ErrorBanner error={error} action={retryAction} />
+        ) : (
+          <LoadingState />
+        )
+      ) : (
+        <>
+          {actorError && <ErrorBanner error={error} action={retryAction} />}
+          {!data ? (
+            <EmptyState title={t('account.pleaseSignIn')} size="compact" />
+          ) : (
+            <div className="account-page__grid">
+              <ProfileSection me={data} />
+              <PasswordSection />
+              <PatSection />
+              <IdentitiesSection />
+              <SessionsSection />
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -356,7 +367,7 @@ function PatSection() {
     })
   }, [me])
   const [shown, setShown] = useState<string | null>(null)
-  const { data } = useQuery<
+  const { data, isLoading, error, refetch } = useQuery<
     Array<{
       id: string
       name: string
@@ -536,52 +547,88 @@ function PatSection() {
           </button>
         </div>
       )}
-      {(data ?? []).length === 0 ? (
-        <p className="account-empty">{t('account.noPats', { defaultValue: 'No tokens yet.' })}</p>
+      {create.error !== null && <ErrorBanner error={create.error} />}
+      {revoke.error !== null && <ErrorBanner error={revoke.error} />}
+      {data === undefined ? (
+        isLoading ? (
+          <LoadingState size="compact" />
+        ) : error !== null ? (
+          <ErrorBanner
+            error={error}
+            action={
+              <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
+                {t('common.retry')}
+              </button>
+            }
+          />
+        ) : null
       ) : (
-        <table className="account-table">
-          <thead>
-            <tr>
-              <th>{t('account.patNameCol', { defaultValue: 'Name' })}</th>
-              <th>{t('account.patScopes', { defaultValue: 'Scopes' })}</th>
-              <th>{t('account.patStatus', { defaultValue: 'Status' })}</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {(data ?? []).map((p) => (
-              <tr key={p.id}>
-                <td>{p.name}</td>
-                <td>
-                  <div className="account-scope-chips">
-                    {p.scopes.map((s) => (
-                      <span key={s} className="account-scope-chip">
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                </td>
-                <td>
-                  <StatusChip kind={p.revokedAt ? 'danger' : 'success'}>
-                    {p.revokedAt
-                      ? t('account.patStatusRevoked', { defaultValue: 'revoked' })
-                      : t('account.patStatusActive', { defaultValue: 'active' })}
-                  </StatusChip>
-                </td>
-                <td>
-                  {!p.revokedAt && (
-                    <button
-                      onClick={() => revoke.mutate(p.id)}
-                      className="btn btn--ghost btn--xs btn--danger"
-                    >
-                      {t('account.revoke', { defaultValue: 'Revoke' })}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <>
+          {error !== null && (
+            <ErrorBanner
+              error={error}
+              action={
+                <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
+                  {t('common.retry')}
+                </button>
+              }
+            />
+          )}
+          {data.length === 0 ? (
+            <p className="account-empty">
+              {t('account.noPats', { defaultValue: 'No tokens yet.' })}
+            </p>
+          ) : (
+            <TableViewport
+              label={t('account.pats', { defaultValue: 'Personal Access Tokens' })}
+              minWidth="sm"
+            >
+              <table className="account-table">
+                <thead>
+                  <tr>
+                    <th>{t('account.patNameCol', { defaultValue: 'Name' })}</th>
+                    <th>{t('account.patScopes', { defaultValue: 'Scopes' })}</th>
+                    <th>{t('account.patStatus', { defaultValue: 'Status' })}</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.map((p) => (
+                    <tr key={p.id}>
+                      <td>{p.name}</td>
+                      <td>
+                        <div className="account-scope-chips">
+                          {p.scopes.map((s) => (
+                            <span key={s} className="account-scope-chip">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
+                        <StatusChip kind={p.revokedAt ? 'danger' : 'success'}>
+                          {p.revokedAt
+                            ? t('account.patStatusRevoked', { defaultValue: 'revoked' })
+                            : t('account.patStatusActive', { defaultValue: 'active' })}
+                        </StatusChip>
+                      </td>
+                      <td>
+                        {!p.revokedAt && (
+                          <button
+                            onClick={() => revoke.mutate(p.id)}
+                            className="btn btn--ghost btn--xs btn--danger"
+                          >
+                            {t('account.revoke', { defaultValue: 'Revoke' })}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableViewport>
+          )}
+        </>
       )}
     </SectionShell>
   )
@@ -590,10 +637,9 @@ function PatSection() {
 function SessionsSection() {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  const { data } = useQuery<Array<{ id: string; userAgent: string | null; lastUsedAt: number }>>({
-    queryKey: ['sessions'],
-    queryFn: () => api.get('/api/auth/sessions'),
-  })
+  const { data, isLoading, error, refetch } = useQuery<
+    Array<{ id: string; userAgent: string | null; lastUsedAt: number }>
+  >({ queryKey: ['sessions'], queryFn: () => api.get('/api/auth/sessions') })
   const revoke = useMutation({
     mutationFn: (id: string) => api.post(`/api/auth/sessions/${id}/revoke`),
     onSuccess: () => {
@@ -609,38 +655,71 @@ function SessionsSection() {
           'Web sessions for this account. Revoke any session you do not recognise — the next request from that browser will return 401.',
       })}
     >
-      {(data ?? []).length === 0 ? (
-        <p className="account-empty">
-          {t('account.noSessions', { defaultValue: 'No active sessions.' })}
-        </p>
+      {revoke.error !== null && <ErrorBanner error={revoke.error} />}
+      {data === undefined ? (
+        isLoading ? (
+          <LoadingState size="compact" />
+        ) : error !== null ? (
+          <ErrorBanner
+            error={error}
+            action={
+              <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
+                {t('common.retry')}
+              </button>
+            }
+          />
+        ) : null
       ) : (
-        <table className="account-table">
-          <thead>
-            <tr>
-              <th>{t('account.sessionId', { defaultValue: 'Session' })}</th>
-              <th>{t('account.userAgent', { defaultValue: 'User agent' })}</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {(data ?? []).map((s) => (
-              <tr key={s.id}>
-                <td>
-                  <code>{s.id.slice(0, 10)}…</code>
-                </td>
-                <td className="account-table__ua">{s.userAgent ?? '—'}</td>
-                <td>
-                  <button
-                    onClick={() => revoke.mutate(s.id)}
-                    className="btn btn--ghost btn--xs btn--danger"
-                  >
-                    {t('account.revoke', { defaultValue: 'Revoke' })}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <>
+          {error !== null && (
+            <ErrorBanner
+              error={error}
+              action={
+                <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
+                  {t('common.retry')}
+                </button>
+              }
+            />
+          )}
+          {data.length === 0 ? (
+            <p className="account-empty">
+              {t('account.noSessions', { defaultValue: 'No active sessions.' })}
+            </p>
+          ) : (
+            <TableViewport
+              label={t('account.sessions', { defaultValue: 'Active sessions' })}
+              minWidth="sm"
+            >
+              <table className="account-table">
+                <thead>
+                  <tr>
+                    <th>{t('account.sessionId', { defaultValue: 'Session' })}</th>
+                    <th>{t('account.userAgent', { defaultValue: 'User agent' })}</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.map((s) => (
+                    <tr key={s.id}>
+                      <td>
+                        <code>{s.id.slice(0, 10)}…</code>
+                      </td>
+                      <td className="account-table__ua">{s.userAgent ?? '—'}</td>
+                      <td>
+                        <button
+                          onClick={() => revoke.mutate(s.id)}
+                          className="btn btn--ghost btn--xs btn--danger"
+                        >
+                          {t('account.revoke', { defaultValue: 'Revoke' })}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableViewport>
+          )}
+        </>
       )}
     </SectionShell>
   )
@@ -649,7 +728,7 @@ function SessionsSection() {
 function IdentitiesSection() {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  const { data } = useQuery<
+  const { data, isLoading, error, refetch } = useQuery<
     Array<{
       id: string
       providerSlug: string
@@ -673,38 +752,71 @@ function IdentitiesSection() {
           'OIDC providers linked to this account. Unlinking does not delete the account; you can re-link from the login page.',
       })}
     >
-      {(data ?? []).length === 0 ? (
-        <p className="account-empty">
-          {t('account.noIdentities', { defaultValue: 'No linked identities yet.' })}
-        </p>
+      {remove.error !== null && <ErrorBanner error={remove.error} />}
+      {data === undefined ? (
+        isLoading ? (
+          <LoadingState size="compact" />
+        ) : error !== null ? (
+          <ErrorBanner
+            error={error}
+            action={
+              <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
+                {t('common.retry')}
+              </button>
+            }
+          />
+        ) : null
       ) : (
-        <table className="account-table">
-          <thead>
-            <tr>
-              <th>{t('account.provider', { defaultValue: 'Provider' })}</th>
-              <th>{t('account.subject', { defaultValue: 'Subject' })}</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {data?.map((i) => (
-              <tr key={i.id}>
-                <td>{i.providerDisplayName ?? i.providerSlug}</td>
-                <td>
-                  <code>{i.subject}</code>
-                </td>
-                <td>
-                  <button
-                    onClick={() => remove.mutate(i.id)}
-                    className="btn btn--ghost btn--xs btn--danger"
-                  >
-                    {t('account.unlink', { defaultValue: 'Unlink' })}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <>
+          {error !== null && (
+            <ErrorBanner
+              error={error}
+              action={
+                <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
+                  {t('common.retry')}
+                </button>
+              }
+            />
+          )}
+          {data.length === 0 ? (
+            <p className="account-empty">
+              {t('account.noIdentities', { defaultValue: 'No linked identities yet.' })}
+            </p>
+          ) : (
+            <TableViewport
+              label={t('account.linkedIdentities', { defaultValue: 'Linked identities' })}
+              minWidth="sm"
+            >
+              <table className="account-table">
+                <thead>
+                  <tr>
+                    <th>{t('account.provider', { defaultValue: 'Provider' })}</th>
+                    <th>{t('account.subject', { defaultValue: 'Subject' })}</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.map((i) => (
+                    <tr key={i.id}>
+                      <td>{i.providerDisplayName ?? i.providerSlug}</td>
+                      <td>
+                        <code>{i.subject}</code>
+                      </td>
+                      <td>
+                        <button
+                          onClick={() => remove.mutate(i.id)}
+                          className="btn btn--ghost btn--xs btn--danger"
+                        >
+                          {t('account.unlink', { defaultValue: 'Unlink' })}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableViewport>
+          )}
+        </>
       )}
     </SectionShell>
   )

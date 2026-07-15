@@ -12,7 +12,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import {
@@ -21,9 +21,14 @@ import {
 } from '../src/hooks/useResolveResourceName'
 
 function Probe({ kind, id }: { kind: ResolvableResourceKind; id: string }) {
-  const { name, isLoading, isError } = useResolveResourceName(kind, id)
+  const { name, isLoading, isError, refetch } = useResolveResourceName(kind, id)
   if (isLoading) return <p>loading…</p>
-  if (isError) return <p data-testid="err">error</p>
+  if (isError)
+    return (
+      <p data-testid="err">
+        error <button onClick={refetch}>retry</button>
+      </p>
+    )
   return <p data-testid="name">{name}</p>
 }
 
@@ -72,6 +77,26 @@ describe('useResolveResourceName', () => {
     expect(n).toBe(1)
   })
 
+  test('a transient resolver failure can be retried explicitly', async () => {
+    let attempt = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      attempt += 1
+      return attempt === 1
+        ? new Response(JSON.stringify({ code: 'resolver-down', message: 'resolver down' }), {
+            status: 503,
+            headers: { 'content-type': 'application/json' },
+          })
+        : new Response(JSON.stringify({ name: 'recovered-agent' }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+    })
+    mount('agents', 'a1')
+    fireEvent.click(await screen.findByRole('button', { name: 'retry' }))
+    await waitFor(() => expect(screen.getByTestId('name').textContent).toBe('recovered-agent'))
+    expect(attempt).toBe(2)
+  })
+
   test('freshness guards (Codex P1): re-resolve every mount, never navigate on stale cache', () => {
     // Source-lock the P1 fix: the mapping is identity-sensitive, so the query must
     // not retain/reuse a cached name across mounts and must revalidate every mount.
@@ -101,6 +126,8 @@ describe('by-id redirect routes wire the resolver to a typed Navigate', () => {
     expect(wg).toContain("to: '/workgroups/$name'")
     expect(wg).toContain('replace: true')
     expect(wg).toContain('EmptyState')
+    expect(wg).toContain('ErrorBanner')
+    expect(wg).toContain('onClick={refetch}')
   })
 
   test('agent route resolves then redirects to /agents/$name (replace) + EmptyState on error', () => {
@@ -108,5 +135,7 @@ describe('by-id redirect routes wire the resolver to a typed Navigate', () => {
     expect(ag).toContain("to: '/agents/$name'")
     expect(ag).toContain('replace: true')
     expect(ag).toContain('EmptyState')
+    expect(ag).toContain('ErrorBanner')
+    expect(ag).toContain('onClick={refetch}')
   })
 })

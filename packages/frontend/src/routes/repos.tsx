@@ -9,11 +9,15 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { CachedRepo, ListCachedReposResponse } from '@agent-workflow/shared'
 import { redactGitUrl } from '@agent-workflow/shared'
-import { api, ApiError } from '@/api/client'
+import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import { PageHeader } from '@/components/PageHeader'
 import { RelativeTime } from '@/components/RelativeTime'
+import { TableViewport } from '@/components/TableViewport'
+import { REPO_ICON } from '@/components/icons/resourceIcons'
 import { BatchImportDialog } from '@/components/repos/BatchImportDialog'
 import { SubmoduleBadge } from '@/components/repos/SubmoduleBadge'
 import { Route as RootRoute } from './__root'
@@ -67,23 +71,30 @@ function ReposPage() {
   }, [activeBatchId])
 
   const items = list.data?.items ?? []
+  const isInitialEmpty = !list.isLoading && list.data !== undefined && items.length === 0
+  const batchImportAction = (
+    <button
+      ref={batchImportTriggerRef}
+      type="button"
+      className="btn btn--primary"
+      data-testid="repos-batch-import-button"
+      onClick={() => setBatchImportOpen(true)}
+    >
+      {t('repos.batchImport.button')}
+    </button>
+  )
+  const retryAction = (
+    <button type="button" className="btn btn--sm" onClick={() => void list.refetch()}>
+      {t('common.retry')}
+    </button>
+  )
 
   return (
     <div className="page repos-page">
-      <header className="page__header page__header--row">
-        <div>
-          <h1>{t('repos.title')}</h1>
-        </div>
-        <button
-          ref={batchImportTriggerRef}
-          type="button"
-          className="btn btn--primary"
-          data-testid="repos-batch-import-button"
-          onClick={() => setBatchImportOpen(true)}
-        >
-          {t('repos.batchImport.button')}
-        </button>
-      </header>
+      <PageHeader
+        title={t('repos.title')}
+        actions={isInitialEmpty ? undefined : batchImportAction}
+      />
 
       <BatchImportDialog
         open={batchImportOpen}
@@ -95,76 +106,82 @@ function ReposPage() {
 
       {list.isLoading && <LoadingState label={t('repos.loading')} data-testid="repos-loading" />}
       {list.error !== null && list.error !== undefined && (
-        <div className="error-box">{describeError(list.error)}</div>
+        <ErrorBanner error={list.error} action={retryAction} />
       )}
-      {!list.isLoading && items.length === 0 && (
-        <EmptyState title={t('repos.empty')} data-testid="repos-empty" />
+      {isInitialEmpty && (
+        <EmptyState
+          title={t('repos.empty')}
+          description={t('repos.emptyDescription')}
+          icon={REPO_ICON}
+          action={batchImportAction}
+          data-testid="repos-empty"
+        />
       )}
 
       {items.length > 0 && (
-        <table className="data-table" data-testid="repos-table">
-          <thead>
-            <tr>
-              <th>{t('repos.colUrl')}</th>
-              <th>{t('repos.colLocalPath')}</th>
-              <th>{t('repos.colLastFetched')}</th>
-              <th>{t('repos.colRefs')}</th>
-              <th>{t('repos.colActions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.id} data-testid={`repos-row-${item.id}`}>
-                <td className="data-table__truncate">
-                  {item.urlRedacted}{' '}
-                  <SubmoduleBadge
-                    hasSubmodules={item.hasSubmodules}
-                    lastSubmoduleSyncOk={item.lastSubmoduleSyncOk}
-                    lastSubmoduleSyncError={item.lastSubmoduleSyncError}
-                  />
-                </td>
-                <td className="data-table__truncate">{item.localPath}</td>
-                <td>
-                  {/* RFC-192 (D4/D5): list-layer relative time; the ISO string
-                      rides <RelativeTime>'s string contract (Date.parse). */}
-                  <RelativeTime ts={item.lastFetchedAt} />
-                </td>
-                <td>{item.referencingTaskCount}</td>
-                <td>
-                  <div className="data-table__actions">
-                    <button
-                      type="button"
-                      className="btn btn--sm"
-                      disabled={refresh.isPending}
-                      onClick={() => refresh.mutate(item.id)}
-                    >
-                      {t('repos.refresh')}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--sm btn--danger"
-                      onClick={() =>
-                        item.referencingTaskCount > 0
-                          ? setPendingDelete(item)
-                          : remove.mutate({ id: item.id })
-                      }
-                    >
-                      {t('repos.delete')}
-                    </button>
-                  </div>
-                </td>
+        <TableViewport label={t('repos.title')}>
+          <table className="data-table" data-testid="repos-table">
+            <thead>
+              <tr>
+                <th>{t('repos.colUrl')}</th>
+                <th>{t('repos.colLocalPath')}</th>
+                <th>{t('repos.colLastFetched')}</th>
+                <th>{t('repos.colRefs')}</th>
+                <th>{t('repos.colActions')}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id} data-testid={`repos-row-${item.id}`}>
+                  <td className="data-table__truncate">
+                    {item.urlRedacted}{' '}
+                    <SubmoduleBadge
+                      hasSubmodules={item.hasSubmodules}
+                      lastSubmoduleSyncOk={item.lastSubmoduleSyncOk}
+                      lastSubmoduleSyncError={item.lastSubmoduleSyncError}
+                    />
+                  </td>
+                  <td className="data-table__truncate">{item.localPath}</td>
+                  <td>
+                    {/* RFC-192 (D4/D5): list-layer relative time; the ISO string
+                      rides <RelativeTime>'s string contract (Date.parse). */}
+                    <RelativeTime ts={item.lastFetchedAt} />
+                  </td>
+                  <td>{item.referencingTaskCount}</td>
+                  <td>
+                    <div className="data-table__actions">
+                      <button
+                        type="button"
+                        className="btn btn--sm"
+                        disabled={refresh.isPending}
+                        onClick={() => refresh.mutate(item.id)}
+                      >
+                        {t('repos.refresh')}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--sm btn--danger"
+                        onClick={() =>
+                          item.referencingTaskCount > 0
+                            ? setPendingDelete(item)
+                            : remove.mutate({ id: item.id })
+                        }
+                      >
+                        {t('repos.delete')}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableViewport>
       )}
 
       {refresh.error !== null && refresh.error !== undefined && (
-        <div className="error-box">{describeError(refresh.error)}</div>
+        <ErrorBanner error={refresh.error} />
       )}
-      {remove.error !== null && remove.error !== undefined && (
-        <div className="error-box">{describeError(remove.error)}</div>
-      )}
+      {remove.error !== null && remove.error !== undefined && <ErrorBanner error={remove.error} />}
 
       <Dialog
         open={pendingDelete !== null}
@@ -203,10 +220,4 @@ function ReposPage() {
       </Dialog>
     </div>
   )
-}
-
-function describeError(e: unknown): string {
-  if (e instanceof ApiError) return `${e.code}: ${e.message}`
-  if (e instanceof Error) return e.message
-  return String(e)
 }

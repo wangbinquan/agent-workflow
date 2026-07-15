@@ -30,7 +30,7 @@ export function useResourceList<
   T extends { id: string; name: string; ownerUserId?: string | null | undefined },
 >(opts: UseResourceListOptions) {
   const qc = useQueryClient()
-  const { data, isLoading, error } = useQuery<T[]>({
+  const { data, isLoading, error, refetch } = useQuery<T[]>({
     queryKey: opts.queryKey,
     queryFn: ({ signal }) => api.get(opts.endpoint, undefined, signal),
   })
@@ -44,5 +44,5 @@ export function useResourceList<
   // RFC-099 — resolve owner ids to display names for the list badge.
   const owners = useUserLookup((data ?? []).map((r) => r.ownerUserId))
 
-  return { data, isLoading, error, del, owners }
+  return { data, isLoading, error, refetch, del, owners }
 }

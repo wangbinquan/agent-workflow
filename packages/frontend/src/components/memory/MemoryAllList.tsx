@@ -19,11 +19,11 @@ import type { ApiError } from '@/api/client'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
-import { describeApiError } from '@/i18n'
+import { Segmented } from '@/components/Segmented'
 import { sortByRecency } from '@/lib/memory'
 import { FuseDialog } from '@/components/fusion/FuseDialog'
-import { TabBar } from '@/components/TabBar'
 import { MemoryEditDialog } from './MemoryEditDialog'
 import { MemoryRow } from './MemoryRow'
 
@@ -103,18 +103,16 @@ export function MemoryAllList({ isAdmin }: MemoryAllListProps) {
 
   return (
     <div className="memory-all" data-testid="memory-all">
-      {/* RFC-150: the old `tabs--pills` modifier had NO CSS definition (ghost
-          class — visually identical without it), so the shared TabBar renders
-          the default variant; the `memory-all__filter` namespace hook stays. */}
-      <TabBar<View>
+      <Segmented<View>
         className="memory-all__filter"
-        tabs={(['approved', 'archived'] as const).map((v) => ({
-          key: v,
+        options={(['approved', 'archived'] as const).map((v) => ({
+          value: v,
           label: t(`memory.status.${v}`),
           testid: `memory-all-filter-${v}`,
         }))}
-        active={view}
-        onSelect={setView}
+        value={view}
+        onChange={setView}
+        ariaLabel={t('memory.tab.all')}
       />
 
       {view === 'approved' && selected.size > 0 && (
@@ -234,70 +232,87 @@ function renderBody(args: BodyArgs) {
     onToggleSelect,
     t,
   } = args
-  if (list.isLoading) return <LoadingState />
-  if (list.error !== null && list.error !== undefined) {
-    return <div className="error-box">{describeApiError(list.error)}</div>
+  const listError = list.error !== null && list.error !== undefined
+  const retryAction = (
+    <button type="button" className="btn btn--sm" onClick={() => void list.refetch()}>
+      {t('common.retry')}
+    </button>
+  )
+
+  if (list.data === undefined) {
+    if (list.isLoading) return <LoadingState />
+    if (listError) {
+      return <ErrorBanner error={list.error} action={retryAction} />
+    }
+    return <LoadingState />
   }
-  const rows = sortByRecency(list.data?.items ?? [])
-  if (rows.length === 0) {
-    return <EmptyState title={t('memory.empty')} />
-  }
+  const rows = sortByRecency(list.data.items)
 
   return (
-    <ul className="memory-all-list" data-testid="memory-all-list">
-      {rows.map((m) => {
-        // RFC-099 (D12): per-row manage rights — scope-resource owners manage
-        // their own rows; `canManage` comes from the backend annotation and
-        // falls back to the admin role for older payloads.
-        const rowManage = m.canManage ?? isAdmin
-        return (
-          <MemoryRow
-            key={m.id}
-            memory={m}
-            onEdit={onEdit !== undefined && rowManage ? () => onEdit(m.id) : undefined}
-            editable={rowManage}
-            select={
-              view === 'approved' && rowManage && onToggleSelect !== undefined
-                ? { checked: selected?.has(m.id) ?? false, onChange: () => onToggleSelect(m.id) }
-                : undefined
-            }
-            actions={
-              <>
-                {view === 'approved' ? (
-                  <button
-                    type="button"
-                    className="btn btn--xs"
-                    onClick={() => onArchive(m.id)}
-                    disabled={!rowManage || archivePending}
-                    data-testid={`memory-all-${m.id}-archive`}
-                  >
-                    {t('memory.action.archive')}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn btn--xs"
-                    onClick={() => onUnarchive(m.id)}
-                    disabled={!rowManage || unarchivePending}
-                    data-testid={`memory-all-${m.id}-unarchive`}
-                  >
-                    {t('memory.action.unarchive')}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="btn btn--xs btn--danger"
-                  onClick={() => onDelete(m.id)}
-                  disabled={!rowManage || delPending}
-                  data-testid={`memory-all-${m.id}-delete`}
-                >
-                  {t('memory.action.delete')}
-                </button>
-              </>
-            }
-          />
-        )
-      })}
-    </ul>
+    <>
+      {listError && <ErrorBanner error={list.error} action={retryAction} />}
+      {rows.length === 0 ? (
+        <EmptyState title={t('memory.empty')} />
+      ) : (
+        <ul className="memory-all-list" data-testid="memory-all-list">
+          {rows.map((m) => {
+            // RFC-099 (D12): per-row manage rights — scope-resource owners manage
+            // their own rows; `canManage` comes from the backend annotation and
+            // falls back to the admin role for older payloads.
+            const rowManage = m.canManage ?? isAdmin
+            return (
+              <MemoryRow
+                key={m.id}
+                memory={m}
+                onEdit={onEdit !== undefined && rowManage ? () => onEdit(m.id) : undefined}
+                editable={rowManage}
+                select={
+                  view === 'approved' && rowManage && onToggleSelect !== undefined
+                    ? {
+                        checked: selected?.has(m.id) ?? false,
+                        onChange: () => onToggleSelect(m.id),
+                      }
+                    : undefined
+                }
+                actions={
+                  <>
+                    {view === 'approved' ? (
+                      <button
+                        type="button"
+                        className="btn btn--xs"
+                        onClick={() => onArchive(m.id)}
+                        disabled={!rowManage || archivePending}
+                        data-testid={`memory-all-${m.id}-archive`}
+                      >
+                        {t('memory.action.archive')}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn--xs"
+                        onClick={() => onUnarchive(m.id)}
+                        disabled={!rowManage || unarchivePending}
+                        data-testid={`memory-all-${m.id}-unarchive`}
+                      >
+                        {t('memory.action.unarchive')}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn--xs btn--danger"
+                      onClick={() => onDelete(m.id)}
+                      disabled={!rowManage || delPending}
+                      data-testid={`memory-all-${m.id}-delete`}
+                    >
+                      {t('memory.action.delete')}
+                    </button>
+                  </>
+                }
+              />
+            )
+          })}
+        </ul>
+      )}
+    </>
   )
 }

@@ -11,7 +11,7 @@
 // key / roles) so they don't race i18n language detection.
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -89,6 +89,7 @@ async function renderDetail() {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
+  return qc
 }
 
 describe('RFC-159 — scheduled-detail UI consistency', () => {
@@ -137,5 +138,43 @@ describe('RFC-159 — scheduled-detail UI consistency', () => {
     expect(link.getAttribute('href')).toContain('/tasks/task-1')
     // …and the shared <TaskStatusChip> (success kind for a done task).
     expect(table.querySelector('.status-chip--success')).not.toBeNull()
+    expect(table.parentElement?.classList.contains('table-viewport__scroller')).toBe(true)
+    expect(table.closest('.table-viewport')?.classList.contains('table-viewport--sm')).toBe(true)
+    expect(screen.getByRole('banner').querySelector('h1.page__title')).not.toBeNull()
+  })
+
+  test('a failed background refresh keeps stale detail visible and exposes retry', async () => {
+    let detailAttempt = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+      const url = input.toString()
+      if (url.includes('/api/scheduled-tasks/sched-1')) {
+        detailAttempt += 1
+        if (detailAttempt > 1) {
+          return new Response(JSON.stringify({ error: 'temporarily unavailable' }), {
+            status: 503,
+            headers: { 'content-type': 'application/json' },
+          })
+        }
+        return new Response(JSON.stringify(SCHEDULE), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    const qc = await renderDetail()
+    await screen.findByTestId('scheduled-detail')
+
+    await qc.refetchQueries({ queryKey: ['scheduled-tasks', 'detail', 'sched-1'] })
+    await waitFor(() => screen.getByRole('alert'))
+    expect(screen.getByTestId('scheduled-detail')).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain(SCHEDULE.name)
+
+    fireEvent.click(screen.getByRole('button', { name: /retry|重试/i }))
+    await waitFor(() => expect(detailAttempt).toBe(3))
   })
 })

@@ -168,8 +168,18 @@ describe('/skills split page', () => {
   test('selecting a managed skill opens the four-tab detail', async () => {
     renderSkills('/skills/sk1')
     await waitFor(() => screen.getByRole('heading', { level: 2, name: 'sk1' }))
-    for (const tab of ['Overview', 'Content', 'Files', 'History']) {
-      expect(screen.getByRole('tab', { name: tab })).toBeTruthy()
+    for (const [key, name] of [
+      ['overview', 'Overview'],
+      ['content', 'Content'],
+      ['files', 'Files'],
+      ['history', 'History'],
+    ] as const) {
+      const tab = screen.getByRole('tab', { name })
+      const panel = screen.getByTestId(`skill-panel-${key}`)
+      expect(tab.id).toBe(`skills-detail-tab-${key}`)
+      expect(tab.getAttribute('aria-controls')).toBe(panel.id)
+      expect(panel.id).toBe(`skills-detail-panel-${key}`)
+      expect(panel.getAttribute('aria-labelledby')).toBe(tab.id)
     }
     expect(screen.getByTestId('skills-mobile-back').getAttribute('href')).toBe('/skills')
     expect(screen.getAllByTestId('skills-mobile-back')).toHaveLength(1)

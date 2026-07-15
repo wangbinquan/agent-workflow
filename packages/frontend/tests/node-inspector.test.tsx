@@ -173,6 +173,40 @@ describe('NodeInspector', () => {
     expect(tabs[1]?.textContent).toMatch(/Preview/i)
   })
 
+  test('true tabs keep every stable panel target while mounting content only for the active tab', () => {
+    const node: WorkflowNode = {
+      id: 'a1',
+      kind: 'agent-single',
+      agentName: 'coder',
+      promptTemplate: 'Draft {{req}}',
+    } as unknown as WorkflowNode
+    setup(node)
+
+    const editTab = screen.getByRole('tab', { name: /Edit/i })
+    const previewTab = screen.getByRole('tab', { name: /Preview/i })
+    expect(editTab.id).toBe('workflow-node-inspector-tab-edit')
+    expect(editTab.getAttribute('aria-controls')).toBe('workflow-node-inspector-panel-edit')
+    expect(previewTab.id).toBe('workflow-node-inspector-tab-preview')
+    expect(previewTab.getAttribute('aria-controls')).toBe('workflow-node-inspector-panel-preview')
+    expect(document.getElementById('workflow-node-inspector-panel-edit')?.hidden).toBe(false)
+    expect(document.getElementById('workflow-node-inspector-panel-preview')?.hidden).toBe(true)
+
+    let panels = screen.getAllByRole('tabpanel')
+    expect(panels).toHaveLength(1)
+    expect(panels[0]?.id).toBe('workflow-node-inspector-panel-edit')
+    expect(panels[0]?.getAttribute('aria-labelledby')).toBe(editTab.id)
+    expect(screen.getByLabelText(/Display name/i)).toBeTruthy()
+
+    fireEvent.click(previewTab)
+    panels = screen.getAllByRole('tabpanel')
+    expect(panels).toHaveLength(1)
+    expect(panels[0]?.id).toBe('workflow-node-inspector-panel-preview')
+    expect(panels[0]?.getAttribute('aria-labelledby')).toBe(previewTab.id)
+    expect(document.getElementById('workflow-node-inspector-panel-edit')?.hidden).toBe(true)
+    expect(document.getElementById('workflow-node-inspector-panel-preview')?.hidden).toBe(false)
+    expect(screen.queryByLabelText(/Display name/i)).toBeNull()
+  })
+
   test('Close button calls onClose', () => {
     const onClose = vi.fn()
     render(

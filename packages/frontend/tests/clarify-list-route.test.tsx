@@ -13,7 +13,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
   RouterProvider,
   createMemoryHistory,
@@ -25,6 +25,7 @@ import {
 import type { ClarifyRoundSummary } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { ClarifyListPage } from '../src/routes/clarify'
+import { enUS } from '../src/i18n/en-US'
 import '../src/i18n'
 
 beforeEach(() => {
@@ -119,28 +120,43 @@ function renderWithRouter() {
     path: '/tasks/$id',
     component: () => null,
   })
-  const tree = rootRoute.addChildren([indexRoute, detailRoute, taskRoute])
+  const newTaskRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/tasks/new',
+    component: () => null,
+  })
+  const tree = rootRoute.addChildren([indexRoute, detailRoute, taskRoute, newTaskRoute])
   const router = createRouter({
     routeTree: tree,
     history: createMemoryHistory({ initialEntries: ['/'] }),
   })
-  return render(
+  const view = render(
     <QueryClientProvider client={qc}>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
+  return { ...view, queryClient: qc }
 }
 
 describe('/clarify list (RFC-023 T22)', () => {
   test('Awaiting filter is active on first render and empty hint shows when backend returns []', async () => {
     mockListResponse([])
     renderWithRouter()
-    await waitFor(() => {
-      expect(screen.getByTestId('clarify-list-empty')).toBeTruthy()
-    })
-    const awaitingTab = screen.getByTestId('clarify-filter-awaiting')
-    expect(awaitingTab.getAttribute('aria-selected')).toBe('true')
+    const empty = await screen.findByTestId('clarify-list-empty')
+    const awaitingFilter = screen.getByTestId('clarify-filter-awaiting')
+    expect(awaitingFilter.getAttribute('role')).toBe('radio')
+    expect(awaitingFilter.getAttribute('aria-checked')).toBe('true')
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(empty.textContent).toContain(enUS.clarify.list.emptyDescription)
+    expect(empty.querySelector('[data-icon="clarify"]')).not.toBeNull()
+    const startTask = within(empty).getByRole('link', { name: enUS.tasks.newButton })
+    expect(startTask.getAttribute('href')).toBe('/tasks/new')
+    const header = empty.closest('.page')?.querySelector('header.page__header')
+    const chromePrimaries = [header, empty].flatMap((surface) =>
+      Array.from(surface?.querySelectorAll('.btn--primary') ?? []),
+    )
+    expect(chromePrimaries).toEqual([startTask])
   })
 
   test('switching to Answered triggers a fetch with status=answered', async () => {
@@ -151,6 +167,42 @@ describe('/clarify list (RFC-023 T22)', () => {
     await waitFor(() => {
       expect(calls.some((u) => u.includes('status=answered'))).toBe(true)
     })
+    const empty = await screen.findByTestId('clarify-list-empty')
+    expect(empty.textContent).not.toContain(enUS.clarify.list.emptyDescription)
+    expect(empty.querySelector('[data-icon]')).toBeNull()
+    expect(within(empty).queryByRole('link', { name: enUS.tasks.newButton })).toBeNull()
+    fireEvent.click(within(empty).getByRole('button', { name: /clear filters/i }))
+    expect(screen.getByTestId('clarify-filter-awaiting').getAttribute('aria-checked')).toBe('true')
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByTestId('clarify-filter-awaiting')),
+    )
+  })
+
+  test('a failed refetch keeps stale rows visible and exposes a retry action', async () => {
+    let attempt = 0
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      attempt += 1
+      if (attempt === 1) {
+        return new Response(JSON.stringify([mkSummary({ id: 'stale-row' })]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({ error: 'temporarily unavailable' }), {
+        status: 503,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    const { queryClient } = renderWithRouter()
+    await waitFor(() => screen.getByTestId('clarify-row-stale-row'))
+
+    await queryClient.refetchQueries({ queryKey: ['clarify', 'list', 'awaiting'] })
+    await waitFor(() => screen.getByRole('alert'))
+    expect(screen.getByTestId('clarify-row-stale-row')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /retry|重试/i }))
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(3))
   })
 
   // RFC-037 follow-up: rows render the workflow node title with a nodeId

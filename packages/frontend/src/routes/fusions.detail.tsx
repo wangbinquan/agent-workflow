@@ -16,6 +16,8 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, TextArea } from '@/components/Form'
 import { MemoryReviewItem } from '@/components/fusion/MemoryReviewItem'
 import { LoadingState } from '@/components/LoadingState'
+import { NoticeBanner } from '@/components/NoticeBanner'
+import { PageHeader } from '@/components/PageHeader'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -84,8 +86,29 @@ function FusionDetailPage() {
     onSuccess: invalidate,
   })
 
-  if (fusion.isLoading) return <div className="page">{<LoadingState />}</div>
-  if (fusion.error) return <div className="page">{<ErrorBanner error={fusion.error} />}</div>
+  if (fusion.data === undefined && fusion.isLoading) {
+    return (
+      <div className="page">
+        <PageHeader title={t('fusion.detailTitle')} />
+        <LoadingState />
+      </div>
+    )
+  }
+  if (fusion.data === undefined && fusion.error) {
+    return (
+      <div className="page">
+        <PageHeader title={t('fusion.detailTitle')} />
+        <ErrorBanner
+          error={fusion.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void fusion.refetch()}>
+              {t('common.retry')}
+            </button>
+          }
+        />
+      </div>
+    )
+  }
   const f = fusion.data
   if (f === undefined) return null
 
@@ -94,10 +117,10 @@ function FusionDetailPage() {
 
   return (
     <div className="page page--wide">
-      <header className="page__header page__header--row">
-        <div>
-          <h1>{t('fusion.detailTitle')}</h1>
-          <p className="page__hint">
+      <PageHeader
+        title={t('fusion.detailTitle')}
+        meta={
+          <>
             <Link to="/skills/$name" params={{ name: f.skillName }}>
               {f.skillName}
             </Link>{' '}
@@ -105,10 +128,10 @@ function FusionDetailPage() {
               {t(`fusion.status.${f.status}`)}
             </span>{' '}
             <span className="muted">{t('fusion.iteration', { n: f.iteration })}</span>
-          </p>
-        </div>
-        <div className="page__actions">
-          {!['done', 'failed', 'canceled'].includes(f.status) && (
+          </>
+        }
+        actions={
+          !['done', 'failed', 'canceled'].includes(f.status) ? (
             <ConfirmButton
               label={t('fusion.cancel')}
               confirmLabel={t('fusion.cancelConfirm')}
@@ -116,22 +139,36 @@ function FusionDetailPage() {
               variant="danger"
               disabled={cancel.isPending}
             />
-          )}
-        </div>
-      </header>
+          ) : undefined
+        }
+      />
 
+      {fusion.error ? (
+        <ErrorBanner
+          error={fusion.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void fusion.refetch()}>
+              {t('common.retry')}
+            </button>
+          }
+        />
+      ) : null}
       {approve.error ? <ErrorBanner error={approve.error} /> : null}
       {cancel.error ? <ErrorBanner error={cancel.error} /> : null}
 
       {isActive && (
-        <section className="page__section">
-          <p>{t('fusion.runningHint')}</p>
-          {f.currentTaskId !== null && (
-            <Link className="btn btn--sm" to="/clarify">
-              {t('fusion.clarifyLink')}
-            </Link>
-          )}
-        </section>
+        <NoticeBanner
+          tone="info"
+          action={
+            f.currentTaskId !== null ? (
+              <Link className="btn btn--sm" to="/clarify">
+                {t('fusion.clarifyLink')}
+              </Link>
+            ) : undefined
+          }
+        >
+          {t('fusion.runningHint')}
+        </NoticeBanner>
       )}
 
       {f.status === 'failed' && f.error !== null && (

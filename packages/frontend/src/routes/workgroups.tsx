@@ -20,6 +20,7 @@ import { QuickCreateDialog } from '@/components/QuickCreateDialog'
 import { ResourceBadges } from '@/components/ResourceBadges'
 import { StatusChip } from '@/components/StatusChip'
 import { ResourceGalleryPage, type GalleryCardItem } from '@/components/gallery/ResourceGalleryPage'
+import { WORKGROUP_ICON } from '@/components/icons/resourceIcons'
 import { WORKGROUP_MODE_KIND } from '@/lib/workgroup-mode'
 import {
   buildQuickCreatePayload,
@@ -163,25 +164,36 @@ function WorkgroupsPage() {
     [data, owners, t],
   )
 
+  // One stable trigger moves between the genuine-empty state and the header,
+  // so page chrome never presents duplicate primary actions and Dialog focus
+  // restoration always targets the connected instance.
+  const createAction = (
+    <button
+      type="button"
+      className="btn btn--primary"
+      ref={createTriggerRef}
+      onClick={openCreate}
+      data-testid="workgroup-new-button"
+    >
+      {t('workgroups.newButton')}
+    </button>
+  )
+
   return (
     <ResourceGalleryPage
       title={t('workgroups.title')}
-      headerActions={
-        <button
-          type="button"
-          className="btn btn--primary"
-          ref={createTriggerRef}
-          onClick={openCreate}
-          data-testid="workgroup-new-button"
-        >
-          {t('workgroups.newButton')}
-        </button>
-      }
+      headerActions={createAction}
+      emptyAction={createAction}
+      emptyIcon={WORKGROUP_ICON}
       items={items}
       isLoading={isLoading}
       error={error}
+      onRetry={() => void qc.invalidateQueries({ queryKey: ['workgroups'] })}
+      onClearSearch={() => undefined}
+      clearSearchLabel={t('common.clearSearch')}
       searchPlaceholder={t('common.searchCards')}
       emptyListText={t('workgroups.emptyList')}
+      emptyDescription={t('workgroups.emptyDescription')}
       emptyTestid="workgroups-empty"
       loadingTestid="workgroups-loading"
     >

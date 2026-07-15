@@ -137,12 +137,23 @@ function SkillDetailPage() {
     },
   })
 
+  const retryDetailAction = (
+    <button
+      type="button"
+      className="btn btn--sm"
+      onClick={() => void Promise.all([meta.refetch(), content.refetch()])}
+    >
+      {t('common.retry')}
+    </button>
+  )
+
   if (draft === undefined) {
+    if (meta.error !== null && meta.error !== undefined)
+      return <ErrorBanner error={meta.error} action={retryDetailAction} />
+    if (content.error !== null && content.error !== undefined)
+      return <ErrorBanner error={content.error} action={retryDetailAction} />
     if (meta.isLoading || content.isLoading)
       return <LoadingState data-testid="skill-detail-loading" />
-    if (meta.error !== null && meta.error !== undefined) return <ErrorBanner error={meta.error} />
-    if (content.error !== null && content.error !== undefined)
-      return <ErrorBanner error={content.error} />
     if (meta.data === undefined) return null
   }
 
@@ -173,6 +184,8 @@ function SkillDetailPage() {
   return (
     <fieldset className="detail-freeze skill-detail" disabled={del.isPending}>
       <DetailHeaderActions
+        title={name}
+        headingLevel={2}
         acl={{
           resourceBaseUrl: `/api/skills/${encodeURIComponent(name)}`,
           invalidateKey: ['skills'],
@@ -197,16 +210,24 @@ function SkillDetailPage() {
           </button>
         }
         errors={[combinedSave.error, del.error]}
-      >
-        <div>
-          <h2>{name}</h2>
-        </div>
-      </DetailHeaderActions>
+      />
+
+      {(meta.error !== null && meta.error !== undefined) ||
+      (content.error !== null && content.error !== undefined) ? (
+        <ErrorBanner error={meta.error ?? content.error} action={retryDetailAction} />
+      ) : null}
 
       <div className="agent-form">
-        <TabBar tabs={tabs} active={tab} onSelect={setTab} ariaLabel={t('skills.title')} />
+        <TabBar
+          tabs={tabs}
+          active={tab}
+          onSelect={setTab}
+          ariaLabel={t('skills.title')}
+          idPrefix="skills-detail"
+        />
         <TabPanels
           active={tab}
+          idPrefix="skills-detail"
           className="split__detail-body agent-form__panel"
           panels={[
             { key: 'overview', testid: 'skill-panel-overview', content: overview },

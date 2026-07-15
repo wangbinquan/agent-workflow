@@ -33,6 +33,7 @@ describe('TaskDiagnosePanel', () => {
   })
   afterEach(() => {
     globalThis.fetch = realFetch
+    vi.restoreAllMocks()
   })
 
   test('renders empty state when openAlerts is empty', async () => {
@@ -57,6 +58,14 @@ describe('TaskDiagnosePanel', () => {
   })
 
   test('renders table rows for open alerts (rule + severity)', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains('table-viewport__scroller') ? 320 : 0
+    })
+    vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockImplementation(function (this: Element) {
+      return this.classList.contains('table-viewport__scroller') ? 920 : 0
+    })
     globalThis.fetch = vi.fn(async () =>
       jsonResponse({
         scanned: 1,
@@ -94,6 +103,20 @@ describe('TaskDiagnosePanel', () => {
     await waitFor(() => {
       expect(document.body.querySelector('[data-testid="task-diagnose-table"]')).not.toBeNull()
     })
+    const table = screen.getByTestId('task-diagnose-table')
+    const scroller = table.parentElement as HTMLDivElement
+    const viewport = scroller.parentElement as HTMLDivElement
+    const dialog = screen.getByTestId('task-diagnose-panel').querySelector('[role="dialog"]')!
+    const title =
+      document.getElementById(dialog.getAttribute('aria-labelledby')!)?.textContent ?? ''
+    expect(title).not.toBe('')
+    expect(scroller.classList.contains('table-viewport__scroller')).toBe(true)
+    expect(viewport.classList.contains('table-viewport--lg')).toBe(true)
+    expect(scroller.firstElementChild).toBe(table)
+    expect(scroller.scrollWidth).toBeGreaterThan(scroller.clientWidth)
+    expect(screen.getByRole('region', { name: title })).toBe(scroller)
+    expect(scroller.getAttribute('tabindex')).toBe('0')
+    expect(viewport.getAttribute('data-overflow-end')).toBe('true')
     const r1Row = document.body.querySelector('tr[data-rule="R1"]')
     const s4Row = document.body.querySelector('tr[data-rule="S4"]')
     expect(r1Row).not.toBeNull()

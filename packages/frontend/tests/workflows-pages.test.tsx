@@ -238,6 +238,38 @@ describe('workflow name rules (pure) — unified with workgroup naming (用户 2
 })
 
 describe('/workflows quick-create dialog', () => {
+  test('RFC-198 page-header-primary-ratchet counts gallery chrome independently', async () => {
+    installFetch({ workflows: [wf('visible')], calls: [] })
+    await renderPage('/workflows')
+
+    await screen.findByTestId('workflow-card-visible')
+    const page = screen.getByTestId('gallery-grid').closest('.page--gallery')
+    const header = page?.querySelector('header.page__header')
+    const create = screen.getByTestId('workflow-new-button')
+
+    // Card-level Launch controls are a separate contextual group. The page
+    // chrome itself has one primary task, and it is the header Create action.
+    expect(Array.from(header?.querySelectorAll('.btn--primary') ?? [])).toEqual([create])
+    expect(header?.contains(create)).toBe(true)
+  })
+
+  test('RFC-198 initial gallery chrome moves, rather than duplicates, its primary task', async () => {
+    installFetch({ workflows: [], calls: [] })
+    await renderPage('/workflows')
+
+    const empty = await screen.findByTestId('workflows-empty')
+    const page = empty.closest('.page--gallery')
+    const header = page?.querySelector('header.page__header')
+    const create = screen.getByTestId('workflow-new-button')
+    const chromePrimaries = [header, empty].flatMap((surface) =>
+      Array.from(surface?.querySelectorAll('.btn--primary') ?? []),
+    )
+
+    expect(chromePrimaries).toEqual([create])
+    expect(header?.contains(create)).toBe(false)
+    expect(empty.contains(create)).toBe(true)
+  })
+
   test('empty name disables Create; a valid draft POSTs the full payload and navigates to the editor', async () => {
     const state = { workflows: [], calls: [] as Recorded['calls'] }
     installFetch(state)
@@ -432,13 +464,39 @@ describe('/workflows/new removal wiring', () => {
     expect(editIdx).toBeGreaterThan(redirectIdx)
   })
 
-  test('editor renders the error state before the loading guard (stuck-loading fix)', () => {
+  test('editor separates initial failure from stale refetch failure (stuck-loading fix)', () => {
     const edit = readSrc('routes/workflows.edit.tsx')
-    const errIdx = edit.indexOf('if (query.error !== null && query.error !== undefined)')
-    const loadIdx = edit.indexOf('if (query.isLoading || draft === null)')
-    expect(errIdx).toBeGreaterThan(0)
-    expect(loadIdx).toBeGreaterThan(0)
-    expect(errIdx).toBeLessThan(loadIdx)
+    const initialGuardIdx = edit.indexOf(
+      'if (draft === null || loadedWorkflowIdRef.current !== id)',
+    )
+    const initialErrorIdx = edit.indexOf(
+      'if (query.error !== null && query.error !== undefined)',
+      initialGuardIdx,
+    )
+    const editorReturnIdx = edit.indexOf('<div className="page page--editor">')
+    const staleErrorIdx = edit.indexOf(
+      'query.error !== null && query.error !== undefined &&',
+      editorReturnIdx,
+    )
+    expect(initialGuardIdx).toBeGreaterThan(0)
+    expect(initialErrorIdx).toBeGreaterThan(initialGuardIdx)
+    expect(editorReturnIdx).toBeGreaterThan(initialErrorIdx)
+    expect(staleErrorIdx).toBeGreaterThan(editorReturnIdx)
+    expect(edit).toContain('<PageHeader title={id} />')
+    expect(edit).toContain("<LoadingState label={t('editor.loadingWorkflow')} />")
+    expect(edit).toContain('error={query.error}')
+    expect(edit).toContain('onClick={() => void query.refetch()}')
+    expect(edit).not.toContain('<div className="page error-box">')
+  })
+
+  test('editor composes shared page header and feedback without changing canvas ownership', () => {
+    const edit = readSrc('routes/workflows.edit.tsx')
+    expect(edit).toContain('title={name || id}')
+    expect(edit).toContain('actions={headerActions}')
+    expect(edit).toContain('<ErrorBanner error={save.error} />')
+    expect(edit).toContain('<ErrorBanner error={validate.error} />')
+    expect(edit).toContain('<NoticeBanner')
+    expect(edit).toContain('<WorkflowCanvas')
   })
 
   test('the editor route file only serves /workflows/$id', () => {

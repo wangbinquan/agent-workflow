@@ -76,6 +76,24 @@ describe('RFC-169 — five-tab layout', () => {
       expect(screen.getByTestId(`agent-panel-${key}`)).toBeTruthy()
     }
   })
+
+  test('every tab has a stable two-way DOM association with its panel', () => {
+    mount(emptyAgent())
+    for (const [key, name] of [
+      ['basics', 'Basics'],
+      ['prompt', 'Prompt'],
+      ['ports', 'Ports'],
+      ['resources', 'Resources & deps'],
+      ['advanced', 'Advanced'],
+    ] as const) {
+      const tab = screen.getByRole('tab', { name: new RegExp(name) })
+      const panel = screen.getByTestId(`agent-panel-${key}`)
+      expect(tab.id).toBe(`agent-form-tab-${key}`)
+      expect(tab.getAttribute('aria-controls')).toBe(panel.id)
+      expect(panel.id).toBe(`agent-form-panel-${key}`)
+      expect(panel.getAttribute('aria-labelledby')).toBe(tab.id)
+    }
+  })
 })
 
 describe('RFC-169 — tab count badges', () => {

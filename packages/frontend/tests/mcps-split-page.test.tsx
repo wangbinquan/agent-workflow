@@ -128,8 +128,17 @@ describe('/mcps split page', () => {
     fireEvent.click(screen.getByTestId('split-card-db'))
     await waitFor(() => expect(router.state.location.pathname).toBe('/mcps/db'))
     await waitFor(() => screen.getByRole('heading', { level: 2, name: 'db' }))
-    expect(screen.getByRole('tab', { name: 'Config' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: /Tools/ })).toBeTruthy()
+    for (const [key, name] of [
+      ['config', 'Config'],
+      ['probe', 'Tools'],
+    ] as const) {
+      const tab = screen.getByRole('tab', { name: new RegExp(name) })
+      const panel = screen.getByTestId(`mcp-panel-${key}`)
+      expect(tab.id).toBe(`mcps-detail-tab-${key}`)
+      expect(tab.getAttribute('aria-controls')).toBe(panel.id)
+      expect(panel.id).toBe(`mcps-detail-panel-${key}`)
+      expect(panel.getAttribute('aria-labelledby')).toBe(tab.id)
+    }
     expect(screen.getByTestId('mcps-mobile-back').getAttribute('href')).toBe('/mcps')
     expect(screen.getAllByTestId('mcps-mobile-back')).toHaveLength(1)
     expect(

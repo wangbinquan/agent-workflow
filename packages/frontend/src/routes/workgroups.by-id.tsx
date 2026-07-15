@@ -19,7 +19,10 @@ import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import { PageHeader } from '@/components/PageHeader'
+import { ApiError } from '@/api/client'
 import { useResolveResourceName } from '@/hooks/useResolveResourceName'
 import { Route as RootRoute } from './__root'
 
@@ -33,19 +36,39 @@ function WorkgroupByIdRedirect() {
   const { t } = useTranslation()
   const { id } = Route.useParams()
   const navigate = useNavigate()
-  const { name, isLoading, isError } = useResolveResourceName('workgroups', id)
+  const { name, isError, error, refetch } = useResolveResourceName('workgroups', id)
 
   useEffect(() => {
     if (name !== null) void navigate({ to: '/workgroups/$name', params: { name }, replace: true })
   }, [name, navigate])
 
-  if (isLoading) return <LoadingState />
-  if (isError || name === null) {
+  if (isError && error instanceof ApiError && error.status === 404) {
     return (
       <div className="page">
+        <PageHeader title={t('workgroups.title')} />
         <EmptyState title={t('common.resourceUnavailable')} />
       </div>
     )
   }
-  return <LoadingState /> // resolved — redirecting
+  if (isError) {
+    return (
+      <div className="page">
+        <PageHeader title={t('workgroups.title')} />
+        <ErrorBanner
+          error={error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={refetch}>
+              {t('common.retry')}
+            </button>
+          }
+        />
+      </div>
+    )
+  }
+  return (
+    <div className="page">
+      <PageHeader title={t('workgroups.title')} />
+      <LoadingState />
+    </div>
+  ) // loading or resolved and redirecting
 }

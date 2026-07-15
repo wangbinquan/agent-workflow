@@ -102,10 +102,16 @@ function McpDetailPage() {
     },
   })
 
+  const retryDetailAction = (
+    <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
+      {t('common.retry')}
+    </button>
+  )
+
   if (form === undefined) {
     if (query.isLoading) return <LoadingState data-testid="mcp-detail-loading" />
     if (query.error !== null && query.error !== undefined)
-      return <ErrorBanner error={query.error} />
+      return <ErrorBanner error={query.error} action={retryDetailAction} />
     return null
   }
 
@@ -117,6 +123,8 @@ function McpDetailPage() {
   return (
     <fieldset className="detail-freeze" disabled={del.isPending}>
       <DetailHeaderActions
+        title={name}
+        headingLevel={2}
         acl={{
           resourceBaseUrl: `/api/mcps/${encodeURIComponent(name)}`,
           invalidateKey: ['mcps'],
@@ -133,16 +141,23 @@ function McpDetailPage() {
           disabled: del.isPending,
         }}
         errors={[save.error, del.error]}
-      >
-        <div>
-          <h2>{name}</h2>
-        </div>
-      </DetailHeaderActions>
+      />
+
+      {query.error !== null && query.error !== undefined && (
+        <ErrorBanner error={query.error} action={retryDetailAction} />
+      )}
 
       <div className="agent-form">
-        <TabBar tabs={tabs} active={tab} onSelect={setTab} ariaLabel={t('mcps.title')} />
+        <TabBar
+          tabs={tabs}
+          active={tab}
+          onSelect={setTab}
+          ariaLabel={t('mcps.title')}
+          idPrefix="mcps-detail"
+        />
         <TabPanels
           active={tab}
+          idPrefix="mcps-detail"
           className="split__detail-body agent-form__panel"
           panels={[
             {

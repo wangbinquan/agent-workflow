@@ -31,9 +31,6 @@ const ALLOWLIST = new Set<string>([
   // Row-title fallback chain (`title → loading → id`): inline text inside a
   // list row label, not a three-state shell.
   'components/fusion/MemoryReviewItem.tsx',
-  // Inline <span> inside the diff-toolbar slot ternary (historical diff
-  // loading); the slot expects inline content.
-  'routes/reviews.detail.tsx',
 ])
 
 function walk(dir: string, out: string[] = []): string[] {

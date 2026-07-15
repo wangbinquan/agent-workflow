@@ -7,8 +7,13 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import { PageHeader } from '@/components/PageHeader'
 import { Select } from '@/components/Select'
+import { TableViewport } from '@/components/TableViewport'
+import { USER_ICON } from '@/components/icons/resourceIcons'
 import { useActor, usePermission } from '@/hooks/useActor'
 import { Route as RootRoute } from './__root'
 
@@ -31,11 +36,11 @@ export const Route = createRoute({
 export function UsersPage() {
   const { t } = useTranslation()
   const allowed = usePermission('users:read')
-  const { data: me } = useActor()
+  const { data: me, isLoading: isActorLoading } = useActor()
   const qc = useQueryClient()
   const [showCreate, setShowCreate] = useState(false)
 
-  const { data, isLoading, error } = useQuery<UserRow[]>({
+  const { data, isLoading, error, refetch } = useQuery<UserRow[]>({
     queryKey: ['users'],
     queryFn: () => api.get('/api/users'),
     enabled: allowed,
@@ -81,121 +86,154 @@ export function UsersPage() {
     },
   })
 
-  if (!allowed) {
-    return (
-      <div className="page">
-        <h1>{t('users.title', { defaultValue: 'Users' })}</h1>
-        <NoPermission />
-      </div>
-    )
-  }
+  const users = data ?? []
+  const hasUsers = allowed && users.length > 0
+  const isInitialEmpty = allowed && data !== undefined && users.length === 0
+  const newUserAction = (
+    <button type="button" className="btn btn--primary" onClick={() => setShowCreate(true)}>
+      {t('users.new', { defaultValue: 'New user' })}
+    </button>
+  )
+  const retryAction = (
+    <button type="button" className="btn btn--sm" onClick={() => void refetch()}>
+      {t('common.retry')}
+    </button>
+  )
 
   return (
     <div className="page">
-      <header className="page__header page__header--row">
-        <div>
-          <h1>{t('users.title', { defaultValue: 'Users' })}</h1>
-        </div>
-        <button className="btn btn--primary" onClick={() => setShowCreate(true)}>
-          {t('users.new', { defaultValue: 'New user' })}
-        </button>
-      </header>
-      {isLoading && <LoadingState />}
-      {error && <div className="auth-form__error">{(error as Error).message}</div>}
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>{t('users.username', { defaultValue: 'Username' })}</th>
-            <th>{t('users.displayName', { defaultValue: 'Display name' })}</th>
-            <th>{t('users.role', { defaultValue: 'Role' })}</th>
-            <th>{t('users.status', { defaultValue: 'Status' })}</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {(data ?? []).map((u) => {
-            const isSystem = u.id === '__system__'
-            // Self-role lockout guard (mirrors the backend's
-            // self-role-change-forbidden): show a static chip instead of the
-            // select so an admin can't demote themselves out of /users.
-            const isSelf = u.id === me?.user.id
-            const showRoleError = roleError?.id === u.id
-            return (
-              <tr key={u.id}>
-                <td>
-                  <code>{u.username}</code>
-                </td>
-                <td>{u.displayName}</td>
-                <td>
-                  {isSystem || isSelf ? (
-                    <span
-                      className={`role-chip role-chip--${u.role}`}
-                      title={
-                        isSelf
-                          ? t('users.selfRoleLocked', {
-                              defaultValue: 'You cannot change your own role.',
-                            })
-                          : undefined
-                      }
-                    >
-                      {u.role}
-                    </span>
-                  ) : (
-                    <Select<'admin' | 'user'>
-                      value={u.role}
-                      onChange={(role) => {
-                        if (role === u.role) return
-                        updateRole.mutate({ id: u.id, role })
-                      }}
-                      ariaLabel={t('users.role', { defaultValue: 'Role' })}
-                      options={[
-                        {
-                          value: 'user',
-                          label: t('users.roleOption.user'),
-                          description: t('users.roleOption.userDesc'),
-                        },
-                        {
-                          value: 'admin',
-                          label: t('users.roleOption.admin'),
-                          description: t('users.roleOption.adminDesc'),
-                        },
-                      ]}
-                      renderOption={(opt) => (
-                        <span className="select__option-stack">
-                          <span className="select__option-title">{opt.label}</span>
-                          {opt.description && (
-                            <span className="select__option-sub">{opt.description}</span>
-                          )}
-                        </span>
-                      )}
-                    />
-                  )}
-                  {showRoleError && <div className="users-row__error">{roleError.msg}</div>}
-                </td>
-                <td>{u.status}</td>
-                <td>
-                  {/* Self-disable lockout mirrors the self-role guard above
-                      (backend enforces self-disable-forbidden too): an admin
-                      can't disable their own account from the UI. */}
-                  {!isSystem && !isSelf && u.status === 'active' && (
-                    <button
-                      className="btn btn--ghost btn--xs btn--danger"
-                      onClick={() => disable.mutate(u.id)}
-                    >
-                      {t('users.disable', { defaultValue: 'Disable' })}
-                    </button>
-                  )}
-                  {!isSystem && u.status === 'disabled' && (
-                    <button className="btn btn--ghost btn--xs" onClick={() => enable.mutate(u.id)}>
-                      {t('users.enable', { defaultValue: 'Enable' })}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            )
+      <PageHeader
+        title={t('users.title', { defaultValue: 'Users' })}
+        actions={hasUsers ? newUserAction : undefined}
+      />
+
+      {isActorLoading ? (
+        <LoadingState />
+      ) : !allowed ? (
+        <EmptyState
+          title={t('users.noPermission.title', { defaultValue: 'Admin permission required' })}
+          description={t('users.noPermission.body', {
+            defaultValue: 'This page is only available to administrators.',
           })}
-        </tbody>
-      </table>
+          size="compact"
+          data-testid="no-permission"
+        />
+      ) : (
+        <>
+          {isLoading && data === undefined && <LoadingState />}
+          {error !== null && <ErrorBanner error={error} action={retryAction} />}
+          {isInitialEmpty && (
+            <EmptyState
+              title={t('users.empty')}
+              description={t('users.emptyDescription')}
+              icon={USER_ICON}
+              action={newUserAction}
+              data-testid="users-empty"
+            />
+          )}
+          {hasUsers && (
+            <TableViewport label={t('users.title', { defaultValue: 'Users' })}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>{t('users.username', { defaultValue: 'Username' })}</th>
+                    <th>{t('users.displayName', { defaultValue: 'Display name' })}</th>
+                    <th>{t('users.role', { defaultValue: 'Role' })}</th>
+                    <th>{t('users.status', { defaultValue: 'Status' })}</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => {
+                    const isSystem = u.id === '__system__'
+                    // Self-role lockout guard (mirrors the backend's
+                    // self-role-change-forbidden): show a static chip instead of the
+                    // select so an admin can't demote themselves out of /users.
+                    const isSelf = u.id === me?.user.id
+                    const showRoleError = roleError?.id === u.id
+                    return (
+                      <tr key={u.id}>
+                        <td>
+                          <code>{u.username}</code>
+                        </td>
+                        <td>{u.displayName}</td>
+                        <td>
+                          {isSystem || isSelf ? (
+                            <span
+                              className={`role-chip role-chip--${u.role}`}
+                              title={
+                                isSelf
+                                  ? t('users.selfRoleLocked', {
+                                      defaultValue: 'You cannot change your own role.',
+                                    })
+                                  : undefined
+                              }
+                            >
+                              {u.role}
+                            </span>
+                          ) : (
+                            <Select<'admin' | 'user'>
+                              value={u.role}
+                              onChange={(role) => {
+                                if (role === u.role) return
+                                updateRole.mutate({ id: u.id, role })
+                              }}
+                              ariaLabel={t('users.role', { defaultValue: 'Role' })}
+                              options={[
+                                {
+                                  value: 'user',
+                                  label: t('users.roleOption.user'),
+                                  description: t('users.roleOption.userDesc'),
+                                },
+                                {
+                                  value: 'admin',
+                                  label: t('users.roleOption.admin'),
+                                  description: t('users.roleOption.adminDesc'),
+                                },
+                              ]}
+                              renderOption={(opt) => (
+                                <span className="select__option-stack">
+                                  <span className="select__option-title">{opt.label}</span>
+                                  {opt.description && (
+                                    <span className="select__option-sub">{opt.description}</span>
+                                  )}
+                                </span>
+                              )}
+                            />
+                          )}
+                          {showRoleError && <div className="users-row__error">{roleError.msg}</div>}
+                        </td>
+                        <td>{u.status}</td>
+                        <td>
+                          {/* Self-disable lockout mirrors the self-role guard above
+                              (backend enforces self-disable-forbidden too): an admin
+                              can't disable their own account from the UI. */}
+                          {!isSystem && !isSelf && u.status === 'active' && (
+                            <button
+                              className="btn btn--ghost btn--xs btn--danger"
+                              onClick={() => disable.mutate(u.id)}
+                            >
+                              {t('users.disable', { defaultValue: 'Disable' })}
+                            </button>
+                          )}
+                          {!isSystem && u.status === 'disabled' && (
+                            <button
+                              className="btn btn--ghost btn--xs"
+                              onClick={() => enable.mutate(u.id)}
+                            >
+                              {t('users.enable', { defaultValue: 'Enable' })}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </TableViewport>
+          )}
+        </>
+      )}
       {showCreate && (
         <CreateUserDialog
           onCancel={() => setShowCreate(false)}
@@ -316,19 +354,5 @@ function CreateUserDialog(props: {
         {props.error && <div className="form-field__error">{props.error}</div>}
       </form>
     </Dialog>
-  )
-}
-
-function NoPermission() {
-  const { t } = useTranslation()
-  return (
-    <div className="empty-state" data-testid="no-permission">
-      <h2>{t('users.noPermission.title', { defaultValue: 'Admin permission required' })}</h2>
-      <p>
-        {t('users.noPermission.body', {
-          defaultValue: 'This page is only available to administrators.',
-        })}
-      </p>
-    </div>
   )
 }

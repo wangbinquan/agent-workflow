@@ -111,6 +111,7 @@ export interface ResourceSplitPageProps {
 export function ResourceSplitPage(props: ResourceSplitPageProps) {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
   const cardRefs = useRef(new Map<string, HTMLAnchorElement>())
   const newLinkRef = useRef<HTMLAnchorElement | null>(null)
   const restoreListFocusRef = useRef(false)
@@ -178,6 +179,11 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
       </button>
     )
 
+  const clearSearch = useCallback(() => {
+    setSearch('')
+    searchInputRef.current?.focus()
+  }, [])
+
   return (
     <div className="page page--split" data-mobile-view={mobileView}>
       <SplitDirtyContext.Provider value={ctxValue}>
@@ -193,6 +199,7 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
               )}
             </div>
             <TextInput
+              inputRef={searchInputRef}
               type="search"
               value={search}
               onChange={setSearch}
@@ -212,6 +219,13 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
                   title={listEmpty ? props.emptyListText : t('common.noMatches')}
                   description={listEmpty ? props.emptyDescription : undefined}
                   icon={listEmpty ? props.emptyIcon : undefined}
+                  action={
+                    listEmpty ? undefined : (
+                      <button type="button" className="btn btn--sm" onClick={clearSearch}>
+                        {t('common.clearSearch')}
+                      </button>
+                    )
+                  }
                   data-testid="split-empty"
                 />
               )}

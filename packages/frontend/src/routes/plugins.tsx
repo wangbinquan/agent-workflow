@@ -21,6 +21,7 @@ import {
   pluginUpdateAvailable,
   type PluginUpdatesCache,
 } from '@/lib/plugin-updates'
+import { PLUGIN_ICON } from '@/components/icons/resourceIcons'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -37,7 +38,7 @@ export const IndexRoute = createRoute({
 
 function PluginsSplitLayout() {
   const { t } = useTranslation()
-  const { data, isLoading, error, owners } = useResourceList<Plugin>({
+  const { data, isLoading, error, refetch, owners } = useResourceList<Plugin>({
     queryKey: ['plugins'],
     endpoint: '/api/plugins',
     deleteBy: 'id',
@@ -107,6 +108,9 @@ function PluginsSplitLayout() {
       newTo="/plugins/new"
       searchPlaceholder={t('common.searchEllipsis')}
       emptyListText={t('plugins.emptyList')}
+      emptyDescription={t('plugins.emptyDescription')}
+      emptyIcon={PLUGIN_ICON}
+      onRetry={() => void refetch()}
       listTo="/plugins"
       mobileBackLabel={t('common.backToList')}
       mobileBackTestId="plugins-mobile-back"

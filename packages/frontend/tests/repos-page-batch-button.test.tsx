@@ -8,6 +8,7 @@ import { resolve } from 'node:path'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { enUS } from '../src/i18n/en-US'
 import type * as ApiClientModule from '../src/api/client'
 
 vi.mock('../src/api/client', async () => {
@@ -61,12 +62,22 @@ function renderPage() {
 }
 
 describe('/repos page batch import button (RFC-033)', () => {
-  test('header renders batch-import button', async () => {
+  test('initial empty state renders exactly one batch-import button', async () => {
     renderPage()
-    // Wait for the (empty) query to resolve so the header is fully painted.
-    await new Promise((r) => setTimeout(r, 10))
-    const btn = screen.getByTestId('repos-batch-import-button')
+    const empty = await screen.findByTestId('repos-empty')
+    expect(empty.textContent).toContain(enUS.repos.emptyDescription)
+    expect(empty.querySelector('[data-icon="repo"]')).not.toBeNull()
+    const buttons = screen.getAllByTestId('repos-batch-import-button')
+    expect(buttons).toHaveLength(1)
+    const btn = buttons[0]!
     expect(btn.textContent ?? '').toMatch(/批量导入|Batch import/)
+    expect(empty.contains(btn)).toBe(true)
+    expect(btn.closest('.page__actions')).toBeNull()
+    const header = empty.closest('.page')?.querySelector('header.page__header')
+    const chromePrimaries = [header, empty].flatMap((surface) =>
+      Array.from(surface?.querySelectorAll('.btn--primary') ?? []),
+    )
+    expect(chromePrimaries).toEqual([btn])
   })
 
   test('clicking the button mounts the dialog', async () => {
@@ -90,20 +101,24 @@ describe('/repos page batch import button (RFC-033)', () => {
     expect(src).toMatch(/<button\s+ref=\{[a-zA-Z]+TriggerRef\}/)
     // BatchImportDialog must receive that ref through triggerRef.
     expect(src).toMatch(/triggerRef=\{[a-zA-Z]+TriggerRef\}/)
+    // RFC-198: one stable action element moves between the initial empty state
+    // and PageHeader, so a list refresh while the dialog is open updates the
+    // shared ref to the newly connected trigger.
+    expect(src).toContain('actions={isInitialEmpty ? undefined : batchImportAction}')
+    expect(src).toMatch(/<EmptyState[^>]+action=\{batchImportAction\}/)
   })
 
-  // Locks in the top-right placement aligned with /agents "新建代理" button
-  // (see commit aligning batch-import button placement). Header should be a
-  // page__header--row flex so the button sits to the right of the title;
-  // button itself should use the unsized primary style, not btn--sm.
-  test('button uses primary style inside page__header--row layout', async () => {
+  // Initial empty lists intentionally move the sole primary CTA into the
+  // EmptyState. The shared PageHeader still owns the page heading; after data
+  // arrives the same action is conditionally rendered in its actions slot.
+  test('empty CTA keeps primary styling while PageHeader owns the heading', async () => {
     renderPage()
-    await new Promise((r) => setTimeout(r, 10))
+    await screen.findByTestId('repos-empty')
     const btn = screen.getByTestId('repos-batch-import-button')
     expect(btn.className).toContain('btn--primary')
     expect(btn.className).not.toContain('btn--sm')
-    const header = btn.closest('header')
-    expect(header).not.toBeNull()
-    expect(header?.className ?? '').toContain('page__header--row')
+    expect(
+      document.querySelector('header.page__header.page__header--row h1.page__title'),
+    ).not.toBeNull()
   })
 })

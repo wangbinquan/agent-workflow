@@ -16,6 +16,7 @@ import type {
 } from '@agent-workflow/shared'
 import { EmptyState } from '@/components/EmptyState'
 import { Segmented } from '@/components/Segmented'
+import { tabDomIds } from '@/components/TabBar'
 import {
   summaryRows,
   groupFileChanges,
@@ -466,7 +467,6 @@ function StructuralTree({
   const { t } = useTranslation()
   const [sel, setSel] = useState(0)
   const idx = Math.min(sel, files.length - 1)
-  const selected = files[idx]
 
   // Keyboard file switching, mirroring WorktreeDiffPanel. The list is a vertical
   // `role="tablist"`; Up/Down (+ Home/End) step between FILE rows in their
@@ -536,11 +536,14 @@ function StructuralTree({
             const f = files[row.fileIndex]
             if (f === undefined) return null
             const i = row.fileIndex
+            const ids = tabDomIds('structural-file', String(i))
             return (
               <button
                 type="button"
                 key={`f${i}`}
                 role="tab"
+                id={ids.tabId}
+                aria-controls={ids.panelId}
                 ref={(el) => {
                   if (el !== null) tabRefs.current.set(i, el)
                   else tabRefs.current.delete(i)
@@ -565,17 +568,30 @@ function StructuralTree({
           })}
         </nav>
       </aside>
-      <section className="structure__body">
-        {selected !== undefined && (
-          <FileChanges
-            file={selected}
-            sortBy={sortBy}
-            sevFilter={sevFilter}
-            onJumpToHunk={onJumpToHunk}
-            onOpenCallChain={onOpenCallChain}
-          />
-        )}
-      </section>
+      {files.map((file, index) => {
+        const ids = tabDomIds('structural-file', String(index))
+        const active = index === idx
+        return (
+          <section
+            key={file.filePath}
+            className="structure__body"
+            role="tabpanel"
+            id={ids.panelId}
+            aria-labelledby={ids.tabId}
+            hidden={!active}
+          >
+            {active ? (
+              <FileChanges
+                file={file}
+                sortBy={sortBy}
+                sevFilter={sevFilter}
+                onJumpToHunk={onJumpToHunk}
+                onOpenCallChain={onOpenCallChain}
+              />
+            ) : null}
+          </section>
+        )
+      })}
     </div>
   )
 }

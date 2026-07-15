@@ -34,6 +34,7 @@ import { Dialog } from '@/components/Dialog'
 import { TextArea } from '@/components/Form'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import { PageHeader } from '@/components/PageHeader'
 import { ReviewDecisionInfo } from '@/components/review/ReviewDecisionInfo'
 import { ReviewDocPane } from '@/components/review/ReviewDocPane'
 import { StatusChip, type StatusChipKind } from '@/components/StatusChip'
@@ -164,6 +165,8 @@ export function MultiDocReviewView({
     await qc.invalidateQueries({ queryKey: ['reviews', 'version-body', nodeRunId, activeDocId] })
   }, [qc, nodeRunId, activeDocId])
 
+  const [dialog, setDialog] = useState<DecisionDialog>(null)
+
   const selectionMut = useMutation({
     mutationFn: async (input: { docVersionId: string; selection: 'accepted' | 'not_accepted' }) => {
       await api.patch(`/api/reviews/${nodeRunId}/documents/${input.docVersionId}/selection`, {
@@ -182,6 +185,9 @@ export function MultiDocReviewView({
       await api.post(`/api/reviews/${nodeRunId}/decision`, input)
     },
     onSuccess: async () => {
+      // Keep the confirmation open through the request. It only closes after
+      // the server accepts the decision; failures remain visible in-context.
+      setDialog(null)
       await qc.invalidateQueries({ queryKey: ['reviews', 'detail', nodeRunId] })
       await qc.invalidateQueries({ queryKey: ['reviews', 'list'] })
       await qc.invalidateQueries({ queryKey: ['reviews', 'pending-count'] })
@@ -193,9 +199,8 @@ export function MultiDocReviewView({
     },
   })
 
-  const [dialog, setDialog] = useState<DecisionDialog>(null)
   const reviewIteration = detail.data?.summary.reviewIteration ?? 0
-  const confirmDecision = useCallback(async () => {
+  const confirmDecision = useCallback(() => {
     if (dialog === null) return
     if (dialog.kind === 'reject') {
       const reason = dialog.reason.trim()
@@ -203,8 +208,7 @@ export function MultiDocReviewView({
         setDialog({ ...dialog, reasonError: true })
         return
       }
-      setDialog(null)
-      await submitDecision.mutateAsync({
+      submitDecision.mutate({
         decision: 'rejected',
         rejectReason: reason,
         reviewIteration,
@@ -212,8 +216,7 @@ export function MultiDocReviewView({
       return
     }
     const decision = dialog.kind === 'approve' ? 'approved' : 'iterated'
-    setDialog(null)
-    await submitDecision.mutateAsync({ decision, reviewIteration })
+    submitDecision.mutate({ decision, reviewIteration })
   }, [dialog, submitDecision, reviewIteration])
 
   // RFC-090: keyboard nav for the multi-doc review queue — ↑/↓ switch document,
@@ -266,23 +269,58 @@ export function MultiDocReviewView({
     }
   }, [activeDocId])
 
-  if (detail.isLoading) return <LoadingState />
-  if (detail.isError || detail.data === undefined) return <ErrorBanner error={detail.error} />
+  if (detail.data === undefined) {
+    return (
+      <div className="page review-multidoc">
+        <PageHeader title={t('reviews.title')} />
+        {detail.error !== null && detail.error !== undefined ? (
+          <ErrorBanner
+            error={detail.error}
+            action={
+              <button type="button" className="btn btn--sm" onClick={() => void detail.refetch()}>
+                {t('common.retry')}
+              </button>
+            }
+          />
+        ) : (
+          <LoadingState />
+        )}
+      </div>
+    )
+  }
   // RFC-149: while the rounds list loads, the historical view renders
   // OPTIMISTICALLY (read-only shell + placeholder labels + pane loading state)
   // instead of the old full-page spinner — single-doc parity. Only a rounds
-  // ERROR still blocks (the list IS the historical data source).
-  if (historicalRoundKey !== undefined && rounds.isError) {
-    return <ErrorBanner error={rounds.error} />
+  // initial error still blocks because the list IS the historical data source.
+  // A stale-data refetch error, however, keeps the resolved round on screen.
+  if (
+    historicalRoundKey !== undefined &&
+    rounds.data === undefined &&
+    rounds.error !== null &&
+    rounds.error !== undefined
+  ) {
+    return (
+      <div className="page review-multidoc">
+        <PageHeader title={t('reviews.title')} />
+        <ErrorBanner
+          error={rounds.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void rounds.refetch()}>
+              {t('common.retry')}
+            </button>
+          }
+        />
+      </div>
+    )
   }
 
   const current = documents.find((d) => d.docVersionId === activeDocId)
 
   return (
     <div className="page review-multidoc">
-      <header className="page__header page__header--row">
-        <div>
-          <h1 className="page__title">
+      <PageHeader
+        title={
+          <>
             {/* Lead with the task name linked to its detail page (inline, no
                 extra row — keeps the multi-doc header compact), then the review
                 round's title / node id. */}
@@ -298,8 +336,10 @@ export function MultiDocReviewView({
             </Link>
             {' / '}
             {detail.data.summary.title || detail.data.summary.reviewNodeId}
-          </h1>
-          <div className="muted">
+          </>
+        }
+        meta={
+          <>
             {view.mode === 'historical' && (
               <>
                 {t('reviews.roundLabel', {
@@ -309,62 +349,86 @@ export function MultiDocReviewView({
               </>
             )}
             {t('reviews.multiDoc.documents', { count: documents.length })}
-          </div>
-          {/* RFC-142: 决策信息块——历史轮显示该轮决策；当前视图在轮已决策时显示
+          </>
+        }
+        actions={
+          mode !== 'historical' ? (
+            <>
+              <button
+                type="button"
+                className="btn btn--sm btn--primary"
+                data-testid="multidoc-approve"
+                disabled={mode !== 'awaiting' || !allDecided || submitDecision.isPending}
+                title={
+                  allDecided
+                    ? undefined
+                    : t('reviews.multiDoc.approveBlocked', {
+                        count: documents.length - decidedCount,
+                      })
+                }
+                onClick={() => setDialog({ kind: 'approve' })}
+              >
+                {t('reviews.multiDoc.approveProgress', {
+                  decided: decidedCount,
+                  total: documents.length,
+                })}
+              </button>
+              <button
+                type="button"
+                className="btn btn--sm"
+                disabled={mode !== 'awaiting' || submitDecision.isPending}
+                onClick={() => setDialog({ kind: 'iterate' })}
+              >
+                {t('reviews.iterateButton')}
+              </button>
+              <button
+                type="button"
+                className="btn btn--sm btn--danger"
+                disabled={mode !== 'awaiting' || submitDecision.isPending}
+                onClick={() => setDialog({ kind: 'reject', reason: '', reasonError: false })}
+              >
+                {t('reviews.rejectButton')}
+              </button>
+            </>
+          ) : undefined
+        }
+      >
+        {/* RFC-142: 决策信息块——历史轮显示该轮决策；当前视图在轮已决策时显示
               （pending 时组件自身返回 null）。 */}
-          <ReviewDecisionInfo
-            decision={decisionSource.decision}
-            decisionReason={decisionSource.decisionReason}
-            decidedAt={decisionSource.decidedAt}
-            decidedBy={decisionSource.decidedBy}
-            decidedByRole={decisionSource.decidedByRole ?? null}
-            user={
-              decisionSource.decidedBy !== null && decisionSource.decidedBy !== undefined
-                ? deciderLookup.get(decisionSource.decidedBy)
-                : undefined
-            }
-          />
-        </div>
-        {/* RFC-149: decided current round keeps the buttons visible but
-            disabled (single-doc parity); only the historical view hides them. */}
-        {mode !== 'historical' && (
-          <div className="page__actions">
-            <button
-              type="button"
-              className="btn btn--sm btn--primary"
-              data-testid="multidoc-approve"
-              disabled={mode !== 'awaiting' || !allDecided || submitDecision.isPending}
-              title={
-                allDecided
-                  ? undefined
-                  : t('reviews.multiDoc.approveBlocked', { count: documents.length - decidedCount })
-              }
-              onClick={() => setDialog({ kind: 'approve' })}
-            >
-              {t('reviews.multiDoc.approveProgress', {
-                decided: decidedCount,
-                total: documents.length,
-              })}
+        <ReviewDecisionInfo
+          decision={decisionSource.decision}
+          decisionReason={decisionSource.decisionReason}
+          decidedAt={decisionSource.decidedAt}
+          decidedBy={decisionSource.decidedBy}
+          decidedByRole={decisionSource.decidedByRole ?? null}
+          user={
+            decisionSource.decidedBy !== null && decisionSource.decidedBy !== undefined
+              ? deciderLookup.get(decisionSource.decidedBy)
+              : undefined
+          }
+        />
+      </PageHeader>
+
+      {detail.error !== null && detail.error !== undefined && (
+        <ErrorBanner
+          error={detail.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void detail.refetch()}>
+              {t('common.retry')}
             </button>
-            <button
-              type="button"
-              className="btn btn--sm"
-              disabled={mode !== 'awaiting' || submitDecision.isPending}
-              onClick={() => setDialog({ kind: 'iterate' })}
-            >
-              {t('reviews.iterateButton')}
+          }
+        />
+      )}
+      {rounds.data !== undefined && rounds.error !== null && rounds.error !== undefined && (
+        <ErrorBanner
+          error={rounds.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void rounds.refetch()}>
+              {t('common.retry')}
             </button>
-            <button
-              type="button"
-              className="btn btn--sm btn--danger"
-              disabled={mode !== 'awaiting' || submitDecision.isPending}
-              onClick={() => setDialog({ kind: 'reject', reason: '', reasonError: false })}
-            >
-              {t('reviews.rejectButton')}
-            </button>
-          </div>
-        )}
-      </header>
+          }
+        />
+      )}
 
       {view.mode === 'historical' && (
         <div className="readonly-banner" role="status">
@@ -442,8 +506,22 @@ export function MultiDocReviewView({
             shared <ReviewDocPane>, which renders the active doc's markdown +
             anchored comment sidebar exactly like the single-document page. */}
         <div className="review-multidoc__pane">
+          {!isFirst && selectedDoc.error !== null && selectedDoc.error !== undefined && (
+            <ErrorBanner
+              error={selectedDoc.error}
+              action={
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => void selectedDoc.refetch()}
+                >
+                  {t('common.retry')}
+                </button>
+              }
+            />
+          )}
           {mode !== 'historical' && current !== undefined && (
-            <div className="review-multidoc__doc-actions">
+            <div className="review-multidoc__doc-actions" aria-busy={selectionMut.isPending}>
               <button
                 type="button"
                 data-testid="multidoc-accept"
@@ -487,9 +565,26 @@ export function MultiDocReviewView({
               </span>
             </div>
           )}
-          {activeBody === undefined ? (
+          {selectionMut.error !== null && selectionMut.error !== undefined && (
+            <ErrorBanner
+              error={selectionMut.error}
+              action={
+                selectionMut.variables !== undefined ? (
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    disabled={selectionMut.isPending}
+                    onClick={() => selectionMut.mutate(selectionMut.variables)}
+                  >
+                    {t('common.retry')}
+                  </button>
+                ) : undefined
+              }
+            />
+          )}
+          {activeBody === undefined && selectedDoc.error === null ? (
             <LoadingState />
-          ) : (
+          ) : activeBody !== undefined ? (
             <ReviewDocPane
               nodeRunId={nodeRunId}
               taskId={detail.data.summary.taskId}
@@ -500,13 +595,18 @@ export function MultiDocReviewView({
               onInvalidate={invalidate}
               onShortcutCaptureChange={setPaneCapturing}
             />
-          )}
+          ) : null}
         </div>
       </div>
 
       <Dialog
         open={dialog !== null}
-        onClose={() => setDialog(null)}
+        onClose={() => {
+          if (submitDecision.isPending) return
+          submitDecision.reset()
+          setDialog(null)
+        }}
+        dismissDisabled={submitDecision.isPending}
         title={
           dialog?.kind === 'reject'
             ? t('reviews.rejectDialogTitle')
@@ -516,13 +616,23 @@ export function MultiDocReviewView({
         }
         footer={
           <>
-            <button type="button" className="btn btn--sm" onClick={() => setDialog(null)}>
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={submitDecision.isPending}
+              onClick={() => {
+                submitDecision.reset()
+                setDialog(null)
+              }}
+            >
               {t('reviews.dialogCancel')}
             </button>
             <button
               type="button"
               className="btn btn--sm btn--primary"
-              onClick={() => void confirmDecision()}
+              disabled={submitDecision.isPending}
+              aria-busy={submitDecision.isPending}
+              onClick={confirmDecision}
             >
               {t('reviews.dialogConfirm')}
             </button>
@@ -538,12 +648,16 @@ export function MultiDocReviewView({
               value={dialog.reason}
               onChange={(v) => setDialog({ ...dialog, reason: v, reasonError: false })}
               rows={4}
+              disabled={submitDecision.isPending}
               data-testid="multidoc-reject-reason"
             />
             {dialog.reasonError && (
               <div className="form-error">{t('reviews.rejectReasonRequired')}</div>
             )}
           </div>
+        )}
+        {submitDecision.error !== null && submitDecision.error !== undefined && (
+          <ErrorBanner error={submitDecision.error} />
         )}
       </Dialog>
     </div>

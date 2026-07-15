@@ -34,8 +34,11 @@ import {
   workgroupLaunchReadiness,
 } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, NumberInput, Switch, TextArea, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
+import { NoticeBanner } from '@/components/NoticeBanner'
+import { PageHeader } from '@/components/PageHeader'
 import { ScheduleDialog } from '@/components/ScheduleDialog'
 import { ChoiceCards } from '@/components/ChoiceCards'
 import { Select } from '@/components/Select'
@@ -485,6 +488,64 @@ function TaskWizardPage() {
         : { disabled: true, description: t('taskWizard.workgroupNotReady') }),
     }
   })
+  const activeInventoryQ =
+    kind === 'workflow' ? workflowsQ : kind === 'agent' ? agentsQ : workgroupsQ
+  const activeInventoryLoading = activeInventoryQ.data === undefined && activeInventoryQ.isLoading
+  const activeInventoryError =
+    activeInventoryQ.error !== null && activeInventoryQ.error !== undefined
+  const activeInventoryEmpty =
+    kind === 'workflow'
+      ? workflowOptions.length === 0
+      : kind === 'agent'
+        ? agentOptions.length === 0
+        : workgroupOptions.length === 0
+  const objectFieldLabel =
+    kind === 'workflow'
+      ? t('taskWizard.objectWorkflow')
+      : kind === 'agent'
+        ? t('taskWizard.objectAgent')
+        : t('taskWizard.objectWorkgroup')
+  const objectPicker =
+    kind === 'workflow' ? (
+      <Select
+        value={workflowId}
+        onChange={setWorkflowId}
+        options={workflowOptions}
+        searchable
+        ariaLabel={objectFieldLabel}
+        placeholder={t('taskWizard.objectPlaceholder')}
+        data-testid="wizard-object-workflow"
+      />
+    ) : kind === 'agent' ? (
+      <Select
+        value={agentName}
+        onChange={(name) => {
+          setAgentName(name)
+          // RFC-175 (R8-F3): capture the picked agent's CURRENT id so an
+          // explicit re-pick sends the guard for the chosen agent (not a
+          // stale seeded id → no false 409).
+          setSelectedAgentId((agentsQ.data ?? []).find((a) => a.name === name)?.id)
+        }}
+        options={agentOptions}
+        searchable
+        ariaLabel={objectFieldLabel}
+        placeholder={t('taskWizard.objectPlaceholder')}
+        data-testid="wizard-object-agent"
+      />
+    ) : (
+      <Select
+        value={workgroupName}
+        onChange={(name) => {
+          setWorkgroupName(name)
+          setSelectedWorkgroupId((workgroupsQ.data ?? []).find((g) => g.name === name)?.id)
+        }}
+        options={workgroupOptions}
+        searchable
+        ariaLabel={objectFieldLabel}
+        placeholder={t('taskWizard.objectPlaceholder')}
+        data-testid="wizard-object-workgroup"
+      />
+    )
 
   const selectedObject =
     kind === 'workflow' ? workflowId : kind === 'agent' ? agentName : workgroupName
@@ -725,15 +786,37 @@ function TaskWizardPage() {
     !submitPending
   // RFC-159: upload files can't be persisted into a schedule's JSON payload.
   const scheduleUnsupported = kind === 'workflow' && (hasUploadInput || hasUploads)
+  const pageTitle = isEdit
+    ? t('taskWizard.titleEdit')
+    : search.schedule === true
+      ? t('taskWizard.titleScheduled')
+      : t('taskWizard.title')
 
-  if (isEdit && scheduleQ.isLoading)
+  // An edit draft seeds exactly once. Before that barrier, loading/error are
+  // full-page initial states; after it, a background refetch failure must not
+  // replace (or re-seed) the user's draft.
+  if (isEdit && !seededRef.current && !scheduleQ.isError)
     return (
       <div className="page">
+        <PageHeader title={pageTitle} />
         <LoadingState />
       </div>
     )
-  if (isEdit && scheduleQ.error !== null && scheduleQ.error !== undefined)
-    return <div className="page error-box">{describeApiError(scheduleQ.error)}</div>
+  if (isEdit && !seededRef.current && scheduleQ.isError) {
+    return (
+      <div className="page">
+        <PageHeader title={pageTitle} />
+        <ErrorBanner
+          error={scheduleQ.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void scheduleQ.refetch()}>
+              {t('common.retry')}
+            </button>
+          }
+        />
+      </div>
+    )
+  }
 
   const steps = [
     { key: 'mode', title: t('taskWizard.stepMode') },
@@ -755,25 +838,45 @@ function TaskWizardPage() {
 
   return (
     <div className="page task-wizard" data-testid="task-wizard">
-      <header className="page__header">
-        <h1>
-          {isEdit
-            ? t('taskWizard.titleEdit')
-            : search.schedule === true
-              ? t('taskWizard.titleScheduled')
-              : t('taskWizard.title')}
-        </h1>
-      </header>
+      <PageHeader title={pageTitle} />
 
-      {seedFailed && (
-        <div className="info-box info-box--muted" role="alert" data-testid="wizard-seed-degraded">
-          {t('taskWizard.degradedBanner')}
+      {isEdit && scheduleQ.isError && (
+        <div data-testid="wizard-schedule-stale-error">
+          <ErrorBanner
+            error={scheduleQ.error}
+            action={
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => void scheduleQ.refetch()}
+              >
+                {t('common.retry')}
+              </button>
+            }
+          />
         </div>
       )}
 
+      {seedFailed && (
+        <NoticeBanner tone="warning" size="compact" className="info-box--muted">
+          <span data-testid="wizard-seed-degraded">{t('taskWizard.degradedBanner')}</span>
+        </NoticeBanner>
+      )}
+
       {relaunchError && (
-        <div className="error-box" role="alert" data-testid="wizard-relaunch-error">
-          {describeApiError(relaunchErrorQ?.error)}
+        <div data-testid="wizard-relaunch-error">
+          <ErrorBanner
+            error={relaunchErrorQ?.error}
+            action={
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => void relaunchErrorQ?.refetch()}
+              >
+                {t('common.retry')}
+              </button>
+            }
+          />
         </div>
       )}
 
@@ -913,60 +1016,33 @@ function TaskWizardPage() {
             </Field>
             {isEdit && <div className="muted">{t('taskWizard.kindLocked')}</div>}
 
-            <Field
-              label={
-                kind === 'workflow'
-                  ? t('taskWizard.objectWorkflow')
-                  : kind === 'agent'
-                    ? t('taskWizard.objectAgent')
-                    : t('taskWizard.objectWorkgroup')
-              }
-              required
-            >
-              {(kind === 'workflow' && workflowOptions.length === 0) ||
-              (kind === 'agent' && agentOptions.length === 0) ||
-              (kind === 'workgroup' && workgroupOptions.length === 0) ? (
+            <Field label={objectFieldLabel} required group>
+              {activeInventoryLoading ? (
+                <LoadingState size="compact" data-testid="wizard-object-loading" />
+              ) : activeInventoryError ? (
+                <>
+                  <div data-testid="wizard-object-load-error">
+                    <ErrorBanner
+                      error={activeInventoryQ.error}
+                      action={
+                        <button
+                          type="button"
+                          className="btn btn--sm"
+                          onClick={() => void activeInventoryQ.refetch()}
+                        >
+                          {t('common.retry')}
+                        </button>
+                      }
+                    />
+                  </div>
+                  {!activeInventoryEmpty && objectPicker}
+                </>
+              ) : activeInventoryEmpty ? (
                 <div className="muted" data-testid="wizard-object-empty">
                   {t('taskWizard.objectEmpty')}
                 </div>
-              ) : kind === 'workflow' ? (
-                <Select
-                  value={workflowId}
-                  onChange={setWorkflowId}
-                  options={workflowOptions}
-                  searchable
-                  placeholder={t('taskWizard.objectPlaceholder')}
-                  data-testid="wizard-object-workflow"
-                />
-              ) : kind === 'agent' ? (
-                <Select
-                  value={agentName}
-                  onChange={(name) => {
-                    setAgentName(name)
-                    // RFC-175 (R8-F3): capture the picked agent's CURRENT id so an
-                    // explicit re-pick sends the guard for the chosen agent (not a
-                    // stale seeded id → no false 409).
-                    setSelectedAgentId((agentsQ.data ?? []).find((a) => a.name === name)?.id)
-                  }}
-                  options={agentOptions}
-                  searchable
-                  placeholder={t('taskWizard.objectPlaceholder')}
-                  data-testid="wizard-object-agent"
-                />
               ) : (
-                <Select
-                  value={workgroupName}
-                  onChange={(name) => {
-                    setWorkgroupName(name)
-                    setSelectedWorkgroupId(
-                      (workgroupsQ.data ?? []).find((g) => g.name === name)?.id,
-                    )
-                  }}
-                  options={workgroupOptions}
-                  searchable
-                  placeholder={t('taskWizard.objectPlaceholder')}
-                  data-testid="wizard-object-workgroup"
-                />
+                objectPicker
               )}
             </Field>
           </div>
@@ -1079,11 +1155,22 @@ function TaskWizardPage() {
 
             {kind === 'workflow' && workflowQ.isLoading && <LoadingState />}
             {kind === 'workflow' && workflowQ.error !== null && workflowQ.error !== undefined && (
-              <div className="error-box" role="alert" data-testid="wizard-workflow-load-error">
-                {describeApiError(workflowQ.error)}
+              <div data-testid="wizard-workflow-load-error">
+                <ErrorBanner
+                  error={workflowQ.error}
+                  action={
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      onClick={() => void workflowQ.refetch()}
+                    >
+                      {t('common.retry')}
+                    </button>
+                  }
+                />
               </div>
             )}
-            {kind === 'workflow' && !workflowQ.isLoading && inputDefs.length === 0 && (
+            {kind === 'workflow' && workflowQ.data !== undefined && inputDefs.length === 0 && (
               <div className="muted">{t('launch.noInputs')}</div>
             )}
             {kind === 'workflow' &&

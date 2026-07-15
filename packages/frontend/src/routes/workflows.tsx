@@ -17,6 +17,7 @@ import { getBaseUrl, getToken } from '@/stores/auth'
 import { QuickCreateDialog } from '@/components/QuickCreateDialog'
 import { ResourceBadges } from '@/components/ResourceBadges'
 import { ResourceGalleryPage, type GalleryCardItem } from '@/components/gallery/ResourceGalleryPage'
+import { WORKFLOW_ICON } from '@/components/icons/resourceIcons'
 import { buildQuickCreateWorkflowPayload } from '@/lib/workflow-form'
 import { Route as RootRoute } from './__root'
 
@@ -162,42 +163,61 @@ function WorkflowsPage() {
     [data, owners, t],
   )
 
+  // The same stable primary action moves between the header (items / no-match)
+  // and the genuine-empty state. Keeping one element also keeps Dialog focus
+  // restoration pointed at whichever trigger is currently connected.
+  const createAction = (
+    <button
+      type="button"
+      className="btn btn--primary"
+      ref={createTriggerRef}
+      onClick={openCreate}
+      data-testid="workflow-new-button"
+    >
+      {t('workflows.newButton')}
+    </button>
+  )
+  const importActions = (
+    <>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".yaml,.yml,application/yaml,text/yaml"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (file) void handleImport(file)
+          e.target.value = ''
+        }}
+      />
+      <button type="button" className="btn" onClick={() => fileRef.current?.click()}>
+        {t('workflows.importButton')}
+      </button>
+    </>
+  )
+
   return (
     <ResourceGalleryPage
       title={t('workflows.title')}
       headerActions={
         <>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".yaml,.yml,application/yaml,text/yaml"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) void handleImport(file)
-              e.target.value = ''
-            }}
-          />
-          <button type="button" className="btn" onClick={() => fileRef.current?.click()}>
-            {t('workflows.importButton')}
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            ref={createTriggerRef}
-            onClick={openCreate}
-            data-testid="workflow-new-button"
-          >
-            {t('workflows.newButton')}
-          </button>
+          {importActions}
+          {createAction}
         </>
       }
+      emptyHeaderActions={importActions}
+      emptyAction={createAction}
+      emptyIcon={WORKFLOW_ICON}
       notice={importMsg !== null && <div className="info-box info-box--muted">{importMsg}</div>}
       items={items}
       isLoading={isLoading}
       error={error}
+      onRetry={() => void qc.invalidateQueries({ queryKey: ['workflows'] })}
+      onClearSearch={() => undefined}
+      clearSearchLabel={t('common.clearSearch')}
       searchPlaceholder={t('common.searchCards')}
       emptyListText={t('workflows.emptyList')}
+      emptyDescription={t('workflows.emptyDescription')}
       emptyTestid="workflows-empty"
       loadingTestid="workflows-loading"
     >

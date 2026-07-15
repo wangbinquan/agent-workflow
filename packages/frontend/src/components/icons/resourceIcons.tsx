@@ -19,6 +19,9 @@ export type ResourceIconKey =
   | 'task'
   | 'schedule'
   | 'repo'
+  | 'user'
+  | 'review'
+  | 'clarify'
   | 'memory'
 
 function IconSvg({ name, children }: { name: string; children: ReactNode }) {
@@ -156,6 +159,30 @@ export const TASK_ICON: ReactNode = (
   </IconSvg>
 )
 
+/** User — a profile silhouette for account administration. */
+export const USER_ICON: ReactNode = (
+  <IconSvg name="user">
+    <circle cx="8" cy="5" r="2.5" />
+    <path d="M3.2 13c.5-2.4 2.2-3.7 4.8-3.7s4.3 1.3 4.8 3.7" />
+  </IconSvg>
+)
+
+/** Review — a document with a completed decision mark. */
+export const REVIEW_ICON: ReactNode = (
+  <IconSvg name="review">
+    <path d="M3 2.2h6.4l3.1 3.1v8.5H3z" />
+    <path d="M9.4 2.2v3.1h3.1M5.2 9l1.5 1.5 3.4-3.4" />
+  </IconSvg>
+)
+
+/** Clarify — a question inside a conversation bubble. */
+export const CLARIFY_ICON: ReactNode = (
+  <IconSvg name="clarify">
+    <path d="M2.2 3.2h11.6v8.1H7l-3.3 2.3v-2.3H2.2z" />
+    <path d="M6.4 6.2A1.7 1.7 0 1 1 8.5 8c-.5.2-.7.5-.7 1M7.8 10.4h.01" />
+  </IconSvg>
+)
+
 /** Home — a simple roof and doorway. */
 export const HOME_ICON: ReactNode = (
   <IconSvg name="home">
@@ -174,6 +201,9 @@ const RESOURCE_ICONS: Record<ResourceIconKey, ReactNode> = {
   task: TASK_ICON,
   schedule: SCHEDULE_ICON,
   repo: REPO_ICON,
+  user: USER_ICON,
+  review: REVIEW_ICON,
+  clarify: CLARIFY_ICON,
   memory: MEMORY_ICON,
 }
 

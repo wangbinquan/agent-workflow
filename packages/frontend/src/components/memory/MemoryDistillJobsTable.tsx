@@ -8,8 +8,9 @@ import type { MemoryDistillJob } from '@agent-workflow/shared'
 import type { ApiError } from '@/api/client'
 import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
-import { describeApiError } from '@/i18n'
+import { TableViewport } from '@/components/TableViewport'
 
 interface ListResponse {
   items: MemoryDistillJob[]
@@ -32,95 +33,110 @@ export function MemoryDistillJobsTable() {
     },
   })
 
-  if (list.isLoading) return <LoadingState />
-  if (list.error !== null && list.error !== undefined) {
-    return <div className="error-box">{describeApiError(list.error)}</div>
+  const listError = list.error !== null && list.error !== undefined
+  const retryAction = (
+    <button type="button" className="btn btn--sm" onClick={() => void list.refetch()}>
+      {t('common.retry')}
+    </button>
+  )
+  if (list.data === undefined) {
+    if (list.isLoading) return <LoadingState />
+    if (listError) {
+      return <ErrorBanner error={list.error} action={retryAction} />
+    }
+    return <LoadingState />
   }
-  const rows = list.data?.items ?? []
+  const rows = list.data.items
   if (rows.length === 0) {
-    return <EmptyState title={t('memory.distillJobs.empty')} />
+    return (
+      <>
+        {listError && <ErrorBanner error={list.error} action={retryAction} />}
+        <EmptyState title={t('memory.distillJobs.empty')} />
+      </>
+    )
   }
 
   return (
     <div className="memory-distill-jobs" data-testid="memory-distill-jobs">
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>{t('memory.distillJobs.colId')}</th>
-            <th>{t('memory.distillJobs.colStatus')}</th>
-            <th>{t('memory.distillJobs.colSource')}</th>
-            <th>{t('memory.distillJobs.colAttempts')}</th>
-            <th>{t('memory.distillJobs.colCreated')}</th>
-            <th>{t('memory.distillJobs.colError')}</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((job) => (
-            <tr
-              key={job.id}
-              data-testid={`distill-job-row-${job.id}`}
-              className="memory-distill-jobs__row"
-              onClick={() =>
-                // RFC-043: whole-row click jumps to the admin detail
-                // page. Retry / Cancel buttons stop propagation so they
-                // remain row-local controls.
-                void navigate({
-                  to: '/memory/distill-jobs/$jobId',
-                  params: { jobId: job.id },
-                })
-              }
-              style={{ cursor: 'pointer' }}
-            >
-              <td>
-                <code>{job.id}</code>
-              </td>
-              <td>
-                <span className={`memory-distill-status memory-distill-status--${job.status}`}>
-                  {t(`memory.distillJobs.status.${job.status}`)}
-                </span>
-              </td>
-              <td>{t(`memory.sourceKind.${job.sourceKind}`)}</td>
-              <td>{job.attempts}</td>
-              <td className="muted">{new Date(job.createdAt).toLocaleString()}</td>
-              <td className="memory-distill-status__error">{job.lastError ?? ''}</td>
-              <td>
-                {job.status === 'failed' && (
-                  <button
-                    type="button"
-                    className="btn btn--xs"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      action.mutate({ id: job.id, verb: 'retry' })
-                    }}
-                    disabled={action.isPending}
-                    data-testid={`distill-job-row-${job.id}-retry`}
-                  >
-                    {t('memory.distillJobs.action.retry')}
-                  </button>
-                )}
-                {job.status === 'pending' && (
-                  <button
-                    type="button"
-                    className="btn btn--xs"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      action.mutate({ id: job.id, verb: 'cancel' })
-                    }}
-                    disabled={action.isPending}
-                    data-testid={`distill-job-row-${job.id}-cancel`}
-                  >
-                    {t('memory.distillJobs.action.cancel')}
-                  </button>
-                )}
-              </td>
+      {listError && <ErrorBanner error={list.error} action={retryAction} />}
+      <TableViewport label={t('memory.tab.distillJobs')} minWidth="lg">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>{t('memory.distillJobs.colId')}</th>
+              <th>{t('memory.distillJobs.colStatus')}</th>
+              <th>{t('memory.distillJobs.colSource')}</th>
+              <th>{t('memory.distillJobs.colAttempts')}</th>
+              <th>{t('memory.distillJobs.colCreated')}</th>
+              <th>{t('memory.distillJobs.colError')}</th>
+              <th></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      {action.error !== null && action.error !== undefined && (
-        <div className="error-box">{describeApiError(action.error)}</div>
-      )}
+          </thead>
+          <tbody>
+            {rows.map((job) => (
+              <tr
+                key={job.id}
+                data-testid={`distill-job-row-${job.id}`}
+                className="memory-distill-jobs__row"
+                onClick={() =>
+                  // RFC-043: whole-row click jumps to the admin detail
+                  // page. Retry / Cancel buttons stop propagation so they
+                  // remain row-local controls.
+                  void navigate({
+                    to: '/memory/distill-jobs/$jobId',
+                    params: { jobId: job.id },
+                  })
+                }
+                style={{ cursor: 'pointer' }}
+              >
+                <td>
+                  <code>{job.id}</code>
+                </td>
+                <td>
+                  <span className={`memory-distill-status memory-distill-status--${job.status}`}>
+                    {t(`memory.distillJobs.status.${job.status}`)}
+                  </span>
+                </td>
+                <td>{t(`memory.sourceKind.${job.sourceKind}`)}</td>
+                <td>{job.attempts}</td>
+                <td className="muted">{new Date(job.createdAt).toLocaleString()}</td>
+                <td className="memory-distill-status__error">{job.lastError ?? ''}</td>
+                <td>
+                  {job.status === 'failed' && (
+                    <button
+                      type="button"
+                      className="btn btn--xs"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        action.mutate({ id: job.id, verb: 'retry' })
+                      }}
+                      disabled={action.isPending}
+                      data-testid={`distill-job-row-${job.id}-retry`}
+                    >
+                      {t('memory.distillJobs.action.retry')}
+                    </button>
+                  )}
+                  {job.status === 'pending' && (
+                    <button
+                      type="button"
+                      className="btn btn--xs"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        action.mutate({ id: job.id, verb: 'cancel' })
+                      }}
+                      disabled={action.isPending}
+                      data-testid={`distill-job-row-${job.id}-cancel`}
+                    >
+                      {t('memory.distillJobs.action.cancel')}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableViewport>
+      {action.error !== null && action.error !== undefined && <ErrorBanner error={action.error} />}
     </div>
   )
 }

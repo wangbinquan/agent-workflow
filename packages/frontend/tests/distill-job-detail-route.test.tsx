@@ -22,9 +22,12 @@ import {
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import '../src/i18n'
 
-// Mock the actor hook so we can flip admin / non-admin freely.
+// Mock the actor hook so we can flip admin / non-admin freely. The gate keys
+// off the admin ROLE (useIsAdmin) — memory:approve is a user-baseline
+// permission and no longer implies admin (RFC-099 D12).
 vi.mock('../src/hooks/useActor', () => ({
-  usePermission: (perm: string) => (perm === 'memory:approve' ? mockIsAdmin : false),
+  useIsAdmin: () => mockIsAdmin,
+  usePermission: () => false,
   useActor: () => ({ data: null }),
 }))
 let mockIsAdmin = true
@@ -82,6 +85,7 @@ describe('memory.distill-jobs.$jobId route page (RFC-043)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('distill-detail-admin-only')).toBeTruthy()
     })
+    expect(screen.getByRole('heading', { level: 1, name: 'job-1' })).toBeTruthy()
   })
 
   test('admin: load error renders the localized error box', async () => {
@@ -99,6 +103,9 @@ describe('memory.distill-jobs.$jobId route page (RFC-043)', () => {
     await waitFor(() => {
       expect(screen.getByText(/Failed to load distill job detail/i)).toBeTruthy()
     })
+    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'job-x' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /retry/i })).toBeTruthy()
   })
 
   test('admin: happy path renders 4 section titles', async () => {
@@ -148,5 +155,6 @@ describe('memory.distill-jobs.$jobId route page (RFC-043)', () => {
     expect(screen.getByTestId('distill-scope-section')).toBeTruthy()
     expect(screen.getByTestId('distill-candidates-section')).toBeTruthy()
     expect(screen.getByTestId('distill-conversation-section')).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'job-y' })).toBeTruthy()
   })
 })

@@ -219,8 +219,16 @@ describe('ResourceSplitPage — structure & three states', () => {
   test('filtered-to-nothing shows no-matches; genuinely empty list shows emptyListText', async () => {
     renderSplit({ initial: '/agents', items: ITEMS })
     await waitFor(() => screen.getByTestId('split-card-code-worker'))
-    fireEvent.change(screen.getByTestId('split-search'), { target: { value: 'zzz' } })
+    const search = screen.getByTestId('split-search') as HTMLInputElement
+    fireEvent.change(search, { target: { value: 'zzz' } })
     expect(screen.getByTestId('split-empty').textContent).toContain('No matches')
+    expect(screen.getAllByRole('link', { name: '+ New agent' })).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(search.value).toBe('')
+    expect(document.activeElement).toBe(search)
+    expect(screen.queryByTestId('split-empty')).toBeNull()
+    expect(screen.getByTestId('split-card-code-worker')).toBeTruthy()
 
     cleanup()
     renderSplit({ initial: '/agents', items: [] })

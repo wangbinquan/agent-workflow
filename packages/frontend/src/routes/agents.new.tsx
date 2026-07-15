@@ -19,6 +19,7 @@ import { AgentForm, emptyAgent, type AgentTab } from '@/components/AgentForm'
 import { AgentImportDialog } from '@/components/AgentImportDialog'
 import { AgentPortValidationSummary } from '@/components/agent-ports/AgentPortValidationSummary'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { PageHeader } from '@/components/PageHeader'
 import { NEW_CARD_KEY, useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
 import { useDirtyBaseline } from '@/hooks/useDraftFromQuery'
 import { mergeAgentImport } from '@/lib/agent-import-merge'
@@ -93,33 +94,34 @@ function AgentCreatePage() {
 
   return (
     <div className="agent-new">
-      <header className="page__header page__header--row">
-        <div>
-          <h2>{t('agents.newTitle')}</h2>
-        </div>
-        <div className="page__actions">
-          <button
-            ref={importTriggerRef}
-            type="button"
-            className="btn btn--sm"
-            data-testid="agent-import-open"
-            onClick={() => setImportOpen(true)}
-          >
-            {t('agentForm.importButton')}
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={create.isPending || draft.name === '' || !portValidation.valid}
-            onClick={() => {
-              if (portValidation.valid) create.mutate()
-            }}
-            data-testid="agent-create-button"
-          >
-            {create.isPending ? t('common.creating') : t('agents.createButton')}
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        title={t('agents.newTitle')}
+        headingLevel={2}
+        actions={
+          <>
+            <button
+              ref={importTriggerRef}
+              type="button"
+              className="btn btn--sm"
+              data-testid="agent-import-open"
+              onClick={() => setImportOpen(true)}
+            >
+              {t('agentForm.importButton')}
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={create.isPending || draft.name === '' || !portValidation.valid}
+              onClick={() => {
+                if (portValidation.valid) create.mutate()
+              }}
+              data-testid="agent-create-button"
+            >
+              {create.isPending ? t('common.creating') : t('agents.createButton')}
+            </button>
+          </>
+        }
+      />
       {blockingPortIssues.length > 0 && (
         <AgentPortValidationSummary
           issues={blockingPortIssues}
@@ -131,6 +133,7 @@ function AgentCreatePage() {
       <AgentForm
         value={draft}
         onChange={setDraft}
+        idPrefix="agents-new"
         activeTab={activeTab}
         onTabChange={setActiveTab}
         hasExternalPortAlert={blockingPortIssues.length > 0}

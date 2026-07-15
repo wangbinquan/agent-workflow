@@ -24,7 +24,10 @@ describe('RFC-105 WP-A — preview route + wiring', () => {
   test('preview route reuses Prose, not a second markdown renderer', () => {
     const route = read('src/routes/tasks.preview.tsx')
     expect(route).toContain("from '@/components/prose/Prose'")
+    expect(route).toContain('<PageHeader')
     expect(route).toContain('<Prose')
+    expect(route).toContain('<RetryAction onRetry={() => void q.refetch()} />')
+    expect(route).not.toContain('<div className="error-box" data-testid="md-preview-invalid">')
     // No bespoke react-markdown instance in the preview route.
     expect(route).not.toContain('react-markdown')
   })

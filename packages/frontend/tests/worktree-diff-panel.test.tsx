@@ -54,6 +54,17 @@ describe('WorktreeDiffPanel', () => {
     expect(tabs[0]?.getAttribute('aria-selected')).toBe('true')
     expect(tabs[1]?.getAttribute('aria-selected')).toBe('false')
     expect(tabs[2]?.getAttribute('aria-selected')).toBe('false')
+    const panel = screen.getByRole('tabpanel')
+    expect(tabs[0]?.id).toBe('worktree-diff-file-tab-0')
+    expect(tabs[0]?.getAttribute('aria-controls')).toBe(panel.id)
+    expect(panel.id).toBe('worktree-diff-file-panel-0')
+    expect(panel.getAttribute('aria-labelledby')).toBe(tabs[0]?.id)
+    for (const [index, tab] of tabs.entries()) {
+      const controlled = document.getElementById(tab.getAttribute('aria-controls') ?? '')
+      expect(controlled).not.toBeNull()
+      expect(controlled?.getAttribute('aria-labelledby')).toBe(tab.id)
+      expect((controlled as HTMLElement | null)?.hidden).toBe(index !== 0)
+    }
     // RFC-091: the file column is a folder tree — tabs show basenames under a
     // single compacted `src` directory header row; the full path stays in title.
     expect(tabs.map((t) => t.textContent)).toEqual(['a.ts', 'b.ts', 'c.ts'])
@@ -72,6 +83,10 @@ describe('WorktreeDiffPanel', () => {
     fireEvent.click(tabs[1]!)
     expect(tabs[0]?.getAttribute('aria-selected')).toBe('false')
     expect(tabs[1]?.getAttribute('aria-selected')).toBe('true')
+    expect(tabs[1]?.getAttribute('aria-controls')).toBe('worktree-diff-file-panel-1')
+    expect(screen.getByRole('tabpanel').id).toBe('worktree-diff-file-panel-1')
+    expect(document.getElementById('worktree-diff-file-panel-0')).not.toBeNull()
+    expect((document.getElementById('worktree-diff-file-panel-0') as HTMLElement).hidden).toBe(true)
     expect(screen.getByText('+new line from b')).toBeTruthy()
     expect(screen.queryByText('+new line from a')).toBeNull()
   })

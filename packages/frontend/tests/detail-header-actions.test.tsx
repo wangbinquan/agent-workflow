@@ -1,9 +1,9 @@
 // RFC-151 PR-4 — <DetailHeaderActions> shell contract.
 //
-// The four resource detail pages route their header through this shell; the
+// Editable resource detail pages route their header through this shell; the
 // page-level tests keep covering each page's wiring. This file locks the
 // shell's own guarantees:
-//   1. structure: title children + page__actions cluster inside the flex
+//   1. structure: PageHeader title + page__actions cluster inside the flex
 //      header; the form-actions error row is a SIBLING AFTER the header
 //      (long errors must not be squeezed into the header's flex row).
 //   2. errors array: nullish entries filtered; each present channel renders
@@ -48,18 +48,16 @@ describe('DetailHeaderActions', () => {
     wrap(
       <DetailHeaderActions
         {...BASE}
+        title="My resource"
+        headingLevel={2}
         save={{ label: 'Save now', onClick: () => {}, disabled: false }}
         errors={[new ApiError(500, 'boom-code', 'boom happened')]}
-      >
-        <div>
-          <h1>My resource</h1>
-          <p className="page__hint">hint text</p>
-        </div>
-      </DetailHeaderActions>,
+      />,
     )
     const header = document.querySelector('header.page__header.page__header--row')
     expect(header).not.toBeNull()
-    expect(header!.querySelector('h1')?.textContent).toBe('My resource')
+    expect(header!.querySelector('h2.page__title')?.textContent).toBe('My resource')
+    expect(header!.querySelector('.page__heading')).not.toBeNull()
     expect(header!.querySelector('.page__actions')).not.toBeNull()
     // The error row is NOT inside the flex header — it renders as a sibling
     // right after it, so long messages get their own full-width row.
@@ -74,13 +72,10 @@ describe('DetailHeaderActions', () => {
     wrap(
       <DetailHeaderActions
         {...BASE}
+        title="t"
         save={{ onClick: () => {}, disabled: false }}
         errors={[null, new Error('first failure'), undefined, new Error('second failure')]}
-      >
-        <div>
-          <h1>t</h1>
-        </div>
-      </DetailHeaderActions>,
+      />,
     )
     const spans = [...document.querySelectorAll('.form-actions__error')]
     expect(spans.map((s) => s.textContent)).toEqual(['first failure', 'second failure'])
@@ -90,13 +85,10 @@ describe('DetailHeaderActions', () => {
     wrap(
       <DetailHeaderActions
         {...BASE}
+        title="t"
         save={{ onClick: () => {}, disabled: false }}
         errors={[null, undefined]}
-      >
-        <div>
-          <h1>t</h1>
-        </div>
-      </DetailHeaderActions>,
+      />,
     )
     expect(document.querySelector('.form-actions')).toBeNull()
   })
@@ -106,13 +98,10 @@ describe('DetailHeaderActions', () => {
     wrap(
       <DetailHeaderActions
         {...BASE}
+        title="t"
         save={{ label: 'Saving…', onClick, disabled: true, testid: 'my-save' }}
         errors={[]}
-      >
-        <div>
-          <h1>t</h1>
-        </div>
-      </DetailHeaderActions>,
+      />,
     )
     const btn = screen.getByTestId('my-save') as HTMLButtonElement
     expect(btn.textContent).toBe('Saving…')
@@ -127,6 +116,7 @@ describe('DetailHeaderActions', () => {
     wrap(
       <DetailHeaderActions
         {...BASE}
+        title="t"
         save={{ label: 'Save', onClick: () => {}, disabled: false, testid: 'save-here' }}
         extra={
           <button type="button" data-testid="fuse-like-extra">
@@ -134,11 +124,7 @@ describe('DetailHeaderActions', () => {
           </button>
         }
         errors={[]}
-      >
-        <div>
-          <h1>t</h1>
-        </div>
-      </DetailHeaderActions>,
+      />,
     )
     const cluster = document.querySelector('.page__actions')!
     const buttons = [...cluster.querySelectorAll('button')]
@@ -148,5 +134,17 @@ describe('DetailHeaderActions', () => {
     expect(extraIdx).toBeGreaterThanOrEqual(0)
     expect(saveIdx).toBeGreaterThan(extraIdx)
     expect(delIdx).toBeGreaterThan(saveIdx)
+  })
+
+  test('defaults to h1 for non-split detail pages', () => {
+    wrap(
+      <DetailHeaderActions
+        {...BASE}
+        title="Top-level resource"
+        save={{ onClick: () => {}, disabled: false }}
+        errors={[]}
+      />,
+    )
+    expect(screen.getByRole('heading', { level: 1, name: 'Top-level resource' })).not.toBeNull()
   })
 })

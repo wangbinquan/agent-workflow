@@ -75,24 +75,26 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-async function loadMemoryPage() {
+async function loadMemoryPage(initialEntry = '/memory') {
   const mod = await import('../src/routes/memory')
   const root = createRootRoute({ component: Outlet })
   const route = createRoute({
     getParentRoute: () => root,
     path: '/memory',
     component: mod.Route.options.component,
+    validateSearch: mod.Route.options.validateSearch,
   })
   const router = createRouter({
     routeTree: root.addChildren([route]),
-    history: createMemoryHistory({ initialEntries: ['/memory'] }),
+    history: createMemoryHistory({ initialEntries: [initialEntry] }),
   })
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
+  const view = render(
     <QueryClientProvider client={qc}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
+  return { router, view }
 }
 
 describe('/memory page header — [+ New memory] (RFC-045)', () => {
@@ -100,6 +102,7 @@ describe('/memory page header — [+ New memory] (RFC-045)', () => {
     mockIsAdmin = true
     await loadMemoryPage()
     const btn = await screen.findByTestId('memory-new-button')
+    expect(btn.closest('header')?.querySelector('h1.page__title')).not.toBeNull()
     expect(btn).toBeTruthy()
   })
 
@@ -122,5 +125,29 @@ describe('/memory page header — [+ New memory] (RFC-045)', () => {
     fireEvent.click(btn)
     const dialog = await screen.findByTestId('memory-new-dialog')
     expect(dialog).toBeTruthy()
+  })
+
+  test('page tabs push URL state, preserve focus/hash, and expose matching panels', async () => {
+    const { router } = await loadMemoryPage('/memory?focus=mem_1#candidate')
+    const allTab = await screen.findByTestId('memory-tab-all')
+    expect(allTab.getAttribute('aria-controls')).toBe('memory-panel-all')
+    expect(document.getElementById('memory-panel-all')?.hidden).toBe(true)
+
+    fireEvent.click(allTab)
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ focus: 'mem_1', tab: 'all' })
+    })
+    expect(router.state.location.hash).toBe('candidate')
+    expect(document.getElementById('memory-panel-all')?.hidden).toBe(false)
+    expect(allTab.getAttribute('aria-selected')).toBe('true')
+
+    router.history.back()
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ focus: 'mem_1' })
+      expect(screen.getByTestId('memory-tab-approval-queue').getAttribute('aria-selected')).toBe(
+        'true',
+      )
+    })
+    expect(router.state.location.hash).toBe('candidate')
   })
 })

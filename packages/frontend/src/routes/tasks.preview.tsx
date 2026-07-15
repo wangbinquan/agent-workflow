@@ -18,7 +18,10 @@ import { fetchWorktreeFile } from '@/api/worktreeFiles'
 import { portArtifactItemUrl } from '@/lib/worktree-download'
 import { getBaseUrl, getToken } from '@/stores/auth'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { EmptyState } from '@/components/EmptyState'
 import { LoadingState } from '@/components/LoadingState'
+import { NoticeBanner } from '@/components/NoticeBanner'
+import { PageHeader } from '@/components/PageHeader'
 import { Prose } from '@/components/prose/Prose'
 import { formatBytes } from '@/components/WorktreeFilesPanel'
 import { downloadWorktreeFile } from '@/lib/worktree-download'
@@ -47,6 +50,15 @@ function deriveTitle(source: PreviewResolution, explicit: string | undefined): s
   return ''
 }
 
+function RetryAction({ onRetry }: { onRetry: () => void }) {
+  const { t } = useTranslation()
+  return (
+    <button type="button" className="btn btn--sm" onClick={onRetry}>
+      {t('common.retry')}
+    </button>
+  )
+}
+
 export function TaskMarkdownPreviewPage() {
   const { t } = useTranslation()
   const { id } = Route.useParams()
@@ -56,8 +68,8 @@ export function TaskMarkdownPreviewPage() {
 
   return (
     <div className="page page--md-preview">
-      <header className="page__header page__header--row">
-        <div className="md-preview__head">
+      <PageHeader
+        back={
           <Link
             to="/tasks/$id"
             params={{ id }}
@@ -66,15 +78,19 @@ export function TaskMarkdownPreviewPage() {
           >
             ← {t('taskPreview.back')}
           </Link>
-          <h1 className="md-preview__title" title={title}>
+        }
+        title={
+          <span className="md-preview__title" title={title}>
             {title}
-          </h1>
-        </div>
-      </header>
+          </span>
+        }
+      />
       <div className="md-preview__body">
         {source.mode === 'invalid' ? (
-          <div className="error-box" data-testid="md-preview-invalid">
-            {t('taskPreview.invalidLink')}
+          <div data-testid="md-preview-invalid">
+            <NoticeBanner tone="error" size="compact">
+              {t('taskPreview.invalidLink')}
+            </NoticeBanner>
           </div>
         ) : source.mode === 'file' ? (
           <FilePreviewBody taskId={id} path={source.path} />
@@ -128,13 +144,21 @@ function ArtifactPreviewBody({
     },
     staleTime: 0,
   })
-  if (q.isLoading) return <LoadingState size="compact" />
-  if (q.error !== null && q.error !== undefined) return <ErrorBanner error={q.error} />
   const data = q.data
-  if (data === undefined) return null
+  if (data === undefined) {
+    if (q.error !== null && q.error !== undefined)
+      return (
+        <ErrorBanner error={q.error} action={<RetryAction onRetry={() => void q.refetch()} />} />
+      )
+    if (q.isLoading) return <LoadingState size="compact" />
+    return null
+  }
   if ('fallback' in data) return <FilePreviewBody taskId={taskId} path={path} />
   return (
     <>
+      {q.error !== null && q.error !== undefined && (
+        <ErrorBanner error={q.error} action={<RetryAction onRetry={() => void q.refetch()} />} />
+      )}
       {data.truncated && (
         <div className="md-preview__truncated muted" role="note" data-testid="md-preview-truncated">
           {t('taskOutputs.artifactTruncated')}
@@ -153,12 +177,27 @@ function FilePreviewBody({ taskId, path }: { taskId: string; path: string }) {
     queryFn: ({ signal }) => fetchWorktreeFile(taskId, path, signal),
     staleTime: 0,
   })
-  if (q.isLoading) return <LoadingState size="compact" />
-  if (q.error !== null && q.error !== undefined) return <ErrorBanner error={q.error} />
   const data = q.data
-  if (data === undefined) return null
-  if (data.oversized) return <OversizedHint taskId={taskId} path={path} size={data.size} />
-  return <PreviewContent body={data.content} taskId={taskId} />
+  if (data === undefined) {
+    if (q.error !== null && q.error !== undefined)
+      return (
+        <ErrorBanner error={q.error} action={<RetryAction onRetry={() => void q.refetch()} />} />
+      )
+    if (q.isLoading) return <LoadingState size="compact" />
+    return null
+  }
+  return (
+    <>
+      {q.error !== null && q.error !== undefined && (
+        <ErrorBanner error={q.error} action={<RetryAction onRetry={() => void q.refetch()} />} />
+      )}
+      {data.oversized ? (
+        <OversizedHint taskId={taskId} path={path} size={data.size} />
+      ) : (
+        <PreviewContent body={data.content} taskId={taskId} />
+      )}
+    </>
+  )
 }
 
 function PortPreviewBody({ taskId, runId, port }: { taskId: string; runId: string; port: string }) {
@@ -167,29 +206,39 @@ function PortPreviewBody({ taskId, runId, port }: { taskId: string; runId: strin
     queryFn: ({ signal }) =>
       api.get(`/api/tasks/${encodeURIComponent(taskId)}/node-runs`, undefined, signal),
   })
-  if (q.isLoading) return <LoadingState size="compact" />
-  if (q.error !== null && q.error !== undefined) return <ErrorBanner error={q.error} />
   const data = q.data
-  if (data === undefined) return null
+  if (data === undefined) {
+    if (q.error !== null && q.error !== undefined)
+      return (
+        <ErrorBanner error={q.error} action={<RetryAction onRetry={() => void q.refetch()} />} />
+      )
+    if (q.isLoading) return <LoadingState size="compact" />
+    return null
+  }
   const out = data.outputs.find((o: NodeRunOutput) => o.nodeRunId === runId && o.port === port)
-  return <PreviewContent body={out?.value ?? null} taskId={taskId} />
+  return (
+    <>
+      {q.error !== null && q.error !== undefined && (
+        <ErrorBanner error={q.error} action={<RetryAction onRetry={() => void q.refetch()} />} />
+      )}
+      <PreviewContent body={out?.value ?? null} taskId={taskId} />
+    </>
+  )
 }
 
 function PreviewContent({ body, taskId }: { body: string | null; taskId: string }) {
   const { t } = useTranslation()
   if (body === null) {
     return (
-      <div className="muted" data-testid="md-preview-missing">
-        {t('taskPreview.pending')}
-      </div>
+      <EmptyState
+        title={t('taskPreview.pending')}
+        size="compact"
+        data-testid="md-preview-missing"
+      />
     )
   }
   if (body.trim() === '') {
-    return (
-      <div className="muted" data-testid="md-preview-empty">
-        {t('common.empty')}
-      </div>
-    )
+    return <EmptyState title={t('common.empty')} size="compact" data-testid="md-preview-empty" />
   }
   return <Prose body={body} taskId={taskId} className="md-preview__prose" />
 }

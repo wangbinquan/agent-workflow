@@ -147,10 +147,16 @@ function PluginDetailPage() {
     },
   })
 
+  const retryDetailAction = (
+    <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
+      {t('common.retry')}
+    </button>
+  )
+
   if (form === undefined) {
     if (query.isLoading) return <LoadingState data-testid="plugin-detail-loading" />
     if (query.error !== null && query.error !== undefined)
-      return <ErrorBanner error={query.error} />
+      return <ErrorBanner error={query.error} action={retryDetailAction} />
     return null
   }
 
@@ -203,6 +209,8 @@ function PluginDetailPage() {
   return (
     <fieldset className="detail-freeze" disabled={del.isPending}>
       <DetailHeaderActions
+        title={displayName}
+        headingLevel={2}
         acl={{
           resourceBaseUrl: `/api/plugins/${encodeURIComponent(id)}`,
           invalidateKey: ['plugins'],
@@ -219,16 +227,23 @@ function PluginDetailPage() {
           disabled: del.isPending,
         }}
         errors={[save.error, del.error]}
-      >
-        <div>
-          <h2>{displayName}</h2>
-        </div>
-      </DetailHeaderActions>
+      />
+
+      {query.error !== null && query.error !== undefined && (
+        <ErrorBanner error={query.error} action={retryDetailAction} />
+      )}
 
       <div className="agent-form">
-        <TabBar tabs={tabs} active={tab} onSelect={setTab} ariaLabel={t('plugins.title')} />
+        <TabBar
+          tabs={tabs}
+          active={tab}
+          onSelect={setTab}
+          ariaLabel={t('plugins.title')}
+          idPrefix="plugins-detail"
+        />
         <TabPanels
           active={tab}
+          idPrefix="plugins-detail"
           className="split__detail-body agent-form__panel"
           panels={[
             {

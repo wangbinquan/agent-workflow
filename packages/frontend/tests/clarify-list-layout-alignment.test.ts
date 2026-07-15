@@ -1,8 +1,7 @@
 // Locks the alignment between /clarify and /reviews list pages.
 //
 // User asked to "拉齐评审、反问两个页签的样式" — both inbox pages should share
-// the same overall structure: `<div className="tabs" role="tablist">` with
-// role="tab" + aria-selected buttons, a `.reviews-group` per task, a
+// the same overall structure: a shared segmented filter, a `.reviews-group` per task, a
 // `.data-table` body with a status-chip column and a per-row "Open" button.
 // (RFC-155 removed the static `.page__hint` header paragraph from BOTH pages
 // — the alignment now includes its absence.) Source-text assertions only —
@@ -26,19 +25,27 @@ describe('clarify ↔ reviews list — aligned page shell', () => {
     expect(reviews).not.toMatch(/page__hint/)
   })
 
-  test('both pages use the shared <TabBar> for the filter tablist', () => {
-    // RFC-150 PR-2: both filter strips migrated from the hand-rolled
-    // `<div className="tabs" role="tablist">` to the shared <TabBar>
-    // primitive — role=tablist/tab + aria-selected now come from the
-    // component (locked in tab-bar.test.tsx). The alignment contract is
-    // that BOTH pages render the same primitive off their FILTERS array.
+  test('both pages use PageHeader and Segmented without tab semantics', () => {
+    // RFC-198: list status is a filter, not a panel switch. Both pages use
+    // radio semantics through Segmented and reserve TabBar for true tabs.
     for (const src of [clarify, reviews]) {
-      expect(src).toMatch(/<TabBar\b/)
-      expect(src).toMatch(/tabs=\{FILTERS\.map\(/)
-      expect(src).toMatch(/active=\{filter\}/)
-      expect(src).toMatch(/onSelect=\{setFilter\}/)
-      // No hand-rolled tab strip may come back.
+      expect(src).toMatch(/<PageHeader\b/)
+      expect(src).toContain('<div className="page-filter">')
+      expect(src).toMatch(/<Segmented\b/)
+      expect(src).toMatch(/options=\{FILTERS\.map\(/)
+      expect(src).toMatch(/value=\{filter\}/)
+      expect(src).toMatch(/onChange=\{setFilter\}/)
+      expect(src).not.toMatch(/<TabBar\b/)
       expect(src).not.toMatch(/role="tablist"/)
+    }
+  })
+
+  test('both pages share query feedback and preserve their table DOM inside TableViewport', () => {
+    for (const src of [clarify, reviews]) {
+      expect(src).toMatch(/<ErrorBanner\b[\s\S]*?list\.refetch\(\)/)
+      expect(src).toMatch(/<LoadingState\b/)
+      expect(src).toMatch(/<EmptyState\b/)
+      expect(src).toMatch(/<TableViewport\b[\s\S]*?<table className="data-table">/)
     }
   })
 

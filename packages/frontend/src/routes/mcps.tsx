@@ -16,6 +16,7 @@ import { McpProbeStatusChip, type McpProbeUiStatus } from '@/components/McpProbe
 import { ResourceSplitPage, type ResourceCardItem } from '@/components/split/ResourceSplitPage'
 import { useMcpProbes } from '@/lib/mcp-probe-query'
 import { probeFreshness } from '@/lib/probe-freshness'
+import { MCP_ICON } from '@/components/icons/resourceIcons'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -39,7 +40,7 @@ export function probeUiStatus(probe: McpProbe | null, mcpUpdatedAt: number): Mcp
 
 function McpsSplitLayout() {
   const { t } = useTranslation()
-  const { data, isLoading, error, owners } = useResourceList<Mcp>({
+  const { data, isLoading, error, refetch, owners } = useResourceList<Mcp>({
     queryKey: ['mcps'],
     endpoint: '/api/mcps',
     deleteBy: 'name',
@@ -103,6 +104,9 @@ function McpsSplitLayout() {
       newTo="/mcps/new"
       searchPlaceholder={t('common.searchEllipsis')}
       emptyListText={t('mcps.emptyList')}
+      emptyDescription={t('mcps.emptyDescription')}
+      emptyIcon={MCP_ICON}
+      onRetry={() => void refetch()}
       listTo="/mcps"
       mobileBackLabel={t('common.backToList')}
       mobileBackTestId="mcps-mobile-back"

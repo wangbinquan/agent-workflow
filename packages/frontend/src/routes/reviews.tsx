@@ -14,16 +14,19 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { Link, createRoute } from '@tanstack/react-router'
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { DocVersion, ReviewRoundSummary, ReviewSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
-import { describeApiError } from '@/i18n'
 import { decisionChipKind } from '@/lib/review/decisionChip'
 import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
+import { PageHeader } from '@/components/PageHeader'
+import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
-import { TabBar } from '@/components/TabBar'
+import { TableViewport } from '@/components/TableViewport'
 import { LoadingState } from '@/components/LoadingState'
+import { REVIEW_ICON } from '@/components/icons/resourceIcons'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -38,6 +41,13 @@ type Filter = (typeof FILTERS)[number]
 export function ReviewsListPage() {
   const { t } = useTranslation()
   const [filter, setFilter] = useState<Filter>('pending')
+  const activeFilterRef = useRef<HTMLButtonElement | null>(null)
+  const restoreFilterFocusRef = useRef(false)
+  useEffect(() => {
+    if (filter !== 'pending' || !restoreFilterFocusRef.current) return
+    restoreFilterFocusRef.current = false
+    activeFilterRef.current?.focus()
+  }, [filter])
   // RFC-013: per-row expand toggles. Keyed by nodeRunId. Not persisted to
   // localStorage — page-session only; users who navigate away expect a
   // clean slate when they come back.
@@ -77,24 +87,64 @@ export function ReviewsListPage() {
 
   return (
     <div className="page">
-      <header className="page__header">
-        <h1>{t('reviews.title')}</h1>
-      </header>
-      <TabBar<Filter>
-        tabs={FILTERS.map((k) => ({
-          key: k,
-          label: t(`reviews.filter${k.charAt(0).toUpperCase()}${k.slice(1)}` as const),
-          testid: `reviews-filter-${k}`,
-        }))}
-        active={filter}
-        onSelect={setFilter}
-      />
+      <PageHeader title={t('reviews.title')} />
+      <div className="page-filter">
+        <Segmented<Filter>
+          options={FILTERS.map((k) => ({
+            value: k,
+            label: t(`reviews.filter${k.charAt(0).toUpperCase()}${k.slice(1)}` as const),
+            testid: `reviews-filter-${k}`,
+          }))}
+          value={filter}
+          onChange={setFilter}
+          ariaLabel={t('reviews.title')}
+          testidPrefix="reviews-filter"
+          activeOptionRef={activeFilterRef}
+        />
+      </div>
       {list.isLoading && <LoadingState data-testid="reviews-loading" />}
       {list.error !== null && list.error !== undefined && (
-        <div className="error-box">{describeApiError(list.error)}</div>
+        <ErrorBanner
+          error={list.error}
+          action={
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => {
+                void list.refetch()
+              }}
+            >
+              {t('common.retry')}
+            </button>
+          }
+        />
       )}
       {list.data !== undefined && list.data.length === 0 && (
-        <EmptyState title={t('reviews.emptyList')} data-testid="reviews-empty" />
+        <EmptyState
+          title={t('reviews.emptyList')}
+          description={filter === 'pending' ? t('reviews.emptyDescription') : undefined}
+          icon={filter === 'pending' ? REVIEW_ICON : undefined}
+          size={filter === 'pending' ? 'comfortable' : 'compact'}
+          action={
+            filter === 'pending' ? (
+              <Link to="/tasks/new" className="btn btn--primary" data-testid="reviews-new-task">
+                {t('tasks.newButton')}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => {
+                  restoreFilterFocusRef.current = true
+                  setFilter('pending')
+                }}
+              >
+                {t('common.clearFilters')}
+              </button>
+            )
+          }
+          data-testid="reviews-empty"
+        />
       )}
       {Array.from(groups.entries()).map(([taskId, g]) => (
         <section key={taskId} className="reviews-group">
@@ -107,102 +157,109 @@ export function ReviewsListPage() {
             <span className="muted reviews-group__workflow">{g.workflowName}</span>
             <code className="muted reviews-group__taskid"> · {taskId}</code>
           </h2>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th aria-label={t('reviews.expand')}></th>
-                <th>{t('reviews.colNode')}</th>
-                <th>{t('reviews.colStatus')}</th>
-                <th>{t('reviews.colVersion')}</th>
-                <th>{t('reviews.colCreated')}</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {g.items.map((r) => {
-                const hasTitle = r.title !== '' && r.title !== r.reviewNodeId
-                const isOpen = expanded.has(r.nodeRunId)
-                return (
-                  <Fragment key={r.nodeRunId}>
-                    <tr>
-                      <td className="reviews-row__expand-cell">
-                        <button
-                          type="button"
-                          className="reviews-row__expand"
-                          aria-expanded={isOpen}
-                          aria-label={isOpen ? t('reviews.collapse') : t('reviews.expand')}
-                          onClick={() => toggleRow(r.nodeRunId)}
-                        >
-                          <span aria-hidden="true" className="reviews-row__expand-icon">
-                            {isOpen ? '▾' : '▸'}
-                          </span>
-                        </button>
-                      </td>
-                      <td>
-                        {hasTitle ? (
-                          <>
-                            <div className="reviews-row__title">{r.title}</div>
-                            <code className="chip chip--tight reviews-row__nodeid">
-                              {r.reviewNodeId}
-                            </code>
-                          </>
-                        ) : (
-                          <code className="chip chip--tight">{r.reviewNodeId}</code>
-                        )}
-                        {r.description !== '' && r.description !== r.title && (
-                          <div className="muted reviews-row__desc">{r.description}</div>
-                        )}
-                        {r.isMultiDoc === true && (
-                          <span
-                            className="chip chip--tight reviews-row__multidoc"
-                            title={t('reviews.multiDoc.badge')}
-                            data-testid="review-multidoc-badge"
+          <TableViewport
+            label={`${t('reviews.title')} — ${g.taskName.length > 0 ? g.taskName : g.workflowName}`}
+            minWidth="md"
+          >
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th aria-label={t('reviews.expand')}></th>
+                  <th>{t('reviews.colNode')}</th>
+                  <th>{t('reviews.colStatus')}</th>
+                  <th>{t('reviews.colVersion')}</th>
+                  <th>{t('reviews.colCreated')}</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {g.items.map((r) => {
+                  const hasTitle = r.title !== '' && r.title !== r.reviewNodeId
+                  const isOpen = expanded.has(r.nodeRunId)
+                  return (
+                    <Fragment key={r.nodeRunId}>
+                      <tr>
+                        <td className="reviews-row__expand-cell">
+                          <button
+                            type="button"
+                            className="reviews-row__expand"
+                            aria-expanded={isOpen}
+                            aria-label={isOpen ? t('reviews.collapse') : t('reviews.expand')}
+                            onClick={() => toggleRow(r.nodeRunId)}
                           >
-                            {t('reviews.multiDoc.badge')}
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        <StatusChip kind={r.awaitingReview ? 'warn' : decisionChipKind(r.decision)}>
-                          {r.awaitingReview
-                            ? t('reviews.statusAwaiting')
-                            : t(`reviews.decision.${r.decision}`)}
-                        </StatusChip>
-                      </td>
-                      <td>v{r.currentVersionIndex}</td>
-                      <td className="muted">{formatTimestamp(r.createdAt)}</td>
-                      <td>
-                        <Link
-                          to="/reviews/$nodeRunId"
-                          params={{ nodeRunId: r.nodeRunId }}
-                          search={{}}
-                          className="btn btn--sm"
-                        >
-                          {t('reviews.openButton')}
-                        </Link>
-                      </td>
-                    </tr>
-                    {isOpen && (
-                      <tr className="reviews-row__history">
-                        <td colSpan={6}>
-                          {/* RFC-142: 多文档评审按轮展开（第 n 轮 + 轮决策 chip），
-                              单文档保持 v1..vN 版本行不变。 */}
-                          {r.isMultiDoc === true ? (
-                            <RoundRows nodeRunId={r.nodeRunId} />
+                            <span aria-hidden="true" className="reviews-row__expand-icon">
+                              {isOpen ? '▾' : '▸'}
+                            </span>
+                          </button>
+                        </td>
+                        <td>
+                          {hasTitle ? (
+                            <>
+                              <div className="reviews-row__title">{r.title}</div>
+                              <code className="chip chip--tight reviews-row__nodeid">
+                                {r.reviewNodeId}
+                              </code>
+                            </>
                           ) : (
-                            <HistoryRows
-                              nodeRunId={r.nodeRunId}
-                              currentVersionIndex={r.currentVersionIndex}
-                            />
+                            <code className="chip chip--tight">{r.reviewNodeId}</code>
+                          )}
+                          {r.description !== '' && r.description !== r.title && (
+                            <div className="muted reviews-row__desc">{r.description}</div>
+                          )}
+                          {r.isMultiDoc === true && (
+                            <span
+                              className="chip chip--tight reviews-row__multidoc"
+                              title={t('reviews.multiDoc.badge')}
+                              data-testid="review-multidoc-badge"
+                            >
+                              {t('reviews.multiDoc.badge')}
+                            </span>
                           )}
                         </td>
+                        <td>
+                          <StatusChip
+                            kind={r.awaitingReview ? 'warn' : decisionChipKind(r.decision)}
+                          >
+                            {r.awaitingReview
+                              ? t('reviews.statusAwaiting')
+                              : t(`reviews.decision.${r.decision}`)}
+                          </StatusChip>
+                        </td>
+                        <td>v{r.currentVersionIndex}</td>
+                        <td className="muted">{formatTimestamp(r.createdAt)}</td>
+                        <td>
+                          <Link
+                            to="/reviews/$nodeRunId"
+                            params={{ nodeRunId: r.nodeRunId }}
+                            search={{}}
+                            className="btn btn--sm"
+                          >
+                            {t('reviews.openButton')}
+                          </Link>
+                        </td>
                       </tr>
-                    )}
-                  </Fragment>
-                )
-              })}
-            </tbody>
-          </table>
+                      {isOpen && (
+                        <tr className="reviews-row__history">
+                          <td colSpan={6}>
+                            {/* RFC-142: 多文档评审按轮展开（第 n 轮 + 轮决策 chip），
+                                单文档保持 v1..vN 版本行不变。 */}
+                            {r.isMultiDoc === true ? (
+                              <RoundRows nodeRunId={r.nodeRunId} />
+                            ) : (
+                              <HistoryRows
+                                nodeRunId={r.nodeRunId}
+                                currentVersionIndex={r.currentVersionIndex}
+                              />
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
+              </tbody>
+            </table>
+          </TableViewport>
         </section>
       ))}
     </div>

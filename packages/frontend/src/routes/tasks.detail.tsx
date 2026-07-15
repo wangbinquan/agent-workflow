@@ -16,9 +16,14 @@ import type {
   WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { COMMIT_PUSH_NODE_PREFIX, redactGitUrl, taskExecutionKind } from '@agent-workflow/shared'
-import { api, ApiError } from '@/api/client'
+import { api } from '@/api/client'
+import type { ApiError } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import { NoticeBanner } from '@/components/NoticeBanner'
+import { PageHeader } from '@/components/PageHeader'
+import { TableViewport } from '@/components/TableViewport'
 import { TaskSubjectLink } from '@/components/TaskSubjectLink'
 import { WorkflowCanvas, type WorkflowCanvasHandle } from '@/components/canvas/WorkflowCanvas'
 import type { CanvasNodeData } from '@/components/canvas/nodes/types'
@@ -37,7 +42,7 @@ import { SessionTab } from '@/components/node-session/SessionTab'
 import { collectPorts, TaskOutputPanel } from '@/components/TaskOutputPanel'
 import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
-import { TabBar } from '@/components/TabBar'
+import { TabBar, tabDomIds } from '@/components/TabBar'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
 import { WorktreeDiffPanel } from '@/components/WorktreeDiffPanel'
 import { StructuralDiffView } from '@/components/structure/StructuralDiffView'
@@ -53,13 +58,16 @@ import { deriveReviewNodeNav, type ReviewNodeNavKind } from '@/lib/review-node-n
 import { deriveClarifyNodeNav, type ClarifyNodeNavKind } from '@/lib/clarify-node-nav'
 import { reviewRunDisplay } from '@/lib/reviewRunDisplay'
 import {
-  availableTabs,
   canOfferFailedJump,
-  defaultDynamicTab,
   isTerminal,
   nextTabForFailedJump,
   type TaskDetailTab,
 } from '@/lib/task-detail-tabs'
+import {
+  resolveTaskDetailTabs,
+  validateTaskDetailSearch,
+  withTaskDetailTab,
+} from '@/lib/task-detail-route-tabs'
 import { workgroupRoomKey, type WorkgroupRoomResponse } from '@/lib/workgroup-room'
 import { useTaskSync } from '@/hooks/useTaskSync'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -69,17 +77,30 @@ export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/tasks/$id',
   component: TaskDetailPage,
+  validateSearch: validateTaskDetailSearch,
 })
 
 function TaskDetailPage() {
   const { t } = useTranslation()
   const { id } = Route.useParams()
+  const search = Route.useSearch()
+  const navigateTaskRoute = Route.useNavigate()
   const qc = useQueryClient()
   useTaskSync(id)
   const [selectedNodeRunId, setSelectedNodeRunId] = useState<string | null>(null)
-  // RFC-021: page-level tab state. Default is the workflow-status canvas
-  // since that's the most actionable view for a running task.
-  const [tab, setTab] = useState<TaskDetailTab>('workflow-status')
+  // RFC-198: every tab write uses this one functional-search navigation path.
+  // Canonical fallbacks pass replace=true; user/programmatic jumps use push so
+  // Back/Forward traverses panels. Unrelated search payload is preserved.
+  const navigateTaskTab = useCallback(
+    (next: TaskDetailTab, replace = false) => {
+      if (!replace && search.tab === next) return
+      void navigateTaskRoute({
+        search: (previous) => withTaskDetailTab(previous, next),
+        replace,
+      })
+    },
+    [navigateTaskRoute, search.tab],
+  )
   // RFC-120 D13: a canvas question-badge click jumps here. The incrementing
   // `key` makes each click a fresh signal so clicking the SAME node twice still
   // re-applies the board filter (TaskQuestionList keys its effect off `.key`).
@@ -89,11 +110,14 @@ function TaskDetailPage() {
     null,
   )
   const focusKeyRef = useRef(0)
-  const jumpToQuestions = useCallback((nodeId: string) => {
-    focusKeyRef.current += 1
-    setFocusTargetNode({ nodeId, key: focusKeyRef.current })
-    setTab('task-questions')
-  }, [])
+  const jumpToQuestions = useCallback(
+    (nodeId: string) => {
+      focusKeyRef.current += 1
+      setFocusTargetNode({ nodeId, key: focusKeyRef.current })
+      navigateTaskTab('task-questions')
+    },
+    [navigateTaskTab],
+  )
   // RFC-083: structural-diff scope — 'task' or `node:${nodeRunId}`.
   const [structScope, setStructScope] = useState<string>('task')
   // RFC-083: engine — 'baseline' (always available) or 'deep' (external SCIP
@@ -155,6 +179,86 @@ function TaskDetailPage() {
     [taskQuestionsForBadge.data],
   )
 
+  const cancel = useMutation({
+    mutationFn: () => api.post<Task>(`/api/tasks/${encodeURIComponent(id)}/cancel`),
+    onSuccess: (tk) => {
+      qc.setQueryData(['tasks', id], tk)
+      void qc.invalidateQueries({ queryKey: ['tasks'] })
+    },
+  })
+
+  const resume = useMutation({
+    mutationFn: () => api.post<Task>(`/api/tasks/${encodeURIComponent(id)}/resume`),
+    onSuccess: (tk) => {
+      qc.setQueryData(['tasks', id], tk)
+      void qc.invalidateQueries({ queryKey: ['tasks', id, 'node-runs'] })
+      void qc.invalidateQueries({ queryKey: ['tasks'] })
+    },
+  })
+
+  // Compute `hasOutputs` from the optional snapshot so the useEffect can
+  // run on every render — including the initial loading render. React's
+  // rules-of-hooks forbids calling hooks after a conditional return, so
+  // this must sit above the `if (task.isLoading) return ...` guards.
+  const hasOutputs =
+    task.data === undefined ? false : collectPorts(task.data.workflowSnapshot).length > 0
+  // RFC-164 PR-4: workgroup tasks swap the tab set (chat room first, canvas +
+  // outputs hidden — the builtin host graph is not an observation surface).
+  const isWorkgroup = task.data?.workgroupId != null
+  // RFC-167 PR-3: dynamic_workflow groups are the exception — no chatroom;
+  // the orchestration panel + (post-confirm) the REAL DAG canvas. RFC-198
+  // treats this async room aggregate as the classification authority: a
+  // workgroup stays pending rather than flashing/canonicalizing turn-engine.
+  const room = useQuery<WorkgroupRoomResponse>({
+    queryKey: workgroupRoomKey(id),
+    queryFn: ({ signal }) =>
+      api.get(`/api/workgroup-tasks/${encodeURIComponent(id)}/room`, undefined, signal),
+    enabled: isWorkgroup,
+  })
+  const isDynamicWorkgroup = isWorkgroup && room.data?.config.mode === 'dynamic_workflow'
+  const dwPhase = room.data?.dw?.phase ?? null
+  const tabResolution = resolveTaskDetailTabs({
+    taskLoaded: task.data !== undefined,
+    hasOutputs,
+    isWorkgroup,
+    room:
+      !isWorkgroup || room.data !== undefined
+        ? {
+            status: 'ready',
+            mode: isDynamicWorkgroup ? 'dynamic-workflow' : 'turn-engine',
+            dwPhase,
+          }
+        : room.error !== null
+          ? { status: 'error' }
+          : { status: 'pending' },
+    searchTab: search.tab,
+  })
+  const tabs = tabResolution.status === 'ready' ? tabResolution.tabs : []
+  // During a room error only the universally safe explicit details deep-link
+  // is renderable. Other raw searches remain untouched until retry succeeds.
+  const tab =
+    tabResolution.status === 'ready'
+      ? tabResolution.tab
+      : tabResolution.status === 'error' && tabResolution.requestedTab === 'details'
+        ? 'details'
+        : undefined
+  const displayedTabs: TaskDetailTab[] =
+    tabResolution.status === 'ready' ? tabs : tab === 'details' ? ['details'] : []
+  const canonicalTab =
+    tabResolution.status === 'ready' && tabResolution.canonicalize ? tabResolution.tab : null
+  useEffect(() => {
+    if (canonicalTab !== null) navigateTaskTab(canonicalTab, true)
+  }, [canonicalTab, navigateTaskTab])
+
+  // RFC-120: agent nodes of the frozen snapshot — reassign candidates for the
+  // task question board (only agent nodes are valid handlers). Labels resolve to
+  // the node's display name (title → agentName → id fallback, same oracle as the
+  // node-runs table) — the board must show 节点名，不是节点 ID (用户 2026-07-02).
+  const agentNodeOptions = useMemo(
+    () => agentNodeOptionsFromSnapshot(task.data?.workflowSnapshot),
+    [task.data?.workflowSnapshot],
+  )
+
   // RFC-083 — structural (semantic) diff for the task scope. Same gating as the
   // textual diff (needs a base commit); refetches while the task is live.
   const structuralDiff = useQuery<StructuralDiff>({
@@ -184,86 +288,52 @@ function TaskDetailPage() {
     retry: false,
   })
 
-  const cancel = useMutation({
-    mutationFn: () => api.post<Task>(`/api/tasks/${encodeURIComponent(id)}/cancel`),
-    onSuccess: (tk) => {
-      qc.setQueryData(['tasks', id], tk)
-      void qc.invalidateQueries({ queryKey: ['tasks'] })
-    },
-  })
-
-  const resume = useMutation({
-    mutationFn: () => api.post<Task>(`/api/tasks/${encodeURIComponent(id)}/resume`),
-    onSuccess: (tk) => {
-      qc.setQueryData(['tasks', id], tk)
-      void qc.invalidateQueries({ queryKey: ['tasks', id, 'node-runs'] })
-      void qc.invalidateQueries({ queryKey: ['tasks'] })
-    },
-  })
-
-  // Compute `hasOutputs` from the optional snapshot so the useEffect can
-  // run on every render — including the initial loading render. React's
-  // rules-of-hooks forbids calling hooks after a conditional return, so
-  // this must sit above the `if (task.isLoading) return ...` guards.
-  const hasOutputs =
-    task.data === undefined ? false : collectPorts(task.data.workflowSnapshot).length > 0
-  // RFC-164 PR-4: workgroup tasks swap the tab set (chat room first, canvas +
-  // outputs hidden — the builtin host graph is not an observation surface).
-  const isWorkgroup = task.data?.workgroupId != null
-  // RFC-167 PR-3: dynamic_workflow groups are the exception — no chatroom;
-  // the orchestration panel + (post-confirm) the REAL DAG canvas. The mode
-  // lives in the room aggregate (same cache entry the panels use); until it
-  // arrives the task renders as a turn-engine group and self-corrects one
-  // query later.
-  const room = useQuery<WorkgroupRoomResponse>({
-    queryKey: workgroupRoomKey(id),
-    queryFn: ({ signal }) =>
-      api.get(`/api/workgroup-tasks/${encodeURIComponent(id)}/room`, undefined, signal),
-    enabled: isWorkgroup,
-  })
-  const isDynamicWorkgroup = isWorkgroup && room.data?.config.mode === 'dynamic_workflow'
-  const dwPhase = room.data?.dw?.phase ?? null
-  const tabs = availableTabs({ hasOutputs, isWorkgroup, isDynamicWorkgroup })
-  // RFC-120: agent nodes of the frozen snapshot — reassign candidates for the
-  // task question board (only agent nodes are valid handlers). Labels resolve to
-  // the node's display name (title → agentName → id fallback, same oracle as the
-  // node-runs table) — the board must show 节点名，不是节点 ID (用户 2026-07-02).
-  const agentNodeOptions = useMemo(
-    () => agentNodeOptionsFromSnapshot(task.data?.workflowSnapshot),
-    [task.data?.workflowSnapshot],
-  )
-  // If the user was on the outputs tab and hasOutputs flips false (mostly
-  // defensive — the snapshot is frozen at task start), fall back to the
-  // set's FIRST tab. Always-mount strategy keeps panes in the DOM, but the
-  // tab bar must reflect what's actually selectable. RFC-164 PR-4: this is
-  // also how a workgroup task lands on its default tab — the initial
-  // 'workflow-status' state is not in WORKGROUP_TAB_ORDER, so once the task
-  // row loads the effect switches to tabs[0] === 'chatroom'.
-  useEffect(() => {
-    if (!tabs.includes(tab)) setTab(tabs[0] ?? 'workflow-status')
-  }, [tabs, tab])
-  // RFC-167 PR-3 (Codex impl-gate P2): apply the phase-driven default tab
-  // ONCE per task when the room config first identifies a dynamic group
-  // (executing → the DAG canvas; anything earlier → the orchestration panel).
-  // Declared AFTER the invalid-tab fallback above on purpose: both effects
-  // fire in the same commit when the tab set flips to the dynamic order (the
-  // fallback reads this render's stale `tab` and schedules tabs[0]) — the
-  // later setTab wins, so the phase default reliably lands. Keyed by task id
-  // so navigating between tasks re-applies; manual tab choices afterwards are
-  // never overridden.
-  const dwDefaultAppliedFor = useRef<string | null>(null)
-  useEffect(() => {
-    if (!isDynamicWorkgroup || dwDefaultAppliedFor.current === id) return
-    dwDefaultAppliedFor.current = id
-    setTab(defaultDynamicTab(dwPhase))
-  }, [isDynamicWorkgroup, dwPhase, id])
-
-  if (task.isLoading) return <div className="page muted">{t('tasks.loadingTask')}</div>
-  if (task.error !== null && task.error !== undefined)
-    return <div className="page error-box">{describeError(task.error)}</div>
+  if (task.data === undefined && task.isLoading) {
+    return (
+      <div className="page page--task-detail">
+        <PageHeader title={id} />
+        <LoadingState label={t('tasks.loadingTask')} />
+      </div>
+    )
+  }
+  if (task.data === undefined && task.error !== null && task.error !== undefined) {
+    return (
+      <div className="page page--task-detail">
+        <PageHeader title={id} />
+        <ErrorBanner
+          error={task.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void task.refetch()}>
+              {t('common.retry')}
+            </button>
+          }
+        />
+      </div>
+    )
+  }
   if (task.data === undefined) return null
+  if (tabResolution.status === 'pending') {
+    return (
+      <div className="page page--task-detail">
+        <PageHeader title={task.data.name} />
+        {task.error !== null && task.error !== undefined && (
+          <ErrorBanner
+            error={task.error}
+            action={
+              <button type="button" className="btn btn--sm" onClick={() => void task.refetch()}>
+                {t('common.retry')}
+              </button>
+            }
+          />
+        )}
+        <LoadingState label={t('tasks.loadingTask')} />
+      </div>
+    )
+  }
 
   const tk = task.data
+  const nodeRunsConsumerActive =
+    tab === 'workflow-status' || tab === 'node-runs' || tab === 'outputs'
   const cancelable = tk.status === 'pending' || tk.status === 'running'
   const resumability = resumeStatus(tk.status, tk.worktreePath)
   // RFC-164/165: the task's execution subject (workgroup / agent / workflow) —
@@ -287,93 +357,110 @@ function TaskDetailPage() {
 
   return (
     <div className="page page--task-detail">
-      <header className="page__header page__header--row">
-        <div>
-          {/* RFC-037: user-supplied display name is the primary heading;
-              the ULID drops to a muted subtitle so it stays copyable but
-              doesn't dominate the page. */}
-          <h1 className="task-detail__title">
+      <PageHeader
+        title={
+          /* RFC-037: user-supplied display name is the primary heading; the
+             ULID drops to muted metadata so it stays copyable without
+             dominating the page. */
+          <span className="task-detail__title">
             <span className="task-detail__name">{tk.name}</span>{' '}
             <TaskStatusChip status={tk.status} />
-          </h1>
-          <div className="task-detail__id">
-            <span className="task-detail__id-label">{t('tasks.detailTitleIdLabel')}</span>{' '}
-            <code>{tk.id}</code>
-          </div>
-          {/* Jump link to the task's execution SUBJECT, surfaced in the
-              always-visible page header (the full meta row lives in the
-              non-default "details" tab, so without this a user landing on a task
-              can't reach its subject without switching tabs). TaskSubjectLink
-              resolves workgroup / agent / workflow, so a group or single-agent
-              task links to its owning resource instead of leaking the internal
-              `__workgroup_host__` / `__agent_host__` anchor. Its badge labels ALL
-              three kinds, so the header carries no separate 「工作流」text label —
-              that label existed only because workflow tasks used to render bare,
-              and keeping it would now print the kind twice. */}
-          <div className="task-detail__workflow">
-            <TaskSubjectLink task={tk} taskId={tk.id} badge />
-          </div>
-        </div>
-        <div className="page__actions">
-          <TaskMembersDialogButton taskId={id} />
-          {/* RFC-175: full-parameter relaunch — terminal tasks deep-link into the
+          </span>
+        }
+        meta={
+          <>
+            <div className="task-detail__id">
+              <span className="task-detail__id-label">{t('tasks.detailTitleIdLabel')}</span>{' '}
+              <code>{tk.id}</code>
+            </div>
+            {/* The execution subject stays visible even when the non-default
+                details panel is closed. TaskSubjectLink resolves workgroup,
+                agent and workflow without exposing builtin host anchors. */}
+            <div className="task-detail__workflow">
+              <TaskSubjectLink task={tk} taskId={tk.id} badge />
+            </div>
+          </>
+        }
+        actions={
+          <>
+            <TaskMembersDialogButton taskId={id} />
+            {/* RFC-175: full-parameter relaunch — terminal tasks deep-link into the
               /tasks/new wizard with ALL launch params pre-filled from THIS task
               (?relaunchFrom=). Suppressed for internal/fusion tasks: their subject
               is a builtin workflow (assertNotBuiltin would 403) — not user
               relaunchable (§5, R4-F1). */}
-          {isTerminal(tk.status) && tk.spaceKind !== 'internal' && (
-            <Link
-              to="/tasks/new"
-              search={{ relaunchFrom: tk.id }}
-              className="btn"
-              data-testid="task-detail-relaunch"
-            >
-              {t('tasks.relaunchButton')}
-            </Link>
-          )}
-          {showResume && (
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={() => resume.mutate()}
-              disabled={resume.isPending}
-            >
-              {resume.isPending ? t('tasks.resuming') : t('tasks.resumeButton')}
+            {isTerminal(tk.status) && tk.spaceKind !== 'internal' && (
+              <Link
+                to="/tasks/new"
+                search={{ relaunchFrom: tk.id }}
+                className="btn"
+                data-testid="task-detail-relaunch"
+              >
+                {t('tasks.relaunchButton')}
+              </Link>
+            )}
+            {showResume && (
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => resume.mutate()}
+                disabled={resume.isPending}
+              >
+                {resume.isPending ? t('tasks.resuming') : t('tasks.resumeButton')}
+              </button>
+            )}
+            {cancelable && (
+              <ConfirmButton
+                label={t('tasks.cancelButton')}
+                onConfirm={() => cancel.mutateAsync()}
+                variant="danger"
+                disabled={cancel.isPending}
+              />
+            )}
+          </>
+        }
+      />
+      {task.error !== null && task.error !== undefined && (
+        <ErrorBanner
+          error={task.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void task.refetch()}>
+              {t('common.retry')}
             </button>
-          )}
-          {cancelable && (
-            <ConfirmButton
-              label={t('tasks.cancelButton')}
-              onConfirm={() => cancel.mutateAsync()}
-              variant="danger"
-              disabled={cancel.isPending}
-            />
-          )}
-        </div>
-      </header>
+          }
+        />
+      )}
       <StuckTaskBanner taskId={id} />
       <WorkflowSyncBanner taskId={id} />
-      {cancel.error !== null && cancel.error !== undefined && (
-        <div className="error-box">{describeError(cancel.error)}</div>
-      )}
-      {resume.error !== null && resume.error !== undefined && (
-        <div className="error-box">{describeError(resume.error)}</div>
-      )}
+      {cancel.error !== null && cancel.error !== undefined && <ErrorBanner error={cancel.error} />}
+      {resume.error !== null && resume.error !== undefined && <ErrorBanner error={resume.error} />}
       {resumability === 'worktree-missing' && (
-        <div className="info-box info-box--muted">
-          <span>{t('tasks.resumeUnavailableNoWorktree')}</span>{' '}
-          <Link to="/tasks/new" search={{ relaunchFrom: tk.id }} className="btn btn--sm">
-            {t('tasks.resumeLaunchLink')}
-          </Link>
-        </div>
+        <NoticeBanner
+          tone="info"
+          size="compact"
+          className="info-box--muted"
+          action={
+            <Link to="/tasks/new" search={{ relaunchFrom: tk.id }} className="btn btn--sm">
+              {t('tasks.resumeLaunchLink')}
+            </Link>
+          }
+        >
+          {t('tasks.resumeUnavailableNoWorktree')}
+        </NoticeBanner>
       )}
       {showWorkgroupResumeHint && (
-        <div className="info-box info-box--muted">
-          <span>{t('tasks.resumeUnavailableWorkgroup')}</span>{' '}
-          <Link to="/tasks/new" search={{ relaunchFrom: tk.id }} className="btn btn--sm">
-            {t('tasks.resumeLaunchLink')}
-          </Link>
-        </div>
+        <NoticeBanner
+          tone="info"
+          size="compact"
+          className="info-box--muted"
+          action={
+            <Link to="/tasks/new" search={{ relaunchFrom: tk.id }} className="btn btn--sm">
+              {t('tasks.resumeLaunchLink')}
+            </Link>
+          }
+        >
+          {t('tasks.resumeUnavailableWorkgroup')}
+        </NoticeBanner>
       )}
 
       {tk.status === 'failed' && tk.errorSummary !== null && (
@@ -403,7 +490,7 @@ function TaskDetailPage() {
                   tk.failedNodeId,
                 )
                 if (runId !== null) setSelectedNodeRunId(runId)
-                setTab(next)
+                navigateTaskTab(next)
               }}
             >
               {t('tasks.jumpToFailed', { nodeId: tk.failedNodeId })}
@@ -413,28 +500,72 @@ function TaskDetailPage() {
       )}
 
       {(tk.status === 'canceled' || tk.status === 'interrupted') && tk.worktreePath !== '' && (
-        <div className="info-box info-box--muted">
-          <span>{t('tasks.worktreePreserved', { path: tk.worktreePath })}</span>
-        </div>
+        <NoticeBanner tone="info" size="compact" className="info-box--muted">
+          {t('tasks.worktreePreserved', { path: tk.worktreePath })}
+        </NoticeBanner>
       )}
 
       {/* RFC-108 T21/T23: system-recovery audit + auto-recovery quarantine clear,
           live-polled while the task is active (same idiom as the task/node-runs queries). */}
       <RecoverySection taskId={id} status={tk.status} />
 
-      <TabBar<TaskDetailTab>
-        className="task-detail__tab-bar"
-        tabs={tabs.map((k) => ({
-          key: k,
-          label: tabLabel(t, k),
-          // RFC-128: 「问题」tab carries a non-terminal pending-question count badge.
-          badge:
-            k === 'task-questions' && pendingQuestionCount > 0 ? pendingQuestionCount : undefined,
-          badgeTestid: k === 'task-questions' ? 'tq-tab-badge' : undefined,
-        }))}
-        active={tab}
-        onSelect={setTab}
-      />
+      {tabResolution.status === 'error' && (
+        <ErrorBanner
+          error={room.error}
+          action={
+            <div className="page__actions">
+              {tab !== 'details' && (
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => navigateTaskTab('details')}
+                >
+                  {t('tasks.tabDetails')}
+                </button>
+              )}
+              <button type="button" className="btn btn--sm" onClick={() => void room.refetch()}>
+                {t('common.retry')}
+              </button>
+            </div>
+          }
+        />
+      )}
+
+      {displayedTabs.length > 0 && (
+        <TabBar<TaskDetailTab>
+          className="task-detail__tab-bar"
+          tabs={displayedTabs.map((k) => ({
+            key: k,
+            label: tabLabel(t, k),
+            // RFC-128: 「问题」tab carries a non-terminal pending-question count badge.
+            badge:
+              k === 'task-questions' && pendingQuestionCount > 0 ? pendingQuestionCount : undefined,
+            badgeTestid: k === 'task-questions' ? 'tq-tab-badge' : undefined,
+          }))}
+          active={tab ?? 'details'}
+          onSelect={(next) => navigateTaskTab(next)}
+          idPrefix="task-detail"
+          ariaLabel={tk.name}
+        />
+      )}
+
+      {/* The node-runs aggregate powers three panels. Keep its feedback next
+          to the active navigation surface so workflow status and outputs do
+          not look like an empty success while the aggregate is loading or
+          failed. Cached data remains mounted underneath a stale error. */}
+      {nodeRunsConsumerActive && nodeRuns.data === undefined && nodeRuns.isLoading && (
+        <LoadingState size="compact" />
+      )}
+      {nodeRunsConsumerActive && nodeRuns.error !== null && nodeRuns.error !== undefined && (
+        <ErrorBanner
+          error={nodeRuns.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void nodeRuns.refetch()}>
+              {t('common.retry')}
+            </button>
+          }
+        />
+      )}
 
       <div className="task-detail__panes">
         {/* RFC-164 PR-4: workgroup chat room — the group task's primary view.
@@ -442,7 +573,11 @@ function TaskDetailPage() {
             dynamic_workflow groups have no turns/chatroom — they get the
             orchestration pane below instead). The pane div always exists so
             the hidden-pane structure stays uniform. */}
-        <div className="task-detail__pane" hidden={tab !== 'chatroom'}>
+        <div
+          {...taskTabPanelProps('chatroom')}
+          className="task-detail__pane"
+          hidden={tab !== 'chatroom'}
+        >
           {isWorkgroup && !isDynamicWorkgroup && (
             <WorkgroupRoom taskId={id} taskStatus={tk.status} />
           )}
@@ -450,7 +585,11 @@ function TaskDetailPage() {
 
         {/* RFC-167 PR-3: dynamic-workflow orchestration panel — generation
             progress, the confirm gate (read-only DAG preview) and save-as. */}
-        <div className="task-detail__pane" hidden={tab !== 'dw-orchestration'}>
+        <div
+          {...taskTabPanelProps('dw-orchestration')}
+          className="task-detail__pane"
+          hidden={tab !== 'dw-orchestration'}
+        >
           {isDynamicWorkgroup && (
             <DynamicWorkflowPanel
               taskId={id}
@@ -466,7 +605,11 @@ function TaskDetailPage() {
             RFC-167 PR-3: a dynamic task's canvas is REAL once the confirmed DAG
             is swapped in (phase executing); before that the snapshot is still
             the generation host graph — show a waiting hint instead. */}
-        <div className="task-detail__pane" hidden={tab !== 'workflow-status'}>
+        <div
+          {...taskTabPanelProps('workflow-status')}
+          className="task-detail__pane"
+          hidden={tab !== 'workflow-status'}
+        >
           {isDynamicWorkgroup && dwPhase !== 'executing' && (
             <EmptyState size="comfortable" title={t('workgroups.dw.canvasPending')} />
           )}
@@ -503,17 +646,21 @@ function TaskDetailPage() {
           )}
         </div>
 
-        <div className="task-detail__pane" hidden={tab !== 'node-runs'}>
-          {nodeRuns.isLoading && <LoadingState size="compact" />}
-          {nodeRuns.error !== null && nodeRuns.error !== undefined && (
-            <div className="error-box">{describeError(nodeRuns.error)}</div>
-          )}
+        <div
+          {...taskTabPanelProps('node-runs')}
+          className="task-detail__pane"
+          hidden={tab !== 'node-runs'}
+        >
           {nodeRuns.data !== undefined && (
             <NodeRunsTable runs={nodeRuns.data.runs} workflowSnapshot={tk.workflowSnapshot} />
           )}
         </div>
 
-        <div className="task-detail__pane" hidden={tab !== 'details'}>
+        <div
+          {...taskTabPanelProps('details')}
+          className="task-detail__pane"
+          hidden={tab !== 'details'}
+        >
           {/* RFC-066: multi-repo summary. Single-repo tasks (repoCount === 1)
               render nothing here — byte-baseline visual against pre-RFC-066.
               Multi-repo shows a collapsible block listing every repo's
@@ -619,7 +766,11 @@ function TaskDetailPage() {
         </div>
 
         {hasOutputs && (
-          <div className="task-detail__pane" hidden={tab !== 'outputs'}>
+          <div
+            {...taskTabPanelProps('outputs')}
+            className="task-detail__pane"
+            hidden={tab !== 'outputs'}
+          >
             {nodeRuns.data !== undefined && (
               <TaskOutputPanel
                 task={tk}
@@ -631,7 +782,11 @@ function TaskDetailPage() {
         )}
 
         {/* RFC-065 — worktree files browser, between outputs and worktree-diff. */}
-        <div className="task-detail__pane" hidden={tab !== 'worktree-files'}>
+        <div
+          {...taskTabPanelProps('worktree-files')}
+          className="task-detail__pane"
+          hidden={tab !== 'worktree-files'}
+        >
           {tk.worktreePath === '' ? (
             <div className="muted">{t('tasks.worktreeFilesNoWorktree')}</div>
           ) : (
@@ -639,19 +794,46 @@ function TaskDetailPage() {
           )}
         </div>
 
-        <div className="task-detail__pane" hidden={tab !== 'worktree-diff'}>
+        <div
+          {...taskTabPanelProps('worktree-diff')}
+          className="task-detail__pane"
+          hidden={tab !== 'worktree-diff'}
+        >
           {tk.baseCommit === null ? (
             <div className="muted">{t('tasks.noBaseCommit')}</div>
-          ) : diff.isLoading ? (
-            <div className="muted">{t('tasks.loadingDiff')}</div>
-          ) : diff.error !== null && diff.error !== undefined ? (
-            <div className="error-box">{describeError(diff.error)}</div>
           ) : diff.data !== undefined ? (
-            <WorktreeDiffPanel
-              diff={diff.data.diff}
-              truncated={diff.data.truncated}
-              focusFilePath={diffFocusFile}
-              storageKey={tk.id}
+            <>
+              {diff.error !== null && diff.error !== undefined && (
+                <ErrorBanner
+                  error={diff.error}
+                  action={
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      onClick={() => void diff.refetch()}
+                    >
+                      {t('common.retry')}
+                    </button>
+                  }
+                />
+              )}
+              <WorktreeDiffPanel
+                diff={diff.data.diff}
+                truncated={diff.data.truncated}
+                focusFilePath={diffFocusFile}
+                storageKey={tk.id}
+              />
+            </>
+          ) : diff.isLoading ? (
+            <LoadingState size="compact" label={t('tasks.loadingDiff')} />
+          ) : diff.error !== null && diff.error !== undefined ? (
+            <ErrorBanner
+              error={diff.error}
+              action={
+                <button type="button" className="btn btn--sm" onClick={() => void diff.refetch()}>
+                  {t('common.retry')}
+                </button>
+              }
             />
           ) : null}
         </div>
@@ -660,7 +842,11 @@ function TaskDetailPage() {
             Content (incl. the scope <Select>) renders only when this tab is
             active: keeps the expensive analysis lazy and keeps a page-wide
             `[role=combobox]` locator from grabbing the hidden scope picker. */}
-        <div className="task-detail__pane" hidden={tab !== 'worktree-structure'}>
+        <div
+          {...taskTabPanelProps('worktree-structure')}
+          className="task-detail__pane"
+          hidden={tab !== 'worktree-structure'}
+        >
           {tab !== 'worktree-structure' ? null : tk.baseCommit === null ? (
             <div className="muted">{t('tasks.noBaseCommit')}</div>
           ) : (
@@ -693,17 +879,44 @@ function TaskDetailPage() {
                   ariaLabel={t('tasks.structEngineLabel')}
                 />
               </div>
-              {structuralDiff.isLoading ? (
-                <div className="muted">{t('tasks.loadingDiff')}</div>
+              {structuralDiff.data !== undefined ? (
+                <>
+                  {structuralDiff.error !== null && structuralDiff.error !== undefined && (
+                    <ErrorBanner
+                      error={structuralDiff.error}
+                      action={
+                        <button
+                          type="button"
+                          className="btn btn--sm"
+                          onClick={() => void structuralDiff.refetch()}
+                        >
+                          {t('common.retry')}
+                        </button>
+                      }
+                    />
+                  )}
+                  <StructuralDiffView
+                    data={structuralDiff.data}
+                    onJumpToHunk={(anchor) => {
+                      setDiffFocusFile(anchor.filePath)
+                      navigateTaskTab('worktree-diff')
+                    }}
+                  />
+                </>
+              ) : structuralDiff.isLoading ? (
+                <LoadingState size="compact" label={t('tasks.loadingDiff')} />
               ) : structuralDiff.error !== null && structuralDiff.error !== undefined ? (
-                <div className="error-box">{describeError(structuralDiff.error)}</div>
-              ) : structuralDiff.data !== undefined ? (
-                <StructuralDiffView
-                  data={structuralDiff.data}
-                  onJumpToHunk={(anchor) => {
-                    setDiffFocusFile(anchor.filePath)
-                    setTab('worktree-diff')
-                  }}
+                <ErrorBanner
+                  error={structuralDiff.error}
+                  action={
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      onClick={() => void structuralDiff.refetch()}
+                    >
+                      {t('common.retry')}
+                    </button>
+                  }
                 />
               ) : null}
             </div>
@@ -715,11 +928,19 @@ function TaskDetailPage() {
             squeezed `.task-detail__panes` (flex:1; min-height:0) down to
             zero and hid the task area. Promoting it to its own tab keeps
             the run-monitoring panes their full height. */}
-        <div className="task-detail__pane" hidden={tab !== 'feedback'}>
+        <div
+          {...taskTabPanelProps('feedback')}
+          className="task-detail__pane"
+          hidden={tab !== 'feedback'}
+        >
           <TaskFeedbackList taskId={id} />
         </div>
         {/* RFC-120: task question list / 任务中心 board. */}
-        <div className="task-detail__pane" hidden={tab !== 'task-questions'}>
+        <div
+          {...taskTabPanelProps('task-questions')}
+          className="task-detail__pane"
+          hidden={tab !== 'task-questions'}
+        >
           <TaskQuestionList
             taskId={id}
             nodeOptions={agentNodeOptions}
@@ -729,6 +950,15 @@ function TaskDetailPage() {
       </div>
     </div>
   )
+}
+
+function taskTabPanelProps(tab: TaskDetailTab) {
+  const ids = tabDomIds('task-detail', tab)
+  return {
+    role: 'tabpanel' as const,
+    id: ids.panelId,
+    'aria-labelledby': ids.tabId,
+  }
 }
 
 function tabLabel(t: (key: string) => string, k: TaskDetailTab): string {
@@ -1041,93 +1271,97 @@ function NodeRunsTable({ runs, workflowSnapshot }: { runs: NodeRun[]; workflowSn
     (r) => !(r.nodeId.startsWith(COMMIT_PUSH_PREFIX) && r.commitPush == null),
   )
   return (
-    <table className="data-table">
-      <thead>
-        <tr>
-          <th>{t('tasks.colNode')}</th>
-          <th>{t('tasks.colStatus')}</th>
-          <th>{t('tasks.colIteration')}</th>
-          <th>{t('tasks.colRetry')}</th>
-          <th>{t('tasks.colStarted')}</th>
-          <th>{t('tasks.colDuration')}</th>
-          <th>{t('tasks.colError')}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {visible.map((r) => {
-          // RFC-075: framework commit&push row — distinct rendering + session dialog.
-          if (r.commitPush != null) {
-            return <CommitRunRow key={r.id} run={r} allRuns={runs} />
-          }
-          const name = resolveNodeNameFromSnapshot(workflowSnapshot, r.nodeId) ?? r.nodeId
-          // RFC-078: review rows show the CURRENT round's content-anchored start,
-          // not the pinned slot-first-open started_at. The duration column renders
-          // reviewRunDisplay's unified durationMs — a review's human-review wait and
-          // a compute span format identically, with no 人工/非人工 marker. See
-          // lib/reviewRunDisplay.
-          const { displayStartedAt, durationMs } = reviewRunDisplay(r)
-          return (
-            <tr key={r.id}>
-              <td>
-                <span>{name}</span>
-                {name !== r.nodeId && (
-                  <>
-                    {' '}
-                    <code className="data-table__muted">{r.nodeId}</code>
-                  </>
-                )}
-                {r.shardKey !== null && <span className="muted"> · {r.shardKey}</span>}
-              </td>
-              <td>
-                <StatusChip kind={nodeRunStatusToKind(r.status)}>
-                  {t(displayNoderunStatusKey(r))}
-                </StatusChip>
-                {shouldShowReviewJump(r.status) && (
-                  <>
-                    {' '}
-                    <Link
-                      to="/reviews/$nodeRunId"
-                      params={{ nodeRunId: r.id }}
-                      search={{}}
-                      className="btn btn--sm node-runs__review-link"
-                    >
-                      {t('tasks.reviewButton')}
-                    </Link>
-                  </>
-                )}
-                {shouldShowClarifyJump(r.status) && (
-                  <>
-                    {' '}
-                    <Link
-                      to="/clarify/$nodeRunId"
-                      params={{ nodeRunId: r.id }}
-                      className="btn btn--sm node-runs__clarify-link"
-                    >
-                      {t('tasks.clarifyButton')}
-                    </Link>
-                  </>
-                )}
-              </td>
-              <td className="data-table__muted">{r.iteration}</td>
-              <td className="data-table__muted">{r.retryIndex}</td>
-              <td className="data-table__muted">
-                {displayStartedAt === null
-                  ? t('common.emDash')
-                  : new Date(displayStartedAt).toLocaleTimeString()}
-              </td>
-              <td className="data-table__muted">
-                {durationMs === null ? t('common.emDash') : `${Math.round(durationMs / 100) / 10}s`}
-              </td>
-              <td className="data-table__muted">
-                {classifyCanceled(r) === 'manual'
-                  ? (r.errorMessage ?? t('common.emDash'))
-                  : t('common.emDash')}
-              </td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
+    <TableViewport label={t('tasks.tabNodeRuns')} minWidth="lg">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>{t('tasks.colNode')}</th>
+            <th>{t('tasks.colStatus')}</th>
+            <th>{t('tasks.colIteration')}</th>
+            <th>{t('tasks.colRetry')}</th>
+            <th>{t('tasks.colStarted')}</th>
+            <th>{t('tasks.colDuration')}</th>
+            <th>{t('tasks.colError')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {visible.map((r) => {
+            // RFC-075: framework commit&push row — distinct rendering + session dialog.
+            if (r.commitPush != null) {
+              return <CommitRunRow key={r.id} run={r} allRuns={runs} />
+            }
+            const name = resolveNodeNameFromSnapshot(workflowSnapshot, r.nodeId) ?? r.nodeId
+            // RFC-078: review rows show the CURRENT round's content-anchored start,
+            // not the pinned slot-first-open started_at. The duration column renders
+            // reviewRunDisplay's unified durationMs — a review's human-review wait and
+            // a compute span format identically, with no 人工/非人工 marker. See
+            // lib/reviewRunDisplay.
+            const { displayStartedAt, durationMs } = reviewRunDisplay(r)
+            return (
+              <tr key={r.id}>
+                <td>
+                  <span>{name}</span>
+                  {name !== r.nodeId && (
+                    <>
+                      {' '}
+                      <code className="data-table__muted">{r.nodeId}</code>
+                    </>
+                  )}
+                  {r.shardKey !== null && <span className="muted"> · {r.shardKey}</span>}
+                </td>
+                <td>
+                  <StatusChip kind={nodeRunStatusToKind(r.status)}>
+                    {t(displayNoderunStatusKey(r))}
+                  </StatusChip>
+                  {shouldShowReviewJump(r.status) && (
+                    <>
+                      {' '}
+                      <Link
+                        to="/reviews/$nodeRunId"
+                        params={{ nodeRunId: r.id }}
+                        search={{}}
+                        className="btn btn--sm node-runs__review-link"
+                      >
+                        {t('tasks.reviewButton')}
+                      </Link>
+                    </>
+                  )}
+                  {shouldShowClarifyJump(r.status) && (
+                    <>
+                      {' '}
+                      <Link
+                        to="/clarify/$nodeRunId"
+                        params={{ nodeRunId: r.id }}
+                        className="btn btn--sm node-runs__clarify-link"
+                      >
+                        {t('tasks.clarifyButton')}
+                      </Link>
+                    </>
+                  )}
+                </td>
+                <td className="data-table__muted">{r.iteration}</td>
+                <td className="data-table__muted">{r.retryIndex}</td>
+                <td className="data-table__muted">
+                  {displayStartedAt === null
+                    ? t('common.emDash')
+                    : new Date(displayStartedAt).toLocaleTimeString()}
+                </td>
+                <td className="data-table__muted">
+                  {durationMs === null
+                    ? t('common.emDash')
+                    : `${Math.round(durationMs / 100) / 10}s`}
+                </td>
+                <td className="data-table__muted">
+                  {classifyCanceled(r) === 'manual'
+                    ? (r.errorMessage ?? t('common.emDash'))
+                    : t('common.emDash')}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </TableViewport>
   )
 }
 
@@ -1299,12 +1533,6 @@ export function canOfferResume(input: {
   if (resumeStatus(input.status, input.worktreePath) !== 'ready') return false
   if (input.isWorkgroup && !input.isDynamicWorkgroup) return false
   return true
-}
-
-function describeError(e: unknown): string {
-  if (e instanceof ApiError) return `${e.code}: ${e.message}`
-  if (e instanceof Error) return e.message
-  return String(e)
 }
 
 /**

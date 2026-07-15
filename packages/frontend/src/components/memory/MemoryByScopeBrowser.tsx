@@ -6,12 +6,12 @@ import { useTranslation } from 'react-i18next'
 import type { Memory, MemorySummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { groupCandidatesByScope, SCOPE_TABS } from '@/lib/memory'
 import { useActor } from '@/hooks/useActor'
 import { MemoryEditDialog } from './MemoryEditDialog'
 import { MemoryRow } from './MemoryRow'
-import { describeApiError } from '@/i18n'
 
 interface ListResponse {
   items: MemorySummary[]
@@ -38,14 +38,24 @@ export function MemoryByScopeBrowser() {
     enabled: editingId !== null,
   })
 
-  if (approved.isLoading) return <LoadingState />
-  if (approved.error !== null && approved.error !== undefined) {
-    return <div className="error-box">{describeApiError(approved.error)}</div>
+  const approvedError = approved.error !== null && approved.error !== undefined
+  const retryAction = (
+    <button type="button" className="btn btn--sm" onClick={() => void approved.refetch()}>
+      {t('common.retry')}
+    </button>
+  )
+  if (approved.data === undefined) {
+    if (approved.isLoading) return <LoadingState />
+    if (approvedError) {
+      return <ErrorBanner error={approved.error} action={retryAction} />
+    }
+    return <LoadingState />
   }
-  const grouped = groupCandidatesByScope(approved.data?.items ?? [])
+  const grouped = groupCandidatesByScope(approved.data.items)
 
   return (
     <div className="memory-by-scope" data-testid="memory-by-scope">
+      {approvedError && <ErrorBanner error={approved.error} action={retryAction} />}
       {SCOPE_TABS.map((scope) => (
         <section key={scope} className="memory-by-scope__section" data-scope={scope}>
           <h3 className="memory-by-scope__heading">

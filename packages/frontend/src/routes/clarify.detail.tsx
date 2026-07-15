@@ -30,7 +30,10 @@ import type {
 } from '@agent-workflow/shared'
 import { api, type ApiError } from '@/api/client'
 import { AttributionChip } from '@/components/AttributionChip'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import { NoticeBanner } from '@/components/NoticeBanner'
+import { PageHeader } from '@/components/PageHeader'
 import { StatusChip } from '@/components/StatusChip'
 import { QuestionForm, type QuestionFormHandle } from '@/components/clarify/QuestionForm'
 import { ClarifyQuestionHandler } from '@/components/clarify/ClarifyQuestionHandler'
@@ -573,15 +576,28 @@ export function ClarifyDetailPage() {
   // render
   // ----------------------------------------------------------------------
 
-  if (session.isLoading) {
+  if (session.data === undefined && session.isLoading) {
     return (
       <div className="page">
+        <PageHeader title={nodeRunId} />
         <LoadingState />
       </div>
     )
   }
-  if (session.error !== null && session.error !== undefined) {
-    return <div className="page error-box">{(session.error as Error).message}</div>
+  if (session.data === undefined && session.error !== null && session.error !== undefined) {
+    return (
+      <div className="page">
+        <PageHeader title={nodeRunId} />
+        <ErrorBanner
+          error={session.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void session.refetch()}>
+              {t('common.retry')}
+            </button>
+          }
+        />
+      </div>
+    )
   }
   const s = session.data
   if (s === undefined) return null
@@ -605,6 +621,23 @@ export function ClarifyDetailPage() {
   const shardKey = s.kind === 'cross' ? null : s.askingShardKey
   const truncationWarnings = s.kind === 'self' ? s.truncationWarnings : undefined
   const isCross = s.kind === 'cross'
+  const nodeLabel = nodeTitle ?? nodeName(nodeId)
+  const hasTaskName = typeof taskQuery.data?.name === 'string' && taskQuery.data.name.length > 0
+  const title = hasTaskName ? (
+    <>
+      <Link
+        to="/tasks/$id"
+        params={{ id: s.taskId }}
+        className="link"
+        data-testid="clarify-detail-task-name"
+      >
+        {taskQuery.data!.name}
+      </Link>
+      {` / ${nodeLabel}`}
+    </>
+  ) : (
+    nodeLabel
+  )
 
   return (
     <div
@@ -613,39 +646,14 @@ export function ClarifyDetailPage() {
       data-status={s.status}
       data-kind={s.kind}
     >
-      <header className="page__header">
-        {/* RFC-037 + follow-up: lead with the user-supplied task name (when
+      {/* RFC-037 + follow-up: lead with the user-supplied task name (when
             loaded), then the clarify node title (workflowSnapshot's
             `WorkflowNode.title`) with a fall-back to the clarify node id —
             same pattern as the review detail page so the two surfaces read
             identically. 用户 2026-07-02: cross-clarify (whose DTO carries no
             intermediaryNodeTitle) now resolves via the frozen snapshot before
             the id fallback. */}
-        <h1>
-          {(() => {
-            const nodeLabel = nodeTitle ?? nodeName(nodeId)
-            const hasTaskName =
-              typeof taskQuery.data?.name === 'string' && taskQuery.data.name.length > 0
-            if (!hasTaskName) return nodeLabel
-            return (
-              <>
-                {/* Task name links to the owning task detail page, kept inline
-                    in the H1 (no extra row) so the clarify header stays compact.
-                    data-testid preserved here for the baseline source-lock that
-                    used to sit on the now-removed standalone task-name row. */}
-                <Link
-                  to="/tasks/$id"
-                  params={{ id: s.taskId }}
-                  className="link"
-                  data-testid="clarify-detail-task-name"
-                >
-                  {taskQuery.data!.name}
-                </Link>
-                {` / ${nodeLabel}`}
-              </>
-            )
-          })()}
-        </h1>
+      <PageHeader title={title}>
         <p className="page__hint" data-testid="clarify-context-card">
           {isCross
             ? t('crossClarify.contextCard', { name: sourceName, n: iteration })
@@ -667,15 +675,39 @@ export function ClarifyDetailPage() {
             </>
           )}
         </p>
-      </header>
+      </PageHeader>
+
+      {session.error !== null && session.error !== undefined && (
+        <ErrorBanner
+          error={session.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void session.refetch()}>
+              {t('common.retry')}
+            </button>
+          }
+        />
+      )}
+
+      {peers.error !== null && peers.error !== undefined && (
+        <ErrorBanner
+          error={peers.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void peers.refetch()}>
+              {t('common.retry')}
+            </button>
+          }
+        />
+      )}
 
       {truncationWarnings !== undefined && truncationWarnings.length > 0 && (
-        <div className="error-box" data-testid="clarify-truncation-warning">
-          {truncationWarnings.map((w) => (
-            <div key={w.code}>
-              [{w.code}] {w.detail}
-            </div>
-          ))}
+        <div data-testid="clarify-truncation-warning">
+          <NoticeBanner tone="warning">
+            {truncationWarnings.map((w) => (
+              <div key={w.code}>
+                [{w.code}] {w.detail}
+              </div>
+            ))}
+          </NoticeBanner>
         </div>
       )}
 

@@ -92,18 +92,25 @@ function AgentDetailPage() {
   })
   const portValidation = validateAgentPortState(draft ?? emptyAgent())
   const blockingPortIssues = portValidation.issues.filter((issue) => issue.severity === 'error')
+  const retryDetailAction = (
+    <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
+      {t('common.retry')}
+    </button>
+  )
 
   // §6 error-state narrowing: only a missing draft shows the full error/loading;
   // once seeded, a background failure keeps the editor and shows a top banner.
   if (draft === undefined) {
     if (query.isLoading) return <LoadingState data-testid="agent-detail-loading" />
     if (query.error !== null && query.error !== undefined)
-      return <ErrorBanner error={query.error} />
+      return <ErrorBanner error={query.error} action={retryDetailAction} />
   }
 
   return (
     <fieldset className="detail-freeze" disabled={del.isPending}>
       <DetailHeaderActions
+        title={name}
+        headingLevel={2}
         acl={{
           resourceBaseUrl: `/api/agents/${encodeURIComponent(name)}`,
           invalidateKey: ['agents'],
@@ -127,18 +134,14 @@ function AgentDetailPage() {
             <Link
               to="/tasks/new"
               search={{ kind: 'agent', agent: name }}
-              className="btn btn--primary"
+              className="btn"
               data-testid="agent-launch-button"
             >
               {t('taskWizard.launchEntry')}
             </Link>
           )
         }
-      >
-        <div>
-          <h2>{name}</h2>
-        </div>
-      </DetailHeaderActions>
+      />
       {blockingPortIssues.length > 0 && (
         <AgentPortValidationSummary
           issues={blockingPortIssues}
@@ -147,11 +150,12 @@ function AgentDetailPage() {
         />
       )}
       {draft !== undefined && query.error !== null && query.error !== undefined && (
-        <ErrorBanner error={query.error} />
+        <ErrorBanner error={query.error} action={retryDetailAction} />
       )}
       <AgentForm
         value={draft ?? emptyAgent()}
         onChange={setDraft}
+        idPrefix="agents-detail"
         nameLocked
         activeTab={activeTab}
         onTabChange={setActiveTab}

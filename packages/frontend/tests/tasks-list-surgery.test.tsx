@@ -16,7 +16,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
   RouterProvider,
   createMemoryHistory,
@@ -27,6 +27,7 @@ import {
 } from '@tanstack/react-router'
 import type { TaskSummary } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { enUS } from '../src/i18n/en-US'
 import '../src/i18n'
 
 beforeEach(() => {
@@ -78,7 +79,10 @@ function installFetch(rows: TaskSummary[]): Recorded {
   return rec
 }
 
-async function renderPage() {
+async function renderPage(
+  initialEntry = '/tasks',
+  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   const list = await import('../src/routes/tasks')
   const rootRoute = createRootRoute({ component: () => <Outlet /> })
   const listRoute = createRoute({
@@ -103,9 +107,8 @@ async function renderPage() {
       stub('/workgroups/by-id/$id'),
       stub('/agents/$name'),
     ]),
-    history: createMemoryHistory({ initialEntries: ['/tasks'] }),
+    history: createMemoryHistory({ initialEntries: [initialEntry] }),
   })
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={qc}>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
@@ -116,6 +119,19 @@ async function renderPage() {
 }
 
 describe('/tasks — run-monitor table (RFC-192)', () => {
+  test('RFC-198 page-header-primary-ratchet keeps one populated-list header task', async () => {
+    installFetch([row('primary-ratchet')])
+    await renderPage()
+
+    const taskRow = await screen.findByTestId('task-row-t_primary-ratchet')
+    const page = taskRow.closest('.page')
+    const header = page?.querySelector('header.page__header')
+    const create = screen.getByTestId('tasks-new-button')
+
+    expect(Array.from(header?.querySelectorAll('.btn--primary') ?? [])).toEqual([create])
+    expect(create.getAttribute('href')).toBe('/tasks/new')
+  })
+
   test('query requests limit=500; error line only on FAILED rows (canceled negative)', async () => {
     const rec = installFetch([
       row('boom', { status: 'failed', errorSummary: 'node exec failed: exited 1' }),
@@ -130,6 +146,14 @@ describe('/tasks — run-monitor table (RFC-192)', () => {
     expect(err.getAttribute('title')).toBe('node exec failed: exited 1')
     // Canceled row: summary present in the payload but NO red error line.
     expect(screen.queryByTestId('task-error-t_halted')).toBeNull()
+
+    // RFC-198: the route keeps its native table/row contract, but the table
+    // now lives in the shared responsive viewport and the heading uses the
+    // shared PageHeader DOM shape.
+    const table = err.closest('table')
+    expect(table?.parentElement?.classList.contains('table-viewport__scroller')).toBe(true)
+    expect(table?.closest('.table-viewport')?.classList.contains('table-viewport--lg')).toBe(true)
+    expect(document.querySelector('h1.page__title')).not.toBeNull()
   })
 
   test('repo chip only when repoCount>1; URL-mode repo name derives from the redacted URL', async () => {
@@ -202,19 +226,93 @@ describe('/tasks — run-monitor table (RFC-192)', () => {
     expect(screen.getByTestId('task-row-t_crew-b')).toBeTruthy()
 
     fireEvent.change(screen.getByTestId('tasks-search'), { target: { value: 'zzz' } })
-    expect(screen.getByTestId('tasks-no-matches')).toBeTruthy()
+    const noMatches = screen.getByTestId('tasks-no-matches')
     expect(screen.queryByTestId('tasks-empty')).toBeNull()
 
-    // Clearing composes back.
-    fireEvent.change(screen.getByTestId('tasks-search'), { target: { value: 'crew' } })
+    // The compact empty state owns one clear action; it resets both local
+    // filters and restores focus to the retained search field.
+    fireEvent.click(within(noMatches).getByRole('button', { name: /clear filters/i }))
+    expect((screen.getByTestId('tasks-search') as HTMLInputElement).value).toBe('')
+    expect(document.activeElement).toBe(screen.getByTestId('tasks-search'))
+    expect(screen.getByTestId('tasks-subject-all').getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByTestId('task-row-t_flow-a')).toBeTruthy()
     expect(screen.getByTestId('task-row-t_crew-b')).toBeTruthy()
   })
 
-  test('empty list renders the classic empty state without the new toolbar', async () => {
+  test('empty list renders one guided primary action without the filter toolbar', async () => {
     installFetch([])
     await renderPage()
-    await screen.findByTestId('tasks-empty')
+    const empty = await screen.findByTestId('tasks-empty')
     expect(screen.queryByTestId('tasks-search')).toBeNull()
     expect(screen.queryByTestId('tasks-subject-all')).toBeNull()
+    expect(empty.textContent).toContain(enUS.tasks.emptyDescription)
+    expect(empty.querySelector('[data-icon="task"]')).not.toBeNull()
+    const createActions = screen.getAllByTestId('tasks-new-button')
+    expect(createActions).toHaveLength(1)
+    expect(createActions[0]!.textContent).toBe(enUS.tasks.newButton)
+    expect(empty.contains(createActions[0]!)).toBe(true)
+    expect(createActions[0]!.closest('.page__actions')).toBeNull()
+    const header = empty.closest('.page')?.querySelector('header.page__header')
+    const chromePrimaries = [header, empty].flatMap((surface) =>
+      Array.from(surface?.querySelectorAll('.btn--primary') ?? []),
+    )
+    expect(chromePrimaries).toEqual([createActions[0]])
+  })
+
+  test('status-filter no-match keeps one create action and restores focus after URL clear', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (req: RequestInfo | URL) => {
+      const url = req.toString()
+      const payload = url.includes('status=failed') ? [] : [row('after-status-clear')]
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    const router = await renderPage('/tasks?status=failed')
+    const empty = await screen.findByTestId('tasks-no-matches')
+    const createActions = screen.getAllByTestId('tasks-new-button')
+    expect(createActions).toHaveLength(1)
+    expect(empty.contains(createActions[0]!)).toBe(false)
+    expect(createActions[0]!.closest('.page__actions')).not.toBeNull()
+    fireEvent.click(within(empty).getByRole('button', { name: /clear filters/i }))
+    await waitFor(() => expect(router.state.location.search).toEqual({}))
+    await screen.findByTestId('task-row-t_after-status-clear')
+    expect(document.activeElement).toBe(screen.getByTestId('tasks-search'))
+  })
+
+  test('refetch error keeps stale rows visible and exposes a working retry action', async () => {
+    let fail = false
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (req: RequestInfo | URL) => {
+      const url = req.toString()
+      if (!url.includes('/api/tasks')) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (fail) {
+        return new Response(JSON.stringify({ code: 'tasks-load-failed', message: 'try again' }), {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify([row('stale')]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    await renderPage('/tasks', qc)
+    await screen.findByTestId('task-row-t_stale')
+
+    fail = true
+    await qc.refetchQueries({ queryKey: ['tasks'] })
+    await screen.findByRole('alert')
+    expect(screen.getByTestId('task-row-t_stale')).toBeTruthy()
+
+    fail = false
+    fireEvent.click(screen.getByRole('button', { name: /retry|重试/i }))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(screen.getByTestId('task-row-t_stale')).toBeTruthy()
   })
 })

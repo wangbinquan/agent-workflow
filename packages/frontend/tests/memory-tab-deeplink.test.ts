@@ -8,7 +8,7 @@
 // keeps flowing — swallowing it would break those deep-links.
 
 import { describe, expect, test } from 'vitest'
-import { Route } from '../src/routes/memory'
+import { Route, withMemoryTab } from '../src/routes/memory'
 
 type ValidateSearch = (search: Record<string, unknown>) => { tab?: string; focus?: string }
 
@@ -38,18 +38,29 @@ describe('RFC-190 /memory tab deep-link', () => {
   })
 })
 
-// Impl-gate Codex P2 regression (source-level lock): the tab-sync effect must
-// reset to the approval-queue default when the search param is CLEARED (e.g.
-// `?tab=all` → sidebar `/memory` keeps the component mounted with an empty
-// search). An `if (search.tab !== undefined)`-guarded effect leaves the page
-// stuck on the previous deep-link tab while the URL claims the default.
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-describe('RFC-190 /memory tab sync effect', () => {
-  test('effect resets to the default when search.tab is absent', () => {
+describe('RFC-198 /memory URL tab authority + panel semantics', () => {
+  test('functional tab updates preserve focus and adjacent search state', () => {
+    expect(withMemoryTab({ focus: 'mem_123', source: 'distill', tab: 'all' }, 'fusion')).toEqual({
+      focus: 'mem_123',
+      source: 'distill',
+      tab: 'fusion',
+    })
+  })
+
+  test('route derives active state from search and wires stable tab/panel ids', () => {
     const src = readFileSync(resolve(__dirname, '../src/routes/memory.tsx'), 'utf-8')
-    expect(src).toContain("setTab(search.tab ?? 'approval-queue')")
-    expect(src).not.toMatch(/if \(search\.tab !== undefined\) setTab/)
+    expect(src).toContain("const tab = search.tab ?? 'approval-queue'")
+    expect(src).toContain('const navigate = Route.useNavigate()')
+    expect(src).toContain('search: (previous) => withMemoryTab(previous, next)')
+    expect(src).toContain('hash })')
+    expect(src).toContain('idPrefix="memory"')
+    expect(src).toContain("tabDomIds('memory', panelTab)")
+    expect(src).toContain('role="tabpanel"')
+    expect(src).toContain('aria-labelledby={ids.tabId}')
+    expect(src).toContain('hidden={!isActive}')
+    expect(src).not.toContain('setTab(')
   })
 })

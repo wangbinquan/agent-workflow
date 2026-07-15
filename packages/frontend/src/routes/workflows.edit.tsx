@@ -20,6 +20,10 @@ import type { CanvasSelection } from '@/components/canvas/nodes/types'
 import { workflowRenameError } from '@/lib/workflow-form'
 import { AclDialogButton } from '@/components/AclPanel'
 import { ConfirmButton } from '@/components/ConfirmButton'
+import { ErrorBanner } from '@/components/ErrorBanner'
+import { LoadingState } from '@/components/LoadingState'
+import { NoticeBanner } from '@/components/NoticeBanner'
+import { PageHeader } from '@/components/PageHeader'
 import { RenameDialog } from '@/components/RenameDialog'
 import { useWorkflowSync } from '@/hooks/useWorkflowSync'
 import { Route as RootRoute } from './__root'
@@ -100,6 +104,7 @@ function WorkflowEditPage() {
     description: string
     definition: WorkflowDefinition
   } | null>(null)
+  const loadedWorkflowIdRef = useRef<string | null>(null)
 
   const query = useQuery<Workflow>({
     queryKey: ['workflows', id],
@@ -126,7 +131,8 @@ function WorkflowEditPage() {
       description: query.data.description,
       definition: query.data.definition,
     }
-  }, [query.data])
+    loadedWorkflowIdRef.current = id
+  }, [id, query.data])
 
   // Name + description are edited ONLY through the rename dialog now (用户
   // 2026-07-13「把名称和描述修改收到重命名按钮内」); the canvas still
@@ -224,13 +230,13 @@ function WorkflowEditPage() {
 
   const headerActions = useMemo(
     () => (
-      <div className="page__actions">
+      <>
         {/* RFC parity with backend startTask: run static validation on
             click; only navigate to the launcher if there are no
             error-severity issues. Warnings still let the user through. */}
         <button
           type="button"
-          className="btn btn--sm btn--primary"
+          className="btn btn--primary"
           onClick={() => {
             validate
               .mutateAsync()
@@ -295,46 +301,83 @@ function WorkflowEditPage() {
           disabled={del.isPending}
           size="sm"
         />
-      </div>
+      </>
     ),
     [id, navigate, validate, del, t],
   )
 
-  // Error must win over the draft===null loading guard: a failed GET (bad id,
-  // deleted workflow, expired bookmark) never populates the draft, and the
-  // old order left the page on the loading state forever.
-  if (query.error !== null && query.error !== undefined)
-    return <div className="page error-box">{describeError(query.error)}</div>
-  if (query.isLoading || draft === null)
-    return <div className="page muted">{t('editor.loadingWorkflow')}</div>
+  // Only an initial load failure owns the whole page. A background refetch can
+  // fail while the editor holds an unsaved draft; keep that draft mounted and
+  // surface the failure inline instead of replacing the canvas. The loaded id
+  // guard also prevents a same-route id change from flashing the prior draft.
+  if (draft === null || loadedWorkflowIdRef.current !== id) {
+    if (query.error !== null && query.error !== undefined) {
+      return (
+        <div className="page">
+          <PageHeader title={id} />
+          <ErrorBanner
+            error={query.error}
+            action={
+              <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
+                {t('common.retry')}
+              </button>
+            }
+          />
+        </div>
+      )
+    }
+    return (
+      <div className="page">
+        <PageHeader title={id} />
+        <LoadingState label={t('editor.loadingWorkflow')} />
+      </div>
+    )
+  }
 
   return (
     <div className="page page--editor">
-      <header className="page__header page__header--row">
-        <div>
-          <h1>{name || id}</h1>
-          <p className="page__hint">
+      <PageHeader
+        title={name || id}
+        meta={
+          <>
             <code>{id}</code> · v{query.data?.version ?? '?'} ·{' '}
             {dirty
               ? save.isPending
                 ? t('editor.statusSaving')
                 : t('editor.statusUnsaved')
               : t('editor.statusSaved')}
-          </p>
-        </div>
-        {headerActions}
-      </header>
+          </>
+        }
+        actions={headerActions}
+      />
 
-      {save.error !== null && save.error !== undefined && (
-        <div className="error-box">{describeError(save.error)}</div>
+      {query.error !== null && query.error !== undefined && (
+        <ErrorBanner
+          error={query.error}
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => void query.refetch()}>
+              {t('common.retry')}
+            </button>
+          }
+        />
       )}
+      {save.error !== null && save.error !== undefined && <ErrorBanner error={save.error} />}
+      {validate.error !== null && validate.error !== undefined && (
+        <ErrorBanner error={validate.error} />
+      )}
+      {agents.error !== null && agents.error !== undefined && <ErrorBanner error={agents.error} />}
       {remoteToast !== null && (
-        <div className="info-box">
-          {remoteToast}{' '}
-          <button type="button" className="info-box__action" onClick={() => setRemoteToast(null)}>
-            {t('editor.remoteDismiss')}
-          </button>
-        </div>
+        <NoticeBanner
+          tone="info"
+          size="compact"
+          action={
+            <button type="button" className="btn btn--sm" onClick={() => setRemoteToast(null)}>
+              {t('editor.remoteDismiss')}
+            </button>
+          }
+        >
+          {remoteToast}
+        </NoticeBanner>
       )}
       {validate.data !== undefined && validate.error === null && (
         <ValidationPanel

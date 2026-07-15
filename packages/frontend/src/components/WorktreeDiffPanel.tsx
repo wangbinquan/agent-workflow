@@ -27,6 +27,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DiffFileBody, splitByRepo, type FileBlock } from './DiffViewer'
+import { tabDomIds } from './TabBar'
 import { fileTreeRows } from '@/lib/fileTree'
 import { loadViewed, saveViewed, toggleViewed, viewedProgress } from '@/lib/diffViewed'
 
@@ -275,6 +276,8 @@ export function WorktreeDiffPanel({ diff, truncated, focusFilePath, storageKey }
             const isActive = selected !== undefined && selected.selKey === it.selKey
             const isViewed = viewed.has(it.viewedKey)
             const ariaFile = it.repo !== null ? `${it.repo}/${it.block.header}` : it.block.header
+            const fileIndex = fileOrder.indexOf(it.selKey)
+            const ids = tabDomIds('worktree-diff-file', String(fileIndex))
             return (
               <div
                 key={row.key}
@@ -291,6 +294,8 @@ export function WorktreeDiffPanel({ diff, truncated, focusFilePath, storageKey }
                 <button
                   type="button"
                   role="tab"
+                  id={ids.tabId}
+                  aria-controls={ids.panelId}
                   ref={(el) => {
                     if (el !== null) tabRefs.current.set(it.selKey, el)
                     else tabRefs.current.delete(it.selKey)
@@ -310,9 +315,24 @@ export function WorktreeDiffPanel({ diff, truncated, focusFilePath, storageKey }
           })}
         </nav>
       </aside>
-      <section className="worktree-diff__body">
-        {selected !== undefined ? <DiffFileBody block={selected.block} /> : null}
-      </section>
+      {fileOrder.map((key, index) => {
+        const item = items.find((candidate) => candidate.selKey === key)
+        if (item === undefined) return null
+        const ids = tabDomIds('worktree-diff-file', String(index))
+        const active = selected?.selKey === key
+        return (
+          <section
+            key={key}
+            className="worktree-diff__body"
+            role="tabpanel"
+            id={ids.panelId}
+            aria-labelledby={ids.tabId}
+            hidden={!active}
+          >
+            {active ? <DiffFileBody block={item.block} /> : null}
+          </section>
+        )
+      })}
     </div>
   )
 }

@@ -23,7 +23,7 @@ import { ErrorBanner } from './ErrorBanner'
 import { FileDropzone, formatShortBytes } from './FileDropzone'
 import { Field, TextArea } from './Form'
 import { StatusChip } from './StatusChip'
-import { TabBar } from './TabBar'
+import { TabBar, tabDomIds } from './TabBar'
 import { emptyAgent, type AgentTab } from './AgentForm'
 
 export interface AgentImportDialogProps {
@@ -36,6 +36,12 @@ export interface AgentImportDialogProps {
 }
 
 type SourceTab = 'upload' | 'paste'
+
+const SOURCE_TAB_PREFIX = 'agent-import-source'
+const SOURCE_TAB_IDS = {
+  upload: tabDomIds(SOURCE_TAB_PREFIX, 'upload'),
+  paste: tabDomIds(SOURCE_TAB_PREFIX, 'paste'),
+} satisfies Record<SourceTab, ReturnType<typeof tabDomIds>>
 
 interface SourceDraft {
   active: SourceTab
@@ -521,46 +527,62 @@ export function AgentImportDialog({
               active={phase.source.active}
               onSelect={selectSourceTab}
               ariaLabel={t('agentForm.importDialog.selectTitle')}
+              idPrefix={SOURCE_TAB_PREFIX}
             />
 
-            {phase.source.active === 'upload' ? (
-              <FileDropzone
-                file={phase.source.uploadFile}
-                onFileChange={selectFile}
-                accept=".md,.markdown,text/markdown,text/plain"
-                disabled={phase.busy !== null}
-                title={t('agentForm.importDialog.uploadTitle')}
-                description={t('agentForm.importDialog.uploadDescription')}
-                chooseLabel={t('agentForm.importDialog.chooseFile')}
-                replaceLabel={t('agentForm.importDialog.replaceFile')}
-                removeLabel={t('agentForm.importDialog.removeFile')}
-                error={phase.source.selectionError ?? undefined}
-                buttonRef={chooseButtonRef}
-                icon={
-                  <svg width="24" height="24" viewBox="0 0 24 24">
-                    <path d="M7 3h7l4 4v14H7z" />
-                    <path d="M14 3v5h5M12 17v-6m-3 3 3-3 3 3" />
-                  </svg>
-                }
-                data-testid="agent-import-file"
-              />
-            ) : (
-              <Field
-                label={t('agentForm.importDialog.pasteLabel')}
-                hint={t('agentForm.importDialog.pasteHint')}
-              >
-                <TextArea
-                  textareaRef={pasteTextAreaRef}
-                  value={phase.source.pasteText}
-                  onChange={updatePasteText}
-                  rows={10}
-                  monospace
+            <div
+              role="tabpanel"
+              id={SOURCE_TAB_IDS.upload.panelId}
+              aria-labelledby={SOURCE_TAB_IDS.upload.tabId}
+              hidden={phase.source.active !== 'upload'}
+            >
+              {phase.source.active === 'upload' && (
+                <FileDropzone
+                  file={phase.source.uploadFile}
+                  onFileChange={selectFile}
+                  accept=".md,.markdown,text/markdown,text/plain"
                   disabled={phase.busy !== null}
-                  placeholder={t('agentForm.importDialog.pastePlaceholder')}
-                  data-testid="agent-import-textarea"
+                  title={t('agentForm.importDialog.uploadTitle')}
+                  description={t('agentForm.importDialog.uploadDescription')}
+                  chooseLabel={t('agentForm.importDialog.chooseFile')}
+                  replaceLabel={t('agentForm.importDialog.replaceFile')}
+                  removeLabel={t('agentForm.importDialog.removeFile')}
+                  error={phase.source.selectionError ?? undefined}
+                  buttonRef={chooseButtonRef}
+                  icon={
+                    <svg width="24" height="24" viewBox="0 0 24 24">
+                      <path d="M7 3h7l4 4v14H7z" />
+                      <path d="M14 3v5h5M12 17v-6m-3 3 3-3 3 3" />
+                    </svg>
+                  }
+                  data-testid="agent-import-file"
                 />
-              </Field>
-            )}
+              )}
+            </div>
+            <div
+              role="tabpanel"
+              id={SOURCE_TAB_IDS.paste.panelId}
+              aria-labelledby={SOURCE_TAB_IDS.paste.tabId}
+              hidden={phase.source.active !== 'paste'}
+            >
+              {phase.source.active === 'paste' && (
+                <Field
+                  label={t('agentForm.importDialog.pasteLabel')}
+                  hint={t('agentForm.importDialog.pasteHint')}
+                >
+                  <TextArea
+                    textareaRef={pasteTextAreaRef}
+                    value={phase.source.pasteText}
+                    onChange={updatePasteText}
+                    rows={10}
+                    monospace
+                    disabled={phase.busy !== null}
+                    placeholder={t('agentForm.importDialog.pastePlaceholder')}
+                    data-testid="agent-import-textarea"
+                  />
+                </Field>
+              )}
+            </div>
 
             <Card className="agent-import__note">
               <strong>{t('agentForm.importDialog.draftOnlyTitle')}</strong>

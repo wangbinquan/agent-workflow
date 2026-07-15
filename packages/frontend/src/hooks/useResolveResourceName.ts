@@ -24,6 +24,8 @@ export interface ResolvedResourceName {
   name: string | null
   isLoading: boolean
   isError: boolean
+  error: unknown
+  refetch: () => void
 }
 
 export function useResolveResourceName(
@@ -46,5 +48,7 @@ export function useResolveResourceName(
     name: settledFresh ? (q.data?.name ?? null) : null,
     isLoading: q.isFetching,
     isError: !q.isFetching && q.isError,
+    error: q.error,
+    refetch: () => void q.refetch(),
   }
 }

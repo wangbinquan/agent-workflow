@@ -8,9 +8,9 @@ import { useTranslation } from 'react-i18next'
 import type { Memory, MemoryScope, MemorySummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { useActor } from '@/hooks/useActor'
-import { describeApiError } from '@/i18n'
 import { MemoryEditDialog } from './MemoryEditDialog'
 import { MemoryRow } from './MemoryRow'
 
@@ -47,22 +47,35 @@ export function MemoryScopedList(props: MemoryScopedListProps) {
     enabled: editingId !== null,
   })
 
-  if (list.isLoading) return <LoadingState size="compact" />
-  if (list.error !== null && list.error !== undefined) {
-    return <div className="error-box">{describeApiError(list.error)}</div>
+  const listError = list.error !== null && list.error !== undefined
+  const retryAction = (
+    <button type="button" className="btn btn--sm" onClick={() => void list.refetch()}>
+      {t('common.retry')}
+    </button>
+  )
+  if (list.data === undefined) {
+    if (list.isLoading) return <LoadingState size="compact" />
+    if (listError) {
+      return <ErrorBanner error={list.error} action={retryAction} />
+    }
+    return <LoadingState size="compact" />
   }
-  const rows = list.data?.items ?? []
+  const rows = list.data.items
   if (rows.length === 0) {
     return (
-      <EmptyState
-        title={t('memory.empty')}
-        data-testid={props['data-testid'] ?? 'memory-scoped-empty'}
-      />
+      <>
+        {listError && <ErrorBanner error={list.error} action={retryAction} />}
+        <EmptyState
+          title={t('memory.empty')}
+          data-testid={props['data-testid'] ?? 'memory-scoped-empty'}
+        />
+      </>
     )
   }
 
   return (
     <>
+      {listError && <ErrorBanner error={list.error} action={retryAction} />}
       <ul className="memory-scoped-list" data-testid={props['data-testid'] ?? 'memory-scoped-list'}>
         {rows.map((m) => (
           <MemoryRow

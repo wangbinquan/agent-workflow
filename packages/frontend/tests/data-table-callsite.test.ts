@@ -16,7 +16,11 @@ function read(rel: string): string {
 
 describe('RFC-035 .data-table推广 grep guard', () => {
   test('routes/repos.tsx renders .data-table for its list', () => {
-    expect(read('routes/repos.tsx').includes('className="data-table"')).toBe(true)
+    const body = read('routes/repos.tsx')
+    expect(body.includes('className="data-table"')).toBe(true)
+    expect(body.includes("<TableViewport label={t('repos.title')}>"), 'responsive wrapper').toBe(
+      true,
+    )
   })
 
   test('routes/repos.tsx no longer applies the legacy .repos-table CSS class (data-testid="repos-table" survives as a test anchor)', () => {

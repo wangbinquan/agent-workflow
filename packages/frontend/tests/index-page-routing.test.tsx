@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type * as RouterModule from '@tanstack/react-router'
 import '../src/i18n'
 import { setBaseUrl, setToken } from '../src/stores/auth'
@@ -45,7 +45,13 @@ vi.mock('@tanstack/react-router', async () => {
 // `useOnboardingProbe` at module-load time so the import in
 // `routes/index.tsx` resolves through the mock factory.
 const probeReturn: { current: OnboardingModule.OnboardingProbe } = {
-  current: { isLoading: false, isFirstRun: false, error: null },
+  current: {
+    isLoading: false,
+    isFirstRun: false,
+    hasData: true,
+    error: null,
+    retry: vi.fn(),
+  },
 }
 
 vi.mock('../src/components/Onboarding', async () => {
@@ -117,6 +123,13 @@ function mockTasksRuntimeEmpty(): void {
 beforeEach(() => {
   setBaseUrl('http://daemon.test')
   setToken('tok')
+  probeReturn.current = {
+    isLoading: false,
+    isFirstRun: false,
+    hasData: true,
+    error: null,
+    retry: vi.fn(),
+  }
 })
 
 afterEach(() => {
@@ -125,7 +138,7 @@ afterEach(() => {
 
 describe('RFC-032 / route — locks first-run vs. non-first-run branching', () => {
   test('isFirstRun:true → Onboarding renders (P-5-10 path)', async () => {
-    probeReturn.current = { isLoading: false, isFirstRun: true, error: null }
+    probeReturn.current = { ...probeReturn.current, isFirstRun: true }
     mockTasksRuntimeEmpty()
     const { Route } = await import('../src/routes/index')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -139,7 +152,7 @@ describe('RFC-032 / route — locks first-run vs. non-first-run branching', () =
   })
 
   test('isFirstRun:false → Homepage renders (no Navigate)', async () => {
-    probeReturn.current = { isLoading: false, isFirstRun: false, error: null }
+    probeReturn.current = { ...probeReturn.current, isFirstRun: false }
     mockTasksRuntimeEmpty()
     const { Route } = await import('../src/routes/index')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -150,6 +163,75 @@ describe('RFC-032 / route — locks first-run vs. non-first-run branching', () =
     })
     // The Navigate stub must NOT appear — we replaced it with <Homepage />.
     expect(screen.queryByTestId('navigate-stub')).toBeNull()
+  })
+
+  test('initial probe loading uses the shared page header/loading state', async () => {
+    probeReturn.current = {
+      ...probeReturn.current,
+      isLoading: true,
+      hasData: false,
+    }
+    const { Route } = await import('../src/routes/index')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Comp = (Route.options as any).component as React.ComponentType
+    wrap(<Comp />)
+    expect(screen.getByTestId('home-probe-state')).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/Home|首页/)
+    expect(screen.getByTestId('loading-state')).toBeTruthy()
+    expect(screen.queryByTestId('homepage')).toBeNull()
+  })
+
+  test('initial probe failure never masquerades as Homepage and exposes retry', async () => {
+    const retry = vi.fn()
+    probeReturn.current = {
+      isLoading: false,
+      isFirstRun: false,
+      hasData: false,
+      error: new Error('agents probe failed'),
+      retry,
+    }
+    const { Route } = await import('../src/routes/index')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Comp = (Route.options as any).component as React.ComponentType
+    wrap(<Comp />)
+    expect(screen.getByRole('alert').textContent).toContain('agents probe failed')
+    expect(screen.queryByTestId('homepage')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Retry|重试/ }))
+    expect(retry).toHaveBeenCalledTimes(1)
+  })
+
+  test('background probe failure keeps stale Homepage visible with retry feedback', async () => {
+    const retry = vi.fn()
+    probeReturn.current = {
+      isLoading: false,
+      isFirstRun: false,
+      hasData: true,
+      error: new Error('refresh failed'),
+      retry,
+    }
+    mockTasksRuntimeEmpty()
+    const { Route } = await import('../src/routes/index')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Comp = (Route.options as any).component as React.ComponentType
+    wrap(<Comp />)
+    expect(await screen.findByTestId('homepage')).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toContain('refresh failed')
+    fireEvent.click(screen.getByRole('button', { name: /Retry|重试/ }))
+    expect(retry).toHaveBeenCalledTimes(1)
+  })
+
+  test('background probe failure keeps stale Onboarding visible', async () => {
+    probeReturn.current = {
+      ...probeReturn.current,
+      isFirstRun: true,
+      error: new Error('refresh failed'),
+    }
+    const { Route } = await import('../src/routes/index')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Comp = (Route.options as any).component as React.ComponentType
+    wrap(<Comp />)
+    expect(screen.getByTestId('onboarding-hero')).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toContain('refresh failed')
   })
 
   test('source guard: routes/index.tsx no longer ships Navigate.*/agents', () => {

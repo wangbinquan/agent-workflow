@@ -125,6 +125,10 @@ describe('/workgroups/$name — launch entry gating', () => {
     await renderPage('/workgroups/review-squad')
     const btn = await screen.findByTestId('workgroup-launch-button')
     expect(btn.getAttribute('href')).toBe('/tasks/new?kind=workgroup&workgroup=review-squad')
+    expect(btn.classList.contains('btn--primary')).toBe(false)
+    expect(screen.getByTestId('workgroup-save-button').classList.contains('btn--primary')).toBe(
+      true,
+    )
   })
 
   test('a not-ready group (no members) hides the launch button', async () => {

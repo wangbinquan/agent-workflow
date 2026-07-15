@@ -30,6 +30,7 @@ import {
 import type { ScheduledTask } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { runNowBlocked } from '../src/routes/scheduled'
+import { enUS } from '../src/i18n/en-US'
 import '../src/i18n'
 
 beforeEach(() => {
@@ -97,7 +98,7 @@ function installFetch(rows: ScheduledTask[]): Recorded {
   return rec
 }
 
-async function renderPage() {
+async function renderPage(qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   const list = await import('../src/routes/scheduled')
   const rootRoute = createRootRoute({ component: () => <Outlet /> })
   const listRoute = createRoute({
@@ -120,7 +121,6 @@ async function renderPage() {
     ]),
     history: createMemoryHistory({ initialEntries: ['/scheduled'] }),
   })
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={qc}>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
@@ -240,5 +240,61 @@ describe('/scheduled — inline operations (RFC-192)', () => {
     // every header over the wrong column.
     const table = row.closest('table')
     expect(table?.querySelectorAll('thead th')).toHaveLength(cells.length)
+    expect(table?.parentElement?.classList.contains('table-viewport__scroller')).toBe(true)
+    expect(table?.closest('.table-viewport')?.classList.contains('table-viewport--lg')).toBe(true)
+    expect(document.querySelector('h1.page__title')).not.toBeNull()
+  })
+
+  test('initial empty state owns the only create action', async () => {
+    installFetch([])
+    await renderPage()
+    const empty = await screen.findByTestId('scheduled-empty')
+    expect(empty.textContent).toContain(enUS.scheduled.emptyDescription)
+    expect(empty.querySelector('[data-icon="schedule"]')).not.toBeNull()
+    const createActions = screen.getAllByTestId('scheduled-new')
+    expect(createActions).toHaveLength(1)
+    expect(empty.contains(createActions[0]!)).toBe(true)
+    expect(createActions[0]!.closest('.page__actions')).toBeNull()
+    const header = empty.closest('.page')?.querySelector('header.page__header')
+    const chromePrimaries = [header, empty].flatMap((surface) =>
+      Array.from(surface?.querySelectorAll('.btn--primary') ?? []),
+    )
+    expect(chromePrimaries).toEqual([createActions[0]])
+  })
+
+  test('refetch error keeps stale schedules visible and retry recovers', async () => {
+    let fail = false
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (req: RequestInfo | URL) => {
+      const url = req.toString()
+      if (url.includes('/api/scheduled-tasks') && fail) {
+        return new Response(
+          JSON.stringify({ code: 'scheduled-load-failed', message: 'try again' }),
+          {
+            status: 500,
+            headers: { 'content-type': 'application/json' },
+          },
+        )
+      }
+      return new Response(
+        JSON.stringify(url.includes('/api/scheduled-tasks') ? [sched('stale')] : []),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      )
+    })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    await renderPage(qc)
+    await screen.findByTestId('scheduled-row-stale')
+
+    fail = true
+    await qc.refetchQueries({ queryKey: ['scheduled-tasks'] })
+    await screen.findByRole('alert')
+    expect(screen.getByTestId('scheduled-row-stale')).toBeTruthy()
+
+    fail = false
+    fireEvent.click(screen.getByRole('button', { name: /retry|重试/i }))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(screen.getByTestId('scheduled-row-stale')).toBeTruthy()
   })
 })

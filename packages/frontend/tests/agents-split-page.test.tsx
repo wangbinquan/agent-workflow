@@ -75,7 +75,9 @@ function chooseSelectOption(comboboxName: RegExp, optionName: string) {
   fireEvent.mouseDown(screen.getByRole('option', { name: optionName }))
 }
 
-function installFetch(opts: { failList?: boolean; ownerName?: string } = {}) {
+function installFetch(
+  opts: { failList?: boolean; ownerName?: string; failDetail?: () => boolean } = {},
+) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
@@ -86,6 +88,8 @@ function installFetch(opts: { failList?: boolean; ownerName?: string } = {}) {
       if (method === 'GET' && path.endsWith('/api/agents'))
         return opts.failList ? json({ error: 'boom' }, 500) : json(agents)
       if (method === 'GET' && path.includes('/api/agents/')) {
+        if (opts.failDetail?.() === true)
+          return json({ code: 'agent-detail-failed', message: 'detail unavailable' }, 500)
         const name = decodeURIComponent(path.split('/api/agents/')[1]!.split('?')[0]!)
         const a = agents.find((x) => x.name === name)
         return a ? json(a) : json({ error: 'not found' }, 404)
@@ -136,8 +140,10 @@ function installFetch(opts: { failList?: boolean; ownerName?: string } = {}) {
   )
 }
 
-function renderAgents(initial: string) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+function renderAgents(
+  initial: string,
+  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   const tree = RootRoute.addChildren([
     agentsRoute.addChildren([agentNewRoute, agentDetailRoute, agentsIndexRoute]),
   ])
@@ -165,6 +171,29 @@ afterEach(() => {
 })
 
 describe('/agents split page', () => {
+  test('RFC-198 page-header-primary-ratchet counts detail chrome and rail separately', async () => {
+    renderAgents('/agents/alpha')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'alpha' }))
+
+    const detail = screen.getByTestId('split-detail')
+    const save = screen.getByTestId('agent-save-button')
+    const launch = screen.getByTestId('agent-launch-button')
+    const newAgent = screen.getByTestId('split-new-button')
+    const detailHeader = save.closest('header.page__header')
+    const rail = newAgent.closest('aside')
+
+    // RFC-198 §5.1 treats the split rail as an independent shape: Save is
+    // the detail header's only primary, while Launch remains secondary. The
+    // form's port/dependency section actions are independent contextual groups.
+    expect(detail.contains(save)).toBe(true)
+    expect(Array.from(detailHeader?.querySelectorAll('.btn--primary') ?? [])).toEqual([save])
+    expect(launch.classList.contains('btn--primary')).toBe(false)
+
+    // The rail independently retains exactly one creation entry.
+    expect(rail).not.toBeNull()
+    expect(Array.from(rail?.querySelectorAll('.btn--primary') ?? [])).toEqual([newAgent])
+  })
+
   test('empty pane at /agents; card click opens the detail form', async () => {
     const router = renderAgents('/agents')
     const alphaCard = await waitFor(() => screen.getByTestId('split-card-alpha'))
@@ -186,6 +215,12 @@ describe('/agents split page', () => {
     fireEvent.click(screen.getByTestId('split-card-alpha'))
     await waitFor(() => expect(router.state.location.pathname).toBe('/agents/alpha'))
     await waitFor(() => screen.getByRole('heading', { level: 2, name: 'alpha' }))
+    const basicsTab = screen.getByRole('tab', { name: 'Basics' })
+    const basicsPanel = screen.getByTestId('agent-panel-basics')
+    expect(basicsTab.id).toBe('agents-detail-tab-basics')
+    expect(basicsTab.getAttribute('aria-controls')).toBe(basicsPanel.id)
+    expect(basicsPanel.id).toBe('agents-detail-panel-basics')
+    expect(basicsPanel.getAttribute('aria-labelledby')).toBe(basicsTab.id)
     const back = screen.getByTestId('agents-mobile-back')
     expect(back.getAttribute('href')).toBe('/agents')
     expect(screen.getAllByTestId('agents-mobile-back')).toHaveLength(1)
@@ -243,6 +278,38 @@ describe('/agents split page', () => {
     // card subtitle refreshed from the eager patch
     await waitFor(() =>
       expect(screen.getByTestId('split-card-alpha').textContent).toContain('edited-desc'),
+    )
+  })
+
+  test('detail retry recovers initial failure and stale refetch keeps an unsaved draft mounted', async () => {
+    let failDetail = true
+    vi.restoreAllMocks()
+    installFetch({ failDetail: () => failDetail })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    renderAgents('/agents/alpha', qc)
+
+    const retry = await screen.findByRole('button', { name: /retry/i })
+    expect(screen.queryByRole('textbox', { name: /Description/ })).toBeNull()
+    failDetail = false
+    fireEvent.click(retry)
+    const desc = (await screen.findByRole('textbox', {
+      name: /Description/,
+    })) as HTMLInputElement
+    fireEvent.change(desc, { target: { value: 'local-unsaved' } })
+
+    failDetail = true
+    await qc.refetchQueries({ queryKey: ['agents', 'alpha'], exact: true })
+    const staleAlert = await screen.findByRole('alert')
+    expect(staleAlert.textContent).toContain('detail unavailable')
+    expect((screen.getByRole('textbox', { name: /Description/ }) as HTMLInputElement).value).toBe(
+      'local-unsaved',
+    )
+
+    failDetail = false
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect((screen.getByRole('textbox', { name: /Description/ }) as HTMLInputElement).value).toBe(
+      'local-unsaved',
     )
   })
 
@@ -387,6 +454,12 @@ describe('/agents split page', () => {
   test('creating a new agent navigates to it and selects its card', async () => {
     const router = renderAgents('/agents/new')
     await waitFor(() => screen.getByTestId('agent-create-button'))
+    const basicsTab = screen.getByRole('tab', { name: 'Basics' })
+    const basicsPanel = screen.getByTestId('agent-panel-basics')
+    expect(basicsTab.id).toBe('agents-new-tab-basics')
+    expect(basicsTab.getAttribute('aria-controls')).toBe(basicsPanel.id)
+    expect(basicsPanel.id).toBe('agents-new-panel-basics')
+    expect(basicsPanel.getAttribute('aria-labelledby')).toBe(basicsTab.id)
     expect(screen.getByTestId('agents-mobile-back').getAttribute('href')).toBe('/agents')
     expect(screen.getAllByTestId('agents-mobile-back')).toHaveLength(1)
     expect(screen.getAllByTestId('split-new-button')).toHaveLength(1)

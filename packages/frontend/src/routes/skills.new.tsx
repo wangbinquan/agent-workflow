@@ -15,6 +15,7 @@ import { api } from '@/api/client'
 import { Field, TextArea, TextInput } from '@/components/Form'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { ImportZipPanel } from '@/components/skills/ImportZipPanel'
+import { PageHeader } from '@/components/PageHeader'
 import { NEW_CARD_KEY, useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
 import { TabPanels } from '@/components/split/TabPanels'
 import { TabBar } from '@/components/TabBar'
@@ -68,13 +69,11 @@ function SkillCreatePage() {
 
   return (
     <div className="agent-new">
-      <header className="page__header page__header--row">
-        <div>
-          <h2>{tab === 'zip' ? t('skills.importTitle') : t('skills.newTitle')}</h2>
-          {tab === 'zip' && <p className="page__hint">{t('skills.importSubtitle')}</p>}
-        </div>
-        {tab !== 'zip' && (
-          <div className="page__actions">
+      <PageHeader
+        title={tab === 'zip' ? t('skills.importTitle') : t('skills.newTitle')}
+        headingLevel={2}
+        actions={
+          tab !== 'zip' && (
             <button
               type="button"
               className="btn btn--primary"
@@ -84,9 +83,11 @@ function SkillCreatePage() {
             >
               {create.isPending ? t('common.creating') : t('skills.createButton')}
             </button>
-          </div>
-        )}
-      </header>
+          )
+        }
+      >
+        {tab === 'zip' && <p className="page__hint">{t('skills.importSubtitle')}</p>}
+      </PageHeader>
 
       <TabBar<Tab>
         tabs={[

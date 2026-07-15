@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { ResourceSplitPage, type ResourceCardItem } from '@/components/split/ResourceSplitPage'
 import { RUNTIMES_QUERY_KEY } from '@/components/RuntimeList'
 import { StatusChip } from '@/components/StatusChip'
+import { AGENT_ICON } from '@/components/icons/resourceIcons'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -32,7 +33,7 @@ function AgentsSplitLayout() {
   const { t } = useTranslation()
   // RFC-151 PR-3 — shared list shell: query + owner lookup (delete lives in the
   // detail header now).
-  const { data, isLoading, error, owners } = useResourceList<Agent>({
+  const { data, isLoading, error, refetch, owners } = useResourceList<Agent>({
     queryKey: ['agents'],
     endpoint: '/api/agents',
     deleteBy: 'name',
@@ -143,6 +144,9 @@ function AgentsSplitLayout() {
       newTo="/agents/new"
       searchPlaceholder={t('common.searchEllipsis')}
       emptyListText={t('agents.emptyList')}
+      emptyDescription={t('agents.emptyDescription')}
+      emptyIcon={AGENT_ICON}
+      onRetry={() => void refetch()}
       listTo="/agents"
       mobileBackLabel={t('common.backToList')}
       mobileBackTestId="agents-mobile-back"

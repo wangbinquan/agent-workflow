@@ -44,11 +44,7 @@ export function useActor() {
     queryKey: [...ACTOR_QUERY_KEY, token ?? 'no-token'],
     queryFn: async () => {
       if (!token) return null
-      try {
-        return await api.get<MeResponse>('/api/auth/me')
-      } catch {
-        return null
-      }
+      return api.get<MeResponse>('/api/auth/me')
     },
     staleTime: 30_000,
     refetchOnWindowFocus: false,
@@ -62,4 +58,14 @@ export function usePermission(perm: string): boolean {
   const { data } = useActor()
   if (!data) return false
   return data.permissions.includes(perm)
+}
+
+/**
+ * Admin-IDENTITY gate — distinct from usePermission. Several permission points
+ * now sit in the user baseline (e.g. memory:approve after RFC-099 D12), so a
+ * surface that is genuinely admin-only must key off the ROLE: keying it off
+ * such a permission would make the gate a no-op for every logged-in user.
+ */
+export function useIsAdmin(): boolean {
+  return useActor().data?.user.role === 'admin'
 }

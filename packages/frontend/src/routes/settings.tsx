@@ -17,16 +17,22 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useRouterState } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Agent, Config, ConfigPatch } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { Card } from '@/components/Card'
 import { Dialog } from '@/components/Dialog'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, NumberInput, Switch, TextInput } from '@/components/Form'
+import { LoadingState } from '@/components/LoadingState'
+import { PageHeader } from '@/components/PageHeader'
 import { RuntimeSelect } from '@/components/RuntimeSelect'
 import { Select } from '@/components/Select'
-import { TabBar } from '@/components/TabBar'
+import { StatusChip } from '@/components/StatusChip'
+import { TabBar, tabDomIds } from '@/components/TabBar'
+import { TableViewport } from '@/components/TableViewport'
 import { RuntimeList } from '@/components/RuntimeList'
 import { describeApiError, setLanguage, type SupportedLanguage } from '@/i18n'
 import { isSupportedLanguage } from '@/hooks/useLanguage'
@@ -36,9 +42,10 @@ export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/settings',
   component: SettingsPage,
+  validateSearch: validateSettingsSearch,
 })
 
-type Tab =
+export type SettingsTab =
   | 'runtime'
   // RFC-156: the internal framework agents' runtime + run-config live here now,
   // pulled out of Limits (commit-push) and the removed Memory tab (distiller).
@@ -51,34 +58,108 @@ type Tab =
   | 'rendering'
   | 'authentication'
 
+export const SETTINGS_TABS = [
+  'runtime',
+  'systemAgents',
+  'limits',
+  'recovery',
+  'gc',
+  'network',
+  'appearance',
+  'rendering',
+  'authentication',
+] as const satisfies readonly SettingsTab[]
+
+interface SettingsSearch extends Record<string, unknown> {
+  tab?: SettingsTab
+}
+
+function isSettingsTab(tab: unknown): tab is SettingsTab {
+  return typeof tab === 'string' && (SETTINGS_TABS as readonly string[]).includes(tab)
+}
+
+export function validateSettingsSearch(raw: Record<string, unknown>): SettingsSearch {
+  const { tab, ...adjacent } = raw
+  return isSettingsTab(tab) ? { ...adjacent, tab } : adjacent
+}
+
+export function withSettingsTab<T extends Record<string, unknown>>(
+  previous: T,
+  tab: SettingsTab,
+): T & { tab: SettingsTab } {
+  return { ...previous, tab }
+}
+
 function SettingsPage() {
-  const [tab, setTab] = useState<Tab>('runtime')
   const [runtimeFlashKey, setRuntimeFlashKey] = useState(0)
+  const claimedRuntimeFlashRef = useRef(0)
   const { t } = useTranslation()
+  const search = Route.useSearch()
+  const navigate = Route.useNavigate()
+  // validateSearch is the first line of defence, while this runtime guard also
+  // keeps URL and panel aligned in embedded/test routers that can hand a route
+  // raw search state during initial hydration.
+  const tab = isSettingsTab(search.tab) ? search.tab : 'runtime'
+  const claimRuntimeFlash = useCallback((key: number) => {
+    if (claimedRuntimeFlashRef.current === key) return false
+    claimedRuntimeFlashRef.current = key
+    return true
+  }, [])
   const config = useQuery<Config>({
     queryKey: ['config'],
     queryFn: ({ signal }) => api.get('/api/config', undefined, signal),
   })
 
-  // RFC-032: when the sidebar's runtime nav row navigates here it lands on
-  // `/settings#runtime`. Force the runtime tab + bump a key the RuntimeTab
-  // uses to re-trigger its flash animation. We also re-trigger the flash on
-  // every navigation to the same hash (router updates that don't unmount).
+  // RFC-198: URL search is the single tab authority. Missing/unknown values
+  // canonicalize to runtime with replace so Back never loops through a bad URL.
+  // RFC-032's legacy /settings#runtime entry point is consumed once in the same
+  // navigation and still bumps the RuntimeTab flash key.
   const hash = useRouterState({ select: (s) => s.location.hash })
   useEffect(() => {
-    if (hash === 'runtime') {
-      setTab('runtime')
-      setRuntimeFlashKey((k) => k + 1)
+    if (isSettingsTab(search.tab)) return
+    if (hash === 'runtime') setRuntimeFlashKey((k) => k + 1)
+    void navigate({
+      search: (previous) => withSettingsTab(previous, 'runtime'),
+      hash: hash === 'runtime' ? '' : hash,
+      replace: true,
+    })
+  }, [hash, navigate, search.tab])
+
+  const retryAction = (
+    <button type="button" className="btn btn--sm" onClick={() => void config.refetch()}>
+      {t('common.retry')}
+    </button>
+  )
+  let panelContent: React.ReactNode = null
+  if (config.data === undefined) {
+    if (config.isLoading) panelContent = <LoadingState label={t('settings.loading')} />
+    else if (config.error !== null) {
+      panelContent = <ErrorBanner error={config.error} action={retryAction} />
     }
-  }, [hash])
+  } else {
+    panelContent = (
+      <>
+        {config.error !== null && <ErrorBanner error={config.error} action={retryAction} />}
+        {tab === 'runtime' && (
+          <RuntimeTab flashKey={runtimeFlashKey} claimFlash={claimRuntimeFlash} />
+        )}
+        {tab === 'systemAgents' && <SystemAgentsTab config={config.data} />}
+        {tab === 'limits' && <LimitsTab config={config.data} />}
+        {tab === 'recovery' && <RecoveryTab config={config.data} />}
+        {tab === 'gc' && <GcTab config={config.data} />}
+        {tab === 'network' && <NetworkTab config={config.data} />}
+        {tab === 'appearance' && <AppearanceTab config={config.data} />}
+        {tab === 'rendering' && <RenderingTab config={config.data} />}
+        {tab === 'authentication' && <AuthenticationTab />}
+      </>
+    )
+  }
 
   return (
     <div className="page">
-      <header className="page__header">
-        <h1>{t('settings.title')}</h1>
-      </header>
+      <PageHeader title={t('settings.title')} />
 
-      <TabBar<Tab>
+      <TabBar<SettingsTab>
         tabs={(
           [
             ['runtime', t('settings.tabRuntime')],
@@ -90,29 +171,32 @@ function SettingsPage() {
             ['appearance', t('settings.tabAppearance')],
             ['rendering', t('settings.tabRendering')],
             ['authentication', t('settings.tabAuthentication')],
-          ] as Array<[Tab, string]>
+          ] as Array<[SettingsTab, string]>
         ).map(([k, label]) => ({ key: k, label }))}
         active={tab}
-        onSelect={setTab}
+        onSelect={(next) => {
+          if (next === tab) return
+          void navigate({ search: (previous) => withSettingsTab(previous, next) })
+        }}
+        idPrefix="settings"
+        ariaLabel={t('settings.title')}
       />
 
-      {config.isLoading && <div className="muted">{t('settings.loading')}</div>}
-      {config.error !== null && config.error !== undefined && (
-        <div className="error-box">{describeError(config.error)}</div>
-      )}
-      {config.data !== undefined && (
-        <>
-          {tab === 'runtime' && <RuntimeTab flashKey={runtimeFlashKey} />}
-          {tab === 'systemAgents' && <SystemAgentsTab config={config.data} />}
-          {tab === 'limits' && <LimitsTab config={config.data} />}
-          {tab === 'recovery' && <RecoveryTab config={config.data} />}
-          {tab === 'gc' && <GcTab config={config.data} />}
-          {tab === 'network' && <NetworkTab config={config.data} />}
-          {tab === 'appearance' && <AppearanceTab config={config.data} />}
-          {tab === 'rendering' && <RenderingTab config={config.data} />}
-          {tab === 'authentication' && <AuthenticationTab />}
-        </>
-      )}
+      {SETTINGS_TABS.map((panelTab) => {
+        const ids = tabDomIds('settings', panelTab)
+        const isActive = panelTab === tab
+        return (
+          <div
+            key={panelTab}
+            role="tabpanel"
+            id={ids.panelId}
+            aria-labelledby={ids.tabId}
+            hidden={!isActive}
+          >
+            {isActive ? panelContent : null}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -125,19 +209,25 @@ interface TabProps {
   config: Config
 }
 
-function RuntimeTab({ flashKey = 0 }: { flashKey?: number }) {
+function RuntimeTab({
+  flashKey = 0,
+  claimFlash,
+}: {
+  flashKey?: number
+  claimFlash?: (key: number) => boolean
+}) {
   const runtimeRef = useRef<HTMLDivElement | null>(null)
   const [flashing, setFlashing] = useState(false)
 
   // RFC-032: scroll + flash the runtime block when the sidebar runtime row
   // navigates here (location.hash === '#runtime' bumps flashKey).
   useEffect(() => {
-    if (flashKey === 0) return
+    if (flashKey === 0 || claimFlash?.(flashKey) === false) return
     setFlashing(true)
     runtimeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     const id = window.setTimeout(() => setFlashing(false), 2000)
     return () => window.clearTimeout(id)
-  }, [flashKey])
+  }, [claimFlash, flashKey])
 
   // RFC-113: the Runtime tab is JUST the runtimes table. Every runtime/model
   // setting (binary, model, variant, temperature, steps + the in-table default
@@ -961,6 +1051,11 @@ function AuthenticationTab() {
       api.delete(`/api/oidc/providers/${id}${force ? '?force=true' : ''}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['oidc-providers'] }),
   })
+  const retryAction = (
+    <button type="button" className="btn btn--sm" onClick={() => void list.refetch()}>
+      {t('common.retry')}
+    </button>
+  )
 
   return (
     <div className="auth-tab">
@@ -981,73 +1076,77 @@ function AuthenticationTab() {
         </button>
       </header>
 
-      {list.isLoading && <div className="muted">{t('settings.loading')}</div>}
-      {list.error && <div className="auth-form__error">{(list.error as Error).message}</div>}
+      {list.isLoading && list.data === undefined && <LoadingState label={t('settings.loading')} />}
+      {list.error !== null && <ErrorBanner error={list.error} action={retryAction} />}
 
       {list.data && list.data.length === 0 && (
-        <p className="account-empty">
-          {t('settings.auth.empty', {
+        <EmptyState
+          title={t('settings.auth.empty', {
             defaultValue: 'No providers yet. Add one to enable single sign-on.',
           })}
-        </p>
+          size="compact"
+        />
       )}
 
       {list.data && list.data.length > 0 && (
-        <table className="account-table">
-          <thead>
-            <tr>
-              <th>{t('settings.auth.colSlug', { defaultValue: 'Slug' })}</th>
-              <th>{t('settings.auth.colName', { defaultValue: 'Name' })}</th>
-              <th>{t('settings.auth.colIssuer', { defaultValue: 'Issuer' })}</th>
-              <th>{t('settings.auth.colProvisioning', { defaultValue: 'Provisioning' })}</th>
-              <th>{t('settings.auth.colEnabled', { defaultValue: 'Enabled' })}</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.data.map((p) => (
-              <tr key={p.id}>
-                <td>
-                  <code>{p.slug}</code>
-                </td>
-                <td>{p.displayName}</td>
-                <td className="account-table__ua">{p.issuerUrl}</td>
-                <td>{p.provisioning}</td>
-                <td>
-                  <span
-                    className={`account-dot account-dot--status-${p.enabled ? 'active' : 'disabled'}`}
-                    aria-hidden
-                  />{' '}
-                  {p.enabled
-                    ? t('settings.auth.enabled', { defaultValue: 'enabled' })
-                    : t('settings.auth.disabled', { defaultValue: 'disabled' })}
-                </td>
-                <td>
-                  <button className="btn btn--ghost btn--xs" onClick={() => setEditing(p)}>
-                    {t('settings.auth.edit', { defaultValue: 'Edit' })}
-                  </button>
-                  <button
-                    className="btn btn--ghost btn--xs btn--danger"
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          t('settings.auth.deleteConfirm', {
-                            defaultValue: `Delete provider "${p.displayName}"?`,
-                            name: p.displayName,
-                          }),
-                        )
-                      ) {
-                        remove.mutate({ id: p.id, force: false })
-                      }
-                    }}
-                  >
-                    {t('settings.auth.delete', { defaultValue: 'Delete' })}
-                  </button>
-                </td>
+        <TableViewport
+          label={t('settings.auth.providersTitle', { defaultValue: 'OIDC providers' })}
+          minWidth="lg"
+        >
+          <table className="account-table">
+            <thead>
+              <tr>
+                <th>{t('settings.auth.colSlug', { defaultValue: 'Slug' })}</th>
+                <th>{t('settings.auth.colName', { defaultValue: 'Name' })}</th>
+                <th>{t('settings.auth.colIssuer', { defaultValue: 'Issuer' })}</th>
+                <th>{t('settings.auth.colProvisioning', { defaultValue: 'Provisioning' })}</th>
+                <th>{t('settings.auth.colEnabled', { defaultValue: 'Enabled' })}</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {list.data.map((p) => (
+                <tr key={p.id}>
+                  <td>
+                    <code>{p.slug}</code>
+                  </td>
+                  <td>{p.displayName}</td>
+                  <td className="account-table__ua">{p.issuerUrl}</td>
+                  <td>{p.provisioning}</td>
+                  <td>
+                    <StatusChip kind={p.enabled ? 'success' : 'neutral'} withDot size="sm">
+                      {p.enabled
+                        ? t('settings.auth.enabled', { defaultValue: 'enabled' })
+                        : t('settings.auth.disabled', { defaultValue: 'disabled' })}
+                    </StatusChip>
+                  </td>
+                  <td>
+                    <button className="btn btn--ghost btn--xs" onClick={() => setEditing(p)}>
+                      {t('settings.auth.edit', { defaultValue: 'Edit' })}
+                    </button>
+                    <button
+                      className="btn btn--ghost btn--xs btn--danger"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            t('settings.auth.deleteConfirm', {
+                              defaultValue: `Delete provider "${p.displayName}"?`,
+                              name: p.displayName,
+                            }),
+                          )
+                        ) {
+                          remove.mutate({ id: p.id, force: false })
+                        }
+                      }}
+                    >
+                      {t('settings.auth.delete', { defaultValue: 'Delete' })}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableViewport>
       )}
 
       {showCreate && (

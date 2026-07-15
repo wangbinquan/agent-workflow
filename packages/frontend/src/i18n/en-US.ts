@@ -162,7 +162,9 @@ export const enUS: Resources = {
   },
   reviews: {
     title: 'Reviews',
-    emptyList: 'No reviews.',
+    emptyList: 'No reviews are waiting',
+    emptyDescription:
+      'Tasks pause here at review steps so you can inspect the result and make a decision.',
     filterPending: 'Pending',
     filterAll: 'All',
     filterApproved: 'Approved',
@@ -427,6 +429,9 @@ export const enUS: Resources = {
   users: {
     title: 'Users',
     new: 'New user',
+    empty: 'No users yet',
+    emptyDescription:
+      'Create the first platform account and assign user or administrator access by responsibility.',
     username: 'Username',
     displayName: 'Display name',
     role: 'Role',
@@ -454,8 +459,9 @@ export const enUS: Resources = {
   repos: {
     title: 'Cached repos',
     loading: 'Loading…',
-    empty:
-      "No cached repos yet. Launch a task in the launcher's Remote URL mode to populate this list.",
+    empty: 'No cached repos yet',
+    emptyDescription:
+      'Batch import frequently used remotes to prepare reusable caches and speed up future tasks.',
     colUrl: 'Remote URL',
     colLocalPath: 'Local cache path',
     colLastFetched: 'Last fetched',
@@ -678,6 +684,7 @@ export const enUS: Resources = {
     noMatches: 'No matches',
     retry: 'Retry',
     clearSearch: 'Clear search',
+    clearFilters: 'Clear filters',
     backToList: 'Back to list',
     redirectingToLogin: 'Taking you to sign in…',
     itemsCount_one: '{{count}} item',
@@ -756,7 +763,7 @@ export const enUS: Resources = {
     unsavedStay: 'Stay on page',
     unsavedDiscard: 'Discard changes',
     emptyPaneTitle: 'Nothing selected',
-    emptyPaneHint: 'Select one from the left, or create a new one.',
+    emptyPaneHint: 'Select an item from the list to view its details.',
   },
   // RFC-112: runtime registry (Settings → Runtime list + add/edit dialog).
   runtimes: {
@@ -825,6 +832,7 @@ export const enUS: Resources = {
     title: 'Agents',
     newButton: '+ New agent',
     emptyList: 'No agents yet. Create one to get started.',
+    emptyDescription: 'Define reusable roles, prompts, and ports for workflows and workgroups.',
     cardPorts: '{{inputs}} in · {{outputs}} out',
     colName: 'Name',
     colDescription: 'Description',
@@ -841,6 +849,7 @@ export const enUS: Resources = {
     title: 'Skills',
     newButton: '+ New skill',
     emptyList: 'No skills yet.',
+    emptyDescription: 'Create or import reusable expertise, then assign it to an agent.',
     cardVersion: 'Content v{{version}}',
     colName: 'Name',
     colSource: 'Source',
@@ -1048,6 +1057,7 @@ export const enUS: Resources = {
     title: 'MCP Servers',
     newButton: '+ New MCP',
     emptyList: 'No MCP servers registered.',
+    emptyDescription: 'Register a local or remote MCP server so agents can use its tools.',
     colName: 'Name',
     colType: 'Type',
     colDescription: 'Description',
@@ -1162,6 +1172,7 @@ export const enUS: Resources = {
     title: 'Plugins',
     newButton: '+ New plugin',
     emptyList: 'No plugins registered.',
+    emptyDescription: 'Register an npm, local, or Git plugin, then assign it to an agent.',
     colName: 'Name',
     colSpec: 'Spec',
     colSource: 'Source',
@@ -1212,6 +1223,7 @@ export const enUS: Resources = {
     fieldNameHint: 'Starts with a lowercase letter / digit; only [a-z0-9_-], at most 128 chars.',
     importButton: 'Import YAML',
     emptyList: 'No workflows yet.',
+    emptyDescription: 'Create a reusable automation, then refine its nodes and connections.',
     importedAsNew: 'Imported as new workflow.',
     workflowOverwritten: 'Workflow overwritten.',
     importCanceled: 'Import canceled.',
@@ -1232,6 +1244,7 @@ export const enUS: Resources = {
     cardKind: 'Workgroup',
     newButton: '+ New workgroup',
     emptyList: 'No workgroups yet.',
+    emptyDescription: 'Create a collaborative team, then configure its members and operating mode.',
     modeLeaderWorker: 'Leader-Worker',
     modeFreeCollab: 'Free collaboration',
     modeDynamicWorkflow: 'Dynamic workflow',
@@ -1476,7 +1489,9 @@ export const enUS: Resources = {
   scheduled: {
     repairBadge: 'Needs repair',
     title: 'Scheduled Tasks',
-    empty: 'No scheduled tasks yet. Configure a workflow launch and choose "Save as scheduled".',
+    empty: 'No scheduled tasks yet',
+    emptyDescription:
+      'Configure a workflow launch and save its schedule to run recurring work automatically.',
     new: 'New',
     colName: 'Name',
     colSchedule: 'Schedule',
@@ -1535,8 +1550,11 @@ export const enUS: Resources = {
   },
   tasks: {
     title: 'Tasks',
+    newButton: 'New task',
     filterAll: 'All',
-    emptyList: 'No tasks match this filter.',
+    emptyList: 'No tasks yet',
+    emptyDescription:
+      'Launch a workflow, workgroup, or single agent and track every execution from here.',
     colId: 'ID',
     colName: 'Name',
     colSubject: 'Subject',
@@ -2830,7 +2848,9 @@ export const enUS: Resources = {
     list: {
       title: 'Clarify',
       filter: { awaiting: 'Awaiting', answered: 'Answered', all: 'All' },
-      empty: 'No clarify items.',
+      empty: 'No clarification questions are waiting',
+      emptyDescription:
+        'Questions appear here when an agent needs more information before it can continue.',
       colTask: 'Task',
       colAgent: 'Asking agent',
       colNode: 'Node',

@@ -47,6 +47,8 @@ import {
 export interface AgentFormProps {
   value: CreateAgent
   onChange: (next: CreateAgent) => void
+  /** Stable DOM id namespace for the owning route's tabs and panels. */
+  idPrefix?: string
   /** When true the name input is read-only (editing an existing agent). */
   nameLocked?: boolean
   /** Optional controlled tab, used by route-level repair links. */
@@ -94,6 +96,7 @@ export type AgentTab = 'basics' | 'prompt' | 'ports' | 'resources' | 'advanced'
 export function AgentForm({
   value,
   onChange,
+  idPrefix = 'agent-form',
   nameLocked,
   activeTab,
   onTabChange,
@@ -405,9 +408,16 @@ export function AgentForm({
 
   return (
     <div className="agent-form">
-      <TabBar tabs={tabs} active={tab} onSelect={selectTab} ariaLabel={t('agentForm.tabsAria')} />
+      <TabBar
+        tabs={tabs}
+        active={tab}
+        onSelect={selectTab}
+        ariaLabel={t('agentForm.tabsAria')}
+        idPrefix={idPrefix}
+      />
       <TabPanels
         active={tab}
+        idPrefix={idPrefix}
         className="split__detail-body agent-form__panel"
         panels={[
           { key: 'basics', testid: 'agent-panel-basics', content: basics },

@@ -5,20 +5,25 @@
 // page. Polling every 10s mirrors the Reviews inbox so the badge count and
 // the list stay rough-time-in-sync without a WS dep here.
 //
-// Layout mirrors /reviews: same accessible `.tabs` tab bar,
+// Layout mirrors /reviews: same accessible segmented filter,
 // per-task `.reviews-group` section with a `.data-table` body and a
 // per-row "Open" button + status chip. The two inbox pages stay visually
 // uniform so users don't context-switch between them.
 
 import { useQuery } from '@tanstack/react-query'
 import { Link, createRoute } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ClarifyRoundSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import { PageHeader } from '@/components/PageHeader'
+import { Segmented } from '@/components/Segmented'
 import { StatusChip } from '@/components/StatusChip'
-import { TabBar } from '@/components/TabBar'
+import { TableViewport } from '@/components/TableViewport'
+import { CLARIFY_ICON } from '@/components/icons/resourceIcons'
 import { clarifyRoundStatusChip } from '@/lib/clarify-status'
 import { Route as RootRoute } from './__root'
 
@@ -147,6 +152,13 @@ function renderRow(entry: ClarifyRoundSummary, t: (key: string) => string): Reac
 export function ClarifyListPage() {
   const { t } = useTranslation()
   const [filter, setFilter] = useState<FilterKey>('awaiting')
+  const activeFilterRef = useRef<HTMLButtonElement | null>(null)
+  const restoreFilterFocusRef = useRef(false)
+  useEffect(() => {
+    if (filter !== 'awaiting' || !restoreFilterFocusRef.current) return
+    restoreFilterFocusRef.current = false
+    activeFilterRef.current?.focus()
+  }, [filter])
 
   const list = useQuery<ClarifyRoundSummary[]>({
     queryKey: ['clarify', 'list', filter],
@@ -168,26 +180,64 @@ export function ClarifyListPage() {
 
   return (
     <div className="page" data-testid="clarify-list-page">
-      <header className="page__header">
-        <h1>{t('clarify.list.title')}</h1>
-      </header>
-      <TabBar<FilterKey>
-        tabs={FILTERS.map((k) => ({
-          key: k,
-          label: t(`clarify.list.filter.${k}`),
-          testid: `clarify-filter-${k}`,
-        }))}
-        active={filter}
-        onSelect={setFilter}
-      />
+      <PageHeader title={t('clarify.list.title')} />
+      <div className="page-filter">
+        <Segmented<FilterKey>
+          options={FILTERS.map((k) => ({
+            value: k,
+            label: t(`clarify.list.filter.${k}`),
+            testid: `clarify-filter-${k}`,
+          }))}
+          value={filter}
+          onChange={setFilter}
+          ariaLabel={t('clarify.list.title')}
+          testidPrefix="clarify-filter"
+          activeOptionRef={activeFilterRef}
+        />
+      </div>
       {list.isLoading && <LoadingState />}
       {list.error !== null && list.error !== undefined && (
-        <div className="error-box">{(list.error as Error).message}</div>
+        <ErrorBanner
+          error={list.error}
+          action={
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => {
+                void list.refetch()
+              }}
+            >
+              {t('common.retry')}
+            </button>
+          }
+        />
       )}
       {list.data !== undefined && list.data.length === 0 && (
-        <div className="muted" data-testid="clarify-list-empty">
-          {t('clarify.list.empty')}
-        </div>
+        <EmptyState
+          title={t('clarify.list.empty')}
+          description={filter === 'awaiting' ? t('clarify.list.emptyDescription') : undefined}
+          icon={filter === 'awaiting' ? CLARIFY_ICON : undefined}
+          size={filter === 'awaiting' ? 'comfortable' : 'compact'}
+          action={
+            filter === 'awaiting' ? (
+              <Link to="/tasks/new" className="btn btn--primary" data-testid="clarify-new-task">
+                {t('tasks.newButton')}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => {
+                  restoreFilterFocusRef.current = true
+                  setFilter('awaiting')
+                }}
+              >
+                {t('common.clearFilters')}
+              </button>
+            )
+          }
+          data-testid="clarify-list-empty"
+        />
       )}
       {Array.from(groups.entries()).map(([taskId, items]) => (
         <section key={taskId} className="reviews-group" data-testid={`clarify-group-${taskId}`}>
@@ -203,19 +253,24 @@ export function ClarifyListPage() {
               {taskId.slice(-10)}
             </code>
           </h2>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{t('clarify.list.colNode')}</th>
-                <th>{t('reviews.colStatus')}</th>
-                <th>{t('clarify.list.colIteration')}</th>
-                <th>{t('clarify.list.colQuestions')}</th>
-                <th>{t('clarify.list.colTime')}</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>{items.map((s) => renderRow(s, t))}</tbody>
-          </table>
+          <TableViewport
+            label={`${t('clarify.list.title')} — ${items[0]?.taskName && items[0].taskName.length > 0 ? items[0].taskName : taskId}`}
+            minWidth="md"
+          >
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{t('clarify.list.colNode')}</th>
+                  <th>{t('reviews.colStatus')}</th>
+                  <th>{t('clarify.list.colIteration')}</th>
+                  <th>{t('clarify.list.colQuestions')}</th>
+                  <th>{t('clarify.list.colTime')}</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>{items.map((s) => renderRow(s, t))}</tbody>
+            </table>
+          </TableViewport>
         </section>
       ))}
     </div>

@@ -11,11 +11,11 @@ import type { Memory, MemoryCandidatePromote } from '@agent-workflow/shared'
 import type { ApiError } from '@/api/client'
 import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { MemoryConflictCompareDialog } from './MemoryConflictCompareDialog'
 import { MemoryEditDialog } from './MemoryEditDialog'
 import { promoteActionToLabel, sourceKindLabel } from '@/lib/memory'
-import { describeApiError } from '@/i18n'
 
 interface ListResponse {
   items: Memory[]
@@ -72,19 +72,32 @@ export function MemoryApprovalQueue({ isAdmin }: MemoryApprovalQueueProps) {
     enabled: editingId !== null,
   })
 
-  if (candidates.isLoading) {
+  const candidatesError = candidates.error !== null && candidates.error !== undefined
+  const retryAction = (
+    <button type="button" className="btn btn--sm" onClick={() => void candidates.refetch()}>
+      {t('common.retry')}
+    </button>
+  )
+  if (candidates.data === undefined) {
+    if (candidates.isLoading) return <LoadingState />
+    if (candidatesError) {
+      return <ErrorBanner error={candidates.error} action={retryAction} />
+    }
     return <LoadingState />
   }
-  if (candidates.error !== null && candidates.error !== undefined) {
-    return <div className="error-box">{describeApiError(candidates.error)}</div>
-  }
-  const rows = candidates.data?.items ?? []
+  const rows = candidates.data.items
   if (rows.length === 0) {
-    return <EmptyState title={t('memory.empty')} data-testid="memory-approval-queue-empty" />
+    return (
+      <>
+        {candidatesError && <ErrorBanner error={candidates.error} action={retryAction} />}
+        <EmptyState title={t('memory.empty')} data-testid="memory-approval-queue-empty" />
+      </>
+    )
   }
 
   return (
     <div className="memory-approval-queue" data-testid="memory-approval-queue">
+      {candidatesError && <ErrorBanner error={candidates.error} action={retryAction} />}
       {/* RFC-099 (D12): non-admins may still manage rows whose scoped
           resource they OWN — the banner only shows when nothing here is
           manageable by them. */}
@@ -144,8 +157,8 @@ export function MemoryApprovalQueue({ isAdmin }: MemoryApprovalQueueProps) {
         />
       )}
       {promote.error !== null && promote.error !== undefined && (
-        <div className="error-box" data-testid="memory-approve-error">
-          {describeApiError(promote.error)}
+        <div data-testid="memory-approve-error">
+          <ErrorBanner error={promote.error} />
         </div>
       )}
       {editingId !== null && editingMemory.data?.memory !== undefined && (

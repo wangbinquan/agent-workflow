@@ -20,7 +20,7 @@ import { readFileSync } from 'node:fs'
 import path, { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
   RouterProvider,
   createMemoryHistory,
@@ -117,7 +117,7 @@ function renderWithRouter(component: () => React.ReactElement, initialEntry: str
       <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
-  return router
+  return { router, qc }
 }
 
 function item(overrides: Partial<WorkflowGalleryCardItem> = {}): WorkflowGalleryCardItem {
@@ -154,7 +154,7 @@ function workgroupItem(
 }
 
 describe('ResourceGalleryPage shell', () => {
-  test('notice renders before the grid; search only when items exist', async () => {
+  test('PageHeader, notice, and grid retain semantic DOM order; search only renders with items', async () => {
     renderWithRouter(
       () => (
         <ResourceGalleryPage
@@ -173,6 +173,10 @@ describe('ResourceGalleryPage shell', () => {
     )
     const notice = await screen.findByTestId('notice')
     const grid = screen.getByTestId('gallery-grid')
+    const header = screen.getByRole('banner')
+    expect(header.className).toBe('page__header page__header--row')
+    expect(screen.getByRole('heading', { level: 1, name: 'Things' }).className).toBe('page__title')
+    expect(header.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     // DOM order: notice strictly precedes the grid (P2-9).
     expect(notice.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByTestId('gallery-search')).toBeTruthy()
@@ -198,6 +202,94 @@ describe('ResourceGalleryPage shell', () => {
     await screen.findByTestId('things-empty')
     expect(screen.queryByTestId('gallery-search')).toBeNull()
     expect(screen.queryByTestId('gallery-grid')).toBeNull()
+  })
+
+  test('genuine empty list moves one primary CTA into EmptyState while retaining separate header actions', async () => {
+    const primaryAction = (
+      <button type="button" className="btn btn--primary" data-testid="new-thing">
+        New thing
+      </button>
+    )
+    renderWithRouter(
+      () => (
+        <ResourceGalleryPage
+          title="Things"
+          headerActions={
+            <>
+              <button type="button">Import</button>
+              {primaryAction}
+            </>
+          }
+          emptyHeaderActions={<button type="button">Import</button>}
+          emptyAction={primaryAction}
+          emptyDescription="Create the first thing when you are ready."
+          emptyIcon={<svg data-testid="things-empty-icon" />}
+          items={[]}
+          isLoading={false}
+          error={null}
+          searchPlaceholder="Search…"
+          emptyListText="No things yet."
+          emptyTestid="things-empty"
+        />
+      ),
+      '/gallery',
+    )
+
+    const empty = await screen.findByTestId('things-empty')
+    expect(screen.getAllByTestId('new-thing')).toHaveLength(1)
+    expect(within(empty).getByTestId('new-thing')).toBeTruthy()
+    expect(within(screen.getByRole('banner')).queryByTestId('new-thing')).toBeNull()
+    expect(within(screen.getByRole('banner')).getByRole('button', { name: 'Import' })).toBeTruthy()
+    expect(empty.textContent).toContain('Create the first thing when you are ready.')
+    expect(screen.getByTestId('things-empty-icon')).toBeTruthy()
+  })
+
+  test('legacy empty callers without emptyAction keep their header actions', async () => {
+    renderWithRouter(
+      () => (
+        <ResourceGalleryPage
+          title="Things"
+          headerActions={<button type="button">Legacy new</button>}
+          items={[]}
+          isLoading={false}
+          error={null}
+          searchPlaceholder="Search…"
+          emptyListText="No things yet."
+          emptyTestid="things-empty"
+        />
+      ),
+      '/gallery',
+    )
+    await screen.findByTestId('things-empty')
+    expect(
+      within(screen.getByRole('banner')).getByRole('button', { name: 'Legacy new' }),
+    ).toBeTruthy()
+  })
+
+  test('error retry coexists with stale cards and preserves banner-before-grid order', async () => {
+    const onRetry = vi.fn()
+    renderWithRouter(
+      () => (
+        <ResourceGalleryPage
+          title="Things"
+          headerActions={null}
+          items={[item()]}
+          isLoading={false}
+          error={new Error('stale request failed')}
+          onRetry={onRetry}
+          searchPlaceholder="Search…"
+          emptyListText="No things yet."
+          emptyTestid="things-empty"
+        />
+      ),
+      '/gallery',
+    )
+    const card = await screen.findByTestId('card-alpha')
+    const alert = screen.getByRole('alert')
+    expect(alert.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('card-alpha')).toBeTruthy()
   })
 
   test('search filters by title OR subtitle; no hit → compact no-matches (not list-empty)', async () => {
@@ -230,6 +322,38 @@ describe('ResourceGalleryPage shell', () => {
     expect(screen.getByTestId('gallery-no-matches')).toBeTruthy()
     expect(screen.getByTestId('gallery-count').textContent).toBe('0 items')
     expect(screen.queryByTestId('things-empty')).toBeNull()
+  })
+
+  test('no-match state owns only clear-search; clearing restores cards and search focus', async () => {
+    const onClearSearch = vi.fn()
+    renderWithRouter(
+      () => (
+        <ResourceGalleryPage
+          title="Things"
+          headerActions={<button type="button">New thing</button>}
+          items={[item()]}
+          isLoading={false}
+          error={null}
+          onClearSearch={onClearSearch}
+          clearSearchLabel="Clear search"
+          searchPlaceholder="Search…"
+          emptyListText="No things yet."
+          emptyTestid="things-empty"
+        />
+      ),
+      '/gallery',
+    )
+    await screen.findByTestId('card-alpha')
+    const search = screen.getByTestId('gallery-search') as HTMLInputElement
+    fireEvent.change(search, { target: { value: 'zzz' } })
+    const noMatches = screen.getByTestId('gallery-no-matches')
+    expect(within(noMatches).getAllByRole('button')).toHaveLength(1)
+    fireEvent.click(within(noMatches).getByRole('button', { name: 'Clear search' }))
+    expect(onClearSearch).toHaveBeenCalledTimes(1)
+    expect(search.value).toBe('')
+    expect(document.activeElement).toBe(search)
+    expect(screen.getByTestId('card-alpha')).toBeTruthy()
+    expect(screen.queryByTestId('gallery-no-matches')).toBeNull()
   })
 
   test('card: stretched link and launch are SIBLING <a>s (never nested); fallback desc is italicized', async () => {
@@ -322,6 +446,24 @@ describe('ResourceGalleryPage shell', () => {
 })
 
 describe('/workflows gallery assembly (T3)', () => {
+  test('genuine empty list exposes one create CTA in EmptyState while import stays in the header', async () => {
+    installFetch([])
+    const list = await import('../src/routes/workflows')
+    renderWithRouter(list.Route.options.component as () => React.ReactElement, '/workflows')
+
+    const empty = await screen.findByTestId('workflows-empty')
+    expect(empty.textContent).toContain(enUS.workflows.emptyDescription)
+    expect(screen.getAllByTestId('workflow-new-button')).toHaveLength(1)
+    expect(within(empty).getByTestId('workflow-new-button')).toBeTruthy()
+    const header = screen.getByRole('banner')
+    expect(within(header).queryByTestId('workflow-new-button')).toBeNull()
+    expect(within(header).getByRole('button', { name: enUS.workflows.importButton })).toBeTruthy()
+    expect(
+      within(empty).getByTestId('workflow-new-button').classList.contains('btn--primary'),
+    ).toBe(true)
+    expect(empty.querySelector('[data-icon="workflow"]')).not.toBeNull()
+  })
+
   test('cards carry vN + node-count chips, launch deep-link, and desc fallback', async () => {
     installFetch([
       wf('code-audit', {
@@ -358,6 +500,53 @@ describe('/workflows gallery assembly (T3)', () => {
     fireEvent.change(screen.getByTestId('gallery-search'), { target: { value: 'v7' } })
     expect(screen.getByTestId('workflow-card-code-audit')).toBeTruthy()
     expect(screen.queryByTestId('workflow-card-docs-sync')).toBeNull()
+
+    // With data (including a no-match filter), creation lives in the header;
+    // the compact state owns only clear-search.
+    fireEvent.change(screen.getByTestId('gallery-search'), { target: { value: 'zzz' } })
+    const noMatches = screen.getByTestId('gallery-no-matches')
+    expect(within(screen.getByRole('banner')).getByTestId('workflow-new-button')).toBeTruthy()
+    expect(within(noMatches).queryByTestId('workflow-new-button')).toBeNull()
+    expect(within(noMatches).getAllByRole('button')).toHaveLength(1)
+    fireEvent.click(within(noMatches).getByRole('button', { name: enUS.common.clearSearch }))
+    expect(screen.getByTestId('workflow-card-code-audit')).toBeTruthy()
+    expect(screen.getByTestId('workflow-card-docs-sync')).toBeTruthy()
+  })
+
+  test('background refetch failure keeps stale cards and route retry refetches the collection', async () => {
+    let workflowRequests = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (req: RequestInfo | URL) => {
+      const url = req.toString()
+      const json = (payload: unknown, status = 200) =>
+        new Response(JSON.stringify(payload), {
+          status,
+          headers: { 'content-type': 'application/json' },
+        })
+      if (url.includes('/api/users/lookup')) return json([])
+      if (url.endsWith('/api/workflows')) {
+        workflowRequests += 1
+        if (workflowRequests === 2) {
+          return json({ ok: false, code: 'workflow-list-stale', message: 'refresh failed' }, 503)
+        }
+        return json([wf('stale-card')])
+      }
+      return json({})
+    })
+    const list = await import('../src/routes/workflows')
+    const { qc } = renderWithRouter(
+      list.Route.options.component as () => React.ReactElement,
+      '/workflows',
+    )
+    await screen.findByTestId('workflow-card-stale-card')
+
+    await qc.invalidateQueries({ queryKey: ['workflows'] })
+    const alert = await screen.findByRole('alert')
+    expect(screen.getByTestId('workflow-card-stale-card')).toBeTruthy()
+    fireEvent.click(within(alert).getByRole('button', { name: enUS.common.retry }))
+
+    await waitFor(() => expect(workflowRequests).toBe(3))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(screen.getByTestId('workflow-card-stale-card')).toBeTruthy()
   })
 
   test('no delete affordance on the list (delete lives in the editor header)', async () => {
@@ -371,11 +560,23 @@ describe('/workflows gallery assembly (T3)', () => {
 
 describe('gallery callsite locks (T5)', () => {
   test('both gallery pages compose ResourceGalleryPage and dropped the data-table', () => {
-    for (const rel of ['routes/workflows.tsx', 'routes/workgroups.tsx']) {
+    for (const [rel, queryKey] of [
+      ['routes/workflows.tsx', 'workflows'],
+      ['routes/workgroups.tsx', 'workgroups'],
+    ] as const) {
       const body = readSrc(rel)
       expect(body, `${rel} composes the gallery shell`).toContain('ResourceGalleryPage')
       expect(body, `${rel} must not regress to a data-table`).not.toContain(
         'className="data-table"',
+      )
+      expect(body, `${rel} wires retry`).toContain(
+        `onRetry={() => void qc.invalidateQueries({ queryKey: ['${queryKey}'] })}`,
+      )
+      expect(body, `${rel} wires the only no-match action`).toContain(
+        "clearSearchLabel={t('common.clearSearch')}",
+      )
+      expect(body, `${rel} moves its primary CTA into genuine empty`).toContain(
+        'emptyAction={createAction}',
       )
     }
   })

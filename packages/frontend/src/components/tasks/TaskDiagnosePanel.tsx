@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { StatusChip } from '@/components/StatusChip'
+import { TableViewport } from '@/components/TableViewport'
 import { describeApiError } from '@/i18n'
 import { RepairChoiceDialog } from '@/components/tasks/RepairChoiceDialog'
 import type { LifecycleAlertRule, LifecycleAlertSeverity } from '@/types/lifecycle'
@@ -149,50 +150,52 @@ function DiagnoseTable({ response, onRepair }: DiagnoseTableProps): ReactElement
     )
   }
   return (
-    <table className="diagnose-table" data-testid="task-diagnose-table">
-      <thead>
-        <tr>
-          <th>{t('tasks.diagnose.col.rule')}</th>
-          <th>{t('tasks.diagnose.col.severity')}</th>
-          <th>{t('tasks.diagnose.col.detectedAt')}</th>
-          <th>{t('tasks.diagnose.col.detail')}</th>
-          <th>{t('tasks.diagnose.col.actions')}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {response.openAlerts.map((a) => (
-          <tr key={a.id} data-rule={a.rule}>
-            <td>
-              <code>{a.rule}</code>
-              <div className="muted" style={{ fontSize: 12 }}>
-                {t(`tasks.diagnose.rule.${a.rule}`)}
-              </div>
-            </td>
-            <td>
-              <StatusChip kind={a.severity === 'error' ? 'danger' : 'warn'}>
-                {t(`tasks.diagnose.severity.${a.severity}`)}
-              </StatusChip>
-            </td>
-            <td>{new Date(a.detectedAt).toLocaleString()}</td>
-            <td>
-              <details className="diagnose-table__detail-disclosure">
-                <summary>{t('tasks.diagnose.detailDisclosureLabel')}</summary>
-                <pre className="diagnose-table__detail">{JSON.stringify(a.detail, null, 2)}</pre>
-              </details>
-            </td>
-            <td>
-              <button
-                type="button"
-                className="btn btn--sm"
-                onClick={() => onRepair(a)}
-                data-testid={`task-diagnose-repair-${a.rule}`}
-              >
-                {t('tasks.diagnose.repair.openButton')}
-              </button>
-            </td>
+    <TableViewport label={t('tasks.diagnose.panelTitle')} minWidth="lg">
+      <table className="diagnose-table" data-testid="task-diagnose-table">
+        <thead>
+          <tr>
+            <th>{t('tasks.diagnose.col.rule')}</th>
+            <th>{t('tasks.diagnose.col.severity')}</th>
+            <th>{t('tasks.diagnose.col.detectedAt')}</th>
+            <th>{t('tasks.diagnose.col.detail')}</th>
+            <th>{t('tasks.diagnose.col.actions')}</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {response.openAlerts.map((a) => (
+            <tr key={a.id} data-rule={a.rule}>
+              <td>
+                <code>{a.rule}</code>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  {t(`tasks.diagnose.rule.${a.rule}`)}
+                </div>
+              </td>
+              <td>
+                <StatusChip kind={a.severity === 'error' ? 'danger' : 'warn'}>
+                  {t(`tasks.diagnose.severity.${a.severity}`)}
+                </StatusChip>
+              </td>
+              <td>{new Date(a.detectedAt).toLocaleString()}</td>
+              <td>
+                <details className="diagnose-table__detail-disclosure">
+                  <summary>{t('tasks.diagnose.detailDisclosureLabel')}</summary>
+                  <pre className="diagnose-table__detail">{JSON.stringify(a.detail, null, 2)}</pre>
+                </details>
+              </td>
+              <td>
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => onRepair(a)}
+                  data-testid={`task-diagnose-repair-${a.rule}`}
+                >
+                  {t('tasks.diagnose.repair.openButton')}
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </TableViewport>
   )
 }

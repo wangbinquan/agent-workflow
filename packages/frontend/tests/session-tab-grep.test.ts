@@ -20,8 +20,9 @@ const SESSION_TAB = readFileSync(
 const RUNNER = readFileSync(join(REPO_ROOT, 'packages/backend/src/services/runner.ts'), 'utf8')
 
 describe('RFC-027 source-code wiring', () => {
-  test("NodeDetailDrawer still mounts the SessionTab on tab === 'session'", () => {
-    expect(DRAWER).toContain("tab === 'session'")
+  test('NodeDetailDrawer keeps a stable Session panel and mounts its content only while active', () => {
+    expect(DRAWER).toContain("active && key === 'session'")
+    expect(DRAWER).toContain('hidden={!active}')
     expect(DRAWER).toContain('<SessionTab')
   })
 

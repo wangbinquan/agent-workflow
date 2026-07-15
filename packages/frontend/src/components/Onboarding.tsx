@@ -9,21 +9,28 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { Agent, Workflow } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
+import { ErrorBanner } from '@/components/ErrorBanner'
 import { CapabilityGrid } from '@/components/home/CapabilityGrid'
 import { PipelineHero } from '@/components/home/PipelineHero'
+import { NoticeBanner } from '@/components/NoticeBanner'
+import { PageHeader } from '@/components/PageHeader'
 import { DEMO_WORKFLOW_YAML } from '@/fixtures/demo-workflow'
 import { getBaseUrl, getToken } from '@/stores/auth'
 
 export interface OnboardingProbe {
   isFirstRun: boolean
   isLoading: boolean
+  hasData: boolean
   error: unknown
+  retry: () => void
 }
 
 /**
- * Pure decision rule: true when both lists are non-empty arrays of length 0.
- * Treats loading / error states as "not first-run" so the home route doesn't
- * flash the onboarding card while data is still in flight.
+ * Pure decision rule: true when both list snapshots exist and are empty.
+ * Loading/error flags do not discard already-rendered snapshots: a background
+ * refetch failure must keep the current first-run/home surface visible while
+ * the route reports that failure separately. Initial requests have undefined
+ * data and therefore never flash the onboarding surface.
  */
 export function computeIsFirstRun(opts: {
   agents: Agent[] | undefined
@@ -31,8 +38,6 @@ export function computeIsFirstRun(opts: {
   isLoading: boolean
   error: unknown
 }): boolean {
-  if (opts.isLoading) return false
-  if (opts.error !== null && opts.error !== undefined) return false
   if (opts.agents === undefined || opts.workflows === undefined) return false
   return opts.agents.length === 0 && opts.workflows.length === 0
 }
@@ -46,8 +51,9 @@ export function useOnboardingProbe(): OnboardingProbe {
     queryKey: ['workflows'],
     queryFn: ({ signal }) => api.get('/api/workflows', undefined, signal),
   })
-  const isLoading = agents.isLoading || workflows.isLoading
+  const isLoading = agents.isFetching || workflows.isFetching
   const error = agents.error ?? workflows.error ?? null
+  const hasData = agents.data !== undefined && workflows.data !== undefined
   return {
     isFirstRun: computeIsFirstRun({
       agents: agents.data,
@@ -56,11 +62,22 @@ export function useOnboardingProbe(): OnboardingProbe {
       error,
     }),
     isLoading,
+    hasData,
     error,
+    retry: () => {
+      void Promise.all([agents.refetch(), workflows.refetch()])
+    },
   }
 }
 
-export function Onboarding() {
+export interface OnboardingProps {
+  /** A failed background first-run probe; stale onboarding data stays visible. */
+  probeError?: unknown
+  onRetryProbe?: () => void
+  probeRetrying?: boolean
+}
+
+export function Onboarding(props: OnboardingProps = {}) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const importDemo = useMutation<void, Error>({
@@ -70,10 +87,29 @@ export function Onboarding() {
 
   return (
     <div className="page onboarding">
-      <header className="page__header">
-        <h1>{t('onboarding.title')}</h1>
+      <PageHeader title={t('onboarding.title')}>
         <p className="page__hint">{t('onboarding.intro')}</p>
-      </header>
+        {props.probeError !== null && props.probeError !== undefined && (
+          <div className="stack-top--sm">
+            <ErrorBanner
+              error={props.probeError}
+              action={
+                props.onRetryProbe !== undefined ? (
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={props.probeRetrying === true}
+                    aria-busy={props.probeRetrying === true}
+                    onClick={props.onRetryProbe}
+                  >
+                    {t('common.retry')}
+                  </button>
+                ) : undefined
+              }
+            />
+          </div>
+        )}
+      </PageHeader>
 
       {/* RFC-190: first-run hero — the platform's core abstraction drawn as
           the same animated mini-pipeline the homepage uses, plus a count-less
@@ -107,32 +143,35 @@ export function Onboarding() {
         <li className="onboarding__step">
           <h2>{t('onboarding.step3Title')}</h2>
           <p>{t('onboarding.step3Body')}</p>
-          <div className="onboarding__actions">
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={importDemo.isPending || importDemo.isSuccess}
-              onClick={() => importDemo.mutate()}
-            >
-              {importDemo.isPending
-                ? t('onboarding.step3ImportRunning')
-                : t('onboarding.step3Import')}
-            </button>
-            {/* Creation is a quick-create dialog on the workflows list page. */}
-            <Link to="/workflows" className="btn">
-              {t('onboarding.step3Manual')}
-            </Link>
+          <div className="stack--sm">
+            <div className="onboarding__actions">
+              <button
+                type="button"
+                className="btn"
+                disabled={importDemo.isPending || importDemo.isSuccess}
+                aria-busy={importDemo.isPending}
+                onClick={() => importDemo.mutate()}
+              >
+                {importDemo.isPending
+                  ? t('onboarding.step3ImportRunning')
+                  : importDemo.error !== null
+                    ? t('common.retry')
+                    : t('onboarding.step3Import')}
+              </button>
+              {/* Creation is a quick-create dialog on the workflows list page. */}
+              <Link to="/workflows" className="btn">
+                {t('onboarding.step3Manual')}
+              </Link>
+            </div>
+            {importDemo.isSuccess && (
+              <NoticeBanner tone="success" size="compact">
+                {t('onboarding.importedHint')}
+              </NoticeBanner>
+            )}
+            {importDemo.error !== null && importDemo.error !== undefined && (
+              <ErrorBanner error={importDemo.error} message={describeError(importDemo.error)} />
+            )}
           </div>
-          {importDemo.isSuccess && (
-            <div className="info-box" role="status" aria-live="polite">
-              {t('onboarding.importedHint')}
-            </div>
-          )}
-          {importDemo.error !== null && importDemo.error !== undefined && (
-            <div className="error-box" role="alert">
-              {describeError(importDemo.error)}
-            </div>
-          )}
         </li>
 
         <li className="onboarding__step">

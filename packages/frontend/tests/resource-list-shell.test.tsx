@@ -129,27 +129,33 @@ afterEach(() => {
 
 describe('useResourceList', () => {
   function Probe(props: { deleteBy: 'name' | 'id'; endpoint: string }) {
-    const { data, isLoading, error, del, owners } = useResourceList<Row>({
+    const { data, isLoading, error, refetch, del, owners } = useResourceList<Row>({
       queryKey: ['rl-test', props.endpoint, props.deleteBy],
       endpoint: props.endpoint,
       deleteBy: props.deleteBy,
     })
     if (isLoading) return <p>loading…</p>
-    if (error !== null && error !== undefined) return <p>failed</p>
+    if (error !== null && error !== undefined && data === undefined) return <p>failed</p>
     return (
-      <ul>
-        {(data ?? []).map((r) => (
-          <li key={r.id}>
-            <span data-testid={`row-${r.id}`}>{r.name}</span>
-            <span data-testid={`owner-${r.id}`}>
-              {r.ownerUserId != null ? (owners.get(r.ownerUserId)?.displayName ?? '') : ''}
-            </span>
-            <button type="button" onClick={() => void del.mutateAsync(r)}>
-              del {r.id}
-            </button>
-          </li>
-        ))}
-      </ul>
+      <>
+        {error !== null && error !== undefined && <p role="alert">failed</p>}
+        <ul>
+          {(data ?? []).map((r) => (
+            <li key={r.id}>
+              <span data-testid={`row-${r.id}`}>{r.name}</span>
+              <span data-testid={`owner-${r.id}`}>
+                {r.ownerUserId != null ? (owners.get(r.ownerUserId)?.displayName ?? '') : ''}
+              </span>
+              <button type="button" onClick={() => void del.mutateAsync(r)}>
+                del {r.id}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <button type="button" onClick={() => void refetch()}>
+          retry
+        </button>
+      </>
     )
   }
 
@@ -203,6 +209,51 @@ describe('useResourceList', () => {
     expect(lookups).toHaveLength(1)
     // Duplicate + null ids collapse to the single distinct real id.
     expect(lookups[0]!.body).toEqual({ ids: ['u1'] })
+  })
+
+  test('manual refetch failure keeps stale rows visible and can retry again', async () => {
+    let fail = false
+    let listGets = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        const method = (init?.method ?? 'GET').toUpperCase()
+        if (method === 'POST' && url.endsWith('/api/users/lookup')) {
+          return new Response('[]', {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        }
+        if (method === 'GET' && url.endsWith('/api/agents')) {
+          listGets += 1
+          if (fail) {
+            return new Response(JSON.stringify({ error: 'offline' }), {
+              status: 503,
+              headers: { 'content-type': 'application/json' },
+            })
+          }
+          return new Response(JSON.stringify([{ id: 'a1', name: 'alpha' }]), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        }
+        return new Response('not found', { status: 404 })
+      },
+    )
+
+    renderAtAgents(() => <Probe deleteBy="name" endpoint="/api/agents" />)
+    await screen.findByTestId('row-a1')
+
+    fail = true
+    fireEvent.click(screen.getByRole('button', { name: 'retry' }))
+    await screen.findByRole('alert')
+    expect(screen.getByTestId('row-a1').textContent).toBe('alpha')
+
+    fail = false
+    fireEvent.click(screen.getByRole('button', { name: 'retry' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(screen.getByTestId('row-a1')).toBeTruthy()
+    expect(listGets).toBe(3)
   })
 })
 

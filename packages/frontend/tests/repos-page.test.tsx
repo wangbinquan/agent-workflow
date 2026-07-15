@@ -36,6 +36,15 @@ describe('/repos page wiring (RFC-024)', () => {
     expect(REPOS_SRC).toContain('?force=1')
   })
 
+  test('RFC-198 shared chrome keeps the table and state contracts centralized', () => {
+    expect(REPOS_SRC).toContain("import { PageHeader } from '@/components/PageHeader'")
+    expect(REPOS_SRC).toContain("import { TableViewport } from '@/components/TableViewport'")
+    expect(REPOS_SRC).toContain("import { ErrorBanner } from '@/components/ErrorBanner'")
+    expect(REPOS_SRC).toContain("<TableViewport label={t('repos.title')}>")
+    expect(REPOS_SRC).toContain('<ErrorBanner error={list.error} action={retryAction} />')
+    expect(REPOS_SRC).not.toContain('<div className="error-box">')
+  })
+
   test('renders only the redacted URL (no raw item.url interpolation)', () => {
     // The table cell uses `item.urlRedacted`; the only direct `item.url`
     // reference is the dialog's body where it passes through redactGitUrl.

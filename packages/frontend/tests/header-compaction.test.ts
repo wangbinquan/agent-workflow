@@ -22,15 +22,13 @@ const CSS = read('styles.css')
 const CLARIFY = read('routes/clarify.detail.tsx')
 
 describe('review-detail header compaction', () => {
-  test('header-text rows collapse their default block margins', () => {
-    expect(CSS).toMatch(/\.review-detail__page-header-text > \*[^{]*\{[^}]*margin:\s*0/)
-    expect(CSS).toMatch(
-      /\.review-detail__page-header-text > \* \+ \*[^{]*\{[^}]*margin-top:\s*var\(--space/,
-    )
+  test('PageHeader heading rows collapse their default block margins', () => {
+    expect(CSS).toMatch(/\.review-detail__page-header \.page__heading > \*[^{]*\{[^}]*margin:\s*0/)
+    expect(CSS).toMatch(/\.page__heading\s*\{[^}]*gap:\s*var\(--space/)
   })
   test('the heading is shrunk to a token font-size (not the UA-default ~32px)', () => {
     expect(CSS).toMatch(
-      /\.review-detail__page-header-text h1[^{]*\{[^}]*font-size:\s*var\(--font-[a-z]+\)/,
+      /\.review-detail__page-header \.page__title[^{]*\{[^}]*font-size:\s*var\(--font-[a-z]+\)/,
     )
   })
 })

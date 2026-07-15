@@ -79,6 +79,30 @@ afterEach(() => {
 })
 
 describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', () => {
+  test('Approved / Archived is a filter radiogroup, not page-tab semantics', async () => {
+    installFetch(
+      () =>
+        new Response(JSON.stringify({ items: [mkMem()] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    )
+    wrap(true)
+    await screen.findByTestId('memory-all-mem_1-archive')
+
+    expect(screen.getByRole('radiogroup')).toBeTruthy()
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.getByTestId('memory-all-filter-approved').getAttribute('role')).toBe('radio')
+    expect(screen.getByTestId('memory-all-filter-approved').getAttribute('aria-checked')).toBe(
+      'true',
+    )
+
+    fireEvent.click(screen.getByTestId('memory-all-filter-archived'))
+    expect(screen.getByTestId('memory-all-filter-archived').getAttribute('aria-checked')).toBe(
+      'true',
+    )
+  })
+
   test('default view is Approved → GET ?status=approved', async () => {
     const calls = installFetch(
       () =>

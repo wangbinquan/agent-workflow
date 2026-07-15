@@ -6,6 +6,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
+import { SETTINGS_TABS, validateSettingsSearch, withSettingsTab } from '../src/routes/settings'
 
 const SETTINGS = readFileSync(
   resolve(import.meta.dirname, '..', 'src', 'routes', 'settings.tsx'),
@@ -13,6 +14,52 @@ const SETTINGS = readFileSync(
 )
 const ZH = readFileSync(resolve(import.meta.dirname, '..', 'src', 'i18n', 'zh-CN.ts'), 'utf-8')
 const EN = readFileSync(resolve(import.meta.dirname, '..', 'src', 'i18n', 'en-US.ts'), 'utf-8')
+
+describe('RFC-198 — Settings URL tab shell', () => {
+  test('schema accepts every stable wire key and rejects missing/unknown values', () => {
+    for (const tab of SETTINGS_TABS) expect(validateSettingsSearch({ tab })).toEqual({ tab })
+    expect(validateSettingsSearch({})).toEqual({})
+    expect(validateSettingsSearch({ tab: 'unknown' })).toEqual({})
+    expect(validateSettingsSearch({ tab: 42 })).toEqual({})
+    expect(validateSettingsSearch({ tab: 'limits', focus: 'runtime-card' })).toEqual({
+      tab: 'limits',
+      focus: 'runtime-card',
+    })
+    expect(validateSettingsSearch({ tab: 'unknown', focus: 'runtime-card' })).toEqual({
+      focus: 'runtime-card',
+    })
+  })
+
+  test('functional tab updates preserve adjacent search state', () => {
+    expect(withSettingsTab({ focus: 'runtime-card', tab: 'limits' }, 'network')).toEqual({
+      focus: 'runtime-card',
+      tab: 'network',
+    })
+  })
+
+  test('route uses URL authority, replace canonicalization, and stable tab/panel ids', () => {
+    expect(SETTINGS).toContain('validateSearch: validateSettingsSearch')
+    expect(SETTINGS).toContain('const search = Route.useSearch()')
+    expect(SETTINGS).toContain('const navigate = Route.useNavigate()')
+    expect(SETTINGS).toContain("const tab = isSettingsTab(search.tab) ? search.tab : 'runtime'")
+    expect(SETTINGS).toContain('if (isSettingsTab(search.tab)) return')
+    expect(SETTINGS).toContain("withSettingsTab(previous, 'runtime')")
+    expect(SETTINGS).toContain("hash: hash === 'runtime' ? '' : hash")
+    expect(SETTINGS).toContain('replace: true')
+    expect(SETTINGS).toContain('idPrefix="settings"')
+    expect(SETTINGS).toContain("ariaLabel={t('settings.title')}")
+    expect(SETTINGS).toContain("tabDomIds('settings', panelTab)")
+    expect(SETTINGS).toContain('role="tabpanel"')
+    expect(SETTINGS).toContain('aria-labelledby={ids.tabId}')
+    expect(SETTINGS).toContain('hidden={!isActive}')
+  })
+
+  test('shared shell and async states replace settings-local chrome', () => {
+    expect(SETTINGS).toContain("<PageHeader title={t('settings.title')} />")
+    expect(SETTINGS).toContain("<LoadingState label={t('settings.loading')} />")
+    expect(SETTINGS).toContain('<ErrorBanner error={config.error} action={retryAction} />')
+  })
+})
 
 describe('RFC-156 — tab placement', () => {
   test('Tab union + TabBar list gain systemAgents and drop the Memory tab', () => {

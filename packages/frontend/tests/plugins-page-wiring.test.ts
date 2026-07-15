@@ -94,12 +94,13 @@ describe('RFC-031 /plugins wiring', () => {
     const shell = read('components/DetailHeaderActions.tsx')
     expect(shell).toContain('className="form-actions"')
     expect(shell).toContain('form-actions__error')
-    const headerBlock = shell.match(
-      /<header className="page__header page__header--row">[\s\S]*?<\/header>/,
-    )
-    expect(headerBlock).not.toBeNull()
-    expect(headerBlock![0]).toContain('className="page__actions"')
-    expect(headerBlock![0]).not.toContain('form-actions__error')
+    expect(shell).toContain("import { PageHeader } from '@/components/PageHeader'")
+    expect(shell).toContain('<PageHeader')
+    expect(shell).toContain('actions={')
+    expect(shell).not.toContain('<header className="page__header')
+    const pageHeader = read('components/PageHeader.tsx')
+    expect(pageHeader).toContain('className="page__actions"')
+    expect(pageHeader).not.toContain('form-actions__error')
     // plugins.detail routes both mutation channels through the shell's slot.
     const src = read('routes/plugins.detail.tsx')
     expect(src).toMatch(/errors=\{\[save\.error, del\.error\]\}/)

@@ -12,7 +12,7 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import type * as ApiClientModule from '../src/api/client'
 import type { DocVersion, ReviewDetail } from '@agent-workflow/shared'
@@ -137,12 +137,14 @@ function wrap(node: React.ReactElement): ReturnType<typeof render> {
 
 beforeEach(() => {
   ;(api.get as ReturnType<typeof vi.fn>).mockReset()
+  ;(api.post as ReturnType<typeof vi.fn>).mockReset()
   ;(api.patch as ReturnType<typeof vi.fn>).mockReset()
   ;(api.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
     if (url === '/api/reviews/run') return Promise.resolve(detail)
     if (url === '/api/config') return Promise.resolve({})
     return Promise.resolve(undefined)
   })
+  ;(api.post as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true })
   ;(api.patch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true })
 })
 
@@ -166,6 +168,62 @@ describe('MultiDocReviewView', () => {
         selection: 'accepted',
       })
     })
+  })
+
+  test('selection failure keeps the document visible and exposes a working Retry', async () => {
+    let fail = true
+    ;(api.patch as ReturnType<typeof vi.fn>).mockImplementation(() =>
+      fail ? Promise.reject(new Error('selection failed')) : Promise.resolve({ ok: true }),
+    )
+    wrap(<MultiDocReviewView nodeRunId="run" />)
+    await screen.findByText('Case A')
+
+    fireEvent.click(screen.getByTestId('multidoc-accept'))
+    expect((await screen.findByRole('alert')).textContent).toContain('selection failed')
+    expect(screen.getByText('Active document body')).toBeTruthy()
+
+    fail = false
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(api.patch).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(screen.getByText('Active document body')).toBeTruthy()
+  })
+
+  test('decision failure stays in the dialog; pending controls lock and Retry does not reject globally', async () => {
+    let rejectDecision: ((reason?: unknown) => void) | undefined
+    ;(api.post as ReturnType<typeof vi.fn>)
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectDecision = reject
+          }),
+      )
+      .mockResolvedValueOnce({ ok: true })
+    wrap(<MultiDocReviewView nodeRunId="run" />)
+    await screen.findByText('Case A')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revise per comments' }))
+    const dialog = await screen.findByRole('dialog')
+    const confirm = within(dialog).getByRole('button', { name: 'Confirm' }) as HTMLButtonElement
+    const cancel = within(dialog).getByRole('button', { name: 'Cancel' }) as HTMLButtonElement
+    fireEvent.click(confirm)
+
+    await waitFor(() => expect(confirm.disabled).toBe(true))
+    expect(confirm.getAttribute('aria-busy')).toBe('true')
+    expect(cancel.disabled).toBe(true)
+    expect(screen.getByRole('dialog')).toBeTruthy()
+
+    await act(async () => {
+      rejectDecision?.(new Error('decision failed'))
+      await Promise.resolve()
+    })
+    expect((await within(dialog).findByRole('alert')).textContent).toContain('decision failed')
+    expect(confirm.disabled).toBe(false)
+    expect(screen.getByRole('dialog')).toBeTruthy()
+
+    fireEvent.click(confirm)
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
   // RFC-090: keyboard navigation for the review queue.
