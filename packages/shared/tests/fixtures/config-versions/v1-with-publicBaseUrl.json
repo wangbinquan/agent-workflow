@@ -5,6 +5,7 @@
   "defaultPerTaskMaxDurationMs": 7200000,
   "defaultPerTaskMaxTotalTokens": 500000,
   "defaultPerNodeTimeoutMs": 1800000,
+  "defaultNodeRetries": 5,
   "worktreeAutoGc": { "enabled": true, "maxAgeDays": 30 },
   "eventsArchiveThresholds": { "perNodeRunRows": 100000, "globalRows": 5000000 },
   "largeOutputThresholdBytes": 2097152,

@@ -3,6 +3,6 @@
 exact = false
 
 [test]
-# bun test runs backend + shared only. Frontend tests use vitest with
-# happy-dom + browser-shaped globals (separate runtime).
+# Root `bun test` discovers backend tests only. Shared tests must run through
+# `bun run --filter @agent-workflow/shared test`; frontend tests use Vitest.
 root = "packages/backend/tests"

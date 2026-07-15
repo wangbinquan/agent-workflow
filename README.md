@@ -351,23 +351,25 @@ bun run dev
 
 # Repository gates
 bun run typecheck
-bun run test
+bun run test # backend (root Bun discovery is scoped by bunfig.toml)
+bun run --filter @agent-workflow/shared test
 bun run --filter @agent-workflow/frontend test
 bun run lint
 bun run format:check
 
-# Root README formatting (the repository format script scopes packages/)
+# Root README formatting (outside the fixed package/repo-UI format gates)
 bunx prettier --check README.md README.zh-CN.md
 
 # Playwright end-to-end suite (requires its browser dependencies)
 bun run e2e:install
 bun run e2e
+bun run test:visual -- --retries=0 # opt-in Chromium snapshots at 1280x800
 
 # Self-contained binary under dist/
 bun run build:binary
 ```
 
-CI runs formatting, lint, typechecking, backend/shared tests, frontend tests,
+CI runs formatting, lint, typechecking, explicit backend/shared tests, frontend tests,
 single-binary smoke checks, and sharded Playwright coverage on macOS and Linux.
 Nightly jobs add live opencode compatibility, WebKit, visual regression, and real
 SSH/HTTPS Git protocol coverage.

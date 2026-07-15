@@ -23,6 +23,8 @@
 
 import { type PlaywrightTestConfig, defineConfig, devices } from '@playwright/test'
 
+const canonicalDesktopViewport = { width: 1280, height: 800 }
+
 // Default project list: chromium-only (PR-gating). Webkit is added only when
 // PLAYWRIGHT_WEBKIT=1 (nightly cron + opt-in local runs). Keeping webkit
 // behind a flag means the default `bun run e2e` invocation stays fast and
@@ -31,13 +33,13 @@ import { type PlaywrightTestConfig, defineConfig, devices } from '@playwright/te
 const projects: NonNullable<PlaywrightTestConfig['projects']> = [
   {
     name: 'chromium',
-    use: { ...devices['Desktop Chrome'] },
+    use: { ...devices['Desktop Chrome'], viewport: canonicalDesktopViewport },
   },
 ]
 if (process.env.PLAYWRIGHT_WEBKIT === '1') {
   projects.push({
     name: 'webkit',
-    use: { ...devices['Desktop Safari'] },
+    use: { ...devices['Desktop Safari'], viewport: canonicalDesktopViewport },
   })
 }
 
@@ -66,7 +68,7 @@ export default defineConfig({
   reporter: process.env.CI ? [['list'], ['github']] : [['list']],
   use: {
     headless: true,
-    viewport: { width: 1280, height: 800 },
+    viewport: canonicalDesktopViewport,
     ignoreHTTPSErrors: true,
     actionTimeout: 15_000,
     navigationTimeout: 30_000,

@@ -26,13 +26,11 @@ export async function routePopulatedInbox(
   const reviews = Array.from({ length: reviewCount }, (_, index) => ({
     nodeRunId: `visual-review-${index}`,
     taskId: `task-review-${index}`,
-    taskName:
-      index === 0 ? LONG_TASK_NAME : `Migration task ${index + 1}`,
+    taskName: index === 0 ? LONG_TASK_NAME : `Migration task ${index + 1}`,
     workflowId: 'wf-visual-review',
     workflowName: 'Release readiness workflow',
     reviewNodeId: `review-node-${index}`,
-    title:
-      index === 0 ? LONG_TITLE : `Review deployment evidence ${index + 1}`,
+    title: index === 0 ? LONG_TITLE : `Review deployment evidence ${index + 1}`,
     description: '',
     currentVersionIndex: 1,
     reviewIteration: 0,

@@ -71,12 +71,11 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      # Coverage is only consumed from the ubuntu leg (the Codecov upload below
-      # is gated to ubuntu, and codecov.yml reads only that lcov). Running V8
-      # coverage instrumentation on macOS just to discard the result wastes
-      # macOS wall-clock, so macOS runs plain `bun test`. The exact same test
-      # files run on both legs — coverage signal is unchanged.
-      - name: Test (backend + shared, bun:test, ubuntu — with coverage)
+      # Root Bun discovery is intentionally backend-only (see bunfig.toml).
+      # Coverage is consumed only from the ubuntu leg; macOS runs the same
+      # backend files without instrumentation. Shared tests run explicitly in
+      # the following cross-platform step.
+      - name: Test (backend only, bun:test, ubuntu — with coverage)
         if: matrix.os == 'ubuntu-latest'
         # --coverage-reporter accepts multiple values: keep the human-readable
         # text summary in the log and also emit lcov for codecov upload.
@@ -88,18 +87,21 @@ jobs:
           # coverage is unchanged (these files run unconditionally before this gate).
           RUN_GIT_NETWORK: '1'
 
-      - name: Test (backend + shared, bun:test, macOS — no coverage)
+      - name: Test (backend only, bun:test, macOS — no coverage)
         if: matrix.os != 'ubuntu-latest'
         run: bun test
         env:
           RUN_GIT_NETWORK: '1'
 
+      - name: Test (shared, bun:test)
+        run: bun run --filter @agent-workflow/shared test
+
       - name: Test (frontend, vitest)
         run: bun run --filter @agent-workflow/frontend test
 
-      - name: Upload coverage to Codecov
-        # Tokenless upload works for public repos. Only upload from one OS to
-        # avoid double-counting the same lines; ubuntu is the canonical leg.
+      - name: Upload backend-only coverage to Codecov
+        # Tokenless upload works for public repos. This lcov is backend-only;
+        # upload from one OS to avoid double-counting the same lines.
         if: matrix.os == 'ubuntu-latest'
         uses: codecov/codecov-action@v6
         with:

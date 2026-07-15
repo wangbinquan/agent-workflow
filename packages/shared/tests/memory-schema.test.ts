@@ -50,9 +50,10 @@ describe('MemoryScopeSchema', () => {
 })
 
 describe('MemoryStatusSchema / MemorySourceKindSchema / DistillActionSchema', () => {
-  test('status enum is exactly 5 members', () => {
-    expect(MemoryStatusSchema.options.length).toBe(5)
-    for (const s of ['candidate', 'approved', 'archived', 'superseded', 'rejected']) {
+  test('status enum is exactly 6 members', () => {
+    const statuses = ['candidate', 'approved', 'archived', 'superseded', 'rejected', 'fused']
+    expect(MemoryStatusSchema.options).toEqual(statuses)
+    for (const s of statuses) {
       expect(MemoryStatusSchema.parse(s)).toBe(s)
     }
   })

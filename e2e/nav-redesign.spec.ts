@@ -16,7 +16,7 @@
 //   #5 — auth gate: visiting /agents without a token kicks the user out
 //        to /auth (no sidebar visible).
 
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { startDaemon, type DaemonHandle } from './harness'
 import { routePopulatedInbox } from './inbox-fixtures'
 
@@ -30,7 +30,7 @@ test.afterAll(async () => {
   if (daemon !== undefined) await daemon.stop()
 })
 
-async function primeAuth(page: import('@playwright/test').Page, d: DaemonHandle): Promise<void> {
+async function primeAuth(page: Page, d: DaemonHandle): Promise<void> {
   await page.addInitScript(
     ({ baseUrl, token }) => {
       try {
