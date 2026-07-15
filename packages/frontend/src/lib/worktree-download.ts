@@ -27,12 +27,52 @@ export async function downloadWorktreeFile(taskId: string, relPath: string): Pro
   if (!res.ok) {
     throw new ApiError(res.status, `http-${res.status}`, res.statusText || 'download failed')
   }
-  const blob = await res.blob()
+  await saveBlobAs(await res.blob(), downloadBaseName(relPath))
+}
+
+/** RFC-193 §4.7 — the port-artifacts item URL (emit-time archive read). */
+export function portArtifactItemUrl(
+  base: string,
+  taskId: string,
+  runId: string,
+  port: string,
+  item = 0,
+): string {
+  return `${base}/api/tasks/${encodeURIComponent(taskId)}/port-artifacts/${encodeURIComponent(
+    runId,
+  )}/${encodeURIComponent(port)}?item=${item}`
+}
+
+/**
+ * RFC-193 — download a path port's file via the emit-time archive (immune to
+ * wrapper scoping / worktree GC), falling back to the worktree-files route on
+ * 404 (legacy rows without an archive). Any other failure propagates.
+ */
+export async function downloadPortArtifact(
+  taskId: string,
+  runId: string,
+  port: string,
+  relPath: string,
+): Promise<void> {
+  const token = getToken()
+  const headers: Record<string, string> = {}
+  if (token !== null) headers.Authorization = `Bearer ${token}`
+  const res = await fetch(portArtifactItemUrl(getBaseUrl(), taskId, runId, port), { headers })
+  if (res.status === 404) {
+    return downloadWorktreeFile(taskId, relPath)
+  }
+  if (!res.ok) {
+    throw new ApiError(res.status, `http-${res.status}`, res.statusText || 'download failed')
+  }
+  await saveBlobAs(await res.blob(), downloadBaseName(relPath))
+}
+
+async function saveBlobAs(blob: Blob, name: string): Promise<void> {
   const objectUrl = URL.createObjectURL(blob)
   try {
     const a = document.createElement('a')
     a.href = objectUrl
-    a.download = downloadBaseName(relPath)
+    a.download = name
     a.rel = 'noopener'
     document.body.appendChild(a)
     a.click()

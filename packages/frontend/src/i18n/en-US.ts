@@ -2443,6 +2443,7 @@ export const enUS: Resources = {
     download: 'Download',
     downloading: 'Downloading…',
     downloadFailed: 'Download failed',
+    artifactTruncated: 'Archived copy truncated at 2 MiB — download the full file from the worktree.',
   },
   taskPreview: {
     button: 'Preview',

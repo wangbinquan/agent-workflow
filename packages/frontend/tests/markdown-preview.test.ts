@@ -70,10 +70,14 @@ describe('validatePreviewSearch', () => {
 })
 
 describe('resolvePreviewSource', () => {
-  test('path wins (file mode)', () => {
+  test('all three params → artifact mode (RFC-193; was "path wins" pre-archive)', () => {
+    // RFC-105 的 builder 从不同时序列化三参，"path wins" 只是防御顺序；RFC-193
+    // 起三参齐是 ARTIFACT 源的正式形态（emit-time 归档优先，404 回退 file）。
     expect(resolvePreviewSource({ path: 'a.md', runId: 'r', port: 'p' })).toEqual({
-      mode: 'file',
+      mode: 'artifact',
       path: 'a.md',
+      runId: 'r',
+      port: 'p',
     })
   })
   test('runId+port → port mode', () => {

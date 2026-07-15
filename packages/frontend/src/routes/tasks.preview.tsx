@@ -13,8 +13,10 @@ import { createRoute, Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { NodeRunOutput, TaskNodeRuns, WorktreeFileResponse } from '@agent-workflow/shared'
 import { WORKTREE_FILE_MAX_BYTES } from '@agent-workflow/shared'
-import { api } from '@/api/client'
+import { api, ApiError } from '@/api/client'
 import { fetchWorktreeFile } from '@/api/worktreeFiles'
+import { portArtifactItemUrl } from '@/lib/worktree-download'
+import { getBaseUrl, getToken } from '@/stores/auth'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { Prose } from '@/components/prose/Prose'
@@ -76,11 +78,70 @@ export function TaskMarkdownPreviewPage() {
           </div>
         ) : source.mode === 'file' ? (
           <FilePreviewBody taskId={id} path={source.path} />
+        ) : source.mode === 'artifact' ? (
+          <ArtifactPreviewBody
+            taskId={id}
+            path={source.path}
+            runId={source.runId}
+            port={source.port}
+          />
         ) : (
           <PortPreviewBody taskId={id} runId={source.runId} port={source.port} />
         )}
       </div>
     </div>
+  )
+}
+
+// RFC-193 — artifact source: body from the emit-time archive (port-artifacts
+// API, immune to wrapper scoping / worktree GC); a 404 (legacy row without an
+// archive) falls back to the FILE source so old tasks render exactly as
+// before. A truncated archive copy renders with a visible banner.
+function ArtifactPreviewBody({
+  taskId,
+  path,
+  runId,
+  port,
+}: {
+  taskId: string
+  path: string
+  runId: string
+  port: string
+}) {
+  const { t } = useTranslation()
+  const q = useQuery<{ body: string; truncated: boolean } | { fallback: true }>({
+    queryKey: ['portArtifact', taskId, runId, port],
+    queryFn: async ({ signal }) => {
+      const token = getToken()
+      const headers: Record<string, string> = {}
+      if (token !== null) headers.Authorization = `Bearer ${token}`
+      const res = await fetch(portArtifactItemUrl(getBaseUrl(), taskId, runId, port), {
+        headers,
+        ...(signal !== undefined ? { signal } : {}),
+      })
+      if (res.status === 404) return { fallback: true as const }
+      if (!res.ok) throw new ApiError(res.status, `http-${res.status}`, res.statusText)
+      return {
+        body: await res.text(),
+        truncated: res.headers.get('x-aw-artifact-truncated') === '1',
+      }
+    },
+    staleTime: 0,
+  })
+  if (q.isLoading) return <LoadingState size="compact" />
+  if (q.error !== null && q.error !== undefined) return <ErrorBanner error={q.error} />
+  const data = q.data
+  if (data === undefined) return null
+  if ('fallback' in data) return <FilePreviewBody taskId={taskId} path={path} />
+  return (
+    <>
+      {data.truncated && (
+        <div className="md-preview__truncated muted" role="note" data-testid="md-preview-truncated">
+          {t('taskOutputs.artifactTruncated')}
+        </div>
+      )}
+      <PreviewContent body={data.body} taskId={taskId} />
+    </>
   )
 }
 

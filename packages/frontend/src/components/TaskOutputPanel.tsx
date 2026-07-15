@@ -21,7 +21,7 @@ import {
   type PreviewSource,
 } from '@/lib/markdown-preview'
 import { isFileOutputKind, isSingleLinePath } from '@/lib/output-port'
-import { downloadWorktreeFile } from '@/lib/worktree-download'
+import { downloadPortArtifact, downloadWorktreeFile } from '@/lib/worktree-download'
 
 interface Props {
   task: Task
@@ -148,13 +148,18 @@ function OutputDetail({ taskId, port, value, kind, sourceRunId }: DetailProps) {
   const showDownload = isFileOutputKind(kind) && isSingleLinePath(value)
 
   // RFC-105: a "预览" button for markdown-renderable ports — file ports whose
-  // value is a `.md` path (file mode) or inline `markdown` ports (port mode,
-  // body re-resolved from the source run+port on the preview route).
+  // value is a `.md` path or inline `markdown` ports (port mode, body
+  // re-resolved from the source run+port on the preview route).
+  // RFC-193: file ports carry runId+port too → ARTIFACT source (emit-time
+  // archive first, worktree fallback on 404) — a bare file source breaks for
+  // wrapper-internal nodes and GC'd worktrees.
   const previewSource: PreviewSource | null =
     !isMarkdownPreviewable(kind, value) || value === null
       ? null
       : isFileOutputKind(kind)
-        ? { kind: 'file', path: value.trim() }
+        ? sourceRunId !== null
+          ? { kind: 'artifact', path: value.trim(), runId: sourceRunId, port: port.portName }
+          : { kind: 'file', path: value.trim() }
         : sourceRunId !== null
           ? { kind: 'port', runId: sourceRunId, port: port.portName }
           : null
@@ -172,9 +177,13 @@ function OutputDetail({ taskId, port, value, kind, sourceRunId }: DetailProps) {
     if (value === null || downloading) return
     setDownloading(true)
     setDownloadFailed(false)
-    void downloadWorktreeFile(taskId, value.trim())
-      .catch(() => setDownloadFailed(true))
-      .finally(() => setDownloading(false))
+    // RFC-193: prefer the emit-time archive (404 → worktree fallback inside
+    // the helper); no sourceRunId (defensive) → old worktree path directly.
+    const dl =
+      sourceRunId !== null
+        ? downloadPortArtifact(taskId, sourceRunId, port.portName, value.trim())
+        : downloadWorktreeFile(taskId, value.trim())
+    void dl.catch(() => setDownloadFailed(true)).finally(() => setDownloading(false))
   }
 
   return (

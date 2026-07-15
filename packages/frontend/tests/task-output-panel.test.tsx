@@ -25,6 +25,7 @@ import type { NodeRun, NodeRunOutput, Task } from '@agent-workflow/shared'
 
 vi.mock('@/lib/worktree-download', () => ({
   downloadWorktreeFile: vi.fn().mockResolvedValue(undefined),
+  downloadPortArtifact: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock('@/lib/clipboard', () => ({ copyText: vi.fn().mockResolvedValue(true) }))
 
@@ -32,7 +33,7 @@ import '../src/i18n'
 import { TaskOutputPanel } from '../src/components/TaskOutputPanel'
 import { validatePreviewSearch } from '../src/lib/markdown-preview'
 import { copyText } from '@/lib/clipboard'
-import { downloadWorktreeFile } from '@/lib/worktree-download'
+import { downloadPortArtifact, downloadWorktreeFile } from '@/lib/worktree-download'
 
 const snapshot = {
   nodes: [
@@ -93,11 +94,19 @@ describe('TaskOutputPanel', () => {
     expect(screen.getByText('out/report.md')).toBeTruthy()
   })
 
-  test('file-path kind shows a Download button that calls downloadWorktreeFile', async () => {
+  test('file-path kind Download prefers the port-artifact archive (RFC-193)', async () => {
+    // sourceRunId 可得（run-a）→ 走归档下载（内部 404 自动回退 worktree）；
+    // downloadWorktreeFile 不再被直接调用。
     await renderPanel()
     const dl = screen.getByTestId('task-output-download')
     fireEvent.click(dl)
-    expect(vi.mocked(downloadWorktreeFile)).toHaveBeenCalledWith('task1', 'out/report.md')
+    expect(vi.mocked(downloadPortArtifact)).toHaveBeenCalledWith(
+      'task1',
+      'run-a',
+      'doc',
+      'out/report.md',
+    )
+    expect(vi.mocked(downloadWorktreeFile)).not.toHaveBeenCalled()
   })
 
   test('selecting a text-kind port hides the Download button', async () => {

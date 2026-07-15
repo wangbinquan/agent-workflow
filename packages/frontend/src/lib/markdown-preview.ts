@@ -86,24 +86,39 @@ export function validatePreviewSearch(raw: Record<string, unknown>): TaskPreview
 export type PreviewResolution =
   | { mode: 'file'; path: string }
   | { mode: 'port'; runId: string; port: string }
+  | { mode: 'artifact'; path: string; runId: string; port: string }
   | { mode: 'invalid' }
 
 /**
- * Decide the body source from validated search. `path` wins over `runId/port`
- * (file mode is preferred + unambiguous); a `runId`+`port` pair is the inline
- * source; anything else is invalid (the route shows "无效预览链接").
+ * Decide the body source from validated search.
+ *
+ * RFC-193: all three params present (`path` + `runId` + `port`) is the
+ * ARTIFACT source — body from the emit-time archive (port-artifacts API),
+ * immune to wrapper scoping / worktree GC, falling back to the file route on
+ * 404 (legacy rows). `path` alone stays file mode (old links keep working —
+ * the previous builder only serialized `path`, Codex design-gate P1);
+ * `runId`+`port` alone is the inline-port source; anything else is invalid.
  */
 export function resolvePreviewSource(search: TaskPreviewSearch): PreviewResolution {
-  if (search.path !== undefined && search.path.length > 0) {
-    return { mode: 'file', path: search.path }
-  }
-  if (
+  const hasPath = search.path !== undefined && search.path.length > 0
+  const hasRun =
     search.runId !== undefined &&
     search.runId.length > 0 &&
     search.port !== undefined &&
     search.port.length > 0
-  ) {
-    return { mode: 'port', runId: search.runId, port: search.port }
+  if (hasPath && hasRun) {
+    return {
+      mode: 'artifact',
+      path: search.path as string,
+      runId: search.runId as string,
+      port: search.port as string,
+    }
+  }
+  if (hasPath) {
+    return { mode: 'file', path: search.path as string }
+  }
+  if (hasRun) {
+    return { mode: 'port', runId: search.runId as string, port: search.port as string }
   }
   return { mode: 'invalid' }
 }
@@ -112,6 +127,7 @@ export function resolvePreviewSource(search: TaskPreviewSearch): PreviewResoluti
 export type PreviewSource =
   | { kind: 'file'; path: string }
   | { kind: 'port'; runId: string; port: string }
+  | { kind: 'artifact'; path: string; runId: string; port: string }
 
 /** Navigation target (spread into `<Link>` / `navigate()`) for one source. */
 export interface PreviewTarget {
@@ -131,7 +147,11 @@ export function buildPreviewTarget(
   title?: string,
 ): PreviewTarget {
   const search: TaskPreviewSearch =
-    source.kind === 'file' ? { path: source.path } : { runId: source.runId, port: source.port }
+    source.kind === 'file'
+      ? { path: source.path }
+      : source.kind === 'port'
+        ? { runId: source.runId, port: source.port }
+        : { path: source.path, runId: source.runId, port: source.port }
   if (title !== undefined && title.length > 0) search.title = title
   return { to: '/tasks/$id/preview', params: { id: taskId }, search }
 }

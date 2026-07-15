@@ -2320,6 +2320,7 @@ export interface Resources {
     download: string
     downloading: string
     downloadFailed: string
+    artifactTruncated: string
   }
   taskPreview: {
     button: string
@@ -5322,6 +5323,7 @@ export const zhCN: Resources = {
     download: '下载',
     downloading: '下载中…',
     downloadFailed: '下载失败',
+    artifactTruncated: '归档副本超过 2 MiB 已截断——完整文件请从工作区下载。',
   },
   taskPreview: {
     button: '预览',
