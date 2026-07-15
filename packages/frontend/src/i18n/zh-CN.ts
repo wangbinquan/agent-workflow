@@ -61,7 +61,8 @@ export interface Resources {
       // RFC-164 PR-6: workgroup to-dos third source.
       errorWorkgroups: string
       wgKind: string
-      wgRow: string
+      wgRow_one: string
+      wgRow_other: string
       wgBreakdown: string
       itemAria: string
       workgroupItemAria: string
@@ -3084,7 +3085,8 @@ export const zhCN: Resources = {
       iterLabel: '第 {{iter}} 轮',
       errorWorkgroups: '工作组待办加载失败',
       wgKind: '工作组',
-      wgRow: '{{n}} 项工作组待办',
+      wgRow_one: '{{count}} 项工作组待办',
+      wgRow_other: '{{count}} 项工作组待办',
       wgBreakdown: '待交付 {{d}} · 待确认 {{g}}',
       itemAria: '{{kind}}：{{title}}，来自 {{task}}',
       workgroupItemAria: '打开 {{n}} 项工作组待办',

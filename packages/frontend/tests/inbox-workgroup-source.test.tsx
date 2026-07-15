@@ -1,10 +1,10 @@
-// RFC-164 PR-6 — the InboxDrawer's workgroup to-dos row (third source).
+// RFC-164 PR-6 / RFC-195 — Inbox workgroup to-dos (third source).
 //
 // The pending-count endpoint is count-only (no per-item rows), so the drawer
 // renders ONE summary row: kind chip + total + deliveries/gates breakdown,
 // clicking navigates to the tasks list (each room owns its actionable
 // cards). Locks: render-when-positive, hidden-when-zero, failure-soft error
-// row that leaves the reviews/clarify lists alone, and the navigation.
+// banner that leaves the reviews/clarify lists alone, and close-before-nav.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -48,11 +48,11 @@ function mockFeeds(opts: {
   })
 }
 
-function wrap() {
+function wrap(onClose: () => void = () => {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <InboxDrawer open onClose={() => {}} />
+      <InboxDrawer open onClose={onClose} />
     </QueryClientProvider>,
   )
 }
@@ -77,19 +77,33 @@ describe('InboxDrawer — workgroup to-dos row', () => {
     mockFeeds({ wg: { deliveries: 2, gates: 1, total: 3 } })
     wrap()
     const row = await screen.findByTestId('inbox-row-workgroups')
-    expect(row.textContent).toContain('3 workgroup to-do(s)')
+    expect(row.textContent).toContain('3 workgroup to-dos')
     expect(screen.getByTestId('inbox-row-workgroups-breakdown').textContent).toBe(
       '2 to deliver · 1 to confirm',
     )
+    expect(row.getAttribute('aria-label')).toBeNull()
+    expect(screen.getByRole('button', { name: /Workgroup.*2 to deliver.*1 to confirm/ })).toBe(row)
   })
 
-  test('clicking the row navigates to the tasks list', async () => {
+  test('uses singular English copy for one workgroup to-do', async () => {
     mockFeeds({ wg: { deliveries: 1, gates: 0, total: 1 } })
     wrap()
+    const row = await screen.findByTestId('inbox-row-workgroups')
+    expect(row.querySelector('.inbox-dialog__item-title')?.textContent).toBe('1 workgroup to-do')
+  })
+
+  test('clicking the row closes before navigating to the tasks list', async () => {
+    mockFeeds({ wg: { deliveries: 1, gates: 0, total: 1 } })
+    const onClose = vi.fn()
+    wrap(onClose)
     fireEvent.click(await screen.findByTestId('inbox-row-workgroups'))
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith({ to: '/tasks' })
     })
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onClose.mock.invocationCallOrder[0]).toBeLessThan(
+      navigateSpy.mock.invocationCallOrder[0]!,
+    )
   })
 
   test('zero to-dos → no row (and the empty state may show)', async () => {
@@ -101,7 +115,7 @@ describe('InboxDrawer — workgroup to-dos row', () => {
     })
   })
 
-  test('failure-soft: a broken workgroup feed shows its error row, reviews/clarify still render', async () => {
+  test('failure-soft: a broken workgroup feed shows an alert while review rows remain usable', async () => {
     mockFeeds({
       wg: 'error',
       reviews: [
@@ -122,11 +136,14 @@ describe('InboxDrawer — workgroup to-dos row', () => {
       ],
     })
     wrap()
-    // The wg error row appears…
-    await screen.findByText('Failed to load workgroup to-dos')
+    // The workgroup-specific shared ErrorBanner appears…
+    expect((await screen.findByRole('alert')).textContent ?? '').toContain(
+      'Failed to load workgroup to-dos',
+    )
     // …while the surviving review row still lists.
     await screen.findByTestId('inbox-row-review-r1')
     expect(screen.queryByTestId('inbox-row-workgroups')).toBeNull()
+    expect(screen.queryByTestId('empty-state')).toBeNull()
   })
 
   test('hidden on the reviews/clarify tabs (all-tab summary only)', async () => {

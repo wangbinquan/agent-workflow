@@ -141,3 +141,44 @@ test.describe('RFC-054 W2-6 — Dialog keyboard contract', () => {
     expect(ariaModal).toBe('true')
   })
 })
+
+test.describe('RFC-195 — Inbox dialog keyboard contract', () => {
+  test('selected filter receives initial focus and Escape restores the inbox trigger', async ({
+    page,
+  }) => {
+    await primeAuth(page, daemon)
+    await page.goto(`${daemon.baseUrl}/agents`)
+
+    const trigger = page.getByTestId('inbox-footer-button')
+    await trigger.click()
+    const dialog = page.getByRole('dialog', { name: 'Inbox' })
+    await expect(dialog).toBeVisible()
+
+    const allFilter = page.getByTestId('inbox-tab-all')
+    const clarifyFilter = page.getByTestId('inbox-tab-clarify')
+    await expect(allFilter).toHaveAttribute('aria-checked', 'true')
+    await expect(allFilter).toBeFocused()
+
+    // Standard radio-group keyboard model: one Tab stop, arrow keys move
+    // focus and selection across the segmented options.
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByTestId('inbox-tab-reviews')).toHaveAttribute('aria-checked', 'true')
+    await page.keyboard.press('ArrowRight')
+    await expect(clarifyFilter).toHaveAttribute('aria-checked', 'true')
+    await expect(clarifyFilter).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(trigger).toBeFocused()
+
+    // The selected filter is stateful across close/reopen. Initial focus must
+    // follow that selection instead of falling back to the first (All) radio.
+    await trigger.click()
+    await expect(dialog).toBeVisible()
+    await expect(clarifyFilter).toHaveAttribute('aria-checked', 'true')
+    await expect(clarifyFilter).toBeFocused()
+
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(trigger).toBeFocused()
+  })
+})

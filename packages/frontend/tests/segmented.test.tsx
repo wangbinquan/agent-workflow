@@ -9,6 +9,7 @@
 
 import { readFileSync } from 'node:fs'
 import path, { resolve } from 'node:path'
+import { createRef, useState } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { Segmented, type SegmentedOption } from '../src/components/Segmented'
@@ -76,9 +77,95 @@ describe('<Segmented> — radiogroup shape', () => {
     )
     expect(screen.getByRole('radio').getAttribute('title')).toBe('Designer answers')
   })
+
+  test('activeOptionRef points only to the active option and follows value changes', () => {
+    const activeOptionRef = createRef<HTMLButtonElement>()
+    const { rerender } = render(
+      <Segmented
+        value="designer"
+        onChange={() => {}}
+        options={OPTIONS}
+        ariaLabel="Scope"
+        activeOptionRef={activeOptionRef}
+      />,
+    )
+
+    expect(activeOptionRef.current).toBe(screen.getByRole('radio', { name: 'Designer' }))
+
+    rerender(
+      <Segmented
+        value="questioner"
+        onChange={() => {}}
+        options={OPTIONS}
+        ariaLabel="Scope"
+        activeOptionRef={activeOptionRef}
+      />,
+    )
+    expect(activeOptionRef.current).toBe(screen.getByRole('radio', { name: 'Questioner' }))
+  })
 })
 
 describe('<Segmented> — change semantics', () => {
+  test('uses roving tabindex and arrow keys select/focus the next enabled radio', () => {
+    const onChange = vi.fn()
+    render(
+      <Segmented
+        value="designer"
+        onChange={onChange}
+        options={[
+          { value: 'designer', label: 'Designer' },
+          { value: 'disabled' as Mode, label: 'Disabled', disabled: true },
+          { value: 'questioner', label: 'Questioner' },
+        ]}
+        ariaLabel="Scope"
+      />,
+    )
+
+    const designer = screen.getByRole('radio', { name: 'Designer' })
+    const questioner = screen.getByRole('radio', { name: 'Questioner' })
+    expect(designer.getAttribute('tabindex')).toBe('0')
+    expect(questioner.getAttribute('tabindex')).toBe('-1')
+
+    designer.focus()
+    fireEvent.keyDown(designer, { key: 'ArrowRight' })
+    expect(onChange).toHaveBeenCalledWith('questioner')
+    expect(document.activeElement).toBe(questioner)
+  })
+
+  test('Home/End and backward arrows wrap across the enabled radios', () => {
+    const onChange = vi.fn()
+    function Harness() {
+      const [value, setValue] = useState<Mode>('designer')
+      return (
+        <Segmented
+          value={value}
+          onChange={(next) => {
+            onChange(next)
+            setValue(next)
+          }}
+          options={OPTIONS}
+          ariaLabel="Scope"
+        />
+      )
+    }
+    render(<Harness />)
+    const designer = screen.getByRole('radio', { name: 'Designer' })
+    const questioner = screen.getByRole('radio', { name: 'Questioner' })
+
+    fireEvent.keyDown(designer, { key: 'ArrowLeft' })
+    expect(onChange).toHaveBeenLastCalledWith('questioner')
+    expect(document.activeElement).toBe(questioner)
+
+    fireEvent.keyDown(questioner, { key: 'Home' })
+    expect(onChange).toHaveBeenLastCalledWith('designer')
+    expect(document.activeElement).toBe(designer)
+
+    fireEvent.keyDown(designer, { key: 'End' })
+    expect(onChange).toHaveBeenLastCalledWith('questioner')
+    fireEvent.keyDown(questioner, { key: 'ArrowUp' })
+    expect(onChange).toHaveBeenLastCalledWith('designer')
+  })
+
   test('clicking a non-active option fires onChange with its value', () => {
     const onChange = vi.fn()
     render(<Segmented value="designer" onChange={onChange} options={OPTIONS} ariaLabel="Scope" />)
@@ -133,6 +220,37 @@ describe('<Segmented> — change semantics', () => {
     )
     fireEvent.click(screen.getByRole('radio', { name: 'Questioner' }))
     expect(onChange).not.toHaveBeenCalled()
+  })
+
+  test('first enabled option remains in the Tab order when the active option is disabled', () => {
+    render(
+      <Segmented
+        value="designer"
+        onChange={() => {}}
+        options={[
+          { value: 'designer', label: 'Designer', disabled: true },
+          { value: 'questioner', label: 'Questioner' },
+        ]}
+        ariaLabel="Scope"
+      />,
+    )
+
+    expect(screen.getByRole('radio', { name: 'Designer' }).getAttribute('tabindex')).toBe('-1')
+    expect(screen.getByRole('radio', { name: 'Questioner' }).getAttribute('tabindex')).toBe('0')
+  })
+
+  test('first enabled option remains in the Tab order when value is absent from dynamic options', () => {
+    render(
+      <Segmented
+        value={'missing' as Mode}
+        onChange={() => {}}
+        options={OPTIONS}
+        ariaLabel="Scope"
+      />,
+    )
+
+    expect(screen.getByRole('radio', { name: 'Designer' }).getAttribute('tabindex')).toBe('0')
+    expect(screen.getByRole('radio', { name: 'Questioner' }).getAttribute('tabindex')).toBe('-1')
   })
 })
 

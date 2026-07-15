@@ -28,6 +28,7 @@ import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 
 import { startDaemon, type DaemonHandle } from './harness'
+import { routePopulatedInbox } from './inbox-fixtures'
 
 let daemon: DaemonHandle
 
@@ -139,6 +140,22 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     await page.goto(`${daemon.baseUrl}/agents`)
     await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible()
     await expectNoCriticalOrSeriousAxeViolations(page, '/agents')
+  })
+
+  test('/agents inbox dialog open passes a11y', async ({ page }) => {
+    // Render both populated kind chips and a partial-error banner so the scan
+    // covers the contrast/name risks hidden by a clean empty daemon.
+    await routePopulatedInbox(page, { rows: 6, workgroupError: true })
+    await primeAuth(page, daemon)
+    await page.goto(`${daemon.baseUrl}/agents`)
+    await page.getByTestId('inbox-footer-button').click()
+
+    const dialog = page.getByRole('dialog', { name: 'Inbox' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog).toHaveAttribute('aria-modal', 'true')
+    await expect(page.getByTestId('inbox-row-clarify-visual-clarify-0')).toBeVisible()
+    await expect(dialog.getByRole('alert')).toBeVisible()
+    await expectNoCriticalOrSeriousAxeViolations(page, '/agents (inbox dialog open)')
   })
 
   test('/agents/new (RFC-169 five-tab form) passes a11y', async ({ page }) => {

@@ -1528,16 +1528,16 @@ code {
   transform: translateY(-50%);
 }
 
-.inbox-dialog .dialog__header {
+.dialog--md .inbox-dialog :where(.dialog__header) {
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--border);
 }
 
-.inbox-dialog .dialog__body {
+.dialog--md .inbox-dialog :where(.dialog__body) {
   gap: var(--space-3);
 }
 
-.inbox-dialog .dialog__footer {
+.dialog--md .inbox-dialog :where(.dialog__footer) {
   justify-content: stretch;
   padding-top: var(--space-3);
   border-top: 1px solid var(--border);
@@ -1572,7 +1572,7 @@ code {
   font-variant-numeric: tabular-nums;
 }
 
-.inbox-dialog__filters.segmented {
+.inbox-dialog__filters:where(.segmented) {
   width: 100%;
 }
 
@@ -1685,7 +1685,7 @@ code {
   background: color-mix(in srgb, var(--warn) 12%, transparent);
 }
 
-.inbox-dialog .error-box {
+.dialog--md .inbox-dialog :where(.error-box) {
   color: color-mix(in srgb, var(--danger) 80%, var(--text));
 }
 
@@ -1769,8 +1769,7 @@ code {
   justify-content: center;
 }
 
-.inbox-dialog__state > .empty-state,
-.inbox-dialog__state > .loading-state {
+.inbox-dialog__state > :is(.empty-state, .loading-state) {
   width: 100%;
 }
 
@@ -1786,7 +1785,7 @@ code {
   width: 100%;
 }
 
-.inbox-dialog__footer .btn {
+.inbox-dialog__footer :where(.btn) {
   flex: 1 1 0;
   justify-content: center;
 }

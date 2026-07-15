@@ -1,7 +1,6 @@
-// RFC-037 T9 — source-layer wiring guard for the inbox drawer + clarify and
-// reviews list pages: the joined `taskName` field is rendered alongside the
-// existing source-task ID chip. Grep against the .tsx source so future
-// refactors that drop the chip turn red.
+// RFC-037 T9 / RFC-195 — source-layer wiring guard for inbox + list pages.
+// Projection now lives in lib/inbox-view.ts, while InboxDrawer owns the
+// semantic source/time rendering. Keep the guard aligned with that seam.
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -12,11 +11,16 @@ function read(rel: string): string {
 }
 
 describe('RFC-037 — inbox / clarify / reviews chain renders taskName', () => {
-  test('InboxDrawer threads taskName from review and clarify summaries', () => {
+  test('inbox view model projects taskName from review and clarify summaries', () => {
+    const src = read('lib/inbox-view.ts')
+    expect(src).toContain('taskName: review.taskName')
+    expect(src).toContain('taskName: round.taskName')
+  })
+
+  test('InboxDrawer renders task source and shared RelativeTime', () => {
     const src = read('components/shell/InboxDrawer.tsx')
-    expect(src).toContain('taskName: r.taskName')
-    expect(src).toContain('taskName: c.taskName')
-    expect(src).toContain('inbox-drawer__task-name')
+    expect(src).toContain('RelativeTime')
+    expect(src).toContain('inbox-dialog__task-name')
     expect(src).toContain('inbox-row-task-name')
   })
 
@@ -54,8 +58,8 @@ describe('RFC-037 — inbox / clarify / reviews chain renders taskName', () => {
     expect(src).toContain('clarify-detail-task-name')
   })
 
-  test('styles.css declares the inbox-drawer__task-name family', () => {
+  test('styles.css declares the inbox-dialog__task-name family', () => {
     const css = readFileSync(resolve(import.meta.dirname, '..', 'src', 'styles.css'), 'utf-8')
-    expect(css).toMatch(/\.inbox-drawer__task-name/)
+    expect(css).toMatch(/\.inbox-dialog__task-name/)
   })
 })

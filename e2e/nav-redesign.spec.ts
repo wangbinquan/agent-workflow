@@ -18,6 +18,7 @@
 
 import { test, expect } from '@playwright/test'
 import { startDaemon, type DaemonHandle } from './harness'
+import { routePopulatedInbox } from './inbox-fixtures'
 
 let daemon: DaemonHandle
 
@@ -134,7 +135,7 @@ test('RFC-032 nav-redesign homepage: non-first-run / renders 3 sections + Start 
   await expect(page.locator('[data-testid="homepage-start-task"]')).toBeVisible()
 })
 
-test('RFC-032 nav-redesign inbox: footer button opens drawer; empty pending → empty hint, no badge', async ({
+test('RFC-195 inbox dialog: footer button opens an accessible empty-state dialog', async ({
   page,
 }) => {
   // The daemon comes up clean — no pending reviews / clarify sessions —
@@ -152,14 +153,64 @@ test('RFC-032 nav-redesign inbox: footer button opens drawer; empty pending → 
   await expect(page.locator('[data-testid="inbox-footer-badge"]')).toHaveCount(0)
 
   await inboxButton.click()
-  await expect(page.locator('[data-testid="inbox-drawer"]')).toBeVisible()
+  const dialog = page.getByRole('dialog', { name: 'Inbox' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toHaveAttribute('aria-modal', 'true')
+  await expect(dialog.getByRole('heading', { name: 'Inbox', exact: true })).toBeVisible()
   await expect(page.locator('[data-testid="inbox-tab-all"]')).toBeVisible()
   await expect(page.locator('[data-testid="inbox-tab-reviews"]')).toBeVisible()
   await expect(page.locator('[data-testid="inbox-tab-clarify"]')).toBeVisible()
   // Empty hint (en-US bundle).
-  await expect(page.locator('[data-testid="inbox-drawer"]')).toContainText('Nothing waiting')
+  await expect(dialog).toContainText('Nothing waiting')
 
   // ESC closes.
   await page.keyboard.press('Escape')
-  await expect(page.locator('[data-testid="inbox-drawer"]')).toHaveCount(0)
+  await expect(dialog).toHaveCount(0)
+})
+
+test('RFC-195 inbox dialog: populated 390px panel keeps content and footer in bounds', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await routePopulatedInbox(page)
+  await primeAuth(page, daemon)
+  await page.goto(`${daemon.baseUrl}/agents`)
+
+  await page.getByTestId('inbox-footer-button').click()
+  const dialog = page.getByRole('dialog', { name: 'Inbox' })
+  await expect(dialog).toBeVisible()
+  await expect(page.getByTestId('inbox-row-review-visual-review-0')).toBeVisible()
+  await expect(dialog).toHaveClass(/inbox-dialog/)
+
+  const box = await dialog.boundingBox()
+  expect(box).not.toBeNull()
+  if (box === null) return
+
+  // RFC-195: <=720px is a true full-screen sheet. The half-pixel tolerance
+  // absorbs browser rounding while still catching the old 240px-left drawer
+  // (which overflowed a 390px viewport by roughly 210px).
+  expect(box.x).toBeGreaterThanOrEqual(-0.5)
+  expect(box.y).toBeGreaterThanOrEqual(-0.5)
+  expect(box.x + box.width).toBeLessThanOrEqual(390.5)
+  expect(box.y + box.height).toBeLessThanOrEqual(844.5)
+  expect(box.width).toBeGreaterThanOrEqual(389)
+  expect(box.height).toBeGreaterThanOrEqual(843)
+
+  await expect(page.getByTestId('inbox-drawer-open-reviews')).toBeInViewport()
+  await expect(page.getByTestId('inbox-drawer-open-clarify')).toBeInViewport()
+  const overflow = await dialog.evaluate((panel) => {
+    const body = panel.querySelector<HTMLElement>('.dialog__body')
+    return {
+      documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      panelFits: panel.scrollWidth <= panel.clientWidth,
+      bodyFits: body !== null && body.scrollWidth <= body.clientWidth,
+      bodyScrolls: body !== null && body.scrollHeight > body.clientHeight,
+    }
+  })
+  expect(overflow).toEqual({
+    documentFits: true,
+    panelFits: true,
+    bodyFits: true,
+    bodyScrolls: true,
+  })
 })

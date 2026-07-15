@@ -10,7 +10,7 @@
 // workflows-group highlight via `resolveActiveNav`'s fallback.
 
 import { Link, Outlet, createRootRoute, redirect, useRouterState } from '@tanstack/react-router'
-import { useSyncExternalStore } from 'react'
+import { useRef, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LanguageSwitch } from '@/components/LanguageSwitch'
 import { UserMenu } from '@/components/UserMenu'
@@ -50,6 +50,7 @@ function RootComponent() {
   const { t } = useTranslation()
   useApplyTheme()
   useApplyLanguage()
+  const inboxTriggerRef = useRef<HTMLButtonElement>(null)
   // RFC-036 — the `#aw_session=` fragment from the OIDC callback is
   // consumed at module-init time inside @/stores/auth.ts (so the token
   // is set BEFORE TanStack Router's beforeLoad gate inspects it).
@@ -171,7 +172,7 @@ function RootComponent() {
             />
           ))}
         </nav>
-        <InboxFooterButton open={inboxOpen} onToggle={toggleInboxOpen} />
+        <InboxFooterButton ref={inboxTriggerRef} open={inboxOpen} onToggle={toggleInboxOpen} />
         <div className="sidebar__footer">
           <UserMenu />
           <div className="sidebar__footer-row">
@@ -183,7 +184,11 @@ function RootComponent() {
       <main className="content">
         <Outlet />
       </main>
-      <InboxDrawer open={inboxOpen} onClose={() => setInboxOpen(false)} />
+      <InboxDrawer
+        open={inboxOpen}
+        onClose={() => setInboxOpen(false)}
+        triggerRef={inboxTriggerRef}
+      />
     </div>
   )
 }

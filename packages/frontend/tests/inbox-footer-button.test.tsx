@@ -11,6 +11,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { createRef } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import '../src/i18n'
 import { InboxFooterButton } from '../src/components/shell/InboxFooterButton'
@@ -92,12 +93,23 @@ afterEach(() => {
 })
 
 describe('RFC-032 InboxFooterButton', () => {
+  test('RFC-195 forwards its ref to the existing trigger button', () => {
+    mockCounts(0, 0)
+    const ref = createRef<HTMLButtonElement>()
+    wrap(<InboxFooterButton ref={ref} open={false} onToggle={() => {}} />)
+
+    expect(ref.current).toBe(screen.getByTestId('inbox-footer-button'))
+  })
+
   test('reviews=3 + clarify=3 → badge "6"', async () => {
     mockCounts(3, 3)
     wrap(<InboxFooterButton open={false} onToggle={() => {}} />)
     await waitFor(() => {
       expect(screen.getByTestId('inbox-footer-badge').textContent).toBe('6')
     })
+    expect(screen.getByTestId('inbox-footer-button').getAttribute('aria-label')).toMatch(
+      /Inbox, 6 pending items|收件箱，6 项待处理/,
+    )
   })
 
   test('reviews=0 + clarify=0 → no badge rendered (button still present)', async () => {

@@ -27,6 +27,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
 import { startDaemon, type DaemonHandle } from './harness'
+import { routePopulatedInbox } from './inbox-fixtures'
 
 const RUN_VISUAL_REGRESSION = process.env.RUN_VISUAL_REGRESSION === '1'
 
@@ -168,5 +169,38 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await page.goto(`${daemon.baseUrl}/tasks`)
     await expect(page.getByRole('heading', { name: /tasks/i }).first()).toBeVisible()
     await expect(page).toHaveScreenshot('tasks.png', SNAPSHOT_OPTS)
+  })
+
+  test('RFC-195 inbox empty dialog (light)', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' })
+    await primeAuth(page, daemon)
+    await page.goto(`${daemon.baseUrl}/agents`)
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'))
+    await page.getByTestId('inbox-footer-button').click()
+    const dialog = page.getByRole('dialog', { name: 'Inbox' })
+    await expect(dialog).toContainText('Nothing waiting')
+    await expect(page).toHaveScreenshot('inbox-empty-light.png', SNAPSHOT_OPTS)
+  })
+
+  test('RFC-195 inbox populated dialog (light)', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' })
+    await routePopulatedInbox(page)
+    await primeAuth(page, daemon)
+    await page.goto(`${daemon.baseUrl}/agents`)
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'))
+    await page.getByTestId('inbox-footer-button').click()
+    await expect(page.getByTestId('inbox-row-review-visual-review-0')).toBeVisible()
+    await expect(page).toHaveScreenshot('inbox-populated-light.png', SNAPSHOT_OPTS)
+  })
+
+  test('RFC-195 inbox populated dialog (dark)', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await routePopulatedInbox(page)
+    await primeAuth(page, daemon)
+    await page.goto(`${daemon.baseUrl}/agents`)
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
+    await page.getByTestId('inbox-footer-button').click()
+    await expect(page.getByTestId('inbox-row-review-visual-review-0')).toBeVisible()
+    await expect(page).toHaveScreenshot('inbox-populated-dark.png', SNAPSHOT_OPTS)
   })
 })

@@ -1,42 +1,35 @@
-// RFC-032 PR2: unified inbox drawer. Replaces the standalone /reviews and
-// /clarify sidebar entries — one button, one drawer, three segmented tabs
-// (All / Reviews / Clarify). Click a row to navigate to the underlying
-// detail page; the drawer stays open so the user can plough through a
-// queue of pending items.
+// RFC-195: task-focused inbox dialog.
 //
-// RFC-121: the inbox is scoped back to task-flow to-dos (reviews + clarify).
-// The memory-candidate group (RFC-041 PR4) and the fusion group (RFC-101)
-// were lifted OUT of here and onto the /memory page (its approval-queue +
-// new "fusion" tab), with the sidebar Memory badge carrying their pending
-// count. Keep this drawer to reviews + clarify only.
-//
-// Lifecycle:
-//   - The footer button (lifted in __root.tsx) toggles `open`.
-//   - ESC + outside click close it. Detail-page navigation does NOT.
-//   - Renders into document.body via a React portal so the absolute
-//     positioning lives outside the sidebar's flow.
+// The shared Dialog owns modal chrome, dismissal, scroll locking, the focus
+// trap, and trigger focus restoration. This component owns only the three
+// failure-soft inbox feeds and their task-oriented presentation.
 
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ClarifyRoundSummary, ReviewSummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { Dialog } from '@/components/Dialog'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorBanner } from '@/components/ErrorBanner'
+import { LoadingState } from '@/components/LoadingState'
+import { RelativeTime } from '@/components/RelativeTime'
+import { Segmented, type SegmentedOption } from '@/components/Segmented'
+import { deriveInboxViewModel, type InboxItem, type InboxTab } from '@/lib/inbox-view'
 import type { WorkgroupPendingCount } from '@/lib/workgroup-room'
-
-export type InboxTab = 'all' | 'reviews' | 'clarify'
+import { InboxIcon } from './InboxIcon'
 
 interface InboxDrawerProps {
   open: boolean
   onClose: () => void
+  triggerRef?: RefObject<HTMLElement | null>
 }
 
-export function InboxDrawer({ open, onClose }: InboxDrawerProps) {
+export function InboxDrawer({ open, onClose, triggerRef }: InboxDrawerProps) {
   const { t } = useTranslation()
   const [tab, setTab] = useState<InboxTab>('all')
-  const tabRef = useRef<HTMLButtonElement | null>(null)
-  const panelRef = useRef<HTMLDivElement | null>(null)
+  const selectedOptionRef = useRef<HTMLButtonElement | null>(null)
   const navigate = useNavigate()
 
   const reviews = useQuery<ReviewSummary[]>({
@@ -53,272 +46,322 @@ export function InboxDrawer({ open, onClose }: InboxDrawerProps) {
     refetchInterval: open ? 15_000 : false,
   })
 
-  // RFC-164 PR-6 — third source: workgroup to-dos (deliveries + gates). The
-  // endpoint is count-only, so the drawer renders a single summary row that
-  // jumps to the tasks list (each room carries its own to-do cards).
+  // RFC-164: this endpoint is count-only, so it becomes one aggregate row
+  // in the All view and navigates to the tasks list for the actual actions.
   const workgroups = useQuery<WorkgroupPendingCount>({
     queryKey: ['workgroup-tasks', 'pending-count'],
     queryFn: ({ signal }) => api.get('/api/workgroup-tasks/pending-count', undefined, signal),
     enabled: open,
     refetchInterval: open ? 15_000 : false,
   })
-  const wgTotal = tab === 'all' ? (workgroups.data?.total ?? 0) : 0
 
-  // ESC closes; outside-click closes (only after the first paint, so the
-  // very click that opened the drawer doesn't immediately close it).
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
-    }
-    const onDocClick = (e: MouseEvent): void => {
-      const panel = panelRef.current
-      const target = e.target
-      if (panel === null || !(target instanceof Node)) return
-      if (panel.contains(target)) return
-      // The footer button has its own onToggle handler; do not double-fire
-      // if the user clicked it (it bubbles after our handler).
-      const footerButton = document.querySelector('[data-testid="inbox-footer-button"]')
-      if (footerButton !== null && footerButton.contains(target)) return
-      onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    // Use mousedown rather than click — the mouseup-after-drag artifact
-    // can otherwise fire on a release that started inside the panel.
-    document.addEventListener('mousedown', onDocClick)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.removeEventListener('mousedown', onDocClick)
-    }
-  }, [open, onClose])
+  const view = deriveInboxViewModel({
+    tab,
+    reviews: {
+      data: reviews.data,
+      isInitialLoading: reviews.isLoading,
+      error: reviews.error,
+    },
+    clarify: {
+      data: clarify.data,
+      isInitialLoading: clarify.isLoading,
+      error: clarify.error,
+    },
+    workgroups: {
+      data: workgroups.data,
+      isInitialLoading: workgroups.isLoading,
+      error: workgroups.error,
+    },
+    formatClarifyContext: ({ askingAgent, shardKey, iteration }) => {
+      const detail =
+        shardKey !== null
+          ? t('nav.inbox.shardLabel', { shard: shardKey })
+          : t('nav.inbox.iterLabel', { iter: iteration })
+      return t('nav.inbox.clarifySubtitle', { agent: askingAgent, detail })
+    },
+  })
 
-  // Focus the first segmented tab when the drawer mounts open.
-  useEffect(() => {
-    if (open) tabRef.current?.focus()
-  }, [open])
+  const selectedCount =
+    tab === 'all' ? view.counts.all : tab === 'reviews' ? view.counts.reviews : view.counts.clarify
+  const options: ReadonlyArray<SegmentedOption<InboxTab>> = (
+    ['all', 'reviews', 'clarify'] as const
+  ).map((value) => ({
+    value,
+    testid: `inbox-tab-${value}`,
+    label: (
+      <span className="inbox-dialog__filter-label">
+        {t(inboxTabLabelKey(value))}
+        {view.counts[value] !== undefined && (
+          <span className="inbox-dialog__filter-count">{view.counts[value]}</span>
+        )}
+      </span>
+    ),
+  }))
 
-  const items = useMemo<InboxItem[]>(() => {
-    const rows: InboxItem[] = []
-    if (tab === 'all' || tab === 'reviews') {
-      for (const r of reviews.data ?? []) {
-        rows.push({
-          kind: 'review',
-          rowKey: r.nodeRunId,
-          id: r.nodeRunId,
-          taskId: r.taskId,
-          taskName: r.taskName,
-          title: r.title,
-          subtitle: r.workflowName,
-          createdAt: r.createdAt,
-        })
-      }
-    }
-    if (tab === 'all' || tab === 'clarify') {
-      for (const c of clarify.data ?? []) {
-        // RFC-058: unified ClarifyRoundSummary — intermediary == clarify
-        // node, asking == source agent, iteration == legacy iterationIndex.
-        const clarifyTitle =
-          typeof c.intermediaryNodeTitle === 'string' && c.intermediaryNodeTitle.length > 0
-            ? c.intermediaryNodeTitle
-            : c.intermediaryNodeId
-        const agentLabel =
-          typeof c.askingNodeTitle === 'string' && c.askingNodeTitle.length > 0
-            ? c.askingNodeTitle
-            : c.askingNodeId
-        const shardOrIter = c.askingShardKey
-          ? t('nav.inbox.shardLabel', { shard: c.askingShardKey })
-          : t('nav.inbox.iterLabel', { iter: c.iteration })
-        rows.push({
-          kind: 'clarify',
-          // React key uses the round id (always unique). The nav target
-          // stays on `intermediaryNodeRunId` because the detail route is
-          // /clarify/$nodeRunId — keyed by the intermediary (clarify /
-          // clarify-cross-agent) node's run id.
-          rowKey: c.id,
-          id: c.intermediaryNodeRunId,
-          taskId: c.taskId,
-          taskName: c.taskName,
-          title: clarifyTitle,
-          subtitle: t('nav.inbox.clarifySubtitle', { agent: agentLabel, detail: shardOrIter }),
-          createdAt: c.createdAt,
-        })
-      }
-    }
-    rows.sort((a, b) => b.createdAt - a.createdAt)
-    return rows
-  }, [tab, reviews.data, clarify.data, t])
+  const navigateAndClose = (target: unknown): void => {
+    onClose()
+    // Route targets are fixed below; keeping this helper untyped avoids
+    // spreading TanStack Router's route-union cast across every row.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void navigate(target as any)
+  }
 
-  if (!open) return null
-
-  const overlay = (
-    <div
-      ref={panelRef}
-      className="inbox-drawer"
-      role="dialog"
-      aria-label={t('nav.inbox.label')}
-      data-testid="inbox-drawer"
-    >
-      <div className="inbox-drawer__tabs" role="tablist">
-        {(['all', 'reviews', 'clarify'] as const).map((k, i) => (
-          <button
-            key={k}
-            type="button"
-            role="tab"
-            aria-selected={tab === k}
-            ref={i === 0 ? tabRef : null}
-            className={`inbox-drawer__tab${tab === k ? ' inbox-drawer__tab--active' : ''}`}
-            onClick={() => setTab(k)}
-            data-testid={`inbox-tab-${k}`}
-          >
-            {t(inboxTabLabelKey(k))}
-          </button>
-        ))}
-      </div>
-
-      {(tab === 'all' || tab === 'reviews') && reviews.error !== null && (
-        <ErrorRow message={t('nav.inbox.errorReviews')} onRetry={() => void reviews.refetch()} />
-      )}
-      {(tab === 'all' || tab === 'clarify') && clarify.error !== null && (
-        <ErrorRow message={t('nav.inbox.errorClarify')} onRetry={() => void clarify.refetch()} />
-      )}
-      {tab === 'all' && workgroups.error !== null && (
-        <ErrorRow
-          message={t('nav.inbox.errorWorkgroups')}
-          onRetry={() => void workgroups.refetch()}
-        />
-      )}
-
-      {items.length === 0 && wgTotal === 0 && !reviews.isLoading && !clarify.isLoading && (
-        <div className="inbox-drawer__empty muted">{t('nav.inbox.empty')}</div>
-      )}
-
-      {/* RFC-164 PR-6 — workgroup to-dos summary row (count-only source; the
-          per-task room owns the actionable cards). */}
-      {wgTotal > 0 && (
-        <button
-          type="button"
-          className="inbox-drawer__item"
-          data-testid="inbox-row-workgroups"
-          onClick={() => {
-            onClose()
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            void navigate({ to: '/tasks' } as any)
-          }}
-        >
-          <span className="inbox-drawer__kind inbox-drawer__kind--wg" data-kind="wg">
-            {t('nav.inbox.wgKind')}
-          </span>
-          <span className="inbox-drawer__title">{t('nav.inbox.wgRow', { n: wgTotal })}</span>
-          <span
-            className="inbox-drawer__subtitle muted"
-            data-testid="inbox-row-workgroups-breakdown"
-          >
-            {t('nav.inbox.wgBreakdown', {
-              d: workgroups.data?.deliveries ?? 0,
-              g: workgroups.data?.gates ?? 0,
-            })}
-          </span>
-        </button>
-      )}
-
-      <div className="inbox-drawer__list">
-        {items.map((it) => (
-          <button
-            key={`${it.kind}-${it.rowKey}`}
-            type="button"
-            className="inbox-drawer__item"
-            data-testid={`inbox-row-${it.kind}-${it.rowKey}`}
-            onClick={() => {
-              const target =
-                it.kind === 'review'
-                  ? { to: '/reviews/$nodeRunId', params: { nodeRunId: it.id } }
-                  : { to: '/clarify/$nodeRunId', params: { nodeRunId: it.id } }
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              void navigate(target as any)
-            }}
-          >
-            <span
-              className={`inbox-drawer__kind inbox-drawer__kind--${it.kind}`}
-              data-kind={it.kind}
-            >
-              {t(inboxKindLabelKey(it.kind))}
-            </span>
-            <span className="inbox-drawer__title">{it.title}</span>
-            <span className="inbox-drawer__subtitle muted">{it.subtitle}</span>
-            {/* RFC-037: surface the user-supplied task name so the inbox
-                disambiguates same-workflow tasks. Falls back to the short
-                ID label when name is blank (defensive — schema requires it). */}
-            <span className="inbox-drawer__task-name" data-testid="inbox-row-task-name">
-              {it.taskName.length > 0
-                ? it.taskName
-                : t('nav.inbox.sourceTask', { taskId: it.taskId })}
-            </span>
-            <span className="inbox-drawer__task muted">
-              {t('nav.inbox.sourceTask', { taskId: it.taskId })}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {/* Footer entry points to the full list pages. The drawer was
-          intentionally kept short (pending-only), so users need a way to
-          reach the historical /reviews + /clarify tabs (approved /
-          rejected / answered, etc.). Clicking closes the drawer so the
-          user lands cleanly on the list page. */}
-      <div className="inbox-drawer__footer">
-        <button
-          type="button"
-          className="inbox-drawer__footer-link"
-          data-testid="inbox-drawer-open-reviews"
-          onClick={() => {
-            onClose()
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            void navigate({ to: '/reviews' } as any)
-          }}
-        >
-          {t('nav.inbox.openReviews')}
-        </button>
-        <button
-          type="button"
-          className="inbox-drawer__footer-link"
-          data-testid="inbox-drawer-open-clarify"
-          onClick={() => {
-            onClose()
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            void navigate({ to: '/clarify' } as any)
-          }}
-        >
-          {t('nav.inbox.openClarify')}
-        </button>
-      </div>
+  const footer = (
+    <div className="inbox-dialog__footer">
+      <button
+        type="button"
+        className="btn btn--ghost btn--sm"
+        data-testid="inbox-drawer-open-reviews"
+        onClick={() => navigateAndClose({ to: '/reviews' })}
+      >
+        {t('nav.inbox.openReviews')}
+      </button>
+      <button
+        type="button"
+        className="btn btn--ghost btn--sm"
+        data-testid="inbox-drawer-open-clarify"
+        onClick={() => navigateAndClose({ to: '/clarify' })}
+      >
+        {t('nav.inbox.openClarify')}
+      </button>
     </div>
   )
 
-  return createPortal(overlay, document.body)
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={t('nav.inbox.label')}
+      triggerRef={triggerRef}
+      initialFocusRef={selectedOptionRef}
+      panelClassName="inbox-dialog"
+      data-testid="inbox-drawer"
+      footer={footer}
+    >
+      <div className="inbox-dialog__summary">
+        <div className="inbox-dialog__summary-copy">
+          <p className="inbox-dialog__subtitle">{t('nav.inbox.subtitle')}</p>
+        </div>
+        {view.partial ? (
+          <span className="status-badge inbox-dialog__total">{t('nav.inbox.partial')}</span>
+        ) : selectedCount !== undefined ? (
+          <span className="status-badge inbox-dialog__total">
+            {t('nav.inbox.total', { n: selectedCount })}
+          </span>
+        ) : null}
+      </div>
+
+      <Segmented
+        value={tab}
+        onChange={setTab}
+        options={options}
+        ariaLabel={t('nav.inbox.filterAria')}
+        className="inbox-dialog__filters"
+        activeOptionRef={selectedOptionRef}
+      />
+
+      <InboxFeedErrors
+        tab={tab}
+        reviewError={reviews.error}
+        clarifyError={clarify.error}
+        workgroupError={workgroups.error}
+        retryReviews={() => void reviews.refetch()}
+        retryClarify={() => void clarify.refetch()}
+        retryWorkgroups={() => void workgroups.refetch()}
+      />
+
+      {view.state === 'loading' && (
+        <div className="inbox-dialog__state">
+          <LoadingState size="compact" label={t('nav.inbox.loading')} data-testid="inbox-loading" />
+        </div>
+      )}
+
+      {view.state === 'empty' && (
+        <div className="inbox-dialog__state">
+          <EmptyState
+            size="compact"
+            title={t('nav.inbox.empty')}
+            description={t('nav.inbox.emptyHint')}
+            icon={<InboxEmptyIcon />}
+          />
+        </div>
+      )}
+
+      {view.state === 'content' && (
+        <div className="inbox-dialog__list">
+          {view.workgroup !== null && (
+            <button
+              key={view.workgroup.rowKey}
+              type="button"
+              className="inbox-dialog__item"
+              data-testid="inbox-row-workgroups"
+              onClick={() => navigateAndClose({ to: '/tasks' })}
+            >
+              <span className="inbox-dialog__item-meta">
+                <span className="inbox-dialog__kind inbox-dialog__kind--wg" data-kind="wg">
+                  {t('nav.inbox.wgKind')}
+                </span>
+                <span className="inbox-dialog__workgroup-count">
+                  {t('nav.inbox.total', { n: view.workgroup.total })}
+                </span>
+              </span>
+              <span className="inbox-dialog__item-title">
+                {t('nav.inbox.wgRow', { count: view.workgroup.total })}
+              </span>
+              <span className="inbox-dialog__item-source">
+                <span className="inbox-dialog__task-name">{t('nav.group.tasks')}</span>
+                <span
+                  className="inbox-dialog__context"
+                  data-testid="inbox-row-workgroups-breakdown"
+                >
+                  {t('nav.inbox.wgBreakdown', {
+                    d: view.workgroup.deliveries,
+                    g: view.workgroup.gates,
+                  })}
+                </span>
+              </span>
+              <span className="inbox-dialog__chevron" aria-hidden="true">
+                ›
+              </span>
+            </button>
+          )}
+
+          {view.items.map((item) => (
+            <InboxItemRow
+              key={`${item.kind}-${item.rowKey}`}
+              item={item}
+              onOpen={() =>
+                navigateAndClose(
+                  item.kind === 'review'
+                    ? {
+                        to: '/reviews/$nodeRunId',
+                        params: { nodeRunId: item.navigationId },
+                      }
+                    : {
+                        to: '/clarify/$nodeRunId',
+                        params: { nodeRunId: item.navigationId },
+                      },
+                )
+              }
+            />
+          ))}
+        </div>
+      )}
+    </Dialog>
+  )
 }
 
-interface InboxItem {
-  kind: 'review' | 'clarify'
-  /**
-   * Stable, row-unique identifier used for the React `key` and the row's
-   * `data-testid`. For reviews this is `nodeRunId` (unique per pending
-   * review); for clarify this is the session `id` rather than
-   * `clarifyNodeRunId`, because a single node-run can have several
-   * awaiting sessions across loop iterations / retries.
-   */
-  rowKey: string
-  /** Navigation target — `nodeRunId` for both kinds. */
-  id: string
-  taskId: string
-  /** RFC-037: joined `tasks.name`. Rendered as a chip in the row. */
-  taskName: string
-  title: string
-  subtitle: string
-  createdAt: number
+interface InboxFeedErrorsProps {
+  tab: InboxTab
+  reviewError: unknown | null
+  clarifyError: unknown | null
+  workgroupError: unknown | null
+  retryReviews: () => void
+  retryClarify: () => void
+  retryWorkgroups: () => void
 }
 
-function inboxTabLabelKey(k: InboxTab): string {
-  switch (k) {
+function InboxFeedErrors(props: InboxFeedErrorsProps) {
+  const { t } = useTranslation()
+  const errors = [
+    (props.tab === 'all' || props.tab === 'reviews') && props.reviewError !== null
+      ? {
+          key: 'reviews',
+          error: props.reviewError,
+          message: t('nav.inbox.errorReviews'),
+          feedLabel: t('nav.inbox.tabReviews'),
+          retry: props.retryReviews,
+        }
+      : null,
+    (props.tab === 'all' || props.tab === 'clarify') && props.clarifyError !== null
+      ? {
+          key: 'clarify',
+          error: props.clarifyError,
+          message: t('nav.inbox.errorClarify'),
+          feedLabel: t('nav.inbox.tabClarify'),
+          retry: props.retryClarify,
+        }
+      : null,
+    props.tab === 'all' && props.workgroupError !== null
+      ? {
+          key: 'workgroups',
+          error: props.workgroupError,
+          message: t('nav.inbox.errorWorkgroups'),
+          feedLabel: t('nav.inbox.wgKind'),
+          retry: props.retryWorkgroups,
+        }
+      : null,
+  ].filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+
+  if (errors.length === 0) return null
+
+  return (
+    <div className="inbox-dialog__errors">
+      {errors.map((entry) => (
+        <ErrorBanner
+          key={entry.key}
+          error={entry.error}
+          message={entry.message}
+          action={
+            <button
+              type="button"
+              className="btn btn--ghost btn--xs"
+              aria-label={t('nav.inbox.retryFeed', { feed: entry.feedLabel })}
+              onClick={entry.retry}
+            >
+              {t('nav.inbox.retry')}
+            </button>
+          }
+        />
+      ))}
+    </div>
+  )
+}
+
+function InboxItemRow({ item, onOpen }: { item: InboxItem; onOpen: () => void }) {
+  const { t } = useTranslation()
+  const kindLabel = t(inboxKindLabelKey(item.kind))
+  const taskLabel =
+    item.taskName.length > 0 ? item.taskName : t('nav.inbox.sourceTask', { taskId: item.taskId })
+
+  return (
+    <button
+      type="button"
+      className="inbox-dialog__item"
+      data-testid={`inbox-row-${item.kind}-${item.rowKey}`}
+      onClick={onOpen}
+    >
+      <span className="inbox-dialog__item-meta">
+        <span
+          className={`inbox-dialog__kind inbox-dialog__kind--${item.kind}`}
+          data-kind={item.kind}
+        >
+          {kindLabel}
+        </span>
+        <span className="inbox-dialog__time">
+          <RelativeTime ts={item.createdAt} data-testid={`inbox-row-time-${item.rowKey}`} />
+        </span>
+      </span>
+      <span className="inbox-dialog__item-title">{item.title}</span>
+      <span className="inbox-dialog__item-source">
+        <span
+          className="inbox-dialog__task-name"
+          data-testid="inbox-row-task-name"
+          title={item.taskId}
+        >
+          {taskLabel}
+        </span>
+        <span className="inbox-dialog__context">{item.context}</span>
+      </span>
+      <span className="inbox-dialog__chevron" aria-hidden="true">
+        ›
+      </span>
+    </button>
+  )
+}
+
+function inboxTabLabelKey(tab: InboxTab): string {
+  switch (tab) {
     case 'all':
       return 'nav.inbox.tabAll'
     case 'reviews':
@@ -337,14 +380,10 @@ function inboxKindLabelKey(kind: InboxItem['kind']): string {
   }
 }
 
-function ErrorRow({ message, onRetry }: { message: string; onRetry: () => void }) {
-  const { t } = useTranslation()
+function InboxEmptyIcon() {
   return (
-    <div className="inbox-drawer__error error-box" role="alert">
-      <span>{message}</span>
-      <button type="button" className="btn btn--xs" onClick={onRetry}>
-        {t('nav.inbox.retry')}
-      </button>
-    </div>
+    <span className="inbox-dialog__empty-icon">
+      <InboxIcon size={32} strokeWidth={1.6} />
+    </span>
   )
 }
