@@ -14,7 +14,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import type { MemorySummary } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { MemoryPendingBadge } from '../src/components/shell/MemoryPendingBadge'
@@ -37,7 +37,7 @@ function mkSum(overrides: Partial<MemorySummary> = {}): MemorySummary {
 }
 
 function installFetch(
-  meResponse: { permissions: string[] },
+  meResponse: { permissions: string[]; role?: 'admin' | 'user' },
   candidates: MemorySummary[],
   fusionCount = 0,
 ): { urls: string[] } {
@@ -52,7 +52,7 @@ function installFetch(
             id: 'u',
             username: 'u',
             displayName: 'u',
-            role: 'admin',
+            role: meResponse.role ?? 'admin',
             status: 'active',
           },
           source: 'session',
@@ -97,7 +97,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  document.body.innerHTML = ''
+  cleanup()
   vi.restoreAllMocks()
 })
 
@@ -122,7 +122,10 @@ describe('MemoryPendingBadge', () => {
   })
 
   test('non-admin sees no badge (and no /api/memories fetch fires)', async () => {
-    const { urls } = installFetch({ permissions: ['memory:read'] }, [mkSum(), mkSum({ id: 'm2' })])
+    const { urls } = installFetch({ permissions: ['memory:read'], role: 'user' }, [
+      mkSum(),
+      mkSum({ id: 'm2' }),
+    ])
     renderBadge()
     // Allow react-query a tick to consider firing the candidate query.
     await new Promise((r) => setTimeout(r, 20))
@@ -141,7 +144,7 @@ describe('MemoryPendingBadge', () => {
   test('RFC-121: non-admin owner with a pending fusion sees the badge', async () => {
     // No memory:approve → candidate query stays disabled (count 0), but the
     // owner-scoped fusion count (3) still lights the Memory badge.
-    installFetch({ permissions: ['memory:read'] }, [], 3)
+    installFetch({ permissions: ['memory:read'], role: 'user' }, [], 3)
     renderBadge()
     await waitFor(() => {
       expect(screen.getByTestId('nav-memory-badge').textContent).toBe('3')

@@ -106,8 +106,10 @@ export async function listDrafts(
   })
 }
 
-/** Test helper — clears the store so suites don't leak between cases. */
-export async function clearAllDraftsForTests(): Promise<void> {
+/** Clears the ENTIRE review draft store. Used on logout (wipe the prior
+ *  account's private drafts on a shared browser — RFC-099 audit) and by test
+ *  suites to avoid leaking between cases. */
+export async function clearAllReviewDrafts(): Promise<void> {
   const db = await openDb()
   if (db === null) return
   return new Promise((resolve) => {

@@ -141,8 +141,10 @@ export async function listClarifyDrafts(
   })
 }
 
-/** Test helper — clears the clarify store so suites don't leak between cases. */
-export async function clearAllClarifyDraftsForTests(): Promise<void> {
+/** Clears the ENTIRE clarify draft store. Used on logout (wipe the prior
+ *  account's private drafts on a shared browser — RFC-099 audit) and by test
+ *  suites to avoid leaking between cases. */
+export async function clearAllClarifyDrafts(): Promise<void> {
   const db = await openDb()
   if (db === null) return
   return new Promise((resolve) => {

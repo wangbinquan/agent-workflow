@@ -22,7 +22,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import type { FusionPendingCount, MemorySummary } from '@agent-workflow/shared'
 import { api } from '@/api/client'
-import { usePermission } from '@/hooks/useActor'
+import { useIsAdmin } from '@/hooks/useActor'
 
 interface ListResponse {
   items: MemorySummary[]
@@ -32,7 +32,7 @@ export function MemoryPendingBadge() {
   const { t } = useTranslation()
   // Memory-candidate approval stays admin-gated: only admins fetch + count
   // candidates (a non-admin never fires this request).
-  const isAdmin = usePermission('memory:approve')
+  const isAdmin = useIsAdmin()
   const candidates = useQuery<ListResponse>({
     queryKey: ['memories', 'pending-count'],
     queryFn: ({ signal }) =>

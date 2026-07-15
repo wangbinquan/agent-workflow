@@ -22,7 +22,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { ClarifyAnswer } from '@agent-workflow/shared'
 import {
   clarifyDraftKey,
-  clearAllClarifyDraftsForTests,
+  clearAllClarifyDrafts,
   deleteClarifyDraft,
   getClarifyDraft,
   listClarifyDrafts,
@@ -45,7 +45,7 @@ const SAMPLE: ClarifyAnswer[] = [
 ]
 
 afterEach(async () => {
-  await clearAllClarifyDraftsForTests()
+  await clearAllClarifyDrafts()
 })
 
 describe('clarifyDraftKey', () => {

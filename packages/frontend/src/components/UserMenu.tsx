@@ -5,11 +5,14 @@
 // canonical Settings entry, so duplicating it inside this menu would
 // just be visual noise.
 
+import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api/client'
 import { useActor, usePermission } from '@/hooks/useActor'
+import { clearAllClarifyDrafts } from '@/lib/clarify/draftStore'
+import { clearAllReviewDrafts } from '@/lib/review/draftStore'
 import { clearToken, getToken, subscribeAuth } from '@/stores/auth'
 
 export function UserMenu() {
@@ -17,6 +20,7 @@ export function UserMenu() {
   const { t } = useTranslation()
   const isAdmin = usePermission('users:read')
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -36,6 +40,14 @@ export function UserMenu() {
       /* ignore */
     }
     clearToken()
+    // Wipe all client-side private state so a shared browser doesn't leak the
+    // prior account's data to the next login: React Query caches (resource
+    // lists/details, ACL member lists, task data) and the IDB answer drafts are
+    // keyed WITHOUT the account id, so stale-while-revalidate would otherwise
+    // flash the previous user's private data before the refetch 403s (RFC-099
+    // audit).
+    queryClient.clear()
+    await Promise.all([clearAllClarifyDrafts(), clearAllReviewDrafts()])
     setOpen(false)
     navigate({ to: '/auth' })
   }
