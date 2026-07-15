@@ -100,26 +100,17 @@ function stripComments(src: string): string {
     }
     if (escape) {
       escape = false
-      out[outIdx++] = inString !== null && inString !== '`' ? ' ' : c
+      out[outIdx++] = c
       continue
     }
     if (inString) {
       if (c === '\\') {
         escape = true
-        out[outIdx++] = inString !== '`' ? ' ' : c
-        continue
-      }
-      if (c === inString) {
-        inString = null
         out[outIdx++] = c
         continue
       }
-      // Plain '…' / "…" string contents are data, not code — blank them so
-      // prose inside a message (e.g. "cannot add the system user as a
-      // member", RFC-099 bda0d4fb) is never mis-scanned as an `as` cast.
-      // Template literals keep their contents: `${…}` interpolation can
-      // carry real code this scan must still see.
-      out[outIdx++] = inString !== '`' ? (c === '\n' ? '\n' : ' ') : c
+      if (c === inString) inString = null
+      out[outIdx++] = c
       continue
     }
     if (c === '"' || c === "'" || c === '`') {
@@ -170,6 +161,45 @@ function listRouteFiles(): string[] {
 
 const CAST_RE = /\bas\s+([A-Za-z_][A-Za-z0-9_]*)/g
 
+/**
+ * Blank the contents of single/double-quoted string literals on ONE line
+ * before cast matching, so prose inside a message string (e.g. "cannot add
+ * the system user as a member", RFC-099 bda0d4fb) never scans as an `as`
+ * cast. Escape-aware and PAIR-REQUIRED: an unpaired quote (regex literal
+ * like /["]/) blanks nothing, so this step can only produce a false
+ * POSITIVE (a flagged line someone inspects) — it can never hide a real
+ * cast that sits outside a string. The stateful lexer above deliberately
+ * does NOT blank strings for the same reason: a phantom string opened by a
+ * regex-literal quote would swallow real code across lines.
+ */
+function blankLineStrings(line: string): string {
+  return line.replace(/'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"/g, (m) =>
+    m.length <= 2 ? m : m[0]! + ' '.repeat(m.length - 2) + m[m.length - 1]!,
+  )
+}
+
+describe('blankLineStrings — cast-scan string blanking', () => {
+  test('blanks prose inside quoted strings (the RFC-099 bda0d4fb false positive)', () => {
+    const line = "throw new ValidationError('x', 'cannot add the system user as a member')"
+    expect(blankLineStrings(line)).not.toMatch(/\bas\s+a\b/)
+  })
+
+  test('an unpaired quote (regex literal like /["]/) blanks nothing — later casts stay visible', () => {
+    const line = 'const m = (raw.match(/["]/) ?? body) as UnsafeBody'
+    expect(blankLineStrings(line)).toContain('as UnsafeBody')
+  })
+
+  test('escaped quotes do not end the pair early', () => {
+    const line = "t('it\\'s counted as a member here')"
+    expect(blankLineStrings(line)).not.toMatch(/\bas\s+a\b/)
+  })
+
+  test('a real cast between two string args survives blanking', () => {
+    const line = `foo('a', body as UnsafeBody, "b")`
+    expect(blankLineStrings(line)).toContain('as UnsafeBody')
+  })
+})
+
 describe('RFC-054 W1-7 — routes/*.ts must not use `as T` to bypass Zod', () => {
   test('every `as Word` cast in route handlers is allowlisted or banned', () => {
     const files = listRouteFiles()
@@ -182,9 +212,12 @@ describe('RFC-054 W1-7 — routes/*.ts must not use `as T` to bypass Zod', () =>
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i]!
         if (isImportishLine(line, lines, i)) continue
+        // Match against the string-blanked view; keep snippet/allowlist keys
+        // on the original line so FILE_LINE_ALLOWLIST entries stay stable.
+        const scanLine = blankLineStrings(line)
         CAST_RE.lastIndex = 0
         let m: RegExpExecArray | null
-        while ((m = CAST_RE.exec(line)) !== null) {
+        while ((m = CAST_RE.exec(scanLine)) !== null) {
           const target = m[1]!
           if (ALLOWED_CAST_TARGETS.has(target)) continue
           const snippet = line.trim().slice(0, 80)
