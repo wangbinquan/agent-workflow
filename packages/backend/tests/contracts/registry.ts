@@ -21,7 +21,7 @@
 // existing entry is non-breaking.
 
 import { z } from 'zod'
-import { ErrorResponseSchema } from '@agent-workflow/shared'
+import { ErrorResponseSchema, OverviewResponseSchema } from '@agent-workflow/shared'
 import type { ContractHarness } from './harness'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
@@ -419,6 +419,15 @@ export const ENDPOINTS: EndpointSpec[] = [
     method: 'GET',
     path: '/api/runtimes/status',
     happy: { schema: z.object({ runtimes: z.array(z.object({}).passthrough()) }) },
+  },
+
+  // ---- overview (RFC-190) ----
+  // Homepage capability portal: per-actor-visible resource counts + 7d task
+  // stats. Validated against the real shared schema (backend writes it).
+  {
+    method: 'GET',
+    path: '/api/overview',
+    happy: { schema: OverviewResponseSchema },
   },
   { method: 'POST', path: '/api/runtimes/probe' },
   { method: 'POST', path: '/api/runtimes' },

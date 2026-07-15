@@ -23,6 +23,7 @@ import { mountMcpRoutes } from '@/routes/mcps'
 import { mountMemoryRoutes } from '@/routes/memories'
 import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
 import { mountTaskFeedbackRoutes } from '@/routes/taskFeedback'
+import { mountOverviewRoutes } from '@/routes/overview'
 import { mountOidcRoutes } from '@/routes/oidc'
 import { mountOidcAuthRoutes } from '@/routes/oidc-auth'
 import { mountPlantumlRoutes } from '@/routes/plantuml'
@@ -184,6 +185,7 @@ export function createApp(deps: AppDeps): Hono {
   mountPlantumlRoutes(app, deps)
   mountRuntimeRoutes(app, deps)
   mountRuntimesRoutes(app, deps)
+  mountOverviewRoutes(app, deps) // RFC-190
   mountAgentRoutes(app, deps)
   mountMcpRoutes(app, deps)
   mountPluginRoutes(app, deps)

@@ -9,6 +9,7 @@
 // RFC-124 only wires the task-questions board onto it; clarify / memory /
 // resource cards stay on their bespoke CSS and migrate in a follow-up.
 
+import { Link, type LinkProps } from '@tanstack/react-router'
 import type { ReactElement, ReactNode } from 'react'
 
 export interface CardProps {
@@ -22,6 +23,14 @@ export interface CardProps {
   interactive?: boolean
   /** Accent-tinted background + border (e.g. selected). Default false. */
   highlighted?: boolean
+  /**
+   * RFC-190: render the card root as a router `<Link to>` instead of a div —
+   * the whole card becomes one navigation affordance (capability tiles).
+   * Same class chain and slots; omit for the classic div card.
+   */
+  to?: LinkProps['to']
+  /** Router search params for the link root (e.g. `/memory` deep-link tab). */
+  search?: LinkProps['search']
   /** Extra classes appended after the standard `.card` chain. */
   className?: string
   'data-testid'?: string
@@ -37,11 +46,28 @@ export function Card(props: CardProps): ReactElement {
   // render an empty `.card__header` / `.card__footer` wrapper (RFC-124 Codex P3).
   const hasHeader = props.header != null && props.header !== false
   const hasFooter = props.footer != null && props.footer !== false
-  return (
-    <div className={classes.join(' ')} data-testid={props['data-testid']}>
+  const inner = (
+    <>
       {hasHeader && <div className="card__header">{props.header}</div>}
       <div className="card__body">{props.children}</div>
       {hasFooter && <div className="card__footer">{props.footer}</div>}
+    </>
+  )
+  if (props.to !== undefined) {
+    return (
+      <Link
+        to={props.to}
+        search={props.search}
+        className={classes.join(' ')}
+        data-testid={props['data-testid']}
+      >
+        {inner}
+      </Link>
+    )
+  }
+  return (
+    <div className={classes.join(' ')} data-testid={props['data-testid']}>
+      {inner}
     </div>
   )
 }

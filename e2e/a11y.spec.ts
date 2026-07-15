@@ -196,12 +196,48 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     await expectNoCriticalOrSeriousAxeViolations(page, '/settings')
   })
 
-  test('/ (homepage / dashboard) passes a11y', async ({ page }) => {
+  test('/ first-run (onboarding) passes a11y', async ({ page }) => {
     await primeAuth(page, daemon)
     await page.goto(`${daemon.baseUrl}/`)
-    // Homepage layout — wait for the main content region. The shell mounts
-    // even without data, so don't anchor on data-dependent content.
+    // On a clean daemon `/` renders the first-run Onboarding (RFC-190 split:
+    // the seeded dashboard gets its own case below).
     await page.waitForLoadState('networkidle')
-    await expectNoCriticalOrSeriousAxeViolations(page, '/')
+    await expectNoCriticalOrSeriousAxeViolations(page, '/ (onboarding)')
+  })
+
+  // RFC-190: the capability-portal homepage (pipeline hero SVG + tiles +
+  // task feed) only renders non-first-run — seed one agent + workflow so
+  // the axe gate actually covers it. Runs AFTER the onboarding case
+  // (declaration order) so that one still sees the clean daemon.
+  test('/ (homepage / dashboard, seeded) passes a11y', async ({ page }) => {
+    const headers = {
+      Authorization: `Bearer ${daemon.token}`,
+      'Content-Type': 'application/json',
+    }
+    await fetch(`${daemon.baseUrl}/api/agents`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: 'a11y-stub-agent',
+        description: 'e2e seed',
+        outputs: ['answer'],
+        readonly: true,
+        bodyMd: '',
+      }),
+    })
+    await fetch(`${daemon.baseUrl}/api/workflows`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: 'a11y-stub-workflow',
+        description: 'e2e seed',
+        definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
+      }),
+    })
+    await primeAuth(page, daemon)
+    await page.goto(`${daemon.baseUrl}/`)
+    await expect(page.locator('[data-testid="homepage"]')).toBeVisible()
+    await page.waitForLoadState('networkidle')
+    await expectNoCriticalOrSeriousAxeViolations(page, '/ (seeded homepage)')
   })
 })

@@ -24,7 +24,7 @@ import { existsSync, realpathSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { ulid } from 'ulid'
 
-import { buildActor, type Actor } from '@/auth/actor'
+import { buildActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { scheduledTasks, users } from '@/db/schema'
 import { assertWorkflowLaunchable } from '@/services/taskLaunchGate'
@@ -158,6 +158,19 @@ function assertNoRequiredUploadInput(wf: LaunchableWorkflow): void {
 export async function listScheduledTasks(db: DbClient): Promise<ScheduledTask[]> {
   const rows = await db.select().from(scheduledTasks)
   return rows.map(rowToScheduledTask)
+}
+
+/**
+ * Read visibility: admins (tasks:read:all) see all; otherwise owner only.
+ * Single source shared by the list/detail routes and /api/overview counting
+ * (RFC-190) — scheduled tasks are member-based-private like tasks, NOT the
+ * RFC-099 five-type ACL.
+ */
+export function canViewScheduledTask(actor: Actor, row: ScheduledTask): boolean {
+  if (actor.permissions.has('tasks:read:all')) return true
+  if (row.ownerUserId === actor.user.id) return true
+  if (row.ownerUserId === SYSTEM_USER_ID && actor.user.id === SYSTEM_USER_ID) return true
+  return false
 }
 
 export async function getScheduledTask(db: DbClient, id: string): Promise<ScheduledTask | null> {

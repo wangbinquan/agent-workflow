@@ -1,5 +1,11 @@
 // RFC-032 PR3 Homepage — locks the three-section structure + greeting
 // + start-task button + section counts.
+// RFC-190 migration: the three sections live on as sub-groups inside the
+// merged TaskFeed card — every RFC-032 lock below still holds verbatim
+// (testids, inbox-above-running order, inbox action stays a <button>).
+// New RFC-190 surfaces (pulse line, capability tiles) get their own block
+// at the bottom; deep component behavior is in capability-grid.test.tsx /
+// pipeline-hero.test.tsx.
 //
 // Why this test exists: PR3 replaces the previous `<Navigate to="/agents">`
 // fallback with a task-driven dashboard. A regression that drops one of
@@ -51,9 +57,31 @@ function mockEndpoints(opts: {
   reviews?: Array<{ nodeRunId: string; title?: string }>
   clarify?: Array<{ clarifyNodeRunId: string }>
   runtime?: 'ready' | 'missing' | 'checking'
+  /** RFC-190: /api/overview payload (defaults to a small healthy fixture). */
+  overview?: unknown
 }): void {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
     const s = typeof url === 'string' ? url : url.toString()
+    // RFC-190: capability tiles + hero pulse read the aggregate endpoint.
+    if (s.includes('/api/overview')) {
+      return json(
+        opts.overview ?? {
+          resources: {
+            agents: 4,
+            skills: 2,
+            mcps: 1,
+            plugins: 0,
+            workflows: 3,
+            workgroups: 1,
+            repos: 2,
+            scheduled: 1,
+            memories: 5,
+          },
+          tasks: { running: 1, awaiting: 2, done7d: 4, failed7d: 1 },
+          generatedAt: '2026-07-15T00:00:00.000Z',
+        },
+      )
+    }
     // RFC-135: the hero reads the registry status endpoint (one entry per
     // enabled runtime, version-gate free) instead of /api/runtime/opencode.
     if (s.includes('/api/runtimes/status')) {
@@ -302,5 +330,64 @@ describe('RFC-032 Homepage dashboard', () => {
     ;(link as HTMLButtonElement).click()
     expect(inboxStore.getInboxOpen()).toBe(true)
     inboxStore.setInboxOpen(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-190 — capability-portal surfaces on the homepage: the hero pulse line
+// (task stats from /api/overview) and the six-tile capability grid. Deep tile
+// behavior (null counts, hrefs, intro variant) lives in
+// capability-grid.test.tsx; here we lock that the portal actually renders on
+// the composed homepage next to the preserved task feed.
+// ---------------------------------------------------------------------------
+describe('RFC-190 capability portal on the homepage', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  test('pulse line renders running/awaiting/7d stats with success rate', async () => {
+    mockEndpoints({})
+    wrap(<Homepage />)
+    const pulse = await screen.findByTestId('homepage-pulse')
+    // 4 done / (4 done + 1 failed) → 80%.
+    expect(pulse.textContent ?? '').toMatch(/80\s*%|80%/)
+    expect(pulse.textContent ?? '').toMatch(/1/)
+  })
+
+  test('pulse line is omitted when tasks stats are null (no read permission)', async () => {
+    mockEndpoints({
+      overview: {
+        resources: {
+          agents: 0,
+          skills: 0,
+          mcps: 0,
+          plugins: 0,
+          workflows: 0,
+          workgroups: 0,
+          repos: 0,
+          scheduled: 0,
+          memories: 0,
+        },
+        tasks: null,
+        generatedAt: '2026-07-15T00:00:00.000Z',
+      },
+    })
+    wrap(<Homepage />)
+    await screen.findByTestId('homepage-section-running')
+    expect(screen.queryByTestId('homepage-pulse')).toBeNull()
+  })
+
+  test('six capability tiles render with live counts + pipeline hero present', async () => {
+    mockEndpoints({})
+    wrap(<Homepage />)
+    // Count nodes exist from first paint with "—" — wait for fetched values.
+    await waitFor(() => {
+      expect(screen.getByTestId('home-cap-agents-count').textContent).toBe('4')
+    })
+    expect(screen.getByTestId('home-cap-workflows-count').textContent).toBe('3')
+    expect(screen.getByTestId('home-cap-memory-count').textContent).toBe('5')
+    expect(screen.getByTestId('pipeline-hero')).toBeTruthy()
+    // Secondary CTA next to start-task.
+    expect(screen.getByTestId('homepage-new-workflow').getAttribute('href')).toBe('/workflows')
   })
 })

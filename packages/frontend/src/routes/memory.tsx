@@ -14,7 +14,7 @@
 // approval queue).
 
 import { createRoute } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Route as RootRoute } from './__root'
 import { MemoryApprovalQueue } from '@/components/memory/MemoryApprovalQueue'
@@ -36,6 +36,19 @@ export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/memory',
   component: MemoryPage,
+  // RFC-190: optional `?tab=` deep-link (the homepage memory tile lands on
+  // `all`, whose default view is the approved pool the tile counts). Unknown
+  // or absent values keep the classic approval-queue default. `focus` is the
+  // pre-existing RFC-041 deep-link param (written by distill-job
+  // CandidatesList) — passed through so those links keep compiling/working.
+  validateSearch: (search: Record<string, unknown>): { tab?: MemoryTab; focus?: string } => {
+    const out: { tab?: MemoryTab; focus?: string } = {}
+    if (typeof search.tab === 'string' && (TABS as string[]).includes(search.tab)) {
+      out.tab = search.tab as MemoryTab
+    }
+    if (typeof search.focus === 'string') out.focus = search.focus
+    return out
+  },
 })
 
 function MemoryPage() {
@@ -45,7 +58,13 @@ function MemoryPage() {
   // actor's role instead of the permission point.
   const actor = useActor()
   const isAdmin = actor.data?.user.role === 'admin'
-  const [tab, setTab] = useState<MemoryTab>('approval-queue')
+  const search = Route.useSearch()
+  const [tab, setTab] = useState<MemoryTab>(search.tab ?? 'approval-queue')
+  // A same-page navigation with a different ?tab (e.g. clicking the homepage
+  // tile while already on /memory) re-syncs the local tab state.
+  useEffect(() => {
+    if (search.tab !== undefined) setTab(search.tab)
+  }, [search.tab])
   const [newDialogOpen, setNewDialogOpen] = useState(false)
 
   // Live updates for the entire surface.

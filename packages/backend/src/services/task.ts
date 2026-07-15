@@ -33,7 +33,7 @@ import type {
   WorkflowDefinition,
   WorkflowSyncPreview,
 } from '@agent-workflow/shared'
-import { and, asc, count, desc, eq, gt, inArray, isNull, ne, or } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, inArray, isNull, ne, or, type SQL } from 'drizzle-orm'
 import { existsSync, mkdirSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
@@ -2482,6 +2482,33 @@ export interface ListTasksFilters {
   }
 }
 
+/**
+ * The member-visibility predicate: owner OR task_collaborators membership
+ * ('mine'), or strictly shared-with-me-but-not-mine ('shared'). Single source
+ * shared by listTasks and /api/overview task stats (RFC-190) so the two can
+ * never drift.
+ */
+export function taskVisibilityCondition(
+  db: DbClient,
+  visibility: { actorUserId: string; scope: 'mine' | 'shared' },
+): SQL<unknown> {
+  const { actorUserId, scope } = visibility
+  const ownerEq = eq(tasks.ownerUserId, actorUserId)
+  const collabExists = inArray(
+    tasks.id,
+    db
+      .select({ id: taskCollaborators.taskId })
+      .from(taskCollaborators)
+      .where(eq(taskCollaborators.userId, actorUserId)),
+  )
+  if (scope === 'shared') {
+    // Strict "shared with me but not mine" — exclude rows the actor owns.
+    return and(collabExists, ne(tasks.ownerUserId, actorUserId))!
+  }
+  // 'mine' — owner OR collaborator. Either alone satisfies the gate.
+  return or(ownerEq, collabExists)!
+}
+
 export async function listTasks(
   db: DbClient,
   filters: ListTasksFilters = {},
@@ -2493,22 +2520,7 @@ export async function listTasks(
   if (filters.scheduledTaskId !== undefined)
     conditions.push(eq(tasks.scheduledTaskId, filters.scheduledTaskId))
   if (filters.visibility) {
-    const { actorUserId, scope } = filters.visibility
-    const ownerEq = eq(tasks.ownerUserId, actorUserId)
-    const collabExists = inArray(
-      tasks.id,
-      db
-        .select({ id: taskCollaborators.taskId })
-        .from(taskCollaborators)
-        .where(eq(taskCollaborators.userId, actorUserId)),
-    )
-    if (scope === 'shared') {
-      // Strict "shared with me but not mine" — exclude rows the actor owns.
-      conditions.push(and(collabExists, ne(tasks.ownerUserId, actorUserId)))
-    } else {
-      // 'mine' — owner OR collaborator. Either alone satisfies the gate.
-      conditions.push(or(ownerEq, collabExists)!)
-    }
+    conditions.push(taskVisibilityCondition(db, filters.visibility))
   }
   const where =
     conditions.length === 0

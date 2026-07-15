@@ -153,3 +153,28 @@ describe('Onboarding render', () => {
     expect(screen.getByRole('alert').textContent).toContain('workflow-yaml-invalid')
   })
 })
+
+// ---------------------------------------------------------------------------
+// RFC-190 — first-run hero + capability intro grid. The four-step walkthrough
+// above stays byte-identical; the renewal only ADDS the pipeline hero and the
+// count-less intro tiles (which must not fire /api/overview on a fresh,
+// unauthenticated install).
+// ---------------------------------------------------------------------------
+describe('RFC-190 Onboarding renewal', () => {
+  test('renders the pipeline hero + intro capability grid without counts', () => {
+    const spy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }),
+      )
+    wrap(<Onboarding />)
+    expect(screen.getByTestId('onboarding-hero')).toBeTruthy()
+    expect(screen.getByTestId('pipeline-hero')).toBeTruthy()
+    expect(screen.getByTestId('home-cap-grid')).toBeTruthy()
+    // intro variant: tiles render, counts don't, and no overview request fires
+    expect(screen.getByTestId('home-cap-agents')).toBeTruthy()
+    expect(screen.queryByTestId('home-cap-agents-count')).toBeNull()
+    const overviewCalls = spy.mock.calls.filter((c) => String(c[0]).includes('/api/overview'))
+    expect(overviewCalls.length).toBe(0)
+  })
+})

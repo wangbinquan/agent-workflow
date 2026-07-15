@@ -17,9 +17,15 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { RuntimeStatusEntry, RuntimesStatusResponse } from '@agent-workflow/shared'
+import type {
+  OverviewTasks,
+  RuntimeStatusEntry,
+  RuntimesStatusResponse,
+} from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { pickGreetingKey } from '@/lib/homepage'
+import { PipelineHero } from './PipelineHero'
+import { useOverview } from './useOverview'
 
 export const RUNTIMES_STATUS_HOME_QUERY_KEY = ['runtimes', 'status', 'home'] as const
 
@@ -60,6 +66,11 @@ export function HomepageGreeting() {
     refetchInterval: 60_000,
   })
 
+  // RFC-190: task pulse line under the runtime status (shared /api/overview
+  // query with CapabilityGrid; the whole line is omitted when tasks stats are
+  // unavailable — no permission, still loading, or fetch failed).
+  const overview = useOverview()
+  const pulse = describePulse(t, overview.data?.tasks ?? null)
   const view = describeRuntimes(t, probe)
   const greetingKey = `home.greet.${pickGreetingKey(now)}` as const
 
@@ -88,16 +99,53 @@ export function HomepageGreeting() {
             )}
           </Link>
         </p>
+        {pulse !== null && (
+          <p className="homepage__pulse muted" data-testid="homepage-pulse">
+            {pulse}
+          </p>
+        )}
+        <div className="homepage__cta">
+          <Link
+            to="/tasks/new"
+            className="btn btn--primary homepage__start-task"
+            data-testid="homepage-start-task"
+          >
+            {t('home.startTask')}
+          </Link>
+          <Link to="/workflows" className="btn" data-testid="homepage-new-workflow">
+            {t('home.newWorkflow')}
+          </Link>
+        </div>
       </div>
-      <Link
-        to="/tasks/new"
-        className="btn btn--primary homepage__start-task"
-        data-testid="homepage-start-task"
-      >
-        {t('home.startTask')}
-      </Link>
+      <PipelineHero />
     </header>
   )
+}
+
+/**
+ * RFC-190 — pulse copy: running / awaiting / 7d-done, with the success rate
+ * appended only when the 7d window has outcomes (done+failed > 0). Returns
+ * null when stats are absent so the caller can drop the whole line.
+ */
+function describePulse(
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  tasks: OverviewTasks | null,
+): string | null {
+  if (tasks === null) return null
+  const outcomes = tasks.done7d + tasks.failed7d
+  if (outcomes > 0) {
+    return t('home.pulse.line', {
+      running: tasks.running,
+      awaiting: tasks.awaiting,
+      done: tasks.done7d,
+      rate: Math.round((tasks.done7d / outcomes) * 100),
+    })
+  }
+  return t('home.pulse.lineNoRate', {
+    running: tasks.running,
+    awaiting: tasks.awaiting,
+    done: tasks.done7d,
+  })
 }
 
 function Dot({ severity }: { severity: Severity }) {
@@ -168,4 +216,4 @@ function describeRuntimes(
   }
 }
 
-export const __test__ = { describeRuntimes, itemSeverity, AGGREGATE_THRESHOLD }
+export const __test__ = { describeRuntimes, itemSeverity, AGGREGATE_THRESHOLD, describePulse }

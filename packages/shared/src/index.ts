@@ -21,6 +21,7 @@ export * from './schemas/plugin'
 export * from './schemas/repoBatchImport'
 export * from './schemas/skill'
 export * from './schemas/skillVersion'
+export * from './schemas/overview' // RFC-190
 export * from './schemas/task'
 export * from './schemas/scheduledTask' // RFC-159
 export * from './schemas/taskCollab'

@@ -88,6 +88,28 @@ function mockTasksRuntimeEmpty(): void {
         { status: 200, headers: { 'content-type': 'application/json' } },
       )
     }
+    // RFC-190: the homepage branch fetches /api/overview — the fallback `[]`
+    // is not a legal OverviewResponse, so answer with an empty-but-valid one.
+    if (s.includes('/api/overview')) {
+      return new Response(
+        JSON.stringify({
+          resources: {
+            agents: 0,
+            skills: 0,
+            mcps: 0,
+            plugins: 0,
+            workflows: 0,
+            workgroups: 0,
+            repos: 0,
+            scheduled: 0,
+            memories: 0,
+          },
+          tasks: { running: 0, awaiting: 0, done7d: 0, failed7d: 0 },
+          generatedAt: '2026-07-15T00:00:00.000Z',
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }
     return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })
   })
 }

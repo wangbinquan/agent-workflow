@@ -117,9 +117,48 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await expect(page).toHaveScreenshot('settings.png', SNAPSHOT_OPTS)
   })
 
-  test('/ (homepage / dashboard)', async ({ page }) => {
+  // RFC-190: `/` used to be captured once as "homepage.png", but on this
+  // clean daemon that actually rendered the FIRST-RUN Onboarding page (no
+  // agents/workflows yet) — the dashboard had no visual coverage at all.
+  // Split: first capture the true first-run Onboarding, THEN seed one
+  // agent + workflow (same API seeding as nav-redesign.spec.ts) and capture
+  // the real capability-portal homepage. Declaration order matters: the
+  // onboarding shot must run before anything seeds this daemon.
+  test('/ first-run (onboarding)', async ({ page }) => {
     await primeAuth(page, daemon)
     await page.goto(`${daemon.baseUrl}/`)
+    await page.waitForLoadState('networkidle')
+    await expect(page).toHaveScreenshot('onboarding.png', SNAPSHOT_OPTS)
+  })
+
+  test('/ (homepage / dashboard, seeded non-first-run)', async ({ page }) => {
+    const headers = {
+      Authorization: `Bearer ${daemon.token}`,
+      'Content-Type': 'application/json',
+    }
+    await fetch(`${daemon.baseUrl}/api/agents`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: 'visual-stub-agent',
+        description: 'e2e seed',
+        outputs: ['answer'],
+        readonly: true,
+        bodyMd: '',
+      }),
+    })
+    await fetch(`${daemon.baseUrl}/api/workflows`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: 'visual-stub-workflow',
+        description: 'e2e seed',
+        definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
+      }),
+    })
+    await primeAuth(page, daemon)
+    await page.goto(`${daemon.baseUrl}/`)
+    await expect(page.locator('[data-testid="homepage"]')).toBeVisible()
     await page.waitForLoadState('networkidle')
     await expect(page).toHaveScreenshot('homepage.png', SNAPSHOT_OPTS)
   })

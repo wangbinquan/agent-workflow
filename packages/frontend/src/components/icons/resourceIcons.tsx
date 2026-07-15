@@ -83,3 +83,54 @@ export const AGENT_ICON: ReactNode = (
     <path d="M6.6 10.8h2.8" />
   </IconSvg>
 )
+
+// ---- RFC-190: capability-portal tile icons ------------------------------------
+// Same 16×16 stroke idiom; consumed by the homepage CapabilityGrid (and any
+// future surface that needs a per-resource glyph).
+
+/** Workflow — three nodes joined by edges (a mini pipeline). */
+export const WORKFLOW_ICON: ReactNode = (
+  <IconSvg name="workflow">
+    <rect x="1.8" y="6" width="4" height="4" rx="1" />
+    <rect x="10.2" y="2.2" width="4" height="4" rx="1" />
+    <rect x="10.2" y="9.8" width="4" height="4" rx="1" />
+    <path d="M5.8 8h2.2M8 8V4.2h2.2M8 8v3.8h2.2" />
+  </IconSvg>
+)
+
+/** Workgroup — a leader dot above two member dots. */
+export const WORKGROUP_ICON: ReactNode = (
+  <IconSvg name="workgroup">
+    <circle cx="8" cy="4" r="1.9" />
+    <circle cx="4" cy="11.4" r="1.9" />
+    <circle cx="12" cy="11.4" r="1.9" />
+    <path d="M6.8 5.6 5 9.7M9.2 5.6 11 9.7" />
+  </IconSvg>
+)
+
+/** Memory — a labeled archive box (distilled knowledge). */
+export const MEMORY_ICON: ReactNode = (
+  <IconSvg name="memory">
+    <rect x="2.5" y="2.8" width="11" height="3.2" rx="0.8" />
+    <path d="M3.5 6v6.2a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V6" />
+    <path d="M6.4 8.6h3.2" />
+  </IconSvg>
+)
+
+/** Scheduled — a clock face. */
+export const SCHEDULE_ICON: ReactNode = (
+  <IconSvg name="schedule">
+    <circle cx="8" cy="8" r="5.5" />
+    <path d="M8 4.8V8l2.4 1.6" />
+  </IconSvg>
+)
+
+/** Repo — a git branch glyph. */
+export const REPO_ICON: ReactNode = (
+  <IconSvg name="repo">
+    <circle cx="4.6" cy="3.6" r="1.7" />
+    <circle cx="4.6" cy="12.4" r="1.7" />
+    <circle cx="11.4" cy="6" r="1.7" />
+    <path d="M4.6 5.3v5.4M11.4 7.7c0 2.6-2.6 2.6-5 3.4" />
+  </IconSvg>
+)

@@ -21,7 +21,7 @@ const RUNNING_STATUSES: TaskStatus[] = ['running', 'awaiting_human', 'awaiting_r
 export const RUNNING_LIMIT = 8
 
 interface RunningTaskListProps {
-  /** Total count is computed by the caller (parent <HomepageSection>) so the
+  /** Total count is computed by the caller (parent <TaskFeed> group) so the
    *  badge and the visible row count agree even before render. */
   onCount?: (n: number) => void
 }

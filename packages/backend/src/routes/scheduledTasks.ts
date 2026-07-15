@@ -16,10 +16,11 @@ import {
 import type { ScheduledTask } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 
-import { actorOf, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import {
+  canViewScheduledTask,
   createScheduledTask,
   deleteScheduledTask,
   getScheduledTask,
@@ -28,14 +29,6 @@ import {
   updateScheduledTask,
 } from '@/services/scheduledTasks'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
-
-/** Read visibility: admins (tasks:read:all) see all; otherwise owner only. */
-function canViewScheduledTask(actor: Actor, row: ScheduledTask): boolean {
-  if (actor.permissions.has('tasks:read:all')) return true
-  if (row.ownerUserId === actor.user.id) return true
-  if (row.ownerUserId === SYSTEM_USER_ID && actor.user.id === SYSTEM_USER_ID) return true
-  return false
-}
 
 /** Write authority: owner or an admin. */
 function requireWriteAccess(actor: Actor, row: ScheduledTask): void {

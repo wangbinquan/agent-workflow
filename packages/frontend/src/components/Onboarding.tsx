@@ -9,6 +9,8 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { Agent, Workflow } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
+import { CapabilityGrid } from '@/components/home/CapabilityGrid'
+import { PipelineHero } from '@/components/home/PipelineHero'
 import { DEMO_WORKFLOW_YAML } from '@/fixtures/demo-workflow'
 import { getBaseUrl, getToken } from '@/stores/auth'
 
@@ -72,6 +74,18 @@ export function Onboarding() {
         <h1>{t('onboarding.title')}</h1>
         <p className="page__hint">{t('onboarding.intro')}</p>
       </header>
+
+      {/* RFC-190: first-run hero — the platform's core abstraction drawn as
+          the same animated mini-pipeline the homepage uses, plus a count-less
+          capability intro grid (fresh installs shouldn't see a wall of 0s). */}
+      <section className="onboarding__hero" data-testid="onboarding-hero">
+        <div className="onboarding__hero-text">
+          <h2>{t('onboarding.heroTitle')}</h2>
+          <p className="muted">{t('onboarding.heroIntro')}</p>
+        </div>
+        <PipelineHero />
+      </section>
+      <CapabilityGrid variant="intro" />
 
       <ol className="onboarding__steps">
         <li className="onboarding__step">

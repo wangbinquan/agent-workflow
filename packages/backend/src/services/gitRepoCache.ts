@@ -649,6 +649,20 @@ async function refTaskCount(db: DbClient, url: string): Promise<number> {
   return r[0]?.count ?? 0
 }
 
+/**
+ * RFC-190: cardinality-only count for /api/overview. listCachedRepos runs a
+ * per-repo referencing-task count (1+N queries) + full DTO assembly that a
+ * plain "how many repos" question does not need; the overview oracle test
+ * locks `countCachedRepos == listCachedRepos().length`.
+ */
+export async function countCachedRepos(db: DbClient): Promise<number> {
+  const r = db
+    .select({ count: sql<number>`count(*)`.as('count') })
+    .from(cachedRepos)
+    .all()
+  return r[0]?.count ?? 0
+}
+
 export async function listCachedRepos(db: DbClient): Promise<CachedRepo[]> {
   const rows = db.select().from(cachedRepos).all()
   const out: CachedRepo[] = []
