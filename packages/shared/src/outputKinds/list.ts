@@ -150,6 +150,9 @@ const handler: ParametricOutputKindHandler = {
     const itemKind = ctx.kind.item
     const itemHandler = getHandlerForParsedKind(itemKind)
     const failures: { idx: number; subReason: string; detail?: string }[] = []
+    // RFC-193: keep each item's validate output (body + sourcePath for path
+    // items) so archive-at-emit can reuse this pass's file reads.
+    const itemResults: Array<{ body: string; sourcePath?: string }> = []
     for (let i = 0; i < items.length; i++) {
       const item = items[i]!
       const result: ValidateResult = itemHandler.validate(
@@ -159,6 +162,11 @@ const handler: ParametricOutputKindHandler = {
       )
       if (!result.ok) {
         failures.push({ idx: i, subReason: result.subReason, detail: result.detail })
+      } else {
+        itemResults.push({
+          body: result.body,
+          ...(result.sourcePath !== undefined ? { sourcePath: result.sourcePath } : {}),
+        })
       }
     }
     if (failures.length > 0) {
@@ -174,7 +182,7 @@ const handler: ParametricOutputKindHandler = {
     // Body wire form unchanged: caller still reads `rawContent` for shard
     // splitting / promptRender. We return the trimmed-line-joined form so
     // downstream consumers see a normalized representation.
-    return { ok: true, body: items.join('\n') }
+    return { ok: true, body: items.join('\n'), items: itemResults }
   },
 
   buildRepairBlock({ failures, ports }) {

@@ -46,7 +46,20 @@ export interface ValidateCtx {
 }
 
 export type ValidateResult =
-  | { ok: true; body: string; sourcePath?: string }
+  | {
+      ok: true
+      body: string
+      sourcePath?: string
+      /**
+       * RFC-193: per-item validate outputs for `list<T>` kinds (item handler's
+       * body/sourcePath, in `splitListItems` line order). Set ONLY by the list
+       * handler; single-value kinds never populate it. Lets archive-at-emit
+       * reuse the validation pass's file reads instead of re-running per-item
+       * validation. Single-level by construction — nested lists carrying path
+       * are rejected at declaration (D18, kindParser.isNestedListPathKind).
+       */
+      items?: Array<{ body: string; sourcePath?: string }>
+    }
   | { ok: false; subReason: string; detail: string }
 
 export interface KindFailure {

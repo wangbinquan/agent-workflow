@@ -10,7 +10,11 @@
 // will consume.
 
 import { z } from 'zod'
-import { isRegisteredKindString, isReviewableBodyKindString } from '../kindParser'
+import {
+  isNestedListPathKindString,
+  isRegisteredKindString,
+  isReviewableBodyKindString,
+} from '../kindParser'
 import { PortRefSchema } from './workflow'
 
 // -----------------------------------------------------------------------------
@@ -44,11 +48,23 @@ import { PortRefSchema } from './workflow'
 export const AGENT_OUTPUT_KIND = ['string', 'markdown', 'markdown_file'] as const
 export type LegacyAgentOutputKind = (typeof AGENT_OUTPUT_KIND)[number]
 
-export const AgentOutputKindSchema = z.string().refine(isRegisteredKindString, {
-  message:
-    "kind must be a registered base kind, 'path<ext>', or 'list<...>' " +
-    '(see RFC-060 kindParser.ts)',
-})
+export const AgentOutputKindSchema = z
+  .string()
+  .refine(isRegisteredKindString, {
+    message:
+      "kind must be a registered base kind, 'path<ext>', or 'list<...>' " +
+      '(see RFC-060 kindParser.ts)',
+  })
+  // RFC-193 D18: nested lists carrying a path kind (list<list<path<md>>>)
+  // would pass the grammar yet bypass archival + force-merge-back (both are
+  // single-level) — reject at declaration so no "validated but dangling"
+  // port can exist. Single-level list<path<md>> is unaffected.
+  .refine((t) => !isNestedListPathKindString(t), {
+    message:
+      'output-kind-nested-list-path-unsupported: nested list kinds containing ' +
+      "path (e.g. 'list<list<path<md>>>') are not supported — flatten to a " +
+      'single-level list<path<...>>',
+  })
 export type AgentOutputKind = z.infer<typeof AgentOutputKindSchema>
 
 // -----------------------------------------------------------------------------

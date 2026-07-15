@@ -246,6 +246,34 @@ export function isReviewableBodyKindString(kind: string): boolean {
   return parsed !== null && isReviewableBodyKind(parsed)
 }
 
+/** Does this kind subtree contain a `path<…>` anywhere? (RFC-193 D18 helper.) */
+function subtreeContainsPath(p: ParsedKind): boolean {
+  if (p.kind === 'path') return true
+  if (p.kind === 'list') return subtreeContainsPath(p.item)
+  return false
+}
+
+/**
+ * RFC-193 D18 — a NESTED list whose inner tree carries a `path` kind
+ * (e.g. `list<list<path<md>>>`). The kind grammar allows it, but the
+ * archival / force-merge-back / shard machinery all treat list ports as a
+ * single flat level — letting such a declaration through would create ports
+ * that pass validation yet whose files are never archived nor force-included
+ * (a "validated but dangling" dark corner). Declaration is rejected at agent
+ * save time (schemas/review.ts AgentOutputKindSchema), which transitively
+ * covers workflow references. `list<path<md>>` (single level) is unaffected;
+ * nested lists of non-path kinds (`list<list<string>>`) stay allowed.
+ */
+export function isNestedListPathKind(p: ParsedKind): boolean {
+  return p.kind === 'list' && p.item.kind === 'list' && subtreeContainsPath(p.item)
+}
+
+/** String form of {@link isNestedListPathKind}; false on unparseable input. */
+export function isNestedListPathKindString(kind: string): boolean {
+  const parsed = tryParseKind(kind)
+  return parsed !== null && isNestedListPathKind(parsed)
+}
+
 // -----------------------------------------------------------------------------
 // internal helpers
 // -----------------------------------------------------------------------------

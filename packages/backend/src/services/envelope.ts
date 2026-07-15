@@ -454,6 +454,8 @@ export interface ResolvePortContentOptions {
 export function resolvePortContentDetailed(opts: ResolvePortContentOptions): {
   body: string
   sourcePath?: string
+  /** RFC-193: list<T> per-item validate outputs (see ValidateResult.items). */
+  items?: Array<{ body: string; sourcePath?: string }>
 } {
   const { rawContent, kind, worktreePath } = opts
   if (kind === undefined) {
@@ -481,8 +483,13 @@ export function resolvePortContentDetailed(opts: ResolvePortContentOptions): {
     NODE_VALIDATE_IO,
   )
   if (result.ok) {
-    const out: { body: string; sourcePath?: string } = { body: result.body }
+    const out: {
+      body: string
+      sourcePath?: string
+      items?: Array<{ body: string; sourcePath?: string }>
+    } = { body: result.body }
     if (result.sourcePath !== undefined) out.sourcePath = result.sourcePath
+    if (result.items !== undefined) out.items = result.items
     return out
   }
   const errCode = formatPortValidationErrCode(handler.displayName, result.subReason)
