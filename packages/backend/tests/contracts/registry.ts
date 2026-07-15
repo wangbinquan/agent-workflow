@@ -316,6 +316,8 @@ export const ENDPOINTS: EndpointSpec[] = [
   // ---- worktree-files ----
   { method: 'GET', path: '/api/worktree-files/:taskId' },
   { method: 'GET', path: '/api/worktree-files/:taskId/*' },
+  // ---- port-artifacts (RFC-193) ----
+  { method: 'GET', path: '/api/tasks/:taskId/port-artifacts/:nodeRunId/:portName' },
 
   // ---- reviews (RFC-005) ----
   { method: 'GET', path: '/api/reviews' },

@@ -44,6 +44,7 @@ import { mountWorkflowRoutes } from '@/routes/workflows'
 import { mountWorkgroupRoutes } from '@/routes/workgroups'
 import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'
 import { mountWorktreeFilesRoutes } from '@/routes/worktree-files'
+import { mountPortArtifactRoutes } from '@/routes/port-artifacts'
 import { errorHandler } from '@/util/errors'
 import { createLogger } from '@/util/log'
 
@@ -199,6 +200,7 @@ export function createApp(deps: AppDeps): Hono {
   mountScheduledTaskRoutes(app, deps) // RFC-159
   mountBackupRoutes(app, deps)
   mountWorktreeFilesRoutes(app, deps)
+  mountPortArtifactRoutes(app, deps)
   mountReviewRoutes(app, deps)
   mountClarifyRoutes(app, deps)
   mountTaskQuestionRoutes(app, deps)
