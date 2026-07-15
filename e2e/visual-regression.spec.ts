@@ -57,6 +57,20 @@ async function primeAuth(page: Page, d: DaemonHandle): Promise<void> {
   )
 }
 
+async function setDaemonTheme(theme: 'light' | 'dark'): Promise<void> {
+  const response = await fetch(`${daemon.baseUrl}/api/config`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${daemon.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ theme }),
+  })
+  if (!response.ok) {
+    throw new Error(`visual-regression: failed to set ${theme} theme (${response.status})`)
+  }
+}
+
 /**
  * Per-test snapshot config. Threshold 0.2% per RFC-054 plan §risk 9
  * (font subpixel jitter). `animations: 'disabled'` freezes CSS
@@ -173,9 +187,10 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
 
   test('RFC-195 inbox empty dialog (light)', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'light' })
+    await setDaemonTheme('light')
     await primeAuth(page, daemon)
     await page.goto(`${daemon.baseUrl}/agents`)
-    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'))
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
     await page.getByTestId('inbox-footer-button').click()
     const dialog = page.getByRole('dialog', { name: 'Inbox' })
     await expect(dialog).toContainText('Nothing waiting')
@@ -184,10 +199,11 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
 
   test('RFC-195 inbox populated dialog (light)', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'light' })
+    await setDaemonTheme('light')
     await routePopulatedInbox(page)
     await primeAuth(page, daemon)
     await page.goto(`${daemon.baseUrl}/agents`)
-    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'))
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
     await page.getByTestId('inbox-footer-button').click()
     await expect(page.getByTestId('inbox-row-review-visual-review-0')).toBeVisible()
     await expect(page).toHaveScreenshot('inbox-populated-light.png', SNAPSHOT_OPTS)
@@ -195,10 +211,11 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
 
   test('RFC-195 inbox populated dialog (dark)', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark' })
+    await setDaemonTheme('dark')
     await routePopulatedInbox(page)
     await primeAuth(page, daemon)
     await page.goto(`${daemon.baseUrl}/agents`)
-    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     await page.getByTestId('inbox-footer-button').click()
     await expect(page.getByTestId('inbox-row-review-visual-review-0')).toBeVisible()
     await expect(page).toHaveScreenshot('inbox-populated-dark.png', SNAPSHOT_OPTS)
