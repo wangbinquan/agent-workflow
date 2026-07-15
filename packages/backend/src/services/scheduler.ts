@@ -2472,6 +2472,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       // (wrapper-canonical inside git/loop) — task.worktreePath was the
       // wrapper-review deadlock.
       scopeRoot: state.scopeRoot,
+      repoDirName: state.repos[0]?.worktreeDirName ?? '',
     })
   }
 
@@ -4565,15 +4566,30 @@ async function runFanoutWrapperNode(
       const outletName = renames[port] ?? port
       const content = aggRes.outputs[port] ?? ''
       // RFC-193 D16: the aggregator run's row carries kind+archive reference
-      // (runner wrote them) — the outlet projection must not drop them.
-      const row = await readPortRowAtIteration(db, taskId, aggInfo.node.id, port, iteration)
+      // (runner wrote them) — the outlet projection must not drop them. The
+      // aggregator run is a CHILD row (parentNodeRunId = wrapperRunId), so a
+      // topLevelOnly picker never sees it (Codex impl-gate P1): read the exact
+      // run the dispatch returned.
+      const aggRows =
+        aggRes.aggRunId !== undefined
+          ? await db
+              .select()
+              .from(nodeRunOutputs)
+              .where(
+                and(
+                  eq(nodeRunOutputs.nodeRunId, aggRes.aggRunId),
+                  eq(nodeRunOutputs.portName, port),
+                ),
+              )
+          : []
+      const row = aggRows[0]
       await upsertWrapperOutput(
         db,
         wrapperRunId,
         outletName,
         content,
-        row.kind,
-        row.content === content ? row.archiveJson : null,
+        row?.kind ?? null,
+        row !== undefined && row.content === content ? (row.archiveJson ?? null) : null,
       )
     }
   } else {
@@ -5061,7 +5077,7 @@ interface DispatchAggregatorArgs {
  */
 async function dispatchFanoutAggregator(
   args: DispatchAggregatorArgs,
-): Promise<OneNodeResult & { outputs: Record<string, string> }> {
+): Promise<OneNodeResult & { outputs: Record<string, string>; aggRunId?: string }> {
   const { state, wrapperRunId, aggNode, aggAgent, iteration, shards, definition, scope, log } = args
   const { db, task, taskId, opts } = state
 
@@ -5175,7 +5191,7 @@ async function dispatchFanoutAggregator(
     const outputs: Record<string, string> = {}
     for (const o of outRows) outputs[o.portName] = o.content
     broadcastNodeStatus(taskId, freshestAgg.id, aggNode.id, 'done')
-    return { kind: 'ok', summary: '', message: '', outputs }
+    return { kind: 'ok', summary: '', message: '', outputs, aggRunId: freshestAgg.id }
   }
   let aggRunId: string
   if (
@@ -5383,7 +5399,7 @@ async function dispatchFanoutAggregator(
     // Aggregator's outputs are already persisted by runner.ts (nodeRunOutputs
     // upsert at runner.ts §port-persist). The wrapper-row outlet copy is
     // handled by the caller (runFanoutWrapperNode after this returns).
-    return { kind: 'ok', summary: '', message: '', outputs: result.outputs }
+    return { kind: 'ok', summary: '', message: '', outputs: result.outputs, aggRunId }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     broadcastNodeStatus(taskId, aggRunId, aggNode.id, 'failed')

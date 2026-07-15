@@ -31,7 +31,7 @@ import {
   type IsoHandle,
   type MergeBackConflict,
 } from '@/services/nodeIsolation'
-import { forcedPortPathsForTask } from '@/services/portArtifacts'
+import { forcedPortPathsForTask, repoRelForcedPaths } from '@/services/portArtifacts'
 import type { Logger } from '@/util/log'
 
 /** The slice of the per-task write lock the primitives need (taskWriteLocks'
@@ -179,9 +179,22 @@ export async function mergeBackAndSettle(args: {
   log?: Logger
 }): Promise<MergeSettleOutcome> {
   const { db, writeSem, handle, nodeRunId, via, log } = args
+  // RFC-193 K1（Codex 实现门 P1）：merge 前把 roster 重聚合并写回 handle——
+  // 并发 sibling 可能在本 handle 创建【之后】归档了同一 ignored 路径并已 merge
+  // 进 canonical；canonical 侧（ours）快照若仍用建 handle 时的旧 roster，会漏
+  // 掉 sibling 的文件，3-way merge 把本 run 的版本当 clean add 静默覆写（而非
+  // 报冲突）。此刻 sibling 的 INSERT 已落库（INSERT 先于 merge-back），重聚合
+  // 能看到；并上 extra（本 run 自己的产出）后统一喂给 final 与 ours 两侧。
+  if (!handle.passthrough) {
+    const fresh = await forcedPortPathsForTask(db, handle.taskId)
+    const union = [...new Set([...fresh, ...(args.extraForcedContainerPaths ?? [])])]
+    for (const r of handle.repos) {
+      r.forcedRepoRelPaths = repoRelForcedPaths(union, r.worktreeDirName)
+    }
+  }
   let nodeTrees = args.nodeTrees
   if (nodeTrees === undefined) {
-    nodeTrees = await snapshotNodeIsoFinal(handle, log, args.extraForcedContainerPaths)
+    nodeTrees = await snapshotNodeIsoFinal(handle, log)
     await persistIsoNodeTree(db, nodeRunId, args.repoCount, nodeTrees)
   }
   const trees = nodeTrees

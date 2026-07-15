@@ -26,6 +26,7 @@ import {
   writeFileSync,
   realpathSync,
 } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { and, eq, isNotNull } from 'drizzle-orm'
 import { WORKTREE_FILE_MAX_BYTES, tryParseKind, splitListItems } from '@agent-workflow/shared'
@@ -40,23 +41,17 @@ const log = createLogger('port-artifacts')
 // ---------------------------------------------------------------------------
 
 /**
- * portName → 安全的单段磁盘/路由键。`AgentSchema.outputs` 仅校验为 string，
- * 端口名可含 `/`、`..` 等——原样拼目录可写出归档根之外。percent-encode 除
- * `[A-Za-z0-9_-]` 外的一切字符（含 `.`，否则 portName 恰为 `..` 时编码后仍
- * 是目录上跳段）。确定性、可逆、跨平台文件名安全。
+ * portName → 安全的单段磁盘键。`AgentSchema.outputs` 仅校验为 string——端口
+ * 名可含 `/`、`..`、任意 Unicode。键 = 可读前缀（非 [A-Za-z0-9_-] 折为 `_`，
+ * 截 48）+ sha256 前 16 hex：**有界**（组件 ≤65 字符，不会超文件系统 255
+ * 限）、**区分大小写**（macOS 默认卷大小写不敏感，`Report`/`report` 纯
+ * sanitize 会撞同一目录——digest 区分，Codex 实现门 P2）、确定性、单段
+ * （无 `/`、不可能是 `..`）。
  */
 export function encodePortSegment(portName: string): string {
-  let out = ''
-  for (const ch of portName) {
-    if (/[A-Za-z0-9_-]/.test(ch)) {
-      out += ch
-    } else {
-      for (const byte of Buffer.from(ch, 'utf8')) {
-        out += `%${byte.toString(16).toUpperCase().padStart(2, '0')}`
-      }
-    }
-  }
-  return out
+  const sanitized = portName.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 48)
+  const digest = createHash('sha256').update(portName, 'utf8').digest('hex').slice(0, 16)
+  return `${sanitized}_${digest}`
 }
 
 /** 该 nodeRun 全部端口归档的根目录（appHome 相对）。 */
@@ -102,6 +97,13 @@ export interface PortArchiveItem {
   /** 源文件原始字节数。 */
   size: number
   truncated: boolean
+  /**
+   * D19（Codex 实现门 P2）：端口值为 symlink 且目标在 worktree 内时，目标的
+   * 容器相对路径。必达清单从 archive_json 重建（forcedPortPathsForTask）——
+   * 不持久化目标的话，下游 base 快照只 add -f 链接本体、丢掉被 ignore 的
+   * 目标，得到悬挂 symlink。
+   */
+  linkTarget?: string
 }
 
 export interface PortArchive {
@@ -215,14 +217,21 @@ export function archivePortArtifacts(opts: {
     portFilePaths.push(it.sourcePath)
     // D19：symlink 端口值——`git add -f` 只收录链接对象本身，目标若被 ignore
     // 会让下游 iso 里的链接失效。目标仍在 worktree 内（相对链接）时把目标也
-    // 追加进必达清单；绝对目标（指向本 iso 之外）warn，工作区语义不承诺
-    // （阅读语义已由上面的 copyFileSync 跟随物化兜底）。
+    // 追加进必达清单，并持久化到 archive item（linkTarget）——后续任务级
+    // roster 从 archive_json 重建，瞬态 portFilePaths 之外必须有持久痕迹
+    // （Codex 实现门 P2）。绝对目标（指向本 iso 之外）warn，工作区语义不
+    // 承诺（阅读语义已由上面的 copyFileSync 跟随物化兜底）。
     try {
       if (lstatSync(it.sourceAbs).isSymbolicLink()) {
         const realTarget = realpathSync(it.sourceAbs)
         const realRoot = realpathSync(opts.worktreeRootAbs)
         if (realTarget === realRoot || realTarget.startsWith(realRoot + sep)) {
-          portFilePaths.push(relative(realRoot, realTarget))
+          const targetRepoRel = relative(realRoot, realTarget)
+          portFilePaths.push(targetRepoRel)
+          const last = items[items.length - 1]
+          if (last !== undefined) {
+            last.linkTarget = toContainerRelative(opts.worktreeDirName, targetRepoRel)
+          }
         } else {
           log.warn('symlink port target outside worktree — workspace semantics not guaranteed', {
             port: opts.portName,
@@ -292,13 +301,28 @@ export function readPortArtifact(opts: {
   kind: string | null
   /** review 传 scopeRoot；API 传 task.worktreePath；null = 无回退根。 */
   fallbackWorktreeRoot: string | null
+  /**
+   * repos[0] 的 worktreeDirName。存量行（archive_json NULL）的 content 是
+   * repo0 相对，而 fallbackWorktreeRoot 是容器根——多 repo 时文件实际在
+   * `{root}/{dirName}/{line}`，不补前缀会把存在的文件误报 missing（Codex
+   * 实现门 P1）。单 repo '' 恒等；省略默认 ''。
+   */
+  legacyRepoDirName?: string
+  /**
+   * 选择性读取（Codex 实现门 P2）：'meta' 只回元数据（不读任何字节——100
+   * item 的端口元数据请求不应吃 200MiB）；number 只读该下标的字节，其余
+   * item 仅元数据。省略 = 全量（review 归档面需要全部 body）。
+   */
+  only?: 'meta' | number
 }): { items: PortArtifactReadItem[] } {
+  const wantBytes = (idx: number): boolean =>
+    opts.only === undefined ? true : opts.only === 'meta' ? false : opts.only === idx
   const archive = parseArchiveJson(opts.archiveJson)
   if (archive !== null) {
     // D3/§4.3 containment：归档副本必须落在本任务的 ports/ 命名空间内
     // （防 DB 污染的 `../` 逃逸——file 字段只被信任到「相对本命名空间」）。
     const portsRootAbs = resolve(opts.appHome, 'runs', opts.taskId, 'ports')
-    const items = archive.items.map((it): PortArtifactReadItem => {
+    const items = archive.items.map((it, idx): PortArtifactReadItem => {
       if (it.file !== null) {
         const rel = relative(portsRootAbs, resolve(opts.appHome, it.file))
         if (rel.startsWith('..') || isAbsolute(rel)) {
@@ -306,6 +330,18 @@ export function readPortArtifact(opts: {
             file: it.file,
             taskId: opts.taskId,
           })
+        } else if (!wantBytes(idx)) {
+          // 元数据面：existsSync 定 source，绝不读字节。
+          if (existsInsideRoot(portsRootAbs, rel)) {
+            return {
+              path: it.path,
+              body: '',
+              bytes: EMPTY_BYTES,
+              size: it.size,
+              truncated: it.truncated,
+              source: 'archive',
+            }
+          }
         } else {
           const buf = readInsideRoot(portsRootAbs, rel)
           if (buf !== null) {
@@ -322,22 +358,35 @@ export function readPortArtifact(opts: {
       }
       // file null（超限二进制）或归档副本丢失 → worktree 回退（容器相对 path）。
       if (opts.fallbackWorktreeRoot !== null) {
-        const buf = readInsideRoot(opts.fallbackWorktreeRoot, it.path)
-        if (buf !== null) {
-          return {
-            path: it.path,
-            body: buf.toString('utf8'),
-            bytes: buf,
-            size: it.size,
-            truncated: false,
-            source: 'worktree',
+        if (!wantBytes(idx)) {
+          if (existsInsideRoot(opts.fallbackWorktreeRoot, it.path)) {
+            return {
+              path: it.path,
+              body: '',
+              bytes: EMPTY_BYTES,
+              size: it.size,
+              truncated: false,
+              source: 'worktree',
+            }
+          }
+        } else {
+          const buf = readInsideRoot(opts.fallbackWorktreeRoot, it.path)
+          if (buf !== null) {
+            return {
+              path: it.path,
+              body: buf.toString('utf8'),
+              bytes: buf,
+              size: it.size,
+              truncated: false,
+              source: 'worktree',
+            }
           }
         }
       }
       return {
         path: it.path,
         body: '',
-        bytes: Buffer.alloc(0),
+        bytes: EMPTY_BYTES,
         size: it.size,
         truncated: it.truncated,
         source: 'missing',
@@ -369,30 +418,65 @@ export function readPortArtifact(opts: {
     }
   }
   const lines = parsed.kind === 'list' ? splitListItems(opts.content) : [opts.content.trim()]
-  const items = lines.map((line): PortArtifactReadItem => {
+  // 存量行的 line 是 repo0 相对——容器根下补 dirName 前缀（单 repo '' 恒等）。
+  const dirName = opts.legacyRepoDirName ?? ''
+  const items = lines.map((line, idx): PortArtifactReadItem => {
+    const containerRel = toContainerRelative(dirName, line)
     if (opts.fallbackWorktreeRoot !== null) {
-      const buf = readInsideRoot(opts.fallbackWorktreeRoot, line)
-      if (buf !== null) {
-        return {
-          path: line,
-          body: buf.toString('utf8'),
-          bytes: buf,
-          size: buf.length,
-          truncated: false,
-          source: 'worktree',
+      if (!wantBytes(idx)) {
+        if (existsInsideRoot(opts.fallbackWorktreeRoot, containerRel)) {
+          return {
+            path: containerRel,
+            body: '',
+            bytes: EMPTY_BYTES,
+            size: 0,
+            truncated: false,
+            source: 'worktree',
+          }
+        }
+      } else {
+        const buf = readInsideRoot(opts.fallbackWorktreeRoot, containerRel)
+        if (buf !== null) {
+          return {
+            path: containerRel,
+            body: buf.toString('utf8'),
+            bytes: buf,
+            size: buf.length,
+            truncated: false,
+            source: 'worktree',
+          }
         }
       }
     }
     return {
-      path: line,
+      path: containerRel,
       body: '',
-      bytes: Buffer.alloc(0),
+      bytes: EMPTY_BYTES,
       size: 0,
       truncated: false,
       source: 'missing',
     }
   })
   return { items }
+}
+
+const EMPTY_BYTES: Uint8Array = Buffer.alloc(0)
+
+/** {@link readInsideRoot} 的存在性面（元数据模式——零字节读取）。 */
+function existsInsideRoot(rootAbs: string, rel: string): boolean {
+  const root = resolve(rootAbs)
+  const target = isAbsolute(rel) ? resolve(rel) : resolve(root, rel)
+  try {
+    const lexicalInside = target === root || target.startsWith(root + sep)
+    const realTarget = realpathSync(target)
+    const realRoot = realpathSync(root)
+    const realInside = realTarget === realRoot || realTarget.startsWith(realRoot + sep)
+    if (!realInside) return false
+    if (!lexicalInside && !isAbsolute(rel)) return false
+    return statSync(realTarget).isFile()
+  } catch {
+    return false
+  }
 }
 
 /** path 形 kind 判定（path<…> 或单层 list<path<…>>；markdown_file 折叠为 path<md>）。 */
@@ -455,7 +539,12 @@ export async function forcedPortPathsForTask(db: DbClient, taskId: string): Prom
   for (const r of rows) {
     const arch = parseArchiveJson(r.archiveJson)
     if (arch === null) continue
-    for (const it of arch.items) out.add(it.path)
+    for (const it of arch.items) {
+      out.add(it.path)
+      // D19：symlink 目标随 item 持久化——重建的 roster 必须含目标，否则
+      // 下游 base 快照只带链接本体、目标被 ignore 时得到悬挂 symlink。
+      if (it.linkTarget !== undefined) out.add(it.linkTarget)
+    }
   }
   return [...out]
 }

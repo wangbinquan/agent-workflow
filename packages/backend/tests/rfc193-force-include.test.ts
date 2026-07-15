@@ -116,6 +116,10 @@ describe('RFC-193 symlink port artifact (case 8f)', () => {
     expect(readFileSync(join(home, it.file!), 'utf8')).toBe('REAL BODY')
     expect(res.portFilePaths).toContain('link.md')
     expect(res.portFilePaths).toContain('notes/real.md')
+    // impl-gate P2：目标持久化进 archive item——任务级 roster 从 archive_json
+    // 重建，瞬态 portFilePaths 之外必须有持久痕迹，否则下游 base 快照只带
+    // 链接本体、ignored 目标缺席 → 悬挂 symlink。
+    expect(it.linkTarget).toBe('notes/real.md')
   })
 
   test('absolute-target symlink: content archived, target NOT rostered (warn path)', () => {

@@ -16,7 +16,7 @@ import { and, eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { extname } from 'node:path'
 import { actorOf } from '@/auth/actor'
-import { nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
+import { nodeRunOutputs, nodeRuns, taskRepos, tasks } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { readPortArtifact } from '@/services/portArtifacts'
 import { canViewTask } from '@/services/taskCollab'
@@ -43,8 +43,10 @@ export function mountPortArtifactRoutes(app: Hono, deps: AppDeps): void {
   app.get('/api/tasks/:taskId/port-artifacts/:nodeRunId/:portName', async (c) => {
     const taskId = c.req.param('taskId')
     const nodeRunId = c.req.param('nodeRunId')
-    // Hono 已按 URL 规则 decode 路径段；portName 是 percent-encode 往返段（D3）。
-    const portName = decodeURIComponent(c.req.param('portName'))
+    // Hono 已 decode 路径段——不可二次 decodeURIComponent：合法端口名含字面
+    // `%` 时前端发 %25、Hono 还原为 `%`，二次 decode 抛 URIError → 500
+    // （Codex 实现门 P2）。
+    const portName = c.req.param('portName')
 
     const taskRows = await deps.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
     const task = taskRows[0]
@@ -76,8 +78,29 @@ export function mountPortArtifactRoutes(app: Hono, deps: AppDeps): void {
       throw new NotFoundError('port-not-found', `port '${portName}' not found on run`)
     }
 
+    const itemParam = c.req.query('item')
+    const idx = itemParam === undefined ? undefined : Number(itemParam)
+    if (idx !== undefined && (!Number.isInteger(idx) || idx < 0)) {
+      throw new ValidationError(
+        'port-artifact-bad-item',
+        `item '${itemParam}' must be a non-negative integer`,
+      )
+    }
+
+    // 存量行（无归档）的 content 是 repo0 相对；多 repo 任务的回退根是容器，
+    // 要补 repos[0] 的 dirName 前缀（Codex 实现门 P1）。
+    let legacyRepoDirName = ''
+    if (task.repoCount > 1) {
+      const repoRows = await deps.db
+        .select({ worktreeDirName: taskRepos.worktreeDirName })
+        .from(taskRepos)
+        .where(eq(taskRepos.taskId, taskId))
+      legacyRepoDirName = repoRows[0]?.worktreeDirName ?? ''
+    }
+
     // RFC-005 同款：归档路径锚在 daemon app home（Paths.root getter，惰性读
     // AGENT_WORKFLOW_HOME）——AppDeps 不携带 appHome（对齐 reviews.ts appHomeFor）。
+    // 选择性读取（Codex 实现门 P2）：元数据请求零字节读，item 请求只读该下标。
     const read = readPortArtifact({
       appHome: Paths.root,
       taskId,
@@ -85,10 +108,11 @@ export function mountPortArtifactRoutes(app: Hono, deps: AppDeps): void {
       content: row.content,
       kind: row.kind ?? null,
       fallbackWorktreeRoot: task.worktreePath,
+      legacyRepoDirName,
+      only: idx === undefined ? 'meta' : idx,
     })
 
-    const itemParam = c.req.query('item')
-    if (itemParam === undefined) {
+    if (idx === undefined) {
       return c.json({
         items: read.items.map((it) => ({
           path: it.path,
@@ -97,13 +121,6 @@ export function mountPortArtifactRoutes(app: Hono, deps: AppDeps): void {
           source: it.source,
         })),
       })
-    }
-    const idx = Number(itemParam)
-    if (!Number.isInteger(idx) || idx < 0) {
-      throw new ValidationError(
-        'port-artifact-bad-item',
-        `item '${itemParam}' must be a non-negative integer`,
-      )
     }
     const item = read.items[idx]
     if (item === undefined || item.source === 'missing') {

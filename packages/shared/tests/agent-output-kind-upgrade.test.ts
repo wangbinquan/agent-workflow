@@ -44,8 +44,13 @@ describe('AgentOutputKindSchema — new parametric kinds', () => {
     expect(AgentOutputKindSchema.parse('list<path<md>>')).toBe('list<path<md>>')
   })
 
-  test("'list<list<path<*>>>' valid (deep nesting)", () => {
-    expect(AgentOutputKindSchema.parse('list<list<path<*>>>')).toBe('list<list<path<*>>>')
+  test("'list<list<path<*>>>' REJECTED since RFC-193 D18 (was valid deep nesting)", () => {
+    // 契约演进：语法上仍可 parse，但归档/必达/分片全是单层机制——含 path 的
+    // 嵌套 list 会成为「过校验却悬挂」的端口，声明期拒绝。非 path 嵌套
+    // (list<list<string>>) 不受影响（见下）。
+    const res = AgentOutputKindSchema.safeParse('list<list<path<*>>>')
+    expect(res.success).toBe(false)
+    expect(AgentOutputKindSchema.safeParse('list<list<string>>').success).toBe(true)
   })
 
   test("'list<markdown_file>' valid (alias inside list)", () => {

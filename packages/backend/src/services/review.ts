@@ -79,7 +79,7 @@ import {
   tasks,
   workflows,
 } from '@/db/schema'
-import { readPortArtifact, subsetArchiveJson } from '@/services/portArtifacts'
+import { isPathishKindString, readPortArtifact, subsetArchiveJson } from '@/services/portArtifacts'
 import { pickFreshestRun } from '@/services/freshness'
 import { parseConsumedJson } from '@/services/freshness'
 import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
@@ -389,6 +389,11 @@ export interface DispatchReviewArgs {
    * never join paths against a worktree it picked itself (source-locked).
    */
   scopeRoot: string
+  /**
+   * repos[0] 的 worktreeDirName（多 repo 存量行回退的前缀；单 repo ''）。
+   * 省略默认 ''——S1 修复等无 repos 上下文的调用方保持现状语义。
+   */
+  repoDirName?: string
 }
 
 export interface DispatchReviewResult {
@@ -412,7 +417,7 @@ export interface DispatchReviewResult {
  *      file + row at versionIndex = max+1, broadcast review.created.
  */
 export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<DispatchReviewResult> {
-  const { db, taskId, appHome, definition, node, iteration, scopeRoot } = args
+  const { db, taskId, appHome, definition, node, iteration, scopeRoot, repoDirName } = args
 
   const inputSource = readPortRef(node, 'inputSource')
   if (inputSource === null) {
@@ -495,6 +500,7 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
     content: portRow.content,
     kind: upstreamKind ?? null,
     fallbackWorktreeRoot: scopeRoot,
+    legacyRepoDirName: repoDirName ?? '',
   })
   // RFC-081: list<markdown> items are inline document bodies framed by
   // MARKDOWN_DOC_BOUNDARY; list<path<md>> items are newline-separated worktree
@@ -521,7 +527,13 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
       }
     }
     resolvedBody = item0.body
-    resolvedSourcePath = item0.path ?? undefined
+    // sourceFilePath 必须保持【端口 content 的 repo0 相对形态】——它会经
+    // approve 原样发布给下游（agent cwd = repo0 根）；item0.path 是容器相对
+    // （多 repo 带 repoA/ 前缀），发布它会让下游解析成 repoA/repoA/…（Codex
+    // 实现门 P1）。归档 path 只用于定位字节，不做发布形态。
+    resolvedSourcePath = isPathishKindString(upstreamKind ?? null)
+      ? portRow.content.trim()
+      : undefined
   }
 
   // Find / create the review node_run row.

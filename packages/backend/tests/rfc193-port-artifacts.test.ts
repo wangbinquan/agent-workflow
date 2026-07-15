@@ -50,12 +50,18 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // ---------------------------------------------------------------------------
 
 describe('RFC-193 encodePortSegment / toContainerRelative', () => {
-  test('plain names pass through; traversal-capable chars are percent-encoded', () => {
-    expect(encodePortSegment('doc_path-1')).toBe('doc_path-1')
-    expect(encodePortSegment('..')).toBe('%2E%2E')
-    expect(encodePortSegment('../evil')).toBe('%2E%2E%2Fevil')
-    expect(encodePortSegment('a/b')).toBe('a%2Fb')
-    expect(encodePortSegment('中文')).toBe('%E4%B8%AD%E6%96%87')
+  test('bounded digest key: single-segment, case-distinct, hostile-name safe (impl-gate P2)', () => {
+    // 键 = sanitize(48) + '_' + sha256(16)：有界、区分大小写（macOS 大小写
+    // 不敏感卷上 Report/report 纯 sanitize 会撞目录）、确定性、永不含 '/'。
+    for (const name of ['doc_path-1', '..', '../evil', 'a/b', '中文', 'x'.repeat(500)]) {
+      const key = encodePortSegment(name)
+      expect(key.includes('/')).toBe(false)
+      expect(key).not.toBe('..')
+      expect(key.length).toBeLessThanOrEqual(65)
+      expect(encodePortSegment(name)).toBe(key) // deterministic
+    }
+    expect(encodePortSegment('Report')).not.toBe(encodePortSegment('report'))
+    expect(encodePortSegment('doc_path-1').startsWith('doc_path-1_')).toBe(true)
   })
 
   test('toContainerRelative: empty dirName is identity; non-empty prefixes', () => {
@@ -95,7 +101,8 @@ describe('RFC-193 archivePortArtifacts (module)', () => {
     const it = parsed!.items[0]!
     expect(it.path).toBe('report.md')
     expect(it.truncated).toBe(false)
-    expect(it.file).toBe(join('runs', 't1', 'ports', 'r1', 'doc', 'item_0.md'))
+    // 目录段 = encodePortSegment('doc')（bounded digest 键，impl-gate P2）。
+    expect(it.file).toBe(join('runs', 't1', 'ports', 'r1', encodePortSegment('doc'), 'item_0.md'))
     expect(readFileSync(join(home, it.file!), 'utf8')).toBe('# hello 世界\n')
     expect(res.portFilePaths).toEqual(['report.md'])
   })
@@ -289,6 +296,60 @@ describe('RFC-193 readPortArtifact (module — fallback chain, case 6 core)', ()
     })
     expect(read.items[0]!.source).toBe('missing')
     expect(read.items[0]!.body).not.toContain('TOP SECRET')
+  })
+
+  test('legacy multi-repo fallback prefixes repos[0] dirName (impl-gate P1)', () => {
+    mkdirSync(join(home, 'container', 'repoA', 'sub'), { recursive: true })
+    writeFileSync(join(home, 'container', 'repoA', 'sub', 'a.md'), 'FROM REPO A')
+    const read = readPortArtifact({
+      appHome: home,
+      taskId: 't1',
+      archiveJson: null,
+      content: 'sub/a.md', // repo0 相对（存量行形态）
+      kind: 'path<md>',
+      fallbackWorktreeRoot: join(home, 'container'),
+      legacyRepoDirName: 'repoA',
+    })
+    expect(read.items[0]!.source).toBe('worktree')
+    expect(read.items[0]!.body).toBe('FROM REPO A')
+    expect(read.items[0]!.path).toBe('repoA/sub/a.md')
+  })
+
+  test("only:'meta' reads zero bytes; only:index reads just that item (impl-gate P2)", () => {
+    const abs = join(home, 'wt', 'r.md')
+    mkdirSync(join(home, 'wt'), { recursive: true })
+    writeFileSync(abs, 'BODY')
+    const arch = archivePortArtifacts({
+      appHome: home,
+      taskId: 't1',
+      nodeRunId: 'r1',
+      portName: 'doc',
+      items: [{ sourceAbs: abs, sourcePath: 'r.md' }],
+      worktreeDirName: '',
+      worktreeRootAbs: join(home, 'wt'),
+    })
+    const meta = readPortArtifact({
+      appHome: home,
+      taskId: 't1',
+      archiveJson: arch.archiveJson,
+      content: 'r.md',
+      kind: 'path<md>',
+      fallbackWorktreeRoot: null,
+      only: 'meta',
+    })
+    expect(meta.items[0]!.source).toBe('archive')
+    expect(meta.items[0]!.bytes.length).toBe(0)
+    expect(meta.items[0]!.size).toBe(4)
+    const item = readPortArtifact({
+      appHome: home,
+      taskId: 't1',
+      archiveJson: arch.archiveJson,
+      content: 'r.md',
+      kind: 'path<md>',
+      fallbackWorktreeRoot: null,
+      only: 0,
+    })
+    expect(item.items[0]!.body).toBe('BODY')
   })
 
   test('fallback containment refuses absolute + traversal + symlink-out paths', () => {
