@@ -2,6 +2,8 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+📝 **进行中 RFC（Draft，2026-07-15）：[RFC-193 path 端口产物归档制（archive-at-emit）](design/RFC-193-port-artifact-archival/proposal.md)**。源自用户线上撞到 wrapper 内 review 死锁断链（agent 在 iso 写文件、review 用 `task.worktreePath` 找不到）+「怎么根治」追问。诊断=RFC-130 后 path 类端口值是「悬挂指针」（根/时刻/可见性三维不稳定），五类消费方断链已逐一锚定（review.ts:471/658、runner.ts:1369 校验根、前端预览下载+worktree GC 后历史任务永久坏、下游 agent 读 gitignored〔`git add -A` 不收，git.ts:1186〕·绝对路径、fanout 分片）。根治两问已用户拍板：走归档制 RFC、止血（scopeRoot）并入不单独先修。方案=产出时刻固化+两种语义分离：runner 校验窗口归档（handler 已读出 body，零额外 IO）→ `archive_json` 引用列+`runs/{task}/ports/` 文件（2 MiB 截断标记）；阅读语义走归档+回退链（review 切 `readPortArtifact`、新 port-artifacts API、前端优先归档 404 回退）；工作区语义走必达 merge-back（`snapshotFullState.forceIncludePaths` 对 port 文件 `add -f`）；content 规范化容器相对路径；`review.ts` 禁 `task.worktreePath` 文本锁。三件套已落档，待 Codex 设计门 + 用户批准后进实现。
+
 📝 **进行中 RFC（Draft，2026-07-15）：[RFC-191 定义资源列表画廊化](design/RFC-191-resource-list-gallery/proposal.md) + [RFC-192 运行记录列手术](design/RFC-192-run-record-list-surgery/proposal.md)**。源自用户「调研工作流/工作组/任务/定时任务列表表现形式」→ 调研报告（现状复现+方案渲染 artifact）→ 用户拍板方案 A（画廊）+ D2-D5 全确认。RFC-191=工作流/工作组卡片画廊（新公共组件 + `<RelativeTime>` 原语落地 + 启动深链，删除收敛详情层，零后端，空态基线零 churn）；RFC-192=任务/定时任务表格列手术（状态前置+脉冲/错误折行/repoCount·scheduledTaskId·lastTaskId 三件闲置字段接线/耗时列/三维过滤/Switch 启停/立即运行轻确认/repos 时间收尾，依赖 191-T1，实现顺序 191→192）。三件套已落档，待 Codex 设计门 + 用户批准后进实现。
 
 📝 **进行中 RFC（Draft，2026-07-15）：[RFC-190 首页能力门户改版](design/RFC-190-homepage-capability-portal/proposal.md)**。用户需求「优化首页显示，要有平台特点、直观体现平台能力」；四项设计取向已问答对齐（形态=能力门户卡片矩阵 / hero=动态管线画布〔纯 SVG/CSS〕/ 数据=新增 `GET /api/overview` 聚合端点〔RFC-099 ACL 过滤，口径与列表页一致〕/ 范围=Onboarding 一起翻新；任务三区合并为「任务动态」单列）。三件套已落档，待 Codex 设计门 + 用户批准后进实现。
