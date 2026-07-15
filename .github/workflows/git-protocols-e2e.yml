@@ -28,7 +28,6 @@ on:
       - 'packages/backend/src/services/gitRepoCache.ts'
       - 'packages/backend/src/services/repoBatchImport.ts'
       - 'packages/shared/src/git-url.ts'
-      - 'docker-compose.test.yml'
       - 'scripts/git-protocols/**'
       - 'e2e/git-protocols.spec.ts'
       - '.github/workflows/git-protocols-e2e.yml'
@@ -53,7 +52,7 @@ jobs:
         # ubuntu-latest has docker pre-installed; no setup-docker needed.
         # Compose v2 syntax (`docker compose`, not legacy `docker-compose`).
         run: |
-          docker compose -f docker-compose.test.yml up -d
+          docker compose -f scripts/git-protocols/docker-compose.test.yml up -d
           echo "Gitea container starting; healthcheck will block downstream."
 
       - name: Seed admin user / token / repo
@@ -98,4 +97,4 @@ jobs:
 
       - name: Tear down gitea
         if: always()
-        run: docker compose -f docker-compose.test.yml down -v
+        run: docker compose -f scripts/git-protocols/docker-compose.test.yml down -v

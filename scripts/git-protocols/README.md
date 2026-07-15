@@ -1,15 +1,14 @@
 # scripts/git-protocols — gitea test fixture (RFC-054 W3-4)
 
 Brings up a real Gitea instance for the `e2e/git-protocols.spec.ts` suite.
-Two files in this directory + one compose file at repo root form the
-fixture; the CI workflow `.github/workflows/git-protocols-e2e.yml` wires
-them together.
+The three files in this directory form the fixture; the CI workflow
+`.github/workflows/git-protocols-e2e.yml` wires them together.
 
-| File                            | Role                                                                           |
-| ------------------------------- | ------------------------------------------------------------------------------ |
-| `../../docker-compose.test.yml` | Gitea service (1.22.6 pinned) on `localhost:3001` HTTP + `localhost:2222` SSH. |
-| `seed-gitea.sh`                 | Bootstrap admin user + API token + test repo. Idempotent. Emits env-var lines. |
-| `README.md` (this file)         | Human-facing operator docs.                                                    |
+| File                      | Role                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------ |
+| `docker-compose.test.yml` | Gitea service (1.22.6 pinned) on `localhost:3001` HTTP + `localhost:2222` SSH. |
+| `seed-gitea.sh`           | Bootstrap admin user + API token + test repo. Idempotent. Emits env-var lines. |
+| `README.md` (this file)   | Human-facing operator docs.                                                    |
 
 ## Running locally
 
@@ -17,8 +16,8 @@ Docker Desktop must be running (the daemon must be reachable on
 `/var/run/docker.sock` / `~/.docker/run/docker.sock`).
 
 ```sh
-# 1. Start gitea.
-docker compose -f docker-compose.test.yml up -d
+# 1. Start gitea (run from the repo root).
+docker compose -f scripts/git-protocols/docker-compose.test.yml up -d
 
 # 2. Wait until healthy + seed admin user / repo / token.
 #    The script blocks on the HTTP health probe internally.
@@ -28,7 +27,7 @@ eval "$(scripts/git-protocols/seed-gitea.sh)"
 RUN_GIT_PROTOCOLS=1 bun run e2e e2e/git-protocols.spec.ts
 
 # 4. Tear down (drops the named volume so the next run starts clean).
-docker compose -f docker-compose.test.yml down -v
+docker compose -f scripts/git-protocols/docker-compose.test.yml down -v
 ```
 
 `eval $(seed-gitea.sh)` exports five env vars the spec reads:
@@ -66,19 +65,19 @@ Triggers:
 - **workflow_dispatch**: manual button for ad-hoc verification.
 - **pull_request**: only when the PR diff touches
   `packages/backend/src/services/gitRepoCache.ts`,
-  `packages/shared/src/git-url.ts`, this directory, the compose file,
-  or the workflow file itself. Every other PR skips it.
+  `packages/shared/src/git-url.ts`, this directory (compose file
+  included), or the workflow file itself. Every other PR skips it.
 
 Sequence within the job:
 
 1. `actions/checkout@v5`
-2. `docker compose -f docker-compose.test.yml up -d`
+2. `docker compose -f scripts/git-protocols/docker-compose.test.yml up -d`
 3. `scripts/git-protocols/seed-gitea.sh > /tmp/seed.env` then export to `$GITHUB_ENV`
 4. `bun install --frozen-lockfile`
 5. `bun run build:binary` (the spec needs the daemon binary)
 6. `bunx playwright install --with-deps chromium`
 7. `RUN_GIT_PROTOCOLS=1 bun run e2e e2e/git-protocols.spec.ts`
-8. `docker compose -f docker-compose.test.yml down -v` (always-run cleanup)
+8. `docker compose -f scripts/git-protocols/docker-compose.test.yml down -v` (always-run cleanup)
 
 Total wall-clock: ~2 min (gitea boot 30s + seed 5s + daemon start 5s +
 3 cases ~30s + teardown 10s).

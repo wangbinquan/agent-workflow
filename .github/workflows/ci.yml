@@ -255,7 +255,7 @@ jobs:
     # Catch broken links / dead RFC cross-references before they rot the
     # design docs. design/ has 50+ RFC dirs with relative `../RFC-NNN/...`
     # paths and external pointers (multica / opencode source) — easy for
-    # any of them to silently break. Skips blog/ (drafts may carry
+    # any of them to silently break. Skips docs/blog/ (drafts may carry
     # placeholder URLs) and root README (points at future PRs / external
     # integrations on purpose).
     name: Markdown link check (design/)
