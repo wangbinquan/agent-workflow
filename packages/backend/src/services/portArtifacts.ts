@@ -16,6 +16,7 @@
 
 import {
   copyFileSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -26,7 +27,10 @@ import {
   realpathSync,
 } from 'node:fs'
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { and, eq, isNotNull } from 'drizzle-orm'
 import { WORKTREE_FILE_MAX_BYTES, tryParseKind, splitListItems } from '@agent-workflow/shared'
+import type { DbClient } from '@/db/client'
+import { nodeRunOutputs, nodeRuns } from '@/db/schema'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('port-artifacts')
@@ -73,6 +77,17 @@ export function portArchiveRootRel(taskId: string, nodeRunId: string): string {
  */
 export function toContainerRelative(worktreeDirName: string, repoRelPath: string): string {
   return worktreeDirName === '' ? repoRelPath : join(worktreeDirName, repoRelPath)
+}
+
+/** {@link toContainerRelative} 的对偶：容器相对清单 → 指定 repo 的 repo 相对子集。 */
+export function repoRelForcedPaths(
+  containerPaths: readonly string[] | undefined,
+  worktreeDirName: string,
+): string[] {
+  if (containerPaths === undefined || containerPaths.length === 0) return []
+  if (worktreeDirName === '') return [...containerPaths]
+  const prefix = worktreeDirName + '/'
+  return containerPaths.filter((p) => p.startsWith(prefix)).map((p) => p.slice(prefix.length))
 }
 
 // ---------------------------------------------------------------------------
@@ -154,6 +169,8 @@ export function archivePortArtifacts(opts: {
   items: Array<{ sourceAbs: string; sourcePath: string }>
   /** repos[0] 的 worktreeDirName（容器相对化前缀；单 repo ''）。 */
   worktreeDirName: string
+  /** 校验根（= agent cwd = repos[0] iso）。D19 symlink 目标判定用。 */
+  worktreeRootAbs: string
 }): ArchivePortArtifactsResult {
   const rootRel = portArchiveRootRel(opts.taskId, opts.nodeRunId)
   const portRel = join(rootRel, encodePortSegment(opts.portName))
@@ -196,6 +213,26 @@ export function archivePortArtifacts(opts: {
       items.push({ path: containerRel, file: fileRel, size, truncated: true })
     }
     portFilePaths.push(it.sourcePath)
+    // D19：symlink 端口值——`git add -f` 只收录链接对象本身，目标若被 ignore
+    // 会让下游 iso 里的链接失效。目标仍在 worktree 内（相对链接）时把目标也
+    // 追加进必达清单；绝对目标（指向本 iso 之外）warn，工作区语义不承诺
+    // （阅读语义已由上面的 copyFileSync 跟随物化兜底）。
+    try {
+      if (lstatSync(it.sourceAbs).isSymbolicLink()) {
+        const realTarget = realpathSync(it.sourceAbs)
+        const realRoot = realpathSync(opts.worktreeRootAbs)
+        if (realTarget === realRoot || realTarget.startsWith(realRoot + sep)) {
+          portFilePaths.push(relative(realRoot, realTarget))
+        } else {
+          log.warn('symlink port target outside worktree — workspace semantics not guaranteed', {
+            port: opts.portName,
+            source: it.sourcePath,
+          })
+        }
+      }
+    } catch {
+      // lstat/realpath race (file vanished) — roster stays as-is.
+    }
   }
   const archive: PortArchive = { v: 1, items }
   return { archiveJson: JSON.stringify(archive), portFilePaths }
@@ -350,4 +387,31 @@ export function isPathishKindString(kind: string | null | undefined): boolean {
 /** 归档缺失时 review 的占位 body（沿用 RFC-079 文案锚，测试锁定）。 */
 export function missingArtifactPlaceholder(path: string | null): string {
   return `> ⚠️ RFC-079: file not found in worktree: \`${path ?? '(unknown)'}\``
+}
+
+// ---------------------------------------------------------------------------
+// K1 必达清单聚合（design §4.5 / D7）。
+// ---------------------------------------------------------------------------
+
+/**
+ * 该任务迄今归档过的全部 path 端口源文件（容器相对，去重）。ignored 端口文件
+ * 要跨节点存活必须过三跳（producer final 快照 → merge-back 落 canonical →
+ * consumer base 快照），①③ 都是 add -A——所以每个全状态快照点都要带上这份
+ * 清单 `add -f`。archive_json 本身就是持久化的清单（无需新列）；handle 为
+ * per-node-run 短命对象，每次 dispatch 重建 ⇒ 清单天然最新（唯一长命例外
+ * wrapper final 由调用方重聚合，design §4.5）。
+ */
+export async function forcedPortPathsForTask(db: DbClient, taskId: string): Promise<string[]> {
+  const rows = await db
+    .select({ archiveJson: nodeRunOutputs.archiveJson })
+    .from(nodeRunOutputs)
+    .innerJoin(nodeRuns, eq(nodeRunOutputs.nodeRunId, nodeRuns.id))
+    .where(and(eq(nodeRuns.taskId, taskId), isNotNull(nodeRunOutputs.archiveJson)))
+  const out = new Set<string>()
+  for (const r of rows) {
+    const arch = parseArchiveJson(r.archiveJson)
+    if (arch === null) continue
+    for (const it of arch.items) out.add(it.path)
+  }
+  return [...out]
 }

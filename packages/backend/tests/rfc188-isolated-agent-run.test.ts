@@ -125,6 +125,7 @@ describe('RFC-188 A/B — createIsoUnderLock + mergeBackAndSettle（live 干净�
       writeSem,
       appHome,
       taskId,
+      db,
       isoKeyRunId: runId,
       canonRepos: canonRepos(repo),
     })
@@ -167,6 +168,7 @@ describe('RFC-188 A/B — createIsoUnderLock + mergeBackAndSettle（live 干净�
         writeSem,
         appHome,
         taskId,
+        db,
         isoKeyRunId: runId,
         canonRepos: canonRepos(repo),
       })
@@ -218,6 +220,7 @@ describe('RFC-188 A/B — createIsoUnderLock + mergeBackAndSettle（live 干净�
       writeSem,
       appHome,
       taskId,
+      db,
       isoKeyRunId: runId,
       canonRepos: canonRepos(repo),
     })

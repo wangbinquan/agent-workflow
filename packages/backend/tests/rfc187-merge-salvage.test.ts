@@ -62,6 +62,7 @@ function repoEntry(dir: string, worktreeDirName: string, base: string, baseHead:
     baseBranch: 'main',
     baseSnapshot: base,
     taskBaseHead: baseHead,
+    forcedRepoRelPaths: [],
   }
 }
 

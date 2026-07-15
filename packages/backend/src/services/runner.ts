@@ -1445,6 +1445,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
                 portName: name,
                 items: arch.items,
                 worktreeDirName,
+                worktreeRootAbs: opts.worktreePath,
               })
               archiveJsonByPort.set(name, res.archiveJson)
               normalizedContent.set(name, arch.items.map((it) => it.sourcePath).join('\n'))

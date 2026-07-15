@@ -31,6 +31,7 @@ import {
   type IsoHandle,
   type MergeBackConflict,
 } from '@/services/nodeIsolation'
+import { forcedPortPathsForTask } from '@/services/portArtifacts'
 import type { Logger } from '@/util/log'
 
 /** The slice of the per-task write lock the primitives need (taskWriteLocks'
@@ -53,14 +54,20 @@ export async function createIsoUnderLock(args: {
    *  whole retry loop (D17); other sites pass the run's own id. */
   isoKeyRunId: string
   canonRepos: CanonRepo[]
+  /** RFC-193 K1：必达清单在原语内部聚合（archive_json → 容器相对），调用方
+   *  结构性无法忘带——base 快照缺清单会让 ignored 端口文件断在下游 iso 跳。 */
+  db: DbClient
   log?: Logger
 }): Promise<IsoHandle> {
+  // 聚合在锁外（纯读）；快照在锁内（防 sibling merge-back 推进 canonical）。
+  const forcedContainerPaths = await forcedPortPathsForTask(args.db, args.taskId)
   return args.writeSem.run(() =>
     createNodeIso({
       appHome: args.appHome,
       taskId: args.taskId,
       nodeRunId: args.isoKeyRunId,
       canonRepos: args.canonRepos,
+      forcedContainerPaths,
       ...(args.log !== undefined ? { log: args.log } : {}),
     }),
   )
@@ -156,6 +163,15 @@ export async function mergeBackAndSettle(args: {
   repoCount: number
   nodeTrees?: Record<string, string>
   via: 'live' | 'replay'
+  /**
+   * RFC-193 K1：EXTRA container-relative force-include paths for the FINAL
+   * snapshot — the producing run's own just-emitted port files
+   * (RunResult.portFilePaths container-relativized by the caller; the
+   * DB-aggregated roster in the handle predates this run's INSERT) and the
+   * wrapper-final re-aggregation. Replay runs skip the snapshot (trees
+   * persisted pre-crash), so no roster is needed there.
+   */
+  extraForcedContainerPaths?: string[]
   conflictResolver: (
     conflicts: MergeBackConflict[],
     containerPath: string,
@@ -165,7 +181,7 @@ export async function mergeBackAndSettle(args: {
   const { db, writeSem, handle, nodeRunId, via, log } = args
   let nodeTrees = args.nodeTrees
   if (nodeTrees === undefined) {
-    nodeTrees = await snapshotNodeIsoFinal(handle, log)
+    nodeTrees = await snapshotNodeIsoFinal(handle, log, args.extraForcedContainerPaths)
     await persistIsoNodeTree(db, nodeRunId, args.repoCount, nodeTrees)
   }
   const trees = nodeTrees

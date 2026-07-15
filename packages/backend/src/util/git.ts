@@ -1174,7 +1174,18 @@ export async function hasDirtySubmoduleContent(worktreePath: string): Promise<bo
 
 export async function snapshotFullState(
   worktreePath: string,
-  opts?: { pinRef?: string; log?: Logger },
+  opts?: {
+    pinRef?: string
+    log?: Logger
+    /**
+     * RFC-193 K1 必达：`add -A` 之后逐路径 `git add -f`（同一临时 index），把
+     * gitignored 的 path 端口源文件强制收进快照。带 GIT_LITERAL_PATHSPECS=1 —
+     * `--` 只终止选项解析、不关闭 pathspec magic，`:` 开头的合法文件名会被当
+     * `:(glob)` 等模式解释（Codex 设计门 P2）。单路径失败降级 warn（文件可能
+     * 已被后续节点删除——快照如实反映；阅读语义有归档兜底）。
+     */
+    forceIncludePaths?: string[]
+  },
 ): Promise<string> {
   const tmpIndex = join(tmpdir(), `aw-iso-index-${process.pid}-${isoTmpIndexCounter++}`)
   const env = { GIT_INDEX_FILE: tmpIndex }
@@ -1186,6 +1197,17 @@ export async function snapshotFullState(
     const add = await runGit(worktreePath, ['add', '-A'], { env })
     if (add.exitCode !== 0) {
       throw new DomainError('iso-snapshot-failed', `add -A: ${add.stderr.trim()}`, 500)
+    }
+    for (const p of opts?.forceIncludePaths ?? []) {
+      const forced = await runGit(worktreePath, ['add', '-f', '--', p], {
+        env: { ...env, GIT_LITERAL_PATHSPECS: '1' },
+      })
+      if (forced.exitCode !== 0) {
+        opts?.log?.warn('snapshot force-include path failed (skipped)', {
+          path: p,
+          error: forced.stderr.trim(),
+        })
+      }
     }
     const writeTree = await runGit(worktreePath, ['write-tree'], { env })
     if (writeTree.exitCode !== 0) {

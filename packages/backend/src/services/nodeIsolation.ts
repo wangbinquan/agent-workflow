@@ -35,6 +35,7 @@ import {
   parseConflictManifest,
   type ResolvedPathState,
 } from '@/services/mergeAgent'
+import { repoRelForcedPaths } from '@/services/portArtifacts'
 import type { Logger } from '@/util/log'
 
 /** One canonical repo + its isolated mirror for a single node run. */
@@ -52,6 +53,15 @@ export interface IsoRepo {
   baseSnapshot: string
   /** Canonical HEAD when the iso was created (iso `reset --mixed` target). */
   taskBaseHead: string
+  /**
+   * RFC-193 K1 必达：this repo's repo-relative force-include roster (archived
+   * path-port source files so far in this task). EVERY full-state snapshot of
+   * this repo (base / final / ours / conflict-resolve) carries it — gitignored
+   * port files must survive all three hops of the propagation chain
+   * (producer final → canonical materialize → consumer base), and add -A
+   * drops them at each hop (design §4.5).
+   */
+  forcedRepoRelPaths: string[]
 }
 
 export interface IsoHandle {
@@ -110,6 +120,13 @@ export async function createNodeIso(opts: {
   taskId: string
   nodeRunId: string
   canonRepos: CanonRepo[]
+  /**
+   * RFC-193 K1：container-relative force-include roster (forcedPortPathsForTask
+   * 的产出，调用方聚合——本模块保持 git-only、不查 DB)。Split per-repo onto
+   * IsoRepo.forcedRepoRelPaths; the BASE snapshot below already carries it so
+   * a downstream iso checks out the gitignored port files of its upstreams.
+   */
+  forcedContainerPaths?: string[]
   submoduleMode?: 'auto' | 'always' | 'never'
   submoduleJobs?: number
   log?: Logger
@@ -135,6 +152,7 @@ export async function createNodeIso(opts: {
         baseBranch: r.baseBranch,
         baseSnapshot: '',
         taskBaseHead: '',
+        forcedRepoRelPaths: [],
       })),
     }
   }
@@ -146,10 +164,12 @@ export async function createNodeIso(opts: {
       opts.nodeRunId,
       r.worktreeDirName,
     )
+    const forcedRepoRelPaths = repoRelForcedPaths(opts.forcedContainerPaths, r.worktreeDirName)
     const taskBaseHead = await headOf(r.worktreePath)
     const baseSnapshot = await snapshotFullState(r.worktreePath, {
       pinRef: isoRefName(opts.taskId, opts.nodeRunId, 'base'),
       log: opts.log,
+      forceIncludePaths: forcedRepoRelPaths,
     })
     // Run `git worktree add` from the CANONICAL worktree, not the source repo:
     // the base-snapshot commit was just created in the canonical worktree's
@@ -173,6 +193,7 @@ export async function createNodeIso(opts: {
       baseBranch: r.baseBranch,
       baseSnapshot,
       taskBaseHead,
+      forcedRepoRelPaths,
     })
   }
   return {
@@ -192,6 +213,8 @@ export function rebuildIsoHandle(opts: {
   canonRepos: CanonRepo[]
   baseSnapshots: Record<string, string>
   taskBaseHeads: Record<string, string>
+  /** RFC-193 K1（同 createNodeIso）：resume 路径的快照同样要带清单。 */
+  forcedContainerPaths?: string[]
 }): IsoHandle {
   const repos: IsoRepo[] = opts.canonRepos.map((r) => ({
     repoPath: r.repoPath,
@@ -206,6 +229,7 @@ export function rebuildIsoHandle(opts: {
     baseBranch: r.baseBranch,
     baseSnapshot: opts.baseSnapshots[r.worktreeDirName] ?? '',
     taskBaseHead: opts.taskBaseHeads[r.worktreeDirName] ?? '',
+    forcedRepoRelPaths: repoRelForcedPaths(opts.forcedContainerPaths, r.worktreeDirName),
   }))
   return {
     taskId: opts.taskId,
@@ -224,6 +248,14 @@ export function rebuildIsoHandle(opts: {
 export async function snapshotNodeIsoFinal(
   handle: IsoHandle,
   log?: Logger,
+  /**
+   * RFC-193 K1：EXTRA container-relative force-include paths unioned onto the
+   * handle roster — the producing node's own just-emitted port files
+   * (RunResult.portFilePaths, not yet in the DB-aggregated roster) and the
+   * wrapper-final re-aggregation (inner nodes archived DURING the wrapper's
+   * lifetime; the wrapper handle is the one long-lived exception, §4.5).
+   */
+  extraForcedContainerPaths?: string[],
 ): Promise<Record<string, string>> {
   if (handle.passthrough) return {}
   const out: Record<string, string> = {}
@@ -243,6 +275,10 @@ export async function snapshotNodeIsoFinal(
     out[r.worktreeDirName] = await snapshotFullState(r.isoWorktreePath, {
       pinRef: isoRefName(handle.taskId, handle.nodeRunId, 'node'),
       log,
+      forceIncludePaths: [
+        ...r.forcedRepoRelPaths,
+        ...repoRelForcedPaths(extraForcedContainerPaths, r.worktreeDirName),
+      ],
     })
   }
   return out
@@ -275,6 +311,9 @@ export interface MergeBackConflict {
    * The conflicted paths above remain withheld for the merge agent / human.
    */
   salvagedPaths: string[]
+  /** RFC-193 K1：carried from IsoRepo so the resolve-flow snapshots (§6.2①/④)
+   *  keep force-including the task's gitignored port files. */
+  forcedRepoRelPaths: string[]
 }
 
 export interface MergeBackResult {
@@ -303,7 +342,10 @@ export async function mergeBackNodeIso(
   for (const r of handle.repos) {
     const theirs = nodeTrees[r.worktreeDirName]
     if (theirs === undefined) continue
-    const ours = await snapshotFullState(r.canonWorktreePath, { log })
+    const ours = await snapshotFullState(r.canonWorktreePath, {
+      log,
+      forceIncludePaths: r.forcedRepoRelPaths,
+    })
     const merge = await mergeTreeInMemory(r.canonWorktreePath, {
       base: r.baseSnapshot,
       ours,
@@ -356,6 +398,7 @@ export async function mergeBackNodeIso(
         canonWorktreePath: r.canonWorktreePath,
         taskBaseHead: r.taskBaseHead,
         salvagedPaths,
+        forcedRepoRelPaths: r.forcedRepoRelPaths,
       })
       continue
     }
@@ -404,6 +447,8 @@ export async function undoPriorShardDeltaInIso(
   priorNodeCommit: string | undefined,
   priorBaseCommit: string | undefined,
   log?: Logger,
+  /** RFC-193 K1：shard 重跑的 undo 快照同样携带该 repo 的必达清单。 */
+  forcedRepoRelPaths?: string[],
 ): Promise<boolean> {
   if (priorNodeCommit === undefined || priorBaseCommit === undefined) return false
   if (!(await isGitWorkTree(isoWorktreePath))) return false
@@ -417,7 +462,10 @@ export async function undoPriorShardDeltaInIso(
     })
     return false
   }
-  const isoCurrent = await snapshotFullState(isoWorktreePath, { log })
+  const isoCurrent = await snapshotFullState(isoWorktreePath, {
+    log,
+    ...(forcedRepoRelPaths !== undefined ? { forceIncludePaths: forcedRepoRelPaths } : {}),
+  })
   const rev = await mergeTreeInMemory(isoWorktreePath, {
     base: priorNodeCommit,
     ours: isoCurrent,
@@ -508,7 +556,10 @@ export async function resolveConflictWithAgent(
   // (Merging the human's resolution back against the node base instead would spuriously
   // re-conflict on the very region both sides touched.) We hold writeSem across §6.2,
   // so this `ours` equals the `ours` the materialize below re-snapshots.
-  const oursAtConflict = await snapshotFullState(repoGit, { log })
+  const oursAtConflict = await snapshotFullState(repoGit, {
+    log,
+    forceIncludePaths: conflict.forcedRepoRelPaths,
+  })
   const cmt = await commitTree(repoGit, conflict.mergedTree, oursAtConflict, 'aw-conflict')
   const suffix = conflict.worktreeDirName === '' ? 'repo' : conflict.worktreeDirName
   const resolveIso = join(containerPath, `resolve-${suffix}`)
@@ -566,8 +617,14 @@ export async function resolveConflictWithAgent(
     return { resolved: false, unresolved, resolveIsoPath: resolveIso }
   }
   // §6.2④: snapshot the resolution + materialize into the canonical worktree.
-  const resolvedTree = await snapshotFullState(resolveIso, { log })
-  const ours = await snapshotFullState(conflict.canonWorktreePath, { log })
+  const resolvedTree = await snapshotFullState(resolveIso, {
+    log,
+    forceIncludePaths: conflict.forcedRepoRelPaths,
+  })
+  const ours = await snapshotFullState(conflict.canonWorktreePath, {
+    log,
+    forceIncludePaths: conflict.forcedRepoRelPaths,
+  })
   const canonCurrentTree = await treeOf(conflict.canonWorktreePath, ours)
   await materializeTree(conflict.canonWorktreePath, {
     mergedTree: resolvedTree,
@@ -649,7 +706,10 @@ export async function completeHumanResolvedConflict(
     // resolved; a genuine conflict (resolve-iso GC'd / deleted by hand) stays
     // parked, exactly the old behavior for the truly-conflicted repo.
     if (!existsSync(resolveIso) || !(await isGitWorkTree(resolveIso))) {
-      const ours = await snapshotFullState(r.canonWorktreePath, { log })
+      const ours = await snapshotFullState(r.canonWorktreePath, {
+        log,
+        forceIncludePaths: r.forcedRepoRelPaths,
+      })
       const probe = await mergeTreeInMemory(r.canonWorktreePath, {
         base: r.baseSnapshot,
         ours,
@@ -690,8 +750,14 @@ export async function completeHumanResolvedConflict(
     // §6.3 — re-merge the human's resolution against the CURRENT canonical, based at
     // ours-at-conflict so ONLY a post-conflict sibling advance INTO the same region
     // re-conflicts (not the region the human just reconciled).
-    const resolvedTree = await snapshotFullState(resolveIso, { log })
-    const ours = await snapshotFullState(r.canonWorktreePath, { log })
+    const resolvedTree = await snapshotFullState(resolveIso, {
+      log,
+      forceIncludePaths: r.forcedRepoRelPaths,
+    })
+    const ours = await snapshotFullState(r.canonWorktreePath, {
+      log,
+      forceIncludePaths: r.forcedRepoRelPaths,
+    })
     const merge = await mergeTreeInMemory(r.canonWorktreePath, {
       base: oursAtConflict,
       ours,

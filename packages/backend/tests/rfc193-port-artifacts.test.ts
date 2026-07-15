@@ -87,6 +87,7 @@ describe('RFC-193 archivePortArtifacts (module)', () => {
       portName: 'doc',
       items: [{ sourceAbs: abs, sourcePath: 'report.md' }],
       worktreeDirName: '',
+      worktreeRootAbs: join(home, 'wt'),
     })
     const parsed = parseArchiveJson(res.archiveJson)
     expect(parsed).not.toBeNull()
@@ -111,6 +112,7 @@ describe('RFC-193 archivePortArtifacts (module)', () => {
       portName: 'img',
       items: [{ sourceAbs: abs, sourcePath: 'img.png' }],
       worktreeDirName: '',
+      worktreeRootAbs: join(home, 'wt'),
     })
     const it = parseArchiveJson(res.archiveJson)!.items[0]!
     expect(Buffer.compare(readFileSync(join(home, it.file!)), bin)).toBe(0)
@@ -126,6 +128,7 @@ describe('RFC-193 archivePortArtifacts (module)', () => {
       portName: 'doc',
       items: [{ sourceAbs: abs, sourcePath: 'big.md' }],
       worktreeDirName: '',
+      worktreeRootAbs: join(home, 'wt'),
     })
     const it = parseArchiveJson(res.archiveJson)!.items[0]!
     expect(it.truncated).toBe(true)
@@ -146,6 +149,7 @@ describe('RFC-193 archivePortArtifacts (module)', () => {
       portName: 'blob',
       items: [{ sourceAbs: abs, sourcePath: 'big.bin' }],
       worktreeDirName: '',
+      worktreeRootAbs: join(home, 'wt'),
     })
     const it = parseArchiveJson(res.archiveJson)!.items[0]!
     expect(it.file).toBeNull()
@@ -161,6 +165,7 @@ describe('RFC-193 archivePortArtifacts (module)', () => {
       portName: '../evil',
       items: [{ sourceAbs: abs, sourcePath: 'a.md' }],
       worktreeDirName: '',
+      worktreeRootAbs: join(home, 'wt'),
     })
     const it = parseArchiveJson(res.archiveJson)!.items[0]!
     const rootAbs = resolve(home, portArchiveRootRel('t1', 'r1'))
@@ -177,6 +182,7 @@ describe('RFC-193 archivePortArtifacts (module)', () => {
       portName: 'doc',
       items: [{ sourceAbs: abs, sourcePath: 'report.md' }],
       worktreeDirName: 'repoA',
+      worktreeRootAbs: join(home, 'wt'),
     })
     expect(parseArchiveJson(res.archiveJson)!.items[0]!.path).toBe('repoA/report.md')
     // roster stays repo0-relative (feeds repo0's snapshot force-include).
@@ -202,6 +208,7 @@ describe('RFC-193 readPortArtifact (module — fallback chain, case 6 core)', ()
       portName: 'doc',
       items: [{ sourceAbs: abs, sourcePath: 'r.md' }],
       worktreeDirName: '',
+      worktreeRootAbs: join(home, 'wt'),
     })
     writeFileSync(abs, 'WORKTREE NEW') // diverge after emit
     const read = readPortArtifact({

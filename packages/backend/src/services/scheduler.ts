@@ -137,6 +137,7 @@ import {
   wrapperRevivalEvidence,
 } from '@/services/dispatchFrontier'
 import { runNode, type ResolvedSkill, type RunResult } from '@/services/runner'
+import { forcedPortPathsForTask, toContainerRelative } from '@/services/portArtifacts'
 import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
 import {
   dismissOpenClarifyParksForAutonomous,
@@ -691,6 +692,7 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
         writeSem: state.writeSem,
         appHome: opts.appHome,
         taskId,
+        db,
         isoKeyRunId: req.nodeRunId,
         canonRepos: state.repos,
         log,
@@ -2171,6 +2173,9 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
       canonRepos: state.repos,
       baseSnapshots,
       taskBaseHeads,
+      // RFC-193 K1: the replay's merge-back re-snapshots canonical (ours) —
+      // it must keep force-including the task's gitignored port files.
+      forcedContainerPaths: await forcedPortPathsForTask(db, taskId),
     })
     // RFC-188: the ONE merge-back assembly — replay passes the PERSISTED node
     // trees (the iso worktree may be gone; the agent is never re-run) so the
@@ -2248,6 +2253,7 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
       canonRepos: state.repos,
       baseSnapshots,
       taskBaseHeads,
+      forcedContainerPaths: await forcedPortPathsForTask(db, taskId),
     })
     const outcome = await state.writeSem.run(() =>
       completeHumanResolvedConflict(handle, nodeTrees, log),
@@ -2778,6 +2784,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       writeSem,
       appHome: opts.appHome,
       taskId,
+      db,
       isoKeyRunId,
       canonRepos: state.repos,
       log,
@@ -2875,6 +2882,7 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
               writeSem,
               appHome: opts.appHome,
               taskId,
+              db,
               isoKeyRunId,
               canonRepos: state.repos,
               log,
@@ -3518,6 +3526,11 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
           nodeRunId,
           repoCount: task.repoCount,
           via: 'live',
+          // RFC-193 K1: this run's own just-emitted port files (not yet in the
+          // handle's DB-aggregated roster) join the final-snapshot force list.
+          extraForcedContainerPaths: (lastResult.portFilePaths ?? []).map((p) =>
+            toContainerRelative(state.repos[0]?.worktreeDirName ?? '', p),
+          ),
           conflictResolver: (conflicts, containerPath) =>
             resolveMergeConflicts(state, {
               conflicts,
@@ -4819,6 +4832,7 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
       writeSem: state.writeSem,
       appHome: opts.appHome,
       taskId,
+      db,
       isoKeyRunId: shardRunId,
       canonRepos: state.repos,
       log,
@@ -4838,6 +4852,7 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
             priorShardUndo.node[r.worktreeDirName],
             priorShardUndo.base[r.worktreeDirName],
             log,
+            r.forcedRepoRelPaths,
           )
         } catch (err) {
           log.warn('T14 iso-undo failed — superimposition fallback', {
@@ -4944,6 +4959,9 @@ async function dispatchFanoutShard(args: DispatchShardArgs): Promise<DispatchSha
           nodeRunId: shardRunId,
           repoCount: task.repoCount,
           via: 'live',
+          extraForcedContainerPaths: (result.portFilePaths ?? []).map((p) =>
+            toContainerRelative(state.repos[0]?.worktreeDirName ?? '', p),
+          ),
           conflictResolver: (conflicts, containerPath) =>
             resolveMergeConflicts(state, {
               conflicts,
@@ -5201,6 +5219,7 @@ async function dispatchFanoutAggregator(
       writeSem: state.writeSem,
       appHome: opts.appHome,
       taskId,
+      db,
       isoKeyRunId: aggRunId,
       canonRepos: state.repos,
       log,
@@ -5292,6 +5311,9 @@ async function dispatchFanoutAggregator(
           nodeRunId: aggRunId,
           repoCount: task.repoCount,
           via: 'live',
+          extraForcedContainerPaths: (result.portFilePaths ?? []).map((p) =>
+            toContainerRelative(state.repos[0]?.worktreeDirName ?? '', p),
+          ),
           conflictResolver: (conflicts, containerPath) =>
             resolveMergeConflicts(state, {
               conflicts,
@@ -5536,6 +5558,7 @@ export async function createOrRebuildWrapperIso(
         canonRepos: state.repos,
         baseSnapshots,
         taskBaseHeads,
+        forcedContainerPaths: await forcedPortPathsForTask(state.db, taskId),
       })
     }
     // No persisted iso base (legacy / passthrough row) — fall through to create.
@@ -5566,6 +5589,7 @@ export async function createOrRebuildWrapperIso(
     taskId,
     nodeRunId: wrapperRunId,
     canonRepos: state.repos,
+    forcedContainerPaths: await forcedPortPathsForTask(state.db, taskId),
     log: state.log,
   })
   if (!handle.passthrough) await persistIsoBase(db, wrapperRunId, task.repoCount, handle)
@@ -5599,7 +5623,14 @@ async function mergeBackWrapperIso(
 > {
   const { db, task, taskId } = state
   try {
-    const nodeTrees = await snapshotNodeIsoFinal(wrapperIso, log)
+    // RFC-193 K1: re-aggregate at wrapper-final time — the wrapper handle is
+    // the one LONG-LIVED handle (inner nodes archived new port files during
+    // its lifetime; the create-time roster predates them, design §4.5).
+    const nodeTrees = await snapshotNodeIsoFinal(
+      wrapperIso,
+      log,
+      await forcedPortPathsForTask(db, taskId),
+    )
     await persistIsoNodeTree(db, wrapperRunId, task.repoCount, nodeTrees)
     const merge = await state.writeSem.run(async () => {
       const mr = await mergeBackNodeIso(wrapperIso, nodeTrees, log)

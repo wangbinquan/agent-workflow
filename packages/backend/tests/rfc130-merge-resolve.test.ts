@@ -68,6 +68,7 @@ async function makeConflict(): Promise<{
     canonWorktreePath: canon,
     taskBaseHead,
     salvagedPaths: [], // RFC-187 §4-2: this fixture's conflict has no clean paths to salvage
+    forcedRepoRelPaths: [], // RFC-193 K1: fixture has no archived port files
   }
   return { canon, conflict, theirs }
 }
@@ -193,6 +194,7 @@ describe('RFC-130 §6.2 — resolveConflictWithAgent (mock agent)', () => {
           baseBranch: 'main',
           baseSnapshot: conflict.base,
           taskBaseHead: conflict.taskBaseHead,
+          forcedRepoRelPaths: [],
         },
       ],
     }
