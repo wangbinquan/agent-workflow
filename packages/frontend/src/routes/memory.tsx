@@ -60,10 +60,12 @@ function MemoryPage() {
   const isAdmin = actor.data?.user.role === 'admin'
   const search = Route.useSearch()
   const [tab, setTab] = useState<MemoryTab>(search.tab ?? 'approval-queue')
-  // A same-page navigation with a different ?tab (e.g. clicking the homepage
-  // tile while already on /memory) re-syncs the local tab state.
+  // A same-page navigation re-syncs the local tab state — BOTH directions
+  // (impl-gate Codex P2): `?tab=all` → sidebar `/memory` clears the search
+  // but keeps this component mounted, so an absent param must reset to the
+  // approval-queue default, not stick on the previous deep-link value.
   useEffect(() => {
-    if (search.tab !== undefined) setTab(search.tab)
+    setTab(search.tab ?? 'approval-queue')
   }, [search.tab])
   const [newDialogOpen, setNewDialogOpen] = useState(false)
 
