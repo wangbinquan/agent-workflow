@@ -76,7 +76,7 @@ describe('RFC-023 bugfix #4 — clarify question form CSS contract', () => {
     // The footer rule must follow the className, otherwise margin-left:auto
     // (which pushes the submit to the right) silently breaks.
     expect(css).toContain('.clarify-detail__footer .btn {')
-    // Sanity: .btn--primary exists and uses the accent color (blue).
-    expect(css).toMatch(/\.btn--primary\s*\{[^}]*var\(--accent\)/)
+    // Sanity: .btn--primary exists and uses the filled accent role.
+    expect(css).toMatch(/\.btn--primary\s*\{[^}]*var\(--accent-fill\)/)
   })
 })

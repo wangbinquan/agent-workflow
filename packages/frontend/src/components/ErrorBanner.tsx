@@ -2,7 +2,8 @@
 
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ApiError } from '@/api/client'
+import { describeApiError } from '@/i18n'
+import { NoticeBanner } from './NoticeBanner'
 
 interface ErrorBannerProps {
   error: unknown
@@ -12,22 +13,18 @@ interface ErrorBannerProps {
 
 export function ErrorBanner({ error, message, action }: ErrorBannerProps) {
   const { t } = useTranslation()
-  let msg = message ?? t('common.unknownError')
-  if (message === undefined) {
-    if (error instanceof ApiError) msg = `${error.code}: ${error.message}`
-    else if (error instanceof Error) msg = error.message
-  }
-  const hasAction = action !== undefined && action !== null
+  const msg =
+    message ??
+    (error === null || error === undefined ? t('common.unknownError') : describeApiError(error))
+  const hasAction = action !== undefined && action !== null && action !== false
   return (
-    <div className={'error-box' + (hasAction ? ' error-banner--with-action' : '')} role="alert">
-      {hasAction ? (
-        <>
-          <span>⚠ {msg}</span>
-          {action}
-        </>
-      ) : (
-        <>⚠ {msg}</>
-      )}
-    </div>
+    <NoticeBanner
+      tone="error"
+      size="compact"
+      action={action}
+      className={hasAction ? 'error-box error-banner--with-action' : 'error-box'}
+    >
+      {msg}
+    </NoticeBanner>
   )
 }

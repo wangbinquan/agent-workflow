@@ -16,11 +16,56 @@ const cssPath = path.resolve(here, '../src/styles.css')
 const css = readFileSync(cssPath, 'utf8')
 
 const SPACE = ['--space-1', '--space-2', '--space-3', '--space-4', '--space-5', '--space-6']
-const FONT = ['--font-xs', '--font-sm', '--font-md', '--font-lg', '--font-xl']
+const FONT = [
+  '--font-ui',
+  '--font-mono',
+  '--font-xs',
+  '--font-sm',
+  '--font-md',
+  '--font-lg',
+  '--font-xl',
+]
 const RADIUS = ['--radius-sm', '--radius-md', '--radius-lg', '--radius-pill']
 const SHADOW = ['--shadow-sm', '--shadow-md', '--shadow-lg']
-const SEMANTIC = ['--success', '--success-bg', '--warn', '--warn-bg', '--info', '--info-bg']
-const DARK_SEMANTIC = ['--success', '--warn', '--info']
+const SEMANTIC = [
+  '--accent-fill',
+  '--on-accent',
+  '--success-fg',
+  '--success-fill',
+  '--on-success',
+  '--success-bg',
+  '--success-border',
+  '--warn-fg',
+  '--warn-fill',
+  '--on-warn',
+  '--warn-bg',
+  '--warn-border',
+  '--info-fg',
+  '--info-fill',
+  '--on-info',
+  '--info-bg',
+  '--info-border',
+  '--danger-fg',
+  '--danger-fill',
+  '--on-danger',
+  '--danger-bg',
+  '--danger-border',
+  '--focus-ring-color',
+  '--focus-ring-width',
+  '--focus-ring-offset',
+]
+const DARK_SEMANTIC = [
+  '--accent',
+  '--accent-fill',
+  '--danger-fg',
+  '--danger-fill',
+  '--success-fg',
+  '--success-fill',
+  '--warn-fg',
+  '--warn-fill',
+  '--info-fg',
+  '--info-fill',
+]
 
 function declared(name: string): boolean {
   return new RegExp(`${name}:\\s`).test(css)
@@ -47,7 +92,7 @@ describe('RFC-035 design tokens', () => {
     for (const t of SEMANTIC) expect(declared(t), t).toBe(true)
   })
 
-  test('dark theme override declares --success / --warn / --info', () => {
+  test('dark theme override declares text and fill roles independently', () => {
     // The dark block starts with `:root[data-theme='dark']` and must contain
     // each semantic color name. We extract from the first dark block up to
     // the closing brace via a non-greedy match.
@@ -63,7 +108,7 @@ describe('RFC-035 design tokens', () => {
     const idx = css.indexOf('prefers-color-scheme: dark')
     expect(idx).toBeGreaterThan(0)
     // Grab a generous slice; the block is small.
-    const slice = css.slice(idx, idx + 600)
+    const slice = css.slice(idx, idx + 1_600)
     for (const t of DARK_SEMANTIC) {
       expect(slice.includes(`${t}:`), `media-query fallback ${t}`).toBe(true)
     }

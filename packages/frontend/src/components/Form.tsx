@@ -79,9 +79,14 @@ interface TextInputProps {
   value: string
   onChange: (v: string) => void
   placeholder?: string
-  type?: 'text' | 'number' | 'url' | 'search'
+  type?: 'text' | 'search' | 'email' | 'password' | 'url' | 'tel' | 'number'
+  id?: string
+  name?: string
+  autoComplete?: string
+  autoFocus?: boolean
   disabled?: boolean
   required?: boolean
+  minLength?: number
   pattern?: string
   maxLength?: number
   /** RFC-191: standalone inputs (gallery / toolbar search) carry their own
@@ -93,6 +98,8 @@ interface TextInputProps {
   inputRef?: Ref<HTMLInputElement>
   'aria-invalid'?: AriaAttributes['aria-invalid']
   'aria-describedby'?: AriaAttributes['aria-describedby']
+  'aria-labelledby'?: AriaAttributes['aria-labelledby']
+  'aria-errormessage'?: AriaAttributes['aria-errormessage']
   'data-testid'?: string
 }
 
@@ -101,8 +108,13 @@ export function TextInput({
   onChange,
   placeholder,
   type = 'text',
+  id,
+  name,
+  autoComplete,
+  autoFocus,
   disabled,
   required,
+  minLength,
   pattern,
   maxLength,
   'aria-label': ariaLabel,
@@ -110,6 +122,8 @@ export function TextInput({
   inputRef,
   'aria-invalid': ariaInvalid,
   'aria-describedby': ariaDescribedBy,
+  'aria-labelledby': ariaLabelledBy,
+  'aria-errormessage': ariaErrorMessage,
   'data-testid': testid,
 }: TextInputProps) {
   return (
@@ -117,16 +131,23 @@ export function TextInput({
       ref={inputRef}
       className={className === undefined ? 'form-input' : `form-input ${className}`}
       type={type}
+      id={id}
+      name={name}
+      autoComplete={autoComplete}
+      autoFocus={autoFocus}
       value={value}
       onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
       placeholder={placeholder}
       disabled={disabled}
       required={required}
+      minLength={minLength}
       pattern={pattern}
       maxLength={maxLength}
       aria-label={ariaLabel}
       aria-invalid={ariaInvalid}
       aria-describedby={ariaDescribedBy}
+      aria-labelledby={ariaLabelledBy}
+      aria-errormessage={ariaErrorMessage}
       data-testid={testid}
     />
   )
@@ -180,37 +201,70 @@ export function NumberInput({
 interface TextAreaProps {
   value: string
   onChange: (v: string) => void
+  id?: string
+  name?: string
+  autoComplete?: string
+  autoFocus?: boolean
   rows?: number
   placeholder?: string
   monospace?: boolean
   disabled?: boolean
+  required?: boolean
+  minLength?: number
   maxLength?: number
   /** Optional ref forwarding for Dialog initial-focus contracts. */
   textareaRef?: Ref<HTMLTextAreaElement>
+  'aria-label'?: AriaAttributes['aria-label']
+  'aria-invalid'?: AriaAttributes['aria-invalid']
+  'aria-describedby'?: AriaAttributes['aria-describedby']
+  'aria-labelledby'?: AriaAttributes['aria-labelledby']
+  'aria-errormessage'?: AriaAttributes['aria-errormessage']
   'data-testid'?: string
 }
 
 export function TextArea({
   value,
   onChange,
+  id,
+  name,
+  autoComplete,
+  autoFocus,
   rows = 8,
   placeholder,
   monospace,
   disabled,
+  required,
+  minLength,
   maxLength,
   textareaRef,
+  'aria-label': ariaLabel,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
+  'aria-labelledby': ariaLabelledBy,
+  'aria-errormessage': ariaErrorMessage,
   'data-testid': testid,
 }: TextAreaProps) {
   return (
     <textarea
       ref={textareaRef}
       className={monospace === true ? 'form-input form-input--mono' : 'form-input'}
+      id={id}
+      name={name}
+      autoComplete={autoComplete}
+      autoFocus={autoFocus}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       rows={rows}
       placeholder={placeholder}
       disabled={disabled}
+      required={required}
+      minLength={minLength}
       maxLength={maxLength}
+      aria-label={ariaLabel}
+      aria-invalid={ariaInvalid}
+      aria-describedby={ariaDescribedBy}
+      aria-labelledby={ariaLabelledBy}
+      aria-errormessage={ariaErrorMessage}
       data-testid={testid}
     />
   )

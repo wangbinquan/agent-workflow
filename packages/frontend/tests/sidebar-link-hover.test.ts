@@ -39,7 +39,7 @@ describe('sidebar link hover — Issue: hover indistinguishable from panel + act
     // selected nav item. Listing both selectors on the same rule keeps the
     // active state stable.
     expect(css).toMatch(
-      /\.sidebar__link--active\s*,\s*\.sidebar__link--active:hover\s*\{[^}]*background:\s*var\(--accent\)/,
+      /\.sidebar__link--active\s*,\s*\.sidebar__link--active:hover\s*\{[^}]*background:\s*var\(--accent-fill\)/,
     )
   })
 })

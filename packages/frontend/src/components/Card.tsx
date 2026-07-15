@@ -31,6 +31,10 @@ export interface CardProps {
   to?: LinkProps['to']
   /** Router search params for the link root (e.g. `/memory` deep-link tab). */
   search?: LinkProps['search']
+  /** Semantic root for non-link cards. Link roots always take precedence. */
+  as?: 'div' | 'section'
+  /** Associates a semantic card section with its visible heading. */
+  'aria-labelledby'?: string
   /** Extra classes appended after the standard `.card` chain. */
   className?: string
   'data-testid'?: string
@@ -65,9 +69,14 @@ export function Card(props: CardProps): ReactElement {
       </Link>
     )
   }
+  const Root = props.as ?? 'div'
   return (
-    <div className={classes.join(' ')} data-testid={props['data-testid']}>
+    <Root
+      className={classes.join(' ')}
+      aria-labelledby={props['aria-labelledby']}
+      data-testid={props['data-testid']}
+    >
       {inner}
-    </div>
+    </Root>
   )
 }

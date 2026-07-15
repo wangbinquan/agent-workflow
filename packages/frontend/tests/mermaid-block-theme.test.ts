@@ -55,7 +55,7 @@ describe('MermaidBlock — theme is plumbed into mermaid.initialize', () => {
       background: '#15181d', // --bg dark
       primaryColor: '#1c2028', // --panel dark
       primaryTextColor: '#e6e7ea', // --text dark
-      primaryBorderColor: '#6aa3ff', // --accent dark
+      primaryBorderColor: '#8eb8ff', // --accent dark
       lineColor: '#95a0b3', // --muted dark
     })
   })
@@ -72,8 +72,8 @@ describe('MermaidBlock — theme is plumbed into mermaid.initialize', () => {
       background: '#ffffff', // --panel light
       primaryColor: '#ffffff',
       primaryTextColor: '#1f2328', // --text light
-      primaryBorderColor: '#2f6feb', // --accent light
-      lineColor: '#6b7180', // --muted light
+      primaryBorderColor: '#1f5fda', // --accent light
+      lineColor: '#5b6271', // --muted light
     })
     // Light preset must NOT carry mermaid's darkMode flag.
     expect(call?.themeVariables?.darkMode).toBeUndefined()

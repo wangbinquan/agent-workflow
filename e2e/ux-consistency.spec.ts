@@ -86,7 +86,7 @@ test.describe('RFC-198 T8a UX consistency foundation', () => {
       expect(await readThemeStyles(page)).toEqual({
         theme: 'dark',
         background: 'rgb(21, 24, 29)',
-        primaryBackground: 'rgb(106, 163, 255)',
+        primaryBackground: 'rgb(39, 89, 165)',
       })
     })
 

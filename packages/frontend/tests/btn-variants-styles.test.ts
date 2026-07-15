@@ -49,16 +49,16 @@ describe('.btn--armed stays legible while hovered (二次确认 white-on-white f
   test('.btn--armed base fill + white text are declared', () => {
     const block = css.slice(css.indexOf('.btn--armed {'))
     const rule = block.slice(0, block.indexOf('}'))
-    expect(rule).toContain('background: var(--danger)')
-    expect(rule).toContain('color: #fff')
+    expect(rule).toContain('background: var(--danger-fill)')
+    expect(rule).toContain('color: var(--on-danger)')
   })
 
   test('.btn--armed:hover overrides the background so it cannot revert to var(--bg)', () => {
     expect(css.includes('.btn--armed:hover')).toBe(true)
     const block = css.slice(css.indexOf('.btn--armed:hover'))
     const rule = block.slice(0, block.indexOf('}'))
-    // Must repaint a dark danger-derived fill (not var(--bg)) to keep #fff readable.
-    expect(rule).toContain('var(--danger)')
+    // Must repaint a dark danger-derived fill (not var(--bg)) to keep the label readable.
+    expect(rule).toContain('var(--danger-fill)')
     expect(rule).not.toContain('var(--bg)')
   })
 })

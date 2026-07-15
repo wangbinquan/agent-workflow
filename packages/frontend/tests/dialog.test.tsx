@@ -111,6 +111,22 @@ describe('<Dialog />', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
+  test('dismissDisabled locks ESC, overlay and the native close button', () => {
+    const onClose = vi.fn()
+    render(
+      <Dialog open onClose={onClose} title="Saving" dismissDisabled>
+        body
+      </Dialog>,
+    )
+
+    const close = document.querySelector<HTMLButtonElement>('.dialog__close')
+    expect(close?.disabled).toBe(true)
+    fireEvent.click(close as HTMLButtonElement)
+    fireEvent.mouseDown(document.querySelector('.dialog__overlay') as HTMLElement)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
   test('size modifier carries through to the overlay class', () => {
     const cases: Array<'sm' | 'md' | 'lg'> = ['sm', 'md', 'lg']
     for (const size of cases) {
@@ -149,6 +165,79 @@ describe('<Dialog />', () => {
     // The focus is scheduled in a setTimeout(0) inside the dialog effect.
     await new Promise((r) => setTimeout(r, 5))
     expect(document.activeElement?.getAttribute('data-testid')).toBe('focus-target')
+  })
+
+  test('focus restore skips a disconnected trigger and uses the stable fallback', async () => {
+    const trigger = document.createElement('button')
+    const fallback = document.createElement('button')
+    document.body.append(trigger, fallback)
+    trigger.focus()
+    const triggerRef = { current: trigger }
+    const fallbackRef = { current: fallback }
+    const { rerender } = render(
+      <Dialog
+        open
+        onClose={() => {}}
+        title="t"
+        triggerRef={triggerRef}
+        restoreFocusFallbackRef={fallbackRef}
+      >
+        body
+      </Dialog>,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    trigger.remove()
+
+    rerender(
+      <Dialog
+        open={false}
+        onClose={() => {}}
+        title="t"
+        triggerRef={triggerRef}
+        restoreFocusFallbackRef={fallbackRef}
+      >
+        body
+      </Dialog>,
+    )
+    expect(document.activeElement).toBe(fallback)
+    fallback.remove()
+  })
+
+  test('focus restore verifies success before falling through to the fallback', async () => {
+    const trigger = document.createElement('button')
+    const fallback = document.createElement('button')
+    document.body.append(trigger, fallback)
+    trigger.focus()
+    const triggerRef = { current: trigger }
+    const fallbackRef = { current: fallback }
+    const { rerender } = render(
+      <Dialog
+        open
+        onClose={() => {}}
+        title="t"
+        triggerRef={triggerRef}
+        restoreFocusFallbackRef={fallbackRef}
+      >
+        body
+      </Dialog>,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    vi.spyOn(trigger, 'focus').mockImplementation(() => {})
+
+    rerender(
+      <Dialog
+        open={false}
+        onClose={() => {}}
+        title="t"
+        triggerRef={triggerRef}
+        restoreFocusFallbackRef={fallbackRef}
+      >
+        body
+      </Dialog>,
+    )
+    expect(document.activeElement).toBe(fallback)
+    trigger.remove()
+    fallback.remove()
   })
 
   test('TextInput inputRef supports initial focus and Field ids wire grouped validation', async () => {

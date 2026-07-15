@@ -61,6 +61,6 @@ describe('review detail — diff mode segmented control', () => {
     expect(css).toMatch(/\.diff-mode-segmented__btn--active/)
     // 容器是 pill（圆角 999px）+ active 态有 accent 背景
     expect(css).toMatch(/\.diff-mode-segmented\s*\{[^}]*border-radius:\s*999px/)
-    expect(css).toMatch(/\.diff-mode-segmented__btn--active[^}]*background:\s*var\(--accent\)/)
+    expect(css).toMatch(/\.diff-mode-segmented__btn--active[^}]*background:\s*var\(--accent-fill\)/)
   })
 })

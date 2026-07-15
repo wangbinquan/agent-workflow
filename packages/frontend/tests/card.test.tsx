@@ -71,4 +71,19 @@ describe('Card primitive', () => {
     const b = body.querySelector('.b') as HTMLElement
     expect(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
+
+  test('renders a labelled section without changing the card slot structure', () => {
+    const { container } = render(
+      <Card
+        as="section"
+        aria-labelledby="account-heading"
+        header={<h2 id="account-heading">Account</h2>}
+      >
+        body
+      </Card>,
+    )
+    const card = container.querySelector('section.card')
+    expect(card?.getAttribute('aria-labelledby')).toBe('account-heading')
+    expect(card?.querySelector('.card__header h2')?.textContent).toBe('Account')
+  })
 })

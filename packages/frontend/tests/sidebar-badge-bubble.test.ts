@@ -41,9 +41,9 @@ describe('sidebar pending-review badge renders as a bubble', () => {
     // Fully rounded → pill / bubble.
     expect(body).toMatch(/border-radius:\s*999px/)
     // Filled with the danger token (count is an attention-grabber).
-    expect(body).toMatch(/background:\s*var\(--danger\)/)
-    // White text on the filled pill.
-    expect(body).toMatch(/color:\s*#fff/)
+    expect(body).toMatch(/background:\s*var\(--danger-fill\)/)
+    // Semantic on-fill text on the filled pill.
+    expect(body).toMatch(/color:\s*var\(--on-danger\)/)
     // Min-width keeps single-digit counts circular instead of squished.
     expect(body).toMatch(/min-width:\s*\d+px/)
   })

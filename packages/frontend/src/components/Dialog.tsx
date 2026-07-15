@@ -41,6 +41,10 @@ export interface DialogProps {
    * explicitly when the contract matters (see e2e/keyboard-flows.spec.ts).
    */
   triggerRef?: RefObject<HTMLElement | null>
+  /** Stable fallback when the original trigger unmounts before close. */
+  restoreFocusFallbackRef?: RefObject<HTMLElement | null>
+  /** Locks every dismiss path while an owned transaction is pending. */
+  dismissDisabled?: boolean
   closeOnOverlayClick?: boolean
   closeOnEsc?: boolean
   'aria-label'?: string
@@ -87,11 +91,19 @@ function isFocusInsideDialog(panel: HTMLElement, node: Node | null): boolean {
   return false
 }
 
+function tryFocus(target: HTMLElement | null | undefined): boolean {
+  if (target === null || target === undefined || !target.isConnected) return false
+  target.focus?.()
+  return document.activeElement === target
+}
+
 export function Dialog(props: DialogProps): ReactElement | null {
   const { t } = useTranslation()
+  const { open, onClose } = props
   const size: DialogSize = props.size ?? 'md'
   const closeOnOverlay = props.closeOnOverlayClick ?? true
   const closeOnEsc = props.closeOnEsc ?? true
+  const dismissDisabled = props.dismissDisabled ?? false
   const overlayRef = useRef<HTMLDivElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const titleId = useId()
@@ -125,7 +137,7 @@ export function Dialog(props: DialogProps): ReactElement | null {
 
   // ESC handler.
   useEffect(() => {
-    if (!props.open || !closeOnEsc) return
+    if (!open || !closeOnEsc || dismissDisabled) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         // A child popover may consume Escape by calling preventDefault().
@@ -138,12 +150,12 @@ export function Dialog(props: DialogProps): ReactElement | null {
         // window listeners all see the event regardless of stopPropagation.
         if (!isTopDialog()) return
         e.stopPropagation()
-        props.onClose()
+        onClose()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [props.open, closeOnEsc, props])
+  }, [open, closeOnEsc, dismissDisabled, onClose])
 
   // Focus management: remember the element that had focus before we
   // opened so we can hand it back on close; set initial focus. The
@@ -165,10 +177,11 @@ export function Dialog(props: DialogProps): ReactElement | null {
     }, 0)
     return () => {
       window.clearTimeout(focusTimer)
-      const restoreTarget = props.triggerRef?.current ?? restoreRef.current
-      restoreTarget?.focus?.()
+      if (tryFocus(props.triggerRef?.current)) return
+      if (tryFocus(props.restoreFocusFallbackRef?.current)) return
+      tryFocus(restoreRef.current)
     }
-  }, [props.open, props.initialFocusRef, props.triggerRef])
+  }, [props.open, props.initialFocusRef, props.triggerRef, props.restoreFocusFallbackRef])
 
   // Focus trap — yank focus back whenever it lands outside the panel.
   // The previous implementation intercepted Tab/Shift+Tab keydowns and
@@ -244,7 +257,7 @@ export function Dialog(props: DialogProps): ReactElement | null {
       ref={overlayRef}
       className={`dialog__overlay dialog--${size}`}
       onMouseDown={(e) => {
-        if (!closeOnOverlay) return
+        if (!closeOnOverlay || dismissDisabled) return
         if (e.target === overlayRef.current) props.onClose()
       }}
       data-testid={props['data-testid']}
@@ -264,6 +277,7 @@ export function Dialog(props: DialogProps): ReactElement | null {
             type="button"
             className="dialog__close"
             onClick={props.onClose}
+            disabled={dismissDisabled}
             aria-label={t('common.close')}
           >
             ×
