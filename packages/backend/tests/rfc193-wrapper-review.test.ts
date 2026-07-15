@@ -224,6 +224,88 @@ describe('RFC-193 e2e — wrapper 内 review 主回归（AC-1）', () => {
   })
 })
 
+describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
+  let h: Harness
+  beforeEach(async () => {
+    h = await buildHarness()
+  })
+  afterEach(() => h?.cleanup())
+
+  test('loop 提升行与 output 虚拟节点行携带上游 kind + archive_json', async () => {
+    await seedAgent(h.db, 'writer', ['doc'], { doc: 'path<md>' })
+    writeFileSync(
+      h.planFile,
+      JSON.stringify({
+        writer: { files: { 'design.md': 'PROJECTED BODY' }, output: { doc: 'design.md' } },
+      }),
+    )
+    const def: WorkflowDefinition = {
+      $schema_version: 3,
+      inputs: [{ kind: 'text', key: 'req', label: 'r' }],
+      nodes: [
+        { id: 'in1', kind: 'input', inputKey: 'req' } as WorkflowNode,
+        {
+          id: 'loop',
+          kind: 'wrapper-loop',
+          nodeIds: ['writer'],
+          maxIterations: 1,
+          exitCondition: { kind: 'port-not-empty', nodeId: 'writer', portName: 'doc' },
+          outputBindings: [{ name: 'final', bind: { nodeId: 'writer', portName: 'doc' } }],
+        } as unknown as WorkflowNode,
+        { id: 'writer', kind: 'agent-single', agentName: 'writer' } as WorkflowNode,
+        {
+          id: 'out1',
+          kind: 'output',
+          ports: [{ name: 'z', bind: { nodeId: 'loop', portName: 'final' } }],
+        } as unknown as WorkflowNode,
+      ],
+      edges: [
+        {
+          id: 'e1',
+          source: { nodeId: 'in1', portName: 'req' },
+          target: { nodeId: 'writer', portName: 'req' },
+        },
+        {
+          id: 'e2',
+          source: { nodeId: 'loop', portName: 'final' },
+          target: { nodeId: 'out1', portName: 'z' },
+        },
+      ],
+    }
+    const taskId = await seedTask(h, def)
+    await runTask({ db: h.db, taskId, appHome: h.appHome, opencodeCmd: ['bun', 'run', h.mockPath] })
+
+    const { nodeRunOutputs, nodeRuns } = await import('../src/db/schema')
+    const { and } = await import('drizzle-orm')
+    const { parseArchiveJson } = await import('../src/services/portArtifacts')
+    async function projectedRow(nodeId: string, port: string) {
+      const runs = await h.db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+      const done = runs.filter((r) => r.status === 'done').at(-1)
+      expect(done).toBeDefined()
+      const rows = await h.db
+        .select()
+        .from(nodeRunOutputs)
+        .where(and(eq(nodeRunOutputs.nodeRunId, done!.id), eq(nodeRunOutputs.portName, port)))
+      return rows[0]
+    }
+    for (const [nodeId, port] of [
+      ['loop', 'final'],
+      ['out1', 'z'],
+    ] as const) {
+      const row = await projectedRow(nodeId, port)
+      expect(row).toBeDefined()
+      expect(row!.content).toBe('design.md')
+      expect(row!.kind).toBe('path<md>')
+      const arch = parseArchiveJson(row!.archiveJson)
+      expect(arch).not.toBeNull()
+      expect(readFileSync(join(h.appHome, arch!.items[0]!.file!), 'utf8')).toBe('PROJECTED BODY')
+    }
+  })
+})
+
 // RFC-193 D9/AC-7 源码锁 — scopeRoot 接线 + review.ts 禁 task.worktreePath。
 // 若有人把 review 的读取改回「join(task.worktreePath, …)」或把 wrapper
 // innerState 的 scopeRoot 拆掉，这里比 e2e 更快地红出来。

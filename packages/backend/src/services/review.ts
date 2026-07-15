@@ -79,7 +79,7 @@ import {
   tasks,
   workflows,
 } from '@/db/schema'
-import { readPortArtifact } from '@/services/portArtifacts'
+import { readPortArtifact, subsetArchiveJson } from '@/services/portArtifacts'
 import { pickFreshestRun } from '@/services/freshness'
 import { parseConsumedJson } from '@/services/freshness'
 import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
@@ -347,6 +347,33 @@ export function pickFreshestReviewRun(
 // ---------------------------------------------------------------------------
 // Scheduler entry point.
 // ---------------------------------------------------------------------------
+
+/**
+ * RFC-193 D16 — the upstream port row's archive reference for a review run,
+ * located via the run's RFC-074 provenance (consumed_upstream_runs_json). The
+ * decision products (approved_doc / accepted) project that port's paths, so
+ * they inherit the matching archive slice through subsetArchiveJson. Null
+ * provenance (legacy rows) → null (readers use the fallback chain).
+ */
+async function upstreamPortArchiveJson(
+  db: DbClient,
+  reviewRun: typeof nodeRuns.$inferSelect,
+  sourceNodeId: string,
+  sourcePortName: string,
+): Promise<string | null> {
+  const upstreamRunId = parseConsumedJson(reviewRun.consumedUpstreamRunsJson)[sourceNodeId]
+  if (upstreamRunId === undefined) return null
+  const rows = await db
+    .select({ archiveJson: nodeRunOutputs.archiveJson })
+    .from(nodeRunOutputs)
+    .where(
+      and(
+        eq(nodeRunOutputs.nodeRunId, upstreamRunId),
+        eq(nodeRunOutputs.portName, sourcePortName),
+      ),
+    )
+  return rows[0]?.archiveJson ?? null
+}
 
 export interface DispatchReviewArgs {
   db: DbClient
@@ -1942,6 +1969,16 @@ async function approveMultiDocReview(args: {
     acceptedCount: acceptedItemIndices.length,
     acceptedItemIndices,
   })
+  // RFC-193 D16: a path-list accepted subset is a projection of the upstream
+  // port — carry the matching slice of its archive reference so the accepted
+  // row stays artifact-readable after worktree GC. Inline rounds carry bodies
+  // verbatim (self-sufficient, no archive needed).
+  const acceptedArchiveJson = itemsInline
+    ? null
+    : subsetArchiveJson(
+        await upstreamPortArchiveJson(db, run, rep.sourceNodeId, rep.sourcePortName),
+        acceptedSubsetPaths(dvs),
+      )
   await db
     .insert(nodeRunOutputs)
     .values({
@@ -1949,10 +1986,11 @@ async function approveMultiDocReview(args: {
       portName: REVIEW_APPROVED_PORT_MULTI,
       content: acceptedContent,
       kind: acceptedKind,
+      archiveJson: acceptedArchiveJson,
     })
     .onConflictDoUpdate({
       target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-      set: { content: acceptedContent, kind: acceptedKind },
+      set: { content: acceptedContent, kind: acceptedKind, archiveJson: acceptedArchiveJson },
     })
   await db
     .insert(nodeRunOutputs)
@@ -2125,6 +2163,14 @@ export async function submitReviewDecision(
     // 'markdown_file'（kindParser 约定 stringifyKind 永不输出别名；存量行由
     // migration 0075 清洗，读侧 parse 时两者本就等价折叠）。
     const approvedDocKind = hasSourcePath ? 'path<md>' : null
+    // RFC-193 D16: path-shaped approved_doc projects the upstream port —
+    // carry its archive slice (inline-markdown approvals are self-sufficient).
+    const approvedArchiveJson = hasSourcePath
+      ? subsetArchiveJson(
+          await upstreamPortArchiveJson(args.db, run, dv.sourceNodeId, dv.sourcePortName),
+          [sourcePath as string],
+        )
+      : null
     // RFC-099 prompt isolation: no decider identity in the port payload.
     const meta = JSON.stringify({
       decision: 'approved',
@@ -2150,10 +2196,15 @@ export async function submitReviewDecision(
         portName: REVIEW_APPROVED_PORT_SINGLE,
         content: approvedDocContent,
         kind: approvedDocKind,
+        archiveJson: approvedArchiveJson,
       })
       .onConflictDoUpdate({
         target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-        set: { content: approvedDocContent, kind: approvedDocKind },
+        set: {
+          content: approvedDocContent,
+          kind: approvedDocKind,
+          archiveJson: approvedArchiveJson,
+        },
       })
     await args.db
       .insert(nodeRunOutputs)

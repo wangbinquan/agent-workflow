@@ -2425,14 +2425,22 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       iteration,
     })
     for (const b of bindings) {
-      const content = await readPortAtIteration(
+      // RFC-193 D16: copy kind + archive reference with the content — an
+      // output node is pure projection, its row must stay artifact-readable.
+      const row = await readPortRowAtIteration(
         db,
         taskId,
         b.bind.nodeId,
         b.bind.portName,
         iteration,
       )
-      await db.insert(nodeRunOutputs).values({ nodeRunId: nrId, portName: b.name, content })
+      await db.insert(nodeRunOutputs).values({
+        nodeRunId: nrId,
+        portName: b.name,
+        content: row.content,
+        kind: row.kind,
+        archiveJson: row.archiveJson,
+      })
     }
     broadcastNodeStatus(taskId, nrId, node.id, 'done')
     return { kind: 'ok', summary: '', message: '' }
@@ -4073,8 +4081,8 @@ async function runLoopWrapperNode(
     const portContent = await readPortAtIteration(db, taskId, cond.nodeId, cond.portName, i)
     if (evaluateExitCondition(cond, portContent)) {
       for (const b of bindings) {
-        const v = await readPortAtIteration(db, taskId, b.bind.nodeId, b.bind.portName, i)
-        await upsertWrapperOutput(db, wrapperRunId, b.name, v)
+        const v = await readPortRowAtIteration(db, taskId, b.bind.nodeId, b.bind.portName, i)
+        await upsertWrapperOutput(db, wrapperRunId, b.name, v.content, v.kind, v.archiveJson)
       }
       // RFC-130 T12: merge the loop's total (all-iterations) delta back into the
       // task canonical as one unit when it exits.
@@ -4556,7 +4564,17 @@ async function runFanoutWrapperNode(
     for (const port of aggInfo.agent.outputs) {
       const outletName = renames[port] ?? port
       const content = aggRes.outputs[port] ?? ''
-      await upsertWrapperOutput(db, wrapperRunId, outletName, content)
+      // RFC-193 D16: the aggregator run's row carries kind+archive reference
+      // (runner wrote them) — the outlet projection must not drop them.
+      const row = await readPortRowAtIteration(db, taskId, aggInfo.node.id, port, iteration)
+      await upsertWrapperOutput(
+        db,
+        wrapperRunId,
+        outletName,
+        content,
+        row.kind,
+        row.content === content ? row.archiveJson : null,
+      )
     }
   } else {
     // No aggregator: emit the implicit __done__ signal outlet. Empty content;
@@ -5480,13 +5498,17 @@ async function upsertWrapperOutput(
   wrapperRunId: string,
   portName: string,
   content: string,
+  // RFC-193 D16: projections copy the source row's kind + archive reference
+  // (synthesized outlets — __done__, git_diff — have no source row: NULL).
+  kind: string | null = null,
+  archiveJson: string | null = null,
 ): Promise<void> {
   await db
     .insert(nodeRunOutputs)
-    .values({ nodeRunId: wrapperRunId, portName, content })
+    .values({ nodeRunId: wrapperRunId, portName, content, kind, archiveJson })
     .onConflictDoUpdate({
       target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-      set: { content },
+      set: { content, kind, archiveJson },
     })
 }
 
@@ -6284,6 +6306,22 @@ async function readPortAtIteration(
   portName: string,
   iteration: number,
 ): Promise<string> {
+  return (await readPortRowAtIteration(db, taskId, nodeId, portName, iteration)).content
+}
+
+/**
+ * RFC-193 D16 — row-returning variant: derived-output projections (output
+ * virtual nodes, wrapper outlet promotion) must copy `kind` + `archive_json`
+ * alongside `content`, or the projected row 404s on the port-artifacts API
+ * and goes dark after worktree GC (Codex design-gate P1).
+ */
+async function readPortRowAtIteration(
+  db: DbClient,
+  taskId: string,
+  nodeId: string,
+  portName: string,
+  iteration: number,
+): Promise<{ content: string; kind: string | null; archiveJson: string | null }> {
   const rows = await db
     .select()
     .from(nodeRuns)
@@ -6306,12 +6344,16 @@ async function readPortAtIteration(
   // inherited from isFresherNodeRun; the old comment describing the retired
   // (clarifyIteration, retryIndex, id) triple was stale and is gone.)
   const chosen = pickFreshestRun(rows, { topLevelOnly: true, statusIn: ['done'] })
-  if (chosen === undefined) return ''
+  if (chosen === undefined) return { content: '', kind: null, archiveJson: null }
   const out = await db
     .select()
     .from(nodeRunOutputs)
     .where(and(eq(nodeRunOutputs.nodeRunId, chosen.id), eq(nodeRunOutputs.portName, portName)))
-  return out[0]?.content ?? ''
+  return {
+    content: out[0]?.content ?? '',
+    kind: out[0]?.kind ?? null,
+    archiveJson: out[0]?.archiveJson ?? null,
+  }
 }
 
 /**

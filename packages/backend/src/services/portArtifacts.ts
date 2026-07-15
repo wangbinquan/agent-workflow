@@ -396,6 +396,30 @@ export function missingArtifactPlaceholder(path: string | null): string {
   return `> ⚠️ RFC-079: file not found in worktree: \`${path ?? '(unknown)'}\``
 }
 
+/**
+ * RFC-193 D16 — 派生投影的归档子集：review 决策产物（approved_doc /
+ * accepted）把上游 path 端口的路径（子集）转写成自己的 content，归档引用也要
+ * 跟着来，否则这些行在 worktree GC 后照样 404。`wantPaths` 是决策产物的行
+ * （repo0 相对，= doc_versions 的 sourceFilePath/itemPath）；上游 archive
+ * items[].path 是容器相对——精确匹配优先，其次「/ 边界后缀」匹配吸收多
+ * repo 前缀差。产出 items 按 wantPaths 序。全部不匹配 → null（回退链兜底）。
+ */
+export function subsetArchiveJson(
+  upstreamArchiveJson: string | null,
+  wantPaths: readonly string[],
+): string | null {
+  const arch = parseArchiveJson(upstreamArchiveJson)
+  if (arch === null) return null
+  const items: PortArchiveItem[] = []
+  for (const want of wantPaths) {
+    const hit =
+      arch.items.find((i) => i.path === want) ??
+      arch.items.find((i) => i.path.endsWith('/' + want))
+    if (hit !== undefined) items.push(hit)
+  }
+  return items.length > 0 ? JSON.stringify({ v: 1, items } satisfies PortArchive) : null
+}
+
 // ---------------------------------------------------------------------------
 // K1 必达清单聚合（design §4.5 / D7）。
 // ---------------------------------------------------------------------------
