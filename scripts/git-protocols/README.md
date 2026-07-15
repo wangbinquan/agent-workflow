@@ -15,6 +15,13 @@ The three files in this directory form the fixture; the CI workflow
 Docker Desktop must be running (the daemon must be reachable on
 `/var/run/docker.sock` / `~/.docker/run/docker.sock`).
 
+> One-time migration note: this compose file used to live at the repo
+> root, where its implicit project name was your checkout dir. It now
+> pins `name: aw-git-protocols`, so a fixture started from the old
+> location is invisible to the new `down -v`. If one is still up, clear
+> it once with `docker rm -f aw-gitea-test` and
+> `docker volume rm <checkout-dir>_gitea-data`.
+
 ```sh
 # 1. Start gitea (run from the repo root).
 docker compose -f scripts/git-protocols/docker-compose.test.yml up -d
