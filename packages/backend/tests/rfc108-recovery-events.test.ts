@@ -5,7 +5,7 @@
 // 按 task 倒序可查；② 真实 actor（boot-reap）会记录事件（防接线漂移）。
 
 import { resolve } from 'node:path'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
@@ -44,6 +44,13 @@ async function seedRunningTask(db: DbClient): Promise<string> {
 }
 
 describe('RFC-108 T3 — recordRecoveryEvent + counters', () => {
+  // RFC-187: reset BEFORE as well as after. `recoveryCountersSnapshot()` is a
+  // process-global, and several suites drive real recovery actions (autoResume /
+  // dw-e2e / workgroup-e2e) without resetting — so an afterEach alone made the
+  // exact-count assertions below depend on TEST FILE ORDER, and they went red on
+  // ubuntu CI the moment new test files shifted that order. Resetting first makes
+  // the counts mean "what THIS test did", independent of whatever ran before.
+  beforeEach(() => __resetRecoveryCountersForTest())
   afterEach(() => __resetRecoveryCountersForTest())
 
   test('records a durable row, bumps the counter, lists newest-first', async () => {
@@ -66,6 +73,7 @@ describe('RFC-108 T3 — recordRecoveryEvent + counters', () => {
 })
 
 describe('RFC-108 T3 — actors record recovery_events', () => {
+  beforeEach(() => __resetRecoveryCountersForTest())
   afterEach(() => __resetRecoveryCountersForTest())
 
   test('reapOrphanRuns records a boot-reap event for each flipped task', async () => {

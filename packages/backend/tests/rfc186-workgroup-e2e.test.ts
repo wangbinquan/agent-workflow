@@ -8,7 +8,8 @@
 // 10 tasks 0 done). This drives it for real via `scenario-opencode` (per-agent,
 // per-turn scripted opencode) so the first green is regression-locked.
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
+import { __resetRecoveryCountersForTest } from '../src/services/recovery'
 import { execSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -29,6 +30,12 @@ import {
   startWorkgroupTask,
   WORKGROUP_HOST_WORKFLOW_ID,
 } from '../src/services/workgroupLaunch'
+
+// RFC-187: this suite drives REAL auto-resume, which bumps the process-global
+// recovery counters. bun shares the module registry across test files under CI's
+// coverage run, so leaving them bumped made another suite's exact-count assertion
+// (rfc108-recovery-events) fail depending on file order. Leave no residue.
+afterEach(() => __resetRecoveryCountersForTest())
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')

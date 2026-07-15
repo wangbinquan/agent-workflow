@@ -13,7 +13,8 @@
 // Fix = revive-by-re-mint at engine entry (like the DAG revives a terminal row) + an
 // auto-resume sweep that recognises this second wedge shape.
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
+import { __resetRecoveryCountersForTest } from '../src/services/recovery'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -22,6 +23,12 @@ import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import { isKilledClarifyContinuation } from '../src/services/workgroupRunner'
 import { CLARIFY_RERUN_CAUSES, isClarifyRerunCause } from '../src/services/nodeRunMint'
+
+// RFC-187: this suite drives REAL auto-resume, which bumps the process-global
+// recovery counters. bun shares the module registry across test files under CI's
+// coverage run, so leaving them bumped made another suite's exact-count assertion
+// (rfc108-recovery-events) fail depending on file order. Leave no residue.
+afterEach(() => __resetRecoveryCountersForTest())
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
