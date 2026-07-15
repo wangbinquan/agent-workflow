@@ -67,13 +67,27 @@ describe('RFC-190 PipelineHero', () => {
     expect(html).not.toContain('aw-stream-')
   })
 
-  test('topology includes the aggregate stage between audits and fix', () => {
+  test('topology is a REAL business flow: IO pills + GIT wrapper + fan-in straight into fix', () => {
+    // Acceptance revision (user: "右上角那个图不是一个正常的业务流"):
+    // snapshot/aggregate are framework MECHANICS, not business nodes — the
+    // git wrapper contains the coder and yields git_diff; the multi-process
+    // audit aggregates internally. This test locks the corrected shape so
+    // the pseudo-nodes can't sneak back in.
     const { container } = render(<PipelineHero />)
     const labels = Array.from(container.querySelectorAll('text')).map((t) => t.textContent ?? '')
     // zh default locale in tests; accept either bundle to stay locale-proof.
-    expect(labels.some((l) => /聚合|Aggregate/.test(l))).toBe(true)
+    expect(labels.some((l) => /快照|Snapshot/.test(l))).toBe(false)
+    expect(labels.some((l) => /聚合|Aggregate/.test(l))).toBe(false)
+    expect(labels.some((l) => /输入|Input/.test(l))).toBe(true)
+    expect(labels.some((l) => /输出|Output/.test(l))).toBe(true)
+    expect(labels.some((l) => /编码|Code/.test(l))).toBe(true)
     expect(labels.some((l) => /修复|Fix/.test(l))).toBe(true)
-    // three audit nodes (the fan-out), each marked live/breathing
+    // the GIT wrapper container (editor's dashed wrapper-group, miniaturized)
+    expect(container.querySelector('.pipeline-hero__wrapper-box')).toBeTruthy()
+    expect(labels.some((l) => l === 'GIT')).toBe(true)
+    // the wrapper's output port feeding the fan-out
+    expect(labels.some((l) => l === 'git_diff')).toBe(true)
+    // three exploded audit instances (the fan-out), each live/breathing
     const live = container.querySelectorAll('.pipeline-hero__node--live')
     expect(live.length).toBe(3)
   })

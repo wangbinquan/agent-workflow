@@ -105,12 +105,15 @@ export interface Resources {
       relativeDayAgo: string
     }
     // RFC-190：能力门户首页——管线 hero / 脉搏行 / 能力卡片 / 任务动态。
+    // 验收修订：管线图按真实业务流重画——快照/聚合是框架机制不是业务节点
+    // （git wrapper 容器取 diff、多进程节点内建聚合），改为输入/输出 IO 节点
+    // + GIT wrapper 框内编码 + 三审计扇入直进修复。
     pipeline: {
-      snapshot: string
+      input: string
       code: string
       audit: string
-      aggregate: string
       fix: string
+      output: string
       caption: string
       open: string
     }
@@ -3085,12 +3088,12 @@ export const zhCN: Resources = {
     },
     // RFC-190：能力门户首页。
     pipeline: {
-      snapshot: '快照',
+      input: '输入',
       code: '编码',
       audit: '审计',
-      aggregate: '聚合',
       fix: '修复',
-      caption: '快照 → 执行 → 扇出 → 聚合，确定性引擎驱动的多代理流水线',
+      output: '输出',
+      caption: '编码取 diff → 分片并行审计 → 聚合修复，确定性引擎全程编排',
       open: '打开工作流列表',
     },
     pulse: {

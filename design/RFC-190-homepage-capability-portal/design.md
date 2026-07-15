@@ -122,12 +122,12 @@ export const OverviewResponseSchema = z.object({
 ### 3.3 PipelineHero（平台特点视觉）
 
 - `components/home/PipelineHero.tsx`，纯手写 SVG（零依赖），`.pipeline-hero` 命名空间；外层 `<Link to="/workflows" aria-label={t('home.pipeline.open')}>`，`<svg aria-hidden="true">`。
-- 拓扑与平台核心抽象**逐段对齐**（设计门 P1-8；`CLAUDE.md` Code→Audit→Fix：审计结果先聚合再进 fixer；fan-out aggregator 现实见 `scheduler.ts` aggregator 收集 shard 输出）：`[git 快照] → [编码] ⇉ [审计]×3（扇出）→ [聚合] → [修复]`。聚合画为小型汇合节点（kind 标 `AGG`），三条审计边扇入其左侧。
-- 节点视觉呼应画布 `.canvas-node`（`styles.css:4667-4707`：`var(--panel)` 底、`var(--border)` 1px、radius 8、uppercase kind 小标 + 标题），kind 标示 `GIT / AGENT / AGENT ×3 / AGG / AGENT`。
+- 拓扑（**验收修订 v3**，用户反馈「右上角图不是正常业务流」）：初版把「快照」「聚合」画成独立业务节点系语义错误——两者都是框架机制而非用户会摆的节点（git wrapper 前后快照取 diff、多进程节点内建聚合，`CLAUDE.md`/proposal §5.2/§4.5）。修正为真实画布同构的业务流：`(输入) → ┊GIT wrapper[编码]┊ —git_diff→ [审计]×3（爆开三实例扇出，用户择案）→ 扇入直进 [修复] → (输出)`；wrapper 画为编辑器同款蓝虚线容器（`.canvas-node--wrapper-group--git` 色系，静态不参与流动动画），`git_diff` 作为端口名标注在扇出起点（唯一值得点名的机制——它就是审计消费的产物），输入/输出为画布 IO 节点微缩药丸。测试锁死伪节点不得复活（快照/聚合文案断言为 false）。
+- 节点视觉呼应画布 `.canvas-node`（`styles.css:4667-4707`：`var(--panel)` 底、`var(--border)` 1px、radius 8、uppercase kind 小标 + 标题），agent 节点 kind 一律 `AGENT`。
 - 三条扇出边分别用品牌三渐变色（stop 值复制 `__root.tsx:87-119`：`#10b981→#06b6d4`、`#3b82f6→#a855f7`、`#ec4899→#f97316`），渐变 id `aw-pipe-a/b/c`（避免与源级锁的 `aw-stream-*` 撞 id）；干线边用 `var(--border-strong)`。
 - 动画（纯 CSS，三套 selector 单列便于测试锁）：①`.pipeline-hero__edge`：`stroke-dasharray`+`stroke-dashoffset` 匀速行进；②`.pipeline-hero__dot`：光点 `<circle>` 走 CSS `offset-path: path('…')` 循环；③`.pipeline-hero__node--live`：审计组呼吸。**三者均在 `@media (prefers-reduced-motion: reduce)` 内逐 selector `animation: none`**（仓内 idiom：`styles.css:5192-5200`/`5233-5242`；测试锁到 selector 粒度，设计门 P2-3）。
 - 主题：全部用 token（`--panel/--border/--text/--muted/--accent`），`data-theme` 级联自动适配暗色；渐变 stop 为品牌常量、双主题同值（与侧栏 logo 同理）。
-- 节点文字 `<text>` 用 i18n（`home.pipeline.snapshot/code/audit/aggregate/fix`）；SVG 下方一行 caption（`home.pipeline.caption`，muted）。
+- 节点文字 `<text>` 用 i18n（`home.pipeline.input/code/audit/fix/output`；kind 标签 `GIT`/`AGENT` 与端口名 `git_diff` 为代码级标识不入 i18n）；SVG 下方一行 caption（`home.pipeline.caption`，muted，说明「取 diff → 分片并行审计 → 聚合修复」的机制语义）。
 - 响应式：hero 右列 `min-width` 不足（<~900px 容器）时管线换行至问候语下方；`viewBox` 等比缩放。
 - e2e 视觉回归以 `animations:'disabled'` 截图，CSS 动画被冻结，基线稳定。
 

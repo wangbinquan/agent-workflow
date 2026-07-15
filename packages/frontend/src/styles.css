@@ -2091,6 +2091,43 @@ code {
   font-family: inherit;
 }
 
+/* GIT wrapper container — same hue family as the editor's
+ * .canvas-node--wrapper-group--git (dashed blue, tinted fill). Static:
+ * containers are membership, not flow, so no marching animation. */
+.pipeline-hero__wrapper-box {
+  fill: color-mix(in srgb, #4a78a6 6%, var(--panel));
+  stroke: color-mix(in srgb, #4a78a6 55%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+.pipeline-hero__wrapper-label {
+  fill: color-mix(in srgb, #4a78a6 80%, var(--text));
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  font-family: inherit;
+}
+
+/* IO pills — the canvas input/output nodes, miniaturized. */
+.pipeline-hero__io-box {
+  fill: var(--panel);
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.pipeline-hero__io-text {
+  fill: var(--muted);
+  font-size: 10px;
+  font-family: inherit;
+}
+
+/* Port-name tag on the fan-out (the wrapper's git_diff output). */
+.pipeline-hero__edge-label {
+  fill: var(--muted);
+  font-size: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 .pipeline-hero__edge {
   fill: none;
   stroke-width: 1.6;

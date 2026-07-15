@@ -98,13 +98,13 @@ export const enUS: Resources = {
     },
     // RFC-190: capability-portal homepage.
     pipeline: {
-      snapshot: 'Snapshot',
+      input: 'Input',
       code: 'Code',
       audit: 'Audit',
-      aggregate: 'Aggregate',
       fix: 'Fix',
+      output: 'Output',
       caption:
-        'snapshot → run → fan-out → aggregate, a deterministic engine driving multi-agent pipelines',
+        'code → diff sharded to parallel audits → aggregated fix, orchestrated by a deterministic engine',
       open: 'Open workflows',
     },
     pulse: {
