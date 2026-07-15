@@ -5,7 +5,11 @@
 import { describe, expect, test } from 'vitest'
 import type { AgentMarkdownParseResult, CreateAgent } from '@agent-workflow/shared'
 import { emptyAgent } from '../src/components/AgentForm'
-import { fieldsOverwrittenByImport, mergeAgentImport } from '../src/lib/agent-import-merge'
+import {
+  fieldsOverwrittenByImport,
+  importOrphanSidecarConflicts,
+  mergeAgentImport,
+} from '../src/lib/agent-import-merge'
 
 function makeResult(partial: Partial<CreateAgent>): AgentMarkdownParseResult {
   return { partial, warnings: [], unrecognizedKeys: [], hadFrontmatter: true }
@@ -51,7 +55,7 @@ describe('mergeAgentImport', () => {
     expect(merged.bodyMd).toBe('new body')
   })
 
-  test('outputs / skills never touched by parser are preserved', () => {
+  test('port fields omitted by parser and skills preserve current values', () => {
     const current: CreateAgent = {
       ...emptyAgent(),
       outputs: ['p1'],
@@ -63,6 +67,33 @@ describe('mergeAgentImport', () => {
     )
     expect(merged.outputs).toEqual(['p1'])
     expect(merged.skills).toEqual(['s1'])
+  })
+
+  test('RFC-194: overwrites all imported first-class port fields', () => {
+    const current: CreateAgent = {
+      ...emptyAgent(),
+      inputs: [{ name: 'old_in', kind: 'string' }],
+      outputs: ['old_out'],
+      outputKinds: { old_out: 'markdown' },
+      role: 'normal',
+      outputWrapperPortNames: { old_out: 'old_wrapper' },
+    }
+    const merged = mergeAgentImport(
+      current,
+      makeResult({
+        inputs: [{ name: 'new_in', kind: 'markdown' }],
+        outputs: ['new_out', 'new_out'],
+        outputKinds: { new_out: 'path<md>' },
+        role: 'aggregator',
+        outputWrapperPortNames: { new_out: 'new_wrapper' },
+      }),
+    )
+
+    expect(merged.inputs).toEqual([{ name: 'new_in', kind: 'markdown' }])
+    expect(merged.outputs).toEqual(['new_out', 'new_out'])
+    expect(merged.outputKinds).toEqual({ new_out: 'path<md>' })
+    expect(merged.role).toBe('aggregator')
+    expect(merged.outputWrapperPortNames).toEqual({ new_out: 'new_wrapper' })
   })
 })
 
@@ -97,5 +128,64 @@ describe('fieldsOverwrittenByImport', () => {
       empty,
     )
     expect(fields).toEqual([])
+  })
+
+  test('RFC-194: lists edited first-class port fields that import replaces', () => {
+    const empty = emptyAgent()
+    const current: CreateAgent = {
+      ...empty,
+      inputs: [{ name: 'old_in', kind: 'string' }],
+      outputs: ['old_out'],
+      outputKinds: { old_out: 'markdown' },
+      role: 'aggregator',
+      outputWrapperPortNames: { old_out: 'wrapper_out' },
+    }
+    const fields = fieldsOverwrittenByImport(
+      current,
+      makeResult({
+        inputs: [{ name: 'new_in', kind: 'string' }],
+        outputs: ['new_out'],
+        outputKinds: { new_out: 'markdown' },
+        role: 'normal',
+        outputWrapperPortNames: { new_out: 'new_wrapper' },
+      }),
+      empty,
+    )
+
+    expect(fields.sort()).toEqual(
+      ['inputs', 'outputKinds', 'outputWrapperPortNames', 'outputs', 'role'].sort(),
+    )
+  })
+})
+
+describe('importOrphanSidecarConflicts', () => {
+  test('blocks an outputs-only import from silently claiming current orphan maps', () => {
+    const current: CreateAgent = {
+      ...emptyAgent(),
+      outputKinds: { future: 'markdown' },
+      outputWrapperPortNames: { future: 'published' },
+    }
+    expect(importOrphanSidecarConflicts(current, makeResult({ outputs: ['future'] }))).toEqual([
+      { source: 'outputKinds', key: 'future' },
+      { source: 'outputWrapperPortNames', key: 'future' },
+    ])
+  })
+
+  test('allows an import that explicitly replaces each conflicting sidecar map', () => {
+    const current: CreateAgent = {
+      ...emptyAgent(),
+      outputKinds: { future: 'markdown' },
+      outputWrapperPortNames: { future: 'published' },
+    }
+    expect(
+      importOrphanSidecarConflicts(
+        current,
+        makeResult({
+          outputs: ['future'],
+          outputKinds: { future: 'string' },
+          outputWrapperPortNames: {},
+        }),
+      ),
+    ).toEqual([])
   })
 })

@@ -16,7 +16,7 @@
 // These tests must stay green so the trap never re-grabs an open <Select>,
 // while still trapping focus that genuinely escapes the dialog.
 
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/react'
 import { useState } from 'react'
 import { Dialog } from '../src/components/Dialog'
@@ -26,6 +26,31 @@ function DialogWithSelect() {
   const [v, setV] = useState<'a' | 'b'>('a')
   return (
     <Dialog open onClose={() => {}} title="t">
+      <Select<'a' | 'b'>
+        value={v}
+        onChange={setV}
+        ariaLabel="sel"
+        options={[
+          { value: 'a', label: 'A' },
+          { value: 'b', label: 'B' },
+        ]}
+      />
+    </Dialog>
+  )
+}
+
+function ClosableDialogWithSelect({ onClose }: { onClose: () => void }) {
+  const [open, setOpen] = useState(true)
+  const [v, setV] = useState<'a' | 'b'>('a')
+  return (
+    <Dialog
+      open={open}
+      onClose={() => {
+        onClose()
+        setOpen(false)
+      }}
+      title="t"
+    >
       <Select<'a' | 'b'>
         value={v}
         onChange={setV}
@@ -74,5 +99,26 @@ describe('Dialog focus trap × portaled <Select>', () => {
     expect(ae).not.toBe(outside)
     const panel = document.querySelector<HTMLElement>('[role="dialog"]')
     expect(panel?.contains(ae)).toBe(true)
+  })
+
+  test('Escape closes the listbox first, then a second Escape closes the Dialog', async () => {
+    const onClose = vi.fn()
+    render(<ClosableDialogWithSelect onClose={onClose} />)
+    const trigger = document.querySelector<HTMLElement>('[role="combobox"]')
+    fireEvent.click(trigger as HTMLElement)
+    await new Promise((r) => setTimeout(r, 10))
+
+    const listbox = document.querySelector<HTMLElement>('[role="listbox"]')
+    expect(listbox).not.toBeNull()
+    fireEvent.keyDown(listbox as HTMLElement, { key: 'Escape' })
+
+    expect(onClose).not.toHaveBeenCalled()
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull()
+    expect(trigger?.getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(trigger)
+
+    fireEvent.keyDown(trigger as HTMLElement, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
   })
 })

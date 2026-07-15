@@ -10,15 +10,18 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, createRoute, useNavigate } from '@tanstack/react-router'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Agent, CreateAgent } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { useDraftFromQuery } from '@/hooks/useDraftFromQuery'
 import { useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
-import { AgentForm, emptyAgent } from '@/components/AgentForm'
+import { AgentForm, emptyAgent, type AgentTab } from '@/components/AgentForm'
+import { AgentPortValidationSummary } from '@/components/agent-ports/AgentPortValidationSummary'
 import { DetailHeaderActions } from '@/components/DetailHeaderActions'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
+import { validateAgentPortState } from '@/lib/agent-ports'
 import { Route as agentsRoute } from './agents'
 
 export const Route = createRoute({
@@ -35,6 +38,7 @@ function AgentDetailPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { report } = useSplitDirty()
+  const [activeTab, setActiveTab] = useState<AgentTab>('basics')
 
   const query = useQuery<Agent>({
     queryKey: ['agents', name],
@@ -86,6 +90,8 @@ function AgentDetailPage() {
       navigate({ to: '/agents' })
     },
   })
+  const portValidation = validateAgentPortState(draft ?? emptyAgent())
+  const blockingPortIssues = portValidation.issues.filter((issue) => issue.severity === 'error')
 
   // §6 error-state narrowing: only a missing draft shows the full error/loading;
   // once seeded, a background failure keeps the editor and shows a top banner.
@@ -107,7 +113,7 @@ function AgentDetailPage() {
           onClick: () => {
             if (draft !== undefined) save.mutate(draft)
           },
-          disabled: save.isPending || !loaded,
+          disabled: save.isPending || !loaded || !portValidation.valid,
           testid: 'agent-save-button',
         }}
         del={{
@@ -133,10 +139,24 @@ function AgentDetailPage() {
           <h2>{name}</h2>
         </div>
       </DetailHeaderActions>
+      {blockingPortIssues.length > 0 && (
+        <AgentPortValidationSummary
+          issues={blockingPortIssues}
+          variant="compact"
+          onNavigate={setActiveTab}
+        />
+      )}
       {draft !== undefined && query.error !== null && query.error !== undefined && (
         <ErrorBanner error={query.error} />
       )}
-      <AgentForm value={draft ?? emptyAgent()} onChange={setDraft} nameLocked />
+      <AgentForm
+        value={draft ?? emptyAgent()}
+        onChange={setDraft}
+        nameLocked
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        hasExternalPortAlert={blockingPortIssues.length > 0}
+      />
     </fieldset>
   )
 }

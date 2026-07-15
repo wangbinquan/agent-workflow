@@ -7,7 +7,15 @@
 // to apply the partial.
 
 import { parse as parseYaml } from 'yaml'
-import type { AgentPermission, CreateAgent } from './schemas/agent'
+import { z } from 'zod'
+import {
+  AgentInputPortSchema,
+  AgentOutputKindsMapSchema,
+  AgentOutputWrapperPortNamesSchema,
+  AgentRoleSchema,
+  type AgentPermission,
+  type CreateAgent,
+} from './schemas/agent'
 
 export interface AgentMarkdownParseOptions {
   /** Filename stem (no extension) used when frontmatter has no `name`. */
@@ -46,11 +54,23 @@ const KNOWN_KEYS = new Set<string>([
   // Same shape policy as dependsOn / mcp. Existence + enabled check happens
   // server-side at save time (services/agent.ts `validatePluginReferences`).
   'plugins',
+  // RFC-194: the existing agent port contract must enter the form as typed
+  // fields. Keeping these keys out of frontmatterExtra also prevents reserved
+  // sidecars from being promoted only after the form-level repair gate.
+  'inputs',
+  'outputs',
+  'outputKinds',
+  'role',
+  'outputWrapperPortNames',
   // RFC-111 (Codex audit F6): runtime name this agent dispatches to. String
   // shape; the named runtime's existence is checked server-side at save time
   // (services/agent.ts), same policy as mcp / plugins.
   'runtime',
 ])
+
+// Deliberately no uniqueness refine: imported legacy duplicates must reach the
+// Ports editor's repair state instead of being hidden in frontmatterExtra.
+const AgentOutputsImportSchema = z.array(z.string())
 
 /** RFC-022: matches AGENT_NAME_RE in schemas/agent.ts so import-time and
  *  save-time validation agree on legal names. */
@@ -120,6 +140,61 @@ export function parseAgentMarkdown(
     } else {
       extras.description = data.description
       warnings.push('description must be string; kept in frontmatterExtra')
+    }
+  }
+
+  // RFC-194: route the existing agent port fields into their first-class form
+  // state. A malformed field is preserved verbatim in frontmatterExtra with a
+  // warning so import never silently drops authored data.
+  if (data.inputs !== undefined) {
+    const parsed = AgentInputPortSchema.array().safeParse(data.inputs)
+    if (parsed.success) {
+      partial.inputs = parsed.data
+    } else {
+      extras.inputs = data.inputs
+      warnings.push('inputs must be an array of valid input ports; kept in frontmatterExtra')
+    }
+  }
+
+  if (data.outputs !== undefined) {
+    const parsed = AgentOutputsImportSchema.safeParse(data.outputs)
+    if (parsed.success) {
+      partial.outputs = parsed.data
+    } else {
+      extras.outputs = data.outputs
+      warnings.push('outputs must be an array of strings; kept in frontmatterExtra')
+    }
+  }
+
+  if (data.outputKinds !== undefined) {
+    const parsed = AgentOutputKindsMapSchema.safeParse(data.outputKinds)
+    if (parsed.success) {
+      partial.outputKinds = parsed.data
+    } else {
+      extras.outputKinds = data.outputKinds
+      warnings.push('outputKinds must map port names to registered kinds; kept in frontmatterExtra')
+    }
+  }
+
+  if (data.role !== undefined) {
+    const parsed = AgentRoleSchema.safeParse(data.role)
+    if (parsed.success) {
+      partial.role = parsed.data
+    } else {
+      extras.role = data.role
+      warnings.push('role must be normal or aggregator; kept in frontmatterExtra')
+    }
+  }
+
+  if (data.outputWrapperPortNames !== undefined) {
+    const parsed = AgentOutputWrapperPortNamesSchema.safeParse(data.outputWrapperPortNames)
+    if (parsed.success) {
+      partial.outputWrapperPortNames = parsed.data
+    } else {
+      extras.outputWrapperPortNames = data.outputWrapperPortNames
+      warnings.push(
+        'outputWrapperPortNames must map port names to non-empty strings; kept in frontmatterExtra',
+      )
     }
   }
 

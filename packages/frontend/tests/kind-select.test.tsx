@@ -4,7 +4,8 @@
 //      BOTH locales (a new kind without a label fails here, not at runtime).
 //   3. render smoke — picking a base option emits the canonical kind.
 
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { describe, expect, test, vi } from 'vitest'
 import { OUTPUT_KIND_UI, PATH_EXT_UI } from '@agent-workflow/shared'
 import { decompose, recompose, KindSelect } from '../src/components/KindSelect'
@@ -71,9 +72,11 @@ describe('RFC-080 drift guard 3b — OUTPUT_KIND_UI labels resolve in both local
     }, obj)
   }
   for (const d of OUTPUT_KIND_UI) {
-    test(`${d.id}: ${d.labelKey} present in en-US + zh-CN`, () => {
+    test(`${d.id}: label + description present in en-US + zh-CN`, () => {
       expect(typeof resolve(enUS, d.labelKey)).toBe('string')
       expect(typeof resolve(zhCN, d.labelKey)).toBe('string')
+      expect(typeof resolve(enUS, d.descriptionKey)).toBe('string')
+      expect(typeof resolve(zhCN, d.descriptionKey)).toBe('string')
     })
   }
   // The path ext sub-dropdown (PATH_EXT_UI) + its aria-label must also resolve.
@@ -103,6 +106,12 @@ describe('KindSelect render smoke', () => {
     expect(opt).toBeDefined()
     fireEvent.mouseDown(opt!)
     expect(onChange).toHaveBeenCalledWith('markdown')
+  })
+
+  test('base options render their catalog descriptions', () => {
+    render(<KindSelect value="string" onChange={() => {}} ariaLabel="Output kind" />)
+    fireEvent.click(screen.getByRole('combobox', { name: 'Output kind' }))
+    expect(document.querySelectorAll('.select__option-sub')).toHaveLength(OUTPUT_KIND_UI.length)
   })
 
   test('a list<path<md>> value renders a list toggle that is on + a path ext dropdown on Markdown', () => {
@@ -135,5 +144,127 @@ describe('KindSelect render smoke', () => {
     expect(opt).toBeDefined()
     fireEvent.mouseDown(opt!)
     expect(onChange).toHaveBeenCalledWith('path<md>')
+  })
+
+  test('contextLabel distinguishes every repeated guided control and className reaches the wrapper', () => {
+    render(
+      <KindSelect
+        value="path<md>"
+        onChange={() => {}}
+        className="port-kind"
+        contextLabel="artifact"
+      />,
+    )
+
+    const wrapper = document.querySelector('.kind-select')
+    expect(wrapper?.classList.contains('port-kind')).toBe(true)
+    expect(
+      screen.getByRole('combobox', {
+        name: `artifact — ${enUS.kindSelect.baseLabel}`,
+      }),
+    ).toBeTruthy()
+    expect(
+      screen.getByRole('combobox', {
+        name: `artifact — ${enUS.kindSelect.extLabel}`,
+      }),
+    ).toBeTruthy()
+    expect(
+      screen.getByRole('checkbox', {
+        name: `artifact — ${enUS.kindSelect.listToggle}`,
+      }),
+    ).toBeTruthy()
+    expect(
+      screen.getByRole('button', {
+        name: `artifact — ${enUS.kindSelect.advancedToggle}`,
+      }),
+    ).toBeTruthy()
+  })
+
+  test('onValidityChange reports transitions once; advanced input solely owns its parse error', async () => {
+    const validity = vi.fn<(valid: boolean) => void>()
+
+    function Probe() {
+      const [value, setValue] = useState('string')
+      return (
+        <KindSelect
+          value={value}
+          onChange={setValue}
+          onValidityChange={validity}
+          contextLabel="report"
+          className="port-kind"
+          testidPrefix="k"
+        />
+      )
+    }
+
+    render(<Probe />)
+    await waitFor(() => expect(validity).toHaveBeenLastCalledWith(true))
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `report — ${enUS.kindSelect.advancedToggle}`,
+      }),
+    )
+
+    const input = screen.getByTestId('k-advanced-input')
+    expect(document.querySelector('.kind-select')?.className).toContain(
+      'kind-select--advanced port-kind',
+    )
+    fireEvent.change(input, { target: { value: 'not a kind' } })
+    await waitFor(() => expect(validity).toHaveBeenLastCalledWith(false))
+
+    const alerts = screen.getAllByRole('alert')
+    expect(alerts).toHaveLength(1)
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+    expect(input.getAttribute('aria-describedby')).toBe(alerts[0]?.id)
+
+    fireEvent.change(input, { target: { value: 'list<path<md>>' } })
+    await waitFor(() => expect(validity).toHaveBeenLastCalledWith(true))
+    expect(screen.queryByRole('alert')).toBeNull()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `report — ${enUS.kindSelect.guidedToggle}`,
+      }),
+    )
+    expect(
+      screen.getByRole('combobox', {
+        name: `report — ${enUS.kindSelect.baseLabel}`,
+      }),
+    ).toBeTruthy()
+    expect(validity.mock.calls.map(([valid]) => valid)).toEqual([true, false, true])
+  })
+
+  test('Advanced to Guided realigns the keyboard active option with the current value', async () => {
+    const changes = vi.fn<(value: string) => void>()
+
+    function Probe() {
+      const [value, setValue] = useState('string')
+      return (
+        <KindSelect
+          value={value}
+          onChange={(next) => {
+            changes(next)
+            setValue(next)
+          }}
+          ariaLabel="Output kind"
+          testidPrefix="guided-realign"
+        />
+      )
+    }
+
+    render(<Probe />)
+    fireEvent.click(screen.getByRole('button', { name: enUS.kindSelect.advancedToggle }))
+    fireEvent.change(screen.getByTestId('guided-realign-advanced-input'), {
+      target: { value: 'markdown' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: enUS.kindSelect.guidedToggle }))
+
+    const trigger = screen.getByRole('combobox', { name: 'Output kind' })
+    expect(trigger.textContent).toContain('markdown')
+    fireEvent.click(trigger)
+    const listbox = await screen.findByRole('listbox')
+    fireEvent.keyDown(listbox, { key: 'Enter' })
+
+    expect(changes.mock.calls.map(([value]) => value)).toEqual(['markdown', 'markdown'])
   })
 })

@@ -78,6 +78,39 @@ describe('buildOrchestratorPrompt', () => {
     expect(p).toContain('REJECTED')
     expect(p).toContain('the auditor should run last')
   })
+
+  test('64 pool cards stay present while input-description additions stay within 4,800 chars', () => {
+    const verbosePool: CapabilitySource[] = Array.from({ length: 64 }, (_, index) => ({
+      name: `agent-${index}`,
+      description: `agent ${index}`,
+      inputs: [
+        {
+          name: 'request',
+          kind: 'string',
+          description: 'long capability detail '.repeat(100),
+        },
+      ],
+      outputs: ['result'],
+      role: 'normal',
+    }))
+    const compactPool: CapabilitySource[] = verbosePool.map((agent) => ({
+      ...agent,
+      inputs: agent.inputs?.map(({ description: _drop, ...port }) => port),
+    }))
+    const withDescriptions = buildOrchestratorPrompt({ charter: '', goal: 'g', pool: verbosePool })
+    const withoutDescriptions = buildOrchestratorPrompt({
+      charter: '',
+      goal: 'g',
+      pool: compactPool,
+    })
+
+    for (let index = 0; index < 64; index += 1) {
+      expect(withDescriptions).toContain(`### agent-${index}`)
+      expect(withDescriptions).toContain('request (string)')
+    }
+    expect(withDescriptions.length - withoutDescriptions.length).toBeGreaterThan(0)
+    expect(withDescriptions.length - withoutDescriptions.length).toBeLessThanOrEqual(4_800)
+  })
 })
 
 const POOL_NAMES = ['coder', 'auditor']

@@ -20,7 +20,11 @@ import type {
   WorkflowValidationIssue,
   WorkflowValidationResult,
 } from '@agent-workflow/shared'
-import { DW_VALIDATION_CODES, renderRosterCapabilityCards } from '@agent-workflow/shared'
+import {
+  DW_VALIDATION_CODES,
+  perCardInputDescriptionBudget,
+  renderRosterCapabilityCards,
+} from '@agent-workflow/shared'
 
 /** Name of the framework-internal orchestrator agent (never a user `agents` row). */
 export const ORCHESTRATOR_AGENT_NAME = 'aw-workflow-orchestrator'
@@ -28,6 +32,9 @@ export const ORCHESTRATOR_AGENT_NAME = 'aw-workflow-orchestrator'
 export const ORCHESTRATOR_WORKFLOW_PORT = 'workflow'
 /** Node id of the orchestrator node in the synthesized generation-phase snapshot. */
 export const DW_ORCHESTRATOR_NODE_ID = '__dw_orchestrator__'
+
+const ORCHESTRATOR_INPUT_DESCRIPTION_TOTAL_BUDGET = 4_800
+const ORCHESTRATOR_CARD_INPUT_DESCRIPTION_MAX = 600
 
 // The phase constants moved to shared (PR-2③ — the frontend maps them to copy
 // and the scheduler dispatches on them); re-exported here so existing backend
@@ -130,7 +137,18 @@ export function buildOrchestratorPrompt(opts: {
     lines.push('Group charter (fixed background):', opts.charter.trim(), '')
   }
   lines.push('This run’s objective:', opts.goal.trim(), '')
-  lines.push('## Agent pool', '', renderRosterCapabilityCards(opts.pool), '')
+  lines.push(
+    '## Agent pool',
+    '',
+    renderRosterCapabilityCards(opts.pool, {
+      inputDescriptionBudget: perCardInputDescriptionBudget(
+        ORCHESTRATOR_INPUT_DESCRIPTION_TOTAL_BUDGET,
+        opts.pool.length,
+        ORCHESTRATOR_CARD_INPUT_DESCRIPTION_MAX,
+      ),
+    }),
+    '',
+  )
   if (opts.rejectionComment !== undefined && opts.rejectionComment.trim().length > 0) {
     lines.push(
       '## Previous attempt was REJECTED',

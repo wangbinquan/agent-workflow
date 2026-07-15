@@ -214,4 +214,42 @@ describe('buildRosterAgentCards — RFC-166 preload (DB)', () => {
     expect(cards.get('m-a')).toBe(cards.get('m-b'))
     expect(cards.get('m-a')).toContain('writes the patch')
   })
+
+  test('64 members keep every card while input-description additions stay within 2,400 chars', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await createAgent(
+      db,
+      agentPayload('verbose-agent', {
+        inputs: [
+          {
+            name: 'diff',
+            kind: 'string',
+            required: true,
+            description: 'description '.repeat(120),
+          },
+        ],
+      }),
+    )
+    const members = Array.from({ length: 64 }, (_, index) => ({
+      id: `m-${index}`,
+      memberType: 'agent' as const,
+      agentName: 'verbose-agent',
+      userId: null,
+      displayName: `worker-${index}`,
+      roleDesc: '',
+    }))
+    const cards = await buildRosterAgentCards(db, cfg({ members, leaderMemberId: members[0]!.id }))
+
+    expect(cards.size).toBe(64)
+    let addedDescriptionChars = 0
+    const baseInputLine = '- inputs: diff (string, required)'
+    for (const card of cards.values()) {
+      const inputLine = card.split('\n').find((line) => line.startsWith('- inputs:')) ?? ''
+      expect(card).toContain('### verbose-agent')
+      expect(inputLine.startsWith(baseInputLine)).toBe(true)
+      expect(inputLine).toContain(' — ')
+      addedDescriptionChars += inputLine.length - baseInputLine.length
+    }
+    expect(addedDescriptionChars).toBeLessThanOrEqual(2_400)
+  })
 })

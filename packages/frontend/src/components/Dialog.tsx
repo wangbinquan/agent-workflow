@@ -122,6 +122,12 @@ export function Dialog(props: DialogProps): ReactElement | null {
     if (!props.open || !closeOnEsc) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // A child popover may consume Escape by calling preventDefault().
+        // React portals still bubble through the component tree, but browser
+        // event ordering can let this window listener observe the same key
+        // after the child handler. Respecting defaultPrevented keeps the first
+        // Escape scoped to that child layer (for example <Select>'s listbox).
+        if (e.defaultPrevented) return
         // Nested dialogs: only the topmost layer answers ESC — sibling
         // window listeners all see the event regardless of stopPropagation.
         if (!isTopDialog()) return

@@ -3725,83 +3725,257 @@ details.form-section[open] > summary {
   font-size: 12px;
 }
 
-/* ---- Outputs editor (per-port name + kind select) ---- */
+/* ---- RFC-194 agent port editor ---- */
 
-/* RFC-166: InputsEditor shares OutputsEditor's row chrome (list of port rows).
-   Selectors are grouped so both stay visually identical with zero duplication;
-   InputsEditor adds only a `required` toggle cell (.inputs-editor__required). */
-.outputs-editor,
-.inputs-editor {
+.agent-ports {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 28px;
+  min-width: 0;
 }
 
-.outputs-editor__list,
-.inputs-editor__list {
-  list-style: none;
+.agent-ports .form-section {
+  margin-top: 0;
+}
+
+.agent-port-section__header,
+.agent-port-section__intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.agent-port-section__header {
+  justify-content: space-between;
+}
+
+.agent-port-section__intro {
+  flex: 1 1 auto;
+  align-items: baseline;
+}
+
+.agent-port-section__intro p {
   margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-.outputs-editor__row,
-.inputs-editor__row {
+.agent-port-section__count {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.agent-port-section__add {
+  flex: 0 0 auto;
+}
+
+.agent-port-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.agent-port-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.agent-port-card__header,
+.agent-port-card__chips,
+.agent-port-card__input-summary,
+.agent-port-card__output-summary,
+.agent-port-card__wrapper-map {
   display: flex;
   align-items: center;
   gap: 8px;
-  /* Keep the row inside its container: without min-width:0 a long port name
-     would push the row wider than the form column. */
   min-width: 0;
 }
 
-.outputs-editor__name,
-.inputs-editor__name {
-  flex: 1 1 0;
+.agent-port-card__header {
+  width: 100%;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.agent-port-card__chips {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.agent-port-card__name,
+.agent-port-card__kind-code {
   min-width: 0;
-  font-family: var(--font-mono, monospace);
-  font-size: 13px;
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg);
-  /* Long names truncate instead of stretching the row off-screen. */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.outputs-editor__kind,
-.inputs-editor__kind {
-  /* Override .form-input { width: 100% } — inside the flex row that 100%
-     would force flex-basis to a full row width and shove the rest of the
-     row past the viewport edge. */
-  width: auto;
-  flex: 0 0 auto;
-  min-width: 140px;
-  max-width: 40%;
+.agent-port-card__name {
+  font-size: 14px;
+  font-weight: 650;
 }
 
-.outputs-editor__remove,
-.inputs-editor__remove {
-  flex: 0 0 auto;
+.agent-port-card__kind-code {
+  max-width: 24ch;
+  color: var(--muted);
+  font-size: 11px;
 }
 
-/* RFC-166: the per-port `required` toggle — a compact inline switch label. */
-.inputs-editor__required {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--muted, #666);
-  white-space: nowrap;
+.agent-port-card__input-summary,
+.agent-port-card__output-summary {
+  min-height: 42px;
+  align-items: flex-start;
 }
 
-.inputs-editor__required input {
+.agent-port-card__description {
+  display: -webkit-box;
+  flex: 1 1 auto;
   margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.agent-port-card__wrapper-map code,
+.agent-port-card__wrapper-default {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.agent-port-card .card__footer {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.agent-port-card .card__footer .btn {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.agent-port-dialog__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.agent-port-dialog__fields .kind-select__row {
+  align-items: flex-start;
+}
+
+.agent-port-validation,
+.agent-port-orphans {
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  background: var(--warn-bg);
+  padding: 12px 14px;
+}
+
+.agent-port-validation--compact {
+  margin: 0 0 14px;
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+  background: color-mix(in srgb, var(--danger) 8%, var(--panel));
+}
+
+.agent-port-validation__title,
+.agent-port-orphans__header h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.agent-port-validation__list,
+.agent-port-orphans__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-port-validation__item,
+.agent-port-orphans__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agent-port-validation__message,
+.agent-port-orphans__item code {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.agent-port-validation__target {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.agent-port-orphans__header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .agent-port-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agent-port-section__header,
+  .agent-port-section__intro,
+  .agent-port-validation__item,
+  .agent-port-orphans__item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .agent-port-section__add {
+    align-self: flex-start;
+    min-height: 44px;
+  }
+
+  .agent-port-card .card__footer .btn,
+  .agent-port-validation__navigate,
+  .agent-port-orphans__item .btn {
+    min-height: 44px;
+  }
+
+  .agent-port-card .card__footer {
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  .agent-port-card .card__footer .btn {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .agent-port-card__chips {
+    justify-content: flex-start;
+  }
+
+  .agent-port-dialog__fields .kind-select__row > * {
+    max-width: 100%;
+  }
 }
 
 /* ---- RFC-166 §4.2 capability card preview (shared UI primitive) ---- */
@@ -3858,7 +4032,15 @@ details.form-section[open] > summary {
 .capability-card__ports-list {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
+}
+
+.capability-card__port-item {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
 }
 
 .capability-card__port {
@@ -3881,6 +4063,14 @@ details.form-section[open] > summary {
   color: var(--danger, #c0392b);
   font-size: 10px;
   text-transform: uppercase;
+}
+
+.capability-card__port-description {
+  max-width: 32ch;
+  color: var(--muted, #666);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .capability-card__ports-none {

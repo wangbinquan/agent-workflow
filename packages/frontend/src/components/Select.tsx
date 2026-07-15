@@ -115,18 +115,16 @@ export function Select<V extends string>(props: Props<V>) {
   useEffect(() => {
     if (open) {
       setQuery('')
-      // Re-align the active row with the CURRENT selection: after a filtered
-      // session, activeIndex still indexes the old filtered array — reopening
-      // over the full list would highlight an unrelated option and an
-      // immediate Enter would adopt it (Codex P2).
-      if (props.searchable === true) {
-        setActiveIndex(
-          Math.max(
-            0,
-            props.options.findIndex((o) => o.value === props.value),
-          ),
-        )
-      }
+      // Re-align the active row with the CURRENT selection on every open.
+      // The same Select instance may receive a new value while hidden (for
+      // example KindSelect's Advanced → Guided transition); retaining its old
+      // index would make an immediate Enter silently choose another option.
+      setActiveIndex(
+        Math.max(
+          0,
+          props.options.findIndex((o) => o.value === props.value),
+        ),
+      )
       const t = window.setTimeout(() => {
         if (props.searchable === true) searchRef.current?.focus()
         else listRef.current?.focus()
@@ -179,6 +177,11 @@ export function Select<V extends string>(props: Props<V>) {
         triggerRef.current?.focus()
       }
     } else if (e.key === 'Escape') {
+      // A Select can live inside a Dialog. Consume the first Escape here so
+      // it closes only this listbox; a subsequent Escape may then close the
+      // surrounding Dialog. Without this, the event reaches Dialog's window
+      // listener and dismisses both layers at once (RFC-194).
+      e.stopPropagation()
       e.preventDefault()
       setOpen(false)
       triggerRef.current?.focus()

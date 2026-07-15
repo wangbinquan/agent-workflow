@@ -18,8 +18,11 @@ import {
   AgentInputPortSchema,
   AgentInputPortsSchema,
   AgentSchema,
+  capabilityCardModel,
+  clipInputDescription,
   type CapabilitySource,
   CreateAgentSchema,
+  perCardInputDescriptionBudget,
   renderAgentCapabilityCard,
   renderRosterCapabilityCards,
 } from '../src'
@@ -163,8 +166,13 @@ const AUDITOR: CapabilitySource = {
   name: 'auditor',
   description: 'Reviews a diff and reports findings.',
   inputs: [
-    { name: 'diff', kind: 'string', required: true },
-    { name: 'spec', kind: 'markdown' },
+    {
+      name: 'diff',
+      kind: 'string',
+      required: true,
+      description: '  the source diff to inspect  ',
+    },
+    { name: 'spec', kind: 'markdown', description: 'the governing specification' },
   ],
   outputs: ['report', 'signal_done'],
   outputKinds: { report: 'markdown', signal_done: 'signal' },
@@ -178,7 +186,9 @@ describe('renderAgentCapabilityCard', () => {
     expect(card).toContain('### auditor')
     expect(card).toContain('Reviews a diff and reports findings.')
     expect(card).toContain('- role: normal')
-    expect(card).toContain('- inputs: diff (string, required), spec (markdown)')
+    expect(card).toContain(
+      '- inputs: diff (string, required) — the source diff to inspect, spec (markdown) — the governing specification',
+    )
     expect(card).toContain('- outputs: report (markdown), signal_done (signal)')
     expect(card).toContain('- prompt: You are a meticulous code auditor.')
   })
@@ -208,6 +218,20 @@ describe('renderAgentCapabilityCard', () => {
     expect(card).not.toContain('- prompt:')
   })
 
+  test('inputDescriptionBudget:0 preserves the pre-RFC-194 input-line shape', () => {
+    const card = renderAgentCapabilityCard(AUDITOR, { inputDescriptionBudget: 0 })
+    expect(card).toContain('- inputs: diff (string, required), spec (markdown)')
+    expect(card).not.toContain('the source diff to inspect')
+    expect(card).not.toContain('the governing specification')
+  })
+
+  test('input-description fragments, including separators, never exceed the card budget', () => {
+    const withoutDescriptions = renderAgentCapabilityCard(AUDITOR, { inputDescriptionBudget: 0 })
+    const withDescriptions = renderAgentCapabilityCard(AUDITOR, { inputDescriptionBudget: 24 })
+    expect(withDescriptions.length - withoutDescriptions.length).toBeLessThanOrEqual(24)
+    expect(withDescriptions).toContain(' — ')
+  })
+
   test('long body is clipped to the budget with an ellipsis', () => {
     const longBody = 'word '.repeat(400) // 2000 chars
     const card = renderAgentCapabilityCard({ ...AUDITOR, bodyMd: longBody }, { promptBudget: 80 })
@@ -230,6 +254,35 @@ describe('renderAgentCapabilityCard', () => {
     expect(card).not.toContain('user_SECRET_OWNER')
     expect(card).not.toContain('ownerUserId')
     expect(card).not.toContain('visibility')
+  })
+})
+
+describe('RFC-194 input-description budget helpers', () => {
+  test('clipInputDescription collapses whitespace and reserves room for ellipsis', () => {
+    expect(clipInputDescription('  alpha\n beta  ', 20)).toBe('alpha beta')
+    expect(clipInputDescription('abcdef', 1)).toBe('…')
+    expect(clipInputDescription('abcdef', 4)).toBe('abc…')
+    expect(clipInputDescription('abcdef', 0)).toBe('')
+  })
+
+  test('perCardInputDescriptionBudget handles empty, single, and 64-card rosters', () => {
+    expect(perCardInputDescriptionBudget(2_400, 0, 240)).toBe(0)
+    expect(perCardInputDescriptionBudget(2_400, 1, 240)).toBe(240)
+    expect(perCardInputDescriptionBudget(2_400, 64, 240)).toBe(37)
+    expect(perCardInputDescriptionBudget(4_800, 64, 600)).toBe(75)
+    expect(perCardInputDescriptionBudget(1, 64, 600)).toBe(0)
+  })
+
+  test('capabilityCardModel trims descriptions and maps blank text to null', () => {
+    const model = capabilityCardModel({
+      ...AUDITOR,
+      inputs: [
+        { name: 'a', kind: 'string', description: '  useful  ' },
+        { name: 'b', kind: 'string', description: '   ' },
+        { name: 'c', kind: 'string' },
+      ],
+    })
+    expect(model.inputs.map((p) => p.description)).toEqual(['useful', null, null])
   })
 })
 

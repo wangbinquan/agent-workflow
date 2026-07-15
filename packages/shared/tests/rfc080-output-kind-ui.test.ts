@@ -28,6 +28,7 @@ describe('RFC-080 OUTPUT_KIND_UI catalog', () => {
 
   test('every base descriptor id is a registered base kind; path is the only param shape', () => {
     for (const d of OUTPUT_KIND_UI) {
+      expect(d.descriptionKey).toBe(`kindSelect.description_${d.id}`)
       if (d.editorShape === 'base') {
         expect(REGISTERED_BASE_KINDS.has(d.id)).toBe(true)
       } else {
@@ -73,7 +74,7 @@ describe('RFC-080 OUTPUT_KIND_UI catalog', () => {
     // If any OutputKindUiDescriptor field is made optional (regressing the
     // satisfies-table drift guard), this becomes valid → @ts-expect-error unused
     // → `bun run typecheck` errors.
-    // @ts-expect-error — omitting downloadable + dataBearing must be a type error.
+    // @ts-expect-error — omitting descriptionKey/downloadable/dataBearing must be a type error.
     const bad: OutputKindUiDescriptor = { id: 'x', editorShape: 'base', labelKey: 'k' }
     expect(bad.id).toBe('x')
   })

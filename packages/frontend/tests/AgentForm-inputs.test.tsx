@@ -1,12 +1,8 @@
-// RFC-166 (T7) — AgentForm's InputsEditor forwards declared input ports as a
-// single onChange payload so callers PUT /api/agents with `inputs` set. Locks:
-//  1. Adding a port (type + Enter) surfaces inputs with the default string kind.
-//  2. Changing a port's kind via the shared KindSelect surfaces inputs[].kind.
-//  3. Toggling the per-port `required` checkbox surfaces inputs[].required.
-//  4. Removing a port drops it from inputs.
+// RFC-194 — AgentForm input ports use explicit Card + Add/Edit Dialog
+// transactions. No inline composer, blur commit, or Backspace delete remains.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { CreateAgent } from '@agent-workflow/shared'
 import { AgentForm, emptyAgent } from '../src/components/AgentForm'
@@ -21,10 +17,36 @@ function mount(initial: CreateAgent, onChange: (next: CreateAgent) => void) {
       <AgentForm value={initial} onChange={onChange} />
     </QueryClientProvider>,
   )
-  // RFC-169: the InputsEditor lives in the Ports tab; open it so the port
-  // controls are accessible (hidden panels are excluded from getByRole).
   fireEvent.click(screen.getByRole('tab', { name: /Ports/ }))
   return utils
+}
+
+function lastPayload(onChange: ReturnType<typeof vi.fn>): CreateAgent {
+  return onChange.mock.calls.at(-1)?.[0] as CreateAgent
+}
+
+function openInputEditor(name: string, position = 1) {
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: new RegExp(`^Edit input port ${name}.*${position}`),
+    }),
+  )
+}
+
+function chooseKind(optionLabel: string) {
+  const trigger = screen.getByRole('combobox', { name: /Data type/ })
+  fireEvent.click(trigger)
+  const option = Array.from(document.querySelectorAll('li[role="option"]')).find((candidate) =>
+    (candidate.textContent ?? '').includes(optionLabel),
+  )
+  if (option === undefined) throw new Error(`kind option '${optionLabel}' not found`)
+  fireEvent.mouseDown(option)
+}
+
+async function saveInputDialog() {
+  const save = screen.getByTestId('agent-input-port-save') as HTMLButtonElement
+  await waitFor(() => expect(save.disabled).toBe(false))
+  fireEvent.click(save)
 }
 
 beforeEach(() => {
@@ -40,52 +62,84 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function lastPayload(onChange: ReturnType<typeof vi.fn>): CreateAgent {
-  return onChange.mock.calls.at(-1)?.[0] as CreateAgent
-}
-
-describe('AgentForm inputs port editor', () => {
-  test('adding an input port surfaces inputs[] with the default string kind', () => {
+describe('AgentForm input port cards and Dialog', () => {
+  test('explicit Add commits a port with the default string kind', async () => {
     const onChange = vi.fn<(next: CreateAgent) => void>()
     mount({ ...emptyAgent(), name: 'demo' }, onChange)
 
-    const add = screen.getByPlaceholderText('add an input port name then Enter')
-    fireEvent.change(add, { target: { value: 'diff' } })
-    fireEvent.keyDown(add, { key: 'Enter' })
+    expect(screen.getByTestId('agent-input-ports-empty')).toBeTruthy()
+    expect(screen.queryByPlaceholderText(/input port name then Enter/i)).toBeNull()
+    fireEvent.click(screen.getByTestId('agent-input-port-add'))
+    fireEvent.change(screen.getByTestId('agent-input-port-name'), {
+      target: { value: 'diff' },
+    })
+    await saveInputDialog()
 
-    expect(onChange).toHaveBeenCalled()
     expect(lastPayload(onChange).inputs).toEqual([{ name: 'diff', kind: 'string' }])
   })
 
-  test('changing a port kind surfaces inputs[].kind', () => {
+  test('Edit Dialog commits kind and trimmed description together', async () => {
     const onChange = vi.fn<(next: CreateAgent) => void>()
-    mount({ ...emptyAgent(), name: 'demo', inputs: [{ name: 'spec', kind: 'string' }] }, onChange)
-
-    const trigger = screen.getByRole('combobox', { name: /Input kind for spec/ })
-    fireEvent.click(trigger)
-    const opt = Array.from(document.querySelectorAll('li[role="option"]')).find((li) =>
-      (li.textContent ?? '').includes('markdown'),
+    mount(
+      {
+        ...emptyAgent(),
+        name: 'demo',
+        inputs: [{ name: 'spec', kind: 'string', description: 'Old description' }],
+      },
+      onChange,
     )
-    if (opt === undefined) throw new Error('markdown option not found')
-    fireEvent.mouseDown(opt)
 
-    expect(lastPayload(onChange).inputs).toEqual([{ name: 'spec', kind: 'markdown' }])
+    expect(screen.getByText('Old description')).toBeTruthy()
+    openInputEditor('spec')
+    expect((screen.getByTestId('agent-input-port-description') as HTMLTextAreaElement).value).toBe(
+      'Old description',
+    )
+    chooseKind('markdown')
+    fireEvent.change(screen.getByTestId('agent-input-port-description'), {
+      target: { value: '  Detailed specification  ' },
+    })
+    await saveInputDialog()
+
+    expect(lastPayload(onChange).inputs).toEqual([
+      { name: 'spec', kind: 'markdown', description: 'Detailed specification' },
+    ])
   })
 
-  test('toggling required surfaces inputs[].required', () => {
+  test('Edit Dialog commits the required flag without losing other input fields', async () => {
     const onChange = vi.fn<(next: CreateAgent) => void>()
-    mount({ ...emptyAgent(), name: 'demo', inputs: [{ name: 'diff', kind: 'string' }] }, onChange)
+    mount(
+      {
+        ...emptyAgent(),
+        name: 'demo',
+        inputs: [{ name: 'diff', kind: 'path<md>', description: 'Patch file' }],
+      },
+      onChange,
+    )
 
-    fireEvent.click(screen.getByLabelText('Mark diff as required'))
+    openInputEditor('diff')
+    fireEvent.click(screen.getByTestId('agent-input-port-required'))
+    await saveInputDialog()
 
-    expect(lastPayload(onChange).inputs).toEqual([{ name: 'diff', kind: 'string', required: true }])
+    expect(lastPayload(onChange).inputs).toEqual([
+      { name: 'diff', kind: 'path<md>', required: true, description: 'Patch file' },
+    ])
   })
 
-  test('removing a port drops it from inputs', () => {
+  test('two-click card deletion drops the input port', () => {
     const onChange = vi.fn<(next: CreateAgent) => void>()
-    mount({ ...emptyAgent(), name: 'demo', inputs: [{ name: 'diff', kind: 'string' }] }, onChange)
+    mount(
+      {
+        ...emptyAgent(),
+        name: 'demo',
+        inputs: [{ name: 'diff', kind: 'string', description: 'Keep until confirmed' }],
+      },
+      onChange,
+    )
 
-    fireEvent.click(screen.getByLabelText('Remove diff'))
+    const remove = screen.getByRole('button', { name: /^Delete input port diff.*1/ })
+    fireEvent.click(remove)
+    expect(onChange).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /^Confirm delet.*input port diff.*1/ }))
 
     expect(lastPayload(onChange).inputs).toEqual([])
   })

@@ -18,8 +18,8 @@ const AUDITOR: CapabilitySource = {
   name: 'auditor',
   description: 'Reviews a diff.',
   inputs: [
-    { name: 'diff', kind: 'string', required: true },
-    { name: 'spec', kind: 'markdown' },
+    { name: 'diff', kind: 'string', required: true, description: 'Patch to inspect' },
+    { name: 'spec', kind: 'markdown', description: 'Expected behavior' },
   ],
   outputs: ['report'],
   outputKinds: { report: 'markdown' },
@@ -35,6 +35,8 @@ describe('AgentCapabilityCard', () => {
     expect(screen.getByText('diff')).toBeTruthy()
     expect(screen.getByText('spec')).toBeTruthy()
     expect(screen.getByText('report')).toBeTruthy()
+    expect(screen.getByText('Patch to inspect')).toBeTruthy()
+    expect(screen.getByText('Expected behavior')).toBeTruthy()
     // the per-input required badge (i18n capabilityCard.required)
     expect(screen.getByText('required')).toBeTruthy()
     // prompt summary present by default
@@ -49,6 +51,7 @@ describe('AgentCapabilityCard', () => {
   test('compact hides the prompt summary', () => {
     const { container } = render(<AgentCapabilityCard agent={AUDITOR} compact />)
     expect(container.querySelector('.capability-card__prompt')).toBeNull()
+    expect(container.querySelector('.capability-card__port-description')).toBeNull()
   })
 
   test('prompt-isolation: never renders an owner user id', () => {

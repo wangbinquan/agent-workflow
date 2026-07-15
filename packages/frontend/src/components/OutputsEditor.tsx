@@ -1,103 +1,206 @@
-// Per-port editor for agent.outputs + agent.outputKinds. Each declared port
-// is a row of (name, KindSelect, remove). New ports are added via an inline
-// input that mirrors ChipsInput's Enter/Backspace semantics. Completes RFC-005
-// design.md §line 120; RFC-080 PR-B swaps the bespoke 3-option native dropdown
-// for the shared KindSelect so the full kind grammar (path / list / signal) is
-// selectable and the option set derives from the OUTPUT_KIND_UI catalog.
-// RFC-151 PR-1 — the add-input's commit logic (Enter/comma commit, Backspace
-// delete-last, dedup, pattern validate) no longer forks ChipsInput's: it is
-// the shared `useChipsCommit` hook. Rendering (per-port rows + KindSelect)
-// stays bespoke — this editor is NOT a plain chips list.
+// RFC-194 — transactional card editor for the three-field Agent output state.
 
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DEFAULT_OUTPUT_KIND, type AgentOutputKindsMap } from '@agent-workflow/shared'
-import { useChipsCommit } from './ChipsInput'
-import { KindSelect } from './KindSelect'
-
-const PORT_NAME_RE = /^[a-z][a-z0-9_]*$/
+import { ConfirmButton } from './ConfirmButton'
+import { EmptyState } from './EmptyState'
+import { FormSection } from './FormSection'
+import { AgentPortCard } from './agent-ports/AgentPortCard'
+import { AgentPortDialog, type AgentPortDialogMode } from './agent-ports/AgentPortDialog'
+import {
+  AGENT_PORT_NAME_RE,
+  findOrphanOutputSidecars,
+  removeOrphanOutputSidecars,
+  removeOutputPort,
+  type MutableOutputPortState,
+  type OrphanSidecarRef,
+} from '@/lib/agent-ports'
 
 interface OutputsEditorProps {
   outputs: string[]
   outputKinds?: AgentOutputKindsMap
-  onChange: (outputs: string[], outputKinds: AgentOutputKindsMap | undefined) => void
+  outputWrapperPortNames?: Record<string, string>
+  aggregator?: boolean
+  /** A route-level compact summary is already the page's live alert. */
+  hasExternalPortAlert?: boolean
+  onChange: (
+    outputs: string[],
+    outputKinds: AgentOutputKindsMap | undefined,
+    outputWrapperPortNames: Record<string, string> | undefined,
+  ) => void
+  /** Pre-RFC-194 compatibility only; adding is now an explicit Dialog action. */
   placeholder?: string
 }
 
-function compact(map: AgentOutputKindsMap): AgentOutputKindsMap | undefined {
-  return Object.keys(map).length === 0 ? undefined : map
-}
+type PendingFocus = number | 'add' | null
 
-export function OutputsEditor({ outputs, outputKinds, onChange, placeholder }: OutputsEditorProps) {
+export function OutputsEditor({
+  outputs,
+  outputKinds,
+  outputWrapperPortNames,
+  aggregator = false,
+  hasExternalPortAlert,
+  onChange,
+}: OutputsEditorProps) {
   const { t } = useTranslation()
-  const kinds: AgentOutputKindsMap = outputKinds ?? {}
+  const [dialogMode, setDialogMode] = useState<AgentPortDialogMode | null>(null)
+  const addRef = useRef<HTMLButtonElement | null>(null)
+  const dialogTriggerRef = useRef<HTMLElement | null>(null)
+  const editRefs = useRef(new Map<number, HTMLButtonElement>())
+  const pendingFocusRef = useRef<PendingFocus>(null)
+  const state = { outputs, outputKinds, outputWrapperPortNames }
 
-  function removeAt(idx: number) {
-    const name = outputs[idx]
-    const nextOutputs = outputs.filter((_, i) => i !== idx)
-    if (name !== undefined && kinds[name] !== undefined) {
-      const { [name]: _drop, ...rest } = kinds
-      onChange(nextOutputs, compact(rest))
-    } else {
-      onChange(nextOutputs, outputKinds)
-    }
+  useEffect(() => {
+    const pending = pendingFocusRef.current
+    if (pending === null) return
+    pendingFocusRef.current = null
+    if (pending === 'add') addRef.current?.focus()
+    else editRefs.current.get(pending)?.focus()
+  }, [outputs])
+
+  const counts = new Map<string, number>()
+  for (const output of outputs) counts.set(output, (counts.get(output) ?? 0) + 1)
+  const wrapperCounts = new Map<string, number>()
+  for (const output of outputs) {
+    const wrapper = outputWrapperPortNames?.[output] ?? output
+    wrapperCounts.set(wrapper, (wrapperCounts.get(wrapper) ?? 0) + 1)
+  }
+  const orphans = findOrphanOutputSidecars(state)
+
+  function emit(next: MutableOutputPortState) {
+    onChange(next.outputs, next.outputKinds, next.outputWrapperPortNames)
   }
 
-  const chips = useChipsCommit({
-    values: outputs,
-    validate: (token) => (PORT_NAME_RE.test(token) ? null : t('agentForm.outputsValidate')),
-    // Adding a port never touches outputKinds (new ports default to string).
-    onCommit: (token) => onChange([...outputs, token], outputKinds),
-    // Backspace on empty input removes the last port AND its kind entry.
-    onRemoveLast: () => removeAt(outputs.length - 1),
-  })
+  function open(mode: AgentPortDialogMode, trigger: HTMLElement | null) {
+    dialogTriggerRef.current = trigger
+    setDialogMode(mode)
+  }
 
-  function setKind(name: string, kind: string) {
-    if (kind === DEFAULT_OUTPUT_KIND) {
-      if (kinds[name] === undefined) return
-      const { [name]: _drop, ...rest } = kinds
-      onChange(outputs, compact(rest))
-    } else {
-      onChange(outputs, { ...kinds, [name]: kind })
-    }
+  function remove(index: number) {
+    const next = removeOutputPort(state, index)
+    pendingFocusRef.current =
+      next.outputs.length === 0 ? 'add' : Math.min(index, Math.max(0, next.outputs.length - 1))
+    emit(next)
+  }
+
+  function cleanupOrphan(ref: OrphanSidecarRef) {
+    emit(removeOrphanOutputSidecars(state, [ref]))
   }
 
   return (
-    <div className="outputs-editor">
-      {outputs.length > 0 && (
-        <ul className="outputs-editor__list">
-          {outputs.map((name, idx) => {
-            const kind: string = kinds[name] ?? DEFAULT_OUTPUT_KIND
-            return (
-              <li key={`${name}-${idx}`} className="outputs-editor__row">
-                <span className="outputs-editor__name">{name}</span>
-                <KindSelect
-                  value={kind}
-                  onChange={(k) => setKind(name, k)}
-                  ariaLabel={t('agentForm.outputKindLabel', { port: name })}
-                  testidPrefix={`output-kind-${name}`}
-                />
-                <button
-                  type="button"
-                  className="chip__remove outputs-editor__remove"
-                  onClick={() => removeAt(idx)}
-                  aria-label={t('common.removeAria', { label: name })}
-                >
-                  ×
-                </button>
-              </li>
-            )
-          })}
-        </ul>
+    <FormSection title={t('agentForm.ports.outputsTitle')} data-testid="agent-output-ports">
+      <div className="agent-port-section__header">
+        <div className="agent-port-section__intro">
+          <p>{t('agentForm.ports.outputsRelation')}</p>
+          <span className="agent-port-section__count">
+            {t('agentForm.ports.count', { count: outputs.length })}
+          </span>
+        </div>
+        <button
+          ref={addRef}
+          type="button"
+          className="btn btn--primary btn--sm agent-port-section__add"
+          onClick={(event) => open({ kind: 'add' }, event.currentTarget)}
+          data-testid="agent-output-port-add"
+        >
+          {t('agentForm.ports.addOutput')}
+        </button>
+      </div>
+
+      {outputs.length === 0 ? (
+        <EmptyState
+          size="compact"
+          title={t('agentForm.ports.outputsEmptyTitle')}
+          description={t('agentForm.ports.outputsEmptyDescription')}
+          data-testid="agent-output-ports-empty"
+        />
+      ) : (
+        <div className="agent-port-list" data-testid="agent-output-port-list">
+          {outputs.map((name, index) => (
+            <AgentPortCard
+              key={index}
+              direction="output"
+              index={index}
+              name={name}
+              kind={outputKinds?.[name] ?? DEFAULT_OUTPUT_KIND}
+              aggregator={aggregator}
+              wrapperPortName={outputWrapperPortNames?.[name]}
+              wrapperDuplicate={
+                aggregator && (wrapperCounts.get(outputWrapperPortNames?.[name] ?? name) ?? 0) > 1
+              }
+              legacy={!AGENT_PORT_NAME_RE.test(name)}
+              duplicate={(counts.get(name) ?? 0) > 1}
+              editButtonRef={(node) => {
+                if (node === null) editRefs.current.delete(index)
+                else editRefs.current.set(index, node)
+              }}
+              onEdit={() => open({ kind: 'edit', index }, editRefs.current.get(index) ?? null)}
+              onDelete={() => remove(index)}
+            />
+          ))}
+        </div>
       )}
-      <input
-        className="form-input outputs-editor__add"
-        value={chips.pending}
-        onChange={(e) => chips.setPendingValue(e.target.value)}
-        onKeyDown={chips.handleKeyDown}
-        onBlur={chips.handleBlur}
-        placeholder={placeholder}
-      />
-      {chips.error !== null && <div className="chips-input__error">{chips.error}</div>}
-    </div>
+
+      {orphans.length > 0 && (
+        <section className="agent-port-orphans" aria-labelledby="agent-port-orphans-title">
+          <div className="agent-port-orphans__header">
+            <h3 id="agent-port-orphans-title">{t('agentForm.ports.orphanTitle')}</h3>
+            <p>{t('agentForm.ports.orphanDescription')}</p>
+          </div>
+          <ul className="agent-port-orphans__list">
+            {orphans.map((ref) => {
+              const value =
+                ref.source === 'outputKinds'
+                  ? outputKinds?.[ref.key]
+                  : outputWrapperPortNames?.[ref.key]
+              const context = `${ref.source}:${ref.key}`
+              const confirmationIdentity = JSON.stringify([context, value])
+              return (
+                <li key={context} className="agent-port-orphans__item">
+                  <code>
+                    {t(
+                      ref.source === 'outputKinds'
+                        ? 'agentForm.ports.orphanKind'
+                        : 'agentForm.ports.orphanWrapper',
+                      { key: ref.key, value: String(value) },
+                    )}
+                  </code>
+                  <ConfirmButton
+                    size="sm"
+                    variant="danger"
+                    label={t('common.delete')}
+                    confirmLabel={t('common.confirmDelete')}
+                    ariaLabel={t('agentForm.ports.cleanupOrphan', { key: context })}
+                    confirmAriaLabel={t('agentForm.ports.confirmCleanupOrphan', { key: context })}
+                    confirmationKey={confirmationIdentity}
+                    onConfirm={() => cleanupOrphan(ref)}
+                  />
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
+
+      {dialogMode !== null && (
+        <AgentPortDialog
+          open
+          direction="output"
+          mode={dialogMode}
+          outputState={state}
+          role={aggregator ? 'aggregator' : 'normal'}
+          hasExternalPortAlert={hasExternalPortAlert}
+          triggerRef={dialogTriggerRef}
+          onClose={() => setDialogMode(null)}
+          onCommit={(next) => {
+            pendingFocusRef.current =
+              dialogMode.kind === 'add' ? next.outputs.length - 1 : dialogMode.index
+            emit(next)
+          }}
+          testidPrefix="agent-output-port"
+        />
+      )}
+    </FormSection>
   )
 }

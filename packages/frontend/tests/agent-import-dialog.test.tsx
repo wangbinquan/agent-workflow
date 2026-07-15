@@ -80,4 +80,103 @@ describe('AgentImportDialog', () => {
     const banner = screen.getByTestId('agent-import-overwrite')
     expect(banner.textContent ?? '').toContain('description')
   })
+
+  test('RFC-194: port preview routes fields to Ports and role to Advanced', () => {
+    setup()
+    fireEvent.click(screen.getByRole('tab', { name: /paste/i }))
+    fireEvent.change(screen.getByTestId('agent-import-textarea'), {
+      target: {
+        value: [
+          '---',
+          'inputs:',
+          '  - name: source',
+          '    kind: string',
+          'outputs: [result]',
+          'outputKinds:',
+          '  result: markdown',
+          'role: aggregator',
+          'outputWrapperPortNames:',
+          '  result: merged_result',
+          '---',
+        ].join('\n'),
+      },
+    })
+    fireEvent.click(screen.getByTestId('agent-import-parse'))
+
+    const rows = screen.getAllByRole('row')
+    const routes = Object.fromEntries(
+      rows.map((row) => {
+        const cells = row.querySelectorAll('td')
+        return [cells[0]?.textContent, cells[2]?.textContent]
+      }),
+    )
+    expect(routes.inputs).toContain('Ports')
+    expect(routes.outputs).toContain('Ports')
+    expect(routes.outputKinds).toContain('Ports')
+    expect(routes.outputWrapperPortNames).toContain('Ports')
+    expect(routes.role).toContain('Advanced')
+  })
+
+  test('RFC-194: overwrite banner includes edited port fields', () => {
+    setup({
+      currentValue: {
+        ...emptyAgent(),
+        inputs: [{ name: 'old_in', kind: 'string' }],
+        outputs: ['old_out'],
+        outputKinds: { old_out: 'markdown' },
+        role: 'aggregator',
+        outputWrapperPortNames: { old_out: 'old_wrapper' },
+      },
+    })
+    fireEvent.click(screen.getByRole('tab', { name: /paste/i }))
+    fireEvent.change(screen.getByTestId('agent-import-textarea'), {
+      target: {
+        value: [
+          '---',
+          'inputs:',
+          '  - name: new_in',
+          '    kind: string',
+          'outputs: [new_out]',
+          'outputKinds:',
+          '  new_out: markdown',
+          'role: normal',
+          'outputWrapperPortNames:',
+          '  new_out: new_wrapper',
+          '---',
+        ].join('\n'),
+      },
+    })
+    fireEvent.click(screen.getByTestId('agent-import-parse'))
+
+    const banner = screen.getByTestId('agent-import-overwrite').textContent ?? ''
+    expect(banner).toContain('inputs')
+    expect(banner).toContain('outputs')
+    expect(banner).toContain('outputKinds')
+    expect(banner).toContain('role')
+    expect(banner).toContain('outputWrapperPortNames')
+  })
+
+  test('RFC-194: outputs-only import cannot silently claim an existing orphan sidecar', () => {
+    const { onApply, onClose } = setup({
+      currentValue: {
+        ...emptyAgent(),
+        outputKinds: { future: 'markdown' },
+        outputWrapperPortNames: { future: 'published' },
+      },
+    })
+    fireEvent.click(screen.getByRole('tab', { name: /paste/i }))
+    fireEvent.change(screen.getByTestId('agent-import-textarea'), {
+      target: { value: ['---', 'outputs: [future]', '---'].join('\n') },
+    })
+    fireEvent.click(screen.getByTestId('agent-import-parse'))
+
+    const conflict = screen.getByTestId('agent-import-port-conflict')
+    expect(conflict.textContent).toContain('outputKinds:future')
+    expect(conflict.textContent).toContain('outputWrapperPortNames:future')
+    const apply = screen.getByTestId('agent-import-apply') as HTMLButtonElement
+    expect(apply.disabled).toBe(true)
+    fireEvent.click(apply)
+    expect(onApply).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+  })
 })

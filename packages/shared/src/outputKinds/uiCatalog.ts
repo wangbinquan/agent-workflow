@@ -5,8 +5,8 @@
 // drift guard layer 2: declared `as const satisfies readonly
 // OutputKindUiDescriptor[]` (the same exhaustiveness pattern as
 // node-kind-behavior.ts's `NODE_KIND_BEHAVIORS satisfies Record<…>`). Adding a
-// selectable kind without filling EVERY dimension (labelKey / downloadable /
-// dataBearing / editorShape) is a compile error.
+// selectable kind without filling EVERY dimension (labelKey / descriptionKey /
+// downloadable / dataBearing / editorShape) is a compile error.
 //
 // CYCLE RED LINE (RFC-079): this module imports ONLY from kindParser — never
 // from ./registry or the handlers — so enumerating it from the frontend can't
@@ -34,6 +34,8 @@ export interface OutputKindUiDescriptor {
   readonly editorShape: OutputKindEditorShape
   /** i18n key; the frontend provides cn/en (asserted present by a frontend test). */
   readonly labelKey: string
+  /** i18n key for the short explanatory copy shown in the kind dropdown. */
+  readonly descriptionKey: string
   /** A port of this kind (as a worktree file) offers a download in the Outputs tab. */
   readonly downloadable: boolean
   /** Carries data referenceable as a `{{port}}` token. MUST match handler.carriesData. */
@@ -45,6 +47,7 @@ export const OUTPUT_KIND_UI = [
     id: 'string',
     editorShape: 'base',
     labelKey: 'kindSelect.base_string',
+    descriptionKey: 'kindSelect.description_string',
     downloadable: false,
     dataBearing: true,
   },
@@ -52,6 +55,7 @@ export const OUTPUT_KIND_UI = [
     id: 'markdown',
     editorShape: 'base',
     labelKey: 'kindSelect.base_markdown',
+    descriptionKey: 'kindSelect.description_markdown',
     downloadable: false,
     dataBearing: true,
   },
@@ -59,6 +63,7 @@ export const OUTPUT_KIND_UI = [
     id: 'signal',
     editorShape: 'base',
     labelKey: 'kindSelect.base_signal',
+    descriptionKey: 'kindSelect.description_signal',
     downloadable: false,
     dataBearing: false,
   },
@@ -66,6 +71,7 @@ export const OUTPUT_KIND_UI = [
     id: 'path',
     editorShape: 'param-path',
     labelKey: 'kindSelect.base_path',
+    descriptionKey: 'kindSelect.description_path',
     downloadable: true,
     dataBearing: true,
   },

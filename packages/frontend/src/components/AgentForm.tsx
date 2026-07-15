@@ -29,10 +29,12 @@ import { McpsPicker } from './McpsPicker'
 import { PluginsPicker } from './PluginsPicker'
 import { InputsEditor } from './InputsEditor'
 import { OutputsEditor } from './OutputsEditor'
+import { AgentPortValidationSummary } from './agent-ports/AgentPortValidationSummary'
 import { Select } from './Select'
 import { SkillsPicker } from './SkillsPicker'
 import { TabBar, type TabDef } from './TabBar'
 import { TabPanels } from './split/TabPanels'
+import { validateAgentPortState } from '@/lib/agent-ports'
 import {
   AGENT_ICON,
   CAP_ICON,
@@ -47,6 +49,11 @@ export interface AgentFormProps {
   onChange: (next: CreateAgent) => void
   /** When true the name input is read-only (editing an existing agent). */
   nameLocked?: boolean
+  /** Optional controlled tab, used by route-level repair links. */
+  activeTab?: AgentTab
+  onTabChange?: (tab: AgentTab) => void
+  /** The owning route renders the compact port summary as its sole live alert. */
+  hasExternalPortAlert?: boolean
 }
 
 const DEFAULT: CreateAgent = {
@@ -82,12 +89,24 @@ export function resourceRefCount(v: CreateAgent): number {
   )
 }
 
-type AgentTab = 'basics' | 'prompt' | 'ports' | 'resources' | 'advanced'
+export type AgentTab = 'basics' | 'prompt' | 'ports' | 'resources' | 'advanced'
 
-export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
+export function AgentForm({
+  value,
+  onChange,
+  nameLocked,
+  activeTab,
+  onTabChange,
+  hasExternalPortAlert,
+}: AgentFormProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [tab, setTab] = useState<AgentTab>('basics')
+  const [internalTab, setInternalTab] = useState<AgentTab>('basics')
+  const tab = activeTab ?? internalTab
+  const selectTab = (next: AgentTab) => {
+    if (activeTab === undefined) setInternalTab(next)
+    onTabChange?.(next)
+  }
   // RFC-113: the runtime selector is the only per-agent profile control here —
   // model / variant / temperature / steps now live on the runtime profile, so
   // AgentForm no longer renders ModelSelect.
@@ -123,6 +142,7 @@ export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
 
   const portCount = portBadgeCount(value)
   const refCount = resourceRefCount(value)
+  const portValidation = validateAgentPortState(value)
   const tabs: ReadonlyArray<TabDef<AgentTab>> = [
     { key: 'basics', label: t('agentForm.tabBasics'), testid: 'agent-tab-basics' },
     { key: 'prompt', label: t('agentForm.tabPrompt'), testid: 'agent-tab-prompt' },
@@ -205,23 +225,30 @@ export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
   )
 
   const ports = (
-    <>
-      <Field label={t('agentForm.fieldInputs')} hint={t('agentForm.fieldInputsHint')}>
-        <InputsEditor
-          inputs={value.inputs ?? []}
-          onChange={(inputs) => onChange({ ...value, inputs })}
-          placeholder={t('agentForm.fieldInputsPlaceholder')}
+    <div className="agent-ports">
+      {portValidation.issues.length > 0 && (
+        <AgentPortValidationSummary
+          issues={portValidation.issues}
+          variant="detail"
+          onNavigate={selectTab}
         />
-      </Field>
-      <Field label={t('agentForm.fieldOutputs')} hint={t('agentForm.fieldOutputsHint')}>
-        <OutputsEditor
-          outputs={value.outputs ?? []}
-          outputKinds={value.outputKinds}
-          onChange={(outputs, outputKinds) => onChange({ ...value, outputs, outputKinds })}
-          placeholder={t('agentForm.fieldOutputsPlaceholder')}
-        />
-      </Field>
-    </>
+      )}
+      <InputsEditor
+        inputs={value.inputs ?? []}
+        hasExternalPortAlert={hasExternalPortAlert}
+        onChange={(inputs) => onChange({ ...value, inputs })}
+      />
+      <OutputsEditor
+        outputs={value.outputs ?? []}
+        outputKinds={value.outputKinds}
+        outputWrapperPortNames={value.outputWrapperPortNames}
+        aggregator={value.role === 'aggregator'}
+        hasExternalPortAlert={hasExternalPortAlert}
+        onChange={(outputs, outputKinds, outputWrapperPortNames) =>
+          onChange({ ...value, outputs, outputKinds, outputWrapperPortNames })
+        }
+      />
+    </div>
   )
 
   const resources = (
@@ -335,9 +362,8 @@ export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
         hint={t('agentForm.fieldSyncOutputsOnIterateHint')}
       />
 
-      {/* RFC-060 PR-B — agent role + outputWrapperPortNames. The map editor
-          is JSON-shaped for now; PR-F upgrades OutputsEditor with per-port
-          rename inputs. */}
+      {/* RFC-194: role remains an advanced setting. Aggregator output-name
+          promotion is edited transactionally beside each output card. */}
       <Field label={t('agentForm.fieldRole')} hint={t('agentForm.fieldRoleHint')}>
         <Select<'normal' | 'aggregator'>
           value={value.role ?? 'normal'}
@@ -349,23 +375,6 @@ export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
           ariaLabel={t('agentForm.fieldRole')}
         />
       </Field>
-
-      {value.role === 'aggregator' ? (
-        <Field
-          label={t('agentForm.fieldOutputWrapperPortNames')}
-          hint={t('agentForm.fieldOutputWrapperPortNamesHint')}
-        >
-          <JsonField
-            value={value.outputWrapperPortNames ?? {}}
-            onChange={(v) => {
-              if (typeof v !== 'object' || v === null || Array.isArray(v)) return
-              patch('outputWrapperPortNames', v as Record<string, string>)
-            }}
-            placeholder={'{"report":"final"}'}
-            rows={3}
-          />
-        </Field>
-      ) : null}
 
       {/* RFC-113: model / variant / temperature / steps / maxSteps moved to the
           RUNTIME (Settings → Runtimes). The agent only SELECTS a runtime in
@@ -396,7 +405,7 @@ export function AgentForm({ value, onChange, nameLocked }: AgentFormProps) {
 
   return (
     <div className="agent-form">
-      <TabBar tabs={tabs} active={tab} onSelect={setTab} ariaLabel={t('agentForm.tabsAria')} />
+      <TabBar tabs={tabs} active={tab} onSelect={selectTab} ariaLabel={t('agentForm.tabsAria')} />
       <TabPanels
         active={tab}
         className="split__detail-body agent-form__panel"

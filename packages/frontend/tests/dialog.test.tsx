@@ -5,6 +5,7 @@ import { fireEvent, render } from '@testing-library/react'
 import { useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import { Dialog } from '../src/components/Dialog'
+import { Field, TextInput } from '../src/components/Form'
 
 afterEach(() => {
   // React 19 + happy-dom + createPortal: never manually wipe document.body
@@ -46,6 +47,23 @@ describe('<Dialog />', () => {
     )
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  test('a child-consumed ESC does not close the Dialog', () => {
+    const onClose = vi.fn()
+    render(
+      <Dialog open onClose={onClose} title="t">
+        body
+      </Dialog>,
+    )
+    const event = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    })
+    event.preventDefault()
+    window.dispatchEvent(event)
+    expect(onClose).not.toHaveBeenCalled()
   })
 
   test('closeOnEsc=false suppresses the ESC handler', () => {
@@ -122,6 +140,43 @@ describe('<Dialog />', () => {
     // The focus is scheduled in a setTimeout(0) inside the dialog effect.
     await new Promise((r) => setTimeout(r, 5))
     expect(document.activeElement?.getAttribute('data-testid')).toBe('focus-target')
+  })
+
+  test('TextInput inputRef supports initial focus and Field ids wire grouped validation', async () => {
+    function Probe(): ReactElement {
+      const ref = useRef<HTMLInputElement | null>(null)
+      return (
+        <Dialog open onClose={() => {}} title="t" initialFocusRef={ref}>
+          <Field
+            label="Port name"
+            labelId="port-name-label"
+            error="Name is invalid"
+            errorId="port-name-error"
+            group
+          >
+            <TextInput
+              inputRef={ref}
+              value="Bad Name"
+              onChange={() => {}}
+              aria-invalid
+              aria-describedby="port-name-error"
+              data-testid="port-name-input"
+            />
+          </Field>
+        </Dialog>
+      )
+    }
+
+    render(<Probe />)
+    await new Promise((r) => setTimeout(r, 5))
+
+    const input = document.querySelector<HTMLInputElement>('[data-testid="port-name-input"]')
+    const group = document.querySelector<HTMLElement>('[role="group"]')
+    expect(document.activeElement).toBe(input)
+    expect(group?.getAttribute('aria-labelledby')).toBe('port-name-label')
+    expect(input?.getAttribute('aria-invalid')).toBe('true')
+    expect(input?.getAttribute('aria-describedby')).toBe('port-name-error')
+    expect(document.getElementById('port-name-error')?.getAttribute('role')).toBe('alert')
   })
 
   test('footer slot renders the dialog footer when supplied', () => {

@@ -29,6 +29,7 @@ import {
   parseWgMessagesPort,
   parseWgResultPort,
   parseWgTasksAddPort,
+  perCardInputDescriptionBudget,
   renderAgentCapabilityCard,
   resolveClarifyEnabled,
   resolveCompletionGate,
@@ -412,6 +413,8 @@ interface EngineDbState {
  *  bounded. The description + port lines are always shown in full; only the
  *  bodyMd prompt summary is clipped to this budget. */
 const ROSTER_CARD_PROMPT_BUDGET = 240
+const ROSTER_INPUT_DESCRIPTION_TOTAL_BUDGET = 2_400
+const ROSTER_CARD_INPUT_DESCRIPTION_MAX = 240
 
 /**
  * RFC-166 — preload each AGENT member's capability card once per engine pass.
@@ -425,6 +428,12 @@ export async function buildRosterAgentCards(
   config: WorkgroupRuntimeConfig,
 ): Promise<Map<string, string>> {
   const cards = new Map<string, string>()
+  const agentMemberCount = config.members.filter((m) => m.memberType === 'agent').length
+  const inputDescriptionBudget = perCardInputDescriptionBudget(
+    ROSTER_INPUT_DESCRIPTION_TOTAL_BUDGET,
+    agentMemberCount,
+    ROSTER_CARD_INPUT_DESCRIPTION_MAX,
+  )
   // De-dupe DB reads: several members may reference the same agentName.
   const agentByName = new Map<string, Agent | null>()
   for (const m of config.members) {
@@ -435,7 +444,13 @@ export async function buildRosterAgentCards(
       agentByName.set(m.agentName, agent)
     }
     if (agent === null) continue
-    cards.set(m.id, renderAgentCapabilityCard(agent, { promptBudget: ROSTER_CARD_PROMPT_BUDGET }))
+    cards.set(
+      m.id,
+      renderAgentCapabilityCard(agent, {
+        promptBudget: ROSTER_CARD_PROMPT_BUDGET,
+        inputDescriptionBudget,
+      }),
+    )
   }
   return cards
 }

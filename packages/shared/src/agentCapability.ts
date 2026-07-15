@@ -23,9 +23,18 @@ export type CapabilitySource = Pick<
 export interface CapabilityCardOptions {
   /** System-prompt summary char budget. 0 → omit the prompt line. Default 600. */
   promptBudget?: number
+  /**
+   * Total char budget for the rendered input-description fragments in one
+   * card. The ` — ` separator counts toward the budget. 0 preserves the
+   * pre-RFC-194 markdown shape. Default 600.
+   */
+  inputDescriptionBudget?: number
 }
 
 const DEFAULT_PROMPT_BUDGET = 600
+const DEFAULT_INPUT_DESCRIPTION_BUDGET = 600
+const MAX_INPUT_DESCRIPTION_CHARS = 160
+const INPUT_DESCRIPTION_SEPARATOR = ' — '
 
 /** Clip to `budget` chars on a word-ish boundary, appending an ellipsis. */
 function clipSummary(text: string, budget: number): string {
@@ -36,11 +45,50 @@ function clipSummary(text: string, budget: number): string {
   return `${(lastSpace > budget * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`
 }
 
+/**
+ * Clip one normalized input description without ever exceeding `budget`.
+ * Truncation reserves one character for the ellipsis; a one-char budget is
+ * therefore represented by the ellipsis alone.
+ */
+export function clipInputDescription(text: string, budget: number): string {
+  const limit = Number.isFinite(budget) ? Math.max(0, Math.floor(budget)) : 0
+  if (limit === 0) return ''
+  const collapsed = text.replace(/\s+/g, ' ').trim()
+  if (collapsed.length <= limit) return collapsed
+  if (limit === 1) return '…'
+  const raw = collapsed.slice(0, limit - 1)
+  const lastSpace = raw.lastIndexOf(' ')
+  const body = (lastSpace > (limit - 1) * 0.6 ? raw.slice(0, lastSpace) : raw).trimEnd()
+  return `${body}…`
+}
+
+/** Deterministically divide one roster-wide description budget across cards. */
+export function perCardInputDescriptionBudget(
+  totalBudget: number,
+  cardCount: number,
+  perCardMax: number,
+): number {
+  const count = Math.floor(cardCount)
+  if (
+    !Number.isFinite(totalBudget) ||
+    !Number.isFinite(cardCount) ||
+    !Number.isFinite(perCardMax) ||
+    count <= 0 ||
+    totalBudget <= 0 ||
+    perCardMax <= 0
+  ) {
+    return 0
+  }
+  return Math.min(Math.floor(perCardMax), Math.floor(totalBudget / count))
+}
+
 /** A resolved input port for a capability card (required normalized to bool). */
 export interface CapabilityInputPort {
   name: string
   kind: string
   required: boolean
+  /** Trimmed declaration text; null when absent/blank. */
+  description: string | null
 }
 
 /** A resolved output port for a capability card (kind from the sidecar map). */
@@ -77,6 +125,8 @@ export function capabilityCardModel(
     name: p.name,
     kind: p.kind,
     required: p.required === true,
+    description:
+      p.description !== undefined && p.description.trim().length > 0 ? p.description.trim() : null,
   }))
   const outputs: CapabilityOutputPort[] = (agent.outputs ?? []).map((name) => ({
     name,
@@ -97,9 +147,27 @@ export function capabilityCardModel(
   }
 }
 
-/** Render one input port: `name (kind, required)`. */
-function renderInputPort(p: CapabilityInputPort): string {
-  return `${p.name} (${p.required ? `${p.kind}, required` : p.kind})`
+/** Render all input ports while consuming one strict description budget. */
+function renderInputPorts(inputs: readonly CapabilityInputPort[], budget: number): string {
+  let remaining = Number.isFinite(budget) ? Math.max(0, Math.floor(budget)) : 0
+  return inputs
+    .map((p) => {
+      let rendered = `${p.name} (${p.required ? `${p.kind}, required` : p.kind})`
+      if (p.description !== null && remaining >= INPUT_DESCRIPTION_SEPARATOR.length + 1) {
+        const descriptionBudget = Math.min(
+          MAX_INPUT_DESCRIPTION_CHARS,
+          remaining - INPUT_DESCRIPTION_SEPARATOR.length,
+        )
+        const clipped = clipInputDescription(p.description, descriptionBudget)
+        if (clipped.length > 0) {
+          const fragment = `${INPUT_DESCRIPTION_SEPARATOR}${clipped}`
+          rendered += fragment
+          remaining -= fragment.length
+        }
+      }
+      return rendered
+    })
+    .join(', ')
 }
 
 /**
@@ -112,11 +180,14 @@ export function renderAgentCapabilityCard(
   opts?: CapabilityCardOptions,
 ): string {
   const m = capabilityCardModel(agent, opts)
+  const inputDescriptionBudget = opts?.inputDescriptionBudget ?? DEFAULT_INPUT_DESCRIPTION_BUDGET
   const lines: string[] = [`### ${m.name}`]
   if (m.description.length > 0) lines.push(m.description)
   lines.push(`- role: ${m.role}`)
   lines.push(
-    `- inputs: ${m.inputs.length > 0 ? m.inputs.map(renderInputPort).join(', ') : '(none declared)'}`,
+    `- inputs: ${
+      m.inputs.length > 0 ? renderInputPorts(m.inputs, inputDescriptionBudget) : '(none declared)'
+    }`,
   )
   lines.push(
     `- outputs: ${

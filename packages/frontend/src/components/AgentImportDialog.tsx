@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next'
 import type { AgentMarkdownParseResult, CreateAgent } from '@agent-workflow/shared'
 import { parseAgentMarkdown } from '@agent-workflow/shared'
 import { emptyAgent } from './AgentForm'
-import { fieldsOverwrittenByImport } from '@/lib/agent-import-merge'
+import { fieldsOverwrittenByImport, importOrphanSidecarConflicts } from '@/lib/agent-import-merge'
 import { structureImportWarnings } from '@/lib/agent-import-warnings'
 import { Dialog } from './Dialog'
 import { TabBar } from './TabBar'
@@ -29,6 +29,8 @@ const ROUTE_KEYS = {
   name: 'agentForm.importDialog.routedTo.name',
   description: 'agentForm.importDialog.routedTo.description',
   permission: 'agentForm.importDialog.routedTo.permission',
+  ports: 'agentForm.importDialog.routedTo.ports',
+  advanced: 'agentForm.importDialog.routedTo.advanced',
   bodyMd: 'agentForm.importDialog.routedTo.bodyMd',
   frontmatterExtra: 'agentForm.importDialog.routedTo.frontmatterExtra',
 } as const
@@ -68,6 +70,11 @@ export function AgentImportDialog({
   )
   const blockingWarning = warnings.find((w) => w.blocking)
   const hasYamlError = blockingWarning !== undefined
+  const orphanConflicts = useMemo(
+    () => (parseResult === null ? [] : importOrphanSidecarConflicts(currentValue, parseResult)),
+    [currentValue, parseResult],
+  )
+  const hasBlockingIssue = hasYamlError || orphanConflicts.length > 0
 
   if (!open) return null
 
@@ -89,7 +96,7 @@ export function AgentImportDialog({
   }
 
   function doApply() {
-    if (parseResult === null || hasYamlError) return
+    if (parseResult === null || hasBlockingIssue) return
     onApply(parseResult)
     onClose()
   }
@@ -114,6 +121,11 @@ export function AgentImportDialog({
     add('name', ROUTE_KEYS.name)
     add('description', ROUTE_KEYS.description)
     add('permission', ROUTE_KEYS.permission)
+    add('inputs', ROUTE_KEYS.ports)
+    add('outputs', ROUTE_KEYS.ports)
+    add('outputKinds', ROUTE_KEYS.ports)
+    add('outputWrapperPortNames', ROUTE_KEYS.ports)
+    add('role', ROUTE_KEYS.advanced)
     if (p.frontmatterExtra !== undefined) {
       for (const key of Object.keys(p.frontmatterExtra)) {
         out.push({
@@ -152,7 +164,7 @@ export function AgentImportDialog({
           <button
             type="button"
             className="btn btn--primary"
-            disabled={parseResult === null || hasYamlError}
+            disabled={parseResult === null || hasBlockingIssue}
             data-testid="agent-import-apply"
             onClick={doApply}
           >
@@ -222,6 +234,15 @@ export function AgentImportDialog({
             {blockingWarning !== undefined && (
               <div className="agent-import__warning" data-testid="agent-import-warning">
                 {blockingWarning.message}
+              </div>
+            )}
+            {!hasYamlError && orphanConflicts.length > 0 && (
+              <div className="agent-import__warning" data-testid="agent-import-port-conflict">
+                {t('agentForm.importDialog.orphanConflict', {
+                  mappings: orphanConflicts
+                    .map((conflict) => `${conflict.source}:${conflict.key}`)
+                    .join(', '),
+                })}
               </div>
             )}
             {!hasYamlError && willOverwrite.length > 0 && (

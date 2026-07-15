@@ -1,151 +1,138 @@
-// RFC-151 PR-1 — OutputsEditor × useChipsCommit: outputKinds roundtrip lock.
-//
-// OutputsEditor is NOT a plain chips list: each port row carries a KindSelect
-// and the component must keep the outputKinds map in sync (delete a port →
-// its kind entry goes too). RFC-151 extracted the add-input's token-commit
-// core (Enter/comma commit, Backspace delete-last, dedup, validate) into the
-// shared `useChipsCommit` hook exported from ChipsInput.tsx — the design-gate
-// risk is that the extraction silently drops the kinds bookkeeping. This
-// suite locks the roundtrip:
-//   add port → pick kind → map entry written;
-//   delete port (row × AND Backspace) → map entry pruned;
-//   editing other ports never loses an existing non-default kind.
-// Rendering itself is already locked by OutputsEditor.test.tsx (unchanged).
+// RFC-194 — output kinds round-trip through the explicit Dialog transaction.
+// The old Enter/comma/Backspace token composer is intentionally gone: edits
+// remain local until Save, and deletion is a visible two-step card action.
 
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { useState } from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { describe, expect, test, vi } from 'vitest'
 import type { AgentOutputKindsMap } from '@agent-workflow/shared'
 import { OutputsEditor } from '../src/components/OutputsEditor'
 
-type OnChange = (outputs: string[], kinds: AgentOutputKindsMap | undefined) => void
+type WrapperMap = Record<string, string>
+type OnChange = (
+  outputs: string[],
+  kinds: AgentOutputKindsMap | undefined,
+  wrappers: WrapperMap | undefined,
+) => void
 
-// Controlled harness that feeds every change back in, so multi-step
-// interactions run against the updated value (same pattern as
-// OutputsEditor.test.tsx's mountStateful).
 function mountStateful(
   initialOutputs: string[],
   initialKinds: AgentOutputKindsMap | undefined,
+  initialWrappers: WrapperMap | undefined,
   spy: OnChange,
 ) {
   function Harness() {
     const [outputs, setOutputs] = useState(initialOutputs)
-    const [kinds, setKinds] = useState(initialKinds)
+    const [kinds, setKinds] = useState<AgentOutputKindsMap | undefined>(initialKinds)
+    const [wrappers, setWrappers] = useState<WrapperMap | undefined>(initialWrappers)
     return (
       <OutputsEditor
         outputs={outputs}
         outputKinds={kinds}
-        onChange={(o, k) => {
-          spy(o, k)
-          setOutputs(o)
-          setKinds(k)
+        outputWrapperPortNames={wrappers}
+        onChange={(nextOutputs, nextKinds, nextWrappers) => {
+          spy(nextOutputs, nextKinds, nextWrappers)
+          setOutputs(nextOutputs)
+          setKinds(nextKinds)
+          setWrappers(nextWrappers)
         }}
-        placeholder="add a port"
       />
     )
   }
+
   return render(<Harness />)
 }
 
-function addPort(name: string) {
-  const input = screen.getByPlaceholderText('add a port') as HTMLInputElement
-  fireEvent.change(input, { target: { value: name } })
-  fireEvent.keyDown(input, { key: 'Enter' })
-}
-
-function pickKind(port: string, optionLabel: string) {
-  const trigger = screen.getByRole('combobox', {
-    name: new RegExp(`Output kind for ${port}`),
-  }) as HTMLButtonElement
+function chooseOption(trigger: HTMLElement, optionLabel: RegExp) {
   fireEvent.click(trigger)
-  const opt = Array.from(document.querySelectorAll('li[role="option"]')).find((li) =>
-    (li.textContent ?? '').includes(optionLabel),
-  )
-  if (opt === undefined) throw new Error(`option '${optionLabel}' not found`)
-  fireEvent.mouseDown(opt)
+  const option = screen
+    .getAllByRole('option')
+    .find((candidate) => optionLabel.test(candidate.textContent ?? ''))
+  if (option === undefined) throw new Error(`option ${String(optionLabel)} not found`)
+  fireEvent.mouseDown(option)
 }
 
-afterEach(() => {
-  document.body.innerHTML = ''
-})
-
-describe('OutputsEditor — outputKinds roundtrip through the shared commit hook', () => {
-  test('add port → select kind → remove port: map entry follows the port', () => {
-    const spy = vi.fn<OnChange>()
-    mountStateful([], undefined, spy)
-
-    addPort('report')
-    expect(spy).toHaveBeenLastCalledWith(['report'], undefined)
-
-    pickKind('report', 'markdown')
-    expect(spy).toHaveBeenLastCalledWith(['report'], { report: 'markdown' })
-
-    fireEvent.click(screen.getByLabelText('Remove report'))
-    expect(spy).toHaveBeenLastCalledWith([], undefined)
-  })
-
-  test('Backspace on empty input removes the last port AND its kind entry', () => {
-    const spy = vi.fn<OnChange>()
-    mountStateful(['summary', 'report'], { report: 'markdown' }, spy)
-    const input = screen.getByPlaceholderText('add a port') as HTMLInputElement
-    fireEvent.keyDown(input, { key: 'Backspace' })
-    expect(spy).toHaveBeenLastCalledWith(['summary'], undefined)
-  })
-
-  test('edit roundtrip never loses an unrelated non-default kind', () => {
-    const spy = vi.fn<OnChange>()
-    mountStateful(['report'], { report: 'markdown' }, spy)
-
-    // Add a second port — report's kind must survive untouched.
-    addPort('extra')
-    expect(spy).toHaveBeenLastCalledWith(['report', 'extra'], { report: 'markdown' })
-
-    // Backspace-remove the freshly added kindless port — still untouched.
-    const input = screen.getByPlaceholderText('add a port') as HTMLInputElement
-    fireEvent.keyDown(input, { key: 'Backspace' })
-    expect(spy).toHaveBeenLastCalledWith(['report'], { report: 'markdown' })
-  })
-
-  test('dedup and pattern validation still gate the add input (hook wiring)', () => {
-    const spy = vi.fn<OnChange>()
-    mountStateful(['report'], undefined, spy)
-    const input = screen.getByPlaceholderText('add a port') as HTMLInputElement
-
-    fireEvent.change(input, { target: { value: 'report' } })
-    fireEvent.keyDown(input, { key: 'Enter' })
-    expect(spy).not.toHaveBeenCalled()
-    expect(screen.getByText(/duplicate/)).toBeTruthy()
-
-    fireEvent.change(input, { target: { value: 'BadName' } })
-    fireEvent.keyDown(input, { key: 'Enter' })
-    expect(spy).not.toHaveBeenCalled()
-  })
-})
-
-describe('source-level: one token-commit core, no fork', () => {
-  const chipsSrc = readFileSync(
-    join(__dirname, '..', 'src', 'components', 'ChipsInput.tsx'),
-    'utf8',
+function editPort(name: string, position: number) {
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: new RegExp(`^Edit output port ${name}.*${position}`),
+    }),
   )
-  const outputsSrc = readFileSync(
-    join(__dirname, '..', 'src', 'components', 'OutputsEditor.tsx'),
-    'utf8',
-  )
+}
 
-  test('ChipsInput exports useChipsCommit and consumes it itself', () => {
-    expect(chipsSrc).toContain('export function useChipsCommit')
-    expect(chipsSrc).toContain('useChipsCommit({')
+async function saveDialog() {
+  const save = screen.getByTestId('agent-output-port-save') as HTMLButtonElement
+  await waitFor(() => expect(save.disabled).toBe(false))
+  fireEvent.click(save)
+}
+
+describe('OutputsEditor kind and sidecar round-trip', () => {
+  test('Add Dialog composes list<path<md>> and emits all three fields only on Save', async () => {
+    const spy = vi.fn<OnChange>()
+    mountStateful([], undefined, undefined, spy)
+
+    fireEvent.click(screen.getByTestId('agent-output-port-add'))
+    fireEvent.change(screen.getByTestId('agent-output-port-name'), {
+      target: { value: 'docs' },
+    })
+    chooseOption(screen.getByRole('combobox', { name: /docs.*Data type/i }), /file path/i)
+    chooseOption(screen.getByRole('combobox', { name: /docs.*file extension/i }), /Markdown/i)
+    fireEvent.click(screen.getByRole('checkbox', { name: /docs.*list/i }))
+
+    expect(spy).not.toHaveBeenCalled()
+    await saveDialog()
+
+    expect(spy).toHaveBeenLastCalledWith(['docs'], { docs: 'list<path<md>>' }, undefined)
+    expect(
+      document.querySelector('[data-testid="agent-port-card-output-0"] .agent-port-card__kind-code')
+        ?.textContent,
+    ).toBe('list<path<md>>')
   })
 
-  test('OutputsEditor delegates commit/keyboard semantics to the hook', () => {
-    expect(outputsSrc).toContain("import { useChipsCommit } from './ChipsInput'")
-    // The forked keyboard handler must not come back.
-    expect(outputsSrc.includes("e.key === 'Enter'"), 'local Enter handling returned').toBe(false)
-    expect(outputsSrc.includes("e.key === 'Backspace'"), 'local Backspace handling returned').toBe(
-      false,
+  test('editing one port back to string drops only its kind entry', async () => {
+    const spy = vi.fn<OnChange>()
+    mountStateful(['report', 'keep'], { report: 'markdown', keep: 'signal' }, undefined, spy)
+
+    editPort('report', 1)
+    chooseOption(screen.getByRole('combobox', { name: /report.*Data type/i }), /^string/i)
+    expect(spy).not.toHaveBeenCalled()
+    await saveDialog()
+
+    expect(spy).toHaveBeenLastCalledWith(['report', 'keep'], { keep: 'signal' }, undefined)
+  })
+
+  test('Cancel discards an unfinished kind change', () => {
+    const spy = vi.fn<OnChange>()
+    mountStateful(['report'], { report: 'markdown' }, undefined, spy)
+
+    editPort('report', 1)
+    chooseOption(screen.getByRole('combobox', { name: /report.*Data type/i }), /file path/i)
+    fireEvent.click(screen.getByTestId('agent-output-port-cancel'))
+
+    expect(spy).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(
+      document.querySelector('[data-testid="agent-port-card-output-0"] .agent-port-card__kind-code')
+        ?.textContent,
+    ).toBe('markdown')
+  })
+
+  test('Backspace is inert; explicit confirmed delete prunes kind and wrapper tombstones', () => {
+    const spy = vi.fn<OnChange>()
+    mountStateful(['summary', 'report'], { report: 'markdown' }, { report: 'promoted_report' }, spy)
+
+    const add = screen.getByTestId('agent-output-port-add')
+    fireEvent.keyDown(add, { key: 'Backspace' })
+    expect(spy).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Delete output port report.*2/ }))
+    expect(spy).not.toHaveBeenCalled()
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Confirm deletion of output port report.*2/ }),
     )
-    expect(outputsSrc.includes('.includes(token)'), 'local dedup check returned').toBe(false)
+
+    // Empty maps are intentional sparse-update tombstones: returning undefined
+    // here would preserve the stale server values on PUT.
+    expect(spy).toHaveBeenLastCalledWith(['summary'], {}, {})
   })
 })

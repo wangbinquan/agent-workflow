@@ -41,9 +41,11 @@ function PortChip({ port }: { port: CapabilityInputPort | CapabilityOutputPort }
 function PortRow({
   label,
   ports,
+  showInputDescriptions,
 }: {
   label: string
   ports: Array<CapabilityInputPort | CapabilityOutputPort>
+  showInputDescriptions?: boolean
 }) {
   const { t } = useTranslation()
   return (
@@ -51,8 +53,13 @@ function PortRow({
       <span className="capability-card__ports-label">{label}</span>
       {ports.length > 0 ? (
         <span className="capability-card__ports-list">
-          {ports.map((p) => (
-            <PortChip key={p.name} port={p} />
+          {ports.map((p, index) => (
+            <span className="capability-card__port-item" key={`${p.name}-${index}`}>
+              <PortChip port={p} />
+              {showInputDescriptions === true && 'description' in p && p.description !== null && (
+                <span className="capability-card__port-description">{p.description}</span>
+              )}
+            </span>
           ))}
         </span>
       ) : (
@@ -74,7 +81,11 @@ export function AgentCapabilityCard({ agent, promptBudget, compact }: AgentCapab
         </span>
       </div>
       {model.description.length > 0 && <p className="capability-card__desc">{model.description}</p>}
-      <PortRow label={t('capabilityCard.inputs')} ports={model.inputs} />
+      <PortRow
+        label={t('capabilityCard.inputs')}
+        ports={model.inputs}
+        showInputDescriptions={compact !== true}
+      />
       <PortRow label={t('capabilityCard.outputs')} ports={model.outputs} />
       {model.promptSummary !== null && (
         <p className="capability-card__prompt">

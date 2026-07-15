@@ -234,6 +234,86 @@ describe('parseAgentMarkdown', () => {
     expect(r.partial.bodyMd).toBe('body')
   })
 
+  // RFC-194: all existing port fields are first-class import fields. Duplicate
+  // names intentionally survive parsing so the Ports editor can present its
+  // explicit repair flow instead of hiding the field in frontmatterExtra.
+  test('RFC-194: port fields parse first-class and preserve legacy duplicates', () => {
+    const src = [
+      '---',
+      'inputs:',
+      '  - name: source',
+      '    kind: string',
+      '    required: true',
+      '  - name: source',
+      '    kind: markdown',
+      'outputs:',
+      '  - result',
+      '  - result',
+      'outputKinds:',
+      '  result: markdown',
+      'role: aggregator',
+      'outputWrapperPortNames:',
+      '  result: merged_result',
+      '---',
+      'body',
+    ].join('\n')
+
+    const r = parseAgentMarkdown(src)
+
+    expect(r.partial.inputs).toEqual([
+      { name: 'source', kind: 'string', required: true },
+      { name: 'source', kind: 'markdown' },
+    ])
+    expect(r.partial.outputs).toEqual(['result', 'result'])
+    expect(r.partial.outputKinds).toEqual({ result: 'markdown' })
+    expect(r.partial.role).toBe('aggregator')
+    expect(r.partial.outputWrapperPortNames).toEqual({ result: 'merged_result' })
+    expect(r.partial.frontmatterExtra).toBeUndefined()
+    expect(r.unrecognizedKeys).toEqual([])
+    expect(r.warnings).toEqual([])
+  })
+
+  test('RFC-194: malformed port fields are preserved in extras with warnings', () => {
+    const src = [
+      '---',
+      'inputs:',
+      '  - name: valid',
+      '    kind: not_registered',
+      'outputs:',
+      '  - result',
+      '  - 7',
+      'outputKinds:',
+      '  result: not_registered',
+      'role: leader',
+      'outputWrapperPortNames:',
+      '  result: ""',
+      '---',
+    ].join('\n')
+
+    const r = parseAgentMarkdown(src)
+
+    expect(r.partial.inputs).toBeUndefined()
+    expect(r.partial.outputs).toBeUndefined()
+    expect(r.partial.outputKinds).toBeUndefined()
+    expect(r.partial.role).toBeUndefined()
+    expect(r.partial.outputWrapperPortNames).toBeUndefined()
+    expect(r.partial.frontmatterExtra).toEqual({
+      inputs: [{ name: 'valid', kind: 'not_registered' }],
+      outputs: ['result', 7],
+      outputKinds: { result: 'not_registered' },
+      role: 'leader',
+      outputWrapperPortNames: { result: '' },
+    })
+    expect(r.unrecognizedKeys).toEqual([])
+    expect(r.warnings).toEqual([
+      'inputs must be an array of valid input ports; kept in frontmatterExtra',
+      'outputs must be an array of strings; kept in frontmatterExtra',
+      'outputKinds must map port names to registered kinds; kept in frontmatterExtra',
+      'role must be normal or aggregator; kept in frontmatterExtra',
+      'outputWrapperPortNames must map port names to non-empty strings; kept in frontmatterExtra',
+    ])
+  })
+
   // RFC-022: dependsOn parser cases.
   test('dependsOn (array of valid names) round-trips and dedupes order', () => {
     const src =

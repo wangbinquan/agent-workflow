@@ -1,7 +1,7 @@
 // Small form primitives shared by Agent / Skill detail pages. Keep them
 // dependency-light: no shadcn until M2 brings in the canvas (P-2-02).
 
-import type { ChangeEvent, ReactNode } from 'react'
+import type { AriaAttributes, ChangeEvent, ReactNode, Ref } from 'react'
 
 interface FieldProps {
   label: string
@@ -20,12 +20,29 @@ interface FieldProps {
   // implicitly binds to the first one — clicks/hover on the hint area then
   // proxy to that button, which surprises users.
   group?: boolean
+  /** Optional id for callers that need to label a grouped control explicitly. */
+  labelId?: string
+  /** Optional id for associating the rendered validation error with a control. */
+  errorId?: string
+  /** Keep an already-announced parent error visual/associated without replaying it live. */
+  errorLive?: boolean
 }
 
-export function Field({ label, hint, icon, error, required, children, group }: FieldProps) {
+export function Field({
+  label,
+  hint,
+  icon,
+  error,
+  required,
+  children,
+  group,
+  labelId,
+  errorId,
+  errorLive = true,
+}: FieldProps) {
   const inner = (
     <>
-      <span className="form-field__label">
+      <span id={labelId} className="form-field__label">
         {icon !== undefined && (
           <span className="form-field__icon" aria-hidden="true">
             {icon}
@@ -36,7 +53,7 @@ export function Field({ label, hint, icon, error, required, children, group }: F
       </span>
       {children}
       {error !== undefined && error !== '' ? (
-        <span className="form-field__error" role="alert">
+        <span id={errorId} className="form-field__error" role={errorLive ? 'alert' : undefined}>
           {error}
         </span>
       ) : (
@@ -45,7 +62,15 @@ export function Field({ label, hint, icon, error, required, children, group }: F
     </>
   )
   if (group === true) {
-    return <div className="form-field">{inner}</div>
+    return (
+      <div
+        className="form-field"
+        role={labelId === undefined ? undefined : 'group'}
+        aria-labelledby={labelId}
+      >
+        {inner}
+      </div>
+    )
   }
   return <label className="form-field">{inner}</label>
 }
@@ -64,6 +89,10 @@ interface TextInputProps {
   'aria-label'?: string
   /** RFC-191: extra classes appended after the standard `form-input`. */
   className?: string
+  /** RFC-194: opt-in ref forwarding for Dialog initial-focus contracts. */
+  inputRef?: Ref<HTMLInputElement>
+  'aria-invalid'?: AriaAttributes['aria-invalid']
+  'aria-describedby'?: AriaAttributes['aria-describedby']
   'data-testid'?: string
 }
 
@@ -78,10 +107,14 @@ export function TextInput({
   maxLength,
   'aria-label': ariaLabel,
   className,
+  inputRef,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
   'data-testid': testid,
 }: TextInputProps) {
   return (
     <input
+      ref={inputRef}
       className={className === undefined ? 'form-input' : `form-input ${className}`}
       type={type}
       value={value}
@@ -92,6 +125,8 @@ export function TextInput({
       pattern={pattern}
       maxLength={maxLength}
       aria-label={ariaLabel}
+      aria-invalid={ariaInvalid}
+      aria-describedby={ariaDescribedBy}
       data-testid={testid}
     />
   )

@@ -5,10 +5,44 @@
 //  - any key with `partial[key] !== undefined` overwrites current[key]
 //  - `frontmatterExtra` is shallow-merged (imported keys overwrite same-name
 //    current keys; current-only keys are preserved)
-//  - `outputs / outputKinds / syncOutputsOnIterate / skills` are
-//    never touched by the parser, so the current value is preserved as-is
+//  - RFC-194 routes inputs / outputs / outputKinds / role /
+//    outputWrapperPortNames as first-class fields; omitted fields (including
+//    syncOutputsOnIterate / skills) preserve the current value as-is
 
 import type { AgentMarkdownParseResult, CreateAgent } from '@agent-workflow/shared'
+import type { OrphanSidecarRef } from './agent-ports'
+
+const hasOwn = (record: object | undefined, key: string): boolean =>
+  record !== undefined && Object.prototype.hasOwnProperty.call(record, key)
+
+/**
+ * Importing only `outputs` must not turn a previously orphaned, omitted
+ * sidecar into a live mapping. The dialog uses this to require an explicit
+ * cleanup (or an import that explicitly replaces that sidecar map) first.
+ */
+export function importOrphanSidecarConflicts(
+  current: CreateAgent,
+  result: AgentMarkdownParseResult,
+): OrphanSidecarRef[] {
+  const importedOutputs = result.partial.outputs
+  if (importedOutputs === undefined) return []
+
+  const currentOutputs = new Set(current.outputs ?? [])
+  const conflicts: OrphanSidecarRef[] = []
+  for (const key of new Set(importedOutputs)) {
+    if (currentOutputs.has(key)) continue
+    if (result.partial.outputKinds === undefined && hasOwn(current.outputKinds, key)) {
+      conflicts.push({ source: 'outputKinds', key })
+    }
+    if (
+      result.partial.outputWrapperPortNames === undefined &&
+      hasOwn(current.outputWrapperPortNames, key)
+    ) {
+      conflicts.push({ source: 'outputWrapperPortNames', key })
+    }
+  }
+  return conflicts
+}
 
 export function mergeAgentImport(
   current: CreateAgent,

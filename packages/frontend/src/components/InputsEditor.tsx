@@ -1,96 +1,123 @@
-// RFC-166 — per-port editor for agent.inputs (declarative INPUT ports). Each
-// declared port is a row of (name, KindSelect, required toggle, remove); new
-// ports are added via an inline input reusing ChipsInput's Enter/comma/Backspace
-// commit semantics (shared `useChipsCommit` hook — same as OutputsEditor).
-//
-// Symmetric to OutputsEditor but over the richer AgentInputPort shape
-// ({name, kind, required?, description?}): kind is inlined (no sidecar map) and
-// there is a per-port `required` flag. `description` is preserved verbatim on
-// every port (spread) even though this compact editor does not surface it, so
-// an imported agent.md's port descriptions survive a round-trip through the UI.
-//
-// Duplicate names are rejected at commit (useChipsCommit dedup), matching the
-// AgentInputPortsSchema uniqueness refine so the UI never produces a body the
-// server would 422.
+// RFC-194 — transactional card editor for declarative Agent input ports.
 
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { DEFAULT_OUTPUT_KIND, type AgentInputPort } from '@agent-workflow/shared'
-import { useChipsCommit } from './ChipsInput'
-import { KindSelect } from './KindSelect'
-
-const PORT_NAME_RE = /^[a-z][a-z0-9_]*$/
+import type { AgentInputPort } from '@agent-workflow/shared'
+import { EmptyState } from './EmptyState'
+import { FormSection } from './FormSection'
+import { AgentPortCard } from './agent-ports/AgentPortCard'
+import { AgentPortDialog, type AgentPortDialogMode } from './agent-ports/AgentPortDialog'
+import { AGENT_PORT_NAME_RE, removeInputPort } from '@/lib/agent-ports'
 
 interface InputsEditorProps {
   inputs: AgentInputPort[]
   onChange: (inputs: AgentInputPort[]) => void
+  /** A route-level compact summary is already the page's live alert. */
+  hasExternalPortAlert?: boolean
+  /** Pre-RFC-194 compatibility only; adding is now an explicit Dialog action. */
   placeholder?: string
 }
 
-export function InputsEditor({ inputs, onChange, placeholder }: InputsEditorProps) {
+type PendingFocus = number | 'add' | null
+
+export function InputsEditor({ inputs, onChange, hasExternalPortAlert }: InputsEditorProps) {
   const { t } = useTranslation()
+  const [dialogMode, setDialogMode] = useState<AgentPortDialogMode | null>(null)
+  const addRef = useRef<HTMLButtonElement | null>(null)
+  const dialogTriggerRef = useRef<HTMLElement | null>(null)
+  const editRefs = useRef(new Map<number, HTMLButtonElement>())
+  const pendingFocusRef = useRef<PendingFocus>(null)
 
-  function removeAt(idx: number) {
-    onChange(inputs.filter((_, i) => i !== idx))
-  }
-  function patchAt(idx: number, patch: Partial<AgentInputPort>) {
-    onChange(inputs.map((p, i) => (i === idx ? { ...p, ...patch } : p)))
+  useEffect(() => {
+    const pending = pendingFocusRef.current
+    if (pending === null) return
+    pendingFocusRef.current = null
+    if (pending === 'add') addRef.current?.focus()
+    else editRefs.current.get(pending)?.focus()
+  }, [inputs])
+
+  const counts = new Map<string, number>()
+  for (const input of inputs) counts.set(input.name, (counts.get(input.name) ?? 0) + 1)
+
+  function open(mode: AgentPortDialogMode, trigger: HTMLElement | null) {
+    dialogTriggerRef.current = trigger
+    setDialogMode(mode)
   }
 
-  const chips = useChipsCommit({
-    values: inputs.map((p) => p.name),
-    validate: (token) => (PORT_NAME_RE.test(token) ? null : t('agentForm.inputsValidate')),
-    // New ports default to the base string kind; kind/required are edited inline.
-    onCommit: (token) => onChange([...inputs, { name: token, kind: DEFAULT_OUTPUT_KIND }]),
-    // Backspace on empty input removes the last port.
-    onRemoveLast: () => removeAt(inputs.length - 1),
-  })
+  function remove(index: number) {
+    const next = removeInputPort(inputs, index)
+    pendingFocusRef.current =
+      next.length === 0 ? 'add' : Math.min(index, Math.max(0, next.length - 1))
+    onChange(next)
+  }
 
   return (
-    <div className="inputs-editor">
-      {inputs.length > 0 && (
-        <ul className="inputs-editor__list">
-          {inputs.map((port, idx) => {
-            const kind: string = port.kind === '' ? DEFAULT_OUTPUT_KIND : port.kind
-            return (
-              <li key={`${port.name}-${idx}`} className="inputs-editor__row">
-                <span className="inputs-editor__name">{port.name}</span>
-                <KindSelect
-                  value={kind}
-                  onChange={(k) => patchAt(idx, { kind: k })}
-                  ariaLabel={t('agentForm.inputKindLabel', { port: port.name })}
-                  testidPrefix={`input-kind-${port.name}`}
-                />
-                <label className="inputs-editor__required">
-                  <input
-                    type="checkbox"
-                    checked={port.required === true}
-                    onChange={(e) => patchAt(idx, { required: e.target.checked })}
-                    aria-label={t('agentForm.inputRequiredLabel', { port: port.name })}
-                  />
-                  {t('agentForm.inputRequired')}
-                </label>
-                <button
-                  type="button"
-                  className="chip__remove inputs-editor__remove"
-                  onClick={() => removeAt(idx)}
-                  aria-label={t('common.removeAria', { label: port.name })}
-                >
-                  ×
-                </button>
-              </li>
-            )
-          })}
-        </ul>
+    <FormSection title={t('agentForm.ports.inputsTitle')} data-testid="agent-input-ports">
+      <div className="agent-port-section__header">
+        <div className="agent-port-section__intro">
+          <p>{t('agentForm.ports.inputsRelation')}</p>
+          <span className="agent-port-section__count">
+            {t('agentForm.ports.count', { count: inputs.length })}
+          </span>
+        </div>
+        <button
+          ref={addRef}
+          type="button"
+          className="btn btn--primary btn--sm agent-port-section__add"
+          onClick={(event) => open({ kind: 'add' }, event.currentTarget)}
+          data-testid="agent-input-port-add"
+        >
+          {t('agentForm.ports.addInput')}
+        </button>
+      </div>
+
+      {inputs.length === 0 ? (
+        <EmptyState
+          size="compact"
+          title={t('agentForm.ports.inputsEmptyTitle')}
+          description={t('agentForm.ports.inputsEmptyDescription')}
+          data-testid="agent-input-ports-empty"
+        />
+      ) : (
+        <div className="agent-port-list" data-testid="agent-input-port-list">
+          {inputs.map((port, index) => (
+            <AgentPortCard
+              key={index}
+              direction="input"
+              index={index}
+              name={port.name}
+              kind={port.kind}
+              description={port.description}
+              required={port.required === true}
+              legacy={!AGENT_PORT_NAME_RE.test(port.name)}
+              duplicate={(counts.get(port.name) ?? 0) > 1}
+              editButtonRef={(node) => {
+                if (node === null) editRefs.current.delete(index)
+                else editRefs.current.set(index, node)
+              }}
+              onEdit={() => open({ kind: 'edit', index }, editRefs.current.get(index) ?? null)}
+              onDelete={() => remove(index)}
+            />
+          ))}
+        </div>
       )}
-      <input
-        className="form-input inputs-editor__add"
-        value={chips.pending}
-        onChange={(e) => chips.setPendingValue(e.target.value)}
-        onKeyDown={chips.handleKeyDown}
-        onBlur={chips.handleBlur}
-        placeholder={placeholder}
-      />
-      {chips.error !== null && <div className="chips-input__error">{chips.error}</div>}
-    </div>
+
+      {dialogMode !== null && (
+        <AgentPortDialog
+          open
+          direction="input"
+          mode={dialogMode}
+          inputs={inputs}
+          hasExternalPortAlert={hasExternalPortAlert}
+          triggerRef={dialogTriggerRef}
+          onClose={() => setDialogMode(null)}
+          onCommit={(next) => {
+            pendingFocusRef.current = dialogMode.kind === 'add' ? next.length - 1 : dialogMode.index
+            onChange(next)
+          }}
+          testidPrefix="agent-input-port"
+        />
+      )}
+    </FormSection>
   )
 }

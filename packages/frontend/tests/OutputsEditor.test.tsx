@@ -1,170 +1,236 @@
-// OutputsEditor: per-port name + KindSelect. RFC-005 design.md §line 120 let
-// users pick a kind from the UI; RFC-080 PR-B swapped the 3-option <select> for
-// the shared KindSelect so the full grammar (path<ext> / list<…> / signal) is
-// selectable. These tests drive the public Select popover + lock the upward
-// (outputs, outputKinds) propagation.
+// RFC-194 — OutputsEditor is an explicit card + Dialog editor for one logical
+// three-field value: outputs, outputKinds, and outputWrapperPortNames.
+// These tests deliberately exercise the public UI transaction instead of the
+// retired inline token composer / per-row controls.
 
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { useState } from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { describe, expect, test, vi } from 'vitest'
 import type { AgentOutputKindsMap } from '@agent-workflow/shared'
 import { OutputsEditor } from '../src/components/OutputsEditor'
 
-type OnChange = (outputs: string[], kinds: AgentOutputKindsMap | undefined) => void
-
-function mount(
+type WrapperMap = Record<string, string>
+type OnChange = (
   outputs: string[],
-  outputKinds: AgentOutputKindsMap | undefined,
-  onChange: OnChange,
-) {
-  return render(
-    <OutputsEditor
-      outputs={outputs}
-      outputKinds={outputKinds}
-      onChange={onChange}
-      placeholder="add a port name then Enter"
-    />,
-  )
+  kinds: AgentOutputKindsMap | undefined,
+  wrappers: WrapperMap | undefined,
+) => void
+
+interface InitialState {
+  outputs: string[]
+  kinds?: AgentOutputKindsMap
+  wrappers?: WrapperMap
+  aggregator?: boolean
 }
 
-// Stateful harness for multi-step interactions: feeds onChange back into the
-// controlled value so the next step renders against the updated kind, while
-// still forwarding every change to a spy for assertions.
-function mountStateful(
-  initialOutputs: string[],
-  initialKinds: AgentOutputKindsMap | undefined,
-  spy: OnChange,
-) {
+function mountStateful(initial: InitialState, spy: OnChange = vi.fn<OnChange>()) {
   function Harness() {
-    const [outputs, setOutputs] = useState(initialOutputs)
-    const [kinds, setKinds] = useState(initialKinds)
+    const [outputs, setOutputs] = useState(initial.outputs)
+    const [kinds, setKinds] = useState<AgentOutputKindsMap | undefined>(initial.kinds)
+    const [wrappers, setWrappers] = useState<WrapperMap | undefined>(initial.wrappers)
     return (
       <OutputsEditor
         outputs={outputs}
         outputKinds={kinds}
-        onChange={(o, k) => {
-          spy(o, k)
-          setOutputs(o)
-          setKinds(k)
+        outputWrapperPortNames={wrappers}
+        aggregator={initial.aggregator}
+        onChange={(nextOutputs, nextKinds, nextWrappers) => {
+          spy(nextOutputs, nextKinds, nextWrappers)
+          setOutputs(nextOutputs)
+          setKinds(nextKinds)
+          setWrappers(nextWrappers)
         }}
-        placeholder="add a port name then Enter"
       />
     )
   }
-  return render(<Harness />)
+
+  return { ...render(<Harness />), spy }
 }
 
-// Drives the public Select popover: click the button[role=combobox] trigger,
-// then mousedown the matching portaled <li role="option">.
-function clickKindOption(triggerLabel: RegExp, optionLabel: string) {
-  const trigger = screen.getByRole('combobox', { name: triggerLabel }) as HTMLButtonElement
-  fireEvent.click(trigger)
-  const opt = Array.from(document.querySelectorAll('li[role="option"]')).find((li) =>
-    (li.textContent ?? '').includes(optionLabel),
+function openEdit(name: string, position: number) {
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: new RegExp(`^Edit output port ${name}.*${position}`),
+    }),
   )
-  if (opt === undefined) throw new Error(`option '${optionLabel}' not found`)
-  fireEvent.mouseDown(opt)
+  return screen.getByTestId('agent-output-port-dialog')
 }
 
-afterEach(() => {
-  document.body.innerHTML = ''
-})
+async function saveDialog() {
+  const save = screen.getByTestId('agent-output-port-save') as HTMLButtonElement
+  await waitFor(() => expect(save.disabled).toBe(false))
+  fireEvent.click(save)
+}
 
-describe('OutputsEditor', () => {
-  test('renders one row per declared port with the current kind shown', () => {
-    mount(['summary', 'report'], { report: 'markdown_file' }, vi.fn())
-    // summary defaults to base string; report is markdown_file → path<md>.
-    expect(screen.getByRole('combobox', { name: /Output kind for summary/ }).textContent).toContain(
-      'string',
-    )
-    expect(screen.getByRole('combobox', { name: /Output kind for report/ }).textContent).toContain(
-      'file path',
-    )
-    // the path ext is now a second combobox (RFC-080 follow-up): it shows the
-    // Markdown (.md) label rather than a raw 'md' text input.
-    const ext = screen.getByRole('combobox', { name: /file extension/ })
-    expect((ext.textContent ?? '').toLowerCase()).toContain('markdown')
-  })
-
-  test('adding a new port leaves outputKinds untouched (defaults to string)', () => {
-    const onChange = vi.fn<OnChange>()
-    mount(['summary'], { summary: 'markdown' }, onChange)
-    const input = screen.getByPlaceholderText('add a port name then Enter') as HTMLInputElement
-    fireEvent.change(input, { target: { value: 'extra_port' } })
-    fireEvent.keyDown(input, { key: 'Enter' })
-    expect(onChange).toHaveBeenCalledWith(['summary', 'extra_port'], { summary: 'markdown' })
-  })
-
-  test('selecting markdown on a port writes the outputKinds entry', () => {
-    const onChange = vi.fn<OnChange>()
-    mount(['report'], undefined, onChange)
-    clickKindOption(/Output kind for report/, 'markdown')
-    expect(onChange).toHaveBeenCalledWith(['report'], { report: 'markdown' })
-  })
-
-  test('flipping the only port back to string drops the key and returns undefined', () => {
-    const onChange = vi.fn<OnChange>()
-    mount(['report'], { report: 'markdown' }, onChange)
-    clickKindOption(/Output kind for report/, 'string')
-    expect(onChange).toHaveBeenCalledWith(['report'], undefined)
-  })
-
-  test('file path + ext md + list toggle yields list<path<md>> (RFC-080 grammar)', () => {
-    const spy = vi.fn<OnChange>()
-    mountStateful(['docs'], undefined, spy)
-    clickKindOption(/Output kind for docs/, 'file path')
-    expect(spy).toHaveBeenLastCalledWith(['docs'], { docs: 'path<*>' })
-    // ext is now a Select: pick the Markdown (.md) option from its popover.
-    clickKindOption(/file extension/, 'Markdown')
-    expect(spy).toHaveBeenLastCalledWith(['docs'], { docs: 'path<md>' })
-    fireEvent.click(screen.getByLabelText('list'))
-    expect(spy).toHaveBeenLastCalledWith(['docs'], { docs: 'list<path<md>>' })
-  })
-
-  test('removing a port with a kind drops both array entry and kinds key', () => {
-    const onChange = vi.fn<OnChange>()
-    mount(['summary', 'report'], { report: 'markdown_file' }, onChange)
-    fireEvent.click(screen.getByLabelText('Remove report'))
-    expect(onChange).toHaveBeenCalledWith(['summary'], undefined)
-  })
-
-  test('rejects duplicates and invalid names without invoking onChange', () => {
-    const onChange = vi.fn<OnChange>()
-    mount(['summary'], undefined, onChange)
-    const input = screen.getByPlaceholderText('add a port name then Enter') as HTMLInputElement
-
-    fireEvent.change(input, { target: { value: 'summary' } })
-    fireEvent.keyDown(input, { key: 'Enter' })
-    expect(onChange).not.toHaveBeenCalled()
-    expect(screen.getByText(/duplicate/)).toBeTruthy()
-
-    fireEvent.change(input, { target: { value: 'BadName' } })
-    fireEvent.keyDown(input, { key: 'Enter' })
-    expect(onChange).not.toHaveBeenCalled()
-  })
-})
-
-describe('AgentForm wiring + KindSelect source-level guards', () => {
-  const outputsEditorSrc = readFileSync(
-    join(__dirname, '..', 'src', 'components', 'OutputsEditor.tsx'),
-    'utf8',
+function confirmDelete(name: string, position: number) {
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: new RegExp(`^Delete output port ${name}.*${position}`),
+    }),
   )
-  const agentFormSrc = readFileSync(
-    join(__dirname, '..', 'src', 'components', 'AgentForm.tsx'),
-    'utf8',
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: new RegExp(`^Confirm deletion of output port ${name}.*${position}`),
+    }),
   )
+}
 
-  test('AgentForm.tsx imports OutputsEditor and no longer uses ChipsInput for outputs', () => {
-    expect(agentFormSrc).toContain('import { OutputsEditor }')
-    expect(agentFormSrc).toContain('<OutputsEditor')
-    expect(agentFormSrc).not.toMatch(/<ChipsInput[^>]*value=\{value\.outputs/)
+describe('OutputsEditor explicit card and Dialog flow', () => {
+  test('renders a useful empty state and adds the first port only after Dialog save', async () => {
+    const { spy } = mountStateful({ outputs: [] })
+
+    expect(screen.getByTestId('agent-output-ports-empty')).toBeTruthy()
+    expect(screen.queryByTestId('agent-output-port-list')).toBeNull()
+    expect(screen.queryByRole('textbox')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('agent-output-port-add'))
+    const dialog = screen.getByTestId('agent-output-port-dialog')
+    expect(within(dialog).getByRole('dialog')).toBeTruthy()
+    fireEvent.change(screen.getByTestId('agent-output-port-name'), {
+      target: { value: 'result' },
+    })
+
+    expect(spy).not.toHaveBeenCalled()
+    await saveDialog()
+
+    expect(spy).toHaveBeenLastCalledWith(['result'], undefined, undefined)
+    expect(screen.queryByTestId('agent-output-ports-empty')).toBeNull()
+    expect(screen.getByTestId('agent-port-card-output-0')).toBeTruthy()
   })
 
-  test('OutputsEditor delegates the kind editor to KindSelect (no bespoke <select>)', () => {
-    expect(outputsEditorSrc).toContain("import { KindSelect } from './KindSelect'")
-    expect(outputsEditorSrc).toContain('<KindSelect')
-    expect(outputsEditorSrc).not.toContain('<select')
+  test('renders declared outputs as read-only cards with canonical kind summaries', () => {
+    const { container } = mountStateful({
+      outputs: ['summary', 'report'],
+      kinds: { report: 'markdown_file' },
+    })
+
+    expect(screen.getAllByTestId(/^agent-port-card-output-/)).toHaveLength(2)
+    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(
+      container.querySelector(
+        '[data-testid="agent-port-card-output-0"] .agent-port-card__kind-code',
+      )?.textContent,
+    ).toBe('string')
+    expect(
+      container.querySelector(
+        '[data-testid="agent-port-card-output-1"] .agent-port-card__kind-code',
+      )?.textContent,
+    ).toBe('path<md>')
+  })
+
+  test('aggregator rename and delete update both sidecar maps atomically', async () => {
+    const { spy } = mountStateful({
+      outputs: ['report', 'keep'],
+      kinds: { report: 'markdown', keep: 'signal' },
+      wrappers: { report: 'old_promoted', keep: 'keep_promoted' },
+      aggregator: true,
+    })
+
+    openEdit('report', 1)
+    fireEvent.change(screen.getByTestId('agent-output-port-name'), {
+      target: { value: 'final_report' },
+    })
+    fireEvent.change(screen.getByTestId('agent-output-port-wrapper'), {
+      target: { value: 'new_promoted' },
+    })
+    expect(screen.getByText(/Renaming may invalidate existing workflow references/)).toBeTruthy()
+    expect(spy).not.toHaveBeenCalled()
+
+    await saveDialog()
+    expect(spy).toHaveBeenLastCalledWith(
+      ['final_report', 'keep'],
+      { keep: 'signal', final_report: 'markdown' },
+      { keep: 'keep_promoted', final_report: 'new_promoted' },
+    )
+
+    confirmDelete('final_report', 1)
+    expect(spy).toHaveBeenLastCalledWith(['keep'], { keep: 'signal' }, { keep: 'keep_promoted' })
+  })
+
+  test('normal role hides the wrapper field but preserves and migrates its stored mapping', async () => {
+    const { spy } = mountStateful({
+      outputs: ['report'],
+      kinds: { report: 'markdown' },
+      wrappers: { report: 'promoted_report' },
+      aggregator: false,
+    })
+
+    openEdit('report', 1)
+    expect(screen.queryByTestId('agent-output-port-wrapper')).toBeNull()
+    expect(screen.getByText(/promoted_report.*inactive/i)).toBeTruthy()
+    fireEvent.change(screen.getByTestId('agent-output-port-name'), {
+      target: { value: 'final_report' },
+    })
+    await saveDialog()
+
+    expect(spy).toHaveBeenLastCalledWith(
+      ['final_report'],
+      { final_report: 'markdown' },
+      { final_report: 'promoted_report' },
+    )
+  })
+
+  test('orphan repair clears same-key sidecars independently and emits final empty-map tombstones', async () => {
+    const { spy } = mountStateful({
+      outputs: [],
+      kinds: { ghost: 'markdown' },
+      wrappers: { ghost: 'published' },
+    })
+
+    expect(screen.getAllByRole('button', { name: /orphan mapping.*ghost/i })).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: /Clean up.*outputKinds:ghost/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Confirm cleanup.*outputKinds:ghost/i }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /Clean up.*outputKinds:ghost/i })).toBeNull(),
+    )
+    expect(
+      screen.getByRole('button', { name: /Clean up.*outputWrapperPortNames:ghost/i }),
+    ).toBeTruthy()
+    expect(spy).toHaveBeenLastCalledWith([], {}, { ghost: 'published' })
+
+    fireEvent.click(screen.getByRole('button', { name: /Clean up.*outputWrapperPortNames:ghost/i }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /Confirm cleanup.*outputWrapperPortNames:ghost/i }),
+    )
+    await waitFor(() => expect(screen.queryByText(/Unlinked output mappings found/)).toBeNull())
+    expect(spy).toHaveBeenLastCalledWith([], {}, {})
+  })
+
+  test('orphan confirmation is reset when a refetch replaces the same source and key value', () => {
+    const onChange = vi.fn<OnChange>()
+    const { rerender } = render(
+      <OutputsEditor outputs={[]} outputKinds={{ ghost: 'markdown' }} onChange={onChange} />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Clean up.*outputKinds:ghost/i }))
+    expect(screen.getByRole('button', { name: /Confirm cleanup.*outputKinds:ghost/i })).toBeTruthy()
+
+    rerender(<OutputsEditor outputs={[]} outputKinds={{ ghost: 'signal' }} onChange={onChange} />)
+    expect(screen.getByText(/signal/)).toBeTruthy()
+    const refreshed = screen.getByRole('button', { name: /Clean up.*outputKinds:ghost/i })
+    fireEvent.click(refreshed)
+    expect(onChange).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: /Confirm cleanup.*outputKinds:ghost/i })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Confirm cleanup.*outputKinds:ghost/i }))
+    expect(onChange).toHaveBeenCalledWith([], {}, undefined)
+  })
+
+  test('duplicate and invalid names stay local and cannot be submitted', () => {
+    const { spy } = mountStateful({ outputs: ['summary'] })
+    fireEvent.click(screen.getByTestId('agent-output-port-add'))
+    const name = screen.getByTestId('agent-output-port-name')
+    const save = screen.getByTestId('agent-output-port-save') as HTMLButtonElement
+
+    fireEvent.change(name, { target: { value: 'summary' } })
+    expect(save.disabled).toBe(true)
+    expect(name.getAttribute('aria-invalid')).toBe('true')
+    expect(screen.getByText(/Port names must be unique/)).toBeTruthy()
+
+    fireEvent.change(name, { target: { value: 'BadName' } })
+    expect(save.disabled).toBe(true)
+    expect(screen.getByText(/Start with a lowercase letter/)).toBeTruthy()
+    expect(spy).not.toHaveBeenCalled()
   })
 })

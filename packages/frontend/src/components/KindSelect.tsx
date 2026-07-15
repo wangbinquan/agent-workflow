@@ -9,7 +9,7 @@
 // hand-edited kinds fall to an advanced raw-text field that validates live via
 // the shared grammar and never silently rewrites the user's input.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   tryParseKind,
@@ -24,7 +24,7 @@ import {
 import { Select } from './Select'
 import { Switch, TextInput } from './Form'
 
-interface KindSelectProps {
+export interface KindSelectProps {
   /** Canonical kind string; '' / 'string' are treated as base string. */
   value: string
   /** Always called with a canonical `stringifyKind(...)` form. */
@@ -32,6 +32,18 @@ interface KindSelectProps {
   ariaLabel?: string
   disabled?: boolean
   testidPrefix?: string
+  /** Extra classes appended to the real outer `.kind-select` wrapper. */
+  className?: string
+  /** Reports whether the current guided/advanced value can be committed. */
+  onValidityChange?: (valid: boolean) => void
+  /** Distinguishes repeated controls in accessible names (for example a port name). */
+  contextLabel?: string
+  /** Additional schema-level error when the generic kind grammar still parses. */
+  validationError?: string
+  /** Whether the rendered error is a live alert. Defaults to true. */
+  errorLive?: boolean
+  /** Called when the user edits the advanced raw value. */
+  onEdit?: () => void
 }
 
 type Guided = { mode: 'guided'; listWrap: boolean; leafId: string; ext: string }
@@ -82,11 +94,18 @@ export function KindSelect({
   ariaLabel,
   disabled,
   testidPrefix,
+  className,
+  onValidityChange,
+  contextLabel,
+  validationError,
+  errorLive = true,
+  onEdit,
 }: KindSelectProps) {
   const { t } = useTranslation()
   const decomposed = decompose(value)
   const [forceAdvanced, setForceAdvanced] = useState(false)
   const [advRaw, setAdvRaw] = useState(value)
+  const advancedErrorId = useId()
 
   // Keep the advanced buffer in sync when the value changes from outside.
   useEffect(() => {
@@ -94,29 +113,62 @@ export function KindSelect({
   }, [value])
 
   const isAdvanced = forceAdvanced || decomposed.mode === 'advanced'
+  const advValid = isRegisteredKindString(advRaw)
+  // `onValidityChange` reports the generic grammar only. Callers can layer a
+  // stricter schema through `validationError` without creating a feedback
+  // loop between their validity state and this callback.
+  const valid = !isAdvanced || advValid
+  const validityCallbackRef = useRef(onValidityChange)
+  validityCallbackRef.current = onValidityChange
+
+  // Depend only on the boolean value: callers commonly pass an inline state
+  // setter wrapper, and depending on its identity would report every render
+  // (or loop when that callback updates parent state).
+  useEffect(() => {
+    validityCallbackRef.current?.(valid)
+  }, [valid])
+
   const tid = (s: string) => (testidPrefix !== undefined ? `${testidPrefix}-${s}` : undefined)
+  const contextualize = (label: string) =>
+    contextLabel === undefined || contextLabel === '' ? label : `${contextLabel} — ${label}`
+  const rootClassName = ['kind-select', isAdvanced ? 'kind-select--advanced' : undefined, className]
+    .filter((part): part is string => part !== undefined && part !== '')
+    .join(' ')
 
   if (isAdvanced) {
-    const advValid = isRegisteredKindString(advRaw)
+    const displayedError = !advValid ? t('kindSelect.parseError') : validationError
     return (
-      <div className="kind-select kind-select--advanced">
+      <div className={rootClassName}>
         <TextInput
           value={advRaw}
           onChange={(v) => {
+            onEdit?.()
             setAdvRaw(v)
             if (isRegisteredKindString(v)) onChange(stringifyKind(parseKind(v)))
           }}
           placeholder="list<path<md>>"
           disabled={disabled}
+          aria-label={contextualize(ariaLabel ?? t('kindSelect.baseLabel'))}
+          aria-invalid={displayedError !== undefined}
+          aria-describedby={displayedError === undefined ? undefined : advancedErrorId}
           data-testid={tid('advanced-input')}
         />
-        {!advValid && <div className="kind-select__error">{t('kindSelect.parseError')}</div>}
+        {displayedError !== undefined && (
+          <div
+            id={advancedErrorId}
+            className="kind-select__error"
+            role={errorLive ? 'alert' : undefined}
+          >
+            {displayedError}
+          </div>
+        )}
         {decompose(advRaw).mode === 'guided' && (
           <button
             type="button"
             className="btn btn--xs"
             onClick={() => setForceAdvanced(false)}
             disabled={disabled}
+            aria-label={contextualize(t('kindSelect.guidedToggle'))}
           >
             {t('kindSelect.guidedToggle')}
           </button>
@@ -129,13 +181,17 @@ export function KindSelect({
   const isPath = g.leafId === 'path'
 
   return (
-    <div className="kind-select" aria-label={ariaLabel}>
+    <div className={rootClassName} aria-label={ariaLabel}>
       <div className="kind-select__row">
         <Select<string>
           value={g.leafId}
           onChange={(leafId) => onChange(recompose(g.listWrap, leafId, g.ext))}
-          options={SELECTABLE.map((d) => ({ value: d.id, label: t(d.labelKey) }))}
-          ariaLabel={ariaLabel ?? t('kindSelect.baseLabel')}
+          options={SELECTABLE.map((d) => ({
+            value: d.id,
+            label: t(d.labelKey),
+            description: t(d.descriptionKey),
+          }))}
+          ariaLabel={contextualize(ariaLabel ?? t('kindSelect.baseLabel'))}
           disabled={disabled}
         />
         {isPath && (
@@ -144,7 +200,7 @@ export function KindSelect({
               value={g.ext}
               onChange={(ext) => onChange(recompose(g.listWrap, g.leafId, ext))}
               options={PATH_EXTS.map((e) => ({ value: e.ext, label: t(e.labelKey) }))}
-              ariaLabel={t('kindSelect.extLabel')}
+              ariaLabel={contextualize(t('kindSelect.extLabel'))}
               disabled={disabled}
             />
           </span>
@@ -153,6 +209,8 @@ export function KindSelect({
           checked={g.listWrap}
           onChange={(listWrap) => onChange(recompose(listWrap, g.leafId, g.ext))}
           label={t('kindSelect.listToggle')}
+          aria-label={contextualize(t('kindSelect.listToggle'))}
+          disabled={disabled}
         />
         <button
           type="button"
@@ -162,6 +220,7 @@ export function KindSelect({
             setForceAdvanced(true)
           }}
           disabled={disabled}
+          aria-label={contextualize(t('kindSelect.advancedToggle'))}
         >
           {t('kindSelect.advancedToggle')}
         </button>

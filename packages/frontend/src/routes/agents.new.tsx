@@ -15,12 +15,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Agent, Config, CreateAgent } from '@agent-workflow/shared'
 import { api } from '@/api/client'
-import { AgentForm, emptyAgent } from '@/components/AgentForm'
+import { AgentForm, emptyAgent, type AgentTab } from '@/components/AgentForm'
 import { AgentImportDialog } from '@/components/AgentImportDialog'
+import { AgentPortValidationSummary } from '@/components/agent-ports/AgentPortValidationSummary'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { NEW_CARD_KEY, useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
 import { useDirtyBaseline } from '@/hooks/useDraftFromQuery'
 import { mergeAgentImport } from '@/lib/agent-import-merge'
+import { validateAgentPortState } from '@/lib/agent-ports'
 import { Route as agentsRoute } from './agents'
 
 export const Route = createRoute({
@@ -47,6 +49,7 @@ function AgentCreatePage() {
   const qc = useQueryClient()
   const { report } = useSplitDirty()
   const [draft, setDraft] = useState(emptyAgent)
+  const [activeTab, setActiveTab] = useState<AgentTab>('basics')
   const [importOpen, setImportOpen] = useState(false)
   const { dirty, resetBaseline } = useDirtyBaseline(draft, draft)
   useReportSplitDirty(NEW_CARD_KEY, dirty)
@@ -84,6 +87,8 @@ function AgentCreatePage() {
       navigate({ to: '/agents/$name', params: { name: created.name } })
     },
   })
+  const portValidation = validateAgentPortState(draft)
+  const blockingPortIssues = portValidation.issues.filter((issue) => issue.severity === 'error')
 
   return (
     <div className="agent-new">
@@ -103,16 +108,31 @@ function AgentCreatePage() {
           <button
             type="button"
             className="btn btn--primary"
-            disabled={create.isPending || draft.name === ''}
-            onClick={() => create.mutate()}
+            disabled={create.isPending || draft.name === '' || !portValidation.valid}
+            onClick={() => {
+              if (portValidation.valid) create.mutate()
+            }}
             data-testid="agent-create-button"
           >
             {create.isPending ? t('common.creating') : t('agents.createButton')}
           </button>
         </div>
       </header>
+      {blockingPortIssues.length > 0 && (
+        <AgentPortValidationSummary
+          issues={blockingPortIssues}
+          variant="compact"
+          onNavigate={setActiveTab}
+        />
+      )}
       {create.error !== null && create.error !== undefined && <ErrorBanner error={create.error} />}
-      <AgentForm value={draft} onChange={setDraft} />
+      <AgentForm
+        value={draft}
+        onChange={setDraft}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        hasExternalPortAlert={blockingPortIssues.length > 0}
+      />
       <AgentImportDialog
         open={importOpen}
         onClose={() => setImportOpen(false)}

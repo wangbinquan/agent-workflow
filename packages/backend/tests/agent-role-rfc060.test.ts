@@ -12,6 +12,7 @@
 //  6. outputWrapperPortNames round-trips through frontmatter_extra.
 //  7. outputKinds sidecar (RFC-005) and RFC-060 sidecars (role +
 //     outputWrapperPortNames) coexist without trampling each other.
+//  8. RFC-194: explicit empty sidecar maps survive update as `{}` tombstones.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -177,5 +178,37 @@ describe('RFC-060 PR-B — coexistence with RFC-005 outputKinds', () => {
     const fm = await readFmExtraRaw(db, 'a')
     expect(fm.outputKinds).toEqual({ report: 'path<md>' })
     expect(fm.role).toBe('aggregator')
+  })
+
+  test('RFC-194: clearing both sidecar maps preserves empty tombstones and unrelated frontmatter', async () => {
+    await createAgent(db, {
+      ...basePayload('a'),
+      outputs: ['report'],
+      outputKinds: { report: 'path<md>' },
+      role: 'aggregator',
+      outputWrapperPortNames: { report: 'final' },
+    })
+
+    const updated = await updateAgent(db, 'a', {
+      outputKinds: {},
+      outputWrapperPortNames: {},
+    })
+
+    // The service response must distinguish an explicit clear (`{}`) from an
+    // omitted sparse-patch field (`undefined`) while preserving adjacent data.
+    expect(updated.outputKinds).toEqual({})
+    expect(updated.outputWrapperPortNames).toEqual({})
+    expect(updated.role).toBe('aggregator')
+    expect(updated.frontmatterExtra).toEqual({ user_key: 'kept' })
+
+    // The raw agent frontmatter is the persistence contract: both tombstones,
+    // the reserved role, and unknown user-authored keys must all survive.
+    const fm = await readFmExtraRaw(db, 'a')
+    expect(fm).toEqual({
+      user_key: 'kept',
+      outputKinds: {},
+      role: 'aggregator',
+      outputWrapperPortNames: {},
+    })
   })
 })

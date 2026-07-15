@@ -1,36 +1,23 @@
-// RFC-060 PR-B — AgentForm role + outputWrapperPortNames field tests.
-//
-// Locks:
-//  1. Form renders a role selector with two options (normal / aggregator)
-//     using the public `<Select>` chrome (RFC-035 consistency).
-//  2. Default value (role undefined → display "Normal") wires through.
-//  3. Selecting "Aggregator" surfaces role: 'aggregator' upward via onChange.
-//  4. Selecting back to "Normal" clears role to undefined (so fmExtra stays
-//     byte-identical to pre-RFC-060 agents — see services/agent.ts).
-//  5. outputWrapperPortNames JSON field is hidden when role !== 'aggregator'.
-//  6. outputWrapperPortNames JSON field shows + round-trips when role === 'aggregator'.
+// RFC-060 + RFC-194 — role remains in Advanced, while aggregator promotion
+// mappings move to each output port's transactional Edit Dialog.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { CreateAgent } from '@agent-workflow/shared'
 import { AgentForm, emptyAgent } from '../src/components/AgentForm'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
 function clickSelectOption(triggerLabel: RegExp, optionLabel: string) {
-  // Public Select is a button[role=combobox] + portaled ul[role=listbox];
-  // options dispatch onChange via mouseDown (matches canvas-sharding-inspector
-  // pattern). fireEvent.click on a portaled <li> doesn't fire React handlers
-  // attached via onMouseDown.
   const trigger = screen.getByRole('combobox', { name: triggerLabel }) as HTMLButtonElement
   fireEvent.click(trigger)
   const list = document.querySelector('ul[role="listbox"]') as HTMLUListElement | null
   if (list === null) throw new Error('listbox not opened')
-  const opt = Array.from(list.querySelectorAll('li[role="option"]')).find((li) =>
-    (li.textContent ?? '').includes(optionLabel),
+  const option = Array.from(list.querySelectorAll('li[role="option"]')).find((candidate) =>
+    (candidate.textContent ?? '').includes(optionLabel),
   )
-  if (opt === undefined) throw new Error(`option '${optionLabel}' not found`)
-  fireEvent.mouseDown(opt)
+  if (option === undefined) throw new Error(`option '${optionLabel}' not found`)
+  fireEvent.mouseDown(option)
 }
 
 function mount(initial: CreateAgent, onChange: (next: CreateAgent) => void) {
@@ -42,10 +29,26 @@ function mount(initial: CreateAgent, onChange: (next: CreateAgent) => void) {
       <AgentForm value={initial} onChange={onChange} />
     </QueryClientProvider>,
   )
-  // RFC-169: role + outputWrapperPortNames live in the Advanced tab; open it so
-  // the combobox is accessible (hidden panels are excluded from getByRole).
   fireEvent.click(screen.getByRole('tab', { name: 'Advanced' }))
   return utils
+}
+
+function openPorts() {
+  fireEvent.click(screen.getByRole('tab', { name: /Ports/ }))
+}
+
+function openOutputEditor(name: string, position = 1) {
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: new RegExp(`^Edit output port ${name}.*${position}`),
+    }),
+  )
+}
+
+async function saveOutputDialog() {
+  const save = screen.getByTestId('agent-output-port-save') as HTMLButtonElement
+  await waitFor(() => expect(save.disabled).toBe(false))
+  fireEvent.click(save)
 }
 
 beforeEach(() => {
@@ -61,80 +64,116 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('AgentForm — role selector', () => {
-  test('renders a role combobox with two options', () => {
-    const onChange = vi.fn<(next: CreateAgent) => void>()
-    const initial: CreateAgent = { ...emptyAgent(), name: 'demo' }
-    mount(initial, onChange)
+describe('AgentForm role selector', () => {
+  test('renders Normal by default', () => {
+    mount({ ...emptyAgent(), name: 'demo' }, vi.fn())
 
     const trigger = screen.getByRole('combobox', { name: /^Role$/ })
-    expect(trigger).toBeTruthy()
-    // Default selection shows "Normal" because role is undefined.
     expect(trigger.textContent).toMatch(/Normal/)
   })
 
-  test('selecting Aggregator surfaces role: aggregator on onChange', () => {
+  test('selecting Aggregator preserves hidden mappings and surfaces the role', () => {
     const onChange = vi.fn<(next: CreateAgent) => void>()
-    const initial: CreateAgent = { ...emptyAgent(), name: 'demo' }
-    mount(initial, onChange)
+    mount(
+      {
+        ...emptyAgent(),
+        name: 'demo',
+        outputs: ['report'],
+        outputWrapperPortNames: { report: 'final' },
+      },
+      onChange,
+    )
 
     clickSelectOption(/^Role$/, 'Aggregator')
 
-    expect(onChange).toHaveBeenCalledTimes(1)
     const next = onChange.mock.calls[0]?.[0] as CreateAgent
     expect(next.role).toBe('aggregator')
+    expect(next.outputWrapperPortNames).toEqual({ report: 'final' })
   })
 
-  test('switching back to Normal clears role to undefined (byte-identical fmExtra)', () => {
+  test('switching back to Normal clears only role and keeps promotion mappings', () => {
     const onChange = vi.fn<(next: CreateAgent) => void>()
-    const initial: CreateAgent = { ...emptyAgent(), name: 'demo', role: 'aggregator' }
-    mount(initial, onChange)
+    mount(
+      {
+        ...emptyAgent(),
+        name: 'demo',
+        role: 'aggregator',
+        outputs: ['report'],
+        outputWrapperPortNames: { report: 'final' },
+      },
+      onChange,
+    )
 
     clickSelectOption(/^Role$/, 'Normal')
 
-    expect(onChange).toHaveBeenCalledTimes(1)
     const next = onChange.mock.calls[0]?.[0] as CreateAgent
     expect(next.role).toBeUndefined()
+    expect(next.outputWrapperPortNames).toEqual({ report: 'final' })
   })
 })
 
-describe('AgentForm — outputWrapperPortNames field visibility', () => {
-  test('hidden when role is normal / undefined', () => {
-    const onChange = vi.fn<(next: CreateAgent) => void>()
-    const initial: CreateAgent = { ...emptyAgent(), name: 'demo' }
-    mount(initial, onChange)
+describe('AgentForm wrapper promotion editing', () => {
+  test.each([undefined, 'aggregator' as const])(
+    'Advanced has no raw outputWrapperPortNames JSON block (role=%s)',
+    (role) => {
+      mount({ ...emptyAgent(), name: 'demo', role }, vi.fn())
 
-    expect(screen.queryByText(/Output → wrapper port name map/i)).toBeNull()
+      expect(screen.queryByText(/Output → wrapper port name map/i)).toBeNull()
+      expect(screen.queryByPlaceholderText(/"report":"final"/)).toBeNull()
+    },
+  )
+
+  test('aggregator wrapper mapping round-trips through the output Edit Dialog', async () => {
+    const onChange = vi.fn<(next: CreateAgent) => void>()
+    mount(
+      {
+        ...emptyAgent(),
+        name: 'demo',
+        role: 'aggregator',
+        outputs: ['report'],
+        outputKinds: { report: 'markdown' },
+        outputWrapperPortNames: { report: 'old_final' },
+      },
+      onChange,
+    )
+    openPorts()
+    openOutputEditor('report')
+
+    const wrapper = screen.getByTestId('agent-output-port-wrapper') as HTMLInputElement
+    expect(wrapper.value).toBe('old_final')
+    fireEvent.change(wrapper, { target: { value: 'final' } })
+    await saveOutputDialog()
+
+    const next = onChange.mock.calls.at(-1)?.[0] as CreateAgent
+    expect(next.role).toBe('aggregator')
+    expect(next.outputs).toEqual(['report'])
+    expect(next.outputKinds).toEqual({ report: 'markdown' })
+    expect(next.outputWrapperPortNames).toEqual({ report: 'final' })
   })
 
-  test('shown when role is aggregator', () => {
+  test('normal Edit Dialog hides and preserves a legacy wrapper mapping', async () => {
     const onChange = vi.fn<(next: CreateAgent) => void>()
-    const initial: CreateAgent = {
-      ...emptyAgent(),
-      name: 'demo',
-      role: 'aggregator',
-    }
-    mount(initial, onChange)
+    mount(
+      {
+        ...emptyAgent(),
+        name: 'demo',
+        outputs: ['report'],
+        outputKinds: { report: 'markdown' },
+        outputWrapperPortNames: { report: 'final' },
+      },
+      onChange,
+    )
+    openPorts()
+    openOutputEditor('report')
 
-    expect(screen.getByText(/Output → wrapper port name map/i)).toBeTruthy()
-  })
+    expect(screen.queryByTestId('agent-output-port-wrapper')).toBeNull()
+    clickSelectOption(/Data type/, 'string')
+    await saveOutputDialog()
 
-  test('JsonField round-trips a {port: rename} object', () => {
-    const onChange = vi.fn<(next: CreateAgent) => void>()
-    const initial: CreateAgent = {
-      ...emptyAgent(),
-      name: 'demo',
-      role: 'aggregator',
-    }
-    mount(initial, onChange)
-
-    const field = screen.getByPlaceholderText(/"report":"final"/) as HTMLTextAreaElement
-    fireEvent.change(field, { target: { value: '{"report":"final"}' } })
-    // JsonField emits onChange only when the JSON parses to a valid object;
-    // the last call shape carries outputWrapperPortNames.
-    const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1]
-    expect(lastCall).toBeTruthy()
-    const next = lastCall?.[0] as CreateAgent
+    const next = onChange.mock.calls.at(-1)?.[0] as CreateAgent
+    expect(next.role).toBeUndefined()
+    expect(next.outputs).toEqual(['report'])
+    expect(next.outputKinds).toEqual({})
     expect(next.outputWrapperPortNames).toEqual({ report: 'final' })
   })
 })

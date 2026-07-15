@@ -774,6 +774,7 @@ export interface Resources {
     itemsCount_other: string
     loading: string
     open: string
+    edit: string
     delete: string
     save: string
     saved: string
@@ -812,6 +813,7 @@ export interface Resources {
     empty: string
     optionalPlaceholder: string
     confirmPrompt: string
+    confirmDelete: string
     close: string
     cancel: string
     selectAnOption: string
@@ -2099,19 +2101,124 @@ export interface Resources {
     fieldDescriptionPlaceholder: string
     fieldInputs: string
     fieldInputsHint: string
-    fieldInputsPlaceholder: string
-    inputsValidate: string
     inputKindLabel: string
     inputRequired: string
     inputRequiredLabel: string
     fieldOutputs: string
     fieldOutputsHint: string
-    fieldOutputsPlaceholder: string
-    outputsValidate: string
     outputKindLabel: string
     outputKind_string: string
     outputKind_markdown: string
     outputKind_markdown_file: string
+    ports: {
+      direction: {
+        input: string
+        output: string
+      }
+      actions: {
+        edit: string
+        delete: string
+        confirmDelete: string
+      }
+      card: {
+        customKind: string
+        legacy: string
+        duplicate: string
+        noDescription: string
+        required: string
+        wrapperSameName: string
+        wrapperDuplicate: string
+        normalOutput: string
+        inactiveWrapperMap: string
+      }
+      validation: {
+        compactTitle: string
+        detailTitle: string
+        target: {
+          ports: string
+          advanced: string
+        }
+        severity: {
+          error: string
+          warning: string
+        }
+        issue: {
+          inputNameSchema: string
+          inputNameDuplicate: string
+          outputNameDuplicate: string
+          outputKindInvalid: string
+          wrapperNameDuplicate: string
+          reservedPortSidecarKey: string
+          orphanOutputKind: string
+          orphanWrapperName: string
+        }
+      }
+      inputsTitle: string
+      inputsRelation: string
+      outputsTitle: string
+      outputsRelation: string
+      count: string
+      addInput: string
+      addOutput: string
+      inputsEmptyTitle: string
+      inputsEmptyDescription: string
+      outputsEmptyTitle: string
+      outputsEmptyDescription: string
+      addInputDialogTitle: string
+      editInputDialogTitle: string
+      addOutputDialogTitle: string
+      editOutputDialogTitle: string
+      fieldName: string
+      fieldKind: string
+      fieldRequired: string
+      fieldDescription: string
+      fieldDescriptionHint: string
+      fieldWrapperName: string
+      fieldWrapperNameHint: string
+      saveAdd: string
+      saveEdit: string
+      cancel: string
+      editInput: string
+      editOutput: string
+      deleteInput: string
+      deleteOutput: string
+      confirmDeleteInput: string
+      confirmDeleteOutput: string
+      requiredChip: string
+      noDescription: string
+      wrapperSame: string
+      wrapperMapping: string
+      legacyChip: string
+      duplicateChip: string
+      renameWarning: string
+      legacyWarning: string
+      errorRequired: string
+      errorFormat: string
+      errorTooLong: string
+      errorDuplicate: string
+      errorWrapperDuplicate: string
+      errorKindInvalid: string
+      errorOrphanConflict: string
+      errorStale: string
+      orphanTitle: string
+      orphanDescription: string
+      orphanKind: string
+      orphanWrapper: string
+      cleanupOrphan: string
+      confirmCleanupOrphan: string
+      validationTitle: string
+      validationCompactTitle: string
+      navigatePorts: string
+      navigateAdvanced: string
+      issueInputNameSchema: string
+      issueInputNameDuplicate: string
+      issueOutputNameDuplicate: string
+      issueOutputKindInvalid: string
+      issueWrapperNameDuplicate: string
+      issueReservedPortSidecarKey: string
+      issueOrphanOutputKind: string
+      issueOrphanWrapperName: string
+    }
     groupCapabilities: string
     groupCapabilitiesHint: string
     groupDependencies: string
@@ -2196,6 +2303,7 @@ export interface Resources {
       cancelButton: string
       previewEmpty: string
       willOverwrite: string
+      orphanConflict: string
       footerHint: string
       bodySizeHint: string
       routedTo: {
@@ -3683,6 +3791,7 @@ export const zhCN: Resources = {
     itemsCount_other: '{{count}} 项',
     loading: '加载中…',
     open: '打开',
+    edit: '编辑',
     delete: '删除',
     save: '保存',
     saved: '已保存',
@@ -3717,6 +3826,7 @@ export const zhCN: Resources = {
     empty: '（空）',
     optionalPlaceholder: '（可选）',
     confirmPrompt: '确认？',
+    confirmDelete: '确认删除',
     close: '关闭',
     cancel: '取消',
     selectAnOption: '请选择',
@@ -5139,20 +5249,116 @@ export const zhCN: Resources = {
     fieldInputs: '输入端口',
     fieldInputsHint:
       '声明式输入端口（名称 + 类型 + 可选的「必填」标记）。可选——输入端口会展示在能力卡上，供 leader / 编排 agent 了解该 agent 消费什么；无论此处声明与否，agent 仍通过 {{token}} 模板接收提示词。',
-    fieldInputsPlaceholder: '输入端口名后按 Enter',
-    inputsValidate: '只允许小写字母 + 下划线',
     inputKindLabel: '{{port}} 的输入类型',
     inputRequired: '必填',
     inputRequiredLabel: '将 {{port}} 标记为必填',
     fieldOutputs: '输出端口',
     fieldOutputsHint:
       '在 <port> envelope 中声明的端口名。可为每个端口选择类型；选「文件路径」并把扩展名设为 Markdown（.md）时，端口内容是 worktree 内的 .md 相对路径，框架会自动读取文件内容。',
-    fieldOutputsPlaceholder: '输入端口名后按 Enter',
-    outputsValidate: '只允许小写字母 + 下划线',
     outputKindLabel: '{{port}} 的输出类型',
     outputKind_string: '字符串',
     outputKind_markdown: 'Markdown 正文',
     outputKind_markdown_file: 'Markdown 文件路径',
+    ports: {
+      direction: { input: '输入', output: '输出' },
+      actions: {
+        edit: '编辑{{direction}}端口 {{name}}（第 {{index}} 项）',
+        delete: '删除{{direction}}端口 {{name}}（第 {{index}} 项）',
+        confirmDelete: '确认删除{{direction}}端口 {{name}}（第 {{index}} 项）',
+      },
+      card: {
+        customKind: '自定义类型',
+        legacy: '存量名称',
+        duplicate: '名称重复',
+        noDescription: '未填写说明',
+        required: '必填',
+        wrapperSameName: '聚合后保持名称 {{name}}',
+        wrapperDuplicate: '聚合名称重复',
+        normalOutput: '运行信封必须按此名称产出。',
+        inactiveWrapperMap: '保留的聚合映射 {{name}} → {{wrapper}} 在普通代理角色下不生效。',
+      },
+      validation: {
+        compactTitle: '端口配置需要处理（{{count}} 项）',
+        detailTitle: '端口配置问题（{{count}} 项）',
+        target: { ports: '在端口中修复', advanced: '在高级设置中修复' },
+        severity: { error: '错误', warning: '警告' },
+        issue: {
+          inputNameSchema: '第 {{position}} 个输入端口（{{name}}）名称无效。',
+          inputNameDuplicate: '输入端口 {{name}} 在第 {{positions}} 项重复。',
+          outputNameDuplicate: '输出端口 {{name}} 在第 {{positions}} 项重复。',
+          outputKindInvalid: '输出 {{key}} 的类型无效：{{value}}。',
+          wrapperNameDuplicate: '聚合端口 {{name}} 被第 {{positions}} 项重复使用。',
+          reservedPortSidecarKey: '额外 frontmatter 不能包含保留键 {{key}}。',
+          orphanOutputKind: '类型映射 {{key}} 没有对应的输出端口：{{value}}。',
+          orphanWrapperName: '聚合映射 {{key}} 没有对应的输出端口：{{value}}。',
+        },
+      },
+      inputsTitle: '输入端口',
+      inputsRelation: '描述这个代理需要接收什么，帮助编排者正确选择和调用它。',
+      outputsTitle: '输出端口',
+      outputsRelation: '定义代理可产出的结果，以及每项结果的数据类型。',
+      count: '{{count}} 个',
+      addInput: '添加输入端口',
+      addOutput: '添加输出端口',
+      inputsEmptyTitle: '还没有输入端口',
+      inputsEmptyDescription: '如果代理需要明确的上下文或文件，请添加输入端口。',
+      outputsEmptyTitle: '还没有输出端口',
+      outputsEmptyDescription: '添加代理会产出的结果，让工作流可以引用它。',
+      addInputDialogTitle: '添加输入端口',
+      editInputDialogTitle: '编辑输入端口',
+      addOutputDialogTitle: '添加输出端口',
+      editOutputDialogTitle: '编辑输出端口',
+      fieldName: '端口名称',
+      fieldKind: '数据类型',
+      fieldRequired: '必填输入',
+      fieldDescription: '说明',
+      fieldDescriptionHint: '可选，最多 2048 个字符；会显示在能力卡中。',
+      fieldWrapperName: '聚合后端口名',
+      fieldWrapperNameHint: '留空表示与当前输出端口同名。',
+      saveAdd: '添加端口',
+      saveEdit: '保存更改',
+      cancel: '取消',
+      editInput: '编辑输入端口 {{name}}（第 {{position}} 项）',
+      editOutput: '编辑输出端口 {{name}}（第 {{position}} 项）',
+      deleteInput: '删除输入端口 {{name}}（第 {{position}} 项）',
+      deleteOutput: '删除输出端口 {{name}}（第 {{position}} 项）',
+      confirmDeleteInput: '确认删除输入端口 {{name}}（第 {{position}} 项）',
+      confirmDeleteOutput: '确认删除输出端口 {{name}}（第 {{position}} 项）',
+      requiredChip: '必填',
+      noDescription: '未填写说明',
+      wrapperSame: '聚合后保持同名',
+      wrapperMapping: '{{name}} → {{wrapper}}',
+      legacyChip: '存量名称',
+      duplicateChip: '名称重复',
+      renameWarning: '重命名可能让现有工作流引用失效；启动校验仍会阻止失效连线。',
+      legacyWarning: '这是可读取的存量名称；保持原名可以保存，改名时需使用标准格式。',
+      errorRequired: '请输入端口名称。',
+      errorFormat: '以小写字母开头，仅可包含小写字母、数字和下划线。',
+      errorTooLong: '输入端口名称最多 128 个字符。',
+      errorDuplicate: '端口名称必须唯一。',
+      errorWrapperDuplicate: '聚合后的端口名必须唯一。',
+      errorKindInvalid: '请选择合法的数据类型。',
+      errorOrphanConflict: '该名称仍有未关联映射，请先在下方清理。',
+      errorStale: '目标端口已变化，请关闭后重新打开。',
+      orphanTitle: '发现未关联的输出映射',
+      orphanDescription: '这些历史配置没有对应的输出端口。清理后才能复用同名端口。',
+      orphanKind: '类型映射：{{key}} = {{value}}',
+      orphanWrapper: '聚合映射：{{key}} = {{value}}',
+      cleanupOrphan: '清理 {{key}} 的未关联映射',
+      confirmCleanupOrphan: '确认清理 {{key}} 的未关联映射',
+      validationTitle: '端口配置需要处理',
+      validationCompactTitle: '创建或保存前，请修复端口配置。',
+      navigatePorts: '前往端口',
+      navigateAdvanced: '前往高级设置',
+      issueInputNameSchema: '输入端口 {{name}} 不符合长度要求。',
+      issueInputNameDuplicate: '输入端口 {{name}} 重复。',
+      issueOutputNameDuplicate: '输出端口 {{name}} 重复。',
+      issueOutputKindInvalid: '输出 {{key}} 的类型无效。',
+      issueWrapperNameDuplicate: '聚合后的端口名 {{name}} 重复。',
+      issueReservedPortSidecarKey: '额外 frontmatter 中含保留键 {{key}}。',
+      issueOrphanOutputKind: '类型映射 {{key}} 没有对应的输出端口。',
+      issueOrphanWrapperName: '聚合映射 {{key}} 没有对应的输出端口。',
+    },
     groupCapabilities: '能力',
     groupCapabilitiesHint: '注入到该代理进程内、供其调用',
     groupDependencies: '依赖',
@@ -5243,6 +5449,8 @@ export const zhCN: Resources = {
       cancelButton: '取消',
       previewEmpty: '未识别到任何字段。文件可能为空或仅包含正文。',
       willOverwrite: '应用将覆盖你已修改的 {{count}} 个字段：{{fields}}',
+      orphanConflict:
+        '导入会占用未关联映射 {{mappings}}；请先在端口页显式清理，或在本次导入中同时提供对应映射。',
       footerHint: '仅填入下方表单；保存仍需点击「创建」按钮。',
       bodySizeHint: '（{{bytes}} 字节）',
       routedTo: {

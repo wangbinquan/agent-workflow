@@ -23,6 +23,8 @@ interface AgentRow {
   name: string
   description: string
   outputs: string[]
+  outputKinds?: Record<string, string>
+  outputWrapperPortNames?: Record<string, string>
   syncOutputsOnIterate: boolean
   permission: Record<string, unknown>
   skills: string[]
@@ -66,6 +68,11 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { 'content-type': 'application/json' },
   })
+}
+
+function chooseSelectOption(comboboxName: RegExp, optionName: string) {
+  fireEvent.click(screen.getByRole('combobox', { name: comboboxName }))
+  fireEvent.mouseDown(screen.getByRole('option', { name: optionName }))
 }
 
 function installFetch(opts: { failList?: boolean; ownerName?: string } = {}) {
@@ -227,6 +234,134 @@ describe('/agents split page', () => {
     )
   })
 
+  test('duplicate output blocks Save with one live explanation and repairs in Ports', async () => {
+    agents = [{ ...makeAgent('broken'), outputs: ['result', 'result'] }]
+    renderAgents('/agents/broken')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'broken' }))
+
+    const save = screen.getByTestId('agent-save-button') as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+    const alert = screen.getByRole('alert', { name: /Port configuration needs attention/ })
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    expect(alert.textContent).toContain('result')
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Fix in Ports: Output port result is duplicated/ }),
+    )
+    expect(screen.getByRole('tab', { name: /Ports/ }).getAttribute('aria-selected')).toBe('true')
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('tab', { name: /Ports/ })),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /^Edit output port result.*item 1/i }))
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    fireEvent.click(screen.getByTestId('agent-output-port-cancel'))
+
+    fireEvent.click(screen.getByRole('button', { name: /^Delete output port result.*item 2/i }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Confirm deletion of output port result.*item 2/i }),
+    )
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(save.disabled).toBe(false)
+  })
+
+  test('opening a declared invalid kind keeps one route alert and associates a non-live field error', async () => {
+    agents = [
+      {
+        ...makeAgent('invalid-kind'),
+        outputs: ['report'],
+        outputKinds: { report: 'not a kind' },
+      },
+    ]
+    renderAgents('/agents/invalid-kind')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'invalid-kind' }))
+
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: /^Fix in Ports:/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Edit output port report/ }))
+
+    const advanced = screen.getByTestId('agent-output-port-kind-advanced-input')
+    expect(advanced.getAttribute('aria-invalid')).toBe('true')
+    const error = document.querySelector('.kind-select__error')
+    expect(error).toBeTruthy()
+    expect(advanced.getAttribute('aria-describedby')).toBe(error?.id)
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+
+    // Continuing to type an invalid local value must not create a second
+    // alert while the uncommitted route draft still owns the compact one.
+    fireEvent.change(advanced, { target: { value: 'still not a kind' } })
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    expect(advanced.getAttribute('aria-invalid')).toBe('true')
+  })
+
+  test('reserved port sidecar in extra frontmatter directs repair to Advanced', async () => {
+    agents = [
+      {
+        ...makeAgent('reserved-extra'),
+        frontmatterExtra: { outputKinds: { report: 'markdown' } },
+      },
+    ]
+    renderAgents('/agents/reserved-extra')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'reserved-extra' }))
+
+    expect((screen.getByTestId('agent-save-button') as HTMLButtonElement).disabled).toBe(true)
+    const alert = screen.getByRole('alert', { name: /Port configuration needs attention/ })
+    expect(alert.textContent).toContain('outputKinds')
+    fireEvent.click(screen.getByRole('button', { name: /^Fix in Advanced:/ }))
+    expect(screen.getByRole('tab', { name: 'Advanced' }).getAttribute('aria-selected')).toBe('true')
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Advanced' })),
+    )
+  })
+
+  test('normal retained wrapper collision stays savable; Aggregator blocks until Ports repair', async () => {
+    agents = [
+      {
+        ...makeAgent('role-collision'),
+        outputs: ['left', 'right'],
+        outputWrapperPortNames: { right: 'left' },
+      },
+    ]
+    renderAgents('/agents/role-collision')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'role-collision' }))
+
+    const save = screen.getByTestId('agent-save-button') as HTMLButtonElement
+    expect(save.disabled).toBe(false)
+    expect(screen.queryByRole('alert', { name: /Port configuration needs attention/ })).toBeNull()
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Advanced' }))
+    chooseSelectOption(/^Role$/, 'Aggregator')
+    await waitFor(() => expect(save.disabled).toBe(true))
+    expect(screen.getByRole('alert', { name: /Port configuration needs attention/ })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Fix in Ports:/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Edit output port right/ }))
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    const wrapper = screen.getByTestId('agent-output-port-wrapper')
+    fireEvent.change(wrapper, { target: { value: 'published_right' } })
+    fireEvent.click(screen.getByTestId('agent-output-port-save'))
+    await waitFor(() => expect(save.disabled).toBe(false))
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  test('unique schema-readable legacy port names do not block Save', async () => {
+    agents = [
+      {
+        ...makeAgent('legacy-ports'),
+        inputs: [{ name: 'Legacy Input', kind: 'string' }],
+        outputs: ['Legacy Output'],
+        outputKinds: { 'Legacy Output': 'markdown' },
+      },
+    ]
+    renderAgents('/agents/legacy-ports')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'legacy-ports' }))
+
+    expect((screen.getByTestId('agent-save-button') as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.queryByRole('alert', { name: /Port configuration needs attention/ })).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: /Ports/ }))
+    expect(screen.getAllByText('legacy name')).toHaveLength(2)
+  })
+
   test('switching agents via a card click remounts the detail (T-D11)', async () => {
     const router = renderAgents('/agents/alpha')
     await waitFor(() => screen.getByRole('heading', { level: 2, name: 'alpha' }))
@@ -247,6 +382,82 @@ describe('/agents split page', () => {
     await waitFor(() =>
       expect(screen.getByTestId('split-card-gamma').className).toContain('is-selected'),
     )
+  })
+
+  test('imported duplicate inputs and outputs block Create until both are repaired', async () => {
+    const router = renderAgents('/agents/new')
+    await waitFor(() => screen.getByTestId('agent-create-button'))
+    fireEvent.click(screen.getByTestId('agent-import-open'))
+    fireEvent.click(screen.getByRole('tab', { name: /paste/i }))
+    fireEvent.change(screen.getByTestId('agent-import-textarea'), {
+      target: {
+        value: [
+          '---',
+          'name: imported-duplicate',
+          'inputs:',
+          '  - name: source',
+          '    kind: string',
+          '  - name: source',
+          '    kind: markdown',
+          'outputs: [result, result]',
+          '---',
+        ].join('\n'),
+      },
+    })
+    fireEvent.click(screen.getByTestId('agent-import-parse'))
+    fireEvent.click(screen.getByTestId('agent-import-apply'))
+
+    const create = screen.getByTestId('agent-create-button') as HTMLButtonElement
+    expect(create.disabled).toBe(true)
+    const duplicateAlert = screen.getByRole('alert', {
+      name: /Port configuration needs attention/,
+    })
+    expect(duplicateAlert.textContent).toContain('source')
+    expect(duplicateAlert.textContent).toContain('result')
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Fix in Ports: Output port result is duplicated/ }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Delete output port result.*item 2/i }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Confirm deletion of output port result.*item 2/i }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Delete input port source.*item 2/i }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Confirm deletion of input port source.*item 2/i }),
+    )
+
+    await waitFor(() => expect(create.disabled).toBe(false))
+    fireEvent.click(create)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/agents/imported-duplicate'))
+  })
+
+  test('outputs-only re-import cannot turn an existing orphan kind into a live mapping', async () => {
+    renderAgents('/agents/new')
+    await waitFor(() => screen.getByTestId('agent-create-button'))
+
+    fireEvent.click(screen.getByTestId('agent-import-open'))
+    fireEvent.click(screen.getByRole('tab', { name: /paste/i }))
+    fireEvent.change(screen.getByTestId('agent-import-textarea'), {
+      target: {
+        value: ['---', 'name: orphan-import', 'outputKinds:', '  future: markdown', '---'].join(
+          '\n',
+        ),
+      },
+    })
+    fireEvent.click(screen.getByTestId('agent-import-parse'))
+    fireEvent.click(screen.getByTestId('agent-import-apply'))
+
+    fireEvent.click(screen.getByTestId('agent-import-open'))
+    fireEvent.click(screen.getByRole('tab', { name: /paste/i }))
+    fireEvent.change(screen.getByTestId('agent-import-textarea'), {
+      target: { value: ['---', 'outputs: [future]', '---'].join('\n') },
+    })
+    fireEvent.click(screen.getByTestId('agent-import-parse'))
+
+    expect(screen.getByTestId('agent-import-port-conflict').textContent).toContain(
+      'outputKinds:future',
+    )
+    expect((screen.getByTestId('agent-import-apply') as HTMLButtonElement).disabled).toBe(true)
   })
 
   test('deleting an agent navigates to the empty pane and removes its card', async () => {
