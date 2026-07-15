@@ -691,7 +691,7 @@ describe('/workgroups/$name — member gallery + context panel (RFC-168)', () =>
 describe('RFC-164 /workgroups wiring', () => {
   test('sidebar nav exposes /workgroups inside the workflows group', () => {
     const nav = readSrc('lib/nav.ts')
-    expect(nav).toContain("{ to: '/workgroups', i18nKey: 'nav.workgroups' }")
+    expect(nav).toContain("{ to: '/workgroups', i18nKey: 'nav.workgroups', icon: 'workgroup' }")
     const workflowsGroup = nav.slice(nav.indexOf("key: 'workflows'"), nav.indexOf("key: 'tasks'"))
     expect(workflowsGroup).toContain("to: '/workgroups'")
   })

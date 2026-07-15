@@ -47,8 +47,8 @@ describe('RFC-028 /mcps wiring', () => {
 
   test('list page links to /mcps/new and /mcps/$name (split cards, no inline editor box)', () => {
     const page = read('routes/mcps.tsx')
-    // "+ new" Link (empty pane) + card destinations passed to ResourceSplitPage.
-    expect(page).toContain('to="/mcps/new"')
+    // Shared split-page create destination + card destinations.
+    expect(page).toContain('newTo="/mcps/new"')
     expect(page).toContain("to: '/mcps/$name'")
     // Old inline editor box is gone — page no longer renders McpEditor /
     // mcp-editor class names.
