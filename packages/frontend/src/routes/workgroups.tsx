@@ -120,7 +120,9 @@ function WorkgroupsPage() {
                       {t('workgroups.cardMembers', { n: w.members.length })}
                     </span>
                     {leader !== null && (
-                      <span className="chip chip--tight">
+                      // title carries the full value — the chip ellipsizes
+                      // (64-char whitespace-free names, 实现门 P2).
+                      <span className="chip chip--tight" title={leader}>
                         {t('workgroups.cardLeader', { name: leader })}
                       </span>
                     )}

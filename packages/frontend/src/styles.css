@@ -2336,6 +2336,9 @@ code {
   border-radius: 4px;
   cursor: pointer;
   line-height: 1.2;
+  /* RFC-192: options must never wrap — inside a shrinking flex context (the
+     /tasks toolbar) the labels used to collapse into vertical text. */
+  white-space: nowrap;
 }
 .segmented__option:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
@@ -13511,17 +13514,20 @@ button.status-chip {
 }
 
 /* Stretched-link host. The title <Link>'s ::after overlay makes the whole
-   card clickable; ONLY `__ops` is raised above it (badges/meta stay under —
-   clicking them opens the card, no dead zones; RFC-191 design §1.2). */
+   card clickable; raised above it are `__ops` (buttons) plus `__desc` and
+   `__when` — the latter two are non-interactive but carry REQUIRED title
+   fallbacks (full description / absolute time) that the overlay would
+   otherwise swallow (RFC-191 实现门 P2). Badges/meta stay under — clicking
+   them opens the card. */
 .gallery-card {
   position: relative;
 }
 
+/* Body grows so footers align across a grid row even when neighbors' meta
+   rows wrap taller (实现门 P2). Base .card__body already provides the flex
+   column + min-width lock. */
 .gallery-card .card__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
+  flex: 1;
 }
 
 .gallery-card__title {
@@ -13547,11 +13553,23 @@ button.status-chip {
   inset: 0;
 }
 
+/* Badges may shrink (128-char owner display names must not blow the 300px
+   track) — the inner owner badge ellipsizes (实现门 P2). */
 .gallery-card__badges {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.gallery-card__badges .data-table__owner {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .gallery-card__desc {
+  position: relative;
+  z-index: 1;
   margin: 0;
   font-size: 13px;
   line-height: 1.55;
@@ -13570,7 +13588,27 @@ button.status-chip {
   font-style: italic;
 }
 
+/* Meta chips must never overflow the track: a 64-char whitespace-free leader
+   token ellipsizes inside its chip (实现门 P2). The gallery meta chips are
+   text-only, so inline-block (which text-overflow requires — inline-flex
+   cannot ellipsize its text child) renders identically to the .chip base. */
+.gallery-card__meta {
+  min-width: 0;
+}
+
+.gallery-card__meta > .chip,
+.gallery-card__meta > .status-chip {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Fill the base .card__footer flex line so space-between actually pushes
+   the launch action to the card's right edge (实现门 P2). */
 .gallery-card__foot {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -13579,6 +13617,8 @@ button.status-chip {
 }
 
 .gallery-card__when {
+  position: relative;
+  z-index: 1;
   font-size: var(--font-sm);
   color: var(--muted);
   white-space: nowrap;

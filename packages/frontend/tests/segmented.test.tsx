@@ -7,6 +7,8 @@
 // the stopPointerPropagation canvas contract (ClarifyDirectiveToggle relies
 // on all three: stops mouseDown AND click bubbling; active click no-ops).
 
+import { readFileSync } from 'node:fs'
+import path, { resolve } from 'node:path'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { Segmented, type SegmentedOption } from '../src/components/Segmented'
@@ -326,5 +328,20 @@ describe('<Segmented> — stopPointerPropagation (canvas contract)', () => {
     )
     fireEvent.click(screen.getByRole('radio', { name: 'A' }))
     expect(onChange).not.toHaveBeenCalled()
+  })
+})
+
+// RFC-192 — options must never wrap: inside a shrinking flex context (the
+// /tasks toolbar) the labels used to collapse into vertical per-character
+// text. Locked at the CSS layer since the failure is purely layout.
+describe('segmented option nowrap (RFC-192)', () => {
+  test('.segmented__option declares white-space: nowrap', () => {
+    const css = readFileSync(
+      resolve(path.dirname(new URL(import.meta.url).pathname), '../src/styles.css'),
+      'utf8',
+    )
+    const block = css.match(/\.segmented__option\s*\{[^}]*\}/)
+    expect(block, '.segmented__option rule must exist').not.toBeNull()
+    expect(block![0]).toMatch(/white-space:\s*nowrap/)
   })
 })
