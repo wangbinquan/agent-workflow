@@ -1,5 +1,7 @@
 # Agent Workflow
 
+[**English**](./README.md) | [简体中文](./README.zh-CN.md)
+
 [![Release](https://img.shields.io/github/v/release/wangbinquan/agent-workflow)](https://github.com/wangbinquan/agent-workflow/releases/latest)
 [![CI](https://github.com/wangbinquan/agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/wangbinquan/agent-workflow/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
@@ -7,10 +9,11 @@
 **A local-first orchestration platform for running CLI coding agents as reliable,
 inspectable teams.**
 
-Agent Workflow launches each agent in its own process and isolated Git worktree,
-then keeps coordination, data flow, retries, human decisions, and recovery in a
-deterministic Bun daemon. Agents keep focused contexts; users get a visual control
-plane instead of a single, ever-growing parent conversation.
+Agent Workflow launches agents as separate CLI processes and, for Git-backed runs,
+isolates their normal work in Git worktrees. A deterministic Bun daemon keeps
+coordination, data flow, retries, human decisions, and recovery under control.
+Agents keep focused contexts; users get a visual control plane instead of a single,
+ever-growing parent conversation.
 
 The flagship pattern is **Code → Audit → Fix**: let one agent implement, fan the
 diff out to independent auditors, aggregate their findings, and send the result to
@@ -25,8 +28,8 @@ scheduled maintenance, adaptive workgroups, and one-off agent tasks.
 
 ## Choose how agents work
 
-Every launch becomes a task with the same history, files, diff, recovery, and
-permission model.
+Every launch becomes a task on the same execution substrate: persisted history,
+files and diffs, recovery controls, and access-control checks.
 
 | Execution model  | Best for                               | Behavior                                                                                                    |
 | ---------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -54,12 +57,14 @@ flowchart LR
   Scheduler --> Record["events · outputs · transcripts<br/>diffs · recovery audit"]
 ```
 
-A task owns one canonical worktree. Each agent run branches from the canonical
-state into a temporary node worktree, so independent DAG branches can write in
-parallel without sharing a filesystem. Successful deltas merge back under a short
-lock; failed attempts never pollute the canonical tree. Clean merges are automatic,
-real conflicts go to a built-in merge agent, and unresolved cases pause for a
-human.
+A Git-backed task owns one canonical worktree. Agent-backed runs normally branch
+from that state into temporary node worktrees, so independent DAG branches can
+write in parallel without sharing a working directory. Successful deltas merge
+back under a short lock; failed attempts are not merged automatically. Clean
+merges are automatic, real conflicts go to a built-in merge agent, and unresolved
+cases pause for a human. This is Git/worktree isolation, not an operating-system
+sandbox: an agent explicitly given an absolute path outside its run directory can
+still reach that path subject to its process permissions.
 
 The daemon persists task and node state in SQLite. If it restarts, it reconciles
 orphaned processes and can resume interrupted work; optional auto-recovery rules
@@ -71,8 +76,9 @@ are guarded by audit records and circuit breakers.
 
 - Build versioned DAGs in an xyflow editor with drag-and-drop nodes, validation,
   preview, auto-save, YAML import/export, and multi-tab synchronization.
-- Connect typed ports using `string`, `markdown`, `signal`, `path<ext>`, and nested
-  `list<T>` kinds. Prompt templates consume upstream values explicitly.
+- Connect typed ports using `string`, `markdown`, `signal`, `path<ext>`, and
+  parameterized `list<T>` kinds such as `list<path<md>>`. Prompt templates consume
+  upstream values explicitly.
 - Compose nestable wrappers:
   - **git** snapshots the inner scope and emits its complete diff;
   - **loop** repeats a scope under a bounded exit policy;
@@ -94,7 +100,8 @@ and task-scoped history. They have three execution modes:
 | `free_collab`      | Members share a task board and room, claim work, exchange outputs, and converge without a leader.                                                                                    |
 | `dynamic_workflow` | A built-in orchestrator selects from the group's agent pool, generates a constrained DAG, lets a human approve or regenerate it, then hands it to the deterministic workflow engine. |
 
-Visibility switches control shared outputs, direct messages, and the blackboard.
+In `leader_worker` mode, visibility switches control shared outputs, direct
+messages, and the blackboard; `free_collab` treats all three channels as enabled.
 An autonomous option suppresses routine human interruptions and completion gates
 while retaining bounded safety fallbacks.
 
@@ -104,14 +111,15 @@ while retaining bounded safety fallbacks.
   runtime/model selection, dependent agents, skills, MCP servers, and plugins.
 - Use the built-in `opencode` and `claude-code` runtime protocols or register
   additional CLI profiles that speak one of those protocols. Runtime profiles can
-  carry their own binary, model and execution parameters, and config-directory
-  mapping.
+  carry their own binary, model and execution parameters, plus config-directory
+  environment-variable and directory-name mappings.
 - Manage skills as versioned, framework-owned directories; edit files in the UI
   or import multiple skills from ZIP with explicit conflict handling.
 - Register local stdio or remote HTTP/SSE MCP servers, including remote OAuth
   settings and capability probes.
 - Install npm, file, or Git-based opencode plugins once, cache them locally, and
-  inject zero-network `file://` references into agent runs.
+  inject `file://` references without reinstalling them for every agent run. A
+  plugin may still perform its own network activity at runtime.
 - For opencode runs, inspect the runtime inventory actually loaded, not only the
   resources the agent was configured to receive.
 
@@ -257,12 +265,13 @@ agent-workflow config get [key]              Print all config or one field
 agent-workflow config set <key> <value>      Update a field; parses JSON values
 agent-workflow migrate                       Apply pending DB migrations
 agent-workflow backup                        Create a state archive under backups/
-agent-workflow version                       Print the build version
+agent-workflow version                       Print the embedded CLI version string
 
 agent-workflow user create --username <name> [--admin] [--password <pw>]
 agent-workflow user reset-password --username <name> --new-password <pw>
 agent-workflow user list
 agent-workflow user disable --username <name>
+agent-workflow user enable --username <name>
 ```
 
 Database migrations also run automatically on daemon startup.
@@ -282,7 +291,8 @@ put the service behind an appropriate trusted proxy before exposing it to a
 network.
 
 All local state is rooted at `~/.agent-workflow/`. Set `AGENT_WORKFLOW_HOME` to
-use another directory.
+use another directory. Key paths are shown below; the daemon also creates transient
+lock and runtime entries as needed.
 
 ```text
 ~/.agent-workflow/
@@ -296,12 +306,14 @@ use another directory.
 ├── worktrees/         Canonical task worktrees
 ├── runs/              Per-run runtime config and artifacts
 ├── snapshots/         Git snapshot material used by execution/recovery
+├── scratch/           Transient upload and task staging
 ├── logs/              Daemon and archived event logs
 └── backups/           CLI and Settings backups
 ```
 
-Back up `secret.key` together with the database. Losing it makes existing encrypted
-OIDC client secrets unreadable.
+The built-in backup archive does not include `secret.key`. Copy it separately with
+the database backup; losing it makes existing encrypted OIDC client secrets
+unreadable.
 
 ## Documentation
 
@@ -344,6 +356,9 @@ bun run --filter @agent-workflow/frontend test
 bun run lint
 bun run format:check
 
+# Root README formatting (the repository format script scopes packages/)
+bunx prettier --check README.md README.zh-CN.md
+
 # Playwright end-to-end suite (requires its browser dependencies)
 bun run e2e:install
 bun run e2e
@@ -357,8 +372,8 @@ single-binary smoke checks, and sharded Playwright coverage on macOS and Linux.
 Nightly jobs add live opencode compatibility, WebKit, visual regression, and real
 SSH/HTTPS Git protocol coverage.
 
-Release versions come from Git tags; workspace `package.json` versions are
-placeholders.
+Git tags and GitHub Releases are the release identity. Workspace `package.json`
+versions and the current CLI `version` string remain `0.0.0` placeholders.
 
 ## License
 
