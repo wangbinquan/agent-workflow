@@ -6,8 +6,11 @@
 // `.tabs--<variant>` modifier mapping and per-tab testids.
 
 import { fireEvent, render, screen } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { TabBar, type TabDef } from '../src/components/TabBar'
+import { TabBar, tabDomIds, type TabDef } from '../src/components/TabBar'
 
 type Key = 'edit' | 'preview'
 
@@ -60,12 +63,154 @@ describe('<TabBar> — tablist shape', () => {
         ]}
         active="edit"
         onSelect={onSelect}
+        activation="manual"
       />,
     )
     const edit = screen.getByRole('tab', { name: 'Edit' }) as HTMLButtonElement
     expect(edit.disabled).toBe(true)
     fireEvent.click(edit)
+    fireEvent.keyDown(edit, { key: 'Enter' })
     expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  test('uses one roving tab stop and follows a disabled active tab with the first enabled tab', () => {
+    const { rerender } = render(<TabBar tabs={TABS} active="preview" onSelect={() => {}} />)
+    expect(screen.getByRole('tab', { name: 'Edit' }).tabIndex).toBe(-1)
+    expect(screen.getByRole('tab', { name: 'Preview' }).tabIndex).toBe(0)
+
+    rerender(
+      <TabBar
+        tabs={[
+          { key: 'edit', label: 'Edit', disabled: true },
+          { key: 'preview', label: 'Preview' },
+        ]}
+        active="edit"
+        onSelect={() => {}}
+      />,
+    )
+    expect(screen.getByRole('tab', { name: 'Edit' }).tabIndex).toBe(-1)
+    expect(screen.getByRole('tab', { name: 'Preview' }).tabIndex).toBe(0)
+  })
+})
+
+describe('<TabBar> — keyboard roving', () => {
+  const tabs: ReadonlyArray<TabDef<'a' | 'b' | 'c' | 'd'>> = [
+    { key: 'a', label: 'A' },
+    { key: 'b', label: 'B', disabled: true },
+    { key: 'c', label: 'C' },
+    { key: 'd', label: 'D' },
+  ]
+
+  test('ArrowLeft/Right wrap, skip disabled tabs, focus, and automatically select', () => {
+    const onSelect = vi.fn()
+    render(<TabBar tabs={tabs} active="a" onSelect={onSelect} />)
+    const a = screen.getByRole('tab', { name: 'A' })
+    const c = screen.getByRole('tab', { name: 'C' })
+    const d = screen.getByRole('tab', { name: 'D' })
+
+    a.focus()
+    fireEvent.keyDown(a, { key: 'ArrowRight' })
+    expect(document.activeElement).toBe(c)
+    expect(c.tabIndex).toBe(0)
+    expect(onSelect).toHaveBeenLastCalledWith('c')
+
+    fireEvent.keyDown(c, { key: 'ArrowLeft' })
+    expect(document.activeElement).toBe(a)
+    expect(onSelect).toHaveBeenLastCalledWith('a')
+
+    fireEvent.keyDown(a, { key: 'ArrowLeft' })
+    expect(document.activeElement).toBe(d)
+    expect(onSelect).toHaveBeenLastCalledWith('d')
+  })
+
+  test('Home/End target the first/last enabled tab', () => {
+    const onSelect = vi.fn()
+    render(<TabBar tabs={tabs} active="c" onSelect={onSelect} />)
+    const a = screen.getByRole('tab', { name: 'A' })
+    const c = screen.getByRole('tab', { name: 'C' })
+    const d = screen.getByRole('tab', { name: 'D' })
+
+    c.focus()
+    fireEvent.keyDown(c, { key: 'End' })
+    expect(document.activeElement).toBe(d)
+    expect(onSelect).toHaveBeenLastCalledWith('d')
+
+    fireEvent.keyDown(d, { key: 'Home' })
+    expect(document.activeElement).toBe(a)
+    expect(onSelect).toHaveBeenLastCalledWith('a')
+  })
+
+  test('manual activation moves focus without selecting until Space or Enter', () => {
+    const onSelect = vi.fn()
+    render(<TabBar tabs={tabs} active="a" onSelect={onSelect} activation="manual" />)
+    const a = screen.getByRole('tab', { name: 'A' })
+    const c = screen.getByRole('tab', { name: 'C' })
+
+    a.focus()
+    fireEvent.keyDown(a, { key: 'ArrowRight' })
+    expect(document.activeElement).toBe(c)
+    expect(onSelect).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(c, { key: ' ' })
+    expect(onSelect).toHaveBeenCalledWith('c')
+    fireEvent.keyDown(c, { key: 'Enter' })
+    expect(onSelect).toHaveBeenLastCalledWith('c')
+    expect(onSelect).toHaveBeenCalledTimes(2)
+  })
+
+  test('all-disabled tabs expose no tab stop and ignore keyboard selection', () => {
+    const onSelect = vi.fn()
+    render(
+      <TabBar
+        tabs={tabs.map((tab) => ({ ...tab, disabled: true }))}
+        active="a"
+        onSelect={onSelect}
+      />,
+    )
+    expect(screen.getAllByRole('tab').every((tab) => tab.tabIndex === -1)).toBe(true)
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'A' }), { key: 'ArrowRight' })
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+})
+
+describe('<TabBar> — panel ids and scrolling', () => {
+  test('tablist owns horizontal overflow without shrinking tab targets', () => {
+    const here = path.dirname(fileURLToPath(import.meta.url))
+    const css = readFileSync(path.resolve(here, '../src/styles.css'), 'utf8')
+    const tabsRule = css.match(/\.tabs\s*\{([^}]*)\}/)?.[1] ?? ''
+    const tabRule = css.match(/\.tabs__tab\s*\{([^}]*)\}/)?.[1] ?? ''
+    expect(tabsRule).toContain('overflow-x: auto')
+    expect(tabsRule).toContain('overscroll-behavior-inline: contain')
+    expect(tabsRule).toContain('scrollbar-width: thin')
+    expect(tabRule).toContain('flex: 0 0 auto')
+  })
+
+  test('tabDomIds and idPrefix create stable tab/panel associations', () => {
+    expect(tabDomIds('settings', 'runtime')).toEqual({
+      tabId: 'settings-tab-runtime',
+      panelId: 'settings-panel-runtime',
+    })
+    render(<TabBar tabs={TABS} active="edit" onSelect={() => {}} idPrefix="agent-editor" />)
+    const edit = screen.getByRole('tab', { name: 'Edit' })
+    expect(edit.id).toBe('agent-editor-tab-edit')
+    expect(edit.getAttribute('aria-controls')).toBe('agent-editor-panel-edit')
+  })
+
+  test('scrolls a newly active tab into view and honors reduced motion', () => {
+    const scrollIntoView = vi.fn()
+    const original = HTMLElement.prototype.scrollIntoView
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true }))
+    const { rerender } = render(<TabBar tabs={TABS} active="edit" onSelect={() => {}} />)
+    scrollIntoView.mockClear()
+    rerender(<TabBar tabs={TABS} active="preview" onSelect={() => {}} />)
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      block: 'nearest',
+      inline: 'nearest',
+      behavior: 'auto',
+    })
+    HTMLElement.prototype.scrollIntoView = original
+    vi.unstubAllGlobals()
   })
 })
 

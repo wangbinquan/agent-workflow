@@ -115,11 +115,33 @@ describe('/plugins split page', () => {
     fireEvent.change(screen.getByTestId('split-search'), { target: { value: '1.2.0' } })
     expect(screen.getByTestId('split-card-p1')).toBeTruthy()
     expect(screen.getByText('Nothing selected')).toBeTruthy()
+    expect(screen.getAllByTestId('split-new-button')).toHaveLength(1)
+    expect(screen.queryByTestId('plugins-mobile-back')).toBeNull()
+    expect(screen.getAllByRole('link', { name: '+ New plugin' })).toHaveLength(1)
+    expect(
+      screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
+    ).toBe('list')
     fireEvent.click(screen.getByTestId('split-card-p1'))
     await waitFor(() => expect(router.state.location.pathname).toBe('/plugins/p1'))
     await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
     expect(screen.getByRole('tab', { name: 'Config' })).toBeTruthy()
     expect(screen.getByRole('tab', { name: 'Updates' })).toBeTruthy()
+    expect(screen.getByTestId('plugins-mobile-back').getAttribute('href')).toBe('/plugins')
+    expect(screen.getAllByTestId('plugins-mobile-back')).toHaveLength(1)
+    expect(
+      screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
+    ).toBe('detail')
+  })
+
+  test('new route uses the shared back and keeps the rail create CTA unique', async () => {
+    renderPlugins('/plugins/new')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: /New plugin/ }))
+    expect(screen.getByTestId('plugins-mobile-back').getAttribute('href')).toBe('/plugins')
+    expect(screen.getAllByTestId('plugins-mobile-back')).toHaveLength(1)
+    expect(screen.getAllByTestId('split-new-button')).toHaveLength(1)
+    expect(
+      screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
+    ).toBe('detail')
   })
 
   test('check-update in the Updates tab lights up the list card chip (shared cache)', async () => {

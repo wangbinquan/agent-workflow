@@ -6,7 +6,7 @@
 // selection survives a tab switch.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Skill } from '@agent-workflow/shared'
@@ -16,6 +16,7 @@ import { Field, TextArea, TextInput } from '@/components/Form'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { ImportZipPanel } from '@/components/skills/ImportZipPanel'
 import { NEW_CARD_KEY, useReportSplitDirty, useSplitDirty } from '@/components/split/splitDirty'
+import { TabPanels } from '@/components/split/TabPanels'
 import { TabBar } from '@/components/TabBar'
 import { useDirtyBaseline } from '@/hooks/useDraftFromQuery'
 import { Route as skillsRoute } from './skills'
@@ -69,9 +70,6 @@ function SkillCreatePage() {
     <div className="agent-new">
       <header className="page__header page__header--row">
         <div>
-          <Link to="/skills" className="skill-import__mobile-back">
-            ← {t('skills.zipReturnList')}
-          </Link>
           <h2>{tab === 'zip' ? t('skills.importTitle') : t('skills.newTitle')}</h2>
           {tab === 'zip' && <p className="page__hint">{t('skills.importSubtitle')}</p>}
         </div>
@@ -97,34 +95,49 @@ function SkillCreatePage() {
         ]}
         active={tab}
         onSelect={setTab}
+        idPrefix="skills-new"
       />
 
       {/* ZIP panel kept mounted so its staged selection survives tab switches. */}
-      <div role="tabpanel" hidden={tab !== 'zip'} className="split__detail-body">
-        <ImportZipPanel />
-      </div>
-
-      <div role="tabpanel" hidden={tab === 'zip'} className="split__detail-body">
-        <div className="form-grid">
-          <Field label={t('skills.fieldName')} required hint={t('skills.fieldNameHint')}>
-            <TextInput
-              value={form.name}
-              onChange={(v) => set('name', v)}
-              required
-              pattern={SKILL_NAME_RE.source}
-            />
-          </Field>
-          <Field label={t('skills.fieldDescription')}>
-            <TextInput value={form.description} onChange={(v) => set('description', v)} />
-          </Field>
-          <Field label={t('skills.fieldBody')}>
-            <TextArea value={form.bodyMd} onChange={(v) => set('bodyMd', v)} rows={10} monospace />
-          </Field>
-        </div>
-        {create.error !== null && create.error !== undefined && (
-          <ErrorBanner error={create.error} />
-        )}
-      </div>
+      <TabPanels<Tab>
+        active={tab}
+        idPrefix="skills-new"
+        className="split__detail-body"
+        panels={[
+          { key: 'zip', content: <ImportZipPanel /> },
+          {
+            key: 'managed',
+            content: (
+              <>
+                <div className="form-grid">
+                  <Field label={t('skills.fieldName')} required hint={t('skills.fieldNameHint')}>
+                    <TextInput
+                      value={form.name}
+                      onChange={(v) => set('name', v)}
+                      required
+                      pattern={SKILL_NAME_RE.source}
+                    />
+                  </Field>
+                  <Field label={t('skills.fieldDescription')}>
+                    <TextInput value={form.description} onChange={(v) => set('description', v)} />
+                  </Field>
+                  <Field label={t('skills.fieldBody')}>
+                    <TextArea
+                      value={form.bodyMd}
+                      onChange={(v) => set('bodyMd', v)}
+                      rows={10}
+                      monospace
+                    />
+                  </Field>
+                </div>
+                {create.error !== null && create.error !== undefined && (
+                  <ErrorBanner error={create.error} />
+                )}
+              </>
+            ),
+          },
+        ]}
+      />
     </div>
   )
 }

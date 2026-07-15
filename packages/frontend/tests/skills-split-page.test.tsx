@@ -155,6 +155,12 @@ describe('/skills split page', () => {
     fireEvent.change(screen.getByTestId('split-search'), { target: { value: 'Content v1' } })
     expect(screen.getByTestId('split-card-sk1')).toBeTruthy()
     expect(screen.getByText('Nothing selected')).toBeTruthy()
+    expect(screen.getAllByTestId('split-new-button')).toHaveLength(1)
+    expect(screen.queryByTestId('skills-mobile-back')).toBeNull()
+    expect(screen.getAllByRole('link', { name: '+ New skill' })).toHaveLength(1)
+    expect(
+      screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
+    ).toBe('list')
     // The empty pane renders the guidance EmptyState in the detail column.
     await waitFor(() => expect(screen.getByTestId('split-detail').textContent).not.toBe(''))
   })
@@ -165,6 +171,11 @@ describe('/skills split page', () => {
     for (const tab of ['Overview', 'Content', 'Files', 'History']) {
       expect(screen.getByRole('tab', { name: tab })).toBeTruthy()
     }
+    expect(screen.getByTestId('skills-mobile-back').getAttribute('href')).toBe('/skills')
+    expect(screen.getAllByTestId('skills-mobile-back')).toHaveLength(1)
+    expect(
+      screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
+    ).toBe('detail')
   })
 
   test('edit description → dirty dot; Save stays in place and clears it', async () => {
@@ -194,11 +205,30 @@ describe('/skills split page', () => {
   test('the new view offers the managed + ZIP creation modes', async () => {
     renderSkills('/skills/new')
     await waitFor(() => screen.getByRole('heading', { level: 2, name: /New skill/ }))
-    expect(screen.getByRole('tab', { name: 'Managed' })).toBeTruthy()
+    const managedTab = screen.getByRole('tab', { name: 'Managed' })
+    expect(managedTab.id).toBe('skills-new-tab-managed')
+    expect(managedTab.getAttribute('aria-controls')).toBe('skills-new-panel-managed')
+    expect(
+      document.getElementById('skills-new-panel-managed')?.getAttribute('aria-labelledby'),
+    ).toBe('skills-new-tab-managed')
+    const sharedBack = screen.getByTestId('skills-mobile-back')
+    expect(sharedBack.getAttribute('href')).toBe('/skills')
+    expect(screen.getAllByTestId('skills-mobile-back')).toHaveLength(1)
+    expect(
+      screen
+        .getByTestId('split-detail')
+        .querySelectorAll('a.split__mobile-back, a.skill-import__mobile-back'),
+    ).toHaveLength(1)
+    expect(
+      screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
+    ).toBe('detail')
     fireEvent.click(screen.getByTestId('skills-tab-zip'))
     expect(screen.getByRole('heading', { level: 2, name: 'Import skills' })).toBeTruthy()
-    expect(screen.getByRole('link', { name: /Back to skills/ }).getAttribute('href')).toBe(
-      '/skills',
+    const zipTab = screen.getByRole('tab', { name: 'ZIP import' })
+    expect(zipTab.id).toBe('skills-new-tab-zip')
+    expect(zipTab.getAttribute('aria-controls')).toBe('skills-new-panel-zip')
+    expect(document.getElementById('skills-new-panel-zip')?.getAttribute('aria-labelledby')).toBe(
+      'skills-new-tab-zip',
     )
     expect(screen.getByText(/Structure and name conflicts/)).toBeTruthy()
     expect(screen.queryByTestId('skill-create-button')).toBeNull()

@@ -38,6 +38,14 @@ describe('/skills/new — Upload ZIP tab wiring', () => {
     expect(src).toContain("testid: 'skills-tab-zip'")
   })
 
+  test('true tabs share stable ids with their keep-mounted panels', () => {
+    const src = readFileSync(ROUTE_PATH, 'utf-8')
+    expect(src).toContain("from '@/components/split/TabPanels'")
+    expect(src).toContain('idPrefix="skills-new"')
+    expect(src).toContain('<TabPanels<Tab>')
+    expect(src).not.toContain('<div role="tabpanel"')
+  })
+
   test('ZIP mode owns a dynamic import heading and no create action', () => {
     const src = readFileSync(ROUTE_PATH, 'utf-8')
     expect(src).toContain("tab === 'zip' ? t('skills.importTitle')")

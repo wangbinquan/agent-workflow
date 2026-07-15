@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
+import { TabBar } from '../src/components/TabBar'
 import { TabPanels } from '../src/components/split/TabPanels'
 
 afterEach(() => vi.restoreAllMocks())
@@ -48,5 +49,54 @@ describe('TabPanels keep-mounted', () => {
     fireEvent.click(screen.getByTestId('to-b')) // switch away (panel a hidden, not unmounted)
     fireEvent.click(screen.getByTestId('to-a')) // switch back
     expect((screen.getByTestId('input-a') as HTMLInputElement).value).toBe('draft-in-progress')
+  })
+
+  test('shares stable aria ids with TabBar while only one panel is visible', () => {
+    render(
+      <>
+        <TabBar
+          tabs={[
+            { key: 'a', label: 'Alpha' },
+            { key: 'b', label: 'Beta' },
+          ]}
+          active="a"
+          onSelect={() => {}}
+          idPrefix="resource"
+        />
+        <TabPanels
+          active="a"
+          idPrefix="resource"
+          panels={[
+            { key: 'a', content: 'Alpha panel' },
+            { key: 'b', content: 'Beta panel' },
+          ]}
+        />
+      </>,
+    )
+
+    const alphaTab = screen.getByRole('tab', { name: 'Alpha' })
+    const alphaPanel = screen.getByRole('tabpanel')
+    const betaPanel = document.getElementById('resource-panel-b')
+    expect(alphaTab.getAttribute('aria-controls')).toBe(alphaPanel.id)
+    expect(alphaPanel.id).toBe('resource-panel-a')
+    expect(alphaPanel.getAttribute('aria-labelledby')).toBe(alphaTab.id)
+    expect(betaPanel?.hidden).toBe(true)
+    expect(betaPanel?.getAttribute('aria-labelledby')).toBe('resource-tab-b')
+  })
+
+  test('keeps legacy callers without idPrefix free of empty id attributes', () => {
+    render(
+      <TabPanels
+        active="a"
+        panels={[
+          { key: 'a', content: 'Alpha panel' },
+          { key: 'b', content: 'Beta panel' },
+        ]}
+      />,
+    )
+    for (const panel of screen.getAllByRole('tabpanel', { hidden: true })) {
+      expect(panel.hasAttribute('id')).toBe(false)
+      expect(panel.hasAttribute('aria-labelledby')).toBe(false)
+    }
   })
 })

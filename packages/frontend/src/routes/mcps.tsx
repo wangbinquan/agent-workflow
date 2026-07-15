@@ -6,7 +6,7 @@
 // detail "Tools & probe" tab.
 
 import { useMemo } from 'react'
-import { Link, Outlet, createRoute, useMatchRoute, useParams } from '@tanstack/react-router'
+import { Outlet, createRoute, useMatchRoute, useParams } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { Mcp, McpProbe } from '@agent-workflow/shared'
 import { useResourceList } from '@/hooks/useResourceList'
@@ -103,6 +103,9 @@ function McpsSplitLayout() {
       newTo="/mcps/new"
       searchPlaceholder={t('common.searchEllipsis')}
       emptyListText={t('mcps.emptyList')}
+      listTo="/mcps"
+      mobileBackLabel={t('common.backToList')}
+      mobileBackTestId="mcps-mobile-back"
     >
       <Outlet />
     </ResourceSplitPage>
@@ -112,14 +115,6 @@ function McpsSplitLayout() {
 function McpsEmptyPane() {
   const { t } = useTranslation()
   return (
-    <EmptyState
-      title={t('splitPage.emptyPaneTitle')}
-      description={t('splitPage.emptyPaneHint')}
-      action={
-        <Link to="/mcps/new" className="btn btn--primary">
-          {t('mcps.newButton')}
-        </Link>
-      }
-    />
+    <EmptyState title={t('splitPage.emptyPaneTitle')} description={t('splitPage.emptyPaneHint')} />
   )
 }

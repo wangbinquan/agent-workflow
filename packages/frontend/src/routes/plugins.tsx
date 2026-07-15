@@ -8,7 +8,7 @@
 // detail "Updates" tab.
 
 import { useQuery } from '@tanstack/react-query'
-import { Link, Outlet, createRoute, useMatchRoute, useParams } from '@tanstack/react-router'
+import { Outlet, createRoute, useMatchRoute, useParams } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { Plugin } from '@agent-workflow/shared'
 import { useResourceList } from '@/hooks/useResourceList'
@@ -107,6 +107,9 @@ function PluginsSplitLayout() {
       newTo="/plugins/new"
       searchPlaceholder={t('common.searchEllipsis')}
       emptyListText={t('plugins.emptyList')}
+      listTo="/plugins"
+      mobileBackLabel={t('common.backToList')}
+      mobileBackTestId="plugins-mobile-back"
     >
       <Outlet />
     </ResourceSplitPage>
@@ -116,14 +119,6 @@ function PluginsSplitLayout() {
 function PluginsEmptyPane() {
   const { t } = useTranslation()
   return (
-    <EmptyState
-      title={t('splitPage.emptyPaneTitle')}
-      description={t('splitPage.emptyPaneHint')}
-      action={
-        <Link to="/plugins/new" className="btn btn--primary">
-          {t('plugins.newButton')}
-        </Link>
-      }
-    />
+    <EmptyState title={t('splitPage.emptyPaneTitle')} description={t('splitPage.emptyPaneHint')} />
   )
 }

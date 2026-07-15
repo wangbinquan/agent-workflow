@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
@@ -63,6 +64,9 @@ function renderSplit(opts: {
   isLoading?: boolean
   error?: unknown
   detailDirty?: boolean
+  emptyDescription?: string
+  emptyIcon?: ReactNode
+  onRetry?: () => void
 }) {
   mockFetch()
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -84,6 +88,12 @@ function renderSplit(opts: {
           newTo="/agents/new"
           searchPlaceholder="Search…"
           emptyListText="No agents yet"
+          emptyDescription={opts.emptyDescription}
+          emptyIcon={opts.emptyIcon}
+          onRetry={opts.onRetry}
+          listTo="/agents"
+          mobileBackLabel="Back to agents"
+          mobileBackTestId="agents-mobile-back"
         >
           <Outlet />
         </ResourceSplitPage>
@@ -218,10 +228,41 @@ describe('ResourceSplitPage — structure & three states', () => {
     expect(screen.getByTestId('split-empty').textContent).toContain('No agents yet')
   })
 
+  test('genuine empty metadata and retry stay inside the list without clearing stale cards', async () => {
+    renderSplit({
+      initial: '/agents',
+      items: [],
+      emptyDescription: 'Create the first agent when you are ready.',
+      emptyIcon: <svg data-testid="empty-icon" />,
+    })
+    const empty = await screen.findByTestId('split-empty')
+    expect(empty.className).not.toContain('empty-state--compact')
+    expect(empty.textContent).toContain('Create the first agent when you are ready.')
+    expect(screen.getByTestId('empty-icon')).toBeTruthy()
+
+    cleanup()
+    const onRetry = vi.fn()
+    renderSplit({ initial: '/agents', items: ITEMS, error: new Error('boom'), onRetry })
+    await waitFor(() => screen.getByTestId('split-card-code-worker'))
+    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(screen.getByTestId('split-card-auditor')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
   test('"+ new" button is active on /new; index route is not', async () => {
     renderSplit({ initial: '/agents/new', items: ITEMS })
     await waitFor(() => screen.getByTestId('new-pane'))
     expect(screen.getByTestId('split-new-button').className).toContain('is-active')
+  })
+
+  test('the rail owns the only create CTA; the index detail gets no synthesized duplicate', async () => {
+    renderSplit({ initial: '/agents', items: ITEMS })
+    await waitFor(() => screen.getByTestId('empty-pane'))
+    expect(screen.getAllByRole('link', { name: '+ New agent' })).toHaveLength(1)
+    expect(
+      within(screen.getByTestId('split-detail')).queryByRole('link', { name: '+ New agent' }),
+    ).toBeNull()
   })
 
   test('compact cards keep keyboard focus, two-line descriptions, and semantic summary chrome', () => {
@@ -244,6 +285,89 @@ describe('ResourceSplitPage — structure & three states', () => {
       /\.split-card__badges \.data-table__owner\s*\{[^}]*text-overflow: ellipsis/s,
     )
     expect(css).toContain('@media (forced-colors: active)')
+  })
+})
+
+describe('ResourceSplitPage — mobile list/detail DOM contract', () => {
+  test('CSS switches exactly one split pane at the 720px content breakpoint', () => {
+    const css = readFileSync(
+      path.resolve(path.dirname(new URL(import.meta.url).pathname), '../src/styles.css'),
+      'utf8',
+    )
+    expect(css).toMatch(/@media \(max-width: 720px\)[\s\S]*?data-mobile-view='list'/)
+    expect(css).toMatch(/data-mobile-view='detail'[\s\S]*?\.split__list[\s\S]*?display: none/)
+    expect(css).toMatch(/\.split__mobile-back[\s\S]*?display: inline-flex/)
+  })
+
+  test('view state comes only from route props and detail exposes one router back link', async () => {
+    const router = renderSplit({ initial: '/agents/code-worker', items: ITEMS })
+    await waitFor(() => screen.getByTestId('detail-pane'))
+    const page = screen.getByTestId('split-detail').closest('.page--split')
+    expect(page?.getAttribute('data-mobile-view')).toBe('detail')
+
+    const back = screen.getByTestId('agents-mobile-back')
+    expect(back.getAttribute('href')).toBe('/agents')
+    expect(screen.getAllByRole('link', { name: 'Back to agents' })).toHaveLength(1)
+
+    fireEvent.click(back)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/agents'))
+    expect(page?.getAttribute('data-mobile-view')).toBe('list')
+    expect(screen.queryByTestId('agents-mobile-back')).toBeNull()
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByTestId('split-card-code-worker')),
+    )
+  })
+
+  test('back navigation uses the existing dirty blocker before restoring list focus', async () => {
+    const router = renderSplit({
+      initial: '/agents/code-worker',
+      items: ITEMS,
+      detailDirty: true,
+    })
+    await waitFor(() => screen.getByTestId('split-card-dot-code-worker'))
+
+    fireEvent.click(screen.getByTestId('agents-mobile-back'))
+    await waitFor(() => screen.getByTestId('unsaved-guard-dialog'))
+    expect(router.state.location.pathname).toBe('/agents/code-worker')
+    expect(
+      screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
+    ).toBe('detail')
+
+    fireEvent.click(screen.getByTestId('unsaved-discard'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/agents'))
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByTestId('split-card-code-worker')),
+    )
+  })
+
+  test('list focus falls back to the first visible card, then the create action', async () => {
+    const firstRouter = renderSplit({ initial: '/agents/missing', items: ITEMS })
+    await waitFor(() => screen.getByTestId('detail-pane'))
+    fireEvent.click(screen.getByTestId('agents-mobile-back'))
+    await waitFor(() => expect(firstRouter.state.location.pathname).toBe('/agents'))
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByTestId('split-card-code-worker')),
+    )
+
+    cleanup()
+    const emptyRouter = renderSplit({ initial: '/agents/missing', items: [] })
+    await waitFor(() => screen.getByTestId('detail-pane'))
+    fireEvent.click(screen.getByTestId('agents-mobile-back'))
+    await waitFor(() => expect(emptyRouter.state.location.pathname).toBe('/agents'))
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('split-new-button')))
+  })
+
+  test('new route is detail state and returns focus to the first card', async () => {
+    const router = renderSplit({ initial: '/agents/new', items: ITEMS })
+    await waitFor(() => screen.getByTestId('new-pane'))
+    expect(
+      screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
+    ).toBe('detail')
+    fireEvent.click(screen.getByTestId('agents-mobile-back'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/agents'))
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByTestId('split-card-code-worker')),
+    )
   })
 })
 

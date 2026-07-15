@@ -5,7 +5,7 @@
 // zero-button — open = click, launch/delete/ACL moved into the detail header.
 
 import { useQuery } from '@tanstack/react-query'
-import { Link, Outlet, createRoute, useMatchRoute, useParams } from '@tanstack/react-router'
+import { Outlet, createRoute, useMatchRoute, useParams } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { Agent } from '@agent-workflow/shared'
 import { api } from '@/api/client'
@@ -143,6 +143,9 @@ function AgentsSplitLayout() {
       newTo="/agents/new"
       searchPlaceholder={t('common.searchEllipsis')}
       emptyListText={t('agents.emptyList')}
+      listTo="/agents"
+      mobileBackLabel={t('common.backToList')}
+      mobileBackTestId="agents-mobile-back"
     >
       <Outlet />
     </ResourceSplitPage>
@@ -152,14 +155,6 @@ function AgentsSplitLayout() {
 function AgentsEmptyPane() {
   const { t } = useTranslation()
   return (
-    <EmptyState
-      title={t('splitPage.emptyPaneTitle')}
-      description={t('splitPage.emptyPaneHint')}
-      action={
-        <Link to="/agents/new" className="btn btn--primary">
-          {t('agents.newButton')}
-        </Link>
-      }
-    />
+    <EmptyState title={t('splitPage.emptyPaneTitle')} description={t('splitPage.emptyPaneHint')} />
   )
 }

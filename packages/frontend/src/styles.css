@@ -3172,6 +3172,78 @@ code {
   cursor: not-allowed;
 }
 
+/* ---- Data table ---- */
+
+.table-viewport {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.table-viewport__scroller {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+.table-viewport__scroller > table {
+  width: 100%;
+}
+
+.table-viewport--sm .table-viewport__scroller > table {
+  min-width: 560px;
+}
+
+.table-viewport--md .table-viewport__scroller > table {
+  min-width: 720px;
+}
+
+.table-viewport--lg .table-viewport__scroller > table {
+  min-width: 920px;
+}
+
+.table-viewport__scroller:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.table-viewport__hint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.table-viewport__hint::before,
+.table-viewport__hint::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  content: '';
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.table-viewport__hint::before {
+  left: 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--text) 18%, transparent), transparent);
+}
+
+.table-viewport__hint::after {
+  right: 0;
+  background: linear-gradient(
+    270deg,
+    color-mix(in srgb, var(--text) 18%, transparent),
+    transparent
+  );
+}
+
+.table-viewport[data-overflow-start='true'] .table-viewport__hint::before,
+.table-viewport[data-overflow-end='true'] .table-viewport__hint::after {
+  opacity: 1;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
@@ -4360,9 +4432,13 @@ details.form-section[open] > summary {
   gap: 4px;
   margin-bottom: 16px;
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
 }
 
 .tabs__tab {
+  flex: 0 0 auto;
   background: none;
   border: none;
   padding: 8px 14px;
@@ -8183,10 +8259,6 @@ mark.comment-anchor[data-active='true'] {
   min-width: 0;
 }
 
-.skill-import__mobile-back {
-  display: none;
-}
-
 /* The compact 11px chips in this workflow need stronger foregrounds than the
    app-wide semantic palette to retain AA contrast against their tinted fills. */
 .skill-import {
@@ -8558,31 +8630,6 @@ mark.comment-anchor[data-active='true'] {
 }
 
 @media (max-width: 720px) {
-  /* /skills/new is a focused task on phones: remove the two desktop rails and
-     give the form/import workflow the viewport. The inline back link keeps the
-     Skills list reachable without restoring either rail. */
-  .app-shell:has(.skill-import) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .app-shell:has(.skill-import) > .sidebar,
-  .page--split:has(.skill-import) .split__list {
-    display: none;
-  }
-
-  .page--split:has(.skill-import) .split {
-    grid-template-rows: minmax(0, 1fr);
-    gap: 0;
-  }
-
-  .skill-import__mobile-back {
-    display: inline-flex;
-    margin-bottom: var(--space-2);
-    color: var(--accent);
-    font-size: var(--font-sm);
-    font-weight: 600;
-  }
-
   .file-dropzone__selection,
   .file-dropzone__file,
   .file-dropzone__actions,
@@ -14648,6 +14695,10 @@ button.status-chip {
   min-width: 0;
 }
 
+.split__mobile-back {
+  display: none;
+}
+
 /* The single scroll point on the right — pages render header + TabBar fixed,
    then their tab content inside this body. */
 .split__detail-body {
@@ -14677,6 +14728,47 @@ button.status-chip {
        which globally asserts the old task-output card rule string is gone,
        stays meaningful. */
     max-height: 15rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .page--split[data-mobile-view='list'] .split__detail,
+  .page--split[data-mobile-view='detail'] .split__list {
+    display: none;
+  }
+
+  .split {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .split__list {
+    height: 100%;
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+
+  .split__cards {
+    max-height: none;
+  }
+
+  .split__detail {
+    height: 100%;
+  }
+
+  .split__mobile-back {
+    display: inline-flex;
+    align-self: flex-start;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 44px;
+    margin-bottom: var(--space-2);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .split__mobile-back:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
   }
 }
 
@@ -15611,9 +15703,7 @@ button.status-chip {
     inset: auto max(var(--space-3), env(safe-area-inset-right)) auto auto;
     top: calc(52px + env(safe-area-inset-top) + var(--space-3));
     width: min(420px, calc(100vw - 24px));
-    max-height: calc(
-      100dvh - 52px - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px
-    );
+    max-height: calc(100dvh - 52px - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px);
     transform: none;
   }
 }

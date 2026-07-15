@@ -177,9 +177,21 @@ describe('/agents split page', () => {
     fireEvent.change(screen.getByTestId('split-search'), { target: { value: 'opencode' } })
     expect(screen.getByTestId('split-card-alpha')).toBeTruthy()
     expect(screen.getByText('Nothing selected')).toBeTruthy()
+    expect(screen.getAllByTestId('split-new-button')).toHaveLength(1)
+    expect(screen.queryByTestId('agents-mobile-back')).toBeNull()
+    expect(screen.getAllByRole('link', { name: '+ New agent' })).toHaveLength(1)
+    expect(
+      screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
+    ).toBe('list')
     fireEvent.click(screen.getByTestId('split-card-alpha'))
     await waitFor(() => expect(router.state.location.pathname).toBe('/agents/alpha'))
     await waitFor(() => screen.getByRole('heading', { level: 2, name: 'alpha' }))
+    const back = screen.getByTestId('agents-mobile-back')
+    expect(back.getAttribute('href')).toBe('/agents')
+    expect(screen.getAllByTestId('agents-mobile-back')).toHaveLength(1)
+    expect(
+      screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
+    ).toBe('detail')
     expect((screen.getByRole('textbox', { name: /Name/ }) as HTMLInputElement).value).toBe('alpha')
   })
 
@@ -375,6 +387,12 @@ describe('/agents split page', () => {
   test('creating a new agent navigates to it and selects its card', async () => {
     const router = renderAgents('/agents/new')
     await waitFor(() => screen.getByTestId('agent-create-button'))
+    expect(screen.getByTestId('agents-mobile-back').getAttribute('href')).toBe('/agents')
+    expect(screen.getAllByTestId('agents-mobile-back')).toHaveLength(1)
+    expect(screen.getAllByTestId('split-new-button')).toHaveLength(1)
+    expect(
+      screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
+    ).toBe('detail')
     const name = screen.getByRole('textbox', { name: /Name/ }) as HTMLInputElement
     fireEvent.change(name, { target: { value: 'gamma' } })
     fireEvent.click(screen.getByTestId('agent-create-button'))

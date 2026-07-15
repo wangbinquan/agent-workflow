@@ -14,12 +14,13 @@
 // task-outputs-panel option language; the dirty dot is drawn from the
 // SplitDirty context.
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, type LinkProps } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { RelativeTime } from '@/components/RelativeTime'
 import { filterResourceCards } from '@/lib/resource-card-filter'
@@ -93,6 +94,16 @@ export interface ResourceSplitPageProps {
   searchPlaceholder: string
   /** Shown when the resource list itself is empty (vs. filtered-to-nothing). */
   emptyListText: string
+  /** Optional supporting copy/icon for the genuine empty-list state. */
+  emptyDescription?: string
+  emptyIcon?: ReactNode
+  /** Retry action shown inside the list error banner. */
+  onRetry?: () => void
+  /** Canonical list route used by the phone-only detail back affordance. */
+  listTo?: LinkProps['to']
+  /** Visible and accessible label for the phone-only detail back affordance. */
+  mobileBackLabel?: string
+  mobileBackTestId?: string
   /** Right rail (the routed <Outlet/>). */
   children: ReactNode
 }
@@ -100,6 +111,10 @@ export interface ResourceSplitPageProps {
 export function ResourceSplitPage(props: ResourceSplitPageProps) {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
+  const cardRefs = useRef(new Map<string, HTMLAnchorElement>())
+  const newLinkRef = useRef<HTMLAnchorElement | null>(null)
+  const restoreListFocusRef = useRef(false)
+  const returnCardKeyRef = useRef<string | null>(null)
 
   // Dirty key in a ref (guard reads it synchronously) + state (drives the dot).
   const dirtyKeyRef = useRef<string | null>(null)
@@ -126,9 +141,45 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
   const listEmpty = items !== undefined && items.length === 0
   const filteredEmpty = filtered !== undefined && filtered.length === 0
   const visibleCount = filtered?.length ?? 0
+  const firstVisibleKey = filtered?.[0]?.key ?? null
+  const mobileView = props.selectedKey !== null || props.newActive ? 'detail' : 'list'
+
+  // The rail and detail stay mounted; CSS chooses which one is reachable at
+  // <=720px from data-mobile-view. After the explicit detail -> list link
+  // completes (including an UnsavedChangesGuard proceed), restore focus to the
+  // card the user came from, then the first visible card, then New.
+  useEffect(() => {
+    if (mobileView !== 'list' || !restoreListFocusRef.current) return
+    restoreListFocusRef.current = false
+
+    const returnTarget =
+      returnCardKeyRef.current === null
+        ? null
+        : (cardRefs.current.get(returnCardKeyRef.current) ?? null)
+    const firstTarget =
+      firstVisibleKey === null ? null : (cardRefs.current.get(firstVisibleKey) ?? null)
+    const targets = [returnTarget, firstTarget, newLinkRef.current]
+    for (const target of targets) {
+      if (target === null || !target.isConnected) continue
+      target.focus()
+      if (document.activeElement === target) break
+    }
+  }, [firstVisibleKey, mobileView])
+
+  const markListFocusRestore = useCallback(() => {
+    returnCardKeyRef.current = props.selectedKey
+    restoreListFocusRef.current = true
+  }, [props.selectedKey])
+
+  const retryAction =
+    props.onRetry === undefined ? undefined : (
+      <button type="button" className="btn btn--sm" onClick={props.onRetry}>
+        {t('common.retry')}
+      </button>
+    )
 
   return (
-    <div className="page page--split">
+    <div className="page page--split" data-mobile-view={mobileView}>
       <SplitDirtyContext.Provider value={ctxValue}>
         <UnsavedChangesGuard dirtyRef={dirtyKeyRef} />
         <div className="split">
@@ -141,24 +192,26 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
                 </span>
               )}
             </div>
-            <input
-              className="form-input split__search"
+            <TextInput
               type="search"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={setSearch}
               placeholder={props.searchPlaceholder}
               aria-label={props.searchPlaceholder}
+              className="split__search"
               data-testid="split-search"
             />
             <div className="split__cards" data-testid="split-cards">
               {props.isLoading && items === undefined && <LoadingState size="compact" />}
               {props.error !== null && props.error !== undefined && (
-                <ErrorBanner error={props.error} />
+                <ErrorBanner error={props.error} action={retryAction} />
               )}
               {filteredEmpty && (
                 <EmptyState
-                  size="compact"
+                  size={listEmpty ? 'comfortable' : 'compact'}
                   title={listEmpty ? props.emptyListText : t('common.noMatches')}
+                  description={listEmpty ? props.emptyDescription : undefined}
+                  icon={listEmpty ? props.emptyIcon : undefined}
                   data-testid="split-empty"
                 />
               )}
@@ -183,6 +236,10 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
                 return (
                   <Link
                     key={it.key}
+                    ref={(node) => {
+                      if (node === null) cardRefs.current.delete(it.key)
+                      else cardRefs.current.set(it.key, node)
+                    }}
                     to={it.to}
                     params={it.params}
                     className={`split-card split-card--${it.kind}${selected ? ' is-selected' : ''}`}
@@ -239,6 +296,7 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
               })}
             </div>
             <Link
+              ref={newLinkRef}
               to={props.newTo}
               className={'btn btn--primary split__new' + (props.newActive ? ' is-active' : '')}
               data-testid="split-new-button"
@@ -247,6 +305,18 @@ export function ResourceSplitPage(props: ResourceSplitPageProps) {
             </Link>
           </aside>
           <section className="split__detail" data-testid="split-detail">
+            {mobileView === 'detail' &&
+              props.listTo !== undefined &&
+              props.mobileBackLabel !== undefined && (
+                <Link
+                  to={props.listTo}
+                  className="split__mobile-back"
+                  data-testid={props.mobileBackTestId ?? 'split-mobile-back'}
+                  onClick={markListFocusRestore}
+                >
+                  <span aria-hidden="true">←</span> {props.mobileBackLabel}
+                </Link>
+              )}
             {props.children}
           </section>
         </div>

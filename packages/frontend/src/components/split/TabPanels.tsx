@@ -4,6 +4,7 @@
 // tab switches instead of being dropped on every switch.
 
 import type { ReactNode } from 'react'
+import { tabDomIds } from '../TabBar'
 
 export interface TabPanelDef<K extends string> {
   key: K
@@ -18,20 +19,27 @@ export function TabPanels<K extends string>(props: {
   panels: ReadonlyArray<TabPanelDef<K>>
   /** Class applied to every panel (the shared scroll body). */
   className?: string
+  /** Stable DOM id namespace shared with the matching TabBar. */
+  idPrefix?: string
 }) {
   return (
     <>
-      {props.panels.map((p) => (
-        <div
-          key={p.key}
-          role="tabpanel"
-          hidden={p.key !== props.active}
-          data-testid={p.testid}
-          className={[props.className, p.className].filter(Boolean).join(' ') || undefined}
-        >
-          {p.content}
-        </div>
-      ))}
+      {props.panels.map((p) => {
+        const ids = props.idPrefix === undefined ? undefined : tabDomIds(props.idPrefix, p.key)
+        return (
+          <div
+            key={p.key}
+            role="tabpanel"
+            id={ids?.panelId}
+            aria-labelledby={ids?.tabId}
+            hidden={p.key !== props.active}
+            data-testid={p.testid}
+            className={[props.className, p.className].filter(Boolean).join(' ') || undefined}
+          >
+            {p.content}
+          </div>
+        )
+      })}
     </>
   )
 }

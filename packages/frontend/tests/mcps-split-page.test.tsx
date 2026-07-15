@@ -119,11 +119,33 @@ describe('/mcps split page', () => {
     fireEvent.change(screen.getByTestId('split-search'), { target: { value: 'Local (stdio)' } })
     expect(screen.getByTestId('split-card-db')).toBeTruthy()
     expect(screen.getByText('Nothing selected')).toBeTruthy()
+    expect(screen.getAllByTestId('split-new-button')).toHaveLength(1)
+    expect(screen.queryByTestId('mcps-mobile-back')).toBeNull()
+    expect(screen.getAllByRole('link', { name: '+ New MCP' })).toHaveLength(1)
+    expect(
+      screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
+    ).toBe('list')
     fireEvent.click(screen.getByTestId('split-card-db'))
     await waitFor(() => expect(router.state.location.pathname).toBe('/mcps/db'))
     await waitFor(() => screen.getByRole('heading', { level: 2, name: 'db' }))
     expect(screen.getByRole('tab', { name: 'Config' })).toBeTruthy()
     expect(screen.getByRole('tab', { name: /Tools/ })).toBeTruthy()
+    expect(screen.getByTestId('mcps-mobile-back').getAttribute('href')).toBe('/mcps')
+    expect(screen.getAllByTestId('mcps-mobile-back')).toHaveLength(1)
+    expect(
+      screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
+    ).toBe('detail')
+  })
+
+  test('new route uses the shared back and keeps the rail create CTA unique', async () => {
+    renderMcps('/mcps/new')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: /New MCP/ }))
+    expect(screen.getByTestId('mcps-mobile-back').getAttribute('href')).toBe('/mcps')
+    expect(screen.getAllByTestId('mcps-mobile-back')).toHaveLength(1)
+    expect(screen.getAllByTestId('split-new-button')).toHaveLength(1)
+    expect(
+      screen.getByTestId('split-detail').closest('.page--split')?.getAttribute('data-mobile-view'),
+    ).toBe('detail')
   })
 
   test('Save stays in place, clears the dirty dot', async () => {

@@ -4,7 +4,7 @@
 // <Outlet/>. RFC-178: skills are managed-only, so the empty pane just prompts
 // to create one.
 
-import { Link, Outlet, createRoute, useMatchRoute, useParams } from '@tanstack/react-router'
+import { Outlet, createRoute, useMatchRoute, useParams } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { Skill } from '@agent-workflow/shared'
 import { useResourceList } from '@/hooks/useResourceList'
@@ -79,6 +79,9 @@ function SkillsSplitLayout() {
       newTo="/skills/new"
       searchPlaceholder={t('common.searchEllipsis')}
       emptyListText={t('skills.emptyList')}
+      listTo="/skills"
+      mobileBackLabel={t('common.backToList')}
+      mobileBackTestId="skills-mobile-back"
     >
       <Outlet />
     </ResourceSplitPage>
@@ -92,11 +95,6 @@ function SkillsEmptyPane() {
       <EmptyState
         title={t('splitPage.emptyPaneTitle')}
         description={t('splitPage.emptyPaneHint')}
-        action={
-          <Link to="/skills/new" className="btn btn--primary">
-            {t('skills.newButton')}
-          </Link>
-        }
       />
     </div>
   )
