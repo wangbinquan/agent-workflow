@@ -30,12 +30,21 @@
 // 注意：直接在 source 用 PUA 字符字面量容易在编辑链路上被剥（曾被 Write
 // 工具脱掉），一律从 MARKERS 单一来源派生 / 运行时拼接，避免漂移。
 
-import { MARKERS } from './markdownDiff'
+import { extractMarkedView, MARKERS } from './markdownDiff'
 
-const STRIP_MARKER_RE = new RegExp(
+const ANY_MARKER_RE = new RegExp(
   '[' + MARKERS.INS_OPEN + MARKERS.INS_CLOSE + MARKERS.DEL_OPEN + MARKERS.DEL_CLOSE + ']',
-  'g',
 )
+
+/** 含 marker 的字符串解析成单一版本：优先取"新版本"（context+ins），若
+ *  ins 视图剥后为空（纯删除场景）回退旧版本。直接剥 marker 会把
+ *  `https://old/a` 与 `https://new/b` 拼成两侧都不存在的 URL / 公式。 */
+function resolveMarkedString(s: string): string {
+  if (!ANY_MARKER_RE.test(s)) return s
+  const ins = extractMarkedView(s, 'ins')
+  if (ins.length > 0) return ins
+  return extractMarkedView(s, 'del')
+}
 
 interface TextNode {
   type: 'text'
@@ -160,16 +169,25 @@ export function splitMarkers(s: string): Array<TextNode | DiffMarkNode> {
 }
 
 /** 带 value 的非 text 叶子（code / inlineCode / math / html…）与 link/image
- *  的 url、title：剥掉残留 marker，防止 PUA 字符渲染成乱码方块。 */
+ *  的 url、title：解析成单一版本，防止 PUA 字符渲染成乱码方块、或新旧文本
+ *  拼接成两侧都不存在的 URL / 公式。remark-math 一类插件会把渲染文本缓存
+ *  在 data.hChildren（mdast→hast 优先用它），必须同步处理，否则 KaTeX 仍
+ *  收到带 marker 的原文并报 katex-error。 */
 function stripNodeStrings(node: ParentNode): void {
   if (node.type !== 'text' && typeof node.value === 'string') {
-    node.value = node.value.replace(STRIP_MARKER_RE, '')
+    node.value = resolveMarkedString(node.value)
   }
   if (typeof node.url === 'string') {
-    node.url = node.url.replace(STRIP_MARKER_RE, '')
+    node.url = resolveMarkedString(node.url)
   }
   if (typeof node.title === 'string') {
-    node.title = node.title.replace(STRIP_MARKER_RE, '')
+    node.title = resolveMarkedString(node.title)
+  }
+  const data = (node as { data?: { hChildren?: Array<{ value?: unknown }> } }).data
+  if (data?.hChildren !== undefined && Array.isArray(data.hChildren)) {
+    for (const h of data.hChildren) {
+      if (typeof h.value === 'string') h.value = resolveMarkedString(h.value)
+    }
   }
 }
 

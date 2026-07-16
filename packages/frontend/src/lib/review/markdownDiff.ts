@@ -236,7 +236,16 @@ function findFencedBlocks(text: string): LineBlock[] {
       }
       j++
     }
-    const end = closed ? j : lines.length - 1
+    // 未闭合 fence 吞到 EOF 时，排除原文尾部 \n 在 split 后留下的空串哨兵，
+    // 否则哨兵进 atom、fold 后 ensureTrailingNewline 又补一个 \n，restore
+    // 会让 identical 输入平白多出一个空 code 行。
+    let end: number
+    if (closed) {
+      end = j
+    } else {
+      end = lines.length - 1
+      if (end > i && lines[end] === '') end--
+    }
     blocks.push({ start: i, end, content: lines.slice(i, end + 1).join('\n') })
     i = end + 1
   }
@@ -290,7 +299,9 @@ function replaceLineBlocks(text: string, blocks: LineBlock[], replacements: stri
 }
 
 // 同行内的 inline code span（`code` / ``a `b`` 多反引号形式，不跨行）。
-const INLINE_CODE_RE = /(`+)(?!`)([^`\n]+?)\1(?!`)/g
+// 开端排除 `\` 转义的反引号（`\`word\`` 是字面反引号文本，不是 code span，
+// 误原子化会让 marker 把转义符一起包进去、渲染出裸的 `\`）。
+const INLINE_CODE_RE = /(?<!\\)(`+)(?!`)([^`\n]+?)\1(?!`)/g
 
 /**
  * word 路径专属：把 left / right 中的 fenced code block、markdown 表格、
@@ -368,7 +379,10 @@ function getWordSegmenter(): Intl.Segmenter | null {
 // Segmenter 不可用时的退路：空白 run / 词字符 run / 单个其它字符（含 CJK
 // 逐字与占位符），与 diff@9 自带 tokenizer 同粒度。`u` flag 保证按 code
 // point 迭代，emoji 等 astral 字符不会被劈成半个 surrogate（乱码防护）。
-const FALLBACK_TOKEN_RE = /\s+|[\p{L}\p{N}_]+|[\s\S]/gu
+// CJK 单字分支必须排在 letter-run 之前：\p{L} 包含汉字，若让整段中文进
+// letter-run，一个 token 吞掉整句，比逐字对齐还粗（改一个字整句红绿）。
+const FALLBACK_TOKEN_RE =
+  /\s+|[\p{sc=Han}\p{sc=Hangul}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Bopomofo}]|[\p{L}\p{N}_]+|[\s\S]/gu
 
 /**
  * UTF-8 / CJK-safe 词级 tokenizer。Intl.Segmenter 的词典分词让中文以
@@ -583,9 +597,11 @@ function isPrefixInterrupted(line: string, prefixLen: number): boolean {
   return false
 }
 
-/** 把一行按 marker 状态机还原成单侧视图：keep 侧内容 + context 保留，
- *  另一侧内容与所有 marker 字符丢弃。 */
-function extractLineView(line: string, keep: 'ins' | 'del'): string {
+/** 把一段含 marker 的文本按状态机还原成单侧视图：keep 侧内容 + context
+ *  保留，另一侧内容与所有 marker 字符丢弃。导出供 remarkDiffMarkers 解析
+ *  link url / math value 等"新旧拼接"字符串（直接剥 marker 会把
+ *  https://old/a 与 https://new/b 拼成不存在的 URL）。 */
+export function extractMarkedView(line: string, keep: 'ins' | 'del'): string {
   let mode: 'context' | 'ins' | 'del' = 'context'
   let out = ''
   for (const ch of line) {
@@ -640,8 +656,8 @@ function repairBrokenLinePrefixes(merged: string): string {
     // 打断判定基于"单侧视图"的前缀：`-`→`*` 这类替换在 merged 里混成
     // "-*" 不构成合法前缀（直接看 stripped 会漏检），但 del 视图
     // "- item" / ins 视图 "* item" 的前缀是真实存在的结构。
-    const delView = extractLineView(line, 'del')
-    const insView = extractLineView(line, 'ins')
+    const delView = extractMarkedView(line, 'del')
+    const insView = extractMarkedView(line, 'ins')
     const delPrefix = LEADING_BLOCK_PREFIX_RE.exec(delView)?.[1] ?? ''
     const insPrefix = LEADING_BLOCK_PREFIX_RE.exec(insView)?.[1] ?? ''
     const structural = delPrefix.trim().length > 0 || insPrefix.trim().length > 0
@@ -660,7 +676,14 @@ function repairBrokenLinePrefixes(merged: string): string {
     if (pushed.length === 0) {
       out.push(line.replace(ANY_MARKER_RE, ''))
     } else {
-      out.push(...pushed)
+      // 拆出的 DEL 行与 INS 行之间必须隔空行：CommonMark 把相邻的
+      // `10. item` / `1. item` 解析成同一个 <ol>，第二行的显式序号被
+      // 忽略（显示 10、11 而不是 10、1）。空行让两侧各自成块。
+      out.push(pushed[0]!)
+      for (let k = 1; k < pushed.length; k++) {
+        out.push('')
+        out.push(pushed[k]!)
+      }
     }
   }
   return out.join('\n')
@@ -724,8 +747,9 @@ export const _internal = {
   PlaceholderAllocator,
   trimCommonAffixes,
   repairBrokenLinePrefixes,
-  extractLineView,
+  extractMarkedView,
   isPrefixInterrupted,
+  FALLBACK_TOKEN_RE,
   TABLE_ROW_RE,
   TABLE_SEP_RE,
   PLACEHOLDER_BASE,

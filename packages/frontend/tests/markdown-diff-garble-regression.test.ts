@@ -262,3 +262,40 @@ describe('根因 5 — 输入边界防护', () => {
     }
   })
 })
+
+// 2026-07-16 — Codex 实现门评审(6 P2)修复回归。
+describe('Codex 实现门 findings', () => {
+  test('F1: 转义反引号 \\`word\\` 不被当 code span 原子化', () => {
+    const merged = buildMergedMarkdown('see \\`old\\` here\n', 'see \\`new\\` here\n', 'word')
+    expect(merged.includes(`${DEL_OPEN}old${DEL_CLOSE}`)).toBe(true)
+    expect(merged.includes(`${INS_OPEN}new${INS_CLOSE}`)).toBe(true)
+  })
+
+  test('F3: 无 Segmenter fallback 正则 CJK 逐字、拉丁词级', () => {
+    expect('甲乙丙 hello'.match(_internal.FALLBACK_TOKEN_RE)).toEqual([
+      '甲',
+      '乙',
+      '丙',
+      ' ',
+      'hello',
+    ])
+  })
+
+  test('F4: 有序列表显式序号变化 10.→1. 拆行后以空行分隔成两个列表', () => {
+    const merged = buildMergedMarkdown('10. item\n', '1. item\n', 'word')
+    const lines = merged.split('\n')
+    const delIdx = lines.findIndex((l) => l.startsWith('10. ') && l.includes(DEL_OPEN))
+    const insIdx = lines.findIndex((l) => l.startsWith('1. ') && l.includes(INS_OPEN))
+    expect(delIdx).toBeGreaterThanOrEqual(0)
+    expect(insIdx).toBeGreaterThan(delIdx)
+    // 相邻会被 CommonMark 合并成一个 <ol> 并忽略第二个显式序号
+    expect(lines.slice(delIdx + 1, insIdx).some((l) => l.trim() === '')).toBe(true)
+  })
+
+  test('F5: line 档未闭合 fence 到 EOF,identical 输入逐字节还原', () => {
+    const doc = '```js\nconst x = 1\n'
+    expect(buildMergedMarkdown(doc, doc, 'line')).toBe(doc)
+    // word 档同样不多不少
+    expect(buildMergedMarkdown(doc, doc, 'word')).toBe(doc)
+  })
+})

@@ -202,7 +202,8 @@ describe('remarkDiffMarkers — 跨节点归组与 value 剥 marker', () => {
       ],
     }
     remarkDiffMarkers()(tree)
-    expect((tree.children[0] as { value: string }).value).toBe('const b = 299')
+    // resolve 语义:value 取新版本视图(context+ins),不再新旧拼接
+    expect((tree.children[0] as { value: string }).value).toBe('const b = 99')
     const para = tree.children[1] as { children: Array<{ value?: string }> }
     expect(para.children[0]?.value).toBe('foo baz')
   })
@@ -228,7 +229,7 @@ describe('remarkDiffMarkers — 跨节点归组与 value 剥 marker', () => {
     const link = (tree.children[0] as { children: Array<{ url?: string; title?: string }> })
       .children[0]
     expect(link?.url).toBe('http://a.example/x')
-    expect(link?.title).toBe('t1')
+    expect(link?.title).toBe('t')
   })
 
   test('未配对 open 跨 sibling 到结尾 → 内容摊平不丢、不加高亮', () => {
@@ -251,5 +252,81 @@ describe('remarkDiffMarkers — 跨节点归组与 value 剥 marker', () => {
     expect(para.children.some((n) => n.type === 'diffMark')).toBe(false)
     expect(para.children.map((n) => n.type)).toEqual(['text', 'strong', 'text'])
     expect(para.children[0]?.value).toBe('aa ')
+  })
+})
+
+// 2026-07-16 — Codex 实现门 F2/F6:url / math 缓存的"新旧拼接"解析。
+describe('remarkDiffMarkers — resolveMarkedString(Codex F2/F6)', () => {
+  test('F2: link url 整体替换 → 解析为新版本 URL,不拼接', () => {
+    const tree = {
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            {
+              type: 'link',
+              url: `${DEL_OPEN}https://old.example/a${DEL_CLOSE}${INS_OPEN}https://new.example/b${INS_CLOSE}`,
+              children: [{ type: 'text', value: 'x' }],
+            },
+          ],
+        },
+      ],
+    }
+    remarkDiffMarkers()(tree)
+    const link = (tree.children[0] as { children: Array<{ url?: string }> }).children[0]
+    expect(link?.url).toBe('https://new.example/b')
+  })
+
+  test('F2: 纯删除的 url(无 ins 段)回退保留旧 URL', () => {
+    const tree = {
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            {
+              type: 'link',
+              url: `${DEL_OPEN}https://gone.example${DEL_CLOSE}`,
+              children: [{ type: 'text', value: 'x' }],
+            },
+          ],
+        },
+      ],
+    }
+    remarkDiffMarkers()(tree)
+    const link = (tree.children[0] as { children: Array<{ url?: string }> }).children[0]
+    expect(link?.url).toBe('https://gone.example')
+  })
+
+  test('F6: remark-math 缓存的 data.hChildren 同步解析(KaTeX 不再收到 marker)', () => {
+    const mathValue = `x${DEL_OPEN}+${DEL_CLOSE}${INS_OPEN}-${INS_CLOSE}y`
+    const tree = {
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            {
+              type: 'inlineMath',
+              value: mathValue,
+              data: {
+                hName: 'code',
+                hProperties: { className: ['language-math'] },
+                hChildren: [{ type: 'text', value: mathValue }],
+              },
+            },
+          ],
+        },
+      ],
+    }
+    remarkDiffMarkers()(tree)
+    const math = (
+      tree.children[0] as {
+        children: Array<{ value?: string; data?: { hChildren?: Array<{ value?: string }> } }>
+      }
+    ).children[0]
+    expect(math?.value).toBe('x-y')
+    expect(math?.data?.hChildren?.[0]?.value).toBe('x-y')
   })
 })
