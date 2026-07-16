@@ -79,8 +79,12 @@ async function importYaml(
   })
 }
 
-async function exportYaml(id: string): Promise<string> {
-  const res = await fetch(`${daemon.baseUrl}/api/workflows/${id}/export`, {
+async function exportYaml(workflow: WorkflowRow): Promise<string> {
+  const query = new URLSearchParams({
+    expectedVersion: String(workflow.version),
+    expectedSnapshotHash: workflow.snapshotHash,
+  })
+  const res = await fetch(`${daemon.baseUrl}/api/workflows/${workflow.id}/export?${query}`, {
     headers: { Authorization: `Bearer ${daemon.token}` },
   })
   if (!res.ok) throw new Error(`export: ${res.status}`)
@@ -109,6 +113,7 @@ interface WorkflowRow {
   name: string
   description: string
   version: number
+  snapshotHash: string
   definition: unknown
 }
 
@@ -147,7 +152,7 @@ test.describe('RFC-054 W2-7 — YAML import / export', () => {
     const wf1 = await createdWorkflow(r1)
 
     // 2. Export and snapshot the YAML.
-    const yamlExported = await exportYaml(wf1.id)
+    const yamlExported = await exportYaml(wf1)
     expect(yamlExported.length).toBeGreaterThan(0)
     // Sanity — exported YAML mentions the canonical name.
     expect(yamlExported).toContain('rfc054-w2-7-sample')
@@ -187,7 +192,7 @@ test.describe('RFC-054 W2-7 — YAML import / export', () => {
 
     // Export yields YAML with the id baked in — that's the artifact a
     // user would actually paste back to migrate between environments.
-    const exported = await exportYaml(wf1.id)
+    const exported = await exportYaml(wf1)
     expect(exported).toContain(`id: ${wf1.id}`)
 
     const r2 = await importYaml(exported, 'fail')
@@ -211,7 +216,7 @@ test.describe('RFC-054 W2-7 — YAML import / export', () => {
     expect(r1.status).toBe(201)
     const wf1 = await createdWorkflow(r1)
 
-    const exported = await exportYaml(wf1.id)
+    const exported = await exportYaml(wf1)
     const mutationId = nextClientMutationId()
     const r2 = await importYaml(exported, 'overwrite', {
       workflowId: wf1.id,
@@ -238,7 +243,7 @@ test.describe('RFC-054 W2-7 — YAML import / export', () => {
     expect(r1.status).toBe(201)
     const wf1 = await createdWorkflow(r1)
 
-    const exported = await exportYaml(wf1.id)
+    const exported = await exportYaml(wf1)
     const r2 = await importYaml(exported, 'new')
     expect(r2.status).toBe(201)
     const wf2 = await createdWorkflow(r2)
