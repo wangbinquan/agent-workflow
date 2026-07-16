@@ -155,7 +155,9 @@ describe('RFC-074 migration 0041 — DROP clarify_iteration preserves row data',
       expect(cols).toContain('rolled_back')
       // RFC-189 (0095): wg_round — the lw workgroup round ordinal.
       expect(cols).toContain('wg_round')
-      expect(cols.length).toBe(cols0040.length - 1 + 7 + 6 + 3 + 1)
+      // RFC-200 (0097): envelope_nonce — per-run envelope nonce.
+      expect(cols).toContain('envelope_nonce')
+      expect(cols.length).toBe(cols0040.length - 1 + 7 + 6 + 3 + 1 + 1)
 
       // 4b. row count unchanged.
       const n = (up.query('SELECT count(*) AS n FROM node_runs').get() as { n: number }).n

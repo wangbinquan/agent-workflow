@@ -991,6 +991,13 @@ export const nodeRuns = sqliteTable(
      */
     failureCode: text('failure_code'),
     promptText: text('prompt_text'), // actual user prompt sent to opencode
+    // RFC-200 (T1): per-run envelope nonce. Generated (crypto random) + persisted
+    // at dispatch; the protocol block emits `<workflow-output nonce="…">` and the
+    // parser (T3) only accepts THIS run's nonce, so an echoed/forged bare envelope
+    // is not采信 (closes the "echo-forge + last-wins" vector). Reused on resume /
+    // followup so an inline session's earlier nonce stays valid. NULL = a run
+    // dispatched before RFC-200 (parser falls back to bare-tag matching).
+    envelopeNonce: text('envelope_nonce'),
     // token usage
     tokInput: integer('tok_input'),
     tokOutput: integer('tok_output'),

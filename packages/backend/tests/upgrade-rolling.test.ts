@@ -296,7 +296,8 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-185 D4 bumped to 94 with 0094_rfc185_workgroup_fan_out.
     // RFC-189 T1 bumped to 95 with 0095_rfc189_wg_round.
     // RFC-193 T1 bumped to 96 with 0096_rfc193_port_artifact.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(96)
+    // RFC-200 T1 bumped to 97 with 0097_rfc200_envelope_nonce.
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(97)
   })
 
   for (const target of FREEZE_TARGETS) {
