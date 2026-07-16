@@ -4,18 +4,20 @@
 
 ## 任务清单
 
+> 2026-07-16 Codex 设计门评审（6 P1 + 5 P2）已全部折入 design.md 与下列任务规格。
+
 - **RFC-202-T1 空列表评审自动通过（P0）**
-  `review.ts` dispatch 空分支改造：铸 run → 写空 `accepted`/`approval_meta` → approve-review 转 done → 返回完成变体；summary 带 auto-approved 标记。测试：inline/path 双 kind、非空回归、wedged 存量行重入解卡、approval_meta 无归属。
+  `review.ts` dispatch 空分支改造：铸 run → 写空 `accepted`/`approval_meta`（`auto:'empty-list'`）→ approve-review 转 done → 返回完成变体；可见性走 `node_run_events`（`review-auto-approved`）而非 summary（runScope 会丢弃 summary）。测试：inline/path 双 kind、事件落库、非空回归、wedged 存量行重入解卡、approval_meta 无归属。
 - **RFC-202-T2 封存器与终态钩子**（依赖 T1 的 review 侧事件补边）
-  新建 `services/terminalSweep.ts`（泛化 `dismissOpenClarifyParksForAutonomous`，clarify 三层 + review node_run）；workgroup 封存器改为委托调用方；shared node_run 转移表补 awaiting_review→canceled（如缺）；`lifecycle.ts` 增 `registerTerminalTaskHook`（to ∈ {done,canceled} 触发，try/catch）；`cli/start.ts` 装配注册。测试：封存三层、workgroup 回归、钩子失败不阻转移、源级防环锁。
+  新建 `services/terminalSweep.ts`：clarify 按 kind 分支（self→canceled；cross→abandoned 双表，避开 0031 CHECK）+ review node_run；`transitionNodeRunStatusInTx` 同步原语（dbTxSync 拒 thenable）；`scope: 'all'|'clarify-only'`，workgroup 自治切换委托时传 clarify-only（防误伤活任务的 review/completion gate）；shared node_run 转移表补 awaiting_review→canceled（如缺）；`lifecycle.ts` 增 `registerTerminalTaskHook`（to ∈ {done,canceled}，try/catch）；`cli/start.ts` 装配注册；**写路径护栏**：sealRoundQuestions / submitReviewDecision / 问题下发在写事务内校验 owning task 终态 → 409 `task-terminal` 先于落库。测试：cross+self 混合 sweep、clarify-only scope、单事务原子性、钩子失败不阻转移 + 护栏兜底、源级防环锁。
 - **RFC-202-T3 awaiting\_\* 可取消**（依赖 T2 封存器）
   `cancelTask` allowedFrom 放宽 + fallback CAS 放宽；`task-not-cancelable` zh/en 文案更正；前端 `tasks.detail.tsx` cancelable 判定放宽。测试：backend 转移 + 前端按钮渲染 + 文案断言。
 - **RFC-202-T4 优雅关停 reason 通道**
-  `abortAllActiveTasks(reason)` → `controller.abort(reason)`；调度器 4 个检查点按 `signal.reason` 分流到新 `interruptTaskRow`（interrupted + `daemon-restart`）；`shutdown.ts` 幸存者改盖 `daemon-restart`。测试：shutdown 分流 / 用户取消逐字节回归 / autoResume 拾取两类。
+  `abortAllActiveTasks(reason)` → `controller.abort(reason)`；调度器 4 个检查点按 `signal.reason` 分流到新 `interruptTaskRow`（interrupted + `daemon-restart`）；**runner abort 分支同分流：活动 node_run 写 interrupted 而非 canceled**；`shutdown.ts` 幸存者改盖 `daemon-restart`。测试：任务行 + node_run 双语义 / 用户取消逐字节回归 / autoResume 拾取两类。
 - **RFC-202-T5 deleteWorkflow 定时任务守卫**
-  `scheduledRowsReferencingWorkflow` helper + `workflow-scheduled-referenced` 409（details 带 ids/names）；zh/en errors 词条。测试：命中/未命中/坏 JSON payload；agent 守卫回归。
+  `scheduledRowsReferencingWorkflow` helper + `workflow-scheduled-referenced` 409；details 遵守 RFC-099：仅 principal 可见的 `{id,name}` + `hiddenCount` 聚合；词条不带占位符，`workflows.edit.tsx` 调用点就地渲染 details 清单。测试：命中/未命中/坏 JSON payload/他人私有 schedule 不泄名；agent 守卫回归；前端清单渲染。
 - **RFC-202-T6 待办口径过滤 + 死轮拒答**
-  `listClarifyRoundSummaries` 与 `listReviewSummaries` 的待办口径排除 `TERMINAL_TASK_STATUSES` 任务；admin clarify pending-count 改道 rounds 口径；`clarify-round-terminal` zh/en 词条；`clarify.detail.tsx` 封存轮状态说明条（替换「草稿已保存」页脚）。测试：list/count 双面消失、failed 任务 resume 后重现、封存轮 409 零落库、admin/非 admin 口径一致、前端说明条。
+  `listClarifyRoundSummaries` 与 `listReviewSummaries` 待办口径排除 `TERMINAL_TASK_STATUSES` 任务——**过滤在分页/SQL limit 之前生效**；pending-count 用不带 limit 的精确计数；admin clarify pending-count 改道 rounds 口径；clarify/review 详情响应携带任务状态/封存原因，前端按原因分文案（终态 vs 自治撤销），review 决策端点终态 409 + 中文词条（`task-terminal`/`review-not-awaiting`/`clarify-round-terminal`）。测试：list/count 双面消失、僵尸挤窗场景、failed 任务 resume 后重现、封存轮 409 零落库、admin/非 admin 口径一致、review 终态 409、前端双文案。
 - **RFC-202-T7 修复弹窗 ok:false 消费**
   `RepairConfirmModal` 分流（不关窗 + banner + 折叠原文）；新词条 `tasks.repair.applyFailedBanner`。测试：ok:false 不关窗、ok:true 回归。
 - **RFC-202-T8 resume 失败上浮**
