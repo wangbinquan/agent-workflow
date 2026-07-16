@@ -332,6 +332,16 @@ export interface RenderPromptInput {
    * first-time runs and any run with no prior captured output.
    */
   priorOutputUpdate?: PriorOutputUpdateContext
+  /**
+   * RFC-200 (T2): the per-run envelope nonce (persisted on
+   * `node_runs.envelope_nonce`, generated at mint / inherited on inline
+   * followup). When set, every emitted `<workflow-output>` / `<workflow-clarify>`
+   * open tag carries `nonce="…"` and the runner parses the agent's stdout with
+   * the SAME nonce, so an echoed/forged BARE envelope is ignored. Absent →
+   * bare tags (a pre-RFC-200 in-flight run, or any direct caller / preview that
+   * threads no nonce) → byte-identical to the pre-RFC-200 render.
+   */
+  envelopeNonce?: string
 }
 
 // Whitespace-tolerant so `{{ port }}` (a very common authoring habit) resolves
@@ -633,11 +643,15 @@ export function renderUserPrompt(input: RenderPromptInput): string {
   //     clarify-only, so the session has never seen the output format — this
   //     is the first time it must be emitted. Routing inline-stop to the
   //     reminder (as pre-RFC-100 did) would leave the agent with no port list.
+  // RFC-200 (T2): the per-run nonce scopes every emitted envelope open tag.
+  // Absent (legacy / pre-RFC-200 run) → the emit helpers render bare tags, so
+  // this whole block stays byte-identical to before.
+  const nonce = input.envelopeNonce
   let trailing: string
   if (mandatoryAskBack) {
     trailing = inlineMode
       ? buildClarifyInlineReminder()
-      : buildMandatoryClarifyPreamble() + buildClarifyProtocolBlock()
+      : buildMandatoryClarifyPreamble() + buildClarifyProtocolBlock(nonce)
   } else if (optionalAskBack) {
     // RFC-165 (F12): optional ask-back — the agent sees BOTH envelope
     // formats and picks one. Inline (post-answer / same-session) rounds get
@@ -646,12 +660,12 @@ export function renderUserPrompt(input: RenderPromptInput): string {
     trailing = inlineMode
       ? buildOptionalClarifyInlineReminder()
       : buildOptionalClarifyPreamble() +
-        buildOptionalDualProtocolBlock(input.agentOutputs, input.agentOutputKinds)
+        buildOptionalDualProtocolBlock(input.agentOutputs, input.agentOutputKinds, nonce)
   } else if (input.workgroupProtocolBlock !== undefined) {
     // RFC-164: workgroup runs replace (never extend) the agent-outputs block.
     trailing = input.workgroupProtocolBlock
   } else {
-    trailing = buildProtocolBlock(input.agentOutputs, input.agentOutputKinds)
+    trailing = buildProtocolBlock(input.agentOutputs, input.agentOutputKinds, nonce)
   }
   return body + sections + trailing
 }
@@ -677,9 +691,30 @@ export function renderUserPrompt(input: RenderPromptInput): string {
  * observed failure mode where agents return a path with no corresponding
  * file on disk and the framework's later `resolvePortContent` read fails.
  */
+/**
+ * RFC-200 (T2) — the envelope open tags, optionally nonce-scoped. Empty/absent
+ * nonce → the bare tag (legacy byte-compat: a run dispatched before RFC-200, or
+ * any direct caller that passes no nonce, renders exactly as before). A nonce →
+ * `<workflow-output nonce="…">`. The emit side (these protocol blocks) and the
+ * parser (envelope.ts) both key off the SAME per-run nonce, so an echoed/forged
+ * BARE envelope the parser later sees in the agent's stdout is ignored.
+ */
+export function envelopeOpenTag(nonce?: string): string {
+  return nonce !== undefined && nonce.length > 0
+    ? `<workflow-output nonce="${nonce}">`
+    : '<workflow-output>'
+}
+
+export function clarifyOpenTag(nonce?: string): string {
+  return nonce !== undefined && nonce.length > 0
+    ? `<workflow-clarify nonce="${nonce}">`
+    : '<workflow-clarify>'
+}
+
 export function buildProtocolBlock(
   agentOutputs: string[],
   agentOutputKinds?: AgentOutputKindsMap,
+  nonce?: string,
 ): string {
   // RFC-080: per-port bullet / example annotation is owned by each kind's
   // handler (parsed-kind dispatch) — no more literal `=== 'markdown_file'`
@@ -716,12 +751,17 @@ export function buildProtocolBlock(
     return out
   }
 
-  let s = '\n\n---\nYou MUST end your reply with a `<workflow-output>` block listing these ports:\n'
+  const openTag = envelopeOpenTag(nonce)
+  const nonceNote =
+    nonce !== undefined && nonce.length > 0
+      ? ` The \`nonce="${nonce}"\` attribute is REQUIRED — copy it EXACTLY; the framework ignores any \`<workflow-output>\` block that omits it or carries a different value.`
+      : ''
+  let s = `\n\n---\nYou MUST end your reply with a \`${openTag}\` block listing these ports:${nonceNote}\n`
   for (const port of agentOutputs) {
     s += renderBullet(port)
   }
   s += renderPerKindGuidance()
-  s += '\nFormat:\n<workflow-output>\n'
+  s += `\nFormat:\n${openTag}\n`
   for (const port of agentOutputs) {
     s += renderExample(port)
   }
@@ -766,9 +806,12 @@ export function buildMandatoryClarifyPreamble(): string {
  * `\n\n` so callers can concatenate without injecting their own separator.
  */
 /** RFC-023 — the clarify envelope format example (shared by the mandatory and
- *  optional protocol blocks so the two renderings can never drift). */
-export const CLARIFY_FORMAT_EXAMPLE = `Format:
-<workflow-clarify>
+ *  optional protocol blocks so the two renderings can never drift). RFC-200:
+ *  parameterized by the per-run nonce; the OPEN tag carries it so the parser
+ *  only accepts this run's clarify envelope. Absent nonce → bare (legacy). */
+export function clarifyFormatExample(nonce?: string): string {
+  return `Format:
+${clarifyOpenTag(nonce)}
 {
   "questions": [
     {
@@ -787,6 +830,11 @@ export const CLARIFY_FORMAT_EXAMPLE = `Format:
   ]
 }
 </workflow-clarify>`
+}
+
+/** Bare (no-nonce) clarify format — back-compat for callers / source-text grep
+ *  guards that don't thread a per-run nonce (e.g. workgroup WG_CLARIFY_BLOCK). */
+export const CLARIFY_FORMAT_EXAMPLE = clarifyFormatExample()
 
 /** RFC-023 — the structural clarify rules shared by both directive modes
  *  (question/option caps, labels, legacy form, Q&A echo semantics). */
@@ -796,11 +844,17 @@ export const CLARIFY_STRUCTURAL_RULES = `- Limits: at most 5 questions, each que
 - Legacy form is also accepted: \`"options": ["a", "b", "c"]\` — strings are lifted into \`{label, description:"", recommended:false, recommendationReason:""}\`. Prefer the structured form for new emissions.
 - Once the user submits answers, you will receive every question answered so far in the next prompt under "## Clarify Q&A" — a single flat list where each question is an equal peer with the user's answer (a deterministic synthesis line). Treat every listed answer as an already-resolved decision.`
 
-export function buildClarifyProtocolBlock(): string {
+export function buildClarifyProtocolBlock(nonce?: string): string {
+  const nonceNote =
+    nonce !== undefined && nonce.length > 0
+      ? ` Copy the \`nonce="${nonce}"\` attribute EXACTLY onto your \`<workflow-clarify>\` tag; the framework ignores a clarify envelope that lacks it.`
+      : ''
   return (
     `\n\n---\n` +
-    '**Clarify format.** Emit exactly one <workflow-clarify> block and nothing else — no <workflow-output> anywhere in the reply. Asking back is the expected outcome of this round.\n\n' +
-    CLARIFY_FORMAT_EXAMPLE +
+    '**Clarify format.** Emit exactly one <workflow-clarify> block and nothing else — no <workflow-output> anywhere in the reply. Asking back is the expected outcome of this round.' +
+    nonceNote +
+    '\n\n' +
+    clarifyFormatExample(nonce) +
     '\n\nHard rules — violation is treated as a malformed reply and the node will fail / retry:\n' +
     '- Your reply MUST contain exactly one <workflow-clarify> block and NO <workflow-output> — emitting <workflow-output> is rejected until the user stops clarifying. Defer all output ports to a later round; do not output partial data.\n' +
     CLARIFY_STRUCTURAL_RULES
@@ -863,21 +917,24 @@ export function buildOptionalClarifyPreamble(): string {
 export function buildOptionalDualProtocolBlock(
   agentOutputs: string[],
   agentOutputKinds?: AgentOutputKindsMap,
+  nonce?: string,
 ): string {
   const optionA =
     `\n\n---\n` +
     '**Option A — ask the user (reply with ONE `<workflow-clarify>` block and nothing else).**\n\n' +
-    CLARIFY_FORMAT_EXAMPLE +
+    clarifyFormatExample(nonce) +
     '\n\n' +
     'Rules if you choose Option A — violation is treated as a malformed reply:\n' +
     '- The reply must contain exactly one <workflow-clarify> block and NO <workflow-output> — you finalize in a LATER round, after the user answers.\n' +
     CLARIFY_STRUCTURAL_RULES
 
-  const MANDATORY_HEAD =
-    'You MUST end your reply with a `<workflow-output>` block listing these ports:'
-  const OPTIONAL_HEAD =
-    '**Option B — finalize (reply with ONE `<workflow-output>` block).** If you choose to finalize instead of asking, end your reply with a `<workflow-output>` block listing these ports:'
-  const outputBlock = buildProtocolBlock(agentOutputs, agentOutputKinds)
+  // RFC-200: the heads reference the nonced output tag so the head-swap still
+  // matches buildProtocolBlock's (now nonced) instruction line. Nonce absent →
+  // envelopeOpenTag() = bare → byte-identical to the pre-RFC-200 heads.
+  const outTag = envelopeOpenTag(nonce)
+  const MANDATORY_HEAD = `You MUST end your reply with a \`${outTag}\` block listing these ports:`
+  const OPTIONAL_HEAD = `**Option B — finalize (reply with ONE \`<workflow-output>\` block).** If you choose to finalize instead of asking, end your reply with a \`${outTag}\` block listing these ports:`
+  const outputBlock = buildProtocolBlock(agentOutputs, agentOutputKinds, nonce)
   // The head swap is locked by tests; if the mandatory head ever changes,
   // fall back to prefixing so the choice framing is never silently lost.
   const optionB = outputBlock.includes(MANDATORY_HEAD)
