@@ -171,8 +171,31 @@ const NODE_VALIDATE_IO: ValidateIO = {
   },
 }
 
-const ENVELOPE_RE = /<workflow-output>([\s\S]*?)<\/workflow-output>/g
-const CLARIFY_ENVELOPE_RE = /<workflow-clarify>([\s\S]*?)<\/workflow-clarify>/g
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// RFC-200 (T3): envelope matchers scoped to the run's nonce. With a nonce, ONLY
+// `<workflow-output nonce="{nonce}">` matches — an echoed/forged BARE (or
+// wrong-nonce) envelope in the agent's stdout is invisible to the parser, so it
+// cannot be采信 as the agent's output ("echo-forge + last-wins" is closed).
+// Absent nonce → the legacy bare open tag (a run dispatched before RFC-200).
+// Each call returns a FRESH RegExp, so there is no shared `lastIndex` state to
+// reset between callers (the old module-level consts needed that dance).
+function envelopeRe(nonce?: string): RegExp {
+  const open =
+    nonce !== undefined && nonce.length > 0
+      ? `<workflow-output\\s+nonce="${escapeRe(nonce)}"\\s*>`
+      : '<workflow-output>'
+  return new RegExp(`${open}([\\s\\S]*?)<\\/workflow-output>`, 'g')
+}
+function clarifyRe(nonce?: string): RegExp {
+  const open =
+    nonce !== undefined && nonce.length > 0
+      ? `<workflow-clarify\\s+nonce="${escapeRe(nonce)}"\\s*>`
+      : '<workflow-clarify>'
+  return new RegExp(`${open}([\\s\\S]*?)<\\/workflow-clarify>`, 'g')
+}
 // Accept both "name" and 'name' attribute quotes. Tolerant of arbitrary
 // whitespace inside the opening tag. RFC-103 T6: matches only the OPENING tag;
 // each port's content is delimited by the next opening tag (container-based,
@@ -214,8 +237,8 @@ export interface EnvelopeParseResult {
  * Find the last `<workflow-output>...</workflow-output>` block in `text`.
  * Returns the entire matched block (incl. open/close tags), or null if none.
  */
-export function extractLastEnvelope(text: string): string | null {
-  const matches = [...text.matchAll(ENVELOPE_RE)]
+export function extractLastEnvelope(text: string, nonce?: string): string | null {
+  const matches = [...text.matchAll(envelopeRe(nonce))]
   if (matches.length === 0) return null
   const last = matches[matches.length - 1]
   return last ? last[0] : null
@@ -295,14 +318,12 @@ export const ENVELOPE_PORT_MALFORMED_PREFIX = 'envelope-port-malformed'
  * and another later are still rejected so we never have to decide which one
  * was the intent.
  */
-export function detectEnvelopeKind(stdout: string): DetectedEnvelopeKind {
-  const hasOutput = ENVELOPE_RE.test(stdout)
-  // RegExp objects with the global flag carry mutable lastIndex state across
-  // .test()/.exec() calls. Reset so the next caller doesn't get a false
-  // negative on a string that begins before our last cursor position.
-  ENVELOPE_RE.lastIndex = 0
-  const hasClarify = CLARIFY_ENVELOPE_RE.test(stdout)
-  CLARIFY_ENVELOPE_RE.lastIndex = 0
+export function detectEnvelopeKind(stdout: string, nonce?: string): DetectedEnvelopeKind {
+  // RFC-200: fresh per-call RegExps (envelopeRe/clarifyRe) — no shared
+  // `lastIndex` to reset. With a nonce, a forged BARE envelope does not match,
+  // so it can neither be采信 as output nor spuriously trip the 'both' reject.
+  const hasOutput = envelopeRe(nonce).test(stdout)
+  const hasClarify = clarifyRe(nonce).test(stdout)
   if (hasOutput && hasClarify) return 'both'
   if (hasOutput) return 'output'
   if (hasClarify) return 'clarify'
@@ -316,8 +337,8 @@ export function detectEnvelopeKind(stdout: string): DetectedEnvelopeKind {
  * verbatim — callers (shared/clarify.parseClarifyEnvelopeBody) handle JSON
  * parsing + zod validation + permissive truncation.
  */
-export function extractClarifyEnvelopeBody(stdout: string): string | null {
-  const matches = [...stdout.matchAll(CLARIFY_ENVELOPE_RE)]
+export function extractClarifyEnvelopeBody(stdout: string, nonce?: string): string | null {
+  const matches = [...stdout.matchAll(clarifyRe(nonce))]
   if (matches.length === 0) return null
   const last = matches[matches.length - 1]
   if (!last) return null
@@ -348,7 +369,10 @@ export function parseEnvelope(envelopeXml: string, declaredOutputs: string[]): E
   // limit: content containing the exact sequence `</port>` + `<port name=`
   // (a fake port boundary) still mis-frames — the protocol forbids it.
   const inner = envelopeXml
-    .replace(/^[\s\S]*?<workflow-output>/, '')
+    // RFC-200: strip the OPEN tag whether bare (`<workflow-output>`) or
+    // nonce-scoped (`<workflow-output nonce="…">`) — `[^>]*` swallows any
+    // attributes so parseEnvelope needs no nonce of its own.
+    .replace(/^[\s\S]*?<workflow-output[^>]*>/, '')
     .replace(/<\/workflow-output>[\s\S]*$/, '')
   const CLOSE = '</port>'
   PORT_OPEN_RE.lastIndex = 0
