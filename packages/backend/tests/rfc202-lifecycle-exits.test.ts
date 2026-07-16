@@ -13,7 +13,6 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
-  agents as agentsTable,
   clarifyRounds,
   clarifySessions,
   crossClarifySessions,
