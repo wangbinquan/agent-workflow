@@ -639,9 +639,10 @@ describe('WorkflowEditorLoaded RFC-199 draft integration', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1_000)
     })
-    await flushEffects()
-    expect(put).toHaveBeenCalledTimes(1)
-    expect(screen.getByTestId('workflow-draft-phase').textContent).toMatch(/已保存|Saved/)
+    await vi.waitFor(() => {
+      expect(put).toHaveBeenCalledTimes(1)
+      expect(screen.getByTestId('workflow-draft-phase').textContent).toMatch(/已保存|Saved/)
+    })
   })
 
   test('offline ensureSaved failure unlocks Launch and focuses the durable save Notice', async () => {
