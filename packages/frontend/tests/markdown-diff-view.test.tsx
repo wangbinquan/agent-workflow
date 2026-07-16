@@ -290,3 +290,88 @@ describe('MarkdownDiffView — RFC-012 table preservation (word)', () => {
     expect(badPs.length).toBe(0)
   })
 })
+
+// 2026-07-16 — 渲染级乱码回归锁：PUA marker 不允许出现在最终 DOM 文本里，
+// code / bold / heading 结构在 diff 后保持合法（此前 fence 内改行会把 PUA
+// 渲染成 tofu 方块、整行新增含 bold 时高亮整段静默丢失、##→### 会把
+// heading 降级成段落并漏出裸 #）。
+describe('MarkdownDiffView — 乱码 / 高亮丢失渲染回归', () => {
+  const PUA_RE = /[\uE000-\uF8FF]/
+
+  test('fence 内改行：DOM 文本无 PUA，新旧代码块都完整渲染', () => {
+    const { container } = render(
+      <MarkdownDiffView
+        left={'intro\n\n```js\nconst b = 2\n```\n'}
+        right={'intro\n\n```js\nconst b = 99\n```\n'}
+      />,
+    )
+    expect(PUA_RE.test(container.textContent ?? '')).toBe(false)
+    expect(container.querySelectorAll('pre').length).toBe(2)
+    expect(container.textContent).toContain('const b = 2')
+    expect(container.textContent).toContain('const b = 99')
+  })
+
+  test('line 模式 fence 内改行：DOM 文本无 PUA', () => {
+    const { container } = render(
+      <MarkdownDiffView
+        left={'```js\nconst b = 2\n```\n'}
+        right={'```js\nconst b = 99\n```\n'}
+        granularity="line"
+      />,
+    )
+    expect(PUA_RE.test(container.textContent ?? '')).toBe(false)
+    expect(container.textContent).toContain('const b = 2')
+    expect(container.textContent).toContain('const b = 99')
+  })
+
+  test('inline code 改词：diff span 完整包裹 <code>，无 PUA 泄漏', () => {
+    const { container } = render(
+      <MarkdownDiffView left={'run `foo bar` now'} right={'run `foo baz` now'} />,
+    )
+    expect(PUA_RE.test(container.textContent ?? '')).toBe(false)
+    const del = container.querySelector('.diff-del')
+    const ins = container.querySelector('.diff-ins')
+    expect(del?.querySelector('code')?.textContent).toBe('foo bar')
+    expect(ins?.querySelector('code')?.textContent).toBe('foo baz')
+  })
+
+  test('整行新增含 **bold**：整行进 .diff-ins（跨节点高亮不再丢失）', () => {
+    const { container } = render(
+      <MarkdownDiffView
+        left={'stable'}
+        right={'stable\nnew line with **bold** words'}
+        granularity="line"
+      />,
+    )
+    const ins = container.querySelector('.diff-ins')
+    expect(ins).not.toBeNull()
+    expect(ins?.querySelector('strong')?.textContent).toBe('bold')
+    expect(ins?.textContent).toBe('new line with bold words')
+  })
+
+  test('heading 级别变化 ##→###：渲染成两个合法 heading，无裸 #', () => {
+    const { container } = render(<MarkdownDiffView left={'## Title'} right={'### Title'} />)
+    const h2 = container.querySelector('h2')
+    const h3 = container.querySelector('h3')
+    expect(h2?.querySelector('.diff-del')).not.toBeNull()
+    expect(h3?.querySelector('.diff-ins')).not.toBeNull()
+    // rehype-autolink-headings 会给 heading 追加 '#' 锚点文本，因此不能
+    // 断 textContent 无 '#'；断"没有降级成段落"即可锁住旧 bug 形态。
+    expect(container.querySelector('p')).toBeNull()
+  })
+
+  test('CJK 词级：审查→评审 无逐字交错（del/ins 各自完整成段）', () => {
+    if (typeof Intl.Segmenter !== 'function') return
+    const { container } = render(
+      <MarkdownDiffView left={'本轮代码审查通过'} right={'本轮代码评审通过'} />,
+    )
+    const del = Array.from(container.querySelectorAll('.diff-del'))
+      .map((n) => n.textContent ?? '')
+      .join('')
+    const ins = Array.from(container.querySelectorAll('.diff-ins'))
+      .map((n) => n.textContent ?? '')
+      .join('')
+    expect(del).toBe('审查')
+    expect(ins).toBe('评审')
+  })
+})

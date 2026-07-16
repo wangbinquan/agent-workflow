@@ -51,7 +51,11 @@ describe('splitMarkers', () => {
     const out = splitMarkers(`hello ${INS_OPEN}world`)
     // 终止时 'world' 在 ins buf 内未闭合 → 当成 text flush
     const concat = out
-      .map((n) => (n.type === 'text' ? n.value : (n.children[0]?.value ?? '')))
+      .map((n) =>
+        n.type === 'text'
+          ? n.value
+          : ((n.children[0] as { value?: string } | undefined)?.value ?? ''),
+      )
       .join('')
     expect(concat.includes('world')).toBe(true)
     expect(concat.includes(INS_OPEN)).toBe(false)
@@ -129,5 +133,123 @@ describe('remarkDiffMarkers plugin', () => {
     const before = JSON.stringify(tree)
     remarkDiffMarkers()(tree)
     expect(JSON.stringify(tree)).toBe(before)
+  })
+})
+
+// 2026-07-16 — 跨节点归组 + value 叶子剥 marker（乱码 / 高亮丢失修复回归）。
+// 旧实现逐 text 节点独立配对：open/close 分居不同 text 节点（整行新增里夹
+// **bold** / `code` 时必然如此）两侧都被吞，整行高亮静默消失；code 节点
+// value 里的残留 marker 直接渲染成 tofu 方块。
+describe('remarkDiffMarkers — 跨节点归组与 value 剥 marker', () => {
+  test('open/close 分居 strong 两侧 → 单个 diffMark 收编整段（含 strong）', () => {
+    const tree = {
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            { type: 'text', value: `${INS_OPEN}new ` },
+            { type: 'strong', children: [{ type: 'text', value: 'bold' }] },
+            { type: 'text', value: ` words${INS_CLOSE} tail` },
+          ],
+        },
+      ],
+    }
+    remarkDiffMarkers()(tree)
+    const para = tree.children[0] as {
+      children: Array<{ type: string; children?: Array<{ type: string }> }>
+    }
+    expect(para.children).toHaveLength(2)
+    const mark = para.children[0]
+    expect(mark?.type).toBe('diffMark')
+    // diffMark 内部依次是 text('new ') / strong / text(' words')
+    expect(mark?.children?.map((n) => n.type)).toEqual(['text', 'strong', 'text'])
+    expect(para.children[1]?.type).toBe('text')
+  })
+
+  test('inlineCode 元素被 open/close 夹住 → 整个收进 diffMark（高亮包 code）', () => {
+    const tree = {
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            { type: 'text', value: `run ${DEL_OPEN}` },
+            { type: 'inlineCode', value: 'foo bar' },
+            { type: 'text', value: `${DEL_CLOSE} now` },
+          ],
+        },
+      ],
+    }
+    remarkDiffMarkers()(tree)
+    const para = tree.children[0] as {
+      children: Array<{ type: string; children?: Array<{ type: string }> }>
+    }
+    const mark = para.children.find((n) => n.type === 'diffMark')
+    expect(mark).toBeDefined()
+    expect(mark?.children?.some((n) => n.type === 'inlineCode')).toBe(true)
+  })
+
+  test('code / inlineCode 节点 value 内残留 marker 被剥掉（乱码保险丝）', () => {
+    const tree = {
+      type: 'root',
+      children: [
+        { type: 'code', value: `const b = ${DEL_OPEN}2${DEL_CLOSE}${INS_OPEN}99${INS_CLOSE}` },
+        {
+          type: 'paragraph',
+          children: [{ type: 'inlineCode', value: `foo ${INS_OPEN}baz${INS_CLOSE}` }],
+        },
+      ],
+    }
+    remarkDiffMarkers()(tree)
+    expect((tree.children[0] as { value: string }).value).toBe('const b = 299')
+    const para = tree.children[1] as { children: Array<{ value?: string }> }
+    expect(para.children[0]?.value).toBe('foo baz')
+  })
+
+  test('link url / title 内残留 marker 被剥掉（href 不携带 PUA）', () => {
+    const tree = {
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            {
+              type: 'link',
+              url: `http://a.example/${INS_OPEN}x${INS_CLOSE}`,
+              title: `t${DEL_OPEN}1${DEL_CLOSE}`,
+              children: [{ type: 'text', value: 'a' }],
+            },
+          ],
+        },
+      ],
+    }
+    remarkDiffMarkers()(tree)
+    const link = (tree.children[0] as { children: Array<{ url?: string; title?: string }> })
+      .children[0]
+    expect(link?.url).toBe('http://a.example/x')
+    expect(link?.title).toBe('t1')
+  })
+
+  test('未配对 open 跨 sibling 到结尾 → 内容摊平不丢、不加高亮', () => {
+    const tree = {
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            { type: 'text', value: `${INS_OPEN}aa ` },
+            { type: 'strong', children: [{ type: 'text', value: 'bold' }] },
+            { type: 'text', value: ' bb' },
+          ],
+        },
+      ],
+    }
+    remarkDiffMarkers()(tree)
+    const para = tree.children[0] as { children: Array<{ type: string; value?: string }> }
+    // 无 diffMark，内容原样摊平（marker 本身被吞）
+    expect(para.children.some((n) => n.type === 'diffMark')).toBe(false)
+    expect(para.children.map((n) => n.type)).toEqual(['text', 'strong', 'text'])
+    expect(para.children[0]?.value).toBe('aa ')
   })
 })

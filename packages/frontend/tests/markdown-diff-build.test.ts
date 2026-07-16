@@ -3,7 +3,7 @@
 //   - 等同 → 无 marker
 //   - 改字 → marker 包裹改动 token，保留行首 markdown 结构前缀
 //   - 整行新增 / 删除 → 每行独立包 marker，不破坏块结构
-//   - CJK 词级粒度复用 DiffView 的 splitForWordDiff
+//   - CJK 词级粒度走 Intl.Segmenter tokenize（tokenizeForWordDiff）
 //   - <script> 字面量原样保留（react-markdown 阶段才转义）
 // 这些断言一旦红，意味着 MarkdownDiffView 的渲染态高亮会出错。
 
@@ -11,7 +11,7 @@ import { describe, expect, test } from 'vitest'
 import {
   buildMergedMarkdown,
   MARKERS,
-  splitForWordDiff,
+  tokenizeForWordDiff,
   _internal,
 } from '@/lib/review/markdownDiff'
 
@@ -282,31 +282,39 @@ describe('buildMergedMarkdown — block 模式回归', () => {
   })
 })
 
-describe('splitForWordDiff', () => {
-  test('passes through pure ASCII', () => {
-    expect(splitForWordDiff('simple english')).toBe('simple english')
+describe('tokenizeForWordDiff', () => {
+  test('tokens 拼接恒等于原文（partition 不变量，diff 后 join 无损）', () => {
+    for (const s of ['simple english', '你好世界', 'mix 中文 and english\nnew line']) {
+      expect(tokenizeForWordDiff(s).join('')).toBe(s)
+    }
   })
 
-  test('CJK 序列被加分隔符（如果 Intl.Segmenter 可用）', () => {
-    const out = splitForWordDiff('你好世界')
-    // happy-dom 环境下 Intl.Segmenter 可能不存在；只断言输出至少不丢字符
-    for (const ch of '你好世界') expect(out).toContain(ch)
+  test('CJK 被切成多个 token（词级，不再整段一个 token）', () => {
+    // Intl.Segmenter 可用时"你好世界"至少切成"你好/世界"两段；
+    // fallback 正则也按单字切。两条路径都不允许整段成一个 token。
+    const out = tokenizeForWordDiff('你好世界')
+    expect(out.length).toBeGreaterThan(1)
+  })
+
+  test('空串 → 空 token 数组', () => {
+    expect(tokenizeForWordDiff('')).toEqual([])
   })
 })
 
-// RFC-012 — 源码层断言锁住 word 路径上的表格保护内部 helper 在 _internal
-// 里被 export。一旦未来误删 / 改名，build 测试一并红，提示这是 word 模式
-// 表格保留契约的一部分。
-describe('_internal exports — RFC-012 table preservation contract', () => {
-  test('_internal 暴露 findTableBlocks / pretreatTablesForWordDiff / restoreTablePlaceholders', () => {
+// RFC-012 — 源码层断言锁住 word 路径上的占位符原子化内部 helper 在
+// _internal 里被 export。一旦未来误删 / 改名，build 测试一并红，提示这是
+// word 模式表格 / code 块保留契约的一部分。
+describe('_internal exports — 占位符原子化契约（RFC-012 泛化）', () => {
+  test('_internal 暴露 findTableBlocks / findFencedBlocks / pretreatWordAtoms / restoreAtoms', () => {
     expect(typeof _internal.findTableBlocks).toBe('function')
-    expect(typeof _internal.pretreatTablesForWordDiff).toBe('function')
-    expect(typeof _internal.restoreTablePlaceholders).toBe('function')
+    expect(typeof _internal.findFencedBlocks).toBe('function')
+    expect(typeof _internal.pretreatWordAtoms).toBe('function')
+    expect(typeof _internal.restoreAtoms).toBe('function')
   })
 
-  test('_internal.TABLE_PLACEHOLDER_BASE 与 MARKERS PUA 区间不重叠', () => {
-    const base = _internal.TABLE_PLACEHOLDER_BASE as number
-    const end = _internal.TABLE_PLACEHOLDER_END as number
+  test('_internal.PLACEHOLDER_BASE 与 MARKERS PUA 区间不重叠', () => {
+    const base = _internal.PLACEHOLDER_BASE as number
+    const end = _internal.PLACEHOLDER_END as number
     const markerCps = [INS_OPEN, INS_CLOSE, DEL_OPEN, DEL_CLOSE].map((c) => c.codePointAt(0)!)
     for (const cp of markerCps) {
       expect(cp).toBeLessThan(base)

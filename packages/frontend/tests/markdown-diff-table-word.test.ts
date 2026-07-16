@@ -139,27 +139,42 @@ describe('_internal helpers', () => {
     expect(_internal.findTableBlocks(text).length).toBe(0)
   })
 
-  test('pretreatTablesForWordDiff: 内容相等 → 共用 placeholder（unchanged 保持）', () => {
+  test('pretreatWordAtoms: 内容相等 → 共用 placeholder（unchanged 保持）', () => {
     const t = '| a | b |\n|---|---|\n| 1 | 2 |\n'
-    const { lTokens, rTokens, lookup } = _internal.pretreatTablesForWordDiff(t, t)
-    expect(lTokens).toBe(rTokens)
+    const { l, r, lookup } = _internal.pretreatWordAtoms(t, t)
+    expect(l).toBe(r)
     expect(lookup.size).toBe(1)
   })
 
-  test('pretreatTablesForWordDiff: 内容不等 → 两个独立 placeholder（jsdiff 会 emit del + ins）', () => {
+  test('pretreatWordAtoms: 内容不等 → 两个独立 placeholder（jsdiff 会 emit del + ins）', () => {
     const left = '| a | b |\n|---|---|\n| 1 | 2 |\n'
     const right = '| a | b2 |\n|---|---|\n| 1 | 2 |\n'
-    const { lTokens, rTokens, lookup } = _internal.pretreatTablesForWordDiff(left, right)
-    expect(lTokens).not.toBe(rTokens)
+    const { l, r, lookup } = _internal.pretreatWordAtoms(left, right)
+    expect(l).not.toBe(r)
     expect(lookup.size).toBe(2)
   })
 
-  test('restoreTablePlaceholders: 占位符回填且补 `\\n\\n` 周边空白', () => {
-    const lookup = new Map([['', '| h |\n|---|\n| v |']])
-    const changes = [{ added: true, removed: false, value: '', count: 1 }] as Parameters<
-      typeof _internal.restoreTablePlaceholders
+  test('pretreatWordAtoms: 同内容表在两侧不同位置 → 仍共用 placeholder（内容寻址）', () => {
+    // 2026-07-16 回归：占位符旧实现按位置 i 配对，右侧中间插入一张新表时，
+    // 后续内容未变的表被拆成两个独立占位符 → jsdiff 标成整表 DEL+INS 各
+    // 显示一遍。内容寻址后同内容必共用。
+    const t1 = '| a | b |\n|---|---|\n| 1 | 2 |'
+    const t2 = '| x | y |\n|---|---|\n| 8 | 9 |'
+    const tNew = '| n | m |\n|---|---|\n| 5 | 6 |'
+    const { lookup } = _internal.pretreatWordAtoms(
+      `${t1}\n\n${t2}\n`,
+      `${t1}\n\n${tNew}\n\n${t2}\n`,
+    )
+    // t1 / t2 各共用一个，tNew 独立 → 一共 3 个
+    expect(lookup.size).toBe(3)
+  })
+
+  test('restoreAtoms: pad 块占位符回填且补 `\\n\\n` 周边空白', () => {
+    const lookup = new Map([['\uE010', { content: '| h |\n|---|\n| v |', pad: true }]])
+    const changes = [{ added: true, removed: false, value: '\uE010', count: 1 }] as Parameters<
+      typeof _internal.restoreAtoms
     >[0]
-    const out = _internal.restoreTablePlaceholders(changes, lookup)
+    const out = _internal.restoreAtoms(changes, lookup)
     expect(out[0]?.value).toBe('\n\n| h |\n|---|\n| v |\n\n')
   })
 })
