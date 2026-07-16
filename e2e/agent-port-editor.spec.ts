@@ -183,7 +183,12 @@ test.describe('RFC-194 Agent port editor', () => {
     const dialog = await configureListMarkdownPathOutput(page, 'documents')
     const extension = dialog.getByRole('combobox', { name: /file extension/i })
     await extension.click()
-    await expect(page.getByRole('listbox')).toBeVisible()
+    const listbox = page.getByRole('listbox')
+    await expect(listbox).toBeVisible()
+    // Select moves focus on a zero-delay timer after the portal mounts. Wait
+    // for that hand-off so Escape is consumed by the listbox instead of racing
+    // the parent Dialog's global Escape listener on slower macOS runners.
+    await expect(listbox).toBeFocused()
 
     await page.keyboard.press('Escape')
     await expect(page.getByRole('listbox')).toHaveCount(0)

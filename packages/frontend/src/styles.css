@@ -15240,6 +15240,13 @@ button.status-chip {
     max-height: 14rem;
   }
 
+  /* A flex/overflow palette has no reliable intrinsic block contribution in
+     the one-column editor grid. Give its mobile row a definite height so it
+     cannot collapse underneath the following canvas and lose pointer hits. */
+  .editor-layout > .editor-sidebar {
+    height: min(14rem, 35dvh);
+  }
+
   .editor-layout > .canvas-frame,
   .task-canvas-layout--with-drawer > .canvas-frame--task {
     height: min(70dvh, 38rem);

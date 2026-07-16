@@ -1,9 +1,10 @@
 // RFC-198 T8 — browser evidence for the global UX consistency contract.
 //
 // This spec deliberately uses semantic anchors and geometry instead of
-// screenshots. It locks the two independent breakpoints (900px shell and
-// 720px content), representative split/table/form/dialog surfaces, the
-// workflow deep-create transaction, and explicit/system theme precedence.
+// screenshots. It locks the independent breakpoints (1080px route-owned
+// resource split, 900px shell, and 720px content), representative
+// split/table/form/dialog surfaces, the workflow deep-create transaction,
+// and explicit/system theme precedence.
 
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
@@ -362,7 +363,7 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await expectNoPageOverflow(page)
   })
 
-  test('1024 keeps the desktop shell while split stacks and table scroll stays internal', async ({
+  test('1024 keeps the desktop shell while resource split uses one full-height pane and table scroll stays internal', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1024, height: 768 })
@@ -372,11 +373,18 @@ test.describe('RFC-198 global UX browser matrix', () => {
 
     await expect(page.getByTestId('desktop-sidebar')).toBeVisible()
     await expect(page.getByTestId('mobile-topbar')).toHaveCount(0)
-    const listBox = await page.locator('.split__list').boundingBox()
-    const detailBox = await page.getByTestId('split-detail').boundingBox()
-    expect(listBox).not.toBeNull()
-    expect(detailBox).not.toBeNull()
-    expect(listBox!.y + listBox!.height).toBeLessThanOrEqual(detailBox!.y + 1)
+    await expect(page.locator('.split__list')).toBeVisible()
+    await expect(page.getByTestId('split-detail')).toBeHidden()
+
+    await page.setViewportSize({ width: 1024, height: 480 })
+    await page.goto(`${daemon.baseUrl}/agents/${FIXTURE_AGENT}`)
+    await expect(page.locator('.split__list')).toBeHidden()
+    await expect(page.getByTestId('split-detail')).toBeVisible()
+    await expect(page.getByTestId('agents-mobile-back')).toBeVisible()
+    await page.getByTestId('agent-tab-prompt').click()
+    const promptTextarea = page.locator('.md-editor__pane--edit textarea')
+    await expect(promptTextarea).toBeVisible()
+    expect((await promptTextarea.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(120)
     await expectNoPageOverflow(page)
 
     await routeTaskFixture(page)
@@ -535,7 +543,7 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await expectNoPageOverflow(page)
   })
 
-  test('721/720 changes content, form, and split stacking without changing shell mode', async ({
+  test('721/720 changes content and form while compact resource split stays route-owned', async ({
     page,
   }) => {
     await setDaemonTheme('light')
@@ -557,7 +565,7 @@ test.describe('RFC-198 global UX browser matrix', () => {
 
     await openAgents(page)
     await expect(page.locator('.split__list')).toBeVisible()
-    await expect(page.getByTestId('split-detail')).toBeVisible()
+    await expect(page.getByTestId('split-detail')).toBeHidden()
     await expectNoPageOverflow(page)
 
     await page.setViewportSize({ width: 720, height: 800 })

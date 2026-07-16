@@ -43,6 +43,7 @@ import { startDaemon, type DaemonHandle } from './harness'
 let daemon: DaemonHandle
 let repoDir: string
 let workflowId: string
+let workflowSequence = 0
 
 test.setTimeout(60_000)
 
@@ -81,9 +82,40 @@ async function seedAgent(name: string): Promise<void> {
   }
 }
 
-async function seedWorkflow(): Promise<string> {
-  await seedAgent('w2-3-agent-a')
-  await seedAgent('w2-3-agent-b')
+async function seedWorkflow(
+  definition: Record<string, unknown> = {
+    $schema_version: 3,
+    inputs: [{ kind: 'text', key: 'topic', label: 'Topic', required: true }],
+    nodes: [
+      { id: 'in_1', kind: 'input', inputKey: 'topic', position: { x: 0, y: 0 } },
+      {
+        id: 'agent_1',
+        kind: 'agent-single',
+        agentName: 'w2-3-agent-a',
+        promptTemplate: 'Describe {{topic}}.',
+        position: { x: 320, y: 0 },
+      },
+      {
+        id: 'out_1',
+        kind: 'output',
+        ports: [{ name: 'answer', bind: { nodeId: 'agent_1', portName: 'answer' } }],
+        position: { x: 640, y: 0 },
+      },
+    ],
+    edges: [
+      {
+        id: 'e1',
+        source: { nodeId: 'in_1', portName: 'topic' },
+        target: { nodeId: 'agent_1', portName: 'topic' },
+      },
+      {
+        id: 'e2',
+        source: { nodeId: 'agent_1', portName: 'answer' },
+        target: { nodeId: 'out_1', portName: 'answer' },
+      },
+    ],
+  },
+): Promise<string> {
   const res = await fetch(`${daemon.baseUrl}/api/workflows`, {
     method: 'POST',
     headers: {
@@ -91,40 +123,9 @@ async function seedWorkflow(): Promise<string> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      name: 'w2-3-editor-workflow',
+      name: `w2-3-editor-workflow-${++workflowSequence}`,
       description: 'W2-3 fixture',
-      definition: {
-        $schema_version: 3,
-        inputs: [{ kind: 'text', key: 'topic', label: 'Topic', required: true }],
-        nodes: [
-          { id: 'in_1', kind: 'input', inputKey: 'topic', position: { x: 0, y: 0 } },
-          {
-            id: 'agent_1',
-            kind: 'agent-single',
-            agentName: 'w2-3-agent-a',
-            promptTemplate: 'Describe {{topic}}.',
-            position: { x: 320, y: 0 },
-          },
-          {
-            id: 'out_1',
-            kind: 'output',
-            ports: [{ name: 'answer', bind: { nodeId: 'agent_1', portName: 'answer' } }],
-            position: { x: 640, y: 0 },
-          },
-        ],
-        edges: [
-          {
-            id: 'e1',
-            source: { nodeId: 'in_1', portName: 'topic' },
-            target: { nodeId: 'agent_1', portName: 'topic' },
-          },
-          {
-            id: 'e2',
-            source: { nodeId: 'agent_1', portName: 'answer' },
-            target: { nodeId: 'out_1', portName: 'answer' },
-          },
-        ],
-      },
+      definition,
     }),
   })
   if (!res.ok) throw new Error(`seedWorkflow: ${res.status}`)
@@ -141,6 +142,14 @@ test.beforeAll(async () => {
   execSync('git config user.name e2e', { cwd: repoDir })
   execSync('git add .', { cwd: repoDir })
   execSync('git commit -qm initial', { cwd: repoDir })
+  await seedAgent('w2-3-agent-a')
+  await seedAgent('w2-3-agent-b')
+})
+
+// RFC-199 autosaves every canvas mutation. Each interaction case therefore
+// needs its own workflow resource instead of inheriting the previous case's
+// deleted/inserted nodes through the shared daemon.
+test.beforeEach(async () => {
   workflowId = await seedWorkflow()
 })
 
@@ -148,13 +157,14 @@ test.afterAll(async () => {
   if (daemon !== undefined) await daemon.stop()
 })
 
-async function openEditor(page: Page): Promise<void> {
+async function openEditor(page: Page, expectedNodeCount = 3): Promise<void> {
   await primeAuth(page, daemon)
   await page.goto(`${daemon.baseUrl}/workflows/${workflowId}`)
-  // xyflow renders nodes under .react-flow__node. Wait until the
-  // 3 seed nodes are mounted.
-  await page.waitForSelector('.react-flow__node', { state: 'visible' })
-  await expect(page.locator('.react-flow__node')).toHaveCount(3)
+  await expect(page.locator('.workflow-canvas')).toBeVisible()
+  if (expectedNodeCount > 0) {
+    await page.waitForSelector('.react-flow__node', { state: 'visible' })
+  }
+  await expect(page.locator('.react-flow__node')).toHaveCount(expectedNodeCount)
 }
 
 // ---------------------------------------------------------------------------
@@ -495,8 +505,23 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
 
   test('RFC-199 B0 screen-to-flow placement survives a zoomed viewport', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 })
-    await openEditor(page)
-    await page.locator('.react-flow__node[data-id="agent_1"]').click()
+    // Keep the viewport centre unoccupied so this case isolates exact
+    // screen-to-flow projection. Collision/spiral displacement is locked by
+    // workflow-placement.test.ts and must not be mistaken for projection drift.
+    workflowId = await seedWorkflow({
+      $schema_version: 3,
+      inputs: [
+        { kind: 'text', key: 'left', label: 'Left', required: false },
+        { kind: 'text', key: 'right', label: 'Right', required: false },
+      ],
+      nodes: [
+        { id: 'left', kind: 'input', inputKey: 'left', position: { x: -1_000, y: 0 } },
+        { id: 'right', kind: 'input', inputKey: 'right', position: { x: 1_000, y: 0 } },
+      ],
+      edges: [],
+    })
+    await openEditor(page, 2)
+    await page.locator('.react-flow__node[data-id="left"]').click()
     await expect(page.locator('.editor-layout > .inspector')).toBeVisible()
 
     const pane = page.locator('.react-flow__pane')
