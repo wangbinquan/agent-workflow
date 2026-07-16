@@ -168,6 +168,8 @@ palette 与拖拽继续存在；本 RFC 不回退 RFC-198 已完成的 click/key
 - 打开 inspector 对应 section，并把焦点放到可修字段；
 - 无法定位的全局问题留在顶层，不伪造节点关联。
 
+Validation summary 固定在 toolbar；正常高度下详情作为不参与 grid 排版的限高 overlay 自滚动，`<=720px` 或短视口改用互斥的 full-screen/sheet surface。错误数量增加时不得继续挤压画布。检查器仍只保留“编辑 / 提示词预览”两个顶层模式，Review/Loop 等复杂配置在“编辑”内部按基础、流程、高级、技术信息渐进披露，不继续增加同级 Tab。
+
 每次 definition/name/description 编辑都令旧结果变成“上次校验，当前草稿待重新校验”。Launch 执行固定序列：
 
 `短暂冻结本次 Launch 编辑 → ensureSaved(click revision) → validate(saved version/hash) → navigate launch`
@@ -199,6 +201,7 @@ palette 与拖拽继续存在；本 RFC 不回退 RFC-198 已完成的 click/key
 8. 页面断线期间另一端提交：重连后 clean 草稿跟随，dirty 草稿进入冲突；旧绿色校验在 agent/skill/plugin inventory 变化后不能被 Launch 复用。
 9. 保存期间 owner/ACL 变化或资源变得不可见：本地草稿不消失，也不把不可区分的 403/404 冒充“已删除”；用户仍可本地导出、在有权限时另存副本或返回列表。
 10. 不拖拽创建空 git/loop/fan-out wrapper 后，可从容器内可见入口添加 child；membership、definition 绝对坐标 / renderer 相对投影和 Undo 正确。
+11. 大量 Validation issue 时问题列表独立滚动、当前 issue 可定位聚焦；normal-height overlay 或 compact/short-height modal 关闭后的 summary-only 状态下，canvas 不低于对应断点的几何下限。compact/short-height modal 打开时改验 full-screen surface、最后 issue 与焦点交接，不要求背后 canvas 可见；Output/Review/Edge 的 node/port 引用均不要求手输 raw ID。
 
 ### 6.2 质量门
 

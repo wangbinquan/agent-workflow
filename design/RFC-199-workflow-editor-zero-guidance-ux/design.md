@@ -585,11 +585,13 @@ type IssueTarget =
 
 画布节点显示 error/warning 计数 badge；颜色不是唯一线索。边问题使用加粗/虚线与 accessible label。只展示绑定当前 revision 的 issue。
 
+Validation summary 是 toolbar 中固定高度的 action，不再让详情 panel 成为 editor grid 的自增行。viewport `>720px` 且 block-size `>520px` 时，详情作为 workspace 内 anchored overlay，固定 `max-block-size`、own scroll，不参与 canvas layout；`<=720px` 或 block-size `<=520px` 时改用共享 top-level `modalSurface='validation'` full-screen/sheet。issue 数量从 1 增到 N 时 panel allocation 与 canvas bounding box 不变；compact validation modal 打开时不要求背后 canvas 可见，但关闭/summary-only 的 640×400 canvas 仍 >=240px。点击 issue 后若目标移出当前可视区，Validation surface 先 handoff 关闭并抑制 trigger restore，再完成 selection/fit/inspector mount 与字段 focus；普通 Cancel/Escape 回 toolbar summary。列表自身 scroll position 不应被 canvas fit 重置。
+
 ### 7.2 Inspector
 
 - 标题：用户命名 / agent 名；raw kind 与 node id 移到 collapsed “技术详情”，保留复制 ID。
-- `OutputEdit` 的 upstream node id / port name 裸输入改为从 definition 派生的可搜索对象/端口 Select；提交仍生成原 wire。
-- 常用字段置顶，高级端口、wrapper/runtime 配置保留现有 TabBar/section progressive disclosure。
+- `OutputEdit`/`ReviewEdit` 的 editable upstream/rerun node/port 裸输入改为从 definition 派生的可搜索对象/端口 Select。`EdgeInspector` 的 source/target node 改为业务名只读显示，raw id 收进技术信息；可编辑 target-port 使用同一 selector，但提交必须消费 B5 唯一 connection transition/`applyWorkflowTransition`，端点重连走 ConnectionDialog，B8 不新增直写旁路。wire 不变。
+- Inspector 顶层只保留“编辑 / 提示词预览”；Preview 不再使用过宽的泛称。常用字段置顶，Review/Loop 等复杂表单在编辑 panel 内按 Basics / Flow / Advanced / Technical sections 渐进披露；高级端口、wrapper/runtime 配置不继续增加同级 Tab。
 - 字段错误同时提供 inline message 与 Validation list 反向链接；全页只有一个受控 live announcement。
 - 不把尚未保存的字段错误交给 server validate 才发现：可同步判断的 required/name/kind compatibility 就地显示，server 仍为最终 oracle。
 
@@ -619,7 +621,7 @@ type IssueTarget =
 - breakpoint 通过 CSS media query 决定呈现；JS 只用于当前挂载哪一种交互 surface，沿用 AppShell 的 `useSyncExternalStore(matchMedia)` 形状，避免 hidden duplicate 进入 tab order。
 - sheet 使用共享 Dialog 的 `panelClassName` 皮肤，参考 Inbox/mobile nav；不创建私有 focus trap。
 - 抽无 chrome 的 `WorkflowPaletteContent`、`NodeInspectorContent`、`EdgeInspectorContent`；rail 与 Dialog 复用 content，避免双标题/双关闭。persistent rail 完全由 viewport mode + selection 派生，不进入 modal state：wide 可同时有 palette rail 与 inspector rail，mid 可同时有 inspector rail 与 palette modal。
-- 单一顶层 `modalSurface` 控制器取值 `none | palette | inspector | connection | starter | actions | rename | acl | save-copy | confirm`。`<=1179` 的 palette/inspector 才是互斥 workspace modal；`1180–1535` 的 palette 是 modal、inspector 仍可在 rail；`>=1536` 的 Add 直接 focus palette search，不另开 palette modal。任何 mode 同时最多一个 **top-level editor Dialog**；actions→rename/ACL/delete-confirm、conflict→save-copy 都先 handoff，不把旧 action Dialog 留在底下。
+- 单一顶层 `modalSurface` 控制器取值 `none | palette | inspector | connection | starter | validation | actions | rename | acl | save-copy | confirm`。`<=1179` 的 palette/inspector 与 compact/short-height validation 都是互斥 workspace modal；`1180–1535` 的 palette 是 modal、inspector 仍可在 rail；`>=1536` 的 Add 直接 focus palette search，不另开 palette modal。任何 mode 同时最多一个 **top-level editor Dialog**；validation issue→inspector、actions→rename/ACL/delete-confirm、conflict→save-copy 都先 handoff，不把旧 Dialog 留在底下。
 - 现有 ACL owner-transfer 合同是唯一已知需要 parent ACL Dialog 上再开确认层的业务路径，继续复用 shared Dialog stack：允许最多一层 `nestedDialogSurface = none | acl-owner-transfer`。nested 打开时 parent panel inert/不可聚焦但保留 DOM；Escape/Cancel 只关 topmost 并把焦点还给 parent 内触发按钮，再次 Escape 才关闭 ACL 回页面稳定 trigger。不得把 NodePicker/Connection/Starter/普通 confirm 任意叠成第二层；新增 nested case 必须回 RFC/公共 Dialog 合同评审。
 - transactional surface 从 palette/inspector 发起时直接做状态 handoff：关闭 outgoing 时抑制其 trigger restore，再打开 incoming 并设置 initial focus；Cancel 可回 origin surface/field，成功按结果去目标 inspector/canvas；最终关闭才回稳定 Add/node trigger。palette→inspector、More→Rename、More→ACL、More→Delete confirm、conflict→save-copy 等切换不得出现瞬时双 top-level Dialog，也不得被 outgoing restore 抢焦点。Rename/ACL Cancel 回 More trigger，成功回页面名称/ACL 状态；Delete Cancel 回 More trigger，成功后按既有列表导航。Escape 每次只关闭当前 topmost surface。
 - side modal 固定 `inline-size: min(88vw, 420px)`；phone 为 `100vw × 100dvh` 并计 safe-area。palette 初始焦点落共享 `TextInput type="search"`（补 accessible label）；inspector 初始焦点落 active tab/首字段。
@@ -627,7 +629,8 @@ type IssueTarget =
 - inspector/picker 打开时桌面 selection 保留；关闭 sheet 后焦点回对应 canvas node/toolbar trigger。
 - 200% zoom 触发 compact layout 后，若当前 focus 所在 rail 被卸载，焦点交给等价 sheet trigger，不落 body。
 - port 视觉点可保持紧凑，但 pointer hit area 尽量达到 24×24；移动端核心连接通过 Dialog 完成，满足非精密替代。
-- browser geometry 直接断言 bounding box：1536/1535、1180/1179、901/900、721/720 成对；wide/mid inspector open 时 canvas `>=520px`，390×844 canvas visible block `>=560px`，640×400 landscape `>=240px`，side modal `<=420px` 且 phone modal 等于 visual viewport。不得只断言 class 或 body 无 overflow。
+- browser geometry 直接断言 bounding box：1536/1535、1180/1179、1280×521/520、901/900、721/720 成对；wide/mid inspector open 时 canvas `>=520px`，390×844 canvas visible block `>=560px`，640×400 landscape `>=240px`，side modal `<=420px` 且 phone modal 等于 visual viewport。1280×521/520 独立锁 block-size threshold：521 为 anchored overlay，520 为 validation modal，不能只靠 640×400 同时命中宽/高 compact。不得只断言 class 或 body 无 overflow。
+- 同一几何门增加 1/N validation issue fixture：normal-height overlay 与 compact/short-height modal 都独立滚动、最后一项可达；1→N 不改变 canvas 尺寸。640×400 在 validation modal 关闭/summary-only 时量 canvas >=240px，modal 打开时改量 full-screen surface、最后 issue 与焦点交接，不要求背后 canvas 可见。
 
 状态视觉按六个正交轴映射，不能用一个 border 同时表达全部含义：
 

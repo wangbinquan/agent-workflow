@@ -177,11 +177,12 @@
 ## 10. B8 — 校验定位与检查器
 
 - [ ] T13.1 strict typed target 覆盖所有能唯一定位的现有 blocking issue；node field 用 shared semantic enum、node port 用复合身份；frontend resolver 优先 target、兼容 pointer/code、unknown/重复对象不猜。
-- [ ] T13.2 抽真实 ValidationPanel；每条 issue 是 button，可 selection + fit + inspector section + stable field focus。
+- [ ] T13.2 抽真实 ValidationPanel；summary 固定 toolbar；normal-height 详情为不参与 grid 的 anchored overlay，`<=720px`/block-size<=520 为互斥 validation sheet；每条 issue 是 button，可 handoff selection + fit + inspector section + stable field focus；1→N own-scroll 且 canvas bounding box 不变。
 - [ ] T13.3 stale target 提示重新校验；节点/边 issue 显示图标+文字+计数，颜色不是唯一信息。
 - [ ] T13.4 node 主卡显示业务名/agent 名与配置摘要；raw kind/id 移到“技术详情”，保留 copy id。
-- [ ] T13.5 `OutputEdit` upstream node/port 裸 ID 输入迁可搜索对象/端口选择，wire 不变。
+- [ ] T13.5 `OutputEdit`/`ReviewEdit` editable upstream/rerun node/port 迁可搜索选择；Edge endpoint node 只读业务名+技术 ID，target-port selector 必须走 B5 唯一 transition，端点重连走 ConnectionDialog；wire 不变、零直写旁路。
 - [ ] T13.6 canvas 加 accessible name/description；全页只保留一个受控 live announcement。
+- [ ] T13.7 Inspector 顶层保持“编辑 / 提示词预览”；Review/Loop 等复杂表单在 Edit 内按 Basics / Flow / Advanced / Technical 渐进披露，不继续堆同级 Tab。
 
 ## 11. B9 — 四档 workspace 与视觉
 
@@ -189,7 +190,7 @@
 
 - [ ] T14.1 抽无 chrome 的 Palette/NodeInspector/EdgeInspector content；rail/Dialog 复用，避免双标题/双 close。
 - [ ] T14.2 editor mode：`>=1536` palette rail + canvas + selection inspector rail；`1180–1535` canvas + selection inspector rail / palette modal；`721–1179` canvas-only + side modal；`<=720` full-screen modal。grid track 分别锁 `240 + minmax(520,1fr) + clamp(360,27vw,420)` 与 `minmax(520,1fr) + clamp(360,30vw,420)`。
-- [ ] T14.3 persistent rail 由 mode+selection 派生；单一 top-level `modalSurface = none|palette|inspector|connection|starter|actions|rename|acl|save-copy|confirm`。compact palette→inspector、More→Rename/ACL/Delete、conflict→save-copy 直接 handoff，无双 top-level Dialog/抢焦点。
+- [ ] T14.3 persistent rail 由 mode+selection 派生；单一 top-level `modalSurface = none|palette|inspector|connection|starter|validation|actions|rename|acl|save-copy|confirm`。compact validation issue→inspector、palette→inspector、More→Rename/ACL/Delete、conflict→save-copy 直接 handoff，无双 top-level Dialog/抢焦点。
 - [ ] T14.4 共享 Dialog + feature `panelClassName`，side `min(88vw,420px)`、phone `100vw×100dvh` + safe area；只为现有 ACL owner-transfer 允许一层 nested Dialog，parent inert，Esc/Cancel/成功逐层恢复焦点。锁其他 surface 不叠层、200% zoom 与 resize fallback。
 - [ ] T14.5 supersede editor vertical-stack selector/test；task/review/workgroup 等 RFC-198 specialized workspace 不变。
 
@@ -204,7 +205,7 @@
 
 - [ ] 纯键盘/触摸、不用 drag/right-click/help：空白 → 添加两节点 → 连接 → 修校验 → Launch；另锁空 git/loop/fanout wrapper 内部 Add 与 Undo。
 - [ ] edge insert E2E 锁合法普通 edge 的 target/mirror/Undo 守恒；boundary/clarify/control/inner/cross-wrapper/fanout inner-chain 不显示入口或 fail closed，Cancel 零 mutation。
-- [ ] 1536/1535、1280、1180/1179、901/900、721/720、390×844、640×400 几何门直接量 bounding box：wide/mid inspector open canvas >=520px、390 block >=560px、landscape block >=240px、side <=420px；无 body overflow、最后字段可达。
+- [ ] 1536/1535、1280、1180/1179、1280×521/520、901/900、721/720、390×844、640×400 几何门直接量 bounding box：wide/mid inspector open canvas >=520px、390 block >=560px、landscape summary-only canvas >=240px、side <=420px；无 body overflow、最后字段可达；Validation 1/N own-scroll 且 canvas 尺寸不变，1280×521/520 独立锁 short-height overlay→modal，compact/short modal 打开时改量 full-screen surface/最后 issue/focus handoff。
 - [ ] top-level modal 单实例、ACL owner-transfer 唯一 nested layer、persistent rail 共存规则、初始焦点、Tab trap、handoff、逐层 Escape/resize restore、selection/draft 不丢；More→Rename/ACL/Delete Cancel/成功回交有 oracle。
 - [ ] axe 场景实跑 1536/1280 inspector、1179 palette modal、390 NodePicker/Inspector/Connection、More→Rename/ACL/Delete 与 ACL→owner-transfer（至少一组 light/dark）；单层查唯一 top-level Dialog，nested 按 topmost scope 查 name/heading/close、parent inert/无重复 focus。renderer exclusion 另有 node/port/action component keyboard gate。
 - [ ] task-detail 与 dynamic-workflow preview rendered/visual oracle 证明 editor surface CSS 未泄漏。
