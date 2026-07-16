@@ -21,6 +21,7 @@
 // deriveFrontier's in-flight set and freeze the frontier. Violation throws
 // (pinned by node-run-mint.test.ts).
 
+import { randomBytes } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { NodeRunStatus, RerunCause } from '@agent-workflow/shared'
@@ -104,6 +105,15 @@ export interface MintNodeRunOverrides {
   /** RFC-189 — leader_worker workgroup round ordinal（1-based）. Workgroup
    *  turn mints stamp it; everything else leaves NULL. */
   wgRound?: number | null
+  /**
+   * RFC-200 (T1b) — per-run envelope nonce. Normally left unset, so the factory
+   * generates a fresh unpredictable one (default). The runner passes an explicit
+   * value on the inline-followup path so the follow-up dispatch REUSES the
+   * anchor round's nonce (the resumed opencode session already told the agent
+   * that nonce; a fresh one would make the parser reject the agent's output) —
+   * mirrors how the runner inherits the memory snapshot from the first attempt.
+   */
+  envelopeNonce?: string
 }
 
 export interface MintNodeRunArgs {
@@ -141,6 +151,17 @@ export interface MintNodeRunArgs {
  *
  * Resolution order per field: `overrides` ≻ `inheritFrom` ≻ default.
  */
+/**
+ * RFC-200 — a fresh, unpredictable per-run envelope nonce (16 hex chars = 64
+ * bits of `crypto` randomness). Unpredictable is load-bearing: the whole point
+ * is that untrusted upstream content — authored BEFORE this run existed — cannot
+ * guess it to forge a `<workflow-output nonce="…">` the parser would accept. A
+ * time-ordered id (ULID) would be guessable, so this must stay `randomBytes`.
+ */
+export function generateEnvelopeNonce(): string {
+  return randomBytes(8).toString('hex')
+}
+
 export function buildMintNodeRunValues(
   args: MintNodeRunArgs & { id?: string },
 ): typeof nodeRuns.$inferInsert {
@@ -191,6 +212,9 @@ export function buildMintNodeRunValues(
     finishedAt: o.finishedAt !== undefined ? o.finishedAt : args.status === 'done' ? now : null,
     agentOverrideName: o.agentOverrideName ?? null,
     wgRound: o.wgRound ?? null,
+    // RFC-200 (T1b): generate a fresh per-run nonce by default; a caller may
+    // override it (inline-followup reuses the anchor round's nonce).
+    envelopeNonce: o.envelopeNonce ?? generateEnvelopeNonce(),
   }
 }
 
