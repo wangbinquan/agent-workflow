@@ -15152,6 +15152,29 @@ button.status-chip {
     flex: 1 1 auto;
   }
 
+  /* Keep the subject selector and search reachable as two full-width rows.
+     A single inline row exceeds the content width under WebKitGTK's font
+     metrics and leaves the search input clipped beyond the mobile viewport. */
+  .tasks-toolbar {
+    flex: 1 1 100%;
+    min-width: 0;
+    margin-left: 0;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tasks-toolbar > .segmented {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .tasks-toolbar__search {
+    max-width: none;
+  }
+
   .btn,
   .nav-item,
   .sidebar__link,

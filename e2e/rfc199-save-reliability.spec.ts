@@ -200,6 +200,35 @@ test.describe('RFC-199 G1 — weak-network save reliability', () => {
     const committedName = 'rfc199-response-loss-committed'
     const queuedName = 'rfc199-response-loss-queued'
     const workflowId = await seedWorkflow(initialName)
+    let droppedEchoMutationId: string | null = null
+
+    // This case specifically covers HTTP reconciliation after a lost response.
+    // Drop the matching own WS echo so it cannot legitimately settle the exact
+    // attempt before the controller exercises that branch.
+    await page.routeWebSocket(/\/ws\/workflows(?:\?.*)?$/, (browserSocket) => {
+      const serverSocket = browserSocket.connectToServer()
+      serverSocket.onMessage((message) => {
+        try {
+          const frame = JSON.parse(
+            typeof message === 'string' ? message : message.toString('utf8'),
+          ) as {
+            type?: string
+            workflowId?: string
+            clientMutationId?: string
+          }
+          if (
+            frame.type === 'workflow.updated' &&
+            frame.workflowId === workflowId &&
+            frame.clientMutationId === droppedEchoMutationId
+          ) {
+            return
+          }
+        } catch {
+          // Non-JSON frames still pass through unchanged.
+        }
+        browserSocket.send(message)
+      })
+    })
     await openEditor(page, workflowId, initialName)
 
     const endpoint = `${daemon.baseUrl}/api/workflows/${encodeURIComponent(workflowId)}`
@@ -216,13 +245,22 @@ test.describe('RFC-199 G1 — weak-network save reliability', () => {
         savedNames.push(request.snapshot.name)
         if (dropFirstResponse) {
           dropFirstResponse = false
-          // route.fetch reaches the real daemon and commits the snapshot; aborting
-          // only the browser-facing response models a response lost in transit.
-          const response = await route.fetch()
-          expect(response.ok()).toBe(true)
+          droppedEchoMutationId = request.clientMutationId
+          // Commit over an independent Node-side connection, then abort the
+          // browser request. Reusing route.fetch() lets WebKit race delivery of
+          // that successful response against route.abort().
+          const response = await fetch(endpoint, {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${daemon.token}`,
+              'Content-Type': 'application/json',
+            },
+            body: route.request().postData() ?? undefined,
+          })
+          expect(response.ok).toBe(true)
           failReconcileReads = true
-          firstCommitReachedServer.resolve()
           await route.abort('failed')
+          firstCommitReachedServer.resolve()
           return
         }
       } else if (method === 'GET' && failReconcileReads) {
