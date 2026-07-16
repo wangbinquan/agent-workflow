@@ -851,7 +851,7 @@ function composeMemberPrompt(
         '## Message turn',
         '',
         'You were woken because teammates (or a human) messaged you — respond or',
-        'record what matters. Do NOT claim or start任务 work in this turn.',
+        'record what matters. Do NOT claim or start task work in this turn.',
       ].join('\n'),
     )
   }

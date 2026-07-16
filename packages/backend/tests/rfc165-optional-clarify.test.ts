@@ -237,6 +237,24 @@ describe('RFC-165 O3 — renderUserPrompt dual-envelope protocol', () => {
     expect(p).toContain(buildOptionalClarifyPreamble().trim().split('\n')[1]!.slice(0, 40))
   })
 
+  test('P0 regression: Option A carries the REAL clarify format + rules, not literal placeholders', () => {
+    const p = renderUserPrompt({
+      ...BASE,
+      clarifyChannel: { kind: 'self', directive: 'optional', injectStopNotice: false },
+    } as never)
+    // Option A tells the agent the "<workflow-clarify> ... format below", so the
+    // actual CLARIFY_FORMAT_EXAMPLE (JSON shape) + CLARIFY_STRUCTURAL_RULES MUST
+    // be present. Before the fix, buildOptionalDualProtocolBlock emitted the
+    // literal tokens `FORMAT_PLACEHOLDER` / `RULES_PLACEHOLDER` (commit d1d42034
+    // wrote bare placeholders instead of `${...}` interpolation), so an optional
+    // clarify node's first round got no format → clarify-questions-malformed →
+    // burned its whole retry budget → node failed.
+    expect(p).toContain('"questions": [')
+    expect(p).toContain('at most 5 questions')
+    expect(p).not.toContain('FORMAT_PLACEHOLDER')
+    expect(p).not.toContain('RULES_PLACEHOLDER')
+  })
+
   test('P1 fix: optional dual block carries NO contradictory mandatory commands', () => {
     const p = renderUserPrompt({
       ...BASE,

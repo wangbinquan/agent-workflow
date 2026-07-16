@@ -17,7 +17,11 @@ import { ChipsInput } from '@/components/ChipsInput'
  * Exported for unit tests.
  */
 export function extractMissingRefs(template: string, inputPorts: string[]): string[] {
-  const re = /\{\{(\w+)\}\}/g
+  // Whitespace-tolerant to match the runtime renderer (shared prompt.ts
+  // TEMPLATE_RE) and the backend validator: `{{ port }}` is the same ref as
+  // `{{port}}`, so the editor's missing-ref hint must not diverge from what
+  // actually substitutes at run time.
+  const re = /\{\{\s*(\w+)\s*\}\}/g
   const refs = new Set<string>()
   let m: RegExpExecArray | null
   while ((m = re.exec(template)) !== null) {

@@ -31,4 +31,17 @@ describe('extractMissingRefs', () => {
     const out = extractMissingRefs('{{a}} and {{a}} again', [])
     expect(out).toEqual(['a'])
   })
+
+  // Regression: `{{ port }}` with surrounding whitespace is accepted by the
+  // launch-time validator AND (after the renderer fix) substitutes at runtime,
+  // so the editor's missing-ref hint must treat it as a ref too — otherwise a
+  // real missing ref written as `{{ port }}` shows no warning in the canvas.
+  test('detects refs with surrounding whitespace: {{ a }} / {{  b  }}', () => {
+    const out = extractMissingRefs('Implement {{ a }} given {{  b  }}', [])
+    expect(new Set(out)).toEqual(new Set(['a', 'b']))
+  })
+
+  test('spaced builtin {{ __repo_path__ }} is still treated as always-available', () => {
+    expect(extractMissingRefs('Repo at {{ __repo_path__ }}', [])).toEqual([])
+  })
 })

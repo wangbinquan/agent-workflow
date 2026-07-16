@@ -132,6 +132,24 @@ describe('renderUserPrompt — template substitution', () => {
     expect(out).toContain('+hello')
   })
 
+  // Regression: `{{ port }}` with surrounding whitespace is a common authoring
+  // habit AND is accepted by the launch-time validator (workflow.validator.ts
+  // TEMPLATE_RE), so it MUST substitute here too. Before the fix the renderer's
+  // regex was `/\{\{(\w+)\}\}/g` (no `\s*`), so a launch-valid `{{ git_diff }}`
+  // rendered a LITERAL placeholder to the agent. Locks renderer↔validator
+  // ref-regex alignment.
+  test('resolves refs with surrounding whitespace: {{ port }} / {{  __repo_path__  }}', () => {
+    const out = renderUserPrompt({
+      promptTemplate: 'Audit: {{ git_diff }} at {{  __repo_path__  }}',
+      inputs: { git_diff: 'DIFFDATA' },
+      meta: META,
+      agentOutputs: ['findings'],
+    })
+    expect(out).toContain(`Audit: DIFFDATA at ${META.repoPath}`)
+    expect(out).not.toContain('{{ git_diff }}')
+    expect(out).not.toContain('__repo_path__')
+  })
+
   test('built-in variables replaced', () => {
     const out = renderUserPrompt({
       promptTemplate: 'repo={{__repo_path__}} base={{__base_branch__}} task={{__task_id__}}',

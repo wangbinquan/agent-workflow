@@ -334,7 +334,12 @@ export interface RenderPromptInput {
   priorOutputUpdate?: PriorOutputUpdateContext
 }
 
-const TEMPLATE_RE = /\{\{(\w+)\}\}/g
+// Whitespace-tolerant so `{{ port }}` (a very common authoring habit) resolves
+// the same as `{{port}}`. Kept in lockstep with the validator's ref regex
+// (workflow.validator.ts TEMPLATE_RE) and the frontend ref detector
+// (promptRefs.tsx): a spaced ref that the validator accepts MUST also substitute
+// here, or a launch-valid template renders a literal `{{ port }}` to the agent.
+const TEMPLATE_RE = /\{\{\s*(\w+)\s*\}\}/g
 
 /**
  * RFC-103 T5 (04-WFM-06/07): single source of truth for the set of built-in
@@ -862,10 +867,11 @@ export function buildOptionalDualProtocolBlock(
   const optionA =
     `\n\n---\n` +
     '**Option A — ask the user (reply with ONE `<workflow-clarify>` block and nothing else).**\n\n' +
-    `FORMAT_PLACEHOLDER\n\n` +
+    CLARIFY_FORMAT_EXAMPLE +
+    '\n\n' +
     'Rules if you choose Option A — violation is treated as a malformed reply:\n' +
     '- The reply must contain exactly one <workflow-clarify> block and NO <workflow-output> — you finalize in a LATER round, after the user answers.\n' +
-    `RULES_PLACEHOLDER`
+    CLARIFY_STRUCTURAL_RULES
 
   const MANDATORY_HEAD =
     'You MUST end your reply with a `<workflow-output>` block listing these ports:'
