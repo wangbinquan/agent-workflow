@@ -299,7 +299,7 @@
 
 - **启动失败的常见后端错误（clone 失败/ref 不存在/上传超限等）全部缺 i18n 映射，向导最后一步直接透传英文 git stderr**
   位置：`packages/frontend/src/i18n/zh-CN.ts:6114`｜类别：error-message
-  影响：中文用户填完四步点「启动」，等待 clone（提示「正在克隆…」可能持续数分钟）后，在按钮旁看到类似「请求失败: git clone failed for https://github.com/x/y: fatal: Authentication failed for ...」或「请求失败: ref 'dev' not found in ...」的英文技术句；既不知道发生了什么，也不知道下一步该去哪改（第 2 步的 URL/分支输入框），只能自行猜测。
+  影响：中文用户填完四步点「启动」，等待 clone（提示「正在克隆…」可能持续数分钟）后，在按钮旁看到类似「请求失败: git clone failed for <仓库URL>: fatal: Authentication failed for ...」或「请求失败: ref 'dev' not found in ...」的英文技术句；既不知道发生了什么，也不知道下一步该去哪改（第 2 步的 URL/分支输入框），只能自行猜测。
   建议：为 repo-clone-failed / repo-ref-not-found / repo-url-invalid / upload-_（5 个）/ agent-not-found / scheduled-task-_ 等启动链路错误码补齐 zh-CN 与 en-US errors.\* 词条，文案写明「发生了什么 + 检查哪里 / 去哪一步改」；repo 类错误可在向导里附带「返回执行空间」快捷按钮（复用 version-mismatch banner 的 action 模式），git stderr 收进可展开的详情区而不是主文案。
 
 - **必填的 git 类型工作流输入可以以空值通过校验并成功启动任务（前端只查字符串非空，后端完全不校验必填输入）**（另由 任务发起前置校验 维度独立发现）
