@@ -25,10 +25,7 @@ import { actorOf, type Actor } from '@/auth/actor'
 import { resolveOpencodeCmd } from '@/util/opencode'
 import { clarifyRounds, nodeRuns, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
-import {
-  broadcastSelfClarifyAnsweredForRound,
-  countPendingClarifications,
-} from '@/services/clarify'
+import { broadcastSelfClarifyAnsweredForRound } from '@/services/clarify'
 import { broadcastCrossClarifyAnsweredForRound } from '@/services/crossClarify'
 import { sealRoundQuestions } from '@/services/clarifySeal'
 import { autoDispatchClarifyRound } from '@/services/clarifyAutoDispatch'
@@ -41,7 +38,13 @@ import { canViewTask, requireTaskMember } from '@/services/taskCollab'
 import { resumeTask } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { Paths } from '@/util/paths'
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  DomainError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
@@ -163,11 +166,19 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
 
   app.get('/api/clarify/pending-count', async (c) => {
     // RFC-099: badge counts only rounds on tasks visible to the actor.
+    // RFC-202 T6: both branches now count via the SAME clarify_rounds path —
+    // the old admin branch queried the legacy clarify_sessions table, which
+    // (a) missed every cross-agent round (audit P2: admin badge undercounted)
+    // and (b) kept counting rounds of terminal tasks forever. The uncapped
+    // limit keeps the count exact (never truncated by the list page size).
     const actor = actorOf(c)
+    const pending = await listClarifyRoundSummaries(deps.db, {
+      status: 'awaiting_human',
+      limit: Number.MAX_SAFE_INTEGER,
+    })
     if (actor.permissions.has('tasks:read:all')) {
-      return c.json({ count: await countPendingClarifications(deps.db) })
+      return c.json({ count: pending.length })
     }
-    const pending = await listClarifyRoundSummaries(deps.db, { status: 'awaiting_human' })
     const visible = await filterRoundsByTaskVisibility(deps, actor, pending)
     return c.json({ count: visible.length })
   })
@@ -379,20 +390,31 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
         ...(opencodeCmdAuto ? { opencodeCmd: opencodeCmdAuto } : {}),
         ...resolveLaunchRuntimeConfig(deps.configPath),
       }
-      void resumeTask(deps.db, auto.taskId, resumeDepsAuto).catch((err) => {
+      // RFC-202 T8: real resume failures ride in the response (the answers
+      // ARE sealed — 2xx stays true); the UI shows a warning instead of the
+      // old silent parked-forever outcome. task-not-resumable stays a benign
+      // deferral (live loop picks the reruns up).
+      let resumeFailure: { ok: false; code: string; message: string } | undefined
+      try {
+        await resumeTask(deps.db, auto.taskId, resumeDepsAuto)
+      } catch (err) {
         if (err instanceof ConflictError && err.code === 'task-not-resumable') {
           log.info('clarify autodispatch resume deferred — live loop picks up the pending reruns', {
             taskId: auto.taskId,
           })
-          return
+        } else {
+          const message = err instanceof Error ? err.message : String(err)
+          log.warn('clarify autodispatch resume threw', { taskId: auto.taskId, error: message })
+          resumeFailure = {
+            ok: false,
+            code: err instanceof DomainError ? err.code : 'resume-failed',
+            message,
+          }
         }
-        log.warn('clarify autodispatch resume threw', {
-          taskId: auto.taskId,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      })
+      }
       return c.json({
         ok: true,
+        ...(resumeFailure ? { resume: resumeFailure } : {}),
         kind: 'autodispatch' as const,
         roundKind: auto.kind,
         sealedQuestionIds: auto.sealedQuestionIds,

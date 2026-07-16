@@ -33,7 +33,7 @@ import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { type DbTxSync, dbTxSync } from '@/db/txSync'
-import { resourceGrants, tasks, workflows } from '@/db/schema'
+import { resourceGrants, scheduledTasks, tasks, workflows } from '@/db/schema'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   WORKFLOWS_CHANNEL,
@@ -281,6 +281,46 @@ export async function deleteWorkflow(
       )
     }
 
+    // RFC-202 T5: refuse while any scheduled task still launches this
+    // workflow — symmetric with deleteAgent's 'agent-scheduled-referenced'
+    // guard. Without it the orphaned enabled schedule fires workflow-not-found
+    // silently on every tick (no task row, no visible trace) until the
+    // consecutive-failure auto-disable kicks in ~10 fires later (audit P1
+    // F-12). Same transaction as the DELETE, so a schedule insert that wins
+    // first is always observed.
+    const schedRows = tx
+      .select({
+        id: scheduledTasks.id,
+        name: scheduledTasks.name,
+        launchKind: scheduledTasks.launchKind,
+        launchPayload: scheduledTasks.launchPayload,
+        ownerUserId: scheduledTasks.ownerUserId,
+      })
+      .from(scheduledTasks)
+      .all()
+    const referencing = scheduledRowsReferencingWorkflow(schedRows, id)
+    if (referencing.length > 0) {
+      // Schedules are member-private (owner + tasks:read:all admins). Details
+      // disclose names only for schedules the principal may see; the rest is
+      // an aggregate count — same 404-shape hiding discipline the routes use
+      // (Codex design-gate P1: do not leak private schedule names/existence).
+      const canSeeAll =
+        principal.kind === 'system' || principal.actor.permissions.has('tasks:read:all' as never)
+      const visible = referencing.filter(
+        (r) =>
+          canSeeAll || (principal.kind === 'actor' && r.ownerUserId === principal.actor.user.id),
+      )
+      throw new ConflictError(
+        'workflow-scheduled-referenced',
+        `workflow '${id}' is the launch target of ${referencing.length} scheduled task(s); delete or repoint them first`,
+        {
+          scheduledCount: referencing.length,
+          visibleScheduled: visible.map((r) => ({ id: r.id, name: r.name })),
+          hiddenCount: referencing.length - visible.length,
+        },
+      )
+    }
+
     // The row cannot be re-read after DELETE. Capture its complete non-admin
     // visibility audience in this same transaction, then carry it beside (not
     // inside) the WS frame after commit. This closes the cold-cache delivery
@@ -319,6 +359,29 @@ export async function deleteWorkflow(
     },
     deleted.audience,
   )
+}
+
+/**
+ * RFC-202 T5 — pure core of the scheduled-task reference check (mirrors
+ * `scheduledRowsReferencingAgent` in agent.ts). launchKind='workflow' rows
+ * carry the target inside the JSON launch payload (`workflowId`); malformed
+ * payloads are skipped (degraded rows are repaired/deleted via their own
+ * flow).
+ */
+export function scheduledRowsReferencingWorkflow<
+  R extends { id: string; launchKind: string; launchPayload: string },
+>(rows: ReadonlyArray<R>, workflowId: string): R[] {
+  const out: R[] = []
+  for (const row of rows) {
+    if (row.launchKind !== 'workflow') continue
+    try {
+      const p = JSON.parse(row.launchPayload) as { workflowId?: unknown }
+      if (p.workflowId === workflowId) out.push(row)
+    } catch {
+      /* skip degraded rows */
+    }
+  }
+  return out
 }
 
 /**

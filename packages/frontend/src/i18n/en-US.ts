@@ -4,6 +4,10 @@
 import type { Resources } from './zh-CN'
 
 export const enUS: Resources = {
+  tabBar: {
+    scrollStart: 'Show more sections before',
+    scrollEnd: 'Show more sections after',
+  },
   nav: {
     agents: 'Agents',
     skills: 'Skills',
@@ -66,6 +70,7 @@ export const enUS: Resources = {
     memory: 'Memory',
     memoryHint: 'Distilled long-term context from past clarify, review, and feedback',
     memoryBadge: '{{count}} awaiting review',
+    memoryPendingAction: 'Open {{count}} pending memory item(s)',
   },
   home: {
     greet: {
@@ -313,6 +318,10 @@ export const enUS: Resources = {
     tabOidc: 'Identity provider',
     tabToken: 'Token sign-in',
     oidcHint: 'Sign in with an external identity provider.',
+    oidcDiscoveryLoading: 'Checking available identity providers…',
+    oidcDiscoveryError:
+      'Identity providers could not be loaded. Password and token sign-in still work.',
+    oidcDiscoveryEmpty: 'No identity providers are configured. Use password or token sign-in.',
     tokenHint:
       'Use the 64-char hex token printed when the daemon started. Admin / break-glass only.',
   },
@@ -508,6 +517,24 @@ export const enUS: Resources = {
   },
   settings: {
     title: 'Settings',
+    sectionNavLabel: 'Settings sections',
+    sectionGroups: {
+      execution: 'Execution environment',
+      reliability: 'Reliability',
+      access: 'Connections & access',
+      interface: 'Interface',
+    },
+    sectionDescriptions: {
+      runtime: 'Register command runtimes and choose the default.',
+      systemAgents: 'Choose runtimes and output rules for built-in automation.',
+      limits: 'Set task, token, timeout, and concurrency guardrails.',
+      recovery: 'Create backups and configure recovery behavior.',
+      gc: 'Control retention and automatic cleanup.',
+      network: 'Set the daemon bind address and listening port.',
+      appearance: 'Choose the theme and interface language.',
+      rendering: 'Configure external diagram rendering.',
+      authentication: 'Manage OIDC sign-in providers.',
+    },
     tabRuntime: 'Runtime',
     tabSystemAgents: 'System agents',
     tabLimits: 'Limits',
@@ -522,6 +549,18 @@ export const enUS: Resources = {
     saving: 'Saving…',
     saved: 'Saved',
     save: 'Save',
+    noChanges: 'There are no changes to save',
+    invalidChanges: 'Fix the invalid values in this section before saving',
+    outcomeUnknown: 'The previous save is still being reconciled with the server',
+    outcomeUnknownBody:
+      'The previous save may or may not have reached the server. Recheck reads the current value without blindly repeating the write.',
+    outcomeUnknownReconcile: 'Recheck server',
+    writeBlockedBody:
+      'The server may still finish the previous write. To prevent a late result from overwriting another save, settings writes are stopped for this connection. Restart the daemon, then reload the app.',
+    staleTitle: 'Server settings changed',
+    staleBody:
+      'Your local draft is preserved. Save to update only this section’s owned fields, or discard the draft to use the server values.',
+    staleDiscard: 'Use server values',
     backupTitle: 'Export backup',
     backupHint:
       'Bundles db.sqlite + config.json + skills/ + workflows YAML into a tarball under ~/.agent-workflow/backups/. Excludes worktrees, runs, logs, token.',
@@ -698,6 +737,8 @@ export const enUS: Resources = {
     saving: 'Saving…',
     creating: 'Creating…',
     unknownError: 'Unknown error',
+    resumeFailedAfterSubmit:
+      'Submitted, but resuming the task failed ({{code}}). Use Resume on the task page, or run Diagnose.',
     yes: 'yes',
     no: 'no',
     details: 'Details',
@@ -760,6 +801,7 @@ export const enUS: Resources = {
     },
     unsavedTitle: 'Unsaved changes',
     unsavedBody: 'You have unsaved changes. Leaving this page will discard them.',
+    unsavedBusyBody: 'A save is still in progress. Wait for it to finish before leaving this page.',
     unsavedStay: 'Stay on page',
     unsavedDiscard: 'Discard changes',
     emptyPaneTitle: 'Nothing selected',
@@ -778,6 +820,9 @@ export const enUS: Resources = {
     test: 'Test',
     edit: 'Edit',
     delete: 'Delete',
+    deleteTitle: 'Delete runtime "{{name}}"?',
+    deleteDescription:
+      'This cannot be undone. Deletion is blocked while an agent or the default configuration still references this runtime.',
     addTitle: 'Add runtime',
     editTitle: 'Edit runtime',
     testBinary: 'Test binary',
@@ -856,12 +901,13 @@ export const enUS: Resources = {
     colDescription: 'Description',
     colPath: 'Path',
     newTitle: 'New skill',
-    tabManaged: 'Managed',
+    tabManaged: 'Manual creation',
     tabExternal: 'External',
-    detailTabOverview: 'Overview',
-    detailTabContent: 'Content',
+    detailTabEdit: 'Edit',
     detailTabFiles: 'Files',
     detailTabHistory: 'History',
+    technicalInformation: 'Technical information',
+    managedPath: 'Managed path',
     fieldName: 'Name',
     fieldNameHint: 'kebab-case; matches /skills/:name URL.',
     fieldDescription: 'Description',
@@ -902,7 +948,7 @@ export const enUS: Resources = {
     sourceSkippedDetails: 'View details',
     sourceFromPill: 'from {{label}}',
     sourceReadonlyHint: 'This skill is managed by a folder; edit files in the source directory.',
-    tabZip: 'ZIP import',
+    tabZip: 'Import ZIP',
     importTitle: 'Import skills',
     importSubtitle:
       'Import one or more managed skills at a time. Structure and name conflicts are checked before anything is written.',
@@ -973,14 +1019,46 @@ export const enUS: Resources = {
     fileTargetUnavailable: 'That file is no longer available. Refresh the list and try again.',
     fileErrPathRequired: 'path required',
     fileErrRelativeOnly: 'relative paths only; no ".."',
-    fileErrMainFileProtected: 'SKILL.md is edited in the Content tab, not the file tree',
+    fileErrMainFileProtected: 'SKILL.md is edited in the Edit tab, not the file tree',
+    fileErrAlreadyExists: 'That path already exists or is already staged.',
     fileTreeHeader: 'Files',
     fileTreeEmpty: 'No files yet.',
     fileNewPathPlaceholder: 'path/to/new-file.md',
     fileAddButton: '+ Add',
+    fileStageAddButton: 'Add to changes',
     fileEditorEmpty: 'Select a file on the left, or add a new one.',
     fileLoadingNamed: 'Loading {{name}}…',
     fileDeleteButton: 'Delete file',
+    fileStageDeleteButton: 'Mark for deletion',
+    filePendingCreate: 'new · pending',
+    filePendingUpdate: 'edited · pending',
+    filePendingDelete: 'delete · pending',
+    fileUndoPending: 'Undo pending change',
+    fileDeleteStagedTitle: '“{{path}}” is marked for deletion',
+    fileDeleteStagedDescription: 'The file is not deleted until you choose Save all changes.',
+    fileStaleWarning: 'The server file changed. Review this draft before saving again.',
+    saveAllChanges: 'Save all changes',
+    saveNothingToSave: 'There are no unsaved changes.',
+    saveStageNewPathFirst: 'Add the typed file path to changes, or clear it first.',
+    saveBusy: 'Wait for the current Skill operation to finish.',
+    saveTokenMissing: 'Reload the Skill to obtain a safe save token.',
+    saveOutcomeUnknown: 'Save result unknown',
+    saveOutcomeUnknownDescription:
+      'Do not retry yet. Recheck a stable server snapshot to learn whether the last operation was applied.',
+    saveOutcomeStillUnknown:
+      'The Skill kept changing while it was checked. The save result is still unknown.',
+    recheckOutcome: 'Recheck server state',
+    recheckingOutcome: 'Rechecking…',
+    saveRemoteDifferent:
+      'The stable server state differs from the submitted change. Your local draft was kept.',
+    saveStaleWarning: 'The server changed since this draft began. Review before saving.',
+    saveAllComplete: '{{count}} change(s) saved.',
+    savePartial: '{{saved}} saved · {{remaining}} not saved.',
+    discardAllChanges: 'Discard all changes',
+    historyBlockedTitle: 'Version history needs a stable Skill',
+    historyBlockedDirty: 'Save or discard all pending changes before viewing versions.',
+    historyBlockedBusy: 'Wait for the current Skill operation to finish.',
+    historyBlockedOutcomeUnknown: 'Recheck the unknown save result before viewing versions.',
     zipParseFailedFallback: 'failed to parse zip',
     zipCommitFailedFallback: 'commit failed ({{status}})',
     zipErrorWholeArchiveLabel: '(zip)',
@@ -1104,6 +1182,13 @@ export const enUS: Resources = {
       'For OAuth-protected remote MCPs, run `opencode mcp auth <name>` on the host machine once. Tokens persist under ~/.opencode/auth/ and every opencode subprocess shares them.',
     oauthModeAuto: 'auto',
     oauthModeDisabled: 'false',
+    errors: {
+      nameRequired: 'Name is required.',
+      commandRequired: 'Command must contain at least one executable entry.',
+      urlRequired: 'URL is required.',
+      urlScheme: 'URL must start with http:// or https://.',
+      timeoutInvalid: 'Timeout must be a positive whole number of milliseconds.',
+    },
     // RFC-030 — probe columns + expand block.
     colStatus: 'Status',
     colLatency: 'Latency',
@@ -1113,6 +1198,22 @@ export const enUS: Resources = {
       latencySec: '{{s}} s',
       btnRun: 'Re-probe',
       btnRunning: 'Probing…',
+      saveAndRun: 'Save and probe',
+      useSaved: 'Use saved version',
+      basisSavedTitle: 'Based on saved configuration',
+      basisSavedBody: 'This probe will use the exact saved revision',
+      basisDirtyTitle: 'Current changes are not saved',
+      basisDirtyBody:
+        'A direct probe still uses the saved version. Save the current changes first to probe them.',
+      basisUnavailable:
+        'The saved operation revision is unavailable. Reload this MCP before probing.',
+      resultStale:
+        'The MCP changed before this probe settled. The old result was discarded and current state is being refreshed.',
+      savedResultExpired: 'The saved probe result is out of date.',
+      savedResultExpiredHint:
+        'This MCP was saved after that probe. Run a new probe before relying on its inventory.',
+      draftChangedDuringSave:
+        'The form changed again while saving. No probe was sent; review the changes and retry.',
       viewFull: 'View full inventory',
       expandRow: 'Expand row',
       collapseRow: 'Collapse row',
@@ -1128,6 +1229,8 @@ export const enUS: Resources = {
       },
       lastProbed: 'Last probed {{at}}',
       neverProbed: 'Not probed yet.',
+      neverProbedHint:
+        'Run a probe to see the tools, resources, and prompt templates this MCP actually exposes.',
       section: {
         tools: 'Tools',
         resources: 'Resources',
@@ -1201,9 +1304,32 @@ export const enUS: Resources = {
     saving: 'Saving…',
     cancelEdit: 'Cancel edit',
     checkUpdateButton: 'Check for update',
+    saveAndCheckButton: 'Save and check',
     checking: 'Checking…',
     upgradeButton: 'Upgrade',
+    reinstallBaselineButton: 'Reinstall baseline',
     upgrading: 'Upgrading…',
+    executionBasisDirtyTitle: 'Draft differs from the saved plugin',
+    executionBasisDirtyBody: 'Check runs only after this draft is saved. Current saved revision:',
+    executionBasisSavedTitle: 'Saved plugin revision',
+    executionBasisSavedBody: 'Check and Upgrade will use exactly this saved revision:',
+    externalManagedTitle: 'Managed by an external path',
+    externalManagedBody:
+      'This file source can change outside Agent Workflow, so atomic Check and Upgrade are unavailable.',
+    notCheckedTitle: 'No update check yet',
+    notCheckedBody:
+      'Check the exact saved plugin revision to see whether a newer source is available.',
+    updateReadyTitle: 'Update ready',
+    updateReadyBody: 'Version {{version}} is available for this exact saved plugin.',
+    noUpdateAvailable: 'This saved plugin is up to date.',
+    identityUnknownTitle: 'Update baseline is unknown',
+    identityUnknownBody:
+      'This legacy install has no immutable source identity. Reinstall once to establish a safe baseline.',
+    draftChangedDuringSave:
+      'The draft changed while it was saving. Review the newer edits, then run Save and check again.',
+    staleOperationResult:
+      'This result belongs to an older saved revision and was not applied. Reloaded data will be used.',
+    upgradeSuccess: 'Upgrade published a new immutable plugin generation.',
     errorOptionsJson: 'Options must be a valid JSON object.',
     errors: {
       nameInvalid: 'name must match [a-z0-9][a-z0-9_-]* and be 1–64 chars',
@@ -1321,6 +1447,8 @@ export const enUS: Resources = {
     panelAria: 'Context panel',
     panelClose: 'Close',
     memberSave: 'Save member',
+    saveAll: 'Save all changes',
+    finishAddingBeforeSave: 'Finish or clear the pending member draft before saving.',
     editAgentDefinition: 'Edit agent definition →',
     agentMissing: 'Agent not found',
     portsIn: 'in',
@@ -1706,6 +1834,10 @@ export const enUS: Resources = {
         confirmTitle: 'Confirm repair action',
         confirmLead: 'You are about to apply: {{option}}.',
         confirmApply: 'Apply',
+        closeAfterFailure: 'Close',
+        applyFailedBanner:
+          'The state repair was applied, but resuming the task failed. Close and re-diagnose, or use Resume on the task page.',
+        applyFailedDetail: 'Failure detail',
         applying: 'Applying…',
         cancel: 'Cancel',
         next: 'Next',
@@ -1760,6 +1892,11 @@ export const enUS: Resources = {
     tabWorktreeFiles: 'Worktree files',
     tabWorktreeDiff: 'Worktree diff',
     tabWorktreeStructure: 'Structure',
+    sectionNavLabel: 'Task sections',
+    sectionGroupOverview: 'Overview',
+    sectionGroupExecution: 'Execution',
+    sectionGroupArtifacts: 'Artifacts',
+    sectionGroupCollaboration: 'Collaboration',
     structScopeLabel: 'Scope',
     structScopeTask: 'Whole task',
     structPruned:
@@ -1871,6 +2008,8 @@ export const enUS: Resources = {
     diffTruncatedBanner:
       '⚠ Diff truncated at 1 MiB. View the worktree directly for the full output.',
     diffViewedProgress: '{{n}}/{{total}} viewed',
+    diffFileSelectorLabel: 'Changed files',
+    structFileSelectorLabel: 'Files with structural changes',
     diffMarkViewed: 'Mark {{file}} as viewed',
     noNodeRuns: "No node runs yet; scheduler hasn't reached any nodes.",
     colNode: 'Node',
@@ -2372,8 +2511,14 @@ export const enUS: Resources = {
     tabBasics: 'Basics',
     tabPrompt: 'Prompt',
     tabPorts: 'Ports',
-    tabResources: 'Resources & deps',
+    tabResources: 'Capabilities & collaboration',
     tabAdvanced: 'Advanced',
+    portValidationBadge: 'Port configuration errors: {{count}}',
+    resourcesIntro:
+      'Choose what this agent can use while it runs and which agents it can delegate work to. Saving a reference does not install or download it.',
+    technicalDetailsSummary: 'Technical information',
+    technicalDetailsBody:
+      'Collaborating agents load recursively with the skills, MCP servers, and plugins they require. Installed plugins are injected from their file:// cache and launch does not download them; launch validation asks you to restore any missing reference first.',
     sectionBasics: 'Basics',
     sectionPrompt: 'Prompt (body)',
     sectionOutputs: 'Inputs & outputs',
@@ -2507,33 +2652,31 @@ export const enUS: Resources = {
       issueOrphanOutputKind: 'Kind mapping {{key}} has no output port.',
       issueOrphanWrapperName: 'Promotion mapping {{key}} has no output port.',
     },
-    groupCapabilities: 'Capabilities',
-    groupCapabilitiesHint: 'Injected into the agent process',
-    groupDependencies: 'Dependencies',
-    groupDependenciesHint: 'Other agents it can delegate to',
+    groupCapabilities: 'Available capabilities',
+    groupCapabilitiesHint: 'Skills, tools, and extensions available at runtime',
+    groupDependencies: 'Collaborating agents',
+    groupDependenciesHint: 'Agents this agent can delegate work to',
     fieldSkills: 'Skills',
-    fieldSkillsHint: 'Skill names the framework should inject.',
+    fieldSkillsHint: 'Reusable instructions and tool capabilities.',
     fieldSkillsPlaceholder: 'add a skill name then Enter',
     skillsPickerLoading: 'Loading…',
     skillsPickerEmpty: 'No skills available (none available)',
     skillsPickerLoadFailed: 'Failed to load skill list; you can still type names directly.',
-    fieldDependsOn: 'Depends on agents',
+    fieldDependsOn: 'Agents it can collaborate with',
     fieldDependsOnHint:
-      'Other agents loaded into the same opencode subprocess (recursively, with their skills). Lets this agent invoke them via the task / subagent tool at runtime.',
+      'This agent can delegate subtasks to them; their required capabilities are loaded with the task.',
     fieldDependsOnPlaceholder: 'add an agent name then Enter',
     dependsPickerLoading: 'Loading…',
     dependsPickerEmpty: 'No other agents available (none available)',
     dependsPickerLoadFailed: 'Failed to load agent list; you can still type names directly.',
     fieldMcps: 'MCP servers',
-    fieldMcpsHint:
-      'Injected when this agent (or any of its dependsOn closure) runs. See docs/OPENCODE_CONFIG.md §3.3 for the runtime field-name translation.',
+    fieldMcpsHint: 'Connected tools and data sources available at runtime.',
     fieldMcpsPlaceholder: 'Type an MCP name and press Enter',
     mcpsPickerLoading: 'Loading…',
     mcpsPickerEmpty: 'No MCPs available (none registered)',
     mcpsPickerLoadFailed: 'Failed to load MCP list; you can still type names directly.',
     fieldPlugins: 'Plugins',
-    fieldPluginsHint:
-      'Each name resolves to an installed plugin (see /plugins). The runner unions every dependsOn-closure member’s plugins[] and injects `file://<cachedPath>` into OPENCODE_CONFIG_CONTENT.plugin — no network access at spawn time.',
+    fieldPluginsHint: 'Installed extensions that can be enabled for this agent at runtime.',
     fieldPluginsPlaceholder: 'Type a plugin name and press Enter',
     pluginsPickerLoading: 'Loading…',
     pluginsPickerEmpty: 'No plugins available (none registered)',
@@ -2560,6 +2703,13 @@ export const enUS: Resources = {
     permissionPlaceholder: '{"edit":"allow","webfetch":"deny"}',
     fieldFrontmatterExtra: 'Extra frontmatter (JSON)',
     fieldFrontmatterExtraHint: 'Any keys other than name/description/outputs/permission/skills.',
+    jsonSyntaxError: 'Enter a valid JSON object. Check quotes, commas, and braces.',
+    jsonObjectError:
+      'Enter a JSON object using { ... }; arrays, strings, and numbers are not accepted.',
+    jsonValidationTitle: 'Advanced JSON needs attention ({{count}})',
+    jsonValidationBadge: 'Invalid JSON fields: {{count}}',
+    jsonErrorStatus: 'Error',
+    jsonFixField: 'Fix {{field}}',
     fieldBody: 'Body (Markdown)',
     bodyPlaceholder: 'Agent system prompt body. Markdown.',
     importButton: 'Import from agent.md',
@@ -2666,6 +2816,8 @@ export const enUS: Resources = {
     tabEvents: 'Events',
     tabOutput: 'Output',
     tabStats: 'Stats',
+    eventCount: '{{count}} events',
+    outputCount: '{{count}} outputs',
     sessionPending: 'Session not yet captured.',
     sessionNotApplicable: 'This node kind has no opencode session.',
     sessionFanoutParent: 'Fan-out parent — no session of its own; pick a shard.',
@@ -2856,7 +3008,9 @@ export const enUS: Resources = {
     bindHostHint: 'Restart required. Default 127.0.0.1 keeps the daemon local-only.',
     bindPort: 'Bind port',
     bindPortHint:
-      'Restart required. Leave blank / 0 to pick a free port at start time (this field is backfilled with the current actual port).',
+      'Restart required. Leave blank / 0 to pick a free port at start time. The effective port is only a suggestion and is never saved automatically.',
+    bindPortCurrent: 'This run is using port {{port}}.',
+    bindPortUseCurrent: 'Pin current port',
     modelLoadFailed: 'Failed to load model list — falling back to text input.',
     modelLoading: 'Loading models…',
     modelRefresh: 'Refresh',
@@ -2929,7 +3083,13 @@ export const enUS: Resources = {
     'http-404': 'Not found.',
     'http-409': 'Conflict — refresh and retry.',
     'route-not-found': 'Route not found.',
-    'task-not-cancelable': 'Task is already finished and cannot be canceled.',
+    'task-not-cancelable': 'Task is already in a terminal state and cannot be canceled.',
+    'task-terminal':
+      'The owning task has ended; this item is sealed and the submission was not saved.',
+    'clarify-round-terminal':
+      'This clarify round is sealed (its task ended or the round was withdrawn); the answer was not saved.',
+    'workflow-scheduled-referenced':
+      'This workflow is still referenced by scheduled task(s); delete or repoint them first.',
     'task-not-resumable': 'Task is still running or has not failed; cannot resume.',
     'task-still-running': 'Task is still running; cancel it first.',
     'workflow-import-conflict': 'Import conflict: a workflow with the same id already exists.',
@@ -2963,6 +3123,10 @@ export const enUS: Resources = {
     fallback: 'Request failed',
   },
   clarify: {
+    roundSealedByTaskTerminal:
+      'The owning task has ended; this clarify round is sealed and needs no answer.',
+    roundDismissedByAutonomous:
+      'The workgroup switched to fully-autonomous mode; this clarify round was withdrawn and needs no answer.',
     taskNameLabel: 'Task',
     nav: {
       label: 'Clarify',
@@ -3009,6 +3173,7 @@ export const enUS: Resources = {
       submitDisabledRequired: 'Answer every "Recommended" question first',
       draftSaving: 'Saving draft…',
       draftSaved: 'Draft saved (safe to close the tab)',
+      roundSealedFooter: 'This round is sealed; no answer is needed.',
       recommendedChip: 'Recommended',
       back: '← Back to list',
       answeredAt: 'Answered · {{time}}',
@@ -3139,6 +3304,35 @@ export const enUS: Resources = {
     title: 'Platform long-term memory',
     adminOnly: 'Admin only',
     empty: 'No learned context yet',
+    sectionNavLabel: 'Memory sections',
+    sectionGroups: {
+      pending: 'Pending',
+      library: 'Memory library',
+      automation: 'Automation',
+    },
+    sectionDescriptions: {
+      approvalQueue: 'Review candidate memories you can manage before they enter the library.',
+      fusion: 'Review changes produced by fusing approved memories into a skill.',
+      all: 'Browse approved and archived memories, and manage writable entries.',
+      byScope: 'Find approved memories by agent, workflow, repository, or global scope.',
+      distillJobs: 'Monitor automatic distillation runs and recover failed jobs.',
+    },
+    sectionUnavailable: 'You cannot access that automation section, so Memory returned to All.',
+    loadingEdit: 'Loading memory details…',
+    emptyStates: {
+      candidates: 'No candidate memories need your review',
+      candidatesDescription:
+        'Manageable candidates appear after task feedback is distilled or a memory is created manually.',
+      approved: 'No approved memories in the library yet',
+      approvedDescription:
+        'Approve a candidate first; future tasks can then use it within its scope.',
+      archived: 'No archived memories',
+      archivedDescription:
+        'Items archived from the Approved view stay here and can be restored at any time.',
+      scope: 'No memories in this scope',
+      scopeDescription:
+        'Approved candidates are grouped here by agent, workflow, repository, or global scope.',
+    },
     confirmDelete: 'Permanently delete this memory? This cannot be undone.',
     confirmArchive:
       'Archive this memory? It will stop being injected into future runs. You can restore it from the Archived view.',
@@ -3157,6 +3351,8 @@ export const enUS: Resources = {
     fusion: {
       subtitle: 'Awaiting approval · {{n}} memories',
       empty: 'No fusions awaiting approval',
+      emptyDescription:
+        'Launch a fusion from an approved memory or managed skill; reviews waiting for you appear here.',
       error: 'Failed to load fusions',
       retry: 'Retry',
     },
@@ -3257,6 +3453,8 @@ export const enUS: Resources = {
     },
     distillJobs: {
       empty: 'No distill jobs queued',
+      emptyDescription:
+        'Feedback and review events create jobs automatically; new runs will appear here for monitoring.',
       colId: 'Job ID',
       colStatus: 'Status',
       colSource: 'Source',

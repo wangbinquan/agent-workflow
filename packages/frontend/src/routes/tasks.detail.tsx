@@ -334,7 +334,14 @@ function TaskDetailPage() {
   const tk = task.data
   const nodeRunsConsumerActive =
     tab === 'workflow-status' || tab === 'node-runs' || tab === 'outputs'
-  const cancelable = tk.status === 'pending' || tk.status === 'running'
+  // RFC-202 T3: awaiting_review / awaiting_human are cancelable too (shared
+  // lifecycle `cancel` event) — a user who does not want to answer the
+  // agent's questions needs an exit besides answering everything.
+  const cancelable =
+    tk.status === 'pending' ||
+    tk.status === 'running' ||
+    tk.status === 'awaiting_review' ||
+    tk.status === 'awaiting_human'
   const resumability = resumeStatus(tk.status, tk.worktreePath)
   // RFC-164/165: the task's execution subject (workgroup / agent / workflow) —
   // one derivation reused by the header subject link, the meta row and the

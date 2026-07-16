@@ -44,6 +44,7 @@ import {
   isMultiMarkdownUpstream,
   selectCurrentReviewRound,
   SIBLING_OUTPUTS_INSTRUCTION,
+  TERMINAL_TASK_STATUSES,
 } from '@agent-workflow/shared'
 import {
   acceptedSubsetPaths,
@@ -73,6 +74,7 @@ import type { DbClient } from '@/db/client'
 import {
   agents as agentsTable,
   docVersions,
+  nodeRunEvents,
   nodeRunOutputs,
   nodeRuns,
   reviewComments,
@@ -746,12 +748,84 @@ export async function dispatchReviewNode(args: DispatchReviewArgs): Promise<Disp
         docs.push(dv)
       }
     }
-    // One broadcast is enough — the WS event just triggers an inbox/detail
-    // refetch that pulls the whole document set. Empty list → park an empty
-    // round (approve emits an empty `accepted`); skip the broadcast (no dv).
-    if (docs.length > 0) {
-      broadcastReviewCreated(taskId, reviewNodeRunId, node.id, docs[0]!)
+    // RFC-202 T1: an EMPTY upstream list means "zero findings" — that is the
+    // success case of the Code→Audit→Fix workflow, not something a human can
+    // review. The old behavior parked an empty round, which was unreachable
+    // from every UI entry (no doc_versions → invisible in the inbox, detail
+    // 404s, canvas nav null) and undecidable via the API (submitReviewDecision
+    // 409s on zero pending rows) — the task wedged in awaiting_review forever.
+    // Auto-approve instead: publish the same empty `accepted` +
+    // `approval_meta` an empty-subset human approval would emit
+    // (approveMultiDocReview semantics), close the run, and let the scheduler
+    // continue downstream. Wedged legacy rounds heal here too: S1 repair /
+    // resume re-enters this dispatch with pendingDocVersions=[] and falls
+    // into this branch.
+    if (docs.length === 0) {
+      const decidedAt = Date.now()
+      const acceptedKind = itemsInline ? 'list<markdown>' : 'list<path<md>>'
+      // RFC-099 prompt isolation: approval_meta is a downstream-consumable
+      // port — no decider identity; `auto` marks the framework decision.
+      const meta = JSON.stringify({
+        decision: 'approved',
+        decidedAt,
+        reviewIteration,
+        sourceNodeId,
+        sourcePortName,
+        itemCount: 0,
+        acceptedCount: 0,
+        acceptedItemIndices: [],
+        auto: 'empty-list',
+      })
+      await db
+        .insert(nodeRunOutputs)
+        .values({
+          nodeRunId: reviewNodeRunId,
+          portName: REVIEW_APPROVED_PORT_MULTI,
+          content: '',
+          kind: acceptedKind,
+          archiveJson: null,
+        })
+        .onConflictDoUpdate({
+          target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+          set: { content: '', kind: acceptedKind, archiveJson: null },
+        })
+      await db
+        .insert(nodeRunOutputs)
+        .values({ nodeRunId: reviewNodeRunId, portName: REVIEW_APPROVAL_META_PORT, content: meta })
+        .onConflictDoUpdate({
+          target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+          set: { content: meta },
+        })
+      await transitionNodeRunStatus({
+        db,
+        nodeRunId: reviewNodeRunId,
+        event: { kind: 'approve-review' },
+        extra: { finishedAt: decidedAt },
+      })
+      // Persistent, user-visible audit record (node drawer "events" tab) —
+      // the dispatch summary string is discarded by runScope and node_runs
+      // has no summary column, so this event is the durable trace.
+      await db.insert(nodeRunEvents).values({
+        nodeRunId: reviewNodeRunId,
+        ts: decidedAt,
+        kind: 'text',
+        payload: `[rfc202/review-auto-approved] ${JSON.stringify({
+          rfc: 'RFC-202',
+          reason: 'empty-list',
+          itemCount: 0,
+          sourceNodeId,
+          sourcePortName,
+        })}`,
+      })
+      return {
+        kind: 'ok',
+        summary: `review node ${node.id} auto-approved (0 documents, empty list)`,
+        message: 'review-auto-approved',
+      }
     }
+    // One broadcast is enough — the WS event just triggers an inbox/detail
+    // refetch that pulls the whole document set.
+    broadcastReviewCreated(taskId, reviewNodeRunId, node.id, docs[0]!)
     return {
       kind: 'awaiting_review',
       summary: `review node ${node.id} awaiting decision (${docs.length} document${
@@ -1137,11 +1211,25 @@ export async function listReviewSummaries(
   // Join doc_versions ↔ nodeRuns ↔ tasks ↔ workflows. We do it manually with
   // separate selects to keep things composable across drizzle limitations on
   // SQLite multi-join.
-  const dvRows = await db
-    .select()
-    .from(docVersions)
-    .orderBy(desc(docVersions.createdAt))
-    .limit(filter.limit ?? 100)
+  //
+  // RFC-202 T6: the PENDING (inbox) query must apply its predicates BEFORE
+  // any pagination window — the old unconditional `.limit()` on raw
+  // doc_versions let a page of terminal-task zombies push actionable rounds
+  // out of the window entirely (Codex design-gate P1). For pending we fetch
+  // the pending rows via SQL predicate (bounded set), filter, and apply the
+  // limit at the very end; historical queries keep the original shape.
+  const isPendingQuery = filter.status === 'pending'
+  const dvRows = isPendingQuery
+    ? await db
+        .select()
+        .from(docVersions)
+        .where(eq(docVersions.decision, 'pending'))
+        .orderBy(desc(docVersions.createdAt))
+    : await db
+        .select()
+        .from(docVersions)
+        .orderBy(desc(docVersions.createdAt))
+        .limit(filter.limit ?? 100)
 
   if (dvRows.length === 0) return []
 
@@ -1187,6 +1275,12 @@ export async function listReviewSummaries(
     const wf = wfById.get(task.workflowId)
     if (wf === undefined) continue
     const awaitingReview = run.status === 'awaiting_review' && dv.decision === 'pending'
+    // RFC-202 T6: dead tasks' rounds leave the pending inbox. done/canceled
+    // are hard-sealed by the terminal sweep; failed/interrupted are revivable
+    // and only filtered here (they reappear if the task is resumed).
+    if (isPendingQuery && (TERMINAL_TASK_STATUSES as readonly string[]).includes(task.status)) {
+      continue
+    }
     if (filter.status !== undefined && filter.status !== 'all') {
       if (filter.status === 'pending' && !awaitingReview) continue
       if (filter.status === 'approved' && dv.decision !== 'approved') continue
@@ -1198,11 +1292,16 @@ export async function listReviewSummaries(
     const nodeMeta = reviewNodeMetaByTask.get(task.id)?.get(dv.reviewNodeId)
     out.push(assembleReviewSummary(dv, run, task, wf, nodeMeta))
   }
-  return out
+  // RFC-202 T6: pending pagination happens AFTER filtering (see above).
+  return isPendingQuery ? out.slice(0, filter.limit ?? 100) : out
 }
 
 export async function countPendingReviews(db: DbClient): Promise<number> {
-  const summaries = await listReviewSummaries(db, { status: 'pending', limit: 500 })
+  // RFC-202 T6: exact count — must not be truncated by a list page limit.
+  const summaries = await listReviewSummaries(db, {
+    status: 'pending',
+    limit: Number.MAX_SAFE_INTEGER,
+  })
   return summaries.length
 }
 
@@ -2037,6 +2136,27 @@ export async function submitReviewDecision(
     throw new NotFoundError('review-not-found', `review run ${args.nodeRunId} not found`)
   }
   const run = runRows[0]!
+  // RFC-202 T2 write-path guard: refuse decisions on a task that is already
+  // done/canceled — the terminal sweep normally closes these runs, but a
+  // hook failure (or a race with it) can leave the run awaiting; the write
+  // path must fail closed on its own. failed/interrupted stay decidable
+  // (revivable, design §1).
+  const owningTask = (
+    await args.db
+      .select({ status: tasks.status })
+      .from(tasks)
+      .where(eq(tasks.id, run.taskId))
+      .limit(1)
+  )[0]
+  if (
+    owningTask !== undefined &&
+    (owningTask.status === 'done' || owningTask.status === 'canceled')
+  ) {
+    throw new ConflictError(
+      'task-terminal',
+      `task ${run.taskId} is '${owningTask.status}'; this review round is closed and no longer accepts decisions`,
+    )
+  }
   if (run.status !== 'awaiting_review') {
     throw new ConflictError(
       'review-not-awaiting',

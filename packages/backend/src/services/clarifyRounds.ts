@@ -14,12 +14,13 @@
 //   - `freezeAnswerAttributions` / `buildFrozenAttributionSet` —— 提交时点的
 //     归属快照（审计列/只读 UI 用，绝不进 agent prompt）。
 
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, inArray } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import { clarifyRounds, tasks } from '@/db/schema'
 import {
+  TERMINAL_TASK_STATUSES,
   type ClarifyAnswer,
   type ClarifyAnswerAttributions,
   type ClarifyDirective,
@@ -173,12 +174,30 @@ export async function listClarifyRoundSummaries(
   const all = await db.select().from(clarifyRounds).orderBy(desc(clarifyRounds.createdAt))
   const desiredKind = filter.kind ?? 'all'
   const desiredStatus = filter.status ?? 'awaiting_human'
-  const filtered = all.filter((r) => {
+  let filtered = all.filter((r) => {
     if (filter.taskId !== undefined && r.taskId !== filter.taskId) return false
     if (desiredKind !== 'all' && r.kind !== desiredKind) return false
     if (desiredStatus !== 'all' && r.status !== desiredStatus) return false
     return true
   })
+  // RFC-202 T6: the awaiting_human TODO view must not surface rounds whose
+  // task is already terminal — dead tasks' rounds cluttered the inbox forever
+  // (audit R8; done/canceled rounds are hard-sealed by the terminal sweep,
+  // failed/interrupted are revivable so they are only FILTERED here and
+  // reappear if the task is resumed). Applied BEFORE the limit slice: a page
+  // of terminal-task zombies must not push actionable rounds out of the
+  // window (Codex design-gate P1). Historical queries (explicit status)
+  // stay unfiltered.
+  if (desiredStatus === 'awaiting_human' && filtered.length > 0) {
+    const statusByTaskId = await loadTaskStatusesByTaskId(
+      db,
+      Array.from(new Set(filtered.map((r) => r.taskId))),
+    )
+    filtered = filtered.filter((r) => {
+      const st = statusByTaskId.get(r.taskId)
+      return st === undefined || !(TERMINAL_TASK_STATUSES as readonly string[]).includes(st)
+    })
+  }
   const limit = filter.limit ?? 100
   const sliced = filtered.slice(0, limit)
 
@@ -333,6 +352,20 @@ function parseJsonRecord<T>(raw: string | null): T | null {
   } catch {
     return null
   }
+}
+
+async function loadTaskStatusesByTaskId(
+  db: DbClient,
+  taskIds: string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  if (taskIds.length === 0) return out
+  const rows = await db
+    .select({ id: tasks.id, status: tasks.status })
+    .from(tasks)
+    .where(inArray(tasks.id, taskIds))
+  for (const t of rows) out.set(t.id, t.status)
+  return out
 }
 
 async function loadTaskNamesByTaskId(

@@ -11,6 +11,7 @@
 //      next startup's orphan reaper (P-4-07) doesn't have to do it.
 
 import { eq } from 'drizzle-orm'
+import { DAEMON_RESTART_ERROR_SUMMARY, DAEMON_SHUTDOWN_ABORT_REASON } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { tasks } from '@/db/schema'
 import { abortAllActiveTasks } from '@/services/task'
@@ -21,7 +22,10 @@ import { trySetTaskStatus } from '@/services/lifecycle'
 const log = createLogger('shutdown')
 
 export async function gracefulShutdown(db: DbClient, budgetMs: number = 30_000): Promise<void> {
-  abortAllActiveTasks()
+  // RFC-202 T4: tag the abort so the scheduler writes interrupted +
+  // daemon-restart (resumable / boot-auto-resumable) instead of
+  // 'canceled by user' — a daemon restart is not a user decision.
+  abortAllActiveTasks(DAEMON_SHUTDOWN_ABORT_REASON)
 
   const deadline = Date.now() + budgetMs
   while (Date.now() < deadline) {
@@ -46,7 +50,12 @@ export async function gracefulShutdown(db: DbClient, budgetMs: number = 30_000):
       allowedFrom: ['running'],
       extra: {
         finishedAt: Date.now(),
-        errorSummary: 'daemon-shutdown',
+        // RFC-202 T4: stamp the summary autoResume actually matches —
+        // 'daemon-shutdown' was never picked up by boot auto-resume
+        // (autoResume.ts matches DAEMON_RESTART_ERROR_SUMMARY exactly).
+        // The recovery_events row below keeps 'daemon-shutdown' as the
+        // audit-side provenance.
+        errorSummary: DAEMON_RESTART_ERROR_SUMMARY,
         errorMessage: 'task did not exit within graceful shutdown budget',
       },
       reason: 'graceful-shutdown',

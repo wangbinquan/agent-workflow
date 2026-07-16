@@ -80,6 +80,9 @@ describe('gracefulShutdown', () => {
     await gracefulShutdown(h.db, 300)
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('interrupted')
-    expect(t?.errorSummary).toBe('daemon-shutdown')
+    // RFC-202 T4: survivors stamp DAEMON_RESTART_ERROR_SUMMARY ('daemon-restart')
+    // — the exact summary autoResume's boot pass matches — instead of the old
+    // 'daemon-shutdown' string that no recovery path ever picked up.
+    expect(t?.errorSummary).toBe('daemon-restart')
   })
 })

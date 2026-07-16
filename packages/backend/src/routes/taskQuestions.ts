@@ -31,7 +31,7 @@ import { dispatchTaskQuestions } from '@/services/taskQuestionDispatch'
 import { canViewTask, requireTaskMember } from '@/services/taskCollab'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { resumeTask } from '@/services/task'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 
@@ -173,16 +173,28 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
       ...(opencodeCmd ? { opencodeCmd } : {}),
       ...resolveLaunchRuntimeConfig(deps.configPath),
     }
-    void resumeTask(deps.db, taskId, resumeDeps).catch((err) => {
+    // RFC-202 T8: surface real resume failures in the response (dispatch DID
+    // land; the UI shows a warning) instead of the old silent log-only path.
+    let resumeFailure: { ok: false; code: string; message: string } | undefined
+    try {
+      await resumeTask(deps.db, taskId, resumeDeps)
+    } catch (err) {
       if (err instanceof ConflictError && err.code === 'task-not-resumable') {
         log.info('task-questions dispatch resume deferred', { taskId })
-        return
+      } else {
+        const message = err instanceof Error ? err.message : String(err)
+        log.warn('task-questions dispatch resume threw', { taskId, error: message })
+        resumeFailure = {
+          ok: false,
+          code: err instanceof DomainError ? err.code : 'resume-failed',
+          message,
+        }
       }
-      log.warn('task-questions dispatch resume threw', {
-        taskId,
-        error: err instanceof Error ? err.message : String(err),
-      })
+    }
+    return c.json({
+      ok: true,
+      reruns: result.reruns,
+      ...(resumeFailure ? { resume: resumeFailure } : {}),
     })
-    return c.json({ ok: true, reruns: result.reruns })
   })
 }

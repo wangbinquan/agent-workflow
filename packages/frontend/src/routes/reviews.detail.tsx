@@ -227,18 +227,30 @@ function ReviewDetailPage() {
   }, [qc, nodeRunId])
   const [paneCapturing, setPaneCapturing] = useState(false)
 
+  // RFC-202 T8: a decision can land while the follow-up task resume fails
+  // (worktree GC'd, spawn error, …) — the backend now reports that in the
+  // response's optional `resume` field. Keep the user here with a warning
+  // instead of navigating away as if everything worked.
+  const [resumeWarning, setResumeWarning] = useState<{ code: string } | null>(null)
   const submitDecision = useMutation({
     mutationFn: async (input: {
       decision: ReviewDecisionKind
       rejectReason?: string
       reviewIteration: number
     }) => {
-      await api.post(`/api/reviews/${nodeRunId}/decision`, input)
+      return await api.post<{ resume?: { ok: false; code: string; message: string } }>(
+        `/api/reviews/${nodeRunId}/decision`,
+        input,
+      )
     },
-    onSuccess: async () => {
+    onSuccess: async (res) => {
       await qc.invalidateQueries({ queryKey: ['reviews', 'detail', nodeRunId] })
       await qc.invalidateQueries({ queryKey: ['reviews', 'list'] })
       await qc.invalidateQueries({ queryKey: ['reviews', 'pending-count'] })
+      if (res.resume !== undefined && res.resume.ok === false) {
+        setResumeWarning({ code: res.resume.code })
+        return
+      }
       // RFC-023 bugfix #8 parity (see lib/nav/taskNav): after deciding, take
       // the reviewer to the owning task's detail page so they immediately
       // see the agent resume (approve) / rerun (iterate · reject) kick off
@@ -744,6 +756,14 @@ function ReviewDetailPage() {
             <ErrorBanner error={submitDecision.error} />
           </div>
         )}
+
+      {resumeWarning !== null && (
+        <div className="review-detail__error">
+          <NoticeBanner tone="warning" size="compact" className="review-resume-failed">
+            {t('common.resumeFailedAfterSubmit', { code: resumeWarning.code })}
+          </NoticeBanner>
+        </div>
+      )}
 
       {mode !== 'historical' && decisionDialog !== null && (
         <DecisionDialog

@@ -44,6 +44,7 @@ import {
   crossClarifySessions,
   nodeRuns,
   taskQuestions,
+  tasks,
 } from '@/db/schema'
 import { parseAnswersArray, sealAnswersServerSide } from '@/services/clarify'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
@@ -173,6 +174,25 @@ export async function sealRoundQuestions(
         throw new ConflictError(
           'clarify-round-terminal',
           `clarify_round ${round.id} is '${round.status}'; cannot seal questions on it`,
+        )
+      }
+      // RFC-202 T2 write-path guard: the read-path terminal filter and the
+      // terminal sweep can both be raced or (hook failure) missed — the WRITE
+      // must independently refuse to persist answers into a task that is
+      // already done/canceled. Same-tx read keeps it TOCTOU-free. failed /
+      // interrupted stay answerable (revivable, design §1).
+      const owningTask = tx
+        .select({ status: tasks.status })
+        .from(tasks)
+        .where(eq(tasks.id, round.taskId))
+        .all()[0]
+      if (
+        owningTask !== undefined &&
+        (owningTask.status === 'done' || owningTask.status === 'canceled')
+      ) {
+        throw new ConflictError(
+          'task-terminal',
+          `task ${round.taskId} is '${owningTask.status}'; this clarify round is sealed and no longer accepts answers`,
         )
       }
 

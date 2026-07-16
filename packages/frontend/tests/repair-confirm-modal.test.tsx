@@ -180,4 +180,35 @@ describe('<RepairConfirmModal />', () => {
     ) as HTMLButtonElement
     expect(apply.disabled).toBe(true)
   })
+
+  // RFC-202 T7 — a 200 with ok:false ('apply-failed': mutations landed but
+  // resumeTask blew up) must NOT be treated as success: the modal stays open,
+  // explains the failure (+ collapsible outcomeMessage), and never fires
+  // onApplied. Locks audit P1 F-14 (silent close left the user believing the
+  // repair worked while the task sat unresumed).
+  test('ok:false keeps the modal open, shows the failure banner + detail, does NOT call onApplied', async () => {
+    installFetch(() =>
+      jsonResponse({
+        ok: false,
+        auditId: 'audit-2',
+        outcome: 'apply-failed',
+        outcomeMessage: 'mutations applied but resumeTask failed: worktree missing',
+        resolvedAlertIds: [],
+        newAlerts: [],
+      }),
+    )
+    let applied = false
+    renderModal({ onApplied: () => (applied = true) })
+    fireEvent.click(
+      document.querySelector('[data-testid="repair-confirm-apply"]') as HTMLButtonElement,
+    )
+    await waitFor(() => {
+      expect(document.querySelector('[data-testid="repair-confirm-close-failed"]')).not.toBeNull()
+    })
+    expect(applied).toBe(false)
+    // modal still mounted with the failure explanation + raw detail
+    expect(document.querySelector('[data-testid="repair-confirm-modal"]')).not.toBeNull()
+    expect(document.body.textContent).toContain('resuming the task failed')
+    expect(document.body.textContent).toContain('worktree missing')
+  })
 })

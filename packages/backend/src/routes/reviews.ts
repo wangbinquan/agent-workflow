@@ -43,7 +43,13 @@ import {
   submitReviewDecision,
   updateReviewCommentText,
 } from '@/services/review'
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  DomainError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 
@@ -156,7 +162,11 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
     if (actor.permissions.has('tasks:read:all')) {
       return c.json({ count: await countPendingReviews(deps.db) })
     }
-    const pending = await listReviewSummaries(deps.db, { status: 'pending' })
+    // RFC-202 T6: exact count — not truncated by the default list page size.
+    const pending = await listReviewSummaries(deps.db, {
+      status: 'pending',
+      limit: Number.MAX_SAFE_INTEGER,
+    })
     const visible = await filterVisibleByTask(deps, actor, pending)
     return c.json({ count: visible.length })
   })
@@ -227,8 +237,14 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       ...(parsed.data.rejectReason !== undefined ? { rejectReason: parsed.data.rejectReason } : {}),
     }
     const result = await submitReviewDecision(args)
+    // RFC-202 T8: the resume kick is no longer pure fire-and-forget — real
+    // failures (worktree GC'd → 410, spawn errors, …) used to vanish into
+    // the daemon log while the HTTP response claimed unqualified success and
+    // the task sat parked (audit R4 "伪成功"). The decision itself DID land
+    // (2xx stays correct); the kick outcome now rides in the response as an
+    // optional `resume` field the UI surfaces as a warning.
+    let resumeFailure: { ok: false; code: string; message: string } | undefined
     if (result.resumeRequired) {
-      // Fire-and-forget; the scheduler re-enters and drives the task forward.
       const opencodeCmd = resolveOpencodeCmd(deps.configPath)
       const resumeDeps: Parameters<typeof resumeTask>[2] = {
         db: deps.db,
@@ -242,22 +258,23 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       // RFC-097 (audit S-27): classified swallow — `task-not-resumable` is
       // EXPECTED when the task is still running or actively driven (the live
       // dispatch loop picks the freshly minted pending rerun row up via
-      // deriveFrontier's pending-anchor release, RFC-092); anything else is
-      // surfaced at warn so failures stop vanishing.
-      void resumeTask(deps.db, result.taskId, resumeDeps).catch((err) => {
+      // deriveFrontier's pending-anchor release, RFC-092).
+      try {
+        await resumeTask(deps.db, result.taskId, resumeDeps)
+      } catch (err) {
         if (err instanceof ConflictError && err.code === 'task-not-resumable') {
           log.info('review resume deferred — live dispatch loop picks up the pending rerun', {
             taskId: result.taskId,
           })
-          return
+        } else {
+          const message = err instanceof Error ? err.message : String(err)
+          const code = err instanceof DomainError ? err.code : 'resume-failed'
+          log.warn('review resume threw', { taskId: result.taskId, error: message })
+          resumeFailure = { ok: false, code, message }
         }
-        log.warn('review resume threw', {
-          taskId: result.taskId,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      })
+      }
     }
-    return c.json({ ok: true, ...result })
+    return c.json({ ok: true, ...result, ...(resumeFailure ? { resume: resumeFailure } : {}) })
   })
 
   // RFC-079: set one multi-document review item's accepted/not_accepted choice.

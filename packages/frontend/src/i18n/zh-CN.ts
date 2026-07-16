@@ -6,6 +6,10 @@
 // matches en-US 1:1.
 
 export interface Resources {
+  tabBar: {
+    scrollStart: string
+    scrollEnd: string
+  }
   nav: {
     agents: string
     skills: string
@@ -72,6 +76,7 @@ export interface Resources {
     memory: string
     memoryHint: string
     memoryBadge: string
+    memoryPendingAction: string
   }
   home: {
     greet: {
@@ -194,6 +199,13 @@ export interface Resources {
     oauthCliHint: string
     oauthModeAuto: string
     oauthModeDisabled: string
+    errors: {
+      nameRequired: string
+      commandRequired: string
+      urlRequired: string
+      urlScheme: string
+      timeoutInvalid: string
+    }
     // RFC-030 — probe columns + expand block.
     colStatus: string
     colLatency: string
@@ -203,6 +215,17 @@ export interface Resources {
       latencySec: string
       btnRun: string
       btnRunning: string
+      saveAndRun: string
+      useSaved: string
+      basisSavedTitle: string
+      basisSavedBody: string
+      basisDirtyTitle: string
+      basisDirtyBody: string
+      basisUnavailable: string
+      resultStale: string
+      savedResultExpired: string
+      savedResultExpiredHint: string
+      draftChangedDuringSave: string
       viewFull: string
       expandRow: string
       collapseRow: string
@@ -218,6 +241,7 @@ export interface Resources {
       // Inventory panel (T9)
       lastProbed: string
       neverProbed: string
+      neverProbedHint: string
       section: {
         tools: string
         resources: string
@@ -288,9 +312,27 @@ export interface Resources {
     saving: string
     cancelEdit: string
     checkUpdateButton: string
+    saveAndCheckButton: string
     checking: string
     upgradeButton: string
+    reinstallBaselineButton: string
     upgrading: string
+    executionBasisDirtyTitle: string
+    executionBasisDirtyBody: string
+    executionBasisSavedTitle: string
+    executionBasisSavedBody: string
+    externalManagedTitle: string
+    externalManagedBody: string
+    notCheckedTitle: string
+    notCheckedBody: string
+    updateReadyTitle: string
+    updateReadyBody: string
+    noUpdateAvailable: string
+    identityUnknownTitle: string
+    identityUnknownBody: string
+    draftChangedDuringSave: string
+    staleOperationResult: string
+    upgradeSuccess: string
     errorOptionsJson: string
     errors: {
       nameInvalid: string
@@ -454,6 +496,9 @@ export interface Resources {
     tabOidc: string
     tabToken: string
     oidcHint: string
+    oidcDiscoveryLoading: string
+    oidcDiscoveryError: string
+    oidcDiscoveryEmpty: string
     tokenHint: string
   }
   // RFC-036 — sidebar UserMenu dropdown.
@@ -623,6 +668,24 @@ export interface Resources {
   }
   settings: {
     title: string
+    sectionNavLabel: string
+    sectionGroups: {
+      execution: string
+      reliability: string
+      access: string
+      interface: string
+    }
+    sectionDescriptions: {
+      runtime: string
+      systemAgents: string
+      limits: string
+      recovery: string
+      gc: string
+      network: string
+      appearance: string
+      rendering: string
+      authentication: string
+    }
     tabRuntime: string
     tabSystemAgents: string
     tabLimits: string
@@ -637,6 +700,15 @@ export interface Resources {
     saving: string
     saved: string
     save: string
+    noChanges: string
+    invalidChanges: string
+    outcomeUnknown: string
+    outcomeUnknownBody: string
+    outcomeUnknownReconcile: string
+    writeBlockedBody: string
+    staleTitle: string
+    staleBody: string
+    staleDiscard: string
     backupTitle: string
     backupHint: string
     backupCreate: string
@@ -793,6 +865,7 @@ export interface Resources {
     saving: string
     creating: string
     unknownError: string
+    resumeFailedAfterSubmit: string
     yes: string
     no: string
     details: string
@@ -858,6 +931,7 @@ export interface Resources {
     }
     unsavedTitle: string
     unsavedBody: string
+    unsavedBusyBody: string
     unsavedStay: string
     unsavedDiscard: string
     emptyPaneTitle: string
@@ -874,6 +948,8 @@ export interface Resources {
     test: string
     edit: string
     delete: string
+    deleteTitle: string
+    deleteDescription: string
     addTitle: string
     editTitle: string
     testBinary: string
@@ -945,10 +1021,11 @@ export interface Resources {
     newTitle: string
     tabManaged: string
     tabExternal: string
-    detailTabOverview: string
-    detailTabContent: string
+    detailTabEdit: string
     detailTabFiles: string
     detailTabHistory: string
+    technicalInformation: string
+    managedPath: string
     fieldName: string
     fieldNameHint: string
     fieldDescription: string
@@ -1057,13 +1134,42 @@ export interface Resources {
     fileErrPathRequired: string
     fileErrRelativeOnly: string
     fileErrMainFileProtected: string
+    fileErrAlreadyExists: string
     fileTreeHeader: string
     fileTreeEmpty: string
     fileNewPathPlaceholder: string
     fileAddButton: string
+    fileStageAddButton: string
     fileEditorEmpty: string
     fileLoadingNamed: string
     fileDeleteButton: string
+    fileStageDeleteButton: string
+    filePendingCreate: string
+    filePendingUpdate: string
+    filePendingDelete: string
+    fileUndoPending: string
+    fileDeleteStagedTitle: string
+    fileDeleteStagedDescription: string
+    fileStaleWarning: string
+    saveAllChanges: string
+    saveNothingToSave: string
+    saveStageNewPathFirst: string
+    saveBusy: string
+    saveTokenMissing: string
+    saveOutcomeUnknown: string
+    saveOutcomeUnknownDescription: string
+    saveOutcomeStillUnknown: string
+    recheckOutcome: string
+    recheckingOutcome: string
+    saveRemoteDifferent: string
+    saveStaleWarning: string
+    saveAllComplete: string
+    savePartial: string
+    discardAllChanges: string
+    historyBlockedTitle: string
+    historyBlockedDirty: string
+    historyBlockedBusy: string
+    historyBlockedOutcomeUnknown: string
     zipParseFailedFallback: string
     zipCommitFailedFallback: string
     zipErrorWholeArchiveLabel: string
@@ -1235,6 +1341,8 @@ export interface Resources {
     panelAria: string
     panelClose: string
     memberSave: string
+    saveAll: string
+    finishAddingBeforeSave: string
     editAgentDefinition: string
     agentMissing: string
     portsIn: string
@@ -1611,6 +1719,9 @@ export interface Resources {
         confirmLead: string
         confirmApply: string
         applying: string
+        closeAfterFailure: string
+        applyFailedBanner: string
+        applyFailedDetail: string
         cancel: string
         next: string
         loading: string
@@ -1665,6 +1776,11 @@ export interface Resources {
     tabWorktreeFiles: string
     tabWorktreeDiff: string
     tabWorktreeStructure: string
+    sectionNavLabel: string
+    sectionGroupOverview: string
+    sectionGroupExecution: string
+    sectionGroupArtifacts: string
+    sectionGroupCollaboration: string
     structScopeLabel: string
     structScopeTask: string
     structPruned: string
@@ -1775,6 +1891,8 @@ export interface Resources {
     diffNoChanges: string
     diffTruncatedBanner: string
     diffViewedProgress: string
+    diffFileSelectorLabel: string
+    structFileSelectorLabel: string
     diffMarkViewed: string
     noNodeRuns: string
     colNode: string
@@ -2243,6 +2361,10 @@ export interface Resources {
     tabPorts: string
     tabResources: string
     tabAdvanced: string
+    portValidationBadge: string
+    resourcesIntro: string
+    technicalDetailsSummary: string
+    technicalDetailsBody: string
     /** RFC-155 — form-section titles (visible + collapsible groups). */
     sectionBasics: string
     sectionPrompt: string
@@ -2423,6 +2545,12 @@ export interface Resources {
     permissionPlaceholder: string
     fieldFrontmatterExtra: string
     fieldFrontmatterExtraHint: string
+    jsonSyntaxError: string
+    jsonObjectError: string
+    jsonValidationTitle: string
+    jsonValidationBadge: string
+    jsonErrorStatus: string
+    jsonFixField: string
     fieldBody: string
     bodyPlaceholder: string
     importButton: string
@@ -2533,6 +2661,8 @@ export interface Resources {
     tabEvents: string
     tabOutput: string
     tabStats: string
+    eventCount: string
+    outputCount: string
     sessionPending: string
     sessionNotApplicable: string
     sessionFanoutParent: string
@@ -2703,6 +2833,8 @@ export interface Resources {
     bindHostHint: string
     bindPort: string
     bindPortHint: string
+    bindPortCurrent: string
+    bindPortUseCurrent: string
     modelLoadFailed: string
     modelLoading: string
     modelRefresh: string
@@ -2785,6 +2917,8 @@ export interface Resources {
   errors: Record<string, string>
   // RFC-023 clarify feature (PR-C).
   clarify: {
+    roundSealedByTaskTerminal: string
+    roundDismissedByAutonomous: string
     taskNameLabel: string
     nav: { label: string; badgeTitle: string }
     list: {
@@ -2819,6 +2953,7 @@ export interface Resources {
       submitDisabledRequired: string
       draftSaving: string
       draftSaved: string
+      roundSealedFooter: string
       recommendedChip: string
       back: string
       answeredAt: string
@@ -2922,6 +3057,31 @@ export interface Resources {
     title: string
     adminOnly: string
     empty: string
+    sectionNavLabel: string
+    sectionGroups: {
+      pending: string
+      library: string
+      automation: string
+    }
+    sectionDescriptions: {
+      approvalQueue: string
+      fusion: string
+      all: string
+      byScope: string
+      distillJobs: string
+    }
+    sectionUnavailable: string
+    loadingEdit: string
+    emptyStates: {
+      candidates: string
+      candidatesDescription: string
+      approved: string
+      approvedDescription: string
+      archived: string
+      archivedDescription: string
+      scope: string
+      scopeDescription: string
+    }
     confirmDelete: string
     confirmArchive: string
     archiveDialogTitle: string
@@ -2939,6 +3099,7 @@ export interface Resources {
     fusion: {
       subtitle: string
       empty: string
+      emptyDescription: string
       error: string
       retry: string
     }
@@ -3039,6 +3200,7 @@ export interface Resources {
     }
     distillJobs: {
       empty: string
+      emptyDescription: string
       colId: string
       colStatus: string
       colSource: string
@@ -3330,6 +3492,10 @@ export interface Resources {
 }
 
 export const zhCN: Resources = {
+  tabBar: {
+    scrollStart: '向前查看更多分区',
+    scrollEnd: '向后查看更多分区',
+  },
   nav: {
     agents: '代理',
     skills: '技能',
@@ -3392,6 +3558,7 @@ export const zhCN: Resources = {
     memory: '记忆',
     memoryHint: '从过往反问、评审与反馈中沉淀的长期上下文',
     memoryBadge: '{{count}} 项待审批',
+    memoryPendingAction: '打开 {{count}} 项记忆待办',
   },
   home: {
     greet: {
@@ -3635,6 +3802,9 @@ export const zhCN: Resources = {
     tabOidc: '身份提供商',
     tabToken: 'Token 登录',
     oidcHint: '通过已配置的身份提供商登录。',
+    oidcDiscoveryLoading: '正在检查可用的身份提供商…',
+    oidcDiscoveryError: '无法加载身份提供商；账号密码和 Token 登录仍可用。',
+    oidcDiscoveryEmpty: '尚未配置身份提供商，请使用账号密码或 Token 登录。',
     tokenHint: '使用 daemon 启动时打印的 64 位十六进制 token。仅供管理员 / 应急使用。',
   },
   userMenu: {
@@ -3815,6 +3985,24 @@ export const zhCN: Resources = {
   },
   settings: {
     title: '设置',
+    sectionNavLabel: '设置分区',
+    sectionGroups: {
+      execution: '执行环境',
+      reliability: '可靠性',
+      access: '连接与访问',
+      interface: '界面',
+    },
+    sectionDescriptions: {
+      runtime: '注册命令运行时并选择默认项。',
+      systemAgents: '设置内置自动化 Agent 的运行时与输出规则。',
+      limits: '设置任务、token、超时与并发边界。',
+      recovery: '创建备份并配置恢复行为。',
+      gc: '控制数据保留与自动清理。',
+      network: '设置 daemon 监听地址与端口。',
+      appearance: '选择主题与界面语言。',
+      rendering: '配置外部图表渲染服务。',
+      authentication: '管理 OIDC 登录提供商。',
+    },
     tabRuntime: '运行时',
     tabSystemAgents: '系统 Agent',
     tabLimits: '限额',
@@ -3829,6 +4017,18 @@ export const zhCN: Resources = {
     saving: '保存中…',
     saved: '已保存',
     save: '保存',
+    noChanges: '没有需要保存的更改',
+    invalidChanges: '请先修正当前分区中的无效值',
+    outcomeUnknown: '上次保存结果尚未确认，请等待服务器核对',
+    outcomeUnknownBody:
+      '无法确认上次保存是否已生效。重新核对只会读取当前服务器值，不会盲目重复写入。',
+    outcomeUnknownReconcile: '重新核对',
+    writeBlockedBody:
+      '服务器可能仍会完成上次写入。为避免后续保存被迟到结果覆盖，本连接中的设置写入已停止；请先重启 daemon，再重新载入应用。',
+    staleTitle: '服务器设置已更新',
+    staleBody:
+      '已保留你的本地修改。继续保存只会提交当前分区拥有的字段，或放弃本地修改以采用服务器值。',
+    staleDiscard: '采用服务器值',
     backupTitle: '导出备份',
     backupHint:
       '将 db.sqlite + config.json + skills/ + workflows YAML 打包为 tarball，存放到 ~/.agent-workflow/backups/。不含 worktrees / runs / logs / token。',
@@ -3997,6 +4197,8 @@ export const zhCN: Resources = {
     saving: '保存中…',
     creating: '创建中…',
     unknownError: '未知错误',
+    resumeFailedAfterSubmit:
+      '已提交成功，但任务续跑失败（{{code}}）。请到任务详情页点「继续执行」，或使用「诊断」修复。',
     yes: '是',
     no: '否',
     details: '详情',
@@ -4059,6 +4261,7 @@ export const zhCN: Resources = {
     },
     unsavedTitle: '有未保存的修改',
     unsavedBody: '当前有未保存的修改，离开本页将丢弃它们。',
+    unsavedBusyBody: '保存操作仍在进行中，请等待完成后再离开本页。',
     unsavedStay: '留在本页',
     unsavedDiscard: '放弃修改',
     emptyPaneTitle: '未选择任何项',
@@ -4077,6 +4280,8 @@ export const zhCN: Resources = {
     test: '测试',
     edit: '编辑',
     delete: '删除',
+    deleteTitle: '删除运行时“{{name}}”？',
+    deleteDescription: '删除后无法恢复。若仍有 Agent 或默认配置引用该运行时，系统会阻止删除。',
     addTitle: '添加运行时',
     editTitle: '编辑运行时',
     testBinary: '测试二进制',
@@ -4146,12 +4351,13 @@ export const zhCN: Resources = {
     colDescription: '描述',
     colPath: '路径',
     newTitle: '新建技能',
-    tabManaged: '托管',
+    tabManaged: '手动创建',
     tabExternal: '外部',
-    detailTabOverview: '概览',
-    detailTabContent: '内容',
+    detailTabEdit: '编辑',
     detailTabFiles: '文件',
     detailTabHistory: '历史',
+    technicalInformation: '技术信息',
+    managedPath: '托管路径',
     fieldName: '名称',
     fieldNameHint: 'kebab-case；用于 /skills/:name URL。',
     fieldDescription: '描述',
@@ -4190,7 +4396,7 @@ export const zhCN: Resources = {
     sourceSkippedDetails: '展开详情',
     sourceFromPill: '来自 {{label}}',
     sourceReadonlyHint: '此技能由父目录纳管，请在外部目录里编辑文件。',
-    tabZip: 'ZIP 导入',
+    tabZip: '导入 ZIP',
     importTitle: '导入技能',
     importSubtitle: '一次导入一个或多个托管 Skill；写入前会先检查目录结构和同名冲突。',
     zipDropTitle: '拖放 ZIP 到这里，或选择文件',
@@ -4259,14 +4465,43 @@ export const zhCN: Resources = {
     fileTargetUnavailable: '该文件已不可用，请刷新列表后重试。',
     fileErrPathRequired: '路径必填',
     fileErrRelativeOnly: '仅允许相对路径；不能包含 ".."',
-    fileErrMainFileProtected: 'SKILL.md 请在「内容」页签编辑，不能在文件树中操作',
+    fileErrMainFileProtected: 'SKILL.md 请在「编辑」页签中修改，不能在文件树中操作',
+    fileErrAlreadyExists: '该路径已存在或已经加入待保存更改。',
     fileTreeHeader: '文件',
     fileTreeEmpty: '暂无文件。',
     fileNewPathPlaceholder: 'path/to/new-file.md',
     fileAddButton: '+ 新增',
+    fileStageAddButton: '加入待保存更改',
     fileEditorEmpty: '请在左侧选择文件，或新增一个。',
     fileLoadingNamed: '正在加载 {{name}}…',
     fileDeleteButton: '删除文件',
+    fileStageDeleteButton: '标记删除',
+    filePendingCreate: '新建 · 待保存',
+    filePendingUpdate: '已修改 · 待保存',
+    filePendingDelete: '删除 · 待保存',
+    fileUndoPending: '撤销待保存更改',
+    fileDeleteStagedTitle: '“{{path}}”已标记删除',
+    fileDeleteStagedDescription: '文件尚未删除；点击「保存所有更改」后才会生效。',
+    fileStaleWarning: '服务端文件已变化，请检查当前草稿后再保存。',
+    saveAllChanges: '保存所有更改',
+    saveNothingToSave: '当前没有未保存的更改。',
+    saveStageNewPathFirst: '请先把已输入的文件路径加入待保存更改，或清空路径。',
+    saveBusy: '请等待当前 Skill 操作完成。',
+    saveTokenMissing: '请重新加载 Skill，以取得安全保存所需的令牌。',
+    saveOutcomeUnknown: '保存结果未知',
+    saveOutcomeUnknownDescription: '暂时不要重试。请核对稳定的服务端快照，确认上一步是否已生效。',
+    saveOutcomeStillUnknown: '核对期间 Skill 持续变化，保存结果仍然未知。',
+    recheckOutcome: '重新核对服务端状态',
+    recheckingOutcome: '核对中…',
+    saveRemoteDifferent: '稳定的服务端状态与本次提交不同，已保留你的本地草稿。',
+    saveStaleWarning: '服务端在草稿期间已发生变化，请检查后再保存。',
+    saveAllComplete: '已保存 {{count}} 项更改。',
+    savePartial: '已保存 {{saved}} 项 · {{remaining}} 项未保存。',
+    discardAllChanges: '放弃所有更改',
+    historyBlockedTitle: '版本历史需要稳定的 Skill 状态',
+    historyBlockedDirty: '请先保存或放弃全部待保存更改，再查看版本。',
+    historyBlockedBusy: '请等待当前 Skill 操作完成。',
+    historyBlockedOutcomeUnknown: '请先核对结果未知的保存操作，再查看版本。',
     zipParseFailedFallback: '解析 zip 失败',
     zipCommitFailedFallback: '提交失败（{{status}}）',
     zipErrorWholeArchiveLabel: '(zip)',
@@ -4383,6 +4618,13 @@ export const zhCN: Resources = {
       'remote MCP 走 OAuth 时，建议先在主机上执行 `opencode mcp auth <name>` 完成一次浏览器登录，token 会落到 ~/.opencode/auth/，之后所有 opencode 子进程都能复用。',
     oauthModeAuto: '自动',
     oauthModeDisabled: '禁用',
+    errors: {
+      nameRequired: '名称必填。',
+      commandRequired: '启动命令至少需要一个可执行项。',
+      urlRequired: 'URL 必填。',
+      urlScheme: 'URL 必须以 http:// 或 https:// 开头。',
+      timeoutInvalid: '超时必须是大于 0 的整数毫秒数。',
+    },
     // RFC-030 — probe columns + expand block.
     colStatus: '状态',
     colLatency: '延时',
@@ -4392,6 +4634,17 @@ export const zhCN: Resources = {
       latencySec: '{{s}} s',
       btnRun: '重新探测',
       btnRunning: '探测中…',
+      saveAndRun: '保存并探测',
+      useSaved: '仍使用已保存版本',
+      basisSavedTitle: '基于已保存配置',
+      basisSavedBody: '本次探测会严格使用保存版本',
+      basisDirtyTitle: '当前改动尚未保存',
+      basisDirtyBody: '直接探测仍会使用已保存版本；也可以先保存当前改动再探测。',
+      basisUnavailable: '暂时无法确认操作版本，请重新加载该 MCP 后再探测。',
+      resultStale: '探测完成后 MCP 已出现更新；旧结果已丢弃，正在刷新当前状态。',
+      savedResultExpired: '已保存的探测结果已过期。',
+      savedResultExpiredHint: '该 MCP 在上次探测后又被保存过，请重新探测后再使用其接口清单。',
+      draftChangedDuringSave: '保存期间表单又发生了修改；未发起探测，请确认后重试。',
       viewFull: '查看完整接口',
       expandRow: '展开行',
       collapseRow: '折叠行',
@@ -4406,6 +4659,7 @@ export const zhCN: Resources = {
       },
       lastProbed: '最近探测：{{at}}',
       neverProbed: '尚未探测。',
+      neverProbedHint: '运行一次探测，查看此 MCP 实际提供的工具、资源和提示模板。',
       section: {
         tools: '工具',
         resources: '资源',
@@ -4477,9 +4731,27 @@ export const zhCN: Resources = {
     saving: '保存中…',
     cancelEdit: '取消编辑',
     checkUpdateButton: '检查更新',
+    saveAndCheckButton: '保存并检查',
     checking: '检查中…',
     upgradeButton: '升级',
+    reinstallBaselineButton: '重新安装并建立基线',
     upgrading: '升级中…',
+    executionBasisDirtyTitle: '草稿与已保存插件不同',
+    executionBasisDirtyBody: '检查只会在保存此草稿后执行。当前已保存版本：',
+    executionBasisSavedTitle: '已保存插件版本',
+    executionBasisSavedBody: '检查和升级将精确使用此已保存版本：',
+    externalManagedTitle: '由外部路径管理',
+    externalManagedBody: '文件来源可能在系统外变化，因此不提供无法保证原子性的检查与升级。',
+    notCheckedTitle: '尚未检查更新',
+    notCheckedBody: '检查当前精确保存的插件版本，以确认是否有更新的来源可用。',
+    updateReadyTitle: '更新已就绪',
+    updateReadyBody: '版本 {{version}} 可用于当前精确保存的插件。',
+    noUpdateAvailable: '当前已保存插件已是最新。',
+    identityUnknownTitle: '更新基线未知',
+    identityUnknownBody: '此旧安装没有不可变来源标识。请重新安装一次以建立安全基线。',
+    draftChangedDuringSave: '保存期间草稿又有修改。请检查新改动，然后再次执行“保存并检查”。',
+    staleOperationResult: '此结果属于旧的已保存版本，未应用。页面将使用重新加载的数据。',
+    upgradeSuccess: '升级已发布新的不可变插件代次。',
     errorOptionsJson: 'Options 必须是合法的 JSON 对象。',
     errors: {
       nameInvalid: 'name 必须匹配 [a-z0-9][a-z0-9_-]* 且长度 1–64',
@@ -4592,6 +4864,8 @@ export const zhCN: Resources = {
     panelAria: '上下文面板',
     panelClose: '关闭',
     memberSave: '保存成员',
+    saveAll: '保存全部更改',
+    finishAddingBeforeSave: '请先完成或清空当前新增成员草稿。',
     editAgentDefinition: '编辑 agent 定义 →',
     agentMissing: 'agent 不存在',
     portsIn: '输入',
@@ -4960,6 +5234,10 @@ export const zhCN: Resources = {
         confirmTitle: '确认修复操作',
         confirmLead: '即将执行：{{option}}。',
         confirmApply: '确认应用',
+        closeAfterFailure: '关闭',
+        applyFailedBanner:
+          '状态修复已生效，但任务续跑失败。可关闭本窗后重新诊断，或到任务详情页点「继续执行」。',
+        applyFailedDetail: '失败详情',
         applying: '应用中…',
         cancel: '取消',
         next: '下一步',
@@ -5013,6 +5291,11 @@ export const zhCN: Resources = {
     tabWorktreeFiles: '工作目录',
     tabWorktreeDiff: '工作目录 diff',
     tabWorktreeStructure: '结构',
+    sectionNavLabel: '任务分区',
+    sectionGroupOverview: '概览',
+    sectionGroupExecution: '执行',
+    sectionGroupArtifacts: '产物',
+    sectionGroupCollaboration: '协作',
     structScopeLabel: '范围',
     structScopeTask: '整任务',
     structPruned: '该节点的快照已被回收（worktree GC 后），结构 diff 不可用。',
@@ -5119,6 +5402,8 @@ export const zhCN: Resources = {
     diffNoChanges: '自任务启动以来没有改动。',
     diffTruncatedBanner: '⚠ Diff 已截断至 1 MiB。请直接查看 worktree 获取完整输出。',
     diffViewedProgress: '已看 {{n}}/{{total}}',
+    diffFileSelectorLabel: '已变更文件',
+    structFileSelectorLabel: '存在结构变更的文件',
     diffMarkViewed: '标记 {{file}} 为已看',
     noNodeRuns: '还没有节点运行；调度器还未触达任何节点。',
     colNode: '节点',
@@ -5584,8 +5869,14 @@ export const zhCN: Resources = {
     tabBasics: '基础',
     tabPrompt: '提示词',
     tabPorts: '端口',
-    tabResources: '资源与依赖',
+    tabResources: '能力与协作',
     tabAdvanced: '高级',
+    portValidationBadge: '端口配置有 {{count}} 项错误',
+    resourcesIntro:
+      '选择这个代理运行时能使用的能力，以及它可以把工作委派给哪些协作代理。保存引用不会自动安装或下载资源。',
+    technicalDetailsSummary: '技术说明',
+    technicalDetailsBody:
+      '协作代理会按依赖闭包递归加载，并合并成员所需的 Skill、MCP 与插件。插件从已安装缓存以 file:// 注入，启动阶段不会联网下载；引用缺失时，启动校验会要求先补齐资源。',
     sectionBasics: '基本信息',
     sectionPrompt: '提示词（正文）',
     sectionOutputs: '输入与输出',
@@ -5710,33 +6001,30 @@ export const zhCN: Resources = {
       issueOrphanOutputKind: '类型映射 {{key}} 没有对应的输出端口。',
       issueOrphanWrapperName: '聚合映射 {{key}} 没有对应的输出端口。',
     },
-    groupCapabilities: '能力',
-    groupCapabilitiesHint: '注入到该代理进程内、供其调用',
-    groupDependencies: '依赖',
-    groupDependenciesHint: '该代理可委派调用的其他代理',
+    groupCapabilities: '可用能力',
+    groupCapabilitiesHint: '运行时可调用的技能、工具和扩展',
+    groupDependencies: '协作代理',
+    groupDependenciesHint: '这个代理可以向其委派工作',
     fieldSkills: '技能',
-    fieldSkillsHint: '框架运行时注入的技能名。',
+    fieldSkillsHint: '可复用的工作说明与工具能力。',
     fieldSkillsPlaceholder: '输入技能名后按 Enter',
     skillsPickerLoading: '加载中…',
     skillsPickerEmpty: '暂无可选技能（尚无可用项）',
     skillsPickerLoadFailed: '加载技能列表失败；仍可直接输入。',
-    fieldDependsOn: '依赖的其他代理',
-    fieldDependsOnHint:
-      '运行时会把这些代理（递归含它们的依赖）以及它们的技能一并加载进同一个 opencode 子进程，主代理可以通过 task / subagent 工具调用它们。',
+    fieldDependsOn: '可协作的代理',
+    fieldDependsOnHint: '当前代理可以把子任务委派给这些代理；所需能力会随任务一起加载。',
     fieldDependsOnPlaceholder: '输入代理名后按 Enter',
     dependsPickerLoading: '加载中…',
     dependsPickerEmpty: '暂无可选代理（尚无可用项）',
     dependsPickerLoadFailed: '加载代理列表失败；仍可直接输入。',
     fieldMcps: 'MCP 服务',
-    fieldMcpsHint:
-      '该 agent 启动时按 dependsOn 闭包合并注入。详细规则见 docs/OPENCODE_CONFIG.md §3.3。',
+    fieldMcpsHint: '运行时可连接的工具与数据源。',
     fieldMcpsPlaceholder: '输入 MCP 名后按 Enter',
     mcpsPickerLoading: '加载中…',
     mcpsPickerEmpty: '暂无可选 MCP（尚无可用项）',
     mcpsPickerLoadFailed: '加载 MCP 列表失败；仍可直接输入。',
     fieldPlugins: '插件',
-    fieldPluginsHint:
-      '名称需对应 /plugins 中已登记的插件。runner 在闭包合并后以 file://<cachedPath> 注入到 OPENCODE_CONFIG_CONTENT.plugin，spawn 阶段零联网。',
+    fieldPluginsHint: '已安装并可在运行时启用的扩展。',
     fieldPluginsPlaceholder: '输入插件名后按 Enter',
     pluginsPickerLoading: '加载中…',
     pluginsPickerEmpty: '暂无可选插件（尚无可用项）',
@@ -5763,6 +6051,12 @@ export const zhCN: Resources = {
     permissionPlaceholder: '{"edit":"allow","webfetch":"deny"}',
     fieldFrontmatterExtra: '额外 frontmatter (JSON)',
     fieldFrontmatterExtraHint: '除 name/description/outputs/permission/skills 之外的其它键。',
+    jsonSyntaxError: '请输入合法的 JSON 对象，并检查引号、逗号和括号是否完整。',
+    jsonObjectError: '请输入使用 { ... } 表示的 JSON 对象；不支持数组、字符串或数字。',
+    jsonValidationTitle: '高级 JSON 需要处理（{{count}} 项）',
+    jsonValidationBadge: '{{count}} 个 JSON 字段无效',
+    jsonErrorStatus: '错误',
+    jsonFixField: '修复{{field}}',
     fieldBody: '正文 (Markdown)',
     bodyPlaceholder: 'Agent 系统提示词；Markdown。',
     importButton: '从 agent.md 导入',
@@ -5871,6 +6165,8 @@ export const zhCN: Resources = {
     tabEvents: '事件',
     tabOutput: '输出',
     tabStats: '统计',
+    eventCount: '{{count}} 条事件',
+    outputCount: '{{count}} 项输出',
     shardCount: '{{n}} 个 shard',
     shardNoKey: '(无 key)',
     tokenPrefix: 'tok',
@@ -6048,7 +6344,10 @@ export const zhCN: Resources = {
     bindHost: '监听 host',
     bindHostHint: '需要重启。默认 127.0.0.1 使 daemon 仅本机可达。',
     bindPort: '监听 port',
-    bindPortHint: '需要重启。留空 / 0 让启动时自动挑空闲端口（此处会回填当前实际端口）。',
+    bindPortHint:
+      '需要重启。留空 / 0 表示启动时自动挑选空闲端口；当前实际端口只作提示，不会自动保存。',
+    bindPortCurrent: '本次运行实际使用 {{port}}。',
+    bindPortUseCurrent: '固定为当前端口',
     modelLoadFailed: '模型列表加载失败 — 已降级为手动输入。',
     modelLoading: '加载模型列表…',
     modelRefresh: '刷新',
@@ -6116,7 +6415,10 @@ export const zhCN: Resources = {
     'http-404': '资源不存在。',
     'http-409': '存在冲突，请刷新后重试。',
     'route-not-found': '路由不存在。',
-    'task-not-cancelable': '该任务已结束，无法取消。',
+    'task-not-cancelable': '该任务已处于终态，无法取消。',
+    'task-terminal': '所属任务已结束，本条待办已封存，提交未保存。',
+    'clarify-round-terminal': '本轮反问已封存（所属任务已结束或反问已撤销），答案未保存。',
+    'workflow-scheduled-referenced': '该工作流仍被定时任务引用，请先删除或改指向这些定时任务。',
     'task-not-resumable': '该任务还在运行或未失败，无法 resume。',
     'task-still-running': '任务还在运行，请先取消。',
     'workflow-import-conflict': '导入冲突：已存在同 id 的工作流。',
@@ -6145,6 +6447,8 @@ export const zhCN: Resources = {
     fallback: '请求失败',
   },
   clarify: {
+    roundSealedByTaskTerminal: '所属任务已结束，本轮反问已封存，无需回答。',
+    roundDismissedByAutonomous: '工作组已切换为全自动模式，本轮反问已撤销，无需回答。',
     taskNameLabel: '所属任务',
     nav: {
       label: '反问澄清',
@@ -6189,6 +6493,7 @@ export const zhCN: Resources = {
       submitDisabledRequired: '请先回答所有"推荐"题',
       draftSaving: '正在保存草稿…',
       draftSaved: '草稿已保存（关 tab 不丢）',
+      roundSealedFooter: '本轮已封存，无需回答。',
       recommendedChip: '推荐',
       back: '← 返回列表',
       answeredAt: '已回答 · {{time}}',
@@ -6311,6 +6616,31 @@ export const zhCN: Resources = {
     title: '平台长期记忆',
     adminOnly: '仅管理员可审批',
     empty: '暂无沉淀',
+    sectionNavLabel: '记忆分区',
+    sectionGroups: {
+      pending: '待处理',
+      library: '记忆库',
+      automation: '自动化',
+    },
+    sectionDescriptions: {
+      approvalQueue: '审核你有权管理的候选记忆，决定是否进入长期记忆库。',
+      fusion: '检查把多条记忆融合进技能后的变更。',
+      all: '浏览已批准与已归档的记忆，并管理可写条目。',
+      byScope: '按 Agent、工作流、仓库与全局范围查找已批准记忆。',
+      distillJobs: '查看自动提炼任务的运行状态并处理失败任务。',
+    },
+    sectionUnavailable: '你没有访问该自动化分区的权限，已返回记忆库。',
+    loadingEdit: '正在加载记忆详情…',
+    emptyStates: {
+      candidates: '没有需要你处理的候选记忆',
+      candidatesDescription: '任务反馈经提炼或手工新建后，可管理的候选会出现在这里。',
+      approved: '记忆库中还没有已批准记忆',
+      approvedDescription: '先在候选记忆中批准一条，后续任务即可按作用域使用它。',
+      archived: '没有已归档记忆',
+      archivedDescription: '从已批准视图归档的条目会保留在这里，并可随时恢复。',
+      scope: '此作用域暂无记忆',
+      scopeDescription: '批准候选后，记忆会按其 Agent、工作流、仓库或全局作用域归类。',
+    },
     confirmDelete: '永久删除这条记忆？不可恢复。',
     confirmArchive: '确认归档这条记忆？归档后将不再注入未来运行，可在"已归档"视图中恢复。',
     archiveDialogTitle: '归档记忆',
@@ -6328,6 +6658,7 @@ export const zhCN: Resources = {
     fusion: {
       subtitle: '待审批 · 吸收 {{n}} 条记忆',
       empty: '暂无待审批的融合',
+      emptyDescription: '可从已批准记忆或可管理技能发起融合，待你处理的评审会出现在这里。',
       error: '融合列表加载失败',
       retry: '重试',
     },
@@ -6428,6 +6759,7 @@ export const zhCN: Resources = {
     },
     distillJobs: {
       empty: '当前没有提炼任务',
+      emptyDescription: '反馈与评审事件会自动创建提炼任务，新的运行将在这里提供监控。',
       colId: '任务 ID',
       colStatus: '状态',
       colSource: '来源',

@@ -31,6 +31,8 @@ import type {
   WrapperFanoutPort,
 } from '@agent-workflow/shared'
 import {
+  DAEMON_RESTART_ERROR_SUMMARY,
+  DAEMON_SHUTDOWN_ABORT_REASON,
   FANOUT_DONE_PORT_NAME,
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   FOLLOWUP_POLICY,
@@ -590,7 +592,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     return
   }
   if (result.kind === 'canceled') {
-    await cancelTaskRow(db, taskId, result.detail?.nodeId)
+    await cancelTaskRow(db, taskId, result.detail?.nodeId, opts.signal?.reason)
     return
   }
   if (result.kind === 'awaiting_review') {
@@ -599,7 +601,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     // RFC-097: cancel wins — an abort that landed after runScope's last
     // signal check must not be overwritten by a park/terminal write.
     if (opts.signal?.aborted === true) {
-      await cancelTaskRow(db, taskId)
+      await cancelTaskRow(db, taskId, undefined, opts.signal.reason)
       return
     }
     if (
@@ -627,7 +629,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     // created when the user POSTs answers. Per design §7.3 awaiting_human
     // outranks awaiting_review on the task chip when both can fire at once.
     if (opts.signal?.aborted === true) {
-      await cancelTaskRow(db, taskId)
+      await cancelTaskRow(db, taskId, undefined, opts.signal.reason)
       return
     }
     if (
@@ -653,7 +655,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   // CAS; a cancelTask fallback racing us resolves by whoever's CAS lands
   // (from-sets are disjoint winners: done from=running vs canceled CAS).
   if (opts.signal?.aborted === true) {
-    await cancelTaskRow(db, taskId)
+    await cancelTaskRow(db, taskId, undefined, opts.signal.reason)
     return
   }
   if (
@@ -6091,7 +6093,38 @@ async function failTask(
   await emitStatus(db, taskId)
 }
 
-async function cancelTaskRow(db: DbClient, taskId: string, failedNodeId?: string): Promise<void> {
+async function cancelTaskRow(
+  db: DbClient,
+  taskId: string,
+  failedNodeId?: string,
+  abortReason?: unknown,
+): Promise<void> {
+  // RFC-202 T4: a graceful daemon shutdown aborts the scheduler exactly like
+  // a user cancel did — but writing 'canceled by user' misattributes it and
+  // strands the task (canceled has no resume edge; audit P1 F-13). The
+  // shutdown path tags its abort with reason='daemon-shutdown'
+  // (AbortController.abort(reason)); a user cancel aborts with no argument,
+  // whose signal.reason is a DOMException — the string comparison below
+  // leaves that path byte-identical. Shutdown-interrupted tasks land
+  // interrupted + DAEMON_RESTART_ERROR_SUMMARY so both the Resume button and
+  // boot auto-resume (autoResume.ts matches exactly that summary) cover them.
+  if (abortReason === DAEMON_SHUTDOWN_ABORT_REASON) {
+    const won = await trySetTaskStatus({
+      db,
+      taskId,
+      to: 'interrupted',
+      allowedFrom: ['running'],
+      extra: {
+        finishedAt: Date.now(),
+        errorSummary: DAEMON_RESTART_ERROR_SUMMARY,
+        errorMessage: 'daemon shutdown interrupted this task; resume (or auto-resume) continues it',
+        ...(failedNodeId !== undefined ? { failedNodeId } : {}),
+      },
+      reason: 'cancelTaskRow-shutdown',
+    })
+    if (won) await emitStatus(db, taskId)
+    return
+  }
   // RFC-097: idempotent — cancelTask's fallback (or a failTask that raced
   // first) may already have landed a terminal status; respect the winner.
   const won = await trySetTaskStatus({

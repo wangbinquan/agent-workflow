@@ -25,7 +25,10 @@ describe('describeApiError', () => {
   test('maps known error codes to localized strings', () => {
     setLanguage('zh-CN')
     const err = new ApiError(409, 'task-not-cancelable', 'task is already done')
-    expect(describeApiError(err)).toBe('该任务已结束，无法取消。')
+    // RFC-202 T3: awaiting_* is now cancelable, so the 409 only fires on true
+    // terminal states — the copy stopped claiming "已结束" for tasks that
+    // hadn't ended (audit F-15's misleading wording).
+    expect(describeApiError(err)).toBe('该任务已处于终态，无法取消。')
   })
 
   test('falls back to "<localized fallback>: <message>" for unknown codes', () => {

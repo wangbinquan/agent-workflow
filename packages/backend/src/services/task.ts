@@ -119,10 +119,15 @@ export function isTaskActive(taskId: string): boolean {
  * P-4-06: abort every in-flight task. Used by daemon shutdown. The runner
  * SIGTERMs each opencode child via the controller's signal; the scheduler
  * then marks rows canceled/interrupted in the normal flow.
+ *
+ * RFC-202 T4: `reason` rides on the AbortController
+ * (`controller.abort(reason)` → `signal.reason`) so the scheduler's abort
+ * checkpoints can tell a daemon shutdown (→ interrupted + daemon-restart,
+ * resumable) apart from a user cancel (no-arg abort → canceled by user).
  */
-export function abortAllActiveTasks(): string[] {
+export function abortAllActiveTasks(reason?: string): string[] {
   const ids = [...activeTasks.keys()]
-  for (const id of ids) activeTasks.get(id)?.abort()
+  for (const id of ids) activeTasks.get(id)?.abort(reason)
   return ids
 }
 
@@ -1888,15 +1893,26 @@ async function escalateLiveChildSurvived(
   )
 }
 
+// RFC-202 T3: aligned with the shared lifecycle table's `cancel` event —
+// awaiting_review / awaiting_human ARE cancelable (a user who does not want
+// to answer an agent's questions must have an exit; audit P1 F-15). The old
+// pending/running-only gate predated the awaiting statuses.
+const CANCELABLE_TASK_STATUSES = [
+  'pending',
+  'running',
+  'awaiting_review',
+  'awaiting_human',
+] as const
+
 export async function cancelTask(db: DbClient, id: string): Promise<Task> {
   const task = await getTask(db, id)
   if (task === null) {
     throw new NotFoundError('task-not-found', `task '${id}' not found`)
   }
-  if (task.status !== 'pending' && task.status !== 'running') {
+  if (!(CANCELABLE_TASK_STATUSES as readonly string[]).includes(task.status)) {
     throw new ConflictError(
       'task-not-cancelable',
-      `task '${id}' is already ${task.status}; nothing to cancel`,
+      `task '${id}' is already terminal (${task.status}); nothing to cancel`,
     )
   }
 
@@ -1909,7 +1925,10 @@ export async function cancelTask(db: DbClient, id: string): Promise<Task> {
     const deadline = Date.now() + 5000
     while (Date.now() < deadline) {
       const reread = await getTask(db, id)
-      if (reread !== null && reread.status !== 'pending' && reread.status !== 'running') {
+      if (
+        reread !== null &&
+        !(CANCELABLE_TASK_STATUSES as readonly string[]).includes(reread.status)
+      ) {
         return reread
       }
       await Bun.sleep(50)
@@ -1917,14 +1936,16 @@ export async function cancelTask(db: DbClient, id: string): Promise<Task> {
   }
 
   // Fallback: scheduler didn't notice or no controller — flip the row.
-  // RFC-097: CAS from {pending, running}; a loss means the scheduler (or a
+  // RFC-097: CAS from the cancelable set; a loss means the scheduler (or a
   // racing failTask) landed a terminal status first — return the winner
-  // instead of overwriting it.
+  // instead of overwriting it. Parked tasks (awaiting_*) have no controller
+  // and always take this path; the terminal-task hook (RFC-202 T2) then
+  // seals their open clarify/review rounds.
   await trySetTaskStatus({
     db,
     taskId: id,
     to: 'canceled',
-    allowedFrom: ['pending', 'running'],
+    allowedFrom: CANCELABLE_TASK_STATUSES,
     extra: {
       finishedAt: Date.now(),
       errorSummary: 'canceled by user',

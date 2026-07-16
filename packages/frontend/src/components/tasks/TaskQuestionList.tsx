@@ -174,9 +174,19 @@ export function TaskQuestionList({
   }
   const dispatchM = useMutation({
     mutationFn: (entryIds: string[]) =>
-      api.post(`/api/tasks/${taskId}/questions/dispatch`, { entryIds }),
-    onSuccess: () => {
-      setDispatchError(null)
+      api.post<{ resume?: { ok: false; code: string; message: string } }>(
+        `/api/tasks/${taskId}/questions/dispatch`,
+        { entryIds },
+      ),
+    onSuccess: (res) => {
+      // RFC-202 T8: dispatch landed but the task resume kick failed — say so
+      // (the old fire-and-forget path reported unqualified success while the
+      // task stayed parked).
+      if (res.resume !== undefined && res.resume.ok === false) {
+        setDispatchError(new Error(t('common.resumeFailedAfterSubmit', { code: res.resume.code })))
+      } else {
+        setDispatchError(null)
+      }
       invalidate()
       // Dispatch flips entries into 处理中 and resumes the task → refresh the task +
       // node-runs queries so the rest of the detail page reflects the processing state.

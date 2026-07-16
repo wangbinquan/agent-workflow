@@ -223,6 +223,15 @@ export const COMMIT_PUSH_NODE_PREFIX = '__commit_push__'
  *  import this constant instead of carrying independent string literals. */
 export const DAEMON_RESTART_ERROR_SUMMARY = 'daemon-restart'
 
+/** RFC-202 T4 — the AbortController reason a graceful daemon shutdown tags
+ *  its aborts with (`controller.abort(DAEMON_SHUTDOWN_ABORT_REASON)`). The
+ *  scheduler's abort checkpoints branch on exact equality: shutdown-tagged
+ *  aborts land `interrupted` + DAEMON_RESTART_ERROR_SUMMARY (resumable /
+ *  auto-resumable) instead of `canceled by user`. A user cancel aborts with
+ *  NO argument (signal.reason is then a DOMException), so that path is
+ *  untouched by this constant. */
+export const DAEMON_SHUTDOWN_ABORT_REASON = 'daemon-shutdown'
+
 /** Task-level transition events (business transitions). Mirrors the node_run
  *  ADT. Targets are fixed per event (independent of the source within the
  *  event's allowed-from set), so `targetForTaskEvent` is total. */

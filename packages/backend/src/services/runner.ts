@@ -30,6 +30,7 @@ import type {
   ReviewPromptContext,
 } from '@agent-workflow/shared'
 import {
+  DAEMON_SHUTDOWN_ABORT_REASON,
   isAgentNodeKind,
   clarifyDispositionFor,
   composePerParsedKindRepairBlocks,
@@ -1166,8 +1167,16 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     status = 'failed'
     errorMessage = `child-unkillable: pid ${child.pid} survived SIGTERM→SIGKILL escalation past ${graceMs + FINAL_REAP_MARGIN_MS}ms; abandoned (detached process group left running)`
   } else if (aborted) {
+    // RFC-202 T4: a daemon-shutdown abort must NOT read as a user cancel.
+    // RunResult keeps status='canceled' (control flow: loop break / runScope
+    // canceled propagation stay untouched); the PERSISTED row branches below
+    // to 'interrupted' so resume's rollback-target selection (failed /
+    // interrupted only) rolls this node back before re-running it.
     status = 'canceled'
-    errorMessage = 'aborted by signal'
+    errorMessage =
+      opts.signal?.reason === DAEMON_SHUTDOWN_ABORT_REASON
+        ? 'daemon-shutdown: node interrupted mid-run; resume re-runs it from its pre-run snapshot'
+        : 'aborted by signal'
   } else if (timedOut) {
     status = 'failed'
     errorMessage = `node-timeout: exceeded ${opts.timeoutMs ?? 0}ms`
@@ -1583,10 +1592,14 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // running → {done, failed, canceled}. Non-status fields are batched in
   // `extra`. Two writes: status via CAS helper, then the columns lifecycle
   // doesn't know about (inventory / token usage / portValidation / etc.).
+  const persistedStatus =
+    status === 'canceled' && opts.signal?.reason === DAEMON_SHUTDOWN_ABORT_REASON
+      ? 'interrupted'
+      : status
   await setNodeRunStatus({
     db: opts.db,
     nodeRunId: opts.nodeRunId,
-    to: status,
+    to: persistedStatus,
     allowedFrom: ['running'],
     reason: 'runner-exit',
     extra: {

@@ -37,6 +37,9 @@ import {
 import { nodeRuns } from '@/db/schema'
 import type { DbClient } from '@/db/client'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
+import { createLogger } from '@/util/log'
+
+const lifecycleLog = createLogger('lifecycle')
 
 /**
  * Extra fields that may be written alongside a status transition (mirrors
@@ -356,7 +359,36 @@ export async function setTaskStatus(args: {
   if (updated.length === 0) {
     throw new ConcurrentTaskTransition(args.taskId, args.allowedFrom, args.reason)
   }
+  // RFC-202 T2: unrevivable terminal statuses sweep the task's open human
+  // gates (clarify rounds / review parks) so they leave the inbox for good.
+  // Registered as a callback (cli/start.ts assembly) because lifecycle.ts is
+  // the low-level primitive — importing clarify/review services here would
+  // create a module cycle (binary-build hazard). Hook failures must never
+  // undo or block the already-committed status write: warn and move on; the
+  // read-path terminal filter (RFC-202 T6) and the write-path guards
+  // (task-terminal 409s) keep the system consistent until the next sweep.
+  if (args.to === 'done' || args.to === 'canceled') {
+    try {
+      terminalTaskHook?.(args.db, args.taskId, args.to)
+    } catch (err) {
+      lifecycleLog.warn(
+        `terminal task hook failed for ${args.taskId} → ${args.to}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+  }
   return { from, to: args.to }
+}
+
+/**
+ * RFC-202 T2 — terminal-task sweep hook. Wired once at daemon assembly
+ * (cli/start.ts) to `sealOpenHumanGatesForTask`; kept as a registration to
+ * avoid a lifecycle → clarify/review import cycle. Pass `null` to reset
+ * (tests).
+ */
+export type TerminalTaskHook = (db: DbClient, taskId: string, to: TaskStatus) => void
+let terminalTaskHook: TerminalTaskHook | null = null
+export function registerTerminalTaskHook(fn: TerminalTaskHook | null): void {
+  terminalTaskHook = fn
 }
 
 /**

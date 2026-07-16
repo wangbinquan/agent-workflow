@@ -89,6 +89,13 @@
 - 不做收件箱条目的任务状态徽标（展示增强，非本 RFC）。
 - 不动 `clarify.ts:listClarifySummaries` 死代码之外的遗留双表问题（`clarify_sessions` 的其余读写面不迁移；仅 admin 计数分支改道）。
 
+## 2.9 实现偏差记录（2026-07-16 实现时敲定，均在设计门认可的备选方案内）
+
+1. **workgroup 自治封存器保留窄实现**（Codex 门 P1 给出的两个选项取 B）：`dismissOpenClarifyParksForAutonomous` 原样保留——它跑在活任务上、必须与 assignment requeue 同事务；通用封存器 `sealOpenHumanGatesForTask` 因此**不带 scope 参数**（只服务终态任务，恒全量封存），两实现互相以注释交叉引用。
+2. **未新增 `transitionNodeRunStatusInTx` 原语**：封存器沿用仓内既定模式——`dbTxSync` 内带 `rfc053-allow-direct-status-write` 标记的守卫直写（与 workgroup 封存器同款；guard 测试认可该标记），转移合法性由 awaiting-only WHERE 守卫编码（对应共享表 `mark-canceled` 边，该边已存在无需扩表）。
+3. **review 详情页顶部状态说明条未实现**（T6-6 的窄化）：终态任务的评审轮已从列表/徽标消失，直接决策被写路径护栏 409（`task-terminal`，中文词条已补）；详情页沿用既有 decided 只读态。如需页面级说明条另行小 PR。
+4. `sealRoundQuestions` 的写路径护栏在事务内同时覆盖 done/canceled（clarify 轮封存后再提交会先撞 `clarify-round-terminal`，两道闸互为兜底）。
+
 ## 3. 接口契约变化汇总
 
 | 面                                                                                                                                      | 变化                                                                                          | 兼容性                 |
