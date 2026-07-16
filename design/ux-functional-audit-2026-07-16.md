@@ -483,7 +483,7 @@
 
 - **后端 187 个错误码中 163 个在前端完全无本地化处理，用户看到「请求失败: <英文原文>」甚至 git stderr 原文**（另由 API 契约一致性、后端错误文案 维度独立发现）
   位置：`packages/frontend/src/i18n/index.ts:62`｜类别：error-message
-  影响：中文界面用户在最常见的失败场景里看到中英混杂的技术文案且无下一步指引：新建任务时仓库 URL 拼错 → 横幅显示「请求失败: unsupported or malformed Git URL」；私有仓库克隆失败 → 「请求失败: git clone failed for https://…: fatal: could not read Username…」（整段 git stderr）；后端任何 500 → 「请求失败: internal server error」；无权限 → 「请求失败: forbidden」。用户既看不懂发生了什么，也不知道该改 URL、配凭据还是重试。
+  影响：中文界面用户在最常见的失败场景里看到中英混杂的技术文案且无下一步指引：新建任务时仓库 URL 拼错 → 横幅显示「请求失败: unsupported or malformed Git URL」；私有仓库克隆失败 → 「请求失败: git clone failed for <仓库URL>: fatal: could not read Username…」（整段 git stderr）；后端任何 500 → 「请求失败: internal server error」；无权限 → 「请求失败: forbidden」。用户既看不懂发生了什么，也不知道该改 URL、配凭据还是重试。
   建议：为高频用户可触达错误码（repo-clone-failed、repo-url-invalid、forbidden、internal-error、agent-not-found、launch 校验族等）补齐 errors._ 双语词条并写明下一步动作；对确实无法穷举的码，把回退文案改为「请求失败（错误码 X），请重试或联系管理员」并将英文原文降级到可展开的详情区；可加一条测试用后端码清单 diff errors._ 键集防继续漂移。
 
 - **OIDC 设置、用户管理、账户、技能 zip 导入等多处绕过 describeApiError，直接渲染后端英文 e.message**
@@ -522,7 +522,7 @@
 
 - **仓库克隆/分支解析失败把 git stderr 原文透传给启动向导，且后端专为 UX 附带的 availableRefs 前端从未渲染**
   位置：`packages/backend/src/services/gitRepoCache.ts:523`｜类别：error-message
-  影响：用户填错仓库地址或没配好凭据点「启动」，看到「请求失败: git clone failed for https://…: fatal: could not read Username for 'https://github.com'…」这类原始 git 输出；填错分支时后端明明算好了「现有分支列表」，用户却看不到，只能自己去 git 里翻。
+  影响：用户填错仓库地址或没配好凭据点「启动」，看到「请求失败: git clone failed for <仓库URL>: fatal: could not read Username for 'https://github.com'…」这类原始 git 输出；填错分支时后端明明算好了「现有分支列表」，用户却看不到，只能自己去 git 里翻。
   建议：为 repo-clone-failed / repo-ref-not-found / repo-url-invalid / repo-file-source-unreachable 增加中文文案：克隆失败区分鉴权/网络/地址不存在三类常见 stderr 并给对应指引；repo-ref-not-found 渲染 details.availableRefs 为可点选的候选分支。
 
 ### 3.15 任务生命周期（be-lifecycle-ux）
@@ -600,12 +600,12 @@
 
 - **Git/仓库域全部错误码缺 i18n 映射，中文界面直接透传英文 git stderr 与内部函数名**
   位置：`packages/frontend/src/i18n/zh-CN.ts:6114`｜类别：error-message
-  影响：最常见的首用失败场景——URL 拼错、私有仓无凭据、克隆超时——中文用户看到的是『请求失败: git clone failed for https://…: fatal: Authentication failed…』或『…timed out after 1800000ms』这类英文技术句，没有『发生了什么/下一步怎么做』；'terminal prompts disabled' 这种 stderr 更是无从理解。
+  影响：最常见的首用失败场景——URL 拼错、私有仓无凭据、克隆超时——中文用户看到的是『请求失败: git clone failed for <仓库URL>: fatal: Authentication failed…』或『…timed out after 1800000ms』这类英文技术句，没有『发生了什么/下一步怎么做』；'terminal prompts disabled' 这种 stderr 更是无从理解。
   建议：为 repo-clone-failed/repo-url-invalid/repo-ref-not-found/repo-cache-locked/repo-cache-corrupt/repo-file-source-unreachable/task-worktree-missing/worktree-add-failed 等补 errors.\* 中文词条（说明原因+建议动作，如『克隆失败：无法访问远端，请检查 URL 与凭据』），stderr 收进可展开详情；修正超时消息不要暴露函数名，改用人类可读时长。
 
 - **repo-ref-not-found 精心准备的 availableRefs 候选列表从未在前端渲染，ref 输入框也无校验/无候选**
   位置：`packages/frontend/src/components/launch/RepoSourceRow.tsx:106`｜类别：usability
-  影响：用户在启动页把分支名打错一个字母，只有点『启动』后才收到英文兜底错误 'ref 'foo' not found in https://…'，看不到系统其实已经算好的『可用分支列表』，只能自己去别处查正确分支名再回来重试，流程绕远。
+  影响：用户在启动页把分支名打错一个字母，只有点『启动』后才收到英文兜底错误 'ref 'foo' not found in <仓库URL>'，看不到系统其实已经算好的『可用分支列表』，只能自己去别处查正确分支名再回来重试，流程绕远。
   建议：前端识别 err.code==='repo-ref-not-found' 时读取 details.availableRefs 渲染候选（可点击回填）；对已存在于 cached-repos 的 URL，把 ref 字段升级为带自由输入的分支 Select（数据源 /api/repos/refs）。
 
 - **『git commit 本身失败（没有任何提交）』被界面显示为『仅本地提交（推送失败）』**
